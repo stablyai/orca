@@ -1,4 +1,14 @@
 import { keybindingMatchesAction, type KeybindingOverrides } from '../../../../shared/keybindings'
+import { isClipboardTextByteLengthOverLimit } from '../../../../shared/clipboard-text'
+
+export const MARKDOWN_PREVIEW_SEARCH_QUERY_MAX_BYTES = 2 * 1024
+
+export function isMarkdownPreviewSearchQueryTooLarge(
+  query: string,
+  maxBytes = MARKDOWN_PREVIEW_SEARCH_QUERY_MAX_BYTES
+): boolean {
+  return isClipboardTextByteLengthOverLimit(query, maxBytes)
+}
 
 export function isMarkdownPreviewFindShortcut(
   event: Pick<KeyboardEvent, 'key' | 'code' | 'metaKey' | 'ctrlKey' | 'altKey' | 'shiftKey'>,
@@ -8,36 +18,152 @@ export function isMarkdownPreviewFindShortcut(
   return keybindingMatchesAction('editor.find', event, platform, keybindings)
 }
 
-export function findTextMatchRanges(text: string, query: string): { start: number; end: number }[] {
+export function isMarkdownPreviewReplaceShortcut(
+  event: Pick<KeyboardEvent, 'key' | 'code' | 'metaKey' | 'ctrlKey' | 'altKey' | 'shiftKey'>,
+  platform: NodeJS.Platform,
+  keybindings?: KeybindingOverrides
+): boolean {
+  return keybindingMatchesAction('editor.replace', event, platform, keybindings)
+}
+
+export type TextMatchOptions = {
+  matchCase?: boolean
+  wholeWord?: boolean
+}
+
+export function findTextMatchRanges(
+  text: string,
+  query: string,
+  options: TextMatchOptions = {}
+): { start: number; end: number }[] {
   if (!query) {
     return []
   }
+  if (isMarkdownPreviewSearchQueryTooLarge(query)) {
+    return []
+  }
 
-  const normalizedText = text.toLocaleLowerCase()
+  const ranges = options.matchCase
+    ? findCaseSensitiveMatchRanges(text, query)
+    : findCaseInsensitiveMatchRanges(text, query)
+
+  if (!options.wholeWord) {
+    return ranges
+  }
+  return ranges.filter((range) => isWholeWordMatch(text, range.start, range.end))
+}
+
+function findCaseSensitiveMatchRanges(
+  text: string,
+  query: string
+): { start: number; end: number }[] {
+  const matches: { start: number; end: number }[] = []
+  let searchStart = 0
+
+  while (searchStart <= text.length - query.length) {
+    const matchStart = text.indexOf(query, searchStart)
+    if (matchStart === -1) {
+      break
+    }
+    matches.push({ start: matchStart, end: matchStart + query.length })
+    searchStart = matchStart + query.length
+  }
+
+  return matches
+}
+
+function findCaseInsensitiveMatchRanges(
+  text: string,
+  query: string
+): { start: number; end: number }[] {
+  const normalizedText = buildLocaleLowercaseIndex(text)
   const normalizedQuery = query.toLocaleLowerCase()
   const matches: { start: number; end: number }[] = []
   let searchStart = 0
 
-  while (searchStart <= normalizedText.length - normalizedQuery.length) {
-    const matchStart = normalizedText.indexOf(normalizedQuery, searchStart)
+  while (searchStart <= normalizedText.text.length - normalizedQuery.length) {
+    const matchStart = normalizedText.text.indexOf(normalizedQuery, searchStart)
     if (matchStart === -1) {
       break
     }
 
+    const matchEnd = matchStart + normalizedQuery.length
     matches.push({
-      start: matchStart,
-      // Why: use normalizedQuery.length (not query.length) because matchStart
-      // is an index into the locale-lowercased text. toLocaleLowerCase() can
-      // change string length (e.g. Turkish İ, German ß→ss), so the original
-      // query length would produce wrong range boundaries.
-      end: matchStart + normalizedQuery.length
+      start: normalizedText.originalStartByNormalizedOffset[matchStart] ?? text.length,
+      end: normalizedText.originalEndByNormalizedOffset[matchEnd - 1] ?? text.length
     })
     // Why: advance by at least 1 to guarantee forward progress even if a
     // future locale edge-case produces a zero-length normalizedQuery.
-    searchStart = matchStart + Math.max(normalizedQuery.length, 1)
+    searchStart = matchEnd + (normalizedQuery.length === 0 ? 1 : 0)
   }
 
   return matches
+}
+
+// Why: whole-word matching treats Unicode letters, digits, and underscore as
+// word characters so a match only counts when both edges sit on a word boundary,
+// mirroring the editor's "whole word" find toggle.
+const WORD_CHARACTER = /[\p{L}\p{N}_]/u
+
+function isWordCharacter(char: string | undefined): boolean {
+  return char !== undefined && WORD_CHARACTER.test(char)
+}
+
+function codePointBefore(text: string, index: number): string | undefined {
+  if (index <= 0) {
+    return undefined
+  }
+
+  const previousCodeUnit = text.charCodeAt(index - 1)
+  if (
+    previousCodeUnit >= 0xdc00 &&
+    previousCodeUnit <= 0xdfff &&
+    index > 1 &&
+    text.charCodeAt(index - 2) >= 0xd800 &&
+    text.charCodeAt(index - 2) <= 0xdbff
+  ) {
+    return text.slice(index - 2, index)
+  }
+
+  return text[index - 1]
+}
+
+function codePointAt(text: string, index: number): string | undefined {
+  const codePoint = text.codePointAt(index)
+  return codePoint === undefined ? undefined : String.fromCodePoint(codePoint)
+}
+
+function isWholeWordMatch(text: string, start: number, end: number): boolean {
+  const before = codePointBefore(text, start)
+  const after = codePointAt(text, end)
+  return !isWordCharacter(before) && !isWordCharacter(after)
+}
+
+function buildLocaleLowercaseIndex(text: string): {
+  text: string
+  originalStartByNormalizedOffset: number[]
+  originalEndByNormalizedOffset: number[]
+} {
+  let normalized = ''
+  const originalStartByNormalizedOffset: number[] = []
+  const originalEndByNormalizedOffset: number[] = []
+  let originalOffset = 0
+
+  for (const char of text) {
+    const normalizedChar = char.toLocaleLowerCase()
+    const originalEnd = originalOffset + char.length
+    // Why: locale lowercasing can expand one original character into multiple
+    // UTF-16 code units (for example `İ` -> `i\u0307`). Search matches happen
+    // in normalized text but DOM slicing needs original offsets.
+    for (let i = 0; i < normalizedChar.length; i += 1) {
+      originalStartByNormalizedOffset.push(originalOffset)
+      originalEndByNormalizedOffset.push(originalEnd)
+    }
+    normalized += normalizedChar
+    originalOffset = originalEnd
+  }
+
+  return { text: normalized, originalStartByNormalizedOffset, originalEndByNormalizedOffset }
 }
 
 export function clearMarkdownPreviewSearchHighlights(root: HTMLElement): void {
@@ -55,7 +181,7 @@ export function applyMarkdownPreviewSearchHighlights(
 ): HTMLElement[] {
   clearMarkdownPreviewSearchHighlights(root)
 
-  if (!query) {
+  if (!query || isMarkdownPreviewSearchQueryTooLarge(query)) {
     return []
   }
 

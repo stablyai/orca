@@ -1,8 +1,12 @@
 import { describe, expect, it } from 'vitest'
-import { existsSync, mkdtempSync, readFileSync, rmSync, statSync } from 'node:fs'
+import { existsSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { writeFileAtomically } from './fs-utils'
+import {
+  copyFileWithWindowsRetry,
+  renameFileWithWindowsRetry,
+  writeFileAtomically
+} from './fs-utils'
 
 describe('writeFileAtomically', () => {
   let dir: string
@@ -73,6 +77,53 @@ describe('writeFileAtomically', () => {
             .filter((f: string) => f.endsWith('.tmp'))
         : []
       expect(tmpFiles).toHaveLength(0)
+    } finally {
+      cleanup()
+    }
+  })
+})
+
+describe('retrying file operations', () => {
+  let dir: string
+
+  function setup(): string {
+    dir = mkdtempSync(join(tmpdir(), 'orca-fs-utils-'))
+    return dir
+  }
+
+  function cleanup(): void {
+    if (dir) {
+      rmSync(dir, { recursive: true, force: true })
+    }
+  }
+
+  it('renames a file through the retry wrapper', () => {
+    setup()
+    try {
+      const source = join(dir, 'source.txt')
+      const target = join(dir, 'target.txt')
+      writeFileSync(source, 'data', 'utf-8')
+
+      renameFileWithWindowsRetry(source, target)
+
+      expect(existsSync(source)).toBe(false)
+      expect(readFileSync(target, 'utf-8')).toBe('data')
+    } finally {
+      cleanup()
+    }
+  })
+
+  it('copies a file through the retry wrapper', () => {
+    setup()
+    try {
+      const source = join(dir, 'source.txt')
+      const target = join(dir, 'target.txt')
+      writeFileSync(source, 'data', 'utf-8')
+
+      copyFileWithWindowsRetry(source, target)
+
+      expect(readFileSync(source, 'utf-8')).toBe('data')
+      expect(readFileSync(target, 'utf-8')).toBe('data')
     } finally {
       cleanup()
     }

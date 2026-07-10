@@ -36,7 +36,13 @@ function deriveChecksStatus(
     return prChecksStatus
   }
   const hasFailure = checks.some(
-    (check) => check.conclusion === 'failure' || check.conclusion === 'timed_out'
+    (check) =>
+      check.conclusion === 'failure' ||
+      check.conclusion === 'timed_out' ||
+      check.conclusion === 'cancelled' ||
+      // Why: action_required (e.g. a workflow awaiting approval) blocks merge;
+      // treat it as failure so the review queue doesn't report a clean PR.
+      check.conclusion === 'action_required'
   )
   if (hasFailure) {
     return 'failure'
@@ -110,9 +116,13 @@ export function hostedReviewInfoFromGitHubPRInfo(pr: PRInfo): HostedReviewInfo {
     mergeable: pr.mergeable,
     ...(pr.reviewDecision !== undefined ? { reviewDecision: pr.reviewDecision } : {}),
     ...(pr.autoMergeEnabled !== undefined ? { autoMergeEnabled: pr.autoMergeEnabled } : {}),
+    ...(pr.autoMergeAllowed !== undefined ? { autoMergeAllowed: pr.autoMergeAllowed } : {}),
     ...(pr.mergeQueueRequired !== undefined ? { mergeQueueRequired: pr.mergeQueueRequired } : {}),
     ...(pr.mergeStateStatus !== undefined ? { mergeStateStatus: pr.mergeStateStatus } : {}),
     ...(pr.headSha ? { headSha: pr.headSha } : {}),
+    ...(pr.confirmedContainedHeadOid
+      ? { confirmedContainedHeadOid: pr.confirmedContainedHeadOid }
+      : {}),
     ...(pr.conflictSummary ? { conflictSummary: pr.conflictSummary } : {})
   }
 }

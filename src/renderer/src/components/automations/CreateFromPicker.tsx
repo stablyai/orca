@@ -1,3 +1,4 @@
+/* oxlint-disable react-doctor/no-adjust-state-on-prop-change -- Why: picker base-ref defaults and search results come from debounced runtime IPC, so loading/result state is intentionally synchronized from effects. */
 import React from 'react'
 import { Check, ChevronsUpDown } from 'lucide-react'
 import { Button } from '@/components/ui/button'
@@ -12,10 +13,13 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { cn } from '@/lib/utils'
 import type { Repo, Worktree } from '../../../../shared/types'
 import { useAppStore } from '@/store'
+import { getRuntimeEnvironmentIdForRepo } from '@/lib/repo-runtime-owner'
 import {
   getRuntimeRepoBaseRefDefault,
   searchRuntimeRepoBaseRefs
 } from '@/runtime/runtime-repo-client'
+import { isRuntimeRepoRefSearchQueryWithinLimit } from '@/runtime/runtime-repo-search-bounds'
+import { translate } from '@/i18n/i18n'
 
 const DEFAULT_VALUE = '__project_default__'
 
@@ -38,8 +42,8 @@ export function CreateFromPicker({
   triggerClassName?: string
   onValueChange: (baseBranch: string) => void
 }): React.JSX.Element {
-  const activeRuntimeEnvironmentId = useAppStore(
-    (state) => state.settings?.activeRuntimeEnvironmentId ?? null
+  const activeRuntimeEnvironmentId = useAppStore((state) =>
+    getRuntimeEnvironmentIdForRepo(state, repoId)
   )
   const repo = repoMap.get(repoId)
   const [open, setOpen] = React.useState(false)
@@ -77,7 +81,15 @@ export function CreateFromPicker({
     }
   }, [])
 
-  React.useEffect(() => cancelFocusFrame, [cancelFocusFrame])
+  const setInputNode = React.useCallback(
+    (node: HTMLInputElement | null): void => {
+      if (node === null) {
+        cancelFocusFrame()
+      }
+      inputRef.current = node
+    },
+    [cancelFocusFrame]
+  )
 
   const focusSearchInput = React.useCallback(() => {
     cancelFocusFrame()
@@ -120,12 +132,11 @@ export function CreateFromPicker({
   }, [activeRuntimeEnvironmentId, repoId])
 
   React.useEffect(() => {
-    setQuery('')
-    setSearchResults([])
-    setIsSearching(false)
-  }, [repoId])
-
-  React.useEffect(() => {
+    if (!isRuntimeRepoRefSearchQueryWithinLimit(query)) {
+      setSearchResults([])
+      setIsSearching(false)
+      return
+    }
     const trimmedQuery = query.trim()
     if (!open || !repoId || trimmedQuery.length < 2) {
       setSearchResults([])
@@ -172,7 +183,12 @@ export function CreateFromPicker({
             className={cn('h-9 w-full justify-between px-3 text-sm font-normal', triggerClassName)}
           >
             <span className="flex min-w-0 items-center gap-1.5">
-              <span className="shrink-0 text-muted-foreground">Branch from</span>
+              <span className="shrink-0 text-muted-foreground">
+                {translate(
+                  'auto.components.automations.CreateFromPicker.dd3841b442',
+                  'Branch from'
+                )}
+              </span>
               <span className="truncate">{selectedLabel}</span>
             </span>
             <ChevronsUpDown className="size-4 opacity-50" />
@@ -188,14 +204,25 @@ export function CreateFromPicker({
         >
           <Command>
             <CommandInput
-              ref={inputRef}
+              ref={setInputNode}
               value={query}
               onValueChange={setQuery}
-              placeholder="Search repo branches..."
+              placeholder={translate(
+                'auto.components.automations.CreateFromPicker.f061f49e3f',
+                'Search repo branches...'
+              )}
             />
             <CommandList className="max-h-72">
               <CommandEmpty>
-                {isSearching ? 'Searching branches...' : 'No branches found.'}
+                {isSearching
+                  ? translate(
+                      'auto.components.automations.CreateFromPicker.9ce96621f4',
+                      'Searching branches...'
+                    )
+                  : translate(
+                      'auto.components.automations.CreateFromPicker.79512f22a7',
+                      'No branches found.'
+                    )}
               </CommandEmpty>
               <CommandItem
                 value={effectiveDefault ? `${effectiveDefault} default` : 'project default'}
@@ -211,7 +238,16 @@ export function CreateFromPicker({
                   )}
                 />
                 <span className="truncate">
-                  {effectiveDefault ? `${effectiveDefault} (default)` : 'Project default'}
+                  {effectiveDefault
+                    ? translate(
+                        'auto.components.automations.CreateFromPicker.e53d306056',
+                        '{{value0}} (default)',
+                        { value0: effectiveDefault }
+                      )
+                    : translate(
+                        'auto.components.automations.CreateFromPicker.ef6d762538',
+                        'Project default'
+                      )}
                 </span>
               </CommandItem>
               {branchOptions

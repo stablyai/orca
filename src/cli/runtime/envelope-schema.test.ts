@@ -22,6 +22,23 @@ describe('RuntimeRpcEnvelopeSchema', () => {
     expect(parsed.success).toBe(true)
   })
 
+  it('accepts structured failure data for agent recovery hints', () => {
+    const parsed = RuntimeRpcEnvelopeSchema.safeParse({
+      id: 'req-1',
+      ok: false,
+      error: {
+        code: 'app_not_found',
+        message: 'app not found: Gmail',
+        data: {
+          nextSteps: ['Target the desktop browser app/window that contains Gmail.']
+        }
+      },
+      _meta: { runtimeId: 'runtime-1' }
+    })
+
+    expect(parsed.success).toBe(true)
+  })
+
   it('accepts a failure envelope without _meta', () => {
     // Why: the runtime may fail before it has resolved its own runtimeId, in
     // which case _meta is omitted. The schema must tolerate that rather than

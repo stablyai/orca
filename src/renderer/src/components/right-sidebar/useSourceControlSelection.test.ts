@@ -3,6 +3,7 @@ import type { GitStatusEntry } from '../../../../shared/types'
 import {
   getSelectionRangeKeys,
   reconcileSelectionKeys,
+  reconcileSourceControlSelectionState,
   type FlatEntry
 } from './useSourceControlSelection'
 
@@ -33,6 +34,40 @@ describe('reconcileSelectionKeys', () => {
     expect(
       reconcileSelectionKeys(new Set(['unstaged::a.ts', 'untracked::gone.ts']), flatEntries)
     ).toEqual(new Set(['unstaged::a.ts']))
+  })
+})
+
+describe('reconcileSourceControlSelectionState', () => {
+  it('keeps selected keys and anchor identity when all keys are still visible', () => {
+    const flatEntries = [
+      makeEntry('unstaged::a.ts', 'unstaged', 'a.ts'),
+      makeEntry('staged::b.ts', 'staged', 'b.ts')
+    ]
+    const selectedKeys = new Set(['unstaged::a.ts'])
+
+    const result = reconcileSourceControlSelectionState({
+      selectedKeys,
+      anchorKey: 'unstaged::a.ts',
+      flatEntries
+    })
+
+    expect(result.selectedKeys).toBe(selectedKeys)
+    expect(result.anchorKey).toBe('unstaged::a.ts')
+  })
+
+  it('prunes stale selected keys and clears stale range anchors', () => {
+    const flatEntries = [makeEntry('staged::b.ts', 'staged', 'b.ts')]
+
+    expect(
+      reconcileSourceControlSelectionState({
+        selectedKeys: new Set(['unstaged::a.ts', 'staged::b.ts']),
+        anchorKey: 'unstaged::a.ts',
+        flatEntries
+      })
+    ).toEqual({
+      selectedKeys: new Set(['staged::b.ts']),
+      anchorKey: null
+    })
   })
 })
 

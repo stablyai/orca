@@ -2,7 +2,8 @@ import { describe, expect, it, vi } from 'vitest'
 import {
   markTerminalBracketedPasteInterrupted,
   observeTerminalBracketedPasteModeOutput,
-  pasteTerminalText
+  pasteTerminalText,
+  sanitizeTerminalPasteText
 } from './terminal-bracketed-paste'
 
 function createTerminal(bracketedPasteMode = true) {
@@ -13,6 +14,7 @@ function createTerminal(bracketedPasteMode = true) {
     options: {
       ignoreBracketedPasteMode: false as boolean | undefined
     },
+    input: vi.fn(),
     paste: vi.fn()
   }
   return terminal
@@ -51,7 +53,7 @@ describe('terminal bracketed paste policy', () => {
   it('forces bracketed paste behavior when requested after Ctrl+C', () => {
     const terminal = createTerminal(true)
     const observedIgnoreValues: (boolean | undefined)[] = []
-    terminal.paste.mockImplementation(() => {
+    terminal.input.mockImplementation(() => {
       observedIgnoreValues.push(terminal.options.ignoreBracketedPasteMode)
     })
 
@@ -60,17 +62,18 @@ describe('terminal bracketed paste policy', () => {
       forceBracketedPaste: true
     })
 
-    expect(terminal.paste).toHaveBeenCalledWith(
+    expect(terminal.input).toHaveBeenCalledWith(
       '\x1b[200~/tmp/orca-paste-1760000000000-id.png\x1b[201~'
     )
-    expect(observedIgnoreValues).toEqual([true])
+    expect(terminal.paste).not.toHaveBeenCalled()
+    expect(observedIgnoreValues).toEqual([false])
     expect(terminal.options.ignoreBracketedPasteMode).toBe(false)
   })
 
   it('forces bracketed paste behavior even when terminal mode is off', () => {
     const terminal = createTerminal(false)
     const observedIgnoreValues: (boolean | undefined)[] = []
-    terminal.paste.mockImplementation(() => {
+    terminal.input.mockImplementation(() => {
       observedIgnoreValues.push(terminal.options.ignoreBracketedPasteMode)
     })
 
@@ -78,10 +81,11 @@ describe('terminal bracketed paste policy', () => {
       forceBracketedPaste: true
     })
 
-    expect(terminal.paste).toHaveBeenCalledWith(
+    expect(terminal.input).toHaveBeenCalledWith(
       '\x1b[200~/tmp/orca-paste-1760000000000-id.png\x1b[201~'
     )
-    expect(observedIgnoreValues).toEqual([true])
+    expect(terminal.paste).not.toHaveBeenCalled()
+    expect(observedIgnoreValues).toEqual([false])
     expect(terminal.options.ignoreBracketedPasteMode).toBe(false)
   })
 
@@ -92,7 +96,8 @@ describe('terminal bracketed paste policy', () => {
       forceBracketedPaste: true
     })
 
-    expect(terminal.paste).toHaveBeenCalledWith('\x1b[200~/tmp/before\u241b[201~after.png\x1b[201~')
+    expect(terminal.input).toHaveBeenCalledWith('\x1b[200~/tmp/before\u241b[201~after.png\x1b[201~')
+    expect(terminal.paste).not.toHaveBeenCalled()
   })
 
   it('does not change paste behavior when Ctrl+C happened outside bracketed paste mode', () => {
@@ -206,5 +211,34 @@ describe('terminal bracketed paste policy', () => {
     pasteTerminalText(terminal, 'before\x1b[201~after')
 
     expect(terminal.paste).toHaveBeenCalledWith('before\u241b[201~after')
+  })
+
+  it('sanitizes escape-heavy paste text without split arrays', () => {
+    const text = Array.from({ length: 512 }, (_value, index) => `part-${index}\x1b[201~`).join('')
+    const splitSpy = vi.spyOn(String.prototype, 'split')
+
+    const sanitized = sanitizeTerminalPasteText(text)
+    const splitCallCount = splitSpy.mock.calls.length
+    splitSpy.mockRestore()
+
+    expect(sanitized).not.toContain('\x1b')
+    expect(sanitized).toContain('\u241b[201~')
+    expect(splitCallCount).toBe(0)
+  })
+
+  it('detects escape-heavy bracketed mode output without split arrays', () => {
+    const terminal = createTerminal(true)
+    markTerminalBracketedPasteInterrupted(terminal)
+    const output = `${Array.from({ length: 512 }, () => '\x1b]noise').join('')}\x1b[?25;2004h`
+    const splitSpy = vi.spyOn(String.prototype, 'split')
+
+    observeTerminalBracketedPasteModeOutput(terminal, output)
+    const splitCallCount = splitSpy.mock.calls.length
+    splitSpy.mockRestore()
+
+    pasteTerminalText(terminal, 'commit')
+    expect(terminal.paste).toHaveBeenCalledWith('commit')
+    expect(terminal.options.ignoreBracketedPasteMode).toBe(false)
+    expect(splitCallCount).toBe(0)
   })
 })

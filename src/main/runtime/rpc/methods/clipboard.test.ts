@@ -2,6 +2,10 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { RpcDispatcher } from '../dispatcher'
 import type { RpcRequest } from '../core'
 import type { OrcaRuntimeService } from '../../orca-runtime'
+import {
+  CLIPBOARD_IMAGE_MAX_BASE64_CHARS,
+  CLIPBOARD_IMAGE_TOO_LARGE_ERROR
+} from '../../../../shared/clipboard-image'
 
 const { saveClipboardImageBufferAsTempFile } = vi.hoisted(() => ({
   saveClipboardImageBufferAsTempFile: vi.fn()
@@ -71,6 +75,26 @@ describe('clipboard RPC methods', () => {
 
     expect(response.ok).toBe(false)
     expect(saveClipboardImageBufferAsTempFile).not.toHaveBeenCalled()
+  })
+
+  it('rejects oversized direct clipboard image payloads before base64 validation', async () => {
+    const base64Test = vi.spyOn(RegExp.prototype, 'test')
+    const dispatcher = makeDispatcher()
+
+    try {
+      const response = await dispatcher.dispatch(
+        makeRequest('clipboard.saveImageAsTempFile', {
+          contentBase64: 'A'.repeat(CLIPBOARD_IMAGE_MAX_BASE64_CHARS + 1)
+        })
+      )
+
+      expect(response).toMatchObject({ ok: false })
+      expect(JSON.stringify(response)).toContain(CLIPBOARD_IMAGE_TOO_LARGE_ERROR)
+      expect(base64Test).not.toHaveBeenCalled()
+      expect(saveClipboardImageBufferAsTempFile).not.toHaveBeenCalled()
+    } finally {
+      base64Test.mockRestore()
+    }
   })
 
   it('accepts chunked uploads and forwards the recorded connectionId on commit', async () => {
@@ -168,6 +192,35 @@ describe('clipboard RPC methods', () => {
         })
       )
     ).resolves.toMatchObject({ ok: false })
+  })
+
+  it('rejects oversized clipboard image upload chunks before base64 validation', async () => {
+    const base64Test = vi.spyOn(RegExp.prototype, 'test')
+    const dispatcher = makeDispatcher()
+    const start = await dispatcher.dispatch(
+      makeRequest('clipboard.startImageUpload', {
+        expectedBase64Length: CLIPBOARD_IMAGE_UPLOAD_CHUNK_BASE64_CHARS + 4,
+        connectionId: null
+      })
+    )
+    const uploadId = (start.ok ? start.result : null) as { uploadId: string }
+
+    try {
+      const response = await dispatcher.dispatch(
+        makeRequest('clipboard.appendImageUploadChunk', {
+          uploadId: uploadId.uploadId,
+          offset: 0,
+          contentBase64: 'A'.repeat(CLIPBOARD_IMAGE_UPLOAD_CHUNK_BASE64_CHARS + 4)
+        })
+      )
+
+      expect(response).toMatchObject({ ok: false })
+      expect(JSON.stringify(response)).toContain('Clipboard image chunk is too large')
+      expect(base64Test).not.toHaveBeenCalled()
+      expect(saveClipboardImageBufferAsTempFile).not.toHaveBeenCalled()
+    } finally {
+      base64Test.mockRestore()
+    }
   })
 
   it('rejects uploads beyond the existing total clipboard image limit', async () => {

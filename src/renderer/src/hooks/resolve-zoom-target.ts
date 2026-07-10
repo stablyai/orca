@@ -1,5 +1,5 @@
 /**
- * Determine which zoom domain (terminal, editor, or UI) should be adjusted
+ * Determine which zoom domain (terminal, editor, simulator, or UI) should be adjusted
  * based on current view, tab type, and focused element.
  */
 export function resolveZoomTarget(args: {
@@ -12,9 +12,9 @@ export function resolveZoomTarget(args: {
     | 'space'
     | 'skills'
     | 'mobile'
-  activeTabType: 'terminal' | 'editor' | 'browser'
+  activeTabType: 'terminal' | 'editor' | 'browser' | 'simulator'
   activeElement: unknown
-}): 'terminal' | 'editor' | 'ui' {
+}): 'terminal' | 'editor' | 'simulator' | 'ui' {
   const { activeView, activeTabType, activeElement } = args
   const terminalInputFocused =
     typeof activeElement === 'object' &&
@@ -43,14 +43,21 @@ export function resolveZoomTarget(args: {
   if (activeView !== 'terminal') {
     return 'ui'
   }
+  if (activeTabType === 'simulator') {
+    return 'simulator'
+  }
+  // Why: keyboard/menu zoom in an active browser tab belongs to Orca chrome.
+  // Browser page zoom has a dedicated route for wheel and page-specific IPC.
+  if (activeTabType === 'browser') {
+    return 'ui'
+  }
   if (activeTabType === 'editor' || editorFocused) {
     return 'editor'
   }
-  // Why: terminal tabs should keep using per-pane terminal font zoom even when
-  // focus leaves the xterm textarea (e.g. clicking tab bar/sidebar controls).
-  // Falling back to UI zoom here would resize the whole app for a terminal-only
-  // action and break parity with terminal zoom behavior.
-  if (activeTabType === 'terminal' || terminalInputFocused) {
+  // Why: terminal zoom is focus-owned. After the user clicks app chrome or
+  // whitespace, the active terminal tab remains visible but app zoom should own
+  // Cmd/Ctrl +/- until xterm focus returns.
+  if (terminalInputFocused) {
     return 'terminal'
   }
   return 'ui'

@@ -16,9 +16,13 @@ type CachedSlugState =
 
 export function normalizeGitHubRepositorySlug(value: string | null | undefined): string | null {
   const trimmed = value?.trim()
-  if (!trimmed) return null
+  if (!trimmed) {
+    return null
+  }
   const [owner, repo, extra] = trimmed.split('/')
-  if (!owner || !repo || extra) return null
+  if (!owner || !repo || extra) {
+    return null
+  }
   return `${owner}/${repo}`.toLowerCase()
 }
 
@@ -27,8 +31,12 @@ function cachedSlugStateForRepo(
   slugsByRepoId: Record<string, GitHubRepoSlugCacheEntry | undefined>
 ): CachedSlugState {
   const cached = slugsByRepoId[repo.id]
-  if (!cached) return { status: 'missing' }
-  if (cached.path !== repo.path) return { status: 'stale' }
+  if (!cached) {
+    return { status: 'missing' }
+  }
+  if (cached.path !== repo.path) {
+    return { status: 'stale' }
+  }
   return { status: 'resolved', slug: normalizeGitHubRepositorySlug(cached.slug) }
 }
 
@@ -38,7 +46,9 @@ export function findRepoForGitHubProjectRepository(
   slugsByRepoId: Record<string, GitHubRepoSlugCacheEntry | undefined> = {}
 ): GitHubProjectRepoMatch | null {
   const slug = normalizeGitHubRepositorySlug(repository)
-  if (!slug) return null
+  if (!slug) {
+    return null
+  }
 
   const slugStates = new Map(
     repos.map((repo) => [repo.id, cachedSlugStateForRepo(repo, slugsByRepoId)])
@@ -47,8 +57,12 @@ export function findRepoForGitHubProjectRepository(
     const state = slugStates.get(repo.id)
     return state?.status === 'resolved' && state.slug === slug
   })
-  if (slugMatches.length === 1) return slugMatches[0]!
-  if (slugMatches.length > 1) return null
+  if (slugMatches.length === 1) {
+    return slugMatches[0]!
+  }
+  if (slugMatches.length > 1) {
+    return null
+  }
 
   return (
     repos.find((repo) => {

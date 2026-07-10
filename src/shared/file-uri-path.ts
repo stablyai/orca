@@ -28,6 +28,30 @@ export function filesystemPathToFileUri(filePath: string): string {
   return normalizedPath.startsWith('/') ? `file://${encodedPath}` : `file:///${encodedPath}`
 }
 
+export function filesystemPathHrefToFileUri(filePathHref: string): string {
+  const suffixIndex = filePathHref.search(/[?#]/)
+  if (suffixIndex === -1) {
+    return filesystemPathToFileUri(filePathHref)
+  }
+
+  const pathPart = filePathHref.slice(0, suffixIndex)
+  const suffix = filePathHref.slice(suffixIndex)
+  const url = new URL(filesystemPathToFileUri(pathPart))
+  if (suffix.startsWith('#')) {
+    // Why: markdown href fragments like `#L10` should stay URL fragments,
+    // not become `%23L10` inside the Windows filesystem path.
+    url.hash = suffix
+    return url.toString()
+  }
+
+  const hashIndex = suffix.indexOf('#')
+  url.search = hashIndex === -1 ? suffix : suffix.slice(0, hashIndex)
+  if (hashIndex !== -1) {
+    url.hash = suffix.slice(hashIndex)
+  }
+  return url.toString()
+}
+
 export function fileUriToFilesystemPath(url: URL): string | null {
   if (url.protocol !== 'file:') {
     return null

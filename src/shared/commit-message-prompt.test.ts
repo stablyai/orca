@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   buildCommitPrompt,
   cleanGeneratedCommitMessage,
@@ -8,6 +8,10 @@ import {
   tokenizeCustomCommandTemplate,
   truncateDiffForPrompt
 } from './commit-message-prompt'
+
+afterEach(() => {
+  vi.restoreAllMocks()
+})
 
 describe('buildCommitPrompt', () => {
   it('embeds the diff into the base prompt', () => {
@@ -36,16 +40,42 @@ describe('truncateDiffForPrompt', () => {
   })
 
   it('truncates and appends a marker when over budget', () => {
-    const oversized = 'A'.repeat(STAGED_DIFF_BYTE_BUDGET + 100)
+    const oversized = `${'line\n'.repeat(STAGED_DIFF_BYTE_BUDGET / 5 + 100)}`
     const result = truncateDiffForPrompt(oversized)
     expect(result.length).toBeLessThan(oversized.length)
-    expect(result).toMatch(/diff truncated, 100 bytes omitted/)
+    expect(result).toMatch(/diff truncated, \d+ bytes omitted/)
   })
 
-  it('honors a custom budget', () => {
-    const result = truncateDiffForPrompt('abcdefghij', 5)
-    expect(result.startsWith('abcde')).toBe(true)
-    expect(result).toMatch(/diff truncated, 5 bytes omitted/)
+  it('clips on a line boundary so the diff is never cut mid-line', () => {
+    const diff = `${'keep this line\n'.repeat(40)}`
+    const result = truncateDiffForPrompt(diff, 95)
+    const body = result.split('\n...(diff truncated')[0]
+    // Every retained line is whole.
+    for (const line of body.split('\n').filter(Boolean)) {
+      expect(line).toBe('keep this line')
+    }
+  })
+
+  it('keeps clipped output within a tight custom budget', () => {
+    const files = Array.from(
+      { length: 20 },
+      (_, i) => `diff --git a/file-${i}.txt b/file-${i}.txt\n${'+x\n'.repeat(200)}`
+    ).join('')
+    const result = truncateDiffForPrompt(files, 120)
+
+    expect(result.length).toBeLessThanOrEqual(120)
+  })
+
+  it('shares the budget fairly so a huge file does not starve a small one', () => {
+    const hugeFile = `diff --git a/data.jsonl b/data.jsonl\n${'+x\n'.repeat(5000)}`
+    const smallFile = 'diff --git a/src/app.ts b/src/app.ts\n+const meaningful = true\n'
+    const result = truncateDiffForPrompt(`${hugeFile}${smallFile}`, 1_000)
+
+    // The small, human-authored change survives instead of being cut off.
+    expect(result).toContain('a/src/app.ts')
+    expect(result).toContain('const meaningful = true')
+    // The huge file is clipped, not the small one.
+    expect(result).toMatch(/diff truncated, \d+ bytes omitted/)
   })
 })
 
@@ -71,6 +101,27 @@ describe('cleanGeneratedCommitMessage', () => {
 
   it('normalizes CRLF line endings', () => {
     expect(cleanGeneratedCommitMessage('feat: a\r\nbody line\r\n')).toBe('feat: a\nbody line')
+  })
+
+  it('cleans large fenced CRLF output without regex-wide normalization', () => {
+    const replaceSpy = vi.spyOn(String.prototype, 'replace')
+    const matchSpy = vi.spyOn(String.prototype, 'match')
+    const fence = '```'
+    const raw = `\r\n${fence}text\r\nfeat: large output\r\n${'body line\r\n'.repeat(10_000)}${fence}\r\n`
+
+    const result = cleanGeneratedCommitMessage(raw)
+
+    expect(result.startsWith('feat: large output\nbody line')).toBe(true)
+    expect(result.endsWith('body line')).toBe(true)
+    expect(result).not.toContain('\r\n')
+    const usedCrlfReplace = replaceSpy.mock.calls.some(
+      ([pattern]) => pattern instanceof RegExp && pattern.source === '\\r\\n'
+    )
+    const usedFenceMatch = matchSpy.mock.calls.some(
+      ([pattern]) => pattern instanceof RegExp && pattern.source.includes('[\\s\\S]')
+    )
+    expect(usedCrlfReplace).toBe(false)
+    expect(usedFenceMatch).toBe(false)
   })
 
   it('strips a leading list marker from the commit subject', () => {
@@ -114,6 +165,18 @@ describe('extractAgentErrorMessage', () => {
     expect(extractAgentErrorMessage(out, '')).toBe('second failure')
   })
 
+  it('uses the last ERROR line in large CRLF output without line-array splitting', () => {
+    const splitSpy = vi.spyOn(String.prototype, 'split')
+    const out = `${'preamble\r\n'.repeat(10_000)}ERROR: first failure\r\nretry\r\nERROR: second failure\r\n`
+
+    expect(extractAgentErrorMessage(out, '')).toBe('second failure')
+
+    const usedLineSplit = splitSpy.mock.calls.some(
+      ([separator]) => separator instanceof RegExp && separator.source === '\\r?\\n'
+    )
+    expect(usedLineSplit).toBe(false)
+  })
+
   it('matches an `Error:` line emitted on stdout', () => {
     expect(extractAgentErrorMessage('Error: model unavailable\n', '')).toBe('model unavailable')
   })
@@ -142,6 +205,30 @@ describe('extractAgentErrorMessage', () => {
     expect(extractAgentErrorMessage(stdout, '')).toBe(
       'The API Key appears to be invalid or may have expired. Please verify your credentials and try again.'
     )
+  })
+
+  it('extracts wrapped provider error-code payloads from large output without replacement passes', () => {
+    const replaceSpy = vi.spyOn(String.prototype, 'replace')
+    const echoedPrompt = 'echoed pasted prompt '.repeat(10_000)
+    const stdout = [
+      `${echoedPrompt}Error code: 401 - {'error': {'message': 'The API Key appears to be invalid or ma`,
+      "y have expired. Please verify your credentials and try again.', 'type': 'invalid",
+      "_authentication_error'}}"
+    ].join('\r\n')
+
+    expect(extractAgentErrorMessage(stdout, '')).toBe(
+      'The API Key appears to be invalid or may have expired. Please verify your credentials and try again.'
+    )
+    expect(replaceSpy).not.toHaveBeenCalled()
+  })
+
+  it('does not strip ANSI across a paste-sized single-line log before error-code fallback', () => {
+    const replaceSpy = vi.spyOn(String.prototype, 'replace')
+    const pastedLog = 'x'.repeat(20_000)
+    const stdout = `${pastedLog}Error code: 400 - {'message': 'bad request'}`
+
+    expect(extractAgentErrorMessage(stdout, '')).toBe('bad request')
+    expect(replaceSpy).not.toHaveBeenCalled()
   })
 
   it('returns null when no ERROR line is present', () => {

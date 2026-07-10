@@ -1,10 +1,5 @@
 import { useAppStore } from '@/store'
 import type { AppState } from '@/store/types'
-import { isExplicitAgentStatusFresh } from '@/lib/agent-status'
-import {
-  AGENT_STATUS_STALE_AFTER_MS,
-  type AgentStatusEntry
-} from '../../../../shared/agent-status-types'
 import { isTerminalLeafId, makePaneKey } from '../../../../shared/stable-pane-id'
 
 export type FocusedAgentRowHighlightState = Pick<
@@ -21,8 +16,7 @@ export type FocusedAgentRowHighlightState = Pick<
 
 export function getFocusedAgentPaneKeyForWorktree(
   state: FocusedAgentRowHighlightState,
-  worktreeId: string,
-  now = Date.now()
+  worktreeId: string
 ): string | null {
   if (state.activeWorktreeId !== worktreeId || state.activeTabType !== 'terminal') {
     return null
@@ -46,8 +40,11 @@ export function getFocusedAgentPaneKeyForWorktree(
   }
 
   const activePaneKey = makePaneKey(activeTabId, activeLeafId)
-  const liveEntry = state.agentStatusByPaneKey[activePaneKey]
-  if (liveEntry && isFreshLiveAgent(liveEntry, now)) {
+  // Why: the inline card lists every agent attributed to this worktree, even
+  // after its status decays to idle. Highlight whichever displayed row matches
+  // the focused pane — gating on freshness left clicked-into stale rows with no
+  // selection coloring.
+  if (state.agentStatusByPaneKey[activePaneKey]) {
     return activePaneKey
   }
 
@@ -63,8 +60,4 @@ export function getFocusedAgentPaneKeyForWorktree(
 
 export function useFocusedAgentPaneKey(worktreeId: string): string | null {
   return useAppStore((state) => getFocusedAgentPaneKeyForWorktree(state, worktreeId))
-}
-
-function isFreshLiveAgent(entry: AgentStatusEntry, now: number): boolean {
-  return isExplicitAgentStatusFresh(entry, now, AGENT_STATUS_STALE_AFTER_MS)
 }

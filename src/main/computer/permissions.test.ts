@@ -65,12 +65,12 @@ describe('notifyPermissionRequired', () => {
     Object.defineProperty(process, 'platform', { value: originalPlatform, configurable: true })
   })
 
-  function getNotificationEventHandler(eventName: string): () => void {
+  function getNotificationEventHandler(eventName: string): (...args: unknown[]) => void {
     const call = notificationOnMock.mock.calls.find((c: unknown[]) => c[0] === eventName)
     if (!call) {
       throw new Error(`Notification ${eventName} handler not registered`)
     }
-    return call[1] as () => void
+    return call[1] as (...args: unknown[]) => void
   }
 
   it('clears the retained notification fallback timer when the notification closes', () => {
@@ -97,5 +97,24 @@ describe('notifyPermissionRequired', () => {
       expect.stringContaining('Privacy_Accessibility')
     )
     expect(vi.getTimerCount()).toBe(0)
+  })
+
+  it('clears retained notification state when native delivery fails', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    try {
+      notifyPermissionRequired('Enable accessibility')
+      expect(vi.getTimerCount()).toBe(1)
+
+      const failedHandler = getNotificationEventHandler('failed')
+      failedHandler({}, 'Application is not code signed')
+
+      expect(warn).toHaveBeenCalledWith(
+        expect.stringContaining('Accessibility permission notification failed')
+      )
+      expect(vi.getTimerCount()).toBe(0)
+      expect(notificationRemoveListenerMock).toHaveBeenCalledWith('failed', failedHandler)
+    } finally {
+      warn.mockRestore()
+    }
   })
 })

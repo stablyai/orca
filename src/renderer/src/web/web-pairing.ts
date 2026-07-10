@@ -1,3 +1,5 @@
+import type { DeviceScope } from '../../../shared/runtime-types'
+
 const PAIRING_OFFER_VERSION = 2
 
 export type WebPairingOffer = {
@@ -5,7 +7,13 @@ export type WebPairingOffer = {
   endpoint: string
   deviceToken: string
   publicKeyB64: string
+  scope?: DeviceScope
 }
+
+export type WebPairingStartupDecision =
+  | { kind: 'auto-save-runtime-offer'; offer: WebPairingOffer }
+  | { kind: 'show-connect'; initialPairingInput: string | null }
+  | { kind: 'use-stored-environment' }
 
 export function parseWebPairingInput(input: string): WebPairingOffer | null {
   const trimmed = input.trim()
@@ -14,19 +22,9 @@ export function parseWebPairingInput(input: string): WebPairingOffer | null {
   }
 
   try {
-    if (trimmed.startsWith('orca://pair')) {
-      const queryIndex = trimmed.indexOf('?')
-      if (queryIndex !== -1) {
-        const query = trimmed.slice(queryIndex + 1).split('#')[0] ?? ''
-        const params = new URLSearchParams(query)
-        const code = params.get('code')
-        return code ? decodePairingPayload(code) : null
-      }
-      const hashIndex = trimmed.indexOf('#')
-      if (hashIndex === -1) {
-        return null
-      }
-      return decodePairingPayload(trimmed.slice(hashIndex + 1))
+    if (trimmed.toLowerCase().startsWith('orca://')) {
+      const code = extractPairingCodeFromUrl(trimmed)
+      return code ? decodePairingPayload(code) : null
     }
     return decodePairingPayload(trimmed)
   } catch {
@@ -60,6 +58,22 @@ export function readPairingInputFromLocation(location: Location): string | null 
   return hash
 }
 
+export function decideWebPairingStartup(args: {
+  initialPairingInput: string | null
+  hasStoredEnvironment: boolean
+}): WebPairingStartupDecision {
+  const offer = args.initialPairingInput ? parseWebPairingInput(args.initialPairingInput) : null
+  if (offer?.scope === 'runtime') {
+    return { kind: 'auto-save-runtime-offer', offer }
+  }
+  if (offer) {
+    return { kind: 'show-connect', initialPairingInput: args.initialPairingInput }
+  }
+  return args.hasStoredEnvironment
+    ? { kind: 'use-stored-environment' }
+    : { kind: 'show-connect', initialPairingInput: null }
+}
+
 export function clearPairingInputFromAddressBar(): void {
   if (!window.location.hash && !window.location.search) {
     return
@@ -84,12 +98,40 @@ function decodePairingPayload(base64url: string): WebPairingOffer | null {
   ) {
     return null
   }
+  const scope = parseWebPairingScope(parsed.scope)
   return {
     v: PAIRING_OFFER_VERSION,
     endpoint: normalizeWebSocketEndpoint(parsed.endpoint),
     deviceToken: parsed.deviceToken,
-    publicKeyB64: parsed.publicKeyB64
+    publicKeyB64: parsed.publicKeyB64,
+    ...(scope ? { scope } : {})
   }
+}
+
+function parseWebPairingScope(value: unknown): DeviceScope | null {
+  return value === 'mobile' || value === 'runtime' ? value : null
+}
+
+function extractPairingCodeFromUrl(url: string): string | null {
+  let parsed: URL
+  try {
+    parsed = new URL(url)
+  } catch {
+    return null
+  }
+  // Why: prefix checks accepted routes like `orca://pairing?...`; only the
+  // pairing deep-link host may carry runtime auth material.
+  if (parsed.protocol !== 'orca:' || parsed.hostname !== 'pair') {
+    return null
+  }
+  if (parsed.pathname !== '' && parsed.pathname !== '/') {
+    return null
+  }
+  const code = parsed.searchParams.get('code')
+  if (code) {
+    return code
+  }
+  return parsed.hash ? parsed.hash.slice(1) || null : null
 }
 
 function base64UrlToBytes(value: string): Uint8Array {

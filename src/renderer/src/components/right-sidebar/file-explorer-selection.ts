@@ -168,30 +168,6 @@ export function updateFileExplorerSelectionPaths(
   }
 }
 
-export function getFileExplorerActionNodes(
-  flatRows: readonly TreeNode[],
-  selectedPaths: Set<string>,
-  fallbackNode: TreeNode
-): TreeNode[] {
-  if (!selectedPaths.has(fallbackNode.path)) {
-    return [fallbackNode]
-  }
-
-  const selectedNodes = flatRows.filter((node) => selectedPaths.has(node.path))
-  return selectedNodes.length > 0 ? selectedNodes : [fallbackNode]
-}
-
-export function countVisibleFileExplorerSelections(
-  flatRows: readonly TreeNode[],
-  selectedPaths: Set<string>
-): number {
-  if (selectedPaths.size <= 1) {
-    return selectedPaths.size
-  }
-
-  return flatRows.reduce((count, node) => count + (selectedPaths.has(node.path) ? 1 : 0), 0)
-}
-
 export function formatFileExplorerPathsForClipboard(
   nodes: readonly TreeNode[],
   pathKind: 'absolute' | 'relative'

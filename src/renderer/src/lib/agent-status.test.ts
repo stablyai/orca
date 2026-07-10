@@ -1,7 +1,3 @@
-/* eslint-disable max-lines --
- * Why: agent title detection is intentionally table-driven in one place so the
- * supported title variants stay readable and regressions are easy to compare.
- */
 import { describe, expect, it, test, vi } from 'vitest'
 import {
   detectAgentStatusFromTitle,
@@ -10,6 +6,7 @@ import {
   getAgentLabel,
   isGeminiTerminalTitle,
   isClaudeAgent,
+  isClaudeManagementTitle,
   normalizeTerminalTitle,
   isExplicitAgentStatusFresh,
   mapAgentStatusStateToVisualStatus,
@@ -170,6 +167,22 @@ describe('detectAgentStatusFromTitle', () => {
     expect(detectAgentStatusFromTitle('⠋ OpenClaude')).toBe('working')
   })
 
+  it('excludes the exact Claude agents management title', () => {
+    expect(detectAgentStatusFromTitle('claude agents')).toBeNull()
+    expect(detectAgentStatusFromTitle('  Claude Agents  ')).toBeNull()
+    expect(detectAgentStatusFromTitle('claude.exe agents')).toBeNull()
+    expect(detectAgentStatusFromTitle('Claude.CMD agents')).toBeNull()
+    expect(detectAgentStatusFromTitle('claude.bat agents')).toBeNull()
+    expect(detectAgentStatusFromTitle('Claude.PS1 agents')).toBeNull()
+    expect(
+      detectAgentStatusFromTitle('C:\\Users\\dev\\AppData\\Roaming\\npm\\claude.cmd agents')
+    ).toBeNull()
+    expect(
+      detectAgentStatusFromTitle('"C:\\Users\\dev\\AppData\\Roaming\\npm\\claude.cmd" agents')
+    ).toBeNull()
+    expect(detectAgentStatusFromTitle('claude agents working')).toBe('working')
+  })
+
   it('detects Pi idle titles', () => {
     expect(detectAgentStatusFromTitle('π - my-project')).toBe('idle')
     expect(detectAgentStatusFromTitle('π - session-name - my-project')).toBe('idle')
@@ -215,6 +228,13 @@ describe('detectAgentStatusFromTitle', () => {
     expect(detectAgentStatusFromTitle('Hermes working')).toBe('working')
   })
 
+  it('classifies synthesized Devin titles', () => {
+    expect(detectAgentStatusFromTitle('⠋ Devin')).toBe('working')
+    expect(detectAgentStatusFromTitle('Devin ready')).toBe('idle')
+    expect(detectAgentStatusFromTitle('Devin - action required')).toBe('permission')
+    expect(detectAgentStatusFromTitle('Devin working')).toBe('working')
+  })
+
   it('does not treat Factory Droid native needs-input titles as completion', () => {
     expect(detectAgentStatusFromTitle('Factory Droid needs input')).toBeNull()
     expect(detectAgentStatusFromTitle('Factory Droid needs your input')).toBeNull()
@@ -226,14 +246,15 @@ describe('detectAgentStatusFromTitle', () => {
     expect(detectAgentStatusFromTitle('Codex Working')).toBe('working')
   })
 
-  // Why: `detectAgentStatusFromTitle` uses a substring-based `containsAgentName`
-  // fallback, so a cwd-path containing an agent-name fragment without a strong
-  // keyword or ". "/"* " prefix still falls through to the 'idle' branch. Pin
-  // the behavior so a future tightening (or deliberate relaxation) of
-  // `containsAgentName` is an explicit decision.
-  it('still returns idle for cwd-path containing agent name (known containsAgentName gap)', () => {
-    expect(detectAgentStatusFromTitle('~/codex-scratch')).toBe('idle')
-    expect(detectAgentStatusFromTitle('~/codex already built')).toBe('idle')
+  // Why: `containsAgentName` token-matches legacy agent names, so a cwd-path
+  // fragment like "~/codex-scratch" (hyphen-adjacent) or "opencode-blinker"
+  // (the worktree name that mislabeled Codex tabs as OpenCode) no longer mints
+  // an 'idle' agent signal. A bare "~/codex" path still has no strong keyword.
+  it('does not treat cwd-path agent-name fragments as agent activity', () => {
+    expect(detectAgentStatusFromTitle('~/codex-scratch')).toBeNull()
+    expect(detectAgentStatusFromTitle('~/codex already built')).toBeNull()
+    expect(detectAgentStatusFromTitle('opencode-blinker')).toBeNull()
+    expect(detectAgentStatusFromTitle('claude-scratch')).toBeNull()
   })
 
   // Why: short agent names are unsafe under substring detection. Telemetry now
@@ -369,9 +390,58 @@ describe('normalizeTerminalTitle', () => {
     expect(normalizeTerminalTitle('bash')).toBe('bash')
   })
 
+  it('collapses Grok rotating working titles to one stable label', () => {
+    // Grok interpolates a rotating status/tool phrase between the spinner and its
+    // name, so each frame is a distinct title; they must all fold to one label.
+    expect(normalizeTerminalTitle('⠋ - Waiting for response… - grok')).toBe('⠋ Grok')
+    expect(normalizeTerminalTitle('⠴ - Thinking - grok')).toBe('⠋ Grok')
+    expect(normalizeTerminalTitle('⠙ - Responding - grok')).toBe('⠋ Grok')
+    expect(normalizeTerminalTitle('⠦ - Sleep 2s then echo hello-from-grok… - grok')).toBe('⠋ Grok')
+    expect(
+      normalizeTerminalTitle('⠹ - Waiting for response… - Execute Shell Command sleep 2 - grok')
+    ).toBe('⠋ Grok')
+    // Idempotent: re-normalizing our own collapsed label stays stable.
+    expect(normalizeTerminalTitle('⠋ Grok')).toBe('⠋ Grok')
+  })
+
+  it('leaves Grok idle and session titles unchanged', () => {
+    // No spinner → not a working frame; the meaningful final title still shows.
+    expect(normalizeTerminalTitle('grok')).toBe('grok')
+    expect(normalizeTerminalTitle('Fix the auth bug - grok')).toBe('Fix the auth bug - grok')
+    // Names "grok" mid-title but ends with another agent → not a Grok frame.
+    expect(normalizeTerminalTitle('⠋ debugging grok - claude')).toBe('⠋ debugging grok - claude')
+    // Claude/Codex task text ending in "grok" must not collapse — only the
+    // Grok frame shape "spinner - phrase - grok" is the rotating-frame signal.
+    expect(normalizeTerminalTitle('⠋ wire up grok')).toBe('⠋ wire up grok')
+    expect(normalizeTerminalTitle('⠋ Codex is thinking about grok')).toBe(
+      '⠋ Codex is thinking about grok'
+    )
+    expect(normalizeTerminalTitle('⠋ support for Grok')).toBe('⠋ support for Grok')
+    // Trailing " - grok" alone is not enough without the post-spinner delimiter.
+    expect(normalizeTerminalTitle('⠋ fix the flaky suite - grok')).toBe(
+      '⠋ fix the flaky suite - grok'
+    )
+  })
+
   it('collapses Pi spinner and idle titles to stable labels', () => {
     expect(normalizeTerminalTitle('⠋ π - my-project')).toBe('⠋ Pi')
     expect(normalizeTerminalTitle('π - my-project')).toBe('Pi')
+    expect(normalizeTerminalTitle('⠋ π: my-project')).toBe('⠋ Pi')
+    expect(normalizeTerminalTitle('π: my-project')).toBe('Pi')
+    expect(normalizeTerminalTitle('π -')).toBe('Pi')
+    expect(normalizeTerminalTitle('π:')).toBe('Pi')
+    expect(normalizeTerminalTitle('π ')).toBe('Pi')
+  })
+
+  it('does not collapse Pi-compatible titles whose cwd mentions Gemini', () => {
+    expect(normalizeTerminalTitle('⠋ π - gemini')).toBe('⠋ Pi')
+    expect(normalizeTerminalTitle('π - gemini')).toBe('Pi')
+    expect(normalizeTerminalTitle('⠋ π: gemini')).toBe('⠋ Pi')
+    expect(normalizeTerminalTitle('π: gemini')).toBe('Pi')
+    expect(normalizeTerminalTitle('⠋ π gemini')).toBe('⠋ Pi')
+    expect(normalizeTerminalTitle('π gemini')).toBe('Pi')
+    expect(normalizeTerminalTitle('⠋ π - gemini-project')).toBe('⠋ Pi')
+    expect(normalizeTerminalTitle('π - gemini-project')).toBe('Pi')
   })
 })
 
@@ -384,6 +454,17 @@ describe('isGeminiTerminalTitle', () => {
 
   it('does not match other terminal titles', () => {
     expect(isGeminiTerminalTitle('⠂ Claude Code')).toBe(false)
+    expect(isGeminiTerminalTitle('⠋ π - gemini')).toBe(false)
+    expect(isGeminiTerminalTitle('π - gemini')).toBe(false)
+    expect(isGeminiTerminalTitle('⠋ π: gemini')).toBe(false)
+    expect(isGeminiTerminalTitle('π: gemini')).toBe(false)
+    expect(isGeminiTerminalTitle('⠋ π gemini')).toBe(false)
+    expect(isGeminiTerminalTitle('π gemini')).toBe(false)
+    expect(isGeminiTerminalTitle('π -')).toBe(false)
+    expect(isGeminiTerminalTitle('π:')).toBe(false)
+    expect(isGeminiTerminalTitle('π ')).toBe(false)
+    expect(isGeminiTerminalTitle('⠋ π - gemini-project')).toBe(false)
+    expect(isGeminiTerminalTitle('/tmp/gemini/working')).toBe(false)
     expect(isGeminiTerminalTitle('bash')).toBe(false)
   })
 })
@@ -391,6 +472,12 @@ describe('isGeminiTerminalTitle', () => {
 describe('getAgentLabel', () => {
   it('labels Pi working titles as Pi instead of Claude Code', () => {
     expect(getAgentLabel('⠋ π - my-project')).toBe('Pi')
+  })
+
+  it('treats Claude Code prefixed task titles as Claude even when they mention another CLI', () => {
+    expect(getAgentLabel('✳ Gemini CLI')).toBe('Claude Code')
+    expect(getAgentLabel('. Compare Opencode Vs Orca')).toBe('Claude Code')
+    expect(getAgentLabel('* Review Codex behavior')).toBe('Claude Code')
   })
 
   it('labels supported agent families consistently', () => {
@@ -406,6 +493,12 @@ describe('getAgentLabel', () => {
     expect(getAgentLabel('Droid ready')).toBe('Droid')
     expect(getAgentLabel('⠋ Hermes')).toBe('Hermes')
     expect(getAgentLabel('Hermes ready')).toBe('Hermes')
+    expect(getAgentLabel('⠋ Devin')).toBe('Devin')
+    expect(getAgentLabel('Devin ready')).toBe('Devin')
+  })
+
+  it('does not label the Claude agents management title', () => {
+    expect(getAgentLabel('claude agents')).toBeNull()
   })
 
   it('labels GitHub Copilot CLI', () => {
@@ -417,6 +510,29 @@ describe('getAgentLabel', () => {
   it('does not label Android titles as Droid', () => {
     expect(getAgentLabel('android emulator ready')).toBeNull()
   })
+
+  // Why: cwd/worktree titles embed agent-name fragments. Substring matching
+  // mislabeled a Codex tab whose title fell back to the "opencode-blinker"
+  // worktree name as OpenCode. Token matching must reject these fragments for
+  // every legacy agent name.
+  it('does not label cwd/worktree path fragments as an agent', () => {
+    expect(getAgentLabel('opencode-blinker')).toBeNull()
+    expect(getAgentLabel('claude-scratch')).toBeNull()
+    expect(getAgentLabel('~/projects/codex-scratch')).toBeNull()
+    expect(getAgentLabel('~/cursor-rules')).toBeNull()
+    expect(getAgentLabel('grok-fixtures')).toBeNull()
+    expect(getAgentLabel('devin-fixtures')).toBeNull()
+    expect(getAgentLabel('aider-config')).toBeNull()
+  })
+
+  it('still labels real agent titles that contain the name as a token', () => {
+    expect(getAgentLabel('OpenCode ready')).toBe('OpenCode')
+    expect(getAgentLabel('claude.exe')).toBe('Claude Code')
+    expect(getAgentLabel('openclaude.cmd')).toBe('OpenClaude')
+    expect(getAgentLabel('⠋ Codex')).toBe('Codex')
+    expect(getAgentLabel('Aider idle')).toBe('Aider')
+    expect(getAgentLabel('Devin working')).toBe('Devin')
+  })
 })
 
 describe('isClaudeAgent', () => {
@@ -424,6 +540,26 @@ describe('isClaudeAgent', () => {
     expect(isClaudeAgent('⠋ Claude Code')).toBe(true)
     expect(isClaudeAgent('⠋ OpenClaude')).toBe(false)
     expect(isClaudeAgent('OpenClaude ready')).toBe(false)
+  })
+
+  it('does not classify non-prefix Claude mentions as Claude agent titles', () => {
+    expect(isClaudeAgent('ask claude later')).toBe(false)
+    expect(getAgentLabel('ask claude later')).toBeNull()
+  })
+
+  it('does not classify the Claude agents management title as a Claude agent', () => {
+    expect(isClaudeManagementTitle('  Claude Agents  ')).toBe(true)
+    expect(isClaudeManagementTitle('claude.exe agents')).toBe(true)
+    expect(isClaudeManagementTitle('claude.cmd agents')).toBe(true)
+    expect(isClaudeManagementTitle('claude.bat agents')).toBe(true)
+    expect(isClaudeManagementTitle('claude.ps1 agents')).toBe(true)
+    expect(
+      isClaudeManagementTitle('C:\\Users\\dev\\AppData\\Roaming\\npm\\claude.cmd agents')
+    ).toBe(true)
+    expect(
+      isClaudeManagementTitle('"C:\\Users\\dev\\AppData\\Roaming\\npm\\claude.cmd" agents')
+    ).toBe(true)
+    expect(isClaudeAgent('claude agents')).toBe(false)
   })
 })
 
@@ -743,6 +879,10 @@ describe('formatAgentTypeLabel', () => {
     expect(formatAgentTypeLabel('command-code')).toBe('Command Code')
   })
 
+  it("maps 'ante' to 'Ante'", () => {
+    expect(formatAgentTypeLabel('ante')).toBe('Ante')
+  })
+
   it('passes through arbitrary custom agent names as-is', () => {
     expect(formatAgentTypeLabel('weirdo')).toBe('weirdo')
   })
@@ -766,6 +906,7 @@ describe('agentTypeToIconAgent', () => {
     expect(agentTypeToIconAgent('openclaude')).toBe('openclaude')
     expect(agentTypeToIconAgent('antigravity')).toBe('antigravity')
     expect(agentTypeToIconAgent('command-code')).toBe('command-code')
+    expect(agentTypeToIconAgent('ante')).toBe('ante')
   })
 
   it('returns null for arbitrary non-iconable strings', () => {

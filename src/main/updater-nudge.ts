@@ -8,12 +8,9 @@ export type NudgeConfig = {
 }
 
 export async function fetchNudge(): Promise<NudgeConfig | null> {
-  const controller = new AbortController()
-  const timeout = setTimeout(() => controller.abort(), 5000)
-
   try {
     const res = await net.fetch('https://onorca.dev/whats-new/nudge.json', {
-      signal: controller.signal
+      signal: AbortSignal.timeout(5000)
     })
     if (!res.ok) {
       return null
@@ -33,10 +30,18 @@ export async function fetchNudge(): Promise<NudgeConfig | null> {
       return null
     }
 
-    if (minVersion !== undefined && typeof minVersion !== 'string') {return null}
-    if (maxVersion !== undefined && typeof maxVersion !== 'string') {return null}
-    if (minVersion !== undefined && !isValidVersion(minVersion)) {return null}
-    if (maxVersion !== undefined && !isValidVersion(maxVersion)) {return null}
+    if (minVersion !== undefined && typeof minVersion !== 'string') {
+      return null
+    }
+    if (maxVersion !== undefined && typeof maxVersion !== 'string') {
+      return null
+    }
+    if (minVersion !== undefined && !isValidVersion(minVersion)) {
+      return null
+    }
+    if (maxVersion !== undefined && !isValidVersion(maxVersion)) {
+      return null
+    }
     if (
       minVersion !== undefined &&
       maxVersion !== undefined &&
@@ -52,8 +57,6 @@ export async function fetchNudge(): Promise<NudgeConfig | null> {
     }
   } catch {
     return null
-  } finally {
-    clearTimeout(timeout)
   }
 }
 

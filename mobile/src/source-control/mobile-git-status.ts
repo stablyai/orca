@@ -44,8 +44,12 @@ function compareGitStatusEntries(a: MobileGitStatusEntry, b: MobileGitStatusEntr
 }
 
 function getConflictSortRank(entry: MobileGitStatusEntry): number {
-  if (entry.conflictStatus === 'unresolved') return 0
-  if (entry.conflictStatus === 'resolved_locally') return 1
+  if (entry.conflictStatus === 'unresolved') {
+    return 0
+  }
+  if (entry.conflictStatus === 'resolved_locally') {
+    return 1
+  }
   return 2
 }
 

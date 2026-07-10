@@ -15,12 +15,18 @@ import type {
 } from '../../shared/types'
 import type { CodexRuntimeHomeService } from './runtime-home-service'
 import { writeFileAtomically } from './fs-utils'
+import { rewriteRelativePathConfigValues } from '../codex/codex-config-path-reference-rewrite'
 import { resolveCodexCommand } from '../codex-cli/command'
 import type { Store } from '../persistence'
 import type { RateLimitService } from '../rate-limits/service'
 import { parseWslUncPath } from '../../shared/wsl-paths'
 import { toWindowsWslPath } from '../wsl'
 import { buildEncodedWslBashCommand } from '../wsl-bash-command'
+import {
+  buildWslCodexAvailabilityArgs,
+  buildWslCodexLoginArgs,
+  WSL_CODEX_AVAILABILITY_TIMEOUT_MS
+} from './wsl-codex-command'
 import {
   getCodexSelectionTargetForAccount,
   getSelectedCodexAccountIdForTarget,
@@ -45,6 +51,13 @@ type ResolvedCodexIdentity = {
   providerAccountId: string | null
   workspaceLabel: string | null
   workspaceAccountId: string | null
+}
+
+type CanonicalCodexConfig = {
+  contents: string
+  /** Home the config was read from, in the path style Codex sees at runtime
+   *  (Linux-side for WSL); relative path-valued settings resolve against it. */
+  sourceHomePath: string
 }
 
 export type CodexAccountAddTarget = {
@@ -170,8 +183,9 @@ export class CodexAccountService {
 
   private async doReauthenticateAccount(accountId: string): Promise<CodexRateLimitAccountsState> {
     const account = this.requireAccount(accountId)
-    const managedHomePath = this.assertManagedHomePath(account.managedHomePath)
+    const managedHomePath = this.ensureManagedHomeForReauthentication(account)
 
+    this.safeSyncCanonicalConfigIntoManagedHome(managedHomePath)
     await this.runCodexLogin(managedHomePath)
     const identity = this.readIdentityFromHome(managedHomePath)
     if (!identity.email) {
@@ -451,25 +465,31 @@ export class CodexAccountService {
     // Why: Orca account switching is meant to swap Codex credentials and quota
     // identity, not silently fork the user's sandbox/config defaults. Syncing
     // one canonical config into every managed home keeps auth isolated per
-    // account while preserving consistent Codex behavior.
-    this.writeManagedConfig(trustedManagedHomePath, canonicalConfig)
+    // account while preserving consistent Codex behavior. Managed homes are
+    // real CODEX_HOMEs for `codex login`, so relative path-valued settings
+    // must keep resolving against the home the config was read from.
+    this.writeManagedConfig(
+      trustedManagedHomePath,
+      rewriteRelativePathConfigValues(canonicalConfig.contents, canonicalConfig.sourceHomePath)
+    )
   }
 
-  private readCanonicalConfig(): string | null {
-    const primaryConfigPath = join(homedir(), '.codex', 'config.toml')
+  private readCanonicalConfig(): CanonicalCodexConfig | null {
+    const sourceHomePath = join(homedir(), '.codex')
+    const primaryConfigPath = join(sourceHomePath, 'config.toml')
     if (!existsSync(primaryConfigPath)) {
       return null
     }
 
     try {
-      return readFileSync(primaryConfigPath, 'utf-8')
+      return { contents: readFileSync(primaryConfigPath, 'utf-8'), sourceHomePath }
     } catch (error) {
       console.warn('[codex-accounts] Failed to read canonical config:', error)
       return null
     }
   }
 
-  private readCanonicalConfigForManagedHome(managedHomePath: string): string | null {
+  private readCanonicalConfigForManagedHome(managedHomePath: string): CanonicalCodexConfig | null {
     const wslInfo = parseWslUncPath(managedHomePath)
     if (!wslInfo) {
       return this.readCanonicalConfig()
@@ -487,7 +507,9 @@ export class CodexAccountService {
     }
 
     try {
-      return readFileSync(configPath, 'utf-8')
+      // Why: the config is read over UNC but consumed by Codex inside WSL, so
+      // path rewrites must anchor to the Linux-side ~/.codex, not the UNC path.
+      return { contents: readFileSync(configPath, 'utf-8'), sourceHomePath: `${wslHome}/.codex` }
     } catch (error) {
       console.warn('[codex-accounts] Failed to read WSL canonical config:', error)
       return null
@@ -495,13 +517,109 @@ export class CodexAccountService {
   }
 
   private writeManagedConfig(managedHomePath: string, contents: string): void {
-    writeFileAtomically(join(managedHomePath, 'config.toml'), contents)
+    const configPath = join(managedHomePath, 'config.toml')
+    try {
+      if (existsSync(configPath) && readFileSync(configPath, 'utf-8') === contents) {
+        return
+      }
+    } catch {
+      // Why: read errors should not make a stale config look current; the
+      // atomic write path owns Windows ACL repair and persistent error surfacing.
+    }
+    writeFileAtomically(configPath, contents)
   }
 
   private getManagedAccountsRoot(): string {
     const root = join(app.getPath('userData'), 'codex-accounts')
     mkdirSync(root, { recursive: true })
     return root
+  }
+
+  private ensureManagedHomeForReauthentication(account: CodexManagedAccount): string {
+    const wslInfo = parseWslUncPath(account.managedHomePath)
+    if (wslInfo && process.platform === 'win32') {
+      this.ensureExpectedWslManagedHomeForReauthentication(account, wslInfo)
+      return this.assertManagedHomePath(account.managedHomePath)
+    }
+
+    try {
+      return this.assertManagedHomePath(account.managedHomePath)
+    } catch (error) {
+      if (!this.isMissingManagedHomeError(error)) {
+        throw error
+      }
+      return this.recreateExpectedHostManagedHomeForReauthentication(account, error)
+    }
+  }
+
+  private recreateExpectedHostManagedHomeForReauthentication(
+    account: CodexManagedAccount,
+    originalError: unknown
+  ): string {
+    const expectedManagedHomePath = join(this.getManagedAccountsRoot(), account.id, 'home')
+    if (!this.pathsEqual(account.managedHomePath, expectedManagedHomePath)) {
+      throw originalError
+    }
+
+    // Why: explicit re-auth is allowed to recover from a lost empty container,
+    // but only at the exact Orca-owned account path persisted for this account.
+    mkdirSync(expectedManagedHomePath, { recursive: true })
+    writeFileSync(join(expectedManagedHomePath, '.orca-managed-home'), `${account.id}\n`, 'utf-8')
+    return this.assertManagedHomePath(expectedManagedHomePath)
+  }
+
+  private ensureExpectedWslManagedHomeForReauthentication(
+    account: CodexManagedAccount,
+    wslInfo: { distro: string; linuxPath: string }
+  ): void {
+    if (
+      account.managedHomeRuntime !== 'wsl' ||
+      account.wslDistro !== wslInfo.distro ||
+      account.wslLinuxHomePath !== wslInfo.linuxPath ||
+      !wslInfo.linuxPath.endsWith(`/.local/share/orca/codex-accounts/${account.id}/home`)
+    ) {
+      return
+    }
+
+    execFileSync(
+      'wsl.exe',
+      [
+        '-d',
+        wslInfo.distro,
+        '--',
+        'bash',
+        '-lc',
+        buildEncodedWslBashCommand(
+          [
+            'set -euo pipefail',
+            `candidate=${shellQuote(wslInfo.linuxPath)}`,
+            `expected_marker=${shellQuote(account.id)}`,
+            'marker="$candidate/.orca-managed-home"',
+            'if [ -e "$candidate" ] && [ ! -f "$marker" ]; then exit 41; fi',
+            'if [ -f "$marker" ] && [ "$(cat "$marker")" != "$expected_marker" ]; then exit 42; fi',
+            'mkdir -p -- "$candidate"',
+            'printf "%s\\n" "$expected_marker" > "$marker"'
+          ].join('\n')
+        )
+      ],
+      { encoding: 'utf-8', timeout: 5000 }
+    )
+  }
+
+  private isMissingManagedHomeError(error: unknown): boolean {
+    return (
+      error instanceof Error &&
+      error.message === 'Managed Codex home directory does not exist on disk.'
+    )
+  }
+
+  private pathsEqual(left: string, right: string): boolean {
+    const resolvedLeft = resolve(left)
+    const resolvedRight = resolve(right)
+    if (process.platform === 'win32') {
+      return resolvedLeft.toLowerCase() === resolvedRight.toLowerCase()
+    }
+    return resolvedLeft === resolvedRight
   }
 
   private assertManagedHomePath(candidatePath: string): string {
@@ -683,19 +801,16 @@ export class CodexAccountService {
   }
 
   private async runCodexLogin(managedHomePath: string): Promise<void> {
+    const wslInfo = parseWslUncPath(managedHomePath)
+    if (wslInfo) {
+      this.assertWslCodexCliAvailable(wslInfo)
+    }
+
     await new Promise<void>((resolvePromise, rejectPromise) => {
-      const wslInfo = parseWslUncPath(managedHomePath)
       const spawnConfig = wslInfo
         ? {
             command: 'wsl.exe',
-            args: [
-              '-d',
-              wslInfo.distro,
-              '--',
-              'bash',
-              '-lc',
-              `export CODEX_HOME=${shellQuote(wslInfo.linuxPath)}; exec codex login`
-            ],
+            args: buildWslCodexLoginArgs(wslInfo.distro, wslInfo.linuxPath),
             env: process.env,
             codexCommand: 'codex'
           }
@@ -801,6 +916,20 @@ export class CodexAccountService {
       child.on('error', onError)
       child.on('close', onClose)
     })
+  }
+
+  private assertWslCodexCliAvailable(wslInfo: { distro: string; linuxPath: string }): void {
+    try {
+      execFileSync('wsl.exe', buildWslCodexAvailabilityArgs(wslInfo.distro), {
+        encoding: 'utf-8',
+        timeout: WSL_CODEX_AVAILABILITY_TIMEOUT_MS
+      })
+    } catch (error) {
+      throw new Error(
+        `Codex CLI is not available in WSL ${wslInfo.distro}. Install Codex in that distro or switch Account location to Windows.`,
+        { cause: error }
+      )
+    }
   }
 
   private readIdentityFromHome(managedHomePath: string): ResolvedCodexIdentity {

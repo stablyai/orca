@@ -1,4 +1,5 @@
-import type { TuiAgent } from './types'
+import type { SetupDecision, TuiAgent } from './types'
+import type { TaskSourceContext, WorkspaceRunContext } from './task-source-context'
 
 export type AutomationWorkspaceMode = 'existing' | 'new_per_run'
 export type AutomationExecutionTargetType = 'local' | 'ssh'
@@ -9,6 +10,7 @@ export type AutomationRunStatus =
   | 'dispatching'
   | 'dispatched'
   | 'completed'
+  | 'skipped_precheck'
   | 'skipped_missed'
   | 'skipped_unavailable'
   | 'skipped_needs_interactive_auth'
@@ -54,11 +56,42 @@ export type AutomationRunOutputSnapshot = {
   truncated: boolean
 }
 
+export type AutomationPrecheck = {
+  command: string
+  timeoutSeconds: number
+}
+
+export type AutomationPrecheckResult = {
+  command: string
+  exitCode: number | null
+  timedOut: boolean
+  durationMs: number
+  stdout: string
+  stderr: string
+  stdoutTruncated: boolean
+  stderrTruncated: boolean
+  error: string | null
+  startedAt: number
+  completedAt: number
+}
+
 export type Automation = {
   id: string
   name: string
   prompt: string
+  precheck: AutomationPrecheck | null
   agentId: TuiAgent
+  /** Why: runContext carries the logical project + host setup identity for
+   *  multi-host projects; projectId remains only as the legacy repo-id storage
+   *  field for pre-host-context automations.
+   *  @deprecated Use runContext.projectId/runContext.repoId or
+   *  getAutomationRunRepoId(). */
+  runContext?: WorkspaceRunContext | null
+  /** Why: task/provider data can come from a different host/account than the
+   *  workspace run target, so automations persist it separately. */
+  sourceContext?: TaskSourceContext | null
+  /** @deprecated Legacy repo-id compatibility field. New code should persist
+   *  runContext and use getAutomationRunRepoId() for fallback reads. */
   projectId: string
   executionTargetType: AutomationExecutionTargetType
   executionTargetId: string
@@ -66,6 +99,7 @@ export type Automation = {
   workspaceMode: AutomationWorkspaceMode
   workspaceId: string | null
   baseBranch: string | null
+  setupDecision?: SetupDecision
   reuseSession: boolean
   timezone: string
   rrule: string
@@ -82,6 +116,8 @@ export type Automation = {
 export type AutomationRun = {
   id: string
   automationId: string
+  runContext?: WorkspaceRunContext | null
+  sourceContext?: TaskSourceContext | null
   title: string
   scheduledFor: number
   status: AutomationRunStatus
@@ -93,7 +129,12 @@ export type AutomationRun = {
   sessionKind: 'terminal'
   chatSessionId: string | null
   terminalSessionId: string | null
+  /** Why: a terminal tab can later point at a different pane/PTY. Automation
+   *  run reopening must target the pane that actually executed the run. */
+  terminalPaneKey: string | null
+  terminalPtyId: string | null
   outputSnapshot: AutomationRunOutputSnapshot | null
+  precheckResult: AutomationPrecheckResult | null
   usage: AutomationRunUsage | null
   error: string | null
   startedAt: number | null
@@ -104,11 +145,17 @@ export type AutomationRun = {
 export type AutomationCreateInput = {
   name: string
   prompt: string
+  precheck?: AutomationPrecheck | null
   agentId: TuiAgent
+  runContext?: WorkspaceRunContext | null
+  sourceContext?: TaskSourceContext | null
+  /** @deprecated Legacy repo-id compatibility field required for older stored
+   *  automations and clients. Pair it with runContext for new writes. */
   projectId: string
   workspaceMode: AutomationWorkspaceMode
   workspaceId?: string | null
   baseBranch?: string | null
+  setupDecision?: SetupDecision
   reuseSession?: boolean
   timezone: string
   rrule: string
@@ -122,11 +169,15 @@ export type AutomationUpdateInput = Partial<
     Automation,
     | 'name'
     | 'prompt'
+    | 'precheck'
     | 'agentId'
+    | 'runContext'
+    | 'sourceContext'
     | 'projectId'
     | 'workspaceMode'
     | 'workspaceId'
     | 'baseBranch'
+    | 'setupDecision'
     | 'reuseSession'
     | 'timezone'
     | 'rrule'
@@ -139,6 +190,7 @@ export type AutomationUpdateInput = Partial<
 export type AutomationDispatchRequest = {
   automation: Automation
   run: AutomationRun
+  dispatchToken: string
 }
 
 export type AutomationDispatchResult = {
@@ -147,7 +199,10 @@ export type AutomationDispatchResult = {
   workspaceId?: string | null
   workspaceDisplayName?: string | null
   terminalSessionId?: string | null
+  terminalPaneKey?: string | null
+  terminalPtyId?: string | null
   outputSnapshot?: AutomationRunOutputSnapshot | null
+  precheckResult?: AutomationPrecheckResult | null
   usage?: AutomationRunUsage | null
   error?: string | null
 }

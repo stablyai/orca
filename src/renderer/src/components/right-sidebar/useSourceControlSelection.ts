@@ -1,5 +1,6 @@
 import { useState, useCallback, useEffect, useRef, type RefObject } from 'react'
 import type { GitStatusEntry } from '../../../../shared/types'
+import type { SourceControlRowOpenEvent } from './source-control-split-open'
 
 function isMacPlatform(): boolean {
   return typeof navigator !== 'undefined' && navigator.userAgent.includes('Mac')
@@ -27,6 +28,30 @@ export function reconcileSelectionKeys(
   return nextSelected
 }
 
+export function reconcileSourceControlSelectionState(args: {
+  selectedKeys: ReadonlySet<string>
+  anchorKey: string | null
+  flatEntries: FlatEntry[]
+}): { selectedKeys: ReadonlySet<string>; anchorKey: string | null } {
+  const { anchorKey, flatEntries, selectedKeys } = args
+  const validKeys = new Set(flatEntries.map((e) => e.key))
+  const nextSelected = new Set<string>()
+  let selectedChanged = false
+
+  for (const key of selectedKeys) {
+    if (validKeys.has(key)) {
+      nextSelected.add(key)
+    } else {
+      selectedChanged = true
+    }
+  }
+
+  return {
+    selectedKeys: selectedChanged ? nextSelected : selectedKeys,
+    anchorKey: anchorKey && !validKeys.has(anchorKey) ? null : anchorKey
+  }
+}
+
 export function getSelectionRangeKeys(
   flatEntries: FlatEntry[],
   anchorKey: string | null,
@@ -50,10 +75,12 @@ export function getSelectionRangeKeys(
 export function useSourceControlSelection({
   flatEntries,
   onOpenDiff,
+  shouldOpenAsSplit,
   containerRef
 }: {
   flatEntries: FlatEntry[]
-  onOpenDiff: (entry: GitStatusEntry) => void
+  onOpenDiff: (entry: GitStatusEntry, event?: SourceControlRowOpenEvent) => void
+  shouldOpenAsSplit?: (event: SourceControlRowOpenEvent) => boolean
   containerRef: RefObject<HTMLElement | null>
 }) {
   const [selectedKeys, setSelectedKeys] = useState<Set<string>>(new Set())
@@ -62,6 +89,7 @@ export function useSourceControlSelection({
   const anchorKeyRef = useRef<string | null>(anchorKey)
   const selectedKeysRef = useRef(selectedKeys)
   const onOpenDiffRef = useRef(onOpenDiff)
+  const shouldOpenAsSplitRef = useRef(shouldOpenAsSplit)
 
   useEffect(() => {
     flatEntriesRef.current = flatEntries
@@ -79,22 +107,32 @@ export function useSourceControlSelection({
     onOpenDiffRef.current = onOpenDiff
   }, [onOpenDiff])
 
-  // Clear stale selections if entries disappear
   useEffect(() => {
-    const validKeys = new Set(flatEntries.map((e) => e.key))
-    const nextSelected = reconcileSelectionKeys(selectedKeys, flatEntries)
-    const changed = nextSelected.size !== selectedKeys.size
+    shouldOpenAsSplitRef.current = shouldOpenAsSplit
+  }, [shouldOpenAsSplit])
 
-    if (changed) {
-      setSelectedKeys(nextSelected)
-    }
-
-    if (anchorKey && !validKeys.has(anchorKey)) {
-      setAnchorKey(null)
-    }
-  }, [flatEntries, selectedKeys, anchorKey])
+  const reconciledSelection = reconcileSourceControlSelectionState({
+    selectedKeys,
+    anchorKey,
+    flatEntries
+  })
+  if (reconciledSelection.selectedKeys !== selectedKeys) {
+    // Why: visible source-control rows can disappear after filtering, staging,
+    // or status refresh; prune stale bulk-action keys before children see them.
+    setSelectedKeys(new Set(reconciledSelection.selectedKeys))
+  }
+  if (reconciledSelection.anchorKey !== anchorKey) {
+    setAnchorKey(reconciledSelection.anchorKey)
+  }
 
   const handleSelect = useCallback((e: React.MouseEvent, key: string, entry: GitStatusEntry) => {
+    if (shouldOpenAsSplitRef.current?.(e)) {
+      setSelectedKeys((prev) => (prev.size > 0 ? new Set() : prev))
+      setAnchorKey(null)
+      onOpenDiffRef.current(entry, e)
+      return
+    }
+
     const isShift = e.shiftKey
     const isCmdOrCtrl = isMacPlatform() ? e.metaKey : e.ctrlKey
 

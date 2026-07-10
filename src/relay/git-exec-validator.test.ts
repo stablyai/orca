@@ -31,6 +31,7 @@ describe('validateGitExecArgs', () => {
       [['config', '--list']],
       [['config', '-l']],
       [['config', '--get-regexp', 'user']],
+      [['check-ref-format', '--branch', 'feature/ssh-pr-head']],
       [['for-each-ref', '--format=%(refname)', 'refs/remotes']],
       [
         [
@@ -53,7 +54,6 @@ describe('validateGitExecArgs', () => {
     it.each([
       'push',
       'pull',
-      'commit',
       'checkout',
       'reset',
       'rebase',
@@ -204,6 +204,43 @@ describe('validateGitExecArgs', () => {
 
     it('rejects no-index reads', () => {
       expectBlocked(['diff', '--cached', '--no-index', '/etc/passwd'], 'git diff flag not allowed')
+    })
+  })
+
+  describe('git clone', () => {
+    it('allows only the project setup clone shape', () => {
+      expectAllowed(['clone', '--', 'https://github.com/stablyai/orca.git', 'orca'])
+      expectAllowed(['clone', '--progress', '--', 'git@github.com:stablyai/orca.git', 'orca'])
+    })
+
+    it.each([
+      [['clone', 'https://github.com/stablyai/orca.git']],
+      [['clone', 'https://github.com/stablyai/orca.git', 'orca']],
+      [['clone', '--depth=1', '--', 'https://github.com/stablyai/orca.git', 'orca']],
+      [['clone', '--', 'https://github.com/stablyai/orca.git', '.']],
+      [['clone', '--', 'https://github.com/stablyai/orca.git', '..']],
+      [['clone', '--', 'https://github.com/stablyai/orca.git', 'nested/orca']],
+      [['clone', '--', 'https://github.com/stablyai/orca.git', 'nested\\orca']]
+    ])('rejects unsafe clone args %j', (args) => {
+      expectBlocked(args, 'git clone')
+    })
+  })
+
+  describe('git init and empty commit', () => {
+    it('allows only the SSH create-project init and empty commit shapes', () => {
+      expectAllowed(['init'])
+      expectAllowed(['commit', '--allow-empty', '-m', 'Initial commit'])
+    })
+
+    it.each([
+      [['init', '--bare']],
+      [['init', '/tmp/other']],
+      [['commit']],
+      [['commit', '-am', 'message']],
+      [['commit', '--allow-empty']],
+      [['commit', '--allow-empty', '-m', '']]
+    ])('rejects unsafe create-project write args %j', (args) => {
+      expectBlocked(args, 'via exec is restricted')
     })
   })
 })

@@ -1,6 +1,6 @@
-import { detectAgentStatusFromTitle } from '../../../shared/agent-detection'
+import { classifyTitleActivity } from '@/lib/pane-agent-evidence'
 import { isExpectedAgentProcess } from '../../../shared/agent-process-recognition'
-import { isShellProcess } from '@/lib/tui-agent-startup'
+import { isShellProcess } from './tui-agent-startup'
 import { useAppStore } from '@/store'
 import { inspectRuntimeTerminalProcess } from '@/runtime/runtime-terminal-inspection'
 
@@ -51,7 +51,7 @@ function titleSuggestsReady(tabId: string): boolean {
       }
     }
   }
-  return titles.some((title) => detectAgentStatusFromTitle(title) === 'idle')
+  return titles.some((title) => classifyTitleActivity(title) === 'idle')
 }
 
 /**

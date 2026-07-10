@@ -1,0 +1,49 @@
+import type { RuntimeWorktreeAgentRow } from '../../../src/shared/runtime-types'
+
+export type Worktree = {
+  sectionListKey?: string
+  workspaceKind?: 'git' | 'folder-workspace'
+  worktreeId: string
+  repoId: string
+  repo: string
+  branch: string
+  displayName: string
+  workspaceStatus?: string
+  sortOrder?: number
+  manualOrder?: number
+  // Why: on-disk worktree directory path. Needed by NewWorktreeModal so the
+  // marine-creature fallback dedupes against filesystem basenames.
+  path: string
+  isArchived?: boolean
+  isMainWorktree?: boolean
+  hasHostSidebarActivity?: boolean
+  parentWorktreeId?: string | null
+  childWorktreeIds?: string[]
+  lineageDepth?: number
+  lineageChildCount?: number
+  lineageCollapsed?: boolean
+  isLastLineageChild?: boolean
+  liveTerminalCount: number
+  hasAttachedPty: boolean
+  preview: string
+  unread: boolean
+  lastOutputAt?: number
+  isPinned: boolean
+  isActive?: boolean
+  linkedPR: { number: number; state: string } | null
+  linkedIssue?: number | null
+  linkedLinearIssue?: string | null
+  linkedGitLabMR?: number | null
+  linkedGitLabIssue?: number | null
+  comment?: string
+  status?: 'working' | 'active' | 'permission' | 'done' | 'inactive'
+  agents?: RuntimeWorktreeAgentRow[]
+}
+
+export type FilterState = {
+  filterRepoIds: Set<string>
+  hideSleeping: boolean
+  hideDefaultBranch: boolean
+}
+
+export type Section = { key: string; title: string; icon?: 'pin'; data: Worktree[] }

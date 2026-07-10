@@ -4,6 +4,7 @@
 // not via the workspace path. These hooks live in their own module so the
 // existing repoPath-keyed hooks stay focused on the local-workspace flow
 // and so this file remains under the lint line cap.
+/* oxlint-disable react-doctor/no-adjust-state-on-prop-change -- Why: slug metadata hooks clear stale rows and track loading while async provider cache requests are in flight. */
 import { useEffect, useRef, useState } from 'react'
 import { callRuntimeRpc, getActiveRuntimeTarget } from '@/runtime/runtime-rpc-client'
 import type { GitHubAssignableUser, GlobalSettings } from '../../../shared/types'
@@ -43,12 +44,17 @@ export function useRepoLabelsBySlug(
     error: null
   })
   const activeKeyRef = useRef<string | null>(null)
+  // Why: parent selectors can pass a fresh settings object each render; keying
+  // the effect on the primitive env id keeps a failure's setState from re-running
+  // the effect and re-issuing the fetch in a render-paced loop (same class as
+  // the seedKey stabilization below).
+  const activeRuntimeEnvironmentId = settings?.activeRuntimeEnvironmentId ?? null
 
   useEffect(() => {
     if (!owner || !repo) {
       return
     }
-    const target = getActiveRuntimeTarget(settings)
+    const target = getActiveRuntimeTarget({ activeRuntimeEnvironmentId })
     const key =
       target.kind === 'environment'
         ? `runtime:${target.environmentId}:${owner}/${repo}`
@@ -56,15 +62,16 @@ export function useRepoLabelsBySlug(
 
     const cached = getFreshMetadata(slugLabelStore, key)
     if (cached) {
-      // Why: always seed state from cache. A remount with the same key
-      // resets local state to defaults but `activeKeyRef.current` from the
-      // new ref instance is null on first run — the previous gate that
-      // skipped setState when keys matched dropped cached data on remount.
-      setState({ data: cached.data, loading: false, error: null })
+      if (activeKeyRef.current !== key) {
+        setState({ data: cached.data, loading: false, error: null })
+      }
       activeKeyRef.current = key
       return
     }
 
+    if (activeKeyRef.current === key) {
+      return
+    }
     activeKeyRef.current = key
     const requestKey = key
     setState((s) => ({
@@ -106,7 +113,7 @@ export function useRepoLabelsBySlug(
           error: err instanceof Error ? err.message : 'Failed to load labels'
         }))
       })
-  }, [owner, repo, settings])
+  }, [owner, repo, activeRuntimeEnvironmentId])
 
   return state
 }
@@ -127,12 +134,15 @@ export function useRepoAssigneesBySlug(
   // the joined-string identity so the effect doesn't re-fire on every render
   // — this is the assignee popover refetch-storm fix.
   const seedKey = (seedLogins ?? []).slice().sort().join(',')
+  // Why: see useRepoLabelsBySlug — primitive env id keeps failure setState from
+  // re-arming the effect through a fresh settings object identity.
+  const activeRuntimeEnvironmentId = settings?.activeRuntimeEnvironmentId ?? null
 
   useEffect(() => {
     if (!owner || !repo) {
       return
     }
-    const target = getActiveRuntimeTarget(settings)
+    const target = getActiveRuntimeTarget({ activeRuntimeEnvironmentId })
     const key =
       target.kind === 'environment'
         ? `runtime:${target.environmentId}:${owner}/${repo}#${seedKey}`
@@ -140,14 +150,18 @@ export function useRepoAssigneesBySlug(
 
     const cached = getFreshMetadata(slugAssigneeStore, key)
     if (cached) {
-      // Why: see useRepoLabelsBySlug — always seed state from cache so a
-      // remount with the same key picks up cached data instead of staying
-      // at the empty default.
-      setState({ data: cached.data, loading: false, error: null })
+      // Why: see useRepoLabelsBySlug — avoid cached no-op writes when only
+      // the settings object identity changed.
+      if (activeKeyRef.current !== key) {
+        setState({ data: cached.data, loading: false, error: null })
+      }
       activeKeyRef.current = key
       return
     }
 
+    if (activeKeyRef.current === key) {
+      return
+    }
     activeKeyRef.current = key
     const requestKey = key
     setState((s) => ({
@@ -194,7 +208,7 @@ export function useRepoAssigneesBySlug(
           error: err instanceof Error ? err.message : 'Failed to load assignees'
         }))
       })
-  }, [owner, repo, seedKey, settings])
+  }, [owner, repo, seedKey, activeRuntimeEnvironmentId])
 
   return state
 }

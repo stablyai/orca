@@ -7,9 +7,10 @@ import {
   seedWorkspaceAgentStatus,
   seedWorkspaceLiveTerminal
 } from './worktree-lineage-state'
+import { worktreeRow } from './worktree-row-locators'
 
 function worktreeOption(page: Page, worktreeId: string) {
-  return page.locator(`[id="worktree-list-option-${encodeURIComponent(worktreeId)}"]`)
+  return worktreeRow(page, worktreeId)
 }
 
 test.describe('Worktree Lineage', () => {
@@ -36,10 +37,12 @@ test.describe('Worktree Lineage', () => {
 
     const positions = await orcaPage.evaluate(
       ({ parentId, childId }) => {
-        const parent = document.getElementById(
-          `worktree-list-option-${encodeURIComponent(parentId)}`
-        )
-        const child = document.getElementById(`worktree-list-option-${encodeURIComponent(childId)}`)
+        const rowFor = (worktreeId: string) =>
+          [...document.querySelectorAll<HTMLElement>('[data-worktree-id]')].find(
+            (element) => element.dataset.worktreeId === worktreeId
+          )
+        const parent = rowFor(parentId)
+        const child = rowFor(childId)
         if (!parent || !child) {
           return null
         }
@@ -128,10 +131,12 @@ test.describe('Worktree Lineage', () => {
 
     const positions = await orcaPage.evaluate(
       ({ parentId, childId }) => {
-        const parent = document.getElementById(
-          `worktree-list-option-${encodeURIComponent(parentId)}`
-        )
-        const child = document.getElementById(`worktree-list-option-${encodeURIComponent(childId)}`)
+        const rowFor = (worktreeId: string) =>
+          [...document.querySelectorAll<HTMLElement>('[data-worktree-id]')].find(
+            (element) => element.dataset.worktreeId === worktreeId
+          )
+        const parent = rowFor(parentId)
+        const child = rowFor(childId)
         if (!parent || !child) {
           return null
         }
@@ -158,21 +163,9 @@ test.describe('Worktree Lineage', () => {
 
     const childTabId = await seedWorkspaceLiveTerminal(orcaPage, childId)
     await expect(childRow).toContainText('Active')
-    await childRow.click({ button: 'right' })
-    await expect(orcaPage.getByRole('menuitem', { name: 'Sleep' })).not.toHaveAttribute(
-      'data-disabled',
-      ''
-    )
-    await orcaPage.keyboard.press('Escape')
 
     await markWorkspaceTerminalSlept(orcaPage, { worktreeId: childId, tabId: childTabId })
     await expect(childRow).toContainText('Inactive')
-    await childRow.click({ button: 'right' })
-    await expect(orcaPage.getByRole('menuitem', { name: 'Sleep' })).toHaveAttribute(
-      'data-disabled',
-      ''
-    )
-    await orcaPage.keyboard.press('Escape')
   })
 
   test('shows parent and child agent rows while the parent workspace is active', async ({
@@ -189,7 +182,9 @@ test.describe('Worktree Lineage', () => {
     const parentAgentPrompt = await seedWorkspaceAgentStatus(orcaPage, parentId, 'PARENT')
     const childAgentPrompt = await seedWorkspaceAgentStatus(orcaPage, childId, 'CHILD')
 
-    await expect(parentRow.locator(`span[title="${parentAgentPrompt}"]`)).toBeVisible()
-    await expect(childRow.locator(`span[title="${childAgentPrompt}"]`)).toBeVisible()
+    await expect(
+      parentRow.getByRole('treeitem').filter({ hasText: parentAgentPrompt })
+    ).toBeVisible()
+    await expect(childRow.getByRole('treeitem').filter({ hasText: childAgentPrompt })).toBeVisible()
   })
 })

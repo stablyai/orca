@@ -23,11 +23,30 @@ describe('TERMINAL_ACCESSORY_KEYS', () => {
     })
   })
 
+  it('includes a non-repeatable Space default key near the primary editing keys', () => {
+    const ids = TERMINAL_ACCESSORY_KEYS.map((key) => key.id)
+
+    expect(TERMINAL_ACCESSORY_KEYS.find((candidate) => candidate.id === 'space')).toEqual({
+      id: 'space',
+      label: 'Space',
+      bytes: ' ',
+      accessibilityLabel: 'Space'
+    })
+    expect(ids.indexOf('space')).toBeGreaterThan(ids.indexOf('shiftTab'))
+    expect(ids.indexOf('space')).toBeLessThan(ids.indexOf('backspace'))
+    expect(ids.indexOf('space')).toBeLessThan(ids.indexOf('delete'))
+    expect(ids.indexOf('space')).toBeLessThan(ids.indexOf('arrowUp'))
+  })
+
   it('has unique non-empty built-in ids', () => {
     const ids = TERMINAL_ACCESSORY_KEYS.map((key) => key.id)
 
     expect(ids.every((id) => id.length > 0)).toBe(true)
     expect(new Set(ids).size).toBe(ids.length)
+  })
+
+  it('keeps all built-in terminal keys byte-backed', () => {
+    expect(TERMINAL_ACCESSORY_KEYS.every((key) => key.bytes.length > 0)).toBe(true)
   })
 
   it('keeps repeat behavior explicit for built-in terminal keys', () => {
@@ -60,6 +79,24 @@ describe('TERMINAL_ACCESSORY_KEYS', () => {
       label: 'Alt+Shift+1',
       bytes: '\x1b!',
       accessibilityLabel: 'Alt Shift 1'
+    })
+  })
+
+  it('builds custom Space shortcut bytes with terminal modifiers', () => {
+    expect(buildTerminalShortcutKey({ key: 'space', modifiers: [] })).toEqual({
+      label: 'Space',
+      bytes: ' ',
+      accessibilityLabel: 'Space'
+    })
+    expect(buildTerminalShortcutKey({ key: 'space', modifiers: ['ctrl'] })).toEqual({
+      label: 'Ctrl+Space',
+      bytes: '\x00',
+      accessibilityLabel: 'Ctrl Space'
+    })
+    expect(buildTerminalShortcutKey({ key: 'space', modifiers: ['alt'] })).toEqual({
+      label: 'Alt+Space',
+      bytes: '\x1b ',
+      accessibilityLabel: 'Alt Space'
     })
   })
 

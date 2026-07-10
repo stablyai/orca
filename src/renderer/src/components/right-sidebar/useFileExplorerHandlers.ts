@@ -4,18 +4,26 @@ import type { RefObject } from 'react'
 import { detectLanguage } from '@/lib/language-detect'
 import { toast } from 'sonner'
 import type { TreeNode } from './file-explorer-types'
+import { FILE_EXPLORER_DRAGGABLE_SELECTOR } from './file-explorer-drag-scroll-marker'
+import { translate } from '@/i18n/i18n'
 
 type UseFileExplorerHandlersParams = {
   activeWorktreeId: string | null
-  openFile: (params: {
-    filePath: string
-    relativePath: string
-    worktreeId: string
-    language: string
-    mode: 'edit'
-  }) => void
-  pinFile: (filePath: string) => void
+  runtimeEnvironmentId?: string | null
+  openFile: (
+    params: {
+      filePath: string
+      relativePath: string
+      worktreeId: string
+      language: string
+      mode: 'edit'
+      runtimeEnvironmentId?: string | null
+    },
+    options?: { preview?: boolean; suppressActiveRuntimeFallback?: boolean }
+  ) => void
+  makePreviewFilePermanent: (filePath: string) => void
   toggleDir: (worktreeId: string, dirPath: string) => void
+  canToggleDirectories?: boolean
   loadDir: (
     dirPath: string,
     depth: number,
@@ -34,12 +42,15 @@ type UseFileExplorerHandlersReturn = {
 }
 
 type OpenFileParams = Parameters<UseFileExplorerHandlersParams['openFile']>[0]
+type OpenFileOptions = Parameters<UseFileExplorerHandlersParams['openFile']>[1]
 
 export async function activateFileExplorerNode(args: {
   node: TreeNode
   activeWorktreeId: string | null
-  openFile: (params: OpenFileParams) => void
+  runtimeEnvironmentId?: string | null
+  openFile: (params: OpenFileParams, options?: OpenFileOptions) => void
   toggleDir: (worktreeId: string, dirPath: string) => void
+  canToggleDirectories?: boolean
   loadDir: UseFileExplorerHandlersParams['loadDir']
   statPath: UseFileExplorerHandlersParams['statPath']
   markPathAsDirectory: (path: string) => void
@@ -48,8 +59,10 @@ export async function activateFileExplorerNode(args: {
   const {
     node,
     activeWorktreeId,
+    runtimeEnvironmentId,
     openFile,
     toggleDir,
+    canToggleDirectories = true,
     loadDir,
     statPath,
     markPathAsDirectory,
@@ -60,6 +73,9 @@ export async function activateFileExplorerNode(args: {
   }
   setSelectedPath(node.path)
   if (node.isDirectory) {
+    if (!canToggleDirectories) {
+      return
+    }
     toggleDir(activeWorktreeId, node.path)
     return
   }
@@ -70,7 +86,12 @@ export async function activateFileExplorerNode(args: {
     try {
       targetIsDirectory = (await statPath(node.path)).isDirectory
     } catch {
-      toast.error('Cannot open symlink target')
+      toast.error(
+        translate(
+          'auto.components.right.sidebar.useFileExplorerHandlers.32cd9fd991',
+          'Cannot open symlink target'
+        )
+      )
       return
     }
     if (targetIsDirectory) {
@@ -80,27 +101,45 @@ export async function activateFileExplorerNode(args: {
       })
       if (loadedAsDirectory) {
         markPathAsDirectory(node.path)
-        toggleDir(activeWorktreeId, node.path)
+        if (canToggleDirectories) {
+          toggleDir(activeWorktreeId, node.path)
+        }
       } else {
-        toast.error('Cannot open symlink target')
+        toast.error(
+          translate(
+            'auto.components.right.sidebar.useFileExplorerHandlers.32cd9fd991',
+            'Cannot open symlink target'
+          )
+        )
       }
       return
     }
   }
-  openFile({
-    filePath: node.path,
-    relativePath: node.relativePath,
-    worktreeId: activeWorktreeId,
-    language: detectLanguage(node.name),
-    mode: 'edit'
-  })
+  openFile(
+    {
+      filePath: node.path,
+      relativePath: node.relativePath,
+      worktreeId: activeWorktreeId,
+      runtimeEnvironmentId: runtimeEnvironmentId ?? undefined,
+      language: detectLanguage(node.name),
+      mode: 'edit'
+    },
+    {
+      preview: true,
+      // Why: explicit local opens must not inherit the active runtime, so we
+      // encode "no runtime owner" via the fallback-suppression option.
+      suppressActiveRuntimeFallback: runtimeEnvironmentId === null
+    }
+  )
 }
 
 export function useFileExplorerHandlers({
   activeWorktreeId,
+  runtimeEnvironmentId,
   openFile,
-  pinFile,
+  makePreviewFilePermanent,
   toggleDir,
+  canToggleDirectories = true,
   loadDir,
   statPath,
   markPathAsDirectory,
@@ -112,15 +151,27 @@ export function useFileExplorerHandlers({
       void activateFileExplorerNode({
         node,
         activeWorktreeId,
+        runtimeEnvironmentId,
         openFile,
         toggleDir,
+        canToggleDirectories,
         loadDir,
         statPath,
         markPathAsDirectory,
         setSelectedPath
       })
     },
-    [activeWorktreeId, loadDir, markPathAsDirectory, openFile, statPath, toggleDir, setSelectedPath]
+    [
+      activeWorktreeId,
+      runtimeEnvironmentId,
+      canToggleDirectories,
+      loadDir,
+      markPathAsDirectory,
+      openFile,
+      statPath,
+      toggleDir,
+      setSelectedPath
+    ]
   )
 
   const handleDoubleClick = useCallback(
@@ -128,9 +179,9 @@ export function useFileExplorerHandlers({
       if (!activeWorktreeId || node.isDirectory) {
         return
       }
-      pinFile(node.path)
+      makePreviewFilePermanent(node.path)
     },
-    [activeWorktreeId, pinFile]
+    [activeWorktreeId, makePreviewFilePermanent]
   )
 
   const handleWheelCapture = useCallback(
@@ -140,7 +191,7 @@ export function useFileExplorerHandlers({
         return
       }
       const target = e.target
-      if (!(target instanceof Element) || !target.closest('[data-explorer-draggable="true"]')) {
+      if (!(target instanceof Element) || !target.closest(FILE_EXPLORER_DRAGGABLE_SELECTOR)) {
         return
       }
       if (container.scrollHeight <= container.clientHeight) {

@@ -210,6 +210,26 @@ function summarizeMcpServer(name: string, entry: unknown): McpServerSummary {
     }
   }
 
+  if (transport === 'http' && !url) {
+    return {
+      name,
+      transport,
+      status: 'invalid',
+      env,
+      issue: 'Missing URL.'
+    }
+  }
+
+  if (transport === 'stdio' && !command) {
+    return {
+      name,
+      transport,
+      status: 'invalid',
+      env,
+      issue: 'Missing command.'
+    }
+  }
+
   return {
     name,
     transport,

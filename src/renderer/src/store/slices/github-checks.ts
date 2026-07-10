@@ -17,7 +17,10 @@ export function deriveCheckStatusFromChecks(checks: PRCheckDetail[]): CheckStatu
     if (
       check.conclusion === 'failure' ||
       check.conclusion === 'timed_out' ||
-      check.conclusion === 'cancelled'
+      check.conclusion === 'cancelled' ||
+      // Why: action_required (e.g. an unapproved workflow run) blocks merge until
+      // someone acts; treat it as needs-attention rather than a silent pass.
+      check.conclusion === 'action_required'
     ) {
       return 'failure'
     }
@@ -43,14 +46,24 @@ export function syncPRChecksStatus(
   headSha?: string,
   prRepo?: GitHubOwnerRepo | null,
   settings?: AppState['settings'],
-  connectionId?: string | null
+  connectionId?: string | null,
+  executionHostId?: string | null,
+  hasRepoOwner = false
 ): Partial<AppState> | null {
   const normalized = branch ? normalizeBranchName(branch) : ''
   if (!normalized) {
     return null
   }
 
-  const prCacheKey = getGitHubPRCacheKey(repoPath, repoId, normalized, settings, connectionId)
+  const prCacheKey = getGitHubPRCacheKey(
+    repoPath,
+    repoId,
+    normalized,
+    settings,
+    connectionId,
+    executionHostId,
+    hasRepoOwner
+  )
   const prEntry = state.prCache[prCacheKey]
   if (!prEntry?.data) {
     return null

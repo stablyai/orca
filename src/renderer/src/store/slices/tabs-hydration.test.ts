@@ -133,6 +133,94 @@ describe('buildHydratedTabState – unified format', () => {
     expect(result.activeGroupIdByWorktree.w1).toBe('g2')
     expect(result.layoutByWorktree.w1).toEqual({ type: 'leaf', groupId: 'g2' })
   })
+
+  it('keeps restored simulator tabs while pruning unrelated empty split groups', () => {
+    const session: WorkspaceSessionState = {
+      ...makeBaseSession(),
+      unifiedTabs: {
+        w1: [
+          {
+            id: 'terminal-1',
+            entityId: 'terminal-1',
+            groupId: 'g1',
+            worktreeId: 'w1',
+            contentType: 'terminal',
+            label: 'Terminal',
+            customLabel: null,
+            color: null,
+            sortOrder: 0,
+            createdAt: 1
+          },
+          {
+            id: 'simulator-1',
+            entityId: 'simulator-1',
+            groupId: 'g2',
+            worktreeId: 'w1',
+            contentType: 'simulator',
+            label: 'iPhone 17 Pro',
+            customLabel: null,
+            color: null,
+            sortOrder: 1,
+            createdAt: 2
+          }
+        ]
+      },
+      tabGroups: {
+        w1: [
+          { id: 'g1', worktreeId: 'w1', activeTabId: 'terminal-1', tabOrder: ['terminal-1'] },
+          { id: 'g2', worktreeId: 'w1', activeTabId: 'simulator-1', tabOrder: ['simulator-1'] },
+          { id: 'g3', worktreeId: 'w1', activeTabId: null, tabOrder: [] }
+        ]
+      },
+      tabGroupLayouts: {
+        w1: {
+          type: 'split',
+          direction: 'horizontal',
+          first: {
+            type: 'split',
+            direction: 'horizontal',
+            first: { type: 'leaf', groupId: 'g1' },
+            second: { type: 'leaf', groupId: 'g2' },
+            ratio: 0.5
+          },
+          second: { type: 'leaf', groupId: 'g3' },
+          ratio: 0.5
+        }
+      },
+      activeGroupIdByWorktree: { w1: 'g2' }
+    }
+
+    const result = buildHydratedTabState(session, new Set(['w1']))
+
+    expect(result.unifiedTabsByWorktree.w1).toEqual([
+      expect.objectContaining({ id: 'terminal-1', contentType: 'terminal', groupId: 'g1' }),
+      expect.objectContaining({ id: 'simulator-1', contentType: 'simulator', groupId: 'g2' })
+    ])
+    expect(result.groupsByWorktree.w1).toEqual([
+      {
+        id: 'g1',
+        worktreeId: 'w1',
+        activeTabId: 'terminal-1',
+        tabOrder: ['terminal-1'],
+        recentTabIds: ['terminal-1']
+      },
+      {
+        id: 'g2',
+        worktreeId: 'w1',
+        activeTabId: 'simulator-1',
+        tabOrder: ['simulator-1'],
+        recentTabIds: ['simulator-1']
+      }
+    ])
+    expect(result.activeGroupIdByWorktree.w1).toBe('g2')
+    expect(result.layoutByWorktree.w1).toEqual({
+      type: 'split',
+      direction: 'horizontal',
+      first: { type: 'leaf', groupId: 'g1' },
+      second: { type: 'leaf', groupId: 'g2' },
+      ratio: 0.5
+    })
+  })
 })
 
 describe('buildHydratedTabState – legacy format', () => {
@@ -217,6 +305,37 @@ describe('buildHydratedTabState – legacy format', () => {
     const result = buildHydratedTabState(session, new Set(['w1']))
     const group = result.groupsByWorktree.w1[0]
     expect(group.activeTabId).toBe('/f1')
+  })
+
+  it('restores each worktree remembered terminal, not the globally-active one', () => {
+    // Why (regression): the legacy branch used the global session.activeTabId,
+    // so every worktree except the last-focused one lost its remembered
+    // terminal on restart and reopened on the first tab. Use the per-worktree
+    // activeTabIdByWorktree map instead.
+    const terminal = (id: string, worktreeId: string, sortOrder: number) => ({
+      id,
+      ptyId: null,
+      worktreeId,
+      title: id,
+      customTitle: null,
+      color: null,
+      sortOrder,
+      createdAt: 100 + sortOrder
+    })
+    const session: WorkspaceSessionState = {
+      ...makeBaseSession(),
+      // The globally-active tab belongs to w1.
+      activeTabId: 'w1-terminal-1',
+      tabsByWorktree: {
+        w1: [terminal('w1-terminal-1', 'w1', 0)],
+        w2: [terminal('w2-terminal-1', 'w2', 0), terminal('w2-terminal-2', 'w2', 1)]
+      },
+      activeTabIdByWorktree: { w1: 'w1-terminal-1', w2: 'w2-terminal-2' }
+    }
+
+    const result = buildHydratedTabState(session, new Set(['w1', 'w2']))
+    expect(result.groupsByWorktree.w2[0].activeTabId).toBe('w2-terminal-2')
+    expect(result.groupsByWorktree.w1[0].activeTabId).toBe('w1-terminal-1')
   })
 
   it('skips worktrees with no tabs or files', () => {

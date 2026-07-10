@@ -9,15 +9,26 @@ const reactHookRuntime = vi.hoisted(() => ({
 const appStoreMocks = vi.hoisted(() => ({
   openMarkdownPreview: vi.fn(),
   getState: vi.fn(() => ({
-    settings: {}
+    settings: {},
+    unifiedTabsByWorktree: {
+      'wt-1': [{ id: '/repo/untitled-5.md', groupId: 'group-1' }]
+    },
+    groupsByWorktree: {
+      'wt-1': [{ id: 'group-1', tabOrder: ['/repo/untitled-5.md', 'tab-2'] }]
+    }
   }))
 }))
+
+const renameFileOnDiskMock = vi.hoisted(() => vi.fn())
 
 vi.mock('react', async () => {
   const actual = await vi.importActual<typeof import('react')>('react') // eslint-disable-line @typescript-eslint/consistent-type-imports -- vi.importActual requires inline import()
   return {
     ...actual,
     useEffect: () => {},
+    useCallback<T extends (...args: never[]) => unknown>(callback: T) {
+      return callback
+    },
     useRef<T>(initial: T) {
       return { current: initial }
     },
@@ -47,6 +58,18 @@ vi.mock('@dnd-kit/sortable', () => ({
 }))
 
 vi.mock('lucide-react', () => ({
+  ArrowDown: function ArrowDown(props: Record<string, unknown>) {
+    return { type: 'ArrowDown', props }
+  },
+  ArrowLeft: function ArrowLeft(props: Record<string, unknown>) {
+    return { type: 'ArrowLeft', props }
+  },
+  ArrowRight: function ArrowRight(props: Record<string, unknown>) {
+    return { type: 'ArrowRight', props }
+  },
+  ArrowUp: function ArrowUp(props: Record<string, unknown>) {
+    return { type: 'ArrowUp', props }
+  },
   Columns2: function Columns2(props: Record<string, unknown>) {
     return { type: 'Columns2', props }
   },
@@ -59,11 +82,23 @@ vi.mock('lucide-react', () => ({
   Eye: function Eye(props: Record<string, unknown>) {
     return { type: 'Eye', props }
   },
+  ListX: function ListX(props: Record<string, unknown>) {
+    return { type: 'ListX', props }
+  },
+  PanelRightClose: function PanelRightClose(props: Record<string, unknown>) {
+    return { type: 'PanelRightClose', props }
+  },
   GitCompareArrows: function GitCompareArrows(props: Record<string, unknown>) {
     return { type: 'GitCompareArrows', props }
   },
   Pencil: function Pencil(props: Record<string, unknown>) {
     return { type: 'Pencil', props }
+  },
+  Pin: function Pin(props: Record<string, unknown>) {
+    return { type: 'Pin', props }
+  },
+  PinOff: function PinOff(props: Record<string, unknown>) {
+    return { type: 'PinOff', props }
   },
   Rows2: function Rows2(props: Record<string, unknown>) {
     return { type: 'Rows2', props }
@@ -88,6 +123,21 @@ vi.mock('@/components/ui/dropdown-menu', () => ({
   },
   DropdownMenuSeparator: function DropdownMenuSeparator() {
     return { type: 'DropdownMenuSeparator', props: {} }
+  },
+  DropdownMenuShortcut: function DropdownMenuShortcut(props: { children?: unknown }) {
+    return { type: 'DropdownMenuShortcut', props }
+  },
+  DropdownMenuLabel: function DropdownMenuLabel(props: { children?: unknown }) {
+    return { type: 'DropdownMenuLabel', props }
+  },
+  DropdownMenuSub: function DropdownMenuSub(props: { children?: unknown }) {
+    return { type: 'DropdownMenuSub', props }
+  },
+  DropdownMenuSubContent: function DropdownMenuSubContent(props: { children?: unknown }) {
+    return { type: 'DropdownMenuSubContent', props }
+  },
+  DropdownMenuSubTrigger: function DropdownMenuSubTrigger(props: { children?: unknown }) {
+    return { type: 'DropdownMenuSubTrigger', props }
   },
   DropdownMenuTrigger: function DropdownMenuTrigger(props: { children?: unknown }) {
     return { type: 'DropdownMenuTrigger', props }
@@ -117,7 +167,7 @@ vi.mock('@/components/editor/editor-labels', () => ({
 }))
 
 vi.mock('@/lib/rename-file', () => ({
-  renameFileOnDisk: vi.fn()
+  renameFileOnDisk: renameFileOnDiskMock
 }))
 
 vi.mock('@/lib/file-type-icons', () => ({
@@ -150,7 +200,9 @@ vi.mock('./SortableTab', () => ({
 
 vi.mock('./drop-indicator', () => ({
   ACTIVE_TAB_INDICATOR_CLASSES: 'active-tab-indicator',
-  getDropIndicatorClasses: () => ''
+  getDropIndicatorClasses: () => '',
+  getTabStripBorderClasses: () => '',
+  getTabRootStateClasses: () => ''
 }))
 
 vi.mock('@/components/editor/markdown-preview-controls', () => ({
@@ -182,21 +234,27 @@ function baseFile(overrides: Partial<OpenFile> = {}): OpenFile {
 
 async function renderEditorFileTab(
   file: OpenFile,
-  onActivate = vi.fn()
-): Promise<{ element: unknown; onActivate: ReturnType<typeof vi.fn> }> {
+  onActivate = vi.fn(),
+  onMakePermanent = vi.fn()
+): Promise<{
+  element: unknown
+  onActivate: ReturnType<typeof vi.fn>
+  onMakePermanent: ReturnType<typeof vi.fn>
+}> {
   reactHookRuntime.index = 0
   const module = await import('./EditorFileTab')
   const element = module.default({
     file,
     isActive: true,
+    isPinned: false,
     hasTabsToRight: false,
     statusByRelativePath: new Map(),
     onActivate,
     onClose: () => {},
     onCloseToRight: () => {},
     onCloseAll: () => {},
-    onPin: () => {},
-    onSplitGroup: () => {},
+    onMakePermanent,
+    onTogglePin: () => {},
     dragData: {
       kind: 'tab',
       worktreeId: file.worktreeId,
@@ -208,7 +266,7 @@ async function renderEditorFileTab(
       iconPath: file.filePath
     }
   })
-  return { element, onActivate }
+  return { element, onActivate, onMakePermanent }
 }
 
 function expandNode(node: unknown): unknown {
@@ -277,6 +335,38 @@ function findMenuItemByText(node: unknown, label: string): ReactElementLike {
   return item
 }
 
+function findSpanByText(node: unknown, label: string): ReactElementLike {
+  const span = findElementsByType(node, 'span').find(
+    (candidate) =>
+      getText(candidate) === label && typeof candidate.props.onDoubleClick === 'function'
+  )
+  if (!span) {
+    throw new Error(`Missing span: ${label}`)
+  }
+  return span
+}
+
+function pressInputKey(
+  input: ReactElementLike,
+  key: string,
+  options?: { isComposing?: boolean; keyCode?: number }
+): {
+  preventDefault: ReturnType<typeof vi.fn>
+  stopPropagation: ReturnType<typeof vi.fn>
+} {
+  const event = {
+    key,
+    nativeEvent: {
+      isComposing: options?.isComposing ?? false,
+      keyCode: options?.keyCode ?? 13
+    },
+    preventDefault: vi.fn(),
+    stopPropagation: vi.fn()
+  }
+  ;(input.props.onKeyDown as (nextEvent: typeof event) => void)(event)
+  return event
+}
+
 describe('EditorFileTab rename menu', () => {
   beforeEach(() => {
     reactHookRuntime.states = []
@@ -284,6 +374,11 @@ describe('EditorFileTab rename menu', () => {
     vi.clearAllMocks()
     vi.resetModules()
     vi.stubGlobal('navigator', { userAgent: 'Mac' })
+    vi.stubGlobal('requestAnimationFrame', (callback: FrameRequestCallback) => {
+      callback(0)
+      return 1
+    })
+    vi.stubGlobal('cancelAnimationFrame', vi.fn())
   })
 
   it('turns the tab filename into an inline input from the Rename context-menu item', async () => {
@@ -304,6 +399,49 @@ describe('EditorFileTab rename menu', () => {
     expect(inputs[0].props.defaultValue).toBe('untitled-5.md')
     expect(inputs[0].props['data-tab-rename-input']).toBe('true')
     expect(onActivate).toHaveBeenCalledTimes(1)
+
+    const focus = vi.fn()
+    const select = vi.fn()
+    const setSelectionRange = vi.fn()
+    const setInputRef = inputs[0].props.ref as (input: HTMLInputElement | null) => void
+
+    setInputRef({ focus, select, setSelectionRange } as unknown as HTMLInputElement)
+
+    expect(focus).toHaveBeenCalledTimes(1)
+    expect(setSelectionRange).toHaveBeenCalledWith(0, 'untitled-5'.length)
+    expect(select).not.toHaveBeenCalled()
+  })
+
+  it('ignores IME composition Enter before renaming the editor file tab', async () => {
+    const file = baseFile()
+    const firstRender = expandNode((await renderEditorFileTab(file)).element)
+    const renameItem = findMenuItemByText(firstRender, 'Rename')
+
+    ;(renameItem.props.onSelect as () => void)()
+
+    const secondRender = expandNode((await renderEditorFileTab(file)).element)
+    const input = findElementsByType(secondRender, 'input')[0]
+    const setInputRef = input.props.ref as (input: HTMLInputElement | null) => void
+    setInputRef({
+      focus: vi.fn(),
+      select: vi.fn(),
+      setSelectionRange: vi.fn(),
+      value: '日本語.md'
+    } as unknown as HTMLInputElement)
+
+    const composingEvent = pressInputKey(input, 'Enter', { isComposing: true })
+
+    expect(composingEvent.preventDefault).not.toHaveBeenCalled()
+    expect(renameFileOnDiskMock).not.toHaveBeenCalled()
+
+    pressInputKey(input, 'Enter')
+
+    expect(renameFileOnDiskMock).toHaveBeenCalledWith({
+      oldPath: '/repo/untitled-5.md',
+      newName: '日本語.md',
+      worktreeId: 'wt-1',
+      worktreePath: '/repo'
+    })
   })
 
   it('disables Rename for diff tabs that do not map to one writable file', async () => {
@@ -315,5 +453,28 @@ describe('EditorFileTab rename menu', () => {
     const renameItem = findMenuItemByText(element, 'Rename')
 
     expect(renameItem.props.disabled).toBe(true)
+  })
+
+  it('makes a preview tab permanent when double-clicking the filename label', async () => {
+    const onActivate = vi.fn()
+    const onMakePermanent = vi.fn()
+    const file = baseFile({ isPreview: true })
+    const element = expandNode(
+      (await renderEditorFileTab(file, onActivate, onMakePermanent)).element
+    )
+    const label = findSpanByText(element, 'untitled-5.md')
+    const stopPropagation = vi.fn()
+
+    ;(label.props.onDoubleClick as (event: { stopPropagation: () => void }) => void)({
+      stopPropagation
+    })
+
+    expect(onMakePermanent).toHaveBeenCalledTimes(1)
+    expect(stopPropagation).toHaveBeenCalledTimes(1)
+
+    const secondRender = expandNode(
+      (await renderEditorFileTab(file, onActivate, onMakePermanent)).element
+    )
+    expect(findElementsByType(secondRender, 'input')).toHaveLength(0)
   })
 })

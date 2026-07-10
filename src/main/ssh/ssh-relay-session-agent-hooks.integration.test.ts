@@ -1,6 +1,3 @@
-/* eslint-disable max-lines -- Why: this integration spec keeps the SSH relay,
-agent-hook server, and replay/interrupt ordering fixtures together so regressions
-cover the full mux-to-main path. */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import type { Store } from '../persistence'
@@ -423,6 +420,7 @@ describe('SshRelaySession agent hooks over a fake relay transport', () => {
         toolUseId: 'toolu-1',
         toolAgentId: 'agent-subagent-a',
         toolAgentType: 'Review',
+        providerSession: { key: 'session_id', id: 'ssh-relay-session-1' },
         payload: {
           state: 'working',
           prompt: 'remote prompt',
@@ -440,7 +438,8 @@ describe('SshRelaySession agent hooks over a fake relay transport', () => {
           promptInteractionKey: 'command-code-transcript-user-3',
           toolUseId: 'toolu-1',
           toolAgentId: 'agent-subagent-a',
-          toolAgentType: 'Review'
+          toolAgentType: 'Review',
+          providerSession: { key: 'session_id', id: 'ssh-relay-session-1' }
         }),
         'conn-hook-metadata'
       )

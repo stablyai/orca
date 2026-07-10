@@ -7,11 +7,16 @@ import { toast } from 'sonner'
 import { useAppStore } from '@/store'
 import { basename, dirname, joinPath } from '@/lib/path'
 import { getConnectionId } from '@/lib/connection-context'
-import { getWorkspaceFileDragPaths, WORKSPACE_FILE_PATH_MIME } from '@/lib/workspace-file-drag'
+import {
+  getWorkspaceFileDragRejectionMessage,
+  readWorkspaceFileDragPaths,
+  WORKSPACE_FILE_PATH_MIME
+} from '@/lib/workspace-file-drag'
 import { remapOpenEditorTabsForPathChange } from '@/lib/remap-open-editor-tabs-for-path-change'
 import { requestEditorSaveQuiesce } from '@/components/editor/editor-autosave'
 import { commitFileExplorerOp } from './fileExplorerUndoRedo'
 import { renameRuntimePath } from '@/runtime/runtime-file-client'
+import { getRightSidebarWorktreeRuntimeSettings } from './file-explorer-runtime-owner'
 
 function extractIpcErrorMessage(err: unknown, fallback: string): string {
   if (!(err instanceof Error)) {
@@ -233,7 +238,7 @@ export function useFileExplorerDragDrop({
         try {
           const connectionId = getConnectionId(activeWorktreeId ?? null) ?? undefined
           const fileContext = {
-            settings: useAppStore.getState().settings,
+            settings: getRightSidebarWorktreeRuntimeSettings(activeWorktreeId),
             worktreeId: activeWorktreeId,
             worktreePath,
             connectionId
@@ -340,7 +345,12 @@ export function useFileExplorerDragDrop({
         // here; the actual import is triggered from onFileDrop.
         clearNativeDragState()
         if (worktreePath) {
-          for (const sourcePath of getWorkspaceFileDragPaths(e.dataTransfer)) {
+          const dragPaths = readWorkspaceFileDragPaths(e.dataTransfer)
+          if (dragPaths.status === 'rejected') {
+            toast.error(getWorkspaceFileDragRejectionMessage(dragPaths.reason))
+            return
+          }
+          for (const sourcePath of dragPaths.paths) {
             handleMoveDrop(sourcePath, worktreePath)
           }
         }

@@ -1,9 +1,13 @@
+/* oxlint-disable react-doctor/no-adjust-state-on-prop-change -- Why: quick-open file lists are fetched over local or SSH runtime IPC, so loading/error/results track the request lifecycle. */
 import { useEffect, useMemo, useRef, useState } from 'react'
 import type { Worktree } from '../../../shared/types'
-import { getConnectionId } from '@/lib/connection-context'
-import { listRuntimeFiles } from '@/runtime/runtime-file-client'
+import { isWindowsAbsolutePathLike } from '../../../shared/cross-platform-path'
+import { getConnectionIdFromState } from '@/lib/connection-context'
+import { createBrowserUuid } from '@/lib/browser-uuid'
+import { getSettingsForWorktreeRuntimeOwner } from '@/lib/worktree-runtime-owner'
+import { cancelRuntimeFileList, listRuntimeFiles } from '@/runtime/runtime-file-client'
 import { useAppStore } from '@/store'
-import { useWorktreeById, useWorktreesForRepo } from '@/store/selectors'
+import { useWorktreesForRepo } from '@/store/selectors'
 
 export type RuntimeFileListState = {
   files: string[]
@@ -17,7 +21,7 @@ export function cleanRuntimeFileListError(error: unknown): string {
 }
 
 export function isNestedWorktreePath(parentPath: string, childPath: string): boolean {
-  const windowsPath = /^[a-zA-Z]:[\\/]/.test(parentPath) || parentPath.startsWith('\\\\')
+  const windowsPath = isWindowsAbsolutePathLike(parentPath)
   const parent = parentPath.replace(/[\\/]+$/, '').replace(/\\/g, '/')
   const child = childPath.replace(/\\/g, '/')
   // Why: Windows paths are case-insensitive and can arrive with mixed slash
@@ -41,6 +45,51 @@ export function getNestedWorktreeExcludePaths(
     .sort()
 }
 
+export type NestedWorktreeExcludeRequest = {
+  paths: string[]
+  key: string
+}
+
+export type RuntimeFileListTarget = {
+  canList: boolean
+  excludeRequest: NestedWorktreeExcludeRequest
+  worktreePath: string | null
+}
+
+export function getRuntimeFileListTarget(
+  worktreeId: string | null,
+  worktreePath: string | null | undefined,
+  repoWorktrees: readonly Worktree[]
+): RuntimeFileListTarget {
+  const resolvedWorktreePath = worktreePath ?? null
+  if (!worktreeId || !resolvedWorktreePath) {
+    return { canList: false, excludeRequest: { paths: [], key: '[]' }, worktreePath: null }
+  }
+  return {
+    canList: true,
+    excludeRequest: getNestedWorktreeExcludeRequest(
+      worktreeId,
+      resolvedWorktreePath,
+      repoWorktrees
+    ),
+    worktreePath: resolvedWorktreePath
+  }
+}
+
+export function getNestedWorktreeExcludeRequest(
+  worktreeId: string | null,
+  worktreePath: string | null,
+  repoWorktrees: readonly Worktree[]
+): NestedWorktreeExcludeRequest {
+  if (!worktreeId || !worktreePath || repoWorktrees.length === 0) {
+    return { paths: [], key: '[]' }
+  }
+  const paths = getNestedWorktreeExcludePaths(worktreeId, worktreePath, repoWorktrees)
+  // Why: worktree paths can contain newlines. Use JSON as a stable dependency
+  // key while passing the original array to IPC so paths stay lossless.
+  return { paths, key: JSON.stringify(paths) }
+}
+
 export function useRuntimeFileListForWorktree({
   enabled,
   worktreeId
@@ -48,22 +97,26 @@ export function useRuntimeFileListForWorktree({
   enabled: boolean
   worktreeId: string | null
 }): RuntimeFileListState {
-  const worktree = useWorktreeById(worktreeId)
+  const worktree = useAppStore((state) =>
+    // Why: folder workspaces live behind getKnownWorktreeById, not worktreesByRepo.
+    worktreeId ? (state.getKnownWorktreeById(worktreeId) ?? null) : null
+  )
+  const worktreePath = worktree?.path ?? null
   const repoWorktrees = useWorktreesForRepo(worktree?.repoId ?? null)
   const [files, setFiles] = useState<string[]>([])
   const [loading, setLoading] = useState(false)
   const [loadError, setLoadError] = useState<string | null>(null)
   const lastRequestKeyRef = useRef('')
 
-  const worktreePath = worktree?.path ?? null
-  const excludePathsKey = useMemo(() => {
-    if (!worktreeId || !worktreePath || repoWorktrees.length === 0) {
-      return ''
-    }
-    return getNestedWorktreeExcludePaths(worktreeId, worktreePath, repoWorktrees).join('\n')
-  }, [repoWorktrees, worktreeId, worktreePath])
+  const target = useMemo(
+    () => getRuntimeFileListTarget(worktreeId, worktreePath, repoWorktrees),
+    [repoWorktrees, worktreeId, worktreePath]
+  )
+  const { excludeRequest } = target
 
-  const connectionId = useMemo(() => getConnectionId(worktreeId) ?? undefined, [worktreeId])
+  const connectionId = useAppStore(
+    (state) => getConnectionIdFromState(state, worktreeId) ?? undefined
+  )
   const activeTargetStatus = useAppStore((state) =>
     connectionId ? state.sshConnectionStates.get(connectionId)?.status : undefined
   )
@@ -73,8 +126,8 @@ export function useRuntimeFileListForWorktree({
     activeTargetStatus === 'reconnecting'
   const requestKey = useMemo(
     () =>
-      `${worktreePath ?? ''}\n${connectionId ?? ''}\n${excludePathsKey}\n${activeTargetStatus ?? ''}`,
-    [activeTargetStatus, connectionId, excludePathsKey, worktreePath]
+      `${worktreePath ?? ''}\n${connectionId ?? ''}\n${excludeRequest.key}\n${activeTargetStatus ?? ''}`,
+    [activeTargetStatus, connectionId, excludeRequest.key, worktreePath]
   )
 
   useEffect(() => {
@@ -83,7 +136,7 @@ export function useRuntimeFileListForWorktree({
       return
     }
 
-    if (!worktreeId || !worktreePath) {
+    if (!target.canList || !worktreeId || !worktreePath) {
       setFiles([])
       setLoadError(null)
       setLoading(false)
@@ -99,20 +152,22 @@ export function useRuntimeFileListForWorktree({
     setLoadError(null)
     setLoading(true)
 
-    const excludePaths = excludePathsKey ? excludePathsKey.split('\n') : undefined
+    const excludePaths = excludeRequest.paths.length > 0 ? excludeRequest.paths : undefined
+    const requestToken = createBrowserUuid()
+    const requestContext = {
+      // Why: Quick Open lists files for the selected workspace. It must
+      // follow that workspace's owner host, not the globally focused host.
+      settings: getSettingsForWorktreeRuntimeOwner(useAppStore.getState(), worktreeId),
+      worktreeId,
+      worktreePath,
+      connectionId
+    }
 
-    void listRuntimeFiles(
-      {
-        settings: useAppStore.getState().settings,
-        worktreeId,
-        worktreePath,
-        connectionId
-      },
-      {
-        rootPath: worktreePath,
-        excludePaths
-      }
-    )
+    void listRuntimeFiles(requestContext, {
+      rootPath: worktreePath,
+      excludePaths,
+      requestToken
+    })
       .then((result) => {
         if (!cancelled) {
           setFiles(result)
@@ -132,8 +187,13 @@ export function useRuntimeFileListForWorktree({
 
     return () => {
       cancelled = true
+      // Why #7721: switching workspaces (or closing the palette) must abort
+      // the previous full-tree scan host- and relay-side. Over SSH, abandoned
+      // scans otherwise stack up and starve fs.readDir/fs.stat past their
+      // 30s timeout ("Could not load files for this workspace").
+      cancelRuntimeFileList(requestContext, requestToken)
     }
-  }, [connectionId, enabled, excludePathsKey, requestKey, worktreeId, worktreePath])
+  }, [connectionId, enabled, excludeRequest, requestKey, target.canList, worktreeId, worktreePath])
 
   return { files, loading: loading || connectionPending, loadError }
 }

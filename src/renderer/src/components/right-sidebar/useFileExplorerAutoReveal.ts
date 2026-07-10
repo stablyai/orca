@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef } from 'react'
 import type { Virtualizer } from '@tanstack/react-virtual'
 import { useAppStore } from '@/store'
 import type { OpenFile } from '@/store/slices/editor'
-import type { TreeNode } from './file-explorer-types'
+import type { FileExplorerRowProjection } from './file-explorer-row-projection'
 
 type UseFileExplorerAutoRevealParams = {
   activeFileId: string | null
@@ -10,8 +10,7 @@ type UseFileExplorerAutoRevealParams = {
   worktreePath: string | null
   pendingExplorerReveal: { worktreeId: string; filePath: string; requestId: number } | null
   openFiles: OpenFile[]
-  rowsByPath: Map<string, TreeNode>
-  flatRows: TreeNode[]
+  rowProjection: FileExplorerRowProjection
   setSelectedPath: (path: string | null) => void
   virtualizer: Virtualizer<HTMLDivElement, Element>
 }
@@ -30,8 +29,7 @@ export function useFileExplorerAutoReveal({
   worktreePath,
   pendingExplorerReveal,
   openFiles,
-  rowsByPath,
-  flatRows,
+  rowProjection,
   setSelectedPath,
   virtualizer
 }: UseFileExplorerAutoRevealParams): void {
@@ -77,11 +75,11 @@ export function useFileExplorerAutoReveal({
 
     const filePath = activeFile.filePath
 
-    if (rowsByPath.has(filePath)) {
+    if (rowProjection.hasPath(filePath)) {
       // File is already visible in the tree — just scroll to it and select
       setSelectedPath(filePath)
-      const targetIndex = flatRows.findIndex((row) => row.path === filePath)
-      if (targetIndex !== -1) {
+      const targetIndex = rowProjection.getIndexByPath(filePath)
+      if (targetIndex !== null) {
         cancelScrollFrame()
         scrollFrameRef.current = requestAnimationFrame(() => {
           scrollFrameRef.current = null
@@ -107,8 +105,7 @@ export function useFileExplorerAutoReveal({
     worktreePath,
     pendingExplorerReveal,
     openFiles,
-    rowsByPath,
-    flatRows,
+    rowProjection,
     setSelectedPath,
     virtualizer
   ])

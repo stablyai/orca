@@ -1,5 +1,6 @@
-import { homedir } from 'os'
-import { join } from 'path'
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { homedir, tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 vi.mock('electron', () => {
@@ -151,6 +152,30 @@ describe('configureDevUserDataPath', () => {
   })
 })
 
+describe('configureOrcaUserDataPathEnv', () => {
+  it('overwrites stale inherited ORCA_USER_DATA_PATH with Electron userData', async () => {
+    const { app } = await import('electron')
+    const { configureOrcaUserDataPathEnv } = await import('./configure-process')
+    const originalUserDataPath = process.env.ORCA_USER_DATA_PATH
+    process.env.ORCA_USER_DATA_PATH = '/tmp/stale-orca-user-data'
+    app.setPath('userData', '/tmp/current-orca-user-data')
+    let configuredUserDataPath: string | undefined
+
+    try {
+      configureOrcaUserDataPathEnv()
+      configuredUserDataPath = process.env.ORCA_USER_DATA_PATH
+    } finally {
+      if (originalUserDataPath === undefined) {
+        delete process.env.ORCA_USER_DATA_PATH
+      } else {
+        process.env.ORCA_USER_DATA_PATH = originalUserDataPath
+      }
+    }
+
+    expect(configuredUserDataPath).toBe('/tmp/current-orca-user-data')
+  })
+})
+
 describe('shouldInstallManagedHooks', () => {
   it('keeps managed hook auto-install enabled for default dev runs', async () => {
     const { shouldInstallManagedHooks } = await import('./configure-process')
@@ -165,117 +190,73 @@ describe('shouldInstallManagedHooks', () => {
   })
 })
 
-describe('installDevParentDisconnectQuit', () => {
-  it('quits the dev app when the supervising IPC channel disconnects', async () => {
+describe('configureElectronNetworkCompatibility', () => {
+  const tempDirs: string[] = []
+  const originalEnvValue = process.env.ORCA_DISABLE_HTTP2
+
+  function createUserDataDir(settings: Record<string, unknown>): string {
+    const userDataPath = mkdtempSync(join(tmpdir(), 'orca-http1-compat-'))
+    tempDirs.push(userDataPath)
+    writeFileSync(join(userDataPath, 'orca-data.json'), JSON.stringify({ settings }), 'utf-8')
+    return userDataPath
+  }
+
+  afterEach(() => {
+    for (const dir of tempDirs.splice(0)) {
+      rmSync(dir, { recursive: true, force: true })
+    }
+    if (originalEnvValue === undefined) {
+      delete process.env.ORCA_DISABLE_HTTP2
+    } else {
+      process.env.ORCA_DISABLE_HTTP2 = originalEnvValue
+    }
+  })
+
+  it('enables HTTP/1.1 compatibility when the persisted setting is on', async () => {
+    const { shouldDisableHttp2ForElectronNetworking } = await import('./configure-process')
+    const userDataPath = createUserDataDir({ electronHttp1CompatibilityMode: true })
+
+    expect(shouldDisableHttp2ForElectronNetworking({ env: {}, userDataPath })).toBe(true)
+  })
+
+  it('leaves HTTP/2 enabled by default', async () => {
+    const { shouldDisableHttp2ForElectronNetworking } = await import('./configure-process')
+    const userDataPath = createUserDataDir({})
+
+    expect(shouldDisableHttp2ForElectronNetworking({ env: {}, userDataPath })).toBe(false)
+  })
+
+  it('lets the environment override force compatibility on', async () => {
+    const { shouldDisableHttp2ForElectronNetworking } = await import('./configure-process')
+
+    expect(
+      shouldDisableHttp2ForElectronNetworking({
+        env: { ORCA_DISABLE_HTTP2: 'true' },
+        userDataPath: createUserDataDir({ electronHttp1CompatibilityMode: false })
+      })
+    ).toBe(true)
+  })
+
+  it('lets the environment override force compatibility off', async () => {
+    const { shouldDisableHttp2ForElectronNetworking } = await import('./configure-process')
+
+    expect(
+      shouldDisableHttp2ForElectronNetworking({
+        env: { ORCA_DISABLE_HTTP2: '0' },
+        userDataPath: createUserDataDir({ electronHttp1CompatibilityMode: true })
+      })
+    ).toBe(false)
+  })
+
+  it('appends Electron disable-http2 before sessions are created', async () => {
     const { app } = await import('electron')
-    const { installDevParentDisconnectQuit } = await import('./configure-process')
+    const { configureElectronNetworkCompatibility } = await import('./configure-process')
+    const userDataPath = createUserDataDir({ electronHttp1CompatibilityMode: true })
 
-    vi.useFakeTimers()
-    const originalSend = process.send
-    const originalOnce = process.once.bind(process)
-    const disconnectHandlers: (() => void)[] = []
+    vi.mocked(app.commandLine.appendSwitch).mockClear()
+    configureElectronNetworkCompatibility({ env: {}, userDataPath })
 
-    process.send = (() => true) as unknown as NodeJS.Process['send']
-    process.once = ((event: string | symbol, listener: (...args: any[]) => void) => {
-      if (event === 'disconnect') {
-        disconnectHandlers.push(listener as () => void)
-      }
-      return process
-    }) as NodeJS.Process['once']
-
-    vi.mocked(app.quit).mockClear()
-
-    try {
-      installDevParentDisconnectQuit(true)
-    } finally {
-      process.send = originalSend
-      process.once = originalOnce
-    }
-
-    expect(disconnectHandlers).toHaveLength(1)
-    disconnectHandlers[0]()
-    expect(app.quit).toHaveBeenCalledTimes(1)
-    expect(app.exit).not.toHaveBeenCalled()
-
-    await vi.advanceTimersByTimeAsync(3000)
-    expect(app.exit).toHaveBeenCalledWith(0)
-  })
-
-  it('does not register the disconnect hook outside dev ipc launches', async () => {
-    const { installDevParentDisconnectQuit } = await import('./configure-process')
-    const originalSend = process.send
-    const originalOnce = process.once.bind(process)
-    const onceSpy = vi.fn(originalOnce)
-
-    process.send = undefined
-    process.once = onceSpy as NodeJS.Process['once']
-
-    try {
-      installDevParentDisconnectQuit(true)
-      installDevParentDisconnectQuit(false)
-    } finally {
-      process.send = originalSend
-      process.once = originalOnce
-    }
-
-    expect(onceSpy).not.toHaveBeenCalledWith('disconnect', expect.any(Function))
-  })
-})
-
-describe('installDevParentWatchdog', () => {
-  it('quits the dev app when the original parent pid disappears', async () => {
-    const { app } = await import('electron')
-    const { installDevParentWatchdog } = await import('./configure-process')
-
-    vi.useFakeTimers()
-    vi.mocked(app.quit).mockClear()
-    vi.mocked(app.exit).mockClear()
-
-    let parentExists = true
-    vi.spyOn(process, 'kill').mockImplementation(((
-      pid: number,
-      signal?: NodeJS.Signals | number
-    ) => {
-      if (signal === 0 && pid === 4242 && !parentExists) {
-        const error = new Error('missing') as NodeJS.ErrnoException
-        error.code = 'ESRCH'
-        throw error
-      }
-      return true
-    }) as typeof process.kill)
-
-    const originalPpid = Object.getOwnPropertyDescriptor(process, 'ppid')
-    Object.defineProperty(process, 'ppid', {
-      configurable: true,
-      get: () => 4242
-    })
-
-    try {
-      installDevParentWatchdog(true)
-      await vi.advanceTimersByTimeAsync(1000)
-      expect(app.quit).not.toHaveBeenCalled()
-
-      parentExists = false
-      await vi.advanceTimersByTimeAsync(1000)
-      expect(app.quit).toHaveBeenCalledTimes(1)
-      expect(app.exit).not.toHaveBeenCalled()
-
-      await vi.advanceTimersByTimeAsync(3000)
-      expect(app.exit).toHaveBeenCalledWith(0)
-    } finally {
-      if (originalPpid) {
-        Object.defineProperty(process, 'ppid', originalPpid)
-      }
-    }
-  })
-
-  it('does not start the watchdog outside dev mode', async () => {
-    const { installDevParentWatchdog } = await import('./configure-process')
-    const setIntervalSpy = vi.spyOn(globalThis, 'setInterval')
-
-    installDevParentWatchdog(false)
-
-    expect(setIntervalSpy).not.toHaveBeenCalled()
+    expect(app.commandLine.appendSwitch).toHaveBeenCalledWith('disable-http2')
   })
 })
 
@@ -316,6 +297,150 @@ describe('enableMainProcessGpuFeatures', () => {
     expect(app.commandLine.appendSwitch).not.toHaveBeenCalledWith('enable-unsafe-webgpu')
   })
 
+  it('raises the WebGL context budget above the 16-context Blink default', async () => {
+    const { app } = await import('electron')
+    const { enableMainProcessGpuFeatures } = await import('./configure-process')
+
+    delete process.env.ORCA_E2E_USER_DATA_DIR
+    vi.mocked(app.commandLine.appendSwitch).mockClear()
+    enableMainProcessGpuFeatures()
+
+    expect(app.commandLine.appendSwitch).toHaveBeenCalledWith('max-active-webgl-contexts', '128')
+  })
+
+  it('disables the GPU sandbox on Linux Wayland without disabling acceleration', async () => {
+    const { app } = await import('electron')
+    const { enableMainProcessGpuFeatures } = await import('./configure-process')
+    const originalWaylandDisplay = process.env.WAYLAND_DISPLAY
+
+    try {
+      setPlatform('linux')
+      delete process.env.ORCA_E2E_USER_DATA_DIR
+      process.env.WAYLAND_DISPLAY = 'wayland-1'
+      vi.mocked(app.disableHardwareAcceleration).mockClear()
+      vi.mocked(app.commandLine.appendSwitch).mockClear()
+
+      enableMainProcessGpuFeatures()
+    } finally {
+      if (originalWaylandDisplay === undefined) {
+        delete process.env.WAYLAND_DISPLAY
+      } else {
+        process.env.WAYLAND_DISPLAY = originalWaylandDisplay
+      }
+    }
+
+    expect(app.commandLine.appendSwitch).toHaveBeenCalledWith('disable-gpu-sandbox')
+    expect(app.disableHardwareAcceleration).not.toHaveBeenCalled()
+    expect(app.commandLine.appendSwitch).not.toHaveBeenCalledWith(
+      'enable-features',
+      expect.stringContaining('EarlyEstablishGpuChannel')
+    )
+    expect(app.commandLine.appendSwitch).not.toHaveBeenCalledWith(
+      'enable-features',
+      expect.stringContaining('EstablishGpuChannelAsync')
+    )
+  })
+
+  it('uses Electron Ozone hints to recognize forced Linux Wayland launches', async () => {
+    const { app } = await import('electron')
+    const { enableMainProcessGpuFeatures } = await import('./configure-process')
+
+    setPlatform('linux')
+    delete process.env.ORCA_E2E_USER_DATA_DIR
+    vi.mocked(app.commandLine.appendSwitch).mockClear()
+    vi.mocked(app.commandLine.getSwitchValue).mockImplementation((switchName: string) =>
+      switchName === 'ozone-platform' ? 'wayland' : ''
+    )
+
+    enableMainProcessGpuFeatures()
+
+    expect(app.commandLine.appendSwitch).toHaveBeenCalledWith('disable-gpu-sandbox')
+    expect(app.commandLine.appendSwitch).not.toHaveBeenCalledWith(
+      'enable-features',
+      expect.stringContaining('EarlyEstablishGpuChannel')
+    )
+  })
+
+  it('honors explicit Linux X11 Ozone overrides even when Wayland env vars are present', async () => {
+    const { app } = await import('electron')
+    const { enableMainProcessGpuFeatures } = await import('./configure-process')
+    const originalWaylandDisplay = process.env.WAYLAND_DISPLAY
+    const originalSessionType = process.env.XDG_SESSION_TYPE
+
+    try {
+      setPlatform('linux')
+      delete process.env.ORCA_E2E_USER_DATA_DIR
+      process.env.WAYLAND_DISPLAY = 'wayland-1'
+      process.env.XDG_SESSION_TYPE = 'wayland'
+      vi.mocked(app.commandLine.appendSwitch).mockClear()
+      vi.mocked(app.commandLine.getSwitchValue).mockImplementation((switchName: string) =>
+        switchName === 'ozone-platform' ? 'x11' : ''
+      )
+
+      enableMainProcessGpuFeatures()
+    } finally {
+      if (originalWaylandDisplay === undefined) {
+        delete process.env.WAYLAND_DISPLAY
+      } else {
+        process.env.WAYLAND_DISPLAY = originalWaylandDisplay
+      }
+      if (originalSessionType === undefined) {
+        delete process.env.XDG_SESSION_TYPE
+      } else {
+        process.env.XDG_SESSION_TYPE = originalSessionType
+      }
+    }
+
+    expect(app.commandLine.appendSwitch).not.toHaveBeenCalledWith('disable-gpu-sandbox')
+    expect(app.commandLine.appendSwitch).toHaveBeenCalledWith(
+      'enable-features',
+      'EarlyEstablishGpuChannel,EstablishGpuChannelAsync'
+    )
+  })
+
+  it('does not disable the GPU sandbox outside Linux Wayland', async () => {
+    const { app } = await import('electron')
+    const { enableMainProcessGpuFeatures } = await import('./configure-process')
+    const originalWaylandDisplay = process.env.WAYLAND_DISPLAY
+    const originalSessionType = process.env.XDG_SESSION_TYPE
+    const originalOzoneHint = process.env.ELECTRON_OZONE_PLATFORM_HINT
+
+    try {
+      delete process.env.ORCA_E2E_USER_DATA_DIR
+      delete process.env.WAYLAND_DISPLAY
+      delete process.env.XDG_SESSION_TYPE
+      delete process.env.ELECTRON_OZONE_PLATFORM_HINT
+
+      for (const platform of ['linux', 'darwin', 'win32'] as const) {
+        setPlatform(platform)
+        vi.mocked(app.commandLine.appendSwitch).mockClear()
+        vi.mocked(app.commandLine.getSwitchValue).mockImplementation((switchName: string) =>
+          switchName === 'enable-features' ? '' : ''
+        )
+
+        enableMainProcessGpuFeatures()
+
+        expect(app.commandLine.appendSwitch).not.toHaveBeenCalledWith('disable-gpu-sandbox')
+      }
+    } finally {
+      if (originalWaylandDisplay === undefined) {
+        delete process.env.WAYLAND_DISPLAY
+      } else {
+        process.env.WAYLAND_DISPLAY = originalWaylandDisplay
+      }
+      if (originalSessionType === undefined) {
+        delete process.env.XDG_SESSION_TYPE
+      } else {
+        process.env.XDG_SESSION_TYPE = originalSessionType
+      }
+      if (originalOzoneHint === undefined) {
+        delete process.env.ELECTRON_OZONE_PLATFORM_HINT
+      } else {
+        process.env.ELECTRON_OZONE_PLATFORM_HINT = originalOzoneHint
+      }
+    }
+  })
+
   it('disables the GPU process for Linux E2E runs', async () => {
     const { app } = await import('electron')
     const { enableMainProcessGpuFeatures } = await import('./configure-process')
@@ -333,6 +458,10 @@ describe('enableMainProcessGpuFeatures', () => {
       'enable-features',
       expect.any(String)
     )
+    expect(app.commandLine.appendSwitch).not.toHaveBeenCalledWith(
+      'max-active-webgl-contexts',
+      expect.any(String)
+    )
   })
 
   it('preserves existing enable-features switches', async () => {
@@ -348,5 +477,32 @@ describe('enableMainProcessGpuFeatures', () => {
       'enable-features',
       'EarlyEstablishGpuChannel,EstablishGpuChannelAsync,ExistingFeature'
     )
+  })
+
+  it('preserves existing enable-features switches on Linux Wayland without eager GPU channel flags', async () => {
+    const { app } = await import('electron')
+    const { enableMainProcessGpuFeatures } = await import('./configure-process')
+    const originalWaylandDisplay = process.env.WAYLAND_DISPLAY
+
+    try {
+      setPlatform('linux')
+      delete process.env.ORCA_E2E_USER_DATA_DIR
+      process.env.WAYLAND_DISPLAY = 'wayland-1'
+      vi.mocked(app.commandLine.appendSwitch).mockClear()
+      vi.mocked(app.commandLine.getSwitchValue).mockImplementation((switchName: string) =>
+        switchName === 'enable-features' ? 'ExistingFeature' : ''
+      )
+
+      enableMainProcessGpuFeatures()
+    } finally {
+      if (originalWaylandDisplay === undefined) {
+        delete process.env.WAYLAND_DISPLAY
+      } else {
+        process.env.WAYLAND_DISPLAY = originalWaylandDisplay
+      }
+    }
+
+    expect(app.commandLine.appendSwitch).toHaveBeenCalledWith('disable-gpu-sandbox')
+    expect(app.commandLine.appendSwitch).toHaveBeenCalledWith('enable-features', 'ExistingFeature')
   })
 })

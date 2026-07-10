@@ -1,4 +1,3 @@
-/* eslint-disable max-lines */
 import { describe, expect, it } from 'vitest'
 import type { Repo, TerminalTab, Worktree } from '../../../../shared/types'
 import {
@@ -456,6 +455,22 @@ describe('sortWorktreesSmart — cold start fallback', () => {
     const sorted = sortWorktreesSmart([a, b], {}, repoMap, {}, {}, {})
     // Higher sortOrder wins on cold start.
     expect(sorted.map((w) => w.id)).toEqual(['b', 'a'])
+  })
+
+  it('falls back to the path label when a persisted worktree has no displayName', () => {
+    const missingDisplayName = {
+      ...makeWorktree({
+        id: 'missing-display-name',
+        path: '/tmp/alpha-path',
+        sortOrder: 1
+      }),
+      displayName: undefined
+    } as unknown as Worktree
+    const named = makeWorktree({ id: 'named', displayName: 'Zulu', sortOrder: 1 })
+
+    const sorted = sortWorktreesSmart([named, missingDisplayName], {}, repoMap, {}, {}, {})
+
+    expect(sorted.map((w) => w.id)).toEqual(['missing-display-name', 'named'])
   })
 
   it('treats slept tabs (tab.ptyId without live entry) as cold start', () => {

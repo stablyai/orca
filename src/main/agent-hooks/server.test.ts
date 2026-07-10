@@ -1,6 +1,6 @@
 /* eslint-disable max-lines -- Why: this suite exercises the full hook HTTP surface (Claude/Codex/Gemini parsing, transcript chunked scan, paneKey dispatch) and keeping the scenarios co-located avoids fixture drift across files. */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { execFileSync } from 'child_process'
+import { execFileSync } from 'node:child_process'
 import {
   existsSync,
   mkdirSync,
@@ -10,12 +10,18 @@ import {
   statSync,
   utimesSync,
   writeFileSync
-} from 'fs'
-import { tmpdir } from 'os'
-import { join } from 'path'
-import { AgentHookServer, agentHookServer, _internals } from './server'
+} from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import {
+  AgentHookServer,
+  agentHookServer,
+  CLOSED_AGENT_STATUS_TAB_IDS_MAX,
+  _internals
+} from './server'
 import {
   AGENT_STATUS_MAX_FIELD_LENGTH,
+  AGENT_STATUS_STALE_AFTER_MS,
   parseAgentStatusPayload
 } from '../../shared/agent-status-types'
 import { makePaneKey } from '../../shared/stable-pane-id'
@@ -53,6 +59,13 @@ type Body = {
   payload: Record<string, unknown>
 }
 
+type AgentHookServerCacheInternals = {
+  assistantMessageRetryTimers: Map<string, number | ReturnType<typeof globalThis.setTimeout>>
+  promptSentDedupeByPaneKey: Map<string, unknown>
+  runtimeObservedStatusPaneKeys: Set<string>
+  scheduleStatusPersist: () => void
+}
+
 function buildBody(payload: Record<string, unknown>, overrides: Partial<Body> = {}): Body {
   return {
     paneKey: PANE,
@@ -88,6 +101,7 @@ describe('AgentHookServer listener replay', () => {
           paneKey: PANE,
           tabId: 'tab-1',
           worktreeId: 'wt-1',
+          providerSession: { key: 'session_id', id: 'codex-interrupt-session-1' },
           payload: { state: 'working', prompt: 'long task', agentType: 'codex' }
         },
         'conn-1'
@@ -111,6 +125,7 @@ describe('AgentHookServer listener replay', () => {
           state: 'done',
           prompt: 'long task',
           agentType: 'codex',
+          providerSession: { key: 'session_id', id: 'codex-interrupt-session-1' },
           interrupted: true,
           receivedAt: 1_500,
           stateStartedAt: 1_500
@@ -119,6 +134,7 @@ describe('AgentHookServer listener replay', () => {
       expect(listener).toHaveBeenLastCalledWith(
         expect.objectContaining({
           paneKey: PANE,
+          providerSession: { key: 'session_id', id: 'codex-interrupt-session-1' },
           payload: expect.objectContaining({ state: 'done', interrupted: true })
         })
       )
@@ -423,6 +439,74 @@ describe('AgentHookServer listener replay', () => {
     }
   })
 
+  it('does not let late Claude tool hooks with explicit prompt resurrect an inferred interrupt', () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(1_000)
+    try {
+      const server = new AgentHookServer()
+      server.ingestRemote(
+        {
+          paneKey: PANE,
+          tabId: 'tab-1',
+          worktreeId: 'wt-1',
+          hasExplicitPrompt: true,
+          hookEventName: 'UserPromptSubmit',
+          payload: {
+            state: 'working',
+            prompt: 'Do I have gpu acceleration on on my terminal?',
+            agentType: 'claude'
+          }
+        },
+        'conn-1'
+      )
+      const baseline = server.getStatusSnapshot()[0]
+
+      vi.setSystemTime(1_500)
+      expect(
+        server.inferInterrupt({
+          paneKey: PANE,
+          baselineUpdatedAt: baseline.receivedAt,
+          baselineStateStartedAt: baseline.stateStartedAt,
+          baselinePrompt: 'Do I have gpu acceleration on on my terminal?',
+          baselineAgentType: 'claude',
+          intent: 'ctrl-c'
+        })
+      ).toBe(true)
+
+      vi.setSystemTime(2_000)
+      server.ingestRemote(
+        {
+          paneKey: PANE,
+          tabId: 'tab-1',
+          worktreeId: 'wt-1',
+          hasExplicitPrompt: true,
+          hookEventName: 'PostToolUse',
+          payload: {
+            state: 'working',
+            prompt: 'Do I have gpu acceleration on on my terminal?',
+            agentType: 'claude',
+            toolName: 'Read',
+            toolInput: 'src/renderer/src/components/terminal-pane/use-terminal-pane-lifecycle.ts'
+          }
+        },
+        'conn-1'
+      )
+
+      expect(server.getStatusSnapshot()).toEqual([
+        expect.objectContaining({
+          state: 'done',
+          prompt: 'Do I have gpu acceleration on on my terminal?',
+          agentType: 'claude',
+          interrupted: true,
+          receivedAt: 1_500,
+          stateStartedAt: 1_500
+        })
+      ])
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
   it('allows a new prompt after an inferred interrupt', () => {
     vi.useFakeTimers()
     vi.setSystemTime(1_000)
@@ -467,6 +551,64 @@ describe('AgentHookServer listener replay', () => {
           state: 'working',
           prompt: 'second task',
           agentType: 'pi',
+          receivedAt: 2_000,
+          stateStartedAt: 2_000
+        })
+      ])
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('allows a Claude follow-up prompt after an inferred interrupt to keep working', () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(1_000)
+    try {
+      const server = new AgentHookServer()
+      server.ingestRemote(
+        {
+          paneKey: PANE,
+          tabId: 'tab-1',
+          worktreeId: 'wt-1',
+          hasExplicitPrompt: true,
+          hookEventName: 'UserPromptSubmit',
+          payload: { state: 'working', prompt: 'first Claude turn', agentType: 'claude' }
+        },
+        'conn-1'
+      )
+      const baseline = server.getStatusSnapshot()[0]
+
+      vi.setSystemTime(1_500)
+      expect(
+        server.inferInterrupt({
+          paneKey: PANE,
+          baselineUpdatedAt: baseline.receivedAt,
+          baselineStateStartedAt: baseline.stateStartedAt,
+          baselinePrompt: 'first Claude turn',
+          baselineAgentType: 'claude',
+          intent: 'ctrl-c'
+        })
+      ).toBe(true)
+
+      vi.setSystemTime(2_000)
+      server.ingestRemote(
+        {
+          paneKey: PANE,
+          tabId: 'tab-1',
+          worktreeId: 'wt-1',
+          hasExplicitPrompt: true,
+          hookEventName: 'UserPromptSubmit',
+          payload: { state: 'working', prompt: 'second queued Claude turn', agentType: 'claude' }
+        },
+        'conn-1'
+      )
+
+      expect(server.getStatusSnapshot()).toEqual([
+        expect.objectContaining({
+          state: 'working',
+          prompt: 'second queued Claude turn',
+          agentType: 'claude',
+          interrupted: undefined,
           receivedAt: 2_000,
           stateStartedAt: 2_000
         })
@@ -531,7 +673,125 @@ describe('AgentHookServer listener replay', () => {
     }
   })
 
-  it('allows a same-prompt working hook after the stale suppression window', () => {
+  it('suppresses same-turn Claude tool progress after the stale suppression window', () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(1_000)
+    try {
+      const server = new AgentHookServer()
+      server.ingestRemote(
+        {
+          paneKey: PANE,
+          tabId: 'tab-1',
+          worktreeId: 'wt-1',
+          hasExplicitPrompt: true,
+          hookEventName: 'UserPromptSubmit',
+          payload: { state: 'working', prompt: 'repeat task', agentType: 'claude' }
+        },
+        'conn-1'
+      )
+      const baseline = server.getStatusSnapshot()[0]
+
+      vi.setSystemTime(1_500)
+      expect(
+        server.inferInterrupt({
+          paneKey: PANE,
+          baselineUpdatedAt: baseline.receivedAt,
+          baselineStateStartedAt: baseline.stateStartedAt,
+          baselinePrompt: 'repeat task',
+          baselineAgentType: 'claude',
+          intent: 'ctrl-c'
+        })
+      ).toBe(true)
+
+      vi.setSystemTime(16_501)
+      server.ingestRemote(
+        {
+          paneKey: PANE,
+          tabId: 'tab-1',
+          worktreeId: 'wt-1',
+          hasExplicitPrompt: true,
+          hookEventName: 'PostToolUse',
+          payload: {
+            state: 'working',
+            prompt: 'repeat task',
+            agentType: 'claude',
+            toolName: 'bash',
+            toolInput: '/bin/sleep 90'
+          }
+        },
+        'conn-1'
+      )
+
+      expect(server.getStatusSnapshot()).toEqual([
+        expect.objectContaining({
+          state: 'done',
+          prompt: 'repeat task',
+          agentType: 'claude',
+          interrupted: true,
+          receivedAt: 1_500,
+          stateStartedAt: 1_500
+        })
+      ])
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('allows generic non-explicit same-prompt working after the stale suppression window', () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(1_000)
+    try {
+      const server = new AgentHookServer()
+      server.ingestRemote(
+        {
+          paneKey: PANE,
+          tabId: 'tab-1',
+          worktreeId: 'wt-1',
+          payload: { state: 'working', prompt: 'repeat task', agentType: 'pi' }
+        },
+        'conn-1'
+      )
+      const baseline = server.getStatusSnapshot()[0]
+
+      vi.setSystemTime(1_500)
+      expect(
+        server.inferInterrupt({
+          paneKey: PANE,
+          baselineUpdatedAt: baseline.receivedAt,
+          baselineStateStartedAt: baseline.stateStartedAt,
+          baselinePrompt: 'repeat task',
+          baselineAgentType: 'pi',
+          intent: 'ctrl-c'
+        })
+      ).toBe(true)
+
+      vi.setSystemTime(16_501)
+      server.ingestRemote(
+        {
+          paneKey: PANE,
+          tabId: 'tab-1',
+          worktreeId: 'wt-1',
+          payload: { state: 'working', prompt: 'repeat task', agentType: 'pi' }
+        },
+        'conn-1'
+      )
+
+      expect(server.getStatusSnapshot()).toEqual([
+        expect.objectContaining({
+          state: 'working',
+          prompt: 'repeat task',
+          agentType: 'pi',
+          interrupted: undefined,
+          receivedAt: 16_501,
+          stateStartedAt: 16_501
+        })
+      ])
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('allows non-Claude tool-context working after the stale suppression window', () => {
     vi.useFakeTimers()
     vi.setSystemTime(1_000)
     try {
@@ -581,6 +841,9 @@ describe('AgentHookServer listener replay', () => {
           state: 'working',
           prompt: 'repeat task',
           agentType: 'pi',
+          interrupted: undefined,
+          toolName: 'bash',
+          toolInput: '/bin/sleep 90',
           receivedAt: 16_501,
           stateStartedAt: 16_501
         })
@@ -1059,6 +1322,220 @@ describe('AgentHookServer listener replay', () => {
 
     expect(listener).toHaveBeenNthCalledWith(2, [])
     expect(listener).toHaveBeenNthCalledWith(4, [])
+  })
+
+  it('notifies pane-status-clear listener when pane teardown evicts a cached status', () => {
+    const server = new AgentHookServer()
+    const listener = vi.fn()
+    server.setPaneStatusClearListener(listener)
+
+    server.ingestRemote(
+      {
+        paneKey: PANE,
+        tabId: 'tab-1',
+        worktreeId: 'wt-1',
+        payload: { state: 'working', agentType: 'claude' }
+      },
+      'conn-1'
+    )
+    server.clearPaneState(PANE)
+    server.clearPaneState(PANE)
+
+    expect(listener).toHaveBeenCalledTimes(1)
+    expect(listener).toHaveBeenCalledWith(PANE)
+  })
+
+  it('drops cached statuses and pane-scoped listener caches under one tab prefix', () => {
+    vi.useFakeTimers()
+    try {
+      const server = new AgentHookServer()
+      const internals = server as unknown as AgentHookServerCacheInternals
+      const sameTabPane = makePaneKey('tab-1', LEAF_2)
+      const siblingPrefixPane = makePaneKey('tab-10', LEAF_3)
+      const statusListener = vi.fn()
+      const aliasPersist = vi.fn()
+      const sameTabRetry = vi.fn()
+      const siblingRetry = vi.fn()
+      server.subscribeStatusChanges(statusListener)
+      server.setPaneKeyAliasPersistenceListener(aliasPersist)
+      server.ingestRemote(
+        {
+          paneKey: PANE,
+          tabId: 'tab-1',
+          worktreeId: 'wt-1',
+          payload: { state: 'working', prompt: 'first', agentType: 'claude' }
+        },
+        'conn-1'
+      )
+      server.ingestRemote(
+        {
+          paneKey: sameTabPane,
+          tabId: 'tab-1',
+          worktreeId: 'wt-1',
+          payload: { state: 'done', prompt: 'second', agentType: 'codex' }
+        },
+        'conn-1'
+      )
+      server.ingestRemote(
+        {
+          paneKey: siblingPrefixPane,
+          tabId: 'tab-10',
+          worktreeId: 'wt-2',
+          payload: { state: 'working', prompt: 'sibling', agentType: 'claude' }
+        },
+        'conn-1'
+      )
+      server.registerPaneKeyAlias('tab-1:0', sameTabPane, 'pty-1')
+      const state = server._getStateForTests()
+      state.lastPromptByPaneKey.set(PANE, 'cached prompt')
+      state.lastToolByPaneKey.set(`${sameTabPane}\0tool`, {} as never)
+      state.antigravityCompletedTranscriptByPaneKey.set(`${sameTabPane}\0done`, 'cached')
+      state.ampCompletedCacheKeys.add(`${sameTabPane}\0amp`)
+      state.lastPromptByPaneKey.set(siblingPrefixPane, 'sibling prompt')
+      internals.assistantMessageRetryTimers.set(PANE, setTimeout(sameTabRetry, 1_000))
+      internals.assistantMessageRetryTimers.set(siblingPrefixPane, setTimeout(siblingRetry, 1_000))
+      internals.promptSentDedupeByPaneKey.set(PANE, { promptHash: 'same-tab' })
+      internals.promptSentDedupeByPaneKey.set(siblingPrefixPane, { promptHash: 'sibling' })
+      const scheduleStatusPersist = vi.spyOn(internals, 'scheduleStatusPersist')
+      statusListener.mockClear()
+      aliasPersist.mockClear()
+      scheduleStatusPersist.mockClear()
+
+      server.dropStatusEntriesByTabPrefix('tab-1')
+
+      expect(server.getStatusSnapshot()).toEqual([
+        expect.objectContaining({ paneKey: siblingPrefixPane, prompt: 'sibling' })
+      ])
+      expect(state.lastPromptByPaneKey.has(PANE)).toBe(false)
+      expect(state.lastToolByPaneKey.has(`${sameTabPane}\0tool`)).toBe(false)
+      expect(state.antigravityCompletedTranscriptByPaneKey.has(`${sameTabPane}\0done`)).toBe(false)
+      expect(state.ampCompletedCacheKeys.has(`${sameTabPane}\0amp`)).toBe(false)
+      expect(state.lastPromptByPaneKey.get(siblingPrefixPane)).toBe('sibling prompt')
+      expect(internals.assistantMessageRetryTimers.has(PANE)).toBe(false)
+      expect(internals.assistantMessageRetryTimers.has(siblingPrefixPane)).toBe(true)
+      expect(internals.promptSentDedupeByPaneKey.has(PANE)).toBe(false)
+      expect(internals.promptSentDedupeByPaneKey.get(siblingPrefixPane)).toEqual({
+        promptHash: 'sibling'
+      })
+      expect(internals.runtimeObservedStatusPaneKeys.has(PANE)).toBe(false)
+      expect(internals.runtimeObservedStatusPaneKeys.has(sameTabPane)).toBe(false)
+      expect(internals.runtimeObservedStatusPaneKeys.has(siblingPrefixPane)).toBe(true)
+      expect(statusListener).toHaveBeenCalledTimes(1)
+      expect(statusListener).toHaveBeenCalledWith([
+        expect.objectContaining({ state: 'working', observedInCurrentRuntime: true })
+      ])
+      expect(aliasPersist).toHaveBeenCalledTimes(1)
+      expect(aliasPersist).toHaveBeenCalledWith([])
+      expect(scheduleStatusPersist).toHaveBeenCalledTimes(1)
+
+      vi.advanceTimersByTime(1_000)
+      expect(sameTabRetry).not.toHaveBeenCalled()
+      expect(siblingRetry).toHaveBeenCalledTimes(1)
+    } finally {
+      vi.clearAllTimers()
+      vi.useRealTimers()
+    }
+  })
+
+  it('suppresses late writes for a closed tab for the rest of the server session', () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(1_000)
+    try {
+      const server = new AgentHookServer()
+      const listener = vi.fn()
+      server.setListener(listener)
+      server.ingestRemote(
+        {
+          paneKey: PANE,
+          tabId: 'tab-1',
+          worktreeId: 'wt-1',
+          payload: { state: 'working', prompt: 'before close', agentType: 'codex' }
+        },
+        'conn-1'
+      )
+
+      server.dropStatusEntriesByTabPrefix('tab-1')
+      listener.mockClear()
+
+      server.ingestRemote(
+        {
+          paneKey: PANE,
+          tabId: 'tab-1',
+          worktreeId: 'wt-1',
+          payload: { state: 'done', prompt: 'late remote', agentType: 'codex' }
+        },
+        'conn-1'
+      )
+      server.ingestTerminalStatus({
+        paneKey: PANE,
+        tabId: 'tab-1',
+        worktreeId: 'wt-1',
+        payload: { state: 'done', prompt: 'late terminal', agentType: 'codex' }
+      })
+
+      vi.setSystemTime(16_001)
+      server.ingestRemote(
+        {
+          paneKey: PANE,
+          tabId: 'tab-1',
+          worktreeId: 'wt-1',
+          payload: { state: 'working', prompt: 'future reuse', agentType: 'codex' }
+        },
+        'conn-1'
+      )
+
+      expect(listener).not.toHaveBeenCalled()
+      expect(server.getStatusSnapshot()).toEqual([])
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('accepts statuses for unrelated tabs while another tab is recently closed', () => {
+    const server = new AgentHookServer()
+    server.dropStatusEntriesByTabPrefix('tab-1')
+    server.ingestRemote(
+      {
+        paneKey: GOOD_PANE,
+        tabId: 'tab-good',
+        worktreeId: 'wt-1',
+        payload: { state: 'working', prompt: 'unrelated', agentType: 'claude' }
+      },
+      'conn-1'
+    )
+
+    expect(server.getStatusSnapshot()).toEqual([
+      expect.objectContaining({ paneKey: GOOD_PANE, state: 'working', prompt: 'unrelated' })
+    ])
+  })
+
+  it('suppresses local HTTP hook writes for a recently closed tab', async () => {
+    const server = new AgentHookServer()
+    await server.start({ env: 'production' })
+    try {
+      const env = server.buildPtyEnv()
+      const postHook = (prompt: string): Promise<Response> =>
+        fetch(`http://127.0.0.1:${env.ORCA_AGENT_HOOK_PORT}/hook/claude`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-Orca-Agent-Hook-Token': env.ORCA_AGENT_HOOK_TOKEN
+          },
+          body: JSON.stringify(buildBody({ hook_event_name: 'UserPromptSubmit', prompt }))
+        })
+
+      await expect(postHook('before close')).resolves.toMatchObject({ status: 204 })
+      expect(server.getStatusSnapshot()).toEqual([
+        expect.objectContaining({ paneKey: PANE, prompt: 'before close' })
+      ])
+
+      server.dropStatusEntriesByTabPrefix('tab-1')
+      await expect(postHook('late local')).resolves.toMatchObject({ status: 204 })
+
+      expect(server.getStatusSnapshot()).toEqual([])
+    } finally {
+      server.stop()
+    }
   })
 
   it('hydrates cached statuses as not observed in the current runtime', async () => {
@@ -1784,6 +2261,65 @@ describe('AgentHookServer listener replay', () => {
       server.setListener(listener)
 
       expect(listener).not.toHaveBeenCalled()
+    } finally {
+      server.stop()
+    }
+  })
+
+  it('ignores local nested Claude Stop while a parent Codex hook status is active', async () => {
+    const server = new AgentHookServer()
+    await server.start({ env: 'production' })
+    try {
+      const env = server.buildPtyEnv()
+      const listener = vi.fn()
+      server.setListener(listener)
+      const postHook = async (
+        source: 'codex' | 'claude',
+        payload: Record<string, unknown>
+      ): Promise<void> => {
+        const response = await fetch(
+          `http://127.0.0.1:${env.ORCA_AGENT_HOOK_PORT}/hook/${source}`,
+          {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'X-Orca-Agent-Hook-Token': env.ORCA_AGENT_HOOK_TOKEN
+            },
+            body: JSON.stringify(buildBody(payload))
+          }
+        )
+        expect(response.status).toBe(204)
+      }
+
+      await postHook('codex', {
+        hook_event_name: 'UserPromptSubmit',
+        prompt: 'parent codex'
+      })
+      await postHook('claude', {
+        hook_event_name: 'Stop',
+        last_assistant_message: 'child finished'
+      })
+
+      expect(server.getStatusSnapshot()).toEqual([
+        expect.objectContaining({
+          paneKey: PANE,
+          state: 'working',
+          prompt: 'parent codex',
+          agentType: 'codex'
+        })
+      ])
+      const snapshot = server.getStatusSnapshot()[0]
+      expect(snapshot.lastAssistantMessage).toBeUndefined()
+      expect(listener).toHaveBeenCalledTimes(1)
+      expect(listener).toHaveBeenLastCalledWith(
+        expect.objectContaining({
+          payload: expect.objectContaining({
+            state: 'working',
+            prompt: 'parent codex',
+            agentType: 'codex'
+          })
+        })
+      )
     } finally {
       server.stop()
     }
@@ -3758,6 +4294,38 @@ describe('OpenCode hook normalization', () => {
     expect(result?.payload.lastAssistantMessage).toBe('Hello! How can I help?')
   })
 
+  it('caps oversized MessagePart text from stale (pre-throttle) plugin builds', () => {
+    // Why: plugin builds installed before the throttle/cap fix re-post the
+    // full accumulated reply on every streamed part update. The listener must
+    // bound the text so each event's status compare, IPC fanout, and renderer
+    // store update stay O(cap) instead of O(reply length).
+    const assistant = _internals.normalizeHookPayload(
+      'opencode',
+      buildBody({
+        hook_event_name: 'MessagePart',
+        role: 'assistant',
+        text: 'a'.repeat(500_000)
+      }),
+      'production'
+    )
+    expect(assistant?.payload.lastAssistantMessage?.length).toBe(8_000)
+
+    // Why: prompt has always been single-line-capped at 200 by
+    // normalizeAgentStatusObject; this asserts the oversized input still
+    // flows through without blowing past that bound.
+    const user = _internals.normalizeHookPayload(
+      'opencode',
+      buildBody({
+        hook_event_name: 'MessagePart',
+        role: 'user',
+        text: 'u'.repeat(500_000),
+        messageID: 'msg-cap'
+      }),
+      'production'
+    )
+    expect(user?.payload.prompt?.length).toBe(200)
+  })
+
   it('subsequent SessionIdle preserves cached prompt + assistant message', () => {
     _internals.normalizeHookPayload(
       'opencode',
@@ -3813,24 +4381,24 @@ describe('Cursor hook normalization', () => {
     expect(result?.payload.interrupted).toBe(true)
   })
 
-  it('beforeShellExecution maps to waiting with the pending command as toolInput', () => {
+  it('beforeShellExecution maps to working with the pending command as toolInput', () => {
     const result = _internals.normalizeHookPayload(
       'cursor',
       buildBody({ hook_event_name: 'beforeShellExecution', command: 'rm -rf /tmp/foo' }),
       'production'
     )
-    expect(result?.payload.state).toBe('waiting')
+    expect(result?.payload.state).toBe('working')
     expect(result?.payload.toolName).toBe('Shell')
     expect(result?.payload.toolInput).toBe('rm -rf /tmp/foo')
   })
 
-  it('beforeMCPExecution maps to waiting', () => {
+  it('beforeMCPExecution maps to working', () => {
     const result = _internals.normalizeHookPayload(
       'cursor',
       buildBody({ hook_event_name: 'beforeMCPExecution', tool_name: 'fetch', url: 'https://x' }),
       'production'
     )
-    expect(result?.payload.state).toBe('waiting')
+    expect(result?.payload.state).toBe('working')
     expect(result?.payload.toolName).toBe('fetch')
   })
 
@@ -3927,6 +4495,37 @@ describe('Cursor hook normalization', () => {
         lastAssistantMessage: 'All set.'
       })
     ])
+  })
+
+  it('tool-heavy turn keeps working across shell and generic tool hooks until stop', () => {
+    _internals.normalizeHookPayload(
+      'cursor',
+      buildBody({ hook_event_name: 'beforeSubmitPrompt', prompt: 'run checks' }),
+      'production'
+    )
+    const shell = _internals.normalizeHookPayload(
+      'cursor',
+      buildBody({ hook_event_name: 'beforeShellExecution', command: 'pnpm test' }),
+      'production'
+    )
+    expect(shell?.payload.state).toBe('working')
+    const tool = _internals.normalizeHookPayload(
+      'cursor',
+      buildBody({
+        hook_event_name: 'preToolUse',
+        tool_name: 'Read',
+        tool_input: { file_path: '/repo/src/app.ts' }
+      }),
+      'production'
+    )
+    expect(tool?.payload.state).toBe('working')
+    const stop = _internals.normalizeHookPayload(
+      'cursor',
+      buildBody({ hook_event_name: 'stop', status: 'completed' }),
+      'production'
+    )
+    expect(stop?.payload.state).toBe('done')
+    expect(stop?.payload.prompt).toBe('run checks')
   })
 
   it('beforeSubmitPrompt clears the cached tool state from a prior turn', () => {
@@ -4046,6 +4645,19 @@ describe('Droid hook normalization', () => {
       buildBody({
         hook_event_name: 'Notification',
         message: 'Confirmed configuration loaded'
+      }),
+      'production'
+    )
+
+    expect(result).toBeNull()
+  })
+
+  it('SubagentStop does not mark Droid done for mission progress', () => {
+    const result = _internals.normalizeHookPayload(
+      'droid',
+      buildBody({
+        hook_event_name: 'SubagentStop',
+        last_assistant_message: '# Completed Wrote the requested validation assertions'
       }),
       'production'
     )
@@ -5625,6 +6237,211 @@ describe('AgentHookServer ingestRemote', () => {
     )
   })
 
+  it('preserves active pane identity when a nested remote hook reports another agent', () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(1_000)
+    try {
+      const server = new AgentHookServer()
+      const listener = vi.fn()
+      server.setListener(listener)
+      server.ingestRemote(
+        {
+          paneKey: PANE,
+          tabId: 'tab-1',
+          worktreeId: 'wt-1',
+          hasExplicitPrompt: true,
+          payload: { state: 'working', prompt: 'parent codex', agentType: 'codex' }
+        },
+        'conn-1'
+      )
+
+      vi.setSystemTime(1_100)
+      server.ingestRemote(
+        {
+          paneKey: PANE,
+          tabId: 'tab-1',
+          worktreeId: 'wt-1',
+          hasExplicitPrompt: true,
+          payload: {
+            state: 'working',
+            prompt: 'nested claude',
+            agentType: 'claude',
+            toolName: 'Read',
+            toolInput: '00-review-context.md'
+          }
+        },
+        'conn-1'
+      )
+
+      expect(server.getStatusSnapshot()).toEqual([
+        expect.objectContaining({
+          paneKey: PANE,
+          state: 'working',
+          prompt: 'nested claude',
+          agentType: 'codex',
+          toolName: 'Read',
+          toolInput: '00-review-context.md',
+          receivedAt: 1_100
+        })
+      ])
+      expect(listener).toHaveBeenLastCalledWith(
+        expect.objectContaining({
+          payload: expect.objectContaining({
+            prompt: 'nested claude',
+            agentType: 'codex'
+          })
+        })
+      )
+      expect(trackMock).toHaveBeenCalledTimes(1)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('ignores nested remote done while the parent pane agent is still active', () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(1_000)
+    try {
+      const server = new AgentHookServer()
+      const listener = vi.fn()
+      server.setListener(listener)
+      server.ingestRemote(
+        {
+          paneKey: PANE,
+          tabId: 'tab-1',
+          worktreeId: 'wt-1',
+          hasExplicitPrompt: true,
+          payload: { state: 'working', prompt: 'parent codex', agentType: 'codex' }
+        },
+        'conn-1'
+      )
+
+      vi.setSystemTime(1_100)
+      server.ingestRemote(
+        {
+          paneKey: PANE,
+          tabId: 'tab-1',
+          worktreeId: 'wt-1',
+          hasExplicitPrompt: true,
+          payload: {
+            state: 'done',
+            prompt: 'nested claude',
+            agentType: 'claude',
+            toolName: 'Read',
+            toolInput: '00-review-context.md',
+            lastAssistantMessage: 'child finished'
+          }
+        },
+        'conn-1'
+      )
+
+      const snapshot = server.getStatusSnapshot()
+      expect(snapshot).toHaveLength(1)
+      expect(snapshot[0]).toMatchObject({
+        paneKey: PANE,
+        state: 'working',
+        prompt: 'parent codex',
+        agentType: 'codex',
+        receivedAt: 1_000,
+        stateStartedAt: 1_000
+      })
+      expect(snapshot[0].toolName).toBeUndefined()
+      expect(snapshot[0].toolInput).toBeUndefined()
+      expect(snapshot[0].lastAssistantMessage).toBeUndefined()
+      expect(listener).toHaveBeenCalledTimes(1)
+      expect(listener).toHaveBeenLastCalledWith(
+        expect.objectContaining({
+          payload: expect.objectContaining({
+            state: 'working',
+            prompt: 'parent codex',
+            agentType: 'codex'
+          })
+        })
+      )
+      expect(trackMock).toHaveBeenCalledTimes(1)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('allows remote pane identity to change after the prior turn is done', () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(1_000)
+    try {
+      const server = new AgentHookServer()
+      server.ingestRemote(
+        {
+          paneKey: PANE,
+          tabId: 'tab-1',
+          worktreeId: 'wt-1',
+          payload: { state: 'done', prompt: 'parent codex', agentType: 'codex' }
+        },
+        'conn-1'
+      )
+
+      vi.setSystemTime(1_100)
+      server.ingestRemote(
+        {
+          paneKey: PANE,
+          tabId: 'tab-1',
+          worktreeId: 'wt-1',
+          payload: { state: 'working', prompt: 'real claude turn', agentType: 'claude' }
+        },
+        'conn-1'
+      )
+
+      expect(server.getStatusSnapshot()).toEqual([
+        expect.objectContaining({
+          state: 'working',
+          prompt: 'real claude turn',
+          agentType: 'claude',
+          receivedAt: 1_100
+        })
+      ])
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('allows stale active remote pane identity to change', () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(1_000)
+    try {
+      const server = new AgentHookServer()
+      server.ingestRemote(
+        {
+          paneKey: PANE,
+          tabId: 'tab-1',
+          worktreeId: 'wt-1',
+          payload: { state: 'working', prompt: 'old codex turn', agentType: 'codex' }
+        },
+        'conn-1'
+      )
+
+      vi.setSystemTime(1_000 + AGENT_STATUS_STALE_AFTER_MS + 1)
+      server.ingestRemote(
+        {
+          paneKey: PANE,
+          tabId: 'tab-1',
+          worktreeId: 'wt-1',
+          payload: { state: 'working', prompt: 'new claude turn', agentType: 'claude' }
+        },
+        'conn-1'
+      )
+
+      expect(server.getStatusSnapshot()).toEqual([
+        expect.objectContaining({
+          state: 'working',
+          prompt: 'new claude turn',
+          agentType: 'claude',
+          receivedAt: 1_000 + AGENT_STATUS_STALE_AFTER_MS + 1
+        })
+      ])
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
   it('lets remote Claude permission clear when matching approved tool execution starts', () => {
     const server = new AgentHookServer()
     const waiting = parseAgentStatusPayload(
@@ -5875,5 +6692,184 @@ describe('AgentHookServer ingestRemote', () => {
     expect(listener).toHaveBeenCalledTimes(1)
     const event = listener.mock.calls[0][0] as { payload: { prompt: string } }
     expect(event.payload.prompt.length).toBe(200)
+  })
+})
+
+describe('AgentHookServer ingestTerminalStatus', () => {
+  it('forwards runtime terminal status through the normal listener and snapshot path', () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(1_000)
+    try {
+      const server = new AgentHookServer()
+      const listener = vi.fn()
+      server.setListener(listener)
+
+      server.ingestTerminalStatus({
+        paneKey: PANE,
+        tabId: 'tab-1',
+        worktreeId: 'wt-1',
+        payload: {
+          state: 'working',
+          prompt: 'ship it',
+          agentType: 'codex'
+        }
+      })
+
+      expect(listener).toHaveBeenCalledTimes(1)
+      expect(listener).toHaveBeenCalledWith(
+        expect.objectContaining({
+          paneKey: PANE,
+          tabId: 'tab-1',
+          worktreeId: 'wt-1',
+          connectionId: null,
+          receivedAt: 1_000,
+          stateStartedAt: 1_000,
+          payload: {
+            state: 'working',
+            prompt: 'ship it',
+            agentType: 'codex'
+          }
+        })
+      )
+      expect(server.getStatusSnapshot()).toEqual([
+        expect.objectContaining({
+          paneKey: PANE,
+          tabId: 'tab-1',
+          worktreeId: 'wt-1',
+          connectionId: null,
+          receivedAt: 1_000,
+          stateStartedAt: 1_000,
+          state: 'working',
+          prompt: 'ship it',
+          agentType: 'codex'
+        })
+      ])
+      expect(trackMock).not.toHaveBeenCalledWith('agent_prompt_sent', expect.anything())
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('suppresses exact duplicate runtime terminal status observations', () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(1_000)
+    try {
+      const server = new AgentHookServer()
+      const listener = vi.fn()
+      server.setListener(listener)
+      const event = {
+        paneKey: PANE,
+        tabId: 'tab-1',
+        worktreeId: 'wt-1',
+        payload: {
+          state: 'working' as const,
+          prompt: 'same turn',
+          agentType: 'codex' as const
+        }
+      }
+
+      server.ingestTerminalStatus(event)
+      vi.setSystemTime(1_250)
+      server.ingestTerminalStatus(event)
+
+      expect(listener).toHaveBeenCalledTimes(1)
+      expect(server.getStatusSnapshot()).toEqual([
+        expect.objectContaining({
+          paneKey: PANE,
+          receivedAt: 1_000,
+          stateStartedAt: 1_000,
+          state: 'working',
+          prompt: 'same turn'
+        })
+      ])
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('preserves runtime terminal status connection identity', () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(1_000)
+    try {
+      const server = new AgentHookServer()
+      const listener = vi.fn()
+      server.setListener(listener)
+
+      server.ingestTerminalStatus({
+        paneKey: PANE,
+        tabId: 'tab-1',
+        worktreeId: 'wt-1',
+        connectionId: 'ssh-conn-1',
+        payload: {
+          state: 'working',
+          prompt: 'ship it',
+          agentType: 'codex'
+        }
+      })
+
+      expect(listener).toHaveBeenCalledWith(
+        expect.objectContaining({
+          paneKey: PANE,
+          tabId: 'tab-1',
+          worktreeId: 'wt-1',
+          connectionId: 'ssh-conn-1',
+          payload: {
+            state: 'working',
+            prompt: 'ship it',
+            agentType: 'codex'
+          }
+        })
+      )
+      expect(server.getStatusSnapshot()).toEqual([
+        expect.objectContaining({
+          paneKey: PANE,
+          connectionId: 'ssh-conn-1',
+          state: 'working',
+          prompt: 'ship it'
+        })
+      ])
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('rejects runtime terminal status with mismatched tab identity', () => {
+    const server = new AgentHookServer()
+    const listener = vi.fn()
+    server.setListener(listener)
+
+    server.ingestTerminalStatus({
+      paneKey: PANE,
+      tabId: 'other-tab',
+      worktreeId: 'wt-1',
+      payload: {
+        state: 'working',
+        prompt: 'bad tab',
+        agentType: 'codex'
+      }
+    })
+
+    expect(listener).not.toHaveBeenCalled()
+    expect(server.getStatusSnapshot()).toEqual([])
+  })
+})
+
+describe('AgentHookServer closed-tab suppression bound', () => {
+  it('bounds closedAgentStatusTabIds with LRU eviction as tabs close', () => {
+    const server = new AgentHookServer()
+    const internals = server as unknown as {
+      markTabClosedForAgentStatus: (tabId: string) => void
+      closedAgentStatusTabIds: Set<string>
+    }
+
+    const total = CLOSED_AGENT_STATUS_TAB_IDS_MAX + 200
+    for (let i = 0; i < total; i += 1) {
+      internals.markTabClosedForAgentStatus(`closed-tab-${i}`)
+    }
+
+    // Set stays bounded; oldest ids are evicted, most-recent are retained.
+    expect(internals.closedAgentStatusTabIds.size).toBe(CLOSED_AGENT_STATUS_TAB_IDS_MAX)
+    expect(internals.closedAgentStatusTabIds.has('closed-tab-0')).toBe(false)
+    expect(internals.closedAgentStatusTabIds.has(`closed-tab-${total - 1}`)).toBe(true)
   })
 })

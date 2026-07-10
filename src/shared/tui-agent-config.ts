@@ -1,4 +1,5 @@
 import type { TuiAgent } from './types'
+import { getOrcaCliCommandNameForPlatform } from './orca-cli-command-name'
 
 export type AgentPromptInjectionMode =
   | 'argv'
@@ -7,11 +8,24 @@ export type AgentPromptInjectionMode =
   | 'flag-interactive'
   | 'stdin-after-start'
 
-export type DraftPasteReadySignal = 'render-quiet-after-bracketed-paste' | 'codex-composer-prompt'
+export type DraftPasteReadySignal =
+  | 'render-quiet-after-bracketed-paste'
+  | 'codex-composer-prompt'
+  | 'render-cursor-after-bracketed-paste'
+
+export type TuiAgentDetectionRuntime = NodeJS.Platform | 'wsl'
 
 export type TuiAgentConfig = {
   detectCmd: string
+  /** Additional executable names that identify the same agent on PATH. */
+  detectCmdAliases?: readonly string[]
+  /** Other commands that must also be present before this agent counts as installed. */
+  detectRequiredCommands?: readonly string[]
+  /** Detection runtimes where this launch mode is not available as a detected agent. */
+  detectUnsupportedRuntimes?: readonly TuiAgentDetectionRuntime[]
   launchCmd: string
+  /** Platform-specific launch command when the public binary name differs. */
+  launchCmdByPlatform?: Partial<Record<NodeJS.Platform, string>>
   expectedProcess: string
   promptInjectionMode: AgentPromptInjectionMode
   /** Why: flag that launches the TUI with the given text already in the
@@ -49,12 +63,6 @@ export type TuiAgentConfig = {
   draftPasteReadySignal?: DraftPasteReadySignal
 }
 
-// Why: the new-workspace handoff depends on three pieces of per-agent
-// knowledge staying in sync: how Orca detects the agent on PATH, which binary
-// it actually launches, and whether the initial prompt should be passed as an
-// argv flag/argument or typed into the interactive session after startup.
-// Centralizing that metadata prevents the picker, launcher, and preflight
-// checks from quietly drifting apart as new agents are added.
 export const TUI_AGENT_CONFIG: Record<TuiAgent, TuiAgentConfig> = {
   claude: {
     detectCmd: 'claude',
@@ -66,6 +74,25 @@ export const TUI_AGENT_CONFIG: Record<TuiAgent, TuiAgentConfig> = {
     // ready fallback because it eliminates the readiness race entirely.
     // See PR https://github.com/stablyai/orca/pull/926 for context.
     draftPromptFlag: '--prefill'
+  },
+  'claude-agent-teams': {
+    // Why: this is an Orca-provided launch mode, not a separate upstream
+    // binary. Detection follows the Orca CLI and requires Claude below.
+    detectCmd: 'orca',
+    detectCmdAliases: ['orca-dev', 'orca-ide'],
+    // Why: the Orca shim alone exists on fresh installs. Require Claude too so
+    // onboarding does not report Agent Teams when no agent CLI is installed.
+    detectRequiredCommands: ['claude'],
+    // Why: native Windows and WSL use Claude's in-process Agent Teams fallback,
+    // not the Orca native-pane/tmux-shim wrapper exposed by this agent entry.
+    detectUnsupportedRuntimes: ['win32', 'wsl'],
+    launchCmd: 'orca claude-teams',
+    launchCmdByPlatform: {
+      linux: `${getOrcaCliCommandNameForPlatform('linux')} claude-teams`,
+      win32: `${getOrcaCliCommandNameForPlatform('win32')} claude-teams`
+    },
+    expectedProcess: 'claude',
+    promptInjectionMode: 'stdin-after-start'
   },
   openclaude: {
     detectCmd: 'openclaude',
@@ -79,11 +106,6 @@ export const TUI_AGENT_CONFIG: Record<TuiAgent, TuiAgentConfig> = {
     launchCmd: 'codex',
     expectedProcess: 'codex',
     promptInjectionMode: 'argv',
-    // Why: Codex's positional prompt auto-submits the first turn, so Orca
-    // must still paste a draft. The Codex TUI enables bracketed paste before
-    // the first render, then chat_composer.rs emits `›` when the composer row
-    // is visible. Waiting for that prompt skips the generic quiet timer while
-    // avoiding startup/onboarding screens that ignore paste.
     preflightTrust: 'codex',
     draftPasteReadySignal: 'codex-composer-prompt'
   },
@@ -93,11 +115,33 @@ export const TUI_AGENT_CONFIG: Record<TuiAgent, TuiAgentConfig> = {
     expectedProcess: 'autohand',
     promptInjectionMode: 'stdin-after-start'
   },
+  ante: {
+    detectCmd: 'ante',
+    launchCmd: 'ante',
+    expectedProcess: 'ante',
+    // Why: `ante --prompt` is Ante's documented headless mode (runs the task
+    // once and exits), so Orca launches the bare interactive TUI and injects
+    // the composed prompt after startup to keep the hosted session alive.
+    promptInjectionMode: 'stdin-after-start'
+  },
   opencode: {
     detectCmd: 'opencode',
     launchCmd: 'opencode',
     expectedProcess: 'opencode',
-    promptInjectionMode: 'flag-prompt'
+    promptInjectionMode: 'flag-prompt',
+    // Why: opencode enables bracketed paste before its composer mounts; wait
+    // for post-\x1b[?2004h show-cursor (\x1b[?25h) so paste hits mounted input.
+    draftPasteReadySignal: 'render-cursor-after-bracketed-paste'
+  },
+  'mimo-code': {
+    detectCmd: 'mimo',
+    launchCmd: 'mimo',
+    expectedProcess: 'mimo',
+    promptInjectionMode: 'flag-prompt',
+    // Why: mimo-code shares opencode's flag-prompt paste route, so it gets the
+    // same cursor-gated signal by parity (its startup stream is not separately
+    // validated); the quiet-window fallback bounds the risk if it differs.
+    draftPasteReadySignal: 'render-cursor-after-bracketed-paste'
   },
   pi: {
     detectCmd: 'pi',
@@ -114,16 +158,6 @@ export const TUI_AGENT_CONFIG: Record<TuiAgent, TuiAgentConfig> = {
     draftPromptEnvVar: 'ORCA_PI_PREFILL'
   },
   omp: {
-    // Why: OMP (omp.sh) is a Pi fork with its own binary (`omp`), brand,
-    // default config dir (~/.omp/agent), and overlay tree. It re-uses
-    // Pi's argv prompt-injection contract because the OMP binary inherits
-    // Pi's command-line parser, but every Orca-owned env var (overlay
-    // shadow, prefill) is scoped to OMP - see ORCA_OMP_* in
-    // src/main/pi/titlebar-extension-service.ts. The one var that MUST
-    // stay shared is `PI_CODING_AGENT_DIR`: OMP's CHANGELOG documents
-    // the deliberate rename of `OMP_CODING_AGENT_DIR` -> `PI_CODING_AGENT_DIR`
-    // (packages/ai/CHANGELOG.md), so the binary itself reads the PI-prefixed
-    // name and we have to set that to point at the OMP overlay dir.
     detectCmd: 'omp',
     launchCmd: 'omp',
     expectedProcess: 'omp',
@@ -172,7 +206,10 @@ export const TUI_AGENT_CONFIG: Record<TuiAgent, TuiAgentConfig> = {
     // TuiAgent id as 'kiro' for stored preferences, but detect/launch/identify
     // the real binary name so the agent is recognized as active.
     detectCmd: 'kiro-cli',
-    launchCmd: 'kiro-cli',
+    // Why: trust flags are accepted by Kiro's chat subcommand, not the
+    // top-level kiro-cli command. Keep TUI startup explicit so default args
+    // like --trust-all-tools are appended where the installed CLI accepts them.
+    launchCmd: 'kiro-cli chat --tui',
     expectedProcess: 'kiro-cli',
     promptInjectionMode: 'stdin-after-start'
   },
@@ -218,9 +255,12 @@ export const TUI_AGENT_CONFIG: Record<TuiAgent, TuiAgentConfig> = {
     promptInjectionMode: 'argv'
   },
   continue: {
-    detectCmd: 'continue',
-    launchCmd: 'continue',
-    expectedProcess: 'continue',
+    // Why: Continue's CLI binary is `cn`; `continue` is a shell builtin in
+    // bash/zsh, so using it here can resolve to the shell keyword instead of
+    // the coding agent.
+    detectCmd: 'cn',
+    launchCmd: 'cn',
+    expectedProcess: 'cn',
     promptInjectionMode: 'stdin-after-start'
   },
   cursor: {
@@ -248,15 +288,21 @@ export const TUI_AGENT_CONFIG: Record<TuiAgent, TuiAgentConfig> = {
     promptInjectionMode: 'stdin-after-start'
   },
   'mistral-vibe': {
-    detectCmd: 'mistral-vibe',
-    launchCmd: 'mistral-vibe',
-    expectedProcess: 'mistral-vibe',
+    // Why: Mistral's installer and PyPI package expose `vibe` even though the
+    // package/project name is mistral-vibe. Keep the old name as an alias for
+    // manually wrapped installs.
+    detectCmd: 'vibe',
+    detectCmdAliases: ['mistral-vibe'],
+    launchCmd: 'vibe',
+    expectedProcess: 'vibe',
     promptInjectionMode: 'stdin-after-start'
   },
   'qwen-code': {
-    detectCmd: 'qwen-code',
-    launchCmd: 'qwen-code',
-    expectedProcess: 'qwen-code',
+    // Why: the upstream package is QwenLM/qwen-code, but its installed CLI
+    // executable on PATH is `qwen`, so detect/launch/recognition must use that.
+    detectCmd: 'qwen',
+    launchCmd: 'qwen',
+    expectedProcess: 'qwen',
     promptInjectionMode: 'stdin-after-start'
   },
   rovo: {
@@ -300,9 +346,37 @@ export const TUI_AGENT_CONFIG: Record<TuiAgent, TuiAgentConfig> = {
     launchCmd: 'grok',
     expectedProcess: 'grok',
     promptInjectionMode: 'stdin-after-start'
+  },
+  devin: {
+    detectCmd: 'devin',
+    launchCmd: 'devin',
+    expectedProcess: 'devin',
+    // Why: `devin -- <prompt>` auto-submits immediately (docs.devin.ai/cli).
+    // `stdin-after-start` starts the REPL with no argv prompt; Orca then sends
+    // `followupPrompt` to the PTY as plain input + Enter after startup (not
+    // bracketed paste). Use `draftPrompt` / agent-paste-draft for review-before-send.
+    promptInjectionMode: 'stdin-after-start'
   }
 }
 
 export function isTuiAgent(value: unknown): value is TuiAgent {
   return typeof value === 'string' && Object.prototype.hasOwnProperty.call(TUI_AGENT_CONFIG, value)
+}
+
+export function getTuiAgentDetectCommands(config: TuiAgentConfig): string[] {
+  return [config.detectCmd, ...(config.detectCmdAliases ?? [])]
+}
+
+export function getTuiAgentLaunchCommand(
+  config: TuiAgentConfig,
+  platform: NodeJS.Platform,
+  opts?: { isRemote?: boolean }
+): string {
+  // Why: the SSH relay shim is always named `orca` on Unix, so the local-only
+  // `orca-ide` rename (avoids shadowing the GNOME Orca screen reader) must not
+  // leak to Linux remotes — the remote has no such desktop binary on PATH.
+  if (opts?.isRemote && platform === 'linux') {
+    return config.launchCmd
+  }
+  return config.launchCmdByPlatform?.[platform] ?? config.launchCmd
 }

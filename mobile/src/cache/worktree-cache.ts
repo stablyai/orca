@@ -20,13 +20,17 @@ export function setCachedWorktrees(hostId: string, worktrees: unknown[]): void {
   cache.set(hostId, { worktrees, at: Date.now() })
   if (cache.size > MAX_ENTRIES) {
     const oldest = cache.keys().next().value
-    if (oldest) cache.delete(oldest)
+    if (oldest) {
+      cache.delete(oldest)
+    }
   }
 }
 
 export function getCachedWorktrees(hostId: string): unknown[] | null {
   const entry = cache.get(hostId)
-  if (!entry) return null
+  if (!entry) {
+    return null
+  }
   if (Date.now() - entry.at > MAX_AGE_MS) {
     cache.delete(hostId)
     return null

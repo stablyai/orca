@@ -10,6 +10,7 @@ import {
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { translate } from '@/i18n/i18n'
 
 type ProjectGroupNameDialogProps = {
   open: boolean
@@ -94,7 +95,7 @@ export function ProjectGroupNameDialog({
         <form className="space-y-4" onSubmit={handleSubmit}>
           <div className="space-y-1">
             <Label htmlFor={inputId} className="text-[11px] text-muted-foreground">
-              Group Name
+              {translate('auto.components.sidebar.ProjectGroupNameDialog.83dfbc5313', 'Group Name')}
             </Label>
             <Input
               id={inputId}
@@ -112,7 +113,7 @@ export function ProjectGroupNameDialog({
               className="text-xs"
               onClick={() => onOpenChange(false)}
             >
-              Cancel
+              {translate('auto.components.sidebar.ProjectGroupNameDialog.d99a034073', 'Cancel')}
             </Button>
             <Button
               type="submit"
@@ -120,7 +121,12 @@ export function ProjectGroupNameDialog({
               className="text-xs"
               disabled={!trimmedName || submitting}
             >
-              {submitting ? 'Saving...' : confirmLabel}
+              {submitting
+                ? translate(
+                    'auto.components.sidebar.ProjectGroupNameDialog.4a64e78822',
+                    'Saving...'
+                  )
+                : confirmLabel}
             </Button>
           </DialogFooter>
         </form>

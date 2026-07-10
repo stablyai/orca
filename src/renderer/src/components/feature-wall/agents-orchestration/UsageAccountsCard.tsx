@@ -12,6 +12,7 @@ import type {
   CodexRateLimitAccountsState
 } from '../../../../../shared/types'
 import { getFeatureWallUsageProviderConnection } from '../feature-wall-usage-tracking'
+import { translate } from '@/i18n/i18n'
 
 type ConnectAction = 'idle' | 'adding'
 
@@ -70,7 +71,15 @@ function ProviderRow(props: {
               ) : (
                 <Plus className="size-3.5" />
               )}
-              {isAdding ? 'Signing in' : 'Sign in'}
+              {isAdding
+                ? translate(
+                    'auto.components.feature.wall.agents.orchestration.UsageAccountsCard.945865332e',
+                    'Signing in'
+                  )
+                : translate(
+                    'auto.components.feature.wall.agents.orchestration.UsageAccountsCard.29d0653961',
+                    'Sign in'
+                  )}
             </Button>
           )}
         </div>
@@ -153,14 +162,25 @@ export function UsageAccountsCard(props: {
       if (mountedRef.current) {
         await onAccountStateChange?.()
         if (mountedRef.current) {
-          toast.success('Claude account added.')
+          toast.success(
+            translate(
+              'auto.components.feature.wall.agents.orchestration.UsageAccountsCard.9ddeb558f9',
+              'Claude account added.'
+            )
+          )
         }
       }
     } catch (error) {
       if (mountedRef.current) {
-        toast.error('Claude sign-in failed.', {
-          description: String((error as Error)?.message ?? error)
-        })
+        toast.error(
+          translate(
+            'auto.components.feature.wall.agents.orchestration.UsageAccountsCard.4e71d72912',
+            'Claude sign-in failed.'
+          ),
+          {
+            description: String((error as Error)?.message ?? error)
+          }
+        )
       }
     } finally {
       if (mountedRef.current) {
@@ -183,14 +203,25 @@ export function UsageAccountsCard(props: {
       if (mountedRef.current) {
         await onAccountStateChange?.()
         if (mountedRef.current) {
-          toast.success('Codex account added.')
+          toast.success(
+            translate(
+              'auto.components.feature.wall.agents.orchestration.UsageAccountsCard.c7b90c140b',
+              'Codex account added.'
+            )
+          )
         }
       }
     } catch (error) {
       if (mountedRef.current) {
-        toast.error('Codex sign-in failed.', {
-          description: String((error as Error)?.message ?? error)
-        })
+        toast.error(
+          translate(
+            'auto.components.feature.wall.agents.orchestration.UsageAccountsCard.8919321417',
+            'Codex sign-in failed.'
+          ),
+          {
+            description: String((error as Error)?.message ?? error)
+          }
+        )
       }
     } finally {
       if (mountedRef.current) {
@@ -204,7 +235,10 @@ export function UsageAccountsCard(props: {
       <ProviderRow
         icon={<ClaudeIcon size={16} />}
         name="Claude"
-        description="Track session and weekly usage."
+        description={translate(
+          'auto.components.feature.wall.agents.orchestration.UsageAccountsCard.d90d2e1f6d',
+          'Track session and weekly usage.'
+        )}
         connected={claudeConnection.connected}
         connectionLabel={claudeConnection.label}
         isAdding={claudeAction === 'adding'}
@@ -213,7 +247,10 @@ export function UsageAccountsCard(props: {
       <ProviderRow
         icon={<OpenAIIcon size={16} />}
         name="Codex"
-        description="Surface rate limits and swap accounts inline."
+        description={translate(
+          'auto.components.feature.wall.agents.orchestration.UsageAccountsCard.6986b36708',
+          'Surface rate limits and swap accounts inline.'
+        )}
         connected={codexConnection.connected}
         connectionLabel={codexConnection.label}
         isAdding={codexAction === 'adding'}

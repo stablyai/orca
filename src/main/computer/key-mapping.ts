@@ -50,10 +50,7 @@ const KEY_NAMES: Record<string, string> = {
 }
 
 export function parseKey(input: string): KeyChord {
-  const parts = input
-    .split('+')
-    .map((part) => part.trim())
-    .filter(Boolean)
+  const parts = splitKeyChord(input)
   if (parts.length === 0) {
     throw new RuntimeClientError('invalid_argument', 'key must not be empty')
   }
@@ -64,6 +61,28 @@ export function parseKey(input: string): KeyChord {
     key: parseBaseKey(keyPart),
     modifiers: dedupeModifiers(modifiers)
   }
+}
+
+function splitKeyChord(input: string): string[] {
+  const trimmed = input.trim()
+  // Why: `+` is both the chord separator and a printable key users can press.
+  if (trimmed === '+') {
+    return ['+']
+  }
+  if (trimmed.endsWith('+')) {
+    return [
+      ...trimmed
+        .slice(0, -1)
+        .split('+')
+        .map((part) => part.trim())
+        .filter(Boolean),
+      '+'
+    ]
+  }
+  return input
+    .split('+')
+    .map((part) => part.trim())
+    .filter(Boolean)
 }
 
 function parseModifier(input: string): string {

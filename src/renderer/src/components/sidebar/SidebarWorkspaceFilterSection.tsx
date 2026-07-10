@@ -1,30 +1,52 @@
 import React from 'react'
-import { GitBranch, Moon } from 'lucide-react'
+import { GitBranch, Moon, Workflow } from 'lucide-react'
 import { useAppStore } from '@/store'
 import { cn } from '@/lib/utils'
+import { translate } from '@/i18n/i18n'
 
 const SidebarWorkspaceFilterSection = React.memo(function SidebarWorkspaceFilterSection() {
   const showSleepingWorkspaces = useAppStore((s) => s.showSleepingWorkspaces)
   const setShowSleepingWorkspaces = useAppStore((s) => s.setShowSleepingWorkspaces)
   const hideDefaultBranchWorkspace = useAppStore((s) => s.hideDefaultBranchWorkspace)
   const setHideDefaultBranchWorkspace = useAppStore((s) => s.setHideDefaultBranchWorkspace)
+  const hideAutomationGeneratedWorkspaces = useAppStore((s) => s.hideAutomationGeneratedWorkspaces)
+  const setHideAutomationGeneratedWorkspaces = useAppStore(
+    (s) => s.setHideAutomationGeneratedWorkspaces
+  )
 
   return (
     <>
       <div className="flex items-center justify-between px-2 py-1">
-        <span className="text-[11px] font-semibold text-muted-foreground">Filters</span>
+        <span className="text-[11px] font-semibold text-muted-foreground">
+          {translate('auto.components.sidebar.SidebarWorkspaceFilterSection.82594419ba', 'Filters')}
+        </span>
       </div>
       <FilterToggleRow
         icon={<Moon className="size-3.5" />}
-        label="Hide sleeping"
+        label={translate(
+          'auto.components.sidebar.SidebarWorkspaceFilterSection.ed1611b65b',
+          'Hide sleeping'
+        )}
         checked={!showSleepingWorkspaces}
         onChange={(hideSleeping) => setShowSleepingWorkspaces(!hideSleeping)}
       />
       <FilterToggleRow
         icon={<GitBranch className="size-3.5" />}
-        label="Hide default branch"
+        label={translate(
+          'auto.components.sidebar.SidebarWorkspaceFilterSection.c3fa13dc2e',
+          'Hide default branch'
+        )}
         checked={hideDefaultBranchWorkspace}
         onChange={setHideDefaultBranchWorkspace}
+      />
+      <FilterToggleRow
+        icon={<Workflow className="size-3.5" />}
+        label={translate(
+          'auto.components.sidebar.SidebarWorkspaceFilterSection.automationCreated',
+          'Hide automation-created'
+        )}
+        checked={hideAutomationGeneratedWorkspaces}
+        onChange={setHideAutomationGeneratedWorkspaces}
       />
     </>
   )

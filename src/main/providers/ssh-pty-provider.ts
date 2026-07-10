@@ -1,16 +1,30 @@
 import type { SshChannelMultiplexer } from '../ssh/ssh-channel-multiplexer'
-import type { IPtyProvider, PtySpawnOptions, PtySpawnResult } from './types'
+import type { IPtyProvider, PtyProcessInfo, PtySpawnOptions, PtySpawnResult } from './types'
 import { toAppSshPtyId, toRelaySshPtyId } from './ssh-pty-id'
+import { seedPowerlevel10kWizardEnv } from '../pty/powerlevel10k-wizard-env'
 
 type DataCallback = (payload: { id: string; data: string }) => void
 type ReplayCallback = (payload: { id: string; data: string }) => void
 type ExitCallback = (payload: { id: string; code: number }) => void
+type RemoteCliBridgeEnv = {
+  binDir: string
+  relayDir: string
+  nodePath: string
+  sockPath: string
+  pathDelimiter?: ':' | ';'
+}
 
 export const SSH_SESSION_EXPIRED_ERROR = 'SSH_SESSION_EXPIRED'
+export const SSH_PTY_IDENTITY_MISMATCH_ERROR = 'SSH_PTY_IDENTITY_MISMATCH'
 
 export function isSshPtyNotFoundError(err: unknown): boolean {
   const message = err instanceof Error ? err.message : String(err)
   return /PTY ".+" not found/i.test(message)
+}
+
+export function isSshPtyIdentityMismatchError(err: unknown): boolean {
+  const message = err instanceof Error ? err.message : String(err)
+  return message.includes(SSH_PTY_IDENTITY_MISMATCH_ERROR) || /identity mismatch/i.test(message)
 }
 
 /**
@@ -29,7 +43,11 @@ export class SshPtyProvider implements IPtyProvider {
   // the provider is torn down on disconnect, routing events to stale state.
   private unsubscribeNotifications: (() => void) | null = null
 
-  constructor(connectionId: string, mux: SshChannelMultiplexer) {
+  constructor(
+    connectionId: string,
+    mux: SshChannelMultiplexer,
+    private readonly remoteCliBridgeEnv?: RemoteCliBridgeEnv
+  ) {
     this.connectionId = connectionId
     this.mux = mux
 
@@ -89,11 +107,19 @@ export class SshPtyProvider implements IPtyProvider {
         `[ssh-pty] spawn() called with sessionId=${opts.sessionId}, attempting pty.attach`
       )
       try {
+        // Why: pass the pane's expected identity so the relay can reject a
+        // cross-generation id collision (see pty-handler attach) instead of
+        // replaying the wrong shell into this pane. ORCA_PANE_KEY is the
+        // renderer's per-pane identity; ORCA_TAB_ID is the coarser fallback.
+        const expectedPaneKey = opts.paneKey ?? opts.env?.ORCA_PANE_KEY
+        const expectedTabId = opts.tabId ?? opts.env?.ORCA_TAB_ID
         const attachResult = (await this.mux.request('pty.attach', {
           id: relaySessionId,
           cols: opts.cols,
           rows: opts.rows,
-          suppressReplayNotification: true
+          suppressReplayNotification: true,
+          ...(expectedPaneKey ? { expectedPaneKey } : {}),
+          ...(expectedTabId ? { expectedTabId } : {})
         })) as { replay?: string }
         console.warn(
           `[ssh-pty] pty.attach succeeded for ${opts.sessionId}, replay=${!!attachResult.replay}`
@@ -109,7 +135,10 @@ export class SshPtyProvider implements IPtyProvider {
         // binding before replacing the dead relay PTY in the same pane.
         console.warn(`[ssh-pty] pty.attach FAILED for ${opts.sessionId}:`, err)
         if (isSshPtyNotFoundError(err)) {
-          throw new Error(`${SSH_SESSION_EXPIRED_ERROR}: ${relaySessionId}`)
+          const mismatchMarker = isSshPtyIdentityMismatchError(err)
+            ? ` ${SSH_PTY_IDENTITY_MISMATCH_ERROR}`
+            : ''
+          throw new Error(`${SSH_SESSION_EXPIRED_ERROR}: ${relaySessionId}${mismatchMarker}`)
         }
         throw err
       }
@@ -119,14 +148,24 @@ export class SshPtyProvider implements IPtyProvider {
       cols: opts.cols,
       rows: opts.rows,
       cwd: opts.cwd,
-      env: opts.env,
+      env: this.withRemoteCliBridgeEnv(opts.env, opts.envToDelete),
       // Why: the relay's plugin-overlay env augmenter needs to know which
-      // Pi-compatible agent is being launched (`pi` vs `omp`) so it mirrors
-      // the right `~/.<kind>/agent` source dir on the remote disk. The
-      // relay does not execute `command` itself — the user types it into
-      // the shell — but receiving it as a hint lets overlay resolution be
-      // per-launch instead of always-Pi.
-      ...(opts.command ? { command: opts.command } : {})
+      // Pi-compatible agent is being launched, while commandDelivery tells it
+      // whether to submit the command itself for runtime-owned background PTYs.
+      ...(opts.command ? { command: opts.command } : {}),
+      ...(opts.shellOverride !== undefined ? { shellOverride: opts.shellOverride } : {}),
+      ...(opts.terminalWindowsWslDistro !== undefined
+        ? { terminalWindowsWslDistro: opts.terminalWindowsWslDistro }
+        : {}),
+      ...(opts.commandDelivery ? { commandDelivery: opts.commandDelivery } : {}),
+      ...(opts.startupCommandDelivery
+        ? { startupCommandDelivery: opts.startupCommandDelivery }
+        : {}),
+      // Why: main may strip ORCA_PANE_KEY/ORCA_TAB_ID from the shell env when
+      // remote hooks are disabled, but the relay still needs attach identity
+      // metadata to reject cross-generation PTY id collisions.
+      ...(opts.paneKey ? { paneKey: opts.paneKey } : {}),
+      ...(opts.tabId ? { tabId: opts.tabId } : {})
     })
     return {
       ...(result as PtySpawnResult),
@@ -135,8 +174,54 @@ export class SshPtyProvider implements IPtyProvider {
     }
   }
 
+  private withRemoteCliBridgeEnv(
+    env: Record<string, string> | undefined,
+    envToDelete?: readonly string[]
+  ): Record<string, string> {
+    const merged = { ...env }
+    for (const key of envToDelete ?? []) {
+      delete merged[key]
+    }
+    seedPowerlevel10kWizardEnv(merged, { envToDelete })
+    if (!this.remoteCliBridgeEnv) {
+      return merged
+    }
+    const pathDelimiter = this.remoteCliBridgeEnv.pathDelimiter ?? ':'
+    const pathKey = merged.PATH !== undefined ? 'PATH' : merged.Path !== undefined ? 'Path' : null
+    if (pathKey) {
+      const pathValue = merged[pathKey] ?? ''
+      merged[pathKey] = pathValue.split(pathDelimiter).includes(this.remoteCliBridgeEnv.binDir)
+        ? pathValue
+        : pathValue
+          ? `${this.remoteCliBridgeEnv.binDir}${pathDelimiter}${pathValue}`
+          : this.remoteCliBridgeEnv.binDir
+    }
+    merged.ORCA_REMOTE_CLI_BIN_DIR = this.remoteCliBridgeEnv.binDir
+    merged.ORCA_RELAY_DIR = this.remoteCliBridgeEnv.relayDir
+    merged.ORCA_RELAY_NODE_PATH = this.remoteCliBridgeEnv.nodePath
+    merged.ORCA_RELAY_SOCKET_PATH = this.remoteCliBridgeEnv.sockPath
+    return merged
+  }
+
   async attach(id: string): Promise<void> {
     await this.mux.request('pty.attach', { id: this.toRelayPtyId(id) })
+  }
+
+  async attachForReconnect(
+    id: string,
+    expected?: { paneKey?: string; tabId?: string }
+  ): Promise<{ replay?: string }> {
+    // Why: reconnect owns replay delivery so stale/duplicate attach results can
+    // be filtered before they reach the renderer. The expected identity lets the
+    // relay reject a cross-generation id collision instead of reattaching this
+    // lease to a different pane's freshly spawned PTY.
+    const result = (await this.mux.request('pty.attach', {
+      id: this.toRelayPtyId(id),
+      suppressReplayNotification: true,
+      ...(expected?.paneKey ? { expectedPaneKey: expected.paneKey } : {}),
+      ...(expected?.tabId ? { expectedTabId: expected.tabId } : {})
+    })) as { replay?: string } | undefined
+    return result ?? {}
   }
 
   write(id: string, data: string): void {
@@ -198,9 +283,9 @@ export class SshPtyProvider implements IPtyProvider {
     await this.mux.request('pty.revive', { state })
   }
 
-  async listProcesses(): Promise<{ id: string; cwd: string; title: string }[]> {
+  async listProcesses(): Promise<PtyProcessInfo[]> {
     const result = await this.mux.request('pty.listProcesses')
-    return (result as { id: string; cwd: string; title: string }[]).map((session) => ({
+    return (result as PtyProcessInfo[]).map((session) => ({
       ...session,
       id: this.toAppPtyId(session.id)
     }))

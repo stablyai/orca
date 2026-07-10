@@ -40,7 +40,12 @@ export function isSyntheticSinglePaneTitle(
   title: string | null | undefined,
   tab: TerminalTab
 ): boolean {
-  return isSyntheticSinglePaneTitleForLabels(title, [tab.title, tab.defaultTitle, tab.customTitle])
+  return isSyntheticSinglePaneTitleForLabels(title, [
+    tab.title,
+    tab.defaultTitle,
+    tab.quickCommandLabel,
+    tab.customTitle
+  ])
 }
 
 export function sanitizeTerminalLayoutPaneTitlesForLabels(
@@ -83,6 +88,7 @@ export function sanitizeTerminalLayoutPaneTitles(
   return sanitizeTerminalLayoutPaneTitlesForLabels(layout, [
     tab.title,
     tab.defaultTitle,
+    tab.quickCommandLabel,
     tab.customTitle
   ])
 }

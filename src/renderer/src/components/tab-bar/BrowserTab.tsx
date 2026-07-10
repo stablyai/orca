@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useSortable } from '@dnd-kit/sortable'
-import { Globe, X, ExternalLink, Columns2, Rows2, Copy } from 'lucide-react'
+import { Globe, X, ExternalLink, Copy, Pin, PinOff, PanelRightClose } from 'lucide-react'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -18,9 +18,15 @@ import type { TabDragItemData } from '../tab-group/useTabDragSplit'
 import {
   ACTIVE_TAB_INDICATOR_CLASSES,
   getDropIndicatorClasses,
+  getTabRootStateClasses,
+  getTabStripBorderClasses,
   type DropIndicator
 } from './drop-indicator'
 import { preventMiddleButtonDefault } from './middle-button-default-guard'
+import { translate } from '@/i18n/i18n'
+import { TAB_CONTAINER_WIDTH_CLASSES, TAB_LABEL_WIDTH_CLASSES } from './tab-width-rules'
+import { TabWorkspaceLayoutMenuSection } from './TabWorkspaceLayoutMenuSection'
+import { useTabStripPointerActivation } from './tab-strip-pointer-activation'
 
 function formatBrowserTabUrlLabel(url: string): string {
   if (url === ORCA_BROWSER_BLANK_URL || url === 'about:blank') {
@@ -98,25 +104,29 @@ function BrowserTabFavicon({
 export default function BrowserTab({
   tab,
   isActive,
+  isPinned,
   hasTabsToRight,
   onActivate,
   onClose,
   onCloseToRight,
-  onSplitGroup,
   onDuplicate,
+  onTogglePin,
   dragData,
-  dropIndicator
+  dropIndicator,
+  includeTopTabBorder = true
 }: {
   tab: BrowserTabState
   isActive: boolean
+  isPinned: boolean
   hasTabsToRight: boolean
   onActivate: () => void
   onClose: () => void
   onCloseToRight: () => void
-  onSplitGroup: (direction: 'left' | 'right' | 'up' | 'down', sourceVisibleTabId: string) => void
   onDuplicate: () => void
+  onTogglePin: () => void
   dragData: TabDragItemData
   dropIndicator?: DropIndicator
+  includeTopTabBorder?: boolean
 }): React.JSX.Element {
   // Why: no transform/transition/isDragging styling — the drag design is
   // that tabs stay visually anchored; only the blue insertion bar moves.
@@ -160,20 +170,23 @@ export default function BrowserTab({
     return () => window.removeEventListener('blur', dismiss)
   }, [menuOpen])
 
+  // Why: defer activation to pointer-up so dragging the tab (reorder / move into
+  // another pane / split) does not switch the active tab mid-gesture.
+  const { onPointerDown: onTabPointerDown } = useTabStripPointerActivation({ onActivate })
+
   const tabRoot = (
     <div
       ref={setNodeRef}
+      data-tab-id={tab.id}
+      data-pinned={isPinned ? 'true' : 'false'}
       {...attributes}
       {...listeners}
-      className={`group relative flex items-center h-full px-1.5 text-xs cursor-pointer select-none shrink-0 outline-none focus:outline-none focus-visible:outline-none border-t ${hasTabsToRight ? 'border-r' : ''} border-border bg-card ${getDropIndicatorClasses(dropIndicator ?? null)} ${
-        isActive ? 'text-foreground' : 'text-muted-foreground hover:text-foreground'
-      }`}
+      className={`group relative flex items-center h-full px-1.5 text-xs cursor-pointer select-none outline-none focus:outline-none focus-visible:outline-none ${getTabStripBorderClasses(hasTabsToRight, { includeTopBorder: includeTopTabBorder })} ${getDropIndicatorClasses(dropIndicator ?? null)} ${getTabRootStateClasses(isActive)}`}
       onPointerDown={(e) => {
-        if (e.button !== 0) {
-          return
-        }
-        onActivate()
-        listeners?.onPointerDown?.(e)
+        onTabPointerDown(
+          e,
+          listeners?.onPointerDown as ((event: React.PointerEvent<Element>) => void) | undefined
+        )
       }}
       onMouseDown={(e) => {
         if (e.button === 1) {
@@ -185,6 +198,9 @@ export default function BrowserTab({
         if (e.button === 1) {
           e.preventDefault()
           e.stopPropagation()
+          if (isPinned) {
+            return
+          }
           onClose()
         }
       }}
@@ -198,30 +214,34 @@ export default function BrowserTab({
           keep full color on both active and inactive tabs — dimming to
           muted-foreground made the icon read as "disabled" in practice. */}
       <BrowserTabFavicon tabId={tab.id} faviconUrl={tab.faviconUrl} />
-      <span className="truncate max-w-[100px] mr-1">{tabLabel}</span>
+      {isPinned && <Pin className="mr-1 size-3 shrink-0 text-muted-foreground" aria-hidden />}
+      <span className={`${TAB_LABEL_WIDTH_CLASSES} mr-1`}>{tabLabel}</span>
       {tab.loading && !tab.loadError && !isBlankBrowserTab(tab) && (
         <span className="mr-1 size-1.5 rounded-full bg-sky-500/80 shrink-0" />
       )}
-      <button
-        className={`flex items-center justify-center w-4 h-4 rounded-sm shrink-0 ${
-          isActive
-            ? 'text-muted-foreground hover:text-foreground hover:bg-muted'
-            : 'text-transparent group-hover:text-muted-foreground hover:!text-foreground hover:!bg-muted'
-        }`}
-        onPointerDown={(e) => e.stopPropagation()}
-        onClick={(e) => {
-          e.stopPropagation()
-          onClose()
-        }}
-      >
-        <X className="w-3 h-3" />
-      </button>
+      {!isPinned && (
+        <button
+          className={`flex items-center justify-center w-4 h-4 rounded-sm shrink-0 ${
+            isActive
+              ? 'text-muted-foreground hover:text-foreground hover:bg-muted'
+              : 'text-transparent group-hover:text-muted-foreground hover:!text-foreground hover:!bg-muted'
+          }`}
+          onPointerDown={(e) => e.stopPropagation()}
+          onClick={(e) => {
+            e.stopPropagation()
+            onClose()
+          }}
+        >
+          <X className="w-3 h-3" />
+        </button>
+      )}
     </div>
   )
 
   return (
     <>
       <div
+        className={TAB_CONTAINER_WIDTH_CLASSES}
         onContextMenuCapture={(event) => {
           event.preventDefault()
           window.dispatchEvent(new Event(CLOSE_ALL_CONTEXT_MENUS_EVENT))
@@ -259,38 +279,37 @@ export default function BrowserTab({
           sideOffset={0}
           align="start"
         >
-          <DropdownMenuItem onSelect={() => onSplitGroup('up', tab.id)}>
-            <Rows2 className="mr-1.5 size-3.5" />
-            Split Up
-          </DropdownMenuItem>
-          <DropdownMenuItem onSelect={() => onSplitGroup('down', tab.id)}>
-            <Rows2 className="mr-1.5 size-3.5" />
-            Split Down
-          </DropdownMenuItem>
-          <DropdownMenuItem onSelect={() => onSplitGroup('left', tab.id)}>
-            <Columns2 className="mr-1.5 size-3.5" />
-            Split Left
-          </DropdownMenuItem>
-          <DropdownMenuItem onSelect={() => onSplitGroup('right', tab.id)}>
-            <Columns2 className="mr-1.5 size-3.5" />
-            Split Right
-          </DropdownMenuItem>
-          <DropdownMenuSeparator />
+          <TabWorkspaceLayoutMenuSection
+            unifiedTabId={dragData.unifiedTabId}
+            groupId={dragData.groupId}
+            trailingSeparator
+          />
           <DropdownMenuItem onSelect={onDuplicate}>
-            <Copy className="mr-1.5 size-3.5" />
-            Duplicate Tab
+            <Copy className="size-3.5" />
+            {translate('auto.components.tab.bar.BrowserTab.5d6e89891f', 'Duplicate Tab')}
           </DropdownMenuItem>
           <DropdownMenuSeparator />
-          <DropdownMenuItem onSelect={onClose}>Close</DropdownMenuItem>
+          <DropdownMenuItem onSelect={onTogglePin}>
+            {isPinned ? <PinOff className="size-3.5" /> : <Pin className="size-3.5" />}
+            {isPinned
+              ? translate('auto.components.tab.bar.BrowserTab.c5aaee8c39', 'Unpin Tab')
+              : translate('auto.components.tab.bar.BrowserTab.911542656f', 'Pin Tab')}
+          </DropdownMenuItem>
+          <DropdownMenuSeparator />
+          <DropdownMenuItem onSelect={() => !isPinned && onClose()} disabled={isPinned}>
+            <X className="size-3.5" />
+            {translate('auto.components.tab.bar.BrowserTab.1611a1324b', 'Close')}
+          </DropdownMenuItem>
           <DropdownMenuItem onSelect={onCloseToRight} disabled={!hasTabsToRight}>
-            Close Tabs To The Right
+            <PanelRightClose className="size-3.5" />
+            {translate('auto.components.tab.bar.BrowserTab.9dd880bd56', 'Close Tabs To The Right')}
           </DropdownMenuItem>
           <DropdownMenuItem
             onSelect={() => void window.api.shell.openUrl(openInBrowserUrl)}
             disabled={!isHttpUrl}
           >
-            <ExternalLink className="w-3.5 h-3.5 mr-1.5" />
-            Open In Browser
+            <ExternalLink className="size-3.5" />
+            {translate('auto.components.tab.bar.BrowserTab.6e0bc8f3a8', 'Open In Browser')}
           </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>

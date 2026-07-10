@@ -1,6 +1,7 @@
 import { z } from 'zod'
 
 export const PAIRING_OFFER_VERSION = 2
+const PairingScopeSchema = z.enum(['mobile', 'runtime'])
 
 export const PairingOfferSchema = z.object({
   v: z.literal(PAIRING_OFFER_VERSION),
@@ -8,7 +9,10 @@ export const PairingOfferSchema = z.object({
   deviceToken: z.string().min(1),
   // Why: the desktop's Curve25519 public key, base64-encoded. The mobile client
   // uses this to derive a shared secret via ECDH for end-to-end encryption.
-  publicKeyB64: z.string().min(1)
+  publicKeyB64: z.string().min(1),
+  // Why: advisory UI metadata lets the web client reject phone-QR offers before
+  // opening a socket; the runtime still authorizes solely from deviceToken.
+  scope: PairingScopeSchema.optional()
 })
 
 export type PairingOffer = z.infer<typeof PairingOfferSchema>
@@ -34,23 +38,25 @@ export function decodePairingOffer(url: string): PairingOffer {
 }
 
 function extractPairingCodeFromUrl(url: string): string | null {
-  if (!url.startsWith('orca://pair')) {
+  let parsed: URL
+  try {
+    parsed = new URL(url)
+  } catch {
     return null
   }
-  const queryIndex = url.indexOf('?')
-  if (queryIndex !== -1) {
-    const query = url.slice(queryIndex + 1).split('#')[0] ?? ''
-    const params = new URLSearchParams(query)
-    const code = params.get('code')
-    if (code) {
-      return code
-    }
+  // Why: prefix checks accepted routes like `orca://pairing?...`; only the
+  // pairing deep-link host may carry runtime auth material.
+  if (parsed.protocol !== 'orca:' || parsed.hostname !== 'pair') {
+    return null
   }
-  const hashIndex = url.indexOf('#')
-  if (hashIndex !== -1) {
-    return url.slice(hashIndex + 1) || null
+  if (parsed.pathname !== '' && parsed.pathname !== '/') {
+    return null
   }
-  return null
+  const code = parsed.searchParams.get('code')
+  if (code) {
+    return code
+  }
+  return parsed.hash ? parsed.hash.slice(1) || null : null
 }
 
 // Why: accept either an `orca://pair?...` URL or the bare base64
@@ -62,7 +68,7 @@ export function parsePairingCode(input: string): PairingOffer | null {
     return null
   }
   try {
-    if (trimmed.startsWith('orca://pair')) {
+    if (trimmed.toLowerCase().startsWith('orca://')) {
       return decodePairingOffer(trimmed)
     }
     return decodePairingBase64(trimmed)

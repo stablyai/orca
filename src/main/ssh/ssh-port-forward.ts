@@ -1,18 +1,40 @@
-import { createServer, type Server, type Socket } from 'net'
 import type { SshConnection } from './ssh-connection'
+import { Ssh2PortForwardProvider } from './ssh2-port-forward-provider'
+import { SystemSshPortForwardProvider } from './system-ssh-port-forward-provider'
 import type { PortForwardEntry } from '../../shared/ssh-types'
+import type {
+  PortForwardCloseReason,
+  SshPortForwardProvider,
+  StartedPortForward
+} from './ssh-port-forward-provider'
 
 export type { PortForwardEntry }
+export type { PortForwardCloseReason }
 
-type ActiveForward = {
-  entry: PortForwardEntry
-  server: Server
-  activeSockets: Set<Socket>
+type SshPortForwardManagerCallbacks = {
+  onForwardClosed?: (entry: PortForwardEntry, reason: PortForwardCloseReason) => void
 }
 
 export class SshPortForwardManager {
-  private forwards = new Map<string, ActiveForward>()
+  private forwards = new Map<string, StartedPortForward>()
   private nextId = 1
+  private providers: SshPortForwardProvider[]
+  private callbacks: SshPortForwardManagerCallbacks
+
+  constructor(
+    callbacks: SshPortForwardManagerCallbacks = {},
+    providers: SshPortForwardProvider[] = [
+      new Ssh2PortForwardProvider(),
+      new SystemSshPortForwardProvider()
+    ]
+  ) {
+    this.callbacks = callbacks
+    this.providers = providers
+  }
+
+  setCallbacks(callbacks: SshPortForwardManagerCallbacks): void {
+    this.callbacks = callbacks
+  }
 
   async addForward(
     connectionId: string,
@@ -42,48 +64,31 @@ export class SshPortForwardManager {
     remotePort: number,
     label?: string
   ): Promise<PortForwardEntry> {
-    const entry: PortForwardEntry = {
-      id,
-      connectionId,
-      localPort,
-      remoteHost,
-      remotePort,
-      label
-    }
-
-    const client = conn.getClient()
-    if (!client) {
+    const provider = this.providers.find((candidate) => candidate.canHandle(conn))
+    if (!provider) {
       throw new Error('SSH connection is not established')
     }
 
-    const activeSockets = new Set<Socket>()
-
-    const server = createServer((socket) => {
-      activeSockets.add(socket)
-      socket.on('close', () => activeSockets.delete(socket))
-
-      client.forwardOut('127.0.0.1', localPort, remoteHost, remotePort, (err, channel) => {
-        if (err) {
-          socket.destroy()
+    let forward: StartedPortForward | null = null
+    forward = await provider.start(conn, {
+      id,
+      connectionId,
+      localHost: '127.0.0.1',
+      localPort,
+      remoteHost,
+      remotePort,
+      label,
+      onUnexpectedClose: (entry, reason) => {
+        const active = this.forwards.get(id)
+        if (active !== forward) {
           return
         }
-        socket.pipe(channel).pipe(socket)
-        channel.on('close', () => socket.destroy())
-        channel.on('error', () => socket.destroy())
-        socket.on('close', () => channel.close())
-      })
+        this.forwards.delete(id)
+        this.callbacks.onForwardClosed?.(entry, reason)
+      }
     })
-
-    await new Promise<void>((resolve, reject) => {
-      server.on('error', reject)
-      server.listen(localPort, '127.0.0.1', () => {
-        server.removeListener('error', reject)
-        resolve()
-      })
-    })
-
-    this.forwards.set(id, { entry, server, activeSockets })
-    return entry
+    this.forwards.set(id, forward)
+    return forward.entry
   }
 
   async updateForward(
@@ -106,7 +111,8 @@ export class SshPortForwardManager {
     await this.removeForwardAsync(id)
 
     try {
-      return await this.addForward(
+      return await this.addForwardWithId(
+        oldEntry.id,
         oldEntry.connectionId,
         conn,
         localPort,
@@ -139,33 +145,24 @@ export class SshPortForwardManager {
     if (!forward) {
       return null
     }
-    this.teardownForward(forward)
+    forward.dispose()
     this.forwards.delete(id)
     return forward.entry
   }
 
-  // Why: server.close() is async — the OS may not release the port until the
-  // callback fires. callers that need to rebind the same port (updateForward)
-  // must await this variant.
+  async removeForwardAndWait(id: string): Promise<PortForwardEntry | null> {
+    return this.removeForwardAsync(id)
+  }
+
+  // Why: server.close()/process exit are async — callers that need to rebind
+  // the same port (update/reconnect) must wait until the owner fully releases it.
   private removeForwardAsync(id: string): Promise<PortForwardEntry | null> {
     const forward = this.forwards.get(id)
     if (!forward) {
       return Promise.resolve(null)
     }
-    for (const socket of forward.activeSockets) {
-      socket.destroy()
-    }
     this.forwards.delete(id)
-    return new Promise((resolve) => {
-      forward.server.close(() => resolve(forward.entry))
-    })
-  }
-
-  private teardownForward(forward: ActiveForward): void {
-    for (const socket of forward.activeSockets) {
-      socket.destroy()
-    }
-    forward.server.close()
+    return forward.close().then(() => forward.entry)
   }
 
   listForwards(connectionId?: string): PortForwardEntry[] {
@@ -182,8 +179,6 @@ export class SshPortForwardManager {
     const toRemove = [...this.forwards.entries()]
       .filter(([, { entry }]) => entry.connectionId === connectionId)
       .map(([id]) => id)
-    // Why: await each removal so the OS fully releases ports before callers
-    // (like restorePortForwards) try to rebind on the same local ports.
     await Promise.all(toRemove.map((id) => this.removeForwardAsync(id)))
   }
 

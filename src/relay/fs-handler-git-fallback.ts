@@ -6,13 +6,11 @@
  * and git grep as universal fallbacks — git is always available since this is
  * a git-focused app.
  */
-import { spawn } from 'child_process'
-import { type SearchOptions, type SearchResult } from './fs-handler-utils'
-import {
-  buildGitLsFilesArgsForQuickOpen,
-  shouldExcludeQuickOpenRelPath,
-  shouldIncludeQuickOpenPath
-} from '../shared/quick-open-filter'
+import { spawn } from 'node:child_process'
+import { fileListingCancellationError } from '../shared/file-listing-cancellation'
+import type { SearchOptions, SearchResult } from './fs-handler-utils'
+import { buildGitLsFilesArgsForQuickOpen } from '../shared/quick-open-filter'
+import { expandQuickOpenGitFilesWithNestedRepos } from '../shared/quick-open-readdir-walk'
 import {
   buildGitGrepArgs,
   buildSubmatchRegex,
@@ -34,9 +32,14 @@ import { buildRelayCommandEnv } from './relay-command-env'
  */
 export function listFilesWithGit(
   rootPath: string,
-  excludePathPrefixes: readonly string[] = []
+  excludePathPrefixes: readonly string[] = [],
+  options: { signal?: AbortSignal } = {}
 ): Promise<string[]> {
-  const files = new Set<string>()
+  const { signal } = options
+  if (signal?.aborted) {
+    return Promise.reject(fileListingCancellationError(signal))
+  }
+  const gitPaths = new Set<string>()
   const { primary, ignoredPass } = buildGitLsFilesArgsForQuickOpen(excludePathPrefixes)
   const children: {
     child: ReturnType<typeof spawn>
@@ -49,19 +52,11 @@ export function listFilesWithGit(
       let buf = ''
       let done = false
 
-      const processLine = (line: string): void => {
-        if (line.charCodeAt(line.length - 1) === 13) {
-          line = line.substring(0, line.length - 1)
-        }
-        if (!line) {
+      const processPath = (path: string): void => {
+        if (!path) {
           return
         }
-        if (shouldExcludeQuickOpenRelPath(line, excludePathPrefixes)) {
-          return
-        }
-        if (shouldIncludeQuickOpenPath(line)) {
-          files.add(line)
-        }
+        gitPaths.add(path)
       }
 
       const child = spawn('git', ['ls-files', ...args], {
@@ -106,11 +101,11 @@ export function listFilesWithGit(
       function handleStdoutData(chunk: string): void {
         buf += chunk
         let start = 0
-        let idx = buf.indexOf('\n', start)
+        let idx = buf.indexOf('\0', start)
         while (idx !== -1) {
-          processLine(buf.substring(start, idx))
+          processPath(buf.substring(start, idx))
           start = idx + 1
-          idx = buf.indexOf('\n', start)
+          idx = buf.indexOf('\0', start)
         }
         buf = start < buf.length ? buf.substring(start) : ''
       }
@@ -120,7 +115,7 @@ export function listFilesWithGit(
       function handleError(err: Error): void {
         rejectPass(err)
       }
-      function handleClose(_code: number | null, signal: NodeJS.Signals | null): void {
+      function handleClose(code: number | null, signal: NodeJS.Signals | null): void {
         if (done) {
           return
         }
@@ -132,9 +127,16 @@ export function listFilesWithGit(
           return
         }
         if (buf) {
-          processLine(buf)
+          processPath(buf)
         }
-        resolvePass()
+        if (code === 0) {
+          resolvePass()
+          return
+        }
+        // Why: a non-zero exit (e.g. not a git repo) means the listing is
+        // incomplete; reject so the caller surfaces the failure instead of
+        // expanding a partial result set. Matches the main-process fallback.
+        rejectPass(new Error(`git ls-files exited with code ${code}`))
       }
 
       child.stdout!.setEncoding('utf-8')
@@ -149,7 +151,7 @@ export function listFilesWithGit(
     })
   }
 
-  const killSurvivors = (): void => {
+  const killSurvivors = (reason: string): void => {
     // Why: Promise.all returns after the first failed pass, but the sibling
     // git process can keep streaming on SSH unless we cancel it explicitly.
     for (const entry of children) {
@@ -159,15 +161,34 @@ export function listFilesWithGit(
       if (entry.child.exitCode === null && entry.child.signalCode === null) {
         entry.child.kill()
       }
-      entry.reject(new Error('git ls-files canceled after sibling failure'))
+      entry.reject(new Error(reason))
     }
   }
 
+  // Why: a cancelled scan (workspace switch, superseded request) must stop
+  // its git children right away instead of streaming a huge tree the caller
+  // has already abandoned over the shared SSH channel.
+  const onAbort = (): void => killSurvivors('git ls-files cancelled')
+  signal?.addEventListener('abort', onAbort, { once: true })
+
   return Promise.all([runGitLsFiles(primary), runGitLsFiles(ignoredPass)])
-    .then(() => Array.from(files))
+    .then(() =>
+      expandQuickOpenGitFilesWithNestedRepos({
+        rootPath,
+        gitPaths,
+        excludePathPrefixes,
+        signal
+      })
+    )
     .catch((err) => {
-      killSurvivors()
+      killSurvivors('git ls-files canceled after sibling failure')
+      if (signal?.aborted) {
+        throw fileListingCancellationError(signal)
+      }
       throw err
+    })
+    .finally(() => {
+      signal?.removeEventListener('abort', onAbort)
     })
 }
 

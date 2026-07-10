@@ -1,7 +1,6 @@
-/* eslint-disable max-lines -- Why: SSH connection utility tests share mocked filesystem and environment setup across auth, proxy, and retry helpers. */
-import { EventEmitter } from 'events'
+import { EventEmitter } from 'node:events'
 import { afterEach, describe, expect, it, vi, beforeEach } from 'vitest'
-import { join } from 'path'
+import { join } from 'node:path'
 import { BaseAgent, utils, type ParsedKey } from 'ssh2'
 
 const { spawnMock } = vi.hoisted(() => ({
@@ -31,6 +30,7 @@ vi.mock('fs', () => ({
 
 import {
   isTransientError,
+  isSystemSshFallbackError,
   isAuthError,
   isAgentFallbackError,
   sleep,
@@ -141,6 +141,28 @@ describe('isTransientError', () => {
 
   it('returns false for generic errors', () => {
     expect(isTransientError(new Error('something went wrong'))).toBe(false)
+  })
+})
+
+// ── isSystemSshFallbackError ─────────────────────────────────────────
+
+describe('isSystemSshFallbackError', () => {
+  it('returns true for local reachability errors that system ssh may bypass', () => {
+    const hostErr = new Error('host unreachable') as NodeJS.ErrnoException
+    hostErr.code = 'EHOSTUNREACH'
+    const netErr = new Error('net unreachable') as NodeJS.ErrnoException
+    netErr.code = 'ENETUNREACH'
+
+    expect(isSystemSshFallbackError(hostErr)).toBe(true)
+    expect(isSystemSshFallbackError(netErr)).toBe(true)
+  })
+
+  it('returns false for transient errors that should keep the normal retry path', () => {
+    const refused = new Error('refused') as NodeJS.ErrnoException
+    refused.code = 'ECONNREFUSED'
+
+    expect(isSystemSshFallbackError(refused)).toBe(false)
+    expect(isSystemSshFallbackError(new Error('connect ETIMEDOUT 1.2.3.4:22'))).toBe(false)
   })
 })
 
@@ -303,6 +325,8 @@ function makeResolved(overrides?: Partial<SshResolvedConfig>): SshResolvedConfig
     forwardAgent: false,
     identitiesOnly: false,
     proxyUseFdpass: false,
+    controlMaster: 'no',
+    controlPersist: 'no',
     ...overrides
   }
 }
@@ -343,6 +367,33 @@ describe('buildConnectConfig', () => {
     expect(config.username).toBe('admin')
   })
 
+  it('uses ssh -G HostName when a config-host target still points at its alias', () => {
+    const config = buildConnectConfig(
+      makeTarget({ label: 'workbox', configHost: 'workbox', host: 'workbox' }),
+      makeResolved({ hostname: 'workbox.internal' })
+    )
+
+    expect(config.host).toBe('workbox.internal')
+  })
+
+  it('uses ssh -G Port when a config-host target still has the default port', () => {
+    const config = buildConnectConfig(
+      makeTarget({ configHost: 'workbox', host: 'workbox', port: 22 }),
+      makeResolved({ port: 2202 })
+    )
+
+    expect(config.port).toBe(2202)
+  })
+
+  it('keeps explicit non-default target ports ahead of ssh -G Port', () => {
+    const config = buildConnectConfig(
+      makeTarget({ configHost: 'workbox', host: 'workbox', port: 2022 }),
+      makeResolved({ port: 2202 })
+    )
+
+    expect(config.port).toBe(2022)
+  })
+
   it('sets readyTimeout to CONNECT_TIMEOUT_MS', () => {
     const config = buildConnectConfig(makeTarget(), null)
     expect(config.readyTimeout).toBe(30_000)
@@ -356,6 +407,26 @@ describe('buildConnectConfig', () => {
   it('uses agent auth when no explicit key and SSH_AUTH_SOCK is set', () => {
     const config = buildConnectConfig(makeTarget(), null)
     expect(config.agent).toBe('/tmp/agent.sock')
+  })
+
+  it('enables agent forwarding when OpenSSH config requests it and an agent is available', () => {
+    const config = buildConnectConfig(makeTarget(), makeResolved({ forwardAgent: true }))
+
+    expect(config.agent).toBe('/tmp/agent.sock')
+    expect(config.agentForward).toBe(true)
+  })
+
+  it('does not enable agent forwarding without a usable agent', () => {
+    const platformSpy = vi.spyOn(process, 'platform', 'get').mockReturnValue('linux')
+    delete process.env.SSH_AUTH_SOCK
+
+    try {
+      const config = buildConnectConfig(makeTarget(), makeResolved({ forwardAgent: true }))
+      expect(config.agent).toBeUndefined()
+      expect(config.agentForward).toBeUndefined()
+    } finally {
+      platformSpy.mockRestore()
+    }
   })
 
   it('uses configured IdentityAgent before SSH_AUTH_SOCK', () => {

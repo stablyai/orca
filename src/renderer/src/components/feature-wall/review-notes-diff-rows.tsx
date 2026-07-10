@@ -1,6 +1,7 @@
 import type { JSX } from 'react'
 import { cn } from '@/lib/utils'
 import { HUNKS, tokenize, type DiffLine } from './review-animated-visual-shared'
+import { translate } from '@/i18n/i18n'
 
 // Why: pre-flatten hunks into rows with computed line numbers so the
 // imperative animation loop only mutates classes/inline styles, never DOM
@@ -81,7 +82,11 @@ export function ReviewDiffRows(): JSX.Element {
             <div key={r.key} className="ravs-note-row" data-hunk-slot={r.hunk}>
               <div className="ravs-note-card">
                 <div className="ravs-note-meta">
-                  Note · line <span data-slot-line>?</span>
+                  {translate(
+                    'auto.components.feature.wall.review.notes.diff.rows.f621c734f8',
+                    'Note · line'
+                  )}
+                  <span data-slot-line>?</span>
                 </div>
                 <div className="ravs-note-body" data-slot-body />
               </div>

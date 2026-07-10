@@ -22,6 +22,7 @@ import Animated, {
   Extrapolation
 } from 'react-native-reanimated'
 import { colors, spacing } from '../theme/mobile-theme'
+import { resolveBottomDrawerMounted } from './bottom-drawer-mount-state'
 import { useResponsiveLayout } from '../layout/responsive-layout'
 
 const DISMISS_THRESHOLD = 80
@@ -31,7 +32,7 @@ const SPRING_CONFIG = { damping: 28, stiffness: 400 }
 // the drawer cannot expand further.
 const RUBBER_BAND_FACTOR = 0.25
 const SHOW_DURATION = 180
-const HIDE_DURATION = 150
+export const BOTTOM_DRAWER_HIDE_DURATION_MS = 150
 const TOP_SCROLL_EPSILON = 1
 
 type Props = {
@@ -39,6 +40,7 @@ type Props = {
   onClose: () => void
   children: ReactNode
   dragContentToDismiss?: boolean
+  contentScrollable?: boolean
   zIndex?: number
 }
 
@@ -47,19 +49,23 @@ export function BottomDrawer({
   onClose,
   children,
   dragContentToDismiss = true,
+  contentScrollable = true,
   zIndex
 }: Props) {
   const [mounted, setMounted] = useState(visible)
+  const resolvedMounted = resolveBottomDrawerMounted(visible, mounted)
 
-  useEffect(() => {
-    if (visible) {
-      setMounted(true)
-    }
-  }, [visible])
+  // Why: opening drawers should mount before commit; waiting for a passive
+  // Effect adds a null render before every drawer can animate in.
+  if (resolvedMounted !== mounted) {
+    setMounted(resolvedMounted)
+  }
 
   // Why: hidden drawers are rendered by parent screens even while closed; keep
   // their Reanimated/Gesture setup out of hot paths like commit-message typing.
-  if (!mounted) return null
+  if (!resolvedMounted) {
+    return null
+  }
 
   return (
     <MountedBottomDrawer
@@ -67,6 +73,7 @@ export function BottomDrawer({
       onClose={onClose}
       onHidden={() => setMounted(false)}
       dragContentToDismiss={dragContentToDismiss}
+      contentScrollable={contentScrollable}
       zIndex={zIndex}
     >
       {children}
@@ -84,6 +91,7 @@ function MountedBottomDrawer({
   onHidden,
   children,
   dragContentToDismiss = true,
+  contentScrollable = true,
   zIndex = 1000
 }: MountedBottomDrawerProps) {
   const translateY = useSharedValue(0)
@@ -106,7 +114,7 @@ function MountedBottomDrawer({
       progress.value = withTiming(1, { duration: SHOW_DURATION })
     } else {
       Keyboard.dismiss()
-      progress.value = withTiming(0, { duration: HIDE_DURATION }, (finished) => {
+      progress.value = withTiming(0, { duration: BOTTOM_DRAWER_HIDE_DURATION_MS }, (finished) => {
         if (finished) {
           runOnJS(onHidden)()
         }
@@ -119,7 +127,9 @@ function MountedBottomDrawer({
   // useAnimatedKeyboard). Keyboard event listeners work on both platforms
   // and give us the exact height to shift the drawer by.
   useEffect(() => {
-    if (!visible) return
+    if (!visible) {
+      return
+    }
 
     const showEvent = Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow'
     const hideEvent = Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide'
@@ -139,19 +149,26 @@ function MountedBottomDrawer({
     }
   }, [visible, insets.bottom])
 
+  const dismiss = useCallback(() => {
+    Keyboard.dismiss()
+    progress.value = withTiming(0, { duration: BOTTOM_DRAWER_HIDE_DURATION_MS }, (finished) => {
+      if (finished) {
+        runOnJS(onClose)()
+      }
+    })
+  }, [onClose, progress])
+
   useEffect(() => {
-    if (!visible) return
+    if (!visible) {
+      return
+    }
 
     const sub = BackHandler.addEventListener('hardwareBackPress', () => {
-      onClose()
+      dismiss()
       return true
     })
     return () => sub.remove()
-  }, [visible, onClose])
-
-  const dismiss = useCallback(() => {
-    onClose()
-  }, [onClose])
+  }, [visible, dismiss])
 
   const scrollHandler = useAnimatedScrollHandler((event) => {
     scrollOffsetY.value = Math.max(event.contentOffset.y, 0)
@@ -175,7 +192,7 @@ function MountedBottomDrawer({
         const duration = Math.min(Math.max((remaining / velocity) * 1000, 120), 300)
         translateY.value = withTiming(screenHeight, { duration })
         progress.value = withTiming(0, { duration }, () => {
-          runOnJS(dismiss)()
+          runOnJS(onClose)()
         })
       } else {
         translateY.value = withSpring(0, SPRING_CONFIG)
@@ -213,7 +230,9 @@ function MountedBottomDrawer({
       }
     })
     .onEnd((e) => {
-      if (!contentDragCanDismiss.value || scrollOffsetY.value > TOP_SCROLL_EPSILON) return
+      if (!contentDragCanDismiss.value || scrollOffsetY.value > TOP_SCROLL_EPSILON) {
+        return
+      }
 
       const translationY = e.translationY - contentDragStartY.value
       if (translationY > DISMISS_THRESHOLD || e.velocityY > 500) {
@@ -222,7 +241,7 @@ function MountedBottomDrawer({
         const duration = Math.min(Math.max((remaining / velocity) * 1000, 120), 300)
         translateY.value = withTiming(screenHeight, { duration })
         progress.value = withTiming(0, { duration }, () => {
-          runOnJS(dismiss)()
+          runOnJS(onClose)()
         })
       } else {
         translateY.value = withSpring(0, SPRING_CONFIG)
@@ -245,16 +264,10 @@ function MountedBottomDrawer({
     return { opacity: progress.value * dragFade }
   })
 
-  const pointerStyle = useAnimatedStyle(
-    () =>
-      ({
-        pointerEvents: progress.value > 0 ? 'auto' : 'none'
-      }) as { pointerEvents: 'auto' | 'none' }
-  )
-
   return (
     <Animated.View
-      style={[styles.overlay, { zIndex, elevation: zIndex }, pointerStyle]}
+      pointerEvents={visible ? 'auto' : 'none'}
+      style={[styles.overlay, { zIndex, elevation: zIndex }]}
       accessibilityViewIsModal
       aria-modal
     >
@@ -276,7 +289,20 @@ function MountedBottomDrawer({
               drawerStyle
             ]}
           >
-            {dragContentToDismiss ? (
+            {!contentScrollable ? (
+              <>
+                <GestureDetector gesture={handlePanGesture}>
+                  <Animated.View
+                    style={styles.handleHitArea}
+                    accessibilityRole="button"
+                    accessibilityLabel="Dismiss drawer"
+                  >
+                    <View style={styles.handle} />
+                  </Animated.View>
+                </GestureDetector>
+                <View style={styles.staticContent}>{children}</View>
+              </>
+            ) : dragContentToDismiss ? (
               <>
                 <GestureDetector gesture={handlePanGesture}>
                   <Animated.View
@@ -377,6 +403,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingTop: spacing.sm,
     paddingBottom: spacing.md
+  },
+  staticContent: {
+    minHeight: 0
   },
   bottomExtension: {
     position: 'absolute',

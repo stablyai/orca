@@ -4,15 +4,12 @@
 import { existsSync, lstatSync, readlinkSync } from 'node:fs'
 import { execFileSync } from 'node:child_process'
 import path from 'node:path'
-import { fileURLToPath } from 'node:url'
 
-const scriptDir = path.dirname(fileURLToPath(import.meta.url))
-const source = path.join(scriptDir, 'orca-dev')
+const scriptDir = import.meta.dirname
+const source = path.join(scriptDir, 'orca-dev.mjs')
 
 const commandPath =
-  process.platform === 'darwin' || process.platform === 'linux'
-    ? '/usr/local/bin/orca-dev'
-    : null
+  process.platform === 'darwin' || process.platform === 'linux' ? '/usr/local/bin/orca-dev' : null
 
 if (!commandPath) {
   console.log('[orca-dev] Skipping global symlink (unsupported platform).')
@@ -21,7 +18,9 @@ if (!commandPath) {
 
 function isOwnedByUs(target) {
   try {
-    if (!lstatSync(target).isSymbolicLink()) { return false }
+    if (!lstatSync(target).isSymbolicLink()) {
+      return false
+    }
     return readlinkSync(target) === source
   } catch {
     return false

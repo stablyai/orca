@@ -1,6 +1,7 @@
-import React, { useEffect, useRef, useState } from 'react'
+import React, { useCallback, useState } from 'react'
 import type { Editor } from '@tiptap/react'
 import { ExternalLink, Pencil, Unlink } from 'lucide-react'
+import { translate } from '@/i18n/i18n'
 
 export type LinkBubbleState = {
   href: string
@@ -28,6 +29,16 @@ export function getLinkBubblePosition(
   }
 }
 
+export function isLinkEditCancelShortcut(
+  event: Pick<KeyboardEvent, 'key' | 'metaKey' | 'ctrlKey'>,
+  isMac: boolean
+): boolean {
+  if (event.key.toLowerCase() !== 'k') {
+    return false
+  }
+  return isMac ? event.metaKey && !event.ctrlKey : event.ctrlKey && !event.metaKey
+}
+
 function LinkEditInput({
   initialHref,
   onSave,
@@ -38,16 +49,21 @@ function LinkEditInput({
   onCancel: () => void
 }): React.JSX.Element {
   const [value, setValue] = useState(initialHref)
-  const ref = useRef<HTMLInputElement>(null)
+  const isMac = navigator.userAgent.includes('Mac')
 
-  useEffect(() => {
-    ref.current?.focus()
-    ref.current?.select()
+  const setInputElement = useCallback((input: HTMLInputElement | null) => {
+    if (!input) {
+      return
+    }
+    // Why: edit mode should start with the current URL selected, but typing
+    // changes must not re-select the field on every value update.
+    input.focus()
+    input.select()
   }, [])
 
   return (
     <input
-      ref={ref}
+      ref={setInputElement}
       value={value}
       onChange={(e) => setValue(e.target.value)}
       onKeyDown={(e) => {
@@ -60,12 +76,15 @@ function LinkEditInput({
           onCancel()
         }
         // Cmd/Ctrl+K while editing cancels the edit.
-        if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
+        if (isLinkEditCancelShortcut(e, isMac)) {
           e.preventDefault()
           onCancel()
         }
       }}
-      placeholder="Paste or type a link…"
+      placeholder={translate(
+        'auto.components.editor.RichMarkdownLinkBubble.7b0b945fdc',
+        'Paste or type a link…'
+      )}
       className="rich-markdown-link-input"
     />
   )
@@ -114,7 +133,10 @@ export function RichMarkdownLinkBubble({
             type="button"
             className="rich-markdown-link-button"
             onClick={onOpen}
-            title="Open link"
+            title={translate(
+              'auto.components.editor.RichMarkdownLinkBubble.bfc813e909',
+              'Open link'
+            )}
           >
             <ExternalLink size={14} />
           </button>
@@ -122,7 +144,10 @@ export function RichMarkdownLinkBubble({
             type="button"
             className="rich-markdown-link-button"
             onClick={onEditStart}
-            title="Edit link"
+            title={translate(
+              'auto.components.editor.RichMarkdownLinkBubble.cdfe166f6f',
+              'Edit link'
+            )}
           >
             <Pencil size={14} />
           </button>
@@ -130,7 +155,10 @@ export function RichMarkdownLinkBubble({
             type="button"
             className="rich-markdown-link-button"
             onClick={onRemove}
-            title="Remove link"
+            title={translate(
+              'auto.components.editor.RichMarkdownLinkBubble.1c99b726e0',
+              'Remove link'
+            )}
           >
             <Unlink size={14} />
           </button>

@@ -22,24 +22,16 @@ export function getScrollTopToRevealBounds(
   container: HTMLElement,
   bounds: SidebarRevealBounds,
   topInset = 0
-): number | null {
+): number {
   const viewportTopInset = Math.max(0, Math.min(container.clientHeight, topInset))
-  const viewportTop = container.scrollTop + viewportTopInset
-  const viewportBottom = container.scrollTop + container.clientHeight
-  if (bounds.start < viewportTop) {
-    return bounds.start - viewportTopInset
-  }
-  if (bounds.end > viewportBottom) {
-    return bounds.end - container.clientHeight
-  }
-  return null
+  // Why: the sticky header reduces the usable viewport, so center within the
+  // visible area below it instead of behind it.
+  const targetCenter = bounds.start + (bounds.end - bounds.start) / 2
+  const viewportCenterOffset = (viewportTopInset + container.clientHeight) / 2
+  return targetCenter - viewportCenterOffset
 }
 
-export function revealElementInScrollContainer(
-  container: HTMLElement,
-  element: Element,
-  behavior: ScrollBehavior
-): boolean {
+export function revealElementInScrollContainer(container: HTMLElement, element: Element): boolean {
   if (!container.contains(element)) {
     return false
   }
@@ -48,8 +40,9 @@ export function revealElementInScrollContainer(
     getElementScrollBounds(container, element),
     WORKTREE_SIDEBAR_REVEAL_TOP_INSET
   )
-  if (nextScrollTop !== null) {
-    container.scrollTo({ top: Math.max(0, nextScrollTop), behavior })
-  }
+  // Why: sidebar reveal is a focus handoff, so reposition immediately instead
+  // of making the user track an animated list. Boundary rows clamp to the list
+  // edge — padding the list so they can center leaves a phantom gap behind.
+  container.scrollTop = Math.max(0, nextScrollTop)
   return true
 }

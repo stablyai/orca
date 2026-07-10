@@ -1,14 +1,11 @@
 /* oxlint-disable max-lines -- Why: remote workspace IPC keeps snapshot normalization, relay compatibility, and handler registration together so revision/cache semantics stay auditable. */
-import { randomUUID } from 'crypto'
+import { randomUUID } from 'node:crypto'
 import { ipcMain, type BrowserWindow } from 'electron'
-import { hostname } from 'os'
-import { isDeepStrictEqual } from 'util'
+import { hostname } from 'node:os'
+import { isDeepStrictEqual } from 'node:util'
 import type { Store } from '../persistence'
 import { getActiveMultiplexer, getSshConnectionStore } from './ssh'
-import {
-  exportRemoteWorkspaceSession,
-  importRemoteWorkspaceSession
-} from '../../shared/remote-workspace-session-projection'
+import { exportRemoteWorkspaceSession } from '../../shared/remote-workspace-session-projection'
 import type {
   RemoteWorkspaceChangedEvent,
   RemoteWorkspaceConnectedClient,
@@ -18,18 +15,77 @@ import type {
 } from '../../shared/remote-workspace-types'
 import type { SshTarget } from '../../shared/ssh-types'
 import type { WorkspaceSessionState } from '../../shared/types'
-import { getRepoIdFromWorktreeId, splitWorktreeId } from '../../shared/worktree-id'
+import { getRepoIdFromWorktreeId } from '../../shared/worktree-id'
 import { getRemoteWorkspaceNamespace } from './remote-workspace-namespace'
 import { registerRemoteWorkspaceNotificationHandler } from './remote-workspace-events'
 
 const CLIENT_ID = randomUUID()
 const CLIENT_NAME = hostname() || 'This device'
 const SNAPSHOT_SCHEMA_VERSION = 1
+export const REMOTE_WORKSPACE_SNAPSHOT_CACHE_MAX_ENTRIES = 64
 
 let mainWindowGetter: (() => BrowserWindow | null) | null = null
 const latestSnapshotByTargetId = new Map<string, RemoteWorkspaceSnapshot>()
 const remoteWorkspacePatchTailByTargetId = new Map<string, Promise<void>>()
 let unregisterRemoteWorkspaceNotifications: (() => void) | null = null
+
+function rememberRemoteWorkspaceSnapshot(
+  targetId: string,
+  snapshot: RemoteWorkspaceSnapshot
+): void {
+  if (latestSnapshotByTargetId.has(targetId)) {
+    latestSnapshotByTargetId.delete(targetId)
+  }
+  latestSnapshotByTargetId.set(targetId, snapshot)
+  while (latestSnapshotByTargetId.size > REMOTE_WORKSPACE_SNAPSHOT_CACHE_MAX_ENTRIES) {
+    const oldest = latestSnapshotByTargetId.keys().next()
+    if (oldest.done) {
+      break
+    }
+    latestSnapshotByTargetId.delete(oldest.value)
+  }
+}
+
+function getCachedRemoteWorkspaceSnapshot(targetId: string): RemoteWorkspaceSnapshot | undefined {
+  const snapshot = latestSnapshotByTargetId.get(targetId)
+  if (!snapshot) {
+    return undefined
+  }
+  // Why: remote workspace snapshots can contain the whole tab/layout session
+  // for a target. Touch cache hits so deleted or rarely used targets age out.
+  rememberRemoteWorkspaceSnapshot(targetId, snapshot)
+  return snapshot
+}
+
+export function _resetRemoteWorkspaceCachesForTests(): void {
+  latestSnapshotByTargetId.clear()
+  remoteWorkspacePatchTailByTargetId.clear()
+}
+
+export function _getRemoteWorkspaceCacheSizesForTests(): {
+  snapshots: number
+  patchTails: number
+} {
+  return {
+    snapshots: latestSnapshotByTargetId.size,
+    patchTails: remoteWorkspacePatchTailByTargetId.size
+  }
+}
+
+/** @internal - exposed for cache-bound tests only. */
+export function _rememberRemoteWorkspaceSnapshotForTests(
+  targetId: string,
+  snapshot: RemoteWorkspaceSnapshot
+): void {
+  rememberRemoteWorkspaceSnapshot(targetId, snapshot)
+}
+
+/** @internal - exposed for cache-bound tests only. */
+export function _getRemoteWorkspaceSnapshotForTests(
+  targetId: string
+): RemoteWorkspaceSnapshot | undefined {
+  return getCachedRemoteWorkspaceSnapshot(targetId)
+}
 
 function emptyRemoteSession(): RemoteWorkspaceSession {
   return {
@@ -179,29 +235,6 @@ function exportSessionForTarget(
   })
 }
 
-function importSessionForTarget(
-  store: Store,
-  targetId: string,
-  remote: RemoteWorkspaceSession
-): WorkspaceSessionState {
-  const repos = store.getRepos().filter((repo) => repo.connectionId === targetId)
-  const repoById = new Map(repos.map((repo) => [repo.id, repo]))
-  return importRemoteWorkspaceSession(remote, {
-    resolveWorktreeId: (worktreePath) => {
-      for (const repo of repoById.values()) {
-        const candidate = `${repo.id}::${worktreePath}`
-        // Main does not own the live worktree list for SSH repos, so resolve
-        // against repo identity only. Renderer hydration later validates IDs
-        // against its fetched worktree list before panes mount.
-        if (splitWorktreeId(candidate)) {
-          return candidate
-        }
-      }
-      return null
-    }
-  })
-}
-
 async function getRemoteSnapshot(target: SshTarget): Promise<RemoteWorkspaceSnapshot | null> {
   const mux = getActiveMultiplexer(target.id)
   if (!mux) {
@@ -211,7 +244,7 @@ async function getRemoteSnapshot(target: SshTarget): Promise<RemoteWorkspaceSnap
   try {
     const raw = await mux.request('workspace.get', { namespace })
     const snapshot = normalizeSnapshot(raw, namespace)
-    latestSnapshotByTargetId.set(target.id, snapshot)
+    rememberRemoteWorkspaceSnapshot(target.id, snapshot)
     return snapshot
   } catch (err) {
     if ((err as { code?: unknown })?.code === -32601) {
@@ -254,7 +287,7 @@ async function patchRemoteWorkspaceSession(
   }
   const namespace = getRemoteWorkspaceNamespace(target)
   const current =
-    latestSnapshotByTargetId.get(target.id) ?? (await getRemoteSnapshot(target)) ?? undefined
+    getCachedRemoteWorkspaceSnapshot(target.id) ?? (await getRemoteSnapshot(target)) ?? undefined
   if (current && remoteWorkspaceSessionMatchesSnapshot(current, session)) {
     // Why: a pulled workspace snapshot rehydrates local state and can trigger
     // session persistence. Identical target sessions must stay a local no-op or
@@ -289,11 +322,11 @@ async function patchRemoteWorkspaceSession(
 
   const result = await requestPatch(current?.revision)
   if (result.ok) {
-    latestSnapshotByTargetId.set(target.id, result.snapshot)
+    rememberRemoteWorkspaceSnapshot(target.id, result.snapshot)
     return result
   }
   if (result.snapshot) {
-    latestSnapshotByTargetId.set(target.id, result.snapshot)
+    rememberRemoteWorkspaceSnapshot(target.id, result.snapshot)
   }
 
   if (
@@ -311,9 +344,9 @@ async function patchRemoteWorkspaceSession(
     // overwriting a newer snapshot from another device.
     const retry = await requestPatch(result.snapshot.revision)
     if (retry.ok) {
-      latestSnapshotByTargetId.set(target.id, retry.snapshot)
+      rememberRemoteWorkspaceSnapshot(target.id, retry.snapshot)
     } else if (retry.snapshot) {
-      latestSnapshotByTargetId.set(target.id, retry.snapshot)
+      rememberRemoteWorkspaceSnapshot(target.id, retry.snapshot)
     }
     return retry
   }
@@ -335,7 +368,7 @@ export function handleRemoteWorkspaceNotification(
   }
   const namespace = getRemoteWorkspaceNamespace(target)
   const snapshot = normalizeSnapshot(params.snapshot, namespace)
-  latestSnapshotByTargetId.set(targetId, snapshot)
+  rememberRemoteWorkspaceSnapshot(targetId, snapshot)
   const event: RemoteWorkspaceChangedEvent = {
     targetId,
     snapshot,
@@ -372,7 +405,7 @@ export function registerRemoteWorkspaceHandlers(
 
   ipcMain.handle(
     'remoteWorkspace:setForConnectedTargets',
-    async (_event, args: { session: WorkspaceSessionState; hydratedTargetIds?: unknown }) => {
+    async (_event, args: { session?: WorkspaceSessionState; hydratedTargetIds?: unknown }) => {
       const hydratedTargetIds = getExplicitHydratedTargetIds(args.hydratedTargetIds)
       if (!hydratedTargetIds) {
         // Why: an omitted hydration set used to broadcast one session to every
@@ -386,17 +419,21 @@ export function registerRemoteWorkspaceHandlers(
             (target) => hydratedTargetIds.has(target.id) && getActiveMultiplexer(target.id)
           ) ?? []
 
-      const results: { targetId: string; result: RemoteWorkspacePatchResult }[] = []
-      for (const target of targets) {
-        const session = exportSessionForTarget(store, target.id, args.session)
-        const result = await queueRemoteWorkspacePatch(target.id, () =>
-          patchRemoteWorkspaceSession(target, session)
-        )
-        if (result) {
-          results.push({ targetId: target.id, result })
-        }
-      }
-      return results
+      const workspaceSession = args.session ?? store.getWorkspaceSession()
+      const results = await Promise.all(
+        targets.map(async (target) => {
+          // Why: each target has its own revision stream. Keep same-target
+          // writes queued, but do not let one slow relay block others.
+          const session = exportSessionForTarget(store, target.id, workspaceSession)
+          const result = await queueRemoteWorkspacePatch(target.id, () =>
+            patchRemoteWorkspaceSession(target, session)
+          )
+          return result ? { targetId: target.id, result } : null
+        })
+      )
+      return results.filter(
+        (entry): entry is { targetId: string; result: RemoteWorkspacePatchResult } => entry !== null
+      )
     }
   )
 
@@ -447,12 +484,4 @@ export function registerRemoteWorkspaceHandlers(
   )
 
   ipcMain.handle('remoteWorkspace:clientId', () => CLIENT_ID)
-}
-
-export function materializeRemoteWorkspaceForTarget(
-  store: Store,
-  targetId: string,
-  snapshot: RemoteWorkspaceSnapshot
-): WorkspaceSessionState {
-  return importSessionForTarget(store, targetId, snapshot.session)
 }

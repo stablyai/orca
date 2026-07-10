@@ -5,6 +5,9 @@ import { installWindowVisibilityInterval } from '@/lib/window-visibility-interva
 import { useAppStore } from '@/store'
 import { callRuntimeRpc, getActiveRuntimeTarget } from '@/runtime/runtime-rpc-client'
 import type { GetRateLimitResult, GitHubRateLimitSnapshot } from '../../../../shared/types'
+import { getProviderRateLimitScope } from '@/components/settings/provider-account-scope'
+import { ProviderHostScopeControl } from '@/components/settings/ProviderHostScopeControl'
+import { translate } from '@/i18n/i18n'
 
 const REFRESH_INTERVAL_MS = 60_000
 
@@ -17,9 +20,33 @@ type BucketMeta = {
 }
 
 const BUCKETS: BucketMeta[] = [
-  { key: 'core', label: 'REST', description: 'REST API' },
-  { key: 'search', label: 'Search', description: 'Search API' },
-  { key: 'graphql', label: 'GraphQL', description: 'GraphQL API' }
+  {
+    key: 'core',
+    get label() {
+      return translate('auto.components.github.github.rate.limit.display.bb227706a6', 'REST')
+    },
+    get description() {
+      return translate('auto.components.github.github.rate.limit.display.c392c749a6', 'REST API')
+    }
+  },
+  {
+    key: 'search',
+    get label() {
+      return translate('auto.components.github.github.rate.limit.display.c377a4f06a', 'Search')
+    },
+    get description() {
+      return translate('auto.components.github.github.rate.limit.display.1f2f28a4de', 'Search API')
+    }
+  },
+  {
+    key: 'graphql',
+    get label() {
+      return translate('auto.components.github.github.rate.limit.display.1daf0f22a9', 'GraphQL')
+    },
+    get description() {
+      return translate('auto.components.github.github.rate.limit.display.01f7323e58', 'GraphQL API')
+    }
+  }
 ]
 
 export function formatGitHubRateLimitReset(resetAt: number): string {
@@ -126,7 +153,14 @@ function GitHubRateLimitRows({
                 tone === 'warn' && 'text-amber-700 dark:text-amber-300'
               )}
             >
-              {v.remaining} of {v.limit} left · resets in {formatGitHubRateLimitReset(v.resetAt)}
+              {v.remaining}{' '}
+              {translate('auto.components.github.github.rate.limit.display.f42790d150', 'of')}
+              {v.limit}{' '}
+              {translate(
+                'auto.components.github.github.rate.limit.display.6da1858354',
+                'left · resets in'
+              )}
+              {formatGitHubRateLimitReset(v.resetAt)}
             </span>
           </div>
         )
@@ -137,6 +171,8 @@ function GitHubRateLimitRows({
 
 export function GitHubRateLimitPanel({ className }: { className?: string }): React.JSX.Element {
   const { snapshot, hasError, isFetching, refresh } = useGitHubRateLimitSnapshot()
+  const settings = useAppStore((s) => s.settings)
+  const budgetScope = getProviderRateLimitScope(settings, 'GitHub')
 
   return (
     <div className={cn('space-y-3 rounded-md border border-border/60 p-3', className)}>
@@ -144,28 +180,55 @@ export function GitHubRateLimitPanel({ className }: { className?: string }): Rea
         <div className="space-y-0.5">
           <div className="flex items-center gap-1.5 text-sm font-medium text-foreground">
             <Gauge className="size-4" />
-            GitHub API Budget
+            {translate(
+              'auto.components.github.github.rate.limit.display.58c5f88216',
+              'GitHub API Budget'
+            )}
           </div>
           <p className="text-xs text-muted-foreground">
-            Orca uses REST, Search, and GraphQL through the GitHub CLI.
+            {translate(
+              'auto.components.github.github.rate.limit.display.d5e5de9070',
+              'Orca uses REST, Search, and GraphQL through the GitHub CLI.'
+            )}
           </p>
+          <ProviderHostScopeControl
+            labelPrefix={translate(
+              'auto.components.github.github.rate.limit.display.budget_scope_prefix',
+              'Budget scope'
+            )}
+            scope={budgetScope}
+            className="text-xs"
+          />
         </div>
         <button
           type="button"
           onClick={() => void refresh(true)}
           disabled={isFetching}
           className="inline-flex size-7 items-center justify-center rounded-md border border-border bg-secondary text-secondary-foreground transition hover:bg-accent disabled:opacity-50"
-          aria-label="Refresh GitHub API budget"
+          aria-label={translate(
+            'auto.components.github.github.rate.limit.display.d12d3d6f33',
+            'Refresh GitHub API budget'
+          )}
         >
           <RefreshCw className={cn('size-3.5', isFetching && 'animate-spin')} />
         </button>
       </div>
       {hasError ? (
-        <div className="text-xs text-muted-foreground">GitHub API budget is unavailable.</div>
+        <div className="text-xs text-muted-foreground">
+          {translate(
+            'auto.components.github.github.rate.limit.display.34973d4695',
+            'GitHub API budget is unavailable.'
+          )}
+        </div>
       ) : snapshot ? (
         <GitHubRateLimitRows snapshot={snapshot} />
       ) : (
-        <div className="text-xs text-muted-foreground">Loading GitHub API budget…</div>
+        <div className="text-xs text-muted-foreground">
+          {translate(
+            'auto.components.github.github.rate.limit.display.5509443543',
+            'Loading GitHub API budget…'
+          )}
+        </div>
       )}
     </div>
   )

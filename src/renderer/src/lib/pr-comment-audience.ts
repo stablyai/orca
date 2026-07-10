@@ -1,15 +1,16 @@
 import type { PRComment } from '../../../shared/types'
+import { createLocalizedCatalog } from '@/i18n/localized-catalog'
+import { translate } from '@/i18n/i18n'
 
 export type PRCommentAudienceFilter = 'all' | 'human' | 'bot'
 
-export const PR_COMMENT_AUDIENCE_FILTERS: {
-  value: PRCommentAudienceFilter
-  label: string
-}[] = [
-  { value: 'all', label: 'All' },
-  { value: 'human', label: 'Humans' },
-  { value: 'bot', label: 'Bots' }
-]
+export const getPrCommentAudienceFilters = createLocalizedCatalog(
+  (): { value: PRCommentAudienceFilter; label: string }[] => [
+    { value: 'all', label: translate('auto.lib.pr.comment.audience.27ce73211c', 'All') },
+    { value: 'human', label: translate('auto.lib.pr.comment.audience.a7150a17bc', 'Humans') },
+    { value: 'bot', label: translate('auto.lib.pr.comment.audience.64deee36a9', 'Bots') }
+  ]
+)
 
 const BOT_LOGIN_SUFFIX = '[bot]'
 const AUTOMATION_LOGIN_PATTERNS = [
@@ -85,10 +86,10 @@ export function filterPRCommentsByAudience(
 export function getPRCommentAudienceEmptyLabel(filter: PRCommentAudienceFilter): string {
   switch (filter) {
     case 'bot':
-      return 'No bot comments.'
+      return translate('auto.lib.pr.comment.audience.empty.bot', 'No bot comments.')
     case 'human':
-      return 'No human comments.'
-    default:
-      return 'No comments yet.'
+      return translate('auto.lib.pr.comment.audience.empty.human', 'No human comments.')
+    case 'all':
+      return translate('auto.lib.pr.comment.audience.empty.all', 'No comments yet.')
   }
 }

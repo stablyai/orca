@@ -113,7 +113,7 @@ export function sanitizeRecentTabIds(recent: string[] | undefined, tabOrder: str
     seen.add(id)
     reversed.push(id)
   }
-  return reversed.reverse()
+  return reversed.toReversed()
 }
 
 /** Push `tabId` to the tail of the MRU stack (most-recently-active) after
@@ -155,7 +155,9 @@ export function updateGroup(groups: TabGroup[], updated: TabGroup): TabGroup[] {
 }
 
 export function isTransientEditorContentType(contentType: TabContentType): boolean {
-  return contentType === 'diff' || contentType === 'conflict-review'
+  return (
+    contentType === 'diff' || contentType === 'conflict-review' || contentType === 'check-details'
+  )
 }
 
 export function getPersistedEditFileIdsByWorktree(

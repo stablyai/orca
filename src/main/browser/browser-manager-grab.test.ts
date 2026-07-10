@@ -817,7 +817,7 @@ describe('browserManager grab operations', () => {
       const promise = browserManager.awaitGrabSelection('tab-1', 'op-1', guest)
 
       // Find the destroyed handler and trigger it
-      const destroyedHandler = guestOnMock.mock.calls.find(
+      const destroyedHandler = guestOnMock.mock.calls.findLast(
         ([event]) => event === 'destroyed'
       )?.[1] as (() => void) | undefined
 

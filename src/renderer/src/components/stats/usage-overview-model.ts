@@ -15,6 +15,7 @@ import type {
   OpenCodeUsageScanState,
   OpenCodeUsageSummary
 } from '../../../../shared/opencode-usage-types'
+import { translate } from '@/i18n/i18n'
 
 export type UsageProviderId = 'claude' | 'codex' | 'opencode'
 
@@ -135,7 +136,7 @@ function createClaudeProvider(input: UsageOverviewInput['claude']): UsageProvide
     .map((entry) => entry.day)
   return {
     id: 'claude',
-    label: 'Claude',
+    label: translate('auto.components.stats.usage.overview.model.544d6d4c16', 'Claude'),
     enabled: input.scanState?.enabled ?? false,
     isScanning: input.scanState?.isScanning ?? false,
     hasData: summary?.hasAnyClaudeData ?? input.scanState?.hasAnyClaudeData ?? false,
@@ -168,7 +169,7 @@ function createCodexProvider(input: UsageOverviewInput['codex']): UsageProviderO
     .map((entry) => entry.day)
   return {
     id: 'codex',
-    label: 'Codex',
+    label: translate('auto.components.stats.usage.overview.model.eb220d193b', 'Codex'),
     enabled: input.scanState?.enabled ?? false,
     isScanning: input.scanState?.isScanning ?? false,
     hasData: summary?.hasAnyCodexData ?? input.scanState?.hasAnyCodexData ?? false,
@@ -196,7 +197,7 @@ function createOpenCodeProvider(input: UsageOverviewInput['opencode']): UsagePro
     .map((entry) => entry.day)
   return {
     id: 'opencode',
-    label: 'OpenCode',
+    label: translate('auto.components.stats.usage.overview.model.bc474051e5', 'OpenCode'),
     enabled: input.scanState?.enabled ?? false,
     isScanning: input.scanState?.isScanning ?? false,
     hasData: summary?.hasAnyOpenCodeData ?? input.scanState?.hasAnyOpenCodeData ?? false,

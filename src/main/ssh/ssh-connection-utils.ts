@@ -1,6 +1,6 @@
-import { spawn, type ChildProcess } from 'child_process'
-import { Duplex } from 'stream'
-import type { Socket as NetSocket } from 'net'
+import { spawn, type ChildProcess } from 'node:child_process'
+import { Duplex } from 'node:stream'
+import type { Socket as NetSocket } from 'node:net'
 import type { ConnectConfig } from 'ssh2'
 import type { SshTarget, SshConnectionState } from '../../shared/ssh-types'
 import type { SshResolvedConfig } from './ssh-config-parser'
@@ -74,6 +74,16 @@ export function isTransientError(err: Error): boolean {
   return false
 }
 
+const SYSTEM_SSH_FALLBACK_ERROR_CODES = new Set(['EHOSTUNREACH', 'ENETUNREACH'])
+
+export function isSystemSshFallbackError(err: Error): boolean {
+  const code = (err as NodeJS.ErrnoException).code
+  if (code && SYSTEM_SSH_FALLBACK_ERROR_CODES.has(code)) {
+    return true
+  }
+  return err.message.includes('EHOSTUNREACH') || err.message.includes('ENETUNREACH')
+}
+
 export function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms))
 }
@@ -86,6 +96,17 @@ export function wrapRemoteCommandForPosixShell(command: string): string {
   // Why: sshd asks the user's login shell to parse exec commands. Orca emits
   // POSIX sh snippets; `exec` avoids leaving that shell around for relay bridges.
   return `exec /bin/sh -c ${shellEscape(command)}`
+}
+
+export type SshExecOptions = {
+  wrapCommand?: boolean
+  signal?: AbortSignal
+}
+
+export function createSshOperationAbortError(): Error & { name: string } {
+  const error = new Error('SSH operation was cancelled') as Error & { name: string }
+  error.name = 'AbortError'
+  return error
 }
 
 function cmdEscape(s: string): string {
@@ -105,8 +126,8 @@ export function buildConnectConfig(
   resolved: SshResolvedConfig | null,
   options: BuildConnectConfigOptions = {}
 ): ConnectConfig {
-  const effectiveHost = target.host || resolved?.hostname || target.label
-  const effectivePort = target.port || resolved?.port || 22
+  const effectiveHost = resolveEffectiveHost(target, resolved)
+  const effectivePort = resolveEffectivePort(target, resolved)
   const effectiveUser = target.username || resolved?.user || ''
 
   const config: Record<string, unknown> = {
@@ -125,6 +146,10 @@ export function buildConnectConfig(
     config.agent = agent
   }
 
+  if (agent && resolved?.forwardAgent) {
+    config.agentForward = true
+  }
+
   const key =
     (options.includePrivateKey ?? !agent)
       ? resolvePrivateKey(target, resolved)
@@ -134,6 +159,30 @@ export function buildConnectConfig(
   }
 
   return config as ConnectConfig
+}
+
+function resolveEffectiveHost(target: SshTarget, resolved: SshResolvedConfig | null): string {
+  if (shouldUseResolvedEndpoint(target, resolved)) {
+    return resolved!.hostname
+  }
+  return target.host || resolved?.hostname || target.label
+}
+
+function resolveEffectivePort(target: SshTarget, resolved: SshResolvedConfig | null): number {
+  // Why: imported config aliases store 22 as the schema default even when an
+  // included/wildcard OpenSSH rule later resolves a different effective Port.
+  if (target.configHost && target.port === 22 && resolved?.port) {
+    return resolved.port
+  }
+  return target.port || resolved?.port || 22
+}
+
+function shouldUseResolvedEndpoint(target: SshTarget, resolved: SshResolvedConfig | null): boolean {
+  if (!target.configHost || !resolved?.hostname) {
+    return false
+  }
+  const host = target.host.trim()
+  return host === '' || host === target.configHost || host === target.label
 }
 
 // Why: ProxyJump and jumpHost are syntactic sugar for ProxyCommand.

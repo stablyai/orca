@@ -1,11 +1,14 @@
 /* eslint-disable max-lines -- Why: this file is the central main-window IPC wiring point; splitting it during the mobile release compatibility rebase would increase release risk. */
 import { randomUUID } from 'node:crypto'
 
-import { app, ipcMain, session } from 'electron'
-import type { BrowserWindow, Session } from 'electron'
+import { app, ipcMain } from 'electron'
+import type { BrowserWindow } from 'electron'
 import type { Store } from '../persistence'
-import type { CreateWorktreeResult, WorktreeStartupLaunch } from '../../shared/types'
-import { ORCA_BROWSER_PARTITION } from '../../shared/constants'
+import type {
+  CreateWorktreeResult,
+  UpdateCheckOptions,
+  WorktreeStartupLaunch
+} from '../../shared/types'
 import { registerRepoHandlers } from '../ipc/repos'
 import { registerWorktreeHandlers } from '../ipc/worktrees'
 import { registerWorkspaceCleanupHandlers } from '../ipc/workspace-cleanup'
@@ -33,10 +36,33 @@ import type {
   RuntimeMarkdownSaveTabResult
 } from '../../shared/mobile-markdown-document'
 import type { RuntimeMobileSessionTabMove } from '../../shared/runtime-types'
-import type { NativeFileDropPayload } from '../../shared/native-file-drop'
+import { isNativeFileDropPayload, type NativeFileDropPayload } from '../../shared/native-file-drop'
 import { requestMobileMarkdownFromRenderer } from './mobile-markdown-request-relay'
 import type { CodexAccountSelectionTarget } from '../codex-accounts/runtime-selection'
 import type { ClaudeAccountSelectionTarget } from '../claude-accounts/runtime-selection'
+import { runWorktreeChangeInvalidators } from '../ipc/worktree-change-invalidators'
+import {
+  scheduleWorktreeBaseDirectoryWatcherSync,
+  setWorktreeBaseDirectoryWatcherSyncContext
+} from '../ipc/worktree-base-directory-watcher'
+import { logStartupMilestone } from '../startup/startup-diagnostics'
+
+const UPDATER_SETUP_FALLBACK_MS = 15_000
+
+// Why: updater setup is deferred past first paint, but a manual check (app
+// menu or updater:check IPC) can arrive inside that window — it must run
+// against a configured updater (listeners, autoDownload=false, window ref),
+// so those entry points force the pending setup first.
+let pendingAutoUpdaterSetup: (() => void) | null = null
+
+export function ensureAutoUpdaterConfigured(): void {
+  pendingAutoUpdaterSetup?.()
+}
+
+let appReloadHandlerTokenCounter = 0
+let activeAppReloadHandlerToken: number | null = null
+let runtimeNotifierTokenCounter = 0
+let activeRuntimeNotifierToken: number | null = null
 
 export function attachMainWindowServices(
   mainWindow: BrowserWindow,
@@ -47,12 +73,19 @@ export function attachMainWindowServices(
     target?: ClaudeAccountSelectionTarget
   ) => Promise<ClaudeRuntimeAuthPreparation>,
   options?: {
+    awaitLocalPtyStartup?: () => Promise<void>
     onBeforeRendererReload?: (args: { webContentsId: number; ignoreCache: boolean }) => void
+    // Why: lets the PTY orphan sweep skip the one crash-recovery reload (#5787).
+    isRecoveryReloadInFlight?: (webContentsId: number) => boolean
+    onBeforeUpdateQuit?: () => void | Promise<void>
   }
 ): void {
   registerAppReloadHandler(mainWindow, options?.onBeforeRendererReload)
   registerRepoHandlers(mainWindow, store)
   registerWorktreeHandlers(mainWindow, store, runtime)
+  // Why: repo/settings mutations resync watchers through this attached main-window context.
+  setWorktreeBaseDirectoryWatcherSyncContext(store, mainWindow)
+  scheduleWorktreeBaseDirectoryWatcherSync(store, mainWindow)
   registerWorkspaceCleanupHandlers(store, { runtime, getLocalPtyProvider })
   registerPtyHandlers(
     mainWindow,
@@ -60,7 +93,11 @@ export function attachMainWindowServices(
     getSelectedCodexHomePath,
     () => store.getSettings(),
     prepareClaudeAuth,
-    store
+    store,
+    {
+      awaitLocalPtyStartup: options?.awaitLocalPtyStartup,
+      isRecoveryReloadInFlight: options?.isRecoveryReloadInFlight
+    }
   )
   // Why: the Manage Sessions settings panel (docs/daemon-staleness-ux.md §Phase 1)
   // uses a narrow `pty:management:*` IPC surface that reads the live
@@ -85,34 +122,68 @@ export function attachMainWindowServices(
   // function re-runs as the main window is recreated — does not redo the
   // git I/O or daemon RPC.
   void hydrateLocalPtyRegistryAtBoot(store)
+  const localPtyStartupReady = options?.awaitLocalPtyStartup?.()
+  if (localPtyStartupReady) {
+    void localPtyStartupReady
+      .then(() => hydrateLocalPtyRegistryAtBoot(store))
+      .catch((error) => {
+        console.warn(
+          '[memory] Deferred pty-registry hydration skipped:',
+          error instanceof Error ? error.message : String(error)
+        )
+      })
+  }
   registerSshHandlers(store, () => mainWindow, runtime)
   registerRemoteWorkspaceHandlers(store, () => mainWindow)
   registerFileDropRelay(mainWindow)
-  setupAutoUpdater(mainWindow, {
-    getLastUpdateCheckAt: () => store.getUI().lastUpdateCheckAt,
-    onBeforeQuit: () => store.flush(),
-    setLastUpdateCheckAt: (timestamp) => {
-      store.updateUI({ lastUpdateCheckAt: timestamp })
-    },
-    getPendingUpdateNudgeId: () => store.getUI().pendingUpdateNudgeId ?? null,
-    getDismissedUpdateNudgeId: () => store.getUI().dismissedUpdateNudgeId ?? null,
-    setPendingUpdateNudgeId: (id) => {
-      // Why: the nudge lifecycle is owned by the main process. When applying a
-      // new campaign, persist the pending id AND clear the version dismissal
-      // together so relaunches cannot resurrect the old hidden-card state
-      // between nudge apply and renderer sync. When clearing (id is null),
-      // only touch pendingUpdateNudgeId — clearing dismissedUpdateVersion here
-      // would silently un-dismiss an update if the flow ever changes.
-      if (id) {
-        store.updateUI({ pendingUpdateNudgeId: id, dismissedUpdateVersion: null })
-      } else {
-        store.updateUI({ pendingUpdateNudgeId: null })
-      }
-    },
-    setDismissedUpdateNudgeId: (id) => {
-      store.updateUI({ dismissedUpdateNudgeId: id })
+  // Why: setupAutoUpdater's first getAutoUpdater() call synchronously
+  // require()s electron-updater in packaged builds — seconds on a cold
+  // Windows disk under Defender scanning (part of issue #7225's pre-paint
+  // stall) — so defer it past first paint. The timer fallback keeps update
+  // checks alive for renderers that crash-loop before ever painting.
+  let updaterSetupDone = false
+  const setupAutoUpdaterDeferred = (): void => {
+    if (updaterSetupDone || mainWindow.isDestroyed()) {
+      return
     }
-  })
+    updaterSetupDone = true
+    setupAutoUpdater(mainWindow, {
+      getLastUpdateCheckAt: () => store.getUI().lastUpdateCheckAt,
+      onBeforeQuit: async () => {
+        try {
+          await options?.onBeforeUpdateQuit?.()
+        } finally {
+          store.flush()
+        }
+      },
+      setLastUpdateCheckAt: (timestamp) => {
+        store.updateUI({ lastUpdateCheckAt: timestamp })
+      },
+      getPendingUpdateNudgeId: () => store.getUI().pendingUpdateNudgeId ?? null,
+      getDismissedUpdateNudgeId: () => store.getUI().dismissedUpdateNudgeId ?? null,
+      setPendingUpdateNudgeId: (id) => {
+        // Why: the nudge lifecycle is owned by the main process. When applying a
+        // new campaign, persist the pending id AND clear the version dismissal
+        // together so relaunches cannot resurrect the old hidden-card state
+        // between nudge apply and renderer sync. When clearing (id is null),
+        // only touch pendingUpdateNudgeId — clearing dismissedUpdateVersion here
+        // would silently un-dismiss an update if the flow ever changes.
+        if (id) {
+          store.updateUI({ pendingUpdateNudgeId: id, dismissedUpdateVersion: null })
+        } else {
+          store.updateUI({ pendingUpdateNudgeId: null })
+        }
+      },
+      setDismissedUpdateNudgeId: (id) => {
+        store.updateUI({ dismissedUpdateNudgeId: id })
+      }
+    })
+    logStartupMilestone('updater-setup-done')
+  }
+  pendingAutoUpdaterSetup = setupAutoUpdaterDeferred
+  mainWindow.once('ready-to-show', () => setImmediate(setupAutoUpdaterDeferred))
+  const updaterSetupFallback = setTimeout(setupAutoUpdaterDeferred, UPDATER_SETUP_FALLBACK_MS)
+  updaterSetupFallback.unref?.()
   registerRuntimeWindowLifecycle(mainWindow, runtime)
 
   const allowedPermissions = new Set(['media', 'fullscreen', 'pointerLock'])
@@ -137,97 +208,12 @@ export function attachMainWindowServices(
     }
   )
 
-  const browserSession = session.fromPartition(ORCA_BROWSER_PARTITION)
-  browserSession.setPermissionRequestHandler((webContents, permission, callback, details) => {
-    // Why: the in-app browser is for dev previews and lightweight browsing, not
-    // trusted desktop-app privileges. Denying by default keeps arbitrary sites
-    // from silently escalating into camera/mic/notification prompts inside Orca.
-    // Why `media` is allowed through: camera/mic are still gated by macOS TCC
-    // at the app-process level, so granting here only *permits* Chromium to
-    // use whatever the OS has already authorized for Orca. Denying at this
-    // layer would make pages inside the in-app browser throw NotAllowedError
-    // even after the user granted Camera/Microphone via Settings → Permissions
-    // or System Settings — the bug #1273 partially addressed.
-    if (permission === 'media') {
-      void requestSystemMediaAccess(
-        details as Electron.MediaAccessPermissionRequest | undefined
-      ).then(
-        (granted) => {
-          if (!granted) {
-            browserManager.notifyPermissionDenied({
-              guestWebContentsId: webContents.id,
-              permission,
-              rawUrl: webContents.getURL()
-            })
-          }
-          callback(granted)
-        },
-        (error: unknown) => {
-          console.error('[permissions] Browser media access failed:', error)
-          browserManager.notifyPermissionDenied({
-            guestWebContentsId: webContents.id,
-            permission,
-            rawUrl: webContents.getURL()
-          })
-          callback(false)
-        }
-      )
-      return
-    }
-    const allowed = permission === 'fullscreen'
-    if (!allowed) {
-      browserManager.notifyPermissionDenied({
-        guestWebContentsId: webContents.id,
-        permission,
-        rawUrl: webContents.getURL()
-      })
-    }
-    callback(allowed)
-  })
-  browserSession.setPermissionCheckHandler((_webContents, permission, _origin, details) => {
-    if (permission === 'fullscreen') {
-      return true
-    }
-    if (permission === 'media') {
-      return hasSystemMediaAccess(details?.mediaType)
-    }
-    return false
-  })
-  browserSession.setDisplayMediaRequestHandler((_request, callback) => {
-    // Why: arbitrary sites inside Orca should never be able to capture the
-    // desktop or application windows until there is explicit product UX for
-    // selecting a source and surfacing that choice to the user.
-    // Why: pass undefined (not null) to satisfy Electron's typed callback
-    // signature while still denying the request.
-    callback({ video: undefined, audio: undefined })
-  })
-  registerBrowserDownloadHandler(browserSession)
-
   mainWindow.on('closed', () => {
-    // Why: parked browser webviews can outlive the visible tab body until the
-    // renderer process exits. Clearing main-owned guest registrations on window
-    // close prevents stale tab→webContents ids from leaking across app relaunch
-    // or hot-reload cycles.
+    // Why: browser webviews are renderer-owned guest surfaces. Clearing
+    // main-owned guest registrations on window close prevents stale
+    // tab→webContents ids from leaking across app relaunch or hot-reload cycles.
     browserManager.unregisterAll()
   })
-}
-
-function handleBrowserWillDownload(
-  _event: Electron.Event,
-  item: Electron.DownloadItem,
-  webContents: Electron.WebContents
-): void {
-  // Why: browser-tab downloads need explicit product UX before arbitrary sites
-  // can write files through Orca. Pause the item and route it through
-  // BrowserManager so the user must explicitly accept the save path first.
-  browserManager.handleGuestWillDownload({ guestWebContentsId: webContents.id, item })
-}
-
-function registerBrowserDownloadHandler(browserSession: Session): void {
-  // Why: browser sessions are process-persistent while main windows can be
-  // recreated; replace the named handler so re-attach does not stack listeners.
-  browserSession.removeListener('will-download', handleBrowserWillDownload)
-  browserSession.on('will-download', handleBrowserWillDownload)
 }
 
 function registerAppReloadHandler(
@@ -236,6 +222,8 @@ function registerAppReloadHandler(
 ): void {
   // Why: the process-global IPC handler can outlive the BrowserWindow, so keep
   // the registered WebContents and guard both lifetimes before using it.
+  const handlerToken = ++appReloadHandlerTokenCounter
+  activeAppReloadHandlerToken = handlerToken
   const mainWebContents = mainWindow.webContents
   ipcMain.removeHandler('app:reload')
   ipcMain.handle('app:reload', (event) => {
@@ -249,12 +237,23 @@ function registerAppReloadHandler(
     onBeforeRendererReload?.({ webContentsId: mainWebContents.id, ignoreCache: false })
     mainWebContents.reload()
   })
+  mainWindow.on('closed', () => {
+    if (activeAppReloadHandlerToken !== handlerToken) {
+      return
+    }
+    // Why: macOS can keep the process alive with no window, and this global
+    // handler otherwise keeps the closed BrowserWindow reachable until reopen.
+    ipcMain.removeHandler('app:reload')
+    activeAppReloadHandlerToken = null
+  })
 }
 
 function registerRuntimeWindowLifecycle(
   mainWindow: BrowserWindow,
   runtime: OrcaRuntimeService
 ): void {
+  const notifierToken = ++runtimeNotifierTokenCounter
+  activeRuntimeNotifierToken = notifierToken
   runtime.attachWindow(mainWindow.id)
   const send = (channel: string, ...args: unknown[]): void => {
     if (!mainWindow.isDestroyed()) {
@@ -262,7 +261,12 @@ function registerRuntimeWindowLifecycle(
     }
   }
   runtime.setNotifier({
-    worktreesChanged: (repoId) => send('worktrees:changed', { repoId }),
+    worktreesChanged: (repoId, renamed) => {
+      // Why: clear detected-worktree scan caches before renderer listeners
+      // handle this event, preventing stale TTL reads after mutations.
+      runWorktreeChangeInvalidators(repoId)
+      send('worktrees:changed', renamed ? { repoId, renamed } : { repoId })
+    },
     worktreeBaseStatus: (event) => send('worktree:baseStatus', event),
     worktreeRemoteBranchConflict: (event) => send('worktree:remoteBranchConflict', event),
     reposChanged: () => send('repos:changed'),
@@ -270,17 +274,26 @@ function registerRuntimeWindowLifecycle(
       repoId,
       worktreeId,
       setup?: CreateWorktreeResult['setup'],
-      startup?: WorktreeStartupLaunch
+      startup?: WorktreeStartupLaunch,
+      defaultTabs?: CreateWorktreeResult['defaultTabs']
     ) => {
       send('ui:activateWorktree', {
         repoId,
         worktreeId,
         ...(setup ? { setup } : {}),
-        ...(startup ? { startup } : {})
+        ...(startup ? { startup } : {}),
+        ...(defaultTabs ? { defaultTabs } : {})
       })
     },
     createTerminal: (worktreeId, opts) =>
-      send('ui:createTerminal', { worktreeId, command: opts.command, title: opts.title }),
+      send('ui:createTerminal', {
+        worktreeId,
+        command: opts.command,
+        ...(opts.cwd ? { cwd: opts.cwd } : {}),
+        ...(opts.env ? { env: opts.env } : {}),
+        title: opts.title,
+        ...(opts.presentation ? { presentation: opts.presentation } : {})
+      }),
     revealTerminalSession: (worktreeId, opts) =>
       new Promise((resolve, reject) => {
         const requestId = randomUUID()
@@ -289,10 +302,12 @@ function registerRuntimeWindowLifecycle(
           reject(new Error('Terminal reveal timed out'))
         }, 10_000)
         const handler = (
-          _event: Electron.IpcMainEvent,
+          event: Electron.IpcMainEvent,
           reply: { requestId: string; tabId?: string; title?: string; error?: string }
         ): void => {
-          if (reply.requestId !== requestId) {
+          // Why: requestId is renderer-supplied; only the targeted main window
+          // may satisfy the reveal and provide the tab handle.
+          if (event.sender !== mainWindow.webContents || reply.requestId !== requestId) {
             return
           }
           clearTimeout(timer)
@@ -309,14 +324,22 @@ function registerRuntimeWindowLifecycle(
           worktreeId,
           ptyId: opts.ptyId,
           title: opts.title ?? undefined,
+          ...(opts.cwd ? { cwd: opts.cwd } : {}),
+          ...(opts.launchConfig ? { launchConfig: opts.launchConfig } : {}),
+          ...(opts.launchToken ? { launchToken: opts.launchToken } : {}),
+          ...(opts.launchAgent ? { launchAgent: opts.launchAgent } : {}),
           activate: opts.activate !== false,
+          ...(opts.presentation ? { presentation: opts.presentation } : {}),
           // Why: pre-minted tabId from main keeps the renderer's tab id aligned
           // with the paneKey baked into the PTY env at spawn time, so hook
           // events route to the right slot.
           ...(opts.tabId !== undefined ? { tabId: opts.tabId } : {}),
           ...(opts.leafId !== undefined ? { leafId: opts.leafId } : {}),
           ...(opts.splitFromLeafId !== undefined ? { splitFromLeafId: opts.splitFromLeafId } : {}),
-          ...(opts.splitDirection !== undefined ? { splitDirection: opts.splitDirection } : {})
+          ...(opts.splitDirection !== undefined ? { splitDirection: opts.splitDirection } : {}),
+          ...(opts.splitTelemetrySource !== undefined
+            ? { splitTelemetrySource: opts.splitTelemetrySource }
+            : {})
         })
       }),
     splitTerminal: (tabId, paneRuntimeId, opts) => {
@@ -324,7 +347,8 @@ function registerRuntimeWindowLifecycle(
         tabId,
         paneRuntimeId,
         direction: opts.direction,
-        command: opts.command
+        command: opts.command,
+        telemetrySource: opts.telemetrySource
       })
     },
     renameTerminal: (tabId, title) => send('ui:renameTerminal', { tabId, title }),
@@ -334,10 +358,21 @@ function registerRuntimeWindowLifecycle(
     closeSessionTab: (tabId, worktreeId) => send('ui:closeSessionTab', { tabId, worktreeId }),
     moveSessionTab: (worktreeId: string, move: RuntimeMobileSessionTabMove) =>
       send('ui:moveSessionTab', { worktreeId, ...move }),
-    openFile: (worktreeId, filePath, relativePath) =>
-      send('ui:openFileFromMobile', { worktreeId, filePath, relativePath }),
-    openDiff: (worktreeId, filePath, relativePath, staged) =>
-      send('ui:openDiffFromMobile', { worktreeId, filePath, relativePath, staged }),
+    openFile: (worktreeId, filePath, relativePath, runtimeEnvironmentId?) =>
+      send('ui:openFileFromMobile', {
+        worktreeId,
+        filePath,
+        relativePath,
+        runtimeEnvironmentId
+      }),
+    openDiff: (worktreeId, filePath, relativePath, staged, runtimeEnvironmentId?) =>
+      send('ui:openDiffFromMobile', {
+        worktreeId,
+        filePath,
+        relativePath,
+        staged,
+        runtimeEnvironmentId
+      }),
     readMobileMarkdownTab: (worktreeId, tabId) =>
       requestMobileMarkdownFromRenderer(mainWindow, {
         operation: 'read',
@@ -354,6 +389,7 @@ function registerRuntimeWindowLifecycle(
       }) as Promise<RuntimeMarkdownSaveTabResult>,
     closeTerminal: (tabId, paneRuntimeId) => send('ui:closeTerminal', { tabId, paneRuntimeId }),
     sleepWorktree: (worktreeId) => send('ui:sleepWorktree', { worktreeId }),
+    resumeSleepingAgents: (worktreeId) => send('ui:resumeSleepingAgents', { worktreeId }),
     terminalFitOverrideChanged: (ptyId, mode, cols, rows) =>
       send('runtime:terminalFitOverrideChanged', { ptyId, mode, cols, rows }),
     terminalDriverChanged: (ptyId, driver) =>
@@ -369,14 +405,29 @@ function registerRuntimeWindowLifecycle(
   })
   mainWindow.on('closed', () => {
     runtime.markGraphUnavailable(mainWindow.id)
+    if (activeRuntimeNotifierToken === notifierToken) {
+      // Why: the notifier closes over the BrowserWindow for mobile/CLI UI
+      // relays; clear it during the no-window gap so the runtime does not
+      // retain destroyed window graphs.
+      runtime.setNotifier(null)
+      activeRuntimeNotifierToken = null
+    }
   })
 }
 
 function registerFileDropRelay(mainWindow: BrowserWindow): void {
   const channel = 'terminal:file-dropped-from-preload'
+  const mainWebContents = mainWindow.webContents
   ipcMain.removeAllListeners(channel)
-  const relayFileDrop = (_event: Electron.IpcMainEvent, args: NativeFileDropPayload): void => {
-    if (mainWindow.isDestroyed()) {
+  const relayFileDrop = (event: Electron.IpcMainEvent, args: NativeFileDropPayload): void => {
+    if (
+      mainWindow.isDestroyed() ||
+      mainWebContents.isDestroyed() ||
+      event.sender !== mainWebContents
+    ) {
+      return
+    }
+    if (!isNativeFileDropPayload(args)) {
       return
     }
 
@@ -402,9 +453,10 @@ export function registerUpdaterHandlers(_store: Store): void {
 
   ipcMain.handle('updater:getStatus', () => getUpdateStatus())
   ipcMain.handle('updater:getVersion', () => app.getVersion())
-  ipcMain.handle('updater:check', (_event, options?: { includePrerelease?: boolean }) =>
-    checkForUpdatesFromMenu(options)
-  )
+  ipcMain.handle('updater:check', (_event, options?: UpdateCheckOptions) => {
+    ensureAutoUpdaterConfigured()
+    return checkForUpdatesFromMenu(options)
+  })
   ipcMain.handle('updater:download', () => downloadUpdate())
   ipcMain.handle('updater:quitAndInstall', () => quitAndInstall())
   ipcMain.handle('updater:dismissNudge', () => dismissNudge())

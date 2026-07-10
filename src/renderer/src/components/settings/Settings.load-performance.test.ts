@@ -27,11 +27,25 @@ describe('Settings load-performance helpers', () => {
     expect(Array.from(needed).sort()).toEqual(['general'])
   })
 
-  it('adds matched sections immediately when search is non-empty', () => {
+  it('keeps search mounting scoped to the active section', () => {
     const needed = deriveNeededSectionIds({
       navSectionIds: ['general', 'agents', 'appearance', 'terminal', 'stats', 'repo-a'],
       mountedSectionIds: new Set(['general']),
       activeSectionId: 'general',
+      pendingSectionId: null,
+      query: 'stats',
+      visibleSectionIds: new Set(['stats'])
+    })
+
+    expect(needed.has('stats')).toBe(false)
+    expect(needed.has('general')).toBe(false)
+  })
+
+  it('mounts the active matched section during search', () => {
+    const needed = deriveNeededSectionIds({
+      navSectionIds: ['general', 'agents', 'appearance', 'terminal', 'stats', 'repo-a'],
+      mountedSectionIds: new Set(['general']),
+      activeSectionId: 'stats',
       pendingSectionId: null,
       query: 'stats',
       visibleSectionIds: new Set(['stats'])

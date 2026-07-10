@@ -1,3 +1,4 @@
+import { useSyncExternalStore } from 'react'
 import type { RuntimeBrowserDriverState } from '../../../../shared/runtime-types'
 
 export type BrowserDriverState = RuntimeBrowserDriverState
@@ -11,15 +12,36 @@ type BrowserDriverChangeEvent = {
 
 type BrowserDriverChangeListener = (event: BrowserDriverChangeEvent) => void
 const changeListeners = new Set<BrowserDriverChangeListener>()
+const snapshotListeners = new Set<() => void>()
+let version = 0
 
 export function onBrowserDriverChange(listener: BrowserDriverChangeListener): () => void {
   changeListeners.add(listener)
   return () => changeListeners.delete(listener)
 }
 
+function subscribe(listener: () => void): () => void {
+  snapshotListeners.add(listener)
+  return () => {
+    snapshotListeners.delete(listener)
+  }
+}
+
+function getSnapshot(): number {
+  return version
+}
+
+function getServerSnapshot(): number {
+  return 0
+}
+
 function notifyChange(event: BrowserDriverChangeEvent): void {
+  version += 1
   for (const listener of changeListeners) {
     listener(event)
+  }
+  for (const listener of snapshotListeners) {
+    listener()
   }
 }
 
@@ -34,6 +56,42 @@ export function setDriverForBrowserPage(browserPageId: string, driver: BrowserDr
 
 export function getDriverForBrowserPage(browserPageId: string): BrowserDriverState {
   return driverByBrowserPageId.get(browserPageId) ?? { kind: 'idle' }
+}
+
+export function isBrowserPageMobileDriven(browserPageId: string): boolean {
+  return driverByBrowserPageId.get(browserPageId)?.kind === 'mobile'
+}
+
+export function hasMobileDriverForAnyBrowserPage(
+  browserPageIds: readonly (string | null | undefined)[]
+): boolean {
+  return browserPageIds.some((pageId) => Boolean(pageId && isBrowserPageMobileDriven(pageId)))
+}
+
+export function getBrowserMobileDrivenPageIds(
+  browserPageIds: readonly (string | null | undefined)[]
+): Set<string> {
+  const mobileDrivenPageIds = new Set<string>()
+  for (const pageId of browserPageIds) {
+    if (pageId && isBrowserPageMobileDriven(pageId)) {
+      mobileDrivenPageIds.add(pageId)
+    }
+  }
+  return mobileDrivenPageIds
+}
+
+export function useBrowserMobileDriverForAny(
+  browserPageIds: readonly (string | null | undefined)[]
+): boolean {
+  useSyncExternalStore(subscribe, getSnapshot, getServerSnapshot)
+  return hasMobileDriverForAnyBrowserPage(browserPageIds)
+}
+
+export function useBrowserMobileDrivenPageIds(
+  browserPageIds: readonly (string | null | undefined)[]
+): Set<string> {
+  useSyncExternalStore(subscribe, getSnapshot, getServerSnapshot)
+  return getBrowserMobileDrivenPageIds(browserPageIds)
 }
 
 export function hydrateBrowserDrivers(

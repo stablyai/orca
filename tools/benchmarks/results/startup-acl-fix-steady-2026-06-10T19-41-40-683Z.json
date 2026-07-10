@@ -1,0 +1,363 @@
+{
+  "label": "acl-fix-steady",
+  "platform": "win32",
+  "arch": "x64",
+  "cpus": "Intel(R) Core(TM) Ultra 9 185H",
+  "fixtureDir": "C:\\Users\\jinwo\\AppData\\Local\\Temp\\orca-startup-bench\\userdata-28000",
+  "fixtureFiles": 28000,
+  "exe": null,
+  "iterations": [
+    {
+      "outcome": "ok",
+      "events": [
+        {
+          "event": "before-single-instance-lock",
+          "details": {
+            "version": "1.4.58",
+            "packaged": false,
+            "platform": "win32",
+            "osRelease": "10.0.26200",
+            "userData": "C:\\Users\\jinwo\\AppData\\Local\\Temp\\orca-startup-bench\\userdata-28000",
+            "e2eUserData": true
+          },
+          "harnessMs": 690.7
+        },
+        {
+          "event": "single-instance-lock-result",
+          "details": {
+            "acquired": true,
+            "bypassed": false,
+            "skippedForDev": true
+          },
+          "harnessMs": 690.7
+        },
+        {
+          "event": "app-ready",
+          "details": {
+            "t": 700
+          },
+          "harnessMs": 733.2
+        },
+        {
+          "event": "store-loaded",
+          "details": {
+            "t": 707
+          },
+          "harnessMs": 740.1
+        },
+        {
+          "event": "services-initialized",
+          "details": {
+            "t": 865
+          },
+          "harnessMs": 897.8
+        },
+        {
+          "event": "i18n-ready",
+          "details": {
+            "t": 866
+          },
+          "harnessMs": 899.6
+        },
+        {
+          "event": "open-main-window-start",
+          "details": {
+            "t": 873
+          },
+          "harnessMs": 906
+        },
+        {
+          "event": "acl-grant-start",
+          "details": {
+            "t": 873
+          },
+          "harnessMs": 906
+        },
+        {
+          "event": "window-created",
+          "details": {
+            "t": 913
+          },
+          "harnessMs": 946.6
+        },
+        {
+          "event": "load-start",
+          "details": {
+            "t": 936
+          },
+          "harnessMs": 969.2
+        },
+        {
+          "event": "ready-to-show",
+          "details": {
+            "t": 2026
+          },
+          "harnessMs": 2059.3
+        },
+        {
+          "event": "did-finish-load",
+          "details": {
+            "t": 2026
+          },
+          "harnessMs": 2059.4
+        },
+        {
+          "event": "acl-grant-done",
+          "details": {
+            "t": 7686,
+            "mode": "granted"
+          },
+          "harnessMs": 7719
+        }
+      ],
+      "phases": {
+        "spawnToAppReady": 733.2,
+        "appReadyToServices": 165,
+        "servicesToI18n": 1,
+        "i18nToOpenWindow": 7,
+        "aclGrantMs": 6813,
+        "windowCreatedToLoaded": 1113,
+        "totalToWindowCreated": 946.6,
+        "totalToDidFinishLoad": 2059.4
+      }
+    },
+    {
+      "outcome": "ok",
+      "events": [
+        {
+          "event": "before-single-instance-lock",
+          "details": {
+            "version": "1.4.58",
+            "packaged": false,
+            "platform": "win32",
+            "osRelease": "10.0.26200",
+            "userData": "C:\\Users\\jinwo\\AppData\\Local\\Temp\\orca-startup-bench\\userdata-28000",
+            "e2eUserData": true
+          },
+          "harnessMs": 605.1
+        },
+        {
+          "event": "single-instance-lock-result",
+          "details": {
+            "acquired": true,
+            "bypassed": false,
+            "skippedForDev": true
+          },
+          "harnessMs": 605.1
+        },
+        {
+          "event": "app-ready",
+          "details": {
+            "t": 611
+          },
+          "harnessMs": 638.3
+        },
+        {
+          "event": "store-loaded",
+          "details": {
+            "t": 617
+          },
+          "harnessMs": 644.2
+        },
+        {
+          "event": "services-initialized",
+          "details": {
+            "t": 748
+          },
+          "harnessMs": 775.3
+        },
+        {
+          "event": "i18n-ready",
+          "details": {
+            "t": 750
+          },
+          "harnessMs": 777.6
+        },
+        {
+          "event": "open-main-window-start",
+          "details": {
+            "t": 757
+          },
+          "harnessMs": 784.2
+        },
+        {
+          "event": "acl-grant-start",
+          "details": {
+            "t": 757
+          },
+          "harnessMs": 784.2
+        },
+        {
+          "event": "acl-grant-done",
+          "details": {
+            "t": 757,
+            "mode": "marker-hit"
+          },
+          "harnessMs": 784.7
+        },
+        {
+          "event": "window-created",
+          "details": {
+            "t": 786
+          },
+          "harnessMs": 813.9
+        },
+        {
+          "event": "load-start",
+          "details": {
+            "t": 808
+          },
+          "harnessMs": 835.1
+        },
+        {
+          "event": "ready-to-show",
+          "details": {
+            "t": 1768
+          },
+          "harnessMs": 1795.2
+        },
+        {
+          "event": "did-finish-load",
+          "details": {
+            "t": 1768
+          },
+          "harnessMs": 1795.3
+        }
+      ],
+      "phases": {
+        "spawnToAppReady": 638.3,
+        "appReadyToServices": 137,
+        "servicesToI18n": 2,
+        "i18nToOpenWindow": 7,
+        "aclGrantMs": 0,
+        "windowCreatedToLoaded": 982,
+        "totalToWindowCreated": 813.9,
+        "totalToDidFinishLoad": 1795.3
+      }
+    },
+    {
+      "outcome": "ok",
+      "events": [
+        {
+          "event": "before-single-instance-lock",
+          "details": {
+            "version": "1.4.58",
+            "packaged": false,
+            "platform": "win32",
+            "osRelease": "10.0.26200",
+            "userData": "C:\\Users\\jinwo\\AppData\\Local\\Temp\\orca-startup-bench\\userdata-28000",
+            "e2eUserData": true
+          },
+          "harnessMs": 575
+        },
+        {
+          "event": "single-instance-lock-result",
+          "details": {
+            "acquired": true,
+            "bypassed": false,
+            "skippedForDev": true
+          },
+          "harnessMs": 575
+        },
+        {
+          "event": "app-ready",
+          "details": {
+            "t": 584
+          },
+          "harnessMs": 607.5
+        },
+        {
+          "event": "store-loaded",
+          "details": {
+            "t": 589
+          },
+          "harnessMs": 613.1
+        },
+        {
+          "event": "services-initialized",
+          "details": {
+            "t": 724
+          },
+          "harnessMs": 747.2
+        },
+        {
+          "event": "i18n-ready",
+          "details": {
+            "t": 725
+          },
+          "harnessMs": 749
+        },
+        {
+          "event": "open-main-window-start",
+          "details": {
+            "t": 731
+          },
+          "harnessMs": 754.1
+        },
+        {
+          "event": "acl-grant-start",
+          "details": {
+            "t": 731
+          },
+          "harnessMs": 754.1
+        },
+        {
+          "event": "acl-grant-done",
+          "details": {
+            "t": 731,
+            "mode": "marker-hit"
+          },
+          "harnessMs": 754.5
+        },
+        {
+          "event": "window-created",
+          "details": {
+            "t": 757
+          },
+          "harnessMs": 780.3
+        },
+        {
+          "event": "load-start",
+          "details": {
+            "t": 777
+          },
+          "harnessMs": 801
+        },
+        {
+          "event": "ready-to-show",
+          "details": {
+            "t": 1685
+          },
+          "harnessMs": 1708.4
+        },
+        {
+          "event": "did-finish-load",
+          "details": {
+            "t": 1685
+          },
+          "harnessMs": 1708.6
+        }
+      ],
+      "phases": {
+        "spawnToAppReady": 607.5,
+        "appReadyToServices": 140,
+        "servicesToI18n": 1,
+        "i18nToOpenWindow": 6,
+        "aclGrantMs": 0,
+        "windowCreatedToLoaded": 928,
+        "totalToWindowCreated": 780.3,
+        "totalToDidFinishLoad": 1708.6
+      }
+    }
+  ],
+  "summaryMedianMs": {
+    "spawnToAppReady": 638.3,
+    "appReadyToServices": 140,
+    "servicesToI18n": 1,
+    "i18nToOpenWindow": 7,
+    "aclGrantMs": 0,
+    "windowCreatedToLoaded": 982,
+    "totalToWindowCreated": 813.9,
+    "totalToDidFinishLoad": 1795.3
+  }
+}

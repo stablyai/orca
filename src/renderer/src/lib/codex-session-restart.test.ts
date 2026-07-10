@@ -86,6 +86,64 @@ describe('markLiveCodexSessionsForRestart', () => {
     })
   })
 
+  it('marks every live Codex split pane and ignores non-Codex panes', async () => {
+    useAppStore.setState({
+      tabsByWorktree: {
+        wt1: [
+          {
+            id: 'tab-1',
+            ptyId: 'pty-1',
+            worktreeId: 'wt1',
+            title: 'orca-1',
+            customTitle: null,
+            color: null,
+            sortOrder: 0,
+            createdAt: 1
+          },
+          {
+            id: 'tab-2',
+            ptyId: 'pty-3',
+            worktreeId: 'wt1',
+            title: 'orca-2',
+            customTitle: null,
+            color: null,
+            sortOrder: 1,
+            createdAt: 2
+          }
+        ]
+      },
+      ptyIdsByTabId: {
+        'tab-1': ['pty-1', 'pty-2'],
+        'tab-2': ['pty-3']
+      }
+    })
+    vi.mocked(window.api.pty.getForegroundProcess).mockImplementation((ptyId) => {
+      if (ptyId === 'pty-1') {
+        return Promise.resolve('codex')
+      }
+      if (ptyId === 'pty-3') {
+        return Promise.resolve('codex-aarch64-ap')
+      }
+      return Promise.resolve('zsh')
+    })
+
+    await markLiveCodexSessionsForRestart({
+      previousAccountLabel: ACCOUNT_A,
+      nextAccountLabel: ACCOUNT_B
+    })
+
+    expect(useAppStore.getState().codexRestartNoticeByPtyId).toEqual({
+      'pty-1': {
+        previousAccountLabel: ACCOUNT_A,
+        nextAccountLabel: ACCOUNT_B
+      },
+      'pty-3': {
+        previousAccountLabel: ACCOUNT_A,
+        nextAccountLabel: ACCOUNT_B
+      }
+    })
+  })
+
   it('does not mark non-codex foreground processes', async () => {
     vi.mocked(window.api.pty.getForegroundProcess).mockResolvedValue('zsh')
 

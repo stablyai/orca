@@ -12,9 +12,9 @@ export async function createOAuthUsageError(res: Response): Promise<OAuthUsageEr
   return new OAuthUsageError(
     await describeOAuthUsageError(res),
     res.status,
-    // Why: 429 is already the user-visible Claude usage API answer.
-    // Falling through to /usage masks it with Claude 2.1's session-stats UI.
-    res.status === 429
+    // Why: auth/rate-limit responses are already the user-visible usage API
+    // answer. Falling through to /usage can spawn Claude Code needlessly.
+    res.status === 401 || res.status === 403 || res.status === 429
   )
 }
 

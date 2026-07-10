@@ -12,12 +12,16 @@ import type {
   GitHubPRRefreshCandidate,
   GitHubPRRefreshEvent,
   GitHubPRRefreshReason,
+  GitHubCommentResult,
   IssueInfo,
   PRCheckDetail,
+  PRCheckRunDetails,
   PRComment,
   Repo,
   Worktree,
-  GitHubWorkItem
+  GitHubWorkItem,
+  ListWorkItemsResult,
+  GlobalSettings
 } from '../../../../shared/types'
 import type {
   GetProjectViewTableArgs,
@@ -35,11 +39,28 @@ import {
 } from '../../../../shared/work-items'
 import { deriveCheckStatusFromChecks, syncPRChecksStatus } from './github-checks'
 import { callRuntimeRpc, getActiveRuntimeTarget } from '../../runtime/runtime-rpc-client'
+import { getSettingsForRepoRuntimeOwner } from '@/lib/repo-runtime-owner'
+import { settingsForProjectRowOwner } from './github-project-row-owner'
 import { rightSidebarShowsPullRequestData } from '@/lib/right-sidebar-visibility'
 import { hostedReviewInfoFromGitHubPRInfo } from '../../../../shared/hosted-review-github'
 import { getHostedReviewCacheKey, linkedReviewHintKey } from './hosted-review-cache-identity'
 import { getGitHubPRCacheKey, getGitHubRepoCacheKey } from './github-cache-key'
+import { isGitHubWorkItemsQueryTooLarge } from './github-work-items-query-bounds'
 import { isMacAppDataPath } from '@/lib/passive-macos-app-data-access'
+import { translate } from '@/i18n/i18n'
+import {
+  LOCAL_EXECUTION_HOST_ID,
+  getRepoExecutionHostId,
+  getSettingsFocusedExecutionHostId,
+  normalizeExecutionHostId,
+  parseExecutionHostId,
+  type ExecutionHostId
+} from '../../../../shared/execution-host'
+import {
+  getTaskSourceCacheScope,
+  getTaskSourceRuntimeSettings,
+  type TaskSourceContext
+} from '../../../../shared/task-source-context'
 
 // ─── ProjectV2 cache types ────────────────────────────────────────────
 // Why: declared separately from CacheEntry<T> (not a generified E parameter)
@@ -58,6 +79,10 @@ export type ProjectRowContentUpdate = {
   removeLabels?: string[]
   addAssignees?: string[]
   removeAssignees?: string[]
+}
+
+export type GitHubPatchWorkItemOptions = {
+  sourceContext?: TaskSourceContext | null
 }
 
 /** Optimistic, IPC-free patch shape for `projectViewCache` rows.
@@ -105,17 +130,304 @@ function getRuntimeRepoTarget(
   return repo ? { target, repo } : null
 }
 
+function getPRRefreshOwnerRuntimeEnvironmentId(
+  candidate: Pick<GitHubPRRefreshCandidate, 'cacheKey' | 'executionHostId'>
+): string | null {
+  const parsed = parseExecutionHostId(candidate.executionHostId)
+  if (parsed?.kind === 'runtime') {
+    return parsed.environmentId
+  }
+  const cacheScope = candidate.cacheKey.split('::', 1)[0]
+  const cacheScopeHost = parseExecutionHostId(cacheScope)
+  return cacheScopeHost?.kind === 'runtime' ? cacheScopeHost.environmentId : null
+}
+
+function getPRRefreshRuntimeRepoTarget(
+  state: AppState,
+  candidate: GitHubPRRefreshCandidate
+): { target: { kind: 'environment'; environmentId: string }; repo: Repo } | null {
+  const ownerRuntimeEnvironmentId = getPRRefreshOwnerRuntimeEnvironmentId(candidate)
+  if (!ownerRuntimeEnvironmentId) {
+    return null
+  }
+  // Why: PR refreshes must follow the repo owner host, not the Active Server
+  // dropdown. A runtime-owned worktree can be visible while Local desktop is focused.
+  return getRuntimeRepoTarget(
+    state,
+    candidate.repoPath,
+    state.settings
+      ? { ...state.settings, activeRuntimeEnvironmentId: ownerRuntimeEnvironmentId }
+      : ({ activeRuntimeEnvironmentId: ownerRuntimeEnvironmentId } as AppState['settings'])
+  )
+}
+
+function shouldEnqueueLocalPRRefresh(candidate: GitHubPRRefreshCandidate): boolean {
+  // Why: the local PR coordinator owns local git and SSH bridge refreshes, but
+  // runtime-owned repos and disconnected SSH repos must not hit the IPC crash path.
+  if (getPRRefreshOwnerRuntimeEnvironmentId(candidate) !== null) {
+    return false
+  }
+  return !candidate.connectionId || candidate.connectionState === 'connected'
+}
+
+function enqueueLocalGitHubPRRefresh(
+  args: {
+    candidate: GitHubPRRefreshCandidate
+    reason: GitHubPRRefreshReason
+    priority: number
+  },
+  onNotQueued?: () => void | Promise<unknown>
+): void {
+  const enqueue = window.api.gh.enqueuePRRefresh
+  if (!enqueue) {
+    return
+  }
+  // Why: main can reject stale/unknown local paths; renderer refresh triggers
+  // are best-effort and must not become unhandled rejection crash breadcrumbs.
+  void enqueue(args)
+    .then((queued) =>
+      queued === false || queued?.kind === 'fallback' ? onNotQueued?.() : undefined
+    )
+    .catch((err) => {
+      console.warn('Failed to enqueue PR refresh:', err)
+    })
+}
+
+type GitHubWorkItemRequestContext = {
+  repoId: string
+  repoPath: string
+  target: GitHubWorkItemRequestTarget
+}
+
+type GitHubWorkItemRequestTarget =
+  | { kind: 'environment'; environmentId: string; runtimeRepoId: string }
+  | { kind: 'local' }
+
+type GitHubWorkItemsListArgs = {
+  limit: number
+  query?: string
+  before?: string
+  noCache?: true
+}
+
+function settingsForGitHubRepoOwner(
+  settings: AppState['settings'],
+  repo: Pick<Repo, 'connectionId' | 'executionHostId'> | undefined
+): AppState['settings'] {
+  if (!repo) {
+    return settings
+  }
+  const parsed = parseExecutionHostId(getRepoExecutionHostId(repo))
+  if (parsed?.kind === 'runtime') {
+    return settings
+      ? { ...settings, activeRuntimeEnvironmentId: parsed.environmentId }
+      : ({ activeRuntimeEnvironmentId: parsed.environmentId } as AppState['settings'])
+  }
+  // Why: local and SSH-owned GitHub lookups are served by the desktop client;
+  // host focus must not redirect them to the currently selected runtime.
+  return settings
+    ? { ...settings, activeRuntimeEnvironmentId: null }
+    : ({ activeRuntimeEnvironmentId: null } as AppState['settings'])
+}
+
+function settingsForGitHubFocusedRepoOwner(
+  settings: AppState['settings'],
+  repo: Pick<Repo, 'connectionId' | 'executionHostId'> | undefined
+): AppState['settings'] {
+  if (!repo?.executionHostId && !repo?.connectionId) {
+    return settings
+  }
+  return settingsForGitHubRepoOwner(settings, repo)
+}
+
+function getRefreshAliasExecutionHostId(alias: GitHubPRRefreshAlias): string {
+  const explicitHostId = normalizeExecutionHostId(alias.executionHostId)
+  if (explicitHostId) {
+    return explicitHostId
+  }
+  const scope = alias.cacheKey.split('::', 1)[0]
+  return normalizeExecutionHostId(scope) ?? LOCAL_EXECUTION_HOST_ID
+}
+
+function findRepoForGitHubOwner(
+  state: Partial<Pick<AppState, 'repos'>>,
+  repoId: string | undefined,
+  repoPath: string
+): Repo | undefined {
+  return (state.repos ?? []).find((candidate) =>
+    repoId ? candidate.id === repoId || candidate.path === repoPath : candidate.path === repoPath
+  )
+}
+
+function getGitHubFocusedRepoOwnerHostId(
+  settings: AppState['settings'],
+  repo: Pick<Repo, 'connectionId' | 'executionHostId'> | undefined
+): string {
+  if (repo?.executionHostId || repo?.connectionId) {
+    return getRepoExecutionHostId(repo)
+  }
+  return getSettingsFocusedExecutionHostId(settings)
+}
+
+function getWorkItemsCacheKeyForOwner(
+  state: Partial<Pick<AppState, 'repos' | 'settings'>>,
+  repoId: string,
+  limit: number,
+  query: string,
+  repoPath?: string
+): string {
+  const repo = findRepoForGitHubOwner(state, repoId, repoPath ?? '')
+  return workItemsCacheKey(
+    repoId,
+    limit,
+    query,
+    repo ? getGitHubFocusedRepoOwnerHostId(state.settings ?? null, repo) : undefined
+  )
+}
+
+function getGitHubWorkItemSourceHostId(
+  state: AppState,
+  repo: Pick<Repo, 'connectionId' | 'executionHostId'> | undefined,
+  sourceContext?: TaskSourceContext | null
+): ExecutionHostId | undefined {
+  if (sourceContext?.provider === 'github') {
+    return sourceContext.hostId
+  }
+  return repo
+    ? (normalizeExecutionHostId(getGitHubFocusedRepoOwnerHostId(state.settings, repo)) ?? undefined)
+    : undefined
+}
+
+function getGitHubWorkItemSourceCacheScope(
+  state: AppState,
+  repo: Pick<Repo, 'connectionId' | 'executionHostId'> | undefined,
+  sourceContext?: TaskSourceContext | null
+): string | undefined {
+  if (sourceContext?.provider === 'github') {
+    return getTaskSourceCacheScope(sourceContext)
+  }
+  return getGitHubWorkItemSourceHostId(state, repo, sourceContext)
+}
+
+function getGitHubWorkItemSourceSettings(
+  settings: AppState['settings'],
+  repo: Pick<Repo, 'connectionId' | 'executionHostId'> | undefined,
+  sourceContext?: TaskSourceContext | null
+): AppState['settings'] {
+  if (sourceContext?.provider === 'github') {
+    return {
+      ...settings,
+      ...getTaskSourceRuntimeSettings(sourceContext)
+    } as AppState['settings']
+  }
+  return settingsForGitHubFocusedRepoOwner(settings, repo)
+}
+
+function getGitHubRepoSourceSettings(
+  settings: AppState['settings'],
+  repo: Pick<Repo, 'connectionId' | 'executionHostId'> | undefined,
+  sourceContext?: TaskSourceContext | null
+): AppState['settings'] {
+  if (sourceContext?.provider === 'github') {
+    return {
+      ...settings,
+      ...getTaskSourceRuntimeSettings(sourceContext)
+    } as AppState['settings']
+  }
+  return settingsForGitHubRepoOwner(settings, repo)
+}
+
+function getGitHubWorkItemRequestContext(
+  state: AppState,
+  settings: AppState['settings'],
+  repoId: string,
+  repoPath: string,
+  sourceContext?: TaskSourceContext | null
+): GitHubWorkItemRequestContext {
+  if (sourceContext?.provider === 'github') {
+    const parsedHost = parseExecutionHostId(sourceContext.hostId)
+    if (parsedHost?.kind === 'runtime') {
+      return {
+        repoId,
+        repoPath,
+        target: {
+          kind: 'environment',
+          environmentId: parsedHost.environmentId,
+          runtimeRepoId: sourceContext.repoId ?? repoId
+        }
+      }
+    }
+  }
+  const runtimeRepo = getRuntimeRepoTarget(state, repoPath, settings)
+  return {
+    repoId,
+    repoPath,
+    target: runtimeRepo
+      ? {
+          kind: 'environment',
+          environmentId: runtimeRepo.target.environmentId,
+          runtimeRepoId: runtimeRepo.repo.id
+        }
+      : { kind: 'local' }
+  }
+}
+
+function listGitHubWorkItemsForRepo(
+  context: GitHubWorkItemRequestContext,
+  args: GitHubWorkItemsListArgs
+): Promise<ListWorkItemsResult<Omit<GitHubWorkItem, 'repoId'>>> {
+  if (context.target.kind === 'environment') {
+    return callRuntimeRpc<ListWorkItemsResult<Omit<GitHubWorkItem, 'repoId'>>>(
+      { kind: 'environment', environmentId: context.target.environmentId },
+      'github.listWorkItems',
+      {
+        repo: context.target.runtimeRepoId,
+        ...args
+      },
+      { timeoutMs: 30_000 }
+    )
+  }
+  return window.api.gh.listWorkItems({
+    repoPath: context.repoPath,
+    repoId: context.repoId,
+    ...args
+  })
+}
+
+function countGitHubWorkItemsForRepo(
+  context: GitHubWorkItemRequestContext,
+  args: { query?: string }
+): Promise<number> {
+  if (context.target.kind === 'environment') {
+    return callRuntimeRpc<number>(
+      { kind: 'environment', environmentId: context.target.environmentId },
+      'github.countWorkItems',
+      {
+        repo: context.target.runtimeRepoId,
+        ...args
+      },
+      { timeoutMs: 30_000 }
+    )
+  }
+  return window.api.gh.countWorkItems({
+    repoPath: context.repoPath,
+    repoId: context.repoId,
+    ...args
+  })
+}
+
 export function projectViewCacheKey(
   ownerType: GetProjectViewTableArgs['ownerType'],
   owner: string,
   projectNumber: number,
   resolvedViewId: string,
-  queryOverride?: string
+  queryOverride?: string,
+  sourceScope = 'local'
 ): string {
-  return `github-project:${ownerType}:${owner}:${projectNumber}:${resolvedViewId}${queryOverrideKeyPart(queryOverride)}`
+  return `github-project:${sourceScope}:${ownerType}:${owner}:${projectNumber}:${resolvedViewId}${queryOverrideKeyPart(queryOverride)}`
 }
 
-function projectViewRequestKey(args: GetProjectViewTableArgs): string {
+function projectViewRequestKey(args: GetProjectViewTableArgs, sourceScope: string): string {
   // Why: callers without `viewId` can't compute the resolved cache key up
   // front. Use the input-arg signature for inflight dedup; the resolved
   // cache key is only known after the main-process IPC returns.
@@ -126,7 +438,23 @@ function projectViewRequestKey(args: GetProjectViewTableArgs): string {
       : args.viewName
         ? `name:${args.viewName}`
         : 'default'
-  return `${args.ownerType}:${args.owner}:${args.projectNumber}:${selector}${queryOverrideKeyPart(args.queryOverride)}`
+  return `${sourceScope}:${args.ownerType}:${args.owner}:${args.projectNumber}:${selector}${queryOverrideKeyPart(args.queryOverride)}`
+}
+
+function projectViewSourceScope(settings: AppState['settings']): string {
+  const target = getActiveRuntimeTarget(settings)
+  return target.kind === 'environment' ? `runtime:${target.environmentId}` : 'local'
+}
+
+function settingsForProjectViewCacheKey(
+  settings: AppState['settings'],
+  cacheKey: string
+): Pick<NonNullable<AppState['settings']>, 'activeRuntimeEnvironmentId'> {
+  const runtimeMatch = /^github-project:runtime:([^:]+):/.exec(cacheKey)
+  if (runtimeMatch) {
+    return { ...settings, activeRuntimeEnvironmentId: runtimeMatch[1] }
+  }
+  return { ...settings, activeRuntimeEnvironmentId: null }
 }
 
 // Why: module-scope inflight map — must mirror `inflightWorkItemsRequests`
@@ -200,9 +528,8 @@ function optimisticFieldValueFromMutation(
       return { kind: 'number', fieldId, number: value.number }
     case 'date':
       return { kind: 'date', fieldId, date: value.date }
-    default:
-      return null
   }
+  return null
 }
 
 function applyRowPatch(
@@ -272,6 +599,9 @@ function parseSlugAndNumber(
 export type WorkItemsCacheSources = {
   issues: GitHubOwnerRepo | null
   prs: GitHubOwnerRepo | null
+  /** Raw origin remote (if any). Required-nullable so selector code can
+   *  distinguish the raw candidate from the effective PR source. */
+  originCandidate: GitHubOwnerRepo | null
   /** Raw upstream remote (if any) — present so the selector can render
    *  independently of the currently-effective preference. Required-nullable
    *  (matches siblings `issues`/`prs`) so consumers only branch on `null`
@@ -316,13 +646,14 @@ export type CacheEntry<T> = {
 type FetchOptions = {
   force?: boolean
   noCache?: boolean
+  sourceContext?: TaskSourceContext | null
 }
 
 type RepoScopedFetchOptions = FetchOptions & {
   repoId?: string
 }
 
-type PRRefreshState = {
+export type PRRefreshState = {
   status: 'queued' | 'in-flight' | 'paused' | 'skipped' | 'error'
   reason: GitHubPRRefreshReason
   updatedAt: number
@@ -330,12 +661,22 @@ type PRRefreshState = {
   message?: string
 }
 
+export type PRRefreshStateClearToken = {
+  sequence: number
+  status: PRRefreshState['status']
+  updatedAt: number
+}
+
+const PR_REFRESH_ACTIVE_STALE_MS = 120_000
+const PR_REFRESH_PAUSED_GRACE_MS = 5_000
+
 function bypassesGitHubPRRefreshFreshness(reason: GitHubPRRefreshReason): boolean {
   return reason === 'manual' || reason === 'active' || reason === 'post-push'
 }
 
 const CACHE_TTL = 300_000 // 5 minutes (stale data shown instantly, then refreshed)
 const CHECKS_CACHE_TTL = 60_000 // 1 minute — checks change more frequently
+const EMPTY_CHECKS_CACHE_TTL = 10_000
 // Why: the NewWorkspace page's work-item list is a browse surface, not a
 // source of truth, so 60s staleness is fine — stale data renders instantly
 // while a background refresh keeps it current.
@@ -350,7 +691,12 @@ const inflightPRRequests = new Map<
   { promise: Promise<PRInfo | null>; force: boolean; generation: number; lookupHintKey: string }
 >()
 const inflightIssueRequests = new Map<string, Promise<IssueInfo | null>>()
-const inflightChecksRequests = new Map<string, Promise<PRCheckDetail[]>>()
+type InflightChecks = {
+  promise: Promise<PRCheckDetail[]>
+  force: boolean
+  noCache: boolean
+}
+const inflightChecksRequests = new Map<string, InflightChecks>()
 const inflightCommentsRequests = new Map<string, Promise<PRComment[]>>()
 type InflightWorkItems = {
   promise: Promise<GitHubWorkItem[]>
@@ -363,6 +709,22 @@ const prRefreshStartedHostedReviewEntries = new Map<
   string,
   AppState['hostedReviewCache'][string] | undefined
 >()
+const PR_REFRESH_STARTED_HOSTED_REVIEW_ENTRY_MAX = 128
+
+/** @internal - exposed for leak-regression tests only */
+export function _getGitHubPRRequestGenerationCountForTest(): number {
+  return prRequestGenerations.size
+}
+
+/** @internal - exposed for leak-regression tests only */
+export function _getGitHubPRRefreshStartedEntryCountForTest(): number {
+  return prRefreshStartedHostedReviewEntries.size
+}
+
+/** @internal - exposed for leak-regression tests only */
+export function _clearGitHubPRRefreshStartedEntriesForTest(): void {
+  prRefreshStartedHostedReviewEntries.clear()
+}
 
 // Why: cap in-flight cross-repo fan-out and hover-prefetches at the renderer
 // boundary — the main-side gate is behind the IPC queue, so it can't see a
@@ -393,12 +755,48 @@ function releaseWorkItemSlot(): void {
   workItemFetchInFlight -= 1
 }
 
-export function workItemsCacheKey(repoId: string, limit: number, query: string): string {
-  return `${repoId}::${limit}::${query}`
+export function workItemsCacheKey(
+  repoId: string,
+  limit: number,
+  query: string,
+  executionHostId?: string | null
+): string {
+  const scope = executionHostId?.trim() ?? ''
+  const hostId = normalizeExecutionHostId(scope)
+  const owner = `${repoId}::${limit}::${query}`
+  if (hostId) {
+    return hostId !== LOCAL_EXECUTION_HOST_ID ? `${hostId}::${owner}` : owner
+  }
+  return scope ? `${scope}::${owner}` : owner
 }
 
-function repoScopedCacheKey(repoPath: string, repoId: string | undefined, suffix: string): string {
-  return `${repoId ?? repoPath}::${suffix}`
+function workItemsInflightRequestKey(
+  cacheKey: string,
+  target: GitHubWorkItemRequestTarget
+): string {
+  const targetPart =
+    target.kind === 'environment' ? `env:${target.environmentId}:${target.runtimeRepoId}` : 'local'
+  return `${cacheKey}::${targetPart}`
+}
+
+export function issueCacheKey(
+  repoPath: string,
+  repoId: string | undefined,
+  issueNumber: number | string,
+  settings?: Pick<GlobalSettings, 'activeRuntimeEnvironmentId'> | null,
+  connectionId?: string | null,
+  executionHostId?: string | null,
+  hasRepoOwner = false
+): string {
+  return getGitHubRepoCacheKey(
+    repoPath,
+    repoId,
+    String(issueNumber),
+    settings,
+    connectionId,
+    executionHostId,
+    hasRepoOwner
+  )
 }
 
 function runtimeScopedRepoCacheKey(
@@ -406,9 +804,43 @@ function runtimeScopedRepoCacheKey(
   repoId: string | undefined,
   suffix: string,
   settings?: AppState['settings'],
-  connectionId?: string | null
+  connectionId?: string | null,
+  executionHostId?: string | null,
+  hasRepoOwner = false
 ): string {
-  return getGitHubRepoCacheKey(repoPath, repoId, suffix, settings, connectionId)
+  return getGitHubRepoCacheKey(
+    repoPath,
+    repoId,
+    suffix,
+    settings,
+    connectionId,
+    executionHostId,
+    hasRepoOwner
+  )
+}
+
+function sourceScopedRepoCacheKey(
+  repoPath: string,
+  repoId: string | undefined,
+  suffix: string,
+  settings?: AppState['settings'],
+  connectionId?: string | null,
+  executionHostId?: string | null,
+  sourceContext?: TaskSourceContext | null,
+  hasRepoOwner = false
+): string {
+  if (sourceContext?.provider === 'github') {
+    return `${getTaskSourceCacheScope(sourceContext)}::${repoId ?? repoPath}::${suffix}`
+  }
+  return runtimeScopedRepoCacheKey(
+    repoPath,
+    repoId,
+    suffix,
+    settings,
+    connectionId,
+    executionHostId,
+    hasRepoOwner
+  )
 }
 
 function prCacheKey(
@@ -416,9 +848,19 @@ function prCacheKey(
   repoId: string | undefined,
   branch: string,
   settings?: AppState['settings'],
-  connectionId?: string | null
+  connectionId?: string | null,
+  executionHostId?: string | null,
+  hasRepoOwner = false
 ): string {
-  return getGitHubPRCacheKey(repoPath, repoId, branch, settings, connectionId)
+  return getGitHubPRCacheKey(
+    repoPath,
+    repoId,
+    branch,
+    settings,
+    connectionId,
+    executionHostId,
+    hasRepoOwner
+  )
 }
 
 function repoCacheKeyPrefixes(repoId: string, repoPath?: string): string[] {
@@ -487,6 +929,47 @@ export function prCommentsCacheSuffix(prNumber: number, prRepo?: GitHubOwnerRepo
   return `pr-comments::${normalizedRepoIdentity(prRepo)}::${prNumber}`
 }
 
+function commentTimestamp(comment: PRComment): number {
+  const timestamp = new Date(comment.createdAt).getTime()
+  return Number.isFinite(timestamp) ? timestamp : 0
+}
+
+export function mergePRCommentIntoList(
+  comments: readonly PRComment[] | null | undefined,
+  incoming: PRComment
+): PRComment[] {
+  const byId = new Map<number, PRComment>()
+  for (const comment of comments ?? []) {
+    byId.set(comment.id, comment)
+  }
+  const previous = byId.get(incoming.id)
+  byId.set(incoming.id, {
+    ...previous,
+    ...incoming,
+    threadId: incoming.threadId ?? previous?.threadId,
+    path: incoming.path ?? previous?.path,
+    line: incoming.line ?? previous?.line,
+    startLine: incoming.startLine ?? previous?.startLine,
+    isResolved: incoming.isResolved ?? previous?.isResolved,
+    isOutdated: incoming.isOutdated ?? previous?.isOutdated
+  })
+  return Array.from(byId.values()).sort((a, b) => commentTimestamp(a) - commentTimestamp(b))
+}
+
+function hasUsableCommentPayload(result: GitHubCommentResult): result is {
+  ok: true
+  comment: PRComment
+} {
+  return (
+    result.ok &&
+    typeof result.comment?.id === 'number' &&
+    Number.isSafeInteger(result.comment.id) &&
+    result.comment.id > 0 &&
+    typeof result.comment.body === 'string' &&
+    typeof result.comment.createdAt === 'string'
+  )
+}
+
 // Why: 500 entries is generous enough that active developers will never hit it
 // during normal use, but prevents the cache from growing without bound across
 // many repos and branches over a long-running session.
@@ -497,6 +980,10 @@ function isFresh<T>(entry: CacheEntry<T> | undefined, ttl = CACHE_TTL): entry is
   return entry !== undefined && Date.now() - entry.fetchedAt < ttl
 }
 
+function getPRChecksCacheTtl(entry: CacheEntry<PRCheckDetail[]> | undefined): number {
+  return entry?.data?.length === 0 ? EMPTY_CHECKS_CACHE_TTL : CHECKS_CACHE_TTL
+}
+
 function findWorktreeById(state: AppState, worktreeId: string): Worktree | null {
   for (const worktrees of Object.values(state.worktreesByRepo)) {
     const worktree = worktrees.find((w) => w.id === worktreeId)
@@ -505,6 +992,55 @@ function findWorktreeById(state: AppState, worktreeId: string): Worktree | null 
     }
   }
   return null
+}
+
+function isStaleExactLinkedPRLookup(
+  state: AppState,
+  worktreeId: string | undefined,
+  linkedPRNumber: number | null | undefined
+): boolean {
+  if (!worktreeId || linkedPRNumber == null) {
+    return false
+  }
+  return findWorktreeById(state, worktreeId)?.linkedPR !== linkedPRNumber
+}
+
+function shouldClearDivergedLinkedMergedPR(args: {
+  pr: PRInfo | null
+  linkedPRNumber: number | null
+  requestHeadOid: string | null
+}): boolean {
+  const { pr, linkedPRNumber, requestHeadOid } = args
+  return (
+    linkedPRNumber != null &&
+    requestHeadOid !== null &&
+    pr?.number === linkedPRNumber &&
+    pr.state === 'merged' &&
+    // Head-scoped: only clear the worktree whose exact head diverged, so a
+    // PR-number-coalesced refresh broadcast cannot clear a sibling worktree that
+    // is still on the PR's line of work.
+    pr.headDivergedFromMergedPRAtOid === requestHeadOid &&
+    pr.headSha !== requestHeadOid &&
+    pr.confirmedContainedHeadOid !== requestHeadOid
+  )
+}
+
+function shouldApplyDivergedLinkedPRClear(args: {
+  worktree: Pick<Worktree, 'linkedPR' | 'branch' | 'head' | 'isBare' | 'isArchived'> | undefined
+  linkedPRNumber: number
+  branch: string
+  requestHeadOid: string | null
+}): boolean {
+  const { worktree, linkedPRNumber, branch, requestHeadOid } = args
+  return (
+    Boolean(worktree) &&
+    requestHeadOid !== null &&
+    worktree?.linkedPR === linkedPRNumber &&
+    worktree.branch.replace(/^refs\/heads\//, '') === branch &&
+    worktree.head === requestHeadOid &&
+    worktree.isBare !== true &&
+    worktree.isArchived !== true
+  )
 }
 
 function buildPRRefreshCandidate(
@@ -524,19 +1060,34 @@ function buildPRRefreshCandidate(
     repoPath ?? repo.path,
     repo.id,
     branch,
-    state.settings,
-    repo.connectionId
+    settingsForGitHubRepoOwner(state.settings, repo),
+    repo.connectionId,
+    repo.executionHostId,
+    true
   )
+  const cachedPR = state.prCache[cacheKey]?.data ?? null
   const hostedReviewFallbackPRNumber = githubHostedReviewFallbackPRNumber(
     state,
     repoPath ?? repo.path,
     repo.id,
     branch,
-    repo.connectionId
+    repo.connectionId,
+    repo.executionHostId,
+    true
   )
-  const cachedFallbackPRNumber = state.prCache[cacheKey]?.data?.number ?? null
+  const cachedFallbackPRNumber = cachedPR?.number ?? null
+  // Why: a merged PR stays a valid fallback when the worktree sits on its head or
+  // on a commit confirmed to be part of the PR; anything else means the branch
+  // moved on and the number must not resurrect the old merged PR.
+  const cachedMergedPRMovedPastHead =
+    worktree.linkedPR == null &&
+    cachedPR?.state === 'merged' &&
+    cachedPR.headSha !== worktree.head &&
+    cachedPR.confirmedContainedHeadOid !== worktree.head
   const fallbackPRNumber =
-    worktree.linkedPR == null ? (cachedFallbackPRNumber ?? hostedReviewFallbackPRNumber) : null
+    worktree.linkedPR == null && !cachedMergedPRMovedPastHead
+      ? (cachedFallbackPRNumber ?? hostedReviewFallbackPRNumber)
+      : null
   const fallbackPRSource: GitHubPRFallbackSource | null =
     worktree.linkedPR != null || fallbackPRNumber == null
       ? null
@@ -553,6 +1104,7 @@ function buildPRRefreshCandidate(
     branch,
     cacheKey,
     worktreeId: worktree.id,
+    currentHeadOid: worktree.head ?? null,
     // Why: persisted linked PR metadata is exact, while PR cache numbers are
     // only fallback hints after branch lookup misses.
     linkedPRNumber: worktree.linkedPR ?? null,
@@ -561,15 +1113,18 @@ function buildPRRefreshCandidate(
     isBare: worktree.isBare,
     isArchived: worktree.isArchived,
     connectionId: repo.connectionId ?? null,
+    executionHostId: repo.executionHostId ?? null,
     connectionState: repo.connectionId
       ? sshStatus === 'connected'
         ? 'connected'
         : 'disconnected'
       : 'unknown',
     cachedFetchedAt: state.prCache[cacheKey]?.fetchedAt ?? null,
-    cachedHasPR: state.prCache[cacheKey]?.data ? true : state.prCache[cacheKey] ? false : null,
-    cachedPRState: state.prCache[cacheKey]?.data?.state ?? null,
-    cachedChecksStatus: state.prCache[cacheKey]?.data?.checksStatus ?? null
+    cachedHasPR: cachedPR ? true : state.prCache[cacheKey] ? false : null,
+    cachedPRState: cachedPR?.state ?? null,
+    cachedChecksStatus: cachedPR?.checksStatus ?? null,
+    cachedMergeable: cachedPR?.mergeable ?? null,
+    cachedMergeStateStatus: cachedPR?.mergeStateStatus ?? null
   }
 }
 
@@ -578,14 +1133,18 @@ function githubHostedReviewFallbackPRNumber(
   repoPath: string,
   repoId: string | undefined,
   branch: string,
-  connectionId?: string | null
+  connectionId?: string | null,
+  executionHostId?: string | null,
+  hasRepoOwner = false
 ): number | null {
   const hostedReviewCacheKey = getHostedReviewCacheKey(
     repoPath,
     branch,
     state.settings,
     repoId,
-    connectionId
+    connectionId,
+    executionHostId,
+    hasRepoOwner
   )
   const hostedReview = state.hostedReviewCache[hostedReviewCacheKey]?.data
   return hostedReview?.provider === 'github' ? hostedReview.number : null
@@ -648,11 +1207,14 @@ function syncHostedReviewCacheFromGitHubPRResult(args: {
   settings: AppState['settings']
   repoId?: string
   connectionId?: string | null
+  executionHostId?: string | null
+  hasRepoOwner?: boolean
   pr: PRInfo | null
   fetchedAt: number
   linkedPRNumber?: number | null
   fallbackPRNumber?: number | null
   fallbackPRSource?: GitHubPRFallbackSource | null
+  preserveExistingPRForFallbackMiss?: boolean
   requestStartedAt?: number
   requestStartedEntry?: AppState['hostedReviewCache'][string]
 }): { cache: AppState['hostedReviewCache']; accepted: boolean } {
@@ -661,7 +1223,9 @@ function syncHostedReviewCacheFromGitHubPRResult(args: {
     args.branch,
     args.settings,
     args.repoId,
-    args.connectionId
+    args.connectionId,
+    args.executionHostId,
+    args.hasRepoOwner === true
   )
   if (
     args.requestStartedAt !== undefined &&
@@ -685,13 +1249,17 @@ function syncHostedReviewCacheFromGitHubPRResult(args: {
   if (args.pr && hostedReviewEntry?.data && hostedReviewEntry.data.provider !== 'github') {
     return { cache: args.cache, accepted: false }
   }
+  // Why: a hosted-review row may only protect itself from an authoritative
+  // miss when the paired PR cache is preserving a terminal, head-current PR.
   if (
     !args.pr &&
     args.linkedPRNumber == null &&
     args.fallbackPRNumber != null &&
     args.fallbackPRSource !== 'hosted-review' &&
     hostedReviewEntry?.data?.provider === 'github' &&
-    hostedReviewEntry.data.number === args.fallbackPRNumber
+    hostedReviewEntry.data.number === args.fallbackPRNumber &&
+    args.preserveExistingPRForFallbackMiss === true &&
+    canPreserveReviewForFallbackMiss(hostedReviewEntry.data.state)
   ) {
     return { cache: args.cache, accepted: false }
   }
@@ -734,24 +1302,36 @@ function shouldWritePRCacheForHostedReviewSync(args: {
   )
 }
 
+function canPreserveReviewForFallbackMiss(state: PRInfo['state'] | undefined): boolean {
+  return state === 'closed' || state === 'merged'
+}
+
 function shouldPreserveExistingPRForFallbackMiss(args: {
   currentPR: PRInfo | null | undefined
   nextPR: PRInfo | null
+  state: AppState
+  worktreeId?: string
   linkedPRNumber?: number | null
   fallbackPRNumber?: number | null
   fallbackPRSource?: GitHubPRFallbackSource | null
 }): boolean {
-  // Why: fallback PR numbers come from already-visible cache, not durable
-  // worktree metadata. A branch/fallback miss is weaker than the current exact
-  // PR context, except when the fallback is the hosted-review entry being
-  // refreshed; that entry must not protect itself from exact misses.
-  return (
+  const worktree = args.worktreeId ? findWorktreeById(args.state, args.worktreeId) : null
+  const worktreeHead = worktree?.head
+  // Why: merged branch PRs are only safe to keep when cached PR metadata still
+  // matches the commit this stored worktree is actually on — exactly, or via a
+  // head confirmed to be part of the merged PR.
+  const preservesMergedPRForCurrentHead =
     args.nextPR === null &&
     args.linkedPRNumber == null &&
-    args.fallbackPRNumber != null &&
-    args.fallbackPRSource !== 'hosted-review' &&
-    args.currentPR?.number === args.fallbackPRNumber
-  )
+    args.currentPR?.state === 'merged' &&
+    typeof args.currentPR.headSha === 'string' &&
+    args.currentPR.headSha.length > 0 &&
+    typeof worktreeHead === 'string' &&
+    worktreeHead.length > 0 &&
+    (args.currentPR.headSha === worktreeHead ||
+      args.currentPR.confirmedContainedHeadOid === worktreeHead)
+
+  return preservesMergedPRForCurrentHead
 }
 
 function applyPRCacheResult(
@@ -766,7 +1346,7 @@ function applyPRCacheResult(
     return cache
   }
   if (accepted) {
-    return { ...cache, [cacheKey]: { data: pr, fetchedAt } }
+    return withBoundedCacheEntry(cache, cacheKey, { data: pr, fetchedAt })
   }
   if (!cache[cacheKey]) {
     return cache
@@ -780,6 +1360,31 @@ function prRefreshStartedEntryKey(sequence: number, cacheKey: string): string {
   return `${sequence}::${cacheKey}`
 }
 
+function deletePRRefreshStartedEntry(sequence: number | undefined, cacheKey: string): void {
+  if (sequence !== undefined && sequence > 0) {
+    prRefreshStartedHostedReviewEntries.delete(prRefreshStartedEntryKey(sequence, cacheKey))
+  }
+}
+
+function setPRRefreshStartedHostedReviewEntry(
+  key: string,
+  entry: AppState['hostedReviewCache'][string] | undefined
+): void {
+  if (entry === undefined) {
+    prRefreshStartedHostedReviewEntries.delete(key)
+    return
+  }
+  prRefreshStartedHostedReviewEntries.delete(key)
+  prRefreshStartedHostedReviewEntries.set(key, entry)
+  while (prRefreshStartedHostedReviewEntries.size > PR_REFRESH_STARTED_HOSTED_REVIEW_ENTRY_MAX) {
+    const oldest = prRefreshStartedHostedReviewEntries.keys().next()
+    if (oldest.done) {
+      return
+    }
+    prRefreshStartedHostedReviewEntries.delete(oldest.value)
+  }
+}
+
 function setGitHubPRResultCaches(
   state: AppState,
   args: {
@@ -789,8 +1394,11 @@ function setGitHubPRResultCaches(
     settings: AppState['settings']
     repoId?: string
     connectionId?: string | null
+    executionHostId?: string | null
+    hasRepoOwner?: boolean
     pr: PRInfo | null
     fetchedAt: number
+    worktreeId?: string
     linkedPRNumber?: number | null
     fallbackPRNumber?: number | null
     fallbackPRSource?: GitHubPRFallbackSource | null
@@ -798,6 +1406,15 @@ function setGitHubPRResultCaches(
     requestStartedEntry?: AppState['hostedReviewCache'][string]
   }
 ): Partial<AppState> {
+  const preserveExistingPRForFallbackMiss = shouldPreserveExistingPRForFallbackMiss({
+    currentPR: state.prCache[args.prCacheKey]?.data,
+    nextPR: args.pr,
+    state,
+    worktreeId: args.worktreeId,
+    linkedPRNumber: args.linkedPRNumber,
+    fallbackPRNumber: args.fallbackPRNumber,
+    fallbackPRSource: args.fallbackPRSource
+  })
   const hostedReviewSync = syncHostedReviewCacheFromGitHubPRResult({
     cache: state.hostedReviewCache,
     repoPath: args.repoPath,
@@ -805,11 +1422,14 @@ function setGitHubPRResultCaches(
     settings: args.settings,
     repoId: args.repoId,
     connectionId: args.connectionId,
+    executionHostId: args.executionHostId,
+    hasRepoOwner: args.hasRepoOwner,
     pr: args.pr,
     fetchedAt: args.fetchedAt,
     linkedPRNumber: args.linkedPRNumber,
     fallbackPRNumber: args.fallbackPRNumber,
     fallbackPRSource: args.fallbackPRSource,
+    preserveExistingPRForFallbackMiss,
     requestStartedAt: args.requestStartedAt,
     requestStartedEntry: args.requestStartedEntry
   })
@@ -818,29 +1438,26 @@ function setGitHubPRResultCaches(
     args.branch,
     args.settings,
     args.repoId,
-    args.connectionId
+    args.connectionId,
+    args.executionHostId,
+    args.hasRepoOwner === true
+  )
+  const nextPRCache = applyPRCacheResult(
+    state.prCache,
+    args.prCacheKey,
+    args.pr,
+    args.fetchedAt,
+    shouldWritePRCacheForHostedReviewSync({
+      hostedReviewSyncAccepted: hostedReviewSync.accepted,
+      hostedReviewEntry: state.hostedReviewCache[hostedReviewCacheKey],
+      pr: args.pr,
+      linkedPRNumber: args.linkedPRNumber,
+      fallbackPRNumber: args.fallbackPRNumber
+    }),
+    preserveExistingPRForFallbackMiss
   )
   return {
-    prCache: applyPRCacheResult(
-      state.prCache,
-      args.prCacheKey,
-      args.pr,
-      args.fetchedAt,
-      shouldWritePRCacheForHostedReviewSync({
-        hostedReviewSyncAccepted: hostedReviewSync.accepted,
-        hostedReviewEntry: state.hostedReviewCache[hostedReviewCacheKey],
-        pr: args.pr,
-        linkedPRNumber: args.linkedPRNumber,
-        fallbackPRNumber: args.fallbackPRNumber
-      }),
-      shouldPreserveExistingPRForFallbackMiss({
-        currentPR: state.prCache[args.prCacheKey]?.data,
-        nextPR: args.pr,
-        linkedPRNumber: args.linkedPRNumber,
-        fallbackPRNumber: args.fallbackPRNumber,
-        fallbackPRSource: args.fallbackPRSource
-      })
-    ),
+    ...(nextPRCache === state.prCache ? {} : { prCache: nextPRCache }),
     ...(hostedReviewSync.cache === state.hostedReviewCache
       ? {}
       : { hostedReviewCache: hostedReviewSync.cache })
@@ -856,8 +1473,12 @@ function applyGitHubPRResultToCaches(args: {
   settings: AppState['settings']
   repoId?: string
   connectionId?: string | null
+  executionHostId?: string | null
+  hasRepoOwner?: boolean
   pr: PRInfo | null
   fetchedAt: number
+  state: AppState
+  worktreeId?: string
   linkedPRNumber?: number | null
   fallbackPRNumber?: number | null
   fallbackPRSource?: GitHubPRFallbackSource | null
@@ -867,6 +1488,15 @@ function applyGitHubPRResultToCaches(args: {
   prCache: AppState['prCache']
   hostedReviewCache: AppState['hostedReviewCache']
 } {
+  const preserveExistingPRForFallbackMiss = shouldPreserveExistingPRForFallbackMiss({
+    currentPR: args.prCache[args.prCacheKey]?.data,
+    nextPR: args.pr,
+    state: args.state,
+    worktreeId: args.worktreeId,
+    linkedPRNumber: args.linkedPRNumber,
+    fallbackPRNumber: args.fallbackPRNumber,
+    fallbackPRSource: args.fallbackPRSource
+  })
   const hostedReviewSync = syncHostedReviewCacheFromGitHubPRResult({
     cache: args.hostedReviewCache,
     repoPath: args.repoPath,
@@ -874,11 +1504,14 @@ function applyGitHubPRResultToCaches(args: {
     settings: args.settings,
     repoId: args.repoId,
     connectionId: args.connectionId,
+    executionHostId: args.executionHostId,
+    hasRepoOwner: args.hasRepoOwner,
     pr: args.pr,
     fetchedAt: args.fetchedAt,
     linkedPRNumber: args.linkedPRNumber,
     fallbackPRNumber: args.fallbackPRNumber,
     fallbackPRSource: args.fallbackPRSource,
+    preserveExistingPRForFallbackMiss,
     requestStartedAt: args.requestStartedAt,
     requestStartedEntry: args.requestStartedEntry
   })
@@ -887,7 +1520,9 @@ function applyGitHubPRResultToCaches(args: {
     args.branch,
     args.settings,
     args.repoId,
-    args.connectionId
+    args.connectionId,
+    args.executionHostId,
+    args.hasRepoOwner === true
   )
   return {
     prCache: applyPRCacheResult(
@@ -902,13 +1537,7 @@ function applyGitHubPRResultToCaches(args: {
         linkedPRNumber: args.linkedPRNumber,
         fallbackPRNumber: args.fallbackPRNumber
       }),
-      shouldPreserveExistingPRForFallbackMiss({
-        currentPR: args.prCache[args.prCacheKey]?.data,
-        nextPR: args.pr,
-        linkedPRNumber: args.linkedPRNumber,
-        fallbackPRNumber: args.fallbackPRNumber,
-        fallbackPRSource: args.fallbackPRSource
-      })
+      preserveExistingPRForFallbackMiss
     ),
     hostedReviewCache: hostedReviewSync.cache
   }
@@ -918,10 +1547,10 @@ function applyGitHubPRResultToCaches(args: {
  * Evict the oldest entries from a cache record when it exceeds the max size.
  * Returns a pruned copy, or the original reference if no eviction was needed.
  */
-function evictStaleEntries<T>(
-  cache: Record<string, CacheEntry<T>>,
+function evictStaleEntries<T extends { fetchedAt: number }>(
+  cache: Record<string, T>,
   maxEntries = MAX_CACHE_ENTRIES
-): Record<string, CacheEntry<T>> {
+): Record<string, T> {
   const keys = Object.keys(cache)
   if (keys.length <= maxEntries) {
     return cache
@@ -930,11 +1559,176 @@ function evictStaleEntries<T>(
     .map((k) => ({ key: k, fetchedAt: cache[k].fetchedAt }))
     .sort((a, b) => b.fetchedAt - a.fetchedAt)
   const keep = new Set(sorted.slice(0, maxEntries).map((e) => e.key))
-  const pruned: Record<string, CacheEntry<T>> = {}
+  const pruned: Record<string, T> = {}
   for (const k of keep) {
     pruned[k] = cache[k]
   }
   return pruned
+}
+
+function withBoundedCacheEntry<T extends { fetchedAt: number }>(
+  cache: Record<string, T>,
+  key: string,
+  entry: T
+): Record<string, T> {
+  return evictStaleEntries({ ...cache, [key]: entry })
+}
+
+// Why: the prRefresh* maps are keyed by PR cache key (repo/branch/execution-host)
+// — an ephemeral, unbounded key space over a long session. They have no
+// `fetchedAt` to sort by, so bound them by insertion order (oldest-touched keys
+// evicted first; the writers move each touched key to the end). An evicted
+// long-idle branch simply restarts from a clean state, which is acceptable.
+function capRecordByInsertionOrder<T>(
+  record: Record<string, T>,
+  maxEntries = MAX_CACHE_ENTRIES
+): Record<string, T> {
+  const keys = Object.keys(record)
+  if (keys.length <= maxEntries) {
+    return record
+  }
+  const capped: Record<string, T> = {}
+  for (const key of keys.slice(keys.length - maxEntries)) {
+    capped[key] = record[key]
+  }
+  return capped
+}
+
+function capPrRefreshSequences(
+  sequences: Record<string, number>,
+  maxEntries = MAX_CACHE_ENTRIES
+): Record<string, number> {
+  return capRecordByInsertionOrder(sequences, maxEntries)
+}
+
+// Why: prRefreshStates backs visible status pills (refreshing/queued/paused/error)
+// so — unlike the invisible sequence guard — eviction must never drop an in-progress
+// indicator. Bound it well above any realistic tracked-branch count, and when over
+// cap evict *settled* statuses (error/skipped) first; only fall back to evicting an
+// active (in-flight/queued/paused) entry as a last-resort hard memory bound that
+// realistic usage never reaches. Evicted entries self-heal on the next refresh event.
+const MAX_PR_REFRESH_STATE_ENTRIES = 2000
+const SETTLED_PR_REFRESH_STATUSES = new Set<PRRefreshState['status']>(['error', 'skipped'])
+const ACTIVE_PR_REFRESH_STATUSES = new Set<PRRefreshState['status']>([
+  'queued',
+  'in-flight',
+  'paused'
+])
+
+function isPRRefreshStateExpired(state: PRRefreshState, now: number): boolean {
+  const expiryAt = getGitHubPRRefreshStateExpiryAt(state)
+  return expiryAt !== null && now > expiryAt
+}
+
+/**
+ * Captures the exact refresh snapshot a later timeout or request is allowed to clear.
+ */
+export function buildGitHubPRRefreshStateClearToken(
+  state: PRRefreshState | undefined,
+  sequences: Record<string, number>,
+  cacheKey: string
+): PRRefreshStateClearToken | null {
+  if (!state) {
+    return null
+  }
+  return {
+    sequence: sequences[cacheKey] ?? 0,
+    status: state.status,
+    updatedAt: state.updatedAt
+  }
+}
+
+/**
+ * Returns the wall-clock expiry for transient refresh states; settled states persist.
+ */
+export function getGitHubPRRefreshStateExpiryAt(state: PRRefreshState | undefined): number | null {
+  if (!state) {
+    return null
+  }
+  if (state.status === 'queued' || state.status === 'in-flight') {
+    return Number.isFinite(state.updatedAt) ? state.updatedAt + PR_REFRESH_ACTIVE_STALE_MS : 0
+  }
+  if (state.status === 'paused') {
+    return Number.isFinite(state.pausedUntil)
+      ? (state.pausedUntil ?? 0) + PR_REFRESH_PAUSED_GRACE_MS
+      : 0
+  }
+  return null
+}
+
+function isExpiredActivePRRefreshState(state: PRRefreshState, now: number): boolean {
+  return ACTIVE_PR_REFRESH_STATUSES.has(state.status) && isPRRefreshStateExpired(state, now)
+}
+
+/**
+ * Reads refresh state for UI selectors while hiding stale active entries from view.
+ */
+export function getEffectiveGitHubPRRefreshState(
+  states: Record<string, PRRefreshState>,
+  cacheKey: string,
+  now = Date.now()
+): PRRefreshState | undefined {
+  const state = states[cacheKey]
+  if (!state || isExpiredActivePRRefreshState(state, now)) {
+    return undefined
+  }
+  return state
+}
+
+function pruneExpiredPRRefreshStates(
+  states: Record<string, PRRefreshState>,
+  now = Date.now()
+): Record<string, PRRefreshState> {
+  let next: Record<string, PRRefreshState> | null = null
+  for (const [cacheKey, state] of Object.entries(states)) {
+    if (!isExpiredActivePRRefreshState(state, now)) {
+      continue
+    }
+    if (!next) {
+      next = { ...states }
+    }
+    delete next[cacheKey]
+  }
+  return next ?? states
+}
+
+function capPrRefreshStates(
+  states: Record<string, PRRefreshState>,
+  maxEntries = MAX_PR_REFRESH_STATE_ENTRIES
+): Record<string, PRRefreshState> {
+  const keys = Object.keys(states)
+  let toEvict = keys.length - maxEntries
+  if (toEvict <= 0) {
+    return states
+  }
+  const evicted = new Set<string>()
+  // First pass: evict oldest settled (error/skipped) entries.
+  for (const key of keys) {
+    if (toEvict === 0) {
+      break
+    }
+    if (SETTLED_PR_REFRESH_STATUSES.has(states[key].status)) {
+      evicted.add(key)
+      toEvict--
+    }
+  }
+  // Last resort: evict oldest remaining keys to enforce the hard bound.
+  for (const key of keys) {
+    if (toEvict === 0) {
+      break
+    }
+    if (!evicted.has(key)) {
+      evicted.add(key)
+      toEvict--
+    }
+  }
+  const capped: Record<string, PRRefreshState> = {}
+  for (const key of keys) {
+    if (!evicted.has(key)) {
+      capped[key] = states[key]
+    }
+  }
+  return capped
 }
 
 function shouldRefreshIssueDecorations(state: AppState): boolean {
@@ -975,6 +1769,7 @@ export type GitHubSlice = {
     repoPath: string,
     branch: string,
     options?: RepoScopedFetchOptions & {
+      worktreeId?: string
       linkedPRNumber?: number | null
       fallbackPRNumber?: number | null
       fallbackPRSource?: GitHubPRFallbackSource | null
@@ -993,11 +1788,40 @@ export type GitHubSlice = {
     prRepo?: GitHubOwnerRepo | null,
     options?: RepoScopedFetchOptions
   ) => Promise<PRCheckDetail[]>
+  fetchPRCheckDetails: (
+    repoPath: string,
+    args: {
+      checkRunId?: number
+      workflowRunId?: number
+      checkName?: string
+      url?: string | null
+      prRepo?: GitHubOwnerRepo | null
+    },
+    options?: RepoScopedFetchOptions
+  ) => Promise<PRCheckRunDetails | null>
   fetchPRComments: (
     repoPath: string,
     prNumber: number,
     options?: RepoScopedFetchOptions & { prRepo?: GitHubOwnerRepo | null }
   ) => Promise<PRComment[]>
+  addPRConversationComment: (
+    repoPath: string,
+    prNumber: number,
+    body: string,
+    options?: RepoScopedFetchOptions & { prRepo?: GitHubOwnerRepo | null }
+  ) => Promise<GitHubCommentResult>
+  addPRReviewCommentReply: (
+    repoPath: string,
+    prNumber: number,
+    commentId: number,
+    body: string,
+    options?: RepoScopedFetchOptions & {
+      prRepo?: GitHubOwnerRepo | null
+      threadId?: string
+      path?: string
+      line?: number
+    }
+  ) => Promise<GitHubCommentResult>
   resolveReviewThread: (
     repoPath: string,
     prNumber: number,
@@ -1017,12 +1841,24 @@ export type GitHubSlice = {
   reportVisibleGitHubPRRefreshCandidates: (worktreeIds: string[], generation: number) => void
   bumpGitHubPRVisibleRefreshGeneration: () => void
   applyGitHubPRRefreshEvent: (event: GitHubPRRefreshEvent) => void
+  getEffectiveGitHubPRRefreshState: (cacheKey: string, now?: number) => PRRefreshState | undefined
+  expireGitHubPRRefreshState: (
+    cacheKey: string,
+    token: PRRefreshStateClearToken,
+    now?: number
+  ) => void
   /**
    * Why: returns cached work items immediately (null if none) and fires a
    * background refresh when stale. Callers can render the cached list while
    * the SWR revalidate hydrates the latest.
    */
-  getCachedWorkItems: (repoId: string, limit: number, query: string) => GitHubWorkItem[] | null
+  getCachedWorkItems: (
+    repoId: string,
+    limit: number,
+    query: string,
+    repoPath?: string,
+    sourceContext?: TaskSourceContext | null
+  ) => GitHubWorkItem[] | null
   /**
    * Why: the Tasks view header reads sources from the cache to render the
    * "Issues from owner/repo" indicator, and the Tasks empty/partial banner
@@ -1034,7 +1870,8 @@ export type GitHubSlice = {
   getWorkItemsSourcesAndError: (
     repoId: string,
     limit: number,
-    query: string
+    query: string,
+    repoPath?: string
   ) => { sources: WorkItemsCacheSources | null; error: WorkItemsCacheError | null }
   /**
    * Why: the dialog renders the "Issue from owner/repo" chip for a single work
@@ -1051,7 +1888,11 @@ export type GitHubSlice = {
    * mutated) on every write, so reference equality is preserved between
    * unchanged entries.
    */
-  getWorkItemsAnySourcesForRepo: (repoId: string, limit: number) => WorkItemsCacheSources | null
+  getWorkItemsAnySourcesForRepo: (
+    repoId: string,
+    limit: number,
+    repoPath?: string
+  ) => WorkItemsCacheSources | null
   fetchWorkItems: (
     repoId: string,
     repoPath: string,
@@ -1068,7 +1909,12 @@ export type GitHubSlice = {
    * the single-repo behavior of quietly serving stale data.
    */
   fetchWorkItemsAcrossRepos: (
-    repos: { repoId: string; path: string }[],
+    repos: {
+      repoId: string
+      path: string
+      executionHostId?: string | null
+      sourceContext?: TaskSourceContext | null
+    }[],
     perRepoLimit: number,
     displayLimit: number,
     query: string,
@@ -1079,7 +1925,12 @@ export type GitHubSlice = {
    * pagination pages are ephemeral and managed by TaskPage state.
    */
   fetchWorkItemsNextPage: (
-    repos: { repoId: string; path: string }[],
+    repos: {
+      repoId: string
+      path: string
+      executionHostId?: string | null
+      sourceContext?: TaskSourceContext | null
+    }[],
     perRepoLimit: number,
     displayLimit: number,
     query: string,
@@ -1090,15 +1941,31 @@ export type GitHubSlice = {
    * Returns the sum of per-repo counts for the given query.
    */
   countWorkItemsAcrossRepos: (
-    repos: { repoId: string; path: string }[],
+    repos: {
+      repoId: string
+      path: string
+      executionHostId?: string | null
+      sourceContext?: TaskSourceContext | null
+    }[],
     query: string
   ) => Promise<number>
   /**
    * Fire-and-forget prefetch used by UI entry points (hover/focus of the
    * "new workspace" buttons) to warm the cache before the page mounts.
    */
-  prefetchWorkItems: (repoId: string, repoPath: string, limit?: number, query?: string) => void
-  patchWorkItem: (itemId: string, patch: Partial<GitHubWorkItem>, repoId?: string | null) => void
+  prefetchWorkItems: (
+    repoId: string,
+    repoPath: string,
+    limit?: number,
+    query?: string,
+    options?: { sourceContext?: TaskSourceContext | null }
+  ) => void
+  patchWorkItem: (
+    itemId: string,
+    patch: Partial<GitHubWorkItem>,
+    repoId?: string | null,
+    options?: GitHubPatchWorkItemOptions
+  ) => void
   /**
    * Monotonic counter bumped whenever a repo's issue-source preference is
    * flipped. Subscribers (TaskPage's fetch effect) include this in their
@@ -1172,8 +2039,44 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
   workItemsInvalidationNonce: 0,
   projectViewCache: {},
 
+  getEffectiveGitHubPRRefreshState: (cacheKey, now) =>
+    getEffectiveGitHubPRRefreshState(get().prRefreshStates, cacheKey, now),
+
+  expireGitHubPRRefreshState: (cacheKey, token, now = Date.now()) => {
+    const currentState = get()
+    const currentRefreshState = currentState.prRefreshStates[cacheKey]
+    if (
+      !currentRefreshState ||
+      !ACTIVE_PR_REFRESH_STATUSES.has(currentRefreshState.status) ||
+      !isExpiredActivePRRefreshState(currentRefreshState, now) ||
+      (currentState.prRefreshSequences[cacheKey] ?? 0) !== token.sequence ||
+      currentRefreshState.status !== token.status ||
+      currentRefreshState.updatedAt !== token.updatedAt
+    ) {
+      return
+    }
+    set((s) => {
+      const state = s.prRefreshStates[cacheKey]
+      if (
+        !state ||
+        !ACTIVE_PR_REFRESH_STATUSES.has(state.status) ||
+        !isExpiredActivePRRefreshState(state, now) ||
+        (s.prRefreshSequences[cacheKey] ?? 0) !== token.sequence ||
+        state.status !== token.status ||
+        state.updatedAt !== token.updatedAt
+      ) {
+        return s
+      }
+      const nextStates = { ...s.prRefreshStates }
+      delete nextStates[cacheKey]
+      return { prRefreshStates: nextStates }
+    })
+  },
+
   fetchProjectViewTable: async (args, options) => {
-    const requestKey = projectViewRequestKey(args)
+    const target = getActiveRuntimeTarget(get().settings)
+    const sourceScope = projectViewSourceScope(get().settings)
+    const requestKey = projectViewRequestKey(args, sourceScope)
 
     // Fast path: when the caller supplies `viewId`, we already know the
     // resolved cache key and can serve a fresh entry directly.
@@ -1183,7 +2086,8 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
           args.owner,
           args.projectNumber,
           args.viewId,
-          args.queryOverride
+          args.queryOverride,
+          sourceScope
         )
       : null
     if (!options?.force && maybeKnownKey) {
@@ -1208,7 +2112,6 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
     const request = (async (): Promise<GetProjectViewTableResult> => {
       await acquireWorkItemSlot()
       try {
-        const target = getActiveRuntimeTarget(get().settings)
         const envelope =
           target.kind === 'environment'
             ? await callRuntimeRpc<GetProjectViewTableResult>(
@@ -1225,27 +2128,25 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
             table.project.owner,
             table.project.number,
             table.selectedView.id,
-            args.queryOverride
+            args.queryOverride,
+            sourceScope
           )
           set((s) => ({
-            projectViewCache: {
-              ...s.projectViewCache,
-              [key]: { data: table, fetchedAt: Date.now() }
-            }
+            projectViewCache: withBoundedCacheEntry(s.projectViewCache, key, {
+              data: table,
+              fetchedAt: Date.now()
+            })
           }))
         } else if (maybeKnownKey) {
           // Only stamp the error onto the cache when we have a resolved key
           // (i.e. caller supplied viewId). Otherwise we have nowhere to write
           // it — the renderer classifies the error directly from the envelope.
           set((s) => ({
-            projectViewCache: {
-              ...s.projectViewCache,
-              [maybeKnownKey]: {
-                data: s.projectViewCache[maybeKnownKey]?.data ?? null,
-                fetchedAt: Date.now(),
-                error: envelope.error
-              }
-            }
+            projectViewCache: withBoundedCacheEntry(s.projectViewCache, maybeKnownKey, {
+              data: s.projectViewCache[maybeKnownKey]?.data ?? null,
+              fetchedAt: Date.now(),
+              error: envelope.error
+            })
           }))
         }
         return envelope
@@ -1281,14 +2182,20 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
     if (!table) {
       return {
         ok: false,
-        error: { type: 'unknown', message: 'Project view not loaded' }
+        error: {
+          type: 'unknown',
+          message: translate('auto.store.slices.github.a967f23983', 'Project view not loaded')
+        }
       }
     }
     const rowIndex = table.rows.findIndex((r) => r.id === rowId)
     if (rowIndex === -1) {
       return {
         ok: false,
-        error: { type: 'unknown', message: 'Row not found' }
+        error: {
+          type: 'unknown',
+          message: translate('auto.store.slices.github.f963485d37', 'Row not found')
+        }
       }
     }
     const previousRow = table.rows[rowIndex]
@@ -1304,7 +2211,7 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
     }
     applyRowPatch(set, cacheKey, rowId, optimisticRow)
 
-    const target = getActiveRuntimeTarget(get().settings)
+    const target = getActiveRuntimeTarget(settingsForProjectViewCacheKey(get().settings, cacheKey))
     const result =
       target.kind === 'environment'
         ? await callRuntimeRpc<GitHubProjectMutationResult>(
@@ -1337,14 +2244,20 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
     if (!table) {
       return {
         ok: false,
-        error: { type: 'unknown', message: 'Project view not loaded' }
+        error: {
+          type: 'unknown',
+          message: translate('auto.store.slices.github.a967f23983', 'Project view not loaded')
+        }
       }
     }
     const rowIndex = table.rows.findIndex((r) => r.id === rowId)
     if (rowIndex === -1) {
       return {
         ok: false,
-        error: { type: 'unknown', message: 'Row not found' }
+        error: {
+          type: 'unknown',
+          message: translate('auto.store.slices.github.f963485d37', 'Row not found')
+        }
       }
     }
     const previousRow = table.rows[rowIndex]
@@ -1356,7 +2269,7 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
     }
     applyRowPatch(set, cacheKey, rowId, optimisticRow)
 
-    const target = getActiveRuntimeTarget(get().settings)
+    const target = getActiveRuntimeTarget(settingsForProjectViewCacheKey(get().settings, cacheKey))
     const result =
       target.kind === 'environment'
         ? await callRuntimeRpc<GitHubProjectMutationResult>(
@@ -1387,14 +2300,20 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
     if (!table) {
       return {
         ok: false,
-        error: { type: 'unknown', message: 'Project view not loaded' }
+        error: {
+          type: 'unknown',
+          message: translate('auto.store.slices.github.a967f23983', 'Project view not loaded')
+        }
       }
     }
     const rowIndex = table.rows.findIndex((r) => r.id === rowId)
     if (rowIndex === -1) {
       return {
         ok: false,
-        error: { type: 'unknown', message: 'Row not found' }
+        error: {
+          type: 'unknown',
+          message: translate('auto.store.slices.github.f963485d37', 'Row not found')
+        }
       }
     }
     const previousRow = table.rows[rowIndex]
@@ -1404,7 +2323,10 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
         ok: false,
         error: {
           type: 'validation_error',
-          message: 'Row has no owner/repo/number — cannot patch underlying item'
+          message: translate(
+            'auto.store.slices.github.87020f6605',
+            'Row has no owner/repo/number — cannot patch underlying item'
+          )
         }
       }
     }
@@ -1448,7 +2370,16 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
     // PRs goes through updatePullRequestBySlug; for issues through
     // updateIssueBySlug. We dispatch both as needed.
     let envelope: GitHubProjectMutationResult = { ok: true }
-    const target = getActiveRuntimeTarget(get().settings)
+    // Why: Project rows may be slug-only and have no registered Orca repo.
+    // Fall back to the view source encoded in the cache key, not focused host.
+    const target = getActiveRuntimeTarget(
+      settingsForProjectRowOwner(
+        get(),
+        owner,
+        repo,
+        settingsForProjectViewCacheKey(get().settings, cacheKey)
+      )
+    )
     if (
       previousRow.itemType === 'PULL_REQUEST' &&
       (updates.title !== undefined || updates.body !== undefined)
@@ -1521,23 +2452,44 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
     const entry = state.projectViewCache[cacheKey]
     const table = entry?.data
     if (!table) {
-      return { ok: false, error: { type: 'unknown', message: 'Project view not loaded' } }
+      return {
+        ok: false,
+        error: {
+          type: 'unknown',
+          message: translate('auto.store.slices.github.a967f23983', 'Project view not loaded')
+        }
+      }
     }
     const row = table.rows.find((r) => r.id === rowId)
     if (!row) {
-      return { ok: false, error: { type: 'unknown', message: 'Row not found' } }
+      return {
+        ok: false,
+        error: {
+          type: 'unknown',
+          message: translate('auto.store.slices.github.f963485d37', 'Row not found')
+        }
+      }
     }
     if (row.itemType !== 'ISSUE') {
       return {
         ok: false,
-        error: { type: 'validation_error', message: 'Issue Type can only be set on Issues.' }
+        error: {
+          type: 'validation_error',
+          message: translate(
+            'auto.store.slices.github.83f9b126ad',
+            'Issue Type can only be set on Issues.'
+          )
+        }
       }
     }
     const { owner, repo, number } = parseSlugAndNumber(row) ?? {}
     if (!owner || !repo || !number) {
       return {
         ok: false,
-        error: { type: 'validation_error', message: 'Row has no owner/repo/number.' }
+        error: {
+          type: 'validation_error',
+          message: translate('auto.store.slices.github.683a21264b', 'Row has no owner/repo/number.')
+        }
       }
     }
     const previousRow = row
@@ -1546,7 +2498,16 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
       content: { ...previousRow.content, issueType }
     }
     applyRowPatch(set, cacheKey, rowId, optimistic)
-    const target = getActiveRuntimeTarget(get().settings)
+    // Why: slug-only Project rows still belong to the source host that loaded
+    // the view; focused host may have changed after the table was fetched.
+    const target = getActiveRuntimeTarget(
+      settingsForProjectRowOwner(
+        get(),
+        owner,
+        repo,
+        settingsForProjectViewCacheKey(get().settings, cacheKey)
+      )
+    )
     const args = {
       owner,
       repo,
@@ -1610,13 +2571,23 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
     applyRowPatch(set, cacheKey, rowId, nextRow)
   },
 
-  getCachedWorkItems: (repoId, limit, query) => {
-    const key = workItemsCacheKey(repoId, limit, query)
+  getCachedWorkItems: (repoId, limit, query, repoPath, sourceContext) => {
+    if (isGitHubWorkItemsQueryTooLarge(query)) {
+      return null
+    }
+    const state = get()
+    const key =
+      sourceContext?.provider === 'github'
+        ? workItemsCacheKey(repoId, limit, query, getTaskSourceCacheScope(sourceContext))
+        : getWorkItemsCacheKeyForOwner(state, repoId, limit, query, repoPath)
     return get().workItemsCache[key]?.data ?? null
   },
 
-  getWorkItemsSourcesAndError: (repoId, limit, query) => {
-    const key = workItemsCacheKey(repoId, limit, query)
+  getWorkItemsSourcesAndError: (repoId, limit, query, repoPath) => {
+    if (isGitHubWorkItemsQueryTooLarge(query)) {
+      return { sources: null, error: null }
+    }
+    const key = getWorkItemsCacheKeyForOwner(get(), repoId, limit, query, repoPath)
     const entry = get().workItemsCache[key]
     return {
       sources: entry?.sources ?? null,
@@ -1624,14 +2595,14 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
     }
   },
 
-  getWorkItemsAnySourcesForRepo: (repoId, limit) => {
+  getWorkItemsAnySourcesForRepo: (repoId, limit, repoPath) => {
     const cache = get().workItemsCache
-    const primaryKey = workItemsCacheKey(repoId, limit, '')
+    const primaryKey = getWorkItemsCacheKeyForOwner(get(), repoId, limit, '', repoPath)
     const primary = cache[primaryKey]?.sources
     if (primary) {
       return primary
     }
-    const prefix = `${repoId}::`
+    const prefix = primaryKey
     for (const [key, entry] of Object.entries(cache)) {
       if (key.startsWith(prefix) && entry.sources) {
         return entry.sources
@@ -1641,13 +2612,34 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
   },
 
   fetchWorkItems: async (repoId, repoPath, limit, query, options): Promise<GitHubWorkItem[]> => {
-    const key = workItemsCacheKey(repoId, limit, query)
+    if (isGitHubWorkItemsQueryTooLarge(query)) {
+      return []
+    }
+    const requestState = get()
+    const repo = findRepoForGitHubOwner(requestState, repoId, repoPath)
+    const requestSettings = getGitHubWorkItemSourceSettings(
+      requestState.settings,
+      repo,
+      options?.sourceContext
+    )
+    const ownerHostId = getGitHubWorkItemSourceHostId(requestState, repo, options?.sourceContext)
+    const cacheScope = getGitHubWorkItemSourceCacheScope(requestState, repo, options?.sourceContext)
+    const key = workItemsCacheKey(repoId, limit, query, cacheScope)
     const cached = get().workItemsCache[key]
     if (!options?.force && isFresh(cached, WORK_ITEMS_CACHE_TTL)) {
       return cached.data ?? []
     }
 
-    const existing = inflightWorkItemsRequests.get(key)
+    const requestInvalidationNonce = requestState.workItemsInvalidationNonce
+    const requestContext = getGitHubWorkItemRequestContext(
+      requestState,
+      requestSettings,
+      repoId,
+      repoPath,
+      options?.sourceContext
+    )
+    const inflightKey = workItemsInflightRequestKey(key, requestContext.target)
+    const existing = inflightWorkItemsRequests.get(inflightKey)
     if (existing) {
       // Why: a user-initiated refresh (force=true) must not silently dedupe to
       // a less-fresh fetch already in flight. noCache=true is stricter than a
@@ -1662,9 +2654,7 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
     const request = (async () => {
       await acquireWorkItemSlot()
       try {
-        const envelope = await window.api.gh.listWorkItems({
-          repoPath,
-          repoId,
+        const envelope = await listGitHubWorkItemsForRepo(requestContext, {
           limit,
           query: query || undefined,
           ...(options?.noCache ? { noCache: true } : {})
@@ -1692,17 +2682,31 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
           issuesError && envelope.sources.issues
             ? { ...issuesError, source: envelope.sources.issues }
             : undefined
+        const currentRepo = findRepoForGitHubOwner(get(), repoId, repoPath)
+        const currentHostId = getGitHubWorkItemSourceHostId(
+          get(),
+          currentRepo,
+          options?.sourceContext
+        )
+        // Why: host focus changes are allowed, but repo ownership changes mean
+        // this response belongs to an older execution host bucket.
+        if ((currentHostId ?? null) !== (ownerHostId ?? null)) {
+          return items
+        }
+        // Why: clearing in-flight entries lets the next fetch start, but the
+        // old promise can still settle. Do not let pre-flip source data
+        // repopulate the cache after the invalidation nonce changes.
+        if (get().workItemsInvalidationNonce !== requestInvalidationNonce) {
+          return items
+        }
         set((s) => ({
-          workItemsCache: {
-            ...s.workItemsCache,
-            [key]: {
-              data: items,
-              fetchedAt: Date.now(),
-              sources: envelope.sources,
-              ...(errorForCache ? { error: errorForCache } : {}),
-              ...(envelope.issueSourceFellBack ? { issueSourceFellBack: true } : {})
-            }
-          }
+          workItemsCache: withBoundedCacheEntry(s.workItemsCache, key, {
+            data: items,
+            fetchedAt: Date.now(),
+            sources: envelope.sources,
+            ...(errorForCache ? { error: errorForCache } : {}),
+            ...(envelope.issueSourceFellBack ? { issueSourceFellBack: true } : {})
+          })
         }))
         return items
       } catch (err) {
@@ -1714,11 +2718,11 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
         throw err
       } finally {
         releaseWorkItemSlot()
-        inflightWorkItemsRequests.delete(key)
+        inflightWorkItemsRequests.delete(inflightKey)
       }
     })()
 
-    inflightWorkItemsRequests.set(key, {
+    inflightWorkItemsRequests.set(inflightKey, {
       promise: request,
       force: Boolean(options?.force),
       noCache: Boolean(options?.noCache)
@@ -1727,12 +2731,18 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
   },
 
   fetchWorkItemsAcrossRepos: async (repos, perRepoLimit, displayLimit, query, options) => {
+    if (isGitHubWorkItemsQueryTooLarge(query)) {
+      return { items: [], failedCount: 0 }
+    }
     const state = get()
     let failedCount = 0
     const perProjectResults = await Promise.all(
       repos.map(async (r) => {
         try {
-          return await state.fetchWorkItems(r.repoId, r.path, perRepoLimit, query, options)
+          return await state.fetchWorkItems(r.repoId, r.path, perRepoLimit, query, {
+            ...options,
+            sourceContext: r.sourceContext ?? options?.sourceContext
+          })
         } catch (err) {
           // Why: fall back to any cache entry (stale or not) before declaring
           // this repo failed. Matches single-repo behavior of silently serving
@@ -1743,7 +2753,15 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
           if (isGitHubWorkItemsSshRemoteRequiredError(err)) {
             return [] as GitHubWorkItem[]
           }
-          const key = workItemsCacheKey(r.repoId, perRepoLimit, query)
+          const key =
+            r.sourceContext?.provider === 'github'
+              ? workItemsCacheKey(
+                  r.repoId,
+                  perRepoLimit,
+                  query,
+                  getTaskSourceCacheScope(r.sourceContext)
+                )
+              : getWorkItemsCacheKeyForOwner(get(), r.repoId, perRepoLimit, query, r.path)
           const cached = get().workItemsCache[key]?.data
           if (cached) {
             console.warn(`[workItems] ${r.repoId} failed, serving cached:`, err)
@@ -1760,14 +2778,29 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
   },
 
   fetchWorkItemsNextPage: async (repos, perRepoLimit, displayLimit, query, before) => {
+    if (isGitHubWorkItemsQueryTooLarge(query)) {
+      return { items: [], failedCount: 0 }
+    }
     let failedCount = 0
     const perProjectResults = await Promise.all(
       repos.map(async (r) => {
+        const requestState = get()
+        const repo = findRepoForGitHubOwner(requestState, r.repoId, r.path)
+        const requestSettings = getGitHubWorkItemSourceSettings(
+          requestState.settings,
+          repo,
+          r.sourceContext
+        )
+        const requestContext = getGitHubWorkItemRequestContext(
+          requestState,
+          requestSettings,
+          r.repoId,
+          r.path,
+          r.sourceContext
+        )
         await acquireWorkItemSlot()
         try {
-          const envelope = await window.api.gh.listWorkItems({
-            repoPath: r.path,
-            repoId: r.repoId,
+          const envelope = await listGitHubWorkItemsForRepo(requestContext, {
             limit: perRepoLimit,
             query: query || undefined,
             before
@@ -1803,31 +2836,71 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
   },
 
   countWorkItemsAcrossRepos: async (repos, query) => {
+    if (isGitHubWorkItemsQueryTooLarge(query)) {
+      return 0
+    }
     const counts = await Promise.all(
       repos.map(async (r) => {
+        // Why: same stampede cap as the item-fetch paths — without a slot,
+        // a 90-repo selection dispatches 90 concurrent count IPCs before the
+        // main-side rate-limit guard can see the first 403.
+        await acquireWorkItemSlot()
         try {
-          return await window.api.gh.countWorkItems({
-            repoPath: r.path,
-            repoId: r.repoId,
-            query: query || undefined
-          })
+          const requestState = get()
+          const repo = findRepoForGitHubOwner(requestState, r.repoId, r.path)
+          const requestSettings = getGitHubWorkItemSourceSettings(
+            requestState.settings,
+            repo,
+            r.sourceContext
+          )
+          const requestContext = getGitHubWorkItemRequestContext(
+            requestState,
+            requestSettings,
+            r.repoId,
+            r.path,
+            r.sourceContext
+          )
+          return await countGitHubWorkItemsForRepo(requestContext, { query: query || undefined })
         } catch {
           return 0
+        } finally {
+          releaseWorkItemSlot()
         }
       })
     )
     return counts.reduce((sum, c) => sum + c, 0)
   },
 
-  prefetchWorkItems: (repoId, repoPath, limit = PER_REPO_FETCH_LIMIT, query = '') => {
-    const key = workItemsCacheKey(repoId, limit, query)
+  prefetchWorkItems: (repoId, repoPath, limit = PER_REPO_FETCH_LIMIT, query = '', options) => {
+    if (isGitHubWorkItemsQueryTooLarge(query)) {
+      return
+    }
+    const requestState = get()
+    const repo = findRepoForGitHubOwner(requestState, repoId, repoPath)
+    const key =
+      options?.sourceContext?.provider === 'github'
+        ? workItemsCacheKey(repoId, limit, query, getTaskSourceCacheScope(options.sourceContext))
+        : getWorkItemsCacheKeyForOwner(requestState, repoId, limit, query, repoPath)
     const cached = get().workItemsCache[key]
+    const requestSettings = getGitHubWorkItemSourceSettings(
+      requestState.settings,
+      repo,
+      options?.sourceContext
+    )
+    const requestContext = getGitHubWorkItemRequestContext(
+      requestState,
+      requestSettings,
+      repoId,
+      repoPath,
+      options?.sourceContext
+    )
+    const inflightKey = workItemsInflightRequestKey(key, requestContext.target)
     // Skip when the cache is fresh or a request is already in flight.
-    if (isFresh(cached, WORK_ITEMS_CACHE_TTL) || inflightWorkItemsRequests.has(key)) {
+    if (isFresh(cached, WORK_ITEMS_CACHE_TTL) || inflightWorkItemsRequests.has(inflightKey)) {
       return
     }
     void get()
-      .fetchWorkItems(repoId, repoPath, limit, query)
+      .fetchWorkItems(repoId, repoPath, limit, query, { sourceContext: options?.sourceContext })
       .catch(() => {})
   },
 
@@ -1836,8 +2909,8 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
       const persisted = await window.api.cache.getGitHub()
       if (persisted) {
         set({
-          prCache: persisted.pr || {},
-          issueCache: persisted.issue || {}
+          prCache: evictStaleEntries(persisted.pr || {}),
+          issueCache: evictStaleEntries(persisted.issue || {})
         })
       }
     } catch (err) {
@@ -1850,15 +2923,25 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
       options?.repoId ? candidate.id === options.repoId : candidate.path === repoPath
     )
     const repoId = options?.repoId ?? repo?.id
-    const requestSettings = get().settings
-    const cacheKey = prCacheKey(repoPath, repoId, branch, requestSettings, repo?.connectionId)
+    const requestSettings = settingsForGitHubRepoOwner(get().settings, repo)
+    const cacheKey = prCacheKey(
+      repoPath,
+      repoId,
+      branch,
+      requestSettings,
+      repo?.connectionId,
+      repo?.executionHostId,
+      repo !== undefined
+    )
     const cached = get().prCache[cacheKey]
     const hostedReviewCacheKey = getHostedReviewCacheKey(
       repoPath,
       branch,
       requestSettings,
       repoId,
-      repo?.connectionId
+      repo?.connectionId,
+      repo?.executionHostId,
+      repo !== undefined
     )
     // Why: if a prior caller without a linkedPR cached `null` for this branch,
     // the worktree-card lookup (which has a linked PR fallback) would otherwise
@@ -1871,7 +2954,9 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
       repoPath,
       repoId,
       branch,
-      repo?.connectionId
+      repo?.connectionId,
+      repo?.executionHostId,
+      repo !== undefined
     )
     const fallbackPRNumber =
       linkedPRNumber == null ? (explicitFallbackPRNumber ?? hostedReviewFallbackPRNumber) : null
@@ -1884,6 +2969,38 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
     const linkedRefetch =
       cached?.data === null && (linkedPRNumber !== null || fallbackPRNumber !== null)
     if (!options?.force && !linkedRefetch && isFresh(cached)) {
+      // Why: a fresh cache hit still carries the head-scoped divergence signal.
+      // If a prior clear was declined because the head moved mid-request and the
+      // worktree is now back on that diverged head, clear the durable link the
+      // cache would otherwise keep serving until it expires.
+      if (
+        options?.worktreeId &&
+        linkedPRNumber != null &&
+        cached?.data?.headDivergedFromMergedPRAtOid != null
+      ) {
+        const currentHeadOid = findWorktreeById(get(), options.worktreeId)?.head ?? null
+        if (
+          shouldClearDivergedLinkedMergedPR({
+            pr: cached.data,
+            linkedPRNumber,
+            requestHeadOid: currentHeadOid
+          })
+        ) {
+          void get().updateWorktreeMeta(
+            options.worktreeId,
+            { linkedPR: null },
+            {
+              shouldApply: (worktree) =>
+                shouldApplyDivergedLinkedPRClear({
+                  worktree,
+                  linkedPRNumber,
+                  branch,
+                  requestHeadOid: currentHeadOid
+                })
+            }
+          )
+        }
+      }
       return cached.data
     }
 
@@ -1900,11 +3017,21 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
     const generation = (prRequestGenerations.get(cacheKey) ?? 0) + 1
     const requestStartedAt = Date.now()
     const requestStartedHostedReviewEntry = get().hostedReviewCache[hostedReviewCacheKey]
+    const requestStartedPRRefreshState = get().prRefreshStates[cacheKey]
+    const requestStartedPRRefreshToken = buildGitHubPRRefreshStateClearToken(
+      requestStartedPRRefreshState,
+      get().prRefreshSequences,
+      cacheKey
+    )
     prRequestGenerations.set(cacheKey, generation)
 
     const request = (async () => {
       try {
         const runtimeRepo = getRuntimeRepoTarget(get(), repoPath, requestSettings)
+        const candidateWorktree = options?.worktreeId
+          ? findWorktreeById(get(), options.worktreeId)
+          : null
+        const requestHeadOid = candidateWorktree?.head ?? null
         const outcome = runtimeRepo
           ? await callRuntimeRpc<PRInfo | null>(
               runtimeRepo.target,
@@ -1913,7 +3040,10 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
                 repo: runtimeRepo.repo.id,
                 branch,
                 linkedPRNumber,
-                ...(fallbackPRNumber !== null ? { fallbackPRNumber } : {})
+                currentHeadOid: requestHeadOid,
+                ...(fallbackPRNumber !== null
+                  ? { fallbackPRNumber, acceptMergedFallbackPR: fallbackPRSource !== null }
+                  : {})
               },
               { timeoutMs: 30_000 }
             ).then((pr) =>
@@ -1928,16 +3058,33 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
                 repoKind: repo?.kind ?? 'git',
                 branch,
                 cacheKey,
+                worktreeId: options?.worktreeId,
+                currentHeadOid: requestHeadOid,
                 linkedPRNumber,
                 fallbackPRNumber,
                 fallbackPRSource,
                 connectionId: repo?.connectionId ?? null,
-                cachedFetchedAt: cached?.fetchedAt ?? null
+                executionHostId: repo?.executionHostId ?? null,
+                cachedFetchedAt: cached?.fetchedAt ?? null,
+                cachedHasPR: cached?.data ? true : cached ? false : null,
+                cachedPRState: cached?.data?.state ?? null,
+                cachedChecksStatus: cached?.data?.checksStatus ?? null,
+                cachedMergeable: cached?.data?.mergeable ?? null,
+                cachedMergeStateStatus: cached?.data?.mergeStateStatus ?? null
               }
               return window.api.gh.refreshPRNow
                 ? await window.api.gh.refreshPRNow({ candidate })
                 : await window.api.gh
-                    .prForBranch({ repoPath, repoId, branch, linkedPRNumber, fallbackPRNumber })
+                    .prForBranch({
+                      repoPath,
+                      repoId,
+                      branch,
+                      linkedPRNumber,
+                      fallbackPRNumber,
+                      acceptMergedFallbackPR:
+                        fallbackPRNumber !== null && fallbackPRSource !== null,
+                      currentHeadOid: requestHeadOid
+                    })
                     .then((pr) =>
                       pr
                         ? ({ kind: 'found', pr, fetchedAt: Date.now() } as const)
@@ -1950,29 +3097,70 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
           return cached?.data ?? null
         }
         if (prRequestGenerations.get(cacheKey) === generation) {
-          set((s) =>
-            setGitHubPRResultCaches(s, {
+          let skippedStaleLinkedPRLookup = false
+          let didUpdatePRCache = false
+          set((s) => {
+            // Why: unlinking a PR while an exact linked-PR lookup is in flight
+            // must prevent that older result from restoring the manual link UI.
+            if (isStaleExactLinkedPRLookup(s, options?.worktreeId, linkedPRNumber)) {
+              skippedStaleLinkedPRLookup = true
+              return {}
+            }
+            const updates = setGitHubPRResultCaches(s, {
               prCacheKey: cacheKey,
               repoPath,
               branch,
               settings: requestSettings,
               repoId,
               connectionId: repo?.connectionId,
+              executionHostId: repo?.executionHostId,
+              hasRepoOwner: repo !== undefined,
               pr,
               fetchedAt: outcome.fetchedAt,
+              worktreeId: options?.worktreeId,
               linkedPRNumber,
               fallbackPRNumber,
               fallbackPRSource,
               requestStartedAt,
               requestStartedEntry: requestStartedHostedReviewEntry
             })
-          )
-          debouncedSaveCache(get())
+            didUpdatePRCache = updates.prCache !== undefined
+            return updates
+          })
+          if (skippedStaleLinkedPRLookup) {
+            return null
+          }
+          if (didUpdatePRCache) {
+            debouncedSaveCache(get())
+          }
+          if (
+            options?.worktreeId &&
+            linkedPRNumber != null &&
+            shouldClearDivergedLinkedMergedPR({ pr, linkedPRNumber, requestHeadOid })
+          ) {
+            // Why: only clear the durable link that produced this exact probe;
+            // branch/head drift means the stale result no longer owns the worktree.
+            void get().updateWorktreeMeta(
+              options.worktreeId,
+              { linkedPR: null },
+              {
+                shouldApply: (worktree) =>
+                  shouldApplyDivergedLinkedPRClear({
+                    worktree,
+                    linkedPRNumber,
+                    branch,
+                    requestHeadOid
+                  })
+              }
+            )
+          }
         }
         if (
           shouldPreserveExistingPRForFallbackMiss({
             currentPR: get().prCache[cacheKey]?.data,
             nextPR: pr,
+            state: get(),
+            worktreeId: options?.worktreeId,
             linkedPRNumber,
             fallbackPRNumber,
             fallbackPRSource
@@ -1988,6 +3176,12 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
         const activeRequest = inflightPRRequests.get(cacheKey)
         if (activeRequest?.generation === generation) {
           inflightPRRequests.delete(cacheKey)
+          if (prRequestGenerations.get(cacheKey) === generation) {
+            prRequestGenerations.delete(cacheKey)
+          }
+        }
+        if (requestStartedPRRefreshToken) {
+          get().expireGitHubPRRefreshState(cacheKey, requestStartedPRRefreshToken)
         }
       }
     })()
@@ -2002,8 +3196,23 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
   },
 
   fetchIssue: async (repoPath, number, options) => {
-    const repoId = options?.repoId ?? get().repos?.find((repo) => repo.path === repoPath)?.id
-    const cacheKey = repoScopedCacheKey(repoPath, repoId, String(number))
+    const repo = findRepoForGitHubOwner(get(), options?.repoId, repoPath)
+    const repoId = options?.repoId ?? repo?.id
+    const requestSettings = getGitHubRepoSourceSettings(
+      get().settings,
+      repo,
+      options?.sourceContext
+    )
+    const cacheKey = sourceScopedRepoCacheKey(
+      repoPath,
+      repoId,
+      String(number),
+      requestSettings,
+      repo?.connectionId,
+      repo?.executionHostId,
+      options?.sourceContext,
+      repo !== undefined
+    )
     const cached = get().issueCache[cacheKey]
     if (isFresh(cached)) {
       return cached.data
@@ -2016,16 +3225,42 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
 
     const request = (async () => {
       try {
-        const issue = await window.api.gh.issue({ repoPath, repoId, number })
+        const requestContext = getGitHubWorkItemRequestContext(
+          get(),
+          requestSettings,
+          repoId ?? repoPath,
+          repoPath,
+          options?.sourceContext
+        )
+        const issue =
+          requestContext.target.kind === 'environment'
+            ? await callRuntimeRpc<IssueInfo | null>(
+                { kind: 'environment', environmentId: requestContext.target.environmentId },
+                'github.issue',
+                { repo: requestContext.target.runtimeRepoId, number },
+                { timeoutMs: 30_000 }
+              )
+            : await window.api.gh.issue({
+                repoPath,
+                repoId,
+                number,
+                sourceContext: options?.sourceContext
+              })
         set((s) => ({
-          issueCache: { ...s.issueCache, [cacheKey]: { data: issue, fetchedAt: Date.now() } }
+          issueCache: withBoundedCacheEntry(s.issueCache, cacheKey, {
+            data: issue,
+            fetchedAt: Date.now()
+          })
         }))
         debouncedSaveCache(get())
         return issue
       } catch (err) {
         console.error('Failed to fetch issue:', err)
         set((s) => ({
-          issueCache: { ...s.issueCache, [cacheKey]: { data: null, fetchedAt: Date.now() } }
+          issueCache: withBoundedCacheEntry(s.issueCache, cacheKey, {
+            data: null,
+            fetchedAt: Date.now()
+          })
         }))
         debouncedSaveCache(get())
         return null
@@ -2050,28 +3285,39 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
       options?.repoId ? candidate.id === options.repoId : candidate.path === repoPath
     )
     const repoId = options?.repoId ?? repo?.id
-    const requestSettings = get().settings
-    const cacheKey = runtimeScopedRepoCacheKey(
+    const requestSettings = getGitHubRepoSourceSettings(
+      get().settings,
+      repo,
+      options?.sourceContext
+    )
+    const cacheKey = sourceScopedRepoCacheKey(
       repoPath,
       repoId,
       prChecksCacheSuffix(prNumber, prRepo, headSha),
       requestSettings,
-      repo?.connectionId
+      repo?.connectionId,
+      repo?.executionHostId,
+      options?.sourceContext,
+      repo !== undefined
     )
     const legacyCacheKey = headSha
-      ? runtimeScopedRepoCacheKey(
+      ? sourceScopedRepoCacheKey(
           repoPath,
           repoId,
           prChecksCacheSuffix(prNumber, prRepo),
           requestSettings,
-          repo?.connectionId
+          repo?.connectionId,
+          repo?.executionHostId,
+          options?.sourceContext,
+          repo !== undefined
         )
       : cacheKey
     const inflightKey = cacheKey
     const cached = get().checksCache[cacheKey] ?? get().checksCache[legacyCacheKey]
     if (
       !options?.force &&
-      isFresh(cached, CHECKS_CACHE_TTL) &&
+      !options?.noCache &&
+      isFresh(cached, getPRChecksCacheTtl(cached)) &&
       (!headSha || cached.headSha === headSha)
     ) {
       const cachedChecks = cached.data ?? []
@@ -2084,7 +3330,9 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
         cached.headSha,
         prRepo,
         requestSettings,
-        repo?.connectionId
+        repo?.connectionId,
+        repo?.executionHostId,
+        repo !== undefined
       )
       if (prStatusUpdate) {
         set(prStatusUpdate)
@@ -2095,39 +3343,55 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
 
     const inflightRequest = inflightChecksRequests.get(inflightKey)
     if (inflightRequest) {
-      return inflightRequest
+      if (
+        (options?.force && !inflightRequest.force) ||
+        (options?.noCache && !inflightRequest.noCache)
+      ) {
+        await inflightRequest.promise.catch(() => {})
+      } else {
+        return inflightRequest.promise
+      }
     }
 
     const request = (async () => {
       try {
-        const runtimeRepo = getRuntimeRepoTarget(get(), repoPath, requestSettings)
-        const checks = runtimeRepo
-          ? await callRuntimeRpc<PRCheckDetail[]>(
-              runtimeRepo.target,
-              'github.prChecks',
-              {
-                repo: runtimeRepo.repo.id,
+        const requestContext = getGitHubWorkItemRequestContext(
+          get(),
+          requestSettings,
+          repoId ?? repoPath,
+          repoPath,
+          options?.sourceContext
+        )
+        const checks =
+          requestContext.target.kind === 'environment'
+            ? await callRuntimeRpc<PRCheckDetail[]>(
+                { kind: 'environment', environmentId: requestContext.target.environmentId },
+                'github.prChecks',
+                {
+                  repo: requestContext.target.runtimeRepoId,
+                  prNumber,
+                  headSha,
+                  prRepo: prRepo ?? null,
+                  noCache: Boolean(options?.force || options?.noCache)
+                },
+                { timeoutMs: 30_000 }
+              )
+            : ((await window.api.gh.prChecks({
+                repoPath,
+                repoId,
                 prNumber,
                 headSha,
                 prRepo: prRepo ?? null,
-                noCache: options?.force
-              },
-              { timeoutMs: 30_000 }
-            )
-          : ((await window.api.gh.prChecks({
-              repoPath,
-              repoId,
-              prNumber,
-              headSha,
-              prRepo: prRepo ?? null,
-              noCache: options?.force
-            })) as PRCheckDetail[])
+                noCache: Boolean(options?.force || options?.noCache),
+                sourceContext: options?.sourceContext
+              })) as PRCheckDetail[])
         set((s) => {
           const nextState: Partial<AppState> = {
-            checksCache: {
-              ...s.checksCache,
-              [cacheKey]: { data: checks, fetchedAt: Date.now(), headSha }
-            }
+            checksCache: withBoundedCacheEntry(s.checksCache, cacheKey, {
+              data: checks,
+              fetchedAt: Date.now(),
+              headSha
+            })
           }
 
           const prStatusUpdate = syncPRChecksStatus(
@@ -2139,7 +3403,9 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
             headSha,
             prRepo,
             requestSettings,
-            repo?.connectionId
+            repo?.connectionId,
+            repo?.executionHostId,
+            repo !== undefined
           )
           if (prStatusUpdate?.prCache) {
             nextState.prCache = prStatusUpdate.prCache
@@ -2161,8 +3427,55 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
       }
     })()
 
-    inflightChecksRequests.set(inflightKey, request)
+    inflightChecksRequests.set(inflightKey, {
+      promise: request,
+      force: Boolean(options?.force),
+      noCache: Boolean(options?.force || options?.noCache)
+    })
     return request
+  },
+
+  fetchPRCheckDetails: async (repoPath, args, options): Promise<PRCheckRunDetails | null> => {
+    const repo = get().repos?.find((candidate) =>
+      options?.repoId ? candidate.id === options.repoId : candidate.path === repoPath
+    )
+    const repoId = options?.repoId ?? repo?.id
+    const requestSettings = getGitHubRepoSourceSettings(
+      get().settings,
+      repo,
+      options?.sourceContext
+    )
+    const requestContext = getGitHubWorkItemRequestContext(
+      get(),
+      requestSettings,
+      repoId ?? repoPath,
+      repoPath,
+      options?.sourceContext
+    )
+    return requestContext.target.kind === 'environment'
+      ? await callRuntimeRpc<PRCheckRunDetails | null>(
+          { kind: 'environment', environmentId: requestContext.target.environmentId },
+          'github.prCheckDetails',
+          {
+            repo: requestContext.target.runtimeRepoId,
+            checkRunId: args.checkRunId,
+            workflowRunId: args.workflowRunId,
+            checkName: args.checkName,
+            url: args.url,
+            prRepo: args.prRepo ?? null
+          },
+          { timeoutMs: 30_000 }
+        )
+      : ((await window.api.gh.prCheckDetails({
+          repoPath,
+          repoId,
+          checkRunId: args.checkRunId,
+          workflowRunId: args.workflowRunId,
+          checkName: args.checkName,
+          url: args.url,
+          prRepo: args.prRepo ?? null,
+          sourceContext: options?.sourceContext
+        })) as PRCheckRunDetails | null)
   },
 
   fetchPRComments: async (repoPath, prNumber, options): Promise<PRComment[]> => {
@@ -2170,13 +3483,20 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
       options?.repoId ? candidate.id === options.repoId : candidate.path === repoPath
     )
     const repoId = options?.repoId ?? repo?.id
-    const requestSettings = get().settings
-    const cacheKey = runtimeScopedRepoCacheKey(
+    const requestSettings = getGitHubRepoSourceSettings(
+      get().settings,
+      repo,
+      options?.sourceContext
+    )
+    const cacheKey = sourceScopedRepoCacheKey(
       repoPath,
       repoId,
       prCommentsCacheSuffix(prNumber, options?.prRepo),
       requestSettings,
-      repo?.connectionId
+      repo?.connectionId,
+      repo?.executionHostId,
+      options?.sourceContext,
+      repo !== undefined
     )
     const cached = get().commentsCache[cacheKey]
     if (!options?.force && isFresh(cached)) {
@@ -2190,31 +3510,39 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
 
     const request = (async () => {
       try {
-        const runtimeRepo = getRuntimeRepoTarget(get(), repoPath, requestSettings)
-        const comments = runtimeRepo
-          ? await callRuntimeRpc<PRComment[]>(
-              runtimeRepo.target,
-              'github.prComments',
-              {
-                repo: runtimeRepo.repo.id,
+        const requestContext = getGitHubWorkItemRequestContext(
+          get(),
+          requestSettings,
+          repoId ?? repoPath,
+          repoPath,
+          options?.sourceContext
+        )
+        const comments =
+          requestContext.target.kind === 'environment'
+            ? await callRuntimeRpc<PRComment[]>(
+                { kind: 'environment', environmentId: requestContext.target.environmentId },
+                'github.prComments',
+                {
+                  repo: requestContext.target.runtimeRepoId,
+                  prNumber,
+                  prRepo: options?.prRepo ?? null,
+                  noCache: options?.force
+                },
+                { timeoutMs: 30_000 }
+              )
+            : ((await window.api.gh.prComments({
+                repoPath,
+                repoId,
                 prNumber,
                 prRepo: options?.prRepo ?? null,
-                noCache: options?.force
-              },
-              { timeoutMs: 30_000 }
-            )
-          : ((await window.api.gh.prComments({
-              repoPath,
-              repoId,
-              prNumber,
-              prRepo: options?.prRepo ?? null,
-              noCache: options?.force
-            })) as PRComment[])
+                noCache: options?.force,
+                sourceContext: options?.sourceContext
+              })) as PRComment[])
         set((s) => ({
-          commentsCache: {
-            ...s.commentsCache,
-            [cacheKey]: { data: comments, fetchedAt: Date.now() }
-          }
+          commentsCache: withBoundedCacheEntry(s.commentsCache, cacheKey, {
+            data: comments,
+            fetchedAt: Date.now()
+          })
         }))
         return comments
       } catch (err) {
@@ -2229,18 +3557,195 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
     return request
   },
 
+  addPRConversationComment: async (repoPath, prNumber, body, options) => {
+    const repo = get().repos?.find((candidate) =>
+      options?.repoId ? candidate.id === options.repoId : candidate.path === repoPath
+    )
+    const repoId = options?.repoId ?? repo?.id
+    const requestSettings = getGitHubRepoSourceSettings(
+      get().settings,
+      repo,
+      options?.sourceContext
+    )
+    const cacheKey = sourceScopedRepoCacheKey(
+      repoPath,
+      repoId,
+      prCommentsCacheSuffix(prNumber, options?.prRepo),
+      requestSettings,
+      repo?.connectionId,
+      repo?.executionHostId,
+      options?.sourceContext,
+      repo !== undefined
+    )
+    const requestContext = getGitHubWorkItemRequestContext(
+      get(),
+      requestSettings,
+      repoId ?? repoPath,
+      repoPath,
+      options?.sourceContext
+    )
+    let result: GitHubCommentResult
+    try {
+      result =
+        requestContext.target.kind === 'environment'
+          ? await callRuntimeRpc<GitHubCommentResult>(
+              { kind: 'environment', environmentId: requestContext.target.environmentId },
+              'github.addIssueComment',
+              {
+                repo: requestContext.target.runtimeRepoId,
+                number: prNumber,
+                body,
+                type: 'pr',
+                prRepo: options?.prRepo ?? null
+              },
+              { timeoutMs: 30_000 }
+            )
+          : await window.api.gh.addIssueComment({
+              repoPath,
+              repoId,
+              number: prNumber,
+              body,
+              type: 'pr',
+              prRepo: options?.prRepo ?? null,
+              sourceContext: options?.sourceContext
+            })
+    } catch (err) {
+      const error = err instanceof Error ? err.message : 'Failed to post comment.'
+      return { ok: false, error }
+    }
+    if (!hasUsableCommentPayload(result)) {
+      return result.ok
+        ? {
+            ok: false,
+            error: translate(
+              'auto.store.slices.github.f129c42773',
+              'GitHub did not return the new comment.'
+            )
+          }
+        : result
+    }
+    set((s) => {
+      const entry = s.commentsCache[cacheKey]
+      return {
+        commentsCache: withBoundedCacheEntry(s.commentsCache, cacheKey, {
+          data: mergePRCommentIntoList(entry?.data, result.comment),
+          fetchedAt: Date.now()
+        })
+      }
+    })
+    return result
+  },
+
+  addPRReviewCommentReply: async (repoPath, prNumber, commentId, body, options) => {
+    const repo = get().repos?.find((candidate) =>
+      options?.repoId ? candidate.id === options.repoId : candidate.path === repoPath
+    )
+    const repoId = options?.repoId ?? repo?.id
+    const requestSettings = getGitHubRepoSourceSettings(
+      get().settings,
+      repo,
+      options?.sourceContext
+    )
+    const cacheKey = sourceScopedRepoCacheKey(
+      repoPath,
+      repoId,
+      prCommentsCacheSuffix(prNumber, options?.prRepo),
+      requestSettings,
+      repo?.connectionId,
+      repo?.executionHostId,
+      options?.sourceContext,
+      repo !== undefined
+    )
+    const requestContext = getGitHubWorkItemRequestContext(
+      get(),
+      requestSettings,
+      repoId ?? repoPath,
+      repoPath,
+      options?.sourceContext
+    )
+    let result: GitHubCommentResult
+    try {
+      result =
+        requestContext.target.kind === 'environment'
+          ? await callRuntimeRpc<GitHubCommentResult>(
+              { kind: 'environment', environmentId: requestContext.target.environmentId },
+              'github.addPRReviewCommentReply',
+              {
+                repo: requestContext.target.runtimeRepoId,
+                prNumber,
+                commentId,
+                body,
+                threadId: options?.threadId,
+                path: options?.path,
+                line: options?.line,
+                prRepo: options?.prRepo ?? null
+              },
+              { timeoutMs: 30_000 }
+            )
+          : await window.api.gh.addPRReviewCommentReply({
+              repoPath,
+              repoId,
+              prNumber,
+              commentId,
+              body,
+              threadId: options?.threadId,
+              path: options?.path,
+              line: options?.line,
+              prRepo: options?.prRepo ?? null,
+              sourceContext: options?.sourceContext
+            })
+    } catch (err) {
+      const error = err instanceof Error ? err.message : 'Failed to post reply.'
+      return { ok: false, error }
+    }
+    if (!hasUsableCommentPayload(result)) {
+      return result.ok
+        ? {
+            ok: false,
+            error: translate(
+              'auto.store.slices.github.f129c42773',
+              'GitHub did not return the new comment.'
+            )
+          }
+        : result
+    }
+    const comment: PRComment = {
+      ...result.comment,
+      threadId: result.comment.threadId ?? options?.threadId,
+      path: result.comment.path ?? options?.path,
+      line: result.comment.line ?? options?.line
+    }
+    set((s) => {
+      const entry = s.commentsCache[cacheKey]
+      return {
+        commentsCache: withBoundedCacheEntry(s.commentsCache, cacheKey, {
+          data: mergePRCommentIntoList(entry?.data, comment),
+          fetchedAt: Date.now()
+        })
+      }
+    })
+    return { ok: true, comment }
+  },
+
   resolveReviewThread: async (repoPath, prNumber, threadId, resolve, options) => {
     const repo = get().repos?.find((candidate) =>
       options?.repoId ? candidate.id === options.repoId : candidate.path === repoPath
     )
     const repoId = options?.repoId ?? repo?.id
-    const requestSettings = get().settings
-    const cacheKey = runtimeScopedRepoCacheKey(
+    const requestSettings = getGitHubRepoSourceSettings(
+      get().settings,
+      repo,
+      options?.sourceContext
+    )
+    const cacheKey = sourceScopedRepoCacheKey(
       repoPath,
       repoId,
       prCommentsCacheSuffix(prNumber, options?.prRepo),
       requestSettings,
-      repo?.connectionId
+      repo?.connectionId,
+      repo?.executionHostId,
+      options?.sourceContext,
+      repo !== undefined
     )
 
     // Optimistic update: toggle isResolved on all comments in this thread immediately
@@ -2258,15 +3763,34 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
       }))
     }
 
-    const runtimeRepo = getRuntimeRepoTarget(get(), repoPath, requestSettings)
-    const ok = runtimeRepo
-      ? await callRuntimeRpc<boolean>(
-          runtimeRepo.target,
-          'github.resolveReviewThread',
-          { repo: runtimeRepo.repo.id, threadId, resolve },
-          { timeoutMs: 30_000 }
-        )
-      : await window.api.gh.resolveReviewThread({ repoPath, repoId, threadId, resolve })
+    const requestContext = getGitHubWorkItemRequestContext(
+      get(),
+      requestSettings,
+      repoId ?? repoPath,
+      repoPath,
+      options?.sourceContext
+    )
+    let ok = false
+    try {
+      ok =
+        requestContext.target.kind === 'environment'
+          ? await callRuntimeRpc<boolean>(
+              { kind: 'environment', environmentId: requestContext.target.environmentId },
+              'github.resolveReviewThread',
+              { repo: requestContext.target.runtimeRepoId, threadId, resolve },
+              { timeoutMs: 30_000 }
+            )
+          : await window.api.gh.resolveReviewThread({
+              repoPath,
+              repoId,
+              threadId,
+              resolve,
+              sourceContext: options?.sourceContext
+            })
+    } catch (err) {
+      console.error('Failed to update review thread:', err)
+      ok = false
+    }
     if (!ok && prev) {
       // Revert optimistic update on failure
       set((s) => ({
@@ -2286,35 +3810,30 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
     if (!candidate) {
       return
     }
-    if (getRuntimeRepoTarget(state, candidate.repoPath)) {
+    if (getPRRefreshRuntimeRepoTarget(state, candidate)) {
       void get().fetchPRForBranch(candidate.repoPath, candidate.branch, {
         force: bypassesGitHubPRRefreshFreshness(reason),
         repoId: candidate.repoId,
+        worktreeId: candidate.worktreeId,
         linkedPRNumber: candidate.linkedPRNumber ?? null,
         fallbackPRNumber: candidate.fallbackPRNumber ?? null,
         fallbackPRSource: candidate.fallbackPRSource ?? null
       })
       return
     }
-    const enqueue = window.api.gh.enqueuePRRefresh
-    if (enqueue) {
-      void enqueue({ candidate, reason, priority })
-        .then((queued) => {
-          if (queued === false) {
-            return get().fetchPRForBranch(candidate.repoPath, candidate.branch, {
-              force: bypassesGitHubPRRefreshFreshness(reason),
-              repoId: candidate.repoId,
-              linkedPRNumber: candidate.linkedPRNumber ?? null,
-              fallbackPRNumber: candidate.fallbackPRNumber ?? null,
-              fallbackPRSource: candidate.fallbackPRSource ?? null
-            })
-          }
-          return null
-        })
-        .catch((err) => {
-          console.warn('Failed to enqueue PR refresh:', err)
-        })
+    if (!shouldEnqueueLocalPRRefresh(candidate)) {
+      return
     }
+    enqueueLocalGitHubPRRefresh({ candidate, reason, priority }, async () => {
+      await get().fetchPRForBranch(candidate.repoPath, candidate.branch, {
+        force: bypassesGitHubPRRefreshFreshness(reason),
+        repoId: candidate.repoId,
+        worktreeId: candidate.worktreeId,
+        linkedPRNumber: candidate.linkedPRNumber ?? null,
+        fallbackPRNumber: candidate.fallbackPRNumber ?? null,
+        fallbackPRSource: candidate.fallbackPRSource ?? null
+      })
+    })
   },
 
   reportVisibleGitHubPRRefreshCandidates: (worktreeIds, generation) => {
@@ -2325,20 +3844,25 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
         return worktree ? buildPRRefreshCandidate(state, worktree) : null
       })
       .filter((candidate): candidate is GitHubPRRefreshCandidate => candidate !== null)
-    if (getActiveRuntimeTarget(state.settings).kind === 'environment') {
-      for (const candidate of candidates) {
+    const localCandidates: GitHubPRRefreshCandidate[] = []
+    for (const candidate of candidates) {
+      if (getPRRefreshRuntimeRepoTarget(state, candidate)) {
         void get().fetchPRForBranch(candidate.repoPath, candidate.branch, {
           repoId: candidate.repoId,
+          worktreeId: candidate.worktreeId,
           linkedPRNumber: candidate.linkedPRNumber ?? null,
           fallbackPRNumber: candidate.fallbackPRNumber ?? null,
           fallbackPRSource: candidate.fallbackPRSource ?? null
         })
+        continue
       }
-      return
+      if (shouldEnqueueLocalPRRefresh(candidate)) {
+        localCandidates.push(candidate)
+      }
     }
     const reportVisible = window.api.gh.reportVisiblePRRefreshCandidates
     if (reportVisible) {
-      void reportVisible({ candidates, generation }).catch((err) => {
+      void reportVisible({ candidates: localCandidates, generation }).catch((err) => {
         console.warn('Failed to report visible PR refresh candidates:', err)
       })
     }
@@ -2349,25 +3873,57 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
   },
 
   applyGitHubPRRefreshEvent: (event) => {
-    set((s) => {
-      // Why: local main-process refresh events are keyed only by repo/branch;
-      // applying them while a runtime is active can leak local PR state into SSH.
-      if (getActiveRuntimeTarget(s.settings).kind === 'environment') {
-        return {}
+    // Why: the sidebar/left-list refresh for local repos flows through the main
+    // PR coordinator (not fetchPRForBranch), so it must run the same guarded
+    // clear when main stamps a merged linked PR whose head has diverged.
+    const divergedLinkedPRClears: {
+      worktreeId: string
+      linkedPRNumber: number
+      branch: string
+      requestHeadOid: string | null
+    }[] = []
+    if (event.outcome?.kind === 'found') {
+      const pr = event.outcome.pr
+      for (const alias of event.aliases) {
+        const linkedPRNumber = alias.linkedPRNumber ?? null
+        const requestHeadOid = alias.currentHeadOid ?? null
+        if (
+          alias.worktreeId &&
+          linkedPRNumber != null &&
+          shouldClearDivergedLinkedMergedPR({ pr, linkedPRNumber, requestHeadOid })
+        ) {
+          divergedLinkedPRClears.push({
+            worktreeId: alias.worktreeId,
+            linkedPRNumber,
+            branch: alias.branch,
+            requestHeadOid
+          })
+        }
       }
+    }
+    let didUpdatePRCache = false
+    set((s) => {
       const nextSequences = { ...s.prRefreshSequences }
-      const nextStates = { ...s.prRefreshStates }
+      const prunedStates = pruneExpiredPRRefreshStates(s.prRefreshStates)
+      const nextStates = { ...prunedStates }
       let nextPRCache = s.prCache
       let nextHostedReviewCache = s.hostedReviewCache ?? {}
-      let changed = false
+      let changed = prunedStates !== s.prRefreshStates
 
       for (const alias of event.aliases) {
+        const aliasExecutionHostId = getRefreshAliasExecutionHostId(alias)
         const previousSequence = nextSequences[alias.cacheKey] ?? 0
         if (
           event.outcome ? event.sequence < previousSequence : event.sequence <= previousSequence
         ) {
+          if (event.outcome || event.status !== 'in-flight') {
+            deletePRRefreshStartedEntry(event.sequence, alias.cacheKey)
+          }
           continue
         }
+        // Why: delete-then-set moves this key to the end of insertion order so
+        // capPrRefreshSequences evicts genuinely idle keys, not active ones.
+        delete nextSequences[alias.cacheKey]
         nextSequences[alias.cacheKey] = event.sequence
         changed = true
 
@@ -2375,6 +3931,9 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
           const startedEntryKey = prRefreshStartedEntryKey(event.sequence, alias.cacheKey)
           const requestStartedEntry = prRefreshStartedHostedReviewEntries.get(startedEntryKey)
           prRefreshStartedHostedReviewEntries.delete(startedEntryKey)
+          if (previousSequence !== event.sequence) {
+            deletePRRefreshStartedEntry(previousSequence, alias.cacheKey)
+          }
           delete nextStates[alias.cacheKey]
           if (event.outcome.kind === 'upstream-error') {
             nextStates[alias.cacheKey] = {
@@ -2392,12 +3951,40 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
                   const checksCacheKeys = [
                     ...(alias.repoId
                       ? [
+                          ...(pr.headSha
+                            ? [
+                                runtimeScopedRepoCacheKey(
+                                  alias.repoPath,
+                                  alias.repoId,
+                                  prChecksCacheSuffix(pr.number, pr.prRepo, pr.headSha),
+                                  s.settings,
+                                  alias.connectionId,
+                                  aliasExecutionHostId,
+                                  true
+                                )
+                              ]
+                            : []),
                           runtimeScopedRepoCacheKey(
                             alias.repoPath,
                             alias.repoId,
                             prChecksCacheSuffix(pr.number, pr.prRepo),
                             s.settings,
-                            alias.connectionId
+                            alias.connectionId,
+                            aliasExecutionHostId,
+                            true
+                          )
+                        ]
+                      : []),
+                    ...(pr.headSha
+                      ? [
+                          runtimeScopedRepoCacheKey(
+                            alias.repoPath,
+                            undefined,
+                            prChecksCacheSuffix(pr.number, pr.prRepo, pr.headSha),
+                            s.settings,
+                            alias.connectionId,
+                            aliasExecutionHostId,
+                            true
                           )
                         ]
                       : []),
@@ -2406,7 +3993,9 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
                       undefined,
                       prChecksCacheSuffix(pr.number, pr.prRepo),
                       s.settings,
-                      alias.connectionId
+                      alias.connectionId,
+                      aliasExecutionHostId,
+                      true
                     ),
                     `${alias.repoPath}::pr-checks::${pr.number}`
                   ]
@@ -2418,13 +4007,19 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
                     checksEntry.headSha &&
                     pr.headSha &&
                     checksEntry.headSha === pr.headSha &&
-                    event.outcome.fetchedAt - checksEntry.fetchedAt < CHECKS_CACHE_TTL
+                    event.outcome.fetchedAt - checksEntry.fetchedAt <
+                      getPRChecksCacheTtl(checksEntry)
                   ) {
                     return { ...pr, checksStatus: deriveCheckStatusFromChecks(checksEntry.data) }
                   }
                   return pr
                 })()
               : null
+          // Why: queued local refreshes may finish after the user unlinks an
+          // exact PR; those older results must not restore the manual-link UI.
+          if (isStaleExactLinkedPRLookup(s, alias.worktreeId, alias.linkedPRNumber)) {
+            continue
+          }
           const nextCaches = applyGitHubPRResultToCaches({
             prCache: nextPRCache,
             hostedReviewCache: nextHostedReviewCache,
@@ -2434,33 +4029,51 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
             settings: s.settings,
             repoId: alias.repoId,
             connectionId: alias.connectionId,
+            executionHostId: aliasExecutionHostId,
+            hasRepoOwner: true,
             pr: data,
             fetchedAt: event.outcome.fetchedAt,
+            state: s,
+            worktreeId: alias.worktreeId,
             linkedPRNumber: alias.linkedPRNumber,
             fallbackPRNumber: alias.fallbackPRNumber,
             fallbackPRSource: alias.fallbackPRSource,
             requestStartedAt: event.requestStartedAt,
             requestStartedEntry
           })
+          didUpdatePRCache = didUpdatePRCache || nextCaches.prCache !== nextPRCache
           nextPRCache = nextCaches.prCache
           nextHostedReviewCache = nextCaches.hostedReviewCache
           continue
         }
 
         if (event.status) {
+          if (previousSequence !== event.sequence) {
+            deletePRRefreshStartedEntry(previousSequence, alias.cacheKey)
+          }
           if (event.status === 'in-flight' && event.requestStartedAt !== undefined) {
             const hostedReviewCacheKey = getHostedReviewCacheKey(
               alias.repoPath,
               alias.branch,
               s.settings,
               alias.repoId,
-              alias.connectionId
+              alias.connectionId,
+              aliasExecutionHostId,
+              true
             )
-            prRefreshStartedHostedReviewEntries.set(
+            setPRRefreshStartedHostedReviewEntry(
               prRefreshStartedEntryKey(event.sequence, alias.cacheKey),
               s.hostedReviewCache[hostedReviewCacheKey]
             )
+          } else {
+            // Why: rate-limit pauses/skips can follow an in-flight broadcast
+            // without an outcome; the cached request-start snapshot is no
+            // longer live and would otherwise accumulate per refresh sequence.
+            deletePRRefreshStartedEntry(event.sequence, alias.cacheKey)
           }
+          // Why: delete-then-set moves this key to the end of insertion order so
+          // capRecordByInsertionOrder evicts genuinely idle keys, not active ones.
+          delete nextStates[alias.cacheKey]
           nextStates[alias.cacheKey] = {
             status: event.status,
             reason: event.reason,
@@ -2472,49 +4085,68 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
 
       return changed
         ? {
-            prRefreshSequences: nextSequences,
-            prRefreshStates: nextStates,
+            prRefreshSequences: capPrRefreshSequences(nextSequences),
+            // Why: bound prRefreshStates too (same unbounded PR-cache-key space),
+            // but with status-aware eviction so visible in-progress pills survive.
+            prRefreshStates: capPrRefreshStates(nextStates),
             prCache: nextPRCache,
             hostedReviewCache: nextHostedReviewCache
           }
         : {}
     })
-    if (event.outcome && event.outcome.kind !== 'upstream-error') {
+    if (didUpdatePRCache && event.outcome && event.outcome.kind !== 'upstream-error') {
       debouncedSaveCache(get())
+    }
+    for (const clear of divergedLinkedPRClears) {
+      void get().updateWorktreeMeta(
+        clear.worktreeId,
+        { linkedPR: null },
+        {
+          shouldApply: (worktree) =>
+            shouldApplyDivergedLinkedPRClear({
+              worktree,
+              linkedPRNumber: clear.linkedPRNumber,
+              branch: clear.branch,
+              requestHeadOid: clear.requestHeadOid
+            })
+        }
+      )
     }
   },
 
   refreshAllGitHub: () => {
     // Invalidate comments cache so it refreshes on next access.
-    // Also evict old entries from prCache and issueCache to prevent unbounded
-    // growth across many repos and branches over a long-running session.
+    // Also evict old entries from retained caches to prevent unbounded growth
+    // across many repos and branches over a long-running session.
     set((s) => ({
       commentsCache: {},
       prCache: evictStaleEntries(s.prCache),
-      issueCache: evictStaleEntries(s.issueCache)
+      issueCache: evictStaleEntries(s.issueCache),
+      checksCache: evictStaleEntries(s.checksCache),
+      workItemsCache: evictStaleEntries(s.workItemsCache),
+      projectViewCache: evictStaleEntries(s.projectViewCache),
+      prRefreshStates: pruneExpiredPRRefreshStates(s.prRefreshStates)
     }))
 
-    // Why: prRequestGenerations tracks generation counters for inflight
-    // fetch deduplication. Pruning keys that were just evicted from prCache
-    // would race with inflight requests — their generation check would fail
-    // and silently discard valid responses. Since each entry is just a number,
-    // the memory overhead is negligible; let it shrink naturally as keys stop
-    // being fetched. The eviction on prCache/issueCache above is sufficient
-    // to bound the dominant source of growth.
+    // Why: prRequestGenerations tracks only live inflight fetches and is
+    // cleared when the active request settles. Do not prune it here; deleting
+    // a live generation would make the corresponding response look stale.
 
     // Only re-fetch PR/issue entries that are already stale — skip fresh ones
     const state = get()
     const now = Date.now()
     const stalePRCandidates: { candidate: GitHubPRRefreshCandidate; score: number }[] = []
     const cardProps = state.worktreeCardProperties ?? []
+    const rawCardProps = cardProps as readonly string[]
     const shouldRefreshIssues = shouldRefreshIssueDecorations(state)
     const isPRStatusGrouping = state.groupBy === 'pr-status'
     const rightSidebarShowsPR = rightSidebarShowsPullRequestData(state)
     const shouldRefreshPRs =
       isPRStatusGrouping ||
       rightSidebarShowsPR ||
-      cardProps.includes('pr') ||
-      cardProps.includes('ci')
+      (state.settings?.experimentalNewWorktreeCardStyle === true
+        ? cardProps.includes('status')
+        : cardProps.includes('pr') || rawCardProps.includes('ci'))
 
     for (const worktrees of Object.values(state.worktreesByRepo)) {
       for (const wt of worktrees) {
@@ -2525,7 +4157,15 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
 
         const branch = wt.branch.replace(/^refs\/heads\//, '')
         if (shouldRefreshPRs && !wt.isBare && branch) {
-          const prKey = prCacheKey(repo.path, repo.id, branch, state.settings, repo.connectionId)
+          const ownerSettings = settingsForGitHubRepoOwner(state.settings, repo)
+          const prKey = prCacheKey(
+            repo.path,
+            repo.id,
+            branch,
+            ownerSettings,
+            repo.connectionId,
+            repo.executionHostId
+          )
           const prEntry = state.prCache[prKey]
           if (!prEntry || now - prEntry.fetchedAt >= CACHE_TTL) {
             const candidate = buildPRRefreshCandidate(state, wt)
@@ -2540,7 +4180,16 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
           }
         }
         if (shouldRefreshIssues && wt.linkedIssue) {
-          const issueKey = repoScopedCacheKey(repo.path, repo.id, String(wt.linkedIssue))
+          const ownerSettings = settingsForGitHubRepoOwner(state.settings, repo)
+          const issueKey = issueCacheKey(
+            repo.path,
+            repo.id,
+            wt.linkedIssue,
+            ownerSettings,
+            repo.connectionId,
+            repo.executionHostId,
+            true
+          )
           const issueEntry = state.issueCache[issueKey]
           if (!issueEntry || now - issueEntry.fetchedAt >= CACHE_TTL) {
             void get().fetchIssue(repo.path, wt.linkedIssue, { repoId: repo.id })
@@ -2552,15 +4201,20 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
       .sort((a, b) => b.score - a.score)
       .slice(0, isPRStatusGrouping ? stalePRCandidates.length : 5)
     for (const { candidate } of candidatesToRefresh) {
-      if (getRuntimeRepoTarget(state, candidate.repoPath)) {
+      const candidateSettings = settingsForGitHubRepoOwner(
+        state.settings,
+        candidate as Pick<Repo, 'connectionId' | 'executionHostId'>
+      )
+      if (getRuntimeRepoTarget(state, candidate.repoPath, candidateSettings)) {
         void get().fetchPRForBranch(candidate.repoPath, candidate.branch, {
           repoId: candidate.repoId,
+          worktreeId: candidate.worktreeId,
           linkedPRNumber: candidate.linkedPRNumber ?? null,
           fallbackPRNumber: candidate.fallbackPRNumber ?? null,
           fallbackPRSource: candidate.fallbackPRSource ?? null
         })
-      } else {
-        void window.api.gh.enqueuePRRefresh?.({ candidate, reason: 'swr', priority: 10 })
+      } else if (shouldEnqueueLocalPRRefresh(candidate)) {
+        enqueueLocalGitHubPRRefresh({ candidate, reason: 'swr', priority: 10 })
       }
     }
   },
@@ -2585,9 +4239,25 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
 
     // Invalidate this worktree's cache entries
     const branch = worktree.branch.replace(/^refs\/heads\//, '')
-    const prKey = prCacheKey(repo.path, repo.id, branch, state.settings, repo.connectionId)
+    const ownerSettings = settingsForGitHubRepoOwner(state.settings, repo)
+    const prKey = prCacheKey(
+      repo.path,
+      repo.id,
+      branch,
+      ownerSettings,
+      repo.connectionId,
+      repo.executionHostId
+    )
     const issueKey = worktree.linkedIssue
-      ? repoScopedCacheKey(repo.path, repo.id, String(worktree.linkedIssue))
+      ? issueCacheKey(
+          repo.path,
+          repo.id,
+          worktree.linkedIssue,
+          ownerSettings,
+          repo.connectionId,
+          repo.executionHostId,
+          true
+        )
       : ''
 
     set((s) => {
@@ -2608,16 +4278,17 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
     if (!worktree.isBare && branch) {
       const candidate = buildPRRefreshCandidate(get(), worktree)
       if (candidate) {
-        if (getRuntimeRepoTarget(get(), candidate.repoPath)) {
+        if (getPRRefreshRuntimeRepoTarget(get(), candidate)) {
           void get().fetchPRForBranch(candidate.repoPath, candidate.branch, {
             force: true,
             repoId: candidate.repoId,
+            worktreeId: candidate.worktreeId,
             linkedPRNumber: candidate.linkedPRNumber ?? null,
             fallbackPRNumber: candidate.fallbackPRNumber ?? null,
             fallbackPRSource: candidate.fallbackPRSource ?? null
           })
-        } else {
-          void window.api.gh.enqueuePRRefresh?.({ candidate, reason: 'post-push', priority: 100 })
+        } else if (shouldEnqueueLocalPRRefresh(candidate)) {
+          enqueueLocalGitHubPRRefresh({ candidate, reason: 'post-push', priority: 100 })
         }
       }
     }
@@ -2626,11 +4297,20 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
     }
   },
 
-  patchWorkItem: (itemId, patch, repoId) => {
+  patchWorkItem: (itemId, patch, repoId, options) => {
     set((s) => {
       const nextCache = { ...s.workItemsCache }
       let changed = false
+      const sourceScope =
+        options?.sourceContext?.provider === 'github'
+          ? getTaskSourceCacheScope(options.sourceContext)
+          : null
       for (const key of Object.keys(nextCache)) {
+        // Why: task edits from one host/account must not optimistically patch
+        // another host's visually identical GitHub issue or PR cache entry.
+        if (sourceScope && key !== sourceScope && !key.startsWith(`${sourceScope}::`)) {
+          continue
+        }
         const entry = nextCache[key]
         if (!entry?.data) {
           continue
@@ -2674,7 +4354,9 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
       // normalizes `'auto'` to `undefined` so the persisted record drops
       // the key entirely (see main/persistence.ts#updateRepo).
       const updates = { issueSourcePreference: preference === 'auto' ? undefined : preference }
-      const target = getActiveRuntimeTarget(get().settings)
+      // Why: persist to the repo's owner host (same routing as updateRepo) so the
+      // write lands where the repo lives, not on the focused runtime.
+      const target = getActiveRuntimeTarget(getSettingsForRepoRuntimeOwner(get(), repoId))
       await (target.kind === 'local'
         ? window.api.repos.update({ repoId, updates })
         : callRuntimeRpc(target, 'repo.update', { repo: repoId, updates }, { timeoutMs: 15_000 }))
@@ -2684,9 +4366,12 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
       // pill visually reverts (optimistic patch above → resync via
       // fetchRepos below). Without this toast, the UI silently snaps back
       // and the user has no clue the write failed.
-      toast.error('Failed to save issue-source preference', {
-        duration: ERROR_TOAST_DURATION
-      })
+      toast.error(
+        translate('auto.store.slices.github.d49ef4b944', 'Failed to save issue-source preference'),
+        {
+          duration: ERROR_TOAST_DURATION
+        }
+      )
       // Why: the optimistic patch above may now disagree with disk. Resync
       // rather than leave a lie on screen. We only refetch repos — the cache
       // eviction below is still safe to run; worst case we trigger a
@@ -2780,31 +4465,43 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
     const now = Date.now()
     const branch = worktree.branch.replace(/^refs\/heads\//, '')
     const cardProps = state.worktreeCardProperties ?? []
+    const rawCardProps = cardProps as readonly string[]
     const shouldRefreshPR =
       state.groupBy === 'pr-status' ||
-      cardProps.includes('pr') ||
-      cardProps.includes('ci') ||
+      (state.settings?.experimentalNewWorktreeCardStyle === true
+        ? cardProps.includes('status')
+        : cardProps.includes('pr') || rawCardProps.includes('ci')) ||
       rightSidebarShowsPullRequestData(state)
 
     if (shouldRefreshPR && !worktree.isBare && branch) {
       const candidate = buildPRRefreshCandidate(state, worktree)
       if (candidate) {
-        if (getRuntimeRepoTarget(state, candidate.repoPath)) {
+        if (getPRRefreshRuntimeRepoTarget(state, candidate)) {
           void get().fetchPRForBranch(candidate.repoPath, candidate.branch, {
             force: true,
             repoId: candidate.repoId,
+            worktreeId: candidate.worktreeId,
             linkedPRNumber: candidate.linkedPRNumber ?? null,
             fallbackPRNumber: candidate.fallbackPRNumber ?? null,
             fallbackPRSource: candidate.fallbackPRSource ?? null
           })
-        } else {
-          void window.api.gh.enqueuePRRefresh?.({ candidate, reason: 'active', priority: 80 })
+        } else if (shouldEnqueueLocalPRRefresh(candidate)) {
+          enqueueLocalGitHubPRRefresh({ candidate, reason: 'active', priority: 80 })
         }
       }
     }
 
     if (shouldRefreshIssueDecorations(state) && worktree.linkedIssue) {
-      const issueKey = repoScopedCacheKey(repo.path, repo.id, String(worktree.linkedIssue))
+      const ownerSettings = settingsForGitHubRepoOwner(state.settings, repo)
+      const issueKey = issueCacheKey(
+        repo.path,
+        repo.id,
+        worktree.linkedIssue,
+        ownerSettings,
+        repo.connectionId,
+        repo.executionHostId,
+        true
+      )
       const issueEntry = state.issueCache[issueKey]
       if (!issueEntry || now - issueEntry.fetchedAt >= CACHE_TTL) {
         void get().fetchIssue(repo.path, worktree.linkedIssue, { repoId: repo.id })

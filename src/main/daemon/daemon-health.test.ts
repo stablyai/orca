@@ -1,14 +1,17 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { mkdtempSync, rmSync, writeFileSync } from 'fs'
-import { tmpdir } from 'os'
-import { join } from 'path'
-import { createServer, connect, type Server } from 'net'
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { basename, join } from 'node:path'
+import { createServer, connect, type Server } from 'node:net'
 import { DaemonServer } from './daemon-server'
 import { getDaemonPidPath, serializeDaemonPidFile } from './daemon-spawner'
 import {
+  checkDaemonHealth,
   getProcessStartedAtMs,
   healthCheckDaemon,
   killStaleDaemon,
+  parseLinuxBootTimeSeconds,
+  parseLinuxProcStartTicks,
   parseDaemonPidFile,
   startTimeMatches
 } from './daemon-health'
@@ -58,6 +61,12 @@ function canConnect(socketPath: string): Promise<boolean> {
   })
 }
 
+function daemonTestSocketPath(dir: string): string {
+  return process.platform === 'win32'
+    ? `\\\\.\\pipe\\${basename(dir)}-daemon.sock`
+    : join(dir, 'daemon.sock')
+}
+
 describe('daemon health', () => {
   let dir: string
   let socketPath: string
@@ -65,7 +74,7 @@ describe('daemon health', () => {
 
   beforeEach(() => {
     dir = mkdtempSync(join(tmpdir(), 'daemon-health-test-'))
-    socketPath = join(dir, 'daemon.sock')
+    socketPath = daemonTestSocketPath(dir)
     tokenPath = join(dir, 'daemon.token')
   })
 
@@ -74,21 +83,45 @@ describe('daemon health', () => {
   })
 
   it('passes when a daemon answers ping', async () => {
+    const ptySpawnHealthCheck = vi.fn(async () => {})
     const server = new DaemonServer({
       socketPath,
       tokenPath,
+      ptySpawnHealthCheck,
       spawnSubprocess: () => createMockSubprocess()
     })
     await server.start()
 
     try {
+      await expect(checkDaemonHealth(socketPath, tokenPath)).resolves.toBe('healthy')
       await expect(healthCheckDaemon(socketPath, tokenPath)).resolves.toBe(true)
+      expect(ptySpawnHealthCheck).toHaveBeenCalledTimes(2)
+    } finally {
+      await server.shutdown()
+    }
+  })
+
+  it('fails when a protocol-healthy daemon cannot spawn PTYs', async () => {
+    const server = new DaemonServer({
+      socketPath,
+      tokenPath,
+      ptySpawnHealthCheck: vi.fn(async () => {
+        throw new Error('stale node-pty helper')
+      }),
+      spawnSubprocess: () => createMockSubprocess()
+    })
+    await server.start()
+
+    try {
+      await expect(checkDaemonHealth(socketPath, tokenPath)).resolves.toBe('pty-spawn-unhealthy')
+      await expect(healthCheckDaemon(socketPath, tokenPath)).resolves.toBe(false)
     } finally {
       await server.shutdown()
     }
   })
 
   it('fails when the token file is missing', async () => {
+    await expect(checkDaemonHealth(socketPath, tokenPath)).resolves.toBe('unreachable')
     await expect(healthCheckDaemon(socketPath, tokenPath)).resolves.toBe(false)
   })
 
@@ -122,20 +155,23 @@ describe('parseDaemonPidFile', () => {
     expect(parseDaemonPidFile(serialized)).toEqual({
       pid: 12345,
       startedAtMs: 1_700_000_000_000,
-      entryPath: null
+      entryPath: null,
+      appVersion: null
     })
   })
 
-  it('parses JSON pid files with entryPath', () => {
+  it('parses JSON pid files with launch metadata', () => {
     const serialized = serializeDaemonPidFile({
       pid: 12345,
       startedAtMs: 1_700_000_000_000,
-      entryPath: '/repo/out/main/daemon-entry.js'
+      entryPath: '/repo/out/main/daemon-entry.js',
+      appVersion: '1.2.3'
     })
     expect(parseDaemonPidFile(serialized)).toEqual({
       pid: 12345,
       startedAtMs: 1_700_000_000_000,
-      entryPath: '/repo/out/main/daemon-entry.js'
+      entryPath: '/repo/out/main/daemon-entry.js',
+      appVersion: '1.2.3'
     })
   })
 
@@ -145,7 +181,8 @@ describe('parseDaemonPidFile', () => {
     expect(parseDaemonPidFile('{"pid":9999}')).toEqual({
       pid: 9999,
       startedAtMs: null,
-      entryPath: null
+      entryPath: null,
+      appVersion: null
     })
   })
 
@@ -156,12 +193,14 @@ describe('parseDaemonPidFile', () => {
     expect(parseDaemonPidFile('12345')).toEqual({
       pid: 12345,
       startedAtMs: null,
-      entryPath: null
+      entryPath: null,
+      appVersion: null
     })
     expect(parseDaemonPidFile('  12345\n')).toEqual({
       pid: 12345,
       startedAtMs: null,
-      entryPath: null
+      entryPath: null,
+      appVersion: null
     })
   })
 
@@ -169,6 +208,35 @@ describe('parseDaemonPidFile', () => {
     expect(parseDaemonPidFile('not-a-number')).toBeNull()
     expect(parseDaemonPidFile('{"pid":"abc"}')).toBeNull()
     expect(parseDaemonPidFile('{"not_pid":123}')).toBeNull()
+  })
+})
+
+describe('Linux process start-time parsing', () => {
+  it('parses start ticks from proc stat with spaces in the command name', () => {
+    const fields = Array.from({ length: 20 }, (_, index) => String(index + 1))
+    fields[0] = 'S'
+    fields[19] = '987654'
+
+    expect(parseLinuxProcStartTicks(`123 (orca daemon) ${fields.join(' ')}`)).toBe(987654)
+  })
+
+  it('parses boot time seconds from proc stat output', () => {
+    expect(parseLinuxBootTimeSeconds('cpu  1 2 3\r\nbtime 1700000000\nintr 1')).toBe(1_700_000_000)
+  })
+
+  it('does not use line-array or whitespace-regex splitting', () => {
+    const splitSpy = vi.spyOn(String.prototype, 'split')
+
+    parseLinuxProcStartTicks('123 (orca daemon) S 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 42')
+    parseLinuxBootTimeSeconds('cpu 1 2 3\nbtime 1700000000')
+
+    const usedUnboundedSplit = splitSpy.mock.calls.some(
+      ([separator]) =>
+        (typeof separator === 'string' && (separator === '\n' || separator === ' ')) ||
+        (separator instanceof RegExp && separator.source.includes('\\s+'))
+    )
+    splitSpy.mockRestore()
+    expect(usedUnboundedSplit).toBe(false)
   })
 })
 
@@ -225,7 +293,7 @@ describe('killStaleDaemon pid identity guards', () => {
 
   beforeEach(() => {
     dir = mkdtempSync(join(tmpdir(), 'daemon-health-pid-test-'))
-    socketPath = join(dir, 'daemon.sock')
+    socketPath = daemonTestSocketPath(dir)
     tokenPath = join(dir, 'daemon.token')
   })
 

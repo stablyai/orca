@@ -1,4 +1,5 @@
 import { RuntimeClientError } from './runtime-client'
+import { REPEATED_FLAG_SEPARATOR } from './args'
 
 export function getRequiredStringFlag(flags: Map<string, string | boolean>, name: string): string {
   const value = flags.get(name)
@@ -25,6 +26,16 @@ export function getOptionalStringFlag(
 ): string | undefined {
   const value = flags.get(name)
   return typeof value === 'string' && value.length > 0 ? value : undefined
+}
+
+export function getRepeatedStringFlag(
+  flags: Map<string, string | boolean>,
+  name: string
+): string[] {
+  const value = getOptionalStringFlag(flags, name)
+  return value === undefined
+    ? []
+    : value.split(REPEATED_FLAG_SEPARATOR).filter((entry) => entry.length > 0)
 }
 
 export function getOptionalNumberFlag(

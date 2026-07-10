@@ -2,10 +2,14 @@ import type {
   BaseRefSearchResult,
   GitHubWorkItem,
   GitLabWorkItem,
+  LinearCollectionResult,
   LinearIssue
 } from '../../../../shared/types'
+import { isClipboardTextByteLengthOverLimit } from '../../../../shared/clipboard-text'
 
 export type SmartNameMode = 'smart' | 'github' | 'gitlab' | 'branches' | 'linear' | 'text'
+
+export const SMART_WORKSPACE_SOURCE_QUERY_MAX_BYTES = 2048
 
 export type SmartWorkspaceSourceRow =
   | { kind: 'use-name'; value: string; name: string }
@@ -14,6 +18,8 @@ export type SmartWorkspaceSourceRow =
   | { kind: 'gitlab'; value: string; item: GitLabWorkItem }
   | { kind: 'branch'; value: string; refName: string; localBranchName: string }
   | { kind: 'linear'; value: string; issue: LinearIssue }
+
+type LinearIssueSourceInput = LinearIssue[] | LinearCollectionResult<LinearIssue> | null | undefined
 
 const EMPTY_HINT_BY_MODE: Record<SmartNameMode, string> = {
   smart: 'Start typing to create a name or find a source.',
@@ -28,7 +34,15 @@ export function getSmartWorkspaceEmptyHint(mode: SmartNameMode): string {
   return EMPTY_HINT_BY_MODE[mode]
 }
 
+export function isSmartWorkspaceSourceQueryWithinLimit(
+  query: string,
+  maxBytes = SMART_WORKSPACE_SOURCE_QUERY_MAX_BYTES
+): boolean {
+  return !isClipboardTextByteLengthOverLimit(query, maxBytes)
+}
+
 export function getBranchSearchRequest({
+  branchesEnabled,
   disabled,
   textOnly,
   mode,
@@ -36,6 +50,7 @@ export function getBranchSearchRequest({
   query,
   limit
 }: {
+  branchesEnabled?: boolean
   disabled: boolean
   textOnly: boolean
   mode: SmartNameMode
@@ -43,9 +58,18 @@ export function getBranchSearchRequest({
   query: string
   limit: number
 }): { repoId: string; query: string; limit: number } | null {
+  if (
+    branchesEnabled === false ||
+    disabled ||
+    textOnly ||
+    !isSmartWorkspaceSourceQueryWithinLimit(query) ||
+    !selectedRepoId
+  ) {
+    return null
+  }
   const trimmedQuery = query.trim()
   const shouldSearchBranches = mode === 'branches' || (mode === 'smart' && trimmedQuery.length > 0)
-  if (disabled || textOnly || !selectedRepoId || !shouldSearchBranches) {
+  if (!shouldSearchBranches) {
     return null
   }
   return { repoId: selectedRepoId, query: trimmedQuery, limit }
@@ -66,6 +90,9 @@ export function getVisibleBranchResults({
   selectedRepoId: string | null
   value: string
 }): BaseRefSearchResult[] {
+  if (!isSmartWorkspaceSourceQueryWithinLimit(value)) {
+    return []
+  }
   const currentQuery = value.trim()
   if (mode !== 'branches' && mode !== 'smart') {
     return []
@@ -92,11 +119,14 @@ export function buildSmartWorkspaceSourceRows({
   gitlabAvailable: boolean
   gitlabItems: GitLabWorkItem[]
   linearAvailable: boolean
-  linearIssues: LinearIssue[]
+  linearIssues: LinearIssueSourceInput
   mode: SmartNameMode
   resultLimit: number
   value: string
 }): SmartWorkspaceSourceRow[] {
+  if (!isSmartWorkspaceSourceQueryWithinLimit(value)) {
+    return []
+  }
   const trimmed = value.trim()
   const nextRows: SmartWorkspaceSourceRow[] = []
   if (trimmed && mode === 'smart') {
@@ -109,7 +139,7 @@ export function buildSmartWorkspaceSourceRows({
     nextRows.push(
       ...githubItems.map((item) => ({
         kind: 'github' as const,
-        value: `github-${item.type}-${item.number}`,
+        value: `github-${item.repoId}-${item.type}-${item.number}`,
         item
       }))
     )
@@ -118,7 +148,7 @@ export function buildSmartWorkspaceSourceRows({
     nextRows.push(
       ...gitlabItems.map((item) => ({
         kind: 'gitlab' as const,
-        value: `gitlab-${item.type}-${item.number}`,
+        value: `gitlab-${item.repoId}-${item.type}-${item.number}`,
         item
       }))
     )
@@ -141,8 +171,15 @@ export function buildSmartWorkspaceSourceRows({
     )
   }
   if (linearAvailable && (mode === 'smart' || mode === 'linear')) {
+    // Why: mixed-version runtime responses may briefly carry the paginated
+    // collection shape into this render path; rendering must stay recoverable.
+    const resolvedLinearIssues = Array.isArray(linearIssues)
+      ? linearIssues
+      : Array.isArray(linearIssues?.items)
+        ? linearIssues.items
+        : []
     nextRows.push(
-      ...linearIssues.map((issue) => ({
+      ...resolvedLinearIssues.map((issue) => ({
         kind: 'linear' as const,
         value: `linear-${issue.id}`,
         issue

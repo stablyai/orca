@@ -1,11 +1,22 @@
 import type { GitWorktreeInfo, Repo } from '../shared/types'
-import { resolve } from 'path'
 import { listWorktrees } from './git/worktree'
 import { isFolderRepo } from '../shared/repo-kind'
 import { getSshGitProvider } from './providers/ssh-git-dispatch'
+import { areWorktreePathsEqual } from './ipc/worktree-logic'
+
+type LocalRepoWorktreeListOptions = {
+  wslDistro?: string
+  signal?: AbortSignal
+}
+
+function hasLocalRepoWorktreeListOptions(options: LocalRepoWorktreeListOptions | undefined) {
+  return options?.wslDistro !== undefined || options?.signal !== undefined
+}
 
 export function isRepoRoot(repos: Repo[], resolvedTarget: string): boolean {
-  return repos.some((repo) => !repo.connectionId && resolve(repo.path) === resolvedTarget)
+  return repos.some(
+    (repo) => !repo.connectionId && areWorktreePathsEqual(repo.path, resolvedTarget)
+  )
 }
 
 export function createFolderWorktree(repo: Repo): GitWorktreeInfo {
@@ -21,7 +32,10 @@ export function createFolderWorktree(repo: Repo): GitWorktreeInfo {
   }
 }
 
-export async function listRepoWorktrees(repo: Repo): Promise<GitWorktreeInfo[]> {
+export async function listRepoWorktrees(
+  repo: Repo,
+  options?: LocalRepoWorktreeListOptions
+): Promise<GitWorktreeInfo[]> {
   if (isFolderRepo(repo)) {
     return [createFolderWorktree(repo)]
   }
@@ -32,5 +46,7 @@ export async function listRepoWorktrees(repo: Repo): Promise<GitWorktreeInfo[]> 
     // local git against a server path.
     return provider ? await provider.listWorktrees(repo.path) : []
   }
-  return await listWorktrees(repo.path)
+  return hasLocalRepoWorktreeListOptions(options)
+    ? await listWorktrees(repo.path, options)
+    : await listWorktrees(repo.path)
 }

@@ -1,8 +1,8 @@
 /* eslint-disable max-lines */
-import { execFile, type ChildProcess } from 'child_process'
-import { existsSync, accessSync, chmodSync, readFileSync, constants } from 'fs'
-import { join } from 'path'
-import { platform, arch } from 'os'
+import { execFile, type ChildProcess } from 'node:child_process'
+import { existsSync, accessSync, chmodSync, readFileSync, constants } from 'node:fs'
+import { join } from 'node:path'
+import { platform, arch } from 'node:os'
 import { app, type WebContents } from 'electron'
 import { CdpWsProxy } from './cdp-ws-proxy'
 import { captureFullPageScreenshot } from './cdp-screenshot'
@@ -47,6 +47,8 @@ import type {
   BrowserCaptureStopResult,
   BrowserCookie
 } from '../../shared/runtime-types'
+import { assertClipboardTextWriteWithinLimitWithYield } from '../../shared/clipboard-text'
+import { iterateBrowserTextInsertionChunks } from './browser-text-insertion'
 
 // Why: must exceed agent-browser's internal per-command timeouts (goto defaults to 30s,
 // wait can be up to 60s). Using 90s ensures the bridge never kills a command before
@@ -55,6 +57,8 @@ const EXEC_TIMEOUT_MS = 90_000
 const CONSECUTIVE_TIMEOUT_LIMIT = 3
 const WAIT_PROCESS_TIMEOUT_GRACE_MS = 1_000
 const STALE_SESSION_CLOSE_TIMEOUT_MS = 3_000
+export const AGENT_BROWSER_TEXT_ARGUMENT_MAX_BYTES = 8 * 1024
+export const AGENT_BROWSER_CLIPBOARD_WRITE_MAX_BYTES = AGENT_BROWSER_TEXT_ARGUMENT_MAX_BYTES
 
 type SessionState = {
   proxy: CdpWsProxy
@@ -81,6 +85,39 @@ type ResolvedBrowserCommandTarget = {
   webContentsId: number
 }
 
+export type BrowserMouseModifier = 'cmd' | 'ctrl' | 'alt' | 'shift'
+
+function focusedValueSetExpression(
+  valueExpression: string,
+  options?: { append?: boolean; dispatchEvents?: boolean }
+): string {
+  const nextValue = options?.append
+    ? ["String(target.value ?? '') + ", valueExpression].join('')
+    : valueExpression
+  const dispatchEvents = options?.dispatchEvents
+    ? " target.dispatchEvent(new Event('input', { bubbles: true })); target.dispatchEvent(new Event('change', { bubbles: true }));"
+    : ''
+  return [
+    '(() => { const el = document.activeElement; if (el) {',
+    // Why: ARIA spinbutton wrappers can hold focus while a contained or controlled input owns the value.
+    " const editableSelector = \"input:not([type='hidden']):not([type='button']):not([type='checkbox']):not([type='radio']):not([type='file']):not([type='image']):not([type='reset']):not([type='submit']), textarea\";",
+    " const isEditable = (node) => !!node && (node.matches?.(editableSelector) ?? (node.tagName === 'TEXTAREA' || (node.tagName === 'INPUT' && !/^(hidden|button|checkbox|radio|file|image|reset|submit)$/i.test(node.getAttribute?.('type') ?? ''))));",
+    ' const findEditable = (root) => root?.querySelector?.(editableSelector) ?? null;',
+    ' let target = el;',
+    " if (!isEditable(target) && target.getAttribute?.('role') === 'spinbutton') {",
+    "   const controls = target.getAttribute('aria-controls');",
+    '   if (controls) { for (const id of controls.split(/\\s+/)) { if (!id) continue; const controlled = document.getElementById(id); if (isEditable(controlled)) { target = controlled; break; } const descendant = findEditable(controlled); if (descendant) { target = descendant; break; } } }',
+    '   if (target === el) { const descendant = findEditable(target); if (descendant) target = descendant; }',
+    ' }',
+    " const nativeSetter = Object.getOwnPropertyDescriptor(Object.getPrototypeOf(target), 'value')?.set;",
+    ' const nextValue = ',
+    nextValue,
+    '; if (nativeSetter) { nativeSetter.call(target, nextValue); } else { target.value = nextValue; }',
+    dispatchEvents,
+    ' } })()'
+  ].join('')
+}
+
 type AgentBrowserExecOptions = {
   envOverrides?: NodeJS.ProcessEnv
   timeoutMs?: number
@@ -90,6 +127,9 @@ type AgentBrowserExecOptions = {
 type EnqueueTargetedCommandOptions = {
   ensureSession?: boolean
   ensureVisible?: boolean
+  // Why: text-mutating commands must never fall back to the global active tab,
+  // which can point at a different worktree the user is currently viewing.
+  requireScopedTarget?: boolean
 }
 
 type AgentBrowserBridgeOptions = {
@@ -171,6 +211,22 @@ function parseShellArgs(input: string): string[] {
   return args
 }
 
+function stripAgentBrowserTargetArgs(args: string[]): string[] {
+  const stripped: string[] = []
+  for (let index = 0; index < args.length; index++) {
+    const arg = args[index]
+    if (arg === '--cdp' || arg === '--session') {
+      index++
+      continue
+    }
+    if (arg.startsWith('--cdp=') || arg.startsWith('--session=')) {
+      continue
+    }
+    stripped.push(arg)
+  }
+  return stripped
+}
+
 // Why: agent-browser returns generic error messages for stale/unknown refs.
 // Map them to a specific code so agents can reliably detect and re-snapshot.
 function classifyErrorCode(message: string): string {
@@ -217,6 +273,25 @@ function cdpMouseButtonMask(button: CdpMouseButton): number {
   return 1
 }
 
+function cdpMouseModifierMask(modifiers: BrowserMouseModifier[] | undefined): number {
+  if (!modifiers || modifiers.length === 0) {
+    return 0
+  }
+  let mask = 0
+  for (const modifier of modifiers) {
+    if (modifier === 'alt') {
+      mask |= 1
+    } else if (modifier === 'ctrl') {
+      mask |= 2
+    } else if (modifier === 'cmd') {
+      mask |= 4
+    } else if (modifier === 'shift') {
+      mask |= 8
+    }
+  }
+  return mask
+}
+
 function readClickPoint(value: unknown, fallback: BrowserClickPoint): BrowserClickPoint {
   const point = value && typeof value === 'object' ? (value as Record<string, unknown>) : null
   const x = point?.x
@@ -232,11 +307,17 @@ function readClickPoint(value: unknown, fallback: BrowserClickPoint): BrowserCli
   return { x, y, adjusted: point?.adjusted === true, handled: point?.handled === true }
 }
 
-function mobileTouchClickExpression(x: number, y: number, radius: number): string {
+function mobileTouchClickExpression(
+  x: number,
+  y: number,
+  radius: number,
+  allowDomActivation: boolean
+): string {
   return `(() => {
     const inputX = ${JSON.stringify(x)};
     const inputY = ${JSON.stringify(y)};
     const radius = ${JSON.stringify(radius)};
+    const allowDomActivation = ${JSON.stringify(allowDomActivation)};
     const selector = [
       'a[href]',
       'button',
@@ -327,8 +408,11 @@ function mobileTouchClickExpression(x: number, y: number, radius: number): strin
         break;
       }
     }
-    if (best && dispatchClick(best.target, best.x, best.y)) {
+    if (best && allowDomActivation && dispatchClick(best.target, best.x, best.y)) {
       return { x: best.x, y: best.y, adjusted: true, handled: true };
+    }
+    if (best) {
+      return { x: best.x, y: best.y, adjusted: true, handled: false };
     }
     return { x: inputX, y: inputY, adjusted: false, handled: false };
   })()`
@@ -338,7 +422,8 @@ async function resolveMobileTouchClickPoint(
   dbg: WebContents['debugger'],
   x: number,
   y: number,
-  radius?: number
+  radius: number | undefined,
+  allowDomActivation: boolean
 ): Promise<BrowserClickPoint> {
   const fallback = { x, y, adjusted: false, handled: false }
   if (typeof radius !== 'number' || !Number.isFinite(radius) || radius <= 0) {
@@ -346,7 +431,7 @@ async function resolveMobileTouchClickPoint(
   }
   try {
     const result = await dbg.sendCommand('Runtime.evaluate', {
-      expression: mobileTouchClickExpression(x, y, radius),
+      expression: mobileTouchClickExpression(x, y, radius, allowDomActivation),
       returnByValue: true,
       silent: true
     })
@@ -498,7 +583,9 @@ export class AgentBrowserBridge {
       this.activeWebContentsId = nextWorktreeActiveWebContentsId
     }
     if (browserPageId) {
-      await this.destroySession(`orca-tab-${browserPageId}`)
+      const sessionName = `orca-tab-${browserPageId}`
+      await this.destroySession(sessionName)
+      this.pendingInterceptRestore.delete(sessionName)
     }
     this.options.onTabsChanged?.(owningWorktreeId)
   }
@@ -566,6 +653,7 @@ export class AgentBrowserBridge {
     for (const [tabId, wcId] of tabs) {
       const wc = this.getWebContents(wcId)
       if (!wc) {
+        this.browserManager.unregisterGuest(tabId)
         continue
       }
       if (firstLiveWcId === null) {
@@ -683,20 +771,38 @@ export class AgentBrowserBridge {
     worktreeId?: string,
     browserPageId?: string
   ): Promise<BrowserFillResult> {
+    await assertClipboardTextWriteWithinLimitWithYield(value)
     // Why: Input.insertText via Electron's debugger API does not deliver text to
     // focused inputs in webviews — this is a fundamental Electron limitation.
     // Agent-browser's fill and click also fail for the same reason.
     // Workaround: use agent-browser's focus to resolve the ref, then set the value
-    // directly via JS and dispatch input/change events for React/framework compat.
-    return this.enqueueTargetedCommand(worktreeId, browserPageId, async (sessionName) => {
-      await this.execAgentBrowser(sessionName, ['focus', element])
-      const escaped = value.replace(/\\/g, '\\\\').replace(/'/g, "\\'")
-      await this.execAgentBrowser(sessionName, [
-        'eval',
-        `(() => { const el = document.activeElement; if (el) { const nativeSetter = Object.getOwnPropertyDescriptor(Object.getPrototypeOf(el), 'value')?.set; if (nativeSetter) { nativeSetter.call(el, '${escaped}'); } else { el.value = '${escaped}'; } el.dispatchEvent(new Event('input', { bubbles: true })); el.dispatchEvent(new Event('change', { bubbles: true })); } })()`
-      ])
-      return { filled: element } as BrowserFillResult
-    })
+    // directly via chunked JS and dispatch input/change events for React/framework compat.
+    return this.enqueueTargetedCommand(
+      worktreeId,
+      browserPageId,
+      async (sessionName) => {
+        await this.execAgentBrowser(sessionName, ['focus', element])
+        await this.execAgentBrowser(sessionName, [
+          'eval',
+          focusedValueSetExpression(JSON.stringify(''))
+        ])
+        for (const chunk of iterateBrowserTextInsertionChunks(
+          value,
+          AGENT_BROWSER_TEXT_ARGUMENT_MAX_BYTES
+        )) {
+          await this.execAgentBrowser(sessionName, [
+            'eval',
+            focusedValueSetExpression(JSON.stringify(chunk), { append: true })
+          ])
+        }
+        await this.execAgentBrowser(sessionName, [
+          'eval',
+          focusedValueSetExpression(JSON.stringify(''), { append: true, dispatchEvents: true })
+        ])
+        return { filled: element } as BrowserFillResult
+      },
+      { requireScopedTarget: true }
+    )
   }
 
   async type(
@@ -704,13 +810,21 @@ export class AgentBrowserBridge {
     worktreeId?: string,
     browserPageId?: string
   ): Promise<BrowserTypeResult> {
-    return this.enqueueTargetedCommand(worktreeId, browserPageId, async (sessionName) => {
-      return (await this.execAgentBrowser(sessionName, [
-        'keyboard',
-        'type',
-        input
-      ])) as BrowserTypeResult
-    })
+    await assertClipboardTextWriteWithinLimitWithYield(input)
+    return this.enqueueTargetedCommand(
+      worktreeId,
+      browserPageId,
+      async (sessionName) => {
+        for (const chunk of iterateBrowserTextInsertionChunks(
+          input,
+          AGENT_BROWSER_TEXT_ARGUMENT_MAX_BYTES
+        )) {
+          await this.execAgentBrowser(sessionName, ['keyboard', 'type', chunk])
+        }
+        return { typed: true } as BrowserTypeResult
+      },
+      { requireScopedTarget: true }
+    )
   }
 
   async select(
@@ -786,9 +900,22 @@ export class AgentBrowserBridge {
     worktreeId?: string,
     browserPageId?: string
   ): Promise<unknown> {
-    return this.enqueueTargetedCommand(worktreeId, browserPageId, async (sessionName) => {
-      return await this.execAgentBrowser(sessionName, ['keyboard', 'inserttext', text])
-    })
+    await assertClipboardTextWriteWithinLimitWithYield(text)
+    return this.enqueueTargetedCommand(
+      worktreeId,
+      browserPageId,
+      async (sessionName) => {
+        let result: unknown = { inserted: true }
+        for (const chunk of iterateBrowserTextInsertionChunks(
+          text,
+          AGENT_BROWSER_TEXT_ARGUMENT_MAX_BYTES
+        )) {
+          result = await this.execAgentBrowser(sessionName, ['keyboard', 'inserttext', chunk])
+        }
+        return result
+      },
+      { requireScopedTarget: true }
+    )
   }
 
   // ── Mouse commands ──
@@ -820,7 +947,8 @@ export class AgentBrowserBridge {
     button?: string,
     worktreeId?: string,
     browserPageId?: string,
-    radius?: number
+    radius?: number,
+    modifiers?: BrowserMouseModifier[]
   ): Promise<unknown> {
     return this.enqueueTargetedCommand(
       worktreeId,
@@ -835,12 +963,15 @@ export class AgentBrowserBridge {
         }
         const cdpButton = normalizeCdpMouseButton(button)
         const buttons = cdpMouseButtonMask(cdpButton)
+        const cdpModifiers = cdpMouseModifierMask(modifiers)
         const lease = acquireElectronDebugger(wc)
         try {
           wc.focus()
           const point =
             cdpButton === 'left'
-              ? await resolveMobileTouchClickPoint(wc.debugger, x, y, radius)
+              ? // Why: DOM activation cannot carry Cmd/Ctrl/Alt/Shift, so modifier
+                // clicks use only the adjusted point and let CDP dispatch the event.
+                await resolveMobileTouchClickPoint(wc.debugger, x, y, radius, cdpModifiers === 0)
               : { x, y, adjusted: false, handled: false }
           // Why: mobile taps should land as one atomic input operation. Sending
           // move/down/up through separate CLI calls visibly hovers targets and can
@@ -854,6 +985,7 @@ export class AgentBrowserBridge {
               y: point.y,
               button: cdpButton,
               buttons,
+              modifiers: cdpModifiers,
               clickCount: 1
             })
             await wc.debugger.sendCommand('Input.dispatchMouseEvent', {
@@ -862,6 +994,7 @@ export class AgentBrowserBridge {
               y: point.y,
               button: cdpButton,
               buttons: 0,
+              modifiers: cdpModifiers,
               clickCount: 1
             })
           }
@@ -996,6 +1129,9 @@ export class AgentBrowserBridge {
     worktreeId?: string,
     browserPageId?: string
   ): Promise<unknown> {
+    await assertClipboardTextWriteWithinLimitWithYield(text, {
+      maxBytes: AGENT_BROWSER_CLIPBOARD_WRITE_MAX_BYTES
+    })
     return this.enqueueTargetedCommand(worktreeId, browserPageId, async (sessionName) => {
       return await this.execAgentBrowser(sessionName, ['clipboard', 'write', text])
     })
@@ -1695,12 +1831,9 @@ export class AgentBrowserBridge {
 
   async exec(command: string, worktreeId?: string, browserPageId?: string): Promise<unknown> {
     return this.enqueueTargetedCommand(worktreeId, browserPageId, async (sessionName) => {
-      // Why: strip --cdp and --session from raw command to prevent session/target injection
-      const sanitized = command
-        .replace(/--cdp\s+\S+/g, '')
-        .replace(/--session\s+\S+/g, '')
-        .trim()
-      const args = parseShellArgs(sanitized)
+      // Why: strip target/session flags from raw passthrough commands so a
+      // caller cannot override Orca's selected browser page or CDP proxy.
+      const args = stripAgentBrowserTargetArgs(parseShellArgs(command.trim()))
       return await this.execAgentBrowser(sessionName, args)
     })
   }
@@ -1713,6 +1846,7 @@ export class AgentBrowserBridge {
       promises.push(this.destroySession(sessionName))
     }
     await Promise.allSettled(promises)
+    this.pendingInterceptRestore.clear()
   }
 
   // ── Internal ──
@@ -1735,7 +1869,7 @@ export class AgentBrowserBridge {
     execute: (sessionName: string, target: ResolvedBrowserCommandTarget) => Promise<T>,
     options: EnqueueTargetedCommandOptions = {}
   ): Promise<T> {
-    const target = this.resolveCommandTarget(worktreeId, browserPageId)
+    const target = this.resolveCommandTarget(worktreeId, browserPageId, options.requireScopedTarget)
     const sessionName = `orca-tab-${target.browserPageId}`
 
     if (options.ensureSession !== false) {
@@ -1752,6 +1886,7 @@ export class AgentBrowserBridge {
         execute: (() =>
           this.executeWithVisibleTarget(
             sessionName,
+            worktreeId,
             target,
             execute,
             options
@@ -1765,6 +1900,7 @@ export class AgentBrowserBridge {
 
   private async executeWithVisibleTarget<T>(
     sessionName: string,
+    worktreeId: string | undefined,
     target: ResolvedBrowserCommandTarget,
     execute: (sessionName: string, target: ResolvedBrowserCommandTarget) => Promise<T>,
     options: EnqueueTargetedCommandOptions
@@ -1777,10 +1913,48 @@ export class AgentBrowserBridge {
     // automation lease makes only this target paintable without selecting it.
     const restore = await this.browserManager.acquireAutomationVisibility(target.webContentsId)
     try {
-      return await execute(sessionName, target)
+      const visibleTarget = await this.refreshTargetAfterAutomationVisibility(
+        sessionName,
+        worktreeId,
+        target,
+        options
+      )
+      return await execute(sessionName, visibleTarget)
     } finally {
       restore()
     }
+  }
+
+  private async refreshTargetAfterAutomationVisibility(
+    sessionName: string,
+    worktreeId: string | undefined,
+    target: ResolvedBrowserCommandTarget,
+    options: EnqueueTargetedCommandOptions
+  ): Promise<ResolvedBrowserCommandTarget> {
+    const visibleTarget = this.resolveCommandTarget(worktreeId, target.browserPageId)
+    if (visibleTarget.webContentsId === target.webContentsId) {
+      return visibleTarget
+    }
+
+    if (this.activeWebContentsId === target.webContentsId) {
+      this.activeWebContentsId = visibleTarget.webContentsId
+    }
+    if (worktreeId && this.activeWebContentsPerWorktree.get(worktreeId) === target.webContentsId) {
+      this.activeWebContentsPerWorktree.set(worktreeId, visibleTarget.webContentsId)
+    }
+
+    // Why: making a parked webview paintable can re-register the same browser
+    // page with a new guest webContents. Tear down any stale named session now;
+    // DOM commands recreate immediately, direct-CDP commands let the next DOM
+    // command recreate against the live guest.
+    await this.restartSessionForTarget(
+      sessionName,
+      visibleTarget.browserPageId,
+      visibleTarget.webContentsId,
+      { recreate: options.ensureSession !== false }
+    )
+
+    return visibleTarget
   }
 
   private async processQueue(sessionName: string): Promise<void> {
@@ -1800,6 +1974,9 @@ export class AgentBrowserBridge {
       }
     }
 
+    if (queue && queue.length === 0 && this.commandQueues.get(sessionName) === queue) {
+      this.commandQueues.delete(sessionName)
+    }
     this.processingQueues.delete(sessionName)
   }
 
@@ -1813,10 +1990,13 @@ export class AgentBrowserBridge {
 
   private resolveCommandTarget(
     worktreeId?: string,
-    browserPageId?: string
+    browserPageId?: string,
+    requireScopedTarget = false
   ): ResolvedBrowserCommandTarget {
     if (!browserPageId) {
-      return this.resolveActiveTab(worktreeId)
+      return requireScopedTarget
+        ? this.resolveScopedActiveTab(worktreeId)
+        : this.resolveActiveTab(worktreeId)
     }
 
     const tabs = this.getRegisteredTabs(worktreeId)
@@ -1830,6 +2010,7 @@ export class AgentBrowserBridge {
     }
 
     if (!this.getWebContents(webContentsId)) {
+      this.browserManager.unregisterGuest(browserPageId)
       throw new BrowserError(
         'browser_tab_not_found',
         `Browser page ${browserPageId} is no longer available`
@@ -1856,6 +2037,15 @@ export class AgentBrowserBridge {
         if (wcId === preferredWcId && this.getWebContents(wcId)) {
           return { browserPageId: tabId, webContentsId: wcId }
         }
+        if (wcId === preferredWcId) {
+          this.browserManager.unregisterGuest(tabId)
+          if (this.activeWebContentsId === wcId) {
+            this.activeWebContentsId = null
+          }
+          if (worktreeId && this.activeWebContentsPerWorktree.get(worktreeId) === wcId) {
+            this.activeWebContentsPerWorktree.delete(worktreeId)
+          }
+        }
       }
     }
 
@@ -1871,12 +2061,47 @@ export class AgentBrowserBridge {
         }
         return { browserPageId: tabId, webContentsId: wcId }
       }
+      this.browserManager.unregisterGuest(tabId)
     }
 
     throw new BrowserError(
       'browser_no_tab',
       'No live browser tab available — all registered tabs have been destroyed'
     )
+  }
+
+  // Why: text-mutating commands (inserttext/type/fill) must not silently fall
+  // back to the global active tab when no worktree was resolved — that tab can
+  // belong to a worktree the user is currently viewing, so a goal-loop agent in
+  // another worktree would inject text into the user's foreground webview and
+  // steal OS focus. A scoped (worktreeId-bearing) call is already safe because
+  // the candidate set is pre-filtered to that worktree, so defer to the lenient
+  // resolver. An unscoped call instead requires an unambiguous target: scope to
+  // the lone worktree with live tabs, or refuse rather than guess.
+  private resolveScopedActiveTab(worktreeId?: string): ResolvedBrowserCommandTarget {
+    if (worktreeId) {
+      return this.resolveActiveTab(worktreeId)
+    }
+
+    const worktreesWithLiveTabs = new Set<string | undefined>()
+    for (const [tabId, wcId] of this.getRegisteredTabs(undefined)) {
+      if (this.getWebContents(wcId)) {
+        worktreesWithLiveTabs.add(this.browserManager.getWorktreeIdForTab(tabId))
+      }
+    }
+
+    if (worktreesWithLiveTabs.size === 0) {
+      throw new BrowserError('browser_no_tab', 'No browser tab open in this worktree')
+    }
+    if (worktreesWithLiveTabs.size > 1) {
+      throw new BrowserError(
+        'browser_target_ambiguous',
+        'Multiple worktrees have browser tabs open; pass --worktree to target text insertion safely'
+      )
+    }
+
+    const [onlyWorktreeId] = worktreesWithLiveTabs
+    return this.resolveActiveTab(onlyWorktreeId)
   }
 
   private async ensureSession(
@@ -1944,6 +2169,55 @@ export class AgentBrowserBridge {
     }
   }
 
+  private async restartSessionForTarget(
+    sessionName: string,
+    browserPageId: string,
+    webContentsId: number,
+    options: { recreate: boolean } = { recreate: true }
+  ): Promise<void> {
+    const pendingCreation = this.pendingSessionCreation.get(sessionName)
+    if (pendingCreation) {
+      await pendingCreation.catch(() => {})
+    }
+
+    const session = this.sessions.get(sessionName)
+    if (session) {
+      if (session.activeInterceptPatterns.length > 0) {
+        this.pendingInterceptRestore.set(sessionName, [...session.activeInterceptPatterns])
+      }
+      this.sessions.delete(sessionName)
+      this.pendingSessionCreation.delete(sessionName)
+      if (session.activeProcess) {
+        this.cancelledProcesses.add(session.activeProcess)
+        try {
+          session.activeProcess.kill()
+        } catch {
+          // Process may already be exiting.
+        }
+        session.activeProcess = null
+      }
+
+      const destroy = (async (): Promise<void> => {
+        try {
+          await this.runAgentBrowserRaw(sessionName, ['--session', sessionName, 'close'])
+        } catch {
+          // Session may already be dead.
+        }
+        await session.proxy.stop()
+      })()
+      this.pendingSessionDestruction.set(sessionName, destroy)
+      try {
+        await destroy
+      } finally {
+        this.pendingSessionDestruction.delete(sessionName)
+      }
+    }
+
+    if (options.recreate) {
+      await this.ensureSession(sessionName, browserPageId, webContentsId)
+    }
+  }
+
   private async destroySession(sessionName: string): Promise<void> {
     const pendingDestruction = this.pendingSessionDestruction.get(sessionName)
     if (pendingDestruction) {
@@ -1951,8 +2225,21 @@ export class AgentBrowserBridge {
       return
     }
 
+    const pendingCreation = this.pendingSessionCreation.get(sessionName)
+    if (pendingCreation) {
+      // Why: tab close can race with stale-session cleanup before sessions.set().
+      // Wait for creation to settle so a late proxy cannot survive the close.
+      try {
+        await pendingCreation
+      } catch {
+        // Creation failures are handled by the original caller; teardown still
+        // needs to reject queued work and clear any partial state below.
+      }
+    }
+
     const session = this.sessions.get(sessionName)
     if (!session) {
+      this.rejectQueuedCommandsForClosedSession(sessionName)
       return
     }
 
@@ -1961,19 +2248,7 @@ export class AgentBrowserBridge {
 
     // Why: queued commands would hang forever if we just delete the queue —
     // their promises would never resolve or reject. Drain and reject them.
-    const queue = this.commandQueues.get(sessionName)
-    this.commandQueues.delete(sessionName)
-    this.processingQueues.delete(sessionName)
-    if (queue) {
-      const err = new BrowserError(
-        'browser_tab_closed',
-        'Tab was closed while commands were queued'
-      )
-      for (const cmd of queue) {
-        cmd.reject(err)
-      }
-      queue.length = 0
-    }
+    this.rejectQueuedCommandsForClosedSession(sessionName)
 
     if (session.activeProcess) {
       // Why: queued command rejection is not enough when a daemon command is
@@ -2008,6 +2283,22 @@ export class AgentBrowserBridge {
     }
   }
 
+  private rejectQueuedCommandsForClosedSession(sessionName: string): void {
+    const queue = this.commandQueues.get(sessionName)
+    this.commandQueues.delete(sessionName)
+    this.processingQueues.delete(sessionName)
+    if (queue) {
+      const err = new BrowserError(
+        'browser_tab_closed',
+        'Tab was closed while commands were queued'
+      )
+      for (const cmd of queue) {
+        cmd.reject(err)
+      }
+      queue.length = 0
+    }
+  }
+
   private async execAgentBrowser(
     sessionName: string,
     commandArgs: string[],
@@ -2025,6 +2316,7 @@ export class AgentBrowserBridge {
     // could be destroyed. Check here to give a clear error instead of letting the
     // proxy fail with cryptic Electron debugger errors.
     if (!this.getWebContents(session.webContentsId)) {
+      await this.destroySession(sessionName)
       throw this.createPageUnavailableError(sessionName)
     }
 
@@ -2042,7 +2334,12 @@ export class AgentBrowserBridge {
       args.push('--cdp', String(port))
     }
 
-    args.push(...commandArgs, '--json')
+    // Why: exec passthrough can produce a large argv array; spreading it into
+    // push risks V8 argument limits before execFile receives the command.
+    for (const commandArg of commandArgs) {
+      args.push(commandArg)
+    }
+    args.push('--json')
 
     const stdout = await this.runAgentBrowserRaw(sessionName, args, execOptions)
     const translated = translateResult(stdout)

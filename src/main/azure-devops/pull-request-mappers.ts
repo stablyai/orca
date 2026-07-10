@@ -58,6 +58,7 @@ export function mapAzureDevOpsMergeable(mergeStatus: string | null | undefined):
       return 'MERGEABLE'
     case 'conflicts':
       return 'CONFLICTING'
+    case undefined:
     default:
       return 'UNKNOWN'
   }
@@ -80,6 +81,7 @@ function classifyAzureDevOpsStatus(state: string | null | undefined): CheckStatu
     case 'queued':
     case 'running':
       return 'pending'
+    case undefined:
     default:
       return 'neutral'
   }

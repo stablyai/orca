@@ -15,6 +15,11 @@ export function registerClaudeUsageHandlers(claudeUsage: ClaudeUsageStore): void
     claudeUsage.refresh(args?.force ?? false)
   )
   ipcMain.handle(
+    'claudeUsage:getSnapshot',
+    (_event, args: { scope: ClaudeUsageScope; range: ClaudeUsageRange; limit?: number }) =>
+      claudeUsage.getSnapshot(args.scope, args.range, args.limit)
+  )
+  ipcMain.handle(
     'claudeUsage:getSummary',
     (_event, args: { scope: ClaudeUsageScope; range: ClaudeUsageRange }) =>
       claudeUsage.getSummary(args.scope, args.range)

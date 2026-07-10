@@ -1,16 +1,26 @@
-/* eslint-disable max-lines -- Why: daemon connection, RPC, event, and disconnect behavior share one socket test harness. */
-import { EventEmitter } from 'events'
+import { EventEmitter } from 'node:events'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { createServer, type Server, type Socket } from 'net'
-import { tmpdir } from 'os'
-import { join } from 'path'
-import { mkdtempSync, writeFileSync, rmSync } from 'fs'
+import { createServer, type Server, type Socket } from 'node:net'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import { mkdtempSync, writeFileSync, rmSync } from 'node:fs'
 import { DaemonClient } from './client'
 import { encodeNdjson } from './ndjson'
 import type { HelloMessage, DaemonRequest, DaemonEvent } from './types'
+import { getDaemonSocketPath } from './daemon-spawner'
 
 function createTestDir(): string {
   return mkdtempSync(join(tmpdir(), 'daemon-client-test-'))
+}
+
+function splitInsideUtf8Sequence(payload: string, needle: string): [Buffer, Buffer] {
+  const encoded = Buffer.from(payload, 'utf8')
+  const encodedNeedle = Buffer.from(needle, 'utf8')
+  const offset = encoded.indexOf(encodedNeedle)
+  if (offset === -1 || encodedNeedle.length < 2) {
+    throw new Error(`Unable to split payload inside ${needle}`)
+  }
+  return [encoded.subarray(0, offset + 1), encoded.subarray(offset + 1)]
 }
 
 async function waitFor(predicate: () => boolean, timeoutMs = 2000): Promise<void> {
@@ -32,7 +42,7 @@ describe('DaemonClient', () => {
 
   beforeEach(() => {
     dir = createTestDir()
-    socketPath = join(dir, 'test.sock')
+    socketPath = getDaemonSocketPath(dir)
     tokenPath = join(dir, 'test.token')
     writeFileSync(tokenPath, 'test-token-123')
   })
@@ -331,6 +341,48 @@ describe('DaemonClient', () => {
         event: 'data',
         sessionId: 'session-1'
       })
+    })
+
+    it('preserves UTF-8 stream events split inside multibyte characters', async () => {
+      let streamSocket: Socket | null = null
+      await startMockDaemon()
+
+      const origListener = server.listeners('connection')[0] as (s: Socket) => void
+      server.removeAllListeners('connection')
+      let socketCount = 0
+      server.on('connection', (socket) => {
+        socketCount++
+        if (socketCount === 2) {
+          streamSocket = socket
+        }
+        origListener(socket)
+      })
+
+      const events: DaemonEvent[] = []
+      client = new DaemonClient({ socketPath, tokenPath })
+      client.onEvent((event) => events.push(event as DaemonEvent))
+      await client.ensureConnected()
+      await waitFor(() => streamSocket !== null)
+
+      const tableRow = '│OpenCode│🧩│┼────────┤'
+      const event: DaemonEvent = {
+        type: 'event',
+        event: 'data',
+        sessionId: 'session-1',
+        payload: { data: tableRow }
+      }
+      const [first, second] = splitInsideUtf8Sequence(encodeNdjson(event), '🧩')
+      streamSocket!.write(first)
+      streamSocket!.write(second)
+
+      await waitFor(() => events.length > 0)
+      expect(events[0]).toMatchObject({
+        type: 'event',
+        event: 'data',
+        sessionId: 'session-1',
+        payload: { data: tableRow }
+      })
+      expect(JSON.stringify(events[0])).not.toContain('\ufffd')
     })
   })
 

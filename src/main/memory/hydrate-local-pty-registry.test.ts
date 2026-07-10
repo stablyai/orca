@@ -182,7 +182,7 @@ describe('hydrateLocalPtyRegistryAtBoot', () => {
     expect(entry!.paneKey).toBe('tab-1:1')
   })
 
-  it('skips SSH sessions (repo with non-null connectionId)', async () => {
+  it('skips SSH repos before enumerating worktrees', async () => {
     const { hydrate, listRegisteredPtys } = await loadFresh()
 
     const ptyId = 'repo-ssh::/remote/Stingray@@feedface'
@@ -200,6 +200,7 @@ describe('hydrateLocalPtyRegistryAtBoot', () => {
     // visible to the local process sampler. Mirrors the spawn-time gate
     // around `registerPty` in `pty.ts`'s `pty:spawn` handler.
     expect(listRegisteredPtys()).toHaveLength(0)
+    expect(listRepoWorktreesMock).not.toHaveBeenCalled()
   })
 
   it('registers a local session whose worktree is in the store with the daemon-published pid', async () => {

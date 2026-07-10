@@ -1,6 +1,6 @@
 import type { Store } from '../persistence'
 import type { GlobalSettings } from '../../shared/types'
-import { describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 
 const { statMock, readFileMock } = vi.hoisted(() => ({
   statMock: vi.fn(),
@@ -18,6 +18,17 @@ vi.mock('os', () => ({
 }))
 
 import { previewGhosttyImport } from './index'
+
+const originalXdgConfigHome = process.env.XDG_CONFIG_HOME
+
+afterEach(() => {
+  vi.clearAllMocks()
+  if (originalXdgConfigHome !== undefined) {
+    process.env.XDG_CONFIG_HOME = originalXdgConfigHome
+  } else {
+    delete process.env.XDG_CONFIG_HOME
+  }
+})
 
 function createStore(settings: Record<string, unknown> = {}): Store {
   return {
@@ -61,6 +72,43 @@ background = #1a1a1a
     expect(result.diff).toEqual({
       terminalFontFamily: 'JetBrains Mono',
       terminalFontSize: 14,
+      terminalColorOverrides: { background: '#1a1a1a' }
+    })
+    expect(result.unsupportedKeys).toEqual([])
+  })
+
+  it('imports every discovered config file in Ghostty load order', async () => {
+    delete process.env.XDG_CONFIG_HOME
+    statMock.mockImplementation(async (p: string) => {
+      if (
+        p === '/Users/alice/.config/ghostty/config.ghostty' ||
+        p === '/Users/alice/.config/ghostty/config'
+      ) {
+        return { isFile: () => true }
+      }
+      throw Object.assign(new Error('ENOENT'), { code: 'ENOENT' })
+    })
+    readFileMock.mockImplementation(async (p: string) => {
+      if (p === '/Users/alice/.config/ghostty/config.ghostty') {
+        return 'font-size = 22\nbackground = #1a1a1a\n'
+      }
+      if (p === '/Users/alice/.config/ghostty/config') {
+        return 'font-family = JetBrains Mono\nfont-size = 18\n'
+      }
+      throw Object.assign(new Error('ENOENT'), { code: 'ENOENT' })
+    })
+
+    const result = await previewGhosttyImport(createStore())
+
+    expect(result.found).toBe(true)
+    expect(result.configPath).toBe('/Users/alice/.config/ghostty/config.ghostty')
+    expect(result.configPaths).toEqual([
+      '/Users/alice/.config/ghostty/config.ghostty',
+      '/Users/alice/.config/ghostty/config'
+    ])
+    expect(result.diff).toEqual({
+      terminalFontFamily: 'JetBrains Mono',
+      terminalFontSize: 18,
       terminalColorOverrides: { background: '#1a1a1a' }
     })
     expect(result.unsupportedKeys).toEqual([])

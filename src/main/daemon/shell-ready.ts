@@ -2,16 +2,21 @@
    wrapper generation for zsh, bash, and PowerShell plus the launch-config
    plumbing; keeping them together lets the wrapper/marker contract be
    reviewed as a unit (mirrors src/main/providers/local-pty-shell-ready.ts). */
-import { tmpdir } from 'os'
-import { basename, dirname, join, win32 as pathWin32 } from 'path'
-import { chmodSync, existsSync, mkdirSync, writeFileSync } from 'fs'
+import { tmpdir } from 'node:os'
+import { basename, dirname, join, win32 as pathWin32 } from 'node:path'
+import { chmodSync, existsSync, mkdirSync, writeFileSync } from 'node:fs'
 import {
   encodePowerShellCommand,
   getPowerShellOsc133Bootstrap,
   isPowerShellExecutableName
 } from '../powershell-osc133-bootstrap'
 import { getPosixOmpShellWrapper } from '../pty/omp-shell-wrapper'
-import { getZshEnvTemplate } from '../shell-templates'
+import {
+  getZshEnvTemplate,
+  getZshFinalZdotdirRestoreBlock,
+  getZshShellReadyMarkerRegistrationBlock,
+  getZshStartupFileSourceBlock
+} from '../shell-templates'
 
 const ORCA_USER_DATA_PATH_ENV = 'ORCA_USER_DATA_PATH'
 const SHELL_READY_MARKER = '\\033]777;orca-shell-ready\\007'
@@ -90,6 +95,11 @@ elif [[ -f "$HOME/.bash_login" ]]; then
 elif [[ -f "$HOME/.profile" ]]; then
   source "$HOME/.profile"
 fi
+# Why: enable bracketed paste so Orca can deliver a multiline startup prompt as
+# a single literal paste (ESC[200~…ESC[201~); without it, older readline builds
+# treat each embedded newline as Enter and mangle the prompt into PS2
+# continuation. Modern readline defaults this on; force it for the rest.
+[[ $- == *i* ]] && bind 'set enable-bracketed-paste on' 2>/dev/null
 __orca_restore_attribution_path() {
   [[ -n "\${ORCA_ATTRIBUTION_SHIM_DIR:-}" ]] || return 0
   case "$PATH" in
@@ -98,15 +108,18 @@ __orca_restore_attribution_path() {
   export PATH="\${ORCA_ATTRIBUTION_SHIM_DIR}:$PATH"
 }
 __orca_restore_attribution_path
+__orca_restore_agent_teams_path() {
+  [[ -n "\${ORCA_AGENT_TEAMS_SHIM_DIR:-}" ]] || return 0
+  case "$PATH" in
+    "\${ORCA_AGENT_TEAMS_SHIM_DIR}"|"\${ORCA_AGENT_TEAMS_SHIM_DIR}:"*) return 0 ;;
+  esac
+  export PATH="\${ORCA_AGENT_TEAMS_SHIM_DIR}:$PATH"
+}
+__orca_restore_agent_teams_path
 # Why: user startup files may set the default OpenCode config after Orca's
-# spawn env; restore the PTY-scoped overlay before the first prompt.
+# spawn env; restore the Orca-managed config dir before the first prompt.
 [[ -n "\${ORCA_OPENCODE_CONFIG_DIR:-}" ]] && export OPENCODE_CONFIG_DIR="\${ORCA_OPENCODE_CONFIG_DIR}"
-# Why: bare shells carry both Pi and OMP shadows so a later typed OMP can
-# switch on demand. Keep Pi as the shell default unless this PTY is OMP-only.
-[[ -n "\${ORCA_PI_CODING_AGENT_DIR:-}" ]] && export PI_CODING_AGENT_DIR="\${ORCA_PI_CODING_AGENT_DIR}"
-if [[ -z "\${ORCA_PI_CODING_AGENT_DIR:-}" && -n "\${ORCA_OMP_CODING_AGENT_DIR:-}" ]]; then
-  export PI_CODING_AGENT_DIR="\${ORCA_OMP_CODING_AGENT_DIR}"
-fi
+[[ -n "\${ORCA_MIMOCODE_HOME:-}" ]] && export MIMOCODE_HOME="\${ORCA_MIMOCODE_HOME}"
 ${getPosixOmpShellWrapper()}
 # Why: Codex must keep using Orca's runtime CODEX_HOME after profile scripts.
 [[ -n "\${ORCA_CODEX_HOME:-}" ]] && export CODEX_HOME="\${ORCA_CODEX_HOME}"
@@ -122,9 +135,10 @@ __orca_osc133_precmd() {
     unset __orca_in_command
   fi
   printf "\\033]133;A\\007"
-}
-__orca_osc133_prompt_done() {
-  unset __orca_in_prompt_command
+  # Why: emit the shell-ready marker here (not a trailing PROMPT_COMMAND entry)
+  # so a framework that must be last in PROMPT_COMMAND — bash-preexec — is not
+  # displaced by one of Orca's own hooks.
+  [[ "\${ORCA_SHELL_READY_MARKER:-0}" == "1" ]] && printf "${SHELL_READY_MARKER}"
 }
 __orca_run_user_debug_trap() {
   if [[ -n "\${__orca_user_debug_trap:-}" ]]; then
@@ -133,17 +147,43 @@ __orca_run_user_debug_trap() {
 }
 __orca_osc133_preexec() {
   __orca_run_user_debug_trap
+  # Why: a framework (bash-preexec/starship) may replace our DEBUG trap at the
+  # first prompt; __orca_osc133_epilogue re-takes it each prompt and stores the
+  # framework's trap here, so the framework's own preexec still runs while our
+  # command-start C survives its re-arm.
+  if [[ -n "\${__orca_chained_debug_trap:-}" ]]; then
+    eval "$__orca_chained_debug_trap" || true
+  fi
   [[ -z "\${__orca_in_prompt_command:-}" ]] || return
-  # Why: bash DEBUG fires for every simple command, including PROMPT_COMMAND
-  # bodies. Skip our own prompt-time helpers so they don't mark the shell as
-  # "in command" before the prompt has even drawn.
+  # Why: a chained trap can invoke us more than once for a single command, so
+  # emit C only on the first fire (the __orca_in_command gate), and never for a
+  # prompt-time hook — ours or bash-preexec's __bp_* helpers.
+  [[ -z "\${__orca_in_command:-}" ]] || return
   case "$BASH_COMMAND" in
-    *__orca_osc133_precmd*|*__orca_osc133_prompt_done*|*__orca_prompt_mark*) return ;;
+    *__orca_osc133_*|*__bp_*) return ;;
   esac
   printf "\\033]133;C\\007"
   __orca_in_command=1
 }
-# Why: prepend so we capture $? before the user's PROMPT_COMMAND chain mutates it.
+# Why: runs LAST every prompt — closes the prompt window (so command starts emit
+# C) and re-arms our single DEBUG trap. A framework that replaced DEBUG at the
+# first prompt is captured and chained rather than discarded, so it keeps working
+# while its re-arm can no longer silence Orca's command-start signal.
+__orca_osc133_epilogue() {
+  unset __orca_in_prompt_command
+  local __orca_spec="$(trap -p DEBUG)"
+  case "$__orca_spec" in
+    "" | *__orca_osc133_preexec* ) __orca_chained_debug_trap="" ;;
+    * )
+      __orca_spec="\${__orca_spec#trap -- }"
+      __orca_spec="\${__orca_spec% DEBUG}"
+      eval "__orca_chained_debug_trap=$__orca_spec"
+      ;;
+  esac
+  trap '__orca_osc133_preexec' DEBUG
+}
+# Why: normalize an array PROMPT_COMMAND (bash 5.1+) to a string so prepend/append
+# below is uniform, and capture $? in precmd before the user's chain mutates it.
 __orca_normalize_prompt_command() {
   local __orca_joined="" __orca_prompt_part
   if [[ "$(declare -p PROMPT_COMMAND 2>/dev/null)" == "declare -a"* ]]; then
@@ -158,27 +198,8 @@ __orca_normalize_prompt_command() {
     PROMPT_COMMAND="$__orca_joined"
   fi
 }
-__orca_prepend_prompt_command() {
-  __orca_normalize_prompt_command
-  PROMPT_COMMAND="__orca_osc133_precmd\${PROMPT_COMMAND:+;\${PROMPT_COMMAND}}"
-}
-__orca_append_prompt_command() {
-  local command="$1"
-  __orca_normalize_prompt_command
-  if [[ -n "\${PROMPT_COMMAND:-}" ]]; then
-    PROMPT_COMMAND="\${PROMPT_COMMAND};$command"
-  else
-    PROMPT_COMMAND="$command"
-  fi
-}
-__orca_prepend_prompt_command
-if [[ "\${ORCA_SHELL_READY_MARKER:-0}" == "1" ]]; then
-  __orca_prompt_mark() {
-    printf "${SHELL_READY_MARKER}"
-  }
-  __orca_append_prompt_command "__orca_prompt_mark"
-fi
-__orca_append_prompt_command "__orca_osc133_prompt_done"
+__orca_normalize_prompt_command
+PROMPT_COMMAND="__orca_osc133_precmd\${PROMPT_COMMAND:+;\${PROMPT_COMMAND}};__orca_osc133_epilogue"
 __orca_debug_trap_spec="$(trap -p DEBUG)"
 if [[ -n "$__orca_debug_trap_spec" ]]; then
   __orca_debug_trap_command="\${__orca_debug_trap_spec#trap -- }"
@@ -186,7 +207,7 @@ if [[ -n "$__orca_debug_trap_spec" ]]; then
   eval "__orca_user_debug_trap=$__orca_debug_trap_command"
 fi
 unset __orca_debug_trap_spec __orca_debug_trap_command
-unset -f __orca_normalize_prompt_command __orca_prepend_prompt_command __orca_append_prompt_command
+unset -f __orca_normalize_prompt_command
 # Why: arm DEBUG after wrapper setup; otherwise bash treats our own rcfile
 # commands as a foreground command and emits a fake C/D before the first prompt.
 trap '__orca_osc133_preexec' DEBUG
@@ -195,10 +216,11 @@ trap '__orca_osc133_preexec' DEBUG
 
 export function getDaemonZshShellReadyRcfileContent(): string {
   return `# Orca daemon zsh shell-ready wrapper
-_orca_home="\${ORCA_ORIG_ZDOTDIR:-$HOME}"
-if [[ "$_orca_home" != "$ZDOTDIR" && -o interactive && -f "$_orca_home/.zshrc" ]]; then
-  source "$_orca_home/.zshrc"
-fi
+${getZshStartupFileSourceBlock({
+  fileName: '.zshrc',
+  interactiveOnly: true,
+  skipWhenHomeIsCurrentZdotdir: true
+})}
 __orca_restore_attribution_path() {
   [[ -n "\${ORCA_ATTRIBUTION_SHIM_DIR:-}" ]] || return 0
   case "$PATH" in
@@ -207,15 +229,18 @@ __orca_restore_attribution_path() {
   export PATH="\${ORCA_ATTRIBUTION_SHIM_DIR}:$PATH"
 }
 [[ ! -o login ]] && __orca_restore_attribution_path
+__orca_restore_agent_teams_path() {
+  [[ -n "\${ORCA_AGENT_TEAMS_SHIM_DIR:-}" ]] || return 0
+  case "$PATH" in
+    "\${ORCA_AGENT_TEAMS_SHIM_DIR}"|"\${ORCA_AGENT_TEAMS_SHIM_DIR}:"*) return 0 ;;
+  esac
+  export PATH="\${ORCA_AGENT_TEAMS_SHIM_DIR}:$PATH"
+}
+[[ ! -o login ]] && __orca_restore_agent_teams_path
 if [[ ! -o login ]]; then
   # Why: ~/.zshrc can export the user's default OpenCode config after spawn.
   [[ -n "\${ORCA_OPENCODE_CONFIG_DIR:-}" ]] && export OPENCODE_CONFIG_DIR="\${ORCA_OPENCODE_CONFIG_DIR}"
-  # Why: bare shells carry both Pi and OMP shadows; keep Pi as the default and
-  # let the OMP wrapper switch to OMP only for that command.
-  [[ -n "\${ORCA_PI_CODING_AGENT_DIR:-}" ]] && export PI_CODING_AGENT_DIR="\${ORCA_PI_CODING_AGENT_DIR}"
-  if [[ -z "\${ORCA_PI_CODING_AGENT_DIR:-}" && -n "\${ORCA_OMP_CODING_AGENT_DIR:-}" ]]; then
-    export PI_CODING_AGENT_DIR="\${ORCA_OMP_CODING_AGENT_DIR}"
-  fi
+  [[ -n "\${ORCA_MIMOCODE_HOME:-}" ]] && export MIMOCODE_HOME="\${ORCA_MIMOCODE_HOME}"
   ${getPosixOmpShellWrapper()}
   [[ -n "\${ORCA_CODEX_HOME:-}" ]] && export CODEX_HOME="\${ORCA_CODEX_HOME}"
 fi
@@ -234,6 +259,9 @@ __orca_osc133_preexec() {
 # Why: prepend so Orca captures $? before user prompt hooks can overwrite it.
 precmd_functions=(__orca_osc133_precmd \${precmd_functions[@]})
 preexec_functions=(__orca_osc133_preexec \${preexec_functions[@]})
+if [[ ! -o login ]]; then
+${getZshFinalZdotdirRestoreBlock()}
+fi
 `
 }
 
@@ -252,21 +280,11 @@ function ensureShellReadyWrappers(): void {
 
   const zshEnv = getZshEnvTemplate(zshDir, 'daemon')
   const zshProfile = `# Orca daemon zsh shell-ready wrapper
-_orca_home="\${ORCA_ORIG_ZDOTDIR:-$HOME}"
-case "\${_orca_home%/}" in
-  */shell-ready/zsh) _orca_home="$HOME" ;;
-esac
-[[ -f "$_orca_home/.zprofile" ]] && source "$_orca_home/.zprofile"
+${getZshStartupFileSourceBlock({ fileName: '.zprofile' })}
 `
   const zshRc = getDaemonZshShellReadyRcfileContent()
   const zshLogin = `# Orca daemon zsh shell-ready wrapper
-_orca_home="\${ORCA_ORIG_ZDOTDIR:-$HOME}"
-case "\${_orca_home%/}" in
-  */shell-ready/zsh) _orca_home="$HOME" ;;
-esac
-if [[ -o interactive && -f "$_orca_home/.zlogin" ]]; then
-  source "$_orca_home/.zlogin"
-fi
+${getZshStartupFileSourceBlock({ fileName: '.zlogin', interactiveOnly: true })}
 __orca_restore_attribution_path() {
   [[ -n "\${ORCA_ATTRIBUTION_SHIM_DIR:-}" ]] || return 0
   case "$PATH" in
@@ -275,24 +293,21 @@ __orca_restore_attribution_path() {
   export PATH="\${ORCA_ATTRIBUTION_SHIM_DIR}:$PATH"
 }
 __orca_restore_attribution_path
+__orca_restore_agent_teams_path() {
+  [[ -n "\${ORCA_AGENT_TEAMS_SHIM_DIR:-}" ]] || return 0
+  case "$PATH" in
+    "\${ORCA_AGENT_TEAMS_SHIM_DIR}"|"\${ORCA_AGENT_TEAMS_SHIM_DIR}:"*) return 0 ;;
+  esac
+  export PATH="\${ORCA_AGENT_TEAMS_SHIM_DIR}:$PATH"
+}
+__orca_restore_agent_teams_path
 # Why: .zlogin is the final login startup file before the prompt is shown.
 [[ -n "\${ORCA_OPENCODE_CONFIG_DIR:-}" ]] && export OPENCODE_CONFIG_DIR="\${ORCA_OPENCODE_CONFIG_DIR}"
-[[ -n "\${ORCA_PI_CODING_AGENT_DIR:-}" ]] && export PI_CODING_AGENT_DIR="\${ORCA_PI_CODING_AGENT_DIR}"
-if [[ -z "\${ORCA_PI_CODING_AGENT_DIR:-}" && -n "\${ORCA_OMP_CODING_AGENT_DIR:-}" ]]; then
-  export PI_CODING_AGENT_DIR="\${ORCA_OMP_CODING_AGENT_DIR}"
-fi
+[[ -n "\${ORCA_MIMOCODE_HOME:-}" ]] && export MIMOCODE_HOME="\${ORCA_MIMOCODE_HOME}"
 ${getPosixOmpShellWrapper()}
 [[ -n "\${ORCA_CODEX_HOME:-}" ]] && export CODEX_HOME="\${ORCA_CODEX_HOME}"
-if [[ "\${ORCA_SHELL_READY_MARKER:-0}" == "1" ]]; then
-  __orca_prompt_mark() {
-    printf "${SHELL_READY_MARKER}"
-  }
-  # Why: zsh precmd fires before zle switches the PTY into line-editing mode,
-  # so writing startup input there can be echoed once outside the prompt.
-  autoload -Uz add-zle-hook-widget
-  zle -N __orca_prompt_mark
-  add-zle-hook-widget line-init __orca_prompt_mark
-fi
+${getZshShellReadyMarkerRegistrationBlock(SHELL_READY_MARKER)}
+${getZshFinalZdotdirRestoreBlock()}
 `
   const bashRc = getDaemonBashShellReadyRcfileContent()
 

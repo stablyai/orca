@@ -11,10 +11,17 @@ const mocks = vi.hoisted(() => {
     tabsByWorktree: {} as Record<string, { id: string }[]>,
     ptyIdsByTabId: {} as Record<string, string[]>
   }
+  const suspendWorkspace = vi.fn().mockResolvedValue(null)
   const toastError = vi.fn()
   const markWorktreeSleepIntent = vi.fn()
   const clearWorktreeSleepIntent = vi.fn()
-  return { clearWorktreeSleepIntent, markWorktreeSleepIntent, state, toastError }
+  return {
+    clearWorktreeSleepIntent,
+    markWorktreeSleepIntent,
+    state,
+    suspendWorkspace,
+    toastError
+  }
 })
 
 vi.mock('@/store', () => ({
@@ -33,11 +40,21 @@ import { runSleepWorktree, runSleepWorktrees } from './sleep-worktree-flow'
 
 describe('runSleepWorktree', () => {
   beforeEach(() => {
+    vi.unstubAllGlobals()
+    vi.stubGlobal('window', {
+      api: {
+        ephemeralVm: {
+          suspendWorkspace: mocks.suspendWorkspace
+        }
+      },
+      requestAnimationFrame: vi.fn()
+    })
     mocks.state.setActiveWorktree.mockClear()
     mocks.state.shutdownWorktreeBrowsers.mockClear().mockResolvedValue(undefined)
     mocks.state.shutdownWorktreeTerminals.mockClear().mockResolvedValue(undefined)
     mocks.state.suppressPtyExit.mockClear()
     mocks.state.consumeSuppressedPtyExit.mockClear()
+    mocks.suspendWorkspace.mockClear().mockResolvedValue(null)
     mocks.markWorktreeSleepIntent.mockClear()
     mocks.clearWorktreeSleepIntent.mockClear()
     mocks.toastError.mockClear()
@@ -59,9 +76,12 @@ describe('runSleepWorktree', () => {
     expect(mocks.state.shutdownWorktreeTerminals).toHaveBeenCalledWith('wt-1', {
       keepIdentifiers: true
     })
+    expect(mocks.suspendWorkspace).toHaveBeenCalledWith({ workspaceId: 'wt-1' })
     const browsersCallOrder = mocks.state.shutdownWorktreeBrowsers.mock.invocationCallOrder[0]
     const terminalsCallOrder = mocks.state.shutdownWorktreeTerminals.mock.invocationCallOrder[0]
+    const suspendCallOrder = mocks.suspendWorkspace.mock.invocationCallOrder[0]
     expect(browsersCallOrder).toBeLessThan(terminalsCallOrder)
+    expect(terminalsCallOrder).toBeLessThan(suspendCallOrder)
   })
 
   it('clears activeWorktreeId before teardown when the slept worktree is active', async () => {
@@ -90,6 +110,99 @@ describe('runSleepWorktree', () => {
     expect(terminalShutdown).toBeLessThan(clearCall)
   })
 
+  it('preserves active row position through section-scoped sidebar row ids', async () => {
+    const requestAnimationFrame = vi.fn(() => 1)
+    const scroller = {
+      dispatchEvent: vi.fn(),
+      scrollHeight: 100,
+      scrollTop: 0
+    }
+    const row = {
+      closest: (selector: string) => (selector === '[data-worktree-virtual-row]' ? row : null),
+      getBoundingClientRect: () => ({ top: 42 })
+    }
+    const option = {
+      dataset: { worktreeId: 'wt-1' },
+      closest: (selector: string) => (selector === '[data-worktree-virtual-row]' ? row : null),
+      querySelector: () => null
+    }
+    vi.stubGlobal('document', {
+      querySelector: (selector: string) =>
+        selector === '[data-worktree-sidebar]' ? scroller : null,
+      querySelectorAll: (selector: string) => (selector === '[data-worktree-id]' ? [option] : [])
+    })
+    vi.stubGlobal('window', { requestAnimationFrame })
+    mocks.state.activeWorktreeId = 'wt-1'
+
+    await runSleepWorktree('wt-1')
+
+    expect(requestAnimationFrame).toHaveBeenCalledTimes(1)
+  })
+
+  it('anchors sleep restoration to the primary duplicate row', async () => {
+    let frameCount = 0
+    const requestAnimationFrame = vi.fn((callback: FrameRequestCallback) => {
+      frameCount += 1
+      if (frameCount === 1) {
+        callback(0)
+      }
+      return frameCount
+    })
+    const scroller = {
+      dispatchEvent: vi.fn(),
+      scrollHeight: 100,
+      scrollTop: 0
+    }
+    const pinnedRow = {
+      closest: (selector: string) =>
+        selector === '[data-worktree-virtual-row]' ? pinnedRow : null,
+      getBoundingClientRect: () => ({ top: 10 })
+    }
+    let naturalTop = 40
+    const naturalRow = {
+      closest: (selector: string) =>
+        selector === '[data-worktree-virtual-row]' ? naturalRow : null,
+      getBoundingClientRect: () => ({ top: naturalTop })
+    }
+    const pinnedOption = {
+      dataset: {
+        worktreeId: 'wt-1',
+        worktreeRowKey: 'pinned:wt-1',
+        worktreeSectionKey: 'pinned'
+      },
+      closest: (selector: string) =>
+        selector === '[data-worktree-virtual-row]' ? pinnedRow : null,
+      querySelector: () => null
+    }
+    const naturalOption = {
+      dataset: {
+        worktreeId: 'wt-1',
+        worktreeRowKey: 'all:wt-1',
+        worktreeSectionKey: 'all'
+      },
+      closest: (selector: string) =>
+        selector === '[data-worktree-virtual-row]' ? naturalRow : null,
+      querySelector: (selector: string) =>
+        selector === '[data-worktree-card-active="primary"]' ? {} : null
+    }
+    vi.stubGlobal('document', {
+      querySelector: (selector: string) =>
+        selector === '[data-worktree-sidebar]' ? scroller : null,
+      querySelectorAll: (selector: string) =>
+        selector === '[data-worktree-id]' ? [pinnedOption, naturalOption] : []
+    })
+    vi.stubGlobal('window', { requestAnimationFrame })
+    mocks.state.activeWorktreeId = 'wt-1'
+
+    mocks.state.setActiveWorktree.mockImplementation(() => {
+      naturalTop = 45
+    })
+
+    await runSleepWorktree('wt-1')
+
+    expect(scroller.scrollTop).toBe(5)
+  })
+
   it('leaves activeWorktreeId alone when sleeping a background worktree', async () => {
     mocks.state.activeWorktreeId = 'wt-other'
 
@@ -109,6 +222,7 @@ describe('runSleepWorktree', () => {
     await runSleepWorktree('wt-1')
 
     expect(mocks.state.shutdownWorktreeTerminals).not.toHaveBeenCalled()
+    expect(mocks.suspendWorkspace).not.toHaveBeenCalled()
     expect(mocks.clearWorktreeSleepIntent).toHaveBeenCalledWith('wt-1')
     expect(mocks.toastError).toHaveBeenCalledWith(
       'Failed to sleep workspace',
@@ -133,6 +247,7 @@ describe('runSleepWorktree', () => {
     expect(mocks.state.shutdownWorktreeTerminals).toHaveBeenCalledWith('wt-2', {
       keepIdentifiers: true
     })
+    expect(mocks.suspendWorkspace).toHaveBeenCalledWith({ workspaceId: 'wt-2' })
     expect(mocks.toastError).toHaveBeenCalledWith(
       'Failed to sleep some workspaces',
       expect.objectContaining({ description: 'first failed' })
@@ -154,5 +269,7 @@ describe('runSleepWorktree', () => {
     expect(mocks.state.shutdownWorktreeTerminals).toHaveBeenNthCalledWith(2, 'wt-2', {
       keepIdentifiers: true
     })
+    expect(mocks.suspendWorkspace).toHaveBeenNthCalledWith(1, { workspaceId: 'wt-1' })
+    expect(mocks.suspendWorkspace).toHaveBeenNthCalledWith(2, { workspaceId: 'wt-2' })
   })
 })

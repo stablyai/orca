@@ -9,6 +9,7 @@ import {
   parseMarkdownDocLink,
   resolveMarkdownDocLink
 } from './markdown-doc-links'
+import { isDocLinkLiteralCodeTextNode } from './rich-markdown-doc-link-code-context'
 
 const DOC_LINK_PLACEHOLDER_PREFIX = '[[ORCA_DOC_LINK:'
 const DOC_LINK_PLACEHOLDER_SUFFIX = ']]'
@@ -46,8 +47,11 @@ function buildPreviewDecorations(state: EditorState, storage: DocLinkStorage): D
   const decorations: Decoration[] = []
   const index = getDocIndex(storage)
   const cursor = state.selection.from
-  state.doc.descendants((node, pos) => {
+  state.doc.descendants((node, pos, parent) => {
     if (node.type.name !== 'text' || !node.text) {
+      return
+    }
+    if (isDocLinkLiteralCodeTextNode(node, parent)) {
       return
     }
     for (const match of node.text.matchAll(DOC_LINK_PATTERN)) {
@@ -272,8 +276,11 @@ export const MarkdownDocLink = Node.create({
           const cursor = newState.selection.from
           let modified = false
 
-          newState.doc.descendants((node, pos) => {
+          newState.doc.descendants((node, pos, parent) => {
             if (node.type.name !== 'text' || !node.text) {
+              return
+            }
+            if (isDocLinkLiteralCodeTextNode(node, parent)) {
               return
             }
 

@@ -1,6 +1,3 @@
-/* eslint-disable max-lines -- Why: these tests share one mocked browser
-   WebSocket/E2EE transport fixture, and splitting them would obscure the
-   subscription lifecycle regressions they cover. */
 import { describe, expect, it, vi, afterEach, beforeEach } from 'vitest'
 import WebSocket, { WebSocketServer } from 'ws'
 import { WebRuntimeClient } from './web-runtime-client'
@@ -15,22 +12,35 @@ import {
 } from '../../../shared/e2ee-crypto'
 import type { RuntimeRpcResponse } from '../../../shared/runtime-rpc-envelope'
 
+const fakeSockets: FakeWebSocket[] = []
+
 class FakeWebSocket {
   static readonly CONNECTING = 0
   static readonly OPEN = 1
   readyState = FakeWebSocket.CONNECTING
   binaryType = 'arraybuffer'
+  onopen: (() => void) | null = null
+  onmessage: ((event: { data: unknown }) => void) | null = null
+  onclose: (() => void) | null = null
+  onerror: (() => void) | null = null
   close = vi.fn()
   send = vi.fn()
 
-  constructor(readonly _url: string) {}
+  constructor(readonly _url: string) {
+    fakeSockets.push(this)
+  }
 }
 
 describe('WebRuntimeClient', () => {
   beforeEach(() => {
+    fakeSockets.length = 0
     vi.stubGlobal('window', {
       setTimeout,
       clearTimeout,
+      // Why: the connected-state liveness heartbeat arms a window.setInterval, so
+      // the stub must provide interval timers once a client reaches 'connected'.
+      setInterval,
+      clearInterval,
       atob: (value: string) => Buffer.from(value, 'base64').toString('binary'),
       btoa: (value: string) => Buffer.from(value, 'binary').toString('base64')
     })
@@ -129,6 +139,70 @@ describe('WebRuntimeClient', () => {
     client.close()
 
     expect(onClose).toHaveBeenCalledTimes(1)
+  })
+
+  it('rejects pending connection waiters when the client closes', async () => {
+    vi.useFakeTimers()
+    const timerWindow = window as unknown as {
+      setTimeout: typeof setTimeout
+      clearTimeout: typeof clearTimeout
+    }
+    timerWindow.setTimeout = setTimeout
+    timerWindow.clearTimeout = clearTimeout
+    const client = new WebRuntimeClient({
+      v: 2,
+      endpoint: 'ws://127.0.0.1:6768',
+      deviceToken: 'token',
+      publicKeyB64: Buffer.alloc(32).toString('base64')
+    })
+
+    try {
+      const callPromise = client.call('status.get', {}, { timeoutMs: 30_000 })
+
+      client.close()
+
+      await expect(callPromise).rejects.toThrow('Remote Orca runtime connection closed.')
+      expect(vi.getTimerCount()).toBe(0)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('ignores messages from a stale socket after reconnect creates a replacement', async () => {
+    vi.useFakeTimers()
+    const timerWindow = window as unknown as {
+      setTimeout: typeof setTimeout
+      clearTimeout: typeof clearTimeout
+    }
+    timerWindow.setTimeout = setTimeout
+    timerWindow.clearTimeout = clearTimeout
+    const client = new WebRuntimeClient({
+      v: 2,
+      endpoint: 'ws://127.0.0.1:6768',
+      deviceToken: 'token',
+      publicKeyB64: Buffer.alloc(32).toString('base64')
+    })
+
+    try {
+      const staleSocket = fakeSockets[0]!
+
+      await vi.advanceTimersByTimeAsync(12_000)
+      await vi.advanceTimersByTimeAsync(500)
+
+      const replacementSocket = fakeSockets[1]!
+      replacementSocket.readyState = FakeWebSocket.OPEN
+      replacementSocket.onopen?.()
+
+      expect(replacementSocket.send).toHaveBeenCalledTimes(1)
+
+      staleSocket.onmessage?.({ data: JSON.stringify({ type: 'e2ee_ready' }) })
+      await Promise.resolve()
+
+      expect(replacementSocket.send).toHaveBeenCalledTimes(1)
+    } finally {
+      client.close()
+      vi.useRealTimers()
+    }
   })
 
   it('keeps file watches on the owning WebSocket instead of opening child clients', async () => {
@@ -454,5 +528,50 @@ describe('WebRuntimeClient', () => {
         wss.close((error) => (error ? reject(error) : resolve()))
       })
     }
+  })
+
+  it('emits the buildUnsubscribe RPC frame on subscription teardown', async () => {
+    const client = new WebRuntimeClient({
+      v: 2,
+      endpoint: 'ws://127.0.0.1:6768',
+      deviceToken: 'token',
+      publicKeyB64: Buffer.alloc(32).toString('base64')
+    })
+    const internals = client as unknown as {
+      waitForConnected: (timeoutMs?: number) => Promise<void>
+      sendEncrypted: (message: unknown) => boolean
+      subscribeOnCurrentConnection: (
+        method: string,
+        params: unknown,
+        callbacks: unknown,
+        options?: { buildUnsubscribe?: (params: unknown) => unknown }
+      ) => Promise<{ unsubscribe: () => void }>
+    }
+    vi.spyOn(internals, 'waitForConnected').mockResolvedValue(undefined)
+    const sent: unknown[] = []
+    vi.spyOn(internals, 'sendEncrypted').mockImplementation((message) => {
+      sent.push(message)
+      return true
+    })
+
+    const handle = await internals.subscribeOnCurrentConnection(
+      'nativeChat.subscribe',
+      { agent: 'claude', sessionId: 'sess-1' },
+      { onResponse: vi.fn() },
+      {
+        buildUnsubscribe: () => ({
+          method: 'nativeChat.unsubscribe',
+          params: { subscriptionId: 'claude:sess-1' }
+        })
+      }
+    )
+
+    handle.unsubscribe()
+
+    const unsubscribeFrame = sent.find(
+      (m) => (m as { method?: string }).method === 'nativeChat.unsubscribe'
+    ) as { params: { subscriptionId: string } } | undefined
+    expect(unsubscribeFrame?.params.subscriptionId).toBe('claude:sess-1')
+    client.close()
   })
 })

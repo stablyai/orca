@@ -1,7 +1,14 @@
 import { Session, type SubprocessHandle } from './session'
 import { normalizePtySize } from './daemon-pty-size'
 import { resolveProcessCwd } from '../providers/process-cwd'
-import type { SessionInfo, TerminalSnapshot, ShellReadyState } from './types'
+import type { StartupCommandDelivery } from '../../shared/codex-startup-delivery'
+import { buildStartupCommandSubmission } from '../../shared/startup-command-submission'
+import type {
+  SessionInfo,
+  TakePendingOutputResult,
+  TerminalSnapshot,
+  ShellReadyState
+} from './types'
 import { SessionNotFoundError } from './types'
 
 const DEFAULT_MAX_TOMBSTONES = 1000
@@ -14,6 +21,7 @@ export type CreateOrAttachOptions = {
   env?: Record<string, string>
   envToDelete?: string[]
   command?: string
+  startupCommandDelivery?: StartupCommandDelivery
   /** Explicit shell the renderer asked for (e.g. 'wsl.exe' for "New WSL
    *  terminal" from the "+" menu). Forwarded to the subprocess spawner so the
    *  daemon path honors per-tab shell selection the same way LocalPtyProvider
@@ -22,6 +30,7 @@ export type CreateOrAttachOptions = {
   terminalWindowsWslDistro?: string | null
   terminalWindowsPowerShellImplementation?: 'auto' | 'powershell.exe' | 'pwsh.exe'
   shellReadySupported?: boolean
+  shellReadyTimeoutMs?: number
   streamClient: { onData: (data: string) => void; onExit: (code: number) => void }
 }
 
@@ -42,6 +51,7 @@ export type TerminalHostOptions = {
     env?: Record<string, string>
     envToDelete?: string[]
     command?: string
+    startupCommandDelivery?: StartupCommandDelivery
     shellOverride?: string
     terminalWindowsWslDistro?: string | null
     terminalWindowsPowerShellImplementation?: 'auto' | 'powershell.exe' | 'pwsh.exe'
@@ -49,7 +59,11 @@ export type TerminalHostOptions = {
   // Why: on graceful shutdown, the host writes final checkpoints for all live
   // sessions before killing them. This bypasses the RPC round-trip — the daemon
   // writes checkpoints in-process, guaranteeing completion before teardown.
-  onFinalCheckpoint?: (sessionId: string, snapshot: TerminalSnapshot) => void
+  onFinalCheckpoint?: (
+    sessionId: string,
+    snapshot: TerminalSnapshot,
+    records: TakePendingOutputResult['records']
+  ) => void
   // Why: production keeps a large cap, but tests need a small deterministic cap
   // without spawning thousands of full terminal sessions.
   maxTombstones?: number
@@ -68,6 +82,12 @@ export class TerminalHost {
     this.maxTombstones = opts.maxTombstones ?? DEFAULT_MAX_TOMBSTONES
   }
 
+  /**
+   * Creates a terminal session or attaches to an existing live one.
+   *
+   * Startup commands are written through stdin only when the subprocess did not
+   * already deliver them through shell launch arguments.
+   */
   async createOrAttach(opts: CreateOrAttachOptions): Promise<CreateOrAttachResult> {
     const existing = this.sessions.get(opts.sessionId)
 
@@ -107,6 +127,7 @@ export class TerminalHost {
       env: opts.env,
       envToDelete: opts.envToDelete,
       command: opts.command,
+      startupCommandDelivery: opts.startupCommandDelivery,
       shellOverride: opts.shellOverride,
       terminalWindowsWslDistro: opts.terminalWindowsWslDistro,
       terminalWindowsPowerShellImplementation: opts.terminalWindowsPowerShellImplementation
@@ -116,15 +137,24 @@ export class TerminalHost {
       sessionId: opts.sessionId,
       cols: size.cols,
       rows: size.rows,
+      terminalHandle: opts.env?.ORCA_TERMINAL_HANDLE,
       subprocess,
-      shellReadySupported: opts.shellReadySupported ?? false
+      shellReadySupported: opts.shellReadySupported ?? false,
+      // Why: reap the dead session (dispose emulator + drop from the map) the
+      // moment its subprocess exits, instead of retaining it for the daemon's
+      // lifetime. Nothing reads a dead session's emulator (getSnapshot/
+      // takePendingOutput/listSessions all skip !isAlive sessions).
+      onExit: () => this.reapSession(opts.sessionId),
+      ...(opts.shellReadyTimeoutMs !== undefined
+        ? { shellReadyTimeoutMs: opts.shellReadyTimeoutMs }
+        : {})
     })
 
     this.sessions.set(opts.sessionId, session)
 
     const token = session.attachClient(opts.streamClient)
 
-    if (opts.command) {
+    if (opts.command && !subprocess.startupCommandDeliveredInShellArgs) {
       // Why: startup commands must run inside the long-lived interactive shell
       // the daemon keeps for the pane. Session.write() handles the shell-ready
       // barrier for supported shells and falls back to an immediate write for
@@ -134,8 +164,15 @@ export class TerminalHost {
       // the user would need to press Enter after Orca launches the agent or
       // setup script. POSIX shells accept CR as Enter under ICRNL.
       const submit = process.platform === 'win32' ? '\r' : '\n'
-      const endsWithSubmit = opts.command.endsWith('\r') || opts.command.endsWith('\n')
-      session.write(endsWithSubmit ? opts.command : `${opts.command}${submit}`)
+      // Why: multiline startup prompts are pasted literally via bracketed paste
+      // only for Orca-wrapped bash/zsh, which is exactly when the shell-ready
+      // barrier is supported; other shells keep the raw submit path.
+      session.write(
+        buildStartupCommandSubmission(opts.command, {
+          submit,
+          bracketedPasteSafe: opts.shellReadySupported ?? false
+        })
+      )
     }
 
     return {
@@ -155,10 +192,32 @@ export class TerminalHost {
     this.getAliveSession(sessionId).resize(cols, rows)
   }
 
-  kill(sessionId: string): void {
+  kill(sessionId: string, opts: { immediate?: boolean } = {}): void {
     const session = this.getAliveSession(sessionId)
     this.recordTombstone(sessionId)
+    if (opts.immediate) {
+      session.forceKillAndDisposeSubprocess()
+      // Why: the immediate path tears down synchronously without firing the
+      // session's onExit hook, so reap it here. The graceful path below funnels
+      // through Session.handleSubprocessExit -> onExit -> reapSession.
+      this.reapSession(sessionId)
+      return
+    }
     session.kill()
+  }
+
+  // Why: dispose a dead session's headless emulator and drop it from the map so
+  // exited terminals don't pin ~5000 rows of scrollback for the daemon's life.
+  // No-ops on live sessions (a live session must never be disposed here) and on
+  // already-reaped/unknown ids. Wired as the Session onExit hook and also called
+  // on the immediate-kill path.
+  private reapSession(sessionId: string): void {
+    const session = this.sessions.get(sessionId)
+    if (!session || session.isAlive) {
+      return
+    }
+    session.dispose()
+    this.sessions.delete(sessionId)
   }
 
   signal(sessionId: string, sig: string): void {
@@ -210,6 +269,31 @@ export class TerminalHost {
     return session.getSnapshot()
   }
 
+  // Why: read-only readback of the size the PTY actually applied (null-not-throw
+  // like getSnapshot). The renderer compares this against xterm to detect a
+  // resize that was dropped/coerced daemon-side and re-assert it.
+  getAppliedSize(sessionId: string): { cols: number; rows: number } | null {
+    const session = this.sessions.get(sessionId)
+    if (!session || !session.isAlive) {
+      return null
+    }
+    return session.getAppliedSize()
+  }
+
+  // Why: same null-not-throw semantics as getSnapshot — incremental
+  // checkpoints are best-effort against sessions that may have just exited.
+  takePendingOutput(
+    sessionId: string,
+    includeSnapshot: boolean,
+    opts: { teardownSnapshot?: boolean } = {}
+  ): TakePendingOutputResult | null {
+    const session = this.sessions.get(sessionId)
+    if (!session || !session.isAlive) {
+      return null
+    }
+    return session.takePendingOutput(includeSnapshot, opts)
+  }
+
   isKilled(sessionId: string): boolean {
     return this.killedTombstones.has(sessionId)
   }
@@ -220,16 +304,17 @@ export class TerminalHost {
       if (!session.isAlive) {
         continue
       }
-      const snapshot = session.getSnapshot()
+      const size = session.getAppliedSize()
       result.push({
         sessionId: session.sessionId,
         state: session.state,
         shellState: session.shellState,
         isAlive: true,
+        ...(session.terminalHandle ? { terminalHandle: session.terminalHandle } : {}),
         pid: session.pid,
         cwd: session.getCwd(),
-        cols: snapshot?.cols ?? 0,
-        rows: snapshot?.rows ?? 0,
+        cols: size?.cols ?? 0,
+        rows: size?.rows ?? 0,
         createdAt: 0
       })
     }
@@ -244,10 +329,10 @@ export class TerminalHost {
         if (!session.isAlive) {
           continue
         }
-        const snapshot = session.getSnapshot()
-        if (snapshot) {
+        const take = session.takePendingOutput(true, { teardownSnapshot: true })
+        if (take?.snapshot) {
           try {
-            this.onFinalCheckpoint(sessionId, snapshot)
+            this.onFinalCheckpoint(sessionId, take.snapshot, take.records)
           } catch {
             // Best-effort — don't block shutdown
           }

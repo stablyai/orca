@@ -1,11 +1,13 @@
 import {
-  getRuntimePathBasename,
+  isRuntimePathAbsolute,
   isWindowsAbsolutePathLike,
   normalizeRuntimePathForComparison,
   normalizeRuntimePathSeparators,
-  relativePathInsideRoot
+  relativePathInsideRoot,
+  resolveRuntimePath
 } from './cross-platform-path'
 import { parseWslUncPath } from './wsl-paths'
+import { isExplicitlyImportedExternalWorktreePath } from './external-worktree-inbox'
 import type {
   DetectedWorktree,
   ExternalWorktreeVisibility,
@@ -44,12 +46,32 @@ export function effectiveExternalWorktreeVisibility(
 
 export function buildKnownOrcaWorkspaceLayouts(
   settings: Pick<GlobalSettings, 'workspaceDir' | 'nestWorkspaces' | 'workspaceDirHistory'>,
-  repo?: Pick<Repo, 'path' | 'connectionId'>
+  repo?: Pick<Repo, 'path' | 'connectionId' | 'worktreeBasePath'>
 ): OrcaWorkspaceLayout[] {
   const layouts: OrcaWorkspaceLayout[] = []
-  if (!repo?.connectionId && settings.workspaceDir) {
-    layouts.push({ path: settings.workspaceDir, nestWorkspaces: settings.nestWorkspaces })
-    appendWorkspaceLayouts(layouts, settings.workspaceDirHistory ?? [])
+  const repoBasePath = getRepoWorktreeBasePath(repo)
+  if (repo && repoBasePath) {
+    layouts.push({
+      path: resolveWorkspaceLayoutPath(repo.path, repoBasePath),
+      nestWorkspaces: settings.nestWorkspaces
+    })
+  }
+  if (settings.workspaceDir && shouldIncludeWorkspaceLayout(repo, settings.workspaceDir)) {
+    layouts.push({
+      path: repo
+        ? resolveWorkspaceLayoutPath(repo.path, settings.workspaceDir)
+        : settings.workspaceDir,
+      nestWorkspaces: settings.nestWorkspaces
+    })
+    appendWorkspaceLayouts(
+      layouts,
+      (settings.workspaceDirHistory ?? [])
+        .filter((layout) => shouldIncludeWorkspaceLayout(repo, layout.path))
+        .map((layout) => ({
+          ...layout,
+          path: repo ? resolveWorkspaceLayoutPath(repo.path, layout.path) : layout.path
+        }))
+    )
   }
 
   const wslLayouts = repo ? buildWslWorkspaceLayouts(repo.path, settings) : []
@@ -75,6 +97,34 @@ function appendWorkspaceLayouts(
   for (const layout of source) {
     target.push(layout)
   }
+}
+
+function getRepoWorktreeBasePath(
+  repo: Pick<Repo, 'worktreeBasePath'> | undefined
+): string | undefined {
+  const trimmed = repo?.worktreeBasePath?.trim()
+  return trimmed || undefined
+}
+
+function resolveWorkspaceLayoutPath(repoPath: string, layoutPath: string): string {
+  return isRuntimePathAbsoluteForRepo(repoPath, layoutPath)
+    ? normalizeRuntimePathSeparators(layoutPath)
+    : resolveRuntimePath(repoPath, layoutPath)
+}
+
+function isRuntimePathAbsoluteForRepo(repoPath: string, layoutPath: string): boolean {
+  const pathFlavor =
+    isWindowsAbsolutePathLike(repoPath) || isWindowsAbsolutePathLike(layoutPath)
+      ? 'windows'
+      : 'posix'
+  return isRuntimePathAbsolute(layoutPath, pathFlavor)
+}
+
+function shouldIncludeWorkspaceLayout(
+  repo: Pick<Repo, 'path' | 'connectionId'> | undefined,
+  layoutPath: string
+): boolean {
+  return !repo?.connectionId || !isRuntimePathAbsoluteForRepo(repo.path, layoutPath)
 }
 
 function buildWslWorkspaceLayouts(
@@ -109,15 +159,13 @@ export function classifyWorktreeOwnership(args: {
     return 'orca-managed'
   }
 
-  if (matchesStrongOrcaCreatePath(args.worktree.path, args.knownOrcaLayouts, args.repo)) {
-    return 'orca-managed'
-  }
-
   if (isUnderFlatOrUntrustedOrcaRoot(args.worktree.path, args.knownOrcaLayouts)) {
     return 'unknown-legacy'
   }
 
   if (canClassifyAsExternal(args.worktree.path, args.knownOrcaLayouts)) {
+    // Why: a plain `git worktree add` can target Orca's nested workspace
+    // folder. Only metadata proves Orca created it.
     return 'external'
   }
 
@@ -141,7 +189,8 @@ export function toDetectedWorktree(args: {
     ownership,
     repo: args.repo,
     isLegacyRepoForVisibility,
-    isSelectedCheckout: selectedCheckout
+    isSelectedCheckout: selectedCheckout,
+    importedExternalWorktreePaths: args.repo.importedExternalWorktreePaths
   })
 
   return {
@@ -158,11 +207,19 @@ export function shouldShowWorktree(args: {
   repo: Repo
   isLegacyRepoForVisibility: boolean
   isSelectedCheckout: boolean
+  importedExternalWorktreePaths?: readonly string[] | undefined
 }): boolean {
   if (args.isSelectedCheckout) {
     return true
   }
   if (args.ownership === 'orca-managed') {
+    return true
+  }
+  if (
+    isExplicitlyImportedExternalWorktreePath(args.worktree.path, {
+      importedExternalWorktreePaths: args.importedExternalWorktreePaths
+    })
+  ) {
     return true
   }
   if (args.ownership === 'unknown-legacy' && args.isLegacyRepoForVisibility) {
@@ -180,6 +237,7 @@ export function areRuntimePathsEqual(leftPath: string, rightPath: string): boole
 function hasStrongOrcaMetadata(meta: WorktreeMeta | undefined): boolean {
   return Boolean(
     meta?.orcaCreatedAt ||
+    meta?.orcaCreationWorkspaceLayout ||
     meta?.createdAt ||
     meta?.createdWithAgent ||
     meta?.pushTarget ||
@@ -187,38 +245,6 @@ function hasStrongOrcaMetadata(meta: WorktreeMeta | undefined): boolean {
     meta?.sparsePresetId ||
     meta?.preserveBranchOnDelete
   )
-}
-
-export function matchesStrongOrcaCreatePath(
-  worktreePath: string,
-  knownOrcaLayouts: readonly OrcaWorkspaceLayout[],
-  repo: Pick<Repo, 'path'>
-): boolean {
-  const repoName = getRuntimePathBasename(repo.path).replace(/\.git$/i, '')
-  if (!repoName) {
-    return false
-  }
-  for (const layout of knownOrcaLayouts) {
-    if (!layout.nestWorkspaces) {
-      continue
-    }
-    const relative = relativePathInsideRoot(layout.path, worktreePath)
-    if (relative === null) {
-      continue
-    }
-    const segments = splitNormalizedPath(relative)
-    const caseInsensitive =
-      isWindowsAbsolutePathLike(layout.path) || isWindowsAbsolutePathLike(worktreePath)
-    if (
-      segments.length === 2 &&
-      normalizePathSegment(segments[0], caseInsensitive) ===
-        normalizePathSegment(repoName, caseInsensitive) &&
-      segments[1].length > 0
-    ) {
-      return true
-    }
-  }
-  return false
 }
 
 function isUnderFlatOrUntrustedOrcaRoot(
@@ -252,13 +278,4 @@ function canClassifyAsExternal(
     return layout.nestWorkspaces
   }
   return true
-}
-
-function splitNormalizedPath(value: string): string[] {
-  return normalizeRuntimePathSeparators(value).split('/').filter(Boolean)
-}
-
-function normalizePathSegment(value: string, caseInsensitive: boolean): string {
-  const normalized = normalizeRuntimePathSeparators(value)
-  return caseInsensitive ? normalized.toLowerCase() : normalized
 }

@@ -6,9 +6,9 @@
 // relay.ts focused on the daemon-lifecycle wiring and makes the handshake
 // independently unit-testable.
 
-import { dirname, join } from 'path'
-import { existsSync, readFileSync, realpathSync } from 'fs'
-import type { Socket } from 'net'
+import { dirname, join } from 'node:path'
+import { existsSync, readFileSync, realpathSync } from 'node:fs'
+import type { Socket } from 'node:net'
 import {
   RELAY_VERSION,
   MessageType,
@@ -17,6 +17,7 @@ import {
   parseHandshakeMessage,
   type DecodedFrame
 } from './protocol'
+import { relayLogLine } from './relay-diagnostic-log'
 
 // Why: a unique exit code reserved for the wire-level version-mismatch terminal
 // condition. The client (waitForSentinel + ssh.ts) maps this exit code to a
@@ -132,22 +133,18 @@ function handleDaemonHandshakeFrame(
   try {
     msg = parseHandshakeMessage(frame.payload)
   } catch (err) {
-    process.stderr.write(
-      `[relay] Could not parse handshake: ${(err as Error).message}; closing socket\n`
-    )
+    relayLogLine(`[relay] Could not parse handshake: ${(err as Error).message}; closing socket`)
     sock.destroy()
     return false
   }
   if (msg.type !== 'orca-relay-handshake') {
-    process.stderr.write(
-      `[relay] Unexpected handshake type from client: ${msg.type}; closing socket\n`
-    )
+    relayLogLine(`[relay] Unexpected handshake type from client: ${msg.type}; closing socket`)
     sock.destroy()
     return false
   }
   if (msg.version !== launchVersion) {
-    process.stderr.write(
-      `[relay] Handshake mismatch: own=${launchVersion}, client=${msg.version}; closing socket\n`
+    relayLogLine(
+      `[relay] Handshake mismatch: own=${launchVersion}, client=${msg.version}; closing socket`
     )
     try {
       sock.write(

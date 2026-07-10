@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest'
+import { describe, expect, it } from 'vitest'
 import type {
   AgentStatusEntry,
   MigrationUnsupportedPtyEntry
@@ -9,13 +9,6 @@ import {
   getFocusedAgentPaneKeyForWorktree,
   type FocusedAgentRowHighlightState
 } from './focused-agent-row-highlight'
-
-vi.mock('@/lib/agent-status', () => ({
-  isExplicitAgentStatusFresh: vi.fn(
-    (entry: AgentStatusEntry, now: number, staleAfterMs: number) =>
-      now - entry.updatedAt <= staleAfterMs
-  )
-}))
 
 const WORKTREE_ID = 'repo-1::/worktree'
 const OTHER_WORKTREE_ID = 'repo-1::/other'
@@ -89,14 +82,26 @@ function makeState(
 }
 
 describe('getFocusedAgentPaneKeyForWorktree', () => {
-  it('returns the focused pane key when that pane has a fresh live agent status', () => {
+  it('returns the focused pane key when that pane has a live agent status', () => {
     const state = makeState({
       agentStatusByPaneKey: {
         [PANE_KEY]: makeAgentStatusEntry(PANE_KEY)
       }
     })
 
-    expect(getFocusedAgentPaneKeyForWorktree(state, WORKTREE_ID, 2_000)).toBe(PANE_KEY)
+    expect(getFocusedAgentPaneKeyForWorktree(state, WORKTREE_ID)).toBe(PANE_KEY)
+  })
+
+  it('highlights a focused row whose status has decayed past freshness', () => {
+    // Why: the inline card keeps decayed agents visible; clicking one must still
+    // color the row even though its status is no longer fresh.
+    const state = makeState({
+      agentStatusByPaneKey: {
+        [PANE_KEY]: makeAgentStatusEntry(PANE_KEY, 1)
+      }
+    })
+
+    expect(getFocusedAgentPaneKeyForWorktree(state, WORKTREE_ID)).toBe(PANE_KEY)
   })
 
   it('does not return another split pane in the same terminal tab', () => {
@@ -106,7 +111,7 @@ describe('getFocusedAgentPaneKeyForWorktree', () => {
       }
     })
 
-    expect(getFocusedAgentPaneKeyForWorktree(state, WORKTREE_ID, 2_000)).toBeNull()
+    expect(getFocusedAgentPaneKeyForWorktree(state, WORKTREE_ID)).toBeNull()
   })
 
   it('does not highlight while another surface type is active', () => {
@@ -117,7 +122,7 @@ describe('getFocusedAgentPaneKeyForWorktree', () => {
       }
     })
 
-    expect(getFocusedAgentPaneKeyForWorktree(state, WORKTREE_ID, 2_000)).toBeNull()
+    expect(getFocusedAgentPaneKeyForWorktree(state, WORKTREE_ID)).toBeNull()
   })
 
   it('returns retained agent row pane keys for the focused pane', () => {
@@ -134,7 +139,7 @@ describe('getFocusedAgentPaneKeyForWorktree', () => {
       }
     })
 
-    expect(getFocusedAgentPaneKeyForWorktree(state, WORKTREE_ID, 2_000)).toBe(PANE_KEY)
+    expect(getFocusedAgentPaneKeyForWorktree(state, WORKTREE_ID)).toBe(PANE_KEY)
   })
 
   it('returns migration-unsupported agent row pane keys for the focused pane', () => {
@@ -144,6 +149,6 @@ describe('getFocusedAgentPaneKeyForWorktree', () => {
       }
     })
 
-    expect(getFocusedAgentPaneKeyForWorktree(state, WORKTREE_ID, 2_000)).toBe(PANE_KEY)
+    expect(getFocusedAgentPaneKeyForWorktree(state, WORKTREE_ID)).toBe(PANE_KEY)
   })
 })

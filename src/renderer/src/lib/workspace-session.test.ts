@@ -20,8 +20,11 @@ function createSnapshot(overrides: Partial<AppState> = {}): AppState {
       'tab-1': { root: null, activeLeafId: null, expandedLeafId: null }
     },
     activeTabIdByWorktree: { 'wt-1': 'tab-1', 'wt-2': 'tab-2' },
+    editorDrafts: {},
+    markdownFrontmatterVisible: {},
     openFiles: [
       {
+        id: '/tmp/demo.ts',
         filePath: '/tmp/demo.ts',
         relativePath: 'demo.ts',
         worktreeId: 'wt-1',
@@ -33,6 +36,7 @@ function createSnapshot(overrides: Partial<AppState> = {}): AppState {
         originalContent: ''
       },
       {
+        id: '/tmp/demo.diff',
         filePath: '/tmp/demo.diff',
         relativePath: 'demo.diff',
         worktreeId: 'wt-1',
@@ -105,6 +109,16 @@ describe('buildWorkspaceSessionPayload', () => {
     expect(payload.activeWorktreeIdsOnShutdown).toEqual(['wt-1'])
   })
 
+  it('persists the default-tab idempotency marker when present', () => {
+    const payload = buildWorkspaceSessionPayload(
+      createSnapshot({
+        defaultTerminalTabsAppliedByWorktreeId: { 'wt-1': true }
+      })
+    )
+
+    expect(payload.defaultTerminalTabsAppliedByWorktreeId).toEqual({ 'wt-1': true })
+  })
+
   it('persists floating terminal tabs for daemon reattach after restart', () => {
     const payload = buildWorkspaceSessionPayload(
       createSnapshot({
@@ -162,6 +176,75 @@ describe('buildWorkspaceSessionPayload', () => {
     expect(payload.browserTabsByWorktree?.['wt-1'][0].loading).toBe(false)
   })
 
+  it('persists front-matter visibility only for restored editor files', () => {
+    const payload = buildWorkspaceSessionPayload(
+      createSnapshot({
+        markdownFrontmatterVisible: {
+          '/tmp/demo.ts': true,
+          '/tmp/demo.diff': true,
+          '/tmp/closed.md': true
+        }
+      })
+    )
+
+    expect(payload.markdownFrontmatterVisible).toEqual({ '/tmp/demo.ts': true })
+  })
+
+  it('does not persist empty split groups from transient simulator tab creation', () => {
+    const payload = buildWorkspaceSessionPayload(
+      createSnapshot({
+        unifiedTabsByWorktree: {
+          'wt-1': [
+            {
+              id: 'term-unified-1',
+              entityId: 'tab-1',
+              groupId: 'group-left',
+              worktreeId: 'wt-1',
+              contentType: 'terminal',
+              label: 'shell',
+              customLabel: null,
+              color: null,
+              sortOrder: 0,
+              createdAt: 1
+            }
+          ]
+        },
+        groupsByWorktree: {
+          'wt-1': [
+            {
+              id: 'group-left',
+              worktreeId: 'wt-1',
+              activeTabId: 'term-unified-1',
+              tabOrder: ['term-unified-1']
+            },
+            {
+              id: 'group-right',
+              worktreeId: 'wt-1',
+              activeTabId: null,
+              tabOrder: []
+            }
+          ]
+        },
+        layoutByWorktree: {
+          'wt-1': {
+            type: 'split',
+            direction: 'horizontal',
+            first: { type: 'leaf', groupId: 'group-left' },
+            second: { type: 'leaf', groupId: 'group-right' },
+            ratio: 0.5
+          }
+        },
+        activeGroupIdByWorktree: { 'wt-1': 'group-right' }
+      })
+    )
+
+    expect(payload.tabGroups?.['wt-1']).toEqual([
+      expect.objectContaining({ id: 'group-left', tabOrder: ['term-unified-1'] })
+    ])
+    expect(payload.tabGroupLayouts?.['wt-1']).toEqual({ type: 'leaf', groupId: 'group-left' })
+    expect(payload.activeGroupIdByWorktree?.['wt-1']).toBe('group-left')
+  })
+
   it('drops local terminal scrollback buffers from session payloads', () => {
     const localWorktreeId = 'repo-1::/local/worktree'
     const payload = buildWorkspaceSessionPayload(
@@ -185,6 +268,7 @@ describe('buildWorkspaceSessionPayload', () => {
             activeLeafId: null,
             expandedLeafId: null,
             buffersByLeafId: { 'pane:1': 'serialized-local-scrollback' },
+            scrollbackRefsByLeafId: { 'pane:1': 'v1-local' },
             ptyIdsByLeafId: { 'pane:1': 'pty-1' },
             titlesByLeafId: { 'pane:1': 'build' }
           }

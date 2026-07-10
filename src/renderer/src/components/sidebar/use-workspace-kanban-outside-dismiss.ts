@@ -5,6 +5,8 @@ const WORKSPACE_BOARD_KEEP_OPEN_SELECTOR = [
   '[data-workspace-board-trigger]',
   '[data-workspace-board-preserve-open]',
   '[data-workspace-status-appearance-popover]',
+  '[data-contextual-tour-overlay]',
+  '[data-contextual-tour-panel]',
   '[data-radix-popper-content-wrapper]',
   '[data-slot="dropdown-menu-content"]',
   '[data-slot="context-menu-content"]',

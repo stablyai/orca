@@ -34,10 +34,14 @@ let memoryCache: HomeSnapshot | null = null
 let writeTimer: ReturnType<typeof setTimeout> | null = null
 
 export async function loadHomeSnapshot(): Promise<HomeSnapshot | null> {
-  if (memoryCache) return memoryCache
+  if (memoryCache) {
+    return memoryCache
+  }
   try {
     const raw = await AsyncStorage.getItem(STORAGE_KEY)
-    if (!raw) return null
+    if (!raw) {
+      return null
+    }
     const parsed = JSON.parse(raw) as HomeSnapshot
     if (
       typeof parsed !== 'object' ||
@@ -58,7 +62,9 @@ export async function loadHomeSnapshot(): Promise<HomeSnapshot | null> {
 // (one per provider fetch finishing) doesn't hammer AsyncStorage.
 export function saveHomeSnapshot(snapshot: HomeSnapshot): void {
   memoryCache = snapshot
-  if (writeTimer) clearTimeout(writeTimer)
+  if (writeTimer) {
+    clearTimeout(writeTimer)
+  }
   writeTimer = setTimeout(() => {
     writeTimer = null
     void AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(snapshot)).catch(() => {})

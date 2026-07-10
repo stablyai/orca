@@ -3,12 +3,14 @@ export type DesktopNotificationSource = 'agent-task-complete' | 'terminal-bell' 
 export type DesktopNotificationEvent = {
   source: DesktopNotificationSource
   worktreeId?: string
+  notificationId?: string
 }
 
 export type LocalNotificationData = {
   source: DesktopNotificationSource
   hostId: string
   worktreeId?: string
+  notificationId?: string
 }
 
 export type NotificationNavigationOptions = {
@@ -29,6 +31,9 @@ export function buildLocalNotificationData(
   }
   if (event.worktreeId) {
     data.worktreeId = event.worktreeId
+  }
+  if (event.notificationId) {
+    data.notificationId = event.notificationId
   }
   return data
 }

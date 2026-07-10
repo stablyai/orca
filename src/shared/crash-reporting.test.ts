@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   formatCrashReportText,
+  formatUncapturedCrashReportText,
   isCrashReportReason,
   sanitizeCrashReportBreadcrumbs,
   sanitizeCrashReportDetails,
@@ -19,12 +20,21 @@ describe('crash-reporting shared helpers', () => {
   })
 
   it('keeps details on a strict primitive allowlist', () => {
+    const longStack = [
+      'Error: boom',
+      ...Array.from(
+        { length: 80 },
+        (_, index) => `at Component${index} (/Users/alice/project/src/file-${index}.tsx:1:1)`
+      )
+    ].join('\n')
+
     expect(
       sanitizeCrashReportDetails({
         name: 'GPU /home/alice/repo',
         code: 9,
         crashed: true,
         missing: null,
+        error_stack: longStack,
         nested: { nope: true },
         infinite: Number.POSITIVE_INFINITY
       })
@@ -32,8 +42,12 @@ describe('crash-reporting shared helpers', () => {
       name: 'GPU [redacted-path]',
       code: 9,
       crashed: true,
-      missing: null
+      missing: null,
+      error_stack: expect.stringContaining('[redacted-path]')
     })
+    expect(
+      String(sanitizeCrashReportDetails({ error_stack: longStack }).error_stack).length
+    ).toBeGreaterThan(240)
   })
 
   it('sanitizes breadcrumb data and caps to the latest thirty entries', () => {
@@ -90,15 +104,24 @@ describe('crash-reporting shared helpers', () => {
       ]
     }
 
-    const text = formatCrashReportText(report, 'saw /Users/me/project')
+    const text = formatCrashReportText(report, 'saw /Users/me/project', {
+      status: 'uploaded',
+      ticketId: 'ticketabcdefghijklmnop',
+      bundleSubmissionId: 'bundleabcdefghijklmnop',
+      bytes: 1024,
+      spanCount: 12
+    })
 
     expect(text).toContain('[Crash Report]')
     expect(text).toContain('Recent activity:')
     expect(text).toContain('agent_state_changed')
+    expect(text).toContain('Diagnostic log:')
+    expect(text).toContain('ticketabcdefghijklmnop')
+    expect(text.indexOf('Diagnostic log:')).toBeLessThan(text.indexOf('Details:'))
     expect(text).toContain('User notes:')
     expect(text).toContain('[redacted-path]')
     expect(text).not.toContain('Route:')
-    expect(text).not.toContain('URL:')
+    expect(text).not.toContain('\nURL:')
   })
 
   it('caps formatted reports to the crash endpoint limit', () => {
@@ -126,5 +149,33 @@ describe('crash-reporting shared helpers', () => {
 
     expect(text.length).toBeLessThanOrEqual(64_000)
     expect(text).toContain('[Crash report truncated to fit feedback endpoint limits.]')
+  })
+
+  it('formats uncaptured crash reports so users can still submit from Help', () => {
+    const text = formatUncapturedCrashReportText(
+      {
+        createdAt: '2026-05-16T01:00:00.000Z',
+        appVersion: '1.0.0',
+        platform: 'darwin',
+        osRelease: '25.0.0',
+        arch: 'arm64',
+        electronVersion: '41.0.0',
+        chromeVersion: '141.0.0'
+      },
+      'happened after opening /Users/me/project',
+      {
+        status: 'not_uploaded',
+        reason: 'diagnostic upload endpoint is not configured for this build',
+        bundleSubmissionId: 'bundleabcdefghijklmnop',
+        bytes: 2048,
+        spanCount: 3
+      }
+    )
+
+    expect(text).toContain('Report ID: not captured')
+    expect(text).toContain('Reason: no captured crash report')
+    expect(text).toContain('Diagnostic log:')
+    expect(text).toContain('Status: not uploaded')
+    expect(text).toContain('[redacted-path]')
   })
 })

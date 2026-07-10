@@ -97,6 +97,7 @@ type GitLabMRRaw = {
   has_conflicts?: boolean
   detailed_merge_status?: string
   description?: string | null
+  target_branch?: string
   author?: { username?: string | null; avatar_url?: string | null } | null
 }
 
@@ -110,6 +111,7 @@ export function mapMRInfo(data: GitLabMRRaw, pipelineStatus: CheckStatus): MRInf
     updatedAt: data.updated_at ?? data.updatedAt ?? '',
     mergeable: deriveMergeable(data),
     headSha: data.sha,
+    baseRefName: data.target_branch,
     // Why: detail-endpoint payloads include `description`; list endpoints
     // strip it. Pass through what's present rather than coercing missing
     // values to '' so downstream UIs can distinguish "no body authored"

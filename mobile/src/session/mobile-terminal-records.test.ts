@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   getTerminalRecordsFromSessionTabs,
   mergeTerminalListWithKnownRecords,
+  mobileSessionTabsEqual,
   type MobileTerminalSessionTab,
   type TerminalRecord
 } from './mobile-terminal-records'
@@ -72,5 +73,44 @@ describe('mobile terminal records', () => {
         }
       ])
     ).toEqual([])
+  })
+
+  it('treats terminal agent-status changes as session-tab changes', () => {
+    const base: MobileTerminalSessionTab = {
+      type: 'terminal',
+      id: 'term-1::leaf-1',
+      parentTabId: 'term-1',
+      leafId: 'leaf-1',
+      title: 'Claude',
+      status: 'ready',
+      terminal: 'pty-1',
+      isActive: true,
+      agentStatus: {
+        state: 'working',
+        prompt: '',
+        updatedAt: 1,
+        stateStartedAt: 1,
+        paneKey: 'term-1:leaf-1',
+        terminalHandle: 'pty-1',
+        stateHistory: []
+      }
+    }
+
+    expect(
+      mobileSessionTabsEqual(
+        [base],
+        [
+          {
+            ...base,
+            agentStatus: {
+              ...base.agentStatus!,
+              state: 'blocked',
+              updatedAt: 2,
+              stateStartedAt: 2
+            }
+          }
+        ]
+      )
+    ).toBe(false)
   })
 })

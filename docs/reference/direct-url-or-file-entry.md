@@ -43,17 +43,14 @@ The behavior must work from both the titlebar tab strip and split-group tab stri
    `TabBar` owns input text, pending state, focus, and dropdown close behavior. It does not create browser tabs or files. `groupId` should be `groupId ?? worktreeId`, matching the existing `resolvedGroupId` fallback.
 
 3. Add a small hook/helper pair instead of duplicating Quick Open logic:
-
    - `useTabEntryFileList` loads the file list when the menu opens, using the same inputs as `QuickOpen`: active worktree path, `getConnectionId(worktreeId)`, nested worktree exclusions, and active SSH target status. It cancels stale requests on close or key changes.
    - A pure classifier/opening helper accepts the query, file-list snapshot, load/error state, worktree metadata, runtime context, and target group.
 
 4. Wire the callback in both owners:
-
    - `Terminal.tsx` titlebar fallback resolves the current active worktree and target group the same way `handleNewTab` / `handleNewBrowserTab` do.
    - `useTabGroupWorkspaceModel` passes its explicit `worktreeId` and `groupId`. Do not rely on ambient `activeGroupIdByWorktree`; split-group `+` can be invoked from an unfocused group.
 
 5. Classify submissions in this order:
-
    - Empty after trim: reject inline.
    - Explicit URL: accept only `http://` and `https://` URLs with a parseable host.
    - Existing file: once the file-list snapshot is ready, normalize query separators for matching, prefer exact relative-path match, then exact basename match, then `rankQuickOpenFiles`. Before opening, `statRuntimePath` the matched absolute path and reject directories/stale missing matches instead of blindly opening stale list entries.
@@ -61,14 +58,12 @@ The behavior must work from both the titlebar tab strip and split-group tab stri
    - New file: only after file listing has completed successfully with no existing-file match and no host-like URL match. Treat the query as a relative worktree path. If listing fails, allow explicit `http://` / `https://` URLs only; keep bare host-like inputs blocked because they cannot be disambiguated from files.
 
 6. Validate new file paths before joining:
-
    - Reject POSIX absolute paths, Windows drive paths, UNC paths, `~`, empty path, trailing slash, control characters, `.` / `..` segments, and empty raw segments such as `a//b`.
    - Normalize `\` to `/` only after absolute-path checks, then run segment validation on the normalized path too so traversal like `a\..\b` is still rejected.
    - Build the absolute path with `joinPath(worktreePath, relativePath)`, then create with `createRuntimePath(context, absolutePath, 'file')`.
    - On `EEXIST` / "exists", immediately `statRuntimePath`; if it is now a file, open it. If it is a directory, show an error. This handles another window/process winning the create race.
 
 7. Open actions:
-
    - URL: in paired web clients, call `createWebRuntimeSessionBrowserTab({ worktreeId, url, targetGroupId: groupId })`; otherwise call `createBrowserTab(worktreeId, url, { activate: true, targetGroupId: groupId, title: url })`. Do not use `openNewBrowserTabInActiveWorkspace`; it only opens the default URL.
    - Existing/new file: call `openFile(fileInfo, { preview: false, targetGroupId: groupId })` with `language: detectLanguage(relativePath)`. Include the active runtime environment owner as `runtimeEnvironmentId` through the normal `openFile` fallback; do not suppress runtime ownership.
 

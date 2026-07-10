@@ -2,10 +2,10 @@
    managed Amp plugin source and ownership marker. Splitting would make the
    emitted plugin bytes drift from the installer checks that protect user
    plugin files from being overwritten. */
-import { randomUUID } from 'crypto'
-import { existsSync, mkdirSync, readFileSync, renameSync, unlinkSync, writeFileSync } from 'fs'
-import { homedir } from 'os'
-import { dirname, join } from 'path'
+import { randomUUID } from 'node:crypto'
+import { existsSync, mkdirSync, readFileSync, renameSync, unlinkSync, writeFileSync } from 'node:fs'
+import { homedir } from 'node:os'
+import { dirname, join } from 'node:path'
 import type { SFTPWrapper } from 'ssh2'
 
 import type { AgentHookInstallStatus } from '../../shared/agent-hook-types'
@@ -232,6 +232,7 @@ function getAmpPluginSource(): string {
     '      },',
     '      body: JSON.stringify({',
     '        paneKey,',
+    '        launchToken: process.env.ORCA_AGENT_LAUNCH_TOKEN || "",',
     '        tabId: process.env.ORCA_TAB_ID || "",',
     '        worktreeId: process.env.ORCA_WORKTREE_ID || "",',
     '        env: coords.env,',
@@ -247,11 +248,35 @@ function getAmpPluginSource(): string {
     '  }',
     '}',
     '',
-    'let postQueue = Promise.resolve()',
+    'const MAX_PENDING_POSTS = 50',
+    'type QueuedPost = { hookEventName: string; payload: Record<string, unknown> }',
+    'let postQueue: QueuedPost[] = []',
+    'let postDraining = false',
+    '',
+    'async function drainPostQueue(): Promise<void> {',
+    '  if (postDraining) return',
+    '  postDraining = true',
+    '  try {',
+    '    while (postQueue.length > 0) {',
+    '      const next = postQueue.shift()',
+    '      if (!next) continue',
+    '      await post(next.hookEventName, next.payload)',
+    '    }',
+    '  } finally {',
+    '    postDraining = false',
+    '    if (postQueue.length > 0) {',
+    '      void drainPostQueue()',
+    '    }',
+    '  }',
+    '}',
     'function enqueuePost(hookEventName: string, payload: Record<string, unknown>): void {',
-    '  // Why: keep hook callbacks non-blocking while preserving Amp event order.',
-    '  postQueue = postQueue.then(() => post(hookEventName, payload), () => post(hookEventName, payload))',
-    '  void postQueue.catch(() => {})',
+    '  // Why: keep hook callbacks non-blocking without retaining unbounded',
+    '  // payload closures when Orca is down and each POST waits for timeout.',
+    '  if (postQueue.length >= MAX_PENDING_POSTS) {',
+    '    postQueue.shift()',
+    '  }',
+    '  postQueue.push({ hookEventName, payload })',
+    '  void drainPostQueue()',
     '}',
     '',
     'export default function (amp: PluginAPI) {',

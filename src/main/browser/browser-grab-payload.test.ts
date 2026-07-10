@@ -122,4 +122,30 @@ describe('clampGrabPayload', () => {
     expect(payload?.target.reactComponents?.length).toBeLessThanOrEqual(512)
     expect(payload?.target.sourceFile).toBe('src/Button.tsx:12:4')
   })
+
+  it('drops executable and embedded URL schemes from page and attribute URLs', () => {
+    const payload = clampGrabPayload(
+      makeRawPayload({
+        page: {
+          ...(makeRawPayload().page as Record<string, unknown>),
+          sanitizedUrl: 'javascript:alert(1)'
+        },
+        target: {
+          ...(makeRawPayload().target as Record<string, unknown>),
+          attributes: {
+            href: 'javascript:alert(1)',
+            src: 'data:text/html,<script>alert(1)</script>',
+            action: 'vbscript:msgbox(1)',
+            title: 'Safe label'
+          }
+        }
+      })
+    )
+
+    expect(payload?.page.sanitizedUrl).toBe('')
+    expect(payload?.target.attributes.href).toBe('')
+    expect(payload?.target.attributes.src).toBe('')
+    expect(payload?.target.attributes.action).toBe('')
+    expect(payload?.target.attributes.title).toBe('Safe label')
+  })
 })

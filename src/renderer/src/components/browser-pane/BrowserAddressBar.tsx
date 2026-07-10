@@ -1,28 +1,12 @@
+/* oxlint-disable react-doctor/no-adjust-state-on-prop-change -- Why: dropdown visibility depends on DOM focus plus browser-history suggestions, so the close path is an imperative popover sync. */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Globe, Search } from 'lucide-react'
 import { Input } from '@/components/ui/input'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { Command, CommandGroup, CommandItem, CommandList } from '@/components/ui/command'
 import { useAppStore } from '@/store'
-import {
-  buildSearchUrl,
-  looksLikeSearchQuery,
-  normalizeBrowserNavigationUrl,
-  SEARCH_ENGINE_LABELS,
-  DEFAULT_SEARCH_ENGINE,
-  type SearchEngine
-} from '../../../../shared/browser-url'
-
-const MAX_SUGGESTIONS = 8
-
-type SuggestionEntry = {
-  url: string
-  title: string
-  subtitle: string
-  lastVisitedAt: number
-  visitCount: number
-  isSearch: boolean
-}
+import { DEFAULT_SEARCH_ENGINE, type SearchEngine } from '../../../../shared/browser-url'
+import { buildBrowserAddressBarSuggestions } from './browser-address-bar-suggestions'
 
 type BrowserAddressBarProps = {
   value: string
@@ -30,28 +14,7 @@ type BrowserAddressBarProps = {
   onSubmit: () => void
   onNavigate: (url: string) => void
   inputRef: React.RefObject<HTMLInputElement | null>
-}
-
-function scoreSuggestion(
-  entry: { url: string; title: string; lastVisitedAt: number; visitCount: number },
-  query: string
-): number {
-  const lowerQuery = query.toLowerCase()
-  const lowerUrl = entry.url.toLowerCase()
-  const lowerTitle = entry.title.toLowerCase()
-
-  if (!lowerUrl.includes(lowerQuery) && !lowerTitle.includes(lowerQuery)) {
-    return -1
-  }
-
-  let score = 0
-  if (lowerUrl.startsWith(lowerQuery) || lowerUrl.startsWith(`https://${lowerQuery}`)) {
-    score += 100
-  }
-  score += Math.min(entry.visitCount, 50)
-  const ageHours = (Date.now() - entry.lastVisitedAt) / (1000 * 60 * 60)
-  score += Math.max(0, 24 - ageHours)
-  return score
+  dismissSuggestionsRef?: React.MutableRefObject<(() => void) | null>
 }
 
 export default function BrowserAddressBar({
@@ -59,10 +22,15 @@ export default function BrowserAddressBar({
   onChange,
   onSubmit,
   onNavigate,
-  inputRef
+  inputRef,
+  dismissSuggestionsRef
 }: BrowserAddressBarProps): React.ReactElement {
   const [open, setOpen] = useState(false)
   const [selectedValueOverride, setSelectedValueOverride] = useState<string | null>(null)
+  // Why: while previewing a highlighted suggestion the input shows the full URL,
+  // but suggestions must keep matching the original typed query.
+  const [autocompleteQuery, setAutocompleteQuery] = useState(value)
+  const prePreviewValueRef = useRef<string | null>(null)
   const browserUrlHistory = useAppStore((s) => s.browserUrlHistory)
   const browserDefaultSearchEngine = useAppStore((s) => s.browserDefaultSearchEngine)
   const browserKagiSessionLink = useAppStore((s) => s.browserKagiSessionLink)
@@ -94,70 +62,89 @@ export default function BrowserAddressBar({
   const searchEngine: SearchEngine =
     (browserDefaultSearchEngine as SearchEngine | null) ?? DEFAULT_SEARCH_ENGINE
 
-  const suggestions = useMemo((): SuggestionEntry[] => {
-    const trimmed = value.trim()
-    if (trimmed === '' || trimmed === 'about:blank' || trimmed.startsWith('data:')) {
-      if (browserUrlHistory.length === 0) {
-        return []
+  const suggestions = useMemo(
+    () =>
+      buildBrowserAddressBarSuggestions({
+        browserUrlHistory,
+        kagiSessionLink: browserKagiSessionLink,
+        searchEngine,
+        value: autocompleteQuery
+      }),
+    [browserUrlHistory, autocompleteQuery, searchEngine, browserKagiSessionLink]
+  )
+
+  useEffect(() => {
+    if (prePreviewValueRef.current === null) {
+      setAutocompleteQuery(value)
+    }
+  }, [value])
+
+  useEffect(() => {
+    if (open) {
+      return
+    }
+    prePreviewValueRef.current = null
+    setSelectedValueOverride(null)
+  }, [open])
+
+  const clearSuggestionPreview = useCallback((): void => {
+    prePreviewValueRef.current = null
+    setSelectedValueOverride(null)
+  }, [])
+
+  const previewSuggestion = useCallback(
+    (url: string): void => {
+      if (prePreviewValueRef.current === null) {
+        prePreviewValueRef.current = autocompleteQuery
       }
-      return [...browserUrlHistory]
-        .sort((a, b) => b.lastVisitedAt - a.lastVisitedAt)
-        .slice(0, MAX_SUGGESTIONS)
-        .map((entry) => ({ ...entry, subtitle: entry.url, isSearch: false }))
+      setSelectedValueOverride(url)
+      onChange(url)
+    },
+    [autocompleteQuery, onChange]
+  )
+
+  const selectSuggestionAtIndex = useCallback(
+    (index: number): void => {
+      const suggestion = suggestions[index]
+      if (!suggestion) {
+        return
+      }
+      if (index === 0 && suggestion.isSearch) {
+        // Why: the search row mirrors what Enter already does with the typed
+        // query — keep the input on the typed text instead of the search URL.
+        prePreviewValueRef.current = null
+        setSelectedValueOverride(null)
+        onChange(autocompleteQuery)
+        return
+      }
+      previewSuggestion(suggestion.url)
+    },
+    [autocompleteQuery, onChange, previewSuggestion, suggestions]
+  )
+
+  const restoreTypedQuery = useCallback((): void => {
+    const typed = prePreviewValueRef.current
+    if (typed === null) {
+      return
     }
+    prePreviewValueRef.current = null
+    setSelectedValueOverride(null)
+    setAutocompleteQuery(typed)
+    onChange(typed)
+  }, [onChange])
 
-    const historySuggestions: SuggestionEntry[] =
-      browserUrlHistory.length > 0
-        ? browserUrlHistory
-            .map((entry) => ({ entry, score: scoreSuggestion(entry, trimmed) }))
-            .filter((item) => item.score >= 0)
-            .sort((a, b) => b.score - a.score)
-            .slice(0, MAX_SUGGESTIONS - 1)
-            .map((item) => ({ ...item.entry, subtitle: item.entry.url, isSearch: false }))
-        : []
-
-    // Why: the top row of the dropdown must always mirror what pressing Enter
-    // will do — i.e. what `normalizeBrowserNavigationUrl` resolves to. Chrome
-    // and Firefox omniboxes work this way: for URL-like inputs the top row is
-    // the typed URL itself (navigate), and for bare queries it is the search.
-    // The earlier implementation appended a "Google Search" row as a fallback
-    // for URL-like inputs, which then got auto-selected when no history
-    // matched — so Enter on "www.example.com" hit Google instead of the site.
-    const isQuery = looksLikeSearchQuery(trimmed)
-    const topAction: SuggestionEntry = isQuery
-      ? {
-          url: buildSearchUrl(trimmed, searchEngine, {
-            kagiSessionLink: browserKagiSessionLink
-          }),
-          title: trimmed,
-          subtitle: `${SEARCH_ENGINE_LABELS[searchEngine]} Search`,
-          lastVisitedAt: 0,
-          visitCount: 0,
-          isSearch: true
-        }
-      : {
-          url:
-            normalizeBrowserNavigationUrl(trimmed, searchEngine, {
-              kagiSessionLink: browserKagiSessionLink
-            }) ?? trimmed,
-          title: trimmed,
-          subtitle: '',
-          lastVisitedAt: 0,
-          visitCount: 0,
-          isSearch: false
-        }
-
-    // Why: if a history row already targets the same URL as the top action,
-    // skip the synthetic top row — the history row is more informative (real
-    // page title) and will be auto-selected, so Enter still navigates to the
-    // same place.
-    const duplicateIdx = historySuggestions.findIndex((h) => h.url === topAction.url)
-    if (duplicateIdx >= 0) {
-      return historySuggestions.slice(0, MAX_SUGGESTIONS)
+  const dismissSuggestions = useCallback((): void => {
+    if (blurCloseTimerRef.current !== null) {
+      window.clearTimeout(blurCloseTimerRef.current)
+      blurCloseTimerRef.current = null
     }
+    restoreTypedQuery()
+    setOpen(false)
+  }, [restoreTypedQuery])
 
-    return [topAction, ...historySuggestions].slice(0, MAX_SUGGESTIONS)
-  }, [browserUrlHistory, value, searchEngine, browserKagiSessionLink])
+  const cancelSuggestionPreview = useCallback((): void => {
+    dismissSuggestions()
+  }, [dismissSuggestions])
 
   const selectedValue =
     selectedValueOverride &&
@@ -198,15 +185,16 @@ export default function BrowserAddressBar({
       if (grace && inputRef.current && document.activeElement === inputRef.current) {
         return
       }
+      restoreTypedQuery()
       setOpen(false)
     }, 200)
-  }, [inputRef])
+  }, [inputRef, restoreTypedQuery])
 
   const handleSelect = useCallback(
     (url: string) => {
       closingRef.current = true
       setOpen(false)
-      setSelectedValueOverride(null)
+      clearSuggestionPreview()
       onNavigate(url)
       if (closingResetTimerRef.current !== null) {
         window.clearTimeout(closingResetTimerRef.current)
@@ -216,14 +204,24 @@ export default function BrowserAddressBar({
         closingRef.current = false
       }, 100)
     },
-    [onNavigate]
+    [clearSuggestionPreview, onNavigate]
   )
 
   const handleKeyDown = useCallback(
     (event: React.KeyboardEvent<HTMLInputElement>) => {
       if (event.key === 'Escape') {
+        cancelSuggestionPreview()
+        return
+      }
+
+      if (event.key === 'Enter' && open) {
+        // Why: match Chrome — Enter always navigates to the current input text,
+        // not the highlighted dropdown row (click still picks a row directly).
+        event.preventDefault()
         setOpen(false)
-        setSelectedValueOverride(null)
+        clearSuggestionPreview()
+        setAutocompleteQuery(value)
+        onSubmit()
         return
       }
 
@@ -231,31 +229,47 @@ export default function BrowserAddressBar({
         return
       }
 
+      const isPreviewing = prePreviewValueRef.current !== null
+
       if (event.key === 'ArrowDown') {
         event.preventDefault()
         const idx = suggestions.findIndex((s) => s.url === selectedValue)
-        const next = idx < suggestions.length - 1 ? idx + 1 : 0
-        setSelectedValueOverride(suggestions[next].url)
+        const startIdx = Math.max(idx, 0)
+        // Why: row 0 stays highlighted while the input still shows the typed
+        // query, so the first ArrowDown should advance to the next row instead
+        // of redundantly previewing the search row Enter already covers.
+        const next = startIdx < suggestions.length - 1 ? startIdx + 1 : 0
+        selectSuggestionAtIndex(next)
         return
       }
 
       if (event.key === 'ArrowUp') {
         event.preventDefault()
         const idx = suggestions.findIndex((s) => s.url === selectedValue)
-        const next = idx > 0 ? idx - 1 : suggestions.length - 1
-        setSelectedValueOverride(suggestions[next].url)
-        return
-      }
-
-      if (event.key === 'Enter' && selectedValue) {
-        const match = suggestions.find((s) => s.url === selectedValue)
-        if (match) {
-          event.preventDefault()
-          handleSelect(match.url)
+        const startIdx = Math.max(idx, 0)
+        if (!isPreviewing) {
+          const next = startIdx > 0 ? startIdx - 1 : suggestions.length - 1
+          selectSuggestionAtIndex(next)
+          return
         }
+        if (startIdx <= 0) {
+          restoreTypedQuery()
+          return
+        }
+        selectSuggestionAtIndex(startIdx - 1)
       }
     },
-    [open, suggestions, selectedValue, handleSelect]
+    [
+      open,
+      suggestions,
+      selectedValue,
+      selectSuggestionAtIndex,
+      restoreTypedQuery,
+      cancelSuggestionPreview,
+      clearSuggestionPreview,
+      onSubmit,
+      value
+    ]
   )
 
   // Why: close the dropdown only when the input has lost focus AND there are
@@ -268,12 +282,64 @@ export default function BrowserAddressBar({
       if (inputRef.current && document.activeElement === inputRef.current) {
         return
       }
-      setOpen(false)
+      dismissSuggestions()
     }
-  }, [open, suggestions.length, inputRef])
+  }, [dismissSuggestions, open, suggestions.length, inputRef])
+
+  // Why: Electron <webview> guests run in a separate process, so clicking the
+  // page never dispatches pointerdown on the renderer document and Radix cannot
+  // detect an outside dismiss. Window blur and focus moves into the guest (the
+  // host <webview> tag) close the dropdown the same way BrowserImportHintButton
+  // does for its popover.
+  useEffect(() => {
+    if (!open) {
+      return
+    }
+
+    const handleWindowBlur = (): void => {
+      dismissSuggestions()
+    }
+
+    const handleFocusIn = (event: FocusEvent): void => {
+      const target = event.target
+      if (!(target instanceof HTMLElement) || target.tagName !== 'WEBVIEW') {
+        return
+      }
+      dismissSuggestions()
+    }
+
+    const handleEscape = (event: KeyboardEvent): void => {
+      if (event.key !== 'Escape') {
+        return
+      }
+      dismissSuggestions()
+      event.preventDefault()
+      event.stopImmediatePropagation()
+    }
+
+    window.addEventListener('blur', handleWindowBlur)
+    document.addEventListener('focusin', handleFocusIn, true)
+    window.addEventListener('keydown', handleEscape, true)
+    return () => {
+      window.removeEventListener('blur', handleWindowBlur)
+      document.removeEventListener('focusin', handleFocusIn, true)
+      window.removeEventListener('keydown', handleEscape, true)
+    }
+  }, [dismissSuggestions, inputRef, open])
+
+  useEffect(() => {
+    if (!dismissSuggestionsRef) {
+      return
+    }
+    dismissSuggestionsRef.current = dismissSuggestions
+    return () => {
+      dismissSuggestionsRef.current = null
+    }
+  }, [dismissSuggestions, dismissSuggestionsRef])
 
   return (
     <Popover
+      modal={false}
       open={open}
       onOpenChange={(next) => {
         // Why: Radix fires onOpenChange(false) when it detects an outside
@@ -282,6 +348,9 @@ export default function BrowserAddressBar({
         // our handlers) or genuine outside dismissals.
         if (!next && inputRef.current && document.activeElement === inputRef.current) {
           return
+        }
+        if (!next) {
+          restoreTypedQuery()
         }
         setOpen(next)
       }}
@@ -293,6 +362,8 @@ export default function BrowserAddressBar({
           onSubmit={(event) => {
             event.preventDefault()
             setOpen(false)
+            clearSuggestionPreview()
+            setAutocompleteQuery(value)
             onSubmit()
           }}
         >
@@ -309,10 +380,15 @@ export default function BrowserAddressBar({
             autoCapitalize="none"
             autoCorrect="off"
             onChange={(event) => {
+              const nextValue = event.target.value
               // Why: typing creates a new suggestion list, so keyboard selection
               // should return to the derived top match instead of a stale row.
+              // Clearing preview state here also prevents stale hover/selection
+              // from repopulating the input after Cmd+A → Delete.
+              prePreviewValueRef.current = null
               setSelectedValueOverride(null)
-              onChange(event.target.value)
+              setAutocompleteQuery(nextValue)
+              onChange(nextValue)
             }}
             role="combobox"
             aria-expanded={open}

@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import {
   AdvertisedUrlWatcher,
   classifyHost,
@@ -30,6 +30,15 @@ describe('stripTerminalControls', () => {
   it('drops non-printable bytes but keeps whitespace and printable ASCII', () => {
     expect(stripTerminalControls('a\x00b\x08c\td')).toBe('abc\td')
   })
+
+  it('turns horizontal cursor moves into a URL-invalid guard', () => {
+    // A differential redraw steps the cursor over the on-screen `o` instead of
+    // reprinting it. Deleting the move would splice `localh` + `st` into `localhst`.
+    expect(stripTerminalControls('http://localh\x1b[1Cst:5199/')).toBe('http://localh[st:5199/')
+    // Absolute column (G) and position (H) moves are neutralized the same way.
+    expect(stripTerminalControls('localh\x1b[8Gst')).toBe('localh[st')
+    expect(stripTerminalControls('localh\x1b[1;9Hst')).toBe('localh[st')
+  })
 })
 
 describe('extractUrlCandidates', () => {
@@ -55,6 +64,21 @@ describe('extractUrlCandidates', () => {
   it('ignores non-http(s) schemes and bare hostnames', () => {
     expect(extractUrlCandidates('ftp://example.com')).toHaveLength(0)
     expect(extractUrlCandidates('example.com:3001')).toHaveLength(0)
+  })
+
+  it('does not capture a corrupted host from a cursor-skip redraw', () => {
+    // Regression: a CLI redrawing `http://localhost:5199/` via a cursor-forward
+    // over the already-drawn `o` must not yield the plausible-but-wrong
+    // `localhst` host that `new URL()` would otherwise accept verbatim.
+    const cleaned = stripTerminalControls('  >  Local: http://localh\x1b[1Cst:5199/\r\n')
+    const urls = extractUrlCandidates(cleaned)
+    expect(urls).toHaveLength(0)
+  })
+
+  it('does not cache a partial default-port URL from a cursor-skip redraw', () => {
+    const watcher = bindFresh()
+    watcher.ingest(PTY, 'Local: http://localh\x1b[1Cst/\n')
+    expect(watcher.lookup(WORKTREE, 80)).toBeUndefined()
   })
 
   it('handles multiple URLs in one line', () => {
@@ -123,6 +147,18 @@ describe('AdvertisedUrlWatcher.ingest', () => {
     expect(watcher.lookup(WORKTREE, 3001)?.origin).toBe('https://local.getmontecarlo.com:3001')
   })
 
+  it('does not scan buffered PTY text until a line break arrives', () => {
+    const watcher = bindFresh()
+    const charCodeAtSpy = vi.spyOn(String.prototype, 'charCodeAt')
+    watcher.ingest(PTY, '  Network: https://local.getmontecarlo')
+    const charCodeAtCalls = charCodeAtSpy.mock.calls.length
+    charCodeAtSpy.mockRestore()
+
+    expect(charCodeAtCalls).toBe(0)
+    watcher.ingest(PTY, '.com:3001/\n')
+    expect(watcher.lookup(WORKTREE, 3001)?.origin).toBe('https://local.getmontecarlo.com:3001')
+  })
+
   it('reassembles an ANSI escape split across two chunks', () => {
     const watcher = bindFresh()
     watcher.ingest(PTY, '\x1b[32mhttps://example.com:3001/\x1b')
@@ -186,6 +222,25 @@ describe('AdvertisedUrlWatcher.ingest', () => {
     expect(watcher.lookup(WORKTREE, 3001)?.host).toBe('app.example.com')
   })
 
+  it('keeps repeated PTY binds as no-ops once pending data is drained', () => {
+    const watcher = new AdvertisedUrlWatcher({ now: () => 1_000 })
+    watcher.ingest(PTY, 'early https://app.example.com:3001/\n')
+    watcher.bindPty(PTY, WORKTREE)
+
+    const internals = watcher as unknown as { ptyToWorktree: Map<string, string> }
+    const originalSet = internals.ptyToWorktree.set
+    const setSpy = vi.fn(originalSet.bind(internals.ptyToWorktree))
+    internals.ptyToWorktree.set = setSpy
+    try {
+      watcher.bindPty(PTY, WORKTREE)
+    } finally {
+      internals.ptyToWorktree.set = originalSet
+    }
+
+    expect(setSpy).not.toHaveBeenCalled()
+    expect(watcher.lookup(WORKTREE, 3001)?.host).toBe('app.example.com')
+  })
+
   it('unbindPty drops buffered state for the PTY', () => {
     const watcher = bindFresh()
     watcher.ingest(PTY, 'cached https://cached.example.com:3002/\n')
@@ -200,6 +255,28 @@ describe('AdvertisedUrlWatcher.ingest', () => {
     expect(watcher.lookup(WORKTREE, 3001)).toBeUndefined()
     expect(watcher.lookupBest([WORKTREE], 3002)).toBeUndefined()
     expect(events).toContainEqual({ worktreeId: WORKTREE, port: 3002 })
+  })
+
+  it('forgetWorktree drops scan snapshots, PTY buffers, and cached URLs', () => {
+    const watcher = bindFresh()
+    watcher.reconcileScan([WORKTREE], [{ port: 3001, pid: 100 }])
+    watcher.ingest(PTY, 'cached https://cached.example.com:3001/\n')
+    watcher.ingest(PTY, 'partial https://example.com:3002')
+    const events: { worktreeId: string; port: number }[] = []
+    watcher.onDidChange((event) => events.push(event))
+
+    watcher.forgetWorktree(WORKTREE)
+
+    const internals = watcher as unknown as {
+      buffers: Map<string, unknown>
+      ptyToWorktree: Map<string, string>
+      scanSnapshots: Map<string, Map<number, number | undefined>>
+    }
+    expect(watcher.lookup(WORKTREE, 3001)).toBeUndefined()
+    expect(internals.buffers.has(PTY)).toBe(false)
+    expect(internals.ptyToWorktree.has(PTY)).toBe(false)
+    expect(internals.scanSnapshots.has(WORKTREE)).toBe(false)
+    expect(events).toEqual([{ worktreeId: WORKTREE, port: 3001 }])
   })
 
   it('different worktrees on the same port are tracked independently', () => {

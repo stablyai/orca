@@ -1,15 +1,14 @@
 /* eslint-disable max-lines -- Why: local status/install/remove and SSH remote
    install must share the same Copilot event list, script body, and
    managed-command matching so local and remote hook behavior cannot drift. */
-import { existsSync } from 'fs'
-import { homedir } from 'os'
-import { join } from 'path'
+import { existsSync } from 'node:fs'
+import { homedir } from 'node:os'
+import { join } from 'node:path'
 import type { SFTPWrapper } from 'ssh2'
 import type { AgentHookInstallState, AgentHookInstallStatus } from '../../shared/agent-hook-types'
 import {
   createManagedCommandMatcher,
   getSharedManagedScriptPath,
-  hookDefinitionHasManagedCommand,
   readHooksJson,
   removeManagedCommands,
   wrapPosixHookCommand,
@@ -91,6 +90,23 @@ function definitionHasCurrentCommand(definition: HookDefinition, command: string
   )
 }
 
+function definitionHasStaleManagedCommand(
+  definition: HookDefinition,
+  currentCommand: string | null,
+  isManagedCommand: (command: string | undefined) => boolean
+): boolean {
+  const commands = [definition.command, definition.bash, definition.powershell]
+  if (commands.some((command) => isManagedCommand(command) && command !== currentCommand)) {
+    return true
+  }
+  return (
+    Array.isArray(definition.hooks) &&
+    definition.hooks.some(
+      (hook) => isManagedCommand(hook.command) && hook.command !== currentCommand
+    )
+  )
+}
+
 function definitionsChanged(before: HookDefinition[], after: HookDefinition[]): boolean {
   return (
     before.length !== after.length ||
@@ -120,6 +136,7 @@ function getManagedScript(target: 'local' | 'posix' = 'local'): string {
       '  $payload = $inputData | ConvertFrom-Json',
       '  $body = @{',
       '    paneKey = $env:ORCA_PANE_KEY',
+      '    launchToken = $env:ORCA_AGENT_LAUNCH_TOKEN',
       '    tabId = $env:ORCA_TAB_ID',
       '    worktreeId = $env:ORCA_WORKTREE_ID',
       '    hookEventName = $env:ORCA_COPILOT_HOOK_EVENT',
@@ -149,17 +166,21 @@ function getManagedScript(target: 'local' | 'posix' = 'local'): string {
     'if [ -z "$payload" ]; then',
     '  exit 0',
     'fi',
-    'curl -sS -X POST "http://127.0.0.1:${ORCA_AGENT_HOOK_PORT}/hook/copilot" \\',
+    // Why: pipe payload to curl's stdin (`payload@-`) instead of an inline
+    // `payload=$VALUE` arg, so tens-of-KB tool output stays off the curl
+    // command line (EDR command-line false positives). Wire body is identical.
+    'printf \'%s\' "$payload" | curl -sS -X POST "http://127.0.0.1:${ORCA_AGENT_HOOK_PORT}/hook/copilot" \\',
     '  --connect-timeout 0.5 --max-time 1.5 \\',
     '  -H "Content-Type: application/x-www-form-urlencoded" \\',
     '  -H "X-Orca-Agent-Hook-Token: ${ORCA_AGENT_HOOK_TOKEN}" \\',
     '  --data-urlencode "paneKey=${ORCA_PANE_KEY}" \\',
     '  --data-urlencode "tabId=${ORCA_TAB_ID}" \\',
+    '  --data-urlencode "launchToken=${ORCA_AGENT_LAUNCH_TOKEN}" \\',
     '  --data-urlencode "worktreeId=${ORCA_WORKTREE_ID}" \\',
     '  --data-urlencode "hookEventName=${ORCA_COPILOT_HOOK_EVENT}" \\',
     '  --data-urlencode "env=${ORCA_AGENT_HOOK_ENV}" \\',
     '  --data-urlencode "version=${ORCA_AGENT_HOOK_VERSION}" \\',
-    '  --data-urlencode "payload=${payload}" >/dev/null 2>&1 || true',
+    '  --data-urlencode "payload@-" >/dev/null 2>&1 || true',
     'exit 0',
     ''
   ].join('\n')
@@ -184,6 +205,7 @@ export class CopilotHookService {
     const missing: string[] = []
     let presentCount = 0
     let staleManagedPresent = false
+    const managedEvents = new Set<string>(COPILOT_EVENTS)
     for (const eventName of COPILOT_EVENTS) {
       const command = getManagedCommand(scriptPath, eventName)
       const definitions = Array.isArray(config.hooks?.[eventName]) ? config.hooks![eventName]! : []
@@ -194,12 +216,20 @@ export class CopilotHookService {
         presentCount += 1
       } else {
         missing.push(eventName)
-        staleManagedPresent =
-          staleManagedPresent ||
-          definitions.some((definition) =>
-            hookDefinitionHasManagedCommand(definition, isManagedCommand)
-          )
       }
+    }
+    for (const [eventName, definitions] of Object.entries(config.hooks ?? {})) {
+      if (!Array.isArray(definitions)) {
+        continue
+      }
+      const currentCommand = managedEvents.has(eventName)
+        ? getManagedCommand(scriptPath, eventName)
+        : null
+      staleManagedPresent =
+        staleManagedPresent ||
+        definitions.some((definition) =>
+          definitionHasStaleManagedCommand(definition, currentCommand, isManagedCommand)
+        )
     }
 
     const managedHooksPresent = presentCount > 0 || staleManagedPresent
@@ -208,6 +238,9 @@ export class CopilotHookService {
     if (config.disableAllHooks === true && managedHooksPresent) {
       state = 'partial'
       detail = 'Managed Copilot hook file is disabled'
+    } else if (staleManagedPresent) {
+      state = 'partial'
+      detail = 'Managed Copilot hook file contains stale entries'
     } else if (missing.length === 0) {
       state = 'installed'
       detail = null

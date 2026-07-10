@@ -2,7 +2,10 @@ import type { App } from 'electron'
 import { describe, expect, it, vi } from 'vitest'
 import {
   acquireSingleInstanceLock,
+  logSingleInstanceLockBypass,
   logSingleInstanceLockFailure,
+  shouldBypassSingleInstanceLock,
+  SINGLE_INSTANCE_LOCK_BYPASS_MESSAGE,
   SINGLE_INSTANCE_LOCK_FAILURE_MESSAGE
 } from './single-instance-lock'
 
@@ -71,12 +74,52 @@ describe('acquireSingleInstanceLock', () => {
 })
 
 describe('logSingleInstanceLockFailure', () => {
-  it('emits a production-visible diagnostic for the early quit path', () => {
-    const logger = { error: vi.fn() }
+  it('emits a production-visible synchronous diagnostic for the early quit path', () => {
+    const write = vi.fn()
 
-    logSingleInstanceLockFailure(logger)
+    logSingleInstanceLockFailure(write)
 
-    expect(logger.error).toHaveBeenCalledWith(SINGLE_INSTANCE_LOCK_FAILURE_MESSAGE)
-    expect(logger.error.mock.calls[0]?.[0]).toContain('Electron/macOS single-instance lock failure')
+    expect(write).toHaveBeenCalledWith(2, `${SINGLE_INSTANCE_LOCK_FAILURE_MESSAGE}\n`)
+    expect(write.mock.calls[0]?.[1]).toContain('Electron/macOS single-instance lock failure')
+  })
+})
+
+describe('shouldBypassSingleInstanceLock', () => {
+  it('allows the hidden diagnostic bypass only for packaged macOS app launches', () => {
+    expect(
+      shouldBypassSingleInstanceLock({
+        env: { ORCA_BYPASS_SINGLE_INSTANCE_LOCK: '1' },
+        isDev: false,
+        isServeMode: false,
+        platform: 'darwin'
+      })
+    ).toBe(true)
+    expect(
+      shouldBypassSingleInstanceLock({
+        env: { ORCA_BYPASS_SINGLE_INSTANCE_LOCK: '1' },
+        isDev: true,
+        isServeMode: false,
+        platform: 'darwin'
+      })
+    ).toBe(false)
+    expect(
+      shouldBypassSingleInstanceLock({
+        env: { ORCA_BYPASS_SINGLE_INSTANCE_LOCK: '1' },
+        isDev: false,
+        isServeMode: false,
+        platform: 'linux'
+      })
+    ).toBe(false)
+  })
+})
+
+describe('logSingleInstanceLockBypass', () => {
+  it('emits a warning when the diagnostic bypass is active', () => {
+    const write = vi.fn()
+
+    logSingleInstanceLockBypass(write)
+
+    expect(write).toHaveBeenCalledWith(2, `${SINGLE_INSTANCE_LOCK_BYPASS_MESSAGE}\n`)
+    expect(write.mock.calls[0]?.[1]).toContain('bypassing the packaged macOS single-instance lock')
   })
 })

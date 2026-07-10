@@ -56,9 +56,15 @@ describe('repo slice skipped-onboarding folder startup', () => {
       1,
       'folder-1::/folder',
       {
-        sidebarRevealBehavior: 'auto',
         startup: {
-          command: 'codex',
+          command: "codex '--dangerously-bypass-approvals-and-sandbox'",
+          env: {},
+          launchAgent: 'codex',
+          launchConfig: {
+            agentCommand: "codex '--dangerously-bypass-approvals-and-sandbox'",
+            agentArgs: '--dangerously-bypass-approvals-and-sandbox',
+            agentEnv: {}
+          },
           telemetry: {
             agent_kind: 'codex',
             launch_source: 'onboarding',
@@ -70,7 +76,7 @@ describe('repo slice skipped-onboarding folder startup', () => {
     expect(worktreeActivation.activateAndRevealWorktree).toHaveBeenNthCalledWith(
       2,
       'folder-2::/folder',
-      { sidebarRevealBehavior: 'auto' }
+      undefined
     )
   })
 })

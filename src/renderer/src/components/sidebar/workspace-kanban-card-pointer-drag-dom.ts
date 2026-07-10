@@ -6,6 +6,7 @@ export const PIN_DROP_TARGET = '[data-workspace-pin-drop-target]'
 
 const STATUS_DROP_GAP_TOLERANCE_PX = 24
 const POINTER_DROP_INDICATOR_ATTR = 'data-workspace-board-card-drop-indicator'
+const COMMIT_TARGET_FALLBACK_TOLERANCE_PX = 6
 
 export type WorkspaceKanbanStatusDropRect = {
   status: WorkspaceStatus
@@ -32,6 +33,12 @@ export type WorkspaceKanbanCardDropTarget = {
   dropIndex: number
   laneRect?: WorkspaceKanbanLaneDropRect
   cardRects?: readonly WorkspaceKanbanCardDropRect[]
+}
+
+export type WorkspaceKanbanCardTrackedDropTarget = {
+  target: WorkspaceKanbanCardDropTarget
+  x: number
+  y: number
 }
 
 export function resolveWorkspaceStatusDropTargetFromRects(
@@ -72,6 +79,27 @@ export function resolveWorkspaceCardDropIndexFromRects(
     }
   }
   return rects.length
+}
+
+function hasWorkspaceKanbanCardDropTarget(target: WorkspaceKanbanCardDropTarget): boolean {
+  return target.isPinDrop || target.status !== null
+}
+
+export function resolveWorkspaceKanbanCardDropCommitTarget(args: {
+  currentTarget: WorkspaceKanbanCardDropTarget
+  latestTrackedTarget: WorkspaceKanbanCardTrackedDropTarget | null
+  x: number
+  y: number
+}): WorkspaceKanbanCardDropTarget {
+  if (hasWorkspaceKanbanCardDropTarget(args.currentTarget)) {
+    return args.currentTarget
+  }
+  const latest = args.latestTrackedTarget
+  if (!latest || !hasWorkspaceKanbanCardDropTarget(latest.target)) {
+    return args.currentTarget
+  }
+  const distance = Math.hypot(args.x - latest.x, args.y - latest.y)
+  return distance <= COMMIT_TARGET_FALLBACK_TOLERANCE_PX ? latest.target : args.currentTarget
 }
 
 function getStatusDropTargetRects(board: HTMLElement): WorkspaceKanbanStatusDropRect[] {

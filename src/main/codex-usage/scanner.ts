@@ -1,12 +1,13 @@
 /* eslint-disable max-lines -- Why: Codex discovery, incremental parsing, attribution, and aggregation all depend on the same event-normalization rules. Keeping them together makes the duplicate-snapshot logic easier to audit when usage totals look wrong. */
-import { basename, join, win32, posix } from 'path'
-import { createReadStream } from 'fs'
-import { realpath, readdir, stat } from 'fs/promises'
-import { createInterface } from 'readline'
+import { basename, join, win32, posix } from 'node:path'
+import { createReadStream, existsSync } from 'node:fs'
+import { realpath, readdir, stat } from 'node:fs/promises'
+import { createInterface } from 'node:readline'
 import type { Repo } from '../../shared/types'
 import { areWorktreePathsEqual } from '../ipc/worktree-logic'
 import { getOrcaManagedCodexHomePath, getSystemCodexHomePath } from '../codex/codex-home-paths'
 import { getLegacyCopiedCodexSessionBridgeScanPreference } from '../codex/codex-session-bridge'
+import { canonicalizeUsageWorktreePaths } from '../usage-worktree-canonicalizer'
 import type {
   CodexUsageAttributedEvent,
   CodexUsageDailyAggregate,
@@ -54,6 +55,7 @@ type CodexUsageDeltaResolution =
   | { kind: 'baseline'; nextTotals: CodexUsageRawUsage }
 
 const YIELD_EVERY_FILES = 10
+const YIELD_EVERY_DISCOVERY_ENTRIES = 100
 
 function ensureNumber(value: unknown): number {
   return typeof value === 'number' && Number.isFinite(value) ? value : 0
@@ -87,17 +89,24 @@ async function canonicalizePath(pathValue: string): Promise<string> {
 }
 
 async function yieldToEventLoop(): Promise<void> {
-  await new Promise((resolve) => setTimeout(resolve, 0))
+  await new Promise((resolve) => setImmediate(resolve))
 }
 
-async function walkJsonlFiles(dirPath: string): Promise<string[]> {
+async function walkJsonlFiles(
+  dirPath: string,
+  progress: { entriesVisited: number } = { entriesVisited: 0 }
+): Promise<string[]> {
   const entries = await readdir(dirPath, { withFileTypes: true })
   const files: string[] = []
 
   for (const entry of entries) {
+    progress.entriesVisited += 1
+    if (progress.entriesVisited % YIELD_EVERY_DISCOVERY_ENTRIES === 0) {
+      await yieldToEventLoop()
+    }
     const fullPath = join(dirPath, entry.name)
     if (entry.isDirectory()) {
-      appendDiscoveredFiles(files, await walkJsonlFiles(fullPath))
+      appendDiscoveredFiles(files, await walkJsonlFiles(fullPath, progress))
       continue
     }
     if (entry.isFile() && entry.name.endsWith('.jsonl')) {
@@ -131,6 +140,10 @@ export function getCodexSessionDirectories(): string[] {
   )
 }
 
+function hasLegacyCopiedSessionBridgeMarkers(): boolean {
+  return existsSync(join(getOrcaManagedCodexHomePath(), '.orca-session-copies'))
+}
+
 export async function listCodexSessionFiles(): Promise<string[]> {
   const files: string[] = []
   for (const dirPath of getCodexSessionDirectories()) {
@@ -140,29 +153,37 @@ export async function listCodexSessionFiles(): Promise<string[]> {
       // Missing or unreadable history in one home should not hide the other.
     }
   }
-  return dedupeCodexSessionFileAliases(files)
+  return dedupeCodexSessionFileAliases(files, hasLegacyCopiedSessionBridgeMarkers())
 }
 
-async function dedupeCodexSessionFileAliases(files: string[]): Promise<string[]> {
+async function dedupeCodexSessionFileAliases(
+  files: string[],
+  hasLegacyBridgeMarkers: boolean
+): Promise<string[]> {
   const excludedAliases = new Set<string>()
-  for (const filePath of files) {
-    const legacyCopyBridge = getLegacyCopiedCodexSessionBridgeScanPreference(filePath)
-    if (!legacyCopyBridge) {
-      continue
-    }
-    if (legacyCopyBridge.sourceSkipBytes !== null) {
-      continue
-    }
-    excludedAliases.add(
-      await getPhysicalFileAliasKey(
-        legacyCopyBridge.preferManagedCopy ? legacyCopyBridge.sourcePath : filePath
+  if (hasLegacyBridgeMarkers) {
+    for (const [index, filePath] of files.entries()) {
+      const legacyCopyBridge = getLegacyCopiedCodexSessionBridgeScanPreference(filePath)
+      if ((index + 1) % YIELD_EVERY_DISCOVERY_ENTRIES === 0) {
+        await yieldToEventLoop()
+      }
+      if (!legacyCopyBridge) {
+        continue
+      }
+      if (legacyCopyBridge.sourceSkipBytes !== null) {
+        continue
+      }
+      excludedAliases.add(
+        await getPhysicalFileAliasKey(
+          legacyCopyBridge.preferManagedCopy ? legacyCopyBridge.sourcePath : filePath
+        )
       )
-    )
+    }
   }
 
   const seenAliases = new Set<string>()
   const uniqueFiles: string[] = []
-  for (const filePath of [...new Set(files)].sort()) {
+  for (const [index, filePath] of [...new Set(files)].sort().entries()) {
     const aliasKey = await getCodexSessionFileAliasKey(filePath)
     if (excludedAliases.has(aliasKey)) {
       continue
@@ -172,6 +193,9 @@ async function dedupeCodexSessionFileAliases(files: string[]): Promise<string[]>
     }
     seenAliases.add(aliasKey)
     uniqueFiles.push(filePath)
+    if ((index + 1) % YIELD_EVERY_DISCOVERY_ENTRIES === 0) {
+      await yieldToEventLoop()
+    }
   }
   return uniqueFiles
 }
@@ -190,8 +214,14 @@ async function getPhysicalFileAliasKey(filePath: string): Promise<string> {
   return `path:${await canonicalizePath(filePath)}`
 }
 
-function getLegacySourceSkipBytesByPath(files: string[]): Map<string, number> {
+function getLegacySourceSkipBytesByPath(
+  files: string[],
+  hasLegacyBridgeMarkers = hasLegacyCopiedSessionBridgeMarkers()
+): Map<string, number> {
   const sourceSkipBytesByPath = new Map<string, number>()
+  if (!hasLegacyBridgeMarkers) {
+    return sourceSkipBytesByPath
+  }
   for (const filePath of files) {
     const legacyCopyBridge = getLegacyCopiedCodexSessionBridgeScanPreference(filePath)
     if (!legacyCopyBridge || legacyCopyBridge.sourceSkipBytes === null) {
@@ -358,6 +388,28 @@ function resolveCodexUsageDelta(
   return null
 }
 
+function buildCodexUsageEventKey(
+  timestamp: string,
+  totalUsage: CodexUsageRawUsage | null,
+  lastUsage: CodexUsageRawUsage | null
+): string {
+  // Why: fork/resume copies token_count records byte-for-byte into a new
+  // rollout file, but session_meta.id is often rewritten to the new session.
+  // Key only on the raw record fields (timestamp + usage tuples) so the copy
+  // matches the original regardless of surrounding parse context / session id.
+  const tupleOf = (usage: CodexUsageRawUsage | null): string =>
+    usage
+      ? [
+          usage.inputTokens,
+          usage.cachedInputTokens,
+          usage.outputTokens,
+          usage.reasoningOutputTokens,
+          usage.totalTokens
+        ].join(',')
+      : ''
+  return [timestamp, tupleOf(totalUsage), tupleOf(lastUsage)].join('|')
+}
+
 function extractString(value: unknown): string | null {
   if (typeof value !== 'string') {
     return null
@@ -429,14 +481,7 @@ function localDayFromTimestamp(timestamp: string): string | null {
 async function buildWorktreesWithCanonicalPaths(
   worktrees: CodexUsageWorktreeRef[]
 ): Promise<(CodexUsageWorktreeRef & { canonicalPath: string })[]> {
-  const canonicalized = await Promise.all(
-    worktrees.map(async (worktree) => ({
-      ...worktree,
-      canonicalPath: await canonicalizePath(worktree.path)
-    }))
-  )
-
-  return canonicalized.sort((left, right) => right.canonicalPath.length - left.canonicalPath.length)
+  return canonicalizeUsageWorktreePaths(worktrees, canonicalizePath)
 }
 
 function isContainingPath(candidatePath: string, targetPath: string): boolean {
@@ -740,7 +785,7 @@ function mergeSessions(
   for (const session of sessions) {
     const existing = target.get(session.sessionId)
     if (!existing) {
-      target.set(session.sessionId, structuredClone(session))
+      target.set(session.sessionId, cloneSessionForMerge(session))
       continue
     }
 
@@ -812,6 +857,15 @@ function mergeSessions(
         existing.locationModelBreakdown.push({ ...locationModel })
       }
     }
+  }
+}
+
+function cloneSessionForMerge(session: CodexUsageSession): CodexUsageSession {
+  return {
+    ...session,
+    locationBreakdown: session.locationBreakdown.map((entry) => ({ ...entry })),
+    modelBreakdown: session.modelBreakdown.map((entry) => ({ ...entry })),
+    locationModelBreakdown: session.locationModelBreakdown.map((entry) => ({ ...entry }))
   }
 }
 
@@ -924,6 +978,7 @@ export function parseCodexUsageRecord(
   return {
     sessionId: context.sessionId,
     timestamp: parsed.timestamp,
+    eventKey: buildCodexUsageEventKey(parsed.timestamp, totalUsage, lastUsage),
     cwd: context.currentCwd ?? context.sessionCwd,
     model: resolvedModel,
     hasInferredPricing,
@@ -938,7 +993,7 @@ export function parseCodexUsageRecord(
 export async function parseCodexUsageFile(
   filePath: string,
   worktrees: (CodexUsageWorktreeRef & { canonicalPath: string })[],
-  options: { skipInitialBytes?: number } = {}
+  options: { skipInitialBytes?: number; claimEventKey?: (eventKey: string) => boolean } = {}
 ): Promise<CodexUsagePersistedFile> {
   const processedFile = await getProcessedFileInfo(filePath)
   const lines = createInterface({
@@ -960,11 +1015,21 @@ export async function parseCodexUsageFile(
     totalOnlyBaselinePending: (options.skipInitialBytes ?? 0) > 0
   }
 
+  const ownedEventKeys = new Set<string>()
+  let hasDeferredClaims = false
   for await (const line of lines) {
     const parsed = parseCodexUsageRecord(line, context)
     if (!parsed) {
       continue
     }
+    // Why: fork/resume rollouts start with a copied prefix of the parent file.
+    // Events another file already owns are dropped here, but the record still
+    // advanced context.previousTotals above, so later deltas stay correct.
+    if (options.claimEventKey && !options.claimEventKey(parsed.eventKey)) {
+      hasDeferredClaims = true
+      continue
+    }
+    ownedEventKeys.add(parsed.eventKey)
     const attributed = await attributeCodexUsageEvent(parsed, worktrees)
     if (attributed) {
       events.push(attributed)
@@ -973,7 +1038,9 @@ export async function parseCodexUsageFile(
 
   return {
     ...processedFile,
-    ...aggregateCodexUsage(events)
+    ...aggregateCodexUsage(events),
+    ownedEventKeys: [...ownedEventKeys],
+    hasDeferredClaims
   }
 }
 
@@ -987,31 +1054,77 @@ export async function scanCodexUsageFiles(
 }> {
   const files = await listCodexSessionFiles()
   const previousByPath = new Map(previousProcessedFiles.map((file) => [file.path, file]))
-  const processedFiles: CodexUsagePersistedFile[] = []
   const worktreesWithCanonicalPaths = await buildWorktreesWithCanonicalPaths(worktrees)
   const legacySourceSkipBytesByPath = getLegacySourceSkipBytesByPath(files)
-  const sessionsById = new Map<string, CodexUsageSession>()
-  const dailyByKey = new Map<string, CodexUsageDailyAggregate>()
 
+  const currentPaths = new Set(files)
+  // Why: when a rollout that owned event keys is deleted, remaining forks still
+  // contain those records but their caches record them as unowned. Only files
+  // that previously deferred claims can reclaim, so invalidate those — not the
+  // entire rollout corpus.
+  const lostOwnerPath = previousProcessedFiles.some(
+    (file) =>
+      !currentPaths.has(file.path) &&
+      Array.isArray(file.ownedEventKeys) &&
+      file.ownedEventKeys.length > 0
+  )
+
+  const reusedByPath = new Map<string, CodexUsagePersistedFile>()
+  const pathsToParse: string[] = []
   for (const [index, filePath] of files.entries()) {
     const legacySourceSkipBytes = legacySourceSkipBytesByPath.get(filePath) ?? 0
     const fileInfo = await getProcessedFileInfo(filePath)
     const previous = previousByPath.get(filePath)
+    // When an owner disappears, only deferred-claim files need reparse.
+    const mustReclaimDeferred = lostOwnerPath && previous?.hasDeferredClaims !== false
     const canReuse =
+      !mustReclaimDeferred &&
       legacySourceSkipBytes === 0 &&
       previous &&
       previous.mtimeMs === fileInfo.mtimeMs &&
-      previous.size === fileInfo.size
+      previous.size === fileInfo.size &&
+      Array.isArray(previous.ownedEventKeys) &&
+      typeof previous.hasDeferredClaims === 'boolean'
+    if (canReuse) {
+      reusedByPath.set(filePath, previous)
+    } else {
+      pathsToParse.push(filePath)
+    }
+    if ((index + 1) % YIELD_EVERY_FILES === 0) {
+      await yieldToEventLoop()
+    }
+  }
 
-    const processed = canReuse
-      ? previous
-      : await parseCodexUsageFile(filePath, worktreesWithCanonicalPaths, {
-          skipInitialBytes: legacySourceSkipBytes
-        })
+  // Why: resuming or forking a Codex session copies the parent rollout's
+  // token_count records into a new file, so per-file parsing re-counts the
+  // whole copied history once per descendant (#8006). Cross-file ownership
+  // counts each record for exactly one file; cached files keep the claims
+  // they persisted, and new files claim in sorted-path order so rescans stay
+  // deterministic.
+  const eventOwnerByKey = new Map<string, string>()
+  for (const [filePath, previous] of reusedByPath) {
+    for (const eventKey of previous.ownedEventKeys) {
+      // First cached claim wins so conflicting projections stay deterministic.
+      if (!eventOwnerByKey.has(eventKey)) {
+        eventOwnerByKey.set(eventKey, filePath)
+      }
+    }
+  }
 
-    processedFiles.push(processed)
-    mergeSessions(sessionsById, processed.sessions)
-    mergeDailyAggregates(dailyByKey, processed.dailyAggregates)
+  const parsedByPath = new Map<string, CodexUsagePersistedFile>()
+  for (const [index, filePath] of pathsToParse.entries()) {
+    const processed = await parseCodexUsageFile(filePath, worktreesWithCanonicalPaths, {
+      skipInitialBytes: legacySourceSkipBytesByPath.get(filePath) ?? 0,
+      claimEventKey: (eventKey) => {
+        const owner = eventOwnerByKey.get(eventKey)
+        if (owner !== undefined && owner !== filePath) {
+          return false
+        }
+        eventOwnerByKey.set(eventKey, filePath)
+        return true
+      }
+    })
+    parsedByPath.set(filePath, processed)
 
     // Why: Codex session history can grow large, and scans run on the Electron
     // main process. Yield regularly so opening Settings does not stall while
@@ -1019,6 +1132,19 @@ export async function scanCodexUsageFiles(
     if ((index + 1) % YIELD_EVERY_FILES === 0) {
       await yieldToEventLoop()
     }
+  }
+
+  const processedFiles: CodexUsagePersistedFile[] = []
+  const sessionsById = new Map<string, CodexUsageSession>()
+  const dailyByKey = new Map<string, CodexUsageDailyAggregate>()
+  for (const filePath of files) {
+    const processed = reusedByPath.get(filePath) ?? parsedByPath.get(filePath)
+    if (!processed) {
+      continue
+    }
+    processedFiles.push(processed)
+    mergeSessions(sessionsById, processed.sessions)
+    mergeDailyAggregates(dailyByKey, processed.dailyAggregates)
   }
 
   return {

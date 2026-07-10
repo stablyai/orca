@@ -1,5 +1,5 @@
 import type { TerminalLayoutSnapshot, TerminalTab } from '../../../../shared/types'
-import { detectAgentStatusFromTitle } from '@/lib/agent-status'
+import { classifyTitleActivity } from '@/lib/pane-agent-evidence'
 
 export function emptyLayoutSnapshot(): TerminalLayoutSnapshot {
   return {
@@ -37,5 +37,5 @@ function getResetTitle(tab: TerminalTab, index: number): string {
   // Why: reset any recognized agent title on hydration. The prior-session
   // agent is no longer running after a restart, so showing a stale
   // "Claude done" or spinner would be misleading.
-  return detectAgentStatusFromTitle(tab.title) ? fallbackTitle : tab.title
+  return classifyTitleActivity(tab.title) ? fallbackTitle : tab.title
 }

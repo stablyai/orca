@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest'
+import type { TerminalLayoutSnapshot } from '../../../shared/types'
 import { getWorktreeStatus, getWorktreeStatusLabel, resolveWorktreeStatus } from './worktree-status'
+
+const LEAF_ID_1 = '11111111-1111-4111-8111-111111111111'
+const LEAF_ID_2 = '22222222-2222-4222-8222-222222222222'
 
 // Why: build a live-pty map from tab ids so each test can declare which
 // tabs are alive without manually tracking parallel `tab.ptyId` values.
@@ -7,6 +11,19 @@ import { getWorktreeStatus, getWorktreeStatusLabel, resolveWorktreeStatus } from
 // liveness signal — slept-tab tests below pin the gap.
 function livePtyMap(...tabIds: string[]): Record<string, string[]> {
   return Object.fromEntries(tabIds.map((id, i) => [id, [`pty-${i}`]]))
+}
+
+function splitLayout(): TerminalLayoutSnapshot {
+  return {
+    root: {
+      type: 'split',
+      direction: 'vertical',
+      first: { type: 'leaf', leafId: LEAF_ID_1 },
+      second: { type: 'leaf', leafId: LEAF_ID_2 }
+    },
+    activeLeafId: LEAF_ID_1,
+    expandedLeafId: null
+  }
 }
 
 describe('getWorktreeStatus', () => {
@@ -75,6 +92,39 @@ describe('getWorktreeStatus', () => {
     const status = getWorktreeStatus([{ id: 'tab-1', title: 'bash' }], [], livePtyMap('tab-1'))
 
     expect(status).toBe('active')
+  })
+
+  // Why: an exited agent can leave a frozen braille-spinner frame in the
+  // title forever (reproduced live: '⠐ Review branch for regressions' over a
+  // plain shell prompt). The row builder rejects that title as a Claude row
+  // (no explicit "claude" token), so the sidebar shows 0 agents — the worktree
+  // dot must agree instead of spinning on the unattributable title alone.
+  it('does not spin on a bare braille-spinner tab title that yields no agent row', () => {
+    const status = getWorktreeStatus(
+      [{ id: 'tab-1', title: '⠐ Review branch for regressions' }],
+      [],
+      livePtyMap('tab-1')
+    )
+
+    expect(status).toBe('active')
+  })
+
+  it('does not spin on a bare braille-spinner pane title that yields no agent row', () => {
+    const status = getWorktreeStatus([{ id: 'tab-1', title: 'bash' }], [], livePtyMap('tab-1'), {
+      'tab-1': { 0: '⠐ Review branch for regressions', 1: 'bash' }
+    })
+
+    expect(status).toBe('active')
+  })
+
+  it('still spins on an agent-attributable braille-spinner title', () => {
+    const status = getWorktreeStatus(
+      [{ id: 'tab-1', title: '⠹ codex fix flaky test' }],
+      [],
+      livePtyMap('tab-1')
+    )
+
+    expect(status).toBe('working')
   })
 })
 
@@ -206,6 +256,80 @@ describe('resolveWorktreeStatus', () => {
     expect(status).toBe('working')
   })
 
+  it('lets a hook-covered done pane suppress its stale working title', () => {
+    const status = resolveWorktreeStatus({
+      tabs: [{ id: 'tab-1', title: 'claude [working]' }],
+      browserTabs: [],
+      ptyIdsByTabId: livePtyMap('tab-1'),
+      runtimePaneTitlesByTabId: {
+        'tab-1': {
+          1: 'codex [working]',
+          2: 'bash'
+        }
+      },
+      agentStatusPaneIdsByTabId: {
+        'tab-1': new Set([LEAF_ID_1])
+      },
+      terminalLayoutsByTabId: {
+        'tab-1': splitLayout()
+      },
+      hasPermission: false,
+      hasLiveWorking: false,
+      hasLiveDone: true,
+      hasRetainedDone: false
+    })
+
+    expect(status).toBe('done')
+  })
+
+  it('lets a single hook-covered done pane suppress an unmapped single working title', () => {
+    const status = resolveWorktreeStatus({
+      tabs: [{ id: 'tab-1', title: 'claude [working]' }],
+      browserTabs: [],
+      ptyIdsByTabId: livePtyMap('tab-1'),
+      runtimePaneTitlesByTabId: {
+        'tab-1': {
+          1: 'codex [working]'
+        }
+      },
+      agentStatusPaneIdsByTabId: {
+        'tab-1': new Set([LEAF_ID_1])
+      },
+      hasPermission: false,
+      hasLiveWorking: false,
+      hasLiveDone: true,
+      hasRetainedDone: false
+    })
+
+    expect(status).toBe('done')
+  })
+
+  it('keeps sibling pane working when hook done covers only another pane', () => {
+    const status = resolveWorktreeStatus({
+      tabs: [{ id: 'tab-1', title: 'claude [working]' }],
+      browserTabs: [],
+      ptyIdsByTabId: livePtyMap('tab-1'),
+      runtimePaneTitlesByTabId: {
+        'tab-1': {
+          1: 'bash',
+          2: 'codex [working]'
+        }
+      },
+      agentStatusPaneIdsByTabId: {
+        'tab-1': new Set([LEAF_ID_1])
+      },
+      terminalLayoutsByTabId: {
+        'tab-1': splitLayout()
+      },
+      hasPermission: false,
+      hasLiveWorking: false,
+      hasLiveDone: true,
+      hasRetainedDone: false
+    })
+
+    expect(status).toBe('working')
+  })
+
   // Why: title-heuristic permission must beat hasLiveDone/hasRetainedDone —
   // the priority "permission > working > done > heuristic" applies to BOTH
   // sources of permission (the args.hasPermission overlay AND the heuristic
@@ -237,6 +361,36 @@ describe('resolveWorktreeStatus', () => {
     })
 
     expect(status).toBe('done')
+  })
+
+  it('keeps a hook-backed working agent spinning despite an unattributable stale title', () => {
+    // Why: hook-managed agents drive the dot via hasLiveWorking, not the title
+    // heuristic — the attribution gate must not regress them.
+    const status = resolveWorktreeStatus({
+      tabs: [{ id: 'tab-1', title: '⠐ Review branch for regressions' }],
+      browserTabs: [],
+      ptyIdsByTabId: livePtyMap('tab-1'),
+      hasPermission: false,
+      hasLiveWorking: true,
+      hasLiveDone: false,
+      hasRetainedDone: false
+    })
+
+    expect(status).toBe('working')
+  })
+
+  it('resolves a stale unattributable spinner title with no hook entry to active, not working', () => {
+    const status = resolveWorktreeStatus({
+      tabs: [{ id: 'tab-1', title: '⠐ Review branch for regressions' }],
+      browserTabs: [],
+      ptyIdsByTabId: livePtyMap('tab-1'),
+      hasPermission: false,
+      hasLiveWorking: false,
+      hasLiveDone: false,
+      hasRetainedDone: false
+    })
+
+    expect(status).toBe('active')
   })
 
   it('falls through to active heuristic when nothing else applies', () => {

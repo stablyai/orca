@@ -1,5 +1,5 @@
-import { createHash } from 'crypto'
-import { join } from 'path'
+import { createHash } from 'node:crypto'
+import { join } from 'node:path'
 import { PROTOCOL_VERSION } from './types'
 
 export type DaemonConnectionInfo = {
@@ -11,9 +11,11 @@ export type DaemonPidFile = {
   pid: number
   startedAtMs: number | null
   entryPath?: string
+  appVersion?: string
 }
 
 export type DaemonProcessHandle = {
+  mode?: 'degraded-new-pty-fallback'
   shutdown(): Promise<void>
 }
 
@@ -46,6 +48,10 @@ export class DaemonSpawner {
     this.handle = await this.launcher(this.socketPath, this.tokenPath)
 
     return { socketPath: this.socketPath, tokenPath: this.tokenPath }
+  }
+
+  getHandle(): DaemonProcessHandle | null {
+    return this.handle
   }
 
   // Why: after the daemon process dies unexpectedly, the cached handle is

@@ -214,7 +214,7 @@ export function normalizePersistedWorkspaceStatuses(
   ) {
     return cloneDefaultWorkspaceStatuses()
   }
-  // Why: this PR briefly wrote the default columns in reverse workflow order.
+  // Why: a previous build briefly wrote the default columns in reverse order.
   // The repair is one-shot and checks the raw payload, because normalized
   // IDs/labels are indistinguishable from a user-authored column reorder.
   if (
@@ -233,10 +233,6 @@ export function clampWorkspaceBoardOpacity(value: unknown): number {
     return 1
   }
   return Math.min(1, Math.max(0.2, Math.round(value * 100) / 100))
-}
-
-export function normalizeWorkspaceBoardCompact(value: unknown): boolean {
-  return value === true
 }
 
 export function clampWorkspaceBoardColumnWidth(value: unknown): number {

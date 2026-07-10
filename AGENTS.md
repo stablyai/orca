@@ -10,9 +10,15 @@ When writing or modifying code driven by a design doc or non-obvious constraint,
 
 Keep comments short — one or two lines. Capture only the non-obvious reason (safety constraint, compatibility shim, design-doc rule). Don't restate what the code does, narrate the mechanism, cite design-doc sections verbatim, or explain adjacent API choices unless they're the point.
 
+## Lint Rules: Do Not Disable Max Lines
+
+Never add a `max-lines` disable (`eslint-disable max-lines`, `oxlint-disable max-lines`, or line-specific variants), and never add a per-file `max-lines` bump in `mobile/.oxlintrc.json`. Split the file, extract focused modules, move fixtures/builders into named files, or otherwise reduce the counted lines instead.
+
+This is enforced in CI by `pnpm check:max-lines-ratchet` (`config/scripts/check-max-lines-ratchet.mjs`). Files already over the limit are grandfathered in `config/max-lines-baseline.txt`; that list may only **shrink**. Adding a new suppression fails the build. If you remove a suppression (great — split it!), run `pnpm check:max-lines-ratchet --prune` to drop its baseline line.
+
 ## File and Module Naming
 
-Never use vague names like `helpers`, `utils`, `common`, `misc`, or `shared-stuff` for files, folders, or modules. They carry zero information and tend to become dumping grounds. Name files after what they *actually* contain — prefer the concrete domain concept (e.g. `tab-group-state.ts`, `terminal-orphan-cleanup.ts`) over the generic role (`tabs-helpers.ts`, `terminal-utils.ts`). If you find yourself reaching for `helpers`, the file probably has more than one responsibility and should be split, or there's a better name hiding in the code that describes what the functions operate on.
+Never use vague names like `helpers`, `utils`, `common`, `misc`, or `shared-stuff` for files, folders, or modules. They carry zero info and tend to become dumping grounds. Name files after what they _actually_ contain — prefer the concrete domain concept (e.g. `tab-group-state.ts`, `terminal-orphan-cleanup.ts`) over the generic role (`tabs-helpers.ts`, `terminal-utils.ts`). If you find yourself reaching for `helpers`, the file probably has more than one responsibility and should be split, or there's a better name hiding in the code that describes what the functions operate on.
 
 ## Worktree Safety
 
@@ -37,8 +43,6 @@ Source-control and review changes must consider GitLab and other supported git p
 ## GitHub CLI Usage
 
 Be mindful of the user's `gh` CLI API rate limit — batch requests where possible and avoid unnecessary calls. All code, commands, and scripts must be compatible with macOS, Linux, and Windows.
-Never commit PR evidence images; attach them to the PR conversation instead.
+Never commit PR evidence images; attach them to the PR conversation instead (but never use gh-attach).
 
 ## Type Declarations: Prefer `.ts` Over `.d.ts`
-
-Project-owned type declarations belong in `.ts` files. `.d.ts` is reserved for ambient shims (e.g., `env.d.ts`, `vite/client.d.ts`). TypeScript's `skipLibCheck: true` setting applies globally, including to our own `.d.ts` files, which means any unresolved type reference in a `.d.ts` silently becomes `any` at its call sites. Write your types in `.ts` files so the compiler actually checks them. CI enforces this for `src/preload/` and `src/shared/` — see `docs/preload-typecheck-hole.md`.

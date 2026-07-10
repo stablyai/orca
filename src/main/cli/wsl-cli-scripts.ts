@@ -12,8 +12,16 @@ ${MANAGED_MARKER}
 # ORCA_WIN_LAUNCHER_B64=${encodedTarget}
 ORCA_WIN_LAUNCHER=${quoteShell(windowsLauncherPath)}
 ORCA_BRIDGE_PS1=${quoteShell(bridgePath)}
+if command -v powershell.exe >/dev/null 2>&1; then
+  ORCA_POWERSHELL=powershell.exe
+elif [ -x /mnt/c/Windows/System32/WindowsPowerShell/v1.0/powershell.exe ]; then
+  ORCA_POWERSHELL=/mnt/c/Windows/System32/WindowsPowerShell/v1.0/powershell.exe
+else
+  echo "Orca WSL CLI requires Windows interop and could not find powershell.exe." >&2
+  exit 1
+fi
 ORCA_BRIDGE_PS1_WIN=$(wslpath -w "$ORCA_BRIDGE_PS1")
-exec powershell.exe -NoProfile -ExecutionPolicy Bypass -File "$ORCA_BRIDGE_PS1_WIN" "$ORCA_WIN_LAUNCHER" "$@"
+exec "$ORCA_POWERSHELL" -NoProfile -ExecutionPolicy Bypass -File "$ORCA_BRIDGE_PS1_WIN" "$ORCA_WIN_LAUNCHER" "$@"
 `
 }
 

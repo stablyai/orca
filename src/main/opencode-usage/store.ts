@@ -1,7 +1,7 @@
 /* eslint-disable max-lines -- Why: this store owns OpenCode analytics persistence, scan policy, and renderer query semantics. Keeping range/scope queries next to scan persistence prevents UI totals from drifting from the SQLite projection. */
 import { app } from 'electron'
-import { dirname, join } from 'path'
-import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from 'fs'
+import { dirname, join } from 'node:path'
+import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs'
 import type {
   OpenCodeUsageBreakdownKind,
   OpenCodeUsageBreakdownRow,
@@ -10,6 +10,7 @@ import type {
   OpenCodeUsageScanState,
   OpenCodeUsageScope,
   OpenCodeUsageSessionRow,
+  OpenCodeUsageSnapshot,
   OpenCodeUsageSummary
 } from '../../shared/opencode-usage-types'
 import type { Store } from '../persistence'
@@ -17,7 +18,9 @@ import { loadKnownUsageWorktreesByRepo, type UsageWorktreeRef } from '../usage-w
 import type { OpenCodeUsageDailyAggregate, OpenCodeUsagePersistedState } from './types'
 import { createWorktreeRefs, scanOpenCodeUsageDatabases } from './scanner'
 
-const SCHEMA_VERSION = 1
+// Why: v2 adds per-database session ownership (stale sibling-copy dedupe).
+// Older caches were built without it and can carry doubled sessions (#8006).
+const SCHEMA_VERSION = 2
 const STALE_MS = 5 * 60_000
 
 let _openCodeUsageFile: string | null = null
@@ -201,6 +204,21 @@ export class OpenCodeUsageStore {
     }
   }
 
+  getSnapshot(
+    scope: OpenCodeUsageScope,
+    range: OpenCodeUsageRange,
+    recentSessionLimit = 10
+  ): OpenCodeUsageSnapshot {
+    return {
+      scanState: this.getScanState(),
+      summary: this.buildSummary(scope, range),
+      daily: this.buildDaily(scope, range),
+      modelBreakdown: this.buildBreakdown(scope, range, 'model'),
+      projectBreakdown: this.buildBreakdown(scope, range, 'project'),
+      recentSessions: this.buildRecentSessions(scope, range, recentSessionLimit)
+    }
+  }
+
   async refresh(force = false): Promise<OpenCodeUsageScanState> {
     if (!this.state.scanState.enabled) {
       return this.getScanState()
@@ -260,6 +278,10 @@ export class OpenCodeUsageStore {
     range: OpenCodeUsageRange
   ): Promise<OpenCodeUsageSummary> {
     await this.refresh(false)
+    return this.buildSummary(scope, range)
+  }
+
+  private buildSummary(scope: OpenCodeUsageScope, range: OpenCodeUsageRange): OpenCodeUsageSummary {
     const filteredDaily = this.getFilteredDaily(scope, range)
     const filteredSessions = this.getFilteredSessions(scope, range)
 
@@ -315,6 +337,13 @@ export class OpenCodeUsageStore {
     range: OpenCodeUsageRange
   ): Promise<OpenCodeUsageDailyPoint[]> {
     await this.refresh(false)
+    return this.buildDaily(scope, range)
+  }
+
+  private buildDaily(
+    scope: OpenCodeUsageScope,
+    range: OpenCodeUsageRange
+  ): OpenCodeUsageDailyPoint[] {
     const byDay = new Map<string, OpenCodeUsageDailyPoint>()
     for (const row of this.getFilteredDaily(scope, range)) {
       const existing = byDay.get(row.day) ?? {
@@ -341,6 +370,14 @@ export class OpenCodeUsageStore {
     kind: OpenCodeUsageBreakdownKind
   ): Promise<OpenCodeUsageBreakdownRow[]> {
     await this.refresh(false)
+    return this.buildBreakdown(scope, range, kind)
+  }
+
+  private buildBreakdown(
+    scope: OpenCodeUsageScope,
+    range: OpenCodeUsageRange,
+    kind: OpenCodeUsageBreakdownKind
+  ): OpenCodeUsageBreakdownRow[] {
     const rows = new Map<string, OpenCodeUsageBreakdownRow>()
     const filteredDaily = this.getFilteredDaily(scope, range)
     const filteredSessions = this.getFilteredSessions(scope, range)
@@ -399,6 +436,14 @@ export class OpenCodeUsageStore {
     limit = 10
   ): Promise<OpenCodeUsageSessionRow[]> {
     await this.refresh(false)
+    return this.buildRecentSessions(scope, range, limit)
+  }
+
+  private buildRecentSessions(
+    scope: OpenCodeUsageScope,
+    range: OpenCodeUsageRange,
+    limit = 10
+  ): OpenCodeUsageSessionRow[] {
     return this.getFilteredSessions(scope, range)
       .slice(0, limit)
       .map(

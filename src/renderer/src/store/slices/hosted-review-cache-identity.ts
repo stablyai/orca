@@ -1,4 +1,9 @@
 import type { GlobalSettings } from '../../../../shared/types'
+import {
+  getSettingsFocusedExecutionHostId,
+  normalizeExecutionHostId,
+  toSshExecutionHostId
+} from '../../../../shared/execution-host'
 
 export type LinkedReviewHints = {
   linkedGitHubPR?: number | null
@@ -14,16 +19,34 @@ export function getHostedReviewCacheKey(
   branch: string,
   settings?: Pick<GlobalSettings, 'activeRuntimeEnvironmentId'> | null,
   repoId?: string | null,
-  connectionId?: string | null
+  connectionId?: string | null,
+  executionHostId?: string | null,
+  hasRepoOwner = false
 ): string {
-  const environmentId = settings?.activeRuntimeEnvironmentId?.trim()
-  const sshConnectionId = connectionId?.trim()
-  const scope = environmentId
-    ? `runtime:${environmentId}`
-    : sshConnectionId
-      ? `ssh:${sshConnectionId}`
-      : 'local'
+  const scope = getHostedReviewCacheHostScope(settings, connectionId, executionHostId, hasRepoOwner)
   return `${scope}::${repoId ?? repoPath}::${branch}`
+}
+
+function getHostedReviewCacheHostScope(
+  settings?: Pick<GlobalSettings, 'activeRuntimeEnvironmentId'> | null,
+  connectionId?: string | null,
+  executionHostId?: string | null,
+  hasRepoOwner = false
+): string {
+  const hostId = normalizeExecutionHostId(executionHostId)
+  if (hostId) {
+    return hostId
+  }
+  const sshConnectionId = connectionId?.trim()
+  if (sshConnectionId) {
+    return toSshExecutionHostId(sshConnectionId)
+  }
+  // Why: a known repo owner with no SSH/runtime marker is local; absent owner
+  // context keeps the focused-runtime fallback for active-host operations.
+  if (hasRepoOwner) {
+    return 'local'
+  }
+  return getSettingsFocusedExecutionHostId(settings)
 }
 
 // Why: a branch-keyed lookup can describe a different PR than the persisted

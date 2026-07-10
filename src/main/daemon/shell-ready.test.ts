@@ -1,12 +1,10 @@
-/* eslint-disable max-lines -- Why: shell-ready wrapper coverage keeps zsh,
-   bash, marker scanning, and env restoration cases in one suite so the
-   generated wrapper contract is reviewed as a unit. */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { spawnSync } from 'child_process'
-import { tmpdir } from 'os'
-import { join } from 'path'
-import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'fs'
+import { spawnSync } from 'node:child_process'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import type * as ShellReadyModule from './shell-ready'
+import { getZshShellReadyMarkerRegistrationBlock } from '../shell-templates'
 
 async function importFreshShellReady(): Promise<typeof ShellReadyModule> {
   vi.resetModules()
@@ -16,6 +14,96 @@ async function importFreshShellReady(): Promise<typeof ShellReadyModule> {
 const describePosix = process.platform === 'win32' ? describe.skip : describe
 const hasBash = process.platform !== 'win32' && spawnSync('bash', ['--version']).status === 0
 const itWithBash = hasBash ? it : it.skip
+const hasZsh = process.platform !== 'win32' && spawnSync('zsh', ['--version']).status === 0
+const itWithZsh = hasZsh ? it : it.skip
+
+const SHELL_READY_MARKER_OUTPUT = '\x1b]777;orca-shell-ready\x07'
+
+// Why: the shell-ready marker is emitted from zle-line-init, which only fires
+// on a real TTY — spawn through node-pty instead of spawnSync.
+async function runInteractiveZshLogin(args: {
+  tempHome: string
+  wrapperZdotdir: string
+  isDone: (output: string) => boolean
+}): Promise<string> {
+  const pty = await import('node-pty')
+  // Why: -o noglobalrcs skips /etc/zsh/* on CI runners, whose insecure (group-
+  // writable) fpath dirs make the global compinit block on an interactive
+  // "insecure directories" [y/n] prompt before zle-line-init ever fires. The
+  // marker contract lives entirely in our ZDOTDIR files, which still load.
+  const proc = pty.spawn('zsh', ['-o', 'noglobalrcs', '-l'], {
+    name: 'xterm-256color',
+    cols: 80,
+    rows: 24,
+    cwd: args.tempHome,
+    env: {
+      PATH: process.env.PATH ?? '/usr/bin:/bin',
+      HOME: args.tempHome,
+      TERM: 'xterm-256color',
+      ZDOTDIR: args.wrapperZdotdir,
+      ORCA_ORIG_ZDOTDIR: args.tempHome,
+      ORCA_ZSHENV_SOURCE_DIR: args.tempHome,
+      ORCA_SHELL_READY_MARKER: '1'
+    }
+  })
+  let output = ''
+  let settle = (): void => {}
+  const done = new Promise<void>((resolve) => {
+    settle = resolve
+  })
+  const deadline = setTimeout(settle, 10_000)
+  proc.onData((chunk) => {
+    output += chunk
+    if (args.isDone(output)) {
+      settle()
+    }
+  })
+  await done
+  clearTimeout(deadline)
+  proc.kill()
+  return output
+}
+
+// Why: exercise an arbitrary interactive zsh rc (its own ZDOTDIR, no wrapper)
+// so a test can source the marker block directly — e.g. twice, to check the
+// registration is idempotent and keeps chaining the user's prior widget.
+async function runInteractiveZshRc(args: {
+  zdotdir: string
+  isDone: (output: string) => boolean
+}): Promise<string> {
+  const pty = await import('node-pty')
+  // Why: -o noglobalrcs skips /etc/zsh/* so the CI runner's global compinit
+  // can't block on an insecure-directory [y/n] prompt before our marker fires.
+  const proc = pty.spawn('zsh', ['-o', 'noglobalrcs', '-i'], {
+    name: 'xterm-256color',
+    cols: 80,
+    rows: 24,
+    cwd: args.zdotdir,
+    env: {
+      PATH: process.env.PATH ?? '/usr/bin:/bin',
+      HOME: args.zdotdir,
+      TERM: 'xterm-256color',
+      ZDOTDIR: args.zdotdir,
+      ORCA_SHELL_READY_MARKER: '1'
+    }
+  })
+  let output = ''
+  let settle = (): void => {}
+  const done = new Promise<void>((resolve) => {
+    settle = resolve
+  })
+  const deadline = setTimeout(settle, 10_000)
+  proc.onData((chunk) => {
+    output += chunk
+    if (args.isDone(output)) {
+      settle()
+    }
+  })
+  await done
+  clearTimeout(deadline)
+  proc.kill()
+  return output
+}
 
 function runInteractiveBashRcfile(rcfileContent: string, tempDir: string): string {
   const rcfile = join(tempDir, 'bash-osc133-rcfile')
@@ -55,6 +143,17 @@ function expectBashOsc133Lifecycle(output: string): void {
   expect(output).toContain(`${oscD}1\x07${oscA}`)
   expect(output.split(oscC)).toHaveLength(4)
   expect(output.split(oscD)).toHaveLength(3)
+}
+
+function expectZdotdirSourceContext(content: string, fileName: '.zprofile' | '.zshrc' | '.zlogin') {
+  expect(content).toContain('export ZDOTDIR="$_orca_home"')
+  expect(content).toContain(`source "$_orca_home/${fileName}"`)
+  expect(content).toContain('export ZDOTDIR="$_orca_wrapper_zdotdir"')
+}
+
+function expectFinalZdotdirRestoreContext(content: string) {
+  expect(content).toContain("after Orca's last wrapper file has loaded")
+  expect(content).toContain('export ZDOTDIR="$_orca_home"')
 }
 
 describePosix('daemon shell-ready launch config', () => {
@@ -213,12 +312,153 @@ describePosix('daemon shell-ready launch config', () => {
     getShellReadyLaunchConfig('/bin/zsh')
 
     const zshenv = readFileSync(join(userDataPath, 'shell-ready', 'zsh', '.zshenv'), 'utf8')
+    const zprofile = readFileSync(join(userDataPath, 'shell-ready', 'zsh', '.zprofile'), 'utf8')
+    const zshrc = readFileSync(join(userDataPath, 'shell-ready', 'zsh', '.zshrc'), 'utf8')
+    const zlogin = readFileSync(join(userDataPath, 'shell-ready', 'zsh', '.zlogin'), 'utf8')
     expect(zshenv).toContain('_orca_user_zdotdir="${_orca_spawn_orig_zdotdir:-$HOME}"')
     expect(zshenv).toContain('*/shell-ready/zsh) _orca_user_zdotdir="$HOME" ;;')
     expect(zshenv).toContain('""|*/shell-ready/zsh) export ORCA_ORIG_ZDOTDIR="$HOME" ;;')
+    expectZdotdirSourceContext(zprofile, '.zprofile')
+    expectZdotdirSourceContext(zshrc, '.zshrc')
+    expectZdotdirSourceContext(zlogin, '.zlogin')
+    expectFinalZdotdirRestoreContext(zshrc)
+    expectFinalZdotdirRestoreContext(zlogin)
   })
 
-  it('writes wrappers that restore OpenCode and Pi config after user startup files', async () => {
+  it('owns zle-line-init for the shell-ready marker instead of an azhw hook', async () => {
+    const { getShellReadyLaunchConfig } = await importFreshShellReady()
+
+    getShellReadyLaunchConfig('/bin/zsh')
+
+    const zlogin = readFileSync(join(userDataPath, 'shell-ready', 'zsh', '.zlogin'), 'utf8')
+    expect(zlogin).toContain('zle -N zle-line-init __orca_prompt_mark')
+    expect(zlogin).toContain('__orca_prev_line_init_fn="${widgets[zle-line-init]#user:}"')
+    expect(zlogin).toContain('printf "\\033]777;orca-shell-ready\\007"')
+    // Why: add-zle-hook-widget aborts its hook chain when an earlier hook
+    // exits non-zero, so the marker must not be registered through it.
+    expect(zlogin).not.toContain('add-zle-hook-widget line-init')
+    // Why: re-source guard — skip re-capturing when we are already the bound
+    // widget so the prior widget chain survives a second source.
+    expect(zlogin).toContain('== "user:__orca_prompt_mark"')
+  })
+
+  // Why: regression guard — oh-my-zsh vi-mode installs a raw zle-line-init
+  // that returns non-zero when VI_MODE_SET_CURSOR is unset. Registering the
+  // marker via add-zle-hook-widget let that failing widget abort the hook
+  // chain, so the marker never fired and every queued startup command sat on
+  // the daemon's pre-ready timeout (a 15s "bare shell" before the agent).
+  itWithZsh(
+    'emits the shell-ready marker even when a user zle-line-init widget fails (oh-my-zsh vi-mode shape)',
+    async () => {
+      const { getShellReadyLaunchConfig } = await importFreshShellReady()
+      const config = getShellReadyLaunchConfig('/bin/zsh')
+      const tempHome = mkdtempSync(join(tmpdir(), 'orca-zsh-vi-mode-'))
+      writeFileSync(
+        join(tempHome, '.zshrc'),
+        [
+          'function zle-line-init() {',
+          '  [[ "${VI_MODE_SET_CURSOR:-}" = true ]] || return',
+          '}',
+          'zle -N zle-line-init',
+          ''
+        ].join('\n')
+      )
+      try {
+        const output = await runInteractiveZshLogin({
+          tempHome,
+          wrapperZdotdir: config.env.ZDOTDIR,
+          isDone: (current) => current.includes(SHELL_READY_MARKER_OUTPUT)
+        })
+        expect(output).toContain(SHELL_READY_MARKER_OUTPUT)
+      } finally {
+        rmSync(tempHome, { recursive: true, force: true })
+      }
+    },
+    15_000
+  )
+
+  itWithZsh(
+    'still runs user add-zle-hook-widget line-init hooks after the marker',
+    async () => {
+      const { getShellReadyLaunchConfig } = await importFreshShellReady()
+      const config = getShellReadyLaunchConfig('/bin/zsh')
+      const tempHome = mkdtempSync(join(tmpdir(), 'orca-zsh-azhw-'))
+      const userHookOutput = 'ORCA-TEST-USER-HOOK'
+      writeFileSync(
+        join(tempHome, '.zshrc'),
+        [
+          `__orca_test_line_init_hook() { printf "${userHookOutput}" }`,
+          'autoload -Uz add-zle-hook-widget',
+          'zle -N __orca_test_line_init_hook',
+          'add-zle-hook-widget line-init __orca_test_line_init_hook',
+          ''
+        ].join('\n')
+      )
+      try {
+        const output = await runInteractiveZshLogin({
+          tempHome,
+          wrapperZdotdir: config.env.ZDOTDIR,
+          isDone: (current) =>
+            current.includes(SHELL_READY_MARKER_OUTPUT) && current.includes(userHookOutput)
+        })
+        // Why: the marker widget chains to the previously installed widget, so
+        // an azhw dispatcher registered by user config must keep dispatching.
+        expect(output).toContain(SHELL_READY_MARKER_OUTPUT)
+        expect(output).toContain(userHookOutput)
+        expect(output.indexOf(SHELL_READY_MARKER_OUTPUT)).toBeLessThan(
+          output.indexOf(userHookOutput)
+        )
+      } finally {
+        rmSync(tempHome, { recursive: true, force: true })
+      }
+    },
+    15_000
+  )
+
+  // Why: the marker block is normally sourced once per shell, but a re-source
+  // (nested Orca, manual re-source) must stay idempotent — it must keep
+  // chaining the user's original zle-line-init instead of clobbering the
+  // captured function to empty and silently dropping it on later prompts.
+  itWithZsh(
+    'keeps chaining the prior zle-line-init widget when the marker block is sourced twice',
+    async () => {
+      const zdotdir = mkdtempSync(join(tmpdir(), 'orca-zsh-resource-'))
+      const userHookOutput = 'ORCA-TEST-PRIOR-WIDGET'
+      const block = getZshShellReadyMarkerRegistrationBlock('\\033]777;orca-shell-ready\\007')
+      writeFileSync(
+        join(zdotdir, '.zshrc'),
+        [
+          // A user widget that mimics oh-my-zsh vi-mode owning zle-line-init.
+          `__orca_test_prior_widget() { printf "${userHookOutput}" }`,
+          'zle -N zle-line-init __orca_test_prior_widget',
+          block,
+          // Second source of the exact same block — must not drop the chain.
+          block,
+          ''
+        ].join('\n')
+      )
+      try {
+        const output = await runInteractiveZshRc({
+          zdotdir,
+          isDone: (current) =>
+            current.includes(SHELL_READY_MARKER_OUTPUT) && current.includes(userHookOutput)
+        })
+        expect(output).toContain(SHELL_READY_MARKER_OUTPUT)
+        expect(output).toContain(userHookOutput)
+        expect(output.indexOf(SHELL_READY_MARKER_OUTPUT)).toBeLessThan(
+          output.indexOf(userHookOutput)
+        )
+        // Why: idempotent — the marker must fire exactly once per prompt, not
+        // duplicated by the second registration.
+        expect(output.split(SHELL_READY_MARKER_OUTPUT)).toHaveLength(2)
+      } finally {
+        rmSync(zdotdir, { recursive: true, force: true })
+      }
+    },
+    15_000
+  )
+
+  it('writes wrappers without restoring Pi/OMP homes after user startup files', async () => {
     const { getShellReadyLaunchConfig } = await importFreshShellReady()
 
     getShellReadyLaunchConfig('/bin/zsh')
@@ -229,27 +469,30 @@ describePosix('daemon shell-ready launch config', () => {
     const bashRc = readFileSync(join(userDataPath, 'shell-ready', 'bash', 'rcfile'), 'utf8')
     const restoreLine =
       '[[ -n "${ORCA_OPENCODE_CONFIG_DIR:-}" ]] && export OPENCODE_CONFIG_DIR="${ORCA_OPENCODE_CONFIG_DIR}"'
-    const piRestoreLine =
-      '[[ -n "${ORCA_PI_CODING_AGENT_DIR:-}" ]] && export PI_CODING_AGENT_DIR="${ORCA_PI_CODING_AGENT_DIR}"'
+    const mimoRestoreLine =
+      '[[ -n "${ORCA_MIMOCODE_HOME:-}" ]] && export MIMOCODE_HOME="${ORCA_MIMOCODE_HOME}"'
     const codexRestoreLine =
       '[[ -n "${ORCA_CODEX_HOME:-}" ]] && export CODEX_HOME="${ORCA_CODEX_HOME}"'
-    const ompRestoreLine =
-      'if [[ -z "${ORCA_PI_CODING_AGENT_DIR:-}" && -n "${ORCA_OMP_CODING_AGENT_DIR:-}" ]]; then'
+    const agentTeamsPathRestoreLine = '[[ -n "${ORCA_AGENT_TEAMS_SHIM_DIR:-}" ]] || return 0'
     const ompWrapperLine = 'command omp --extension "${ORCA_OMP_STATUS_EXTENSION}" "$@"'
     expect(zshrc).toContain(restoreLine)
     expect(zlogin).toContain(restoreLine)
     expect(bashRc).toContain(restoreLine)
-    expect(zshrc).toContain(piRestoreLine)
-    expect(zlogin).toContain(piRestoreLine)
-    expect(bashRc).toContain(piRestoreLine)
+    expect(zshrc).toContain(mimoRestoreLine)
+    expect(zlogin).toContain(mimoRestoreLine)
+    expect(bashRc).toContain(mimoRestoreLine)
+    expect(zshrc).not.toContain('ORCA_PI_CODING_AGENT_DIR')
+    expect(zlogin).not.toContain('ORCA_PI_CODING_AGENT_DIR')
+    expect(bashRc).not.toContain('ORCA_PI_CODING_AGENT_DIR')
     expect(zshrc).toContain(codexRestoreLine)
     expect(zlogin).toContain(codexRestoreLine)
+    expect(zshrc).toContain(agentTeamsPathRestoreLine)
+    expect(zlogin).toContain(agentTeamsPathRestoreLine)
+    expect(bashRc).toContain(agentTeamsPathRestoreLine)
     expect(bashRc).toContain(codexRestoreLine)
-    // OMP launches use ORCA_OMP_CODING_AGENT_DIR; both restore lines must be
-    // present so a PTY of either kind has its overlay restored after rc files.
-    expect(zshrc).toContain(ompRestoreLine)
-    expect(zlogin).toContain(ompRestoreLine)
-    expect(bashRc).toContain(ompRestoreLine)
+    expect(zshrc).not.toContain('ORCA_OMP_CODING_AGENT_DIR')
+    expect(zlogin).not.toContain('ORCA_OMP_CODING_AGENT_DIR')
+    expect(bashRc).not.toContain('ORCA_OMP_CODING_AGENT_DIR')
     expect(zshrc).toContain(ompWrapperLine)
     expect(zlogin).toContain(ompWrapperLine)
     expect(bashRc).toContain(ompWrapperLine)
@@ -269,11 +512,16 @@ describePosix('daemon shell-ready launch config', () => {
 
     expect(bashRc).toContain('printf "\\033]133;D;%s\\007"')
     expect(bashRc).toContain('printf "\\033]133;C\\007"')
+    // precmd is prepended (captures $? first) and the epilogue is appended last,
+    // so a framework that must be last in PROMPT_COMMAND stays between them.
     expect(bashRc).toContain(
-      'PROMPT_COMMAND="__orca_osc133_precmd${PROMPT_COMMAND:+;${PROMPT_COMMAND}}"'
+      'PROMPT_COMMAND="__orca_osc133_precmd${PROMPT_COMMAND:+;${PROMPT_COMMAND}};__orca_osc133_epilogue"'
     )
-    expect(bashRc.indexOf("trap '__orca_osc133_preexec' DEBUG")).toBeGreaterThan(
-      bashRc.indexOf('if [[ "${ORCA_SHELL_READY_MARKER:-0}" == "1" ]]; then')
+    // The final DEBUG arming runs after PROMPT_COMMAND setup so the rcfile's own
+    // commands are not mistaken for a foreground command (lastIndexOf skips the
+    // identical re-arm inside __orca_osc133_epilogue).
+    expect(bashRc.lastIndexOf("trap '__orca_osc133_preexec' DEBUG")).toBeGreaterThan(
+      bashRc.indexOf('PROMPT_COMMAND="__orca_osc133_precmd')
     )
     expect(zshrc).toContain('printf "\\033]133;D;%s\\007"')
     expect(zshrc).toContain('printf "\\033]133;C\\007"')
@@ -307,6 +555,82 @@ describePosix('daemon shell-ready launch config', () => {
       expect(output).toContain('PROMPT_HOOK')
       expect(output).toContain('USER_DEBUG_AFTER')
       expectBashOsc133Lifecycle(output)
+    }
+  )
+
+  itWithBash(
+    'still emits 133;C when bash-preexec re-arms the DEBUG trap at first prompt',
+    async () => {
+      const { getDaemonBashShellReadyRcfileContent } = await importFreshShellReady()
+      // Minimal bash-preexec imitation (iTerm2/starship setups): re-arms its own
+      // DEBUG trap from PROMPT_COMMAND at the first prompt — silencing Orca's
+      // trap — and dispatches preexec_functions with the command as $1.
+      writeFileSync(
+        join(userDataPath, '.bash_profile'),
+        [
+          'preexec_functions=()',
+          '__bp_preexec_invoke_exec() {',
+          '  [[ -n "${__bp_interactive_mode:-}" ]] || return',
+          '  __bp_interactive_mode=""',
+          '  local f',
+          '  for f in "${preexec_functions[@]}"; do "$f" "$BASH_COMMAND"; done',
+          '}',
+          "__bp_arm() { __bp_interactive_mode=1; trap '__bp_preexec_invoke_exec' DEBUG; }",
+          'PROMPT_COMMAND="${PROMPT_COMMAND:+$PROMPT_COMMAND;}__bp_arm"'
+        ].join('\n')
+      )
+
+      const output = runInteractiveBashRcfile(getDaemonBashShellReadyRcfileContent(), userDataPath)
+
+      expectBashOsc133Lifecycle(output)
+    }
+  )
+
+  itWithBash(
+    'dispatches a non-empty preexec_functions against the real command, not Orca hooks',
+    async () => {
+      const { getDaemonBashShellReadyRcfileContent } = await importFreshShellReady()
+      // Why: Orca's epilogue captures bash-preexec's re-armed DEBUG trap and
+      // chains it. A real preexec callback must fire against the user's command —
+      // not __orca_osc133_epilogue. Mirror upstream bash-preexec faithfully: it
+      // enables `functrace` (so Orca's `trap -p DEBUG` capture sees its trap),
+      // defers that install to the first prompt via PROMPT_COMMAND, and reads the
+      // command from `history` (so DEBUG fires on prompt hooks never dispatch a
+      // phantom). The naive `$BASH_COMMAND` imitation does none of these.
+      writeFileSync(
+        join(userDataPath, '.bash_profile'),
+        [
+          'preexec_functions=(__user_preexec)',
+          '__user_preexec() { printf \'USER_PREEXEC:%s\\n\' "$1"; }',
+          '__bp_inside=0',
+          '__bp_last_hist=""',
+          '__bp_preexec_invoke_exec() {',
+          '  (( __bp_inside > 0 )) && return',
+          '  [[ -n "${__bp_interactive_mode:-}" ]] || return',
+          '  local __bp_inside=1',
+          '  local this_command',
+          '  this_command="$(builtin history 1)"',
+          '  this_command="${this_command#"${this_command%%[![:space:]]*}"}"',
+          '  this_command="${this_command#* }"',
+          '  this_command="${this_command#"${this_command%%[![:space:]]*}"}"',
+          '  [[ -n "$this_command" && "$this_command" != "$__bp_last_hist" ]] || return',
+          '  __bp_last_hist="$this_command"',
+          '  __bp_interactive_mode=""',
+          '  local f',
+          '  for f in "${preexec_functions[@]}"; do "$f" "$this_command"; done',
+          '}',
+          "__bp_arm() { set -o functrace; __bp_interactive_mode=1; trap '__bp_preexec_invoke_exec' DEBUG; }",
+          'PROMPT_COMMAND="${PROMPT_COMMAND:+$PROMPT_COMMAND;}__bp_arm"'
+        ].join('\n')
+      )
+
+      const output = runInteractiveBashRcfile(getDaemonBashShellReadyRcfileContent(), userDataPath)
+
+      expectBashOsc133Lifecycle(output)
+      expect(output).toContain('USER_PREEXEC:true')
+      expect(output).toContain('USER_PREEXEC:false')
+      expect(output).not.toContain('USER_PREEXEC:__orca_osc133')
+      expect(output).not.toContain('USER_PREEXEC:__bp_')
     }
   )
 

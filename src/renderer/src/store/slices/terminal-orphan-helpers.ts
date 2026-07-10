@@ -14,8 +14,11 @@ type OrphanTerminalCleanupState = Pick<
   | 'canExpandPaneByTabId'
   | 'terminalLayoutsByTabId'
   | 'pendingStartupByTabId'
+  | 'pendingInitialCwdByTabId'
   | 'pendingSetupSplitByTabId'
   | 'pendingIssueCommandSplitByTabId'
+  | 'automaticAgentResumeClaimsByTabId'
+  | 'nativeChatLaunchPromptByTabId'
   | 'tabBarOrderByWorktree'
   | 'cacheTimerByKey'
   | 'activeTabIdByWorktree'
@@ -59,13 +62,37 @@ export function buildOrphanTerminalCleanupPatch(
   | 'canExpandPaneByTabId'
   | 'terminalLayoutsByTabId'
   | 'pendingStartupByTabId'
+  | 'pendingInitialCwdByTabId'
   | 'pendingSetupSplitByTabId'
   | 'pendingIssueCommandSplitByTabId'
+  | 'automaticAgentResumeClaimsByTabId'
+  | 'nativeChatLaunchPromptByTabId'
   | 'tabBarOrderByWorktree'
   | 'cacheTimerByKey'
   | 'activeTabIdByWorktree'
   | 'activeTabId'
 > {
+  if (orphanTerminalIds.size === 0) {
+    return {
+      tabsByWorktree: state.tabsByWorktree,
+      ptyIdsByTabId: state.ptyIdsByTabId,
+      runtimePaneTitlesByTabId: state.runtimePaneTitlesByTabId,
+      expandedPaneByTabId: state.expandedPaneByTabId,
+      canExpandPaneByTabId: state.canExpandPaneByTabId,
+      terminalLayoutsByTabId: state.terminalLayoutsByTabId,
+      pendingStartupByTabId: state.pendingStartupByTabId,
+      pendingInitialCwdByTabId: state.pendingInitialCwdByTabId,
+      pendingSetupSplitByTabId: state.pendingSetupSplitByTabId,
+      pendingIssueCommandSplitByTabId: state.pendingIssueCommandSplitByTabId,
+      automaticAgentResumeClaimsByTabId: state.automaticAgentResumeClaimsByTabId,
+      nativeChatLaunchPromptByTabId: state.nativeChatLaunchPromptByTabId,
+      tabBarOrderByWorktree: state.tabBarOrderByWorktree,
+      cacheTimerByKey: state.cacheTimerByKey,
+      activeTabIdByWorktree: state.activeTabIdByWorktree,
+      activeTabId: state.activeTabId
+    }
+  }
+
   const nextTabs = (state.tabsByWorktree[worktreeId] ?? []).filter(
     (tab) => !orphanTerminalIds.has(tab.id)
   )
@@ -75,8 +102,13 @@ export function buildOrphanTerminalCleanupPatch(
   const nextCanExpandPaneByTabId = { ...state.canExpandPaneByTabId }
   const nextTerminalLayoutsByTabId = { ...state.terminalLayoutsByTabId }
   const nextPendingStartupByTabId = { ...state.pendingStartupByTabId }
+  const nextPendingInitialCwdByTabId = { ...state.pendingInitialCwdByTabId }
   const nextPendingSetupSplitByTabId = { ...state.pendingSetupSplitByTabId }
   const nextPendingIssueCommandSplitByTabId = { ...state.pendingIssueCommandSplitByTabId }
+  const nextAutomaticAgentResumeClaimsByTabId = {
+    ...state.automaticAgentResumeClaimsByTabId
+  }
+  const nextNativeChatLaunchPromptByTabId = { ...state.nativeChatLaunchPromptByTabId }
   const nextTabBarOrderByWorktree = {
     ...state.tabBarOrderByWorktree,
     [worktreeId]: (state.tabBarOrderByWorktree[worktreeId] ?? []).filter(
@@ -96,8 +128,11 @@ export function buildOrphanTerminalCleanupPatch(
     delete nextCanExpandPaneByTabId[orphanTabId]
     delete nextTerminalLayoutsByTabId[orphanTabId]
     delete nextPendingStartupByTabId[orphanTabId]
+    delete nextPendingInitialCwdByTabId[orphanTabId]
     delete nextPendingSetupSplitByTabId[orphanTabId]
     delete nextPendingIssueCommandSplitByTabId[orphanTabId]
+    delete nextAutomaticAgentResumeClaimsByTabId[orphanTabId]
+    delete nextNativeChatLaunchPromptByTabId[orphanTabId]
     for (const key of Object.keys(nextCacheTimerByKey)) {
       if (key.startsWith(`${orphanTabId}:`)) {
         delete nextCacheTimerByKey[key]
@@ -123,8 +158,11 @@ export function buildOrphanTerminalCleanupPatch(
     canExpandPaneByTabId: nextCanExpandPaneByTabId,
     terminalLayoutsByTabId: nextTerminalLayoutsByTabId,
     pendingStartupByTabId: nextPendingStartupByTabId,
+    pendingInitialCwdByTabId: nextPendingInitialCwdByTabId,
     pendingSetupSplitByTabId: nextPendingSetupSplitByTabId,
     pendingIssueCommandSplitByTabId: nextPendingIssueCommandSplitByTabId,
+    automaticAgentResumeClaimsByTabId: nextAutomaticAgentResumeClaimsByTabId,
+    nativeChatLaunchPromptByTabId: nextNativeChatLaunchPromptByTabId,
     tabBarOrderByWorktree: nextTabBarOrderByWorktree,
     cacheTimerByKey: nextCacheTimerByKey,
     activeTabIdByWorktree: nextActiveTabIdByWorktree,

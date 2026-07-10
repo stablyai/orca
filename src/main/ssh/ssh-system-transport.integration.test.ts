@@ -1,5 +1,5 @@
-import { mkdtempSync, writeFileSync, mkdirSync, chmodSync, rmSync, readFileSync } from 'fs'
-import { join } from 'path'
+import { mkdtempSync, writeFileSync, mkdirSync, chmodSync, rmSync, readFileSync } from 'node:fs'
+import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 vi.mock('electron', () => ({
@@ -121,7 +121,14 @@ if (process.argv.includes('--detached')) {
 }
 
 function createRelayTree(root: string, remoteHome: string): void {
-  const platforms = ['linux-x64', 'linux-arm64', 'darwin-x64', 'darwin-arm64']
+  const platforms = [
+    'linux-x64',
+    'linux-arm64',
+    'darwin-x64',
+    'darwin-arm64',
+    'win32-x64',
+    'win32-arm64'
+  ]
   for (const platform of platforms) {
     const localDir = join(root, platform)
     mkdirSync(localDir, { recursive: true })

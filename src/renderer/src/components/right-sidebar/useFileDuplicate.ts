@@ -2,9 +2,9 @@ import { useCallback } from 'react'
 import { toast } from 'sonner'
 import { basename, dirname, joinPath } from '@/lib/path'
 import type { TreeNode } from './file-explorer-types'
-import { useAppStore } from '@/store'
 import { copyRuntimePath, runtimePathExists } from '@/runtime/runtime-file-client'
 import { getConnectionId } from '@/lib/connection-context'
+import { getRightSidebarWorktreeRuntimeSettings } from './file-explorer-runtime-owner'
 
 /**
  * Electron's ipcRenderer.invoke wraps errors as:
@@ -42,9 +42,8 @@ export function useFileDuplicate({
       const ext = dotIndex > 0 ? name.slice(dotIndex) : ''
 
       const run = async (): Promise<void> => {
-        const settings = useAppStore.getState().settings
         const context = {
-          settings,
+          settings: getRightSidebarWorktreeRuntimeSettings(activeWorktreeId),
           worktreeId: activeWorktreeId,
           worktreePath,
           connectionId: getConnectionId(activeWorktreeId) ?? undefined

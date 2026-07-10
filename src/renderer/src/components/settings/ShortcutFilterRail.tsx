@@ -1,11 +1,13 @@
 import React from 'react'
 import { Search, X } from 'lucide-react'
+import { isClipboardTextByteLengthOverLimit } from '../../../../shared/clipboard-text'
 import { formatKeybindingList, type KeybindingDefinition } from '../../../../shared/keybindings'
 import { cn } from '../../lib/utils'
 import { Button } from '../ui/button'
 import { Input } from '../ui/input'
-import type { ShortcutTerminalStatus } from './ShortcutBindingRow'
+import type { ShortcutTerminalStatus } from './shortcut-terminal-status'
 import type { SettingsSearchEntry } from './settings-search'
+import { translate } from '@/i18n/i18n'
 
 export type ShortcutFilter = 'all' | 'modified' | 'unassigned' | 'conflicts'
 
@@ -23,12 +25,6 @@ export type ShortcutRowsByGroup = {
   rows: ShortcutRowModel[]
 }
 
-export type ShortcutGroupSummary = {
-  id: string
-  label: string
-  count: number
-}
-
 const SHORTCUT_FILTER_LABELS: Record<ShortcutFilter, string> = {
   all: 'All',
   modified: 'Modified',
@@ -36,10 +32,30 @@ const SHORTCUT_FILTER_LABELS: Record<ShortcutFilter, string> = {
   conflicts: 'Conflicts'
 }
 
+export const SHORTCUT_LOCAL_SEARCH_QUERY_MAX_BYTES = 2 * 1024
+
+export function isShortcutLocalSearchQueryTooLarge(
+  query: string,
+  maxBytes = SHORTCUT_LOCAL_SEARCH_QUERY_MAX_BYTES
+): boolean {
+  return isClipboardTextByteLengthOverLimit(query, maxBytes)
+}
+
+export function normalizeShortcutLocalSearchQuery(query: string): string | null {
+  if (isShortcutLocalSearchQueryTooLarge(query)) {
+    return null
+  }
+  return query.trim().toLowerCase()
+}
+
 export function getShortcutSearchEntry(row: ShortcutRowModel): SettingsSearchEntry {
   return {
     title: row.item.title,
-    description: `${row.groupTitle} shortcut`,
+    description: translate(
+      'auto.components.settings.ShortcutFilterRail.1d5634ba31',
+      '{{value0}} shortcut',
+      { value0: row.groupTitle }
+    ),
     keywords: [...row.item.searchKeywords]
   }
 }
@@ -65,6 +81,9 @@ export function matchesShortcutLocalSearch(
   if (!query) {
     return true
   }
+  if (isShortcutLocalSearchQueryTooLarge(query)) {
+    return false
+  }
   const searchableText = [
     row.item.title,
     row.item.id,
@@ -80,10 +99,7 @@ export function ShortcutFilterRail({
   onQueryChange,
   filter,
   onFilterChange,
-  activeGroup,
-  onActiveGroupChange,
   filterCounts,
-  groupSummaries,
   visibleCount,
   totalCount
 }: {
@@ -91,10 +107,7 @@ export function ShortcutFilterRail({
   onQueryChange: (value: string) => void
   filter: ShortcutFilter
   onFilterChange: (value: ShortcutFilter) => void
-  activeGroup: string
-  onActiveGroupChange: (value: string) => void
   filterCounts: Record<ShortcutFilter, number>
-  groupSummaries: ShortcutGroupSummary[]
   visibleCount: number
   totalCount: number
 }): React.JSX.Element {
@@ -109,7 +122,7 @@ export function ShortcutFilterRail({
       <div className="shrink-0 space-y-2">
         <div className="flex items-center justify-between gap-3">
           <label htmlFor="shortcut-filter-search" className="text-xs font-medium">
-            Find shortcuts
+            {translate('auto.components.settings.ShortcutFilterRail.02dc7d4251', 'Find shortcuts')}
           </label>
           <span className="text-[11px] text-muted-foreground">
             {visibleCount}/{totalCount}
@@ -121,7 +134,10 @@ export function ShortcutFilterRail({
             id="shortcut-filter-search"
             value={query}
             onChange={(event) => onQueryChange(event.target.value)}
-            placeholder="Search command or keys"
+            placeholder={translate(
+              'auto.components.settings.ShortcutFilterRail.f733c4b89f',
+              'Search command or keys'
+            )}
             className="h-8 pl-8 pr-8 text-sm"
           />
           {query ? (
@@ -129,7 +145,10 @@ export function ShortcutFilterRail({
               type="button"
               variant="ghost"
               size="icon-xs"
-              aria-label="Clear shortcut search"
+              aria-label={translate(
+                'auto.components.settings.ShortcutFilterRail.df8466f3fc',
+                'Clear shortcut search'
+              )}
               onClick={() => onQueryChange('')}
               className="absolute top-1/2 right-1 -translate-y-1/2 text-muted-foreground"
             >
@@ -139,9 +158,15 @@ export function ShortcutFilterRail({
         </div>
       </div>
 
-      <nav aria-label="Shortcut status filters" className="shrink-0 space-y-2">
+      <nav
+        aria-label={translate(
+          'auto.components.settings.ShortcutFilterRail.8a1e78c14b',
+          'Shortcut status filters'
+        )}
+        className="shrink-0 space-y-2"
+      >
         <p className="text-[11px] font-semibold tracking-[0.05em] text-muted-foreground uppercase">
-          Status
+          {translate('auto.components.settings.ShortcutFilterRail.28b63545bf', 'Status')}
         </p>
         <div className="grid gap-1">
           {filters.map((option) => (
@@ -158,34 +183,6 @@ export function ShortcutFilterRail({
             >
               <span className="truncate">{option.label}</span>
               <span className="text-[11px] tabular-nums opacity-80">{option.count}</span>
-            </button>
-          ))}
-        </div>
-      </nav>
-
-      <nav
-        aria-label="Shortcut groups"
-        className="min-h-0 flex-1 space-y-2 overflow-y-auto pr-1 scrollbar-sleek"
-      >
-        <p className="text-[11px] font-semibold tracking-[0.05em] text-muted-foreground uppercase">
-          Groups
-        </p>
-        <div className="grid gap-1">
-          {groupSummaries.map((group) => (
-            <button
-              key={group.id}
-              type="button"
-              onClick={() => onActiveGroupChange(group.id)}
-              className={cn(
-                'flex items-center justify-between gap-2 rounded-md px-2 py-1.5 text-left text-xs outline-none transition-colors focus-visible:ring-[3px] focus-visible:ring-ring/50',
-                activeGroup === group.id
-                  ? 'bg-accent font-medium text-accent-foreground'
-                  : 'text-muted-foreground hover:bg-accent/60 hover:text-foreground',
-                group.count === 0 && activeGroup !== group.id ? 'opacity-55' : ''
-              )}
-            >
-              <span className="truncate">{group.label}</span>
-              <span className="text-[11px] tabular-nums opacity-80">{group.count}</span>
             </button>
           ))}
         </div>

@@ -24,6 +24,9 @@ export type WrappedLogicalLine = {
   fingerprint: string
 }
 
+const MAX_SOFT_WRAPPED_LINK_ROWS = 200
+const MAX_SOFT_WRAPPED_LINK_CHARS = 20_000
+
 function translateLineWithCells(line: IBufferLine): { text: string; columns: number[] } | null {
   let text = ''
   const columns: number[] = []
@@ -118,13 +121,22 @@ export function buildWrappedLogicalLine(
   }
 
   let startY = y
+  let rowCount = 1
   while (startY > 0 && buffer.getLine(startY)?.isWrapped) {
+    if (rowCount >= MAX_SOFT_WRAPPED_LINK_ROWS) {
+      return null
+    }
     startY--
+    rowCount++
   }
 
   let endY = y
   while (buffer.getLine(endY + 1)?.isWrapped) {
+    if (rowCount >= MAX_SOFT_WRAPPED_LINK_ROWS) {
+      return null
+    }
     endY++
+    rowCount++
   }
 
   let text = ''
@@ -135,6 +147,11 @@ export function buildWrappedLogicalLine(
       return null
     }
     const translated = translateLineWithColumns(line)
+    // Why: terminal hover runs on the renderer interaction path; enormous
+    // no-newline blobs are not useful file links and can freeze the window.
+    if (text.length + translated.text.length > MAX_SOFT_WRAPPED_LINK_CHARS) {
+      return null
+    }
     rows.push({
       y: rowY,
       text: translated.text,

@@ -25,7 +25,9 @@ Slack, GitHub comments, or any other channel to reach a human during the run.
   orca orchestration send --to term_COORD \\
     --type worker_done --subject "<short status>" \\
     --body "<3-sentence summary: what you did, what you found, what's left>" \\
-    --payload '{"taskId":"task_SNAP","dispatchId":"ctx_SNAP","filesModified":["path/a","path/b"],"reportPath":"<optional: path to the full artifact>"}'
+    --task-id task_SNAP --dispatch-id ctx_SNAP \\
+    --files-modified "path/a,path/b" \\
+    --report-path "<optional: path to the full artifact>"
 
   # BEHAVIOR RULE: send a heartbeat every 5 minutes
   # while actively working on the task. The coordinator uses this to
@@ -39,7 +41,8 @@ Slack, GitHub comments, or any other channel to reach a human during the run.
   # cannot mask a hung retry.
   orca orchestration send --to term_COORD \\
     --type heartbeat --subject "alive" \\
-    --payload '{"taskId":"task_SNAP","dispatchId":"ctx_SNAP","phase":"<short: investigating|implementing|reviewing|waiting>"}'
+    --task-id task_SNAP --dispatch-id ctx_SNAP \\
+    --phase "<short: investigating|implementing|reviewing|waiting>"
 
   # Ask the coordinator a question and block until it answers.
   #
@@ -63,22 +66,23 @@ Slack, GitHub comments, or any other channel to reach a human during the run.
   orca orchestration send --to term_COORD \\
     --type escalation --subject "Blocked: <reason>" \\
     --body "<details>" \\
-    --payload '{"taskId":"task_SNAP"}'
+    --task-id task_SNAP
 
   # Check for messages from the coordinator:
   orca orchestration check
 
 === AFTER YOU SEND worker_done ===
 
-Keep the shell session open for a grace period (10 minutes) in case the
-coordinator sends a follow-up or re-dispatches you. Poll with
-\`orca orchestration check\` every 2 minutes during that window. If no
-follow-up arrives, you may exit after the grace period — the coordinator
-will not expect further output from you.
+worker_done ends your turn for this task. Your dispatched work is complete:
+stop, return to an idle prompt, and take no further actions — do NOT start
+new or unrelated work, do NOT run a sleep/poll loop, and do NOT keep calling
+\`orca orchestration check\`. The coordinator has already recorded your
+completion and expects no further output.
 
-If the coordinator re-dispatches you (you will receive a fresh preamble +
-TASK block), reset your polling and start the new task. Do not respond
-to the previous task's follow-ups after a re-dispatch.
+Do not exit the shell. Your terminal stays available, and if the
+coordinator has more for you it will re-engage this terminal with a fresh
+preamble + TASK block, which arrives as new input. When that happens,
+reset and start the new task; ignore the previous task's follow-ups.
 
 === TASK ===
 TASK_BODY"

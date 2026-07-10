@@ -1,19 +1,10 @@
 import { describe, expect, it } from 'vitest'
-import { shouldBypassXtermKeyboardEvent, type XtermBypassEvent } from './xterm-bypass-policy'
-
-function event(overrides: Partial<XtermBypassEvent>): XtermBypassEvent {
-  return {
-    type: 'keydown',
-    key: '',
-    code: '',
-    defaultPrevented: false,
-    metaKey: false,
-    ctrlKey: false,
-    altKey: false,
-    shiftKey: false,
-    ...overrides
-  }
-}
+import {
+  shouldBypassXtermKeyboardEvent,
+  shouldPreventDefaultTerminalImeCandidateKey,
+  shouldSuppressTerminalImeKeyboardEvent
+} from './xterm-bypass-policy'
+import { event } from './xterm-bypass-event-fixture'
 
 describe('shouldBypassXtermKeyboardEvent — macOS', () => {
   const opts = { isMac: true, hasSelection: true }
@@ -34,6 +25,12 @@ describe('shouldBypassXtermKeyboardEvent — macOS', () => {
     ).toBe(true)
   })
 
+  it('bubbles Cmd+V so web clients receive the native paste event', () => {
+    expect(
+      shouldBypassXtermKeyboardEvent(event({ key: 'v', code: 'KeyV', metaKey: true }), noSel)
+    ).toBe(true)
+  })
+
   it('matches Cmd+C by produced logical key rather than physical key', () => {
     expect(
       shouldBypassXtermKeyboardEvent(event({ key: 'c', code: 'KeyJ', metaKey: true }), opts)
@@ -44,15 +41,12 @@ describe('shouldBypassXtermKeyboardEvent — macOS', () => {
   })
 
   it('does NOT bubble other Cmd chords — Orca window handlers intercept them before xterm', () => {
-    // Why: this policy is narrowly scoped to Cmd+C, the one clipboard chord
-    // Orca does not intercept at the window level. Cmd+V, Cmd+F, Cmd+D, Cmd+K,
-    // Cmd+W, Cmd+Arrow, Cmd+Backspace are all handled in keyboard-handlers.ts
-    // with stopImmediatePropagation before xterm's textarea listener fires,
-    // so they never reach this handler. Cmd+A flows through xterm's legacy
-    // evaluator which correctly produces type=1 (selectAll), so we must not
-    // swallow it here.
+    // Why: this policy is narrowly scoped to clipboard chords. Cmd+F, Cmd+D,
+    // Cmd+K, Cmd+W, Cmd+Arrow, Cmd+Backspace are handled in keyboard-handlers.ts
+    // with stopImmediatePropagation before xterm's textarea listener fires.
+    // Cmd+A flows through xterm's legacy evaluator which correctly produces
+    // type=1 (selectAll), so we must not swallow it here.
     const cases = [
-      event({ key: 'v', code: 'KeyV', metaKey: true }),
       event({ key: 'a', code: 'KeyA', metaKey: true }),
       event({ key: 't', code: 'KeyT', metaKey: true })
     ]
@@ -156,143 +150,106 @@ describe('shouldBypassXtermKeyboardEvent — macOS', () => {
   })
 })
 
-describe('shouldBypassXtermKeyboardEvent — Windows/Linux', () => {
-  const withSel = { isMac: false, hasSelection: true }
-  const noSel = { isMac: false, hasSelection: false }
+describe('shouldSuppressTerminalImeKeyboardEvent — macOS', () => {
+  const idle = {
+    isMac: true,
+    isLinux: false,
+    compositionActive: false,
+    candidateKeyGuardActive: false,
+    pendingCandidateKeyReleaseActive: false
+  }
+  const composing = {
+    isMac: true,
+    isLinux: false,
+    compositionActive: true,
+    candidateKeyGuardActive: true,
+    pendingCandidateKeyReleaseActive: false
+  }
 
-  it('bubbles Ctrl+Shift+C (standard terminal copy on Linux/Windows)', () => {
+  it('suppresses keyboard events while Chromium reports active IME composition', () => {
     expect(
-      shouldBypassXtermKeyboardEvent(
-        event({ key: 'C', code: 'KeyC', ctrlKey: true, shiftKey: true }),
-        noSel
+      shouldSuppressTerminalImeKeyboardEvent(
+        event({ key: 'Backspace', code: 'Backspace', isComposing: true }),
+        idle
       )
     ).toBe(true)
   })
 
-  it('matches Ctrl+Shift+C by produced logical key rather than physical key', () => {
+  it('lets standalone Process keys reach xterm so its CompositionHelper can diff text', () => {
     expect(
-      shouldBypassXtermKeyboardEvent(
-        event({ key: 'C', code: 'KeyJ', ctrlKey: true, shiftKey: true }),
-        noSel
-      )
-    ).toBe(true)
-    expect(
-      shouldBypassXtermKeyboardEvent(
-        event({ key: 'J', code: 'KeyC', ctrlKey: true, shiftKey: true }),
-        noSel
+      shouldSuppressTerminalImeKeyboardEvent(
+        event({ key: 'Process', code: 'KeyN', keyCode: 229 }),
+        idle
       )
     ).toBe(false)
   })
 
-  it('bubbles Ctrl+C only when there is a selection (otherwise SIGINT)', () => {
-    // Why: bare Ctrl+C without a selection must reach the shell as SIGINT.
-    // With a selection, terminals like Windows Terminal copy instead.
+  it('suppresses standalone Process keyups so kitty release reporting cannot leak', () => {
     expect(
-      shouldBypassXtermKeyboardEvent(event({ key: 'c', code: 'KeyC', ctrlKey: true }), withSel)
+      shouldSuppressTerminalImeKeyboardEvent(
+        event({ type: 'keyup', key: 'Process', code: 'KeyN', keyCode: 229 }),
+        idle
+      )
     ).toBe(true)
+  })
+
+  it('suppresses Process keys while the terminal composition tracker is active', () => {
     expect(
-      shouldBypassXtermKeyboardEvent(event({ key: 'c', code: 'KeyC', ctrlKey: true }), noSel)
+      shouldSuppressTerminalImeKeyboardEvent(
+        event({ key: 'Process', code: 'KeyN', keyCode: 229 }),
+        composing
+      )
+    ).toBe(true)
+  })
+
+  it('does not suppress ordinary Backspace outside IME composition', () => {
+    expect(
+      shouldSuppressTerminalImeKeyboardEvent(event({ key: 'Backspace', code: 'Backspace' }), idle)
     ).toBe(false)
   })
 
-  it('matches Ctrl+C with selection by produced logical key rather than physical key', () => {
+  it('suppresses IME-owned editing keys while composition is active', () => {
     expect(
-      shouldBypassXtermKeyboardEvent(event({ key: 'c', code: 'KeyJ', ctrlKey: true }), withSel)
+      shouldSuppressTerminalImeKeyboardEvent(
+        event({ key: 'Backspace', code: 'Backspace' }),
+        composing
+      )
     ).toBe(true)
     expect(
-      shouldBypassXtermKeyboardEvent(event({ key: 'j', code: 'KeyC', ctrlKey: true }), withSel)
-    ).toBe(false)
-    expect(
-      shouldBypassXtermKeyboardEvent(event({ key: 'c', code: 'KeyJ', ctrlKey: true }), noSel)
-    ).toBe(false)
-  })
-
-  it('bubbles Ctrl+V and Ctrl+Shift+V for paste', () => {
-    expect(
-      shouldBypassXtermKeyboardEvent(event({ key: 'v', code: 'KeyV', ctrlKey: true }), noSel)
-    ).toBe(true)
-    expect(
-      shouldBypassXtermKeyboardEvent(
-        event({ key: 'V', code: 'KeyV', ctrlKey: true, shiftKey: true }),
-        noSel
+      shouldSuppressTerminalImeKeyboardEvent(
+        event({ key: 'ArrowDown', code: 'ArrowDown' }),
+        composing
       )
     ).toBe(true)
   })
 
-  it('matches paste by produced logical key rather than physical key', () => {
+  it('does not suppress ordinary text keys solely because composition is active', () => {
     expect(
-      shouldBypassXtermKeyboardEvent(event({ key: 'v', code: 'KeyK', ctrlKey: true }), noSel)
-    ).toBe(true)
-    expect(
-      shouldBypassXtermKeyboardEvent(event({ key: 'k', code: 'KeyV', ctrlKey: true }), noSel)
+      shouldSuppressTerminalImeKeyboardEvent(event({ key: 'a', code: 'KeyA' }), composing)
     ).toBe(false)
   })
 
-  it('bubbles Shift+Insert (X11/Linux paste convention)', () => {
+  it('does not suppress keypress events because they carry committed text', () => {
     expect(
-      shouldBypassXtermKeyboardEvent(
-        event({ key: 'Insert', code: 'Insert', shiftKey: true }),
-        noSel
+      shouldSuppressTerminalImeKeyboardEvent(
+        event({ type: 'keypress', key: '中', code: '', isComposing: true }),
+        idle
       )
-    ).toBe(true)
+    ).toBe(false)
   })
 
-  it('does not bubble plain Ctrl letter chords — shell shortcuts must reach PTY', () => {
-    // Ctrl+A, Ctrl+E, Ctrl+U, Ctrl+R, Ctrl+L — all readline-critical.
-    for (const keyCode of ['a', 'e', 'u', 'r', 'l']) {
-      expect(
-        shouldBypassXtermKeyboardEvent(
-          event({ key: keyCode, code: `Key${keyCode.toUpperCase()}`, ctrlKey: true }),
-          noSel
-        )
-      ).toBe(false)
-    }
-  })
-
-  it('bubbles already-handled Ctrl app shortcuts so kitty does not also write to shell', () => {
+  it('does not apply the Linux/Sogou candidate guard to macOS', () => {
     expect(
-      shouldBypassXtermKeyboardEvent(
-        event({ key: 'b', code: 'KeyB', defaultPrevented: true, ctrlKey: true }),
-        noSel
+      shouldSuppressTerminalImeKeyboardEvent(event({ key: ' ', code: 'Space' }), composing)
+    ).toBe(false)
+    expect(
+      shouldSuppressTerminalImeKeyboardEvent(
+        event({ type: 'keypress', key: '2', code: 'Digit2' }),
+        composing
       )
-    ).toBe(true)
+    ).toBe(false)
     expect(
-      shouldBypassXtermKeyboardEvent(
-        event({
-          key: 'ArrowLeft',
-          code: 'ArrowLeft',
-          defaultPrevented: true,
-          ctrlKey: true,
-          altKey: true
-        }),
-        noSel
-      )
-    ).toBe(true)
-  })
-
-  it('does not bubble plain letters', () => {
-    expect(shouldBypassXtermKeyboardEvent(event({ key: 'c', code: 'KeyC' }), noSel)).toBe(false)
-  })
-
-  it('bubbles Shift+non-ASCII printable text so the active keyboard layout wins', () => {
-    expect(
-      shouldBypassXtermKeyboardEvent(event({ key: 'Ф', code: 'KeyA', shiftKey: true }), noSel)
-    ).toBe(true)
-    expect(
-      shouldBypassXtermKeyboardEvent(
-        event({ type: 'keyup', key: 'Ф', code: 'KeyA', shiftKey: true }),
-        noSel
-      )
-    ).toBe(true)
-  })
-
-  it('does not bubble unshifted non-ASCII printable text', () => {
-    expect(shouldBypassXtermKeyboardEvent(event({ key: 'ф', code: 'KeyA' }), noSel)).toBe(false)
-  })
-
-  it('does not bubble Cmd chords on non-Mac (Super+C has no clipboard meaning there)', () => {
-    expect(
-      shouldBypassXtermKeyboardEvent(event({ key: 'c', code: 'KeyC', metaKey: true }), noSel)
+      shouldPreventDefaultTerminalImeCandidateKey(event({ key: ' ', code: 'Space' }), composing)
     ).toBe(false)
   })
 })

@@ -5,7 +5,9 @@ import {
   getMarkdownPreviewImageOpenTarget,
   getMarkdownPreviewLinkTarget,
   isMarkdownPreviewOpenModifier,
+  isMarkdownPreviewSystemBrowserModifier,
   resolveMarkdownPreviewHref,
+  resolveMarkdownPreviewHttpOpenOptions,
   resolveImageAbsolutePath
 } from './markdown-preview-links'
 
@@ -14,6 +16,12 @@ describe('getMarkdownPreviewLinkTarget', () => {
     expect(getMarkdownPreviewLinkTarget('./guide/setup.md', '/repo/docs/README.md')).toBe(
       'file:///repo/docs/guide/setup.md'
     )
+  })
+
+  it('preserves hash fragments on Windows drive-letter absolute links', () => {
+    expect(
+      getMarkdownPreviewLinkTarget('C:\\repo\\docs\\guide.md#L10', '/repo/docs/README.md')
+    ).toBe('file:///C:/repo/docs/guide.md#L10')
   })
 
   it('preserves external links', () => {
@@ -46,6 +54,12 @@ describe('getMarkdownPreviewImageSrc', () => {
     expect(getMarkdownPreviewImageSrc('./diagram.png', 'C:\\repo\\docs\\README.md')).toBe(
       'file:///C:/repo/docs/diagram.png'
     )
+  })
+
+  it('resolves Windows drive-letter absolute image paths', () => {
+    expect(
+      getMarkdownPreviewImageSrc('C:\\repo\\assets\\diagram.png', '/repo/docs/README.md')
+    ).toBe('file:///C:/repo/assets/diagram.png')
   })
 
   it('resolves relative paths for Windows UNC markdown files', () => {
@@ -94,6 +108,115 @@ describe('isMarkdownPreviewOpenModifier', () => {
   })
 })
 
+describe('isMarkdownPreviewSystemBrowserModifier', () => {
+  it('uses Cmd+Shift on macOS', () => {
+    expect(
+      isMarkdownPreviewSystemBrowserModifier(
+        { metaKey: true, ctrlKey: false, shiftKey: true },
+        true
+      )
+    ).toBe(true)
+    expect(
+      isMarkdownPreviewSystemBrowserModifier(
+        { metaKey: false, ctrlKey: true, shiftKey: true },
+        true
+      )
+    ).toBe(false)
+  })
+
+  it('uses Ctrl+Shift on non-macOS platforms', () => {
+    expect(
+      isMarkdownPreviewSystemBrowserModifier(
+        { metaKey: false, ctrlKey: true, shiftKey: true },
+        false
+      )
+    ).toBe(true)
+    expect(
+      isMarkdownPreviewSystemBrowserModifier(
+        { metaKey: true, ctrlKey: false, shiftKey: true },
+        false
+      )
+    ).toBe(false)
+  })
+})
+
+describe('resolveMarkdownPreviewHttpOpenOptions', () => {
+  // forceSystemBrowser -> shell.openExternal (system default browser);
+  // worktreeId (no force) -> openHttpLink routes into the Orca browser per the
+  // openLinksInApp setting. See http-link-routing.test.ts for that mapping.
+  it('forces the system browser on Cmd+Shift-click on macOS', () => {
+    expect(
+      resolveMarkdownPreviewHttpOpenOptions(
+        { metaKey: true, ctrlKey: false, shiftKey: true },
+        true,
+        'wt-1'
+      )
+    ).toEqual({ forceSystemBrowser: true })
+  })
+
+  it('forces the system browser on Ctrl+Shift-click on Linux/Windows', () => {
+    expect(
+      resolveMarkdownPreviewHttpOpenOptions(
+        { metaKey: false, ctrlKey: true, shiftKey: true },
+        false,
+        'wt-1'
+      )
+    ).toEqual({ forceSystemBrowser: true })
+  })
+
+  it('routes a plain Cmd-click through the worktree so it can open in Orca', () => {
+    expect(
+      resolveMarkdownPreviewHttpOpenOptions(
+        { metaKey: true, ctrlKey: false, shiftKey: false },
+        true,
+        'wt-1'
+      )
+    ).toEqual({ worktreeId: 'wt-1' })
+  })
+
+  it('routes a plain click (no modifier) through the worktree', () => {
+    expect(
+      resolveMarkdownPreviewHttpOpenOptions(
+        { metaKey: false, ctrlKey: false, shiftKey: false },
+        true,
+        'wt-1'
+      )
+    ).toEqual({ worktreeId: 'wt-1' })
+  })
+
+  it('does not force the system browser for Shift without the platform mod key', () => {
+    // Plain Shift-click (no Cmd/Ctrl) is not the escape hatch.
+    expect(
+      resolveMarkdownPreviewHttpOpenOptions(
+        { metaKey: false, ctrlKey: false, shiftKey: true },
+        true,
+        'wt-1'
+      )
+    ).toEqual({ worktreeId: 'wt-1' })
+  })
+
+  it('does not treat Mac Ctrl+Shift-click as the escape hatch', () => {
+    // On macOS the mod key is Cmd; Ctrl+Shift must not force the system browser.
+    expect(
+      resolveMarkdownPreviewHttpOpenOptions(
+        { metaKey: false, ctrlKey: true, shiftKey: true },
+        true,
+        'wt-1'
+      )
+    ).toEqual({ worktreeId: 'wt-1' })
+  })
+
+  it('passes through a null worktree (openHttpLink then falls back to system browser)', () => {
+    expect(
+      resolveMarkdownPreviewHttpOpenOptions(
+        { metaKey: false, ctrlKey: false, shiftKey: false },
+        true,
+        null
+      )
+    ).toEqual({ worktreeId: null })
+  })
+})
+
 describe('resolveImageAbsolutePath', () => {
   it('resolves a relative image src to an absolute filesystem path', () => {
     expect(resolveImageAbsolutePath('diagram.png', '/repo/docs/README.md')).toBe(
@@ -110,6 +233,12 @@ describe('resolveImageAbsolutePath', () => {
   it('resolves Windows paths', () => {
     expect(resolveImageAbsolutePath('./diagram.png', 'C:\\repo\\docs\\README.md')).toBe(
       'C:/repo/docs/diagram.png'
+    )
+  })
+
+  it('resolves Windows drive-letter absolute image paths to filesystem paths', () => {
+    expect(resolveImageAbsolutePath('C:\\repo\\assets\\diagram.png', '/repo/docs/README.md')).toBe(
+      'C:/repo/assets/diagram.png'
     )
   })
 

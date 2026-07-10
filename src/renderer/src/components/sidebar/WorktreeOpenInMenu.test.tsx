@@ -4,6 +4,7 @@ import { DropdownMenuSubContent, DropdownMenuSubTrigger } from '@/components/ui/
 import {
   getWorktreeOpenInEntries,
   getLocalFileManagerLabel,
+  openOpenInAppsSettings,
   openWorktreePath,
   WorktreeOpenInSubMenu
 } from './WorktreeOpenInMenu'
@@ -13,19 +14,26 @@ type ReactElementLike = {
   props: Record<string, unknown>
 }
 
-const { mockState, openInExternalEditorMock, openInFileManagerMock, toastErrorMock } = vi.hoisted(
-  () => ({
-    mockState: {
-      settings: {
-        activeRuntimeEnvironmentId: null as string | null,
-        openInApplications: [] as { id: string; label: string; command: string }[]
-      }
-    },
-    openInExternalEditorMock: vi.fn(),
-    openInFileManagerMock: vi.fn(),
-    toastErrorMock: vi.fn()
-  })
-)
+const {
+  mockState,
+  openInExternalEditorMock,
+  openInFileManagerMock,
+  openSettingsPageMock,
+  openSettingsTargetMock,
+  toastErrorMock
+} = vi.hoisted(() => ({
+  mockState: {
+    settings: {
+      activeRuntimeEnvironmentId: null as string | null,
+      openInApplications: [] as { id: string; label: string; command: string }[]
+    }
+  },
+  openInExternalEditorMock: vi.fn(),
+  openInFileManagerMock: vi.fn(),
+  openSettingsPageMock: vi.fn(),
+  openSettingsTargetMock: vi.fn(),
+  toastErrorMock: vi.fn()
+}))
 
 vi.mock('sonner', () => ({
   toast: {
@@ -38,7 +46,11 @@ vi.mock('@/store', () => {
     (selector: (state: { settings: typeof mockState.settings }) => unknown) =>
       selector({ settings: mockState.settings }),
     {
-      getState: () => ({ settings: mockState.settings })
+      getState: () => ({
+        settings: mockState.settings,
+        openSettingsPage: openSettingsPageMock,
+        openSettingsTarget: openSettingsTargetMock
+      })
     }
   )
   return { useAppStore }
@@ -78,6 +90,8 @@ describe('WorktreeOpenInMenu', () => {
     toastErrorMock.mockReset()
     openInFileManagerMock.mockReset()
     openInExternalEditorMock.mockReset()
+    openSettingsPageMock.mockReset()
+    openSettingsTargetMock.mockReset()
     openInFileManagerMock.mockResolvedValue({ ok: true })
     openInExternalEditorMock.mockResolvedValue({ ok: true })
     Object.defineProperty(globalThis, 'window', {
@@ -153,16 +167,28 @@ describe('WorktreeOpenInMenu', () => {
     })
   })
 
-  it('builds menu entries with VS Code first and file manager last', () => {
+  it('builds menu entries from configured launchers with file manager last', () => {
     expect(
       getWorktreeOpenInEntries(
         [
+          { id: 'vscode', label: 'VS Code', command: 'code' },
           { id: 'cursor', label: 'Cursor', command: 'cursor' },
           { id: 'zed', label: 'Zed', command: 'zed' }
         ],
         'File Manager'
       ).map((entry) => entry.label)
     ).toEqual(['VS Code', 'Cursor', 'Zed', 'File Manager'])
+  })
+
+  it('opens settings at the Open In Apps section', () => {
+    openOpenInAppsSettings()
+
+    expect(openSettingsTargetMock).toHaveBeenCalledWith({
+      pane: 'general',
+      repoId: null,
+      sectionId: 'general-open-in-apps'
+    })
+    expect(openSettingsPageMock).toHaveBeenCalled()
   })
 
   it('forwards the configured command when opening a configured launcher', async () => {

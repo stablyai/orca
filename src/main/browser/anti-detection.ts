@@ -59,12 +59,32 @@ export const ANTI_DETECTION_SCRIPT = `(function() {
   // but real Chrome returns 'prompt' for ungranted permissions. Returning
   // 'denied' is a strong bot signal. Override the query result for common
   // permissions that Turnstile and similar detectors probe.
+  var notificationPermission = 'default';
+  var setNotificationPermission = function(permission) {
+    if (permission === 'granted' || permission === 'denied') {
+      notificationPermission = permission;
+      return permission;
+    }
+    notificationPermission = 'default';
+    return 'default';
+  };
+  var notificationPermissionState = function() {
+    return notificationPermission === 'default' ? 'prompt' : notificationPermission;
+  };
+  try {
+    if (Notification.permission === 'granted') {
+      notificationPermission = 'granted';
+    }
+  } catch {}
   const promptPerms = new Set([
-    'notifications', 'geolocation', 'camera', 'microphone',
+    'geolocation', 'camera', 'microphone',
     'midi', 'idle-detection', 'storage-access'
   ]);
   const origQuery = Permissions.prototype.query;
   Permissions.prototype.query = function(desc) {
+    if (desc.name === 'notifications') {
+      return Promise.resolve({ state: notificationPermissionState(), onchange: null });
+    }
     if (promptPerms.has(desc.name)) {
       return Promise.resolve({ state: 'prompt', onchange: null });
     }
@@ -75,8 +95,25 @@ export const ANTI_DETECTION_SCRIPT = `(function() {
   // or blocked. Turnstile cross-references this with the Permissions API.
   try {
     Object.defineProperty(Notification, 'permission', {
-      get: () => 'default'
+      get: () => notificationPermission
     });
+    const origRequestPermission = Notification.requestPermission;
+    if (typeof origRequestPermission === 'function') {
+      Notification.requestPermission = function(callback) {
+        var wrappedCallback = typeof callback === 'function'
+          ? function(permission) {
+              callback(setNotificationPermission(permission));
+            }
+          : undefined;
+        var result = origRequestPermission.call(Notification, wrappedCallback);
+        if (result && typeof result.then === 'function') {
+          return result.then(function(permission) {
+            return setNotificationPermission(permission);
+          });
+        }
+        return result;
+      };
+    }
   } catch {}
   // Why: Electron webviews may have an empty languages array. Real Chrome
   // always has at least one entry. An empty array is an automation signal.

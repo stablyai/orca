@@ -1,4 +1,4 @@
-import { win32 } from 'path'
+import { win32 } from 'node:path'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const { getWslHomeMock, parseWslPathMock } = vi.hoisted(() => ({
@@ -47,5 +47,20 @@ describe('computeWorktreePath WSL layout', () => {
         workspaceDir: 'C:\\workspaces'
       })
     ).toBe(win32.join('C:\\workspaces', 'feature'))
+  })
+
+  it('uses an explicit WSL UNC workspace root without remapping it', () => {
+    parseWslPathMock.mockReturnValue({
+      distro: 'Ubuntu',
+      linuxPath: '/home/jin/src/repo'
+    })
+    getWslHomeMock.mockReturnValue('\\\\wsl.localhost\\Ubuntu\\home\\jin')
+
+    expect(
+      computeWorktreePath('feature', '\\\\wsl.localhost\\Ubuntu\\home\\jin\\src\\repo', {
+        nestWorkspaces: false,
+        workspaceDir: '\\\\wsl.localhost\\Ubuntu\\home\\jin\\custom-worktrees'
+      })
+    ).toBe('\\\\wsl.localhost\\Ubuntu\\home\\jin\\custom-worktrees\\feature')
   })
 })

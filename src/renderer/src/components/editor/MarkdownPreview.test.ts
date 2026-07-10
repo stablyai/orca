@@ -1,7 +1,9 @@
 import { describe, expect, it } from 'vitest'
 import type { Worktree } from '../../../../shared/types'
 import {
+  decodeMarkdownPreviewAnchor,
   deriveMarkdownPreviewSourceRoot,
+  getMarkdownPreviewSourceRelativePath,
   findMarkdownPreviewOpenedEditFileId,
   findMarkdownPreviewSourceOpenFile,
   getMarkdownPreviewAnchorScrollTop,
@@ -32,6 +34,10 @@ function makeWorktree(id: string, path: string): Worktree {
 }
 
 describe('MarkdownPreview source link routing', () => {
+  it('falls back to the raw anchor when percent-decoding fails', () => {
+    expect(decodeMarkdownPreviewAnchor('%E0%A4%A')).toBe('%E0%A4%A')
+  })
+
   it('keeps the explicit source worktree when it exists', () => {
     const source = makeWorktree('wt-source', '/repo')
     const nested = makeWorktree('wt-nested', '/repo/packages/app')
@@ -55,6 +61,24 @@ describe('MarkdownPreview source link routing', () => {
         '/repo/docs/note.md'
       )
     ).toBe(repoWorktree)
+  })
+
+  it('matches Windows worktree ownership case-insensitively for floating previews', () => {
+    const repoWorktree = makeWorktree('wt-repo', 'C:\\Repo')
+
+    expect(
+      resolveMarkdownPreviewSourceWorktree(
+        { repo: [repoWorktree] },
+        FLOATING_TERMINAL_WORKTREE_ID,
+        'c:\\repo\\docs\\note.md'
+      )
+    ).toBe(repoWorktree)
+  })
+
+  it('derives Windows preview source relative paths case-insensitively', () => {
+    expect(getMarkdownPreviewSourceRelativePath('c:\\repo\\docs\\note.md', 'C:\\Repo')).toBe(
+      'docs/note.md'
+    )
   })
 
   it('derives a source root from floating file relative path', () => {

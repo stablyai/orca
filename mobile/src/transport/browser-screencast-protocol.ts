@@ -40,8 +40,12 @@ export type BrowserScreencastFrame = {
 }
 
 function byteToFormat(value: number): BrowserScreencastFormat | null {
-  if (value === 1) return 'jpeg'
-  if (value === 2) return 'png'
+  if (value === 1) {
+    return 'jpeg'
+  }
+  if (value === 2) {
+    return 'png'
+  }
   return null
 }
 

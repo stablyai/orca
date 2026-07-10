@@ -1,5 +1,6 @@
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../ui/tooltip'
 import type { ClaudeUsageDailyPoint } from '../../../../shared/claude-usage-types'
+import { translate } from '@/i18n/i18n'
 
 function formatTokens(value: number): string {
   if (value >= 1_000_000) {
@@ -35,9 +36,14 @@ export function ClaudeUsageDailyChart({ daily }: ClaudeUsageDailyChartProps): Re
   return (
     <section className="rounded-lg border border-border/60 bg-card/40 p-4">
       <div className="mb-3">
-        <h4 className="text-sm font-semibold text-foreground">Daily usage</h4>
+        <h4 className="text-sm font-semibold text-foreground">
+          {translate('auto.components.stats.ClaudeUsageDailyChart.c9f7cd30e9', 'Daily usage')}
+        </h4>
         <p className="text-xs text-muted-foreground">
-          Input, output, cache read, and cache write totals by day.
+          {translate(
+            'auto.components.stats.ClaudeUsageDailyChart.059945f71d',
+            'Input, output, cache read, and cache write totals by day.'
+          )}
         </p>
       </div>
       <div className="grid h-56 grid-cols-10 items-end gap-3">
@@ -46,23 +52,34 @@ export function ClaudeUsageDailyChart({ daily }: ClaudeUsageDailyChartProps): Re
           const segments = [
             {
               key: 'cache-write',
-              label: 'Cache write',
+              label: translate(
+                'auto.components.stats.ClaudeUsageDailyChart.2a6360c7cb',
+                'Cache write'
+              ),
               value: entry.cacheWriteTokens,
               className: 'bg-fuchsia-500/70'
             },
             {
               key: 'cache-read',
-              label: 'Cache read',
+              label: translate(
+                'auto.components.stats.ClaudeUsageDailyChart.61c58f8976',
+                'Cache read'
+              ),
               value: entry.cacheReadTokens,
               className: 'bg-amber-500/70'
             },
             {
               key: 'output',
-              label: 'Output',
+              label: translate('auto.components.stats.ClaudeUsageDailyChart.7d2efeff5e', 'Output'),
               value: entry.outputTokens,
               className: 'bg-emerald-500/80'
             },
-            { key: 'input', label: 'Input', value: entry.inputTokens, className: 'bg-sky-500/80' }
+            {
+              key: 'input',
+              label: translate('auto.components.stats.ClaudeUsageDailyChart.d7fb787e6b', 'Input'),
+              value: entry.inputTokens,
+              className: 'bg-sky-500/80'
+            }
           ]
           return (
             <div key={entry.day} className="flex h-full min-w-0 flex-col justify-end gap-2">
@@ -86,7 +103,11 @@ export function ClaudeUsageDailyChart({ daily }: ClaudeUsageDailyChartProps): Re
                               <div className="text-xs">
                                 <div>{entry.day}</div>
                                 <div>
-                                  {segment.label}: {segment.value.toLocaleString()} tokens
+                                  {segment.label}: {segment.value.toLocaleString()}{' '}
+                                  {translate(
+                                    'auto.components.stats.ClaudeUsageDailyChart.a7902d3c1d',
+                                    'tokens'
+                                  )}
                                 </div>
                               </div>
                             </TooltipContent>
@@ -107,19 +128,19 @@ export function ClaudeUsageDailyChart({ daily }: ClaudeUsageDailyChartProps): Re
       <div className="mt-3 flex flex-wrap gap-4 text-xs text-muted-foreground">
         <span className="inline-flex items-center gap-2">
           <span className="size-2 rounded-full bg-sky-500/80" />
-          Input
+          {translate('auto.components.stats.ClaudeUsageDailyChart.d7fb787e6b', 'Input')}
         </span>
         <span className="inline-flex items-center gap-2">
           <span className="size-2 rounded-full bg-emerald-500/80" />
-          Output
+          {translate('auto.components.stats.ClaudeUsageDailyChart.7d2efeff5e', 'Output')}
         </span>
         <span className="inline-flex items-center gap-2">
           <span className="size-2 rounded-full bg-amber-500/70" />
-          Cache read
+          {translate('auto.components.stats.ClaudeUsageDailyChart.61c58f8976', 'Cache read')}
         </span>
         <span className="inline-flex items-center gap-2">
           <span className="size-2 rounded-full bg-fuchsia-500/70" />
-          Cache write
+          {translate('auto.components.stats.ClaudeUsageDailyChart.2a6360c7cb', 'Cache write')}
         </span>
       </div>
     </section>

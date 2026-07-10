@@ -62,13 +62,10 @@ function graphqlValueForFieldMutation(value: GitHubProjectFieldMutationValue): s
       return 'number: $value'
     case 'date':
       return 'date: $value'
-    default:
-      // Why: defensive default. If a new mutation kind is added to the type
-      // but not handled here, returning undefined would silently produce a
-      // broken GraphQL query. Throw so updateProjectItemFieldValue can map it
-      // to a validation_error rather than dispatching a malformed mutation.
-      throw new UnknownFieldMutationKindError((value as { kind: string }).kind)
   }
+  // Why: keep a runtime guard for malformed IPC payloads while lint enforces
+  // that every typed mutation kind is handled above.
+  throw new UnknownFieldMutationKindError((value as { kind: string }).kind)
 }
 
 function mutationValueVar(value: GitHubProjectFieldMutationValue): {
@@ -86,11 +83,10 @@ function mutationValueVar(value: GitHubProjectFieldMutationValue): {
       return { type: 'Float!', val: value.number }
     case 'date':
       return { type: 'Date!', val: value.date }
-    default:
-      // Why: see graphqlValueForFieldMutation — surface unknown kinds loudly
-      // instead of returning undefined and dispatching an invalid mutation.
-      throw new UnknownFieldMutationKindError((value as { kind: string }).kind)
   }
+  // Why: see graphqlValueForFieldMutation — surface unknown kinds loudly
+  // instead of returning undefined and dispatching an invalid mutation.
+  throw new UnknownFieldMutationKindError((value as { kind: string }).kind)
 }
 
 export async function updateProjectItemFieldValue(
@@ -175,24 +171,81 @@ export async function updateIssueBySlug(
   if (!args.updates || typeof args.updates !== 'object') {
     return { ok: false, error: { type: 'validation_error', message: 'Updates required.' } }
   }
-  const { title, body, state, addLabels, removeLabels, addAssignees, removeAssignees } =
-    args.updates
+  const {
+    title,
+    body,
+    state,
+    stateReason,
+    duplicateOf,
+    addLabels,
+    removeLabels,
+    addAssignees,
+    removeAssignees
+  } = args.updates
 
-  // Title / body / state go through PATCH /repos/{owner}/{repo}/issues/{n}.
+  if (duplicateOf !== undefined && (state !== 'closed' || stateReason !== 'duplicate')) {
+    return {
+      ok: false,
+      error: {
+        type: 'validation_error',
+        message: 'Duplicate target is only valid when closing as duplicate.'
+      }
+    }
+  }
+  if (state === 'closed' && stateReason === 'duplicate' && duplicateOf === undefined) {
+    return {
+      ok: false,
+      error: {
+        type: 'validation_error',
+        message: 'Duplicate target issue number is required.'
+      }
+    }
+  }
+  if (duplicateOf !== undefined) {
+    const duplicate = assertPositiveInt(duplicateOf, 'duplicateOf')
+    if (!duplicate.ok) {
+      return { ok: false, error: duplicate.error }
+    }
+  }
+
+  // Title/body go through PATCH /repos/{owner}/{repo}/issues/{n}.
+  // State uses gh issue close/reopen so duplicate closes can record a target.
   // Labels/assignees go through their dedicated endpoints.
   const base = `repos/${args.owner}/${args.repo}/issues/${args.number}`
 
+  if (state !== undefined) {
+    const stateArgs =
+      state === 'closed'
+        ? ['issue', 'close', String(args.number), '--repo', `${args.owner}/${args.repo}`]
+        : ['issue', 'reopen', String(args.number), '--repo', `${args.owner}/${args.repo}`]
+    if (state === 'closed') {
+      if (stateReason === 'completed') {
+        stateArgs.push('--reason', 'completed')
+      } else if (stateReason === 'not_planned') {
+        stateArgs.push('--reason', 'not planned')
+      } else if (stateReason === 'duplicate') {
+        stateArgs.push('--duplicate-of', String(duplicateOf))
+      }
+    }
+    await acquire()
+    try {
+      await ghExecFileAsync(stateArgs, { encoding: 'utf-8' })
+    } catch (err) {
+      const { stderr, stdout } = extractExecError(err)
+      return { ok: false, error: classifyProjectError(stderr, stdout) }
+    } finally {
+      release()
+    }
+  }
+
   // 1) PATCH body
-  if (title !== undefined || body !== undefined || state !== undefined) {
+  if (title !== undefined || body !== undefined) {
     const patchArgs: string[] = ['-X', 'PATCH', base]
     if (title !== undefined) {
       patchArgs.push('--raw-field', `title=${title}`)
     }
     if (body !== undefined) {
       patchArgs.push('--raw-field', `body=${body}`)
-    }
-    if (state !== undefined) {
-      patchArgs.push('--raw-field', `state=${state}`)
     }
     const r = await runRest<unknown>(patchArgs)
     if (!r.ok) {

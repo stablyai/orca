@@ -14,16 +14,16 @@ import {
 import { spawnSync } from 'node:child_process'
 import { createRequire } from 'node:module'
 import { platform as osPlatform, tmpdir } from 'node:os'
-import { dirname, join, resolve } from 'node:path'
-import { fileURLToPath } from 'node:url'
+import { join, resolve } from 'node:path'
 
-const require = createRequire(import.meta.url)
-const projectDir = resolve(dirname(fileURLToPath(import.meta.url)), '../..')
+const projectDir = resolve(import.meta.dirname, '../..')
 const electronPackageDir = resolve(projectDir, 'node_modules/electron')
 const electronRequire = createRequire(resolve(electronPackageDir, 'package.json'))
 const { version: electronVersion } = electronRequire('./package.json')
 const { downloadArtifact } = electronRequire('@electron/get')
-const platformPath = getElectronPlatformPath()
+const targetPlatform = getElectronTargetPlatform()
+const targetArch = getElectronTargetArch()
+const platformPath = getElectronPlatformPath(targetPlatform)
 
 try {
   // Why: Electron's own install.js can exit 0 while an async extract promise is
@@ -59,17 +59,24 @@ async function main() {
 
 function electronPackageIsUsable() {
   try {
-    const electronPath = resolveElectronPath()
-    return existsSync(electronPath)
+    const installedVersion = readFileSync(resolve(electronPackageDir, 'dist', 'version'), 'utf8')
+      .trim()
+      .replace(/^v/, '')
+    const installedPlatformPath = readFileSync(resolve(electronPackageDir, 'path.txt'), 'utf8')
+    return (
+      installedVersion === electronVersion &&
+      installedPlatformPath === platformPath &&
+      existsSync(getElectronExecutablePath())
+    )
   } catch {
     return false
   }
 }
 
-function resolveElectronPath() {
-  const electronModulePath = require.resolve('electron')
-  delete require.cache[electronModulePath]
-  return require('electron')
+function getElectronExecutablePath() {
+  return process.env.ELECTRON_OVERRIDE_DIST_PATH
+    ? resolve(process.env.ELECTRON_OVERRIDE_DIST_PATH, platformPath)
+    : resolve(electronPackageDir, 'dist', platformPath)
 }
 
 function resetPartialElectronInstall() {
@@ -107,8 +114,8 @@ async function installElectronPackageBinary() {
     const zipPath = await downloadArtifact({
       version: electronVersion,
       artifactName: 'electron',
-      platform: process.env.npm_config_platform || osPlatform(),
-      arch: process.env.npm_config_arch || process.arch,
+      platform: targetPlatform,
+      arch: targetArch,
       cacheRoot,
       force: true,
       tempDirectory: tempDir,
@@ -250,8 +257,15 @@ function safeReaddir(targetPath) {
   }
 }
 
-function getElectronPlatformPath() {
-  const targetPlatform = process.env.npm_config_platform || osPlatform()
+function getElectronTargetPlatform() {
+  return process.env.ELECTRON_INSTALL_PLATFORM || process.env.npm_config_platform || osPlatform()
+}
+
+function getElectronTargetArch() {
+  return process.env.ELECTRON_INSTALL_ARCH || process.env.npm_config_arch || process.arch
+}
+
+function getElectronPlatformPath(targetPlatform) {
   switch (targetPlatform) {
     case 'mas':
     case 'darwin':

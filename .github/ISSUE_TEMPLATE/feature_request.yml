@@ -1,6 +1,6 @@
 name: Feature request
 description: Suggest an improvement for Orca
-title: "[Feature]: "
+title: '[Feature]: '
 labels:
   - enhancement
 body:

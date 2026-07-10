@@ -35,7 +35,11 @@ export function buildCommitMessagePrompt(
   context: CommitMessageDraftContext,
   customPrompt: string
 ): string {
-  const patch = truncateDiffForPrompt(context.stagedPatch)
+  // Why: the staged patch is dropped when it's too large to read, so fall back to
+  // the file summary and tell the agent why the diff is missing.
+  const patch = context.stagedPatch.trim()
+    ? truncateDiffForPrompt(context.stagedPatch)
+    : '(diff omitted — too large to read; infer the change from the staged file list above)'
   const base = [
     'You are generating a single git commit message.',
     'Return only the commit message text. Do not include a preamble, quotes, or code fences.',
@@ -67,9 +71,10 @@ export function buildCommitMessagePrompt(
 
 export function splitGeneratedCommitMessage(message: string): GeneratedCommitMessage {
   const normalized = cleanGeneratedCommitMessage(message)
-  const [subjectLine = '', ...bodyLines] = normalized.split('\n')
+  const firstNewline = normalized.indexOf('\n')
+  const subjectLine = firstNewline === -1 ? normalized : normalized.slice(0, firstNewline)
   const subject = subjectLine.trim().replace(/[.]+$/g, '').slice(0, 72).trimEnd()
-  const body = bodyLines.join('\n').trim()
+  const body = firstNewline === -1 ? '' : normalized.slice(firstNewline + 1).trim()
   const safeSubject = subject.length > 0 ? subject : 'Update project files'
   return {
     subject: safeSubject,

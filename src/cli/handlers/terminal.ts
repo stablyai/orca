@@ -85,7 +85,8 @@ export const TERMINAL_HANDLERS: Record<string, CommandHandler> = {
       terminal: await getTerminalHandle(flags, cwd, client),
       text: getOptionalStringFlag(flags, 'text'),
       enter: flags.get('enter') === true,
-      interrupt: flags.get('interrupt') === true
+      interrupt: flags.get('interrupt') === true,
+      client: { id: 'orca-cli', type: 'desktop' }
     })
     printResult(result, json, formatTerminalSend)
   },
@@ -141,6 +142,7 @@ export const TERMINAL_HANDLERS: Record<string, CommandHandler> = {
       // path for browser-side features, but CLI creates must stay backgrounded
       // unless the caller explicitly asks for focus.
       focus,
+      ...(focus ? { presentation: 'focused' } : {}),
       ...(useRendererBackedInteractiveTerminal ? { rendererBacked: true, activate: focus } : {})
     })
     printResult(result, json, formatTerminalCreate)

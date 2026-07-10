@@ -19,9 +19,13 @@ export type RemoteRuntimeWebSocket = {
 }
 
 export type RemoteRuntimeWebSocketCallbacks = {
-  onClose: (ws: WebSocket) => void
+  onClose: (ws: WebSocket, code: number, reason: Buffer) => void
   onError: (ws: WebSocket, error: RemoteRuntimeClientError) => void
   onTextFrame: (ws: WebSocket, frame: string) => void
+  // Why: protocol-level pongs (and server heartbeat pings) are the liveness
+  // signal for detecting half-open tunnels that never deliver `close` (#7718).
+  onPong?: (ws: WebSocket) => void
+  onPing?: (ws: WebSocket) => void
 }
 
 export function openRemoteRuntimeWebSocket(
@@ -51,7 +55,7 @@ export function openRemoteRuntimeWebSocket(
       remoteRuntimeUnavailableError('Could not connect to the remote Orca runtime.')
     )
   }
-  const onClose = (): void => callbacks.onClose(ws)
+  const onClose = (code: number, reason: Buffer): void => callbacks.onClose(ws, code, reason)
   const onMessage = (data: WebSocket.RawData, isBinary: boolean): void => {
     if (isBinary) {
       callbacks.onError(
@@ -64,6 +68,8 @@ export function openRemoteRuntimeWebSocket(
     }
     callbacks.onTextFrame(ws, data.toString())
   }
+  const onPong = (): void => callbacks.onPong?.(ws)
+  const onPing = (): void => callbacks.onPing?.(ws)
   const cleanup = (): void => {
     if (cleanedUp) {
       return
@@ -73,6 +79,8 @@ export function openRemoteRuntimeWebSocket(
     ws.off('error', onError)
     ws.off('close', onClose)
     ws.off('message', onMessage)
+    ws.off('pong', onPong)
+    ws.off('ping', onPing)
     // Why: a manually closed ws can still emit a late transport error; keep
     // that from becoming an unhandled EventEmitter error after detaching Orca.
     if (ws.readyState !== WebSocket.CLOSED) {
@@ -84,6 +92,8 @@ export function openRemoteRuntimeWebSocket(
   ws.on('error', onError)
   ws.on('close', onClose)
   ws.on('message', onMessage)
+  ws.on('pong', onPong)
+  ws.on('ping', onPing)
   return { ok: true, socket: { ws, sharedKey, cleanup } }
 }
 

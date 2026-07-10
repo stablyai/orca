@@ -8,7 +8,7 @@ vi.mock('./git/worktree', () => ({
   listWorktrees: listWorktreesMock
 }))
 
-import { createFolderWorktree, listRepoWorktrees } from './repo-worktrees'
+import { createFolderWorktree, isRepoRoot, listRepoWorktrees } from './repo-worktrees'
 
 describe('repo-worktrees', () => {
   beforeEach(() => {
@@ -60,17 +60,36 @@ describe('repo-worktrees', () => {
     listWorktreesMock.mockResolvedValue([
       { path: '/workspace/repo', head: 'abc', branch: '', isBare: false, isMainWorktree: true }
     ])
+    const signal = new AbortController().signal
 
-    const result = await listRepoWorktrees({
-      id: 'repo-1',
-      path: '/workspace/repo',
-      displayName: 'repo',
-      badgeColor: '#000',
-      addedAt: 0,
-      kind: 'git'
-    })
+    const result = await listRepoWorktrees(
+      {
+        id: 'repo-1',
+        path: '/workspace/repo',
+        displayName: 'repo',
+        badgeColor: '#000',
+        addedAt: 0,
+        kind: 'git'
+      },
+      { signal }
+    )
 
-    expect(listWorktreesMock).toHaveBeenCalledWith('/workspace/repo')
+    expect(listWorktreesMock).toHaveBeenCalledWith('/workspace/repo', { signal })
     expect(result).toHaveLength(1)
+  })
+
+  it('treats Windows repo root casing differences as the same local root', () => {
+    const repos = [
+      {
+        id: 'repo-1',
+        path: String.raw`C:\Repo`,
+        displayName: 'repo',
+        badgeColor: '#000',
+        addedAt: 0,
+        kind: 'git' as const
+      }
+    ]
+
+    expect(isRepoRoot(repos, String.raw`c:\repo`)).toBe(true)
   })
 })

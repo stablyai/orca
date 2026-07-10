@@ -7,10 +7,21 @@ import {
   DialogHeader,
   DialogTitle
 } from '@/components/ui/dialog'
+import { translate } from '@/i18n/i18n'
 
 export const ONBOARDING_SKIP_CONFIRMATION_COPY = {
-  title: 'Skip onboarding?',
-  description: "It won't take long!",
+  get title() {
+    return translate(
+      'auto.components.onboarding.OnboardingSkipConfirmationDialog.e4726b2d50',
+      'Skip onboarding?'
+    )
+  },
+  get description() {
+    return translate(
+      'auto.components.onboarding.OnboardingSkipConfirmationDialog.9f47f345a4',
+      "It won't take long!"
+    )
+  },
   skipLabel: 'Skip',
   keepGoingLabel: 'No, keep going'
 } as const

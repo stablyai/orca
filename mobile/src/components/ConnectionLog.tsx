@@ -28,15 +28,21 @@ function formatTime(ts: number, baseTs: number): string {
   // Why: show elapsed seconds since the first entry — absolute wall-clock
   // time isn't actionable when debugging "why is connecting stuck".
   const elapsed = Math.max(0, ts - baseTs) / 1000
-  if (elapsed < 10) return `+${elapsed.toFixed(2)}s`
-  if (elapsed < 100) return `+${elapsed.toFixed(1)}s`
+  if (elapsed < 10) {
+    return `+${elapsed.toFixed(2)}s`
+  }
+  if (elapsed < 100) {
+    return `+${elapsed.toFixed(1)}s`
+  }
   return `+${Math.round(elapsed)}s`
 }
 
 export function ConnectionLog({ entries, title }: Props) {
   const scrollRef = useRef<ScrollView | null>(null)
 
-  if (entries.length === 0) return null
+  if (entries.length === 0) {
+    return null
+  }
   const baseTs = entries[0]!.ts
 
   return (

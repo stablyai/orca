@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { tmpdir } from 'os'
-import { join } from 'path'
-import { mkdtempSync, rmSync } from 'fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import { mkdtempSync, rmSync } from 'node:fs'
 import {
   DaemonSpawner,
   getDaemonPidPath,
@@ -88,7 +88,11 @@ describe('DaemonSpawner', () => {
       const s = createSpawner()
       const info = await s.ensureRunning()
 
-      expect(info.socketPath).toContain(dir)
+      if (process.platform === 'win32') {
+        expect(info.socketPath).toContain(`orca-terminal-host-v${PROTOCOL_VERSION}`)
+      } else {
+        expect(info.socketPath).toContain(dir)
+      }
       expect(info.tokenPath).toContain(dir)
     })
 

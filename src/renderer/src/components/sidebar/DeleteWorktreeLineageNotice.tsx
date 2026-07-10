@@ -1,13 +1,17 @@
 import { Workflow } from 'lucide-react'
 import type { JSX } from 'react'
 import type { Worktree } from '../../../../shared/types'
+import { DeleteWorktreeDirtyChangeHint } from './DeleteWorktreeDirtyChangeHint'
+import { translate } from '@/i18n/i18n'
 
 type DeleteWorktreeLineageNoticeProps = {
   descendants: readonly Worktree[]
+  dirtyChangeCountsByWorktreeId: ReadonlyMap<string, number>
 }
 
 export function DeleteWorktreeLineageNotice({
-  descendants
+  descendants,
+  dirtyChangeCountsByWorktreeId
 }: DeleteWorktreeLineageNoticeProps): JSX.Element | null {
   const childWorkspaceCount = descendants.length
   if (childWorkspaceCount === 0) {
@@ -19,12 +23,23 @@ export function DeleteWorktreeLineageNotice({
       <div className="flex items-start gap-2">
         <Workflow className="mt-0.5 size-3.5 shrink-0 text-muted-foreground" />
         <div className="min-w-0 flex-1">
-          <div className="font-medium text-foreground">Child workspaces won&apos;t be deleted</div>
+          <div className="font-medium text-foreground">
+            {translate(
+              'auto.components.sidebar.DeleteWorktreeLineageNotice.a940f3c96e',
+              'Child workspaces will be deleted'
+            )}
+          </div>
           <div className="mt-1 text-muted-foreground">
-            Deleting this workspace only removes the parent.{' '}
             {childWorkspaceCount === 1
-              ? '1 child workspace will stay in Orca and on disk.'
-              : `${childWorkspaceCount} child workspaces will stay in Orca and on disk.`}
+              ? translate(
+                  'auto.components.sidebar.DeleteWorktreeLineageNotice.66798cc6a2',
+                  'Deleting this workspace also deletes 1 child workspace.'
+                )
+              : translate(
+                  'auto.components.sidebar.DeleteWorktreeLineageNotice.29b98bf9cd',
+                  'Deleting this workspace also deletes {{value0}} child workspaces.',
+                  { value0: childWorkspaceCount }
+                )}
           </div>
           {/* Why: long nowrap paths can otherwise give this grid child an
              intrinsic width wider than the modal. */}
@@ -33,10 +48,19 @@ export function DeleteWorktreeLineageNotice({
               <div key={child.id} className="min-w-0 overflow-hidden">
                 <div className="truncate font-medium text-foreground">{child.displayName}</div>
                 <div className="truncate text-muted-foreground">{child.path}</div>
+                <DeleteWorktreeDirtyChangeHint
+                  changeCount={dirtyChangeCountsByWorktreeId.get(child.id)}
+                />
               </div>
             ))}
             {descendants.length > 4 ? (
-              <div className="text-muted-foreground">+{descendants.length - 4} more</div>
+              <div className="text-muted-foreground">
+                +{descendants.length - 4}{' '}
+                {translate(
+                  'auto.components.sidebar.DeleteWorktreeLineageNotice.ad407c2d55',
+                  'more'
+                )}
+              </div>
             ) : null}
           </div>
         </div>

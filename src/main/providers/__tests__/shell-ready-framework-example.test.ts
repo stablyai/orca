@@ -4,10 +4,10 @@
  * This demonstrates the pattern for future shell-ready tests.
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
-import { tmpdir } from 'os'
-import { join } from 'path'
-import { mkdtempSync, rmSync } from 'fs'
-import { spawnSync } from 'child_process'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import { mkdtempSync, rmSync } from 'node:fs'
+import { spawnSync } from 'node:child_process'
 import { shellScriptTest } from './shell-ready-framework/shell-script-test'
 
 const { getUserDataPathMock } = vi.hoisted(() => ({
@@ -61,7 +61,7 @@ EOF
 
     expect(stdout).toMatchInlineSnapshot(`
       "HOME=<HOME>
-      ZDOTDIR=<WRAPPER_DIR>
+      ZDOTDIR=<HOME>/.config/zsh
       "
     `)
   })
@@ -85,8 +85,8 @@ EOF
     )
 
     expect(stdout).toMatchInlineSnapshot(`
-      "ORCA_ORIG_ZDOTDIR=<HOME>/.config/zsh-remote
-      ZDOTDIR=<WRAPPER_DIR>
+      "ORCA_ORIG_ZDOTDIR=<HOME>
+      ZDOTDIR=<HOME>/.config/zsh-remote
       "
     `)
   })

@@ -63,8 +63,18 @@ vi.mock('@/store', () => ({
     selector({
       openAgentSendPopoverTargetMode: storeMocks.openAgentSendPopoverTargetMode,
       closeAgentSendPopoverTargetMode: storeMocks.closeAgentSendPopoverTargetMode,
-      agentSendPopoverTargetMode: storeMocks.state.agentSendPopoverTargetMode
+      agentSendPopoverTargetMode: storeMocks.state.agentSendPopoverTargetMode,
+      agentStatusByPaneKey: {},
+      agentStatusEpoch: 0,
+      tabsByWorktree: {},
+      terminalLayoutsByTabId: {},
+      ptyIdsByTabId: {},
+      runtimePaneTitlesByTabId: {}
     })
+}))
+
+vi.mock('zustand/react/shallow', () => ({
+  useShallow: (selector: unknown) => selector
 }))
 
 vi.mock('@/components/ui/dropdown-menu', () => ({
@@ -74,8 +84,14 @@ vi.mock('@/components/ui/dropdown-menu', () => ({
   DropdownMenuContent: function DropdownMenuContent(props: Record<string, unknown>) {
     return { type: 'DropdownMenuContent', props }
   },
+  DropdownMenuItem: function DropdownMenuItem(props: Record<string, unknown>) {
+    return { type: 'DropdownMenuItem', props }
+  },
   DropdownMenuLabel: function DropdownMenuLabel(props: Record<string, unknown>) {
     return { type: 'DropdownMenuLabel', props }
+  },
+  DropdownMenuSeparator: function DropdownMenuSeparator(props: Record<string, unknown>) {
+    return { type: 'DropdownMenuSeparator', props }
   },
   DropdownMenuSub: function DropdownMenuSub(props: Record<string, unknown>) {
     return { type: 'DropdownMenuSub', props }
@@ -109,8 +125,27 @@ vi.mock('@/components/tab-bar/QuickLaunchButton', () => ({
   }
 }))
 
-vi.mock('@/lib/focus-terminal-tab-surface', () => ({
-  focusTerminalTabSurface: vi.fn()
+vi.mock('./ReviewNotesSendMenuContent', () => ({
+  ReviewNotesSendMenuContent: function ReviewNotesSendMenuContent(props: Record<string, unknown>) {
+    return { type: 'ReviewNotesSendMenuContent', props }
+  }
+}))
+
+vi.mock('@/lib/active-agent-note-send', () => ({
+  activeAgentNotesSendFailureMessage: (status: string) => status,
+  getActiveTerminalNoteTarget: () => null,
+  sendNotesToActiveAgentSession: vi.fn(),
+  useCanSendNotesToActiveTerminal: () => false
+}))
+
+vi.mock('sonner', () => ({
+  toast: {
+    dismiss: vi.fn(),
+    error: vi.fn(),
+    loading: vi.fn(),
+    message: vi.fn(),
+    success: vi.fn()
+  }
 }))
 
 function resetHookRuntime(): void {
@@ -291,6 +326,18 @@ describe('NotesSendMenu', () => {
     )
   })
 
+  it('passes the default scope to review note send content', () => {
+    const tree = renderMenu()
+
+    expect(findByType(tree, 'ReviewNotesSendMenuContent').props).toMatchObject({
+      worktreeId: 'wt-1',
+      groupId: 'group-1',
+      prompt: 'prompt-all',
+      promptDelivery: 'submit-after-ready',
+      launchSource: 'notes_send'
+    })
+  })
+
   it('switches running-agent target mode when a different scope is focused', () => {
     const tree = renderMenu({
       defaultScopeId: 'file',
@@ -318,9 +365,10 @@ describe('NotesSendMenu', () => {
     hookRuntime.states[0] = true
     storeMocks.state.agentSendPopoverTargetMode = { id: 'some-other-menu' }
 
-    renderMenu()
+    const tree = renderMenu()
 
     expect(hookRuntime.states[0]).toBe(false)
+    expect(findByType(tree, 'DropdownMenu').props.open).toBe(false)
     for (const cleanup of hookRuntime.cleanups) {
       cleanup()
     }

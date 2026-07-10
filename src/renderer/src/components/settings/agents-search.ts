@@ -1,86 +1,151 @@
-import type { SettingsSearchEntry } from './settings-search'
+import { getAgentCatalog } from '@/lib/agent-catalog'
 import {
-  AGENT_AWAKE_TITLE,
   getAgentAwakeDescription,
-  getAgentAwakeSearchKeywords
+  getAgentAwakeSearchKeywords,
+  getAgentAwakeTitle
 } from './agent-awake-copy'
 import {
-  AGENT_GENERATED_TAB_TITLES_DESCRIPTION,
-  AGENT_GENERATED_TAB_TITLES_SEARCH_KEYWORDS,
-  AGENT_GENERATED_TAB_TITLES_TITLE
+  getAgentGeneratedTabTitlesDescription,
+  getAgentGeneratedTabTitlesSearchKeywords,
+  getAgentGeneratedTabTitlesTitle
 } from './agent-generated-tab-title-copy'
 import {
-  AGENT_STATUS_HOOKS_DESCRIPTION,
-  AGENT_STATUS_HOOKS_SEARCH_KEYWORDS,
-  AGENT_STATUS_HOOKS_TITLE
+  getAgentStatusHooksDescription,
+  getAgentStatusHooksSearchKeywords,
+  getAgentStatusHooksTitle
 } from './agent-status-hooks-copy'
+import { getAgentCacheTimerSearchEntries } from './agent-cache-timer-search'
+import { translate } from '@/i18n/i18n'
+import { searchKeywords, translateSearchKeyword, uniqueKeywords } from './settings-search-keywords'
+import { createLocalizedCatalog } from '@/i18n/localized-catalog'
 
-export const AGENTS_PANE_SEARCH_ENTRIES: SettingsSearchEntry[] = [
+function buildAgentSettingsKeywords(): string[] {
+  const keywords = searchKeywords([
+    { key: 'auto.components.settings.agents.search.96ba2373b6', fallback: 'agent' },
+    { key: 'auto.components.settings.agents.search.d8f3a8b8a0', fallback: 'default' },
+    { key: 'auto.components.settings.agents.search.167daeb5e9', fallback: 'command' },
+    { key: 'auto.components.settings.agents.search.be59907510', fallback: 'override' },
+    { key: 'auto.components.settings.agents.search.a6d594c17d', fallback: 'install' },
+    { key: 'auto.components.settings.agents.search.f2932bf22b', fallback: 'detected' },
+    { key: 'auto.components.settings.agents.search.2afd3b5858', fallback: 'enable' },
+    { key: 'auto.components.settings.agents.search.60393e1b17', fallback: 'disable' },
+    { key: 'auto.components.settings.agents.search.2e188c771c', fallback: 'hide' },
+    { key: 'auto.components.settings.agents.search.87fffe6c20', fallback: 'show' },
+    { key: 'auto.components.settings.agents.search.permission', fallback: 'permission' },
+    { key: 'auto.components.settings.agents.search.permissions', fallback: 'permissions' },
+    { key: 'auto.components.settings.agents.search.yolo', fallback: 'yolo', englishOnly: true },
+    { key: 'auto.components.settings.agents.search.manual', fallback: 'manual' },
+    {
+      key: 'auto.components.settings.agents.search.e2b7c0dcd7',
+      fallback: 'github',
+      englishOnly: true
+    }
+  ])
+
+  for (const agent of getAgentCatalog()) {
+    keywords.push(...expandAgentSearchText(agent.id), ...expandAgentSearchText(agent.label))
+    keywords.push(...expandAgentSearchText(agent.cmd))
+  }
+
+  return uniqueKeywords(keywords)
+}
+
+function expandAgentSearchText(value: string): string[] {
+  const spaced = value
+    .replace(/([a-z0-9])([A-Z])/g, '$1 $2')
+    .replace(/[-_]+/g, ' ')
+    .trim()
+
+  return spaced === value ? [value] : [value, spaced]
+}
+
+type AgentsPaneSearchOptions = {
+  includeAgentRuntime?: boolean
+}
+
+const AGENT_RUNTIME_SEARCH_ENTRY_ID = 'agent-runtime'
+
+const getAllAgentsPaneSearchEntries = createLocalizedCatalog(() => [
   {
-    title: 'Agents',
-    description: 'Configure AI coding agents, default agent, and command overrides.',
+    title: translate('auto.components.settings.agents.search.bb9ad95777', 'Agents'),
+    description: translate(
+      'auto.components.settings.agents.search.01926b9d8c',
+      'Configure AI coding agents, default agent, and command overrides.'
+    ),
+    keywords: buildAgentSettingsKeywords()
+  },
+  {
+    title: translate('auto.components.settings.agents.search.agentRuntime', 'Agent Runtime'),
+    id: AGENT_RUNTIME_SEARCH_ENTRY_ID,
+    description: translate(
+      'auto.components.settings.agents.search.agentRuntimeDescription',
+      'Choose whether agents are detected and launched on Windows or in WSL by default.'
+    ),
     keywords: [
-      'agent',
-      'default',
-      'claude',
-      'openclaude',
-      'open claude',
-      'codex',
-      'opencode',
-      'pi',
-      'omp',
-      'gemini',
-      'aider',
-      'goose',
-      'amp',
-      'kilocode',
-      'kiro',
-      'charm',
-      'auggie',
-      'cline',
-      'codebuff',
-      'command code',
-      'continue',
-      'cursor',
-      'droid',
-      'kimi',
-      'mistral',
-      'qwen',
-      'rovo',
-      'hermes',
-      'openclaw',
-      'copilot',
-      'grok',
-      'github',
-      'github copilot',
-      'command',
-      'override',
-      'install',
-      'detected',
-      'enable',
-      'disable',
-      'hide',
-      'show'
+      ...translateSearchKeyword('auto.components.settings.agents.search.96ba2373b6', 'agent'),
+      ...translateSearchKeyword('auto.components.settings.agents.search.runtime', 'runtime'),
+      ...translateSearchKeyword('auto.components.settings.agents.search.d2952dfd74', 'location'),
+      ...translateSearchKeyword(
+        'auto.components.settings.agents.search.agentLocation',
+        'agent location'
+      ),
+      ...translateSearchKeyword('auto.components.settings.agents.search.77c02fa3c3', 'windows'),
+      ...translateSearchKeyword('auto.components.settings.agents.search.d608654c03', 'wsl'),
+      ...translateSearchKeyword('auto.components.settings.agents.search.f622b8eb2a', 'linux'),
+      ...translateSearchKeyword('auto.components.settings.agents.search.839e82c81f', 'detect'),
+      ...translateSearchKeyword('auto.components.settings.agents.search.2814401339', 'installed'),
+      ...translateSearchKeyword(
+        'auto.components.settings.agents.search.installedAgentsWsl',
+        'installed agents in wsl'
+      ),
+      ...translateSearchKeyword('auto.components.settings.agents.search.719f53350c', 'path')
     ]
   },
   {
-    title: 'Agent Location',
-    description: 'Choose whether installed agents are detected on this device or in WSL.',
-    keywords: ['agent', 'location', 'windows', 'wsl', 'linux', 'detect', 'installed', 'path']
+    title: getAgentStatusHooksTitle(),
+    description: getAgentStatusHooksDescription(),
+    keywords: getAgentStatusHooksSearchKeywords()
   },
   {
-    title: AGENT_STATUS_HOOKS_TITLE,
-    description: AGENT_STATUS_HOOKS_DESCRIPTION,
-    keywords: AGENT_STATUS_HOOKS_SEARCH_KEYWORDS
+    title: getAgentGeneratedTabTitlesTitle(),
+    description: getAgentGeneratedTabTitlesDescription(),
+    keywords: getAgentGeneratedTabTitlesSearchKeywords()
   },
   {
-    title: AGENT_GENERATED_TAB_TITLES_TITLE,
-    description: AGENT_GENERATED_TAB_TITLES_DESCRIPTION,
-    keywords: AGENT_GENERATED_TAB_TITLES_SEARCH_KEYWORDS
-  },
-  {
-    title: AGENT_AWAKE_TITLE,
+    title: getAgentAwakeTitle(),
     description: getAgentAwakeDescription(),
     keywords: getAgentAwakeSearchKeywords()
+  },
+  {
+    title: translate(
+      'auto.components.settings.agents.search.agentPermissions',
+      'Agent Permissions'
+    ),
+    description: translate(
+      'auto.components.settings.agents.search.agentPermissionsDescription',
+      'Switch agent permission defaults between Yolo and Manual.'
+    ),
+    keywords: [
+      ...translateSearchKeyword('auto.components.settings.agents.search.permission', 'permission'),
+      ...translateSearchKeyword(
+        'auto.components.settings.agents.search.permissions',
+        'permissions'
+      ),
+      ...translateSearchKeyword('auto.components.settings.agents.search.yolo', 'yolo'),
+      ...translateSearchKeyword('auto.components.settings.agents.search.manual', 'manual'),
+      ...translateSearchKeyword('auto.components.settings.agents.search.skip', 'skip'),
+      ...translateSearchKeyword('auto.components.settings.agents.search.checks', 'checks')
+    ]
+  },
+  ...getAgentCacheTimerSearchEntries()
+])
+
+export function getAgentsPaneSearchEntries({
+  includeAgentRuntime = true
+}: AgentsPaneSearchOptions = {}) {
+  const entries = getAllAgentsPaneSearchEntries()
+  if (includeAgentRuntime) {
+    return entries
   }
-]
+  return entries.filter((entry) => !('id' in entry) || entry.id !== AGENT_RUNTIME_SEARCH_ENTRY_ID)
+}

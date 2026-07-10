@@ -1,16 +1,24 @@
 import { useAppStore } from '@/store'
-import { pasteDraftWhenAgentReady } from '@/lib/agent-paste-draft'
 import {
-  inspectRuntimeTerminalProcess,
-  sendRuntimePtyInputVerified
-} from '@/runtime/runtime-terminal-inspection'
+  getSettingsForAgentTabRuntimeOwner,
+  pasteDraftToAgentPtyWhenReady
+} from '@/lib/agent-paste-draft'
+import { sendFollowupPromptWhenAgentReady } from '@/lib/agent-followup-delivery'
 import type { AgentStartupPlan } from '@/lib/tui-agent-startup'
-import { isShellProcess } from '@/lib/tui-agent-startup'
-import type { OrcaHooks, TaskViewPresetId } from '../../../shared/types'
+import type { LinkedWorkItemContext } from '@/lib/linked-work-item-context'
+import {
+  beginAgentStartupDeliveryAttempt,
+  getAgentStartupTabPtyId,
+  queuePendingAgentStartupDelivery,
+  resolveAgentStartupTabId
+} from '@/lib/agent-startup-delayed-delivery'
+import type { FolderWorkspaceLinkedTask, OrcaHooks, TaskViewPresetId } from '../../../shared/types'
 import { resolveHookCommandSourcePolicy } from '../../../shared/hook-command-source-policy'
-import { isExpectedAgentProcess } from '../../../shared/agent-process-recognition'
 import { slugifyForWorkspaceName } from '../../../shared/workspace-name'
+import { createBrowserUuid } from '@/lib/browser-uuid'
 export { getLinkedWorkItemSuggestedName } from '../../../shared/workspace-name'
+export { getLinkedWorkItemWorkspaceName } from '../../../shared/workspace-name'
+export { getWorkspaceIntentName } from '../../../shared/workspace-name'
 
 /**
  * Why: the TaskPage's preset buttons and the openTaskPage prefetcher both need
@@ -33,39 +41,24 @@ export function getTaskPresetQuery(presetId: TaskViewPresetId | null): string {
       return 'author:@me is:pr is:open'
     case 'review':
       return 'review-requested:@me is:pr is:open'
-    default:
+    case null:
       return 'is:issue is:open'
   }
 }
 
-export const IS_MAC = navigator.userAgent.includes('Mac')
 export const CLIENT_PLATFORM: NodeJS.Platform = navigator.userAgent.includes('Windows')
   ? 'win32'
-  : IS_MAC
+  : navigator.userAgent.includes('Mac')
     ? 'darwin'
     : 'linux'
 
-export type LinkedWorkItemSummary = {
-  /** 'mr' is the GitLab analogue of 'pr'. The shape is otherwise
-   *  identical so the linked-work-item badge in the composer renders
-   *  uniformly across providers. */
-  type: 'issue' | 'pr' | 'mr'
-  number: number
-  title: string
-  url: string
-  /** Linear identifier (for example ENG-123) when this linked item came from
-   *  Linear rather than GitHub. */
-  linearIdentifier?: string
-}
+export { getLinkedWorkItemProvider, isGitLabIssueUrl } from './linked-work-item-provider'
 
-export function isGitLabIssueUrl(url: string): boolean {
-  // Why: self-hosted GitLab issue URLs may not contain "gitlab"; the
-  // provider-stable signal is the `/-/issues/` path segment.
-  try {
-    return new URL(url).pathname.includes('/-/issues/')
-  } catch {
-    return /\/-\/issues\//i.test(url)
-  }
+export type LinkedWorkItemSummary = Omit<FolderWorkspaceLinkedTask, 'provider'> & {
+  provider?: FolderWorkspaceLinkedTask['provider']
+  linearWorkspaceId?: string
+  linearOrganizationUrlKey?: string
+  linkedContext?: LinkedWorkItemContext
 }
 
 // Why: when a repo has no `orca.yaml` issueCommand and no per-user override,
@@ -74,7 +67,38 @@ export function isGitLabIssueUrl(url: string): boolean {
 // is the minimum viable instruction that always produces a coherent agent task.
 export const DEFAULT_ISSUE_COMMAND_TEMPLATE = 'Complete {{artifact_url}}'
 
-export type SetupConfig = { source: 'yaml' | 'local' | 'both'; command: string }
+export type SetupConfig = {
+  source: 'yaml' | 'local' | 'both'
+  command: string
+  kind: 'setup' | 'default-tabs' | 'setup-and-default-tabs'
+}
+
+function getDefaultTabCommandPreview(yamlHooks: OrcaHooks | null): string {
+  return (yamlHooks?.defaultTabs ?? [])
+    .map((tab, index) => {
+      const command = tab.command?.trim()
+      if (!command) {
+        return null
+      }
+      const label = tab.title ? ` ${tab.title}` : ''
+      return `# defaultTabs[${index + 1}]${label}\n${command}`
+    })
+    .filter((entry): entry is string => entry !== null)
+    .join('\n\n')
+}
+
+function getSetupConfigKind(
+  hasSetup: boolean,
+  hasDefaultTabCommands: boolean
+): SetupConfig['kind'] {
+  if (hasSetup && hasDefaultTabCommands) {
+    return 'setup-and-default-tabs'
+  }
+  if (hasDefaultTabCommands) {
+    return 'default-tabs'
+  }
+  return 'setup'
+}
 
 /**
  * Substitute the issue-command template variables. Prefers `{{artifact_url}}`
@@ -99,10 +123,11 @@ export function renderIssueCommandTemplate(
 export function buildAgentPromptWithContext(
   prompt: string,
   attachments: string[],
-  linkedUrls: string[]
+  linkedUrls: string[],
+  linkedContextBlocks: string[] = []
 ): string {
   const trimmedPrompt = prompt.trim()
-  if (attachments.length === 0 && linkedUrls.length === 0) {
+  if (attachments.length === 0 && linkedUrls.length === 0 && linkedContextBlocks.length === 0) {
     return trimmedPrompt
   }
 
@@ -115,9 +140,12 @@ export function buildAgentPromptWithContext(
     const linkBlock = linkedUrls.map((url) => `- ${url}`).join('\n')
     sections.push(`Linked work items:\n${linkBlock}`)
   }
+  if (linkedContextBlocks.length > 0) {
+    sections.push(linkedContextBlocks.join('\n\n'))
+  }
   // Why: the new-workspace flow launches each agent with a single plain-text
-  // startup prompt. Appending attachments and linked URLs keeps extra context
-  // visible to Claude/Codex/OpenCode without cluttering the visible textarea.
+  // startup prompt. Appending attachments and bounded linked context keeps
+  // extra data visible to Claude/Codex/OpenCode without cluttering the textarea.
   if (!trimmedPrompt) {
     return sections.join('\n\n')
   }
@@ -141,21 +169,31 @@ export function getSetupConfig(
   yamlHooks: OrcaHooks | null
 ): SetupConfig | null {
   const yamlSetup = yamlHooks?.scripts?.setup?.trim()
+  const yamlDefaultTabCommands = getDefaultTabCommandPreview(yamlHooks)
   const localSetup = repo?.hookSettings?.scripts?.setup?.trim()
   const sourcePolicy = resolveHookCommandSourcePolicy(repo?.hookSettings?.commandSourcePolicy, {
     hasLocalScript: Boolean(localSetup)
   })
 
   if (sourcePolicy === 'local-only') {
-    return localSetup ? { source: 'local', command: localSetup } : null
+    return localSetup ? { source: 'local', command: localSetup, kind: 'setup' } : null
   }
 
-  if (sourcePolicy === 'run-both' && yamlSetup && localSetup) {
-    return { source: 'both', command: `${yamlSetup}\n${localSetup}` }
+  const yamlCommand = [yamlSetup, yamlDefaultTabCommands].filter(Boolean).join('\n\n')
+  if (sourcePolicy === 'run-both' && yamlCommand && localSetup) {
+    return {
+      source: 'both',
+      command: `${yamlCommand}\n\n${localSetup}`,
+      kind: getSetupConfigKind(true, Boolean(yamlDefaultTabCommands))
+    }
   }
 
-  if (yamlSetup) {
-    return { source: 'yaml', command: yamlSetup }
+  if (yamlCommand) {
+    return {
+      source: 'yaml',
+      command: yamlCommand,
+      kind: getSetupConfigKind(Boolean(yamlSetup), Boolean(yamlDefaultTabCommands))
+    }
   }
   return null
 }
@@ -201,19 +239,17 @@ export function getWorkspaceSeedName(args: {
   return 'workspace'
 }
 
-// Why: bracketed paste markers and ready-wait grace timing live in
-// agent-paste-draft.ts so the new-workspace and "Use" flows share one
-// definition of "type into the agent's input as a non-submitted draft".
-
 export async function ensureAgentStartupInTerminal(args: {
   worktreeId: string
+  primaryTabId?: string | null
   startup: AgentStartupPlan
 }): Promise<void> {
-  const { worktreeId, startup } = args
+  const { worktreeId, primaryTabId, startup } = args
   const draftPrompt = startup.draftPrompt ?? null
   if (startup.followupPrompt === null && draftPrompt === null) {
     return
   }
+  const launchToken = ensureStartupLaunchToken(startup)
 
   // Why: poll until a terminal tab + PTY exists for the worktree before we
   // can interact with it. Activation creates the tab synchronously but the
@@ -222,73 +258,79 @@ export async function ensureAgentStartupInTerminal(args: {
   let ptyId: string | null = null
   for (let attempt = 0; attempt < 30; attempt += 1) {
     if (attempt > 0) {
-      await new Promise((resolve) => window.setTimeout(resolve, 150))
+      await new Promise((resolve) => globalThis.setTimeout(resolve, 150))
     }
     const state = useAppStore.getState()
-    tabId =
-      state.activeTabIdByWorktree[worktreeId] ?? state.tabsByWorktree[worktreeId]?.[0]?.id ?? null
+    tabId = resolveAgentStartupTabId(state, worktreeId, primaryTabId)
     if (!tabId) {
       continue
     }
-    ptyId = state.ptyIdsByTabId[tabId]?.[0] ?? null
+    ptyId = getAgentStartupTabPtyId(state, tabId, launchToken)
     if (ptyId) {
       break
     }
   }
   if (!tabId || !ptyId) {
+    if (tabId) {
+      // Why: background-created workspaces can remain unmounted longer than a
+      // bounded readiness wait. Keep the draft/follow-up tied to the seeded
+      // tab until opening the workspace creates its PTY.
+      queuePendingAgentStartupDelivery({
+        worktreeId,
+        tabId,
+        launchToken,
+        startup,
+        deliver: deliverAgentStartupToTerminal
+      })
+    }
     return
   }
 
+  if (beginAgentStartupDeliveryAttempt({ worktreeId, tabId, launchToken })) {
+    await deliverAgentStartupToTerminal(tabId, ptyId, startup)
+  }
+}
+
+async function deliverAgentStartupToTerminal(
+  tabId: string,
+  ptyId: string,
+  startup: AgentStartupPlan
+): Promise<void> {
+  const draftPrompt = startup.draftPrompt ?? null
+  const runtimeSettings = getSettingsForAgentTabRuntimeOwner(tabId)
   // Why: followupPrompt is the legacy path for stdin-after-start agents
   // (aider, goose, etc.) that need their initial prompt typed into the live
   // session and submitted. Wait until the agent owns the PTY before writing.
   if (startup.followupPrompt) {
-    await waitForAgentForeground(ptyId, startup.expectedProcess)
-    await sendFollowupPrompt(ptyId, startup.followupPrompt)
+    await sendFollowupPromptWhenAgentReady({
+      ptyId,
+      expectedProcess: startup.expectedProcess,
+      prompt: startup.followupPrompt,
+      settings: runtimeSettings
+    })
   }
 
   // Why: draftPrompt uses bracketed-paste so the URL lands atomically in the
   // agent's input buffer (no per-char echo, no auto-submit). Shared with the
   // launch-work-item-direct flow so both behave identically.
   if (draftPrompt) {
-    await pasteDraftWhenAgentReady({
+    await pasteDraftToAgentPtyWhenReady({
       tabId,
+      ptyId,
       content: draftPrompt,
-      agent: startup.agent
+      agent: startup.agent,
+      // Why: startup.draftPrompt is only attached after native draft launch
+      // planning is unavailable, so this paste is the first delivery attempt.
+      forcePaste: true
     })
   }
 }
 
-async function sendFollowupPrompt(ptyId: string, prompt: string): Promise<boolean> {
-  try {
-    return await sendRuntimePtyInputVerified(useAppStore.getState().settings, ptyId, `${prompt}\r`)
-  } catch {
-    return false
+function ensureStartupLaunchToken(startup: AgentStartupPlan): string {
+  if (!startup.launchToken) {
+    // Why: delayed delivery retries must reuse the startup plan's launch token
+    // so they match the pane launch registration for this agent.
+    startup.launchToken = createBrowserUuid()
   }
-}
-
-// Why: legacy followupPrompt path used `agentOwnsForeground` exclusively (with
-// a hasChildProcesses fallback after several polls). Preserve that behavior so
-// stdin-after-start agents still receive their prompt under the same
-// conditions. Returns when the agent appears ready or the budget expires.
-async function waitForAgentForeground(ptyId: string, expectedProcess: string): Promise<void> {
-  for (let attempt = 0; attempt < 30; attempt += 1) {
-    if (attempt > 0) {
-      await new Promise((resolve) => window.setTimeout(resolve, 150))
-    }
-    try {
-      const process = await inspectRuntimeTerminalProcess(useAppStore.getState().settings, ptyId)
-      const foreground = process.foregroundProcess?.toLowerCase() ?? ''
-      if (isExpectedAgentProcess(foreground, expectedProcess)) {
-        return
-      }
-      if (attempt >= 4 && !isShellProcess(foreground)) {
-        if (process.hasChildProcesses) {
-          return
-        }
-      }
-    } catch {
-      // Ignore transient PTY inspection failures and keep polling.
-    }
-  }
+  return startup.launchToken
 }

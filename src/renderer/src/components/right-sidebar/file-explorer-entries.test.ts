@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest'
-import { shouldIncludeFileExplorerEntry } from './file-explorer-entries'
+import { isDotfileRelativePath, shouldIncludeFileExplorerEntry } from './file-explorer-entries'
 
 describe('shouldIncludeFileExplorerEntry', () => {
-  it('keeps hidden files and folders visible in the explorer', () => {
+  it('keeps dotfiles loadable so visibility can be toggled client-side', () => {
     expect(
       shouldIncludeFileExplorerEntry({
         name: '.env',
@@ -36,5 +36,19 @@ describe('shouldIncludeFileExplorerEntry', () => {
         isSymlink: false
       })
     ).toBe(false)
+  })
+})
+
+describe('isDotfileRelativePath', () => {
+  it('matches dotfiles and descendants of dot folders across path separators', () => {
+    expect(isDotfileRelativePath('.env')).toBe(true)
+    expect(isDotfileRelativePath('.config/settings.json')).toBe(true)
+    expect(isDotfileRelativePath('src/.cache/result.json')).toBe(true)
+    expect(isDotfileRelativePath('src\\.cache\\result.json')).toBe(true)
+  })
+
+  it('does not match ordinary paths', () => {
+    expect(isDotfileRelativePath('src/index.ts')).toBe(false)
+    expect(isDotfileRelativePath('config/settings.json')).toBe(false)
   })
 })

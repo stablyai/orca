@@ -1,4 +1,4 @@
-import { EventEmitter } from 'events'
+import { EventEmitter } from 'node:events'
 import { describe, expect, it, vi } from 'vitest'
 
 const { createConnectionMock } = vi.hoisted(() => ({
@@ -43,5 +43,20 @@ describe('connectMacOSProviderSocket', () => {
     } finally {
       vi.useRealTimers()
     }
+  })
+
+  it('destroys the pending socket and removes listeners when aborted', async () => {
+    const socket = new FakeSocket()
+    createConnectionMock.mockReturnValueOnce(socket)
+    const abort = new AbortController()
+
+    const promise = connectMacOSProviderSocket('/tmp/orca-computer.sock', 5_000, abort.signal)
+    await Promise.resolve()
+    abort.abort()
+
+    await expect(promise).rejects.toThrow('startup was cancelled')
+    expect(socket.destroy).toHaveBeenCalledTimes(1)
+    expect(socket.listenerCount('error')).toBe(0)
+    expect(socket.listenerCount('connect')).toBe(0)
   })
 })

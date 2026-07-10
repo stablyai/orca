@@ -119,6 +119,20 @@ describe('gitlab client — combined listWorkItems', () => {
     expect(issuesCallPath.at(-1)).toContain('search=ambiguous%20selector')
   })
 
+  it('passes the requested page through to merge request and issue fetches', async () => {
+    glabApiWithHeadersMock.mockResolvedValueOnce({ body: '[]', headers: {} })
+    glabExecFileAsyncMock.mockResolvedValueOnce({ stdout: '[]' })
+
+    await listWorkItems('/repo', 'opened', 2, 20)
+
+    const mergeRequestCallPath = glabApiWithHeadersMock.mock.calls[0][0] as string[]
+    const issuesCallPath = glabExecFileAsyncMock.mock.calls[0][0] as string[]
+    const mergeRequestParams = new URLSearchParams(mergeRequestCallPath[0].split('?')[1])
+    const issueParams = new URLSearchParams(issuesCallPath.at(-1)?.split('?')[1])
+    expect(mergeRequestParams.get('page')).toBe('2')
+    expect(issueParams.get('page')).toBe('2')
+  })
+
   it("omits the state param when 'all'", async () => {
     glabExecFileAsyncMock.mockImplementation(async () => {
       return { stdout: '[]' }
@@ -143,7 +157,7 @@ describe('gitlab client — combined listWorkItems', () => {
       'api',
       '--hostname',
       'git.internal',
-      'projects/g%2Fp/issues?per_page=20&order_by=updated_at&sort=desc&state=opened'
+      'projects/g%2Fp/issues?page=1&per_page=20&order_by=updated_at&sort=desc&state=opened'
     ])
   })
 

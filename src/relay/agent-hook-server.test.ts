@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'fs'
-import { tmpdir } from 'os'
-import { join } from 'path'
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { homedir, tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { endpointDirForRelaySocket, RelayAgentHookServer } from './agent-hook-server'
 import type { AgentHookRelayEnvelope } from '../shared/agent-hook-relay'
 import { makePaneKey } from '../shared/stable-pane-id'
@@ -25,6 +25,13 @@ describe('RelayAgentHookServer', () => {
     expect(first).toBe(join(dir, 'agent-hooks', 'relay-a.sock'))
     expect(second).toBe(join(dir, 'agent-hooks', 'relay-b.sock'))
     expect(first).not.toBe(second)
+  })
+
+  it('keeps named-pipe endpoint files on a real filesystem path', () => {
+    const endpointDir = endpointDirForRelaySocket('\\\\.\\pipe\\orca-relay-abc123')
+
+    expect(endpointDir).toBe(join(homedir(), '.orca-relay', 'agent-hooks', 'orca-relay-abc123'))
+    expect(endpointDir).not.toContain('\\\\.\\pipe')
   })
 
   it('forwards a parsed Claude UserPromptSubmit POST as a normalized envelope', async () => {
@@ -324,4 +331,51 @@ describe('RelayAgentHookServer', () => {
       vi.unstubAllEnvs()
     }
   })
+
+  it('caps the replay cache at 256 panes, evicting the least-recently-updated', async () => {
+    // Mirrors the server's private MAX_CACHED_PANES. The WSL relay never gets a
+    // per-pane teardown signal, so the cache is recency-capped instead.
+    const CAP = 256
+    const forward = vi.fn<(envelope: AgentHookRelayEnvelope) => void>()
+    const server = new RelayAgentHookServer({ endpointDir: dir, forward })
+    await server.start()
+    try {
+      const { port, token } = server.getCoordinates()
+      const paneKeyFor = (i: number): string => makePaneKey(`tab-${i}`, LEAF_ID)
+      const postPane = (paneKey: string): Promise<Response> =>
+        fetch(`http://127.0.0.1:${port}/hook/claude`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-Orca-Agent-Hook-Token': token
+          },
+          body: JSON.stringify({
+            paneKey,
+            payload: { hook_event_name: 'UserPromptSubmit', prompt: 'p' }
+          })
+        })
+
+      // Fill the cache to exactly the cap in insertion order 0..CAP-1. Sequential
+      // awaits pin Map order = update recency, which the eviction relies on.
+      for (let i = 0; i < CAP; i++) {
+        await postPane(paneKeyFor(i))
+      }
+      // Refresh the OLDEST pane just before overflow, then push one more pane.
+      // Recency (not insertion) order must now evict pane 1, sparing pane 0.
+      await postPane(paneKeyFor(0))
+      await postPane(paneKeyFor(CAP))
+
+      forward.mockClear()
+      const replayed = server.replayCachedPayloadsForPanes()
+      expect(replayed).toBe(CAP)
+
+      const cachedPaneKeys = new Set(forward.mock.calls.map((call) => call[0].paneKey))
+      expect(cachedPaneKeys.size).toBe(CAP)
+      expect(cachedPaneKeys.has(paneKeyFor(0))).toBe(true)
+      expect(cachedPaneKeys.has(paneKeyFor(CAP))).toBe(true)
+      expect(cachedPaneKeys.has(paneKeyFor(1))).toBe(false)
+    } finally {
+      server.stop()
+    }
+  }, 30_000)
 })

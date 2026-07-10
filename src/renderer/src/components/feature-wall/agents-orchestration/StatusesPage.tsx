@@ -1,10 +1,12 @@
+/* oxlint-disable react-doctor/no-adjust-state-on-prop-change -- Why: this page is a timed storyboard; reveal state intentionally resets when the active/reduced-motion gates change. */
 import { useEffect, useRef, useState } from 'react'
 import type { JSX, ReactNode } from 'react'
 import { Wrench } from 'lucide-react'
 import { AgentStateDot } from '@/components/AgentStateDot'
-import { AGENT_CATALOG, AgentIcon } from '@/lib/agent-catalog'
+import { getAgentCatalog, AgentIcon, type AgentCatalogEntry } from '@/lib/agent-catalog'
 import { ClaudeIcon, OpenAIIcon } from '../../status-bar/icons'
 import { cn } from '@/lib/utils'
+import { translate } from '@/i18n/i18n'
 
 type ClaudeActivity = { kind: 'tool'; tool: string; arg: string } | { kind: 'msg'; text: ReactNode }
 
@@ -68,7 +70,10 @@ export function StatusesPage(props: { active: boolean; reducedMotion: boolean })
         <div className="grid grid-cols-[14px_minmax(0,1fr)] items-center gap-3 px-1.5">
           <span className="inline-block size-[9px] rounded-full bg-emerald-500" />
           <div className="truncate text-[15.5px] font-semibold leading-[1.2]">
-            redesign auth flow
+            {translate(
+              'auto.components.feature.wall.agents.orchestration.StatusesPage.79971d1539',
+              'redesign auth flow'
+            )}
           </div>
         </div>
         <div className="flex flex-col gap-3 pl-[30px] pr-2 pt-2.5 pb-1">
@@ -80,7 +85,16 @@ export function StatusesPage(props: { active: boolean; reducedMotion: boolean })
           >
             {revealed.codex ? (
               <span>
-                Wants to run <CodeChip>pnpm migrate latest</CodeChip>
+                {translate(
+                  'auto.components.feature.wall.agents.orchestration.StatusesPage.78f0318ac1',
+                  'Wants to run'
+                )}
+                <CodeChip>
+                  {translate(
+                    'auto.components.feature.wall.agents.orchestration.StatusesPage.7b26349cb2',
+                    'pnpm migrate latest'
+                  )}
+                </CodeChip>
               </span>
             ) : (
               <Skel widthPct={64} />
@@ -103,7 +117,16 @@ export function StatusesPage(props: { active: boolean; reducedMotion: boolean })
           <AgentRow icon={<AgentIcon agent="opencode" size={18} />} name="OpenCode" state="done">
             {revealed.opencode ? (
               <span>
-                Updated <CodeChip>src/auth/session.test.ts</CodeChip>
+                {translate(
+                  'auto.components.feature.wall.agents.orchestration.StatusesPage.139e3d7458',
+                  'Updated'
+                )}
+                <CodeChip>
+                  {translate(
+                    'auto.components.feature.wall.agents.orchestration.StatusesPage.2f549fc0ba',
+                    'src/auth/session.test.ts'
+                  )}
+                </CodeChip>
               </span>
             ) : (
               <Skel widthPct={56} />
@@ -180,6 +203,7 @@ function Skel(props: { widthPct: number }): JSX.Element {
 // -50% translate loop reads as seamless infinite scroll.
 function SupportedAgentsMarquee(props: { reducedMotion: boolean }): JSX.Element {
   const trackRef = useRef<HTMLDivElement | null>(null)
+  const agentCatalog = getAgentCatalog()
   return (
     <div className="relative -mx-1 mb-1 border-b border-border pb-2 pt-1 overflow-hidden">
       <div
@@ -198,10 +222,10 @@ function SupportedAgentsMarquee(props: { reducedMotion: boolean }): JSX.Element 
             props.reducedMotion ? '' : 'feature-wall-marquee-track'
           )}
         >
-          {AGENT_CATALOG.map((agent) => (
+          {agentCatalog.map((agent) => (
             <MarqueePill key={`a-${agent.id}`} agentId={agent.id} label={agent.label} />
           ))}
-          {AGENT_CATALOG.map((agent) => (
+          {agentCatalog.map((agent) => (
             <MarqueePill key={`b-${agent.id}`} agentId={agent.id} label={agent.label} />
           ))}
         </div>
@@ -210,10 +234,7 @@ function SupportedAgentsMarquee(props: { reducedMotion: boolean }): JSX.Element 
   )
 }
 
-function MarqueePill(props: {
-  agentId: (typeof AGENT_CATALOG)[number]['id']
-  label: string
-}): JSX.Element {
+function MarqueePill(props: { agentId: AgentCatalogEntry['id']; label: string }): JSX.Element {
   return (
     <span className="inline-flex shrink-0 items-center gap-1.5 rounded-full bg-foreground/[0.05] px-2.5 py-1 text-[11px] leading-none shadow-[inset_0_0_0_1px_rgba(24,24,27,0.06)]">
       <span className="inline-flex size-3.5 items-center justify-center">

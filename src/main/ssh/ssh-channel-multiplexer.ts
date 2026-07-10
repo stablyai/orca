@@ -31,8 +31,12 @@ type PendingRequest = {
 
 export type NotificationHandler = (method: string, params: Record<string, unknown>) => void
 export type MethodNotificationHandler = (params: Record<string, unknown>) => void
+export type RequestHandler = (params: Record<string, unknown>) => Promise<unknown> | unknown
 
 const REQUEST_TIMEOUT_MS = 30_000
+// Why: a tick gap far beyond the interval means the process was paused
+// (system sleep, App Nap timer throttling) — not that the link is dead (#7773).
+const WAKE_GAP_MS = KEEPALIVE_SEND_MS * 3
 
 export class SshChannelMultiplexer {
   private decoder: FrameDecoder
@@ -44,6 +48,7 @@ export class SshChannelMultiplexer {
   private lastReceivedAt = Date.now()
   private pendingRequests = new Map<number, PendingRequest>()
   private notificationHandlers: NotificationHandler[] = []
+  private requestHandlers = new Map<string, RequestHandler>()
   // Why: per-method dispatch map keeps streaming consumers (fs.streamChunk,
   // fs.streamEnd, fs.streamError) from accreting string-match logic in the
   // generic notification listener that already serves fs.changed.
@@ -55,6 +60,10 @@ export class SshChannelMultiplexer {
 
   // Track the oldest unacked outgoing message timestamp
   private unackedTimestamps = new Map<number, number>()
+
+  // Why: liveness probes (#7773) resolve on the first frame of any kind —
+  // a keepalive ack proves the relay round-trip without a full RPC.
+  private livenessProbeWaiters: { succeed: () => void; fail: () => void }[] = []
 
   constructor(transport: MultiplexerTransport) {
     this.transport = transport
@@ -84,6 +93,9 @@ export class SshChannelMultiplexer {
   }
 
   onNotification(handler: NotificationHandler): () => void {
+    if (this.disposed) {
+      return () => {}
+    }
     this.notificationHandlers.push(handler)
     return () => {
       const idx = this.notificationHandlers.indexOf(handler)
@@ -94,6 +106,9 @@ export class SshChannelMultiplexer {
   }
 
   onNotificationByMethod(method: string, handler: MethodNotificationHandler): () => void {
+    if (this.disposed) {
+      return () => {}
+    }
     let set = this.methodNotificationHandlers.get(method)
     if (!set) {
       set = new Set()
@@ -112,12 +127,24 @@ export class SshChannelMultiplexer {
     }
   }
 
+  onRequest(method: string, handler: RequestHandler): () => void {
+    this.requestHandlers.set(method, handler)
+    return () => {
+      if (this.requestHandlers.get(method) === handler) {
+        this.requestHandlers.delete(method)
+      }
+    }
+  }
+
   // Why: the session needs to know when the relay channel dies so it can
   // auto-reconnect. Without this, a relay channel close (e.g. --connect
   // bridge exits) leaves the session in 'ready' state with a dead mux
   // and no recovery path — the SSH connection stays up so onStateChange
   // never fires the reconnect logic.
   onDispose(handler: (reason: 'shutdown' | 'connection_lost') => void): () => void {
+    if (this.disposed) {
+      return () => {}
+    }
     this.disposeHandlers.push(handler)
     return () => {
       const idx = this.disposeHandlers.indexOf(handler)
@@ -212,6 +239,31 @@ export class SshChannelMultiplexer {
     this.sendMessage(msg)
   }
 
+  /**
+   * Send a fresh keepalive and resolve true when any frame arrives before the
+   * timeout. Used on system resume to distinguish a link that survived sleep
+   * from a dead one before tearing the session down (#7773).
+   */
+  probeLiveness(timeoutMs: number): Promise<boolean> {
+    if (this.disposed) {
+      return Promise.resolve(false)
+    }
+    return new Promise<boolean>((resolve) => {
+      const settle = (alive: boolean): void => {
+        clearTimeout(timer)
+        const idx = this.livenessProbeWaiters.indexOf(waiter)
+        if (idx !== -1) {
+          this.livenessProbeWaiters.splice(idx, 1)
+        }
+        resolve(alive)
+      }
+      const waiter = { succeed: () => settle(true), fail: () => settle(false) }
+      const timer = setTimeout(() => settle(false), timeoutMs)
+      this.livenessProbeWaiters.push(waiter)
+      this.sendKeepAlive()
+    })
+  }
+
   dispose(reason: 'shutdown' | 'connection_lost' = 'shutdown'): void {
     if (this.disposed) {
       return
@@ -239,6 +291,10 @@ export class SshChannelMultiplexer {
       reason === 'connection_lost' ? 'SSH connection lost, reconnecting...' : 'Multiplexer disposed'
     const errorCode = reason === 'connection_lost' ? 'CONNECTION_LOST' : 'DISPOSED'
 
+    for (const waiter of this.livenessProbeWaiters.splice(0)) {
+      waiter.fail()
+    }
+
     for (const [id, pending] of this.pendingRequests) {
       pending.cleanup()
       const err = new Error(errorMessage) as Error & { code: string }
@@ -248,6 +304,9 @@ export class SshChannelMultiplexer {
     }
 
     this.unackedTimestamps.clear()
+    // Why: relay teardown can race with late provider registration; disposed
+    // muxes must not retain provider/session closures through subscribers.
+    this.notificationHandlers.length = 0
     this.methodNotificationHandlers.clear()
     this.decoder.reset()
     this.transport.close?.()
@@ -299,6 +358,12 @@ export class SshChannelMultiplexer {
   }
 
   private handleFrame(frame: DecodedFrame): void {
+    // Why: any decoded frame proves the relay round-trip is alive; resolve
+    // pending resume probes before ordinary dispatch (#7773).
+    for (const waiter of this.livenessProbeWaiters.splice(0)) {
+      waiter.succeed()
+    }
+
     // Update ack tracking
     if (frame.id > this.highestReceivedSeq) {
       this.highestReceivedSeq = frame.id
@@ -329,10 +394,41 @@ export class SshChannelMultiplexer {
   private handleMessage(msg: JsonRpcMessage): void {
     if ('id' in msg && ('result' in msg || 'error' in msg)) {
       this.handleResponse(msg as JsonRpcResponse)
+    } else if ('id' in msg && 'method' in msg) {
+      void this.handleRequest(msg as JsonRpcRequest)
     } else if ('method' in msg && !('id' in msg)) {
       this.handleNotification(msg as JsonRpcNotification)
     }
-    // Requests from relay to client are not expected in Phase 2
+  }
+
+  private async handleRequest(msg: JsonRpcRequest): Promise<void> {
+    const handler = this.requestHandlers.get(msg.method)
+    if (!handler) {
+      this.sendMessage({
+        jsonrpc: '2.0',
+        id: msg.id,
+        error: { code: -32601, message: `Method not found: ${msg.method}` }
+      })
+      return
+    }
+
+    try {
+      const result = await handler(msg.params ?? {})
+      this.sendMessage({
+        jsonrpc: '2.0',
+        id: msg.id,
+        result: result ?? null
+      })
+    } catch (err) {
+      this.sendMessage({
+        jsonrpc: '2.0',
+        id: msg.id,
+        error: {
+          code: (err as { code?: number }).code ?? -32000,
+          message: err instanceof Error ? err.message : String(err)
+        }
+      })
+    }
   }
 
   private handleResponse(msg: JsonRpcResponse): void {
@@ -399,12 +495,28 @@ export class SshChannelMultiplexer {
   }
 
   private startTimeoutCheck(): void {
+    let lastTickAt = Date.now()
     this.timeoutTimer = setInterval(() => {
       if (this.disposed) {
         return
       }
 
       const now = Date.now()
+      const sinceLastTick = now - lastTickAt
+      lastTickAt = now
+      // Why: after sleep/App Nap the pre-pause keepalive looks stale on the
+      // first post-wake tick, killing a healthy link (#7773). Reset staleness
+      // tracking, probe with a fresh keepalive, and let the NEXT full window
+      // make an honest liveness determination.
+      if (sinceLastTick > WAKE_GAP_MS) {
+        this.lastReceivedAt = now
+        for (const seq of this.unackedTimestamps.keys()) {
+          this.unackedTimestamps.set(seq, now)
+        }
+        this.sendKeepAlive()
+        return
+      }
+
       const noDataReceived = now - this.lastReceivedAt > TIMEOUT_MS
 
       // Check oldest unacked message

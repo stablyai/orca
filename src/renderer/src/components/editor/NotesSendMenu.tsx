@@ -12,9 +12,9 @@ import {
   DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
-import { QuickLaunchAgentMenuItems } from '@/components/tab-bar/QuickLaunchButton'
-import { focusTerminalTabSurface } from '@/lib/focus-terminal-tab-surface'
 import { cn } from '@/lib/utils'
+import { ReviewNotesSendMenuContent } from './ReviewNotesSendMenuContent'
+import { translate } from '@/i18n/i18n'
 
 const ENABLED_SEND_TOOLTIP = 'Send notes to an agent'
 
@@ -124,11 +124,12 @@ export function NotesSendMenu<TNote>({
     [closeAgentSendPopoverTargetMode, defaultScope, openTargetMode, targetModeId]
   )
 
-  useEffect(() => {
-    if (sendMenuOpen && activeTargetModeId !== targetModeId) {
-      setSendMenuOpen(false)
-    }
-  }, [activeTargetModeId, sendMenuOpen, targetModeId])
+  const effectiveSendMenuOpen = sendMenuOpen && activeTargetModeId === targetModeId
+  if (sendMenuOpen && activeTargetModeId !== targetModeId) {
+    // Why: avoid rendering a stale menu for one paint after another send target
+    // wins; the local open bit is only meaningful while this target is active.
+    setSendMenuOpen(false)
+  }
 
   useEffect(
     () => () => {
@@ -138,7 +139,7 @@ export function NotesSendMenu<TNote>({
   )
 
   return (
-    <DropdownMenu modal={false} open={sendMenuOpen} onOpenChange={handleOpenChange}>
+    <DropdownMenu modal={false} open={effectiveSendMenuOpen} onOpenChange={handleOpenChange}>
       <Tooltip>
         <TooltipTrigger asChild>
           <DropdownMenuTrigger asChild>
@@ -150,7 +151,15 @@ export function NotesSendMenu<TNote>({
               )}
               disabled={!hasDeliverableNotes}
               title={hasDeliverableNotes ? ENABLED_SEND_TOOLTIP : disabledTooltip}
-              aria-label={triggerLabel ? `Send ${triggerLabel} to an agent` : ENABLED_SEND_TOOLTIP}
+              aria-label={
+                triggerLabel
+                  ? translate(
+                      'auto.components.editor.NotesSendMenu.433928cd9f',
+                      'Send {{value0}} to an agent',
+                      { value0: triggerLabel }
+                    )
+                  : ENABLED_SEND_TOOLTIP
+              }
               onMouseDown={(event) => event.stopPropagation()}
               onClick={(event) => event.stopPropagation()}
             >
@@ -183,7 +192,9 @@ export function NotesSendMenu<TNote>({
       >
         {scopes.length > 1 ? (
           <>
-            <DropdownMenuLabel>Send notes</DropdownMenuLabel>
+            <DropdownMenuLabel>
+              {translate('auto.components.editor.NotesSendMenu.44dc5e60a6', 'Send notes')}
+            </DropdownMenuLabel>
             {scopes.map((scope) => (
               <DropdownMenuSub key={scope.id}>
                 <DropdownMenuSubTrigger
@@ -195,10 +206,9 @@ export function NotesSendMenu<TNote>({
                   <NoteScopeMenuRow label={scope.label} count={scope.notes.length} />
                 </DropdownMenuSubTrigger>
                 <DropdownMenuSubContent className="min-w-[180px]">
-                  <QuickLaunchAgentMenuItems
+                  <ReviewNotesSendMenuContent
                     worktreeId={worktreeId}
                     groupId={groupId}
-                    onFocusTerminal={focusTerminalTabSurface}
                     prompt={scope.prompt}
                     promptDelivery="submit-after-ready"
                     launchSource="notes_send"
@@ -209,10 +219,9 @@ export function NotesSendMenu<TNote>({
             ))}
           </>
         ) : (
-          <QuickLaunchAgentMenuItems
+          <ReviewNotesSendMenuContent
             worktreeId={worktreeId}
             groupId={groupId}
-            onFocusTerminal={focusTerminalTabSurface}
             prompt={defaultScope?.prompt ?? ''}
             promptDelivery="submit-after-ready"
             launchSource="notes_send"

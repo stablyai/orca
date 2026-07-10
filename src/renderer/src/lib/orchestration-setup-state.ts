@@ -10,6 +10,11 @@ export function hasOrchestrationSetupMarker(): boolean {
   return isOrchestrationSetupEnabled()
 }
 
+export function markOrchestrationSetupComplete(): void {
+  localStorage.setItem(ORCHESTRATION_ENABLED_STORAGE_KEY, '1')
+  notifyOrchestrationSetupStateChanged()
+}
+
 export function isOrchestrationSetupDismissed(): boolean {
   return localStorage.getItem(ORCHESTRATION_SETUP_DISMISSED_STORAGE_KEY) === '1'
 }

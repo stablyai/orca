@@ -62,7 +62,7 @@ describe('runtime git client merge operations', () => {
     expect(runtimeEnvironmentCall).toHaveBeenCalledWith({
       selector: 'env-1',
       method: 'git.abortMerge',
-      params: { worktree: 'wt-1' },
+      params: { worktree: 'id:wt-1' },
       timeoutMs: 30_000
     })
     expect(gitAbortMerge).not.toHaveBeenCalled()
@@ -99,7 +99,7 @@ describe('runtime git client merge operations', () => {
     expect(runtimeEnvironmentCall).toHaveBeenCalledWith({
       selector: 'env-1',
       method: 'git.abortRebase',
-      params: { worktree: 'wt-1' },
+      params: { worktree: 'id:wt-1' },
       timeoutMs: 30_000
     })
     expect(gitAbortRebase).not.toHaveBeenCalled()

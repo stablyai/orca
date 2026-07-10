@@ -1,7 +1,7 @@
-import path from 'path'
-import { constants } from 'fs'
-import { EventEmitter } from 'events'
-import { Readable, Writable } from 'stream'
+import path from 'node:path'
+import { constants } from 'node:fs'
+import { EventEmitter } from 'node:events'
+import { Readable, Writable } from 'node:stream'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const handlers = new Map<string, (_event: unknown, args: unknown) => Promise<unknown>>()
@@ -17,6 +17,7 @@ const {
   sftpExistsMock,
   uploadFileMock,
   uploadDirMock,
+  removeDirectorySftpMock,
   mkdirSftpMock,
   getConnMgrMock
 } = vi.hoisted(() => ({
@@ -31,6 +32,7 @@ const {
   sftpExistsMock: vi.fn(),
   uploadFileMock: vi.fn(),
   uploadDirMock: vi.fn(),
+  removeDirectorySftpMock: vi.fn(),
   mkdirSftpMock: vi.fn(),
   getConnMgrMock: vi.fn()
 }))
@@ -52,6 +54,7 @@ vi.mock('../ssh/sftp-upload', () => ({
   sftpPathExists: sftpExistsMock,
   uploadFile: uploadFileMock,
   uploadDirectory: uploadDirMock,
+  removeDirectorySftp: removeDirectorySftpMock,
   mkdirSftp: mkdirSftpMock
 }))
 vi.mock('./ssh', () => ({ getSshConnectionManager: getConnMgrMock }))
@@ -128,6 +131,7 @@ describe('fs:importExternalPaths — SSH routing & connection', () => {
       sftpExistsMock,
       uploadFileMock,
       uploadDirMock,
+      removeDirectorySftpMock,
       mkdirSftpMock,
       getConnMgrMock
     ].forEach((m) => m.mockReset())
@@ -166,6 +170,7 @@ describe('fs:importExternalPaths — SSH routing & connection', () => {
     sftpExistsMock.mockResolvedValue(false)
     uploadFileMock.mockResolvedValue(undefined)
     uploadDirMock.mockResolvedValue(undefined)
+    removeDirectorySftpMock.mockResolvedValue(undefined)
     mkdirSftpMock.mockResolvedValue(undefined)
     registerFilesystemMutationHandlers(store as never)
   })

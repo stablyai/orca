@@ -1,5 +1,7 @@
-import { readFile, readdir, readlink } from 'fs/promises'
-import type { RelayDispatcher } from './dispatcher'
+import { readFile, readdir, readlink } from 'node:fs/promises'
+import { getProcessOutputFields } from '../shared/process-output-field-scanner'
+import type { RelayDispatcher, RequestContext } from './dispatcher'
+import { scanWindowsListeningPorts } from './windows-port-scan'
 
 // Keep in sync with src/shared/ssh-types.ts — DetectedPort
 export type DetectedPort = {
@@ -15,18 +17,27 @@ const MAX_DETECTED_PORTS = 50
 
 export class PortScanHandler {
   constructor(dispatcher: RelayDispatcher) {
-    dispatcher.onRequest('ports.detect', async () => {
-      if (process.platform !== 'linux') {
-        return { ports: [], platform: process.platform }
+    dispatcher.onRequest('ports.detect', async (_params, context: RequestContext) => {
+      if (process.platform === 'linux') {
+        return {
+          ports: await this.scanLinuxListeningPorts(),
+          platform: process.platform
+        }
+      }
+      if (process.platform === 'win32') {
+        return {
+          ports: await scanWindowsListeningPorts(context.signal),
+          platform: process.platform
+        }
       }
       return {
-        ports: await this.scanListeningPorts(),
+        ports: [],
         platform: process.platform
       }
     })
   }
 
-  private async scanListeningPorts(): Promise<DetectedPort[]> {
+  private async scanLinuxListeningPorts(): Promise<DetectedPort[]> {
     const [tcp4, tcp6] = await Promise.all([
       this.readProcNet('/proc/net/tcp'),
       this.readProcNet('/proc/net/tcp6')
@@ -95,7 +106,7 @@ export class PortScanHandler {
     const results: { port: number; host: string; inode: number }[] = []
 
     for (let i = 1; i < lines.length; i++) {
-      const fields = lines[i].trim().split(/\s+/)
+      const fields = getProcessOutputFields(lines[i], 10)
       if (fields.length < 10) {
         continue
       }
@@ -111,8 +122,8 @@ export class PortScanHandler {
         continue
       }
 
-      const inode = parseInt(fields[9], 10)
-      if (isNaN(inode) || inode === 0) {
+      const inode = Number.parseInt(fields[9], 10)
+      if (Number.isNaN(inode) || inode === 0) {
         continue
       }
 
@@ -144,7 +155,7 @@ export class PortScanHandler {
         continue
       }
 
-      const pid = parseInt(pidStr, 10)
+      const pid = Number.parseInt(pidStr, 10)
 
       for (const fd of fds) {
         let link: string
@@ -159,7 +170,7 @@ export class PortScanHandler {
           continue
         }
 
-        const inode = parseInt(match[1], 10)
+        const inode = Number.parseInt(match[1], 10)
         if (inodes.has(inode)) {
           result.set(inode, pid)
         }
@@ -198,18 +209,18 @@ export function parseHexAddress(hexAddr: string): { host: string; port: number }
     return null
   }
 
-  const port = parseInt(parts[1], 16)
-  if (isNaN(port) || port === 0) {
+  const port = Number.parseInt(parts[1], 16)
+  if (Number.isNaN(port) || port === 0) {
     return null
   }
 
   const addrHex = parts[0]
 
   if (addrHex.length === 8) {
-    const b1 = parseInt(addrHex.substring(6, 8), 16)
-    const b2 = parseInt(addrHex.substring(4, 6), 16)
-    const b3 = parseInt(addrHex.substring(2, 4), 16)
-    const b4 = parseInt(addrHex.substring(0, 2), 16)
+    const b1 = Number.parseInt(addrHex.substring(6, 8), 16)
+    const b2 = Number.parseInt(addrHex.substring(4, 6), 16)
+    const b3 = Number.parseInt(addrHex.substring(2, 4), 16)
+    const b4 = Number.parseInt(addrHex.substring(0, 2), 16)
     const host = `${b1}.${b2}.${b3}.${b4}`
     return { host, port }
   }

@@ -1,30 +1,50 @@
 import { execFile } from 'node:child_process'
-import { copyFile, chmod, mkdir, mkdtemp, rm, stat, symlink, writeFile } from 'node:fs/promises'
+import { copyFile, mkdir, mkdtemp, rm, stat, symlink, writeFile } from 'node:fs/promises'
 import { createRequire } from 'node:module'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { join, sep } from 'node:path'
 import { promisify } from 'node:util'
 import { describe, expect, it } from 'vitest'
+import { buildAppImageCliWrapper } from './appimage-cli-wrapper'
 
 const require = createRequire(import.meta.url)
 const execFileAsync = promisify(execFile)
 const itRunsUnixShell = process.platform === 'win32' ? it.skip : it
 const builderConfig = require('../../../config/electron-builder.config.cjs') as {
-  asarUnpack?: string[]
+  mac?: { extraResources?: { from?: string; to?: string }[] }
+  linux?: { extraResources?: { from?: string; to?: string }[] }
+  win?: { extraResources?: { from?: string; to?: string }[] }
 }
 const linuxLauncherAsset = new URL('../../../resources/linux/bin/orca-ide', import.meta.url)
 
 describe('packaged CLI assets', () => {
-  it('unpacks runtime dependencies used before Electron asar integration is available', () => {
-    expect(builderConfig.asarUnpack).toEqual(
+  it('copies runtime dependencies used before Electron asar integration is available', () => {
+    const runtimeResourceTargets = new Set(
+      [
+        ...(builderConfig.mac?.extraResources ?? []),
+        ...(builderConfig.linux?.extraResources ?? []),
+        ...(builderConfig.win?.extraResources ?? [])
+      ].map((resource) => normalizeResourceTarget(resource.to))
+    )
+
+    expect([...runtimeResourceTargets]).toEqual(
       expect.arrayContaining([
-        'node_modules/ws/**',
-        'node_modules/tweetnacl/**',
-        'node_modules/zod/**',
-        'node_modules/yaml/**'
+        join('node_modules', 'ws'),
+        join('node_modules', 'tweetnacl'),
+        join('node_modules', 'zod'),
+        join('node_modules', 'yaml'),
+        join('node_modules', 'jsonc-parser'),
+        join('node_modules', 'node-pty'),
+        join('node_modules', 'sherpa-onnx-darwin-${arch}'),
+        join('node_modules', 'sherpa-onnx-linux-${arch}'),
+        join('node_modules', 'sherpa-onnx-win-x64')
       ])
     )
   })
+
+  function normalizeResourceTarget(target: string | undefined): string | undefined {
+    return target?.replace(/[\\/]/g, sep)
+  }
 
   itRunsUnixShell('keeps the Linux launcher executable in packaged resources', async () => {
     const launcherStats = await stat(linuxLauncherAsset)
@@ -47,7 +67,7 @@ describe('packaged CLI assets', () => {
         await mkdir(launcherDir, { recursive: true })
         await mkdir(cliDir, { recursive: true })
         await copyFile(linuxLauncherAsset, launcherPath)
-        await chmod(launcherPath, 0o755)
+        expect((await stat(launcherPath)).mode & 0o111).not.toBe(0)
         await writeFile(cliPath, '', 'utf8')
         await writeFile(
           electronPath,
@@ -84,4 +104,72 @@ printf 'arg=%s\\n' "$@"
       }
     }
   )
+
+  itRunsUnixShell('runs the AppImage CLI wrapper through APPDIR at runtime', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'orca-appimage-cli-'))
+    try {
+      const appDir = join(root, 'Orca.AppDir')
+      const cliDir = join(appDir, 'resources', 'app.asar.unpacked', 'out', 'cli')
+      const cliPath = join(cliDir, 'index.js')
+      const appImagePath = join(root, "Orca's AppImage.AppImage")
+      const commandPath = join(root, 'orca-ide')
+      await mkdir(cliDir, { recursive: true })
+      await writeFile(
+        cliPath,
+        `exports.main = (argv) => {
+  console.log(JSON.stringify({
+    argv,
+    appDir: process.env.APPDIR,
+    runAsNode: process.env.ELECTRON_RUN_AS_NODE,
+    nodeOptions: process.env.NODE_OPTIONS ?? null,
+    orcaNodeOptions: process.env.ORCA_NODE_OPTIONS ?? null,
+    nodeReplExternalModule: process.env.NODE_REPL_EXTERNAL_MODULE ?? null,
+    orcaNodeReplExternalModule: process.env.ORCA_NODE_REPL_EXTERNAL_MODULE ?? null
+  }))
+}
+`,
+        'utf8'
+      )
+      await writeFile(
+        appImagePath,
+        `#!/usr/bin/env bash
+export APPDIR="$FAKE_APPDIR"
+exec node "$@"
+`,
+        { encoding: 'utf8', mode: 0o755 }
+      )
+      await writeFile(commandPath, buildAppImageCliWrapper(appImagePath), {
+        encoding: 'utf8',
+        mode: 0o755
+      })
+
+      const result = await execFileAsync(commandPath, ['--help', 'two words'], {
+        env: {
+          ...process.env,
+          FAKE_APPDIR: appDir,
+          NODE_OPTIONS: '--trace-warnings',
+          NODE_REPL_EXTERNAL_MODULE: 'external-loader'
+        }
+      })
+      const payload = JSON.parse(result.stdout) as {
+        argv: string[]
+        appDir: string
+        runAsNode: string
+        nodeOptions: string | null
+        orcaNodeOptions: string | null
+        nodeReplExternalModule: string | null
+        orcaNodeReplExternalModule: string | null
+      }
+
+      expect(payload.argv).toEqual(['--help', 'two words'])
+      expect(payload.appDir).toBe(appDir)
+      expect(payload.runAsNode).toBe('1')
+      expect(payload.nodeOptions).toBeNull()
+      expect(payload.orcaNodeOptions).toBe('--trace-warnings')
+      expect(payload.nodeReplExternalModule).toBeNull()
+      expect(payload.orcaNodeReplExternalModule).toBe('external-loader')
+    } finally {
+      await rm(root, { recursive: true, force: true })
+    }
+  })
 })

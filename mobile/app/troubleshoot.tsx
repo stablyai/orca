@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect, useRef } from 'react'
+import { useState, useCallback, useRef } from 'react'
 import {
   View,
   Text,
@@ -14,18 +14,24 @@ import {
   ChevronLeft,
   ChevronDown,
   ChevronUp,
-  WifiOff,
-  Shield,
-  Monitor,
-  Clock,
-  Globe,
   Activity,
   CheckCircle2,
+  ScrollText,
   XCircle,
   AlertTriangle
 } from 'lucide-react-native'
 import { colors, spacing, typography } from '../src/theme/mobile-theme'
 import { loadHosts } from '../src/transport/host-store'
+import {
+  startDiagnosticFetchTimeout,
+  type DiagnosticFetchTimeout
+} from '../src/diagnostics/diagnostic-fetch-timeout'
+import {
+  formatEndpoint,
+  testHostReachability,
+  unreachableHostDetail
+} from '../src/diagnostics/host-reachability'
+import { troubleshootCommonIssues } from '../src/diagnostics/troubleshoot-common-issues'
 
 type DiagnosticStatus = 'idle' | 'running' | 'done'
 
@@ -34,66 +40,6 @@ type CheckResult = {
   status: 'pass' | 'fail' | 'warn'
   detail: string
 }
-
-type TroubleshootSection = {
-  id: string
-  icon: React.ReactNode
-  title: string
-  steps: string[]
-}
-
-const sections: TroubleshootSection[] = [
-  {
-    id: 'wifi',
-    icon: <WifiOff size={16} color={colors.textSecondary} />,
-    title: 'Different WiFi Networks',
-    steps: [
-      'Both devices must be on the same local network.',
-      'Ethernet and WiFi must share the same subnet.',
-      'Try reconnecting WiFi on both devices.'
-    ]
-  },
-  {
-    id: 'firewall',
-    icon: <Shield size={16} color={colors.textSecondary} />,
-    title: 'Firewall Blocking Port 6768',
-    steps: [
-      'macOS: System Settings → Network → Firewall — allow Orca.',
-      'Windows: Defender Firewall → Allow app — enable Orca for Private networks.',
-      'Linux: sudo ufw allow 6768',
-      'Corporate/school networks may block P2P — try a personal hotspot.'
-    ]
-  },
-  {
-    id: 'desktop',
-    icon: <Monitor size={16} color={colors.textSecondary} />,
-    title: 'Desktop App Not Running',
-    steps: [
-      'Orca must be open on your desktop to accept connections.',
-      'Try restarting Orca — the companion server starts on launch.',
-      'After an update, you may need to re-pair via QR code.'
-    ]
-  },
-  {
-    id: 'timeout',
-    icon: <Clock size={16} color={colors.textSecondary} />,
-    title: 'Connection Timeout',
-    steps: [
-      'Check WiFi signal strength on your phone.',
-      'Go back to the host list and tap your host to retry.',
-      'Restart both apps if timeouts persist.'
-    ]
-  },
-  {
-    id: 'vpn',
-    icon: <Globe size={16} color={colors.textSecondary} />,
-    title: 'VPN Interference',
-    steps: [
-      'VPNs can route local traffic through a remote server.',
-      'Disable the VPN or enable split tunneling / "Allow LAN".'
-    ]
-  }
-]
 
 function StatusIcon({ status }: { status: CheckResult['status'] }) {
   switch (status) {
@@ -113,11 +59,19 @@ export default function TroubleshootScreen() {
   const [diagnosticStatus, setDiagnosticStatus] = useState<DiagnosticStatus>('idle')
   const [checks, setChecks] = useState<CheckResult[]>([])
   const abortRef = useRef(false)
+  const diagnosticRunRef = useRef(0)
+  const activeInternetCheckRef = useRef<DiagnosticFetchTimeout | null>(null)
 
-  useEffect(() => {
-    return () => {
-      abortRef.current = true
+  const setTroubleshootRootRef = useCallback((node: View | null): void => {
+    if (node !== null) {
+      return
     }
+    // Why: diagnostics can outlive the screen; cancel the active run when the
+    // route detaches without a passive cleanup-only Effect.
+    abortRef.current = true
+    diagnosticRunRef.current += 1
+    activeInternetCheckRef.current?.dispose()
+    activeInternetCheckRef.current = null
   }, [])
 
   const toggleSection = useCallback((id: string) => {
@@ -125,11 +79,16 @@ export default function TroubleshootScreen() {
   }, [])
 
   const runDiagnostics = useCallback(async () => {
+    const runId = diagnosticRunRef.current + 1
+    diagnosticRunRef.current = runId
     abortRef.current = false
+    activeInternetCheckRef.current?.dispose()
+    activeInternetCheckRef.current = null
     setDiagnosticStatus('running')
     setChecks([])
 
     const results: CheckResult[] = []
+    const isCurrentRun = () => !abortRef.current && diagnosticRunRef.current === runId
 
     try {
       const hosts = await loadHosts()
@@ -142,39 +101,58 @@ export default function TroubleshootScreen() {
       results.push({ label: 'Paired hosts', status: 'warn', detail: 'Could not read host data' })
     }
 
-    if (abortRef.current) return
+    if (!isCurrentRun()) {
+      return
+    }
     setChecks([...results])
 
+    const internetCheck = startDiagnosticFetchTimeout(5000)
+    activeInternetCheckRef.current = internetCheck
     try {
-      const controller = new AbortController()
-      const timeout = setTimeout(() => controller.abort(), 5000)
       const resp = await fetch('https://dns.google/resolve?name=example.com&type=A', {
-        signal: controller.signal
+        signal: internetCheck.signal
       })
-      clearTimeout(timeout)
+      if (!isCurrentRun()) {
+        return
+      }
       results.push(
         resp.ok
           ? { label: 'Internet', status: 'pass', detail: 'Connected' }
           : { label: 'Internet', status: 'warn', detail: 'Unexpected response' }
       )
     } catch {
+      if (!isCurrentRun()) {
+        return
+      }
       results.push({ label: 'Internet', status: 'fail', detail: 'No connection' })
+    } finally {
+      internetCheck.dispose()
+      if (activeInternetCheckRef.current === internetCheck) {
+        activeInternetCheckRef.current = null
+      }
     }
 
-    if (abortRef.current) return
+    if (!isCurrentRun()) {
+      return
+    }
     setChecks([...results])
 
     try {
       const hosts = await loadHosts()
       for (const host of hosts) {
-        if (abortRef.current) return
+        if (!isCurrentRun()) {
+          return
+        }
         const reachable = await testHostReachability(host.endpoint)
+        if (!isCurrentRun()) {
+          return
+        }
         results.push({
           label: host.name,
           status: reachable ? 'pass' : 'fail',
           detail: reachable
             ? `Reachable at ${formatEndpoint(host.endpoint)}`
-            : `Cannot reach ${formatEndpoint(host.endpoint)}`
+            : unreachableHostDetail(host.endpoint)
         })
         setChecks([...results])
       }
@@ -182,7 +160,9 @@ export default function TroubleshootScreen() {
       results.push({ label: 'Hosts', status: 'warn', detail: 'Could not test' })
     }
 
-    if (abortRef.current) return
+    if (!isCurrentRun()) {
+      return
+    }
 
     results.push({
       label: 'Platform',
@@ -195,7 +175,10 @@ export default function TroubleshootScreen() {
   }, [])
 
   return (
-    <View style={[styles.container, { paddingTop: insets.top + spacing.sm }]}>
+    <View
+      ref={setTroubleshootRootRef}
+      style={[styles.container, { paddingTop: insets.top + spacing.sm }]}
+    >
       <View style={styles.topRow}>
         <Pressable style={styles.backButton} onPress={() => router.back()}>
           <ChevronLeft size={22} color={colors.textSecondary} />
@@ -231,6 +214,17 @@ export default function TroubleshootScreen() {
           </Text>
         </Pressable>
 
+        <Pressable
+          style={({ pressed }) => [
+            styles.diagnosticButton,
+            pressed && styles.diagnosticButtonPressed
+          ]}
+          onPress={() => router.push('/connection-log')}
+        >
+          <ScrollText size={16} color={colors.textPrimary} />
+          <Text style={styles.diagnosticButtonLabel}>View connection log</Text>
+        </Pressable>
+
         {checks.length > 0 && (
           <View style={styles.section}>
             {checks.map((check, i) => (
@@ -253,7 +247,7 @@ export default function TroubleshootScreen() {
         <Text style={styles.sectionHeading}>Common issues</Text>
 
         <View style={styles.section}>
-          {sections.map((section, i) => (
+          {troubleshootCommonIssues.map((section, i) => (
             <View key={section.id}>
               {i > 0 && <View style={styles.separator} />}
               <Pressable
@@ -286,40 +280,6 @@ export default function TroubleshootScreen() {
       </ScrollView>
     </View>
   )
-}
-
-// Why: WebSocket reachability is tested by opening a connection and waiting for
-// the server to respond with any frame, or timing out after 4 seconds.
-// We don't complete the E2EE handshake — just verify the endpoint is listening.
-async function testHostReachability(endpoint: string): Promise<boolean> {
-  return new Promise((resolve) => {
-    const timeout = setTimeout(() => {
-      ws.close()
-      resolve(false)
-    }, 4000)
-
-    const ws = new WebSocket(endpoint)
-
-    ws.onopen = () => {
-      clearTimeout(timeout)
-      ws.close()
-      resolve(true)
-    }
-
-    ws.onerror = () => {
-      clearTimeout(timeout)
-      resolve(false)
-    }
-  })
-}
-
-function formatEndpoint(endpoint: string): string {
-  try {
-    const url = new URL(endpoint)
-    return url.host
-  } catch {
-    return endpoint
-  }
 }
 
 const styles = StyleSheet.create({

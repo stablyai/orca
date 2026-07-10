@@ -3,13 +3,21 @@ import { ChevronDown, CircleHelp, RefreshCw } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { cn } from '@/lib/utils'
+import { ContextMenu, ContextMenuTrigger } from '@/components/ui/context-menu'
 import type { GitHistoryItem, GitHistoryResult } from '../../../../shared/git-history'
+import type { GitBranchChangeEntry } from '../../../../shared/types'
 import {
   buildDefaultGitHistoryColorMap,
-  buildGitHistoryViewModels,
-  type GitHistoryItemViewModel
+  buildGitHistoryViewModels
 } from '../../../../shared/git-history-graph'
-import { GitHistoryGraphSvg, graphColor } from './GitHistoryGraphSvg'
+import { GitHistoryRow } from './GitHistoryRow'
+import { GitHistoryCommitFiles, type GitHistoryCommitFilesState } from './GitHistoryCommitFiles'
+import {
+  GitHistoryCommitContextMenu,
+  type GitHistoryCommitAction
+} from './GitHistoryCommitContextMenu'
+import type { SourceControlRowOpenEvent } from './source-control-split-open'
+import { translate } from '@/i18n/i18n'
 
 export type GitHistoryPanelState =
   | { status: 'idle' | 'loading'; result?: GitHistoryResult; error?: string }
@@ -32,168 +40,28 @@ function clampGitHistoryPanelHeight(height: number): number {
   return Math.min(MAX_GIT_HISTORY_PANEL_HEIGHT, Math.max(MIN_GIT_HISTORY_PANEL_HEIGHT, height))
 }
 
-function formatHistoryTimestamp(timestamp: number | undefined): string {
-  if (!timestamp) {
-    return ''
-  }
-  return new Intl.DateTimeFormat(undefined, { month: 'short', day: 'numeric' }).format(
-    new Date(timestamp)
-  )
-}
-
-function GitHistoryRefBadge({
-  itemRef
-}: {
-  itemRef: NonNullable<GitHistoryResult['currentRef']>
-}): React.JSX.Element {
-  const refLabel = itemRef.category ? `${itemRef.name} (${itemRef.category})` : itemRef.name
-
-  return (
-    <Tooltip>
-      <TooltipTrigger asChild>
-        <span
-          className="max-w-[8rem] truncate rounded-full border bg-sidebar px-1.5 py-0.5 text-[10px] leading-none"
-          style={{
-            borderColor: itemRef.color ? graphColor(itemRef.color) : 'var(--border)',
-            color: itemRef.color ? graphColor(itemRef.color) : 'var(--muted-foreground)'
-          }}
-          title={itemRef.name}
-        >
-          {itemRef.name}
-        </span>
-      </TooltipTrigger>
-      <TooltipContent side="bottom" sideOffset={6} className="max-w-72">
-        {refLabel}
-      </TooltipContent>
-    </Tooltip>
-  )
-}
-
-function GitHistoryRow({
-  viewModel,
-  onOpenCommit
-}: {
-  viewModel: GitHistoryItemViewModel
-  onOpenCommit?: (item: GitHistoryItem) => void
-}): React.JSX.Element {
-  const item = viewModel.historyItem
-  const timestamp = formatHistoryTimestamp(item.timestamp)
-  const isBoundaryNode =
-    viewModel.kind === 'incoming-changes' || viewModel.kind === 'outgoing-changes'
-  const canOpenCommit = !isBoundaryNode && Boolean(onOpenCommit)
-  const refs = item.references ?? []
-  const visibleRefs = refs.slice(0, 2)
-  const hiddenRefs = refs.slice(2)
-  const rowTooltip = item.message || item.subject
-  const rowClassName = cn(
-    'grid min-h-[34px] w-full min-w-0 grid-cols-[auto_minmax(0,1fr)_4.5rem_3.25rem_3.75rem] grid-rows-[auto_auto] items-start gap-x-1.5 px-3 py-1 text-left text-xs transition-colors',
-    canOpenCommit && 'cursor-pointer hover:bg-accent/40 focus-visible:bg-accent/40',
-    !canOpenCommit && 'cursor-default',
-    isBoundaryNode && 'text-muted-foreground'
-  )
-  const rowContent = (
-    <>
-      <div className="row-span-2">
-        <GitHistoryGraphSvg viewModel={viewModel} />
-      </div>
-      <div className="min-w-0 overflow-hidden">
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <span className="block min-w-0 truncate text-foreground" title={rowTooltip}>
-              {item.subject}
-            </span>
-          </TooltipTrigger>
-          <TooltipContent side="bottom" sideOffset={6} className="max-w-96 whitespace-pre-wrap">
-            {rowTooltip}
-          </TooltipContent>
-        </Tooltip>
-      </div>
-      {item.author ? (
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <span
-              className="min-w-0 truncate text-right text-[11px] leading-4 text-muted-foreground"
-              title={item.author}
-            >
-              {item.author}
-            </span>
-          </TooltipTrigger>
-          <TooltipContent side="bottom" sideOffset={6} className="max-w-72 break-all">
-            {item.author}
-          </TooltipContent>
-        </Tooltip>
-      ) : (
-        <span className="min-w-0 truncate text-right text-[11px] leading-4 text-muted-foreground" />
-      )}
-      <span className="min-w-0 truncate text-right text-[11px] leading-4 text-muted-foreground">
-        {timestamp}
-      </span>
-      <span className="min-w-0 truncate text-right font-mono text-[10px] leading-4 text-muted-foreground">
-        {!isBoundaryNode ? item.displayId : ''}
-      </span>
-      <div className="col-span-4 col-start-2 min-w-0 overflow-hidden">
-        {refs.length > 0 && (
-          <div className="mt-0.5 flex h-3.5 min-w-0 items-center gap-1 overflow-hidden">
-            {visibleRefs.map((ref) => (
-              <GitHistoryRefBadge key={ref.id} itemRef={ref} />
-            ))}
-            {hiddenRefs.length > 0 && (
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <span
-                    className="shrink-0 text-[10px] leading-none text-muted-foreground"
-                    title={hiddenRefs.map((ref) => ref.name).join(', ')}
-                  >
-                    +{hiddenRefs.length}
-                  </span>
-                </TooltipTrigger>
-                <TooltipContent side="bottom" sideOffset={6} className="max-w-72">
-                  {hiddenRefs.map((ref) => ref.name).join(', ')}
-                </TooltipContent>
-              </Tooltip>
-            )}
-          </div>
-        )}
-      </div>
-    </>
-  )
-
-  if (!canOpenCommit) {
-    return (
-      <div className={rowClassName} title={rowTooltip} data-testid="git-history-row">
-        {rowContent}
-      </div>
-    )
-  }
-
-  return (
-    <button
-      type="button"
-      className={rowClassName}
-      title={rowTooltip}
-      aria-label={`Open commit ${item.displayId ?? item.id}: ${item.subject}`}
-      data-testid="git-history-row"
-      onClick={() => {
-        onOpenCommit?.(item)
-      }}
-    >
-      {rowContent}
-    </button>
-  )
-}
-
 export function GitHistoryPanel({
   state,
   collapsed,
   onToggle,
   onRefresh,
-  onOpenCommit
+  onOpenCommit,
+  onLoadCommitFiles,
+  onOpenCommitFile,
+  onCommitAction
 }: {
   state: GitHistoryPanelState
   collapsed: boolean
   onToggle: () => void
   onRefresh: () => void
   onOpenCommit?: (item: GitHistoryItem) => void
+  onLoadCommitFiles?: (item: GitHistoryItem) => Promise<GitBranchChangeEntry[]>
+  onOpenCommitFile?: (
+    item: GitHistoryItem,
+    entry: GitBranchChangeEntry,
+    event?: SourceControlRowOpenEvent
+  ) => void
+  onCommitAction?: (action: GitHistoryCommitAction, item: GitHistoryItem) => void
 }): React.JSX.Element | null {
   const result = state.result
   const viewModels = useMemo(() => {
@@ -216,6 +84,62 @@ export function GitHistoryPanel({
   const count = result?.items.length ?? 0
   const [panelHeight, setPanelHeight] = useState(DEFAULT_GIT_HISTORY_PANEL_HEIGHT)
   const resizeSessionRef = useRef<GitHistoryResizeSession | null>(null)
+
+  const [expanded, setExpanded] = useState<Set<string>>(() => new Set())
+  const [filesByCommit, setFilesByCommit] = useState<Record<string, GitHistoryCommitFilesState>>({})
+  // Tracks commits whose files have been loaded (or are in flight) so re-expanding
+  // never refetches; an entry is cleared on error to allow a retry.
+  const loadedCommitsRef = useRef<Set<string>>(new Set())
+
+  // A new history result can reorder or replace commits, so drop any expansion
+  // and cached file lists rather than risk showing stale files under a row.
+  useEffect(() => {
+    setExpanded(new Set())
+    setFilesByCommit({})
+    loadedCommitsRef.current = new Set()
+  }, [result])
+
+  const handleToggleExpand = useCallback(
+    (item: GitHistoryItem): void => {
+      const id = item.id
+      const willExpand = !expanded.has(id)
+      setExpanded((prev) => {
+        const next = new Set(prev)
+        if (willExpand) {
+          next.add(id)
+        } else {
+          next.delete(id)
+        }
+        return next
+      })
+      if (!willExpand || !onLoadCommitFiles || loadedCommitsRef.current.has(id)) {
+        return
+      }
+      loadedCommitsRef.current.add(id)
+      setFilesByCommit((prev) => ({ ...prev, [id]: { status: 'loading' } }))
+      onLoadCommitFiles(item)
+        .then((entries) => {
+          setFilesByCommit((prev) => ({ ...prev, [id]: { status: 'ready', entries } }))
+        })
+        .catch((error: unknown) => {
+          loadedCommitsRef.current.delete(id)
+          setFilesByCommit((prev) => ({
+            ...prev,
+            [id]: {
+              status: 'error',
+              error:
+                error instanceof Error
+                  ? error.message
+                  : translate(
+                      'auto.components.right.sidebar.GitHistoryPanel.6d1e0a7c3b',
+                      'Failed to load commit files'
+                    )
+            }
+          }))
+        })
+    },
+    [expanded, onLoadCommitFiles]
+  )
 
   const stopResize = useCallback((): void => {
     const session = resizeSessionRef.current
@@ -295,7 +219,10 @@ export function GitHistoryPanel({
       {!collapsed && (
         <div
           role="separator"
-          aria-label="Resize graph"
+          aria-label={translate(
+            'auto.components.right.sidebar.GitHistoryPanel.e5e81e59a6',
+            'Resize commits'
+          )}
           aria-orientation="horizontal"
           aria-valuemin={MIN_GIT_HISTORY_PANEL_HEIGHT}
           aria-valuemax={MAX_GIT_HISTORY_PANEL_HEIGHT}
@@ -316,7 +243,9 @@ export function GitHistoryPanel({
             <ChevronDown
               className={cn('size-3 shrink-0 transition-transform', collapsed && '-rotate-90')}
             />
-            <span>Graph</span>
+            <span>
+              {translate('auto.components.right.sidebar.GitHistoryPanel.d836037d02', 'Commits')}
+            </span>
             {result && <span className="text-[10px] font-medium tabular-nums">{count}</span>}
             {result?.hasMore && <span className="text-[10px] font-medium">+</span>}
           </button>
@@ -327,7 +256,10 @@ export function GitHistoryPanel({
                 variant="ghost"
                 size="icon-xs"
                 className="my-auto h-auto w-auto p-0.5 text-muted-foreground hover:bg-transparent hover:text-muted-foreground dark:hover:bg-transparent [&_svg]:size-3"
-                aria-label="What are graph refs?"
+                aria-label={translate(
+                  'auto.components.right.sidebar.GitHistoryPanel.9289ba0cb9',
+                  'What are refs?'
+                )}
                 onClick={(event) => {
                   event.stopPropagation()
                 }}
@@ -336,8 +268,10 @@ export function GitHistoryPanel({
               </Button>
             </TooltipTrigger>
             <TooltipContent side="bottom" sideOffset={6} className="max-w-72">
-              Refs are branch or tag names pointing at that exact commit. They only appear where Git
-              has a named ref for the commit.
+              {translate(
+                'auto.components.right.sidebar.GitHistoryPanel.9f7535d22b',
+                'Refs are branch or tag names pointing at that exact commit. They only appear where Git has a named ref for the commit.'
+              )}
             </TooltipContent>
           </Tooltip>
           <Tooltip>
@@ -355,13 +289,19 @@ export function GitHistoryPanel({
                   }
                   onRefresh()
                 }}
-                aria-label="Refresh graph"
+                aria-label={translate(
+                  'auto.components.right.sidebar.GitHistoryPanel.d0fb0f4bf2',
+                  'Refresh commits'
+                )}
               >
                 <RefreshCw className={cn('size-3.5', loading && 'animate-spin')} />
               </Button>
             </TooltipTrigger>
             <TooltipContent side="bottom" sideOffset={6}>
-              Refresh graph
+              {translate(
+                'auto.components.right.sidebar.GitHistoryPanel.d0fb0f4bf2',
+                'Refresh commits'
+              )}
             </TooltipContent>
           </Tooltip>
         </div>
@@ -383,7 +323,12 @@ export function GitHistoryPanel({
           style={expandedBodyStyle}
         >
           <RefreshCw className="size-3 animate-spin" />
-          <span>Loading graph...</span>
+          <span>
+            {translate(
+              'auto.components.right.sidebar.GitHistoryPanel.781a8bcf7b',
+              'Loading graph...'
+            )}
+          </span>
         </div>
       )}
       {!collapsed && result && viewModels.length === 0 && (
@@ -391,18 +336,49 @@ export function GitHistoryPanel({
           className={cn(expandedBodyClassName, 'px-6 py-2 text-[11px] text-muted-foreground')}
           style={expandedBodyStyle}
         >
-          No commits yet
+          {translate('auto.components.right.sidebar.GitHistoryPanel.cf7cad58d2', 'No commits yet')}
         </div>
       )}
       {!collapsed && viewModels.length > 0 && (
         <div className={expandedBodyClassName} style={expandedBodyStyle}>
-          {viewModels.map((viewModel) => (
-            <GitHistoryRow
-              key={`${viewModel.kind}:${viewModel.historyItem.id}`}
-              viewModel={viewModel}
-              onOpenCommit={onOpenCommit}
-            />
-          ))}
+          {viewModels.map((viewModel) => {
+            const item = viewModel.historyItem
+            const isBoundaryNode =
+              viewModel.kind === 'incoming-changes' || viewModel.kind === 'outgoing-changes'
+            const canExpand =
+              !isBoundaryNode && Boolean(onLoadCommitFiles) && Boolean(onOpenCommitFile)
+            const isExpanded = canExpand && expanded.has(item.id)
+            const row = (
+              <GitHistoryRow
+                viewModel={viewModel}
+                expanded={isExpanded}
+                preserveRefIds={result?.baseRef ? [result.baseRef.id] : undefined}
+                onOpenCommit={onOpenCommit}
+                onToggleExpand={canExpand ? handleToggleExpand : undefined}
+              />
+            )
+            return (
+              <React.Fragment key={`${viewModel.kind}:${item.id}`}>
+                {onCommitAction && !isBoundaryNode ? (
+                  <ContextMenu>
+                    <ContextMenuTrigger asChild>{row}</ContextMenuTrigger>
+                    <GitHistoryCommitContextMenu item={item} onAction={onCommitAction} />
+                  </ContextMenu>
+                ) : (
+                  row
+                )}
+                {isExpanded && (
+                  <GitHistoryCommitFiles
+                    state={filesByCommit[item.id] ?? { status: 'loading' }}
+                    author={item.author}
+                    timestamp={item.timestamp}
+                    onOpenFile={(entry, event) => onOpenCommitFile?.(item, entry, event)}
+                    onOpenAll={onOpenCommit ? () => onOpenCommit(item) : undefined}
+                  />
+                )}
+              </React.Fragment>
+            )
+          })}
         </div>
       )}
     </div>

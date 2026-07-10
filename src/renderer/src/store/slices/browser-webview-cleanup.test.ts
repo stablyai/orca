@@ -5,7 +5,11 @@ vi.mock('../../components/browser-pane/webview-registry', () => ({
   destroyPersistentWebview: vi.fn()
 }))
 
-import { collectBrowserWebviewIds, destroyWorkspaceWebviews } from './browser-webview-cleanup'
+import {
+  collectBrowserWebviewIds,
+  destroyRemovedBrowserWebview,
+  destroyWorkspaceWebviews
+} from './browser-webview-cleanup'
 import { destroyPersistentWebview } from '../../components/browser-pane/webview-registry'
 
 function workspace(id: string): BrowserWorkspace {
@@ -63,6 +67,12 @@ describe('collectBrowserWebviewIds', () => {
 describe('destroyWorkspaceWebviews', () => {
   beforeEach(() => {
     vi.mocked(destroyPersistentWebview).mockClear()
+  })
+
+  it('destroys the webview when the backing page is removed', () => {
+    destroyRemovedBrowserWebview('page-1')
+
+    expect(destroyPersistentWebview).toHaveBeenCalledWith('page-1')
   })
 
   it('destroys every page id for a multi-page workspace', () => {

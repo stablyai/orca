@@ -45,6 +45,25 @@ describe('parseNumstat', () => {
     expect(plain.get('new.ts')).toEqual({ added: 2, removed: 1 })
   })
 
+  it('keeps literal rename-marker filenames when parsing NUL-delimited numstat', () => {
+    const stats = parseNumstat('1\t0\tdocs/a => b.txt\0')
+
+    expect(stats.get('docs/a => b.txt')).toEqual({ added: 1, removed: 0 })
+  })
+
+  it('keys NUL-delimited renames to the post-rename path', () => {
+    const stats = parseNumstat('2\t1\t\0old.ts\0new.ts\0')
+
+    expect(stats.get('new.ts')).toEqual({ added: 2, removed: 1 })
+  })
+
+  it('decodes Git C-quoted paths before keying stats', () => {
+    expect(parseNumstat('1\t1\t"tab\\tfile.txt"\n').get('tab\tfile.txt')).toEqual({
+      added: 1,
+      removed: 1
+    })
+  })
+
   it('ignores blank lines', () => {
     expect(parseNumstat('').size).toBe(0)
   })
@@ -115,6 +134,23 @@ describe('collectUntrackedAdditions', () => {
 
     expect(stats.get('cached.ts')).toEqual({ added: 3 })
     expect(readFileMock).toHaveBeenCalledTimes(1)
+  })
+
+  it('keeps the cache effective across polls for a status-limit-sized change set', async () => {
+    // Why: git status caps at DEFAULT_GIT_STATUS_LIMIT (10,000) entries. A
+    // cache smaller than one scan FIFO-evicts every entry mid-scan, so the
+    // next poll re-reads every file (#8013). Scan the full limit twice; the
+    // second pass must be stat-only.
+    lstatMock.mockResolvedValue(mockFileStat(5, 7))
+    readFileMock.mockResolvedValue(Buffer.from('a\nb\nc'))
+    const paths = Array.from({ length: 10_000 }, (_, i) => `poll-scale/file-${i}.ts`)
+
+    await collectUntrackedAdditions('/repo', paths)
+    const firstPassReads = readFileMock.mock.calls.length
+    await collectUntrackedAdditions('/repo', paths)
+
+    expect(firstPassReads).toBe(paths.length)
+    expect(readFileMock).toHaveBeenCalledTimes(paths.length)
   })
 })
 

@@ -1,6 +1,5 @@
-/* eslint-disable max-lines -- Why: SSH config parsing fixtures cover OpenSSH file parsing and ssh -G output together so import and connection resolution stay aligned. */
 import { describe, expect, it, vi } from 'vitest'
-import { join } from 'path'
+import { join } from 'node:path'
 import { parseSshConfig, sshConfigHostsToTargets, parseSshGOutput } from './ssh-config-parser'
 
 vi.mock('os', () => ({
@@ -104,6 +103,46 @@ Host myserver
     expect(hosts[0].identityFile).toBe(testHomePath('.ssh', 'id_ed25519'))
   })
 
+  it('parses quoted scalar values like OpenSSH', () => {
+    const config = `
+Host quoted
+  HostName "localhost" # local test
+  User "deploy" # deploy user
+  Port "2202" # ssh port
+  IdentityFile "~/.ssh/id with space" # private key
+  IdentityAgent "~/.1password/agent sock" # agent socket
+  IdentitiesOnly "yes" # limit keys
+  ProxyJump "bastion" # jump host
+`
+    const hosts = parseSshConfig(config)
+    expect(hosts[0]).toEqual({
+      host: 'quoted',
+      hostname: 'localhost',
+      user: 'deploy',
+      port: 2202,
+      identityFile: testHomePath('.ssh', 'id with space'),
+      identityAgent: testHomePath('.1password', 'agent sock'),
+      identitiesOnly: true,
+      proxyJump: 'bastion'
+    })
+  })
+
+  it('parses equals-form scalar directives', () => {
+    const config = `
+Host eq
+  HostName=eq.example.com
+  User=deploy
+  Port=2202
+`
+    const hosts = parseSshConfig(config)
+    expect(hosts[0]).toEqual({
+      host: 'eq',
+      hostname: 'eq.example.com',
+      user: 'deploy',
+      port: 2202
+    })
+  })
+
   it('parses IdentityAgent with ~ expansion', () => {
     const config = `
 Host myserver
@@ -136,6 +175,15 @@ Host internal
     expect(hosts[0].proxyCommand).toBe('ssh -W %h:%p bastion')
     expect(hosts[0].proxyUseFdpass).toBe(true)
     expect(hosts[0].proxyJump).toBe('bastion.example.com')
+  })
+
+  it('preserves ProxyCommand as the rest of the line', () => {
+    const config = `
+Host internal
+  ProxyCommand sh -c "nc %h %p" # shell comment
+`
+    const hosts = parseSshConfig(config)
+    expect(hosts[0].proxyCommand).toBe('sh -c "nc %h %p" # shell comment')
   })
 
   it('ignores comments and blank lines', () => {
@@ -458,5 +506,26 @@ describe('parseSshGOutput', () => {
     const output = 'hostname example.com\nidentitiesonly yes\nport 22'
     const result = parseSshGOutput(output)
     expect(result.identitiesOnly).toBe(true)
+  })
+
+  it('parses controlmaster options and filters controlpath none', () => {
+    const output = [
+      'hostname example.com',
+      'controlmaster auto',
+      'controlpath ~/.ssh/cm/%r@%h:%p',
+      'controlpersist 10m',
+      'port 22'
+    ].join('\n')
+    const result = parseSshGOutput(output)
+    expect(result.controlMaster).toBe('auto')
+    expect(result.controlPath).toBe(testHomePath('.ssh', 'cm', '%r@%h:%p'))
+    expect(result.controlPersist).toBe('10m')
+
+    const noneResult = parseSshGOutput(
+      'hostname example.com\ncontrolmaster no\ncontrolpath none\ncontrolpersist no\nport 22'
+    )
+    expect(noneResult.controlMaster).toBe('no')
+    expect(noneResult.controlPath).toBeUndefined()
+    expect(noneResult.controlPersist).toBe('no')
   })
 })

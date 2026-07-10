@@ -28,6 +28,11 @@ vi.mock('./browser-manager', () => ({
 import { browserSessionRegistry } from './browser-session-registry'
 import { setupClientHintsOverride } from './browser-session-ua'
 import { ORCA_BROWSER_PARTITION } from '../../shared/constants'
+import {
+  DEFAULT_LOCAL_ORCA_PROFILE_ID,
+  getOrcaProfileBrowserDefaultPartition,
+  getOrcaProfileBrowserSessionPartition
+} from '../../shared/orca-profiles'
 
 describe('BrowserSessionRegistry', () => {
   beforeEach(() => {
@@ -39,6 +44,7 @@ describe('BrowserSessionRegistry', () => {
     sessionFromPartitionMock.mockReturnValue({
       setPermissionRequestHandler: vi.fn(),
       setPermissionCheckHandler: vi.fn(),
+      setDevicePermissionHandler: vi.fn(),
       setDisplayMediaRequestHandler: vi.fn(),
       on: vi.fn(),
       removeListener: vi.fn(),
@@ -105,6 +111,17 @@ describe('BrowserSessionRegistry', () => {
     expect(browserSessionRegistry.resolvePartition('nonexistent')).toBe(ORCA_BROWSER_PARTITION)
   })
 
+  it('strictly resolves known profile partitions without downgrading unknown profiles', () => {
+    const profile = browserSessionRegistry.createProfile('isolated', 'Strict Resolve')
+    expect(profile).not.toBeNull()
+
+    expect(browserSessionRegistry.resolveKnownPartition(null)).toBe(ORCA_BROWSER_PARTITION)
+    expect(browserSessionRegistry.resolveKnownPartition(undefined)).toBe(ORCA_BROWSER_PARTITION)
+    expect(browserSessionRegistry.resolveKnownPartition('default')).toBe(ORCA_BROWSER_PARTITION)
+    expect(browserSessionRegistry.resolveKnownPartition(profile!.id)).toBe(profile!.partition)
+    expect(browserSessionRegistry.resolveKnownPartition('missing-profile')).toBeNull()
+  })
+
   it('lists all profiles', () => {
     const before = browserSessionRegistry.listProfiles().length
     browserSessionRegistry.createProfile('isolated', 'List Test')
@@ -157,6 +174,7 @@ describe('BrowserSessionRegistry', () => {
     expect(mockSession.removeListener).toHaveBeenCalledWith('will-download', downloadHandler)
     expect(mockSession.setPermissionRequestHandler).toHaveBeenLastCalledWith(null)
     expect(mockSession.setPermissionCheckHandler).toHaveBeenLastCalledWith(null)
+    expect(mockSession.setDevicePermissionHandler).toHaveBeenLastCalledWith(null)
     expect(mockSession.setDisplayMediaRequestHandler).toHaveBeenLastCalledWith(null)
   })
 
@@ -185,6 +203,7 @@ describe('BrowserSessionRegistry', () => {
     const mockSession = sessionFromPartitionMock.mock.results[0]?.value
     expect(mockSession?.setPermissionRequestHandler).toHaveBeenCalled()
     expect(mockSession?.setPermissionCheckHandler).toHaveBeenCalled()
+    expect(mockSession?.setDevicePermissionHandler).toHaveBeenCalled()
   })
 
   it('routes media permission requests through macOS TCC for isolated partitions', async () => {
@@ -203,7 +222,91 @@ describe('BrowserSessionRegistry', () => {
     await vi.waitFor(() => expect(cb).toHaveBeenCalledWith(true))
 
     expect(checkHandler(null, 'media', '', { mediaType: 'video' })).toBe(true)
-    expect(checkHandler(null, 'notifications', '', {})).toBe(false)
+    expect(checkHandler(null, 'notifications', '', {})).toBe(true)
+    expect(checkHandler(null, 'persistent-storage', '', {})).toBe(true)
+    expect(checkHandler(null, 'geolocation', '', {})).toBe(false)
+  })
+
+  it('wires WebAuthn device selection for isolated partitions', () => {
+    browserSessionRegistry.createProfile('isolated', 'Security Key Test')
+    const mockSession = sessionFromPartitionMock.mock.results[0]?.value
+    const devicePermissionHandler = mockSession.setDevicePermissionHandler.mock.calls[0][0]
+    const checkHandler = mockSession.setPermissionCheckHandler.mock.calls[0][0]
+
+    expect(
+      devicePermissionHandler({
+        deviceType: 'hid',
+        origin: 'https://github.com',
+        device: { collections: [{ usagePage: 0xf1d0 }] }
+      })
+    ).toBe(true)
+    expect(
+      devicePermissionHandler({
+        deviceType: 'hid',
+        origin: 'http://[::1]:5173',
+        device: { collections: [{ usagePage: 0xf1d0 }] }
+      })
+    ).toBe(true)
+    expect(
+      devicePermissionHandler({
+        deviceType: 'hid',
+        origin: 'https://github.com',
+        device: { collections: [{ usagePage: 1 }] }
+      })
+    ).toBe(false)
+    expect(checkHandler(null, 'hid', '', { securityOrigin: 'https://github.com' })).toBe(true)
+
+    const selectHidHandler = mockSession.on.mock.calls.find(
+      ([eventName]) => eventName === 'select-hid-device'
+    )?.[1]
+    const hidCallback = vi.fn()
+    selectHidHandler(
+      { preventDefault: vi.fn() },
+      {
+        frame: { url: 'https://github.com' },
+        deviceList: [
+          { deviceId: 'keyboard', collections: [{ usagePage: 1 }] },
+          { deviceId: 'security-key', collections: [{ usagePage: 0xf1d0 }] }
+        ]
+      },
+      hidCallback
+    )
+    expect(hidCallback).toHaveBeenCalledWith('security-key')
+
+    const selectWebAuthnHandler = mockSession.on.mock.calls.find(
+      ([eventName]) => eventName === 'select-webauthn-account'
+    )?.[1]
+    const webAuthnCallback = vi.fn()
+    selectWebAuthnHandler(
+      { preventDefault: vi.fn() },
+      { accounts: [{ credentialId: 'credential-1' }] },
+      webAuthnCallback
+    )
+    expect(webAuthnCallback).toHaveBeenCalledWith('credential-1')
+  })
+
+  it('uses profile-owned partitions for non-default Orca profiles', () => {
+    const orcaProfileId = 'local-work'
+    browserSessionRegistry.configureForOrcaProfile({
+      orcaProfileId,
+      profileDirectory: '/profiles/local-work'
+    })
+
+    expect(browserSessionRegistry.getDefaultProfile().partition).toBe(
+      getOrcaProfileBrowserDefaultPartition(orcaProfileId)
+    )
+    expect(browserSessionRegistry.isAllowedPartition(ORCA_BROWSER_PARTITION)).toBe(false)
+
+    const profile = browserSessionRegistry.createProfile('isolated', 'Work Browser')
+    expect(profile).not.toBeNull()
+    expect(profile!.partition).toBe(
+      getOrcaProfileBrowserSessionPartition(orcaProfileId, profile!.id)
+    )
+
+    browserSessionRegistry.configureForOrcaProfile({
+      orcaProfileId: DEFAULT_LOCAL_ORCA_PROFILE_ID,
+      profileDirectory: '/profiles/local-default'
+    })
   })
 
   describe('setupClientHintsOverride', () => {

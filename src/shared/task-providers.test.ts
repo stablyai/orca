@@ -16,7 +16,7 @@ describe('task providers', () => {
   })
 
   it('falls back to all providers when none are visible', () => {
-    expect(normalizeVisibleTaskProviders([])).toEqual(['github', 'gitlab', 'linear'])
+    expect(normalizeVisibleTaskProviders([])).toEqual(['github', 'gitlab', 'linear', 'jira'])
   })
 
   it('restores a valid saved default when provider settings drifted', () => {
@@ -35,7 +35,7 @@ describe('task providers', () => {
     expect(
       normalizeTaskProviderSettings({
         visibleTaskProviders: ['gitlab'],
-        defaultTaskSource: 'jira'
+        defaultTaskSource: 'bitbucket'
       })
     ).toEqual({
       defaultTaskSource: 'gitlab',
@@ -103,7 +103,7 @@ describe('task providers', () => {
           gitlabInstalled: false,
           linearConnected: true
         },
-        'jira'
+        'bitbucket'
       )
     ).toEqual(['github'])
   })

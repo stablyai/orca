@@ -1,10 +1,10 @@
-import { existsSync } from 'fs'
-import { execFile } from 'child_process'
-import { join } from 'path'
-import { homedir } from 'os'
+import { existsSync } from 'node:fs'
+import { join } from 'node:path'
+import { homedir } from 'node:os'
 import type { SshTarget } from '../../shared/ssh-types'
 import { expandSshConfigIncludes } from './ssh-config-include-expander'
 import { resolveSshConfigHomePath } from './ssh-config-path-expansion'
+export { parseSshGOutput, resolveWithSshG, type SshResolvedConfig } from './ssh-g-config-resolution'
 
 export type SshConfigHost = {
   host: string
@@ -34,21 +34,19 @@ export function parseSshConfig(content: string): SshConfigHost[] {
       continue
     }
 
-    const match = line.match(/^(\S+)\s+(.+)$/)
-    if (!match) {
+    const directive = parseConfigDirective(line)
+    if (!directive) {
       continue
     }
 
-    const [, keyword, rawValue] = match
-    const key = keyword.toLowerCase()
-    const value = rawValue.trim()
+    const { key, rawValue } = directive
 
     if (key === 'host') {
       if (current.length > 0) {
         appendHosts(hosts, current)
       }
 
-      const patterns = splitHostPatterns(value)
+      const patterns = splitHostPatterns(rawValue)
       const concretePatterns = patterns.filter(
         (pattern) => !pattern.startsWith('!') && !pattern.includes('*') && !pattern.includes('?')
       )
@@ -73,6 +71,8 @@ export function parseSshConfig(content: string): SshConfigHost[] {
       continue
     }
 
+    const value = parseScalarConfigValue(rawValue)
+
     switch (key) {
       case 'hostname':
         for (const host of current) {
@@ -81,7 +81,7 @@ export function parseSshConfig(content: string): SshConfigHost[] {
         break
       case 'port':
         for (const host of current) {
-          host.port = parseInt(value, 10) || 22
+          host.port = Number.parseInt(value, 10) || 22
         }
         break
       case 'user':
@@ -106,7 +106,9 @@ export function parseSshConfig(content: string): SshConfigHost[] {
         break
       case 'proxycommand':
         for (const host of current) {
-          host.proxyCommand = value
+          // Why: OpenSSH treats ProxyCommand as a shell snippet and preserves
+          // the rest of the line, including quotes and `#` characters.
+          host.proxyCommand = rawValue.trim()
         }
         break
       case 'proxyusefdpass':
@@ -136,8 +138,30 @@ function appendHosts(target: SshConfigHost[], entries: SshConfigHost[]): void {
   }
 }
 
+function parseConfigDirective(line: string): { key: string; rawValue: string } | null {
+  const match = line.match(/^([^=\s]+)(?:\s*=\s*|\s+)(.*)$/)
+  if (!match) {
+    return null
+  }
+
+  return {
+    key: match[1].toLowerCase(),
+    rawValue: match[2].trim()
+  }
+}
+
+function parseScalarConfigValue(input: string): string {
+  // Why: scalar OpenSSH directives strip wrapping quotes and inline comments;
+  // keeping them would turn valid config values into bad hostnames/users/paths.
+  return splitOpenSshArguments(input)[0] ?? ''
+}
+
 function splitHostPatterns(input: string): string[] {
-  const patterns: string[] = []
+  return splitOpenSshArguments(input)
+}
+
+function splitOpenSshArguments(input: string): string[] {
+  const args: string[] = []
   let current = ''
   let inQuotes = false
   let escaped = false
@@ -166,7 +190,7 @@ function splitHostPatterns(input: string): string[] {
 
     if (!inQuotes && /\s/.test(char)) {
       if (current) {
-        patterns.push(current)
+        args.push(current)
         current = ''
       }
       continue
@@ -176,10 +200,10 @@ function splitHostPatterns(input: string): string[] {
   }
 
   if (current) {
-    patterns.push(current)
+    args.push(current)
   }
 
-  return patterns
+  return args
 }
 
 /** Read and parse the user's ~/.ssh/config file. Returns empty array if not found. */
@@ -231,105 +255,4 @@ export function sshConfigHostsToTargets(
   }
 
   return targets
-}
-// ── ssh -G config resolution ──────────────────────────────────────────
-
-export type SshResolvedConfig = {
-  hostname: string
-  user?: string
-  port: number
-  identityFile: string[]
-  identityAgent?: string
-  identitiesOnly: boolean
-  forwardAgent: boolean
-  proxyCommand?: string
-  proxyUseFdpass: boolean
-  proxyJump?: string
-}
-
-const SSH_G_TIMEOUT_MS = 5000
-
-// Why: `ssh -G <host>` asks OpenSSH to resolve the full effective config
-// for a host, including Include directives, Match blocks, wildcard
-// inheritance, and ProxyCommand expansion. This gives us correct config
-// resolution without reimplementing OpenSSH's complex matching logic.
-export function resolveWithSshG(host: string): Promise<SshResolvedConfig | null> {
-  return new Promise((resolve) => {
-    let settled = false
-    let child: ReturnType<typeof execFile> | undefined
-    const timer = setTimeout(() => {
-      if (settled) {
-        return
-      }
-      settled = true
-      child?.kill()
-      resolve(null)
-    }, SSH_G_TIMEOUT_MS)
-
-    const settle = (callback: () => void): void => {
-      if (settled) {
-        return
-      }
-      settled = true
-      clearTimeout(timer)
-      callback()
-    }
-
-    // Why: '--' prevents a host label starting with '-' from being interpreted
-    // as an SSH flag (classic argument injection vector).
-    // Why: execFile's timeout only signals ssh; a stuck callback must still
-    // release SSH import/connection resolution with the existing null fallback.
-    try {
-      child = execFile('ssh', ['-G', '--', host], { timeout: SSH_G_TIMEOUT_MS }, (err, stdout) => {
-        if (err) {
-          settle(() => resolve(null))
-          return
-        }
-        settle(() => resolve(parseSshGOutput(stdout)))
-      })
-    } catch {
-      settle(() => resolve(null))
-    }
-  })
-}
-
-export function parseSshGOutput(stdout: string): SshResolvedConfig {
-  const map = new Map<string, string>()
-  const identityFiles: string[] = []
-
-  for (const line of stdout.split('\n')) {
-    const spaceIdx = line.indexOf(' ')
-    if (spaceIdx === -1) {
-      continue
-    }
-    const key = line.substring(0, spaceIdx).toLowerCase()
-    const value = line.substring(spaceIdx + 1).trim()
-    if (key === 'identityfile') {
-      identityFiles.push(resolveSshConfigHomePath(value))
-    } else {
-      map.set(key, value)
-    }
-  }
-
-  // Why: `ssh -G` outputs `proxycommand none` / `proxyjump none` when no
-  // proxy is configured. Treating "none" as real would spawn bad commands.
-  const rawProxy = map.get('proxycommand')
-  const proxyCommand = rawProxy && rawProxy !== 'none' ? rawProxy : undefined
-  const rawJump = map.get('proxyjump')
-  const proxyJump = rawJump && rawJump !== 'none' ? rawJump : undefined
-  const rawIdentityAgent = map.get('identityagent')
-  const identityAgent = rawIdentityAgent ? resolveSshConfigHomePath(rawIdentityAgent) : undefined
-
-  return {
-    hostname: map.get('hostname') ?? '',
-    user: map.get('user') || undefined,
-    port: parseInt(map.get('port') ?? '22', 10),
-    identityFile: identityFiles,
-    identityAgent,
-    identitiesOnly: map.get('identitiesonly') === 'yes',
-    forwardAgent: map.get('forwardagent') === 'yes',
-    proxyCommand,
-    proxyUseFdpass: map.get('proxyusefdpass') === 'yes',
-    proxyJump
-  }
 }

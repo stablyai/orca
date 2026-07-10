@@ -1,7 +1,11 @@
-import { describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { consumeBrowserFocusRequest, queueBrowserFocusRequest } from './browser-focus'
 
 describe('browser-focus', () => {
+  afterEach(() => {
+    vi.useRealTimers()
+  })
+
   it('queues and consumes one browser focus request per page id', () => {
     queueBrowserFocusRequest({ pageId: 'page-1', target: 'webview' })
 
@@ -18,5 +22,15 @@ describe('browser-focus', () => {
 
   it('returns null for a page id that was never queued', () => {
     expect(consumeBrowserFocusRequest('nonexistent-page')).toBeNull()
+  })
+
+  it('expires unconsumed requests for pages that never mount', () => {
+    vi.useFakeTimers()
+
+    queueBrowserFocusRequest({ pageId: 'page-stale', target: 'webview' })
+
+    vi.advanceTimersByTime(30_000)
+
+    expect(consumeBrowserFocusRequest('page-stale')).toBeNull()
   })
 })

@@ -1,5 +1,9 @@
+import type { TaskSourceContext } from '../../shared/task-source-context'
+
 export type WorkItemArgs = {
   repoPath: string
+  repoId?: string | null
+  sourceContext?: TaskSourceContext | null
   number: number
   type?: 'issue' | 'pr'
 }
@@ -7,6 +11,10 @@ export type WorkItemArgs = {
 type RegisteredRepoContext = {
   path: string
   connectionId?: string | null
+}
+
+type LocalGitExecOptions = {
+  wslDistro?: string
 }
 
 // Why: renderer input crosses the IPC boundary and is untrusted. Reject
@@ -20,13 +28,15 @@ export function dispatchWorkItem<T>(
     path: string,
     n: number,
     t?: 'issue' | 'pr',
-    connectionId?: string | null
-  ) => Promise<T | null>
+    connectionId?: string | null,
+    localGitOptions?: LocalGitExecOptions
+  ) => Promise<T | null>,
+  localGitOptions?: LocalGitExecOptions
 ): Promise<T | null> | null {
   const { number, type } = args
   if (typeof number !== 'number' || !Number.isInteger(number) || number < 1) {
     return null
   }
   const safeType = type === 'issue' || type === 'pr' ? type : undefined
-  return fn(repo.path, number, safeType, repo.connectionId ?? null)
+  return fn(repo.path, number, safeType, repo.connectionId ?? null, localGitOptions)
 }

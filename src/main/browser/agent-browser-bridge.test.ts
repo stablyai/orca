@@ -29,6 +29,7 @@ const { CdpWsProxyMock } = vi.hoisted(() => {
   const instances: unknown[] = []
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const MockClass = vi.fn().mockImplementation(function (this: any, _wc: unknown) {
+    this._wc = _wc
     this.start = vi.fn(async () => 'ws://127.0.0.1:9222')
     this.stop = vi.fn(async () => {})
     this.getPort = vi.fn(() => 9222)
@@ -50,8 +51,17 @@ vi.mock('./cdp-bridge', () => ({
   }
 }))
 
-import { AgentBrowserBridge } from './agent-browser-bridge'
+import {
+  AGENT_BROWSER_CLIPBOARD_WRITE_MAX_BYTES,
+  AGENT_BROWSER_TEXT_ARGUMENT_MAX_BYTES,
+  AgentBrowserBridge
+} from './agent-browser-bridge'
 import type { BrowserManager } from './browser-manager'
+import {
+  CLIPBOARD_TEXT_MEASURE_YIELD_CODE_UNITS,
+  CLIPBOARD_TEXT_WRITE_MAX_BYTES,
+  CLIPBOARD_TEXT_WRITE_TOO_LARGE_ERROR
+} from '../../shared/clipboard-text'
 
 // Why: the bridge resolves webContents via dynamic require('electron').webContents.fromId
 // inside a try/catch. Override the private method to inject our mock.
@@ -69,6 +79,7 @@ function mockBrowserManager(
     getWebContentsIdByTabId: () => tabs,
     getWorktreeIdForTab: (tabId: string) => worktrees.get(tabId),
     getGuestWebContentsId: vi.fn(() => null),
+    unregisterGuest: vi.fn(),
     ensureWebviewVisible: vi.fn(async () => () => {}),
     acquireAutomationVisibility: vi.fn(async () => () => {}),
     ...overrides
@@ -104,6 +115,103 @@ function failWith(error: string): void {
   execFileMock.mockImplementation((_bin: string, _args: string[], _opts: unknown, cb: Function) => {
     cb(null, JSON.stringify({ success: false, error }), '')
   })
+}
+
+class TestEvent {
+  type: string
+  bubbles: boolean
+
+  constructor(type: string, init?: { bubbles?: boolean }) {
+    this.type = type
+    this.bubbles = init?.bubbles ?? false
+  }
+}
+
+type FillEvalNode = {
+  tagName: string
+  getAttribute: (name: string) => string | null
+  matches: (selector: string) => boolean
+  querySelector?: (selector: string) => FillEvalNode | null
+  dispatchEvent: (event: TestEvent) => boolean
+  value: string
+}
+
+function matchesFillEvalSelector(node: FillEvalNode, selector: string): boolean {
+  return selector.split(',').some((candidate) => {
+    const trimmed = candidate.trim()
+    if (trimmed === 'textarea') {
+      return node.tagName === 'TEXTAREA'
+    }
+    if (!trimmed.startsWith('input') || node.tagName !== 'INPUT') {
+      return false
+    }
+    const excludedTypes = [...trimmed.matchAll(/:not\(\[type='([^']+)'\]\)/g)].map((match) =>
+      match[1].toLowerCase()
+    )
+    const inputType = node.getAttribute('type')?.toLowerCase() ?? ''
+    return !excludedTypes.includes(inputType)
+  })
+}
+
+function createFillEvalNode(options: {
+  tagName: string
+  role?: string
+  ariaControls?: string
+  descendant?: FillEvalNode | null
+  descendants?: FillEvalNode[]
+  type?: string
+}) {
+  const events: TestEvent[] = []
+  let value = ''
+  const proto = {
+    get value() {
+      return value
+    },
+    set value(next: string) {
+      value = next
+    }
+  }
+  const node = Object.create(proto) as FillEvalNode
+
+  node.tagName = options.tagName
+  node.getAttribute = (name: string) => {
+    if (name === 'role') {
+      return options.role ?? null
+    }
+    if (name === 'aria-controls') {
+      return options.ariaControls ?? null
+    }
+    if (name === 'type') {
+      return options.type ?? null
+    }
+    return null
+  }
+  node.matches = vi.fn((selector: string) => matchesFillEvalSelector(node, selector))
+  const descendants = options.descendants ?? (options.descendant ? [options.descendant] : [])
+  node.querySelector = vi.fn(
+    (selector: string) => descendants.find((descendant) => descendant.matches(selector)) ?? null
+  )
+  node.dispatchEvent = vi.fn((event: TestEvent) => {
+    events.push(event)
+    return true
+  })
+
+  return {
+    node,
+    events,
+    get value() {
+      return value
+    }
+  }
+}
+
+function runFillEvalExpressions(
+  expressions: string[],
+  document: { activeElement: unknown; getElementById: (id: string) => unknown }
+): void {
+  for (const expression of expressions) {
+    new Function('document', 'Event', `return (${expression})`)(document, TestEvent)
+  }
 }
 
 const CDP_DISCOVERY_FAILURE =
@@ -307,7 +415,9 @@ describe('AgentBrowserBridge', () => {
 
   it('strips --cdp and --session from exec commands', async () => {
     succeedWith({ output: 'ok' })
-    await bridge.exec('dblclick @e3 --cdp ws://evil --session hijack')
+    await bridge.exec(
+      'dblclick @e3 --cdp ws://evil --session hijack --cdp=ws://evil-equals --session=hijack-equals'
+    )
 
     // Why: find the actual exec call (contains 'dblclick'), not the stale-session close
     const execCall = execFileMock.mock.calls.find((c: unknown[]) =>
@@ -315,9 +425,11 @@ describe('AgentBrowserBridge', () => {
     )
     const args = execCall![1] as string[]
     // The bridge's own --session and --cdp (for session init) are expected.
-    // Verify the user-injected ones were stripped: no 'ws://evil' or 'hijack'
+    // Verify the user-injected ones were stripped, including --flag=value forms.
     expect(args.join(' ')).not.toContain('ws://evil')
+    expect(args.join(' ')).not.toContain('ws://evil-equals')
     expect(args.join(' ')).not.toContain('hijack')
+    expect(args.join(' ')).not.toContain('hijack-equals')
     expect(args).toContain('dblclick')
     expect(args).toContain('@e3')
   })
@@ -372,6 +484,21 @@ describe('AgentBrowserBridge', () => {
         { browserPageId: 'tab-b', active: false }
       ])
       expect(b.getActiveWebContentsId()).toBeNull()
+    })
+
+    it('unregisters stale tab-list entries when their WebContents is gone', () => {
+      const tabs = new Map([
+        ['tab-a', 1],
+        ['tab-b', 2]
+      ])
+      const wc2 = mockWebContents(2, 'https://b.com', 'B')
+      webContentsFromIdMock.mockImplementation((id: number) => (id === 2 ? wc2 : null))
+      const unregisterGuest = vi.fn()
+
+      const b = new AgentBrowserBridge(mockBrowserManager(tabs, new Map(), { unregisterGuest }))
+
+      expect(b.tabList().tabs).toMatchObject([{ browserPageId: 'tab-b', active: true }])
+      expect(unregisterGuest).toHaveBeenCalledWith('tab-a')
     })
   })
 
@@ -432,6 +559,68 @@ describe('AgentBrowserBridge', () => {
     expect(mouseCalls).toHaveLength(2)
     expect(mouseCalls[0]?.[1]).toMatchObject({ type: 'mousePressed', x: 10, y: 20 })
     expect(mouseCalls[1]?.[1]).toMatchObject({ type: 'mouseReleased', x: 10, y: 20 })
+  })
+
+  it('passes mobile click modifiers through to CDP mouse events', async () => {
+    const wc = mockWebContents(100)
+    wc.debugger.sendCommand.mockImplementation(async (method: string) => {
+      if (method === 'Runtime.evaluate') {
+        return { result: { value: { x: 10, y: 20, adjusted: false, handled: false } } }
+      }
+      return {}
+    })
+    webContentsFromIdMock.mockReturnValue(wc)
+
+    await bridge.mouseClick(10, 20, 'left', undefined, 'tab-1', 18, ['cmd', 'shift'])
+
+    const mouseCalls = wc.debugger.sendCommand.mock.calls.filter(
+      (call) => call[0] === 'Input.dispatchMouseEvent'
+    )
+    expect(mouseCalls[0]?.[1]).toMatchObject({ type: 'mousePressed', modifiers: 12 })
+    expect(mouseCalls[1]?.[1]).toMatchObject({ type: 'mouseReleased', modifiers: 12 })
+  })
+
+  it('keeps adjusted mobile tap coordinates but uses CDP for modifier clicks', async () => {
+    const wc = mockWebContents(100)
+    wc.debugger.sendCommand.mockImplementation(async (method: string) => {
+      if (method === 'Runtime.evaluate') {
+        return { result: { value: { x: 12, y: 34, adjusted: true, handled: false } } }
+      }
+      return {}
+    })
+    webContentsFromIdMock.mockReturnValue(wc)
+
+    await expect(
+      bridge.mouseClick(10, 20, 'left', undefined, 'tab-1', 18, ['cmd'])
+    ).resolves.toEqual({
+      clicked: { x: 12, y: 34, button: 'left', adjusted: true, handled: false }
+    })
+
+    const evaluateCall = wc.debugger.sendCommand.mock.calls.find(
+      (call) => call[0] === 'Runtime.evaluate'
+    )
+    expect((evaluateCall?.[1] as { expression?: string } | undefined)?.expression).toContain(
+      'const allowDomActivation = false'
+    )
+    const mouseCalls = wc.debugger.sendCommand.mock.calls.filter(
+      (call) => call[0] === 'Input.dispatchMouseEvent'
+    )
+    expect(mouseCalls).toHaveLength(2)
+    expect(mouseCalls[0]?.[1]).toMatchObject({ type: 'mousePressed', x: 12, y: 34, modifiers: 4 })
+    expect(mouseCalls[1]?.[1]).toMatchObject({ type: 'mouseReleased', x: 12, y: 34, modifiers: 4 })
+  })
+
+  it('drops empty command queues after direct CDP commands finish', async () => {
+    const wc = mockWebContents(100)
+    wc.debugger.sendCommand.mockResolvedValue({})
+    webContentsFromIdMock.mockReturnValue(wc)
+
+    await bridge.mouseClick(10, 20, 'right', undefined, 'tab-1')
+
+    expect(
+      (bridge as unknown as { commandQueues: Map<string, unknown[]> }).commandQueues.size
+    ).toBe(0)
+    expect((bridge as unknown as { processingQueues: Set<string> }).processingQueues.size).toBe(0)
   })
 
   // ── Command queue serialization ──
@@ -504,6 +693,134 @@ describe('AgentBrowserBridge', () => {
     expect(lifecycleEvents).toEqual(['acquire-100', 'command-snapshot', 'restore-100'])
   })
 
+  it('re-resolves the page after automation visibility re-registers the webview', async () => {
+    const tabs = new Map([['tab-1', 100]])
+    const wc100 = mockWebContents(100)
+    const wc200 = mockWebContents(200, 'https://example.com/reloaded', 'Reloaded')
+    webContentsFromIdMock.mockImplementation((id: number) => {
+      if (id === 100) {
+        return wc100
+      }
+      if (id === 200) {
+        return wc200
+      }
+      return null
+    })
+
+    const acquireAutomationVisibility = vi.fn(async () => {
+      tabs.set('tab-1', 200)
+      return vi.fn()
+    })
+    const b = new AgentBrowserBridge(
+      mockBrowserManager(tabs, undefined, {
+        acquireAutomationVisibility
+      })
+    )
+    b.setActiveTab(100)
+
+    succeedWith({ snapshot: 'tree' })
+    await expect(b.snapshot()).resolves.toEqual({ browserPageId: 'tab-1', snapshot: 'tree' })
+
+    expect(acquireAutomationVisibility).toHaveBeenCalledWith(100)
+    const createdProxyIds = CdpWsProxyMock.instances.map(
+      (instance) => (instance as { _wc?: { id?: number } })._wc?.id
+    )
+    expect(createdProxyIds).toEqual([100, 200])
+  })
+
+  it('preserves intercept routes when automation visibility re-registers the webview', async () => {
+    const tabs = new Map([['tab-1', 100]])
+    const wc100 = mockWebContents(100)
+    const wc200 = mockWebContents(200, 'https://example.com/reloaded', 'Reloaded')
+    webContentsFromIdMock.mockImplementation((id: number) => {
+      if (id === 100) {
+        return wc100
+      }
+      if (id === 200) {
+        return wc200
+      }
+      return null
+    })
+
+    let reregisterOnVisibility = false
+    const acquireAutomationVisibility = vi.fn(async () => {
+      if (reregisterOnVisibility) {
+        tabs.set('tab-1', 200)
+      }
+      return vi.fn()
+    })
+    const b = new AgentBrowserBridge(
+      mockBrowserManager(tabs, undefined, {
+        acquireAutomationVisibility
+      })
+    )
+    b.setActiveTab(100)
+
+    const commandCalls: string[][] = []
+    execFileMock.mockImplementation(
+      (_bin: string, args: string[], _opts: unknown, cb: Function) => {
+        commandCalls.push(args)
+        cb(null, JSON.stringify({ success: true, data: { ok: true } }), '')
+      }
+    )
+
+    await b.interceptEnable(['https://old.example/**'])
+    reregisterOnVisibility = true
+    await expect(b.snapshot()).resolves.toEqual({ browserPageId: 'tab-1', ok: true })
+
+    const routeCalls = commandCalls.filter(
+      (args) => args.includes('network') && args.includes('route')
+    )
+    expect(routeCalls).toHaveLength(2)
+    expect(routeCalls.at(-1)).toContain('https://old.example/**')
+  })
+
+  it('clears stale sessions after direct CDP visibility re-registration', async () => {
+    const tabs = new Map([['tab-1', 100]])
+    const wc100 = mockWebContents(100)
+    const wc200 = mockWebContents(200, 'https://example.com/reloaded', 'Reloaded')
+    wc200.debugger.sendCommand.mockResolvedValue({})
+    webContentsFromIdMock.mockImplementation((id: number) => {
+      if (id === 100) {
+        return wc100
+      }
+      if (id === 200) {
+        return wc200
+      }
+      return null
+    })
+
+    let reregisterOnVisibility = false
+    const acquireAutomationVisibility = vi.fn(async () => {
+      if (reregisterOnVisibility) {
+        tabs.set('tab-1', 200)
+      }
+      return vi.fn()
+    })
+    const b = new AgentBrowserBridge(
+      mockBrowserManager(tabs, undefined, {
+        acquireAutomationVisibility
+      })
+    )
+    b.setActiveTab(100)
+
+    succeedWith({ snapshot: 'before' })
+    await b.snapshot()
+
+    reregisterOnVisibility = true
+    await expect(b.mouseClick(10, 20, 'right', undefined, 'tab-1')).resolves.toEqual({
+      clicked: { x: 10, y: 20, button: 'right', adjusted: false, handled: false }
+    })
+
+    succeedWith({ snapshot: 'after' })
+    await expect(b.snapshot()).resolves.toEqual({ browserPageId: 'tab-1', snapshot: 'after' })
+
+    const createdProxyIds = CdpWsProxyMock.instances.map(
+      (instance) => (instance as { _wc?: { id?: number } })._wc?.id
+    )
+    expect(createdProxyIds).toEqual([100, 200])
+  })
+
   it('clears reload fallback timer after the load event settles', async () => {
     vi.useFakeTimers()
     try {
@@ -522,9 +839,9 @@ describe('AgentBrowserBridge', () => {
         expect(wc.on).toHaveBeenCalledWith('did-finish-load', expect.any(Function))
       })
 
-      const finishListener = wc.on.mock.calls.find(([event]) => event === 'did-finish-load')?.[1] as
-        | (() => void)
-        | undefined
+      const finishListener = wc.on.mock.calls.find(
+        ([event]) => event === 'did-finish-load'
+      )?.[1] as (() => void) | undefined
       const failListener = wc.on.mock.calls.find(([event]) => event === 'did-fail-load')?.[1] as
         | (() => void)
         | undefined
@@ -766,6 +1083,53 @@ describe('AgentBrowserBridge', () => {
     expect(commandCalls.filter((args) => args.includes('close'))).toHaveLength(2)
   })
 
+  it('tears down a session that finishes creating after destruction starts', async () => {
+    const commandCalls: string[][] = []
+    let releaseStaleClose: (() => void) | null = null
+    execFileMock.mockImplementation(
+      (_bin: string, args: string[], _opts: unknown, cb: Function) => {
+        commandCalls.push(args)
+        if (args.includes('close') && !releaseStaleClose) {
+          releaseStaleClose = () => {
+            cb(null, JSON.stringify({ success: true, data: null }), '')
+          }
+          return { kill: vi.fn() }
+        }
+        cb(null, JSON.stringify({ success: true, data: null }), '')
+        return { kill: vi.fn() }
+      }
+    )
+
+    const ensurePromise = (
+      bridge as unknown as {
+        ensureSession: (
+          sessionName: string,
+          browserPageId: string,
+          webContentsId: number
+        ) => Promise<void>
+      }
+    ).ensureSession('orca-tab-tab-1', 'tab-1', 100)
+
+    await vi.waitFor(() => {
+      expect(releaseStaleClose).not.toBeNull()
+    })
+    expect(CdpWsProxyMock.instances).toHaveLength(0)
+
+    const destroyPromise = (
+      bridge as unknown as { destroySession: (name: string) => Promise<void> }
+    ).destroySession('orca-tab-tab-1')
+
+    releaseStaleClose!()
+    await ensurePromise
+    await destroyPromise
+
+    const sessions = (bridge as unknown as { sessions: Map<string, unknown> }).sessions
+    const proxy = CdpWsProxyMock.instances[0] as { stop: ReturnType<typeof vi.fn> }
+    expect(commandCalls.filter((args) => args.includes('close'))).toHaveLength(2)
+    expect(sessions.size).toBe(0)
+    expect(proxy.stop).toHaveBeenCalledTimes(1)
+  })
+
   it('cancels the command already running when a session is destroyed', async () => {
     succeedWith({ snapshot: 'initial' })
     await bridge.snapshot()
@@ -916,6 +1280,33 @@ describe('AgentBrowserBridge', () => {
     expect(routeCalls[0]).toContain('https://new.example/**')
     expect(routeCalls[0]).not.toContain('https://old.example/**')
     expect(routeCalls[0]).toContain('--cdp')
+  })
+
+  it('clears pending intercept restore state when a swapped tab closes before reuse', async () => {
+    const tabs = new Map([['tab-1', 100]])
+    const mgr = mockBrowserManager(tabs)
+    const b = new AgentBrowserBridge(mgr)
+    b.setActiveTab(100)
+
+    succeedWith({ ok: true })
+    await b.interceptEnable(['https://old.example/**'])
+
+    tabs.set('tab-1', 200)
+    webContentsFromIdMock.mockReturnValue(mockWebContents(200))
+    succeedWith(null)
+    await b.onProcessSwap('tab-1', 200)
+
+    expect(
+      (b as unknown as { pendingInterceptRestore: Map<string, string[]> }).pendingInterceptRestore
+        .size
+    ).toBe(1)
+
+    await b.onTabClosed(200)
+
+    expect(
+      (b as unknown as { pendingInterceptRestore: Map<string, string[]> }).pendingInterceptRestore
+        .size
+    ).toBe(0)
   })
 
   // ── Tab close clears active ──
@@ -1101,6 +1492,351 @@ describe('AgentBrowserBridge', () => {
     const args = execFileMock.mock.calls.at(-1)![1] as string[]
     expect(args).toContain('goto')
     expect(args).toContain('https://example.com')
+  })
+
+  it('rejects oversized browser clipboard writes before spawning agent-browser', async () => {
+    const secret = 'browser-clipboard-secret'
+    succeedWith({ ok: true })
+
+    await expect(
+      bridge.clipboardWrite(secret + 'x'.repeat(CLIPBOARD_TEXT_WRITE_MAX_BYTES + 1))
+    ).rejects.toThrow(CLIPBOARD_TEXT_WRITE_TOO_LARGE_ERROR)
+
+    expect(execFileMock).not.toHaveBeenCalled()
+  })
+
+  it('rejects browser clipboard writes that exceed the safe agent-browser argument size', async () => {
+    succeedWith({ ok: true })
+
+    await expect(
+      bridge.clipboardWrite('x'.repeat(AGENT_BROWSER_CLIPBOARD_WRITE_MAX_BYTES + 1))
+    ).rejects.toThrow(CLIPBOARD_TEXT_WRITE_TOO_LARGE_ERROR)
+
+    expect(execFileMock).not.toHaveBeenCalled()
+  })
+
+  it('builds valid fill eval JavaScript for multiline values', async () => {
+    succeedWith({ ok: true })
+
+    await bridge.fill('@textarea', "line one\nline two with 'quote' and \\ slash")
+
+    const evalCall = execFileMock.mock.calls.find((call: unknown[]) =>
+      (call[1] as string[]).includes('eval')
+    )
+    expect(evalCall).toBeDefined()
+    const args = evalCall![1] as string[]
+    const expression = args[args.indexOf('eval') + 1]
+    expect(() => new Function(expression)).not.toThrow()
+  })
+
+  it('routes focused spinbutton wrappers to editable descendants before filling', async () => {
+    succeedWith({ ok: true })
+
+    await bridge.fill('@spinbutton', '200')
+
+    const expressions = execFileMock.mock.calls
+      .filter((call: unknown[]) => (call[1] as string[]).includes('eval'))
+      .map((call: unknown[]) => {
+        const args = call[1] as string[]
+        return args[args.indexOf('eval') + 1]
+      })
+
+    const input = createFillEvalNode({ tagName: 'INPUT' })
+    const wrapper = createFillEvalNode({
+      tagName: 'DIV',
+      role: 'spinbutton',
+      descendant: input.node
+    })
+
+    runFillEvalExpressions(expressions, {
+      activeElement: wrapper.node,
+      getElementById: () => null
+    })
+
+    expect(input.value).toBe('200')
+    expect(wrapper.value).toBe('')
+    expect(input.events.map((event) => event.type)).toEqual(['input', 'change'])
+    expect(wrapper.events).toHaveLength(0)
+  })
+
+  it('routes aria-controlled spinbutton wrappers to editable inputs before filling', async () => {
+    succeedWith({ ok: true })
+
+    await bridge.fill('@spinbutton', '200')
+
+    const expressions = execFileMock.mock.calls
+      .filter((call: unknown[]) => (call[1] as string[]).includes('eval'))
+      .map((call: unknown[]) => {
+        const args = call[1] as string[]
+        return args[args.indexOf('eval') + 1]
+      })
+
+    const input = createFillEvalNode({ tagName: 'INPUT' })
+    const wrapper = createFillEvalNode({
+      tagName: 'DIV',
+      role: 'spinbutton',
+      ariaControls: 'target-id'
+    })
+
+    runFillEvalExpressions(expressions, {
+      activeElement: wrapper.node,
+      getElementById: (id: string) => (id === 'target-id' ? input.node : null)
+    })
+
+    expect(input.value).toBe('200')
+    expect(wrapper.value).toBe('')
+    expect(input.events.map((event) => event.type)).toEqual(['input', 'change'])
+    expect(wrapper.events).toHaveLength(0)
+  })
+
+  it('routes aria-controlled spinbutton containers to editable descendants before filling', async () => {
+    succeedWith({ ok: true })
+
+    await bridge.fill('@spinbutton', '200')
+
+    const expressions = execFileMock.mock.calls
+      .filter((call: unknown[]) => (call[1] as string[]).includes('eval'))
+      .map((call: unknown[]) => {
+        const args = call[1] as string[]
+        return args[args.indexOf('eval') + 1]
+      })
+
+    const input = createFillEvalNode({ tagName: 'INPUT' })
+    const controlled = createFillEvalNode({ tagName: 'DIV', descendant: input.node })
+    const wrapper = createFillEvalNode({
+      tagName: 'DIV',
+      role: 'spinbutton',
+      ariaControls: 'target-id'
+    })
+
+    runFillEvalExpressions(expressions, {
+      activeElement: wrapper.node,
+      getElementById: (id: string) => (id === 'target-id' ? controlled.node : null)
+    })
+
+    expect(input.value).toBe('200')
+    expect(controlled.value).toBe('')
+    expect(wrapper.value).toBe('')
+    expect(input.events.map((event) => event.type)).toEqual(['input', 'change'])
+    expect(controlled.events).toHaveLength(0)
+    expect(wrapper.events).toHaveLength(0)
+  })
+
+  it('skips non-text spinbutton descendant inputs before filling', async () => {
+    succeedWith({ ok: true })
+
+    await bridge.fill('@spinbutton', '200')
+
+    const expressions = execFileMock.mock.calls
+      .filter((call: unknown[]) => (call[1] as string[]).includes('eval'))
+      .map((call: unknown[]) => {
+        const args = call[1] as string[]
+        return args[args.indexOf('eval') + 1]
+      })
+
+    const hiddenInput = createFillEvalNode({ tagName: 'INPUT', type: 'hidden' })
+    const numberInput = createFillEvalNode({ tagName: 'INPUT', type: 'number' })
+    const wrapper = createFillEvalNode({
+      tagName: 'DIV',
+      role: 'spinbutton',
+      descendants: [hiddenInput.node, numberInput.node]
+    })
+
+    runFillEvalExpressions(expressions, {
+      activeElement: wrapper.node,
+      getElementById: () => null
+    })
+
+    expect(numberInput.value).toBe('200')
+    expect(hiddenInput.value).toBe('')
+    expect(wrapper.value).toBe('')
+    expect(numberInput.events.map((event) => event.type)).toEqual(['input', 'change'])
+    expect(hiddenInput.events).toHaveLength(0)
+    expect(wrapper.events).toHaveLength(0)
+  })
+
+  it('keeps plain focused inputs as fill targets', async () => {
+    succeedWith({ ok: true })
+
+    await bridge.fill('@input', '200')
+
+    const expressions = execFileMock.mock.calls
+      .filter((call: unknown[]) => (call[1] as string[]).includes('eval'))
+      .map((call: unknown[]) => {
+        const args = call[1] as string[]
+        return args[args.indexOf('eval') + 1]
+      })
+
+    const input = createFillEvalNode({ tagName: 'INPUT' })
+
+    runFillEvalExpressions(expressions, {
+      activeElement: input.node,
+      getElementById: () => null
+    })
+
+    expect(input.value).toBe('200')
+    expect(input.events.map((event) => event.type)).toEqual(['input', 'change'])
+  })
+
+  it('chunks large agent-browser fill values before eval transport', async () => {
+    const text = ['x'.repeat(AGENT_BROWSER_TEXT_ARGUMENT_MAX_BYTES), 'tail'].join('')
+    succeedWith({ ok: true })
+
+    await bridge.fill('@textarea', text)
+
+    const evalCalls = execFileMock.mock.calls.filter((call: unknown[]) =>
+      (call[1] as string[]).includes('eval')
+    )
+    const appendExpressions = evalCalls.slice(1, -1).map((call: unknown[]) => {
+      const args = call[1] as string[]
+      return args[args.indexOf('eval') + 1]
+    })
+
+    expect(appendExpressions).toHaveLength(2)
+    expect(appendExpressions.some((expression) => expression.includes(text))).toBe(false)
+    expect(appendExpressions[0]).toContain('x'.repeat(AGENT_BROWSER_TEXT_ARGUMENT_MAX_BYTES))
+    expect(appendExpressions[1]).toContain('tail')
+  })
+
+  it.each([
+    ['fill', (b: AgentBrowserBridge, text: string) => b.fill('@textarea', text)],
+    ['type', (b: AgentBrowserBridge, text: string) => b.type(text)],
+    ['keyboard insert', (b: AgentBrowserBridge, text: string) => b.keyboardInsertText(text)]
+  ])('yields before spawning agent-browser for accepted large %s text', async (_name, run) => {
+    vi.useFakeTimers()
+    try {
+      const text = 'é'.repeat(CLIPBOARD_TEXT_MEASURE_YIELD_CODE_UNITS + 1)
+      succeedWith({ ok: true })
+
+      const pending = run(bridge, text)
+      await Promise.resolve()
+
+      expect(execFileMock).not.toHaveBeenCalled()
+
+      await vi.runOnlyPendingTimersAsync()
+      await pending
+
+      expect(execFileMock).toHaveBeenCalled()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('chunks large agent-browser type text before keyboard transport', async () => {
+    const text = ['y'.repeat(AGENT_BROWSER_TEXT_ARGUMENT_MAX_BYTES), 'zz'].join('')
+    succeedWith({ typed: true })
+
+    await bridge.type(text)
+
+    const typeCalls = execFileMock.mock.calls.filter((call: unknown[]) => {
+      const args = call[1] as string[]
+      return args.includes('keyboard') && args.includes('type')
+    })
+    const chunks = typeCalls.map((call: unknown[]) => {
+      const args = call[1] as string[]
+      return args[args.indexOf('type') + 1]
+    })
+
+    expect(chunks).toEqual(['y'.repeat(AGENT_BROWSER_TEXT_ARGUMENT_MAX_BYTES), 'zz'])
+  })
+
+  it('chunks large agent-browser keyboard insert text before transport', async () => {
+    const text = ['z'.repeat(AGENT_BROWSER_TEXT_ARGUMENT_MAX_BYTES), 'qq'].join('')
+    succeedWith({ inserted: true })
+
+    await bridge.keyboardInsertText(text)
+
+    const insertTextCalls = execFileMock.mock.calls.filter((call: unknown[]) => {
+      const args = call[1] as string[]
+      return args.includes('keyboard') && args.includes('inserttext')
+    })
+    const chunks = insertTextCalls.map((call: unknown[]) => {
+      const args = call[1] as string[]
+      return args[args.indexOf('inserttext') + 1]
+    })
+
+    expect(chunks).toEqual(['z'.repeat(AGENT_BROWSER_TEXT_ARGUMENT_MAX_BYTES), 'qq'])
+  })
+
+  // ── Cross-worktree text-injection guard ──
+
+  describe('scoped target for text-mutating commands', () => {
+    function twoWorktreeBridge(): AgentBrowserBridge {
+      const tabs = new Map([
+        ['tab-a', 1],
+        ['tab-b', 2]
+      ])
+      const worktrees = new Map([
+        ['tab-a', 'wt-1'],
+        ['tab-b', 'wt-2']
+      ])
+      const wc1 = mockWebContents(1, 'https://a.com', 'A')
+      const wc2 = mockWebContents(2, 'https://b.com', 'B')
+      webContentsFromIdMock.mockImplementation((id: number) => (id === 1 ? wc1 : wc2))
+      return new AgentBrowserBridge(mockBrowserManager(tabs, worktrees))
+    }
+
+    function sessionNamesUsed(): string[] {
+      return execFileMock.mock.calls
+        .filter((call: unknown[]) => (call[1] as string[]).includes('--session'))
+        .map((call: unknown[]) => {
+          const args = call[1] as string[]
+          return args[args.indexOf('--session') + 1]
+        })
+    }
+
+    it.each([
+      ['inserttext', (b: AgentBrowserBridge) => b.keyboardInsertText('x', undefined, undefined)],
+      ['type', (b: AgentBrowserBridge) => b.type('x', undefined, undefined)],
+      ['fill', (b: AgentBrowserBridge) => b.fill('@input', 'x', undefined, undefined)]
+    ])(
+      'refuses %s when worktrees are ambiguous instead of routing to the global active tab',
+      async (_name, run) => {
+        const b = twoWorktreeBridge()
+        // Why: simulates the user viewing worktree B's tab, which sets the global
+        // active webContents — the bug would route the agent's text there.
+        b.onTabChanged(2, 'wt-2')
+        succeedWith({ inserted: true })
+
+        await expect(run(b)).rejects.toMatchObject({
+          code: 'browser_target_ambiguous'
+        })
+        // Must not have dispatched the command to worktree B's session.
+        expect(sessionNamesUsed()).not.toContain('orca-tab-tab-b')
+      }
+    )
+
+    it('auto-scopes inserttext to the lone worktree that has a live tab', async () => {
+      const tabs = new Map([['tab-a', 1]])
+      const worktrees = new Map([['tab-a', 'wt-1']])
+      const wc1 = mockWebContents(1, 'https://a.com', 'A')
+      webContentsFromIdMock.mockReturnValue(wc1)
+      const b = new AgentBrowserBridge(mockBrowserManager(tabs, worktrees))
+      succeedWith({ inserted: true })
+
+      await b.keyboardInsertText('x', undefined, undefined)
+
+      expect(sessionNamesUsed()).toContain('orca-tab-tab-a')
+    })
+
+    it('throws browser_no_tab for inserttext when no live tab exists', async () => {
+      const b = new AgentBrowserBridge(mockBrowserManager(new Map()))
+      await expect(b.keyboardInsertText('x', undefined, undefined)).rejects.toMatchObject({
+        code: 'browser_no_tab'
+      })
+    })
+
+    it('keeps read-only snapshot on the lenient global active-tab fallback', async () => {
+      const b = twoWorktreeBridge()
+      // Why: read/navigation commands intentionally keep the global fallback so
+      // discovery still works without a worktree; only text writes are guarded.
+      b.onTabChanged(2, 'wt-2')
+      succeedWith({ snapshot: 'tree' })
+
+      await b.snapshot(undefined, undefined)
+
+      expect(sessionNamesUsed()).toContain('orca-tab-tab-b')
+    })
   })
 
   // ── Cookie command arg building ──

@@ -3,6 +3,7 @@ import type { OrcaHooks } from '../../../shared/types'
 import { resolveHookCommandSourcePolicy } from '../../../shared/hook-command-source-policy'
 import { hashOrcaHookScript, type OrcaHookScriptKind } from './orca-hook-trust'
 import { checkRuntimeHooks, readRuntimeIssueCommand } from '@/runtime/runtime-hooks-client'
+import { getRuntimeEnvironmentIdForRepo } from './repo-runtime-owner'
 
 export type HookScriptKind = OrcaHookScriptKind
 
@@ -19,6 +20,51 @@ export function __resetTrustPromptChainForTests(): void {
   trustPromptChain = Promise.resolve()
 }
 
+function getSetupTrustContent(yamlHooks: OrcaHooks | null): string {
+  const defaultTabCommands = (yamlHooks?.defaultTabs ?? [])
+    .map((tab, index) => {
+      const command = tab.command?.trim()
+      if (!command) {
+        return null
+      }
+      const label = tab.title ? ` ${tab.title}` : ''
+      return `# defaultTabs[${index + 1}]${label}\n${command}`
+    })
+    .filter((entry): entry is string => entry !== null)
+  return [yamlHooks?.scripts?.setup?.trim(), ...defaultTabCommands].filter(Boolean).join('\n\n')
+}
+
+function getVmRecipeTrustContent(yamlHooks: OrcaHooks | null): string {
+  return (yamlHooks?.environmentRecipes ?? [])
+    .map((recipe) =>
+      [
+        `# environmentRecipes.${recipe.id}`,
+        `name: ${recipe.name}`,
+        recipe.description ? `description: ${recipe.description}` : null,
+        `create: ${recipe.create}`,
+        recipe.suspend ? `suspend: ${recipe.suspend}` : null,
+        recipe.resume ? `resume: ${recipe.resume}` : null,
+        recipe.destroyDisabled
+          ? 'destroy: none'
+          : recipe.destroy
+            ? `destroy: ${recipe.destroy}`
+            : null
+      ]
+        .filter((entry): entry is string => entry !== null)
+        .join('\n')
+    )
+    .join('\n\n')
+}
+
+function settingsForHookRepoOwner(state: AppState, repoId: string): AppState['settings'] {
+  const runtimeEnvironmentId = getRuntimeEnvironmentIdForRepo(state, repoId)
+  // Why: hook inspection must follow the repo owner. SSH/local repos execute
+  // through desktop IPC, while runtime repos may differ from the focused host.
+  return state.settings
+    ? { ...state.settings, activeRuntimeEnvironmentId: runtimeEnvironmentId }
+    : ({ activeRuntimeEnvironmentId: runtimeEnvironmentId } as AppState['settings'])
+}
+
 export async function ensureHooksConfirmed(
   state: AppState,
   repoId: string,
@@ -33,7 +79,10 @@ export async function ensureHooksConfirmed(
     try {
       if (scriptKind === 'issueCommand') {
         // Local overrides are user-owned; only shared orca.yaml commands need repo trust.
-        const result = await readRuntimeIssueCommand(state.settings, repoId)
+        const result = await readRuntimeIssueCommand(
+          settingsForHookRepoOwner(state, repoId),
+          repoId
+        )
         if (result.source === 'local') {
           return 'run'
         }
@@ -56,12 +105,17 @@ export async function ensureHooksConfirmed(
         if (sourcePolicy === 'local-only') {
           return 'run'
         }
-        const result = await checkRuntimeHooks(state.settings, repoId)
+        const result = await checkRuntimeHooks(settingsForHookRepoOwner(state, repoId), repoId)
         if (result.status === 'error') {
           return 'skip'
         }
         const yamlHooks = (result.hooks as OrcaHooks | null) ?? null
-        scriptContent = (yamlHooks?.scripts?.[scriptKind] ?? '').trim()
+        scriptContent =
+          scriptKind === 'setup'
+            ? getSetupTrustContent(yamlHooks)
+            : scriptKind === 'vmRecipe'
+              ? getVmRecipeTrustContent(yamlHooks)
+              : (yamlHooks?.scripts?.[scriptKind] ?? '').trim()
       }
     } catch {
       // Fail closed: if we cannot inspect the script, we cannot trust it.

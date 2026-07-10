@@ -1,10 +1,13 @@
 /* eslint-disable max-lines */
-import { ipcMain, shell } from 'electron'
-import { readdir, readFile, writeFile, stat, lstat, open } from 'fs/promises'
-import { extname, resolve } from 'path'
-import type { ChildProcess } from 'child_process'
+import { BrowserWindow, dialog, ipcMain, shell } from 'electron'
+import { readdir, readFile, writeFile, stat, lstat, open, rename, rm } from 'node:fs/promises'
+import type { FileHandle } from 'node:fs/promises'
+import { randomUUID } from 'node:crypto'
+import { dirname, extname, join, resolve } from 'node:path'
+import type { ChildProcess } from 'node:child_process'
 import { gitExecFileAsync, wslAwareSpawn } from '../git/runner'
 import { parseWslPath, toWindowsWslPath } from '../wsl'
+import { tryDeleteWslUncPath } from '../wsl-unc-delete'
 import type { Store } from '../persistence'
 import type {
   DirEntry,
@@ -12,6 +15,10 @@ import type {
   GitCommitCompareResult,
   GitConflictOperation,
   GitDiffResult,
+  GitForkSyncExpectedUpstream,
+  GitForkSyncResult,
+  GlobalSettings,
+  GitStagingArea,
   GitPushTarget,
   GitUpstreamStatus,
   GitStatusResult,
@@ -32,6 +39,7 @@ import {
 } from '../../shared/text-search'
 import {
   getStatus,
+  getSubmoduleStatus,
   abortMerge,
   abortRebase,
   detectConflictOperation,
@@ -59,17 +67,26 @@ import {
   generatePullRequestFieldsFromContext,
   resolveCommitMessageSettings,
   type DiscoverCommitMessageModelsResult,
+  type CommitMessageGenerationTarget,
   type GenerateCommitMessageResult,
   type GeneratePullRequestFieldsResult
 } from '../text-generation/commit-message-text-generation'
 import { getPullRequestDraftContext } from '../text-generation/pull-request-context'
 import { getUpstreamStatus } from '../git/upstream'
 import { gitFastForward, gitFetch, gitPull, gitPullRebaseFromBase, gitPush } from '../git/remote'
+import { gitSyncForkDefaultBranch } from '../git/fork-sync'
+import { validateGitForkSyncExpectedUpstream } from '../../shared/git-fork-sync'
 import { checkIgnoredPaths } from '../git/check-ignored-paths'
+import {
+  appendFolderToGitignore,
+  findKnownHugeFolderPathsToIgnore
+} from '../git/huge-folder-ignore'
 import { assertGitPushTargetShape } from '../../shared/git-push-target-validation'
 import { getCommitMessageModelDiscoveryHostKey } from '../../shared/commit-message-host-key'
+import type { HostedReviewProvider } from '../../shared/hosted-review'
+import type { ResolvedSourceControlAiGenerationParams } from '../../shared/source-control-ai'
 import { validateGitPushTarget } from '../git/push-target-validation'
-import { getRemoteFileUrl } from '../git/repo'
+import { getRemoteCommitUrl, getRemoteFileUrl } from '../git/repo'
 import {
   resolveAuthorizedPath,
   resolveRegisteredWorktreePath,
@@ -80,6 +97,7 @@ import {
 import { listQuickOpenFiles } from './filesystem-list-files'
 import { registerFilesystemMutationHandlers } from './filesystem-mutations'
 import { searchWithGitGrep } from './filesystem-search-git'
+import { getLocalGitOptionsForRegisteredWorktree } from './local-worktree-runtime-options'
 import { listMarkdownDocuments, markdownDocumentsFromRelativePaths } from './markdown-documents'
 import { checkRgAvailable } from './rg-availability'
 import {
@@ -90,12 +108,18 @@ import {
   getSshGitProvider,
   SSH_GIT_PROVIDER_UNAVAILABLE_MESSAGE
 } from '../providers/ssh-git-dispatch'
+import { resolveHostedReviewBodyForGeneration } from '../source-control/pull-request-template'
 import {
   prepareLocalCommitMessageAgentEnv,
+  type CommitMessageAgentRuntimeTarget,
   type CommitMessageAgentEnvironmentResolvers
 } from '../text-generation/commit-message-agent-environment'
 import { listRepoWorktrees } from '../repo-worktrees'
+import { recordCrashBreadcrumb } from '../crash-reporting/crash-breadcrumb-store'
+import { buildReadDirErrorBreadcrumb, type ReadDirThrowSite } from './readdir-error-diagnostics'
 import { splitWorktreeId } from '../../shared/worktree-id'
+import { getRuntimePathBasename } from '../../shared/cross-platform-path'
+import type { LocalProjectWorktreeGitOptions } from '../project-runtime-git-options'
 
 // Why: Monaco has large-file optimizations like VS Code; blocking at 5MB makes
 // ordinary JSON/log files inaccessible before the editor can degrade features.
@@ -121,14 +145,115 @@ const PREVIEWABLE_BINARY_MIME_TYPES: Record<string, string> = {
   '.ico': 'image/x-icon',
   '.pdf': 'application/pdf'
 }
+const WINDOWS_RESERVED_LOCAL_BASENAME = /^(?:con|prn|aux|nul|com[1-9]|lpt[1-9])(?:\..*)?$/i
+const LOCAL_FILENAME_REPLACEMENT_CHARS = new Set(['<', '>', ':', '"', '/', '\\', '|', '?', '*'])
+
+type DownloadFileResult = { canceled: true } | { canceled: false; destinationPath: string }
+
+function validateRequiredString(value: unknown, label: string): string {
+  if (typeof value !== 'string' || value.trim() === '') {
+    throw new Error(`${label} is required`)
+  }
+  return value
+}
+
+function sanitizeSaveDialogFilename(remoteBasename: string): string {
+  const sanitized = Array.from(remoteBasename, (char) =>
+    char.charCodeAt(0) < 32 || LOCAL_FILENAME_REPLACEMENT_CHARS.has(char) ? '_' : char
+  )
+    .join('')
+    .replace(/[. ]+$/g, '')
+  if (!sanitized || WINDOWS_RESERVED_LOCAL_BASENAME.test(sanitized)) {
+    return 'download'
+  }
+  return sanitized
+}
+
+function decodeDownloadedFileContent(content: string, encoding: 'utf8' | 'base64'): Buffer {
+  if (encoding === 'base64') {
+    return Buffer.from(content, 'base64')
+  }
+  return Buffer.from(content, 'utf8')
+}
+
+type DownloadSession = {
+  destinationPath: string
+  tempPath: string
+  destinationExisted: boolean
+  handle: FileHandle
+  cleanupTimer: ReturnType<typeof setTimeout>
+  senderId: number
+}
+
+const DOWNLOAD_SESSION_TTL_MS = 30 * 60 * 1000
+
+function createSiblingTransferPath(destinationPath: string, suffix: string): string {
+  return join(dirname(destinationPath), `.${randomUUID()}.${suffix}`)
+}
+
+async function cleanupLocalTransferPath(filePath: string | null): Promise<void> {
+  if (!filePath) {
+    return
+  }
+  await rm(filePath, { force: true }).catch(() => {})
+}
+
+async function inspectDownloadDestination(destinationPath: string): Promise<{ existed: boolean }> {
+  try {
+    const destinationStat = await stat(destinationPath)
+    if (destinationStat.isDirectory()) {
+      throw new Error('Cannot download to a directory')
+    }
+    return { existed: true }
+  } catch (error) {
+    if (isENOENT(error)) {
+      return { existed: false }
+    }
+    throw error
+  }
+}
+
+async function assertDestinationStillUnclaimed(destinationPath: string): Promise<void> {
+  try {
+    await stat(destinationPath)
+  } catch (error) {
+    if (isENOENT(error)) {
+      return
+    }
+    throw error
+  }
+  throw new Error('Destination file appeared before download completed')
+}
+
+async function promoteDownloadedFile(
+  tempPath: string,
+  destinationPath: string,
+  destinationExisted: boolean
+): Promise<void> {
+  if (!destinationExisted) {
+    await assertDestinationStillUnclaimed(destinationPath)
+    await rename(tempPath, destinationPath)
+    return
+  }
+
+  const backupPath = createSiblingTransferPath(destinationPath, 'backup')
+  let backupCreated = false
+  try {
+    await rename(destinationPath, backupPath)
+    backupCreated = true
+    await rename(tempPath, destinationPath)
+    await cleanupLocalTransferPath(backupPath)
+  } catch (error) {
+    if (backupCreated) {
+      await rename(backupPath, destinationPath).catch(() => {})
+    }
+    throw error
+  }
+}
 
 function comparableLocalPath(value: string): string {
   const normalized = resolve(value)
   return process.platform === 'win32' ? normalized.toLowerCase() : normalized
-}
-
-function comparableRemotePath(value: string): string {
-  return value.replace(/[/\\]+$/g, '')
 }
 
 function getCandidateLocalWorktreePaths(
@@ -150,6 +275,10 @@ function hasRegisteredWorktreeMetaForRepo(
     }
   }
   return false
+}
+
+function comparableRemotePath(value: string): string {
+  return value.replace(/[/\\]+$/g, '')
 }
 
 function hasRegisteredRemoteWorktreeMetaForRepo(
@@ -249,6 +378,27 @@ async function getRepoForSourceControlAi(
   return (await localRepoOwnsWorktree(store, repo, args.worktreePath)) ? repo : null
 }
 
+function getLocalAgentRuntimeTarget(
+  gitOptions: LocalProjectWorktreeGitOptions
+): CommitMessageAgentRuntimeTarget {
+  return gitOptions.wslDistro
+    ? { runtime: 'wsl', wslDistro: gitOptions.wslDistro }
+    : { runtime: 'host' }
+}
+
+function getLocalTextGenerationTarget(
+  worktreePath: string,
+  gitOptions: LocalProjectWorktreeGitOptions,
+  env?: NodeJS.ProcessEnv
+): Extract<CommitMessageGenerationTarget, { kind: 'local' }> {
+  return {
+    kind: 'local',
+    cwd: worktreePath,
+    ...(gitOptions.wslDistro ? { wslDistro: gitOptions.wslDistro } : {}),
+    ...(env ? { env } : {})
+  }
+}
+
 function validateFullGitObjectId(value: string, label: string): string {
   if (!FULL_GIT_OBJECT_ID_PATTERN.test(value)) {
     throw new Error(`${label} must be a full git object id`)
@@ -304,32 +454,79 @@ export function registerFilesystemHandlers(
   commitMessageAgentEnv?: CommitMessageAgentEnvironmentResolvers
 ): void {
   const activeTextSearches = new Map<string, ChildProcess>()
+  const downloadSessions = new Map<string, DownloadSession>()
+
+  async function closeDownloadSession(
+    transferId: string,
+    cleanupTemp: boolean
+  ): Promise<DownloadSession | null> {
+    const session = downloadSessions.get(transferId)
+    if (!session) {
+      return null
+    }
+    downloadSessions.delete(transferId)
+    clearTimeout(session.cleanupTimer)
+    await session.handle.close().catch(() => {})
+    if (cleanupTemp) {
+      await cleanupLocalTransferPath(session.tempPath)
+    }
+    return session
+  }
+
+  function cleanupDownloadSessionsForSender(senderId: number): void {
+    for (const [transferId, session] of Array.from(downloadSessions)) {
+      if (session.senderId === senderId) {
+        void closeDownloadSession(transferId, true)
+      }
+    }
+  }
 
   // ─── Filesystem ─────────────────────────────────────────
   ipcMain.handle(
     'fs:readDir',
     async (_event, args: { dirPath: string; connectionId?: string }): Promise<DirEntry[]> => {
-      if (args.connectionId) {
-        const provider = requireSshFilesystemProvider(args.connectionId)
-        return provider.readDir(args.dirPath)
-      }
-      const dirPath = await resolveAuthorizedPath(args.dirPath, store)
-      const entries = await readdir(dirPath, { withFileTypes: true })
-      const mapped = await Promise.all(
-        entries.map(async (entry) => ({
-          name: entry.name,
-          isDirectory: await isDirectoryEntry(dirPath, entry, (entryPath) =>
-            resolveAuthorizedPath(entryPath, store)
-          ),
-          isSymlink: entry.isSymbolicLink()
-        }))
-      )
-      return mapped.sort((a, b) => {
-        if (a.isDirectory !== b.isDirectory) {
-          return a.isDirectory ? -1 : 1
+      // Why: a thrown fs:readDir reaches the renderer as the opaque "Error
+      // invoking remote method 'fs:readDir'" (Windows WSL/UNC realpath/readdir
+      // failures, dropped SSH providers). Record which throw site fired plus a
+      // redacted path shape so these are diagnosable without the raw path.
+      let throwSite: ReadDirThrowSite = 'authorize'
+      try {
+        if (args.connectionId) {
+          throwSite = 'ssh-provider'
+          const provider = requireSshFilesystemProvider(args.connectionId)
+          return await provider.readDir(args.dirPath)
         }
-        return a.name.localeCompare(b.name)
-      })
+        throwSite = 'authorize'
+        const dirPath = await resolveAuthorizedPath(args.dirPath, store)
+        throwSite = 'readdir'
+        const entries = await readdir(dirPath, { withFileTypes: true })
+        const mapped = await Promise.all(
+          entries.map(async (entry) => ({
+            name: entry.name,
+            isDirectory: await isDirectoryEntry(dirPath, entry, (entryPath) =>
+              resolveAuthorizedPath(entryPath, store)
+            ),
+            isSymlink: entry.isSymbolicLink()
+          }))
+        )
+        return mapped.sort((a, b) => {
+          if (a.isDirectory !== b.isDirectory) {
+            return a.isDirectory ? -1 : 1
+          }
+          return a.name.localeCompare(b.name)
+        })
+      } catch (error: unknown) {
+        recordCrashBreadcrumb(
+          'fs_readdir_error',
+          buildReadDirErrorBreadcrumb({
+            dirPath: args.dirPath,
+            connectionId: args.connectionId,
+            throwSite,
+            error
+          })
+        )
+        throw error
+      }
     }
   )
 
@@ -379,6 +576,197 @@ export function registerFilesystemHandlers(
       }
 
       return { content: buffer.toString('utf-8'), isBinary: false }
+    }
+  )
+
+  ipcMain.handle(
+    'fs:downloadFile',
+    async (
+      event,
+      args: { filePath?: string; connectionId?: string }
+    ): Promise<DownloadFileResult> => {
+      const filePath = validateRequiredString(args?.filePath, 'filePath')
+      const connectionId = validateRequiredString(args?.connectionId, 'connectionId')
+      const provider = requireSshFilesystemProvider(connectionId)
+      const remoteStat = await provider.stat(filePath)
+      if (remoteStat.type === 'directory') {
+        throw new Error('Cannot download a directory')
+      }
+      if (!provider.downloadFile) {
+        throw new Error('Remote file download is unavailable. Reconnect the SSH target and retry.')
+      }
+
+      const remoteBasename = getRuntimePathBasename(filePath)
+      const defaultPath = sanitizeSaveDialogFilename(remoteBasename)
+      const parentWindow = BrowserWindow.fromWebContents(event.sender) ?? undefined
+      const dialogResult = parentWindow
+        ? await dialog.showSaveDialog(parentWindow, { defaultPath })
+        : await dialog.showSaveDialog({ defaultPath })
+      if (dialogResult.canceled || !dialogResult.filePath) {
+        return { canceled: true }
+      }
+
+      const destinationPath = dialogResult.filePath
+      const { existed } = await inspectDownloadDestination(destinationPath)
+      const tempPath = createSiblingTransferPath(destinationPath, 'download')
+      let promoted = false
+      try {
+        await provider.downloadFile(filePath, tempPath)
+        await promoteDownloadedFile(tempPath, destinationPath, existed)
+        promoted = true
+        return { canceled: false, destinationPath }
+      } finally {
+        if (!promoted) {
+          await cleanupLocalTransferPath(tempPath)
+        }
+      }
+    }
+  )
+
+  ipcMain.handle(
+    'fs:saveDownloadedFile',
+    async (
+      event,
+      args: { suggestedName?: string; content?: string; encoding?: 'utf8' | 'base64' }
+    ): Promise<DownloadFileResult> => {
+      const suggestedName = sanitizeSaveDialogFilename(
+        validateRequiredString(args?.suggestedName, 'suggestedName')
+      )
+      if (typeof args?.content !== 'string') {
+        throw new Error('content is required')
+      }
+      const content = args.content
+      const encoding = args?.encoding === 'base64' ? 'base64' : 'utf8'
+      const parentWindow = BrowserWindow.fromWebContents(event.sender) ?? undefined
+      const dialogResult = parentWindow
+        ? await dialog.showSaveDialog(parentWindow, { defaultPath: suggestedName })
+        : await dialog.showSaveDialog({ defaultPath: suggestedName })
+      if (dialogResult.canceled || !dialogResult.filePath) {
+        return { canceled: true }
+      }
+
+      const destinationPath = dialogResult.filePath
+      const { existed } = await inspectDownloadDestination(destinationPath)
+      const tempPath = createSiblingTransferPath(destinationPath, 'download')
+      let promoted = false
+      try {
+        await writeFile(tempPath, decodeDownloadedFileContent(content, encoding))
+        await promoteDownloadedFile(tempPath, destinationPath, existed)
+        promoted = true
+        return { canceled: false, destinationPath }
+      } finally {
+        if (!promoted) {
+          await cleanupLocalTransferPath(tempPath)
+        }
+      }
+    }
+  )
+
+  ipcMain.handle(
+    'fs:startDownloadedFile',
+    async (
+      event,
+      args: { suggestedName?: string }
+    ): Promise<
+      | { canceled: true }
+      | {
+          canceled: false
+          transferId: string
+          destinationPath: string
+        }
+    > => {
+      const suggestedName = sanitizeSaveDialogFilename(
+        validateRequiredString(args?.suggestedName, 'suggestedName')
+      )
+      const parentWindow = BrowserWindow.fromWebContents(event.sender) ?? undefined
+      const dialogResult = parentWindow
+        ? await dialog.showSaveDialog(parentWindow, { defaultPath: suggestedName })
+        : await dialog.showSaveDialog({ defaultPath: suggestedName })
+      if (dialogResult.canceled || !dialogResult.filePath) {
+        return { canceled: true }
+      }
+
+      const destinationPath = dialogResult.filePath
+      const { existed } = await inspectDownloadDestination(destinationPath)
+      const tempPath = createSiblingTransferPath(destinationPath, 'download')
+      const transferId = randomUUID()
+      try {
+        const handle = await open(tempPath, 'wx')
+        const senderId = typeof event.sender.id === 'number' ? event.sender.id : Number.NaN
+        const cleanupTimer = setTimeout(() => {
+          void closeDownloadSession(transferId, true)
+        }, DOWNLOAD_SESSION_TTL_MS)
+        if (typeof cleanupTimer.unref === 'function') {
+          cleanupTimer.unref()
+        }
+        downloadSessions.set(transferId, {
+          destinationPath,
+          tempPath,
+          destinationExisted: existed,
+          handle,
+          cleanupTimer,
+          senderId
+        })
+        event.sender.once?.('destroyed', () => cleanupDownloadSessionsForSender(senderId))
+        return { canceled: false, transferId, destinationPath }
+      } catch (error) {
+        await cleanupLocalTransferPath(tempPath)
+        throw error
+      }
+    }
+  )
+
+  ipcMain.handle(
+    'fs:appendDownloadedFileChunk',
+    async (
+      _event,
+      args: { transferId?: string; contentBase64?: string }
+    ): Promise<{ ok: true }> => {
+      const transferId = validateRequiredString(args?.transferId, 'transferId')
+      const contentBase64 = validateRequiredString(args?.contentBase64, 'contentBase64')
+      const session = downloadSessions.get(transferId)
+      if (!session) {
+        throw new Error('Download session not found')
+      }
+      await session.handle.writeFile(Buffer.from(contentBase64, 'base64'))
+      return { ok: true }
+    }
+  )
+
+  ipcMain.handle(
+    'fs:finishDownloadedFile',
+    async (
+      _event,
+      args: { transferId?: string }
+    ): Promise<{ canceled: false; destinationPath: string }> => {
+      const transferId = validateRequiredString(args?.transferId, 'transferId')
+      const session = await closeDownloadSession(transferId, false)
+      if (!session) {
+        throw new Error('Download session not found')
+      }
+      let promoted = false
+      try {
+        await promoteDownloadedFile(
+          session.tempPath,
+          session.destinationPath,
+          session.destinationExisted
+        )
+        promoted = true
+        return { canceled: false, destinationPath: session.destinationPath }
+      } finally {
+        if (!promoted) {
+          await cleanupLocalTransferPath(session.tempPath)
+        }
+      }
+    }
+  )
+
+  ipcMain.handle(
+    'fs:cancelDownloadedFile',
+    async (_event, args: { transferId?: string }): Promise<{ ok: true }> => {
+      const transferId = validateRequiredString(args?.transferId, 'transferId')
+      await closeDownloadSession(transferId, true)
+      return { ok: true }
     }
   )
 
@@ -444,6 +832,14 @@ export function registerFilesystemHandlers(
         preserveSymlink: true
       })
 
+      // Why: WSL UNC targets (\\wsl.localhost\<distro>\...) have no Recycle Bin,
+      // so shell.trashItem throws. Hard-delete via `rm` inside the distro instead
+      // (true delete, honors Linux perms). Returns false for normal local paths,
+      // which still go to the Recycle Bin (issue #6415).
+      if (await tryDeleteWslUncPath(targetPath, { recursive: args.recursive })) {
+        return
+      }
+
       // Why: once auto-refresh exists, an external delete can race with a
       // UI-initiated delete. Swallowing ENOENT keeps the action idempotent
       // from the user's perspective (design §7.1).
@@ -485,6 +881,27 @@ export function registerFilesystemHandlers(
     }
   )
 
+  ipcMain.handle(
+    'fs:pathExists',
+    async (_event, args: { filePath: string; connectionId?: string }): Promise<boolean> => {
+      try {
+        if (args.connectionId) {
+          const provider = requireSshFilesystemProvider(args.connectionId)
+          await provider.stat(args.filePath)
+          return true
+        }
+        const filePath = await resolveAuthorizedPath(args.filePath, store)
+        await stat(filePath)
+        return true
+      } catch (error) {
+        if (isENOENT(error)) {
+          return false
+        }
+        throw error
+      }
+    }
+  )
+
   // ─── Search ────────────────────────────────────────────
   ipcMain.handle(
     'fs:search',
@@ -494,6 +911,11 @@ export function registerFilesystemHandlers(
         return provider.search(args)
       }
       const rootPath = await resolveAuthorizedPath(args.rootPath, store)
+      const localGitOptions = getLocalGitOptionsForRegisteredWorktree(
+        store,
+        args.rootPath,
+        rootPath
+      )
       const maxResults = Math.max(
         1,
         Math.min(args.maxResults ?? DEFAULT_SEARCH_MAX_RESULTS, DEFAULT_SEARCH_MAX_RESULTS)
@@ -504,9 +926,9 @@ export function registerFilesystemHandlers(
       // spawn('rg') emits 'close' before 'error' on some platforms, causing
       // the handler to resolve with empty results before the git-grep
       // fallback can run. The result is cached after the first check.
-      const rgAvailable = await checkRgAvailable(rootPath)
+      const rgAvailable = await checkRgAvailable(rootPath, localGitOptions.wslDistro)
       if (!rgAvailable) {
-        return searchWithGitGrep(rootPath, args, maxResults)
+        return searchWithGitGrep(rootPath, args, maxResults, localGitOptions)
       }
 
       return new Promise((resolvePromise) => {
@@ -525,12 +947,11 @@ export function registerFilesystemHandlers(
         let child: ChildProcess | null = null
         let killTimeout: ReturnType<typeof setTimeout>
 
-        // Why: when rg runs inside WSL, output paths are Linux-native
-        // (e.g. /home/user/repo/src/file.ts). Translate them back to
-        // Windows UNC paths so path.relative() and Node fs APIs work.
-        const wslInfo = parseWslPath(rootPath)
-        const transformAbsPath = wslInfo
-          ? (p: string): string => toWindowsWslPath(p, wslInfo.distro)
+        // Why: WSL-routed rg emits Linux-native paths. UNC repos carry their
+        // distro in the path; Windows-path repos carry it in project runtime.
+        const wslDistroForOutput = parseWslPath(rootPath)?.distro ?? localGitOptions.wslDistro
+        const transformAbsPath = wslDistroForOutput
+          ? (p: string): string => (p.startsWith('/') ? toWindowsWslPath(p, wslDistroForOutput) : p)
           : undefined
 
         const resolveOnce = (): void => {
@@ -560,6 +981,7 @@ export function registerFilesystemHandlers(
 
         const nextChild = wslAwareSpawn('rg', rgArgs, {
           cwd: rootPath,
+          ...(localGitOptions.wslDistro ? { wslDistro: localGitOptions.wslDistro } : {}),
           stdio: ['ignore', 'pipe', 'pipe']
         })
         child = nextChild
@@ -604,38 +1026,76 @@ export function registerFilesystemHandlers(
   )
 
   // ─── List all files (for quick-open) ─────────────────────
+  // Why #7721: keyed by renderer-generated token so a workspace switch can
+  // abort the previous workspace's full-tree scan (SSH relays otherwise stack
+  // scans that starve interactive fs.readDir/fs.stat past their 30s timeout).
+  const listFilesCancellations = new Map<string, AbortController>()
   ipcMain.handle(
     'fs:listFiles',
     async (
       _event,
-      args: { rootPath: string; connectionId?: string; excludePaths?: string[] }
-    ): Promise<string[]> => {
-      if (args.connectionId) {
-        const provider = getSshFilesystemProvider(args.connectionId)
-        // Why: when the SSH connection is not yet established (cold start) or
-        // temporarily disconnected, return [] so quick-open shows "No matching
-        // files" instead of an error banner. The file list will repopulate when
-        // the user re-opens quick-open after the connection is restored.
-        if (!provider) {
-          return []
-        }
-        // Why: forward excludePaths through to the remote provider.
-        // Dropping it here would silently double-scan nested linked worktrees
-        // over SSH and contribute to timeout-induced partial results.
-        return provider.listFiles(args.rootPath, { excludePaths: args.excludePaths })
+      args: {
+        rootPath: string
+        connectionId?: string
+        excludePaths?: string[]
+        requestToken?: string
       }
-      return listQuickOpenFiles(args.rootPath, store, args.excludePaths)
+    ): Promise<string[]> => {
+      const controller = args.requestToken ? new AbortController() : null
+      if (controller && args.requestToken) {
+        listFilesCancellations.set(args.requestToken, controller)
+      }
+      try {
+        if (args.connectionId) {
+          const provider = getSshFilesystemProvider(args.connectionId)
+          // Why: when the SSH connection is not yet established (cold start) or
+          // temporarily disconnected, return [] so quick-open shows "No matching
+          // files" instead of an error banner. The file list will repopulate when
+          // the user re-opens quick-open after the connection is restored.
+          if (!provider) {
+            return []
+          }
+          // Why: forward excludePaths through to the remote provider.
+          // Dropping it here would silently double-scan nested linked worktrees
+          // over SSH and contribute to timeout-induced partial results.
+          return await provider.listFiles(args.rootPath, {
+            excludePaths: args.excludePaths,
+            signal: controller?.signal
+          })
+        }
+        return await listQuickOpenFiles(args.rootPath, store, args.excludePaths)
+      } finally {
+        if (args.requestToken) {
+          listFilesCancellations.delete(args.requestToken)
+        }
+      }
     }
   )
+
+  ipcMain.handle('fs:cancelListFiles', (_event, args: { requestToken: string }): void => {
+    // Why: best-effort — the entry is gone once the listing settles, and
+    // local scans are fast enough to simply let them finish.
+    listFilesCancellations.get(args.requestToken)?.abort()
+  })
 
   // ─── Git operations ─────────────────────────────────────
   ipcMain.handle(
     'git:status',
     async (
       _event,
-      args: { worktreePath: string; connectionId?: string; includeIgnored?: boolean }
+      args: {
+        worktreePath: string
+        connectionId?: string
+        includeIgnored?: boolean
+        bypassEffectiveUpstreamNegativeCache?: boolean
+      }
     ): Promise<GitStatusResult> => {
-      const options = { includeIgnored: args.includeIgnored ?? false }
+      const options = {
+        includeIgnored: args.includeIgnored ?? false,
+        ...(args.bypassEffectiveUpstreamNegativeCache === true
+          ? { bypassEffectiveUpstreamNegativeCache: true }
+          : {})
+      }
       if (args.connectionId) {
         const provider = getSshGitProvider(args.connectionId)
         if (!provider) {
@@ -644,7 +1104,46 @@ export function registerFilesystemHandlers(
         return provider.getStatus(args.worktreePath, options)
       }
       const worktreePath = await resolveRegisteredWorktreePath(args.worktreePath, store)
-      return getStatus(worktreePath, options)
+      const gitOptions = getLocalGitOptionsForRegisteredWorktree(
+        store,
+        args.worktreePath,
+        worktreePath
+      )
+      return getStatus(worktreePath, { ...options, ...gitOptions })
+    }
+  )
+
+  // Why: the parent status only reports one gitlink row per submodule. When the
+  // user expands a dirty submodule, this fetches the inner per-file changes by
+  // running a plain status inside the submodule's own worktree (read-only).
+  ipcMain.handle(
+    'git:submoduleStatus',
+    async (
+      _event,
+      args: {
+        worktreePath: string
+        submodulePath: string
+        connectionId?: string
+        area?: GitStagingArea
+      }
+    ): Promise<GitStatusResult> => {
+      if (args.connectionId) {
+        const provider = getSshGitProvider(args.connectionId)
+        if (!provider) {
+          throw new Error(SSH_GIT_PROVIDER_UNAVAILABLE_MESSAGE)
+        }
+        return provider.getSubmoduleStatus(args.worktreePath, args.submodulePath, args.area)
+      }
+      const worktreePath = await resolveRegisteredWorktreePath(args.worktreePath, store)
+      const gitOptions = getLocalGitOptionsForRegisteredWorktree(
+        store,
+        args.worktreePath,
+        worktreePath
+      )
+      return getSubmoduleStatus(worktreePath, args.submodulePath, {
+        ...gitOptions,
+        ...(args.area === 'staged' ? { staged: true } : {})
+      })
     }
   )
 
@@ -664,7 +1163,37 @@ export function registerFilesystemHandlers(
       }
       const worktreePath = await resolveRegisteredWorktreePath(args.worktreePath, store)
       const paths = args.paths.map((p) => validateGitRelativeFilePath(worktreePath, p))
-      return checkIgnoredPaths(worktreePath, paths)
+      const gitOptions = getLocalGitOptionsForRegisteredWorktree(
+        store,
+        args.worktreePath,
+        worktreePath
+      )
+      return checkIgnoredPaths(worktreePath, paths, gitOptions)
+    }
+  )
+
+  // Why: when status hits the entry limit, the SCM view offers to .gitignore the
+  // folder that's flooding it. These two handlers back that flow. Local-only:
+  // the huge-untracked-folder case is a local-dev pathology, and routing a
+  // .gitignore write through the SSH provider isn't worth the surface here.
+  ipcMain.handle(
+    'git:findHugeFoldersToIgnore',
+    async (_event, args: { worktreePath: string }): Promise<string[]> => {
+      const worktreePath = await resolveRegisteredWorktreePath(args.worktreePath, store)
+      const gitOptions = getLocalGitOptionsForRegisteredWorktree(
+        store,
+        args.worktreePath,
+        worktreePath
+      )
+      return findKnownHugeFolderPathsToIgnore(worktreePath, gitOptions)
+    }
+  )
+
+  ipcMain.handle(
+    'git:appendGitignore',
+    async (_event, args: { worktreePath: string; folderName: string }): Promise<boolean> => {
+      const worktreePath = await resolveRegisteredWorktreePath(args.worktreePath, store)
+      return appendFolderToGitignore(worktreePath, args.folderName)
     }
   )
 
@@ -683,7 +1212,12 @@ export function registerFilesystemHandlers(
         return provider.getHistory(args.worktreePath, options)
       }
       const worktreePath = await resolveRegisteredWorktreePath(args.worktreePath, store)
-      return getHistory(worktreePath, options)
+      const gitOptions = getLocalGitOptionsForRegisteredWorktree(
+        store,
+        args.worktreePath,
+        worktreePath
+      )
+      return getHistory(worktreePath, { ...options, ...gitOptions })
     }
   )
 
@@ -719,7 +1253,12 @@ export function registerFilesystemHandlers(
         return provider.abortMerge(args.worktreePath)
       }
       const worktreePath = await resolveRegisteredWorktreePath(args.worktreePath, store)
-      await abortMerge(worktreePath)
+      const gitOptions = getLocalGitOptionsForRegisteredWorktree(
+        store,
+        args.worktreePath,
+        worktreePath
+      )
+      await abortMerge(worktreePath, gitOptions)
     }
   )
 
@@ -734,7 +1273,12 @@ export function registerFilesystemHandlers(
         return provider.abortRebase(args.worktreePath)
       }
       const worktreePath = await resolveRegisteredWorktreePath(args.worktreePath, store)
-      await abortRebase(worktreePath)
+      const gitOptions = getLocalGitOptionsForRegisteredWorktree(
+        store,
+        args.worktreePath,
+        worktreePath
+      )
+      await abortRebase(worktreePath, gitOptions)
     }
   )
 
@@ -764,7 +1308,12 @@ export function registerFilesystemHandlers(
       }
       const worktreePath = await resolveRegisteredWorktreePath(args.worktreePath, store)
       const filePath = validateGitRelativeFilePath(worktreePath, args.filePath)
-      return getDiff(worktreePath, filePath, args.staged, args.compareAgainstHead)
+      const gitOptions = getLocalGitOptionsForRegisteredWorktree(
+        store,
+        args.worktreePath,
+        worktreePath
+      )
+      return getDiff(worktreePath, filePath, args.staged, args.compareAgainstHead, gitOptions)
     }
   )
 
@@ -786,7 +1335,12 @@ export function registerFilesystemHandlers(
         return provider.commit(args.worktreePath, args.message)
       }
       const worktreePath = await resolveRegisteredWorktreePath(args.worktreePath, store)
-      return commitChanges(worktreePath, args.message)
+      const gitOptions = getLocalGitOptionsForRegisteredWorktree(
+        store,
+        args.worktreePath,
+        worktreePath
+      )
+      return commitChanges(worktreePath, args.message, gitOptions)
     }
   )
 
@@ -798,15 +1352,28 @@ export function registerFilesystemHandlers(
         worktreePath: string
         repoId?: string
         connectionId?: string
+        sourceControlAiResolvedParams?: ResolvedSourceControlAiGenerationParams
+        sourceControlAi?: GlobalSettings['sourceControlAi']
+        agentCmdOverrides?: GlobalSettings['agentCmdOverrides']
       }
     ): Promise<GenerateCommitMessageResult> => {
       const discoveryHostKey = getCommitMessageModelDiscoveryHostKey(args.connectionId ?? null)
-      const resolvedSettings = resolveCommitMessageSettings(
-        store.getSettings(),
-        discoveryHostKey,
-        'commitMessage',
-        await getRepoForSourceControlAi(store, args)
-      )
+      const baseSettings = store.getSettings()
+      const requestSettings = {
+        ...baseSettings,
+        ...(args.sourceControlAi !== undefined ? { sourceControlAi: args.sourceControlAi } : {}),
+        ...(args.agentCmdOverrides !== undefined
+          ? { agentCmdOverrides: args.agentCmdOverrides }
+          : {})
+      }
+      const resolvedSettings = args.sourceControlAiResolvedParams
+        ? { ok: true as const, params: args.sourceControlAiResolvedParams }
+        : resolveCommitMessageSettings(
+            requestSettings,
+            discoveryHostKey,
+            'commitMessage',
+            await getRepoForSourceControlAi(store, args)
+          )
       if (!resolvedSettings.ok) {
         return { success: false, error: resolvedSettings.error }
       }
@@ -840,9 +1407,14 @@ export function registerFilesystemHandlers(
         })
       }
       const worktreePath = await resolveRegisteredWorktreePath(args.worktreePath, store)
+      const gitOptions = getLocalGitOptionsForRegisteredWorktree(
+        store,
+        args.worktreePath,
+        worktreePath
+      )
       let context
       try {
-        context = await getStagedCommitContext(worktreePath)
+        context = await getStagedCommitContext(worktreePath, gitOptions)
       } catch (error) {
         console.error('[filesystem] Failed to read staged commit context:', error)
         return {
@@ -855,16 +1427,17 @@ export function registerFilesystemHandlers(
       }
       const localEnv = await prepareLocalCommitMessageAgentEnv(
         resolvedSettings.params.agentId,
-        commitMessageAgentEnv
+        commitMessageAgentEnv,
+        getLocalAgentRuntimeTarget(gitOptions)
       )
       if (!localEnv.ok) {
         return { success: false, error: localEnv.error }
       }
-      return generateCommitMessageFromContext(context, resolvedSettings.params, {
-        kind: 'local',
-        cwd: worktreePath,
-        ...(localEnv.env ? { env: localEnv.env } : {})
-      })
+      return generateCommitMessageFromContext(
+        context,
+        resolvedSettings.params,
+        getLocalTextGenerationTarget(worktreePath, gitOptions, localEnv.env)
+      )
     }
   )
 
@@ -910,15 +1483,36 @@ export function registerFilesystemHandlers(
           agentCommandOverride
         )
       }
-      const localEnv = await prepareLocalCommitMessageAgentEnv(agentId, commitMessageAgentEnv)
+      let localRuntimeTarget: CommitMessageAgentRuntimeTarget = { runtime: 'host' }
+      let localDiscoveryOptions: Parameters<typeof discoverCommitMessageModelsLocal>[3]
+      if (args.worktreePath) {
+        const worktreePath = await resolveRegisteredWorktreePath(args.worktreePath, store)
+        const gitOptions = getLocalGitOptionsForRegisteredWorktree(
+          store,
+          args.worktreePath,
+          worktreePath
+        )
+        localRuntimeTarget = getLocalAgentRuntimeTarget(gitOptions)
+        localDiscoveryOptions = gitOptions.wslDistro
+          ? { cwd: worktreePath, wslDistro: gitOptions.wslDistro }
+          : { cwd: worktreePath }
+      }
+      const localEnv = await prepareLocalCommitMessageAgentEnv(
+        agentId,
+        commitMessageAgentEnv,
+        localRuntimeTarget
+      )
       if (!localEnv.ok) {
         return { success: false, error: localEnv.error }
       }
-      return discoverCommitMessageModelsLocal(
-        agentId as TuiAgent,
-        localEnv.env,
-        agentCommandOverride
-      )
+      return localDiscoveryOptions
+        ? discoverCommitMessageModelsLocal(
+            agentId as TuiAgent,
+            localEnv.env,
+            agentCommandOverride,
+            localDiscoveryOptions
+          )
+        : discoverCommitMessageModelsLocal(agentId as TuiAgent, localEnv.env, agentCommandOverride)
     }
   )
 
@@ -933,16 +1527,31 @@ export function registerFilesystemHandlers(
         title: string
         body: string
         draft: boolean
+        provider?: HostedReviewProvider
+        useTemplate?: boolean
         connectionId?: string
+        sourceControlAiResolvedParams?: ResolvedSourceControlAiGenerationParams
+        sourceControlAi?: GlobalSettings['sourceControlAi']
+        agentCmdOverrides?: GlobalSettings['agentCmdOverrides']
       }
     ): Promise<GeneratePullRequestFieldsResult> => {
       const discoveryHostKey = getCommitMessageModelDiscoveryHostKey(args.connectionId ?? null)
-      const resolvedSettings = resolveCommitMessageSettings(
-        store.getSettings(),
-        discoveryHostKey,
-        'pullRequest',
-        await getRepoForSourceControlAi(store, args)
-      )
+      const baseSettings = store.getSettings()
+      const requestSettings = {
+        ...baseSettings,
+        ...(args.sourceControlAi !== undefined ? { sourceControlAi: args.sourceControlAi } : {}),
+        ...(args.agentCmdOverrides !== undefined
+          ? { agentCmdOverrides: args.agentCmdOverrides }
+          : {})
+      }
+      const resolvedSettings = args.sourceControlAiResolvedParams
+        ? { ok: true as const, params: args.sourceControlAiResolvedParams }
+        : resolveCommitMessageSettings(
+            requestSettings,
+            discoveryHostKey,
+            'pullRequest',
+            await getRepoForSourceControlAi(store, args)
+          )
       if (!resolvedSettings.ok) {
         return { success: false, error: resolvedSettings.error }
       }
@@ -956,12 +1565,19 @@ export function registerFilesystemHandlers(
         }
         let context: Awaited<ReturnType<typeof getPullRequestDraftContext>>
         try {
+          const currentBody = await resolveHostedReviewBodyForGeneration({
+            body: args.body,
+            repoPath: args.worktreePath,
+            connectionId: args.connectionId,
+            provider: args.provider,
+            useTemplate: args.useTemplate
+          })
           context = await getPullRequestDraftContext(
             (argv) => provider.exec(argv, args.worktreePath),
             {
               base: args.base,
               currentTitle: args.title,
-              currentBody: args.body,
+              currentBody,
               currentDraft: args.draft
             }
           )
@@ -985,14 +1601,27 @@ export function registerFilesystemHandlers(
       }
 
       const worktreePath = await resolveRegisteredWorktreePath(args.worktreePath, store)
+      const gitOptions = getLocalGitOptionsForRegisteredWorktree(
+        store,
+        args.worktreePath,
+        worktreePath
+      )
       let context: Awaited<ReturnType<typeof getPullRequestDraftContext>>
       try {
+        const currentBody = await resolveHostedReviewBodyForGeneration({
+          body: args.body,
+          repoPath: worktreePath,
+          connectionId: args.connectionId,
+          provider: args.provider,
+          useTemplate: args.useTemplate
+        })
         context = await getPullRequestDraftContext(
-          (argv, options) => gitExecFileAsync(argv, { cwd: worktreePath, ...options }),
+          (argv, options) =>
+            gitExecFileAsync(argv, { cwd: worktreePath, ...gitOptions, ...options }),
           {
             base: args.base,
             currentTitle: args.title,
-            currentBody: args.body,
+            currentBody,
             currentDraft: args.draft
           }
         )
@@ -1007,16 +1636,17 @@ export function registerFilesystemHandlers(
       }
       const localEnv = await prepareLocalCommitMessageAgentEnv(
         resolvedSettings.params.agentId,
-        commitMessageAgentEnv
+        commitMessageAgentEnv,
+        getLocalAgentRuntimeTarget(gitOptions)
       )
       if (!localEnv.ok) {
         return { success: false, error: localEnv.error }
       }
-      return generatePullRequestFieldsFromContext(context, resolvedSettings.params, {
-        kind: 'local',
-        cwd: worktreePath,
-        ...(localEnv.env ? { env: localEnv.env } : {})
-      })
+      return generatePullRequestFieldsFromContext(
+        context,
+        resolvedSettings.params,
+        getLocalTextGenerationTarget(worktreePath, gitOptions, localEnv.env)
+      )
     }
   )
 
@@ -1050,7 +1680,12 @@ export function registerFilesystemHandlers(
         return provider.getBranchCompare(args.worktreePath, args.baseRef)
       }
       const worktreePath = await resolveRegisteredWorktreePath(args.worktreePath, store)
-      return getBranchCompare(worktreePath, args.baseRef)
+      const gitOptions = getLocalGitOptionsForRegisteredWorktree(
+        store,
+        args.worktreePath,
+        worktreePath
+      )
+      return getBranchCompare(worktreePath, args.baseRef, gitOptions)
     }
   )
 
@@ -1069,7 +1704,12 @@ export function registerFilesystemHandlers(
         return provider.getCommitCompare(args.worktreePath, commitId)
       }
       const worktreePath = await resolveRegisteredWorktreePath(args.worktreePath, store)
-      return getCommitCompare(worktreePath, commitId)
+      const gitOptions = getLocalGitOptionsForRegisteredWorktree(
+        store,
+        args.worktreePath,
+        worktreePath
+      )
+      return getCommitCompare(worktreePath, commitId, gitOptions)
     }
   )
 
@@ -1090,7 +1730,12 @@ export function registerFilesystemHandlers(
         return provider.getUpstreamStatus(args.worktreePath, args.pushTarget)
       }
       const worktreePath = await resolveRegisteredWorktreePath(args.worktreePath, store)
-      return getUpstreamStatus(worktreePath, args.pushTarget)
+      const gitOptions = getLocalGitOptionsForRegisteredWorktree(
+        store,
+        args.worktreePath,
+        worktreePath
+      )
+      return getUpstreamStatus(worktreePath, args.pushTarget, gitOptions)
     }
   )
 
@@ -1111,10 +1756,45 @@ export function registerFilesystemHandlers(
         return provider.fetchRemote(args.worktreePath, args.pushTarget)
       }
       const worktreePath = await resolveRegisteredWorktreePath(args.worktreePath, store)
+      const gitOptions = getLocalGitOptionsForRegisteredWorktree(
+        store,
+        args.worktreePath,
+        worktreePath
+      )
       if (args.pushTarget) {
-        await validateGitPushTarget(worktreePath, args.pushTarget)
+        await validateGitPushTarget(worktreePath, args.pushTarget, gitOptions)
       }
-      await gitFetch(worktreePath, args.pushTarget)
+      await gitFetch(worktreePath, args.pushTarget, gitOptions)
+    }
+  )
+
+  ipcMain.handle(
+    'git:syncFork',
+    async (
+      _event,
+      args: {
+        worktreePath: string
+        connectionId?: string
+        expectedUpstream: GitForkSyncExpectedUpstream
+      }
+    ): Promise<GitForkSyncResult> => {
+      const expectedUpstream = validateGitForkSyncExpectedUpstream(args.expectedUpstream, {
+        required: true
+      })
+      if (args.connectionId) {
+        const provider = getSshGitProvider(args.connectionId)
+        if (!provider) {
+          throw new Error(SSH_GIT_PROVIDER_UNAVAILABLE_MESSAGE)
+        }
+        return provider.syncForkDefaultBranch(args.worktreePath, expectedUpstream)
+      }
+      const worktreePath = await resolveRegisteredWorktreePath(args.worktreePath, store)
+      const gitOptions = getLocalGitOptionsForRegisteredWorktree(
+        store,
+        args.worktreePath,
+        worktreePath
+      )
+      return gitSyncForkDefaultBranch(worktreePath, expectedUpstream, gitOptions)
     }
   )
 
@@ -1147,11 +1827,17 @@ export function registerFilesystemHandlers(
         })
       }
       const worktreePath = await resolveRegisteredWorktreePath(args.worktreePath, store)
+      const gitOptions = getLocalGitOptionsForRegisteredWorktree(
+        store,
+        args.worktreePath,
+        worktreePath
+      )
       if (args.pushTarget) {
-        await validateGitPushTarget(worktreePath, args.pushTarget)
+        await validateGitPushTarget(worktreePath, args.pushTarget, gitOptions)
       }
       await gitPush(worktreePath, publish, args.pushTarget, {
-        forceWithLease: args.forceWithLease === true
+        forceWithLease: args.forceWithLease === true,
+        ...gitOptions
       })
     }
   )
@@ -1173,10 +1859,15 @@ export function registerFilesystemHandlers(
         return provider.pullBranch(args.worktreePath, args.pushTarget)
       }
       const worktreePath = await resolveRegisteredWorktreePath(args.worktreePath, store)
+      const gitOptions = getLocalGitOptionsForRegisteredWorktree(
+        store,
+        args.worktreePath,
+        worktreePath
+      )
       if (args.pushTarget) {
-        await validateGitPushTarget(worktreePath, args.pushTarget)
+        await validateGitPushTarget(worktreePath, args.pushTarget, gitOptions)
       }
-      await gitPull(worktreePath, args.pushTarget)
+      await gitPull(worktreePath, args.pushTarget, gitOptions)
     }
   )
 
@@ -1197,10 +1888,15 @@ export function registerFilesystemHandlers(
         return provider.fastForwardBranch(args.worktreePath, args.pushTarget)
       }
       const worktreePath = await resolveRegisteredWorktreePath(args.worktreePath, store)
+      const gitOptions = getLocalGitOptionsForRegisteredWorktree(
+        store,
+        args.worktreePath,
+        worktreePath
+      )
       if (args.pushTarget) {
-        await validateGitPushTarget(worktreePath, args.pushTarget)
+        await validateGitPushTarget(worktreePath, args.pushTarget, gitOptions)
       }
-      await gitFastForward(worktreePath, args.pushTarget)
+      await gitFastForward(worktreePath, args.pushTarget, gitOptions)
     }
   )
 
@@ -1218,7 +1914,12 @@ export function registerFilesystemHandlers(
         return provider.rebaseFromBase(args.worktreePath, args.baseRef)
       }
       const worktreePath = await resolveRegisteredWorktreePath(args.worktreePath, store)
-      await gitPullRebaseFromBase(worktreePath, args.baseRef)
+      const gitOptions = getLocalGitOptionsForRegisteredWorktree(
+        store,
+        args.worktreePath,
+        worktreePath
+      )
+      await gitPullRebaseFromBase(worktreePath, args.baseRef, gitOptions)
     }
   )
 
@@ -1264,12 +1965,21 @@ export function registerFilesystemHandlers(
       const oldPath = args.oldPath
         ? validateGitRelativeFilePath(worktreePath, args.oldPath)
         : undefined
-      return getBranchDiff(worktreePath, {
-        mergeBase: args.compare.mergeBase,
-        headOid: args.compare.headOid,
-        filePath,
-        oldPath
-      })
+      const gitOptions = getLocalGitOptionsForRegisteredWorktree(
+        store,
+        args.worktreePath,
+        worktreePath
+      )
+      return getBranchDiff(
+        worktreePath,
+        {
+          mergeBase: args.compare.mergeBase,
+          headOid: args.compare.headOid,
+          filePath,
+          oldPath
+        },
+        gitOptions
+      )
     }
   )
 
@@ -1305,12 +2015,21 @@ export function registerFilesystemHandlers(
       const oldPath = args.oldPath
         ? validateGitRelativeFilePath(worktreePath, args.oldPath)
         : undefined
-      return getCommitDiff(worktreePath, {
-        commitOid,
-        parentOid,
-        filePath,
-        oldPath
-      })
+      const gitOptions = getLocalGitOptionsForRegisteredWorktree(
+        store,
+        args.worktreePath,
+        worktreePath
+      )
+      return getCommitDiff(
+        worktreePath,
+        {
+          commitOid,
+          parentOid,
+          filePath,
+          oldPath
+        },
+        gitOptions
+      )
     }
   )
 
@@ -1329,7 +2048,12 @@ export function registerFilesystemHandlers(
       }
       const worktreePath = await resolveRegisteredWorktreePath(args.worktreePath, store)
       const filePath = validateGitRelativeFilePath(worktreePath, args.filePath)
-      await stageFile(worktreePath, filePath)
+      const gitOptions = getLocalGitOptionsForRegisteredWorktree(
+        store,
+        args.worktreePath,
+        worktreePath
+      )
+      await stageFile(worktreePath, filePath, gitOptions)
     }
   )
 
@@ -1348,7 +2072,12 @@ export function registerFilesystemHandlers(
       }
       const worktreePath = await resolveRegisteredWorktreePath(args.worktreePath, store)
       const filePath = validateGitRelativeFilePath(worktreePath, args.filePath)
-      await unstageFile(worktreePath, filePath)
+      const gitOptions = getLocalGitOptionsForRegisteredWorktree(
+        store,
+        args.worktreePath,
+        worktreePath
+      )
+      await unstageFile(worktreePath, filePath, gitOptions)
     }
   )
 
@@ -1367,7 +2096,12 @@ export function registerFilesystemHandlers(
       }
       const worktreePath = await resolveRegisteredWorktreePath(args.worktreePath, store)
       const filePath = validateGitRelativeFilePath(worktreePath, args.filePath)
-      await discardChanges(worktreePath, filePath)
+      const gitOptions = getLocalGitOptionsForRegisteredWorktree(
+        store,
+        args.worktreePath,
+        worktreePath
+      )
+      await discardChanges(worktreePath, filePath, gitOptions)
     }
   )
 
@@ -1386,7 +2120,12 @@ export function registerFilesystemHandlers(
       }
       const worktreePath = await resolveRegisteredWorktreePath(args.worktreePath, store)
       const filePaths = args.filePaths.map((p) => validateGitRelativeFilePath(worktreePath, p))
-      await bulkDiscardChanges(worktreePath, filePaths)
+      const gitOptions = getLocalGitOptionsForRegisteredWorktree(
+        store,
+        args.worktreePath,
+        worktreePath
+      )
+      await bulkDiscardChanges(worktreePath, filePaths, gitOptions)
     }
   )
 
@@ -1405,7 +2144,12 @@ export function registerFilesystemHandlers(
       }
       const worktreePath = await resolveRegisteredWorktreePath(args.worktreePath, store)
       const filePaths = args.filePaths.map((p) => validateGitRelativeFilePath(worktreePath, p))
-      await bulkStageFiles(worktreePath, filePaths)
+      const gitOptions = getLocalGitOptionsForRegisteredWorktree(
+        store,
+        args.worktreePath,
+        worktreePath
+      )
+      await bulkStageFiles(worktreePath, filePaths, gitOptions)
     }
   )
 
@@ -1424,7 +2168,12 @@ export function registerFilesystemHandlers(
       }
       const worktreePath = await resolveRegisteredWorktreePath(args.worktreePath, store)
       const filePaths = args.filePaths.map((p) => validateGitRelativeFilePath(worktreePath, p))
-      await bulkUnstageFiles(worktreePath, filePaths)
+      const gitOptions = getLocalGitOptionsForRegisteredWorktree(
+        store,
+        args.worktreePath,
+        worktreePath
+      )
+      await bulkUnstageFiles(worktreePath, filePaths, gitOptions)
     }
   )
 
@@ -1445,6 +2194,27 @@ export function registerFilesystemHandlers(
       }
       const worktreePath = await resolveRegisteredWorktreePath(args.worktreePath, store)
       return getRemoteFileUrl(worktreePath, args.relativePath, args.line)
+    }
+  )
+
+  ipcMain.handle(
+    'git:remoteCommitUrl',
+    async (
+      _event,
+      args: { worktreePath: string; sha: string; connectionId?: string }
+    ): Promise<string | null> => {
+      const sha = validateFullGitObjectId(args.sha, 'sha')
+      // Why: remote repos can't read relay-side .git/config locally. Delegate
+      // URL construction to the SSH provider, which can fetch remote metadata.
+      if (args.connectionId) {
+        const provider = getSshGitProvider(args.connectionId)
+        if (!provider) {
+          throw new Error(SSH_GIT_PROVIDER_UNAVAILABLE_MESSAGE)
+        }
+        return provider.getRemoteCommitUrl(args.worktreePath, sha)
+      }
+      const worktreePath = await resolveRegisteredWorktreePath(args.worktreePath, store)
+      return getRemoteCommitUrl(worktreePath, sha)
     }
   )
 }

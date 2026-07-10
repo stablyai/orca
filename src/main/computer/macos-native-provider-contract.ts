@@ -1,4 +1,4 @@
-import type net from 'net'
+import type net from 'node:net'
 import type { ComputerProviderCapabilities } from '../../shared/runtime-types'
 
 export type NativeMethod =
@@ -41,6 +41,23 @@ export function assertMacOSProviderCapability(
 ): boolean {
   const groupCapabilities = capabilities?.supports[group] as Record<string, boolean> | undefined
   return groupCapabilities?.[capability] === true
+}
+
+export function macOSActionCapabilityKey(
+  method: NativeActionMethod
+): keyof ComputerProviderCapabilities['supports']['actions'] {
+  const keys = {
+    click: 'click',
+    performSecondaryAction: 'performAction',
+    scroll: 'scroll',
+    drag: 'drag',
+    typeText: 'typeText',
+    pressKey: 'pressKey',
+    hotkey: 'hotkey',
+    pasteText: 'pasteText',
+    setValue: 'setValue'
+  } satisfies Record<NativeActionMethod, keyof ComputerProviderCapabilities['supports']['actions']>
+  return keys[method]
 }
 
 export function writeNativeProviderLine(transport: net.Socket, line: string): Promise<void> {

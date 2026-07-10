@@ -23,6 +23,7 @@
 //   default env is `remote`, a location marker ignored by dev-vs-prod checks.
 
 import type { ParsedAgentStatusPayload } from './agent-status-types'
+import type { AgentProviderSessionMetadata } from './agent-session-resume'
 
 // Why: the local hook server knows the discriminator from URL pathname routing
 // (`/hook/<source>`); the relay equally must tag each forwarded notification
@@ -37,6 +38,7 @@ export type AgentHookSource =
   | 'antigravity'
   | 'amp'
   | 'opencode'
+  | 'mimo-code'
   | 'cursor'
   | 'pi'
   | 'omp'
@@ -45,6 +47,8 @@ export type AgentHookSource =
   | 'grok'
   | 'copilot'
   | 'hermes'
+  | 'devin'
+  | 'kimi'
 
 /** Env marker used by the remote relay. It is a transport/location marker, not
  *  a dev-vs-prod build tag, so main-process env mismatch diagnostics ignore it. */
@@ -54,6 +58,8 @@ export const REMOTE_AGENT_HOOK_ENV = 'remote' as const
 export type AgentHookRelayEnvelope = {
   source: AgentHookSource
   paneKey: string
+  /** Ephemeral Orca launch identity stamped into the PTY env for this process. */
+  launchToken?: string
   tabId?: string
   worktreeId?: string
   /** Always `null` on the wire — relay does not know Orca's local connectionId. */
@@ -72,6 +78,8 @@ export type AgentHookRelayEnvelope = {
   toolAgentId?: string
   /** Claude agent type, used only as a lower-confidence identity fallback. */
   toolAgentType?: string
+  /** Provider-owned conversation/session id needed to resume a sleeping agent. */
+  providerSession?: AgentProviderSessionMetadata
   /** True when the relay is replaying its cache after Orca reconnects. */
   isReplay?: boolean
   /** Forwarded from the agent CLI POST body. The relay default is `remote`,
@@ -95,7 +103,7 @@ export const AGENT_HOOK_REQUEST_REPLAY_METHOD = 'agent_hook.requestReplay' as co
 
 /** JSON-RPC request method Orca issues at session-ready to ship the
  *  OpenCode/Pi plugin source files to the relay so it can materialize the
- *  per-PTY overlay dirs on the remote. */
+ *  overlay dirs on the remote. */
 export const AGENT_HOOK_INSTALL_PLUGINS_METHOD = 'agent_hook.installPlugins' as const
 
 /** Feature-flag env var. Read once at process start by Orca and the relay.

@@ -1,4 +1,7 @@
+import { isClipboardTextByteLengthOverLimit } from '../../../shared/clipboard-text'
+
 export const QUICK_OPEN_RESULT_LIMIT = 50
+export const QUICK_OPEN_QUERY_MAX_BYTES = 2 * 1024
 
 export type QuickOpenIndexedFile = {
   path: string
@@ -14,14 +17,22 @@ export type QuickOpenSearchResult = {
 
 export function prepareQuickOpenFiles(files: readonly string[]): QuickOpenIndexedFile[] {
   return files.map((path, inputIndex) => {
-    const lastSlash = path.lastIndexOf('/')
+    const searchPath = path.replace(/\\/g, '/')
+    const lastSlash = searchPath.lastIndexOf('/')
     return {
       path,
-      lowerPath: path.toLowerCase(),
-      lowerFilename: path.slice(lastSlash + 1).toLowerCase(),
+      lowerPath: searchPath.toLowerCase(),
+      lowerFilename: searchPath.slice(lastSlash + 1).toLowerCase(),
       inputIndex
     }
   })
+}
+
+export function isQuickOpenQueryTooLarge(
+  query: string,
+  maxBytes = QUICK_OPEN_QUERY_MAX_BYTES
+): boolean {
+  return isClipboardTextByteLengthOverLimit(query, maxBytes)
 }
 
 export function rankQuickOpenFiles(
@@ -32,8 +43,13 @@ export function rankQuickOpenFiles(
   if (limit <= 0) {
     return []
   }
+  if (isQuickOpenQueryTooLarge(query)) {
+    return []
+  }
 
-  const normalizedQuery = query.trim().toLowerCase()
+  // Why: Quick Open presents slash-normalized paths even on Windows; users
+  // still naturally type backslashes in path queries.
+  const normalizedQuery = query.trim().replace(/\\/g, '/').toLowerCase()
   if (!normalizedQuery) {
     return files.slice(0, limit).map((file) => ({ path: file.path, score: 0 }))
   }

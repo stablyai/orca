@@ -1,11 +1,32 @@
 export type CommitFailureDialogState = {
-  identity: string
+  worktreeKey: string
   open: boolean
 }
 
-export function resolveCommitFailureDialogState(
+export function getCommitFailureDialogWorktreeKey(worktreeId: string | null | undefined): string {
+  return worktreeId ?? 'no-worktree'
+}
+
+export function shouldShowCommitFailureDialog(
   state: CommitFailureDialogState,
-  currentIdentity: string
+  worktreeKey: string,
+  hasDetails: boolean
+): boolean {
+  return hasDetails && state.open && state.worktreeKey === worktreeKey
+}
+
+export function syncCommitFailureDialogState(
+  state: CommitFailureDialogState,
+  worktreeKey: string,
+  hasDetails: boolean
 ): CommitFailureDialogState {
-  return state.identity === currentIdentity ? state : { identity: currentIdentity, open: false }
+  if (state.worktreeKey === worktreeKey && hasDetails) {
+    return state
+  }
+
+  if (state.worktreeKey === worktreeKey && !state.open) {
+    return state
+  }
+
+  return { worktreeKey, open: false }
 }

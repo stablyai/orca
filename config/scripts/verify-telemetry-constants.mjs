@@ -31,8 +31,7 @@
 // and the Windows `.cmd`-shim/`shell: true` workaround.
 
 import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs'
-import { dirname, join, resolve } from 'node:path'
-import { fileURLToPath } from 'node:url'
+import { join, resolve } from 'node:path'
 // Why @electron/asar: canonical replacement for the deprecated `asar` package.
 // It's transitively available via electron-builder (and pnpm's
 // `shamefully-hoist=true` in `.npmrc` flattens it into the root
@@ -45,7 +44,7 @@ import { extractFile, listPackage } from '@electron/asar'
 // Resolving relative to the script's own location turns a misleading
 // "could not parse TELEMETRY_ENABLED flag" parse error into a clear
 // file-not-found error, and decouples the script from the caller's cwd.
-const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..')
+const repoRoot = resolve(import.meta.dirname, '..', '..')
 
 function findAsar(rootDir) {
   // Why: electron-builder produces one `app.asar` per platform-arch combo.
@@ -170,9 +169,7 @@ function verifyAsar(asarPath) {
   const writeKeyMatch = WRITE_KEY_RE.exec(indexJs)
 
   if (!buildIdentityMatch) {
-    console.error(
-      `::error::BUILD_IDENTITY constant missing or unexpected value in ${asarPath}`
-    )
+    console.error(`::error::BUILD_IDENTITY constant missing or unexpected value in ${asarPath}`)
     const sample = indexJs.match(/.{0,80}BUILD_IDENTITY.{0,80}/g)?.slice(0, 5) ?? []
     for (const line of sample) {
       console.error(`  ${line.slice(0, 200)}`)
@@ -213,9 +210,7 @@ for (const asarPath of asarMatches) {
 
 const distinctIdentities = new Set(results.map((r) => r.buildIdentity))
 if (distinctIdentities.size > 1) {
-  console.error(
-    `::error::asars disagree on BUILD_IDENTITY: ${[...distinctIdentities].join(', ')}`
-  )
+  console.error(`::error::asars disagree on BUILD_IDENTITY: ${[...distinctIdentities].join(', ')}`)
   for (const r of results) {
     console.error(`  - ${r.asarPath}: ${r.buildIdentity}`)
   }

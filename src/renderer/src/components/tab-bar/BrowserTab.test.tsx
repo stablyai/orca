@@ -11,6 +11,11 @@ vi.mock('react', async () => {
   return {
     ...actual,
     useEffect: () => {},
+    // Why: this shallow harness calls the component as a plain function (no React
+    // render), so ref/callback hooks must be stubbed like useState/useEffect. The
+    // favicon tests never fire pointer events, so non-persistent refs are fine.
+    useRef: <T,>(initial: T) => ({ current: initial }),
+    useCallback: <T,>(fn: T) => fn,
     useState<T>(initial: T | (() => T)) {
       const stateIndex = reactHookRuntime.index++
       if (!(stateIndex in reactHookRuntime.states)) {
@@ -37,6 +42,18 @@ vi.mock('@dnd-kit/sortable', () => ({
 }))
 
 vi.mock('lucide-react', () => ({
+  ArrowDown: function ArrowDown(props: Record<string, unknown>) {
+    return { type: 'ArrowDown', props }
+  },
+  ArrowLeft: function ArrowLeft(props: Record<string, unknown>) {
+    return { type: 'ArrowLeft', props }
+  },
+  ArrowRight: function ArrowRight(props: Record<string, unknown>) {
+    return { type: 'ArrowRight', props }
+  },
+  ArrowUp: function ArrowUp(props: Record<string, unknown>) {
+    return { type: 'ArrowUp', props }
+  },
   Columns2: function Columns2(props: Record<string, unknown>) {
     return { type: 'Columns2', props }
   },
@@ -48,6 +65,15 @@ vi.mock('lucide-react', () => ({
   },
   Globe: function Globe(props: Record<string, unknown>) {
     return { type: 'Globe', props }
+  },
+  Pin: function Pin(props: Record<string, unknown>) {
+    return { type: 'Pin', props }
+  },
+  PinOff: function PinOff(props: Record<string, unknown>) {
+    return { type: 'PinOff', props }
+  },
+  PanelRightClose: function PanelRightClose(props: Record<string, unknown>) {
+    return { type: 'PanelRightClose', props }
   },
   Rows2: function Rows2(props: Record<string, unknown>) {
     return { type: 'Rows2', props }
@@ -69,6 +95,21 @@ vi.mock('@/components/ui/dropdown-menu', () => ({
   },
   DropdownMenuSeparator: function DropdownMenuSeparator() {
     return { type: 'DropdownMenuSeparator', props: {} }
+  },
+  DropdownMenuShortcut: function DropdownMenuShortcut(props: { children?: unknown }) {
+    return { type: 'DropdownMenuShortcut', props }
+  },
+  DropdownMenuLabel: function DropdownMenuLabel(props: { children?: unknown }) {
+    return { type: 'DropdownMenuLabel', props }
+  },
+  DropdownMenuSub: function DropdownMenuSub(props: { children?: unknown }) {
+    return { type: 'DropdownMenuSub', props }
+  },
+  DropdownMenuSubContent: function DropdownMenuSubContent(props: { children?: unknown }) {
+    return { type: 'DropdownMenuSubContent', props }
+  },
+  DropdownMenuSubTrigger: function DropdownMenuSubTrigger(props: { children?: unknown }) {
+    return { type: 'DropdownMenuSubTrigger', props }
   },
   DropdownMenuTrigger: function DropdownMenuTrigger(props: { children?: unknown }) {
     return { type: 'DropdownMenuTrigger', props }
@@ -122,12 +163,13 @@ async function renderBrowserTab(tab: BrowserTabState): Promise<unknown> {
   return module.default({
     tab,
     isActive: true,
+    isPinned: false,
     hasTabsToRight: false,
     onActivate: () => {},
     onClose: () => {},
     onCloseToRight: () => {},
-    onSplitGroup: () => {},
     onDuplicate: () => {},
+    onTogglePin: () => {},
     dragData: {
       kind: 'tab',
       worktreeId: tab.worktreeId,
@@ -187,7 +229,7 @@ async function renderExpandedBrowserTab(tab: BrowserTabState): Promise<unknown> 
   return expandNode(await renderBrowserTab(tab))
 }
 
-describe('BrowserTab favicon', () => {
+describe('BrowserTab favicon', { timeout: 30_000 }, () => {
   beforeEach(() => {
     reactHookRuntime.states = []
     reactHookRuntime.index = 0

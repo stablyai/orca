@@ -1,7 +1,7 @@
-import { tmpdir } from 'os'
-import { join, basename } from 'path'
-import { mkdtempSync, rmSync, writeFileSync } from 'fs'
-import { spawnSync } from 'child_process'
+import { tmpdir } from 'node:os'
+import { join, basename } from 'node:path'
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { spawnSync } from 'node:child_process'
 import { getShellReadyLaunchConfig } from '../../local-pty-shell-ready'
 import { escapeRegex } from '../../../../shared/string-utils'
 
@@ -62,7 +62,11 @@ export async function shellScriptTest(
 
     const env: Record<string, string> = {
       ...config.env,
-      HOME: testHome
+      // Why: the framework creates user startup files under testHome after
+      // computing the wrapper config; route wrapper discovery to that fixture.
+      HOME: testHome,
+      ORCA_ORIG_ZDOTDIR: testHome,
+      ORCA_ZSHENV_SOURCE_DIR: testHome
     }
 
     const spawnOptions = {

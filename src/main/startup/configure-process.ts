@@ -1,15 +1,77 @@
 import { app } from 'electron'
-import { join } from 'path'
+import { existsSync, readFileSync } from 'node:fs'
+import { join } from 'node:path'
 import { getVersionManagerBinPaths } from '../codex-cli/command'
 import { getMainE2EConfig } from '../e2e-config'
 
 const DEV_PARENT_SHUTDOWN_GRACE_MS = 3000
+const HTTP1_COMPATIBILITY_ENV_VAR = 'ORCA_DISABLE_HTTP2'
+const TRUE_ENV_VALUES = new Set(['1', 'true', 'yes', 'on'])
+const FALSE_ENV_VALUES = new Set(['0', 'false', 'no', 'off'])
+let devParentShutdownRequested = false
+
+type NetworkCompatibilityOptions = {
+  env?: NodeJS.ProcessEnv
+  userDataPath?: string
+}
+
+function parseBooleanEnvFlag(value: string | undefined): boolean | null {
+  if (value === undefined) {
+    return null
+  }
+  const normalized = value.trim().toLowerCase()
+  if (TRUE_ENV_VALUES.has(normalized)) {
+    return true
+  }
+  if (FALSE_ENV_VALUES.has(normalized)) {
+    return false
+  }
+  return null
+}
+
+function readPersistedHttp1CompatibilityMode(userDataPath: string): boolean {
+  const dataFile = join(userDataPath, 'orca-data.json')
+  if (!existsSync(dataFile)) {
+    return false
+  }
+
+  try {
+    const parsed = JSON.parse(readFileSync(dataFile, 'utf-8')) as {
+      settings?: { electronHttp1CompatibilityMode?: unknown }
+    }
+    return parsed.settings?.electronHttp1CompatibilityMode === true
+  } catch {
+    return false
+  }
+}
+
+export function shouldDisableHttp2ForElectronNetworking(
+  options: NetworkCompatibilityOptions = {}
+): boolean {
+  const envValue = parseBooleanEnvFlag(options.env?.[HTTP1_COMPATIBILITY_ENV_VAR])
+  if (envValue !== null) {
+    return envValue
+  }
+  return readPersistedHttp1CompatibilityMode(options.userDataPath ?? app.getPath('userData'))
+}
+
+export function configureElectronNetworkCompatibility(
+  options: NetworkCompatibilityOptions = {}
+): void {
+  if (!shouldDisableHttp2ForElectronNetworking(options)) {
+    return
+  }
+  // Why: Chromium's HTTP/2 switch is process-wide and only works before the
+  // first session exists, so read the persisted setting during early startup.
+  app.commandLine.appendSwitch('disable-http2')
+}
 
 function getProcessPathDelimiter(): string {
   return process.platform === 'win32' ? ';' : ':'
 }
 
 function requestDevParentShutdown(): void {
+  devParentShutdownRequested = true
   app.quit()
 
   const forceExitTimer = setTimeout(() => {
@@ -22,6 +84,14 @@ function requestDevParentShutdown(): void {
   }, DEV_PARENT_SHUTDOWN_GRACE_MS)
 
   forceExitTimer.unref()
+}
+
+export function isDevParentShutdownRequested(): boolean {
+  return devParentShutdownRequested
+}
+
+export function resetDevParentShutdownRequestForTests(): void {
+  devParentShutdownRequested = false
 }
 
 export function installUncaughtPipeErrorGuard(): void {
@@ -135,6 +205,13 @@ export function configureDevUserDataPath(isDev: boolean): void {
   app.setPath('userData', join(app.getPath('appData'), 'orca-dev'))
 }
 
+export function configureOrcaUserDataPathEnv(): void {
+  // Why: app relaunches can inherit an ORCA_USER_DATA_PATH from an older CLI or
+  // updater process. Main must canonicalize it before CLI-shared modules build
+  // runtime-home paths, or migrations can bridge two Orca app-data directories.
+  process.env.ORCA_USER_DATA_PATH = app.getPath('userData')
+}
+
 export function shouldInstallManagedHooks(isDev: boolean): boolean {
   void isDev
   // Why: managed hook installation now targets Orca-owned, environment-scoped
@@ -203,6 +280,22 @@ export function installDevParentWatchdog(isDev: boolean): void {
   timer.unref()
 }
 
+export function installDevParentSignalQuit(isDev: boolean): void {
+  if (!isDev) {
+    return
+  }
+
+  const onSignal = (): void => {
+    // Why: run-electron-vite-dev forwards terminal shutdown signals to the
+    // Electron process group; those are dev-supervisor shutdowns too, so the
+    // detached daemon should not be preserved for warm reattach.
+    requestDevParentShutdown()
+  }
+
+  process.once('SIGINT', onSignal)
+  process.once('SIGTERM', onSignal)
+}
+
 export function enableMainProcessGpuFeatures(): void {
   if (process.platform === 'linux' && getMainE2EConfig().userDataDir) {
     // Why: Ubuntu/Xvfb runners can fail Electron startup with
@@ -214,16 +307,41 @@ export function enableMainProcessGpuFeatures(): void {
     return
   }
 
+  // Why: Blink force-loses the oldest WebGL context past 16 per renderer, and
+  // each attached terminal pane holds one — a busy worktree (tabs × splits)
+  // can exceed that, silently downgrading evicted panes to the DOM renderer.
+  // 128 covers real layouts while keeping a bound so context leaks surface.
+  app.commandLine.appendSwitch('max-active-webgl-contexts', '128')
+
+  const ozonePlatform = (app.commandLine.getSwitchValue('ozone-platform') ?? '').toLowerCase()
+  const ozonePlatformHint = (process.env.ELECTRON_OZONE_PLATFORM_HINT ?? '').toLowerCase()
+  const isLinuxX11Override =
+    ozonePlatform === 'x11' || (ozonePlatform === '' && ozonePlatformHint === 'x11')
+  const isLinuxWaylandSession =
+    process.platform === 'linux' &&
+    !isLinuxX11Override &&
+    (Boolean(process.env.WAYLAND_DISPLAY) ||
+      process.env.XDG_SESSION_TYPE === 'wayland' ||
+      ozonePlatformHint === 'wayland' ||
+      ozonePlatform === 'wayland')
+  if (isLinuxWaylandSession) {
+    // Why: #5319 reproduces when Wayland loses the eager GPU channel. Keep
+    // acceleration available, but drop the GPU sandbox and let Chromium open
+    // the GPU channel lazily on this compositor path.
+    app.commandLine.appendSwitch('disable-gpu-sandbox')
+  }
+
   const existingFeatures = app.commandLine.getSwitchValue('enable-features')
   const features = [
     // Why: mirror VS Code's conservative Electron GPU-channel startup flags
     // instead of opting into Vulkan/SkiaGraphite/unsafe WebGPU globally.
     // Terminal acceleration is controlled by xterm WebGL in the renderer.
-    'EarlyEstablishGpuChannel',
-    'EstablishGpuChannelAsync',
+    ...(isLinuxWaylandSession ? [] : ['EarlyEstablishGpuChannel', 'EstablishGpuChannelAsync']),
     existingFeatures
   ]
     .filter(Boolean)
     .join(',')
-  app.commandLine.appendSwitch('enable-features', features)
+  if (features) {
+    app.commandLine.appendSwitch('enable-features', features)
+  }
 }

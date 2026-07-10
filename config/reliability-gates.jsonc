@@ -1,0 +1,2705 @@
+{
+  "schemaVersion": 1,
+  "updatedAt": "2026-07-09",
+  "policy": {
+    "maturityLevels": [
+      "experimental",
+      "soak",
+      "blocking",
+      "accepted-gap",
+      "deprecated"
+    ],
+    "blockingPromotion": {
+      "minimumSoakRuns": 100,
+      "minimumSoakDays": 14,
+      "maximumUnexplainedFlakes": 0
+    }
+  },
+  "gates": [
+    {
+      "id": "terminal-session.snapshot-freshness",
+      "title": "Stale liveness snapshots cannot close newer PTY bindings",
+      "maturity": "experimental",
+      "protection": "partial",
+      "owner": "terminal-runtime",
+      "layer": "renderer-unit",
+      "surfaces": [
+        "terminal lifecycle",
+        "dead-session reconciliation",
+        "tab creation"
+      ],
+      "platforms": [
+        "macos",
+        "linux",
+        "windows"
+      ],
+      "providers": [
+        "local",
+        "daemon"
+      ],
+      "coveredPlatforms": [
+        "macos"
+      ],
+      "coveredProviders": [],
+      "coverageNotes": "Local macOS evidence over the reconcile guards that exist on main@1282f5c2d. Broader targeted-hasPty resume paths, no-hot listing counts, and live Electron survival arrive with the pending reliability stack.",
+      "motivatingLinks": [
+        "https://github.com/stablyai/orca/issues/6773",
+        "https://github.com/stablyai/orca/pull/6514",
+        "https://github.com/stablyai/orca/pull/6796",
+        "https://github.com/stablyai/orca/pull/6801"
+      ],
+      "invariant": "A local or daemon liveness snapshot requested before a pane binds a PTY cannot prove that newer binding dead or route it through exit teardown.",
+      "oracle": "The decision layer rejects reconciliation when ptyBoundAt is greater than or equal to snapshotRequestedAt, still reconciles genuinely absent older local ids, and treats rejected provider listing as unknown.",
+      "commands": [
+        "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/terminal-pane/terminal-dead-session-reconcile.test.ts"
+      ],
+      "testFiles": [
+        "src/renderer/src/components/terminal-pane/terminal-dead-session-reconcile.test.ts"
+      ],
+      "assertionRefs": [
+        {
+          "file": "src/renderer/src/components/terminal-pane/terminal-dead-session-reconcile.test.ts",
+          "assertions": [
+            "a newborn pane bound after the snapshot was requested is not reconciled (boundAt >= requestedAt freshness guard)",
+            "a rejected listSessions is treated as unknown and reconciles nothing",
+            "remote, SSH, and mid-spawn panes are skipped by the reconcile path",
+            "targeted liveness probes receive the request timestamp and resolved live-session ids"
+          ]
+        }
+      ],
+      "evidenceRuns": [
+        {
+          "date": "2026-07-03",
+          "runner": "local",
+          "platform": "macos",
+          "command": "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/terminal-pane/terminal-dead-session-reconcile.test.ts",
+          "result": "passed",
+          "durationSeconds": 1.5,
+          "summary": "1 test file(s) passed, 17 tests passed on main@1282f5c2d in a clean checkout."
+        }
+      ],
+      "runtimeBudget": {
+        "p95Seconds": 10,
+        "scope": "local unit test"
+      },
+      "flakeHistory": {
+        "status": "unknown",
+        "evidence": "Registered after existing targeted tests were found; needs soak history before blocking promotion."
+      },
+      "redGreenEvidence": {
+        "status": "partial",
+        "evidence": "Unit tests encode the stale snapshot/newborn race and fail if the freshness guard is removed. Needs saved CI or intentional-break artifact before blocking promotion."
+      },
+      "performanceBudget": {
+        "required": true,
+        "evidence": "The gate itself is cheap. Any PR changing reconciliation loops, hidden-pane scans, or provider polling must also run a terminal throughput or event-loop-delay measurement before blocking promotion."
+      },
+      "promotionCriteria": [
+        "Run in soak for at least 100 consecutive passes or 14 days across required CI platforms.",
+        "Attach red/green evidence from the freshness guard regression.",
+        "Add an integration/provider-contract follow-up that proves tab survival plus input/output after stale snapshot release."
+      ],
+      "knownGaps": [
+        "Current command asserts the pure decision and orchestration timestamp forwarding, not a full Electron tab-survival/input echo flow.",
+        "SSH and remote providers are intentionally unknown-liveness paths and need separate provider-contract gates."
+      ],
+      "demotionRule": "Demote or quarantine if the gate flakes once without a product bug or harness bug filed to the owner."
+    },
+    {
+      "id": "terminal-session.kill-all-surface-cleanup",
+      "title": "Kill all sessions removes only the confirmed terminal surfaces and current bindings",
+      "maturity": "experimental",
+      "protection": "partial",
+      "owner": "terminal-runtime",
+      "layer": "renderer-main-contract",
+      "surfaces": [
+        "terminal lifecycle",
+        "terminal tab cleanup",
+        "PTY shutdown",
+        "Manage Sessions",
+        "Resource Manager"
+      ],
+      "platforms": [
+        "macos",
+        "linux",
+        "windows"
+      ],
+      "providers": [
+        "local",
+        "daemon",
+        "ssh",
+        "wsl",
+        "remote-runtime",
+        "mobile-relay"
+      ],
+      "coveredPlatforms": [
+        "macos"
+      ],
+      "coveredProviders": [
+        "local",
+        "daemon",
+        "ssh"
+      ],
+      "coverageNotes": "Local macOS deterministic evidence covers the renderer snapshot/coordinator, exact local and SSH-shaped PTY request settlement, active-last and pinned terminal-tab routing, component-unmount continuation, and the existing current/legacy daemon management contract. Windows Electron process absence, live SSH/WSL behavior, and remote-runtime/mobile host completion remain explicit gaps.",
+      "motivatingLinks": [
+        "https://github.com/stablyai/orca/issues/8001"
+      ],
+      "invariant": "Every terminal surface confirmed in the invoking renderer is force-closed exactly once after daemon management settles, later-created surfaces and non-terminal tabs survive, and exact shutdown requests are limited to deduplicated current non-runtime PTY bindings of the confirmed surfaces.",
+      "oracle": "Snapshot terminal entity IDs before the first await; mutate ownership, active selection, bindings, and tab presence while daemon management is pending; then assert only the immutable targets disappear from both terminal stores, active targets close last with valid editor/browser/deactivated post-state, every captured exact PTY promise settles before callbacks, and no provider inventory sweep or late-tab kill occurs.",
+      "commands": [
+        "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/shared/kill-all-terminal-surfaces.test.ts src/renderer/src/components/shared/useDaemonActions.test.tsx src/renderer/src/components/terminal/terminal-tab-actions-kill-all.test.ts src/main/ipc/pty-management.test.ts"
+      ],
+      "testFiles": [
+        "src/renderer/src/components/shared/kill-all-terminal-surfaces.test.ts",
+        "src/renderer/src/components/shared/useDaemonActions.test.tsx",
+        "src/renderer/src/components/terminal/terminal-tab-actions-kill-all.test.ts",
+        "src/main/ipc/pty-management.test.ts"
+      ],
+      "assertionRefs": [
+        {
+          "file": "src/renderer/src/components/shared/kill-all-terminal-surfaces.test.ts",
+          "assertions": [
+            "snapshot deduplicates legacy, unified-only, split, multi-worktree, and floating terminal surfaces while excluding editor tabs",
+            "cleanup-time moves, active-worktree switches, rebinding, missing targets, and later-created tabs preserve the confirmation boundary and active-last order",
+            "current exact PTY bindings are deduplicated, remote runtime IDs and stale/late bindings are excluded, and all per-PTY settlements finish before completion",
+            "the production dependency path calls daemon management exactly once and never invokes listSessions for a post-kill sweep",
+            "management rejection and per-close/provider failures do not stop remaining cleanup and produce bounded count/latency diagnostics",
+            "a real 100-tab Zustand fixture records 100 close attempts and exact kills, at least 100 writes, 49 event-loop yields, and no close batch over 50 ms"
+          ]
+        },
+        {
+          "file": "src/renderer/src/components/shared/useDaemonActions.test.tsx",
+          "assertions": [
+            "the hook snapshots before onKillAllStart and before coordinator work",
+            "unmounting the invoking component does not revoke cleanup while React callbacks remain mount-gated",
+            "error and settled callbacks run only after coordinator settlement",
+            "closed terminal tabs report success instead of the no-sessions informational state when daemon management reports zero"
+          ]
+        },
+        {
+          "file": "src/renderer/src/components/terminal/terminal-tab-actions-kill-all.test.ts",
+          "assertions": [
+            "force closes pinned terminals without a second confirmation",
+            "closing the last active terminal preserves and activates editor or browser content, otherwise deactivates without auto-spawn"
+          ]
+        },
+        {
+          "file": "src/main/ipc/pty-management.test.ts",
+          "assertions": [
+            "killAll fires one shutdown for each initial daemon session and polls those initial IDs until empty",
+            "freshly respawned session IDs are excluded from remainingCount",
+            "per-session shutdown rejection does not stop the daemon batch and refused initial sessions remain reported"
+          ]
+        }
+      ],
+      "evidenceRuns": [
+        {
+          "date": "2026-07-09",
+          "runner": "local",
+          "platform": "macos",
+          "command": "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/shared/kill-all-terminal-surfaces.test.ts src/renderer/src/components/shared/useDaemonActions.test.tsx src/renderer/src/components/terminal/terminal-tab-actions-kill-all.test.ts src/main/ipc/pty-management.test.ts",
+          "result": "passed",
+          "durationSeconds": 1.31,
+          "summary": "4 test files and 27 tests passed locally, including the existing daemon handler contract and a real 100-terminal Zustand cleanup fixture."
+        }
+      ],
+      "runtimeBudget": {
+        "p95Seconds": 10,
+        "scope": "focused renderer/main unit and performance-count tests"
+      },
+      "flakeHistory": {
+        "status": "unknown",
+        "evidence": "The focused 27-test slice passed locally once; it needs CI and soak history before promotion."
+      },
+      "redGreenEvidence": {
+        "status": "partial",
+        "evidence": "The initial 100-tab implementation exposed a 145.82 ms close batch and failed the 50 ms budget; two-close event-loop batching reduced the focused run below the budget. Saved CI artifacts and intentional-break evidence for the confirmation-boundary assertions are still needed."
+      },
+      "performanceBudget": {
+        "required": true,
+        "evidence": "The coordinator performs one existing management call, zero provider inventory sweeps, one close per present unique target, and at most one exact kill per unique current non-runtime PTY binding. A real 100-tab Zustand fixture asserts 100 close attempts, 100 exact kill calls, at least 100 store writes, 49 event-loop yields, and a maximum two-close batch at or below 50 ms."
+      },
+      "promotionCriteria": [
+        "Run the focused gate for at least 100 consecutive passes or 14 days across required CI platforms.",
+        "Attach Windows Electron evidence for both entry points, empty and established terminals, later-tab survival, xterm removal, and initial PTY absence after settlement.",
+        "Exercise the SSH fixture and WSL when available, or keep their live process-absence gaps explicit.",
+        "Propagate and align runtime-host tab-close completion before claiming verified remote-runtime shutdown."
+      ],
+      "knownGaps": [
+        "Windows Electron screenshots and live process/xterm absence evidence were not produced by this local macOS run.",
+        "Live SSH and WSL process absence, Linux local/daemon behavior, and mobile/relay shutdown remain unproved.",
+        "Runtime-host terminal close is best-effort because closeTerminalTab still discards the existing async host result and its close-intent lifetime is shorter than the possible RPC flow.",
+        "Daemon adapter listing failures remain suppressed by the existing management API, so reported daemon counts are not authoritative verification of every process."
+      ],
+      "demotionRule": "Keep experimental or demote to protection none if the gate flakes, permits a late-created tab or unrelated PTY to close, or exceeds the 50 ms maximum close-batch budget without a tracked product or harness bug."
+    },
+    {
+      "id": "terminal-session.startup-cwd-missing-dir-recovery",
+      "title": "Fresh local terminal creation cannot be bricked by a deleted startup cwd",
+      "maturity": "experimental",
+      "protection": "partial",
+      "owner": "terminal-runtime",
+      "layer": "shared-main-renderer-contract",
+      "surfaces": [
+        "terminal lifecycle",
+        "tab creation",
+        "PTY spawn",
+        "startup cwd persistence"
+      ],
+      "platforms": [
+        "macos",
+        "linux",
+        "windows",
+        "mobile"
+      ],
+      "providers": [
+        "local",
+        "daemon",
+        "ssh",
+        "wsl",
+        "remote-runtime"
+      ],
+      "coveredPlatforms": [
+        "macos"
+      ],
+      "coveredProviders": [
+        "local",
+        "ssh",
+        "remote-runtime"
+      ],
+      "coverageNotes": "Local macOS evidence covers the shared missing-dir fallback policy, main pty:spawn recovery and metadata, no-flag and reattach strictness, renderer IPC flag routing, SSH-tagged and remote-runtime omission, and the visibility-gated terminal notice. Daemon shares the same pre-provider main cwd decision but lacks a live daemon-provider run; WSL UNC paths are exempt from the probe by design and lack a live run; Linux/Windows and mobile/API strictness are gaps.",
+      "motivatingLinks": [
+        "https://github.com/stablyai/orca/issues/7239",
+        "https://github.com/stablyai/orca/pull/7750",
+        "https://github.com/stablyai/orca/pull/7678"
+      ],
+      "invariant": "A fresh local renderer terminal spawn may recover from a saved startup cwd whose directory no longer exists only by spawning at the selected workspace root and printing a generic in-terminal notice; existing directories — including ones outside the worktree (#7685) — spawn as requested, and reattach, SSH, remote-runtime, runtime/API, and mobile callers keep exact cwd semantics.",
+      "oracle": "The shared resolver falls back to the workspace root only when the injected existence probe reports the resolved cwd missing and the workspace root present, and never probes floating terminals or a cwd equal to the root. The renderer sends cwdFallback only for fresh local IPC spawns, main honors it only when connectionId and sessionId are absent, WSL UNC paths never engage the probe-based fallback, main returns fallback metadata only after an actual fallback, the IPC transport preserves that metadata, and the connection layer writes a generic notice that omits the missing path.",
+      "commands": [
+        "pnpm exec vitest run --config config/vitest.config.ts src/shared/terminal-startup-cwd.test.ts",
+        "pnpm exec vitest run --config config/vitest.config.ts src/main/ipc/pty.test.ts",
+        "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/terminal-pane/pty-transport.test.ts",
+        "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/terminal-pane/pty-connection.test.ts"
+      ],
+      "testFiles": [
+        "src/shared/terminal-startup-cwd.test.ts",
+        "src/main/ipc/pty.test.ts",
+        "src/renderer/src/components/terminal-pane/pty-transport.test.ts",
+        "src/renderer/src/components/terminal-pane/pty-connection.test.ts"
+      ],
+      "assertionRefs": [
+        {
+          "file": "src/shared/terminal-startup-cwd.test.ts",
+          "assertions": [
+            "a missing requested cwd falls back to the workspace root and reports the missing path to the callback",
+            "existing cwds — nested or outside the worktree (#7685) — are never remapped",
+            "no fallback happens when the workspace root is missing too",
+            "floating terminal cwds and root-equal requests are never probed",
+            "non-ASCII worktree roots and folder workspace roots are recovered verbatim"
+          ]
+        },
+        {
+          "file": "src/main/ipc/pty.test.ts",
+          "assertions": [
+            "local pty:spawn with cwdFallback worktree spawns at the worktree root when the saved cwd is missing and returns fallback metadata",
+            "a missing cwd without the flag still surfaces the provider's missing-directory error",
+            "an existing outside-worktree cwd spawns as requested without fallback metadata",
+            "session reattach spawns ignore the fallback flag and keep exact cwd semantics"
+          ]
+        },
+        {
+          "file": "src/renderer/src/components/terminal-pane/pty-transport.test.ts",
+          "assertions": [
+            "IPC transport sends cwdFallback only for local fresh spawns",
+            "SSH-tagged and session reattach spawns omit cwdFallback",
+            "IPC transport returns startup cwd fallback metadata to the connection layer"
+          ]
+        },
+        {
+          "file": "src/renderer/src/components/terminal-pane/pty-connection.test.ts",
+          "assertions": [
+            "fresh local IPC worktree spawns are marked with cwdFallback worktree",
+            "startup cwd fallback metadata prints a generic in-terminal notice",
+            "remote-runtime worktree spawns are not marked with cwdFallback"
+          ]
+        }
+      ],
+      "evidenceRuns": [
+        {
+          "date": "2026-07-08",
+          "runner": "local",
+          "platform": "macos",
+          "command": "pnpm exec vitest run --config config/vitest.config.ts src/shared/terminal-startup-cwd.test.ts",
+          "result": "passed",
+          "durationSeconds": 0.2,
+          "summary": "1 test file passed, 21 tests passed; covers the missing-dir fallback policy, #7685 outside-worktree preservation, and root-missing/floating exemptions."
+        },
+        {
+          "date": "2026-07-08",
+          "runner": "local",
+          "platform": "macos",
+          "command": "pnpm exec vitest run --config config/vitest.config.ts src/main/ipc/pty.test.ts",
+          "result": "passed",
+          "durationSeconds": 0.9,
+          "summary": "1 test file passed, 225 tests passed; covers main pty:spawn recovery, fallback metadata, and no-flag/reattach provider-error strictness."
+        },
+        {
+          "date": "2026-07-08",
+          "runner": "local",
+          "platform": "macos",
+          "command": "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/terminal-pane/pty-transport.test.ts",
+          "result": "passed",
+          "durationSeconds": 0.4,
+          "summary": "1 test file passed, 58 tests passed; covers cwdFallback forwarding only for local fresh spawns and metadata handoff."
+        },
+        {
+          "date": "2026-07-08",
+          "runner": "local",
+          "platform": "macos",
+          "command": "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/terminal-pane/pty-connection.test.ts",
+          "result": "passed",
+          "durationSeconds": 6.5,
+          "summary": "1 test file passed, 341 tests passed; covers local IPC marking, the generic terminal fallback notice, and remote-runtime omission."
+        }
+      ],
+      "runtimeBudget": {
+        "p95Seconds": 30,
+        "scope": "focused unit and IPC contract tests"
+      },
+      "flakeHistory": {
+        "status": "unknown",
+        "evidence": "New experimental gate added with local deterministic evidence only; needs CI soak before promotion."
+      },
+      "redGreenEvidence": {
+        "status": "partial",
+        "evidence": "The main IPC missing-cwd tests fail with the provider's 'Working directory ... does not exist.' error when the fallback is removed and pass with it. Full live Electron reproduction from a production persisted session is not captured."
+      },
+      "performanceBudget": {
+        "required": true,
+        "evidence": "The runtime change adds at most two statSync probes on the fresh-local spawn path (the provider already stats the same paths during validation) and one bounded terminal write only when fallback actually occurs; no polling, provider listing, hidden-pane work, startup awaits, subprocesses, or render-loop work was added."
+      },
+      "promotionCriteria": [
+        "Attach CI evidence for all declared test files.",
+        "Add a live Electron regression that opens a local terminal whose persisted startupCwd was deleted and proves visible shell input/output at the workspace root.",
+        "Add WSL/mobile/API provider-contract coverage or explicitly narrow their risk scope."
+      ],
+      "knownGaps": [
+        "No live Electron fixture seeds a persisted tab whose startupCwd directory was deleted.",
+        "Daemon coverage is via the shared pre-provider main cwd decision, not a live daemon provider spawn.",
+        "WSL UNC paths bypass the probe by design and have no live existence-recovery run; Linux, Windows, and mobile/API strictness are not directly exercised."
+      ],
+      "demotionRule": "Demote or quarantine if the gate flakes without a product bug, if an existing directory is ever remapped away from the requested cwd, or if a reattach/remote/API caller can engage the fallback."
+    },
+    {
+      "id": "agent-session.provider-ownership",
+      "title": "Provider sessions are resumed once per workspace ownership claim",
+      "maturity": "experimental",
+      "protection": "partial",
+      "owner": "agent-session",
+      "layer": "renderer-state",
+      "surfaces": [
+        "agent launch",
+        "workspace activation",
+        "sleep and hibernate restore",
+        "provider session dedupe",
+        "sidebar and mobile identity"
+      ],
+      "platforms": [
+        "macos",
+        "linux",
+        "windows"
+      ],
+      "providers": [
+        "local",
+        "daemon",
+        "ssh",
+        "wsl",
+        "remote-runtime"
+      ],
+      "coveredPlatforms": [
+        "macos"
+      ],
+      "coveredProviders": [],
+      "coverageNotes": "Local macOS evidence over the ownership/dedupe suite on main@1282f5c2d. Queued/pending resume-claim indexing, same-session and wrong-session hook proofs, and Electron repeat-activation coverage arrive with the pending stack (#7008).",
+      "motivatingLinks": [
+        "https://github.com/stablyai/orca/pull/6800",
+        "https://github.com/stablyai/orca/pull/5240",
+        "https://github.com/stablyai/orca/pull/6411",
+        "https://github.com/stablyai/orca/pull/6833"
+      ],
+      "invariant": "Workspace activation, launch, restore, sleep, hibernate, dedupe, clearing, and reconnect code must not replay or resume a provider session id already owned, queued, pending, or live in that workspace.",
+      "oracle": "The current renderer-state slice asserts provider-session claim keys are owned by preserved active tabs, inactive split leaves, visible non-focused split groups, live records, quit records, worktree-sleep records, queued startup payloads, time-bounded resume bridge claims, and same-session live hook evidence; duplicates clear without launching a second resume command. The provider list is the risk scope, not proof that every provider has a live integration gate.",
+      "commands": [
+        "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/lib/resume-sleeping-agent-session.test.ts"
+      ],
+      "testFiles": [
+        "src/renderer/src/lib/resume-sleeping-agent-session.test.ts"
+      ],
+      "assertionRefs": [
+        {
+          "file": "src/renderer/src/lib/resume-sleeping-agent-session.test.ts",
+          "assertions": [
+            "preserved panes claim their provider session and only stale duplicates are cleared",
+            "one launch per provider session: skipped duplicates are cleared instead of relaunched",
+            "active stable-pane records owned by preserved or visible panes are not resumed again",
+            "hibernated stable panes with cleared live PTY bindings are skipped"
+          ]
+        }
+      ],
+      "evidenceRuns": [
+        {
+          "date": "2026-07-03",
+          "runner": "local",
+          "platform": "macos",
+          "command": "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/lib/resume-sleeping-agent-session.test.ts",
+          "result": "passed",
+          "durationSeconds": 1.9,
+          "summary": "1 test file(s) passed, 30 tests passed on main@1282f5c2d in a clean checkout."
+        }
+      ],
+      "runtimeBudget": {
+        "p95Seconds": 15,
+        "scope": "local renderer state test"
+      },
+      "flakeHistory": {
+        "status": "unknown",
+        "evidence": "Registered after targeted tests were found; needs soak history before blocking promotion."
+      },
+      "redGreenEvidence": {
+        "status": "partial",
+        "evidence": "Tests encode provider-session dedupe and ownership claims across active/inactive/visible split records, queued pendingStartupByTabId resume payloads, time-bounded runtime automaticAgentResumeClaimsByTabId bridge claims, live same-session hook evidence, wrong-session hook rejection, and a bounded queued-claim index over many records/tabs. Needs saved red/green artifact for the class-level replay invariant."
+      },
+      "performanceBudget": {
+        "required": true,
+        "evidence": "Current state tests are cheap and assert queued pending-startup provider-session ids are indexed once per activation. PRs adding new ownership scans must show bounded work over records and no hidden-pane wake loop before blocking promotion."
+      },
+      "promotionCriteria": [
+        "Run in soak for at least 100 consecutive passes or 14 days across required CI platforms.",
+        "Add bounded-work assertions for delayed hook/status ownership scans if those paths grow.",
+        "Attach red/green evidence that display/replay evidence alone cannot claim ownership."
+      ],
+      "knownGaps": [
+        "Providers listed on this gate are affected identity surfaces; the current executable command is renderer-state coverage, not live local/daemon/SSH/WSL/remote-runtime coverage.",
+        "Current command models live same-session and wrong-session hook evidence, but does not run the real hook timing through Electron.",
+        "Current command does not run a real workspace activation loop repeatedly through Electron."
+      ],
+      "demotionRule": "Demote or quarantine if failures are non-actionable or if a duplicate resume escape occurs outside the modeled matrix."
+    },
+    {
+      "id": "terminal-geometry.visible-convergence",
+      "title": "Visible desktop terminals converge across xterm, fit, PTY, shell, and runtime mirror size",
+      "maturity": "experimental",
+      "protection": "partial",
+      "owner": "terminal-rendering",
+      "layer": "renderer-provider-contract",
+      "surfaces": [
+        "PTY sizing",
+        "split layout",
+        "restore",
+        "hidden-to-visible transitions"
+      ],
+      "platforms": [
+        "macos",
+        "linux",
+        "windows"
+      ],
+      "providers": [
+        "local",
+        "daemon",
+        "ssh",
+        "remote-runtime"
+      ],
+      "coveredPlatforms": [
+        "macos"
+      ],
+      "coveredProviders": [],
+      "coverageNotes": "Local macOS evidence on main@1282f5c2d, including #7192's runtime-mirror geometry authority slice. Shell-visible size, SSH/remote geometry, Windows ConPTY readback, and resume-time reassertion coverage arrive with the pending stack and #7006.",
+      "motivatingLinks": [
+        "https://github.com/stablyai/orca/pull/6644",
+        "https://github.com/stablyai/orca/pull/6649",
+        "https://github.com/stablyai/orca/pull/6725",
+        "https://github.com/stablyai/orca/pull/6785",
+        "https://github.com/stablyai/orca/pull/6853",
+        "https://github.com/stablyai/orca/pull/6939",
+        "https://github.com/stablyai/orca/pull/7192"
+      ],
+      "invariant": "A visible desktop-owned terminal cannot trust 0x0, stale requested size, or renderer-only size; xterm, fit/proposed size, applied PTY size, shell-visible size, and the runtime mirror's parse dimensions must converge or enter explicit degraded state, and mirror resize reflow must stay ordered with queued output writes.",
+      "oracle": "The current executable slice uses deterministic frame schedulers and fake providers to force 0x0 first fit, delayed layout settle, dropped resize/readback drift, and hidden-to-visible activation, then asserts the renderer forwards a usable size, pty:getSize reports applied rather than merely requested size where available, and visibility resume reasserts real drift without hot listSessions. Shell-visible stty/echo-wrap convergence remains a live-gate follow-up.",
+      "commands": [
+        "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/terminal-pane/pty-size-reconcile.test.ts src/renderer/src/components/terminal-pane/split-right-white-screen.test.ts src/main/ipc/pty.test.ts src/main/runtime/orca-runtime.test.ts"
+      ],
+      "testFiles": [
+        "src/renderer/src/components/terminal-pane/pty-size-reconcile.test.ts",
+        "src/renderer/src/components/terminal-pane/split-right-white-screen.test.ts",
+        "src/main/ipc/pty.test.ts",
+        "src/main/runtime/orca-runtime.test.ts"
+      ],
+      "assertionRefs": [
+        {
+          "file": "src/renderer/src/components/terminal-pane/pty-size-reconcile.test.ts",
+          "assertions": [
+            "hidden delayed narrow settle is forwarded instead of stopping on a fixed frame budget",
+            "unmeasurable frames do not count as settled",
+            "applied-size readback divergence is re-forwarded before handoff"
+          ]
+        },
+        {
+          "file": "src/renderer/src/components/terminal-pane/split-right-white-screen.test.ts",
+          "assertions": [
+            "0x0 split-right spawn recovers when the container becomes measurable",
+            "visible permanently-unmeasurable 0x0 pane gets a nonzero safe fallback",
+            "hidden 0x0 background spawn is not forced to phantom desktop size"
+          ]
+        },
+        {
+          "file": "src/main/ipc/pty.test.ts",
+          "assertions": [
+            "accepted desktop resizes fan out to the runtime after provider resize",
+            "rejected desktop resizes do not fan out to the runtime"
+          ]
+        },
+        {
+          "file": "src/main/runtime/orca-runtime.test.ts",
+          "assertions": [
+            "the headless mirror resizes after an accepted desktop PTY resize (#7192)",
+            "headless mirror resizes are ordered behind queued PTY writes (#7192)"
+          ]
+        }
+      ],
+      "evidenceRuns": [
+        {
+          "date": "2026-07-03",
+          "runner": "local",
+          "platform": "macos",
+          "command": "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/terminal-pane/pty-size-reconcile.test.ts src/renderer/src/components/terminal-pane/split-right-white-screen.test.ts src/main/ipc/pty.test.ts src/main/runtime/orca-runtime.test.ts",
+          "result": "passed",
+          "durationSeconds": 8.4,
+          "summary": "4 test file(s) passed, 777 tests passed on main@1282f5c2d in a clean checkout."
+        }
+      ],
+      "runtimeBudget": {
+        "p95Seconds": 60,
+        "scope": "provider-contract or focused Electron test"
+      },
+      "flakeHistory": {
+        "status": "unknown",
+        "evidence": "Deterministic Vitest slices passed locally; no CI soak history yet."
+      },
+      "redGreenEvidence": {
+        "status": "partial",
+        "evidence": "#7192 proved the mirror slice red before its fix (snapshot stayed 80x24, queued write parsed at the wrong width). The renderer 0x0/settle slices do not have recorded red runs."
+      },
+      "performanceBudget": {
+        "required": true,
+        "evidence": "Must include resize/throughput budget so convergence loops do not add frame or SIGWINCH churn."
+      },
+      "promotionCriteria": [
+        "Build deterministic fault hooks before adding broad E2E coverage.",
+        "Keep stress variants non-blocking until runtime and flake history are known."
+      ],
+      "knownGaps": [
+        "No live Electron geometry command yet beyond the local live PTY resize slice.",
+        "The runtime mirror geometry slice is unregistered: #7192's red tests (orca-runtime.test.ts headless-mirror resize and ordering, pty.test.ts desktop resize fan-out) exist on fresh main but not at this branch's merge-base, so they can only be registered during the rebase.",
+        "Does not yet prove shell-visible size, provider-applied size, and xterm size converge across SSH/remote paths.",
+        "Does not yet prove Windows ConPTY geometry/readback.",
+        "Current command uses deterministic fake providers for the main/renderer contracts, not a real remote PTY."
+      ],
+      "demotionRule": "Cannot promote without deterministic oracle and runtime history."
+    },
+    {
+      "id": "xterm-addon.boundary-containment",
+      "title": "xterm addon failures stay pane-scoped and input survives",
+      "maturity": "experimental",
+      "protection": "partial",
+      "owner": "terminal-rendering",
+      "layer": "renderer-unit",
+      "surfaces": [
+        "terminal search",
+        "links",
+        "WebGL",
+        "decorations",
+        "keyboard navigation"
+      ],
+      "platforms": [
+        "macos",
+        "linux",
+        "windows"
+      ],
+      "providers": [
+        "local",
+        "daemon",
+        "ssh",
+        "remote-runtime"
+      ],
+      "coveredPlatforms": [
+        "macos"
+      ],
+      "coveredProviders": [],
+      "coverageNotes": "Local macOS evidence over the WebGL/link/search containment suites on main@1282f5c2d, adopting the #6949 atlas-recovery rename and #7133's reveal hardening tests. Core addon-load throw containment and live typed-input survival arrive with #7004 and a live follow-up.",
+      "motivatingLinks": [
+        "https://github.com/stablyai/orca/pull/6852",
+        "https://github.com/stablyai/orca/pull/6872",
+        "https://github.com/stablyai/orca/pull/6855"
+      ],
+      "invariant": "Search, link, WebGL, decoration, input-protocol, or keyboard-navigation errors must not unmount the terminal surface, crash React/window, break focus, or stop PTY input/output.",
+      "oracle": "The current executable slice injects a core addon load throw and asserts pane opening continues through later addons, covers link provider throws as pane-scoped no-link results, covers search decoration positive-integer failures as false results instead of renderer crashes, and covers WebGL attach/refresh/recovery containment. Focused typed input echo after addon failure still needs a live/component follow-up.",
+      "commands": [
+        "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/lib/pane-manager/terminal-link-provider-guard.test.ts src/renderer/src/components/terminal-search-safe-find.test.ts src/renderer/src/lib/pane-manager/pane-webgl-refresh-lifecycle.test.ts src/renderer/src/components/terminal-pane/terminal-webgl-atlas-recovery.test.ts src/renderer/src/lib/pane-manager/pane-webgl-context-recovery.test.ts src/renderer/src/lib/pane-manager/pane-webgl-renderer.test.ts src/renderer/src/lib/pane-manager/pane-reveal-repaint.test.ts src/renderer/src/components/terminal-pane/terminal-visibility-resume.test.ts"
+      ],
+      "testFiles": [
+        "src/renderer/src/lib/pane-manager/terminal-link-provider-guard.test.ts",
+        "src/renderer/src/components/terminal-search-safe-find.test.ts",
+        "src/renderer/src/lib/pane-manager/pane-webgl-refresh-lifecycle.test.ts",
+        "src/renderer/src/components/terminal-pane/terminal-webgl-atlas-recovery.test.ts",
+        "src/renderer/src/lib/pane-manager/pane-webgl-context-recovery.test.ts",
+        "src/renderer/src/lib/pane-manager/pane-webgl-renderer.test.ts",
+        "src/renderer/src/lib/pane-manager/pane-reveal-repaint.test.ts",
+        "src/renderer/src/components/terminal-pane/terminal-visibility-resume.test.ts"
+      ],
+      "assertionRefs": [
+        {
+          "file": "src/renderer/src/lib/pane-manager/terminal-link-provider-guard.test.ts",
+          "assertions": [
+            "link-provider throws are reproduced and contained without escaping the surface"
+          ]
+        },
+        {
+          "file": "src/renderer/src/components/terminal-search-safe-find.test.ts",
+          "assertions": [
+            "the xterm positive-integers decoration crash is swallowed while unrelated errors re-throw"
+          ]
+        },
+        {
+          "file": "src/renderer/src/lib/pane-manager/pane-webgl-refresh-lifecycle.test.ts",
+          "assertions": [
+            "WebGL teardown/refresh lifecycle stays pane-scoped and cancels on dispose"
+          ]
+        },
+        {
+          "file": "src/renderer/src/components/terminal-pane/terminal-webgl-atlas-recovery.test.ts",
+          "assertions": [
+            "risky-output atlas recovery is bounded, coalesced, and survives a throwing manager"
+          ]
+        },
+        {
+          "file": "src/renderer/src/lib/pane-manager/pane-webgl-context-recovery.test.ts",
+          "assertions": [
+            "failed attach backs off and context-lost panes recover on the next rendering resume"
+          ]
+        },
+        {
+          "file": "src/renderer/src/lib/pane-manager/pane-webgl-renderer.test.ts",
+          "assertions": [
+            "attach bail disposes the addon instead of orphaning it (#7133 single-addon invariant)"
+          ]
+        },
+        {
+          "file": "src/renderer/src/lib/pane-manager/pane-reveal-repaint.test.ts",
+          "assertions": [
+            "reveal repaint waits for a settled frame and keeps repainting when one pane throws (#7133)"
+          ]
+        },
+        {
+          "file": "src/renderer/src/components/terminal-pane/terminal-visibility-resume.test.ts",
+          "assertions": [
+            "tab reveal, heavy reveal, and window wake schedule pane-scoped repaint (#7133)"
+          ]
+        }
+      ],
+      "evidenceRuns": [
+        {
+          "date": "2026-07-03",
+          "runner": "local",
+          "platform": "macos",
+          "command": "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/lib/pane-manager/terminal-link-provider-guard.test.ts src/renderer/src/components/terminal-search-safe-find.test.ts src/renderer/src/lib/pane-manager/pane-webgl-refresh-lifecycle.test.ts src/renderer/src/components/terminal-pane/terminal-webgl-atlas-recovery.test.ts src/renderer/src/lib/pane-manager/pane-webgl-context-recovery.test.ts src/renderer/src/lib/pane-manager/pane-webgl-renderer.test.ts src/renderer/src/lib/pane-manager/pane-reveal-repaint.test.ts src/renderer/src/components/terminal-pane/terminal-visibility-resume.test.ts",
+          "result": "passed",
+          "durationSeconds": 0.8,
+          "summary": "8 test file(s) passed, 33 tests passed on main@1282f5c2d in a clean checkout."
+        }
+      ],
+      "runtimeBudget": {
+        "p95Seconds": 30,
+        "scope": "renderer unit or component test"
+      },
+      "flakeHistory": {
+        "status": "unknown",
+        "evidence": "Focused renderer-unit containment slice passed locally on 2026-07-02; needs soak history before promotion."
+      },
+      "redGreenEvidence": {
+        "status": "partial",
+        "evidence": "#7133 proved the reveal-hardening slice against live corrupted specimens; the link/search guards reproduce their original crashes in-test. No recorded red runs for the refresh-lifecycle slice."
+      },
+      "performanceBudget": {
+        "required": false,
+        "evidence": "Required only if containment adds retry loops, polling, or renderer fallback churn."
+      },
+      "promotionCriteria": [
+        "Add deterministic addon throw injection.",
+        "Prove input/output survives after boundary failure."
+      ],
+      "knownGaps": [
+        "Current command is renderer-unit containment, not live Electron typed input/output survival after addon failure.",
+        "Does not yet inject WebGL dispose/reset throws and active/hidden/resumed pane focus recovery in one component-level oracle."
+      ],
+      "demotionRule": "Cannot promote while it only checks visual rendering."
+    },
+    {
+      "id": "terminal-scroll.intent-preservation",
+      "title": "Scrollbar drag intent survives tab and visibility resume",
+      "maturity": "experimental",
+      "protection": "partial",
+      "owner": "terminal-rendering",
+      "layer": "renderer-unit",
+      "surfaces": [
+        "terminal lifecycle",
+        "hidden-to-visible resume",
+        "tab switching",
+        "xterm scrollbar DOM",
+        "scrollback"
+      ],
+      "platforms": [
+        "macos",
+        "linux",
+        "windows"
+      ],
+      "providers": [
+        "local",
+        "daemon",
+        "ssh",
+        "wsl",
+        "remote-runtime"
+      ],
+      "coveredPlatforms": [
+        "macos"
+      ],
+      "coveredProviders": [],
+      "coverageNotes": "Renderer-unit coverage proves the shared xterm DOM intent path. Live Electron evidence is PR validation evidence for local macOS only until the flow has stable automation; live SSH, WSL, Linux, and Windows paths remain unproved.",
+      "motivatingLinks": [
+        "STA-1341"
+      ],
+      "invariant": "A user-driven xterm scrollbar thumb or track scroll updates the live terminal scroll intent before tab, visibility, or layout resume enforces intent, so resume preserves the latest dragged viewport instead of an older pinned line.",
+      "oracle": "Pointerdown on .xterm-scrollbar or .xterm-slider followed by xterm viewport movement records the new pinned viewport, and enforcing current intent restores that dragged line instead of stale top intent.",
+      "commands": [
+        "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/lib/pane-manager/terminal-scroll-intent.test.ts"
+      ],
+      "testFiles": [
+        "src/renderer/src/lib/pane-manager/terminal-scroll-intent.test.ts"
+      ],
+      "assertionRefs": [
+        {
+          "file": "src/renderer/src/lib/pane-manager/terminal-scroll-intent.test.ts",
+          "assertions": [
+            "pointer-driven .xterm-scrollbar and .xterm-slider scrolls update terminal scroll intent",
+            "a scrollbar-dragged viewport is restored instead of stale top intent",
+            "terminal body pointer activity is not treated as scrollbar intent"
+          ]
+        }
+      ],
+      "evidenceRuns": [
+        {
+          "date": "2026-07-05",
+          "runner": "local",
+          "platform": "macos",
+          "command": "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/lib/pane-manager/terminal-scroll-intent.test.ts",
+          "result": "passed",
+          "durationSeconds": 0.3,
+          "summary": "1 test file(s) passed, 17 tests passed in this worktree."
+        }
+      ],
+      "runtimeBudget": {
+        "p95Seconds": 10,
+        "scope": "focused renderer unit test"
+      },
+      "flakeHistory": {
+        "status": "unknown",
+        "evidence": "New experimental gate; needs soak history before promotion."
+      },
+      "redGreenEvidence": {
+        "status": "partial",
+        "evidence": "The new scrollbar DOM target assertions fail when only .xterm-viewport pointerdown is recognized. Needs saved CI/intentional-break artifact before blocking promotion."
+      },
+      "performanceBudget": {
+        "required": true,
+        "evidence": "Runtime fix is limited to constant-time class/closest checks on pointerdown. It must not add polling, output parsing, PTY listing, hidden-pane wakeups, resize calls, or startup awaits."
+      },
+      "promotionCriteria": [
+        "Collect stable CI soak history for the renderer-unit gate.",
+        "Add stable live Electron automation for the scrollbar drag plus tab-switch repro.",
+        "Attach red/green evidence for stale intent restoring the wrong viewport."
+      ],
+      "knownGaps": [
+        "Manifest command is deterministic renderer-unit coverage, not a live Electron scrollbar drag.",
+        "Live daemon, SSH, WSL, remote-runtime, Linux, and Windows validation is not covered by this gate.",
+        "Future xterm scrollbar DOM class changes are only caught if they break the currently modeled class contract."
+      ],
+      "demotionRule": "Demote or quarantine if the unit gate flakes without a product bug or harness bug filed to the owner."
+    },
+    {
+      "id": "startup-upgrade.persisted-session-corpus",
+      "title": "Current Orca preserves or recovers old production persisted sessions",
+      "maturity": "experimental",
+      "protection": "none",
+      "owner": "startup-persistence",
+      "layer": "upgrade-fixture",
+      "surfaces": [
+        "startup",
+        "upgrade",
+        "session restore",
+        "daemon restore"
+      ],
+      "platforms": [
+        "macos",
+        "linux",
+        "windows"
+      ],
+      "providers": [
+        "local",
+        "daemon",
+        "ssh",
+        "wsl"
+      ],
+      "coveredPlatforms": [],
+      "coveredProviders": [],
+      "coverageNotes": "Registered gap only; no executable coverage is wired yet.",
+      "motivatingLinks": [
+        "https://github.com/stablyai/orca/issues/5356",
+        "https://github.com/stablyai/orca/pull/5234",
+        "https://github.com/stablyai/orca/pull/5240"
+      ],
+      "invariant": "Startup and restore fixes must preserve or explicitly recover sessions from the last affected production persisted-state schema, not only from state written by current code.",
+      "oracle": "Boot current Orca against immutable copied user-data fixtures from affected versions and reject blank replacement panes, duplicate resume tabs, silent session loss, or works-only-after-current-write behavior.",
+      "commands": [],
+      "testFiles": [],
+      "assertionRefs": [],
+      "evidenceRuns": [],
+      "runtimeBudget": {
+        "p95Seconds": 120,
+        "scope": "focused Electron upgrade fixture"
+      },
+      "flakeHistory": {
+        "status": "not-started",
+        "evidence": "Fixture corpus not implemented."
+      },
+      "redGreenEvidence": {
+        "status": "missing",
+        "evidence": "Needs immutable pre-fix persisted-state fixture."
+      },
+      "performanceBudget": {
+        "required": true,
+        "evidence": "Startup fixture must record startup latency and avoid adding blocking migration scans."
+      },
+      "promotionCriteria": [
+        "Land immutable old-version fixture with documented source version.",
+        "Run second restart after current code writes upgraded state.",
+        "Record startup timing and failure artifact."
+      ],
+      "knownGaps": [
+        "No fixture corpus or command yet."
+      ],
+      "demotionRule": "Cannot promote without old production fixture provenance."
+    },
+    {
+      "id": "terminal-platform.live-pty-liveness",
+      "title": "A real Electron local PTY accepts input, survives workspace restore, resizes, and exits cleanly",
+      "maturity": "experimental",
+      "protection": "none",
+      "owner": "terminal-runtime",
+      "layer": "electron-live-pty",
+      "surfaces": [
+        "active terminal PTY binding",
+        "xterm focus",
+        "keyboard input",
+        "PTY output",
+        "workspace hide and restore",
+        "resize",
+        "exit cleanup"
+      ],
+      "platforms": [
+        "linux",
+        "macos"
+      ],
+      "providers": [
+        "local"
+      ],
+      "coveredPlatforms": [],
+      "coveredProviders": [],
+      "coverageNotes": "Registered gap on main. The live Electron Playwright slice exists only on the pending reliability stack. It registers here with its owning split PR.",
+      "motivatingLinks": [
+        "https://github.com/stablyai/orca/pull/6801",
+        "https://github.com/stablyai/orca/pull/6842",
+        "https://github.com/stablyai/orca/pull/6939",
+        "https://github.com/stablyai/orca/pull/6989"
+      ],
+      "invariant": "An active local Electron terminal has one active PTY id listed exactly once, accepts real keyboard input through focused xterm, renders process output visibly, keeps the same live PTY across repeated workspace hide/restore cycles, applies an actual size change, and removes the old PTY from liveness state after exit.",
+      "oracle": "A deterministic raw-mode probe prints a ready marker, ordered key markers from real keyboard input, the active PTY id appears exactly once in pty:listSessions, remains bound to the same PTY id across two worktree switch-away/switch-back cycles, accepts more keyboard input after each restore, changes pty:getSize after viewport resize, prints the same process-visible size, and prints an exit marker; after shell exit, pty:listSessions no longer contains the old id.",
+      "commands": [],
+      "testFiles": [],
+      "assertionRefs": [],
+      "evidenceRuns": [],
+      "runtimeBudget": {
+        "p95Seconds": 75,
+        "scope": "focused Electron live PTY gate including e2e build/setup"
+      },
+      "flakeHistory": {
+        "status": "unknown",
+        "evidence": "Focused Playwright gate passed locally after adding two workspace hide/restore cycles, exact active-PTY listing, and actual resize convergence on 2026-07-02: 1 test passed, 8.6s test body, 58.6s full command including build/setup. Needs repeated CI/runtime history before promotion."
+      },
+      "redGreenEvidence": {
+        "status": "partial",
+        "evidence": "The gate asserts PTY binding, active PTY listed exactly once, real xterm keyboard delivery, same-PTY ownership across repeated workspace hide/restore cycles, post-restore input delivery, actual pty:getSize change, matching process-visible size, and listSessions cleanup after shell exit. Needs saved intentional-break evidence before promotion."
+      },
+      "performanceBudget": {
+        "required": true,
+        "evidence": "Must record key latencies, size snapshots, and final liveness state. The gate may use broad listing as a test oracle; product hot paths must not use broad provider listing as a synchronization primitive."
+      },
+      "promotionCriteria": [
+        "Implement without blind sleeps; wait only on PTY binding, probe markers, size marker, and liveness absence.",
+        "Run in soak on Linux before blocking; keep macOS as soak until stable.",
+        "Attach red/green evidence for focus, PTY write, resize, and exit cleanup failures."
+      ],
+      "knownGaps": [
+        "No executable coverage on main yet; the slice lives on the pending fix-terminal-reliability stack.",
+        "Needs soak/runtime history before promotion.",
+        "Does not yet cover tab switch inside one worktree, scrollback after restore, or app restart persistence.",
+        "Does not cover Windows ConPTY, SSH, WSL, daemon, or remote-runtime providers."
+      ],
+      "demotionRule": "Cannot promote without deterministic user-visible oracle, failure artifacts, and stable runtime history."
+    },
+    {
+      "id": "terminal-platform.windows-conpty-liveness",
+      "title": "Windows ConPTY terminals stay input-live, render-live, and geometry-live",
+      "maturity": "experimental",
+      "protection": "none",
+      "owner": "terminal-platform",
+      "layer": "windows-electron-conpty",
+      "surfaces": [
+        "Windows ConPTY",
+        "PowerShell and cmd",
+        "keyboard protocol",
+        "CJK repaint",
+        "cursor and resize"
+      ],
+      "platforms": [
+        "windows"
+      ],
+      "providers": [
+        "local",
+        "daemon",
+        "wsl"
+      ],
+      "coveredPlatforms": [],
+      "coveredProviders": [],
+      "coverageNotes": "Registered gap only; no executable coverage is wired yet.",
+      "motivatingLinks": [
+        "https://github.com/stablyai/orca/pull/6541",
+        "https://github.com/stablyai/orca/pull/6858",
+        "https://github.com/stablyai/orca/pull/6876",
+        "https://github.com/stablyai/orca/pull/6968",
+        "https://github.com/stablyai/orca/pull/6970",
+        "https://github.com/stablyai/orca/pull/6999"
+      ],
+      "invariant": "Windows local and daemon terminals must spawn with the intended shell, accept normal Enter/Backspace/Arrow input after agent or TUI exit, render cursor/CJK/wide-glyph redraws without stale cells, and converge to nonzero applied size.",
+      "oracle": "A Windows live gate proves shell echo, command submission, keyboard reset, resize readback, cursor visibility, and CJK/wide-glyph redraw using PTY input logs plus visible buffer/pixel evidence.",
+      "commands": [],
+      "testFiles": [],
+      "assertionRefs": [],
+      "evidenceRuns": [],
+      "runtimeBudget": {
+        "p95Seconds": 90,
+        "scope": "Windows focused Electron ConPTY gate"
+      },
+      "flakeHistory": {
+        "status": "not-started",
+        "evidence": "Windows live E2E remains a known weak area; gate must soak before blocking."
+      },
+      "redGreenEvidence": {
+        "status": "missing",
+        "evidence": "Needs proof against stale keyboard-protocol mode, shell resolution failure, dropped resize, and CJK repaint regression."
+      },
+      "performanceBudget": {
+        "required": true,
+        "evidence": "Must include input latency and no broad session listing while typing or switching terminals."
+      },
+      "promotionCriteria": [
+        "Start as Windows nightly/soak because Windows Electron E2E has been flaky.",
+        "Use deterministic PTY markers for input/resize and reserve screenshots for repaint diagnostics.",
+        "Split shell parity, keyboard reset, and CJK repaint into smaller gates if a combined gate is flaky."
+      ],
+      "knownGaps": [
+        "No manifest command yet.",
+        "Real IME composition may require a separate lower-layer/native-text-forwarding gate."
+      ],
+      "demotionRule": "Cannot promote while Windows E2E is flaky, silently skipped, or screenshot-only."
+    },
+    {
+      "id": "terminal-performance.no-hot-list-sessions",
+      "title": "Hot terminal interactions do not call global PTY session listing",
+      "maturity": "experimental",
+      "protection": "none",
+      "owner": "terminal-performance",
+      "layer": "ipc-count-contract",
+      "surfaces": [
+        "typing",
+        "focus",
+        "tab switch",
+        "workspace switch",
+        "visibility resume",
+        "resize",
+        "render"
+      ],
+      "platforms": [
+        "macos",
+        "linux",
+        "windows"
+      ],
+      "providers": [
+        "local",
+        "daemon",
+        "ssh",
+        "wsl",
+        "remote-runtime"
+      ],
+      "coveredPlatforms": [],
+      "coveredProviders": [],
+      "coverageNotes": "Registered gap on main. The targeted-hasPty product hardening and no-hot count assertions exist only on the pending reliability stack. It registers here with its owning split PR.",
+      "motivatingLinks": [
+        "https://github.com/stablyai/orca/pull/7002",
+        "https://github.com/stablyai/orca/pull/6858"
+      ],
+      "invariant": "Typing, focus, terminal switch, workspace switch, visibility resume, resize, render, and per-pane liveness paths must not call global pty:listSessions; they must use targeted per-PTY APIs or cached provider-owned state.",
+      "oracle": "The current executable slice asserts targeted visibility/first-input liveness, resize re-assertion after visibility resume, light tab/active-state resume, SSH/remote skip behavior, and closed Resource Manager status badges avoid pty:listSessions; targeted hasPty/getSize calls are allowed for liveness/resize slices and forbidden for light tab/active-state resume. The full hot-path oracle still needs instrumentation around raw focus, split focus, workspace switch, render ticks, and high-session local/daemon/SSH fixtures.",
+      "commands": [],
+      "testFiles": [],
+      "assertionRefs": [],
+      "evidenceRuns": [],
+      "runtimeBudget": {
+        "p95Seconds": 20,
+        "scope": "unit or focused Electron count gate"
+      },
+      "flakeHistory": {
+        "status": "unknown",
+        "evidence": "Focused count tests now run locally; needs soak history before promotion."
+      },
+      "redGreenEvidence": {
+        "status": "partial",
+        "evidence": "Tests assert visibility resume prefers targeted hasPty over listSessions, first input after visibility resume calls targeted hasPty once, resize re-assertion after visibility resume uses getSize/resize without listSessions, light tab switches and visible active-state resume avoid listSessions/hasPty/getSize fanout while still allowing the active PTY scheduler hint, SSH/remote broad listing is skipped, Resource Manager broad session inventory polling is scoped to the open popover rather than its closed badge, and panes close only on authoritative false. Needs broader raw focus/workspace-switch/render/high-session count coverage before promotion."
+      },
+      "performanceBudget": {
+        "required": true,
+        "evidence": "This gate is the performance budget for global session listing in hot paths."
+      },
+      "promotionCriteria": [
+        "Add deterministic call-count instrumentation.",
+        "Cover typing, focus, switch, visibility resume, resize, and render separately.",
+        "Run with enough preserved sessions/providers to make a broad listing observable."
+      ],
+      "knownGaps": [
+        "No executable coverage on main yet; the slice lives on the pending fix-terminal-reliability stack.",
+        "Current command covers targeted visibility/first-input liveness, resize re-assertion on visibility resume, light tab/active-state resume, SSH/remote skip behavior, and closed Resource Manager session-poll avoidance, but not every hot interaction listed in the invariant.",
+        "No Electron or IPC-level high-session counter gate yet proves raw focus, workspace switch, render, or high-session typing stay at zero global listSessions calls."
+      ],
+      "demotionRule": "Cannot promote if the test allows broad listing in any hot interaction path."
+    },
+    {
+      "id": "terminal-observability.lifecycle-breadcrumbs",
+      "title": "Terminal lifecycle anomalies enter crash diagnostics as compact breadcrumbs",
+      "maturity": "experimental",
+      "protection": "none",
+      "owner": "terminal-runtime",
+      "layer": "renderer-observability",
+      "surfaces": [
+        "terminal lifecycle",
+        "reattach",
+        "restore",
+        "provider ownership",
+        "diagnostics bundle"
+      ],
+      "platforms": [
+        "macos",
+        "linux",
+        "windows"
+      ],
+      "providers": [
+        "local",
+        "daemon",
+        "ssh",
+        "wsl",
+        "remote-runtime"
+      ],
+      "coveredPlatforms": [],
+      "coveredProviders": [],
+      "coverageNotes": "Registered gap on main. The crash-breadcrumb recording and its test exist only on the pending reliability stack. It registers here with its owning split PR.",
+      "motivatingLinks": [
+        "https://github.com/stablyai/orca/pull/6800",
+        "https://github.com/stablyai/orca/issues/6773"
+      ],
+      "invariant": "Terminal lifecycle anomalies around reattach, restore, provider ownership, stale liveness, and fallback routing must leave compact, deduped, privacy-safe breadcrumbs in crash diagnostics so future reports can be attributed from evidence.",
+      "oracle": "The current executable slice calls warnTerminalLifecycleAnomaly with terminal identity, provider, PTY id, binding epoch, and reason, then asserts the existing console warning is preserved and a compact terminal_lifecycle_anomaly crash breadcrumb is recorded once per lifecycle identity. Full pane transition traces and diagnostics-bundle artifact proof remain follow-ups.",
+      "commands": [],
+      "testFiles": [],
+      "assertionRefs": [],
+      "evidenceRuns": [],
+      "runtimeBudget": {
+        "p95Seconds": 10,
+        "scope": "renderer observability unit test"
+      },
+      "flakeHistory": {
+        "status": "unknown",
+        "evidence": "Focused unit slice passed locally once; no CI soak history yet."
+      },
+      "redGreenEvidence": {
+        "status": "partial",
+        "evidence": "Tests would fail if lifecycle anomalies stopped recording crash breadcrumbs or stopped deduping repeated identities. Needs diagnostics-bundle artifact proof and full transition-trace evidence before promotion."
+      },
+      "performanceBudget": {
+        "required": true,
+        "evidence": "Breadcrumb recording is deduped and capped by the existing lifecycle anomaly guard; full trace buffers must include size and event-count caps before promotion."
+      },
+      "promotionCriteria": [
+        "Add full compact pane lifecycle trace buffer with event-count caps.",
+        "Prove diagnostics bundle includes recent terminal lifecycle breadcrumbs or traces.",
+        "Add forbidden-transition tests for stale close, unknown owner fallback, and stuck zero-size panes."
+      ],
+      "knownGaps": [
+        "No executable coverage on main yet; the slice lives on the pending fix-terminal-reliability stack.",
+        "Current command records anomaly breadcrumbs only, not a full pane lifecycle state-machine trace.",
+        "Current command does not prove crash/diagnostics bundle export includes the breadcrumb.",
+        "Current command does not assert forbidden transitions across live Electron/provider flows."
+      ],
+      "demotionRule": "Cannot promote if diagnostics are console-only, unbounded, or missing from support artifacts."
+    },
+    {
+      "id": "terminal-performance.output-backpressure-budget",
+      "title": "Terminal output backpressure stays bounded from daemon to renderer",
+      "maturity": "experimental",
+      "protection": "partial",
+      "owner": "terminal-performance",
+      "layer": "provider-ipc-renderer-perf",
+      "surfaces": [
+        "daemon stream",
+        "main PTY batching",
+        "renderer ACK",
+        "xterm scheduler",
+        "hidden output"
+      ],
+      "platforms": [
+        "macos",
+        "linux",
+        "windows"
+      ],
+      "providers": [
+        "local",
+        "daemon",
+        "ssh",
+        "remote-runtime"
+      ],
+      "coveredPlatforms": [
+        "macos"
+      ],
+      "coveredProviders": [],
+      "coverageNotes": "Local macOS evidence over the main-process pending-output caps that exist on main@1282f5c2d. Daemon stream write(false)/drain contracts, cross-session drain priority, and bounded queued tails arrive with the pending perf slice; live flood/latency artifacts remain gaps.",
+      "motivatingLinks": [
+        "https://github.com/stablyai/orca/pull/6836",
+        "https://github.com/stablyai/orca/pull/6858",
+        "https://github.com/stablyai/orca/pull/7002",
+        "https://github.com/stablyai/orca/pull/7054"
+      ],
+      "invariant": "High-volume terminal output must stay bounded across daemon socket writes, main-to-renderer in-flight bytes, renderer scheduler queues, and hidden-output restore without starving focused input.",
+      "oracle": "The current executable slice injects daemon socket backpressure and main-process renderer backlog pressure, then asserts write(false)/drain ordering, bounded queued daemon bytes, per-PTY and total pending-output caps, preserved sequenced-tail metadata, active-pending protection ahead of background trimming, and ACK-gated in-flight bounds. The live Electron perf oracle adds hidden-output floods, renderer scheduler queue depth, dropped-output-zero normal scenarios, and active key latency budgets before promotion.",
+      "commands": [
+        "pnpm exec vitest run --config config/vitest.config.ts src/main/ipc/pty.test.ts"
+      ],
+      "testFiles": [
+        "src/main/ipc/pty.test.ts"
+      ],
+      "assertionRefs": [
+        {
+          "file": "src/main/ipc/pty.test.ts",
+          "assertions": [
+            "total renderer in-flight output is capped across many PTYs",
+            "active PTY pending output is prioritized during renderer backpressure",
+            "combined pending output exceeding the interactive size limit is batched"
+          ]
+        }
+      ],
+      "evidenceRuns": [
+        {
+          "date": "2026-07-03",
+          "runner": "local",
+          "platform": "macos",
+          "command": "pnpm exec vitest run --config config/vitest.config.ts src/main/ipc/pty.test.ts",
+          "result": "passed",
+          "durationSeconds": 1.5,
+          "summary": "1 test file(s) passed, 209 tests passed on main@1282f5c2d in a clean checkout."
+        }
+      ],
+      "runtimeBudget": {
+        "p95Seconds": 120,
+        "scope": "deterministic provider/IPC contract now; terminal perf soak/report gate before promotion"
+      },
+      "flakeHistory": {
+        "status": "unknown",
+        "evidence": "Daemon stream backpressure and focused main/renderer backlog tests are deterministic unit slices. The combined perf soak still needs runtime history before promotion."
+      },
+      "redGreenEvidence": {
+        "status": "partial",
+        "evidence": "Tests assert daemon stream writes pause after socket write(false), later stream data queues behind the pressured socket, flush-immediate output from another session is prioritized ahead of unrelated queued background backlog on drain while preserving per-session order, queued lines resume on drain, global cleanup clears clients that only have backpressured writes, queued daemon stream bytes are bounded by keeping priority output and the newest tail under sustained pressure, main pending renderer output is capped per PTY and in total, total-pressure trimming prefers background pending output before active pending output, trimmed pending tails preserve seq/rawLength metadata, and ACK-gated in-flight output remains bounded. Existing renderer tests cover replay/backlog slices. Needs intentional-break proof and broader hidden-output/input-latency perf artifacts before promotion."
+      },
+      "performanceBudget": {
+        "required": true,
+        "evidence": "Suggested ceilings: renderer in-flight <=8MB total, <=512KB per PTY plus active reserve, renderer queued chars <=2MB, dropped backlogs 0, hidden restore <=1000ms, active key median/worst <=75ms/300ms in perf scenarios."
+      },
+      "promotionCriteria": [
+        "Split daemon stream backpressure into a deterministic provider/IPC contract if full E2E is flaky.",
+        "Record JSON artifacts with bytes, dropped counts, queue depth, timer drift, and key latency.",
+        "Keep stress variants non-blocking until stable runtime history exists."
+      ],
+      "knownGaps": [
+        "Current command asserts daemon stream write(false)/drain/cleanup at the batcher contract layer and main pending renderer caps at the IPC contract layer.",
+        "Current command does not prove renderer parse pressure, scheduler queue depth, event-loop delay, or active key latency.",
+        "Live hidden-output pressure, active input latency, and full Electron perf artifacts remain unproved."
+      ],
+      "demotionRule": "Cannot promote without metric artifacts and bounded-byte assertions."
+    },
+    {
+      "id": "terminal-provider.daemon-startup-degraded-contract",
+      "title": "Daemon startup reconcile and degraded fallback preserve provider identity",
+      "maturity": "experimental",
+      "protection": "none",
+      "owner": "terminal-provider",
+      "layer": "provider-contract",
+      "surfaces": [
+        "daemon startup",
+        "degraded daemon",
+        "fallback PTY",
+        "provider ownership",
+        "startup restore"
+      ],
+      "platforms": [
+        "macos",
+        "linux",
+        "windows"
+      ],
+      "providers": [
+        "daemon",
+        "local"
+      ],
+      "coveredPlatforms": [],
+      "coveredProviders": [],
+      "coverageNotes": "Registered gap on main. The fail-closed degraded-daemon hardening and its contracts exist only on the pending reliability stack. It registers here with its owning split PR.",
+      "motivatingLinks": [
+        "https://github.com/stablyai/orca/pull/6830",
+        "https://github.com/stablyai/orca/pull/6866",
+        "https://github.com/stablyai/orca/pull/7002"
+      ],
+      "invariant": "Daemon startup reconciliation must preserve valid live daemon sessions, reap only true orphans, and degraded mode must not route an existing-looking daemon session through local fallback unless the caller explicitly marks a fresh degraded-mode spawn.",
+      "oracle": "The current provider-contract corpus covers valid current-worktree ids, folder/floating workspace ids, invalid removed-worktree ids, mixed live/orphan dry-run reconciliation, hyphenated worktree ids, malformed ids, daemon sessions discovered after restart, router discovery before existing-session spawn, router fail-closed behavior when legacy ownership cannot be listed or a known session has exited, degraded daemon fallback for fresh sessions, fail-closed behavior for unknown restored ids, benign inspection defaults for unknown ownership, and synthetic exits on daemon restart. Prior-worktree aliases and renamed-worktree startup wiring are promotion gaps, not current proof.",
+      "commands": [],
+      "testFiles": [],
+      "assertionRefs": [],
+      "evidenceRuns": [],
+      "runtimeBudget": {
+        "p95Seconds": 20,
+        "scope": "provider contract unit/integration test"
+      },
+      "flakeHistory": {
+        "status": "unknown",
+        "evidence": "Focused provider contract tests now run locally; needs soak history before promotion."
+      },
+      "redGreenEvidence": {
+        "status": "partial",
+        "evidence": "Tests assert discovered daemon sessions route to the daemon, fresh degraded-mode PTYs route to fallback only when marked new, router spawn discovers uncached existing sessions before choosing an adapter, router spawn fails closed instead of falling through to current when legacy listing fails or a known session has exited, targeted hasPty discovery caches legacy ownership before later write/resize-style operations, real daemon adapter listProcesses discovery seeds targeted hasPty liveness, folder and floating terminal workspace ids survive startup reconcile when valid, restored worktree-scoped and legacy/non-scoped ids do not fall back through spawn after ownership is lost or unknown, operations on unknown or exited existing ids fail closed, startup reconcile can dry-run orphan detection without killing live sessions, and process inspection returns benign defaults for unknown ownership. Production startup reconcile wiring remains unproven."
+      },
+      "performanceBudget": {
+        "required": true,
+        "evidence": "Reconcile must not add startup-blocking scans beyond the explicit daemon session inventory and must not leak global listing into hot paths."
+      },
+      "promotionCriteria": [
+        "Wire reconcileOnStartup or mark the production wiring gap explicitly.",
+        "Cover priorWorktreeIds so renamed worktrees are not falsely reaped."
+      ],
+      "knownGaps": [
+        "No executable coverage on main yet; the slice lives on the pending fix-terminal-reliability stack.",
+        "Production startup reconcile wiring remains unproven.",
+        "Prior-worktree aliases and renamed-worktree startup reconcile are not covered by the current executable corpus.",
+        "Real daemon restart behavior is still covered only by lower-level synthetic exit and provider-contract tests."
+      ],
+      "demotionRule": "Cannot promote while restored daemon ids or routing operations can silently route to local fallback."
+    },
+    {
+      "id": "terminal-provider.ssh-remote-reattach-contract",
+      "title": "SSH and remote terminal restore never turn unknown liveness into destructive cleanup",
+      "maturity": "experimental",
+      "protection": "none",
+      "owner": "terminal-provider",
+      "layer": "provider-contract",
+      "surfaces": [
+        "SSH deferred restore",
+        "remote-runtime mirror polling",
+        "provider listing",
+        "reattach",
+        "unknown liveness"
+      ],
+      "platforms": [
+        "macos",
+        "linux",
+        "windows"
+      ],
+      "providers": [
+        "ssh",
+        "remote-runtime",
+        "wsl"
+      ],
+      "coveredPlatforms": [],
+      "coveredProviders": [],
+      "coverageNotes": "Registered gap on main. The SSH unknown-liveness hardening and deferred-reattach contracts exist only on the pending reliability stack. It registers here with its owning split PR.",
+      "motivatingLinks": [
+        "https://github.com/stablyai/orca/pull/6951",
+        "https://github.com/stablyai/orca/pull/6955",
+        "https://github.com/stablyai/orca/pull/6979",
+        "https://github.com/stablyai/orca/pull/7009"
+      ],
+      "invariant": "SSH, WSL, and remote-runtime restore paths must treat provider listing failures and unknown liveness as unknown, not dead, while still avoiding duplicate spawn and clearing expired relay leases exactly once.",
+      "oracle": "The current executable slice asserts saved SSH sessions use relay attach, expired relay attach does not silently fresh-spawn inside the provider, provider listing and targeted-liveness failures are unknown rather than dead, deferred passphrase cancellation does not auto-reconnect, deferred SSH attach uses saved leaf/tab session ids once connected, transient deferred reattach failure preserves the saved restore id without fresh-spawning, deferred SSH no-result cleanup clears the pending serializer without consuming the saved restore id, disconnected SSH relay ids are retained as deferred reconnect metadata and sidebar wake hints rather than attached PTY proof, and expired deferred relay state clears stale pane/tab bindings before one fresh replacement spawn. WSL and remote-runtime mirror polling require separate follow-up contracts.",
+      "commands": [],
+      "testFiles": [],
+      "assertionRefs": [],
+      "evidenceRuns": [],
+      "runtimeBudget": {
+        "p95Seconds": 45,
+        "scope": "provider contract plus optional SSH soak"
+      },
+      "flakeHistory": {
+        "status": "unknown",
+        "evidence": "Focused provider/main/renderer SSH contract tests now run locally; needs soak history before promotion."
+      },
+      "redGreenEvidence": {
+        "status": "partial",
+        "evidence": "Tests assert SSH attach uses relay pty.attach for saved sessions, expired relay attach does not fresh-spawn in the provider, a failed SSH listProcesses observation does not clear previously learned ownership, a rejected SSH hasPty probe resolves as unknown liveness, deferred SSH passphrase cancellation does not auto-reconnect, deferred attach uses saved leaf/tab session ids once connected, transient deferred reattach failure preserves the saved session id without clearing pane/tab bindings or fresh-spawning, deferred SSH no-result cleanup clears the pending serializer without clearing pane/tab bindings or consuming the saved restore id, disconnected SSH relay ids are retained as deferred reconnect metadata and sidebar wake hints rather than attached PTY proof, and expired deferred relay state clears stale pane/tab bindings before one fresh replacement spawn. Needs WSL, remote-runtime mirror polling, live SSH, and saved intentional-break artifacts before promotion."
+      },
+      "performanceBudget": {
+        "required": true,
+        "evidence": "Provider listing and polling must be bounded, targeted where possible, and absent from typing/focus hot paths."
+      },
+      "promotionCriteria": [
+        "Use deterministic fake providers for failure and unknown-liveness cases.",
+        "Keep environment-dependent live SSH tests as soak until stable.",
+        "Include reconnect/polling artifacts that identify provider, connection id, and lease state."
+      ],
+      "knownGaps": [
+        "No executable coverage on main yet; the slice lives on the pending fix-terminal-reliability stack.",
+        "Current command covers store wake-hint metadata, main-process SSH provider failure semantics, provider attach/expired-attach behavior, and renderer deferred SSH reconnect/transient-failure/expired-relay fallback with mocked transports.",
+        "The store coverage asserts recoverability metadata, not a live attached PTY or user-visible connected state.",
+        "Live SSH/remote coverage remains environment-dependent.",
+        "WSL and remote-runtime mirror polling contracts are not wired yet.",
+        "The deferred SSH coverage does not boot Electron against a real SSH relay or exercise real network reconnect timing."
+      ],
+      "demotionRule": "Cannot promote if provider failure can close panes or if the oracle is screenshot-only."
+    },
+    {
+      "id": "terminal-provider.wsl-restore-contract",
+      "title": "WSL terminals preserve launch identity, liveness, and restore boundaries",
+      "maturity": "experimental",
+      "protection": "none",
+      "owner": "terminal-provider",
+      "layer": "windows-provider-contract",
+      "surfaces": [
+        "WSL",
+        "Windows host boundary",
+        "cwd identity",
+        "startup command",
+        "provider liveness",
+        "restore"
+      ],
+      "platforms": [
+        "windows"
+      ],
+      "providers": [
+        "wsl"
+      ],
+      "coveredPlatforms": [],
+      "coveredProviders": [],
+      "coverageNotes": "Registered gap only; no executable coverage is wired yet.",
+      "motivatingLinks": [
+        "https://github.com/stablyai/orca/pull/6801",
+        "https://github.com/stablyai/orca/pull/6830",
+        "https://github.com/stablyai/orca/pull/6866",
+        "https://github.com/stablyai/orca/pull/6951"
+      ],
+      "invariant": "WSL terminal restore must preserve Windows-host and Linux-guest path/cwd identity, shell launch args, startup command delivery, provider liveness semantics, and saved session ownership without being treated as ordinary local Windows ConPTY or generic SSH.",
+      "oracle": "No executable slice yet. Promotion needs a Windows provider contract plus one focused live WSL smoke proving cwd/path mapping, shell echo, startup command delivery, targeted liveness unknown handling, and restore without duplicate panes or destructive false-dead cleanup.",
+      "commands": [],
+      "testFiles": [],
+      "assertionRefs": [],
+      "evidenceRuns": [],
+      "runtimeBudget": {
+        "p95Seconds": 90,
+        "scope": "Windows WSL provider contract plus focused live smoke"
+      },
+      "flakeHistory": {
+        "status": "not-started",
+        "evidence": "WSL is split out from SSH/remote planning so it cannot be mistaken for covered provider behavior."
+      },
+      "redGreenEvidence": {
+        "status": "missing",
+        "evidence": "Needs intentional-break evidence for path/cwd mapping, startup command delivery, liveness unknown handling, and restore ownership."
+      },
+      "performanceBudget": {
+        "required": true,
+        "evidence": "WSL restore and liveness checks must avoid broad provider scans on typing, focus, switch, render, or resize hot paths."
+      },
+      "promotionCriteria": [
+        "Start with deterministic provider contracts for path/cwd mapping and launch args.",
+        "Add one focused Windows live WSL smoke after provider contracts are stable.",
+        "Keep WSL separate from SSH and local ConPTY evidence in PR descriptions."
+      ],
+      "knownGaps": [
+        "No manifest command yet.",
+        "No live Windows WSL CI evidence.",
+        "No provider contract yet separates Windows host paths from Linux guest cwd identity."
+      ],
+      "demotionRule": "Cannot promote while WSL restore is inferred from SSH, local ConPTY, or remote-runtime gates."
+    },
+    {
+      "id": "terminal-output.scrollback-replay-fifo",
+      "title": "Replay, scrollback, and hidden-output restore preserve ordering and clear semantics",
+      "maturity": "experimental",
+      "protection": "none",
+      "owner": "terminal-rendering",
+      "layer": "renderer-unit-provider-contract",
+      "surfaces": [
+        "snapshot replay",
+        "scrollback restore",
+        "hidden output",
+        "metadata-only replay",
+        "WebGL recovery"
+      ],
+      "platforms": [
+        "macos",
+        "linux",
+        "windows"
+      ],
+      "providers": [
+        "local",
+        "daemon",
+        "ssh",
+        "remote-runtime"
+      ],
+      "coveredPlatforms": [],
+      "coveredProviders": [],
+      "coverageNotes": "Registered gap on main. The replay FIFO/burst coalescing product change and its tests exist only on the pending reliability stack; main still uses a single pendingReplayData slot. It registers here with its owning split PR.",
+      "motivatingLinks": [
+        "https://github.com/stablyai/orca/pull/7012",
+        "https://github.com/stablyai/orca/pull/7054",
+        "https://github.com/stablyai/orca/pull/6949"
+      ],
+      "invariant": "Multiple replay notifications, metadata-only eager replays, hidden-output restores, and WebGL recovery must preserve FIFO ordering, apply clear-before-replay only when intended, and never overlay stale bytes on newer terminal output.",
+      "oracle": "The current executable slice injects overlapping replay notifications while async replay drains and asserts pre-parse coalescing, in-flight replay preservation, FIFO draining after xterm parsing starts, and bounded burst-tail coalescing. Metadata-only replay, hidden output chunks, live output interleaving, clear semantics, and stale-overlap checks remain promotion-scope gaps.",
+      "commands": [],
+      "testFiles": [],
+      "assertionRefs": [],
+      "evidenceRuns": [],
+      "runtimeBudget": {
+        "p95Seconds": 20,
+        "scope": "renderer unit or provider-contract test"
+      },
+      "flakeHistory": {
+        "status": "unknown",
+        "evidence": "Focused remote replay tests now run locally; needs soak history before promotion."
+      },
+      "redGreenEvidence": {
+        "status": "partial",
+        "evidence": "Focused tests assert pre-parse replay coalescing, in-flight replay preservation, FIFO draining for multiple replay notifications accepted after xterm parsing starts, and bounded burst-tail coalescing that keeps the newest snapshot. Needs saved red/green evidence and broader clear/metadata/hidden-output cases before promotion."
+      },
+      "performanceBudget": {
+        "required": true,
+        "evidence": "Replay fixes must not add unbounded renderer parsing, hidden-pane wakeups, or retry loops."
+      },
+      "promotionCriteria": [
+        "Extend deterministic multi-replay coverage before changing replay code.",
+        "Prove metadata-only replay does not clear restored scrollback.",
+        "Keep long-table/golden visual tests as supporting evidence, not the primary oracle."
+      ],
+      "knownGaps": [
+        "No executable coverage on main yet; the slice lives on the pending fix-terminal-reliability stack.",
+        "Current command covers remote replay overlap, in-flight preservation, FIFO ordering for multiple in-progress replay notifications, and bounded burst-tail coalescing only.",
+        "Does not yet cover clearBeforeReplay metadata on the fresh main implementation.",
+        "Does not yet cover hidden-output restore plus live-output interleaving."
+      ],
+      "demotionRule": "Cannot promote without ordered replay and clear-semantics assertions."
+    },
+    {
+      "id": "terminal-input.ime-and-synthetic-forwarding",
+      "title": "IME, native text, and synthetic input commit exactly once and do not leak preedit bytes",
+      "maturity": "experimental",
+      "protection": "partial",
+      "owner": "terminal-input",
+      "layer": "renderer-unit-platform-soak",
+      "surfaces": [
+        "IME",
+        "native text forwarding",
+        "synthetic input",
+        "paste",
+        "keyboard bypass",
+        "JIS yen"
+      ],
+      "platforms": [
+        "macos",
+        "linux",
+        "windows"
+      ],
+      "providers": [
+        "local",
+        "daemon",
+        "ssh",
+        "remote-runtime"
+      ],
+      "coveredPlatforms": [
+        "macos"
+      ],
+      "coveredProviders": [],
+      "coverageNotes": "Local macOS evidence on main@1282f5c2d, deterministic renderer-unit coverage for the Linux/Sogou candidate-key policy, and a local Electron/CDP live-PTY Sogou-style repro. Real Linux/Sogou OS IME automation, Windows ConPTY post-agent reset, and the CJK/Vietnamese/Arabic matrix remain registered gaps.",
+      "motivatingLinks": [
+        "https://github.com/stablyai/orca/pull/6699",
+        "https://github.com/stablyai/orca/pull/6682",
+        "https://github.com/stablyai/orca/pull/6513",
+        "https://github.com/stablyai/orca/pull/6999"
+      ],
+      "invariant": "Composition, native text forwarding, synthetic input, paste, and platform keyboard bypass paths must not send preedit/control bytes before commit and must commit text exactly once to the intended PTY.",
+      "oracle": "The current renderer-unit slice asserts native text commits route to the intended PTY once, composition/preedit bookkeeping does not leak premature text, input-source classification handles synthetic/native paths, paste/runtime forwarding avoids duplicate terminal payloads for covered fixtures, and Linux/Sogou candidate Space/digit selectors do not leak keydown/keypress/keyup while ordinary post-IME typing remains available. The Electron/CDP live-PTY repro verifies Sogou-style Space and digit candidate selectors submit only the committed Chinese text. Real IME paths and the full CJK/Vietnamese/Arabic/JIS-yen matrix run in follow-up platform soak where automation is possible.",
+      "commands": [
+        "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/terminal-pane/terminal-ime-native-text-forwarder.test.ts src/renderer/src/components/terminal-pane/terminal-ime-input-source.test.ts src/renderer/src/components/terminal-pane/terminal-paste-runtime.test.ts src/renderer/src/components/terminal-pane/terminal-ime-composition-tracker.test.ts src/renderer/src/components/terminal-pane/terminal-ime-candidate-key-release-guard.test.ts src/renderer/src/components/terminal-pane/xterm-bypass-policy-non-mac.test.ts src/renderer/src/components/terminal-pane/xterm-bypass-policy.test.ts",
+        "pnpm run test:e2e -- tests/e2e/chinese-ime-chat-input-repro.spec.ts"
+      ],
+      "testFiles": [
+        "src/renderer/src/components/terminal-pane/terminal-ime-native-text-forwarder.test.ts",
+        "src/renderer/src/components/terminal-pane/terminal-ime-input-source.test.ts",
+        "src/renderer/src/components/terminal-pane/terminal-paste-runtime.test.ts",
+        "src/renderer/src/components/terminal-pane/terminal-ime-composition-tracker.test.ts",
+        "src/renderer/src/components/terminal-pane/terminal-ime-candidate-key-release-guard.test.ts",
+        "src/renderer/src/components/terminal-pane/xterm-bypass-policy-non-mac.test.ts",
+        "src/renderer/src/components/terminal-pane/xterm-bypass-policy.test.ts",
+        "tests/e2e/chinese-ime-chat-input-repro.spec.ts"
+      ],
+      "assertionRefs": [
+        {
+          "file": "src/renderer/src/components/terminal-pane/terminal-ime-native-text-forwarder.test.ts",
+          "assertions": [
+            "native text commits route once to the intended PTY",
+            "composition/preedit bookkeeping does not leak premature text"
+          ]
+        },
+        {
+          "file": "src/renderer/src/components/terminal-pane/terminal-ime-input-source.test.ts",
+          "assertions": [
+            "synthetic and native input-source paths are classified for covered fixtures"
+          ]
+        },
+        {
+          "file": "src/renderer/src/components/terminal-pane/terminal-paste-runtime.test.ts",
+          "assertions": [
+            "paste/runtime forwarding avoids duplicate terminal payloads"
+          ]
+        },
+        {
+          "file": "src/renderer/src/components/terminal-pane/terminal-ime-composition-tracker.test.ts",
+          "assertions": [
+            "empty Sogou-style compositionupdate keeps composition active",
+            "stale composition state expires so editing keys cannot stay suppressed indefinitely",
+            "post-composition candidate guard is armed only by Sogou-style empty updates and clears after real typing"
+          ]
+        },
+        {
+          "file": "src/renderer/src/components/terminal-pane/terminal-ime-candidate-key-release-guard.test.ts",
+          "assertions": [
+            "suppressed candidate keydown arms only the matching keypress/keyup release guard",
+            "held-key repeat keydowns stay guarded until their keyup, even past expiry",
+            "fresh keydowns, other keys, modified keys, and expired keypresses are not guarded, and a fresh press drops a stale pending release"
+          ]
+        },
+        {
+          "file": "src/renderer/src/components/terminal-pane/xterm-bypass-policy-non-mac.test.ts",
+          "assertions": [
+            "standalone Linux 229 keydowns reach xterm while Windows 229 keydowns stay suppressed",
+            "candidate Space/digit selectors are suppressed only while candidate guards are active"
+          ]
+        },
+        {
+          "file": "src/renderer/src/components/terminal-pane/xterm-bypass-policy.test.ts",
+          "assertions": [
+            "macOS standalone Process key behavior and composition-owned key suppression stay intact"
+          ]
+        },
+        {
+          "file": "tests/e2e/chinese-ime-chat-input-repro.spec.ts",
+          "assertions": [
+            "Sogou-style Space candidate selection submits only the committed Chinese character",
+            "Sogou-style digit candidate selection submits only the committed Chinese phrase",
+            "Post-composition Sogou-style digit selection stays out of the PTY after compositionend"
+          ]
+        }
+      ],
+      "evidenceRuns": [
+        {
+          "date": "2026-07-07",
+          "runner": "local",
+          "platform": "macos",
+          "command": "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/terminal-pane/terminal-ime-native-text-forwarder.test.ts src/renderer/src/components/terminal-pane/terminal-ime-input-source.test.ts src/renderer/src/components/terminal-pane/terminal-paste-runtime.test.ts src/renderer/src/components/terminal-pane/terminal-ime-composition-tracker.test.ts src/renderer/src/components/terminal-pane/terminal-ime-candidate-key-release-guard.test.ts src/renderer/src/components/terminal-pane/xterm-bypass-policy-non-mac.test.ts src/renderer/src/components/terminal-pane/xterm-bypass-policy.test.ts",
+          "result": "passed",
+          "durationSeconds": 0.7,
+          "summary": "7 test file(s) passed, 144 tests passed on the Linux/Sogou candidate-key branch (includes held-key repeat guard coverage)."
+        },
+        {
+          "date": "2026-07-07",
+          "runner": "local",
+          "platform": "macos",
+          "command": "pnpm run test:e2e -- tests/e2e/chinese-ime-chat-input-repro.spec.ts",
+          "result": "passed",
+          "durationSeconds": 72.0,
+          "summary": "Electron/CDP IME repro passed: Sogou candidate selection, post-composition candidate selection, and existing Chinese IME harness passed; real Codex IME test was skipped behind ORCA_E2E_REAL_CODEX_IME."
+        }
+      ],
+      "runtimeBudget": {
+        "p95Seconds": 90,
+        "scope": "renderer unit plus focused Electron/CDP IME repro"
+      },
+      "flakeHistory": {
+        "status": "unknown",
+        "evidence": "Focused renderer input tests and the Electron/CDP Sogou-style repro are now registered; needs soak history and true platform IME evidence before promotion."
+      },
+      "redGreenEvidence": {
+        "status": "partial",
+        "evidence": "Focused tests cover existing native-text, input-source, paste/runtime forwarding, Linux/Sogou candidate selector, post-composition guard contracts, and live-PTY Sogou-style candidate commits. Needs intentional-break proof for duplicate native text forwarding and composition preedit leakage, plus the broader language/platform matrix."
+      },
+      "performanceBudget": {
+        "required": true,
+        "evidence": "Terminal IME hot-path audit clean on 2026-07-07: candidate guard adds O(1) boolean checks plus a bounded Space/digit release map; composition listeners are disposed with pane lifecycle; no polling, IPC fan-out, subprocess work, or SSH/remote transport cost added."
+      },
+      "promotionCriteria": [
+        "Cover deterministic byte/cell oracles first.",
+        "Mark true OS IME automation gaps explicitly by platform.",
+        "Pair with Windows ConPTY keyboard reset for Windows standard-key behavior."
+      ],
+      "knownGaps": [
+        "Current commands include renderer-unit coverage and a CDP-driven Electron repro; real OS IME automation may need manual or soak evidence.",
+        "Backspace/Enter during composition, JIS yen, Arabic/RTL, paste edge cases, and Windows ConPTY post-agent key reset still need representative gate coverage."
+      ],
+      "demotionRule": "Cannot promote if success is based only on DOM text without PTY byte/cell evidence."
+    },
+    {
+      "id": "terminal-input.windows-conpty-keyboard-reset",
+      "title": "Windows ConPTY resets keyboard protocol state after agents and TUIs exit",
+      "maturity": "experimental",
+      "protection": "none",
+      "owner": "terminal-platform",
+      "layer": "windows-electron-conpty",
+      "surfaces": [
+        "Windows ConPTY",
+        "keyboard protocol",
+        "agent exit",
+        "TUI exit",
+        "standard key input"
+      ],
+      "platforms": [
+        "windows"
+      ],
+      "providers": [
+        "local",
+        "daemon",
+        "wsl"
+      ],
+      "coveredPlatforms": [],
+      "coveredProviders": [],
+      "coverageNotes": "Registered gap only; no executable coverage is wired yet.",
+      "motivatingLinks": [
+        "https://github.com/stablyai/orca/pull/6999",
+        "https://github.com/stablyai/orca/pull/6858"
+      ],
+      "invariant": "After an agent or TUI exits on Windows ConPTY, ordinary Enter, Backspace, Arrow, paste, and printable keys must be delivered as standard shell input, not stale Kitty/CSI-u or application-mode bytes.",
+      "oracle": "A Windows gate records PTY input bytes before and after agent/TUI exit, submits real shell commands, and proves standard keys work without protocol leakage.",
+      "commands": [],
+      "testFiles": [],
+      "assertionRefs": [],
+      "evidenceRuns": [],
+      "runtimeBudget": {
+        "p95Seconds": 60,
+        "scope": "Windows provider-contract or focused Electron gate"
+      },
+      "flakeHistory": {
+        "status": "not-started",
+        "evidence": "Gate is registered as a known Windows ConPTY gap; no command is wired."
+      },
+      "redGreenEvidence": {
+        "status": "missing",
+        "evidence": "Needs intentional-break proof for stale keyboard-protocol mode after agent/TUI exit."
+      },
+      "performanceBudget": {
+        "required": true,
+        "evidence": "Must not add per-key global session listing or repeated protocol reset work on the typing hot path."
+      },
+      "promotionCriteria": [
+        "Use byte-level PTY input evidence, not only screenshots.",
+        "Start as Windows soak until skip and flake behavior is known.",
+        "Fail promotion on silent Windows environment skips."
+      ],
+      "knownGaps": [
+        "No manifest command yet.",
+        "Real Windows ConPTY execution is not covered by macOS/Linux CI."
+      ],
+      "demotionRule": "Cannot promote if standard-key behavior is inferred without PTY byte evidence."
+    },
+    {
+      "id": "terminal-input.agent-prompt-injection",
+      "title": "Orchestration agent prompts arrive as bracketed paste before submit",
+      "maturity": "experimental",
+      "protection": "partial",
+      "owner": "terminal-input",
+      "layer": "runtime-contract-and-cli-repro",
+      "surfaces": [
+        "terminal input",
+        "agent prompt injection",
+        "orchestration dispatch",
+        "PTY writes",
+        "bracketed paste"
+      ],
+      "platforms": [
+        "macos",
+        "linux",
+        "windows"
+      ],
+      "providers": [
+        "local",
+        "daemon",
+        "ssh",
+        "remote-runtime"
+      ],
+      "coveredPlatforms": [
+        "macos"
+      ],
+      "coveredProviders": [
+        "local"
+      ],
+      "coverageNotes": "Local macOS evidence covers the runtime PTY write contract and a live dev-runtime CLI repro. SSH, daemon, remote-runtime, Linux, and Windows remain provider/platform gaps; the product path stays provider-owned and does not add local filesystem or process assumptions.",
+      "motivatingLinks": [
+        "https://github.com/stablyai/orca/issues/7226"
+      ],
+      "invariant": "Injected orchestration task prompts for recognized agent CLIs must send the prompt body inside one bracketed-paste frame, sanitize embedded ESC bytes, preserve chunk boundaries without losing the frame, and send Enter only after the paste frame completes.",
+      "oracle": "Runtime tests assert the exact PTY write sequence and failure cleanup; orchestration tests assert dispatch/coordinator use the agent prompt path; the live CLI harness dispatches a 32KB task to a fake Codex-like TUI and requires marker present, bracketed paste present, zero unframed line breaks, and submit observed.",
+      "commands": [
+        "pnpm exec vitest run --config config/vitest.config.ts src/shared/agent-prompt-injection.test.ts src/main/runtime/orca-runtime.test.ts src/main/runtime/rpc/methods/orchestration.test.ts src/main/runtime/orchestration/coordinator.test.ts",
+        "node tools/repro-orchestration-long-prompt.mjs --cli out/bin/orca-dev --mode codex-like --size-kb 32 --timeout-ms 20000"
+      ],
+      "testFiles": [
+        "src/shared/agent-prompt-injection.test.ts",
+        "src/main/runtime/orca-runtime.test.ts",
+        "src/main/runtime/rpc/methods/orchestration.test.ts",
+        "src/main/runtime/orchestration/coordinator.test.ts",
+        "tools/repro-orchestration-long-prompt.mjs"
+      ],
+      "assertionRefs": [
+        {
+          "file": "src/shared/agent-prompt-injection.test.ts",
+          "assertions": [
+            "agent prompts are always framed as bracketed paste",
+            "submit stays separate from the paste frame",
+            "embedded ESC bytes are made inert before framing",
+            "chunk reconstruction preserves the paste frame"
+          ]
+        },
+        {
+          "file": "src/main/runtime/orca-runtime.test.ts",
+          "assertions": [
+            "runtime writes bracketed paste before a delayed submit",
+            "large prompt frames are chunked and reconstructed before submit",
+            "partial prompt write failure closes the paste frame and does not submit"
+          ]
+        },
+        {
+          "file": "src/main/runtime/rpc/methods/orchestration.test.ts",
+          "assertions": [
+            "orchestration.dispatch uses the agent prompt path for injected preambles",
+            "raw terminal.send is not called for injected task prompts",
+            "failed prompt injection rolls back the active dispatch"
+          ]
+        },
+        {
+          "file": "src/main/runtime/orchestration/coordinator.test.ts",
+          "assertions": [
+            "coordinator dispatch failures from prompt injection circuit-break through the DB",
+            "silent-skip paths do not attempt prompt injection"
+          ]
+        },
+        {
+          "file": "tools/repro-orchestration-long-prompt.mjs",
+          "assertions": [
+            "fake Codex-like worker observes submit after long orchestration dispatch",
+            "32KB task marker survives before submit",
+            "prompt bytes include a bracketed-paste frame with zero unframed line breaks"
+          ]
+        }
+      ],
+      "evidenceRuns": [
+        {
+          "date": "2026-07-07",
+          "runner": "local",
+          "platform": "macos",
+          "command": "pnpm exec vitest run --config config/vitest.config.ts src/shared/agent-prompt-injection.test.ts src/main/runtime/orca-runtime.test.ts src/main/runtime/rpc/methods/orchestration.test.ts src/main/runtime/orchestration/coordinator.test.ts",
+          "result": "passed",
+          "durationSeconds": 7.4,
+          "summary": "4 test files passed, 697 tests passed; covers framing, runtime PTY writes, orchestration RPC dispatch, and coordinator dispatch behavior."
+        },
+        {
+          "date": "2026-07-07",
+          "runner": "local",
+          "platform": "macos",
+          "command": "node tools/repro-orchestration-long-prompt.mjs --cli out/bin/orca-dev --mode codex-like --size-kb 32 --timeout-ms 20000",
+          "result": "passed",
+          "durationSeconds": 2.2,
+          "summary": "Live dev-runtime repro passed: expectedSpecBytes=32830, hasSubmit=true, rawContainsMarker=true, hasBracketedPasteFrame=true, unframedLineBreaks=0, contractOk=true."
+        }
+      ],
+      "runtimeBudget": {
+        "p95Seconds": 30,
+        "scope": "runtime contract tests plus optional local dev-runtime CLI repro"
+      },
+      "flakeHistory": {
+        "status": "unknown",
+        "evidence": "First local macOS evidence only; needs repeated dev-runtime harness runs and provider matrix evidence before promotion."
+      },
+      "redGreenEvidence": {
+        "status": "partial",
+        "evidence": "The live harness reproduced the unsafe raw multiline contract before the fix and passes after the fix; intentional-break evidence is local only and not yet in CI."
+      },
+      "performanceBudget": {
+        "required": true,
+        "evidence": "Agent prompt dispatch remains O(prompt bytes), uses the existing 16KB terminal input chunking and one existing 500ms submit delay, and adds no polling, provider listing, subprocess churn, hidden-pane wakeups, or renderer work."
+      },
+      "promotionCriteria": [
+        "Run the live harness in soak with a self-starting dev runtime or provider-contract fixture.",
+        "Add daemon, SSH, remote-runtime, Linux, and Windows evidence or mark narrower provider scope.",
+        "Capture stable red/green intentional-break evidence in CI before blocking promotion."
+      ],
+      "knownGaps": [
+        "Live harness command currently expects an already-running dev runtime and generated out/bin/orca-dev wrapper.",
+        "No Windows ConPTY, Linux PTY, SSH, daemon, or remote-runtime live evidence yet.",
+        "Push-on-idle orchestration message banners remain outside this dispatch-prompt gate."
+      ],
+      "demotionRule": "Demote or quarantine if the live harness flakes without a product bug or harness bug filed to the terminal-input owner."
+    },
+    {
+      "id": "terminal-render.windows-cjk-repaint",
+      "title": "Windows ConPTY wide glyphs and cursor rewrites repaint without stale cells",
+      "maturity": "experimental",
+      "protection": "none",
+      "owner": "terminal-rendering",
+      "layer": "windows-electron-conpty",
+      "surfaces": [
+        "Windows ConPTY",
+        "CJK",
+        "emoji",
+        "wide glyphs",
+        "cursor repaint",
+        "rewrite output"
+      ],
+      "platforms": [
+        "windows"
+      ],
+      "providers": [
+        "local",
+        "daemon",
+        "wsl"
+      ],
+      "coveredPlatforms": [],
+      "coveredProviders": [],
+      "coverageNotes": "Registered gap only; no executable coverage is wired yet.",
+      "motivatingLinks": [
+        "https://github.com/stablyai/orca/pull/6876",
+        "https://github.com/stablyai/orca/pull/6968",
+        "https://github.com/stablyai/orca/pull/6970"
+      ],
+      "invariant": "Windows terminal repaint must not leave stale cells, clipped wide glyphs, or hidden cursor state after CJK, emoji, or cursor-rewrite output.",
+      "oracle": "A Windows gate combines xterm buffer assertions with bounded screenshot/canvas evidence for representative CJK, emoji, and rewrite sequences.",
+      "commands": [],
+      "testFiles": [],
+      "assertionRefs": [],
+      "evidenceRuns": [],
+      "runtimeBudget": {
+        "p95Seconds": 90,
+        "scope": "Windows focused Electron render gate"
+      },
+      "flakeHistory": {
+        "status": "not-started",
+        "evidence": "Gate is registered as a known Windows rendering gap; no command is wired."
+      },
+      "redGreenEvidence": {
+        "status": "missing",
+        "evidence": "Needs intentional-break proof for stale wide-glyph repaint or cursor restore."
+      },
+      "performanceBudget": {
+        "required": true,
+        "evidence": "Must record refresh count or frame budget so repaint fixes do not mask excessive redraw churn."
+      },
+      "promotionCriteria": [
+        "Use buffer/cell evidence as the primary oracle and screenshots as diagnostics.",
+        "Keep stress cases non-blocking until Windows runtime history is stable.",
+        "Fail promotion on silent Windows environment skips."
+      ],
+      "knownGaps": [
+        "No manifest command yet.",
+        "No Windows CJK/emoji repaint command is wired."
+      ],
+      "demotionRule": "Cannot promote if the oracle is screenshot-only or environment-skipped."
+    },
+    {
+      "id": "terminal-shell.windows-resolution-parity",
+      "title": "Windows local and daemon providers resolve shells and startup commands consistently",
+      "maturity": "experimental",
+      "protection": "none",
+      "owner": "terminal-platform",
+      "layer": "provider-contract-windows",
+      "surfaces": [
+        "shell resolution",
+        "startup command",
+        "cwd",
+        "environment",
+        "local provider",
+        "daemon provider"
+      ],
+      "platforms": [
+        "windows"
+      ],
+      "providers": [
+        "local",
+        "daemon",
+        "wsl"
+      ],
+      "coveredPlatforms": [],
+      "coveredProviders": [],
+      "coverageNotes": "Registered gap only; no executable coverage is wired yet.",
+      "motivatingLinks": [
+        "https://github.com/stablyai/orca/pull/6541",
+        "https://github.com/stablyai/orca/pull/6858"
+      ],
+      "invariant": "Windows local and daemon terminals must resolve equivalent shell paths, args, cwd, env, startup command delivery, and fallback behavior for PowerShell 5/7, cmd, Git Bash, WSL, and missing pwsh.",
+      "oracle": "Provider-contract fixtures compare resolved command descriptors and live shell markers for supported Windows shells across local and daemon providers.",
+      "commands": [],
+      "testFiles": [],
+      "assertionRefs": [],
+      "evidenceRuns": [],
+      "runtimeBudget": {
+        "p95Seconds": 60,
+        "scope": "Windows provider-contract gate"
+      },
+      "flakeHistory": {
+        "status": "not-started",
+        "evidence": "Gate is registered as a known Windows shell parity gap; no command is wired."
+      },
+      "redGreenEvidence": {
+        "status": "missing",
+        "evidence": "Needs intentional-break proof for mismatched daemon/local shell resolution or lost startup command."
+      },
+      "performanceBudget": {
+        "required": false,
+        "evidence": "Required if resolution adds probing or PATH scans on hot startup paths."
+      },
+      "promotionCriteria": [
+        "Start with provider-contract fixtures before live Electron coverage.",
+        "Cover missing-shell fallback explicitly.",
+        "Fail promotion on silent Windows environment skips."
+      ],
+      "knownGaps": [
+        "No manifest command yet.",
+        "No local-vs-daemon Windows shell parity command is wired."
+      ],
+      "demotionRule": "Cannot promote if local and daemon provider behavior are tested separately without parity assertions."
+    },
+    {
+      "id": "terminal-performance.input-throughput",
+      "title": "Terminal input latency and throughput stay inside explicit budgets",
+      "maturity": "experimental",
+      "protection": "none",
+      "owner": "terminal-performance",
+      "layer": "electron-perf",
+      "surfaces": [
+        "typing latency",
+        "output throughput",
+        "hidden output",
+        "renderer CPU",
+        "resize churn"
+      ],
+      "platforms": [
+        "macos",
+        "linux",
+        "windows"
+      ],
+      "providers": [
+        "local",
+        "daemon",
+        "ssh",
+        "remote-runtime"
+      ],
+      "coveredPlatforms": [],
+      "coveredProviders": [],
+      "coverageNotes": "Registered gap only; no executable coverage is wired yet.",
+      "motivatingLinks": [
+        "https://github.com/stablyai/orca/pull/7002",
+        "https://github.com/stablyai/orca/pull/6858"
+      ],
+      "invariant": "Terminal typing, paste, resize, and output rendering must stay within latency and throughput budgets under realistic active and hidden-output load.",
+      "oracle": "Perf artifacts record median/p95/max key latency, event-loop delay, renderer CPU, output bytes/sec, resize count, hidden restore latency, queue depth, and dropped-output counts.",
+      "commands": [],
+      "testFiles": [],
+      "assertionRefs": [],
+      "evidenceRuns": [],
+      "runtimeBudget": {
+        "p95Seconds": 120,
+        "scope": "focused terminal perf report gate"
+      },
+      "flakeHistory": {
+        "status": "not-started",
+        "evidence": "Existing terminal perf scripts exist, but this gate is not wired with budgets or artifacts."
+      },
+      "redGreenEvidence": {
+        "status": "missing",
+        "evidence": "Needs intentional-break proof for hot-path listing, unbounded scheduler work, and input starvation."
+      },
+      "performanceBudget": {
+        "required": true,
+        "evidence": "Suggested initial budgets: active key median <=75ms, worst <=300ms in perf scenarios, dropped output 0, and bounded queue depths recorded per run."
+      },
+      "promotionCriteria": [
+        "Wire existing perf scripts to emit machine-readable artifacts.",
+        "Make budgets platform-aware before blocking.",
+        "Do not promote stress variants until runtime history is stable."
+      ],
+      "knownGaps": [
+        "No manifest command yet.",
+        "Existing perf scripts are not registered with explicit budgets or flake history."
+      ],
+      "demotionRule": "Cannot promote without metric artifacts and stable p95 runtime history."
+    },
+    {
+      "id": "terminal-performance.daemon-stream-backpressure",
+      "title": "Daemon terminal streams respect socket backpressure under output floods",
+      "maturity": "experimental",
+      "protection": "none",
+      "owner": "terminal-performance",
+      "layer": "daemon-provider-contract",
+      "surfaces": [
+        "daemon stream",
+        "socket write",
+        "drain",
+        "hidden output",
+        "input starvation"
+      ],
+      "platforms": [
+        "macos",
+        "linux",
+        "windows"
+      ],
+      "providers": [
+        "daemon"
+      ],
+      "coveredPlatforms": [],
+      "coveredProviders": [],
+      "coverageNotes": "Registered gap on main. The daemon batcher write(false)/drain contracts exist only on the pending reliability stack. It registers here with its owning split PR.",
+      "motivatingLinks": [
+        "https://github.com/stablyai/orca/pull/6836",
+        "https://github.com/stablyai/orca/pull/6858"
+      ],
+      "invariant": "Daemon terminal output floods must pause when socket writes return false, resume on drain, keep buffered bytes bounded, and not starve focused input.",
+      "oracle": "The current executable slice injects a slow socket and asserts write(false)/drain ordering, bounded queued daemon stream bytes, close/error listener cleanup, newest-tail preservation under sustained pressure, and flush-immediate cross-session priority ahead of unrelated background backlog on drain. Active input latency remains part of the broader perf gate.",
+      "commands": [],
+      "testFiles": [],
+      "assertionRefs": [],
+      "evidenceRuns": [],
+      "runtimeBudget": {
+        "p95Seconds": 60,
+        "scope": "daemon provider-contract gate"
+      },
+      "flakeHistory": {
+        "status": "unknown",
+        "evidence": "Focused daemon stream backpressure contract runs locally; needs soak history before promotion."
+      },
+      "redGreenEvidence": {
+        "status": "partial",
+        "evidence": "Tests assert daemon stream writes pause after socket write(false), later stream data queues behind the pressured socket, flush-immediate output from another session is prioritized ahead of unrelated queued background backlog on drain while preserving per-session order, queued lines resume on drain, global cleanup and close/error clear pending drain listeners, and queued bytes are bounded by preserving priority output plus the newest tail. Needs intentional-break artifact plus active-input latency proof before promotion."
+      },
+      "performanceBudget": {
+        "required": true,
+        "evidence": "Must record queued bytes, drain count, write(false) count, dropped output, and active input latency."
+      },
+      "promotionCriteria": [
+        "Keep deterministic socket mocks as the blocking candidate only after soak.",
+        "Record byte and drain artifacts on failure.",
+        "Pair with the broader output-backpressure budget before blocking."
+      ],
+      "knownGaps": [
+        "No executable coverage on main yet; the slice lives on the pending fix-terminal-reliability stack.",
+        "Current command is daemon batcher contract coverage, not live daemon/Electron perf.",
+        "Active input latency is not proven in live daemon/Electron perf."
+      ],
+      "demotionRule": "Cannot promote if backpressure is inferred only from renderer output success."
+    },
+    {
+      "id": "terminal-performance.store-and-git-hot-paths",
+      "title": "Terminal-adjacent store and git polling work stays off hot interaction paths",
+      "maturity": "experimental",
+      "protection": "none",
+      "owner": "terminal-performance",
+      "layer": "renderer-main-perf-contract",
+      "surfaces": [
+        "store selectors",
+        "git polling",
+        "startup hydration",
+        "terminal focus",
+        "tab switch",
+        "workspace switch",
+        "agent status"
+      ],
+      "platforms": [
+        "macos",
+        "linux",
+        "windows"
+      ],
+      "providers": [
+        "local",
+        "daemon",
+        "ssh",
+        "remote-runtime"
+      ],
+      "coveredPlatforms": [],
+      "coveredProviders": [],
+      "coverageNotes": "Registered gap on main. The boot-hydration counters and their tests exist only on the pending reliability stack. It registers here with its owning split PR.",
+      "motivatingLinks": [
+        "https://github.com/stablyai/orca/pull/7002"
+      ],
+      "invariant": "Terminal typing, focus, resize, tab/workspace switch, and agent/session restore must not trigger unbounded store projection, git status, provider listing, or per-pane polling work.",
+      "oracle": "The current executable slice instruments boot-time local PTY registry hydration with repo counts, local-vs-remote repo skips, worktree enumeration counts, adapter/session listing counts, registration/skipped-session counts, duration, and failure phase. The broader oracle still needs instrumentation that counts store selector recomputes, git status requests, provider listings, and session scans during scripted hot interactions with many worktrees and terminal panes.",
+      "commands": [],
+      "testFiles": [],
+      "assertionRefs": [],
+      "evidenceRuns": [],
+      "runtimeBudget": {
+        "p95Seconds": 60,
+        "scope": "renderer-main perf/count gate"
+      },
+      "flakeHistory": {
+        "status": "unknown",
+        "evidence": "Focused boot-hydration counter slice passed locally once; needs CI/runtime history before promotion."
+      },
+      "redGreenEvidence": {
+        "status": "partial",
+        "evidence": "Tests would fail if boot hydration enumerated SSH worktrees, stopped recording provider-unavailable retry state, lost the startup counter surface, stopped recording fatal hydration failures, or missed router adapter fanout/list-failure counters. Needs intentional-break proof for git/status polling or store scans triggered by terminal hot paths."
+      },
+      "performanceBudget": {
+        "required": true,
+        "evidence": "Current slice records boot-hydration repo, worktree, adapter, session, skip, register, and duration counters. Promotion still requires count budgets for listSessions, git status, provider scans, store recomputes, and elapsed hot-interaction time."
+      },
+      "promotionCriteria": [
+        "Use deterministic counters before broad perf scenarios.",
+        "Cover high-session and high-worktree fixtures.",
+        "Keep stress variants non-blocking until stable."
+      ],
+      "knownGaps": [
+        "No executable coverage on main yet; the slice lives on the pending fix-terminal-reliability stack.",
+        "Current command covers boot hydration counters only, not interactive terminal hot paths.",
+        "No Electron count gate yet proves focus, typing, tab switch, workspace switch, render, or high-session provider fanout avoids broad store/git/provider scans."
+      ],
+      "demotionRule": "Cannot promote without count budgets and actionable artifacts."
+    },
+    {
+      "id": "terminal-output.scrollback-restore",
+      "title": "Scrollback restore, hidden output, and replay clear semantics do not overlap stale bytes",
+      "maturity": "experimental",
+      "protection": "partial",
+      "owner": "terminal-rendering",
+      "layer": "renderer-provider-contract",
+      "surfaces": [
+        "scrollback",
+        "hidden output",
+        "snapshot replay",
+        "metadata-only replay",
+        "clear semantics"
+      ],
+      "platforms": [
+        "macos",
+        "linux",
+        "windows"
+      ],
+      "providers": [
+        "local",
+        "daemon",
+        "ssh",
+        "remote-runtime"
+      ],
+      "coveredPlatforms": [
+        "macos"
+      ],
+      "coveredProviders": [],
+      "coverageNotes": "Local macOS evidence over the merged #7133/#7173 restore and hidden-output ordering tests on main@1282f5c2d. The dirty-state exactness contract, normal-buffer clear semantics, and metadata-only replay remain pending-stack work.",
+      "motivatingLinks": [
+        "https://github.com/stablyai/orca/pull/7173",
+        "https://github.com/stablyai/orca/pull/7133",
+        "https://github.com/stablyai/orca/pull/7012",
+        "https://github.com/stablyai/orca/pull/7054",
+        "https://github.com/stablyai/orca/pull/6949"
+      ],
+      "invariant": "Hidden-output restore, snapshot replay, metadata-only replay, and clear-before-replay must preserve order and never overlay stale bytes on newer live terminal output; restoring a snapshot onto an already-dirty pane must yield a buffer exactly equal to the snapshot frame.",
+      "oracle": "Apply snapshots onto adversarially dirty pane states (already on the alternate screen, stale content occupying cells the new frame leaves blank, scrollback present, wide glyphs, revived sessions with restarted PTY seq counters) and assert exact buffer equality with the snapshot frame; fault injection interleaves hidden chunks, live output, metadata-only replay, and clear-before-replay, then asserts ordered terminal buffer content, clear decisions, and replay diagnostics. Marker-presence checks are not acceptable evidence on restore paths.",
+      "commands": [
+        "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/terminal-pane/pty-connection.test.ts"
+      ],
+      "testFiles": [
+        "src/renderer/src/components/terminal-pane/pty-connection.test.ts"
+      ],
+      "assertionRefs": [
+        {
+          "file": "src/renderer/src/components/terminal-pane/pty-connection.test.ts",
+          "assertions": [
+            "restoring an alternate-screen snapshot clears only the alternate screen (#7133)",
+            "hidden Codex output is restored when the pty seq counter restarts, with or without an observed exit (#7173)",
+            "pending hidden restore chunks are not replayed after a terminal clear",
+            "a scrolled-up viewport is preserved after hidden-backlog snapshot replay"
+          ]
+        }
+      ],
+      "evidenceRuns": [
+        {
+          "date": "2026-07-03",
+          "runner": "local",
+          "platform": "macos",
+          "command": "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/terminal-pane/pty-connection.test.ts",
+          "result": "passed",
+          "durationSeconds": 8.4,
+          "summary": "1 test file(s) passed, 311 tests passed on main@1282f5c2d in a clean checkout."
+        }
+      ],
+      "runtimeBudget": {
+        "p95Seconds": 45,
+        "scope": "renderer provider-contract gate"
+      },
+      "flakeHistory": {
+        "status": "not-started",
+        "evidence": "Remote replay FIFO has a focused slice, but the broader scrollback restore gate is not wired."
+      },
+      "redGreenEvidence": {
+        "status": "partial",
+        "evidence": "#7133 and #7173 each proved their slices red before fix (stale alt-screen bleed-through; stale background chunk written after restore; frozen revived seq counters). The broader dirty-state exactness contract has no red runs yet."
+      },
+      "performanceBudget": {
+        "required": true,
+        "evidence": "Must keep hidden restore bounded and avoid unbounded renderer parsing or wake loops."
+      },
+      "promotionCriteria": [
+        "Start every restore case from adversarially dirty pane state, never only fresh terminals.",
+        "Assert frame exactness or stale-content absence, never marker presence.",
+        "Build deterministic lower-layer clear and interleaving tests before broad golden E2E.",
+        "Use long-table/golden visual tests only as supporting evidence.",
+        "Record ordered buffer diagnostics on failure."
+      ],
+      "knownGaps": [
+        "No manifest command yet.",
+        "The existing replay FIFO command is narrower than this broader scrollback restore invariant.",
+        "#7133's merged alt-only-clear restore tests exist on main but are not yet registered as this gate's command.",
+        "#7173's ordered-seq interleaving and session-revival tests in pty-connection.test.ts on main are the seed for the hidden/live interleaving slice and are unregistered until the rebase."
+      ],
+      "demotionRule": "Cannot promote without clear-semantics and hidden/live interleaving assertions."
+    },
+    {
+      "id": "terminal-capability.startup-color-query",
+      "title": "Startup color capability queries do not leak into shell or terminal streams",
+      "maturity": "experimental",
+      "protection": "none",
+      "owner": "terminal-rendering",
+      "layer": "renderer-provider-contract",
+      "surfaces": [
+        "OSC 10/11",
+        "startup capability query",
+        "shell stream",
+        "renderer stream",
+        "terminal colors"
+      ],
+      "platforms": [
+        "macos",
+        "linux",
+        "windows"
+      ],
+      "providers": [
+        "local",
+        "daemon",
+        "ssh",
+        "remote-runtime"
+      ],
+      "coveredPlatforms": [],
+      "coveredProviders": [],
+      "coverageNotes": "Registered gap only; no executable coverage is wired yet.",
+      "motivatingLinks": [
+        "https://github.com/stablyai/orca/pull/6949"
+      ],
+      "invariant": "Startup OSC 10/11 color queries are answered out of band at startup only, never leak into shell/provider output streams, and ordinary runtime OSC color queries remain renderer-handled.",
+      "oracle": "A provider-contract fixture records startup query replies, shell-visible bytes, renderer-visible bytes, and later runtime OSC behavior to prove no query leakage or color deadlock.",
+      "commands": [],
+      "testFiles": [],
+      "assertionRefs": [],
+      "evidenceRuns": [],
+      "runtimeBudget": {
+        "p95Seconds": 30,
+        "scope": "renderer provider-contract gate"
+      },
+      "flakeHistory": {
+        "status": "not-started",
+        "evidence": "Gate is registered as a capability/startup gap; no command is wired."
+      },
+      "redGreenEvidence": {
+        "status": "missing",
+        "evidence": "Needs intentional-break proof for leaked startup OSC replies or disabled runtime OSC handling."
+      },
+      "performanceBudget": {
+        "required": false,
+        "evidence": "Required if capability probing adds retry loops or startup polling."
+      },
+      "promotionCriteria": [
+        "Assert shell/provider byte streams directly.",
+        "Cover startup-only and runtime OSC paths separately.",
+        "Keep screenshot evidence diagnostic only."
+      ],
+      "knownGaps": [
+        "No manifest command yet.",
+        "No startup color-query contract is wired."
+      ],
+      "demotionRule": "Cannot promote if success is based only on absence of visible artifacts."
+    },
+    {
+      "id": "terminal-runtime.mobile-stream-budget",
+      "title": "Runtime and mobile terminal streams keep snapshot and live-output bytes bounded",
+      "maturity": "experimental",
+      "protection": "partial",
+      "owner": "terminal-runtime",
+      "layer": "runtime-rpc-contract",
+      "surfaces": [
+        "mobile terminal",
+        "runtime RPC",
+        "binary multiplex",
+        "JSON subscribe fallback",
+        "snapshot buffering"
+      ],
+      "platforms": [
+        "macos",
+        "linux",
+        "windows",
+        "mobile"
+      ],
+      "providers": [
+        "remote-runtime",
+        "ssh",
+        "local",
+        "daemon"
+      ],
+      "coveredPlatforms": [
+        "macos"
+      ],
+      "coveredProviders": [],
+      "coverageNotes": "Local macOS evidence over the runtime-RPC stream budgets on main@1282f5c2d. The pending stack adds byte-exact 512KB/2MB/256KB/48KB budget assertions; legacy JSON subscribe parity remains undecided.",
+      "motivatingLinks": [
+        "https://github.com/stablyai/orca/pull/6951",
+        "https://github.com/stablyai/orca/pull/6955",
+        "https://github.com/stablyai/orca/pull/7009"
+      ],
+      "invariant": "Runtime and mobile terminal subscriptions must cap initial snapshots, live output buffered while snapshots load, chunk sizes, and batch sizes, while preserving output order, input locks, resize/driver events, and fallback parity or explicit fallback deprecation.",
+      "oracle": "The current executable slice asserts mobile initial snapshots downgrade until they fit <=512KB, requested binary snapshots downgrade until they fit <=2MB, binary live output queued while the initial snapshot loads stays <=256KB while preserving the newest tail, large binary output is split into <=48KB frames, output bursts are coalesced before emit, aborts do not register stale listeners, and stale mobile resize re-stream completions are dropped. JSON fallback parity/deprecation remains an explicit gap.",
+      "commands": [
+        "pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/rpc/terminal-subscribe-buffer.test.ts src/main/runtime/rpc/terminal-output-batching.test.ts src/main/runtime/rpc/terminal-multiplex.test.ts"
+      ],
+      "testFiles": [
+        "src/main/runtime/rpc/terminal-subscribe-buffer.test.ts",
+        "src/main/runtime/rpc/terminal-output-batching.test.ts",
+        "src/main/runtime/rpc/terminal-multiplex.test.ts"
+      ],
+      "assertionRefs": [
+        {
+          "file": "src/main/runtime/rpc/terminal-subscribe-buffer.test.ts",
+          "assertions": [
+            "legacy binary output queued during initial snapshot serialization stays bounded",
+            "stale mobile resize re-stream completions are dropped for legacy binary streams",
+            "aborted stream signals do not register stale listeners"
+          ]
+        },
+        {
+          "file": "src/main/runtime/rpc/terminal-output-batching.test.ts",
+          "assertions": [
+            "desktop output bursts coalesce before stream emission",
+            "large binary output is encoded lazily before the first output frame"
+          ]
+        },
+        {
+          "file": "src/main/runtime/rpc/terminal-multiplex.test.ts",
+          "assertions": [
+            "requested snapshots fall back smaller when serialized data exceeds the send budget",
+            "oversized live output frames are bounded for subscribed binary streams",
+            "multibyte live output flushes when encoded bytes reach the batch budget"
+          ]
+        }
+      ],
+      "evidenceRuns": [
+        {
+          "date": "2026-07-03",
+          "runner": "local",
+          "platform": "macos",
+          "command": "pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/rpc/terminal-subscribe-buffer.test.ts src/main/runtime/rpc/terminal-output-batching.test.ts src/main/runtime/rpc/terminal-multiplex.test.ts",
+          "result": "passed",
+          "durationSeconds": 3.8,
+          "summary": "3 test file(s) passed, 28 tests passed on main@1282f5c2d in a clean checkout."
+        }
+      ],
+      "runtimeBudget": {
+        "p95Seconds": 20,
+        "scope": "runtime RPC contract test"
+      },
+      "flakeHistory": {
+        "status": "unknown",
+        "evidence": "Focused runtime RPC contract tests passed locally on 2026-07-02; needs soak history before promotion."
+      },
+      "redGreenEvidence": {
+        "status": "partial",
+        "evidence": "Tests cover mobile initial snapshot byte downgrade, requested binary snapshot byte downgrade, pending live-output cap while snapshot loads, output chunk size, output coalescing, abort cleanup, and stale resize re-stream suppression. Needs intentional-break proof plus JSON fallback coverage before promotion."
+      },
+      "performanceBudget": {
+        "required": true,
+        "evidence": "This gate is the byte and batching budget for runtime/mobile terminal streaming."
+      },
+      "promotionCriteria": [
+        "Gate binary multiplex first.",
+        "Decide whether JSON fallback is supported, gated, or deprecated.",
+        "Record byte counts and order/cursor artifacts on failure."
+      ],
+      "knownGaps": [
+        "Current command covers binary runtime/mobile stream contracts only.",
+        "Legacy JSON subscribe parity is undecided."
+      ],
+      "demotionRule": "Cannot promote while a supported stream path has uncapped snapshot or live-output buffering."
+    },
+    {
+      "id": "terminal-mirror.parser-parity",
+      "title": "Renderer xterm and main headless mirror parse identical bytes into identical cells",
+      "maturity": "experimental",
+      "protection": "partial",
+      "owner": "terminal-rendering",
+      "layer": "renderer-main-parity-contract",
+      "surfaces": [
+        "main mirror buffer",
+        "snapshot restore",
+        "terminal reads",
+        "mobile streams",
+        "unicode width",
+        "parser configuration"
+      ],
+      "platforms": [
+        "macos",
+        "linux",
+        "windows"
+      ],
+      "providers": [
+        "local",
+        "daemon",
+        "ssh",
+        "remote-runtime"
+      ],
+      "coveredPlatforms": [
+        "macos"
+      ],
+      "coveredProviders": [],
+      "coverageNotes": "Local macOS evidence over #7148's width-parity oracle on main@1282f5c2d. A broader byte corpus, a shared parser-construction assertion over terminal-unicode-provider.ts/pane-terminal-options.ts, and recorded agent-session corpora remain gaps.",
+      "motivatingLinks": [
+        "https://github.com/stablyai/orca/pull/7148",
+        "https://github.com/stablyai/orca/pull/7133"
+      ],
+      "invariant": "The main-process headless terminal mirror and the renderer xterm must parse identical byte streams into cell-identical buffers (unicode width tables, joining behavior, modes, and addon-visible semantics), so snapshots, restores, reads, and mobile streams never encode a frame the renderer would not have produced.",
+      "oracle": "Feed identical byte corpora (emoji/ZWJ/wide glyphs, positioned overwrites after wide characters, alternate-screen transitions, wrapped lines) to both parser configurations and assert cell-identical visible buffers; both parsers must be constructed from one shared configuration module so one-sided drift fails the gate.",
+      "commands": [
+        "pnpm exec vitest run --config config/vitest.config.ts src/main/daemon/headless-emulator-unicode-width.test.ts"
+      ],
+      "testFiles": [
+        "src/main/daemon/headless-emulator-unicode-width.test.ts"
+      ],
+      "assertionRefs": [
+        {
+          "file": "src/main/daemon/headless-emulator-unicode-width.test.ts",
+          "assertions": [
+            "emoji advance two cells in the headless mirror so positioned writes land like the renderer (#7148)",
+            "ZWJ emoji join into one wide pair like the renderer provider (#7148)"
+          ]
+        }
+      ],
+      "evidenceRuns": [
+        {
+          "date": "2026-07-03",
+          "runner": "local",
+          "platform": "macos",
+          "command": "pnpm exec vitest run --config config/vitest.config.ts src/main/daemon/headless-emulator-unicode-width.test.ts",
+          "result": "passed",
+          "durationSeconds": 0.7,
+          "summary": "1 test file(s) passed, 2 tests passed on main@1282f5c2d in a clean checkout."
+        }
+      ],
+      "runtimeBudget": {
+        "p95Seconds": 30,
+        "scope": "shared parser-parity unit gate"
+      },
+      "flakeHistory": {
+        "status": "not-started",
+        "evidence": "Deterministic unit-layer corpus; no timing dependence expected."
+      },
+      "redGreenEvidence": {
+        "status": "partial",
+        "evidence": "#7148 proved this red before its fix (positioned overwrite after emoji landed shifted in the mirror). Intentional-drift proof for the shared provider is still missing."
+      },
+      "performanceBudget": {
+        "required": true,
+        "evidence": "Shared parser construction must not add renderer or emulator startup cost; the corpus stays a bounded unit fixture."
+      },
+      "promotionCriteria": [
+        "Register #7148's merged width test (src/main/daemon/headless-emulator-unicode-width.test.ts) plus a shared-construction assertion over src/shared/terminal-unicode-provider.ts and pane-terminal-options.ts as the first command during the stack rebase.",
+        "Extend the corpus with recorded real agent-session byte streams.",
+        "Promote only on aggregated reliability-gates CI history."
+      ],
+      "knownGaps": [
+        "No manifest command yet; the seed test exists on fresh main but not at this branch's merge-base.",
+        "Width parity is protected only by #7148's single test; no broader corpus or shared-construction assertion covers the other parser-config axes.",
+        "Corpus does not yet include recorded live agent sessions.",
+        "Parity at identical configuration cannot catch state-synchronization divergence such as #7192's stale-width mirror; geometry fan-out and reflow ordering are owned by terminal-geometry.visible-convergence."
+      ],
+      "demotionRule": "Cannot promote without cell-exact parity assertions over a wide-glyph corpus and shared-construction proof."
+    },
+    {
+      "id": "terminal-observability.restore-convergence-selfcheck",
+      "title": "Post-restore convergence self-check flags renderer/mirror divergence as an anomaly",
+      "maturity": "experimental",
+      "protection": "none",
+      "owner": "terminal-rendering",
+      "layer": "renderer-observability",
+      "surfaces": [
+        "hidden-output restore",
+        "snapshot replay",
+        "anomaly breadcrumbs",
+        "telemetry"
+      ],
+      "platforms": [
+        "macos",
+        "linux",
+        "windows"
+      ],
+      "providers": [
+        "local",
+        "daemon",
+        "ssh",
+        "remote-runtime"
+      ],
+      "coveredPlatforms": [],
+      "coveredProviders": [],
+      "coverageNotes": "Registered gap only; the anomaly-breadcrumb machinery exists in this branch but no convergence probe is implemented.",
+      "motivatingLinks": [
+        "https://github.com/stablyai/orca/pull/7133",
+        "https://github.com/stablyai/orca/pull/7054"
+      ],
+      "invariant": "After every hidden-to-visible reveal settles — whether or not a restore was triggered — the renderer buffer must converge with the current main-mirror state; divergence is recorded as a compact, content-free terminal_lifecycle_anomaly breadcrumb and counted in telemetry instead of failing silently. Restore-scoped checking is insufficient: #7173's frozen-output variant restores faithfully and then silently drops later hidden output, so it never triggers another restore.",
+      "oracle": "Deterministic tests inject forced divergence in both shapes — stale bytes written after a faithful restore, and a frozen pane whose reveal triggers no restore — and assert exactly one deduped breadcrumb with row-hash evidence and no terminal content; the production probe is a bounded row-hash sample comparison against current mirror rows that runs once per reveal with no polling and a strict time budget.",
+      "commands": [],
+      "testFiles": [],
+      "assertionRefs": [],
+      "evidenceRuns": [],
+      "runtimeBudget": {
+        "p95Seconds": 30,
+        "scope": "renderer observability unit gate"
+      },
+      "flakeHistory": {
+        "status": "not-started",
+        "evidence": "Probe and tests not yet implemented."
+      },
+      "redGreenEvidence": {
+        "status": "missing",
+        "evidence": "Needs an intentionally divergent restore fixture proving the probe fires, dedupes, and stays silent on faithful restores."
+      },
+      "performanceBudget": {
+        "required": true,
+        "evidence": "One bounded comparison per reveal; no polling, no hot-path work, no content serialization beyond hashed row samples."
+      },
+      "promotionCriteria": [
+        "Prove the probe is content-free and privacy-safe (hashes and indices only).",
+        "Prove zero false positives across the existing restore test corpus before enabling telemetry counting.",
+        "Watch anomaly telemetry after each terminal release as the in-production regression signal."
+      ],
+      "knownGaps": [
+        "No manifest command yet.",
+        "Probe not implemented; #7133-class and #7173-class corruption is currently silent in production.",
+        "Pixel-level divergence is out of scope for this probe (see terminal-render.pixel-refresh-repair).",
+        "Renderer-vs-mirror comparison cannot see corruption upstream of the mirror itself (#7192's stale-width mirror); mirror-vs-PTY truth is owned by terminal-geometry.visible-convergence."
+      ],
+      "demotionRule": "Disable the probe if it exceeds its per-reveal budget or produces false-positive anomaly noise."
+    },
+    {
+      "id": "terminal-render.pixel-refresh-repair",
+      "title": "Forced repaint does not change revealed pane pixels",
+      "maturity": "experimental",
+      "protection": "none",
+      "owner": "terminal-rendering",
+      "layer": "electron-visual-golden",
+      "surfaces": [
+        "WebGL rendering",
+        "tab reveal",
+        "worktree resume",
+        "window wake",
+        "render model"
+      ],
+      "platforms": [
+        "macos",
+        "linux",
+        "windows"
+      ],
+      "providers": [
+        "local",
+        "daemon"
+      ],
+      "coveredPlatforms": [],
+      "coveredProviders": [],
+      "coverageNotes": "Registered gap only; the live repro harness with a refresh-repair oracle exists but is not productized into the release-blocking terminal-rendering-golden suite.",
+      "motivatingLinks": [
+        "https://github.com/stablyai/orca/pull/7133",
+        "https://github.com/stablyai/orca/pull/7054"
+      ],
+      "invariant": "After any reveal, restore, or wake, the pixels a pane displays must equal what a forced full model-invalidating repaint would draw from the buffer; a material refresh-repair diff means stale rendering escaped, whatever the mechanism.",
+      "oracle": "Screenshot the revealed pane, force a model-invalidating full repaint, screenshot again, and assert the bounded pixel diff is immaterial; pair with a JS-level render-model-vs-buffer comparison. Compositor screenshots only, because WebGL canvas readback is blank with preserveDrawingBuffer disabled.",
+      "commands": [],
+      "testFiles": [],
+      "assertionRefs": [],
+      "evidenceRuns": [],
+      "runtimeBudget": {
+        "p95Seconds": 300,
+        "scope": "release-blocking golden Electron visual test"
+      },
+      "flakeHistory": {
+        "status": "not-started",
+        "evidence": "Runs nightly only while the per-platform diff threshold stabilizes; the destination is the release-blocking terminal-rendering-golden suite in release-cut.yml."
+      },
+      "redGreenEvidence": {
+        "status": "missing",
+        "evidence": "Needs an intentionally fossilized render model (skip the model invalidation on reveal) proving the refresh-repair diff fires."
+      },
+      "performanceBudget": {
+        "required": true,
+        "evidence": "Soak-only; must not add product-path repaints beyond the existing reveal hardening."
+      },
+      "promotionCriteria": [
+        "Productize the existing stale-render repro harness with the refresh-repair oracle and failure artifacts.",
+        "Establish a stable material-diff threshold across platforms via nightly runs.",
+        "Promotion means membership in the release-blocking terminal-rendering-golden suite that release-cut.yml runs against every release tag; never PR-blocking.",
+        "Register the gate command as a direct spec-file invocation; the checker rejects --grep tag selectors, so do not reuse the existing --grep-based golden script as the command."
+      ],
+      "knownGaps": [
+        "No manifest command yet.",
+        "Buffer-clean, pixels-stale variants are otherwise invisible to every buffer oracle in the manifest."
+      ],
+      "demotionRule": "Drop from the golden suite back to nightly diagnostic if diff thresholds cannot be kept stable across CI runners."
+    }
+  ]
+}

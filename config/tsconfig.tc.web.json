@@ -6,7 +6,10 @@
     "../src/renderer/src/**/*.tsx",
     "../src/preload/api-types.ts",
     "../src/shared/**/*",
+    "../src/main/ipc/worktree-branch-name.ts",
     "../src/main/ipc/worktree-logic.ts",
+    "../src/main/ipc/worktree-linked-work-item-metadata.ts",
+    "../src/main/ipc/worktree-metadata-merge.ts",
     "../src/main/wsl.ts"
   ],
   "compilerOptions": {

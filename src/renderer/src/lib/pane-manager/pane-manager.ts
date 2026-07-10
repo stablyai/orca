@@ -4,7 +4,11 @@ import type {
   PaneStyleOptions,
   ManagedPane,
   ManagedPaneInternal,
-  DropZone
+  PaneRenderingDiagnostics,
+  DropZone,
+  PaneExternalDropHandler,
+  PaneExternalDropResolver,
+  PaneExternalDropTarget
 } from './pane-manager-types'
 import type { SplitPaneAroundLeafIdsOptions } from './pane-subtree-split'
 import {
@@ -15,8 +19,10 @@ import {
   disposeDividersIn
 } from './pane-divider'
 import { cancelActivePaneDrag, createDragReorderState, handlePaneDrop } from './pane-drag-reorder'
+import { beginPaneDragFromPointerDown } from './pane-drag-pointer'
 import { createPaneDOM, openTerminal, setLigaturesEnabled, disposePane } from './pane-lifecycle'
 import { shouldFollowMouseFocus } from './focus-follows-mouse'
+import { getTerminalWebglAutoDecision } from './terminal-webgl-auto-policy'
 import {
   equalizePaneSplitSizes,
   safeFit,
@@ -25,19 +31,35 @@ import {
 } from './pane-tree-ops'
 import { toPublicPane } from './pane-public-view'
 import { applyTerminalGpuAcceleration } from './pane-terminal-gpu-acceleration'
+import { rebuildAttachedWebgl } from './pane-webgl-reattach'
 import {
   markPaneComplexScriptOutput,
+  resetPaneWebglTextureAtlases,
   resumePaneRendering,
   setPaneGpuRenderingState,
   suspendPaneRendering
 } from './pane-rendering-control'
 import type { TerminalLeafId } from '../../../../shared/stable-pane-id'
+import { registerLivePaneManager, unregisterLivePaneManager } from './pane-manager-registry'
+import { schedulePaneRevealPresent, schedulePaneRevealRepaint } from './pane-reveal-repaint'
 import { PaneIdentityRegistry } from './pane-identity-registry'
-import { closeManagedPane, splitManagedPane } from './pane-split-close'
+import {
+  closeManagedPane,
+  detachManagedPaneForExternalMove,
+  splitManagedPane
+} from './pane-split-close'
 import { FIRST_PANE_ID } from '../../../../shared/pane-key'
 import { splitPaneAroundMountedSubtree } from './pane-subtree-split'
 
-export type { PaneManagerOptions, PaneStyleOptions, ManagedPane, DropZone }
+export type {
+  PaneManagerOptions,
+  PaneStyleOptions,
+  ManagedPane,
+  DropZone,
+  PaneExternalDropTarget,
+  PaneExternalDropResolver,
+  PaneExternalDropHandler
+}
 
 export class PaneManager {
   private root: HTMLElement
@@ -58,6 +80,9 @@ export class PaneManager {
     this.root = root
     this.options = options
     this.renderingSuspended = options.initialRenderingSuspended === true
+    // Why: atlas recovery must reach every live manager — see
+    // resetAllTerminalWebglAtlases for the shared-atlas rationale.
+    registerLivePaneManager(this)
   }
 
   createInitialPane(opts?: { focus?: boolean; leafId?: string }): ManagedPane {
@@ -148,12 +173,40 @@ export class PaneManager {
     })
   }
 
+  detachPaneForExternalMove(paneId: number): boolean {
+    return detachManagedPaneForExternalMove({
+      paneId,
+      activePaneId: this.activePaneId,
+      panes: this.panes,
+      root: this.root,
+      styleOptions: this.styleOptions,
+      managerOptions: this.options,
+      getDragCallbacks: () => this.getDragCallbacks(),
+      releasePaneIdentity: (numericPaneId) => this.identities.release(numericPaneId),
+      setActivePaneId: (id) => {
+        this.activePaneId = id
+      }
+    })
+  }
+
   getPanes(): ManagedPane[] {
     return Array.from(this.panes.values()).map(toPublicPane)
   }
 
   fitAllPanes(): void {
     fitAllPanesInternal(this.panes)
+  }
+
+  refreshAllPanes(): void {
+    for (const pane of this.panes.values()) {
+      try {
+        if (pane.terminal.rows > 0) {
+          pane.terminal.refresh(0, pane.terminal.rows - 1)
+        }
+      } catch {
+        // Why: restore-all repaint is best-effort while panes are mounting or tearing down.
+      }
+    }
   }
 
   equalizePaneSizes(): void {
@@ -177,6 +230,19 @@ export class PaneManager {
     }
     const pane = this.panes.get(this.activePaneId)
     return pane ? toPublicPane(pane) : null
+  }
+
+  getRenderingDiagnostics(): PaneRenderingDiagnostics[] {
+    return Array.from(this.panes.values()).map((pane) => ({
+      paneId: pane.id,
+      terminalGpuAcceleration: pane.terminalGpuAcceleration,
+      gpuRenderingEnabled: pane.gpuRenderingEnabled,
+      webglAttachmentDeferred: pane.webglAttachmentDeferred,
+      webglDisabledAfterContextLoss: pane.webglDisabledAfterContextLoss,
+      hasComplexScriptOutput: pane.hasComplexScriptOutput,
+      terminalWebglAutoDecision: getTerminalWebglAutoDecision(),
+      hasWebgl: Boolean(pane.webglAddon)
+    }))
   }
 
   getLeafId(numericPaneId: number): TerminalLeafId | null {
@@ -244,6 +310,31 @@ export class PaneManager {
     markPaneComplexScriptOutput(this.panes, paneId)
   }
 
+  rebuildPaneWebgl(paneId: number): void {
+    const pane = this.panes.get(paneId)
+    if (!pane) {
+      return
+    }
+    rebuildAttachedWebgl(pane)
+  }
+
+  resetWebglTextureAtlases(): void {
+    resetPaneWebglTextureAtlases(this.panes.values())
+  }
+
+  scheduleRevealRepaint(): void {
+    // Why: the settled-frame callback can fire after destroy(); repainting
+    // disposed panes could throw in attach and latch the global WebGL
+    // attach backoff, downgrading unrelated new panes to the DOM renderer.
+    schedulePaneRevealRepaint(() => (this.destroyed ? [] : this.panes.values()))
+  }
+
+  scheduleRevealPresent(): void {
+    // Why: same destroy guard as scheduleRevealRepaint, but presents without
+    // clearing the shared glyph atlas — used by the plain-refocus recovery.
+    schedulePaneRevealPresent(() => (this.destroyed ? [] : this.panes.values()))
+  }
+
   suspendRendering(): void {
     this.renderingSuspended = true
     suspendPaneRendering(this.panes.values())
@@ -258,8 +349,13 @@ export class PaneManager {
     handlePaneDrop(sourcePaneId, targetPaneId, zone, this.dragState, this.getDragCallbacks())
   }
 
+  beginPaneDragFromPointerDown(paneId: number, handle: HTMLElement, event: PointerEvent): void {
+    beginPaneDragFromPointerDown(handle, paneId, this.dragState, this.getDragCallbacks(), event)
+  }
+
   destroy(): void {
     this.destroyed = true
+    unregisterLivePaneManager(this)
     cancelActivePaneDrag(this.dragState)
     this.cancelPendingPaneReparentFrames()
     for (const pane of this.panes.values()) {
@@ -325,7 +421,8 @@ export class PaneManager {
   private createDividerWrapped(isVertical: boolean): HTMLElement {
     return createDivider(isVertical, this.styleOptions, {
       refitPanesUnder: (el) => refitPanesUnder(el, this.panes),
-      onLayoutChanged: this.options.onLayoutChanged
+      onLayoutChanged: this.options.onLayoutChanged,
+      onDragActiveChange: this.options.onPaneDragActiveChange
     })
   }
 
@@ -344,7 +441,9 @@ export class PaneManager {
         this.requestPaneReparentFrame(callback)
       },
       onLayoutChanged: this.options.onLayoutChanged,
-      onDragActiveChange: this.options.onPaneDragActiveChange
+      onDragActiveChange: this.options.onPaneDragActiveChange,
+      resolveExternalDropTarget: this.options.resolveExternalPaneDropTarget,
+      onExternalPaneDrop: this.options.onExternalPaneDrop
     }
   }
 

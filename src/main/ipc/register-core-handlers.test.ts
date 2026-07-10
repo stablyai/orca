@@ -1,8 +1,9 @@
-/* eslint-disable max-lines -- Why: this test mirrors the complete core IPC handler registry so
-   duplicate-registration coverage stays tied to the one production entry point. */
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const {
+  getPathMock,
+  listEnvironmentsMock,
+  callRuntimeEnvironmentMock,
   registerCliHandlersMock,
   registerPreflightHandlersMock,
   registerClaudeUsageHandlersMock,
@@ -24,14 +25,21 @@ const {
   registerPetHandlersMock,
   registerSessionHandlersMock,
   registerUIHandlersMock,
+  setTrustedUIRendererWebContentsIdMock,
   registerFilesystemHandlersMock,
   registerRuntimeHandlersMock,
   registerRuntimeEnvironmentHandlersMock,
+  registerEphemeralVmHandlersMock,
+  registerAiVaultHandlersMock,
+  registerOrcaProfileHandlersMock,
   registerCodexAccountHandlersMock,
   registerAgentHookHandlersMock,
   registerAgentTrustHandlersMock,
   registerClaudeAccountHandlersMock,
+  registerMiniMaxCredentialsHandlersMock,
+  registerGrokAccountHandlersMock,
   registerClipboardHandlersMock,
+  setTrustedClipboardRendererWebContentsIdMock,
   registerUpdaterHandlersMock,
   registerRateLimitHandlersMock,
   registerBrowserHandlersMock,
@@ -40,6 +48,7 @@ const {
   registerFilesystemWatcherHandlersMock,
   registerAppHandlersMock,
   registerLinearHandlersMock,
+  registerJiraHandlersMock,
   registerGitLabHandlersMock,
   registerHostedReviewHandlersMock,
   registerExportHandlersMock,
@@ -47,8 +56,15 @@ const {
   registerSpeechHandlersMock,
   registerSkillsHandlersMock,
   registerWorkspaceSpaceHandlersMock,
-  registerWorkspacePortHandlersMock
+  registerWorkspacePortHandlersMock,
+  registerLocalhostWorktreeLabelHandlersMock,
+  registerNativeChatHandlersMock,
+  registerEmulatorFrameStreamHandlersMock,
+  registerEmulatorVideoStreamHandlersMock
 } = vi.hoisted(() => ({
+  getPathMock: vi.fn(() => '/test/user-data'),
+  listEnvironmentsMock: vi.fn(() => []),
+  callRuntimeEnvironmentMock: vi.fn(),
   registerCliHandlersMock: vi.fn(),
   registerPreflightHandlersMock: vi.fn(),
   registerClaudeUsageHandlersMock: vi.fn(),
@@ -70,14 +86,21 @@ const {
   registerPetHandlersMock: vi.fn(),
   registerSessionHandlersMock: vi.fn(),
   registerUIHandlersMock: vi.fn(),
+  setTrustedUIRendererWebContentsIdMock: vi.fn(),
   registerFilesystemHandlersMock: vi.fn(),
   registerRuntimeHandlersMock: vi.fn(),
   registerRuntimeEnvironmentHandlersMock: vi.fn(),
+  registerEphemeralVmHandlersMock: vi.fn(),
+  registerAiVaultHandlersMock: vi.fn(),
+  registerOrcaProfileHandlersMock: vi.fn(),
   registerCodexAccountHandlersMock: vi.fn(),
   registerAgentHookHandlersMock: vi.fn(),
   registerAgentTrustHandlersMock: vi.fn(),
   registerClaudeAccountHandlersMock: vi.fn(),
+  registerMiniMaxCredentialsHandlersMock: vi.fn(),
+  registerGrokAccountHandlersMock: vi.fn(),
   registerClipboardHandlersMock: vi.fn(),
+  setTrustedClipboardRendererWebContentsIdMock: vi.fn(),
   registerUpdaterHandlersMock: vi.fn(),
   registerRateLimitHandlersMock: vi.fn(),
   registerBrowserHandlersMock: vi.fn(),
@@ -86,6 +109,7 @@ const {
   registerFilesystemWatcherHandlersMock: vi.fn(),
   registerAppHandlersMock: vi.fn(),
   registerLinearHandlersMock: vi.fn(),
+  registerJiraHandlersMock: vi.fn(),
   registerGitLabHandlersMock: vi.fn(),
   registerHostedReviewHandlersMock: vi.fn(),
   registerExportHandlersMock: vi.fn(),
@@ -93,7 +117,25 @@ const {
   registerSpeechHandlersMock: vi.fn(),
   registerSkillsHandlersMock: vi.fn(),
   registerWorkspaceSpaceHandlersMock: vi.fn(),
-  registerWorkspacePortHandlersMock: vi.fn()
+  registerWorkspacePortHandlersMock: vi.fn(),
+  registerLocalhostWorktreeLabelHandlersMock: vi.fn(),
+  registerNativeChatHandlersMock: vi.fn(),
+  registerEmulatorFrameStreamHandlersMock: vi.fn(),
+  registerEmulatorVideoStreamHandlersMock: vi.fn()
+}))
+
+vi.mock('electron', () => ({
+  app: {
+    getPath: getPathMock
+  }
+}))
+
+vi.mock('../../shared/runtime-environment-store', () => ({
+  listEnvironments: listEnvironmentsMock
+}))
+
+vi.mock('./runtime-environment-transport-routing', () => ({
+  callRuntimeEnvironment: callRuntimeEnvironmentMock
 }))
 
 vi.mock('./onboarding', () => ({
@@ -176,6 +218,10 @@ vi.mock('./workspace-ports', () => ({
   registerWorkspacePortHandlers: registerWorkspacePortHandlersMock
 }))
 
+vi.mock('./localhost-worktree-labels', () => ({
+  registerLocalhostWorktreeLabelHandlers: registerLocalhostWorktreeLabelHandlersMock
+}))
+
 vi.mock('./keybindings', () => ({
   registerKeybindingHandlers: registerKeybindingHandlersMock
 }))
@@ -201,7 +247,16 @@ vi.mock('./session', () => ({
 }))
 
 vi.mock('./ui', () => ({
-  registerUIHandlers: registerUIHandlersMock
+  registerUIHandlers: registerUIHandlersMock,
+  setTrustedUIRendererWebContentsId: setTrustedUIRendererWebContentsIdMock
+}))
+
+vi.mock('./emulator-frame-stream', () => ({
+  registerEmulatorFrameStreamHandlers: registerEmulatorFrameStreamHandlersMock
+}))
+
+vi.mock('./emulator-video-stream', () => ({
+  registerEmulatorVideoStreamHandlers: registerEmulatorVideoStreamHandlersMock
 }))
 
 vi.mock('./filesystem', () => ({
@@ -224,6 +279,18 @@ vi.mock('./runtime-environments', () => ({
   registerRuntimeEnvironmentHandlers: registerRuntimeEnvironmentHandlersMock
 }))
 
+vi.mock('./ephemeral-vm', () => ({
+  registerEphemeralVmHandlers: registerEphemeralVmHandlersMock
+}))
+
+vi.mock('./ai-vault', () => ({
+  registerAiVaultHandlers: registerAiVaultHandlersMock
+}))
+
+vi.mock('./orca-profiles', () => ({
+  registerOrcaProfileHandlers: registerOrcaProfileHandlersMock
+}))
+
 vi.mock('./codex-accounts', () => ({
   registerCodexAccountHandlers: registerCodexAccountHandlersMock
 }))
@@ -240,12 +307,21 @@ vi.mock('./claude-accounts', () => ({
   registerClaudeAccountHandlers: registerClaudeAccountHandlersMock
 }))
 
+vi.mock('./minimax-credentials', () => ({
+  registerMiniMaxCredentialsHandlers: registerMiniMaxCredentialsHandlersMock
+}))
+
+vi.mock('./grok-accounts', () => ({
+  registerGrokAccountHandlers: registerGrokAccountHandlersMock
+}))
+
 vi.mock('../window/attach-main-window-services', () => ({
   registerUpdaterHandlers: registerUpdaterHandlersMock
 }))
 
 vi.mock('../window/clipboard-ipc-handlers', () => ({
-  registerClipboardHandlers: registerClipboardHandlersMock
+  registerClipboardHandlers: registerClipboardHandlersMock,
+  setTrustedClipboardRendererWebContentsId: setTrustedClipboardRendererWebContentsIdMock
 }))
 
 vi.mock('./browser', () => ({
@@ -262,6 +338,10 @@ vi.mock('./linear', () => ({
   registerLinearHandlers: registerLinearHandlersMock
 }))
 
+vi.mock('./jira', () => ({
+  registerJiraHandlers: registerJiraHandlersMock
+}))
+
 vi.mock('./gitlab', () => ({
   registerGitLabHandlers: registerGitLabHandlersMock
 }))
@@ -270,10 +350,19 @@ vi.mock('./hosted-review', () => ({
   registerHostedReviewHandlers: registerHostedReviewHandlersMock
 }))
 
+vi.mock('./native-chat', () => ({
+  registerNativeChatHandlers: registerNativeChatHandlersMock
+}))
+
 import { registerCoreHandlers } from './register-core-handlers'
 
 describe('registerCoreHandlers', () => {
   beforeEach(() => {
+    getPathMock.mockReset()
+    getPathMock.mockReturnValue('/test/user-data')
+    listEnvironmentsMock.mockReset()
+    listEnvironmentsMock.mockReturnValue([])
+    callRuntimeEnvironmentMock.mockReset()
     registerCliHandlersMock.mockReset()
     registerPreflightHandlersMock.mockReset()
     registerClaudeUsageHandlersMock.mockReset()
@@ -295,14 +384,20 @@ describe('registerCoreHandlers', () => {
     registerPetHandlersMock.mockReset()
     registerSessionHandlersMock.mockReset()
     registerUIHandlersMock.mockReset()
+    setTrustedUIRendererWebContentsIdMock.mockReset()
     registerFilesystemHandlersMock.mockReset()
     registerRuntimeHandlersMock.mockReset()
     registerRuntimeEnvironmentHandlersMock.mockReset()
+    registerEphemeralVmHandlersMock.mockReset()
+    registerAiVaultHandlersMock.mockReset()
+    registerOrcaProfileHandlersMock.mockReset()
     registerCodexAccountHandlersMock.mockReset()
     registerAgentHookHandlersMock.mockReset()
     registerAgentTrustHandlersMock.mockReset()
     registerClaudeAccountHandlersMock.mockReset()
+    registerMiniMaxCredentialsHandlersMock.mockReset()
     registerClipboardHandlersMock.mockReset()
+    setTrustedClipboardRendererWebContentsIdMock.mockReset()
     registerUpdaterHandlersMock.mockReset()
     registerRateLimitHandlersMock.mockReset()
     registerBrowserHandlersMock.mockReset()
@@ -311,6 +406,7 @@ describe('registerCoreHandlers', () => {
     registerFilesystemWatcherHandlersMock.mockReset()
     registerAppHandlersMock.mockReset()
     registerLinearHandlersMock.mockReset()
+    registerJiraHandlersMock.mockReset()
     registerGitLabHandlersMock.mockReset()
     registerHostedReviewHandlersMock.mockReset()
     registerExportHandlersMock.mockReset()
@@ -318,9 +414,13 @@ describe('registerCoreHandlers', () => {
     registerSkillsHandlersMock.mockReset()
     registerWorkspaceSpaceHandlersMock.mockReset()
     registerWorkspacePortHandlersMock.mockReset()
+    registerLocalhostWorktreeLabelHandlersMock.mockReset()
+    registerNativeChatHandlersMock.mockReset()
+    registerEmulatorFrameStreamHandlersMock.mockReset()
+    registerEmulatorVideoStreamHandlersMock.mockReset()
   })
 
-  it('passes the store through to handler registrars that need it', () => {
+  it('passes the store through to handler registrars that need it', async () => {
     const store = { marker: 'store' }
     const runtime = { marker: 'runtime', getAgentBrowserBridge: () => null }
     const stats = { marker: 'stats' }
@@ -332,6 +432,7 @@ describe('registerCoreHandlers', () => {
     const rateLimits = { marker: 'rateLimits' }
     const agentAwakeService = { marker: 'agentAwakeService' }
     const onBeforeRelaunch = vi.fn()
+    const getAdditionalAiVaultCodexHomePaths = vi.fn(() => ['/runtime/codex/home'])
 
     registerCoreHandlers(
       store as never,
@@ -349,20 +450,31 @@ describe('registerCoreHandlers', () => {
       agentAwakeService as never,
       undefined,
       undefined,
-      { onBeforeRelaunch }
+      { getAdditionalAiVaultCodexHomePaths, onBeforeRelaunch }
     )
+
+    const aiVaultOptions = registerAiVaultHandlersMock.mock.calls[0]?.[0]
+    expect(aiVaultOptions).toBeDefined()
+
+    callRuntimeEnvironmentMock.mockResolvedValueOnce({
+      ok: true,
+      result: { sessions: 'bad-shape' }
+    })
 
     expect(registerClaudeUsageHandlersMock).toHaveBeenCalledWith(claudeUsage)
     expect(registerCodexUsageHandlersMock).toHaveBeenCalledWith(codexUsage)
     expect(registerOpenCodeUsageHandlersMock).toHaveBeenCalledWith(openCodeUsage)
     expect(registerAppHandlersMock).toHaveBeenCalledWith(store, { onBeforeRelaunch })
     expect(registerCodexAccountHandlersMock).toHaveBeenCalledWith(codexAccounts)
-    expect(registerAgentHookHandlersMock).toHaveBeenCalled()
+    expect(registerAgentHookHandlersMock).toHaveBeenCalledWith(runtime)
     expect(registerPetHandlersMock).toHaveBeenCalled()
     expect(registerClaudeAccountHandlersMock).toHaveBeenCalledWith(claudeAccounts)
+    expect(registerMiniMaxCredentialsHandlersMock).toHaveBeenCalledWith(rateLimits)
+    expect(registerGrokAccountHandlersMock).toHaveBeenCalled()
     expect(registerRateLimitHandlersMock).toHaveBeenCalledWith(rateLimits)
     expect(registerGitHubHandlersMock).toHaveBeenCalledWith(store, stats)
     expect(registerLinearHandlersMock).toHaveBeenCalled()
+    expect(registerJiraHandlersMock).toHaveBeenCalled()
     expect(registerGitLabHandlersMock).toHaveBeenCalledWith(store)
     expect(registerHostedReviewHandlersMock).toHaveBeenCalledWith(store, stats)
     expect(registerFeedbackHandlersMock).toHaveBeenCalled()
@@ -376,21 +488,71 @@ describe('registerCoreHandlers', () => {
     expect(registerSkillsHandlersMock).toHaveBeenCalledWith(store)
     expect(registerWorkspaceSpaceHandlersMock).toHaveBeenCalledWith(store)
     expect(registerWorkspacePortHandlersMock).toHaveBeenCalledWith(store)
+    expect(registerLocalhostWorktreeLabelHandlersMock).toHaveBeenCalledWith(store)
     expect(registerTelemetryHandlersMock).toHaveBeenCalledWith(store)
+    expect(registerOrcaProfileHandlersMock).toHaveBeenCalledWith(store, { onBeforeRelaunch })
     expect(registerSessionHandlersMock).toHaveBeenCalledWith(store)
     expect(registerUIHandlersMock).toHaveBeenCalledWith(store)
+    expect(registerEmulatorFrameStreamHandlersMock).toHaveBeenCalled()
+    expect(registerEmulatorVideoStreamHandlersMock).toHaveBeenCalled()
     expect(registerFilesystemHandlersMock).toHaveBeenCalledWith(store)
     expect(registerRuntimeHandlersMock).toHaveBeenCalledWith(runtime)
-    expect(registerRuntimeEnvironmentHandlersMock).toHaveBeenCalled()
+    expect(registerRuntimeEnvironmentHandlersMock).toHaveBeenCalledWith(store)
+    expect(registerEphemeralVmHandlersMock).toHaveBeenCalledWith(store)
+    expect(registerAiVaultHandlersMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        getAdditionalCodexHomePaths: getAdditionalAiVaultCodexHomePaths,
+        getActiveRuntimeAiVaultHostInfos: expect.any(Function),
+        scanRuntimeAiVaultSessions: expect.any(Function)
+      })
+    )
+    expect(aiVaultOptions.getActiveRuntimeAiVaultHostInfos()).toEqual([])
+    expect(registerNativeChatHandlersMock).toHaveBeenCalled()
     expect(registerCliHandlersMock).toHaveBeenCalled()
     expect(registerPreflightHandlersMock).toHaveBeenCalled()
     expect(registerShellHandlersMock).toHaveBeenCalled()
-    expect(registerClipboardHandlersMock).toHaveBeenCalled()
+    expect(registerClipboardHandlersMock).toHaveBeenCalledWith(store)
     expect(registerUpdaterHandlersMock).toHaveBeenCalled()
     expect(setTrustedBrowserRendererWebContentsIdMock).toHaveBeenCalledWith(null)
+    expect(setTrustedClipboardRendererWebContentsIdMock).toHaveBeenCalledWith(null)
+    expect(setTrustedUIRendererWebContentsIdMock).toHaveBeenCalledWith(null)
     expect(registerBrowserHandlersMock).toHaveBeenCalled()
     expect(registerFilesystemWatcherHandlersMock).toHaveBeenCalled()
     expect(registerSpeechHandlersMock).toHaveBeenCalledWith(store)
+
+    await expect(
+      aiVaultOptions.scanRuntimeAiVaultSessions(
+        'env-123',
+        {
+          limit: 10,
+          scopePaths: ['/workspace']
+        },
+        { timeoutMs: 3000 }
+      )
+    ).resolves.toEqual({
+      sessions: [],
+      issues: [
+        expect.objectContaining({
+          executionHostId: 'runtime:env-123',
+          agent: 'codex',
+          path: 'env-123',
+          message: expect.stringContaining('Invalid aiVault.listSessions response')
+        })
+      ],
+      scannedAt: expect.any(String)
+    })
+    expect(callRuntimeEnvironmentMock).toHaveBeenCalledWith(
+      '/test/user-data',
+      'env-123',
+      'aiVault.listSessions',
+      {
+        limit: 10,
+        force: undefined,
+        scopePaths: ['/workspace'],
+        executionHostId: 'runtime:env-123'
+      },
+      3000
+    )
   })
 
   it('only registers IPC handlers once but always updates web contents id', () => {
@@ -421,6 +583,8 @@ describe('registerCoreHandlers', () => {
 
     // Web contents ID should always be updated
     expect(setTrustedBrowserRendererWebContentsIdMock).toHaveBeenCalledWith(42)
+    expect(setTrustedClipboardRendererWebContentsIdMock).toHaveBeenCalledWith(42)
+    expect(setTrustedUIRendererWebContentsIdMock).toHaveBeenCalledWith(42)
     // IPC handlers should NOT be registered again
     expect(registerCliHandlersMock).not.toHaveBeenCalled()
     expect(registerPreflightHandlersMock).not.toHaveBeenCalled()

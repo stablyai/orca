@@ -121,10 +121,16 @@ describe('diffViewStateCache', () => {
 
   it('works with setWithLRU for diff-tab keys', () => {
     const diffState = {
-      original: { cursorState: [], viewState: { scrollTop: 10, scrollTopWithoutViewZones: 10, scrollLeft: 0 } },
-      modified: { cursorState: [], viewState: { scrollTop: 20, scrollTopWithoutViewZones: 20, scrollLeft: 0 } },
+      original: {
+        cursorState: [],
+        viewState: { scrollTop: 10, scrollTopWithoutViewZones: 10, scrollLeft: 0 }
+      },
+      modified: {
+        cursorState: [],
+        viewState: { scrollTop: 20, scrollTopWithoutViewZones: 20, scrollLeft: 0 }
+      },
       modelState: { unchangedRegions: [] }
-    } as unknown as (typeof diffViewStateCache extends Map<string, infer T> ? T : never)
+    } as unknown as typeof diffViewStateCache extends Map<string, infer T> ? T : never
 
     setWithLRU(diffViewStateCache, 'diff-tab', diffState)
 

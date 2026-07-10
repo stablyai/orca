@@ -1,8 +1,9 @@
-import { CornerDownLeft, Pencil, Trash, FileText } from 'lucide-react'
-import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react'
+import { CornerDownLeft, Pencil, Trash } from 'lucide-react'
+import { useLayoutEffect, useRef, useState, type ReactNode } from 'react'
 import { Button } from '@/components/ui/button'
 import { getDiffCommentLineLabel } from '@/lib/diff-comment-compat'
 import { useMountedRef } from '@/hooks/useMountedRef'
+import { translate } from '@/i18n/i18n'
 
 // Why: the saved-note card lives inside a Monaco view zone's DOM node.
 // useDiffCommentDecorator creates a React root per zone and renders this
@@ -54,6 +55,7 @@ export function DiffCommentCard({
   const [submitting, setSubmitting] = useState(false)
   const mountedRef = useMountedRef()
   const textareaRef = useRef<HTMLTextAreaElement | null>(null)
+  const resizeAfterCloseRef = useRef(false)
 
   // Why: stash `onContentResize` in a ref so the layout/resize effects only
   // re-run on `editing` transitions. The decorator passes a fresh arrow every
@@ -68,6 +70,10 @@ export function DiffCommentCard({
   // the next animation frame would visibly jump from 0 to N px.
   useLayoutEffect(() => {
     if (!editing) {
+      if (resizeAfterCloseRef.current) {
+        resizeAfterCloseRef.current = false
+        onContentResizeRef.current?.()
+      }
       return
     }
     const el = textareaRef.current
@@ -81,20 +87,12 @@ export function DiffCommentCard({
     onContentResizeRef.current?.()
   }, [editing])
 
-  const editingPrevRef = useRef(editing)
-  useEffect(() => {
-    if (editingPrevRef.current === editing) {
-      return
-    }
-    editingPrevRef.current = editing
-    // Why: when the editor opens or closes the card's height changes (textarea
-    // + footer vs single body block). Ping the decorator so it re-measures and
-    // resizes the Monaco view zone — otherwise the card clips the next line.
-    // Skip the initial mount: the zone's heightInPx estimate is intentionally
-    // close to actual on first paint to avoid a layout pass before the user
-    // interacts; firing here would re-layout every card on creation.
-    onContentResizeRef.current?.()
-  }, [editing])
+  const scheduleContentResizeAfterClose = (): void => {
+    // Why: closing edit mode removes the textarea/footer before Monaco can
+    // re-measure the view zone. Let the layout effect run after React commits
+    // the body-only card so async saves cannot measure the old edit height.
+    resizeAfterCloseRef.current = true
+  }
 
   const handleStartEdit = (): void => {
     setDraft(body)
@@ -102,6 +100,7 @@ export function DiffCommentCard({
   }
 
   const handleCancel = (): void => {
+    scheduleContentResizeAfterClose()
     setEditing(false)
     setDraft(body)
   }
@@ -122,6 +121,7 @@ export function DiffCommentCard({
     try {
       const ok = await onSubmitEdit(trimmedDraft)
       if (ok && mountedRef.current) {
+        scheduleContentResizeAfterClose()
         setEditing(false)
       }
     } catch (err) {
@@ -159,15 +159,21 @@ export function DiffCommentCard({
                   <button
                     type="button"
                     className="orca-diff-comment-pill-btn"
-                    title="Open in browser"
-                    aria-label="Open in browser"
+                    title={translate(
+                      'auto.components.diff.comments.DiffCommentCard.508ee678a5',
+                      'Open in browser'
+                    )}
+                    aria-label={translate(
+                      'auto.components.diff.comments.DiffCommentCard.508ee678a5',
+                      'Open in browser'
+                    )}
                     onClick={(ev) => {
                       ev.preventDefault()
                       ev.stopPropagation()
                       void window.api.shell.openUrl(url)
                     }}
                   >
-                    Open
+                    {translate('auto.components.diff.comments.DiffCommentCard.6978871a3d', 'Open')}
                   </button>
                   {(onSubmitEdit || onDelete) && (
                     <span className="orca-diff-comment-pill-divider" />
@@ -179,8 +185,14 @@ export function DiffCommentCard({
                   <button
                     type="button"
                     className="orca-diff-comment-pill-btn"
-                    title="Edit note"
-                    aria-label="Edit note"
+                    title={translate(
+                      'auto.components.diff.comments.DiffCommentCard.cad3384faa',
+                      'Edit note'
+                    )}
+                    aria-label={translate(
+                      'auto.components.diff.comments.DiffCommentCard.cad3384faa',
+                      'Edit note'
+                    )}
                     onClick={(ev) => {
                       ev.preventDefault()
                       ev.stopPropagation()
@@ -196,8 +208,14 @@ export function DiffCommentCard({
                 <button
                   type="button"
                   className="orca-diff-comment-pill-btn orca-diff-comment-pill-btn-danger"
-                  title="Delete note"
-                  aria-label="Delete note"
+                  title={translate(
+                    'auto.components.diff.comments.DiffCommentCard.cce596969e',
+                    'Delete note'
+                  )}
+                  aria-label={translate(
+                    'auto.components.diff.comments.DiffCommentCard.cce596969e',
+                    'Delete note'
+                  )}
                   onClick={(ev) => {
                     ev.preventDefault()
                     ev.stopPropagation()
@@ -214,7 +232,6 @@ export function DiffCommentCard({
         {/* Quote Block */}
         {quote ? (
           <div className="orca-diff-comment-quote">
-            <FileText className="size-3.5 flex-shrink-0 text-amber-500 mt-0.5" />
             <div className="orca-diff-comment-quote-text">{quote}</div>
           </div>
         ) : null}
@@ -251,15 +268,22 @@ export function DiffCommentCard({
             />
             <div className="orca-diff-comment-popover-footer">
               <Button variant="ghost" size="sm" onClick={handleCancel} disabled={submitting}>
-                Cancel
+                {translate('auto.components.diff.comments.DiffCommentCard.0203bed775', 'Cancel')}
               </Button>
               <Button
                 size="sm"
                 onClick={() => void handleSubmit()}
                 disabled={!canSubmit}
-                title={submitting ? 'Saving…' : undefined}
+                title={
+                  submitting
+                    ? translate(
+                        'auto.components.diff.comments.DiffCommentCard.bb0a55f856',
+                        'Saving…'
+                      )
+                    : undefined
+                }
               >
-                Save
+                {translate('auto.components.diff.comments.DiffCommentCard.109a791e7b', 'Save')}
                 <CornerDownLeft className="ml-1 size-3 opacity-70" />
               </Button>
             </div>

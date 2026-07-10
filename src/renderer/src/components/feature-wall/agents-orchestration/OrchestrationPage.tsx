@@ -1,3 +1,4 @@
+/* oxlint-disable react-doctor/no-adjust-state-on-prop-change -- Why: this page is a timed storyboard; row state resets are part of replaying the animation when the active step changes. */
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { JSX } from 'react'
 import { ChevronDown, Workflow } from 'lucide-react'
@@ -19,6 +20,7 @@ import {
 } from './orchestration-types'
 import { arrowPathFromCoordTo, bubblePathBetweenRows } from './orchestration-bubble-path'
 import { AgentRow, WorkspaceCard } from './orchestration-cards'
+import { translate } from '@/i18n/i18n'
 
 // Children start pending (no agent row visible) and reveal as the orchestrator
 // dispatches a message to them. This mirrors the "agents arrive when assigned"
@@ -35,6 +37,7 @@ const FIRST_DISPATCH_MS = ORCHESTRATION_CLI_COMMAND_TIMINGS_MS[2]
 export function OrchestrationPage(props: {
   active: boolean
   reducedMotion: boolean
+  onCycleComplete?: () => void
   controlledCreatedChildCount?: number
   loopMs?: number
   showResponseBeats?: boolean
@@ -42,6 +45,7 @@ export function OrchestrationPage(props: {
   const {
     active,
     reducedMotion,
+    onCycleComplete,
     controlledCreatedChildCount,
     loopMs,
     showResponseBeats = true
@@ -246,6 +250,7 @@ export function OrchestrationPage(props: {
 
     const loop = (): void => {
       runOnce(() => {
+        onCycleComplete?.()
         const beatCount = showResponseBeats ? PHASE1_BEATS.length : 2
         const elapsedMs = FIRST_DISPATCH_MS + beatCount * BUBBLE_GAP_MS + 800
         later(loop, loopMs ? Math.max(0, loopMs - elapsedMs) : 1400)
@@ -268,7 +273,7 @@ export function OrchestrationPage(props: {
         cleanupLayer.innerHTML = ''
       }
     }
-  }, [active, reducedMotion, drawArrow, loopMs, showResponseBeats])
+  }, [active, onCycleComplete, reducedMotion, drawArrow, loopMs, showResponseBeats])
 
   return (
     <div
@@ -315,10 +320,18 @@ export function OrchestrationPage(props: {
           <span
             className="inline-flex items-center gap-1 rounded-md border border-border bg-card px-1.5 text-muted-foreground"
             style={{ height: 18, fontSize: 10, fontWeight: 500 }}
-            aria-label="2 child workspaces"
+            aria-label={translate(
+              'auto.components.feature.wall.agents.orchestration.OrchestrationPage.862605d066',
+              '2 child workspaces'
+            )}
           >
             <Workflow className="size-2.5" aria-hidden />
-            <span className="truncate">2 children</span>
+            <span className="truncate">
+              {translate(
+                'auto.components.feature.wall.agents.orchestration.OrchestrationPage.30b509a467',
+                '2 children'
+              )}
+            </span>
             <ChevronDown className="size-2.5" aria-hidden />
           </span>
         </div>

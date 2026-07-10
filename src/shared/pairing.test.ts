@@ -22,6 +22,11 @@ describe('pairing offer', () => {
     expect(decoded).toEqual(offer)
   })
 
+  it('preserves optional device scope metadata', () => {
+    const scopedOffer: PairingOffer = { ...offer, scope: 'mobile' }
+    expect(decodePairingOffer(encodePairingOffer(scopedOffer))).toEqual(scopedOffer)
+  })
+
   it('encoded URL uses base64url (no +, /, or = characters)', () => {
     const url = encodePairingOffer(offer)
     const code = new URLSearchParams(url.slice(url.indexOf('?') + 1)).get('code')!
@@ -30,6 +35,15 @@ describe('pairing offer', () => {
 
   it('rejects URLs with wrong scheme', () => {
     expect(() => decodePairingOffer('https://example.com#abc')).toThrow('Invalid pairing URL')
+  })
+
+  it('rejects orca URLs outside the exact pairing route', () => {
+    const url = encodePairingOffer(offer)
+    const code = new URLSearchParams(url.slice(url.indexOf('?') + 1)).get('code')!
+
+    expect(parsePairingCode(`orca://pairing?code=${code}`)).toBeNull()
+    expect(parsePairingCode(`orca://pair-extra?code=${code}`)).toBeNull()
+    expect(() => decodePairingOffer(`orca://pairing?code=${code}`)).toThrow('Invalid pairing URL')
   })
 
   it('rejects URLs without a pairing code', () => {

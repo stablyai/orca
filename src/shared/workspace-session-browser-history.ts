@@ -23,9 +23,20 @@ export function normalizeBrowserHistoryEntries(
 ): BrowserHistoryEntry[] {
   const seen = new Set<string>()
   const normalizedEntries: BrowserHistoryEntry[] = []
-  for (const entry of entries) {
-    const safeUrl = redactKagiSessionToken(entry.url)
-    const key = normalizeBrowserHistoryUrl(safeUrl)
+  const candidates = entries
+    .map((entry) => {
+      const safeUrl = redactKagiSessionToken(entry.url)
+      return {
+        entry,
+        safeUrl,
+        key: normalizeBrowserHistoryUrl(safeUrl)
+      }
+    })
+    // Why: persisted history from older builds or schema repair may not be in
+    // recency order; the cap must keep recent visits, not arbitrary file order.
+    .sort((a, b) => b.entry.lastVisitedAt - a.entry.lastVisitedAt)
+
+  for (const { entry, safeUrl, key } of candidates) {
     if (seen.has(key)) {
       continue
     }

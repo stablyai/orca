@@ -16,7 +16,10 @@ export function findReusableAutomationSession(args: {
   worktreeId: string
   currentRunId: string
   runs: AutomationRun[]
-  state: Pick<AppState, 'agentStatusByPaneKey' | 'ptyIdsByTabId' | 'unifiedTabsByWorktree'>
+  state: Pick<
+    AppState,
+    'agentStatusByPaneKey' | 'ptyIdsByTabId' | 'terminalLayoutsByTabId' | 'unifiedTabsByWorktree'
+  >
 }): ReusableAutomationSession | null {
   const { automationId, agentId, worktreeId, currentRunId, runs, state } = args
   const worktreeTabs = state.unifiedTabsByWorktree[worktreeId] ?? []
@@ -30,43 +33,64 @@ export function findReusableAutomationSession(args: {
         run.automationId === automationId &&
         run.workspaceId === worktreeId &&
         run.status === 'completed' &&
-        run.terminalSessionId &&
-        terminalTabIds.has(run.terminalSessionId)
+        Boolean(run.terminalPaneKey) &&
+        Boolean(run.terminalPtyId)
     )
     .sort((left, right) => right.createdAt - left.createdAt)
 
   for (const run of candidates) {
-    const tabId = run.terminalSessionId
-    if (!tabId) {
-      continue
+    const exactPane = findReusableExactRunPane({ state, terminalTabIds, agentId, run })
+    if (exactPane) {
+      return exactPane
     }
-    const ptyId = state.ptyIdsByTabId[tabId]?.[0]
-    if (!ptyId) {
-      continue
-    }
-    const paneKey = findReusablePaneKey(state.agentStatusByPaneKey, tabId, agentId)
-    if (!paneKey) {
-      continue
-    }
-    return { tabId, ptyId, paneKey }
   }
   return null
 }
 
-function findReusablePaneKey(
-  entries: Record<string, AgentStatusEntry>,
-  tabId: string,
+function findReusableExactRunPane({
+  state,
+  terminalTabIds,
+  agentId,
+  run
+}: {
+  state: Pick<AppState, 'agentStatusByPaneKey' | 'ptyIdsByTabId' | 'terminalLayoutsByTabId'>
+  terminalTabIds: Set<string>
   agentId: TuiAgent
-): string | null {
-  for (const [paneKey, entry] of Object.entries(entries)) {
-    const parsed = parsePaneKey(paneKey)
-    if (parsed?.tabId !== tabId || entry.state !== 'done') {
-      continue
-    }
-    if (entry.agentType && entry.agentType !== 'unknown' && entry.agentType !== agentId) {
-      continue
-    }
-    return paneKey
+  run: AutomationRun
+}): ReusableAutomationSession | null {
+  if (!run.terminalPaneKey || !run.terminalPtyId) {
+    return null
   }
-  return null
+  const parsed = parsePaneKey(run.terminalPaneKey)
+  if (!parsed || !terminalTabIds.has(parsed.tabId)) {
+    return null
+  }
+  const entry = state.agentStatusByPaneKey[run.terminalPaneKey]
+  if (!entry || !isReusableAgentStatus(entry, agentId)) {
+    return null
+  }
+  if (!isRunPtyLiveInPane(state, parsed.tabId, parsed.leafId, run.terminalPtyId)) {
+    return null
+  }
+  return { tabId: parsed.tabId, ptyId: run.terminalPtyId, paneKey: run.terminalPaneKey }
+}
+
+function isReusableAgentStatus(entry: AgentStatusEntry, agentId: TuiAgent): boolean {
+  if (entry.state !== 'done') {
+    return false
+  }
+  return !entry.agentType || entry.agentType === 'unknown' || entry.agentType === agentId
+}
+
+function isRunPtyLiveInPane(
+  state: Pick<AppState, 'ptyIdsByTabId' | 'terminalLayoutsByTabId'>,
+  tabId: string,
+  leafId: string,
+  ptyId: string
+): boolean {
+  if (!state.ptyIdsByTabId[tabId]?.includes(ptyId)) {
+    return false
+  }
+  const layoutPtyId = state.terminalLayoutsByTabId[tabId]?.ptyIdsByLeafId?.[leafId]
+  return layoutPtyId === undefined || layoutPtyId === ptyId
 }

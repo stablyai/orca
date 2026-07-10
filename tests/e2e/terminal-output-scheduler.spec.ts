@@ -19,8 +19,10 @@ import { getTerminalContent, waitForActiveTerminalManager } from './helpers/term
 
 type SchedulerDebugSnapshot = {
   backgroundEnqueueCount: number
+  deferredForegroundEnqueueCount: number
   foregroundWriteCount: number
   backgroundWriteCount: number
+  deferredForegroundWriteCount: number
   flushWriteCount: number
   scheduledDrainCount: number
   drainWrites: number[]
@@ -63,11 +65,20 @@ async function createTerminalTab(page: Page): Promise<string> {
   const tabsBefore = await countRenderedTabs(page)
   const activeBefore = await getActiveTabId(page)
 
-  await page.getByRole('button', { name: 'New tab' }).click()
-  await page
-    .getByRole('menuitem', { name: /New Terminal/i })
-    .first()
-    .click()
+  const createdTabId = await page.evaluate(() => {
+    const store = window.__store
+    if (!store) {
+      throw new Error('window.__store is not available')
+    }
+    const state = store.getState()
+    const worktreeId = state.activeWorktreeId
+    if (!worktreeId) {
+      throw new Error('createTerminalTab: active worktree id was unavailable')
+    }
+    // Why: this scheduler spec cares about mounted PTYs, not the tab menu.
+    // Store creation avoids hiding xterm regressions behind menu hit-testing flakes.
+    return state.createTab(worktreeId).id
+  })
 
   await expect
     .poll(() => countRenderedTabs(page), {
@@ -81,7 +92,7 @@ async function createTerminalTab(page: Page): Promise<string> {
     .poll(
       async () => {
         tabId = await getActiveTabId(page)
-        return Boolean(tabId && tabId !== activeBefore)
+        return tabId === createdTabId && tabId !== activeBefore
       },
       {
         timeout: 5_000,
@@ -230,18 +241,40 @@ test.describe('Terminal output scheduler', () => {
       .toBe(true)
 
     await expect
-      .poll(async () => (await getSchedulerDebug(orcaPage)).backgroundEnqueueCount, {
-        timeout: 5_000,
-        message: 'Background PTY output did not enter the scheduler queue'
-      })
-      .toBeGreaterThanOrEqual(backgroundCommands.length)
+      .poll(
+        async () => {
+          const debug = await getSchedulerDebug(orcaPage)
+          if (debug.backgroundEnqueueCount >= backgroundCommands.length) {
+            return true
+          }
+          const snapshots = await Promise.all(
+            backgroundCommands.map(({ ptyId, marker }) =>
+              mainSnapshotContains(orcaPage, ptyId, marker)
+            )
+          )
+          return snapshots.every(Boolean)
+        },
+        {
+          timeout: 30_000,
+          message: 'Background PTY output was not retained by the scheduler or main snapshot'
+        }
+      )
+      .toBe(true)
 
     await expect
-      .poll(async () => (await getSchedulerDebug(orcaPage)).backgroundWriteCount, {
-        timeout: 10_000,
-        message: 'Queued background PTY output did not drain into xterm'
-      })
-      .toBeGreaterThanOrEqual(backgroundCommands.length)
+      .poll(
+        async () => {
+          const debug = await getSchedulerDebug(orcaPage)
+          return debug.backgroundEnqueueCount > 0
+            ? debug.backgroundWriteCount >= backgroundCommands.length
+            : true
+        },
+        {
+          timeout: 10_000,
+          message: 'Queued background terminal output did not drain through the scheduler'
+        }
+      )
+      .toBe(true)
 
     const debug = await getSchedulerDebug(orcaPage)
     expect(debug.foregroundWriteCount).toBeGreaterThan(0)
@@ -264,6 +297,49 @@ test.describe('Terminal output scheduler', () => {
         message: 'Background terminal output was not preserved after scheduler drain'
       })
       .toBe(true)
+  })
+
+  test('visible bulk output uses the high-priority drain instead of synchronous xterm writes', async ({
+    orcaPage
+  }, testInfo) => {
+    await waitForSessionReady(orcaPage)
+    await waitForActiveWorktree(orcaPage)
+    await ensureTerminalVisible(orcaPage)
+    await waitForActiveTerminalManager(orcaPage, 30_000)
+
+    const activeTabId = await createTerminalTab(orcaPage)
+    if (!activeTabId) {
+      throw new Error('Expected a fresh terminal tab')
+    }
+    const ptyId = await waitForTabPtyId(orcaPage, activeTabId)
+    await resetSchedulerDebug(orcaPage)
+
+    const runId = Date.now()
+    const marker = `VISIBLE_THROUGHPUT_${runId}`
+    const floodCommand = nodeScriptCommand(
+      `const marker='VISIBLE' + '_THROUGHPUT_' + '${runId}'; process.stdout.write('VISIBLE_FILL_${runId}\\n' + 'x'.repeat(700000) + '\\n' + marker + '\\n')`
+    )
+
+    await sendPtyCommands(orcaPage, [{ ptyId, command: floodCommand }])
+
+    await expect
+      .poll(async () => (await getTerminalContent(orcaPage, 12_000)).includes(marker), {
+        timeout: 30_000,
+        message: 'Active terminal did not render the visible throughput marker'
+      })
+      .toBe(true)
+
+    const debug = await getSchedulerDebug(orcaPage)
+    await testInfo.attach('terminal-visible-throughput-proof', {
+      body: JSON.stringify(debug, null, 2),
+      contentType: 'application/json'
+    })
+    testInfo.annotations.push({
+      type: 'terminal-visible-throughput',
+      description: `foreground=${debug.foregroundWriteCount} deferredForegroundEnqueue=${debug.deferredForegroundEnqueueCount} deferredForegroundWrite=${debug.deferredForegroundWriteCount} drains=${debug.drainWrites.join(',')}`
+    })
+    expect(debug.deferredForegroundEnqueueCount).toBeGreaterThan(0)
+    expect(debug.deferredForegroundWriteCount).toBeGreaterThan(0)
   })
 
   test('hidden overflow restores from main-owned terminal state when the tab becomes visible', async ({

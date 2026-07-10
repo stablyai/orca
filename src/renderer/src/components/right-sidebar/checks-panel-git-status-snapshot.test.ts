@@ -2,7 +2,9 @@ import { describe, expect, it } from 'vitest'
 import {
   buildChecksPanelGitStatusContextKey,
   readChecksPanelPublishActionGitStatus,
+  readChecksPanelRefreshGitIdentitySnapshot,
   readChecksPanelGitStatusSnapshot,
+  hasChecksPanelGitStatusBranchChanged,
   shouldClearChecksPanelGitStatusSnapshot,
   shouldCoalesceChecksPanelGitStatusSnapshotRefresh,
   shouldCommitChecksPanelGitStatusSnapshot,
@@ -17,6 +19,10 @@ const SNAPSHOT: ChecksPanelGitStatusSnapshot = {
     hasUpstream: false,
     ahead: 0,
     behind: 0
+  },
+  gitIdentity: {
+    head: 'abc123',
+    branch: 'refs/heads/feature/checks'
   }
 }
 
@@ -42,6 +48,67 @@ describe('buildChecksPanelGitStatusContextKey', () => {
         pushTarget: { remoteName: 'fork', branchName: 'feature/checks' }
       })
     )
+  })
+
+  it('changes when linked hosted review metadata changes', () => {
+    const base = {
+      repoId: 'repo-1',
+      worktreeId: 'worktree-1',
+      worktreePath: 'repo-worktree',
+      branch: 'feature/checks',
+      runtimeEnvironmentId: 'runtime-1',
+      repoConnectionId: 'ssh-1',
+      pushTarget: null
+    }
+    const unlinkedContext = buildChecksPanelGitStatusContextKey({
+      ...base,
+      linkedGitHubPR: null,
+      linkedGitLabMR: null,
+      linkedBitbucketPR: null,
+      linkedAzureDevOpsPR: null,
+      linkedGiteaPR: null
+    })
+
+    expect(
+      buildChecksPanelGitStatusContextKey({
+        ...base,
+        linkedGitHubPR: 12,
+        linkedGitLabMR: null,
+        linkedBitbucketPR: null,
+        linkedAzureDevOpsPR: null,
+        linkedGiteaPR: null
+      })
+    ).not.toBe(unlinkedContext)
+    expect(
+      buildChecksPanelGitStatusContextKey({
+        ...base,
+        linkedGitHubPR: null,
+        linkedGitLabMR: null,
+        linkedBitbucketPR: 34,
+        linkedAzureDevOpsPR: null,
+        linkedGiteaPR: null
+      })
+    ).not.toBe(unlinkedContext)
+    expect(
+      buildChecksPanelGitStatusContextKey({
+        ...base,
+        linkedGitHubPR: null,
+        linkedGitLabMR: null,
+        linkedBitbucketPR: null,
+        linkedAzureDevOpsPR: 56,
+        linkedGiteaPR: null
+      })
+    ).not.toBe(unlinkedContext)
+    expect(
+      buildChecksPanelGitStatusContextKey({
+        ...base,
+        linkedGitHubPR: null,
+        linkedGitLabMR: null,
+        linkedBitbucketPR: null,
+        linkedAzureDevOpsPR: null,
+        linkedGiteaPR: 78
+      })
+    ).not.toBe(unlinkedContext)
   })
 })
 
@@ -124,6 +191,82 @@ describe('readChecksPanelPublishActionGitStatus', () => {
       hasUncommittedChanges: undefined,
       remoteStatus: undefined
     })
+  })
+})
+
+describe('readChecksPanelRefreshGitIdentitySnapshot', () => {
+  it('treats refs/heads display differences as the same branch identity', () => {
+    expect(
+      readChecksPanelRefreshGitIdentitySnapshot({
+        snapshot: SNAPSHOT,
+        contextKey: SNAPSHOT.contextKey,
+        currentBranch: 'feature/checks'
+      })
+    ).toEqual({ kind: 'same' })
+  })
+
+  it('reports missing when the snapshot is from a different execution context', () => {
+    expect(
+      readChecksPanelRefreshGitIdentitySnapshot({
+        snapshot: SNAPSHOT,
+        contextKey: 'runtime:env-2::repo::worktree::branch',
+        currentBranch: 'feature/checks'
+      })
+    ).toEqual({ kind: 'missing' })
+  })
+
+  it('reports changed when the observed branch is a different branch', () => {
+    expect(
+      readChecksPanelRefreshGitIdentitySnapshot({
+        snapshot: {
+          ...SNAPSHOT,
+          gitIdentity: {
+            head: 'def456',
+            branch: 'refs/heads/feature/next'
+          }
+        },
+        contextKey: SNAPSHOT.contextKey,
+        currentBranch: 'feature/checks'
+      })
+    ).toEqual({
+      kind: 'changed',
+      head: 'def456',
+      branch: 'refs/heads/feature/next'
+    })
+  })
+
+  it('reports missing when the snapshot lacks branch/head identity', () => {
+    expect(
+      readChecksPanelRefreshGitIdentitySnapshot({
+        snapshot: {
+          contextKey: SNAPSHOT.contextKey,
+          hasUncommittedChanges: false,
+          remoteStatus: undefined
+        },
+        contextKey: SNAPSHOT.contextKey,
+        currentBranch: 'feature/checks'
+      })
+    ).toEqual({ kind: 'missing' })
+  })
+})
+
+describe('hasChecksPanelGitStatusBranchChanged', () => {
+  it('does not treat refs/heads display differences as branch changes', () => {
+    expect(
+      hasChecksPanelGitStatusBranchChanged({
+        observedBranch: 'refs/heads/feature/checks',
+        currentBranch: 'feature/checks'
+      })
+    ).toBe(false)
+  })
+
+  it('treats detached HEAD as changed from the rendered branch', () => {
+    expect(
+      hasChecksPanelGitStatusBranchChanged({
+        observedBranch: null,
+        currentBranch: 'feature/checks'
+      })
+    ).toBe(true)
   })
 })
 

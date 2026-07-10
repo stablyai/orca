@@ -112,8 +112,12 @@ vi.mock('./ipc/pty', () => ({
   killAllPty: killAllPtyMock
 }))
 
+const { fetchChangelogMock } = vi.hoisted(() => ({
+  fetchChangelogMock: vi.fn()
+}))
+
 vi.mock('./updater-changelog', () => ({
-  fetchChangelog: vi.fn().mockResolvedValue(null)
+  fetchChangelog: fetchChangelogMock
 }))
 
 const { fetchNudgeMock, shouldApplyNudgeMock } = vi.hoisted(() => ({
@@ -157,6 +161,7 @@ describe('updater', () => {
     powerMonitorOnMock.mockReset()
     fetchNudgeMock.mockReset().mockResolvedValue(null)
     shouldApplyNudgeMock.mockReset().mockReturnValue(false)
+    fetchChangelogMock.mockReset().mockResolvedValue(null)
     fetchNewerReleaseTagsMock.mockReset().mockResolvedValue([])
     vi.unstubAllGlobals()
     vi.useRealTimers()
@@ -356,11 +361,544 @@ describe('updater', () => {
       expect(autoUpdaterMock.checkForUpdates).toHaveBeenCalledTimes(1)
     })
 
+    autoUpdaterMock.emit('checking-for-update')
     autoUpdaterMock.emit('update-not-available')
     expect(sendMock).toHaveBeenCalledWith('updater:status', {
       state: 'not-available',
       userInitiated: true
     })
+  })
+
+  it('keeps a silent background settle user-initiated after menu promotion', async () => {
+    vi.useFakeTimers()
+    fetchNewerReleaseTagsMock.mockResolvedValue({ tags: [], state: 'no-newer' })
+    autoUpdaterMock.checkForUpdates.mockResolvedValue(undefined)
+    const sendMock = vi.fn()
+    const mainWindow = { webContents: { send: sendMock } }
+
+    const { setupAutoUpdater, checkForUpdatesFromMenu } = await import('./updater')
+
+    setupAutoUpdater(mainWindow as never, { getLastUpdateCheckAt: () => null })
+
+    await vi.waitFor(() => {
+      expect(autoUpdaterMock.checkForUpdates).toHaveBeenCalledTimes(1)
+    })
+    await vi.advanceTimersByTimeAsync(0)
+
+    sendMock.mockClear()
+    checkForUpdatesFromMenu()
+
+    expect(sendMock).toHaveBeenCalledWith('updater:status', {
+      state: 'checking',
+      userInitiated: true
+    })
+
+    await vi.advanceTimersByTimeAsync(1000)
+
+    expect(sendMock).toHaveBeenCalledWith('updater:status', {
+      state: 'not-available',
+      userInitiated: true
+    })
+  })
+
+  it('settles a manual check when electron-updater resolves without a terminal event', async () => {
+    vi.useFakeTimers()
+    fetchNewerReleaseTagsMock.mockResolvedValue({ tags: [], state: 'no-newer' })
+    autoUpdaterMock.checkForUpdates.mockResolvedValue(undefined)
+    const sendMock = vi.fn()
+    const setLastUpdateCheckAt = vi.fn()
+    const mainWindow = { webContents: { send: sendMock } }
+
+    const { setupAutoUpdater, checkForUpdatesFromMenu } = await import('./updater')
+
+    setupAutoUpdater(mainWindow as never, {
+      getLastUpdateCheckAt: () => Date.now(),
+      setLastUpdateCheckAt
+    })
+    checkForUpdatesFromMenu()
+
+    await vi.waitFor(() => {
+      expect(autoUpdaterMock.checkForUpdates).toHaveBeenCalledTimes(1)
+    })
+    await vi.advanceTimersByTimeAsync(1000)
+
+    expect(sendMock).toHaveBeenCalledWith('updater:status', {
+      state: 'not-available',
+      userInitiated: true
+    })
+    expect(setLastUpdateCheckAt).toHaveBeenCalledTimes(1)
+  })
+
+  it('ignores a stale update-available event after a silent background settle', async () => {
+    vi.useFakeTimers()
+    fetchNewerReleaseTagsMock.mockResolvedValue({ tags: [], state: 'no-newer' })
+    autoUpdaterMock.checkForUpdates.mockResolvedValue(undefined)
+    const sendMock = vi.fn()
+    const mainWindow = { webContents: { send: sendMock } }
+
+    const { setupAutoUpdater } = await import('./updater')
+
+    setupAutoUpdater(mainWindow as never, {
+      getLastUpdateCheckAt: () => null,
+      setLastUpdateCheckAt: vi.fn()
+    })
+
+    await vi.waitFor(() => {
+      expect(autoUpdaterMock.checkForUpdates).toHaveBeenCalledTimes(1)
+    })
+    await vi.advanceTimersByTimeAsync(1000)
+
+    autoUpdaterMock.emit('update-available', { version: '1.0.61' })
+    await vi.advanceTimersByTimeAsync(0)
+
+    expect(fetchChangelogMock).not.toHaveBeenCalled()
+    expect(sendMock).not.toHaveBeenCalledWith(
+      'updater:status',
+      expect.objectContaining({ state: 'available', version: '1.0.61' })
+    )
+  })
+
+  it('ignores a stale checking-for-update event after a silent manual settle', async () => {
+    vi.useFakeTimers()
+    fetchNewerReleaseTagsMock.mockResolvedValue({ tags: [], state: 'no-newer' })
+    autoUpdaterMock.checkForUpdates.mockResolvedValue(undefined)
+    const sendMock = vi.fn()
+    const mainWindow = { webContents: { send: sendMock } }
+
+    const { setupAutoUpdater, checkForUpdatesFromMenu } = await import('./updater')
+
+    setupAutoUpdater(mainWindow as never, { getLastUpdateCheckAt: () => Date.now() })
+    checkForUpdatesFromMenu()
+
+    await vi.waitFor(() => {
+      expect(autoUpdaterMock.checkForUpdates).toHaveBeenCalledTimes(1)
+    })
+    await vi.advanceTimersByTimeAsync(1000)
+
+    sendMock.mockClear()
+    autoUpdaterMock.emit('checking-for-update')
+
+    expect(sendMock).not.toHaveBeenCalled()
+  })
+
+  it('ignores stale updater events while a new check is still in feed preflight', async () => {
+    vi.useFakeTimers()
+    let resolveSecondTags: (value: { tags: string[]; state: 'no-newer' }) => void = () => {}
+    fetchNewerReleaseTagsMock
+      .mockResolvedValueOnce({ tags: [], state: 'no-newer' })
+      .mockImplementationOnce(
+        () =>
+          new Promise<{ tags: string[]; state: 'no-newer' }>((resolve) => {
+            resolveSecondTags = resolve
+          })
+      )
+    autoUpdaterMock.checkForUpdates.mockResolvedValue(undefined)
+    const sendMock = vi.fn()
+    const mainWindow = { webContents: { send: sendMock } }
+
+    const { setupAutoUpdater, checkForUpdatesFromMenu } = await import('./updater')
+
+    setupAutoUpdater(mainWindow as never, { getLastUpdateCheckAt: () => Date.now() })
+    checkForUpdatesFromMenu()
+
+    await vi.waitFor(() => {
+      expect(autoUpdaterMock.checkForUpdates).toHaveBeenCalledTimes(1)
+    })
+    await vi.advanceTimersByTimeAsync(1000)
+
+    sendMock.mockClear()
+    checkForUpdatesFromMenu()
+    await vi.waitFor(() => {
+      expect(fetchNewerReleaseTagsMock).toHaveBeenCalledTimes(2)
+      expect(autoUpdaterMock.checkForUpdates).toHaveBeenCalledTimes(1)
+    })
+
+    autoUpdaterMock.emit('checking-for-update')
+    autoUpdaterMock.emit('update-not-available')
+
+    expect(sendMock).not.toHaveBeenCalledWith('updater:status', {
+      state: 'not-available',
+      userInitiated: true
+    })
+
+    resolveSecondTags({ tags: [], state: 'no-newer' })
+    await vi.waitFor(() => {
+      expect(autoUpdaterMock.checkForUpdates).toHaveBeenCalledTimes(2)
+    })
+    autoUpdaterMock.emit('checking-for-update')
+    autoUpdaterMock.emit('update-not-available')
+
+    expect(sendMock).toHaveBeenCalledWith('updater:status', {
+      state: 'not-available',
+      userInitiated: true
+    })
+  })
+
+  it('does not let a stale silent settle finish a later manual check', async () => {
+    vi.useFakeTimers()
+    fetchNewerReleaseTagsMock.mockResolvedValue({ tags: [], state: 'no-newer' })
+    autoUpdaterMock.checkForUpdates.mockImplementation(() => {
+      const callCount = autoUpdaterMock.checkForUpdates.mock.calls.length
+      autoUpdaterMock.emit('checking-for-update')
+      if (callCount === 1) {
+        queueMicrotask(() => {
+          autoUpdaterMock.emit('update-not-available')
+        })
+        return Promise.resolve(undefined)
+      }
+      return new Promise(() => {})
+    })
+    const sendMock = vi.fn()
+    const mainWindow = { webContents: { send: sendMock } }
+
+    const { setupAutoUpdater, checkForUpdatesFromMenu } = await import('./updater')
+
+    setupAutoUpdater(mainWindow as never, { getLastUpdateCheckAt: () => Date.now() })
+    checkForUpdatesFromMenu()
+
+    await vi.waitFor(() => {
+      expect(sendMock).toHaveBeenCalledWith('updater:status', {
+        state: 'not-available',
+        userInitiated: true
+      })
+    })
+
+    sendMock.mockClear()
+    checkForUpdatesFromMenu()
+    await vi.waitFor(() => {
+      expect(autoUpdaterMock.checkForUpdates).toHaveBeenCalledTimes(2)
+      expect(sendMock).toHaveBeenCalledWith('updater:status', {
+        state: 'checking',
+        userInitiated: true
+      })
+    })
+
+    await vi.advanceTimersByTimeAsync(1000)
+
+    expect(sendMock).not.toHaveBeenCalledWith('updater:status', {
+      state: 'not-available',
+      userInitiated: true
+    })
+  })
+
+  it('does not let a stale pending update-available block a later silent settle', async () => {
+    vi.useFakeTimers()
+    let resolveChangelog: (value: null) => void = () => {}
+    fetchChangelogMock.mockImplementation(
+      () =>
+        new Promise<null>((resolve) => {
+          resolveChangelog = resolve
+        })
+    )
+    fetchNewerReleaseTagsMock.mockResolvedValue({ tags: ['v1.0.52'], state: 'ready' })
+    autoUpdaterMock.checkForUpdates.mockImplementation(() => {
+      const callCount = autoUpdaterMock.checkForUpdates.mock.calls.length
+      autoUpdaterMock.emit('checking-for-update')
+      if (callCount === 1) {
+        queueMicrotask(() => {
+          autoUpdaterMock.emit('update-available', { version: '1.0.52' })
+        })
+      }
+      return Promise.resolve(undefined)
+    })
+    const sendMock = vi.fn()
+    const mainWindow = { webContents: { send: sendMock } }
+
+    const { setupAutoUpdater, checkForUpdatesFromMenu } = await import('./updater')
+
+    setupAutoUpdater(mainWindow as never, { getLastUpdateCheckAt: () => Date.now() })
+    checkForUpdatesFromMenu()
+
+    await vi.waitFor(() => {
+      expect(fetchChangelogMock).toHaveBeenCalledTimes(1)
+    })
+
+    autoUpdaterMock.emit('error', new Error('boom'))
+    await vi.waitFor(() => {
+      expect(sendMock).toHaveBeenCalledWith('updater:status', {
+        state: 'error',
+        message: 'boom',
+        userInitiated: undefined
+      })
+    })
+
+    sendMock.mockClear()
+    checkForUpdatesFromMenu()
+    await vi.waitFor(() => {
+      expect(autoUpdaterMock.checkForUpdates).toHaveBeenCalledTimes(2)
+      expect(sendMock).toHaveBeenCalledWith('updater:status', {
+        state: 'checking',
+        userInitiated: true
+      })
+    })
+
+    await vi.advanceTimersByTimeAsync(1000)
+
+    expect(sendMock).toHaveBeenCalledWith('updater:status', {
+      state: 'not-available',
+      userInitiated: true
+    })
+
+    sendMock.mockClear()
+    resolveChangelog(null)
+    await vi.advanceTimersByTimeAsync(0)
+
+    expect(sendMock).not.toHaveBeenCalledWith(
+      'updater:status',
+      expect.objectContaining({ state: 'available', version: '1.0.52' })
+    )
+  })
+
+  it('ignores a stale update-available event after a new check starts preflight', async () => {
+    vi.useFakeTimers()
+    fetchNewerReleaseTagsMock.mockResolvedValue({ tags: [], state: 'no-newer' })
+    autoUpdaterMock.checkForUpdates.mockImplementation(() => {
+      if (autoUpdaterMock.checkForUpdates.mock.calls.length === 1) {
+        return Promise.resolve(undefined)
+      }
+      return new Promise(() => {})
+    })
+    const sendMock = vi.fn()
+    const mainWindow = { webContents: { send: sendMock } }
+
+    const { setupAutoUpdater, checkForUpdatesFromMenu } = await import('./updater')
+
+    setupAutoUpdater(mainWindow as never, { getLastUpdateCheckAt: () => Date.now() })
+    checkForUpdatesFromMenu()
+
+    await vi.waitFor(() => {
+      expect(autoUpdaterMock.checkForUpdates).toHaveBeenCalledTimes(1)
+    })
+    await vi.advanceTimersByTimeAsync(1000)
+
+    sendMock.mockClear()
+    checkForUpdatesFromMenu()
+    await vi.waitFor(() => {
+      expect(autoUpdaterMock.checkForUpdates).toHaveBeenCalledTimes(2)
+      expect(sendMock).toHaveBeenCalledWith('updater:status', {
+        state: 'checking',
+        userInitiated: true
+      })
+    })
+
+    autoUpdaterMock.emit('update-available', { version: '1.0.61' })
+    await vi.advanceTimersByTimeAsync(0)
+
+    expect(fetchChangelogMock).not.toHaveBeenCalled()
+    expect(sendMock).not.toHaveBeenCalledWith(
+      'updater:status',
+      expect.objectContaining({ state: 'available', version: '1.0.61' })
+    )
+  })
+
+  it('ignores a stale update-not-available event after a new check starts preflight', async () => {
+    vi.useFakeTimers()
+    fetchNewerReleaseTagsMock.mockResolvedValue({ tags: [], state: 'no-newer' })
+    autoUpdaterMock.checkForUpdates.mockImplementation(() => {
+      if (autoUpdaterMock.checkForUpdates.mock.calls.length === 1) {
+        return Promise.resolve(undefined)
+      }
+      return new Promise(() => {})
+    })
+    const sendMock = vi.fn()
+    const mainWindow = { webContents: { send: sendMock } }
+
+    const { setupAutoUpdater, checkForUpdatesFromMenu } = await import('./updater')
+
+    setupAutoUpdater(mainWindow as never, { getLastUpdateCheckAt: () => Date.now() })
+    checkForUpdatesFromMenu()
+
+    await vi.waitFor(() => {
+      expect(autoUpdaterMock.checkForUpdates).toHaveBeenCalledTimes(1)
+    })
+    await vi.advanceTimersByTimeAsync(1000)
+
+    sendMock.mockClear()
+    checkForUpdatesFromMenu()
+    await vi.waitFor(() => {
+      expect(autoUpdaterMock.checkForUpdates).toHaveBeenCalledTimes(2)
+      expect(sendMock).toHaveBeenCalledWith('updater:status', {
+        state: 'checking',
+        userInitiated: true
+      })
+    })
+
+    autoUpdaterMock.emit('update-not-available')
+
+    expect(sendMock).not.toHaveBeenCalledWith('updater:status', {
+      state: 'not-available',
+      userInitiated: true
+    })
+  })
+
+  it('ignores a stale error event after a new check starts preflight', async () => {
+    vi.useFakeTimers()
+    let resolveSecondTags: (value: { tags: string[]; state: 'no-newer' }) => void = () => {}
+    fetchNewerReleaseTagsMock
+      .mockResolvedValueOnce({ tags: [], state: 'no-newer' })
+      .mockImplementationOnce(
+        () =>
+          new Promise<{ tags: string[]; state: 'no-newer' }>((resolve) => {
+            resolveSecondTags = resolve
+          })
+      )
+    autoUpdaterMock.checkForUpdates.mockResolvedValue(undefined)
+    const sendMock = vi.fn()
+    const mainWindow = { webContents: { send: sendMock } }
+
+    const { setupAutoUpdater, checkForUpdatesFromMenu } = await import('./updater')
+
+    setupAutoUpdater(mainWindow as never, { getLastUpdateCheckAt: () => Date.now() })
+    checkForUpdatesFromMenu()
+
+    await vi.waitFor(() => {
+      expect(autoUpdaterMock.checkForUpdates).toHaveBeenCalledTimes(1)
+    })
+    await vi.advanceTimersByTimeAsync(1000)
+
+    sendMock.mockClear()
+    checkForUpdatesFromMenu()
+    await vi.waitFor(() => {
+      expect(fetchNewerReleaseTagsMock).toHaveBeenCalledTimes(2)
+      expect(autoUpdaterMock.checkForUpdates).toHaveBeenCalledTimes(1)
+    })
+
+    autoUpdaterMock.emit('error', new Error('stale boom'))
+
+    expect(sendMock).not.toHaveBeenCalledWith(
+      'updater:status',
+      expect.objectContaining({ state: 'error', message: 'stale boom' })
+    )
+
+    resolveSecondTags({ tags: [], state: 'no-newer' })
+    await vi.waitFor(() => {
+      expect(autoUpdaterMock.checkForUpdates).toHaveBeenCalledTimes(2)
+    })
+    autoUpdaterMock.emit('checking-for-update')
+    autoUpdaterMock.emit('update-not-available')
+
+    expect(sendMock).toHaveBeenCalledWith('updater:status', {
+      state: 'not-available',
+      userInitiated: true
+    })
+  })
+
+  it('times out a manual preflight that never reaches electron-updater events', async () => {
+    vi.useFakeTimers()
+    fetchNewerReleaseTagsMock.mockImplementation(() => new Promise(() => {}))
+    const sendMock = vi.fn()
+    const mainWindow = { webContents: { send: sendMock } }
+
+    const { setupAutoUpdater, checkForUpdatesFromMenu } = await import('./updater')
+
+    setupAutoUpdater(mainWindow as never, { getLastUpdateCheckAt: () => Date.now() })
+    checkForUpdatesFromMenu()
+
+    expect(sendMock).toHaveBeenCalledWith('updater:status', {
+      state: 'checking',
+      userInitiated: true
+    })
+    await vi.advanceTimersByTimeAsync(45 * 1000)
+
+    expect(autoUpdaterMock.checkForUpdates).not.toHaveBeenCalled()
+    expect(sendMock).toHaveBeenCalledWith('updater:status', {
+      state: 'error',
+      message: 'Update check timed out. Try again in a few minutes.',
+      userInitiated: true
+    })
+  })
+
+  it('does not launch electron-updater after a manual preflight timeout settles', async () => {
+    vi.useFakeTimers()
+    let resolveTags: (value: { tags: string[]; state: 'no-newer' }) => void = () => {}
+    fetchNewerReleaseTagsMock.mockImplementation(
+      () =>
+        new Promise<{ tags: string[]; state: 'no-newer' }>((resolve) => {
+          resolveTags = resolve
+        })
+    )
+    autoUpdaterMock.checkForUpdates.mockResolvedValue(undefined)
+    const sendMock = vi.fn()
+    const mainWindow = { webContents: { send: sendMock } }
+
+    const { setupAutoUpdater, checkForUpdatesFromMenu } = await import('./updater')
+
+    setupAutoUpdater(mainWindow as never, { getLastUpdateCheckAt: () => Date.now() })
+    checkForUpdatesFromMenu()
+
+    await vi.advanceTimersByTimeAsync(45 * 1000)
+    expect(sendMock).toHaveBeenCalledWith('updater:status', {
+      state: 'error',
+      message: 'Update check timed out. Try again in a few minutes.',
+      userInitiated: true
+    })
+
+    resolveTags({ tags: [], state: 'no-newer' })
+    await vi.advanceTimersByTimeAsync(0)
+
+    expect(autoUpdaterMock.checkForUpdates).not.toHaveBeenCalled()
+  })
+
+  it('runs a fresh prerelease check when Shift-click promotes an in-flight stable check', async () => {
+    vi.useFakeTimers()
+    let resolveStableTags: (value: { tags: string[]; state: 'no-newer' }) => void = () => {}
+    let resolveStableCheck: () => void = () => {}
+    fetchNewerReleaseTagsMock
+      .mockImplementationOnce(
+        () =>
+          new Promise<{ tags: string[]; state: 'no-newer' }>((resolve) => {
+            resolveStableTags = resolve
+          })
+      )
+      .mockResolvedValueOnce({ tags: ['v1.4.36-rc.5'], state: 'ready' })
+    autoUpdaterMock.checkForUpdates
+      .mockImplementationOnce(
+        () =>
+          new Promise<void>((resolve) => {
+            resolveStableCheck = resolve
+          })
+      )
+      .mockResolvedValueOnce(undefined)
+    const sendMock = vi.fn()
+    const mainWindow = { webContents: { send: sendMock } }
+
+    const { setupAutoUpdater, checkForUpdatesFromMenu } = await import('./updater')
+
+    appMock.getVersion.mockReturnValue('1.4.35')
+    setupAutoUpdater(mainWindow as never, { getLastUpdateCheckAt: () => null })
+    checkForUpdatesFromMenu({ includePrerelease: true })
+
+    expect(sendMock).toHaveBeenCalledWith('updater:status', {
+      state: 'checking',
+      userInitiated: true
+    })
+    expect(autoUpdaterMock.checkForUpdates).not.toHaveBeenCalled()
+
+    resolveStableTags({ tags: [], state: 'no-newer' })
+    await vi.waitFor(() => {
+      expect(autoUpdaterMock.checkForUpdates).toHaveBeenCalledTimes(1)
+    })
+
+    autoUpdaterMock.emit('checking-for-update')
+    autoUpdaterMock.emit('update-not-available')
+    await vi.advanceTimersByTimeAsync(0)
+    resolveStableCheck()
+
+    await vi.waitFor(() => {
+      expect(fetchNewerReleaseTagsMock).toHaveBeenCalledWith('1.4.35', 2, {
+        includePrerelease: true
+      })
+      expect(autoUpdaterMock.checkForUpdates).toHaveBeenCalledTimes(2)
+    })
+    expect(autoUpdaterMock.setFeedURL).toHaveBeenLastCalledWith({
+      provider: 'generic',
+      url: 'https://github.com/stablyai/orca/releases/download/v1.4.36-rc.5'
+    })
+    expect(
+      sendMock.mock.calls
+        .filter(([channel]) => channel === 'updater:status')
+        .map(([, status]) => status)
+    ).not.toContainEqual({ state: 'not-available', userInitiated: true })
   })
 
   it('keeps promoted background promise failures user-initiated after a paired error event', async () => {
@@ -474,6 +1012,97 @@ describe('updater', () => {
     expect(autoUpdaterMock.setFeedURL.mock.calls.length).toBe(setupFeedUrlCalls + 1)
   })
 
+  it('pins the generic feed to a perf-tagged prerelease when requested', async () => {
+    appMock.getVersion.mockReturnValue('1.4.120')
+    fetchNewerReleaseTagsMock.mockResolvedValue(['v1.4.121-rc.6.perf'])
+    autoUpdaterMock.checkForUpdates.mockResolvedValue(undefined)
+    const mainWindow = { webContents: { send: vi.fn() } }
+
+    const { setupAutoUpdater, checkForUpdatesFromMenu } = await import('./updater')
+
+    setupAutoUpdater(mainWindow as never, { getLastUpdateCheckAt: () => Date.now() })
+
+    checkForUpdatesFromMenu({ includePerfPrerelease: true })
+
+    await vi.waitFor(() => {
+      expect(fetchNewerReleaseTagsMock).toHaveBeenCalledWith('1.4.120', 2, {
+        includePrerelease: true,
+        releaseFilter: 'perf'
+      })
+      expect(autoUpdaterMock.setFeedURL).toHaveBeenLastCalledWith({
+        provider: 'generic',
+        url: 'https://github.com/stablyai/orca/releases/download/v1.4.121-rc.6.perf'
+      })
+      expect(autoUpdaterMock.checkForUpdates).toHaveBeenCalledTimes(1)
+    })
+    expect(autoUpdaterMock.allowPrerelease).toBe(true)
+  })
+
+  it('surfaces no-update feedback when no newer perf-tagged prerelease exists', async () => {
+    appMock.getVersion.mockReturnValue('1.4.120')
+    fetchNewerReleaseTagsMock.mockResolvedValue({ tags: [], state: 'no-newer' })
+    autoUpdaterMock.checkForUpdates.mockResolvedValue(undefined)
+    const sendMock = vi.fn()
+    const mainWindow = { webContents: { send: sendMock } }
+
+    const { setupAutoUpdater, checkForUpdatesFromMenu } = await import('./updater')
+
+    setupAutoUpdater(mainWindow as never, { getLastUpdateCheckAt: () => Date.now() })
+    const setupFeedUrlCalls = autoUpdaterMock.setFeedURL.mock.calls.length
+
+    checkForUpdatesFromMenu({ includePerfPrerelease: true })
+
+    await vi.waitFor(() => {
+      expect(sendMock).toHaveBeenCalledWith('updater:status', {
+        state: 'not-available',
+        userInitiated: true
+      })
+    })
+    expect(fetchNewerReleaseTagsMock).toHaveBeenCalledWith('1.4.120', 2, {
+      includePrerelease: true,
+      releaseFilter: 'perf'
+    })
+    expect(autoUpdaterMock.checkForUpdates).not.toHaveBeenCalled()
+    expect(autoUpdaterMock.setFeedURL.mock.calls.length).toBe(setupFeedUrlCalls)
+  })
+
+  it('keeps background retries on the stable channel after a perf publishing-window miss', async () => {
+    vi.useFakeTimers()
+    appMock.getVersion.mockReturnValue('1.4.120')
+    fetchNewerReleaseTagsMock
+      .mockResolvedValueOnce({ tags: [], state: 'not-ready' })
+      .mockResolvedValueOnce(['v1.4.121'])
+    autoUpdaterMock.checkForUpdates.mockResolvedValue(undefined)
+    const sendMock = vi.fn()
+    const mainWindow = { webContents: { send: sendMock } }
+
+    const { setupAutoUpdater, checkForUpdatesFromMenu } = await import('./updater')
+
+    setupAutoUpdater(mainWindow as never, { getLastUpdateCheckAt: () => Date.now() })
+
+    checkForUpdatesFromMenu({ includePerfPrerelease: true })
+
+    await vi.waitFor(() => {
+      expect(sendMock).toHaveBeenCalledWith('updater:status', {
+        state: 'error',
+        message: "Couldn't reach the update server. Try again in a few minutes.",
+        userInitiated: true
+      })
+    })
+
+    await vi.advanceTimersByTimeAsync(60 * 60 * 1000)
+
+    await vi.waitFor(() => {
+      expect(fetchNewerReleaseTagsMock).toHaveBeenNthCalledWith(2, '1.4.120', 1, {
+        includePrerelease: false
+      })
+      expect(autoUpdaterMock.setFeedURL).toHaveBeenLastCalledWith({
+        provider: 'generic',
+        url: 'https://github.com/stablyai/orca/releases/download/v1.4.121'
+      })
+    })
+  })
+
   it('leaves the feed URL alone for a normal user-initiated check', async () => {
     autoUpdaterMock.checkForUpdates.mockResolvedValue(undefined)
     const mainWindow = { webContents: { send: vi.fn() } }
@@ -488,6 +1117,45 @@ describe('updater', () => {
 
     expect(autoUpdaterMock.setFeedURL.mock.calls.length).toBe(initialFeedUrlCalls)
     expect(autoUpdaterMock.allowPrerelease).not.toBe(true)
+  })
+
+  it('still surfaces updater error events while a download is in flight', async () => {
+    fetchNewerReleaseTagsMock.mockResolvedValue({ tags: ['v1.0.61'], state: 'ready' })
+    autoUpdaterMock.checkForUpdates.mockImplementation(() => {
+      autoUpdaterMock.emit('checking-for-update')
+      queueMicrotask(() => {
+        autoUpdaterMock.emit('update-available', { version: '1.0.61' })
+      })
+      return Promise.resolve(undefined)
+    })
+    autoUpdaterMock.downloadUpdate.mockImplementation(() => {
+      autoUpdaterMock.emit('error', new Error('download failed'))
+      return new Promise(() => {})
+    })
+    const sendMock = vi.fn()
+    const mainWindow = { webContents: { send: sendMock } }
+
+    const { setupAutoUpdater, checkForUpdatesFromMenu, downloadUpdate } = await import('./updater')
+
+    setupAutoUpdater(mainWindow as never, { getLastUpdateCheckAt: () => Date.now() })
+    checkForUpdatesFromMenu()
+
+    await vi.waitFor(() => {
+      expect(sendMock).toHaveBeenCalledWith('updater:status', {
+        state: 'available',
+        version: '1.0.61',
+        changelog: null
+      })
+    })
+
+    sendMock.mockClear()
+    downloadUpdate()
+
+    expect(autoUpdaterMock.downloadUpdate).toHaveBeenCalledTimes(1)
+    expect(sendMock).toHaveBeenCalledWith(
+      'updater:status',
+      expect.objectContaining({ state: 'error', message: 'download failed' })
+    )
   })
 
   it('defers quitAndInstall through the shared main-process entrypoint', async () => {
@@ -509,6 +1177,25 @@ describe('updater', () => {
     expect(autoUpdaterMock.quitAndInstall).toHaveBeenCalledWith(false, true)
   })
 
+  it('runs pre-quit cleanup before local PTY cleanup during update install', async () => {
+    vi.useFakeTimers()
+
+    const onBeforeQuit = vi.fn()
+    const mainWindow = { webContents: { send: vi.fn() } }
+    const { setupAutoUpdater, quitAndInstall } = await import('./updater')
+
+    setupAutoUpdater(mainWindow as never, { onBeforeQuit })
+    quitAndInstall()
+
+    await vi.advanceTimersByTimeAsync(100)
+
+    expect(onBeforeQuit).toHaveBeenCalledTimes(1)
+    expect(killAllPtyMock).toHaveBeenCalledTimes(1)
+    expect(onBeforeQuit.mock.invocationCallOrder[0]).toBeLessThan(
+      killAllPtyMock.mock.invocationCallOrder[0]
+    )
+  })
+
   it('ignores duplicate quitAndInstall requests while the shared delay is pending', async () => {
     vi.useFakeTimers()
 
@@ -522,6 +1209,174 @@ describe('updater', () => {
     await vi.advanceTimersByTimeAsync(100)
 
     expect(autoUpdaterMock.quitAndInstall).toHaveBeenCalledTimes(1)
+  })
+
+  it('ignores duplicate quitAndInstall requests while async pre-quit cleanup is running', async () => {
+    vi.useFakeTimers()
+
+    let finishCleanup!: () => void
+    const onBeforeQuit = vi.fn(
+      () =>
+        new Promise<void>((resolve) => {
+          finishCleanup = resolve
+        })
+    )
+    const mainWindow = { webContents: { send: vi.fn() } }
+    const { setupAutoUpdater, quitAndInstall } = await import('./updater')
+
+    setupAutoUpdater(mainWindow as never, { onBeforeQuit })
+    quitAndInstall()
+
+    await vi.advanceTimersByTimeAsync(100)
+
+    expect(onBeforeQuit).toHaveBeenCalledTimes(1)
+    expect(autoUpdaterMock.quitAndInstall).not.toHaveBeenCalled()
+
+    quitAndInstall()
+    finishCleanup()
+    await vi.advanceTimersByTimeAsync(0)
+
+    expect(onBeforeQuit).toHaveBeenCalledTimes(1)
+    expect(autoUpdaterMock.quitAndInstall).toHaveBeenCalledTimes(1)
+  })
+
+  it('recovers quit-for-update state on sync quitAndInstall error event without killing PTYs', async () => {
+    vi.useFakeTimers()
+
+    autoUpdaterMock.quitAndInstall.mockImplementation(() => {
+      // Why: BaseUpdater dispatches 'error' synchronously inside install() for
+      // the common "no staged update filepath" path.
+      autoUpdaterMock.emit(
+        'error',
+        new Error("No update filepath provided, can't quit and install")
+      )
+    })
+
+    const sendMock = vi.fn()
+    const mainWindow = { webContents: { send: sendMock } }
+    const { setupAutoUpdater, quitAndInstall, isQuittingForUpdate } = await import('./updater')
+
+    setupAutoUpdater(mainWindow as never)
+    quitAndInstall()
+
+    await vi.advanceTimersByTimeAsync(100)
+
+    expect(autoUpdaterMock.quitAndInstall).toHaveBeenCalledTimes(1)
+    expect(isQuittingForUpdate()).toBe(false)
+    // Why: destructive prep runs only after quitAndInstall returns still in
+    // progress; sync recovery clears flags first so PTYs stay alive.
+    expect(killAllPtyMock).not.toHaveBeenCalled()
+    expect(sendMock).toHaveBeenCalledWith(
+      'updater:status',
+      expect.objectContaining({
+        state: 'error',
+        message: 'Could not restart to install the update. Quit and reopen Orca, then try again.'
+      })
+    )
+  })
+
+  it('does not recover quit-for-update state from late errors after install commit', async () => {
+    const sendMock = vi.fn()
+    const mainWindow = { webContents: { send: sendMock } }
+    fetchNewerReleaseTagsMock.mockResolvedValue({ tags: ['v1.0.61'], state: 'ready' })
+    autoUpdaterMock.checkForUpdates.mockImplementation(() => {
+      autoUpdaterMock.emit('checking-for-update')
+      queueMicrotask(() => {
+        autoUpdaterMock.emit('update-available', { version: '1.0.61' })
+      })
+      return Promise.resolve(undefined)
+    })
+
+    const { setupAutoUpdater, checkForUpdatesFromMenu, quitAndInstall, isQuittingForUpdate } =
+      await import('./updater')
+
+    setupAutoUpdater(mainWindow as never, { getLastUpdateCheckAt: () => Date.now() })
+    checkForUpdatesFromMenu()
+
+    // Why: put status in downloaded so a naive error handler would otherwise
+    // treat a late post-commit error as a download/install UI failure.
+    await vi.waitFor(() => {
+      expect(sendMock).toHaveBeenCalledWith('updater:status', {
+        state: 'available',
+        version: '1.0.61',
+        changelog: null
+      })
+    })
+
+    autoUpdaterMock.emit('update-downloaded', { version: '1.0.61' })
+
+    // Why: on macOS install is only "committed" once Squirrel is ready; mark
+    // it ready so this test covers the post-commit path on all platforms and
+    // the UI can leave the "waiting for Squirrel" downloading state.
+    if (process.platform === 'darwin') {
+      const nativeDownloadedHandler = nativeUpdaterMock.on.mock.calls.find(
+        ([eventName]) => eventName === 'update-downloaded'
+      )?.[1] as (() => void) | undefined
+      expect(nativeDownloadedHandler).toBeTypeOf('function')
+      nativeDownloadedHandler?.()
+    }
+
+    await vi.waitFor(() => {
+      expect(sendMock).toHaveBeenCalledWith(
+        'updater:status',
+        expect.objectContaining({ state: 'downloaded', version: '1.0.61' })
+      )
+    })
+
+    quitAndInstall()
+    await vi.waitFor(() => {
+      expect(autoUpdaterMock.quitAndInstall).toHaveBeenCalledTimes(1)
+    })
+    expect(killAllPtyMock).toHaveBeenCalledTimes(1)
+    expect(isQuittingForUpdate()).toBe(true)
+
+    sendMock.mockClear()
+    autoUpdaterMock.emit('error', new Error('late post-commit install error'))
+
+    expect(isQuittingForUpdate()).toBe(true)
+    // Why: handoff still owns the process after commit — no recovery message
+    // and no general check/download error status either.
+    expect(sendMock).not.toHaveBeenCalled()
+  })
+
+  it('does not treat pre-native autoUpdater errors as quitAndInstall recovery', async () => {
+    vi.useFakeTimers()
+
+    let finishCleanup!: () => void
+    const onBeforeQuit = vi.fn(
+      () =>
+        new Promise<void>((resolve) => {
+          finishCleanup = resolve
+        })
+    )
+    const sendMock = vi.fn()
+    const mainWindow = { webContents: { send: sendMock } }
+    const { setupAutoUpdater, quitAndInstall, isQuittingForUpdate } = await import('./updater')
+
+    setupAutoUpdater(mainWindow as never, {
+      onBeforeQuit,
+      getLastUpdateCheckAt: () => Date.now()
+    })
+    quitAndInstall()
+    await vi.advanceTimersByTimeAsync(100)
+
+    expect(onBeforeQuit).toHaveBeenCalledTimes(1)
+    expect(autoUpdaterMock.quitAndInstall).not.toHaveBeenCalled()
+    expect(isQuittingForUpdate()).toBe(true)
+
+    sendMock.mockClear()
+    // Why: an unrelated error during pre-quit cleanup must not clear
+    // quittingForUpdate or emit the install-recovery status (native not invoked).
+    autoUpdaterMock.emit('error', new Error('pre-native concurrent error'))
+
+    expect(isQuittingForUpdate()).toBe(true)
+    expect(sendMock).not.toHaveBeenCalled()
+
+    finishCleanup()
+    await vi.advanceTimersByTimeAsync(0)
+
+    expect(autoUpdaterMock.quitAndInstall).toHaveBeenCalledTimes(1)
+    expect(isQuittingForUpdate()).toBe(true)
   })
 
   it('runs a startup check immediately when the last background check is stale', async () => {
@@ -760,6 +1615,7 @@ describe('updater', () => {
         .map(([, status]) => status)
 
       expect(statusCalls).toContainEqual({ state: 'checking', userInitiated: true })
+      expect(autoUpdaterMock.checkForUpdates).toHaveBeenCalledTimes(2)
     })
 
     autoUpdaterMock.emit('update-available', { version: '1.0.62' })
@@ -793,6 +1649,9 @@ describe('updater', () => {
       getDismissedUpdateNudgeId: () => null
     })
 
+    await vi.waitFor(() => {
+      expect(autoUpdaterMock.checkForUpdates).toHaveBeenCalledTimes(1)
+    })
     autoUpdaterMock.emit('update-available', { version: '1.0.61' })
     await new Promise((resolve) => setTimeout(resolve, 0))
 
@@ -905,6 +1764,44 @@ describe('updater', () => {
     expect(setDismissedUpdateNudgeId).toHaveBeenCalledWith('campaign-1')
   })
 
+  it('clears pending nudge campaign when a silent follow-up check settles not-available', async () => {
+    vi.useFakeTimers()
+    const sendMock = vi.fn()
+    const mainWindow = { webContents: { send: sendMock } }
+    let pendingNudgeId: string | null = null
+    const setPendingUpdateNudgeId = vi.fn((id: string | null) => {
+      pendingNudgeId = id
+    })
+    const setDismissedUpdateNudgeId = vi.fn()
+
+    fetchNudgeMock.mockResolvedValue({ id: 'campaign-1', minVersion: '1.0.0' })
+    shouldApplyNudgeMock.mockReturnValue(true)
+    fetchNewerReleaseTagsMock.mockResolvedValue({ tags: [], state: 'no-newer' })
+    autoUpdaterMock.checkForUpdates.mockResolvedValue(undefined)
+
+    const { setupAutoUpdater } = await import('./updater')
+
+    setupAutoUpdater(mainWindow as never, {
+      getLastUpdateCheckAt: () => Date.now(),
+      setPendingUpdateNudgeId,
+      getPendingUpdateNudgeId: () => pendingNudgeId,
+      getDismissedUpdateNudgeId: () => null,
+      setDismissedUpdateNudgeId
+    })
+
+    await vi.waitFor(() => {
+      expect(autoUpdaterMock.checkForUpdates).toHaveBeenCalledTimes(1)
+    })
+    expect(setPendingUpdateNudgeId).toHaveBeenCalledWith('campaign-1')
+
+    await vi.advanceTimersByTimeAsync(1000)
+
+    expect(sendMock).toHaveBeenCalledWith('updater:status', { state: 'not-available' })
+    expect(setPendingUpdateNudgeId).toHaveBeenCalledWith(null)
+    expect(setDismissedUpdateNudgeId).toHaveBeenCalledWith('campaign-1')
+    expect(pendingNudgeId).toBe(null)
+  })
+
   it('auto-dismisses nudge campaign when the follow-up check errors out', async () => {
     const sendMock = vi.fn()
     const mainWindow = { webContents: { send: sendMock } }
@@ -1008,11 +1905,14 @@ describe('updater', () => {
     expect(setPendingUpdateNudgeId).toHaveBeenCalledWith(null)
   })
 
-  // Why: issue #631 — the Windows auto-updater fails because installed
-  // versions signed with the wrong certificate have a stale publisherName
-  // in app-update.yml. verifyUpdateCodeSignature must be overridden on
-  // Windows so electron-updater skips Authenticode verification.
-  it('overrides verifyUpdateCodeSignature on Windows to skip signing verification', async () => {
+  // Why: the Windows auto-updater must keep electron-updater's built-in
+  // Authenticode verification, which checks the downloaded installer against
+  // the SignPath Foundation publisherName that electron-builder embeds in
+  // app-update.yml. A no-op verifyUpdateCodeSignature override would silently
+  // accept every installer, so setup must NOT install one. (The issue #631
+  // stale-publisherName problem that once justified an override is resolved now
+  // that SignPath builds embed the correct publisherName.)
+  it('does not disable Windows Authenticode verification on win32', async () => {
     vi.stubGlobal('process', { ...process, platform: 'win32' })
 
     const { setupAutoUpdater } = await import('./updater')
@@ -1022,11 +1922,7 @@ describe('updater', () => {
 
     setupAutoUpdater(mainWindow as never)
 
-    // The override should be set on the autoUpdater mock
-    const override = (autoUpdaterMock as Record<string, unknown>).verifyUpdateCodeSignature
-    expect(override).toBeTypeOf('function')
-    // Calling it should resolve to null (meaning "signature valid, skip check")
-    await expect((override as () => Promise<string | null>)()).resolves.toBeNull()
+    expect((autoUpdaterMock as Record<string, unknown>).verifyUpdateCodeSignature).toBeUndefined()
   })
 
   it('does not override verifyUpdateCodeSignature on non-Windows platforms', async () => {
@@ -1258,6 +2154,56 @@ describe('updater', () => {
     await vi.waitFor(() => {
       expect(sendMock).toHaveBeenCalledWith('updater:status', { state: 'not-available' })
     })
+    expect(setLastUpdateCheckAt).not.toHaveBeenCalled()
+
+    await vi.advanceTimersByTimeAsync(59 * 60 * 1000)
+    expect(autoUpdaterMock.checkForUpdates).toHaveBeenCalledTimes(1)
+
+    await vi.advanceTimersByTimeAsync(60 * 1000)
+    await vi.waitFor(() => {
+      expect(autoUpdaterMock.checkForUpdates).toHaveBeenCalledTimes(2)
+    })
+    expect(autoUpdaterMock.setFeedURL).toHaveBeenLastCalledWith({
+      provider: 'generic',
+      url: 'https://github.com/stablyai/orca/releases/download/v1.4.27'
+    })
+  })
+
+  it('keeps silent publishing-window fallback on the short retry cadence', async () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date('2026-05-24T21:40:00Z'))
+    appMock.getVersion.mockReturnValue('1.4.26')
+    fetchNewerReleaseTagsMock
+      .mockResolvedValueOnce({
+        tags: [],
+        state: 'not-ready',
+        lastGoodTag: 'v1.4.26'
+      })
+      .mockResolvedValueOnce(['v1.4.27'])
+    autoUpdaterMock.checkForUpdates.mockImplementation(() => {
+      autoUpdaterMock.emit('checking-for-update')
+      return Promise.resolve(undefined)
+    })
+    const setLastUpdateCheckAt = vi.fn()
+    const sendMock = vi.fn()
+    const mainWindow = { webContents: { send: sendMock } }
+
+    const { setupAutoUpdater } = await import('./updater')
+
+    setupAutoUpdater(mainWindow as never, {
+      getLastUpdateCheckAt: () => null,
+      setLastUpdateCheckAt
+    })
+
+    await vi.waitFor(() => {
+      expect(autoUpdaterMock.checkForUpdates).toHaveBeenCalledTimes(1)
+    })
+    await vi.advanceTimersByTimeAsync(1000)
+
+    expect(sendMock).toHaveBeenCalledWith(
+      'updater:status',
+      expect.objectContaining({ state: 'not-available' })
+    )
     expect(setLastUpdateCheckAt).not.toHaveBeenCalled()
 
     await vi.advanceTimersByTimeAsync(59 * 60 * 1000)

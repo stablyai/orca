@@ -52,7 +52,9 @@ export default function RootLayout() {
     }
 
     void Linking.getInitialURL().then((url) => {
-      if (url) handleUrl(url)
+      if (url) {
+        handleUrl(url)
+      }
     })
 
     const sub = Linking.addEventListener('url', ({ url }) => handleUrl(url))
@@ -100,6 +102,14 @@ export default function RootLayout() {
         return
       }
       handledNotificationIdsRef.current.add(notificationId)
+      // Why: RootLayout never unmounts, so cap this tap-dedup set (FIFO) rather
+      // than letting it grow one id per notification tapped for the app's life.
+      if (handledNotificationIdsRef.current.size > 256) {
+        const oldest = handledNotificationIdsRef.current.values().next().value
+        if (oldest !== undefined) {
+          handledNotificationIdsRef.current.delete(oldest)
+        }
+      }
 
       const path = await getNavigationPath(response.notification.request.content.data)
       clearLastNotificationResponse()
@@ -144,6 +154,11 @@ export default function RootLayout() {
             headerTitleStyle: { fontSize: 16, fontWeight: '600' },
             contentStyle: { backgroundColor: colors.bgBase },
             headerShadowVisible: false
+            // Why: deliberately no `orientation` screenOption. react-native-screens
+            // has no value that respects the device rotation lock — even 'default'
+            // calls setRequestedOrientation(UNSPECIFIED) at runtime, overriding the
+            // manifest. Leaving it unset lets the manifest's "fullUser" (set by the
+            // android-respect-rotation-lock config plugin) honor the auto-rotate lock.
           }}
         >
           <Stack.Screen
@@ -158,8 +173,11 @@ export default function RootLayout() {
           <Stack.Screen name="pair-confirm" options={{ headerShown: false }} />
           <Stack.Screen name="settings" options={{ headerShown: false }} />
           <Stack.Screen name="terminal-settings" options={{ headerShown: false }} />
+          <Stack.Screen name="browser-settings" options={{ headerShown: false }} />
+          <Stack.Screen name="voice-settings" options={{ headerShown: false }} />
           <Stack.Screen name="notifications" options={{ headerShown: false }} />
           <Stack.Screen name="troubleshoot" options={{ headerShown: false }} />
+          <Stack.Screen name="connection-log" options={{ headerShown: false }} />
           <Stack.Screen name="about" options={{ headerShown: false }} />
           <Stack.Screen name="h" options={{ headerShown: false }} />
         </Stack>

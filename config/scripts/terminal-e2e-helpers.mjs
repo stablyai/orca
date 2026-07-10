@@ -23,7 +23,7 @@
  *   node config/scripts/terminal-e2e-helpers.mjs --port 9444 --command 'echo hello'
  */
 
-import { execFileSync } from 'child_process'
+import { execFileSync } from 'node:child_process'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
@@ -142,10 +142,7 @@ export class OrcaTerminal {
    */
   probePtyIdWithScreenshot(maxId = 10, screenshotPath = tempScreenshotPath('orca-pty-probe.png')) {
     for (let i = 1; i <= maxId; i++) {
-      evalInRenderer(
-        this.port,
-        `window.api.pty.write('${i}', '\\x03\\x15echo PTY_ID_${i}\\r')`
-      )
+      evalInRenderer(this.port, `window.api.pty.write('${i}', '\\x03\\x15echo PTY_ID_${i}\\r')`)
     }
     sleep(2_000)
     this.screenshot(screenshotPath)

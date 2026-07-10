@@ -249,7 +249,11 @@ export async function discoverSkills(args: {
   )
   const seen = new Map<string, DiscoveredSkill>()
   for (const skill of skillGroups.flat()) {
-    seen.set(skill.skillFilePath, skill)
+    // Why: WSL discovery sets cwd to the WSL home, so home skills can also be
+    // reached through the synthetic repo root. Keep the global home identity.
+    if (!seen.has(skill.skillFilePath)) {
+      seen.set(skill.skillFilePath, skill)
+    }
   }
   return {
     skills: Array.from(seen.values()).sort(compareSkills),

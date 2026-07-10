@@ -33,7 +33,10 @@ vi.mock('./ssh-relay-deploy-helpers', () => ({
     onData: vi.fn(),
     onClose: vi.fn()
   }),
-  execCommand: vi.fn(),
+  execCommand: vi.fn()
+}))
+
+vi.mock('./ssh-remote-node-resolution', () => ({
   resolveRemoteNodePath: vi.fn().mockResolvedValue('/usr/bin/node')
 }))
 
@@ -47,6 +50,7 @@ import type { SshConnection } from './ssh-connection'
 
 function makeMockConnection(): SshConnection {
   return {
+    canRunConcurrentExecCommands: vi.fn().mockReturnValue(false),
     exec: vi.fn().mockResolvedValue({
       on: vi.fn(),
       stderr: { on: vi.fn() },

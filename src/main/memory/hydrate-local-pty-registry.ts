@@ -19,6 +19,7 @@
 
 import { getDaemonProvider } from '../daemon/daemon-init'
 import { DaemonPtyRouter } from '../daemon/daemon-pty-router'
+import { DegradedDaemonPtyProvider } from '../daemon/degraded-daemon-pty-provider'
 import type { DaemonPtyAdapter } from '../daemon/daemon-pty-adapter'
 import type { SessionInfo } from '../daemon/types'
 import { listRegisteredPtys, registerPty } from './pty-registry'
@@ -76,8 +77,13 @@ export async function hydrateLocalPtyRegistryAtBoot(store: Pick<Store, 'getRepos
     const repoConnectionIdByWorktreeId = new Map<string, string | null>()
 
     for (const repo of repos) {
-      const worktrees = await listRepoWorktrees(repo)
       const connectionId = repo.connectionId ?? null
+      if (connectionId) {
+        // Why: SSH PTYs are never registered for local process sampling, so
+        // avoid startup SSH/git enumeration for repos we will skip anyway.
+        continue
+      }
+      const worktrees = await listRepoWorktrees(repo)
       for (const wt of worktrees) {
         const worktreeId = `${repo.id}::${wt.path}`
         repoConnectionIdByWorktreeId.set(worktreeId, connectionId)
@@ -135,13 +141,15 @@ export async function hydrateLocalPtyRegistryAtBoot(store: Pick<Store, 'getRepos
 }
 
 async function collectSessionInfos(
-  provider: DaemonPtyRouter | DaemonPtyAdapter
+  provider: DaemonPtyRouter | DaemonPtyAdapter | DegradedDaemonPtyProvider
 ): Promise<SessionInfo[]> {
   // Why: the router fans `listSessions` out across current + legacy adapters
   // so we get every protocol-version daemon's sessions; the bare-adapter
   // fallback is only the in-process restart edge case.
   const adapters: readonly DaemonPtyAdapter[] =
-    provider instanceof DaemonPtyRouter ? provider.getAllAdapters() : [provider]
+    provider instanceof DaemonPtyRouter || provider instanceof DegradedDaemonPtyProvider
+      ? provider.getAllAdapters()
+      : [provider]
   const out: SessionInfo[] = []
   for (const adapter of adapters) {
     try {

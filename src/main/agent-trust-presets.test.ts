@@ -140,7 +140,7 @@ describe('markCodexProjectTrusted', () => {
   it('writes ~/.codex/config.toml with the project marked trusted', () => {
     const workspace = mkdtempSync(join(tmpdir(), 'orca-codex-ws-'))
     try {
-      const realpath = realpathSync(workspace)
+      const realpath = realpathSync.native(workspace)
       markCodexProjectTrusted(workspace)
       const configPath = join(testState.fakeHomeDir, '.codex', 'config.toml')
       const runtimeConfigPath = join(
@@ -164,7 +164,7 @@ describe('markCodexProjectTrusted', () => {
 
   it('preserves existing config keys and updates an existing project block', () => {
     const workspace = mkdtempSync(join(tmpdir(), 'orca-codex-ws-'))
-    const realpath = realpathSync(workspace)
+    const realpath = realpathSync.native(workspace)
     try {
       const codexDir = join(testState.fakeHomeDir, '.codex')
       const runtimeCodexDir = join(testState.userDataDir, 'codex-runtime-home', 'home')

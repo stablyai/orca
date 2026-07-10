@@ -32,8 +32,26 @@ export type StageAllArea = 'unstaged' | 'untracked'
  */
 export function getStageAllPaths(entries: readonly GitStatusEntry[], area: StageAllArea): string[] {
   return entries
-    .filter((entry) => entry.area === area && entry.conflictStatus !== 'unresolved')
+    .filter((entry) => entry.area === area && isStageableStatusEntry(entry))
     .map((entry) => entry.path)
+}
+
+export function isStageableStatusEntry(entry: GitStatusEntry): boolean {
+  return (
+    (entry.area === 'unstaged' || entry.area === 'untracked') &&
+    entry.conflictStatus !== 'unresolved' &&
+    // Why: changes inside a submodule (lazily expanded) are read-only from the
+    // parent — `git add` here can't stage the submodule's own working tree.
+    !entry.submoduleRoot &&
+    !isSubmoduleWorktreeOnlyChange(entry)
+  )
+}
+
+export function isSubmoduleWorktreeOnlyChange(entry: GitStatusEntry): boolean {
+  const submodule = entry.submodule
+  // Why: parent-repo `git add <submodule>` can stage a changed gitlink commit,
+  // but it cannot stage tracked/untracked file dirtiness inside the submodule.
+  return entry.area === 'unstaged' && !!submodule && !submodule.commitChanged
 }
 
 /**

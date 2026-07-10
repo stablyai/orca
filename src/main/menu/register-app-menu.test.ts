@@ -27,6 +27,7 @@ function buildMenuOptions() {
   return {
     onCheckForUpdates: vi.fn(),
     onOpenSettings: vi.fn(),
+    onOpenSetupGuide: vi.fn(),
     onOpenFeatureTour: vi.fn(),
     onOpenCrashReport: vi.fn(),
     onBeforeReload: vi.fn(),
@@ -38,6 +39,7 @@ function buildMenuOptions() {
     onToggleAppearance: vi.fn(),
     getAppearanceState: vi.fn(() => ({
       showTasksButton: true,
+      showAutomationsButton: true,
       showMobileButton: true,
       showTitlebarAppName: true,
       statusBarVisible: true
@@ -137,7 +139,7 @@ describe('registerAppMenu', () => {
     expect(options.onBeforeReload).toHaveBeenCalledWith({ ignoreCache: true, webContentsId: 102 })
   })
 
-  it('includes prereleases when Check for Updates is clicked with shift held', () => {
+  it('routes Check for Updates modifier clicks to prerelease and perf checks', () => {
     const options = buildMenuOptions()
     registerAppMenu(options)
 
@@ -150,19 +152,42 @@ describe('registerAppMenu', () => {
     )
 
     item?.click?.({} as never, undefined as never, { shiftKey: true } as Electron.KeyboardEvent)
+    item?.click?.({} as never, undefined as never, {} as Electron.KeyboardEvent)
     item?.click?.(
       {} as never,
       undefined as never,
-      { metaKey: true, shiftKey: true } as Electron.KeyboardEvent
+      {
+        shiftKey: true,
+        ...(isMac ? { metaKey: true } : { ctrlKey: true })
+      } as Electron.KeyboardEvent
     )
-    item?.click?.({} as never, undefined as never, {} as Electron.KeyboardEvent)
-    item?.click?.({} as never, undefined as never, { metaKey: true } as Electron.KeyboardEvent)
+    item?.click?.(
+      {} as never,
+      undefined as never,
+      (isMac ? { metaKey: true } : { ctrlKey: true }) as Electron.KeyboardEvent
+    )
+    item?.click?.(
+      {} as never,
+      undefined as never,
+      (isMac ? { ctrlKey: true } : { metaKey: true }) as Electron.KeyboardEvent
+    )
+    item?.click?.(
+      {} as never,
+      undefined as never,
+      {
+        triggeredByAccelerator: true,
+        shiftKey: true,
+        ...(isMac ? { metaKey: true } : { ctrlKey: true })
+      } as Electron.KeyboardEvent
+    )
 
     expect(options.onCheckForUpdates.mock.calls).toEqual([
-      [{ includePrerelease: true }],
-      [{ includePrerelease: true }],
-      [{ includePrerelease: false }],
-      [{ includePrerelease: false }]
+      [{ includePrerelease: true, includePerfPrerelease: false }],
+      [{ includePrerelease: false, includePerfPrerelease: false }],
+      [{ includePrerelease: true, includePerfPrerelease: true }],
+      [{ includePrerelease: false, includePerfPrerelease: true }],
+      [{ includePrerelease: false, includePerfPrerelease: false }],
+      [{ includePrerelease: false, includePerfPrerelease: false }]
     ])
   })
 
@@ -177,6 +202,23 @@ describe('registerAppMenu', () => {
     expect(paletteItem?.accelerator).toBeUndefined()
   })
 
+  it('routes Edit > Paste through Orca coordinated paste ownership', () => {
+    const send = vi.fn()
+    getFocusedWindowMock.mockReturnValue({ webContents: { send } })
+    registerAppMenu(buildMenuOptions())
+
+    const editSubmenu = getSubmenu(getTemplate(), 'Edit')
+    const pasteItem = editSubmenu.find((item) => item.label === 'Paste')
+
+    expect(pasteItem).toBeDefined()
+    expect(pasteItem?.role).toBeUndefined()
+    expect(pasteItem?.accelerator).toBe('CmdOrCtrl+V')
+
+    pasteItem?.click?.({} as never, {} as never, {} as never)
+
+    expect(send).toHaveBeenCalledWith('ui:appMenuPaste')
+  })
+
   it.runIf(!isMac)('puts Settings and Exit under File on Windows/Linux', () => {
     registerAppMenu(buildMenuOptions())
 
@@ -187,17 +229,20 @@ describe('registerAppMenu', () => {
     expect(template.find((item) => item.label === 'Orca')).toBeUndefined()
 
     const fileLabels = getSubmenu(template, 'File').map((item) => item.label)
+    expect(fileLabels).not.toContain(`Export as PDF...\t${isMac ? '⌘⇧E' : 'Ctrl+Shift+E'}`)
+    expect(fileLabels[0]).toBe(`Settings\t${isMac ? '⌘,' : 'Ctrl+,'}`)
     expect(fileLabels).toEqual(
-      expect.arrayContaining([
-        `Export as PDF...\t${isMac ? '⌘⇧E' : 'Ctrl+Shift+E'}`,
-        `Settings\t${isMac ? '⌘,' : 'Ctrl+,'}`,
-        'Exit'
-      ])
+      expect.arrayContaining([`Settings\t${isMac ? '⌘,' : 'Ctrl+,'}`, 'Exit'])
     )
 
     const helpLabels = getSubmenu(template, 'Help').map((item) => item.label)
     expect(helpLabels).toEqual(
-      expect.arrayContaining(['Report Crash...', 'Explore Orca', 'Check for Updates...'])
+      expect.arrayContaining([
+        'Report Crash...',
+        'Getting Started with Orca',
+        'Explore Orca',
+        'Check for Updates...'
+      ])
     )
   })
 
@@ -211,12 +256,31 @@ describe('registerAppMenu', () => {
       expect.arrayContaining(['Check for Updates...', `Settings\t${isMac ? '⌘,' : 'Ctrl+,'}`])
     )
     // Why: on macOS File should NOT duplicate Settings/Exit — those live in
-    // the system app menu, so only Export belongs under File.
-    const fileLabels = getSubmenu(template, 'File').map((item) => item.label)
-    expect(fileLabels).not.toContain(`Settings\t${isMac ? '⌘,' : 'Ctrl+,'}`)
-    expect(fileLabels).not.toContain('Exit')
+    // the system app menu. Without global Export, there is no File item left.
+    expect(template.find((item) => item.label === 'File')).toBeUndefined()
     const helpLabels = getSubmenu(template, 'Help').map((item) => item.label)
-    expect(helpLabels).toEqual(['Report Crash...', undefined, 'Explore Orca'])
+    expect(helpLabels).toEqual([
+      'Report Crash...',
+      undefined,
+      'Explore Orca',
+      'Getting Started with Orca'
+    ])
+  })
+
+  it('routes Getting Started with Orca through its callback', () => {
+    const options = buildMenuOptions()
+    registerAppMenu(options)
+
+    const setupGuideItem = getSubmenu(getTemplate(), 'Help').find(
+      (entry) => entry.label === 'Getting Started with Orca'
+    )
+    expect(setupGuideItem?.accelerator).toBeUndefined()
+
+    const targetWindow = {} as Electron.BaseWindow
+    setupGuideItem?.click?.({} as never, targetWindow, {} as Electron.KeyboardEvent)
+
+    expect(options.onOpenSetupGuide).toHaveBeenCalledTimes(1)
+    expect(options.onOpenSetupGuide).toHaveBeenCalledWith(targetWindow)
   })
 
   it('routes Feature tour through its callback', () => {
@@ -254,6 +318,7 @@ describe('registerAppMenu', () => {
     const options = buildMenuOptions()
     options.getAppearanceState.mockReturnValue({
       showTasksButton: false,
+      showAutomationsButton: false,
       showMobileButton: true,
       showTitlebarAppName: true,
       statusBarVisible: true
@@ -269,6 +334,12 @@ describe('registerAppMenu', () => {
     const tasksItem = appearanceSubmenu.find((item) => item.label === 'Show Tasks Button')
     expect(tasksItem?.type).toBe('checkbox')
     expect(tasksItem?.checked).toBe(false)
+
+    const automationsItem = appearanceSubmenu.find(
+      (item) => item.label === 'Show Automations Button'
+    )
+    expect(automationsItem?.type).toBe('checkbox')
+    expect(automationsItem?.checked).toBe(false)
 
     const mobileItem = appearanceSubmenu.find((item) => item.label === 'Show Orca Mobile Button')
     expect(mobileItem?.type).toBe('checkbox')
@@ -293,6 +364,9 @@ describe('registerAppMenu', () => {
       .find((item) => item.label === 'Show Tasks Button')
       ?.click?.({} as never, {} as never, {} as never)
     appearanceSubmenu
+      .find((item) => item.label === 'Show Automations Button')
+      ?.click?.({} as never, {} as never, {} as never)
+    appearanceSubmenu
       .find((item) => item.label === 'Show Orca Mobile Button')
       ?.click?.({} as never, {} as never, {} as never)
     appearanceSubmenu
@@ -300,6 +374,7 @@ describe('registerAppMenu', () => {
       ?.click?.({} as never, {} as never, {} as never)
 
     expect(options.onToggleAppearance).toHaveBeenCalledWith('showTasksButton')
+    expect(options.onToggleAppearance).toHaveBeenCalledWith('showAutomationsButton')
     expect(options.onToggleAppearance).toHaveBeenCalledWith('showMobileButton')
     expect(options.onToggleAppearance).toHaveBeenCalledWith('showTitlebarAppName')
   })

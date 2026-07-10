@@ -1,8 +1,8 @@
-import { createServer } from 'http'
-import { execFile, execFileSync, spawnSync } from 'child_process'
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'fs'
-import { tmpdir } from 'os'
-import { join } from 'path'
+import { createServer } from 'node:http'
+import { execFile, execFileSync, spawnSync } from 'node:child_process'
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { parse } from 'yaml'
 
@@ -223,5 +223,47 @@ describe('HermesHookService', () => {
         user_message: 'make Hermes good'
       }
     })
+  })
+
+  it('bounds generated plugin payload normalization before JSON encoding', () => {
+    const pythonAvailable = spawnSync('python3', ['--version'], { encoding: 'utf-8' }).status === 0
+    if (!pythonAvailable) {
+      return
+    }
+    new HermesHookService().install()
+
+    const initPath = join(homeDir, 'plugins', _internals.HERMES_PLUGIN_NAME, '__init__.py')
+    const script = [
+      'import importlib.util, json',
+      `spec = importlib.util.spec_from_file_location("orca_status", ${JSON.stringify(initPath)})`,
+      'mod = importlib.util.module_from_spec(spec)',
+      'spec.loader.exec_module(mod)',
+      'payload = mod._payload_for_event("post_tool_call", {',
+      '    "session_id": "sess-1",',
+      '    "tool_name": "BigTool",',
+      '    "args": {"long": "x" * 9000, "items": list(range(200))},',
+      '    "result": {"text": "y" * 9000, "nested": [{"value": i} for i in range(200)]},',
+      '    "duration_ms": 12,',
+      '})',
+      'print(json.dumps(payload))'
+    ].join('\n')
+
+    const output = execFileSync('python3', ['-c', script], {
+      encoding: 'utf-8',
+      timeout: 15_000
+    })
+    const payload = JSON.parse(output) as {
+      args: { long: string; items: unknown[] }
+      result: { text: string; nested: unknown[] }
+      tool_input: { items: unknown[] }
+    }
+
+    expect(payload.args.long).toHaveLength(8192 + '...[truncated]'.length)
+    expect(payload.args.long.endsWith('...[truncated]')).toBe(true)
+    expect(payload.args.items).toHaveLength(51)
+    expect(payload.args.items.at(-1)).toBe('...[truncated]')
+    expect(payload.result.text.endsWith('...[truncated]')).toBe(true)
+    expect(payload.result.nested).toHaveLength(51)
+    expect(payload.tool_input.items).toHaveLength(51)
   })
 })

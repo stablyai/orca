@@ -1,6 +1,6 @@
-import { randomUUID } from 'crypto'
-import { existsSync, readFileSync } from 'fs'
-import { join } from 'path'
+import { randomUUID } from 'node:crypto'
+import { existsSync, readFileSync } from 'node:fs'
+import { join } from 'node:path'
 import { parsePairingCode, type PairingOffer } from './pairing'
 import { hardenExistingSecureFile, writeSecureJsonFile } from './secure-file'
 import {
@@ -9,6 +9,7 @@ import {
   KnownRuntimeEnvironmentSchema,
   RuntimeEnvironmentStoreSchema,
   type KnownRuntimeEnvironment,
+  type RuntimeEnvironmentSource,
   type RuntimeEnvironmentStore
 } from './runtime-environments'
 
@@ -36,7 +37,7 @@ export function listEnvironments(userDataPath: string): KnownRuntimeEnvironment[
 
 export function addEnvironmentFromPairingCode(
   userDataPath: string,
-  args: { name: string; pairingCode: string; now?: number }
+  args: { name: string; pairingCode: string; now?: number; source?: RuntimeEnvironmentSource }
 ): KnownRuntimeEnvironment {
   const offer = parsePairingCode(args.pairingCode)
   if (!offer) {
@@ -59,7 +60,8 @@ export function addEnvironmentFromPairingCode(
     name: args.name,
     now,
     offer,
-    runtimeId: null
+    runtimeId: null,
+    ...(args.source ? { source: args.source } : {})
   })
   const next = {
     version: 1 as const,
@@ -82,6 +84,44 @@ export function removeEnvironment(userDataPath: string, selector: string): Known
   return environment
 }
 
+export function updateEnvironmentFromPairingCode(
+  userDataPath: string,
+  selector: string,
+  args: { pairingCode: string; now?: number }
+): KnownRuntimeEnvironment {
+  const offer = parsePairingCode(args.pairingCode)
+  if (!offer) {
+    throw new RuntimeEnvironmentStoreError(
+      'invalid_argument',
+      'Invalid pairing code. Expected an orca://pair?... URL or bare pairing payload.'
+    )
+  }
+  const store = readEnvironmentStore(userDataPath)
+  const existing = resolveEnvironmentFromStore(store, selector)
+  const now = args.now ?? Date.now()
+  const environment = createEnvironmentFromPairingOffer({
+    id: existing.id,
+    name: existing.name,
+    now: existing.createdAt,
+    offer,
+    runtimeId: existing.runtimeId,
+    ...(existing.source ? { source: existing.source } : {})
+  })
+  const next = {
+    ...environment,
+    createdAt: existing.createdAt,
+    updatedAt: now,
+    lastUsedAt: existing.lastUsedAt
+  }
+  writeEnvironmentStore(userDataPath, {
+    version: 1,
+    environments: store.environments
+      .map((entry) => (entry.id === existing.id ? next : entry))
+      .sort((a, b) => a.name.localeCompare(b.name))
+  })
+  return next
+}
+
 export function resolveEnvironment(
   userDataPath: string,
   selector: string
@@ -96,6 +136,11 @@ export function resolveEnvironmentPairingOffer(
   return getPreferredPairingOffer(resolveEnvironment(userDataPath, selector))
 }
 
+// Why: markEnvironmentUsed runs on every runtime round-trip; persisting lastUsedAt each
+// time forces a secure-file rewrite (ACL hardening), which blocks the main thread on
+// Windows. lastUsedAt only needs coarse freshness, so skip writes within this window.
+const LAST_USED_PERSIST_INTERVAL_MS = 60_000
+
 export function markEnvironmentUsed(
   userDataPath: string,
   selector: string,
@@ -104,6 +149,14 @@ export function markEnvironmentUsed(
   const store = readEnvironmentStore(userDataPath)
   const environment = resolveEnvironmentFromStore(store, selector)
   const now = args.now ?? Date.now()
+  const runtimeIdChanged = args.runtimeId != null && args.runtimeId !== environment.runtimeId
+  const lastUsedIsFresh =
+    environment.lastUsedAt != null &&
+    now >= environment.lastUsedAt &&
+    now - environment.lastUsedAt < LAST_USED_PERSIST_INTERVAL_MS
+  if (!runtimeIdChanged && lastUsedIsFresh) {
+    return
+  }
   const next = store.environments.map((entry) =>
     entry.id === environment.id
       ? {

@@ -1,5 +1,5 @@
-import { createHash } from 'crypto'
-import path from 'path'
+import { createHash } from 'node:crypto'
+import path from 'node:path'
 import type { AppIdentity } from '../../shared/app-identity'
 
 const BASE_APP_NAME = 'Orca'
@@ -22,7 +22,7 @@ function cleanEnvValue(value: string | undefined): string | null {
 
 function lastPathSegment(value: string): string {
   const normalized = value.replace(/\\/g, '/')
-  return normalized.split('/').filter(Boolean).at(-1) ?? value
+  return normalized.split('/').findLast(Boolean) ?? value
 }
 
 function formatLabel(branch: string | null, worktreeName: string | null): string | null {

@@ -15,6 +15,7 @@ describe('onboarding feature setup telemetry validation', () => {
     const selection = {
       browser_use: true,
       computer_use: false,
+      linear_tickets: true,
       orchestration: true,
       selected_count: 2
     }
@@ -45,6 +46,7 @@ describe('onboarding feature setup telemetry validation', () => {
       validate('onboarding_feature_setup_terminal_opened', {
         browser_use: true,
         computer_use: false,
+        linear_tickets: false,
         orchestration: true,
         selected_count: 2,
         command: 'npx skills add https://github.com/stablyai/orca --global'
@@ -64,6 +66,7 @@ describe('onboarding feature setup telemetry validation', () => {
       validate('onboarding_feature_setup_run', {
         browser_use: false,
         computer_use: false,
+        linear_tickets: false,
         orchestration: false,
         selected_count: 3,
         cli_touched: false,
@@ -77,6 +80,7 @@ describe('onboarding feature setup telemetry validation', () => {
       validate('onboarding_feature_setup_terminal_opened', {
         browser_use: true,
         computer_use: false,
+        linear_tickets: false,
         orchestration: true,
         selected_count: 1
       } as never).ok
