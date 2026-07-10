@@ -429,6 +429,88 @@ describe('terminal subscribe buffering', () => {
     }
   })
 
+  it('downgrades mobile initial snapshots until they fit the 512KB byte budget', async () => {
+    const messages: string[] = []
+    const binaryFrames: Uint8Array<ArrayBufferLike>[] = []
+    const cleanups = new Map<string, () => void>()
+    const oversizedSnapshot = 'x'.repeat(600 * 1024)
+    const budgetedSnapshot = 'tail'.repeat(40 * 1024)
+    const runtime = stubRuntime({
+      resolveLeafForHandle: vi.fn().mockReturnValue({ ptyId: 'pty-1' }),
+      readTerminal: vi.fn().mockResolvedValue({ tail: [], truncated: false }),
+      serializeTerminalBuffer: vi.fn(async (_ptyId: string, opts?: { scrollbackRows?: number }) => {
+        if ((opts?.scrollbackRows ?? 0) > 250) {
+          return { data: oversizedSnapshot, cols: 100, rows: 30 }
+        }
+        return { data: budgetedSnapshot, cols: 100, rows: 30, seq: 42 }
+      }),
+      getTerminalSize: vi.fn().mockReturnValue({ cols: 80, rows: 24 }),
+      getMobileDisplayMode: vi.fn().mockReturnValue('mobile-fit'),
+      getLayout: vi.fn().mockReturnValue({ seq: 1 }),
+      isTerminalAlternateScreen: vi.fn().mockReturnValue(false),
+      handleMobileSubscribe: vi.fn().mockResolvedValue(undefined),
+      handleMobileUnsubscribe: vi.fn(),
+      subscribeToTerminalData: vi.fn().mockReturnValue(vi.fn()),
+      subscribeToTerminalResize: vi.fn().mockReturnValue(vi.fn()),
+      subscribeToFitOverrideChanges: vi.fn().mockReturnValue(vi.fn()),
+      registerSubscriptionCleanup: vi.fn((id: string, cleanup: () => void) => {
+        cleanups.set(id, cleanup)
+      }),
+      cleanupSubscription: vi.fn((id: string) => {
+        const cleanup = cleanups.get(id)
+        cleanups.delete(id)
+        cleanup?.()
+      }),
+      waitForTerminal: vi.fn(() => new Promise<RuntimeTerminalWait>(() => {})),
+      sendTerminal: vi.fn().mockResolvedValue({ accepted: true }),
+      updateMobileViewport: vi.fn().mockResolvedValue(false)
+    })
+    const dispatcher = new RpcDispatcher({ runtime, methods: TERMINAL_METHODS })
+
+    const dispatchPromise = dispatcher.dispatchStreaming(
+      makeRequest('terminal.subscribe', {
+        terminal: 'terminal-1',
+        client: { id: 'phone-1', type: 'mobile' },
+        capabilities: { terminalBinaryStream: 1 }
+      }),
+      (msg) => messages.push(msg),
+      {
+        connectionId: 'conn-mobile-budget',
+        sendBinary: (bytes) => binaryFrames.push(bytes)
+      }
+    )
+
+    await vi.waitFor(() =>
+      expect(messages.some((msg) => JSON.parse(msg).result?.type === 'subscribed')).toBe(true)
+    )
+
+    expect(runtime.serializeTerminalBuffer).toHaveBeenNthCalledWith(1, 'pty-1', {
+      scrollbackRows: 1000
+    })
+    expect(runtime.serializeTerminalBuffer).toHaveBeenNthCalledWith(2, 'pty-1', {
+      scrollbackRows: 500
+    })
+    expect(runtime.serializeTerminalBuffer).toHaveBeenNthCalledWith(3, 'pty-1', {
+      scrollbackRows: 250
+    })
+    const decodedFrames = binaryFrames.map((frame) => decodeTerminalStreamFrame(frame))
+    const snapshotStart = decodedFrames.find(
+      (frame) => frame?.opcode === TerminalStreamOpcode.SnapshotStart
+    )
+    expect(snapshotStart && decodeTerminalStreamJson(snapshotStart.payload)).toMatchObject({
+      truncatedByByteBudget: true
+    })
+    const snapshotData = decodedFrames
+      .filter((frame) => frame?.opcode === TerminalStreamOpcode.SnapshotChunk)
+      .map((frame) => (frame ? decodeTerminalStreamText(frame.payload) : ''))
+      .join('')
+    expect(snapshotData).toBe(budgetedSnapshot)
+    expect(Buffer.byteLength(snapshotData, 'utf8')).toBeLessThanOrEqual(512 * 1024)
+
+    runtime.cleanupSubscription('terminal-1:phone-1')
+    await dispatchPromise
+  })
+
   it('drops stale mobile resize re-stream completions for legacy binary streams', async () => {
     const messages: string[] = []
     const binaryFrames: Uint8Array<ArrayBufferLike>[] = []

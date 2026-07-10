@@ -246,6 +246,9 @@ describe('terminal output batching', () => {
         .map((frame) => decodeTerminalStreamFrame(frame))
         .filter((frame) => frame?.opcode === TerminalStreamOpcode.Output)
       expect(outputFrames.length).toBeGreaterThan(1)
+      for (const frame of outputFrames) {
+        expect(frame?.payload.byteLength ?? 0).toBeLessThanOrEqual(48 * 1024)
+      }
       expect(firstOutputEncodeCount).toBe(1)
       expect(
         outputFrames.map((frame) => (frame ? decodeTerminalStreamText(frame.payload) : '')).join('')

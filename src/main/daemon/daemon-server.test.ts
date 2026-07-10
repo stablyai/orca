@@ -362,6 +362,131 @@ describe('DaemonServer', () => {
       }
     })
 
+    it('delivers exit for sessions attached before a reconnect to the current stream socket', async () => {
+      vi.useFakeTimers()
+      try {
+        let subprocess: ReturnType<typeof createMockSubprocess>
+        server = new DaemonServer({
+          socketPath,
+          tokenPath,
+          spawnSubprocess: () => {
+            subprocess = createMockSubprocess()
+            return subprocess
+          }
+        })
+        const daemon = server as unknown as DaemonServerPrivate
+        const oldControlSocket = { destroy: vi.fn() } as unknown as Socket
+        const oldStreamSocket = {
+          destroyed: false,
+          destroy: vi.fn(),
+          write: vi.fn(() => true)
+        } as unknown as Socket & { write: ReturnType<typeof vi.fn> }
+
+        daemon.clients.set('client-1', {
+          clientId: 'client-1',
+          controlSocket: oldControlSocket,
+          streamSocket: oldStreamSocket
+        })
+
+        await daemon.routeRequest('client-1', {
+          id: 'req-1',
+          type: 'createOrAttach',
+          payload: { sessionId: 'test-session', cols: 80, rows: 24 }
+        })
+
+        // Same-clientId reconnect: a new ConnectedClient replaces the old one and
+        // the old sockets are destroyed, but the createOrAttach closure still
+        // holds the replaced object.
+        const newStreamSocket = {
+          destroyed: false,
+          destroy: vi.fn(),
+          write: vi.fn(() => true)
+        } as unknown as Socket & { write: ReturnType<typeof vi.fn> }
+        daemon.clients.set('client-1', {
+          clientId: 'client-1',
+          controlSocket: { destroy: vi.fn() } as unknown as Socket,
+          streamSocket: newStreamSocket
+        })
+        ;(oldStreamSocket as { destroyed: boolean }).destroyed = true
+
+        subprocess!._simulateExit(7)
+
+        const oldWrites = oldStreamSocket.write.mock.calls.map((c) => String(c[0]))
+        const newWrites = newStreamSocket.write.mock.calls.map((c) => String(c[0]))
+        expect(oldWrites.some((w) => w.includes('"event":"exit"'))).toBe(false)
+        expect(newWrites.some((w) => w.includes('"event":"exit"') && w.includes('"code":7'))).toBe(
+          true
+        )
+      } finally {
+        vi.useRealTimers()
+      }
+    })
+
+    it('keeps the exit event behind backpressured stream output', async () => {
+      vi.useFakeTimers()
+      try {
+        let subprocess: ReturnType<typeof createMockSubprocess>
+        server = new DaemonServer({
+          socketPath,
+          tokenPath,
+          spawnSubprocess: () => {
+            subprocess = createMockSubprocess()
+            return subprocess
+          }
+        })
+        const daemon = server as unknown as DaemonServerPrivate
+        const controlSocket = { destroy: vi.fn() } as unknown as Socket
+        const writes: string[] = []
+        let drainHandler: (() => void) | null = null
+        const streamSocket = {
+          destroyed: false,
+          destroy: vi.fn(),
+          write: vi.fn((line: string) => {
+            writes.push(String(line))
+            // First accepted write signals backpressure; later writes are accepted.
+            return writes.length !== 1
+          }),
+          once: vi.fn((event: string, cb: () => void) => {
+            if (event === 'drain') {
+              drainHandler = cb
+            }
+          }),
+          off: vi.fn()
+        } as unknown as Socket & { write: ReturnType<typeof vi.fn> }
+
+        daemon.clients.set('client-1', {
+          clientId: 'client-1',
+          controlSocket,
+          streamSocket
+        })
+
+        await daemon.routeRequest('client-1', {
+          id: 'req-1',
+          type: 'createOrAttach',
+          payload: { sessionId: 'test-session', cols: 80, rows: 24 }
+        })
+
+        subprocess!._simulateData('first')
+        vi.advanceTimersByTime(8)
+        expect(writes).toHaveLength(1)
+
+        subprocess!._simulateData('final-tail')
+        vi.advanceTimersByTime(8)
+        expect(writes).toHaveLength(1)
+
+        subprocess!._simulateExit(42)
+        expect(writes.some((w) => w.includes('"event":"exit"'))).toBe(false)
+
+        drainHandler!()
+        const tailIndex = writes.findIndex((w) => w.includes('final-tail'))
+        const exitIndex = writes.findIndex((w) => w.includes('"event":"exit"'))
+        expect(tailIndex).toBeGreaterThan(-1)
+        expect(exitIndex).toBeGreaterThan(tailIndex)
+      } finally {
+        vi.useRealTimers()
+      }
+    })
+
     it('flushes pending batched stream output before the exit event', async () => {
       vi.useFakeTimers()
       try {

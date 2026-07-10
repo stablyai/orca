@@ -2082,7 +2082,7 @@
       "id": "terminal-performance.daemon-stream-backpressure",
       "title": "Daemon terminal streams respect socket backpressure under output floods",
       "maturity": "experimental",
-      "protection": "none",
+      "protection": "partial",
       "owner": "terminal-performance",
       "layer": "daemon-provider-contract",
       "surfaces": [
@@ -2100,30 +2100,89 @@
       "providers": [
         "daemon"
       ],
-      "coveredPlatforms": [],
+      "coveredPlatforms": [
+        "macos"
+      ],
       "coveredProviders": [],
-      "coverageNotes": "Registered gap on main. The daemon batcher write(false)/drain contracts exist only on the pending reliability stack. It registers here with its owning split PR.",
+      "coverageNotes": "Deterministic daemon socket write/drain contracts with a fake socket, plus live-socket contracts against a real DaemonServer on a real unix socket with a genuinely stalled reader (kernel-level write(false)/drain). The queue byte bound is soft by one frame: the sole remaining line is never dropped, so the effective cap is maxQueuedBytes plus one frame (<= the NDJSON line cap). Active key latency artifacts and the renderer ACK slice remain gaps (pending perf slice B); Windows named-pipe drain semantics are unexercised in the live regime.",
       "motivatingLinks": [
         "https://github.com/stablyai/orca/pull/6836",
         "https://github.com/stablyai/orca/pull/6858"
       ],
       "invariant": "Daemon terminal output floods must pause when socket writes return false, resume on drain, keep buffered bytes bounded, and not starve focused input.",
       "oracle": "The current executable slice injects a slow socket and asserts write(false)/drain ordering, bounded queued daemon stream bytes, close/error listener cleanup, newest-tail preservation under sustained pressure, and flush-immediate cross-session priority ahead of unrelated background backlog on drain. Active input latency remains part of the broader perf gate.",
-      "commands": [],
-      "testFiles": [],
-      "assertionRefs": [],
-      "evidenceRuns": [],
+      "commands": [
+        "pnpm exec vitest run --config config/vitest.config.ts src/main/daemon/daemon-stream-data-batcher.test.ts src/main/daemon/daemon-server.test.ts",
+        "pnpm exec vitest run --config config/vitest.config.ts src/main/daemon/daemon-stream-data-batcher.test.ts src/main/daemon/daemon-server.test.ts src/main/daemon/daemon-server.live-socket.test.ts"
+      ],
+      "testFiles": [
+        "src/main/daemon/daemon-stream-data-batcher.test.ts",
+        "src/main/daemon/daemon-server.test.ts",
+        "src/main/daemon/daemon-server.live-socket.test.ts"
+      ],
+      "assertionRefs": [
+        {
+          "file": "src/main/daemon/daemon-stream-data-batcher.test.ts",
+          "assertions": [
+            "stream writes pause when the socket applies backpressure and resume on drain",
+            "later stream data queues behind a backpressured socket until drain",
+            "interactive session output is prioritized over unrelated backpressured backlog on drain",
+            "queued stream data stays bounded while a socket remains backpressured",
+            "global cleanup clears clients that only have backpressured stream writes",
+            "writes aimed at a destroyed socket are dropped without clearing the live queue or leaking drain listeners"
+          ]
+        },
+        {
+          "file": "src/main/daemon/daemon-server.test.ts",
+          "assertions": [
+            "exit events do not overtake backpressured stream output; the exit frame is written after the drained tail",
+            "interactive bypass and exit-flush ordering hold at the daemon-server seam",
+            "exit for sessions attached before a same-clientId reconnect is delivered to the current stream socket, not the stale captured one"
+          ]
+        },
+        {
+          "file": "src/main/daemon/daemon-server.live-socket.test.ts",
+          "assertions": [
+            "queued stream bytes stay bounded against a stalled real socket (kernel-level backpressure)",
+            "the stream is lossless and ordered after drain when the backlog stays under the queue bound",
+            "the newest contiguous tail survives when the backlog exceeds the bound (single gap, tail intact)",
+            "a session's exit frame stays behind its drained output tail on a real socket",
+            "interactive echo jumps unrelated queued backlog on drain",
+            "exit routes through the current stream socket after a same-clientId reconnect, behind the new socket's queued tail"
+          ]
+        }
+      ],
+      "evidenceRuns": [
+        {
+          "date": "2026-07-05",
+          "runner": "local",
+          "platform": "macos",
+          "command": "pnpm exec vitest run --config config/vitest.config.ts src/main/daemon/daemon-stream-data-batcher.test.ts src/main/daemon/daemon-server.test.ts",
+          "result": "passed",
+          "durationSeconds": 0.7,
+          "summary": "2 test files passed, 34 tests passed; queue contracts, exit-ordering, stale-socket reconnect exit routing, and destroyed-socket guard — the latter two red-proven from the Fable review round."
+        },
+        {
+          "date": "2026-07-06",
+          "runner": "local",
+          "platform": "macos",
+          "command": "pnpm exec vitest run --config config/vitest.config.ts src/main/daemon/daemon-stream-data-batcher.test.ts src/main/daemon/daemon-server.test.ts src/main/daemon/daemon-server.live-socket.test.ts",
+          "result": "passed",
+          "durationSeconds": 5.2,
+          "summary": "34 unit contracts plus 6 live-socket contracts against a real unix socket with a genuinely stalled reader; live rig red-proven three ways (direct exit write, stale captured client, 64KB queue bound each tripped exactly the expected tests). Real-PTY flood probe on the same day: daemon-side buffered bytes 69.4MB unbounded on the merge-base vs 8.4MB bounded on this branch under the same stalled-reader seq flood."
+        }
+      ],
       "runtimeBudget": {
         "p95Seconds": 60,
         "scope": "daemon provider-contract gate"
       },
       "flakeHistory": {
-        "status": "unknown",
-        "evidence": "Focused daemon stream backpressure contract runs locally; needs soak history before promotion."
+        "status": "soaking",
+        "evidence": "100/100 consecutive local green runs of the gate command on 2026-07-06 (macOS, 124s total); needs aggregated CI history before promotion."
       },
       "redGreenEvidence": {
         "status": "partial",
-        "evidence": "Tests assert daemon stream writes pause after socket write(false), later stream data queues behind the pressured socket, flush-immediate output from another session is prioritized ahead of unrelated queued background backlog on drain while preserving per-session order, queued lines resume on drain, global cleanup and close/error clear pending drain listeners, and queued bytes are bounded by preserving priority output plus the newest tail. Needs intentional-break artifact plus active-input latency proof before promotion."
+        "evidence": "The exit-ordering regression test was proven red against the pre-fix branch (exit frame written directly while output sat in the backpressure queue) and green after routing exit through writeEventLine. The five queue contracts were developed red-first on the reliability stack. A second (Fable) review round red-proved two more: a stale onExit client reference could wipe the live queue via clear-on-mismatch after a same-clientId reconnect, and destroyed-socket writes leaked never-draining pending entries."
       },
       "performanceBudget": {
         "required": true,
@@ -2135,9 +2194,9 @@
         "Pair with the broader output-backpressure budget before blocking."
       ],
       "knownGaps": [
-        "No executable coverage on main yet; the slice lives on the pending fix-terminal-reliability stack.",
-        "Current command is daemon batcher contract coverage, not live daemon/Electron perf.",
-        "Active input latency is not proven in live daemon/Electron perf."
+        "No active-input key latency metric artifact yet.",
+        "Windows named-pipe drain semantics are unexercised in the live regime (unit contracts are platform-neutral; live rig evidence is unix-socket macOS).",
+        "The renderer/main ACK and pending-cap extensions arrive with the second perf slice (pty.ts / pty-connection.ts hunks)."
       ],
       "demotionRule": "Cannot promote if backpressure is inferred only from renderer output success."
     },
@@ -2400,7 +2459,7 @@
         "macos"
       ],
       "coveredProviders": [],
-      "coverageNotes": "Local macOS evidence over the runtime-RPC stream budgets on main@1282f5c2d. The pending stack adds byte-exact 512KB/2MB/256KB/48KB budget assertions; legacy JSON subscribe parity remains undecided.",
+      "coverageNotes": "Local macOS evidence over the runtime-RPC stream budgets on main@1282f5c2d. The 512KB mobile initial-snapshot budget is now byte-exact; remaining byte-exact 2MB/256KB/48KB assertions arrive with the pending stack; legacy JSON subscribe parity remains undecided.",
       "motivatingLinks": [
         "https://github.com/stablyai/orca/pull/6951",
         "https://github.com/stablyai/orca/pull/6955",
@@ -2422,7 +2481,8 @@
           "assertions": [
             "legacy binary output queued during initial snapshot serialization stays bounded",
             "stale mobile resize re-stream completions are dropped for legacy binary streams",
-            "aborted stream signals do not register stale listeners"
+            "aborted stream signals do not register stale listeners",
+            "mobile initial snapshots downgrade until they fit the 512KB byte budget"
           ]
         },
         {
@@ -2450,6 +2510,15 @@
           "result": "passed",
           "durationSeconds": 3.8,
           "summary": "3 test file(s) passed, 28 tests passed on main@1282f5c2d in a clean checkout."
+        },
+        {
+          "date": "2026-07-03",
+          "runner": "local",
+          "platform": "macos",
+          "command": "pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/rpc/terminal-subscribe-buffer.test.ts src/main/runtime/rpc/terminal-output-batching.test.ts src/main/runtime/rpc/terminal-multiplex.test.ts",
+          "result": "passed",
+          "durationSeconds": 3.3,
+          "summary": "3 test files passed, 29 tests passed, including the new byte-exact 512KB mobile initial-snapshot budget test."
         }
       ],
       "runtimeBudget": {

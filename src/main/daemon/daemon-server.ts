@@ -311,8 +311,17 @@ export class DaemonServer {
               this.log.log('session-exited', { sessionId: p.sessionId, code })
               this.streamDataBatcher.flush(clientId)
               this.lastInputAtBySessionId.delete(p.sessionId)
-              if (client?.streamSocket) {
-                client.streamSocket.write(
+              // Why: the client captured at createOrAttach is stale after a
+              // same-clientId reconnect replaces it; resolve the current owner
+              // so exit frames follow the live socket, not a destroyed one.
+              const liveClient = this.clients.get(clientId)
+              if (liveClient?.streamSocket) {
+                // Why: exit must ride the same ordered path as stream data so it
+                // cannot overtake output queued behind a backpressured socket.
+                this.streamDataBatcher.writeEventLine(
+                  clientId,
+                  liveClient.streamSocket,
+                  p.sessionId,
                   encodeNdjson({
                     type: 'event',
                     event: 'exit',
@@ -447,7 +456,10 @@ export class DaemonServer {
     // Why: write/resize are notification-heavy and intentionally do not wait
     // for replies. If their target session is gone, this synthetic exit is the
     // only signal the renderer gets to clear stale terminal pane bindings.
-    client.streamSocket.write(
+    this.streamDataBatcher.writeEventLine(
+      client.clientId,
+      client.streamSocket,
+      sessionId,
       encodeNdjson({
         type: 'event',
         event: 'exit',
