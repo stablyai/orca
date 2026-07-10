@@ -1733,7 +1733,10 @@
         "searchIssues": "Buscar issues",
         "useIssueNumber": "Usar issue #{{value0}}",
         "noMatchingIssuesLoaded": "No se cargaron issues coincidentes.",
-        "editReviewersWithCurrent": "Editar revisores: {{value0}}"
+        "editReviewersWithCurrent": "Editar revisores: {{value0}}",
+        "linearEmptyAttributeFilter": "Ningún issue coincide con los filtros seleccionados. Limpia un filtro o prueba con otros criterios.",
+        "linearEmptyUnfilteredScope": "No hay issues en el alcance de este espacio de trabajo. Intenta buscar o ajustar los equipos.",
+        "linearFetchMore": "Cargar más"
       },
       "Terminal": {
         "73768427cf": "Cerrar",
@@ -3037,7 +3040,9 @@
             "grokUsageDetails": "Open Grok usage details",
             "5131f6a8a7": "Uso de Grok",
             "8e2c5b7d43": "Abrir detalles de uso de Grok",
-            "remoteServerLabel": "Servidor remoto"
+            "remoteServerLabel": "Servidor remoto",
+            "grokUsageAria": "Abrir detalles de uso de Grok",
+            "grokUsageMenu": "Uso de Grok"
           },
           "StatusBarUsageEmptyCta": {
             "828c764a79": "Conectar una cuenta",
@@ -3385,7 +3390,8 @@
           "b2cf4310ce": "Resumen",
           "908c470587": "codex",
           "eb6a066185": "claude",
-          "eee19cfade": "resumen"
+          "eee19cfade": "resumen",
+          "grokUsageTab": "Grok"
         },
         "UsageOverviewPane": {
           "22ed1b7669": "sesiones",
@@ -3437,7 +3443,12 @@
             "0e2a0b6431": "uso",
             "372debfac0": "estadísticas",
             "26bb901fcd": "Estadísticas de Orca más analíticas de uso combinadas de Claude, Codex y OpenCode: tokens, caché, modelos y sesiones.",
-            "cb2430ae6a": "Estadísticas y uso"
+            "cb2430ae6a": "Estadísticas y uso",
+            "f8a1b2c3d4": "grok",
+            "e7f0a1b2c3": "suscripción",
+            "d6e9f0a1b2": "créditos",
+            "a3b6c7d8e9": "uso de grok",
+            "9f2a3b4c5d": "xai"
           }
         },
         "usage": {
@@ -3487,6 +3498,17 @@
           "faf3444859": "Entrada",
           "a8b7487ff7": "Salida",
           "cfe2282ffa": "Desconocido"
+        },
+        "GrokUsagePane": {
+          "g8h9i0j1k2": "Uso de Grok",
+          "b2d3e4f5c6": "Créditos semanales de suscripción desde OAuth de Grok CLI (~/.grok/auth.json). Es la misma fuente que la barra de estado.",
+          "c3e4f5a6b7": "Configurar en Cuentas",
+          "h9i0j1k2l3": " • {{value0}}",
+          "i0j1k2l3m4": "Actualizar uso de Grok",
+          "d4f5a6b7c8": "Actualizar",
+          "e5a6b7c8d9": "Créditos semanales usados",
+          "f6b7c8d9e0": "Restablecimiento del periodo de facturación",
+          "a7b8c9d0e1": "Configuración de la cuenta de Grok"
         }
       },
       "sparse": {
@@ -4650,7 +4672,17 @@
           "87412c2a68": "Se terminó {{value0}} sesión.",
           "a2f040ac1c": "Se terminaron {{value0}} sesiones.",
           "63520148e2": "La sesión {{value0}} se negó a salir.",
-          "cc0a26cb14": "{{value0}} sesiones se negaron a salir."
+          "cc0a26cb14": "{{value0}} sesiones se negaron a salir.",
+          "71a8d342b0": "Terminal tabs absent: {{value0}}/{{value1}}. Failed close attempts: {{value2}}. Exact PTY shutdown requests accepted: {{value3}}; failed: {{value4}}.",
+          "2e57c1a940": "El resultado del apagado del daemon no está verificado porque su solicitud de gestión falló.",
+          "993af6052c": "La gestión del daemon reportó salida: {{value0}}/{{value1}}; aún presente antes de la limpieza exacta: {{value2}}.",
+          "1f0d8ac762": "La limpieza del terminal terminó con errores.",
+          "80b6ea14cf": "La limpieza del terminal terminó con advertencias.",
+          "47cd2a50e9": "No se reportaron sesiones ni pestañas de terminal.",
+          "c34fb1098d": "Las pestañas de terminal se cerraron y se solicitó el apagado.",
+          "d9657ac204": "Se solicitó el apagado de la sesión de terminal.",
+          "e8f25bd903": "No se pudo completar la limpieza del terminal.",
+          "a702d4196e": "Esto cierra cada pestaña de terminal en todos los espacios de trabajo y solicita el apagado de sus sesiones de terminal actuales. Cualquier trabajo de terminal no guardado se pierde. El daemon en sí continúa ejecutándose y se pueden abrir terminales nuevas inmediatamente. Esta acción no se puede deshacer."
         }
       },
       "setup": {
@@ -6942,7 +6974,13 @@
             "733f9e2a93": "Uso de MiniMax",
             "f8374c3151": "Pega tu cookie de sesión de platform.minimax.io para obtener límites de uso locales.",
             "913f2f40f9": "Grok Accounts",
-            "4f0a71c893": "Optional account switching for Grok using isolated GROK_HOME directories."
+            "4f0a71c893": "Optional account switching for Grok using isolated GROK_HOME directories.",
+            "f4a8c2e1b7": "Uso de Grok (xAI)",
+            "e3b7d1f9a2": "Inicio de sesión OAuth mediante Grok CLI (grok login) para el uso de créditos semanales.",
+            "d2c6a0e8f1": "grok",
+            "c1b5f9d7e0": "xai",
+            "b0a4e8c6d9": "OAuth",
+            "a9f3d7b5c8": "inicio de sesión"
           }
         },
         "advanced": {
@@ -7160,7 +7198,11 @@
             "antigravityUsageDescription": "Show Antigravity subscription usage in the status bar.",
             "antigravityUsageTitle": "Antigravity Usage",
             "798169c7f4": "Uso de Grok",
-            "b286fc6d86": "Muestra el uso de la suscripción de Grok en la barra de estado."
+            "b286fc6d86": "Muestra el uso de la suscripción de Grok en la barra de estado.",
+            "f8e2a1c4b6": "Uso de Grok",
+            "e7d1b0f3a5": "Muestra el uso semanal de créditos de Grok desde OAuth de Grok CLI.",
+            "d6c0a9e2f4": "grok",
+            "c5b9f8d1e3": "xai"
           }
         },
         "auto": {
@@ -8938,7 +8980,20 @@
           "e74831fb6b": "Active",
           "afd4795eef": "Use your current system Grok login.",
           "264b67cb71": "No managed Grok accounts. Orca will use the system default Grok login until you add one here.",
-          "8a0f870153": "Re-authenticate"
+          "8a0f870153": "Re-authenticate",
+          "a1b2c3d4e5": "Grok (xAI)",
+          "f6e5d4c3b2": "Muestra el uso semanal de créditos desde tu inicio de sesión en Grok CLI (archivo de sesión ~/.grok/auth.json).",
+          "0d8e77bc40": "Documentación de Grok CLI",
+          "ad47a33f72": "Cargando…",
+          "b2c3d4e5f6": "Sesión iniciada",
+          "c3d4e5f6a7": "Sesión iniciada. Orca solo lee ese archivo en disco; ejecuta grok login de nuevo si falla el uso.",
+          "d4e5f6a7b8": "Sesión vencida; ejecuta grok login en una terminal para renovarla.",
+          "e5f6a7b8c9": "No has iniciado sesión en Grok CLI",
+          "f6a7b8c9d0": "En una terminal, ejecuta grok login y luego haz clic en Actualizar uso aquí.",
+          "3325d996cb": "Actualizar uso",
+          "a8f3e2c1b4": "Créditos semanales",
+          "b7e2d9f0a3": "El mismo porcentaje de créditos semanales que la pantalla grok /usage en la terminal.",
+          "c6d1a8f4e2": "Se restablece {{when}}"
         },
         "linear": {
           "agent": {
@@ -12790,6 +12845,29 @@
             }
           }
         }
+      },
+      "linear-issue-attribute-filter-dropdowns": {
+        "removeFilter": "Eliminar filtro de {{value0}}",
+        "teamRequired": "Selecciona un equipo para cargar el estado, asignatarios y etiquetas de este espacio de trabajo.",
+        "filters": "Filtros",
+        "allWorkspacesTitle": "Selecciona un espacio de trabajo",
+        "allWorkspacesBody": "Los filtros de estado, asignatario y etiquetas usan IDs de un solo espacio de trabajo de Linear. Elige un espacio de trabajo para filtrar por esos atributos.",
+        "optionsFromTeam": "Opciones de {{team}}",
+        "clearAll": "Limpiar todos los filtros"
+      },
+      "linear-issue-attribute-filter-sections": {
+        "status": "Estado",
+        "priority": "Prioridad",
+        "assignee": "Asignatario",
+        "unassigned": "Sin asignar",
+        "labels": "Etiquetas",
+        "countSelected": "{{count}} seleccionados",
+        "selected": "seleccionados",
+        "searchPriority": "Filtrar prioridad…",
+        "searchStatus": "Filtrar estado…",
+        "searchLabels": "Filtrar etiquetas…",
+        "searchAssignee": "Filtrar asignatario…",
+        "back": "Atrás"
       }
     },
     "i18n": {

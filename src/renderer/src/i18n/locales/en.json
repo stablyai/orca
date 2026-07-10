@@ -1733,7 +1733,10 @@
         "searchIssues": "Search issues",
         "useIssueNumber": "Use issue #{{value0}}",
         "noMatchingIssuesLoaded": "No matching issues loaded.",
-        "editReviewersWithCurrent": "Edit reviewers: {{value0}}"
+        "editReviewersWithCurrent": "Edit reviewers: {{value0}}",
+        "linearEmptyAttributeFilter": "No issues match the selected filters. Clear a filter or try different criteria.",
+        "linearEmptyUnfilteredScope": "No issues in this workspace scope. Try searching or adjusting teams.",
+        "linearFetchMore": "Fetch more"
       },
       "Terminal": {
         "73768427cf": "Close",
@@ -3037,7 +3040,9 @@
             "grokUsageDetails": "Open Grok usage details",
             "5131f6a8a7": "Grok Usage",
             "8e2c5b7d43": "Open Grok usage details",
-            "remoteServerLabel": "Remote server"
+            "remoteServerLabel": "Remote server",
+            "grokUsageAria": "Open Grok usage details",
+            "grokUsageMenu": "Grok Usage"
           },
           "StatusBarUsageEmptyCta": {
             "828c764a79": "Connect an account",
@@ -3385,7 +3390,8 @@
           "b2cf4310ce": "Overview",
           "908c470587": "codex",
           "eb6a066185": "claude",
-          "eee19cfade": "overview"
+          "eee19cfade": "overview",
+          "grokUsageTab": "Grok"
         },
         "UsageOverviewPane": {
           "22ed1b7669": "sessions",
@@ -3437,7 +3443,12 @@
             "0e2a0b6431": "usage",
             "372debfac0": "stats",
             "26bb901fcd": "Orca stats plus combined Claude, Codex, and OpenCode usage analytics, tokens, cache, models, and sessions.",
-            "cb2430ae6a": "Stats & Usage"
+            "cb2430ae6a": "Stats & Usage",
+            "f8a1b2c3d4": "grok",
+            "e7f0a1b2c3": "subscription",
+            "d6e9f0a1b2": "credits",
+            "a3b6c7d8e9": "grok usage",
+            "9f2a3b4c5d": "xai"
           }
         },
         "usage": {
@@ -3487,6 +3498,17 @@
           "faf3444859": "Input",
           "a8b7487ff7": "Output",
           "cfe2282ffa": "Unknown"
+        },
+        "GrokUsagePane": {
+          "g8h9i0j1k2": "Grok usage",
+          "b2d3e4f5c6": "Weekly subscription credits from Grok CLI OAuth (~/.grok/auth.json). Same source as the status bar.",
+          "c3e4f5a6b7": "Set up in Accounts",
+          "h9i0j1k2l3": " • {{value0}}",
+          "i0j1k2l3m4": "Refresh Grok usage",
+          "d4f5a6b7c8": "Refresh",
+          "e5a6b7c8d9": "Weekly credits used",
+          "f6b7c8d9e0": "Billing period reset",
+          "a7b8c9d0e1": "Grok account settings"
         }
       },
       "sparse": {
@@ -4650,7 +4672,17 @@
           "87412c2a68": "Killed {{value0}} session.",
           "a2f040ac1c": "Killed {{value0}} sessions.",
           "63520148e2": "{{value0}} session refused to exit.",
-          "cc0a26cb14": "{{value0}} sessions refused to exit."
+          "cc0a26cb14": "{{value0}} sessions refused to exit.",
+          "71a8d342b0": "Terminal tabs absent: {{value0}}/{{value1}}. Failed close attempts: {{value2}}. Exact PTY shutdown requests accepted: {{value3}}; failed: {{value4}}.",
+          "2e57c1a940": "The daemon shutdown result is unverified because its management request failed.",
+          "993af6052c": "Daemon management reported exited: {{value0}}/{{value1}}; still present before exact cleanup: {{value2}}.",
+          "1f0d8ac762": "Terminal cleanup finished with errors.",
+          "80b6ea14cf": "Terminal cleanup finished with warnings.",
+          "47cd2a50e9": "No sessions or terminal tabs were reported.",
+          "c34fb1098d": "Terminal tabs closed and shutdown requested.",
+          "d9657ac204": "Terminal session shutdown requested.",
+          "e8f25bd903": "Couldn’t finish terminal cleanup.",
+          "a702d4196e": "This closes every terminal tab across all workspaces and requests shutdown for its current terminal sessions. Any unsaved terminal work is lost. The daemon itself keeps running, and new terminals can be opened immediately. This can't be undone."
         }
       },
       "setup": {
@@ -6979,7 +7011,13 @@
             "733f9e2a93": "MiniMax Usage",
             "f8374c3151": "Paste your platform.minimax.io session cookie for local rate-limit fetching.",
             "913f2f40f9": "Grok Accounts",
-            "4f0a71c893": "Optional account switching for Grok using isolated GROK_HOME directories."
+            "4f0a71c893": "Optional account switching for Grok using isolated GROK_HOME directories.",
+            "f4a8c2e1b7": "Grok (xAI) Usage",
+            "e3b7d1f9a2": "OAuth sign-in via Grok CLI (grok login) for weekly credit usage.",
+            "d2c6a0e8f1": "grok",
+            "c1b5f9d7e0": "xai",
+            "b0a4e8c6d9": "oauth",
+            "a9f3d7b5c8": "login"
           }
         },
         "advanced": {
@@ -7197,7 +7235,11 @@
             "antigravityUsageDescription": "Show Antigravity subscription usage in the status bar.",
             "antigravityUsageTitle": "Antigravity Usage",
             "798169c7f4": "Grok Usage",
-            "b286fc6d86": "Show Grok subscription usage in the status bar."
+            "b286fc6d86": "Show Grok subscription usage in the status bar.",
+            "f8e2a1c4b6": "Grok Usage",
+            "e7d1b0f3a5": "Show Grok weekly credit usage from Grok CLI OAuth.",
+            "d6c0a9e2f4": "grok",
+            "c5b9f8d1e3": "xai"
           }
         },
         "auto": {
@@ -8938,7 +8980,20 @@
           "e74831fb6b": "Active",
           "afd4795eef": "Use your current system Grok login.",
           "264b67cb71": "No managed Grok accounts. Orca will use the system default Grok login until you add one here.",
-          "8a0f870153": "Re-authenticate"
+          "8a0f870153": "Re-authenticate",
+          "a1b2c3d4e5": "Grok (xAI)",
+          "f6e5d4c3b2": "Shows weekly credit usage from your Grok CLI sign-in (session file ~/.grok/auth.json).",
+          "0d8e77bc40": "Grok CLI docs",
+          "ad47a33f72": "Loading…",
+          "b2c3d4e5f6": "Signed in",
+          "c3d4e5f6a7": "Signed in. Orca only reads that file on disk — run grok login again if usage fails.",
+          "d4e5f6a7b8": "Session expired — run grok login in a terminal to refresh.",
+          "e5f6a7b8c9": "Not signed in to Grok CLI",
+          "f6a7b8c9d0": "In a terminal, run grok login, then click Refresh usage here.",
+          "3325d996cb": "Refresh usage",
+          "a8f3e2c1b4": "Weekly credits",
+          "b7e2d9f0a3": "Same weekly credit % as the grok /usage screen in the terminal.",
+          "c6d1a8f4e2": "Resets {{when}}"
         },
         "linear": {
           "agent": {
@@ -12790,6 +12845,29 @@
             }
           }
         }
+      },
+      "linear-issue-attribute-filter-dropdowns": {
+        "removeFilter": "Remove {{value0}} filter",
+        "teamRequired": "Select a team to load status, assignees, and labels for this workspace.",
+        "filters": "Filters",
+        "allWorkspacesTitle": "Select one workspace",
+        "allWorkspacesBody": "Status, assignee, and label filters use ids from a single Linear workspace. Choose one workspace to filter by those attributes.",
+        "optionsFromTeam": "Options from {{team}}",
+        "clearAll": "Clear all filters"
+      },
+      "linear-issue-attribute-filter-sections": {
+        "status": "Status",
+        "priority": "Priority",
+        "assignee": "Assignee",
+        "unassigned": "Unassigned",
+        "labels": "Labels",
+        "countSelected": "{{count}} selected",
+        "selected": "selected",
+        "searchPriority": "Filter priority…",
+        "searchStatus": "Filter status…",
+        "searchLabels": "Filter labels…",
+        "searchAssignee": "Filter assignee…",
+        "back": "Back"
       }
     },
     "i18n": {

@@ -51,6 +51,7 @@ import {
   rebuildAppMenu
 } from './menu/register-app-menu'
 import { checkForUpdatesFromMenu, isQuittingForUpdate } from './updater'
+import { recordUpdaterLifecycle } from './updater-lifecycle-diagnostics'
 import {
   configureElectronNetworkCompatibility,
   configureDevUserDataPath,
@@ -2221,6 +2222,11 @@ app.whenReady().then(async () => {
 })
 
 app.on('before-quit', () => {
+  if (isQuittingForUpdate()) {
+    recordUpdaterLifecycle('before_quit_allowed', undefined, {
+      message: 'before-quit allowed for update install'
+    })
+  }
   isQuitting = true
   unsubscribeSystemResumeBroadcast?.()
   unsubscribeSystemResumeBroadcast = null
@@ -2242,6 +2248,14 @@ app.on('before-quit', () => {
 // async work and let Electron exit.
 let daemonDisconnectDone = false
 app.on('will-quit', (e) => {
+  const updateQuitInProgress = isQuittingForUpdate()
+  if (updateQuitInProgress) {
+    recordUpdaterLifecycle(
+      'will_quit_cleanup_started',
+      { daemonTeardown: 'disconnect' },
+      { message: 'will-quit cleanup for update install; daemonTeardown=disconnect' }
+    )
+  }
   // Why: before-quit can still be aborted by renderer beforeunload; wait until
   // the committed quit path before removing the Windows notification icon.
   destroySystemTray()

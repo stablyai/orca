@@ -1733,7 +1733,10 @@
         "searchIssues": "搜索议题",
         "useIssueNumber": "使用议题 #{{value0}}",
         "noMatchingIssuesLoaded": "没有加载到匹配的议题。",
-        "editReviewersWithCurrent": "编辑评审人：{{value0}}"
+        "editReviewersWithCurrent": "编辑评审人：{{value0}}",
+        "linearEmptyAttributeFilter": "没有匹配所选筛选条件的问题。请清除筛选条件或尝试其他条件。",
+        "linearEmptyUnfilteredScope": "此工作区范围内没有问题。请尝试搜索或调整团队。",
+        "linearFetchMore": "加载更多"
       },
       "Terminal": {
         "73768427cf": "关闭",
@@ -3037,7 +3040,9 @@
             "grokUsageDetails": "Open Grok usage details",
             "5131f6a8a7": "Grok 用量",
             "8e2c5b7d43": "打开 Grok 用量详情",
-            "remoteServerLabel": "远程服务器"
+            "remoteServerLabel": "远程服务器",
+            "grokUsageAria": "打开 Grok 使用详情",
+            "grokUsageMenu": "Grok 使用量"
           },
           "StatusBarUsageEmptyCta": {
             "828c764a79": "连接账户",
@@ -3385,7 +3390,8 @@
           "b2cf4310ce": "概览",
           "908c470587": "codex",
           "eb6a066185": "claude",
-          "eee19cfade": "概览"
+          "eee19cfade": "概览",
+          "grokUsageTab": "Grok"
         },
         "UsageOverviewPane": {
           "22ed1b7669": "会话",
@@ -3437,7 +3443,12 @@
             "0e2a0b6431": "用法",
             "372debfac0": "统计数据",
             "26bb901fcd": "Orca 统计数据以及 Claude、Codex 和 OpenCode 的综合使用分析、Token、缓存、模型和会话。",
-            "cb2430ae6a": "统计和使用情况"
+            "cb2430ae6a": "统计和使用情况",
+            "f8a1b2c3d4": "grok",
+            "e7f0a1b2c3": "订阅",
+            "d6e9f0a1b2": "额度",
+            "a3b6c7d8e9": "grok 使用量",
+            "9f2a3b4c5d": "xai"
           }
         },
         "usage": {
@@ -3487,6 +3498,17 @@
           "faf3444859": "输入",
           "a8b7487ff7": "输出",
           "cfe2282ffa": "未知"
+        },
+        "GrokUsagePane": {
+          "g8h9i0j1k2": "Grok 使用量",
+          "b2d3e4f5c6": "来自 Grok CLI OAuth（~/.grok/auth.json）的每周订阅额度。与状态栏使用同一来源。",
+          "c3e4f5a6b7": "在账户中设置",
+          "h9i0j1k2l3": " • {{value0}}",
+          "i0j1k2l3m4": "刷新 Grok 使用量",
+          "d4f5a6b7c8": "刷新",
+          "e5a6b7c8d9": "已用每周额度",
+          "f6b7c8d9e0": "计费周期重置",
+          "a7b8c9d0e1": "Grok 账户设置"
         }
       },
       "sparse": {
@@ -4650,7 +4672,17 @@
           "87412c2a68": "已终止 {{value0}} 个会话。",
           "a2f040ac1c": "已终止 {{value0}} 个会话。",
           "63520148e2": "{{value0}} 个会话拒绝退出。",
-          "cc0a26cb14": "{{value0}} 个会话拒绝退出。"
+          "cc0a26cb14": "{{value0}} 个会话拒绝退出。",
+          "71a8d342b0": "Terminal tabs absent: {{value0}}/{{value1}}. Failed close attempts: {{value2}}. Exact PTY shutdown requests accepted: {{value3}}; failed: {{value4}}.",
+          "2e57c1a940": "守护进程关闭结果未经验证，因为其管理请求失败。",
+          "993af6052c": "守护进程管理报告已退出：{{value0}}/{{value1}}；在精确清理前仍存在：{{value2}}。",
+          "1f0d8ac762": "终端清理完成，但有错误。",
+          "80b6ea14cf": "终端清理完成，但有警告。",
+          "47cd2a50e9": "未报告任何会话或终端标签页。",
+          "c34fb1098d": "终端标签页已关闭，关闭请求已发送。",
+          "d9657ac204": "终端会话关闭请求已发送。",
+          "e8f25bd903": "无法完成终端清理。",
+          "a702d4196e": "这将关闭所有工作区中的每个终端标签页，并请求关闭其当前终端会话。任何未保存的终端工作将丢失。守护进程本身将继续运行，可以立即打开新终端。此操作不可撤销。"
         }
       },
       "setup": {
@@ -6927,7 +6959,13 @@
             "733f9e2a93": "MiniMax 使用量",
             "f8374c3151": "粘贴 platform.minimax.io 会话 Cookie 以在本地获取速率限制。",
             "913f2f40f9": "Grok Accounts",
-            "4f0a71c893": "Optional account switching for Grok using isolated GROK_HOME directories."
+            "4f0a71c893": "Optional account switching for Grok using isolated GROK_HOME directories.",
+            "f4a8c2e1b7": "Grok (xAI) 使用量",
+            "e3b7d1f9a2": "通过 Grok CLI（grok login）OAuth 登录以查看每周额度使用量。",
+            "d2c6a0e8f1": "grok",
+            "c1b5f9d7e0": "xai",
+            "b0a4e8c6d9": "OAuth",
+            "a9f3d7b5c8": "登录"
           }
         },
         "advanced": {
@@ -7145,7 +7183,11 @@
             "antigravityUsageDescription": "Show Antigravity subscription usage in the status bar.",
             "antigravityUsageTitle": "Antigravity Usage",
             "798169c7f4": "Grok 用量",
-            "b286fc6d86": "在状态栏显示 Grok 订阅使用情况。"
+            "b286fc6d86": "在状态栏显示 Grok 订阅使用情况。",
+            "f8e2a1c4b6": "Grok 使用量",
+            "e7d1b0f3a5": "显示来自 Grok CLI OAuth 的 Grok 每周额度使用量。",
+            "d6c0a9e2f4": "grok",
+            "c5b9f8d1e3": "xai"
           }
         },
         "auto": {
@@ -8938,7 +8980,20 @@
           "e74831fb6b": "Active",
           "afd4795eef": "Use your current system Grok login.",
           "264b67cb71": "No managed Grok accounts. Orca will use the system default Grok login until you add one here.",
-          "8a0f870153": "Re-authenticate"
+          "8a0f870153": "Re-authenticate",
+          "a1b2c3d4e5": "Grok (xAI)",
+          "f6e5d4c3b2": "显示来自 Grok CLI 登录的每周额度使用量（会话文件 ~/.grok/auth.json）。",
+          "0d8e77bc40": "Grok CLI 文档",
+          "ad47a33f72": "正在加载…",
+          "b2c3d4e5f6": "已登录",
+          "c3d4e5f6a7": "已登录。Orca 只读取磁盘上的该文件；如果使用量获取失败，请重新运行 grok login。",
+          "d4e5f6a7b8": "会话已过期，请在终端运行 grok login 以刷新。",
+          "e5f6a7b8c9": "未登录 Grok CLI",
+          "f6a7b8c9d0": "在终端运行 grok login，然后点击此处的刷新使用量。",
+          "3325d996cb": "刷新使用量",
+          "a8f3e2c1b4": "每周额度",
+          "b7e2d9f0a3": "与终端中 grok /usage 屏幕显示的每周额度百分比相同。",
+          "c6d1a8f4e2": "{{when}} 重置"
         },
         "linear": {
           "agent": {
@@ -12790,6 +12845,29 @@
             }
           }
         }
+      },
+      "linear-issue-attribute-filter-dropdowns": {
+        "removeFilter": "移除 {{value0}} 筛选器",
+        "teamRequired": "选择一个团队以加载此工作区的状态、负责人和标签。",
+        "filters": "筛选器",
+        "allWorkspacesTitle": "选择一个工作区",
+        "allWorkspacesBody": "状态、负责人和标签筛选器使用单个 Linear 工作区的 ID。请选择一个工作区以按这些属性进行筛选。",
+        "optionsFromTeam": "来自 {{team}} 的选项",
+        "clearAll": "清除所有筛选器"
+      },
+      "linear-issue-attribute-filter-sections": {
+        "status": "状态",
+        "priority": "优先级",
+        "assignee": "负责人",
+        "unassigned": "未分配",
+        "labels": "标签",
+        "countSelected": "已选择 {{count}} 个",
+        "selected": "已选择",
+        "searchPriority": "筛选优先级…",
+        "searchStatus": "筛选状态…",
+        "searchLabels": "筛选标签…",
+        "searchAssignee": "筛选负责人…",
+        "back": "返回"
       }
     },
     "i18n": {

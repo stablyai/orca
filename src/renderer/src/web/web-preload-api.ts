@@ -2586,7 +2586,9 @@ function createRateLimitsApi(): NonNullable<Partial<PreloadApi>['rateLimits']> {
     antigravity: null,
     grok: null,
     minimax: null,
+    grok: null,
     minimaxCookieConfigured: false,
+    grokAuthConfigured: false,
     claudeTarget: { runtime: 'host', wslDistro: null },
     codexTarget: { runtime: 'host', wslDistro: null },
     inactiveClaudeAccounts: [],
@@ -2604,6 +2606,7 @@ function createRateLimitsApi(): NonNullable<Partial<PreloadApi>['rateLimits']> {
     fetchInactiveClaudeAccounts: () => Promise.resolve(),
     fetchInactiveCodexAccounts: () => Promise.resolve(),
     refreshMiniMax: () => Promise.resolve(empty),
+    refreshGrok: () => Promise.resolve(empty),
     onUpdate: () => noopUnsubscribe
   }
 }

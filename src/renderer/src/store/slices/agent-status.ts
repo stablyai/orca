@@ -24,6 +24,12 @@ import {
 } from '../../../../shared/agent-status-identity'
 import type { TerminalTab } from '../../../../shared/types'
 import { isExplicitAgentStatusFresh } from '@/lib/agent-status'
+import {
+  getAgentRowGeneratedTitleText,
+  getOrcaDispatchTaskId,
+  isOrcaDispatchPrompt,
+  orchestrationLabelsMatchLiveDispatch
+} from '@/lib/agent-row-primary-text'
 import { createFreshnessScheduler } from './agent-status-freshness-scheduler'
 
 /** Snapshot of a finished (or vanished) agent status entry, kept around so
@@ -261,6 +267,34 @@ function getTabIdFromPaneKey(paneKey: string): string | null {
     return null
   }
   return paneKey.slice(0, separator)
+}
+
+/** True when auto-title generation would no-op without replace (custom/quick/generated). */
+function agentStatusTabAlreadyHasProtectedOrGeneratedTitle(
+  state: AppState,
+  tabId: string | null,
+  worktreeId?: string | null
+): boolean {
+  if (!tabId) {
+    return false
+  }
+  const ownerTabs = worktreeId ? state.tabsByWorktree[worktreeId] : undefined
+  if (ownerTabs) {
+    const tab = ownerTabs.find((candidate) => candidate.id === tabId)
+    return Boolean(
+      tab?.customTitle?.trim() || tab?.quickCommandLabel?.trim() || tab?.generatedTitle?.trim()
+    )
+  }
+  for (const tabs of Object.values(state.tabsByWorktree)) {
+    const tab = tabs.find((candidate) => candidate.id === tabId)
+    if (!tab) {
+      continue
+    }
+    return Boolean(
+      tab.customTitle?.trim() || tab.quickCommandLabel?.trim() || tab.generatedTitle?.trim()
+    )
+  }
+  return false
 }
 
 function getLeafIdFromPaneKey(paneKey: string): string | null {
@@ -914,6 +948,7 @@ export const createAgentStatusSlice: StateCreator<AppState, [], [], AgentStatusS
     recentlyClosedAgentStatusTabIds: {},
 
     setRuntimeAgentOrchestrationByPaneKey: (entries) => {
+      const generatedTitleUpdates: AgentStatusEntry[] = []
       set((s) => {
         const runtimeMapChanged = !orchestrationMapsEqual(
           s.runtimeAgentOrchestrationByPaneKey,
@@ -936,7 +971,19 @@ export const createAgentStatusSlice: StateCreator<AppState, [], [], AgentStatusS
                 nextLive = { ...nextLive }
                 liveChanged = true
               }
-              nextLive[paneKey] = { ...liveEntry, orchestration: merged }
+              const nextEntry = { ...liveEntry, orchestration: merged }
+              nextLive[paneKey] = nextEntry
+              // Why: only replace titles when labels match the live dispatch
+              // taskId; sticky completed context must not rename a later turn.
+              if (
+                (merged.displayName?.trim() || merged.taskTitle?.trim()) &&
+                orchestrationLabelsMatchLiveDispatch({
+                  prompt: nextEntry.prompt,
+                  orchestration: merged
+                })
+              ) {
+                generatedTitleUpdates.push(nextEntry)
+              }
             }
           }
 
@@ -970,6 +1017,15 @@ export const createAgentStatusSlice: StateCreator<AppState, [], [], AgentStatusS
           ...(liveChanged ? { agentStatusEpoch: s.agentStatusEpoch + 1 } : {})
         }
       })
+      for (const entry of generatedTitleUpdates) {
+        get().setGeneratedTabTitleFromAgentPrompt(
+          entry.paneKey,
+          getAgentRowGeneratedTitleText(entry),
+          {
+            replaceExistingGeneratedTitle: true
+          }
+        )
+      }
     },
 
     registerAgentLaunchConfig: (paneKey, launchConfig, metadata) => {
@@ -1071,6 +1127,7 @@ export const createAgentStatusSlice: StateCreator<AppState, [], [], AgentStatusS
       }
       let completionRefreshWorktreeId: string | null = null
       let suppressedInheritedTerminalStatus = false
+      const generatedTitleEntry: { current: AgentStatusEntry | null } = { current: null }
       set((s) => {
         const existing = s.agentStatusByPaneKey[paneKey]
         // Why: snapshots and live pushes share receivedAt from the same main-side
@@ -1245,6 +1302,7 @@ export const createAgentStatusSlice: StateCreator<AppState, [], [], AgentStatusS
           // it when a new turn starts (working → Stop reprices it).
           interrupted: payload.interrupted
         }
+        generatedTitleEntry.current = entry
         if (
           isAgentCompletionState(entry.state) &&
           existing !== undefined &&
@@ -1385,7 +1443,52 @@ export const createAgentStatusSlice: StateCreator<AppState, [], [], AgentStatusS
       if (suppressedInheritedTerminalStatus) {
         return
       }
-      get().setGeneratedTabTitleFromAgentPrompt(paneKey, payload.prompt)
+      const entryForGeneratedTitle = generatedTitleEntry.current
+      if (entryForGeneratedTitle) {
+        // Why: sticky orchestration (~30m) can outlive the dispatch turn.
+        // - Matching labels: replace so displayName upgrades the task preview.
+        // - Mismatched sticky taskId on a new dispatch preamble: replace so the
+        //   prior task's title does not stick across re-dispatch on the same pane.
+        const hasMatchingOrchestrationLabels = Boolean(
+          (entryForGeneratedTitle.orchestration?.displayName?.trim() ||
+            entryForGeneratedTitle.orchestration?.taskTitle?.trim()) &&
+          orchestrationLabelsMatchLiveDispatch(entryForGeneratedTitle)
+        )
+        const liveIsDispatchPrompt = isOrcaDispatchPrompt(entryForGeneratedTitle.prompt)
+        const liveDispatchTaskId = liveIsDispatchPrompt
+          ? getOrcaDispatchTaskId(entryForGeneratedTitle.prompt)
+          : null
+        const stickyOrchestrationTaskId =
+          entryForGeneratedTitle.orchestration?.taskId?.trim() || null
+        const isNewDispatchAgainstStickyOrchestration = Boolean(
+          liveDispatchTaskId &&
+          stickyOrchestrationTaskId &&
+          liveDispatchTaskId !== stickyOrchestrationTaskId
+        )
+        const shouldReplaceGeneratedTitle =
+          hasMatchingOrchestrationLabels || isNewDispatchAgainstStickyOrchestration
+        // Why: setAgentStatus is high-frequency. Only parse dispatch preambles when
+        // a title write is still possible (feature on + replace or first-write).
+        const mayWriteGeneratedTitle =
+          get().settings?.tabAutoGenerateTitle === true &&
+          (shouldReplaceGeneratedTitle ||
+            !agentStatusTabAlreadyHasProtectedOrGeneratedTitle(
+              get(),
+              entryForGeneratedTitle.tabId ?? getTabIdFromPaneKey(paneKey),
+              entryForGeneratedTitle.worktreeId
+            ))
+        const generatedTitlePrompt =
+          liveIsDispatchPrompt && mayWriteGeneratedTitle
+            ? getAgentRowGeneratedTitleText(entryForGeneratedTitle)
+            : entryForGeneratedTitle.prompt
+        if (shouldReplaceGeneratedTitle) {
+          get().setGeneratedTabTitleFromAgentPrompt(paneKey, generatedTitlePrompt, {
+            replaceExistingGeneratedTitle: true
+          })
+        } else {
+          get().setGeneratedTabTitleFromAgentPrompt(paneKey, generatedTitlePrompt)
+        }
+      }
       // Why: schedule after set completes so the timer reads the updated map.
       // queueMicrotask avoids re-entry into the zustand store during set.
       queueMicrotask(() => freshness.schedule())

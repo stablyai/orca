@@ -1733,7 +1733,10 @@
         "searchIssues": "Issue を検索",
         "useIssueNumber": "Issue #{{value0}} を使用",
         "noMatchingIssuesLoaded": "一致する issue は読み込まれていません。",
-        "editReviewersWithCurrent": "レビュアーを編集: {{value0}}"
+        "editReviewersWithCurrent": "レビュアーを編集: {{value0}}",
+        "linearEmptyAttributeFilter": "選択したフィルターに一致するイシューがありません。フィルターを解除するか、異なる条件を試してください。",
+        "linearEmptyUnfilteredScope": "このワークスペーススコープにイシューがありません。検索するか、チームを調整してください。",
+        "linearFetchMore": "さらに読み込む"
       },
       "Terminal": {
         "73768427cf": "閉じる",
@@ -3037,7 +3040,9 @@
             "grokUsageDetails": "Open Grok usage details",
             "5131f6a8a7": "Grok 使用状況",
             "8e2c5b7d43": "Grok 使用状況の詳細を開く",
-            "remoteServerLabel": "リモートサーバー"
+            "remoteServerLabel": "リモートサーバー",
+            "grokUsageAria": "Grok の使用状況詳細を開く",
+            "grokUsageMenu": "Grok の使用状況"
           },
           "StatusBarUsageEmptyCta": {
             "828c764a79": "アカウントを接続する",
@@ -3385,7 +3390,8 @@
           "b2cf4310ce": "概要",
           "908c470587": "codex",
           "eb6a066185": "claude",
-          "eee19cfade": "概要"
+          "eee19cfade": "概要",
+          "grokUsageTab": "Grok"
         },
         "UsageOverviewPane": {
           "22ed1b7669": "セッション",
@@ -3437,7 +3443,12 @@
             "0e2a0b6431": "使用法",
             "372debfac0": "統計",
             "26bb901fcd": "Orca の統計に加え、Claude、Codex、OpenCode の使用状況分析、トークン、キャッシュ、モデル、セッションを組み合わせたもの。",
-            "cb2430ae6a": "統計と使用状況"
+            "cb2430ae6a": "統計と使用状況",
+            "f8a1b2c3d4": "grok",
+            "e7f0a1b2c3": "サブスクリプション",
+            "d6e9f0a1b2": "クレジット",
+            "a3b6c7d8e9": "grok の使用状況",
+            "9f2a3b4c5d": "xai"
           }
         },
         "usage": {
@@ -3487,6 +3498,17 @@
           "faf3444859": "入力",
           "a8b7487ff7": "出力",
           "cfe2282ffa": "不明"
+        },
+        "GrokUsagePane": {
+          "g8h9i0j1k2": "Grok の使用状況",
+          "b2d3e4f5c6": "Grok CLI OAuth (~/.grok/auth.json) から取得した週次サブスクリプションクレジット。ステータスバーと同じ情報源です。",
+          "c3e4f5a6b7": "アカウントで設定",
+          "h9i0j1k2l3": " • {{value0}}",
+          "i0j1k2l3m4": "Grok 使用状況を更新",
+          "d4f5a6b7c8": "更新",
+          "e5a6b7c8d9": "使用済み週次クレジット",
+          "f6b7c8d9e0": "請求期間のリセット",
+          "a7b8c9d0e1": "Grok アカウント設定"
         }
       },
       "sparse": {
@@ -4650,7 +4672,17 @@
           "87412c2a68": "{{value0}} 個のセッションを終了しました。",
           "a2f040ac1c": "{{value0}} 個のセッションを終了しました。",
           "63520148e2": "{{value0}} 個のセッションが終了を拒否しました。",
-          "cc0a26cb14": "{{value0}} 個のセッションが終了を拒否しました。"
+          "cc0a26cb14": "{{value0}} 個のセッションが終了を拒否しました。",
+          "71a8d342b0": "Terminal tabs absent: {{value0}}/{{value1}}. Failed close attempts: {{value2}}. Exact PTY shutdown requests accepted: {{value3}}; failed: {{value4}}.",
+          "2e57c1a940": "管理リクエストが失敗したため、デーモンのシャットダウン結果が検証されていません。",
+          "993af6052c": "デーモン管理が終了を報告：{{value0}}/{{value1}}；正確なクリーンアップ前にまだ存在：{{value2}}。",
+          "1f0d8ac762": "ターミナルクリーンアップがエラーで完了しました。",
+          "80b6ea14cf": "ターミナルクリーンアップが警告付きで完了しました。",
+          "47cd2a50e9": "セッションまたはターミナルタブが報告されていません。",
+          "c34fb1098d": "ターミナルタブが閉じられ、シャットダウンリクエストが送信されました。",
+          "d9657ac204": "ターミナルセッションのシャットダウンリクエストが送信されました。",
+          "e8f25bd903": "ターミナルクリーンアップを完了できませんでした。",
+          "a702d4196e": "これにより、すべてのワークスペースのターミナルタブが閉じられ、現在のターミナルセッションのシャットダウンがリクエストされます。保存されていないターミナル作業は失われます。デーモン自体は実行を続け、新しいターミナルはすぐに開けます。この操作は取り消せません。"
         }
       },
       "setup": {
@@ -6964,7 +6996,13 @@
             "733f9e2a93": "MiniMax 使用量",
             "f8374c3151": "ローカルのレート制限取得用に platform.minimax.io のセッション Cookie を貼り付けます。",
             "913f2f40f9": "Grok Accounts",
-            "4f0a71c893": "Optional account switching for Grok using isolated GROK_HOME directories."
+            "4f0a71c893": "Optional account switching for Grok using isolated GROK_HOME directories.",
+            "f4a8c2e1b7": "Grok (xAI) の使用状況",
+            "e3b7d1f9a2": "週次クレジット使用量のための Grok CLI (grok login) による OAuth サインイン。",
+            "d2c6a0e8f1": "grok",
+            "c1b5f9d7e0": "xai",
+            "b0a4e8c6d9": "認証",
+            "a9f3d7b5c8": "ログイン"
           }
         },
         "advanced": {
@@ -7182,7 +7220,11 @@
             "antigravityUsageDescription": "Show Antigravity subscription usage in the status bar.",
             "antigravityUsageTitle": "Antigravity Usage",
             "798169c7f4": "Grok 使用状況",
-            "b286fc6d86": "ステータスバーに Grok サブスクリプション使用状況を表示します。"
+            "b286fc6d86": "ステータスバーに Grok サブスクリプション使用状況を表示します。",
+            "f8e2a1c4b6": "Grok の使用状況",
+            "e7d1b0f3a5": "Grok CLI OAuth から Grok の週次クレジット使用量を表示します。",
+            "d6c0a9e2f4": "grok",
+            "c5b9f8d1e3": "xai"
           }
         },
         "auto": {
@@ -8938,7 +8980,20 @@
           "e74831fb6b": "Active",
           "afd4795eef": "Use your current system Grok login.",
           "264b67cb71": "No managed Grok accounts. Orca will use the system default Grok login until you add one here.",
-          "8a0f870153": "Re-authenticate"
+          "8a0f870153": "Re-authenticate",
+          "a1b2c3d4e5": "Grok (xAI)",
+          "f6e5d4c3b2": "Grok CLI サインインから週次クレジット使用量を表示します (セッションファイル ~/.grok/auth.json)。",
+          "0d8e77bc40": "Grok CLI ドキュメント",
+          "ad47a33f72": "読み込み中…",
+          "b2c3d4e5f6": "サインイン済み",
+          "c3d4e5f6a7": "サインイン済みです。Orca はディスク上のそのファイルだけを読み取ります。使用状況の取得に失敗する場合は grok login を再実行してください。",
+          "d4e5f6a7b8": "セッションの有効期限が切れました。ターミナルで grok login を実行して更新してください。",
+          "e5f6a7b8c9": "Grok CLI にサインインしていません",
+          "f6a7b8c9d0": "ターミナルで grok login を実行してから、ここで「使用状況を更新」をクリックしてください。",
+          "3325d996cb": "使用状況を更新",
+          "a8f3e2c1b4": "週次クレジット",
+          "b7e2d9f0a3": "ターミナルの grok /usage 画面と同じ週次クレジット率です。",
+          "c6d1a8f4e2": "{{when}} にリセット"
         },
         "linear": {
           "agent": {
@@ -12790,6 +12845,29 @@
             }
           }
         }
+      },
+      "linear-issue-attribute-filter-dropdowns": {
+        "removeFilter": "{{value0}}フィルターを解除",
+        "teamRequired": "このワークスペースのステータス、担当者、ラベルを読み込むにはチームを選択してください。",
+        "filters": "フィルター",
+        "allWorkspacesTitle": "ワークスペースを選択",
+        "allWorkspacesBody": "ステータス、担当者、ラベルのフィルターは単一のLinearワークスペースのIDを使用します。フィルタリングするワークスペースを選択してください。",
+        "optionsFromTeam": "{{team}}からのオプション",
+        "clearAll": "すべてのフィルターをクリア"
+      },
+      "linear-issue-attribute-filter-sections": {
+        "status": "ステータス",
+        "priority": "優先度",
+        "assignee": "担当者",
+        "unassigned": "未割当",
+        "labels": "ラベル",
+        "countSelected": "{{count}}件選択中",
+        "selected": "選択中",
+        "searchPriority": "優先度をフィルター…",
+        "searchStatus": "ステータスをフィルター…",
+        "searchLabels": "ラベルをフィルター…",
+        "searchAssignee": "担当者をフィルター…",
+        "back": "戻る"
       }
     },
     "i18n": {

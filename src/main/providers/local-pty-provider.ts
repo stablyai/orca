@@ -1064,7 +1064,7 @@ export class LocalPtyProvider implements IPtyProvider {
     return ptyProcesses.get(id)
   }
 
-  /** Kill all PTYs. Call on app quit. */
+  /** Kill all in-process local PTYs. Call on app quit. */
   killAll(): void {
     for (const [id, proc] of ptyProcesses) {
       safeKillAndClean(id, proc)

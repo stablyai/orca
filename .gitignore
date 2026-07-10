@@ -60,6 +60,9 @@ pnpm-debug.log*
 # Coverage
 coverage/
 
+# Prod release scan output (accidental adds)
+prod-release-scan-*.md
+
 # Benchmark run output
 /tools/benchmarks/results/*.json
 /.bench-fixtures/
