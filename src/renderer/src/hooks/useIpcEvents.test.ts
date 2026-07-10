@@ -4299,7 +4299,7 @@ describe('useIpcEvents agent status snapshot integration', () => {
     stateStartedAt: number
   }
   type StoreLike = Record<string, unknown>
-  type StoreSubscribeListener = (state: StoreLike) => void
+  type StoreSubscribeListener = (state: StoreLike, previousState: StoreLike) => void
   type MobileFitEvent = {
     ptyId: string
     mode: 'mobile-fit' | 'desktop-fit'
@@ -4799,6 +4799,7 @@ describe('useIpcEvents agent status snapshot integration', () => {
     expect(setAgentStatus).not.toHaveBeenCalled()
     expect(getSnapshot).not.toHaveBeenCalled()
 
+    const previousStoreState = { ...storeState }
     storeState.workspaceSessionReady = true
     storeState.tabsByWorktree = {
       'wt-1': [{ id: 'tab-future', ptyId: 'pty-1', worktreeId: 'wt-1', title: 'Future Tab' }]
@@ -4813,7 +4814,7 @@ describe('useIpcEvents agent status snapshot integration', () => {
     if (typeof subscribeListenerRef.current !== 'function') {
       throw new Error('Expected useAppStore.subscribe listener to be registered')
     }
-    subscribeListenerRef.current(storeState)
+    subscribeListenerRef.current(storeState, previousStoreState)
     await Promise.resolve()
 
     expect(setAgentStatus).toHaveBeenCalledTimes(1)
@@ -4937,7 +4938,7 @@ describe('useIpcEvents agent status snapshot integration', () => {
     vi.doMock('./agent-hook-completion-notifications', () => ({
       observeAgentHookCompletionForNotification,
       resetAgentHookCompletionNotificationCoordinators: vi.fn(),
-      syncAgentHookCompletionNotificationSettings: vi.fn()
+      syncAgentHookCompletionNotificationsForStoreUpdate: vi.fn()
     }))
     stubAuxiliaryModules()
     vi.stubGlobal(
@@ -5014,7 +5015,7 @@ describe('useIpcEvents agent status snapshot integration', () => {
     vi.doMock('./agent-hook-completion-notifications', () => ({
       observeAgentHookCompletionForNotification,
       resetAgentHookCompletionNotificationCoordinators: vi.fn(),
-      syncAgentHookCompletionNotificationSettings: vi.fn()
+      syncAgentHookCompletionNotificationsForStoreUpdate: vi.fn()
     }))
     stubAuxiliaryModules()
     vi.stubGlobal(
@@ -5169,7 +5170,7 @@ describe('useIpcEvents agent status snapshot integration', () => {
     vi.doMock('./agent-hook-completion-notifications', () => ({
       observeAgentHookCompletionForNotification,
       resetAgentHookCompletionNotificationCoordinators: vi.fn(),
-      syncAgentHookCompletionNotificationSettings: vi.fn()
+      syncAgentHookCompletionNotificationsForStoreUpdate: vi.fn()
     }))
     stubAuxiliaryModules()
     vi.stubGlobal(
@@ -5978,6 +5979,7 @@ describe('useIpcEvents agent status snapshot integration', () => {
       reason: 'unknown_tab_id'
     })
 
+    const previousStoreState = { ...storeState }
     storeState.terminalLayoutsByTabId = {
       'tab-future': {
         root: { type: 'leaf', leafId: FUTURE_LEAF_ID },
@@ -5988,7 +5990,7 @@ describe('useIpcEvents agent status snapshot integration', () => {
     if (typeof subscribeListenerRef.current !== 'function') {
       throw new Error('Expected useAppStore.subscribe listener to be registered')
     }
-    subscribeListenerRef.current(storeState)
+    subscribeListenerRef.current(storeState, previousStoreState)
 
     expect(setAgentStatus).toHaveBeenCalledTimes(2)
     expect(setAgentStatus).toHaveBeenNthCalledWith(

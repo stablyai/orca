@@ -116,7 +116,7 @@ import {
 import {
   observeAgentHookCompletionForNotification,
   resetAgentHookCompletionNotificationCoordinators,
-  syncAgentHookCompletionNotificationSettings
+  syncAgentHookCompletionNotificationsForStoreUpdate
 } from './agent-hook-completion-notifications'
 import { shouldSuppressCodexAutoApprovalStatus } from '@/components/terminal-pane/codex-auto-approval-notification-suppression'
 import { showTerminalShortcutCaptureNotification } from '@/lib/terminal-shortcut-capture-notification'
@@ -3212,10 +3212,10 @@ export function useIpcEvents(): void {
     // renderer state.
     requestAgentStatusSnapshotIfReady()
     unsubs.push(
-      useAppStore.subscribe(() => {
+      useAppStore.subscribe((state, previousState) => {
         requestAgentStatusSnapshotIfReady()
         flushPendingAgentStatuses()
-        syncAgentHookCompletionNotificationSettings()
+        syncAgentHookCompletionNotificationsForStoreUpdate(state, previousState)
       })
     )
 
