@@ -326,6 +326,15 @@ import { serveSimStateWatcher } from '../emulator/serve-sim-state-watcher'
 import type { EmulatorBridge } from '../emulator/emulator-bridge'
 import { RuntimeFileCommands } from './orca-runtime-files'
 import { RuntimeGitCommands } from './orca-runtime-git'
+import {
+  detectUsageLimitStall,
+  extractUsageLimitResetAt,
+  type UsageLimitStallSignal
+} from './usage-limit-stall-detection'
+import type {
+  UsageLimitProvider,
+  UsageLimitStallReason
+} from '../../shared/agent-auto-resume-types'
 import { ClaudeAgentTeamsService } from './claude-agent-teams-service'
 import type {
   AgentTeamsTmuxCompatRequest,
@@ -973,6 +982,56 @@ type RuntimePtyWorktreeRecord = {
   waitBlockedAt: number | null
   // Why: memoized wait scan of the current retained tail (see RuntimeLeafRecord).
   tailWaitState?: TerminalTailWaitState
+  // Why: the live usage-limit stall this PTY is currently in, stamped when a
+  // *newer* banner/menu appears in the tail. Feeds AgentAutoResumeService via
+  // the usage-limit-stall event; cleared when the agent goes back to working.
+  usageLimitStall: PtyUsageLimitStall | null
+}
+
+type PtyUsageLimitStall = {
+  reason: UsageLimitStallReason
+  resetsAt: number | null
+  detectedAt: number
+}
+
+/** Emitted whenever a PTY's usage-limit state changes. Consumed by
+ *  AgentAutoResumeService in the composition root. */
+export type UsageLimitStallEvent =
+  | {
+      kind: 'detected'
+      ptyId: string
+      handle: string | null
+      worktreeId: string | null
+      paneKey: string | null
+      provider: UsageLimitProvider | null
+      reason: UsageLimitStallReason
+      resetsAt: number | null
+      detectedAt: number
+    }
+  | { kind: 'cleared'; ptyId: string }
+  | {
+      kind: 'exited'
+      ptyId: string
+      worktreeId: string | null
+      paneKey: string | null
+      exitCode: number
+    }
+
+/** Live re-verification of a PTY's usage-limit stall, read against the current
+ *  tail just before the service acts (never against stale history). */
+export type UsageLimitStallSnapshot = {
+  ptyId: string
+  handle: string | null
+  worktreeId: string | null
+  paneKey: string | null
+  provider: UsageLimitProvider | null
+  reason: UsageLimitStallReason
+  resetsAt: number | null
+  detectedAt: number
+  /** Whether the triggering banner/menu is still present in the live tail. */
+  present: boolean
+  /** Whether the agent is currently working (a resumed agent must not be poked). */
+  agentWorking: boolean
 }
 
 type TerminalCreateOptions = {
@@ -2104,6 +2163,9 @@ export class OrcaRuntimeService {
     Set<(event: { mode: 'mobile-fit' | 'desktop-fit'; cols: number; rows: number }) => void>
   >()
   private driverListeners = new Map<string, Set<(driver: DriverState) => void>>()
+  // Why: process-wide (not per-PTY) fan-out of usage-limit stall events to the
+  // single AgentAutoResumeService registered in the composition root.
+  private usageLimitStallListeners = new Set<(event: UsageLimitStallEvent) => void>()
   private subscriptionCleanups = new Map<string, () => void>()
   // Why: index of subscriptionIds by per-WebSocket connectionId so the
   // server can sweep all subscriptions for a closing socket without
@@ -5398,6 +5460,9 @@ export class OrcaRuntimeService {
       if (tailGainedNewerBlockedReason(previousWaitState, nextWaitState, normalized.text)) {
         pty.waitBlockedAt = at
       }
+      if (tailGainedNewerUsageLimitStall(previousWaitState, nextWaitState, normalized.text)) {
+        this.recordPtyUsageLimitStall(pty, ptyId, nextWaitState, at)
+      }
       pty.tailWaitState = nextWaitState
       ptyTailAfter = nextTail
       pty.tailBuffer = nextTail.lines
@@ -5416,6 +5481,12 @@ export class OrcaRuntimeService {
         this.setPtyManagementTitleFromObservedTitle(pty, oscTitle, observedAt)
         shouldTouchPtyBackedSessionTabs =
           prevTitle !== oscTitle || prevStatus !== pty.lastAgentStatus
+        // Why: a resumed agent must stop being tracked so the service never
+        // pokes a working agent (product rule #6). Working is the only status
+        // that clears — an idle-at-banner agent is still limited.
+        if (agentStatus === 'working' && pty.usageLimitStall) {
+          this.clearPtyUsageLimitStall(pty, ptyId)
+        }
         if (agentStatus === 'idle' && prevStatus !== 'idle') {
           this.resolvePtyTuiIdleWaiters(pty, ptyId)
         }
@@ -5778,6 +5849,94 @@ export class OrcaRuntimeService {
 
   subscribeToDriverChanges(ptyId: string, listener: (driver: DriverState) => void): () => void {
     return addListenerToMap(this.driverListeners, ptyId, listener)
+  }
+
+  /** Subscribe to usage-limit stall lifecycle events (detected / cleared /
+   *  exited). One subscriber — the composition root's AgentAutoResumeService. */
+  subscribeUsageLimitStall(listener: (event: UsageLimitStallEvent) => void): () => void {
+    this.usageLimitStallListeners.add(listener)
+    return () => {
+      this.usageLimitStallListeners.delete(listener)
+    }
+  }
+
+  private emitUsageLimitStall(event: UsageLimitStallEvent): void {
+    for (const listener of this.usageLimitStallListeners) {
+      try {
+        listener(event)
+      } catch (error) {
+        console.warn('[usage-limit] stall listener threw', error)
+      }
+    }
+  }
+
+  private ptyUsageLimitProvider(pty: RuntimePtyWorktreeRecord): UsageLimitProvider | null {
+    const agent = pty.foregroundAgent ?? pty.launchAgent
+    if (agent === 'claude' || agent === 'claude-agent-teams' || agent === 'openclaude') {
+      return 'claude'
+    }
+    return agent === 'codex' ? 'codex' : null
+  }
+
+  private recordPtyUsageLimitStall(
+    pty: RuntimePtyWorktreeRecord,
+    ptyId: string,
+    waitState: TerminalTailWaitState,
+    at: number
+  ): void {
+    const signal = waitState.usageLimitSignal
+    if (!signal) {
+      return
+    }
+    // Why: parse the reset from the live tail lines the same scan matched, never
+    // from history on disk. The menu carries no time, so this is null for menus.
+    const resetsAt =
+      signal.reason === 'usage-limit-banner'
+        ? extractUsageLimitResetAt(waitState.waitText.split('\n'))
+        : null
+    pty.usageLimitStall = { reason: signal.reason, resetsAt, detectedAt: at }
+    this.emitUsageLimitStall({
+      kind: 'detected',
+      ptyId,
+      handle: this.handleByPtyId.get(ptyId) ?? null,
+      worktreeId: pty.worktreeId ?? null,
+      paneKey: pty.paneKey,
+      provider: this.ptyUsageLimitProvider(pty),
+      reason: signal.reason,
+      resetsAt,
+      detectedAt: at
+    })
+  }
+
+  private clearPtyUsageLimitStall(pty: RuntimePtyWorktreeRecord, ptyId: string): void {
+    if (!pty.usageLimitStall) {
+      return
+    }
+    pty.usageLimitStall = null
+    this.emitUsageLimitStall({ kind: 'cleared', ptyId })
+  }
+
+  /** Re-scan the live tail for the service's pre-send verification. Returns null
+   *  when the PTY is gone or was never recorded as limited. */
+  getUsageLimitStallSnapshot(ptyId: string): UsageLimitStallSnapshot | null {
+    const pty = this.ptysById.get(ptyId)
+    if (!pty || !pty.usageLimitStall) {
+      return null
+    }
+    const waitText = buildTerminalWaitText(pty.tailBuffer, pty.tailPartialLine, pty.preview)
+    const liveSignal = detectUsageLimitStall(waitText.toLowerCase())
+    return {
+      ptyId,
+      handle: this.handleByPtyId.get(ptyId) ?? null,
+      worktreeId: pty.worktreeId ?? null,
+      paneKey: pty.paneKey,
+      provider: this.ptyUsageLimitProvider(pty),
+      reason: pty.usageLimitStall.reason,
+      resetsAt: pty.usageLimitStall.resetsAt,
+      detectedAt: pty.usageLimitStall.detectedAt,
+      present: liveSignal?.reason === pty.usageLimitStall.reason,
+      agentWorking: pty.lastAgentStatus === 'working'
+    }
   }
 
   private notifyFitOverrideListeners(
@@ -7238,6 +7397,19 @@ export class OrcaRuntimeService {
       pty.connected = false
       pty.disconnectedAt = Date.now()
       pty.lastExitCode = exitCode
+      // Why: a PTY dying mid-stall can't be resumed by keystrokes; hand the
+      // dead-PTY case to the service (which notifies / defers to the sleeping-
+      // agent resume path) before the record is pruned.
+      if (pty.usageLimitStall) {
+        this.emitUsageLimitStall({
+          kind: 'exited',
+          ptyId,
+          worktreeId: pty.worktreeId ?? null,
+          paneKey: pty.paneKey,
+          exitCode
+        })
+        pty.usageLimitStall = null
+      }
       this.resolvePtyExitWaiters(pty, ptyId)
       this.pruneDisconnectedPtyTranscript(pty)
       this.touchMobileSessionSnapshotsForPty(ptyId)
@@ -18611,7 +18783,8 @@ export class OrcaRuntimeService {
         tailTruncated: false,
         tailLinesTotal: 0,
         preview: state.preview ?? '',
-        waitBlockedAt: null
+        waitBlockedAt: null,
+        usageLimitStall: null
       }
       if (state.title) {
         this.setPtyManagementTitleFromObservedTitle(pty, state.title, titleObservedAt ?? 0)
@@ -23617,6 +23790,10 @@ function buildTerminalWaitText(lines: string[], partialLine: string, preview: st
 export type TerminalTailWaitState = {
   waitText: string
   signal: { reason: RuntimeTerminalWaitBlockedReason; index: number } | null
+  // Why: usage-limit stalls ride the same per-chunk lowercased tail scan but
+  // travel a separate reason so they are never conflated with a blocked
+  // permission prompt (see agent-auto-resume-types.ts).
+  usageLimitSignal: UsageLimitStallSignal | null
   // Why: the retained tail is authoritative; `preview` is only a fallback for an
   // empty tail. A preview-derived state depends on a value that is recomputed
   // after each append, so it must not be reused as the next chunk's previous
@@ -23641,11 +23818,33 @@ export function computeTerminalTailWaitState(
     .join('\n')
   const fromTail = tailText.length > 0
   const waitText = fromTail ? tailText : preview
+  const normalized = waitText.toLowerCase()
   return {
     waitText,
-    signal: findActionableTerminalWaitBlockedSignal(waitText.toLowerCase()),
+    signal: findActionableTerminalWaitBlockedSignal(normalized),
+    usageLimitSignal: detectUsageLimitStall(normalized),
     fromTail
   }
+}
+
+// Why: mirrors tailGainedNewerBlockedReason for usage-limit stalls — returns
+// true only when the appended chunk introduced a stall newer than any the
+// previous tail already held, so the auto-resume timer arms once per fresh
+// limit event and never re-fires on stale banner/menu text lingering in the
+// tail (the exact failure mode of the old history-scraping cron).
+export function tailGainedNewerUsageLimitStall(
+  previous: TerminalTailWaitState,
+  next: TerminalTailWaitState,
+  appendedText: string
+): boolean {
+  if (next.usageLimitSignal === null) {
+    return false
+  }
+  if (previous.usageLimitSignal === null) {
+    return true
+  }
+  const appendCandidate = detectUsageLimitStall(`${previous.waitText}${appendedText}`.toLowerCase())
+  return appendCandidate !== null && appendCandidate.index > previous.usageLimitSignal.index
 }
 
 // Why: decides whether the appended chunk introduced a newer actionable blocked

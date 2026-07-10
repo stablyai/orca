@@ -83,6 +83,10 @@ import type {
   RateLimitRuntimeTarget,
   RateLimitState
 } from '../shared/rate-limit-types'
+import {
+  AGENT_AUTO_RESUME_UPDATE_CHANNEL,
+  type AgentAutoResumeSnapshot
+} from '../shared/agent-auto-resume-types'
 import type { WorkspaceSpaceScanProgress } from '../shared/workspace-space-types'
 import type { WorkspaceCleanupScanProgress } from '../shared/workspace-cleanup'
 import type { WorkspacePortAdvertisedUrlChangedEvent } from '../shared/workspace-ports'
@@ -3859,6 +3863,16 @@ const api = {
       const listener = (_event: Electron.IpcRendererEvent, state: RateLimitState) => callback(state)
       ipcRenderer.on('rateLimits:update', listener)
       return () => ipcRenderer.removeListener('rateLimits:update', listener)
+    }
+  },
+
+  agentAutoResume: {
+    get: (): Promise<AgentAutoResumeSnapshot> => ipcRenderer.invoke('agentAutoResume:get'),
+    onUpdate: (callback: (snapshot: AgentAutoResumeSnapshot) => void): (() => void) => {
+      const listener = (_event: Electron.IpcRendererEvent, snapshot: AgentAutoResumeSnapshot) =>
+        callback(snapshot)
+      ipcRenderer.on(AGENT_AUTO_RESUME_UPDATE_CHANNEL, listener)
+      return () => ipcRenderer.removeListener(AGENT_AUTO_RESUME_UPDATE_CHANNEL, listener)
     }
   },
 

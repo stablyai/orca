@@ -1,9 +1,12 @@
 import React from 'react'
 import { Bell, GitBranch } from 'lucide-react'
+import { useShallow } from 'zustand/react/shallow'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { translate } from '@/i18n/i18n'
 import { cn } from '@/lib/utils'
 import { getWorktreeStatusLabel, type WorktreeStatus } from '@/lib/worktree-status'
+import { useAppStore } from '@/store'
+import { formatRateLimitedLabel, selectWorktreeRateLimitStatus } from '@/store/slices/auto-resume'
 import { FilledBellIcon } from './WorktreeCardHelpers'
 import StatusIndicator from './StatusIndicator'
 import { useWorktreeActivityStatus } from './use-worktree-activity-status'
@@ -101,7 +104,11 @@ export function WorktreeCardStatusSlot({
   className
 }: WorktreeCardStatusSlotProps): React.JSX.Element | null {
   const status = useWorktreeActivityStatus(worktreeId)
-  const statusLabel = getWorktreeStatusLabel(status) || status
+  const rateLimit = useAppStore(useShallow((s) => selectWorktreeRateLimitStatus(s, worktreeId)))
+  const statusLabel =
+    status === 'rate-limited'
+      ? formatRateLimitedLabel(rateLimit.resumesAt)
+      : getWorktreeStatusLabel(status) || status
   const canShowReviewStatus =
     newCardStyle &&
     showStatus &&

@@ -157,6 +157,12 @@ import { AutomationService } from './automations/service'
 import { createHeadlessAutomationOutputSnapshotBuffer } from './automations/headless-dispatch'
 import { buildHeadlessAutomationWorktreeCreateArgs } from './automations/headless-workspace-create'
 import { AgentAwakeService } from './agent-awake-service'
+import { AgentAutoResumeService } from './agent-auto-resume-service'
+import { deliverAgentAutoResumeNotification } from './agent-auto-resume-notifications'
+import {
+  AGENT_AUTO_RESUME_UPDATE_CHANNEL,
+  type UsageLimitProvider
+} from '../shared/agent-auto-resume-types'
 import { registerSystemResumeBroadcast } from './system-resume-broadcast'
 import {
   getCrashBreadcrumbSnapshot,
@@ -217,6 +223,8 @@ let headlessBrowserDisplayAvailable = false
 
 let starNag: StarNagService | null = null
 let agentAwakeService: AgentAwakeService | null = null
+let agentAutoResumeService: AgentAutoResumeService | null = null
+let unsubscribeUsageLimitStall: (() => void) | null = null
 let crashReports: CrashReportStore | null = null
 let unsubscribeAgentAwakeStatusChanges: (() => void) | null = null
 let unsubscribeSystemResumeBroadcast: (() => void) | null = null
@@ -751,6 +759,84 @@ function showMainWindowFromTray(): void {
   }
 }
 
+// Why: the wait-for-reset menu grace reuses the user's configured agent idle
+// timeout so a human has the same window to intervene they already expect.
+// Clamped inline (the renderer's planner constants can't be imported into main).
+const DEFAULT_MENU_GRACE_MS = 30 * 60 * 1000
+const MIN_MENU_GRACE_MS = 60 * 1000
+const MAX_MENU_GRACE_MS = 24 * 60 * 60 * 1000
+
+function resolveMenuGraceMs(value: unknown): number {
+  return typeof value === 'number' &&
+    Number.isFinite(value) &&
+    value >= MIN_MENU_GRACE_MS &&
+    value <= MAX_MENU_GRACE_MS
+    ? value
+    : DEFAULT_MENU_GRACE_MS
+}
+
+function createAgentAutoResumeService(
+  runtimeService: OrcaRuntimeService,
+  activeStore: Store,
+  rateLimitService: RateLimitService | null
+): AgentAutoResumeService {
+  const service = new AgentAutoResumeService({
+    verifyStall: (ptyId) => runtimeService.getUsageLimitStallSnapshot(ptyId),
+    sendKeys: async (handle, action) => {
+      await runtimeService.sendTerminal(handle, action)
+    },
+    getMenuGraceMs: () => resolveMenuGraceMs(activeStore.getSettings().agentHibernationIdleMs),
+    getProviderResetAt: (provider) => getProviderResetAt(rateLimitService, provider),
+    notify: (notification) =>
+      deliverAgentAutoResumeNotification(notification, {
+        getNotificationSettings: () => activeStore.getSettings().notifications,
+        focus: (worktreeId) => focusWorktreeFromMain(worktreeId)
+      }),
+    onSnapshot: (snapshot) =>
+      mainWindow?.webContents.send(AGENT_AUTO_RESUME_UPDATE_CHANNEL, snapshot)
+  })
+  service.setEnabled(activeStore.getSettings().autoResumeRateLimitedAgents)
+  unsubscribeUsageLimitStall = runtimeService.subscribeUsageLimitStall((event) =>
+    service.handleEvent(event)
+  )
+  return service
+}
+
+function getProviderResetAt(
+  rateLimitService: RateLimitService | null,
+  provider: UsageLimitProvider | null
+): number | null {
+  if (!rateLimitService || !provider) {
+    return null
+  }
+  const state = rateLimitService.getState()
+  const windows = provider === 'claude' ? state.claude : state.codex
+  // The 5-hour session window is the one that stalls active agents; fall back
+  // to the weekly window when the session window carries no reset.
+  return windows?.session?.resetsAt ?? windows?.weekly?.resetsAt ?? null
+}
+
+function focusWorktreeFromMain(worktreeId: string): void {
+  if (!worktreeId.includes('::')) {
+    return
+  }
+  const win = BrowserWindow.getAllWindows().find((w) => !w.isDestroyed())
+  if (!win) {
+    return
+  }
+  if (process.platform === 'darwin') {
+    app.focus({ steal: true })
+  }
+  if (win.isMinimized()) {
+    win.restore()
+  }
+  win.focus()
+  win.webContents.send('ui:activateWorktree', {
+    repoId: getRepoIdFromWorktreeId(worktreeId),
+    worktreeId
+  })
+}
+
 function openMainWindow(): BrowserWindow {
   logStartupMilestone('open-main-window-start')
   if (!store) {
@@ -956,7 +1042,8 @@ function openMainWindow(): BrowserWindow {
         isQuitting = true
         await preserveAgentAuthBeforeRestart({ codexRuntimeHome, claudeRuntimeAuth, store })
       }
-    }
+    },
+    agentAutoResumeService ?? undefined
   )
   automations.setWebContents(window.webContents)
   automations.start()
@@ -1812,6 +1899,7 @@ app.whenReady().then(async () => {
       isAgentStatusHooksEnabled(store?.getSettings()) ? agentHookServer.buildPtyEnv() : {}
   })
   runtime = runtimeService
+  agentAutoResumeService = createAgentAutoResumeService(runtimeService, store, rateLimits)
   automations = new AutomationService(store, {
     claudeUsage,
     codexUsage,
@@ -2224,6 +2312,10 @@ app.on('before-quit', () => {
   unsubscribeAgentAwakeStatusChanges = null
   agentAwakeService?.dispose()
   agentAwakeService = null
+  unsubscribeUsageLimitStall?.()
+  unsubscribeUsageLimitStall = null
+  agentAutoResumeService?.dispose()
+  agentAutoResumeService = null
   // Why: PTY cleanup is deferred to will-quit so the renderer has a chance to
   // capture terminal scrollback buffers before PTY exit events race in and
   // unmount TerminalPane components (removing their capture callbacks).

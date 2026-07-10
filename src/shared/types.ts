@@ -2815,6 +2815,10 @@ export type GlobalSettings = {
   confirmClosePinnedTab: boolean
   /** When true, Orca requests local awake assertions while hook-reported agents are working. */
   keepComputerAwakeWhileAgentsRun: boolean
+  /** When true, Orca auto-resumes agents stalled on a provider usage limit:
+   *  waits for the limit to reset (or the configured idle grace for the
+   *  wait-for-reset menu) then resumes them. Opt-in, off by default. */
+  autoResumeRateLimitedAgents: boolean
   /** Why: macOS terminals must choose between letting Option compose layout
    *  characters (@ on German, € on French) or treating Option as Meta/Esc for
    *  readline shortcuts. Mirrors Ghostty's macos-option-as-alt setting — and

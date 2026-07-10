@@ -20,6 +20,7 @@ import type { CodexUsageSlice } from './slices/codex-usage'
 import type { OpenCodeUsageSlice } from './slices/opencode-usage'
 import type { BrowserSlice } from './slices/browser'
 import type { RateLimitSlice } from './slices/rate-limits'
+import type { AutoResumeSlice } from './slices/auto-resume'
 import type { SshSlice } from './slices/ssh'
 import type { RuntimeEnvironmentSshSlice } from './slices/runtime-environment-ssh'
 import type { AgentStatusSlice } from './slices/agent-status'
@@ -58,6 +59,7 @@ export type AppState = RepoSlice &
   OpenCodeUsageSlice &
   BrowserSlice &
   RateLimitSlice &
+  AutoResumeSlice &
   SshSlice &
   RuntimeEnvironmentSshSlice &
   AgentStatusSlice &

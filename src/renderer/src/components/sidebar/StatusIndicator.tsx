@@ -1,4 +1,5 @@
 import React from 'react'
+import { Hourglass } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { getWorktreeStatusLabel, type WorktreeStatus } from '@/lib/worktree-status'
 
@@ -36,6 +37,21 @@ const StatusIndicator = React.memo(function StatusIndicator({
         {/* Why: a stepped spin preserves the worker-is-running affordance while
             avoiding a full-refresh-rate compositor loop for long agent runs. */}
         <span className="block size-2 rounded-full border-2 border-yellow-500 border-t-transparent [animation:spin_1s_steps(12,end)_infinite]" />
+      </span>
+    )
+  }
+
+  if (status === 'rate-limited') {
+    // Why: a paused/waiting-for-reset agent gets its own amber hourglass so it
+    // reads as "Orca is waiting to resume this", distinct from the permission
+    // dot (also amber) which demands user action.
+    return (
+      <span
+        className={cn('inline-flex h-3 w-3 shrink-0 items-center justify-center', className)}
+        title={resolvedTitle}
+        {...rest}
+      >
+        <Hourglass className="size-2.5 text-amber-500" aria-hidden="true" />
       </span>
     )
   }

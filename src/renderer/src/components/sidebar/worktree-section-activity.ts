@@ -18,6 +18,7 @@ import {
   selectRuntimePaneTitlesForWorktree
 } from './worktree-card-status-inputs'
 import { selectWorktreeAgentActivitySummary } from './worktree-agent-activity-summary'
+import { selectHasRateLimitedForWorktree } from '@/store/slices/auto-resume'
 import type { BrowserActivityTab } from './visible-worktree-activity-inputs'
 
 export type WorktreeSectionActivityState = Pick<
@@ -28,6 +29,7 @@ export type WorktreeSectionActivityState = Pick<
   | 'agentStatusByPaneKey'
   | 'migrationUnsupportedByPtyId'
   | 'retainedAgentsByPaneKey'
+  | 'autoResumeEntries'
 > & {
   tabsByWorktree: Record<string, readonly Pick<TerminalTab, 'id' | 'title'>[]>
   browserTabsByWorktree: Record<string, readonly BrowserActivityTab[]>
@@ -111,6 +113,7 @@ function getSectionWorktreeStatus(
     hasPermission: agentSummary.hasPermission,
     hasLiveWorking: agentSummary.hasLiveWorking,
     hasLiveDone: agentSummary.hasLiveDone,
-    hasRetainedDone: agentSummary.hasRetainedDone
+    hasRetainedDone: agentSummary.hasRetainedDone,
+    hasRateLimited: selectHasRateLimitedForWorktree(state, worktreeId)
   })
 }

@@ -9,6 +9,7 @@ import { rebuildAppMenu } from '../menu/register-app-menu'
 import { track } from '../telemetry/client'
 import { SETTINGS_CHANGED_WHITELIST, type SettingsChangedKey } from '../../shared/telemetry-events'
 import type { AgentAwakeService } from '../agent-awake-service'
+import type { AgentAutoResumeService } from '../agent-auto-resume-service'
 import { sanitizeFloatingWorkspaceDirectorySetting } from './floating-workspace-directory'
 import { applyAgentStatusHooksEnabled } from '../agent-hooks/managed-agent-hook-controls'
 import { applyElectronProxySettings } from '../network/proxy-settings'
@@ -51,7 +52,8 @@ const APPEARANCE_MENU_KEYS: readonly (keyof GlobalSettings)[] = [
 
 export function registerSettingsHandlers(
   store: Store,
-  agentAwakeService?: AgentAwakeService
+  agentAwakeService?: AgentAwakeService,
+  agentAutoResumeService?: AgentAutoResumeService
 ): void {
   store.onSettingsChanged((updates, _settings, originWebContentsId) => {
     for (const window of BrowserWindow.getAllWindows()) {
@@ -116,6 +118,9 @@ export function registerSettingsHandlers(
     })
     if ('keepComputerAwakeWhileAgentsRun' in sanitizedArgs) {
       agentAwakeService?.setEnabled(result.keepComputerAwakeWhileAgentsRun)
+    }
+    if ('autoResumeRateLimitedAgents' in sanitizedArgs) {
+      agentAutoResumeService?.setEnabled(result.autoResumeRateLimitedAgents)
     }
     if (
       'agentStatusHooksEnabled' in sanitizedArgs &&

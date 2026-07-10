@@ -8,7 +8,13 @@ import type {
   TerminalTab
 } from '../../../shared/types'
 
-export type WorktreeStatus = 'active' | 'working' | 'permission' | 'done' | 'inactive'
+export type WorktreeStatus =
+  | 'active'
+  | 'working'
+  | 'permission'
+  | 'rate-limited'
+  | 'done'
+  | 'inactive'
 
 type WorktreeStatusHeuristicOptions = {
   agentStatusPaneIdsByTabId?: Record<string, ReadonlySet<string>>
@@ -20,6 +26,7 @@ const STATUS_LABELS: Record<WorktreeStatus, string> = {
   active: 'Active',
   working: 'Working',
   permission: 'Needs permission',
+  'rate-limited': 'Rate-limited',
   done: 'Done',
   inactive: 'Inactive'
 }
@@ -157,6 +164,7 @@ export function resolveWorktreeStatus(args: {
   hasLiveWorking: boolean
   hasLiveDone: boolean
   hasRetainedDone: boolean
+  hasRateLimited?: boolean
 }): WorktreeStatus {
   const heuristic = getWorktreeStatus(
     args.tabs,
@@ -185,6 +193,12 @@ export function resolveWorktreeStatus(args: {
   // Trust the fresh explicit working row so those cards stay yellow on restart.
   if (args.hasLiveWorking || heuristic === 'working') {
     return 'working'
+  }
+  // Why: a rate-limited (paused) agent outranks the passive done/active/inactive
+  // states so the card advertises that Orca is waiting to auto-resume it, but
+  // stays below permission/working which are more user-actionable / live.
+  if (args.hasRateLimited) {
+    return 'rate-limited'
   }
   if (args.hasLiveDone || args.hasRetainedDone) {
     return 'done'

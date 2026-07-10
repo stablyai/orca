@@ -356,6 +356,7 @@ import type {
   RateLimitRuntimeTarget,
   RateLimitState
 } from '../shared/rate-limit-types'
+import type { AgentAutoResumeSnapshot } from '../shared/agent-auto-resume-types'
 import type {
   SpeechErrorEvent,
   SpeechLifecycleEvent,
@@ -2886,6 +2887,10 @@ export type PreloadApi = {
     refreshMiniMax: () => Promise<RateLimitState>
     refreshGrok: () => Promise<RateLimitState>
     onUpdate: (callback: (state: RateLimitState) => void) => () => void
+  }
+  agentAutoResume: {
+    get: () => Promise<AgentAutoResumeSnapshot>
+    onUpdate: (callback: (snapshot: AgentAutoResumeSnapshot) => void) => () => void
   }
   minimaxCredentials: {
     getStatus: () => Promise<{ configured: boolean }>

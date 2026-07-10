@@ -22,6 +22,7 @@ import { createCodexUsageSlice } from './slices/codex-usage'
 import { createOpenCodeUsageSlice } from './slices/opencode-usage'
 import { createBrowserSlice } from './slices/browser'
 import { createRateLimitSlice } from './slices/rate-limits'
+import { createAutoResumeSlice } from './slices/auto-resume'
 import { createSshSlice } from './slices/ssh'
 import { createRuntimeEnvironmentSshSlice } from './slices/runtime-environment-ssh'
 import { createAgentStatusSlice } from './slices/agent-status'
@@ -63,6 +64,7 @@ export const useAppStore = create<AppState>()((...a) => ({
   ...createOpenCodeUsageSlice(...a),
   ...createBrowserSlice(...a),
   ...createRateLimitSlice(...a),
+  ...createAutoResumeSlice(...a),
   ...createSshSlice(...a),
   ...createRuntimeEnvironmentSshSlice(...a),
   ...createAgentStatusSlice(...a),
