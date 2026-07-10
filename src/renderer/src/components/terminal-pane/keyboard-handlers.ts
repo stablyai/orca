@@ -31,6 +31,7 @@ import { recordTerminalUserInputForLeaf } from './terminal-input-activity'
 import { isLocalWindowsConptyPaneForCtrlArrow } from './terminal-ctrl-arrow-conpty'
 import { makePaneKey } from '../../../../shared/stable-pane-id'
 import { resolveWindowsShiftEnterEncodingForPane } from './terminal-windows-shift-enter'
+import { resolveTerminalInputHostPlatform } from './terminal-input-host-platform'
 import {
   markTerminalFollowOutput,
   markTerminalPinnedViewport,
@@ -345,7 +346,17 @@ export function useTerminalKeyboardShortcuts({
         isLocalWindowsConptyPane,
         isKittyKeyboardActivePane,
         getLayoutBaseCharacterForCode,
-        getActivePaneWindowsShiftEnterEncoding
+        getActivePaneWindowsShiftEnterEncoding,
+        () =>
+          resolveTerminalInputHostPlatform({
+            clientPlatform: shortcutPlatform,
+            state: useAppStore.getState(),
+            worktreeId,
+            transport:
+              paneTransportsRef.current.get(
+                (manager.getActivePane() ?? manager.getPanes()[0])?.id ?? -1
+              ) ?? null
+          }) === 'win32'
       )
       if (!action) {
         return

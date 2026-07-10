@@ -90,7 +90,10 @@ export function resolveTerminalShortcutAction(
   layoutBaseCharacterForCode?: (code: string) => string | undefined,
   // Why: lazily resolves the active pane's Windows encoding. Only consulted for
   // Shift+Enter so agent-state lookup stays off every other keystroke.
-  getWindowsShiftEnterEncoding?: () => WindowsShiftEnterEncoding
+  getWindowsShiftEnterEncoding?: () => WindowsShiftEnterEncoding,
+  // Why: keybindings follow the client OS, but terminal byte protocols follow
+  // the PTY host. They differ for clients attached to a remote host.
+  isWindowsTerminalHost: () => boolean = () => isWindows
 ): TerminalShortcutAction | null {
   const platform: NodeJS.Platform = isMac ? 'darwin' : isWindows ? 'win32' : 'linux'
   if (!event.repeat) {
@@ -150,12 +153,14 @@ export function resolveTerminalShortcutAction(
     event.shiftKey &&
     event.key === 'Enter'
   ) {
-    // Why: Droid needs CSI-u but Codex needs Esc+CR; preserve legacy bytes for
-    // SSH/WSL/remote peers that cannot be safely classified from this client.
-    const useLocalWindowsCapability = isWindows && isLocalWindowsConptyPane?.() !== false
+    // Why: Droid needs CSI-u but Codex needs Esc+CR on Windows PTYs; preserve
+    // legacy bytes for remote Windows peers that cannot be safely classified.
+    const windowsTerminalHost = isWindowsTerminalHost()
+    const useLocalWindowsCapability =
+      windowsTerminalHost && isLocalWindowsConptyPane?.() !== false
     const encoding = useLocalWindowsCapability
       ? (getWindowsShiftEnterEncoding?.() ?? 'alt-enter')
-      : isWindows
+      : windowsTerminalHost
         ? 'alt-enter'
         : 'csi-u'
     return { type: 'sendInput', data: encoding === 'csi-u' ? '\x1b[13;2u' : '\x1b\r' }

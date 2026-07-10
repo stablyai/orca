@@ -240,6 +240,56 @@ describe('resolveTerminalShortcutAction', () => {
     expect(getWindowsShiftEnterEncoding).toHaveBeenCalledTimes(1)
   })
 
+  it('uses the Windows fallback for a Windows PTY reached from macOS', () => {
+    const isLocalWindowsConptyPane = vi.fn(() => false)
+    const getWindowsShiftEnterEncoding = vi.fn(() => 'csi-u' as const)
+    const isWindowsTerminalHost = vi.fn(() => true)
+
+    expect(
+      resolveTerminalShortcutAction(
+        event({ key: 'Enter', code: 'Enter', shiftKey: true }),
+        true,
+        'false',
+        0,
+        false,
+        undefined,
+        isLocalWindowsConptyPane,
+        undefined,
+        undefined,
+        getWindowsShiftEnterEncoding,
+        isWindowsTerminalHost
+      )
+    ).toEqual({ type: 'sendInput', data: '\x1b\r' })
+    expect(isWindowsTerminalHost).toHaveBeenCalledTimes(1)
+    expect(isLocalWindowsConptyPane).toHaveBeenCalledTimes(1)
+    expect(getWindowsShiftEnterEncoding).not.toHaveBeenCalled()
+  })
+
+  it('uses CSI-u for a non-Windows PTY reached from a Windows client', () => {
+    const isLocalWindowsConptyPane = vi.fn(() => true)
+    const getWindowsShiftEnterEncoding = vi.fn(() => 'alt-enter' as const)
+    const isWindowsTerminalHost = vi.fn(() => false)
+
+    expect(
+      resolveTerminalShortcutAction(
+        event({ key: 'Enter', code: 'Enter', shiftKey: true }),
+        false,
+        'false',
+        0,
+        true,
+        undefined,
+        isLocalWindowsConptyPane,
+        undefined,
+        undefined,
+        getWindowsShiftEnterEncoding,
+        isWindowsTerminalHost
+      )
+    ).toEqual({ type: 'sendInput', data: '\x1b[13;2u' })
+    expect(isWindowsTerminalHost).toHaveBeenCalledTimes(1)
+    expect(isLocalWindowsConptyPane).not.toHaveBeenCalled()
+    expect(getWindowsShiftEnterEncoding).not.toHaveBeenCalled()
+  })
+
   it('forwards Ctrl+Enter as the kitty CSI-u chord so TUIs can cue instead of send', () => {
     // Why: xterm.js collapses Ctrl+Enter to a bare CR; intercept upstream and
     // emit the kitty sequence (modifier code 5 = Ctrl) so probing TUIs receive
