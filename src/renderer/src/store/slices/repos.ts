@@ -44,7 +44,10 @@ import { isGitRepoKind } from '../../../../shared/repo-kind'
 import { sanitizeRepoIcon } from '../../../../shared/repo-icon'
 import { normalizeRepoBadgeColor } from '../../../../shared/repo-badge-color'
 import { getProjectGroupSubtreeIds } from '../../../../shared/project-groups'
-import { isPathInsideOrEqual } from '../../../../shared/cross-platform-path'
+import {
+  isPathInsideOrEqual,
+  normalizeRuntimePathForComparison
+} from '../../../../shared/cross-platform-path'
 import { getRepoIdFromWorktreeId } from '../../../../shared/worktree-id'
 import { selectProjectGroupRemovalTargets } from './project-group-removal-targets'
 import { reconcileFetchedRepos } from './repo-identity-reconcile'
@@ -1130,7 +1133,10 @@ function getRuntimeTargetCachePrefix(
 }
 
 type FolderWorkspacePathStatusRouteOptions = { runtimeEnvironmentId?: string | null }
-type AddRepoPathRouteOptions = { runtimeEnvironmentId?: string | null }
+type AddRepoPathRouteOptions = {
+  runtimeEnvironmentId?: string | null
+  suppressFolderFallback?: boolean
+}
 
 function getFolderWorkspacePathStatusRouteSettings(
   options: FolderWorkspacePathStatusRouteOptions | undefined,
@@ -1793,6 +1799,31 @@ export const createRepoSlice: StateCreator<AppState, [], [], RepoSlice> = (set, 
               }
             : state.folderWorkspacePathStatuses
       }))
+      if (request.scope === 'folder-workspace' && status.exists) {
+        const state = get()
+        const workspace = state.folderWorkspaces.find(
+          (entry) => entry.id === request.folderWorkspaceId
+        )
+        if (workspace && state.activeWorktreeId === folderWorkspaceKey(workspace.id)) {
+          const repo = await state.addRepoPath(workspace.folderPath, 'git', {
+            runtimeEnvironmentId: getFolderWorkspacePathStatusRouteSettings(options, state.settings)
+              ?.activeRuntimeEnvironmentId,
+            suppressFolderFallback: true
+          })
+          if (repo && isGitRepoKind(repo)) {
+            await get().fetchWorktrees(repo.id, { requireAuthoritative: true })
+            const canonicalWorktree = get().worktreesByRepo[repo.id]?.find(
+              (worktree) =>
+                normalizeRuntimePathForComparison(worktree.path) ===
+                normalizeRuntimePathForComparison(workspace.folderPath)
+            )
+            if (canonicalWorktree) {
+              const { activateAndRevealWorktree } = await import('../../lib/worktree-activation')
+              activateAndRevealWorktree(canonicalWorktree.id)
+            }
+          }
+        }
+      }
       return status
     } catch (err) {
       console.error('Failed to fetch folder workspace path status:', err)
@@ -2216,6 +2247,9 @@ export const createRepoSlice: StateCreator<AppState, [], [], RepoSlice> = (set, 
         if (kind !== 'git' || !message.includes('Not a valid git repository')) {
           throw err
         }
+        if (options?.suppressFolderFallback) {
+          return null
+        }
         if (target.kind !== 'local') {
           const status = await fetchRuntimeAddProjectPathStatus({ target, path })
           if (status?.exists !== true) {
@@ -2250,13 +2284,29 @@ export const createRepoSlice: StateCreator<AppState, [], [], RepoSlice> = (set, 
       }
       repo = repoWithFetchedOwner(repo, target)
       const repoIdentity = getRepoHostIdentity(repo)
-      const alreadyAdded = get().repos.some((r) => getRepoHostIdentity(r) === repoIdentity)
+      const existingRepo = get().repos.find((r) => getRepoHostIdentity(r) === repoIdentity)
+      const alreadyAdded = Boolean(existingRepo)
+      const repoChanged = Boolean(existingRepo && existingRepo.kind !== repo.kind)
       if (alreadyAdded) {
         get().clearOrcaHookTrustForRepo(repo.id)
       }
       set((s) => {
-        if (s.repos.some((r) => getRepoHostIdentity(r) === repoIdentity)) {
-          return s
+        const existingIndex = s.repos.findIndex((r) => getRepoHostIdentity(r) === repoIdentity)
+        if (existingIndex !== -1) {
+          if (!repoChanged) {
+            return s
+          }
+          const nextRepos = [...s.repos]
+          nextRepos[existingIndex] = repo
+          return {
+            repos: nextRepos,
+            ...mergeProjectCompatibilityForHostRepoChange({
+              previous: { projects: s.projects, projectHostSetups: s.projectHostSetups },
+              nextRepos,
+              hostId: getRepoExecutionHostId(repo)
+            }),
+            folderWorkspacePathStatuses: {}
+          }
         }
         const nextRepos = [...s.repos, repo]
         const hostId = getRepoExecutionHostId(repo)
@@ -2270,11 +2320,11 @@ export const createRepoSlice: StateCreator<AppState, [], [], RepoSlice> = (set, 
           folderWorkspacePathStatuses: {}
         }
       })
-      if (alreadyAdded) {
+      if (alreadyAdded && !repoChanged) {
         toast.info(translate('auto.store.slices.repos.a8e4b3af5b', 'Project already added'), {
           description: repo.displayName
         })
-      } else {
+      } else if (!alreadyAdded) {
         toast.success(
           isGitRepoKind(repo)
             ? translate('auto.store.slices.repos.8bb3ad7935', 'Project added')

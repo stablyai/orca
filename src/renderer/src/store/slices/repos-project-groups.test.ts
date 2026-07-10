@@ -1,5 +1,6 @@
+/* eslint-disable max-lines -- This routing test file already owns the folder workspace activation matrix. */
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { createTestStore } from './store-test-helpers'
+import { createTestStore, makeWorktree } from './store-test-helpers'
 import type {
   NestedRepoScanResult,
   Repo,
@@ -13,6 +14,14 @@ import {
 import { clearRuntimeCompatibilityCacheForTests } from '../../runtime/runtime-rpc-client'
 import { folderWorkspaceKey } from '../../../../shared/workspace-scope'
 import type { SshConnectionState } from '../../../../shared/ssh-types'
+
+const worktreeActivation = vi.hoisted(() => ({
+  activateAndRevealWorktree: vi.fn()
+}))
+
+vi.mock('../../lib/worktree-activation', () => ({
+  activateAndRevealWorktree: worktreeActivation.activateAndRevealWorktree
+}))
 
 const remoteRepo: Repo = {
   id: 'remote-repo',
@@ -36,6 +45,7 @@ const projectGroup: ProjectGroup = {
 }
 
 const reposList = vi.fn()
+const reposAdd = vi.fn()
 const reposRemove = vi.fn()
 const ptyKill = vi.fn()
 const projectGroupsList = vi.fn()
@@ -51,6 +61,7 @@ const folderWorkspacesGetPathStatus = vi.fn()
 const folderWorkspacesCreate = vi.fn()
 const folderWorkspacesUpdate = vi.fn()
 const folderWorkspacesDelete = vi.fn()
+const worktreesListDetected = vi.fn()
 const runtimeEnvironmentCall = vi.fn()
 const runtimeEnvironmentTransportCall = vi.fn()
 
@@ -66,6 +77,7 @@ function makeSshConnectionState(status: SshConnectionState['status']): SshConnec
 beforeEach(() => {
   clearRuntimeCompatibilityCacheForTests()
   reposList.mockReset()
+  reposAdd.mockReset()
   reposRemove.mockReset()
   reposRemove.mockResolvedValue(undefined)
   ptyKill.mockReset()
@@ -84,18 +96,24 @@ beforeEach(() => {
   folderWorkspacesCreate.mockReset()
   folderWorkspacesUpdate.mockReset()
   folderWorkspacesDelete.mockReset()
+  worktreesListDetected.mockReset()
   runtimeEnvironmentCall.mockReset()
   runtimeEnvironmentTransportCall.mockReset()
+  worktreeActivation.activateAndRevealWorktree.mockReset()
   runtimeEnvironmentTransportCall.mockImplementation((args: RuntimeEnvironmentCallRequest) => {
     return createCompatibleRuntimeStatusResponseIfNeeded(args) ?? runtimeEnvironmentCall(args)
   })
   vi.stubGlobal('window', {
     api: {
       repos: {
+        add: reposAdd,
         list: reposList,
         remove: reposRemove
       },
       pty: { kill: ptyKill },
+      worktrees: {
+        listDetected: worktreesListDetected
+      },
       projectGroups: {
         list: projectGroupsList,
         create: projectGroupsCreate,
@@ -368,6 +386,95 @@ describe('project group store routing', () => {
       reason: 'missing'
     })
     expect(folderWorkspacesGetPathStatus).toHaveBeenCalledTimes(1)
+  })
+
+  it('promotes an active folder workspace to the canonical git worktree when the same path becomes a repo', async () => {
+    const folderWorkspace: FolderWorkspace = {
+      id: 'folder-workspace-1',
+      projectGroupId: projectGroup.id,
+      name: 'Platform',
+      folderPath: '/workspace/platform',
+      linkedTask: null,
+      comment: '',
+      isArchived: false,
+      isUnread: false,
+      isPinned: false,
+      sortOrder: 1,
+      lastActivityAt: 0,
+      createdAt: 1,
+      updatedAt: 1
+    }
+    reposAdd.mockResolvedValue({
+      repo: {
+        id: 'repo-1',
+        path: folderWorkspace.folderPath,
+        displayName: 'Platform',
+        badgeColor: '#111',
+        addedAt: 2,
+        kind: 'git'
+      }
+    })
+    worktreesListDetected.mockResolvedValue({
+      repoId: 'repo-1',
+      authoritative: true,
+      source: 'git',
+      worktrees: [
+        {
+          ...makeWorktree({
+            id: 'repo-1::root',
+            repoId: 'repo-1',
+            path: folderWorkspace.folderPath,
+            isMainWorktree: true,
+            displayName: 'platform'
+          }),
+          ownership: 'orca-managed',
+          selectedCheckout: true,
+          visible: true
+        }
+      ]
+    })
+    const store = createTestStore()
+    store.setState({
+      repos: [
+        {
+          id: 'repo-1',
+          path: folderWorkspace.folderPath,
+          displayName: 'Platform',
+          badgeColor: '#111',
+          addedAt: 1,
+          kind: 'folder',
+          executionHostId: 'local'
+        }
+      ],
+      folderWorkspaces: [folderWorkspace],
+      activeWorktreeId: folderWorkspaceKey(folderWorkspace.id)
+    })
+
+    await expect(
+      store.getState().fetchFolderWorkspacePathStatus({
+        scope: 'folder-workspace',
+        folderWorkspaceId: folderWorkspace.id
+      })
+    ).resolves.toEqual({ path: folderWorkspace.folderPath, exists: true })
+
+    expect(reposAdd).toHaveBeenCalledWith({ path: folderWorkspace.folderPath, kind: 'git' })
+    expect(worktreesListDetected).toHaveBeenCalledWith({ repoId: 'repo-1' })
+    expect(store.getState().repos).toEqual([
+      expect.objectContaining({
+        id: 'repo-1',
+        path: folderWorkspace.folderPath,
+        kind: 'git',
+        executionHostId: 'local'
+      })
+    ])
+    expect(store.getState().worktreesByRepo['repo-1']).toEqual([
+      expect.objectContaining({
+        id: 'repo-1::root',
+        path: folderWorkspace.folderPath,
+        repoId: 'repo-1'
+      })
+    ])
+    expect(worktreeActivation.activateAndRevealWorktree).toHaveBeenCalledWith('repo-1::root')
   })
 
   it('ignores stale folder path status responses after a group path changes', async () => {
