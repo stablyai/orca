@@ -72,7 +72,55 @@ class SceneDelegate: UIResponder, UIWindowSceneDelegate {
 }
 `
 
+const BOOTSTRAP_MIGRATED_MARKER = 'self.launchOptions = launchOptions'
+
+function hasMigratedBootstrap(contents) {
+  // Why: after the first successful bootstrap rewrite the old UIWindow pattern
+  // is gone. Reruns must short-circuit on this marker — not only on the scene
+  // hook — or a partial first pass (bootstrap ok, scene insert missed) throws
+  // on the second prebuild.
+  return (
+    contents.includes(BOOTSTRAP_MIGRATED_MARKER) ||
+    contents.includes('SceneDelegate owns the window under the UIScene lifecycle')
+  )
+}
+
+function insertSceneConfigurationHook(contents) {
+  if (contents.includes('configurationForConnecting')) {
+    return contents
+  }
+  const insertAfter = `return super.application(application, didFinishLaunchingWithOptions: launchOptions)
+  }`
+  const sceneHook = `return super.application(application, didFinishLaunchingWithOptions: launchOptions)
+  }
+
+  // Why: explicit scene configuration so UIKit uses SceneDelegate even if
+  // Info.plist naming differs across build modules.
+  public func application(
+    _ application: UIApplication,
+    configurationForConnecting connectingSceneSession: UISceneSession,
+    options: UIScene.ConnectionOptions
+  ) -> UISceneConfiguration {
+    let configuration = UISceneConfiguration(
+      name: "Default Configuration",
+      sessionRole: connectingSceneSession.role
+    )
+    configuration.delegateClass = SceneDelegate.self
+    return configuration
+  }`
+  if (!contents.includes(insertAfter)) {
+    throw new Error(
+      'ios-uikit-scene-lifecycle: could not insert configurationForConnecting; refuse partial rewrite'
+    )
+  }
+  return contents.replace(insertAfter, sceneHook)
+}
+
 function rewriteAppDelegate(contents) {
+  if (hasMigratedBootstrap(contents)) {
+    // Bootstrap already deferred to SceneDelegate — only ensure the scene hook.
+    return insertSceneConfigurationHook(contents)
+  }
   if (contents.includes('class SceneDelegate') || contents.includes('configurationForConnecting')) {
     return contents
   }
@@ -105,7 +153,7 @@ function rewriteAppDelegate(contents) {
       launchOptions: launchOptions)
 #endif`
 
-  const newBootstrap = `self.launchOptions = launchOptions
+  const newBootstrap = `${BOOTSTRAP_MIGRATED_MARKER}
 
     // Why: do not create UIWindow here — SceneDelegate owns the window under
     // the UIScene lifecycle required by iOS 27.`
@@ -115,7 +163,7 @@ function rewriteAppDelegate(contents) {
     // Fallback for slightly reformatted templates.
     next = next.replace(
       /window = UIWindow\(frame: UIScreen\.main\.bounds\)\s*\n\s*factory\.startReactNative\(\s*\n\s*withModuleName: "main",\s*\n\s*in: window,\s*\n\s*launchOptions: launchOptions\)/,
-      'self.launchOptions = launchOptions\n    // SceneDelegate owns the window under the UIScene lifecycle required by iOS 27.'
+      `${BOOTSTRAP_MIGRATED_MARKER}\n    // SceneDelegate owns the window under the UIScene lifecycle required by iOS 27.`
     )
   } else {
     next = next.replace(oldBootstrap, newBootstrap)
@@ -126,30 +174,9 @@ function rewriteAppDelegate(contents) {
     )
   }
 
-  if (!next.includes('configurationForConnecting')) {
-    const insertAfter = `return super.application(application, didFinishLaunchingWithOptions: launchOptions)
-  }`
-    const sceneHook = `return super.application(application, didFinishLaunchingWithOptions: launchOptions)
-  }
-
-  // Why: explicit scene configuration so UIKit uses SceneDelegate even if
-  // Info.plist naming differs across build modules.
-  public func application(
-    _ application: UIApplication,
-    configurationForConnecting connectingSceneSession: UISceneSession,
-    options: UIScene.ConnectionOptions
-  ) -> UISceneConfiguration {
-    let configuration = UISceneConfiguration(
-      name: "Default Configuration",
-      sessionRole: connectingSceneSession.role
-    )
-    configuration.delegateClass = SceneDelegate.self
-    return configuration
-  }`
-    if (next.includes(insertAfter)) {
-      next = next.replace(insertAfter, sceneHook)
-    }
-  }
+  // Why: refuse partial migration — bootstrap without scene configuration leaves
+  // the app without a SceneDelegate on the next launch.
+  next = insertSceneConfigurationHook(next)
 
   return next
 }

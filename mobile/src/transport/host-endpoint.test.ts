@@ -25,6 +25,11 @@ describe('endpointPort', () => {
   it('returns undefined when the port is omitted', () => {
     expect(endpointPort('ws://192.168.1.10')).toBeUndefined()
   })
+
+  it('preserves scheme-default ports that URL.port hides', () => {
+    expect(endpointPort('ws://192.168.1.10:80')).toBe('80')
+    expect(endpointPort('wss://desk.example:443')).toBe('443')
+  })
 })
 
 describe('normalizeHostEndpoint', () => {
@@ -68,6 +73,19 @@ describe('normalizeHostEndpoint', () => {
       ok: true,
       endpoint: 'ws://192.168.1.10:9000'
     })
+  })
+
+  it('preserves explicit ws :80 and wss :443 instead of rewriting to fallback', () => {
+    expect(normalizeHostEndpoint('ws://192.168.1.10:80', { fallbackPort: '6768' })).toEqual({
+      ok: true,
+      endpoint: 'ws://192.168.1.10:80'
+    })
+    expect(normalizeHostEndpoint('wss://desk.example:443', { fallbackPort: '6768' })).toEqual({
+      ok: true,
+      endpoint: 'wss://desk.example:443'
+    })
+    expect(displayHostEndpoint('ws://192.168.1.10:80')).toBe('192.168.1.10:80')
+    expect(displayHostEndpoint('wss://desk.example:443')).toBe('desk.example:443')
   })
 
   it('trims whitespace', () => {

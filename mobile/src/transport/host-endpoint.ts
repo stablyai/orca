@@ -15,7 +15,8 @@ export function displayHostEndpoint(endpoint: string): string {
     // Why: some URL parsers leave IPv6 brackets on hostname, others strip them.
     // Normalize once so round-trip through normalizeHostEndpoint stays stable.
     const host = formatHostForUrl(unwrapHostname(url.hostname))
-    return `${host}${url.port ? `:${url.port}` : ''}`
+    const port = resolveWebsocketUrlPort(endpoint, url)
+    return port ? `${host}:${port}` : host
   } catch {
     return endpoint
   }
@@ -25,10 +26,46 @@ function unwrapHostname(hostname: string): string {
   return hostname.startsWith('[') && hostname.endsWith(']') ? hostname.slice(1, -1) : hostname
 }
 
+/**
+ * Recover an explicitly written port from a ws(s) URL authority.
+ * Why: `new URL('ws://host:80').port` and `wss://host:443` are empty — the
+ * URL parser hides scheme-default ports, so callers that need the user's
+ * literal :80/:443 must re-parse the original string.
+ */
+function extractExplicitPortFromWebsocketUrl(input: string): string | null {
+  const withoutScheme = input.replace(/^[a-zA-Z][a-zA-Z0-9+.-]*:\/\//, '')
+  if (withoutScheme.startsWith('[')) {
+    const close = withoutScheme.indexOf(']')
+    if (close <= 1) {
+      return null
+    }
+    const rest = withoutScheme.slice(close + 1)
+    const match = /^:(\d+)(?=[/?#]|$)/.exec(rest)
+    return match?.[1] ?? null
+  }
+  const end = withoutScheme.search(/[/?#]/)
+  const authority = end === -1 ? withoutScheme : withoutScheme.slice(0, end)
+  const at = authority.lastIndexOf('@')
+  const hostPort = at === -1 ? authority : authority.slice(at + 1)
+  const match = /:(\d+)$/.exec(hostPort)
+  return match?.[1] ?? null
+}
+
+function resolveWebsocketUrlPort(input: string, url: URL): string | null {
+  if (url.port) {
+    return url.port
+  }
+  const explicit = extractExplicitPortFromWebsocketUrl(input)
+  if (explicit && isValidPort(explicit)) {
+    return explicit
+  }
+  return null
+}
+
 export function endpointPort(endpoint: string): string | undefined {
   try {
     const url = new URL(endpoint)
-    return url.port || undefined
+    return resolveWebsocketUrlPort(endpoint, url) ?? undefined
   } catch {
     return undefined
   }
@@ -104,7 +141,9 @@ function normalizeSchemeUrl(input: string, fallbackPort: string): NormalizeHostE
     return { ok: false, error: hostError }
   }
 
-  const port = url.port || fallbackPort
+  // Why: keep explicit :80/:443 (URL.port is empty for scheme defaults) instead
+  // of rewriting them to fallbackPort (usually 6768).
+  const port = resolveWebsocketUrlPort(input, url) ?? fallbackPort
   if (!isValidPort(port)) {
     return { ok: false, error: 'Port must be 1–65535.' }
   }
