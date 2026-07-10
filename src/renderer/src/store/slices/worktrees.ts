@@ -3959,7 +3959,7 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
     // persistence is async), so the reveal below resolves against a render
     // where the shortcut row already exists.
     void get().updateWorktreesMeta(updates)
-    get().revealWorktreeInSidebar(revealWorktreeId, { behavior: 'smooth', highlight: true })
+    get().revealWorktreeInSidebar(revealWorktreeId, { highlight: true })
   },
 
   markWorktreeUnread: (worktreeId) => {

@@ -222,7 +222,6 @@ async function executeWorktreeCreation(
   let primaryTabId: string | null
   if (stillActive) {
     activation = activateAndRevealWorktree(worktree.id, {
-      sidebarRevealBehavior: 'auto',
       ...(result.setup ? { setup: result.setup } : {}),
       ...(result.defaultTabs ? { defaultTabs: result.defaultTabs } : {}),
       ...(startupOpt ? { startup: startupOpt } : {}),

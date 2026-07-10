@@ -36,7 +36,7 @@ function revealCompactAgentCard(agentListRoot: HTMLElement | null): void {
   if (!(sidebarElement instanceof HTMLElement) || !worktreeOptionElement) {
     return
   }
-  revealElementInScrollContainer(sidebarElement, worktreeOptionElement, 'auto')
+  revealElementInScrollContainer(sidebarElement, worktreeOptionElement)
 }
 
 type Props = {
@@ -238,7 +238,7 @@ const WorktreeCardAgentsBody = React.memo(function WorktreeCardAgentsBody({
       // Why: defer the reveal scroll out of the expand commit. Running it inline
       // forces a synchronous sidebar layout that blocks the animation's opening
       // frames (a visible jump); next-frame keeps the open smooth and the
-      // ScrollBehavior 'auto' still lands before the height transition finishes.
+      // instant reveal still lands before the height transition finishes.
       const handle = requestAnimationFrame(() => {
         revealCompactAgentCard(compactAgentListRootRef.current)
       })

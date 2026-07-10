@@ -3094,6 +3094,12 @@ export class Store {
           ),
           settings: {
             ...defaults.settings,
+            // Why (#7977): a persisted experimentalNewWorktreeCardStyle:true is
+            // kept even though the default is now false. The v1.4.130 open-
+            // onboarding auto-default wrote the same plain boolean as a real
+            // opt-in, so a rollback migration would also revert genuine opt-ins;
+            // product intent was only to change the default, and the setting
+            // stays user-toggleable.
             ...stripLegacyTerminalScrollbackBytes(parsed.settings),
             // Why: v1.3.42 renamed the cosmetic sidekick setting to pet. Carry
             // the old persisted flag forward once so enabled users don't lose it.

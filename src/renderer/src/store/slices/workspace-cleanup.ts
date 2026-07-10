@@ -79,6 +79,10 @@ type WorkspaceCleanupEnrichmentCacheEntry = {
 const RECENT_VISIBLE_CONTEXT_MS = 24 * 60 * 60 * 1000
 const VIEWED_FROM_CLEANUP_MS = 2 * 60 * 60 * 1000
 const WORKSPACE_CLEANUP_PREFLIGHT_CONCURRENCY = 4
+// Why: dirty-files/unpushed-commits are concrete known work at risk; unknown-base
+// and git-status-error only mean "couldn't verify". A row approved while
+// unverifiable must still fail if real work becomes visible before removal.
+const WORKSPACE_CLEANUP_CONCRETE_RISK_BLOCKERS = ['dirty-files', 'unpushed-commits'] as const
 
 let inFlightWorkspaceCleanupScan: {
   key: string
@@ -857,20 +861,27 @@ async function preflightWorkspaceCleanupCandidate(
   // Why: this row may be removed minutes after the confirm click. If it now
   // needs a force removal the user never approved (new dirt, unpushed work,
   // or a git error since confirmation), fail it instead of force-deleting.
-  if (
-    approvedCandidate &&
-    shouldForceWorkspaceCleanupRemoval(candidate) &&
-    !shouldForceWorkspaceCleanupRemoval(approvedCandidate)
-  ) {
-    return {
-      ok: false,
-      failure: {
-        worktreeId,
-        displayName: candidate.displayName,
-        message: translate(
-          'auto.store.slices.workspace.cleanup.changedSinceConfirmation',
-          'Workspace changed after confirmation. Refresh to review it before removing.'
-        )
+  if (approvedCandidate) {
+    const escalatedToForce =
+      shouldForceWorkspaceCleanupRemoval(candidate) &&
+      !shouldForceWorkspaceCleanupRemoval(approvedCandidate)
+    // Why: an approved row that was already force-flagged for an unverifiable
+    // reason must still fail when real dirt/unpushed work is now visible.
+    const revealedConcreteRisk = WORKSPACE_CLEANUP_CONCRETE_RISK_BLOCKERS.some(
+      (blocker) =>
+        candidate.blockers.includes(blocker) && !approvedCandidate.blockers.includes(blocker)
+    )
+    if (escalatedToForce || revealedConcreteRisk) {
+      return {
+        ok: false,
+        failure: {
+          worktreeId,
+          displayName: candidate.displayName,
+          message: translate(
+            'auto.store.slices.workspace.cleanup.changedSinceConfirmation',
+            'Workspace changed after confirmation. Refresh to review it before removing.'
+          )
+        }
       }
     }
   }

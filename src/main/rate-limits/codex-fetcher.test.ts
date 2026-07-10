@@ -77,7 +77,7 @@ describe('fetchCodexRateLimits', () => {
     vi.useFakeTimers()
     vi.clearAllMocks()
     resolveCodexCommandMock.mockReturnValue('codex')
-    vi.mocked(codexAuthExists).mockReturnValue(true)
+    vi.mocked(codexAuthExists).mockResolvedValue(true)
     readFileMock.mockRejectedValue(new Error('no auth fixture'))
     vi.stubGlobal('fetch', vi.fn())
   })
@@ -87,7 +87,7 @@ describe('fetchCodexRateLimits', () => {
   })
 
   it('does not spawn Codex when the user is not signed in', async () => {
-    vi.mocked(codexAuthExists).mockReturnValue(false)
+    vi.mocked(codexAuthExists).mockResolvedValue(false)
 
     await expect(fetchCodexRateLimits()).resolves.toMatchObject({
       provider: 'codex',
@@ -97,6 +97,28 @@ describe('fetchCodexRateLimits', () => {
       error: 'Codex not signed in'
     })
 
+    expect(childSpawnMock).not.toHaveBeenCalled()
+    expect(ptySpawnMock).not.toHaveBeenCalled()
+  })
+
+  it('preserves the aborted result when cancellation lands during the auth check', async () => {
+    let resolveAuth!: (exists: boolean) => void
+    vi.mocked(codexAuthExists).mockReturnValueOnce(
+      new Promise<boolean>((resolve) => {
+        resolveAuth = resolve
+      })
+    )
+    const controller = new AbortController()
+
+    const result = fetchCodexRateLimits({ signal: controller.signal })
+    controller.abort()
+    resolveAuth(false)
+
+    await expect(result).resolves.toMatchObject({
+      provider: 'codex',
+      status: 'error',
+      error: 'Rate-limit fetch aborted'
+    })
     expect(childSpawnMock).not.toHaveBeenCalled()
     expect(ptySpawnMock).not.toHaveBeenCalled()
   })
@@ -133,6 +155,7 @@ describe('fetchCodexRateLimits', () => {
     childSpawnMock.mockReturnValue(rpcChild)
 
     const resultPromise = fetchCodexRateLimits({ allowPtyFallback: false })
+    await vi.advanceTimersByTimeAsync(0)
 
     const spawnCwd = childSpawnMock.mock.calls[0]?.[2]?.cwd as string
     expect(spawnCwd).toContain('rate-limit-pty-cwd')
@@ -168,6 +191,7 @@ describe('fetchCodexRateLimits', () => {
     const controller = new AbortController()
 
     const resultPromise = fetchCodexRateLimits({ signal: controller.signal })
+    await vi.advanceTimersByTimeAsync(0)
 
     controller.abort()
 
@@ -221,6 +245,7 @@ describe('fetchCodexRateLimits', () => {
     })
 
     const resultPromise = fetchCodexRateLimits()
+    await vi.advanceTimersByTimeAsync(0)
     rpcChild.emit('close')
     await vi.advanceTimersByTimeAsync(0)
 
@@ -247,6 +272,7 @@ describe('fetchCodexRateLimits', () => {
     childSpawnMock.mockReturnValue(rpcChild)
 
     const resultPromise = fetchCodexRateLimits({ allowPtyFallback: false })
+    await vi.advanceTimersByTimeAsync(0)
     rpcChild.emit('close')
     await vi.advanceTimersByTimeAsync(0)
 
@@ -421,6 +447,7 @@ describe('fetchCodexRateLimits', () => {
     expect(fetch).toHaveBeenCalledWith(
       'https://chatgpt.com/backend-api/wham/rate-limit-reset-credits',
       expect.objectContaining({
+        signal: expect.any(AbortSignal),
         headers: expect.objectContaining({
           Authorization: 'Bearer access-token',
           'ChatGPT-Account-Id': 'account-id',
@@ -553,6 +580,8 @@ describe('fetchCodexRateLimits', () => {
       )
       expect(shellCommand.match(/<&3 >&4 3<&- 4>&-/g)).toHaveLength(3)
       expect(shellCommand.match(/exec codex [^\n]+<&3 >&4 3<&- 4>&-/g)).toHaveLength(3)
+      expect(shellCommand).not.toContain('_orca_codex')
+      expect(shellCommand).not.toContain('wsl-codex-path')
       expect(spawnOptions).toEqual(
         expect.objectContaining({
           cwd: expect.stringContaining('rate-limit-pty-cwd'),
@@ -649,6 +678,7 @@ describe('fetchCodexRateLimits', () => {
       const resultPromise = fetchCodexRateLimits({
         codexHomePath: '\\\\wsl.localhost\\Ubuntu\\home\\alice\\.local\\share\\orca\\account\\home'
       })
+      await vi.advanceTimersByTimeAsync(0)
       rpcChild.emit('close')
       await vi.advanceTimersByTimeAsync(0)
 
@@ -668,6 +698,8 @@ describe('fetchCodexRateLimits', () => {
         "export CODEX_HOME='\\''/home/alice/.local/share/orca/account/home'\\''"
       )
       expect(shellCommand).toContain('exec codex ')
+      expect(shellCommand).not.toContain('_orca_codex')
+      expect(shellCommand).not.toContain('wsl-codex-path')
       expect(spawnOptions).toEqual(
         expect.objectContaining({
           cwd: expect.stringContaining('rate-limit-pty-cwd'),

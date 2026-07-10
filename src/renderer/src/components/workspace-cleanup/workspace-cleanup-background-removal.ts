@@ -29,6 +29,10 @@ export type WorkspaceCleanupBackgroundRemovalArgs = {
   onProgress: (progress: WorkspaceCleanupRemovalProgress) => void
   onResult?: (result: WorkspaceCleanupRemoveResult) => void
   onError?: (error: unknown) => void
+  // Why: a row can fail before its removal starts (preflight failure or a
+  // skipped nested workspace); report it now so its queued overlay can clear
+  // instead of waiting for the whole batch to settle.
+  onRowFailed?: (failure: WorkspaceCleanupFailure) => void
   removalTimeoutMs?: number
 }
 
@@ -38,6 +42,7 @@ export function startWorkspaceCleanupBackgroundRemoval({
   onProgress,
   onResult,
   onError,
+  onRowFailed,
   removalTimeoutMs = DEFAULT_WORKSPACE_CLEANUP_REMOVAL_TIMEOUT_MS
 }: WorkspaceCleanupBackgroundRemovalArgs): void {
   if (candidates.length === 0) {
@@ -64,6 +69,17 @@ export function startWorkspaceCleanupBackgroundRemoval({
     })
   }
 
+  const reportFailures = (rowFailures: readonly WorkspaceCleanupFailure[]): void => {
+    for (const failure of rowFailures) {
+      failures.push(failure)
+      try {
+        onRowFailed?.(failure)
+      } catch (callbackError) {
+        console.error('Workspace cleanup row failure callback failed', callbackError)
+      }
+    }
+  }
+
   emitProgress()
 
   // Why: keep the store's nested-worktree delete invariant even though progress
@@ -78,14 +94,16 @@ export function startWorkspaceCleanupBackgroundRemoval({
         )
       ) {
         failedCandidates.push(candidate)
-        failures.push({
-          worktreeId: candidate.worktreeId,
-          displayName: candidate.displayName,
-          message: translate(
-            'auto.components.workspace.cleanup.backgroundRemoval.skippedAncestor',
-            'Skipped because a nested workspace could not be removed.'
-          )
-        })
+        reportFailures([
+          {
+            worktreeId: candidate.worktreeId,
+            displayName: candidate.displayName,
+            message: translate(
+              'auto.components.workspace.cleanup.backgroundRemoval.skippedAncestor',
+              'Skipped because a nested workspace could not be removed.'
+            )
+          }
+        ])
         processedCount += 1
         emitProgress()
         continue
@@ -97,17 +115,19 @@ export function startWorkspaceCleanupBackgroundRemoval({
           removalTimeoutMs
         )
         removedIds.push(...result.removedIds)
-        failures.push(...result.failures)
+        reportFailures(result.failures)
         if (result.failures.length > 0) {
           failedCandidates.push(candidate)
         }
       } catch (error: unknown) {
         failedCandidates.push(candidate)
-        failures.push({
-          worktreeId: candidate.worktreeId,
-          displayName: candidate.displayName,
-          message: error instanceof Error ? error.message : String(error)
-        })
+        reportFailures([
+          {
+            worktreeId: candidate.worktreeId,
+            displayName: candidate.displayName,
+            message: error instanceof Error ? error.message : String(error)
+          }
+        ])
       } finally {
         processedCount += 1
         emitProgress()

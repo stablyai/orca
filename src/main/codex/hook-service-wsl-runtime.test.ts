@@ -213,6 +213,7 @@ describe('Codex WSL runtime hook install', () => {
           ...process.env,
           PATH: `${binDir}:${process.env.PATH ?? ''}`,
           WSL_DISTRO_NAME: 'Ubuntu',
+          ORCA_AGENT_HOOK_ENDPOINT: '',
           ORCA_AGENT_HOOK_PORT: '43210',
           ORCA_AGENT_HOOK_TOKEN: 'token',
           ORCA_PANE_KEY: 'pane-1',

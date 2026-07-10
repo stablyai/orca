@@ -214,6 +214,41 @@ describe('startWorkspaceCleanupBackgroundRemoval', () => {
     })
   })
 
+  it('reports each failure as it happens so queued rows can clear before the batch ends', async () => {
+    const parent = makeCandidate({
+      worktreeId: 'repo-1::/repo/parent',
+      displayName: 'parent',
+      branch: 'parent',
+      path: '/repo/parent'
+    })
+    const child = makeCandidate({
+      worktreeId: 'repo-1::/repo/parent/child',
+      displayName: 'child',
+      branch: 'child',
+      path: '/repo/parent/child'
+    })
+    const removeCandidates = vi.fn().mockResolvedValueOnce({
+      removedIds: [],
+      failures: [{ worktreeId: child.worktreeId, displayName: child.displayName, message: 'busy' }]
+    })
+    const onRowFailed = vi.fn()
+
+    startWorkspaceCleanupBackgroundRemoval({
+      candidates: [parent, child],
+      removeCandidates,
+      onProgress: vi.fn(),
+      onRowFailed
+    })
+    await settleBackgroundRemoval()
+
+    // Child fails at removal (per-row result), then parent is skipped as its
+    // ancestor — both reported incrementally, not only in the final result.
+    expect(onRowFailed.mock.calls.map(([failure]) => failure.worktreeId)).toEqual([
+      child.worktreeId,
+      parent.worktreeId
+    ])
+  })
+
   it('does not skip same-path ancestors from another connection after a nested failure', async () => {
     const failedChild = makeCandidate({
       worktreeId: 'repo-1::/repo/parent/child',

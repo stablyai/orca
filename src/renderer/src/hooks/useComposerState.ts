@@ -3707,7 +3707,6 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
         startupPlan.launchToken = createBrowserUuid()
       }
       const activation = activateAndRevealWorktree(worktree.id, {
-        sidebarRevealBehavior: 'auto',
         setup: result.setup,
         defaultTabs: result.defaultTabs,
         issueCommand,

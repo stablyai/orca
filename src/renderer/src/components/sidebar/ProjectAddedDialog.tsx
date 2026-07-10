@@ -81,7 +81,7 @@ export default function ProjectAddedDialog(): null {
         }
         const folderWorktree = useAppStore.getState().worktreesByRepo[repoId]?.[0]
         if (folderWorktree) {
-          activateAndRevealWorktree(folderWorktree.id, { sidebarRevealBehavior: 'auto' })
+          activateAndRevealWorktree(folderWorktree.id)
         }
         closeModal()
       })()

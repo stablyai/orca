@@ -23,11 +23,9 @@ async function prepareSidebarForScrollTest(page: Page): Promise<void> {
 
 test.describe('Reveal active workspace button', () => {
   test.beforeEach(async ({ orcaPage }) => {
-    // Why: headless Electron under xvfb never ticks a smooth-scroll animation,
-    // so the reveal's `scrollTo({ behavior: 'smooth' })` would never reach its
-    // target. Reduced-motion makes the reveal jump instantly (see
-    // worktree-sidebar-reveal.ts) so the geometry assertions are deterministic.
-    await orcaPage.emulateMedia({ reducedMotion: 'reduce' })
+    // Sidebar reveal now always jumps instantly (worktree-sidebar-reveal.ts
+    // assigns scrollTop directly), so no reduced-motion emulation is needed
+    // for the geometry assertions to be deterministic.
     await waitForSessionReady(orcaPage)
     await waitForActiveWorktree(orcaPage)
   })

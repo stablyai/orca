@@ -266,7 +266,7 @@ export async function startAgentSessionFork(fork: PreparedAgentSessionFork): Pro
   const forkWorktreeId = created.worktree.id
 
   if (!fork.agent) {
-    activateAndRevealWorktree(forkWorktreeId, { sidebarRevealBehavior: 'auto' })
+    activateAndRevealWorktree(forkWorktreeId)
     return copyAgentSessionForkContext(fork)
   }
   await preflightForkAgentTrust({
@@ -287,7 +287,7 @@ export async function startAgentSessionFork(fork: PreparedAgentSessionFork): Pro
     launchSource: 'terminal_context_menu',
     ...(launchPlatform ? { launchPlatform } : {})
   })
-  activateAndRevealWorktree(forkWorktreeId, { sidebarRevealBehavior: 'auto' })
+  activateAndRevealWorktree(forkWorktreeId)
 
   if (!result) {
     return copyAgentSessionForkContext(fork)

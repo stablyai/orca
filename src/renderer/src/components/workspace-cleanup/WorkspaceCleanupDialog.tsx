@@ -307,7 +307,10 @@ export default function WorkspaceCleanupDialog(): React.JSX.Element {
         setSelectedIds(new Set())
       }
     }
-    if (!loading && !autoScanAttemptedForOpenRef.current) {
+    // Why: reopening mid-batch keeps the deletion progress view; a broad scan
+    // started here would be discarded by the removal's scan invalidation, so
+    // skip it while a removal batch is running (matches the reset guard above).
+    if (!loading && !autoScanAttemptedForOpenRef.current && !removalInFlightRef.current) {
       autoScanAttemptedForOpenRef.current = true
       startWorkspaceCleanupScan({ notifyWhenReady: true })
     }
@@ -523,6 +526,19 @@ export default function WorkspaceCleanupDialog(): React.JSX.Element {
     setConfirmCandidates([])
   }, [closeModal, removalProgress])
 
+  const clearQueuedDeleteState = useCallback(
+    (worktreeId: string) => {
+      const deleteState = useAppStore.getState().deleteStateByWorktreeId[worktreeId]
+      // Why: candidates that fail before removal starts would otherwise stay
+      // marked "Queued for deletion" in the sidebar; rows already in the
+      // 'deleting' phase or failed with an error keep their own state.
+      if (deleteState?.isDeleting && deleteState.error === null && deleteState.phase === 'queued') {
+        clearWorktreeDeleteState(worktreeId)
+      }
+    },
+    [clearWorktreeDeleteState]
+  )
+
   const confirmRemove = useCallback(() => {
     if (confirmCandidates.length === 0 || removalInFlightRef.current) {
       return
@@ -547,20 +563,14 @@ export default function WorkspaceCleanupDialog(): React.JSX.Element {
           setRemovalProgress(progress)
         }
       },
+      onRowFailed: (failure) => {
+        clearQueuedDeleteState(failure.worktreeId)
+      },
       onResult: (result) => {
         const nextFailures: Record<string, string> = {}
         for (const failure of result.failures) {
           nextFailures[failure.worktreeId] = failure.message
-          const deleteState = useAppStore.getState().deleteStateByWorktreeId[failure.worktreeId]
-          if (
-            deleteState?.isDeleting &&
-            deleteState.error === null &&
-            deleteState.phase === 'queued'
-          ) {
-            // Why: candidates that fail before removal starts would otherwise
-            // stay marked "Queued for deletion" in the sidebar indefinitely.
-            clearWorktreeDeleteState(failure.worktreeId)
-          }
+          clearQueuedDeleteState(failure.worktreeId)
         }
         if (mountedRef.current) {
           setRowFailures(nextFailures)
@@ -592,6 +602,7 @@ export default function WorkspaceCleanupDialog(): React.JSX.Element {
       }
     })
   }, [
+    clearQueuedDeleteState,
     clearWorktreeDeleteState,
     confirmCandidates,
     markWorktreesQueuedForDeletion,

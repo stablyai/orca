@@ -190,7 +190,7 @@ export function useCreateRepo(
         }
         const folderWorktree = useAppStore.getState().worktreesByRepo[repo.id]?.[0]
         if (folderWorktree) {
-          activateAndRevealWorktree(folderWorktree.id, { sidebarRevealBehavior: 'auto' })
+          activateAndRevealWorktree(folderWorktree.id)
         }
         await markOnboardingProjectAdded('addedFolder')
         closeModal()

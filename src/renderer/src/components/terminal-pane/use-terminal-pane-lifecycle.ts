@@ -1760,9 +1760,18 @@ export function useTerminalPaneLifecycle({
         return
       }
       for (const panePtyBinding of panePtyBindingsRef.current.values()) {
-        ;(
-          panePtyBinding as IDisposable & { wakeHibernatedAgentIfArmed?: () => void }
-        ).wakeHibernatedAgentIfArmed?.()
+        const claimKey = (
+          panePtyBinding as IDisposable & {
+            wakeHibernatedAgentIfArmed?: (claimedProviderSessions?: Set<string>) => string | null
+          }
+        ).wakeHibernatedAgentIfArmed?.(detail.wokenClaimKeys)
+        // Why: the dispatcher's follow-up generic resume must skip provider
+        // sessions this pane woke (or latched) in place — the sleeping record
+        // is only cleared after the in-place spawn succeeds, so without this
+        // the same session would resume twice.
+        if (claimKey) {
+          detail.wokenClaimKeys?.add(claimKey)
+        }
       }
     }
     window.addEventListener(WAKE_HIBERNATED_AGENTS_WORKTREE_EVENT, onWakeHibernatedAgents)

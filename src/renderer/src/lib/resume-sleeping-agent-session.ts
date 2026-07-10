@@ -1,18 +1,8 @@
-import { toast } from 'sonner'
 import { useAppStore } from '@/store'
-import { CLIENT_PLATFORM } from '@/lib/new-workspace'
-import { buildAgentResumeStartupPlan } from '@/lib/tui-agent-startup'
-import { tuiAgentToAgentKind } from '@/lib/telemetry'
-import { reconcileTabOrder } from '@/components/tab-bar/reconcile-order'
-import {
-  resolveTuiAgentLaunchArgs,
-  resolveTuiAgentLaunchEnv
-} from '../../../shared/tui-agent-launch-defaults'
 import type {
   AgentProviderSessionMetadata,
   SleepingAgentSessionRecord
 } from '../../../shared/agent-session-resume'
-import { translate } from '@/i18n/i18n'
 import { AGENT_STATUS_STALE_AFTER_MS } from '../../../shared/agent-status-types'
 import {
   getProviderSessionClaimKey,
@@ -20,99 +10,11 @@ import {
   recordPaneIsOwnedByPreservedPane
 } from './sleeping-agent-pane-ownership'
 import {
-  getResumeLaunchPlatform,
-  isRemoteResumeLaunch
-} from './resume-sleeping-agent-launch-platform'
+  launchSleepingAgentSession,
+  type ResumeSleepingAgentSessionsOptions
+} from './sleeping-agent-session-launch'
 
-function appendTabToWorktreeOrder(worktreeId: string, tabId: string): void {
-  const state = useAppStore.getState()
-  const termIds = (state.tabsByWorktree[worktreeId] ?? []).map((tab) => tab.id)
-  const editorIds = state.openFiles
-    .filter((file) => file.worktreeId === worktreeId)
-    .map((f) => f.id)
-  const browserIds = (state.browserTabsByWorktree?.[worktreeId] ?? []).map((tab) => tab.id)
-  const base = reconcileTabOrder(
-    state.tabBarOrderByWorktree[worktreeId],
-    termIds,
-    editorIds,
-    browserIds
-  )
-  const order = base.filter((id) => id !== tabId)
-  order.push(tabId)
-  state.setTabBarOrder(worktreeId, order)
-}
-
-// Why: mobile-driven wake runs on the desktop host renderer, so it must create
-// the resume tab without stealing the desktop's active worktree/tab/view.
-function launchSleepingAgentSession(
-  record: SleepingAgentSessionRecord,
-  options?: { suppressNavigation?: boolean }
-): boolean {
-  const state = useAppStore.getState()
-  const launchConfig = record.launchConfig
-  const resumeLaunchPlatform = getResumeLaunchPlatform(record.worktreeId)
-  const startupPlan = buildAgentResumeStartupPlan({
-    agent: record.agent,
-    providerSession: record.providerSession,
-    cmdOverrides: state.settings?.agentCmdOverrides ?? {},
-    agentArgs:
-      launchConfig !== undefined
-        ? launchConfig.agentArgs
-        : resolveTuiAgentLaunchArgs(record.agent, state.settings?.agentDefaultArgs),
-    agentEnv:
-      launchConfig !== undefined
-        ? launchConfig.agentEnv
-        : resolveTuiAgentLaunchEnv(record.agent, state.settings?.agentDefaultEnv, {
-            settings: state.settings,
-            isRemote: isRemoteResumeLaunch(record.worktreeId),
-            launchPlatform: resumeLaunchPlatform,
-            hostPlatform: CLIENT_PLATFORM
-          }),
-    ...(launchConfig?.agentCommand ? { agentCommand: launchConfig.agentCommand } : {}),
-    platform: resumeLaunchPlatform
-  })
-  if (!startupPlan) {
-    toast.error(
-      translate(
-        'auto.lib.resume.sleeping.agent.session.f235f604fd',
-        'This agent session cannot be resumed.'
-      )
-    )
-    return false
-  }
-
-  const tab = state.createTab(record.worktreeId, undefined, undefined, {
-    launchAgent: record.agent,
-    ...(options?.suppressNavigation ? { activate: false, recordInteraction: false } : {})
-  })
-  state.queueTabStartupCommand(tab.id, {
-    command: startupPlan.launchCommand,
-    ...(startupPlan.env ? { env: startupPlan.env } : {}),
-    launchConfig: startupPlan.launchConfig,
-    resumeProviderSession: record.providerSession,
-    launchAgent: record.agent,
-    ...(startupPlan.startupCommandDelivery
-      ? { startupCommandDelivery: startupPlan.startupCommandDelivery }
-      : {}),
-    showSessionRestoredBanner: true,
-    telemetry: {
-      agent_kind: tuiAgentToAgentKind(record.agent),
-      launch_source: 'sidebar',
-      request_kind: 'resume'
-    }
-  })
-  state.claimAutomaticAgentResume(tab.id, {
-    worktreeId: record.worktreeId,
-    launchAgent: record.agent,
-    providerSession: record.providerSession
-  })
-  state.clearSleepingAgentSession(record.paneKey)
-  if (!options?.suppressNavigation) {
-    state.setActiveTabType('terminal')
-  }
-  appendTabToWorktreeOrder(record.worktreeId, tab.id)
-  return true
-}
+export type { ResumeSleepingAgentSessionsOptions } from './sleeping-agent-session-launch'
 
 function clearPassiveCompletedRecordsForClaimKey(
   records: readonly SleepingAgentSessionRecord[],
@@ -240,7 +142,7 @@ function isInvalidWorktreeActivationRecord(record: SleepingAgentSessionRecord): 
 
 export function resumeSleepingAgentSessionsForWorktree(
   worktreeId: string,
-  options?: { suppressNavigation?: boolean }
+  options?: ResumeSleepingAgentSessionsOptions
 ): number {
   const state = useAppStore.getState()
   const worktreeRecords = Object.values(state.sleepingAgentSessionsByPaneKey)
@@ -263,6 +165,12 @@ export function resumeSleepingAgentSessionsForWorktree(
       continue
     }
     const claimKey = getProviderSessionClaimKey(record)
+    // Why: a mounted pane already consumed (or latched) the in-place
+    // hibernation wake for this session; its record clears when that spawn
+    // succeeds. Launching or clearing here would double-resume the session.
+    if (options?.skipClaimKeys?.has(claimKey)) {
+      continue
+    }
     if (isInvalidWorktreeActivationRecord(record)) {
       state.clearSleepingAgentSession(record.paneKey)
       continue

@@ -74,8 +74,19 @@ export type CloseTerminalPaneDetail = {
 
 export type BackgroundMountTerminalWorktreeDetail = {
   worktreeId: string
+  /** When set, only these terminal tabs mount for the background worktree.
+   *  Why: a worktree-wide background mount instantiates a TerminalPane (and
+   *  its PTY connect work) for every saved tab; wake/resume flows know exactly
+   *  which tabs they need. Omitted → whole-worktree mount (legacy dispatch
+   *  sites); a real activation always lifts the restriction. */
+  tabIds?: readonly string[]
 }
 
 export type WakeHibernatedAgentsWorktreeDetail = {
   worktreeId: string
+  /** Mutable collector: mounted panes that consume (or latch) the in-place
+   *  hibernation wake add their provider-session claim keys here so the
+   *  dispatcher's follow-up generic resume skips those sessions instead of
+   *  launching them a second time. */
+  wokenClaimKeys?: Set<string>
 }

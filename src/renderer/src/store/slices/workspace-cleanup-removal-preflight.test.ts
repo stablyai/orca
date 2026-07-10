@@ -369,6 +369,43 @@ describe('workspace cleanup removal and protection', () => {
     })
   })
 
+  it('fails a removal that reveals concrete git risk after an unverified force approval', async () => {
+    const approvedCandidate = makeCandidate({
+      tier: 'review',
+      blockers: ['git-status-error'],
+      git: { clean: null, upstreamAhead: null, upstreamBehind: null, checkedAt: null }
+    })
+    const nowRevealsUnpushed = makeCandidate({
+      tier: 'review',
+      blockers: ['unpushed-commits'],
+      git: { clean: true, upstreamAhead: 3, upstreamBehind: 0, checkedAt: NOW }
+    })
+    const scan = vi.fn().mockResolvedValue({
+      scannedAt: NOW,
+      candidates: [nowRevealsUnpushed],
+      errors: []
+    } satisfies WorkspaceCleanupScanResult)
+    installWorkspaceCleanupApi(scan)
+    const removeWorktree = vi.fn().mockResolvedValue({ ok: true })
+    const store = createCleanupTestStore(removeWorktree)
+
+    await expect(
+      store.getState().removeWorkspaceCleanupCandidates([WORKTREE_ID], {
+        approvedCandidates: [approvedCandidate]
+      })
+    ).resolves.toEqual({
+      removedIds: [],
+      failures: [
+        {
+          worktreeId: WORKTREE_ID,
+          displayName: 'old-workspace',
+          message: 'Workspace changed after confirmation. Refresh to review it before removing.'
+        }
+      ]
+    })
+    expect(removeWorktree).not.toHaveBeenCalled()
+  })
+
   it('protects old workspaces when an agent process is still foregrounded', async () => {
     ;(globalThis as { window: unknown }).window = {
       api: {

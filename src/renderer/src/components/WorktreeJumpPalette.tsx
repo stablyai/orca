@@ -1409,7 +1409,7 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
       skipRestoreFocusRef.current = true
       // Why: selecting a project or repo group is a sidebar navigation action;
       // it should reveal the grouping row without activating an arbitrary workspace.
-      revealSidebarRow(result.rowKey, { behavior: 'smooth', highlight: true })
+      revealSidebarRow(result.rowKey, { highlight: true })
       recordFeatureInteraction('cmd-j')
       closeModal()
       setSelectedItemId('')

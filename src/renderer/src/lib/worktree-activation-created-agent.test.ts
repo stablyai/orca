@@ -299,10 +299,10 @@ describe('activateAndRevealWorktree created agent reopen', () => {
       revealWorktreeInSidebar
     })
 
-    const result = activateAndRevealWorktree(worktree.id, { sidebarRevealBehavior: 'auto' })
+    const result = activateAndRevealWorktree(worktree.id)
 
     expect(result).toEqual({ primaryTabId: expect.any(String) })
-    expect(revealWorktreeInSidebar).toHaveBeenCalledWith(worktree.id, { behavior: 'auto' })
+    expect(revealWorktreeInSidebar).toHaveBeenCalledWith(worktree.id)
   })
 
   it('asks the host runtime to activate the worktree in the paired web client', async () => {

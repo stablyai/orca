@@ -14898,7 +14898,24 @@ describe('OrcaRuntimeService', () => {
     const runtime = new OrcaRuntimeService({
       ...store,
       getAllWorktreeMeta: () => metaById,
-      getWorktreeMeta: (worktreeId: string) => metaById[worktreeId]
+      getWorktreeMeta: (worktreeId: string) => metaById[worktreeId],
+      getWorkspaceSession: () => ({
+        ...getDefaultWorkspaceSession(),
+        sleepingAgentSessionsByPaneKey: {
+          'tab-1:leaf-1': {
+            paneKey: 'tab-1:leaf-1',
+            tabId: 'tab-1',
+            worktreeId: TEST_WORKTREE_ID,
+            agent: 'codex',
+            providerSession: { key: 'session_id', id: 'session-1' },
+            prompt: 'test',
+            state: 'done',
+            capturedAt: 1,
+            updatedAt: 1,
+            origin: 'worktree-sleep'
+          }
+        }
+      })
     } as never)
     runtime.setNotifier({
       worktreesChanged: vi.fn(),
@@ -14915,13 +14932,13 @@ describe('OrcaRuntimeService', () => {
       terminalFitOverrideChanged: vi.fn(),
       terminalDriverChanged: vi.fn()
     })
-    // A renderer must be attached to receive the wake (headless serve is a
-    // deliberate non-goal — no renderer, no wake).
+    // A renderer must be attached to receive the wake — headless serve reports
+    // the explicit 'unsupported-headless' outcome instead (see below).
     electronMocks.BrowserWindow.fromId.mockReturnValue({ isDestroyed: () => false } as never)
     runtime.attachWindow(TEST_WINDOW_ID)
     runtime.markGraphReady(TEST_WINDOW_ID)
 
-    await runtime.activateManagedWorktree(`id:${TEST_WORKTREE_ID}`, {
+    const result = await runtime.activateManagedWorktree(`id:${TEST_WORKTREE_ID}`, {
       notifyClients: false,
       clientKind: 'mobile'
     })
@@ -14930,6 +14947,86 @@ describe('OrcaRuntimeService', () => {
     // routes exclusively through the renderer's own navigation-free wake.
     expect(resumeSleepingAgents).toHaveBeenCalledWith(TEST_WORKTREE_ID)
     expect(activateWorktree).not.toHaveBeenCalled()
+    expect(result.sleepingAgentWake).toBe('requested')
+  })
+
+  it('reports the wake as unsupported when a phone activates a worktree on headless serve', async () => {
+    // Why: without an attached renderer nothing holds the sleeping records, so
+    // no agent actually wakes. The result must say so explicitly — activating
+    // silently would let the phone present slept agents as resumed (#7906).
+    const metaById: Record<string, WorktreeMeta> = {
+      [TEST_WORKTREE_ID]: makeWorktreeMeta({ isUnread: false })
+    }
+    const resumeSleepingAgents = vi.fn()
+    const getWorkspaceSession = vi.fn(() => ({
+      ...getDefaultWorkspaceSession(),
+      sleepingAgentSessionsByPaneKey: {
+        'tab-1:leaf-1': {
+          paneKey: 'tab-1:leaf-1',
+          tabId: 'tab-1',
+          worktreeId: TEST_WORKTREE_ID,
+          agent: 'codex',
+          providerSession: { key: 'session_id', id: 'session-1' },
+          prompt: 'test',
+          state: 'done',
+          capturedAt: 1,
+          updatedAt: 1,
+          origin: 'worktree-sleep'
+        }
+      }
+    }))
+    const runtime = new OrcaRuntimeService({
+      ...store,
+      getAllWorktreeMeta: () => metaById,
+      getWorktreeMeta: (worktreeId: string) => metaById[worktreeId],
+      getWorkspaceSession
+    } as never)
+    runtime.setNotifier({
+      worktreesChanged: vi.fn(),
+      reposChanged: vi.fn(),
+      activateWorktree: vi.fn(),
+      createTerminal: vi.fn(),
+      revealTerminalSession: vi.fn(),
+      splitTerminal: vi.fn(),
+      renameTerminal: vi.fn(),
+      focusTerminal: vi.fn(),
+      closeTerminal: vi.fn(),
+      sleepWorktree: vi.fn(),
+      resumeSleepingAgents,
+      terminalFitOverrideChanged: vi.fn(),
+      terminalDriverChanged: vi.fn()
+    })
+    // Headless/no-live-renderer: the graph is ready but no BrowserWindow backs
+    // the authoritative id, so getAvailableAuthoritativeWindow() is null.
+    electronMocks.BrowserWindow.fromId.mockReturnValue(null as never)
+    runtime.attachWindow(TEST_WINDOW_ID)
+    runtime.markGraphReady(TEST_WINDOW_ID)
+
+    const result = await runtime.activateManagedWorktree(`id:${TEST_WORKTREE_ID}`, {
+      notifyClients: false,
+      clientKind: 'mobile'
+    })
+
+    expect(result.activated).toBe(true)
+    expect(result.sleepingAgentWake).toBe('unsupported-headless')
+    // Why: sleeping records are host-partitioned; the check must read the
+    // repo's execution host partition, not always the local one.
+    expect(getWorkspaceSession).toHaveBeenCalledWith('local')
+    expect(resumeSleepingAgents).not.toHaveBeenCalled()
+  })
+
+  it('does not report headless wake degradation without sleeping records', async () => {
+    const runtime = new OrcaRuntimeService(store as never)
+    electronMocks.BrowserWindow.fromId.mockReturnValue(null as never)
+    runtime.attachWindow(TEST_WINDOW_ID)
+    runtime.markGraphReady(TEST_WINDOW_ID)
+
+    const result = await runtime.activateManagedWorktree(`id:${TEST_WORKTREE_ID}`, {
+      notifyClients: false,
+      clientKind: 'mobile'
+    })
+
+    expect(result.sleepingAgentWake).toBe('not-applicable')
   })
 
   it('does not wake slept agents for non-mobile session-only activation', async () => {
@@ -14963,12 +15060,13 @@ describe('OrcaRuntimeService', () => {
 
     // INV-3: web/desktop runtime clients keep their existing wake-on-activation
     // paths untouched — the renderer notifier wake is mobile-scoped.
-    await runtime.activateManagedWorktree(`id:${TEST_WORKTREE_ID}`, {
+    const result = await runtime.activateManagedWorktree(`id:${TEST_WORKTREE_ID}`, {
       notifyClients: false,
       clientKind: 'runtime'
     })
 
     expect(resumeSleepingAgents).not.toHaveBeenCalled()
+    expect(result.sleepingAgentWake).toBe('not-applicable')
   })
 
   it('does not rewrite unread metadata when a mobile activation finds the worktree already read', async () => {
