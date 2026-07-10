@@ -250,7 +250,20 @@ export class DaemonPtyRouter implements IPtyProvider {
   }
 
   private adapterFor(sessionId: string): DaemonPtyAdapter {
-    return this.sessionAdapters.get(sessionId) ?? this.current
+    const routed = this.sessionAdapters.get(sessionId)
+    if (routed) {
+      return routed
+    }
+    // Why: reads fan out across all adapters, but this routing map is filled only
+    // by one-shot boot discovery. A legacy session it missed had its writes silently
+    // dropped onto `current`; self-heal by asking who actually owns the pty, then cache.
+    for (const adapter of this.allAdapters()) {
+      if (adapter.hasPty(sessionId)) {
+        this.sessionAdapters.set(sessionId, adapter)
+        return adapter
+      }
+    }
+    return this.current
   }
 
   private allAdapters(): DaemonPtyAdapter[] {

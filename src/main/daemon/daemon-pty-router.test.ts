@@ -118,6 +118,34 @@ describe('DaemonPtyRouter', () => {
     expect(current.write).toHaveBeenCalledWith(fresh.id, 'new\n')
   })
 
+  it('routes an undiscovered legacy session to its owning daemon, not current', () => {
+    // Reproduces the frozen-input bug: the old daemon still owns the session
+    // (hasPty true, output streaming), but the one-shot discoverLegacySessions()
+    // boot pass never mapped it — so the routing map is empty for this id.
+    const current = createAdapter('current')
+    const legacy = createAdapter('legacy', ['orphan-session'])
+    const router = new DaemonPtyRouter({ current, legacy: [legacy] })
+
+    // Deliberately NO discoverLegacySessions() / reconcile / spawn call.
+    router.write('orphan-session', 'input\n')
+    router.resize('orphan-session', 80, 24)
+
+    expect(legacy.write).toHaveBeenCalledWith('orphan-session', 'input\n')
+    expect(legacy.resize).toHaveBeenCalledWith('orphan-session', 80, 24)
+    expect(current.write).not.toHaveBeenCalled()
+  })
+
+  it('falls back to the current adapter when no adapter owns the session', () => {
+    const current = createAdapter('current')
+    const legacy = createAdapter('legacy')
+    const router = new DaemonPtyRouter({ current, legacy: [legacy] })
+
+    router.write('unknown-session', 'input\n')
+
+    expect(current.write).toHaveBeenCalledWith('unknown-session', 'input\n')
+    expect(legacy.write).not.toHaveBeenCalled()
+  })
+
   it('drops a legacy mapping after the routed session exits', async () => {
     const current = createAdapter('current')
     const legacy = createAdapter('legacy', ['legacy-session'])
