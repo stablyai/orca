@@ -1,15 +1,18 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
-const { lstatMock } = vi.hoisted(() => ({
-  lstatMock: vi.fn()
+const { lstatMock, readdirMock } = vi.hoisted(() => ({
+  lstatMock: vi.fn(),
+  readdirMock: vi.fn()
 }))
 
 vi.mock('fs/promises', async () => {
   const actual = await vi.importActual<typeof import('fs/promises')>('fs/promises') // eslint-disable-line @typescript-eslint/consistent-type-imports -- vi.importActual requires inline import()
   lstatMock.mockImplementation(actual.lstat)
+  readdirMock.mockImplementation(actual.readdir)
   return {
     ...actual,
-    lstat: lstatMock
+    lstat: lstatMock,
+    readdir: readdirMock
   }
 })
 
@@ -19,7 +22,7 @@ import { dirname, join } from 'node:path'
 import {
   classifyQuickOpenGitEntry,
   createQuickOpenReaddirBudget,
-  expandQuickOpenGitFilesWithNestedRepos,
+  expandQuickOpenGitFileListing,
   isQuickOpenReaddirBudgetError,
   listQuickOpenFilesWithReaddir,
   parseQuickOpenGitLsFilesEntry
@@ -94,7 +97,7 @@ describe('quick-open readdir walk', () => {
 
   it('keeps ordinary git entries without lstat calls', async () => {
     await expect(
-      expandQuickOpenGitFilesWithNestedRepos({
+      expandQuickOpenGitFileListing({
         rootPath: '/unused/root',
         gitPaths: [
           staged('100644', 'README.md'),
@@ -152,7 +155,7 @@ describe('quick-open readdir walk', () => {
     await writeRel(root, 'packages/lib/src/lib.ts')
 
     await expect(
-      expandQuickOpenGitFilesWithNestedRepos({
+      expandQuickOpenGitFileListing({
         rootPath: root,
         gitPaths: [
           staged('100644', 'README.md'),
@@ -180,7 +183,7 @@ describe('quick-open readdir walk', () => {
     await writeRel(root, 'packages/lib/c.ts')
 
     await expect(
-      expandQuickOpenGitFilesWithNestedRepos({
+      expandQuickOpenGitFileListing({
         rootPath: root,
         gitPaths: [staged('160000', 'packages/app'), staged('160000', 'packages/lib')],
         budget: createQuickOpenReaddirBudget({ maxFiles: 2 })
@@ -199,13 +202,60 @@ describe('quick-open readdir walk', () => {
     }
 
     await expect(
-      expandQuickOpenGitFilesWithNestedRepos({
+      expandQuickOpenGitFileListing({
         rootPath: root,
         gitPaths: [staged('160000', 'packages/app')],
         excludePathPrefixes: ['packages/app/excluded'],
         budget: createQuickOpenReaddirBudget({ maxFiles: 5 })
       })
     ).resolves.toEqual(['packages/app/keep.ts'])
+  })
+
+  it('expands allowed ignored directories without walking blocked or excluded directories', async () => {
+    const root = await makeTempRoot()
+    await writeRel(root, 'dist/generated.js')
+    await writeRel(root, 'node_modules/pkg/index.js')
+    await writeRel(root, '.cache/state.json')
+    await writeRel(root, '.local/share/state.json')
+    await writeRel(root, '.local/config.toml')
+    await writeRel(root, 'excluded/other.js')
+
+    await expect(
+      expandQuickOpenGitFileListing({
+        rootPath: root,
+        gitPaths: [],
+        directoryPaths: [
+          'dist/',
+          '.local/',
+          'node_modules/',
+          '.cache/',
+          '.local/share/',
+          'excluded/'
+        ],
+        excludePathPrefixes: ['excluded'],
+        budget: createQuickOpenReaddirBudget({ maxFiles: 2 })
+      })
+    ).resolves.toEqual(['dist/generated.js', '.local/config.toml'])
+
+    const walkedPaths = readdirMock.mock.calls.map(([path]) => path)
+    expect(walkedPaths).toContain(join(root, 'dist'))
+    expect(walkedPaths).toContain(join(root, '.local'))
+    expect(walkedPaths).not.toContain(join(root, '.local', 'share'))
+  })
+
+  it('rejects instead of returning a partial ignored-directory expansion', async () => {
+    const root = await makeTempRoot()
+    await writeRel(root, 'dist/a.js')
+    await writeRel(root, 'dist/b.js')
+
+    await expect(
+      expandQuickOpenGitFileListing({
+        rootPath: root,
+        gitPaths: [],
+        directoryPaths: ['dist/'],
+        budget: createQuickOpenReaddirBudget({ maxFiles: 1 })
+      })
+    ).rejects.toThrow('File listing exceeded')
   })
 
   it('identifies budget errors so callers can translate only those to install-rg guidance', () => {
@@ -254,7 +304,7 @@ describe('quick-open readdir walk', () => {
     await writeRel(root, 'packages/app [one] space/src/main.ts')
 
     await expect(
-      expandQuickOpenGitFilesWithNestedRepos({
+      expandQuickOpenGitFileListing({
         rootPath: root,
         gitPaths: ['packages/app [one] space/']
       })
@@ -276,7 +326,7 @@ describe('quick-open readdir walk', () => {
     await rejection.catch((err) => expect(isQuickOpenReaddirBudgetError(err)).toBe(false))
   })
 
-  it('stops nested-repo expansion when the signal aborts (#7721)', async () => {
+  it('stops ignored-directory expansion when the signal aborts (#7721)', async () => {
     const root = await makeTempRoot()
     await writeRel(root, 'src/kept.ts')
 
@@ -284,9 +334,10 @@ describe('quick-open readdir walk', () => {
     controller.abort()
 
     await expect(
-      expandQuickOpenGitFilesWithNestedRepos({
+      expandQuickOpenGitFileListing({
         rootPath: root,
-        gitPaths: ['src/kept.ts'],
+        gitPaths: [],
+        directoryPaths: ['src/'],
         signal: controller.signal
       })
     ).rejects.toSatisfy(isFileListingCancellation)

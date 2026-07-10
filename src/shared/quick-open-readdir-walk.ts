@@ -96,13 +96,13 @@ function normalizeGitEntry(entry: string): string {
 }
 
 // Translate workspace-root-relative exclude prefixes into prefixes relative to
-// a nested repo at `nestedRelPath`, so the nested walk can prune them during
-// traversal. Prefixes outside the nested repo are dropped (they cannot match).
-function rebaseExcludePrefixesForNestedRepo(
+// one expanded subtree, so its walk prunes them during traversal. Prefixes
+// outside that subtree are dropped because they cannot match.
+function rebaseExcludePrefixesForSubtree(
   excludePathPrefixes: readonly string[],
-  nestedRelPath: string
+  subtreeRelPath: string
 ): string[] {
-  const base = `${nestedRelPath}/`
+  const base = `${subtreeRelPath}/`
   const rebased: string[] = []
   for (const prefix of excludePathPrefixes) {
     if (prefix.startsWith(base)) {
@@ -157,6 +157,7 @@ export async function listQuickOpenFilesWithReaddir(
   rootPath: string,
   opts: {
     excludePathPrefixes?: readonly string[]
+    workspaceRelPathPrefix?: string
     budget?: QuickOpenReaddirBudget
     signal?: AbortSignal
   } = {}
@@ -187,16 +188,19 @@ export async function listQuickOpenFilesWithReaddir(
       const name = entry.name
       const absPath = join(dir, name)
       const relPath = toRelPath(rootPath, absPath)
+      const workspaceRelPath = opts.workspaceRelPathPrefix
+        ? `${opts.workspaceRelPathPrefix}/${relPath}`
+        : relPath
       if (shouldExcludeQuickOpenRelPath(relPath, excludePathPrefixes)) {
         continue
       }
       if (entry.isDirectory()) {
-        if (shouldDescend(name)) {
+        if (shouldDescend(name) && shouldIncludeQuickOpenPath(workspaceRelPath)) {
           await walk(absPath)
         }
         continue
       }
-      if (entry.isFile()) {
+      if (entry.isFile() && shouldIncludeQuickOpenPath(workspaceRelPath)) {
         consumeFileBudget(budget)
         files.push(relPath)
       }
@@ -207,9 +211,10 @@ export async function listQuickOpenFilesWithReaddir(
   return files
 }
 
-export async function expandQuickOpenGitFilesWithNestedRepos(opts: {
+export async function expandQuickOpenGitFileListing(opts: {
   rootPath: string
   gitPaths: Iterable<string>
+  directoryPaths?: Iterable<string>
   excludePathPrefixes?: readonly string[]
   budget?: QuickOpenReaddirBudget
   signal?: AbortSignal
@@ -247,12 +252,41 @@ export async function expandQuickOpenGitFilesWithNestedRepos(opts: {
       // Why: exclude prefixes are workspace-root-relative; rebase them onto the
       // nested repo so the walk prunes excluded subtrees during traversal
       // instead of burning the shared budget and filtering them at the end.
-      excludePathPrefixes: rebaseExcludePrefixesForNestedRepo(excludePathPrefixes, relPath),
+      excludePathPrefixes: rebaseExcludePrefixesForSubtree(excludePathPrefixes, relPath),
+      workspaceRelPathPrefix: relPath,
       budget,
       signal: opts.signal
     })
     for (const nestedFile of nestedFiles) {
       addFinalPath(`${relPath}/${nestedFile}`)
+    }
+  }
+
+  for (const rawPath of opts.directoryPaths ?? []) {
+    throwIfFileListingCancelled(opts.signal)
+    assertWithinDeadline(budget)
+
+    const relPath = normalizeGitEntry(rawPath)
+    // Why: Git intentionally leaves collapsed directories unexpanded; reject
+    // blocked and nested-worktree placeholders before any filesystem IO.
+    if (
+      !relPath ||
+      shouldExcludeQuickOpenRelPath(relPath, excludePathPrefixes) ||
+      !shouldIncludeQuickOpenPath(relPath)
+    ) {
+      continue
+    }
+
+    const ignoredFiles = await listQuickOpenFilesWithReaddir(joinRootRel(opts.rootPath, relPath), {
+      excludePathPrefixes: rebaseExcludePrefixesForSubtree(excludePathPrefixes, relPath),
+      // Why: Git can collapse `.local/share/` to `.local/`; keep workspace
+      // context so the walker still prunes the multi-segment blocklist.
+      workspaceRelPathPrefix: relPath,
+      budget,
+      signal: opts.signal
+    })
+    for (const ignoredFile of ignoredFiles) {
+      addFinalPath(`${relPath}/${ignoredFile}`)
     }
   }
 

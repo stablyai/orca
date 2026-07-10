@@ -3,7 +3,7 @@ import { gitSpawn } from '../git/runner'
 import { buildGitLsFilesArgsForQuickOpen } from '../../shared/quick-open-filter'
 import {
   createQuickOpenReaddirBudget,
-  expandQuickOpenGitFilesWithNestedRepos,
+  expandQuickOpenGitFileListing,
   listQuickOpenFilesWithReaddir
 } from '../../shared/quick-open-readdir-walk'
 
@@ -62,6 +62,7 @@ export async function listFilesWithGit(
   }
 
   const gitPaths = new Set<string>()
+  const directoryPaths = new Set<string>()
   const { primary, ignoredPass } = buildGitLsFilesArgsForQuickOpen(excludePathPrefixes)
   const children: {
     child: ChildProcess
@@ -78,7 +79,11 @@ export async function listFilesWithGit(
         if (!path) {
           return
         }
-        gitPaths.add(path)
+        if (path.endsWith('/')) {
+          directoryPaths.add(path)
+        } else {
+          gitPaths.add(path)
+        }
       }
 
       // Why: git ls-files outputs paths relative to cwd, so we set cwd to
@@ -189,9 +194,10 @@ export async function listFilesWithGit(
     throw err
   }
 
-  return expandQuickOpenGitFilesWithNestedRepos({
+  return expandQuickOpenGitFileListing({
     rootPath,
     gitPaths,
+    directoryPaths,
     excludePathPrefixes
   })
 }

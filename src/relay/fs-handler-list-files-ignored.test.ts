@@ -98,6 +98,8 @@ describe('relay quick open ignored file listing', () => {
   })
 
   it('git fallback ignored pass includes ignored non-env files', async () => {
+    const root = await makeTempRoot()
+    await writeRel(root, 'dist/generated.js')
     const primaryProc = createMockProcess()
     const ignoredProc = createMockProcess()
     let callIndex = 0
@@ -107,7 +109,7 @@ describe('relay quick open ignored file listing', () => {
       return callIndex === 1 ? primaryProc : ignoredProc
     })
 
-    const promise = listFilesWithGit('/remote/root', ['packages/other'])
+    const promise = listFilesWithGit(root, ['packages/other'])
 
     setTimeout(() => {
       ;(primaryProc.stdout as unknown as EventEmitter).emit(
@@ -120,7 +122,7 @@ describe('relay quick open ignored file listing', () => {
       )
       primaryProc.emit('close', 0, null)
 
-      ;(ignoredProc.stdout as unknown as EventEmitter).emit('data', 'dist/generated.js\0')
+      ;(ignoredProc.stdout as unknown as EventEmitter).emit('data', 'dist/\0')
       ;(ignoredProc.stdout as unknown as EventEmitter).emit('data', 'packages/other/src/x.ts\0')
       ignoredProc.emit('close', 0, null)
     }, 10)
@@ -138,8 +140,8 @@ describe('relay quick open ignored file listing', () => {
     ])
     expect(ignoredArgs).toContain('--')
     expect(ignoredArgs).toContain('.')
-    expect(ignoredArgs).toContain(':(exclude,glob)**/node_modules/**')
-    expect(ignoredArgs).toContain(':(exclude,glob)**/.cache/**')
+    expect(ignoredArgs).toContain('--directory')
+    expect(ignoredArgs).toContain('--no-empty-directory')
     expect(ignoredArgs).toContain(':(exclude,glob)packages/other')
     expect(ignoredArgs).toContain(':(exclude,glob)packages/other/**')
   })

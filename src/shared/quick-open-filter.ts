@@ -358,33 +358,11 @@ export type GitLsFilesArgs = {
   ignoredPass: string[]
 }
 
-function addGitExcludePathspecs(out: string[], relPath: string): void {
-  const escaped = escapeGlobPath(relPath)
-  out.push(`:(exclude,glob)${escaped}`)
-  out.push(`:(exclude,glob)${escaped}/**`)
-  out.push(`:(exclude,glob)**/${escaped}`)
-  out.push(`:(exclude,glob)**/${escaped}/**`)
-}
-
-function buildGeneratedGitExcludePathspecs(): string[] {
-  const out: string[] = []
-  // Why: the ignored git pass can otherwise enumerate huge generated trees
-  // (node_modules, build caches) before the later Quick Open output filter runs.
-  for (const relPath of [NON_DOTTED_PRUNE, ...HIDDEN_DIR_BLOCKLIST]) {
-    addGitExcludePathspecs(out, relPath)
-  }
-  for (const relPath of HIDDEN_PATH_BLOCKLIST) {
-    addGitExcludePathspecs(out, relPath)
-  }
-  return out
-}
-
 /**
  * Build the two `git ls-files` arg arrays for Quick Open. Exclude prefixes
  * are encoded as `:(exclude,glob)` pathspecs; a positive `.` pathspec is
  * prepended so exclude-only pathspecs do not depend on git's edge-case
- * defaults. Generated cache directories use the same pathspec form so git can
- * avoid walking them in the no-ripgrep fallback.
+ * defaults.
  *
  * The ignored pass asks git for ignored untracked files. Non-git roots keep
  * their existing non-git fallback limits in the callers.
@@ -392,22 +370,34 @@ function buildGeneratedGitExcludePathspecs(): string[] {
 export function buildGitLsFilesArgsForQuickOpen(
   excludePathPrefixes: readonly string[] = []
 ): GitLsFilesArgs {
-  const excludeSpecs = buildGeneratedGitExcludePathspecs()
+  const excludeSpecs: string[] = []
   for (const prefix of excludePathPrefixes) {
     excludeSpecs.push(`:(exclude,glob)${escapeGlobPath(prefix)}`)
     excludeSpecs.push(`:(exclude,glob)${escapeGlobPath(prefix)}/**`)
   }
-  const trailingPathspecs = ['--', '.', ...excludeSpecs]
+  const trailingPathspecs = excludeSpecs.length > 0 ? ['--', '.', ...excludeSpecs] : []
+  // Why: collapse untracked trees before Git traverses them; callers expand
+  // only allowed directory placeholders with the shared bounded walker.
+  const directoryCollapseArgs = ['--directory', '--no-empty-directory']
 
   // Why: NUL preserves real Git paths; stage mode identifies gitlinks without
   // lstat probes for ordinary tracked files.
-  const primary = ['-z', '-s', '--cached', '--others', '--exclude-standard', ...trailingPathspecs]
+  const primary = [
+    '-z',
+    '-s',
+    '--cached',
+    '--others',
+    '--exclude-standard',
+    ...directoryCollapseArgs,
+    ...trailingPathspecs
+  ]
   const ignoredPass = [
     '-z',
     '-s',
     '--others',
     '--ignored',
     '--exclude-standard',
+    ...directoryCollapseArgs,
     ...trailingPathspecs
   ]
   return { primary, ignoredPass }

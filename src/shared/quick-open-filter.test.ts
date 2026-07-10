@@ -239,39 +239,38 @@ describe('normalizeQuickOpenRgLine', () => {
 describe('buildGitLsFilesArgsForQuickOpen', () => {
   it('primary pass is --cached --others --exclude-standard', () => {
     const { primary } = buildGitLsFilesArgsForQuickOpen()
-    expect(primary.slice(0, 5)).toEqual(['-z', '-s', '--cached', '--others', '--exclude-standard'])
+    expect(primary).toEqual([
+      '-z',
+      '-s',
+      '--cached',
+      '--others',
+      '--exclude-standard',
+      '--directory',
+      '--no-empty-directory'
+    ])
   })
 
   it('ignored pass surfaces ignored files without .env* pathspec whitelist', () => {
     const { ignoredPass } = buildGitLsFilesArgsForQuickOpen()
-    expect(ignoredPass.slice(0, 5)).toEqual([
+    expect(ignoredPass).toEqual([
       '-z',
       '-s',
       '--others',
       '--ignored',
-      '--exclude-standard'
+      '--exclude-standard',
+      '--directory',
+      '--no-empty-directory'
     ])
     expect(ignoredPass).not.toContain('.env*')
     expect(ignoredPass).not.toContain(':(glob)**/.env*')
   })
 
-  it('prunes generated directories in git before output filtering', () => {
+  it('collapses untracked directories in both passes without generated pathspec churn', () => {
     const { primary, ignoredPass } = buildGitLsFilesArgsForQuickOpen()
-    for (const args of [primary, ignoredPass]) {
-      const dashDashIdx = args.indexOf('--')
-      expect(dashDashIdx).toBeGreaterThanOrEqual(0)
-      expect(args[dashDashIdx + 1]).toBe('.')
-      expect(args).toContain(':(exclude,glob)node_modules')
-      expect(args).toContain(':(exclude,glob)node_modules/**')
-      expect(args).toContain(':(exclude,glob)**/node_modules')
-      expect(args).toContain(':(exclude,glob)**/node_modules/**')
-      expect(args).toContain(':(exclude,glob).cache')
-      expect(args).toContain(':(exclude,glob)**/.cache/**')
-      expect(args).toContain(':(exclude,glob).local/share')
-      expect(args).toContain(':(exclude,glob)**/.local/share/**')
-      expect(args).not.toContain(':(exclude,glob).github')
-      expect(args).not.toContain(':(exclude,glob).github/**')
-    }
+    expect(primary).toContain('--directory')
+    expect(ignoredPass).toContain('--directory')
+    expect(ignoredPass).toContain('--no-empty-directory')
+    expect([...primary, ...ignoredPass]).not.toContain(':(exclude,glob)**/node_modules/**')
   })
 
   it('exclude prefixes prepend positive "." pathspec', () => {
