@@ -19392,34 +19392,43 @@ export class OrcaRuntimeService {
         hasHookCompletionSignal ||
         normalizedTabAgentStatus?.interactivePrompt != null ||
         normalizedTabAgentStatus?.toolName != null
+      const shellReclaimedTransientAgent =
+        explicitAgentStatusToUse !== null &&
+        liveTitleEvidence !== null &&
+        liveTitleEvidenceClassification !== 'agent' &&
+        normalizedTabAgentStatus?.state !== 'done' &&
+        normalizedTabAgentStatus?.interactivePrompt == null &&
+        normalizedTabAgentStatus?.toolName == null
       const keepFullAgentStatus =
         normalizedTabAgentStatus &&
         (liveTitleEvidence === null ||
           liveTitleEvidenceClassification === 'agent' ||
           hasLiveAgentSignal)
-      const agentStatus = keepFullAgentStatus
-        ? { agentStatus: normalizedTabAgentStatus }
-        : // Why: when live title evidence says the pane is idle (e.g. the Claude
-          // agents picker or a neutral shell title), suppress the stale "working"
-          // state so the client shows no spinner — but retain agent identity
-          // (agentType + providerSession) so native chat can still address an
-          // idle agent's transcript. Reset the transient state to 'done'.
-          normalizedTabAgentStatus?.agentType != null
-          ? {
-              agentStatus: {
-                state: 'done' as const,
-                prompt: '',
-                updatedAt: normalizedTabAgentStatus.updatedAt,
-                stateStartedAt: normalizedTabAgentStatus.stateStartedAt,
-                paneKey: normalizedTabAgentStatus.paneKey,
-                stateHistory: [],
-                agentType: normalizedTabAgentStatus.agentType,
-                ...(normalizedTabAgentStatus.providerSession
-                  ? { providerSession: normalizedTabAgentStatus.providerSession }
-                  : {})
+      const agentStatus = shellReclaimedTransientAgent
+        ? {}
+        : keepFullAgentStatus
+          ? { agentStatus: normalizedTabAgentStatus }
+          : // Why: when live title evidence says the pane is idle (e.g. the Claude
+            // agents picker or a neutral shell title), suppress the stale "working"
+            // state so the client shows no spinner — but retain agent identity
+            // (agentType + providerSession) so native chat can still address an
+            // idle agent's transcript. Reset the transient state to 'done'.
+            normalizedTabAgentStatus?.agentType != null
+            ? {
+                agentStatus: {
+                  state: 'done' as const,
+                  prompt: '',
+                  updatedAt: normalizedTabAgentStatus.updatedAt,
+                  stateStartedAt: normalizedTabAgentStatus.stateStartedAt,
+                  paneKey: normalizedTabAgentStatus.paneKey,
+                  stateHistory: [],
+                  agentType: normalizedTabAgentStatus.agentType,
+                  ...(normalizedTabAgentStatus.providerSession
+                    ? { providerSession: normalizedTabAgentStatus.providerSession }
+                    : {})
+                }
               }
-            }
-          : null
+            : null
       tabs.push({
         type: 'terminal',
         id: tab.id,
