@@ -1,4 +1,5 @@
 import { useAppStore } from '@/store'
+import { getIndexedRepoMap, getIndexedWorktreeMap } from '@/store/worktree-repo-index'
 import type { AppState } from '@/store/types'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../shared/constants'
 import { getRepoIdFromWorktreeId } from '../../../shared/worktree-id'
@@ -35,12 +36,13 @@ export function getConnectionIdFromState(
   if (parsedWorkspaceKey?.type === 'folder') {
     return getFolderWorkspaceConnectionId(state, parsedWorkspaceKey.folderWorkspaceId)
   }
-  const allWorktrees = Object.values(state.worktreesByRepo ?? {}).flat()
-  const worktree = allWorktrees.find((w) => w.id === worktreeId)
+  // Why: retained Zustand selectors call this on unrelated writes; reuse the
+  // immutable-slice indexes instead of flattening every worktree each time.
+  const worktree = getIndexedWorktreeMap(state.worktreesByRepo).get(worktreeId)
   // Why: SSH worktrees can be restored from session IDs before relay discovery
   // repopulates worktreesByRepo. The composite ID still carries the repo ID.
   const repoId = worktree?.repoId ?? getRepoIdFromWorktreeId(worktreeId)
-  const repo = state.repos?.find((r) => r.id === repoId)
+  const repo = getIndexedRepoMap(state.repos).get(repoId)
   if (!repo) {
     return undefined
   }
