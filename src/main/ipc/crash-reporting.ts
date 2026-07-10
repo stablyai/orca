@@ -377,7 +377,10 @@ function collectCrashDiagnosticBundleAttachment(): CrashDiagnosticBundleAttachme
   }
 }
 
-export function registerCrashReportingHandlers(store: CrashReportStore): void {
+export function registerCrashReportingHandlers(
+  store: CrashReportStore,
+  options: { markExpectedRendererReload?: (webContentsId: number) => void } = {}
+): void {
   ipcMain.removeHandler('crashReports:getLatestPending')
   ipcMain.handle('crashReports:getLatestPending', () => getLatestPendingReport(store))
 
@@ -408,6 +411,13 @@ export function registerCrashReportingHandlers(store: CrashReportStore): void {
       recordRendererBreadcrumbTrace(args.name, data)
     }
   )
+
+  ipcMain.removeAllListeners('crashReports:markExpectedRendererReload')
+  ipcMain.on('crashReports:markExpectedRendererReload', (event) => {
+    // Why: lazy chunk recovery intentionally reloads the renderer; Electron can
+    // report that teardown as killed(1), which must not become a crash prompt.
+    options.markExpectedRendererReload?.(event.sender.id)
+  })
 
   ipcMain.removeHandler('crashReports:copyLatestDiagnostics')
   ipcMain.handle(

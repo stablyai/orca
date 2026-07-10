@@ -1032,6 +1032,8 @@ const api = {
       ipcRenderer.invoke('crashReports:recordRendererError', args),
     recordBreadcrumb: (args: { name: string; data?: CrashReportBreadcrumbData }): void =>
       ipcRenderer.send('crashReports:recordBreadcrumb', args),
+    markExpectedRendererReload: (): void =>
+      ipcRenderer.send('crashReports:markExpectedRendererReload'),
     submit: (args: CrashReportSubmitArgs): Promise<CrashReportSubmitResult> =>
       ipcRenderer.invoke('crashReports:submit', args),
     copyLatestDiagnostics: (args?: { reportId?: string; notes?: string }) =>

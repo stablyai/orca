@@ -794,6 +794,7 @@ describe('connectPanePty', () => {
       markAgentCompletionPaneUnread: vi.fn()
     } as StoreState
     ;(globalThis as unknown as { window: unknown }).window = {
+      dispatchEvent: vi.fn(() => true),
       api: {
         ssh: {
           connect: vi.fn().mockResolvedValue({ status: 'connected' }),

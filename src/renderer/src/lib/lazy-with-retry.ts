@@ -84,6 +84,15 @@ function recordReloadBreadcrumb(reloadKey: string, message: string): void {
   }
 }
 
+function markExpectedRendererReload(): void {
+  try {
+    const api = (window as Window & { api?: Window['api'] }).api
+    api?.crashReports.markExpectedRendererReload()
+  } catch {
+    // Expected-reload classification is best-effort; recovery must still reload.
+  }
+}
+
 const wait = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms))
 
 // Suspends the React.lazy boundary while window.location.reload() tears the page
@@ -145,6 +154,7 @@ export async function loadLazyWithRetry<T extends AnyComponent>(
     if (!markChunkReloadAttempted()) {
       throw lastError
     }
+    markExpectedRendererReload()
     recordReloadBreadcrumb(
       options.reloadKey ?? 'unknown',
       lastError instanceof Error ? lastError.message : String(lastError)
