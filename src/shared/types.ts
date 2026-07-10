@@ -3574,6 +3574,16 @@ export type WikiReadResult =
     }
 export type WikiGenerateResult = { ok: true } | { ok: false; error: string }
 
+// Shared between preload (renderer-facing type) and main (emitChanged/webContents.send
+// payload) so the wire shape can't drift between the two sides.
+export type WikiGenerationChangedPayload = {
+  worktreeId: string
+  running: boolean
+  output: string
+  error?: string
+  done?: boolean
+}
+
 // ─── Filesystem watcher ─────────────────────────────────────
 export type FsChangeEvent = {
   kind: 'create' | 'update' | 'delete' | 'rename' | 'overflow'

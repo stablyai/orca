@@ -205,6 +205,7 @@ import type {
   WorkspaceSessionPatch,
   WorkspaceSessionState,
   WikiGenerateResult,
+  WikiGenerationChangedPayload,
   WikiReadResult
 } from '../shared/types'
 
@@ -878,11 +879,6 @@ export type AppApi = {
 }
 
 export type WikiGenerationStatus = { running: boolean; output: string; error?: string }
-
-export type WikiGenerationChangedPayload = WikiGenerationStatus & {
-  worktreeId: string
-  done?: boolean
-}
 
 export type WikiApi = {
   read: (args: {

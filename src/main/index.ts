@@ -29,6 +29,7 @@ import type { WikiHandlerDeps } from './ipc/wiki'
 import { WikiGenerationService } from './wiki/wiki-generation-service'
 import { spawnWikiAgent } from './wiki/wiki-generation-process'
 import { TUI_AGENT_CONFIG, getTuiAgentLaunchCommand } from '../shared/tui-agent-config'
+import type { WikiGenerationChangedPayload } from '../shared/types'
 import { initObservability, shutdownObservability } from './observability'
 import { startSpan } from './observability/tracer'
 import { registerMobileHandlers } from './ipc/mobile'
@@ -942,7 +943,7 @@ function openMainWindow(): BrowserWindow {
         getTuiAgentLaunchCommand(TUI_AGENT_CONFIG[agent], process.platform, { isRemote: false })
       )
     },
-    emitChanged: (payload) => {
+    emitChanged: (payload: WikiGenerationChangedPayload) => {
       if (mainWindow && !mainWindow.isDestroyed()) {
         mainWindow.webContents.send('wiki:generationChanged', payload)
       }

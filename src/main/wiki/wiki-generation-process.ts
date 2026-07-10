@@ -1,7 +1,8 @@
-import { exec, spawn, type ChildProcess } from 'node:child_process'
+import { execFile, spawn, type ChildProcess } from 'node:child_process'
 import { resolveCliCommand } from '../codex-cli/command'
 import { getSpawnArgsForWindows } from '../win32-utils'
 
+/** Input for spawning a headless wiki-generation agent process. */
 export type SpawnWikiAgentInput = {
   binary: string
   args: string[]
@@ -10,6 +11,7 @@ export type SpawnWikiAgentInput = {
   promptViaStdin: boolean
 }
 
+/** Spawns the wiki-generation agent's CLI binary, resolving Windows shims and piping the prompt via stdin when required. */
 // Why: mirrors commit-message-text-generation.ts's local spawn shape so the
 // headless wiki agent resolves the same Windows .cmd shims and cwd/env rules.
 export function spawnWikiAgent(input: SpawnWikiAgentInput): ChildProcess {
@@ -34,6 +36,7 @@ export function spawnWikiAgent(input: SpawnWikiAgentInput): ChildProcess {
   return child
 }
 
+/** Kills the given child process and its whole process tree, cross-platform. */
 // Why: on Windows, npm-installed CLIs are usually .cmd shims, so child.kill()
 // only terminates the wrapper. taskkill /T /F walks the process tree from the
 // wrapper PID. On POSIX, the negative pid targets the whole detached group.
@@ -43,7 +46,8 @@ export function killProcessTree(child: ChildProcess): void {
     return
   }
   if (process.platform === 'win32') {
-    exec(`taskkill /pid ${pid} /T /F`, () => {
+    // Why: execFile avoids spawning a shell (exec) for a fixed argv.
+    execFile('taskkill', ['/pid', String(pid), '/T', '/F'], () => {
       // Best-effort; the spawn's `close` listener fires once the tree exits.
     })
     return

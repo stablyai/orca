@@ -36,6 +36,14 @@ describe('wikilinksToMarkdownLinks', () => {
   it('leaves existing markdown links untouched', () => {
     expect(wikilinksToMarkdownLinks('[x](y.md)')).toBe('[x](y.md)')
   })
+
+  it('wraps a target with spaces in angle brackets', () => {
+    expect(wikilinksToMarkdownLinks('[[Target Note]]')).toBe('[Target Note](<Target Note>)')
+  })
+
+  it('leaves a target without spaces unwrapped', () => {
+    expect(wikilinksToMarkdownLinks('[[NoSpace]]')).toBe('[NoSpace](NoSpace)')
+  })
 })
 
 describe('prepareWikiNoteForDisplay', () => {

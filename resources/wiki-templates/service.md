@@ -56,7 +56,7 @@ libs: []
 
 ## Folder (core service)
 
-```
+```text
 Services/<service>/
   <service>.md              # overview + note map (table) + Where in code + business areas + Gotchas; tag + type/moc
   <service> — Data.md     # tables, models, DSN

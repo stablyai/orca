@@ -1,9 +1,9 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import type { IFilesystemProvider } from '../providers/types'
 import { readWikiNoteSsh, readWikiOverviewSsh } from './wiki-repository-ssh'
 
-const WORKTREE = '/repo'
-const WIKI_DIR = '/repo/.wiki'
+const WORKTREE = '/remote/repo'
+const WIKI_DIR = '/remote/repo/.wiki'
 
 function fakeProvider(overrides: Partial<IFilesystemProvider>): IFilesystemProvider {
   const notImplemented = () => {
@@ -67,13 +67,18 @@ describe('readWikiOverviewSsh', () => {
 
 describe('readWikiNoteSsh', () => {
   it('reads a note', async () => {
+    const statSpy = vi.fn(async () => ({ size: 10, type: 'file' as const, mtime: 0 }))
+    const readFileSpy = vi.fn(async () => ({ content: '# Home', isBinary: false }))
     const provider = fakeProvider({
       realpath: async (p: string) => p,
-      stat: async () => ({ size: 10, type: 'file', mtime: 0 }),
-      readFile: async () => ({ content: '# Home', isBinary: false })
+      stat: statSpy,
+      readFile: readFileSpy
     })
     const result = await readWikiNoteSsh(provider, WORKTREE, 'Home.md')
     expect(result).toEqual({ relativePath: 'Home.md', content: '# Home' })
+    // Why: regression guard for the leading-slash strip bug — provider must see absolute paths.
+    expect(statSpy).toHaveBeenCalledWith('/remote/repo/.wiki/Home.md')
+    expect(readFileSpy).toHaveBeenCalledWith('/remote/repo/.wiki/Home.md')
   })
 
   it('rejects when stat.type is not file', async () => {

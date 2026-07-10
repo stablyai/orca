@@ -8,6 +8,13 @@ function toPosix(p: string): string {
   return p.replace(/\\/g, '/').replace(/^\/+/, '')
 }
 
+// Why: wikiDir/realpath values are absolute remote paths — toPosix's leading-slash
+// strip would turn them relative and break provider.stat/readFile/realpath.
+function toRemotePosix(p: string): string {
+  return p.replace(/\\/g, '/')
+}
+
+/** Lists a remote worktree's `.wiki/` notes over SSH and resolves the root note, mirroring the local `readWikiOverview`. */
 export async function readWikiOverviewSsh(
   provider: IFilesystemProvider,
   worktreePath: string,
@@ -27,6 +34,7 @@ export async function readWikiOverviewSsh(
   return shapeWikiOverview(notes, repoName)
 }
 
+/** Reads one `.wiki/` note over SSH, rejecting paths that escape `.wiki/` (including via symlinks) or aren't markdown. */
 export async function readWikiNoteSsh(
   provider: IFilesystemProvider,
   worktreePath: string,
@@ -40,14 +48,14 @@ export async function readWikiNoteSsh(
     return null
   }
   const wikiDir = resolveWikiDir(worktreePath)
-  const abs = posix.join(toPosix(wikiDir), normalized)
+  const abs = posix.join(toRemotePosix(wikiDir), normalized)
   try {
     // Why: reject symlink escapes — the resolved real path must stay inside .wiki/.
     const [realWikiDir, realAbs] = await Promise.all([
       provider.realpath(wikiDir),
       provider.realpath(abs)
     ])
-    if (!isPathInsideOrEqual(toPosix(realWikiDir), toPosix(realAbs))) {
+    if (!isPathInsideOrEqual(toRemotePosix(realWikiDir), toRemotePosix(realAbs))) {
       return null
     }
     const fileStat = await provider.stat(abs)

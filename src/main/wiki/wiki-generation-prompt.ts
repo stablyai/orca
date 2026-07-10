@@ -2,6 +2,7 @@ import { readFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { app } from 'electron'
 
+/** Lists candidate directories that may hold the wiki-generation prompt templates, in lookup order. */
 export function wikiTemplatesDirCandidates(env: {
   isPackaged: boolean
   resourcesPath: string | undefined
@@ -19,6 +20,7 @@ export function wikiTemplatesDirCandidates(env: {
   return [...new Set(candidates)]
 }
 
+/** Resolves the first candidate wiki-templates directory for the running Electron app. */
 export function resolveWikiTemplatesDir(): string {
   return wikiTemplatesDirCandidates({
     isPackaged: app.isPackaged,
@@ -37,6 +39,7 @@ const CLAUDE_MD_INSTRUCTION = [
   'project — keep it up to date when changing architecture, data, interfaces, or business logic.'
 ].join('\n')
 
+/** Assembles the full wiki-generation prompt from the contract and template files, optionally appending the CLAUDE.md instruction. */
 export async function buildWikiGenerationPrompt(input: {
   repoName: string
   readTemplateFile: (name: string) => Promise<string>
@@ -66,6 +69,7 @@ export async function buildWikiGenerationPrompt(input: {
   return sections.join('\n')
 }
 
+/** Reads the named wiki template file, trying each candidate templates directory until one succeeds. */
 export async function readWikiTemplateFile(name: string): Promise<string> {
   const candidates = wikiTemplatesDirCandidates({
     isPackaged: app.isPackaged,

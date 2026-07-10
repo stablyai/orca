@@ -1,3 +1,4 @@
+/** Back-stack navigation over visited wiki notes, always holding at least the root note. */
 export type WikiHistory = {
   current: () => string
   canGoBack: () => boolean
@@ -6,6 +7,7 @@ export type WikiHistory = {
   home: () => void
 }
 
+/** Creates a `WikiHistory` stack seeded with the given root note. */
 export function createWikiHistory(root: string): WikiHistory {
   const stack: string[] = [root]
   return {

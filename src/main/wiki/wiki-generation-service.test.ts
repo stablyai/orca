@@ -147,8 +147,9 @@ describe('WikiGenerationService', () => {
     })
   })
 
-  it('cancels a running generation, kills the process, and treats the following close as canceled', () => {
+  it('cancels a running generation, kills the process, and preserves accumulated output', () => {
     service.start({ worktreeId: 'w1', cwd: '/repo', agent: 'claude', prompt: 'PROMPT' })
+    child.stdout.emit('data', Buffer.from('partial output'))
     service.cancel('w1')
     expect(killProcessTree).toHaveBeenCalledWith(child)
     expect(child.kill).toHaveBeenCalledWith('SIGKILL')
@@ -156,7 +157,7 @@ describe('WikiGenerationService', () => {
     expect(emitChanged).toHaveBeenLastCalledWith({
       worktreeId: 'w1',
       running: false,
-      output: '',
+      output: 'partial output',
       done: true
     })
     expect(service.getStatus('w1')).toBeNull()

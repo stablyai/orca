@@ -1,6 +1,7 @@
 import React from 'react'
 import { ArrowLeft, Home } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import { translate } from '@/i18n/i18n'
 
 type WikiPanelTopBarProps = {
   relativePath: string
@@ -14,6 +15,7 @@ function formatWikiBreadcrumb(relativePath: string): string {
   return relativePath.replace(/\.(md|mdx|markdown)$/i, '')
 }
 
+/** Top bar for the wiki panel: back/home navigation buttons and the current note's breadcrumb. */
 export function WikiPanelTopBar({
   relativePath,
   canGoBack,
@@ -27,8 +29,8 @@ export function WikiPanelTopBar({
         size="icon-sm"
         disabled={!canGoBack}
         onClick={onBack}
-        aria-label="Back"
-        title="Back"
+        aria-label={translate('auto.components.right.sidebar.WikiPanelTopBar.b2030cab15', 'Back')}
+        title={translate('auto.components.right.sidebar.WikiPanelTopBar.b2030cab15', 'Back')}
       >
         <ArrowLeft />
       </Button>
@@ -37,8 +39,8 @@ export function WikiPanelTopBar({
         size="icon-sm"
         disabled={!canGoBack}
         onClick={onHome}
-        aria-label="Home"
-        title="Home"
+        aria-label={translate('auto.components.right.sidebar.WikiPanelTopBar.350a0c1651', 'Home')}
+        title={translate('auto.components.right.sidebar.WikiPanelTopBar.350a0c1651', 'Home')}
       >
         <Home />
       </Button>

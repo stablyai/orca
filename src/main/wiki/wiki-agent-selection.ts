@@ -7,6 +7,7 @@ type WikiAgentSettings = Pick<
   'defaultTuiAgent' | 'disabledTuiAgents' | 'sourceControlAi'
 >
 
+/** Picks the TUI agent to run wiki generation with, preferring the source-control AI agent, falling back to the default agent, and rejecting disabled agents. */
 export function resolveWikiGenerationAgent(
   settings: WikiAgentSettings
 ): { ok: true; agent: TuiAgent } | { ok: false; error: string } {

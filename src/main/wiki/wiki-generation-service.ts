@@ -1,15 +1,17 @@
 import type { ChildProcess } from 'node:child_process'
-import type { TuiAgent } from '../../shared/types'
+import type { TuiAgent, WikiGenerationChangedPayload } from '../../shared/types'
 import { buildWikiHeadlessArgs } from './wiki-generation-command'
 import { killProcessTree } from './wiki-generation-process'
 
+/** Snapshot of a worktree's background wiki-generation run: whether it's running, its accumulated output, and any error. */
 export type WikiGenerationStatus = { running: boolean; output: string; error?: string }
 
+/** Dependencies injected into `WikiGenerationService` so it can resolve binaries, notify the renderer, spawn processes, and get the current time. */
 export type WikiGenerationServiceDeps = {
   // Resolve the agent launch binary (cmd override or TUI_AGENT_CONFIG launchCmd). See wiring notes.
   resolveBinary: (agent: TuiAgent) => string
   // Emit a status snapshot to the renderer (webContents.send('wiki:generationChanged', payload)).
-  emitChanged: (payload: { worktreeId: string } & WikiGenerationStatus & { done?: boolean }) => void
+  emitChanged: (payload: WikiGenerationChangedPayload) => void
   // Injected for tests; defaults to the real spawn wrapper in production.
   spawnAgent: (input: {
     binary: string
@@ -35,14 +37,17 @@ type GenerationRecord = {
   lastEmitAt?: number
 }
 
+/** Runs and tracks a background wiki-generation agent process per worktree. */
 // Why: owns the wiki-generation child process + per-worktree state in the main
 // process so it survives renderer unmount/remount (sidebar tab switches).
 export class WikiGenerationService {
   private readonly records = new Map<string, GenerationRecord>()
   private readonly children = new Map<string, ChildProcess>()
 
+  /** Creates the service with its injected binary-resolution, IPC, spawn, and clock dependencies. */
   constructor(private readonly deps: WikiGenerationServiceDeps) {}
 
+  /** Starts a wiki-generation run for the worktree, or returns an error if the agent has no headless mode. Idempotent while already running. */
   start(input: {
     worktreeId: string
     cwd: string
@@ -103,12 +108,13 @@ export class WikiGenerationService {
 
   private finish(worktreeId: string, result: { failed: boolean; error?: string }): void {
     this.children.delete(worktreeId)
-    if (this.records.get(worktreeId)?.canceled) {
+    const record = this.records.get(worktreeId)
+    if (record?.canceled) {
       this.records.delete(worktreeId)
-      this.deps.emitChanged({ worktreeId, running: false, output: '', done: true })
+      // Why: preserve output accumulated before Stop so the panel can still show it.
+      this.deps.emitChanged({ worktreeId, running: false, output: record.output, done: true })
       return
     }
-    const record = this.records.get(worktreeId)
     const output = record?.output ?? ''
     if (result.failed) {
       this.records.set(worktreeId, {
@@ -124,6 +130,7 @@ export class WikiGenerationService {
     }
   }
 
+  /** Returns the worktree's current generation status, or null if no run is tracked. */
   getStatus(worktreeId: string): WikiGenerationStatus | null {
     const record = this.records.get(worktreeId)
     if (!record) {
@@ -132,6 +139,7 @@ export class WikiGenerationService {
     return { running: record.status === 'running', output: record.output, error: record.error }
   }
 
+  /** Cancels the worktree's running generation, killing its process tree and preserving output already emitted. */
   cancel(worktreeId: string): void {
     const child = this.children.get(worktreeId)
     if (!child) {

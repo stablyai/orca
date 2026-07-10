@@ -6,6 +6,7 @@ import { isDescendantOrEqual } from '../ipc/filesystem-auth'
 const WIKI_DIR = '.wiki'
 const ROOT_CANDIDATES = ['Home.md', 'index.md', 'README.md']
 
+/** Returns the absolute path to a worktree's `.wiki/` directory. */
 export function resolveWikiDir(worktreePath: string): string {
   return join(worktreePath, WIKI_DIR)
 }
@@ -14,6 +15,7 @@ function toPosix(relativePath: string): string {
   return relativePath.replace(/\\/g, '/')
 }
 
+/** True if a relative path stays inside `.wiki/`: no `..` traversal, no backslashes, no Windows drive letters. */
 export function isContainedRelativePath(relativePath: string): boolean {
   // Why: reject traversal, and Windows drive-letter/backslash paths (Orca supports Windows).
   if (!relativePath || relativePath.includes('\\') || /^[a-zA-Z]:/.test(relativePath)) {
@@ -52,6 +54,7 @@ async function listWikiNotes(wikiDir: string): Promise<string[]> {
   return notes.sort((a, b) => a.localeCompare(b))
 }
 
+/** Picks the wiki's root/home note from `notes`: Home.md, `<repoName>.md`, index.md, README.md, else the alphabetically first note. */
 export function resolveWikiRootRelativePath(notes: string[], repoName: string): string | null {
   const ordered = [ROOT_CANDIDATES[0], `${repoName}.md`, ROOT_CANDIDATES[1], ROOT_CANDIDATES[2]]
   for (const candidate of ordered) {
@@ -67,6 +70,7 @@ export function resolveWikiRootRelativePath(notes: string[], repoName: string): 
   return [...notes].sort((a, b) => a.localeCompare(b))[0]
 }
 
+/** Builds the wiki overview result (hasWiki/rootRelativePath/notes) from a list of note paths. */
 export function shapeWikiOverview(
   notes: string[],
   repoName: string
@@ -77,6 +81,7 @@ export function shapeWikiOverview(
   return { hasWiki: true, rootRelativePath: resolveWikiRootRelativePath(notes, repoName), notes }
 }
 
+/** Lists a local worktree's `.wiki/` notes recursively and resolves its root note. */
 export async function readWikiOverview(
   worktreePath: string,
   repoName: string
@@ -86,6 +91,7 @@ export async function readWikiOverview(
   return shapeWikiOverview(notes, repoName)
 }
 
+/** Reads one local `.wiki/` note, rejecting paths that escape `.wiki/` (including via symlinks) or aren't markdown. */
 export async function readWikiNote(
   worktreePath: string,
   relativePath: string
@@ -132,6 +138,7 @@ function safeDecodeHref(value: string): string {
   }
 }
 
+/** Resolves a clicked link's href (wikilink, relative path, or bare basename) to a note path in `notes`, or null if it doesn't match one. */
 export function resolveWikiTarget(
   notes: string[],
   fromRelativePath: string,

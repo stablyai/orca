@@ -49,6 +49,7 @@ import type {
   SearchResult,
   TuiAgent,
   UpdateStatus,
+  WikiGenerationChangedPayload,
   WorktreeBaseStatusEvent,
   WorktreeDefaultTabsLaunch,
   WorktreeRemoteBranchConflictEvent
@@ -507,16 +508,8 @@ const api = {
     generationStatus: (args) => ipcRenderer.invoke('wiki:generationStatus', args),
     cancelGeneration: (args) => ipcRenderer.invoke('wiki:cancelGeneration', args),
     onGenerationChanged: (callback) => {
-      const listener = (
-        _event: Electron.IpcRendererEvent,
-        payload: {
-          worktreeId: string
-          running: boolean
-          output: string
-          error?: string
-          done?: boolean
-        }
-      ) => callback(payload)
+      const listener = (_event: Electron.IpcRendererEvent, payload: WikiGenerationChangedPayload) =>
+        callback(payload)
       ipcRenderer.on('wiki:generationChanged', listener)
       return () => ipcRenderer.removeListener('wiki:generationChanged', listener)
     }

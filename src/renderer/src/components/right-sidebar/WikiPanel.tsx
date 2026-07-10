@@ -10,14 +10,14 @@ import { createWikiHistory, type WikiHistory } from './wiki-panel-navigation'
 import { prepareWikiNoteForDisplay } from './wiki-note-content'
 import { WikiPanelTopBar } from './WikiPanelTopBar'
 import { WikiPanelSetupState } from './WikiPanelSetupState'
+import { translate } from '@/i18n/i18n'
 
 type WikiNote = { relativePath: string; content: string }
 type WikiPanelPhase = 'loading' | 'empty' | 'generating' | 'error' | 'content'
 
 const EXTERNAL_LINK_PATTERN = /^https?:\/\//i
-const DEFAULT_LOAD_ERROR = 'Failed to load the wiki.'
-const DEFAULT_GENERATE_ERROR = 'Failed to start generation.'
 
+/** Right-sidebar panel that loads, displays, and navigates a worktree's `.wiki/` notes, or offers to generate one. */
 export default function WikiPanel(): React.JSX.Element | null {
   const activeWorktree = useActiveWorktree()
   const repo = useRepoById(activeWorktree?.repoId ?? null)
@@ -53,7 +53,12 @@ export default function WikiPanel(): React.JSX.Element | null {
           return
         }
         if (!result.note) {
-          setErrorMessage('Failed to load the wiki root page.')
+          setErrorMessage(
+            translate(
+              'auto.components.right.sidebar.WikiPanel.9fe482ef65',
+              'Failed to load the wiki root page.'
+            )
+          )
           setPhase('error')
           return
         }
@@ -64,7 +69,14 @@ export default function WikiPanel(): React.JSX.Element | null {
         if (!mountedRef.current || requestId !== requestIdRef.current) {
           return
         }
-        setErrorMessage(error instanceof Error ? error.message : DEFAULT_LOAD_ERROR)
+        setErrorMessage(
+          error instanceof Error
+            ? error.message
+            : translate(
+                'auto.components.right.sidebar.WikiPanel.9e1f136ed0',
+                'Failed to load the wiki.'
+              )
+        )
         setPhase('error')
       }
     },
@@ -151,7 +163,13 @@ export default function WikiPanel(): React.JSX.Element | null {
       if (!mountedRef.current || requestId !== requestIdRef.current) {
         return
       }
-      const message = error instanceof Error ? error.message : DEFAULT_GENERATE_ERROR
+      const message =
+        error instanceof Error
+          ? error.message
+          : translate(
+              'auto.components.right.sidebar.WikiPanel.a5aa987a97',
+              'Failed to start generation.'
+            )
       toast.error(message)
       setErrorMessage(message)
       setPhase('error')
@@ -162,9 +180,20 @@ export default function WikiPanel(): React.JSX.Element | null {
     if (!worktreeId) {
       return
     }
-    // Why: the following main-process status change (running:false) drives the
-    // phase transition out of "generating" — no local phase flip here.
-    await window.api.wiki.cancelGeneration({ worktreeId })
+    try {
+      // Why: the following main-process status change (running:false) drives the
+      // phase transition out of "generating" — no local phase flip here.
+      await window.api.wiki.cancelGeneration({ worktreeId })
+    } catch (error) {
+      toast.error(
+        error instanceof Error
+          ? error.message
+          : translate(
+              'auto.components.right.sidebar.WikiPanel.eccbe5d645',
+              'Failed to stop generation.'
+            )
+      )
+    }
   }, [worktreeId])
 
   const loadNoteAt = useCallback(
@@ -173,14 +202,17 @@ export default function WikiPanel(): React.JSX.Element | null {
         return
       }
       const requestId = ++requestIdRef.current
-      void window.api.wiki.read({ worktreeId, target: relativePath }).then((result) => {
-        if (!mountedRef.current || requestId !== requestIdRef.current) {
-          return
-        }
-        if (result.hasWiki && result.note) {
-          setNote(result.note)
-        }
-      })
+      window.api.wiki
+        .read({ worktreeId, target: relativePath })
+        .then((result) => {
+          if (!mountedRef.current || requestId !== requestIdRef.current) {
+            return
+          }
+          if (result.hasWiki && result.note) {
+            setNote(result.note)
+          }
+        })
+        .catch(() => {})
     },
     [worktreeId, mountedRef]
   )
@@ -219,16 +251,19 @@ export default function WikiPanel(): React.JSX.Element | null {
       }
       const fromRelativePath = historyRef.current.current()
       const requestId = ++requestIdRef.current
-      void window.api.wiki.read({ worktreeId, target: href, fromRelativePath }).then((result) => {
-        if (!mountedRef.current || requestId !== requestIdRef.current) {
-          return
-        }
-        if (result.hasWiki && result.note) {
-          historyRef.current?.push(result.note.relativePath)
-          setNote(result.note)
-          bumpHistoryTick((tick) => tick + 1)
-        }
-      })
+      window.api.wiki
+        .read({ worktreeId, target: href, fromRelativePath })
+        .then((result) => {
+          if (!mountedRef.current || requestId !== requestIdRef.current) {
+            return
+          }
+          if (result.hasWiki && result.note) {
+            historyRef.current?.push(result.note.relativePath)
+            setNote(result.note)
+            bumpHistoryTick((tick) => tick + 1)
+          }
+        })
+        .catch(() => {})
     },
     [worktreeId, mountedRef]
   )
@@ -243,7 +278,13 @@ export default function WikiPanel(): React.JSX.Element | null {
     <div
       className="flex h-full min-h-0 flex-col"
       role="region"
-      aria-label={repo ? `Wiki: ${repo.displayName}` : 'Wiki'}
+      aria-label={
+        repo
+          ? translate('auto.components.right.sidebar.WikiPanel.2a8893f928', 'Wiki: {{value0}}', {
+              value0: repo.displayName
+            })
+          : translate('auto.components.right.sidebar.WikiPanel.8521212a7a', 'Wiki')
+      }
     >
       {phase === 'content' && note ? (
         <>

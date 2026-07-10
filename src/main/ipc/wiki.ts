@@ -14,6 +14,7 @@ import type { WikiGenerationStatus } from '../wiki/wiki-generation-service'
 
 const SSH_NOT_SUPPORTED_ERROR = 'Background wiki generation is not available for SSH worktrees yet.'
 
+/** Dependencies `registerWikiHandlers` needs from the main process: worktree/settings lookup and the background generation service. */
 export type WikiHandlerDeps = {
   getWorktree: (
     worktreeId: string
@@ -37,6 +38,7 @@ export type WikiHandlerDeps = {
 type WikiOverview = { hasWiki: boolean; rootRelativePath: string | null; notes: string[] }
 type WikiNote = { relativePath: string; content: string } | null
 
+/** Registers the `wiki:read`, `wiki:generate`, `wiki:generationStatus`, and `wiki:cancelGeneration` IPC handlers. */
 export function registerWikiHandlers(deps: WikiHandlerDeps): void {
   ipcMain.handle(
     'wiki:read',
