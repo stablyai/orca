@@ -35,13 +35,15 @@ export class RotatingLogWriter {
     this.open()
   }
 
-  private open(): void {
+  private open(mode: 'a' | 'w' = 'a'): void {
     try {
-      // Append so pre-JS boot output already in relay.log is preserved and
-      // concurrent appends stay atomic per write.
-      this.fd = openSync(this.logPath, 'a')
+      // 'a' preserves pre-JS boot output already in relay.log and keeps
+      // concurrent appends atomic; 'w' truncates in place (used as the rotation
+      // fallback when a rename cannot succeed — e.g. Windows, where the launch
+      // shell's own redirect handle blocks renaming the live file).
+      this.fd = openSync(this.logPath, mode)
       try {
-        this.currentBytes = statSync(this.logPath).size
+        this.currentBytes = mode === 'w' ? 0 : statSync(this.logPath).size
       } catch {
         this.currentBytes = 0
       }
@@ -79,21 +81,28 @@ export class RotatingLogWriter {
   }
 
   private rotate(): void {
-    try {
-      if (this.fd !== null) {
-        closeSync(this.fd)
-        this.fd = null
-      }
-      // rename() replaces any existing relay.log.1 atomically on POSIX and is
-      // supported on Windows; the live file is renamed (never deleted) so no
-      // log window is lost.
-      renameSync(this.logPath, this.rotatedPath)
-    } catch {
-      // Rotation failed (e.g. cross-device, locked file): reopen the same file
-      // and keep appending rather than losing the ability to log.
+    if (this.fd !== null) {
+      closeSync(this.fd)
+      this.fd = null
     }
-    this.currentBytes = 0
-    this.open()
+    let renamed = false
+    try {
+      // Preferred path: archive one generation. rename() replaces any existing
+      // relay.log.1 atomically on POSIX; the live file is renamed (never
+      // deleted) so no log window is lost, then we reopen a fresh relay.log.
+      renameSync(this.logPath, this.rotatedPath)
+      renamed = true
+    } catch {
+      // Why: on Windows the launch shell holds its own `1>relay.log` handle
+      // WITHOUT FILE_SHARE_DELETE, so renaming the live file fails (EPERM/EBUSY)
+      // — and a cross-device relay.log.1 would fail too. Fall back to truncating
+      // relay.log in place ('w') so the size cap STILL holds and we don't churn a
+      // failing rename on every subsequent line. The shell's fd keeps appending
+      // at its own offset, but the truncation bounds total growth. Trade-off: no
+      // archived generation on this platform/path.
+    }
+    // Successful rename → fresh append file (size 0). Failed rename → truncate.
+    this.open(renamed ? 'a' : 'w')
   }
 
   private closeQuietly(): void {

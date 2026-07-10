@@ -7,8 +7,8 @@
  * archived generation, and always leaves the CURRENT log at relay.log so the
  * `tail -100 relay.log` diagnostics workflow keeps working.
  */
-import { describe, expect, it, beforeEach, afterEach } from 'vitest'
-import { mkdtempSync, readFileSync, existsSync, statSync, writeFileSync } from 'node:fs'
+import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest'
+import { mkdtempSync, mkdirSync, readFileSync, existsSync, statSync, writeFileSync } from 'node:fs'
 import { rm } from 'node:fs/promises'
 import * as path from 'node:path'
 import { tmpdir } from 'node:os'
@@ -85,6 +85,27 @@ describe('RotatingLogWriter', () => {
     }
   })
 
+  it('caps size via truncate-in-place when rename cannot succeed (Windows shell-handle case)', () => {
+    // Model the platform where renameSync fails (e.g. Windows, where the launch
+    // shell's own `1>relay.log` handle blocks renaming the live file): make the
+    // archive path a directory so renameSync(logPath, `${logPath}.1`) throws.
+    mkdirSync(`${logPath}.1`, { recursive: true })
+    const cap = 4 * 1024
+    const writer = new RotatingLogWriter(logPath, cap)
+    try {
+      const line = `${'q'.repeat(200)}\n`
+      for (let i = 0; i < 100; i += 1) {
+        writer.write(line)
+      }
+      // The cap still holds via truncate-in-place even though no archive was made.
+      expect(statSync(logPath).size).toBeLessThanOrEqual(cap)
+      writer.write('MARKER-LAST\n')
+      expect(readFileSync(logPath, 'utf-8')).toContain('MARKER-LAST')
+    } finally {
+      writer.dispose()
+    }
+  })
+
   it('installRelayLogRotation routes process.stderr through the rotator and restores', () => {
     const cap = 2 * 1024
     const { restore } = installRelayLogRotation(logPath, cap)
@@ -94,9 +115,15 @@ describe('RotatingLogWriter', () => {
     } finally {
       restore()
     }
-    // After restore, process.stderr no longer targets the rotator file.
+    // After restore, process.stderr no longer targets the rotator file. Spy so
+    // the assertion write does not leak to the real test-runner stderr.
     const sizeAfterRestore = statSync(logPath).size
-    process.stderr.write('should-not-be-in-relay-log\n')
+    const spy = vi.spyOn(process.stderr, 'write').mockReturnValue(true)
+    try {
+      process.stderr.write('should-not-be-in-relay-log\n')
+    } finally {
+      spy.mockRestore()
+    }
     expect(statSync(logPath).size).toBe(sizeAfterRestore)
   })
 })
