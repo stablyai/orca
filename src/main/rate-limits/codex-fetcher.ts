@@ -522,6 +522,8 @@ function parseTopLevelTomlStringKey(config: string, key: string): string | null 
   return null
 }
 
+const DEFAULT_CHATGPT_BACKEND_BASE_URL = 'https://chatgpt.com/backend-api'
+
 const OFFICIAL_CHATGPT_API_HOSTS = new Set([
   'chatgpt.com',
   'www.chatgpt.com',
@@ -592,7 +594,6 @@ async function resolveCodexBackendBaseUrl(codexHomePath?: string | null): Promis
   return normalizeCodexBackendBaseUrl(fromConfig)
 }
 
-
 // Why: Codex reports remaining minutes in `windowDurationMins` for known
 // primary/secondary meters. Snap that remaining value up to the smallest
 // standard window that can contain it so additional limit_ids are not all
@@ -618,9 +619,10 @@ function inferAdditionalWindowMinutes(
   return Math.max(fallback, Math.ceil(reportedRemainingMins))
 }
 
-function preferredRpcRateLimitSnapshot(
-  wrapper: RpcRateLimitsResponse | undefined
-): { id: string | null; snapshot: RpcRateLimitSnapshot | undefined } {
+function preferredRpcRateLimitSnapshot(wrapper: RpcRateLimitsResponse | undefined): {
+  id: string | null
+  snapshot: RpcRateLimitSnapshot | undefined
+} {
   // Why: rateLimits is the declared preferred meter; scanning by-id first can
   // swap session/weekly onto a non-primary limit on multi-meter plans.
   if (wrapper?.rateLimits) {
@@ -708,7 +710,6 @@ function mapRpcRateLimitsPayload(wrapper: RpcRateLimitsResponse | undefined): {
 // ---------------------------------------------------------------------------
 // RPC fetch — spawn `codex -s read-only -a untrusted app-server`
 // ---------------------------------------------------------------------------
-
 
 function mapBackendUsageWindow(
   raw: BackendRateLimitWindow | null | undefined,
