@@ -14,10 +14,15 @@ vi.mock('./gh-utils', () => ({
   getIssueOwnerRepo: vi.fn(),
   getOwnerRepoForRemote: vi.fn(),
   resolveIssueSource: vi.fn(),
-  ghRepoExecOptions: vi.fn((context) => (context.connectionId ? {} : { cwd: context.repoPath })),
-  githubRepoContext: vi.fn((repoPath, connectionId) => ({
+  ghRepoExecOptions: vi.fn((context) =>
+    context.connectionId
+      ? {}
+      : { cwd: context.repoPath, ...(context.wslDistro ? { wslDistro: context.wslDistro } : {}) }
+  ),
+  githubRepoContext: vi.fn((repoPath, connectionId, localGitOptions) => ({
     repoPath,
-    connectionId: connectionId ?? null
+    connectionId: connectionId ?? null,
+    ...localGitOptions
   })),
   classifyGhError: vi.fn(),
   classifyListIssuesError: vi.fn(),
@@ -72,5 +77,25 @@ describe('setPRFileViewed', () => {
 
     const args = ghExecFileAsyncMock.mock.calls[0][0]
     expect(args.find((arg: string) => arg.startsWith('query='))).toContain('unmarkFileAsViewed')
+  })
+
+  it('routes local WSL file-viewed mutations through the selected distro', async () => {
+    ghExecFileAsyncMock.mockResolvedValueOnce({ stdout: '{}' })
+
+    await expect(
+      setPRFileViewed({
+        repoPath: '/repo-root',
+        connectionId: null,
+        localGitOptions: { wslDistro: 'Ubuntu' },
+        pullRequestId: 'PR_kwDO123',
+        path: 'src/app.ts',
+        viewed: true
+      })
+    ).resolves.toBe(true)
+
+    expect(ghExecFileAsyncMock.mock.calls[0][1]).toEqual({
+      cwd: '/repo-root',
+      wslDistro: 'Ubuntu'
+    })
   })
 })

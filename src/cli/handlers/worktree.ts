@@ -28,6 +28,10 @@ import {
   hasWorkspaceProjectTarget,
   resolveProjectCreateRepoSelector
 } from '../worktree-project-target'
+import {
+  assertCreateParentFlagsCompatible,
+  resolveCreateParentSelector
+} from './worktree-create-parent-selector'
 import { getOptionalLinearIssueLinkFlag } from './worktree-linear-issue-link'
 
 type HookWarningResult = {
@@ -54,23 +58,11 @@ function printPreservedBranchWarning(result: PreservedBranchResult, json: boolea
   }
 }
 
-function assertParentFlagsCompatible(flags: Map<string, string | boolean>): void {
+function assertParentWorktreeFlagsCompatible(flags: Map<string, string | boolean>): void {
   if (flags.has('parent-worktree') && flags.get('no-parent') === true) {
     throw new RuntimeClientError(
       'invalid_argument',
       'Choose either --parent-worktree or --no-parent, not both.'
-    )
-  }
-  if (flags.has('parent-workspace') && flags.get('no-parent') === true) {
-    throw new RuntimeClientError(
-      'invalid_argument',
-      'Choose either --parent-workspace or --no-parent, not both.'
-    )
-  }
-  if (flags.has('parent-workspace') && flags.has('parent-worktree')) {
-    throw new RuntimeClientError(
-      'invalid_argument',
-      'Choose either --parent-workspace or --parent-worktree, not both.'
     )
   }
   const parentWorktree = flags.get('parent-worktree')
@@ -79,13 +71,6 @@ function assertParentFlagsCompatible(flags: Map<string, string | boolean>): void
     (typeof parentWorktree !== 'string' || parentWorktree === '')
   ) {
     throw new RuntimeClientError('invalid_argument', 'Missing required --parent-worktree')
-  }
-  const parentWorkspace = flags.get('parent-workspace')
-  if (
-    flags.has('parent-workspace') &&
-    (typeof parentWorkspace !== 'string' || parentWorkspace === '')
-  ) {
-    throw new RuntimeClientError('invalid_argument', 'Missing required --parent-workspace')
   }
 }
 
@@ -211,20 +196,16 @@ export const WORKTREE_HANDLERS: Record<string, CommandHandler> = {
     printResult(result, json, formatWorktreeShow)
   },
   'worktree create': async ({ flags, client, cwd, json }) => {
-    assertParentFlagsCompatible(flags)
+    assertCreateParentFlagsCompatible(flags)
     assertWorkspaceTargetFlagsCompatible(flags)
     const callerTerminalHandle =
       typeof process.env.ORCA_TERMINAL_HANDLE === 'string' &&
       process.env.ORCA_TERMINAL_HANDLE.length > 0
         ? process.env.ORCA_TERMINAL_HANDLE
         : undefined
-    const explicitParentWorktree = await getOptionalWorktreeSelector(
-      flags,
-      'parent-worktree',
-      cwd,
-      client
-    )
-    const explicitParentWorkspace = getPresentStringFlag(flags, 'parent-workspace')
+    const explicitParent = await resolveCreateParentSelector(flags, cwd, client)
+    const explicitParentWorktree = explicitParent.parentWorktree
+    const explicitParentWorkspace = explicitParent.parentWorkspace
     const startupAgent = getOptionalStartupAgent(flags)
     const setupDecision = getOptionalSetupDecision(flags)
     const noParent = flags.get('no-parent') === true
@@ -277,7 +258,7 @@ export const WORKTREE_HANDLERS: Record<string, CommandHandler> = {
     printResult(result, json, formatWorktreeShow)
   },
   'worktree set': async ({ flags, client, cwd, json }) => {
-    assertParentFlagsCompatible(flags)
+    assertParentWorktreeFlagsCompatible(flags)
     const linearIssueLink = getOptionalLinearIssueLinkFlag(flags, 'linear-issue', {
       allowNull: true
     })

@@ -1,7 +1,3 @@
-/* eslint-disable max-lines -- Why: the issue-source test suite covers the
-heuristic split (#1076), the partial-failure envelope (feature 1), and the
-three-state preference matrix (feature 2) as one surface so a regression in
-any of them blocks the same merge gate. */
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as GhUtils from './gh-utils'
 
@@ -47,7 +43,8 @@ vi.mock('./gh-utils', async () => {
 
 vi.mock('./rate-limit', () => ({
   rateLimitGuard: rateLimitGuardMock,
-  noteRateLimitSpend: noteRateLimitSpendMock
+  noteRateLimitSpend: noteRateLimitSpendMock,
+  getRateLimit: vi.fn(async () => ({ ok: false, error: 'not probed in tests' }))
 }))
 
 import { countWorkItems, getWorkItem, listWorkItems, _resetOwnerRepoCache } from './client'
@@ -173,8 +170,13 @@ describe('GitHub issue source split', () => {
 
     await listWorkItems('/home/jinwoo/orca', 10, undefined, undefined, 'auto', 'openclaw-2')
 
-    expect(resolveIssueSourceMock).toHaveBeenCalledWith('/home/jinwoo/orca', 'auto', 'openclaw-2')
-    expect(getOwnerRepoMock).toHaveBeenCalledWith('/home/jinwoo/orca', 'openclaw-2')
+    expect(resolveIssueSourceMock).toHaveBeenCalledWith(
+      '/home/jinwoo/orca',
+      'auto',
+      'openclaw-2',
+      {}
+    )
+    expect(getOwnerRepoMock).toHaveBeenCalledWith('/home/jinwoo/orca', 'openclaw-2', {})
     expect(ghExecFileAsyncMock).toHaveBeenNthCalledWith(
       1,
       [
@@ -512,7 +514,7 @@ describe('GitHub issue source split', () => {
 
       const result = await listWorkItems('/repo-root', 10, undefined, undefined, 'auto')
 
-      expect(resolveIssueSourceMock).toHaveBeenCalledWith('/repo-root', 'auto', undefined)
+      expect(resolveIssueSourceMock).toHaveBeenCalledWith('/repo-root', 'auto', undefined, {})
       expect(ghExecFileAsyncMock).toHaveBeenNthCalledWith(
         1,
         [

@@ -52,7 +52,10 @@ describe('terminal output batching', () => {
         }),
         waitForTerminal: vi.fn(() => new Promise<RuntimeTerminalWait>(() => {}))
       })
-      const dispatcher = new RpcDispatcher({ runtime, methods: TERMINAL_METHODS })
+      const dispatcher = new RpcDispatcher({
+        runtime,
+        methods: TERMINAL_METHODS
+      })
 
       const dispatchPromise = dispatcher.dispatchStreaming(
         makeRequest('terminal.subscribe', {
@@ -78,7 +81,9 @@ describe('terminal output batching', () => {
         .map((msg) => JSON.parse(msg))
         .filter((message) => message.result?.type === 'data')
       expect(dataMessages).toHaveLength(1)
-      expect(dataMessages[0]).toMatchObject({ result: { type: 'data', chunk: 'ab' } })
+      expect(dataMessages[0]).toMatchObject({
+        result: { type: 'data', chunk: 'ab' }
+      })
 
       runtime.cleanupSubscription('terminal-1:desktop-1')
       await dispatchPromise
@@ -123,7 +128,10 @@ describe('terminal output batching', () => {
         sendTerminal: vi.fn().mockResolvedValue({ accepted: true }),
         updateMobileViewport: vi.fn().mockResolvedValue(false)
       })
-      const dispatcher = new RpcDispatcher({ runtime, methods: TERMINAL_METHODS })
+      const dispatcher = new RpcDispatcher({
+        runtime,
+        methods: TERMINAL_METHODS
+      })
 
       const dispatchPromise = dispatcher.dispatchStreaming(
         makeRequest('terminal.subscribe', {
@@ -134,7 +142,9 @@ describe('terminal output batching', () => {
         (msg) => messages.push(msg),
         {
           connectionId: 'conn-1',
-          sendBinary: (bytes) => binaryFrames.push(bytes)
+          sendBinary: (bytes) => {
+            binaryFrames.push(bytes)
+          }
         }
       )
 
@@ -144,7 +154,10 @@ describe('terminal output batching', () => {
       const subscribed = messages
         .map((msg) => JSON.parse(msg))
         .find((msg) => msg.result?.type === 'subscribed')
-      expect(subscribed?.result).toMatchObject({ type: 'subscribed', streamId: expect.any(Number) })
+      expect(subscribed?.result).toMatchObject({
+        type: 'subscribed',
+        streamId: expect.any(Number)
+      })
       await vi.waitFor(() => expect(dataListenerRef.current).toBeDefined())
 
       const emitData = dataListenerRef.current
@@ -163,6 +176,96 @@ describe('terminal output batching', () => {
         .filter((frame) => frame?.opcode === TerminalStreamOpcode.Output)
       expect(outputFrames).toHaveLength(1)
       expect(outputFrames[0] ? decodeTerminalStreamText(outputFrames[0].payload) : '').toBe('ab')
+
+      runtime.cleanupSubscription('terminal-1:desktop-1')
+      await dispatchPromise
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('encodes large binary terminal output lazily before the first output frame', async () => {
+    vi.useFakeTimers()
+    try {
+      const messages: string[] = []
+      const binaryFrames: Uint8Array<ArrayBufferLike>[] = []
+      const cleanups = new Map<string, () => void>()
+      const dataListenerRef: { current?: (data: string) => void } = {}
+      let captureOutputFrames = false
+      let firstOutputEncodeCount: number | undefined
+      const encodeSpy = vi.spyOn(TextEncoder.prototype, 'encode')
+      const runtime = stubRuntime({
+        resolveLeafForHandle: vi.fn().mockReturnValue({ ptyId: 'pty-1' }),
+        readTerminal: vi.fn().mockResolvedValue({ tail: [], truncated: false }),
+        serializeTerminalBuffer: vi.fn().mockResolvedValue(null),
+        getTerminalSize: vi.fn().mockReturnValue({ cols: 80, rows: 24 }),
+        getMobileDisplayMode: vi.fn().mockReturnValue('auto'),
+        getLayout: vi.fn().mockReturnValue({ seq: 1 }),
+        subscribeToTerminalData: vi.fn((_: string, listener: (data: string) => void) => {
+          dataListenerRef.current = listener
+          return vi.fn()
+        }),
+        subscribeToTerminalResize: vi.fn().mockReturnValue(vi.fn()),
+        subscribeToFitOverrideChanges: vi.fn().mockReturnValue(vi.fn()),
+        registerSubscriptionCleanup: vi.fn((id: string, cleanup: () => void) => {
+          cleanups.set(id, cleanup)
+        }),
+        cleanupSubscription: vi.fn((id: string) => {
+          const cleanup = cleanups.get(id)
+          cleanups.delete(id)
+          cleanup?.()
+        }),
+        waitForTerminal: vi.fn(() => new Promise<RuntimeTerminalWait>(() => {})),
+        sendTerminal: vi.fn().mockResolvedValue({ accepted: true }),
+        updateMobileViewport: vi.fn().mockResolvedValue(false)
+      })
+      const dispatcher = new RpcDispatcher({
+        runtime,
+        methods: TERMINAL_METHODS
+      })
+
+      const dispatchPromise = dispatcher.dispatchStreaming(
+        makeRequest('terminal.subscribe', {
+          terminal: 'terminal-1',
+          client: { id: 'desktop-1', type: 'desktop' },
+          capabilities: { terminalBinaryStream: 1 }
+        }),
+        (msg) => messages.push(msg),
+        {
+          connectionId: 'conn-1',
+          sendBinary: (bytes) => {
+            const frame = decodeTerminalStreamFrame(bytes)
+            if (
+              captureOutputFrames &&
+              firstOutputEncodeCount === undefined &&
+              frame?.opcode === TerminalStreamOpcode.Output
+            ) {
+              firstOutputEncodeCount = encodeSpy.mock.calls.length
+            }
+            binaryFrames.push(bytes)
+          }
+        }
+      )
+
+      await vi.waitFor(() =>
+        expect(messages.some((msg) => JSON.parse(msg).result?.type === 'subscribed')).toBe(true)
+      )
+      await vi.waitFor(() => expect(dataListenerRef.current).toBeDefined())
+
+      binaryFrames.length = 0
+      encodeSpy.mockClear()
+      captureOutputFrames = true
+      const output = 'x'.repeat(48 * 1024 * 3 + 17)
+      dataListenerRef.current?.(output)
+
+      const outputFrames = binaryFrames
+        .map((frame) => decodeTerminalStreamFrame(frame))
+        .filter((frame) => frame?.opcode === TerminalStreamOpcode.Output)
+      expect(outputFrames.length).toBeGreaterThan(1)
+      expect(firstOutputEncodeCount).toBe(1)
+      expect(
+        outputFrames.map((frame) => (frame ? decodeTerminalStreamText(frame.payload) : '')).join('')
+      ).toBe(output)
 
       runtime.cleanupSubscription('terminal-1:desktop-1')
       await dispatchPromise
@@ -199,7 +302,10 @@ describe('terminal output batching', () => {
       sendTerminal: vi.fn().mockResolvedValue({ accepted: true }),
       updateMobileViewport: vi.fn().mockResolvedValue(false)
     })
-    const dispatcher = new RpcDispatcher({ runtime, methods: TERMINAL_METHODS })
+    const dispatcher = new RpcDispatcher({
+      runtime,
+      methods: TERMINAL_METHODS
+    })
     const messages: string[] = []
 
     const dispatchPromise = dispatcher.dispatchStreaming(

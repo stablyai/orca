@@ -1,4 +1,4 @@
-import type { AddressInfo } from 'net'
+import type { AddressInfo } from 'node:net'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import WebSocketClient, { WebSocketServer, type WebSocket } from 'ws'
 import { encodePairingOffer, parsePairingCode, type PairingOffer } from './pairing'
@@ -102,6 +102,37 @@ describe('subscribeRemoteRuntimeRequest', () => {
     } finally {
       offSpy.mockRestore()
     }
+  })
+
+  it('closes a half-open subscription socket via client liveness so callers can resubscribe', async () => {
+    // Why: dedicated stream sockets (terminal.multiplex, browser.screencast)
+    // must not hang forever when a tunnel goes half-open — no close frame, no
+    // pongs, no data (#7718). Client liveness surfaces onError/onClose so the
+    // renderer's onTransportClose resubscribe path can run.
+    const server = await createSubscriptionServer({ disableAutoPong: true })
+    const onResponse = vi.fn()
+    const onError = vi.fn()
+    const onClose = vi.fn()
+
+    const subscription = await subscribeRemoteRuntimeRequest(
+      server.pairing,
+      'terminal.multiplex',
+      {},
+      1000,
+      { onResponse, onError, onClose },
+      { pingIntervalMs: 50, livenessTimeoutMs: 200 }
+    )
+
+    await vi.waitFor(() => expect(onResponse).toHaveBeenCalled())
+    await vi.waitFor(
+      () =>
+        expect(onError).toHaveBeenCalledWith(
+          expect.objectContaining({ code: 'remote_runtime_unavailable' })
+        ),
+      { timeout: 5000 }
+    )
+    expect(onClose).toHaveBeenCalledOnce()
+    subscription.close()
   })
 
   it('closes established subscription sockets after terminal protocol errors', async () => {
@@ -223,6 +254,9 @@ describe('sendRemoteRuntimeRequest', () => {
 async function createSubscriptionServer(
   options: {
     sendMismatchedResponseAfterSubscribe?: boolean
+    // Why: half-open simulation — the socket stays open but never answers
+    // protocol pings, like a wedged tunnel that swallows frames silently.
+    disableAutoPong?: boolean
   } = {}
 ): Promise<{
   pairing: PairingOffer
@@ -233,7 +267,7 @@ async function createSubscriptionServer(
   const nextBinary = new Promise<Uint8Array>((resolve) => {
     resolveBinary = resolve
   })
-  const wss = new WebSocketServer({ port: 0 })
+  const wss = new WebSocketServer({ port: 0, autoPong: options.disableAutoPong !== true })
   servers.push(wss)
 
   wss.on('connection', (ws) => {

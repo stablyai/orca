@@ -9,6 +9,40 @@ function makeRequest(method: string, params?: unknown): RpcRequest {
 }
 
 describe('repo RPC methods', () => {
+  it('updates project runtime preferences on the runtime server', async () => {
+    const project = {
+      id: 'project-1',
+      displayName: 'Project',
+      badgeColor: '#737373',
+      sourceRepoIds: [],
+      createdAt: 1,
+      updatedAt: 2,
+      localWindowsRuntimePreference: { kind: 'windows-host' }
+    }
+    const runtime = {
+      getRuntimeId: () => 'test-runtime',
+      updateProject: vi.fn().mockReturnValue(project)
+    } as unknown as OrcaRuntimeService
+    const dispatcher = new RpcDispatcher({ runtime, methods: REPO_METHODS })
+
+    const response = await dispatcher.dispatch(
+      makeRequest('project.update', {
+        projectId: 'project-1',
+        updates: { localWindowsRuntimePreference: { kind: 'windows-host' } }
+      })
+    )
+
+    expect(runtime.updateProject).toHaveBeenCalledWith('project-1', {
+      localWindowsRuntimePreference: { kind: 'windows-host' }
+    })
+    expect(response).toMatchObject({
+      ok: true,
+      result: {
+        project: { id: 'project-1', localWindowsRuntimePreference: { kind: 'windows-host' } }
+      }
+    })
+  })
+
   it('creates a repo on the runtime server', async () => {
     const runtime = {
       getRuntimeId: () => 'test-runtime',
@@ -384,6 +418,12 @@ describe('repo RPC methods', () => {
         folderWorkspaceId: 'folder-workspace-1'
       })
     )
+    const directPathStatusResponse = await dispatcher.dispatch(
+      makeRequest('folderWorkspace.getPathStatus', {
+        scope: 'path',
+        path: '/srv/platform'
+      })
+    )
 
     expect(runtime.listProjectGroups).toHaveBeenCalled()
     expect(runtime.createProjectGroup).toHaveBeenCalledWith({
@@ -410,6 +450,10 @@ describe('repo RPC methods', () => {
       scope: 'folder-workspace',
       folderWorkspaceId: 'folder-workspace-1'
     })
+    expect(runtime.getFolderWorkspacePathStatus).toHaveBeenCalledWith({
+      scope: 'path',
+      path: '/srv/platform'
+    })
     expect(moveResponse).toMatchObject({
       ok: true,
       result: { repo: { id: 'repo-1', projectGroupId: group.id } }
@@ -421,6 +465,10 @@ describe('repo RPC methods', () => {
       }
     })
     expect(statusResponse).toMatchObject({
+      ok: true,
+      result: { status: { path: '/srv/platform', exists: true } }
+    })
+    expect(directPathStatusResponse).toMatchObject({
       ok: true,
       result: { status: { path: '/srv/platform', exists: true } }
     })

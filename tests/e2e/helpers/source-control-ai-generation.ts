@@ -1,8 +1,8 @@
 import type { Page } from '@stablyai/playwright-test'
 import { expect } from '@stablyai/playwright-test'
-import { execFileSync } from 'child_process'
-import { writeFileSync } from 'fs'
-import path from 'path'
+import { execFileSync } from 'node:child_process'
+import { writeFileSync } from 'node:fs'
+import path from 'node:path'
 export async function openSourceControl(page: Page, worktreeId: string): Promise<void> {
   await page.evaluate((targetWorktreeId) => {
     const state = window.__store?.getState()
@@ -25,6 +25,30 @@ export async function openSourceControl(page: Page, worktreeId: string): Promise
     )
     .toBe(true)
 }
+
+export async function openChecks(page: Page, worktreeId: string): Promise<void> {
+  await page.evaluate((targetWorktreeId) => {
+    const state = window.__store?.getState()
+    state?.setActiveWorktree(targetWorktreeId)
+    state?.setRightSidebarOpen(true)
+    state?.setRightSidebarTab('checks')
+  }, worktreeId)
+  await expect
+    .poll(
+      () =>
+        page.evaluate((targetWorktreeId) => {
+          const state = window.__store?.getState()
+          return (
+            state?.activeWorktreeId === targetWorktreeId &&
+            state.rightSidebarOpen &&
+            state.rightSidebarTab === 'checks'
+          )
+        }, worktreeId),
+      { timeout: 5_000 }
+    )
+    .toBe(true)
+}
+
 export async function seedCreatePrComposer(page: Page): Promise<{
   primaryWorktreeId: string
   prWorktreeId: string

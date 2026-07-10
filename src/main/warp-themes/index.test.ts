@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import path from 'path'
+import path from 'node:path'
 import type * as WarpThemeDiscovery from './discovery'
 
 const opendirMock = vi.hoisted(() => vi.fn())
@@ -705,7 +705,7 @@ describe('previewWarpThemeImport', () => {
       filePaths: [
         path.join('/Users/alice/warp-themes', 'aaa-not-theme.txt'),
         ...themePaths
-      ].reverse()
+      ].toReversed()
     })
 
     const preview = await previewWarpThemeImport({} as Store, { kind: 'chooseFile' })

@@ -1,4 +1,5 @@
 import type { Tab, TabGroup, Worktree } from '../../../shared/types'
+import { isClipboardTextByteLengthOverLimit } from '../../../shared/clipboard-text'
 import type { MatchRange } from './worktree-palette-search'
 
 export type SearchableSimulatorTab = {
@@ -28,6 +29,15 @@ export type SimulatorPaletteSearchResult = {
 }
 
 type SimulatorPaletteActiveTabType = 'browser' | 'editor' | 'terminal' | 'simulator'
+
+export const SIMULATOR_PALETTE_QUERY_MAX_BYTES = 2 * 1024
+
+export function isSimulatorPaletteQueryTooLarge(
+  query: string,
+  maxBytes = SIMULATOR_PALETTE_QUERY_MAX_BYTES
+): boolean {
+  return isClipboardTextByteLengthOverLimit(query, maxBytes)
+}
 
 export type BuildSearchableSimulatorTabsOptions = {
   worktrees: readonly Worktree[]
@@ -160,7 +170,11 @@ export function searchSimulatorTabs(
   entries: SearchableSimulatorTab[],
   query: string
 ): SimulatorPaletteSearchResult[] {
-  const trimmedQuery = query.trim().toLowerCase()
+  if (isSimulatorPaletteQueryTooLarge(query)) {
+    return []
+  }
+  const trimmed = query.trim()
+  const trimmedQuery = trimmed.toLowerCase()
   const results: SimulatorPaletteSearchResult[] = []
 
   for (const entry of entries) {

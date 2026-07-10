@@ -1,7 +1,3 @@
-/* eslint-disable max-lines --
- * Why: agent title detection is intentionally table-driven in one place so the
- * supported title variants stay readable and regressions are easy to compare.
- */
 import { describe, expect, it, test, vi } from 'vitest'
 import {
   detectAgentStatusFromTitle,
@@ -232,6 +228,13 @@ describe('detectAgentStatusFromTitle', () => {
     expect(detectAgentStatusFromTitle('Hermes working')).toBe('working')
   })
 
+  it('classifies synthesized Devin titles', () => {
+    expect(detectAgentStatusFromTitle('⠋ Devin')).toBe('working')
+    expect(detectAgentStatusFromTitle('Devin ready')).toBe('idle')
+    expect(detectAgentStatusFromTitle('Devin - action required')).toBe('permission')
+    expect(detectAgentStatusFromTitle('Devin working')).toBe('working')
+  })
+
   it('does not treat Factory Droid native needs-input titles as completion', () => {
     expect(detectAgentStatusFromTitle('Factory Droid needs input')).toBeNull()
     expect(detectAgentStatusFromTitle('Factory Droid needs your input')).toBeNull()
@@ -387,9 +390,58 @@ describe('normalizeTerminalTitle', () => {
     expect(normalizeTerminalTitle('bash')).toBe('bash')
   })
 
+  it('collapses Grok rotating working titles to one stable label', () => {
+    // Grok interpolates a rotating status/tool phrase between the spinner and its
+    // name, so each frame is a distinct title; they must all fold to one label.
+    expect(normalizeTerminalTitle('⠋ - Waiting for response… - grok')).toBe('⠋ Grok')
+    expect(normalizeTerminalTitle('⠴ - Thinking - grok')).toBe('⠋ Grok')
+    expect(normalizeTerminalTitle('⠙ - Responding - grok')).toBe('⠋ Grok')
+    expect(normalizeTerminalTitle('⠦ - Sleep 2s then echo hello-from-grok… - grok')).toBe('⠋ Grok')
+    expect(
+      normalizeTerminalTitle('⠹ - Waiting for response… - Execute Shell Command sleep 2 - grok')
+    ).toBe('⠋ Grok')
+    // Idempotent: re-normalizing our own collapsed label stays stable.
+    expect(normalizeTerminalTitle('⠋ Grok')).toBe('⠋ Grok')
+  })
+
+  it('leaves Grok idle and session titles unchanged', () => {
+    // No spinner → not a working frame; the meaningful final title still shows.
+    expect(normalizeTerminalTitle('grok')).toBe('grok')
+    expect(normalizeTerminalTitle('Fix the auth bug - grok')).toBe('Fix the auth bug - grok')
+    // Names "grok" mid-title but ends with another agent → not a Grok frame.
+    expect(normalizeTerminalTitle('⠋ debugging grok - claude')).toBe('⠋ debugging grok - claude')
+    // Claude/Codex task text ending in "grok" must not collapse — only the
+    // Grok frame shape "spinner - phrase - grok" is the rotating-frame signal.
+    expect(normalizeTerminalTitle('⠋ wire up grok')).toBe('⠋ wire up grok')
+    expect(normalizeTerminalTitle('⠋ Codex is thinking about grok')).toBe(
+      '⠋ Codex is thinking about grok'
+    )
+    expect(normalizeTerminalTitle('⠋ support for Grok')).toBe('⠋ support for Grok')
+    // Trailing " - grok" alone is not enough without the post-spinner delimiter.
+    expect(normalizeTerminalTitle('⠋ fix the flaky suite - grok')).toBe(
+      '⠋ fix the flaky suite - grok'
+    )
+  })
+
   it('collapses Pi spinner and idle titles to stable labels', () => {
     expect(normalizeTerminalTitle('⠋ π - my-project')).toBe('⠋ Pi')
     expect(normalizeTerminalTitle('π - my-project')).toBe('Pi')
+    expect(normalizeTerminalTitle('⠋ π: my-project')).toBe('⠋ Pi')
+    expect(normalizeTerminalTitle('π: my-project')).toBe('Pi')
+    expect(normalizeTerminalTitle('π -')).toBe('Pi')
+    expect(normalizeTerminalTitle('π:')).toBe('Pi')
+    expect(normalizeTerminalTitle('π ')).toBe('Pi')
+  })
+
+  it('does not collapse Pi-compatible titles whose cwd mentions Gemini', () => {
+    expect(normalizeTerminalTitle('⠋ π - gemini')).toBe('⠋ Pi')
+    expect(normalizeTerminalTitle('π - gemini')).toBe('Pi')
+    expect(normalizeTerminalTitle('⠋ π: gemini')).toBe('⠋ Pi')
+    expect(normalizeTerminalTitle('π: gemini')).toBe('Pi')
+    expect(normalizeTerminalTitle('⠋ π gemini')).toBe('⠋ Pi')
+    expect(normalizeTerminalTitle('π gemini')).toBe('Pi')
+    expect(normalizeTerminalTitle('⠋ π - gemini-project')).toBe('⠋ Pi')
+    expect(normalizeTerminalTitle('π - gemini-project')).toBe('Pi')
   })
 })
 
@@ -402,6 +454,17 @@ describe('isGeminiTerminalTitle', () => {
 
   it('does not match other terminal titles', () => {
     expect(isGeminiTerminalTitle('⠂ Claude Code')).toBe(false)
+    expect(isGeminiTerminalTitle('⠋ π - gemini')).toBe(false)
+    expect(isGeminiTerminalTitle('π - gemini')).toBe(false)
+    expect(isGeminiTerminalTitle('⠋ π: gemini')).toBe(false)
+    expect(isGeminiTerminalTitle('π: gemini')).toBe(false)
+    expect(isGeminiTerminalTitle('⠋ π gemini')).toBe(false)
+    expect(isGeminiTerminalTitle('π gemini')).toBe(false)
+    expect(isGeminiTerminalTitle('π -')).toBe(false)
+    expect(isGeminiTerminalTitle('π:')).toBe(false)
+    expect(isGeminiTerminalTitle('π ')).toBe(false)
+    expect(isGeminiTerminalTitle('⠋ π - gemini-project')).toBe(false)
+    expect(isGeminiTerminalTitle('/tmp/gemini/working')).toBe(false)
     expect(isGeminiTerminalTitle('bash')).toBe(false)
   })
 })
@@ -430,6 +493,8 @@ describe('getAgentLabel', () => {
     expect(getAgentLabel('Droid ready')).toBe('Droid')
     expect(getAgentLabel('⠋ Hermes')).toBe('Hermes')
     expect(getAgentLabel('Hermes ready')).toBe('Hermes')
+    expect(getAgentLabel('⠋ Devin')).toBe('Devin')
+    expect(getAgentLabel('Devin ready')).toBe('Devin')
   })
 
   it('does not label the Claude agents management title', () => {
@@ -456,6 +521,7 @@ describe('getAgentLabel', () => {
     expect(getAgentLabel('~/projects/codex-scratch')).toBeNull()
     expect(getAgentLabel('~/cursor-rules')).toBeNull()
     expect(getAgentLabel('grok-fixtures')).toBeNull()
+    expect(getAgentLabel('devin-fixtures')).toBeNull()
     expect(getAgentLabel('aider-config')).toBeNull()
   })
 
@@ -465,6 +531,7 @@ describe('getAgentLabel', () => {
     expect(getAgentLabel('openclaude.cmd')).toBe('OpenClaude')
     expect(getAgentLabel('⠋ Codex')).toBe('Codex')
     expect(getAgentLabel('Aider idle')).toBe('Aider')
+    expect(getAgentLabel('Devin working')).toBe('Devin')
   })
 })
 
@@ -812,6 +879,10 @@ describe('formatAgentTypeLabel', () => {
     expect(formatAgentTypeLabel('command-code')).toBe('Command Code')
   })
 
+  it("maps 'ante' to 'Ante'", () => {
+    expect(formatAgentTypeLabel('ante')).toBe('Ante')
+  })
+
   it('passes through arbitrary custom agent names as-is', () => {
     expect(formatAgentTypeLabel('weirdo')).toBe('weirdo')
   })
@@ -835,6 +906,7 @@ describe('agentTypeToIconAgent', () => {
     expect(agentTypeToIconAgent('openclaude')).toBe('openclaude')
     expect(agentTypeToIconAgent('antigravity')).toBe('antigravity')
     expect(agentTypeToIconAgent('command-code')).toBe('command-code')
+    expect(agentTypeToIconAgent('ante')).toBe('ante')
   })
 
   it('returns null for arbitrary non-iconable strings', () => {

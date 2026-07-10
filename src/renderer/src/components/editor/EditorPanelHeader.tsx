@@ -1,7 +1,7 @@
 import { useMemo } from 'react'
 import { Columns2, Eye, FileText, ListTree, Rows2 } from 'lucide-react'
 import { useAppStore } from '@/store'
-import type { MarkdownViewMode, OpenFile } from '@/store/slices/editor'
+import type { OpenFile } from '@/store/slices/editor'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import EditorViewToggle, {
   CSV_VIEW_MODE_METADATA,
@@ -25,12 +25,12 @@ type EditorPanelHeaderProps = {
   hasEditorToggle: boolean
   availableEditorToggleModes: readonly EditorToggleValue[]
   effectiveToggleValue: EditorToggleValue
-  mdViewMode: MarkdownViewMode
-  hasViewModeToggle: boolean
   canOpenPreviewToSide: boolean
   canShowMarkdownPreview: boolean
   canShowMarkdownTableOfContents: boolean
   isMarkdownTableOfContentsDisabled: boolean
+  shouldShowMarkdownExportAction: boolean
+  canExportMarkdownToPdf: boolean
   showMarkdownTableOfContents: boolean
   canShowMarkdownFrontmatterToggle: boolean
   markdownFrontmatterVisible: boolean
@@ -59,12 +59,12 @@ export function EditorPanelHeader({
   hasEditorToggle,
   availableEditorToggleModes,
   effectiveToggleValue,
-  mdViewMode,
-  hasViewModeToggle,
   canOpenPreviewToSide,
   canShowMarkdownPreview,
   canShowMarkdownTableOfContents,
   isMarkdownTableOfContentsDisabled,
+  shouldShowMarkdownExportAction,
+  canExportMarkdownToPdf,
   showMarkdownTableOfContents,
   canShowMarkdownFrontmatterToggle,
   markdownFrontmatterVisible,
@@ -83,6 +83,8 @@ export function EditorPanelHeader({
 }: EditorPanelHeaderProps): React.JSX.Element {
   const diffComments = useAppStore((s) => s.getDiffComments(activeFile.worktreeId))
   const activeGroupId = useAppStore((s) => s.activeGroupIdByWorktree[activeFile.worktreeId])
+  const diffWordWrap = useAppStore((s) => s.settings?.diffWordWrap === true)
+  const updateSettings = useAppStore((s) => s.updateSettings)
   const fileDiffComments = useMemo(
     () => diffComments.filter((comment) => comment.filePath === activeFile.relativePath),
     [activeFile.relativePath, diffComments]
@@ -98,6 +100,31 @@ export function EditorPanelHeader({
         onOpenMarkdownPreview={onOpenMarkdownPreview}
         onOpenContainingFolder={onOpenContainingFolder}
       />
+      {canOpenPreviewToSide && (
+        <TooltipProvider delayDuration={300}>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <button
+                type="button"
+                className="p-1 rounded hover:bg-accent text-muted-foreground hover:text-foreground transition-colors flex-shrink-0"
+                onClick={onOpenPreviewToSide}
+                aria-label={translate(
+                  'auto.components.editor.EditorPanelHeader.fb8331694e',
+                  'Open Preview to the Side'
+                )}
+              >
+                <Eye size={14} />
+              </button>
+            </TooltipTrigger>
+            <TooltipContent side="bottom" sideOffset={4}>
+              {translate(
+                'auto.components.editor.EditorPanelHeader.fb8331694e',
+                'Open Preview to the Side'
+              )}
+            </TooltipContent>
+          </Tooltip>
+        </TooltipProvider>
+      )}
       {isSingleDiff && (
         <TooltipProvider delayDuration={300}>
           <Tooltip>
@@ -146,31 +173,6 @@ export function EditorPanelHeader({
           triggerClassName="h-6 shrink-0 gap-1 rounded-full border border-border/70 bg-muted/40 px-2 text-[11px] font-medium leading-none text-foreground/80 hover:bg-accent hover:text-foreground"
           iconClassName="size-3"
         />
-      )}
-      {canOpenPreviewToSide && (
-        <TooltipProvider delayDuration={300}>
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <button
-                type="button"
-                className="p-1 rounded hover:bg-accent text-muted-foreground hover:text-foreground transition-colors flex-shrink-0"
-                onClick={onOpenPreviewToSide}
-                aria-label={translate(
-                  'auto.components.editor.EditorPanelHeader.fb8331694e',
-                  'Open Preview to the Side'
-                )}
-              >
-                <Eye size={14} />
-              </button>
-            </TooltipTrigger>
-            <TooltipContent side="bottom" sideOffset={4}>
-              {translate(
-                'auto.components.editor.EditorPanelHeader.fb8331694e',
-                'Open Preview to the Side'
-              )}
-            </TooltipContent>
-          </Tooltip>
-        </TooltipProvider>
       )}
       {isDiffSurface && (
         <TooltipProvider delayDuration={300}>
@@ -246,10 +248,13 @@ export function EditorPanelHeader({
       )}
       <EditorPanelMarkdownActionsMenu
         isMarkdown={isMarkdown}
-        hasViewModeToggle={hasViewModeToggle}
-        mdViewMode={mdViewMode}
+        isDiffSurface={isDiffSurface}
+        diffWordWrap={diffWordWrap}
+        shouldShowMarkdownExportAction={shouldShowMarkdownExportAction}
+        canExportMarkdownToPdf={canExportMarkdownToPdf}
         canShowMarkdownFrontmatterToggle={canShowMarkdownFrontmatterToggle}
         markdownFrontmatterVisible={markdownFrontmatterVisible}
+        onToggleDiffWordWrap={() => void updateSettings({ diffWordWrap: !diffWordWrap })}
         onToggleMarkdownFrontmatter={onToggleMarkdownFrontmatter}
         onExportMarkdownToPdf={onExportMarkdownToPdf}
       />

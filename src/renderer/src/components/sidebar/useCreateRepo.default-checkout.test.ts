@@ -81,6 +81,11 @@ vi.mock('@/runtime/runtime-rpc-client', () => ({
   callRuntimeRpc: mocks.callRuntimeRpc
 }))
 
+const STATE_NAME = 0
+const STATE_PARENT_PATH = 1
+const STATE_ERROR_MESSAGE = 2
+const STATE_IS_CREATING = 3
+
 function makeRepo(overrides: Partial<Repo> = {}): Repo {
   return {
     id: 'repo-created',
@@ -98,7 +103,11 @@ describe('useCreateRepo default-checkout handoff', () => {
     vi.clearAllMocks()
     mocks.stateIndex = 0
     mocks.stateSetters = []
-    mocks.stateValues = ['created', '/projects', 'git', null, false]
+    mocks.stateValues = []
+    mocks.stateValues[STATE_NAME] = 'created'
+    mocks.stateValues[STATE_PARENT_PATH] = '/projects'
+    mocks.stateValues[STATE_ERROR_MESSAGE] = null
+    mocks.stateValues[STATE_IS_CREATING] = false
     mocks.storeState.repos = []
     mocks.storeState.projects = []
     mocks.storeState.projectHostSetups = []
@@ -151,7 +160,7 @@ describe('useCreateRepo default-checkout handoff', () => {
     const result = useCreateRepo(mocks.fetchWorktrees, vi.fn(), mocks.onGitRepoReady)
     await expect(result.handlePickParent()).resolves.toBe(pickedDir)
 
-    expect(mocks.stateSetters[1]).toHaveBeenCalledWith(pickedDir)
+    expect(mocks.stateSetters[STATE_PARENT_PATH]).toHaveBeenCalledWith(pickedDir)
   })
 
   it('does not return a parent path when the runtime target blocks the local picker', async () => {
@@ -163,7 +172,7 @@ describe('useCreateRepo default-checkout handoff', () => {
     await expect(result.handlePickParent()).resolves.toBeNull()
 
     expect(window.api.repos.pickDirectory).not.toHaveBeenCalled()
-    expect(mocks.stateSetters[1]).not.toHaveBeenCalled()
+    expect(mocks.stateSetters[STATE_PARENT_PATH]).not.toHaveBeenCalled()
   })
 
   it('continues to completion when refresh is not authoritative after create', async () => {
@@ -179,16 +188,15 @@ describe('useCreateRepo default-checkout handoff', () => {
       requireAuthoritative: true
     })
     expect(mocks.onGitRepoReady).toHaveBeenCalledWith(repo.id)
-    expect(mocks.stateSetters[3]).not.toHaveBeenCalledWith(
+    expect(mocks.stateSetters[STATE_ERROR_MESSAGE]).not.toHaveBeenCalledWith(
       'Could not refresh project worktrees. Try again.'
     )
   })
 
-  it('marks onboarding folder progress when a created folder project opens', async () => {
+  it('opens an existing folder project returned by create dedupe', async () => {
     const repo = makeRepo({ kind: 'folder' })
     const worktree = { id: `${repo.id}::/projects/created` }
     const closeModal = vi.fn()
-    mocks.stateValues = ['created', '/projects', 'folder', null, false]
     mocks.createRepo.mockResolvedValue({ repo })
     mocks.fetchWorktrees.mockImplementation(async (repoId: string) => {
       mocks.storeState.worktreesByRepo = { [repoId]: [worktree] }
@@ -202,7 +210,7 @@ describe('useCreateRepo default-checkout handoff', () => {
     expect(mocks.createRepo).toHaveBeenCalledWith({
       parentPath: '/projects',
       name: 'created',
-      kind: 'folder'
+      kind: 'git'
     })
     expect(mocks.fetchWorktrees).toHaveBeenCalledWith(repo.id)
     expect(mocks.activateAndRevealWorktree).toHaveBeenCalledWith(worktree.id, {

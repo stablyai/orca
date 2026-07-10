@@ -1,7 +1,7 @@
 /* eslint-disable max-lines -- Why: this store owns OpenCode analytics persistence, scan policy, and renderer query semantics. Keeping range/scope queries next to scan persistence prevents UI totals from drifting from the SQLite projection. */
 import { app } from 'electron'
-import { dirname, join } from 'path'
-import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from 'fs'
+import { dirname, join } from 'node:path'
+import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs'
 import type {
   OpenCodeUsageBreakdownKind,
   OpenCodeUsageBreakdownRow,
@@ -18,7 +18,9 @@ import { loadKnownUsageWorktreesByRepo, type UsageWorktreeRef } from '../usage-w
 import type { OpenCodeUsageDailyAggregate, OpenCodeUsagePersistedState } from './types'
 import { createWorktreeRefs, scanOpenCodeUsageDatabases } from './scanner'
 
-const SCHEMA_VERSION = 1
+// Why: v2 adds per-database session ownership (stale sibling-copy dedupe).
+// Older caches were built without it and can carry doubled sessions (#8006).
+const SCHEMA_VERSION = 2
 const STALE_MS = 5 * 60_000
 
 let _openCodeUsageFile: string | null = null

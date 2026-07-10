@@ -1,10 +1,14 @@
 import React from 'react'
 import { ExternalLink, LoaderCircle, RefreshCw } from 'lucide-react'
+import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import CommentMarkdown from '@/components/sidebar/CommentMarkdown'
 import type { PRCheckDetail, PRCheckRunDetails } from '../../../../shared/types'
-import { CheckJobLogTail } from '@/components/right-sidebar/check-job-log-tail'
+import { SourceControlFixSplitButton } from '@/components/right-sidebar/source-control-fix-split-button'
 import { translate } from '@/i18n/i18n'
+import { useCheckRunDetailsFixWithAI } from './check-run-details-fix-with-ai'
+import { CheckRunAnnotations } from './CheckRunAnnotations'
+import { CheckRunJobs } from './CheckRunJobs'
 
 function formatCheckTimestamp(value: string | null | undefined): string | null {
   if (!value) {
@@ -22,7 +26,12 @@ function formatCheckTimestamp(value: string | null | undefined): string | null {
   })
 }
 
-function getCheckStatusLabel(check: PRCheckDetail): string {
+type CheckStatusLike = {
+  status: PRCheckDetail['status'] | string | null | undefined
+  conclusion: PRCheckDetail['conclusion'] | string | null | undefined
+}
+
+function getCheckStatusLabel(check: CheckStatusLike): string {
   const conclusion = check.conclusion ?? 'pending'
   switch (conclusion) {
     case 'success':
@@ -33,17 +42,34 @@ function getCheckStatusLabel(check: PRCheckDetail): string {
       return translate('auto.components.editor.CheckRunDetailsPanel.91a4c7e2b0', 'Cancelled')
     case 'timed_out':
       return translate('auto.components.editor.CheckRunDetailsPanel.2f6d8a1c45', 'Timed out')
+    case 'action_required':
+      return translate(
+        'auto.components.editor.CheckRunDetailsPanel.actionRequired',
+        'Action required'
+      )
     case 'skipped':
       return translate('auto.components.editor.CheckRunDetailsPanel.7b3e9d4f12', 'Skipped')
     case 'neutral':
       return translate('auto.components.editor.CheckRunDetailsPanel.5a1c8e3d67', 'Neutral')
     case 'pending':
       return translate('auto.components.editor.CheckRunDetailsPanel.3d9f2b8e14', 'Pending')
+    default:
+      return isFailureState(conclusion)
+        ? translate('auto.components.editor.CheckRunDetailsPanel.4c8e1b2d73', 'Failed')
+        : translate('auto.components.editor.CheckRunDetailsPanel.3d9f2b8e14', 'Pending')
   }
 }
 
 function isFailureState(state: string | null | undefined): boolean {
-  return state === 'failure' || state === 'cancelled' || state === 'timed_out'
+  return (
+    state === 'failure' ||
+    state === 'failed' ||
+    state === 'action_required' ||
+    state === 'cancelled' ||
+    state === 'stale' ||
+    state === 'startup_failure' ||
+    state === 'timed_out'
+  )
 }
 
 export function CheckRunDetailsPanel({
@@ -52,6 +78,7 @@ export function CheckRunDetailsPanel({
   loading,
   error,
   openUrl,
+  worktreeId,
   onRefresh
 }: {
   check: PRCheckDetail
@@ -59,14 +86,34 @@ export function CheckRunDetailsPanel({
   loading: boolean
   error: string | null
   openUrl: string | null | undefined
+  worktreeId: string | null
   onRefresh?: () => void
 }): React.JSX.Element {
+  const {
+    canFixWithAI,
+    disabledReason,
+    isFixing,
+    fixPrompt,
+    repoId,
+    connectionId,
+    launchPlatform,
+    savedAgentId,
+    savedCommandInputTemplate,
+    savedAgentArgs,
+    saveLaunchActionDefault,
+    openSourceControlAiSettings,
+    fixWithAI
+  } = useCheckRunDetailsFixWithAI({
+    worktreeId,
+    check,
+    details
+  })
   const startedAt = formatCheckTimestamp(details?.startedAt)
   const completedAt = formatCheckTimestamp(details?.completedAt)
-  const detailsStatusCheck: PRCheckDetail = {
+  const detailsStatusCheck: CheckStatusLike = {
     ...check,
-    status: (details?.status as PRCheckDetail['status'] | undefined) ?? check.status,
-    conclusion: (details?.conclusion as PRCheckDetail['conclusion'] | undefined) ?? check.conclusion
+    status: details?.status ?? check.status,
+    conclusion: details?.conclusion ?? check.conclusion
   }
   const failedJobs =
     details?.jobs.filter((job) => {
@@ -85,19 +132,86 @@ export function CheckRunDetailsPanel({
           <h1 className="min-w-0 flex-1 truncate text-base font-medium text-foreground">
             {check.name}
           </h1>
-          {onRefresh && (
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              className="shrink-0"
-              disabled={loading}
-              onClick={onRefresh}
-            >
-              <RefreshCw className={`size-3.5${loading ? ' animate-spin' : ''}`} />
-              {translate('auto.components.editor.CheckRunDetailsPanel.b7f5e2c91a', 'Refresh')}
-            </Button>
-          )}
+          <div className="flex shrink-0 items-center gap-2">
+            {canFixWithAI && (
+              <SourceControlFixSplitButton
+                label={translate(
+                  'auto.components.editor.CheckRunDetailsPanel.834cb3f23d',
+                  'Fix with AI'
+                )}
+                actionId="fixChecks"
+                dialogTitle={translate(
+                  'auto.components.editor.CheckRunDetailsPanel.834cb3f23d',
+                  'Fix with AI'
+                )}
+                dialogDescription={translate(
+                  'auto.components.editor.CheckRunDetailsPanel.c8f1a2d4e7',
+                  'Choose the agent and edit the full command input before launch.'
+                )}
+                launchSource="task_page"
+                contextUnavailableLabel={translate(
+                  'auto.components.editor.CheckRunDetailsPanel.b3e7f9a1c2',
+                  'Check fix context unavailable'
+                )}
+                primaryTitle={translate(
+                  'auto.components.editor.CheckRunDetailsPanel.d5a8c2f1b9',
+                  'Start the default AI agent to fix this check'
+                )}
+                primaryAriaLabel={translate(
+                  'auto.components.editor.CheckRunDetailsPanel.834cb3f23d',
+                  'Fix with AI'
+                )}
+                chevronTitle={translate(
+                  'auto.components.editor.CheckRunDetailsPanel.e2b4d7c8a1',
+                  'Choose an agent for this check'
+                )}
+                chevronAriaLabel={translate(
+                  'auto.components.editor.CheckRunDetailsPanel.f1c9e3a6d4',
+                  'Choose agent to fix check'
+                )}
+                worktreeId={worktreeId}
+                groupId={worktreeId}
+                connectionId={connectionId}
+                repoId={repoId}
+                launchPlatform={launchPlatform}
+                prompt={fixPrompt}
+                isLaunching={loading || isFixing}
+                disabledReason={disabledReason}
+                variant="default"
+                size="sm"
+                iconClassName="size-3.5"
+                primaryClassName="rounded-r-none font-medium"
+                chevronClassName="rounded-l-none border-l border-primary-foreground/20 px-2"
+                savedAgentId={savedAgentId}
+                savedCommandInputTemplate={savedCommandInputTemplate}
+                savedAgentArgs={savedAgentArgs}
+                onSaveAgentDefault={saveLaunchActionDefault}
+                onOpenSettings={openSourceControlAiSettings}
+                onFixWithDefaultAgent={fixWithAI}
+                onPromptDelivered={() =>
+                  toast.success(
+                    translate(
+                      'auto.components.editor.check.run.details.fix.with.ai.2ef90c9819',
+                      'Started an AI agent for this check.'
+                    )
+                  )
+                }
+              />
+            )}
+            {onRefresh && (
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="shrink-0"
+                disabled={loading}
+                onClick={onRefresh}
+              >
+                <RefreshCw className={`size-3.5${loading ? ' animate-spin' : ''}`} />
+                {translate('auto.components.editor.CheckRunDetailsPanel.b7f5e2c91a', 'Refresh')}
+              </Button>
+            )}
+          </div>
         </div>
         <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
           <span>
@@ -172,95 +286,10 @@ export function CheckRunDetailsPanel({
             )}
 
             {hasAnnotations && (
-              <section className="rounded-md border border-border bg-background">
-                <div className="border-b border-border px-3 py-2 text-sm font-medium">
-                  {translate(
-                    'auto.components.editor.CheckRunDetailsPanel.f2fe8a4e8f',
-                    'Annotations'
-                  )}
-                </div>
-                <div className="divide-y divide-border/50">
-                  {details!.annotations.map((annotation, index) => (
-                    <div key={`${annotation.path ?? 'annotation'}-${index}`} className="px-3 py-3">
-                      <div className="flex min-w-0 flex-wrap items-center gap-2">
-                        <span className="min-w-0 break-all font-mono text-xs text-muted-foreground">
-                          {annotation.path ??
-                            translate(
-                              'auto.components.editor.CheckRunDetailsPanel.cdbfda4dec',
-                              'Annotation'
-                            )}
-                          {annotation.startLine ? `:${annotation.startLine}` : ''}
-                        </span>
-                        {annotation.annotationLevel && (
-                          <span className="shrink-0 text-xs text-muted-foreground">
-                            {annotation.annotationLevel}
-                          </span>
-                        )}
-                      </div>
-                      {annotation.title && (
-                        <div className="mt-2 text-sm font-medium text-foreground">
-                          {annotation.title}
-                        </div>
-                      )}
-                      <div className="mt-2 break-words text-sm text-foreground">
-                        {annotation.message}
-                      </div>
-                      {annotation.rawDetails && (
-                        <pre className="mt-2 max-h-60 overflow-auto whitespace-pre-wrap rounded bg-muted/40 p-3 font-mono text-xs text-muted-foreground scrollbar-sleek">
-                          {annotation.rawDetails}
-                        </pre>
-                      )}
-                    </div>
-                  ))}
-                </div>
-              </section>
+              <CheckRunAnnotations annotations={details!.annotations} worktreeId={worktreeId} />
             )}
 
-            {hasJobs && (
-              <section className="rounded-md border border-border bg-background">
-                <div className="border-b border-border px-3 py-2 text-sm font-medium">
-                  {failedJobs.length > 0
-                    ? translate(
-                        'auto.components.editor.CheckRunDetailsPanel.066fedd446',
-                        'Failed jobs'
-                      )
-                    : translate('auto.components.editor.CheckRunDetailsPanel.49731703ea', 'Jobs')}
-                </div>
-                <div className="divide-y divide-border/50">
-                  {jobs.map((job, index) => (
-                    <div key={`${job.name}-${index}`} className="px-3 py-3">
-                      <div className="flex min-w-0 items-center gap-2">
-                        <span className="min-w-0 flex-1 truncate text-sm font-medium text-foreground">
-                          {job.name}
-                        </span>
-                        <span className="shrink-0 text-xs text-muted-foreground">
-                          {job.conclusion ??
-                            job.status ??
-                            translate(
-                              'auto.components.editor.CheckRunDetailsPanel.ee07b33924',
-                              'unknown'
-                            )}
-                        </span>
-                      </div>
-                      {job.steps.length > 0 && (
-                        <div className="mt-2 grid gap-1">
-                          {job.steps.map((step) => (
-                            <div
-                              key={step.name}
-                              className="flex min-w-0 items-center gap-2 text-xs text-muted-foreground"
-                            >
-                              <span className="min-w-0 flex-1 truncate">{step.name}</span>
-                              <span className="shrink-0">{step.conclusion ?? step.status}</span>
-                            </div>
-                          ))}
-                        </div>
-                      )}
-                      {job.logTail && <CheckJobLogTail logTail={job.logTail} />}
-                    </div>
-                  ))}
-                </div>
-              </section>
-            )}
+            {hasJobs && <CheckRunJobs jobs={jobs} hasFailedJobs={failedJobs.length > 0} />}
 
             {!error && !hasOutput && !hasAnnotations && !hasJobs && (
               <div className="text-sm text-muted-foreground">

@@ -1,5 +1,6 @@
 import type {
   CreateWorktreeResult,
+  CreateWorktreeArgs,
   CreateSparseCheckoutRequest,
   DetectedWorktree,
   DetectedWorktreeListResult,
@@ -29,6 +30,7 @@ export { getRepoIdFromWorktreeId } from '../../../../shared/worktree-id'
 
 export type WorktreeDeleteState = {
   isDeleting: boolean
+  phase?: 'deleting' | 'queued'
   error: string | null
   canForceDelete: boolean
 }
@@ -111,12 +113,13 @@ export type WorktreeSlice = {
   hasHydratedWorktreePurge: boolean
   fetchDetectedWorktrees: (repoId: string) => Promise<DetectedWorktreeListResult | null>
   fetchWorktrees: (repoId: string, options?: { requireAuthoritative?: boolean }) => Promise<boolean>
-  fetchAllWorktrees: () => Promise<void>
+  fetchAllWorktrees: (options?: { hydrationPurge?: 'allow' | 'defer' }) => Promise<void>
   fetchWorktreeLineage: () => Promise<void>
   updateWorktreeLineage: (
     worktreeId: string,
     args: { parentWorktreeId?: string; noParent?: boolean }
   ) => Promise<void>
+  assignWorktreeParent: (worktreeId: string, args: { parentWorktreeId: string }) => Promise<void>
   createWorktree: (
     repoId: string,
     name: string,
@@ -146,32 +149,43 @@ export type WorktreeSlice = {
     linkedLinearIssueOrganizationUrlKey?: string | null,
     linkedBitbucketPR?: number | null,
     linkedAzureDevOpsPR?: number | null,
-    linkedGiteaPR?: number | null
+    linkedGiteaPR?: number | null,
+    compareBaseRef?: string,
+    // Why: reserved for automation-dispatch flows so host-side provenance can
+    // be minted securely; regular create callers should omit this.
+    options?: { automationProvenanceRequest?: CreateWorktreeArgs['automationProvenanceRequest'] }
   ) => Promise<CreateWorktreeResult>
   /** Register an in-flight background creation and make it the active surface. */
   beginPendingWorktreeCreation: (entry: PendingWorktreeCreation) => void
-  /** Merge a status patch (phase/error/status/loaderVisible) into an existing
-   *  pending entry. */
+  /** Merge a status patch into an existing pending entry. */
   updatePendingWorktreeCreation: (
     creationId: string,
     patch: {
       phase?: WorktreeCreationPhase
       status?: 'creating' | 'error'
+      startedAt?: number
       error?: string
       loaderVisible?: boolean
+      request?: PendingWorktreeCreation['request']
+      provisioningLog?: string
     }
   ) => void
-  /** Drop a pending entry (on success or dismiss), clearing the active surface
-   *  if it pointed at this creation. */
-  removePendingWorktreeCreation: (creationId: string) => void
+  /** Drop a pending entry, clearing the active surface if it pointed at this
+   *  creation. VM cleanup is for cancellation/dismissal, not successful handoff. */
+  removePendingWorktreeCreation: (creationId: string, options?: { cleanupVm?: boolean }) => void
   /** Point the content panel at a pending creation (or clear it with null). */
   setActivePendingWorktreeCreation: (creationId: string | null) => void
   prefetchWorktreeCreateBase: (repoId: string, baseBranch?: string) => Promise<void>
   removeWorktree: (
     worktreeId: string,
-    force?: boolean
+    force?: boolean,
+    // 'forget-local' drops the workspace from Orca only (no remote Git/FS work)
+    // for workspaces pinned to a removed/disconnected SSH host. Reuses the same
+    // renderer-side teardown/purge as a normal remove.
+    options?: { mode?: 'remove' | 'forget-local'; suppressPreservedBranchToast?: boolean }
   ) => Promise<({ ok: true } & RemoveWorktreeResult) | { ok: false; error: string }>
   markWorktreesDeleting: (worktreeIds: readonly string[]) => void
+  markWorktreesQueuedForDeletion: (worktreeIds: readonly string[]) => void
   forceDeletePreservedBranch: (
     worktreeId: string,
     branchName: string,
@@ -183,6 +197,7 @@ export type WorktreeSlice = {
     updates: Partial<WorktreeMeta>,
     options?: WorktreeMetaUpdateOptions
   ) => Promise<void>
+  ensureHostedReviewPushTarget: (worktreeId: string) => Promise<void>
   updateWorktreesMeta: (
     updatesByWorktreeId: ReadonlyMap<string, Partial<WorktreeMeta>>
   ) => Promise<void>

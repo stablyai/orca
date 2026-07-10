@@ -1,4 +1,3 @@
-/* eslint-disable max-lines -- Activity E2E keeps the setup helpers beside the split-pane, split-group, and workspace-card routing assertions they support. */
 import type { Page } from '@stablyai/playwright-test'
 import { test, expect } from './helpers/orca-app'
 import {
@@ -8,6 +7,7 @@ import {
   waitForPaneIdentitySnapshot,
   type PaneIdentitySnapshot
 } from './helpers/terminal'
+import { clickFileInExplorer } from './helpers/file-explorer'
 import { ensureTerminalVisible, waitForActiveWorktree, waitForSessionReady } from './helpers/store'
 
 type SeededActivityThread = {
@@ -26,6 +26,7 @@ type ActivePaneSelection = {
   activeWorktreeId: string | null
   activeGroupId: string | null
   activeTabId: string | null
+  activeTabType: string | null
   activeLeafId: string | null
   activePaneId: number | null
 }
@@ -189,6 +190,7 @@ async function readActivePaneSelection(page: Page): Promise<ActivePaneSelection>
         activeWorktreeId: null,
         activeGroupId: null,
         activeTabId: null,
+        activeTabType: null,
         activeLeafId: null,
         activePaneId: null
       }
@@ -208,10 +210,15 @@ async function readActivePaneSelection(page: Page): Promise<ActivePaneSelection>
       activeWorktreeId,
       activeGroupId,
       activeTabId,
+      activeTabType: state.activeTabType ?? null,
       activeLeafId: activePane?.leafId ?? null,
       activePaneId: activePane?.id ?? null
     }
   })
+}
+
+function terminalPaneForLeaf(page: Page, leafId: string) {
+  return page.locator(`.pane[data-leaf-id="${leafId}"]`).first()
 }
 
 async function createTerminalInNewSplitGroup(page: Page): Promise<SplitGroupTerminal> {
@@ -299,14 +306,25 @@ test.describe('Activity Agent Pane Isolation', () => {
     await splitActiveTerminalPane(orcaPage, 'vertical')
     await waitForPaneCount(orcaPage, 2)
     const snapshot = await waitForPaneIdentitySnapshot(orcaPage, 2)
-    const firstPane = snapshot.panes[0]
-    if (!firstPane) {
+    // Why: useAutoAckViewedAgent (App.tsx) auto-acknowledges the agent on the
+    // store's *active* visible terminal leaf the instant its status lands, which
+    // clears the unread badge before we can assert it (flaky on focused xvfb CI
+    // windows). Seed on the non-active split pane — auto-ack only ever targets the
+    // active leaf — so the badge stays unread until the explicit acknowledgeAgents()
+    // call under test.
+    const activeLeafId = await orcaPage.evaluate(
+      (tabId) => window.__store?.getState().terminalLayoutsByTabId[tabId]?.activeLeafId ?? null,
+      snapshot.tabId
+    )
+    const targetPane =
+      snapshot.panes.find((pane) => pane.leafId !== activeLeafId) ?? snapshot.panes[0]
+    if (!targetPane) {
       throw new Error('Activity acknowledgement test needs a split pane')
     }
     const now = Date.now()
     const thread: SeededActivityThread = {
-      paneKey: `${snapshot.tabId}:${firstPane.leafId}`,
-      leafId: firstPane.leafId,
+      paneKey: `${snapshot.tabId}:${targetPane.leafId}`,
+      leafId: targetPane.leafId,
       prompt: `ACTIVITY_ACK_STABLE_PANE_${now}`
     }
 
@@ -373,6 +391,42 @@ test.describe('Activity Agent Pane Isolation', () => {
         activeTabId: snapshot.tabId,
         activeLeafId: second.leafId
       })
+  })
+
+  test('workspace card agent rows reveal terminal logs from a non-terminal surface', async ({
+    orcaPage
+  }) => {
+    await splitActiveTerminalPane(orcaPage, 'vertical')
+    await waitForPaneCount(orcaPage, 2)
+    const snapshot = await waitForPaneIdentitySnapshot(orcaPage, 2)
+    const [first] = await seedActivityThreadsForSplitPanes(orcaPage, snapshot)
+
+    await enableInlineAgentCards(orcaPage)
+    await expect(terminalPaneForLeaf(orcaPage, first.leafId)).toBeVisible()
+    // Why: this reproduces the user-visible failure mode: the agent row is
+    // visible in the sidebar while the main workspace surface is not Terminal.
+    await expect(await clickFileInExplorer(orcaPage, ['README.md'])).toBe('README.md')
+    await expect
+      .poll(() => readActivePaneSelection(orcaPage))
+      .toMatchObject({
+        activeTabType: 'editor',
+        activeTabId: snapshot.tabId
+      })
+    await expect(terminalPaneForLeaf(orcaPage, first.leafId)).toBeHidden()
+
+    await clickWorkspaceCardAgentRow(orcaPage, first.prompt)
+
+    await expect
+      .poll(async () => readActivePaneSelection(orcaPage), {
+        timeout: 10_000,
+        message: 'Workspace-card row did not reveal the terminal log surface'
+      })
+      .toMatchObject({
+        activeTabType: 'terminal',
+        activeTabId: snapshot.tabId,
+        activeLeafId: first.leafId
+      })
+    await expect(terminalPaneForLeaf(orcaPage, first.leafId)).toBeVisible()
   })
 
   test('workspace card agent rows focus the matching split-group terminal pane', async ({

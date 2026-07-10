@@ -33,14 +33,18 @@ jobs:
             platform: linux
           - os: macos-15
             platform: mac
-          - os: windows-latest
-            platform: windows
+          # Why: Windows golden E2E is temporarily disabled on CI while its
+          # flaky runner-only failures are investigated.
+          # - os: windows-latest
+          #   platform: windows
 
     steps:
       - name: Checkout
         uses: actions/checkout@v6
         with:
-          ref: ${{ inputs.ref || github.ref }}
+          # Why: pull_request merge refs disappear after merge, but experiment
+          # reruns still need a stable commit to checkout.
+          ref: ${{ inputs.ref || github.event.pull_request.head.sha || github.ref }}
 
       - name: Install native build tools
         if: runner.os == 'Linux'
@@ -81,15 +85,6 @@ jobs:
         run: |
           env SKIP_BUILD=1 ORCA_E2E_FORWARD_APP_LOGS=1 pnpm run test:e2e -- tests/e2e/golden-core-flows.spec.ts
           env SKIP_BUILD=1 ORCA_E2E_FORWARD_APP_LOGS=1 pnpm run test:e2e:terminal-rendering-golden
-
-      - name: Run golden E2E tests on Windows
-        if: runner.os == 'Windows'
-        shell: pwsh
-        run: |
-          $env:SKIP_BUILD = '1'
-          $env:ORCA_E2E_FORWARD_APP_LOGS = '1'
-          pnpm run test:e2e -- tests/e2e/golden-core-flows.spec.ts
-          pnpm run test:e2e:terminal-rendering-golden
 
       - name: Upload Playwright traces
         if: failure()

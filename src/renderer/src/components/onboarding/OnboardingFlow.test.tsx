@@ -1,8 +1,8 @@
 import type { ComponentProps } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { getDefaultOnboardingState, getDefaultSettings } from '../../../../shared/constants'
 import { TooltipProvider } from '@/components/ui/tooltip'
+import { getDefaultOnboardingState, getDefaultSettings } from '../../../../shared/constants'
 import { useAppStore } from '@/store'
 import OnboardingFlow from './OnboardingFlow'
 import { ONBOARDING_SKIP_CONFIRMATION_COPY } from './OnboardingSkipConfirmationDialog'
@@ -53,7 +53,7 @@ describe('OnboardingFlow', () => {
     [5, 'Set up notifications'],
     [9, 'Set up notifications']
   ])(
-    'resumes unversioned seven-step onboarding progress %i at the matching four-step page',
+    'resumes unversioned seven-step onboarding progress %i at the matching current page',
     (legacyStep, title) => {
       const html = renderOnboardingFlow({
         onboarding: {
@@ -76,7 +76,7 @@ describe('OnboardingFlow', () => {
     [5, 'Set up notifications'],
     [9, 'Set up notifications']
   ])(
-    'resumes versioned five-step onboarding progress %i at the matching four-step page',
+    'resumes versioned five-step onboarding progress %i at the matching current page',
     (legacyStep, title) => {
       const html = renderOnboardingFlow({
         onboarding: {
@@ -92,6 +92,69 @@ describe('OnboardingFlow', () => {
       expect(html).not.toContain('Explore Orca')
     }
   )
+
+  it.each([
+    [3, 'Set up notifications'],
+    [4, 'Set up notifications'],
+    [9, 'Set up notifications']
+  ])(
+    'resumes versioned four-step onboarding progress %i without showing Windows setup on Mac',
+    (legacyStep, title) => {
+      const html = renderOnboardingFlow({
+        onboarding: {
+          ...getDefaultOnboardingState(),
+          flowVersion: 3,
+          lastCompletedStep: legacyStep
+        },
+        onOnboardingChange: vi.fn()
+      })
+
+      expect(html).toContain(title)
+      expect(html).not.toContain('Set Windows terminal defaults')
+    }
+  )
+
+  it('shows the Windows terminal defaults page for Windows users after integrations', () => {
+    vi.stubGlobal('navigator', { userAgent: 'Windows' })
+
+    const html = renderOnboardingFlow({
+      onboarding: {
+        ...getDefaultOnboardingState(),
+        lastCompletedStep: 3
+      },
+      onOnboardingChange: vi.fn()
+    })
+
+    expect(html).toContain('Set Windows terminal defaults')
+    expect(html).toContain('4 of 5')
+  })
+
+  it('drops the skipped integrations step from the stepper on Windows', () => {
+    vi.stubGlobal('navigator', { userAgent: 'Windows' })
+    useAppStore.setState({
+      preflightStatus: {
+        git: { installed: true },
+        gh: { installed: true, authenticated: false }
+      },
+      preflightStatusChecked: true
+    })
+
+    const html = renderOnboardingFlow({
+      onboarding: {
+        ...getDefaultOnboardingState(),
+        lastCompletedStep: 2
+      },
+      onOnboardingChange: vi.fn()
+    })
+
+    expect(html).toContain('Set Windows terminal defaults')
+    // Why: integrations is skipped (gh already installed), so it is not a
+    // stepper dot at all — the four real steps are agent, theme, Windows
+    // terminal, notifications, and Windows terminal is the third of four.
+    expect(html).toContain('3 of 4')
+    expect(html).not.toContain('Set up GitHub tasks')
+    expect(html).not.toContain('Integrations')
+  })
 
   it('skips GitHub task setup when the GitHub CLI is already detected', () => {
     useAppStore.setState({
@@ -115,6 +178,10 @@ describe('OnboardingFlow', () => {
     expect(html).not.toContain('Set up GitHub tasks')
     expect(html).not.toContain('Connect your task sources')
     expect(html).not.toContain('Point Orca at some code')
+    // Why: with both integrations (gh installed) and Windows terminal (Mac)
+    // skipped, the stepper shows only the three real steps — no dead dots.
+    expect(html).toContain('3 of 3')
+    expect(html).not.toContain('Integrations')
   })
 
   it('shows only GitHub on the task setup page when the GitHub CLI is missing', () => {

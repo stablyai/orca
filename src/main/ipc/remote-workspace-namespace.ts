@@ -1,4 +1,4 @@
-import { createHash } from 'crypto'
+import { createHash } from 'node:crypto'
 import type { SshTarget } from '../../shared/ssh-types'
 
 export function getRemoteWorkspaceNamespace(target: SshTarget): string {

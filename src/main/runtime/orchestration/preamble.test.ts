@@ -1,4 +1,4 @@
-import { spawnSync } from 'child_process'
+import { spawnSync } from 'node:child_process'
 import { describe, expect, it } from 'vitest'
 import { buildDispatchPreamble } from './preamble'
 
@@ -10,6 +10,16 @@ function baseParams(overrides: Partial<Parameters<typeof buildDispatchPreamble>[
     coordinatorHandle: 'term_coord',
     ...overrides
   }
+}
+
+function afterWorkerDoneSection(result: string) {
+  const sectionStart = result.indexOf('=== AFTER YOU SEND worker_done ===')
+  const sectionEnd = result.indexOf('=== TASK ===')
+
+  expect(sectionStart).toBeGreaterThan(-1)
+  expect(sectionEnd).toBeGreaterThan(sectionStart)
+
+  return result.slice(sectionStart, sectionEnd)
 }
 
 describe('buildDispatchPreamble', () => {
@@ -38,25 +48,29 @@ describe('buildDispatchPreamble', () => {
     expect(result).toContain('--report-path "<optional: path to the full artifact>"')
   })
 
-  it('CLI examples parse as valid shell (bash -n on the extracted block)', () => {
-    const result = buildDispatchPreamble(baseParams())
-    // Why: feeding `bash -n` the full preamble falsely fails on apostrophes
-    // in the surrounding prose. Slice between the CLI markers and strip
-    // shell-style comment lines so we only syntax-check the commands.
-    const cliStart = result.indexOf('=== CLI COMMANDS ===')
-    const cliEnd = result.indexOf('=== AFTER YOU SEND worker_done ===')
-    expect(cliStart).toBeGreaterThan(-1)
-    expect(cliEnd).toBeGreaterThan(cliStart)
-    const block = result.slice(cliStart, cliEnd)
-    const stripped = block
-      .split('\n')
-      .filter((line) => !line.trim().startsWith('#'))
-      .filter((line) => !line.trim().startsWith('==='))
-      .join('\n')
+  it(
+    'CLI examples parse as valid shell (bash -n on the extracted block)',
+    { timeout: 15_000 },
+    () => {
+      const result = buildDispatchPreamble(baseParams())
+      // Why: feeding `bash -n` the full preamble falsely fails on apostrophes
+      // in the surrounding prose. Slice between the CLI markers and strip
+      // shell-style comment lines so we only syntax-check the commands.
+      const cliStart = result.indexOf('=== CLI COMMANDS ===')
+      const cliEnd = result.indexOf('=== AFTER YOU SEND worker_done ===')
+      expect(cliStart).toBeGreaterThan(-1)
+      expect(cliEnd).toBeGreaterThan(cliStart)
+      const block = result.slice(cliStart, cliEnd)
+      const stripped = block
+        .split('\n')
+        .filter((line) => !line.trim().startsWith('#'))
+        .filter((line) => !line.trim().startsWith('==='))
+        .join('\n')
 
-    const check = spawnSync('bash', ['-n'], { input: stripped, encoding: 'utf8' })
-    expect(check.status).toBe(0)
-  })
+      const check = spawnSync('bash', ['-n'], { input: stripped, encoding: 'utf8' })
+      expect(check.status).toBe(0)
+    }
+  )
 
   it('includes heartbeat CLI block with taskId and dispatchId and 5-minute cadence', () => {
     const result = buildDispatchPreamble(baseParams())
@@ -89,11 +103,33 @@ describe('buildDispatchPreamble', () => {
     expect(occurrences).toBe(3)
   })
 
-  it('includes AFTER YOU SEND block with 2-minute poll cadence and release signal', () => {
+  it('tells prompt-returning workers to idle without post-done polling', () => {
     const result = buildDispatchPreamble(baseParams())
-    expect(result).toContain('=== AFTER YOU SEND worker_done ===')
-    expect(result).toMatch(/2 minutes/)
-    expect(result).toMatch(/may exit/)
+    const section = afterWorkerDoneSection(result)
+
+    expect(section).toContain('=== AFTER YOU SEND worker_done ===')
+    expect(section).toContain('worker_done ends your turn for this task')
+    expect(section).toContain('return to an idle prompt')
+    expect(section).toContain('Do not exit the shell')
+    expect(section).toContain('do NOT run a sleep/poll loop')
+    expect(section).toContain('do NOT keep calling')
+    expect(section).toMatch(/fresh\s+preamble \+ TASK block/)
+    expect(section).not.toMatch(/2 minutes/)
+    expect(section).not.toMatch(/10 minutes/)
+    expect(section).not.toMatch(/may exit/)
+    expect(section).not.toMatch(/grace period/)
+  })
+
+  it('tells bare-shell workers to exit after worker_done', () => {
+    const result = buildDispatchPreamble(baseParams({ workerKind: 'bare-shell' }))
+    const section = afterWorkerDoneSection(result)
+
+    expect(section).toContain('Exit the shell after completion')
+    expect(section).toContain('Bare-shell workers have no idle agent')
+    expect(section).toContain('do NOT run a sleep/poll loop')
+    expect(section).not.toContain('Do not exit the shell')
+    expect(section).not.toMatch(/2 minutes/)
+    expect(section).not.toMatch(/may exit/)
   })
 
   it('uses === TASK === separator with the task spec appended', () => {

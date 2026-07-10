@@ -25,8 +25,10 @@ export function ProviderHostScopeControl({
 
   return (
     <div className={className}>
-      <div className="flex items-start justify-between gap-3">
-        <div className="min-w-0">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        {/* Why: integration cards can become narrow while Settings navigation
+        remains visible, so the action must wrap before scope copy collapses. */}
+        <div className="min-w-[min(14rem,100%)] flex-1">
           <span className="font-medium text-foreground">
             {translate(
               'auto.components.settings.ProviderHostScopeControl.scope_label',
@@ -36,7 +38,13 @@ export function ProviderHostScopeControl({
           </span>
           <div className="mt-0.5 text-muted-foreground">{scope.description}</div>
         </div>
-        <Button type="button" variant="ghost" size="sm" onClick={openHostsSettings}>
+        <Button
+          type="button"
+          variant="ghost"
+          size="sm"
+          className="shrink-0"
+          onClick={openHostsSettings}
+        >
           <ServerCog className="size-3.5" />
           {translate(
             'auto.components.settings.ProviderHostScopeControl.change_host',

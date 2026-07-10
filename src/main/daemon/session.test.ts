@@ -9,6 +9,7 @@ function createMockSubprocess() {
   let onData: ((data: string) => void) | null = null
   let onExit: ((code: number) => void) | null = null
   let killed = false
+  let clearCalls = 0
   let pid = 12345
 
   return {
@@ -20,13 +21,20 @@ function createMockSubprocess() {
     get pid() {
       return pid
     },
+    foregroundProcess: null as string | null,
     getForegroundProcess(): string | null {
-      return null
+      return this.foregroundProcess
     },
     write(data: string) {
       written.push(data)
     },
     resize(_cols: number, _rows: number) {},
+    get clearCalls() {
+      return clearCalls
+    },
+    clear() {
+      clearCalls++
+    },
     kill() {
       killed = true
       // Simulate async exit
@@ -73,6 +81,7 @@ describe('Session', () => {
 
   function createSession(opts?: {
     shellReadySupported?: boolean
+    shellReadyTimeoutMs?: number
     cols?: number
     rows?: number
   }): Session {
@@ -81,7 +90,10 @@ describe('Session', () => {
       cols: opts?.cols ?? 80,
       rows: opts?.rows ?? 24,
       subprocess,
-      shellReadySupported: opts?.shellReadySupported ?? false
+      shellReadySupported: opts?.shellReadySupported ?? false,
+      ...(opts?.shellReadyTimeoutMs !== undefined
+        ? { shellReadyTimeoutMs: opts.shellReadyTimeoutMs }
+        : {})
     })
     return session
   }
@@ -203,6 +215,125 @@ describe('Session', () => {
       expect(subprocess.written).toEqual(['first\n', 'second\n'])
     })
 
+    it('uses the short settle path when marker and prompt bytes arrive together', () => {
+      createSession({ shellReadySupported: true })
+      session.write('codex\n')
+
+      subprocess.simulateData('\x1b]777;orca-shell-ready\x07\r\nuser@host $ ')
+      expect(session.shellState).toBe('ready' satisfies ShellReadyState)
+      vi.advanceTimersByTime(29)
+      expect(subprocess.written).toEqual([])
+
+      vi.advanceTimersByTime(1)
+      expect(subprocess.written).toEqual(['codex\n'])
+    })
+
+    it('does not treat bytes before the marker as post-marker prompt output', () => {
+      createSession({ shellReadySupported: true })
+      session.write('codex\n')
+
+      subprocess.simulateData('last login\r\n\x1b]777;orca-shell-ready\x07')
+      expect(session.shellState).toBe('ready' satisfies ShellReadyState)
+      vi.advanceTimersByTime(30)
+      expect(subprocess.written).toEqual([])
+
+      subprocess.simulateData('\r\nuser@host $ ')
+      vi.advanceTimersByTime(30)
+      expect(subprocess.written).toEqual(['codex\n'])
+    })
+
+    it('strips shell-ready marker bytes before client and pending-output fan-out', () => {
+      createSession({ shellReadySupported: true })
+      const received: string[] = []
+      session.attachClient({
+        onData: (data) => received.push(data),
+        onExit: () => {}
+      })
+
+      subprocess.simulateData('hello \x1b]777;orca-shell-ready\x07% ')
+
+      expect(received).toEqual(['hello % '])
+      expect(session.takePendingOutput(false)?.records).toEqual([
+        { kind: 'output', data: 'hello % ' }
+      ])
+      expect(session.getSnapshot()?.snapshotAnsi).toContain('hello % ')
+      expect(session.getSnapshot()?.snapshotAnsi).not.toContain('orca-shell-ready')
+    })
+
+    it('releases held marker-prefix bytes before flushing queued input on timeout', () => {
+      createSession({ shellReadySupported: true, shellReadyTimeoutMs: 100 })
+      const received: string[] = []
+      session.attachClient({
+        onData: (data) => received.push(data),
+        onExit: () => {}
+      })
+
+      subprocess.simulateData('\x1b]777;orca-shell-ready')
+      session.write('codex\n')
+      vi.advanceTimersByTime(100)
+
+      expect(session.shellState).toBe('timed_out' satisfies ShellReadyState)
+      expect(received).toEqual(['\x1b]777;orca-shell-ready'])
+      expect(session.takePendingOutput(false)?.records).toEqual([
+        { kind: 'output', data: '\x1b]777;orca-shell-ready' }
+      ])
+      expect(subprocess.written).toEqual(['codex\n'])
+    })
+
+    it('releases held marker-prefix bytes when the subprocess exits before readiness', () => {
+      createSession({ shellReadySupported: true, shellReadyTimeoutMs: 100 })
+      const received: string[] = []
+      session.attachClient({
+        onData: (data) => received.push(data),
+        onExit: () => {}
+      })
+
+      subprocess.simulateData('\x1b]777;orca-shell-ready')
+      subprocess.simulateExit(0)
+
+      expect(received).toEqual(['\x1b]777;orca-shell-ready'])
+      expect(session.takePendingOutput(false)?.records).toEqual([
+        { kind: 'output', data: '\x1b]777;orca-shell-ready' }
+      ])
+    })
+
+    it('keeps held marker-prefix bytes during live take-with-snapshot', () => {
+      createSession({ shellReadySupported: true, shellReadyTimeoutMs: 100 })
+      session.write('codex\n')
+
+      subprocess.simulateData('\x1b]777;orca-shell-ready')
+      const taken = session.takePendingOutput(true)
+      subprocess.simulateData('\x07\r\nuser@host $ ')
+      vi.advanceTimersByTime(30)
+
+      expect(taken?.records).toEqual([])
+      expect(taken?.snapshot).toBeTruthy()
+      expect(session.shellState).toBe('ready' satisfies ShellReadyState)
+      expect(subprocess.written).toEqual(['codex\n'])
+    })
+
+    it('releases held marker-prefix bytes before final take-with-snapshot', () => {
+      createSession({ shellReadySupported: true, shellReadyTimeoutMs: 100 })
+
+      subprocess.simulateData('\x1b]777;orca-shell-ready')
+      const taken = session.takePendingOutput(true, { teardownSnapshot: true })
+
+      expect(taken?.records).toEqual([{ kind: 'output', data: '\x1b]777;orca-shell-ready' }])
+      expect(taken?.snapshot).toBeTruthy()
+    })
+
+    it('cancels the post-ready flush gate when force-disposing the subprocess', () => {
+      createSession({ shellReadySupported: true })
+      session.write('codex\n')
+
+      subprocess.simulateData('\x1b]777;orca-shell-ready\x07')
+      expect(session.shellState).toBe('ready' satisfies ShellReadyState)
+      session.forceKillAndDisposeSubprocess()
+      vi.advanceTimersByTime(500)
+
+      expect(subprocess.written).toEqual([])
+    })
+
     it('transitions to timed_out after 15 seconds', () => {
       createSession({ shellReadySupported: true })
       session.write('waiting input')
@@ -211,6 +342,18 @@ describe('Session', () => {
 
       expect(session.shellState).toBe('timed_out' satisfies ShellReadyState)
       expect(subprocess.written).toEqual(['waiting input'])
+    })
+
+    it('honors a shorter shell-ready timeout for Codex startup sessions', () => {
+      createSession({ shellReadySupported: true, shellReadyTimeoutMs: 300 })
+      session.write('codex\n')
+
+      vi.advanceTimersByTime(299)
+      expect(subprocess.written).toEqual([])
+
+      vi.advanceTimersByTime(1)
+      expect(session.shellState).toBe('timed_out' satisfies ShellReadyState)
+      expect(subprocess.written).toEqual(['codex\n'])
     })
 
     it('detects marker split across data chunks', () => {
@@ -288,6 +431,98 @@ describe('Session', () => {
       session.signal('SIGINT')
       expect(subprocess.signals).toEqual(['SIGINT'])
       expect(session.isTerminating).toBe(false)
+    })
+  })
+
+  describe('clearScrollback', () => {
+    function withPlatform(platform: NodeJS.Platform, run: () => void): void {
+      const original = process.platform
+      Object.defineProperty(process, 'platform', { value: platform })
+      try {
+        run()
+      } finally {
+        Object.defineProperty(process, 'platform', { value: original })
+      }
+    }
+
+    it('resyncs the native PTY screen state alongside the emulator clear', () => {
+      createSession()
+      session.clearScrollback()
+      // Why: without the subprocess clear, ConPTY keeps a stale cursor row and
+      // the next prompt repaint lands below a blank gap on Windows.
+      expect(subprocess.clearCalls).toBe(1)
+      const take = session.takePendingOutput(false)
+      expect(take?.records).toContainEqual({ kind: 'clear' })
+    })
+
+    it('nudges a Windows PowerShell prompt to repaint with a form feed', async () => {
+      createSession()
+      subprocess.foregroundProcess = 'powershell.exe'
+      subprocess.simulateData('PS C:\\Users\\me> ')
+      await vi.advanceTimersByTimeAsync(10)
+      withPlatform('win32', () => session.clearScrollback())
+      // Why: the ConPTY clear cannot reach PSReadLine's cached cursor row;
+      // Ctrl+L makes PSReadLine repaint the prompt at the true origin.
+      expect(subprocess.written).toEqual(['\x0c'])
+    })
+
+    it('does not send a form feed while input is pending at the prompt', async () => {
+      createSession()
+      subprocess.foregroundProcess = 'powershell.exe'
+      subprocess.simulateData('PS C:\\Users\\me> fd')
+      await vi.advanceTimersByTimeAsync(10)
+      // Why: PSReadLine repaints pending input at a stale cached row that
+      // ConPTY's fixed viewport doesn't track, so the nudge must be skipped.
+      withPlatform('win32', () => session.clearScrollback())
+      expect(subprocess.written).toEqual([])
+    })
+
+    it('does not send or queue a form feed before shell-ready', async () => {
+      createSession({ shellReadySupported: true })
+      subprocess.foregroundProcess = 'powershell.exe'
+      subprocess.simulateData('PS C:\\Users\\me> ')
+      await vi.advanceTimersByTimeAsync(10)
+      // Why: a queued form feed would flush after the startup command at an
+      // arbitrary later moment, when the prompt gates no longer hold.
+      withPlatform('win32', () => session.clearScrollback())
+      expect(subprocess.written).toEqual([])
+      subprocess.simulateData('\x1b]777;orca-shell-ready\x07\r\nPS C:\\Users\\me> ')
+      await vi.advanceTimersByTimeAsync(10)
+      expect(subprocess.written).toEqual([])
+    })
+
+    it('does not send a form feed at a PowerShell continuation prompt', async () => {
+      createSession()
+      subprocess.foregroundProcess = 'powershell.exe'
+      subprocess.simulateData('PS C:\\Users\\me> {\r\n>> ')
+      await vi.advanceTimersByTimeAsync(10)
+      withPlatform('win32', () => session.clearScrollback())
+      expect(subprocess.written).toEqual([])
+    })
+
+    it('does not send a form feed while a command owns the foreground', async () => {
+      createSession()
+      subprocess.foregroundProcess = 'node'
+      subprocess.simulateData('PS C:\\Users\\me> ')
+      await vi.advanceTimersByTimeAsync(10)
+      withPlatform('win32', () => session.clearScrollback())
+      expect(subprocess.written).toEqual([])
+    })
+
+    it('does not send a form feed on POSIX platforms', async () => {
+      createSession()
+      subprocess.foregroundProcess = 'pwsh'
+      subprocess.simulateData('PS C:\\Users\\me> ')
+      await vi.advanceTimersByTimeAsync(10)
+      withPlatform('linux', () => session.clearScrollback())
+      expect(subprocess.written).toEqual([])
+    })
+
+    it('does not touch the subprocess after dispose', () => {
+      createSession()
+      session.dispose()
+      session.clearScrollback()
+      expect(subprocess.clearCalls).toBe(0)
     })
   })
 

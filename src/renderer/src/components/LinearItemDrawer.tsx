@@ -23,6 +23,10 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { VisuallyHidden } from 'radix-ui'
 import CommentMarkdown from '@/components/sidebar/CommentMarkdown'
 import { cn } from '@/lib/utils'
+import {
+  getCommentBodySubmitState,
+  hasBoundedCommentBodyText
+} from '@/lib/comment-body-submit-state'
 import { useAppStore } from '@/store'
 import { getScreenSubmitShortcutLabel, isScreenSubmitShortcut } from '@/lib/screen-submit-shortcut'
 import { createBrowserUuid } from '@/lib/browser-uuid'
@@ -199,6 +203,7 @@ export function LinearIssueEditSection({
           patchLinearIssue(issue.id, { state: prevState }, { sourceContext })
         },
         onSuccess: () => {
+          useAppStore.getState().invalidateLinearIssueLists({ sourceContext })
           useAppStore.getState().recordFeatureInteraction('linear-tasks')
         },
         onError: (err) => toast.error(err)
@@ -219,7 +224,7 @@ export function LinearIssueEditSection({
 
   const handlePriorityChange = useCallback(
     (value: string) => {
-      const priority = parseInt(value, 10)
+      const priority = Number.parseInt(value, 10)
       const prevPriority = localPriority
       run('priority', {
         mutate: () =>
@@ -233,6 +238,7 @@ export function LinearIssueEditSection({
           patchLinearIssue(issue.id, { priority: prevPriority }, { sourceContext })
         },
         onSuccess: () => {
+          useAppStore.getState().invalidateLinearIssueLists({ sourceContext })
           useAppStore.getState().recordFeatureInteraction('linear-tasks')
         },
         onError: (err) => toast.error(err)
@@ -324,6 +330,7 @@ export function LinearIssueEditSection({
           patchLinearIssue(issue.id, { assignee: prevAssignee }, { sourceContext })
         },
         onSuccess: () => {
+          useAppStore.getState().invalidateLinearIssueLists({ sourceContext })
           useAppStore.getState().recordFeatureInteraction('linear-tasks')
         },
         onError: (err) => toast.error(err)
@@ -379,6 +386,7 @@ export function LinearIssueEditSection({
           )
         },
         onSuccess: () => {
+          useAppStore.getState().invalidateLinearIssueLists({ sourceContext })
           useAppStore.getState().recordFeatureInteraction('linear-tasks')
         },
         onError: (err) => toast.error(err)
@@ -1069,13 +1077,27 @@ export function LinearIssueCommentFooter({
   }, [])
 
   const handleSubmit = useCallback(async () => {
-    const trimmed = body.trim()
-    if (!trimmed) {
+    const bodyState = getCommentBodySubmitState(body)
+    if (bodyState.status === 'empty') {
+      return
+    }
+    if (bodyState.status === 'too-large-leading-whitespace') {
+      toast.error(
+        translate(
+          'auto.components.LinearItemDrawer.commentTooLarge',
+          'Comment is too large to submit safely.'
+        )
+      )
       return
     }
     setSubmitting(true)
     try {
-      const result = await linearAddIssueComment(providerSettings, issueId, trimmed, workspaceId)
+      const result = await linearAddIssueComment(
+        providerSettings,
+        issueId,
+        bodyState.body,
+        workspaceId
+      )
       const typed = result as { ok: boolean; id?: string; error?: string }
       if (!mountedRef.current) {
         return
@@ -1085,7 +1107,7 @@ export function LinearIssueCommentFooter({
         useAppStore.getState().recordFeatureInteraction('linear-tasks')
         onCommentAdded({
           id: typed.id ?? createBrowserUuid(),
-          body: trimmed,
+          body: bodyState.body,
           createdAt: new Date().toISOString()
         })
       } else {
@@ -1108,6 +1130,7 @@ export function LinearIssueCommentFooter({
       }
     }
   }, [body, issueId, onCommentAdded, providerSettings, workspaceId])
+  const canSubmitComment = hasBoundedCommentBodyText(body)
 
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent) => {
@@ -1151,7 +1174,7 @@ export function LinearIssueCommentFooter({
           <Button
             size="icon-sm"
             onClick={handleSubmit}
-            disabled={!body.trim() || submitting}
+            disabled={!canSubmitComment || submitting}
             aria-label={translate('auto.components.LinearItemDrawer.d369841269', 'Send comment')}
           >
             {submitting ? (
@@ -1185,7 +1208,7 @@ export function LinearIssueCommentFooter({
       <Button
         size="icon"
         onClick={handleSubmit}
-        disabled={!body.trim() || submitting}
+        disabled={!canSubmitComment || submitting}
         className="size-8 shrink-0"
         aria-label={translate('auto.components.LinearItemDrawer.d369841269', 'Send comment')}
       >

@@ -46,7 +46,12 @@ vi.mock('@/store', () => ({
 
 vi.mock('@/i18n/i18n', () => ({
   translate: (_key: string, fallback: string, values?: Record<string, unknown>) =>
-    values ? fallback.replace('{{value0}}', String(values.value0)) : fallback
+    values
+      ? Object.entries(values).reduce(
+          (text, [key, value]) => text.replaceAll(`{{${key}}}`, String(value)),
+          fallback
+        )
+      : fallback
 }))
 
 vi.mock('@/lib/http-link-routing', () => ({
@@ -150,7 +155,7 @@ function makeWorktree(): Worktree {
   }
 }
 
-function makeReview(): HostedReviewInfo {
+function makeReview(overrides: Partial<HostedReviewInfo> = {}): HostedReviewInfo {
   return {
     provider: 'github',
     number: 12,
@@ -160,16 +165,18 @@ function makeReview(): HostedReviewInfo {
     status: 'success',
     updatedAt: '2026-01-01T00:00:00.000Z',
     mergeable: 'MERGEABLE',
-    headSha: 'abc'
+    headSha: 'abc',
+    ...overrides
   }
 }
 
-function makeCheck(): PRCheckDetail {
+function makeCheck(overrides: Partial<PRCheckDetail> = {}): PRCheckDetail {
   return {
     name: 'verify',
     status: 'completed',
     conclusion: 'success',
-    url: 'https://example.test/check/verify'
+    url: 'https://example.test/check/verify',
+    ...overrides
   }
 }
 
@@ -254,6 +261,114 @@ describe('FolderWorkspacePrChecksPanel', () => {
     expect(container.textContent).toContain('verify')
     expect(mockState.store.setActiveWorktree).not.toHaveBeenCalled()
     expect(mockState.store.setRightSidebarTab).not.toHaveBeenCalled()
+  })
+
+  it('shows a compact clean-state header summary without noisy aggregate counts', () => {
+    renderPanel()
+
+    expect(container.textContent).toContain('Review checks')
+    expect(container.textContent).toContain('1 worktree · all checks passing')
+    expect(container.textContent).not.toContain('1 attached')
+    expect(container.textContent).not.toContain('with PR/MR')
+    expect(container.textContent).not.toContain('unknown')
+  })
+
+  it('summarizes failing and pending rows before the worktree count', () => {
+    const repo = mockState.store.repos[0]
+    const passingWorktree = mockState.store.worktreesByRepo[repo.id][0]
+    const failingWorktree = {
+      ...makeWorktree(),
+      id: 'repo-1::/failing-child',
+      path: '/failing-child',
+      head: 'def',
+      branch: 'refs/heads/failing-child',
+      displayName: 'Failing child',
+      linkedPR: 13,
+      lastActivityAt: 2
+    }
+    const pendingWorktree = {
+      ...makeWorktree(),
+      id: 'repo-1::/pending-child',
+      path: '/pending-child',
+      head: 'fed',
+      branch: 'refs/heads/pending-child',
+      displayName: 'Pending child',
+      linkedPR: 14,
+      lastActivityAt: 1
+    }
+    const reviewsByBranch = {
+      feature: makeReview(),
+      'failing-child': makeReview({
+        number: 13,
+        title: 'Failing review',
+        status: 'failure',
+        headSha: 'def'
+      }),
+      'pending-child': makeReview({
+        number: 14,
+        title: 'Pending review',
+        status: 'pending',
+        headSha: 'fed'
+      })
+    }
+    const worktrees = [passingWorktree, failingWorktree, pendingWorktree]
+    mockState.store.worktreesByRepo = { [repo.id]: worktrees }
+    mockState.store.workspaceLineageByChildKey = Object.fromEntries(
+      worktrees.map((worktree, index) => [
+        worktreeWorkspaceKey(worktree.id),
+        {
+          childWorkspaceKey: worktreeWorkspaceKey(worktree.id),
+          childInstanceId: null,
+          parentWorkspaceKey: folderWorkspaceKey('folder-1'),
+          parentInstanceId: null,
+          origin: 'cli',
+          capture: { source: 'env-workspace', confidence: 'inferred' },
+          createdAt: index + 1
+        }
+      ])
+    )
+    mockState.store.hostedReviewCache = {
+      [getHostedReviewCacheKey(repo.path, 'feature', null, repo.id)]: {
+        data: reviewsByBranch.feature,
+        fetchedAt: 1
+      },
+      [getHostedReviewCacheKey(repo.path, 'failing-child', null, repo.id)]: {
+        data: reviewsByBranch['failing-child'],
+        fetchedAt: 1
+      },
+      [getHostedReviewCacheKey(repo.path, 'pending-child', null, repo.id)]: {
+        data: reviewsByBranch['pending-child'],
+        fetchedAt: 1
+      }
+    }
+    mockState.store.checksCache = {
+      [getGitHubRepoCacheKey(repo.path, repo.id, prChecksCacheSuffix(12, null, 'abc'), null)]: {
+        data: [makeCheck()],
+        fetchedAt: 1,
+        headSha: 'abc'
+      },
+      [getGitHubRepoCacheKey(repo.path, repo.id, prChecksCacheSuffix(13, null, 'def'), null)]: {
+        data: [makeCheck({ name: 'unit-tests', conclusion: 'failure' })],
+        fetchedAt: 1,
+        headSha: 'def'
+      },
+      [getGitHubRepoCacheKey(repo.path, repo.id, prChecksCacheSuffix(14, null, 'fed'), null)]: {
+        data: [makeCheck({ name: 'integration', status: 'in_progress', conclusion: null })],
+        fetchedAt: 1,
+        headSha: 'fed'
+      }
+    }
+    mockState.store.fetchHostedReviewForBranch = vi.fn(
+      async (_repoPath: string, branch: keyof typeof reviewsByBranch) =>
+        reviewsByBranch[branch] ?? null
+    )
+
+    renderPanel()
+
+    expect(container.textContent).toContain('Review checks')
+    expect(container.textContent).toContain('1 failing · 1 pending · 3 worktrees')
+    expect(container.textContent).not.toContain('with PR/MR')
+    expect(container.textContent).not.toContain('unknown')
   })
 
   it('opens external review links without activating the row', () => {

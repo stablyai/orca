@@ -20,8 +20,20 @@ const { homedirMock } = vi.hoisted(() => ({
 }))
 
 const { fsMockState } = vi.hoisted(() => ({
-  fsMockState: { failLink: false, failSymlink: false }
+  fsMockState: {
+    failLink: false,
+    failSymlink: false,
+    fakeSymlinks: new Map<string, string>()
+  }
 }))
+
+function isWindowsSymlinkPrivilegeError(error: unknown): boolean {
+  if (process.platform !== 'win32' || !(error instanceof Error)) {
+    return false
+  }
+  const errorWithCode = error as Error & { code?: string }
+  return errorWithCode.code === 'EPERM' || errorWithCode.code === 'EACCES'
+}
 
 vi.mock('node:fs', async () => {
   const actual = await vi.importActual<typeof NodeFs>('node:fs')
@@ -33,11 +45,52 @@ vi.mock('node:fs', async () => {
       }
       return actual.linkSync(...args)
     },
+    lstatSync: ((path: Parameters<typeof actual.lstatSync>[0]) => {
+      const stat = actual.lstatSync(path)
+      if (!fsMockState.fakeSymlinks.has(String(path))) {
+        return stat
+      }
+      // Why: Windows often disallows file symlink creation outside Developer
+      // Mode; tests simulate the link metadata while keeping a real path.
+      return { ...stat, isSymbolicLink: () => true }
+    }) as typeof actual.lstatSync,
+    readlinkSync: ((path: Parameters<typeof actual.readlinkSync>[0]) => {
+      const fakeTarget = fsMockState.fakeSymlinks.get(String(path))
+      if (fakeTarget !== undefined) {
+        return fakeTarget
+      }
+      return actual.readlinkSync(path)
+    }) as typeof actual.readlinkSync,
+    renameSync: (...args: Parameters<typeof actual.renameSync>) => {
+      const [oldPath, newPath] = args
+      const fakeTarget = fsMockState.fakeSymlinks.get(String(oldPath))
+      const result = actual.renameSync(...args)
+      if (fakeTarget !== undefined) {
+        fsMockState.fakeSymlinks.delete(String(oldPath))
+        fsMockState.fakeSymlinks.set(String(newPath), fakeTarget)
+      } else {
+        fsMockState.fakeSymlinks.delete(String(newPath))
+      }
+      return result
+    },
+    rmSync: (...args: Parameters<typeof actual.rmSync>) => {
+      fsMockState.fakeSymlinks.delete(String(args[0]))
+      return actual.rmSync(...args)
+    },
     symlinkSync: (...args: Parameters<typeof actual.symlinkSync>) => {
       if (fsMockState.failSymlink) {
         throw new Error('symlink disabled for test')
       }
-      return actual.symlinkSync(...args)
+      try {
+        return actual.symlinkSync(...args)
+      } catch (error) {
+        if (!isWindowsSymlinkPrivilegeError(error)) {
+          throw error
+        }
+        const [target, path] = args
+        fsMockState.fakeSymlinks.set(String(path), String(target))
+        actual.writeFileSync(path, '', 'utf-8')
+      }
     }
   }
 })
@@ -50,7 +103,10 @@ vi.mock('node:os', async () => {
   }
 })
 
-import { syncSystemCodexSessionsIntoManagedHome } from './codex-session-bridge'
+import {
+  syncSystemCodexSessionsIntoManagedHome,
+  syncSystemCodexSessionsIntoManagedHomeIncrementally
+} from './codex-session-bridge'
 
 let fakeHomeDir: string
 let userDataDir: string
@@ -103,6 +159,7 @@ function writeLegacyCopyMarker(relativePath: string, sourcePath: string, targetP
 beforeEach(() => {
   fsMockState.failLink = false
   fsMockState.failSymlink = false
+  fsMockState.fakeSymlinks.clear()
   fakeHomeDir = mkdtempSync(join(tmpdir(), 'orca-codex-session-home-'))
   userDataDir = mkdtempSync(join(tmpdir(), 'orca-codex-session-user-data-'))
   previousUserDataPath = process.env.ORCA_USER_DATA_PATH
@@ -155,6 +212,51 @@ describe('syncSystemCodexSessionsIntoManagedHome', () => {
     expectResourceLinked(runtimeSessionPath, systemSessionPath)
     expect(
       existsSync(join(getRuntimeCodexHomePath(), 'sessions', '2026', '05', '26', 'scratch.txt'))
+    ).toBe(false)
+  })
+
+  it('bridges from a custom source home override instead of ~/.codex', () => {
+    // Why: users with a custom CODEX_HOME point history discovery at that
+    // folder; the default ~/.codex must be ignored when an override is given.
+    const customSourceHome = join(fakeHomeDir, 'custom-codex')
+    const customSessionPath = join(
+      customSourceHome,
+      'sessions',
+      '2026',
+      '05',
+      '26',
+      'rollout-custom.jsonl'
+    )
+    mkdirSync(dirname(customSessionPath), { recursive: true })
+    writeFileSync(customSessionPath, '{"id":"custom"}\n', 'utf-8')
+
+    // A session under the default ~/.codex should NOT be bridged when overridden.
+    const defaultSessionPath = join(
+      getSystemCodexHomePath(),
+      'sessions',
+      '2026',
+      '05',
+      '26',
+      'rollout-default.jsonl'
+    )
+    mkdirSync(dirname(defaultSessionPath), { recursive: true })
+    writeFileSync(defaultSessionPath, '{"id":"default"}\n', 'utf-8')
+
+    syncSystemCodexSessionsIntoManagedHome(customSourceHome)
+
+    const bridgedCustomPath = join(
+      getRuntimeCodexHomePath(),
+      'sessions',
+      '2026',
+      '05',
+      '26',
+      'rollout-custom.jsonl'
+    )
+    expect(readFileSync(bridgedCustomPath, 'utf-8')).toBe('{"id":"custom"}\n')
+    expect(
+      existsSync(
+        join(getRuntimeCodexHomePath(), 'sessions', '2026', '05', '26', 'rollout-default.jsonl')
+      )
     ).toBe(false)
   })
 
@@ -275,5 +377,36 @@ describe('syncSystemCodexSessionsIntoManagedHome', () => {
 
     expect(lstatSync(runtimeSessionPath).isSymbolicLink()).toBe(false)
     expect(readFileSync(runtimeSessionPath, 'utf-8')).toBe('{"id":"legacy"}\n')
+  })
+
+  it('incrementally bridges session files without requiring the synchronous launch path', async () => {
+    const systemSessionRoot = join(getSystemCodexHomePath(), 'sessions', '2026', '06', '18')
+    mkdirSync(systemSessionRoot, { recursive: true })
+    for (let index = 0; index < 5; index += 1) {
+      writeFileSync(
+        join(systemSessionRoot, `rollout-incremental-${index}.jsonl`),
+        `{"id":"incremental-${index}"}\n`,
+        'utf-8'
+      )
+    }
+
+    const summary = await syncSystemCodexSessionsIntoManagedHomeIncrementally({
+      batchSize: 2,
+      yieldMs: 0
+    })
+
+    expect(summary).toEqual({ scannedFiles: 5, linkedFiles: 5 })
+    for (let index = 0; index < 5; index += 1) {
+      const systemSessionPath = join(systemSessionRoot, `rollout-incremental-${index}.jsonl`)
+      const runtimeSessionPath = join(
+        getRuntimeCodexHomePath(),
+        'sessions',
+        '2026',
+        '06',
+        '18',
+        `rollout-incremental-${index}.jsonl`
+      )
+      expectResourceLinked(runtimeSessionPath, systemSessionPath)
+    }
   })
 })

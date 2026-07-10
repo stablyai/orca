@@ -226,13 +226,24 @@ function mkTempProject() {
 }
 
 function runRebuildScript(projectDir, extraEnv = {}) {
+  const env = {
+    ...process.env,
+    npm_config_platform: 'linux',
+    npm_config_arch: 'x64'
+  }
+  for (const key of Object.keys(env)) {
+    if (
+      key.toLowerCase() === 'orca_strict_electron_install' ||
+      key.toLowerCase() === 'npm_lifecycle_event'
+    ) {
+      delete env[key]
+    }
+  }
   return spawnSync(process.execPath, ['config/scripts/rebuild-native-deps.mjs'], {
     cwd: projectDir,
     encoding: 'utf8',
     env: {
-      ...process.env,
-      npm_config_platform: 'linux',
-      npm_config_arch: 'x64',
+      ...env,
       ...extraEnv
     }
   })
@@ -401,5 +412,7 @@ function writePatchedNodePtyBuildArtifacts(projectDir) {
   const buildDir = join(projectDir, 'node_modules', 'node-pty', 'build', 'Release')
   mkdirSync(buildDir, { recursive: true })
   writeFileSync(join(buildDir, 'pty.node'), '')
-  writeFileSync(join(buildDir, 'spawn-helper'), '')
+  if (process.platform === 'darwin') {
+    writeFileSync(join(buildDir, 'spawn-helper'), '')
+  }
 }

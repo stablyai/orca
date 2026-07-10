@@ -1,10 +1,21 @@
-import { mkdtemp, mkdir, rm, writeFile } from 'fs/promises'
-import { tmpdir } from 'os'
-import { join } from 'path'
+import { mkdtemp, mkdir, rm, writeFile } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import { ServeSimStateWatcher, type ServeSimStateDetectedEvent } from './serve-sim-state-watcher'
 
 const TEST_UDID = '11111111-2222-3333-4444-555555555555'
+
+let isolatedStateDirSeq = 0
+// Why: the default state dir is the real $TMPDIR/serve-sim — a leftover state
+// file from an actual simulator session would leak extra events into tests
+// that only exercise PTY ingestion. Point at a dir that never exists.
+function createIsolatedWatcher(): ServeSimStateWatcher {
+  isolatedStateDirSeq += 1
+  return new ServeSimStateWatcher({
+    stateDir: join(tmpdir(), `orca-serve-sim-test-none-${process.pid}-${isolatedStateDirSeq}`)
+  })
+}
 
 async function waitForEvent(
   events: ServeSimStateDetectedEvent[],
@@ -34,7 +45,7 @@ describe('ServeSimStateWatcher', () => {
     const parentDir = await mkdtemp(join(tmpdir(), 'orca-serve-sim-watch-'))
     cleanupPaths.push(parentDir)
     const stateDir = join(parentDir, 'serve-sim')
-    const watcher = new ServeSimStateWatcher({ parentDir, stateDir })
+    const watcher = new ServeSimStateWatcher({ stateDir })
     const events: ServeSimStateDetectedEvent[] = []
 
     watcher.bindPty('pty-1', 'worktree-1')
@@ -68,7 +79,7 @@ describe('ServeSimStateWatcher', () => {
   })
 
   it('suppresses Orca-managed sessions only while they are marked managed', async () => {
-    const watcher = new ServeSimStateWatcher()
+    const watcher = createIsolatedWatcher()
     const events: ServeSimStateDetectedEvent[] = []
     const payload = JSON.stringify({
       device: TEST_UDID,
@@ -94,8 +105,35 @@ describe('ServeSimStateWatcher', () => {
     watcher.stop()
   })
 
+  it('prunes worktree-scoped dedupe keys on forget so a re-bound worktree re-emits', () => {
+    const watcher = createIsolatedWatcher()
+    const events: ServeSimStateDetectedEvent[] = []
+    const payload = JSON.stringify({
+      device: TEST_UDID,
+      streamUrl: 'http://127.0.0.1:3100/stream.mjpeg',
+      wsUrl: 'ws://127.0.0.1:3100/ws',
+      pid: 12345
+    })
+
+    watcher.onDetected((event) => events.push(event))
+
+    watcher.bindPty('pty-1', 'worktree-1')
+    watcher.ingestPtyOutput('pty-1', payload)
+    watcher.ingestPtyOutput('pty-1', payload) // deduped within the same worktree
+    expect(events).toHaveLength(1)
+
+    // Forgetting the worktree must drop its dedupe keys; a re-bind is a fresh
+    // context and should re-emit (otherwise the Set leaks for the session).
+    watcher.forgetWorktree('worktree-1')
+    watcher.bindPty('pty-2', 'worktree-1')
+    watcher.ingestPtyOutput('pty-2', payload)
+    expect(events).toHaveLength(2)
+
+    watcher.stop()
+  })
+
   it('dedupes one helper without hiding a later helper for the same simulator', () => {
-    const watcher = new ServeSimStateWatcher()
+    const watcher = createIsolatedWatcher()
     const events: ServeSimStateDetectedEvent[] = []
     const firstPayload = JSON.stringify({
       device: TEST_UDID,

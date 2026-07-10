@@ -1,8 +1,8 @@
 import type React from 'react'
 import { MoreHorizontal } from 'lucide-react'
-import type { MarkdownViewMode } from '@/store/slices/editor'
 import {
   DropdownMenu,
+  DropdownMenuCheckboxItem,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuSeparator,
@@ -12,24 +12,32 @@ import { translate } from '@/i18n/i18n'
 
 type EditorPanelMarkdownActionsMenuProps = {
   isMarkdown: boolean
-  hasViewModeToggle: boolean
-  mdViewMode: MarkdownViewMode
+  isDiffSurface: boolean
+  diffWordWrap: boolean
+  shouldShowMarkdownExportAction: boolean
+  canExportMarkdownToPdf: boolean
   canShowMarkdownFrontmatterToggle: boolean
   markdownFrontmatterVisible: boolean
+  onToggleDiffWordWrap: () => void
   onToggleMarkdownFrontmatter: () => void
   onExportMarkdownToPdf: () => void
 }
 
 export function EditorPanelMarkdownActionsMenu({
   isMarkdown,
-  hasViewModeToggle,
-  mdViewMode,
+  isDiffSurface,
+  diffWordWrap,
+  shouldShowMarkdownExportAction,
+  canExportMarkdownToPdf,
   canShowMarkdownFrontmatterToggle,
   markdownFrontmatterVisible,
+  onToggleDiffWordWrap,
   onToggleMarkdownFrontmatter,
   onExportMarkdownToPdf
 }: EditorPanelMarkdownActionsMenuProps): React.JSX.Element | null {
-  if (!isMarkdown || (!hasViewModeToggle && !canShowMarkdownFrontmatterToggle)) {
+  const hasMarkdownActions =
+    isMarkdown && (shouldShowMarkdownExportAction || canShowMarkdownFrontmatterToggle)
+  if (!isDiffSurface && !hasMarkdownActions) {
     return null
   }
 
@@ -52,6 +60,17 @@ export function EditorPanelMarkdownActionsMenu({
         </button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" sideOffset={4}>
+        {isDiffSurface ? (
+          <>
+            <DropdownMenuCheckboxItem checked={diffWordWrap} onCheckedChange={onToggleDiffWordWrap}>
+              {translate(
+                'auto.components.editor.EditorPanelMarkdownActionsMenu.1eef809708',
+                'Word Wrap'
+              )}
+            </DropdownMenuCheckboxItem>
+            {hasMarkdownActions ? <DropdownMenuSeparator /> : null}
+          </>
+        ) : null}
         {canShowMarkdownFrontmatterToggle ? (
           <>
             <DropdownMenuItem
@@ -70,15 +89,13 @@ export function EditorPanelMarkdownActionsMenu({
                     'Show front matter'
                   )}
             </DropdownMenuItem>
-            {hasViewModeToggle ? <DropdownMenuSeparator /> : null}
+            {shouldShowMarkdownExportAction ? <DropdownMenuSeparator /> : null}
           </>
         ) : null}
-        {hasViewModeToggle ? (
+        {shouldShowMarkdownExportAction ? (
           <DropdownMenuItem
-            // Why: source/Monaco mode has no document DOM. Avoid polling the
-            // portal-mounted menu; exportActiveMarkdownToPdf is a safe no-op
-            // when no rendered markdown subtree is found.
-            disabled={mdViewMode === 'source'}
+            // Why: source/Monaco fallbacks have no rendered document DOM to export.
+            disabled={!canExportMarkdownToPdf}
             onSelect={onExportMarkdownToPdf}
           >
             {translate(

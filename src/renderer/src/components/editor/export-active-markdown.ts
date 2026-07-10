@@ -3,23 +3,25 @@ import { getActiveMarkdownExportPayload } from './markdown-export-extract'
 import { translate } from '@/i18n/i18n'
 
 /**
- * Export the currently-active markdown document to PDF via the main-process
- * IPC bridge. Silent no-op when no markdown surface is active — the menu
- * item and overflow action can both share this entry point.
+ * Export the markdown document for a local editor panel through the existing
+ * PDF bridge. Silent no-op when the panel no longer has rendered markdown.
  */
-export async function exportActiveMarkdownToPdf(): Promise<void> {
-  const payload = getActiveMarkdownExportPayload()
-  if (!payload) {
-    // Why: design doc §5 — menu-triggered export with no markdown surface is
-    // a silent no-op. The overflow-menu item is disabled in that case so we
-    // only reach this branch for stray menu shortcuts.
-    return
-  }
-
+export async function exportActiveMarkdownToPdf(options: {
+  fileId: string
+  root: ParentNode | null
+}): Promise<void> {
   const toastId = toast.loading(
     translate('auto.components.editor.export.active.markdown.d4a901e0ad', 'Exporting PDF...')
   )
   try {
+    const payload = await getActiveMarkdownExportPayload(options)
+    if (!payload) {
+      // Why: stale panel refs can survive a dropdown click; keep export defensive
+      // even though the local Markdown menu disables unreachable states.
+      toast.dismiss(toastId)
+      return
+    }
+
     const result = await window.api.export.htmlToPdf({
       html: payload.html,
       title: payload.title

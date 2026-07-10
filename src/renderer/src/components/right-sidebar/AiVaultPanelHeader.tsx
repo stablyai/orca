@@ -1,13 +1,15 @@
 import { LoaderCircle, RefreshCw, Search, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { translate } from '@/i18n/i18n'
-import {
-  type AiVaultAgent,
-  type AiVaultGroup,
-  type AiVaultScope,
-  type AiVaultSort
+import type {
+  AiVaultAgent,
+  AiVaultGroup,
+  AiVaultScope,
+  AiVaultSort
 } from '../../../../shared/ai-vault-types'
-import { VaultScopeSwitch, VaultViewMenu } from './AiVaultPanelControls'
+import type { ExecutionHostScope } from '../../../../shared/execution-host'
+import { VaultHostScopeMenu, VaultScopeSwitch, VaultViewMenu } from './AiVaultPanelControls'
+import type { AiVaultHostScopeOption } from './ai-vault-host-scope'
 
 type AiVaultPanelHeaderProps = {
   query: string
@@ -16,7 +18,10 @@ type AiVaultPanelHeaderProps = {
   sessionCount: number
   hasScanResult: boolean
   activeWorktreePath: string | null
+  activeProjectKey: string | null
   scope: AiVaultScope
+  executionHostScope: ExecutionHostScope
+  hostScopeOptions: readonly AiVaultHostScopeOption[]
   agents: readonly AiVaultAgent[]
   sort: AiVaultSort
   group: AiVaultGroup
@@ -24,6 +29,7 @@ type AiVaultPanelHeaderProps = {
   adjustmentCount: number
   onQueryChange: (query: string) => void
   onScopeChange: (scope: AiVaultScope) => void
+  onExecutionHostScopeChange: (scope: ExecutionHostScope) => void
   onAgentEnabledChange: (agent: AiVaultAgent, enabled: boolean) => void
   onSortChange: (sort: AiVaultSort) => void
   onGroupChange: (group: AiVaultGroup) => void
@@ -39,7 +45,10 @@ export function AiVaultPanelHeader({
   sessionCount,
   hasScanResult,
   activeWorktreePath,
+  activeProjectKey,
   scope,
+  executionHostScope,
+  hostScopeOptions,
   agents,
   sort,
   group,
@@ -47,6 +56,7 @@ export function AiVaultPanelHeader({
   adjustmentCount,
   onQueryChange,
   onScopeChange,
+  onExecutionHostScopeChange,
   onAgentEnabledChange,
   onSortChange,
   onGroupChange,
@@ -56,7 +66,7 @@ export function AiVaultPanelHeader({
 }: AiVaultPanelHeaderProps): React.JSX.Element {
   return (
     <div className="shrink-0 border-b border-sidebar-border px-2.5 py-2">
-      <div className="flex items-center gap-1.5 @max-[300px]/ai-vault:items-start">
+      <div className="flex items-center gap-1.5">
         <div className="min-w-0 flex-1">
           <div className="truncate text-xs font-semibold text-foreground">
             {/* Why: below 300px the header competes with fixed controls, so compact copy prevents overlap. */}
@@ -97,10 +107,10 @@ export function AiVaultPanelHeader({
           </div>
         </div>
         <div className="flex shrink-0 items-center gap-1 @max-[300px]/ai-vault:gap-0.5">
-          <VaultScopeSwitch
-            scope={scope}
-            workspaceAvailable={Boolean(activeWorktreePath)}
-            onScopeChange={onScopeChange}
+          <VaultHostScopeMenu
+            executionHostScope={executionHostScope}
+            hostOptions={hostScopeOptions}
+            onExecutionHostScopeChange={onExecutionHostScopeChange}
           />
           <VaultViewMenu
             agents={agents}
@@ -134,6 +144,15 @@ export function AiVaultPanelHeader({
             )}
           </Button>
         </div>
+      </div>
+
+      <div className="mt-2">
+        <VaultScopeSwitch
+          scope={scope}
+          workspaceAvailable={Boolean(activeWorktreePath)}
+          projectAvailable={Boolean(activeProjectKey)}
+          onScopeChange={onScopeChange}
+        />
       </div>
 
       <div className="mt-2 flex h-8 items-center gap-1.5 rounded-md border border-sidebar-border bg-input/50 px-2 focus-within:border-sidebar-ring focus-within:ring-[2px] focus-within:ring-sidebar-ring/30">

@@ -1,3 +1,5 @@
+import type { GitRuntimeOptions } from './git-runtime-options'
+import { gitOptionsForWorktree } from './git-runtime-options'
 import { gitExecFileAsync } from './runner'
 
 /**
@@ -19,9 +21,13 @@ export function assertValidBranchName(branch: string): void {
  * `assertValidBranchName` (rejects `-…`); the trailing `--` marks that no
  * pathspecs follow, so the token is unambiguously treated as a branch ref.
  */
-export async function checkoutBranch(worktreePath: string, branch: string): Promise<void> {
+export async function checkoutBranch(
+  worktreePath: string,
+  branch: string,
+  options: GitRuntimeOptions = {}
+): Promise<void> {
   assertValidBranchName(branch)
-  await gitExecFileAsync(['checkout', branch, '--'], { cwd: worktreePath })
+  await gitExecFileAsync(['checkout', branch, '--'], gitOptionsForWorktree(worktreePath, options))
 }
 
 /**
@@ -30,11 +36,12 @@ export async function checkoutBranch(worktreePath: string, branch: string): Prom
  * locale-dependent decoration.
  */
 export async function listLocalBranches(
-  worktreePath: string
+  worktreePath: string,
+  options: GitRuntimeOptions = {}
 ): Promise<{ current: string | null; branches: string[] }> {
   const { stdout } = await gitExecFileAsync(
     ['for-each-ref', '--format=%(HEAD)%09%(refname:short)', 'refs/heads/'],
-    { cwd: worktreePath }
+    gitOptionsForWorktree(worktreePath, options)
   )
   let current: string | null = null
   const branches: string[] = []

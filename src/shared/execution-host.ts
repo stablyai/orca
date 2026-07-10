@@ -13,40 +13,39 @@ export type ParsedExecutionHost =
   | { kind: 'ssh'; id: `ssh:${string}`; targetId: string }
   | { kind: 'runtime'; id: `runtime:${string}`; environmentId: string }
 
+function getCurrentLocalPlatform(): NodeJS.Platform | null {
+  const globalNavigator = (globalThis as { navigator?: { userAgent?: string; platform?: string } })
+    .navigator
+  const userAgent = globalNavigator?.userAgent || globalNavigator?.platform || ''
+  if (/Windows/i.test(userAgent)) {
+    return 'win32'
+  }
+  if (/Mac/i.test(userAgent)) {
+    return 'darwin'
+  }
+  if (/Linux|X11/i.test(userAgent)) {
+    return 'linux'
+  }
+  return typeof process === 'undefined' ? null : process.platform
+}
+
+export function getLocalExecutionHostLabel(platform: NodeJS.Platform | null = null): string {
+  const localPlatform = platform ?? getCurrentLocalPlatform()
+  if (localPlatform === 'darwin') {
+    return 'Local Mac'
+  }
+  if (localPlatform === 'win32') {
+    return 'Local Windows'
+  }
+  if (localPlatform === 'linux') {
+    return 'Local Linux'
+  }
+  return 'This computer'
+}
+
 function normalizeHostPart(value: string | null | undefined): string | null {
   const trimmed = value?.trim()
   return trimmed ? trimmed : null
-}
-
-function getCurrentHostPlatform(): string {
-  if (typeof process !== 'undefined' && typeof process.platform === 'string') {
-    return process.platform
-  }
-  if (typeof navigator !== 'undefined') {
-    if (navigator.userAgent.includes('Windows')) {
-      return 'win32'
-    }
-    if (navigator.userAgent.includes('Linux')) {
-      return 'linux'
-    }
-    if (navigator.userAgent.includes('Mac')) {
-      return 'darwin'
-    }
-  }
-  return ''
-}
-
-export function getLocalExecutionHostLabel(platform = getCurrentHostPlatform()): string {
-  switch (platform) {
-    case 'darwin':
-      return 'Local Mac'
-    case 'win32':
-      return 'Local Windows'
-    case 'linux':
-      return 'Local Linux'
-    default:
-      return 'This computer'
-  }
 }
 
 export function toSshExecutionHostId(targetId: string): `ssh:${string}` {
@@ -55,6 +54,16 @@ export function toSshExecutionHostId(targetId: string): `ssh:${string}` {
 
 export function toRuntimeExecutionHostId(environmentId: string): `runtime:${string}` {
   return `runtime:${encodeURIComponent(environmentId)}`
+}
+
+// Why: runtime-owned (ephemeral-VM) SSH targets are hidden from user-facing
+// SSH/run-target surfaces. The renderer can't read the target.owner field, so it
+// recognizes them by their deterministic id prefix. getRuntimeOwnedSshTargetId
+// (main) builds on this same prefix to keep the two in sync.
+export const RUNTIME_OWNED_SSH_TARGET_ID_PREFIX = 'runtime-ssh-'
+
+export function isRuntimeOwnedSshTargetId(targetId: string | null | undefined): boolean {
+  return typeof targetId === 'string' && targetId.startsWith(RUNTIME_OWNED_SSH_TARGET_ID_PREFIX)
 }
 
 export function parseExecutionHostId(value: string | null | undefined): ParsedExecutionHost | null {

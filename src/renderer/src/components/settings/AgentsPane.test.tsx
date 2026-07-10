@@ -1,5 +1,3 @@
-/* eslint-disable max-lines -- Why: Agents pane settings interactions share
-   store-backed queue fixtures that are easier to audit beside the UI helper coverage. */
 import React from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
@@ -11,6 +9,7 @@ import { getAgentGeneratedTabTitlesTitle } from './agent-generated-tab-title-cop
 import { getAgentStatusHooksTitle } from './agent-status-hooks-copy'
 import { getAgentAwakeDescription, getAgentAwakeTitle } from './agent-awake-copy'
 import { AgentAwakeSetting } from './AgentAwakeSetting'
+import { AgentRuntimeSetting } from './AgentRuntimeSetting'
 import {
   AgentAvailabilityControl,
   AgentPermissionsSetting,
@@ -91,6 +90,9 @@ function visit(node: unknown, cb: (node: ReactElementLike) => void): void {
   if (element.props?.children) {
     visit(element.props.children, cb)
   }
+  if (element.props?.control) {
+    visit(element.props.control, cb)
+  }
 }
 
 function findSwitch(node: unknown, ariaLabel: string): ReactElementLike {
@@ -123,6 +125,19 @@ function findSwitchRow(node: unknown, ariaLabel: string): ReactElementLike {
   return found
 }
 
+function findSegmentedControl(node: unknown, ariaLabel: string): ReactElementLike {
+  let found: ReactElementLike | null = null
+  visit(node, (entry) => {
+    if (entry.props.ariaLabel === ariaLabel && typeof entry.props.onChange === 'function') {
+      found = entry
+    }
+  })
+  if (!found) {
+    throw new Error('segmented control not found')
+  }
+  return found
+}
+
 describe('AgentsPane', () => {
   beforeEach(() => {
     detectedAgentsMock.detectedIds = ['claude']
@@ -139,7 +154,8 @@ describe('AgentsPane', () => {
     const markup = renderPane(getDefaultSettings('/tmp'))
 
     expect(markup).not.toContain('Agent location')
-    expect(markup).not.toContain('aria-label="Agent location"')
+    expect(markup).not.toContain('Agent runtime')
+    expect(markup).not.toContain('aria-label="Agent runtime"')
     expect(markup).toContain('Keep computer awake while agents are working')
     expect(markup).toContain(
       'Keeps this computer and display awake while agents are working. Orca also asks this device to stay awake when the lid is closed, subject to its power policy.'
@@ -147,17 +163,19 @@ describe('AgentsPane', () => {
     expect(markup).toContain('aria-checked="false"')
   })
 
-  it('keeps the agent location aligned with a WSL default terminal while capabilities load', () => {
+  it('renders the agent runtime control on Windows-class hosts', () => {
     const markup = renderPane(
       {
         ...getDefaultSettings('/tmp'),
-        terminalWindowsShell: 'wsl.exe'
+        localWindowsRuntimeDefault: { kind: 'wsl', distro: 'Ubuntu' }
       },
-      { wslSupportedPlatform: true, wslCapabilitiesLoading: true }
+      { wslSupportedPlatform: true, wslAvailable: true, wslDistros: ['Ubuntu'] }
     )
 
-    expect(markup).toContain('Show installed agents from WSL default.')
-    expect(markup).toContain('role="radio" aria-checked="true" disabled=""')
+    expect(markup).not.toContain('Agent location')
+    expect(markup).toContain('Agent runtime')
+    expect(markup).toContain('aria-label="Agent runtime"')
+    expect(markup).toContain('Detect and launch agents in Ubuntu via WSL')
   })
 
   it('hides the WSL agent location controls on platforms without WSL support', () => {
@@ -169,7 +187,32 @@ describe('AgentsPane', () => {
 
     expect(markup).not.toContain('Agent location')
     expect(markup).not.toContain('aria-label="Agent location"')
+    expect(markup).not.toContain('Agent runtime')
+    expect(markup).not.toContain('aria-label="Agent runtime"')
     expect(markup).not.toContain('WSL is not available on this machine.')
+  })
+
+  it('updates the global project runtime when changing agent runtime', async () => {
+    const updateSettings = vi.fn()
+    const element = AgentRuntimeSetting({
+      settings: getDefaultSettings('/tmp'),
+      updateSettings,
+      refresh: detectedAgentsMock.refresh,
+      wslSupportedPlatform: true,
+      wslAvailable: true,
+      wslDistros: ['Ubuntu'],
+      wslCapabilitiesLoading: false
+    })
+    const control = findSegmentedControl(element, 'Agent runtime')
+    const onChange = control.props.onChange as (value: 'windows-host' | 'wsl') => void
+
+    onChange('wsl')
+    await flushPromiseQueue()
+
+    expect(updateSettings).toHaveBeenCalledWith({
+      localWindowsRuntimeDefault: { kind: 'wsl', distro: 'Ubuntu' }
+    })
+    expect(detectedAgentsMock.refresh).toHaveBeenCalledTimes(1)
   })
 
   it('describes Windows lid behavior according to the device', () => {
@@ -374,9 +417,12 @@ describe('AgentsPane', () => {
     })
   })
 
-  it('includes agent location search metadata', () => {
-    expect(matchesSettingsSearch('wsl', getAgentsPaneSearchEntries())).toBe(true)
-    expect(matchesSettingsSearch('windows', getAgentsPaneSearchEntries())).toBe(true)
+  it('includes agent runtime search metadata', () => {
+    expect(matchesSettingsSearch('agent runtime', getAgentsPaneSearchEntries())).toBe(true)
+    expect(matchesSettingsSearch('agent location', getAgentsPaneSearchEntries())).toBe(true)
+    expect(matchesSettingsSearch('installed agents in wsl', getAgentsPaneSearchEntries())).toBe(
+      true
+    )
   })
 
   it('serializes rapid availability writes against the latest settings snapshot', async () => {

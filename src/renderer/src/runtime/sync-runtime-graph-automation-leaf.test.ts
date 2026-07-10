@@ -77,23 +77,32 @@ async function flushMicrotasks(): Promise<void> {
   await Promise.resolve()
 }
 
+async function flushRuntimeGraphSyncTimer(): Promise<void> {
+  await vi.advanceTimersByTimeAsync(20)
+  await flushMicrotasks()
+}
+
 afterEach(() => {
   setRuntimeGraphSyncEnabled(false)
   setRuntimeGraphStoreStateGetter(null)
   vi.mocked(getEagerPtyBufferHandle).mockReturnValue(undefined)
   warnTerminalLifecycleAnomaly.mockClear()
+  vi.useRealTimers()
   vi.unstubAllGlobals()
 })
 
 async function captureGraph(): Promise<RuntimeSyncWindowGraph> {
+  vi.useFakeTimers()
   const syncWindowGraph = vi.fn().mockResolvedValue(undefined)
   vi.stubGlobal('window', { api: { runtime: { syncWindowGraph } } })
   vi.stubGlobal('HTMLElement', class HTMLElement {})
   setRuntimeGraphStoreStateGetter(() => automationState())
   setRuntimeGraphSyncEnabled(true)
-  await flushMicrotasks()
+  await flushRuntimeGraphSyncTimer()
   expect(syncWindowGraph).toHaveBeenCalledTimes(1)
-  return syncWindowGraph.mock.calls[0]![0] as RuntimeSyncWindowGraph
+  const graph = syncWindowGraph.mock.calls[0]?.[0]
+  expect(graph).toBeDefined()
+  return graph as RuntimeSyncWindowGraph
 }
 
 describe('syncRuntimeGraph background automation tabs', () => {

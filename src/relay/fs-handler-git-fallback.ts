@@ -6,13 +6,11 @@
  * and git grep as universal fallbacks — git is always available since this is
  * a git-focused app.
  */
-import { spawn } from 'child_process'
-import { type SearchOptions, type SearchResult } from './fs-handler-utils'
-import {
-  buildGitLsFilesArgsForQuickOpen,
-  shouldExcludeQuickOpenRelPath,
-  shouldIncludeQuickOpenPath
-} from '../shared/quick-open-filter'
+import { spawn } from 'node:child_process'
+import { fileListingCancellationError } from '../shared/file-listing-cancellation'
+import type { SearchOptions, SearchResult } from './fs-handler-utils'
+import { buildGitLsFilesArgsForQuickOpen } from '../shared/quick-open-filter'
+import { expandQuickOpenGitFileListing } from '../shared/quick-open-readdir-walk'
 import {
   buildGitGrepArgs,
   buildSubmatchRegex,
@@ -21,7 +19,7 @@ import {
   ingestGitGrepLine,
   SEARCH_TIMEOUT_MS
 } from '../shared/text-search'
-import { buildRelayCommandEnv } from './relay-command-env'
+import { buildRelayGitEnv } from './relay-command-env'
 
 /**
  * List files using `git ls-files`. Fallback when rg is not installed.
@@ -34,9 +32,15 @@ import { buildRelayCommandEnv } from './relay-command-env'
  */
 export function listFilesWithGit(
   rootPath: string,
-  excludePathPrefixes: readonly string[] = []
+  excludePathPrefixes: readonly string[] = [],
+  options: { signal?: AbortSignal } = {}
 ): Promise<string[]> {
-  const files = new Set<string>()
+  const { signal } = options
+  if (signal?.aborted) {
+    return Promise.reject(fileListingCancellationError(signal))
+  }
+  const gitPaths = new Set<string>()
+  const directoryPaths = new Set<string>()
   const { primary, ignoredPass } = buildGitLsFilesArgsForQuickOpen(excludePathPrefixes)
   const children: {
     child: ReturnType<typeof spawn>
@@ -53,17 +57,16 @@ export function listFilesWithGit(
         if (!path) {
           return
         }
-        if (shouldExcludeQuickOpenRelPath(path, excludePathPrefixes)) {
-          return
-        }
-        if (shouldIncludeQuickOpenPath(path)) {
-          files.add(path)
+        if (path.endsWith('/')) {
+          directoryPaths.add(path)
+        } else {
+          gitPaths.add(path)
         }
       }
 
       const child = spawn('git', ['ls-files', ...args], {
         cwd: rootPath,
-        env: buildRelayCommandEnv(),
+        env: buildRelayGitEnv(),
         stdio: ['ignore', 'pipe', 'pipe']
       })
       let timer: ReturnType<typeof setTimeout> | null = null
@@ -117,7 +120,7 @@ export function listFilesWithGit(
       function handleError(err: Error): void {
         rejectPass(err)
       }
-      function handleClose(_code: number | null, signal: NodeJS.Signals | null): void {
+      function handleClose(code: number | null, signal: NodeJS.Signals | null): void {
         if (done) {
           return
         }
@@ -131,7 +134,14 @@ export function listFilesWithGit(
         if (buf) {
           processPath(buf)
         }
-        resolvePass()
+        if (code === 0) {
+          resolvePass()
+          return
+        }
+        // Why: a non-zero exit (e.g. not a git repo) means the listing is
+        // incomplete; reject so the caller surfaces the failure instead of
+        // expanding a partial result set. Matches the main-process fallback.
+        rejectPass(new Error(`git ls-files exited with code ${code}`))
       }
 
       child.stdout!.setEncoding('utf-8')
@@ -146,7 +156,7 @@ export function listFilesWithGit(
     })
   }
 
-  const killSurvivors = (): void => {
+  const killSurvivors = (reason: string): void => {
     // Why: Promise.all returns after the first failed pass, but the sibling
     // git process can keep streaming on SSH unless we cancel it explicitly.
     for (const entry of children) {
@@ -156,15 +166,38 @@ export function listFilesWithGit(
       if (entry.child.exitCode === null && entry.child.signalCode === null) {
         entry.child.kill()
       }
-      entry.reject(new Error('git ls-files canceled after sibling failure'))
+      entry.reject(new Error(reason))
     }
   }
 
+  // Why: a cancelled scan (workspace switch, superseded request) must stop
+  // its git children right away instead of streaming a huge tree the caller
+  // has already abandoned over the shared SSH channel.
+  const onAbort = (): void => killSurvivors('git ls-files cancelled')
+  signal?.addEventListener('abort', onAbort, { once: true })
+
   return Promise.all([runGitLsFiles(primary), runGitLsFiles(ignoredPass)])
-    .then(() => Array.from(files))
+    .then(async () => {
+      const files = await expandQuickOpenGitFileListing({
+        rootPath,
+        gitPaths,
+        directoryPaths,
+        excludePathPrefixes,
+        signal
+      })
+      // Why: directory placeholders are expanded after Git exits; restore
+      // Git's path order for empty queries and fuzzy-score ties over SSH.
+      return files.sort()
+    })
     .catch((err) => {
-      killSurvivors()
+      killSurvivors('git ls-files canceled after sibling failure')
+      if (signal?.aborted) {
+        throw fileListingCancellationError(signal)
+      }
       throw err
+    })
+    .finally(() => {
+      signal?.removeEventListener('abort', onAbort)
     })
 }
 
@@ -185,7 +218,7 @@ export function searchWithGitGrep(
 
     const child = spawn('git', gitArgs, {
       cwd: rootPath,
-      env: buildRelayCommandEnv(),
+      env: buildRelayGitEnv(),
       stdio: ['ignore', 'pipe', 'pipe']
     })
     let killTimeout: ReturnType<typeof setTimeout>

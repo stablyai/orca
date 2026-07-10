@@ -3,8 +3,11 @@ import { getGeneralEditorSearchEntries } from './general-editor-search'
 import { translate } from '@/i18n/i18n'
 import { searchKeywords, translateSearchKeyword } from './settings-search-keywords'
 import { createLocalizedCatalog } from '@/i18n/localized-catalog'
+import { getGeneralProjectRuntimeSearchEntries } from './general-project-runtime-search'
+import { getGeneralSupportSearchEntries } from './general-support-search'
 
 export { getGeneralEditorSearchEntries } from './general-editor-search'
+export { getGeneralSupportSearchEntries } from './general-support-search'
 
 export const getGeneralWorkspaceSearchEntries = createLocalizedCatalog(() => [
   {
@@ -92,41 +95,6 @@ export const getGeneralWorkspaceSearchEntries = createLocalizedCatalog(() => [
   }
 ])
 
-export const getGeneralNetworkSearchEntries = createLocalizedCatalog(() => [
-  {
-    title: translate('auto.components.settings.general.search.c29f23ab57', 'HTTP Proxy'),
-    description: translate(
-      'auto.components.settings.general.search.e3b1d42f95',
-      'Proxy URL for Orca network requests and local terminal children.'
-    ),
-    keywords: [
-      ...translateSearchKeyword('auto.components.settings.general.search.20b711ac9e', 'proxy'),
-      ...translateSearchKeyword('auto.components.settings.general.search.8f03d44672', 'http_proxy'),
-      ...translateSearchKeyword(
-        'auto.components.settings.general.search.b9096a44cf',
-        'https_proxy'
-      ),
-      ...translateSearchKeyword('auto.components.settings.general.search.c56cb6f1c2', 'network'),
-      ...translateSearchKeyword('auto.components.settings.general.search.9da6c875e5', 'dock'),
-      ...translateSearchKeyword('auto.components.settings.general.search.e55d62dfa4', 'launchpad')
-    ]
-  },
-  {
-    title: translate('auto.components.settings.general.search.8436ff6f8e', 'Proxy Bypass Rules'),
-    description: translate(
-      'auto.components.settings.general.search.eb8946b2c9',
-      'Hosts that should bypass the configured HTTP proxy.'
-    ),
-    keywords: [
-      ...translateSearchKeyword('auto.components.settings.general.search.20b711ac9e', 'proxy'),
-      ...translateSearchKeyword('auto.components.settings.general.search.3a73054565', 'bypass'),
-      ...translateSearchKeyword('auto.components.settings.general.search.91a46caafc', 'no_proxy'),
-      ...translateSearchKeyword('auto.components.settings.general.search.3566fce83f', 'localhost'),
-      ...translateSearchKeyword('auto.components.settings.general.search.c56cb6f1c2', 'network')
-    ]
-  }
-])
-
 export const getGeneralNavigationSearchEntries = createLocalizedCatalog(() => [
   {
     title: translate('auto.components.settings.general.search.256d92554d', 'Tab Order'),
@@ -146,6 +114,23 @@ export const getGeneralNavigationSearchEntries = createLocalizedCatalog(() => [
       ...translateSearchKeyword('auto.components.settings.general.search.12ecc640a8', 'mru'),
       ...translateSearchKeyword('auto.components.settings.general.search.f8f0ac213a', 'sequential'),
       ...translateSearchKeyword('auto.components.settings.general.search.fb84767421', 'switch')
+    ]
+  },
+  {
+    title: translate(
+      'auto.components.settings.general.search.161a86a9da',
+      'Confirm before closing pinned tabs'
+    ),
+    description: translate(
+      'auto.components.settings.general.search.8e593f04fc',
+      'Show a confirmation dialog before a pinned tab is closed.'
+    ),
+    keywords: [
+      ...translateSearchKeyword('auto.components.settings.general.search.867dddea41', 'pinned'),
+      ...translateSearchKeyword('auto.components.settings.general.search.5250cf0e48', 'pin'),
+      ...translateSearchKeyword('auto.components.settings.general.search.2a254b725e', 'tab'),
+      ...translateSearchKeyword('auto.components.settings.general.search.9f8558233a', 'confirm'),
+      ...translateSearchKeyword('auto.components.settings.general.search.afa37a34e1', 'close')
     ]
   }
 ])
@@ -208,25 +193,6 @@ export const getGeneralUpdateSearchEntries = createLocalizedCatalog(() => [
   }
 ])
 
-export const getGeneralCacheTimerSearchEntries = createLocalizedCatalog(() => [
-  {
-    title: translate('auto.components.settings.general.search.1e0f28c6f1', 'Prompt Cache Timer'),
-    description: translate(
-      'auto.components.settings.general.search.40c9585e43',
-      'Countdown timer showing time until prompt cache expires (Claude agents).'
-    ),
-    keywords: [
-      ...translateSearchKeyword('auto.components.settings.general.search.b2601a778c', 'cache'),
-      ...translateSearchKeyword('auto.components.settings.general.search.939b80f5fd', 'timer'),
-      ...translateSearchKeyword('auto.components.settings.general.search.0efc9d96ad', 'prompt'),
-      ...translateSearchKeyword('auto.components.settings.general.search.585beac3f8', 'ttl'),
-      ...translateSearchKeyword('auto.components.settings.general.search.95b63edde7', 'claude'),
-      ...translateSearchKeyword('auto.components.settings.general.search.660528b048', 'cost'),
-      ...translateSearchKeyword('auto.components.settings.general.search.3462308bd3', 'tokens')
-    ]
-  }
-])
-
 export const getGeneralAgentSearchEntries = createLocalizedCatalog(() => [
   {
     title: translate('auto.components.settings.general.search.db11502270', 'Default Agent'),
@@ -250,35 +216,26 @@ export const getGeneralAgentSearchEntries = createLocalizedCatalog(() => [
       ...translateSearchKeyword('auto.components.settings.general.search.3c30fe2d51', 'gemini'),
       ...translateSearchKeyword('auto.components.settings.general.search.f472e97440', 'aider'),
       ...translateSearchKeyword('auto.components.settings.general.search.5d9ba08673', 'copilot'),
-      ...translateSearchKeyword('auto.components.settings.general.search.c61b14be7c', 'grok')
+      ...translateSearchKeyword('auto.components.settings.general.search.c61b14be7c', 'grok'),
+      ...translateSearchKeyword('auto.lib.agent.catalog.fc80296033', 'devin')
     ]
   }
 ])
 
-export const getGeneralSupportSearchEntries = createLocalizedCatalog(() => [
-  {
-    title: translate('auto.components.settings.general.search.36a72f0d9e', 'Star Orca on GitHub'),
-    description: translate(
-      'auto.components.settings.general.search.e0b8c8bc25',
-      'Support the project with a GitHub star via the gh CLI.'
-    ),
-    keywords: [
-      ...translateSearchKeyword('auto.components.settings.general.search.e4fb4516d0', 'star'),
-      ...translateSearchKeyword('auto.components.settings.general.search.06ea5a69a6', 'github'),
-      ...translateSearchKeyword('auto.components.settings.general.search.b65665703a', 'support'),
-      ...translateSearchKeyword('auto.components.settings.general.search.e6b01c8e30', 'feedback'),
-      ...translateSearchKeyword('auto.components.settings.general.search.bdfb6dc21b', 'like')
-    ]
-  }
-])
+type GeneralPaneSearchOptions = {
+  includeProjectRuntime?: boolean
+}
 
-export const getGeneralPaneSearchEntries = createLocalizedCatalog((): SettingsSearchEntry[] => [
-  ...getGeneralWorkspaceSearchEntries(),
-  ...getGeneralNetworkSearchEntries(),
-  ...getGeneralNavigationSearchEntries(),
-  ...getGeneralEditorSearchEntries(),
-  ...getGeneralCliSearchEntries(),
-  ...getGeneralCacheTimerSearchEntries(),
-  ...getGeneralUpdateSearchEntries(),
-  ...getGeneralSupportSearchEntries()
-])
+export function getGeneralPaneSearchEntries(
+  options: GeneralPaneSearchOptions = {}
+): SettingsSearchEntry[] {
+  return [
+    ...getGeneralWorkspaceSearchEntries(),
+    ...getGeneralNavigationSearchEntries(),
+    ...(options.includeProjectRuntime === false ? [] : getGeneralProjectRuntimeSearchEntries()),
+    ...getGeneralEditorSearchEntries(),
+    ...getGeneralCliSearchEntries(),
+    ...getGeneralUpdateSearchEntries(),
+    ...getGeneralSupportSearchEntries()
+  ]
+}

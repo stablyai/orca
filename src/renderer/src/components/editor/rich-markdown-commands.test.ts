@@ -42,6 +42,8 @@ describe('rich markdown slash commands', () => {
       'Headings:toggle-h1',
       'Headings:heading-2',
       'Headings:heading-3',
+      'Headings:heading-4',
+      'Headings:heading-5',
       'Basic blocks:blockquote',
       'Basic blocks:ordered-list',
       'Basic blocks:bullet-list',
@@ -57,6 +59,24 @@ describe('rich markdown slash commands', () => {
       'Media:image',
       'Others:emoji'
     ])
+  })
+
+  it('supports deep heading slash commands', () => {
+    const h4Editor = createEditor('Deep heading')
+    const h5Editor = createEditor('Nested heading')
+
+    try {
+      getCommand('heading-4').run(h4Editor)
+      getCommand('heading-5').run(h5Editor)
+
+      expect(h4Editor.getMarkdown()).toBe('#### Deep heading')
+      expect(h5Editor.getMarkdown()).toBe('##### Nested heading')
+      expect(getCommand('heading-4').aliases).toContain('h4')
+      expect(getCommand('heading-5').aliases).toContain('h5')
+    } finally {
+      h4Editor.destroy()
+      h5Editor.destroy()
+    }
   })
 
   it('inserts a durable markdown table', () => {

@@ -141,4 +141,111 @@ describe('BrowserAddressBar autocomplete preview', () => {
     expect(onNavigate).not.toHaveBeenCalled()
     expect(onSubmit).not.toHaveBeenCalled()
   })
+
+  it('dismisses suggestions when the window blurs', async () => {
+    const onNavigate = vi.fn()
+    const onSubmit = vi.fn()
+
+    await act(async () => {
+      root.render(
+        <AddressBarHarness initialValue="local" onNavigate={onNavigate} onSubmit={onSubmit} />
+      )
+    })
+
+    const input = container.querySelector<HTMLInputElement>('input[data-orca-browser-address-bar]')
+    expect(input).not.toBeNull()
+
+    await act(async () => {
+      input?.focus()
+    })
+    await act(async () => {
+      input?.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true }))
+    })
+
+    expect(container.querySelector('[data-current-address-value="true"]')?.textContent).toBe(
+      'http://localhost:3000/review-one'
+    )
+
+    await act(async () => {
+      window.dispatchEvent(new Event('blur'))
+    })
+
+    expect(container.querySelector('[data-current-address-value="true"]')?.textContent).toBe(
+      'local'
+    )
+    expect(onNavigate).not.toHaveBeenCalled()
+    expect(onSubmit).not.toHaveBeenCalled()
+  })
+
+  it('dismisses suggestions when Escape is pressed outside React input handling', async () => {
+    const onNavigate = vi.fn()
+    const onSubmit = vi.fn()
+
+    await act(async () => {
+      root.render(
+        <AddressBarHarness initialValue="local" onNavigate={onNavigate} onSubmit={onSubmit} />
+      )
+    })
+
+    const input = container.querySelector<HTMLInputElement>('input[data-orca-browser-address-bar]')
+    expect(input).not.toBeNull()
+
+    await act(async () => {
+      input?.focus()
+    })
+    await act(async () => {
+      input?.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true }))
+    })
+
+    expect(container.querySelector('[data-current-address-value="true"]')?.textContent).toBe(
+      'http://localhost:3000/review-one'
+    )
+
+    await act(async () => {
+      window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))
+    })
+
+    expect(container.querySelector('[data-current-address-value="true"]')?.textContent).toBe(
+      'local'
+    )
+    expect(onNavigate).not.toHaveBeenCalled()
+    expect(onSubmit).not.toHaveBeenCalled()
+  })
+
+  it('dismisses suggestions when focus moves into an Electron webview guest', async () => {
+    const onNavigate = vi.fn()
+    const onSubmit = vi.fn()
+    const webview = document.createElement('webview')
+    document.body.appendChild(webview)
+
+    await act(async () => {
+      root.render(
+        <AddressBarHarness initialValue="local" onNavigate={onNavigate} onSubmit={onSubmit} />
+      )
+    })
+
+    const input = container.querySelector<HTMLInputElement>('input[data-orca-browser-address-bar]')
+    expect(input).not.toBeNull()
+
+    await act(async () => {
+      input?.focus()
+    })
+    await act(async () => {
+      input?.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true }))
+    })
+
+    expect(container.querySelector('[data-current-address-value="true"]')?.textContent).toBe(
+      'http://localhost:3000/review-one'
+    )
+
+    await act(async () => {
+      webview.dispatchEvent(new FocusEvent('focusin', { bubbles: true }))
+    })
+
+    expect(container.querySelector('[data-current-address-value="true"]')?.textContent).toBe(
+      'local'
+    )
+    expect(onNavigate).not.toHaveBeenCalled()
+    expect(onSubmit).not.toHaveBeenCalled()
+  })
 })

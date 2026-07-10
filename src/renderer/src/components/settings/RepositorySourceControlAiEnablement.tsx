@@ -20,6 +20,12 @@ function enablementValue(value: boolean | undefined): 'inherit' | 'on' | 'off' {
   return 'inherit'
 }
 
+function visibilityLabel(value: boolean): string {
+  return value
+    ? translate('auto.components.settings.RepositorySourceControlAiEnablement.show', 'Show')
+    : translate('auto.components.settings.RepositorySourceControlAiEnablement.hide', 'Hide')
+}
+
 export function RepositorySourceControlAiEnablement({
   value,
   source,
@@ -30,25 +36,16 @@ export function RepositorySourceControlAiEnablement({
       <div className="min-w-0 space-y-0.5">
         <Label className="text-xs font-medium">
           {translate(
-            'auto.components.settings.RepositorySourceControlAiEnablement.cf5959c834',
-            'Source Control AI enabled'
+            'auto.components.settings.RepositorySourceControlAiEnablement.showActionsLabel',
+            'Show Source Control AI actions'
           )}
         </Label>
         <p className="text-[11px] text-muted-foreground">
           {translate(
-            'auto.components.settings.RepositorySourceControlAiEnablement.30ae6dcce8',
-            'Global default is'
+            'auto.components.settings.RepositorySourceControlAiEnablement.visibilityHelper',
+            "Controls whether Source Control AI buttons are shown for this repository. Generation used by separate features follows those features' settings. Global default is {{value0}}.",
+            { value0: visibilityLabel(source.enabled) }
           )}
-          {source.enabled
-            ? translate(
-                'auto.components.settings.RepositorySourceControlAiEnablement.bea897eec2',
-                'On'
-              )
-            : translate(
-                'auto.components.settings.RepositorySourceControlAiEnablement.84233d1bb3',
-                'Off'
-              )}
-          .
         </p>
       </div>
       <Select
@@ -68,16 +65,10 @@ export function RepositorySourceControlAiEnablement({
             )}
           </SelectItem>
           <SelectItem value="on">
-            {translate(
-              'auto.components.settings.RepositorySourceControlAiEnablement.bea897eec2',
-              'On'
-            )}
+            {translate('auto.components.settings.RepositorySourceControlAiEnablement.show', 'Show')}
           </SelectItem>
           <SelectItem value="off">
-            {translate(
-              'auto.components.settings.RepositorySourceControlAiEnablement.84233d1bb3',
-              'Off'
-            )}
+            {translate('auto.components.settings.RepositorySourceControlAiEnablement.hide', 'Hide')}
           </SelectItem>
         </SelectContent>
       </Select>

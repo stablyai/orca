@@ -135,6 +135,58 @@ describe('createSessionWriteSubscriber', () => {
     cleanup()
   })
 
+  it('writes a live agent recovery checkpoint when provider session metadata arrives', () => {
+    const persist = vi.fn<(payload: WorkspaceSessionWrite) => void>()
+    const cleanup = createSessionWriteSubscriber({ store: useAppStore, persist })
+
+    useAppStore.setState({
+      workspaceSessionReady: true,
+      hydrationSucceeded: true,
+      tabsByWorktree: {
+        'wt-1': [
+          {
+            id: 'tab-1',
+            ptyId: null,
+            worktreeId: 'wt-1',
+            title: 'Codex',
+            customTitle: null,
+            color: null,
+            sortOrder: 0,
+            createdAt: 1
+          }
+        ]
+      }
+    } as never)
+    vi.advanceTimersByTime(200)
+    persist.mockClear()
+
+    useAppStore.getState().setAgentStatus(
+      'tab-1:leaf-1',
+      {
+        state: 'working',
+        prompt: 'Fix tests',
+        agentType: 'codex'
+      },
+      'Codex',
+      { updatedAt: 10, stateStartedAt: 10 },
+      { tabId: 'tab-1', worktreeId: 'wt-1' },
+      { providerSession: { key: 'session_id', id: 'codex-session-1' } }
+    )
+    vi.advanceTimersByTime(200)
+
+    expect(persist).toHaveBeenCalledWith({
+      patch: {
+        sleepingAgentSessionsByPaneKey: {
+          'tab-1:leaf-1': expect.objectContaining({
+            providerSession: { key: 'session_id', id: 'codex-session-1' },
+            origin: 'live'
+          })
+        }
+      }
+    })
+    cleanup()
+  })
+
   it('writes exactly once when a relevant field changes', () => {
     const persist = vi.fn<(payload: WorkspaceSessionWrite) => void>()
     const cleanup = createSessionWriteSubscriber({ store: useAppStore, persist })

@@ -1,6 +1,10 @@
 import { useCallback, useEffect, useRef, useState, type CSSProperties } from 'react'
 import { toast } from 'sonner'
-import { getConnectionId } from '@/lib/connection-context'
+import {
+  canResumeAiVaultSessionOnTarget,
+  getAiVaultResumeWorkspaceExecutionHostId,
+  getAiVaultResumeWorkspaceTargetStatus
+} from '@/lib/ai-vault-resume-target'
 import {
   AI_VAULT_SESSION_DRAG_END_EVENT,
   AI_VAULT_SESSION_DRAG_START_EVENT,
@@ -9,7 +13,9 @@ import {
   readAiVaultSessionDragData
 } from '@/lib/ai-vault-session-drag'
 import { launchAiVaultSessionInNewTab } from '@/lib/launch-ai-vault-session'
-import { resolveDropZone, type TabDropZone } from './useTabDragSplit'
+import { useAppStore } from '@/store'
+import { resolveDropZone } from './tab-drop-zone'
+import type { TabDropZone } from './useTabDragSplit'
 import { translate } from '@/i18n/i18n'
 
 type PaneDropTarget = {
@@ -164,39 +170,69 @@ export default function AiVaultSessionDropLayer({
         return true
       }
 
-      const connectionId = getConnectionId(worktreeId)
-      if (connectionId) {
+      const state = useAppStore.getState()
+      const targetStatus = getAiVaultResumeWorkspaceTargetStatus(state, worktreeId)
+      const targetExecutionHostId = getAiVaultResumeWorkspaceExecutionHostId(state, worktreeId)
+      if (targetStatus === 'unknown') {
         toast.error(
           translate(
-            'auto.components.tab.group.AiVaultSessionDropLayer.localWorkspacesOnly',
-            'Resume from history is only available in local workspaces.'
+            'auto.components.tab.group.AiVaultSessionDropLayer.openSupportedWorkspace',
+            'Open a workspace before resuming a session.'
           )
         )
         return true
       }
-      if (connectionId === undefined) {
+      if (
+        !canResumeAiVaultSessionOnTarget({
+          sessionFilePath: payload.sessionFilePath ?? null,
+          sessionExecutionHostId: payload.sessionExecutionHostId ?? null,
+          targetStatus,
+          targetExecutionHostId
+        })
+      ) {
         toast.error(
           translate(
-            'auto.components.tab.group.AiVaultSessionDropLayer.openLocalWorkspace',
-            'Open a local workspace before resuming a session.'
+            'auto.components.tab.group.AiVaultSessionDropLayer.sessionHostMismatchUnsupported',
+            'This session belongs to a different host. Drop it onto a workspace on the same host.'
           )
         )
         return true
       }
 
-      launchAiVaultSessionInNewTab({
+      const launchResult = launchAiVaultSessionInNewTab({
         agent: payload.agent,
         worktreeId,
         command: payload.command,
+        ...(payload.env ? { env: payload.env } : {}),
+        ...(payload.launchConfig ? { launchConfig: payload.launchConfig } : {}),
         targetGroupId: dropTarget.groupId,
         splitDirection: dropTarget.zone === 'center' ? undefined : dropTarget.zone
       })
-      toast.success(
-        translate(
-          'auto.components.tab.group.AiVaultSessionDropLayer.sessionQueued',
-          'Session queued'
+      const showQueuedToast = (): void => {
+        toast.success(
+          translate(
+            'auto.components.tab.group.AiVaultSessionDropLayer.sessionQueued',
+            'Session queued'
+          )
         )
-      )
+      }
+      if (launchResult.tabId === null) {
+        void launchResult.runtimeLaunch.then((created) => {
+          if (!created) {
+            toast.error(
+              translate(
+                'auto.lib.launch.agent.in.new.tab.11cce5cc77',
+                'Could not launch {{value0}} in a new terminal.',
+                { value0: payload.agent }
+              )
+            )
+            return
+          }
+          showQueuedToast()
+        })
+        return true
+      }
+      showQueuedToast()
       return true
     },
     [clearDragState, target, updateTarget, worktreeId]

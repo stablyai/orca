@@ -125,7 +125,10 @@ describe('jira RPC methods', () => {
       jiraListCreateFields: vi.fn().mockResolvedValue([{ key: 'customfield_10010' }]),
       jiraListPriorities: vi.fn().mockResolvedValue([{ id: 'priority-1' }]),
       jiraListAssignableUsers: vi.fn().mockResolvedValue([{ accountId: 'user-1' }]),
-      jiraListTransitions: vi.fn().mockResolvedValue([{ id: 'transition-1' }])
+      jiraListTransitions: vi.fn().mockResolvedValue([{ id: 'transition-1' }]),
+      jiraGetProjectStatusOrder: vi.fn().mockResolvedValue({
+        statusIdsByColumn: [['status-1']]
+      })
     } as unknown as OrcaRuntimeService
     const dispatcher = new RpcDispatcher({ runtime, methods: JIRA_METHODS })
 
@@ -151,6 +154,9 @@ describe('jira RPC methods', () => {
     await dispatcher.dispatch(
       makeRequest('jira.listTransitions', { key: 'ABC-3', siteId: 'site-1' })
     )
+    await dispatcher.dispatch(
+      makeRequest('jira.getProjectStatusOrder', { projectKey: 'ALP', siteId: 'site-1' })
+    )
 
     expect(runtime.jiraListProjects).toHaveBeenCalledWith('all')
     expect(runtime.jiraListIssueTypes).toHaveBeenCalledWith('project-1', 'site-1')
@@ -158,5 +164,6 @@ describe('jira RPC methods', () => {
     expect(runtime.jiraListPriorities).toHaveBeenCalledWith('site-1')
     expect(runtime.jiraListAssignableUsers).toHaveBeenCalledWith('ABC-3', 'Ada', 'site-1')
     expect(runtime.jiraListTransitions).toHaveBeenCalledWith('ABC-3', 'site-1')
+    expect(runtime.jiraGetProjectStatusOrder).toHaveBeenCalledWith('ALP', 'site-1')
   })
 })

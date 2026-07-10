@@ -1,17 +1,18 @@
 /* eslint-disable max-lines -- Why: this class owns the daemon socket protocol,
    request routing, stream fanout, and session lifecycle in one place so
    renderer/daemon request semantics stay auditable across platform branches. */
-import { createServer, type Server, type Socket } from 'net'
-import { randomUUID } from 'crypto'
-import { performance } from 'perf_hooks'
-import { writeFileSync, chmodSync, unlinkSync } from 'fs'
-import { StringDecoder } from 'string_decoder'
+import { createServer, type Server, type Socket } from 'node:net'
+import { randomUUID } from 'node:crypto'
+import { performance } from 'node:perf_hooks'
+import { writeFileSync, chmodSync, unlinkSync } from 'node:fs'
+import { StringDecoder } from 'node:string_decoder'
 import { encodeNdjson, createNdjsonParser } from './ndjson'
 import { TerminalHost } from './terminal-host'
 import { DaemonStreamDataBatcher } from './daemon-stream-data-batcher'
 import { readCurrentProcessMacSystemResolverHealth } from '../network/macos-system-resolver-health'
 import type { SubprocessHandle } from './session'
 import { checkPtySpawnHealth } from './pty-subprocess'
+import { createNoopDaemonFileLog, type DaemonFileLog } from './daemon-file-log'
 import {
   PROTOCOL_VERSION,
   NOTIFY_PREFIX,
@@ -24,6 +25,7 @@ export type DaemonServerOptions = {
   socketPath: string
   tokenPath: string
   ptySpawnHealthCheck?: () => Promise<void>
+  log?: DaemonFileLog
   spawnSubprocess: (opts: {
     sessionId: string
     cols: number
@@ -48,6 +50,7 @@ export class DaemonServer {
   private socketPath: string
   private tokenPath: string
   private ptySpawnHealthCheck: () => Promise<void>
+  private log: DaemonFileLog
 
   private clients = new Map<string, ConnectedClient>()
   private streamDataBatcher = new DaemonStreamDataBatcher((clientId) => this.clients.get(clientId))
@@ -66,6 +69,7 @@ export class DaemonServer {
     this.token = randomUUID()
     this.host = new TerminalHost({ spawnSubprocess: opts.spawnSubprocess })
     this.ptySpawnHealthCheck = opts.ptySpawnHealthCheck ?? checkPtySpawnHealth
+    this.log = opts.log ?? createNoopDaemonFileLog()
   }
 
   async start(): Promise<void> {
@@ -139,23 +143,30 @@ export class DaemonServer {
   ): void {
     const hello = msg as HelloMessage
     if (hello.type !== 'hello') {
+      this.log.log('client-hello-rejected', { reason: 'expected-hello' })
       socket.write(encodeNdjson({ type: 'hello', ok: false, error: 'Expected hello' }))
       socket.destroy()
       return
     }
 
     if (hello.version !== PROTOCOL_VERSION) {
+      this.log.log('client-hello-rejected', {
+        reason: 'protocol-mismatch',
+        clientVersion: hello.version
+      })
       socket.write(encodeNdjson({ type: 'hello', ok: false, error: 'Protocol version mismatch' }))
       socket.destroy()
       return
     }
 
     if (hello.token !== this.token) {
+      this.log.log('client-hello-rejected', { reason: 'invalid-token', role: hello.role })
       socket.write(encodeNdjson({ type: 'hello', ok: false, error: 'Invalid token' }))
       socket.destroy()
       return
     }
 
+    this.log.log('client-hello-accepted', { role: hello.role, clientId: hello.clientId })
     socket.write(encodeNdjson({ type: 'hello', ok: true }))
 
     if (hello.role === 'control') {
@@ -274,10 +285,15 @@ export class DaemonServer {
           env: p.env,
           envToDelete: p.envToDelete,
           command: p.command,
+          startupCommandDelivery: p.startupCommandDelivery,
           shellOverride: p.shellOverride,
           terminalWindowsWslDistro: p.terminalWindowsWslDistro,
           terminalWindowsPowerShellImplementation: p.terminalWindowsPowerShellImplementation,
           shellReadySupported: p.shellReadySupported,
+          historySeed: p.historySeed,
+          ...(p.shellReadyTimeoutMs !== undefined
+            ? { shellReadyTimeoutMs: p.shellReadyTimeoutMs }
+            : {}),
           streamClient: {
             onData: (data) => {
               const lastInputAt = this.lastInputAtBySessionId.get(p.sessionId)
@@ -293,6 +309,7 @@ export class DaemonServer {
             onExit: (code) => {
               // Why: exit tears down renderer handlers; flush final output first
               // so the last few milliseconds of PTY data are not stranded.
+              this.log.log('session-exited', { sessionId: p.sessionId, code })
               this.streamDataBatcher.flush(clientId)
               this.lastInputAtBySessionId.delete(p.sessionId)
               if (client?.streamSocket) {
@@ -308,11 +325,16 @@ export class DaemonServer {
             }
           }
         })
+        this.log.log(result.isNew ? 'session-created' : 'session-attached', {
+          sessionId: p.sessionId,
+          pid: result.pid
+        })
         return {
           isNew: result.isNew,
           snapshot: result.snapshot,
           pid: result.pid,
-          shellState: result.shellState
+          shellState: result.shellState,
+          ...(result.historySeeded !== undefined ? { historySeeded: result.historySeeded } : {})
         }
       }
 
@@ -345,7 +367,11 @@ export class DaemonServer {
 
       case 'kill':
         this.lastInputAtBySessionId.delete(request.payload.sessionId)
-        this.host.kill(request.payload.sessionId)
+        this.log.log('session-killed', {
+          sessionId: request.payload.sessionId,
+          immediate: request.payload.immediate === true
+        })
+        this.host.kill(request.payload.sessionId, { immediate: request.payload.immediate })
         return {}
 
       case 'signal':
@@ -355,6 +381,7 @@ export class DaemonServer {
       case 'detach':
         // Note: detach token handling is simplified here — full implementation
         // would track tokens per client
+        this.log.log('session-detached', { sessionId: request.payload.sessionId })
         return {}
 
       case 'getCwd':
@@ -373,6 +400,9 @@ export class DaemonServer {
       case 'getSnapshot':
         return { snapshot: this.host.getSnapshot(request.payload.sessionId) }
 
+      case 'getSize':
+        return { size: this.host.getAppliedSize(request.payload.sessionId) }
+
       case 'takePendingOutput':
         // Why no await before this call: with includeSnapshot, drain and
         // serialize must share one synchronous turn — an intervening await
@@ -380,7 +410,8 @@ export class DaemonServer {
         // those bytes on top of a snapshot that already contains them.
         return this.host.takePendingOutput(
           request.payload.sessionId,
-          request.payload.includeSnapshot === true
+          request.payload.includeSnapshot === true,
+          { teardownSnapshot: request.payload.teardownSnapshot === true }
         )
 
       case 'ping':
@@ -394,6 +425,10 @@ export class DaemonServer {
         return { healthy: true }
 
       case 'shutdown':
+        this.log.log('shutdown', {
+          reason: 'rpc',
+          killSessions: request.payload.killSessions === true
+        })
         if (request.payload.killSessions) {
           this.host.dispose()
         }

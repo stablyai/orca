@@ -1,9 +1,9 @@
 /* eslint-disable max-lines */
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'fs'
-import { tmpdir } from 'os'
-import { join } from 'path'
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type * as Fs from 'fs'
+import type * as Fs from 'node:fs'
 import type {
   CodexUsageDailyAggregate,
   CodexUsagePersistedFile,
@@ -111,7 +111,7 @@ describe('CodexUsageStore', () => {
 
   it('persists a successful refresh with one compact disk write', async () => {
     const store = createStoreWithState({
-      schemaVersion: 3,
+      schemaVersion: 5,
       scanState: {
         enabled: true,
         lastScanStartedAt: null,
@@ -138,7 +138,7 @@ describe('CodexUsageStore', () => {
     const pendingScan = createDeferred<ScanResult>()
     vi.mocked(scanCodexUsageFiles).mockReturnValueOnce(pendingScan.promise)
     const store = createStoreWithState({
-      schemaVersion: 3,
+      schemaVersion: 5,
       scanState: {
         enabled: true,
         lastScanStartedAt: null,
@@ -768,7 +768,7 @@ describe('CodexUsageStore', () => {
     } as unknown as CodexUsagePersistedState)
 
     expect(normalized).toEqual({
-      schemaVersion: 3,
+      schemaVersion: 5,
       worktreeFingerprint: null,
       processedFiles: [],
       sessions: [],

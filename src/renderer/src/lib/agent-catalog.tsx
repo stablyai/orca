@@ -2,12 +2,14 @@ import type React from 'react'
 import { ClaudeIcon, DroidIcon, OpenAIIcon } from '@/components/status-bar/icons'
 import openClaudeLogoUrl from '../../../../resources/openclaude-logo.png?url'
 import type { TuiAgent } from '../../../shared/types'
+import { getTuiAgentLaunchCommand, TUI_AGENT_CONFIG } from '../../../shared/tui-agent-config'
 import {
   AgentLetterIcon,
   AiderIcon,
   CopilotIcon,
   KiloIcon,
   OmpIcon,
+  OpenCodeIcon,
   PiIcon
 } from './agent-icon-glyphs'
 import { translate } from '@/i18n/i18n'
@@ -26,6 +28,20 @@ export type AgentCatalogEntry = {
   homepageUrl: string
 }
 
+function getCatalogPlatform(): NodeJS.Platform {
+  const userAgent = typeof navigator === 'undefined' ? '' : navigator.userAgent
+  if (userAgent.includes('Windows')) {
+    return 'win32'
+  }
+  if (userAgent.includes('Mac')) {
+    return 'darwin'
+  }
+  if (userAgent) {
+    return 'linux'
+  }
+  return typeof process === 'undefined' ? 'linux' : process.platform
+}
+
 export const getAgentCatalog = createLocalizedCatalog((): AgentCatalogEntry[] => [
   {
     id: 'claude',
@@ -36,7 +52,7 @@ export const getAgentCatalog = createLocalizedCatalog((): AgentCatalogEntry[] =>
   {
     id: 'claude-agent-teams',
     label: translate('auto.lib.agent.catalog.bf53f09bf8', 'Claude Agent Teams'),
-    cmd: 'orca claude-teams',
+    cmd: getTuiAgentLaunchCommand(TUI_AGENT_CONFIG['claude-agent-teams'], getCatalogPlatform()),
     homepageUrl: 'https://code.claude.com/docs/agent-teams'
   },
   {
@@ -71,8 +87,21 @@ export const getAgentCatalog = createLocalizedCatalog((): AgentCatalogEntry[] =>
     id: 'opencode',
     label: translate('auto.lib.agent.catalog.e7a4ca5103', 'OpenCode'),
     cmd: 'opencode',
-    faviconDomain: 'opencode.ai',
     homepageUrl: 'https://opencode.ai/docs/cli/'
+  },
+  {
+    id: 'mimo-code',
+    label: translate('auto.lib.agent.catalog.mimo_code_label', 'MiMo Code'),
+    cmd: 'mimo',
+    faviconDomain: 'mimo.xiaomi.com',
+    homepageUrl: 'https://mimo.xiaomi.com/coder'
+  },
+  {
+    id: 'ante',
+    label: translate('auto.lib.agent.catalog.da41abbdd4', 'Ante'),
+    cmd: 'ante',
+    faviconDomain: 'antigma.ai',
+    homepageUrl: 'https://github.com/AntigmaLabs/ante-preview'
   },
   {
     id: 'pi',
@@ -225,7 +254,9 @@ export const getAgentCatalog = createLocalizedCatalog((): AgentCatalogEntry[] =>
   {
     id: 'qwen-code',
     label: translate('auto.lib.agent.catalog.bee242fe3d', 'Qwen Code'),
-    cmd: 'qwen-code',
+    // Why: QwenLM/qwen-code installs its CLI executable as `qwen`; the package
+    // name is not the binary users put on PATH. Keep `id` for stable identity.
+    cmd: 'qwen',
     faviconDomain: 'qwenlm.github.io',
     homepageUrl: 'https://github.com/QwenLM/qwen-code'
   },
@@ -304,6 +335,9 @@ export function AgentIcon({
   }
   if (agent === 'copilot') {
     return <CopilotIcon size={size} />
+  }
+  if (agent === 'opencode') {
+    return <OpenCodeIcon size={size} />
   }
   const catalogEntry = getAgentCatalog().find((a) => a.id === agent)
   if (catalogEntry?.iconUrl) {

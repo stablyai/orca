@@ -55,4 +55,47 @@ describe('subscribeRuntimeClientEvents', () => {
     subscription.unsubscribe()
     expect(unsubscribe).toHaveBeenCalledTimes(1)
   })
+
+  it('signals a replay-tagged response so event-derived state can resync after a reconnect', async () => {
+    let capturedOnResponse: ((response: unknown) => void) | undefined
+    const subscribe = vi.fn(async (_args, nextCallbacks) => {
+      capturedOnResponse = (nextCallbacks as { onResponse: (response: unknown) => void }).onResponse
+      return { unsubscribe: vi.fn(), sendBinary: vi.fn() }
+    })
+    const onEvent = vi.fn()
+    const onReplayed = vi.fn()
+
+    vi.stubGlobal('window', {
+      api: {
+        runtimeEnvironments: { subscribe }
+      }
+    })
+
+    await subscribeRuntimeClientEvents('env-1', onEvent, vi.fn(), onReplayed)
+    if (!capturedOnResponse) {
+      throw new Error('Expected subscription callbacks')
+    }
+
+    capturedOnResponse({
+      ok: true,
+      result: { type: 'ready', subscriptionId: 'sub-1' }
+    })
+    expect(onReplayed).not.toHaveBeenCalled()
+
+    capturedOnResponse({
+      ok: true,
+      result: { type: 'ready', subscriptionId: 'sub-1' },
+      _replayedAfterReconnect: true
+    })
+    expect(onReplayed).toHaveBeenCalledTimes(1)
+
+    // A replay-tagged event frame both signals and still delivers the event.
+    capturedOnResponse({
+      ok: true,
+      result: { type: 'worktreesChanged', repoId: 'repo-1' },
+      _replayedAfterReconnect: true
+    })
+    expect(onReplayed).toHaveBeenCalledTimes(2)
+    expect(onEvent).toHaveBeenCalledWith({ type: 'worktreesChanged', repoId: 'repo-1' })
+  })
 })

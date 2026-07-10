@@ -1,8 +1,7 @@
 // Secrets scrubber for the error-tracking lane. Runs synchronously at three
 // well-defined locations (see telemetry-error-tracking.md §The redactor):
 //
-//   1. Sink-write time — every span is redacted before NDJSON serialization
-//      and before any optional OTLP export.
+//   1. Sink-write time — every span is redacted before NDJSON serialization.
 //   2. Bundle-collection time — a second pass before the user-preview window
 //      renders. Belt-and-suspenders against a sink-write bug.
 //   3. Server-side ingest — a third pass. The client-side redactor runs on
@@ -27,7 +26,7 @@
 //
 // Per-attribute length capping is deliberately NOT applied here. The spec
 // argues against it (see §The redactor "No per-attribute length cap"):
-// envelope-level bounds (10 MB × 10 file rotation; 10 MB Mode-3 upload cap)
+// envelope-level bounds (10 MB × 10 file rotation; 4 MiB bundle upload cap)
 // already cover the worst case, and a per-attribute truncation would eat the
 // tail of long stack chains, which is the most diagnostic part. Spans that
 // dump a multi-MB blob into one attribute are a call-site bug to fix at the

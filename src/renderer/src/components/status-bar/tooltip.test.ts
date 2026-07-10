@@ -1,10 +1,34 @@
-import { describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
+import { renderToStaticMarkup } from 'react-dom/server'
+import type * as ReactModule from 'react'
 import type { ProviderRateLimits } from '../../../../shared/rate-limit-types'
+
+vi.mock('@/lib/agent-catalog', async () => {
+  const ReactActual = await vi.importActual<typeof ReactModule>('react')
+  return {
+    AgentIcon: ({ agent }: { agent: string }) =>
+      ReactActual.createElement('span', { 'data-agent-icon': agent })
+  }
+})
+
+vi.mock('@/i18n/i18n', () => ({
+  translate: (_key: string, fallback: string, values?: Record<string, string>) => {
+    let result = fallback
+    for (const [key, value] of Object.entries(values ?? {})) {
+      result = result.replace(`{{${key}}}`, value)
+    }
+    return result
+  }
+}))
+
 import {
+  formatResetCreditExpiry,
   formatResetCountdown,
   getProviderUsageErrorMessage,
   getProviderUsageStatusLabel,
-  getWindowSections
+  getWindowSections,
+  ProviderIcon,
+  ProviderPanel
 } from './tooltip'
 
 function provider(overrides: Partial<ProviderRateLimits> = {}): ProviderRateLimits {
@@ -19,6 +43,10 @@ function provider(overrides: Partial<ProviderRateLimits> = {}): ProviderRateLimi
   }
 }
 
+afterEach(() => {
+  vi.useRealTimers()
+})
+
 describe('formatResetCountdown', () => {
   it('uses natural copy when the reset time has arrived', () => {
     expect(formatResetCountdown(0)).toBe('Resets now')
@@ -27,6 +55,22 @@ describe('formatResetCountdown', () => {
 
   it('keeps the "in" preposition for future reset times', () => {
     expect(formatResetCountdown(12 * 60 * 60_000 + 41 * 60_000)).toBe('Resets in 12h 41m')
+  })
+})
+
+describe('formatResetCreditExpiry', () => {
+  it('shows singular and plural expiry countdowns', () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date('2026-06-20T12:00:00Z'))
+
+    expect(formatResetCreditExpiry(Date.parse('2026-06-20T14:30:00Z'), 1)).toBe('Expires in 2h 30m')
+    expect(formatResetCreditExpiry(Date.parse('2026-06-25T12:00:00Z'), 2)).toBe(
+      'Next expires in 5d'
+    )
+  })
+
+  it('omits expiry copy when the backend has not reported an expiry', () => {
+    expect(formatResetCreditExpiry(null, 1)).toBeNull()
   })
 })
 
@@ -123,6 +167,69 @@ describe('provider usage error copy', () => {
       'Network error while refreshing OAuth usage: ECONNRESET'
     )
   })
+
+  it('keeps live-Claude refresh deferral copy visible', () => {
+    const p = provider({
+      error:
+        'Claude usage refresh is waiting for the live Claude terminal to rotate its credentials.',
+      usageMetadata: {
+        failureKind: 'deferred-by-live-session',
+        deferredByLiveClaudeSession: true
+      }
+    })
+
+    expect(getProviderUsageStatusLabel(p)).toBe('Waiting for Claude session')
+    expect(getProviderUsageErrorMessage(p)).toBe(
+      'Claude usage will refresh after the live Claude terminal rotates its credentials.'
+    )
+  })
+
+  it('uses structured Claude failure kinds before raw auth regexes', () => {
+    const p = provider({
+      error: 'Invalid OAuth token.',
+      usageMetadata: {
+        failureKind: 'stale-token',
+        attemptedSources: ['oauth', 'cli']
+      }
+    })
+
+    expect(getProviderUsageStatusLabel(p)).toBe('Refreshing sign-in')
+    expect(getProviderUsageErrorMessage(p)).toBe(
+      'Claude sign-in is being refreshed. Agent sessions may still be signed in.'
+    )
+  })
+
+  it('uses structured network copy for Claude usage failures', () => {
+    const p = provider({
+      error: 'Network error while refreshing OAuth usage: ECONNRESET',
+      usageMetadata: { failureKind: 'network' }
+    })
+
+    expect(getProviderUsageStatusLabel(p)).toBe('Network issue')
+    expect(getProviderUsageErrorMessage(p)).toBe(
+      'Claude usage could not be refreshed because the network request failed.'
+    )
+  })
+
+  it('uses structured Keychain copy for Claude usage failures', () => {
+    const p = provider({
+      error: 'Claude Keychain credentials unavailable',
+      usageMetadata: { failureKind: 'keychain-unavailable' }
+    })
+
+    expect(getProviderUsageStatusLabel(p)).toBe('Sign-in unavailable')
+    expect(getProviderUsageErrorMessage(p)).toBe('Claude sign-in credentials could not be read.')
+  })
+
+  it('uses structured unavailable copy for Claude CLI usage shell failures', () => {
+    const p = provider({
+      error: 'Claude plan usage is unavailable for this Claude CLI session.',
+      usageMetadata: { failureKind: 'usage-unavailable' }
+    })
+
+    expect(getProviderUsageStatusLabel(p)).toBe('Usage unavailable')
+    expect(getProviderUsageErrorMessage(p)).toBe('Claude usage is unavailable right now.')
+  })
 })
 
 describe('getWindowSections', () => {
@@ -172,6 +279,29 @@ describe('getWindowSections', () => {
     expect(sections).toEqual([
       { label: 'Session', window: p.session },
       { label: 'Weekly', window: p.weekly }
+    ])
+  })
+
+  it('returns a separate Fable section when Claude reports Fable weekly usage', () => {
+    const p: ProviderRateLimits = {
+      provider: 'claude',
+      session: { usedPercent: 40, windowMinutes: 300, resetsAt: null, resetDescription: null },
+      weekly: { usedPercent: 20, windowMinutes: 10080, resetsAt: null, resetDescription: null },
+      fableWeekly: {
+        usedPercent: 42,
+        windowMinutes: 10080,
+        resetsAt: null,
+        resetDescription: null
+      },
+      updatedAt: Date.now(),
+      error: null,
+      status: 'ok'
+    }
+    const sections = getWindowSections(p)
+    expect(sections).toEqual([
+      { label: 'Session', window: p.session },
+      { label: 'Weekly', window: p.weekly },
+      { label: 'Fable', window: p.fableWeekly }
     ])
   })
 
@@ -254,5 +384,87 @@ describe('getWindowSections', () => {
     expect(sections[0].label).toBe('Pro')
     expect(sections[0].window!.resetsAt).toBe(18000000)
     expect(sections[0].window!.resetDescription).toBe('5:00 PM')
+  })
+})
+
+describe('ProviderPanel reset rendering', () => {
+  it('renders the Fable reset countdown when Claude reports a reset timestamp', () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date(2026, 6, 3, 20, 0))
+    const p = provider({
+      status: 'ok',
+      session: null,
+      weekly: null,
+      fableWeekly: {
+        usedPercent: 62,
+        windowMinutes: 10080,
+        resetsAt: Date.now() + (6 * 24 + 17) * 60 * 60_000,
+        resetDescription: 'Jul 10 at 1:00 PM'
+      }
+    })
+
+    const markup = renderToStaticMarkup(ProviderPanel({ p }))
+
+    expect(markup).toContain('Fable')
+    expect(markup).toContain('Resets in 6d 17h')
+  })
+
+  it('renders MiniMax session as `100 - usedPercent` left so the value matches the bar', () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date(2026, 6, 4, 15, 0))
+    const p = provider({
+      provider: 'minimax',
+      status: 'ok',
+      session: {
+        usedPercent: 35,
+        windowMinutes: 300,
+        resetsAt: Date.now() + 2 * 60 * 60_000,
+        resetDescription: null
+      }
+    })
+
+    const markup = renderToStaticMarkup(ProviderPanel({ p }))
+
+    // Why: the bar reads "65% 5h"; the tooltip must read "65% left" from the
+    // same source field so the two views stay consistent.
+    expect(markup).toContain('65%')
+    expect(markup).toContain('% left')
+    expect(markup).not.toContain('100% left')
+  })
+
+  it('clamps MiniMax session to 0% left when usedPercent reports 100', () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date(2026, 6, 4, 15, 0))
+    const p = provider({
+      provider: 'minimax',
+      status: 'ok',
+      session: {
+        usedPercent: 100,
+        windowMinutes: 300,
+        resetsAt: Date.now() + 2 * 60 * 60_000,
+        resetDescription: null
+      }
+    })
+
+    const markup = renderToStaticMarkup(ProviderPanel({ p }))
+
+    expect(markup).toContain('0% left')
+  })
+})
+
+describe('ProviderIcon', () => {
+  it('renders the Antigravity agent icon for the antigravity provider', () => {
+    const markup = renderToStaticMarkup(ProviderIcon({ provider: 'antigravity' }))
+    expect(markup).toContain('data-agent-icon="antigravity"')
+  })
+
+  it('renders the official MiniMax icon asset for the minimax provider', () => {
+    // Why: the icon must travel to the status bar / tooltip unchanged so the
+    // user recognises the brand. We pin it to an <img> with a non-empty
+    // resource URL and aria-hidden so the icon stays purely decorative.
+    const markup = renderToStaticMarkup(ProviderIcon({ provider: 'minimax' }))
+    expect(markup.startsWith('<img')).toBe(true)
+    expect(markup).toContain('aria-hidden="true"')
+    expect(markup).toMatch(/src="[^"]+"/)
   })
 })

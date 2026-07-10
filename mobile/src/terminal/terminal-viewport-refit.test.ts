@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest'
 import type { RpcResponse } from '../transport/types'
 import {
   isTerminalUpdateViewportApplied,
+  isTerminalUpdateViewportUpdated,
   isTerminalViewportRefitTargetCurrent
 } from './terminal-viewport-refit-state'
 
@@ -62,17 +63,49 @@ describe('terminal viewport refit', () => {
     expect(resubscribeIndex).toBeGreaterThan(rpcIndex)
   })
 
+  it('reflows the local xterm scrollback after a successful updateViewport', () => {
+    // Why: updateViewport may only record an informational mobile viewport in
+    // desktop mode. Reflow local scrollback only after the server says it
+    // actually applied phone-fit to the PTY.
+    const appliedIndex = hookSource.indexOf('isTerminalUpdateViewportApplied(response)')
+    const reflowIndex = hookSource.indexOf('ref.reflow(dims.cols, dims.rows)')
+    const cacheUpdateIndex = hookSource.indexOf('updateTerminalSubscriptionViewport(handle, dims)')
+    // Assert each anchor exists before ordering: a missing marker yields -1 and would
+    // let the ordering comparisons pass vacuously.
+    expect(appliedIndex).toBeGreaterThanOrEqual(0)
+    expect(cacheUpdateIndex).toBeGreaterThanOrEqual(0)
+    expect(reflowIndex).toBeGreaterThanOrEqual(0)
+    expect(reflowIndex).toBeGreaterThan(appliedIndex)
+    expect(reflowIndex).toBeGreaterThan(cacheUpdateIndex)
+  })
+
+  it('checks refit freshness after updateViewport resolves before side effects', () => {
+    // Why: rapid dock/sidebar resizing can complete RPCs out of order; a stale
+    // response must not update the viewport cache or locally reflow the old dims.
+    const responseIndex = hookSource.indexOf("sendRequest('terminal.updateViewport'")
+    const postRpcCurrentIndex = hookSource.indexOf('if (!isCurrentTarget())', responseIndex)
+    const cacheUpdateIndex = hookSource.indexOf('updateTerminalSubscriptionViewport(handle, dims)')
+    expect(postRpcCurrentIndex).toBeGreaterThan(responseIndex)
+    expect(postRpcCurrentIndex).toBeLessThan(cacheUpdateIndex)
+  })
+
   it('only treats updateViewport as applied when the runtime updated the subscriber', () => {
     const okUpdated = {
       id: '1',
       ok: true,
-      result: { updated: true },
+      result: { updated: true, applied: true },
+      _meta: { runtimeId: 'runtime' }
+    } satisfies RpcResponse
+    const okRecordedButNotApplied = {
+      id: '1b',
+      ok: true,
+      result: { updated: true, applied: false },
       _meta: { runtimeId: 'runtime' }
     } satisfies RpcResponse
     const okNotUpdated = {
       id: '2',
       ok: true,
-      result: { updated: false },
+      result: { updated: false, applied: false },
       _meta: { runtimeId: 'runtime' }
     } satisfies RpcResponse
     const failed = {
@@ -82,7 +115,11 @@ describe('terminal viewport refit', () => {
       _meta: { runtimeId: 'runtime' }
     } satisfies RpcResponse
 
+    expect(isTerminalUpdateViewportUpdated(okUpdated)).toBe(true)
+    expect(isTerminalUpdateViewportUpdated(okRecordedButNotApplied)).toBe(true)
+    expect(isTerminalUpdateViewportUpdated(okNotUpdated)).toBe(false)
     expect(isTerminalUpdateViewportApplied(okUpdated)).toBe(true)
+    expect(isTerminalUpdateViewportApplied(okRecordedButNotApplied)).toBe(false)
     expect(isTerminalUpdateViewportApplied(okNotUpdated)).toBe(false)
     expect(isTerminalUpdateViewportApplied(failed)).toBe(false)
   })

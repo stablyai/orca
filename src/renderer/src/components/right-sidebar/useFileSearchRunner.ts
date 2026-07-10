@@ -1,5 +1,9 @@
 import { useCallback, useEffect, useRef } from 'react'
 import { getConnectionId } from '@/lib/connection-context'
+import {
+  createEmptyRuntimeFileSearchResult,
+  getRuntimeFileSearchRejectedField
+} from '@/runtime/runtime-file-search-bounds'
 import { searchRuntimeFiles } from '@/runtime/runtime-file-client'
 import { useAppStore } from '@/store'
 import type { SearchResult } from '../../../../shared/types'
@@ -48,7 +52,27 @@ export function useFileSearchRunner({
         searchTimerRef.current = null
       }
 
-      if (!query.trim() || !worktreePath || !activeWorktreeId) {
+      if (!worktreePath || !activeWorktreeId) {
+        updateActiveSearchState({ results: null, loading: false })
+        return
+      }
+
+      const currentSearchState = useAppStore.getState().fileSearchStateByWorktree[activeWorktreeId]
+      if (
+        getRuntimeFileSearchRejectedField({
+          query,
+          includePattern: currentSearchState?.includePattern || undefined,
+          excludePattern: currentSearchState?.excludePattern || undefined
+        })
+      ) {
+        updateActiveSearchState({
+          results: createEmptyRuntimeFileSearchResult(),
+          loading: false
+        })
+        return
+      }
+
+      if (!query.trim()) {
         updateActiveSearchState({ results: null, loading: false })
         return
       }
@@ -60,6 +84,21 @@ export function useFileSearchRunner({
           const state = useAppStore.getState()
           const connectionId = getConnectionId(activeWorktreeId) ?? undefined
           const activeSearchState = state.fileSearchStateByWorktree[activeWorktreeId]
+          if (
+            getRuntimeFileSearchRejectedField({
+              query,
+              includePattern: activeSearchState?.includePattern || undefined,
+              excludePattern: activeSearchState?.excludePattern || undefined
+            })
+          ) {
+            if (latestSearchIdRef.current === searchId) {
+              updateActiveSearchState({
+                results: createEmptyRuntimeFileSearchResult(),
+                loading: false
+              })
+            }
+            return
+          }
           const results = await searchRuntimeFiles(
             {
               settings: getRightSidebarWorktreeRuntimeSettings(activeWorktreeId),

@@ -6,8 +6,40 @@ import {
   shouldIgnoreNestedWorktreeContextMenuScope,
   shouldRemoveProjectFromContextMenu,
   shouldSuppressContextMenuFollowUpClick,
-  shouldContinueDeleteSiblingPositionRestore
+  shouldContinueDeleteSiblingPositionRestore,
+  getWorktreeParentPickerAnchor,
+  getWorktreeParentPickerLabel,
+  isWorktreeParentPickerDisabled,
+  selectMenuScopedMap
 } from './WorktreeContextMenu'
+
+describe('selectMenuScopedMap (delete-teardown re-render guard)', () => {
+  // Why: the closed menu wrapper must stay inert to delete teardown's high-churn
+  // set()s. The guard is referential stability — when closed, the selector must
+  // return the SAME `empty` reference even as the live map identity changes each
+  // teardown set(), so Zustand's Object.is equality short-circuits the subscription
+  // and the (common) closed wrapper does not re-render. These assertions pin that
+  // contract; if they regress, every visible card re-renders on every teardown set()
+  // and worktree-card hover popovers stall during a delete.
+  it('returns the stable empty sentinel when the menu is closed', () => {
+    const empty = Object.freeze({})
+    const liveA = { 'wt-1': ['pty-1'] }
+    const liveB = { 'wt-2': ['pty-2'] }
+    // Live map identity churns across teardown set()s, yet a closed wrapper keeps
+    // the same reference — no subscription wakeup.
+    expect(selectMenuScopedMap(false, liveA, empty)).toBe(empty)
+    expect(selectMenuScopedMap(false, liveB, empty)).toBe(empty)
+    expect(selectMenuScopedMap(false, liveA, empty)).toBe(selectMenuScopedMap(false, liveB, empty))
+  })
+
+  it('returns the live map synchronously once the menu is open', () => {
+    const empty = Object.freeze({})
+    const live = { 'wt-1': ['pty-1'] }
+    // The render where menuOpen flips true must read real data so menu items
+    // (sleep/delete/lineage) reflect live tabs/ptys/delete state.
+    expect(selectMenuScopedMap(true, live, empty)).toBe(live)
+  })
+})
 
 describe('shouldUseNativeContextMenu', () => {
   it('uses the browser context menu for marked hovercard content', () => {
@@ -103,6 +135,39 @@ describe('shouldContinueDeleteSiblingPositionRestore', () => {
         stableFrames: 6
       })
     ).toBe(false)
+  })
+})
+
+describe('parent picker context menu affordance', () => {
+  it('uses set/change labels based on valid parent presence', () => {
+    expect(getWorktreeParentPickerLabel(null)).toBe('Set Parent Worktree...')
+    expect(getWorktreeParentPickerLabel('parent-1')).toBe('Change Parent Worktree...')
+  })
+
+  it('disables the parent picker while deleting or without candidates', () => {
+    expect(isWorktreeParentPickerDisabled({ isDeleting: true, eligibleParentCount: 1 })).toBe(true)
+    expect(isWorktreeParentPickerDisabled({ isDeleting: false, eligibleParentCount: 0 })).toBe(true)
+    expect(isWorktreeParentPickerDisabled({ isDeleting: false, eligibleParentCount: 1 })).toBe(
+      false
+    )
+  })
+
+  it('snapshots the stable row anchor before the context menu closes', () => {
+    const card = { dataset: { worktreeDragId: 'child' } } as unknown as HTMLElement
+    const scope = {
+      closest: (selector: string) => (selector === '[data-worktree-drag-id]' ? card : null)
+    } as HTMLElement
+
+    expect(getWorktreeParentPickerAnchor(scope, 'child')).toBe(card)
+  })
+
+  it('uses the child scope instead of climbing to a different workspace drag row', () => {
+    const parentCard = { dataset: { worktreeDragId: 'parent' } } as unknown as HTMLElement
+    const scope = {
+      closest: (selector: string) => (selector === '[data-worktree-drag-id]' ? parentCard : null)
+    } as HTMLElement
+
+    expect(getWorktreeParentPickerAnchor(scope, 'child')).toBe(scope)
   })
 })
 

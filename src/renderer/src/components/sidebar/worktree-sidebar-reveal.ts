@@ -48,8 +48,17 @@ export function revealElementInScrollContainer(
     getElementScrollBounds(container, element),
     WORKTREE_SIDEBAR_REVEAL_TOP_INSET
   )
-  if (nextScrollTop !== null) {
-    container.scrollTo({ top: Math.max(0, nextScrollTop), behavior })
+  if (nextScrollTop === null) {
+    return true
   }
+  // Why: honor the user's reduced-motion preference by jumping instantly instead of
+  // animating a smooth scroll (also makes the reveal deterministic in headless
+  // environments that never tick the smooth-scroll animation).
+  const prefersReducedMotion =
+    typeof window !== 'undefined' &&
+    window.matchMedia?.('(prefers-reduced-motion: reduce)').matches === true
+  const resolvedBehavior: ScrollBehavior =
+    behavior === 'smooth' && prefersReducedMotion ? 'auto' : behavior
+  container.scrollTo({ top: Math.max(0, nextScrollTop), behavior: resolvedBehavior })
   return true
 }

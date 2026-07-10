@@ -13,7 +13,7 @@ function getLineageSourceLabel(source: string): string {
     case 'explicit-cli-flag':
       return 'explicit flag'
     case 'active-workspace':
-      return 'active workspace'
+      return 'active context'
     default:
       return 'manual action'
   }

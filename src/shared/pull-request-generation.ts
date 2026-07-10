@@ -41,6 +41,8 @@ export function buildPullRequestFieldsPrompt(
     '- Keep the base branch as the current base unless the diff clearly targets a different branch.',
     '- Title: concise, specific, no trailing period.',
     '- Body: useful Markdown summary for reviewers. Include testing notes only when evidence exists.',
+    '- If Current description contains a pull request or merge request template, preserve its headings, required sections, and checklists while filling relevant sections from the branch changes.',
+    '- Leave genuinely unknown template items as TODO or unchecked instead of deleting them.',
     '- draft: true only when the changes clearly look unfinished, WIP, or unsafe to review.',
     '- Do not include labels, reviewers, code fences, prose, or any keys beyond base/title/body/draft.',
     '',
@@ -83,10 +85,10 @@ export function buildPullRequestFieldsPrompt(
 }
 
 function stripJsonFence(raw: string): string {
-  let text = raw.replace(/\r\n/g, '\n').trim()
-  const fenced = text.match(/^```(?:json)?\n([\s\S]*?)\n```$/i)
-  if (fenced) {
-    text = fenced[1].trim()
+  let text = raw.trim()
+  const fencedBody = getJsonFenceBody(text)
+  if (fencedBody !== null) {
+    text = fencedBody.trim()
   }
   const start = text.indexOf('{')
   const end = text.lastIndexOf('}')
@@ -94,6 +96,56 @@ function stripJsonFence(raw: string): string {
     return text.slice(start, end + 1)
   }
   return text
+}
+
+function getJsonFenceBody(text: string): string | null {
+  let bodyStart = getLineBreakEnd(text, 3)
+  if (bodyStart === null && startsWithAsciiIgnoreCase(text, '```json', 0)) {
+    bodyStart = getLineBreakEnd(text, 7)
+  }
+  if (bodyStart === null || !text.endsWith('```')) {
+    return null
+  }
+
+  const closeStart = text.length - 3
+  const bodyEnd = getBodyEndBeforeClosingFence(text, closeStart)
+  return bodyEnd === null ? null : text.slice(bodyStart, bodyEnd)
+}
+
+function getLineBreakEnd(text: string, index: number): number | null {
+  const code = text.charCodeAt(index)
+  if (code === 10) {
+    return index + 1
+  }
+  if (code === 13) {
+    return text.charCodeAt(index + 1) === 10 ? index + 2 : index + 1
+  }
+  return null
+}
+
+function getBodyEndBeforeClosingFence(text: string, closeStart: number): number | null {
+  const previousCode = text.charCodeAt(closeStart - 1)
+  if (previousCode === 10) {
+    return text.charCodeAt(closeStart - 2) === 13 ? closeStart - 2 : closeStart - 1
+  }
+  if (previousCode === 13) {
+    return closeStart - 1
+  }
+  return null
+}
+
+function startsWithAsciiIgnoreCase(value: string, search: string, startIndex: number): boolean {
+  if (startIndex < 0 || startIndex + search.length > value.length) {
+    return false
+  }
+  for (let index = 0; index < search.length; index++) {
+    const code = value.charCodeAt(startIndex + index)
+    const normalizedCode = code >= 65 && code <= 90 ? code + 32 : code
+    if (normalizedCode !== search.charCodeAt(index)) {
+      return false
+    }
+  }
+  return true
 }
 
 export function parseGeneratedPullRequestFields(

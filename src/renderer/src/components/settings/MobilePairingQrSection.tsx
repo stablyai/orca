@@ -81,7 +81,7 @@ export function MobilePairingQrSection({
             )}
             className="size-48"
           />
-          <Maximize2 className="absolute top-1.5 right-1.5 size-3 text-black/30 opacity-0 transition-opacity group-hover:opacity-100" />
+          <Maximize2 className="absolute top-1.5 right-1.5 size-3 text-black/30 can-hover:opacity-0 transition-opacity group-hover:opacity-100" />
         </button>
         {endpoint && <span className="text-muted-foreground font-mono text-xs">{endpoint}</span>}
         <p className="text-muted-foreground max-w-xs text-center text-xs">

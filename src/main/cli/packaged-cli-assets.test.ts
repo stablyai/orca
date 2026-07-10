@@ -2,7 +2,7 @@ import { execFile } from 'node:child_process'
 import { copyFile, mkdir, mkdtemp, rm, stat, symlink, writeFile } from 'node:fs/promises'
 import { createRequire } from 'node:module'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { join, sep } from 'node:path'
 import { promisify } from 'node:util'
 import { describe, expect, it } from 'vitest'
 import { buildAppImageCliWrapper } from './appimage-cli-wrapper'
@@ -24,7 +24,7 @@ describe('packaged CLI assets', () => {
         ...(builderConfig.mac?.extraResources ?? []),
         ...(builderConfig.linux?.extraResources ?? []),
         ...(builderConfig.win?.extraResources ?? [])
-      ].map((resource) => resource.to)
+      ].map((resource) => normalizeResourceTarget(resource.to))
     )
 
     expect([...runtimeResourceTargets]).toEqual(
@@ -33,6 +33,7 @@ describe('packaged CLI assets', () => {
         join('node_modules', 'tweetnacl'),
         join('node_modules', 'zod'),
         join('node_modules', 'yaml'),
+        join('node_modules', 'jsonc-parser'),
         join('node_modules', 'node-pty'),
         join('node_modules', 'sherpa-onnx-darwin-${arch}'),
         join('node_modules', 'sherpa-onnx-linux-${arch}'),
@@ -40,6 +41,10 @@ describe('packaged CLI assets', () => {
       ])
     )
   })
+
+  function normalizeResourceTarget(target: string | undefined): string | undefined {
+    return target?.replace(/[\\/]/g, sep)
+  }
 
   itRunsUnixShell('keeps the Linux launcher executable in packaged resources', async () => {
     const launcherStats = await stat(linuxLauncherAsset)

@@ -4,7 +4,11 @@ import { randomUUID } from 'node:crypto'
 import { app, ipcMain } from 'electron'
 import type { BrowserWindow } from 'electron'
 import type { Store } from '../persistence'
-import type { CreateWorktreeResult, WorktreeStartupLaunch } from '../../shared/types'
+import type {
+  CreateWorktreeResult,
+  UpdateCheckOptions,
+  WorktreeStartupLaunch
+} from '../../shared/types'
 import { registerRepoHandlers } from '../ipc/repos'
 import { registerWorktreeHandlers } from '../ipc/worktrees'
 import { registerWorkspaceCleanupHandlers } from '../ipc/workspace-cleanup'
@@ -32,10 +36,28 @@ import type {
   RuntimeMarkdownSaveTabResult
 } from '../../shared/mobile-markdown-document'
 import type { RuntimeMobileSessionTabMove } from '../../shared/runtime-types'
-import type { NativeFileDropPayload } from '../../shared/native-file-drop'
+import { isNativeFileDropPayload, type NativeFileDropPayload } from '../../shared/native-file-drop'
 import { requestMobileMarkdownFromRenderer } from './mobile-markdown-request-relay'
 import type { CodexAccountSelectionTarget } from '../codex-accounts/runtime-selection'
 import type { ClaudeAccountSelectionTarget } from '../claude-accounts/runtime-selection'
+import { runWorktreeChangeInvalidators } from '../ipc/worktree-change-invalidators'
+import {
+  scheduleWorktreeBaseDirectoryWatcherSync,
+  setWorktreeBaseDirectoryWatcherSyncContext
+} from '../ipc/worktree-base-directory-watcher'
+import { logStartupMilestone } from '../startup/startup-diagnostics'
+
+const UPDATER_SETUP_FALLBACK_MS = 15_000
+
+// Why: updater setup is deferred past first paint, but a manual check (app
+// menu or updater:check IPC) can arrive inside that window — it must run
+// against a configured updater (listeners, autoDownload=false, window ref),
+// so those entry points force the pending setup first.
+let pendingAutoUpdaterSetup: (() => void) | null = null
+
+export function ensureAutoUpdaterConfigured(): void {
+  pendingAutoUpdaterSetup?.()
+}
 
 let appReloadHandlerTokenCounter = 0
 let activeAppReloadHandlerToken: number | null = null
@@ -53,11 +75,17 @@ export function attachMainWindowServices(
   options?: {
     awaitLocalPtyStartup?: () => Promise<void>
     onBeforeRendererReload?: (args: { webContentsId: number; ignoreCache: boolean }) => void
+    // Why: lets the PTY orphan sweep skip the one crash-recovery reload (#5787).
+    isRecoveryReloadInFlight?: (webContentsId: number) => boolean
+    onBeforeUpdateQuit?: () => void | Promise<void>
   }
 ): void {
   registerAppReloadHandler(mainWindow, options?.onBeforeRendererReload)
   registerRepoHandlers(mainWindow, store)
   registerWorktreeHandlers(mainWindow, store, runtime)
+  // Why: repo/settings mutations resync watchers through this attached main-window context.
+  setWorktreeBaseDirectoryWatcherSyncContext(store, mainWindow)
+  scheduleWorktreeBaseDirectoryWatcherSync(store, mainWindow)
   registerWorkspaceCleanupHandlers(store, { runtime, getLocalPtyProvider })
   registerPtyHandlers(
     mainWindow,
@@ -67,7 +95,8 @@ export function attachMainWindowServices(
     prepareClaudeAuth,
     store,
     {
-      awaitLocalPtyStartup: options?.awaitLocalPtyStartup
+      awaitLocalPtyStartup: options?.awaitLocalPtyStartup,
+      isRecoveryReloadInFlight: options?.isRecoveryReloadInFlight
     }
   )
   // Why: the Manage Sessions settings panel (docs/daemon-staleness-ux.md §Phase 1)
@@ -107,31 +136,54 @@ export function attachMainWindowServices(
   registerSshHandlers(store, () => mainWindow, runtime)
   registerRemoteWorkspaceHandlers(store, () => mainWindow)
   registerFileDropRelay(mainWindow)
-  setupAutoUpdater(mainWindow, {
-    getLastUpdateCheckAt: () => store.getUI().lastUpdateCheckAt,
-    onBeforeQuit: () => store.flush(),
-    setLastUpdateCheckAt: (timestamp) => {
-      store.updateUI({ lastUpdateCheckAt: timestamp })
-    },
-    getPendingUpdateNudgeId: () => store.getUI().pendingUpdateNudgeId ?? null,
-    getDismissedUpdateNudgeId: () => store.getUI().dismissedUpdateNudgeId ?? null,
-    setPendingUpdateNudgeId: (id) => {
-      // Why: the nudge lifecycle is owned by the main process. When applying a
-      // new campaign, persist the pending id AND clear the version dismissal
-      // together so relaunches cannot resurrect the old hidden-card state
-      // between nudge apply and renderer sync. When clearing (id is null),
-      // only touch pendingUpdateNudgeId — clearing dismissedUpdateVersion here
-      // would silently un-dismiss an update if the flow ever changes.
-      if (id) {
-        store.updateUI({ pendingUpdateNudgeId: id, dismissedUpdateVersion: null })
-      } else {
-        store.updateUI({ pendingUpdateNudgeId: null })
-      }
-    },
-    setDismissedUpdateNudgeId: (id) => {
-      store.updateUI({ dismissedUpdateNudgeId: id })
+  // Why: setupAutoUpdater's first getAutoUpdater() call synchronously
+  // require()s electron-updater in packaged builds — seconds on a cold
+  // Windows disk under Defender scanning (part of issue #7225's pre-paint
+  // stall) — so defer it past first paint. The timer fallback keeps update
+  // checks alive for renderers that crash-loop before ever painting.
+  let updaterSetupDone = false
+  const setupAutoUpdaterDeferred = (): void => {
+    if (updaterSetupDone || mainWindow.isDestroyed()) {
+      return
     }
-  })
+    updaterSetupDone = true
+    setupAutoUpdater(mainWindow, {
+      getLastUpdateCheckAt: () => store.getUI().lastUpdateCheckAt,
+      onBeforeQuit: async () => {
+        try {
+          await options?.onBeforeUpdateQuit?.()
+        } finally {
+          store.flush()
+        }
+      },
+      setLastUpdateCheckAt: (timestamp) => {
+        store.updateUI({ lastUpdateCheckAt: timestamp })
+      },
+      getPendingUpdateNudgeId: () => store.getUI().pendingUpdateNudgeId ?? null,
+      getDismissedUpdateNudgeId: () => store.getUI().dismissedUpdateNudgeId ?? null,
+      setPendingUpdateNudgeId: (id) => {
+        // Why: the nudge lifecycle is owned by the main process. When applying a
+        // new campaign, persist the pending id AND clear the version dismissal
+        // together so relaunches cannot resurrect the old hidden-card state
+        // between nudge apply and renderer sync. When clearing (id is null),
+        // only touch pendingUpdateNudgeId — clearing dismissedUpdateVersion here
+        // would silently un-dismiss an update if the flow ever changes.
+        if (id) {
+          store.updateUI({ pendingUpdateNudgeId: id, dismissedUpdateVersion: null })
+        } else {
+          store.updateUI({ pendingUpdateNudgeId: null })
+        }
+      },
+      setDismissedUpdateNudgeId: (id) => {
+        store.updateUI({ dismissedUpdateNudgeId: id })
+      }
+    })
+    logStartupMilestone('updater-setup-done')
+  }
+  pendingAutoUpdaterSetup = setupAutoUpdaterDeferred
+  mainWindow.once('ready-to-show', () => setImmediate(setupAutoUpdaterDeferred))
+  const updaterSetupFallback = setTimeout(setupAutoUpdaterDeferred, UPDATER_SETUP_FALLBACK_MS)
+  updaterSetupFallback.unref?.()
   registerRuntimeWindowLifecycle(mainWindow, runtime)
 
   const allowedPermissions = new Set(['media', 'fullscreen', 'pointerLock'])
@@ -209,8 +261,12 @@ function registerRuntimeWindowLifecycle(
     }
   }
   runtime.setNotifier({
-    worktreesChanged: (repoId, renamed) =>
-      send('worktrees:changed', renamed ? { repoId, renamed } : { repoId }),
+    worktreesChanged: (repoId, renamed) => {
+      // Why: clear detected-worktree scan caches before renderer listeners
+      // handle this event, preventing stale TTL reads after mutations.
+      runWorktreeChangeInvalidators(repoId)
+      send('worktrees:changed', renamed ? { repoId, renamed } : { repoId })
+    },
     worktreeBaseStatus: (event) => send('worktree:baseStatus', event),
     worktreeRemoteBranchConflict: (event) => send('worktree:remoteBranchConflict', event),
     reposChanged: () => send('repos:changed'),
@@ -230,7 +286,14 @@ function registerRuntimeWindowLifecycle(
       })
     },
     createTerminal: (worktreeId, opts) =>
-      send('ui:createTerminal', { worktreeId, command: opts.command, title: opts.title }),
+      send('ui:createTerminal', {
+        worktreeId,
+        command: opts.command,
+        ...(opts.cwd ? { cwd: opts.cwd } : {}),
+        ...(opts.env ? { env: opts.env } : {}),
+        title: opts.title,
+        ...(opts.presentation ? { presentation: opts.presentation } : {})
+      }),
     revealTerminalSession: (worktreeId, opts) =>
       new Promise((resolve, reject) => {
         const requestId = randomUUID()
@@ -239,10 +302,12 @@ function registerRuntimeWindowLifecycle(
           reject(new Error('Terminal reveal timed out'))
         }, 10_000)
         const handler = (
-          _event: Electron.IpcMainEvent,
+          event: Electron.IpcMainEvent,
           reply: { requestId: string; tabId?: string; title?: string; error?: string }
         ): void => {
-          if (reply.requestId !== requestId) {
+          // Why: requestId is renderer-supplied; only the targeted main window
+          // may satisfy the reveal and provide the tab handle.
+          if (event.sender !== mainWindow.webContents || reply.requestId !== requestId) {
             return
           }
           clearTimeout(timer)
@@ -259,7 +324,12 @@ function registerRuntimeWindowLifecycle(
           worktreeId,
           ptyId: opts.ptyId,
           title: opts.title ?? undefined,
+          ...(opts.cwd ? { cwd: opts.cwd } : {}),
+          ...(opts.launchConfig ? { launchConfig: opts.launchConfig } : {}),
+          ...(opts.launchToken ? { launchToken: opts.launchToken } : {}),
+          ...(opts.launchAgent ? { launchAgent: opts.launchAgent } : {}),
           activate: opts.activate !== false,
+          ...(opts.presentation ? { presentation: opts.presentation } : {}),
           // Why: pre-minted tabId from main keeps the renderer's tab id aligned
           // with the paneKey baked into the PTY env at spawn time, so hook
           // events route to the right slot.
@@ -319,6 +389,7 @@ function registerRuntimeWindowLifecycle(
       }) as Promise<RuntimeMarkdownSaveTabResult>,
     closeTerminal: (tabId, paneRuntimeId) => send('ui:closeTerminal', { tabId, paneRuntimeId }),
     sleepWorktree: (worktreeId) => send('ui:sleepWorktree', { worktreeId }),
+    resumeSleepingAgents: (worktreeId) => send('ui:resumeSleepingAgents', { worktreeId }),
     terminalFitOverrideChanged: (ptyId, mode, cols, rows) =>
       send('runtime:terminalFitOverrideChanged', { ptyId, mode, cols, rows }),
     terminalDriverChanged: (ptyId, driver) =>
@@ -346,9 +417,17 @@ function registerRuntimeWindowLifecycle(
 
 function registerFileDropRelay(mainWindow: BrowserWindow): void {
   const channel = 'terminal:file-dropped-from-preload'
+  const mainWebContents = mainWindow.webContents
   ipcMain.removeAllListeners(channel)
-  const relayFileDrop = (_event: Electron.IpcMainEvent, args: NativeFileDropPayload): void => {
-    if (mainWindow.isDestroyed()) {
+  const relayFileDrop = (event: Electron.IpcMainEvent, args: NativeFileDropPayload): void => {
+    if (
+      mainWindow.isDestroyed() ||
+      mainWebContents.isDestroyed() ||
+      event.sender !== mainWebContents
+    ) {
+      return
+    }
+    if (!isNativeFileDropPayload(args)) {
       return
     }
 
@@ -374,9 +453,10 @@ export function registerUpdaterHandlers(_store: Store): void {
 
   ipcMain.handle('updater:getStatus', () => getUpdateStatus())
   ipcMain.handle('updater:getVersion', () => app.getVersion())
-  ipcMain.handle('updater:check', (_event, options?: { includePrerelease?: boolean }) =>
-    checkForUpdatesFromMenu(options)
-  )
+  ipcMain.handle('updater:check', (_event, options?: UpdateCheckOptions) => {
+    ensureAutoUpdaterConfigured()
+    return checkForUpdatesFromMenu(options)
+  })
   ipcMain.handle('updater:download', () => downloadUpdate())
   ipcMain.handle('updater:quitAndInstall', () => quitAndInstall())
   ipcMain.handle('updater:dismissNudge', () => dismissNudge())

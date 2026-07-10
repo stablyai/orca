@@ -17,7 +17,15 @@ const INTERACTIVE_DRAG_BLOCKER_SELECTOR = [
 ].join(',')
 
 export function isSidebarPointerDragBlocked(target: EventTarget | null, row: HTMLElement): boolean {
-  if (!(target instanceof HTMLElement)) {
+  if (!(target instanceof Node)) {
+    return false
+  }
+  // Why: Radix hover cards portal outside the row, but React still bubbles their
+  // pointer events through row handlers; text selection there must not drag rows.
+  if (!row.contains(target)) {
+    return true
+  }
+  if (!(target instanceof Element)) {
     return false
   }
   const blocker = target.closest(INTERACTIVE_DRAG_BLOCKER_SELECTOR)

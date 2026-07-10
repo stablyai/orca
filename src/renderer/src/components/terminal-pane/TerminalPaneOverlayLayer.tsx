@@ -10,8 +10,12 @@ import {
   type ActivityTerminalPortalTarget
 } from '../activity/activity-terminal-portal'
 import TerminalPane from './TerminalPane'
+import { closeTerminalTab } from '../terminal/terminal-tab-actions'
+import { shouldMountBackgroundWorktreeTab } from '../terminal/background-terminal-worktree-mount'
+import { useNativeChatToggleShortcut } from '../native-chat/use-native-chat-toggle-shortcut'
 
 type TerminalOverlayAssignment = {
+  unifiedTabId: string
   groupId: string
   isActiveInGroup: boolean
 }
@@ -25,6 +29,8 @@ const HAS_CSS_ANCHOR_POSITIONING =
   CSS.supports('position-anchor', '--orca-terminal-overlay-probe') &&
   CSS.supports('top', 'anchor(--orca-terminal-overlay-probe top)') &&
   CSS.supports('width', 'anchor-size(--orca-terminal-overlay-probe width)')
+const MIN_OVERLAY_FIT_WIDTH_PX = 48
+const MIN_OVERLAY_FIT_HEIGHT_PX = 24
 
 function shouldUseCssAnchorPositioning(): boolean {
   return (
@@ -45,7 +51,9 @@ type TerminalOverlaySlotProps = {
   terminalGeneration: number | undefined
   worktreeId: string
   worktreePath: string
+  startupCwd: string | undefined
   groupId: string | undefined
+  isWorktreeActive: boolean
   isVisible: boolean
   isActive: boolean
   activityTerminalPortal: ActivityTerminalPortalTarget | null
@@ -60,7 +68,9 @@ const TerminalOverlaySlot = memo(function TerminalOverlaySlot({
   terminalGeneration,
   worktreeId,
   worktreePath,
+  startupCwd,
   groupId,
+  isWorktreeActive,
   isVisible,
   isActive,
   activityTerminalPortal,
@@ -74,9 +84,14 @@ const TerminalOverlaySlot = memo(function TerminalOverlaySlot({
   const [measuredFallbackRect, setMeasuredFallbackRect] = useState<MeasuredFallbackRect | null>(
     null
   )
-  const [shouldMeasureHiddenStartup] = useState(
+  const [shouldMeasureHiddenStartup, setShouldMeasureHiddenStartup] = useState(
     () => useAppStore.getState().pendingStartupByTabId[terminalTabId] !== undefined
   )
+  useLayoutEffect(() => {
+    if (isVisible && shouldMeasureHiddenStartup) {
+      setShouldMeasureHiddenStartup(false)
+    }
+  }, [isVisible, shouldMeasureHiddenStartup])
   useLayoutEffect(() => {
     if (!anchorName || shouldUseCssAnchorPositioning() || !groupId) {
       return
@@ -127,21 +142,37 @@ const TerminalOverlaySlot = memo(function TerminalOverlaySlot({
   }, [anchorName, groupId, isVisible])
 
   useLayoutEffect(() => {
-    if (!isVisible || !anchorName || shouldUseCssAnchorPositioning()) {
+    if (!isVisible || !anchorName) {
       return
     }
-    // Why: worktree switches resume visibility before fallback positioning
-    // settles. Re-fit on show and again after the measured rect lands so the
-    // PTY never stays pinned at a stale ~2-col width.
-    const frameId = requestAnimationFrame(() => {
+    const dispatchFitIfMeasurable = (): void => {
+      const rect = overlayRef.current?.getBoundingClientRect()
+      if (
+        !rect ||
+        rect.width < MIN_OVERLAY_FIT_WIDTH_PX ||
+        rect.height < MIN_OVERLAY_FIT_HEIGHT_PX
+      ) {
+        return
+      }
       window.dispatchEvent(new Event(SYNC_FIT_PANES_EVENT))
+    }
+
+    // Why: tab switches can resume visibility before anchor/fallback geometry
+    // settles. Re-fit only after the overlay has real dimensions so the PTY
+    // never stays pinned at a stale ~2-col width.
+    const frameId = requestAnimationFrame(() => {
+      dispatchFitIfMeasurable()
     })
     const retryId = window.setTimeout(() => {
-      window.dispatchEvent(new Event(SYNC_FIT_PANES_EVENT))
+      dispatchFitIfMeasurable()
     }, 50)
+    const settledRetryId = window.setTimeout(() => {
+      dispatchFitIfMeasurable()
+    }, 150)
     return () => {
       cancelAnimationFrame(frameId)
       window.clearTimeout(retryId)
+      window.clearTimeout(settledRetryId)
     }
   }, [anchorName, isVisible, measuredFallbackRect])
 
@@ -195,12 +226,13 @@ const TerminalOverlaySlot = memo(function TerminalOverlaySlot({
       key={`${terminalTabId}-${terminalGeneration ?? 0}`}
       tabId={terminalTabId}
       worktreeId={worktreeId}
-      cwd={worktreePath}
+      cwd={startupCwd ?? worktreePath}
       isActive={isActive || activityTerminalPortal?.active === true}
       // Why: split-group changes reparent TabGroupPanel subtrees. Keeping the
       // TerminalPane mounted here preserves alt-screen TUI state while this
       // flag still lets hidden tabs throttle rendering.
       isVisible={isVisible || activityTerminalPortal !== null}
+      isWorktreeActive={isWorktreeActive || activityTerminalPortal !== null}
       isolatedPaneKey={activityTerminalPortal?.paneKey ?? null}
       onPtyExit={(ptyId) => {
         if (consumeSuppressedPtyExit(ptyId)) {
@@ -210,7 +242,10 @@ const TerminalOverlaySlot = memo(function TerminalOverlaySlot({
         leaveWorktreeIfEmpty()
       }}
       onCloseTab={() => {
-        closeTab(terminalTabId)
+        // Why: route through closeTerminalTab (not the raw store closeTab) so a
+        // pinned tab hits the confirmation guard. The overlay's direct
+        // store.closeTab was the path that closed pinned terminals silently.
+        closeTerminalTab(terminalTabId)
         leaveWorktreeIfEmpty()
       }}
     />
@@ -233,6 +268,9 @@ const TerminalOverlaySlot = memo(function TerminalOverlaySlot({
       onFocusCapture={focusGroup}
     >
       {terminalPane}
+      {/* The chat/terminal toggle now lives in the pane header's action cluster
+          (TerminalPaneHeaderOverlay), beside split/close — not as a separate
+          floating overlay. */}
     </div>
   )
 })
@@ -241,12 +279,16 @@ const TerminalPaneOverlayLayer = memo(function TerminalPaneOverlayLayer({
   worktreeId,
   worktreePath,
   isWorktreeActive,
-  activityTerminalPortals = EMPTY_ACTIVITY_PORTALS
+  activityTerminalPortals = EMPTY_ACTIVITY_PORTALS,
+  backgroundMountTabIds = null
 }: {
   worktreeId: string
   worktreePath: string
   isWorktreeActive: boolean
   activityTerminalPortals?: ActivityTerminalPortalTarget[]
+  /** Non-null for targeted background mounts: only these terminal tabs get a
+   *  TerminalPane, so waking one slept agent does not connect every saved tab. */
+  backgroundMountTabIds?: ReadonlySet<string> | null
 }): React.JSX.Element | null {
   const { terminalTabs, unifiedTabs, groups, activeGroupId } = useAppStore(
     useShallow((state) => ({
@@ -261,6 +303,8 @@ const TerminalPaneOverlayLayer = memo(function TerminalPaneOverlayLayer({
   const closeTab = useAppStore((state) => state.closeTab)
   const setActiveWorktree = useAppStore((state) => state.setActiveWorktree)
   const reconcileWorktreeTabModel = useAppStore((state) => state.reconcileWorktreeTabModel)
+
+  useNativeChatToggleShortcut(worktreeId, isWorktreeActive)
 
   // Why: legacy TabGroupPanel routed terminal closes through
   // commands.closeItem → leaveWorktreeIfEmpty, which deselected the worktree
@@ -299,6 +343,7 @@ const TerminalPaneOverlayLayer = memo(function TerminalPaneOverlayLayer({
         continue
       }
       entries.set(tab.entityId, {
+        unifiedTabId: tab.id,
         groupId: tab.groupId,
         isActiveInGroup: groupActiveTabById[tab.groupId] === tab.id
       })
@@ -312,32 +357,38 @@ const TerminalPaneOverlayLayer = memo(function TerminalPaneOverlayLayer({
 
   return (
     <>
-      {terminalTabs.map((terminalTab) => {
-        const assignment = assignments.get(terminalTab.id)
-        const isVisible = Boolean(isWorktreeActive && assignment && assignment.isActiveInGroup)
-        const isActive = Boolean(isVisible && assignment && assignment.groupId === activeGroupId)
-        const activityTerminalPortal = findActivityTerminalPortal(activityTerminalPortals, {
-          worktreeId,
-          tabId: terminalTab.id
-        })
-        return (
-          <TerminalOverlaySlot
-            key={terminalTab.id}
-            terminalTabId={terminalTab.id}
-            terminalGeneration={terminalTab.generation}
-            worktreeId={worktreeId}
-            worktreePath={worktreePath}
-            groupId={assignment?.groupId}
-            isVisible={isVisible}
-            isActive={isActive}
-            activityTerminalPortal={activityTerminalPortal}
-            onFocusOwningGroup={focusOwningGroup}
-            consumeSuppressedPtyExit={consumeSuppressedPtyExit}
-            closeTab={closeTab}
-            leaveWorktreeIfEmpty={leaveWorktreeIfEmpty}
-          />
+      {terminalTabs
+        .filter((terminalTab) =>
+          shouldMountBackgroundWorktreeTab(backgroundMountTabIds, terminalTab.id)
         )
-      })}
+        .map((terminalTab) => {
+          const assignment = assignments.get(terminalTab.id)
+          const isVisible = Boolean(isWorktreeActive && assignment && assignment.isActiveInGroup)
+          const isActive = Boolean(isVisible && assignment && assignment.groupId === activeGroupId)
+          const activityTerminalPortal = findActivityTerminalPortal(activityTerminalPortals, {
+            worktreeId,
+            tabId: terminalTab.id
+          })
+          return (
+            <TerminalOverlaySlot
+              key={terminalTab.id}
+              terminalTabId={terminalTab.id}
+              terminalGeneration={terminalTab.generation}
+              worktreeId={worktreeId}
+              worktreePath={worktreePath}
+              startupCwd={terminalTab.startupCwd}
+              groupId={assignment?.groupId}
+              isWorktreeActive={isWorktreeActive}
+              isVisible={isVisible}
+              isActive={isActive}
+              activityTerminalPortal={activityTerminalPortal}
+              onFocusOwningGroup={focusOwningGroup}
+              consumeSuppressedPtyExit={consumeSuppressedPtyExit}
+              closeTab={closeTab}
+              leaveWorktreeIfEmpty={leaveWorktreeIfEmpty}
+            />
+          )
+        })}
     </>
   )
 })

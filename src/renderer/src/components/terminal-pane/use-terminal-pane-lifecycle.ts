@@ -2,10 +2,24 @@
 import { useEffect, useRef } from 'react'
 import type { IDisposable, Terminal } from '@xterm/xterm'
 import type { ParsedAgentStatusPayload } from '../../../../shared/agent-status-types'
-import { PaneManager } from '@/lib/pane-manager/pane-manager'
+import type { TerminalKittyKeyboardModeTracker } from '../../../../shared/terminal-kitty-keyboard-mode-tracker'
+import {
+  PaneManager,
+  type PaneExternalDropHandler,
+  type PaneExternalDropResolver
+} from '@/lib/pane-manager/pane-manager'
 import { consumePendingWebRuntimeSplitMirrorTelemetry } from '@/runtime/web-runtime-session'
-import { resolveTerminalCursorInactiveStyle } from '@/lib/pane-manager/pane-terminal-options'
+import {
+  normalizeTerminalFastScrollSensitivity,
+  normalizeTerminalScrollSensitivity,
+  resolveTerminalCursorInactiveStyle
+} from '@/lib/pane-manager/pane-terminal-options'
+import { normalizeDesktopTerminalScrollbackRows } from '../../../../shared/terminal-scrollback-policy'
+import { normalizeTerminalLineHeight } from '../../../../shared/terminal-line-height-settings'
+import { normalizeTerminalTuiMouseWheelMultiplier } from '@/lib/pane-manager/pane-terminal-mouse-wheel'
 import { buildWindowsPtyCompatibilityOptions } from '@/lib/pane-manager/windows-pty-compatibility'
+import { buildTerminalKeyboardProtocolOptions } from '@/lib/pane-manager/terminal-keyboard-protocol'
+import { resolvePaneKeyboardProtocolAgent } from './terminal-keyboard-protocol-pane-agent'
 import { useAppStore } from '@/store'
 import {
   createFilePathLinkProvider,
@@ -20,14 +34,18 @@ import {
   installHttpLinkClickFallback,
   type TerminalLinkRoutingPreferenceRequester
 } from './terminal-url-link-hit-testing'
+import { resolveLocalhostHttpLinkDisplayUrl } from '@/lib/http-link-routing'
 import type {
   GlobalSettings,
   SetupSplitDirection,
   TerminalTab,
-  TerminalLayoutSnapshot
+  TerminalLayoutSnapshot,
+  TuiAgent
 } from '../../../../shared/types'
 import type { TerminalPaneSplitSource } from '../../../../shared/feature-education-telemetry'
 import type { EventProps } from '../../../../shared/telemetry-events'
+import type { StartupCommandDelivery } from '../../../../shared/codex-startup-delivery'
+import type { SleepingAgentLaunchConfig } from '../../../../shared/agent-session-resume'
 import { resolveTerminalFontWeights } from '../../../../shared/terminal-fonts'
 import {
   buildFontFamily,
@@ -36,6 +54,7 @@ import {
   replayTerminalLayout,
   restoreScrollbackBuffers
 } from './layout-serialization'
+import { resolveTerminalLayoutActiveLeafId } from './terminal-layout-leaf-ids'
 import { makePaneKey } from '../../../../shared/stable-pane-id'
 import { applyExpandedLayoutTo, restoreExpandedLayoutFrom } from './expand-collapse'
 import {
@@ -47,9 +66,23 @@ import { handleOsc52ClipboardRequest } from './osc52-clipboard'
 import { showOsc52ClipboardBlockedToast } from './osc52-clipboard-blocked-toast'
 import { parseOsc7 } from './parse-osc7'
 import { resolveTerminalJisYenInput } from './terminal-jis-yen-input'
+import { installTerminalImeCompositionTracker } from './terminal-ime-composition-tracker'
+import {
+  armTerminalImePendingCandidateKeyRelease,
+  clearTerminalImePendingCandidateKeyRelease,
+  createTerminalImePendingCandidateKeyReleases,
+  shouldApplyTerminalImePendingCandidateKeyRelease
+} from './terminal-ime-candidate-key-release-guard'
+import {
+  DISABLED_MAC_NATIVE_TEXT_INPUT_SOURCE_FEATURES,
+  getMacNativeTextInputSourceTracker
+} from './terminal-ime-input-source'
+import { installTerminalImeNativeTextForwarder } from './terminal-ime-native-text-forwarder'
 import {
   shouldBypassXtermKeyboardEvent,
   shouldHandleTerminalInterruptKeyboardEvent,
+  shouldPreventDefaultTerminalImeCandidateKey,
+  shouldSuppressTerminalImeKeyboardEvent,
   shouldSuppressTerminalInterruptKeyup,
   shouldSuppressTerminalModifierKeyboardEvent,
   TERMINAL_INTERRUPT_INPUT
@@ -60,10 +93,19 @@ import type { EffectiveMacOptionAsAlt } from '@/lib/keyboard-layout/detect-optio
 import { resolveEffectiveTerminalAppearance } from '@/lib/terminal-theme'
 import { connectPanePty } from './pty-connection'
 import type { PtyTransport } from './pty-transport'
+import {
+  reconcileMissingSessions,
+  type ReconcilableBinding
+} from './terminal-dead-session-reconcile'
 import { getRemoteRuntimePtyEnvironmentId } from '@/runtime/runtime-terminal-stream'
 import { getConnectionId } from '@/lib/connection-context'
+import { getExecutionHostIdForWorktree } from '@/lib/worktree-runtime-owner'
 import { isPaneReplaying, type ReplayingPanesRef } from './replay-guard'
 import { fitAndFocusPanes, fitPanes } from './pane-helpers'
+import {
+  markTerminalPinnedViewport,
+  syncTerminalScrollIntentSoon
+} from '@/lib/pane-manager/terminal-scroll-intent'
 import { registerRuntimeTerminalTab, scheduleRuntimeGraphSync } from '@/runtime/sync-runtime-graph'
 import { e2eConfig } from '@/lib/e2e-config'
 import {
@@ -74,11 +116,15 @@ import {
 import {
   SPLIT_TERMINAL_PANE_EVENT,
   CLOSE_TERMINAL_PANE_EVENT,
+  WAKE_HIBERNATED_AGENTS_WORKTREE_EVENT,
   type SplitTerminalPaneDetail,
-  type CloseTerminalPaneDetail
+  type CloseTerminalPaneDetail,
+  type WakeHibernatedAgentsWorktreeDetail
 } from '@/constants/terminal'
 import { acquireWebviewsDragPassthrough } from '../browser-pane/webview-registry'
 import { recordCreatedTerminalPaneSplit } from './terminal-pane-split-completion'
+import { closeTerminalTab } from '../terminal/terminal-tab-actions'
+import { seedStartupSessionRestoredBanner } from './session-restored-banner-pane-state'
 
 export function recordRuntimeCreatedTerminalPaneSplit(
   createdPane: unknown,
@@ -89,6 +135,21 @@ export function recordRuntimeCreatedTerminalPaneSplit(
   }
 ): boolean {
   return recordCreatedTerminalPaneSplit(createdPane, args)
+}
+
+type TerminalScrollbackPaneManager = {
+  getPanes(): { terminal: Pick<Terminal, 'options'> }[]
+}
+
+export function applyTerminalScrollbackRowsToMountedPanes(
+  manager: TerminalScrollbackPaneManager,
+  rows: number
+): void {
+  for (const pane of manager.getPanes()) {
+    if (pane.terminal.options.scrollback !== rows) {
+      pane.terminal.options.scrollback = rows
+    }
+  }
 }
 
 function extractUncHost(value: string | undefined): string | null {
@@ -109,16 +170,43 @@ function reportActiveRendererPtyForPane(
   }
 }
 
+async function formatTerminalUrlTooltip(url: string, openLinkHint: string): Promise<string | null> {
+  const labeledUrl = await resolveLocalhostHttpLinkDisplayUrl(url)
+  if (!labeledUrl) {
+    return null
+  }
+  try {
+    const originalHost = new URL(url).host
+    return `${labeledUrl} (${originalHost}; ${openLinkHint})`
+  } catch {
+    return `${labeledUrl} (${openLinkHint})`
+  }
+}
+
 type UseTerminalPaneLifecycleDeps = {
   tabId: string
   worktreeId: string
   cwd?: string
   startup?: {
     command: string
+    /** Renderer-delivered startup input for callers that need xterm paste
+     *  semantics before the submit Enter. */
+    delivery?: 'terminal-paste'
+    startupCommandDelivery?: StartupCommandDelivery
     env?: Record<string, string>
+    launchConfig?: SleepingAgentLaunchConfig
+    launchToken?: string
+    launchAgent?: TuiAgent
+    draftPrompt?: string
+    /** Initial prompt-start status for agents that lack native prompt hooks. */
+    initialAgentStatus?: { agent: TuiAgent; prompt: string }
     /** Telemetry payload for `agent_started`. Forwarded to `pty:spawn`
      *  so main fires the event only after the spawn succeeds. */
     telemetry?: EventProps<'agent_started'>
+    /** Show the restored-session banner when this startup command mounts. */
+    showSessionRestoredBanner?: boolean
+    /** Initial startup may be paired with a setup split that changes its grid. */
+    waitForSetupSplitDirection?: SetupSplitDirection
   } | null
   /** When present, the initial pane boots clean and a split pane is created
    *  (vertical or horizontal per the user setting) to run the setup command —
@@ -155,6 +243,7 @@ type UseTerminalPaneLifecycleDeps = {
    *  context-menu split handlers can read it synchronously for cache hits. */
   paneCwdRef: React.RefObject<PaneCwdMap>
   paneMode2031Ref: React.RefObject<Map<number, boolean>>
+  paneKittyKeyboardModesRef: React.RefObject<Map<number, TerminalKittyKeyboardModeTracker>>
   paneLastThemeModeRef: React.RefObject<Map<number, 'dark' | 'light'>>
   panePtyBindingsRef: React.RefObject<Map<number, IDisposable>>
   replayingPanesRef: ReplayingPanesRef
@@ -174,6 +263,7 @@ type UseTerminalPaneLifecycleDeps = {
   clearWorktreeUnread: (worktreeId: string) => void
   clearTerminalTabUnread: (tabId: string) => void
   clearTerminalPaneUnread: (paneKey: string) => void
+  onShowSessionRestoredBanner: (paneId: number) => void
   dispatchNotification: (event: {
     source: 'terminal-bell' | 'agent-task-complete'
     terminalTitle?: string
@@ -183,6 +273,7 @@ type UseTerminalPaneLifecycleDeps = {
   }) => void
   setCacheTimerStartedAt: (key: string, ts: number | null) => void
   syncPanePtyLayoutBinding: (paneId: number, ptyId: string | null) => void
+  clearExitedPanePtyLayoutBinding: (paneId: number, exitedPtyId: string) => void
   setTabPaneExpanded: (tabId: string, expanded: boolean) => void
   setTabCanExpandPane: (tabId: string, canExpand: boolean) => void
   setExpandedPane: (paneId: number | null) => void
@@ -191,11 +282,16 @@ type UseTerminalPaneLifecycleDeps = {
   setPaneTitles: React.Dispatch<React.SetStateAction<Record<number, string>>>
   paneTitlesRef: React.RefObject<Record<number, string>>
   setRenamingPaneId: React.Dispatch<React.SetStateAction<number | null>>
-  // Why: TerminalPane exposes a reactive pane count so effects (e.g. the
-  // data-has-title toggler) re-run when panes are split or closed. The
+  // Why: TerminalPane exposes reactive pane metadata so effects that read the
+  // imperative pane list re-run when panes are split or closed. The
   // imperative managerRef.getPanes().length is not reactive, so without this
   // dispatcher structural changes wouldn't trigger dependent effects.
   setPaneCount: React.Dispatch<React.SetStateAction<number>>
+  // Why: same pane count does not imply same geometry; drag-reorder can move
+  // panes without resizing them, so overlay rects need a layout-change tick.
+  setPaneLayoutRevision: React.Dispatch<React.SetStateAction<number>>
+  resolveExternalPaneDropTarget?: PaneExternalDropResolver
+  onExternalPaneDrop?: PaneExternalDropHandler
 }
 
 export function suppressIntentionalPaneCloseExit(
@@ -207,6 +303,24 @@ export function suppressIntentionalPaneCloseExit(
     suppressPtyExit(ptyId)
   }
   return ptyId
+}
+
+export function mapRestoredPaneTitlesByPaneId(
+  savedTitles: Record<string, string> | undefined,
+  restoredPaneByLeafId: ReadonlyMap<string, number>
+): Record<number, string> {
+  if (!savedTitles) {
+    return {}
+  }
+
+  const restored: Record<number, string> = {}
+  for (const [oldLeafId, title] of Object.entries(savedTitles)) {
+    const newPaneId = restoredPaneByLeafId.get(oldLeafId)
+    if (newPaneId != null && title) {
+      restored[newPaneId] = title
+    }
+  }
+  return restored
 }
 
 function terminalSelectionExceedsPrimaryLimit(terminal: Terminal): boolean {
@@ -253,6 +367,42 @@ function hydrateTerminalScrollbackRefs(layout: TerminalLayoutSnapshot): {
   return hydrated
     ? { layout: { ...layout, buffersByLeafId: buffers }, hydrated }
     : { layout, hydrated }
+}
+
+export function resolveQueuedInitialCwd(
+  queuedInitialCwd: string | null | undefined,
+  consumeTabInitialCwd: () => string | null,
+  defaultTabCwd: string
+): { queuedInitialCwd: string | null; startupCwd: string } {
+  const nextQueuedInitialCwd =
+    queuedInitialCwd === undefined ? consumeTabInitialCwd() : queuedInitialCwd
+  return {
+    queuedInitialCwd: nextQueuedInitialCwd,
+    startupCwd: nextQueuedInitialCwd ?? defaultTabCwd
+  }
+}
+
+export function clearQueuedInitialCwdAfterFirstPane(
+  queuedInitialCwd: string | null | undefined,
+  defaultTabCwd: string,
+  currentPtyCwd: string
+): { queuedInitialCwd: string | null | undefined; ptyCwd: string } {
+  if (!queuedInitialCwd) {
+    return { queuedInitialCwd, ptyCwd: currentPtyCwd }
+  }
+  return { queuedInitialCwd: null, ptyCwd: defaultTabCwd }
+}
+
+export function resolvePaneLinkCwd(
+  paneCwdMap: PaneCwdMap,
+  paneId: number,
+  fallbackCwd: string
+): string {
+  return paneCwdMap.get(paneId)?.cwd ?? fallbackCwd
+}
+
+export function resolvePaneSeedCwd(splitPaneCwd: string | undefined, fallbackCwd: string): string {
+  return splitPaneCwd ?? fallbackCwd
 }
 
 type SplitStartupPayload = { command: string; env?: Record<string, string> }
@@ -314,6 +464,37 @@ export function shouldDetachPaneTransportOnUnmount(args: {
   )
 }
 
+/**
+ * Self-gating dead-session reconcile pass scheduled from the isVisible effect.
+ * Why self-gate: the effect fires on BOTH isVisible true and false, but we only
+ * reconcile on resume (hidden to visible), never on hide or initial mount.
+ * Returns true when the pass was scheduled so the resume-unit test can assert
+ * the gate.
+ */
+export function isTerminalPaneVisibilityResume(args: {
+  previousIsVisible: boolean | null
+  isVisible: boolean
+}): boolean {
+  return args.previousIsVisible === false && args.isVisible
+}
+
+type TerminalPaneVisibilitySnapshot = {
+  tabId: string
+  cwd: string | null | undefined
+  isVisible: boolean
+}
+
+export function getPreviousVisibleForTerminalPane(args: {
+  previous: TerminalPaneVisibilitySnapshot | null
+  tabId: string
+  cwd: string | null | undefined
+}): boolean | null {
+  if (args.previous?.tabId !== args.tabId || args.previous.cwd !== args.cwd) {
+    return null
+  }
+  return args.previous.isVisible
+}
+
 export function useTerminalPaneLifecycle({
   tabId,
   worktreeId,
@@ -337,6 +518,7 @@ export function useTerminalPaneLifecycle({
   paneTransportsRef,
   paneCwdRef,
   paneMode2031Ref,
+  paneKittyKeyboardModesRef,
   paneLastThemeModeRef,
   panePtyBindingsRef,
   replayingPanesRef,
@@ -356,9 +538,11 @@ export function useTerminalPaneLifecycle({
   clearWorktreeUnread,
   clearTerminalTabUnread,
   clearTerminalPaneUnread,
+  onShowSessionRestoredBanner,
   dispatchNotification,
   setCacheTimerStartedAt,
   syncPanePtyLayoutBinding,
+  clearExitedPanePtyLayoutBinding,
   setTabPaneExpanded,
   setTabCanExpandPane,
   setExpandedPane,
@@ -367,10 +551,17 @@ export function useTerminalPaneLifecycle({
   setPaneTitles,
   paneTitlesRef,
   setRenamingPaneId,
-  setPaneCount
+  setPaneCount,
+  setPaneLayoutRevision,
+  resolveExternalPaneDropTarget,
+  onExternalPaneDrop
 }: UseTerminalPaneLifecycleDeps): void {
+  const terminalScrollbackRows = normalizeDesktopTerminalScrollbackRows(
+    settings?.terminalScrollbackRows
+  )
   const systemPrefersDarkRef = useRef(systemPrefersDark)
   systemPrefersDarkRef.current = systemPrefersDark
+  const previousVisibleForReconcileRef = useRef<TerminalPaneVisibilitySnapshot | null>(null)
   const linkProviderDisposablesRef = useRef(new Map<number, IDisposable>())
   const terminalHandleLinkDisposablesRef = useRef(new Map<number, IDisposable>())
   const fileLinkClickFallbackDisposablesRef = useRef(new Map<number, IDisposable>())
@@ -383,6 +574,10 @@ export function useTerminalPaneLifecycle({
   const osc52DisposablesRef = useRef(new Map<number, IDisposable>())
   const osc7DisposablesRef = useRef(new Map<number, IDisposable>())
   const mouseHideDisposablesRef = useRef(new Map<number, IDisposable>())
+  const imeCompositionDisposablesRef = useRef(new Map<number, IDisposable>())
+  const imeNativeTextForwarderDisposablesRef = useRef(new Map<number, IDisposable>())
+  const queuedInitialCwdRef = useRef<string | null | undefined>(undefined)
+  const restoredViewportBlankingPanesRef = useRef(new Set<number>())
 
   const applyAppearance = (manager: PaneManager): void => {
     const currentSettings = settingsRef.current
@@ -448,6 +643,8 @@ export function useTerminalPaneLifecycle({
     const selectionDisposables = selectionDisposablesRef.current
     const selectionCaptureTimers = selectionCaptureTimersRef.current
     const mouseHideDisposables = mouseHideDisposablesRef.current
+    const imeCompositionDisposables = imeCompositionDisposablesRef.current
+    const imeNativeTextForwarderDisposables = imeNativeTextForwarderDisposablesRef.current
     const worktreePath =
       useAppStore
         .getState()
@@ -455,8 +652,17 @@ export function useTerminalPaneLifecycle({
         .find((candidate) => candidate.id === worktreeId)?.path ??
       cwd ??
       ''
-    const startupCwd = cwd ?? worktreePath
+    const defaultTabCwd = cwd ?? worktreePath
+    const initialCwdResolution = resolveQueuedInitialCwd(
+      queuedInitialCwdRef.current,
+      () => useAppStore.getState().consumeTabInitialCwd(tabId),
+      defaultTabCwd
+    )
+    queuedInitialCwdRef.current = initialCwdResolution.queuedInitialCwd
+    const startupCwd = initialCwdResolution.startupCwd
     const terminalHomePath = resolveTerminalHomePathFromEnv(startup?.env)
+    const getPaneLinkCwd = (paneId: number): string =>
+      resolvePaneLinkCwd(paneCwdRef.current, paneId, startupCwd)
     // Why: existence probes can cross SSH/runtime boundaries. This cache is
     // lifecycle-scoped, so external mutations and the initial 'active' runtime
     // fallback can temporarily leave stale entries.
@@ -465,6 +671,7 @@ export function useTerminalPaneLifecycle({
       worktreeId,
       worktreePath,
       startupCwd,
+      getPaneLinkCwd,
       terminalHomePath,
       managerRef,
       linkProviderDisposablesRef,
@@ -499,11 +706,15 @@ export function useTerminalPaneLifecycle({
     }
 
     // Why: publish the current pane count to React state so effects depending
-    // on structural changes (e.g. the data-has-title toggler) re-run on
-    // split/close. The pane list lives in an imperative PaneManager ref, so
+    // on structural changes re-run on split/close. The pane list lives in an
+    // imperative PaneManager ref, so
     // without this sync those effects would miss structural-only changes.
     const syncPaneCount = (): void => {
       setPaneCount(managerRef.current?.getPanes().length ?? 0)
+    }
+
+    const syncPaneLayoutRevision = (): void => {
+      setPaneLayoutRevision((revision) => revision + 1)
     }
 
     const normalizedInitialLayout = normalizeTerminalLayoutSnapshot(initialLayoutRef.current)
@@ -517,15 +728,21 @@ export function useTerminalPaneLifecycle({
       initialLayoutRef.current = hydratedInitialScrollback.layout
     }
     let shouldPersistLayout = false
+    const startupWithSetupSplitWait =
+      startup && setupSplit
+        ? { ...startup, waitForSetupSplitDirection: setupSplit.direction }
+        : startup
     const ptyDeps = {
       tabId,
       worktreeId,
-      cwd,
-      startup,
+      cwd: startupCwd,
+      startup: startupWithSetupSplitWait,
       paneTransportsRef,
       paneMode2031Ref,
+      paneKittyKeyboardModesRef,
       paneLastThemeModeRef,
       replayingPanesRef,
+      restoredViewportBlankingPanesRef,
       isActiveRef,
       isVisibleRef,
       onPtyExitRef,
@@ -542,9 +759,11 @@ export function useTerminalPaneLifecycle({
       clearWorktreeUnread,
       clearTerminalTabUnread,
       clearTerminalPaneUnread,
+      onShowSessionRestoredBanner,
       dispatchNotification,
       setCacheTimerStartedAt,
       syncPanePtyLayoutBinding,
+      clearExitedPanePtyLayoutBinding,
       restoredPtyIdByLeafId: initialLayoutRef.current.ptyIdsByLeafId ?? {}
     }
 
@@ -558,7 +777,7 @@ export function useTerminalPaneLifecycle({
 
     const fileOpenLinkHint = getTerminalFileOpenHint()
     const urlOpenLinkHint = getTerminalUrlOpenHint()
-    const osc7UncHost = extractUncHost(cwd)
+    const osc7UncHost = extractUncHost(startupCwd)
 
     let releaseWebviewDragPassthrough: (() => void) | null = null
 
@@ -611,6 +830,12 @@ export function useTerminalPaneLifecycle({
         // Return true so xterm marks the sequence handled. If a future
         // consumer registers on code 7, registration order decides who sees
         // each sequence.
+        if (!paneCwdRef.current.has(pane.id)) {
+          paneCwdRef.current.set(pane.id, {
+            cwd: resolvePaneSeedCwd(spawnHints?.cwd, ptyDeps.cwd),
+            confirmed: false
+          })
+        }
         const osc7Disposable = pane.terminal.parser.registerOscHandler(7, (data) => {
           const parsedCwd = parseOsc7(data, { uncHost: osc7UncHost })
           if (parsedCwd) {
@@ -632,8 +857,70 @@ export function useTerminalPaneLifecycle({
         // encoder runs, letting the browser and Electron paths fire normally.
         // See xterm-bypass-policy.ts for the rule derivation.
         let pendingTerminalInterruptKeyup = false
+        const pendingTerminalImeCandidateKeyReleases =
+          createTerminalImePendingCandidateKeyReleases()
+        const isMac = navigator.userAgent.includes('Mac')
+        // Why: Android/ChromeOS UAs also contain "Linux"; keep the Sogou/fcitx
+        // candidate-key policy scoped to desktop Linux so paired web clients on
+        // those platforms keep their previous IME behavior.
+        const isLinux =
+          !isMac &&
+          navigator.userAgent.includes('Linux') &&
+          !/Android|CrOS/.test(navigator.userAgent)
+        const macNativeTextInputSourceTracker = isMac ? getMacNativeTextInputSourceTracker() : null
+        const imeCompositionTracker = installTerminalImeCompositionTracker(pane.terminal.element)
+        imeCompositionDisposablesRef.current.set(pane.id, imeCompositionTracker)
+        // Why: only known macOS native text paths need xterm keydown bypass.
+        // Source gates cover physical CJK/Vietnamese IME rewrites; synthetic
+        // Unicode key events are detected by missing physical key identity.
+        const imeNativeTextForwarder = isMac
+          ? installTerminalImeNativeTextForwarder({
+              terminalElement: pane.terminal.element,
+              isComposing: () => imeCompositionTracker.isActive(),
+              sendInput: (data) => pane.terminal.input(data),
+              getInputSourceFeatures: () =>
+                macNativeTextInputSourceTracker?.getFeatures() ??
+                DISABLED_MAC_NATIVE_TEXT_INPUT_SOURCE_FEATURES
+            })
+          : {
+              claimKeyEvent: () => false,
+              dispose: () => undefined
+            }
+        imeNativeTextForwarderDisposablesRef.current.set(pane.id, imeNativeTextForwarder)
         pane.terminal.attachCustomKeyEventHandler((e) => {
-          const isMac = navigator.userAgent.includes('Mac')
+          const now = Date.now()
+          const pendingCandidateReleaseGuardActive =
+            shouldApplyTerminalImePendingCandidateKeyRelease(
+              e,
+              pendingTerminalImeCandidateKeyReleases,
+              now
+            )
+          const imeKeyboardOptions = {
+            compositionActive: imeCompositionTracker.isActive(),
+            candidateKeyGuardActive:
+              imeCompositionTracker.isCandidateKeyGuardActive() ||
+              pendingCandidateReleaseGuardActive,
+            pendingCandidateKeyReleaseActive: pendingCandidateReleaseGuardActive,
+            isMac,
+            isLinux
+          }
+          if (shouldSuppressTerminalImeKeyboardEvent(e, imeKeyboardOptions)) {
+            // Why: clear before arm — a fresh keydown drops any stale pending
+            // release for its key before the new press arms its own.
+            clearTerminalImePendingCandidateKeyRelease(pendingTerminalImeCandidateKeyReleases, e)
+            if (shouldPreventDefaultTerminalImeCandidateKey(e, imeKeyboardOptions)) {
+              // Why: without preventDefault the suppressed candidate keydown
+              // still fires a keypress and mutates the helper textarea.
+              e.preventDefault()
+              armTerminalImePendingCandidateKeyRelease(
+                pendingTerminalImeCandidateKeyReleases,
+                e,
+                now
+              )
+            }
+            return false
+          }
+          clearTerminalImePendingCandidateKeyRelease(pendingTerminalImeCandidateKeyReleases, e)
           if (pendingTerminalInterruptKeyup && shouldSuppressTerminalInterruptKeyup(e)) {
             pendingTerminalInterruptKeyup = false
             return false
@@ -676,6 +963,21 @@ export function useTerminalPaneLifecycle({
             return false
           }
 
+          if (e.type === 'keydown') {
+            if (e.key === 'PageUp' || e.key === 'Home') {
+              markTerminalPinnedViewport(pane.terminal)
+              syncTerminalScrollIntentSoon(pane.terminal, { preservePinnedAtBottom: true })
+            } else if (e.key === 'PageDown' || e.key === 'End') {
+              syncTerminalScrollIntentSoon(pane.terminal)
+            }
+          }
+
+          if (imeNativeTextForwarder.claimKeyEvent(e)) {
+            // Why: bypass xterm's kitty encoder for native text keydowns so the
+            // committed glyph survives via the input event.
+            return false
+          }
+
           return !shouldBypassXtermKeyboardEvent(e, {
             isMac,
             hasSelection: pane.terminal.hasSelection()
@@ -708,6 +1010,7 @@ export function useTerminalPaneLifecycle({
           requestOpenLinksInAppPreference
         })
         httpLinkClickFallbackDisposables.set(pane.id, httpLinkClickFallbackDisposable)
+        seedStartupSessionRestoredBanner(ptyDeps.startup, pane.id, onShowSessionRestoredBanner)
         // Why: skip empty selections so clicking to deselect doesn't clobber
         // whatever the user last copied elsewhere.
         const selectionDisposable = pane.terminal.onSelectionChange(() => {
@@ -768,11 +1071,15 @@ export function useTerminalPaneLifecycle({
           const mouseHideDisposable = installMouseHideWhileTyping(pane.terminal, pane.container)
           mouseHideDisposablesRef.current.set(pane.id, mouseHideDisposable)
         }
+        // Why: async tooltip formatting can resolve after hover changes, so a
+        // stale result must not overwrite the tooltip for a newer hover/leave.
+        let oscTooltipHoverToken = 0
         pane.terminal.options.linkHandler = {
           allowNonHttpProtocols: true,
           activate: (event, text) => {
-            handleOscLink(text, event as MouseEvent | undefined, {
+            const handled = handleOscLink(text, event as MouseEvent | undefined, {
               ...linkDeps,
+              startupCwd: getPaneLinkCwd(pane.id),
               runtimeEnvironmentId: linkDeps.getRuntimeEnvironmentIdForPane?.(pane.id) ?? null,
               requestOpenLinksInAppPreference
             })
@@ -784,16 +1091,26 @@ export function useTerminalPaneLifecycle({
             // moving the mouse extends a selection until the next click/Esc.
             // clearSelection() explicitly detaches those listeners (see
             // SelectionService._removeMouseDownListeners).
-            pane.terminal.clearSelection()
+            if (handled) {
+              pane.terminal.clearSelection()
+            }
           },
           // Show bottom-left tooltip on hover for OSC 8 hyperlinks (e.g.
           // GitHub owner/repo#issue references emitted by CLI tools) — same
           // behaviour as the WebLinksAddon provides for plain-text URLs.
           hover: (_event, text) => {
+            oscTooltipHoverToken += 1
+            const hoverToken = oscTooltipHoverToken
             pane.linkTooltip.textContent = `${text} (${urlOpenLinkHint})`
             pane.linkTooltip.style.display = ''
+            void formatTerminalUrlTooltip(text, urlOpenLinkHint).then((nextText) => {
+              if (hoverToken === oscTooltipHoverToken && nextText) {
+                pane.linkTooltip.textContent = nextText
+              }
+            })
           },
           leave: () => {
+            oscTooltipHoverToken += 1
             pane.linkTooltip.style.display = 'none'
           }
         }
@@ -824,12 +1141,20 @@ export function useTerminalPaneLifecycle({
         // sets deps.startup immediately before splitPane() and is therefore
         // unaffected by this clear.
         ptyDeps.startup = null
+        const nextInitialCwdState = clearQueuedInitialCwdAfterFirstPane(
+          queuedInitialCwdRef.current,
+          defaultTabCwd,
+          ptyDeps.cwd
+        )
+        queuedInitialCwdRef.current = nextInitialCwdState.queuedInitialCwd
+        ptyDeps.cwd = nextInitialCwdState.ptyCwd
         panePtyBindings.set(pane.id, panePtyBinding)
         syncPaneCount()
         scheduleRuntimeGraphSync()
         queueResizeAll(true)
       },
       onPaneClosed: (paneId, closedPane) => {
+        const isDetachedToTab = closedPane?.reason === 'detach'
         const linkProviderDisposable = linkProviderDisposablesRef.current.get(paneId)
         if (linkProviderDisposable) {
           linkProviderDisposable.dispose()
@@ -856,6 +1181,17 @@ export function useTerminalPaneLifecycle({
           selectionDisposable.dispose()
           selectionDisposablesRef.current.delete(paneId)
         }
+        const imeCompositionDisposable = imeCompositionDisposablesRef.current.get(paneId)
+        if (imeCompositionDisposable) {
+          imeCompositionDisposable.dispose()
+          imeCompositionDisposablesRef.current.delete(paneId)
+        }
+        const imeNativeTextForwarderDisposable =
+          imeNativeTextForwarderDisposablesRef.current.get(paneId)
+        if (imeNativeTextForwarderDisposable) {
+          imeNativeTextForwarderDisposable.dispose()
+          imeNativeTextForwarderDisposablesRef.current.delete(paneId)
+        }
         const selectionCaptureTimer = selectionCaptureTimersRef.current.get(paneId)
         if (selectionCaptureTimer !== undefined) {
           window.clearTimeout(selectionCaptureTimer)
@@ -869,6 +1205,7 @@ export function useTerminalPaneLifecycle({
           mode2031DisposablesRef.current.delete(paneId)
         }
         paneMode2031Ref.current.delete(paneId)
+        paneKittyKeyboardModesRef.current.delete(paneId)
         paneLastThemeModeRef.current.delete(paneId)
         const osc52Disposable = osc52DisposablesRef.current.get(paneId)
         if (osc52Disposable) {
@@ -894,36 +1231,44 @@ export function useTerminalPaneLifecycle({
           panePtyBinding.dispose()
           panePtyBindings.delete(paneId)
         }
-        // Why: closing a pane is user-initiated teardown of this row — drop
-        // (not remove) so any retained `done` snapshot for this pane is also
-        // cleared and a same-frame live→gone transition cannot re-snapshot
-        // it via the retention sync. This is pane-keyed state, so it must
-        // clear even if the PTY transport was already removed.
         const leafId = closedPane?.leafId
-        if (leafId) {
+        if (leafId && !isDetachedToTab) {
+          // Why: closing a pane is user-initiated teardown of this row — drop
+          // (not remove) so any retained `done` snapshot for this pane is also
+          // cleared and a same-frame live→gone transition cannot re-snapshot
+          // it via the retention sync. This is pane-keyed state, so it must
+          // clear even if the PTY transport was already removed.
           const paneKey = makePaneKey(tabId, leafId)
           useAppStore.getState().setCacheTimerStartedAt(paneKey, null)
           clearTerminalPaneUnread(paneKey)
           useAppStore.getState().dropAgentStatus(paneKey)
+          useAppStore.getState().clearPaneForegroundAgent(paneKey)
         }
         if (transport) {
-          const ptyId = suppressIntentionalPaneCloseExit(
-            transport,
-            useAppStore.getState().suppressPtyExit
-          )
-          if (ptyId) {
-            // Why: user/CLI pane closes intentionally tear down this PTY after
-            // PaneManager has already promoted the sibling. Suppress that exit
-            // so the last-surviving pane is not mistaken for an exited tab.
-            syncPanePtyLayoutBinding(paneId, null)
-            clearTabPtyId(tabId, ptyId)
+          if (isDetachedToTab) {
+            // Why: pane-to-tab detach hands the PTY to a newly-created tab;
+            // detach renderer listeners without sending a process teardown.
+            transport.detach?.()
+          } else {
+            const ptyId = suppressIntentionalPaneCloseExit(
+              transport,
+              useAppStore.getState().suppressPtyExit
+            )
+            if (ptyId) {
+              // Why: user/CLI pane closes intentionally tear down this PTY after
+              // PaneManager has already promoted the sibling. Suppress that exit
+              // so the last-surviving pane is not mistaken for an exited tab.
+              syncPanePtyLayoutBinding(paneId, null)
+              clearTabPtyId(tabId, ptyId)
+            }
+            transport.destroy?.()
           }
-          transport.destroy?.()
           paneTransportsRef.current.delete(paneId)
         }
         clearRuntimePaneTitle(tabId, paneId)
         paneFontSizesRef.current.delete(paneId)
         replayingPanesRef.current.delete(paneId)
+        restoredViewportBlankingPanesRef.current.delete(paneId)
         // Clean up pane title state so closed panes don't leave stale entries.
         setPaneTitles((prev) => {
           if (!(paneId in prev)) {
@@ -961,11 +1306,39 @@ export function useTerminalPaneLifecycle({
         scheduleRuntimeGraphSync()
       },
       onActivePaneChange: (pane) => {
+        const layout = useAppStore.getState().terminalLayoutsByTabId[tabId]
+        const ptyIdsByLeafId = layout?.ptyIdsByLeafId ?? {}
+        if (Object.keys(ptyIdsByLeafId).length > 0 && !ptyIdsByLeafId[pane.leafId]) {
+          const fallbackLeafId = resolveTerminalLayoutActiveLeafId({
+            root: layout?.root,
+            activeLeafId: pane.leafId,
+            ptyIdsByLeafId
+          })
+          const fallbackPaneId = fallbackLeafId
+            ? (managerRef.current?.getNumericIdForLeaf(fallbackLeafId) ?? null)
+            : null
+          if (fallbackPaneId != null && fallbackPaneId !== pane.id) {
+            // Why: a pane whose PTY exited can remain visible; do not let a
+            // click park focus on a leaf that will swallow keyboard input.
+            managerRef.current?.setActivePane(fallbackPaneId, { focus: true })
+            return
+          }
+        }
         scheduleRuntimeGraphSync()
+        // Why: active pane lives in PaneManager; React consumers such as the
+        // header chat toggle need a render tick when focus moves between splits.
+        syncPaneLayoutRevision()
         if (shouldPersistLayout) {
           persistLayoutSnapshot()
         }
         reportActiveRendererPtyForPane(paneTransportsRef.current, pane.id)
+        // Why: the tab icon resolves from the active leaf's process identity;
+        // focusing a shell-marked pane whose agent is still running must
+        // re-sample it, since no further OSC boundary will.
+        const focusedBinding = panePtyBindings.get(pane.id) as
+          | (IDisposable & { sampleForegroundAgentOnFocus?: () => void })
+          | undefined
+        focusedBinding?.sampleForegroundAgentOnFocus?.()
         // Why: when the user switches focus between split panes, update the
         // tab title to the newly active pane's last-known title so the tab
         // label reflects the focused agent — not a stale title from the
@@ -981,6 +1354,7 @@ export function useTerminalPaneLifecycle({
         syncExpandedLayout()
         syncCanExpandState()
         syncPaneCount()
+        syncPaneLayoutRevision()
         queueResizeAll(false)
         if (shouldPersistLayout) {
           persistLayoutSnapshot()
@@ -995,6 +1369,8 @@ export function useTerminalPaneLifecycle({
         releaseWebviewDragPassthrough?.()
         releaseWebviewDragPassthrough = null
       },
+      resolveExternalPaneDropTarget,
+      onExternalPaneDrop,
       terminalOptions: () => {
         const currentSettings = settingsRef.current
         const terminalFontWeights = resolveTerminalFontWeights(currentSettings?.terminalFontWeight)
@@ -1004,41 +1380,62 @@ export function useTerminalPaneLifecycle({
           (candidate) => candidate.id === tabId
         )
         const platformInfo = window.api.platform?.get?.()
-        const windowsPtyCompatibilityOptions = buildWindowsPtyCompatibilityOptions({
+        // Why: launch identity belongs only to the pane consuming this one-shot
+        // startup. A tab-wide hint would leak Grok's KKP exception to shell splits.
+        const knownTuiAgent = resolvePaneKeyboardProtocolAgent(
+          ptyDeps.startup,
+          currentTab?.launchAgent
+        )
+        const ptyBackendContext = {
           userAgent: navigator.userAgent,
           osRelease: platformInfo?.osRelease,
           connectionId: getConnectionId(worktreeId),
           cwd: startupCwd,
-          shellOverride: currentTab?.shellOverride
-        })
+          shellOverride: currentTab?.shellOverride,
+          executionHostId: getExecutionHostIdForWorktree(storeState, worktreeId),
+          tuiAgent: knownTuiAgent
+        }
+        const windowsPtyCompatibilityOptions =
+          buildWindowsPtyCompatibilityOptions(ptyBackendContext)
+        // Why: local Windows ConPTY CLIs read the Kitty keyboard advertisement but
+        // do not decode CSI-u, so withhold it there to restore Enter/Up/Down nav
+        // (issue #2434); SSH and macOS/Linux panes keep enhanced reporting.
+        // Exception: Grok (tuiAgent) keeps the advertisement — see protocol module.
+        const keyboardProtocolOptions = buildTerminalKeyboardProtocolOptions(ptyBackendContext)
         return {
           ...windowsPtyCompatibilityOptions,
+          ...keyboardProtocolOptions,
           fontSize: currentSettings?.terminalFontSize ?? 14,
           fontFamily: buildFontFamily(currentSettings?.terminalFontFamily ?? ''),
           fontWeight: terminalFontWeights.fontWeight,
           fontWeightBold: terminalFontWeights.fontWeightBold,
-          scrollback: Math.min(
-            50_000,
-            Math.max(
-              1000,
-              Math.round((currentSettings?.terminalScrollbackBytes ?? 10_000_000) / 200)
-            )
+          scrollback: normalizeDesktopTerminalScrollbackRows(
+            currentSettings?.terminalScrollbackRows
           ),
           cursorStyle,
           cursorInactiveStyle: resolveTerminalCursorInactiveStyle(cursorStyle),
           cursorBlink: currentSettings?.terminalCursorBlink ?? true,
+          scrollSensitivity: normalizeTerminalScrollSensitivity(
+            currentSettings?.terminalScrollSensitivity
+          ),
+          fastScrollSensitivity: normalizeTerminalFastScrollSensitivity(
+            currentSettings?.terminalFastScrollSensitivity
+          ),
           macOptionIsMeta: effectiveMacOptionAsAltRef.current === 'true',
-          lineHeight: currentSettings?.terminalLineHeight ?? 1,
+          lineHeight: normalizeTerminalLineHeight(currentSettings?.terminalLineHeight),
           wordSeparator: currentSettings?.terminalWordSeparator
         }
       },
+      terminalTuiScrollSensitivity: () =>
+        normalizeTerminalTuiMouseWheelMultiplier(settingsRef.current?.terminalTuiScrollSensitivity),
       onLinkClick: (event, url) => {
         if (!event) {
           return
         }
         const activePane = managerRef.current?.getActivePane()
-        void handleOscLink(url, event, {
+        const handled = handleOscLink(url, event, {
           ...linkDeps,
+          startupCwd: activePane ? getPaneLinkCwd(activePane.id) : startupCwd,
           runtimeEnvironmentId: activePane
             ? (linkDeps.getRuntimeEnvironmentIdForPane?.(activePane.id) ?? null)
             : null,
@@ -1051,8 +1448,11 @@ export function useTerminalPaneLifecycle({
         // phantom selection until the next click/Esc. Explicitly clearing the
         // selection also detaches those listeners (see
         // SelectionService._removeMouseDownListeners).
-        managerRef.current?.getActivePane()?.terminal.clearSelection()
+        if (handled) {
+          managerRef.current?.getActivePane()?.terminal.clearSelection()
+        }
       },
+      formatLinkTooltip: (url, openLinkHint) => formatTerminalUrlTooltip(url, openLinkHint),
       // Why: TerminalPane instances stay mounted for hidden visited worktrees
       // so PTYs survive navigation. Creating WebGL for those offscreen panes
       // still consumes Chromium's context budget and can blank visible panes.
@@ -1075,7 +1475,13 @@ export function useTerminalPaneLifecycle({
     const restoredPaneByLeafId = replayTerminalLayout(manager, initialLayoutRef.current, isActive)
 
     const restoredBuffers = initialLayoutRef.current.buffersByLeafId
-    restoreScrollbackBuffers(manager, restoredBuffers, restoredPaneByLeafId, replayingPanesRef)
+    restoreScrollbackBuffers(
+      manager,
+      restoredBuffers,
+      restoredPaneByLeafId,
+      replayingPanesRef,
+      restoredViewportBlankingPanesRef
+    )
     if (restoredBuffers && initialLayoutRef.current.scrollbackRefsByLeafId) {
       const layoutWithoutRestoredBuffers = { ...initialLayoutRef.current }
       delete layoutWithoutRestoredBuffers.buffersByLeafId
@@ -1089,24 +1495,18 @@ export function useTerminalPaneLifecycle({
 
     // Seed pane titles from the persisted snapshot using the same
     // old-leafId → new-paneId mapping used for buffer restore.
-    const savedTitles = initialLayoutRef.current.titlesByLeafId
-    if (savedTitles) {
-      const restored: Record<number, string> = {}
-      for (const [oldLeafId, title] of Object.entries(savedTitles)) {
-        const newPaneId = restoredPaneByLeafId.get(oldLeafId)
-        if (newPaneId != null && title) {
-          restored[newPaneId] = title
-        }
-      }
-      if (Object.keys(restored).length > 0) {
-        // Merge (not replace) so we don't discard any concurrent state
-        // updates from onPaneClosed that React may have batched.
-        setPaneTitles((prev) => ({ ...prev, ...restored }))
-        // Why: the lifecycle immediately persists a fresh layout after restore,
-        // before React state has flushed. Keep the ref in sync now so that
-        // persist preserves restored titles instead of rewriting them away.
-        paneTitlesRef.current = { ...paneTitlesRef.current, ...restored }
-      }
+    const restoredTitles = mapRestoredPaneTitlesByPaneId(
+      initialLayoutRef.current.titlesByLeafId,
+      restoredPaneByLeafId
+    )
+    if (Object.keys(restoredTitles).length > 0) {
+      // Merge (not replace) so we don't discard any concurrent state
+      // updates from onPaneClosed that React may have batched.
+      setPaneTitles((prev) => ({ ...prev, ...restoredTitles }))
+      // Why: the lifecycle immediately persists a fresh layout after restore,
+      // before React state has flushed. Keep the ref in sync now so that
+      // persist preserves restored titles instead of rewriting them away.
+      paneTitlesRef.current = { ...paneTitlesRef.current, ...restoredTitles }
     }
 
     const restoredActivePaneId =
@@ -1147,7 +1547,7 @@ export function useTerminalPaneLifecycle({
     const initialPane = manager.getActivePane() ?? manager.getPanes()[0]
 
     // Why: setup/issue automation panes are internal workspace bootstrap flows,
-    // not the user-visible split-terminal milestone recorded below.
+    // not the user-initiated terminal split interaction recorded below.
     if (setupSplit) {
       if (initialPane) {
         const setupPane = splitPaneWithOneShotStartup(
@@ -1260,7 +1660,10 @@ export function useTerminalPaneLifecycle({
         return
       }
       if (mgr.getPanes().length <= 1) {
-        useAppStore.getState().closeTab(tabId)
+        // Why: route through closeTerminalTab (not the raw store closeTab) so a
+        // pinned tab hits the confirmation guard. Closing the last pane here was
+        // the one path that silently dropped pinned tabs.
+        closeTerminalTab(tabId)
       } else {
         mgr.closePane(detail.paneRuntimeId)
         scheduleRuntimeGraphSync()
@@ -1311,6 +1714,14 @@ export function useTerminalPaneLifecycle({
         disposable.dispose()
       }
       mouseHideDisposables.clear()
+      for (const disposable of imeCompositionDisposables.values()) {
+        disposable.dispose()
+      }
+      imeCompositionDisposables.clear()
+      for (const disposable of imeNativeTextForwarderDisposables.values()) {
+        disposable.dispose()
+      }
+      imeNativeTextForwarderDisposables.clear()
       for (const transport of paneTransports.values()) {
         const ptyId = transport.getPtyId()
         if (
@@ -1353,16 +1764,68 @@ export function useTerminalPaneLifecycle({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tabId, cwd])
 
+  // Why: mobile wake fanout — this pane self-selects by worktreeId and fires its
+  // own armed hibernation --resume while staying hidden on the desktop (no
+  // reveal, no focus/navigation change). Not-yet-mounted panes are covered by
+  // the background-mount fresh-connect cold-restore path instead.
   useEffect(() => {
+    const onWakeHibernatedAgents = (event: Event): void => {
+      const detail = (event as CustomEvent<WakeHibernatedAgentsWorktreeDetail>).detail
+      if (!detail || detail.worktreeId !== worktreeId) {
+        return
+      }
+      for (const panePtyBinding of panePtyBindingsRef.current.values()) {
+        const claimKey = (
+          panePtyBinding as IDisposable & {
+            wakeHibernatedAgentIfArmed?: (claimedProviderSessions?: Set<string>) => string | null
+          }
+        ).wakeHibernatedAgentIfArmed?.(detail.wokenClaimKeys)
+        // Why: the dispatcher's follow-up generic resume must skip provider
+        // sessions this pane woke (or latched) in place — the sleeping record
+        // is only cleared after the in-place spawn succeeds, so without this
+        // the same session would resume twice.
+        if (claimKey) {
+          detail.wokenClaimKeys?.add(claimKey)
+        }
+      }
+    }
+    window.addEventListener(WAKE_HIBERNATED_AGENTS_WORKTREE_EVENT, onWakeHibernatedAgents)
+    return () => {
+      window.removeEventListener(WAKE_HIBERNATED_AGENTS_WORKTREE_EVENT, onWakeHibernatedAgents)
+    }
+  }, [worktreeId, panePtyBindingsRef])
+
+  useEffect(() => {
+    const previousIsVisible = getPreviousVisibleForTerminalPane({
+      previous: previousVisibleForReconcileRef.current,
+      tabId,
+      cwd
+    })
+    previousVisibleForReconcileRef.current = { tabId, cwd, isVisible }
     isVisibleRef.current = isVisible
+    const resumedFromHidden = isTerminalPaneVisibilityResume({ previousIsVisible, isVisible })
     for (const panePtyBinding of panePtyBindingsRef.current.values()) {
       const bindingWithVisibility = panePtyBinding as IDisposable & {
         syncProcessTracking?: () => void
+        noteVisibilityResume?: () => void
       }
       bindingWithVisibility.syncProcessTracking?.()
+      // Why: visible-resume repairs dropped hidden resizes, but it must not fit
+      // against xterm's transient hidden DOM fallback.
+      if (resumedFromHidden) {
+        bindingWithVisibility.noteVisibilityResume?.()
+      }
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- Why: visibility flips must refresh existing PTY process tracking even though the ref object identity is stable.
-  }, [isVisible, isVisibleRef, panePtyBindingsRef])
+    if (resumedFromHidden && typeof window.api.pty.hasPty === 'function') {
+      // Why: preserve missed-exit recovery without daemon-wide listSessions;
+      // providers can answer a single-PTY liveness check from in-memory state.
+      reconcileMissingSessions({
+        bindings: panePtyBindingsRef.current.values() as Iterable<ReconcilableBinding>,
+        hasPty: window.api.pty.hasPty
+      })
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- Why: visibility and terminal identity changes must refresh existing PTY process tracking even though the ref object identity is stable.
+  }, [cwd, isVisible, isVisibleRef, panePtyBindingsRef, tabId])
 
   useEffect(() => {
     const manager = managerRef.current
@@ -1381,6 +1844,16 @@ export function useTerminalPaneLifecycle({
   useEffect(() => {
     managerRef.current?.setTerminalGpuAcceleration(settings?.terminalGpuAcceleration ?? 'auto')
   }, [settings?.terminalGpuAcceleration, managerRef])
+
+  useEffect(() => {
+    const manager = managerRef.current
+    if (!manager) {
+      return
+    }
+    // Why: live row retention changes are xterm option updates only; they must
+    // not recreate panes, replay snapshots, refit, resize, or signal the PTY.
+    applyTerminalScrollbackRowsToMountedPanes(manager, terminalScrollbackRows)
+  }, [managerRef, terminalScrollbackRows])
 
   useEffect(() => {
     const manager = managerRef.current

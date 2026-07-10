@@ -15,12 +15,18 @@ import type {
 } from '../../shared/types'
 import type { CodexRuntimeHomeService } from './runtime-home-service'
 import { writeFileAtomically } from './fs-utils'
+import { rewriteRelativePathConfigValues } from '../codex/codex-config-path-reference-rewrite'
 import { resolveCodexCommand } from '../codex-cli/command'
 import type { Store } from '../persistence'
 import type { RateLimitService } from '../rate-limits/service'
 import { parseWslUncPath } from '../../shared/wsl-paths'
 import { toWindowsWslPath } from '../wsl'
 import { buildEncodedWslBashCommand } from '../wsl-bash-command'
+import {
+  buildWslCodexAvailabilityArgs,
+  buildWslCodexLoginArgs,
+  WSL_CODEX_AVAILABILITY_TIMEOUT_MS
+} from './wsl-codex-command'
 import {
   getCodexSelectionTargetForAccount,
   getSelectedCodexAccountIdForTarget,
@@ -45,6 +51,13 @@ type ResolvedCodexIdentity = {
   providerAccountId: string | null
   workspaceLabel: string | null
   workspaceAccountId: string | null
+}
+
+type CanonicalCodexConfig = {
+  contents: string
+  /** Home the config was read from, in the path style Codex sees at runtime
+   *  (Linux-side for WSL); relative path-valued settings resolve against it. */
+  sourceHomePath: string
 }
 
 export type CodexAccountAddTarget = {
@@ -452,25 +465,31 @@ export class CodexAccountService {
     // Why: Orca account switching is meant to swap Codex credentials and quota
     // identity, not silently fork the user's sandbox/config defaults. Syncing
     // one canonical config into every managed home keeps auth isolated per
-    // account while preserving consistent Codex behavior.
-    this.writeManagedConfig(trustedManagedHomePath, canonicalConfig)
+    // account while preserving consistent Codex behavior. Managed homes are
+    // real CODEX_HOMEs for `codex login`, so relative path-valued settings
+    // must keep resolving against the home the config was read from.
+    this.writeManagedConfig(
+      trustedManagedHomePath,
+      rewriteRelativePathConfigValues(canonicalConfig.contents, canonicalConfig.sourceHomePath)
+    )
   }
 
-  private readCanonicalConfig(): string | null {
-    const primaryConfigPath = join(homedir(), '.codex', 'config.toml')
+  private readCanonicalConfig(): CanonicalCodexConfig | null {
+    const sourceHomePath = join(homedir(), '.codex')
+    const primaryConfigPath = join(sourceHomePath, 'config.toml')
     if (!existsSync(primaryConfigPath)) {
       return null
     }
 
     try {
-      return readFileSync(primaryConfigPath, 'utf-8')
+      return { contents: readFileSync(primaryConfigPath, 'utf-8'), sourceHomePath }
     } catch (error) {
       console.warn('[codex-accounts] Failed to read canonical config:', error)
       return null
     }
   }
 
-  private readCanonicalConfigForManagedHome(managedHomePath: string): string | null {
+  private readCanonicalConfigForManagedHome(managedHomePath: string): CanonicalCodexConfig | null {
     const wslInfo = parseWslUncPath(managedHomePath)
     if (!wslInfo) {
       return this.readCanonicalConfig()
@@ -488,7 +507,9 @@ export class CodexAccountService {
     }
 
     try {
-      return readFileSync(configPath, 'utf-8')
+      // Why: the config is read over UNC but consumed by Codex inside WSL, so
+      // path rewrites must anchor to the Linux-side ~/.codex, not the UNC path.
+      return { contents: readFileSync(configPath, 'utf-8'), sourceHomePath: `${wslHome}/.codex` }
     } catch (error) {
       console.warn('[codex-accounts] Failed to read WSL canonical config:', error)
       return null
@@ -789,15 +810,7 @@ export class CodexAccountService {
       const spawnConfig = wslInfo
         ? {
             command: 'wsl.exe',
-            // Why: nvm and similar WSL installs often initialize PATH from interactive shell config.
-            args: [
-              '-d',
-              wslInfo.distro,
-              '--exec',
-              'bash',
-              '-ic',
-              `export CODEX_HOME=${shellQuote(wslInfo.linuxPath)}; exec codex login`
-            ],
+            args: buildWslCodexLoginArgs(wslInfo.distro, wslInfo.linuxPath),
             env: process.env,
             codexCommand: 'codex'
           }
@@ -907,18 +920,10 @@ export class CodexAccountService {
 
   private assertWslCodexCliAvailable(wslInfo: { distro: string; linuxPath: string }): void {
     try {
-      execFileSync(
-        'wsl.exe',
-        [
-          '-d',
-          wslInfo.distro,
-          '--exec',
-          'bash',
-          '-ic',
-          buildEncodedWslBashCommand('command -v codex >/dev/null 2>&1')
-        ],
-        { encoding: 'utf-8', timeout: 5000 }
-      )
+      execFileSync('wsl.exe', buildWslCodexAvailabilityArgs(wslInfo.distro), {
+        encoding: 'utf-8',
+        timeout: WSL_CODEX_AVAILABILITY_TIMEOUT_MS
+      })
     } catch (error) {
       throw new Error(
         `Codex CLI is not available in WSL ${wslInfo.distro}. Install Codex in that distro or switch Account location to Windows.`,

@@ -8,8 +8,10 @@ import { basename, joinPath } from '@/lib/path'
 import { getExternalFileChangeRelativePath } from '@/components/right-sidebar/useFileExplorerWatch'
 import { normalizeRuntimePathForComparison } from '../../../shared/cross-platform-path'
 import {
+  canAutoSaveOpenFile,
   getOpenFilesForExternalFileChange,
   isExternalReloadableEditorTab,
+  isWorkingTreeCombinedDiffTab,
   notifyEditorExternalFileChange
 } from '@/components/editor/editor-autosave'
 import {
@@ -22,12 +24,18 @@ import { findWorktreeById } from '@/store/slices/worktree-helpers'
 import type { OpenFile } from '@/store/slices/editor'
 import { readRuntimeFileContent, subscribeRuntimeFileChanges } from '@/runtime/runtime-file-client'
 import { getRuntimeEnvironmentIdForWorktree } from '@/lib/worktree-runtime-owner'
+import {
+  ORCA_WORKTREE_FILE_CHANGE_EVENT,
+  type WorktreeFileChangeEventDetail
+} from './worktree-file-change-event'
+import { isGitRepoKind } from '../../../shared/repo-kind'
+import { markFileChangedOnDisk } from '@/components/editor/editor-changed-on-disk-mark'
 
 // Why: atomic-write patterns (Claude Code's Edit tool, editors like vim,
 // VSCode) land as a short burst of `update` events — or `delete + create` on
 // renamers — within a few milliseconds for the same path. Dispatching an
 // `ORCA_EDITOR_EXTERNAL_FILE_CHANGE_EVENT` per raw event fan-outs into N full
-// `setContent` + `normalizeSoftBreaks` doc rebuilds per mounted EditorPanel,
+// `setContent` + document-repair rebuilds per mounted EditorPanel,
 // which under split-pane + large markdown is enough to wedge the renderer
 // and black out the window (issue #826). Coalescing per (worktreeId + path)
 // on a short debounce collapses that burst into one reload notification.
@@ -90,6 +98,8 @@ export type EditorExternalWatchTargetState = Pick<
   | 'rightSidebarOpen'
   | 'rightSidebarTab'
   | 'rightSidebarExplorerView'
+  | 'gitStatusHugeByWorktree'
+  | 'sshConnectionStates'
 >
 
 let cachedOpenFiles: AppState['openFiles'] | null = null
@@ -100,6 +110,8 @@ let cachedRuntimeEnvironmentId: string | undefined
 let cachedRightSidebarOpen: boolean | null = null
 let cachedRightSidebarTab: AppState['rightSidebarTab'] | null = null
 let cachedRightSidebarExplorerView: AppState['rightSidebarExplorerView'] | null = null
+let cachedGitStatusHugeByWorktree: AppState['gitStatusHugeByWorktree'] | null = null
+let cachedSshConnectionStates: AppState['sshConnectionStates'] | null = null
 let cachedWatchedTargetsSnapshot: WatchedTargetsSnapshot = { targets: [], targetsKey: '' }
 
 export function getWatchedTargetKey(target: WatchedTarget): string {
@@ -125,7 +137,9 @@ export function getEditorExternalWatchTargets(
     cachedRuntimeEnvironmentId === runtimeEnvironmentId &&
     cachedRightSidebarOpen === state.rightSidebarOpen &&
     cachedRightSidebarTab === state.rightSidebarTab &&
-    cachedRightSidebarExplorerView === state.rightSidebarExplorerView
+    cachedRightSidebarExplorerView === state.rightSidebarExplorerView &&
+    cachedGitStatusHugeByWorktree === state.gitStatusHugeByWorktree &&
+    cachedSshConnectionStates === state.sshConnectionStates
   ) {
     return cachedWatchedTargetsSnapshot
   }
@@ -145,23 +159,37 @@ export function getEditorExternalWatchTargets(
     // storing the tab, so an ownerless stored tab must stay local here.
     owners.add(openFileRuntimeOwner(f))
   }
-  if (
-    state.activeWorktreeId &&
+  const activeWorktreeId = state.activeWorktreeId
+  const activeWorktree = activeWorktreeId
+    ? findWorktreeById(state.worktreesByRepo, activeWorktreeId)
+    : undefined
+  const activeRepo = activeWorktree
+    ? state.repos.find((repo) => repo.id === activeWorktree.repoId)
+    : undefined
+  const sourceControlCanConsumeWatch =
+    !!activeWorktreeId &&
+    !!activeRepo &&
+    isGitRepoKind(activeRepo) &&
+    !state.gitStatusHugeByWorktree[activeWorktreeId] &&
+    (!activeRepo.connectionId ||
+      state.sshConnectionStates.get(activeRepo.connectionId)?.status === 'connected')
+  const activeWorktreeNeedsSidebarWatch =
+    activeWorktreeId !== null &&
     state.rightSidebarOpen &&
-    state.rightSidebarTab === 'explorer' &&
-    state.rightSidebarExplorerView === 'files'
-  ) {
-    // Why: the right sidebar stays mounted while hidden; do not create a
-    // worktree-level watcher just because the user clicked a workspace.
-    // macOS can surface privacy prompts for those passive filesystem probes.
-    let owners = targetOwnersByWorktreeId.get(state.activeWorktreeId)
+    ((state.rightSidebarTab === 'explorer' && state.rightSidebarExplorerView === 'files') ||
+      (state.rightSidebarTab === 'source-control' && sourceControlCanConsumeWatch))
+  if (activeWorktreeNeedsSidebarWatch) {
+    // Why: this app-level watcher owns subscriptions for Explorer and Source
+    // Control so downstream consumers do not fight over watch/unwatch IPC.
+    let owners = targetOwnersByWorktreeId.get(activeWorktreeId)
     if (!owners) {
       owners = new Set()
-      targetOwnersByWorktreeId.set(state.activeWorktreeId, owners)
+      targetOwnersByWorktreeId.set(activeWorktreeId, owners)
     }
-    // Why: the Explorer is mounted for the selected worktree. Its watcher must
-    // follow that worktree's host owner, not the host currently focused in the UI.
-    owners.add(getRuntimeEnvironmentIdForWorktree(state, state.activeWorktreeId))
+    // Why: sidebar consumers are mounted for the selected worktree. Their
+    // watcher must follow that worktree's host owner, not the host currently
+    // focused in the UI.
+    owners.add(getRuntimeEnvironmentIdForWorktree(state, activeWorktreeId))
   }
 
   const nextTargets: WatchedTarget[] = []
@@ -197,6 +225,8 @@ export function getEditorExternalWatchTargets(
   cachedRightSidebarOpen = state.rightSidebarOpen
   cachedRightSidebarTab = state.rightSidebarTab
   cachedRightSidebarExplorerView = state.rightSidebarExplorerView
+  cachedGitStatusHugeByWorktree = state.gitStatusHugeByWorktree
+  cachedSshConnectionStates = state.sshConnectionStates
 
   if (targetsKey === cachedWatchedTargetsSnapshot.targetsKey) {
     return cachedWatchedTargetsSnapshot
@@ -411,6 +441,15 @@ export function createExternalWatchEventHandler(
     if (!target) {
       return
     }
+    // Why: this app-level hook owns worktree watcher subscriptions. Other
+    // consumers listen here so they do not fight over watch/unwatch ownership.
+    if (typeof window !== 'undefined' && typeof window.dispatchEvent === 'function') {
+      window.dispatchEvent(
+        new CustomEvent<WorktreeFileChangeEventDetail>(ORCA_WORKTREE_FILE_CHANGE_EVENT, {
+          detail: { payload, runtimeEnvironmentId: target.runtimeEnvironmentId }
+        })
+      )
+    }
 
     // Why: collect create/update paths first so we can cancel any pending
     // same-path delete before scheduling a new one. This is what absorbs
@@ -508,7 +547,10 @@ export function createExternalWatchEventHandler(
     // Why: if a previously-deleted file reappears at the same path (e.g.
     // the user ran `git checkout`), clear the tombstone so the tab returns
     // to its normal state and any non-dirty content gets reloaded below.
-    // `createOrUpdatePaths` was collected above.
+    // `createOrUpdatePaths` was collected above. Scoped to deleted/renamed:
+    // a 'changed' mark means the file was rewritten while the tab was dirty,
+    // so a further update event must not clear it — it resolves via reload,
+    // save, or the reload path below.
     if (createOrUpdatePaths.size > 0) {
       const state = useAppStore.getState()
       for (const file of state.openFiles) {
@@ -516,7 +558,7 @@ export function createExternalWatchEventHandler(
           file.worktreeId === target.worktreeId &&
           openFileRuntimeOwner(file) === target.runtimeEnvironmentId &&
           (file.mode === 'edit' || file.mode === 'markdown-preview') &&
-          file.externalMutation &&
+          (file.externalMutation === 'deleted' || file.externalMutation === 'renamed') &&
           createOrUpdatePaths.has(normalizeRuntimePathForComparison(file.filePath))
         ) {
           state.setExternalMutation(file.id, null)
@@ -572,6 +614,16 @@ export function createExternalWatchEventHandler(
     // `useFileExplorerHandlers`. Read `openFiles` once per payload to avoid
     // N store reads for large batched events.
     const openFilesSnapshot = useAppStore.getState().openFiles
+    // Why: a combined "Changes" tab matches no single path but renders every
+    // changed file's working-tree diff. This is per-worktree, not per-path, so
+    // compute it once instead of rescanning openFiles for each changed file in
+    // a large batched payload (e.g. a branch switch touching hundreds of files).
+    const hasCombinedDiffConsumer = openFilesSnapshot.some(
+      (f) =>
+        f.worktreeId === target.worktreeId &&
+        openFileRuntimeOwner(f) === target.runtimeEnvironmentId &&
+        isWorkingTreeCombinedDiffTab(f)
+    )
     for (const relativePath of changedFiles) {
       const notification = {
         worktreeId: target.worktreeId,
@@ -581,10 +633,36 @@ export function createExternalWatchEventHandler(
       }
       const matching = getOpenFilesForExternalFileChange(openFilesSnapshot, notification)
       if (matching.length === 0) {
+        // Why: notify the combined-diff tab so its section reloads. Its own
+        // dirty/section guards make a blanket reload safe, and there is no
+        // in-memory editor content to clobber, so self-write suppression is
+        // unnecessary here.
+        if (hasCombinedDiffConsumer) {
+          scheduleDebouncedExternalReload(notification)
+        }
         continue
       }
-      if (matching.some((f) => f.isDirty)) {
-        continue
+      const dirtyMatches = matching.filter((f) => f.isDirty)
+      if (dirtyMatches.length > 0) {
+        // Why: an external write landing on a dirty tab must not vanish
+        // silently (issue #7265) — the user was left with a stale tab and a
+        // save that clobbered the newer disk content. Mark the tab so the
+        // editor shows a changed-on-disk banner with an explicit reload path.
+        scheduleChangedOnDiskMark(
+          target,
+          notification,
+          // Why: canAutoSaveOpenFile is exactly the set of tabs that can hold
+          // unsaved edits (edit + unstaged diff) — the tabs the banner serves.
+          dirtyMatches.filter((dirtyFile) => canAutoSaveOpenFile(dirtyFile)).map((f) => f.id)
+        )
+        if (dirtyMatches.length === matching.length) {
+          if (hasCombinedDiffConsumer) {
+            scheduleDebouncedExternalReload(notification)
+          }
+          continue
+        }
+        // Clean sibling tabs (e.g. an unstaged diff of the same path) still
+        // reload below; every notification consumer skips dirty files.
       }
       const absolutePath = joinPath(notification.worktreePath, notification.relativePath)
       const recentSelfWrite = getRecentSelfWrite(absolutePath, target.runtimeEnvironmentId)
@@ -608,6 +686,90 @@ export function createExternalWatchEventHandler(
   return { handleFsChanged, dispose }
 }
 
+const inFlightEchoVerificationReads = new Map<string, ReturnType<typeof readRuntimeFileContent>>()
+
+// Why: one save echo can arrive as a burst of watcher payloads (SSH poll +
+// event streams), and each verification is a full-file read — on remote
+// transports a network round-trip. Concurrent payloads for the same file
+// share the in-flight read instead of stacking duplicates.
+function readFileForEchoVerification(args: {
+  runtimeEnvironmentId: string | null | undefined
+  filePath: string
+  relativePath: string
+  worktreeId: string | null | undefined
+  connectionId: string | undefined
+}): ReturnType<typeof readRuntimeFileContent> {
+  const key = `${args.runtimeEnvironmentId ?? ''}::${args.connectionId ?? ''}::${args.filePath}`
+  let pending = inFlightEchoVerificationReads.get(key)
+  if (!pending) {
+    pending = readRuntimeFileContent({
+      settings: args.runtimeEnvironmentId
+        ? { activeRuntimeEnvironmentId: args.runtimeEnvironmentId }
+        : null,
+      filePath: args.filePath,
+      relativePath: args.relativePath,
+      worktreeId: args.worktreeId ?? undefined,
+      connectionId: args.connectionId
+    })
+    inFlightEchoVerificationReads.set(key, pending)
+    const release = (): void => {
+      if (inFlightEchoVerificationReads.get(key) === pending) {
+        inFlightEchoVerificationReads.delete(key)
+      }
+    }
+    pending.then(release, release)
+  }
+  return pending
+}
+
+function markTabsChangedOnDisk(fileIds: string[], connectionId: string | undefined): void {
+  const state = useAppStore.getState()
+  for (const fileId of fileIds) {
+    const file = state.openFiles.find((f) => f.id === fileId)
+    // Why: echo verification resolves async — a save or reload may already
+    // have resolved the conflict; the helper only marks still-dirty tabs.
+    if (file) {
+      markFileChangedOnDisk(state, file, { connectionId, origin: 'live' })
+    }
+  }
+}
+
+function scheduleChangedOnDiskMark(
+  target: WatchedTarget,
+  notification: ExternalWatchNotification,
+  fileIds: string[]
+): void {
+  if (fileIds.length === 0) {
+    return
+  }
+  const absolutePath = joinPath(notification.worktreePath, notification.relativePath)
+  const recentSelfWrite = getRecentSelfWrite(absolutePath, target.runtimeEnvironmentId)
+  // Why: the fs event may be the echo of Orca's own save racing keystrokes
+  // typed during the write. Marking on the echo would show a false "changed
+  // on disk" banner, so verify disk really differs from our last write.
+  if (!recentSelfWrite || recentSelfWrite.content === null) {
+    markTabsChangedOnDisk(fileIds, target.connectionId)
+    return
+  }
+  void readFileForEchoVerification({
+    runtimeEnvironmentId: target.runtimeEnvironmentId,
+    filePath: absolutePath,
+    relativePath: notification.relativePath,
+    worktreeId: notification.worktreeId,
+    connectionId: target.connectionId
+  })
+    .then((result) => {
+      if (result.isBinary || result.content !== recentSelfWrite.content) {
+        markTabsChangedOnDisk(fileIds, target.connectionId)
+      }
+    })
+    .catch(() => {
+      // Why: unreadable disk state can't disprove an external change — keep
+      // the conflict visible rather than risk a silent overwrite.
+      markTabsChangedOnDisk(fileIds, target.connectionId)
+    })
+}
+
 function scheduleSelfWriteAwareExternalReload(
   target: WatchedTarget,
   notification: ExternalWatchNotification,
@@ -623,8 +785,8 @@ function scheduleSelfWriteAwareExternalReload(
   // Why: a recent self-write stamp only proves the path changed recently; an
   // agent can write a newer version inside the same TTL. Compare disk content
   // with the saved text so we suppress only the echo of Orca's own write.
-  void readRuntimeFileContent({
-    settings: runtimeEnvironmentId ? { activeRuntimeEnvironmentId: runtimeEnvironmentId } : null,
+  void readFileForEchoVerification({
+    runtimeEnvironmentId,
     filePath: file.filePath,
     relativePath: file.relativePath,
     worktreeId: file.worktreeId,
@@ -649,7 +811,9 @@ function scheduleSelfWriteAwareExternalReload(
 
 function hasCleanExternalReloadTarget(notification: ExternalWatchNotification): boolean {
   const matching = getOpenFilesForExternalFileChange(useAppStore.getState().openFiles, notification)
-  return matching.length > 0 && matching.every((file) => !file.isDirty)
+  // Why: one clean target is enough — every notification consumer skips dirty
+  // files per-file, so a dirty sibling tab no longer vetoes the reload.
+  return matching.some((file) => !file.isDirty)
 }
 
 export function getOverflowExternalReloadTargets(

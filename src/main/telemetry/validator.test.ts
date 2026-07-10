@@ -43,7 +43,7 @@ describe('validate', () => {
 
   it('accepts a well-formed star_nag_outcome payload with cohort context', () => {
     const result = validate('star_nag_outcome', {
-      outcome: 'opened_web',
+      outcome: 'opened_repo',
       source: 'force_show',
       mode: 'web',
       threshold: 35,
@@ -57,7 +57,7 @@ describe('validate', () => {
   it('rejects malformed star_nag_outcome payloads', () => {
     expect(
       validate('star_nag_outcome', {
-        outcome: 'opened_web',
+        outcome: 'opened_repo',
         source: 'force_show',
         mode: 'web',
         threshold: 35,
@@ -68,7 +68,7 @@ describe('validate', () => {
     ).toBe(false)
     expect(
       validate('star_nag_outcome', {
-        outcome: 'opened_web',
+        outcome: 'opened_repo',
         source: 'force_show',
         mode: 'web',
         threshold: 0,
@@ -384,6 +384,14 @@ describe('validate', () => {
     expect(result.ok).toBe(true)
   })
 
+  it('accepts the Windows terminal onboarding step value kind', () => {
+    const result = validate('onboarding_step_completed', {
+      step: 4,
+      value_kind: 'windows_terminal'
+    })
+    expect(result.ok).toBe(true)
+  })
+
   it('rejects onboarding_step_completed with negative duration_ms', () => {
     const result = validate('onboarding_step_completed', {
       step: 1,
@@ -417,6 +425,26 @@ describe('validate', () => {
     const result = validate('onboarding_task_sources_snapshot', {
       github_status: 'signed-in',
       linear_status: 'not_connected',
+      exit_action: 'continue'
+    } as never)
+    expect(result.ok).toBe(false)
+  })
+
+  it('accepts onboarding_windows_terminal_snapshot with bounded choices', () => {
+    const result = validate('onboarding_windows_terminal_snapshot', {
+      default_shell: 'git_bash',
+      right_click_behavior: 'menu',
+      exit_action: 'continue',
+      duration_ms: 1200,
+      advanced_via: 'keyboard'
+    })
+    expect(result.ok).toBe(true)
+  })
+
+  it('rejects onboarding_windows_terminal_snapshot with raw shell values', () => {
+    const result = validate('onboarding_windows_terminal_snapshot', {
+      default_shell: 'C:\\Program Files\\Git\\bin\\bash.exe',
+      right_click_behavior: 'menu',
       exit_action: 'continue'
     } as never)
     expect(result.ok).toBe(false)

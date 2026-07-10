@@ -1,19 +1,10 @@
 import { describe, expect, it } from 'vitest'
-import { shouldBypassXtermKeyboardEvent, type XtermBypassEvent } from './xterm-bypass-policy'
-
-function event(overrides: Partial<XtermBypassEvent>): XtermBypassEvent {
-  return {
-    type: 'keydown',
-    key: '',
-    code: '',
-    defaultPrevented: false,
-    metaKey: false,
-    ctrlKey: false,
-    altKey: false,
-    shiftKey: false,
-    ...overrides
-  }
-}
+import {
+  shouldBypassXtermKeyboardEvent,
+  shouldPreventDefaultTerminalImeCandidateKey,
+  shouldSuppressTerminalImeKeyboardEvent
+} from './xterm-bypass-policy'
+import { event } from './xterm-bypass-event-fixture'
 
 describe('shouldBypassXtermKeyboardEvent — macOS', () => {
   const opts = { isMac: true, hasSelection: true }
@@ -155,6 +146,110 @@ describe('shouldBypassXtermKeyboardEvent — macOS', () => {
   it('does not bubble Shift+Latin printable text', () => {
     expect(
       shouldBypassXtermKeyboardEvent(event({ key: 'A', code: 'KeyA', shiftKey: true }), opts)
+    ).toBe(false)
+  })
+})
+
+describe('shouldSuppressTerminalImeKeyboardEvent — macOS', () => {
+  const idle = {
+    isMac: true,
+    isLinux: false,
+    compositionActive: false,
+    candidateKeyGuardActive: false,
+    pendingCandidateKeyReleaseActive: false
+  }
+  const composing = {
+    isMac: true,
+    isLinux: false,
+    compositionActive: true,
+    candidateKeyGuardActive: true,
+    pendingCandidateKeyReleaseActive: false
+  }
+
+  it('suppresses keyboard events while Chromium reports active IME composition', () => {
+    expect(
+      shouldSuppressTerminalImeKeyboardEvent(
+        event({ key: 'Backspace', code: 'Backspace', isComposing: true }),
+        idle
+      )
+    ).toBe(true)
+  })
+
+  it('lets standalone Process keys reach xterm so its CompositionHelper can diff text', () => {
+    expect(
+      shouldSuppressTerminalImeKeyboardEvent(
+        event({ key: 'Process', code: 'KeyN', keyCode: 229 }),
+        idle
+      )
+    ).toBe(false)
+  })
+
+  it('suppresses standalone Process keyups so kitty release reporting cannot leak', () => {
+    expect(
+      shouldSuppressTerminalImeKeyboardEvent(
+        event({ type: 'keyup', key: 'Process', code: 'KeyN', keyCode: 229 }),
+        idle
+      )
+    ).toBe(true)
+  })
+
+  it('suppresses Process keys while the terminal composition tracker is active', () => {
+    expect(
+      shouldSuppressTerminalImeKeyboardEvent(
+        event({ key: 'Process', code: 'KeyN', keyCode: 229 }),
+        composing
+      )
+    ).toBe(true)
+  })
+
+  it('does not suppress ordinary Backspace outside IME composition', () => {
+    expect(
+      shouldSuppressTerminalImeKeyboardEvent(event({ key: 'Backspace', code: 'Backspace' }), idle)
+    ).toBe(false)
+  })
+
+  it('suppresses IME-owned editing keys while composition is active', () => {
+    expect(
+      shouldSuppressTerminalImeKeyboardEvent(
+        event({ key: 'Backspace', code: 'Backspace' }),
+        composing
+      )
+    ).toBe(true)
+    expect(
+      shouldSuppressTerminalImeKeyboardEvent(
+        event({ key: 'ArrowDown', code: 'ArrowDown' }),
+        composing
+      )
+    ).toBe(true)
+  })
+
+  it('does not suppress ordinary text keys solely because composition is active', () => {
+    expect(
+      shouldSuppressTerminalImeKeyboardEvent(event({ key: 'a', code: 'KeyA' }), composing)
+    ).toBe(false)
+  })
+
+  it('does not suppress keypress events because they carry committed text', () => {
+    expect(
+      shouldSuppressTerminalImeKeyboardEvent(
+        event({ type: 'keypress', key: '中', code: '', isComposing: true }),
+        idle
+      )
+    ).toBe(false)
+  })
+
+  it('does not apply the Linux/Sogou candidate guard to macOS', () => {
+    expect(
+      shouldSuppressTerminalImeKeyboardEvent(event({ key: ' ', code: 'Space' }), composing)
+    ).toBe(false)
+    expect(
+      shouldSuppressTerminalImeKeyboardEvent(
+        event({ type: 'keypress', key: '2', code: 'Digit2' }),
+        composing
+      )
+    ).toBe(false)
+    expect(
+      shouldPreventDefaultTerminalImeCandidateKey(event({ key: ' ', code: 'Space' }), composing)
     ).toBe(false)
   })
 })

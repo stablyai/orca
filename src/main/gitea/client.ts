@@ -6,6 +6,10 @@ import {
   type RawGiteaPullRequest
 } from './pull-request-mappers'
 import { getGiteaRepoRef, type GiteaRepoRef } from './repository-ref'
+import {
+  getHostedReviewLocalGitOptions,
+  type HostedReviewExecutionOptions
+} from '../source-control/hosted-review-git-options'
 
 const REQUEST_TIMEOUT_MS = 5000
 const PULL_REQUEST_PAGE_LIMIT = 50
@@ -71,15 +75,13 @@ async function requestJsonAtBase<T>(
   options: RequestOptions = {}
 ): Promise<T | null> {
   const config = getAuthConfig()
-  const controller = new AbortController()
-  const timeout = setTimeout(() => controller.abort(), options.timeoutMs ?? REQUEST_TIMEOUT_MS)
   try {
     const response = await fetch(apiUrl(baseUrl, path, options.searchParams), {
       headers: {
         Accept: 'application/json',
         ...authHeaders(config)
       },
-      signal: controller.signal
+      signal: AbortSignal.timeout(options.timeoutMs ?? REQUEST_TIMEOUT_MS)
     })
     if (!response.ok) {
       return null
@@ -87,8 +89,6 @@ async function requestJsonAtBase<T>(
     return (await response.json()) as T
   } catch {
     return null
-  } finally {
-    clearTimeout(timeout)
   }
 }
 
@@ -187,9 +187,14 @@ export async function getGiteaAuthStatus(): Promise<GiteaAuthStatus> {
 export async function getGiteaPullRequest(
   repoPath: string,
   prNumber: number,
-  connectionId?: string | null
+  connectionId?: string | null,
+  options: HostedReviewExecutionOptions = {}
 ): Promise<GiteaPullRequestInfo | null> {
-  const repo = await getGiteaRepoRef(repoPath, connectionId)
+  const repo = await getGiteaRepoRef(
+    repoPath,
+    connectionId,
+    getHostedReviewLocalGitOptions(options)
+  )
   if (!repo) {
     return null
   }
@@ -204,14 +209,19 @@ export async function getGiteaPullRequestForBranch(
   repoPath: string,
   branch: string,
   linkedPRNumber?: number | null,
-  connectionId?: string | null
+  connectionId?: string | null,
+  options: HostedReviewExecutionOptions = {}
 ): Promise<GiteaPullRequestInfo | null> {
   const branchName = branch.replace(/^refs\/heads\//, '')
   if (!branchName && linkedPRNumber == null) {
     return null
   }
 
-  const repo = await getGiteaRepoRef(repoPath, connectionId)
+  const repo = await getGiteaRepoRef(
+    repoPath,
+    connectionId,
+    getHostedReviewLocalGitOptions(options)
+  )
   if (!repo) {
     return null
   }
@@ -252,7 +262,8 @@ export async function getGiteaPullRequestForBranch(
 
 export async function getGiteaRepoSlug(
   repoPath: string,
-  connectionId?: string | null
+  connectionId?: string | null,
+  options: HostedReviewExecutionOptions = {}
 ): Promise<GiteaRepoRef | null> {
-  return getGiteaRepoRef(repoPath, connectionId)
+  return getGiteaRepoRef(repoPath, connectionId, getHostedReviewLocalGitOptions(options))
 }

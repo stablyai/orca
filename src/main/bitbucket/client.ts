@@ -1,4 +1,4 @@
-import { Buffer } from 'buffer'
+import { Buffer } from 'node:buffer'
 import type { CheckStatus } from '../../shared/types'
 import {
   deriveBitbucketBuildStatus,
@@ -8,6 +8,10 @@ import {
   type RawBitbucketPullRequest
 } from './pull-request-mappers'
 import { getBitbucketRepoRef, type BitbucketRepoRef } from './repository-ref'
+import {
+  getHostedReviewLocalGitOptions,
+  type HostedReviewExecutionOptions
+} from '../source-control/hosted-review-git-options'
 
 const DEFAULT_API_BASE_URL = 'https://api.bitbucket.org/2.0'
 const REQUEST_TIMEOUT_MS = 5000
@@ -84,15 +88,13 @@ function apiUrl(path: string, searchParams?: RequestOptions['searchParams']): st
 
 async function requestJson<T>(path: string, options: RequestOptions = {}): Promise<T | null> {
   const config = getAuthConfig()
-  const controller = new AbortController()
-  const timeout = setTimeout(() => controller.abort(), options.timeoutMs ?? REQUEST_TIMEOUT_MS)
   try {
     const response = await fetch(apiUrl(path, options.searchParams), {
       headers: {
         Accept: 'application/json',
         ...authHeaders(config)
       },
-      signal: controller.signal
+      signal: AbortSignal.timeout(options.timeoutMs ?? REQUEST_TIMEOUT_MS)
     })
     if (!response.ok) {
       return null
@@ -100,8 +102,6 @@ async function requestJson<T>(path: string, options: RequestOptions = {}): Promi
     return (await response.json()) as T
   } catch {
     return null
-  } finally {
-    clearTimeout(timeout)
   }
 }
 
@@ -160,9 +160,14 @@ export async function getBitbucketAuthStatus(): Promise<BitbucketAuthStatus> {
 export async function getBitbucketPullRequest(
   repoPath: string,
   prNumber: number,
-  connectionId?: string | null
+  connectionId?: string | null,
+  options: HostedReviewExecutionOptions = {}
 ): Promise<BitbucketPullRequestInfo | null> {
-  const repo = await getBitbucketRepoRef(repoPath, connectionId)
+  const repo = await getBitbucketRepoRef(
+    repoPath,
+    connectionId,
+    getHostedReviewLocalGitOptions(options)
+  )
   if (!repo) {
     return null
   }
@@ -176,14 +181,19 @@ export async function getBitbucketPullRequestForBranch(
   repoPath: string,
   branch: string,
   linkedPRNumber?: number | null,
-  connectionId?: string | null
+  connectionId?: string | null,
+  options: HostedReviewExecutionOptions = {}
 ): Promise<BitbucketPullRequestInfo | null> {
   const branchName = branch.replace(/^refs\/heads\//, '')
   if (!branchName && linkedPRNumber == null) {
     return null
   }
 
-  const repo = await getBitbucketRepoRef(repoPath, connectionId)
+  const repo = await getBitbucketRepoRef(
+    repoPath,
+    connectionId,
+    getHostedReviewLocalGitOptions(options)
+  )
   if (!repo) {
     return null
   }
@@ -221,7 +231,8 @@ export async function getBitbucketPullRequestForBranch(
 
 export async function getBitbucketRepoSlug(
   repoPath: string,
-  connectionId?: string | null
+  connectionId?: string | null,
+  options: HostedReviewExecutionOptions = {}
 ): Promise<BitbucketRepoRef | null> {
-  return getBitbucketRepoRef(repoPath, connectionId)
+  return getBitbucketRepoRef(repoPath, connectionId, getHostedReviewLocalGitOptions(options))
 }

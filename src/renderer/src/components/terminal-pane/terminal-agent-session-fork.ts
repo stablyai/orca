@@ -1,7 +1,10 @@
 import { toast } from 'sonner'
 import type { ManagedPane } from '@/lib/pane-manager/pane-manager'
 import { launchAgentInNewTab } from '@/lib/launch-agent-in-new-tab'
-import { buildAgentSessionForkPrompt } from '@/lib/agent-session-fork-context'
+import {
+  buildAgentSessionForkPrompt,
+  buildBoundedSessionTranscript
+} from '@/lib/agent-session-fork-context'
 import { activateAndRevealWorktree } from '@/lib/worktree-activation'
 import { useAppStore } from '@/store'
 import { makePaneKey } from '../../../../shared/stable-pane-id'
@@ -10,6 +13,8 @@ import { slugifyForWorkspaceName } from '../../../../shared/workspace-name'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
 import type { TuiAgent } from '../../../../shared/types'
 import { isWslUncPath } from '../../../../shared/wsl-paths'
+import type { ProjectExecutionRuntimeResolution } from '../../../../shared/project-execution-runtime'
+import { getLocalProjectExecutionRuntimeContext } from '@/lib/local-preflight-context'
 import { translate } from '@/i18n/i18n'
 
 type ForkAgentSessionFromPaneArgs = {
@@ -86,7 +91,14 @@ async function copyForkContext(prompt: string, pane: ManagedPane): Promise<boole
 function getForkAgentLaunchPlatform(args: {
   repo: { connectionId?: string | null } | null | undefined
   worktreePath?: string | null
+  projectRuntime?: ProjectExecutionRuntimeResolution
 }): NodeJS.Platform | undefined {
+  if (args.projectRuntime?.status === 'repair-required') {
+    return args.projectRuntime.repair.preferredRuntime.kind === 'wsl' ? 'linux' : undefined
+  }
+  if (args.projectRuntime?.status === 'resolved' && args.projectRuntime.runtime.kind === 'wsl') {
+    return 'linux'
+  }
   if (args.repo?.connectionId || (args.worktreePath && isWslUncPath(args.worktreePath))) {
     return 'linux'
   }
@@ -159,6 +171,47 @@ export async function copyAgentSessionForkContext(
   return copyForkContext(fork.prompt, fork.pane)
 }
 
+// Why: the standalone "Copy Context" action copies the bounded transcript on its
+// own — for pasting into another tool — so it must not carry the fork prompt's
+// "this is a fork… acknowledge and wait" framing the dialog button uses.
+export async function copyAgentSessionContextFromPane(pane: ManagedPane): Promise<boolean> {
+  const transcript = buildBoundedSessionTranscript(
+    pane.serializeAddon.serialize({ scrollback: 800 })
+  )
+  if (!transcript) {
+    toast.error(
+      translate(
+        'auto.components.terminal.pane.terminal.agent.session.fork.f62b40e2c7',
+        'No terminal context to copy'
+      )
+    )
+    pane.terminal.focus()
+    return false
+  }
+  try {
+    await window.api.ui.writeClipboardText(transcript)
+    toast.message(
+      translate(
+        'auto.components.terminal.pane.terminal.agent.session.fork.373a3103e7',
+        'Context copied'
+      )
+    )
+    pane.terminal.focus()
+    return true
+  } catch (error) {
+    toast.error(
+      error instanceof Error
+        ? error.message
+        : translate(
+            'auto.components.terminal.pane.terminal.agent.session.fork.3fc568a49d',
+            'Failed to copy context.'
+          )
+    )
+    pane.terminal.focus()
+    return false
+  }
+}
+
 export async function startAgentSessionFork(fork: PreparedAgentSessionFork): Promise<boolean> {
   const store = useAppStore.getState()
   const sourceWorktree = store.getKnownWorktreeById(fork.worktreeId)
@@ -172,6 +225,7 @@ export async function startAgentSessionFork(fork: PreparedAgentSessionFork): Pro
     return false
   }
   const sourceRepo = store.repos.find((repo) => repo.id === sourceWorktree.repoId)
+  const sourceProjectRuntime = getLocalProjectExecutionRuntimeContext(store, fork.worktreeId)
   const sourceBranch = getUsableForkBase(sourceWorktree, sourceRepo, fork.worktreeId)
   if (!sourceBranch) {
     toast.error(
@@ -222,7 +276,8 @@ export async function startAgentSessionFork(fork: PreparedAgentSessionFork): Pro
   })
   const launchPlatform = getForkAgentLaunchPlatform({
     repo: sourceRepo,
-    worktreePath: created.worktree.path
+    worktreePath: created.worktree.path,
+    projectRuntime: sourceProjectRuntime
   })
   const result = launchAgentInNewTab({
     agent: fork.agent,

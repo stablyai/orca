@@ -231,13 +231,18 @@ export function useTeamStates(
     error: null
   })
   const activeKeyRef = useRef<string | null>(null)
+  // Why: parents can pass a fresh settings object each render; keying the effect
+  // on the derived cache key keeps a failure's setState from re-arming the fetch
+  // in a render-paced loop. The ref carries the latest settings for the call.
+  const settingsRef = useRef(settings)
+  settingsRef.current = settings
+  const cacheKey = teamId ? linearMetadataCacheKey(teamId, settings, workspaceId) : null
 
   useEffect(() => {
-    if (!teamId) {
+    if (!teamId || !cacheKey) {
       return
     }
 
-    const cacheKey = linearMetadataCacheKey(teamId, settings, workspaceId)
     const cached = getFreshMetadata(linearStateStore, cacheKey)
     if (cached) {
       if (activeKeyRef.current !== cacheKey) {
@@ -256,7 +261,7 @@ export function useTeamStates(
       error: null
     }))
     loadMetadata(linearStateStore, cacheKey, () =>
-      linearTeamStates(settings, teamId, workspaceId).then(
+      linearTeamStates(settingsRef.current, teamId, workspaceId).then(
         (states) => states as LinearWorkflowState[]
       )
     )
@@ -277,7 +282,7 @@ export function useTeamStates(
           error: err instanceof Error ? err.message : 'Failed to load states'
         }))
       })
-  }, [settings, teamId, workspaceId])
+  }, [cacheKey, teamId, workspaceId])
 
   return state
 }
@@ -293,13 +298,17 @@ export function useTeamLabels(
     error: null
   })
   const activeKeyRef = useRef<string | null>(null)
+  // Why: see useTeamStates — cache-key deps + latest-settings ref stop the
+  // failure-setState render loop.
+  const settingsRef = useRef(settings)
+  settingsRef.current = settings
+  const cacheKey = teamId ? linearMetadataCacheKey(teamId, settings, workspaceId) : null
 
   useEffect(() => {
-    if (!teamId) {
+    if (!teamId || !cacheKey) {
       return
     }
 
-    const cacheKey = linearMetadataCacheKey(teamId, settings, workspaceId)
     const cached = getFreshMetadata(linearLabelStore, cacheKey)
     if (cached) {
       if (activeKeyRef.current !== cacheKey) {
@@ -318,7 +327,9 @@ export function useTeamLabels(
       error: null
     }))
     loadMetadata(linearLabelStore, cacheKey, () =>
-      linearTeamLabels(settings, teamId, workspaceId).then((labels) => labels as LinearLabel[])
+      linearTeamLabels(settingsRef.current, teamId, workspaceId).then(
+        (labels) => labels as LinearLabel[]
+      )
     )
       .then((data) => {
         if (activeKeyRef.current !== requestKey) {
@@ -337,7 +348,7 @@ export function useTeamLabels(
           error: err instanceof Error ? err.message : 'Failed to load labels'
         }))
       })
-  }, [settings, teamId, workspaceId])
+  }, [cacheKey, teamId, workspaceId])
 
   return state
 }
@@ -353,13 +364,17 @@ export function useTeamMembers(
     error: null
   })
   const activeKeyRef = useRef<string | null>(null)
+  // Why: see useTeamStates — cache-key deps + latest-settings ref stop the
+  // failure-setState render loop.
+  const settingsRef = useRef(settings)
+  settingsRef.current = settings
+  const cacheKey = teamId ? linearMetadataCacheKey(teamId, settings, workspaceId) : null
 
   useEffect(() => {
-    if (!teamId) {
+    if (!teamId || !cacheKey) {
       return
     }
 
-    const cacheKey = linearMetadataCacheKey(teamId, settings, workspaceId)
     const cached = getFreshMetadata(linearMemberStore, cacheKey)
     if (cached) {
       if (activeKeyRef.current !== cacheKey) {
@@ -378,7 +393,9 @@ export function useTeamMembers(
       error: null
     }))
     loadMetadata(linearMemberStore, cacheKey, () =>
-      linearTeamMembers(settings, teamId, workspaceId).then((members) => members as LinearMember[])
+      linearTeamMembers(settingsRef.current, teamId, workspaceId).then(
+        (members) => members as LinearMember[]
+      )
     )
       .then((data) => {
         if (activeKeyRef.current !== requestKey) {
@@ -397,7 +414,7 @@ export function useTeamMembers(
           error: err instanceof Error ? err.message : 'Failed to load members'
         }))
       })
-  }, [settings, teamId, workspaceId])
+  }, [cacheKey, teamId, workspaceId])
 
   return state
 }

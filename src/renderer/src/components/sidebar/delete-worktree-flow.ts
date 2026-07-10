@@ -2,8 +2,11 @@ import { toast } from 'sonner'
 import { useAppStore } from '@/store'
 import { getWorktreeMapFromState } from '@/store/selectors'
 import { activateAndRevealWorktree } from '@/lib/worktree-activation'
-import { getDeleteWorktreeToastCopy } from './delete-worktree-toast'
+import { prepareActiveWorktreeFocusAfterDelete } from './active-worktree-focus-after-delete'
+import { showDeleteWorktreeFailureToast } from './delete-worktree-failure-toast'
 import { getWorkspaceDeleteLineage } from './workspace-delete-lineage'
+import { resolveSshWorkspaceForget } from './ssh-workspace-forget-resolution'
+import { isPairedWebClientWindow } from '@/lib/desktop-window-chrome'
 import {
   isPathInsideOrEqual,
   normalizeRuntimePathForComparison
@@ -19,6 +22,9 @@ type WorktreeBatchDeleteOptions = {
 type WorktreeDeleteWithToastOptions = {
   force?: boolean
   onForceDeleted?: (worktreeId: string) => void
+  // Why: batch deletes suppress the per-delete focus handoff and instead focus a
+  // single survivor after the whole batch settles (see runWorktreeDeletesInParallel).
+  focusSuccessorOnDelete?: boolean
 }
 
 // Why: a failed delete almost always means the worktree still has changes
@@ -44,6 +50,12 @@ export async function runWorktreeDeletesInParallel(
   targets: readonly Pick<Worktree, 'id' | 'displayName' | 'repoId' | 'path'>[],
   options: WorktreeDeleteWithToastOptions = {}
 ): Promise<string[]> {
+  // Why: capture the viewed workspace before any delete runs so we can focus a
+  // single survivor once the batch settles, rather than per delete.
+  const activeWorktreeIdBefore = useAppStore.getState().activeWorktreeId
+  const commitBatchFocus = activeWorktreeIdBefore
+    ? prepareActiveWorktreeFocusAfterDelete(activeWorktreeIdBefore)
+    : null
   // Why: deletes are serialized per repo to avoid git lock races, but every
   // selected/lineage workspace should show in-flight feedback immediately.
   useAppStore.getState().markWorktreesDeleting(targets.map((target) => target.id))
@@ -76,7 +88,10 @@ export async function runWorktreeDeletesInParallel(
           useAppStore.getState().clearWorktreeDeleteState(target.id)
           continue
         }
-        const deleted = await runWorktreeDeleteWithToast(target.id, target.displayName, options)
+        const deleted = await runWorktreeDeleteWithToast(target.id, target.displayName, {
+          ...options,
+          focusSuccessorOnDelete: false
+        })
         if (deleted) {
           deletedInGroup.push(target.id)
         } else {
@@ -89,6 +104,12 @@ export async function runWorktreeDeletesInParallel(
     })
   )
   const deletedSet = new Set(groupResults.flat())
+  // Why: focus a survivor once, after the batch settles, rather than per delete —
+  // an intermediate focus could land on (and spawn a terminal in) a workspace this
+  // same batch is about to delete.
+  if (activeWorktreeIdBefore && deletedSet.has(activeWorktreeIdBefore)) {
+    commitBatchFocus?.()
+  }
   return targets.filter((target) => deletedSet.has(target.id)).map((target) => target.id)
 }
 
@@ -111,76 +132,77 @@ export function runWorktreeDeleteWithToast(
   options: WorktreeDeleteWithToastOptions = {}
 ): Promise<boolean> {
   const removeWorktree = useAppStore.getState().removeWorktree
+  const commitFocus = prepareActiveWorktreeFocusAfterDelete(worktreeId)
+  const focusSuccessor = options.focusSuccessorOnDelete !== false
 
   return removeWorktree(worktreeId, options.force === true)
     .then((result) => {
       if (result.ok) {
+        // Why: keep the user on a live workspace instead of the Landing screen
+        // when they delete the one they were viewing.
+        if (focusSuccessor) {
+          commitFocus()
+        }
         return true
       }
       const state = useAppStore.getState().deleteStateByWorktreeId[worktreeId]
       const canForceDelete = state?.canForceDelete ?? false
-      const toastCopy = getDeleteWorktreeToastCopy(worktreeName, canForceDelete, result.error)
-      const showToast = toastCopy.isDestructive ? toast.error : toast.info
-      showToast(toastCopy.title, {
-        description: toastCopy.description,
-        duration: 10000,
-        cancel: {
-          label: translate('auto.components.sidebar.delete.worktree.flow.7488ed8711', 'View'),
-          onClick: () => viewWorktreeDiff(worktreeId)
-        },
-        action: canForceDelete
-          ? {
-              label: translate(
-                'auto.components.sidebar.delete.worktree.flow.2b20ce87b3',
-                'Force Delete'
-              ),
-              onClick: () => {
-                useAppStore
-                  .getState()
-                  .removeWorktree(worktreeId, true)
-                  .then((forceResult) => {
-                    if (!forceResult.ok) {
-                      toast.error(
-                        translate(
-                          'auto.components.sidebar.delete.worktree.flow.4f3876c0f5',
-                          'Force delete failed'
-                        ),
-                        {
-                          description: forceResult.error,
-                          action: {
-                            label: translate(
-                              'auto.components.sidebar.delete.worktree.flow.7488ed8711',
-                              'View'
-                            ),
-                            onClick: () => viewWorktreeDiff(worktreeId)
-                          }
-                        }
-                      )
-                      return
-                    }
-                    options.onForceDeleted?.(worktreeId)
-                  })
-                  .catch((err: unknown) => {
-                    toast.error(
-                      translate(
-                        'auto.components.sidebar.delete.worktree.flow.ae57cbf6e4',
-                        'Failed to delete workspace'
+      showDeleteWorktreeFailureToast({
+        error: result.error,
+        canForceDelete,
+        onViewChanges: () => viewWorktreeDiff(worktreeId),
+        onForceDelete: () => {
+          // Why: recapture at click time — the user may have navigated away
+          // while the failed-delete toast was open, so focus only hands off
+          // when this is still the workspace they are viewing.
+          const commitForceFocus = prepareActiveWorktreeFocusAfterDelete(worktreeId)
+          useAppStore
+            .getState()
+            .removeWorktree(worktreeId, true)
+            .then((forceResult) => {
+              if (!forceResult.ok) {
+                toast.error(
+                  translate(
+                    'auto.components.sidebar.delete.worktree.flow.4f3876c0f5',
+                    'Force delete failed'
+                  ),
+                  {
+                    description: forceResult.error,
+                    action: {
+                      label: translate(
+                        'auto.components.sidebar.delete.worktree.flow.7488ed8711',
+                        'View'
                       ),
-                      {
-                        description: err instanceof Error ? err.message : String(err),
-                        action: {
-                          label: translate(
-                            'auto.components.sidebar.delete.worktree.flow.7488ed8711',
-                            'View'
-                          ),
-                          onClick: () => viewWorktreeDiff(worktreeId)
-                        }
-                      }
-                    )
-                  })
+                      onClick: () => viewWorktreeDiff(worktreeId)
+                    }
+                  }
+                )
+                return
               }
-            }
-          : undefined
+              commitForceFocus()
+              options.onForceDeleted?.(worktreeId)
+            })
+            .catch((err: unknown) => {
+              toast.error(
+                translate(
+                  'auto.components.sidebar.delete.worktree.flow.ae57cbf6e4',
+                  'Failed to delete workspace'
+                ),
+                {
+                  description: err instanceof Error ? err.message : String(err),
+                  action: {
+                    label: translate(
+                      'auto.components.sidebar.delete.worktree.flow.7488ed8711',
+                      'View'
+                    ),
+                    onClick: () => viewWorktreeDiff(worktreeId)
+                  }
+                }
+              )
+            })
+        },
+        worktreeId,
+        worktreeName
       })
       return false
     })
@@ -229,6 +251,39 @@ export function runWorktreeDelete(worktreeId: string): void {
     return
   }
   state.clearWorktreeDeleteState(worktreeId)
+
+  // Why: a workspace on a removed/disconnected SSH host cannot go through the
+  // normal remote removal — its provider is gone, so worktrees:remove throws
+  // before any cleanup. Route to a dialog that offers reconnect-and-delete
+  // (when the target still exists) or a local-only forget.
+  //
+  // Skip this on paired web/mobile clients: SSH targets/labels/connection state
+  // are desktop-only, so those clients have empty sshTargetLabels and would
+  // misclassify every SSH repo as a ghost, routing to a forget dialog whose
+  // local-only backend is unavailable there. Their normal worktree.rm RPC path
+  // already handles the delete against the desktop runtime.
+  const repo = state.repos.find((entry) => entry.id === target.repoId) ?? null
+  const sshResolution = isPairedWebClientWindow()
+    ? { kind: 'not-ssh' as const }
+    : resolveSshWorkspaceForget({
+        repo,
+        sshConnectionStates: state.sshConnectionStates,
+        sshTargetLabels: state.sshTargetLabels
+      })
+  if (sshResolution.kind === 'ghost' || sshResolution.kind === 'disconnected') {
+    // Why no lineage-children warning here (unlike the normal path below):
+    // forget-local is metadata-only and per-worktree, so it can't fail on a
+    // still-registered child the way a remote git removal would. Any descendants
+    // live on the same ghost host and remain independently visible/forgettable —
+    // they are not orphaned unrecoverably.
+    state.openModal('forget-ssh-workspace', {
+      worktreeId,
+      displayName: target.displayName,
+      resolution: sshResolution
+    })
+    return
+  }
+
   const hasLineageChildren =
     getWorkspaceDeleteLineage(target, state.allWorktrees(), state.worktreeLineageById).descendants
       .length > 0

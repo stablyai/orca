@@ -37,7 +37,7 @@ type TerminalMultiplexEvent =
 
 export type RemoteRuntimeMultiplexedTerminalCallbacks = {
   onData: (data: string, meta?: { seq?: number; rawLength?: number }) => void
-  onSnapshot: (data: string) => void
+  onSnapshot: (data: string, meta?: { pendingEscapeTailAnsi?: string }) => void
   onSubscribed?: () => void
   onEnd?: () => void
   onError?: (message: string) => void
@@ -77,6 +77,13 @@ type RemoteRuntimeMultiplexedTerminalState = {
   snapshotInfo: RemoteRuntimeSnapshotInfo | null
   initialSnapshotReceived: boolean
   pendingSnapshotRequest: RemoteRuntimeSnapshotRequest | null
+  // Why: Output frames carry a UTF-16 offset high-water `seq`; a jump past the
+  // expected next offset means the server dropped frames under backpressure.
+  // Track it so a gap triggers a self-healing snapshot resync instead of
+  // silently rendering corrupt/missing output (frame-drop resync).
+  expectedSeq: number | undefined
+  resyncInFlight: boolean
+  resyncPendingSend: boolean
 }
 
 type RemoteRuntimeSnapshotInfo = {
@@ -86,6 +93,10 @@ type RemoteRuntimeSnapshotInfo = {
   source?: 'headless' | 'renderer'
   requestId?: number
   truncated?: boolean
+  // Why: a mid-escape tail the emulator could not serialize; the transport
+  // must write it AFTER the replay reset so the next live chunk completes it
+  // instead of rendering literally (#7329).
+  pendingEscapeTailAnsi?: string
 }
 
 type RemoteRuntimeSnapshotRequest = {
@@ -97,6 +108,7 @@ type RemoteRuntimeSnapshotRequest = {
       rows: number
       seq?: number
       source?: 'headless' | 'renderer'
+      pendingEscapeTailAnsi?: string
     } | null
   ) => void
   reject: (error: Error) => void
@@ -106,7 +118,9 @@ type RemoteRuntimeSnapshotRequest = {
 const CONTROL_STREAM_ID = 0
 const MAX_REMOTE_TERMINAL_SNAPSHOT_BYTES = 2 * 1024 * 1024
 const REMOTE_TERMINAL_SNAPSHOT_REQUEST_TIMEOUT_MS = 10_000
-const REMOTE_TERMINAL_SNAPSHOT_TOO_LARGE =
+// Why: exported so the transport can classify it as benign — the snapshot was
+// skipped but live output continues, so it must not surface a fatal red banner.
+export const REMOTE_TERMINAL_SNAPSHOT_TOO_LARGE =
   'Remote terminal snapshot exceeded the 2 MiB replay limit; live output will continue.'
 
 class RemoteRuntimeTerminalMultiplexer {
@@ -144,7 +158,10 @@ class RemoteRuntimeTerminalMultiplexer {
       snapshotTarget: 'initial',
       snapshotInfo: null,
       initialSnapshotReceived: false,
-      pendingSnapshotRequest: null
+      pendingSnapshotRequest: null,
+      expectedSeq: undefined,
+      resyncInFlight: false,
+      resyncPendingSend: false
     }
     this.streams.set(streamId, state)
 
@@ -329,10 +346,21 @@ class RemoteRuntimeTerminalMultiplexer {
     }
     if (frame.opcode === TerminalStreamOpcode.Output) {
       const data = decodeTerminalStreamText(frame.payload)
-      stream.callbacks.onData(data, {
-        seq: typeof frame.seq === 'number' && frame.seq > 0 ? frame.seq : undefined,
-        rawLength: data.length
-      })
+      const rawLength = data.length
+      // Why: a resync snapshot is authoritative; drop live output that arrives
+      // while it is in flight so the corrupt post-gap tail is never rendered.
+      if (stream.resyncInFlight) {
+        return
+      }
+      const seq = typeof frame.seq === 'number' && frame.seq > 0 ? frame.seq : undefined
+      if (this.detectOutputGap(stream, seq, rawLength)) {
+        this.requestResyncSnapshot(stream)
+        return
+      }
+      if (typeof seq === 'number') {
+        stream.expectedSeq = seq
+      }
+      stream.callbacks.onData(data, { seq, rawLength })
       return
     }
     if (frame.opcode === TerminalStreamOpcode.SnapshotStart) {
@@ -381,20 +409,31 @@ class RemoteRuntimeTerminalMultiplexer {
             cols: info?.cols ?? 80,
             rows: info?.rows ?? 24,
             seq: info?.seq,
-            source: info?.source
+            source: info?.source,
+            pendingEscapeTailAnsi: info?.pendingEscapeTailAnsi
           })
           clearPendingSnapshotRequest(stream)
         } else if (target === 'initial') {
-          stream.callbacks.onSnapshot(data ?? '')
+          stream.callbacks.onSnapshot(data ?? '', {
+            pendingEscapeTailAnsi: info?.pendingEscapeTailAnsi
+          })
         }
       } else if (matchesPendingRequest) {
         pendingRequest.resolve(null)
         clearPendingSnapshotRequest(stream)
       }
       clearSnapshot(stream)
+      // Why: the snapshot is the new authoritative output high-water; align the
+      // gap detector to it and re-open the live path (used by both the initial
+      // snapshot and a frame-drop resync, which reuses the 'initial' target).
       if (target === 'initial') {
+        stream.expectedSeq = typeof info?.seq === 'number' ? info.seq : undefined
+        stream.resyncInFlight = false
+        stream.resyncPendingSend = false
         stream.initialSnapshotReceived = true
         stream.callbacks.onSubscribed?.()
+      } else {
+        this.sendDeferredResyncSnapshot(stream)
       }
       return
     }
@@ -404,9 +443,68 @@ class RemoteRuntimeTerminalMultiplexer {
       if (pendingSnapshotRequest) {
         clearPendingSnapshotRequest(stream)
         pendingSnapshotRequest.reject(new Error(decodeTerminalStreamText(frame.payload)))
+        this.sendDeferredResyncSnapshot(stream)
         return
       }
+      // Why: a failed resync must re-open the live path or output stalls forever.
+      stream.resyncInFlight = false
+      stream.resyncPendingSend = false
       stream.callbacks.onError?.(decodeTerminalStreamText(frame.payload))
+    }
+  }
+
+  // Why: Output `seq` is the UTF-16 high-water at the end of a chunk, so a chunk
+  // that begins after the last high-water (startSeq > expectedSeq) means the
+  // server dropped intervening frames under backpressure. Only flag a gap when
+  // both offsets are known, and never on the first seq (nothing to compare to).
+  private detectOutputGap(
+    stream: RemoteRuntimeMultiplexedTerminalState,
+    seq: number | undefined,
+    rawLength: number
+  ): boolean {
+    if (typeof seq !== 'number' || typeof stream.expectedSeq !== 'number') {
+      return false
+    }
+    const startSeq = seq - rawLength
+    return startSeq > stream.expectedSeq
+  }
+
+  // Why: on a detected gap, discard the corrupt tail and pull a fresh
+  // authoritative snapshot. The request carries no requestId so the server
+  // reply renders through the initial-snapshot path (full reset), self-healing
+  // without surfacing an error to the user.
+  private requestResyncSnapshot(stream: RemoteRuntimeMultiplexedTerminalState): void {
+    if (stream.resyncInFlight) {
+      return
+    }
+    stream.resyncInFlight = true
+    stream.expectedSeq = undefined
+    if (stream.pendingSnapshotRequest) {
+      // Why: snapshot frame groups are not multiplexed; wait for the manual
+      // snapshot to finish so its response cannot be mistaken for recovery.
+      stream.resyncPendingSend = true
+      return
+    }
+    this.sendResyncSnapshot(stream)
+  }
+
+  private sendDeferredResyncSnapshot(stream: RemoteRuntimeMultiplexedTerminalState): void {
+    if (!stream.resyncInFlight || !stream.resyncPendingSend || stream.pendingSnapshotRequest) {
+      return
+    }
+    this.sendResyncSnapshot(stream)
+  }
+
+  private sendResyncSnapshot(stream: RemoteRuntimeMultiplexedTerminalState): void {
+    stream.resyncPendingSend = false
+    const sent = this.sendFrame(
+      stream.streamId,
+      TerminalStreamOpcode.SnapshotRequest,
+      encodeTerminalStreamJson({ scrollbackRows: undefined })
+    )
+    if (!sent) {
+      // Transport is down; the reconnect path re-subscribes from scratch.
+      stream.resyncInFlight = false
     }
   }
 
@@ -423,6 +521,11 @@ class RemoteRuntimeTerminalMultiplexer {
     if (this.streams.get(stream.streamId) !== stream || !this.ready || !this.subscription) {
       return Promise.resolve(null)
     }
+    // Recovery uses an untagged snapshot frame group; callers can retry after
+    // it completes instead of racing another request onto the same frame lane.
+    if (stream.resyncInFlight) {
+      return Promise.resolve(null)
+    }
     if (stream.pendingSnapshotRequest) {
       return Promise.reject(new Error('Remote terminal snapshot already in flight.'))
     }
@@ -430,8 +533,9 @@ class RemoteRuntimeTerminalMultiplexer {
     return new Promise((resolve, reject) => {
       const timer = setTimeout(() => {
         if (stream.pendingSnapshotRequest?.timer === timer) {
-          stream.pendingSnapshotRequest = null
+          clearPendingSnapshotRequest(stream)
           reject(new Error('Remote terminal snapshot timed out.'))
+          this.sendDeferredResyncSnapshot(stream)
         }
       }, REMOTE_TERMINAL_SNAPSHOT_REQUEST_TIMEOUT_MS)
       if (typeof timer.unref === 'function') {
@@ -608,6 +712,7 @@ function decodeSnapshotInfo(
     source?: unknown
     requestId?: unknown
     truncated?: unknown
+    pendingEscapeTailAnsi?: unknown
   }>(payload)
   if (!raw) {
     return null
@@ -618,7 +723,9 @@ function decodeSnapshotInfo(
     seq: typeof raw.seq === 'number' ? raw.seq : undefined,
     source: raw.source === 'headless' || raw.source === 'renderer' ? raw.source : undefined,
     requestId: typeof raw.requestId === 'number' ? raw.requestId : undefined,
-    truncated: raw.truncated === true
+    truncated: raw.truncated === true,
+    pendingEscapeTailAnsi:
+      typeof raw.pendingEscapeTailAnsi === 'string' ? raw.pendingEscapeTailAnsi : undefined
   }
 }
 

@@ -16,15 +16,19 @@ describe('TaskPage source switching host boundary', () => {
   it('renders GitHub item details from the task-detail page owner only', () => {
     const detailSection = sourceBetween(
       TASK_PAGE_SOURCE,
-      "{taskSource === 'github' && dialogWorkItem ?",
+      '<PullRequestPage',
       ") : taskSource === 'github' && githubMode === 'project' ?"
     )
     const modalSection = sourceBetween(
       TASK_PAGE_SOURCE,
-      '<Dialog\n        open={newJiraIssueOpen}',
+      '<ProjectViewWrapper selectedRepoIds={repoSelection} />',
       '<GitLabItemDialog'
     )
 
+    expect(modalSection).toContain('selectedRepoIds={repoSelection}')
+    expect(detailSection).toContain('workItem={dialogWorkItem}')
+    expect(detailSection).toContain('<PullRequestPage')
+    expect(detailSection).toContain('sourceContext={dialogSourceContext}')
     expect(detailSection).toContain('<GitHubItemDialog')
     expect(detailSection).toContain('sourceContext={dialogSourceContext}')
     expect(modalSection).not.toContain('<GitHubItemDialog')

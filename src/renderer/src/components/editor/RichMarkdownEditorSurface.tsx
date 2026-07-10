@@ -37,6 +37,7 @@ function shouldFocusEmptyEditorFromSurfaceClick(
 type RichMarkdownEditorSurfaceProps = {
   editor: Editor | null
   editorFontZoomLevel: number
+  rootElement: HTMLDivElement | null
   rootRef: (node: HTMLDivElement | null) => void
   scrollContainerRef: React.RefObject<HTMLDivElement | null>
   headerSlot?: React.ReactNode
@@ -70,17 +71,28 @@ type RichMarkdownEditorSurfaceProps = {
   showTableOfContents: boolean
   searchState: {
     activeMatchIndex: number
+    isReplaceMode: boolean
     isSearchOpen: boolean
+    matchCase: boolean
     matchCount: number
+    replaceQuery: string
     searchQuery: string
     searchInputRef: React.RefObject<HTMLInputElement | null>
+    wholeWord: boolean
   }
   searchActions: {
     closeSearch: () => void
     moveToMatch: (direction: 1 | -1) => void
+    replaceAllMatches: () => void
+    replaceCurrentMatch: () => void
+    setReplaceQuery: (query: string) => void
     setSearchQuery: (query: string) => void
+    toggleMatchCase: () => void
+    toggleReplaceMode: () => void
+    toggleWholeWord: () => void
   }
   linkBubbleActions: {
+    dismissLinkBubble: () => void
     handleLinkSave: (href: string) => void
     handleLinkRemove: () => void
     handleLinkEditCancel: () => void
@@ -109,6 +121,7 @@ type RichMarkdownEditorSurfaceProps = {
 export function RichMarkdownEditorSurface({
   editor,
   editorFontZoomLevel,
+  rootElement,
   rootRef,
   scrollContainerRef,
   headerSlot,
@@ -219,18 +232,31 @@ export function RichMarkdownEditorSurface({
           <RichMarkdownSearchBar
             activeMatchIndex={searchState.activeMatchIndex}
             isOpen={searchState.isSearchOpen}
+            isReplaceMode={searchState.isReplaceMode}
+            matchCase={searchState.matchCase}
             matchCount={searchState.matchCount}
+            query={searchState.searchQuery}
+            replaceQuery={searchState.replaceQuery}
+            searchInputRef={searchState.searchInputRef}
+            wholeWord={searchState.wholeWord}
             onClose={searchActions.closeSearch}
             onMoveToMatch={searchActions.moveToMatch}
             onQueryChange={searchActions.setSearchQuery}
-            query={searchState.searchQuery}
-            searchInputRef={searchState.searchInputRef}
+            onReplaceAll={searchActions.replaceAllMatches}
+            onReplaceCurrent={searchActions.replaceCurrentMatch}
+            onReplaceQueryChange={searchActions.setReplaceQuery}
+            onToggleMatchCase={searchActions.toggleMatchCase}
+            onToggleReplaceMode={searchActions.toggleReplaceMode}
+            onToggleWholeWord={searchActions.toggleWholeWord}
           />
         </div>
         {linkBubble ? (
           <RichMarkdownLinkBubble
+            anchorElement={rootElement}
             linkBubble={linkBubble}
             isEditing={isEditingLink}
+            onDismiss={linkBubbleActions.dismissLinkBubble}
+            portalToDocument
             onSave={linkBubbleActions.handleLinkSave}
             onRemove={linkBubbleActions.handleLinkRemove}
             onEditStart={() => linkBubbleActions.setIsEditingLink(true)}

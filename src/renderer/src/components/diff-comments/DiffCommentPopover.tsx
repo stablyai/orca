@@ -1,8 +1,14 @@
-import { useCallback, useEffect, useId, useRef, useState } from 'react'
+import { useCallback, useEffect, useId, useLayoutEffect, useRef, useState } from 'react'
 import { CornerDownLeft } from 'lucide-react'
+import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { useMountedRef } from '@/hooks/useMountedRef'
+import {
+  getCommentBodySubmitState,
+  hasBoundedCommentBodyText
+} from '@/lib/comment-body-submit-state'
 import { translate } from '@/i18n/i18n'
+import { resolveDiffCommentPopoverTop } from './diff-comment-popover-position'
 
 // Why: rendered as a DOM sibling overlay inside the editor container rather
 // than as a Monaco content widget because it owns a React textarea with
@@ -15,6 +21,11 @@ type Props = {
   startLine?: number
   top: number
   left?: number
+  // Height of the anchor line, used to flip the popover above it when it would
+  // overflow the bottom of the viewport. Defaults to 0 for callers that don't
+  // anchor to a Monaco line (e.g. markdown annotations): the popover still
+  // clamps inside the viewport, it just doesn't offset by the line's height.
+  lineHeight?: number
   title?: string
   placeholder?: string
   submitLabel?: string
@@ -23,11 +34,16 @@ type Props = {
   onSubmit: (body: string) => Promise<void>
 }
 
+function hasDraftText(body: string): boolean {
+  return /\S/u.test(body)
+}
+
 export function DiffCommentPopover({
   lineNumber,
   startLine,
   top,
   left,
+  lineHeight = 0,
   title,
   placeholder = 'Add note for the AI',
   submitLabel = 'Add note',
@@ -36,6 +52,12 @@ export function DiffCommentPopover({
   onSubmit
 }: Props): React.JSX.Element {
   const [body, setBody] = useState('')
+  // Why: mirror the draft into a ref so the document mousedown listener (empty
+  // dep array, see below) can read the freshest body without re-registering on
+  // every keystroke. Used to keep the popover open on outside-click when the
+  // user has typed something, so an accidental click never discards a draft.
+  const bodyRef = useRef(body)
+  bodyRef.current = body
   // Why: `submitting` prevents duplicate note rows when the user
   // double-clicks the Add note button or hits Enter twice before the
   // IPC round-trip resolves. Iteration 1 made submission async and keeps the
@@ -60,6 +82,58 @@ export function DiffCommentPopover({
   // don't collide on aria-labelledby references. Screen readers announce the
   // "Line N" label as the dialog's accessible name.
   const labelId = useId()
+  // Why: `top` anchors the popover just below the selected line. Near the
+  // bottom of the editor viewport that downward box gets clipped by the pane's
+  // overflow container, so the resolved top may flip the popover above the line
+  // (see resolveDiffCommentPopoverTop). Start at `top` so the first paint is
+  // correct when there is room below; the layout effect refines it otherwise.
+  const [resolvedTop, setResolvedTop] = useState(top)
+
+  // Why: read the freshest anchor inside `measure` (a stable callback) so the
+  // ResizeObserver below can stay mounted once instead of tearing down on every
+  // scroll frame, which updates `top` continuously while the popover is open.
+  const topRef = useRef(top)
+  topRef.current = top
+  const lineHeightRef = useRef(lineHeight)
+  lineHeightRef.current = lineHeight
+
+  const measureResolvedTop = useCallback((): void => {
+    const popover = popoverRef.current
+    const container = popover?.parentElement
+    if (!popover || !container) {
+      setResolvedTop(topRef.current)
+      return
+    }
+    setResolvedTop(
+      resolveDiffCommentPopoverTop({
+        belowTop: topRef.current,
+        lineHeight: lineHeightRef.current,
+        popoverHeight: popover.offsetHeight,
+        viewportHeight: container.clientHeight
+      })
+    )
+  }, [])
+
+  // Why: re-resolve placement before paint whenever the anchor moves (scroll,
+  // font zoom) so the flip/clamp tracks the selected line without flicker.
+  useLayoutEffect(() => {
+    measureResolvedTop()
+  }, [top, lineHeight, measureResolvedTop])
+
+  // Why: the textarea auto-grows as the user types and the editor pane can be
+  // resized; observe both so a growing draft re-resolves and never ends up
+  // clipped at the bottom edge.
+  useEffect(() => {
+    const popover = popoverRef.current
+    const container = popover?.parentElement
+    if (!popover || !container || typeof ResizeObserver === 'undefined') {
+      return
+    }
+    const observer = new ResizeObserver(() => measureResolvedTop())
+    observer.observe(popover)
+    observer.observe(container)
+    return () => observer.disconnect()
+  }, [measureResolvedTop])
 
   const focusTextareaRef = useCallback((textarea: HTMLTextAreaElement | null): void => {
     // Why: the draft field should receive focus as soon as the popover mounts;
@@ -78,6 +152,11 @@ export function DiffCommentPopover({
         return
       }
       if (popoverRef.current.contains(ev.target as Node)) {
+        return
+      }
+      // Why: outside-click is a soft dismiss, so preserve any non-whitespace
+      // draft even when submit's bounded scanner would reject it as too large.
+      if (hasDraftText(bodyRef.current)) {
         return
       }
       // Why: read the latest onCancel from the ref rather than closing over it
@@ -100,25 +179,35 @@ export function DiffCommentPopover({
     if (submitting) {
       return
     }
-    const trimmed = body.trim()
-    if (!trimmed) {
+    const bodyState = getCommentBodySubmitState(body)
+    if (bodyState.status === 'empty') {
+      return
+    }
+    if (bodyState.status === 'too-large-leading-whitespace') {
+      toast.error(
+        translate(
+          'auto.components.diff.comments.DiffCommentPopover.commentTooLarge',
+          'Comment is too large to submit safely.'
+        )
+      )
       return
     }
     setSubmitting(true)
     try {
-      await onSubmit(trimmed)
+      await onSubmit(bodyState.body)
     } finally {
       if (mountedRef.current) {
         setSubmitting(false)
       }
     }
   }
+  const canSubmitComment = hasBoundedCommentBodyText(body)
 
   return (
     <div
       ref={popoverRef}
       className="orca-diff-comment-popover"
-      style={{ top: `${top}px`, ...(left == null ? {} : { left: `${left}px` }) }}
+      style={{ top: `${resolvedTop}px`, ...(left == null ? {} : { left: `${left}px` }) }}
       role="dialog"
       aria-modal="true"
       aria-labelledby={labelId}
@@ -180,11 +269,7 @@ export function DiffCommentPopover({
           <Button variant="ghost" size="sm" onClick={onCancel}>
             {translate('auto.components.diff.comments.DiffCommentPopover.2b3ce6d394', 'Cancel')}
           </Button>
-          <Button
-            size="sm"
-            onClick={handleSubmit}
-            disabled={submitting || body.trim().length === 0}
-          >
+          <Button size="sm" onClick={handleSubmit} disabled={submitting || !canSubmitComment}>
             {submitting ? submittingLabel : submitLabel}
             {!submitting && <CornerDownLeft className="ml-1 size-3 opacity-70" />}
           </Button>

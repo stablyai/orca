@@ -1,4 +1,4 @@
-import { isAbsolute, relative, resolve as resolvePath } from 'path'
+import { isAbsolute, relative, resolve as resolvePath } from 'node:path'
 import type {
   ComputerAppQuery,
   RuntimeWorktreeListResult,
@@ -39,7 +39,7 @@ function assertLocalCwdWorktreeSelector(selector: string, client: RuntimeClient)
   // server, so cwd-derived worktree selectors are only valid locally.
   throw new RuntimeClientError(
     'invalid_argument',
-    `${selector} is a local cwd shortcut and cannot be resolved against a remote runtime. Pass an explicit server-side worktree selector such as id:<id>, branch:<branch>, issue:<number>, or path:<absolute-server-path>.`
+    `${selector} is a local cwd shortcut and cannot be resolved against a remote runtime. Pass an explicit server-side worktree selector such as id:<id>, name:<displayName>, branch:<branch>, issue:<number>, or path:<absolute-server-path>.`
   )
 }
 

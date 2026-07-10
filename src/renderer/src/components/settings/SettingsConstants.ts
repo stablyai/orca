@@ -1,16 +1,26 @@
 import type { OrcaHooks } from '../../../../shared/types'
-import { getDefaultRepoHookSettings } from '../../../../shared/constants'
+import { DEFAULT_APP_FONT_FAMILY, getDefaultRepoHookSettings } from '../../../../shared/constants'
+import { DESKTOP_TERMINAL_SCROLLBACK_ROW_PRESETS } from '../../../../shared/terminal-scrollback-policy'
 
 export type HookName = keyof OrcaHooks['scripts']
 export const DEFAULT_REPO_HOOK_SETTINGS = getDefaultRepoHookSettings()
 export const MAX_THEME_RESULTS = 80
-export const SCROLLBACK_PRESETS_MB = [10, 25, 50, 100, 250] as const
+export const SCROLLBACK_PRESETS_ROWS = DESKTOP_TERMINAL_SCROLLBACK_ROW_PRESETS
 export const ZOOM_STEP = 0.5
 export const ZOOM_MIN = -3
 export const ZOOM_MAX = 5
 
 export function zoomLevelToPercent(level: number): number {
   return Math.round(100 * Math.pow(1.2, level))
+}
+
+export function mergeFontSuggestions(
+  systemFonts: readonly string[],
+  previousFonts: readonly string[]
+): string[] {
+  // Why: picker rendering can be capped later, but the source list must keep
+  // every installed font searchable/selectable.
+  return Array.from(new Set([DEFAULT_APP_FONT_FAMILY, ...systemFonts, ...previousFonts]))
 }
 
 export function getFallbackTerminalFonts(): string[] {

@@ -1,7 +1,22 @@
 import { describe, expect, it } from 'vitest'
-import { hasCompletedTabAgent, resolveCompletedTabAgent, resolveTabAgent } from './tab-agent'
+import {
+  resolveFocusedCompletedTabAgent,
+  resolveFocusedTabAgent,
+  resolveSiblingCompletedTabAgent,
+  resolveSiblingTabAgent
+} from './tab-agent'
 import type { AgentStatusEntry, AgentType } from '../../../shared/agent-status-types'
-import type { TerminalLayoutSnapshot } from '../../../shared/types'
+import type { TerminalLayoutSnapshot, TuiAgent } from '../../../shared/types'
+
+// Composed exactly the way useTabAgent layers the resolvers: focused pane
+// first, then any sibling agent pane in the tab.
+function resolveTabAgent(
+  map: Record<string, AgentStatusEntry>,
+  layout: TerminalLayoutSnapshot | undefined,
+  tabId: string
+): TuiAgent | null {
+  return resolveFocusedTabAgent(map, layout, tabId) ?? resolveSiblingTabAgent(map, layout, tabId)
+}
 
 const LEAF_A = '11111111-1111-4111-8111-111111111111'
 const LEAF_B = '22222222-2222-4222-8222-222222222222'
@@ -40,6 +55,15 @@ describe('resolveTabAgent', () => {
     expect(resolveTabAgent(map, layout(LEAF_B), 'tab-1')).toBe('codex')
   })
 
+  it('exposes focused and sibling hook identity separately', () => {
+    const map = {
+      [`tab-1:${LEAF_A}`]: entry(`tab-1:${LEAF_A}`, 'claude'),
+      [`tab-1:${LEAF_B}`]: entry(`tab-1:${LEAF_B}`, 'codex')
+    }
+    expect(resolveFocusedTabAgent(map, layout(LEAF_A), 'tab-1')).toBe('claude')
+    expect(resolveSiblingTabAgent(map, layout(LEAF_A), 'tab-1')).toBe('codex')
+  })
+
   it('falls back to any agent pane when the focused pane is a plain terminal', () => {
     // Focused leaf A has no entry (it's a shell); the split sibling runs Codex.
     const map = { [`tab-1:${LEAF_B}`]: entry(`tab-1:${LEAF_B}`, 'codex') }
@@ -49,6 +73,13 @@ describe('resolveTabAgent', () => {
   it('resolves via the prefix scan when the layout is missing', () => {
     const map = { [`tab-1:${LEAF_A}`]: entry(`tab-1:${LEAF_A}`, 'droid') }
     expect(resolveTabAgent(map, undefined, 'tab-1')).toBe('droid')
+  })
+
+  it('treats same-tab hook identity as focused when the layout is missing', () => {
+    const map = { [`tab-1:${LEAF_A}`]: entry(`tab-1:${LEAF_A}`, 'codex') }
+
+    expect(resolveFocusedTabAgent(map, undefined, 'tab-1')).toBe('codex')
+    expect(resolveSiblingTabAgent(map, undefined, 'tab-1')).toBeNull()
   })
 
   it("keeps the terminal glyph for an agent that didn't identify itself", () => {
@@ -73,8 +104,24 @@ describe('resolveTabAgent', () => {
         state: 'done' as const
       }
     }
-    expect(hasCompletedTabAgent(map, 'tab-1')).toBe(true)
-    expect(resolveCompletedTabAgent(map, 'tab-1')).toBe('openclaude')
+    expect(resolveFocusedCompletedTabAgent(map, undefined, 'tab-1')).toBe('openclaude')
+    expect(resolveSiblingCompletedTabAgent(map, undefined, 'tab-1')).toBeNull()
+  })
+
+  it('exposes focused and sibling completed hook identity separately', () => {
+    const map = {
+      [`tab-1:${LEAF_A}`]: {
+        ...entry(`tab-1:${LEAF_A}`, 'claude'),
+        state: 'done' as const
+      },
+      [`tab-1:${LEAF_B}`]: {
+        ...entry(`tab-1:${LEAF_B}`, 'codex'),
+        state: 'done' as const
+      }
+    }
+
+    expect(resolveFocusedCompletedTabAgent(map, layout(LEAF_A), 'tab-1')).toBe('claude')
+    expect(resolveSiblingCompletedTabAgent(map, layout(LEAF_A), 'tab-1')).toBe('codex')
   })
 
   it('keeps the terminal glyph for an agent Orca has no icon for', () => {

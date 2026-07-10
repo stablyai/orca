@@ -1,4 +1,4 @@
-import { mkdir, mkdtemp, readdir, rm, stat, writeFile } from 'node:fs/promises'
+import { mkdir, mkdtemp, readFile, readdir, rm, stat, writeFile } from 'node:fs/promises'
 import { createRequire } from 'node:module'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -63,6 +63,36 @@ describe('electron-builder config', () => {
     )
   })
 
+  // Why: on macOS 26 UNUserNotificationCenter aborts for executables launched
+  // from Contents/Resources, so the helper must ship in Contents/MacOS (#7929).
+  it('ships the mac notification-status helper in Contents/MacOS, not Resources', () => {
+    expect(electronBuilderConfig.mac.extraFiles).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          from: 'native/notification-status-macos/.build/release/orca-notification-status',
+          to: 'MacOS/orca-notification-status'
+        })
+      ])
+    )
+    expect(electronBuilderConfig.mac.extraResources).not.toEqual(
+      expect.arrayContaining([expect.objectContaining({ to: 'orca-notification-status' })])
+    )
+  })
+
+  it('unpacks the compiled CommonJS boundary with CLI runtime files', () => {
+    expect(electronBuilderConfig.asarUnpack).toEqual(
+      expect.arrayContaining(['out/package.json', 'out/cli/**', 'out/shared/**'])
+    )
+  })
+
+  // Why: without the unpacked entry the watcher client silently falls back to
+  // in-process @parcel/watcher, reintroducing the #7547 main-process crash.
+  it('unpacks the forked parcel-watcher process entry', () => {
+    expect(electronBuilderConfig.asarUnpack).toEqual(
+      expect.arrayContaining(['out/main/parcel-watcher-process-entry.js'])
+    )
+  })
+
   it('uses the multi-size icon source for Linux packages', () => {
     expect(electronBuilderConfig.linux.icon).toBe('resources/build/icon.icns')
   })
@@ -71,14 +101,34 @@ describe('electron-builder config', () => {
     expect(electronBuilderConfig.linux.desktop.entry.StartupWMClass).toBe('orca')
   })
 
-  it('builds RPMs without changing existing Linux artifact names', () => {
-    expect(electronBuilderConfig.linux.target).toEqual(['AppImage', 'deb', 'rpm'])
+  it('uses AppImage and deb as local Linux targets without changing existing artifact names', () => {
+    expect(electronBuilderConfig.linux.target).toEqual(['AppImage', 'deb'])
     expect(electronBuilderConfig.appImage.artifactName).toBe('orca-linux.${ext}')
     expect(electronBuilderConfig.deb.artifactName).toBe('orca-ide_${version}_${arch}.${ext}')
     expect(electronBuilderConfig.rpm).toMatchObject({
       packageName: 'orca-ide',
       artifactName: 'orca-ide-${version}.${arch}.${ext}'
     })
+  })
+
+  it('uses a distinct AppImage name for Linux arm64 release uploads', () => {
+    const configPath = require.resolve('../electron-builder.config.cjs')
+    const original = process.env.ORCA_LINUX_ARM64_RELEASE
+    try {
+      delete require.cache[configPath]
+      process.env.ORCA_LINUX_ARM64_RELEASE = '1'
+      expect(require('../electron-builder.config.cjs').appImage.artifactName).toBe(
+        'orca-linux-arm64.${ext}'
+      )
+    } finally {
+      if (original === undefined) {
+        delete process.env.ORCA_LINUX_ARM64_RELEASE
+      } else {
+        process.env.ORCA_LINUX_ARM64_RELEASE = original
+      }
+      delete require.cache[configPath]
+      require('../electron-builder.config.cjs')
+    }
   })
 
   it('uses Orca native rebuild hook instead of electron-builder default rebuild', () => {
@@ -144,6 +194,40 @@ describe('electron-builder config', () => {
       ).resolves.toEqual([])
     } finally {
       await rm(resourcesDir, { recursive: true, force: true })
+    }
+  })
+
+  it('copies the Windows node-pty ConPTY runtime beside the rebuilt addon', async () => {
+    for (const arch of ['x64', 'arm64']) {
+      const resourcesDir = await mkdtemp(join(tmpdir(), `orca-node-pty-conpty-${arch}-`))
+      try {
+        const nodePtyDir = join(resourcesDir, 'node_modules', 'node-pty')
+        const releaseDir = join(nodePtyDir, 'build', 'Release')
+        const conptyRoot = join(nodePtyDir, 'third_party', 'conpty', '0.1.0')
+        await mkdir(releaseDir, { recursive: true })
+        await writeFile(join(releaseDir, 'conpty.node'), 'native addon placeholder', 'utf8')
+        for (const sourceArch of ['x64', 'arm64']) {
+          const sourceDir = join(conptyRoot, `win10-${sourceArch}`)
+          await mkdir(sourceDir, { recursive: true })
+          await writeFile(join(sourceDir, 'conpty.dll'), `dll payload ${sourceArch}`, 'utf8')
+          await writeFile(
+            join(sourceDir, 'OpenConsole.exe'),
+            `console payload ${sourceArch}`,
+            'utf8'
+          )
+        }
+
+        prunePackagedNodePty(resourcesDir, 'win32', arch)
+
+        await expect(readFile(join(releaseDir, 'conpty', 'conpty.dll'), 'utf8')).resolves.toBe(
+          `dll payload ${arch}`
+        )
+        await expect(readFile(join(releaseDir, 'conpty', 'OpenConsole.exe'), 'utf8')).resolves.toBe(
+          `console payload ${arch}`
+        )
+      } finally {
+        await rm(resourcesDir, { recursive: true, force: true })
+      }
     }
   })
 
@@ -269,6 +353,15 @@ describe('electron-builder config', () => {
         const launcherPath = join(resourcesDir, 'bin', 'orca-ide')
         await mkdir(join(resourcesDir, 'bin'), { recursive: true })
         await mkdir(join(resourcesDir, 'node_modules', 'zod', 'src'), { recursive: true })
+        // Why: afterPack now fails hard when the unpacked daemon entry is
+        // missing, so the fixture must carry one like a real package layout.
+        const unpackedMainDir = join(resourcesDir, 'app.asar.unpacked', 'out', 'main')
+        await mkdir(unpackedMainDir, { recursive: true })
+        await writeFile(
+          join(unpackedMainDir, 'daemon-entry.js'),
+          'console.error("Usage: daemon-entry <socket>"); process.exit(1)\n',
+          'utf8'
+        )
         await writeFile(launcherPath, '#!/usr/bin/env bash\n', { encoding: 'utf8', mode: 0o644 })
 
         await electronBuilderConfig.afterPack({

@@ -1,23 +1,24 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { RefreshCw, TicketCheck, X } from 'lucide-react'
 import type { CliInstallStatus } from '../../../../shared/cli-install-types'
-import type { SkillDiscoveryTarget } from '../../../../shared/skills'
+import type { ProjectExecutionRuntimeResolution } from '../../../../shared/project-execution-runtime'
 import { Button } from '@/components/ui/button'
 import {
   GLOBAL_AGENT_SKILL_SOURCE_KINDS,
-  useInstalledAgentSkill
+  useInstalledAgentSkillNames
 } from '@/hooks/useInstalledAgentSkills'
 import {
-  LINEAR_TICKETS_SKILL_NAME,
-  buildAgentFeatureSkillInstallCommand
+  LINEAR_AGENT_SKILL_NAMES,
+  ORCA_LINEAR_SKILL_INSTALL_COMMAND
 } from '@/lib/agent-feature-install-commands'
+import { getLinearAgentSkillUpdateCommand } from '@/lib/linear-agent-skill-update-command'
 import {
   ensureOrcaCliAvailableForAgentSkillTerminal,
   isOrcaCliAvailableOnPath
 } from '@/lib/agent-skill-cli-prerequisite'
 import { cn } from '@/lib/utils'
 import {
-  buildSkillInstallCommandForRuntime,
+  buildSkillCommandForRuntime,
   ensureWslCliAvailableForAgentSkillTerminal,
   getWslCliDistroRequest
 } from '../settings/CliSkillRuntimeSetup'
@@ -37,6 +38,8 @@ import {
 import {
   getCurrentPlatform,
   getLinearPromptAgentRuntime,
+  getLinearPromptSetupCheckIdentity,
+  getLinearPromptSkillDiscoveryTarget,
   getLinearPromptTerminalShellOverride,
   getLocalDismissStorageKey,
   readLocalDismissed,
@@ -56,6 +59,7 @@ type LinearAgentSkillSetupPromptProps = {
   remote: boolean
   surface?: 'inline' | 'modal'
   settings?: LinearAgentSkillPromptSettings | null
+  projectRuntime?: ProjectExecutionRuntimeResolution
   currentPlatform?: NodeJS.Platform
   className?: string
 }
@@ -67,6 +71,7 @@ export function LinearAgentSkillSetupPrompt({
   remote,
   surface = 'inline',
   settings,
+  projectRuntime,
   currentPlatform = getCurrentPlatform(),
   className
 }: LinearAgentSkillSetupPromptProps): React.JSX.Element | null {
@@ -76,45 +81,46 @@ export function LinearAgentSkillSetupPrompt({
   const [setupCheckResult, setSetupCheckResult] = useState<SetupCheckResult>('idle')
   const [activeSetupCheckIdentity, setActiveSetupCheckIdentity] = useState<string | null>(null)
   const agentRuntime = useMemo(
-    () => getLinearPromptAgentRuntime(settings, currentPlatform, remote),
-    [currentPlatform, remote, settings]
+    () => getLinearPromptAgentRuntime(settings, currentPlatform, remote, projectRuntime),
+    [currentPlatform, projectRuntime, remote, settings]
   )
   const setupCheckIdentity = useMemo(
     () =>
-      JSON.stringify({
+      getLinearPromptSetupCheckIdentity({
         remote,
-        runtime: agentRuntime.runtime,
-        wslDistro: agentRuntime.wslDistro ?? null,
+        runtime: agentRuntime,
+        projectRuntime,
         activeRuntimeEnvironmentId: settings?.activeRuntimeEnvironmentId ?? null
       }),
-    [agentRuntime.runtime, agentRuntime.wslDistro, remote, settings?.activeRuntimeEnvironmentId]
+    [agentRuntime, projectRuntime, remote, settings?.activeRuntimeEnvironmentId]
   )
   const currentSetupCheckIdentityRef = useRef(setupCheckIdentity)
   const cliRefreshGenerationRef = useRef(0)
   currentSetupCheckIdentityRef.current = setupCheckIdentity
-  const skillDiscoveryTarget = useMemo<SkillDiscoveryTarget | undefined>(
-    () =>
-      agentRuntime.runtime === 'wsl'
-        ? { runtime: 'wsl', wslDistro: agentRuntime.wslDistro }
-        : undefined,
-    [agentRuntime.runtime, agentRuntime.wslDistro]
+  const skillDiscoveryTarget = useMemo(
+    () => getLinearPromptSkillDiscoveryTarget(agentRuntime, projectRuntime),
+    [agentRuntime, projectRuntime]
   )
   const localDismissStorageKey = getLocalDismissStorageKey(agentRuntime)
   const [localDismissed, setLocalDismissed] = useState(() =>
     readLocalDismissed(localDismissStorageKey)
   )
-  const skill = useInstalledAgentSkill(LINEAR_TICKETS_SKILL_NAME, {
+  const skill = useInstalledAgentSkillNames(LINEAR_AGENT_SKILL_NAMES, {
     enabled: linked,
     discoveryTarget: skillDiscoveryTarget,
     sourceKinds: GLOBAL_AGENT_SKILL_SOURCE_KINDS
   })
   const command = useMemo(
+    () => buildSkillCommandForRuntime(ORCA_LINEAR_SKILL_INSTALL_COMMAND, agentRuntime),
+    [agentRuntime]
+  )
+  const installedCommand = useMemo(
     () =>
-      buildSkillInstallCommandForRuntime(
-        buildAgentFeatureSkillInstallCommand([LINEAR_TICKETS_SKILL_NAME]),
+      buildSkillCommandForRuntime(
+        getLinearAgentSkillUpdateCommand(skill.skills, skill.installed),
         agentRuntime
       ),
-    [agentRuntime]
+    [agentRuntime, skill.installed, skill.skills]
   )
   const terminalShellOverride = getLinearPromptTerminalShellOverride(
     currentPlatform,
@@ -276,6 +282,7 @@ export function LinearAgentSkillSetupPrompt({
       successDescription={successDescription}
       missingLabel={missingLabel}
       command={command}
+      installedCommand={installedCommand}
       terminalShellOverride={terminalShellOverride}
       installed={skill.installed}
       loading={showCheckingModal || cliLoading || skill.loading}

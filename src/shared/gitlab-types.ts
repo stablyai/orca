@@ -63,6 +63,8 @@ export type MRInfo = {
   authorAvatarUrl?: string | null
   /** GitLab MR head SHA — pipeline status is keyed off the head commit. */
   headSha?: string
+  /** Target branch name for review-created worktree compare-base repair. */
+  baseRefName?: string
   conflictSummary?: PRConflictSummary
 }
 

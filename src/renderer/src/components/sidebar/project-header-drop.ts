@@ -1,4 +1,8 @@
-import { getWorktreeSidebarBoundaryDrop } from './worktree-sidebar-drag-autoscroll'
+import { getEffectiveProjectGroupManualRank } from '../../../../shared/project-groups'
+import {
+  computeWorktreeSidebarHeaderDropPreview,
+  type WorktreeSidebarHeaderDropPreview
+} from './worktree-sidebar-header-drop-preview'
 import type { Row } from './worktree-list-groups'
 import type { Repo } from '../../../../shared/types'
 
@@ -13,14 +17,10 @@ export type ProjectHeaderDragRect = {
   headerIndex: number
   top: number
   bottom: number
+  sectionBottom?: number
 }
 
-export type ProjectHeaderDropPreview = {
-  dropIndex: number
-  dropIndicatorY: number
-}
-
-const INDICATOR_GAP_PX = 4
+export type ProjectHeaderDropPreview = WorktreeSidebarHeaderDropPreview
 
 export function getProjectHeaderDragBucketKey(
   repo: Pick<Repo, 'projectGroupId'>
@@ -67,12 +67,7 @@ export function getProjectGroupOrderForSidebarDrop(args: {
     if (!repo) {
       return undefined
     }
-    const order = repo.projectGroupOrder
-    if (typeof order === 'number' && Number.isFinite(order)) {
-      return order
-    }
-    const repoRank = args.repoOrderRankById?.get(repo.id)
-    return (repoRank ?? fallbackIndex) * 1000
+    return getEffectiveProjectGroupManualRank(repo, args.repoOrderRankById, fallbackIndex)
   }
   const before = getEffectiveOrder(ordered[args.dropIndex - 1], args.dropIndex - 1)
   const after = getEffectiveOrder(ordered[args.dropIndex], args.dropIndex)
@@ -119,6 +114,15 @@ function getVirtualRowStart(virtualRow: HTMLElement | null): number | null {
   return Number.isFinite(start) ? start : null
 }
 
+function getOptionalNumberAttribute(element: HTMLElement, attribute: string): number | undefined {
+  const rawValue = element.getAttribute(attribute)
+  if (rawValue === null) {
+    return undefined
+  }
+  const value = Number(rawValue)
+  return Number.isFinite(value) ? value : undefined
+}
+
 export function measureProjectHeaderDragRects(
   container: HTMLElement,
   bucketKey?: ProjectHeaderDragBucketKey
@@ -148,7 +152,8 @@ export function measureProjectHeaderDragRects(
       bucketKey: elementBucketKey,
       headerIndex,
       top,
-      bottom: top + rect.height
+      bottom: top + rect.height,
+      sectionBottom: getOptionalNumberAttribute(element, 'data-repo-header-section-end')
     })
   })
   rects.sort((left, right) => left.top - right.top)
@@ -181,53 +186,14 @@ export function computeProjectHeaderDropPreview(args: {
   sidebarRepoHeaderIds: readonly string[]
 }): ProjectHeaderDropPreview | null {
   const { rects, sidebarRepoHeaderIds } = args
-  if (rects.length === 0 || sidebarRepoHeaderIds.length === 0) {
-    return null
-  }
-
-  const localY = args.pointerY - args.containerTop + args.scrollTop
-  const first = rects[0]!
-  const last = rects.at(-1)!
-  const boundaryDrop = getWorktreeSidebarBoundaryDrop({
-    localY,
-    firstRect: {
-      worktreeId: first.repoId,
-      groupIndex: first.headerIndex,
-      top: first.top,
-      bottom: first.bottom
-    },
-    lastRect: {
-      worktreeId: last.repoId,
-      groupIndex: last.headerIndex,
-      top: last.top,
-      bottom: last.bottom
-    },
-    sourceGroupSize: sidebarRepoHeaderIds.length
+  return computeWorktreeSidebarHeaderDropPreview({
+    pointerY: args.pointerY,
+    containerTop: args.containerTop,
+    scrollTop: args.scrollTop,
+    rects,
+    headerCount: sidebarRepoHeaderIds.length,
+    getId: (rect) => rect.repoId
   })
-  if (boundaryDrop.kind === 'outside') {
-    return null
-  }
-
-  let dropIndex = last.headerIndex + 1
-  let indicatorY = last.bottom + INDICATOR_GAP_PX
-  if (boundaryDrop.kind === 'drop') {
-    dropIndex = boundaryDrop.dropIndex
-    indicatorY = boundaryDrop.indicatorY
-  } else {
-    for (const rect of rects) {
-      const mid = (rect.top + rect.bottom) / 2
-      if (localY < mid) {
-        dropIndex = rect.headerIndex
-        indicatorY = Math.max(0, rect.top - INDICATOR_GAP_PX)
-        break
-      }
-    }
-  }
-
-  return {
-    dropIndex,
-    dropIndicatorY: Math.max(args.scrollTop, indicatorY)
-  }
 }
 
 export function applyAllRepoInsertAt(

@@ -1,4 +1,4 @@
-import { detectAgentStatusFromTitle, isExplicitAgentStatusFresh } from '@/lib/agent-status'
+import { classifyTitleActivity, isExplicitAgentStatusFresh } from '@/lib/pane-agent-evidence'
 import { tabHasLivePty } from '@/lib/tab-has-live-pty'
 import {
   AGENT_STATUS_STALE_AFTER_MS,
@@ -7,6 +7,7 @@ import {
 } from '../../../../shared/agent-status-types'
 import { parsePaneKey } from '../../../../shared/stable-pane-id'
 import type { TerminalTab } from '../../../../shared/types'
+import { isClipboardTextByteLengthOverLimit } from '../../../../shared/clipboard-text'
 import type {
   WorkspaceSpaceItem,
   WorkspaceSpaceWorktree
@@ -14,6 +15,14 @@ import type {
 
 export type WorkspaceSpaceSortKey = 'size' | 'name' | 'repo' | 'activity'
 export type WorkspaceSpaceSortDirection = 'asc' | 'desc'
+export const WORKSPACE_SPACE_FILTER_QUERY_MAX_BYTES = 2 * 1024
+
+export function isWorkspaceSpaceFilterQueryTooLarge(
+  query: string,
+  maxBytes = WORKSPACE_SPACE_FILTER_QUERY_MAX_BYTES
+): boolean {
+  return isClipboardTextByteLengthOverLimit(query, maxBytes)
+}
 
 export type WorkspaceSpaceDeleteReadiness = {
   isActive: boolean
@@ -73,12 +82,12 @@ function countTitleActiveAgentsForTab(
   const paneTitles = runtimePaneTitlesByTabId[tab.id]
   if (paneTitles && Object.keys(paneTitles).length > 0) {
     return Object.values(paneTitles).filter((title) => {
-      const status = detectAgentStatusFromTitle(title)
+      const status = classifyTitleActivity(title)
       return status === 'working' || status === 'permission'
     }).length
   }
 
-  const status = detectAgentStatusFromTitle(tab.title)
+  const status = classifyTitleActivity(tab.title)
   return status === 'working' || status === 'permission' ? 1 : 0
 }
 
@@ -208,7 +217,11 @@ export function filterWorkspaceSpaceRows(
   query: string,
   onlyDeletable: boolean
 ): WorkspaceSpaceWorktree[] {
-  const normalizedQuery = query.trim().toLowerCase()
+  if (isWorkspaceSpaceFilterQueryTooLarge(query)) {
+    return []
+  }
+  const trimmedQuery = query.trim()
+  const normalizedQuery = trimmedQuery.toLowerCase()
   return rows.filter((row) => {
     if (onlyDeletable && !row.canDelete) {
       return false

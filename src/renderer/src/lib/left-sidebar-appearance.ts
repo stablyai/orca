@@ -33,9 +33,9 @@ function hexToRgba(hex: string, alpha: number): string {
       .map((part) => part + part)
       .join('')
   }
-  const r = parseInt(clean.slice(0, 2), 16)
-  const g = parseInt(clean.slice(2, 4), 16)
-  const b = parseInt(clean.slice(4, 6), 16)
+  const r = Number.parseInt(clean.slice(0, 2), 16)
+  const g = Number.parseInt(clean.slice(2, 4), 16)
+  const b = Number.parseInt(clean.slice(4, 6), 16)
   return `rgba(${r}, ${g}, ${b}, ${alpha})`
 }
 
@@ -53,7 +53,9 @@ function buildSurfaceVariables(args: {
 }): LeftSidebarStyleVariables {
   const { background, foreground, overrideTextTokens = false } = args
   const accent = `color-mix(in srgb, ${foreground} 9%, ${background})`
-  const border = `color-mix(in srgb, ${foreground} 14%, ${background})`
+  // 7% keeps the sidebar divider at the same prominence as the global --border
+  // (7% in dark mode) so it reads like the rest of the UI; 14% rendered brighter (#5906).
+  const border = `color-mix(in srgb, ${foreground} 7%, ${background})`
   const ring = `color-mix(in srgb, ${foreground} 44%, ${background})`
   const vars: LeftSidebarStyleVariables = {
     '--worktree-sidebar': background,
@@ -81,7 +83,8 @@ function buildSurfaceVariables(args: {
     vars['--accent-foreground'] = foreground
     vars['--muted'] = `color-mix(in srgb, ${foreground} 7%, ${background})`
     vars['--muted-foreground'] = `color-mix(in srgb, ${foreground} 62%, ${background})`
-    vars['--border'] = `color-mix(in srgb, ${foreground} 14%, ${background})`
+    // Match the global --border (7%) so sidebar-scoped dividers aren't brighter (#5906).
+    vars['--border'] = `color-mix(in srgb, ${foreground} 7%, ${background})`
   }
   return vars
 }

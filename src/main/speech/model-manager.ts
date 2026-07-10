@@ -1,11 +1,11 @@
 /* eslint-disable max-lines -- Why: model download, checksum, extraction, and cleanup share one state machine so progress/error transitions stay coupled. */
 import { app, net } from 'electron'
-import { join, resolve, relative } from 'path'
-import { existsSync, mkdirSync, createWriteStream, createReadStream, rmSync } from 'fs'
-import { readdir, rm } from 'fs/promises'
-import { createHash } from 'crypto'
-import { pipeline } from 'stream/promises'
-import { spawn } from 'child_process'
+import { join, resolve, relative } from 'node:path'
+import { existsSync, mkdirSync, createWriteStream, createReadStream, rmSync } from 'node:fs'
+import { readdir, rm } from 'node:fs/promises'
+import { createHash } from 'node:crypto'
+import { pipeline } from 'node:stream/promises'
+import { spawn } from 'node:child_process'
 import type {
   SpeechModelManifest,
   SpeechModelState,
@@ -14,6 +14,11 @@ import type {
 import { SPEECH_MODEL_CATALOG, getCatalogModel, isLocalSpeechModel } from './model-catalog'
 import { hasOpenAiSpeechApiKey } from './openai-api-key-store'
 import { resolveTarExecutable } from './tar-executable'
+import {
+  getSpeechModelCacheDirCandidates,
+  migrateSpeechModelCacheIfNeeded,
+  type SpeechModelCacheDir
+} from './model-cache-path'
 
 type DownloadHandle = {
   abort: () => void
@@ -31,13 +36,23 @@ const DOWNLOAD_IDLE_TIMEOUT_MS = 120_000
 
 export class ModelManager {
   private modelsDir: string
+  private migrationSourceDir: string | null
+  private migrationReady: Promise<void>
   private activeDownloads = new Map<string, DownloadHandle>()
   private modelStates = new Map<string, SpeechModelState>()
   private progressCallbacks = new Set<ProgressCallback>()
 
   constructor(customModelsDir?: string) {
-    this.modelsDir = customModelsDir || join(app.getPath('userData'), 'speech-models')
-    mkdirSync(this.modelsDir, { recursive: true })
+    const requestedModelsDir = customModelsDir || join(app.getPath('userData'), 'speech-models')
+    const prepared = this.prepareModelsDir(requestedModelsDir)
+    this.modelsDir = prepared.modelsDir
+    this.migrationSourceDir = prepared.migrationSourceDir
+    // Why: migrating a non-ASCII cache copies large model files; run it off the
+    // main thread and gate model-state reads on it so the UI stays responsive.
+    this.migrationReady = migrateSpeechModelCacheIfNeeded(
+      prepared.migrationSourceDir,
+      prepared.modelsDir
+    )
   }
 
   setProgressCallback(cb: ProgressCallback): () => void {
@@ -53,6 +68,23 @@ export class ModelManager {
     return this.modelsDir
   }
 
+  private prepareModelsDir(requestedModelsDir: string): SpeechModelCacheDir {
+    let lastError: unknown = null
+    for (const candidate of getSpeechModelCacheDirCandidates(requestedModelsDir)) {
+      try {
+        mkdirSync(candidate.modelsDir, { recursive: true })
+        return candidate
+      } catch (error) {
+        lastError = error
+        if (candidate.migrationSourceDir) {
+          console.warn('[speech] Failed to prepare ASCII speech model cache:', error)
+        }
+      }
+    }
+
+    throw lastError instanceof Error ? lastError : new Error(String(lastError))
+  }
+
   async getModelStates(): Promise<SpeechModelState[]> {
     const states: SpeechModelState[] = []
     for (const manifest of SPEECH_MODEL_CATALOG) {
@@ -63,6 +95,7 @@ export class ModelManager {
   }
 
   async getModelState(modelId: string): Promise<SpeechModelState> {
+    await this.migrationReady
     const cached = this.modelStates.get(modelId)
     if (cached && (cached.status === 'downloading' || cached.status === 'extracting')) {
       return cached
@@ -94,12 +127,12 @@ export class ModelManager {
     return this.getSafeModelDir(modelId)
   }
 
-  private getSafeModelDir(modelId: string): string {
+  private getSafeModelDir(modelId: string, root: string = this.modelsDir): string {
     const manifest = getCatalogModel(modelId)
     if (!manifest) {
       throw new Error(`Unknown model: ${modelId}`)
     }
-    const modelsRoot = resolve(this.modelsDir)
+    const modelsRoot = resolve(root)
     const modelDir = resolve(modelsRoot, modelId)
     const rel = relative(modelsRoot, modelDir)
     if (rel.startsWith('..') || rel === '' || rel.includes('..') || resolve(rel) === rel) {
@@ -116,6 +149,10 @@ export class ModelManager {
   }
 
   async downloadModel(modelId: string): Promise<void> {
+    // Why: no migration await here — migration only copies dirs already present
+    // in the old cache (surfaced as ready via getModelState before download is
+    // offered), so it never races a download, and awaiting would defer the
+    // synchronous request setup that cancelDownload relies on.
     if (this.activeDownloads.has(modelId)) {
       return
     }
@@ -231,6 +268,7 @@ export class ModelManager {
   }
 
   async deleteModel(modelId: string): Promise<void> {
+    await this.migrationReady
     if (!getCatalogModel(modelId)) {
       throw new Error(`Unknown model: ${modelId}`)
     }
@@ -242,6 +280,15 @@ export class ModelManager {
     const modelDir = this.getModelDir(modelId)
     if (existsSync(modelDir)) {
       await rm(modelDir, { recursive: true, force: true })
+    }
+    // Why: also delete the pre-migration copy (awaited above, so the copy has
+    // finished) — otherwise the next launch re-migrates it and resurrects the
+    // model the user just deleted.
+    if (this.migrationSourceDir) {
+      const sourceModelDir = this.getSafeModelDir(modelId, this.migrationSourceDir)
+      if (existsSync(sourceModelDir)) {
+        await rm(sourceModelDir, { recursive: true, force: true })
+      }
     }
     this.modelStates.delete(modelId)
   }
@@ -393,8 +440,10 @@ export class ModelManager {
 
         const contentLength = response.headers['content-length']
         const totalSize =
-          parseInt(Array.isArray(contentLength) ? contentLength[0] : contentLength || '0', 10) ||
-          expectedSize
+          Number.parseInt(
+            Array.isArray(contentLength) ? contentLength[0] : contentLength || '0',
+            10
+          ) || expectedSize
         let downloaded = 0
 
         const fileStream = createWriteStream(dest)
@@ -595,7 +644,7 @@ export class ModelManager {
         const nestedFiles = await readdir(nestedDir)
         const hasExpected = manifest.files.some((f) => nestedFiles.includes(f))
         if (hasExpected) {
-          const { rename: fsRename } = await import('fs/promises')
+          const { rename: fsRename } = await import('node:fs/promises')
           for (const file of nestedFiles) {
             await fsRename(join(nestedDir, file), join(modelDir, file))
           }

@@ -18,7 +18,7 @@ export function WarpThemeImportButton({
       onClick={() => void warpThemes.handleClick()}
     >
       <WarpIcon className="size-4" />
-      {translate('auto.components.settings.WarpThemeImportModal.title', 'Import themes from Warp')}
+      {translate('auto.components.settings.WarpThemeImportModal.title', 'Import from Warp')}
     </Button>
   )
 }

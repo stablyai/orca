@@ -1,4 +1,24 @@
-export function parseFileUriPath(uri: string): string | null {
+export type ParsedFileUriPath = {
+  path: string
+  hostname: string
+}
+
+export type ParseFileUriPathOptions = {
+  pathFlavor?: 'posix' | 'win32'
+  remotePosixAuthority?: boolean
+}
+
+export function parseFileUriPath(
+  uri: string,
+  options: ParseFileUriPathOptions = {}
+): string | null {
+  return parseFileUriPathParts(uri, options)?.path ?? null
+}
+
+export function parseFileUriPathParts(
+  uri: string,
+  options: ParseFileUriPathOptions = {}
+): ParsedFileUriPath | null {
   try {
     const url = new URL(uri)
     if (url.protocol !== 'file:') {
@@ -6,21 +26,21 @@ export function parseFileUriPath(uri: string): string | null {
     }
 
     const decodedPath = decodeURIComponent(url.pathname)
-    if (process.platform !== 'win32') {
-      return decodedPath
+    const hostname = url.hostname.toLowerCase()
+    const pathFlavor = options.pathFlavor ?? (process.platform === 'win32' ? 'win32' : 'posix')
+    if (pathFlavor !== 'win32') {
+      return { path: decodedPath, hostname }
     }
 
-    // Why: Windows OSC-7 cwd updates can describe both drive-letter paths
-    // (`file:///C:/repo`) and UNC shares (`file://server/share/repo`). Use the
-    // hostname when present so live cwd tracking, snapshots, and restore all
-    // round-trip to a native Windows path instead of dropping the server name.
-    if (url.hostname) {
-      return `\\\\${url.hostname}${decodedPath.replace(/\//g, '\\')}`
-    }
     if (/^\/[A-Za-z]:/.test(decodedPath)) {
-      return decodedPath.slice(1)
+      return { path: decodedPath.slice(1), hostname }
     }
-    return decodedPath.replace(/\//g, '\\')
+    // Why: localhost/empty-host OSC-7 URIs are POSIX paths even when parsed by
+    // a Windows app; only non-local hosts describe Windows UNC shares.
+    if (hostname && hostname !== 'localhost' && !options.remotePosixAuthority) {
+      return { path: `\\\\${url.hostname}${decodedPath.replace(/\//g, '\\')}`, hostname }
+    }
+    return { path: decodedPath, hostname }
   } catch {
     return null
   }

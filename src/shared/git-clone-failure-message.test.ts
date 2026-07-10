@@ -1,5 +1,9 @@
-import { describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { getGitCloneFailureMessage } from './git-clone-failure-message'
+
+afterEach(() => {
+  vi.restoreAllMocks()
+})
 
 describe('getGitCloneFailureMessage', () => {
   it('turns an existing destination into an actionable message after progress output', () => {
@@ -40,5 +44,31 @@ describe('getGitCloneFailureMessage', () => {
     expect(getGitCloneFailureMessage('warning: retrying\nnetwork vanished\n')).toBe(
       'network vanished'
     )
+  })
+
+  it('scrubs credential-bearing clone URLs before surfacing the fatal line', () => {
+    // Clone errors echo the URL the user typed — the most likely git error to
+    // embed a live token — and the message reaches dialogs and bug reports.
+    const stderr =
+      'Cloning into repo...\n' +
+      "fatal: repository 'https://user:ghp_secret123@github.com/org/repo.git/' not found\n"
+
+    expect(getGitCloneFailureMessage(stderr)).toBe(
+      "fatal: repository 'https://github.com/org/repo.git/' not found"
+    )
+  })
+
+  it('summarizes CRLF-heavy stderr without line-array splitting', () => {
+    const splitSpy = vi.spyOn(String.prototype, 'split')
+    const stderr = `${'remote: counting objects\r\n'.repeat(10_000)}fatal: repository not found\r\n`
+
+    expect(getGitCloneFailureMessage(stderr)).toBe('fatal: repository not found')
+
+    const usedLineSplit = splitSpy.mock.calls.some(
+      ([separator]) =>
+        (typeof separator === 'string' && separator === '\n') ||
+        (separator instanceof RegExp && separator.source === '\\r?\\n')
+    )
+    expect(usedLineSplit).toBe(false)
   })
 })

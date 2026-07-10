@@ -37,10 +37,11 @@ export function handleRichMarkdownImagePaste({
 
   event.preventDefault()
   const insertPos = editor.state.selection.from
+  const targetDom = editor.view.dom
 
   void saveClipboardImageForMarkdownPaste(worktreeId, runtimeEnvironmentId)
     .then((sourcePath) => {
-      if (!sourcePath) {
+      if (!sourcePath || !isRichMarkdownImagePasteTargetAvailable(editor, targetDom)) {
         return
       }
       return insertRichMarkdownImageFromPath({
@@ -49,7 +50,8 @@ export function handleRichMarkdownImagePaste({
         sourcePath,
         worktreeId,
         runtimeEnvironmentId,
-        insertPos
+        insertPos,
+        canInsert: (candidate) => isRichMarkdownImagePasteTargetAvailable(candidate, targetDom)
       })
     })
     .catch((err) => {
@@ -57,6 +59,10 @@ export function handleRichMarkdownImagePaste({
     })
 
   return true
+}
+
+function isRichMarkdownImagePasteTargetAvailable(editor: Editor, targetDom: HTMLElement): boolean {
+  return !editor.isDestroyed && editor.view.dom === targetDom && targetDom.isConnected
 }
 
 async function saveClipboardImageForMarkdownPaste(

@@ -1,10 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import {
-  getPRCommentGroupId,
-  getPRCommentGroupRoot,
-  groupPRComments,
-  type PRCommentGroup
-} from '@/lib/pr-comment-groups'
+import { getPRCommentGroupId, groupPRComments, type PRCommentGroup } from '@/lib/pr-comment-groups'
+import { isPRCommentGroupQueueableForAI } from '@/lib/pr-comment-action-state'
 import type { PRComment } from '../../../../shared/types'
 
 export type PRCommentsListSelection = {
@@ -69,7 +65,7 @@ export function usePRCommentsListSelection(
   selectionContextKey: string | undefined,
   clearRequest?: PRCommentsListSelectionClearRequest | null
 ): PRCommentsListSelection {
-  const lastClearRequestTokenRef = useRef<number | null>(clearRequest?.token ?? null)
+  const lastClearRequestTokenRef = useRef<number | null>(null)
   const [selectionState, setSelectionState] = useState<PRCommentsListSelectionState>(() =>
     createSelectionState(selectionContextKey)
   )
@@ -81,13 +77,14 @@ export function usePRCommentsListSelection(
   }, [selectionContextKey])
 
   useEffect(() => {
-    if (!clearRequest || clearRequest.token === lastClearRequestTokenRef.current) {
+    if (
+      !clearRequest ||
+      clearRequest.contextKey !== selectionContextKey ||
+      clearRequest.token === lastClearRequestTokenRef.current
+    ) {
       return
     }
     lastClearRequestTokenRef.current = clearRequest.token
-    if (clearRequest.contextKey !== selectionContextKey) {
-      return
-    }
     const next = {
       contextKey: selectionContextKey,
       isSelectingForAI: false,
@@ -101,7 +98,7 @@ export function usePRCommentsListSelection(
   // audience filter doesn't silently drop already-selected comments.
   const canonicalGroups = useMemo(() => groupPRComments(comments), [comments])
   const selectableGroups = useMemo(
-    () => canonicalGroups.filter((group) => getPRCommentGroupRoot(group).isResolved !== true),
+    () => canonicalGroups.filter(isPRCommentGroupQueueableForAI),
     [canonicalGroups]
   )
   const selectableGroupsById = useMemo(() => {

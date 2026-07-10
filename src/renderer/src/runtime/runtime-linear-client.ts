@@ -24,6 +24,12 @@ import {
   getTaskSourceRuntimeSettings,
   type TaskSourceContext
 } from '../../../shared/task-source-context'
+import { isRuntimeProviderSearchQueryWithinLimit } from './runtime-provider-search-bounds'
+import type { LinearIssueAttributeFilter } from '../../../shared/linear-issue-attribute-filter'
+import {
+  canonicalizeLinearIssueAttributeFilter,
+  isEmptyLinearIssueAttributeFilter
+} from '../../../shared/linear-issue-attribute-filter'
 
 export type RuntimeLinearSettings =
   | Pick<GlobalSettings, 'activeRuntimeEnvironmentId'>
@@ -170,6 +176,9 @@ export async function linearSearchIssues(
   limit?: number,
   workspaceId?: LinearWorkspaceSelection | null
 ): Promise<LinearIssue[]> {
+  if (!isRuntimeProviderSearchQueryWithinLimit(query)) {
+    return []
+  }
   const target = getLinearRuntimeTarget(settings)
   return target.kind === 'environment'
     ? callRuntimeRpc<LinearIssue[]>(
@@ -185,22 +194,26 @@ export async function linearListIssues(
   settings: RuntimeLinearSettings,
   filter?: LinearIssueFilter,
   limit?: number,
-  workspaceId?: LinearWorkspaceSelection | null
+  workspaceId?: LinearWorkspaceSelection | null,
+  attributeFilter?: LinearIssueAttributeFilter | null
 ): Promise<LinearCollectionResult<LinearIssue>> {
   const target = getLinearRuntimeTarget(settings)
+  const canonicalAttributeFilter =
+    attributeFilter && !isEmptyLinearIssueAttributeFilter(attributeFilter)
+      ? canonicalizeLinearIssueAttributeFilter(attributeFilter)
+      : undefined
+  const payload = {
+    filter,
+    limit,
+    workspaceId: workspaceId ?? undefined,
+    ...(canonicalAttributeFilter ? { attributeFilter: canonicalAttributeFilter } : {})
+  }
   const result =
     target.kind === 'environment'
-      ? await callRuntimeRpc<unknown>(
-          target,
-          'linear.listIssues',
-          { filter, limit, workspaceId: workspaceId ?? undefined },
-          { timeoutMs: 30_000 }
-        )
-      : await window.api.linear.listIssues({
-          filter,
-          limit,
-          workspaceId: workspaceId ?? undefined
+      ? await callRuntimeRpc<unknown>(target, 'linear.listIssues', payload, {
+          timeoutMs: 30_000
         })
+      : await window.api.linear.listIssues(payload)
   return normalizeLinearIssueCollectionResult(result)
 }
 
@@ -329,6 +342,9 @@ export async function linearListProjects(
   workspaceId?: LinearWorkspaceSelection | null,
   options?: LinearReadOptions
 ): Promise<LinearCollectionResult<LinearProjectSummary>> {
+  if (!isRuntimeProviderSearchQueryWithinLimit(query)) {
+    return { items: [] }
+  }
   const target = getLinearRuntimeTarget(settings)
   return target.kind === 'environment'
     ? callRuntimeRpc<LinearCollectionResult<LinearProjectSummary>>(

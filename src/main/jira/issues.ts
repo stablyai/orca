@@ -14,6 +14,7 @@ import type {
   JiraMutationResult,
   JiraPriority,
   JiraProject,
+  JiraProjectStatusOrder,
   JiraSite,
   JiraSiteSelection,
   JiraStatus,
@@ -29,6 +30,7 @@ import {
   release,
   type JiraClientForSite
 } from './client'
+import { adfToMarkdownText, textToAdf } from './adf-markdown'
 
 const ISSUE_FIELDS = [
   'summary',
@@ -67,8 +69,38 @@ function clampLimit(limit: number | undefined, fallback = 30): number {
   return Math.min(Math.max(1, Number.isFinite(limit) ? Number(limit) : fallback), 100)
 }
 
-function shouldThrowAuthError(selection: JiraSiteSelection | null | undefined): boolean {
-  return selection !== 'all'
+type JiraIssueSearchFailure = {
+  error: unknown
+  auth: boolean
+}
+
+function getErrorStatus(error: unknown): number | null {
+  if (!error || typeof error !== 'object' || !('status' in error)) {
+    return null
+  }
+  const status = (error as { status?: unknown }).status
+  return typeof status === 'number' && Number.isFinite(status) ? status : null
+}
+
+function toIssueSearchFailureError(error: unknown): unknown {
+  const status = getErrorStatus(error)
+  if (
+    status === null ||
+    !(error instanceof Error) ||
+    error.message.startsWith(`Error ${status}:`)
+  ) {
+    return error
+  }
+  return new Error(`Error ${status}: ${error.message}`)
+}
+
+function shouldSurfaceSiteFailure(
+  selection: JiraSiteSelection | null | undefined,
+  entryCount: number
+): boolean {
+  // getClients can resolve an omitted selection to the persisted 'all' choice;
+  // multi-entry reads need the same resilient fan-out policy as explicit 'all'.
+  return selection !== 'all' && entryCount <= 1
 }
 
 function asRecord(value: unknown): JiraRecord {
@@ -77,6 +109,13 @@ function asRecord(value: unknown): JiraRecord {
 
 function asString(value: unknown, fallback = ''): string {
   return typeof value === 'string' ? value : fallback
+}
+
+function asIdentifier(value: unknown): string {
+  if (typeof value === 'string') {
+    return value
+  }
+  return typeof value === 'number' && Number.isFinite(value) ? String(value) : ''
 }
 
 function asStringArray(value: unknown): string[] {
@@ -264,67 +303,6 @@ function mapStatus(value: unknown): JiraStatus {
   }
 }
 
-function textNode(text: string): JiraRecord {
-  return text ? { type: 'text', text } : { type: 'hardBreak' }
-}
-
-function textToAdf(text: string): JiraRecord {
-  const lines = text.split(/\r?\n/)
-  return {
-    type: 'doc',
-    version: 1,
-    content: lines.map((line) => ({
-      type: 'paragraph',
-      content: line ? [textNode(line)] : []
-    }))
-  }
-}
-
-function adfToPlainText(value: unknown): string {
-  const chunks: string[] = []
-
-  const walk = (node: unknown): void => {
-    if (!node) {
-      return
-    }
-    if (typeof node === 'string') {
-      chunks.push(node)
-      return
-    }
-    if (Array.isArray(node)) {
-      node.forEach(walk)
-      return
-    }
-    if (typeof node !== 'object') {
-      return
-    }
-    const record = node as JiraRecord
-    if (typeof record.text === 'string') {
-      chunks.push(record.text)
-    }
-    if (record.type === 'hardBreak') {
-      chunks.push('\n')
-    }
-    walk(record.content)
-    if (
-      record.type === 'paragraph' ||
-      record.type === 'heading' ||
-      record.type === 'listItem' ||
-      record.type === 'bulletList' ||
-      record.type === 'orderedList'
-    ) {
-      chunks.push('\n')
-    }
-  }
-
-  walk(value)
-  return chunks
-    .join('')
-    .replace(/[ \t]+\n/g, '\n')
-    .replace(/\n{3,}/g, '\n\n')
-    .trim()
-}
-
 function issueUrl(site: JiraSite, key: string): string {
   return `${site.siteUrl}/browse/${encodeURIComponent(key)}`
 }
@@ -338,7 +316,7 @@ export function mapJiraIssue(site: JiraSite, raw: JiraRecord): JiraIssue {
     siteId: site.id,
     siteName: site.displayName,
     title: asString(fields.summary, key || 'Untitled issue'),
-    description: adfToPlainText(fields.description),
+    description: adfToMarkdownText(fields.description),
     url: issueUrl(site, key),
     project: mapProject(fields.project, site),
     issueType: mapIssueType(fields.issuetype),
@@ -405,26 +383,37 @@ export async function searchIssues(
     return []
   }
   const safeLimit = clampLimit(limit)
+  const failures: (JiraIssueSearchFailure | undefined)[] = Array.from({ length: entries.length })
+  const surfaceSiteFailure = shouldSurfaceSiteFailure(siteId, entries.length)
   const results = await Promise.all(
-    entries.map(async (entry) => {
+    entries.map(async (entry, index) => {
       await acquire()
       try {
         return await searchIssuesForClient(entry, jql.trim(), safeLimit)
       } catch (error) {
-        if (isAuthError(error)) {
+        const authFailure = isAuthError(error)
+        if (authFailure) {
           clearToken(entry.site.id)
-          if (shouldThrowAuthError(siteId)) {
-            throw error
-          }
-        } else {
-          console.warn('[jira] searchIssues failed:', error)
         }
-        return []
+        if (surfaceSiteFailure) {
+          throw toIssueSearchFailureError(error)
+        }
+        console.warn('[jira] searchIssues failed:', error)
+        failures[index] = { error: toIssueSearchFailureError(error), auth: authFailure }
+        return [] as JiraIssue[]
       } finally {
         release()
       }
     })
   )
+  // 'all' fan-out: only surface an error when every connected site failed, so a
+  // partial success (or a genuinely empty result) is not reported as an error.
+  const recordedFailures = failures.filter(
+    (failure): failure is JiraIssueSearchFailure => failure !== undefined
+  )
+  if (recordedFailures.length === entries.length) {
+    throw (recordedFailures.find((failure) => !failure.auth) ?? recordedFailures[0]).error
+  }
   return entries.length === 1
     ? results.flat().slice(0, safeLimit)
     : sortAndLimitIssues(results.flat(), safeLimit)
@@ -448,7 +437,7 @@ export async function getIssue(
     } catch (error) {
       if (isAuthError(error)) {
         clearToken(entry.site.id)
-        if (shouldThrowAuthError(siteId)) {
+        if (shouldSurfaceSiteFailure(siteId, entries.length)) {
           throw error
         }
       } else {
@@ -592,7 +581,7 @@ export async function addIssueComment(
 function mapComment(raw: JiraRecord): JiraComment {
   return {
     id: asString(raw.id),
-    body: adfToPlainText(raw.body),
+    body: adfToMarkdownText(raw.body),
     createdAt: asString(raw.created, new Date().toISOString()),
     updatedAt: asString(raw.updated) || undefined,
     user: mapUser(raw.author)
@@ -650,7 +639,7 @@ export async function listProjects(siteId?: JiraSiteSelection | null): Promise<J
       } catch (error) {
         if (isAuthError(error)) {
           clearToken(entry.site.id)
-          if (shouldThrowAuthError(siteId)) {
+          if (shouldSurfaceSiteFailure(siteId, entries.length)) {
             throw error
           }
         } else {
@@ -825,6 +814,80 @@ export async function listTransitions(
     }
     console.warn('[jira] listTransitions failed:', error)
     return []
+  } finally {
+    release()
+  }
+}
+
+export async function getProjectStatusOrder(
+  projectKey: string,
+  siteId?: string | null
+): Promise<JiraProjectStatusOrder> {
+  // Why: an omitted site can resolve to the persisted "all" selection; board
+  // metadata is only truthful when exactly one Jira connection owns the project.
+  const entries = getClients(siteId)
+  const entry = entries.length === 1 ? entries[0] : undefined
+  if (!entry) {
+    return { statusIdsByColumn: [] }
+  }
+  await acquire()
+  try {
+    // Why: without an explicit board picker there is no truthful way to choose
+    // among multiple project boards, so ambiguous projects keep alphabetical order.
+    const params = new URLSearchParams({ projectKeyOrId: projectKey, maxResults: '2' })
+    const boardsResponse = await jiraRequest<JiraPagedResponse<JiraRecord>>(
+      entry,
+      `/rest/agile/1.0/board?${params.toString()}`
+    )
+    const boards = boardsResponse.values ?? []
+    const boardCount = asFiniteNumber(boardsResponse.total)
+    const singleBoardIsProven =
+      boards.length === 1 &&
+      boardsResponse.isLast !== false &&
+      (boardCount === 1 || (boardCount === null && boardsResponse.isLast === true))
+    const boardId = singleBoardIsProven ? asIdentifier(asRecord(boards[0]).id) : ''
+    if (!boardId) {
+      return { statusIdsByColumn: [] }
+    }
+
+    const configResponse = await jiraRequest<unknown>(
+      entry,
+      `/rest/agile/1.0/board/${encodeURIComponent(boardId)}/configuration`
+    )
+    const columns = asRecord(asRecord(configResponse).columnConfig).columns
+    if (!Array.isArray(columns)) {
+      return { statusIdsByColumn: [] }
+    }
+
+    // Why: issues already carry status names and IDs, so returning board IDs
+    // avoids a second metadata request and keeps duplicate names unambiguous.
+    const seenStatusIds = new Set<string>()
+    const statusIdsByColumn: string[][] = []
+    for (const column of columns) {
+      const statuses = asRecord(column).statuses
+      if (!Array.isArray(statuses)) {
+        continue
+      }
+      const columnStatusIds: string[] = []
+      for (const status of statuses) {
+        const statusId = asIdentifier(asRecord(status).id)
+        if (statusId && !seenStatusIds.has(statusId)) {
+          seenStatusIds.add(statusId)
+          columnStatusIds.push(statusId)
+        }
+      }
+      if (columnStatusIds.length > 0) {
+        statusIdsByColumn.push(columnStatusIds)
+      }
+    }
+    return { statusIdsByColumn }
+  } catch (error) {
+    if (isAuthError(error)) {
+      clearToken(entry.site.id)
+      throw error
+    }
+    console.warn('[jira] getProjectStatusOrder failed:', error)
+    return { statusIdsByColumn: [] }
   } finally {
     release()
   }

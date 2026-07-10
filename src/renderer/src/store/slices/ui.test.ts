@@ -1,15 +1,14 @@
 /* eslint-disable max-lines */
 import { createStore, type StoreApi } from 'zustand/vanilla'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { getDefaultUIState } from '../../../../shared/constants'
+import { getDefaultUIState, getWorktreeCardModeProperties } from '../../../../shared/constants'
 import type {
   GitHubWorkItem,
   JiraIssue,
   LinearIssue,
   PersistedUIState,
   TerminalTab,
-  Worktree,
-  WorktreeCardProperty
+  Worktree
 } from '../../../../shared/types'
 import type { GitLabWorkItem } from '../../../../shared/gitlab-types'
 import { createUISlice } from './ui'
@@ -22,17 +21,22 @@ import { makePaneKey } from '../../../../shared/stable-pane-id'
 import { buildAgentNotificationId } from '../../../../shared/agent-notification-id'
 import type { AgentStatusEntry } from '../../../../shared/agent-status-types'
 import type { TaskSourceContext } from '../../../../shared/task-source-context'
+import { getSetupScriptPromptDismissalKey } from '../../lib/setup-script-prompt'
 
 const mocks = vi.hoisted(() => ({
-  sendBracketedPasteToRunningAgent: vi.fn(),
+  sendNotesToActiveAgentSession: vi.fn(),
   track: vi.fn(),
   toastMessage: vi.fn(),
   toastSuccess: vi.fn(),
   toastError: vi.fn()
 }))
 
-vi.mock('@/lib/agent-paste-draft', () => ({
-  sendBracketedPasteToRunningAgent: mocks.sendBracketedPasteToRunningAgent
+vi.mock('@/lib/active-agent-note-send', () => ({
+  activeAgentNotesSendFailureMessage: (
+    status: string,
+    options: { explicitTarget?: boolean } = {}
+  ) => (options.explicitTarget ? `selected:${status}` : status),
+  sendNotesToActiveAgentSession: mocks.sendNotesToActiveAgentSession
 }))
 
 vi.mock('@/lib/telemetry', () => ({
@@ -53,7 +57,8 @@ afterEach(() => {
 })
 
 beforeEach(() => {
-  mocks.sendBracketedPasteToRunningAgent.mockReset()
+  mocks.sendNotesToActiveAgentSession.mockReset()
+  mocks.sendNotesToActiveAgentSession.mockResolvedValue({ status: 'sent' })
   mocks.track.mockReset()
   mocks.toastMessage.mockReset()
   mocks.toastSuccess.mockReset()
@@ -234,6 +239,9 @@ describe('createUISlice agent send target mode', () => {
           }
         }
       },
+      ptyIdsByTabId: {
+        [tabId]: ['pty-ready', 'pty-working']
+      },
       agentStatusByPaneKey: {
         [readyPaneKey]: {
           state: 'done',
@@ -272,10 +280,8 @@ describe('createUISlice agent send target mode', () => {
 
     expect(store.getState().agentSendPopoverTargetMode).toMatchObject({
       id: 'send-1',
-      eligiblePaneKeys: [readyPaneKey],
-      disabledPaneKeys: {
-        [workingPaneKey]: 'Agent is working'
-      },
+      eligiblePaneKeys: [readyPaneKey, workingPaneKey],
+      disabledPaneKeys: {},
       status: 'open'
     })
     expect(store.getState().pendingRevealWorktree).toMatchObject({
@@ -283,6 +289,43 @@ describe('createUISlice agent send target mode', () => {
       behavior: 'auto',
       highlight: true
     })
+  })
+
+  it('disables sidebar target rows that need permission', async () => {
+    const store = createUIStore()
+    seedAgentSendState(store)
+    const agentStatusByPaneKey = store.getState().agentStatusByPaneKey
+    store.setState({
+      agentStatusByPaneKey: {
+        ...agentStatusByPaneKey,
+        [workingPaneKey]: {
+          ...agentStatusByPaneKey[workingPaneKey]!,
+          state: 'blocked'
+        }
+      }
+    } as Partial<AppState>)
+
+    store.getState().openAgentSendPopoverTargetMode({
+      id: 'send-1',
+      worktreeId,
+      source: 'diff-notes',
+      prompt: 'Review this',
+      label: 'All unsent notes',
+      launchSource: 'notes_send'
+    })
+
+    expect(store.getState().agentSendPopoverTargetMode).toMatchObject({
+      id: 'send-1',
+      eligiblePaneKeys: [readyPaneKey],
+      disabledPaneKeys: {
+        [workingPaneKey]: 'Agent needs permission'
+      },
+      status: 'open'
+    })
+    await expect(store.getState().sendPromptToSidebarAgentTarget(workingPaneKey)).resolves.toBe(
+      false
+    )
+    expect(mocks.sendNotesToActiveAgentSession).not.toHaveBeenCalled()
   })
 
   it('does not reveal the sidebar when the current workspace has no eligible targets', () => {
@@ -299,8 +342,14 @@ describe('createUISlice agent send target mode', () => {
           },
           activeLeafId: readyLeafId,
           expandedLeafId: null,
-          ptyIdsByLeafId: {}
+          ptyIdsByLeafId: {
+            [readyLeafId]: 'pty-ready',
+            [workingLeafId]: 'pty-working'
+          }
         }
+      },
+      ptyIdsByTabId: {
+        [tabId]: []
       }
     })
 
@@ -328,7 +377,6 @@ describe('createUISlice agent send target mode', () => {
     const store = createUIStore()
     const onPromptDelivered = vi.fn()
     seedAgentSendState(store)
-    mocks.sendBracketedPasteToRunningAgent.mockResolvedValue(true)
     store.getState().openAgentSendPopoverTargetMode({
       id: 'send-1',
       worktreeId,
@@ -341,9 +389,10 @@ describe('createUISlice agent send target mode', () => {
 
     await expect(store.getState().sendPromptToSidebarAgentTarget(readyPaneKey)).resolves.toBe(true)
 
-    expect(mocks.sendBracketedPasteToRunningAgent).toHaveBeenCalledWith({
-      ptyId: 'pty-ready',
-      content: 'Review this'
+    expect(mocks.sendNotesToActiveAgentSession).toHaveBeenCalledWith({
+      worktreeId,
+      prompt: 'Review this',
+      noteTarget: { tabId, leafId: readyLeafId }
     })
     expect(onPromptDelivered).toHaveBeenCalledTimes(1)
     expect(mocks.track).toHaveBeenCalledWith('agent_prompt_sent', {
@@ -359,7 +408,7 @@ describe('createUISlice agent send target mode', () => {
     const store = createUIStore()
     const onPromptDelivered = vi.fn()
     seedAgentSendState(store)
-    mocks.sendBracketedPasteToRunningAgent.mockResolvedValue(false)
+    mocks.sendNotesToActiveAgentSession.mockResolvedValue({ status: 'not-ready' })
     store.getState().openAgentSendPopoverTargetMode({
       id: 'send-1',
       worktreeId,
@@ -375,19 +424,18 @@ describe('createUISlice agent send target mode', () => {
     expect(onPromptDelivered).not.toHaveBeenCalled()
     expect(mocks.track).not.toHaveBeenCalled()
     expect(mocks.toastError).toHaveBeenCalledWith("Couldn't send to Codex", {
-      description: 'Terminal is no longer available'
+      description: 'selected:not-ready'
     })
     expect(store.getState().agentSendPopoverTargetMode).toMatchObject({
       id: 'send-1',
       status: 'error',
-      error: 'Terminal is no longer available'
+      error: 'selected:not-ready'
     })
   })
 
-  it('does not send to a working agent row', async () => {
+  it('sends to a working agent row through the selected-target note helper', async () => {
     const store = createUIStore()
     seedAgentSendState(store)
-    mocks.sendBracketedPasteToRunningAgent.mockResolvedValue(true)
     store.getState().openAgentSendPopoverTargetMode({
       id: 'send-1',
       worktreeId,
@@ -398,29 +446,32 @@ describe('createUISlice agent send target mode', () => {
     })
 
     await expect(store.getState().sendPromptToSidebarAgentTarget(workingPaneKey)).resolves.toBe(
-      false
+      true
     )
 
-    expect(mocks.sendBracketedPasteToRunningAgent).not.toHaveBeenCalled()
-    expect(mocks.toastSuccess).not.toHaveBeenCalled()
-    expect(store.getState().agentSendPopoverTargetMode).toMatchObject({
-      id: 'send-1',
-      status: 'open'
+    expect(mocks.sendNotesToActiveAgentSession).toHaveBeenCalledWith({
+      worktreeId,
+      prompt: 'Review this',
+      noteTarget: { tabId, leafId: workingLeafId }
     })
+    expect(mocks.toastSuccess).toHaveBeenCalledWith('Sent to Codex')
+    expect(store.getState().agentSendPopoverTargetMode).toBeNull()
   })
 
   it('does not let an older send close a reopened popover with the same id', async () => {
     const store = createUIStore()
-    const write = deferred<boolean>()
+    const onPromptDelivered = vi.fn()
+    const write = deferred<{ status: 'sent' }>()
     seedAgentSendState(store)
-    mocks.sendBracketedPasteToRunningAgent.mockReturnValue(write.promise)
+    mocks.sendNotesToActiveAgentSession.mockReturnValue(write.promise)
     store.getState().openAgentSendPopoverTargetMode({
       id: 'send-1',
       worktreeId,
       source: 'diff-notes',
       prompt: 'Review this',
       label: 'All unsent notes',
-      launchSource: 'notes_send'
+      launchSource: 'notes_send',
+      onPromptDelivered
     })
 
     const send = store.getState().sendPromptToSidebarAgentTarget(readyPaneKey)
@@ -435,8 +486,8 @@ describe('createUISlice agent send target mode', () => {
     })
     const reopenedMode = store.getState().agentSendPopoverTargetMode
 
-    write.resolve(true)
-    await expect(send).resolves.toBe(true)
+    write.resolve({ status: 'sent' })
+    await expect(send).resolves.toBe(false)
 
     expect(store.getState().agentSendPopoverTargetMode).toBe(reopenedMode)
     expect(store.getState().agentSendPopoverTargetMode).toMatchObject({
@@ -444,13 +495,60 @@ describe('createUISlice agent send target mode', () => {
       prompt: 'Review this again',
       status: 'open'
     })
+    expect(onPromptDelivered).not.toHaveBeenCalled()
+    expect(mocks.track).not.toHaveBeenCalled()
+    expect(mocks.toastSuccess).not.toHaveBeenCalled()
+    expect(mocks.toastError).not.toHaveBeenCalled()
+  })
+
+  it('does not let an older send failure mutate a reopened popover with the same id', async () => {
+    const store = createUIStore()
+    const onPromptDelivered = vi.fn()
+    const write = deferred<{ status: 'not-ready' }>()
+    seedAgentSendState(store)
+    mocks.sendNotesToActiveAgentSession.mockReturnValue(write.promise)
+    store.getState().openAgentSendPopoverTargetMode({
+      id: 'send-1',
+      worktreeId,
+      source: 'diff-notes',
+      prompt: 'Review this',
+      label: 'All unsent notes',
+      launchSource: 'notes_send',
+      onPromptDelivered
+    })
+
+    const send = store.getState().sendPromptToSidebarAgentTarget(readyPaneKey)
+    store.getState().closeAgentSendPopoverTargetMode('send-1')
+    store.getState().openAgentSendPopoverTargetMode({
+      id: 'send-1',
+      worktreeId,
+      source: 'diff-notes',
+      prompt: 'Review this again',
+      label: 'All unsent notes',
+      launchSource: 'notes_send'
+    })
+    const reopenedMode = store.getState().agentSendPopoverTargetMode
+
+    write.resolve({ status: 'not-ready' })
+    await expect(send).resolves.toBe(false)
+
+    expect(store.getState().agentSendPopoverTargetMode).toBe(reopenedMode)
+    expect(store.getState().agentSendPopoverTargetMode).toMatchObject({
+      id: 'send-1',
+      prompt: 'Review this again',
+      status: 'open'
+    })
+    expect(onPromptDelivered).not.toHaveBeenCalled()
+    expect(mocks.track).not.toHaveBeenCalled()
+    expect(mocks.toastSuccess).not.toHaveBeenCalled()
+    expect(mocks.toastError).not.toHaveBeenCalled()
   })
 
   it('does not retarget the same popover while a send is in progress', async () => {
     const store = createUIStore()
-    const write = deferred<boolean>()
+    const write = deferred<{ status: 'sent' }>()
     seedAgentSendState(store)
-    mocks.sendBracketedPasteToRunningAgent.mockReturnValue(write.promise)
+    mocks.sendNotesToActiveAgentSession.mockReturnValue(write.promise)
     store.getState().openAgentSendPopoverTargetMode({
       id: 'send-1',
       worktreeId,
@@ -479,7 +577,7 @@ describe('createUISlice agent send target mode', () => {
       sendingPaneKey: readyPaneKey
     })
 
-    write.resolve(true)
+    write.resolve({ status: 'sent' })
     await expect(send).resolves.toBe(true)
   })
 })
@@ -666,6 +764,56 @@ describe('createUISlice hydratePersistedUI', () => {
     expect(store.getState().rightSidebarExplorerView).toBe('files')
   })
 
+  it('preserves persisted repo filters until repos are loaded', () => {
+    const store = createUIStore()
+    const remoteDismissalKey = getSetupScriptPromptDismissalKey('remote-repo')
+
+    store.getState().hydratePersistedUI(
+      makePersistedUI({
+        filterRepoIds: ['remote-repo', 12 as never, 'stale-repo'],
+        trustedOrcaHooks: {
+          'remote-repo': { all: { approvedAt: 1 } },
+          'bad-shape': 'yes' as never
+        },
+        setupScriptPromptDismissedRepoIds: [remoteDismissalKey, 'remote-repo', remoteDismissalKey]
+      })
+    )
+
+    expect(store.getState().filterRepoIds).toEqual(['remote-repo', 'stale-repo'])
+    expect(store.getState().trustedOrcaHooks).toEqual({
+      'remote-repo': { all: { approvedAt: 1 } }
+    })
+    expect(store.getState().setupScriptPromptDismissedRepoIds).toEqual([remoteDismissalKey])
+  })
+
+  it('validates persisted repo filters when repos are already loaded', () => {
+    const store = createUIStore()
+    const localDismissalKey = getSetupScriptPromptDismissalKey('local-repo')
+    const staleDismissalKey = getSetupScriptPromptDismissalKey('stale-repo')
+    store.setState({
+      repos: [
+        { id: 'local-repo', path: '/local', displayName: 'Local', badgeColor: '#000', addedAt: 1 }
+      ]
+    } as Partial<AppState>)
+
+    store.getState().hydratePersistedUI(
+      makePersistedUI({
+        filterRepoIds: ['local-repo', 'stale-repo'],
+        trustedOrcaHooks: {
+          'local-repo': { all: { approvedAt: 1 } },
+          'stale-repo': { all: { approvedAt: 2 } }
+        },
+        setupScriptPromptDismissedRepoIds: [localDismissalKey, staleDismissalKey]
+      })
+    )
+
+    expect(store.getState().filterRepoIds).toEqual(['local-repo'])
+    expect(store.getState().trustedOrcaHooks).toEqual({
+      'local-repo': { all: { approvedAt: 1 } }
+    })
+    expect(store.getState().setupScriptPromptDismissedRepoIds).toEqual([localDismissalKey])
+  })
+
   it('hydrates legacy persisted search tab as Explorer search', () => {
     const store = createUIStore()
 
@@ -788,6 +936,19 @@ describe('createUISlice hydratePersistedUI', () => {
     expect(setUI).toHaveBeenCalledWith({ workspaceHostOrder: ['ssh:win%20vm', 'local'] })
   })
 
+  it('persists group changes with collapsed groups cleared', () => {
+    const setUI = vi.fn(() => Promise.resolve())
+    vi.stubGlobal('window', { api: { ui: { set: setUI } } })
+    const store = createUIStore()
+
+    store.setState({ collapsedGroups: new Set(['repo:old']) })
+    store.getState().setGroupBy('none')
+
+    expect(store.getState().groupBy).toBe('none')
+    expect([...store.getState().collapsedGroups]).toEqual([])
+    expect(setUI).toHaveBeenCalledWith({ groupBy: 'none', collapsedGroups: [] })
+  })
+
   it('hydrates persisted per-worktree dotfile visibility', () => {
     const store = createUIStore()
 
@@ -804,6 +965,42 @@ describe('createUISlice hydratePersistedUI', () => {
       'repo-1::/repo': false,
       'repo-2::/repo': true
     })
+  })
+
+  it('does not churn persisted UI references when hydration is identical by value', () => {
+    const store = createUIStore()
+    const persistedUI = makePersistedUI({
+      featureTipsSeenIds: ['voice-dictation'],
+      contextualToursSeenIds: ['tasks'],
+      showDotfilesByWorktree: { 'repo-1::/repo': false },
+      collapsedGroups: ['repo:one'],
+      workspaceHostOrder: ['local'],
+      worktreeCardProperties: ['status', 'unread', 'ports'],
+      acknowledgedAgentsByPaneKey: { 'tab-1::pane-1': Date.now() }
+    })
+
+    store.getState().hydratePersistedUI(persistedUI)
+    const before = store.getState()
+    const references = {
+      acknowledgedAgentsByPaneKey: before.acknowledgedAgentsByPaneKey,
+      featureTipsSeenIds: before.featureTipsSeenIds,
+      contextualToursSeenIds: before.contextualToursSeenIds,
+      workspaceHostOrder: before.workspaceHostOrder,
+      showDotfilesByWorktree: before.showDotfilesByWorktree,
+      collapsedGroups: before.collapsedGroups,
+      worktreeCardProperties: before.worktreeCardProperties
+    }
+
+    store.getState().hydratePersistedUI(makePersistedUI({ ...persistedUI }))
+    const after = store.getState()
+
+    expect(after.acknowledgedAgentsByPaneKey).toBe(references.acknowledgedAgentsByPaneKey)
+    expect(after.featureTipsSeenIds).toBe(references.featureTipsSeenIds)
+    expect(after.contextualToursSeenIds).toBe(references.contextualToursSeenIds)
+    expect(after.workspaceHostOrder).toBe(references.workspaceHostOrder)
+    expect(after.showDotfilesByWorktree).toBe(references.showDotfilesByWorktree)
+    expect(after.collapsedGroups).toBe(references.collapsedGroups)
+    expect(after.worktreeCardProperties).toBe(references.worktreeCardProperties)
   })
 
   it('drops invalid persisted per-worktree dotfile visibility entries', () => {
@@ -992,7 +1189,7 @@ describe('createUISlice hydratePersistedUI', () => {
     expect(store.getState().hideDefaultBranchWorkspace).toBe(true)
   })
 
-  it('restores fixed card properties during hydration', () => {
+  it('restores selected card properties during hydration', () => {
     const store = createUIStore()
 
     store.getState().hydratePersistedUI(
@@ -1016,11 +1213,30 @@ describe('createUISlice hydratePersistedUI', () => {
       })
     )
 
-    expect(store.getState().statusBarItems).toEqual(['claude', 'resource-usage', 'ports', 'kimi'])
+    expect(store.getState().statusBarItems).toEqual([
+      'claude',
+      'resource-usage',
+      'ports',
+      'kimi',
+      'minimax',
+      'antigravity',
+      'grok'
+    ])
     expect(setUI).toHaveBeenCalledWith({
-      statusBarItems: ['claude', 'resource-usage', 'ports', 'kimi'],
+      statusBarItems: [
+        'claude',
+        'resource-usage',
+        'ports',
+        'kimi',
+        'minimax',
+        'antigravity',
+        'grok'
+      ],
       _portsStatusBarDefaultAdded: true,
-      _kimiStatusBarDefaultAdded: true
+      _kimiStatusBarDefaultAdded: true,
+      _minimaxStatusBarDefaultAdded: true,
+      _antigravityStatusBarDefaultAdded: true,
+      _grokStatusBarDefaultAdded: true
     })
   })
 
@@ -1033,7 +1249,10 @@ describe('createUISlice hydratePersistedUI', () => {
       makePersistedUI({
         statusBarItems: ['claude', 'resource-usage'],
         _portsStatusBarDefaultAdded: true,
-        _kimiStatusBarDefaultAdded: true
+        _kimiStatusBarDefaultAdded: true,
+        _minimaxStatusBarDefaultAdded: true,
+        _antigravityStatusBarDefaultAdded: true,
+        _grokStatusBarDefaultAdded: true
       })
     )
 
@@ -1051,6 +1270,26 @@ describe('createUISlice hydratePersistedUI', () => {
     )
 
     expect(store.getState().workspaceBoardColumnWidth).toBe(520)
+  })
+
+  it('defaults workspace board task status sync off and persists changes', () => {
+    const setUI = vi.fn().mockResolvedValue(undefined)
+    vi.stubGlobal('window', { api: { ui: { set: setUI } } })
+    const store = createUIStore()
+
+    expect(store.getState().syncTaskStatusFromWorkspaceBoard).toBe(false)
+
+    store.getState().hydratePersistedUI(
+      makePersistedUI({
+        syncTaskStatusFromWorkspaceBoard: true
+      })
+    )
+    expect(store.getState().syncTaskStatusFromWorkspaceBoard).toBe(true)
+
+    store.getState().setSyncTaskStatusFromWorkspaceBoard(false)
+
+    expect(store.getState().syncTaskStatusFromWorkspaceBoard).toBe(false)
+    expect(setUI).toHaveBeenCalledWith({ syncTaskStatusFromWorkspaceBoard: false })
   })
 
   it('hydrates a valid Kagi session link', () => {
@@ -1352,17 +1591,69 @@ describe('createUISlice hydratePersistedUI', () => {
     expect(setUI).toHaveBeenCalledWith({ taskResumeState: expected })
   })
 
-  it('keeps fixed card properties when toggling Agent activity', () => {
+  it('sets Default worktree card mode with matching settings and UI writes', () => {
+    const setUI = vi.fn().mockResolvedValue(undefined)
+    const setSettings = vi.fn().mockResolvedValue({ compactWorktreeCards: false })
+    vi.stubGlobal('window', {
+      api: { ui: { set: setUI }, settings: { set: setSettings } }
+    })
+    const store = createUIStore()
+    store.setState({
+      settings: { compactWorktreeCards: true } as AppState['settings'],
+      worktreeCardProperties: ['status', 'branch']
+    })
+
+    store.getState().setWorktreeCardMode('Default')
+
+    const expected = getWorktreeCardModeProperties('Default')
+    expect(store.getState().settings?.compactWorktreeCards).toBe(false)
+    expect(store.getState().worktreeCardProperties).toEqual(expected)
+    expect(setSettings).toHaveBeenCalledWith({ compactWorktreeCards: false })
+    expect(setUI).toHaveBeenCalledWith({
+      worktreeCardProperties: expected,
+      _worktreeCardModeDefaulted: true
+    })
+  })
+
+  it('sets Compact worktree card mode and removes migrated branch', () => {
+    const setUI = vi.fn().mockResolvedValue(undefined)
+    const setSettings = vi.fn().mockResolvedValue({ compactWorktreeCards: true })
+    vi.stubGlobal('window', {
+      api: { ui: { set: setUI }, settings: { set: setSettings } }
+    })
+    const store = createUIStore()
+    store.setState({
+      settings: { compactWorktreeCards: false } as AppState['settings'],
+      worktreeCardProperties: ['status', 'branch', 'inline-agents']
+    })
+
+    store.getState().setWorktreeCardMode('Compact')
+
+    const expected = getWorktreeCardModeProperties('Compact')
+    expect(store.getState().settings?.compactWorktreeCards).toBe(true)
+    expect(store.getState().worktreeCardProperties).toEqual(expected)
+    expect(store.getState().worktreeCardProperties).not.toContain('branch')
+    expect(store.getState().worktreeCardProperties).not.toContain('inline-agents')
+    expect(setSettings).toHaveBeenCalledWith({ compactWorktreeCards: true })
+    expect(setUI).toHaveBeenCalledWith({
+      worktreeCardProperties: expected,
+      _worktreeCardModeDefaulted: true
+    })
+  })
+
+  it('sets custom worktree card properties', () => {
     const setUI = vi.fn().mockResolvedValue(undefined)
     vi.stubGlobal('window', { api: { ui: { set: setUI } } })
     const store = createUIStore()
 
-    store.setState({ worktreeCardProperties: ['inline-agents'] })
-    store.getState().toggleWorktreeCardProperty('inline-agents')
+    store.getState().setWorktreeCardProperties(['inline-agents', 'inline-agents'])
 
-    const expected: WorktreeCardProperty[] = ['status', 'unread']
-    expect(store.getState().worktreeCardProperties).toEqual(expected)
-    expect(setUI).toHaveBeenCalledWith({ worktreeCardProperties: expected })
+    expect(store.getState().worktreeCardProperties).toEqual(['status', 'unread', 'inline-agents'])
+    expect(store.getState()._worktreeCardModeDefaulted).toBe(false)
+    expect(setUI).toHaveBeenCalledWith({
+      worktreeCardProperties: ['status', 'unread', 'inline-agents'],
+      _worktreeCardModeDefaulted: false
+    })
   })
 
   it('persists the agent activity display mode', () => {
@@ -1997,6 +2288,74 @@ describe('createUISlice setup guide sidebar dismissal', () => {
     )
     expect(store.getState().setupGuideBrowserMilestoneMigrated).toBe(false)
     expect(store.getState().setupGuideBrowserMilestoneLegacyComplete).toBe(false)
+  })
+})
+
+describe('createUISlice mobile emulator agent setup dismissal', () => {
+  it('persists mobile emulator agent setup dismissal once', () => {
+    const setMock = vi.fn(() => Promise.resolve())
+    vi.stubGlobal('window', {
+      api: {
+        ui: {
+          set: setMock
+        }
+      }
+    })
+    const store = createUIStore()
+
+    store.getState().dismissMobileEmulatorAgentSetup()
+    store.getState().dismissMobileEmulatorAgentSetup()
+
+    expect(store.getState().mobileEmulatorAgentSetupDismissed).toBe(true)
+    expect(setMock).toHaveBeenCalledTimes(1)
+    expect(setMock).toHaveBeenCalledWith({ mobileEmulatorAgentSetupDismissed: true })
+  })
+
+  it('hydrates only explicit mobile emulator agent setup dismissals', () => {
+    const store = createUIStore()
+
+    store
+      .getState()
+      .hydratePersistedUI(makePersistedUI({ mobileEmulatorAgentSetupDismissed: true }))
+    expect(store.getState().mobileEmulatorAgentSetupDismissed).toBe(true)
+
+    store
+      .getState()
+      .hydratePersistedUI(makePersistedUI({ mobileEmulatorAgentSetupDismissed: undefined }))
+    expect(store.getState().mobileEmulatorAgentSetupDismissed).toBe(false)
+  })
+})
+
+describe('createUISlice mobile emulator tab intro dismissal', () => {
+  it('persists mobile emulator tab intro dismissal once', () => {
+    const setMock = vi.fn(() => Promise.resolve())
+    vi.stubGlobal('window', {
+      api: {
+        ui: {
+          set: setMock
+        }
+      }
+    })
+    const store = createUIStore()
+
+    store.getState().dismissMobileEmulatorTabIntro()
+    store.getState().dismissMobileEmulatorTabIntro()
+
+    expect(store.getState().mobileEmulatorTabIntroDismissed).toBe(true)
+    expect(setMock).toHaveBeenCalledTimes(1)
+    expect(setMock).toHaveBeenCalledWith({ mobileEmulatorTabIntroDismissed: true })
+  })
+
+  it('hydrates only explicit mobile emulator tab intro dismissals', () => {
+    const store = createUIStore()
+
+    store.getState().hydratePersistedUI(makePersistedUI({ mobileEmulatorTabIntroDismissed: true }))
+    expect(store.getState().mobileEmulatorTabIntroDismissed).toBe(true)
+
+    store
+      .getState()
+      .hydratePersistedUI(makePersistedUI({ mobileEmulatorTabIntroDismissed: undefined }))
+    expect(store.getState().mobileEmulatorTabIntroDismissed).toBe(false)
   })
 })
 

@@ -13,7 +13,7 @@ export type SourceControlGenerationPlanResult =
 const SYNTHETIC_COMMIT_PROMPT =
   'Generate a concise git commit message for a synthetic dry-run diff. Return only the commit message.'
 const SYNTHETIC_PULL_REQUEST_PROMPT =
-  'Generate a hosted review title and description for a synthetic branch diff. Return structured pull request fields.'
+  'Generate a hosted review title and description for a synthetic branch diff. Preserve any existing pull request or merge request template in the current description. Return structured pull request fields.'
 
 const SYNTHETIC_TEXT_GENERATION_CONTEXT: Record<
   SourceControlTextActionId,

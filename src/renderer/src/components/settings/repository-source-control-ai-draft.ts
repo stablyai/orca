@@ -1,7 +1,16 @@
-import { normalizeRepoSourceControlAiOverrides } from '../../../../shared/source-control-ai'
+import {
+  normalizeRepoSourceControlAiOverrides,
+  resolveSourceControlActionRecipe
+} from '../../../../shared/source-control-ai'
 import type { SourceControlActionId } from '../../../../shared/source-control-ai-actions'
 import type { RepoSourceControlAiOverrides } from '../../../../shared/source-control-ai-types'
+import type { GlobalSettings } from '../../../../shared/types'
+import { completeRepoActionRecipe } from './repository-source-control-ai-labels'
 import { SOURCE_CONTROL_TEXT_ACTION_ID_SET } from './source-control-action-recipe-options'
+
+type RepoActionRecipe = NonNullable<
+  NonNullable<RepoSourceControlAiOverrides['actionOverrides']>[SourceControlActionId]
+>
 
 export type RepoAiDraftState = {
   repoId: string
@@ -92,4 +101,67 @@ export function dropRepoLegacyInstructionForAction(
     instructionsByOperation:
       Object.keys(instructionsByOperation).length > 0 ? instructionsByOperation : undefined
   }
+}
+
+export function readCompleteRecipeForDraft(
+  current: RepoSourceControlAiOverrides,
+  settings: GlobalSettings | null,
+  actionId: SourceControlActionId
+): RepoActionRecipe {
+  const recipe = resolveSourceControlActionRecipe({
+    settings,
+    repo: { sourceControlAi: current },
+    actionId
+  })
+  return completeRepoActionRecipe(recipe, actionId)
+}
+
+export function setActionOverride(
+  current: RepoSourceControlAiOverrides,
+  actionId: SourceControlActionId,
+  recipe: RepoActionRecipe
+): RepoSourceControlAiOverrides {
+  return dropRepoLegacyInstructionForAction(
+    {
+      ...current,
+      actionOverrides: {
+        ...current.actionOverrides,
+        [actionId]: recipe
+      }
+    },
+    actionId
+  )
+}
+
+export function serializeActionOverride(
+  value: RepoSourceControlAiOverrides,
+  actionId: SourceControlActionId
+): string {
+  return JSON.stringify({
+    hasOverride: hasOwnActionOverride(value.actionOverrides, actionId),
+    recipe: value.actionOverrides?.[actionId] ?? null
+  })
+}
+
+/**
+ * Layer only one action's draft override onto the last-saved repo settings, so a
+ * per-action save persists that recipe without flushing other rows' edits.
+ */
+export function buildActionScopedRepoAiSave(
+  persisted: RepoSourceControlAiOverrides,
+  draft: RepoSourceControlAiOverrides,
+  actionId: SourceControlActionId
+): RepoSourceControlAiOverrides {
+  const nextActionOverrides = { ...persisted.actionOverrides }
+  if (hasOwnActionOverride(draft.actionOverrides, actionId)) {
+    nextActionOverrides[actionId] = draft.actionOverrides?.[actionId]
+  } else {
+    delete nextActionOverrides[actionId]
+  }
+  return normalizeRepoAiDraft(
+    dropRepoLegacyInstructionForAction(
+      { ...persisted, actionOverrides: nextActionOverrides },
+      actionId
+    )
+  )
 }

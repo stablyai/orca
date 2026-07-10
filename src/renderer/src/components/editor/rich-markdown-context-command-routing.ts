@@ -49,6 +49,12 @@ export function runRichMarkdownContextCommand({
     case 'heading-3':
       editor.chain().focus().setHeading({ level: 3 }).run()
       return
+    case 'heading-4':
+      editor.chain().focus().setHeading({ level: 4 }).run()
+      return
+    case 'heading-5':
+      editor.chain().focus().setHeading({ level: 5 }).run()
+      return
     case 'bullet-list':
       editor.chain().focus().toggleBulletList().run()
       return

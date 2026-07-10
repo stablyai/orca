@@ -1,9 +1,11 @@
 import { describe, expect, it } from 'vitest'
 import {
+  SMART_WORKSPACE_SOURCE_QUERY_MAX_BYTES,
   buildSmartWorkspaceSourceRows,
   getBranchSearchRequest,
   getSmartWorkspaceEmptyHint,
-  getVisibleBranchResults
+  getVisibleBranchResults,
+  isSmartWorkspaceSourceQueryWithinLimit
 } from './smart-workspace-source-results'
 
 describe('Branch source results', () => {
@@ -58,6 +60,32 @@ describe('Branch source results', () => {
     ).toBeNull()
   })
 
+  it('rejects oversized pasted branch queries before provider search planning', () => {
+    expect(
+      getBranchSearchRequest({
+        disabled: false,
+        textOnly: false,
+        mode: 'smart',
+        selectedRepoId: 'repo-1',
+        query: 'x'.repeat(4096),
+        limit: 12
+      })
+    ).toBeNull()
+  })
+
+  it('rejects oversized whitespace before trimming branch queries', () => {
+    expect(
+      getBranchSearchRequest({
+        disabled: false,
+        textOnly: false,
+        mode: 'branches',
+        selectedRepoId: 'repo-1',
+        query: ' '.repeat(SMART_WORKSPACE_SOURCE_QUERY_MAX_BYTES + 1),
+        limit: 12
+      })
+    ).toBeNull()
+  })
+
   it('hides stale branch rows when Smart mode input is cleared', () => {
     const rows = buildSmartWorkspaceSourceRows({
       mode: 'smart',
@@ -98,6 +126,19 @@ describe('Branch source results', () => {
         branches: [{ refName: 'origin/main', localBranchName: 'main' }]
       })
     ).toEqual([{ refName: 'origin/main', localBranchName: 'main' }])
+  })
+
+  it('hides branch results for oversized pasted values before trimming', () => {
+    expect(
+      getVisibleBranchResults({
+        mode: 'branches',
+        value: ' '.repeat(SMART_WORKSPACE_SOURCE_QUERY_MAX_BYTES + 1),
+        selectedRepoId: 'repo-1',
+        resultRepoId: 'repo-1',
+        resultQuery: '',
+        branches: [{ refName: 'origin/main', localBranchName: 'main' }]
+      })
+    ).toEqual([])
   })
 
   it('keeps returned branch rows visible before the user types', () => {
@@ -152,6 +193,50 @@ describe('Branch source results', () => {
     ])
   })
 
+  it('keeps GitHub row values unique for the same item number across repos', () => {
+    const rows = buildSmartWorkspaceSourceRows({
+      mode: 'github',
+      value: '',
+      branches: [],
+      githubItems: [
+        { repoId: 'repo-a', type: 'issue', number: 123, title: 'Repo A issue' } as never,
+        { repoId: 'repo-b', type: 'issue', number: 123, title: 'Repo B issue' } as never
+      ],
+      gitlabItems: [],
+      linearIssues: [],
+      gitlabAvailable: false,
+      linearAvailable: false,
+      resultLimit: 12
+    })
+
+    expect(rows.map((row) => row.value)).toEqual([
+      'github-repo-a-issue-123',
+      'github-repo-b-issue-123'
+    ])
+  })
+
+  it('keeps GitLab row values unique for the same item number across repos', () => {
+    const rows = buildSmartWorkspaceSourceRows({
+      mode: 'gitlab',
+      value: '',
+      branches: [],
+      githubItems: [],
+      gitlabItems: [
+        { repoId: 'repo-a', type: 'issue', number: 123, title: 'Repo A issue' } as never,
+        { repoId: 'repo-b', type: 'issue', number: 123, title: 'Repo B issue' } as never
+      ],
+      linearIssues: [],
+      gitlabAvailable: true,
+      linearAvailable: false,
+      resultLimit: 12
+    })
+
+    expect(rows.map((row) => row.value)).toEqual([
+      'gitlab-repo-a-issue-123',
+      'gitlab-repo-b-issue-123'
+    ])
+  })
+
   it('ignores malformed Linear collection rows instead of throwing during render', () => {
     expect(() =>
       buildSmartWorkspaceSourceRows({
@@ -168,7 +253,41 @@ describe('Branch source results', () => {
     ).not.toThrow()
   })
 
+  it('returns no rows for oversized pasted values before echoing or scanning results', () => {
+    expect(
+      buildSmartWorkspaceSourceRows({
+        mode: 'smart',
+        value: 'x'.repeat(SMART_WORKSPACE_SOURCE_QUERY_MAX_BYTES + 1),
+        branches: [{ refName: 'origin/main', localBranchName: 'main' }],
+        githubItems: [
+          {
+            get number(): number {
+              throw new Error('oversized smart workspace rows must not scan GitHub results')
+            }
+          } as never
+        ],
+        gitlabItems: [],
+        linearIssues: [],
+        gitlabAvailable: false,
+        linearAvailable: false,
+        resultLimit: 12
+      })
+    ).toEqual([])
+  })
+
   it('describes empty Branch results after the empty-query search runs', () => {
     expect(getSmartWorkspaceEmptyHint('branches')).toBe('No matching branches.')
+  })
+})
+
+describe('source query byte limits', () => {
+  it('measures provider-search limits as UTF-8 bytes', () => {
+    expect(isSmartWorkspaceSourceQueryWithinLimit('abc', 3)).toBe(true)
+    expect(isSmartWorkspaceSourceQueryWithinLimit('😀', 3)).toBe(false)
+    expect(
+      isSmartWorkspaceSourceQueryWithinLimit(
+        'é'.repeat(SMART_WORKSPACE_SOURCE_QUERY_MAX_BYTES / 2 + 1)
+      )
+    ).toBe(false)
   })
 })

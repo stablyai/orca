@@ -4,9 +4,11 @@ import type { PtyTransport } from './pty-transport'
 import { flushTerminalOutput } from '@/lib/pane-manager/pane-terminal-output-scheduler'
 import { serializeTerminalLayout } from './layout-serialization'
 import { mergeCapturedLeafState } from './merge-captured-leaf-state'
-import { TERMINAL_SCROLLBACK_SESSION_BUFFER_CHAR_LIMIT } from '../../../../shared/terminal-scrollback-limits'
+import { resolveTerminalLayoutActiveLeafId } from './terminal-layout-leaf-ids'
+import { TERMINAL_SCROLLBACK_SESSION_BUFFER_BYTE_LIMIT } from '../../../../shared/terminal-scrollback-limits'
+import { measureUtf8ByteLength } from '../../../../shared/utf8-byte-limits'
 
-const MAX_BUFFER_BYTES = TERMINAL_SCROLLBACK_SESSION_BUFFER_CHAR_LIMIT
+const MAX_BUFFER_BYTES = TERMINAL_SCROLLBACK_SESSION_BUFFER_BYTE_LIMIT
 
 type ShutdownPane = Pick<ManagedPane, 'id' | 'leafId' | 'terminal' | 'serializeAddon'>
 
@@ -39,6 +41,10 @@ function omitClearedLeafState(
   return Object.keys(next).length > 0 ? next : undefined
 }
 
+function fitsSessionScrollbackByteLimit(serialized: string): boolean {
+  return !measureUtf8ByteLength(serialized, { stopAfterBytes: MAX_BUFFER_BYTES }).exceededLimit
+}
+
 export function captureTerminalShutdownLayout({
   manager,
   container,
@@ -61,15 +67,16 @@ export function captureTerminalShutdownLayout({
         const leafId = pane.leafId
         let scrollback = pane.terminal.options.scrollback ?? 10_000
         let serialized = pane.serializeAddon.serialize({ scrollback })
-        // Cap at 512KB — binary search for largest scrollback that fits.
-        if (serialized.length > MAX_BUFFER_BYTES && scrollback > 1) {
+        // Why: SSH sleep keeps this string in session JSON; cap by UTF-8
+        // bytes so non-ASCII scrollback cannot bypass the intended bound.
+        if (!fitsSessionScrollbackByteLimit(serialized) && scrollback > 1) {
           let lo = 1
           let hi = scrollback
           let best = ''
           while (lo <= hi) {
             const mid = Math.floor((lo + hi) / 2)
             const attempt = pane.serializeAddon.serialize({ scrollback: mid })
-            if (attempt.length <= MAX_BUFFER_BYTES) {
+            if (fitsSessionScrollbackByteLimit(attempt)) {
               best = attempt
               lo = mid + 1
             } else {
@@ -95,9 +102,22 @@ export function captureTerminalShutdownLayout({
     new Map(panes.map((pane) => [pane.id, pane.leafId]))
   )
   const currentLeafIds = new Set(panes.map((p) => p.leafId))
-  const ptyEntries = panes
-    .map((pane) => [pane.leafId, paneTransports.get(pane.id)?.getPtyId() ?? null] as const)
-    .filter((entry): entry is readonly [ShutdownPane['leafId'], string] => entry[1] !== null)
+  const livePtyIdsByLeafId: Record<string, string> = {}
+  const preservedPtyIdsByLeafId: Record<string, string> = {}
+  for (const pane of panes) {
+    const transport = paneTransports.get(pane.id)
+    const livePtyId = transport?.getPtyId() ?? null
+    if (livePtyId) {
+      livePtyIdsByLeafId[pane.leafId] = livePtyId
+      continue
+    }
+    const priorPtyId = existingLayout?.ptyIdsByLeafId?.[pane.leafId]
+    if (transport && priorPtyId) {
+      // Why: shutdown can capture during the post-remount attach gap where
+      // each pane has a transport but the deferred PTY ID is still null.
+      preservedPtyIdsByLeafId[pane.leafId] = priorPtyId
+    }
+  }
 
   const mergedBuffers = captureBuffers
     ? mergeCapturedLeafState({
@@ -111,10 +131,14 @@ export function captureTerminalShutdownLayout({
     fresh: {},
     currentLeafIds
   })
-  const mergedPtyIds = mergeCapturedLeafState({
-    prior: existingLayout?.ptyIdsByLeafId,
-    fresh: Object.fromEntries(ptyEntries),
-    currentLeafIds
+  const ptyIdsByLeafId = { ...preservedPtyIdsByLeafId, ...livePtyIdsByLeafId }
+  // Why: shutdown snapshots can otherwise persist focus on a mounted pane whose
+  // transport was already cleared during PTY exit/reconnect cleanup. Unlike
+  // scrollback, PTY bindings only preserve prior ids during a live attach gap.
+  layout.activeLeafId = resolveTerminalLayoutActiveLeafId({
+    root: layout.root,
+    activeLeafId: layout.activeLeafId,
+    ptyIdsByLeafId
   })
   if (Object.keys(mergedBuffers).length > 0) {
     layout.buffersByLeafId = mergedBuffers
@@ -122,8 +146,8 @@ export function captureTerminalShutdownLayout({
   if (Object.keys(mergedScrollbackRefs).length > 0) {
     layout.scrollbackRefsByLeafId = mergedScrollbackRefs
   }
-  if (Object.keys(mergedPtyIds).length > 0) {
-    layout.ptyIdsByLeafId = mergedPtyIds
+  if (Object.keys(ptyIdsByLeafId).length > 0) {
+    layout.ptyIdsByLeafId = ptyIdsByLeafId
   }
 
   const titleEntries = panes

@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react'
+import React, { useEffect, useMemo } from 'react'
 import { useAppStore } from '@/store'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import { useSidebarResize } from '@/hooks/useSidebarResize'
@@ -13,17 +13,24 @@ import { cn } from '@/lib/utils'
 import { FolderPlus, Loader2 } from 'lucide-react'
 import { useSidebarProjectDrop } from './useSidebarProjectDrop'
 import { useWorkspaceBoardPanel } from './useWorkspaceBoardPanel'
+import { resolveLeftSidebarStyleVariables } from '@/lib/left-sidebar-appearance'
+import { useSystemPrefersDark } from '@/components/terminal-pane/use-system-prefers-dark'
+import { lazyWithRetry } from '@/lib/lazy-with-retry'
 
-const WorktreeMetaDialog = React.lazy(() => import('./WorktreeMetaDialog'))
-const RemoveFolderDialog = React.lazy(() => import('./RemoveFolderDialog'))
-const WorktreeVisibilityDialog = React.lazy(() => import('./WorktreeVisibilityDialog'))
-const OrcaYamlTrustDialog = React.lazy(() => import('./OrcaYamlTrustDialog'))
+const WorktreeMetaDialog = lazyWithRetry(() => import('./WorktreeMetaDialog'))
+const RemoveFolderDialog = lazyWithRetry(() => import('./RemoveFolderDialog'))
+const WorktreeVisibilityDialog = lazyWithRetry(() => import('./WorktreeVisibilityDialog'))
+const OrcaYamlTrustDialog = lazyWithRetry(() => import('./OrcaYamlTrustDialog'))
+const ForgetSshWorkspaceDialog = lazyWithRetry(() => import('./ForgetSshWorkspaceDialog'))
 
 const MIN_WIDTH = 220
 const MAX_WIDTH = 500
-// Why: match the right sidebar's 4px resize target; a 1px seam is too hard to acquire.
+// Why: straddle the sidebar/terminal seam so the divider sits on the border-l
+// instead of leaving a blank strip between the hover target and the edge.
 export const WORKTREE_SIDEBAR_RESIZE_HANDLE_CLASS_NAME =
-  'absolute top-0 right-0 z-10 h-full w-1 cursor-col-resize transition-colors hover:bg-ring/20 active:bg-ring/30'
+  'group absolute -right-1.5 top-0 z-10 flex h-full w-3 cursor-col-resize items-stretch justify-center'
+export const WORKTREE_SIDEBAR_RESIZE_HANDLE_LINE_CLASS_NAME =
+  'h-full w-px bg-transparent transition-colors group-hover:bg-ring/50 group-active:bg-ring'
 
 type SidebarProps = {
   worktreeScrollOffsetRef: React.MutableRefObject<number>
@@ -38,16 +45,28 @@ function Sidebar({
   const sidebarWidth = useAppStore((s) => s.sidebarWidth)
   const setSidebarWidth = useAppStore((s) => s.setSidebarWidth)
   const repos = useAppStore((s) => s.repos)
+  const settings = useAppStore((s) => s.settings)
   const fetchAllWorktrees = useAppStore((s) => s.fetchAllWorktrees)
   const activeModal = useAppStore((s) => s.activeModal)
+  const statusBarVisible = useAppStore((s) => s.statusBarVisible)
+  const systemPrefersDark = useSystemPrefersDark()
+  const leftSidebarStyle = useMemo(
+    () => resolveLeftSidebarStyleVariables(settings, systemPrefersDark),
+    [settings, systemPrefersDark]
+  ) as React.CSSProperties | undefined
   const { nativeDropTarget, dropHandlers, affordance } = useSidebarProjectDrop()
   const {
     workspaceBoardOpen,
+    workspaceBoardRenderedOpen,
+    workspaceBoardDragPreviewOpen,
     workspaceBoardMenuOpen,
     toggleWorkspaceBoard,
     handleWorkspaceBoardOpenChange,
     setWorkspaceBoardMenuOpen,
-    closeWorkspaceBoard
+    closeWorkspaceBoard,
+    previewWorkspaceBoardFromDrag,
+    solidifyWorkspaceBoardFromDrag,
+    cancelWorkspaceBoardDragPreview
   } = useWorkspaceBoardPanel()
 
   const setLiveSidebarWidth = React.useCallback((width: number) => {
@@ -62,13 +81,46 @@ function Sidebar({
     }
   }, [repoCount, fetchAllWorktrees])
 
+  // Why: a runtime host coming online/offline must refresh the sidebar so its
+  // worktrees appear/drop, the same way SSH state changes already refetch. Only
+  // the manual connect button refetched before, so the list went stale until the
+  // user forced a refetch (e.g. via Add Project). React to the set of online
+  // runtime envs (a host has a status entry once it is connected).
+  const runtimeStatusByEnvironmentId = useAppStore((s) => s.runtimeStatusByEnvironmentId)
+  const fetchWorktreeLineage = useAppStore((s) => s.fetchWorktreeLineage)
+  const onlineRuntimeEnvKey = React.useMemo(
+    () =>
+      // Why: tolerate an absent map — a partial/hydrating store can leave this
+      // undefined, and a thrown selector would crash the whole sidebar render.
+      [...(runtimeStatusByEnvironmentId?.entries() ?? [])]
+        .filter(([, entry]) => Boolean(entry?.status))
+        .map(([id]) => id)
+        .sort()
+        .join(','),
+    [runtimeStatusByEnvironmentId]
+  )
+  const previousOnlineRuntimeEnvKeyRef = React.useRef<string | null>(null)
   useEffect(() => {
-    if (!sidebarOpen && workspaceBoardOpen) {
+    // Skip the initial value — startup/repoCount effects already fetch. Only
+    // refetch when the online-host set actually changes.
+    if (previousOnlineRuntimeEnvKeyRef.current === null) {
+      previousOnlineRuntimeEnvKeyRef.current = onlineRuntimeEnvKey
+      return
+    }
+    if (previousOnlineRuntimeEnvKeyRef.current === onlineRuntimeEnvKey) {
+      return
+    }
+    previousOnlineRuntimeEnvKeyRef.current = onlineRuntimeEnvKey
+    void fetchAllWorktrees().then(() => fetchWorktreeLineage())
+  }, [onlineRuntimeEnvKey, fetchAllWorktrees, fetchWorktreeLineage])
+
+  useEffect(() => {
+    if (!sidebarOpen && workspaceBoardRenderedOpen) {
       closeWorkspaceBoard()
     }
-  }, [closeWorkspaceBoard, sidebarOpen, workspaceBoardOpen])
+  }, [closeWorkspaceBoard, sidebarOpen, workspaceBoardRenderedOpen])
 
-  const { containerRef, onResizeStart } = useSidebarResize<HTMLDivElement>({
+  const { containerRef, onResizeStart, isResizing } = useSidebarResize<HTMLDivElement>({
     isOpen: sidebarOpen,
     width: sidebarWidth,
     minWidth: MIN_WIDTH,
@@ -84,6 +136,7 @@ function Sidebar({
         ref={containerRef}
         data-native-file-drop-target={sidebarOpen ? nativeDropTarget : undefined}
         className="relative min-h-0 flex-shrink-0 bg-worktree-sidebar flex flex-col overflow-hidden scrollbar-sleek-parent"
+        style={leftSidebarStyle}
         {...dropHandlers}
       >
         {sidebarOpen && (
@@ -95,6 +148,10 @@ function Sidebar({
             <WorktreeList
               scrollOffsetRef={worktreeScrollOffsetRef}
               scrollAnchorRef={worktreeScrollAnchorRef}
+              workspaceBoardOpen={workspaceBoardOpen}
+              onWorkspaceBoardDragPreviewStart={previewWorkspaceBoardFromDrag}
+              onWorkspaceBoardDragPreviewCommit={solidifyWorkspaceBoardFromDrag}
+              onWorkspaceBoardDragPreviewCancel={cancelWorkspaceBoardDragPreview}
             />
 
             <SetupScriptPromptCard />
@@ -102,6 +159,7 @@ function Sidebar({
             {/* Fixed bottom toolbar */}
             <SidebarToolbar
               workspaceBoardOpen={workspaceBoardOpen}
+              workspaceBoardDragPreviewOpen={workspaceBoardDragPreviewOpen}
               onWorkspaceBoardToggle={toggleWorkspaceBoard}
             />
           </>
@@ -130,9 +188,16 @@ function Sidebar({
         {sidebarOpen && (
           <div
             data-sidebar-resize-handle=""
-            className={WORKTREE_SIDEBAR_RESIZE_HANDLE_CLASS_NAME}
+            className={cn(WORKTREE_SIDEBAR_RESIZE_HANDLE_CLASS_NAME, isResizing && 'bg-ring/10')}
             onMouseDown={onResizeStart}
-          />
+          >
+            <div
+              className={cn(
+                WORKTREE_SIDEBAR_RESIZE_HANDLE_LINE_CLASS_NAME,
+                isResizing && 'bg-ring'
+              )}
+            />
+          </div>
         )}
       </div>
 
@@ -143,10 +208,14 @@ function Sidebar({
         {activeModal === 'confirm-remove-folder' ? <RemoveFolderDialog /> : null}
         {activeModal === 'worktree-visibility' ? <WorktreeVisibilityDialog /> : null}
         {activeModal === 'confirm-orca-yaml-hooks' ? <OrcaYamlTrustDialog /> : null}
+        {activeModal === 'forget-ssh-workspace' ? <ForgetSshWorkspaceDialog /> : null}
       </React.Suspense>
       {sidebarOpen ? (
         <WorkspaceKanbanDrawer
-          open={workspaceBoardOpen}
+          leftSidebarStyle={leftSidebarStyle}
+          open={workspaceBoardRenderedOpen}
+          statusBarVisible={statusBarVisible}
+          dragPreview={workspaceBoardDragPreviewOpen}
           preserveOpenForMenu={workspaceBoardMenuOpen}
           onOpenChange={handleWorkspaceBoardOpenChange}
           onMenuOpenChange={setWorkspaceBoardMenuOpen}

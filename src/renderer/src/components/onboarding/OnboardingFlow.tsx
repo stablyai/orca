@@ -8,6 +8,7 @@ import { AgentStep } from './AgentStep'
 import { ThemeStep } from './ThemeStep'
 import { NotificationStep } from './NotificationStep'
 import { IntegrationsStep } from './IntegrationsStep'
+import { WindowsTerminalStep } from './WindowsTerminalStep'
 import { useOnboardingFlow } from './use-onboarding-flow'
 import { OnboardingSkipConfirmationDialog } from './OnboardingSkipConfirmationDialog'
 import { OnboardingFooter } from './OnboardingFooter'
@@ -71,12 +72,27 @@ const stepCopy = {
         'Install the GitHub CLI to:'
       )
     }
+  },
+  windows_terminal: {
+    get title() {
+      return translate(
+        'auto.components.onboarding.OnboardingFlow.windowsTerminalTitle',
+        'Set Windows terminal defaults'
+      )
+    },
+    get subtitle() {
+      return translate(
+        'auto.components.onboarding.OnboardingFlow.windowsTerminalSubtitle',
+        'Choose the DEFAULT Shell for new panes and how right-click behaves in the terminal.'
+      )
+    }
   }
 } as const
 
 const stepTooltipLabels = {
   agent: 'Default Agent',
   theme: 'Appearance',
+  windows_terminal: 'Windows Terminal',
   notifications: 'Notifications',
   integrations: 'Integrations'
 } as const
@@ -100,22 +116,21 @@ export default function OnboardingFlow({
   const shouldShowFooterBusy = Boolean(busyLabel)
   const footerPrimaryLabel =
     busyLabel ?? (currentStep.id === 'notifications' ? 'Add your first project' : 'Continue')
-  const canDismissCurrentStep = currentStep.id !== 'notifications'
   const [skipConfirmOpen, setSkipConfirmOpen] = useState(false)
   const skipConfirmAdvancedViaRef = useRef<'button' | 'keyboard'>('button')
   const { next: flowNext, dismissOnboarding: flowDismissOnboarding } = flow
 
   const requestSkipConfirmation = useCallback(
     (advancedVia: 'button' | 'keyboard') => {
-      // Why: the final notifications step hands off to Add Project, so all
-      // dismiss paths are disabled there, not just the visible Skip button.
-      if (!canDismissCurrentStep || busyLabel || skipConfirmOpen) {
+      // Why: click-off / Escape dismissal stays available on every step,
+      // including the final notifications step, so the modal never feels stuck.
+      if (busyLabel || skipConfirmOpen) {
         return
       }
       skipConfirmAdvancedViaRef.current = advancedVia
       setSkipConfirmOpen(true)
     },
-    [busyLabel, canDismissCurrentStep, skipConfirmOpen]
+    [busyLabel, skipConfirmOpen]
   )
 
   const confirmSkipOnboarding = useCallback(() => {
@@ -202,7 +217,7 @@ export default function OnboardingFlow({
             </div>
 
             <div className="mt-10 flex items-center gap-2 transition-[margin-top] duration-[760ms] ease-[cubic-bezier(0.22,1,0.36,1)] motion-reduce:transition-none">
-              {flow.visibleSteps.map(({ step, index: realStepIndex }, visibleIdx) => {
+              {flow.progressSteps.map(({ step, index: realStepIndex }, progressIdx) => {
                 const isActive = realStepIndex === stepIndex
                 const isDone = realStepIndex < stepIndex
                 return (
@@ -223,7 +238,7 @@ export default function OnboardingFlow({
                         aria-label={translate(
                           'auto.components.onboarding.OnboardingFlow.adaa0aa627',
                           'Go to onboarding step {{value0}}: {{value1}}',
-                          { value0: visibleIdx + 1, value1: stepCopy[step.id].title }
+                          { value0: progressIdx + 1, value1: stepTooltipLabels[step.id] }
                         )}
                         aria-current={isActive ? 'step' : undefined}
                         onClick={() => flow.jumpToStep(realStepIndex)}
@@ -236,9 +251,9 @@ export default function OnboardingFlow({
                 )
               })}
               <span className="ml-3 text-xs font-medium text-muted-foreground">
-                {flow.visibleStepIndex + 1}{' '}
+                {flow.progressStepIndex + 1}{' '}
                 {translate('auto.components.onboarding.OnboardingFlow.4db04f2f57', 'of')}{' '}
-                {flow.visibleSteps.length}
+                {flow.progressSteps.length}
               </span>
             </div>
 
@@ -293,6 +308,12 @@ export default function OnboardingFlow({
                 <NotificationStep settings={flow.settings} updateSettings={flow.updateSettings} />
               )}
               {currentStep.id === 'integrations' && <IntegrationsStep />}
+              {currentStep.id === 'windows_terminal' && (
+                <WindowsTerminalStep
+                  settings={flow.settings}
+                  updateSettings={flow.updateSettings}
+                />
+              )}
             </div>
 
             <OnboardingFooter

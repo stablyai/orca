@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { Cable, Loader2, Server, Trash2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -12,6 +12,7 @@ import {
 } from './web-runtime-environment'
 import { parseWebPairingInput } from './web-pairing'
 import { WebRuntimeClient } from './web-runtime-client'
+import type { RuntimeStatus } from '../../../shared/runtime-types'
 import { translate } from '@/i18n/i18n'
 
 type WebConnectProps = {
@@ -29,11 +30,21 @@ export default function WebConnect({
   const [error, setError] = useState<string | null>(null)
   const [connecting, setConnecting] = useState(false)
   const parsedOffer = useMemo(() => parseWebPairingInput(pairingCode), [pairingCode])
+  const autoConnectAttempted = useRef(false)
 
   const connect = async (): Promise<void> => {
     setError(null)
     if (!parsedOffer) {
       setError('Enter a valid Orca pairing URL or pairing code.')
+      return
+    }
+    if (parsedOffer.scope === 'mobile') {
+      setError(
+        translate(
+          'auto.web.WebConnect.mobileScopeRejected',
+          'This QR code grants limited (mobile) access. To use the full web app, open the browser access link from Settings → Runtime Environments → Share this Orca server → New Link.'
+        )
+      )
       return
     }
     if (isMixedContentWebSocket(parsedOffer.endpoint)) {
@@ -50,6 +61,17 @@ export default function WebConnect({
       if (!response.ok) {
         throw new Error(response.error.message)
       }
+      // Why: older pairing offers may not carry scope metadata. The server
+      // stamps it onto status.get so those links still fail before app entry.
+      if ((response.result as RuntimeStatus | null)?.deviceScope === 'mobile') {
+        setError(
+          translate(
+            'auto.web.WebConnect.mobileScopeRejected',
+            'This QR code grants limited (mobile) access. To use the full web app, open the browser access link from Settings → Runtime Environments → Share this Orca server → New Link.'
+          )
+        )
+        return
+      }
       saveStoredWebRuntimeEnvironment({
         ...environment,
         runtimeId: response._meta.runtimeId,
@@ -64,6 +86,18 @@ export default function WebConnect({
     }
   }
 
+  // Why: a deep-linked offer that reaches this screen either has mobile scope
+  // or unknown legacy scope; run the same connect path to reject/probe it.
+  useEffect(() => {
+    if (autoConnectAttempted.current || !initialPairingInput || !parsedOffer) {
+      return
+    }
+    autoConnectAttempted.current = true
+    void connect()
+    // Why: run once for the deep-linked offer; connect() reads current refs/state.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [initialPairingInput, parsedOffer])
+
   const clear = (): void => {
     clearStoredWebRuntimeEnvironment()
     setPairingCode('')
@@ -71,7 +105,7 @@ export default function WebConnect({
   }
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-background px-4 py-6 text-foreground">
+    <div className="flex min-h-dvh items-center justify-center bg-background px-4 py-6 text-foreground">
       <div className="flex w-full max-w-[520px] flex-col gap-5 rounded-lg border border-border bg-card p-5 shadow-sm">
         <div className="flex items-start gap-3">
           <div className="flex size-9 shrink-0 items-center justify-center rounded-md border border-border bg-muted">

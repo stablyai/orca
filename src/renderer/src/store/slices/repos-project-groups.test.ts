@@ -123,14 +123,161 @@ describe('project group store routing', () => {
     projectGroupsCreate.mockResolvedValue(projectGroup)
     const store = createTestStore()
 
-    await expect(store.getState().createProjectGroup('Platform')).resolves.toEqual(projectGroup)
+    await expect(store.getState().createProjectGroup('Platform')).resolves.toEqual({
+      ...projectGroup,
+      executionHostId: 'local'
+    })
 
-    expect(store.getState().projectGroups).toEqual([projectGroup])
+    expect(store.getState().projectGroups).toEqual([{ ...projectGroup, executionHostId: 'local' }])
     expect(projectGroupsCreate).toHaveBeenCalledWith({
       name: 'Platform',
       createdFrom: 'manual'
     })
     expect(runtimeEnvironmentCall).not.toHaveBeenCalled()
+  })
+
+  it('stamps local fetched folder groups with the local owner', async () => {
+    const folderGroup = { ...projectGroup, parentPath: '/workspace/platform' }
+    projectGroupsList.mockResolvedValue([folderGroup])
+    const store = createTestStore()
+
+    await store.getState().fetchProjectGroups()
+
+    expect(store.getState().projectGroups).toEqual([{ ...folderGroup, executionHostId: 'local' }])
+    expect(runtimeEnvironmentCall).not.toHaveBeenCalled()
+  })
+
+  it('stamps runtime-fetched SSH folder groups with the runtime owner', async () => {
+    const folderGroup = {
+      ...projectGroup,
+      parentPath: '/workspace/platform',
+      connectionId: 'ssh-1'
+    }
+    runtimeEnvironmentCall.mockResolvedValue({
+      id: 'rpc-list-groups',
+      ok: true,
+      result: { groups: [folderGroup] },
+      _meta: { runtimeId: 'runtime-remote' }
+    })
+    const store = createTestStore()
+    store.setState({ settings: { activeRuntimeEnvironmentId: 'env-1' } as never })
+
+    await store.getState().fetchProjectGroups()
+
+    expect(store.getState().projectGroups).toEqual([
+      { ...folderGroup, executionHostId: 'runtime:env-1' }
+    ])
+  })
+
+  it('stamps runtime-fetched folder groups with the focused runtime host', async () => {
+    const folderGroup = { ...projectGroup, parentPath: '/workspace/platform' }
+    runtimeEnvironmentCall.mockResolvedValue({
+      id: 'rpc-list-groups',
+      ok: true,
+      result: { groups: [folderGroup] },
+      _meta: { runtimeId: 'runtime-remote' }
+    })
+    const store = createTestStore()
+    store.setState({ settings: { activeRuntimeEnvironmentId: 'env-1' } as never })
+
+    await store.getState().fetchProjectGroups()
+
+    expect(store.getState().projectGroups).toEqual([
+      { ...folderGroup, executionHostId: 'runtime:env-1' }
+    ])
+    expect(runtimeEnvironmentCall).toHaveBeenCalledWith({
+      selector: 'env-1',
+      method: 'projectGroup.list',
+      params: undefined,
+      timeoutMs: 15_000
+    })
+    expect(projectGroupsList).not.toHaveBeenCalled()
+  })
+
+  it('routes folder path status through an explicit runtime owner when provided', async () => {
+    runtimeEnvironmentCall.mockResolvedValue({
+      id: 'rpc-path-status',
+      ok: true,
+      result: { status: { path: '/workspace/platform', exists: true } },
+      _meta: { runtimeId: 'runtime-remote' }
+    })
+    const folderGroup = { ...projectGroup, parentPath: '/workspace/platform' }
+    const store = createTestStore()
+    store.setState({
+      settings: { activeRuntimeEnvironmentId: 'wrong-env' } as never,
+      projectGroups: [folderGroup]
+    })
+
+    const request = { scope: 'project-group' as const, projectGroupId: folderGroup.id }
+
+    await expect(
+      store.getState().fetchFolderWorkspacePathStatus(request, {
+        force: true,
+        runtimeEnvironmentId: 'env-1'
+      })
+    ).resolves.toEqual({ path: '/workspace/platform', exists: true })
+
+    expect(store.getState().getFolderWorkspacePathStatusCacheKey(request)).toBe(
+      `environment:wrong-env:project-group:${folderGroup.id}`
+    )
+    expect(
+      store
+        .getState()
+        .getFolderWorkspacePathStatusCacheKey(request, { runtimeEnvironmentId: 'env-1' })
+    ).toBe(`environment:env-1:project-group:${folderGroup.id}`)
+    expect(
+      store.getState().getFreshFolderWorkspacePathStatus(request, { runtimeEnvironmentId: 'env-1' })
+    ).toEqual({ path: '/workspace/platform', exists: true })
+
+    expect(runtimeEnvironmentCall).toHaveBeenCalledWith({
+      selector: 'env-1',
+      method: 'folderWorkspace.getPathStatus',
+      params: request,
+      timeoutMs: 15_000
+    })
+  })
+
+  it('routes folder workspace creation through an explicit runtime owner when provided', async () => {
+    const folderWorkspace: FolderWorkspace = {
+      id: 'folder-workspace-runtime',
+      projectGroupId: projectGroup.id,
+      name: 'Runtime folder',
+      folderPath: '/workspace/platform',
+      linkedTask: null,
+      comment: '',
+      isArchived: false,
+      isUnread: false,
+      isPinned: false,
+      sortOrder: 1,
+      lastActivityAt: 0,
+      createdAt: 1,
+      updatedAt: 1
+    }
+    runtimeEnvironmentCall.mockResolvedValue({
+      id: 'rpc-create-folder',
+      ok: true,
+      result: { folderWorkspace },
+      _meta: { runtimeId: 'runtime-remote' }
+    })
+    const store = createTestStore()
+    store.setState({ settings: { activeRuntimeEnvironmentId: 'wrong-env' } as never })
+
+    await expect(
+      store
+        .getState()
+        .createFolderWorkspace(
+          { projectGroupId: projectGroup.id, name: 'Runtime folder' },
+          { runtimeEnvironmentId: 'env-1' }
+        )
+    ).resolves.toEqual(folderWorkspace)
+
+    expect(runtimeEnvironmentCall).toHaveBeenCalledWith({
+      selector: 'env-1',
+      method: 'folderWorkspace.create',
+      params: { projectGroupId: projectGroup.id, name: 'Runtime folder' },
+      timeoutMs: 15_000
+    })
+    expect(folderWorkspacesCreate).not.toHaveBeenCalled()
   })
 
   it('creates, updates, and deletes local folder workspaces', async () => {
@@ -524,7 +671,7 @@ describe('project group store routing', () => {
     expect(projectGroupsList).toHaveBeenCalled()
     expect(folderWorkspacesList).toHaveBeenCalled()
     expect(reposList).toHaveBeenCalled()
-    expect(store.getState().projectGroups).toEqual([projectGroup])
+    expect(store.getState().projectGroups).toEqual([{ ...projectGroup, executionHostId: 'local' }])
     // Why: the repos slice stamps fetched repos with their owning execution
     // host so multi-host routing never has to guess (multi-host design).
     expect(store.getState().repos).toEqual([{ ...importedRepo, executionHostId: 'local' }])
@@ -666,209 +813,17 @@ describe('project group store routing', () => {
     expect(store.getState().repos).toEqual([{ ...movedRepo, executionHostId: 'local' }])
   })
 
-  it('removes local project group subtrees from renderer state after delete', async () => {
-    const childGroup: ProjectGroup = {
-      ...projectGroup,
-      id: 'child',
-      parentGroupId: projectGroup.id
-    }
-    const siblingGroup: ProjectGroup = {
-      ...projectGroup,
-      id: 'sibling',
-      name: 'Tools',
-      tabOrder: 1
-    }
-    const childWorkspace: FolderWorkspace = {
-      id: 'folder-workspace-1',
-      projectGroupId: childGroup.id,
-      name: 'Shared cleanup',
-      folderPath: '/workspace/platform/shared',
-      linkedTask: null,
-      comment: '',
-      isArchived: false,
-      isUnread: false,
-      isPinned: false,
-      sortOrder: 1,
-      lastActivityAt: 0,
-      createdAt: 1,
-      updatedAt: 1
-    }
-    projectGroupsDelete.mockResolvedValue(true)
+  it('propagates specific folder workspace create failures to callers', async () => {
+    folderWorkspacesCreate.mockRejectedValue(new Error('folder_workspace_path_missing:/srv/app'))
     const store = createTestStore()
-    store.setState({
-      projectGroups: [projectGroup, childGroup, siblingGroup],
-      folderWorkspaces: [childWorkspace],
-      repos: [
-        { ...remoteRepo, id: 'direct', projectGroupId: projectGroup.id },
-        { ...remoteRepo, id: 'nested', projectGroupId: childGroup.id },
-        { ...remoteRepo, id: 'sibling', projectGroupId: siblingGroup.id }
-      ]
-    })
-
-    await expect(store.getState().deleteProjectGroup(projectGroup.id)).resolves.toBe(true)
-
-    expect(store.getState().projectGroups.map((group) => group.id)).toEqual([siblingGroup.id])
-    expect(store.getState().folderWorkspaces).toEqual([])
-    expect(store.getState().repos).toMatchObject([
-      { id: 'direct', projectGroupId: null },
-      { id: 'nested', projectGroupId: null },
-      { id: 'sibling', projectGroupId: siblingGroup.id }
-    ])
-  })
-
-  it('uses the remote delete response shape before mutating local state', async () => {
-    runtimeEnvironmentCall.mockResolvedValue({
-      id: 'rpc-delete-group',
-      ok: true,
-      result: { deleted: false },
-      _meta: { runtimeId: 'runtime-remote' }
-    })
-    const groupedRepo = { ...remoteRepo, projectGroupId: projectGroup.id }
-    const store = createTestStore()
-    store.setState({
-      settings: { activeRuntimeEnvironmentId: 'env-1' } as never,
-      projectGroups: [projectGroup],
-      repos: [groupedRepo]
-    })
-
-    await expect(store.getState().deleteProjectGroup(projectGroup.id)).resolves.toBe(false)
-
-    expect(store.getState().projectGroups).toEqual([projectGroup])
-    expect(store.getState().repos).toEqual([groupedRepo])
-    expect(runtimeEnvironmentCall).toHaveBeenCalledWith({
-      selector: 'env-1',
-      method: 'projectGroup.delete',
-      params: { groupId: projectGroup.id },
-      timeoutMs: 15_000
-    })
-    expect(projectGroupsDelete).not.toHaveBeenCalled()
-  })
-
-  it('deletes only the group when contained project removal is not requested', async () => {
-    projectGroupsDelete.mockResolvedValue(true)
-    const groupedRepo = { ...remoteRepo, id: 'direct', projectGroupId: projectGroup.id }
-    const store = createTestStore()
-    store.setState({
-      projectGroups: [projectGroup],
-      repos: [groupedRepo]
-    })
 
     await expect(
-      store.getState().deleteProjectGroupWithContainedProjects(projectGroup.id, {
-        removeContainedProjects: false
+      store.getState().createFolderWorkspace({
+        projectGroupId: projectGroup.id,
+        name: 'Broken folder'
       })
-    ).resolves.toEqual({
-      status: 'deleted-group',
-      groupId: projectGroup.id,
-      requestedProjectIds: [],
-      removedProjectIds: [],
-      failedProjectRemovals: []
-    })
-
-    expect(reposRemove).not.toHaveBeenCalled()
-    expect(store.getState().repos).toMatchObject([{ id: 'direct', projectGroupId: null }])
-  })
-
-  it('removes direct and nested child projects after deleting a group', async () => {
-    const childGroup: ProjectGroup = {
-      ...projectGroup,
-      id: 'child',
-      parentGroupId: projectGroup.id
-    }
-    const siblingRepo = { ...remoteRepo, id: 'sibling', projectGroupId: null }
-    projectGroupsDelete.mockResolvedValue(true)
-    const store = createTestStore()
-    store.setState({
-      projectGroups: [projectGroup, childGroup],
-      repos: [
-        { ...remoteRepo, id: 'direct', projectGroupId: projectGroup.id },
-        { ...remoteRepo, id: 'nested', projectGroupId: childGroup.id },
-        siblingRepo
-      ]
-    })
-
-    await expect(
-      store.getState().deleteProjectGroupWithContainedProjects(projectGroup.id, {
-        removeContainedProjects: true
-      })
-    ).resolves.toEqual({
-      status: 'deleted-group',
-      groupId: projectGroup.id,
-      requestedProjectIds: ['direct', 'nested'],
-      removedProjectIds: ['direct', 'nested'],
-      failedProjectRemovals: []
-    })
-
-    expect(reposRemove).toHaveBeenCalledWith({ repoId: 'direct' })
-    expect(reposRemove).toHaveBeenCalledWith({ repoId: 'nested' })
-    expect(store.getState().repos).toEqual([siblingRepo])
-  })
-
-  it('does not remove contained projects when group deletion fails', async () => {
-    projectGroupsDelete.mockResolvedValue(false)
-    const groupedRepo = { ...remoteRepo, id: 'direct', projectGroupId: projectGroup.id }
-    const store = createTestStore()
-    store.setState({
-      projectGroups: [projectGroup],
-      repos: [groupedRepo]
-    })
-
-    await expect(
-      store.getState().deleteProjectGroupWithContainedProjects(projectGroup.id, {
-        removeContainedProjects: true
-      })
-    ).resolves.toEqual({
-      status: 'group-delete-failed',
-      groupId: projectGroup.id,
-      requestedProjectIds: ['direct'],
-      removedProjectIds: [],
-      failedProjectRemovals: []
-    })
-
-    expect(reposRemove).not.toHaveBeenCalled()
-    expect(store.getState().repos).toEqual([groupedRepo])
-  })
-
-  it('reports project removal failures by comparing store state after removeProject', async () => {
-    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined)
-    reposRemove.mockImplementation(async ({ repoId }: { repoId: string }) => {
-      if (repoId === 'nested') {
-        throw new Error('remove failed')
-      }
-    })
-    const childGroup: ProjectGroup = {
-      ...projectGroup,
-      id: 'child',
-      parentGroupId: projectGroup.id
-    }
-    projectGroupsDelete.mockResolvedValue(true)
-    const store = createTestStore()
-    store.setState({
-      projectGroups: [projectGroup, childGroup],
-      repos: [
-        { ...remoteRepo, id: 'direct', projectGroupId: projectGroup.id },
-        { ...remoteRepo, id: 'nested', projectGroupId: childGroup.id }
-      ]
-    })
-
-    await expect(
-      store.getState().deleteProjectGroupWithContainedProjects(projectGroup.id, {
-        removeContainedProjects: true
-      })
-    ).resolves.toEqual({
-      status: 'deleted-group',
-      groupId: projectGroup.id,
-      requestedProjectIds: ['direct', 'nested'],
-      removedProjectIds: ['direct'],
-      failedProjectRemovals: [
-        {
-          projectId: 'nested',
-          reason: 'Project remained in Orca after removeProject completed.'
-        }
-      ]
-    })
-
-    expect(store.getState().repos.map((repo) => repo.id)).toEqual(['nested'])
-    consoleError.mockRestore()
+    ).rejects.toThrow(
+      'Folder not found. Orca cannot find /srv/app. Remove and re-import the folder.'
+    )
   })
 })

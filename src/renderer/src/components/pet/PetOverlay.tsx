@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useId, useRef, useState } from 'react'
+import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react'
 import { usePrefersReducedMotion } from '@/hooks/usePrefersReducedMotion'
 import { usePetUrl } from './usePetUrl'
 import type { DetectedSpriteCacheEntry } from './pet-blob-cache'
@@ -6,7 +6,6 @@ import type { CustomPet } from '../../../../shared/types'
 import { useAppStore } from '../../store'
 import { AGENT_STATUS_STALE_AFTER_MS } from '../../../../shared/agent-status-types'
 import { selectPetAnimationName, type PetAnimationName } from './pet-agent-state'
-import { translate } from '@/i18n/i18n'
 
 type Sprite = NonNullable<CustomPet['sprite']>
 
@@ -66,15 +65,12 @@ function SpriteFrame({
   const startY = -(row * sprite.frameHeight * scale)
   const endX = -(frames * sprite.frameWidth * scale)
   const duration = Math.max(0.1, frames / Math.max(0.1, sprite.fps))
+  // Why: sprite keyframes are runtime CSS, not user-visible copy; translated
+  // CSS keywords make the browser discard the animation.
+  const keyframesCss = `@keyframes pet-${animKeyframesId} { from { background-position: ${startX}px ${startY}px; } to { background-position: ${endX}px ${startY}px; } }`
   return (
     <>
-      <style>
-        {translate(
-          'auto.components.pet.PetOverlay.4712d196c6',
-          '@keyframes pet-{{value0}} { from { background-position: {{value1}}px {{value2}}px; } to { background-position: {{value3}}px {{value4}}px; } }',
-          { value0: animKeyframesId, value1: startX, value2: startY, value3: endX, value4: startY }
-        )}
-      </style>
+      <style>{keyframesCss}</style>
       <div
         style={{
           width: renderedW,
@@ -113,6 +109,20 @@ function DetectedSpriteFrame({
   // intended speed; default to 8 only when the manifest didn't declare one.
   const fps = detected.fps > 0 ? detected.fps : 8
 
+  // Why: size the canvas to one fixed footprint bounding the largest scaled
+  // frame so the drag wrapper hugs the pet instead of a maxSize square. A
+  // single size across frames avoids the jitter a per-frame resize would cause.
+  const { footprintW, footprintH } = useMemo(() => {
+    let w = 0
+    let h = 0
+    for (const f of detected.frames) {
+      const s = Math.min(maxSize / f.w, maxSize / f.h)
+      w = Math.max(w, f.w * s)
+      h = Math.max(h, f.h * s)
+    }
+    return { footprintW: Math.max(1, Math.round(w)), footprintH: Math.max(1, Math.round(h)) }
+  }, [detected, maxSize])
+
   useEffect(() => {
     const canvas = canvasRef.current
     if (!canvas) {
@@ -122,22 +132,31 @@ function DetectedSpriteFrame({
     if (!ctx) {
       return
     }
-    canvas.width = maxSize
-    canvas.height = maxSize
+    canvas.width = footprintW
+    canvas.height = footprintH
     // Why: reset playback when the underlying sprite changes so the new
     // animation starts from frame 0 rather than wherever the prior one stopped.
     frameIndexRef.current = 0
     lastTimeRef.current = 0
+    if (detected.frames.length === 0) {
+      ctx.clearRect(0, 0, canvas.width, canvas.height)
+      return
+    }
     let raf = 0
     const draw = (): void => {
       const f = detected.frames[frameIndexRef.current % detected.frames.length]
       const bmp = detected.bitmaps[frameIndexRef.current % detected.bitmaps.length]
+      if (!f || !bmp) {
+        return
+      }
       ctx.imageSmoothingEnabled = false
       ctx.clearRect(0, 0, canvas.width, canvas.height)
       const scale = Math.min(maxSize / f.w, maxSize / f.h)
       const w = f.w * scale
       const h = f.h * scale
-      ctx.drawImage(bmp, (maxSize - w) / 2, (maxSize - h) / 2, w, h)
+      // Why: center each frame within the fixed footprint so frames of differing
+      // sizes stay aligned without resizing the canvas per frame.
+      ctx.drawImage(bmp, (footprintW - w) / 2, (footprintH - h) / 2, w, h)
     }
     const tick = (now: number): void => {
       const dt = now - lastTimeRef.current
@@ -160,12 +179,12 @@ function DetectedSpriteFrame({
         cancelAnimationFrame(raf)
       }
     }
-  }, [detected, animate, maxSize, fps])
+  }, [detected, animate, footprintW, footprintH, maxSize, fps])
 
   return (
     <canvas
       ref={canvasRef}
-      style={{ width: maxSize, height: maxSize, imageRendering: 'pixelated' }}
+      style={{ width: footprintW, height: footprintH, imageRendering: 'pixelated' }}
     />
   )
 }
@@ -262,6 +281,10 @@ function defaultPosition(size: number = SIZE): Position {
   )
 }
 
+// Why: the bob float is runtime CSS, not user-visible copy; keep CSS keywords
+// out of i18n so translated locales cannot invalidate the keyframes.
+const PET_BOB_KEYFRAMES_CSS =
+  '@keyframes pet-bob { 0%,100% { transform: translateY(0); } 50% { transform: translateY(-4px); } }'
 export function PetOverlay(): React.JSX.Element {
   const documentVisible = useDocumentVisible()
   const reducedMotion = usePrefersReducedMotion()
@@ -363,9 +386,9 @@ export function PetOverlay(): React.JSX.Element {
   }
 
   return (
-    // Why: the wrapper is fixed-positioned and pointer-events-none so app
-    // chrome stays interactive; only the pet itself opts back in to
-    // pointer events so the user can press and drag it around.
+    // Why: the outer box and middle layer stay pointer-events-none so app chrome
+    // stays interactive; only the innermost wrapper opts in and shrink-wraps its
+    // content, so the grab/drag hit area hugs the pet, not the full square box.
     <div
       aria-hidden
       className="pointer-events-none fixed z-40"
@@ -376,43 +399,49 @@ export function PetOverlay(): React.JSX.Element {
         height: size
       }}
     >
-      <div
-        onPointerDown={onPointerDown}
-        onPointerMove={onPointerMove}
-        onPointerUp={endDrag}
-        onPointerCancel={endDrag}
-        className="pointer-events-auto flex size-full select-none items-center justify-end"
-        style={{
-          cursor: dragging ? 'grabbing' : 'grab',
-          animation: 'pet-bob 1.2s ease-in-out infinite',
-          animationPlayState: animate ? 'running' : 'paused',
-          touchAction: 'none'
-        }}
-      >
-        <style>
-          {translate(
-            'auto.components.pet.PetOverlay.de932b0e8f',
-            '@keyframes pet-bob { 0%,100% { transform: translateY(0); } 50% { transform: translateY(-4px); } }'
+      <div className="pointer-events-none flex size-full items-center justify-end">
+        <div
+          onPointerDown={onPointerDown}
+          onPointerMove={onPointerMove}
+          onPointerUp={endDrag}
+          onPointerCancel={endDrag}
+          className="pointer-events-auto flex h-fit w-fit select-none"
+          style={{
+            cursor: dragging ? 'grabbing' : 'grab',
+            animation: 'pet-bob 1.2s ease-in-out infinite',
+            animationPlayState: animate ? 'running' : 'paused',
+            touchAction: 'none',
+            // Why: floor so the wrapper stays grabbable while w-fit/h-fit would
+            // otherwise collapse to 0×0 during the image-load window.
+            minWidth: 24,
+            minHeight: 24
+          }}
+        >
+          <style>{PET_BOB_KEYFRAMES_CSS}</style>
+          {sprite ? (
+            <SpriteFrame
+              url={url}
+              sprite={sprite}
+              animate={animate}
+              maxSize={size}
+              animationName={animationName}
+            />
+          ) : detected ? (
+            <DetectedSpriteFrame detected={detected} animate={animate} maxSize={size} />
+          ) : (
+            // Why: cap explicitly at the pet size — the w-fit/h-fit wrapper is
+            // fit-content, so max-w/h-full has no fixed box to resolve against
+            // and the image would otherwise render at its intrinsic size and
+            // overflow the persisted size box that clamping still assumes.
+            <img
+              src={url}
+              alt=""
+              className="max-h-full max-w-full object-contain"
+              style={{ maxWidth: size, maxHeight: size }}
+              draggable={false}
+            />
           )}
-        </style>
-        {sprite ? (
-          <SpriteFrame
-            url={url}
-            sprite={sprite}
-            animate={animate}
-            maxSize={size}
-            animationName={animationName}
-          />
-        ) : detected ? (
-          <DetectedSpriteFrame detected={detected} animate={animate} maxSize={size} />
-        ) : (
-          <img
-            src={url}
-            alt=""
-            className="max-h-full max-w-full object-contain"
-            draggable={false}
-          />
-        )}
+        </div>
       </div>
     </div>
   )

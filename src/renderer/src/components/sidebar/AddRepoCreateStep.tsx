@@ -1,6 +1,6 @@
 // Step for AddRepoDialog (orca#763), split out so create-project state stays scoped.
-import React, { useCallback, useMemo, useRef, useState } from 'react'
-import { ChevronDown, Folder, GitBranch, Loader2 } from 'lucide-react'
+import React, { useMemo, useState } from 'react'
+import { ChevronDown, GitBranch, Loader2 } from 'lucide-react'
 import { DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -13,8 +13,7 @@ import { translate } from '@/i18n/i18n'
 import {
   formatCreateProjectParentSummary,
   joinCreateProjectPath,
-  type GitAvailability,
-  type RepoKind
+  type GitAvailability
 } from './create-project-defaults'
 
 // ── UI helpers ───────────────────────────────────────────────────────
@@ -24,7 +23,6 @@ const CREATE_PROJECT_NAME_PLACEHOLDER = 'project-name'
 type CreateStepProps = {
   createName: string
   createParent: string
-  createKind: RepoKind
   createError: string | null
   isCreating: boolean
   defaultParent?: string
@@ -36,7 +34,6 @@ type CreateStepProps = {
   sshTargetId?: string | null
   onNameChange: (value: string) => void
   onParentChange: (value: string) => void
-  onKindChange: (kind: RepoKind) => void
   onPickParent: () => void
   onCreate: () => void
 }
@@ -44,7 +41,6 @@ type CreateStepProps = {
 export function CreateStep({
   createName,
   createParent,
-  createKind,
   createError,
   isCreating,
   defaultParent = '',
@@ -56,54 +52,21 @@ export function CreateStep({
   sshTargetId,
   onNameChange,
   onParentChange,
-  onKindChange,
   onPickParent,
   onCreate
 }: CreateStepProps): React.JSX.Element {
-  const radioGroupRef = useRef<HTMLDivElement>(null)
-  const radioFocusFrameRef = useRef<number | null>(null)
   const [browsingParent, setBrowsingParent] = useState(false)
   // Why: SSH hosts need a typed remote path; hiding that field behind the
   // collapsed defaults makes the create flow look impossible.
   const [advancedOpen, setAdvancedOpen] = useState(manualParentEntry)
 
-  const cancelRadioFocusFrame = useCallback((): void => {
-    if (radioFocusFrameRef.current === null) {
-      return
-    }
-    cancelAnimationFrame(radioFocusFrameRef.current)
-    radioFocusFrameRef.current = null
-  }, [])
-
-  const setRadioGroupNode = useCallback(
-    (node: HTMLDivElement | null): void => {
-      // Why: the queued arrow-key focus is only valid while this radiogroup is mounted.
-      if (!node) {
-        cancelRadioFocusFrame()
-      }
-      radioGroupRef.current = node
-    },
-    [cancelRadioFocusFrame]
-  )
-
-  // Arrow keys cycle selection within the radiogroup (WAI-ARIA radio pattern).
-  const cycleKind = useCallback(() => {
-    const next = createKind === 'git' ? 'folder' : 'git'
-    onKindChange(next)
-    cancelRadioFocusFrame()
-    radioFocusFrameRef.current = requestAnimationFrame(() => {
-      radioFocusFrameRef.current = null
-      const nextEl = radioGroupRef.current?.querySelector<HTMLButtonElement>(
-        `[data-kind="${next}"]`
-      )
-      nextEl?.focus()
-    })
-  }, [cancelRadioFocusFrame, createKind, onKindChange])
-
+  // Why: SSH hosts report "unknown"; only a confirmed Git miss should block
+  // Git-only creation.
   const canSubmit =
     createName.trim().length > 0 &&
     createParent.trim().length > 0 &&
     gitAvailability !== 'checking' &&
+    gitAvailability !== 'unavailable' &&
     !parentDefaultPending &&
     !isCreating
   const missingLocationLabel = translate(
@@ -139,10 +102,10 @@ export function CreateStep({
     const name = createName.trim() || CREATE_PROJECT_NAME_PLACEHOLDER
     return createParent.trim() ? joinCreateProjectPath(createParent, name) : ''
   }, [createName, createParent])
-  const kindLabel =
-    createKind === 'git'
-      ? translate('auto.components.sidebar.AddRepoCreateStep.11fd2a7db8', 'Git repository')
-      : translate('auto.components.sidebar.AddRepoCreateStep.038729c107', 'Folder')
+  const kindLabel = translate(
+    'auto.components.sidebar.AddRepoCreateStep.11fd2a7db8',
+    'Git repository'
+  )
   const showGitFallback = gitAvailability === 'unavailable'
   const showGitChecking = gitAvailability === 'checking'
   const showRuntimeMissingParent =
@@ -216,11 +179,7 @@ export function CreateStep({
             className="flex w-full min-w-0 items-start gap-2.5 rounded-md px-3 py-2.5 text-left transition-colors cursor-pointer hover:bg-accent/50 focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
           >
             <span className="mt-0.5 inline-flex size-6 shrink-0 items-center justify-center rounded-md border border-border bg-background/60 text-muted-foreground">
-              {createKind === 'git' ? (
-                <GitBranch className="size-3.5" />
-              ) : (
-                <Folder className="size-3.5" />
-              )}
+              <GitBranch className="size-3.5" />
             </span>
             <div className="min-w-0 flex-1">
               <p className="truncate text-sm font-medium">
@@ -242,10 +201,10 @@ export function CreateStep({
                   )}
                 </p>
               ) : showGitFallback ? (
-                <p className="mt-0.5 text-[11px] text-muted-foreground">
+                <p className="mt-0.5 text-[11px] text-destructive">
                   {translate(
                     'auto.components.sidebar.AddRepoCreateStep.fe1e616c5b',
-                    "Git isn't installed, so a plain folder is the default."
+                    'Git is required to create a project.'
                   )}
                 </p>
               ) : showRuntimeMissingParent ? (
@@ -274,87 +233,6 @@ export function CreateStep({
 
           {advancedOpen && (
             <div className="space-y-3 border-t border-border px-3 py-3">
-              {/* Real radiogroup so screen readers announce the segmented choice. */}
-              <div className="space-y-1.5">
-                <span className="text-[11px] font-medium text-muted-foreground block">
-                  {translate(
-                    'auto.components.sidebar.AddRepoCreateStep.180e9b5e48',
-                    'Project kind'
-                  )}
-                </span>
-                <div
-                  ref={setRadioGroupNode}
-                  role="radiogroup"
-                  aria-label={translate(
-                    'auto.components.sidebar.AddRepoCreateStep.180e9b5e48',
-                    'Project kind'
-                  )}
-                  className="grid grid-cols-2 rounded-md border border-border bg-muted/30 p-0.5"
-                >
-                  {(['git', 'folder'] as const).map((kind) => {
-                    const selected = createKind === kind
-                    const label =
-                      kind === 'git'
-                        ? translate(
-                            'auto.components.sidebar.AddRepoCreateStep.11fd2a7db8',
-                            'Git repository'
-                          )
-                        : translate(
-                            'auto.components.sidebar.AddRepoCreateStep.038729c107',
-                            'Folder'
-                          )
-                    const Icon = kind === 'git' ? GitBranch : Folder
-                    return (
-                      <button
-                        key={kind}
-                        type="button"
-                        role="radio"
-                        aria-checked={selected}
-                        tabIndex={selected ? 0 : -1}
-                        onClick={() => onKindChange(kind)}
-                        onKeyDown={(e) => {
-                          // Why: keep keyboard radio navigation intact inside the compact segmented control.
-                          if (
-                            e.key === 'ArrowLeft' ||
-                            e.key === 'ArrowRight' ||
-                            e.key === 'ArrowUp' ||
-                            e.key === 'ArrowDown'
-                          ) {
-                            e.preventDefault()
-                            cycleKind()
-                          } else if (e.key === ' ' || e.key === 'Enter') {
-                            e.preventDefault()
-                            onKindChange(kind)
-                          }
-                        }}
-                        disabled={isCreating}
-                        data-kind={kind}
-                        className={cn(
-                          'inline-flex min-w-0 items-center justify-center gap-1.5 rounded-sm border px-2.5 py-2 text-xs font-medium outline-none transition-colors',
-                          // Why: the segment sits on a muted card, so bg-background alone
-                          // is too subtle; the border makes the selected state legible.
-                          selected
-                            ? 'border-border bg-background text-foreground shadow-xs'
-                            : 'border-transparent text-muted-foreground hover:text-foreground',
-                          'focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:cursor-not-allowed disabled:opacity-60'
-                        )}
-                      >
-                        <Icon className="size-3.5 shrink-0" />
-                        <span className="truncate">{label}</span>
-                      </button>
-                    )
-                  })}
-                </div>
-                {showGitFallback && (
-                  <p className="text-[11px] text-muted-foreground">
-                    {translate(
-                      'auto.components.sidebar.AddRepoCreateStep.fe1e616c5b',
-                      "Git isn't installed, so a plain folder is the default."
-                    )}
-                  </p>
-                )}
-              </div>
-
               {/* The local picker returns client paths; runtime servers browse host paths via RPC. */}
               <CreateProjectLocationField
                 createParent={createParent}

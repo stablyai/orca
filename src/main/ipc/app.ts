@@ -1,4 +1,4 @@
-import { execFile } from 'node:child_process'
+import { spawn } from 'node:child_process'
 import { existsSync } from 'node:fs'
 import path from 'node:path'
 import { pathToFileURL } from 'node:url'
@@ -12,6 +12,7 @@ import { isPwshAvailable } from '../pwsh'
 import { isWslAvailable, listWslDistros } from '../wsl'
 import { isGitBashAvailable } from '../git-bash'
 import { setUnreadDockBadgeCount } from '../dock/unread-badge'
+import { destroySystemTray } from '../tray/system-tray'
 import { authorizeExternalPath } from './filesystem-auth'
 import {
   ensureDefaultFloatingWorkspacePath,
@@ -21,9 +22,19 @@ import {
 import { isMarkdownDocumentName, markdownDocumentFromFilePath } from './markdown-documents'
 
 const KEYBOARD_INPUT_SOURCE_TIMEOUT_MS = 500
+const MAC_HITOOLBOX_DOMAIN = 'com.apple.HIToolbox'
+// Why: macOS 15's `plutil -extract <key> json` aborts on the (pure-string)
+// input-source array and the on-disk plist lags cfprefsd; read live prefs via
+// `defaults export`, extract as xml1 (dodges the json bug), then convert to JSON.
+// Absolute paths so a GUI-launched app's minimal PATH can't shadow the tools.
+const MAC_SELECTED_INPUT_SOURCES_JSON_COMMAND = [
+  `/usr/bin/defaults export ${MAC_HITOOLBOX_DOMAIN} -`,
+  '/usr/bin/plutil -extract AppleSelectedInputSources xml1 -o - -',
+  '/usr/bin/plutil -convert json -o - -'
+].join(' | ')
 
 type RegisterAppHandlersOptions = {
-  onBeforeRelaunch?: () => void
+  onBeforeRelaunch?: () => void | Promise<void>
 }
 
 async function pickFloatingMarkdownDocument(
@@ -56,7 +67,9 @@ async function pickFloatingWorkspaceDirectory(
 ): Promise<string | null> {
   const parentWindow = BrowserWindow.fromWebContents(event.sender)
   const options = {
-    properties: ['openDirectory', 'createDirectory']
+    // Why: this picker grants access to an existing workspace directory.
+    // Creation belongs to explicit file/write actions, not typeahead input.
+    properties: ['openDirectory']
   } satisfies Electron.OpenDialogOptions
   const result = parentWindow
     ? await dialog.showOpenDialog(parentWindow, options)
@@ -100,17 +113,40 @@ function resolveDevFeatureWallAssetDir(): string {
   return candidates.find((candidate) => existsSync(candidate)) ?? candidates[0]
 }
 
-function readKeyboardInputSourceId(): Promise<string> {
+function readCommandStdout(
+  command: string,
+  args: string[],
+  timeoutMessage: string
+): Promise<string> {
   return new Promise((resolve, reject) => {
     let settled = false
-    let child: ReturnType<typeof execFile> | undefined
+    let child: ReturnType<typeof spawn> | undefined
+
+    // Why: the probe runs a `/bin/sh -c` pipeline, so signaling only the shell
+    // orphans wedged `defaults`/`plutil` stages on a stuck cfprefsd. Spawning
+    // detached makes the child a process-group leader, so one negative-pid
+    // SIGKILL reaps the shell and every stage; child.kill() covers the fallback.
+    const killTree = (): void => {
+      if (!child?.pid) {
+        return
+      }
+      try {
+        process.kill(-child.pid, 'SIGKILL')
+      } catch {
+        child.kill()
+      }
+    }
+
+    // Why: short timeout so a wedged macOS preference probe (corporate-managed
+    // config, sandbox policy, ...) never holds the handle indefinitely. This
+    // manual timer is the only timeout guard, so it owns the process-group kill.
     const timer = setTimeout(() => {
       if (settled) {
         return
       }
       settled = true
-      child?.kill()
-      reject(new Error('Keyboard input source probe timed out'))
+      killTree()
+      reject(new Error(timeoutMessage))
     }, KEYBOARD_INPUT_SOURCE_TIMEOUT_MS)
 
     const settle = (callback: () => void): void => {
@@ -122,28 +158,97 @@ function readKeyboardInputSourceId(): Promise<string> {
       callback()
     }
 
-    // Why: execFile's timeout only signals `defaults`; if the callback
-    // never arrives, window-focus keyboard probes would remain pending.
     try {
-      child = execFile(
-        '/usr/bin/defaults',
-        ['read', 'com.apple.HIToolbox', 'AppleCurrentKeyboardLayoutInputSourceID'],
-        // Why: short timeout so a wedged defaults binary (corporate-managed
-        // config, sandbox policy, ...) never holds the handle indefinitely.
-        // Fall through to the fingerprint on timeout.
-        { encoding: 'utf8', timeout: KEYBOARD_INPUT_SOURCE_TIMEOUT_MS },
-        (error, stdout) => {
-          if (error) {
-            settle(() => reject(error))
-            return
-          }
-          settle(() => resolve(String(stdout)))
-        }
-      )
+      child = spawn(command, args, { detached: true, stdio: ['ignore', 'pipe', 'ignore'] })
+      let stdout = ''
+      child.stdout?.setEncoding('utf8')
+      child.stdout?.on('data', (chunk: string) => {
+        stdout += chunk
+      })
+      const failWith = (error: Error): void => {
+        killTree()
+        settle(() => reject(error))
+      }
+      // Why: an unhandled Readable 'error' would crash the main process; treat a
+      // stdout read failure the same as a child spawn error.
+      child.stdout?.on('error', failWith)
+      child.on('error', failWith)
+      child.on('close', (code, signal) => {
+        settle(() =>
+          code === 0
+            ? resolve(stdout)
+            : reject(
+                new Error(
+                  `${command} exited with ${signal ? `signal ${signal}` : `code ${code ?? 'unknown'}`}`
+                )
+              )
+        )
+      })
     } catch (error) {
       settle(() => reject(error))
     }
   })
+}
+
+function readSelectedInputSourceIdFromJson(stdout: string): string | null {
+  let records: unknown
+  try {
+    records = JSON.parse(stdout)
+  } catch {
+    return null
+  }
+  if (!Array.isArray(records)) {
+    return null
+  }
+
+  for (const record of records.slice().toReversed()) {
+    if (!record || typeof record !== 'object') {
+      continue
+    }
+    const fields = record as Record<string, unknown>
+    const kind = typeof fields.InputSourceKind === 'string' ? fields.InputSourceKind : ''
+    if (kind.toLowerCase().includes('non keyboard')) {
+      continue
+    }
+    const inputMode = fields['Input Mode']
+    if (typeof inputMode === 'string' && inputMode.trim()) {
+      return inputMode.trim()
+    }
+    const bundleId = fields['Bundle ID']
+    if (typeof bundleId === 'string' && bundleId.trim()) {
+      return bundleId.trim()
+    }
+  }
+  return null
+}
+
+async function readSelectedKeyboardInputSourceId(): Promise<string | null> {
+  try {
+    const stdout = await readCommandStdout(
+      '/bin/sh',
+      ['-c', MAC_SELECTED_INPUT_SOURCES_JSON_COMMAND],
+      'Selected keyboard input source probe timed out'
+    )
+    return readSelectedInputSourceIdFromJson(stdout)
+  } catch {
+    return null
+  }
+}
+
+function readKeyboardLayoutInputSourceId(): Promise<string> {
+  return readCommandStdout(
+    '/usr/bin/defaults',
+    ['read', MAC_HITOOLBOX_DOMAIN, 'AppleCurrentKeyboardLayoutInputSourceID'],
+    'Keyboard layout input source probe timed out'
+  )
+}
+
+async function readKeyboardInputSourceId(): Promise<string | null> {
+  const selectedInputSourceId = await readSelectedKeyboardInputSourceId()
+  if (selectedInputSourceId) {
+    return selectedInputSourceId
+  }
+  return readKeyboardLayoutInputSourceId()
 }
 
 export function registerAppHandlers(store: Store, options: RegisterAppHandlersOptions = {}): void {
@@ -172,20 +277,12 @@ export function registerAppHandlers(store: Store, options: RegisterAppHandlersOp
   // — the layout-fingerprint probe in the renderer therefore classifies
   // them as 'us' and flips macOptionIsMeta=true, silently swallowing every
   // Option+letter composition (#1205: Option+A → å / ą is dropped). The
-  // macOS-shipped `com.apple.HIToolbox` preference
-  // `AppleCurrentKeyboardLayoutInputSourceID` names the actual layout
+  // macOS-shipped `com.apple.HIToolbox` preferences name the actual input
+  // mode when one is selected, falling back to the keyboard layout ID
   // (e.g. `com.apple.keylayout.ABC` vs `com.apple.keylayout.US`), which
   // the renderer uses as an authoritative override. Non-Darwin platforms
   // have no equivalent and return null so the fingerprint stays the only
   // signal.
-  //
-  // Why `defaults read` and not systemPreferences
-  // .getUserDefault: getUserDefault only reads from NSGlobalDomain and the
-  // current app's own domain. The keyboard layout ID lives in the
-  // `com.apple.HIToolbox` domain, which getUserDefault cannot reach —
-  // observed to return null even when the preference is set. The `defaults`
-  // CLI reads any domain and is the same mechanism Apple documents for
-  // this value.
   ipcMain.handle('app:getKeyboardInputSourceId', async (): Promise<string | null> => {
     if (process.platform !== 'darwin') {
       return null
@@ -196,34 +293,37 @@ export function registerAppHandlers(store: Store, options: RegisterAppHandlersOp
       // and a blocking execFileSync would briefly stall unrelated IPC each
       // time the user Alt-Tabbed back into the app.
       const stdout = await readKeyboardInputSourceId()
-      const trimmed = stdout.trim()
+      const trimmed = stdout?.trim() ?? ''
       return trimmed.length > 0 ? trimmed : null
     } catch {
-      // Why: defaults exits non-zero when the key is absent (first boot
-      // before any input-source interaction), or when sandboxed. Treat
-      // that as "no signal" — the fingerprint still runs as fallback.
+      // Why: macOS preference probes can fail when keys are absent (first boot
+      // before any input-source interaction), or when sandboxed. Treat that as
+      // "no signal" — the fingerprint still runs as fallback.
       return null
     }
   })
 
-  ipcMain.handle('app:relaunch', () => {
+  ipcMain.handle('app:relaunch', async () => {
     // Why: small delay lets the renderer finish painting any "Restarting…"
     // UI state before the window tears down. `app.relaunch()` schedules a
     // spawn; `app.exit(0)` triggers the actual quit without invoking
     // before-quit handlers that could block on confirmation dialogs.
     // Mark shutdown first because app.exit() can bypass the usual quit latch.
-    options.onBeforeRelaunch?.()
+    await runBeforeRelaunchCleanup(options.onBeforeRelaunch)
     setTimeout(() => {
+      // Why: app.exit(0) skips before-quit/will-quit, so clean the Windows tray
+      // explicitly before relaunching to avoid a stale notification-area icon.
+      destroySystemTray()
       app.relaunch()
       app.exit(0)
     }, 150)
   })
 
-  ipcMain.handle('app:restart', () => {
+  ipcMain.handle('app:restart', async () => {
     // Why: the hidden admin restart should mirror the update relaunch path:
     // schedule a new Orca process, then use the normal quit pipeline so daemon
     // checkpoints, runtime metadata, and telemetry flush before exit.
-    options.onBeforeRelaunch?.()
+    await runBeforeRelaunchCleanup(options.onBeforeRelaunch)
     setTimeout(() => {
       app.relaunch()
       app.quit()
@@ -245,4 +345,19 @@ export function registerAppHandlers(store: Store, options: RegisterAppHandlersOp
   ipcMain.handle('app:pickFloatingWorkspaceDirectory', (event) =>
     pickFloatingWorkspaceDirectory(event, store)
   )
+}
+
+async function runBeforeRelaunchCleanup(
+  onBeforeRelaunch?: () => void | Promise<void>
+): Promise<void> {
+  try {
+    await onBeforeRelaunch?.()
+  } catch (error) {
+    // Why: restart/relaunch must not get trapped if best-effort shutdown
+    // cleanup fails; the cleanup path logs without exposing secret contents.
+    console.warn(
+      '[app] Pre-relaunch cleanup failed; continuing relaunch:',
+      error instanceof Error ? error.name : typeof error
+    )
+  }
 }

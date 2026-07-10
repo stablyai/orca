@@ -55,7 +55,7 @@ export function PrivacyDiagnosticBundleControls({
           <ActionIcon busy={copyingTicket} icon={<Clipboard className="size-3.5" />} />
           {translate(
             'auto.components.settings.PrivacyDiagnosticBundleControls.2801d4ce22',
-            'Copy ticket'
+            'Copy reference ID'
           )}
         </Button>
         <Button
@@ -67,7 +67,7 @@ export function PrivacyDiagnosticBundleControls({
           <ActionIcon busy={deletingTicket} icon={<Trash2 className="size-3.5" />} />
           {translate(
             'auto.components.settings.PrivacyDiagnosticBundleControls.7f14a1733c',
-            'Delete bundle'
+            'Delete sent file'
           )}
         </Button>
         <Button variant="ghost" size="sm" disabled={deletingTicket} onClick={onDismissTicket}>
@@ -90,14 +90,26 @@ export function PrivacyDiagnosticBundleControls({
           <ActionIcon busy={openingPreview} icon={<Eye className="size-3.5" />} />
           {translate(
             'auto.components.settings.PrivacyDiagnosticBundleControls.798b6f0be5',
-            'Open preview'
+            'Open review file'
           )}
         </Button>
-        <Button size="sm" disabled={!previewOpened || uploading} onClick={() => void onUpload()}>
+        <Button
+          size="sm"
+          title={
+            previewOpened
+              ? undefined
+              : translate(
+                  'auto.components.settings.PrivacyDiagnosticBundleControls.d8be621237',
+                  'Open the review file first.'
+                )
+          }
+          disabled={!previewOpened || uploading}
+          onClick={() => void onUpload()}
+        >
           <ActionIcon busy={uploading} icon={<UploadCloud className="size-3.5" />} />
           {translate(
             'auto.components.settings.PrivacyDiagnosticBundleControls.aca2c8a367',
-            'Upload'
+            'Send to support'
           )}
         </Button>
         <Button variant="ghost" size="sm" disabled={discarding} onClick={() => void onDiscard()}>
@@ -121,7 +133,7 @@ export function PrivacyDiagnosticBundleControls({
       <ActionIcon busy={collecting} icon={<FileText className="size-3.5" />} />
       {translate(
         'auto.components.settings.PrivacyDiagnosticBundleControls.dc8404a930',
-        'Create preview'
+        'Create diagnostic file'
       )}
     </Button>
   )
@@ -137,13 +149,31 @@ export function getDiagnosticBundleDescription({
   readonly ticketId: string | null
 }): string {
   if (ticketId) {
-    return `Uploaded ticket ${ticketId}.`
+    return translate(
+      'auto.components.settings.PrivacyDiagnosticBundleControls.61676df223',
+      'Diagnostics sent. Share this reference ID with support: {{value0}}.',
+      { value0: ticketId }
+    )
   }
   if (bundle) {
-    const previewState = previewOpened ? 'Ready to upload.' : 'Open the preview before uploading.'
-    return `${bundle.spanCount} span(s), ${formatBytes(bundle.bytes)}. ${previewState}`
+    const size = formatBytes(bundle.bytes)
+    if (previewOpened) {
+      return translate(
+        'auto.components.settings.PrivacyDiagnosticBundleControls.fd7b3891af',
+        'You opened the review file ({{value0}}). Send that file to support, or discard it.',
+        { value0: size }
+      )
+    }
+    return translate(
+      'auto.components.settings.PrivacyDiagnosticBundleControls.62340d4439',
+      'Your review file is ready ({{value0}}). Open it to see what would be sent, then choose whether to send it to support.',
+      { value0: size }
+    )
   }
-  return 'Creates a redacted NDJSON preview for support upload.'
+  return translate(
+    'auto.components.settings.PrivacyDiagnosticBundleControls.19ec5e29b3',
+    'Collects recent app activity and errors into a redacted file you can review before sending. Nothing is uploaded until you choose to send it.'
+  )
 }
 
 function ActionIcon({ busy, icon }: { readonly busy: boolean; readonly icon: React.ReactNode }) {

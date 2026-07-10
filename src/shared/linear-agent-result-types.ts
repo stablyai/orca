@@ -5,6 +5,7 @@ import type {
   LinearIssueListFilter,
   LinearIssueTaskUpdateRequest
 } from './linear-agent-access'
+import type { LinearInlineMedia } from './linear-inline-media'
 
 export type LinearIssueSummary = {
   id: string
@@ -43,6 +44,9 @@ export type LinearIssueCommentNode = {
   id: string
   body: string
   bodyTruncated: boolean
+  // Extracted from the full comment body before truncation so media past the
+  // body cap is not lost.
+  inlineMedia?: LinearInlineMedia[]
   createdAt?: string | null
   updatedAt?: string | null
   parentId?: string | null
@@ -84,6 +88,7 @@ export type LinearIssueContextResult = {
   children?: LinearIssueChildNode[]
   attachments?: LinearIssueAttachment[]
   relations?: LinearIssueRelation[]
+  inlineMedia?: LinearInlineMedia[]
   meta: {
     requested: {
       id?: string

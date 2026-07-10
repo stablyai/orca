@@ -1,11 +1,11 @@
 import { describe, expect, it } from 'vitest'
-import { getLocalExecutionHostLabel } from '../../../shared/execution-host'
 import {
   getTaskSourceAvailabilityNotice,
   getTaskSourceContextSummary
 } from './task-source-context-summary'
+import { getExecutionHostLabel } from '../../../shared/execution-host'
 
-const localHostLabel = getLocalExecutionHostLabel()
+const LOCAL_HOST_LABEL = getExecutionHostLabel('local')
 
 describe('task source context summary', () => {
   it('shows provider, host, and provider identity for a single repo-backed source', () => {
@@ -59,9 +59,9 @@ describe('task source context summary', () => {
       ]
     })
 
-    expect(summary.label).toBe(`GitHub · ${localHostLabel}, builder · personal-gh, work-gh`)
+    expect(summary.label).toBe(`GitHub · ${LOCAL_HOST_LABEL}, builder · personal-gh, work-gh`)
     expect(summary.title).toBe(
-      `GitHub · Host: ${localHostLabel}, builder · Account: personal-gh, work-gh · Source: stablyai/orca · 2 selected projects`
+      `GitHub · Host: ${LOCAL_HOST_LABEL}, builder · Account: personal-gh, work-gh · Source: stablyai/orca · 2 selected projects`
     )
   })
 
@@ -152,9 +152,9 @@ describe('task source context summary', () => {
       ]
     })
 
-    expect(summary.label).toBe(`GitLab · ${localHostLabel} +2 · 3 projects`)
+    expect(summary.label).toBe(`GitLab · ${LOCAL_HOST_LABEL} +2 · 3 projects`)
     expect(summary.title).toBe(
-      `GitLab · Host: ${localHostLabel}, build, linux · 3 selected projects`
+      `GitLab · Host: ${LOCAL_HOST_LABEL}, build, linux · 3 selected projects`
     )
   })
 
@@ -280,7 +280,7 @@ describe('task source context summary', () => {
         accountHostId: 'local',
         linearWorkspaceName: 'Stably'
       }).label
-    ).toBe(`Linear · ${localHostLabel} · Stably`)
+    ).toBe(`Linear · ${LOCAL_HOST_LABEL} · Stably`)
 
     expect(
       getTaskSourceContextSummary({

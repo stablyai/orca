@@ -1,5 +1,6 @@
 import { app } from 'electron'
 import type { UpdateStatus } from '../shared/types'
+import { recordUpdaterLifecycle } from './updater-lifecycle-diagnostics'
 
 const MAC_INSTALL_READY_TIMEOUT_MS = 15000
 
@@ -96,8 +97,13 @@ export function deferMacQuitUntilInstallerReady(
       return
     }
 
-    console.warn(
-      `[updater] macOS installer was not ready after ${MAC_INSTALL_READY_TIMEOUT_MS}ms; allowing quit without install`
+    recordUpdaterLifecycle(
+      'macos_install_guard_timeout',
+      { timeoutMs: MAC_INSTALL_READY_TIMEOUT_MS },
+      {
+        level: 'warn',
+        message: `macOS installer was not ready after ${MAC_INSTALL_READY_TIMEOUT_MS}ms; allowing quit without install`
+      }
     )
     installRequestedAfterSquirrelReady = false
     // This is a safety valve. The updater path should wait for ShipIt so the
@@ -112,14 +118,26 @@ export function deferMacQuitUntilInstallerReady(
 
 export function handleMacInstallerReady(
   hasNewerDownloadedVersion: boolean,
-  onReadyToInstall: () => void,
+  onReadyToInstall: () => void | Promise<void>,
   onReadyToReportDownloaded: () => void
 ): void {
   squirrelReady = true
   clearPendingInstallTimeout()
+  recordUpdaterLifecycle('macos_installer_ready', {
+    deferredInstallRequested: installRequestedAfterSquirrelReady,
+    hasNewerDownloadedVersion
+  })
 
   if (installRequestedAfterSquirrelReady && hasNewerDownloadedVersion) {
-    onReadyToInstall()
+    void Promise.resolve()
+      .then(() => onReadyToInstall())
+      .catch((error) => {
+        recordUpdaterLifecycle(
+          'macos_deferred_install_handoff_failed',
+          { errorType: error instanceof Error ? error.name : typeof error },
+          { level: 'warn', message: 'Deferred macOS install handoff failed' }
+        )
+      })
     return
   }
 

@@ -1,9 +1,10 @@
-import type { GitHubWorkItem } from '../../../shared/types'
+import type { GitHubWorkItem, GitPushTarget } from '../../../shared/types'
 import type { TaskSourceContext } from '../../../shared/task-source-context'
 import { getTaskSourceCacheScope } from '../../../shared/task-source-context'
 import { getLinkedWorkItemWorkspaceName } from '../../../shared/workspace-name'
 import type { LinkedWorkItemSummary } from './new-workspace'
 import { parseGitHubIssueOrPRLink } from './github-links'
+import { resolveGitHubWorkItemIdentity } from '@/lib/github-work-item-identity'
 
 export type SmartGitHubSubmitIntent =
   | {
@@ -24,6 +25,10 @@ export type SmartGitHubSubmitResolution = {
   linkedWorkItem: LinkedWorkItemSummary
   linkedIssueNumber: number | null
   linkedPR: number | null
+  baseBranch?: string
+  compareBaseRef?: string
+  pushTarget?: GitPushTarget
+  branchNameOverride?: string
 }
 
 export type SmartGitHubSubmitLookup = {
@@ -192,12 +197,14 @@ export function getSmartGitHubSubmitLookupCacheSizeForTests(): number {
 export function getSmartGitHubSubmitResolution(
   item: Pick<GitHubWorkItem, 'number' | 'title' | 'type' | 'url'>
 ): SmartGitHubSubmitResolution {
-  const fallbackName = `${item.type}-${item.number}`
-  const titleName = getLinkedWorkItemWorkspaceName(item)
+  const identity = resolveGitHubWorkItemIdentity(item)
+  const normalizedItem = { ...item, type: identity.type, number: identity.number }
+  const fallbackName = `${identity.type}-${identity.number}`
+  const titleName = getLinkedWorkItemWorkspaceName(normalizedItem)
   const workspaceName = titleName?.seedName || fallbackName
   const linkedWorkItem: LinkedWorkItemSummary = {
-    type: item.type,
-    number: item.number,
+    type: identity.type,
+    number: identity.number,
     title: item.title,
     url: item.url
   }
@@ -206,7 +213,7 @@ export function getSmartGitHubSubmitResolution(
     workspaceName,
     displayName: titleName?.displayName ?? fallbackName,
     linkedWorkItem,
-    linkedIssueNumber: item.type === 'issue' ? item.number : null,
-    linkedPR: item.type === 'pr' ? item.number : null
+    linkedIssueNumber: identity.type === 'issue' ? identity.number : null,
+    linkedPR: identity.type === 'pr' ? identity.number : null
   }
 }

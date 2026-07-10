@@ -75,7 +75,7 @@ describe('locale-translation-policy ja round 5', () => {
         localeValue: 'リクエスト、イシュー、ToDo、パイプラインをマージします。',
         locale: 'ja'
       })
-    ).toBe('MR、イシュー、ToDo、パイプラインは')
+    ).toBe('MR、Issue、ToDo、パイプラインは')
     expect(
       repairTranslatedValue({
         key: 'auto.components.GitLabItemDialog.98718490e4',

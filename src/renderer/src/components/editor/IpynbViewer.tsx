@@ -49,9 +49,14 @@ import {
 } from '@/components/ui/dialog'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { ShortcutKeyCombo } from '@/components/ShortcutKeyCombo'
-import { useShortcutKeys } from '@/hooks/useShortcutLabel'
+import { useShortcutKeyDetails, type ShortcutKeyComboDetails } from '@/hooks/useShortcutLabel'
 import { registerPendingEditorFlush } from './editor-pending-flush'
-import { editorShortcutMatches, installEditorSaveShortcut } from './editor-shortcuts'
+import {
+  editorShortcutMatches,
+  installEditorSaveShortcut,
+  installMonacoEditorFindShortcut
+} from './editor-shortcuts'
+import { getIpynbCodeCellEditorHeight, getIpynbCodeCellPreviewLines } from './ipynb-code-cell-lines'
 import MonacoCodeExcerpt from './MonacoCodeExcerpt'
 import {
   deleteIpynbCell,
@@ -264,13 +269,13 @@ function NotebookCellHeader({
 function NotebookHeaderButton({
   label,
   disabled = false,
-  shortcutKeys,
+  shortcut,
   onClick,
   children
 }: {
   label: string
   disabled?: boolean
-  shortcutKeys?: string[]
+  shortcut?: ShortcutKeyComboDetails
   onClick: () => void
   children: React.ReactNode
 }): React.JSX.Element {
@@ -292,7 +297,9 @@ function NotebookHeaderButton({
       <TooltipContent>
         <span className="flex items-center gap-2">
           <span>{label}</span>
-          {shortcutKeys ? <ShortcutKeyCombo keys={shortcutKeys} /> : null}
+          {shortcut && shortcut.keys.length > 0 ? (
+            <ShortcutKeyCombo keys={shortcut.keys} doubleTap={shortcut.doubleTap} />
+          ) : null}
         </span>
       </TooltipContent>
     </Tooltip>
@@ -335,13 +342,9 @@ function CodeCell({
   onDeactivateRef.current = onDeactivate
   onSaveRequestRef.current = onSaveRequest
   const fontSize = computeEditorFontSize(settings?.terminalFontSize ?? 13, editorFontZoomLevel)
-  const lineCount = Math.max(3, source.split('\n').length + 1)
-  const editorHeight = Math.min(520, Math.max(96, lineCount * (fontSize + 8)))
+  const editorHeight = getIpynbCodeCellEditorHeight(source, fontSize)
   const isDark = resolveDocumentTheme(settings?.theme ?? 'system')
-  const lines = useMemo(
-    () => (source.length > 0 ? source.replace(/\n$/, '').split('\n') : ['']),
-    [source]
-  )
+  const lines = useMemo(() => getIpynbCodeCellPreviewLines(source), [source])
   const handleMount: OnMount = useCallback((editorInstance, monacoInstance) => {
     editorInstance.focus()
     const cleanupSaveShortcut = installEditorSaveShortcut(
@@ -350,13 +353,15 @@ function CodeCell({
         void onSaveRequestRef.current()
       }
     )
+    const cleanupFindShortcut = installMonacoEditorFindShortcut(editorInstance)
     const blurSub = editorInstance.onDidBlurEditorWidget(() => {
       onDeactivateRef.current()
     })
     editorInstance.onDidDispose(() => {
-      // Why: the inline source editor owns both the save shortcut and blur
-      // subscription for this Monaco editor instance.
+      // Why: the inline source editor owns its shortcut bridges and blur
+      // subscription for the lifetime of this Monaco editor instance.
       cleanupSaveShortcut()
+      cleanupFindShortcut()
       blurSub.dispose()
     })
     editorInstance.addCommand(monacoInstance.KeyCode.Escape, () => {
@@ -729,7 +734,7 @@ export default function IpynbViewer({
     const latestContent = flushSourceDrafts()
     await onSave(latestContent)
   }, [flushSourceDrafts, onSave])
-  const saveShortcutKeys = useShortcutKeys('editor.save')
+  const saveShortcut = useShortcutKeyDetails('editor.save')
 
   const handleNotebookKeyDownCapture = useCallback(
     (event: React.KeyboardEvent<HTMLDivElement>): void => {
@@ -885,7 +890,7 @@ export default function IpynbViewer({
         <div className="ml-auto flex items-center gap-2">
           <NotebookHeaderButton
             label={translate('auto.components.editor.IpynbViewer.15ec40a735', 'Save notebook')}
-            shortcutKeys={saveShortcutKeys}
+            shortcut={saveShortcut}
             onClick={() => void saveNotebook()}
           >
             <Save className="size-3.5" />

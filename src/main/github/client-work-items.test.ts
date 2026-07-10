@@ -1,6 +1,3 @@
-/* eslint-disable max-lines -- Why: work-items coverage stays in one file so
-the fan-out mock plumbing (issue + PR gh calls, allSettled handling) does
-not drift across split files. */
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const {
@@ -32,12 +29,23 @@ const {
 vi.mock('./gh-utils', () => ({
   execFileAsync: execFileAsyncMock,
   ghExecFileAsync: ghExecFileAsyncMock,
-  githubRepoContext: (repoPath: string, connectionId?: string | null) => ({
+  githubRepoContext: (
+    repoPath: string,
+    connectionId?: string | null,
+    localGitOptions: { wslDistro?: string } = {}
+  ) => ({
     repoPath,
-    connectionId: connectionId ?? null
+    connectionId: connectionId ?? null,
+    ...(localGitOptions.wslDistro ? { wslDistro: localGitOptions.wslDistro } : {})
   }),
-  ghRepoExecOptions: (context: { repoPath: string; connectionId?: string | null }) =>
-    context.connectionId ? {} : { cwd: context.repoPath },
+  ghRepoExecOptions: (context: {
+    repoPath: string
+    connectionId?: string | null
+    wslDistro?: string
+  }) =>
+    context.connectionId
+      ? {}
+      : { cwd: context.repoPath, ...(context.wslDistro ? { wslDistro: context.wslDistro } : {}) },
   getOwnerRepo: getOwnerRepoMock,
   getIssueOwnerRepo: getIssueOwnerRepoMock,
   getOwnerRepoForRemote: getOwnerRepoForRemoteMock,
@@ -55,7 +63,8 @@ vi.mock('../git/runner', () => ({
 
 vi.mock('./rate-limit', () => ({
   rateLimitGuard: rateLimitGuardMock,
-  noteRateLimitSpend: noteRateLimitSpendMock
+  noteRateLimitSpend: noteRateLimitSpendMock,
+  getRateLimit: vi.fn(async () => ({ ok: false, error: 'not probed in tests' }))
 }))
 
 import {
@@ -64,6 +73,8 @@ import {
   _resetMergeQueueCacheForTests,
   _resetOwnerRepoCache
 } from './client'
+import { _resetGhCwdRepoNegativeCache } from './gh-cwd-repo-negative-cache'
+import { GITHUB_WORK_ITEMS_QUERY_MAX_BYTES } from '../../shared/github-work-items-query-bounds'
 
 describe('listWorkItems', () => {
   beforeEach(() => {
@@ -90,6 +101,25 @@ describe('listWorkItems', () => {
     getOwnerRepoForRemoteMock.mockResolvedValue(null)
     _resetOwnerRepoCache()
     _resetMergeQueueCacheForTests()
+    _resetGhCwdRepoNegativeCache()
+  })
+
+  it('stops re-spawning gh for a repo whose cwd resolution already failed with no remotes', async () => {
+    getIssueOwnerRepoMock.mockResolvedValue(null)
+    getOwnerRepoMock.mockResolvedValue(null)
+    ghExecFileAsyncMock.mockRejectedValue(
+      Object.assign(new Error('Command failed: gh pr list\nno git remotes found'), {
+        stderr: 'no git remotes found'
+      })
+    )
+
+    await expect(listWorkItems('/no-remote-repo', 36)).rejects.toThrow('no git remotes found')
+    // The first refresh pays the two cwd-fallback spawns (issue + pr list).
+    expect(ghExecFileAsyncMock).toHaveBeenCalledTimes(2)
+
+    await expect(listWorkItems('/no-remote-repo', 36)).rejects.toThrow('no git remotes found')
+    // The second refresh is served from the negative cache — zero new spawns.
+    expect(ghExecFileAsyncMock).toHaveBeenCalledTimes(2)
   })
 
   it('runs both issue and PR GitHub searches for a mixed query and merges the results by recency', async () => {
@@ -225,6 +255,67 @@ describe('listWorkItems', () => {
         ]
       }
     ])
+  })
+
+  it('routes local WSL work-item listing through repo resolution and gh execution options', async () => {
+    const localGitOptions = { wslDistro: 'Ubuntu' }
+    resolveIssueSourceMock.mockResolvedValue({
+      source: { owner: 'acme', repo: 'widgets' },
+      fellBack: false
+    })
+    getOwnerRepoMock.mockResolvedValue({ owner: 'acme', repo: 'widgets' })
+    getOwnerRepoForRemoteMock.mockResolvedValue(null)
+    ghExecFileAsyncMock.mockResolvedValue({ stdout: '[]' })
+
+    await listWorkItems(
+      '/repo-root',
+      5,
+      undefined,
+      undefined,
+      undefined,
+      null,
+      false,
+      localGitOptions
+    )
+
+    expect(resolveIssueSourceMock).toHaveBeenCalledWith(
+      '/repo-root',
+      undefined,
+      null,
+      localGitOptions
+    )
+    expect(getOwnerRepoMock).toHaveBeenCalledWith('/repo-root', null, localGitOptions)
+    expect(getOwnerRepoForRemoteMock).toHaveBeenCalledWith(
+      '/repo-root',
+      'upstream',
+      null,
+      localGitOptions
+    )
+    expect(ghExecFileAsyncMock.mock.calls.every((call) => call[1]?.wslDistro === 'Ubuntu')).toBe(
+      true
+    )
+  })
+
+  it('rejects oversized queries before resolving repo sources or executing gh', async () => {
+    const secret = 'main-github-work-items-secret'
+    const oversizedQuery = secret + 'x'.repeat(GITHUB_WORK_ITEMS_QUERY_MAX_BYTES)
+
+    await expect(listWorkItems('/repo-root', 10, oversizedQuery)).resolves.toEqual({
+      items: [],
+      sources: {
+        issues: null,
+        prs: null,
+        originCandidate: null,
+        upstreamCandidate: null
+      }
+    })
+
+    expect(resolveIssueSourceMock).not.toHaveBeenCalled()
+    expect(getIssueOwnerRepoMock).not.toHaveBeenCalled()
+    expect(getOwnerRepoMock).not.toHaveBeenCalled()
+    expect(ghExecFileAsyncMock).not.toHaveBeenCalled()
+    expect(acquireMock).not.toHaveBeenCalled()
+    expect(releaseMock).not.toHaveBeenCalled()
   })
 
   it('hydrates PR list rows with repository merge metadata', async () => {
@@ -465,6 +556,36 @@ describe('listWorkItems', () => {
     const apiPath = decodeURIComponent(ghExecFileAsyncMock.mock.calls[0][0][3] as string)
     expect(apiPath).toContain('is:issue is:closed')
     expect(apiPath).not.toContain('-is:merged')
+  })
+
+  it('returns zero without spawning gh when the search bucket is rate-limit blocked', async () => {
+    getIssueOwnerRepoMock.mockResolvedValueOnce({ owner: 'acme', repo: 'widgets' })
+    getOwnerRepoMock.mockResolvedValueOnce({ owner: 'acme', repo: 'widgets' })
+    rateLimitGuardMock.mockReturnValue({
+      blocked: true,
+      remaining: 0,
+      limit: 30,
+      resetAt: Math.floor(Date.now() / 1000) + 60
+    } as unknown as { blocked: boolean })
+
+    await expect(countWorkItems('/repo-root', 'is:issue is:open')).resolves.toBe(0)
+
+    expect(rateLimitGuardMock).toHaveBeenCalledWith('search')
+    expect(ghExecFileAsyncMock).not.toHaveBeenCalled()
+  })
+
+  it('returns zero for oversized count queries before resolving repo sources', async () => {
+    const secret = 'main-github-work-items-secret'
+    const oversizedQuery = secret + 'x'.repeat(GITHUB_WORK_ITEMS_QUERY_MAX_BYTES)
+
+    await expect(countWorkItems('/repo-root', oversizedQuery)).resolves.toBe(0)
+
+    expect(resolveIssueSourceMock).not.toHaveBeenCalled()
+    expect(getIssueOwnerRepoMock).not.toHaveBeenCalled()
+    expect(getOwnerRepoMock).not.toHaveBeenCalled()
+    expect(ghExecFileAsyncMock).not.toHaveBeenCalled()
+    expect(acquireMock).not.toHaveBeenCalled()
+    expect(releaseMock).not.toHaveBeenCalled()
   })
 
   it('passes review-requested as a --search qualifier (gh CLI has no dedicated flag)', async () => {

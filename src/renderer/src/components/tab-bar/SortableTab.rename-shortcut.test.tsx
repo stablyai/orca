@@ -5,19 +5,33 @@ const reactHookRuntime = vi.hoisted(() => ({
   index: 0
 }))
 
-const storeState = vi.hoisted(() => ({
-  agentStatusByPaneKey: {},
-  clearTabLaunchAgent: vi.fn(),
-  ptyIdsByTabId: {} as Record<string, string[]>,
-  renamingTabId: null as string | null,
-  repos: [],
-  setRenamingTabId: vi.fn((tabId: string | null) => {
-    storeState.renamingTabId = tabId
-  }),
-  terminalLayoutsByTabId: {},
-  worktreesByRepo: {},
-  unreadTerminalTabs: {} as Record<string, boolean>
-}))
+const storeState = vi.hoisted(
+  (): {
+    agentStatusByPaneKey: Record<string, unknown>
+    clearTabLaunchAgent: ReturnType<typeof vi.fn>
+    ptyIdsByTabId: Record<string, string[]>
+    renamingTabId: string | null
+    keybindings: Record<string, unknown>
+    repos: unknown[]
+    setRenamingTabId: ReturnType<typeof vi.fn>
+    terminalLayoutsByTabId: Record<string, unknown>
+    worktreesByRepo: Record<string, unknown>
+    unreadTerminalTabs: Record<string, boolean>
+  } => ({
+    agentStatusByPaneKey: {},
+    clearTabLaunchAgent: vi.fn(),
+    ptyIdsByTabId: {} as Record<string, string[]>,
+    renamingTabId: null as string | null,
+    keybindings: {},
+    repos: [],
+    setRenamingTabId: vi.fn((tabId: string | null) => {
+      storeState.renamingTabId = tabId
+    }),
+    terminalLayoutsByTabId: {},
+    worktreesByRepo: {},
+    unreadTerminalTabs: {} as Record<string, boolean>
+  })
+)
 
 vi.mock('react', async () => {
   const actual = await vi.importActual<typeof import('react')>('react') // eslint-disable-line @typescript-eslint/consistent-type-imports -- vi.importActual requires inline import()
@@ -58,11 +72,38 @@ vi.mock('@dnd-kit/sortable', () => ({
 }))
 
 vi.mock('lucide-react', () => ({
+  ArrowDown: function ArrowDown(props: Record<string, unknown>) {
+    return { type: 'ArrowDown', props }
+  },
+  ArrowLeft: function ArrowLeft(props: Record<string, unknown>) {
+    return { type: 'ArrowLeft', props }
+  },
+  ArrowRight: function ArrowRight(props: Record<string, unknown>) {
+    return { type: 'ArrowRight', props }
+  },
+  ArrowUp: function ArrowUp(props: Record<string, unknown>) {
+    return { type: 'ArrowUp', props }
+  },
   Columns2: function Columns2(props: Record<string, unknown>) {
     return { type: 'Columns2', props }
   },
   Minimize2: function Minimize2(props: Record<string, unknown>) {
     return { type: 'Minimize2', props }
+  },
+  PanelBottomClose: function PanelBottomClose(props: Record<string, unknown>) {
+    return { type: 'PanelBottomClose', props }
+  },
+  PanelRightClose: function PanelRightClose(props: Record<string, unknown>) {
+    return { type: 'PanelRightClose', props }
+  },
+  ListX: function ListX(props: Record<string, unknown>) {
+    return { type: 'ListX', props }
+  },
+  MessageSquare: function MessageSquare(props: Record<string, unknown>) {
+    return { type: 'MessageSquare', props }
+  },
+  Pencil: function Pencil(props: Record<string, unknown>) {
+    return { type: 'Pencil', props }
   },
   Pin: function Pin(props: Record<string, unknown>) {
     return { type: 'Pin', props }
@@ -75,7 +116,16 @@ vi.mock('lucide-react', () => ({
   },
   X: function X(props: Record<string, unknown>) {
     return { type: 'X', props }
+  },
+  SquareTerminal: function SquareTerminal(props: Record<string, unknown>) {
+    return { type: 'SquareTerminal', props }
   }
+}))
+
+vi.mock('@/hooks/useShortcutLabel', () => ({
+  formatShortcutLabel: () => '⌘⇧\\',
+  useOptionalShortcutLabel: () => '⌘W',
+  useShortcutKeyDetails: () => ({ keys: ['⌘', 'W'], doubleTap: false })
 }))
 
 vi.mock('@/components/ui/dropdown-menu', () => ({
@@ -88,8 +138,23 @@ vi.mock('@/components/ui/dropdown-menu', () => ({
   DropdownMenuItem: function DropdownMenuItem(props: { children?: unknown }) {
     return { type: 'DropdownMenuItem', props }
   },
+  DropdownMenuShortcut: function DropdownMenuShortcut(props: { children?: unknown }) {
+    return { type: 'DropdownMenuShortcut', props }
+  },
   DropdownMenuSeparator: function DropdownMenuSeparator() {
     return { type: 'DropdownMenuSeparator', props: {} }
+  },
+  DropdownMenuLabel: function DropdownMenuLabel(props: { children?: unknown }) {
+    return { type: 'DropdownMenuLabel', props }
+  },
+  DropdownMenuSub: function DropdownMenuSub(props: { children?: unknown }) {
+    return { type: 'DropdownMenuSub', props }
+  },
+  DropdownMenuSubContent: function DropdownMenuSubContent(props: { children?: unknown }) {
+    return { type: 'DropdownMenuSubContent', props }
+  },
+  DropdownMenuSubTrigger: function DropdownMenuSubTrigger(props: { children?: unknown }) {
+    return { type: 'DropdownMenuSubTrigger', props }
   },
   DropdownMenuTrigger: function DropdownMenuTrigger(props: { children?: unknown }) {
     return props.children
@@ -137,8 +202,18 @@ vi.mock('./middle-button-default-guard', () => ({
   preventMiddleButtonDefault: vi.fn()
 }))
 
+const useAppStoreExport = (selector: (state: typeof storeState) => unknown) => selector(storeState)
+useAppStoreExport.getState = () => ({
+  unifiedTabsByWorktree: {
+    'wt-1': [{ id: 'terminal-tab-1', groupId: 'group-1' }]
+  },
+  groupsByWorktree: {
+    'wt-1': [{ id: 'group-1', tabOrder: ['terminal-tab-1', 'tab-2'] }]
+  }
+})
+
 vi.mock('@/store', () => ({
-  useAppStore: (selector: (state: typeof storeState) => unknown) => selector(storeState)
+  useAppStore: useAppStoreExport
 }))
 
 type ReactElementLike = {
@@ -157,11 +232,17 @@ function makeTerminalTab() {
   }
 }
 
-async function renderSortableTab(): Promise<unknown> {
+async function renderSortableTab({
+  onSetCustomTitle = vi.fn()
+}: {
+  onSetCustomTitle?: (tabId: string, title: string | null) => void
+} = {}): Promise<unknown> {
   reactHookRuntime.index = 0
   const module = await import('./SortableTab')
   return module.default({
     tab: makeTerminalTab() as never,
+    unifiedTabId: 'terminal-tab-1',
+    groupId: 'group-1',
     tabCount: 1,
     hasTabsToRight: false,
     isActive: true,
@@ -171,11 +252,10 @@ async function renderSortableTab(): Promise<unknown> {
     onClose: vi.fn(),
     onCloseOthers: vi.fn(),
     onCloseToRight: vi.fn(),
-    onSetCustomTitle: vi.fn(),
+    onSetCustomTitle,
     onSetTabColor: vi.fn(),
     onTogglePin: vi.fn(),
     onToggleExpand: vi.fn(),
-    onSplitGroup: vi.fn(),
     dragData: {
       kind: 'tab',
       worktreeId: 'wt-1',
@@ -230,6 +310,25 @@ function findElementsByType(node: unknown, typeName: string): ReactElementLike[]
   return results
 }
 
+function pressInputKey(
+  input: ReactElementLike,
+  key: string,
+  options?: { isComposing?: boolean; keyCode?: number }
+): {
+  preventDefault: ReturnType<typeof vi.fn>
+} {
+  const event = {
+    key,
+    nativeEvent: {
+      isComposing: options?.isComposing ?? false,
+      keyCode: options?.keyCode ?? 13
+    },
+    preventDefault: vi.fn()
+  }
+  ;(input.props.onKeyDown as (nextEvent: typeof event) => void)(event)
+  return event
+}
+
 describe('SortableTab rename shortcut signal', () => {
   beforeEach(() => {
     reactHookRuntime.states = []
@@ -259,5 +358,27 @@ describe('SortableTab rename shortcut signal', () => {
     expect(inputs).toHaveLength(1)
     expect(inputs[0].props.value).toBe('Runtime terminal title')
     expect(inputs[0].props['data-tab-rename-input']).toBe('true')
+  })
+
+  it('ignores IME composition Enter before committing the custom tab title', async () => {
+    const onSetCustomTitle = vi.fn()
+
+    await renderSortableTab({ onSetCustomTitle })
+    let rerender = expandNode(await renderSortableTab({ onSetCustomTitle }))
+    let input = findElementsByType(rerender, 'input')[0]
+    ;(input.props.onChange as (event: { target: { value: string } }) => void)({
+      target: { value: '日本語 terminal' }
+    })
+    rerender = expandNode(await renderSortableTab({ onSetCustomTitle }))
+    input = findElementsByType(rerender, 'input')[0]
+
+    const composingEvent = pressInputKey(input, 'Enter', { isComposing: true })
+
+    expect(composingEvent.preventDefault).not.toHaveBeenCalled()
+    expect(onSetCustomTitle).not.toHaveBeenCalled()
+
+    pressInputKey(input, 'Enter')
+
+    expect(onSetCustomTitle).toHaveBeenCalledWith('terminal-tab-1', '日本語 terminal')
   })
 })

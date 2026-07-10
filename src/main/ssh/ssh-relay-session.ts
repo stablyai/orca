@@ -14,7 +14,11 @@ import { execCommand } from './ssh-relay-deploy-helpers'
 import { isRelayVersionMismatchError } from './ssh-relay-version-mismatch-error'
 import type { RelayVersionMismatchError } from './ssh-relay-version-mismatch-error'
 import { SshChannelMultiplexer } from './ssh-channel-multiplexer'
-import { SshPtyProvider, isSshPtyNotFoundError } from '../providers/ssh-pty-provider'
+import {
+  SshPtyProvider,
+  isSshPtyIdentityMismatchError,
+  isSshPtyNotFoundError
+} from '../providers/ssh-pty-provider'
 import { toAppSshPtyId, toRelaySshPtyId } from '../providers/ssh-pty-id'
 import { SshFilesystemProvider } from '../providers/ssh-filesystem-provider'
 import { SshGitProvider } from '../providers/ssh-git-provider'
@@ -37,7 +41,8 @@ import {
   clearPtyOwnershipForConnection,
   clearProviderPtyState,
   deletePtyOwnership,
-  setPtyOwnership
+  setPtyOwnership,
+  answerStartupTerminalColorQueriesForPty
 } from '../ipc/pty'
 import {
   registerSshFilesystemProvider,
@@ -47,6 +52,7 @@ import {
 import { registerSshGitProvider, unregisterSshGitProvider } from '../providers/ssh-git-dispatch'
 import { notifyRemoteWorkspaceHandlers } from '../ipc/remote-workspace-events'
 import { PortScanner } from './ssh-port-scanner'
+import { isMainWindowVisible, onMainWindowBecameVisible } from '../window/main-window-visibility'
 import type { SshPortForwardManager } from './ssh-port-forward'
 import type { SshConnection } from './ssh-connection'
 import { joinRemotePath, isWindowsRemoteHost, type RemoteHostPlatform } from './ssh-remote-platform'
@@ -61,10 +67,15 @@ import {
 import type { Store } from '../persistence'
 import type { OrcaRuntimeService } from '../runtime/orca-runtime'
 import { runRemoteOrcaCli } from './ssh-remote-orca-cli'
+import { toSshExecutionHostId, type ExecutionHostId } from '../../shared/execution-host'
+import { isTerminalLeafId, makePaneKey } from '../../shared/stable-pane-id'
+import { isValidTerminalTabId } from '../../shared/terminal-tab-id'
+import { shellEscape } from './ssh-connection-utils'
 
 export type RelaySessionState = 'idle' | 'deploying' | 'ready' | 'reconnecting' | 'disposed'
 
 type RemoteCliBridgeEnv = {
+  remoteHome: string
   binDir: string
   relayDir: string
   nodePath: string
@@ -72,6 +83,105 @@ type RemoteCliBridgeEnv = {
   hostPlatform: RemoteHostPlatform
   pathDelimiter?: ':' | ';'
 }
+
+type ExpectedPtyIdentity = { paneKey?: string; tabId?: string }
+
+const REMOTE_GROK_HOME_MAX_LENGTH = 4096
+const REMOTE_GROK_HOME_PROBE_TIMEOUT_MS = 8_000
+
+function defaultRemoteGrokHome(remoteHome: string): string {
+  const home = remoteHome.replace(/\/+$/, '') || remoteHome
+  return `${home}/.grok`
+}
+
+function normalizeRemoteGrokHome(candidate: string): string | null {
+  if (
+    candidate.length === 0 ||
+    candidate.length > REMOTE_GROK_HOME_MAX_LENGTH ||
+    candidate !== candidate.trim() ||
+    !candidate.startsWith('/') ||
+    candidate.includes('\\') ||
+    hasControlCharacter(candidate)
+  ) {
+    return null
+  }
+  return candidate.replace(/\/+$/, '') || '/'
+}
+
+function hasControlCharacter(value: string): boolean {
+  return Array.from(value).some((character) => {
+    const code = character.charCodeAt(0)
+    return code <= 0x1f || code === 0x7f
+  })
+}
+
+function loginShellCommand(shell: string, command: string): string {
+  const shellName = shell.split('/').at(-1)
+  const mode = shellName === 'sh' || shellName === 'dash' ? '-c' : '-lc'
+  return `${shellEscape(shell)} ${mode} ${shellEscape(command)}`
+}
+
+async function resolveRemoteGrokHome(
+  connection: SshConnection,
+  remoteHome: string
+): Promise<string> {
+  const fallback = defaultRemoteGrokHome(remoteHome)
+  try {
+    // Why: remote PTYs start login shells, so probe the same profile-derived
+    // environment instead of the relay service or local Electron environment.
+    const shellOutput = await execCommand(connection, "printenv SHELL || printf '/bin/sh\\n'", {
+      timeoutMs: REMOTE_GROK_HOME_PROBE_TIMEOUT_MS
+    })
+    const shell = shellOutput.trim().split(/\r?\n/, 1)[0]
+    if (!shell?.startsWith('/') || hasControlCharacter(shell)) {
+      return fallback
+    }
+    // Why: this runs inside the user's actual login shell, which may be fish or
+    // tcsh. External commands avoid shell-specific variable/conditional syntax.
+    const probe = `printenv GROK_HOME | head -c ${REMOTE_GROK_HOME_MAX_LENGTH + 1}`
+    const output = await execCommand(connection, loginShellCommand(shell, probe), {
+      wrapCommand: false,
+      timeoutMs: REMOTE_GROK_HOME_PROBE_TIMEOUT_MS
+    })
+    return normalizeRemoteGrokHome(output.split(/\r?\n/, 1)[0] ?? '') ?? fallback
+  } catch {
+    return fallback
+  }
+}
+
+function expectedIdentityForLease(lease: {
+  tabId?: string
+  leafId?: string
+}): ExpectedPtyIdentity | null {
+  if (typeof lease.tabId !== 'string' || lease.tabId.length === 0) {
+    return null
+  }
+  const paneKey =
+    isValidTerminalTabId(lease.tabId) &&
+    typeof lease.leafId === 'string' &&
+    isTerminalLeafId(lease.leafId)
+      ? makePaneKey(lease.tabId, lease.leafId)
+      : undefined
+  return {
+    ...(paneKey ? { paneKey } : {}),
+    tabId: lease.tabId
+  }
+}
+
+type ForwardedReplayFingerprint = {
+  fingerprint: string
+  deliveredAt: number
+}
+
+export type SshRelayAiVaultHostInfo = {
+  targetId: string
+  executionHostId: ExecutionHostId
+  remoteHome: string
+  hostPlatform: RemoteHostPlatform
+}
+
+const RECONNECT_REPLAY_DUPLICATE_WINDOW_MS = 1000
+const REPLAY_FINGERPRINT_EDGE_CHARS = 128
 
 function normalizeRelayGracePeriodSeconds(graceTimeSeconds: number | undefined): number {
   const raw = graceTimeSeconds ?? DEFAULT_SSH_RELAY_GRACE_PERIOD_SECONDS
@@ -109,7 +219,9 @@ export class SshRelaySession {
   private _onReady: ((targetId: string) => void) | null = null
   private portScanner: PortScanner | null = null
   private currentConnection: SshConnection | null = null
+  private hostPlatform: RemoteHostPlatform | null = null
   private remoteCliBridgeEnv: RemoteCliBridgeEnv | null = null
+  private forwardedReattachReplayByPty = new Map<string, ForwardedReplayFingerprint>()
 
   constructor(
     readonly targetId: string,
@@ -174,6 +286,23 @@ export class SshRelaySession {
     return this.mux
   }
 
+  getHostPlatform(): RemoteHostPlatform | null {
+    return this.remoteCliBridgeEnv?.hostPlatform ?? this.hostPlatform
+  }
+
+  getAiVaultHostInfo(): SshRelayAiVaultHostInfo | null {
+    const env = this.remoteCliBridgeEnv
+    if (!env) {
+      return null
+    }
+    return {
+      targetId: this.targetId,
+      executionHostId: toSshExecutionHostId(this.targetId),
+      remoteHome: env.remoteHome,
+      hostPlatform: env.hostPlatform
+    }
+  }
+
   getPortScanner(): PortScanner | null {
     return this.portScanner
   }
@@ -199,9 +328,11 @@ export class SshRelaySession {
     try {
       const { transport, remoteHome, remoteRelayDir, nodePath, sockPath, hostPlatform } =
         await deployAndLaunchRelay(conn, undefined, graceTimeSeconds, this.targetId)
+      this.hostPlatform = hostPlatform ?? null
       this.remoteCliBridgeEnv =
         remoteHome && remoteRelayDir && nodePath && sockPath && hostPlatform
           ? {
+              remoteHome,
               binDir: joinRemotePath(hostPlatform, remoteHome, '.orca-relay', 'bin'),
               relayDir: remoteRelayDir,
               nodePath,
@@ -325,9 +456,11 @@ export class SshRelaySession {
     try {
       const { transport, remoteHome, remoteRelayDir, nodePath, sockPath, hostPlatform } =
         await deployAndLaunchRelay(conn, undefined, graceTimeSeconds, this.targetId)
+      this.hostPlatform = hostPlatform ?? null
       this.remoteCliBridgeEnv =
         remoteHome && remoteRelayDir && nodePath && sockPath && hostPlatform
           ? {
+              remoteHome,
               binDir: joinRemotePath(hostPlatform, remoteHome, '.orca-relay', 'bin'),
               relayDir: remoteRelayDir,
               nodePath,
@@ -514,7 +647,19 @@ export class SshRelaySession {
       return false
     }
 
-    await this.installRemoteOrcaCliShim()
+    try {
+      await this.installRemoteOrcaCliShim()
+    } catch (error) {
+      // Why: the remote `orca` CLI shim is a convenience bridge. On session-
+      // limited remotes (MaxSessions=1) the relay bridge holds the only slot,
+      // so this raw-connection install can fail — that must not fail the
+      // whole connection, matching the managed-hook install above.
+      console.warn(
+        `[ssh-relay-session] remote orca CLI shim install failed for ${this.targetId}: ${
+          error instanceof Error ? error.message : String(error)
+        }`
+      )
+    }
     if (shouldContinue && !shouldContinue()) {
       return false
     }
@@ -592,8 +737,10 @@ export class SshRelaySession {
 
     let sftp: Awaited<ReturnType<SshConnection['sftp']>> | null = null
     try {
-      sftp = await this.requireReadyConnection().sftp()
-      await installRemoteManagedAgentHooks(sftp, remoteHome)
+      const connection = this.requireReadyConnection()
+      const remoteGrokHome = await resolveRemoteGrokHome(connection, remoteHome)
+      sftp = await connection.sftp()
+      await installRemoteManagedAgentHooks(sftp, remoteHome, { grokHomeDir: remoteGrokHome })
     } catch (error) {
       console.warn(
         `[ssh-relay-session] remote managed hook install failed for ${this.targetId}: ${
@@ -744,6 +891,7 @@ export class SshRelaySession {
       }
       const envelope = params as {
         paneKey?: unknown
+        launchToken?: unknown
         tabId?: unknown
         worktreeId?: unknown
         env?: unknown
@@ -769,6 +917,7 @@ export class SshRelaySession {
       agentHookServer.ingestRemote(
         {
           paneKey: envelope.paneKey,
+          launchToken: typeof envelope.launchToken === 'string' ? envelope.launchToken : undefined,
           tabId: typeof envelope.tabId === 'string' ? envelope.tabId : undefined,
           worktreeId: typeof envelope.worktreeId === 'string' ? envelope.worktreeId : undefined,
           env: typeof envelope.env === 'string' ? envelope.env : undefined,
@@ -900,7 +1049,13 @@ export class SshRelaySession {
     if (!this.mux || this.isDisposed()) {
       return
     }
-    const scanner = new PortScanner()
+    // Why: each scan walks /proc/*/fd on the remote host, so the scanner skips
+    // ticks entirely while no window can show the results (hidden to tray or
+    // minimized overnight) and rescans immediately when the window returns.
+    const scanner = new PortScanner({
+      isWindowVisible: () => isMainWindowVisible(this.getMainWindow()),
+      onWindowBecameVisible: onMainWindowBecameVisible
+    })
     this.portScanner = scanner
     // Why: capture the scanner instance so that a late ports.detect callback
     // from a previous relay session (before reconnect replaced it) is silently
@@ -923,11 +1078,15 @@ export class SshRelaySession {
   private wireUpPtyEvents(ptyProvider: SshPtyProvider): void {
     ptyProvider.onData((payload) => {
       const seq = this.runtime?.onPtyData(payload.id, payload.data, Date.now())
+      const rendererData = answerStartupTerminalColorQueriesForPty(payload.id, payload.data)
       const win = this.getMainWindow()
-      if (win && !win.isDestroyed()) {
+      if (win && !win.isDestroyed() && rendererData.length > 0) {
         win.webContents.send('pty:data', {
           ...payload,
-          ...(typeof seq === 'number' ? { seq, rawLength: payload.data.length } : {})
+          data: rendererData,
+          ...(rendererData === payload.data && typeof seq === 'number'
+            ? { seq, rawLength: payload.data.length }
+            : {})
         })
       }
     })
@@ -941,6 +1100,7 @@ export class SshRelaySession {
       const relayPtyId = toRelaySshPtyId(this.targetId, payload.id)
       clearProviderPtyState(payload.id)
       deletePtyOwnership(payload.id)
+      this.forwardedReattachReplayByPty.delete(payload.id)
       this.store.markSshRemotePtyLease(this.targetId, relayPtyId, 'terminated')
       this.runtime?.onPtyExit(payload.id, payload.code)
       const win = this.getMainWindow()
@@ -950,11 +1110,50 @@ export class SshRelaySession {
     })
   }
 
+  private replayFingerprint(data: string): string {
+    const head = data.slice(0, REPLAY_FINGERPRINT_EDGE_CHARS)
+    const tail = data.slice(-REPLAY_FINGERPRINT_EDGE_CHARS)
+    return `${data.length}:${head}:${tail}`
+  }
+
+  private shouldForwardReattachReplay(appPtyId: string, data: string): boolean {
+    const now = Date.now()
+    const fingerprint = this.replayFingerprint(data)
+    const previous = this.forwardedReattachReplayByPty.get(appPtyId)
+    this.forwardedReattachReplayByPty.set(appPtyId, { fingerprint, deliveredAt: now })
+    return (
+      !previous ||
+      previous.fingerprint !== fingerprint ||
+      now - previous.deliveredAt > RECONNECT_REPLAY_DUPLICATE_WINDOW_MS
+    )
+  }
+
+  private forwardReattachReplay(appPtyId: string, data: string): void {
+    if (!data || !this.shouldForwardReattachReplay(appPtyId, data)) {
+      return
+    }
+    const win = this.getMainWindow()
+    if (win && !win.isDestroyed()) {
+      win.webContents.send('pty:replay', { id: appPtyId, data })
+    }
+  }
+
   private async reattachKnownPtys(shouldContinue: () => boolean): Promise<void> {
-    const leasedPtyIds = this.store
+    const activeLeases = this.store
       .getSshRemotePtyLeases(this.targetId)
       .filter((lease) => lease.state !== 'terminated' && lease.state !== 'expired')
-      .map((lease) => lease.ptyId)
+    const leasedPtyIds = activeLeases.map((lease) => lease.ptyId)
+    // Why: carry each lease's pane identity into the attach so the relay can
+    // reject cross-generation id collisions even between split panes in one tab.
+    // Older leases may lack leafId, so tabId remains the compatibility fallback.
+    const expectedIdentityByPtyId = new Map(
+      activeLeases
+        .map((lease): [string, ExpectedPtyIdentity] | null => {
+          const expected = expectedIdentityForLease(lease)
+          return expected ? [lease.ptyId, expected] : null
+        })
+        .filter((entry): entry is [string, ExpectedPtyIdentity] => entry !== null)
+    )
     // Why: after app restart, ptyOwnership is empty but durable SSH leases
     // still describe remote PTYs that survived in the relay grace window.
     const ptyIds = Array.from(
@@ -974,25 +1173,39 @@ export class SshRelaySession {
         return
       }
       try {
-        await ptyProvider.attach(ptyId)
+        const expectedIdentity = expectedIdentityByPtyId.get(ptyId)
+        const attachResult =
+          (expectedIdentity
+            ? await ptyProvider.attachForReconnect(ptyId, expectedIdentity)
+            : await ptyProvider.attachForReconnect(ptyId)) ?? {}
         if (!shouldContinue()) {
           return
         }
         const appPtyId = toAppSshPtyId(this.targetId, ptyId)
         setPtyOwnership(appPtyId, this.targetId)
         this.store.markSshRemotePtyLease(this.targetId, ptyId, 'attached')
+        this.forwardReattachReplay(appPtyId, attachResult.replay ?? '')
       } catch (err) {
         if (!isSshPtyNotFoundError(err)) {
           throw err
+        }
+        const appPtyId = toAppSshPtyId(this.targetId, ptyId)
+        if (isSshPtyIdentityMismatchError(err)) {
+          console.warn(
+            `[ssh-relay-session] Ignoring stale PTY ${ptyId} for ${this.targetId} after relay identity mismatch: ${
+              err instanceof Error ? err.message : String(err)
+            }`
+          )
+          continue
         }
         console.warn(
           `[ssh-relay-session] Dropping stale PTY ${ptyId} for ${this.targetId} after relay reattach failed: ${
             err instanceof Error ? err.message : String(err)
           }`
         )
-        const appPtyId = toAppSshPtyId(this.targetId, ptyId)
         clearProviderPtyState(appPtyId)
         deletePtyOwnership(appPtyId)
+        this.forwardedReattachReplayByPty.delete(appPtyId)
         this.store.markSshRemotePtyLease(this.targetId, ptyId, 'expired')
         // Why: if the new relay cannot reattach this id, the remote backing
         // process is gone. Tell the renderer so it clears stale pane bindings

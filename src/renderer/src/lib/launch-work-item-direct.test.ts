@@ -10,6 +10,8 @@ const mocks = vi.hoisted(() => ({
   ensureRemoteDetectedAgents: vi.fn(),
   updateWorktreeMeta: vi.fn(),
   setSidebarOpen: vi.fn(),
+  seedNativeChatLaunchPrompt: vi.fn(),
+  markNativeChatLaunchPromptFailed: vi.fn(),
   activateAndRevealWorktree: vi.fn(),
   pasteDraftWhenAgentReady: vi.fn(),
   openModalFallback: vi.fn(),
@@ -21,6 +23,8 @@ const mocks = vi.hoisted(() => ({
     createWorktree: ReturnType<typeof vi.fn>
     updateWorktreeMeta: ReturnType<typeof vi.fn>
     setSidebarOpen: ReturnType<typeof vi.fn>
+    seedNativeChatLaunchPrompt: ReturnType<typeof vi.fn>
+    markNativeChatLaunchPromptFailed: ReturnType<typeof vi.fn>
   }
 }))
 
@@ -139,6 +143,7 @@ describe('launchWorkItemDirect', () => {
     })
     mocks.resolvePrBase.mockResolvedValue({
       baseBranch: 'abc123',
+      compareBaseRef: 'refs/remotes/origin/main',
       headSha: 'abc123',
       branchNameOverride: 'feature/fix',
       pushTarget: { remoteName: 'origin', branchName: 'feature/fix' }
@@ -162,6 +167,19 @@ describe('launchWorkItemDirect', () => {
           addedAt: 1
         }
       ],
+      activeRepoId: 'repo-1',
+      activeWorktreeId: null,
+      projects: [
+        {
+          id: 'repo-1',
+          displayName: 'Repo',
+          badgeColor: '#000000',
+          sourceRepoIds: ['repo-1'],
+          createdAt: 1,
+          updatedAt: 1
+        }
+      ],
+      worktreesByRepo: {},
       settings: {
         defaultTuiAgent: 'codex',
         disabledTuiAgents: [],
@@ -171,7 +189,9 @@ describe('launchWorkItemDirect', () => {
       ensureRemoteDetectedAgents: mocks.ensureRemoteDetectedAgents,
       createWorktree: mocks.createWorktree,
       updateWorktreeMeta: mocks.updateWorktreeMeta,
-      setSidebarOpen: mocks.setSidebarOpen
+      setSidebarOpen: mocks.setSidebarOpen,
+      seedNativeChatLaunchPrompt: mocks.seedNativeChatLaunchPrompt,
+      markNativeChatLaunchPromptFailed: mocks.markNativeChatLaunchPromptFailed
     } as typeof mocks.store
     // @ts-expect-error -- test shim
     globalThis.window = { api: mockApi }
@@ -215,22 +235,32 @@ describe('launchWorkItemDirect', () => {
       openModalFallback: vi.fn(),
       item: {
         type: 'pr',
-        number: 42,
+        number: 6934,
         title: 'Fix the bug',
-        url: 'https://github.com/acme/repo/pull/42'
+        url: 'https://github.com/stablyai/orca/pull/6934',
+        branchName: 'feature/fix',
+        baseRefName: 'main',
+        isCrossRepository: true
       }
     })
 
+    expect(mocks.resolvePrBase).toHaveBeenCalledWith({
+      repoId: 'repo-1',
+      prNumber: 6934,
+      headRefName: 'feature/fix',
+      baseRefName: 'main',
+      isCrossRepository: true
+    })
     expect(mocks.createWorktree).toHaveBeenCalledWith(
       'repo-1',
-      'review-pr-42',
+      'review-pr-6934',
       'abc123',
       'inherit',
       undefined,
       'sidebar',
-      'Review PR 42',
+      'Review PR 6934',
       undefined,
-      42,
+      6934,
       { remoteName: 'origin', branchName: 'feature/fix' },
       undefined,
       undefined,
@@ -242,8 +272,47 @@ describe('launchWorkItemDirect', () => {
       undefined,
       undefined,
       undefined,
-      undefined
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      'refs/remotes/origin/main'
     )
+  })
+
+  it('treats a PR-typed GitHub issue URL as an issue without resolving a PR head', async () => {
+    const { launchWorkItemDirect } = await import('./launch-work-item-direct')
+    const openModalFallback = vi.fn()
+
+    await expect(
+      launchWorkItemDirect({
+        repoId: 'repo-1',
+        launchSource: 'task_page',
+        telemetrySource: 'sidebar',
+        openModalFallback,
+        item: {
+          type: 'pr',
+          number: 6933,
+          title: 'The board columns are displayed backwards',
+          url: 'https://github.com/stablyai/orca/issues/6933',
+          branchName: 'fix-issue-6933',
+          baseRefName: 'main',
+          isCrossRepository: true
+        }
+      })
+    ).resolves.toBe(true)
+
+    expect(mocks.resolvePrBase).not.toHaveBeenCalled()
+    expect(openModalFallback).not.toHaveBeenCalled()
+    const createArgs = mocks.createWorktree.mock.calls[0]
+    expect(createArgs?.[1]).toBe('issue-6933')
+    expect(createArgs?.[2]).toBeUndefined()
+    expect(createArgs?.[6]).toBe('Issue 6933')
+    expect(createArgs?.[7]).toBe(6933)
+    expect(createArgs?.[8]).toBeUndefined()
+    expect(createArgs?.[9]).toBeUndefined()
+    expect(createArgs?.[12]).toBeUndefined()
+    expect(createArgs?.[24]).toBeUndefined()
   })
 
   it('uses the Linear identifier in direct-launch workspace names', async () => {
@@ -284,8 +353,124 @@ describe('launchWorkItemDirect', () => {
       undefined,
       undefined,
       undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
       undefined
     )
+  })
+
+  it('prefills a link-only Linear reference without source context', async () => {
+    mocks.ensureDetectedAgents.mockResolvedValue(['claude'])
+    const { launchWorkItemDirect } = await import('./launch-work-item-direct')
+
+    await expect(
+      launchWorkItemDirect({
+        repoId: 'repo-1',
+        launchSource: 'task_page',
+        openModalFallback: vi.fn(),
+        agentOverride: 'claude',
+        item: {
+          type: 'issue',
+          number: null,
+          title: 'Ship Linear parity',
+          url: 'https://linear.app/acme/issue/ENG-42/ship-linear-parity',
+          linearIdentifier: 'ENG-42',
+          linkedContext: {
+            provider: 'linear',
+            version: 1,
+            renderedText: [
+              'Linear issue context snapshot',
+              'Identifier: ENG-42',
+              'Title: Ship Linear parity',
+              'Description:',
+              'The distinctive Linear body text is here.'
+            ].join('\n')
+          }
+        }
+      })
+    ).resolves.toBe(true)
+
+    const expectedDraft = [
+      'Linked Linear issue: ENG-42',
+      'https://linear.app/acme/issue/ENG-42/ship-linear-parity'
+    ].join('\n')
+    expect(buildAgentDraftLaunchPlan).toHaveBeenCalledWith({
+      agent: 'claude',
+      draft: `${expectedDraft}\n`,
+      cmdOverrides: {},
+      agentArgs: '--dangerously-skip-permissions',
+      agentEnv: {},
+      platform: 'win32',
+      isRemote: false
+    })
+    expect(buildAgentStartupPlan).not.toHaveBeenCalledWith(
+      expect.objectContaining({
+        agent: 'claude',
+        prompt: '',
+        allowEmptyPromptLaunch: true
+      })
+    )
+    expect(mocks.activateAndRevealWorktree).toHaveBeenCalledWith(
+      'repo-1::/repo/worktree',
+      expect.objectContaining({
+        startup: expect.objectContaining({
+          command: expect.stringContaining('Linked Linear issue: ENG-42')
+        })
+      })
+    )
+    const startupCommand = mocks.activateAndRevealWorktree.mock.calls[0]?.[1]?.startup?.command
+    expect(startupCommand).toContain('https://linear.app/acme/issue/ENG-42/ship-linear-parity')
+    expect(startupCommand).not.toContain('The distinctive Linear body text is here.')
+    expect(startupCommand).not.toContain('--- BEGIN LINKED WORK ITEM CONTEXT ---')
+    expect(pasteDraftWhenAgentReady).not.toHaveBeenCalled()
+  })
+
+  it('preserves explicit Linear paste content submit-after-ready behavior', async () => {
+    mocks.ensureDetectedAgents.mockResolvedValue(['claude'])
+    const { launchWorkItemDirect } = await import('./launch-work-item-direct')
+
+    await expect(
+      launchWorkItemDirect({
+        repoId: 'repo-1',
+        launchSource: 'task_page',
+        openModalFallback: vi.fn(),
+        agentOverride: 'claude',
+        promptDelivery: 'submit-after-ready',
+        item: {
+          type: 'issue',
+          number: null,
+          title: 'Ship Linear parity',
+          url: 'https://linear.app/acme/issue/ENG-42/ship-linear-parity',
+          linearIdentifier: 'ENG-42',
+          pasteContent: 'Use this explicit user prompt.',
+          linkedContext: {
+            provider: 'linear',
+            version: 1,
+            renderedText: 'This generated Linear source should not replace explicit paste content.'
+          }
+        }
+      })
+    ).resolves.toBe(true)
+
+    expect(buildAgentDraftLaunchPlan).not.toHaveBeenCalled()
+    expect(pasteDraftWhenAgentReady).toHaveBeenCalledWith(
+      expect.objectContaining({
+        tabId: 'tab-1',
+        content: 'Use this explicit user prompt.',
+        agent: 'claude',
+        submit: true,
+        forcePaste: true,
+        onTimeout: expect.any(Function)
+      })
+    )
+    expect(mocks.seedNativeChatLaunchPrompt).toHaveBeenCalledWith({
+      tabId: 'tab-1',
+      agent: 'claude',
+      text: 'Use this explicit user prompt.',
+      createdAt: expect.any(Number)
+    })
   })
 
   it('uses remote cursor-agent detection, trust preflight, and paste launch for SSH repos', async () => {
@@ -307,7 +492,8 @@ describe('launchWorkItemDirect', () => {
       agent: 'cursor',
       launchCommand: 'cursor-agent',
       expectedProcess: 'cursor-agent',
-      followupPrompt: null
+      followupPrompt: null,
+      launchConfig: { agentArgs: '', agentEnv: {} }
     })
     mocks.store.createWorktree.mockResolvedValue({
       worktree: { id: 'wt-ssh', path: '/home/orca/repo-worktrees/issue-77' }
@@ -339,7 +525,8 @@ describe('launchWorkItemDirect', () => {
       cmdOverrides: {},
       agentArgs: '--yolo',
       agentEnv: {},
-      platform: 'linux'
+      platform: 'linux',
+      isRemote: true
     })
     expect(buildAgentStartupPlan).toHaveBeenCalledWith({
       agent: 'cursor',
@@ -348,16 +535,18 @@ describe('launchWorkItemDirect', () => {
       agentArgs: '--yolo',
       agentEnv: {},
       platform: 'linux',
+      isRemote: true,
       allowEmptyPromptLaunch: true
     })
-    expect(pasteDraftWhenAgentReady).toHaveBeenCalledWith({
-      tabId: 'tab-1',
-      content: 'https://github.com/acme/repo/issues/77',
-      agent: 'cursor',
-      submit: false,
-      forcePaste: false,
-      onTimeout: expect.any(Function)
-    })
+    expect(mocks.activateAndRevealWorktree).toHaveBeenCalledWith(
+      'wt-ssh',
+      expect.objectContaining({
+        startup: expect.objectContaining({
+          draftPrompt: 'https://github.com/acme/repo/issues/77'
+        })
+      })
+    )
+    expect(pasteDraftWhenAgentReady).not.toHaveBeenCalled()
   })
 
   it('does not launch a disabled saved agent even when another agent is available', async () => {
@@ -468,5 +657,58 @@ describe('launchWorkItemDirect', () => {
     expect(mocks.ensureDetectedAgents).not.toHaveBeenCalled()
     const activationOptions = mocks.activateAndRevealWorktree.mock.calls.at(-1)?.[1]
     expect(activationOptions.startup.command).toContain('unset ORCA_PI_PREFILL')
+  })
+
+  it('plans direct local Windows-path launches with POSIX startup for WSL project runtime', async () => {
+    mocks.store.repos = [
+      {
+        id: 'repo-1',
+        path: 'C:\\Users\\alice\\repo',
+        displayName: 'Repo',
+        addedAt: 1
+      }
+    ]
+    mocks.store.projects = [
+      {
+        id: 'repo-1',
+        displayName: 'Repo',
+        badgeColor: '#000000',
+        sourceRepoIds: ['repo-1'],
+        createdAt: 1,
+        updatedAt: 1,
+        localWindowsRuntimePreference: { kind: 'wsl', distro: 'Ubuntu' }
+      }
+    ]
+    mocks.store.createWorktree.mockResolvedValue({
+      worktree: {
+        id: 'repo-1::C:\\Users\\alice\\repo-worktree',
+        path: 'C:\\Users\\alice\\repo-worktree'
+      }
+    })
+    const { launchWorkItemDirect } = await import('./launch-work-item-direct')
+
+    await expect(
+      launchWorkItemDirect({
+        item: {
+          title: 'Fix failing checks',
+          url: 'https://github.com/acme/repo/pull/1',
+          type: 'issue',
+          number: 1,
+          pasteContent: 'Fix the failing checks.'
+        },
+        repoId: 'repo-1',
+        openModalFallback: mocks.openModalFallback,
+        launchSource: 'task_page',
+        agentOverride: 'codex',
+        promptDelivery: 'submit-after-ready'
+      })
+    ).resolves.toBe(true)
+
+    expect(buildAgentStartupPlan).toHaveBeenCalledWith(
+      expect.objectContaining({
+        agent: 'codex',
+        platform: 'linux'
+      })
+    )
   })
 })

@@ -7,7 +7,8 @@ import type {
   MobileGitFileStatus,
   MobileGitStagingArea,
   MobileGitStatusEntry,
-  MobileGitStatusResult
+  MobileGitStatusResult,
+  MobileGitUpstreamStatus
 } from '../source-control/mobile-git-status'
 
 export type MobileReviewGitDiffResult =
@@ -42,6 +43,10 @@ function readNumber(value: unknown): number | undefined {
   return typeof value === 'number' && Number.isFinite(value) ? value : undefined
 }
 
+function readBoolean(value: unknown): boolean | undefined {
+  return typeof value === 'boolean' ? value : undefined
+}
+
 function readFileStatus(value: unknown): MobileGitFileStatus | null {
   return value === 'modified' ||
     value === 'added' ||
@@ -61,6 +66,26 @@ function readConflictOperation(value: unknown): MobileGitStatusResult['conflictO
   return value === 'merge' || value === 'rebase' || value === 'cherry-pick' || value === 'unknown'
     ? value
     : 'unknown'
+}
+
+function readUpstreamStatus(value: unknown): MobileGitUpstreamStatus | undefined {
+  if (!isRecord(value)) {
+    return undefined
+  }
+  const hasUpstream = readBoolean(value.hasUpstream)
+  const ahead = readNumber(value.ahead)
+  const behind = readNumber(value.behind)
+  if (hasUpstream === undefined || ahead === undefined || behind === undefined) {
+    return undefined
+  }
+  return {
+    hasUpstream,
+    upstreamName: readString(value.upstreamName),
+    ahead,
+    behind,
+    hasConfiguredPushTarget: readBoolean(value.hasConfiguredPushTarget),
+    behindCommitsArePatchEquivalent: readBoolean(value.behindCommitsArePatchEquivalent)
+  }
 }
 
 function readStatusEntry(value: unknown): MobileGitStatusEntry | null {
@@ -103,7 +128,8 @@ export function readMobileGitStatusResult(value: unknown): MobileGitStatusResult
     }),
     conflictOperation: readConflictOperation(value.conflictOperation),
     branch: readString(value.branch),
-    head: readString(value.head)
+    head: readString(value.head),
+    upstreamStatus: readUpstreamStatus(value.upstreamStatus)
   }
 }
 

@@ -3,11 +3,13 @@
 import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { getLocalExecutionHostLabel } from '../../../../shared/execution-host'
+import { getExecutionHostLabel } from '../../../../shared/execution-host'
 import {
   GitHubIntegrationCard,
   GitLabIntegrationCard
 } from './cli-source-control-integration-cards'
+
+const LOCAL_HOST_LABEL = getExecutionHostLabel('local')
 
 type StoreState = {
   settings: { activeRuntimeEnvironmentId: string | null }
@@ -48,7 +50,6 @@ vi.mock('./source-control-preflight-card-status', () => ({
 
 let root: Root | null = null
 let container: HTMLDivElement | null = null
-const localHostLabel = getLocalExecutionHostLabel()
 
 async function renderCard(card: React.ReactNode): Promise<HTMLDivElement> {
   container = document.createElement('div')
@@ -90,7 +91,7 @@ describe('CLI source-control integration card account scope', () => {
 
     expect(rendered.textContent).toContain('GitHub')
     expect(rendered.textContent).toContain('Connected')
-    expect(rendered.textContent).toContain(`Account scope: ${localHostLabel}`)
+    expect(rendered.textContent).toContain(`Account scope: ${LOCAL_HOST_LABEL}`)
     expect(rendered.textContent).toContain(
       'Credentials and account checks for this provider are owned by this desktop client. Use Settings > Remote Orca Servers > Advanced to edit server-owned credentials.'
     )

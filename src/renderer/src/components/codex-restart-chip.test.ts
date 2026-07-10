@@ -1,9 +1,32 @@
-import { describe, expect, it, vi } from 'vitest'
-import {
+// @vitest-environment happy-dom
+
+import React, { act } from 'react'
+import { createRoot, type Root } from 'react-dom/client'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { useAppStore } from '../store'
+import CodexRestartChip, {
   collectStalePtyIdsForTabs,
   collectStaleWorktreePtyIds,
   dismissStaleWorktreePtyIds
 } from './CodexRestartChip'
+
+let container: HTMLDivElement
+let root: Root
+
+beforeEach(() => {
+  useAppStore.setState(useAppStore.getInitialState(), true)
+  container = document.createElement('div')
+  document.body.appendChild(container)
+  root = createRoot(container)
+})
+
+afterEach(() => {
+  act(() => {
+    root.unmount()
+  })
+  container.remove()
+  useAppStore.setState(useAppStore.getInitialState(), true)
+})
 
 describe('CodexRestartChip helpers', () => {
   it('collects all stale PTY ids for tabs in a worktree', () => {
@@ -67,5 +90,39 @@ describe('CodexRestartChip helpers', () => {
     expect(clearCodexRestartNotice).toHaveBeenNthCalledWith(1, 'pty-1')
     expect(clearCodexRestartNotice).toHaveBeenNthCalledWith(2, 'pty-3')
     expect(clearCodexRestartNotice).toHaveBeenCalledTimes(2)
+  })
+
+  it('renders a stale Codex restart notice without an external-store update loop', async () => {
+    useAppStore.setState({
+      tabsByWorktree: {
+        'worktree-1': [
+          {
+            id: 'tab-1',
+            worktreeId: 'worktree-1',
+            title: 'Terminal',
+            customTitle: null,
+            color: null,
+            sortOrder: 0,
+            createdAt: 1,
+            ptyId: null
+          }
+        ]
+      },
+      ptyIdsByTabId: {
+        'tab-1': ['pty-1']
+      },
+      codexRestartNoticeByPtyId: {
+        'pty-1': {
+          previousAccountLabel: 'old@example.com',
+          nextAccountLabel: 'new@example.com'
+        }
+      }
+    })
+
+    await act(async () => {
+      root.render(React.createElement(CodexRestartChip, { worktreeId: 'worktree-1' }))
+    })
+
+    expect(container.textContent).toContain('Codex is still signed in as old@example.com')
   })
 })

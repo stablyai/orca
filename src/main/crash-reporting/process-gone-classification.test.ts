@@ -201,6 +201,16 @@ describe('shouldRecordProcessGoneCrash', () => {
         expectedTeardown: 'none'
       })
     ).toBe(false)
+    expect(
+      shouldRecordProcessGoneCrash({
+        source: 'child',
+        processType: 'Utility',
+        serviceName: 'video_capture.mojom.VideoCaptureService',
+        reason: 'killed',
+        exitCode: 1,
+        expectedTeardown: 'none'
+      })
+    ).toBe(false)
   })
 
   it('still records unknown child process crashes', () => {
@@ -231,6 +241,16 @@ describe('shouldRecordProcessGoneCrash', () => {
         source: 'child',
         processType: 'Utility',
         serviceName: 'network.mojom.NetworkService',
+        reason: 'launch-failed',
+        exitCode: -1,
+        expectedTeardown: 'none'
+      })
+    ).toBe(true)
+    expect(
+      shouldRecordProcessGoneCrash({
+        source: 'child',
+        processType: 'Utility',
+        serviceName: 'video_capture.mojom.VideoCaptureService',
         reason: 'launch-failed',
         exitCode: -1,
         expectedTeardown: 'none'
@@ -272,6 +292,36 @@ describe('shouldRecordProcessGoneCrash', () => {
         expectedTeardown: 'none'
       })
     ).toBe(true)
+  })
+
+  it('records Windows renderer killed exit 1 outside expected lifecycle teardown only', () => {
+    expect(
+      shouldRecordProcessGoneCrash({
+        source: 'renderer',
+        processType: 'renderer',
+        reason: 'killed',
+        exitCode: 1,
+        expectedTeardown: 'none'
+      })
+    ).toBe(true)
+    expect(
+      shouldRecordProcessGoneCrash({
+        source: 'renderer',
+        processType: 'renderer',
+        reason: 'killed',
+        exitCode: 1,
+        expectedTeardown: 'renderer-reload'
+      })
+    ).toBe(false)
+    expect(
+      shouldRecordProcessGoneCrash({
+        source: 'renderer',
+        processType: 'renderer',
+        reason: 'killed',
+        exitCode: 1,
+        expectedTeardown: 'app-shutdown'
+      })
+    ).toBe(false)
   })
 
   it('records non-SIGTERM child-process killed events during renderer-only reloads', () => {

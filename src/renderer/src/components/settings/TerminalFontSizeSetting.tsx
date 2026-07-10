@@ -8,10 +8,12 @@ import { translate } from '@/i18n/i18n'
 
 export function TerminalFontSizeSetting({
   settings,
-  updateSettings
+  updateSettings,
+  forceVisible = false
 }: {
   settings: GlobalSettings
   updateSettings: (updates: Partial<GlobalSettings>) => void
+  forceVisible?: boolean
 }): React.JSX.Element {
   return (
     <SearchableSetting
@@ -21,15 +23,14 @@ export function TerminalFontSizeSetting({
         'Default terminal font size for new panes and live updates.'
       )}
       keywords={['terminal', 'typography', 'text size']}
+      forceVisible={forceVisible}
     >
+      {/* Why: helper text dropped per the copy audit — "Font Size" + px control
+          is self-evident; the search index keeps the longer description. */}
       <SettingsRow
         label={translate(
           'auto.components.settings.TerminalFontSizeSetting.a4a352b1e9',
           'Font Size'
-        )}
-        description={translate(
-          'auto.components.settings.TerminalFontSizeSetting.0f4c92e595',
-          'Default terminal font size for new panes and live updates.'
         )}
         control={
           <div className="flex items-center gap-2">
@@ -50,7 +51,7 @@ export function TerminalFontSizeSetting({
               max={24}
               value={settings.terminalFontSize}
               onChange={(e) => {
-                const value = parseInt(e.target.value, 10)
+                const value = Number.parseInt(e.target.value, 10)
                 if (!Number.isNaN(value) && value >= 10 && value <= 24) {
                   updateSettings({ terminalFontSize: value })
                 }

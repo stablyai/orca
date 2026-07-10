@@ -1,5 +1,3 @@
-/* eslint-disable max-lines -- Why: runtime Linear routing cases stay together
-   so local preload fallback and SSH runtime transport parity are reviewed as one boundary. */
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   linearCreateIssue,
@@ -152,6 +150,24 @@ describe('runtime linear client', () => {
     await expect(
       linearListIssues({ activeRuntimeEnvironmentId: null }, 'assigned', 20)
     ).resolves.toEqual({ items: [{ id: 'legacy-issue' }] })
+  })
+
+  it('rejects oversized local Linear search queries before IPC', async () => {
+    await expect(
+      linearSearchIssues(
+        { activeRuntimeEnvironmentId: null },
+        'secret-token-value'.repeat(1024),
+        10
+      )
+    ).resolves.toEqual([])
+
+    await expect(
+      linearListProjects({ activeRuntimeEnvironmentId: null }, 'x'.repeat(9 * 1024), 10)
+    ).resolves.toEqual({ items: [] })
+
+    expect(linearSearchIssuesLocal).not.toHaveBeenCalled()
+    expect(linearListProjectsLocal).not.toHaveBeenCalled()
+    expect(runtimeEnvironmentCall).not.toHaveBeenCalled()
   })
 
   it('does not throw when an older local preload lacks project listing', async () => {

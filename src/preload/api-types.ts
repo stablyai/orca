@@ -5,12 +5,48 @@ import type {
   HostedReviewCreationEligibility,
   HostedReviewCreationEligibilityArgs,
   HostedReviewForBranchArgs,
-  HostedReviewInfo
+  HostedReviewInfo,
+  HostedReviewProvider
 } from '../shared/hosted-review'
 import type { NativeFileDropPayload } from '../shared/native-file-drop'
+import type { ReadClipboardTextOptions } from '../shared/clipboard-text'
 import type { AppIdentity } from '../shared/app-identity'
+import type {
+  CreateLocalOrcaProfileArgs,
+  CreateLocalOrcaProfileResult,
+  CreateCloudLinkedOrcaProfileArgs,
+  CreateCloudLinkedOrcaProfileResult,
+  ConnectCurrentOrcaProfileResult,
+  FindOrcaProfileProjectsByPathArgs,
+  FindOrcaProfileProjectsByPathResult,
+  OrcaProfileListResult,
+  OrcaProfileAuthStatus,
+  RefreshCurrentOrcaProfileAuthResult,
+  SelectOrcaProfileOrgArgs,
+  SelectOrcaProfileOrgResult,
+  SignOutCurrentOrcaProfileResult,
+  SwitchOrcaProfileArgs,
+  SwitchOrcaProfileResult,
+  TransferOrcaProfileProjectArgs,
+  TransferOrcaProfileProjectResult,
+  OrcaProfileOrgInviteRevokeArgs,
+  OrcaProfileOrgMemberChangeRoleArgs,
+  OrcaProfileOrgMemberInviteArgs,
+  OrcaProfileOrgMemberMutationResult,
+  OrcaProfileOrgMemberRemoveArgs,
+  OrcaProfileOrgMembersListArgs,
+  OrcaProfileOrgMembersListResult
+} from '../shared/orca-profiles'
 import type { TerminalPaneSplitSource } from '../shared/feature-education-telemetry'
 import type { TaskSourceContext } from '../shared/task-source-context'
+import type { LinearIssueAttributeFilter } from '../shared/linear-issue-attribute-filter'
+import type { ProjectExecutionRuntimeResolution } from '../shared/project-execution-runtime'
+import type { StartupCommandDelivery } from '../shared/codex-startup-delivery'
+import type { SleepingAgentLaunchConfig } from '../shared/agent-session-resume'
+import type {
+  LocalhostWorktreeLabelResult,
+  LocalhostWorktreeLabelRoute
+} from '../shared/localhost-worktree-labels'
 import type {
   FolderWorkspacePathStatus,
   FolderWorkspacePathStatusRequest
@@ -43,6 +79,7 @@ import type {
   GitForkSyncExpectedUpstream,
   GitForkSyncResult,
   GitPushTarget,
+  GitStagingArea,
   GitStatusResult,
   GitUpstreamStatus,
   GitHubAssignableUser,
@@ -84,6 +121,7 @@ import type {
   JiraIssue,
   JiraIssueFilter,
   JiraIssueType,
+  JiraProjectStatusOrder,
   JiraIssueUpdate,
   JiraPriority,
   JiraProject,
@@ -110,11 +148,13 @@ import type {
   FloatingTerminalCwdRequest,
   GitHubIssueUpdate,
   GitHubPRRefreshCandidate,
+  GitHubPRRefreshEnqueueResult,
   GitHubPRRefreshEvent,
   GitHubPRRefreshReason,
   GetRateLimitResult,
   NotificationDispatchRequest,
   NotificationDispatchResult,
+  NotificationDeliveryProbeResult,
   NotificationDismissResult,
   NotificationPermissionStatusResult,
   NotificationSoundResult,
@@ -128,6 +168,7 @@ import type {
   PRInfo,
   PRRefreshOutcome,
   Project,
+  ProjectUpdateArgs,
   Repo,
   ProjectGroup,
   ProjectHostSetup,
@@ -150,6 +191,7 @@ import type {
   StatsSummary,
   MemorySnapshot,
   TuiAgent,
+  UpdateCheckOptions,
   UpdateStatus,
   Worktree,
   WorktreeBaseStatusEvent,
@@ -183,6 +225,11 @@ import type {
 import type { SetupScriptImportCandidate } from '../shared/setup-script-imports'
 import type { GitHistoryOptions, GitHistoryResult } from '../shared/git-history'
 import type { PublicKnownRuntimeEnvironment } from '../shared/runtime-environments'
+import type {
+  EphemeralVmRecipeDoctorResult,
+  EphemeralVmRecipeResultWarning
+} from '../shared/ephemeral-vm-recipes'
+import type { EphemeralVmRuntimeRecord } from '../shared/ephemeral-vm-runtimes'
 import type { RuntimeAccessGrant } from '../shared/runtime-access-grants'
 import type { RuntimeRpcResponse } from '../shared/runtime-rpc-envelope'
 import type { ExecutionHostId } from '../shared/execution-host'
@@ -251,7 +298,9 @@ import type {
   RuntimeStatus,
   RuntimeSyncWindowGraphResult,
   RuntimeSyncWindowGraph,
-  RuntimeTerminalDriverState
+  RuntimeTerminalCreateRequestPayload,
+  RuntimeTerminalDriverState,
+  RuntimeTerminalPresentation
 } from '../shared/runtime-types'
 import type {
   CommitMessageAgentCapability,
@@ -302,7 +351,12 @@ import type {
   ClaudeUsageSnapshot,
   ClaudeUsageSummary
 } from '../shared/claude-usage-types'
-import type { RateLimitRuntimeTarget, RateLimitState } from '../shared/rate-limit-types'
+import type {
+  CodexRateLimitResetResult,
+  GrokAccountStatus,
+  RateLimitRuntimeTarget,
+  RateLimitState
+} from '../shared/rate-limit-types'
 import type {
   SpeechErrorEvent,
   SpeechLifecycleEvent,
@@ -350,7 +404,13 @@ import type {
   OpenCodeUsageSnapshot,
   OpenCodeUsageSummary
 } from '../shared/opencode-usage-types'
-import type { AiVaultListArgs, AiVaultListResult } from '../shared/ai-vault-types'
+import type {
+  AiVaultListArgs,
+  AiVaultListResult,
+  AiVaultSubagentListArgs,
+  AiVaultSubagentListResult
+} from '../shared/ai-vault-types'
+import type { AgentType, NativeChatMessage } from '../shared/native-chat-types'
 import type { TelemetryConsentState } from '../shared/telemetry-consent-types'
 import type { AgentKind, LaunchSource, RequestKind } from '../shared/telemetry-events'
 import type { AppStarSource } from '../shared/gh-star-source'
@@ -380,6 +440,7 @@ import type {
   WorkspaceCleanupLocalProcessArgs,
   WorkspaceCleanupLocalProcessResult,
   WorkspaceCleanupScanArgs,
+  WorkspaceCleanupScanProgress,
   WorkspaceCleanupScanResult
 } from '../shared/workspace-cleanup'
 import type { KeybindingActionId, KeybindingFileSnapshot } from '../shared/keybindings'
@@ -425,9 +486,6 @@ export type BrowserApi = {
   onOpenLinkInOrcaTab: (
     callback: (event: { browserPageId: string; url: string }) => void
   ) => () => void
-  acceptDownload: (args: {
-    downloadId: string
-  }) => Promise<{ ok: true } | { ok: false; reason: string }>
   cancelDownload: (args: { downloadId: string }) => Promise<boolean>
   setGrabMode: (args: BrowserSetGrabModeArgs) => Promise<BrowserSetGrabModeResult>
   awaitGrabSelection: (args: BrowserAwaitGrabSelectionArgs) => Promise<BrowserGrabResult>
@@ -475,6 +533,24 @@ export type EmulatorApi = {
   ) => () => void
   onFrameStreamError: (
     callback: (data: { streamId: string; message: string }) => void
+  ) => () => void
+  startVideoStream: (args: { deviceId: string; streamId: string }) => Promise<{ streamId: string }>
+  stopVideoStream: (args: { streamId: string }) => Promise<void>
+  onVideoStreamMeta: (
+    callback: (data: {
+      streamId: string
+      deviceId: string
+      meta: { codecId: string; width: number; height: number }
+    }) => void
+  ) => () => void
+  onVideoStreamFrame: (
+    callback: (data: {
+      streamId: string
+      deviceId: string
+      config: boolean
+      keyFrame: boolean
+      bytes: ArrayBuffer
+    }) => void
   ) => () => void
 }
 
@@ -528,18 +604,24 @@ export type RefreshAgentsResult = {
   pathFailureReason: ShellHydrationFailureReason
 }
 
+export type PreflightRuntimeContext = {
+  wslDistro?: string | null
+  wslDefault?: boolean
+  projectRuntime?: ProjectExecutionRuntimeResolution
+}
+
 export type PreflightApi = {
-  check: (args?: {
-    force?: boolean
-    wslDistro?: string | null
-    wslDefault?: boolean
-  }) => Promise<PreflightStatus>
-  detectAgents: (args?: { wslDistro?: string | null; wslDefault?: boolean }) => Promise<string[]>
-  refreshAgents: (args?: {
-    wslDistro?: string | null
-    wslDefault?: boolean
-  }) => Promise<RefreshAgentsResult>
+  check: (args?: PreflightRuntimeContext & { force?: boolean }) => Promise<PreflightStatus>
+  detectAgents: (args?: PreflightRuntimeContext) => Promise<string[]>
+  refreshAgents: (args?: PreflightRuntimeContext) => Promise<RefreshAgentsResult>
   detectRemoteAgents: (args: { connectionId: string }) => Promise<string[]>
+  detectRemoteWindowsTerminalCapabilities: (args: { connectionId: string }) => Promise<{
+    wslAvailable: boolean
+    wslDistros: string[]
+    pwshAvailable: boolean
+    gitBashAvailable: boolean
+    hostPlatform: NodeJS.Platform | null
+  }>
 }
 
 // Why: renderer-facing mirror of the daemon's `SessionInfo` + protocolVersion
@@ -562,7 +644,9 @@ export type PtyManagementSession = {
 }
 
 export type PtyManagementApi = {
-  listSessions: () => Promise<{ sessions: PtyManagementSession[] }>
+  // `degraded` is true when the daemon is alive but cannot spawn fresh PTYs, so
+  // new terminals run on the local provider without daemon persistence.
+  listSessions: () => Promise<{ sessions: PtyManagementSession[]; degraded: boolean }>
   killAll: () => Promise<{ killedCount: number; remainingCount: number }>
   killOne: (args: { sessionId: string }) => Promise<{ success: boolean }>
   restart: () => Promise<{ success: boolean }>
@@ -588,9 +672,7 @@ export type StatsApi = {
 // renderer's view of the IPC surface.
 export type DiagnosticsStatusPayload = {
   readonly localFileEnabled: boolean
-  readonly otlpEnabled: boolean
   readonly bundleEnabled: boolean
-  readonly otlpStatus: string
   readonly traceFilePath: string
   readonly traceFamilySize: number
   readonly disabledReason?:
@@ -604,9 +686,13 @@ export type DiagnosticsBundlePayload = {
   readonly bytes: number
   readonly spanCount: number
 }
-export type DiagnosticsUploadPayload = {
-  readonly ticketId: string
-}
+export type DiagnosticsUploadPayload =
+  | {
+      readonly ticketId: string
+    }
+  | {
+      readonly canceled: true
+    }
 
 export type MemoryApi = {
   getSnapshot: () => Promise<MemorySnapshot>
@@ -701,6 +787,50 @@ export type OpenCodeUsageApi = {
 
 export type AiVaultApi = {
   listSessions: (args?: AiVaultListArgs) => Promise<AiVaultListResult>
+  /** Lists the Task subagent transcripts of one session, on demand. */
+  listSubagentSessions: (args: AiVaultSubagentListArgs) => Promise<AiVaultSubagentListResult>
+  /** Fires when any app window regains OS focus; returns an unsubscribe. */
+  onWindowFocused: (callback: () => void) => () => void
+}
+
+export type NativeChatReadSessionResult = { messages: NativeChatMessage[] } | { error: string }
+
+/** Messages appended to a live-tailed transcript since the previous emit. */
+export type NativeChatAppendedMessages = NativeChatMessage[]
+
+/** Wire payload for the `nativeChat:appended` push channel. */
+export type NativeChatAppendedPayload = {
+  subscriptionId: string
+  messages: NativeChatAppendedMessages
+}
+
+export type NativeChatSubscribeArgs = {
+  /** Unique per-caller id, echoed on every append so multiple live panes in
+   *  one renderer don't cross-talk. */
+  subscriptionId: string
+  agent: AgentType
+  sessionId: string
+  /** Authoritative transcript path from the agent hook (providerSession). */
+  transcriptPath?: string
+}
+
+export type NativeChatApi = {
+  /** Read the on-disk transcript for an agent + session id, windowed to the most
+   *  recent `limit` turns (defaults to the desktop window). The renderer raises
+   *  `limit` to page in older history as it scrolls to the top. `transcriptPath`
+   *  is the hook-reported authoritative file path, preferred over the id glob. */
+  readSession: (
+    agent: AgentType,
+    sessionId: string,
+    limit?: number,
+    transcriptPath?: string
+  ) => Promise<NativeChatReadSessionResult>
+  /** Live-tail a transcript: `onAppended` fires with only newly-appended
+   *  messages. Returns an unsubscribe fn that closes the main-process watcher. */
+  subscribe: (
+    args: NativeChatSubscribeArgs,
+    onAppended: (messages: NativeChatAppendedMessages) => void
+  ) => () => void
 }
 
 export type AppApi = {
@@ -722,10 +852,13 @@ export type AppApi = {
   /** Resolves when the daemon PTY provider and hook receiver have either
    *  started or failed open for the first BrowserWindow. */
   awaitFirstWindowStartupServices: () => Promise<void>
-  /** Returns the macOS `AppleCurrentKeyboardLayoutInputSourceID` when
-   *  available (e.g. `com.apple.keylayout.PolishPro`). Used by the
-   *  keyboard-layout probe to distinguish layouts whose base layer matches
-   *  US QWERTY but whose Option layer composes characters (issue #1205).
+  /** Emits a startup benchmark marker when ORCA_STARTUP_DIAGNOSTICS is enabled. */
+  startupDiagnostic: (event: string, details?: Record<string, unknown>) => Promise<void>
+  /** Returns the macOS active input mode, or layout ID when no IME mode is
+   *  selected (e.g. `com.apple.keylayout.PolishPro`). Used by the
+   *  keyboard-layout probe to distinguish CJK IMEs and layouts whose base
+   *  layer matches US QWERTY but whose Option layer composes characters
+   *  (issue #1205).
    *  Returns null on non-Darwin platforms or when the defaults read fails. */
   getKeyboardInputSourceId: () => Promise<string | null>
   /** Updates the macOS Dock unread badge. No-op on Windows/Linux. */
@@ -745,10 +878,45 @@ export type AppApi = {
 
 export type PreloadApi = {
   app: AppApi
+  orcaProfiles: {
+    list: () => Promise<OrcaProfileListResult>
+    authStatus: () => Promise<OrcaProfileAuthStatus>
+    createLocal: (args?: CreateLocalOrcaProfileArgs) => Promise<CreateLocalOrcaProfileResult>
+    createCloudLinked: (
+      args?: CreateCloudLinkedOrcaProfileArgs
+    ) => Promise<CreateCloudLinkedOrcaProfileResult>
+    switchProfile: (args: SwitchOrcaProfileArgs) => Promise<SwitchOrcaProfileResult>
+    transferProject: (
+      args: TransferOrcaProfileProjectArgs
+    ) => Promise<TransferOrcaProfileProjectResult>
+    findProjectProfiles: (
+      args: FindOrcaProfileProjectsByPathArgs
+    ) => Promise<FindOrcaProfileProjectsByPathResult>
+    connectCurrent: () => Promise<ConnectCurrentOrcaProfileResult>
+    refreshAuth: () => Promise<RefreshCurrentOrcaProfileAuthResult>
+    signOutCurrent: () => Promise<SignOutCurrentOrcaProfileResult>
+    selectOrg: (args: SelectOrcaProfileOrgArgs) => Promise<SelectOrcaProfileOrgResult>
+    orgMembersList: (
+      args: OrcaProfileOrgMembersListArgs
+    ) => Promise<OrcaProfileOrgMembersListResult>
+    orgMemberInvite: (
+      args: OrcaProfileOrgMemberInviteArgs
+    ) => Promise<OrcaProfileOrgMemberMutationResult>
+    orgInviteRevoke: (
+      args: OrcaProfileOrgInviteRevokeArgs
+    ) => Promise<OrcaProfileOrgMemberMutationResult>
+    orgMemberChangeRole: (
+      args: OrcaProfileOrgMemberChangeRoleArgs
+    ) => Promise<OrcaProfileOrgMemberMutationResult>
+    orgMemberRemove: (
+      args: OrcaProfileOrgMemberRemoveArgs
+    ) => Promise<OrcaProfileOrgMemberMutationResult>
+  }
   platform: {
     get: () => {
       platform: NodeJS.Platform
       osRelease: string
+      displayServer: 'wayland' | 'x11' | null
     }
   }
   e2e: {
@@ -762,6 +930,9 @@ export type PreloadApi = {
       kind?: 'git' | 'folder'
     }) => Promise<{ repo: Repo } | { error: string }>
     remove: (args: { repoId: string }) => Promise<void>
+    // Forget a project on one execution host only, leaving the same repo id on
+    // other hosts (local or a re-added SSH target) intact.
+    removeForHost: (args: { repoId: string; hostId: string }) => Promise<void>
     reorder: (args: { orderedIds: string[] }) => Promise<{ status: 'applied' | 'rejected' }>
     update: (args: {
       repoId: string
@@ -779,11 +950,16 @@ export type PreloadApi = {
           | 'issueSourcePreference'
           | 'externalWorktreeVisibility'
           | 'externalWorktreeVisibilityPromptDismissedAt'
+          | 'externalWorktreeInboxBaselinePaths'
+          | 'importedExternalWorktreePaths'
           | 'projectGroupId'
           | 'projectGroupOrder'
           | 'forkSyncMode'
         >
-      > & { sourceControlAi?: Repo['sourceControlAi'] | null }
+      > & {
+        sourceControlAi?: Repo['sourceControlAi'] | null
+        externalWorktreeDiscoverySuppressedAt?: Repo['externalWorktreeDiscoverySuppressedAt'] | null
+      }
     }) => Promise<Repo>
     pickFolder: () => Promise<string | null>
     pickFolders: () => Promise<string[]>
@@ -825,6 +1001,7 @@ export type PreloadApi = {
   }
   projects: {
     list: () => Promise<Project[]>
+    update: (args: ProjectUpdateArgs) => Promise<Project | null>
     listHostSetups: () => Promise<ProjectHostSetup[]>
     createHostSetup: (args: ProjectHostSetupCreateArgs) => Promise<ProjectHostSetupCreateResult>
     setupExistingFolder: (
@@ -935,6 +1112,7 @@ export type PreloadApi = {
       repoId: string
       prNumber: number
       headRefName?: string
+      baseRefName?: string
       isCrossRepository?: boolean
     }) => Promise<GitHubPrStartPoint | { error: string }>
     /** GitLab parallel of resolvePrBase. For same-project MRs returns
@@ -944,13 +1122,20 @@ export type PreloadApi = {
       repoId: string
       mrIid: number
       sourceBranch?: string
+      targetBranch?: string
       isCrossRepository?: boolean
-    }) => Promise<{ baseBranch: string; pushTarget?: GitPushTarget } | { error: string }>
+    }) => Promise<
+      | { baseBranch: string; compareBaseRef?: string; pushTarget?: GitPushTarget }
+      | { error: string }
+    >
     remove: (args: {
       worktreeId: string
       force?: boolean
       skipArchive?: boolean
     }) => Promise<RemoveWorktreeResult>
+    // Forget a workspace from Orca only — no remote Git/filesystem work. Used
+    // for workspaces pinned to a removed/disconnected SSH host.
+    forgetLocal: (args: { worktreeId: string }) => Promise<RemoveWorktreeResult>
     forceDeletePreservedBranch: (args: {
       worktreeId: string
       branchName: string
@@ -974,7 +1159,10 @@ export type PreloadApi = {
     ) => () => void
   }
   workspaceCleanup: {
-    scan: (args?: WorkspaceCleanupScanArgs) => Promise<WorkspaceCleanupScanResult>
+    scan: (
+      args?: WorkspaceCleanupScanArgs,
+      onProgress?: (progress: WorkspaceCleanupScanProgress) => void
+    ) => Promise<WorkspaceCleanupScanResult>
     dismiss: (args: WorkspaceCleanupDismissArgs) => Promise<void>
     clearDismissals: () => Promise<void>
     hasKillableLocalProcesses: (
@@ -998,8 +1186,13 @@ export type PreloadApi = {
       cols: number
       rows: number
       cwd?: string
+      cwdFallback?: 'worktree'
       env?: Record<string, string>
       command?: string
+      launchConfig?: SleepingAgentLaunchConfig
+      launchToken?: string
+      launchAgent?: TuiAgent
+      startupCommandDelivery?: StartupCommandDelivery
       connectionId?: string | null
       worktreeId?: string
       sessionId?: string
@@ -1007,6 +1200,8 @@ export type PreloadApi = {
       // Preserved from the deleted index.d.ts PtyApi duplicate during the
       // single-source-of-truth collapse (see docs/preload-typecheck-hole.md §1).
       shellOverride?: string
+      projectRuntime?: ProjectExecutionRuntimeResolution
+      terminalColorQueryReplies?: { foreground?: string; background?: string }
       // Why: closes the SIGKILL race documented in INVESTIGATION.md — main
       // sync-flushes the (worktreeId, tabId, leafId → ptyId) binding before
       // pty:spawn returns. Only the renderer's daemon-host path threads these.
@@ -1019,6 +1214,7 @@ export type PreloadApi = {
       telemetry?: { agent_kind: AgentKind; launch_source: LaunchSource; request_kind: RequestKind }
     }) => Promise<{
       id: string
+      launchConfig?: SleepingAgentLaunchConfig
       snapshot?: string
       snapshotCols?: number
       snapshotRows?: number
@@ -1027,20 +1223,28 @@ export type PreloadApi = {
       replay?: string
       sessionExpired?: boolean
       coldRestore?: { scrollback: string; cwd: string }
+      startupCwdFallback?: { kind: 'worktree'; cwd: string }
     }>
     write: (id: string, data: string) => void
     writeAccepted: (id: string, data: string) => Promise<boolean>
     resize: (id: string, cols: number, rows: number) => void
     reportGeometry: (id: string, cols: number, rows: number) => void
     signal: (id: string, signal: string) => void
+    clearBuffer: (id: string) => void
     kill: (id: string, opts?: { keepHistory?: boolean }) => Promise<void>
     ackColdRestore: (id: string) => void
     ackData: (id: string, charCount: number) => void
+    /** One-shot signal that this page's pty:data dispatcher is registered, so
+     *  main can release sends held during the load/reload boot window. */
+    rendererDispatcherReady: () => void
     setActiveRendererPty: (id: string, active: boolean) => void
+    setRendererPtyVisible: (id: string, visible: boolean) => void
     hasChildProcesses: (id: string) => Promise<boolean>
     getForegroundProcess: (id: string) => Promise<string | null>
     getCwd: (id: string) => Promise<string>
+    getSize: (id: string) => Promise<{ cols: number; rows: number } | null>
     listSessions: () => Promise<{ id: string; cwd: string; title: string }[]>
+    hasPty: (id: string) => Promise<boolean | null>
     getMainBufferSnapshot: (
       id: string,
       opts?: { scrollbackRows?: number }
@@ -1051,6 +1255,8 @@ export type PreloadApi = {
       cwd?: string | null
       seq?: number
       source?: 'headless' | 'renderer'
+      alternateScreen?: boolean
+      pendingEscapeTailAnsi?: string
     } | null>
     getRendererDeliveryDebugSnapshot: () => Promise<{
       pendingPtyCount: number
@@ -1066,10 +1272,21 @@ export type PreloadApi = {
       peakRendererInFlightChars: number
       peakMaxRendererInFlightCharsByPty: number
       ackGatedFlushSkipCount: number
+      rendererLifecycleResetCount: number
+      lastLifecycleResetClearedChars: number
+      rendererPtyDispatcherReady: boolean
+      rendererDispatcherReadyForcedCount: number
     }>
     resetRendererDeliveryDebug: () => Promise<void>
     onData: (
-      callback: (data: { id: string; data: string; seq?: number; rawLength?: number }) => void
+      callback: (data: {
+        id: string
+        data: string
+        seq?: number
+        rawLength?: number
+        background?: boolean
+        droppedBacklog?: boolean
+      }) => void
     ) => () => void
     onReplay: (callback: (data: { id: string; data: string }) => void) => () => void
     onExit: (callback: (data: { id: string; code: number }) => void) => () => void
@@ -1129,13 +1346,15 @@ export type PreloadApi = {
       branch: string
       linkedPRNumber?: number | null
       fallbackPRNumber?: number | null
+      acceptMergedFallbackPR?: boolean
+      currentHeadOid?: string | null
     }) => Promise<PRInfo | null>
     refreshPRNow: (args: { candidate: GitHubPRRefreshCandidate }) => Promise<PRRefreshOutcome>
     enqueuePRRefresh: (args: {
       candidate: GitHubPRRefreshCandidate
       reason: GitHubPRRefreshReason
       priority?: number
-    }) => Promise<boolean>
+    }) => Promise<GitHubPRRefreshEnqueueResult | false>
     reportVisiblePRRefreshCandidates: (args: {
       candidates: GitHubPRRefreshCandidate[]
       generation: number
@@ -1168,6 +1387,12 @@ export type PreloadApi = {
         type?: 'issue' | 'pr'
       }
     ) => Promise<GitHubWorkItemDetails | null>
+    notifyWorkItemMutated: (args: {
+      repoPath: string
+      repoId?: string
+      type: 'issue' | 'pr'
+      number: number
+    }) => Promise<boolean>
     prFileContents: (
       args: GitHubRepoSelectorArgs & {
         prNumber: number
@@ -1427,6 +1652,7 @@ export type PreloadApi = {
         state?: MRListState
         page?: number
         perPage?: number
+        query?: string
       }
     ) => Promise<ListMergeRequestsResult>
     /** Combined MR + issue list filtered by state. Issues are skipped
@@ -1436,6 +1662,7 @@ export type PreloadApi = {
         state?: MRListState
         page?: number
         perPage?: number
+        query?: string
       }
     ) => Promise<ListMergeRequestsResult>
     issue: (args: GitLabRepoSelectorArgs & { number: number }) => Promise<GitLabIssueInfo | null>
@@ -1566,6 +1793,7 @@ export type PreloadApi = {
       filter?: 'assigned' | 'created' | 'all' | 'completed'
       limit?: number
       workspaceId?: LinearWorkspaceSelection
+      attributeFilter?: LinearIssueAttributeFilter
     }) => Promise<LinearCollectionResult<LinearIssue>>
     createIssue: (args: {
       teamId: string
@@ -1704,13 +1932,26 @@ export type PreloadApi = {
       siteId?: string
     }) => Promise<JiraUser[]>
     listTransitions: (args: { key: string; siteId?: string }) => Promise<JiraTransition[]>
+    getProjectStatusOrder: (args: {
+      projectKey: string
+      siteId?: string
+    }) => Promise<JiraProjectStatusOrder>
   }
   starNag: {
-    onShow: (callback: (payload?: { mode?: 'gh' | 'web' }) => void) => () => void
+    onShow: (
+      callback: (payload?: { mode?: 'gh' | 'web'; surface?: 'card' | 'toast' }) => void
+    ) => () => void
+    onHide: (callback: () => void) => () => void
     dismiss: () => Promise<void>
+    later: () => Promise<void>
     complete: () => Promise<void>
     disable: () => Promise<void>
+    openWeb: () => Promise<void>
+    starOrca: () => Promise<boolean>
     forceShow: () => Promise<void>
+    agentValueMoment: () => Promise<{ status: 'ready'; mode: 'gh' | 'web' } | { status: 'skipped' }>
+    showAgentValueMoment: () => Promise<void>
+    onboardingCompleted: () => Promise<void>
   }
   /** Fire-and-forget track. Loose typing at the IPC boundary on purpose —
    *  the main-side validator is the single enforcement point. Renderer call
@@ -1720,15 +1961,13 @@ export type PreloadApi = {
   /** Flip the persisted opt-in preference. Subject to a per-session
    *  consent-mutation rate limit on the main side (≤5/session). */
   telemetrySetOptIn: (optedIn: boolean) => Promise<void>
-  /** Diagnostic-bundle / trace-folder controls. Surface for
-   *  telemetry-error-tracking.md §User controls. The renderer triggers
-   *  flows; main does the filesystem / network work and returns
-   *  serializable metadata. Main retains collected upload payloads so the
-   *  renderer can confirm without reading or substituting arbitrary bytes. */
+  /** Diagnostic file controls. Surface for telemetry-error-tracking.md
+   *  §User controls. The renderer triggers flows; main does the filesystem /
+   *  network work and returns serializable metadata. Main retains collected
+   *  upload payloads so the renderer can confirm without reading or
+   *  substituting arbitrary bytes. */
   diagnostics: {
     getStatus: () => Promise<DiagnosticsStatusPayload>
-    openTraceFolder: () => Promise<void>
-    clearTraces: () => Promise<void>
     collectBundle: (lookbackMinutes?: number) => Promise<DiagnosticsBundlePayload>
     openBundlePreview: (bundleSubmissionId: string) => Promise<void>
     discardBundlePreview: (bundleSubmissionId: string) => Promise<void>
@@ -1758,6 +1997,9 @@ export type PreloadApi = {
      *  menu toggles) so the renderer can stay in sync with main's persisted
      *  state without round-tripping through settings:get. */
     onChanged: (callback: (updates: Partial<GlobalSettings>) => void) => () => void
+  }
+  localhostWorktreeLabels: {
+    register: (args: LocalhostWorktreeLabelRoute) => Promise<LocalhostWorktreeLabelResult>
   }
   keybindings: {
     get: () => Promise<KeybindingFileSnapshot>
@@ -1791,6 +2033,7 @@ export type PreloadApi = {
       runtime?: 'host' | 'wsl'
       wslDistro?: string | null
     }) => Promise<ClaudeRateLimitAccountsState>
+    cancelPendingLogin: () => Promise<boolean>
     reauthenticate: (args: { accountId: string }) => Promise<ClaudeRateLimitAccountsState>
     remove: (args: { accountId: string }) => Promise<ClaudeRateLimitAccountsState>
     select: (args: {
@@ -1820,6 +2063,7 @@ export type PreloadApi = {
     grokStatus: () => Promise<AgentHookInstallStatus>
     copilotStatus: () => Promise<AgentHookInstallStatus>
     hermesStatus: () => Promise<AgentHookInstallStatus>
+    devinStatus: () => Promise<AgentHookInstallStatus>
   }
   agentTrust: {
     markTrusted: (args: {
@@ -1834,7 +2078,7 @@ export type PreloadApi = {
     dismiss: (ids: string[]) => Promise<NotificationDismissResult>
     openSystemSettings: () => Promise<void>
     getPermissionStatus: () => Promise<NotificationPermissionStatusResult>
-    requestPermission: () => Promise<NotificationPermissionStatusResult>
+    probeDelivery: (args?: { force?: boolean }) => Promise<NotificationDeliveryProbeResult>
     playSound: (options?: { force?: boolean; volume?: number }) => Promise<NotificationSoundResult>
   }
   onboarding: {
@@ -1909,6 +2153,70 @@ export type PreloadApi = {
     }>
     writeIssueCommand: (args: { repoId: string; content: string }) => Promise<void>
   }
+  ephemeralVm: {
+    listRecipes: (args: { repoId: string }) => Promise<{
+      status: 'ok' | 'error'
+      repoPath: string | null
+      recipes: OrcaHooks['environmentRecipes']
+      diagnostics: NonNullable<OrcaHooks['environmentRecipeDiagnostics']>
+      message?: string
+    }>
+    listRecipeCatalog: () => Promise<
+      {
+        repoId: string
+        repoName: string
+        repoPath: string
+        recipes: NonNullable<OrcaHooks['environmentRecipes']>
+        diagnostics: NonNullable<OrcaHooks['environmentRecipeDiagnostics']>
+      }[]
+    >
+    doctor: (args: { repoId: string; recipeId: string }) => Promise<EphemeralVmRecipeDoctorResult>
+    provision: (args: {
+      repoId: string
+      recipeId: string
+      workspaceName?: string
+      projectId?: string
+      workspaceId?: string
+      provisionId?: string
+    }) => Promise<
+      | {
+          ok: true
+          connectionType: 'orca-server'
+          runtime: EphemeralVmRuntimeRecord
+          environment: PublicKnownRuntimeEnvironment
+          stderr: string
+          warnings: EphemeralVmRecipeResultWarning[]
+        }
+      | {
+          ok: true
+          connectionType: 'ssh'
+          runtime: EphemeralVmRuntimeRecord
+          sshTargetId: string
+          stderr: string
+          warnings: EphemeralVmRecipeResultWarning[]
+        }
+      | { ok: false; error: string; stderr: string; stdout: string }
+    >
+    cancelProvision: (args: { provisionId: string }) => Promise<{ cancelled: boolean }>
+    onProvisionEvent: (
+      callback: (event: { provisionId: string; stream: 'stdout' | 'stderr'; chunk: string }) => void
+    ) => () => void
+    listRuntimes: () => Promise<EphemeralVmRuntimeRecord[]>
+    attachWorkspace: (args: {
+      runtimeId: string
+      workspaceId: string
+    }) => Promise<EphemeralVmRuntimeRecord>
+    suspendWorkspace: (args: { workspaceId: string }) => Promise<EphemeralVmRuntimeRecord | null>
+    resumeWorkspace: (args: { workspaceId: string }) => Promise<EphemeralVmRuntimeRecord | null>
+    cleanup: (args: { runtimeId: string }) => Promise<EphemeralVmRuntimeRecord>
+    getCleanupCommand: (args: { runtimeId: string }) => Promise<{
+      runtimeId: string
+      command: string | null
+      payloadJson: string
+      cleanupDisabled: boolean
+      message?: string
+    }>
+  }
   cache: {
     getGitHub: () => Promise<{
       pr: Record<string, { data: PRInfo | null; fetchedAt: number }>
@@ -1946,7 +2254,7 @@ export type PreloadApi = {
   updater: {
     getVersion: () => Promise<string>
     getStatus: () => Promise<UpdateStatus>
-    check: (options?: { includePrerelease?: boolean }) => Promise<void>
+    check: (options?: UpdateCheckOptions) => Promise<void>
     download: () => Promise<void>
     quitAndInstall: () => Promise<void>
     dismissNudge: () => Promise<void>
@@ -1967,6 +2275,7 @@ export type PreloadApi = {
   codexUsage: CodexUsageApi
   openCodeUsage: OpenCodeUsageApi
   aiVault: AiVaultApi
+  nativeChat: NativeChatApi
   fs: {
     readDir: (args: { dirPath: string; connectionId?: string }) => Promise<DirEntry[]>
     readFile: (args: {
@@ -1977,6 +2286,24 @@ export type PreloadApi = {
       filePath: string
       connectionId: string
     }) => Promise<{ canceled: true } | { canceled: false; destinationPath: string }>
+    saveDownloadedFile: (args: {
+      suggestedName: string
+      content: string
+      encoding: 'utf8' | 'base64'
+    }) => Promise<{ canceled: true } | { canceled: false; destinationPath: string }>
+    startDownloadedFile: (args: {
+      suggestedName: string
+    }) => Promise<
+      { canceled: true } | { canceled: false; transferId: string; destinationPath: string }
+    >
+    appendDownloadedFileChunk: (args: {
+      transferId: string
+      contentBase64: string
+    }) => Promise<{ ok: true }>
+    finishDownloadedFile: (args: {
+      transferId: string
+    }) => Promise<{ canceled: false; destinationPath: string }>
+    cancelDownloadedFile: (args: { transferId: string }) => Promise<{ ok: true }>
     listMarkdownDocuments: (args: {
       rootPath: string
       connectionId?: string
@@ -2005,7 +2332,9 @@ export type PreloadApi = {
       rootPath: string
       connectionId?: string
       excludePaths?: string[]
+      requestToken?: string
     }) => Promise<string[]>
+    cancelListFiles: (args: { requestToken: string }) => Promise<void>
     search: (args: SearchOptions & { connectionId?: string }) => Promise<SearchResult>
     importExternalPaths: (args: {
       sourcePaths: string[]
@@ -2078,6 +2407,13 @@ export type PreloadApi = {
       worktreePath: string
       connectionId?: string
       includeIgnored?: boolean
+      bypassEffectiveUpstreamNegativeCache?: boolean
+    }) => Promise<GitStatusResult>
+    submoduleStatus: (args: {
+      worktreePath: string
+      submodulePath: string
+      connectionId?: string
+      area?: GitStagingArea
     }) => Promise<GitStatusResult>
     checkIgnored: (args: {
       worktreePath: string
@@ -2209,6 +2545,8 @@ export type PreloadApi = {
       title: string
       body: string
       draft: boolean
+      provider?: HostedReviewProvider
+      useTemplate?: boolean
       connectionId?: string
       sourceControlAiResolvedParams?: ResolvedSourceControlAiGenerationParams
       sourceControlAi?: SourceControlAiSettings
@@ -2285,8 +2623,10 @@ export type PreloadApi = {
       callback: (data: { actionId: KeybindingActionId }) => void
     ) => () => void
     onOpenQuickOpen: (callback: () => void) => () => void
+    onToggleQuickCommandsMenu: (callback: () => void) => () => void
     onOpenNewWorkspace: (callback: () => void) => () => void
     onDeleteCurrentWorkspace: (callback: () => void) => () => void
+    onOpenWorkspaceBoard: (callback: () => void) => () => void
     onOpenTasks: (callback: () => void) => () => void
     onJumpToWorktreeIndex: (callback: (index: number) => void) => () => void
     onJumpToTabIndex: (callback: (index: number) => void) => () => void
@@ -2299,13 +2639,19 @@ export type PreloadApi = {
         requestId: string
         url: string
         worktreeId?: string
-        sessionProfileId?: string
+        sessionProfileId?: string | null
+        sessionPartition?: string
         activate?: boolean
       }) => void
     ) => () => void
     replyTabCreate: (reply: { requestId: string; browserPageId?: string; error?: string }) => void
     onRequestTabSetProfile: (
-      callback: (data: { requestId: string; browserPageId: string; profileId: string }) => void
+      callback: (data: {
+        requestId: string
+        browserPageId: string
+        profileId: string
+        sessionPartition?: string
+      }) => void
     ) => () => void
     replyTabSetProfile: (reply: { requestId: string; error?: string }) => void
     onRequestTabClose: (
@@ -2316,6 +2662,7 @@ export type PreloadApi = {
     onFocusBrowserAddressBar: (callback: () => void) => () => void
     onFindInBrowserPage: (callback: () => void) => () => void
     onReloadBrowserPage: (callback: () => void) => () => void
+    onBrowserHistoryNavigate: (callback: (direction: 'back' | 'forward') => void) => () => void
     onZoomBrowserPage: (callback: (direction: 'in' | 'out' | 'reset') => void) => () => void
     onHardReloadBrowserPage: (callback: () => void) => () => void
     onCloseActiveTab: (callback: () => void) => () => void
@@ -2328,6 +2675,8 @@ export type PreloadApi = {
     onToggleStatusBar: (callback: () => void) => () => void
     onDictationKeyDown: (callback: () => void) => () => void
     onExportPdfRequested: (callback: () => void) => () => void
+    onAppMenuPaste: (callback: () => void) => () => void
+    onEditableContextPaste: (callback: (data: { plainTextOnly: boolean }) => void) => () => void
     onActivateWorktree: (
       callback: (data: {
         repoId: string
@@ -2342,9 +2691,15 @@ export type PreloadApi = {
         requestId?: string
         worktreeId: string
         command?: string
+        cwd?: string
+        env?: Record<string, string>
+        launchConfig?: SleepingAgentLaunchConfig
+        launchToken?: string
+        launchAgent?: TuiAgent
         title?: string
         ptyId?: string
         activate?: boolean
+        presentation?: RuntimeTerminalPresentation
         tabId?: string
         leafId?: string
         splitFromLeafId?: string
@@ -2353,15 +2708,7 @@ export type PreloadApi = {
       }) => void
     ) => () => void
     onRequestTerminalCreate: (
-      callback: (data: {
-        requestId: string
-        worktreeId?: string
-        afterTabId?: string
-        targetGroupId?: string
-        command?: string
-        title?: string
-        activate?: boolean
-      }) => void
+      callback: (data: RuntimeTerminalCreateRequestPayload) => void
     ) => () => void
     replyTerminalCreate: (reply: {
       requestId: string
@@ -2425,15 +2772,27 @@ export type PreloadApi = {
       callback: (data: { tabId: string; paneRuntimeId?: number }) => void
     ) => () => void
     onSleepWorktree: (callback: (data: { worktreeId: string }) => void) => () => void
+    onResumeSleepingAgents: (callback: (data: { worktreeId: string }) => void) => () => void
     onTerminalZoom: (callback: (direction: 'in' | 'out' | 'reset') => void) => () => void
-    readClipboardText: () => Promise<string>
-    readSelectionClipboardText: () => Promise<string>
+    onSystemResumed: (callback: () => void) => () => void
+    readClipboardText: (options?: ReadClipboardTextOptions) => Promise<string>
+    readSelectionClipboardText: (options?: ReadClipboardTextOptions) => Promise<string>
     saveClipboardImageAsTempFile: (args?: {
       connectionId?: string | null
+      runtimeEnvironmentId?: string | null
     }) => Promise<string | null>
     writeClipboardText: (text: string) => Promise<void>
     writeSelectionClipboardText: (text: string) => Promise<void>
     writeClipboardImage: (dataUrl: string) => Promise<void>
+    performNativePaste: (options?: { mode?: 'paste' | 'paste-and-match-style' }) => void
+    writeClipboardFile: (
+      args:
+        | {
+            filePath: string
+            connectionId?: string | null
+          }
+        | string
+    ) => Promise<{ ok: boolean; reason?: string }>
     onFileDrop: (callback: (data: NativeFileDropPayload) => void) => () => void
     getZoomLevel: () => number
     setZoomLevel: (level: number) => void
@@ -2531,21 +2890,35 @@ export type PreloadApi = {
     get: () => Promise<RateLimitState>
     refresh: () => Promise<RateLimitState>
     refreshCodexForTarget: (target: RateLimitRuntimeTarget) => Promise<RateLimitState>
+    consumeCodexResetCredit: () => Promise<CodexRateLimitResetResult>
     refreshClaudeForTarget: (target: RateLimitRuntimeTarget) => Promise<RateLimitState>
     setPollingInterval: (ms: number) => Promise<void>
     fetchInactiveClaudeAccounts: () => Promise<void>
     fetchInactiveCodexAccounts: () => Promise<void>
+    refreshMiniMax: () => Promise<RateLimitState>
+    refreshGrok: () => Promise<RateLimitState>
     onUpdate: (callback: (state: RateLimitState) => void) => () => void
+  }
+  minimaxCredentials: {
+    getStatus: () => Promise<{ configured: boolean }>
+    saveCookie: (cookie: string) => Promise<{ configured: boolean }>
+    clearCookie: () => Promise<{ configured: boolean }>
+  }
+  grokAccounts: {
+    getStatus: () => Promise<GrokAccountStatus>
   }
   ssh: {
     listTargets: () => Promise<SshTarget[]>
+    // Removed-target id → last known label, for showing a friendly host name on
+    // workspaces still pinned to a target that no longer exists.
+    listRemovedTargetLabels: () => Promise<Record<string, string>>
     addTarget: (args: { target: Omit<SshTarget, 'id'> }) => Promise<SshTarget>
     updateTarget: (args: {
       id: string
       updates: Partial<Omit<SshTarget, 'id'>>
     }) => Promise<SshTarget>
     removeTarget: (args: { id: string }) => Promise<void>
-    importConfig: () => Promise<SshTarget[]>
+    importConfig: (args?: { reAdopt?: boolean }) => Promise<SshTarget[]>
     connect: (args: { targetId: string }) => Promise<SshConnectionState | null>
     disconnect: (args: { targetId: string }) => Promise<void>
     terminateSessions: (args: { targetId: string }) => Promise<void>
@@ -2644,6 +3017,9 @@ export type PreloadApi = {
     /** Drop a paneKey from the main-process hook cache and the on-disk
      *  last-status file. Fire-and-forget. */
     drop: (paneKey: string) => void
+    /** Drop every cached hook status under one terminal tab prefix.
+     *  Fire-and-forget. */
+    dropByTabPrefix: (tabId: string) => void
   }
   mobile: {
     listNetworkInterfaces: () => Promise<{

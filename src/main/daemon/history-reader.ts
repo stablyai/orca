@@ -1,7 +1,8 @@
-import { join } from 'path'
-import { readFileSync, existsSync, readdirSync } from 'fs'
+import { join } from 'node:path'
+import { readFileSync, existsSync, readdirSync } from 'node:fs'
 import type { SessionMeta } from './history-manager'
 import type { TerminalCheckpointFile, TerminalModes } from './types'
+import type { TerminalOscLinkRange } from '../../shared/terminal-osc-link-ranges'
 import { getHistorySessionDirName } from './history-paths'
 import { decodeTerminalHistoryLog } from './terminal-history-log'
 import { HeadlessEmulator } from './headless-emulator'
@@ -9,6 +10,7 @@ import { HeadlessEmulator } from './headless-emulator'
 export type ColdRestoreInfo = {
   snapshotAnsi: string
   scrollbackAnsi: string
+  oscLinks?: TerminalOscLinkRange[]
   rehydrateSequences: string
   cwd: string
   cols: number
@@ -26,12 +28,28 @@ export class HistoryReader {
     this.basePath = basePath
   }
 
-  detectColdRestore(sessionId: string): ColdRestoreInfo | null {
+  // Why: spawn needs a cheap "could this cold-restore?" predicate before
+  // deciding to pay detectColdRestore's full checkpoint+log replay. Reads only
+  // the small meta.json, using the same unclean-shutdown test detectColdRestore
+  // starts with.
+  hasRestorableHistory(sessionId: string): boolean {
+    const meta = this.readMeta(sessionId)
+    return meta !== null && meta.endedAt === null
+  }
+
+  detectColdRestore(
+    sessionId: string,
+    opts?: { ignoreCleanEnd?: boolean }
+  ): ColdRestoreInfo | null {
     const meta = this.readMeta(sessionId)
     if (!meta) {
       return null
     }
-    if (meta.endedAt !== null) {
+    // Why ignoreCleanEnd: in the spawn probe race, the dying session's exit
+    // event can write endedAt between the aliveness probe and the post-spawn
+    // fallback detect. The caller established restore eligibility before the
+    // probe, so the just-written clean end must not downgrade the restore.
+    if (meta.endedAt !== null && !opts?.ignoreCleanEnd) {
       return null
     }
 
@@ -48,8 +66,9 @@ export class HistoryReader {
     }
 
     // Why log replay is preferred over the checkpoint alone: the log carries
-    // byte-exact output up to ~5s before the crash, while the checkpoint can
-    // be a full log-cap (~5MB of output) stale.
+    // byte-exact output up to ~5s before the crash (up to the full-snapshot
+    // cooldown, ~45s, for a streaming session mid-deferral), while the
+    // checkpoint can be a full log-cap (~5MB of output) stale.
     const logRestore = this.restoreFromIncrementalLog(sessionDir, meta, checkpoint)
     if (logRestore) {
       return logRestore
@@ -136,6 +155,7 @@ export class HistoryReader {
         if (!emulator.writeSync(checkpoint.rehydrateSequences + checkpoint.snapshotAnsi)) {
           return null
         }
+        emulator.setRestoredOscLinks(checkpoint.oscLinks)
       }
       for (const batch of log.batches) {
         for (const record of batch.records) {
@@ -169,6 +189,7 @@ export class HistoryReader {
     snapshot: {
       snapshotAnsi: string
       scrollbackAnsi: string
+      oscLinks?: TerminalOscLinkRange[]
       rehydrateSequences: string
       cols: number
       rows: number
@@ -188,6 +209,7 @@ export class HistoryReader {
     return {
       snapshotAnsi: snapshot.snapshotAnsi,
       scrollbackAnsi,
+      oscLinks: snapshot.oscLinks,
       rehydrateSequences: snapshot.rehydrateSequences,
       cwd: cwd ?? meta.cwd,
       cols: snapshot.cols,

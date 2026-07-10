@@ -1,4 +1,4 @@
-import React, { useState } from 'react'
+import React, { useEffect, useId, useRef, useState } from 'react'
 import { FolderOpen, RotateCcw } from 'lucide-react'
 import type { GlobalSettings } from '../../../../shared/types'
 import {
@@ -14,6 +14,7 @@ import { Label } from '../ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select'
 import { SearchableSetting } from './SearchableSetting'
 import { useSidebarHostScopeOptions } from '../sidebar/use-sidebar-host-scope-options'
+import { isImeCompositionKeyDown } from '@/lib/ime-composition-keyboard-event'
 import {
   buildHostScopeChoices,
   CLIENT_DEFAULT_SCOPE,
@@ -33,6 +34,7 @@ export function WorkspaceDirectorySetting({
 }: WorkspaceDirectorySettingProps): React.JSX.Element {
   const { hostOptions } = useSidebarHostScopeOptions()
   const [scope, setScope] = useState<HostSettingScope>(CLIENT_DEFAULT_SCOPE)
+  const inputId = useId()
 
   const clientDefaultLabel = translate(
     'auto.components.settings.WorkspaceDirectorySetting.1a2b3c4d5e',
@@ -59,6 +61,21 @@ export function WorkspaceDirectorySetting({
         settings.workspaceDir
       )
     : settings.workspaceDir
+  // Why: settings:set prepares the workspace root with mkdir; committing each
+  // keystroke would create every typed path prefix as a real directory.
+  const [draftValue, setDraftValue] = useState(value)
+  const draftValueRef = useRef(value)
+  const skipNextBlurCommitRef = useRef(false)
+
+  useEffect(() => {
+    setDraftValue(value)
+    draftValueRef.current = value
+  }, [value])
+
+  const setDraft = (next: string): void => {
+    draftValueRef.current = next
+    setDraftValue(next)
+  }
 
   const writeValue = (next: string): void => {
     if (!editingHost) {
@@ -75,6 +92,26 @@ export function WorkspaceDirectorySetting({
     })
   }
 
+  const commitDraftValue = (): void => {
+    const next = draftValueRef.current
+    if (next === value) {
+      return
+    }
+    writeValue(next)
+  }
+
+  const handleBlur = (): void => {
+    if (skipNextBlurCommitRef.current) {
+      skipNextBlurCommitRef.current = false
+      return
+    }
+    commitDraftValue()
+  }
+
+  const resetDraftValue = (): void => {
+    setDraft(value)
+  }
+
   const resetOverride = (): void => {
     if (!editingHost) {
       return
@@ -89,9 +126,16 @@ export function WorkspaceDirectorySetting({
   }
 
   const handleBrowse = async (): Promise<void> => {
-    const path = await window.api.repos.pickFolder()
-    if (path) {
-      writeValue(path)
+    try {
+      const path = await window.api.repos.pickFolder()
+      if (path) {
+        setDraft(path)
+        writeValue(path)
+        return
+      }
+      resetDraftValue()
+    } finally {
+      skipNextBlurCommitRef.current = false
     }
   }
 
@@ -113,7 +157,7 @@ export function WorkspaceDirectorySetting({
       className="space-y-2"
     >
       <div className="flex items-center justify-between gap-2">
-        <Label>
+        <Label htmlFor={inputId}>
           {translate(
             'auto.components.settings.GeneralWorkspaceSettingsSection.0e9fc0eadc',
             'Workspace Directory'
@@ -147,13 +191,38 @@ export function WorkspaceDirectorySetting({
       </div>
       <div className="flex gap-2">
         <Input
-          value={value}
-          onChange={(e) => writeValue(e.target.value)}
+          id={inputId}
+          value={draftValue}
+          onChange={(e) => {
+            setDraft(e.target.value)
+          }}
+          onBlur={handleBlur}
+          onKeyDown={(e) => {
+            // Why: an Enter that only confirms a CJK IME candidate must not
+            // commit the rename; wait for a non-composition Enter.
+            if (isImeCompositionKeyDown(e)) {
+              return
+            }
+            if (e.key === 'Enter') {
+              skipNextBlurCommitRef.current = true
+              commitDraftValue()
+              e.currentTarget.blur()
+              return
+            }
+            if (e.key === 'Escape') {
+              skipNextBlurCommitRef.current = true
+              resetDraftValue()
+              e.currentTarget.blur()
+            }
+          }}
           className="flex-1 text-xs"
         />
         <Button
           variant="outline"
           size="sm"
+          onPointerDown={() => {
+            skipNextBlurCommitRef.current = true
+          }}
           onClick={() => void handleBrowse()}
           className="shrink-0 gap-1.5"
         >
@@ -191,12 +260,16 @@ export function WorkspaceDirectorySetting({
           )}
         </div>
       )}
-      <p className="text-xs text-muted-foreground">
-        {translate(
-          'auto.components.settings.GeneralWorkspaceSettingsSection.a246f5ce6f',
-          'Root directory where workspace folders are created.'
-        )}
-      </p>
+      {/* Why: this helper documents the client-default workspaceDir resolver;
+          avoid promising host-specific creation semantics here. */}
+      {!editingHost && (
+        <p className="text-xs text-muted-foreground">
+          {translate(
+            'auto.components.settings.WorkspaceDirectorySetting.6f7a8b9cad',
+            'Use a relative path (e.g. .orca/worktrees) for a per-project location, or an absolute path for one shared folder.'
+          )}
+        </p>
+      )}
     </SearchableSetting>
   )
 }

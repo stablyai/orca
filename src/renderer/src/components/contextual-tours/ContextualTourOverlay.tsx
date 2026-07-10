@@ -21,10 +21,7 @@ import {
   handleContextualTourOverlayKeyDown,
   type ActiveTourRenderState
 } from './ContextualTourOverlaySurface'
-import {
-  REQUEST_ACTIVE_TERMINAL_PANE_SPLIT_EVENT,
-  type RequestActiveTerminalPaneSplitDetail
-} from '@/constants/terminal'
+import { requestActiveTerminalPaneSplit } from '@/components/tab-bar/request-active-terminal-pane-split'
 import { performContextualTourStepAction } from './contextual-tour-step-actions'
 import { openWorkspaceCreationComposerWithTourHandoff } from './workspace-creation-tour-handoff'
 
@@ -321,14 +318,7 @@ export function ContextualTourOverlay(): JSX.Element | null {
       openModal,
       canCreateWorkspace,
       openWorkspaceComposer: openWorkspaceCreationComposerWithTourHandoff,
-      dispatchTerminalPaneSplit: (detail) => {
-        window.dispatchEvent(
-          new CustomEvent<RequestActiveTerminalPaneSplitDetail>(
-            REQUEST_ACTIVE_TERMINAL_PANE_SPLIT_EVENT,
-            { detail }
-          )
-        )
-      },
+      dispatchTerminalPaneSplit: requestActiveTerminalPaneSplit,
       schedule: (callback) => {
         window.setTimeout(callback, 0)
       }

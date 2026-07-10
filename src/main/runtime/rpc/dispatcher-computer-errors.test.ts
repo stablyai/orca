@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { z } from 'zod'
 import { RpcDispatcher } from './dispatcher'
-import { defineMethod, type RpcRequest } from './core'
+import { defineMethod, InvalidArgumentError, type RpcRequest } from './core'
 import type { OrcaRuntimeService } from '../orca-runtime'
 
 function makeRequest(method: string, params?: unknown): RpcRequest {
@@ -24,6 +24,19 @@ const METHODS = [
     name: 'browser.click',
     params: z.object({ page: z.string().min(1, 'Missing page') }),
     handler: () => ({ ok: true })
+  }),
+  defineMethod({
+    name: 'orchestration.throwZod',
+    params: z.object({}),
+    handler: () =>
+      z.object({ title: z.string().min(1, 'Handler title missing') }).parse({ title: '' })
+  }),
+  defineMethod({
+    name: 'orchestration.invalidArgument',
+    params: z.object({}),
+    handler: () => {
+      throw new InvalidArgumentError('Async validation rejected payload')
+    }
   })
 ]
 
@@ -80,5 +93,33 @@ describe('RpcDispatcher computer-use validation errors', () => {
       }
     })
     expect(response.ok === false ? response.error : null).not.toHaveProperty('data')
+  })
+
+  it('preserves formatted Zod issue messages thrown by method handlers', async () => {
+    const dispatcher = new RpcDispatcher({ runtime: makeRuntime(), methods: METHODS })
+
+    const response = await dispatcher.dispatch(makeRequest('orchestration.throwZod', {}))
+
+    expect(response).toMatchObject({
+      ok: false,
+      error: {
+        code: 'invalid_argument',
+        message: 'Handler title missing'
+      }
+    })
+  })
+
+  it('maps async validation errors to invalid_argument without shadowing Zod formatting', async () => {
+    const dispatcher = new RpcDispatcher({ runtime: makeRuntime(), methods: METHODS })
+
+    const response = await dispatcher.dispatch(makeRequest('orchestration.invalidArgument', {}))
+
+    expect(response).toMatchObject({
+      ok: false,
+      error: {
+        code: 'invalid_argument',
+        message: 'Async validation rejected payload'
+      }
+    })
   })
 })

@@ -2,6 +2,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
 import { useAppStore } from '@/store'
 import { isGitRepoKind } from '../../../../shared/repo-kind'
+import { hasFeatureInteraction } from '../../../../shared/feature-interactions'
 import { checkRuntimeHooks } from '@/runtime/runtime-hooks-client'
 import { getLocalPreflightContext, localPreflightContextKey } from '@/lib/local-preflight-context'
 import { hasEffectiveSetupCommand } from '@/lib/setup-script-status'
@@ -15,6 +16,7 @@ import {
   GLOBAL_AGENT_SKILL_SOURCE_KINDS,
   useInstalledAgentSkill
 } from '@/hooks/useInstalledAgentSkills'
+import { useActiveProjectSkillRuntime } from '@/hooks/useActiveProjectSkillRuntime'
 import {
   getFeatureWallSetupProgress,
   type FeatureWallSetupProgress
@@ -43,14 +45,13 @@ export function useSetupGuideProgress(
   const settings = useAppStore((s) => s.settings)
   const featureInteractions = useAppStore((s) => s.featureInteractions)
   const worktreesByRepo = useAppStore((s) => s.worktreesByRepo)
-  const tabsByWorktree = useAppStore((s) => s.tabsByWorktree)
-  const terminalLayoutsByTabId = useAppStore((s) => s.terminalLayoutsByTabId)
   const preflightStatus = useAppStore((s) => s.preflightStatus)
   const preflightStatusChecked = useAppStore((s) => s.preflightStatusChecked)
   const preflightStatusContextKey = useAppStore((s) => s.preflightStatusContextKey)
   const preflightStatusError = useAppStore((s) => s.preflightStatusError)
   const preflightStatusLoading = useAppStore((s) => s.preflightStatusLoading)
   const refreshPreflightStatus = useAppStore((s) => s.refreshPreflightStatus)
+  const activeSkillRuntime = useActiveProjectSkillRuntime()
   const linearStatus = useAppStore((s) => s.linearStatus)
   const linearStatusChecked = useAppStore((s) => s.linearStatusChecked)
   const linearStatusContextKey = useAppStore((s) => s.linearStatusContextKey)
@@ -76,11 +77,13 @@ export function useSetupGuideProgress(
   const { installed: detectedBrowserUseSkillInstalled, loading: detectedBrowserUseSkillLoading } =
     useInstalledAgentSkill(ORCA_CLI_SKILL_NAME, {
       enabled: shouldRefreshCoreState,
+      discoveryTarget: activeSkillRuntime.discoveryTarget,
       sourceKinds: GLOBAL_AGENT_SKILL_SOURCE_KINDS
     })
   const { installed: computerUseSkillInstalled, loading: computerUseSkillLoading } =
     useInstalledAgentSkill(COMPUTER_USE_SKILL_NAME, {
       enabled: shouldRefreshCoreState,
+      discoveryTarget: activeSkillRuntime.discoveryTarget,
       sourceKinds: GLOBAL_AGENT_SKILL_SOURCE_KINDS
     })
   const {
@@ -88,6 +91,7 @@ export function useSetupGuideProgress(
     loading: detectedOrchestrationSkillLoading
   } = useInstalledAgentSkill(ORCHESTRATION_SKILL_NAME, {
     enabled: shouldRefreshCoreState,
+    discoveryTarget: activeSkillRuntime.discoveryTarget,
     sourceKinds: GLOBAL_AGENT_SKILL_SOURCE_KINDS
   })
   const providerRuntimeContextKey = getProviderRuntimeContextKey(settings)
@@ -289,8 +293,6 @@ export function useSetupGuideProgress(
           orchestrationSkillInstalled || detectedOrchestrationSkillInstalled,
         gitRepoCount,
         worktreesByRepo,
-        tabsByWorktree,
-        terminalLayoutsByTabId,
         hasSetupScript: currentSetupScriptProbe.hasSetupScript
       }),
     [
@@ -302,15 +304,17 @@ export function useSetupGuideProgress(
       detectedBrowserUseSkillInstalled,
       detectedOrchestrationSkillInstalled,
       featureInteractions,
-      terminalLayoutsByTabId,
       gitRepoCount,
       hasConnectedTaskSource,
       currentSetupScriptProbe.hasSetupScript,
       orchestrationSkillInstalled,
       settings,
-      tabsByWorktree,
       worktreesByRepo
     ]
   )
-  return useSetupGuideBrowserMilestoneProgress(rawProgress)
+  const historicalSplitTerminalDone = hasFeatureInteraction(
+    featureInteractions,
+    'terminal-pane-split'
+  )
+  return useSetupGuideBrowserMilestoneProgress(rawProgress, historicalSplitTerminalDone)
 }

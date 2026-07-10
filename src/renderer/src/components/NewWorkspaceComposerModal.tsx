@@ -25,10 +25,13 @@ import type {
 import type { TaskSourceContext } from '../../../shared/task-source-context'
 import { translate } from '@/i18n/i18n'
 import { getWorkspaceComposerInitialFocusTarget } from '@/lib/workspace-composer-initial-focus'
+import { getFolderWorkspacePrimaryActionLabel } from '@/components/sidebar/folder-workspace-composer-helpers'
 
 type ComposerModalData = {
   prefilledName?: string
   initialRepoId?: string
+  initialEphemeralVmRecipeId?: string
+  initialProjectGroupId?: string
   linkedWorkItem?: LinkedWorkItemSummary | null
   taskSourceContext?: TaskSourceContext | null
   initialBaseBranch?: string
@@ -126,6 +129,8 @@ function QuickTabBody({
     initialLinkedWorkItem: modalData.linkedWorkItem ?? null,
     initialTaskSourceContext: modalData.taskSourceContext ?? null,
     initialRepoId: modalData.initialRepoId,
+    initialEphemeralVmRecipeId: modalData.initialEphemeralVmRecipeId,
+    initialProjectGroupId: modalData.initialProjectGroupId,
     initialWorkspaceStatus: modalData.initialWorkspaceStatus,
     ...(modalData.initialBaseBranch ? { initialBaseBranch: modalData.initialBaseBranch } : {}),
     persistDraft: false,
@@ -175,7 +180,15 @@ function QuickTabBody({
   const handleCreate = useCallback(async (): Promise<void> => {
     await submitQuick(quickAgent)
   }, [quickAgent, submitQuick])
-  const primaryActionLabel = cardProps.selectedRepoIsGit ? 'Create Worktree' : 'Create Workspace'
+  const selectedProjectOption = cardProps.projectOptions.find(
+    (option) => option.id === cardProps.selectedProjectId
+  )
+  const isFolderWorkspaceTarget = selectedProjectOption?.kind === 'project-group'
+  const primaryActionLabel = isFolderWorkspaceTarget
+    ? getFolderWorkspacePrimaryActionLabel()
+    : cardProps.selectedRepoIsGit
+      ? translate('auto.components.NewWorkspaceComposerModal.createWorktree', 'Create worktree')
+      : translate('auto.components.NewWorkspaceComposerModal.createWorkspace', 'Create workspace')
 
   // Cmd/Ctrl+Enter submits, Esc first blurs the focused input (like the full page).
   useEffect(() => {
@@ -228,7 +241,14 @@ function QuickTabBody({
   return (
     <>
       <DialogHeader className="gap-1">
-        <DialogTitle className="text-base font-semibold">{primaryActionLabel}</DialogTitle>
+        <DialogTitle className="text-base font-semibold">
+          {isFolderWorkspaceTarget
+            ? translate(
+                'auto.components.sidebar.FolderWorkspaceComposerDialog.title',
+                'Create Folder Workspace'
+              )
+            : primaryActionLabel}
+        </DialogTitle>
         <DialogDescription className="sr-only">
           {translate(
             'auto.components.NewWorkspaceComposerModal.fa90f739a5',

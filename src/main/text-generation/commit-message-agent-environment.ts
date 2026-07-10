@@ -4,8 +4,15 @@ import { readShellStartupEnvVar } from '../pty/shell-startup-env'
 import { parseWslUncPath } from '../../shared/wsl-paths'
 
 export type CommitMessageAgentEnvironmentResolvers = {
-  prepareForCodexLaunch?: () => string | null
-  prepareForClaudeLaunch?: () => Promise<ClaudeRuntimeAuthPreparation>
+  prepareForCodexLaunch?: (target?: CommitMessageAgentRuntimeTarget) => string | null
+  prepareForClaudeLaunch?: (
+    target?: CommitMessageAgentRuntimeTarget
+  ) => Promise<ClaudeRuntimeAuthPreparation>
+}
+
+export type CommitMessageAgentRuntimeTarget = {
+  runtime?: 'host' | 'wsl'
+  wslDistro?: string | null
 }
 
 function cloneProcessEnv(): Record<string, string> {
@@ -37,9 +44,9 @@ function prepareShellConfigDirEnv(agentId: string): { ok: true; env?: NodeJS.Pro
     return null
   }
   // Why: each kind owns a distinct ORCA_*_SOURCE_* shadow so a headless commit
-  // run from inside an OMP overlay restores the OMP source dir, never the Pi
-  // one (and vice versa). PI_CODING_AGENT_DIR is the binary-facing var both
-  // kinds emit — see src/main/pi/titlebar-extension-service.ts.
+  // run from inside a legacy OMP overlay restores the OMP source dir, never
+  // the Pi one (and vice versa). PI_CODING_AGENT_DIR is the binary-facing var
+  // both kinds consume — see src/main/pi/titlebar-extension-service.ts.
   const sourceVar =
     agentId === 'opencode'
       ? 'ORCA_OPENCODE_SOURCE_CONFIG_DIR'
@@ -62,9 +69,10 @@ function prepareShellConfigDirEnv(agentId: string): { ok: true; env?: NodeJS.Pro
 
 export async function prepareLocalCommitMessageAgentEnv(
   agentId: string,
-  resolvers: CommitMessageAgentEnvironmentResolvers | undefined
+  resolvers: CommitMessageAgentEnvironmentResolvers | undefined,
+  target?: CommitMessageAgentRuntimeTarget
 ): Promise<{ ok: true; env?: NodeJS.ProcessEnv } | { ok: false; error: string }> {
-  const shellConfigEnv = prepareShellConfigDirEnv(agentId)
+  const shellConfigEnv = target?.runtime === 'wsl' ? null : prepareShellConfigDirEnv(agentId)
   if (shellConfigEnv) {
     return shellConfigEnv
   }
@@ -74,8 +82,18 @@ export async function prepareLocalCommitMessageAgentEnv(
 
   try {
     if (agentId === 'codex' && resolvers.prepareForCodexLaunch) {
-      const codexHomePath = resolvers.prepareForCodexLaunch()
-      if (codexHomePath && parseWslUncPath(codexHomePath)) {
+      const codexHomePath = resolvers.prepareForCodexLaunch(target)
+      const wslCodexHome = codexHomePath ? parseWslUncPath(codexHomePath) : null
+      if (target?.runtime === 'wsl') {
+        const codexHomeForTarget = wslCodexHome?.linuxPath ?? null
+        return {
+          ok: true,
+          env: codexHomeForTarget
+            ? { ...cloneProcessEnv(), CODEX_HOME: codexHomeForTarget }
+            : undefined
+        }
+      }
+      if (codexHomePath && wslCodexHome) {
         // Why: this local generation path spawns the host Codex binary. A WSL
         // managed home is only valid when the process is routed through wsl.exe.
         return { ok: true }
@@ -87,7 +105,7 @@ export async function prepareLocalCommitMessageAgentEnv(
     }
 
     if (agentId === 'claude' && resolvers.prepareForClaudeLaunch) {
-      const preparation = await resolvers.prepareForClaudeLaunch()
+      const preparation = await resolvers.prepareForClaudeLaunch(target)
       const env = applyClaudeEnvPatch(cloneProcessEnv(), preparation.envPatch, {
         stripAuthEnv: preparation.stripAuthEnv
       })
