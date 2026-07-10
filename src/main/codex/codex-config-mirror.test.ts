@@ -314,6 +314,170 @@ describe('syncSystemConfigIntoManagedCodexHome', () => {
     expect(runtimeConfig.match(/\[projects\."\/repo"\]/g)?.length).toBe(1)
   })
 
+  it('deduplicates basic and literal project headers by decoded Windows path', () => {
+    mkdirSync(join(userDataDir, 'codex-runtime-home', 'home'), { recursive: true })
+    writeFileSync(
+      getRuntimeConfigPath(),
+      ["[projects.'c:\\gemini_etl']", 'trust_level = "trusted"', ''].join('\n'),
+      'utf-8'
+    )
+    writeFileSync(
+      getSystemConfigPath(),
+      ['[projects."c:\\\\gemini_etl"]', 'trust_level = "trusted"', ''].join('\n'),
+      'utf-8'
+    )
+
+    syncSystemConfigIntoManagedCodexHome()
+
+    const runtimeConfig = readFileSync(getRuntimeConfigPath(), 'utf-8')
+    expect(runtimeConfig.match(/\[projects\./g)).toHaveLength(1)
+    expect(runtimeConfig).toContain("[projects.'c:\\gemini_etl']")
+  })
+
+  it('lets a semantically matching system revocation replace runtime trust', () => {
+    mkdirSync(join(userDataDir, 'codex-runtime-home', 'home'), { recursive: true })
+    writeFileSync(
+      getRuntimeConfigPath(),
+      ["[projects.'c:\\gemini_etl']", 'trust_level = "trusted"', ''].join('\n'),
+      'utf-8'
+    )
+    writeFileSync(
+      getSystemConfigPath(),
+      ['[projects."C:/gemini_etl"]', 'trust_level = "untrusted"', ''].join('\n'),
+      'utf-8'
+    )
+
+    syncSystemConfigIntoManagedCodexHome()
+
+    const runtimeConfig = readFileSync(getRuntimeConfigPath(), 'utf-8')
+    expect(runtimeConfig.match(/\[projects\./g)).toHaveLength(1)
+    expect(runtimeConfig).toContain('[projects."C:/gemini_etl"]')
+    expect(runtimeConfig).toContain('trust_level = "untrusted"')
+    expect(runtimeConfig).not.toContain('trust_level = "trusted"')
+  })
+
+  it.each([
+    {
+      name: 'drive-letter casing and separators',
+      runtimePath: 'c:\\work\\repo',
+      systemPath: 'C:/work/repo'
+    },
+    {
+      name: 'WSL UNC path',
+      runtimePath: '\\\\wsl$\\Ubuntu\\home\\u\\proj',
+      systemPath: '//WSL$/ubuntu/home/u/proj'
+    },
+    {
+      name: 'server UNC path',
+      runtimePath: '\\\\server\\share\\proj',
+      systemPath: '//SERVER/share/proj'
+    }
+  ])('deduplicates $name across mirror inputs', ({ runtimePath, systemPath }) => {
+    mkdirSync(join(userDataDir, 'codex-runtime-home', 'home'), { recursive: true })
+    writeFileSync(
+      getRuntimeConfigPath(),
+      [`[projects.'${runtimePath}']`, 'trust_level = "trusted"', ''].join('\n'),
+      'utf-8'
+    )
+    writeFileSync(
+      getSystemConfigPath(),
+      [`[projects."${systemPath}"]`, 'trust_level = "trusted"', ''].join('\n'),
+      'utf-8'
+    )
+
+    syncSystemConfigIntoManagedCodexHome()
+
+    expect(readFileSync(getRuntimeConfigPath(), 'utf-8').match(/\[projects\./g)).toHaveLength(1)
+  })
+
+  it('self-heals duplicate project tables already present in the runtime config', () => {
+    mkdirSync(join(userDataDir, 'codex-runtime-home', 'home'), { recursive: true })
+    writeFileSync(
+      getRuntimeConfigPath(),
+      [
+        '[projects."c:\\\\gemini_etl"]',
+        'trust_level = "trusted"',
+        '',
+        "[projects.'c:\\gemini_etl']",
+        'trust_level = "trusted"',
+        ''
+      ].join('\n'),
+      'utf-8'
+    )
+    writeFileSync(getSystemConfigPath(), 'model = "gpt-5"\n', 'utf-8')
+
+    syncSystemConfigIntoManagedCodexHome()
+
+    const runtimeConfig = readFileSync(getRuntimeConfigPath(), 'utf-8')
+    expect(runtimeConfig.match(/\[projects\./g)).toHaveLength(1)
+    expect(runtimeConfig).toContain('[projects."c:\\\\gemini_etl"]')
+  })
+
+  it('keeps untrusted when self-healing duplicate project tables', () => {
+    mkdirSync(join(userDataDir, 'codex-runtime-home', 'home'), { recursive: true })
+    writeFileSync(
+      getRuntimeConfigPath(),
+      [
+        '[projects."c:\\\\gemini_etl"]',
+        'trust_level = "trusted"',
+        '',
+        "[projects.'C:\\gemini_etl']",
+        'trust_level = "untrusted"',
+        ''
+      ].join('\n'),
+      'utf-8'
+    )
+    writeFileSync(getSystemConfigPath(), 'model = "gpt-5"\n', 'utf-8')
+
+    syncSystemConfigIntoManagedCodexHome()
+
+    const runtimeConfig = readFileSync(getRuntimeConfigPath(), 'utf-8')
+    expect(runtimeConfig.match(/\[projects\./g)).toHaveLength(1)
+    expect(runtimeConfig).toContain('trust_level = "untrusted"')
+    expect(runtimeConfig).not.toContain('trust_level = "trusted"')
+  })
+
+  it('keeps untrusted when self-healing duplicate system project tables', () => {
+    writeFileSync(
+      getSystemConfigPath(),
+      [
+        '[projects."c:\\\\gemini_etl"]',
+        'trust_level = "trusted"',
+        '',
+        "[projects.'C:\\gemini_etl']",
+        'trust_level = "untrusted"',
+        ''
+      ].join('\n'),
+      'utf-8'
+    )
+
+    syncSystemConfigIntoManagedCodexHome()
+
+    const runtimeConfig = readFileSync(getRuntimeConfigPath(), 'utf-8')
+    expect(runtimeConfig.match(/\[projects\./g)).toHaveLength(1)
+    expect(runtimeConfig).toContain('trust_level = "untrusted"')
+    expect(runtimeConfig).not.toContain('trust_level = "trusted"')
+  })
+
+  it('deduplicates a POSIX project path containing a quote and backslash', () => {
+    const projectPath = '/tmp/with"quote\\and-backslash'
+    mkdirSync(join(userDataDir, 'codex-runtime-home', 'home'), { recursive: true })
+    writeFileSync(
+      getRuntimeConfigPath(),
+      [`[projects.'${projectPath}']`, 'trust_level = "trusted"', ''].join('\n'),
+      'utf-8'
+    )
+    writeFileSync(
+      getSystemConfigPath(),
+      [`[projects."/tmp/with\\"quote\\\\and-backslash"]`, 'trust_level = "trusted"', ''].join('\n'),
+      'utf-8'
+    )
+
+    syncSystemConfigIntoManagedCodexHome()
+
+    expect(readFileSync(getRuntimeConfigPath(), 'utf-8').match(/\[projects\./g)).toHaveLength(1)
+  })
+
   it('does not treat TOML table headers inside multiline strings as sections', () => {
     mkdirSync(join(userDataDir, 'codex-runtime-home', 'home'), { recursive: true })
     writeFileSync(
