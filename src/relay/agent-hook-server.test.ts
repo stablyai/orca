@@ -331,4 +331,51 @@ describe('RelayAgentHookServer', () => {
       vi.unstubAllEnvs()
     }
   })
+
+  it('caps the replay cache at 256 panes, evicting the least-recently-updated', async () => {
+    // Mirrors the server's private MAX_CACHED_PANES. The WSL relay never gets a
+    // per-pane teardown signal, so the cache is recency-capped instead.
+    const CAP = 256
+    const forward = vi.fn<(envelope: AgentHookRelayEnvelope) => void>()
+    const server = new RelayAgentHookServer({ endpointDir: dir, forward })
+    await server.start()
+    try {
+      const { port, token } = server.getCoordinates()
+      const paneKeyFor = (i: number): string => makePaneKey(`tab-${i}`, LEAF_ID)
+      const postPane = (paneKey: string): Promise<Response> =>
+        fetch(`http://127.0.0.1:${port}/hook/claude`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-Orca-Agent-Hook-Token': token
+          },
+          body: JSON.stringify({
+            paneKey,
+            payload: { hook_event_name: 'UserPromptSubmit', prompt: 'p' }
+          })
+        })
+
+      // Fill the cache to exactly the cap in insertion order 0..CAP-1. Sequential
+      // awaits pin Map order = update recency, which the eviction relies on.
+      for (let i = 0; i < CAP; i++) {
+        await postPane(paneKeyFor(i))
+      }
+      // Refresh the OLDEST pane just before overflow, then push one more pane.
+      // Recency (not insertion) order must now evict pane 1, sparing pane 0.
+      await postPane(paneKeyFor(0))
+      await postPane(paneKeyFor(CAP))
+
+      forward.mockClear()
+      const replayed = server.replayCachedPayloadsForPanes()
+      expect(replayed).toBe(CAP)
+
+      const cachedPaneKeys = new Set(forward.mock.calls.map((call) => call[0].paneKey))
+      expect(cachedPaneKeys.size).toBe(CAP)
+      expect(cachedPaneKeys.has(paneKeyFor(0))).toBe(true)
+      expect(cachedPaneKeys.has(paneKeyFor(CAP))).toBe(true)
+      expect(cachedPaneKeys.has(paneKeyFor(1))).toBe(false)
+    } finally {
+      server.stop()
+    }
+  }, 30_000)
 })

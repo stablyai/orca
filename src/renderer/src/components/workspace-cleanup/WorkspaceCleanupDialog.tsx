@@ -69,6 +69,7 @@ import {
   type WorkspaceCleanupRemovalProgress
 } from './workspace-cleanup-background-removal'
 import { CandidateRow } from './workspace-cleanup-candidate-row'
+import { WorkspaceCleanupCandidateList } from './workspace-cleanup-candidate-list'
 import {
   getCandidateStatus,
   getContextPillLabel,
@@ -212,6 +213,7 @@ export default function WorkspaceCleanupDialog(): React.JSX.Element {
   const openRef = useRef(open)
   const [selectedIds, setSelectedIds] = useState<Set<string>>(() => new Set())
   const [expandedRowIds, setExpandedRowIds] = useState<Set<string>>(() => new Set())
+  const [rowsScrollElement, setRowsScrollElement] = useState<HTMLDivElement | null>(null)
   const [activeView, setActiveView] = useState<WorkspaceCleanupView>('ready')
   const [confirming, setConfirming] = useState(false)
   const [confirmCandidates, setConfirmCandidates] = useState<WorkspaceCleanupCandidate[]>([])
@@ -505,6 +507,10 @@ export default function WorkspaceCleanupDialog(): React.JSX.Element {
     setExpandedRowIds((current) => toggleSetMember(current, worktreeId))
   }, [])
 
+  const toggleSelectedRow = useCallback((worktreeId: string) => {
+    setSelectedIds((current) => toggleSetMember(current, worktreeId))
+  }, [])
+
   const openConfirmRemove = useCallback((candidates: readonly WorkspaceCleanupCandidate[]) => {
     const nextCandidates = filterWorkspaceCleanupRemovalCandidates(
       candidates,
@@ -516,6 +522,28 @@ export default function WorkspaceCleanupDialog(): React.JSX.Element {
     setConfirmCandidates(nextCandidates)
     setConfirming(true)
   }, [])
+
+  // Why: stable per-row handlers so React.memo keeps unchanged CandidateRow
+  // instances from re-rendering on scan stream-in and selection changes.
+  const handleRemoveRow = useCallback(
+    (candidate: WorkspaceCleanupCandidate) => {
+      if (loading) {
+        return
+      }
+      setSelectedIds(new Set([candidate.worktreeId]))
+      openConfirmRemove([candidate])
+    },
+    [loading, openConfirmRemove]
+  )
+
+  const handleViewCandidate = useCallback(
+    (candidate: WorkspaceCleanupCandidate) => {
+      markCandidateViewed(candidate)
+      closeModal()
+      activateAndRevealWorktree(candidate.worktreeId)
+    },
+    [closeModal, markCandidateViewed]
+  )
 
   const cancelConfirmRemove = useCallback(() => {
     if (removalProgress) {
@@ -777,7 +805,7 @@ export default function WorkspaceCleanupDialog(): React.JSX.Element {
                     onRestoreIgnored={() => void resetDismissals()}
                   />
                 ) : null}
-                <ScrollArea className="min-h-0 flex-1">
+                <ScrollArea className="min-h-0 flex-1" viewportRef={setRowsScrollElement}>
                   <div>
                     {initialLoading ? <SkeletonRows /> : null}
                     {!loading && scan && candidates.length === 0 && !scanNoticeMessage ? (
@@ -851,38 +879,34 @@ export default function WorkspaceCleanupDialog(): React.JSX.Element {
                         )}
                       />
                     ) : null}
-                    {activeRows.map((candidate, index) => (
-                      <CandidateRow
-                        key={candidate.worktreeId}
-                        candidate={candidate}
-                        reviewInfo={
-                          reviewInfoByWorktreeId.get(candidate.worktreeId) ?? EMPTY_REVIEW_INFO
-                        }
-                        last={activeRows.length > 1 && index === activeRows.length - 1}
-                        expanded={expandedRowIds.has(candidate.worktreeId)}
-                        lastActivityLabel={formatRelativeTime(candidate.lastActivityAt)}
-                        removing={loading || deletingWorktreeIds.has(candidate.worktreeId)}
-                        selected={
-                          selectedIds.has(candidate.worktreeId) &&
-                          !loading &&
-                          !deletingWorktreeIds.has(candidate.worktreeId)
-                        }
-                        failure={rowFailures[candidate.worktreeId]}
-                        onToggleExpanded={toggleExpandedRow}
-                        onToggleSelected={(id) =>
-                          setSelectedIds((current) => toggleSetMember(current, id))
-                        }
-                        onView={closeAndView}
-                        onIgnore={ignoreCandidate}
-                        onRemove={(candidate) => {
-                          if (loading) {
-                            return
+                    <WorkspaceCleanupCandidateList
+                      rows={activeRows}
+                      scrollElement={rowsScrollElement}
+                      renderRow={(candidate, index) => (
+                        <CandidateRow
+                          key={candidate.worktreeId}
+                          candidate={candidate}
+                          reviewInfo={
+                            reviewInfoByWorktreeId.get(candidate.worktreeId) ?? EMPTY_REVIEW_INFO
                           }
-                          setSelectedIds(new Set([candidate.worktreeId]))
-                          openConfirmRemove([candidate])
-                        }}
-                      />
-                    ))}
+                          last={activeRows.length > 1 && index === activeRows.length - 1}
+                          expanded={expandedRowIds.has(candidate.worktreeId)}
+                          lastActivityLabel={formatRelativeTime(candidate.lastActivityAt)}
+                          removing={loading || deletingWorktreeIds.has(candidate.worktreeId)}
+                          selected={
+                            selectedIds.has(candidate.worktreeId) &&
+                            !loading &&
+                            !deletingWorktreeIds.has(candidate.worktreeId)
+                          }
+                          failure={rowFailures[candidate.worktreeId]}
+                          onToggleExpanded={toggleExpandedRow}
+                          onToggleSelected={toggleSelectedRow}
+                          onView={handleViewCandidate}
+                          onIgnore={ignoreCandidate}
+                          onRemove={handleRemoveRow}
+                        />
+                      )}
+                    />
                   </div>
                 </ScrollArea>
               </div>
@@ -900,12 +924,6 @@ export default function WorkspaceCleanupDialog(): React.JSX.Element {
       </DialogContent>
     </Dialog>
   )
-
-  function closeAndView(candidate: WorkspaceCleanupCandidate): void {
-    markCandidateViewed(candidate)
-    closeModal()
-    activateAndRevealWorktree(candidate.worktreeId)
-  }
 }
 
 function WorkspaceCleanupFilterToolbar({

@@ -1184,9 +1184,25 @@ export class CodexHookService {
     return this.getStatus()
   }
 
-  async installRemote(sftp: SFTPWrapper, remoteHome: string): Promise<AgentHookInstallStatus> {
-    const remoteConfigPath = `${remoteHome.replace(/\/$/, '')}/.codex/hooks.json`
-    const remoteTomlPath = `${remoteHome.replace(/\/$/, '')}/.codex/config.toml`
+  async installRemote(
+    sftp: SFTPWrapper,
+    remoteHome: string,
+    options?: {
+      /** Explicit CODEX_HOME dir (flat layout: hooks.json/config.toml at its
+       *  root). WSL sessions read Orca's managed runtime home, not ~/.codex —
+       *  installing to the default location leaves those sessions hookless. */
+      codexHomeDir?: string
+      /** Skip the trust write when config.toml doesn't exist yet. The WSL
+       *  runtime home's config.toml is seeded only-if-absent by the launch
+       *  path; creating it here first would silently cancel that seed. A
+       *  later (idempotent) reinstall upserts trust once the seed lands. */
+      deferTrustUntilConfigToml?: boolean
+    }
+  ): Promise<AgentHookInstallStatus> {
+    const codexHomeBase =
+      options?.codexHomeDir?.replace(/\/$/, '') ?? `${remoteHome.replace(/\/$/, '')}/.codex`
+    const remoteConfigPath = `${codexHomeBase}/hooks.json`
+    const remoteTomlPath = `${codexHomeBase}/config.toml`
     const remoteScriptPath = `${remoteHome.replace(/\/$/, '')}/.orca/agent-hooks/codex-hook.sh`
     try {
       const config = await readHooksJsonRemote(sftp, remoteConfigPath)
@@ -1245,7 +1261,17 @@ export class CodexHookService {
       // Preserve non-Orca top-level metadata while replacing the hooks tree.
       await writeHooksJsonRemote(sftp, remoteConfigPath, { ...config, hooks: nextHooks })
       try {
-        const existingToml = (await readTextFileRemote(sftp, remoteTomlPath)) ?? ''
+        const existingTomlRaw = await readTextFileRemote(sftp, remoteTomlPath)
+        if (existingTomlRaw === null && options?.deferTrustUntilConfigToml === true) {
+          return {
+            agent: 'codex',
+            state: 'installed',
+            configPath: remoteConfigPath,
+            managedHooksPresent: true,
+            detail: 'Trust entries deferred until config.toml is seeded by the launch path'
+          }
+        }
+        const existingToml = existingTomlRaw ?? ''
         const updatedToml = upsertHookTrustEntriesInContent(existingToml, trustEntries)
         if (updatedToml !== existingToml) {
           await writeTextFileRemoteAtomic(sftp, remoteTomlPath, updatedToml)

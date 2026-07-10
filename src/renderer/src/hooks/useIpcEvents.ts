@@ -29,6 +29,7 @@ import type {
 } from '../../../shared/remote-workspace-types'
 import type { RateLimitState } from '../../../shared/rate-limit-types'
 import type { SshConnectionState } from '../../../shared/ssh-types'
+import { isWslHookRelayConnectionId } from '../../../shared/wsl-hook-relay-contract'
 import type {
   RuntimeBrowserDriverState,
   RuntimeTerminalPresentation,
@@ -2988,15 +2989,23 @@ export function useIpcEvents(): void {
       // matches that tab's worktree, accept the status until repo ownership
       // becomes available; once ownership is resolved, keep the strict
       // connectionId check below.
+      // Why: the WSL hook relay stamps a transport-provenance connectionId
+      // (`wsl:<distro>`), but the pane is a LOCAL pane on a local repo —
+      // ownership-wise it is null. Without this normalization the strict
+      // check below drops every WSL-relayed status for a local repo (while
+      // still rejecting WSL-stamped events against SSH-owned repos).
+      const ownershipConnectionId = isWslHookRelayConnectionId(data.connectionId)
+        ? null
+        : data.connectionId
       const canAcceptPendingRemoteOwnership =
-        data.connectionId !== undefined &&
-        data.connectionId !== null &&
+        ownershipConnectionId !== undefined &&
+        ownershipConnectionId !== null &&
         !repoConnectionResolved &&
         data.worktreeId !== undefined &&
         data.worktreeId === owningWorktreeId
       if (
-        data.connectionId !== undefined &&
-        data.connectionId !== repoConnectionId &&
+        ownershipConnectionId !== undefined &&
+        ownershipConnectionId !== repoConnectionId &&
         !canAcceptPendingRemoteOwnership
       ) {
         return 'dropped'

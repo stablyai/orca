@@ -31,6 +31,7 @@ import {
   getFirstCommandToken
 } from '../../shared/command-token-scanner'
 import { agentHookServer } from '../agent-hooks/server'
+import { wslHookRelayManager } from '../agent-hooks/wsl-hook-relay-manager'
 import { isAgentStatusHooksEnabled } from '../agent-hooks/managed-agent-hook-controls'
 import { piTitlebarExtensionService } from '../pi/titlebar-extension-service'
 import { detectPiAgentKindFromCommand, type PiAgentKind } from '../../shared/pi-agent-kind'
@@ -508,6 +509,9 @@ export type BuildPtyHostEnvOptions = {
   launchCommand?: string
   shellPath?: string
   isWsl?: boolean
+  /** Distro for WSL spawns (null = Windows default distro). Drives the WSL
+   *  hook relay ensure + guest endpoint repoint; only read when isWsl. */
+  wslDistro?: string | null
   agentStatusHooksEnabled: boolean
   networkProxySettings?: NetworkProxySettings
 }
@@ -865,6 +869,19 @@ export function buildPtyHostEnv(
   }
   if (opts.agentStatusHooksEnabled) {
     Object.assign(baseEnv, agentHookServer.buildPtyEnv())
+    if (opts.isWsl === true) {
+      // Why: hook POSTs to 127.0.0.1 die inside WSL's NAT namespace. Ensure
+      // the guest-resident relay for this distro (covers fresh spawns and
+      // post-restart reattach re-spawns), and once the relay has reported the
+      // guest home, point restart re-coordination at the relay-written
+      // guest-side endpoint file instead of the /p-translated Windows one.
+      const distro = opts.wslDistro ?? null
+      wslHookRelayManager.ensureForDistro(distro)
+      const guestEndpoint = wslHookRelayManager.getGuestEndpointFilePath(distro)
+      if (guestEndpoint) {
+        baseEnv.ORCA_AGENT_HOOK_ENDPOINT = guestEndpoint
+      }
+    }
   }
 
   // Why: PI_CODING_AGENT_DIR owns Pi's / OMP's full config/session root. Keep
@@ -1327,6 +1344,7 @@ export function registerPtyHandlers(
           launchCommand: ctx?.command,
           shellPath: ctx?.shellPath,
           isWsl: ctx?.isWsl,
+          wslDistro: ctx?.wslDistro ?? null,
           agentStatusHooksEnabled: isAgentStatusHooksEnabled(getSettings?.()),
           networkProxySettings: getSettings?.()
         })
@@ -2187,6 +2205,7 @@ export function registerPtyHandlers(
           launchCommand: args.command,
           shellPath: daemonShellOverride ?? process.env.COMSPEC,
           isWsl: shouldSkipCodexHomeEnvForWindowsShell(daemonShellOverride, cwd),
+          wslDistro: codexSelectionTarget.runtime === 'wsl' ? codexSelectionTarget.wslDistro : null,
           agentStatusHooksEnabled: isAgentStatusHooksEnabled(getSettings?.()),
           networkProxySettings: getSettings?.()
         })
@@ -2960,6 +2979,8 @@ export function registerPtyHandlers(
             launchCommand: args.command,
             shellPath: effectiveShellOverride ?? process.env.COMSPEC,
             isWsl: shouldSkipCodexHomeEnvForWindowsShell(effectiveShellOverride, cwd),
+            wslDistro:
+              codexSelectionTarget.runtime === 'wsl' ? codexSelectionTarget.wslDistro : null,
             agentStatusHooksEnabled: isAgentStatusHooksEnabled(getSettings?.()),
             networkProxySettings: getSettings?.()
           })

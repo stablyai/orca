@@ -15,15 +15,37 @@ import { hermesHookService } from '../hermes/hook-service'
 import { kimiHookService } from '../kimi/hook-service'
 import { openClaudeHookService } from '../openclaude/hook-service'
 
+export type RemoteManagedHookInstallOptions = {
+  /** Explicit CODEX_HOME dir for redirected runtimes (WSL managed runtime
+   *  home). Codex-only: it is the one agent whose home Orca redirects. Also
+   *  defers the config.toml trust write until that file exists, so the
+   *  launch path's only-if-absent seed is never pre-empted. */
+  codexHomeDir?: string
+}
+
 type RemoteManagedHookInstaller = readonly [
   AgentHookInstallStatus['agent'],
-  (sftp: SFTPWrapper, remoteHome: string) => Promise<AgentHookInstallStatus>
+  (
+    sftp: SFTPWrapper,
+    remoteHome: string,
+    options?: RemoteManagedHookInstallOptions
+  ) => Promise<AgentHookInstallStatus>
 ]
 
 const REMOTE_MANAGED_HOOK_INSTALLERS: readonly RemoteManagedHookInstaller[] = [
   ['claude', (sftp, remoteHome) => claudeHookService.installRemote(sftp, remoteHome)],
   ['openclaude', (sftp, remoteHome) => openClaudeHookService.installRemote(sftp, remoteHome)],
-  ['codex', (sftp, remoteHome) => codexHookService.installRemote(sftp, remoteHome)],
+  [
+    'codex',
+    (sftp, remoteHome, options) =>
+      codexHookService.installRemote(
+        sftp,
+        remoteHome,
+        options?.codexHomeDir
+          ? { codexHomeDir: options.codexHomeDir, deferTrustUntilConfigToml: true }
+          : undefined
+      )
+  ],
   ['gemini', (sftp, remoteHome) => geminiHookService.installRemote(sftp, remoteHome)],
   ['antigravity', (sftp, remoteHome) => antigravityHookService.installRemote(sftp, remoteHome)],
   ['amp', (sftp, remoteHome) => ampHookService.installRemote(sftp, remoteHome)],
@@ -45,12 +67,13 @@ export const REMOTE_MANAGED_HOOK_INSTALLER_AGENTS: readonly AgentHookInstallStat
 
 export async function installRemoteManagedAgentHooks(
   sftp: SFTPWrapper,
-  remoteHome: string
+  remoteHome: string,
+  options?: RemoteManagedHookInstallOptions
 ): Promise<AgentHookInstallStatus[]> {
   const results: AgentHookInstallStatus[] = []
   for (const [agent, install] of REMOTE_MANAGED_HOOK_INSTALLERS) {
     try {
-      const result = await install(sftp, remoteHome)
+      const result = await install(sftp, remoteHome, options)
       results.push(result)
       if (result.state === 'error') {
         console.warn(

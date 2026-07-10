@@ -92,7 +92,12 @@ function MetadataIconChip({
   )
 }
 
-export function CandidateRow({
+// Why: the cleanup list re-renders on every checkbox/expand/search keystroke;
+// memo keeps each unchanged row from re-rendering. Effective only while the
+// parent passes stable (useCallback) handlers — see WorkspaceCleanupDialog.
+// Scan stream-in still re-renders rows (candidates change, so the reviewInfo
+// prop identity changes); virtualization, not memo, bounds that cost.
+export const CandidateRow = React.memo(function CandidateRow({
   candidate,
   expanded,
   failure,
@@ -321,7 +326,7 @@ export function CandidateRow({
       </div>
     </div>
   )
-}
+})
 
 function formatCompactActivityLabel(label: string): string {
   if (label === 'Just now') {

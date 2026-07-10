@@ -33,6 +33,7 @@ import {
 import { app } from 'electron'
 import type { CodexManagedAccount } from '../../shared/types'
 import type { Store } from '../persistence'
+import { WSL_CODEX_RUNTIME_HOME_SEGMENTS } from '../pty/codex-home-wsl-env'
 import { writeFileAtomically } from './fs-utils'
 import {
   getOrcaManagedCodexHomePath,
@@ -657,9 +658,7 @@ export class CodexRuntimeHomeService {
 
   private getWslRuntimeHomePath(distro: string): string | null {
     const home = getWslHome(distro)
-    return home
-      ? this.joinWslPath(home, '.local', 'share', 'orca', 'codex-runtime-home', 'home')
-      : null
+    return home ? this.joinWslPath(home, ...WSL_CODEX_RUNTIME_HOME_SEGMENTS) : null
   }
 
   private safeReadBackActiveWslAccountBeforeRestart(

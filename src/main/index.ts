@@ -132,6 +132,7 @@ import {
 } from './claude-accounts/live-pty-gate'
 import { StarNagService } from './star-nag/service'
 import { agentHookServer } from './agent-hooks/server'
+import { wslHookRelayManager } from './agent-hooks/wsl-hook-relay-manager'
 import { maybeAutoRenameBranchOnFirstWork } from './agent-hooks/first-work-branch-rename'
 import { renameWorktreeFolderOnFirstWork } from './agent-hooks/first-work-folder-rename'
 import { moveWorktree } from './git/worktree'
@@ -2257,6 +2258,9 @@ app.on('will-quit', (e) => {
   automations?.stop()
   setUnreadDockBadgeCount(0)
   agentHookServer.stop()
+  // Why: cancels relay restart/reinstall timers and kills wsl.exe children
+  // deterministically instead of relying on stdio-pipe teardown.
+  wslHookRelayManager.disposeAll()
   stats?.flush()
   // Why: agent-browser daemon processes would otherwise linger after Orca quits,
   // holding ports and leaving stale session state on disk.
