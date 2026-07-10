@@ -3036,7 +3036,7 @@
             "antigravityUsageDetails": "Open Antigravity usage details",
             "grokUsageDetails": "Open Grok usage details",
             "5131f6a8a7": "Uso de Grok",
-            "8e2c5b7d43": "Abrir detalles de uso de Grok",
+            "8e2c5b7d43": "Abrir detalles de uso de Grok",
             "remoteServerLabel": "Servidor remoto"
           },
           "StatusBarUsageEmptyCta": {
@@ -8939,6 +8939,26 @@
           "afd4795eef": "Use your current system Grok login.",
           "264b67cb71": "No managed Grok accounts. Orca will use the system default Grok login until you add one here.",
           "8a0f870153": "Re-authenticate"
+        },
+        "linear": {
+          "agent": {
+            "skill": {
+              "install": {
+                "cta": {
+                  "copiedCommand": "Copied command.",
+                  "copyFailed": "Failed to copy command.",
+                  "skillLabel": "Agent skill:",
+                  "checking": "Checking...",
+                  "installed": "Installed",
+                  "notInstalled": "Not installed",
+                  "recheck": "Re-check",
+                  "installedDescription": "Agent skill installed. To update it, run:",
+                  "description": "Let your agents read and edit Linear tasks.",
+                  "copyCommand": "Copy command"
+                }
+              }
+            }
+          }
         }
       },
       "right": {
