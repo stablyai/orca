@@ -8,6 +8,7 @@ function makeState(overrides: Partial<State> = {}): State {
     activeTabIdByWorktree: {},
     activeTabTypeByWorktree: {},
     terminalLayoutsByTabId: {},
+    activeGroupIdByWorktree: {},
     ...overrides
   } as State
 }
@@ -40,13 +41,29 @@ describe('resolveWorktreeActiveSurfaceFocus', () => {
     })
   })
 
-  it('routes an editor tab to the editor surface', () => {
+  it('routes an editor tab to its active split group', () => {
+    const state = makeState({
+      activeTabIdByWorktree: { 'wt-1': 'file-1' },
+      activeTabTypeByWorktree: { 'wt-1': 'editor' },
+      activeGroupIdByWorktree: { 'wt-1': 'group-7' }
+    })
+
+    expect(resolveWorktreeActiveSurfaceFocus(state, 'wt-1')).toEqual({
+      kind: 'editor',
+      groupId: 'group-7'
+    })
+  })
+
+  it('routes an editor tab with no known active group to a null group', () => {
     const state = makeState({
       activeTabIdByWorktree: { 'wt-1': 'file-1' },
       activeTabTypeByWorktree: { 'wt-1': 'editor' }
     })
 
-    expect(resolveWorktreeActiveSurfaceFocus(state, 'wt-1')).toEqual({ kind: 'editor' })
+    expect(resolveWorktreeActiveSurfaceFocus(state, 'wt-1')).toEqual({
+      kind: 'editor',
+      groupId: null
+    })
   })
 
   it('falls back when the tab type is terminal but the tab id is missing', () => {

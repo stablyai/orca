@@ -3,12 +3,15 @@ import type { AppState } from '@/store/types'
 // Which surface a Cmd-J destination workspace should hand keyboard focus to.
 export type WorktreeActiveSurfaceFocusTarget =
   | { kind: 'terminal'; tabId: string; leafId: string | null }
-  | { kind: 'editor' }
+  | { kind: 'editor'; groupId: string | null }
   | { kind: 'fallback' }
 
 type WorktreeActiveSurfaceFocusState = Pick<
   AppState,
-  'activeTabIdByWorktree' | 'activeTabTypeByWorktree' | 'terminalLayoutsByTabId'
+  | 'activeTabIdByWorktree'
+  | 'activeTabTypeByWorktree'
+  | 'terminalLayoutsByTabId'
+  | 'activeGroupIdByWorktree'
 >
 
 // Why: decide the focus target purely from store state so the routing (active
@@ -27,7 +30,7 @@ export function resolveWorktreeActiveSurfaceFocus(
     return { kind: 'terminal', tabId, leafId }
   }
   if (tabType === 'editor') {
-    return { kind: 'editor' }
+    return { kind: 'editor', groupId: state.activeGroupIdByWorktree[worktreeId] ?? null }
   }
   return { kind: 'fallback' }
 }

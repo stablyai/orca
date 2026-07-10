@@ -242,7 +242,8 @@ describe('activateWorkspaceTabPaletteResult', () => {
     expect(mocks.store.activateTab).toHaveBeenLastCalledWith('diff-tab-1')
     expect(mocks.store.setActiveTabType).toHaveBeenCalledWith('editor')
     expect(mocks.focusTerminalTabSurface).not.toHaveBeenCalled()
-    expect(mocks.focusEditorTabSurface).toHaveBeenCalledTimes(1)
+    // Scoped to the tab's group so a split layout focuses the destination pane.
+    expect(mocks.focusEditorTabSurface).toHaveBeenCalledWith('group-2')
   })
 
   it.each([

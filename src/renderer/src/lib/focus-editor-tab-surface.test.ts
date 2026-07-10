@@ -126,6 +126,24 @@ describe('focusEditorTabSurface', () => {
     expect(editor.focus).toHaveBeenCalled()
   })
 
+  it('scopes focus to the given split group and skips a sibling group editor', () => {
+    flushAnimationFrames()
+    const inGroup = laidOutElement()
+    const sibling = laidOutElement()
+    stubDocument(
+      {
+        '[data-tab-group-body-id="group-7"] .monaco-editor .native-edit-context': [inGroup],
+        '.monaco-editor .native-edit-context': [sibling]
+      },
+      inGroup
+    )
+
+    focusEditorTabSurface('group-7')
+
+    expect(inGroup.focus).toHaveBeenCalled()
+    expect(sibling.focus).not.toHaveBeenCalled()
+  })
+
   it('does not focus anything while an inline tab rename input is open', () => {
     flushAnimationFrames()
     const editor = laidOutElement()

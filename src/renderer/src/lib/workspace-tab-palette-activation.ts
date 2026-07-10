@@ -115,7 +115,8 @@ export function activateWorkspaceTabPaletteResult(
   state.setActiveTabType('editor')
   // Why: mirror the terminal branch — without an explicit focus the editor tab
   // opens with the cursor unfocused, since the Cmd+J modal teardown races the
-  // destination editor mount. See focus-editor-tab-surface.
-  focusEditorTabSurface()
+  // destination editor mount. Scope to the tab's group so a split layout focuses
+  // the destination pane, not a sibling. See focus-editor-tab-surface.
+  focusEditorTabSurface(result.groupId)
   return { status: 'activated' }
 }

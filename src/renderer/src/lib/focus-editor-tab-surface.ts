@@ -13,6 +13,10 @@ import {
  *    no-op. We skip any surface that is not laid out (zero client rects, i.e.
  *    display:none) so focus lands on the destination workspace's visible
  *    editor — never a hidden one, and never a terminal.
+ *  - A worktree can show several side-by-side split groups, each rendering its
+ *    own editor. When a group id is given we scope the query to that group's
+ *    `[data-tab-group-body-id]` so focus lands on the destination tab's pane, not
+ *    the first visible editor in DOM order (mirrors the terminal leaf scoping).
  */
 // Monaco 0.52+ swaps the editing textarea for a focusable `.native-edit-context`
 // div (Electron always has EditContext); never target the bare `textarea`, which
@@ -46,6 +50,16 @@ function cancelPendingFocusFrame(): void {
   pendingFocusFrameId = null
 }
 
+function cssAttributeString(value: string): string {
+  return value.replace(/\\/g, '\\\\').replace(/"/g, '\\"')
+}
+
+// Prefix that scopes a selector to a specific tab group's body, or '' (whole
+// document) when no group is known.
+function groupScopePrefix(groupId: string | null | undefined): string {
+  return groupId ? `[data-tab-group-body-id="${cssAttributeString(groupId)}"] ` : ''
+}
+
 function isLaidOut(element: HTMLElement): boolean {
   // display:none (an inactive, warm workspace) yields zero client rects; a
   // visible editor — even Monaco's zero-size hidden input — yields at least one.
@@ -61,9 +75,9 @@ function isReadOnlyDiffOriginal(element: HTMLElement): boolean {
   return element.closest('.editor.original') !== null
 }
 
-function focusVisibleEditorSurface(): boolean {
+function focusVisibleEditorSurface(scopePrefix: string): boolean {
   for (const selector of EDITOR_FOCUS_SELECTORS) {
-    const candidates = document.querySelectorAll(selector)
+    const candidates = document.querySelectorAll(scopePrefix + selector)
     for (let index = 0; index < candidates.length; index++) {
       const element = candidates.item(index) as HTMLElement | null
       if (!element || !isLaidOut(element) || isReadOnlyDiffOriginal(element)) {
@@ -78,8 +92,11 @@ function focusVisibleEditorSurface(): boolean {
   return false
 }
 
-export function focusEditorTabSurface(): void {
+// `groupId` scopes focus to a specific split group's editor; omit it (or pass
+// null) to target the first visible editor anywhere in the active workspace.
+export function focusEditorTabSurface(groupId?: string | null): void {
   cancelPendingFocusFrame()
+  const scopePrefix = groupScopePrefix(groupId)
   const token = beginActiveSurfaceFocus()
   let attempts = 0
   const attempt = (): void => {
@@ -93,7 +110,7 @@ export function focusEditorTabSurface(): void {
     if (document.querySelector(TAB_RENAME_INPUT_SELECTOR)) {
       return
     }
-    if (focusVisibleEditorSurface()) {
+    if (focusVisibleEditorSurface(scopePrefix)) {
       return
     }
     attempts += 1

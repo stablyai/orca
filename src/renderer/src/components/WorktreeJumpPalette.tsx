@@ -1307,7 +1307,7 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
       if (target.kind === 'terminal') {
         focusTerminalTabSurface(target.tabId, target.leafId)
       } else if (target.kind === 'editor') {
-        focusEditorTabSurface()
+        focusEditorTabSurface(target.groupId)
       } else {
         focusFallbackSurface()
       }
