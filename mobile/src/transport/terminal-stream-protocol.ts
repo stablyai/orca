@@ -9,6 +9,9 @@ export enum TerminalStreamOpcode {
   SnapshotEnd = 4,
   Resized = 5,
   Error = 6,
+  // Why: outbound-only fire-and-forget keystrokes; never arrives inbound, so
+  // the decoder's opcode validation below intentionally omits it.
+  Input = 7,
   Metadata = 12
 }
 

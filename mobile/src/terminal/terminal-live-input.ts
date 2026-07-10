@@ -93,11 +93,14 @@ export function getTerminalLiveSpecialKeyBytes(key: string): string | null {
   return buildTerminalShortcutKey({ key: shortcutKey, modifiers: [] })?.bytes ?? null
 }
 
-export function isTerminalLiveInputWithinByteLimit(
+// Why: returns the encoded payload so the per-keystroke send path doesn't
+// UTF-8-encode the same text twice (once to check, once to transmit).
+export function encodeTerminalLiveInputWithinByteLimit(
   text: string,
   maxBytes = TERMINAL_LIVE_INPUT_MAX_BYTES
-): boolean {
-  return encoder.encode(text).byteLength <= maxBytes
+): Uint8Array | null {
+  const encoded = encoder.encode(text)
+  return encoded.byteLength <= maxBytes ? encoded : null
 }
 
 export function defaultTerminalLiveInputHandles(

@@ -12,18 +12,21 @@ import {
   publicKeyToBase64,
   encrypt,
   decrypt,
-  decryptBytes
+  decryptBytes,
+  encryptBytes
 } from './e2ee'
 import {
   handleTerminalBinaryFrame,
   type TerminalSnapshotState
 } from './rpc-client-terminal-binary-frame'
+import { encodeTerminalStreamFrame, TerminalStreamOpcode } from './terminal-stream-protocol'
 import {
   decodeBrowserScreencastFrame,
   type BrowserScreencastFrame
 } from './browser-screencast-protocol'
 import {
   buildTerminalUnsubscribeParams,
+  findRoutableTerminalStreamId,
   updateTerminalSubscriptionViewport as updateCachedTerminalSubscriptionViewport
 } from './rpc-client-terminal-subscription'
 import { describeSocketEvent } from './socket-event-debug'
@@ -77,6 +80,9 @@ export type RpcClient = {
     terminal: string,
     viewport: { cols: number; rows: number }
   ) => void
+  // Why: fire-and-forget keystroke path — no RPC round-trip per key. Returns
+  // false when no routable binary stream exists; callers fall back to the RPC.
+  sendTerminalBinaryInput: (terminal: string, payload: Uint8Array) => boolean
   getState: () => ConnectionState
   // Why: UI escalates "Reconnecting…" to "Can't connect" once attempts cross
   // a threshold. 0 means never failed; counter is reset on successful open.
@@ -208,6 +214,7 @@ export function connect(
   const terminalStreamListeners = new Map<number, StreamingListener>()
   const terminalStreamIdsByRequest = new Map<string, Set<number>>()
   const terminalSnapshots = new Map<number, TerminalSnapshotState>()
+  let terminalBinaryInputSeq = 0
   let activeBrowserScreencastRequestId: string | null = null
   let pendingBrowserScreencastRequestId: string | null = null
   const stateListeners = new Set<(state: ConnectionState) => void>()
@@ -1158,6 +1165,31 @@ export function connect(
       viewport: { cols: number; rows: number }
     ): void {
       updateCachedTerminalSubscriptionViewport(streamListeners.values(), terminal, viewport)
+    },
+
+    sendTerminalBinaryInput(terminal: string, payload: Uint8Array): boolean {
+      // Why: the routing maps are per-connection state (cleared on reconnect
+      // and stream end), so a hit proves the host can route this frame.
+      const streamId = findRoutableTerminalStreamId(
+        streamListeners,
+        terminalStreamIdsByRequest,
+        terminalStreamListeners,
+        terminal
+      )
+      if (streamId === null) {
+        return false
+      }
+      if (!ws || ws.readyState !== WebSocket.OPEN || !sharedKey) {
+        return false
+      }
+      const frame = encodeTerminalStreamFrame({
+        opcode: TerminalStreamOpcode.Input,
+        streamId,
+        seq: terminalBinaryInputSeq++,
+        payload
+      })
+      ws.send(encryptBytes(frame, sharedKey).buffer as ArrayBuffer)
+      return true
     },
 
     getState(): ConnectionState {

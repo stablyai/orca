@@ -100,9 +100,10 @@ import {
 import { createTerminalLiveAccessoryInput } from '../../../../src/terminal/terminal-live-accessory-input'
 import { getTerminalLiveAccessoryRawSendTarget } from '../../../../src/terminal/terminal-live-accessory-raw-send-target'
 import {
+  TERMINAL_LIVE_INPUT_MAX_BYTES,
   clearTerminalLiveInputFocusTimer,
+  encodeTerminalLiveInputWithinByteLimit,
   focusTerminalLiveInputTarget,
-  isTerminalLiveInputWithinByteLimit,
   scheduleTerminalLiveInputFocus
 } from '../../../../src/terminal/terminal-live-input'
 import { dismissTerminalKeyboard } from '../../../../src/terminal/terminal-keyboard-dismiss'
@@ -3115,9 +3116,10 @@ export default function SessionScreen() {
       if (text.length === 0) {
         return false
       }
-      if (!isTerminalLiveInputWithinByteLimit(text)) {
+      const encodedText = encodeTerminalLiveInputWithinByteLimit(text)
+      if (!encodedText) {
         triggerError()
-        showToast('Input too large (max 256 KiB)', 1500)
+        showToast(`Input too large (max ${TERMINAL_LIVE_INPUT_MAX_BYTES / 1024} KiB)`, 1500)
         return false
       }
       const rpc = clientRef.current
@@ -3129,6 +3131,11 @@ export default function SessionScreen() {
         activeSessionTabTypeRef.current !== 'terminal'
       ) {
         return false
+      }
+      // Why: fire-and-forget binary frame — no RPC round-trip per keystroke.
+      // Falls back to terminal.send when the stream isn't routable (e.g. older hosts).
+      if (rpc.sendTerminalBinaryInput(handle, encodedText)) {
+        return true
       }
       return rpc
         .sendRequest('terminal.send', {
