@@ -32,6 +32,9 @@ export function resolveTerminalInputHostPlatform(args: {
   }
 
   const host = parseExecutionHostId(getExecutionHostIdForWorktree(args.state, args.worktreeId))
+  if (host?.kind === 'ssh') {
+    return args.state.sshConnectionStates.get(host.targetId)?.remotePlatform ?? args.clientPlatform
+  }
   if (host?.kind === 'runtime') {
     return (
       args.state.runtimeStatusByEnvironmentId.get(host.environmentId)?.status?.hostPlatform ??
