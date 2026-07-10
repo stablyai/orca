@@ -961,6 +961,53 @@ describe('upsertHookTrustEntries', () => {
     expect(written).not.toContain(`[hooks.state.'C:\\Users\\O'Connor`)
   })
 
+  it('does not insert the [hooks.state] parent table inside a multi-line string', () => {
+    // Why: ensureHooksStateParentTable used a flat /m regex that matched a
+    // `[hooks.state."..."]`-shaped line inside a user's multi-line TOML string
+    // (e.g. a profile `instructions` block), corrupting the prose and failing
+    // to emit a real parent table before the genuine Windows hook blocks.
+    const original = [
+      '[profiles.default]',
+      'instructions = """',
+      'Approve a hook by adding a block like:',
+      `[hooks.state."some-fake-key"]`,
+      'enabled = true',
+      '"""',
+      ''
+    ].join('\n')
+
+    writeFileSync(configPath, original, 'utf-8')
+
+    const entry: CodexTrustEntry = {
+      sourcePath: 'C:\\Users\\Rod\\AppData\\Roaming\\orca\\hooks.json',
+      eventLabel: 'session_start',
+      groupIndex: 0,
+      handlerIndex: 0,
+      command: 'echo session'
+    }
+    upsertHookTrustEntries(configPath, [entry])
+    const result = readFileSync(configPath, 'utf-8')
+
+    // The user's instructions string survives untouched.
+    expect(result).toContain(
+      [
+        'instructions = """',
+        'Approve a hook by adding a block like:',
+        `[hooks.state."some-fake-key"]`,
+        'enabled = true',
+        '"""'
+      ].join('\n')
+    )
+    // A real parent table is emitted after the closing """ and before the hook.
+    const parentIdx = result.indexOf('[hooks.state]')
+    const realHookIdx = result.indexOf(
+      `[hooks.state.'C:\\Users\\Rod\\AppData\\Roaming\\orca\\hooks.json:session_start:0:0']`
+    )
+    const closingQuoteIdx = result.indexOf('"""\n', result.indexOf('instructions = """'))
+    expect(parentIdx).toBeGreaterThan(closingQuoteIdx)
+    expect(parentIdx).toBeLessThan(realHookIdx)
+  })
+
   it.skipIf(process.platform !== 'win32')(
     'finds a Codex-written block with lowercased username when Orca key has mixed-case username',
     () => {

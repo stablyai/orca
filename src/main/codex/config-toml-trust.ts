@@ -495,15 +495,41 @@ function ensureHooksStateParentTable(content: string): string {
   }
   const eol = content.includes('\r\n') ? '\r\n' : '\n'
   const parent = `[hooks.state]${eol}`
-  const hookHeader = /^[ \t]*\[hooks\.state\.(?:"|')/m.exec(content)
-  if (hookHeader) {
-    return `${content.slice(0, hookHeader.index)}${parent}${eol}${content.slice(hookHeader.index)}`
+  const hookHeaderIndex = findFirstHookStateHeaderIndex(content)
+  if (hookHeaderIndex !== -1) {
+    return `${content.slice(0, hookHeaderIndex)}${parent}${eol}${content.slice(hookHeaderIndex)}`
   }
   if (content.length === 0) {
     return parent
   }
   const separator = content.endsWith(`${eol}${eol}`) ? '' : content.endsWith(eol) ? eol : eol + eol
   return `${content}${separator}${parent}`
+}
+
+// Why: a flat /m regex would also match a `[hooks.state."..."]`-shaped line that
+// lives inside a user's multi-line TOML string (e.g. a profile `instructions`
+// block), inserting the parent table inside that string and corrupting it.
+// Mirror the stateful scanner used by findTrustBlockRanges so only a real header
+// counts as the insertion point.
+function findFirstHookStateHeaderIndex(content: string): number {
+  let cursor = 0
+  let multilineState: TomlMultilineState = { basic: false, literal: false }
+  while (cursor < content.length) {
+    const newlineIdx = content.indexOf('\n', cursor)
+    const lineEnd = newlineIdx === -1 ? content.length : newlineIdx
+    const rawLine = content.slice(cursor, lineEnd)
+    const line = rawLine.replace(/\r$/, '')
+    const nextCursor = newlineIdx === -1 ? content.length : newlineIdx + 1
+    if (
+      !isInsideTomlMultilineString(multilineState) &&
+      parseHookStateHeaderKey(line) !== null
+    ) {
+      return cursor
+    }
+    multilineState = updateTomlMultilineState(multilineState, line)
+    cursor = nextCursor
+  }
+  return -1
 }
 
 type TrustBlockRange = {
