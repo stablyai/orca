@@ -1467,10 +1467,11 @@ export async function importCookiesFromBrowser(
   // In packaged builds where os_crypt IS active, CookieMonster will re-encrypt
   // plaintext cookies on its next flush, so this approach is safe in both modes.
 
-  // Why: CookieMonster holds the live DB's data in memory and overwrites it
-  // on flush/shutdown. Writing directly to the live DB is futile. Instead,
-  // copy the live DB to a staging location, populate it there, and let the
-  // next cold start swap it in before CookieMonster initializes.
+  // Why: cookies are loaded into the live session via cookies.set() (below), which is
+  // the primary path. CookieMonster holds the live DB in memory and overwrites it on
+  // flush/shutdown, so writing the live DB directly is futile — instead we optionally
+  // copy it to a staging location, populate that, and let the next cold start swap it
+  // in for the subset of cookies that fail cookies.set() validation.
   const targetSession = session.fromPartition(targetPartition)
   await targetSession.cookies.flushStore()
 
@@ -1503,11 +1504,18 @@ export async function importCookiesFromBrowser(
     stagingDir,
     `Cookies-${partitionSegment}-${Date.now()}-${randomUUID()}`
   )
+  // Why: the staged copy is a valid Chromium cookie DB we populate and swap in on the
+  // next cold start — the fallback for cookies that fail cookies.set() validation. On
+  // Windows the live partition Cookies DB is held with an exclusive lock by the network
+  // service, so it cannot be copied while Orca is running. Treat staging as best-effort:
+  // when the copy fails, skip it and import in-memory via cookies.set().
+  let stagingAvailable = false
   try {
     mkdirSync(stagingDir, { recursive: true })
     copyFileSync(liveCookiesPath, stagingCookiesPath)
-  } catch {
-    return { ok: false, reason: 'Could not create staging cookie database.' }
+    stagingAvailable = true
+  } catch (stagingErr) {
+    diag(`  staging copy unavailable, importing in-memory only: ${stagingErr}`)
   }
 
   let sourceDb: InstanceType<typeof DatabaseSync> | null = null
@@ -1517,15 +1525,15 @@ export async function importCookiesFromBrowser(
     // Why: Chromium stores timestamps as microseconds since 1601, which can exceed
     // Number.MAX_SAFE_INTEGER (~9e15). readBigInts ensures no precision loss.
     sourceDb = new DatabaseSync(sourceCookiesPath, { readOnly: true, readBigInts: true })
-    stagingDb = new DatabaseSync(stagingCookiesPath)
+    stagingDb = stagingAvailable ? new DatabaseSync(stagingCookiesPath) : null
 
     const targetColumnInfo = stagingDb
-      .prepare('PRAGMA table_info(cookies)')
-      .all() as ChromiumCookieColumnInfo[]
+      ? (stagingDb.prepare('PRAGMA table_info(cookies)').all() as ChromiumCookieColumnInfo[])
+      : []
     const targetCols: string[] = targetColumnInfo.map((r) => r.name)
     const colList = targetCols.join(', ')
 
-    stagingDb.exec('DELETE FROM cookies')
+    stagingDb?.exec('DELETE FROM cookies')
 
     const sourceRows = sourceDb.prepare('SELECT * FROM cookies ORDER BY rowid').all() as Record<
       string,
@@ -1537,7 +1545,7 @@ export async function importCookiesFromBrowser(
     diag(`  source has ${sourceRows.length} cookies`)
 
     if (sourceRows.length === 0) {
-      stagingDb.close()
+      stagingDb?.close()
       stagingDb = null
       try {
         unlinkSync(stagingCookiesPath)
@@ -1555,7 +1563,7 @@ export async function importCookiesFromBrowser(
       ? getEncryptionKey(browser.keychainService!, browser.keychainAccount!, browser)
       : null
     if (needsSourceKey && !sourceKey) {
-      stagingDb.close()
+      stagingDb?.close()
       stagingDb = null
       // Why: key denial happens after staging, so failed retries must not leave
       // one full target database copy behind each time.
@@ -1612,11 +1620,11 @@ export async function importCookiesFromBrowser(
     const decryptedCookies: DecryptedCookie[] = []
 
     const placeholders = targetCols.map(() => '?').join(', ')
-    const insertStmt = stagingDb.prepare(
-      `INSERT OR REPLACE INTO cookies (${colList}) VALUES (${placeholders})`
-    )
+    const insertStmt = stagingDb
+      ? stagingDb.prepare(`INSERT OR REPLACE INTO cookies (${colList}) VALUES (${placeholders})`)
+      : null
 
-    stagingDb.exec('BEGIN TRANSACTION')
+    stagingDb?.exec('BEGIN TRANSACTION')
 
     for (const sourceRow of sourceRows) {
       const encRaw = sourceRow.encrypted_value
@@ -1675,14 +1683,16 @@ export async function importCookiesFromBrowser(
         expirationDate: expiresUtc > 0 ? expiresUtc : undefined
       })
 
-      const params = buildChromiumCookieInsertParams(targetColumnInfo, sourceRow, decryptedValue)
-      insertStmt.run(...params)
+      if (stagingDb && insertStmt) {
+        const params = buildChromiumCookieInsertParams(targetColumnInfo, sourceRow, decryptedValue)
+        insertStmt.run(...params)
+      }
       imported++
     }
     diag(`  skipped ${integritySkipped} Google integrity cookies (SIDCC/STRP/AEC)`)
 
-    stagingDb.exec('COMMIT')
-    stagingDb.close()
+    stagingDb?.exec('COMMIT')
+    stagingDb?.close()
     stagingDb = null
 
     diag(`  SQLite staging complete: ${imported} cookies, ${domainSet.size} domains`)
@@ -1728,19 +1738,27 @@ export async function importCookiesFromBrowser(
 
     diag(`  memory load: ${memoryLoaded} OK, ${memoryFailed} failed`)
 
-    if (memoryFailed > 0) {
+    if (stagingAvailable && memoryFailed > 0) {
       // Why: some cookies couldn't be loaded via cookies.set() (non-ASCII values
       // or other validation failures). Keep the staging DB so the next cold start
       // picks them up from SQLite where CookieMonster reads them without validation.
       browserSessionRegistry.setPendingCookieImport(targetPartition, stagingCookiesPath)
       diag(`  staged at ${stagingCookiesPath} for ${memoryFailed} cookies that need restart`)
     } else {
-      try {
-        unlinkSync(stagingCookiesPath)
-      } catch {
-        /* best-effort */
+      if (stagingAvailable) {
+        try {
+          unlinkSync(stagingCookiesPath)
+        } catch {
+          /* best-effort */
+        }
       }
-      diag(`  all cookies loaded in-memory — no restart needed`)
+      // Why: without staging (e.g. the Windows exclusive lock on the live DB), cookies
+      // that fail cookies.set() validation cannot be recovered via a cold-start swap.
+      diag(
+        stagingAvailable || memoryFailed === 0
+          ? `  all cookies loaded in-memory — no restart needed`
+          : `  imported in-memory; ${memoryFailed} non-loadable cookies dropped (no staging)`
+      )
     }
 
     const ua = getUserAgentForBrowser(browser.family)
