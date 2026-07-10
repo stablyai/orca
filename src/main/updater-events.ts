@@ -266,14 +266,12 @@ export function registerAutoUpdaterHandlers({
       sendStatus({ state: 'not-available' })
       return
     }
-    recordUpdaterLifecycle('update_downloaded', {
-      version: info.version,
-      macInstallerReady: process.platform === 'darwin' ? isMacInstallerReady() : true
-    })
+    const macInstallerReady = process.platform === 'darwin' ? isMacInstallerReady() : true
+    recordUpdaterLifecycle('update_downloaded', { version: info.version, macInstallerReady })
     // On macOS, defer the 'downloaded' status until Squirrel.Mac has finished
     // processing the update via the localhost proxy. On other platforms,
     // the update is ready immediately after electron-updater downloads it.
-    if (process.platform === 'darwin' && !isMacInstallerReady()) {
+    if (process.platform === 'darwin' && !macInstallerReady) {
       // Squirrel is still processing. Keep the UI at 100% downloaded so the
       // user sees the handoff instead of a misleading "ready to install".
       recordUpdaterLifecycle('macos_waiting_for_squirrel', { version: info.version })
