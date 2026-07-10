@@ -634,6 +634,7 @@ import {
 } from '../../shared/constants'
 import { listRepoWorktrees } from '../repo-worktrees'
 import { createWorktreeLinkedPaths, removeWorktreeLinkedPaths } from '../ipc/worktree-symlinks'
+import { copyLocalWorktreeIncludeFiles } from '../ipc/worktree-include-copy'
 import { deleteWorktreeHistoryDir } from '../terminal-history'
 import {
   cleanupUnusedWorktreePushTargetRemote,
@@ -13896,6 +13897,15 @@ export class OrcaRuntimeService {
       await createWorktreeLinkedPaths(repo.path, created.path, repo.symlinkPaths)
     }
 
+    // Why: `.worktreeinclude` is a harness-level contract — gitignored local
+    // setup files listed there must be in place before any setup script or
+    // agent starts, independent of whether setup is configured or skipped.
+    const includeCopy = await copyLocalWorktreeIncludeFiles(
+      repo.path,
+      created.path,
+      localWorktreeGitOptions
+    )
+
     let setup: CreateWorktreeResult['setup']
     let warning: string | undefined
     // Why: CLI-created worktrees do not have a renderer preview to mismatch
@@ -14161,6 +14171,7 @@ export class OrcaRuntimeService {
       ...(addResult.localBaseRefUpdateSuggestion
         ? { localBaseRefUpdateSuggestion: addResult.localBaseRefUpdateSuggestion }
         : {}),
+      ...(includeCopy ? { includeCopy } : {}),
       ...(didSpawnStartup && startupTerminalHandle
         ? {
             startupTerminal: {

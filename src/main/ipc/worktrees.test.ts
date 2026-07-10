@@ -197,6 +197,18 @@ vi.mock('./worktree-logic', async (importOriginal) => {
   }
 })
 
+const { copyLocalWorktreeIncludeFilesMock, copyRemoteWorktreeIncludeFilesMock } = vi.hoisted(
+  () => ({
+    copyLocalWorktreeIncludeFilesMock: vi.fn(),
+    copyRemoteWorktreeIncludeFilesMock: vi.fn()
+  })
+)
+
+vi.mock('./worktree-include-copy', () => ({
+  copyLocalWorktreeIncludeFiles: copyLocalWorktreeIncludeFilesMock,
+  copyRemoteWorktreeIncludeFiles: copyRemoteWorktreeIncludeFilesMock
+}))
+
 const { deleteWorktreeHistoryDirMock } = vi.hoisted(() => ({
   deleteWorktreeHistoryDirMock: vi.fn()
 }))
@@ -336,10 +348,14 @@ describe('registerWorktreeHandlers', () => {
       clearProviderPtyStateMock,
       getLocalPtyProviderMock,
       deleteWorktreeHistoryDirMock,
-      advertisedUrlWatcherForgetWorktreeMock
+      advertisedUrlWatcherForgetWorktreeMock,
+      copyLocalWorktreeIncludeFilesMock,
+      copyRemoteWorktreeIncludeFilesMock
     ]) {
       m.mockReset()
     }
+    copyLocalWorktreeIncludeFilesMock.mockResolvedValue(undefined)
+    copyRemoteWorktreeIncludeFilesMock.mockResolvedValue(undefined)
     killAllProcessesForWorktreeMock.mockResolvedValue({
       runtimeStopped: 0,
       providerStopped: 0,
@@ -1043,6 +1059,118 @@ describe('registerWorktreeHandlers', () => {
         'spawn_startup_terminal'
       ])
     )
+  })
+
+  it('copies .worktreeinclude files after worktree add, before setup prep and agent startup', async () => {
+    addWorktreeMock.mockResolvedValue({})
+    listWorktreesMock.mockResolvedValueOnce([
+      {
+        path: '/workspace/improve-dashboard',
+        head: 'def',
+        branch: 'improve-dashboard',
+        isBare: false,
+        isMainWorktree: false
+      }
+    ])
+    loadHooksMock.mockReturnValue({ scripts: { setup: 'pnpm install' } })
+    getEffectiveHooksMock.mockReturnValue({ scripts: { setup: 'pnpm install' } })
+    getEffectiveHooksFromConfigMock.mockReturnValue({ scripts: { setup: 'pnpm install' } })
+    shouldRunSetupForCreateMock.mockReturnValue(true)
+    copyLocalWorktreeIncludeFilesMock.mockResolvedValue({
+      copied: ['.env.local'],
+      skipped: [{ path: 'tracked.txt', reason: 'tracked' }]
+    })
+
+    const result = (await handlers['worktrees:create'](null, {
+      repoId: 'repo-1',
+      name: 'improve-dashboard',
+      createdWithAgent: 'claude',
+      startup: {
+        command: 'claude --prefill test',
+        env: { ORCA_AGENT_MODE: 'direct' },
+        telemetry: {
+          agent_kind: 'claude',
+          launch_source: 'new_workspace_composer',
+          request_kind: 'new'
+        }
+      }
+    })) as {
+      includeCopy?: { copied: string[]; skipped: { path: string; reason: string }[] }
+      timing?: { phases: { phase: string }[] }
+    }
+
+    expect(copyLocalWorktreeIncludeFilesMock).toHaveBeenCalledWith(
+      '/workspace/repo',
+      '/workspace/improve-dashboard',
+      expect.any(Object)
+    )
+    const copyOrder = copyLocalWorktreeIncludeFilesMock.mock.invocationCallOrder[0]
+    const addOrder = addWorktreeMock.mock.invocationCallOrder[0]
+    const setupPrepOrder = createSetupRunnerScriptMock.mock.invocationCallOrder[0]
+    const agentSpawnOrder = runtimeStub.createTerminal.mock.invocationCallOrder[0]
+    expect(copyOrder).toBeGreaterThan(addOrder!)
+    expect(copyOrder).toBeLessThan(setupPrepOrder!)
+    expect(copyOrder).toBeLessThan(agentSpawnOrder!)
+    expect(result.includeCopy).toEqual({
+      copied: ['.env.local'],
+      skipped: [{ path: 'tracked.txt', reason: 'tracked' }]
+    })
+    expect(result.timing?.phases.map((phase) => phase.phase)).toEqual(
+      expect.arrayContaining(['copy_worktree_include', 'prepare_setup'])
+    )
+  })
+
+  it('copies .worktreeinclude files when no setup script is configured', async () => {
+    listWorktreesMock.mockResolvedValue([
+      {
+        path: '/workspace/improve-dashboard',
+        head: 'abc123',
+        branch: 'refs/heads/improve-dashboard',
+        isBare: false,
+        isMainWorktree: false
+      }
+    ])
+    copyLocalWorktreeIncludeFilesMock.mockResolvedValue({ copied: ['.env.local'], skipped: [] })
+
+    const result = (await handlers['worktrees:create'](null, {
+      repoId: 'repo-1',
+      name: 'improve-dashboard'
+    })) as { includeCopy?: unknown }
+
+    expect(copyLocalWorktreeIncludeFilesMock).toHaveBeenCalledWith(
+      '/workspace/repo',
+      '/workspace/improve-dashboard',
+      expect.any(Object)
+    )
+    expect(createSetupRunnerScriptMock).not.toHaveBeenCalled()
+    expect(result.includeCopy).toEqual({ copied: ['.env.local'], skipped: [] })
+  })
+
+  it('copies .worktreeinclude files when setup is configured but skipped', async () => {
+    listWorktreesMock.mockResolvedValue([
+      {
+        path: '/workspace/improve-dashboard',
+        head: 'abc123',
+        branch: 'refs/heads/improve-dashboard',
+        isBare: false,
+        isMainWorktree: false
+      }
+    ])
+    loadHooksMock.mockReturnValue({ scripts: { setup: 'pnpm install' } })
+    getEffectiveHooksMock.mockReturnValue({ scripts: { setup: 'pnpm install' } })
+    getEffectiveHooksFromConfigMock.mockReturnValue({ scripts: { setup: 'pnpm install' } })
+    shouldRunSetupForCreateMock.mockReturnValue(false)
+    copyLocalWorktreeIncludeFilesMock.mockResolvedValue({ copied: ['.env.local'], skipped: [] })
+
+    const result = (await handlers['worktrees:create'](null, {
+      repoId: 'repo-1',
+      name: 'improve-dashboard',
+      setupDecision: 'skip'
+    })) as { includeCopy?: unknown }
+
+    expect(copyLocalWorktreeIncludeFilesMock).toHaveBeenCalled()
+    expect(createSetupRunnerScriptMock).not.toHaveBeenCalled()
+    expect(result.includeCopy).toEqual({ copied: ['.env.local'], skipped: [] })
   })
 
   it('returns the wrapped setup command when startup spawned but setup creation failed', async () => {
@@ -2827,6 +2955,64 @@ describe('registerWorktreeHandlers', () => {
         manualOrder: 123_456
       })
     })
+  })
+
+  it('copies .worktreeinclude on the remote host after add, before setup prep', async () => {
+    const repo = {
+      id: 'repo-ssh',
+      path: '/remote/repo',
+      displayName: 'ssh',
+      badgeColor: '#000',
+      addedAt: 0,
+      connectionId: 'conn-1',
+      worktreeBaseRef: 'origin/main'
+    }
+    const provider = {
+      exec: vi
+        .fn()
+        .mockImplementation(async (args: string[]) =>
+          args[0] === 'remote' ? { stdout: 'origin\n', stderr: '' } : { stdout: '', stderr: '' }
+        ),
+      fetchRemoteTrackingRef: vi.fn().mockResolvedValue(undefined),
+      addWorktree: vi.fn().mockResolvedValue(undefined),
+      listWorktrees: vi.fn().mockResolvedValue([
+        {
+          path: '/remote/improve-dashboard',
+          head: 'abc123',
+          branch: 'refs/heads/improve-dashboard',
+          isBare: false,
+          isMainWorktree: false
+        }
+      ])
+    }
+    const fsProvider = { readFile: vi.fn().mockRejectedValue(new Error('ENOENT')) }
+    const mux = { request: vi.fn().mockResolvedValue(undefined), notify: vi.fn() }
+    store.getRepos.mockReturnValue([repo])
+    store.getRepo.mockReturnValue(repo)
+    getSshGitProviderMock.mockReturnValue(provider)
+    getSshFilesystemProviderMock.mockReturnValue(fsProvider)
+    getActiveMultiplexerMock.mockReturnValue(mux)
+    store.setWorktreeMeta.mockImplementation((_worktreeId, meta) => meta)
+    copyRemoteWorktreeIncludeFilesMock.mockResolvedValue({
+      copied: ['.env.local'],
+      skipped: []
+    })
+
+    const result = (await handlers['worktrees:create'](null, {
+      repoId: 'repo-ssh',
+      name: 'improve-dashboard'
+    })) as { includeCopy?: unknown }
+
+    expect(copyRemoteWorktreeIncludeFilesMock).toHaveBeenCalledWith(
+      '/remote/repo',
+      '/remote/improve-dashboard',
+      provider,
+      fsProvider
+    )
+    const addOrder = provider.addWorktree.mock.invocationCallOrder[0]
+    const copyOrder = copyRemoteWorktreeIncludeFilesMock.mock.invocationCallOrder[0]
+    expect(copyOrder).toBeGreaterThan(addOrder!)
+    expect(result.includeCopy).toEqual({ copied: ['.env.local'], skipped: [] })
   })
 
   it('returns SSH local base refresh skip status when the owning worktree is dirty', async () => {

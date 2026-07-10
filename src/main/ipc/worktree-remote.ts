@@ -96,6 +96,10 @@ import {
 } from './worktree-push-target-setup'
 import { isENOENT, registerWorktreeRootsForRepo } from './filesystem-auth'
 import { createWorktreeLinkedPaths } from './worktree-symlinks'
+import {
+  copyLocalWorktreeIncludeFiles,
+  copyRemoteWorktreeIncludeFiles
+} from './worktree-include-copy'
 import { normalizeSparseDirectories } from './sparse-checkout-directories'
 import { joinWorktreeRelativePath } from '../runtime/runtime-relative-paths'
 import type { IFilesystemProvider } from '../providers/types'
@@ -1889,6 +1893,17 @@ export async function createRemoteWorktree(
   // local-only until that protocol work is in scope. Remote repos with
   // `symlinkPaths` configured have them silently ignored here.
 
+  // Why: `.worktreeinclude` must be honored before setup preparation and any
+  // agent starts, same as the local flow. The copy runs entirely on the
+  // remote host (relay fs.copy), so listed files — which can hold secrets —
+  // never transit to the local machine.
+  let includeCopy: CreateWorktreeResult['includeCopy']
+  if (fsProvider) {
+    includeCopy = await timing.time('copy_worktree_include', async () =>
+      copyRemoteWorktreeIncludeFiles(repo.path, created.path, provider, fsProvider)
+    )
+  }
+
   let setup: CreateWorktreeResult['setup']
   let defaultTabs: CreateWorktreeResult['defaultTabs']
   if (fsProvider) {
@@ -1941,6 +1956,7 @@ export async function createRemoteWorktree(
     ...(defaultTabs ? { defaultTabs } : {}),
     ...(localBaseRefRefresh ? { localBaseRefRefresh } : {}),
     ...(localBaseRefUpdateSuggestion ? { localBaseRefUpdateSuggestion } : {}),
+    ...(includeCopy ? { includeCopy } : {}),
     timing: timing.finish()
   }
 }
@@ -2521,6 +2537,14 @@ export async function createLocalWorktree(
     })
   }
 
+  // Why: `.worktreeinclude` is a harness-level contract — gitignored local
+  // setup files listed there must be in place before any setup script or
+  // agent starts, and must not depend on a setup script being configured,
+  // launched, or succeeding. Keep this step ahead of prepare_setup.
+  const includeCopy = await timing.time('copy_worktree_include', async () =>
+    copyLocalWorktreeIncludeFiles(repo.path, created.path, localWorktreeGitOptions)
+  )
+
   // Why: the worktree's own `orca.yaml` (at the tip of the base branch) is
   // authoritative for what runs post-creation. The repo-level trust already
   // granted by the user in the pre-create flow covers execution of that
@@ -2609,6 +2633,7 @@ export async function createLocalWorktree(
     ...(addResult.localBaseRefUpdateSuggestion
       ? { localBaseRefUpdateSuggestion: addResult.localBaseRefUpdateSuggestion }
       : {}),
+    ...(includeCopy ? { includeCopy } : {}),
     ...(stagedStartup.startupTerminal ? { startupTerminal: stagedStartup.startupTerminal } : {}),
     ...(stagedStartup.warning ? { warning: stagedStartup.warning } : {}),
     timing: timing.finish()
