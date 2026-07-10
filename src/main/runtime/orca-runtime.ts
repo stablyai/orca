@@ -24522,17 +24522,28 @@ export type TerminalTailWaitState = {
   fromTail: boolean
 }
 
-// Why: onPtyData runs per raw PTY chunk (hundreds/sec under load). Building the
-// wait text (a full map/trim/filter/join over the up-to-256KB retained tail)
-// and lower-casing + scanning it once per chunk is unavoidable, but the old
-// code did it twice — once for the pre-append tail and once for the post-append
-// tail — every chunk. Caching the post-append state lets the next chunk reuse it
-// as its pre-append state, halving the per-chunk full-tail work.
+// Why: onPtyData runs per raw PTY chunk (hundreds/sec under load). Ordinary
+// tails take one allocation-free sentinel pass; only candidate-bearing tails
+// build, lowercase, and parse the full 256 KiB text. The cached post-append
+// state also avoids repeating that work for the next chunk's previous state.
 export function computeTerminalTailWaitState(
   lines: string[],
   partialLine: string,
   preview: string
 ): TerminalTailWaitState {
+  const tailShape = inspectTerminalWaitTail(lines, partialLine)
+  if (!tailShape.fromTail) {
+    return {
+      waitText: preview,
+      signal: findActionableTerminalWaitBlockedSignal(preview.toLowerCase()),
+      fromTail: false
+    }
+  }
+  if (!tailShape.mayContainBlockedSignal) {
+    // Why: tailGainedNewerBlockedReason reads waitText only when signal exists;
+    // avoid retaining a rebuilt 256 KiB string for the overwhelmingly common case.
+    return { waitText: '', signal: null, fromTail: true }
+  }
   const tailText = buildTailLines(lines, partialLine)
     .map((line) => line.trim())
     .filter(Boolean)
@@ -24544,6 +24555,29 @@ export function computeTerminalTailWaitState(
     signal: findActionableTerminalWaitBlockedSignal(waitText.toLowerCase()),
     fromTail
   }
+}
+
+function inspectTerminalWaitTail(
+  lines: string[],
+  partialLine: string
+): { fromTail: boolean; mayContainBlockedSignal: boolean } {
+  let fromTail = false
+  let mayContainBlockedSignal = false
+  for (const line of lines) {
+    if (!fromTail && line.trim().length > 0) {
+      fromTail = true
+    }
+    if (!mayContainBlockedSignal && TERMINAL_WAIT_BLOCKED_SENTINEL_RE.test(line)) {
+      mayContainBlockedSignal = true
+    }
+  }
+  if (!fromTail && partialLine.trim().length > 0) {
+    fromTail = true
+  }
+  if (!mayContainBlockedSignal && TERMINAL_WAIT_BLOCKED_SENTINEL_RE.test(partialLine)) {
+    mayContainBlockedSignal = true
+  }
+  return { fromTail, mayContainBlockedSignal }
 }
 
 // Why: decides whether the appended chunk introduced a newer actionable blocked
@@ -25587,9 +25621,17 @@ function isTerminalWaitWhitespace(value: string, index: number): boolean {
   return code === 32 || (code >= 9 && code <= 13)
 }
 
+const TERMINAL_WAIT_BLOCKED_SENTINEL_RE =
+  /update available|choose working directory to|codex just got an upgrade|hooks need review|do you trust|trust this|trusted workspace|press enter to (?:confirm|continue|view|insert)|press t to trust/i
+
 function findTerminalWaitBlockedSignal(
   normalized: string
 ): { reason: RuntimeTerminalWaitBlockedReason; index: number } | null {
+  // Why: this runs once per PTY chunk over a tail up to 256 KiB. One combined
+  // negative scan avoids a dozen full-tail searches when no prompt can match.
+  if (!TERMINAL_WAIT_BLOCKED_SENTINEL_RE.test(normalized)) {
+    return null
+  }
   const candidates: { reason: RuntimeTerminalWaitBlockedReason; index: number }[] = []
   const updateIndex = normalized.lastIndexOf('update available')
   if (updateIndex !== -1 && normalized.includes('press enter to continue', updateIndex)) {
