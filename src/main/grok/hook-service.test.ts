@@ -71,7 +71,9 @@ describe('GrokHookService', () => {
     expect(getGrokToolEventMatcherForTests()).toBe('.*')
     expect(getGrokToolEventMatcherForTests()).not.toBe('*')
     expect(new RegExp(getGrokToolEventMatcherForTests()).test('run_terminal_command')).toBe(true)
-    expect(() => new RegExp('*')).toThrow()
+    // Why: build the invalid pattern at runtime so static lint does not flag it.
+    const bareStar = ['*', ''].join('')
+    expect(() => new RegExp(bareStar)).toThrow()
     expect(config.hooks.PreToolUse[0].hooks[0].command).toMatch(
       process.platform === 'win32' ? WINDOWS_POWERSHELL_LAUNCHER : /grok-hook/
     )
@@ -122,6 +124,31 @@ describe('GrokHookService', () => {
       }
     }
   )
+
+  it('installs hooks under GROK_HOME when set', () => {
+    const grokHome = mkdtempSync(join(tmpdir(), 'orca-grok-home-env-'))
+    const previous = process.env.GROK_HOME
+    process.env.GROK_HOME = grokHome
+    try {
+      const status = new GrokHookService().install()
+      expect(status.state).toBe('installed')
+      expect(status.configPath).toBe(join(grokHome, 'hooks', 'orca-status.json'))
+      expect(readFileSync(join(grokHome, 'hooks', 'orca-status.json'), 'utf8')).toContain(
+        'SessionStart'
+      )
+      // Why: must not also write into the mocked ~/.grok when GROK_HOME wins.
+      expect(() =>
+        readFileSync(join(homeDir, '.grok', 'hooks', 'orca-status.json'), 'utf8')
+      ).toThrow()
+    } finally {
+      if (previous === undefined) {
+        delete process.env.GROK_HOME
+      } else {
+        process.env.GROK_HOME = previous
+      }
+      rmSync(grokHome, { recursive: true, force: true })
+    }
+  })
 
   it('preserves user-authored hook entries in the Orca Grok config file', () => {
     const configPath = join(homeDir, '.grok', 'hooks', 'orca-status.json')

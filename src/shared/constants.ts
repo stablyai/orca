@@ -261,11 +261,11 @@ export function getDefaultSettings(homedir: string): GlobalSettings {
     windowBackgroundBlur: false,
     minimizeToTrayOnClose: false,
     terminalClipboardOnSelect: false,
-    // Why: Grok (and tmux/nvim/fzf) emit OSC 52 to copy to the host clipboard
-    // over SSH/remote PTYs — xAI docs call this out as the remote copy path.
-    // Default on so agent copy works out of the box; users can still disable
-    // it if they treat PTY OSC 52 writes as an untrusted channel.
-    terminalAllowOsc52Clipboard: true,
+    // Why: OSC 52 is a classic data-exfiltration vector (any process piping
+    // untrusted output into the terminal can rewrite the clipboard). Keep the
+    // conservative default off; users who need Grok/tmux/nvim remote copy can
+    // enable the toggle. OSC 52 *query* remains disabled separately.
+    terminalAllowOsc52Clipboard: false,
     claudeAgentTeamsMode: 'off',
     setupScriptLaunchMode: 'new-tab',
     terminalScrollbackRows: DESKTOP_TERMINAL_SCROLLBACK_ROWS_DEFAULT,

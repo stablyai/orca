@@ -1,7 +1,7 @@
-import { homedir } from 'node:os'
 import { join } from 'node:path'
 import type { SFTPWrapper } from 'ssh2'
 import type { AgentHookInstallState, AgentHookInstallStatus } from '../../shared/agent-hook-types'
+import { resolveGrokHomeDir } from '../../shared/grok-session-paths'
 import {
   buildManagedCommandHook,
   createManagedCommandMatcher,
@@ -56,10 +56,18 @@ export function getGrokToolEventMatcherForTests(): string {
 }
 
 function getConfigPath(): string {
-  // Why: Grok loads trusted global hook files from ~/.grok/hooks/*.json. Keep
-  // Orca's managed entries in a dedicated file so user-authored hook files stay
-  // untouched and project-level trust is not required for status reporting.
-  return join(homedir(), '.grok', 'hooks', 'orca-status.json')
+  // Why: Grok loads trusted global hook files from $GROK_HOME/hooks/*.json
+  // (or ~/.grok when unset). Honor GROK_HOME so install/status match the same
+  // home Grok and transcript lookup use; keep Orca entries in a dedicated file
+  // so user-authored hook files stay untouched.
+  return join(resolveGrokHomeDir(), 'hooks', 'orca-status.json')
+}
+
+/** Remote Grok home under the guest login home (remote env is not probed). */
+function getRemoteGrokHome(remoteHome: string): string {
+  // Why: SFTP paths are always POSIX — never use host path.join here.
+  const home = remoteHome.replace(/\/+$/, '') || remoteHome
+  return `${home}/.grok`
 }
 
 function getManagedScriptFileName(): string {
@@ -229,7 +237,10 @@ export class GrokHookService {
 
   async installRemote(sftp: SFTPWrapper, remoteHome: string): Promise<AgentHookInstallStatus> {
     const home = remoteHome.replace(/\/$/, '')
-    const remoteConfigPath = `${home}/.grok/hooks/orca-status.json`
+    // Why: remote install has no guest GROK_HOME probe yet — place hooks under
+    // the guest login home's .grok tree (same layout as default local home).
+    // Do not apply the *local* process.env.GROK_HOME to remote paths.
+    const remoteConfigPath = `${getRemoteGrokHome(home)}/hooks/orca-status.json`
     const remoteScriptPath = `${home}/.orca/agent-hooks/grok-hook.sh`
     try {
       const config = await readHooksJsonRemote(sftp, remoteConfigPath)

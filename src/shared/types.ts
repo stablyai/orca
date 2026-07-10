@@ -2598,11 +2598,11 @@ export type GlobalSettings = {
   terminalClipboardOnSelect: boolean
   /** Why: lets TUIs like Grok, tmux, nvim, and fzf copy to the system clipboard
    *  via the OSC 52 escape sequence — essential for SSH-hosted workflows where
-   *  the terminal is the only bridge to the local clipboard. Defaults to true
-   *  so agent copy works out of the box. OSC 52 is a classic data-exfiltration
-   *  vector (any process piping untrusted output into the terminal —
-   *  `cat attacker.log` — can silently rewrite the user's clipboard), so users
-   *  who treat PTY OSC 52 writes as an untrusted channel can disable it. */
+   *  the terminal is the only bridge to the local clipboard. Defaults to
+   *  false because OSC 52 is a classic data-exfiltration vector (any
+   *  process piping untrusted output into the terminal — `cat attacker.log`
+   *  — can silently rewrite the user's clipboard). Opt-in preserves the
+   *  conservative default while making the capability one toggle away. */
   terminalAllowOsc52Clipboard: boolean
   /** Experimental Claude Code Agent Teams integration. Native panes use a
    *  tmux-compatible shim so teammate output stays on Orca's normal PTY path. */
