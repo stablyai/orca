@@ -2008,7 +2008,7 @@ function StatusBarInner({ floatingTerminalOpen }: StatusBarProps): React.JSX.Ele
                 iconOnly={iconOnly}
                 ariaLabel={translate(
                   'auto.components.status.bar.StatusBar.grokUsageDetails',
-                  'Grok usage details'
+                  'Open Grok usage details'
                 )}
               />
             )}
@@ -2185,6 +2185,7 @@ function StatusBarInner({ floatingTerminalOpen }: StatusBarProps): React.JSX.Ele
             <DropdownMenuCheckboxItem
               checked={statusBarItems.includes('grok')}
               onCheckedChange={() => {
+                recordFeatureInteraction('usage-tracking')
                 toggleStatusBarItem('grok')
               }}
             >

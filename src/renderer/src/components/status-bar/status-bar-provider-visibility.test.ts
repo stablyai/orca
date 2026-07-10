@@ -401,6 +401,7 @@ describe('isUsageEmptyState', () => {
           opencodeGo: provider('unavailable', { provider: 'opencode-go' }),
           kimi: provider('unavailable', { provider: 'kimi' }),
           antigravity: null,
+          grok: provider('unavailable', { provider: 'grok' }),
           minimax: provider('unavailable', { provider: 'minimax' })
         },
         usageSettings({ antigravityUsageConfigured: true })

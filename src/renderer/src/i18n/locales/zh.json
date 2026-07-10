@@ -3032,7 +3032,9 @@
             "06741a2f3d": "打开 MiniMax 使用量详情",
             "3bbf140864": "MiniMax 使用量",
             "antigravityUsage": "Antigravity Usage",
+            "grokUsage": "Grok Usage",
             "antigravityUsageDetails": "Open Antigravity usage details",
+            "grokUsageDetails": "Open Grok usage details",
             "5131f6a8a7": "Grok 用量",
             "8e2c5b7d43": "打开 Grok 用量详情"
           },

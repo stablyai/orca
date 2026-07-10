@@ -1,25 +1,15 @@
 import { createLocalizedCatalog } from '@/i18n/localized-catalog'
 import { translate } from '@/i18n/i18n'
-import { getUsageStatusBarToggleEntries } from './appearance-status-bar-usage-toggle-entries'
 import {
   getUsageStatusBarToggles,
   type StatusBarToggleSearchEntry
 } from './appearance-status-bar-usage-toggles'
 import { translateSearchKeyword } from './settings-search-keywords'
 
-function mergeUsageStatusBarToggles(): StatusBarToggleSearchEntry[] {
-  // Why: antigravity and grok PRs each extracted a full usage-toggle catalog.
-  // Union by id so the combined branch keeps every provider once.
-  const byId = new Map<string, StatusBarToggleSearchEntry>()
-  for (const entry of [...getUsageStatusBarToggles(), ...getUsageStatusBarToggleEntries()]) {
-    byId.set(entry.id, entry)
-  }
-  return Array.from(byId.values())
-}
-
 export const getStatusBarToggles = createLocalizedCatalog(
   (): readonly StatusBarToggleSearchEntry[] => [
-    ...mergeUsageStatusBarToggles(),
+    // Why: single catalog now owns every usage provider (Claude…Grok/Antigravity).
+    ...getUsageStatusBarToggles(),
     {
       id: 'ssh',
       title: translate('auto.components.settings.appearance.search.57fb424c56', 'Remote Hosts'),

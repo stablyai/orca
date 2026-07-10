@@ -3032,7 +3032,9 @@
             "06741a2f3d": "MiniMax 사용량 세부 정보 열기",
             "3bbf140864": "MiniMax 사용량",
             "antigravityUsage": "Antigravity Usage",
+            "grokUsage": "Grok Usage",
             "antigravityUsageDetails": "Open Antigravity usage details",
+            "grokUsageDetails": "Open Grok usage details",
             "5131f6a8a7": "Grok 사용량",
             "8e2c5b7d43": "Grok 사용량 세부 정보 열기"
           },

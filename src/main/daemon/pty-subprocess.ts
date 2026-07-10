@@ -718,6 +718,24 @@ export function createPtySubprocess(opts: PtySubprocessOptions): SubprocessHandl
         } else {
           env.GROK_HOME = grokHomeWslInfo.linuxPath
           addWslEnvKeys(env, ['GROK_HOME'])
+          // Why: mirror Codex — when wsl.exe has no distro yet, pin shellArgs/
+          // spawnCwd to the managed GROK_HOME distro so the Linux path exists.
+          if (!launchWslDistro) {
+            const resolved = resolveWindowsShellLaunchArgs(
+              shellPath,
+              requestedCwd,
+              getDefaultCwd(),
+              {
+                distro: grokHomeWslInfo.distro
+              },
+              opts.command
+            )
+            shellArgs = resolved.shellArgs
+            spawnCwd = resolved.effectiveCwd
+            validationCwd = resolved.validationCwd
+            startupCommandDeliveredInShellArgs =
+              resolved.startupCommandDeliveredInShellArgs === true
+          }
         }
       } else if (isHostCodexHomeForWsl(env.GROK_HOME)) {
         // Why: Grok managed accounts are host-local unless explicitly

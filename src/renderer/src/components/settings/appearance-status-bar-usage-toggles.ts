@@ -166,6 +166,31 @@ export function getUsageStatusBarToggles(): StatusBarToggleSearchEntry[] {
       )
     },
     {
+      id: 'grok',
+      title: translate('auto.components.settings.appearance.search.798169c7f4', 'Grok Usage'),
+      description: translate(
+        'auto.components.settings.appearance.search.b286fc6d86',
+        'Show Grok subscription usage in the status bar.'
+      ),
+      keywords: [
+        ...translateSearchKeyword(
+          'auto.components.settings.appearance.search.896eb53fd4',
+          'status bar'
+        ),
+        ...translateSearchKeyword('auto.components.settings.appearance.search.1cd7950acd', 'grok'),
+        ...translateSearchKeyword('auto.components.settings.appearance.search.00a028f25f', 'usage'),
+        ...translateSearchKeyword(
+          'auto.components.settings.appearance.search.de586def95',
+          'subscription'
+        ),
+        ...translateSearchKeyword('auto.components.settings.appearance.search.17087fd1bc', 'xai')
+      ],
+      toggleDescription: translate(
+        'settings.appearance.statusBar.grokToggleDescription',
+        'Show Grok subscription usage for the active workspace.'
+      )
+    },
+    {
       id: 'kimi',
       title: translate('auto.components.settings.appearance.search.3a6c028ea8', 'Kimi Usage'),
       description: translate(
