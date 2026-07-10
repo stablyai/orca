@@ -118,13 +118,18 @@ describe('Pi-compatible title detection', () => {
     ['π: tmp', 'omp', 'OMP ready'],
     ['\u280b π: tmp', 'omp', '\u280b OMP'],
     ['\u280b π - tmp', 'omp', '\u280b OMP'],
-    ['\u280b OMP', 'pi', '\u280b Pi']
+    ['\u280b OMP', 'pi', '\u280b Pi'],
+    ['lucky-echidna | \u283c π - Diagnose Orca terminal title flicker - test', 'omp', '\u280b OMP'],
+    ['lucky-echidna | Pi ready', 'omp', 'OMP ready'],
+    ['Codex | Pi ready', 'omp', 'OMP ready'],
+    ['lucky-echidna | \u283c π - Diagnose | test', 'omp', '\u280b OMP']
   ] as const)('normalizes %s to the authoritative %s owner', (title, owner, expectedTitle) => {
     expect(normalizeCompatibleAgentTitleForOwner(title, owner)).toBe(expectedTitle)
   })
 
   it('preserves Pi-compatible custom titles and unrelated owners', () => {
     expect(normalizeCompatibleAgentTitleForOwner('Fix pi bugs', 'omp')).toBe('Fix pi bugs')
+    expect(normalizeCompatibleAgentTitleForOwner('xxPi ready', 'omp')).toBe('xxPi ready')
     expect(normalizeCompatibleAgentTitleForOwner('\u280b Pi', 'codex')).toBe('\u280b Pi')
   })
 
