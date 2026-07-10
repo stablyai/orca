@@ -14,7 +14,12 @@ import {
   type TerminalShortcutPolicy
 } from '../../../../shared/keybindings'
 import type { PaneCwdMap } from './resolve-split-cwd'
+import type { TerminalKittyKeyboardModeTracker } from '../../../../shared/terminal-kitty-keyboard-mode-tracker'
 import { keyboardEventBelongsToScope } from './terminal-keyboard-scope'
+import {
+  getLayoutBaseCharacterForCode,
+  prefetchLayoutBaseCharacters
+} from '@/lib/keyboard-layout/layout-base-character'
 import { normalizeSelectedTextForFileSearch } from '@/lib/file-search-selection'
 import { isFindQueryTooLarge } from '@/lib/find-query-bounds'
 import { handleEmptyFloatingWorkspacePanelCloseShortcut } from '@/lib/floating-workspace-terminal-actions'
@@ -161,6 +166,7 @@ type KeyboardHandlersDeps = {
   searchOpenRef: React.RefObject<boolean>
   searchStateRef: React.RefObject<SearchState>
   macOptionAsAltRef: React.RefObject<MacOptionAsAlt>
+  paneKittyKeyboardModesRef?: React.RefObject<Map<number, TerminalKittyKeyboardModeTracker>>
   keybindings?: KeybindingOverrides
   terminalShortcutPolicy?: TerminalShortcutPolicy
 }
@@ -194,6 +200,7 @@ export function useTerminalKeyboardShortcuts({
   searchOpenRef,
   searchStateRef,
   macOptionAsAltRef,
+  paneKittyKeyboardModesRef,
   keybindings,
   terminalShortcutPolicy = 'orca-first'
 }: KeyboardHandlersDeps): void {
@@ -205,6 +212,12 @@ export function useTerminalKeyboardShortcuts({
     const isMac = navigator.userAgent.includes('Mac')
     const isWindows = navigator.userAgent.includes('Windows')
     const shortcutPlatform: KeybindingPlatform = isMac ? 'darwin' : isWindows ? 'win32' : 'linux'
+
+    // Why: kitty Option-chord encoding resolves base keys through the async
+    // KeyboardLayoutMap; prefetch so the map is cached before the first chord.
+    if (isMac) {
+      prefetchLayoutBaseCharacters()
+    }
 
     // Why: KeyboardEvent.location on a character key (e.g. Period) always
     // reports that key's own position (0 = standard), not which modifier is
@@ -293,6 +306,17 @@ export function useTerminalKeyboardShortcuts({
         })
       }
 
+      // Why: the pane's TUI opted into kitty keyboard reporting via CSI > u;
+      // the tracker mirrors that from PTY output so the policy can encode
+      // Option chords the way the application negotiated.
+      const isKittyKeyboardActivePane = (): boolean => {
+        const activePane = manager.getActivePane() ?? manager.getPanes()[0]
+        if (!activePane) {
+          return false
+        }
+        return (paneKittyKeyboardModesRef?.current.get(activePane.id)?.flags ?? 0) > 0
+      }
+
       const action = resolveTerminalShortcutAction(
         e,
         isMac,
@@ -300,7 +324,9 @@ export function useTerminalKeyboardShortcuts({
         optionKeyLocation,
         isWindows,
         keybindings,
-        isLocalWindowsConptyPane
+        isLocalWindowsConptyPane,
+        isKittyKeyboardActivePane,
+        getLayoutBaseCharacterForCode
       )
       if (!action) {
         return
@@ -537,6 +563,7 @@ export function useTerminalKeyboardShortcuts({
     searchOpenRef,
     searchStateRef,
     macOptionAsAltRef,
+    paneKittyKeyboardModesRef,
     keybindings,
     terminalShortcutPolicy,
     tabId,

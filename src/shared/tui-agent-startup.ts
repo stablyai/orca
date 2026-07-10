@@ -134,7 +134,8 @@ export function buildAgentStartupPlan(args: {
   const quotedPrompt = quoteStartupArg(trimmedPrompt, shell)
 
   if (config.promptInjectionMode === 'argv') {
-    const inlineLaunchCommand = `${launchBaseCommand} ${quotedPrompt}`
+    const promptSeparator = config.argvPromptSeparator ? ` ${config.argvPromptSeparator}` : ''
+    const inlineLaunchCommand = `${launchBaseCommand}${promptSeparator} ${quotedPrompt}`
     // Why: Windows argv/env budgets reject oversized CreateProcess command lines.
     // Fall back to empty launch + post-ready paste-submit (followup) so the
     // prompt still lands without truncating argv.

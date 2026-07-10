@@ -14,7 +14,6 @@ import {
   Search,
   X,
   Pin,
-  GitBranch,
   List,
   SlidersHorizontal,
   Layers,
@@ -52,6 +51,7 @@ import { useActiveWorktreeScroll } from '../../../src/hooks/use-active-worktree-
 import type { RepoIcon } from '../../../../src/shared/repo-icon'
 import { PickerModal } from '../../../src/components/PickerModal'
 import { ActionSheetContent } from '../../../src/components/ActionSheetModal'
+import { buildWorktreeNavigationActions } from '../../../src/agent-history/worktree-navigation-actions'
 import { ConfirmModal } from '../../../src/components/ConfirmModal'
 import { BottomDrawer } from '../../../src/components/BottomDrawer'
 import { ProtocolBlockScreen } from '../../../src/components/ProtocolBlockScreen'
@@ -182,6 +182,7 @@ export function HostScreen({
   const [showGroupPicker, setShowGroupPicker] = useState(false)
   const [showFilterModal, setShowFilterModal] = useState(false)
   const [actionTarget, setActionTarget] = useState<Worktree | null>(null)
+  const [hostCapabilities, setHostCapabilities] = useState<string[]>([])
   const [confirmDelete, setConfirmDelete] = useState<Worktree | null>(null)
   const [confirmRemoveHost, setConfirmRemoveHost] = useState(false)
   const [routeActionState, setRouteActionState] = useState(() =>
@@ -513,6 +514,10 @@ export function HostScreen({
   // format is in place to flip a switch in a future release.
   useEffect(() => {
     if (connState !== 'connected' || !client) {
+      // Why: drop the prior host's capabilities while disconnected/switching so
+      // a capability-gated action (e.g. Agent Session History) can't linger for
+      // a host that doesn't support it.
+      setHostCapabilities([])
       return
     }
     let cancelled = false
@@ -524,9 +529,13 @@ export function HostScreen({
           return
         }
         if (!response.ok) {
+          setHostCapabilities([])
           return
         }
-        const status = (response as RpcSuccess).result as DesktopStatus
+        const status = (response as RpcSuccess).result as DesktopStatus & {
+          capabilities?: string[]
+        }
+        setHostCapabilities(status.capabilities ?? [])
         const verdict = evaluateCompat({
           desktopProtocolVersion: status.protocolVersion,
           desktopMinCompatibleMobileVersion: status.minCompatibleMobileVersion
@@ -1359,20 +1368,14 @@ export function HostScreen({
             actions={
               actionTarget
                 ? [
-                    {
-                      label: 'Source Control',
-                      icon: GitBranch,
-                      onPress: () => {
-                        const params = new URLSearchParams({
-                          name: actionTarget.displayName || actionTarget.repo,
-                          origin: 'host'
-                        })
-                        navigateFromHostList(
-                          `/h/${hostId}/source-control/${encodeURIComponent(actionTarget.worktreeId)}?${params.toString()}`
-                        )
-                        setActionTarget(null)
-                      }
-                    },
+                    ...buildWorktreeNavigationActions({
+                      hostId,
+                      worktreeId: actionTarget.worktreeId,
+                      worktreeName: actionTarget.displayName || actionTarget.repo,
+                      hostCapabilities,
+                      navigate: navigateFromHostList,
+                      onDone: () => setActionTarget(null)
+                    }),
                     {
                       label: 'Sleep',
                       icon: Moon,

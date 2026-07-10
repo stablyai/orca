@@ -89,7 +89,7 @@ function createSettings(overrides: Partial<GlobalSettings> = {}): GlobalSettings
     terminalRightClickToPaste: false,
     terminalFocusFollowsMouse: false,
     terminalClipboardOnSelect: false,
-    terminalAllowOsc52Clipboard: false,
+    terminalAllowOsc52Clipboard: true,
     setupScriptLaunchMode: 'split-vertical',
     terminalScrollbackRows: 5_000,
     localAccountRuntime: 'host',

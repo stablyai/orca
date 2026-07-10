@@ -25,6 +25,11 @@ export const AI_VAULT_AGENTS = [
   'kimi'
 ] as const satisfies readonly TuiAgent[]
 
+// Why: the aiVault.listSessions RPC schema CLAMPS scopePaths to this bound
+// (safe: scope paths only widen discovery). Producer-side caps against the same
+// value are optional belt-and-braces, not required for the request to succeed.
+export const AI_VAULT_SCOPE_PATHS_MAX_COUNT = 64
+
 export type AiVaultAgent = (typeof AI_VAULT_AGENTS)[number]
 export type AiVaultScope = 'workspace' | 'project' | 'all'
 export type AiVaultSort = 'updated' | 'created'

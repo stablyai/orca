@@ -365,6 +365,9 @@ describe('filesystem-list-files', () => {
       expect(gitCalls.length).toBe(2)
       expect(gitCalls[0][1]).toContain('ls-files')
       expect(gitCalls[0][1]).toContain('-s')
+      expect(gitCalls[0][1]).toContain('--directory')
+      expect(gitCalls[1][1]).toContain('--directory')
+      expect(gitCalls[1][1]).toContain('--no-empty-directory')
 
       // Should include valid files and filter node_modules
       expect(result).toContain('src/index.ts')

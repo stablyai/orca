@@ -9,6 +9,7 @@ import { scheduleRuntimeGraphSync } from '@/runtime/sync-runtime-graph'
 import { useAppStore } from '@/store'
 import { getWorktreeMapFromState } from '@/store/selectors'
 import { parseWorkspaceKey } from '../../../../shared/workspace-scope'
+import { TerminalKittyKeyboardModeTracker } from '../../../../shared/terminal-kitty-keyboard-mode-tracker'
 import { isRuntimeOwnedSshTargetId } from '../../../../shared/execution-host'
 import { createTerminalZeroDimensionsMessage } from '../../../../shared/terminal-zero-dimensions-diagnostic'
 import { parseTerminalOscColorQuery } from '../../../../shared/terminal-osc-color-reply'
@@ -1125,6 +1126,19 @@ export function connectPanePty(
   // Why: paneKey crosses PTY env, hook IPC, retained rows, and reload/replay.
   // Use the stable layout leaf UUID, not the renderer-local numeric pane id.
   const cacheKey = makePaneKey(deps.tabId, pane.leafId)
+  // Why: mirrors the kitty keyboard flags the pane's application negotiates.
+  // Fed only from application output (live PTY bytes + daemon replay
+  // payloads), never from renderer-generated resets, so it reflects what the
+  // application expects even after defensive renderer-side kitty wipes.
+  const kittyKeyboardModes = (() => {
+    const existing = deps.paneKittyKeyboardModesRef.current.get(pane.id)
+    if (existing) {
+      return existing
+    }
+    const created = new TerminalKittyKeyboardModeTracker()
+    deps.paneKittyKeyboardModesRef.current.set(pane.id, created)
+    return created
+  })()
   const getSleepingRecordForPane = (
     state: ReturnType<typeof useAppStore.getState>
   ): { paneKey: string; record: SleepingAgentSessionRecord } | null => {
@@ -2178,6 +2192,9 @@ export function connectPanePty(
     handledExitPtyId = ptyId
     agentCompletionCoordinator.dispose()
     clearPanePtyFitBinding()
+    // Why: the negotiating application died with its PTY; any replacement
+    // session starts with kitty keyboard flags at zero.
+    kittyKeyboardModes.reset()
     const isSuppressedExit = deps.consumeSuppressedPtyExit(ptyId)
     if (!isSuppressedExit) {
       deps.clearExitedPanePtyLayoutBinding(pane.id, ptyId)
@@ -3819,6 +3836,11 @@ export function connectPanePty(
     ): Promise<string | null> => {
       clearPaneMode2031State()
       clearHiddenOutputRestoreState()
+      // Why: a fresh spawn is a new process with kitty keyboard flags at
+      // zero. The exit-handler reset alone is not enough: a late exit from a
+      // replaced PTY takes the stale-transport early return and skips it, so
+      // a restart-in-place would leak the old TUI's flags into a fresh shell.
+      kittyKeyboardModes.reset()
       prepareFreshShellViewportForSpawn(options)
       if (connectionId && startupOverride?.command) {
         // Why: SSH providers use `command` only as spawn metadata; the renderer
@@ -4183,6 +4205,11 @@ export function connectPanePty(
           // must clear a stale agent signal from an earlier payload.
           rememberReattachPayloadAgentSignal(data, { fullScreenReplay: clearBeforeReplay })
         }
+        // Why: replayed application bytes carry the live TUI's kitty keyboard
+        // negotiation; the mirror must re-arm from them after a reload. Replay
+        // semantics: relay reconnects redeliver the same window, so pushes
+        // apply as sets to keep the mirrored stack from accumulating frames.
+        kittyKeyboardModes.scanReplay(data)
         await writeReplayDataAsync(data)
         if (clearBeforeReplay || data.length > 0) {
           await writeReplayDataAsync(reattachReplayResetSequence(data))
@@ -4466,6 +4493,10 @@ export function connectPanePty(
       foreground: boolean,
       opts?: { hiddenStartupRendererQuery?: boolean }
     ): void {
+      // Why: every application byte funnels through here (foreground, hidden,
+      // and background writes), so this is the one place the kitty keyboard
+      // mirror observes the pane's protocol negotiation.
+      kittyKeyboardModes.scan(data)
       if (foreground) {
         resetHiddenOutputRestoreIfPtyChanged()
         resetHiddenRendererRiskState()
@@ -5571,6 +5602,10 @@ export function connectPanePty(
           }
         }
         writeReplayData('\x1b[2J\x1b[3J\x1b[H')
+        // Why: the daemon snapshot's rehydrate preamble carries the live
+        // session's kitty keyboard flags; re-arm the mirror from it so Option
+        // chords keep their kitty encoding after a window reload.
+        kittyKeyboardModes.scanReplay(connectResult.snapshot)
         writeReplayData(connectResult.snapshot)
         // Snapshot reattach keeps a live session, so avoid the broader mode
         // reset. We only drop renderer-owned state that should not leak from
@@ -5597,6 +5632,10 @@ export function connectPanePty(
         // duplication. The reattach reset clears renderer-owned state without
         // tearing down the still-running TUI's live modes.
         writeReplayData('\x1b[2J\x1b[3J\x1b[H')
+        // Why: raw relay replay contains the application's own kitty pushes
+        // when they fall inside the retained window; re-arm the mirror with
+        // replay (set) semantics so redelivery cannot grow the stack.
+        kittyKeyboardModes.scanReplay(connectResult.replay)
         writeReplayData(connectResult.replay)
         writeReplayData(reattachReplayResetSequence(connectResult.replay))
         sendFocusedReattachFocusInAfterReplay()
@@ -5624,6 +5663,9 @@ export function connectPanePty(
         // crashed TUI (e.g. Claude's \e[?1004h) left in the scrollback, so
         // reset them to match the fresh shell's expectations.
         writeReplayData(POST_REPLAY_MODE_RESET)
+        // Why: the dead run's scrollback was never scanned, and any kitty
+        // flags it pushed died with it — the fresh shell starts at zero.
+        kittyKeyboardModes.reset()
         consumeRestoredViewportBlankingMarker()
         writeFreshShellViewportBlanking()
         if (!isRemoteRuntimePtyId(ptyId)) {

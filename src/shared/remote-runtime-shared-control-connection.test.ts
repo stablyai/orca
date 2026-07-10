@@ -346,18 +346,18 @@ describe('RemoteRuntimeSharedControlConnection', () => {
     connection.close()
   })
 
-  it('refreshes pending request timeouts when keepalive frames show server progress', async () => {
+  it('times out a stuck short RPC on its absolute deadline despite keepalive frames', async () => {
+    // Why: a keepalive on the shared socket is armed by an unrelated long-poll,
+    // not by this request. It must NOT extend a stuck short RPC's deadline —
+    // otherwise a hung server call hangs the caller forever (#7948).
     const server = await createServer({
+      silentMethods: ['worktree.hang'],
       sendKeepaliveBeforeResponse: true,
-      keepaliveDelayMs: 25,
-      responseDelayMs: 60
+      keepaliveDelayMs: 20
     })
     const connection = new RemoteRuntimeSharedControlConnection(server.pairing)
 
-    await expect(connection.request('worktree.ps', undefined, 50)).resolves.toMatchObject({
-      ok: true,
-      result: { method: 'worktree.ps' }
-    })
+    await expect(connection.request('worktree.hang', undefined, 60)).rejects.toThrow('Timed out')
 
     connection.close()
   })
@@ -618,6 +618,15 @@ function handleRequest(
   delayedResponses: (() => void)[]
 ): void {
   requests.push(request)
+  // Why: keepalives are armed by an unrelated long-poll and keep flowing even
+  // while a method is deliberately silent — emit them before the silent return.
+  if (options.sendKeepaliveBeforeResponse && options.keepaliveDelayMs !== undefined) {
+    const timer = setInterval(
+      () => sendEncrypted(ws, sharedKey, { _keepalive: true }),
+      options.keepaliveDelayMs
+    )
+    ws.once('close', () => clearInterval(timer))
+  }
   if (options.silentMethods?.includes(request.method)) {
     return
   }
@@ -647,13 +656,10 @@ function handleRequest(
     })
   }
   const closeAfterResponse = streaming && options.closeAfterStreamingResponse?.() === true
-  if (options.sendKeepaliveBeforeResponse) {
-    const sendKeepalive = (): void => sendEncrypted(ws, sharedKey, { _keepalive: true })
-    if (options.keepaliveDelayMs !== undefined) {
-      setTimeout(sendKeepalive, options.keepaliveDelayMs)
-    } else {
-      sendKeepalive()
-    }
+  // Delayed/periodic keepalives are handled by the interval above; here we only
+  // cover the immediate single-keepalive-before-response case.
+  if (options.sendKeepaliveBeforeResponse && options.keepaliveDelayMs === undefined) {
+    sendEncrypted(ws, sharedKey, { _keepalive: true })
   }
   if (options.delaySubscriptionReady && streaming) {
     delayedResponses.push(sendResponse)

@@ -49,6 +49,63 @@ describe('tui agent startup plans', () => {
     expect(plan?.launchCommand).toBe('claude "fix ^"quoted^" ^& ^%PATH^%"')
   })
 
+  it('terminates Grok options before a flag-shaped POSIX prompt', () => {
+    const plan = buildAgentStartupPlan({
+      agent: 'grok',
+      prompt: '--version',
+      cmdOverrides: {},
+      platform: 'linux'
+    })
+
+    expect(plan?.launchCommand).toBe("grok -- '--version'")
+  })
+
+  it('terminates Grok options before a flag-shaped PowerShell prompt', () => {
+    const plan = buildAgentStartupPlan({
+      agent: 'grok',
+      prompt: '-h',
+      cmdOverrides: {},
+      platform: 'win32'
+    })
+
+    expect(plan?.launchCommand).toBe("grok -- '-h'")
+  })
+
+  it('terminates Grok options before a subcommand-shaped cmd prompt', () => {
+    const plan = buildAgentStartupPlan({
+      agent: 'grok',
+      prompt: 'help',
+      cmdOverrides: {},
+      platform: 'win32',
+      shell: 'cmd'
+    })
+
+    expect(plan?.launchCommand).toBe('grok -- "help"')
+  })
+
+  it('places the Grok prompt separator after configured agent arguments', () => {
+    const plan = buildAgentStartupPlan({
+      agent: 'grok',
+      prompt: '--version',
+      cmdOverrides: {},
+      agentArgs: '--always-approve',
+      platform: 'win32'
+    })
+
+    expect(plan?.launchCommand).toBe("grok '--always-approve' -- '--version'")
+  })
+
+  it('does not add the Grok prompt separator to other argv agents', () => {
+    const plan = buildAgentStartupPlan({
+      agent: 'codex',
+      prompt: '--version',
+      cmdOverrides: {},
+      platform: 'linux'
+    })
+
+    expect(plan?.launchCommand).toBe("codex '--version'")
+  })
+
   it('does not launch Codex with the Orca profile when agent status hooks are enabled', () => {
     const plan = buildAgentStartupPlan({
       agent: 'codex',

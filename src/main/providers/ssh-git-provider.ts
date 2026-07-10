@@ -21,6 +21,7 @@ import type {
 import type { GitHistoryOptions, GitHistoryResult } from '../../shared/git-history'
 import { buildHostedRemoteCommitUrl, buildHostedRemoteFileUrl } from '../git/hosted-remote-url'
 import { JsonRpcErrorCode } from '../ssh/relay-protocol'
+import { requestGitStreamable } from '../ssh/ssh-git-response-stream-reader'
 import type { CommitMessageDraftContext } from '../../shared/commit-message-generation'
 import type { CommitMessagePlan } from '../../shared/commit-message-plan'
 import type { RemoteCommitMessageExecResult } from '../text-generation/commit-message-text-generation'
@@ -373,7 +374,7 @@ export class SshGitProvider implements IGitProvider {
     return this.gitDiffReadDedupe.run(
       stableInFlightKey(['diff', worktreePath, filePath, staged, compareAgainstHead]),
       async () =>
-        (await this.mux.request('git.diff', {
+        (await requestGitStreamable(this.mux, 'git.diff', {
           worktreePath,
           filePath,
           staged,
@@ -597,7 +598,7 @@ export class SshGitProvider implements IGitProvider {
         keyOptions.oldPath ?? null
       ]),
       async () =>
-        (await this.mux.request('git.branchDiff', {
+        (await requestGitStreamable(this.mux, 'git.branchDiff', {
           worktreePath,
           baseRef,
           ...options
@@ -619,7 +620,7 @@ export class SshGitProvider implements IGitProvider {
         args.oldPath ?? null
       ]),
       async () =>
-        (await this.mux.request('git.commitDiff', {
+        (await requestGitStreamable(this.mux, 'git.commitDiff', {
           worktreePath,
           ...args
         })) as GitDiffResult
@@ -761,8 +762,8 @@ export class SshGitProvider implements IGitProvider {
     options?: { signal?: AbortSignal; timeoutMs?: number }
   ): Promise<{ stdout: string; stderr: string }> {
     const result = options
-      ? await this.mux.request('git.exec', { args, cwd }, options)
-      : await this.mux.request('git.exec', { args, cwd })
+      ? await requestGitStreamable(this.mux, 'git.exec', { args, cwd }, options)
+      : await requestGitStreamable(this.mux, 'git.exec', { args, cwd })
     return result as {
       stdout: string
       stderr: string

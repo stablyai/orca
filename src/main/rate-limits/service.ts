@@ -79,6 +79,7 @@ type InternalRateLimitState = {
   gemini: ProviderRateLimits | null
   opencodeGo: ProviderRateLimits | null
   kimi: ProviderRateLimits | null
+  antigravity: ProviderRateLimits | null
   minimax: ProviderRateLimits | null
   grok: ProviderRateLimits | null
 }
@@ -113,6 +114,7 @@ export class RateLimitService {
     gemini: null,
     opencodeGo: null,
     kimi: null,
+    antigravity: null,
     minimax: null,
     grok: null
   }
@@ -1126,7 +1128,15 @@ export class RateLimitService {
 
   private withFetchingStatus(
     current: ProviderRateLimits | null,
-    provider: 'claude' | 'codex' | 'gemini' | 'opencode-go' | 'kimi' | 'minimax' | 'grok'
+    provider:
+      | 'claude'
+      | 'codex'
+      | 'gemini'
+      | 'opencode-go'
+      | 'kimi'
+      | 'minimax'
+      | 'grok'
+      | 'antigravity'
   ): ProviderRateLimits {
     if (!current) {
       return {
@@ -1200,6 +1210,7 @@ export class RateLimitService {
         ? this.withFetchingStatus(null, 'opencode-go')
         : this.withFetchingStatus(previousState.opencodeGo, 'opencode-go'),
       kimi: this.withFetchingStatus(previousState.kimi, 'kimi'),
+      antigravity: this.withFetchingStatus(previousState.antigravity, 'antigravity'),
       minimax: miniMaxConfigChanged
         ? this.withFetchingStatus(null, 'minimax')
         : this.withFetchingStatus(previousState.minimax, 'minimax'),
@@ -1287,6 +1298,14 @@ export class RateLimitService {
             status: 'error'
           } satisfies ProviderRateLimits)
 
+    // Why: Antigravity shares Google/Gemini usage credentials today; mirror the
+    // Gemini snapshot under provider 'antigravity' so status-bar UI that checks
+    // antigravity state receives a real fetch lifecycle instead of staying null.
+    const antigravity: ProviderRateLimits = {
+      ...gemini,
+      provider: 'antigravity'
+    }
+
     const opencodeGo =
       opencodeGoResult.status === 'fulfilled'
         ? opencodeGoResult.value
@@ -1365,6 +1384,7 @@ export class RateLimitService {
           : this.applyStalePolicy(opencodeGo, previousState.opencodeGo)
         : this.state.opencodeGo,
       kimi: this.applyStalePolicy(kimi, previousState.kimi),
+      antigravity: this.applyStalePolicy(antigravity, previousState.antigravity),
       minimax: shouldApplyMiniMax
         ? miniMaxConfigChanged
           ? miniMax

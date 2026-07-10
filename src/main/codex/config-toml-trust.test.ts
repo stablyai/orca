@@ -1108,6 +1108,60 @@ describe('upsertProjectTrustLevel', () => {
     expect(updated).not.toContain('trust_level = "untrusted"')
   })
 
+  it('updates a Codex literal-string Windows project block without duplicating it', () => {
+    const original = ["[projects.'c:\\gemini_etl']", 'trust_level = "untrusted"', ''].join('\n')
+
+    const updated = upsertProjectTrustLevelInContent(original, 'c:\\gemini_etl', 'trusted', {
+      alreadyCanonical: true
+    })
+
+    expect(updated.match(/\[projects\./g)).toHaveLength(1)
+    expect(updated).toContain("[projects.'c:\\gemini_etl']")
+    expect(updated).toContain('trust_level = "trusted"')
+    expect(updated).not.toContain('[projects."c:\\\\gemini_etl"]')
+  })
+
+  it.each([
+    {
+      name: 'drive-letter casing and separators',
+      existingPath: 'c:\\work\\repo',
+      incomingPath: 'C:/work/repo'
+    },
+    {
+      name: 'WSL UNC path casing and separators',
+      existingPath: '\\\\wsl$\\Ubuntu\\home\\u\\proj',
+      incomingPath: '//WSL$/ubuntu/home/u/proj'
+    },
+    {
+      name: 'server UNC path casing and separators',
+      existingPath: '\\\\server\\share\\proj',
+      incomingPath: '//SERVER/share/proj'
+    }
+  ])('matches $name by decoded Windows path value', ({ existingPath, incomingPath }) => {
+    const original = [`[projects.'${existingPath}']`, 'trust_level = "untrusted"', ''].join('\n')
+
+    const updated = upsertProjectTrustLevelInContent(original, incomingPath, 'trusted', {
+      alreadyCanonical: true
+    })
+
+    expect(updated.match(/\[projects\./g)).toHaveLength(1)
+    expect(updated).toContain(`[projects.'${existingPath}']`)
+    expect(updated).toContain('trust_level = "trusted"')
+  })
+
+  it('matches a literal-string POSIX project path containing a quote and backslash', () => {
+    const projectPath = '/tmp/with"quote\\and-backslash'
+    const original = [`[projects.'${projectPath}']`, 'trust_level = "untrusted"', ''].join('\n')
+
+    const updated = upsertProjectTrustLevelInContent(original, projectPath, 'trusted', {
+      alreadyCanonical: true
+    })
+
+    expect(updated.match(/\[projects\./g)).toHaveLength(1)
+    expect(updated).toContain(`[projects.'${projectPath}']`)
+    expect(updated).toContain('trust_level = "trusted"')
+  })
+
   it('preserves an already-canonical remote Windows project path', () => {
     // Why: SSH project paths are resolved on the remote; local realpath would
     // canonicalize the wrong machine if the same path happens to exist locally.

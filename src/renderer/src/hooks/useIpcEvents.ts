@@ -126,6 +126,8 @@ import { getRuntimeEnvironmentIdForWorktree } from '@/lib/worktree-runtime-owner
 import { translate } from '@/i18n/i18n'
 import { closeTerminalTab } from '@/components/terminal/terminal-tab-actions'
 import { initialAgentTabViewModeProps } from '@/lib/native-chat-initial-view-mode'
+import { getConnectionIdFromState } from '@/lib/connection-context'
+import { isNativeChatTranscriptLocalReadable } from '@/lib/native-chat-transcript-readability'
 
 function getShortcutPlatform(): NodeJS.Platform {
   if (navigator.userAgent.includes('Mac')) {
@@ -931,10 +933,12 @@ export function useIpcEvents(): void {
         // stream and is allowed through this helper separately.
         return
       }
+      const existedBeforeFetch = Boolean(useAppStore.getState().getKnownWorktreeById(worktreeId))
       // Why: fetch worktrees first so the activation helper can resolve
       // the CLI-created worktree via findWorktreeById — it arrived from
       // the main process and is not yet in the renderer state.
       await useAppStore.getState().fetchWorktrees(repoId)
+      const existsAfterFetch = Boolean(useAppStore.getState().getKnownWorktreeById(worktreeId))
       // Why: route through activateAndRevealWorktree so CLI-created
       // worktrees share the canonical activation path with UI-created
       // ones. This records the visit in the back/forward history stack
@@ -944,6 +948,7 @@ export function useIpcEvents(): void {
         ...(setup ? { setup } : {}),
         ...(startup ? { startup } : {}),
         ...(defaultTabs ? { defaultTabs } : {}),
+        ...(!existedBeforeFetch && existsAfterFetch ? { sidebarRevealBehavior: 'auto' } : {}),
         // Why: this activation already came from the host runtime event stream.
         // Echoing it back as worktree.activate can create a selection loop.
         notifyHostRuntime: false
@@ -1481,7 +1486,11 @@ export function useIpcEvents(): void {
                       ? {
                           launchAgent,
                           ...initialAgentTabViewModeProps(store.settings, {
-                            agent: launchAgent
+                            agent: launchAgent,
+                            nativeChatTranscriptIsLocalReadable:
+                              isNativeChatTranscriptLocalReadable(
+                                getConnectionIdFromState(store, worktreeId)
+                              )
                           })
                         }
                       : {}),
@@ -1663,7 +1672,10 @@ export function useIpcEvents(): void {
                 ...(shouldActivate ? {} : { activate: false, recordInteraction: false }),
                 launchAgent: data.launchAgent,
                 ...initialAgentTabViewModeProps(store.settings, {
-                  agent: data.launchAgent
+                  agent: data.launchAgent,
+                  nativeChatTranscriptIsLocalReadable: isNativeChatTranscriptLocalReadable(
+                    getConnectionIdFromState(store, worktreeId)
+                  )
                 }),
                 ...(data.cwd ? { startupCwd: data.cwd } : {})
               }

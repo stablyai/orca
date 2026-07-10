@@ -1063,7 +1063,7 @@ export function registerFilesystemHandlers(
             signal: controller?.signal
           })
         }
-        return await listQuickOpenFiles(args.rootPath, store, args.excludePaths)
+        return await listQuickOpenFiles(args.rootPath, store, args.excludePaths, controller?.signal)
       } finally {
         if (args.requestToken) {
           listFilesCancellations.delete(args.requestToken)
@@ -1073,8 +1073,7 @@ export function registerFilesystemHandlers(
   )
 
   ipcMain.handle('fs:cancelListFiles', (_event, args: { requestToken: string }): void => {
-    // Why: best-effort — the entry is gone once the listing settles, and
-    // local scans are fast enough to simply let them finish.
+    // Why: best-effort — the entry is gone once the listing settles.
     listFilesCancellations.get(args.requestToken)?.abort()
   })
 

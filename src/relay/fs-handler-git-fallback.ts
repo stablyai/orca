@@ -10,7 +10,7 @@ import { spawn } from 'node:child_process'
 import { fileListingCancellationError } from '../shared/file-listing-cancellation'
 import type { SearchOptions, SearchResult } from './fs-handler-utils'
 import { buildGitLsFilesArgsForQuickOpen } from '../shared/quick-open-filter'
-import { expandQuickOpenGitFilesWithNestedRepos } from '../shared/quick-open-readdir-walk'
+import { expandQuickOpenGitFileListing } from '../shared/quick-open-readdir-walk'
 import {
   buildGitGrepArgs,
   buildSubmatchRegex,
@@ -40,6 +40,7 @@ export function listFilesWithGit(
     return Promise.reject(fileListingCancellationError(signal))
   }
   const gitPaths = new Set<string>()
+  const directoryPaths = new Set<string>()
   const { primary, ignoredPass } = buildGitLsFilesArgsForQuickOpen(excludePathPrefixes)
   const children: {
     child: ReturnType<typeof spawn>
@@ -56,7 +57,11 @@ export function listFilesWithGit(
         if (!path) {
           return
         }
-        gitPaths.add(path)
+        if (path.endsWith('/')) {
+          directoryPaths.add(path)
+        } else {
+          gitPaths.add(path)
+        }
       }
 
       const child = spawn('git', ['ls-files', ...args], {
@@ -172,14 +177,18 @@ export function listFilesWithGit(
   signal?.addEventListener('abort', onAbort, { once: true })
 
   return Promise.all([runGitLsFiles(primary), runGitLsFiles(ignoredPass)])
-    .then(() =>
-      expandQuickOpenGitFilesWithNestedRepos({
+    .then(async () => {
+      const files = await expandQuickOpenGitFileListing({
         rootPath,
         gitPaths,
+        directoryPaths,
         excludePathPrefixes,
         signal
       })
-    )
+      // Why: directory placeholders are expanded after Git exits; restore
+      // Git's path order for empty queries and fuzzy-score ties over SSH.
+      return files.sort()
+    })
     .catch((err) => {
       killSurvivors('git ls-files canceled after sibling failure')
       if (signal?.aborted) {

@@ -22,6 +22,7 @@ const mockStoreState = {
     gemini: null,
     opencodeGo: null,
     kimi: null,
+    antigravity: null,
     minimax: null,
     grok: {
       provider: 'grok',

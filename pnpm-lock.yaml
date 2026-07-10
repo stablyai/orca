@@ -9,7 +9,7 @@ patchedDependencies:
     hash: 47405b9994b5acf1b4e90b49250358c1ca03649854d59560e7732b72fe336920
     path: config/patches/@xterm__addon-ligatures@0.11.0-beta.287.patch
   '@xterm/addon-webgl@0.20.0-beta.286':
-    hash: 296e716bb67c0aa3d4ff47d493b9fd9ba9518b7e9f6597005fd680ac04274145
+    hash: c32044ff5e9bfa651090eedbec19a13b2343fca3cc163fa8eec04c97880a3e19
     path: config/patches/@xterm__addon-webgl@0.20.0-beta.286.patch
   node-pty@1.1.0:
     hash: 407ae07e1e0e2ff2e8b58696449c54c31e51d87535bc6aa4a7a7b0b561407282
@@ -211,7 +211,7 @@ importers:
         version: 0.13.0-beta.287(@xterm/xterm@6.1.0-beta.287)
       '@xterm/addon-webgl':
         specifier: 0.20.0-beta.286
-        version: 0.20.0-beta.286(patch_hash=296e716bb67c0aa3d4ff47d493b9fd9ba9518b7e9f6597005fd680ac04274145)(@xterm/xterm@6.1.0-beta.287)
+        version: 0.20.0-beta.286(patch_hash=c32044ff5e9bfa651090eedbec19a13b2343fca3cc163fa8eec04c97880a3e19)(@xterm/xterm@6.1.0-beta.287)
       '@xterm/xterm':
         specifier: 6.1.0-beta.287
         version: 6.1.0-beta.287
@@ -9300,7 +9300,7 @@ snapshots:
     dependencies:
       '@xterm/xterm': 6.1.0-beta.287
 
-  '@xterm/addon-webgl@0.20.0-beta.286(patch_hash=296e716bb67c0aa3d4ff47d493b9fd9ba9518b7e9f6597005fd680ac04274145)(@xterm/xterm@6.1.0-beta.287)':
+  '@xterm/addon-webgl@0.20.0-beta.286(patch_hash=c32044ff5e9bfa651090eedbec19a13b2343fca3cc163fa8eec04c97880a3e19)(@xterm/xterm@6.1.0-beta.287)':
     dependencies:
       '@xterm/xterm': 6.1.0-beta.287
 

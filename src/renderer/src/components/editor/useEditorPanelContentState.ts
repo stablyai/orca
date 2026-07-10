@@ -3,11 +3,7 @@
    make the hook coordination harder to audit. */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { OpenFile } from '@/store/slices/editor'
-import {
-  getConnectionId,
-  getConnectionIdForFile,
-  isWorktreeConnectionResolved
-} from '@/lib/connection-context'
+import { getConnectionIdForFile, isWorktreeConnectionResolved } from '@/lib/connection-context'
 import { joinPath } from '@/lib/path'
 import { useAppStore } from '@/store'
 import { getDiskBaselineSignature } from './diff-content-signature'
@@ -224,7 +220,7 @@ export function useEditorPanelContentState({
             ? file.branchCompare
             : null
         const commitCompare = file.commitCompare?.commitOid ? file.commitCompare : null
-        const connectionId = getConnectionId(file.worktreeId) ?? undefined
+        const connectionId = getConnectionIdForFile(file.worktreeId, file.filePath) ?? undefined
         const activeSettings = useAppStore.getState().settings
         const fileSettings = settingsForRuntimeOwner(activeSettings, file.runtimeEnvironmentId)
         const gitScope = getRuntimeGitScope(fileSettings, connectionId)

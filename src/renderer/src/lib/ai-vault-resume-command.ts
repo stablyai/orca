@@ -137,6 +137,8 @@ export function buildAiVaultResumeStartupForWorktree(args: {
       platform,
       commandOverride: args.commandOverride,
       codexHome,
+      // Why: non-resumable agents queue through this fallback too, so it must
+      // quote for the live Windows shell like the startup-plan branch above.
       shell: queuedShell
     })
   }

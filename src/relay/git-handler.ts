@@ -61,6 +61,8 @@ import { getGitCloneFailureMessage } from '../shared/git-clone-failure-message'
 import { syncForkDefaultBranch, validateGitForkSyncExpectedUpstream } from '../shared/git-fork-sync'
 import { InFlightPromiseDedupe, stableInFlightKey } from '../shared/in-flight-promise-dedupe'
 import { GIT_FETCH_SKIP_AUTO_MAINTENANCE_CONFIG_ARGS } from '../shared/git-fetch-auto-maintenance'
+import { GitResponseStreamRegistry } from './git-response-stream'
+import { GIT_RESPONSE_STREAM_THRESHOLD } from './protocol'
 
 const execFileAsync = promisify(execFile)
 const MAX_GIT_BUFFER = 10 * 1024 * 1024
@@ -171,6 +173,9 @@ function execFileWithStdin(
 export class GitHandler {
   private dispatcher: RelayDispatcher
   private readonly gitDiffReadDedupe = new InFlightPromiseDedupe<unknown>()
+  // Why: large diff/exec responses are chunked onto the bulk lane so they do
+  // not head-of-line-block interactive pty.data echo on the shared SSH channel.
+  private readonly responseStreams = new GitResponseStreamRegistry()
 
   // Why: configured submodule paths change rarely; an instance-level TTL cache
   // avoids re-reading `.gitmodules` on every diff click over SSH, and being
@@ -182,6 +187,13 @@ export class GitHandler {
   constructor(dispatcher: RelayDispatcher, _context: RelayContext) {
     this.dispatcher = dispatcher
     this.registerHandlers()
+    // Why: a detached client's git.responseAck frames will never arrive; wake
+    // any pump parked on the ack window so it re-checks staleness and exits.
+    this.dispatcher.onClientDetached?.(() => this.responseStreams.wakeAll())
+  }
+
+  dispose(): void {
+    this.responseStreams.disposeAll()
   }
 
   private registerHandlers(): void {
@@ -190,7 +202,7 @@ export class GitHandler {
     this.dispatcher.onRequest('git.checkIgnored', (p) => this.checkIgnored(p))
     this.dispatcher.onRequest('git.history', (p) => this.history(p))
     this.dispatcher.onRequest('git.commit', (p) => this.commit(p))
-    this.dispatcher.onRequest('git.diff', (p) => this.getDiff(p))
+    this.dispatcher.onRequest('git.diff', (p, context) => this.getDiff(p, context))
     this.dispatcher.onRequest('git.stage', (p) => this.stage(p))
     this.dispatcher.onRequest('git.unstage', (p) => this.unstage(p))
     this.dispatcher.onRequest('git.bulkStage', (p) => this.bulkStage(p))
@@ -215,8 +227,8 @@ export class GitHandler {
     this.dispatcher.onRequest('git.pull', (p) => this.pull(p))
     this.dispatcher.onRequest('git.fastForward', (p) => this.fastForward(p))
     this.dispatcher.onRequest('git.rebaseFromBase', (p) => this.rebaseFromBase(p))
-    this.dispatcher.onRequest('git.branchDiff', (p) => this.branchDiff(p))
-    this.dispatcher.onRequest('git.commitDiff', (p) => this.commitDiff(p))
+    this.dispatcher.onRequest('git.branchDiff', (p, context) => this.branchDiff(p, context))
+    this.dispatcher.onRequest('git.commitDiff', (p, context) => this.commitDiff(p, context))
     this.dispatcher.onRequest('git.listWorktrees', (p, context) => this.listWorktrees(p, context))
     this.dispatcher.onRequest('git.addWorktree', (p) => this.addWorktree(p))
     this.dispatcher.onRequest('git.removeWorktree', (p) => this.removeWorktree(p))
@@ -231,6 +243,45 @@ export class GitHandler {
     this.dispatcher.onRequest('git.exec', (p, context) => this.exec(p, context))
     this.dispatcher.onRequest('git.clone', (p, context) => this.clone(p, context))
     this.dispatcher.onRequest('git.isGitRepo', (p) => this.isGitRepo(p))
+    this.dispatcher.onNotification('git.responseAck', (p, context) => this.responseAck(p, context))
+    this.dispatcher.onNotification('git.cancelResponseStream', (p, context) =>
+      this.cancelResponseStream(p, context)
+    )
+  }
+
+  private responseAck(params: Record<string, unknown>, context: RequestContext): void {
+    const streamId = params.streamId
+    const seq = params.seq
+    if (typeof streamId === 'number' && typeof seq === 'number') {
+      this.responseStreams.recordAck(streamId, seq, context.clientId)
+    }
+  }
+
+  private cancelResponseStream(params: Record<string, unknown>, context: RequestContext): void {
+    const streamId = params.streamId
+    if (typeof streamId === 'number') {
+      this.responseStreams.abort(streamId, context.clientId)
+    }
+  }
+
+  // Why: when the client opted into response streaming and the serialized result
+  // exceeds the threshold, chunk it onto the bulk lane and return a small
+  // sentinel as the RPC result. Old clients omit the flag (single-frame, as
+  // today); old relays never call this, so a new client falls back to the plain
+  // result they return.
+  private maybeStreamResponse(
+    result: unknown,
+    params: Record<string, unknown>,
+    context: RequestContext | undefined
+  ): unknown {
+    if (params.__streamResponse !== true || !context) {
+      return result
+    }
+    const payload = Buffer.from(JSON.stringify(result ?? null), 'utf-8')
+    if (payload.length <= GIT_RESPONSE_STREAM_THRESHOLD) {
+      return result
+    }
+    return this.responseStreams.startStream(payload, this.dispatcher, context)
   }
 
   private async runWithDiffDedupeClear<T>(run: () => Promise<T>): Promise<T> {
@@ -352,7 +403,7 @@ export class GitHandler {
     })
   }
 
-  private async getDiff(params: Record<string, unknown>) {
+  private async getDiff(params: Record<string, unknown>, context?: RequestContext) {
     const worktreePath = params.worktreePath as string
     const filePath = params.filePath as string
     // Why: filePath is relative to worktreePath and used in readWorkingFile via
@@ -366,7 +417,7 @@ export class GitHandler {
     const compareAgainstHead = params.compareAgainstHead as boolean | undefined
     // Why: register the in-flight dedupe synchronously (before any await) so
     // concurrent identical reads coalesce; submodule routing happens inside.
-    return this.gitDiffReadDedupe.run(
+    const result = await this.gitDiffReadDedupe.run(
       stableInFlightKey(['diff', worktreePath, filePath, staged, compareAgainstHead]),
       async () => {
         // Why: gitlink paths can't be read as blobs and submodule working dirs
@@ -431,6 +482,7 @@ export class GitHandler {
         )
       }
     )
+    return this.maybeStreamResponse(result, params, context)
   }
 
   private async stage(params: Record<string, unknown>) {
@@ -1027,7 +1079,7 @@ export class GitHandler {
     }
   }
 
-  private async branchDiff(params: Record<string, unknown>) {
+  private async branchDiff(params: Record<string, unknown>, context?: RequestContext) {
     const worktreePath = params.worktreePath as string
     const baseRef = params.baseRef as string
     if (baseRef.startsWith('-')) {
@@ -1038,7 +1090,7 @@ export class GitHandler {
       filePath: params.filePath as string | undefined,
       oldPath: params.oldPath as string | undefined
     }
-    return this.gitDiffReadDedupe.run(
+    const result = await this.gitDiffReadDedupe.run(
       stableInFlightKey([
         'branchDiff',
         worktreePath,
@@ -1056,9 +1108,10 @@ export class GitHandler {
           options
         )
     )
+    return this.maybeStreamResponse(result, params, context)
   }
 
-  private async commitDiff(params: Record<string, unknown>) {
+  private async commitDiff(params: Record<string, unknown>, context?: RequestContext) {
     const worktreePath = params.worktreePath as string
     const args = {
       commitOid: params.commitOid as string,
@@ -1066,7 +1119,7 @@ export class GitHandler {
       filePath: params.filePath as string,
       oldPath: params.oldPath as string | undefined
     }
-    return this.gitDiffReadDedupe.run(
+    const result = await this.gitDiffReadDedupe.run(
       stableInFlightKey([
         'commitDiff',
         worktreePath,
@@ -1077,6 +1130,7 @@ export class GitHandler {
       ]),
       () => commitDiffEntry(this.gitBuffer.bind(this), worktreePath, args)
     )
+    return this.maybeStreamResponse(result, params, context)
   }
 
   private async exec(params: Record<string, unknown>, context?: RequestContext) {
@@ -1085,7 +1139,7 @@ export class GitHandler {
 
     validateGitExecArgs(args)
     const { stdout, stderr } = await this.git(args, cwd, { signal: context?.signal })
-    return { stdout, stderr }
+    return this.maybeStreamResponse({ stdout, stderr }, params, context)
   }
 
   private async clone(params: Record<string, unknown>, context?: RequestContext) {

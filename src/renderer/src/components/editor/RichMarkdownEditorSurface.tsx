@@ -37,6 +37,7 @@ function shouldFocusEmptyEditorFromSurfaceClick(
 type RichMarkdownEditorSurfaceProps = {
   editor: Editor | null
   editorFontZoomLevel: number
+  rootElement: HTMLDivElement | null
   rootRef: (node: HTMLDivElement | null) => void
   scrollContainerRef: React.RefObject<HTMLDivElement | null>
   headerSlot?: React.ReactNode
@@ -91,6 +92,7 @@ type RichMarkdownEditorSurfaceProps = {
     toggleWholeWord: () => void
   }
   linkBubbleActions: {
+    dismissLinkBubble: () => void
     handleLinkSave: (href: string) => void
     handleLinkRemove: () => void
     handleLinkEditCancel: () => void
@@ -119,6 +121,7 @@ type RichMarkdownEditorSurfaceProps = {
 export function RichMarkdownEditorSurface({
   editor,
   editorFontZoomLevel,
+  rootElement,
   rootRef,
   scrollContainerRef,
   headerSlot,
@@ -249,8 +252,11 @@ export function RichMarkdownEditorSurface({
         </div>
         {linkBubble ? (
           <RichMarkdownLinkBubble
+            anchorElement={rootElement}
             linkBubble={linkBubble}
             isEditing={isEditingLink}
+            onDismiss={linkBubbleActions.dismissLinkBubble}
+            portalToDocument
             onSave={linkBubbleActions.handleLinkSave}
             onRemove={linkBubbleActions.handleLinkRemove}
             onEditStart={() => linkBubbleActions.setIsEditingLink(true)}

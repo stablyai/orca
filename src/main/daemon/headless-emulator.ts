@@ -4,6 +4,7 @@ import { SerializeAddon } from '@xterm/addon-serialize'
 import { Unicode11Addon } from '@xterm/addon-unicode11'
 import { activateOrcaTerminalUnicodeProvider } from '../../shared/terminal-unicode-provider'
 import { advancePartialEscapeTail } from '../../shared/terminal-partial-escape-tail'
+import { TerminalKittyKeyboardModeTracker } from '../../shared/terminal-kitty-keyboard-mode-tracker'
 import { extractLastOscTitle } from '../../shared/agent-detection'
 import { collectHeadlessOscLinkRanges } from './headless-osc-link-ranges'
 import { extractOscScanTail, scanOsc7Uris } from './osc7-uri-extraction'
@@ -36,6 +37,7 @@ export class HeadlessEmulator {
   private lastTitle: string | null = null
   private oscScanTail = ''
   private privateModes = new TerminalPrivateModeTracker()
+  private kittyKeyboardModes = new TerminalKittyKeyboardModeTracker()
   private restoredOscLinks: TerminalOscLinkRange[] = []
   // Why: a PTY read can end mid-escape-sequence — those bytes live in xterm's
   // parser, not the screen buffer, so serialize() drops them and the next
@@ -97,6 +99,7 @@ export class HeadlessEmulator {
         // Why: snapshots combine serialized xterm state with mirrored mouse
         // modes. Commit the mirror only after xterm has parsed the same bytes.
         this.privateModes.scan(data)
+        this.kittyKeyboardModes.scan(data)
         this.partialEscapeTail = advancePartialEscapeTail(this.partialEscapeTail, data)
         resolve()
       })
@@ -124,6 +127,7 @@ export class HeadlessEmulator {
     // PTY bursts; queued headless writes can snapshot half-cleared TUI rows.
     writeSync.call((this.terminal as TerminalWithSynchronousWrite)._core, data)
     this.privateModes.scan(data)
+    this.kittyKeyboardModes.scan(data)
     this.partialEscapeTail = advancePartialEscapeTail(this.partialEscapeTail, data)
     return true
   }
@@ -286,7 +290,8 @@ export class HeadlessEmulator {
       sgrMousePixelsMode: this.privateModes.sgrMousePixelsMode,
       applicationCursor:
         buffer.type === 'normal' ? this.terminal.modes.applicationCursorKeysMode : false,
-      alternateScreen: buffer.type === 'alternate'
+      alternateScreen: buffer.type === 'alternate',
+      kittyKeyboardFlags: this.kittyKeyboardModes.flags
     }
   }
 
@@ -325,6 +330,15 @@ export class HeadlessEmulator {
       seqs.push('\x1b[?1016h')
     } else if (modes.sgrMouseMode) {
       seqs.push('\x1b[?1006h')
+    }
+    // Why: kitty keyboard flags are per-screen state SerializeAddon cannot
+    // capture; without re-arming them, the still-running TUI keeps expecting
+    // protocol-encoded keys the restored client no longer sends. `=` (set)
+    // instead of `>` (push) so repeated replays cannot grow the flag stack.
+    // Emitted after the alt-screen switch above so the flags land on the
+    // screen the TUI negotiated them on.
+    if (modes.kittyKeyboardFlags && modes.kittyKeyboardFlags > 0) {
+      seqs.push(`\x1b[=${modes.kittyKeyboardFlags};1u`)
     }
     return seqs.join('')
   }

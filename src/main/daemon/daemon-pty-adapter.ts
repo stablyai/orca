@@ -36,6 +36,14 @@ type ColdRestorePayload = {
   oscLinks?: TerminalOscLinkRange[]
 }
 
+function getRecoveredHistorySeed(restoreInfo: ColdRestoreInfo): string | null {
+  // Why: alt-screen snapshots represent the TUI buffer; prefer its normal
+  // scrollback so a dead TUI is not revived as the fresh shell's active screen.
+  return restoreInfo.modes.alternateScreen
+    ? restoreInfo.scrollbackAnsi || restoreInfo.snapshotAnsi || null
+    : restoreInfo.rehydrateSequences + restoreInfo.snapshotAnsi
+}
+
 export type DaemonPtyAdapterOptions = {
   socketPath: string
   tokenPath: string
@@ -166,9 +174,9 @@ export class DaemonPtyAdapter implements IPtyProvider {
         restoreInfo = this.historyReader.detectColdRestore(sessionId)
       }
     }
-    const effectiveCwd = restoreInfo?.cwd ?? opts.cwd
-    const effectiveCols = restoreInfo?.cols ?? opts.cols
-    const effectiveRows = restoreInfo?.rows ?? opts.rows
+    let effectiveCwd = restoreInfo?.cwd ?? opts.cwd
+    let effectiveCols = restoreInfo?.cols ?? opts.cols
+    let effectiveRows = restoreInfo?.rows ?? opts.rows
 
     const shellReadySupported = opts.command ? supportsPtyStartupBarrier(opts.env ?? {}) : false
     const isCodexStartupCommand =
@@ -184,26 +192,31 @@ export class DaemonPtyAdapter implements IPtyProvider {
         ? CODEX_SHELL_READY_TIMEOUT_MS
         : undefined
 
-    const result = await this.client.request<CreateOrAttachResult>('createOrAttach', {
-      sessionId,
-      cols: effectiveCols,
-      rows: effectiveRows,
-      cwd: effectiveCwd,
-      env: opts.env,
-      envToDelete: opts.envToDelete,
-      command: opts.command,
-      startupCommandDelivery: opts.startupCommandDelivery,
-      // Why: without this, the daemon always spawns cmd.exe (COMSPEC) or
-      // PowerShell as a fallback — regardless of which shell the renderer
-      // asked for in the "+" menu or persisted as the default. Forwarding
-      // the override makes the daemon path behave the same as the in-process
-      // LocalPtyProvider.
-      shellOverride: opts.shellOverride,
-      terminalWindowsWslDistro: opts.terminalWindowsWslDistro,
-      terminalWindowsPowerShellImplementation: opts.terminalWindowsPowerShellImplementation,
-      shellReadySupported,
-      ...(shellReadyTimeoutMs !== undefined ? { shellReadyTimeoutMs } : {})
-    })
+    const createOrAttach = (historySeed: string | null) =>
+      this.client.request<CreateOrAttachResult>('createOrAttach', {
+        sessionId,
+        cols: effectiveCols,
+        rows: effectiveRows,
+        cwd: effectiveCwd,
+        env: opts.env,
+        envToDelete: opts.envToDelete,
+        command: opts.command,
+        startupCommandDelivery: opts.startupCommandDelivery,
+        // Why: without this, the daemon always spawns cmd.exe (COMSPEC) or
+        // PowerShell as a fallback — regardless of which shell the renderer
+        // asked for in the "+" menu or persisted as the default. Forwarding
+        // the override makes the daemon path behave the same as the in-process
+        // LocalPtyProvider.
+        shellOverride: opts.shellOverride,
+        terminalWindowsWslDistro: opts.terminalWindowsWslDistro,
+        terminalWindowsPowerShellImplementation: opts.terminalWindowsPowerShellImplementation,
+        shellReadySupported,
+        ...(shellReadyTimeoutMs !== undefined ? { shellReadyTimeoutMs } : {}),
+        ...(historySeed ? { historySeed } : {})
+      })
+
+    let scrollback = restoreInfo ? getRecoveredHistorySeed(restoreInfo) : null
+    let result = await createOrAttach(scrollback)
 
     if (effectiveCwd) {
       this.initialCwds.set(sessionId, effectiveCwd)
@@ -212,7 +225,7 @@ export class DaemonPtyAdapter implements IPtyProvider {
     // Why: the daemon RPC returns the shell pid of the backing subprocess.
     // Surfacing it through PtySpawnResult lets ipc/pty register with the
     // memory collector without a provider-specific accessor.
-    const pid = typeof result.pid === 'number' && result.pid > 0 ? result.pid : null
+    let pid = typeof result.pid === 'number' && result.pid > 0 ? result.pid : null
 
     // Why: check sticky cache first — StrictMode double-mounts call spawn
     // twice. The second call finds an existing daemon session (isNew=false)
@@ -238,6 +251,21 @@ export class DaemonPtyAdapter implements IPtyProvider {
     if (result.isNew && restoreSkippedForLiveSession) {
       restoreInfo =
         this.historyReader?.detectColdRestore(sessionId, { ignoreCleanEnd: true }) ?? null
+      scrollback = restoreInfo ? getRecoveredHistorySeed(restoreInfo) : null
+      if (restoreInfo && scrollback) {
+        // Why: the aliveness probe raced with session death, so the first
+        // create lacked recovery bytes. Replace it before exposing the PTY.
+        await this.client.request('kill', { sessionId, immediate: true })
+        effectiveCwd = restoreInfo.cwd
+        effectiveCols = restoreInfo.cols
+        effectiveRows = restoreInfo.rows
+        result = await createOrAttach(scrollback)
+        pid = typeof result.pid === 'number' && result.pid > 0 ? result.pid : null
+        this.initialCwds.set(sessionId, effectiveCwd)
+      }
+    } else if (!result.isNew && result.historySeeded === false) {
+      restoreInfo = this.historyReader?.detectColdRestore(sessionId) ?? null
+      scrollback = restoreInfo ? getRecoveredHistorySeed(restoreInfo) : null
     }
 
     const wasAlreadyManaged = this.activeSessionIds.has(sessionId)
@@ -246,7 +274,7 @@ export class DaemonPtyAdapter implements IPtyProvider {
     // Cold restore: daemon created a new session but disk history shows
     // an unclean shutdown → return saved scrollback so the renderer can
     // display the previous terminal content.
-    if (result.isNew && restoreInfo) {
+    if (restoreInfo && (result.isNew || result.historySeeded === false)) {
       // Why prefer scrollbackAnsi for alt-screen: snapshotAnsi is the alt buffer
       // (vim/less/htop); normal sessions use the full snapshot + rehydrate.
       // Why the snapshotAnsi fallback: a hibernated TUI agent (empty scrollback)
@@ -254,25 +282,33 @@ export class DaemonPtyAdapter implements IPtyProvider {
       // (no rehydrateSequences — they start with \x1b[?1049h, which the
       // renderer's POST_REPLAY_MODE_RESET does NOT undo) lands the last frame as
       // normal scrollback. An empty snapshot still yields null → no-op.
-      const isAltScreen = restoreInfo.modes.alternateScreen
-      const scrollback = isAltScreen
-        ? restoreInfo.scrollbackAnsi || restoreInfo.snapshotAnsi || null
-        : restoreInfo.rehydrateSequences + restoreInfo.snapshotAnsi
+      const canReanchorHistory = !scrollback || result.historySeeded === true
       // Why: use registerWriter (not openSession) to avoid deleting the
       // existing checkpoint.json. If the revived daemon crashes again before
       // the next 5s tick, the checkpoint is the only recovery data available.
       if (this.historyManager) {
-        this.historyManager.registerWriter(sessionId)
-        this.sessionsNeedingFullCheckpoint.add(sessionId)
-        // Why: the revived generation has no valid checkpoint of its own; a
-        // cooldown inherited from the pre-crash generation (daemon respawn
-        // within one adapter) must not defer this re-anchor.
-        this.lastFullCheckpointAt.delete(sessionId)
+        if (canReanchorHistory) {
+          this.historyManager.registerWriter(sessionId)
+          this.sessionsNeedingFullCheckpoint.add(sessionId)
+          // Why: the revived generation has no valid checkpoint of its own; a
+          // cooldown inherited from the pre-crash generation (daemon respawn
+          // within one adapter) must not defer this re-anchor.
+          this.lastFullCheckpointAt.delete(sessionId)
+        } else {
+          // Preserve the old recovery files when the new daemon cannot include
+          // them; a fresh-only checkpoint would make the data loss permanent.
+          this.historyManager.suspendSession(sessionId)
+        }
       }
       if (scrollback) {
         const coldRestore = { scrollback, cwd: restoreInfo.cwd, oscLinks: restoreInfo.oscLinks }
         this.coldRestoreCache.set(sessionId, coldRestore)
-        return { id: sessionId, pid, coldRestore }
+        return {
+          id: sessionId,
+          pid,
+          coldRestore,
+          ...(!result.isNew ? { isReattach: true } : {})
+        }
       }
       return { id: sessionId, pid }
     }
@@ -285,6 +321,10 @@ export class DaemonPtyAdapter implements IPtyProvider {
           rows: effectiveRows
         })
         .catch((err) => console.warn('[history] openSession failed:', sessionId, err))
+    } else if (this.historyManager && result.historySeeded === false) {
+      // Why: the daemon keeps this failure bit with the live session, so a new
+      // adapter cannot promote its fresh-only snapshot after an app restart.
+      this.historyManager.suspendSession(sessionId)
     } else if (this.historyManager) {
       // Why: on warm reattach after app relaunch, the HistoryManager is a
       // fresh instance with no writers. registerWriter adds the writer

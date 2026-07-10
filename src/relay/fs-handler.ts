@@ -36,7 +36,7 @@ import { buildRelayCommandEnv } from './relay-command-env'
 import { assertNoClobberRenameDestinationAvailable } from '../shared/filesystem-rename-collision'
 import {
   WATCHER_IGNORE_DIRS,
-  buildParcelWatcherIgnoreOption
+  buildParcelWatcherIgnoreOptions
 } from '../main/ipc/filesystem-watcher-ignore'
 
 type WatchState = {
@@ -461,9 +461,9 @@ export class FsHandler {
           }))
           this.dispatcher.notify('fs.changed', { events: mapped })
         },
-        // Why: align remote-Linux watchers with the shared nested-glob exclusion
-        // so nested node_modules/.git don't exhaust inotify on large codebases.
-        { ignore: buildParcelWatcherIgnoreOption(WATCHER_IGNORE_DIRS) }
+        // Why: align remote watchers with the shared nested exclusion so
+        // generated trees neither exhaust inotify nor trigger slow glob regexes.
+        buildParcelWatcherIgnoreOptions(WATCHER_IGNORE_DIRS)
       )
       watchState.unwatchFn = () => {
         void subscription.unsubscribe()

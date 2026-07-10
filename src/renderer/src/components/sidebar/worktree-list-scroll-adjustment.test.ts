@@ -6,7 +6,6 @@ import {
   WORKTREE_SIDEBAR_REVEAL_TOP_INSET,
   shouldAdjustWorktreeSidebarMeasuredRowScroll
 } from './WorktreeList'
-import { revealElementInScrollContainer } from './worktree-sidebar-reveal'
 import {
   extractWorktreeVirtualRowIndexes,
   estimateRenderRowSize,
@@ -44,11 +43,8 @@ const makeImportedCardRow = (): Extract<Row, { type: 'imported-worktrees-card' }
   placement: 'repo-group'
 })
 
-const makeScrollContainer = (
-  scrollTop: number,
-  clientHeight: number,
-  scrollHeight = 1_000
-): HTMLElement => ({ scrollTop, clientHeight, scrollHeight }) as HTMLElement
+const makeScrollContainer = (scrollTop: number, clientHeight: number): HTMLElement =>
+  ({ scrollTop, clientHeight }) as HTMLElement
 
 describe('shouldAdjustWorktreeSidebarMeasuredRowScroll', () => {
   it('counts record keys once per object reference', () => {
@@ -125,52 +121,64 @@ describe('shouldAdjustWorktreeSidebarMeasuredRowScroll', () => {
 })
 
 describe('getScrollTopToRevealBounds', () => {
-  it('centers a fully visible target', () => {
+  it('treats the sticky header as occluding the viewport top', () => {
     const container = makeScrollContainer(100, 400)
 
     expect(
       getScrollTopToRevealBounds(
         container,
         {
-          start: 300,
-          end: 400
-        },
-        WORKTREE_SIDEBAR_REVEAL_TOP_INSET
-      )
-    ).toBe(133)
-  })
-
-  it('centers within the area below the sticky header', () => {
-    const container = makeScrollContainer(100, 400)
-
-    expect(
-      getScrollTopToRevealBounds(
-        container,
-        {
-          start: 300,
-          end: 400
+          start: 100,
+          end: 216
         },
         GROUP_HEADER_ROW_HEIGHT
       )
-    ).toBe(136)
+    ).toBe(72)
   })
 
-  it('clamps a boundary target to the list edge instead of padding the list', () => {
-    // Regression (#8019 follow-up): centering first/last rows via temporary
-    // paddingStart/paddingEnd left a permanent phantom gap in the sidebar once
-    // the reveal finished, since nothing cleared the padding afterwards.
-    const container = {
-      scrollTop: 100,
-      clientHeight: 200,
-      contains: () => true,
-      getBoundingClientRect: () => ({ top: 0, bottom: 200 })
-    } as unknown as HTMLElement
-    const firstRow = {
-      getBoundingClientRect: () => ({ top: -40, bottom: 20 })
-    } as unknown as Element
+  it('includes extra reveal clearance for the highlight ring', () => {
+    const container = makeScrollContainer(100, 400)
 
-    expect(revealElementInScrollContainer(container, firstRow)).toBe(true)
-    expect(container.scrollTop).toBe(0)
+    expect(
+      getScrollTopToRevealBounds(
+        container,
+        {
+          start: 100,
+          end: 216
+        },
+        WORKTREE_SIDEBAR_REVEAL_TOP_INSET
+      )
+    ).toBe(66)
+  })
+
+  it('does not scroll when the bounds are below the sticky header', () => {
+    const container = makeScrollContainer(100, 400)
+
+    expect(
+      getScrollTopToRevealBounds(
+        container,
+        {
+          start: 128,
+          end: 244
+        },
+        GROUP_HEADER_ROW_HEIGHT
+      )
+    ).toBeNull()
+  })
+
+  it('keeps the viewport bottom independent of the sticky header inset', () => {
+    const container = makeScrollContainer(100, 400)
+
+    expect(
+      getScrollTopToRevealBounds(
+        container,
+        {
+          start: 430,
+          end: 520
+        },
+        GROUP_HEADER_ROW_HEIGHT
+      )
+    ).toBe(120)
   })
 })
 

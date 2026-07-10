@@ -21,6 +21,7 @@ import {
 } from '../../runtime/runtime-terminal-stream'
 import {
   getRemoteRuntimeTerminalMultiplexer,
+  REMOTE_TERMINAL_SNAPSHOT_TOO_LARGE,
   type RemoteRuntimeMultiplexedTerminal
 } from '../../runtime/remote-runtime-terminal-multiplexer'
 import {
@@ -373,6 +374,11 @@ export function createRemoteRuntimePtyTransport(
 
   function handleRemoteTerminalError(error: unknown): void {
     const message = runtimeTerminalErrorMessage(error)
+    if (message === REMOTE_TERMINAL_SNAPSHOT_TOO_LARGE) {
+      // Why: an oversized initial snapshot is skipped but live output keeps
+      // flowing — informational, not fatal, so never surface a red xterm banner.
+      return
+    }
     if (isRemoteTerminalGoneMessage(message)) {
       // Why: paired web clients consume host-published PTY handles. If the host
       // retires one between snapshots, clear this mirror and wait for the next

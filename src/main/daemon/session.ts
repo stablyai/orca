@@ -65,6 +65,7 @@ export type SessionOptions = {
   subprocess: SubprocessHandle
   shellReadySupported: boolean
   shellReadyTimeoutMs?: number
+  historySeed?: string
   scrollback?: number
   // Why: fired once the session reaches a terminal state (natural exit or
   // kill-timeout force-dispose) so the owner (TerminalHost) can reap it —
@@ -101,6 +102,7 @@ export class Session {
   private pendingOutputBytes = 0
   private pendingOutputOverflowed = false
   private pendingOutputSeq = 0
+  private readonly _historySeeded: boolean | undefined
 
   constructor(opts: SessionOptions) {
     this.sessionId = opts.sessionId
@@ -117,6 +119,10 @@ export class Session {
       // responder; any daemon reply races ahead via in-process parsing and
       // clobbers the renderer's answer. See the comment in HeadlessEmulator.
     })
+    // Why: recovery must precede listener registration; shells can emit their
+    // prompt synchronously as soon as onData subscribes.
+    this._historySeeded =
+      opts.historySeed === undefined ? undefined : this.emulator.writeSync(opts.historySeed)
 
     if (opts.shellReadySupported) {
       this._shellState = 'pending'
@@ -139,6 +145,10 @@ export class Session {
 
   get shellState(): ShellReadyState {
     return this._shellState
+  }
+
+  get historySeeded(): boolean | undefined {
+    return this._historySeeded
   }
 
   get exitCode(): number | null {

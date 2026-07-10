@@ -11,6 +11,7 @@ import { reconcileTabOrder } from '@/components/tab-bar/reconcile-order'
 import { track, tuiAgentToAgentKind } from '@/lib/telemetry'
 import { deliverLaunchPromptToAgentTab } from '@/lib/agent-launch-prompt-delivery'
 import { initialAgentTabViewModeProps } from '@/lib/native-chat-initial-view-mode'
+import { isNativeChatTranscriptLocalReadable } from '@/lib/native-chat-transcript-readability'
 import { getRuntimeEnvironmentIdForWorktree } from '@/lib/worktree-runtime-owner'
 import { getLocalProjectExecutionRuntimeContext } from '@/lib/local-preflight-context'
 import {
@@ -29,6 +30,7 @@ import { seedCommandCodeSubmittedPromptStatus } from '@/lib/command-code-prompt-
 import type { TuiAgent } from '../../../shared/types'
 import type { LaunchSource } from '../../../shared/telemetry-events'
 import { translate } from '@/i18n/i18n'
+import { getConnectionIdFromState } from '@/lib/connection-context'
 
 export type LaunchAgentInNewTabArgs = {
   agent: TuiAgent
@@ -271,7 +273,10 @@ export function launchAgentInNewTab(args: LaunchAgentInNewTabArgs): LaunchAgentI
     quickCommandLabel,
     ...initialAgentTabViewModeProps(store.settings, {
       agent,
-      promptDelivery: viewModePromptDelivery
+      promptDelivery: viewModePromptDelivery,
+      nativeChatTranscriptIsLocalReadable: isNativeChatTranscriptLocalReadable(
+        getConnectionIdFromState(store, worktreeId)
+      )
     })
   })
   store.queueTabStartupCommand(tab.id, {

@@ -7,6 +7,7 @@ import type { TerminalColorSchemeMode } from '../../../../shared/terminal-color-
 import type { StartupCommandDelivery } from '../../../../shared/codex-startup-delivery'
 import type { SetupSplitDirection, TuiAgent } from '../../../../shared/types'
 import type { SleepingAgentLaunchConfig } from '../../../../shared/agent-session-resume'
+import type { TerminalKittyKeyboardModeTracker } from '../../../../shared/terminal-kitty-keyboard-mode-tracker'
 
 export type PtyConnectionDeps = {
   tabId: string
@@ -37,6 +38,10 @@ export type PtyConnectionDeps = {
   restoredPtyIdByLeafId?: Record<string, string>
   paneTransportsRef: React.RefObject<Map<number, PtyTransport>>
   paneMode2031Ref: React.RefObject<Map<number, boolean>>
+  /** Per-pane mirror of the kitty keyboard flags the pane's application
+   *  negotiated. Fed from PTY output here; read by the keyboard policy. */
+  paneKittyKeyboardModesRef: React.RefObject<Map<number, TerminalKittyKeyboardModeTracker>>
+
   paneLastThemeModeRef: React.RefObject<Map<number, TerminalColorSchemeMode>>
   replayingPanesRef: ReplayingPanesRef
   restoredViewportBlankingPanesRef?: RestoredViewportBlankingPanesRef

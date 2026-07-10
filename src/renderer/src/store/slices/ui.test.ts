@@ -286,6 +286,7 @@ describe('createUISlice agent send target mode', () => {
     })
     expect(store.getState().pendingRevealWorktree).toMatchObject({
       worktreeId,
+      behavior: 'auto',
       highlight: true
     })
   })
@@ -1097,12 +1098,14 @@ describe('createUISlice hydratePersistedUI', () => {
     const store = createUIStore()
 
     store.getState().revealWorktreeInSidebar('repo1::/feature', {
+      behavior: 'smooth',
       highlight: true,
       beginRename: true
     })
 
     expect(store.getState().pendingRevealWorktree).toEqual({
       worktreeId: 'repo1::/feature',
+      behavior: 'smooth',
       highlight: true,
       beginRename: true
     })
@@ -1216,13 +1219,23 @@ describe('createUISlice hydratePersistedUI', () => {
       'ports',
       'kimi',
       'minimax',
+      'antigravity',
       'grok'
     ])
     expect(setUI).toHaveBeenCalledWith({
-      statusBarItems: ['claude', 'resource-usage', 'ports', 'kimi', 'minimax', 'grok'],
+      statusBarItems: [
+        'claude',
+        'resource-usage',
+        'ports',
+        'kimi',
+        'minimax',
+        'antigravity',
+        'grok'
+      ],
       _portsStatusBarDefaultAdded: true,
       _kimiStatusBarDefaultAdded: true,
       _minimaxStatusBarDefaultAdded: true,
+      _antigravityStatusBarDefaultAdded: true,
       _grokStatusBarDefaultAdded: true
     })
   })
@@ -1238,6 +1251,7 @@ describe('createUISlice hydratePersistedUI', () => {
         _portsStatusBarDefaultAdded: true,
         _kimiStatusBarDefaultAdded: true,
         _minimaxStatusBarDefaultAdded: true,
+        _antigravityStatusBarDefaultAdded: true,
         _grokStatusBarDefaultAdded: true
       })
     )

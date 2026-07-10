@@ -40,7 +40,10 @@ describe('terminal subscribe buffering', () => {
         ),
         readTerminal: vi.fn().mockResolvedValue({ tail: [], truncated: false })
       })
-      const dispatcher = new RpcDispatcher({ runtime, methods: TERMINAL_METHODS })
+      const dispatcher = new RpcDispatcher({
+        runtime,
+        methods: TERMINAL_METHODS
+      })
 
       const dispatchPromise = dispatcher.dispatchStreaming(
         makeRequest('terminal.subscribe', {
@@ -77,11 +80,16 @@ describe('terminal subscribe buffering', () => {
     const messages: string[] = []
     const runtime = stubRuntime({
       resolveLeafForHandle: vi.fn().mockReturnValue({ ptyId: null }),
-      readTerminal: vi
-        .fn()
-        .mockResolvedValue({ tail: ['line 120'], truncated: false, limited: true })
+      readTerminal: vi.fn().mockResolvedValue({
+        tail: ['line 120'],
+        truncated: false,
+        limited: true
+      })
     })
-    const dispatcher = new RpcDispatcher({ runtime, methods: TERMINAL_METHODS })
+    const dispatcher = new RpcDispatcher({
+      runtime,
+      methods: TERMINAL_METHODS
+    })
 
     await dispatcher.dispatchStreaming(
       makeRequest('terminal.subscribe', { terminal: 'terminal-1' }),
@@ -104,9 +112,11 @@ describe('terminal subscribe buffering', () => {
     const cleanups = new Map<string, () => void>()
     const runtime = stubRuntime({
       resolveLeafForHandle: vi.fn().mockReturnValue({ ptyId: 'pty-1' }),
-      readTerminal: vi
-        .fn()
-        .mockResolvedValue({ tail: ['line 120'], truncated: false, limited: true }),
+      readTerminal: vi.fn().mockResolvedValue({
+        tail: ['line 120'],
+        truncated: false,
+        limited: true
+      }),
       serializeTerminalBuffer: vi.fn().mockResolvedValue(null),
       getTerminalSize: vi.fn().mockReturnValue({ cols: 80, rows: 24 }),
       getMobileDisplayMode: vi.fn().mockReturnValue('auto'),
@@ -122,7 +132,10 @@ describe('terminal subscribe buffering', () => {
       }),
       waitForTerminal: vi.fn(() => new Promise<RuntimeTerminalWait>(() => {}))
     })
-    const dispatcher = new RpcDispatcher({ runtime, methods: TERMINAL_METHODS })
+    const dispatcher = new RpcDispatcher({
+      runtime,
+      methods: TERMINAL_METHODS
+    })
 
     const dispatchPromise = dispatcher.dispatchStreaming(
       makeRequest('terminal.subscribe', {
@@ -172,7 +185,10 @@ describe('terminal subscribe buffering', () => {
         cleanupSubscription: vi.fn(),
         waitForTerminal: vi.fn(() => new Promise<RuntimeTerminalWait>(() => {}))
       })
-      const dispatcher = new RpcDispatcher({ runtime, methods: TERMINAL_METHODS })
+      const dispatcher = new RpcDispatcher({
+        runtime,
+        methods: TERMINAL_METHODS
+      })
 
       const dispatchPromise = dispatcher.dispatchStreaming(
         makeRequest('terminal.subscribe', {
@@ -209,9 +225,11 @@ describe('terminal subscribe buffering', () => {
     const cleanups = new Map<string, () => void>()
     const runtime = stubRuntime({
       resolveLeafForHandle: vi.fn().mockReturnValue({ ptyId: 'pty-1' }),
-      readTerminal: vi
-        .fn()
-        .mockResolvedValue({ tail: ['line 120'], truncated: false, limited: true }),
+      readTerminal: vi.fn().mockResolvedValue({
+        tail: ['line 120'],
+        truncated: false,
+        limited: true
+      }),
       serializeTerminalBuffer: vi.fn().mockResolvedValue(null),
       getTerminalSize: vi.fn().mockReturnValue({ cols: 80, rows: 24 }),
       getMobileDisplayMode: vi.fn().mockReturnValue('auto'),
@@ -230,7 +248,10 @@ describe('terminal subscribe buffering', () => {
       sendTerminal: vi.fn().mockResolvedValue({ accepted: true }),
       updateMobileViewport: vi.fn().mockResolvedValue(false)
     })
-    const dispatcher = new RpcDispatcher({ runtime, methods: TERMINAL_METHODS })
+    const dispatcher = new RpcDispatcher({
+      runtime,
+      methods: TERMINAL_METHODS
+    })
 
     const dispatchPromise = dispatcher.dispatchStreaming(
       makeRequest('terminal.subscribe', {
@@ -241,7 +262,9 @@ describe('terminal subscribe buffering', () => {
       (msg) => messages.push(msg),
       {
         connectionId: 'conn-binary-limited',
-        sendBinary: (bytes) => binaryFrames.push(bytes)
+        sendBinary: (bytes) => {
+          binaryFrames.push(bytes)
+        }
       }
     )
 
@@ -273,9 +296,11 @@ describe('terminal subscribe buffering', () => {
     const cleanups = new Map<string, () => void>()
     const runtime = stubRuntime({
       resolveLeafForHandle: vi.fn().mockReturnValue({ ptyId: 'pty-1' }),
-      readTerminal: vi
-        .fn()
-        .mockResolvedValue({ tail: ['line 120'], truncated: false, limited: true }),
+      readTerminal: vi.fn().mockResolvedValue({
+        tail: ['line 120'],
+        truncated: false,
+        limited: true
+      }),
       serializeTerminalBuffer: vi.fn().mockResolvedValue({
         data: 'serialized snapshot\r\n',
         cols: 100,
@@ -298,7 +323,10 @@ describe('terminal subscribe buffering', () => {
       sendTerminal: vi.fn().mockResolvedValue({ accepted: true }),
       updateMobileViewport: vi.fn().mockResolvedValue(false)
     })
-    const dispatcher = new RpcDispatcher({ runtime, methods: TERMINAL_METHODS })
+    const dispatcher = new RpcDispatcher({
+      runtime,
+      methods: TERMINAL_METHODS
+    })
 
     const dispatchPromise = dispatcher.dispatchStreaming(
       makeRequest('terminal.subscribe', {
@@ -309,7 +337,9 @@ describe('terminal subscribe buffering', () => {
       (msg) => messages.push(msg),
       {
         connectionId: 'conn-binary-serialized-limited',
-        sendBinary: (bytes) => binaryFrames.push(bytes)
+        sendBinary: (bytes) => {
+          binaryFrames.push(bytes)
+        }
       }
     )
 
@@ -375,7 +405,10 @@ describe('terminal subscribe buffering', () => {
         sendTerminal: vi.fn().mockResolvedValue({ accepted: true }),
         updateMobileViewport: vi.fn().mockResolvedValue(false)
       })
-      const dispatcher = new RpcDispatcher({ runtime, methods: TERMINAL_METHODS })
+      const dispatcher = new RpcDispatcher({
+        runtime,
+        methods: TERMINAL_METHODS
+      })
 
       const dispatchPromise = dispatcher.dispatchStreaming(
         makeRequest('terminal.subscribe', {
@@ -386,7 +419,9 @@ describe('terminal subscribe buffering', () => {
         (msg) => messages.push(msg),
         {
           connectionId: 'conn-buffered',
-          sendBinary: (bytes) => binaryFrames.push(bytes)
+          sendBinary: (bytes) => {
+            binaryFrames.push(bytes)
+          }
         }
       )
 
@@ -446,7 +481,12 @@ describe('terminal subscribe buffering', () => {
       data: string
       cols: number
       rows: number
-      oscLinks?: { row: number; startCol: number; endCol: number; uri: string }[]
+      oscLinks?: {
+        row: number
+        startCol: number
+        endCol: number
+        uri: string
+      }[]
     }) => void)[] = []
     const serializeTerminalBuffer = vi
       .fn()
@@ -457,7 +497,12 @@ describe('terminal subscribe buffering', () => {
             data: string
             cols: number
             rows: number
-            oscLinks?: { row: number; startCol: number; endCol: number; uri: string }[]
+            oscLinks?: {
+              row: number
+              startCol: number
+              endCol: number
+              uri: string
+            }[]
           }>((resolve) => {
             restreamResolves.push(resolve)
           })
@@ -490,7 +535,10 @@ describe('terminal subscribe buffering', () => {
       sendTerminal: vi.fn().mockResolvedValue({ accepted: true }),
       updateMobileViewport: vi.fn().mockResolvedValue({ updated: true, applied: true })
     })
-    const dispatcher = new RpcDispatcher({ runtime, methods: TERMINAL_METHODS })
+    const dispatcher = new RpcDispatcher({
+      runtime,
+      methods: TERMINAL_METHODS
+    })
 
     const dispatchPromise = dispatcher.dispatchStreaming(
       makeRequest('terminal.subscribe', {
@@ -501,19 +549,38 @@ describe('terminal subscribe buffering', () => {
       (msg) => messages.push(msg),
       {
         connectionId: 'conn-stale-resize',
-        sendBinary: (bytes) => binaryFrames.push(bytes)
+        sendBinary: (bytes) => {
+          binaryFrames.push(bytes)
+        }
       }
     )
 
     await vi.waitFor(() => expect(resizeListener).toBeDefined())
     binaryFrames.splice(0)
 
-    resizeListener?.({ cols: 90, rows: 24, displayMode: 'auto', reason: 'apply-layout', seq: 2 })
-    resizeListener?.({ cols: 100, rows: 24, displayMode: 'auto', reason: 'apply-layout', seq: 3 })
+    resizeListener?.({
+      cols: 90,
+      rows: 24,
+      displayMode: 'auto',
+      reason: 'apply-layout',
+      seq: 2
+    })
+    resizeListener?.({
+      cols: 100,
+      rows: 24,
+      displayMode: 'auto',
+      reason: 'apply-layout',
+      seq: 3
+    })
     await vi.waitFor(() => expect(restreamResolves).toHaveLength(2))
 
     const newerOscLinks = [{ row: 0, startCol: 4, endCol: 9, uri: 'https://example.com' }]
-    restreamResolves[1]?.({ data: 'newer', cols: 100, rows: 24, oscLinks: newerOscLinks })
+    restreamResolves[1]?.({
+      data: 'newer',
+      cols: 100,
+      rows: 24,
+      oscLinks: newerOscLinks
+    })
     await vi.waitFor(() =>
       expect(
         binaryFrames.some((frame) => {

@@ -2,6 +2,7 @@ import type { StatusBarItem } from '../../../../shared/types'
 import { createLocalizedCatalog } from '@/i18n/localized-catalog'
 import { translate } from '@/i18n/i18n'
 import { translateSearchKeyword } from './settings-search-keywords'
+import { getAntigravityStatusBarToggleSearchEntry } from './appearance-status-bar-antigravity-toggle-search'
 import { getGrokStatusBarToggleSearchEntry } from './appearance-status-bar-grok-toggle-search'
 
 export const getStatusBarToggles = createLocalizedCatalog(
@@ -99,6 +100,7 @@ export const getStatusBarToggles = createLocalizedCatalog(
         'Show Gemini token and cost usage for the active workspace.'
       )
     },
+    getAntigravityStatusBarToggleSearchEntry(),
     {
       id: 'opencode-go',
       title: translate(

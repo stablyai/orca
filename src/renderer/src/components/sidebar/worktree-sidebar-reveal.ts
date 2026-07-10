@@ -22,16 +22,24 @@ export function getScrollTopToRevealBounds(
   container: HTMLElement,
   bounds: SidebarRevealBounds,
   topInset = 0
-): number {
+): number | null {
   const viewportTopInset = Math.max(0, Math.min(container.clientHeight, topInset))
-  // Why: the sticky header reduces the usable viewport, so center within the
-  // visible area below it instead of behind it.
-  const targetCenter = bounds.start + (bounds.end - bounds.start) / 2
-  const viewportCenterOffset = (viewportTopInset + container.clientHeight) / 2
-  return targetCenter - viewportCenterOffset
+  const viewportTop = container.scrollTop + viewportTopInset
+  const viewportBottom = container.scrollTop + container.clientHeight
+  if (bounds.start < viewportTop) {
+    return bounds.start - viewportTopInset
+  }
+  if (bounds.end > viewportBottom) {
+    return bounds.end - container.clientHeight
+  }
+  return null
 }
 
-export function revealElementInScrollContainer(container: HTMLElement, element: Element): boolean {
+export function revealElementInScrollContainer(
+  container: HTMLElement,
+  element: Element,
+  behavior: ScrollBehavior
+): boolean {
   if (!container.contains(element)) {
     return false
   }
@@ -40,9 +48,17 @@ export function revealElementInScrollContainer(container: HTMLElement, element: 
     getElementScrollBounds(container, element),
     WORKTREE_SIDEBAR_REVEAL_TOP_INSET
   )
-  // Why: sidebar reveal is a focus handoff, so reposition immediately instead
-  // of making the user track an animated list. Boundary rows clamp to the list
-  // edge — padding the list so they can center leaves a phantom gap behind.
-  container.scrollTop = Math.max(0, nextScrollTop)
+  if (nextScrollTop === null) {
+    return true
+  }
+  // Why: honor the user's reduced-motion preference by jumping instantly instead of
+  // animating a smooth scroll (also makes the reveal deterministic in headless
+  // environments that never tick the smooth-scroll animation).
+  const prefersReducedMotion =
+    typeof window !== 'undefined' &&
+    window.matchMedia?.('(prefers-reduced-motion: reduce)').matches === true
+  const resolvedBehavior: ScrollBehavior =
+    behavior === 'smooth' && prefersReducedMotion ? 'auto' : behavior
+  container.scrollTo({ top: Math.max(0, nextScrollTop), behavior: resolvedBehavior })
   return true
 }

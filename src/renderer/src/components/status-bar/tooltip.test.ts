@@ -1,10 +1,15 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { renderToStaticMarkup } from 'react-dom/server'
+import type * as ReactModule from 'react'
 import type { ProviderRateLimits } from '../../../../shared/rate-limit-types'
 
-vi.mock('@/lib/agent-catalog', () => ({
-  AgentIcon: () => null
-}))
+vi.mock('@/lib/agent-catalog', async () => {
+  const ReactActual = await vi.importActual<typeof ReactModule>('react')
+  return {
+    AgentIcon: ({ agent }: { agent: string }) =>
+      ReactActual.createElement('span', { 'data-agent-icon': agent })
+  }
+})
 
 vi.mock('@/i18n/i18n', () => ({
   translate: (_key: string, fallback: string, values?: Record<string, string>) => {
@@ -448,6 +453,11 @@ describe('ProviderPanel reset rendering', () => {
 })
 
 describe('ProviderIcon', () => {
+  it('renders the Antigravity agent icon for the antigravity provider', () => {
+    const markup = renderToStaticMarkup(ProviderIcon({ provider: 'antigravity' }))
+    expect(markup).toContain('data-agent-icon="antigravity"')
+  })
+
   it('renders the official MiniMax icon asset for the minimax provider', () => {
     // Why: the icon must travel to the status bar / tooltip unchanged so the
     // user recognises the brand. We pin it to an <img> with a non-empty
