@@ -98,6 +98,32 @@ describe('normalizeHostEndpoint', () => {
     })
   })
 
+  it('rejects bare hosts with path, query, or spaces', () => {
+    expect(normalizeHostEndpoint('desk/path')).toEqual({
+      ok: false,
+      error: 'Not a valid hostname.'
+    })
+    expect(normalizeHostEndpoint('desk?route')).toEqual({
+      ok: false,
+      error: 'Not a valid hostname.'
+    })
+    expect(normalizeHostEndpoint('desk name')).toEqual({
+      ok: false,
+      error: 'Not a valid hostname.'
+    })
+  })
+
+  it('rejects scheme URLs with path or query', () => {
+    expect(normalizeHostEndpoint('ws://desk.example/path')).toEqual({
+      ok: false,
+      error: 'Host must not include a path or query.'
+    })
+    expect(normalizeHostEndpoint('ws://desk.example?route=1')).toEqual({
+      ok: false,
+      error: 'Host must not include a path or query.'
+    })
+  })
+
   it('accepts bracketed IPv6 with port', () => {
     expect(normalizeHostEndpoint('[fd7a:115c:a1e0::1]:6768')).toEqual({
       ok: true,

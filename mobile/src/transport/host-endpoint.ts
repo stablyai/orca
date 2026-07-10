@@ -12,13 +12,17 @@ const DEFAULT_PORT = '6768'
 export function displayHostEndpoint(endpoint: string): string {
   try {
     const url = new URL(endpoint)
-    // Why: URL.hostname strips IPv6 brackets; re-wrap so round-trip through
-    // normalizeHostEndpoint does not treat "addr:port" as a single host.
-    const host = url.hostname.includes(':') ? `[${url.hostname}]` : url.hostname
+    // Why: some URL parsers leave IPv6 brackets on hostname, others strip them.
+    // Normalize once so round-trip through normalizeHostEndpoint stays stable.
+    const host = formatHostForUrl(unwrapHostname(url.hostname))
     return `${host}${url.port ? `:${url.port}` : ''}`
   } catch {
     return endpoint
   }
+}
+
+function unwrapHostname(hostname: string): string {
+  return hostname.startsWith('[') && hostname.endsWith(']') ? hostname.slice(1, -1) : hostname
 }
 
 export function endpointPort(endpoint: string): string | undefined {
@@ -84,14 +88,29 @@ function normalizeSchemeUrl(input: string, fallbackPort: string): NormalizeHostE
     return { ok: false, error: 'Missing hostname.' }
   }
 
+  // Why: edit-host persists a bare host:port WebSocket endpoint. Path/query/
+  // userinfo are not part of the pairing contract — reject rather than strip
+  // so typos like desk/path or desk?route cannot be saved silently.
+  if (url.username || url.password) {
+    return { ok: false, error: 'Not a valid address.' }
+  }
+  if ((url.pathname && url.pathname !== '/') || url.search || url.hash) {
+    return { ok: false, error: 'Host must not include a path or query.' }
+  }
+
+  const hostname = unwrapHostname(url.hostname)
+  const hostError = validateHostname(hostname)
+  if (hostError) {
+    return { ok: false, error: hostError }
+  }
+
   const port = url.port || fallbackPort
   if (!isValidPort(port)) {
     return { ok: false, error: 'Port must be 1–65535.' }
   }
 
-  // Why: rebuild so path/query noise and accidental whitespace never reach the
-  // WebSocket constructor; pairing offers are host:port only.
-  return { ok: true, endpoint: `${url.protocol}//${formatHostForUrl(url.hostname)}:${port}` }
+  // Why: rebuild so accidental whitespace never reaches the WebSocket constructor.
+  return { ok: true, endpoint: `${url.protocol}//${formatHostForUrl(hostname)}:${port}` }
 }
 
 function normalizeHostPort(
@@ -131,6 +150,13 @@ function normalizeHostPort(
     return { ok: false, error: 'Missing hostname.' }
   }
 
+  // Why: bare input is not a URL, so characters that only make sense in a URL
+  // (path, query, fragment, whitespace) must not be treated as hostname bytes.
+  const hostError = validateHostname(host)
+  if (hostError) {
+    return { ok: false, error: hostError }
+  }
+
   if (port !== undefined) {
     port = port.trim()
     if (!isValidPort(port)) {
@@ -144,6 +170,36 @@ function normalizeHostPort(
 
 function formatHostForUrl(host: string): string {
   return host.includes(':') && !host.startsWith('[') ? `[${host}]` : host
+}
+
+/**
+ * Reject hostnames that would be illegal or ambiguous in a websocket URL.
+ * Allows DNS labels, `.local` mDNS, IPv4, and IPv6 hex forms.
+ */
+function validateHostname(host: string): string | null {
+  if (!host) {
+    return 'Missing hostname.'
+  }
+  // Spaces, path/query/fragment separators, userinfo separators, brackets.
+  if (/[\s/?#@[\]]/.test(host)) {
+    return 'Not a valid hostname.'
+  }
+  if (host.includes(':')) {
+    // Why: bare IPv6 is hex + colons only (brackets already stripped).
+    if (!/^[0-9a-fA-F:]+$/.test(host) || host.split(':').length < 3) {
+      return 'Not a valid hostname.'
+    }
+    return null
+  }
+  // DNS / IPv4 / mDNS: labels of alnum and hyphen, dots between, no empty labels.
+  if (
+    !/^[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(?:\.[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)*$/.test(
+      host
+    )
+  ) {
+    return 'Not a valid hostname.'
+  }
+  return null
 }
 
 function isValidPort(port: string): boolean {

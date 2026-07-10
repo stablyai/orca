@@ -14,6 +14,7 @@ const path = require('node:path')
 // on iOS 27. See Apple TN3187 and expo/expo#46664.
 
 const SCENE_DELEGATE_SOURCE = `import UIKit
+import React
 
 // Why: iOS 27 / Xcode 27 UIKit requires the scene-based lifecycle. Apps that
 // only create UIWindow in AppDelegate hit EXC_BREAKPOINT in
@@ -42,11 +43,31 @@ class SceneDelegate: UIResponder, UIWindowSceneDelegate {
     self.window = window
     appDelegate.window = window
 
+    // Why: under UIScene, cold-start orca://pair URLs land in
+    // connectionOptions.urlContexts, not UIApplication launchOptions. Merge
+    // them so Linking.getInitialURL() can still see the pair deep link.
+    var launchOptions = appDelegate.launchOptions ?? [:]
+    if let url = connectionOptions.urlContexts.first?.url {
+      launchOptions[UIApplication.LaunchOptionsKey.url] = url
+    }
+
     factory.startReactNative(
       withModuleName: "main",
       in: window,
-      launchOptions: appDelegate.launchOptions
+      launchOptions: launchOptions
     )
+  }
+
+  // Why: warm opens (app already running) deliver orca:// via this scene
+  // callback, not AppDelegate.application(_:open:). Forward to RN Linking.
+  func scene(_ scene: UIScene, openURLContexts URLContexts: Set<UIOpenURLContext>) {
+    for context in URLContexts {
+      RCTLinkingManager.application(
+        UIApplication.shared,
+        open: context.url,
+        options: [:]
+      )
+    }
   }
 }
 `
