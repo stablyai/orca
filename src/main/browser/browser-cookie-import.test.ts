@@ -505,6 +505,41 @@ describe('importCookiesFromBrowser Chromium', () => {
       platformSpy.mockRestore()
     }
   })
+
+  it('falls back to in-memory import when the live target DB cannot be copied', async () => {
+    const sourceCookiesPath = join(tmpDir, 'Chrome', 'Default', 'Network', 'Cookies')
+    const targetCookiesPath = join(tmpDir, 'userData', 'Partitions', 'test', 'Network', 'Cookies')
+    createChromiumCookieTestDatabase(sourceCookiesPath, [
+      { name: 'sid', value: 'source-value' }
+    ]).close()
+    createChromiumCookieTestDatabase(targetCookiesPath, [
+      { name: 'old', value: 'target-value' }
+    ]).close()
+
+    // Why: Windows holds the live partition Cookies DB with an exclusive lock, so the
+    // staging copy throws EBUSY. Simulate that to prove import still succeeds in-memory.
+    copyFileSyncMock.mockImplementationOnce(() => {
+      throw Object.assign(new Error('EBUSY: resource busy or locked'), { code: 'EBUSY' })
+    })
+    const platformSpy = vi.spyOn(process, 'platform', 'get').mockReturnValue('win32')
+
+    try {
+      const result = await importCookiesFromBrowser(
+        chromeBrowser(sourceCookiesPath),
+        'persist:test'
+      )
+
+      expect(result.ok).toBe(true)
+      expect(cookiesSetMock).toHaveBeenCalledWith(
+        expect.objectContaining({ domain: '.example.com', name: 'sid', value: 'source-value' })
+      )
+      // Why: the staging copy never materialized, so nothing must be left behind.
+      const stagingDir = join(tmpDir, 'userData', 'cookie-import-staging')
+      expect(existsSync(stagingDir) ? readdirSync(stagingDir) : []).toEqual([])
+    } finally {
+      platformSpy.mockRestore()
+    }
+  })
 })
 
 describe('detectInstalledBrowsers', () => {
