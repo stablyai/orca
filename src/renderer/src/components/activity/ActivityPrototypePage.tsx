@@ -246,6 +246,16 @@ export function activityThreadResponseRenderPreview({
   ).trimEnd()}...`
 }
 
+export function activityThreadMatchesReadFilter({
+  thread,
+  readFilter
+}: {
+  thread: Pick<AgentPaneThread, 'unread'>
+  readFilter: ThreadReadFilter
+}): boolean {
+  return readFilter === 'all' || thread.unread
+}
+
 function getSelectedActivityTerminalPortalStatus(
   target: HTMLElement,
   paneKey: string
@@ -1289,11 +1299,63 @@ function isEventFromNestedInteractiveElement(
   )
 }
 
+export function ActivityThreadReadToggle({
+  unread,
+  onMarkRead,
+  onMarkUnread
+}: {
+  unread: boolean
+  onMarkRead: () => void
+  onMarkUnread: () => void
+}): React.JSX.Element {
+  const markReadLabel = translate(
+    'auto.components.activity.ActivityPrototypePage.c6b1a30e61',
+    'Mark thread read'
+  )
+  const markUnreadLabel = translate(
+    'auto.components.activity.ActivityPrototypePage.59b131fbd9',
+    'Mark thread unread'
+  )
+  const label = unread ? markReadLabel : markUnreadLabel
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <button
+          type="button"
+          onClick={(event) => {
+            event.stopPropagation()
+            if (unread) {
+              onMarkRead()
+            } else {
+              onMarkUnread()
+            }
+          }}
+          onMouseDown={(event) => event.stopPropagation()}
+          className={cn(
+            'flex size-4 shrink-0 cursor-pointer items-center justify-center rounded transition-all',
+            'hover:bg-accent/80 active:scale-95',
+            'focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring'
+          )}
+          aria-label={label}
+        >
+          {unread ? (
+            <FilledBellIcon className="size-[13px] shrink-0 text-amber-500 drop-shadow-sm" />
+          ) : (
+            <Bell className="size-3 text-muted-foreground/40 can-hover:opacity-0 transition-opacity group-hover:opacity-100" />
+          )}
+        </button>
+      </TooltipTrigger>
+      <TooltipContent side="left">{label}</TooltipContent>
+    </Tooltip>
+  )
+}
+
 function ThreadRow({
   thread,
   selected,
   onSelect,
   onJump,
+  onMarkRead,
   onMarkUnread,
   canJump,
   compactMode
@@ -1302,6 +1364,7 @@ function ThreadRow({
   selected: boolean
   onSelect: () => void
   onJump: () => void
+  onMarkRead: () => void
   onMarkUnread: () => void
   canJump: boolean
   compactMode: boolean
@@ -1387,52 +1450,15 @@ function ThreadRow({
           ) : null}
         </div>
         <span className="inline-flex shrink-0 items-center gap-1.5 pt-px">
-          {/* Why (bell matches WorktreeCard pattern): unread → amber filled
-              bell as a static, non-interactive cue (selecting the thread
-              auto-marks it read, so a Mark-read button would be redundant);
-              read → outline Bell that fades in on row hover and acts as
-              Mark-unread. Bare button (no shadcn outline) so it reads as
-              an inline cue rather than a discrete control square. */}
+          {/* Why: this is a real read/unread toggle. Selecting a thread also
+              acknowledges it, but the explicit bell must support inbox
+              triage without opening or moving the terminal. */}
           <span className="inline-flex size-4 shrink-0 items-center justify-center">
-            {thread.unread ? (
-              <FilledBellIcon
-                className="size-[13px] shrink-0 text-amber-500 drop-shadow-sm"
-                aria-label={translate(
-                  'auto.components.activity.ActivityPrototypePage.beb2c19173',
-                  'Unread'
-                )}
-              />
-            ) : (
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <button
-                    type="button"
-                    onClick={(event) => {
-                      event.stopPropagation()
-                      onMarkUnread()
-                    }}
-                    onMouseDown={(event) => event.stopPropagation()}
-                    className={cn(
-                      'group/unread flex size-4 shrink-0 cursor-pointer items-center justify-center rounded transition-all',
-                      'hover:bg-accent/80 active:scale-95',
-                      'focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring'
-                    )}
-                    aria-label={translate(
-                      'auto.components.activity.ActivityPrototypePage.59b131fbd9',
-                      'Mark thread unread'
-                    )}
-                  >
-                    <Bell className="size-3 text-muted-foreground/40 can-hover:opacity-0 transition-opacity group-hover:opacity-100 group-hover/unread:opacity-100" />
-                  </button>
-                </TooltipTrigger>
-                <TooltipContent side="left">
-                  {translate(
-                    'auto.components.activity.ActivityPrototypePage.59b131fbd9',
-                    'Mark thread unread'
-                  )}
-                </TooltipContent>
-              </Tooltip>
-            )}
+            <ActivityThreadReadToggle
+              unread={thread.unread}
+              onMarkRead={onMarkRead}
+              onMarkUnread={onMarkUnread}
+            />
           </span>
           <EventTime timestamp={thread.latestTimestamp} />
         </span>
@@ -1593,14 +1619,10 @@ export default function ActivityPrototypePage(): React.JSX.Element {
   const visibleThreads = useMemo(() => {
     const normalizedQuery = isActivitySearchQueryTooLarge(query) ? null : query.trim().toLowerCase()
     return allThreads.filter((thread) => {
-      // Why: keep the just-selected thread visible even after auto-mark-read
-      // flips it to read, otherwise clicking a row in unread-only mode makes it
-      // vanish from the left list while staying selected on the right.
-      if (
-        readFilter === 'unread' &&
-        !thread.unread &&
-        thread.paneKey !== effectiveSelectedPaneKey
-      ) {
+      // Why: the bell filter is an inbox. Once opening a thread acknowledges
+      // it, remove the row from the unread list while leaving its detail open
+      // on the right. Turning the filter off still exposes full history.
+      if (!activityThreadMatchesReadFilter({ thread, readFilter })) {
         return false
       }
       if (normalizedQuery === null) {
@@ -1608,7 +1630,7 @@ export default function ActivityPrototypePage(): React.JSX.Element {
       }
       return activityThreadMatchesSearchQuery({ thread, searchQuery: normalizedQuery })
     })
-  }, [allThreads, readFilter, query, effectiveSelectedPaneKey])
+  }, [allThreads, readFilter, query])
   const visibleThreadGroups = useMemo(
     () => buildActivityThreadGroups(visibleThreads, groupBy),
     [visibleThreads, groupBy]
@@ -2049,6 +2071,7 @@ export default function ActivityPrototypePage(): React.JSX.Element {
                     selected={thread.paneKey === selectedThread?.paneKey}
                     onSelect={() => selectThread(thread)}
                     onJump={() => jumpToWorkspace(thread)}
+                    onMarkRead={() => markThreadRead(thread)}
                     onMarkUnread={() => markThreadUnread(thread)}
                     canJump={storeData.worktreeMap.has(thread.worktree.id)}
                     compactMode={compactMode}

@@ -11,6 +11,7 @@ import { formatAgentTypeLabel } from '@/lib/agent-status'
 import type { RetainedAgentEntry } from '@/store/slices/agent-status'
 import {
   ACTIVITY_SEARCH_QUERY_MAX_BYTES,
+  activityThreadMatchesReadFilter,
   activityThreadResponseRenderPreview,
   activityThreadMatchesSearchQuery,
   handleActivityFilterFocusShortcut,
@@ -91,6 +92,20 @@ describe('shouldAutoAcknowledgeSelectedThread', () => {
         selectedThreadLatestTimestamp: 2_000
       })
     ).toBe(true)
+  })
+})
+
+describe('activityThreadMatchesReadFilter', () => {
+  it('removes an acknowledged thread from the unread inbox while its detail stays open', () => {
+    expect(
+      activityThreadMatchesReadFilter({ thread: { unread: false }, readFilter: 'unread' })
+    ).toBe(false)
+  })
+
+  it('keeps acknowledged threads available in full history', () => {
+    expect(activityThreadMatchesReadFilter({ thread: { unread: false }, readFilter: 'all' })).toBe(
+      true
+    )
   })
 })
 

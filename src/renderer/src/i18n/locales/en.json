@@ -12480,6 +12480,7 @@
           "4616ea39fd": "Jump to workspace",
           "59b131fbd9": "Mark thread unread",
           "beb2c19173": "Unread",
+          "c6b1a30e61": "Mark thread read",
           "5651b216c6": "Unknown project",
           "22b22034bc": "Standalone terminal unavailable in Activity.",
           "afdc2139a8": "Agent terminal closed. Open a new terminal in this workspace to continue."
