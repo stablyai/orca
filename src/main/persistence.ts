@@ -130,6 +130,11 @@ import {
 } from './agent-hooks/migration-unsupported-pty-state'
 import { agentHookServer } from './agent-hooks/server'
 import { pruneLocalTerminalScrollbackBuffers } from '../shared/workspace-session-terminal-buffers'
+import {
+  backfillAutomationRunNumbers,
+  nextAutomationRunNumber,
+  pruneAutomationRuns
+} from '../shared/automation-run-retention'
 import { pruneWorkspaceSessionBrowserHistory } from '../shared/workspace-session-browser-history'
 import {
   FOLDER_WORKSPACE_INSTANCE_SEPARATOR,
@@ -3387,7 +3392,18 @@ export class Store {
             parsed.legacyPaneKeyAliasEntries
           ),
           automations: Array.isArray(parsed.automations) ? parsed.automations : [],
-          automationRuns: Array.isArray(parsed.automationRuns) ? parsed.automationRuns : [],
+          automationRuns: (() => {
+            if (!Array.isArray(parsed.automationRuns)) {
+              return []
+            }
+            const runs = pruneAutomationRuns(backfillAutomationRunNumbers(parsed.automationRuns))
+            // Why: nothing else on the load path marks state dirty, so without
+            // this an oversized legacy file only shrinks at the next unrelated save.
+            if (runs.length !== parsed.automationRuns.length) {
+              this.loadNeedsSave = true
+            }
+            return runs
+          })(),
           onboarding: normalizedOnboarding
         }
       }
@@ -4701,12 +4717,15 @@ export class Store {
       return existing
     }
     const now = Date.now()
-    const runNumber =
-      (this.state.automationRuns ?? []).filter((run) => run.automationId === automation.id).length +
-      1
+    // Why: retention prunes old runs, so the count of retained runs is no longer
+    // the run's ordinal — carry the number forward from the newest survivor.
+    const runNumber = nextAutomationRunNumber(
+      (this.state.automationRuns ?? []).filter((run) => run.automationId === automation.id)
+    )
     const run: AutomationRun = {
       id: randomUUID(),
       automationId: automation.id,
+      runNumber,
       runContext: automation.runContext ?? null,
       sourceContext: automation.sourceContext ?? null,
       title: `${automation.name} run ${runNumber}`,
@@ -4728,7 +4747,7 @@ export class Store {
       dispatchedAt: null,
       createdAt: now
     }
-    this.state.automationRuns = [...(this.state.automationRuns ?? []), run]
+    this.state.automationRuns = pruneAutomationRuns([...(this.state.automationRuns ?? []), run])
     if (trigger === 'manual') {
       this.recordFeatureInteraction('automation-run')
     }

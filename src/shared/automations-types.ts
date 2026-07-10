@@ -140,6 +140,9 @@ export type AutomationRun = {
   startedAt: number | null
   dispatchedAt: number | null
   createdAt: number
+  /** Why: run titles must stay unique once retention prunes old runs, so the
+   *  number can no longer be derived from how many runs are currently kept. */
+  runNumber?: number
 }
 
 export type AutomationCreateInput = {
