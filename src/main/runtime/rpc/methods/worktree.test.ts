@@ -38,7 +38,32 @@ describe('worktree RPC methods', () => {
 
     expect(response).toMatchObject({ ok: true })
     expect(runtime.activateManagedWorktree).toHaveBeenCalledWith('id:wt-1', {
-      notifyClients: false
+      notifyClients: false,
+      clientKind: undefined
+    })
+  })
+
+  it('forwards the mobile clientKind to the runtime on session-only activation', async () => {
+    const runtime = {
+      getRuntimeId: () => 'test-runtime',
+      activateManagedWorktree: vi
+        .fn()
+        .mockResolvedValue({ repoId: 'repo-1', worktreeId: 'wt-1', activated: true })
+    } as unknown as OrcaRuntimeService
+    const dispatcher = new RpcDispatcher({ runtime, methods: WORKTREE_METHODS })
+
+    // The mobile WebSocket path always uses dispatchStreaming, which threads the
+    // authenticated device scope as clientKind even for non-streaming methods.
+    const replies: string[] = []
+    await dispatcher.dispatchStreaming(
+      makeRequest('worktree.activate', { worktree: 'id:wt-1', notifyClients: false }),
+      (response) => replies.push(response),
+      { clientKind: 'mobile' }
+    )
+
+    expect(runtime.activateManagedWorktree).toHaveBeenCalledWith('id:wt-1', {
+      notifyClients: false,
+      clientKind: 'mobile'
     })
   })
 

@@ -1872,6 +1872,64 @@ describe('connectPanePty', () => {
     expect(transport.connect.mock.calls.length).toBe(connectCallsAfterWake)
   })
 
+  it('resumes a hibernated agent from a navigation-free wake without a visibility reveal', async () => {
+    // Mobile wake fanout drives wakeHibernatedAgentIfArmed on a still-hidden pane
+    // (no isVisible flip): the armed cold-restore --resume must fire exactly once
+    // even when the wake is delivered twice (INV-1 idempotency).
+    const { connectPanePty } = await import('./pty-connection')
+    const transport = createMockTransport('pty-pane-2')
+    transportFactoryQueue.push(transport)
+    const manager = createManager(1)
+    const deps = createDeps({
+      consumeSuppressedPtyExit: vi.fn(() => true),
+      isVisibleRef: { current: false }
+    })
+    const pane = createPane(2)
+    const paneKey = `tab-1:${leafIdForPane(2)}`
+    mockStoreState.sleepingAgentSessionsByPaneKey[paneKey] = {
+      paneKey,
+      tabId: 'tab-1',
+      worktreeId: 'wt-1',
+      agent: 'claude',
+      providerSession: { key: 'session_id', id: 'sess-hibernated-bg' },
+      prompt: 'test prompt',
+      state: 'done',
+      capturedAt: 1,
+      updatedAt: 1,
+      origin: 'worktree-sleep'
+    }
+
+    const binding = connectPanePty(pane as never, manager as never, deps as never) as unknown as {
+      wakeHibernatedAgentIfArmed: () => void
+      dispose: () => void
+    }
+    await flushAsyncTicks()
+
+    const onPtyExit = createdTransportOptions[0]?.onPtyExit as ((ptyId: string) => void) | undefined
+    expect((transport.getPtyId as unknown as () => string | null)()).toBe('tab-pty')
+    const connectCallsBeforeExit = transport.connect.mock.calls.length
+    onPtyExit?.('tab-pty')
+    await flushAsyncTicks()
+    // Still hidden: no reveal happened, so nothing respawned on exit.
+    expect(transport.connect.mock.calls.length).toBe(connectCallsBeforeExit)
+
+    binding.wakeHibernatedAgentIfArmed()
+    await flushAsyncTicks()
+
+    expect(transport.connect.mock.calls.length).toBeGreaterThan(connectCallsBeforeExit)
+    const resumeConnectOptions = transport.connect.mock.calls.at(-1)?.[0] as
+      | { command?: string }
+      | undefined
+    expect(resumeConnectOptions?.command).toContain('--resume')
+    expect(resumeConnectOptions?.command).toContain('sess-hibernated-bg')
+
+    // A second navigation-free wake must not spawn again (one-pane/one-PTY).
+    const connectCallsAfterWake = transport.connect.mock.calls.length
+    binding.wakeHibernatedAgentIfArmed()
+    await flushAsyncTicks()
+    expect(transport.connect.mock.calls.length).toBe(connectCallsAfterWake)
+  })
+
   it('auto-resumes a hibernated pane when its kill lands after the pane is already revealed', async () => {
     // Race: the user reveals the background tab in the window between the
     // coordinator confirming the candidate and the kill's exit arriving. The

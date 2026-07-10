@@ -24,7 +24,11 @@ type GitBufferSpyTarget = {
 }
 
 type GitSpyTarget = {
-  git(args: string[], cwd: string): Promise<{ stdout: string; stderr: string }>
+  git(
+    args: string[],
+    cwd: string,
+    opts?: { signal?: AbortSignal }
+  ): Promise<{ stdout: string; stderr: string }>
 }
 
 function deferredRelayBuffer(content: string): {
@@ -1880,6 +1884,24 @@ describe('GitHandler', () => {
       })) as Record<string, unknown>[]
       expect(result.length).toBeGreaterThanOrEqual(1)
       expect(result[0].isMainWorktree).toBe(true)
+    })
+
+    it('passes request cancellation to the git worktree list subprocess', async () => {
+      const controller = new AbortController()
+      const gitSpy = vi
+        .spyOn(handler as unknown as GitSpyTarget, 'git')
+        .mockRejectedValue(new Error('aborted'))
+
+      const result = await dispatcher.callRequest(
+        'git.listWorktrees',
+        { repoPath: tmpDir },
+        { isStale: () => false, signal: controller.signal }
+      )
+
+      expect(result).toEqual([])
+      expect(gitSpy).toHaveBeenCalledWith(['worktree', 'list', '--porcelain', '-z'], tmpDir, {
+        signal: controller.signal
+      })
     })
 
     it.skipIf(process.platform === 'win32')(

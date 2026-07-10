@@ -210,7 +210,8 @@
         },
         "workspace": {
           "cleanup": {
-            "9d6e531da6": "ワークスペースはもう存在しません。"
+            "9d6e531da6": "ワークスペースはもう存在しません。",
+            "changedSinceConfirmation": "確認後にワークスペースが変更されました。削除する前に更新して確認してください。"
           }
         },
         "worktrees": {
@@ -2339,7 +2340,61 @@
             "gitFilter": "Git",
             "contextFilter": "コンテクスト",
             "sortBy": "並べ替え",
-            "sortDirection": "方向"
+            "sortDirection": "方向",
+            "1d3503357d": "削除の続行中にこれを閉じて後で戻れます。",
+            "4c2990886e": "{{value0}}/{{value1}} 件を削除済み",
+            "86ba852118": "{{value0}}、{{value1}} 件が失敗",
+            "7b7bde5181": "これまでに確認したワークスペース: {{value0}}",
+            "deletingCount": "削除中のワークスペース: {{value0}}",
+            "deleteCount": "ワークスペースを削除しますか: {{value0}}?",
+            "selectedForDeletionCount": "削除対象として選択済み: {{value0}}",
+            "deleteButtonCount": "{{value0}} 件を削除",
+            "archivedStatus": "アーカイブ済み",
+            "readyStatus": "準備完了"
+          },
+          "backgroundRemoval": {
+            "removed": "削除済みワークスペース: {{value0}}",
+            "failed": "削除できなかったワークスペース: {{value0}}",
+            "error": "ワークスペースのクリーンアップに失敗しました",
+            "skippedAncestor": "ネストされたワークスペースを削除できなかったためスキップしました。",
+            "timedOut": "{{value0}} の削除に予想より時間がかかっています。バックグラウンドで継続されます。"
+          },
+          "candidateRow": {
+            "gitLabel": "Git",
+            "commitsLabel": "コミット",
+            "contextLabel": "コンテキスト",
+            "flagsLabel": "フラグ",
+            "collapseDetails": "詳細を折りたたむ",
+            "expandDetails": "詳細を展開",
+            "cleanGit": "Git はクリーン",
+            "dirtyGit": "Git に変更あり",
+            "unpushedCommits": "未プッシュのコミット",
+            "gitUnknown": "Git 不明",
+            "gitStatusUnknown": "Git 状態不明",
+            "noUnpushedCommits": "未プッシュのコミットなし",
+            "unpushedCommitsCount": "未プッシュのコミット: {{value0}}",
+            "uncommittedChanges": "未コミットの変更",
+            "terminalTabsCount": "ターミナルタブ: {{value0}}",
+            "editorTabsCount": "エディタタブ: {{value0}}",
+            "browserTabsCount": "ブラウザタブ: {{value0}}",
+            "diffNotesCount": "差分メモ: {{value0}}",
+            "completedAgentsCount": "完了済みエージェント: {{value0}}",
+            "contextCount": "コンテキスト: {{value0}}",
+            "mainWorkspaceBlocker": "メインワークスペース",
+            "folderProjectBlocker": "フォルダープロジェクト",
+            "pinnedBlocker": "ピン留め済み",
+            "activeWorkspaceBlocker": "アクティブなワークスペース",
+            "runningTerminalBlocker": "実行中のターミナルプロセス",
+            "terminalLivenessUnknownBlocker": "ターミナルの状態不明",
+            "dirtyEditorBufferBlocker": "未保存のエディタバッファ",
+            "volatileLocalContextBlocker": "揮発性のローカルコンテキスト",
+            "recentVisibleContextBlocker": "最近表示したタブ",
+            "liveAgentBlocker": "アクティブなエージェント",
+            "sshDisconnectedBlocker": "リモート利用不可",
+            "gitStatusErrorBlocker": "Git 状態を利用できません",
+            "dirtyFilesBlocker": "変更済みファイル",
+            "unknownBaseBlocker": "未プッシュのコミットを確認できませんでした",
+            "dismissedBlocker": "無視済み"
           }
         }
       },
@@ -2973,7 +3028,8 @@
             "f077f586db": "今後表示しない",
             "c0e972d726": "キャンセル",
             "06741a2f3d": "MiniMax の使用量詳細を開く",
-            "3bbf140864": "MiniMax 使用量"
+            "3bbf140864": "MiniMax 使用量",
+            "remoteServerLabel": "リモートサーバー"
           },
           "StatusBarUsageEmptyCta": {
             "828c764a79": "アカウントを接続する",
@@ -3985,7 +4041,8 @@
           "runtimeHostProject": "Orca サーバー上のプロジェクト",
           "automationCreated": "自動化により作成",
           "branchIdentity": "ブランチ",
-          "branchFolderPathIdentity": "ブランチまたはフォルダパス"
+          "branchFolderPathIdentity": "ブランチまたはフォルダパス",
+          "ef18787206": "削除待ち"
         },
         "WorktreeCardAgents": {
           "1b0a156717": "エージェント"
@@ -4718,7 +4775,13 @@
           "435df0ee51": "リクエストヘッダーの Cookie の値をコピーします。",
           "7492fb3bba": "ここに貼り付けて保存をクリックします。",
           "9fec52de4b": "Cookie のコピー方法",
-          "4e32e030b2": "ローカルに保存されます。Orca は使用量の更新のために platform.minimax.io のみに送信します。"
+          "4e32e030b2": "ローカルに保存されます。Orca は使用量の更新のために platform.minimax.io のみに送信します。",
+          "remoteServerFallback": "リモートサーバー",
+          "loadAccountsFailed": "プロバイダーアカウントを読み込めませんでした。",
+          "remoteScopeAccounts": "{{value0}} が管理するアカウントを表示しています。アカウントの追加や再認証はそのサーバー上で行ってください。",
+          "remoteScopeAuthContext": "各アカウントは {{value0}} 上に独自のサインインコンテキストを保持します。",
+          "remoteEmptyClaudeAccounts": "{{value0}} に管理対象の Claude アカウントはありません。システム既定の Claude ログインを使用します。アカウントの追加はそのサーバー上で行ってください。",
+          "remoteEmptyCodexAccounts": "{{value0}} に管理対象の Codex アカウントはありません。システム既定の Codex ログインを使用します。アカウントの追加はそのサーバー上で行ってください。"
         },
         "AdvancedPane": {
           "40b29e0bf3": "再起動",
@@ -8840,6 +8903,26 @@
           "reviewFirst": "Review first",
           "singular": "Global saves won't change 1 repository with its own recipe.",
           "tooltipTitle": "Repository overrides"
+        },
+        "linear": {
+          "agent": {
+            "skill": {
+              "install": {
+                "cta": {
+                  "copiedCommand": "Copied command.",
+                  "copyFailed": "Failed to copy command.",
+                  "skillLabel": "Agent skill:",
+                  "checking": "Checking...",
+                  "installed": "Installed",
+                  "notInstalled": "Not installed",
+                  "recheck": "Re-check",
+                  "installedDescription": "Agent skill installed. To update it, run:",
+                  "description": "Let your agents read and edit Linear tasks.",
+                  "copyCommand": "Copy command"
+                }
+              }
+            }
+          }
         }
       },
       "right": {

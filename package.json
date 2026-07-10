@@ -1,6 +1,6 @@
 {
   "name": "orca",
-  "version": "1.4.131-rc.1",
+  "version": "1.4.131-rc.2",
   "description": "Next-gen IDE for parallel agentic development",
   "homepage": "https://github.com/stablyai/orca",
   "author": "stablyai",
@@ -69,8 +69,8 @@
     "build:unpack": "pnpm run build && pnpm run ensure:electron-runtime && electron-builder --config config/electron-builder.config.cjs --dir",
     "build:win": "pnpm run build:desktop && pnpm run ensure:electron-runtime && electron-builder --config config/electron-builder.config.cjs --win",
     "build:icons": "bash resources/icon-source/generate.sh",
-    "build:mac": "pnpm run build:desktop && pnpm run build:computer-macos && pnpm run ensure:electron-runtime && electron-builder --config config/electron-builder.config.cjs --mac",
-    "build:mac:release": "node config/scripts/verify-macos-release-env.mjs && ORCA_MAC_RELEASE=1 pnpm run build:desktop && ORCA_MAC_RELEASE=1 pnpm run build:computer-macos && pnpm run ensure:electron-runtime && ORCA_MAC_RELEASE=1 electron-builder --config config/electron-builder.config.cjs --mac",
+    "build:mac": "pnpm run build:desktop && pnpm run build:computer-macos && pnpm run build:notification-status-macos && pnpm run ensure:electron-runtime && electron-builder --config config/electron-builder.config.cjs --mac",
+    "build:mac:release": "node config/scripts/verify-macos-release-env.mjs && ORCA_MAC_RELEASE=1 pnpm run build:desktop && ORCA_MAC_RELEASE=1 pnpm run build:computer-macos && ORCA_MAC_RELEASE=1 pnpm run build:notification-status-macos && pnpm run ensure:electron-runtime && ORCA_MAC_RELEASE=1 electron-builder --config config/electron-builder.config.cjs --mac",
     "build:linux": "pnpm run build:desktop && pnpm run ensure:electron-runtime && electron-builder --config config/electron-builder.config.cjs --linux AppImage deb",
     "test:e2e": "pnpm run ensure:electron-runtime && npx playwright test --config tests/playwright.config.ts --project electron-headless",
     "test:e2e:floating-mobile-emulator": "pnpm run ensure:electron-runtime && npx playwright test tests/e2e/floating-mobile-emulator-tab.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=1",

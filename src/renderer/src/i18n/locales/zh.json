@@ -210,7 +210,8 @@
         },
         "workspace": {
           "cleanup": {
-            "9d6e531da6": "工作区不再存在。"
+            "9d6e531da6": "工作区不再存在。",
+            "changedSinceConfirmation": "工作区在确认后发生了更改。请刷新并在删除前重新检查。"
           }
         },
         "worktrees": {
@@ -2339,7 +2340,61 @@
             "gitFilter": "Git",
             "contextFilter": "上下文",
             "sortBy": "排序依据",
-            "sortDirection": "方向"
+            "sortDirection": "方向",
+            "1d3503357d": "删除继续期间，你可以关闭此窗口并稍后回来。",
+            "4c2990886e": "已删除 {{value0}}/{{value1}}",
+            "86ba852118": "{{value0}}，{{value1}} 个失败",
+            "7b7bde5181": "到目前为止已检查工作区：{{value0}}",
+            "deletingCount": "正在删除工作区：{{value0}}",
+            "deleteCount": "删除工作区：{{value0}}？",
+            "selectedForDeletionCount": "已选择删除：{{value0}}",
+            "deleteButtonCount": "删除 {{value0}}",
+            "archivedStatus": "已归档",
+            "readyStatus": "就绪"
+          },
+          "backgroundRemoval": {
+            "removed": "已删除工作区：{{value0}}",
+            "failed": "未删除工作区：{{value0}}",
+            "error": "工作区清理失败",
+            "skippedAncestor": "由于无法删除嵌套工作区，已跳过。",
+            "timedOut": "删除 {{value0}} 的时间比预期长。它将在后台继续运行。"
+          },
+          "candidateRow": {
+            "gitLabel": "Git",
+            "commitsLabel": "提交",
+            "contextLabel": "上下文",
+            "flagsLabel": "标记",
+            "collapseDetails": "收起详情",
+            "expandDetails": "展开详情",
+            "cleanGit": "Git 干净",
+            "dirtyGit": "Git 有更改",
+            "unpushedCommits": "未推送提交",
+            "gitUnknown": "Git 未知",
+            "gitStatusUnknown": "Git 状态未知",
+            "noUnpushedCommits": "没有未推送提交",
+            "unpushedCommitsCount": "未推送提交：{{value0}}",
+            "uncommittedChanges": "未提交的更改",
+            "terminalTabsCount": "终端标签页：{{value0}}",
+            "editorTabsCount": "编辑器标签页：{{value0}}",
+            "browserTabsCount": "浏览器标签页：{{value0}}",
+            "diffNotesCount": "Diff 备注：{{value0}}",
+            "completedAgentsCount": "已完成智能体：{{value0}}",
+            "contextCount": "上下文：{{value0}}",
+            "mainWorkspaceBlocker": "主工作区",
+            "folderProjectBlocker": "文件夹项目",
+            "pinnedBlocker": "已固定",
+            "activeWorkspaceBlocker": "活动工作区",
+            "runningTerminalBlocker": "正在运行的终端进程",
+            "terminalLivenessUnknownBlocker": "终端状态未知",
+            "dirtyEditorBufferBlocker": "未保存的编辑器缓冲区",
+            "volatileLocalContextBlocker": "易变本地上下文",
+            "recentVisibleContextBlocker": "最近访问的标签页",
+            "liveAgentBlocker": "活动智能体",
+            "sshDisconnectedBlocker": "远程不可用",
+            "gitStatusErrorBlocker": "Git 状态不可用",
+            "dirtyFilesBlocker": "已更改文件",
+            "unknownBaseBlocker": "无法验证未推送提交",
+            "dismissedBlocker": "已忽略"
           }
         }
       },
@@ -2973,7 +3028,8 @@
             "f077f586db": "不再询问",
             "c0e972d726": "取消",
             "06741a2f3d": "打开 MiniMax 使用量详情",
-            "3bbf140864": "MiniMax 使用量"
+            "3bbf140864": "MiniMax 使用量",
+            "remoteServerLabel": "远程服务器"
           },
           "StatusBarUsageEmptyCta": {
             "828c764a79": "连接账户",
@@ -3985,7 +4041,8 @@
           "runtimeHostProject": "Orca 服务器上的项目",
           "automationCreated": "由自动化创建",
           "branchIdentity": "分支",
-          "branchFolderPathIdentity": "分支或文件夹路径"
+          "branchFolderPathIdentity": "分支或文件夹路径",
+          "ef18787206": "已排队删除"
         },
         "WorktreeCardAgents": {
           "1b0a156717": "智能体"
@@ -4718,7 +4775,13 @@
           "435df0ee51": "在请求头中，复制 Cookie 的值。",
           "7492fb3bba": "在此粘贴并点击保存。",
           "9fec52de4b": "如何复制 Cookie",
-          "4e32e030b2": "存储在本地。Orca 仅将其发送到 platform.minimax.io 以刷新使用量。"
+          "4e32e030b2": "存储在本地。Orca 仅将其发送到 platform.minimax.io 以刷新使用量。",
+          "remoteServerFallback": "远程服务器",
+          "loadAccountsFailed": "无法加载提供商账户。",
+          "remoteScopeAccounts": "正在显示由 {{value0}} 管理的账户。请在该服务器上添加或重新验证账户。",
+          "remoteScopeAuthContext": "每个账户在 {{value0}} 上保留自己的登录上下文。",
+          "remoteEmptyClaudeAccounts": "{{value0}} 上没有受管理的 Claude 账户。它使用其系统默认的 Claude 登录；请在该服务器上添加账户。",
+          "remoteEmptyCodexAccounts": "{{value0}} 上没有受管理的 Codex 账户。它使用其系统默认的 Codex 登录；请在该服务器上添加账户。"
         },
         "AdvancedPane": {
           "40b29e0bf3": "重新启动",
@@ -8840,6 +8903,26 @@
           "reviewFirst": "Review first",
           "singular": "Global saves won't change 1 repository with its own recipe.",
           "tooltipTitle": "Repository overrides"
+        },
+        "linear": {
+          "agent": {
+            "skill": {
+              "install": {
+                "cta": {
+                  "copiedCommand": "Copied command.",
+                  "copyFailed": "Failed to copy command.",
+                  "skillLabel": "Agent skill:",
+                  "checking": "Checking...",
+                  "installed": "Installed",
+                  "notInstalled": "Not installed",
+                  "recheck": "Re-check",
+                  "installedDescription": "Agent skill installed. To update it, run:",
+                  "description": "Let your agents read and edit Linear tasks.",
+                  "copyCommand": "Copy command"
+                }
+              }
+            }
+          }
         }
       },
       "right": {

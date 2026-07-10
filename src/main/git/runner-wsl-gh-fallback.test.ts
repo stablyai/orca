@@ -352,6 +352,29 @@ describe('ghExecFileAsync WSL fallback', () => {
     )
   })
 
+  it('does not wake the default WSL distro for host-only GitLab diagnostics', async () => {
+    getDefaultWslDistroMock.mockReturnValue('Ubuntu')
+    execFileMock
+      .mockImplementationOnce((_binary, _args, _options, callback) => {
+        callback(Object.assign(new Error('spawn glab ENOENT'), { code: 'ENOENT' }))
+      })
+      .mockImplementationOnce((_binary, _args, _options, callback) => {
+        callback(null, { stdout: 'Logged in to gitlab.com', stderr: '' })
+      })
+
+    await expect(
+      glabExecFileAsync(['auth', 'status'], { allowDefaultWslFallback: false })
+    ).rejects.toThrow('spawn glab ENOENT')
+
+    expect(execFileMock).toHaveBeenCalledTimes(1)
+    expect(execFileMock).toHaveBeenCalledWith(
+      'glab',
+      ['auth', 'status'],
+      expect.objectContaining({ cwd: undefined }),
+      expect.any(Function)
+    )
+  })
+
   it('still retries idempotent glab transient failures', async () => {
     execFileMock
       .mockImplementationOnce((_binary, _args, _options, callback) => {

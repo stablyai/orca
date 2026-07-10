@@ -210,7 +210,8 @@
         },
         "workspace": {
           "cleanup": {
-            "9d6e531da6": "Workspace no longer exists."
+            "9d6e531da6": "Workspace no longer exists.",
+            "changedSinceConfirmation": "Workspace changed after confirmation. Refresh to review it before removing."
           }
         },
         "worktrees": {
@@ -2339,7 +2340,61 @@
             "gitFilter": "Git",
             "contextFilter": "Context",
             "sortBy": "Sort by",
-            "sortDirection": "Direction"
+            "sortDirection": "Direction",
+            "1d3503357d": "You can close this and come back while deletion continues.",
+            "4c2990886e": "{{value0}}/{{value1}} deleted",
+            "86ba852118": "{{value0}}, {{value1}} failed",
+            "7b7bde5181": "Checked workspaces so far: {{value0}}",
+            "deletingCount": "Deleting workspaces: {{value0}}",
+            "deleteCount": "Delete workspaces: {{value0}}?",
+            "selectedForDeletionCount": "Selected for deletion: {{value0}}",
+            "deleteButtonCount": "Delete {{value0}}",
+            "archivedStatus": "Archived",
+            "readyStatus": "Ready"
+          },
+          "backgroundRemoval": {
+            "removed": "Removed workspaces: {{value0}}",
+            "failed": "Workspaces not removed: {{value0}}",
+            "error": "Workspace cleanup failed",
+            "skippedAncestor": "Skipped because a nested workspace could not be removed.",
+            "timedOut": "Removing {{value0}} is taking longer than expected. It will keep running in the background."
+          },
+          "candidateRow": {
+            "gitLabel": "Git",
+            "commitsLabel": "Commits",
+            "contextLabel": "Context",
+            "flagsLabel": "Flags",
+            "collapseDetails": "Collapse details",
+            "expandDetails": "Expand details",
+            "cleanGit": "Clean git",
+            "dirtyGit": "Dirty git",
+            "unpushedCommits": "Unpushed commits",
+            "gitUnknown": "Git unknown",
+            "gitStatusUnknown": "Git status unknown",
+            "noUnpushedCommits": "No unpushed commits",
+            "unpushedCommitsCount": "Unpushed commits: {{value0}}",
+            "uncommittedChanges": "Uncommitted changes",
+            "terminalTabsCount": "Terminal tabs: {{value0}}",
+            "editorTabsCount": "Editor tabs: {{value0}}",
+            "browserTabsCount": "Browser tabs: {{value0}}",
+            "diffNotesCount": "Diff notes: {{value0}}",
+            "completedAgentsCount": "Completed agents: {{value0}}",
+            "contextCount": "Context: {{value0}}",
+            "mainWorkspaceBlocker": "Main workspace",
+            "folderProjectBlocker": "Folder project",
+            "pinnedBlocker": "Pinned",
+            "activeWorkspaceBlocker": "Active workspace",
+            "runningTerminalBlocker": "Running terminal process",
+            "terminalLivenessUnknownBlocker": "Terminal liveness unknown",
+            "dirtyEditorBufferBlocker": "Unsaved editor buffer",
+            "volatileLocalContextBlocker": "Volatile local context",
+            "recentVisibleContextBlocker": "Recently visited tabs",
+            "liveAgentBlocker": "Active agent",
+            "sshDisconnectedBlocker": "Remote unavailable",
+            "gitStatusErrorBlocker": "Git status unavailable",
+            "dirtyFilesBlocker": "Changed files",
+            "unknownBaseBlocker": "Could not verify unpushed commits",
+            "dismissedBlocker": "Ignored"
           }
         }
       },
@@ -2973,7 +3028,8 @@
             "f077f586db": "Don't ask again",
             "c0e972d726": "Cancel",
             "06741a2f3d": "Open MiniMax usage details",
-            "3bbf140864": "MiniMax Usage"
+            "3bbf140864": "MiniMax Usage",
+            "remoteServerLabel": "Remote server"
           },
           "StatusBarUsageEmptyCta": {
             "828c764a79": "Connect an account",
@@ -4027,7 +4083,8 @@
           "runtimeHostProject": "Project on Orca server",
           "automationCreated": "Created by automation",
           "branchIdentity": "Branch",
-          "branchFolderPathIdentity": "Branch or folder path"
+          "branchFolderPathIdentity": "Branch or folder path",
+          "ef18787206": "Queued for deletion"
         },
         "WorktreeCardAgents": {
           "1b0a156717": "Agents"
@@ -4733,7 +4790,13 @@
           "435df0ee51": "Under Request Headers, copy the Cookie value.",
           "7492fb3bba": "Paste it here and click Save.",
           "9fec52de4b": "How to copy the cookie",
-          "4e32e030b2": "Stored locally. Orca sends it only to platform.minimax.io for usage refreshes."
+          "4e32e030b2": "Stored locally. Orca sends it only to platform.minimax.io for usage refreshes.",
+          "remoteServerFallback": "the remote server",
+          "loadAccountsFailed": "Could not load provider accounts.",
+          "remoteScopeAccounts": "Showing accounts managed by {{value0}}. Add or re-authenticate accounts on that server.",
+          "remoteScopeAuthContext": "Each account keeps its own sign-in context on {{value0}}.",
+          "remoteEmptyClaudeAccounts": "No managed Claude accounts on {{value0}}. It uses its system default Claude login; add accounts on that server.",
+          "remoteEmptyCodexAccounts": "No managed Codex accounts on {{value0}}. It uses its system default Codex login; add accounts on that server."
         },
         "AdvancedPane": {
           "40b29e0bf3": "Restart",
@@ -8840,6 +8903,26 @@
           "reviewFirst": "Review first",
           "singular": "Global saves won't change 1 repository with its own recipe.",
           "tooltipTitle": "Repository overrides"
+        },
+        "linear": {
+          "agent": {
+            "skill": {
+              "install": {
+                "cta": {
+                  "copiedCommand": "Copied command.",
+                  "copyFailed": "Failed to copy command.",
+                  "skillLabel": "Agent skill:",
+                  "checking": "Checking...",
+                  "installed": "Installed",
+                  "notInstalled": "Not installed",
+                  "recheck": "Re-check",
+                  "installedDescription": "Agent skill installed. To update it, run:",
+                  "description": "Let your agents read and edit Linear tasks.",
+                  "copyCommand": "Copy command"
+                }
+              }
+            }
+          }
         }
       },
       "right": {

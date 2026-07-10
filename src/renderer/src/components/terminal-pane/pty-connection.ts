@@ -673,6 +673,11 @@ let inactiveForegroundImmediateBudgetWindowStart = 0
 type PanePtyBinding = IDisposable & {
   syncProcessTracking: () => void
   noteVisibilityResume: () => void
+  /** Navigation-free hibernation wake: fires the armed cold-restore --resume
+   *  without the size-reassert/foreground-sample side effects of a real reveal.
+   *  Used by the mobile wake fanout so a hidden hibernated pane resumes with no
+   *  desktop hidden→visible transition. */
+  wakeHibernatedAgentIfArmed: () => void
   /** Re-sample process identity when the pane gains intra-tab focus: the tab
    *  icon follows the active leaf, and a shell-marked entry on a still-running
    *  agent pane has no OSC boundary left to correct it. */
@@ -6243,6 +6248,11 @@ export function connectPanePty(
       ptySizeReassertion.request({ fit: false })
       consumeHibernatedAgentWake()
       sampleVisiblePaneForegroundAgent()
+    },
+    // Why: mobile wake reaches this pane while it stays hidden on the desktop, so
+    // it must consume only the armed hibernation wake — no size/foreground reads.
+    wakeHibernatedAgentIfArmed() {
+      consumeHibernatedAgentWake()
     },
     sampleForegroundAgentOnFocus() {
       sampleVisiblePaneForegroundAgent()

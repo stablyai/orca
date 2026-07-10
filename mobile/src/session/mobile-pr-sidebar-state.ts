@@ -140,6 +140,47 @@ export async function loadPrSidebarDetails(
   }
 }
 
+// UI treats details===null as "still loading". After phase 2 finishes (success or
+// non-fatal failure), never leave null — use prior comments if any, else empty body.
+export function resolvePrSidebarDetailsAfterPhase2(args: {
+  fetched: GitHubWorkItemDetails | null
+  prior: GitHubWorkItemDetails | null
+  pr: PRInfo
+}): GitHubWorkItemDetails {
+  if (args.fetched != null) {
+    return args.fetched
+  }
+  if (args.prior != null) {
+    return args.prior
+  }
+  return emptyPrSidebarDetails(args.pr)
+}
+
+// Placeholder details so Description/Comments leave the spinner after a failed phase 2.
+export function emptyPrSidebarDetails(pr: PRInfo): GitHubWorkItemDetails {
+  return {
+    item: {
+      id: `pr-${pr.number}`,
+      type: 'pr',
+      number: pr.number,
+      title: pr.title,
+      state: pr.state,
+      url: pr.url,
+      labels: [],
+      updatedAt: pr.updatedAt,
+      author: null
+    },
+    body: '',
+    comments: []
+  }
+}
+
+// Soft head refresh may restart an in-flight phase-1 load; only skip when there is
+// no visible/in-flight sidebar work (hidden or terminal error states).
+export function shouldSoftRefreshPrSidebarOnHeadChange(kind: PrSidebarState['kind']): boolean {
+  return kind === 'ready' || kind === 'none' || kind === 'loading'
+}
+
 // Stale-response guard (KTD6): a load tagged with an older sequence must not
 // overwrite a newer one. The hook bumps a monotonic counter per load.
 export function shouldApplyResult(resultSeq: number, latestSeq: number): boolean {

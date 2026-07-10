@@ -2348,6 +2348,9 @@ function createWebUiApi(): NonNullable<Partial<PreloadApi>['ui']> {
     respondMobileMarkdownRequest: () => {},
     onCloseTerminal: () => noopUnsubscribe,
     onSleepWorktree: () => noopUnsubscribe,
+    // Why: paired web is a full renderer that wakes on activation; mobile wake is
+    // desktop-host-scoped, so the web client never receives this signal.
+    onResumeSleepingAgents: () => noopUnsubscribe,
     onTerminalZoom: () => noopUnsubscribe,
     // Why: a paired web client has no OS sleep signal; occlusion-driven
     // visibilitychange already covers its wake recovery.

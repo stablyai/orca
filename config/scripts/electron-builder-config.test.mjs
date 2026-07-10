@@ -353,6 +353,15 @@ describe('electron-builder config', () => {
         const launcherPath = join(resourcesDir, 'bin', 'orca-ide')
         await mkdir(join(resourcesDir, 'bin'), { recursive: true })
         await mkdir(join(resourcesDir, 'node_modules', 'zod', 'src'), { recursive: true })
+        // Why: afterPack now fails hard when the unpacked daemon entry is
+        // missing, so the fixture must carry one like a real package layout.
+        const unpackedMainDir = join(resourcesDir, 'app.asar.unpacked', 'out', 'main')
+        await mkdir(unpackedMainDir, { recursive: true })
+        await writeFile(
+          join(unpackedMainDir, 'daemon-entry.js'),
+          'console.error("Usage: daemon-entry <socket>"); process.exit(1)\n',
+          'utf8'
+        )
         await writeFile(launcherPath, '#!/usr/bin/env bash\n', { encoding: 'utf8', mode: 0o644 })
 
         await electronBuilderConfig.afterPack({

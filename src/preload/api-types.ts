@@ -2757,6 +2757,7 @@ export type PreloadApi = {
       callback: (data: { tabId: string; paneRuntimeId?: number }) => void
     ) => () => void
     onSleepWorktree: (callback: (data: { worktreeId: string }) => void) => () => void
+    onResumeSleepingAgents: (callback: (data: { worktreeId: string }) => void) => () => void
     onTerminalZoom: (callback: (direction: 'in' | 'out' | 'reset') => void) => () => void
     onSystemResumed: (callback: () => void) => () => void
     readClipboardText: (options?: ReadClipboardTextOptions) => Promise<string>

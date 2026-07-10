@@ -122,6 +122,7 @@ import {
 } from './codex-accounts/runtime-selection'
 import { normalizeClaudeRuntimeSelection } from './claude-accounts/runtime-selection'
 import { codexHookService } from './codex/hook-service'
+import { getDefaultWslDistro } from './wsl'
 import { ClaudeAccountService } from './claude-accounts/service'
 import { ClaudeRuntimeAuthService } from './claude-accounts/runtime-auth-service'
 import {
@@ -694,13 +695,22 @@ async function startServeAgentHookServer(): Promise<void> {
 
 function prepareCodexRuntimeHomeForLaunch(target?: CodexAccountSelectionTarget): string | null {
   const runtimeHomePath = codexRuntimeHome!.prepareForCodexLaunch(target)
+  const hookTarget =
+    target?.runtime === 'wsl'
+      ? {
+          runtime: 'wsl' as const,
+          wslDistro: target.wslDistro?.trim() || getDefaultWslDistro()
+        }
+      : target
   const hooksEnabled = isAgentStatusHooksEnabled(store?.getSettings())
   try {
     // Why: launch prep is reachable after startup via PTY/runtime paths; honor
     // the persisted off switch so those launches cannot reinstall removed hooks.
     const status = hooksEnabled
-      ? codexHookService.install()
-      : codexHookService.refreshRuntimeUserHooks()
+      ? (codexHookService.installForRuntimeHome(runtimeHomePath, hookTarget) ??
+        codexHookService.install())
+      : (codexHookService.refreshRuntimeUserHooksForRuntimeHome(runtimeHomePath, hookTarget) ??
+        codexHookService.refreshRuntimeUserHooks())
     if (status.state === 'error') {
       console.warn(
         `[codex-hook-service] failed to ${
@@ -2047,7 +2057,9 @@ app.whenReady().then(async () => {
   // a random OS-assigned port — breaking deterministic mobile pairing/repro
   // scripts against the dev instance. Pin the first dev instance to 6769 so
   // ws://127.0.0.1:6769 is stable; a second dev instance still falls back via
-  // ws-transport's EADDRINUSE handler.
+  // ws-transport's EADDRINUSE handler. Note: once an instance has ever fallen
+  // back, the persisted fallback port is re-bound in preference to 6769
+  // (STA-1511) until mobile-ws-fallback-port.json is removed from userData.
   const devWsPort = is.dev && !isE2E ? 6769 : undefined
   let serveOptions: ServeOptions | null = null
   try {

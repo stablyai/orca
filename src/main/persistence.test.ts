@@ -527,7 +527,7 @@ describe('Store', () => {
     expect(settings.experimentalActivity).toBe(false)
     expect(settings.experimentalActivityDefaultedOffForAllUsers).toBe(true)
     expect(settings.experimentalTerminalAttention).toBe(false)
-    expect(settings.experimentalNewWorktreeCardStyle).toBe(true)
+    expect(settings.experimentalNewWorktreeCardStyle).toBe(false)
     expect(settings.floatingTerminalEnabled).toBe(true)
     expect(settings.floatingTerminalDefaultedForAllUsers).toBe(true)
     expect(settings.notifications.customSoundPath).toBeNull()
@@ -658,7 +658,7 @@ describe('Store', () => {
     expect(store.getUI().setupGuideSidebarDismissed).toBe(false)
   })
 
-  it('defaults new worktree card style on while onboarding is open', async () => {
+  it('keeps new worktree card style off while onboarding is open', async () => {
     writeDataFile({
       settings: {},
       onboarding: {
@@ -673,7 +673,7 @@ describe('Store', () => {
 
     const store = await createStore()
 
-    expect(store.getSettings().experimentalNewWorktreeCardStyle).toBe(true)
+    expect(store.getSettings().experimentalNewWorktreeCardStyle).toBe(false)
   })
 
   it('preserves explicit new worktree card style opt-out while onboarding is open', async () => {
@@ -694,6 +694,20 @@ describe('Store', () => {
     const store = await createStore()
 
     expect(store.getSettings().experimentalNewWorktreeCardStyle).toBe(false)
+  })
+
+  it('preserves explicit new worktree card style opt-in on load', async () => {
+    writeDataFile({
+      schemaVersion: 1,
+      settings: {
+        experimentalNewWorktreeCardStyle: true
+      },
+      ui: {}
+    })
+
+    const store = await createStore()
+
+    expect(store.getSettings().experimentalNewWorktreeCardStyle).toBe(true)
   })
 
   it('keeps new worktree card style off for existing users backfilled as completed', async () => {

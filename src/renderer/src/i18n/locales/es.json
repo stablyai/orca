@@ -210,7 +210,8 @@
         },
         "workspace": {
           "cleanup": {
-            "9d6e531da6": "El espacio de trabajo ya no existe."
+            "9d6e531da6": "El espacio de trabajo ya no existe.",
+            "changedSinceConfirmation": "El espacio de trabajo cambió después de la confirmación. Actualiza para revisarlo antes de eliminarlo."
           }
         },
         "worktrees": {
@@ -2339,7 +2340,61 @@
             "gitFilter": "Git",
             "contextFilter": "Contexto",
             "sortBy": "Ordenar por",
-            "sortDirection": "Dirección"
+            "sortDirection": "Dirección",
+            "1d3503357d": "Puedes cerrar esto y volver mientras la eliminación continúa.",
+            "4c2990886e": "{{value0}}/{{value1}} eliminados",
+            "86ba852118": "{{value0}}, {{value1}} fallidos",
+            "7b7bde5181": "Espacios de trabajo comprobados hasta ahora: {{value0}}",
+            "deletingCount": "Eliminando espacios de trabajo: {{value0}}",
+            "deleteCount": "¿Eliminar espacios de trabajo: {{value0}}?",
+            "selectedForDeletionCount": "Seleccionados para eliminar: {{value0}}",
+            "deleteButtonCount": "Eliminar {{value0}}",
+            "archivedStatus": "Archivado",
+            "readyStatus": "Listo"
+          },
+          "backgroundRemoval": {
+            "removed": "Espacios de trabajo eliminados: {{value0}}",
+            "failed": "Espacios de trabajo no eliminados: {{value0}}",
+            "error": "Error en la limpieza del espacio de trabajo",
+            "skippedAncestor": "Se omitió porque no se pudo eliminar un espacio de trabajo anidado.",
+            "timedOut": "La eliminación de {{value0}} está tardando más de lo esperado. Continuará ejecutándose en segundo plano."
+          },
+          "candidateRow": {
+            "gitLabel": "Git",
+            "commitsLabel": "Confirmaciones",
+            "contextLabel": "Contexto",
+            "flagsLabel": "Indicadores",
+            "collapseDetails": "Contraer detalles",
+            "expandDetails": "Expandir detalles",
+            "cleanGit": "Git limpio",
+            "dirtyGit": "Git con cambios",
+            "unpushedCommits": "Confirmaciones sin enviar",
+            "gitUnknown": "Git desconocido",
+            "gitStatusUnknown": "Estado de Git desconocido",
+            "noUnpushedCommits": "Sin confirmaciones sin enviar",
+            "unpushedCommitsCount": "Confirmaciones sin enviar: {{value0}}",
+            "uncommittedChanges": "Cambios sin confirmar",
+            "terminalTabsCount": "Pestañas de terminal: {{value0}}",
+            "editorTabsCount": "Pestañas de editor: {{value0}}",
+            "browserTabsCount": "Pestañas de navegador: {{value0}}",
+            "diffNotesCount": "Notas de diff: {{value0}}",
+            "completedAgentsCount": "Agentes completados: {{value0}}",
+            "contextCount": "Contexto: {{value0}}",
+            "mainWorkspaceBlocker": "Espacio de trabajo principal",
+            "folderProjectBlocker": "Proyecto de carpeta",
+            "pinnedBlocker": "Fijado",
+            "activeWorkspaceBlocker": "Espacio de trabajo activo",
+            "runningTerminalBlocker": "Proceso de terminal en ejecución",
+            "terminalLivenessUnknownBlocker": "Estado del terminal desconocido",
+            "dirtyEditorBufferBlocker": "Búfer del editor sin guardar",
+            "volatileLocalContextBlocker": "Contexto local volátil",
+            "recentVisibleContextBlocker": "Pestañas visitadas recientemente",
+            "liveAgentBlocker": "Agente activo",
+            "sshDisconnectedBlocker": "Remoto no disponible",
+            "gitStatusErrorBlocker": "Estado de Git no disponible",
+            "dirtyFilesBlocker": "Archivos modificados",
+            "unknownBaseBlocker": "No se pudieron verificar confirmaciones sin enviar",
+            "dismissedBlocker": "Ignorado"
           }
         }
       },
@@ -2973,7 +3028,8 @@
             "f077f586db": "No volver a preguntar",
             "c0e972d726": "Cancelar",
             "06741a2f3d": "Abrir detalles de uso de MiniMax",
-            "3bbf140864": "Uso de MiniMax"
+            "3bbf140864": "Uso de MiniMax",
+            "remoteServerLabel": "Servidor remoto"
           },
           "StatusBarUsageEmptyCta": {
             "828c764a79": "Conectar una cuenta",
@@ -4004,7 +4060,8 @@
           "runtimeHostProject": "Proyecto en servidor de Orca",
           "automationCreated": "Creado por automatización",
           "branchIdentity": "Rama",
-          "branchFolderPathIdentity": "Rama o ruta de carpeta"
+          "branchFolderPathIdentity": "Rama o ruta de carpeta",
+          "ef18787206": "En cola para eliminación"
         },
         "WorktreeCardAgents": {
           "1b0a156717": "Agents"
@@ -4733,7 +4790,13 @@
           "435df0ee51": "En Encabezados de solicitud, copia el valor del encabezado Cookie.",
           "7492fb3bba": "Pégalo aquí y haz clic en Guardar.",
           "9fec52de4b": "Cómo copiar la cookie",
-          "4e32e030b2": "Se almacena localmente. Orca solo la envía a platform.minimax.io para actualizar el uso."
+          "4e32e030b2": "Se almacena localmente. Orca solo la envía a platform.minimax.io para actualizar el uso.",
+          "remoteServerFallback": "el servidor remoto",
+          "loadAccountsFailed": "No se pudieron cargar las cuentas de proveedor.",
+          "remoteScopeAccounts": "Mostrando las cuentas administradas por {{value0}}. Agrega o vuelve a autenticar cuentas en ese servidor.",
+          "remoteScopeAuthContext": "Cada cuenta mantiene su propio contexto de inicio de sesión en {{value0}}.",
+          "remoteEmptyClaudeAccounts": "No hay cuentas de Claude administradas en {{value0}}. Usa su inicio de sesión de Claude predeterminado del sistema; agrega cuentas en ese servidor.",
+          "remoteEmptyCodexAccounts": "No hay cuentas de Codex administradas en {{value0}}. Usa su inicio de sesión de Codex predeterminado del sistema; agrega cuentas en ese servidor."
         },
         "AdvancedPane": {
           "40b29e0bf3": "Reiniciar",
@@ -8840,6 +8903,26 @@
           "reviewFirst": "Revisar primero",
           "singular": "Guardar a nivel global no cambiará 1 repositorio con su propia receta.",
           "tooltipTitle": "Anulaciones de repositorio"
+        },
+        "linear": {
+          "agent": {
+            "skill": {
+              "install": {
+                "cta": {
+                  "copiedCommand": "Copied command.",
+                  "copyFailed": "Failed to copy command.",
+                  "skillLabel": "Agent skill:",
+                  "checking": "Checking...",
+                  "installed": "Installed",
+                  "notInstalled": "Not installed",
+                  "recheck": "Re-check",
+                  "installedDescription": "Agent skill installed. To update it, run:",
+                  "description": "Let your agents read and edit Linear tasks.",
+                  "copyCommand": "Copy command"
+                }
+              }
+            }
+          }
         }
       },
       "right": {

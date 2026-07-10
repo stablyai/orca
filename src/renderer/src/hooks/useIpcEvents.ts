@@ -9,6 +9,7 @@ import { activateAndRevealWorktree } from '@/lib/worktree-activation'
 import { buildLinearIssueLinkedWorkItem } from '@/lib/linear-linked-work-item'
 import { runWorktreeDelete } from '@/components/sidebar/delete-worktree-flow'
 import { runSleepWorktree } from '@/components/sidebar/sleep-worktree-flow'
+import { wakeSleepingAgentsForWorktreeInBackground } from '@/lib/wake-sleeping-agents-in-background'
 import { OPEN_WORKSPACE_BOARD_EVENT } from '@/components/sidebar/useWorkspaceBoardPanel'
 import {
   BACKGROUND_MOUNT_TERMINAL_WORKTREE_EVENT,
@@ -1032,6 +1033,12 @@ export function useIpcEvents(): void {
       getDesiredEnvironmentIds: getRuntimeClientEventEnvironmentIds,
       subscribe: (environmentId, onEvent, onError) =>
         subscribeRuntimeClientEvents(environmentId, onEvent, onError, () => {
+          // Why: worktreesChanged/reposChanged during the transport gap are
+          // lost, not queued. A quick drop can replay without ever flipping the
+          // env unreachable, so the reachability-transition refetch never runs
+          // and a server-created worktree stays invisible until relaunch
+          // (#7970). The scheduler debounces, so this stays cheap.
+          runtimeProjectRefreshScheduler.request(environmentId)
           if (isPairedWebClientWindow()) {
             return
           }
@@ -1939,6 +1946,14 @@ export function useIpcEvents(): void {
     unsubs.push(
       window.api.ui.onSleepWorktree(({ worktreeId }) => {
         void runSleepWorktree(worktreeId)
+      })
+    )
+
+    unsubs.push(
+      window.api.ui.onResumeSleepingAgents(({ worktreeId }) => {
+        // Why: a phone opened this worktree; wake its slept agents on the host
+        // renderer navigation-free (no desktop worktree/tab/view change).
+        wakeSleepingAgentsForWorktreeInBackground(worktreeId)
       })
     )
 

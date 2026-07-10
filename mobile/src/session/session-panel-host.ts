@@ -47,13 +47,18 @@ export function resolvePanelAction(args: {
 
 // Single source of truth for each panel's expo-router pathname pattern so narrow-push
 // and any deep-linking agree; the caller supplies the [hostId]/[worktreeId] params.
-export function panelRouteDescriptor(panel: Exclude<ActivePanel, null>): { pathname: string } {
+// The Pull Request panel is a segment of the source-control hub, so its narrow-push
+// targets that route with `tab: 'pr'` rather than the standalone (redirecting) route.
+export function panelRouteDescriptor(panel: Exclude<ActivePanel, null>): {
+  pathname: string
+  params?: Record<string, string>
+} {
   switch (panel) {
     case 'sourceControl':
       return { pathname: '/h/[hostId]/source-control/[worktreeId]' }
     case 'files':
       return { pathname: '/h/[hostId]/files/[worktreeId]' }
     case 'pr':
-      return { pathname: '/h/[hostId]/pr/[worktreeId]' }
+      return { pathname: '/h/[hostId]/source-control/[worktreeId]', params: { tab: 'pr' } }
   }
 }

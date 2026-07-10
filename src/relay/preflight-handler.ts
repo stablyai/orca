@@ -7,6 +7,7 @@ import { buildRelayCommandEnv } from './relay-command-env'
 import { isPwshAvailable } from '../main/pwsh'
 import { isWslAvailable, listWslDistros } from '../main/wsl'
 import { isGitBashAvailable } from '../main/git-bash'
+import { buildPosixCommandPathLookupScript } from '../shared/posix-command-path-lookup'
 
 const execFileAsync = promisify(execFile)
 
@@ -219,9 +220,10 @@ function buildPosixCommandLookupSpec(command: string, shell: string): CommandLoo
 }
 
 function buildShCommandLookupScript(command: string): string {
-  const quotedCommand = shellQuote(command)
+  // Why: login shells may define aliases or functions that mask the PATH executable.
   return [
-    `if resolved=$(command -v ${quotedCommand} 2>/dev/null); then`,
+    buildPosixCommandPathLookupScript({ kind: 'literal', value: command }),
+    'if [ -n "$resolved" ]; then',
     `printf '${AGENT_PATH_PREFIX}%s\\n' "$resolved"`,
     'fi'
   ].join('\n')

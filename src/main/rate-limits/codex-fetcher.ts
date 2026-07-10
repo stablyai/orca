@@ -18,6 +18,10 @@ import { cleanupHiddenRateLimitPty, registerHiddenRateLimitPty } from './hidden-
 import { parseWslUncPath } from '../../shared/wsl-paths'
 import { extractCodexAuthError, isCodexAuthError } from '../../shared/codex-auth-errors'
 import {
+  buildWslLoginShellCommand,
+  escapeWslShCommandForWindows
+} from '../../shared/wsl-login-shell-command'
+import {
   getHiddenRateLimitWslCwdSetupCommands,
   resolveHiddenRateLimitPtyCwd
 } from './hidden-rate-limit-pty-cwd'
@@ -112,7 +116,8 @@ function shellQuote(value: string): string {
 
 function buildWslCodexCommand(
   codexHomePath: string,
-  args: string[]
+  args: string[],
+  options?: { isolateRpcStdio?: boolean }
 ): {
   command: string
   args: string[]
@@ -124,11 +129,19 @@ function buildWslCodexCommand(
   const script = [
     ...getHiddenRateLimitWslCwdSetupCommands(),
     `export CODEX_HOME=${shellQuote(wslInfo.linuxPath)}`,
-    `exec codex ${args.map(shellQuote).join(' ')}`
+    `exec codex ${args.map(shellQuote).join(' ')}${
+      options?.isolateRpcStdio ? ' <&3 >&4 3<&- 4>&-' : ''
+    }`
   ].join(' && ')
+  const loginShellCommand = buildWslLoginShellCommand(script)
+  // Why: keep the outer sh non-login and hide RPC pipes before the configured
+  // shell startup can read input or print banners.
+  const command = options?.isolateRpcStdio
+    ? ['exec 3<&0', 'exec 4>&1', 'exec </dev/null', 'exec >/dev/null', loginShellCommand].join('\n')
+    : loginShellCommand
   return {
     command: 'wsl.exe',
-    args: ['-d', wslInfo.distro, '--', 'bash', '-lc', script]
+    args: ['-d', wslInfo.distro, '--', 'sh', '-c', escapeWslShCommandForWindows(command)]
   }
 }
 
@@ -411,7 +424,7 @@ async function fetchViaRpc(options?: FetchCodexRateLimitsOptions): Promise<Provi
 
     const codexArgs = ['-s', 'read-only', '-a', 'untrusted', 'app-server']
     const wslCodex = options?.codexHomePath
-      ? buildWslCodexCommand(options.codexHomePath, codexArgs)
+      ? buildWslCodexCommand(options.codexHomePath, codexArgs, { isolateRpcStdio: true })
       : null
     // Why: cold WSL process startup plus Codex app-server initialization can
     // exceed the host RPC budget, causing a false "unavailable" on app launch.

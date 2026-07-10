@@ -57,7 +57,12 @@ function appendTabToWorktreeOrder(worktreeId: string, tabId: string): void {
   state.setTabBarOrder(worktreeId, order)
 }
 
-function launchSleepingAgentSession(record: SleepingAgentSessionRecord): boolean {
+// Why: mobile-driven wake runs on the desktop host renderer, so it must create
+// the resume tab without stealing the desktop's active worktree/tab/view.
+function launchSleepingAgentSession(
+  record: SleepingAgentSessionRecord,
+  options?: { suppressNavigation?: boolean }
+): boolean {
   const state = useAppStore.getState()
   const launchConfig = record.launchConfig
   const startupPlan = buildAgentResumeStartupPlan({
@@ -86,7 +91,8 @@ function launchSleepingAgentSession(record: SleepingAgentSessionRecord): boolean
   }
 
   const tab = state.createTab(record.worktreeId, undefined, undefined, {
-    launchAgent: record.agent
+    launchAgent: record.agent,
+    ...(options?.suppressNavigation ? { activate: false, recordInteraction: false } : {})
   })
   state.queueTabStartupCommand(tab.id, {
     command: startupPlan.launchCommand,
@@ -110,7 +116,9 @@ function launchSleepingAgentSession(record: SleepingAgentSessionRecord): boolean
     providerSession: record.providerSession
   })
   state.clearSleepingAgentSession(record.paneKey)
-  state.setActiveTabType('terminal')
+  if (!options?.suppressNavigation) {
+    state.setActiveTabType('terminal')
+  }
   appendTabToWorktreeOrder(record.worktreeId, tab.id)
   return true
 }
@@ -239,7 +247,10 @@ function isInvalidWorktreeActivationRecord(record: SleepingAgentSessionRecord): 
   )
 }
 
-export function resumeSleepingAgentSessionsForWorktree(worktreeId: string): number {
+export function resumeSleepingAgentSessionsForWorktree(
+  worktreeId: string,
+  options?: { suppressNavigation?: boolean }
+): number {
   const state = useAppStore.getState()
   const worktreeRecords = Object.values(state.sleepingAgentSessionsByPaneKey)
     .filter((record) => record.worktreeId === worktreeId)
@@ -298,7 +309,7 @@ export function resumeSleepingAgentSessionsForWorktree(worktreeId: string): numb
     if (isPaneOwned) {
       continue
     }
-    if (launchSleepingAgentSession(record)) {
+    if (launchSleepingAgentSession(record, options)) {
       launched += 1
       freshlyLaunchedClaimKeys.add(claimKey)
       clearPassiveCompletedRecordsForClaimKey(worktreeRecords, claimKey, record.paneKey)

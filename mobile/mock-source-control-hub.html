@@ -1,0 +1,2188 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"
+    />
+    <title>Orca Mobile – Source Control Hub</title>
+    <style>
+      * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+        -webkit-tap-highlight-color: transparent;
+      }
+
+      /* Tokens mirrored from mobile/src/theme/mobile-theme.ts */
+      :root {
+        --bg-base: #111111;
+        --bg-panel: #1a1a1a;
+        --bg-raised: #242424;
+        --border-subtle: #2a2a2a;
+        --text-primary: #e0e0e0;
+        --text-secondary: #888888;
+        --text-muted: #555555;
+        --surface-bright: #f5f5f5;
+        --accent-blue: #3b82f6;
+        --status-green: #22c55e;
+        --status-amber: #f59e0b;
+        --status-red: #ef4444;
+        --merge-green: #16a34a;
+        --on-merge-green: #ffffff;
+        --status-purple: #a78bfa;
+        --git-added: #81b88b;
+        --git-deleted: #c74e39;
+        /* spacing xs4 sm8 md12 lg16 xl24 · radii row6 card14 button6 input6 */
+      }
+
+      body {
+        font-family:
+          Geist,
+          ui-sans-serif,
+          system-ui,
+          -apple-system,
+          BlinkMacSystemFont,
+          'Segoe UI',
+          sans-serif;
+        background: #050506;
+        color: var(--text-primary);
+        min-height: 100vh;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 24px 0;
+      }
+
+      /* ─── Phone frame ─── */
+      .frame {
+        width: 390px;
+        height: 844px;
+        background: var(--bg-base);
+        border-radius: 44px;
+        border: 10px solid #000;
+        box-shadow: 0 30px 80px rgba(0, 0, 0, 0.6);
+        overflow: hidden;
+        position: relative;
+        display: flex;
+        flex-direction: column;
+      }
+
+      .status-bar {
+        height: 44px;
+        flex: none;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 0 28px;
+        font-size: 13px;
+        font-weight: 700;
+        color: var(--text-primary);
+      }
+      .status-bar .dots {
+        display: flex;
+        gap: 5px;
+        align-items: center;
+        color: var(--text-primary);
+      }
+
+      /* ─── Header ─── */
+      .hub-header {
+        flex: none;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 4px 12px 10px;
+      }
+      .icon-btn {
+        width: 36px;
+        height: 36px;
+        border-radius: 18px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        border: none;
+        background: transparent;
+        color: var(--text-secondary);
+        cursor: pointer;
+        flex: none;
+        transition: background 0.15s;
+      }
+      .icon-btn:active {
+        background: var(--bg-raised);
+      }
+      .header-title {
+        flex: 1;
+        min-width: 0;
+      }
+      .header-title h1 {
+        font-size: 18px;
+        font-weight: 700;
+        letter-spacing: -0.2px;
+      }
+      .header-title .sub {
+        font-size: 12px;
+        color: var(--text-secondary);
+        margin-top: 1px;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+
+      /* ─── Segmented control ─── */
+      .segments {
+        flex: none;
+        margin: 0 16px 12px;
+        display: flex;
+        background: var(--bg-panel);
+        border: 1px solid var(--border-subtle);
+        border-radius: 10px;
+        padding: 3px;
+        gap: 2px;
+      }
+      .segment {
+        flex: 1;
+        text-align: center;
+        font-size: 13px;
+        font-weight: 600;
+        color: var(--text-secondary);
+        padding: 7px 0;
+        border-radius: 7px;
+        cursor: pointer;
+        border: none;
+        background: transparent;
+        font-family: inherit;
+        transition:
+          background 0.15s,
+          color 0.15s;
+      }
+      .segment.active {
+        background: var(--bg-raised);
+        color: var(--text-primary);
+      }
+
+      /* ─── Branch card (persistent) ─── */
+      .branch-card {
+        flex: none;
+        margin: 0 16px 8px;
+        padding: 12px;
+        border-radius: 14px;
+        background: var(--bg-panel);
+        border: 1px solid var(--border-subtle);
+      }
+      .branch-row {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+      }
+      .branch-row .name {
+        flex: 1;
+        min-width: 0;
+        font-size: 14px;
+        font-weight: 600;
+        color: var(--text-primary);
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+      .sync-row {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        margin-top: 6px;
+        font-size: 12px;
+        color: var(--text-secondary);
+      }
+      .sync-row .updown {
+        display: inline-flex;
+        gap: 8px;
+        font-variant-numeric: tabular-nums;
+      }
+      .branch-divider {
+        height: 1px;
+        background: var(--border-subtle);
+        margin: 10px -12px;
+      }
+      .pr-chip {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        cursor: pointer;
+        border-radius: 8px;
+        margin: -4px -4px;
+        padding: 4px;
+        transition: background 0.15s;
+      }
+      .pr-chip:active {
+        background: var(--bg-raised);
+      }
+      .pr-hex {
+        color: var(--status-green);
+        display: flex;
+        align-items: center;
+      }
+      .pr-num {
+        font-size: 13px;
+        font-weight: 700;
+        color: var(--text-primary);
+        font-variant-numeric: tabular-nums;
+      }
+      .pill {
+        font-size: 11px;
+        font-weight: 700;
+        padding: 2px 8px;
+        border-radius: 999px;
+        line-height: 1.4;
+      }
+      .pill.open {
+        color: var(--status-green);
+        background: rgba(34, 197, 94, 0.13);
+      }
+      .pr-meta {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        flex: 1;
+        min-width: 0;
+        font-size: 12px;
+        color: var(--text-secondary);
+      }
+      .pr-meta .ok {
+        color: var(--status-green);
+      }
+      .pr-chip .chev {
+        color: var(--text-muted);
+        flex: none;
+      }
+
+      /* ─── Content scroll area ─── */
+      .content {
+        flex: 1;
+        min-height: 0;
+        overflow-y: auto;
+        overflow-x: hidden;
+        position: relative;
+      }
+      .pane {
+        display: none;
+      }
+      .pane.active {
+        display: block;
+      }
+      .list-pad {
+        padding: 0 16px;
+      }
+      /* leave room for the commit bar on the Changes pane */
+      #pane-changes .list-pad {
+        padding-bottom: 120px;
+      }
+      #pane-pr,
+      #pane-history {
+        padding-bottom: 28px;
+      }
+
+      /* ─── Section header ─── */
+      .section-head {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 12px 0 4px;
+      }
+      .section-head .title {
+        font-size: 11px;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.4px;
+        color: var(--text-secondary);
+      }
+      .section-head .count {
+        font-size: 12px;
+        font-weight: 600;
+        color: var(--text-muted);
+      }
+      .section-head .spacer {
+        flex: 1;
+      }
+      .section-head .select-btn {
+        font-size: 12px;
+        font-weight: 600;
+        color: var(--text-secondary);
+        background: transparent;
+        border: none;
+        font-family: inherit;
+        cursor: pointer;
+        padding: 4px 6px;
+        border-radius: 6px;
+      }
+      .section-head .select-btn:active {
+        background: var(--bg-raised);
+      }
+
+      /* ─── File rows w/ swipe ─── */
+      .frow {
+        position: relative;
+        overflow: hidden;
+        border-bottom: 1px solid var(--border-subtle);
+        touch-action: pan-y;
+      }
+      .row-action {
+        position: absolute;
+        top: 0;
+        bottom: 0;
+        width: 96px;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 3px;
+        font-size: 12px;
+        font-weight: 700;
+        color: #fff;
+        cursor: pointer;
+      }
+      .row-action.stage {
+        left: 0;
+        background: var(--status-green);
+        align-items: flex-start;
+        padding-left: 18px;
+      }
+      .row-action.discard {
+        right: 0;
+        background: var(--status-red);
+        align-items: flex-end;
+        padding-right: 18px;
+      }
+      .row-fg {
+        position: relative;
+        z-index: 1;
+        background: var(--bg-base);
+        min-height: 50px;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 8px 0;
+        will-change: transform;
+      }
+      .status-badge {
+        width: 24px;
+        text-align: center;
+        font-family: monospace;
+        font-size: 12px;
+        font-weight: 700;
+        flex: none;
+      }
+      .s-mod {
+        color: var(--text-secondary);
+      }
+      .s-add {
+        color: var(--status-green);
+      }
+      .s-del {
+        color: var(--status-red);
+      }
+      .file-icon {
+        color: var(--text-secondary);
+        flex: none;
+        display: flex;
+      }
+      .file-text {
+        flex: 1;
+        min-width: 0;
+      }
+      .file-name {
+        font-size: 14px;
+        font-weight: 600;
+        color: var(--text-primary);
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+      .file-meta {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        margin-top: 2px;
+        min-width: 0;
+      }
+      .file-dir {
+        font-size: 12px;
+        color: var(--text-muted);
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        min-width: 0;
+        direction: rtl;
+        text-align: left;
+      }
+      .diffstat {
+        font-size: 12px;
+        font-variant-numeric: tabular-nums;
+        flex: none;
+        display: flex;
+        gap: 5px;
+      }
+      .diffstat .add {
+        color: var(--git-added);
+      }
+      .diffstat .del {
+        color: var(--git-deleted);
+      }
+      .row-fg .chev {
+        color: var(--text-muted);
+        flex: none;
+      }
+      /* selection mode checkbox */
+      .row-check {
+        width: 20px;
+        height: 20px;
+        border-radius: 6px;
+        border: 1.5px solid var(--text-muted);
+        flex: none;
+        display: none;
+        align-items: center;
+        justify-content: center;
+        color: transparent;
+      }
+      .selecting .frow .row-check {
+        display: flex;
+      }
+      .selecting .frow .status-badge {
+        display: none;
+      }
+      .frow.checked .row-check {
+        background: var(--accent-blue);
+        border-color: var(--accent-blue);
+        color: #fff;
+      }
+      .selecting .frow {
+        touch-action: pan-y;
+      }
+
+      /* ─── Commit bar ─── */
+      .commit-bar {
+        position: absolute;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        padding: 12px 16px 26px;
+        background: var(--bg-panel);
+        border-top: 1px solid var(--border-subtle);
+        display: flex;
+        gap: 8px;
+        align-items: stretch;
+      }
+      .commit-input {
+        flex: 1;
+        min-width: 0;
+        min-height: 42px;
+        border-radius: 6px;
+        border: 1px solid var(--border-subtle);
+        background: var(--bg-base);
+        color: var(--text-primary);
+        padding: 0 12px;
+        font-size: 14px;
+        font-family: inherit;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+      .commit-input input {
+        flex: 1;
+        min-width: 0;
+        background: transparent;
+        border: none;
+        outline: none;
+        color: var(--text-primary);
+        font-size: 14px;
+        font-family: inherit;
+      }
+      .commit-input input::placeholder {
+        color: var(--text-muted);
+      }
+      .sparkle-btn {
+        flex: none;
+        width: 26px;
+        height: 26px;
+        border-radius: 6px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background: transparent;
+        border: none;
+        color: var(--text-secondary);
+        cursor: pointer;
+      }
+      .sparkle-btn:active {
+        background: var(--bg-raised);
+      }
+      /* split primary button */
+      .split-btn {
+        flex: none;
+        display: flex;
+        align-items: stretch;
+        border-radius: 6px;
+        overflow: visible;
+        position: relative;
+      }
+      .split-main {
+        background: var(--text-primary);
+        color: var(--bg-base);
+        border: none;
+        font-family: inherit;
+        font-size: 14px;
+        font-weight: 700;
+        padding: 0 14px;
+        min-height: 42px;
+        border-radius: 6px 0 0 6px;
+        cursor: pointer;
+      }
+      .split-caret {
+        background: var(--text-primary);
+        color: var(--bg-base);
+        border: none;
+        border-left: 1px solid rgba(0, 0, 0, 0.25);
+        border-radius: 0 6px 6px 0;
+        width: 34px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        cursor: pointer;
+      }
+      .split-main:active,
+      .split-caret:active {
+        opacity: 0.8;
+      }
+      .split-menu {
+        position: absolute;
+        bottom: calc(100% + 8px);
+        right: 0;
+        min-width: 190px;
+        background: var(--bg-raised);
+        border: 1px solid var(--border-subtle);
+        border-radius: 12px;
+        padding: 5px;
+        box-shadow: 0 12px 40px rgba(0, 0, 0, 0.55);
+        display: none;
+        z-index: 40;
+      }
+      .split-menu.open {
+        display: block;
+      }
+      .menu-item {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 11px 12px;
+        border-radius: 8px;
+        font-size: 14px;
+        color: var(--text-primary);
+        cursor: pointer;
+      }
+      .menu-item:active {
+        background: var(--bg-panel);
+      }
+      .menu-item.destructive {
+        color: var(--status-red);
+      }
+      .menu-item .mi-icon {
+        color: var(--text-secondary);
+        display: flex;
+        flex: none;
+      }
+      .menu-item.destructive .mi-icon {
+        color: var(--status-red);
+      }
+      .menu-item .sparkle {
+        color: var(--accent-blue);
+        margin-left: auto;
+      }
+
+      /* ─── Bulk bar (multi-select) ─── */
+      .bulk-bar {
+        position: absolute;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        padding: 12px 16px 26px;
+        background: var(--bg-panel);
+        border-top: 1px solid var(--border-subtle);
+        display: none;
+        gap: 8px;
+        align-items: center;
+      }
+      .bulk-bar.open {
+        display: flex;
+      }
+      .bulk-count {
+        font-size: 13px;
+        font-weight: 600;
+        color: var(--text-secondary);
+        margin-right: auto;
+      }
+      .bulk-action {
+        font-family: inherit;
+        font-size: 13px;
+        font-weight: 700;
+        padding: 9px 12px;
+        border-radius: 6px;
+        border: 1px solid var(--border-subtle);
+        background: var(--bg-raised);
+        color: var(--text-primary);
+        cursor: pointer;
+      }
+      .bulk-action.destructive {
+        color: var(--status-red);
+        border-color: rgba(239, 68, 68, 0.4);
+      }
+      .bulk-action:active {
+        opacity: 0.8;
+      }
+
+      /* ─── Bottom sheet (context menu) ─── */
+      .sheet-backdrop {
+        position: absolute;
+        inset: 0;
+        background: rgba(0, 0, 0, 0.5);
+        z-index: 50;
+        display: none;
+        align-items: flex-end;
+      }
+      .sheet-backdrop.open {
+        display: flex;
+      }
+      .sheet {
+        width: 100%;
+        background: var(--bg-panel);
+        border-top: 1px solid var(--border-subtle);
+        border-radius: 20px 20px 0 0;
+        padding: 8px 10px calc(18px + env(safe-area-inset-bottom));
+        transform: translateY(0);
+        animation: sheet-up 0.18s ease-out;
+      }
+      @keyframes sheet-up {
+        from {
+          transform: translateY(30px);
+          opacity: 0.4;
+        }
+        to {
+          transform: translateY(0);
+          opacity: 1;
+        }
+      }
+      .sheet-grip {
+        width: 36px;
+        height: 4px;
+        border-radius: 2px;
+        background: var(--text-muted);
+        margin: 4px auto 8px;
+      }
+      .sheet-title {
+        font-size: 12px;
+        color: var(--text-secondary);
+        padding: 2px 12px 8px;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+
+      /* ─── PR pane ─── */
+      .pr-block {
+        margin-top: 14px;
+        border: 1px solid var(--border-subtle);
+        border-radius: 12px;
+        background: var(--bg-panel);
+        overflow: hidden;
+      }
+      .pr-status-head {
+        padding: 14px;
+      }
+      .pr-status-head .row {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+      .pr-title {
+        font-size: 15px;
+        font-weight: 700;
+        color: var(--text-primary);
+        line-height: 1.35;
+        margin-top: 8px;
+      }
+      .pr-subline {
+        font-size: 12px;
+        color: var(--text-secondary);
+        margin-top: 5px;
+      }
+      .group-head {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 11px 14px;
+        border-top: 1px solid var(--border-subtle);
+      }
+      .group-head .g-title {
+        font-size: 13px;
+        font-weight: 700;
+        color: var(--text-primary);
+      }
+      .group-head .g-title.warn {
+        color: var(--status-red);
+      }
+      .group-head .g-sub {
+        font-size: 12px;
+        color: var(--text-secondary);
+      }
+      .group-head .g-spacer {
+        flex: 1;
+      }
+      .ai-btn {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        font-family: inherit;
+        font-size: 12px;
+        font-weight: 700;
+        color: var(--text-primary);
+        background: var(--bg-raised);
+        border: 1px solid var(--border-subtle);
+        border-radius: 999px;
+        padding: 6px 11px;
+        cursor: pointer;
+        white-space: nowrap;
+        flex: none;
+      }
+      .ai-btn:active {
+        opacity: 0.8;
+      }
+      .ai-btn .sparkle {
+        color: var(--accent-blue);
+        display: flex;
+      }
+      .mini-btn {
+        font-family: inherit;
+        font-size: 12px;
+        font-weight: 600;
+        color: var(--text-secondary);
+        background: transparent;
+        border: 1px solid var(--border-subtle);
+        border-radius: 999px;
+        padding: 6px 11px;
+        cursor: pointer;
+      }
+      .mini-btn:active {
+        background: var(--bg-raised);
+      }
+      .check-row {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 10px 14px;
+        border-top: 1px solid var(--border-subtle);
+      }
+      .check-icon {
+        width: 18px;
+        height: 18px;
+        flex: none;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      }
+      .check-name {
+        flex: 1;
+        min-width: 0;
+      }
+      .check-name .n {
+        display: block;
+        font-size: 13px;
+        color: var(--text-primary);
+        font-weight: 500;
+      }
+      .check-name .d {
+        display: block;
+        font-size: 11px;
+        color: var(--text-muted);
+        margin-top: 2px;
+      }
+      .merge-box {
+        padding: 14px;
+        border-top: 1px solid var(--border-subtle);
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+      }
+      .merge-method {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        border: 1px solid var(--border-subtle);
+        border-radius: 8px;
+        padding: 10px 12px;
+        cursor: pointer;
+        font-size: 13px;
+      }
+      .merge-method .lbl {
+        color: var(--text-secondary);
+      }
+      .merge-method .val {
+        color: var(--text-primary);
+        font-weight: 600;
+        display: flex;
+        align-items: center;
+        gap: 6px;
+      }
+      .toggle-row {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+      }
+      .toggle-row .t-copy {
+        flex: 1;
+        min-width: 0;
+      }
+      .toggle-row .t-copy .t {
+        font-size: 13px;
+        color: var(--text-primary);
+        font-weight: 600;
+      }
+      .toggle-row .t-copy .s {
+        font-size: 11px;
+        color: var(--text-muted);
+        margin-top: 1px;
+      }
+      .switch {
+        width: 44px;
+        height: 26px;
+        border-radius: 13px;
+        background: var(--bg-raised);
+        border: 1px solid var(--border-subtle);
+        position: relative;
+        flex: none;
+        cursor: pointer;
+        transition: background 0.15s;
+      }
+      .switch .knob {
+        position: absolute;
+        top: 2px;
+        left: 2px;
+        width: 20px;
+        height: 20px;
+        border-radius: 10px;
+        background: var(--text-secondary);
+        transition:
+          transform 0.15s,
+          background 0.15s;
+      }
+      .switch.on {
+        background: rgba(59, 130, 246, 0.25);
+        border-color: var(--accent-blue);
+      }
+      .switch.on .knob {
+        transform: translateX(18px);
+        background: var(--accent-blue);
+      }
+      .merge-btn {
+        width: 100%;
+        min-height: 44px;
+        border-radius: 8px;
+        background: var(--merge-green);
+        color: var(--on-merge-green);
+        border: none;
+        font-family: inherit;
+        font-size: 14px;
+        font-weight: 700;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
+      }
+      .merge-btn:active {
+        opacity: 0.85;
+      }
+      .merge-blocked {
+        font-size: 11px;
+        color: var(--status-amber);
+        text-align: center;
+      }
+      .comment-row {
+        display: flex;
+        gap: 10px;
+        padding: 11px 14px;
+        border-top: 1px solid var(--border-subtle);
+      }
+      .avatar {
+        width: 24px;
+        height: 24px;
+        border-radius: 12px;
+        flex: none;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 11px;
+        font-weight: 700;
+        color: var(--bg-base);
+      }
+      .comment-body {
+        flex: 1;
+        min-width: 0;
+      }
+      .comment-meta {
+        font-size: 11px;
+        color: var(--text-secondary);
+        margin-bottom: 2px;
+      }
+      .comment-text {
+        font-size: 13px;
+        color: var(--text-primary);
+        line-height: 1.4;
+      }
+      .comment-file {
+        font-size: 11px;
+        color: var(--text-muted);
+        font-family: monospace;
+        margin-top: 3px;
+      }
+      .reviewer-row {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 11px 14px;
+        border-top: 1px solid var(--border-subtle);
+      }
+      .reviewer-row .r-name {
+        flex: 1;
+        font-size: 13px;
+        color: var(--text-primary);
+      }
+      .r-state {
+        font-size: 12px;
+        font-weight: 600;
+      }
+      .r-state.approved {
+        color: var(--status-green);
+      }
+      .r-state.pending {
+        color: var(--text-secondary);
+      }
+
+      /* ─── History pane ─── */
+      .history {
+        padding-top: 6px;
+      }
+      .commit {
+        display: flex;
+        gap: 12px;
+        position: relative;
+        cursor: pointer;
+      }
+      .rail {
+        width: 20px;
+        flex: none;
+        display: flex;
+        justify-content: center;
+        position: relative;
+      }
+      .rail::before {
+        content: '';
+        position: absolute;
+        top: 0;
+        bottom: 0;
+        width: 2px;
+        background: var(--border-subtle);
+      }
+      .commit:first-child .rail::before {
+        top: 18px;
+      }
+      .commit:last-child .rail::before {
+        bottom: auto;
+        height: 18px;
+      }
+      .rail .dot {
+        width: 10px;
+        height: 10px;
+        border-radius: 5px;
+        background: var(--text-muted);
+        border: 2px solid var(--bg-base);
+        margin-top: 15px;
+        z-index: 1;
+      }
+      .rail .dot.head {
+        background: var(--accent-blue);
+      }
+      .rail .dot.merge {
+        background: var(--status-purple);
+      }
+      .commit-body {
+        flex: 1;
+        min-width: 0;
+        padding: 12px 0;
+        border-bottom: 1px solid var(--border-subtle);
+      }
+      .commit-msg {
+        font-size: 14px;
+        color: var(--text-primary);
+        font-weight: 500;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+      .commit-sub {
+        font-size: 12px;
+        color: var(--text-muted);
+        margin-top: 3px;
+        font-variant-numeric: tabular-nums;
+      }
+      .commit-sub .hash {
+        font-family: monospace;
+        color: var(--text-secondary);
+      }
+      .ahead-divider {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 6px 0 6px 32px;
+        margin: 2px 0;
+      }
+      .ahead-divider .line {
+        flex: 1;
+        height: 1px;
+        background: var(--border-subtle);
+      }
+      .ahead-divider .txt {
+        font-size: 11px;
+        font-weight: 600;
+        color: var(--text-secondary);
+        white-space: nowrap;
+      }
+
+      .empty-hint {
+        text-align: center;
+        color: var(--text-muted);
+        font-size: 12px;
+        padding: 40px 20px;
+      }
+
+      /* ─── Toast ─── */
+      .toast {
+        position: absolute;
+        left: 50%;
+        bottom: 96px;
+        transform: translateX(-50%) translateY(10px);
+        background: var(--bg-raised);
+        border: 1px solid var(--border-subtle);
+        color: var(--text-primary);
+        font-size: 12px;
+        font-weight: 600;
+        padding: 9px 14px;
+        border-radius: 999px;
+        opacity: 0;
+        pointer-events: none;
+        transition:
+          opacity 0.18s,
+          transform 0.18s;
+        z-index: 60;
+        white-space: nowrap;
+        max-width: 320px;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+      .toast.show {
+        opacity: 1;
+        transform: translateX(-50%) translateY(0);
+      }
+    </style>
+  </head>
+  <body>
+    <div class="frame" id="frame">
+      <!-- Status bar -->
+      <div class="status-bar">
+        <span>9:41</span>
+        <span class="dots">
+          <svg width="17" height="11" viewBox="0 0 17 11" fill="currentColor">
+            <rect x="0" y="3" width="3" height="8" rx="1" />
+            <rect x="4.5" y="1.5" width="3" height="9.5" rx="1" />
+            <rect x="9" y="0" width="3" height="11" rx="1" />
+            <rect x="13.5" y="0" width="3" height="11" rx="1" opacity="0.4" />
+          </svg>
+          <svg width="24" height="12" viewBox="0 0 24 12" fill="none">
+            <rect
+              x="0.5"
+              y="0.5"
+              width="20"
+              height="11"
+              rx="3"
+              stroke="currentColor"
+              opacity="0.5"
+            />
+            <rect x="2" y="2" width="15" height="8" rx="1.5" fill="currentColor" />
+            <rect x="21.5" y="4" width="2" height="4" rx="1" fill="currentColor" opacity="0.6" />
+          </svg>
+        </span>
+      </div>
+
+      <!-- Header -->
+      <div class="hub-header">
+        <button class="icon-btn" title="Back" onclick="toast('Back')">
+          <svg
+            width="22"
+            height="22"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+          >
+            <polyline points="15 18 9 12 15 6" />
+          </svg>
+        </button>
+        <div class="header-title">
+          <h1>Source Control</h1>
+          <div class="sub">make-center-split-more-visible</div>
+        </div>
+        <button class="icon-btn" title="Refresh" onclick="toast('Refreshing…')">
+          <svg
+            width="19"
+            height="19"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+          >
+            <polyline points="23 4 23 10 17 10" />
+            <polyline points="1 20 1 14 7 14" />
+            <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15" />
+          </svg>
+        </button>
+      </div>
+
+      <!-- Segmented control -->
+      <div class="segments">
+        <button class="segment active" data-seg="changes" onclick="switchSeg('changes')">
+          Changes
+        </button>
+        <button class="segment" data-seg="pr" onclick="switchSeg('pr')">Pull Request</button>
+        <button class="segment" data-seg="history" onclick="switchSeg('history')">History</button>
+      </div>
+
+      <!-- Persistent branch card -->
+      <div class="branch-card">
+        <div class="branch-row">
+          <svg
+            width="15"
+            height="15"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="var(--text-secondary)"
+            stroke-width="2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+          >
+            <line x1="6" y1="3" x2="6" y2="15" />
+            <circle cx="18" cy="6" r="3" />
+            <circle cx="6" cy="18" r="3" />
+            <path d="M18 9a9 9 0 0 1-9 9" />
+          </svg>
+          <span class="name">make-center-split-more-visible</span>
+        </div>
+        <div class="sync-row">
+          <span class="updown">
+            <span>↑2</span>
+            <span>↓0</span>
+          </span>
+          <span>3 changed · 1 staged</span>
+        </div>
+        <div class="branch-divider"></div>
+        <div class="pr-chip" onclick="switchSeg('pr')">
+          <span class="pr-hex">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none">
+              <path
+                d="M12 2l8.66 5v10L12 22l-8.66-5V7z"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linejoin="round"
+              />
+            </svg>
+          </span>
+          <span class="pr-num">#7701</span>
+          <span class="pill open">Open</span>
+          <span class="pr-meta">
+            <span class="ok">✓ 12/12</span>
+            <span>💬 3</span>
+          </span>
+          <span class="chev">
+            <svg
+              width="16"
+              height="16"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            >
+              <polyline points="9 18 15 12 9 6" />
+            </svg>
+          </span>
+        </div>
+      </div>
+
+      <!-- Content -->
+      <div class="content" id="content">
+        <!-- ═══════ CHANGES ═══════ -->
+        <div class="pane active" id="pane-changes">
+          <div class="list-pad" id="changes-list">
+            <!-- Staged -->
+            <div class="section-head">
+              <span class="title">Staged Changes</span>
+              <span class="count">1</span>
+              <span class="spacer"></span>
+              <button class="select-btn" onclick="toggleSelect()">Select</button>
+            </div>
+            <div
+              class="frow"
+              data-name="EditorFileTab.tsx"
+              data-dir="src/renderer/src/components/tab-bar/"
+              data-area="staged"
+            >
+              <div class="row-action stage">
+                <span>↩</span>
+                <span>Unstage</span>
+              </div>
+              <div class="row-action discard">
+                <span>🗑</span>
+                <span>Discard</span>
+              </div>
+              <div class="row-fg">
+                <span class="row-check">
+                  <svg
+                    width="12"
+                    height="12"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="3"
+                  >
+                    <polyline points="20 6 9 17 4 12" />
+                  </svg>
+                </span>
+                <span class="status-badge s-mod">M</span>
+                <span class="file-icon">
+                  <svg
+                    width="16"
+                    height="16"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-linejoin="round"
+                  >
+                    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+                    <polyline points="14 2 14 8 20 8" />
+                  </svg>
+                </span>
+                <span class="file-text">
+                  <span class="file-name">EditorFileTab.tsx</span>
+                  <span class="file-meta">
+                    <span class="file-dir">&#8206;src/renderer/src/components/tab-bar/</span>
+                    <span class="diffstat"
+                      ><span class="add">+12</span><span class="del">−4</span></span
+                    >
+                  </span>
+                </span>
+                <span class="chev">
+                  <svg
+                    width="16"
+                    height="16"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                  >
+                    <polyline points="9 18 15 12 9 6" />
+                  </svg>
+                </span>
+              </div>
+            </div>
+
+            <!-- Changes (unstaged) -->
+            <div class="section-head">
+              <span class="title">Changes</span>
+              <span class="count">3</span>
+              <span class="spacer"></span>
+              <button class="select-btn" onclick="toggleSelect()">Select</button>
+            </div>
+            <div
+              class="frow"
+              data-name="CenterSplitDivider.tsx"
+              data-dir="src/renderer/src/components/split-view/"
+              data-area="unstaged"
+            >
+              <div class="row-action stage"><span>+</span><span>Stage</span></div>
+              <div class="row-action discard"><span>🗑</span><span>Discard</span></div>
+              <div class="row-fg">
+                <span class="row-check"
+                  ><svg
+                    width="12"
+                    height="12"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="3"
+                  >
+                    <polyline points="20 6 9 17 4 12" /></svg
+                ></span>
+                <span class="status-badge s-mod">M</span>
+                <span class="file-icon"
+                  ><svg
+                    width="16"
+                    height="16"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-linejoin="round"
+                  >
+                    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+                    <polyline points="14 2 14 8 20 8" /></svg
+                ></span>
+                <span class="file-text">
+                  <span class="file-name">CenterSplitDivider.tsx</span>
+                  <span class="file-meta">
+                    <span class="file-dir">&#8206;src/renderer/src/components/split-view/</span>
+                    <span class="diffstat"
+                      ><span class="add">+34</span><span class="del">−8</span></span
+                    >
+                  </span>
+                </span>
+                <span class="chev"
+                  ><svg
+                    width="16"
+                    height="16"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                  >
+                    <polyline points="9 18 15 12 9 6" /></svg
+                ></span>
+              </div>
+            </div>
+            <div
+              class="frow"
+              data-name="split-view-geometry.ts"
+              data-dir="src/renderer/src/lib/"
+              data-area="unstaged"
+            >
+              <div class="row-action stage"><span>+</span><span>Stage</span></div>
+              <div class="row-action discard"><span>🗑</span><span>Discard</span></div>
+              <div class="row-fg">
+                <span class="row-check"
+                  ><svg
+                    width="12"
+                    height="12"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="3"
+                  >
+                    <polyline points="20 6 9 17 4 12" /></svg
+                ></span>
+                <span class="status-badge s-mod">M</span>
+                <span class="file-icon"
+                  ><svg
+                    width="16"
+                    height="16"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-linejoin="round"
+                  >
+                    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+                    <polyline points="14 2 14 8 20 8" /></svg
+                ></span>
+                <span class="file-text">
+                  <span class="file-name">split-view-geometry.ts</span>
+                  <span class="file-meta">
+                    <span class="file-dir">&#8206;src/renderer/src/lib/</span>
+                    <span class="diffstat"
+                      ><span class="add">+6</span><span class="del">−2</span></span
+                    >
+                  </span>
+                </span>
+                <span class="chev"
+                  ><svg
+                    width="16"
+                    height="16"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                  >
+                    <polyline points="9 18 15 12 9 6" /></svg
+                ></span>
+              </div>
+            </div>
+            <div
+              class="frow"
+              data-name="SplitDividerHandle.test.tsx"
+              data-dir="src/renderer/src/components/split-view/__tests__/"
+              data-area="unstaged"
+            >
+              <div class="row-action stage"><span>+</span><span>Stage</span></div>
+              <div class="row-action discard"><span>🗑</span><span>Discard</span></div>
+              <div class="row-fg">
+                <span class="row-check"
+                  ><svg
+                    width="12"
+                    height="12"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="3"
+                  >
+                    <polyline points="20 6 9 17 4 12" /></svg
+                ></span>
+                <span class="status-badge s-add">A</span>
+                <span class="file-icon"
+                  ><svg
+                    width="16"
+                    height="16"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-linejoin="round"
+                  >
+                    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+                    <polyline points="14 2 14 8 20 8" /></svg
+                ></span>
+                <span class="file-text">
+                  <span class="file-name">SplitDividerHandle.test.tsx</span>
+                  <span class="file-meta">
+                    <span class="file-dir"
+                      >&#8206;src/renderer/src/components/split-view/__tests__/</span
+                    >
+                    <span class="diffstat"
+                      ><span class="add">+48</span><span class="del">−0</span></span
+                    >
+                  </span>
+                </span>
+                <span class="chev"
+                  ><svg
+                    width="16"
+                    height="16"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                  >
+                    <polyline points="9 18 15 12 9 6" /></svg
+                ></span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Commit bar -->
+          <div class="commit-bar" id="commit-bar">
+            <div class="commit-input">
+              <input type="text" placeholder="Commit message" />
+              <button
+                class="sparkle-btn"
+                title="Generate message"
+                onclick="toast('Generating commit message ✦')"
+              >
+                <svg
+                  width="16"
+                  height="16"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <path d="M12 3l1.9 4.6L18.5 9.5 13.9 11.4 12 16l-1.9-4.6L5.5 9.5l4.6-1.9z" />
+                  <path d="M19 15l.7 1.8L21.5 17.5l-1.8.7L19 20l-.7-1.8L16.5 17.5l1.8-.7z" />
+                </svg>
+              </button>
+            </div>
+            <div class="split-btn">
+              <button class="split-main" onclick="commitAction('Commit')">Commit</button>
+              <button class="split-caret" onclick="toggleSplitMenu(event)">
+                <svg
+                  width="14"
+                  height="14"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2.5"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <polyline points="6 9 12 15 18 9" />
+                </svg>
+              </button>
+              <div class="split-menu" id="split-menu">
+                <div class="menu-item" onclick="commitAction('Commit &amp; Push')">
+                  <span class="mi-icon"
+                    ><svg
+                      width="17"
+                      height="17"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                    >
+                      <line x1="12" y1="19" x2="12" y2="5" />
+                      <polyline points="5 12 12 5 19 12" /></svg
+                  ></span>
+                  Commit &amp; Push
+                </div>
+                <div class="menu-item" onclick="commitAction('Commit &amp; Sync')">
+                  <span class="mi-icon"
+                    ><svg
+                      width="17"
+                      height="17"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                    >
+                      <polyline points="23 4 23 10 17 10" />
+                      <polyline points="1 20 1 14 7 14" />
+                      <path
+                        d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"
+                      /></svg
+                  ></span>
+                  Commit &amp; Sync
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Bulk bar (multi-select) -->
+          <div class="bulk-bar" id="bulk-bar">
+            <span class="bulk-count" id="bulk-count">0 selected</span>
+            <button class="bulk-action" onclick="bulkAction('Stage')">Stage</button>
+            <button class="bulk-action" onclick="bulkAction('Unstage')">Unstage</button>
+            <button
+              class="bulk-action destructive"
+              onclick="bulkAction('Discard')"
+              id="bulk-discard"
+            >
+              Discard
+            </button>
+          </div>
+        </div>
+
+        <!-- ═══════ PULL REQUEST ═══════ -->
+        <div class="pane" id="pane-pr">
+          <div class="list-pad">
+            <div class="pr-block">
+              <!-- status header -->
+              <div class="pr-status-head">
+                <div class="row">
+                  <span class="pill open">Open</span>
+                  <span class="pr-num">#7701</span>
+                  <span style="font-size: 12px; color: var(--text-muted)"
+                    >octocat wants to merge into main</span
+                  >
+                </div>
+                <div class="pr-title">Make center split divider more visible</div>
+                <div class="pr-subline">
+                  make-center-split-more-visible → main · updated 20m ago
+                </div>
+              </div>
+
+              <!-- failing checks first -->
+              <div class="group-head">
+                <span class="g-title warn">1 check failing</span>
+                <span class="g-spacer"></span>
+                <button class="ai-btn" onclick="toast('Launching agent to fix checks ✦')">
+                  <span class="sparkle"
+                    ><svg
+                      width="13"
+                      height="13"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                    >
+                      <path
+                        d="M12 3l1.9 4.6L18.5 9.5 13.9 11.4 12 16l-1.9-4.6L5.5 9.5l4.6-1.9z"
+                      /></svg
+                  ></span>
+                  Fix failing checks
+                </button>
+              </div>
+              <div class="check-row" onclick="toast('Opening check log tail')">
+                <span class="check-icon"
+                  ><svg
+                    width="16"
+                    height="16"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="var(--status-red)"
+                    stroke-width="2.4"
+                    stroke-linecap="round"
+                  >
+                    <line x1="6" y1="6" x2="18" y2="18" />
+                    <line x1="18" y1="6" x2="6" y2="18" /></svg
+                ></span>
+                <span class="check-name">
+                  <span class="n">e2e / playwright (ubuntu-latest)</span>
+                  <span class="d">Failing · 1 test · 2m 14s</span>
+                </span>
+                <button
+                  class="mini-btn"
+                  onclick="
+                    event.stopPropagation()
+                    toast('Rerunning check…')
+                  "
+                >
+                  Rerun
+                </button>
+              </div>
+
+              <!-- merge box -->
+              <div class="merge-box">
+                <div class="merge-method" onclick="openMergeMethod()">
+                  <span class="lbl">Merge method</span>
+                  <span class="val"
+                    >Squash and merge
+                    <svg
+                      width="14"
+                      height="14"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                    >
+                      <polyline points="6 9 12 15 18 9" />
+                    </svg>
+                  </span>
+                </div>
+                <div class="toggle-row">
+                  <div class="t-copy">
+                    <div class="t">Auto-merge when checks pass</div>
+                    <div class="s">Merges automatically once required checks are green</div>
+                  </div>
+                  <div class="switch" id="automerge" onclick="toggleSwitch('automerge')">
+                    <span class="knob"></span>
+                  </div>
+                </div>
+                <button class="merge-btn" onclick="toast('Confirm merge…')">
+                  <svg
+                    width="16"
+                    height="16"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                  >
+                    <circle cx="18" cy="18" r="3" />
+                    <circle cx="6" cy="6" r="3" />
+                    <path d="M6 21V9a9 9 0 0 0 9 9" />
+                  </svg>
+                  Squash and merge
+                </button>
+                <div class="merge-blocked">1 failing check must pass before merging</div>
+              </div>
+
+              <!-- unresolved comments -->
+              <div class="group-head">
+                <span class="g-title">Unresolved comments</span>
+                <span class="g-sub">· 3</span>
+                <span class="g-spacer"></span>
+                <button class="ai-btn" onclick="toast('Resolving comments with AI ✦')">
+                  <span class="sparkle"
+                    ><svg
+                      width="13"
+                      height="13"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                    >
+                      <path
+                        d="M12 3l1.9 4.6L18.5 9.5 13.9 11.4 12 16l-1.9-4.6L5.5 9.5l4.6-1.9z"
+                      /></svg
+                  ></span>
+                  Resolve with AI
+                </button>
+              </div>
+              <div class="comment-row" onclick="toast('Opening comment thread')">
+                <span class="avatar" style="background: #f59e0b">R</span>
+                <span class="comment-body">
+                  <span class="comment-meta">rauchg · 18m ago</span>
+                  <span class="comment-text"
+                    >Can we clamp the divider width so it doesn't overlap the gutter on narrow
+                    panes?</span
+                  >
+                  <span class="comment-file">CenterSplitDivider.tsx:42</span>
+                </span>
+              </div>
+              <div class="comment-row" onclick="toast('Opening comment thread')">
+                <span class="avatar" style="background: #3b82f6">M</span>
+                <span class="comment-body">
+                  <span class="comment-meta">maren · 25m ago</span>
+                  <span class="comment-text">Add a test for the min-width geometry branch.</span>
+                  <span class="comment-file">split-view-geometry.ts:16</span>
+                </span>
+              </div>
+
+              <!-- reviewers -->
+              <div class="group-head">
+                <span class="g-title">Reviewers</span>
+              </div>
+              <div class="reviewer-row">
+                <span class="avatar" style="background: #22c55e">O</span>
+                <span class="r-name">octocat</span>
+                <span class="r-state approved">Approved</span>
+              </div>
+              <div class="reviewer-row">
+                <span class="avatar" style="background: #8b5cf6">D</span>
+                <span class="r-name">dstndev</span>
+                <span class="r-state pending">Review requested</span>
+              </div>
+
+              <!-- all checks (rollup) -->
+              <div class="group-head">
+                <span class="g-title">All checks</span>
+                <span class="g-sub">· 11 passed · 1 failing</span>
+                <span class="g-spacer"></span>
+                <button class="mini-btn" onclick="toast('Rerunning failed…')">Rerun failed</button>
+              </div>
+              <div class="check-row" onclick="toast('Opening check log tail')">
+                <span class="check-icon"
+                  ><svg
+                    width="16"
+                    height="16"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="var(--status-green)"
+                    stroke-width="2.6"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                  >
+                    <polyline points="20 6 9 17 4 12" /></svg
+                ></span>
+                <span class="check-name"
+                  ><span class="n">build / typecheck</span
+                  ><span class="d">Passed · 1m 02s</span></span
+                >
+              </div>
+              <div class="check-row" onclick="toast('Opening check log tail')">
+                <span class="check-icon"
+                  ><svg
+                    width="16"
+                    height="16"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="var(--status-green)"
+                    stroke-width="2.6"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                  >
+                    <polyline points="20 6 9 17 4 12" /></svg
+                ></span>
+                <span class="check-name"
+                  ><span class="n">lint / oxlint</span><span class="d">Passed · 38s</span></span
+                >
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- ═══════ HISTORY ═══════ -->
+        <div class="pane" id="pane-history">
+          <div class="list-pad">
+            <div class="history">
+              <div
+                class="commit"
+                data-hash="a1b2c3d"
+                data-msg="Make center split divider more visible"
+              >
+                <div class="rail"><div class="dot head"></div></div>
+                <div class="commit-body">
+                  <div class="commit-msg">Make center split divider more visible</div>
+                  <div class="commit-sub">
+                    <span class="hash">a1b2c3d</span> · Jinjing · 18m ago
+                  </div>
+                </div>
+              </div>
+              <div class="commit" data-hash="9f8e7d6" data-msg="Add split-view geometry helper">
+                <div class="rail"><div class="dot"></div></div>
+                <div class="commit-body">
+                  <div class="commit-msg">Add split-view geometry helper</div>
+                  <div class="commit-sub">
+                    <span class="hash">9f8e7d6</span> · Jinjing · 42m ago
+                  </div>
+                </div>
+              </div>
+
+              <div class="ahead-divider">
+                <span class="txt">2 commits ahead of origin/main</span>
+                <span class="line"></span>
+              </div>
+
+              <div
+                class="commit"
+                data-hash="0f7658d"
+                data-msg="Make center split divider more visible (#7701)"
+              >
+                <div class="rail"><div class="dot merge"></div></div>
+                <div class="commit-body">
+                  <div class="commit-msg">Merge pull request #7699 from orca/main</div>
+                  <div class="commit-sub">
+                    <span class="hash">0f7658d</span> · web-flow · 3h ago
+                  </div>
+                </div>
+              </div>
+              <div class="commit" data-hash="2dad1f0" data-msg="Update README downloads badge">
+                <div class="rail"><div class="dot"></div></div>
+                <div class="commit-body">
+                  <div class="commit-msg">Update README downloads badge</div>
+                  <div class="commit-sub"><span class="hash">2dad1f0</span> · Jinjing · 5h ago</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Bottom sheet (context menu) -->
+      <div class="sheet-backdrop" id="sheet" onclick="closeSheet(event)">
+        <div class="sheet" id="sheet-body" onclick="event.stopPropagation()">
+          <div class="sheet-grip"></div>
+          <div class="sheet-title" id="sheet-title"></div>
+          <div id="sheet-items"></div>
+        </div>
+      </div>
+
+      <!-- Toast -->
+      <div class="toast" id="toast"></div>
+    </div>
+
+    <script>
+      // ─── Segment switching (state preserved: panes are just show/hidden) ───
+      function switchSeg(seg) {
+        document.querySelectorAll('.segment').forEach((b) => {
+          b.classList.toggle('active', b.dataset.seg === seg)
+        })
+        document.querySelectorAll('.pane').forEach((p) => {
+          p.classList.toggle('active', p.id === 'pane-' + seg)
+        })
+        // commit/bulk bars belong only to the Changes pane
+        const onChanges = seg === 'changes'
+        document.getElementById('commit-bar').style.display =
+          onChanges && !selectionMode ? 'flex' : 'none'
+        document.getElementById('bulk-bar').classList.toggle('open', onChanges && selectionMode)
+        closeSplitMenu()
+      }
+
+      // ─── Toast feedback (stands in for haptics + confirmation) ───
+      let toastTimer = null
+      function toast(msg) {
+        const t = document.getElementById('toast')
+        t.textContent = msg
+        t.classList.add('show')
+        clearTimeout(toastTimer)
+        toastTimer = setTimeout(() => t.classList.remove('show'), 1400)
+      }
+
+      // ─── Split button menu ───
+      function toggleSplitMenu(e) {
+        e.stopPropagation()
+        document.getElementById('split-menu').classList.toggle('open')
+      }
+      function closeSplitMenu() {
+        document.getElementById('split-menu').classList.remove('open')
+      }
+      function commitAction(label) {
+        closeSplitMenu()
+        toast(label)
+      }
+
+      // ─── Merge box interactions ───
+      function toggleSwitch(id) {
+        document.getElementById(id).classList.toggle('on')
+      }
+      function openMergeMethod() {
+        openSheet('Merge method', [
+          { label: 'Create a merge commit', icon: 'merge' },
+          { label: 'Squash and merge', icon: 'merge' },
+          { label: 'Rebase and merge', icon: 'merge' }
+        ])
+      }
+
+      // ─── Bottom sheet (context menus) ───
+      function openSheet(title, items) {
+        document.getElementById('sheet-title').textContent = title
+        const wrap = document.getElementById('sheet-items')
+        wrap.innerHTML = ''
+        items.forEach((it) => {
+          const div = document.createElement('div')
+          div.className = 'menu-item' + (it.destructive ? ' destructive' : '')
+          div.innerHTML =
+            '<span class="mi-icon">' +
+            iconSvg(it.icon) +
+            '</span>' +
+            it.label +
+            (it.ai ? '<span class="sparkle">' + iconSvg('sparkle') + '</span>' : '')
+          div.onclick = () => {
+            closeSheet()
+            toast(it.label)
+          }
+          wrap.appendChild(div)
+        })
+        document.getElementById('sheet').classList.add('open')
+      }
+      function closeSheet(e) {
+        if (e && e.target.closest('#sheet-body')) return
+        document.getElementById('sheet').classList.remove('open')
+      }
+
+      function iconSvg(name) {
+        const s =
+          '<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">'
+        const paths = {
+          diff: '<line x1="4" y1="9" x2="20" y2="9"/><line x1="4" y1="15" x2="20" y2="15"/>',
+          file: '<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/>',
+          stage: '<line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>',
+          discard:
+            '<polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/>',
+          copy: '<rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>',
+          remote:
+            '<circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15 15 0 0 1 0 20 15 15 0 0 1 0-20"/>',
+          merge:
+            '<circle cx="18" cy="18" r="3"/><circle cx="6" cy="6" r="3"/><path d="M6 21V9a9 9 0 0 0 9 9"/>',
+          hash: '<line x1="4" y1="9" x2="20" y2="9"/><line x1="4" y1="15" x2="20" y2="15"/><line x1="10" y1="3" x2="8" y2="21"/><line x1="16" y1="3" x2="14" y2="21"/>',
+          message: '<path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>',
+          sparkle: '<path d="M12 3l1.9 4.6L18.5 9.5 13.9 11.4 12 16l-1.9-4.6L5.5 9.5l4.6-1.9z"/>'
+        }
+        return s + (paths[name] || paths.file) + '</svg>'
+      }
+
+      // ─── File row context menu ───
+      function openRowMenu(row) {
+        const staged = row.dataset.area === 'staged'
+        openSheet(row.dataset.name, [
+          { label: 'Open diff', icon: 'diff' },
+          { label: 'Open file', icon: 'file' },
+          { label: staged ? 'Unstage' : 'Stage', icon: 'stage' },
+          { label: 'Discard', icon: 'discard', destructive: true },
+          { label: 'Copy path', icon: 'copy' },
+          { label: 'View on remote', icon: 'remote' }
+        ])
+      }
+
+      // ─── Commit (history) context menu ───
+      function openCommitMenu(commit) {
+        openSheet(commit.dataset.hash + ' · ' + commit.dataset.msg, [
+          { label: 'Copy hash', icon: 'hash' },
+          { label: 'Copy message', icon: 'message' },
+          { label: 'Open on remote', icon: 'remote' },
+          { label: 'Explain commit', icon: 'sparkle', ai: true }
+        ])
+      }
+
+      // ─── Multi-select mode ───
+      let selectionMode = false
+      function toggleSelect() {
+        selectionMode = !selectionMode
+        const list = document.getElementById('changes-list')
+        list.classList.toggle('selecting', selectionMode)
+        document.querySelectorAll('.select-btn').forEach((b) => {
+          b.textContent = selectionMode ? 'Done' : 'Select'
+        })
+        if (!selectionMode) {
+          document.querySelectorAll('.frow.checked').forEach((r) => r.classList.remove('checked'))
+        }
+        document.getElementById('commit-bar').style.display = selectionMode ? 'none' : 'flex'
+        document.getElementById('bulk-bar').classList.toggle('open', selectionMode)
+        updateBulkCount()
+      }
+      function updateBulkCount() {
+        const n = document.querySelectorAll('.frow.checked').length
+        document.getElementById('bulk-count').textContent = n + ' selected'
+        document.getElementById('bulk-discard').textContent = 'Discard ' + (n || '')
+      }
+      function bulkAction(label) {
+        const n = document.querySelectorAll('.frow.checked').length
+        if (n === 0) {
+          toast('Select files first')
+          return
+        }
+        toast(label + ' ' + n + ' file' + (n === 1 ? '' : 's'))
+        toggleSelect()
+      }
+
+      // ─── Gesture engine: tap / swipe / long-press per file row ───
+      const THRESHOLD = 58
+      const MAX = 96
+      function attachRow(row) {
+        const fg = row.querySelector('.row-fg')
+        let x0 = 0,
+          y0 = 0,
+          cur = 0,
+          active = false,
+          mode = null,
+          lp = null,
+          isOpen = false
+
+        function settle(to) {
+          fg.style.transition = 'transform .2s ease'
+          fg.style.transform = 'translateX(' + to + 'px)'
+          isOpen = to !== 0
+          cur = to
+        }
+
+        fg.addEventListener('pointerdown', (e) => {
+          if (selectionMode) return
+          if (isOpen) {
+            settle(0)
+            return
+          }
+          x0 = e.clientX
+          y0 = e.clientY
+          cur = 0
+          mode = null
+          active = true
+          fg.style.transition = 'none'
+          lp = setTimeout(() => {
+            if (mode === null) {
+              mode = 'lp'
+              active = false
+              navigator.vibrate && navigator.vibrate(8)
+              openRowMenu(row)
+            }
+          }, 460)
+        })
+        fg.addEventListener('pointermove', (e) => {
+          if (!active) return
+          const dx = e.clientX - x0
+          const dy = e.clientY - y0
+          if (mode === null) {
+            if (Math.abs(dy) > 10 && Math.abs(dy) >= Math.abs(dx)) {
+              active = false
+              clearTimeout(lp)
+              return
+            }
+            if (Math.abs(dx) > 8) {
+              mode = 'swipe'
+              clearTimeout(lp)
+              try {
+                fg.setPointerCapture(e.pointerId)
+              } catch (_) {}
+            }
+          }
+          if (mode === 'swipe') {
+            cur = Math.max(-MAX, Math.min(MAX, dx))
+            fg.style.transform = 'translateX(' + cur + 'px)'
+            e.preventDefault()
+          }
+        })
+        function end() {
+          clearTimeout(lp)
+          if (mode === 'swipe') {
+            if (cur > THRESHOLD) settle(MAX)
+            else if (cur < -THRESHOLD) settle(-MAX)
+            else settle(0)
+          } else if (mode === null && active) {
+            // clean tap → open diff
+            toast('Open diff · ' + row.dataset.name)
+          }
+          active = false
+        }
+        fg.addEventListener('pointerup', end)
+        fg.addEventListener('pointercancel', end)
+
+        // Tap on a revealed action performs it, then closes
+        row.querySelector('.row-action.stage').addEventListener('click', () => {
+          if (!isOpen) return
+          const staged = row.dataset.area === 'staged'
+          toast((staged ? 'Unstaged ' : 'Staged ') + row.dataset.name)
+          settle(0)
+        })
+        row.querySelector('.row-action.discard').addEventListener('click', () => {
+          if (!isOpen) return
+          toast('Discarded ' + row.dataset.name)
+          settle(0)
+        })
+
+        // Selection-mode tap toggles checkbox
+        fg.addEventListener('click', (e) => {
+          if (!selectionMode) return
+          row.classList.toggle('checked')
+          updateBulkCount()
+        })
+      }
+      document.querySelectorAll('#changes-list .frow').forEach(attachRow)
+
+      // ─── Commit long-press ───
+      document.querySelectorAll('.commit').forEach((commit) => {
+        let lp = null,
+          moved = false,
+          sx = 0,
+          sy = 0
+        commit.addEventListener('pointerdown', (e) => {
+          moved = false
+          sx = e.clientX
+          sy = e.clientY
+          lp = setTimeout(() => {
+            moved = true // suppress the tap
+            navigator.vibrate && navigator.vibrate(8)
+            openCommitMenu(commit)
+          }, 460)
+        })
+        commit.addEventListener('pointermove', (e) => {
+          if (Math.abs(e.clientX - sx) > 10 || Math.abs(e.clientY - sy) > 10) {
+            clearTimeout(lp)
+          }
+        })
+        commit.addEventListener('pointerup', () => {
+          clearTimeout(lp)
+          if (!moved) toast('Open commit · ' + commit.dataset.hash)
+        })
+        commit.addEventListener('pointercancel', () => clearTimeout(lp))
+      })
+
+      // ─── Global dismiss: tap-outside + Esc ───
+      document.getElementById('frame').addEventListener('click', (e) => {
+        if (!e.target.closest('.split-btn')) closeSplitMenu()
+      })
+      document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape') {
+          closeSheet()
+          closeSplitMenu()
+        }
+      })
+    </script>
+  </body>
+</html>

@@ -1480,6 +1480,7 @@ type GlabExecOptions = Omit<GitExecOptions, 'cwd'> & {
   cwd?: string
   wslDistro?: string
   idempotent?: boolean
+  allowDefaultWslFallback?: boolean
 }
 
 /**
@@ -1544,6 +1545,7 @@ export async function glabExecFileAsync(
         resolved.wsl === null &&
         !options.cwd &&
         !options.wslDistro &&
+        options.allowDefaultWslFallback !== false &&
         isHostCommandMissing(err, 'glab')
       ) {
         const wslResolved = resolveDefaultWslCli('glab', args)

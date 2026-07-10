@@ -705,8 +705,10 @@ export class OrcaRuntimeRpcServer {
           port: this.wsPort,
           staticRoot: this.webClientRoot,
           // Why: keep the fallback port stable across restarts so paired
-          // devices' stored endpoints stay valid (STA-1511). wsPort 0 means
-          // the caller explicitly wants a random port (E2E) — don't pin it.
+          // devices' stored endpoints stay valid (STA-1511) — the transport
+          // binds a persisted fallback before the preferred port. wsPort 0
+          // means the caller explicitly wants a random port (E2E) — don't
+          // pin it.
           ...(this.wsPort !== 0 ? { fallbackPort: readWsFallbackPort(this.userDataPath) } : {})
         })
         this.wsTransport = wsTransport

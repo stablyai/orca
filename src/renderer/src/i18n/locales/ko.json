@@ -210,7 +210,8 @@
         },
         "workspace": {
           "cleanup": {
-            "9d6e531da6": "워크스페이스가 더 이상 존재하지 않습니다."
+            "9d6e531da6": "워크스페이스가 더 이상 존재하지 않습니다.",
+            "changedSinceConfirmation": "확인 후 워크스페이스가 변경되었습니다. 제거하기 전에 새로 고쳐 검토하세요."
           }
         },
         "worktrees": {
@@ -2339,7 +2340,61 @@
             "gitFilter": "Git",
             "contextFilter": "문맥",
             "sortBy": "정렬 기준",
-            "sortDirection": "방향"
+            "sortDirection": "방향",
+            "1d3503357d": "삭제가 계속되는 동안 이 창을 닫고 나중에 돌아올 수 있습니다.",
+            "4c2990886e": "{{value0}}/{{value1}}개 삭제됨",
+            "86ba852118": "{{value0}}, {{value1}}개 실패",
+            "7b7bde5181": "지금까지 확인한 워크스페이스: {{value0}}",
+            "deletingCount": "삭제 중인 워크스페이스: {{value0}}",
+            "deleteCount": "워크스페이스 삭제: {{value0}}?",
+            "selectedForDeletionCount": "삭제 대상으로 선택됨: {{value0}}",
+            "deleteButtonCount": "{{value0}}개 삭제",
+            "archivedStatus": "보관됨",
+            "readyStatus": "준비됨"
+          },
+          "backgroundRemoval": {
+            "removed": "삭제된 워크스페이스: {{value0}}",
+            "failed": "삭제되지 않은 워크스페이스: {{value0}}",
+            "error": "워크스페이스 정리 실패",
+            "skippedAncestor": "중첩된 워크스페이스를 제거할 수 없어 건너뛰었습니다.",
+            "timedOut": "{{value0}} 제거가 예상보다 오래 걸리고 있습니다. 백그라운드에서 계속 실행됩니다."
+          },
+          "candidateRow": {
+            "gitLabel": "Git",
+            "commitsLabel": "커밋",
+            "contextLabel": "문맥",
+            "flagsLabel": "플래그",
+            "collapseDetails": "세부 정보 접기",
+            "expandDetails": "세부 정보 펼치기",
+            "cleanGit": "Git 깨끗함",
+            "dirtyGit": "Git 변경 있음",
+            "unpushedCommits": "푸시되지 않은 커밋",
+            "gitUnknown": "Git 알 수 없음",
+            "gitStatusUnknown": "Git 상태 알 수 없음",
+            "noUnpushedCommits": "푸시되지 않은 커밋 없음",
+            "unpushedCommitsCount": "푸시되지 않은 커밋: {{value0}}",
+            "uncommittedChanges": "커밋되지 않은 변경 사항",
+            "terminalTabsCount": "터미널 탭: {{value0}}",
+            "editorTabsCount": "편집기 탭: {{value0}}",
+            "browserTabsCount": "브라우저 탭: {{value0}}",
+            "diffNotesCount": "Diff 메모: {{value0}}",
+            "completedAgentsCount": "완료된 에이전트: {{value0}}",
+            "contextCount": "문맥: {{value0}}",
+            "mainWorkspaceBlocker": "기본 워크스페이스",
+            "folderProjectBlocker": "폴더 프로젝트",
+            "pinnedBlocker": "고정됨",
+            "activeWorkspaceBlocker": "활성 워크스페이스",
+            "runningTerminalBlocker": "실행 중인 터미널 프로세스",
+            "terminalLivenessUnknownBlocker": "터미널 상태 알 수 없음",
+            "dirtyEditorBufferBlocker": "저장되지 않은 편집기 버퍼",
+            "volatileLocalContextBlocker": "휘발성 로컬 문맥",
+            "recentVisibleContextBlocker": "최근 방문한 탭",
+            "liveAgentBlocker": "활성 에이전트",
+            "sshDisconnectedBlocker": "원격을 사용할 수 없음",
+            "gitStatusErrorBlocker": "Git 상태를 사용할 수 없음",
+            "dirtyFilesBlocker": "변경된 파일",
+            "unknownBaseBlocker": "푸시되지 않은 커밋을 확인할 수 없음",
+            "dismissedBlocker": "무시됨"
           }
         }
       },
@@ -2973,7 +3028,8 @@
             "f077f586db": "다시 묻지 않기",
             "c0e972d726": "취소",
             "06741a2f3d": "MiniMax 사용량 세부 정보 열기",
-            "3bbf140864": "MiniMax 사용량"
+            "3bbf140864": "MiniMax 사용량",
+            "remoteServerLabel": "원격 서버"
           },
           "StatusBarUsageEmptyCta": {
             "828c764a79": "계정 연결",
@@ -3985,7 +4041,8 @@
           "runtimeHostProject": "Orca 서버의 프로젝트",
           "automationCreated": "자동화로 생성됨",
           "branchIdentity": "브랜치",
-          "branchFolderPathIdentity": "브랜치 또는 폴더 경로"
+          "branchFolderPathIdentity": "브랜치 또는 폴더 경로",
+          "ef18787206": "삭제 대기 중"
         },
         "WorktreeCardAgents": {
           "1b0a156717": "에이전트"
@@ -4718,7 +4775,13 @@
           "435df0ee51": "Request Headers에서 Cookie 값을 복사합니다.",
           "7492fb3bba": "여기에 붙여넣고 저장을 클릭합니다.",
           "9fec52de4b": "Cookie 복사 방법",
-          "4e32e030b2": "로컬에 저장됩니다. Orca는 사용량 새로 고침을 위해 platform.minimax.io로만 전송합니다."
+          "4e32e030b2": "로컬에 저장됩니다. Orca는 사용량 새로 고침을 위해 platform.minimax.io로만 전송합니다.",
+          "remoteServerFallback": "원격 서버",
+          "loadAccountsFailed": "프로바이더 계정을 불러오지 못했습니다.",
+          "remoteScopeAccounts": "{{value0}}에서 관리하는 계정을 표시하고 있습니다. 계정 추가나 재인증은 해당 서버에서 진행하세요.",
+          "remoteScopeAuthContext": "각 계정은 {{value0}}에 자체 로그인 컨텍스트를 유지합니다.",
+          "remoteEmptyClaudeAccounts": "{{value0}}에 관리되는 Claude 계정이 없습니다. 해당 서버의 시스템 기본 Claude 로그인을 사용하며, 계정 추가는 그 서버에서 진행하세요.",
+          "remoteEmptyCodexAccounts": "{{value0}}에 관리되는 Codex 계정이 없습니다. 해당 서버의 시스템 기본 Codex 로그인을 사용하며, 계정 추가는 그 서버에서 진행하세요."
         },
         "AdvancedPane": {
           "40b29e0bf3": "다시 시작",
@@ -8840,6 +8903,26 @@
           "reviewFirst": "Review first",
           "singular": "Global saves won't change 1 repository with its own recipe.",
           "tooltipTitle": "Repository overrides"
+        },
+        "linear": {
+          "agent": {
+            "skill": {
+              "install": {
+                "cta": {
+                  "copiedCommand": "Copied command.",
+                  "copyFailed": "Failed to copy command.",
+                  "skillLabel": "Agent skill:",
+                  "checking": "Checking...",
+                  "installed": "Installed",
+                  "notInstalled": "Not installed",
+                  "recheck": "Re-check",
+                  "installedDescription": "Agent skill installed. To update it, run:",
+                  "description": "Let your agents read and edit Linear tasks.",
+                  "copyCommand": "Copy command"
+                }
+              }
+            }
+          }
         }
       },
       "right": {

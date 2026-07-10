@@ -554,6 +554,17 @@ export function HostScreen({
 
   useFocusEffect(
     useCallback(() => {
+      // Why: opening the host is a strong user signal — reset a backed-off or
+      // trickling reconnect loop (and probe a possibly half-open socket)
+      // immediately instead of waiting out its timer. Deps stay empty so this
+      // fires per focus transition, not per connection-state change; nudging
+      // on every reconnecting↔connecting flip would defeat the backoff.
+      clientRef.current?.notifyForeground()
+    }, [])
+  )
+
+  useFocusEffect(
+    useCallback(() => {
       // The embedded sidebar drives its own polling below; focus never fires
       // for it since it isn't a routed screen.
       if (embedded || connState !== 'connected') {
