@@ -1208,9 +1208,12 @@ export function handleActivityFilterFocusShortcut({
 
 export function shouldAutoAcknowledgeSelectedThread(args: {
   manuallyUnreadPaneKey: string | null
+  selectedAtPaneKey: string | null
+  selectedAtThreadTimestamp: number | null
   selectedPaneKey: string | null
   selectedThreadHasDetailOnlyView: boolean
   selectedThreadIsVisibleTerminal: boolean
+  selectedThreadLatestTimestamp: number
   selectedThreadPaneKey: string | null
   selectedThreadUnread: boolean
   stagedThread: boolean
@@ -1221,6 +1224,13 @@ export function shouldAutoAcknowledgeSelectedThread(args: {
     args.stagedThread ||
     args.selectedThreadPaneKey !== args.selectedPaneKey ||
     args.manuallyUnreadPaneKey === args.selectedThreadPaneKey
+  ) {
+    return false
+  }
+  if (
+    args.selectedAtPaneKey === args.selectedThreadPaneKey &&
+    args.selectedAtThreadTimestamp !== null &&
+    args.selectedThreadLatestTimestamp > args.selectedAtThreadTimestamp
   ) {
     return false
   }
@@ -1489,6 +1499,11 @@ export default function ActivityPrototypePage(): React.JSX.Element {
   // observed by the auto-ack effect below. Remember that explicit user intent
   // so the effect does not immediately flip the thread back to read.
   const manuallyUnreadSelectedPaneKeyRef = useRef<string | null>(null)
+  // Why: a completion that arrives while its terminal is already visible is a
+  // new inbox event, not another view of the selection the user already read.
+  // Keep the thread version observed at selection time so only an explicit
+  // reopen acknowledges a newer done/blocked/waiting transition.
+  const selectedThreadVersionRef = useRef<{ paneKey: string; timestamp: number } | null>(null)
   const [displayedPaneKey, setDisplayedPaneKey] = useState<string | null>(null)
   const [activePortalSlotId, setActivePortalSlotId] =
     useState<ActivityTerminalPortalSlotId>('primary')
@@ -1788,6 +1803,10 @@ export default function ActivityPrototypePage(): React.JSX.Element {
     if (manuallyUnreadSelectedPaneKeyRef.current === thread.paneKey) {
       manuallyUnreadSelectedPaneKeyRef.current = null
     }
+    selectedThreadVersionRef.current = {
+      paneKey: thread.paneKey,
+      timestamp: thread.latestTimestamp
+    }
     storeData.acknowledgeAgents([thread.paneKey])
   }
 
@@ -1828,16 +1847,18 @@ export default function ActivityPrototypePage(): React.JSX.Element {
   }
 
   const selectThread = (thread: AgentPaneThread): void => {
-    const reselectsManuallyUnreadThread =
-      manuallyUnreadSelectedPaneKeyRef.current === thread.paneKey &&
-      effectiveSelectedPaneKey === thread.paneKey
+    const reselectsUnreadThread = effectiveSelectedPaneKey === thread.paneKey && thread.unread
     manuallyUnreadSelectedPaneKeyRef.current = null
+    selectedThreadVersionRef.current = {
+      paneKey: thread.paneKey,
+      timestamp: thread.latestTimestamp
+    }
     setSelectedPaneKey(thread.paneKey)
     activateThreadTerminal(thread)
     // Why: the normal auto-ack effect only reruns after a selection/portal
-    // change. A click on the already-selected manually-unread row has neither,
-    // so acknowledge it directly as the user's explicit reopen action.
-    if (reselectsManuallyUnreadThread) {
+    // change. A click on an already-selected thread has neither, so acknowledge
+    // a newly completed or manually-unread turn directly as an explicit reopen.
+    if (reselectsUnreadThread) {
       storeData.acknowledgeAgents([thread.paneKey])
     }
   }
@@ -1853,14 +1874,21 @@ export default function ActivityPrototypePage(): React.JSX.Element {
     if (
       shouldAutoAcknowledgeSelectedThread({
         manuallyUnreadPaneKey: manuallyUnreadSelectedPaneKeyRef.current,
+        selectedAtPaneKey: selectedThreadVersionRef.current?.paneKey ?? null,
+        selectedAtThreadTimestamp: selectedThreadVersionRef.current?.timestamp ?? null,
         selectedPaneKey: effectiveSelectedPaneKey,
         selectedThreadHasDetailOnlyView,
         selectedThreadIsVisibleTerminal,
+        selectedThreadLatestTimestamp: selectedThread.latestTimestamp,
         selectedThreadPaneKey: selectedThread.paneKey,
         selectedThreadUnread: selectedThread.unread,
         stagedThread: stagedThread !== null
       })
     ) {
+      selectedThreadVersionRef.current = {
+        paneKey: selectedThread.paneKey,
+        timestamp: selectedThread.latestTimestamp
+      }
       storeData.acknowledgeAgents([selectedThread.paneKey])
     }
   }, [

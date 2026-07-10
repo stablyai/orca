@@ -43,9 +43,12 @@ const PANE_KEY_A2 = makePaneKey('tab-a2', LEAF_ID_A2)
 describe('shouldAutoAcknowledgeSelectedThread', () => {
   const visibleSelectedThread = {
     manuallyUnreadPaneKey: null,
+    selectedAtPaneKey: PANE_KEY,
+    selectedAtThreadTimestamp: 2_000,
     selectedPaneKey: PANE_KEY,
     selectedThreadHasDetailOnlyView: false,
     selectedThreadIsVisibleTerminal: true,
+    selectedThreadLatestTimestamp: 2_000,
     selectedThreadPaneKey: PANE_KEY,
     selectedThreadUnread: true,
     stagedThread: false
@@ -68,6 +71,26 @@ describe('shouldAutoAcknowledgeSelectedThread', () => {
         selectedThreadIsVisibleTerminal: false
       })
     ).toBe(false)
+  })
+
+  it('keeps a new completion unread when it arrives in the already-selected thread', () => {
+    expect(
+      shouldAutoAcknowledgeSelectedThread({
+        ...visibleSelectedThread,
+        selectedAtThreadTimestamp: 1_000,
+        selectedThreadLatestTimestamp: 2_000
+      })
+    ).toBe(false)
+  })
+
+  it('acknowledges the latest completion after the thread is explicitly reopened', () => {
+    expect(
+      shouldAutoAcknowledgeSelectedThread({
+        ...visibleSelectedThread,
+        selectedAtThreadTimestamp: 2_000,
+        selectedThreadLatestTimestamp: 2_000
+      })
+    ).toBe(true)
   })
 })
 
