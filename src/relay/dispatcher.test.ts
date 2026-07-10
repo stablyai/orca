@@ -434,6 +434,35 @@ describe('RelayDispatcher', () => {
     }
   })
 
+  it('aborts in-flight primary requests when a client write throws', () => {
+    let throwOnWrite = false
+    const detachDispatcher = new RelayDispatcher(() => {
+      if (throwOnWrite) {
+        throw new Error('socket closed')
+      }
+    })
+    let requestSignal: AbortSignal | undefined
+    try {
+      detachDispatcher.onRequest('slow.method', async (_params, context) => {
+        requestSignal = context.signal
+        await new Promise<void>((resolve) => {
+          context.signal?.addEventListener('abort', () => resolve(), { once: true })
+        })
+      })
+      detachDispatcher.feed(
+        encodeJsonRpcFrame({ jsonrpc: '2.0', id: 9, method: 'slow.method' }, 1, 0)
+      )
+
+      expect(requestSignal?.aborted).toBe(false)
+      throwOnWrite = true
+      detachDispatcher.notify('pty.exit', { id: 'pty-1', code: 0 })
+
+      expect(requestSignal?.aborted).toBe(true)
+    } finally {
+      detachDispatcher.dispose()
+    }
+  })
+
   describe('notifyBulk (bulk lane backpressure)', () => {
     it('resolves immediately when the sink accepts the frame', async () => {
       const frames: Buffer[] = []

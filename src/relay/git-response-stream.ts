@@ -182,14 +182,19 @@ export class GitResponseStreamRegistry {
       }
     } catch (err) {
       if (!context.isStale() && !entry.aborted) {
-        await dispatcher.notifyBulk(
-          'git.responseError',
-          {
-            streamId,
-            message: err instanceof Error ? err.message : String(err)
-          },
-          { clientId }
-        )
+        try {
+          await dispatcher.notifyBulk(
+            'git.responseError',
+            {
+              streamId,
+              message: err instanceof Error ? err.message : String(err)
+            },
+            { clientId }
+          )
+        } catch {
+          // Why: the original failure may be the owning channel closing; a
+          // second send failure must not escape this detached pump.
+        }
       }
     } finally {
       this.streams.delete(streamId)

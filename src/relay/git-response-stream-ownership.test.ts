@@ -46,4 +46,23 @@ describe('GitResponseStreamRegistry client ownership', () => {
     await flushPump()
     expect(notifyBulk.mock.calls.length).toBeGreaterThan(STREAM_ACK_WINDOW_CHUNKS)
   })
+
+  it('contains a secondary failure while reporting a stream error', async () => {
+    const notifyBulk = vi.fn().mockRejectedValue(new Error('socket closed'))
+    const dispatcher = { notifyBulk, notify: vi.fn() } as unknown as RelayDispatcher
+    const registry = new GitResponseStreamRegistry()
+    registries.push(registry)
+
+    registry.startStream(Buffer.from('payload'), dispatcher, {
+      clientId: 7,
+      isStale: () => false
+    })
+
+    await flushPump()
+    await flushPump()
+
+    expect(notifyBulk).toHaveBeenCalledTimes(2)
+    expect(notifyBulk.mock.calls[0]?.[0]).toBe('git.responseChunk')
+    expect(notifyBulk.mock.calls[1]?.[0]).toBe('git.responseError')
+  })
 })

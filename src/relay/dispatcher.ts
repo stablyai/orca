@@ -536,6 +536,7 @@ export class RelayDispatcher {
     } catch (err) {
       client.closed = true
       client.generation++
+      this.requestAborts.abortClient(client.id)
       this.flushDrainWaiters(client)
       // Why: a write throw means this frame (possibly pty.data or pty.exit) was
       // lost with no resend — the framing carries seq/ack but no retransmit
