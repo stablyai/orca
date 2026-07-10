@@ -11,7 +11,8 @@ const AGENT_NAME_GROUPS = [
   'opencode',
   'mimo',
   'gemini',
-  'droid'
+  'droid',
+  'grok'
 ] as const
 
 export type GroupAddress =

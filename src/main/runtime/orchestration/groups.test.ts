@@ -30,6 +30,7 @@ describe('isGroupAddress', () => {
     expect(isGroupAddress('@idle')).toBe(true)
     expect(isGroupAddress('@claude')).toBe(true)
     expect(isGroupAddress('@droid')).toBe(true)
+    expect(isGroupAddress('@grok')).toBe(true)
     expect(isGroupAddress('@worktree:wt_1')).toBe(true)
   })
 
@@ -168,6 +169,22 @@ describe('resolveGroupAddress', () => {
       const terminals = [makeSummary('term_a'), makeSummary('term_b', { title: 'Claude Code' })]
       const result = resolveGroupAddress('@Claude', 'term_a', terminals, noStatus)
       expect(result).toEqual(['term_b'])
+    })
+
+    it('matches @grok as a standalone title token and excludes sender', () => {
+      const terminals = [
+        makeSummary('term_a', { title: 'Grok' }),
+        makeSummary('term_b', { title: 'GROK CLI' }),
+        makeSummary('term_c', { title: '⠋ Grok' }),
+        makeSummary('term_d', { title: 'ngrok' }),
+        makeSummary('term_e', { title: '/tmp/grok' }),
+        makeSummary('term_f', { title: 'my-grok-worker' }),
+        makeSummary('term_g', { title: 'Codex CLI' })
+      ]
+
+      const result = resolveGroupAddress('@GrOk', 'term_a', terminals, noStatus)
+
+      expect(result).toEqual(['term_b', 'term_c'])
     })
   })
 

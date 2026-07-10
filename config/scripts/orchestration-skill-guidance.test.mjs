@@ -188,4 +188,11 @@ describe('orchestration skill guidance', () => {
     expect(skill).not.toContain('post-completion polling messages')
     expect(skill).not.toContain('every 2 minutes')
   })
+
+  it('documents @grok in the Messaging group address list', () => {
+    const skill = readSkill()
+    const messaging = getSection(skill, 'Messaging')
+
+    expect(messaging).toContain('`@grok`')
+  })
 })
