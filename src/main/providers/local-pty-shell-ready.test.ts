@@ -883,7 +883,9 @@ path=(/custom/bin $path)
           expect(result.status, `zsh ${args.join(' ')} failed: ${result.stderr}`).toBe(0)
           expect(result.stdout).toContain('USER_ZSHRC_LOADED=yes')
           expect(result.stdout).toContain(`FINAL_ZDOTDIR=${testHome}`)
-          expect(result.stdout).toContain(args.includes('-l') ? 'IS_LOGIN=yes' : 'IS_LOGIN=no')
+          // Why: `as const` makes .includes('-l') reject the union of tuple
+          // element types; check the login flag by position instead.
+          expect(result.stdout).toContain(args[0] === '-l' ? 'IS_LOGIN=yes' : 'IS_LOGIN=no')
         }
       } finally {
         rmSync(movedUserData, { recursive: true, force: true })
