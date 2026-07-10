@@ -43,8 +43,15 @@ export function resolveMobileDeviceDisplayName(): string {
 }
 
 export function sanitizeDeviceDisplayName(raw: string): string | null {
+  // Why: device metadata is untrusted display text; remove terminal/control
+  // bytes without a control-character regex that cross-platform lint rejects.
   const cleaned = raw
-    .replace(/[\u0000-\u001f\u007f]/g, '')
+    .split('')
+    .filter((character) => {
+      const code = character.charCodeAt(0)
+      return code > 0x1f && code !== 0x7f
+    })
+    .join('')
     .replace(/\s+/g, ' ')
     .trim()
     .slice(0, MAX_DEVICE_NAME_LENGTH)
