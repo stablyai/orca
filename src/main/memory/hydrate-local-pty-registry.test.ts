@@ -47,8 +47,9 @@ vi.mock('../repo-worktrees', () => ({
 // test schema-compliant without coupling to anything the hydrator doesn't
 // touch.
 function makeStore(
-  repos: { id: string; connectionId?: string | null }[] = []
-): Pick<Store, 'getRepos'> {
+  repos: { id: string; connectionId?: string | null }[] = [],
+  worktreeMeta: Record<string, { priorWorktreeIds?: string[] }> = {}
+): Pick<Store, 'getRepos' | 'getAllWorktreeMeta'> {
   const built: Repo[] = repos.map((r) => ({
     id: r.id,
     path: `/tmp/${r.id}`,
@@ -57,7 +58,10 @@ function makeStore(
     addedAt: 0,
     connectionId: r.connectionId ?? null
   }))
-  return { getRepos: () => built }
+  return {
+    getRepos: () => built,
+    getAllWorktreeMeta: () => worktreeMeta as unknown as ReturnType<Store['getAllWorktreeMeta']>
+  }
 }
 
 function makeProvider(sessions: SessionInfo[]): Pick<DaemonPtyAdapter, 'listSessions'> {
@@ -221,6 +225,62 @@ describe('hydrateLocalPtyRegistryAtBoot', () => {
     expect(entry).toBeDefined()
     expect(entry!.pid).toBe(4242)
     expect(entry!.worktreeId).toBe('repo-a::/local/Triton')
+  })
+
+  it('registers a renamed worktree session (minted under a prior id) under its current worktree id', async () => {
+    const { hydrate, listRegisteredPtys } = await loadFresh()
+
+    // The session id is path-stamped with the PRE-rename path; live git now only
+    // reports the current (renamed) path. Without prior-id resolution this session
+    // would be dropped (lost pid sample); with it, it attributes to the current id.
+    const priorPtyId = 'repo-a::/local/old-creature@@cafebabe'
+    const provider = makeProvider([
+      { sessionId: priorPtyId, pid: 4242, cwd: '/local/old-creature' } as unknown as SessionInfo
+    ])
+    getDaemonProviderMock.mockReturnValue(provider)
+    listRepoWorktreesMock.mockResolvedValue([
+      { path: '/local/work-derived', head: '', branch: '', isBare: false, isMainWorktree: true }
+    ])
+
+    await hydrate(
+      makeStore([{ id: 'repo-a', connectionId: null }], {
+        'repo-a::/local/work-derived': {
+          priorWorktreeIds: ['repo-a::/local/old-creature']
+        }
+      })
+    )
+
+    const entry = listRegisteredPtys().find((p) => p.ptyId === priorPtyId)
+    expect(entry).toBeDefined()
+    expect(entry!.pid).toBe(4242)
+    expect(entry!.worktreeId).toBe('repo-a::/local/work-derived')
+  })
+
+  it('trusts the parsed id over a stale alias when its path was recycled by a current worktree', async () => {
+    const { hydrate, listRegisteredPtys } = await loadFresh()
+
+    // Path /local/a was renamed to /local/b (so b lists a as a prior alias), then a
+    // NEW worktree was created reusing /local/a. A live session at the current
+    // /local/a must register under /local/a — not be redirected to the b alias.
+    const sessionAtRecycledPath = 'repo-a::/local/a@@cafebabe'
+    const provider = makeProvider([
+      { sessionId: sessionAtRecycledPath, pid: 7, cwd: '/local/a' } as unknown as SessionInfo
+    ])
+    getDaemonProviderMock.mockReturnValue(provider)
+    listRepoWorktreesMock.mockResolvedValue([
+      { path: '/local/a', head: '', branch: '', isBare: false, isMainWorktree: true },
+      { path: '/local/b', head: '', branch: '', isBare: false, isMainWorktree: false }
+    ])
+
+    await hydrate(
+      makeStore([{ id: 'repo-a', connectionId: null }], {
+        'repo-a::/local/b': { priorWorktreeIds: ['repo-a::/local/a'] }
+      })
+    )
+
+    const entry = listRegisteredPtys().find((p) => p.ptyId === sessionAtRecycledPath)
+    expect(entry).toBeDefined()
+    expect(entry!.worktreeId).toBe('repo-a::/local/a')
   })
 
   it('hydrates large daemon session lists', async () => {
