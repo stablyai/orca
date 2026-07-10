@@ -1,9 +1,12 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const netFetchMock = vi.hoisted(() => vi.fn())
+const cookiesSetMock = vi.hoisted(() => vi.fn())
+const clearStorageDataMock = vi.hoisted(() => vi.fn())
+const fromPartitionMock = vi.hoisted(() => vi.fn())
 
 vi.mock('electron', () => ({
-  net: { fetch: netFetchMock }
+  session: { fromPartition: fromPartitionMock }
 }))
 
 import { fetchOpenCodeGoRateLimits, normalizeCookieInput } from './opencode-go-usage-fetcher'
@@ -42,6 +45,13 @@ describe('fetchOpenCodeGoRateLimits', () => {
     vi.useFakeTimers()
     vi.setSystemTime(new Date('2026-04-24T12:00:00.000Z'))
     netFetchMock.mockReset()
+    cookiesSetMock.mockReset().mockResolvedValue(undefined)
+    clearStorageDataMock.mockReset().mockResolvedValue(undefined)
+    fromPartitionMock.mockReset().mockReturnValue({
+      fetch: netFetchMock,
+      cookies: { set: cookiesSetMock },
+      clearStorageData: clearStorageDataMock
+    })
   })
 
   it('returns unavailable when cookie is empty', async () => {
@@ -112,8 +122,9 @@ describe('fetchOpenCodeGoRateLimits', () => {
     const result = await fetchOpenCodeGoRateLimits('Fe26.2**baretoken')
 
     expect(result.status).toBe('ok')
-    // Cookie sent to the server must be auth=<token>, not the bare value.
-    expect(netFetchMock.mock.calls[0][1].headers.Cookie).toBe('auth=Fe26.2**baretoken')
+    expect(cookiesSetMock).toHaveBeenCalledWith(
+      expect.objectContaining({ name: 'auth', value: 'Fe26.2**baretoken' })
+    )
   })
 
   it('uses GET /_server?id=<hash> with correct headers for workspaces', async () => {
@@ -129,11 +140,37 @@ describe('fetchOpenCodeGoRateLimits', () => {
       expect.objectContaining({
         method: 'GET',
         headers: expect.objectContaining({
-          Cookie: 'auth=mytoken',
           'X-Server-Id': WORKSPACES_SERVER_ID
         })
       })
     )
+    expect(netFetchMock.mock.calls[0][1].headers).not.toHaveProperty('Cookie')
+  })
+
+  it('uses an isolated session cookie jar and clears it after fetching', async () => {
+    netFetchMock
+      .mockResolvedValueOnce(makeResponse(WORKSPACES_RESPONSE))
+      .mockResolvedValueOnce(makeResponse(USAGE_PAGE_WITH_MONTHLY))
+
+    await fetchOpenCodeGoRateLimits('auth=mytoken')
+
+    expect(fromPartitionMock).toHaveBeenCalledWith('orca-opencode-go-rate-limit-fetch')
+    expect(clearStorageDataMock).toHaveBeenCalledTimes(2)
+    expect(clearStorageDataMock).toHaveBeenLastCalledWith({
+      origin: 'https://opencode.ai',
+      storages: ['cookies']
+    })
+  })
+
+  it('clears partially installed cookies when cookie setup fails', async () => {
+    cookiesSetMock.mockRejectedValueOnce(new Error('cookie rejected'))
+
+    const result = await fetchOpenCodeGoRateLimits('auth=mytoken')
+
+    expect(result.status).toBe('error')
+    expect(result.error).toBe('cookie rejected')
+    expect(clearStorageDataMock).toHaveBeenCalledTimes(2)
+    expect(netFetchMock).not.toHaveBeenCalled()
   })
 
   it('fetches usage from /workspace/<id>/go after resolving workspace ID', async () => {
@@ -284,8 +321,10 @@ describe('fetchOpenCodeGoRateLimits', () => {
 
     await fetchOpenCodeGoRateLimits('session=secret; auth=realtoken; tracking=xyz')
 
-    const firstCall = netFetchMock.mock.calls[0]
-    expect(firstCall[1].headers.Cookie).toBe('auth=realtoken')
+    expect(cookiesSetMock).toHaveBeenCalledTimes(1)
+    expect(cookiesSetMock).toHaveBeenCalledWith(
+      expect.objectContaining({ name: 'auth', value: 'realtoken' })
+    )
   })
 
   it('returns error on 404 from workspaces fetch', async () => {

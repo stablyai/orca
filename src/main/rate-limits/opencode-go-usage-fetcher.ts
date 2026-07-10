@@ -1,4 +1,4 @@
-import { net } from 'electron'
+import { session, type Session } from 'electron'
 import { randomUUID } from 'node:crypto'
 import type { ProviderRateLimits, RateLimitWindow } from '../../shared/rate-limit-types'
 import { parseSubscriptionFromPageText } from './opencode-go-page-scraper'
@@ -6,6 +6,7 @@ import { parseSubscriptionFromPageText } from './opencode-go-page-scraper'
 const OPENCODE_BASE_URL = 'https://opencode.ai'
 const OPENCODE_SERVER_URL = 'https://opencode.ai/_server'
 const API_TIMEOUT_MS = 15_000
+const OPENCODE_SESSION_PARTITION = 'orca-opencode-go-rate-limit-fetch'
 
 // Server-function hash for the workspaces endpoint — stable identifier used by
 // the opencode.ai SST/TanStack router server-fn protocol.
@@ -36,18 +37,48 @@ export function normalizeCookieInput(raw: string): string {
   return trimmed
 }
 
-function filterAuthCookie(raw: string): string {
+function parseAuthCookies(raw: string): { name: string; value: string }[] {
   return raw
     .split(';')
     .map((p) => p.trim())
-    .filter((pair) => {
+    .map((pair) => {
       const eq = pair.indexOf('=')
       if (eq < 0) {
-        return false
+        return null
       }
-      return AUTH_COOKIE_NAMES.has(pair.slice(0, eq).trim())
+      const name = pair.slice(0, eq).trim()
+      const value = pair.slice(eq + 1).trim()
+      return AUTH_COOKIE_NAMES.has(name) && value ? { name, value } : null
     })
-    .join('; ')
+    .filter((pair): pair is { name: string; value: string } => pair !== null)
+}
+
+async function clearOpenCodeCookies(openCodeSession: Session): Promise<void> {
+  await openCodeSession.clearStorageData({ origin: OPENCODE_BASE_URL, storages: ['cookies'] })
+}
+
+async function createOpenCodeRequestSession(
+  authCookies: { name: string; value: string }[]
+): Promise<Session> {
+  const openCodeSession = session.fromPartition(OPENCODE_SESSION_PARTITION)
+  await clearOpenCodeCookies(openCodeSession)
+  try {
+    await Promise.all(
+      authCookies.map(({ name, value }) =>
+        openCodeSession.cookies.set({
+          url: OPENCODE_BASE_URL,
+          name,
+          value,
+          secure: true,
+          path: '/'
+        })
+      )
+    )
+    return openCodeSession
+  } catch (error) {
+    await clearOpenCodeCookies(openCodeSession).catch(() => undefined)
+    throw error
+  }
 }
 
 function parseWorkspaceIds(text: string): string[] {
@@ -99,8 +130,8 @@ export async function fetchOpenCodeGoRateLimits(
   }
 
   // Filter to only auth cookies — avoids sending unrelated session data.
-  const cookieHeader = filterAuthCookie(normalizedCookie)
-  if (!cookieHeader) {
+  const authCookies = parseAuthCookies(normalizedCookie)
+  if (authCookies.length === 0) {
     return {
       provider: 'opencode-go',
       session: null,
@@ -112,6 +143,40 @@ export async function fetchOpenCodeGoRateLimits(
     }
   }
 
+  // Why: Chromium can reject a manually supplied Cookie header on Windows.
+  // An isolated session jar lets its network stack attach auth normally.
+  let openCodeSession: Session
+  try {
+    openCodeSession = await createOpenCodeRequestSession(authCookies)
+  } catch (error) {
+    return makeOpenCodeError(error)
+  }
+
+  try {
+    return await fetchOpenCodeGoRateLimitsWithSession(openCodeSession, workspaceIdOverride)
+  } finally {
+    await clearOpenCodeCookies(openCodeSession).catch((error: unknown) => {
+      console.warn('[opencode-go] failed to clear session cookie jar after fetch', error)
+    })
+  }
+}
+
+function makeOpenCodeError(error: unknown): ProviderRateLimits {
+  return {
+    provider: 'opencode-go',
+    session: null,
+    weekly: null,
+    monthly: null,
+    updatedAt: Date.now(),
+    error: error instanceof Error ? error.message : 'Unknown error',
+    status: 'error'
+  }
+}
+
+async function fetchOpenCodeGoRateLimitsWithSession(
+  openCodeSession: Session,
+  workspaceIdOverride?: string
+): Promise<ProviderRateLimits> {
   // Step 1: resolve workspace IDs to try.
   let ids: string[] = []
   const override = workspaceIdOverride?.trim()
@@ -135,10 +200,9 @@ export async function fetchOpenCodeGoRateLimits(
       // and X-Server-Id / X-Server-Instance headers for routing.
       const instanceId = `server-fn:${randomUUID()}`
       const workspacesUrl = `${OPENCODE_SERVER_URL}?id=${WORKSPACES_SERVER_ID}`
-      const workspacesRes = await net.fetch(workspacesUrl, {
+      const workspacesRes = await openCodeSession.fetch(workspacesUrl, {
         method: 'GET',
         headers: {
-          Cookie: cookieHeader,
           'X-Server-Id': WORKSPACES_SERVER_ID,
           'X-Server-Instance': instanceId,
           Accept: 'text/javascript, application/json;q=0.9, */*;q=0.8',
@@ -195,10 +259,9 @@ export async function fetchOpenCodeGoRateLimits(
   for (const candidateId of ids) {
     try {
       const usagePageUrl = `${OPENCODE_BASE_URL}/workspace/${candidateId}/go`
-      const pageRes = await net.fetch(usagePageUrl, {
+      const pageRes = await openCodeSession.fetch(usagePageUrl, {
         method: 'GET',
         headers: {
-          Cookie: cookieHeader,
           Accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
           Origin: OPENCODE_BASE_URL,
           Referer: OPENCODE_BASE_URL
