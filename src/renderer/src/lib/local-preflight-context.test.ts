@@ -190,6 +190,74 @@ describe('local preflight context', () => {
     expect(localPreflightContextKey(context)).toBe('repo-1:repair:wsl-distro-missing:Ubuntu')
   })
 
+  it('uses the global WSL runtime for the git/gh preflight without an active project', () => {
+    const state = {
+      ...makeState({ repoPath: undefined }),
+      activeRepoId: null,
+      activeWorktreeId: null,
+      settings: {
+        localWindowsRuntimeDefault: { kind: 'wsl', distro: 'Ubuntu' }
+      }
+    } as unknown as AppState
+
+    const context = getLocalPreflightContext(state, 'win32')
+
+    expect(context).toEqual({
+      wslDistro: 'Ubuntu',
+      projectRuntime: {
+        status: 'resolved',
+        runtime: {
+          kind: 'wsl',
+          hostPlatform: 'wsl',
+          projectId: 'local-project',
+          distro: 'Ubuntu',
+          reason: 'global-default',
+          cacheKey: 'local-project:wsl:Ubuntu'
+        }
+      }
+    })
+    expect(localPreflightContextKey(context)).toBe('local-project:wsl:Ubuntu')
+  })
+
+  it('keeps the git/gh preflight on the Windows host when that is the default runtime', () => {
+    const state = {
+      ...makeState({ repoPath: undefined }),
+      activeRepoId: null,
+      activeWorktreeId: null,
+      settings: {
+        localWindowsRuntimeDefault: { kind: 'windows-host' }
+      }
+    } as unknown as AppState
+
+    const context = getLocalPreflightContext(state, 'win32')
+
+    expect(context).toEqual({
+      projectRuntime: {
+        status: 'resolved',
+        runtime: {
+          kind: 'windows-host',
+          hostPlatform: 'win32',
+          projectId: 'local-project',
+          reason: 'global-default',
+          cacheKey: 'local-project:windows-host'
+        }
+      }
+    })
+    expect(localPreflightContextKey(context)).toBe('local-project:windows-host')
+  })
+
+  it('leaves the git/gh preflight on the host when no runtime default is set', () => {
+    const state = {
+      ...makeState({ repoPath: undefined }),
+      activeRepoId: null,
+      activeWorktreeId: null,
+      settings: {}
+    } as unknown as AppState
+
+    expect(getLocalPreflightContext(state, 'win32')).toBeUndefined()
+    expect(localPreflightContextKey(getLocalPreflightContext(state, 'win32'))).toBe('host')
+  })
+
   it('uses the migrated WSL runtime for local agent checks when WSL is the default shell', () => {
     const state = {
       ...makeState({ repoPath: 'C:\\Users\\alice\\repo' }),

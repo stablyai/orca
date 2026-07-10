@@ -10,11 +10,17 @@ import type { Repo, Worktree } from '../../../shared/types'
 import { getProviderRuntimeContextKey } from './provider-runtime-context'
 import { getRendererAppPlatform } from './renderer-app-platform'
 import {
+  getProjectRuntimePreflightContext,
+  getWslPreflightContext,
+  type LocalPreflightContext
+} from './local-preflight-context-cache'
+import {
   getCachedWindowsTerminalCapabilities,
   hasCachedWindowsTerminalCapabilities
 } from './windows-terminal-capabilities'
 
 export { localPreflightContextKey } from './local-preflight-context-key'
+export type { LocalPreflightContext } from './local-preflight-context-cache'
 
 type LocalProjectRuntimeState = Pick<
   AppState,
@@ -26,65 +32,8 @@ type LocalProjectRuntimeWslContext = {
   availableWslDistros?: readonly string[] | null
 }
 
-export type LocalPreflightContext =
-  | {
-      wslDistro?: string | null
-      wslDefault?: boolean
-      runtimeContextKey?: string
-      projectRuntime?: ProjectExecutionRuntimeResolution
-    }
-  | undefined
-
-const wslPreflightContextsByDistro = new Map<string, NonNullable<LocalPreflightContext>>()
-const projectRuntimePreflightContextsByKey = new Map<string, NonNullable<LocalPreflightContext>>()
-
 export function getWslDistroFromPath(path?: string | null): string | null {
   return path ? (parseWslUncPath(path)?.distro ?? null) : null
-}
-
-function getWslPreflightContext(wslDistro: string): NonNullable<LocalPreflightContext> {
-  const cached = wslPreflightContextsByDistro.get(wslDistro)
-  if (cached) {
-    return cached
-  }
-
-  // Why: React/Zustand selectors must return a cached snapshot. A fresh object
-  // here triggers a useSyncExternalStore loop when Settings observes WSL repos.
-  const context = Object.freeze({ wslDistro })
-  wslPreflightContextsByDistro.set(wslDistro, context)
-  return context
-}
-
-function getProjectRuntimeContextObjectCacheKey(
-  resolution: ProjectExecutionRuntimeResolution
-): string {
-  if (resolution.status === 'resolved') {
-    return `${resolution.runtime.cacheKey}:${resolution.runtime.reason}`
-  }
-  return `${resolution.repair.cacheKey}:${resolution.repair.source}`
-}
-
-function getProjectRuntimePreflightContext(
-  resolution: ProjectExecutionRuntimeResolution
-): NonNullable<LocalPreflightContext> {
-  const cacheKey = getProjectRuntimeContextObjectCacheKey(resolution)
-  const cached = projectRuntimePreflightContextsByKey.get(cacheKey)
-  if (cached) {
-    return cached
-  }
-
-  const wslDistro =
-    resolution.status === 'resolved' && resolution.runtime.kind === 'wsl'
-      ? resolution.runtime.distro
-      : undefined
-  // Why: selectors compare by reference; cache each resolved runtime context so
-  // adding projectRuntime does not reintroduce useSyncExternalStore churn.
-  const context = Object.freeze({
-    ...(wslDistro ? { wslDistro } : {}),
-    projectRuntime: resolution
-  })
-  projectRuntimePreflightContextsByKey.set(cacheKey, context)
-  return context
 }
 
 export function getLocalProjectExecutionRuntimeContext(
@@ -155,6 +104,33 @@ export function getLocalRepoProjectExecutionRuntimeContext(
   })
 }
 
+// Why: Settings, onboarding, and Landing run the git/gh preflight before any
+// project is active. Without this, a Windows user whose default runtime is WSL
+// would see gh/git checked on the Windows host, not inside their distro.
+function getGlobalDefaultRuntimePreflightContext(
+  state: AppState,
+  appPlatform: NodeJS.Platform,
+  wslContext: LocalProjectRuntimeWslContext
+): NonNullable<LocalPreflightContext> | undefined {
+  if (
+    appPlatform !== 'win32' ||
+    state.activeRepoId ||
+    state.activeWorktreeId ||
+    !state.settings?.localWindowsRuntimeDefault
+  ) {
+    return undefined
+  }
+  return getProjectRuntimePreflightContext(
+    resolveProjectExecutionRuntime({
+      appPlatform: 'win32',
+      projectId: getLocalPreflightProjectId(state),
+      projectRuntimePreference: { kind: 'inherit-global' },
+      globalWindowsRuntimeDefault: state.settings.localWindowsRuntimeDefault,
+      ...wslContext
+    })
+  )
+}
+
 export function getLocalPreflightContext(
   state: AppState,
   appPlatform: NodeJS.Platform = getRendererAppPlatform(),
@@ -171,6 +147,10 @@ export function getLocalPreflightContext(
   )
   if (projectRuntime) {
     return getProjectRuntimePreflightContext(projectRuntime)
+  }
+  const globalDefault = getGlobalDefaultRuntimePreflightContext(state, appPlatform, wslContext)
+  if (globalDefault) {
+    return globalDefault
   }
   const wslDistro = getLocalPreflightWslDistro(state)
   return wslDistro ? getWslPreflightContext(wslDistro) : undefined
@@ -191,23 +171,11 @@ export function getLocalAgentPreflightContext(
     return getProjectRuntimePreflightContext(projectRuntime)
   }
 
-  if (
-    appPlatform === 'win32' &&
-    !state.activeRepoId &&
-    !state.activeWorktreeId &&
-    state.settings?.localWindowsRuntimeDefault
-  ) {
-    // Why: Settings -> Agents is global and can mount before any project is
-    // active; still respect the Windows/WSL runtime default for PATH detection.
-    return getProjectRuntimePreflightContext(
-      resolveProjectExecutionRuntime({
-        appPlatform: 'win32',
-        projectId: getLocalPreflightProjectId(state),
-        projectRuntimePreference: { kind: 'inherit-global' },
-        globalWindowsRuntimeDefault: state.settings.localWindowsRuntimeDefault,
-        ...wslContext
-      })
-    )
+  // Why: Settings -> Agents is global and can mount before any project is
+  // active; still respect the Windows/WSL runtime default for PATH detection.
+  const globalDefault = getGlobalDefaultRuntimePreflightContext(state, appPlatform, wslContext)
+  if (globalDefault) {
+    return globalDefault
   }
 
   const explicitAgentRuntime = appPlatform === 'win32' ? state.settings?.localAgentRuntime : null
