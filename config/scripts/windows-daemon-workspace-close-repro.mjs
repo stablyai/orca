@@ -157,6 +157,31 @@ async function stopChild(child) {
   ])
 }
 
+function isProcessAlive(pid) {
+  try {
+    process.kill(pid, 0)
+    return true
+  } catch (error) {
+    if (error?.code === 'ESRCH') {
+      return false
+    }
+    throw error
+  }
+}
+
+async function waitForVictimExit(rpc, sessionId, pid) {
+  const deadline = Date.now() + requestTimeoutMs
+  while (Date.now() < deadline) {
+    const { sessions } = await rpc.request('listSessions')
+    const sessionAlive = sessions.some((session) => session.sessionId === sessionId)
+    if (!sessionAlive && !isProcessAlive(pid)) {
+      return sessions
+    }
+    await new Promise((resolveDelay) => setTimeout(resolveDelay, 25))
+  }
+  throw new Error(`Victim ${sessionId} or OS pid ${pid} was not reaped`)
+}
+
 async function main() {
   if (process.platform !== 'win32') {
     log('SKIP: Windows ConPTY is required')
@@ -200,13 +225,16 @@ async function main() {
 
     for (let index = 0; index < iterations; index += 1) {
       const victimId = `repro-victim-${index}@@${randomUUID().slice(0, 8)}`
-      await rpc.request('createOrAttach', {
+      const victim = await rpc.request('createOrAttach', {
         sessionId: victimId,
         cols: 80,
         rows: 24,
         cwd: projectDir,
         shellOverride: 'powershell.exe'
       })
+      if (!Number.isInteger(victim.pid) || victim.pid <= 0) {
+        throw new Error(`Victim ${victimId} did not return a valid OS pid`)
+      }
 
       // Why: sending both RPCs before awaiting either preserves the renderer
       // unmount/worktree-sweep overlap that produced issue #8048.
@@ -214,7 +242,7 @@ async function main() {
       const forced = rpc.request('kill', { sessionId: victimId, immediate: true })
       await Promise.all([graceful, forced])
 
-      const { sessions } = await rpc.request('listSessions')
+      const sessions = await waitForVictimExit(rpc, victimId, victim.pid)
       if (child.pid !== daemonPid || child.exitCode !== null) {
         throw new Error(`Daemon PID ${daemonPid} exited while closing victim ${index}`)
       }
@@ -224,7 +252,9 @@ async function main() {
     }
 
     await rpc.request('kill', { sessionId: witnessId, immediate: true })
-    log(`PASS: daemon ${daemonPid} and witness PTY survived ${iterations} workspace-close races`)
+    log(
+      `PASS: ${iterations} victim sessions/PIDs were reaped while daemon ${daemonPid} and the witness PTY survived`
+    )
   } catch (error) {
     const daemonLog = existsSync(daemonLogPath) ? readFileSync(daemonLogPath, 'utf8') : ''
     throw new Error(`${error.message}\nstderr:\n${stderr}\ndaemon.log:\n${daemonLog}`)

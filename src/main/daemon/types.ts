@@ -98,6 +98,8 @@ export type CreateOrAttachRequest = {
     terminalWindowsPowerShellImplementation?: 'auto' | 'powershell.exe' | 'pwsh.exe'
     shellReadySupported?: boolean
     shellReadyTimeoutMs?: number
+    /** Recovered ANSI applied before the new subprocess can emit startup output. */
+    historySeed?: string
   }
 }
 
@@ -266,8 +268,6 @@ export type TakePendingOutputResult = {
   snapshot: TerminalSnapshot | null
 }
 
-export type SeedHistoryRequest = Omit<WriteRequest, 'type'> & { type: 'seedHistory' }
-
 export type DaemonRequest =
   | CreateOrAttachRequest
   | CancelCreateOrAttachRequest
@@ -287,7 +287,6 @@ export type DaemonRequest =
   | GetSnapshotRequest
   | GetSizeRequest
   | TakePendingOutputRequest
-  | SeedHistoryRequest
 
 // ─── RPC Responses (Daemon → Client, on control socket) ────────────
 
@@ -310,6 +309,7 @@ export type CreateOrAttachResult = {
   snapshot: TerminalSnapshot | null
   pid: number | null
   shellState: ShellReadyState
+  historySeeded?: boolean
 }
 
 export type GetSnapshotResult = {

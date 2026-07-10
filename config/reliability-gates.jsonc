@@ -1004,7 +1004,7 @@
         "https://github.com/stablyai/orca/issues/8048"
       ],
       "invariant": "Windows local and daemon terminals must spawn with the intended shell, survive overlapping graceful/forced workspace teardown without affecting unrelated PTYs, retain recovered scrollback across the fresh daemon's first checkpoint, accept normal Enter/Backspace/Arrow input after agent or TUI exit, render cursor/CJK/wide-glyph redraws without stale cells, and converge to nonzero applied size.",
-      "oracle": "The issue #8048 slice asserts one node-pty ConPTY close for a graceful-then-force sequence, replays recovered history into the new daemon emulator before re-anchoring, and runs 25 built-daemon close races while checking a stable daemon PID and live witness PTY after each iteration. A broader Windows live gate still needs shell input, resize, cursor, and CJK/wide-glyph pixel evidence.",
+      "oracle": "The issue #8048 slice asserts one node-pty ConPTY close for a graceful-then-force sequence, atomically seeds recovered history before fresh shell output and re-anchoring, preserves recovery after seed failure plus adapter restart, and runs 25 built-daemon close races while checking victim session/PID reaping, a stable daemon PID, and a live witness PTY. A broader Windows live gate still needs shell input, resize, cursor, and CJK/wide-glyph pixel evidence.",
       "commands": [
         "pnpm vitest run src/main/daemon/pty-subprocess.test.ts src/main/daemon/daemon-pty-adapter.test.ts",
         "pnpm build:electron-vite && node config/scripts/windows-daemon-workspace-close-repro.mjs",
@@ -1025,13 +1025,14 @@
         {
           "file": "src/main/daemon/daemon-pty-adapter.test.ts",
           "assertions": [
-            "the first checkpoint of a cold-restored fresh daemon session contains both recovered scrollback and new shell output"
+            "the first checkpoint orders recovered scrollback before synchronously emitted fresh-shell startup output",
+            "a failed atomic history seed remains non-authoritative across adapter restart and cannot overwrite the recovery files"
           ]
         },
         {
           "file": "config/scripts/windows-daemon-workspace-close-repro.mjs",
           "assertions": [
-            "the built daemon PID and an unrelated witness PowerShell remain alive through 25 overlapping graceful/immediate victim shutdowns"
+            "all 25 victim sessions and OS PIDs are reaped while the built daemon PID and an unrelated witness PowerShell remain alive"
           ]
         }
       ],
@@ -1042,8 +1043,8 @@
           "platform": "windows",
           "command": "node config/scripts/windows-daemon-workspace-close-repro.mjs",
           "result": "passed",
-          "durationSeconds": 7.7,
-          "summary": "The built daemon and witness PTY survived 25 real ConPTY workspace-close races. Both focused unit regressions also produced intentional red failures before their fixes and passed afterward."
+          "durationSeconds": 7.6,
+          "summary": "All 25 victim sessions and OS PIDs were reaped while the built daemon and witness PTY survived the real ConPTY workspace-close races. The double-close, history ordering, and seed-failure restart regressions produced intentional red failures before their fixes and passed afterward."
         }
       ],
       "runtimeBudget": {

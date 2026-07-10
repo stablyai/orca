@@ -290,6 +290,7 @@ export class DaemonServer {
           terminalWindowsWslDistro: p.terminalWindowsWslDistro,
           terminalWindowsPowerShellImplementation: p.terminalWindowsPowerShellImplementation,
           shellReadySupported: p.shellReadySupported,
+          historySeed: p.historySeed,
           ...(p.shellReadyTimeoutMs !== undefined
             ? { shellReadyTimeoutMs: p.shellReadyTimeoutMs }
             : {}),
@@ -332,7 +333,8 @@ export class DaemonServer {
           isNew: result.isNew,
           snapshot: result.snapshot,
           pid: result.pid,
-          shellState: result.shellState
+          shellState: result.shellState,
+          ...(result.historySeeded !== undefined ? { historySeeded: result.historySeeded } : {})
         }
       }
 
@@ -397,11 +399,6 @@ export class DaemonServer {
 
       case 'getSnapshot':
         return { snapshot: this.host.getSnapshot(request.payload.sessionId) }
-
-      case 'seedHistory':
-        return {
-          seeded: this.host.seedHistory(request.payload.sessionId, request.payload.data)
-        }
 
       case 'getSize':
         return { size: this.host.getAppliedSize(request.payload.sessionId) }
