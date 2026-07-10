@@ -711,12 +711,15 @@ function ClaudeSwitcherMenu({
     }
   }, [])
 
+  const activeRuntimeEnvironmentId = settings?.activeRuntimeEnvironmentId?.trim() || null
+  // Why: keyed on the owner id, not the settings object identity, so routine
+  // settings mutations don't re-run the remote snapshot round trip.
   const loadAccounts = useCallback(async () => {
-    const snapshot = await fetchProviderAccountsSnapshot(settings)
+    const snapshot = await fetchProviderAccountsSnapshot({ activeRuntimeEnvironmentId })
     if (mountedRef.current) {
       setAccounts(snapshot.claude)
     }
-  }, [settings])
+  }, [activeRuntimeEnvironmentId])
 
   useEffect(() => {
     void loadAccounts().catch((error) => {
@@ -1270,12 +1273,15 @@ function CodexSwitcherMenu({
   })
   const accountState = resolveCodexStatusAccountState(settings, accounts)
 
+  const activeRuntimeEnvironmentId = settings?.activeRuntimeEnvironmentId?.trim() || null
+  // Why: keyed on the owner id, not the settings object identity, so routine
+  // settings mutations don't re-run the remote snapshot round trip.
   const loadAccounts = useCallback(async () => {
-    const snapshot = await fetchProviderAccountsSnapshot(settings)
+    const snapshot = await fetchProviderAccountsSnapshot({ activeRuntimeEnvironmentId })
     if (mountedRef.current) {
       setAccounts(snapshot.codex)
     }
-  }, [settings])
+  }, [activeRuntimeEnvironmentId])
 
   useEffect(() => {
     mountedRef.current = true
