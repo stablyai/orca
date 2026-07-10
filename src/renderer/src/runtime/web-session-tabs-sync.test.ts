@@ -24,8 +24,10 @@ import {
   _getWebSessionTabsTrackingCountsForTest,
   acceptReplayedWebSessionTabsSnapshot,
   applyFreshWebSessionTabsSnapshot,
+  applyRemovedRuntimeEnvironmentSessionTabs,
   applyWebSessionTabsSnapshot,
   applyWebSessionTabsSnapshots,
+  clearRemovedRuntimeEnvironmentSessionState,
   clearWebSessionTabsTrackingForEnvironment,
   resolveHostSessionTabIdForWebSessionTab,
   resetWebSessionTabsSnapshotFreshnessForTests,
@@ -37,9 +39,15 @@ import {
   type WebSessionTabsSyncState
 } from './web-session-tabs-sync'
 
+const appStoreControl = vi.hoisted(() => ({
+  getState: vi.fn(),
+  setState: vi.fn()
+}))
+
 vi.mock('../store', () => ({
   useAppStore: {
-    setState: vi.fn()
+    getState: appStoreControl.getState,
+    setState: appStoreControl.setState
   }
 }))
 
@@ -99,6 +107,8 @@ function makeSnapshot(
 
 describe('applyWebSessionTabsSnapshot', () => {
   beforeEach(() => {
+    appStoreControl.getState.mockReset()
+    appStoreControl.setState.mockReset()
     resetWebSessionTabsSnapshotFreshnessForTests()
     resetWebSessionFocusIntentForTests()
     resetWebSessionCloseIntentForTests()
@@ -666,6 +676,93 @@ describe('applyWebSessionTabsSnapshot', () => {
       freshness: 1,
       hostMappings: 1
     })
+  })
+
+  it('retires mirrored tabs and agent status when a runtime environment is removed', () => {
+    const hostPaneKey = makePaneKey('host-tab-1', LEAF_ID)
+    const mirroredPatch = applyFreshWebSessionTabsSnapshot(
+      makeState(),
+      makeSnapshot([
+        {
+          type: 'terminal',
+          id: HOST_SURFACE_ID,
+          title: 'codex done',
+          parentTabId: 'host-tab-1',
+          leafId: LEAF_ID,
+          isActive: true,
+          status: 'ready',
+          terminal: 'terminal-1',
+          agentStatus: {
+            state: 'done',
+            prompt: 'remote environment cleanup',
+            updatedAt: NOW,
+            stateStartedAt: NOW - 1_000,
+            agentType: 'codex',
+            paneKey: hostPaneKey,
+            terminalTitle: 'codex done',
+            stateHistory: []
+          }
+        }
+      ]),
+      ENV,
+      NOW
+    ) as Partial<WebSessionTabsSyncState>
+    const mirroredState = makeState(mirroredPatch)
+    const mirroredId = mirroredState.tabsByWorktree[WT]?.[0]?.id
+    const mirroredPaneKey = makePaneKey(mirroredId!, LEAF_ID)
+
+    const cleanupPatch = applyRemovedRuntimeEnvironmentSessionTabs(
+      mirroredState,
+      ENV,
+      NOW + 1
+    ) as Partial<WebSessionTabsSyncState>
+    const cleanedState = { ...mirroredState, ...cleanupPatch }
+
+    expect(mirroredId).toBeTruthy()
+    expect(cleanedState.tabsByWorktree[WT]).toBeUndefined()
+    expect(cleanedState.unifiedTabsByWorktree[WT]).toBeUndefined()
+    expect(cleanedState.agentStatusByPaneKey[mirroredPaneKey]).toBeUndefined()
+    expect(_getWebSessionTabsTrackingCountsForTest()).toEqual({
+      freshness: 0,
+      hostMappings: 0
+    })
+  })
+
+  it('drops retained agent rows before pruning a removed runtime environment', () => {
+    const mirroredPatch = applyFreshWebSessionTabsSnapshot(
+      makeState(),
+      makeSnapshot([
+        {
+          type: 'terminal',
+          id: HOST_SURFACE_ID,
+          title: 'codex done',
+          parentTabId: 'host-tab-1',
+          leafId: LEAF_ID,
+          isActive: true,
+          status: 'ready',
+          terminal: 'terminal-1'
+        }
+      ]),
+      ENV,
+      NOW
+    ) as Partial<WebSessionTabsSyncState>
+    const dropAgentStatusByTabPrefix = vi.fn()
+    const mirroredState = {
+      ...makeState(mirroredPatch),
+      dropAgentStatusByTabPrefix
+    }
+    const mirroredId = mirroredState.tabsByWorktree[WT]?.[0]?.id
+    appStoreControl.getState.mockReturnValue(mirroredState)
+    appStoreControl.setState.mockImplementation((updater) => {
+      if (typeof updater === 'function') {
+        updater(mirroredState)
+      }
+    })
+
+    clearRemovedRuntimeEnvironmentSessionState(ENV)
+
+    expect(dropAgentStatusByTabPrefix).toHaveBeenCalledWith(mirroredId)
+    expect(appStoreControl.setState).toHaveBeenCalledOnce()
   })
 
   it('replaces stale local agent quick-launch tabs once host mirrors arrive', () => {

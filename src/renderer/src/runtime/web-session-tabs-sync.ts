@@ -12,6 +12,7 @@ import {
 } from '../../../shared/agent-status-types'
 import type {
   RuntimeMobileSessionTabsResult,
+  RuntimeMobileSessionTabsRemovedResult,
   RuntimeMobileSessionBrowserTab,
   RuntimeMobileSessionFileTab,
   RuntimeMobileSessionMarkdownTab,
@@ -2440,6 +2441,95 @@ export function applyFreshWebSessionTabsSnapshots(
     : applyWebSessionTabsSnapshots(state, freshSnapshots, environmentId, now)
 }
 
+function collectRuntimeEnvironmentSessionMirrors(
+  state: WebSessionTabsSyncState,
+  environmentId: string
+): { terminalTabIds: Set<string>; worktreeIds: Set<string> } {
+  const terminalTabIds = new Set<string>()
+  const worktreeIds = new Set<string>()
+  const trackingPrefix = `${environmentId}:`
+
+  for (const key of latestSessionTabsSnapshotByWorktree.keys()) {
+    if (key.startsWith(trackingPrefix)) {
+      worktreeIds.add(key.slice(trackingPrefix.length))
+    }
+  }
+  for (const key of lastHostTerminalTabCountByWorktree.keys()) {
+    if (key.startsWith(trackingPrefix)) {
+      worktreeIds.add(key.slice(trackingPrefix.length))
+    }
+  }
+  for (const [worktreeId, tabs] of Object.entries(state.tabsByWorktree)) {
+    for (const tab of tabs) {
+      if (!isRuntimeTerminalTabForEnvironment(tab, environmentId)) {
+        continue
+      }
+      terminalTabIds.add(tab.id)
+      worktreeIds.add(worktreeId)
+    }
+  }
+  for (const [worktreeId, workspaces] of Object.entries(state.browserTabsByWorktree)) {
+    const ownsRemotePage = workspaces.some((workspace) =>
+      (state.browserPagesByWorkspace[workspace.id] ?? []).some(
+        (page) => state.remoteBrowserPageHandlesByPageId[page.id]?.environmentId === environmentId
+      )
+    )
+    if (ownsRemotePage) {
+      worktreeIds.add(worktreeId)
+    }
+  }
+  for (const file of state.openFiles) {
+    if (file.runtimeEnvironmentId === environmentId && file.mirroredFromRuntimeSession === true) {
+      worktreeIds.add(file.worktreeId)
+    }
+  }
+
+  return { terminalTabIds, worktreeIds }
+}
+
+export function applyRemovedRuntimeEnvironmentSessionTabs(
+  state: WebSessionTabsSyncState,
+  environmentId: string,
+  now = Date.now()
+): WebSessionTabsSyncState | Partial<WebSessionTabsSyncState> {
+  const { worktreeIds } = collectRuntimeEnvironmentSessionMirrors(state, environmentId)
+  let nextState = state
+  let mergedPatch: Partial<WebSessionTabsSyncState> = {}
+
+  for (const worktree of worktreeIds) {
+    const removedSnapshot: RuntimeMobileSessionTabsRemovedResult = {
+      worktree,
+      publicationEpoch: `removed-runtime-environment:${environmentId}`,
+      snapshotVersion: 0,
+      activeGroupId: null,
+      activeTabId: null,
+      activeTabType: null,
+      tabs: [],
+      removed: true
+    }
+    const patch = applyWebSessionTabsSnapshot(nextState, removedSnapshot, environmentId, now)
+    if (patch === nextState) {
+      continue
+    }
+    mergedPatch = { ...mergedPatch, ...patch }
+    nextState = { ...nextState, ...patch }
+  }
+
+  clearWebSessionTabsTrackingForEnvironment(environmentId)
+  return Object.keys(mergedPatch).length === 0 ? state : mergedPatch
+}
+
+export function clearRemovedRuntimeEnvironmentSessionState(environmentId: string): void {
+  const state = useAppStore.getState()
+  const { terminalTabIds } = collectRuntimeEnvironmentSessionMirrors(state, environmentId)
+  for (const tabId of terminalTabIds) {
+    state.dropAgentStatusByTabPrefix(tabId)
+  }
+  useAppStore.setState((current) =>
+    applyRemovedRuntimeEnvironmentSessionTabs(current, environmentId)
+  )
+}
+
 export function useWebSessionTabsSync(): void {
   const activeWorktreeId = useAppStore((state) => state.activeWorktreeId)
   const runtimeSessionMirrorEnvironmentKey = useAppStore((state) =>
@@ -2580,10 +2670,19 @@ export function useWebSessionTabsSync(): void {
       for (const unsubscribe of unsubscribes) {
         unsubscribe()
       }
-      // Why: environment ids can churn as paired runtimes reconnect or switch;
-      // stale freshness/mapping entries should not live for the renderer lifetime.
+      const desiredEnvironmentIds = new Set(
+        getRuntimeSessionMirrorEnvironmentIds(useAppStore.getState())
+      )
+      // Why: environment ids can churn as paired runtimes reconnect or switch.
+      // A surviving environment only needs tracking reset for its replay, while
+      // a removed environment must also retire mirrored tabs and retained Done
+      // rows so an orphaned remote thread does not live for the renderer session.
       for (const environmentId of environmentIds) {
-        clearWebSessionTabsTrackingForEnvironment(environmentId)
+        if (desiredEnvironmentIds.has(environmentId)) {
+          clearWebSessionTabsTrackingForEnvironment(environmentId)
+        } else {
+          clearRemovedRuntimeEnvironmentSessionState(environmentId)
+        }
       }
     }
   }, [runtimeSessionMirrorEnvironmentKey, workspaceSessionReady])
