@@ -16,6 +16,7 @@ import type { GlobalSettings } from '../../../shared/types'
 import { sendAgentDraftPasteContent } from './agent-draft-paste-content'
 import { agentDeliversDraftViaNativePrefill } from './agent-native-draft-prefill'
 import { waitForAgentDraftInputReady } from './agent-draft-readiness'
+import { waitForPastedDraftSubmitReady } from './agent-paste-submit-readiness'
 import { isExpectedAgentProcess } from '../../../shared/agent-process-recognition'
 export {
   AGENT_DRAFT_PASTE_CHUNK_MAX_BYTES,
@@ -33,6 +34,10 @@ export {
 export const BRACKETED_PASTE_BEGIN = BRACKETED_PASTE_START
 export { BRACKETED_PASTE_END }
 export const POST_PASTE_SUBMIT_DELAY_MS = 50
+// Why: `process-ready` pastes can land ~1.5s into a TUI boot that takes 15s+
+// (Hermes's node ui-tui). Enter must wait for interactivity or it is swallowed
+// mid-boot; the budget only caps the wait before a best-effort submit.
+export const DEFERRED_SUBMIT_BUDGET_MS = 120_000
 
 export function sanitizeBracketedPasteContent(content: string): string {
   return sanitizeTerminalPasteText(content)
@@ -135,7 +140,8 @@ export async function pasteDraftWhenAgentReady(args: {
     settings,
     ptyId,
     content,
-    submit: submit === true
+    submit: submit === true,
+    deferSubmitUntilInteractive: readySignal === 'process-ready'
   })
 }
 
@@ -182,7 +188,8 @@ export async function pasteDraftToAgentPtyWhenReady(args: {
     settings,
     ptyId,
     content,
-    submit: submit === true
+    submit: submit === true,
+    deferSubmitUntilInteractive: readySignal === 'process-ready'
   })
 }
 
@@ -229,8 +236,15 @@ async function sendBracketedPasteToAgent(args: {
   ptyId: string
   content: string
   submit: boolean
+  deferSubmitUntilInteractive?: boolean
 }): Promise<boolean> {
-  const { settings = useAppStore.getState().settings, ptyId, content, submit } = args
+  const {
+    settings = useAppStore.getState().settings,
+    ptyId,
+    content,
+    submit,
+    deferSubmitUntilInteractive
+  } = args
   try {
     const pasted = await sendAgentDraftPasteContent(settings, ptyId, content)
     if (!pasted) {
@@ -238,6 +252,18 @@ async function sendBracketedPasteToAgent(args: {
     }
     if (!submit) {
       return true
+    }
+
+    if (deferSubmitUntilInteractive) {
+      // Why: the PTY input queue is FIFO, so an Enter written after the TUI
+      // signals interactivity is processed after the buffered paste text. A
+      // timeout still submits best-effort — same exposure as the fixed delay.
+      await waitForPastedDraftSubmitReady({
+        ptyId,
+        content,
+        timeoutMs: DEFERRED_SUBMIT_BUDGET_MS,
+        settings
+      })
     }
 
     // Why: Claude Code can leave a prompt as editable text when paste-end and

@@ -173,6 +173,109 @@ describe('pasteDraftWhenAgentReady', () => {
     expect(testState.sendRuntimePtyInputVerified).toHaveBeenCalledTimes(1)
   })
 
+  it('defers the Hermes submit Enter until the TUI enables bracketed paste', async () => {
+    const promise = pasteDraftWhenAgentReady({
+      tabId: 'tab-1',
+      content: ISSUE_URL,
+      agent: 'hermes',
+      submit: true
+    })
+    await flushMicrotasks()
+
+    // First output arms the process-ready quiet window while the TUI boots.
+    testState.ptyObserver?.('\x1b[?1049h')
+    await flushMicrotasks()
+    await vi.advanceTimersByTimeAsync(1500)
+    await flushMicrotasks(5)
+
+    expect(testState.sendRuntimePtyInputVerified).toHaveBeenCalledWith(
+      {},
+      'pty-1',
+      PASTED_ISSUE_URL
+    )
+    // The Enter must NOT ride a fixed post-paste delay: the TUI is still booting.
+    await vi.advanceTimersByTimeAsync(5000)
+    await flushMicrotasks(5)
+    expect(testState.sendRuntimePtyInputVerified).toHaveBeenCalledTimes(1)
+
+    // The TUI finishing boot (DECSET 2004 enable) releases the deferred Enter.
+    testState.ptyObserver?.(DECSET_BRACKETED_PASTE)
+    await flushMicrotasks(5)
+    await vi.advanceTimersByTimeAsync(50)
+    await flushMicrotasks(5)
+
+    await expect(promise).resolves.toBe(true)
+    expect(testState.sendRuntimePtyInputVerified).toHaveBeenCalledTimes(2)
+    expect(testState.sendRuntimePtyInputVerified).toHaveBeenLastCalledWith({}, 'pty-1', '\r')
+  })
+
+  it('releases the deferred Hermes submit when the pasted content is echoed back', async () => {
+    const promise = pasteDraftWhenAgentReady({
+      tabId: 'tab-1',
+      content: ISSUE_URL,
+      agent: 'hermes',
+      submit: true
+    })
+    await flushMicrotasks()
+
+    testState.ptyObserver?.('\x1b[?1049h')
+    await flushMicrotasks()
+    await vi.advanceTimersByTimeAsync(1500)
+    await flushMicrotasks(5)
+    expect(testState.sendRuntimePtyInputVerified).toHaveBeenCalledTimes(1)
+
+    // The cooked-mode line discipline echoes the paste itself (markers and
+    // all) while the TUI is still booting — an Enter here would be swallowed,
+    // so this echo must NOT release the deferred submit.
+    testState.ptyObserver?.(`\x1b[200~${ISSUE_URL}\x1b[201~`)
+    await flushMicrotasks(5)
+    await vi.advanceTimersByTimeAsync(1000)
+    await flushMicrotasks(5)
+    expect(testState.sendRuntimePtyInputVerified).toHaveBeenCalledTimes(1)
+
+    // Legacy prompt_toolkit TUIs never enable bracketed paste; they echo the
+    // consumed text into the rendered input box — styled, marker-free, and
+    // split across chunks. THIS releases the submit.
+    testState.ptyObserver?.('\x1b[38;5;2mhttps://github.com/stab\x1b[0m')
+    await flushMicrotasks(5)
+    expect(testState.sendRuntimePtyInputVerified).toHaveBeenCalledTimes(1)
+    testState.ptyObserver?.('\x1b[38;5;2mlyai/orca/issues/123\x1b[0m')
+    await flushMicrotasks(5)
+    await vi.advanceTimersByTimeAsync(50)
+    await flushMicrotasks(5)
+
+    await expect(promise).resolves.toBe(true)
+    expect(testState.sendRuntimePtyInputVerified).toHaveBeenCalledTimes(2)
+    expect(testState.sendRuntimePtyInputVerified).toHaveBeenLastCalledWith({}, 'pty-1', '\r')
+  })
+
+  it('submits best-effort when the deferred-submit budget expires', async () => {
+    const promise = pasteDraftWhenAgentReady({
+      tabId: 'tab-1',
+      content: ISSUE_URL,
+      agent: 'hermes',
+      submit: true
+    })
+    await flushMicrotasks()
+
+    testState.ptyObserver?.('\x1b[?1049h')
+    await flushMicrotasks()
+    await vi.advanceTimersByTimeAsync(1500)
+    await flushMicrotasks(5)
+    expect(testState.sendRuntimePtyInputVerified).toHaveBeenCalledTimes(1)
+
+    // No TUI signal ever arrives: the budget expiry matches the pre-existing
+    // fixed-delay exposure instead of parking the prompt forever.
+    await vi.advanceTimersByTimeAsync(120_000)
+    await flushMicrotasks(5)
+    await vi.advanceTimersByTimeAsync(50)
+    await flushMicrotasks(5)
+
+    await expect(promise).resolves.toBe(true)
+    expect(testState.sendRuntimePtyInputVerified).toHaveBeenCalledTimes(2)
+    expect(testState.sendRuntimePtyInputVerified).toHaveBeenLastCalledWith({}, 'pty-1', '\r')
+  })
+
   it('keeps the render-quiet wait for agents without the Codex ready signal', async () => {
     const promise = pasteDraftWhenAgentReady({
       tabId: 'tab-1',
