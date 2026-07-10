@@ -2060,6 +2060,10 @@ export class OrcaRuntimeService {
     { activate: boolean; selectIfNoActiveTab: boolean }
   >()
   private mobileSessionTabListeners = new Set<(snapshot: RuntimeMobileSessionTabsResult) => void>()
+  // Why: hook events can update agent state without PTY output or renderer graph
+  // churn. Track the last hook projection published for each worktree so those
+  // events can advance session.tabs snapshots without republishing every workspace.
+  private hookAgentStatusProjectionByWorktree = new Map<string, string>()
   private leaves = new Map<string, RuntimeLeafRecord>()
   // Why: PTY output is a per-keystroke hot path. Looking up affected leaves by
   // ptyId keeps active TUI redraws independent of the total open terminal count.
@@ -5209,6 +5213,26 @@ export class OrcaRuntimeService {
     this.mobileSessionTabListeners.add(listener)
     return () => {
       this.mobileSessionTabListeners.delete(listener)
+    }
+  }
+
+  notifyAgentStatusSnapshotChanged(): void {
+    const hookStatusByPaneKey = this.getHookAgentStatusByPaneKey()
+    for (const [worktreeId, snapshot] of this.mobileSessionTabsByWorktree) {
+      const projection = this.getHookAgentStatusProjection(snapshot, hookStatusByPaneKey)
+      const previousProjection = this.hookAgentStatusProjectionByWorktree.get(worktreeId)
+      this.hookAgentStatusProjectionByWorktree.set(worktreeId, projection)
+      if (
+        projection === previousProjection ||
+        (previousProjection === undefined && projection === '[]')
+      ) {
+        continue
+      }
+      this.mobileSessionTabsByWorktree.set(worktreeId, {
+        ...snapshot,
+        snapshotVersion: snapshot.snapshotVersion + 1
+      })
+      this.notifyMobileSessionTabsChanged(worktreeId)
     }
   }
 
@@ -19199,6 +19223,11 @@ export class OrcaRuntimeService {
   ): RuntimeMobileSessionTabsResult {
     const tabs: RuntimeMobileSessionClientTab[] = []
     const liveBrowserTabsByPageId = this.getLiveBrowserTabsByPageId(snapshot.worktree)
+    const hookStatusByPaneKey = this.getHookAgentStatusByPaneKey()
+    this.hookAgentStatusProjectionByWorktree.set(
+      snapshot.worktree,
+      this.getHookAgentStatusProjection(snapshot, hookStatusByPaneKey)
+    )
     for (const tab of snapshot.tabs) {
       if (tab.type === 'browser') {
         const liveTab = tab.browserPageId
@@ -19273,34 +19302,74 @@ export class OrcaRuntimeService {
       const liveTitleEvidence = leafTitle ?? ptyTitle
       const liveTitleEvidenceClassification = classifyAgentTitle(liveTitleEvidence)
       const retainedAgentStatus = this.latestAgentStatusByPaneKey.get(paneKey)
-      const retainedAgentStatusToUse =
+      const retainedAgentStatusEntry =
         retainedAgentStatus &&
         (!tab.agentStatus || retainedAgentStatus.updatedAt >= tab.agentStatus.updatedAt)
-          ? retainedAgentStatus
+          ? {
+              ...retainedAgentStatus.payload,
+              prompt: retainedAgentStatus.payload.prompt || tab.agentStatus?.prompt || '',
+              updatedAt: retainedAgentStatus.updatedAt,
+              stateStartedAt: retainedAgentStatus.stateStartedAt,
+              paneKey,
+              stateHistory: tab.agentStatus?.stateHistory ?? [],
+              ...(terminalHandle ? { terminalHandle } : {}),
+              ...(retainedAgentStatus.worktreeId
+                ? { worktreeId: retainedAgentStatus.worktreeId }
+                : {}),
+              ...(retainedAgentStatus.tabId ? { tabId: retainedAgentStatus.tabId } : {}),
+              ...(tab.agentStatus?.orchestration
+                ? { orchestration: tab.agentStatus.orchestration }
+                : {}),
+              ...(tab.agentStatus?.providerSession
+                ? { providerSession: tab.agentStatus.providerSession }
+                : {})
+            }
           : null
-      // Why: a renderer/mobile tab snapshot can lag behind OSC 9999 hooks from
-      // the live PTY. Prefer the newer explicit payload so paired clients see
-      // working/tool transitions instead of retaining an old done row.
-      const freshestAgentStatus = retainedAgentStatusToUse
+      const hookStatus = hookStatusByPaneKey.get(paneKey)
+      const hookAgentStatusEntry = hookStatus
         ? {
-            ...retainedAgentStatusToUse.payload,
-            prompt: retainedAgentStatusToUse.payload.prompt || tab.agentStatus?.prompt || '',
-            updatedAt: retainedAgentStatusToUse.updatedAt,
-            stateStartedAt: retainedAgentStatusToUse.stateStartedAt,
+            state: hookStatus.state,
+            prompt: hookStatus.prompt || tab.agentStatus?.prompt || '',
+            updatedAt: hookStatus.receivedAt,
+            stateStartedAt: hookStatus.stateStartedAt,
             paneKey,
             stateHistory: tab.agentStatus?.stateHistory ?? [],
-            ...(terminalHandle ? { terminalHandle } : {}),
-            ...(retainedAgentStatusToUse.worktreeId
-              ? { worktreeId: retainedAgentStatusToUse.worktreeId }
+            ...(hookStatus.agentType ? { agentType: hookStatus.agentType } : {}),
+            ...(hookStatus.toolName ? { toolName: hookStatus.toolName } : {}),
+            ...(hookStatus.toolInput ? { toolInput: hookStatus.toolInput } : {}),
+            ...(hookStatus.interactivePrompt
+              ? { interactivePrompt: hookStatus.interactivePrompt }
               : {}),
-            ...(retainedAgentStatusToUse.tabId ? { tabId: retainedAgentStatusToUse.tabId } : {}),
-            ...(tab.agentStatus?.orchestration
-              ? { orchestration: tab.agentStatus.orchestration }
+            ...(hookStatus.lastAssistantMessage
+              ? { lastAssistantMessage: hookStatus.lastAssistantMessage }
               : {}),
-            ...(tab.agentStatus?.providerSession
-              ? { providerSession: tab.agentStatus.providerSession }
-              : {})
+            ...(hookStatus.interrupted !== undefined
+              ? { interrupted: hookStatus.interrupted }
+              : {}),
+            ...(terminalHandle
+              ? { terminalHandle }
+              : hookStatus.terminalHandle
+                ? { terminalHandle: hookStatus.terminalHandle }
+                : {}),
+            ...(hookStatus.worktreeId ? { worktreeId: hookStatus.worktreeId } : {}),
+            ...(hookStatus.tabId ? { tabId: hookStatus.tabId } : {}),
+            ...(hookStatus.orchestration ? { orchestration: hookStatus.orchestration } : {}),
+            ...(hookStatus.providerSession ? { providerSession: hookStatus.providerSession } : {})
           }
+        : null
+      const explicitAgentStatus = [retainedAgentStatusEntry, hookAgentStatusEntry]
+        .filter((entry): entry is AgentStatusEntry => entry !== null)
+        .sort((a, b) => b.updatedAt - a.updatedAt)[0]
+      const explicitAgentStatusToUse =
+        explicitAgentStatus &&
+        (!tab.agentStatus || explicitAgentStatus.updatedAt >= tab.agentStatus.updatedAt)
+          ? explicitAgentStatus
+          : null
+      // Why: a renderer/mobile tab snapshot can lag behind OSC 9999 hooks from
+      // the live PTY or main hook cache. Prefer the newer explicit payload so
+      // paired clients see working/tool transitions instead of an old done row.
+      const freshestAgentStatus = explicitAgentStatusToUse
+        ? explicitAgentStatusToUse
         : tab.agentStatus
       const normalizedTabAgentStatus = freshestAgentStatus
         ? normalizeCompatibleAgentStatusEntryForOwner(freshestAgentStatus, ownerAgent)
@@ -19311,12 +19380,16 @@ export class OrcaRuntimeService {
       // shows a task/branch name). Otherwise the mobile/web client falls back to
       // the OSC-title-only status and never sees interactivePrompt (the question
       // card never renders).
-      const hasFreshRetainedAgentSignal =
-        retainedAgentStatusToUse !== null &&
-        Date.now() - retainedAgentStatusToUse.updatedAt <= AGENT_STATUS_STALE_AFTER_MS &&
+      const hasFreshExplicitAgentSignal =
+        explicitAgentStatusToUse !== null &&
+        Date.now() - explicitAgentStatusToUse.updatedAt <= AGENT_STATUS_STALE_AFTER_MS &&
         normalizedTabAgentStatus?.state !== 'done'
+      const hasHookCompletionSignal =
+        explicitAgentStatusToUse === hookAgentStatusEntry &&
+        normalizedTabAgentStatus?.state === 'done'
       const hasLiveAgentSignal =
-        hasFreshRetainedAgentSignal ||
+        hasFreshExplicitAgentSignal ||
+        hasHookCompletionSignal ||
         normalizedTabAgentStatus?.interactivePrompt != null ||
         normalizedTabAgentStatus?.toolName != null
       const keepFullAgentStatus =
@@ -19405,6 +19478,28 @@ export class OrcaRuntimeService {
       ...(snapshot.tabGroupLayout !== undefined ? { tabGroupLayout } : {}),
       tabs: normalizedTabs
     }
+  }
+
+  private getHookAgentStatusByPaneKey(): Map<string, AgentStatusIpcPayload> {
+    return new Map(
+      (this.getAgentStatusSnapshotFn?.() ?? []).map((entry) => [entry.paneKey, entry] as const)
+    )
+  }
+
+  private getHookAgentStatusProjection(
+    snapshot: RuntimeMobileSessionTabsSnapshot,
+    hookStatusByPaneKey: ReadonlyMap<string, AgentStatusIpcPayload>
+  ): string {
+    const entries = snapshot.tabs
+      .filter((tab): tab is RuntimeMobileSessionTerminalTab => tab.type === 'terminal')
+      .map((tab) => {
+        const paneKey = this.getMobileTerminalPaneKey(tab)
+        const entry = hookStatusByPaneKey.get(paneKey)
+        return entry ? [paneKey, entry] : null
+      })
+      .filter((entry): entry is [string, AgentStatusIpcPayload] => entry !== null)
+      .sort(([a], [b]) => a.localeCompare(b))
+    return JSON.stringify(entries)
   }
 
   /**

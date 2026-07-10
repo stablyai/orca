@@ -20,7 +20,10 @@ import type {
   WorkspaceLineage,
   WorkspaceSessionState
 } from '../../shared/types'
-import { AGENT_STATUS_STALE_AFTER_MS } from '../../shared/agent-status-types'
+import {
+  AGENT_STATUS_STALE_AFTER_MS,
+  type AgentStatusIpcPayload
+} from '../../shared/agent-status-types'
 import { detectAgentStatusFromTitle, MAX_OSC_TITLE_CHARS } from '../../shared/agent-detection'
 import {
   addWorktree,
@@ -13421,6 +13424,131 @@ describe('OrcaRuntimeService', () => {
         })
       })
     ])
+  })
+
+  it('hydrates and streams hook-only agent status through remote session tabs', async () => {
+    const leafId = '11111111-1111-4111-8111-111111111111'
+    const paneKey = `tab-1:${leafId}`
+    const now = Date.now()
+    let hookStatuses: AgentStatusIpcPayload[] = [
+      {
+        paneKey,
+        tabId: 'tab-1',
+        worktreeId: TEST_WORKTREE_ID,
+        connectionId: null,
+        state: 'working',
+        prompt: 'check the remote inbox',
+        agentType: 'codex',
+        toolName: 'Bash',
+        toolInput: 'pnpm test',
+        receivedAt: now,
+        stateStartedAt: now - 1_000
+      }
+    ]
+    const runtime = new OrcaRuntimeService(store, undefined, {
+      getAgentStatusSnapshot: () => hookStatuses
+    })
+    runtime.attachWindow(1)
+    runtime.syncWindowGraph(1, {
+      tabs: [],
+      leaves: [],
+      mobileSessionTabs: [
+        {
+          worktree: TEST_WORKTREE_ID,
+          publicationEpoch: 'hook-only-epoch',
+          snapshotVersion: 1,
+          activeGroupId: 'group-1',
+          activeTabId: `tab-1::${leafId}`,
+          activeTabType: 'terminal',
+          tabs: [
+            {
+              type: 'terminal',
+              id: `tab-1::${leafId}`,
+              parentTabId: 'tab-1',
+              leafId,
+              title: 'Remote task',
+              launchAgent: 'codex',
+              isActive: true
+            }
+          ]
+        }
+      ]
+    })
+
+    const hydrated = await runtime.listMobileSessionTabs(`id:${TEST_WORKTREE_ID}`)
+    expect(hydrated.tabs[0]).toEqual(
+      expect.objectContaining({
+        type: 'terminal',
+        agentStatus: expect.objectContaining({
+          state: 'working',
+          prompt: 'check the remote inbox',
+          agentType: 'codex',
+          toolName: 'Bash',
+          toolInput: 'pnpm test',
+          paneKey
+        })
+      })
+    )
+
+    const events: RuntimeMobileSessionTabsResult[] = []
+    const unsubscribe = runtime.onMobileSessionTabsChanged((snapshot) => events.push(snapshot))
+    hookStatuses = [
+      {
+        ...hookStatuses[0]!,
+        state: 'waiting',
+        interactivePrompt: JSON.stringify({ questions: [{ question: 'Continue?' }] }),
+        receivedAt: now + 1,
+        stateStartedAt: now + 1
+      }
+    ]
+    runtime.notifyAgentStatusSnapshotChanged()
+
+    expect(events).toHaveLength(1)
+    expect(events[0]).toMatchObject({
+      publicationEpoch: 'hook-only-epoch',
+      snapshotVersion: 2,
+      tabs: [
+        {
+          agentStatus: expect.objectContaining({
+            state: 'waiting',
+            interactivePrompt: expect.stringContaining('Continue?')
+          })
+        }
+      ]
+    })
+
+    hookStatuses = [
+      {
+        ...hookStatuses[0]!,
+        state: 'done',
+        interactivePrompt: undefined,
+        lastAssistantMessage: 'Finished',
+        receivedAt: now + 2,
+        stateStartedAt: now + 2
+      }
+    ]
+    runtime.notifyAgentStatusSnapshotChanged()
+
+    expect(events).toHaveLength(2)
+    expect(events[1]).toMatchObject({
+      snapshotVersion: 3,
+      tabs: [
+        {
+          agentStatus: expect.objectContaining({
+            state: 'done',
+            lastAssistantMessage: 'Finished'
+          })
+        }
+      ]
+    })
+
+    hookStatuses = []
+    runtime.notifyAgentStatusSnapshotChanged()
+
+    expect(events).toHaveLength(3)
+    expect(events[2]).toMatchObject({ snapshotVersion: 4 })
+    expect(events[2]?.tabs[0]).not.toHaveProperty('agentStatus')
+    unsubscribe()
   })
 
   it('replaces a stale saved Hermes status with a newer explicit PTY hook', async () => {

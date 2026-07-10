@@ -1702,6 +1702,10 @@ app.whenReady().then(async () => {
   agentAwakeService.setStatuses([])
   unsubscribeAgentAwakeStatusChanges = agentHookServer.subscribeStatusChanges((statuses) => {
     agentAwakeService?.setStatuses(statuses)
+    // Why: hook-only transitions do not necessarily emit PTY output or a
+    // renderer graph update. Advance paired session-tab snapshots immediately
+    // so remote Agents views receive working/waiting/done state live.
+    runtime?.notifyAgentStatusSnapshotChanged()
   })
   // Why: telemetry must initialize before any IPC handler / renderer can
   // call `track()`. The client is a no-op in dev/contributor builds
