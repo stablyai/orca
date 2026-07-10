@@ -37,7 +37,11 @@ async function getLiveCodexSessionPtyIds(state: AppState): Promise<string[]> {
       const foregroundProcesses = await Promise.all(
         ptyIds.map((ptyId) =>
           inspectRuntimeTerminalProcess(state.settings, ptyId).then(
-            (inspection) => inspection.foregroundProcess
+            (inspection) => inspection.foregroundProcess,
+            // Why: remote tab mirrors can briefly retain an expired handle.
+            // One failed inspection must not suppress restart notices for every
+            // other live Codex session discovered in the same account switch.
+            () => null
           )
         )
       )

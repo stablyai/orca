@@ -144,6 +144,32 @@ describe('markLiveCodexSessionsForRestart', () => {
     })
   })
 
+  it('still marks healthy Codex panes when another process inspection fails', async () => {
+    useAppStore.setState({
+      ptyIdsByTabId: {
+        'tab-1': ['pty-1', 'pty-expired']
+      }
+    })
+    vi.mocked(window.api.pty.getForegroundProcess).mockImplementation((ptyId) => {
+      if (ptyId === 'pty-expired') {
+        return Promise.reject(new Error('terminal_handle_stale'))
+      }
+      return Promise.resolve('codex')
+    })
+
+    await markLiveCodexSessionsForRestart({
+      previousAccountLabel: ACCOUNT_A,
+      nextAccountLabel: ACCOUNT_B
+    })
+
+    expect(useAppStore.getState().codexRestartNoticeByPtyId).toEqual({
+      'pty-1': {
+        previousAccountLabel: ACCOUNT_A,
+        nextAccountLabel: ACCOUNT_B
+      }
+    })
+  })
+
   it('does not mark non-codex foreground processes', async () => {
     vi.mocked(window.api.pty.getForegroundProcess).mockResolvedValue('zsh')
 

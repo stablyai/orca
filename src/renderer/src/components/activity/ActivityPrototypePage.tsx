@@ -1489,7 +1489,7 @@ function ThreadRow({
 }
 
 export default function ActivityPrototypePage(): React.JSX.Element {
-  const [readFilter, setReadFilter] = useState<ThreadReadFilter>('all')
+  const [readFilter, setReadFilter] = useState<ThreadReadFilter>('unread')
   const [groupBy, setGroupBy] = useState<ActivityGroupBy>('status')
   const [query, setQuery] = useState('')
   const activityFilterInputRef = useRef<HTMLInputElement | null>(null)
