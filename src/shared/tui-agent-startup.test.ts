@@ -235,6 +235,35 @@ describe('tui agent startup plans', () => {
     expect(plan?.launchCommand).toBe("codex 'resume' 's1'")
   })
 
+  it('forces shell-ready delivery for Codex resume so the payload survives rc-file noise', () => {
+    // Why (#5232/#5356): `codex resume <id>` is payload-bearing Codex startup
+    // text. Without shell-ready delivery the daemon markerless fast path can
+    // drop the resume target and silently launch a fresh session instead.
+    const plan = buildAgentResumeStartupPlan({
+      agent: 'codex',
+      providerSession: { key: 'session_id', id: 's1' },
+      cmdOverrides: {},
+      platform: 'linux'
+    })
+
+    expect(plan?.launchCommand).toBe("codex 'resume' 's1'")
+    expect(plan?.startupCommandDelivery).toBe('shell-ready')
+  })
+
+  it('does not force shell-ready delivery for non-Codex resume (already shell-ready by default)', () => {
+    // Non-Codex commands always take the daemon's shell-ready launch config, so
+    // requesting it here would be redundant and diverge from the prompt path.
+    const plan = buildAgentResumeStartupPlan({
+      agent: 'claude',
+      providerSession: { key: 'session_id', id: 's1' },
+      cmdOverrides: {},
+      platform: 'linux'
+    })
+
+    expect(plan?.launchCommand).toBe("claude '--resume' 's1'")
+    expect(plan?.startupCommandDelivery).toBeUndefined()
+  })
+
   it('honors command overrides when building POSIX resume plans', () => {
     const plan = buildAgentResumeStartupPlan({
       agent: 'codex',

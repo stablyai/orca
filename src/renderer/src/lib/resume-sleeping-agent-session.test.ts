@@ -545,6 +545,9 @@ describe('resumeSleepingAgentSessionsForWorktree', () => {
     expect(startup?.command).not.toContain('changed')
     expect(startup?.launchConfig).toEqual(record.launchConfig)
     expect(startup?.resumeProviderSession).toEqual(record.providerSession)
+    // Why (#5232/#5356): Codex resume must use shell-ready delivery so the
+    // `resume <id>` payload survives rc-file noise instead of racing it.
+    expect(startup?.startupCommandDelivery).toBe('shell-ready')
   })
 
   it('launches once and clears skipped duplicates for the same provider session', () => {
