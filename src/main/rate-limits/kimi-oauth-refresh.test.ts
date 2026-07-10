@@ -38,77 +38,89 @@ describe('refreshKimiCredentials', () => {
     lockMock.mockReset()
   })
 
-  it('uses Kimi proper-lockfile options and releases after success', async () => {
-    const root = mkdtempSync(join(tmpdir(), 'orca-kimi-lock-'))
-    const target = join(root, 'oauth', 'kimi-code')
-    const release = vi.fn().mockResolvedValue(undefined)
-    lockMock.mockResolvedValue(release)
+  it.skipIf(process.platform === 'win32')(
+    'uses Kimi proper-lockfile options and releases after success',
+    async () => {
+      const root = mkdtempSync(join(tmpdir(), 'orca-kimi-lock-'))
+      const target = join(root, 'oauth', 'kimi-code')
+      const release = vi.fn().mockResolvedValue(undefined)
+      lockMock.mockResolvedValue(release)
 
-    await expect(acquireKimiRefreshLock(target, async () => 'done')).resolves.toBe('done')
+      await expect(acquireKimiRefreshLock(target, async () => 'done')).resolves.toBe('done')
 
-    expect(lockMock).toHaveBeenCalledWith(target, {
-      retries: { retries: 120, factor: 1, minTimeout: 500, maxTimeout: 1000 },
-      stale: 5000,
-      realpath: false
-    })
-    expect(release).toHaveBeenCalledOnce()
-    rmSync(root, { recursive: true, force: true })
-  })
-
-  it('serializes overlapping actions through the production proper-lockfile path', async () => {
-    const { lock: actualLock } = await vi.importActual<{ lock: typeof ProperLock }>(
-      'proper-lockfile'
-    )
-    lockMock.mockImplementation(actualLock)
-    const root = mkdtempSync(join(tmpdir(), 'orca-kimi-lock-'))
-    const target = join(root, 'oauth', 'kimi-code')
-    const events: string[] = []
-    let markFirstStarted!: () => void
-    const firstStarted = new Promise<void>((resolve) => {
-      markFirstStarted = resolve
-    })
-
-    const first = acquireKimiRefreshLock(target, async () => {
-      events.push('first:start')
-      markFirstStarted()
-      await new Promise((resolve) => setTimeout(resolve, 20))
-      events.push('first:end')
-    })
-    await firstStarted
-    const second = acquireKimiRefreshLock(target, async () => {
-      events.push('second:start')
-      events.push('second:end')
-    })
-    await Promise.all([first, second])
-
-    expect(events).toEqual(['first:start', 'first:end', 'second:start', 'second:end'])
-    rmSync(root, { recursive: true, force: true })
-  })
-
-  it('fails closed when production lock acquisition fails', async () => {
-    const action = vi.fn()
-    lockMock.mockRejectedValue(new Error('lock unavailable'))
-
-    await expect(acquireKimiRefreshLock('/tmp/kimi-lock-target', action)).rejects.toThrow(
-      'lock unavailable'
-    )
-    expect(action).not.toHaveBeenCalled()
-  })
-
-  it('releases the production lock after the protected action throws', async () => {
-    const root = mkdtempSync(join(tmpdir(), 'orca-kimi-lock-'))
-    const target = join(root, 'oauth', 'kimi-code')
-    const release = vi.fn().mockResolvedValue(undefined)
-    lockMock.mockResolvedValue(release)
-
-    await expect(
-      acquireKimiRefreshLock(target, async () => {
-        throw new Error('refresh failed')
+      expect(lockMock).toHaveBeenCalledWith(target, {
+        retries: { retries: 120, factor: 1, minTimeout: 500, maxTimeout: 1000 },
+        stale: 5000,
+        realpath: false
       })
-    ).rejects.toThrow('refresh failed')
-    expect(release).toHaveBeenCalledOnce()
-    rmSync(root, { recursive: true, force: true })
-  })
+      expect(release).toHaveBeenCalledOnce()
+      rmSync(root, { recursive: true, force: true })
+    }
+  )
+
+  it.skipIf(process.platform === 'win32')(
+    'serializes overlapping actions through the production proper-lockfile path',
+    async () => {
+      const { lock: actualLock } = await vi.importActual<{ lock: typeof ProperLock }>(
+        'proper-lockfile'
+      )
+      lockMock.mockImplementation(actualLock)
+      const root = mkdtempSync(join(tmpdir(), 'orca-kimi-lock-'))
+      const target = join(root, 'oauth', 'kimi-code')
+      const events: string[] = []
+      let markFirstStarted!: () => void
+      const firstStarted = new Promise<void>((resolve) => {
+        markFirstStarted = resolve
+      })
+
+      const first = acquireKimiRefreshLock(target, async () => {
+        events.push('first:start')
+        markFirstStarted()
+        await new Promise((resolve) => setTimeout(resolve, 20))
+        events.push('first:end')
+      })
+      await firstStarted
+      const second = acquireKimiRefreshLock(target, async () => {
+        events.push('second:start')
+        events.push('second:end')
+      })
+      await Promise.all([first, second])
+
+      expect(events).toEqual(['first:start', 'first:end', 'second:start', 'second:end'])
+      rmSync(root, { recursive: true, force: true })
+    }
+  )
+
+  it.skipIf(process.platform === 'win32')(
+    'fails closed when production lock acquisition fails',
+    async () => {
+      const action = vi.fn()
+      lockMock.mockRejectedValue(new Error('lock unavailable'))
+
+      await expect(acquireKimiRefreshLock('/tmp/kimi-lock-target', action)).rejects.toThrow(
+        'lock unavailable'
+      )
+      expect(action).not.toHaveBeenCalled()
+    }
+  )
+
+  it.skipIf(process.platform === 'win32')(
+    'releases the production lock after the protected action throws',
+    async () => {
+      const root = mkdtempSync(join(tmpdir(), 'orca-kimi-lock-'))
+      const target = join(root, 'oauth', 'kimi-code')
+      const release = vi.fn().mockResolvedValue(undefined)
+      lockMock.mockResolvedValue(release)
+
+      await expect(
+        acquireKimiRefreshLock(target, async () => {
+          throw new Error('refresh failed')
+        })
+      ).rejects.toThrow('refresh failed')
+      expect(release).toHaveBeenCalledOnce()
+      rmSync(root, { recursive: true, force: true })
+    }
+  )
 
   it.each([
     ['the disable flag', () => vi.stubEnv('KIMI_DISABLE_OAUTH_LOCK', '1')],

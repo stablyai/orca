@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { join } from 'node:path'
 
 const netFetchMock = vi.hoisted(() => vi.fn())
 const fsState = vi.hoisted<{
@@ -291,7 +292,7 @@ describe('fetchKimiRateLimits', () => {
 
     const result = await fetchKimiRateLimits()
 
-    const scopedPath = '/kimi-home/credentials/kimi-code-env-3e58296a497444bf.json'
+    const scopedPath = join('/kimi-home', 'credentials', 'kimi-code-env-3e58296a497444bf.json')
     expect(result.status).toBe('ok')
     expect(fsState.readPaths).toEqual([scopedPath, scopedPath])
     expect(fsState.readPaths).not.toContain('/kimi-home/credentials/kimi-code.json')
@@ -329,7 +330,7 @@ describe('resolveKimiCredentialLocation', () => {
       '/fallback-home'
     )
 
-    expect(location.credentialsPath).toBe(`/kimi-home/credentials/${filename}`)
+    expect(location.credentialsPath).toBe(join('/kimi-home', 'credentials', filename))
   })
 
   it('scopes credentials, lock, and request URLs to the normalized endpoint pair', () => {
@@ -347,8 +348,8 @@ describe('resolveKimiCredentialLocation', () => {
       oauthHost: 'https://auth.example.com',
       baseUrl: 'https://api.example.com/coding/v1',
       storageName: 'kimi-code-env-3e58296a497444bf',
-      credentialsPath: '/kimi-home/credentials/kimi-code-env-3e58296a497444bf.json',
-      lockTarget: '/kimi-home/oauth/kimi-code-env-3e58296a497444bf',
+      credentialsPath: join('/kimi-home', 'credentials', 'kimi-code-env-3e58296a497444bf.json'),
+      lockTarget: join('/kimi-home', 'oauth', 'kimi-code-env-3e58296a497444bf'),
       tokenUrl: 'https://auth.example.com/api/oauth/token',
       usageUrl: 'https://api.example.com/coding/v1/usages'
     })
