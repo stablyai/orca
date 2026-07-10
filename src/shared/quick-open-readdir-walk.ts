@@ -1,6 +1,7 @@
 import { lstat, readdir } from 'node:fs/promises'
 import { join, relative } from 'node:path'
 import { throwIfFileListingCancelled } from './file-listing-cancellation'
+import { addQuickOpenExpansionPath } from './quick-open-expansion-paths'
 import {
   HIDDEN_DIR_BLOCKLIST,
   shouldExcludeQuickOpenRelPath,
@@ -223,6 +224,12 @@ async function listQuickOpenFilesFromRoots(
               return { pending, entries: [] }
             }
             const entries = await readdir(pending.absPath, { withFileTypes: true })
+            // Why: close the ordinary check/use race. If the directory became
+            // a symlink while readdir was pending, discard everything read.
+            const statAfterRead = await lstat(pending.absPath)
+            if (!statAfterRead.isDirectory()) {
+              return { pending, entries: [] }
+            }
             return { pending, entries }
           } catch {
             // Why: permission denied on one subtree is common for broad roots.
@@ -309,7 +316,7 @@ export async function expandQuickOpenGitFileListing(opts: {
       continue
     }
 
-    expansionPaths.set(relPath, false)
+    addQuickOpenExpansionPath(expansionPaths, relPath, false)
   }
 
   for (const rawPath of opts.directoryPaths ?? []) {
@@ -329,7 +336,7 @@ export async function expandQuickOpenGitFileListing(opts: {
 
     // Why: before directory collapse, Git returned untracked symlink entries
     // without following them. Preserve those paths when expanding placeholders.
-    expansionPaths.set(relPath, true)
+    addQuickOpenExpansionPath(expansionPaths, relPath, true)
   }
 
   const expandedFiles = await listQuickOpenFilesFromRoots(

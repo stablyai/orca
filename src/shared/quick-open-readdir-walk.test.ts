@@ -16,7 +16,7 @@ vi.mock('fs/promises', async () => {
   }
 })
 
-import { mkdtemp, mkdir, rm, symlink, writeFile } from 'node:fs/promises'
+import { mkdtemp, mkdir, rename, rm, symlink, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import {
@@ -326,6 +326,55 @@ describe('quick-open readdir walk', () => {
         directoryPaths: ['dist/']
       })
     ).resolves.toEqual([])
+  })
+
+  it('discards entries when a collapsed directory changes during readdir', async () => {
+    const root = await makeTempRoot()
+    const outsideRoot = await makeTempRoot()
+    await mkdirRel(root, 'dist')
+    await writeRel(outsideRoot, 'secret.ts')
+    const actual = await vi.importActual<typeof import('node:fs/promises')>('node:fs/promises') // eslint-disable-line @typescript-eslint/consistent-type-imports -- vi.importActual requires inline import()
+    const distPath = join(root, 'dist')
+    let swapped = false
+    readdirMock.mockImplementation(async (...args: Parameters<typeof actual.readdir>) => {
+      if (!swapped && args[0] === distPath) {
+        swapped = true
+        await rename(distPath, join(root, 'old-dist'))
+        await symlink(outsideRoot, distPath, 'dir')
+      }
+      return actual.readdir(...args)
+    })
+
+    try {
+      await expect(
+        expandQuickOpenGitFileListing({
+          rootPath: root,
+          gitPaths: [],
+          directoryPaths: ['dist/']
+        })
+      ).resolves.toEqual([])
+    } finally {
+      readdirMock.mockImplementation(actual.readdir)
+    }
+  })
+
+  it('walks overlapping primary and ignored placeholders only once', async () => {
+    const root = await makeTempRoot()
+    await writeRel(root, 'foo/a.ts')
+    await writeRel(root, 'foo/bar/b.ts')
+
+    await expect(
+      expandQuickOpenGitFileListing({
+        rootPath: root,
+        gitPaths: [],
+        directoryPaths: ['foo/', 'foo/bar/'],
+        budget: createQuickOpenReaddirBudget({ maxFiles: 2 })
+      })
+    ).resolves.toEqual(['foo/a.ts', 'foo/bar/b.ts'])
+
+    expect(
+      readdirMock.mock.calls.filter(([path]) => path === join(root, 'foo', 'bar'))
+    ).toHaveLength(1)
   })
 
   it('rejects instead of returning a partial ignored-directory expansion', async () => {
