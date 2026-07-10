@@ -50,6 +50,7 @@ import type {
   SearchResult,
   TuiAgent,
   UpdateStatus,
+  WikiGenerationChangedPayload,
   WorktreeBaseStatusEvent,
   WorktreeDefaultTabsLaunch,
   WorktreeRemoteBranchConflictEvent
@@ -502,6 +503,18 @@ const api = {
     orgMemberChangeRole: (args) => ipcRenderer.invoke('orcaProfiles:orgMemberChangeRole', args),
     orgMemberRemove: (args) => ipcRenderer.invoke('orcaProfiles:orgMemberRemove', args)
   } satisfies PreloadApi['orcaProfiles'],
+  wiki: {
+    read: (args) => ipcRenderer.invoke('wiki:read', args),
+    generate: (args) => ipcRenderer.invoke('wiki:generate', args),
+    generationStatus: (args) => ipcRenderer.invoke('wiki:generationStatus', args),
+    cancelGeneration: (args) => ipcRenderer.invoke('wiki:cancelGeneration', args),
+    onGenerationChanged: (callback) => {
+      const listener = (_event: Electron.IpcRendererEvent, payload: WikiGenerationChangedPayload) =>
+        callback(payload)
+      ipcRenderer.on('wiki:generationChanged', listener)
+      return () => ipcRenderer.removeListener('wiki:generationChanged', listener)
+    }
+  } satisfies PreloadApi['wiki'],
 
   platform: {
     get: () => ({

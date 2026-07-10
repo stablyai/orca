@@ -3189,6 +3189,7 @@ export type RightSidebarTab =
   | 'source-control'
   | 'checks'
   | 'ports'
+  | 'wiki'
 export type ActiveRightSidebarTab = Exclude<RightSidebarTab, 'search'>
 export type RightSidebarExplorerView = 'files' | 'search'
 
@@ -3566,6 +3567,25 @@ export type MarkdownDocument = {
   relativePath: string
   basename: string
   name: string
+}
+
+export type WikiReadResult =
+  | { hasWiki: false }
+  | {
+      hasWiki: true
+      rootRelativePath: string
+      note: { relativePath: string; content: string } | null
+    }
+export type WikiGenerateResult = { ok: true } | { ok: false; error: string }
+
+// Shared between preload (renderer-facing type) and main (emitChanged/webContents.send
+// payload) so the wire shape can't drift between the two sides.
+export type WikiGenerationChangedPayload = {
+  worktreeId: string
+  running: boolean
+  output: string
+  error?: string
+  done?: boolean
 }
 
 // ─── Filesystem watcher ─────────────────────────────────────

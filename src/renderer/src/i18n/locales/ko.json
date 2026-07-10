@@ -9688,7 +9688,8 @@
             "fc3095d2ed": "탐색기",
             "aiVaultSessionHistory": "에이전트",
             "folderWorkspaces": "연결된 워크트리",
-            "parentPrChecks": "PR 검사"
+            "parentPrChecks": "PR 검사",
+            "375ca239c1": "Wiki"
           },
           "right": {
             "panel": {
@@ -10080,6 +10081,26 @@
             "subagentsCount": "Subagents ({{value0}})",
             "messageCount": "{{value0}} msgs",
             "viewLog": "View Log"
+          },
+          "WikiPanel": {
+            "9fe482ef65": "Failed to load the wiki root page.",
+            "9e1f136ed0": "Failed to load the wiki.",
+            "a5aa987a97": "Failed to start generation.",
+            "eccbe5d645": "Failed to stop generation.",
+            "2a8893f928": "Wiki: {{value0}}",
+            "8521212a7a": "Wiki"
+          },
+          "WikiPanelSetupState": {
+            "ce26905ff1": "Generating the wiki…",
+            "7ee5702de8": "Stop",
+            "36acee09c0": "Failed to load the wiki.",
+            "ea1ec65541": "Generate wiki",
+            "15a2d17d3c": "No wiki yet for this repository.",
+            "eded43f086": "Add wiki instruction to CLAUDE.md"
+          },
+          "WikiPanelTopBar": {
+            "b2030cab15": "Back",
+            "350a0c1651": "Home"
           }
         }
       },
@@ -12884,7 +12905,7 @@
         "pastedImageLabel": "붙여넣은 이미지",
         "imagePasteFailed": "이미지 붙여넣기 실패.",
         "worktreeNotReady": "워크트리가 준비되지 않았습니다 — 잠시 후 다시 시도하세요.",
-        "uploadingAttachments": "{{value0}}개 파일을 원격으로 업로드 중…"
+        "uploadingAttachments": "Uploading {{value0}} file{{value1}} to remote…"
       },
       "tool": {
         "running": "실행 중…",

@@ -9688,7 +9688,8 @@
             "fc3095d2ed": "エクスプローラ",
             "aiVaultSessionHistory": "エージェント",
             "folderWorkspaces": "添付ワークツリー",
-            "parentPrChecks": "PR チェック"
+            "parentPrChecks": "PR チェック",
+            "375ca239c1": "Wiki"
           },
           "right": {
             "panel": {
@@ -10080,6 +10081,26 @@
             "subagentsCount": "Subagents ({{value0}})",
             "messageCount": "{{value0}} msgs",
             "viewLog": "View Log"
+          },
+          "WikiPanel": {
+            "9fe482ef65": "Failed to load the wiki root page.",
+            "9e1f136ed0": "Failed to load the wiki.",
+            "a5aa987a97": "Failed to start generation.",
+            "eccbe5d645": "Failed to stop generation.",
+            "2a8893f928": "Wiki: {{value0}}",
+            "8521212a7a": "Wiki"
+          },
+          "WikiPanelSetupState": {
+            "ce26905ff1": "Generating the wiki…",
+            "7ee5702de8": "Stop",
+            "36acee09c0": "Failed to load the wiki.",
+            "ea1ec65541": "Generate wiki",
+            "15a2d17d3c": "No wiki yet for this repository.",
+            "eded43f086": "Add wiki instruction to CLAUDE.md"
+          },
+          "WikiPanelTopBar": {
+            "b2030cab15": "Back",
+            "350a0c1651": "Home"
           }
         }
       },
@@ -12884,7 +12905,7 @@
         "pastedImageLabel": "貼り付けた画像",
         "imagePasteFailed": "画像の貼り付けに失敗しました。",
         "worktreeNotReady": "Worktreeが準備できていません — しばらくしてから再試行してください。",
-        "uploadingAttachments": "{{value0}}個のファイルをリモートにアップロード中…"
+        "uploadingAttachments": "Uploading {{value0}} file{{value1}} to remote…"
       },
       "tool": {
         "running": "実行中…",
