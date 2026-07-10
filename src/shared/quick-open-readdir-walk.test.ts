@@ -455,6 +455,24 @@ describe('quick-open readdir walk', () => {
     expect(files).not.toContain('linked-dir/file.ts')
   })
 
+  it('walks an explicitly selected symlinked workspace root', async () => {
+    const targetRoot = await makeTempRoot()
+    const linkContainer = await makeTempRoot()
+    await writeRel(targetRoot, 'src/index.ts')
+    const linkedRoot = join(linkContainer, 'linked-workspace')
+
+    try {
+      await symlink(targetRoot, linkedRoot, 'dir')
+    } catch (err) {
+      if ((err as NodeJS.ErrnoException).code === 'EPERM') {
+        return
+      }
+      throw err
+    }
+
+    await expect(listQuickOpenFilesWithReaddir(linkedRoot)).resolves.toEqual(['src/index.ts'])
+  })
+
   it('fills nested repo paths containing spaces and glob metacharacters', async () => {
     const root = await makeTempRoot()
     await makeNestedRepo(root, 'packages/app [one] space')
@@ -497,6 +515,21 @@ describe('quick-open readdir walk', () => {
         directoryPaths: ['src/'],
         signal: controller.signal
       })
+    ).rejects.toSatisfy(isFileListingCancellation)
+  })
+
+  it('rejects when cancellation lands during an empty readdir batch', async () => {
+    const root = await makeTempRoot()
+    const controller = new AbortController()
+    const actual = await vi.importActual<typeof import('node:fs/promises')>('node:fs/promises') // eslint-disable-line @typescript-eslint/consistent-type-imports -- vi.importActual requires inline import()
+    readdirMock.mockImplementationOnce(async (...args: Parameters<typeof actual.readdir>) => {
+      const entries = await actual.readdir(...args)
+      controller.abort()
+      return entries
+    })
+
+    await expect(
+      listQuickOpenFilesWithReaddir(root, { signal: controller.signal })
     ).rejects.toSatisfy(isFileListingCancellation)
   })
 })

@@ -1,6 +1,7 @@
 import { lstat, readdir } from 'node:fs/promises'
 import { join, relative } from 'node:path'
 import { throwIfFileListingCancelled } from './file-listing-cancellation'
+import { isQuickOpenReadableDirectory } from './quick-open-directory-validation'
 import { collapseQuickOpenExpansionPaths } from './quick-open-expansion-paths'
 import {
   HIDDEN_DIR_BLOCKLIST,
@@ -169,7 +170,8 @@ export async function listQuickOpenFilesWithReaddir(
       {
         rootPath,
         excludePathPrefixes: opts.excludePathPrefixes ?? [],
-        workspaceRelPathPrefix: opts.workspaceRelPathPrefix
+        workspaceRelPathPrefix: opts.workspaceRelPathPrefix,
+        allowRootSymlink: true
       }
     ],
     opts.budget ?? createQuickOpenReaddirBudget(),
@@ -183,11 +185,7 @@ type QuickOpenReaddirRoot = {
   workspaceRelPathPrefix?: string
   outputPathPrefix?: string
   includeSymlinks?: boolean
-}
-
-type QuickOpenPendingDirectory = {
-  root: QuickOpenReaddirRoot
-  absPath: string
+  allowRootSymlink?: boolean
 }
 
 async function listQuickOpenFilesFromRoots(
@@ -196,13 +194,14 @@ async function listQuickOpenFilesFromRoots(
   signal?: AbortSignal
 ): Promise<string[]> {
   const files: string[] = []
-  let pendingDirectories: QuickOpenPendingDirectory[] = roots.map((root) => ({
+  let pendingDirectories = roots.map((root) => ({
     root,
-    absPath: root.rootPath
+    absPath: root.rootPath,
+    isRoot: true
   }))
 
   while (pendingDirectories.length > 0) {
-    const nextDirectories: QuickOpenPendingDirectory[] = []
+    const nextDirectories: typeof pendingDirectories = []
     for (
       let offset = 0;
       offset < pendingDirectories.length;
@@ -220,14 +219,15 @@ async function listQuickOpenFilesFromRoots(
             // Why: Git's placeholder may have been replaced with a symlink
             // before expansion. Never let readdir follow it outside the root.
             const stat = await lstat(pending.absPath)
-            if (!stat.isDirectory()) {
+            const allowSymlinkedRoot = pending.isRoot && pending.root.allowRootSymlink
+            if (!isQuickOpenReadableDirectory(stat, allowSymlinkedRoot)) {
               return { pending, entries: [] }
             }
             const entries = await readdir(pending.absPath, { withFileTypes: true })
             // Why: close the ordinary check/use race. If the directory became
             // a symlink while readdir was pending, discard everything read.
             const statAfterRead = await lstat(pending.absPath)
-            if (!statAfterRead.isDirectory()) {
+            if (!isQuickOpenReadableDirectory(statAfterRead, allowSymlinkedRoot)) {
               return { pending, entries: [] }
             }
             return { pending, entries }
@@ -237,6 +237,10 @@ async function listQuickOpenFilesFromRoots(
           }
         })
       )
+      // Why: an empty directory has no per-entry checkpoint below. Cancellation
+      // or timeout that lands during readdir must still reject, never resolve [].
+      throwIfFileListingCancelled(signal)
+      assertWithinDeadline(budget)
 
       for (const { pending, entries } of entryGroups) {
         for (const entry of entries) {
@@ -254,7 +258,7 @@ async function listQuickOpenFilesFromRoots(
           }
           if (entry.isDirectory()) {
             if (shouldDescend(name) && shouldIncludeQuickOpenPath(workspaceRelPath)) {
-              nextDirectories.push({ root: pending.root, absPath })
+              nextDirectories.push({ root: pending.root, absPath, isRoot: false })
             }
             continue
           }
