@@ -1,9 +1,9 @@
 /* eslint-disable max-lines -- Why: getStatus + install + remove all share the managed-command and trust-key derivation. Splitting would hide that the three operations must agree on group index, event label, and command bytes. */
 import { existsSync, readFileSync, unlinkSync } from 'node:fs'
-import { join, win32 as pathWin32 } from 'node:path'
+import { join } from 'node:path'
 import type { SFTPWrapper } from 'ssh2'
 import type { AgentHookInstallState, AgentHookInstallStatus } from '../../shared/agent-hook-types'
-import { parseWslUncPath } from '../../shared/wsl-paths'
+import type { CodexAccountSelectionTarget } from '../codex-accounts/runtime-selection'
 import {
   buildManagedCommandHook,
   createManagedCommandMatcher,
@@ -44,6 +44,10 @@ import {
 } from './config-toml-trust'
 import { getOrcaManagedCodexHomePath, getSystemCodexHomePath } from './codex-home-paths'
 import { syncSystemConfigIntoManagedCodexHome } from './codex-config-mirror'
+import {
+  createCodexWslRuntimeHookInstallPlan,
+  type CodexWslRuntimeHookInstallPlan
+} from './codex-wsl-hook-install-plan'
 import {
   CODEX_HOOK_EVENT_LABEL,
   createCodexHookTrustEntry,
@@ -124,38 +128,8 @@ function getManagedCommand(scriptPath: string): string {
     : wrapPosixHookCommand(scriptPath)
 }
 
-export type CodexWslRuntimeHookInstallPlan = {
-  configPath: string
-  tomlPath: string
-  scriptPath: string
-  commandScriptPath: string
-  trustConfigPath: string
-}
-
-function trimTrailingSlash(value: string): string {
-  return value.length > 1 ? value.replace(/\/+$/, '') : value
-}
-
-export function createCodexWslRuntimeHookInstallPlan(
-  runtimeHomePath: string | null | undefined
-): CodexWslRuntimeHookInstallPlan | null {
-  if (!runtimeHomePath) {
-    return null
-  }
-  const wslInfo = parseWslUncPath(runtimeHomePath)
-  if (!wslInfo) {
-    return null
-  }
-
-  const linuxRuntimeHome = trimTrailingSlash(wslInfo.linuxPath)
-  return {
-    configPath: pathWin32.join(runtimeHomePath, 'hooks.json'),
-    tomlPath: pathWin32.join(runtimeHomePath, 'config.toml'),
-    scriptPath: pathWin32.join(runtimeHomePath, '.orca', 'agent-hooks', 'codex-hook.sh'),
-    commandScriptPath: `${linuxRuntimeHome}/.orca/agent-hooks/codex-hook.sh`,
-    trustConfigPath: `${linuxRuntimeHome}/hooks.json`
-  }
-}
+export { createCodexWslRuntimeHookInstallPlan }
+export type { CodexWslRuntimeHookInstallPlan }
 
 function wrapReadablePosixHookCommand(scriptPath: string): string {
   const quoted = `'${scriptPath.replaceAll("'", "'\\''")}'`
@@ -837,8 +811,8 @@ function getManagedScript(target: 'local' | 'posix' = 'local'): string {
     '  exit 0',
     'fi',
     'if is_wsl_runtime; then',
-    '  windows_curl=/mnt/c/Windows/System32/curl.exe',
-    '  if [ -x "$windows_curl" ]; then',
+    '  windows_curl=$(command -v curl.exe 2>/dev/null || true)',
+    '  if [ -n "$windows_curl" ] && [ -x "$windows_curl" ]; then',
     '    post_codex_hook "$windows_curl" 3 5 >/dev/null 2>&1 || true',
     '  fi',
     'fi',
@@ -958,15 +932,19 @@ function refreshWslRuntimeUserHooks(plan: CodexWslRuntimeHookInstallPlan): Agent
 }
 
 export class CodexHookService {
-  installForRuntimeHome(runtimeHomePath: string | null | undefined): AgentHookInstallStatus | null {
-    const wslPlan = createCodexWslRuntimeHookInstallPlan(runtimeHomePath)
+  installForRuntimeHome(
+    runtimeHomePath: string | null | undefined,
+    target?: CodexAccountSelectionTarget
+  ): AgentHookInstallStatus | null {
+    const wslPlan = createCodexWslRuntimeHookInstallPlan(runtimeHomePath, target)
     return wslPlan ? installManagedHooksIntoWslRuntime(wslPlan) : null
   }
 
   refreshRuntimeUserHooksForRuntimeHome(
-    runtimeHomePath: string | null | undefined
+    runtimeHomePath: string | null | undefined,
+    target?: CodexAccountSelectionTarget
   ): AgentHookInstallStatus | null {
-    const wslPlan = createCodexWslRuntimeHookInstallPlan(runtimeHomePath)
+    const wslPlan = createCodexWslRuntimeHookInstallPlan(runtimeHomePath, target)
     return wslPlan ? refreshWslRuntimeUserHooks(wslPlan) : null
   }
 

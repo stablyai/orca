@@ -699,8 +699,9 @@ function prepareCodexRuntimeHomeForLaunch(target?: CodexAccountSelectionTarget):
     // Why: launch prep is reachable after startup via PTY/runtime paths; honor
     // the persisted off switch so those launches cannot reinstall removed hooks.
     const status = hooksEnabled
-      ? (codexHookService.installForRuntimeHome(runtimeHomePath) ?? codexHookService.install())
-      : (codexHookService.refreshRuntimeUserHooksForRuntimeHome(runtimeHomePath) ??
+      ? (codexHookService.installForRuntimeHome(runtimeHomePath, target) ??
+        codexHookService.install())
+      : (codexHookService.refreshRuntimeUserHooksForRuntimeHome(runtimeHomePath, target) ??
         codexHookService.refreshRuntimeUserHooks())
     if (status.state === 'error') {
       console.warn(

@@ -71,7 +71,9 @@ describe('Codex WSL runtime hook install', () => {
     const runtimeHome =
       '\\\\wsl.localhost\\Ubuntu\\home\\alice\\.local\\share\\orca\\codex-runtime-home\\home'
 
-    expect(createCodexWslRuntimeHookInstallPlan(runtimeHome)).toEqual({
+    expect(
+      createCodexWslRuntimeHookInstallPlan(runtimeHome, undefined, (_distro, path) => path)
+    ).toEqual({
       configPath: pathWin32.join(runtimeHome, 'hooks.json'),
       tomlPath: pathWin32.join(runtimeHome, 'config.toml'),
       scriptPath: pathWin32.join(runtimeHome, '.orca', 'agent-hooks', 'codex-hook.sh'),
@@ -81,6 +83,45 @@ describe('Codex WSL runtime hook install', () => {
     })
   })
 
+  it('plans WSL hooks when the distro home is mounted on a Windows drive', () => {
+    const runtimeHome = 'D:\\wsl-home\\.local\\share\\orca\\codex-runtime-home\\home'
+
+    expect(
+      createCodexWslRuntimeHookInstallPlan(
+        runtimeHome,
+        { runtime: 'wsl', wslDistro: 'Ubuntu' },
+        (_distro, path) => path
+      )
+    ).toEqual({
+      configPath: pathWin32.join(runtimeHome, 'hooks.json'),
+      tomlPath: pathWin32.join(runtimeHome, 'config.toml'),
+      scriptPath: pathWin32.join(runtimeHome, '.orca', 'agent-hooks', 'codex-hook.sh'),
+      commandScriptPath:
+        '/mnt/d/wsl-home/.local/share/orca/codex-runtime-home/home/.orca/agent-hooks/codex-hook.sh',
+      trustConfigPath: '/mnt/d/wsl-home/.local/share/orca/codex-runtime-home/home/hooks.json'
+    })
+  })
+
+  it('uses WSL-canonical paths for hook commands and trust keys', () => {
+    const runtimeHome =
+      '\\\\wsl.localhost\\Ubuntu\\home\\alias\\.local\\share\\orca\\codex-runtime-home\\home'
+    const canonicalHome = '/home/alice/.local/share/orca/codex-runtime-home/home'
+
+    const plan = createCodexWslRuntimeHookInstallPlan(
+      runtimeHome,
+      { runtime: 'wsl', wslDistro: 'Ubuntu' },
+      (distro, linuxPath) => {
+        expect(distro).toBe('Ubuntu')
+        expect(linuxPath).toBe('/home/alias/.local/share/orca/codex-runtime-home/home')
+        return canonicalHome
+      }
+    )
+
+    expect(plan?.commandScriptPath).toBe(`${canonicalHome}/.orca/agent-hooks/codex-hook.sh`)
+    expect(plan?.trustConfigPath).toBe(`${canonicalHome}/hooks.json`)
+    expect(plan?.configPath).toBe(pathWin32.join(runtimeHome, 'hooks.json'))
+  })
+
   it('generates a POSIX hook that bridges WSL loopback failures through Windows curl', () => {
     const script = _internals.getManagedScript('posix')
     expect(script).toContain('load_hook_endpoint()')
@@ -88,7 +129,7 @@ describe('Codex WSL runtime hook install', () => {
     expect(script).toContain('post_codex_hook()')
     expect(script).toContain('is_wsl_runtime()')
     expect(script).toContain('WSL_DISTRO_NAME')
-    expect(script).toContain('/mnt/c/Windows/System32/curl.exe')
+    expect(script).toContain('windows_curl=$(command -v curl.exe 2>/dev/null || true)')
     expect(script).toContain('--data-urlencode "payload@-"')
     expect(script).toContain('if post_codex_hook curl >/dev/null 2>&1; then')
     expect(script).toContain('post_codex_hook "$windows_curl" 3 5 >/dev/null 2>&1 || true')
@@ -146,6 +187,46 @@ describe('Codex WSL runtime hook install', () => {
     }
   )
 
+  it.skipIf(process.platform === 'win32')(
+    'uses the Windows curl discovered from the WSL PATH after loopback fails',
+    () => {
+      const plan = createTestPlan()
+      const root = dirname(plan.configPath)
+      const binDir = join(root, 'bin')
+      const capturePath = join(root, 'windows-curl-args.txt')
+      mkdirSync(binDir, { recursive: true })
+      writeFileSync(join(binDir, 'curl'), '#!/bin/sh\nexit 7\n', 'utf-8')
+      writeFileSync(
+        join(binDir, 'curl.exe'),
+        '#!/bin/sh\nprintf \'%s\\n\' "$@" > "$ORCA_TEST_CAPTURE"\ncat >> "$ORCA_TEST_CAPTURE"\n',
+        'utf-8'
+      )
+      chmodSync(join(binDir, 'curl'), 0o755)
+      chmodSync(join(binDir, 'curl.exe'), 0o755)
+      mkdirSync(dirname(plan.scriptPath), { recursive: true })
+      writeFileSync(plan.scriptPath, _internals.getManagedScript('posix'), 'utf-8')
+
+      const result = spawnSync('/bin/sh', [plan.scriptPath], {
+        encoding: 'utf-8',
+        input: '{"hook_event_name":"Stop"}',
+        env: {
+          ...process.env,
+          PATH: `${binDir}:${process.env.PATH ?? ''}`,
+          WSL_DISTRO_NAME: 'Ubuntu',
+          ORCA_AGENT_HOOK_PORT: '43210',
+          ORCA_AGENT_HOOK_TOKEN: 'token',
+          ORCA_PANE_KEY: 'pane-1',
+          ORCA_TEST_CAPTURE: capturePath
+        }
+      })
+
+      expect(result.status).toBe(0)
+      const posted = readFileSync(capturePath, 'utf-8')
+      expect(posted).toContain('http://127.0.0.1:43210/hook/codex')
+      expect(posted).toContain('X-Orca-Agent-Hook-Token: token')
+    }
+  )
+
   it('installs trusted WSL hooks and removes only Orca entries when disabled', () => {
     const plan = createTestPlan()
     const userCommand = '/bin/sh /home/alice/user-hook.sh'
@@ -185,7 +266,7 @@ describe('Codex WSL runtime hook install', () => {
       `if [ -r '${plan.commandScriptPath}' ]; then /bin/sh '${plan.commandScriptPath}'; fi`
     )
     expect(installed.hooks.UserPromptSubmit[1]?.hooks?.[0]?.command).toBe(userCommand)
-    expect(readFileSync(plan.scriptPath, 'utf-8')).toContain('/mnt/c/Windows/System32/curl.exe')
+    expect(readFileSync(plan.scriptPath, 'utf-8')).toContain('command -v curl.exe')
 
     const managedTrustEntry = getManagedTrustEntry(plan, managedCommand!)
     const trustEntries = readHookTrustEntries(plan.tomlPath)
