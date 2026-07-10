@@ -1223,6 +1223,7 @@
         "main PTY batching",
         "runtime path provenance",
         "runtime serve-sim detection",
+        "runtime terminal wait detection",
         "renderer ACK",
         "xterm scheduler",
         "hidden output"
@@ -1242,24 +1243,27 @@
         "macos"
       ],
       "coveredProviders": [],
-      "coverageNotes": "Local macOS evidence covers the existing main-process pending-output caps plus deterministic runtime path-provenance history reuse and idle-path serve-sim detection. Daemon stream write(false)/drain contracts, cross-session drain priority, and bounded queued tails arrive with the pending perf slice; live flood/latency artifacts remain gaps.",
+      "coverageNotes": "Local macOS evidence covers the existing main-process pending-output caps plus deterministic runtime path-provenance history reuse, idle-path serve-sim detection, and saturated-tail wait detection. Daemon stream write(false)/drain contracts, cross-session drain priority, and bounded queued tails arrive with the pending perf slice; live flood/latency artifacts remain gaps.",
       "motivatingLinks": [
         "https://github.com/stablyai/orca/pull/6836",
         "https://github.com/stablyai/orca/pull/6858",
         "https://github.com/stablyai/orca/pull/7002",
         "https://github.com/stablyai/orca/pull/7054"
       ],
-      "invariant": "High-volume terminal output must stay bounded across daemon socket writes, main runtime metadata and detectors, main-to-renderer in-flight bytes, renderer scheduler queues, and hidden-output restore without starving focused input.",
-      "oracle": "The current executable slice injects daemon socket backpressure and main-process renderer backlog pressure, then asserts write(false)/drain ordering, bounded queued daemon bytes, unchanged path-provenance history reuse for pathless output, idle serve-sim detection with split-JSON continuity, per-PTY and total pending-output caps, preserved sequenced-tail metadata, active-pending protection ahead of background trimming, and ACK-gated in-flight bounds. The live Electron perf oracle adds hidden-output floods, renderer scheduler queue depth, dropped-output-zero normal scenarios, and active key latency budgets before promotion.",
+      "invariant": "High-volume terminal output must stay bounded across daemon socket writes, main runtime metadata, detectors, and tail checks, main-to-renderer in-flight bytes, renderer scheduler queues, and hidden-output restore without starving focused input.",
+      "oracle": "The current executable slice injects daemon socket backpressure and main-process renderer backlog pressure, then asserts write(false)/drain ordering, bounded queued daemon bytes, unchanged path-provenance history reuse for pathless output, idle serve-sim detection with split-JSON continuity, allocation-free ordinary terminal-wait detection with full prompt-family continuity, per-PTY and total pending-output caps, preserved sequenced-tail metadata, active-pending protection ahead of background trimming, and ACK-gated in-flight bounds. The live Electron perf oracle adds hidden-output floods, renderer scheduler queue depth, dropped-output-zero normal scenarios, and active key latency budgets before promotion.",
       "commands": [
         "pnpm exec vitest run --config config/vitest.config.ts src/main/ipc/pty.test.ts",
         "pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/orca-runtime-path-candidate-history.test.ts",
-        "pnpm exec vitest run --config config/vitest.config.ts src/main/emulator/serve-sim-state-watcher.test.ts"
+        "pnpm exec vitest run --config config/vitest.config.ts src/main/emulator/serve-sim-state-watcher.test.ts",
+        "pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/orca-runtime.test.ts src/main/runtime/orca-runtime-tail-wait-memo.test.ts"
       ],
       "testFiles": [
         "src/main/ipc/pty.test.ts",
         "src/main/runtime/orca-runtime-path-candidate-history.test.ts",
-        "src/main/emulator/serve-sim-state-watcher.test.ts"
+        "src/main/emulator/serve-sim-state-watcher.test.ts",
+        "src/main/runtime/orca-runtime.test.ts",
+        "src/main/runtime/orca-runtime-tail-wait-memo.test.ts"
       ],
       "assertionRefs": [
         {
@@ -1282,6 +1286,23 @@
           "assertions": [
             "does not buffer repeated brace-free PTY output while waiting for metadata",
             "detects serve-sim metadata split across PTY chunks and releases the partial object"
+          ]
+        },
+        {
+          "file": "src/main/runtime/orca-runtime-tail-wait-memo.test.ts",
+          "assertions": [
+            "does not rebuild or repeatedly scan an ordinary saturated tail",
+            "memoized stamping matches recompute reference: blocked prompt split across chunks",
+            "stays equivalent across tail eviction beyond the retained cap"
+          ]
+        },
+        {
+          "file": "src/main/runtime/orca-runtime.test.ts",
+          "assertions": [
+            "returns a blocked wait result for Codex update prompts",
+            "returns a blocked wait result for Codex workspace trust prompts",
+            "returns a blocked wait result for generic Codex interactive prompts",
+            "resolves tui-idle when a stale Codex prompt is followed by the ready header"
           ]
         }
       ],
@@ -1312,6 +1333,15 @@
           "result": "passed",
           "durationSeconds": 0.37,
           "summary": "1 test file passed, 6 tests passed on pushed commit f0e3a185593b."
+        },
+        {
+          "date": "2026-07-10",
+          "runner": "local",
+          "platform": "macos",
+          "command": "pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/orca-runtime.test.ts src/main/runtime/orca-runtime-tail-wait-memo.test.ts",
+          "result": "passed",
+          "durationSeconds": 21.33,
+          "summary": "2 test files passed, 609 tests passed on pushed commit 4fb14eac3897."
         }
       ],
       "runtimeBudget": {
@@ -1324,11 +1354,11 @@
       },
       "redGreenEvidence": {
         "status": "partial",
-        "evidence": "Tests assert daemon stream writes pause after socket write(false), later stream data queues behind the pressured socket, flush-immediate output from another session is prioritized ahead of unrelated queued background backlog on drain while preserving per-session order, queued lines resume on drain, global cleanup clears clients that only have backpressured writes, queued daemon stream bytes are bounded by keeping priority output and the newest tail under sustained pressure, pathless runtime output reuses unchanged path-provenance history with zero old-candidate byte scans, ordinary output leaves the niche serve-sim detector idle while split JSON still emits and releases its partial buffer, main pending renderer output is capped per PTY and in total, total-pressure trimming prefers background pending output before active pending output, trimmed pending tails preserve seq/rawLength metadata, and ACK-gated in-flight output remains bounded. Intentionally restoring the old path-history shape failed the focused scale test after 774ms and 4,096 replacements; restoring the old serve-sim buffer failed its scale test after 180ms with 4,096 buffer writes. The fixed shapes passed their focused suites. Existing renderer tests cover replay/backlog slices. Needs broader hidden-output/input-latency perf artifacts before promotion."
+        "evidence": "Tests assert daemon stream writes pause after socket write(false), later stream data queues behind the pressured socket, flush-immediate output from another session is prioritized ahead of unrelated queued background backlog on drain while preserving per-session order, queued lines resume on drain, global cleanup clears clients that only have backpressured writes, queued daemon stream bytes are bounded by keeping priority output and the newest tail under sustained pressure, pathless runtime output reuses unchanged path-provenance history with zero old-candidate byte scans, ordinary output leaves the niche serve-sim detector idle while split JSON still emits and releases its partial buffer, ordinary saturated terminal tails retain no rebuilt wait text or repeated phrase scans while every blocked/ready prompt family remains live, main pending renderer output is capped per PTY and in total, total-pressure trimming prefers background pending output before active pending output, trimmed pending tails preserve seq/rawLength metadata, and ACK-gated in-flight output remains bounded. Intentionally restoring the old path-history shape failed the focused scale test after 774ms and 4,096 replacements; restoring the old serve-sim buffer failed its scale test after 180ms with 4,096 buffer writes; disabling the ordinary-tail branch failed with a retained 253,999-character waitText. The fixed shapes passed their focused suites. Existing renderer tests cover replay/backlog slices. Needs broader hidden-output/input-latency perf artifacts before promotion."
       },
       "performanceBudget": {
         "required": true,
-        "evidence": "Suggested ceilings: renderer in-flight <=8MB total, <=512KB per PTY plus active reserve, renderer queued chars <=2MB, dropped backlogs 0, hidden restore <=1000ms, active key median/worst <=75ms/300ms in perf scenarios. With 1,024 retained provenance candidates, 4,096 pathless chunks dropped from 78.84ms and 4,096 array replacements to 1.74ms and zero replacements. Brace-free 1 KiB output dropped from 20.32/79.12/318.23ms to 0.31/0.64/2.35ms across 4,096/16,384/65,536 chunks."
+        "evidence": "Suggested ceilings: renderer in-flight <=8MB total, <=512KB per PTY plus active reserve, renderer queued chars <=2MB, dropped backlogs 0, hidden restore <=1000ms, active key median/worst <=75ms/300ms in perf scenarios. With 1,024 retained provenance candidates, 4,096 pathless chunks dropped from 78.84ms and 4,096 array replacements to 1.74ms and zero replacements. Brace-free 1 KiB output dropped from 20.32/79.12/318.23ms to 0.31/0.64/2.35ms across 4,096/16,384/65,536 chunks. Repeated ordinary 252,000-character tail checks dropped from 96.34/464.20/941.79/3,796.70ms to 3.21/15.68/31.34/129.72ms across 100/500/1,000/4,096 updates."
       },
       "promotionCriteria": [
         "Split daemon stream backpressure into a deterministic provider/IPC contract if full E2E is flaky.",
@@ -1339,6 +1369,7 @@
         "Current command asserts daemon stream write(false)/drain/cleanup at the batcher contract layer and main pending renderer caps at the IPC contract layer.",
         "Runtime provenance coverage is deterministic and does not include a live high-throughput provider artifact.",
         "Serve-sim detector coverage is deterministic and does not include a live external simulator helper.",
+        "Terminal-wait scale evidence is deterministic and does not yet include a live saturated-tail event-loop artifact.",
         "Current command does not prove renderer parse pressure, scheduler queue depth, event-loop delay, or active key latency.",
         "Live hidden-output pressure, active input latency, and full Electron perf artifacts remain unproved."
       ],
