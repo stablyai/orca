@@ -756,7 +756,12 @@ async function launchRelay(
   // Fire-and-forget via conn.exec: we don't need the output — the socket
   // poll below detects readiness.
   const logFile = `${remoteDir}/relay.log`
-  const launchCmd = `cd ${escapedDir} && nohup ${escapedNode} relay.js --detached --grace-time ${graceTime} --sock-path ${shellEscape(sockFile)} > ${shellEscape(logFile)} 2>&1 </dev/null &`
+  // Why: pass --log-file so the relay rotates relay.log in-process (size cap +
+  // one archived generation). The shell redirect stays so pre-JS boot/crash
+  // output is still captured; once JS starts, the in-process rotator owns all
+  // subsequent logging (it wraps process.stderr/stdout), so the current log
+  // stays at relay.log for the `tail relay.log` diagnostics workflow.
+  const launchCmd = `cd ${escapedDir} && nohup ${escapedNode} relay.js --detached --grace-time ${graceTime} --sock-path ${shellEscape(sockFile)} --log-file ${shellEscape(logFile)} > ${shellEscape(logFile)} 2>&1 </dev/null &`
   const launchChannel = await conn.exec(launchCmd)
   launchChannel.on('data', () => {})
   launchChannel.on('error', () => {})
@@ -1052,6 +1057,10 @@ function windowsRelayLaunchCommand(
     quoted(sockPath),
     '--endpoint-dir',
     quoted(endpointDir),
+    // Why: in-process rotation owns relay.log (the tail-diagnostics target);
+    // the shell redirects remain for pre-JS boot/crash output.
+    '--log-file',
+    quoted(logFile),
     `1>${quoted(logFile)}`,
     `2>${quoted(errFile)}`
   ].join(' ')

@@ -1,0 +1,102 @@
+/**
+ * Regression: relay.log grows unbounded on long-lived relays.
+ *
+ * The relay is launched detached with `> relay.log 2>&1`, which truncates only
+ * at relaunch; a relay that stays up for days accumulates per-stream stderr
+ * lines forever. These tests assert the in-process rotator caps size, keeps one
+ * archived generation, and always leaves the CURRENT log at relay.log so the
+ * `tail -100 relay.log` diagnostics workflow keeps working.
+ */
+import { describe, expect, it, beforeEach, afterEach } from 'vitest'
+import { mkdtempSync, readFileSync, existsSync, statSync, writeFileSync } from 'node:fs'
+import { rm } from 'node:fs/promises'
+import * as path from 'node:path'
+import { tmpdir } from 'node:os'
+
+import { RotatingLogWriter, installRelayLogRotation } from './rotating-log-writer'
+
+describe('RotatingLogWriter', () => {
+  let dir: string
+  let logPath: string
+
+  beforeEach(() => {
+    dir = mkdtempSync(path.join(tmpdir(), 'relay-log-rot-'))
+    logPath = path.join(dir, 'relay.log')
+  })
+
+  afterEach(async () => {
+    await rm(dir, { recursive: true, force: true })
+  })
+
+  it('rotates relay.log -> relay.log.1 at the cap and keeps the current log tail-able', () => {
+    const cap = 4 * 1024
+    const writer = new RotatingLogWriter(logPath, cap)
+    try {
+      const line = `${'a'.repeat(200)}\n`
+      // Write well past the cap so at least one rotation happens.
+      for (let i = 0; i < 60; i += 1) {
+        writer.write(line)
+      }
+
+      // Current log exists at relay.log (tail target) and is under the cap.
+      expect(existsSync(logPath)).toBe(true)
+      expect(statSync(logPath).size).toBeLessThanOrEqual(cap)
+      // Exactly one archived generation.
+      expect(existsSync(`${logPath}.1`)).toBe(true)
+      expect(existsSync(`${logPath}.2`)).toBe(false)
+
+      // The most recent lines are in the current log (tail-ability).
+      writer.write('MARKER-LAST\n')
+      expect(readFileSync(logPath, 'utf-8')).toContain('MARKER-LAST')
+    } finally {
+      writer.dispose()
+    }
+  })
+
+  it('preserves pre-existing boot output already in relay.log (append, not truncate)', () => {
+    writeFileSync(logPath, 'BOOT-LINE-FROM-SHELL-REDIRECT\n')
+    const writer = new RotatingLogWriter(logPath, 1024 * 1024)
+    try {
+      writer.write('runtime line\n')
+      const contents = readFileSync(logPath, 'utf-8')
+      expect(contents).toContain('BOOT-LINE-FROM-SHELL-REDIRECT')
+      expect(contents).toContain('runtime line')
+    } finally {
+      writer.dispose()
+    }
+  })
+
+  it('caps total footprint to ~2x maxBytes (current + one archive)', () => {
+    const cap = 8 * 1024
+    const writer = new RotatingLogWriter(logPath, cap)
+    try {
+      const line = `${'z'.repeat(256)}\n`
+      for (let i = 0; i < 500; i += 1) {
+        writer.write(line)
+      }
+      const currentSize = statSync(logPath).size
+      const archiveSize = existsSync(`${logPath}.1`) ? statSync(`${logPath}.1`).size : 0
+      // Never more than the current file + a single archived generation.
+      expect(currentSize).toBeLessThanOrEqual(cap)
+      expect(archiveSize).toBeLessThanOrEqual(cap * 2)
+      expect(existsSync(`${logPath}.2`)).toBe(false)
+    } finally {
+      writer.dispose()
+    }
+  })
+
+  it('installRelayLogRotation routes process.stderr through the rotator and restores', () => {
+    const cap = 2 * 1024
+    const { restore } = installRelayLogRotation(logPath, cap)
+    try {
+      process.stderr.write('via-stderr-line\n')
+      expect(readFileSync(logPath, 'utf-8')).toContain('via-stderr-line')
+    } finally {
+      restore()
+    }
+    // After restore, process.stderr no longer targets the rotator file.
+    const sizeAfterRestore = statSync(logPath).size
+    process.stderr.write('should-not-be-in-relay-log\n')
+    expect(statSync(logPath).size).toBe(sizeAfterRestore)
+  })
+})
