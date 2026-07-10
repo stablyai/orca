@@ -57,91 +57,100 @@ describe('relay workspace space scan du handling', () => {
     }
   })
 
-  it('streams native du output instead of using execFile buffering', async () => {
-    await writeFile(join(tempDir!, 'app.ts'), 'console.log("ok")\n')
-    const child = createSpawnedDu()
-    spawnMock.mockReturnValue(child)
+  it.skipIf(process.platform === 'win32')(
+    'streams native du output instead of using execFile buffering',
+    async () => {
+      await writeFile(join(tempDir!, 'app.ts'), 'console.log("ok")\n')
+      const child = createSpawnedDu()
+      spawnMock.mockReturnValue(child)
 
-    const scanPromise = scanWorkspaceSpaceDirectory(tempDir!, createContext())
+      const scanPromise = scanWorkspaceSpaceDirectory(tempDir!, createContext())
 
-    await vi.waitFor(() =>
-      expect(spawnMock).toHaveBeenCalledWith('du', ['-k', '-d', '1', tempDir], {
-        stdio: ['ignore', 'pipe', 'pipe']
-      })
-    )
-    child.stdout.emit('data', Buffer.from(`4\t${join(tempDir!, 'app.ts')}\n`))
-    child.stdout.emit('data', Buffer.from(`12\t${tempDir!}\n`))
-    child.emit('close', 0)
-
-    await expect(scanPromise).resolves.toMatchObject({
-      sizeBytes: 12 * 1024,
-      skippedEntryCount: 0,
-      topLevelItems: [expect.objectContaining({ name: 'app.ts' })]
-    })
-    expect(execFileMock).not.toHaveBeenCalled()
-  })
-
-  it('preserves multibyte du paths split across stdout chunks', async () => {
-    const dirname = '数据'
-    await mkdir(join(tempDir!, dirname), { recursive: true })
-    await writeFile(join(tempDir!, dirname, 'pkg.js'), Buffer.alloc(128))
-    const child = createSpawnedDu()
-    spawnMock.mockReturnValue(child)
-
-    const scanPromise = scanWorkspaceSpaceDirectory(tempDir!, createContext())
-
-    await vi.waitFor(() => expect(spawnMock).toHaveBeenCalled())
-    const dirnameBytes = Buffer.from(dirname)
-    const duLine = Buffer.from(`24\t${join(tempDir!, dirname)}\n`)
-    const splitAt = duLine.indexOf(dirnameBytes) + 1
-    child.stdout.emit('data', duLine.subarray(0, splitAt))
-    child.stdout.emit('data', duLine.subarray(splitAt))
-    child.stdout.emit('data', Buffer.from(`32\t${tempDir!}\n`))
-    child.emit('close', 0)
-
-    await expect(scanPromise).resolves.toMatchObject({
-      sizeBytes: 32 * 1024,
-      topLevelItems: [
-        expect.objectContaining({
-          name: dirname,
-          sizeBytes: 24 * 1024
+      await vi.waitFor(() =>
+        expect(spawnMock).toHaveBeenCalledWith('du', ['-k', '-d', '1', tempDir], {
+          stdio: ['ignore', 'pipe', 'pipe']
         })
-      ]
-    })
-  })
+      )
+      child.stdout.emit('data', Buffer.from(`4\t${join(tempDir!, 'app.ts')}\n`))
+      child.stdout.emit('data', Buffer.from(`12\t${tempDir!}\n`))
+      child.emit('close', 0)
 
-  it('keeps native du running past the old timeout and kills it on cancellation', async () => {
-    await writeFile(join(tempDir!, 'app.ts'), 'console.log("ok")\n')
-    const controller = new AbortController()
-    const child = createSpawnedDu()
-    spawnMock.mockReturnValue(child)
-
-    vi.useFakeTimers()
-    let settled = false
-    const scanPromise = scanWorkspaceSpaceDirectory(tempDir!, createContext(controller.signal))
-      .then((scan) => {
-        settled = true
-        return scan
+      await expect(scanPromise).resolves.toMatchObject({
+        sizeBytes: 12 * 1024,
+        skippedEntryCount: 0,
+        topLevelItems: [expect.objectContaining({ name: 'app.ts' })]
       })
-      .catch((error: unknown) => {
-        settled = true
-        throw error
-      })
+      expect(execFileMock).not.toHaveBeenCalled()
+    }
+  )
 
-    await vi.waitFor(() =>
-      expect(spawnMock).toHaveBeenCalledWith('du', ['-k', '-d', '1', tempDir], {
-        stdio: ['ignore', 'pipe', 'pipe']
-      })
-    )
-    await vi.advanceTimersByTimeAsync(120_000)
+  it.skipIf(process.platform === 'win32')(
+    'preserves multibyte du paths split across stdout chunks',
+    async () => {
+      const dirname = '数据'
+      await mkdir(join(tempDir!, dirname), { recursive: true })
+      await writeFile(join(tempDir!, dirname, 'pkg.js'), Buffer.alloc(128))
+      const child = createSpawnedDu()
+      spawnMock.mockReturnValue(child)
 
-    expect(settled).toBe(false)
-    controller.abort()
-    await expect(scanPromise).rejects.toMatchObject({
-      name: 'RelayWorkspaceSpaceScanCancelledError'
-    })
-    expect(child.kill).toHaveBeenCalled()
-  })
+      const scanPromise = scanWorkspaceSpaceDirectory(tempDir!, createContext())
+
+      await vi.waitFor(() => expect(spawnMock).toHaveBeenCalled())
+      const dirnameBytes = Buffer.from(dirname)
+      const duLine = Buffer.from(`24\t${join(tempDir!, dirname)}\n`)
+      const splitAt = duLine.indexOf(dirnameBytes) + 1
+      child.stdout.emit('data', duLine.subarray(0, splitAt))
+      child.stdout.emit('data', duLine.subarray(splitAt))
+      child.stdout.emit('data', Buffer.from(`32\t${tempDir!}\n`))
+      child.emit('close', 0)
+
+      await expect(scanPromise).resolves.toMatchObject({
+        sizeBytes: 32 * 1024,
+        topLevelItems: [
+          expect.objectContaining({
+            name: dirname,
+            sizeBytes: 24 * 1024
+          })
+        ]
+      })
+    }
+  )
+
+  it.skipIf(process.platform === 'win32')(
+    'keeps native du running past the old timeout and kills it on cancellation',
+    async () => {
+      await writeFile(join(tempDir!, 'app.ts'), 'console.log("ok")\n')
+      const controller = new AbortController()
+      const child = createSpawnedDu()
+      spawnMock.mockReturnValue(child)
+
+      vi.useFakeTimers()
+      let settled = false
+      const scanPromise = scanWorkspaceSpaceDirectory(tempDir!, createContext(controller.signal))
+        .then((scan) => {
+          settled = true
+          return scan
+        })
+        .catch((error: unknown) => {
+          settled = true
+          throw error
+        })
+
+      await vi.waitFor(() =>
+        expect(spawnMock).toHaveBeenCalledWith('du', ['-k', '-d', '1', tempDir], {
+          stdio: ['ignore', 'pipe', 'pipe']
+        })
+      )
+      await vi.advanceTimersByTimeAsync(120_000)
+
+      expect(settled).toBe(false)
+      controller.abort()
+      await expect(scanPromise).rejects.toMatchObject({
+        name: 'RelayWorkspaceSpaceScanCancelledError'
+      })
+      expect(child.kill).toHaveBeenCalled()
+    }
+  )
 
   it('falls back accurately when native du is unavailable', async () => {
     await mkdir(join(tempDir!, 'node_modules'), { recursive: true })
