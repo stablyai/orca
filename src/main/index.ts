@@ -122,6 +122,7 @@ import {
 } from './codex-accounts/runtime-selection'
 import { normalizeClaudeRuntimeSelection } from './claude-accounts/runtime-selection'
 import { codexHookService } from './codex/hook-service'
+import { getDefaultWslDistro } from './wsl'
 import { ClaudeAccountService } from './claude-accounts/service'
 import { ClaudeRuntimeAuthService } from './claude-accounts/runtime-auth-service'
 import {
@@ -694,14 +695,21 @@ async function startServeAgentHookServer(): Promise<void> {
 
 function prepareCodexRuntimeHomeForLaunch(target?: CodexAccountSelectionTarget): string | null {
   const runtimeHomePath = codexRuntimeHome!.prepareForCodexLaunch(target)
+  const hookTarget =
+    target?.runtime === 'wsl'
+      ? {
+          runtime: 'wsl' as const,
+          wslDistro: target.wslDistro?.trim() || getDefaultWslDistro()
+        }
+      : target
   const hooksEnabled = isAgentStatusHooksEnabled(store?.getSettings())
   try {
     // Why: launch prep is reachable after startup via PTY/runtime paths; honor
     // the persisted off switch so those launches cannot reinstall removed hooks.
     const status = hooksEnabled
-      ? (codexHookService.installForRuntimeHome(runtimeHomePath, target) ??
+      ? (codexHookService.installForRuntimeHome(runtimeHomePath, hookTarget) ??
         codexHookService.install())
-      : (codexHookService.refreshRuntimeUserHooksForRuntimeHome(runtimeHomePath, target) ??
+      : (codexHookService.refreshRuntimeUserHooksForRuntimeHome(runtimeHomePath, hookTarget) ??
         codexHookService.refreshRuntimeUserHooks())
     if (status.state === 'error') {
       console.warn(

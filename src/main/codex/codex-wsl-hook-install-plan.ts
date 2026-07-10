@@ -1,8 +1,11 @@
 import { execFileSync } from 'node:child_process'
 import { win32 as pathWin32 } from 'node:path'
 import { parseWslUncPath } from '../../shared/wsl-paths'
-import type { CodexAccountSelectionTarget } from '../codex-accounts/runtime-selection'
-import { getDefaultWslDistro, toLinuxPath } from '../wsl'
+
+export type CodexWslRuntimeHookTarget = {
+  runtime?: 'host' | 'wsl'
+  wslDistro?: string | null
+}
 
 export type CodexWslRuntimeHookInstallPlan = {
   configPath: string
@@ -16,6 +19,14 @@ export type CanonicalizeWslLinuxPath = (distro: string, linuxPath: string) => st
 
 function trimTrailingSlash(value: string): string {
   return value.length > 1 ? value.replace(/\/+$/, '') : value
+}
+
+function toDefaultWslLinuxPath(windowsPath: string): string {
+  const driveMatch = windowsPath.match(/^([A-Za-z]):[/\\](.*)$/)
+  if (!driveMatch) {
+    return windowsPath
+  }
+  return `/mnt/${driveMatch[1].toLowerCase()}/${driveMatch[2].replace(/\\/g, '/')}`
 }
 
 function canonicalizeWslLinuxPath(distro: string, linuxPath: string): string | null {
@@ -40,7 +51,7 @@ function canonicalizeWslLinuxPath(distro: string, linuxPath: string): string | n
 
 export function createCodexWslRuntimeHookInstallPlan(
   runtimeHomePath: string | null | undefined,
-  target?: CodexAccountSelectionTarget,
+  target?: CodexWslRuntimeHookTarget,
   canonicalize: CanonicalizeWslLinuxPath = canonicalizeWslLinuxPath
 ): CodexWslRuntimeHookInstallPlan | null {
   if (!runtimeHomePath) {
@@ -51,15 +62,12 @@ export function createCodexWslRuntimeHookInstallPlan(
   if (!wslInfo && target?.runtime !== 'wsl') {
     return null
   }
-  const distro =
-    wslInfo?.distro ||
-    target?.wslDistro?.trim() ||
-    (target?.runtime === 'wsl' ? getDefaultWslDistro() : null)
+  const distro = wslInfo?.distro || (target?.runtime === 'wsl' ? target.wslDistro?.trim() : null)
   if (!distro) {
     return null
   }
 
-  const logicalLinuxRuntimeHome = wslInfo?.linuxPath ?? toLinuxPath(runtimeHomePath)
+  const logicalLinuxRuntimeHome = wslInfo?.linuxPath ?? toDefaultWslLinuxPath(runtimeHomePath)
   if (!logicalLinuxRuntimeHome.startsWith('/')) {
     return null
   }

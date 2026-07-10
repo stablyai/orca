@@ -14,6 +14,7 @@
     "../src/main/codex/codex-config-path-reference-rewrite.ts",
     "../src/main/codex/codex-home-paths.ts",
     "../src/main/codex/codex-hook-identity.ts",
+    "../src/main/codex/codex-wsl-hook-install-plan.ts",
     "../src/main/codex/config-settings-promotion.ts",
     "../src/main/codex/config-toml-line-scan.ts",
     "../src/main/codex/config-toml-trust.ts",

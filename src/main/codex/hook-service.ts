@@ -3,7 +3,6 @@ import { existsSync, readFileSync, unlinkSync } from 'node:fs'
 import { join } from 'node:path'
 import type { SFTPWrapper } from 'ssh2'
 import type { AgentHookInstallState, AgentHookInstallStatus } from '../../shared/agent-hook-types'
-import type { CodexAccountSelectionTarget } from '../codex-accounts/runtime-selection'
 import {
   buildManagedCommandHook,
   createManagedCommandMatcher,
@@ -46,7 +45,8 @@ import { getOrcaManagedCodexHomePath, getSystemCodexHomePath } from './codex-hom
 import { syncSystemConfigIntoManagedCodexHome } from './codex-config-mirror'
 import {
   createCodexWslRuntimeHookInstallPlan,
-  type CodexWslRuntimeHookInstallPlan
+  type CodexWslRuntimeHookInstallPlan,
+  type CodexWslRuntimeHookTarget
 } from './codex-wsl-hook-install-plan'
 import {
   CODEX_HOOK_EVENT_LABEL,
@@ -934,7 +934,7 @@ function refreshWslRuntimeUserHooks(plan: CodexWslRuntimeHookInstallPlan): Agent
 export class CodexHookService {
   installForRuntimeHome(
     runtimeHomePath: string | null | undefined,
-    target?: CodexAccountSelectionTarget
+    target?: CodexWslRuntimeHookTarget
   ): AgentHookInstallStatus | null {
     const wslPlan = createCodexWslRuntimeHookInstallPlan(runtimeHomePath, target)
     return wslPlan ? installManagedHooksIntoWslRuntime(wslPlan) : null
@@ -942,7 +942,7 @@ export class CodexHookService {
 
   refreshRuntimeUserHooksForRuntimeHome(
     runtimeHomePath: string | null | undefined,
-    target?: CodexAccountSelectionTarget
+    target?: CodexWslRuntimeHookTarget
   ): AgentHookInstallStatus | null {
     const wslPlan = createCodexWslRuntimeHookInstallPlan(runtimeHomePath, target)
     return wslPlan ? refreshWslRuntimeUserHooks(wslPlan) : null
