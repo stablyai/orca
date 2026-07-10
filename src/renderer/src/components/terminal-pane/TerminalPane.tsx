@@ -101,7 +101,6 @@ import {
 import { shouldChatTakeOverMobileSurface } from '../native-chat/native-chat-send-eligibility'
 import { canToggleNativeChat } from '../native-chat/native-chat-availability'
 import { isNativeChatTranscriptLocalReadable } from '@/lib/native-chat-transcript-readability'
-import type { AgentType } from '../../../../shared/agent-status-types'
 import { resolvePaneKeyForManager } from '@/lib/pane-manager/pane-key-resolution'
 import { safeFit } from '@/lib/pane-manager/pane-tree-ops'
 import { captureTerminalShutdownLayout } from './terminal-shutdown-layout-capture'
@@ -148,6 +147,7 @@ import { scheduleImagePasteWebglAtlasRecovery } from './terminal-webgl-atlas-rec
 import { restoreTerminalFitToDesktop, restoreTerminalFitsToDesktop } from './terminal-fit-restore'
 import { useVisibleTerminalTabClaim } from './use-visible-terminal-tab-claim'
 import { TerminalSshReconnectOverlay } from './TerminalSshReconnectOverlay'
+import { selectTerminalTabAgentTypesByLeaf } from './terminal-tab-agent-type-index'
 
 const NATIVE_CHAT_ROOT_SELECTOR = '[data-native-chat-root="true"]'
 
@@ -680,19 +680,10 @@ export default function TerminalPane({
   // when Orca launched a *supported* agent here or one was detected live for the
   // leaf, keyed `${tabId}:${leafId}`. Carry the agent identity, not just "an
   // agent exists", so the gate can reject Grok et al.
-  // Scoped to this tab's panes (leafId → agentType) and shallow-compared so an
-  // unrelated tab's agent status tick doesn't re-render this pane.
-  const tabAgentTypeByLeaf = useAppStore(
-    useShallow((store) => {
-      const prefix = `${tabId}:`
-      const byLeaf: Record<string, AgentType> = {}
-      for (const [paneKey, entry] of Object.entries(store.agentStatusByPaneKey)) {
-        if (paneKey.startsWith(prefix) && entry.agentType) {
-          byLeaf[paneKey.slice(prefix.length)] = entry.agentType
-        }
-      }
-      return byLeaf
-    })
+  // Scope to this tab's panes and reuse the shared map index so hidden tabs do
+  // not each rescan every agent entry on unrelated store writes.
+  const tabAgentTypeByLeaf = useAppStore((store) =>
+    selectTerminalTabAgentTypesByLeaf(store.agentStatusByPaneKey, tabId)
   )
   const toggleTabViewMode = useAppStore((store) => store.toggleTabViewMode)
   const savedLayout = useAppStore((store) => store.terminalLayoutsByTabId[tabId] ?? EMPTY_LAYOUT)
