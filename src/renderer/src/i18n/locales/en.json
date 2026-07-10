@@ -3028,7 +3028,8 @@
             "f077f586db": "Don't ask again",
             "c0e972d726": "Cancel",
             "06741a2f3d": "Open MiniMax usage details",
-            "3bbf140864": "MiniMax Usage"
+            "3bbf140864": "MiniMax Usage",
+            "remoteServerLabel": "Remote server"
           },
           "StatusBarUsageEmptyCta": {
             "828c764a79": "Connect an account",
@@ -4789,7 +4790,11 @@
           "435df0ee51": "Under Request Headers, copy the Cookie value.",
           "7492fb3bba": "Paste it here and click Save.",
           "9fec52de4b": "How to copy the cookie",
-          "4e32e030b2": "Stored locally. Orca sends it only to platform.minimax.io for usage refreshes."
+          "4e32e030b2": "Stored locally. Orca sends it only to platform.minimax.io for usage refreshes.",
+          "remoteServerFallback": "the remote server",
+          "loadAccountsFailed": "Could not load provider accounts.",
+          "remoteScopeAccounts": "Showing accounts managed by {{value0}}. Add or re-authenticate accounts on that server.",
+          "remoteScopeAuthContext": "Each account keeps its own sign-in context on {{value0}}."
         },
         "AdvancedPane": {
           "40b29e0bf3": "Restart",

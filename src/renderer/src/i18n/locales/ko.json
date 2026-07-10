@@ -3028,7 +3028,8 @@
             "f077f586db": "다시 묻지 않기",
             "c0e972d726": "취소",
             "06741a2f3d": "MiniMax 사용량 세부 정보 열기",
-            "3bbf140864": "MiniMax 사용량"
+            "3bbf140864": "MiniMax 사용량",
+            "remoteServerLabel": "원격 서버"
           },
           "StatusBarUsageEmptyCta": {
             "828c764a79": "계정 연결",
@@ -4774,7 +4775,11 @@
           "435df0ee51": "Request Headers에서 Cookie 값을 복사합니다.",
           "7492fb3bba": "여기에 붙여넣고 저장을 클릭합니다.",
           "9fec52de4b": "Cookie 복사 방법",
-          "4e32e030b2": "로컬에 저장됩니다. Orca는 사용량 새로 고침을 위해 platform.minimax.io로만 전송합니다."
+          "4e32e030b2": "로컬에 저장됩니다. Orca는 사용량 새로 고침을 위해 platform.minimax.io로만 전송합니다.",
+          "remoteServerFallback": "원격 서버",
+          "loadAccountsFailed": "프로바이더 계정을 불러오지 못했습니다.",
+          "remoteScopeAccounts": "{{value0}}에서 관리하는 계정을 표시하고 있습니다. 계정 추가나 재인증은 해당 서버에서 진행하세요.",
+          "remoteScopeAuthContext": "각 계정은 {{value0}}에 자체 로그인 컨텍스트를 유지합니다."
         },
         "AdvancedPane": {
           "40b29e0bf3": "다시 시작",
