@@ -17,7 +17,8 @@ const CLI_GATED_ITEMS: ReadonlySet<StatusBarItem> = new Set([
 
 export function isStatusBarItemAvailable(
   id: StatusBarItem,
-  detectedAgentIds: TuiAgent[] | null
+  detectedAgentIds: TuiAgent[] | null,
+  hasProviderEvidence = false
 ): boolean {
   if (!CLI_GATED_ITEMS.has(id)) {
     return true
@@ -25,5 +26,7 @@ export function isStatusBarItemAvailable(
   if (detectedAgentIds === null) {
     return true
   }
-  return detectedAgentIds.includes(id as TuiAgent)
+  // Why: PATH detection is a cached negative snapshot. A later successful
+  // usage fetch proves a CLI was installed mid-session and must win over it.
+  return hasProviderEvidence || detectedAgentIds.includes(id as TuiAgent)
 }
