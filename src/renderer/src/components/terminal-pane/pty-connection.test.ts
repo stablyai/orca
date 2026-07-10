@@ -5630,6 +5630,24 @@ describe('connectPanePty', () => {
     expect(transport.sendInput).toHaveBeenCalledWith('yes')
     expect(transport.sendInput).toHaveBeenCalledWith('\x1b[A')
     expect(transport.sendInputImmediate).not.toHaveBeenCalled()
+
+    // terminal-query-reply.test proves real xterm emits this as one fully framed
+    // onData reply; this pins that production-shaped reply to the immediate path.
+    transport.sendInputImmediate.mockClear()
+    const xtversionReply = '\x1bP>|xterm.js(6.1.0-beta.287)\x1b\\'
+    sendTerminalInputThroughPane(pane, xtversionReply)
+    expect(transport.sendInputImmediate).toHaveBeenCalledWith(xtversionReply)
+
+    // Printable input is user-owned. Remote cooked echo comes back through PTY
+    // output, not onData, so xterm/OSC-looking text must stay on normal input.
+    transport.sendInput.mockClear()
+    transport.sendInputImmediate.mockClear()
+    const printableInputs = [']10;hello', '>|xterm.js(6.1.0-beta.287)', ']|literal-text']
+    for (const data of printableInputs) {
+      sendTerminalInputThroughPane(pane, data)
+      expect(transport.sendInput).toHaveBeenCalledWith(data)
+    }
+    expect(transport.sendInputImmediate).not.toHaveBeenCalled()
   })
 
   it('writes the onReplayData pendingEscapeTailAnsi meta last, after the replayed bytes (#7329)', async () => {

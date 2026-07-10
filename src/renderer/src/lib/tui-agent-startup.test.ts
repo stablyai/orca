@@ -176,7 +176,7 @@ describe('buildAgentStartupPlan', () => {
       })
     ).toEqual({
       agent: 'grok',
-      launchCommand: "grok 'Trace the failing test'",
+      launchCommand: "grok -- 'Trace the failing test'",
       expectedProcess: 'grok',
       followupPrompt: null,
       launchConfig: emptyLaunchConfig('grok')

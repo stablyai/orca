@@ -22,6 +22,8 @@ export type NativeChatAvailabilityInput = {
    *  terminal title resolver) when it identifies the foreground as an agent
    *  before hooks arrive. */
   resolvedAgent?: TuiAgent | null
+  /** Whether this renderer's native-chat reader can access the agent transcript. */
+  nativeChatTranscriptIsLocalReadable?: boolean
   /** Already-chat tabs must always be allowed to toggle back to terminal, even
    *  if live hook state was lost during a dev/app restart. */
   isChatViewMode?: boolean
@@ -44,5 +46,8 @@ export function canToggleNativeChat(input: NativeChatAvailabilityInput): boolean
     return true
   }
   const agent = input.detectedAgent ?? input.launchAgent ?? input.resolvedAgent
+  if (agent === 'grok' && input.nativeChatTranscriptIsLocalReadable !== true) {
+    return false
+  }
   return isNativeChatSupportedAgent(agent)
 }

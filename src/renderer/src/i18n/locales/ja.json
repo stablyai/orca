@@ -5290,11 +5290,11 @@
           },
           "nativeChat": {
             "title": "ネイティブチャット",
-            "description": "Claude と Codex の terminal セッションのデスクトップ チャット サーフェスをプレビューします。",
-            "copy": "サポートされている Claude および Codex の terminal ペインから切り替えることができるネイティブ チャット ビューを追加します。トランスクリプトの忠実度、ストリーミング、ターミナルのパリティを調整するための実験です。",
+            "description": "対応エージェントのターミナルセッション用デスクトップチャット画面をプレビューします。",
+            "copy": "対応エージェントのターミナルペインから切り替えられるネイティブチャットビューを追加します。トランスクリプトの忠実度、ストリーミング、ターミナルとの同等性を調整しているため、試験運用中です。",
             "toggleLabel": "ネイティブチャットの切り替え",
             "defaultTitle": "デフォルトのビュー",
-            "defaultCopy": "新規 Claude および Codex の terminal タブを開く方法を選択します。",
+            "defaultCopy": "対応エージェントの新しいターミナルタブを開く方法を選択します。",
             "defaultViewLabel": "デフォルトのネイティブ チャット ビュー",
             "defaultViewTerminal": "Terminal チャット",
             "defaultViewNative": "ネイティブチャット"
@@ -7496,7 +7496,8 @@
             },
             "nativeChat": {
               "title": "ネイティブチャット",
-              "description": "Claude と Codex の terminal セッションのデスクトップ チャット サーフェスをプレビューします。"
+              "description": "対応エージェントのターミナルセッション用デスクトップチャット画面をプレビューします。",
+              "grok": "grok"
             }
           }
         },

@@ -5290,11 +5290,11 @@
           },
           "nativeChat": {
             "title": "네이티브 채팅",
-            "description": "Claude 및 Codex terminal 세션에 대한 데스크톱 채팅 화면을 미리 봅니다.",
-            "copy": "지원되는 Claude 및 Codex terminal 창에서 전환할 수 있는 기본 채팅 보기를 추가합니다. 성적표 충실도, 스트리밍 및 terminal 패리티를 조정하는 동안 실험적입니다.",
+            "description": "지원되는 에이전트 터미널 세션의 데스크톱 채팅 화면을 미리 봅니다.",
+            "copy": "지원되는 에이전트 터미널 창에서 전환할 수 있는 네이티브 채팅 보기를 추가합니다. 대화 기록 충실도, 스트리밍, 터미널 동작 일치를 조정하는 동안 실험적으로 제공됩니다.",
             "toggleLabel": "기본 채팅 전환",
             "defaultTitle": "기본 보기",
-            "defaultCopy": "새로운 Claude 및 Codex terminal 탭이 열리는 방식을 선택하세요.",
+            "defaultCopy": "지원되는 에이전트의 새 터미널 탭을 여는 방식을 선택합니다.",
             "defaultViewLabel": "기본 기본 채팅 보기",
             "defaultViewTerminal": "Terminal 채팅",
             "defaultViewNative": "네이티브 채팅"
@@ -7459,7 +7459,8 @@
             },
             "nativeChat": {
               "title": "네이티브 채팅",
-              "description": "Claude 및 Codex terminal 세션에 대한 데스크톱 채팅 화면을 미리 봅니다."
+              "description": "지원되는 에이전트 터미널 세션의 데스크톱 채팅 화면을 미리 봅니다.",
+              "grok": "grok"
             }
           }
         },

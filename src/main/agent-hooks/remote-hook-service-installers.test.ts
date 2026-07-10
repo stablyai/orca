@@ -455,6 +455,35 @@ describe('remote hook service installers', () => {
     expect(devin.fs.files.get('/home/dev/.orca/agent-hooks/devin-hook.sh')).toContain('/hook/devin')
   })
 
+  it('installs remote Grok config in the explicit guest GROK_HOME', async () => {
+    const { sftp, fs } = createFakeSftp()
+
+    const status = await new GrokHookService().installRemote(
+      sftp,
+      '/home/dev',
+      '/srv/grok profile/'
+    )
+
+    expect(status.configPath).toBe('/srv/grok profile/hooks/orca-status.json')
+    expect(fs.files.has('/srv/grok profile/hooks/orca-status.json')).toBe(true)
+    expect(fs.files.has('/home/dev/.grok/hooks/orca-status.json')).toBe(false)
+    const script = fs.files.get('/home/dev/.orca/agent-hooks/grok-hook.sh')!
+    expect(script).toContain('${#GROK_HOME}" -le 4096')
+    expect(script).toContain('--data-urlencode "grokHome=${grok_home}"')
+  })
+
+  it.each(['relative/grok', '/bad\\grok', `/${'x'.repeat(4096)}`])(
+    'falls back to login-home Grok config for invalid remote home %s',
+    async (remoteGrokHome) => {
+      const { sftp, fs } = createFakeSftp()
+
+      const status = await new GrokHookService().installRemote(sftp, '/home/dev', remoteGrokHome)
+
+      expect(status.configPath).toBe('/home/dev/.grok/hooks/orca-status.json')
+      expect(fs.files.has('/home/dev/.grok/hooks/orca-status.json')).toBe(true)
+    }
+  )
+
   it('installs remote Kimi hooks as a managed config.toml block preserving user config', async () => {
     const userConfig = 'default_model = "kimi-k2.6"\n\n[providers."mine"]\napi_key = "sk-secret"\n'
     const { sftp, fs } = createFakeSftp({ '/home/dev/.kimi-code/config.toml': userConfig })

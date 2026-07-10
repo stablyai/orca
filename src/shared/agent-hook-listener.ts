@@ -25,7 +25,7 @@ import {
   unlinkSync,
   writeFileSync
 } from 'node:fs'
-import { join } from 'node:path'
+import { isAbsolute, join } from 'node:path'
 
 import { parseAgentStatusPayload, type ParsedAgentStatusPayload } from './agent-status-types'
 import { ORCA_HOOK_PROTOCOL_VERSION } from './agent-hook-types'
@@ -38,6 +38,10 @@ import { parsePaneKey } from './stable-pane-id'
 import { isHarnessInjectedUserTurnText } from './harness-injected-user-turns'
 import {
   buildGrokChatHistoryPathCandidates,
+  findGrokChatHistoryBySessionId,
+  getCachedGrokChatHistoryBySessionId,
+  GROK_SESSION_ID_MAX_LENGTH,
+  isSafeGrokSessionId,
   resolveGrokChatHistoryPathSync,
   resolveGrokSessionsDir
 } from './grok-session-paths'
@@ -687,14 +691,14 @@ function deriveInteractivePrompt(
   toolInput: unknown,
   eventName?: unknown
 ): string | undefined {
-  // Why: an AskUserQuestion is pending only on the Pre/Permission event. On
-  // PostToolUse it has already been answered, so re-asserting the `{questions}`
-  // prompt would re-show an answered card instead of letting it clear. The live
-  // working indicator keys off agentStatus.state (not this prompt), so dropping
-  // it here doesn't suppress it.
+  // Why: providers vary event casing; any post-tool event means the question is
+  // no longer pending and must not recreate its answered live card.
+  const normalizedEventName = normalizeHookEventName(eventName)
+  const isPostToolEvent =
+    normalizedEventName === 'post_tool_use' || normalizedEventName === 'post_tool_use_failure'
   if (
     isAskUserQuestionTool(toolName) &&
-    eventName !== 'PostToolUse' &&
+    !isPostToolEvent &&
     toolInput !== undefined &&
     toolInput !== null
   ) {
@@ -775,8 +779,8 @@ const TRANSCRIPT_CHUNK_BYTES = 64 * 1024
 const TRANSCRIPT_MAX_SCAN_BYTES = 4 * 1024 * 1024
 const AMP_THREAD_ID_MAX_LENGTH = 256
 const AMP_MAX_SCOPED_THREAD_CACHE_KEYS = 32
-const GROK_SESSION_ID_MAX_LENGTH = 128
 const GROK_SESSION_CWD_MAX_LENGTH = 4096
+const GROK_HOME_ENVELOPE_MAX_LENGTH = 4096
 
 function extractAssistantTextFromLine(line: string): string | undefined {
   let entry: unknown
@@ -1045,11 +1049,31 @@ function readBoundedString(
   return value && value.length <= maxLength ? value : undefined
 }
 
-function isSafeGrokSessionId(sessionId: string): boolean {
-  return /^[A-Za-z0-9_-]+$/.test(sessionId) && sessionId.length <= GROK_SESSION_ID_MAX_LENGTH
+function readGrokHomeEnvelope(record: Record<string, unknown>): string | undefined {
+  const value = readBoundedString(record, ['grokHome'], GROK_HOME_ENVELOPE_MAX_LENGTH)
+  if (!value || value !== value.trim() || !isAbsolute(value) || hasControlCharacter(value)) {
+    return undefined
+  }
+  return value
 }
 
-function getGrokChatHistoryPath(hookPayload: Record<string, unknown>): string | undefined {
+function hasControlCharacter(value: string): boolean {
+  return Array.from(value).some((character) => {
+    const code = character.charCodeAt(0)
+    return code <= 0x1f || code === 0x7f
+  })
+}
+
+type GrokSessionMetadata = {
+  sessionId: string
+  cwd?: string
+  sessionsDir: string
+}
+
+function readGrokSessionMetadata(
+  hookPayload: Record<string, unknown>,
+  grokHome?: string
+): GrokSessionMetadata | undefined {
   const sessionId = readBoundedString(
     hookPayload,
     ['sessionId', 'session_id'],
@@ -1063,37 +1087,54 @@ function getGrokChatHistoryPath(hookPayload: Record<string, unknown>): string | 
     ['cwd', 'workspaceRoot', 'workspace_root'],
     GROK_SESSION_CWD_MAX_LENGTH
   )
-  // Why: honor GROK_HOME and find sessions under long-cwd slug groups by
-  // walking for sessionId — encodeURIComponent(cwd) alone misses both cases.
+  // Why: hook scripts report the effective per-PTY/remote home; old scripts
+  // fall back to the listener runtime's Grok home for compatibility.
+  const sessionsDir = grokHome
+    ? join(grokHome, 'sessions')
+    : resolveGrokSessionsDir(process.env, homedir())
+  return { sessionId, cwd, sessionsDir }
+}
+
+function getGrokChatHistoryPath(
+  hookPayload: Record<string, unknown>,
+  grokHome?: string
+): string | undefined {
+  const metadata = readGrokSessionMetadata(hookPayload, grokHome)
+  if (!metadata) {
+    return undefined
+  }
   const resolved = resolveGrokChatHistoryPathSync({
-    sessionId,
-    cwd: cwd ?? null,
-    env: process.env,
-    homeDir: homedir()
+    sessionId: metadata.sessionId,
+    cwd: metadata.cwd ?? null,
+    sessionsDir: metadata.sessionsDir
   })
   if (resolved) {
     return resolved
   }
+  const cached = getCachedGrokChatHistoryBySessionId(metadata.sessionsDir, metadata.sessionId)
+  if (cached) {
+    return cached
+  }
   // Why: hasPendingAgentResultText only needs a plausible on-disk target when
   // the file may not exist yet (SessionEnd can race the last write). Prefer a
-  // short-cwd candidate when available; long-cwd sessions still resolve once
-  // the file appears via the walk above on a later read.
-  if (!cwd) {
+  // short-cwd candidate when available; async discovery caches slug groups.
+  if (!metadata.cwd) {
     return undefined
   }
   return (
     buildGrokChatHistoryPathCandidates({
-      sessionId,
-      cwd,
-      sessionsDir: resolveGrokSessionsDir(process.env, homedir())
+      sessionId: metadata.sessionId,
+      cwd: metadata.cwd,
+      sessionsDir: metadata.sessionsDir
     })[0] ?? undefined
   )
 }
 
 function readLastAssistantFromGrokChatHistory(
-  hookPayload: Record<string, unknown>
+  hookPayload: Record<string, unknown>,
+  grokHome?: string
 ): string | undefined {
-  const chatHistoryPath = getGrokChatHistoryPath(hookPayload)
+  const chatHistoryPath = getGrokChatHistoryPath(hookPayload, grokHome)
   if (!chatHistoryPath) {
     return undefined
   }
@@ -1107,12 +1148,15 @@ export function hasPendingAgentResultText(source: AgentHookSource, body: unknown
   if (!record) {
     return false
   }
-  const directMessage =
-    record.last_assistant_message ?? record.lastAssistantMessage ?? record.message
-  if (typeof directMessage === 'string' && directMessage.trim().length > 0) {
+  if (hasExplicitLastAssistantResult(record)) {
     return false
   }
   if (source === 'copilot') {
+    // Why: Copilot Stop consumes generic `message` as its final assistant text;
+    // Grok and Antigravity use that field for status text instead.
+    if (hasNonEmptyString(record.message)) {
+      return false
+    }
     const transcriptPath = record.transcript_path ?? record.transcriptPath
     return typeof transcriptPath === 'string' && transcriptPath.trim().length > 0
   }
@@ -1128,13 +1172,59 @@ export function hasPendingAgentResultText(source: AgentHookSource, body: unknown
     const transcriptPath = record.transcriptPath ?? record.transcript_path
     return typeof transcriptPath === 'string' && transcriptPath.trim().length > 0
   }
-  if (
-    source === 'grok' &&
-    isGrokEvent(record.hookEventName ?? record.hook_event_name, 'stop', 'session_end')
-  ) {
-    return getGrokChatHistoryPath(record) !== undefined
+  const pendingGrokDiscovery = preparePendingGrokResultDiscovery(source, body)
+  if (pendingGrokDiscovery) {
+    void pendingGrokDiscovery
+    return true
   }
   return false
+}
+
+function hasNonEmptyString(value: unknown): boolean {
+  return typeof value === 'string' && value.trim().length > 0
+}
+
+function hasExplicitLastAssistantResult(record: Record<string, unknown>): boolean {
+  return (
+    hasNonEmptyString(record.last_assistant_message) ||
+    hasNonEmptyString(record.lastAssistantMessage)
+  )
+}
+
+/** Start bounded discovery only for a Grok completion that still needs result text. */
+export function preparePendingGrokResultDiscovery(
+  source: AgentHookSource,
+  body: unknown
+): Promise<void> | null {
+  if (source !== 'grok') {
+    return null
+  }
+  const envelope =
+    typeof body === 'object' && body !== null ? (body as Record<string, unknown>) : null
+  const record = parseHookBodyPayloadRecord(body)
+  if (!record || hasExplicitLastAssistantResult(record)) {
+    return null
+  }
+  const eventName =
+    envelope?.hook_event_name ??
+    envelope?.hookEventName ??
+    record.hook_event_name ??
+    record.hookEventName
+  if (!isGrokEvent(eventName, 'stop', 'session_end')) {
+    return null
+  }
+  const metadata = readGrokSessionMetadata(
+    record,
+    envelope ? readGrokHomeEnvelope(envelope) : undefined
+  )
+  if (!metadata) {
+    return null
+  }
+  // Why: the server can await this signal without moving filesystem discovery
+  // back into the synchronous hook normalization path.
+  return findGrokChatHistoryBySessionId(metadata.sessionsDir, metadata.sessionId).then(
+    () => undefined
+  )
 }
 
 function readLastAssistantFromTranscriptOnce(transcriptPath: string): string | undefined {
@@ -1873,7 +1963,8 @@ function isGrokEvent(eventName: unknown, ...expected: readonly string[]): boolea
 
 function extractGrokToolFields(
   eventName: unknown,
-  hookPayload: Record<string, unknown>
+  hookPayload: Record<string, unknown>,
+  grokHome?: string
 ): ToolSnapshot {
   if (isGrokEvent(eventName, 'pre_tool_use', 'post_tool_use', 'post_tool_use_failure')) {
     const toolName =
@@ -1881,10 +1972,7 @@ function extractGrokToolFields(
       readString(hookPayload, 'tool_name') ??
       readString(hookPayload, 'name')
     const rawInput =
-      hookPayload.toolInput ??
-      hookPayload.tool_input ??
-      hookPayload.input ??
-      hookPayload.arguments
+      hookPayload.toolInput ?? hookPayload.tool_input ?? hookPayload.input ?? hookPayload.arguments
     const toolInput =
       deriveToolInputPreview(toolName, rawInput) ?? deriveFallbackToolInputPreview(rawInput)
     // Why: Grok's ask_user_question is auto-allowed and arrives as PreToolUse
@@ -1929,7 +2017,7 @@ function extractGrokToolFields(
     if (fromTranscript) {
       return { lastAssistantMessage: fromTranscript }
     }
-    const fromChatHistory = readLastAssistantFromGrokChatHistory(hookPayload)
+    const fromChatHistory = readLastAssistantFromGrokChatHistory(hookPayload, grokHome)
     if (fromChatHistory) {
       return { lastAssistantMessage: fromChatHistory }
     }
@@ -2152,7 +2240,8 @@ function hasExplicitUserPrompt(
 function extractToolFields(
   source: AgentHookSource,
   eventName: unknown,
-  hookPayload: Record<string, unknown>
+  hookPayload: Record<string, unknown>,
+  options?: { grokHome?: string }
 ): ToolSnapshot {
   // Why: exhaustive switch so adding a source to AgentHookSource fails
   // typecheck here instead of silently routing through OpenCode's extractor.
@@ -2182,7 +2271,7 @@ function extractToolFields(
     case 'command-code':
       return extractCommandCodeToolFields(eventName, hookPayload)
     case 'grok':
-      return extractGrokToolFields(eventName, hookPayload)
+      return extractGrokToolFields(eventName, hookPayload, options?.grokHome)
     case 'copilot':
       return extractCopilotToolFields(normalizeCopilotEventName(eventName), hookPayload)
     case 'hermes':
@@ -3050,7 +3139,8 @@ function normalizeGrokEvent(
   eventName: unknown,
   promptText: string,
   paneKey: string,
-  hookPayload: Record<string, unknown>
+  hookPayload: Record<string, unknown>,
+  grokHome?: string
 ): ParsedAgentStatusPayload | null {
   if (isGrokEvent(eventName, 'session_start')) {
     // Why: Grok emits SessionStart when the TUI opens/resumes. It should reset
@@ -3110,7 +3200,7 @@ function normalizeGrokEvent(
   const snapshot = resolveToolState(
     state,
     paneKey,
-    extractToolFields('grok', eventName, hookPayload),
+    extractToolFields('grok', eventName, hookPayload, { grokHome }),
     { resetOnNewTurn: isNewTurnEvent('grok', eventName) }
   )
 
@@ -3344,7 +3434,14 @@ export function normalizeHookPayload(
       )
       break
     case 'grok':
-      payload = normalizeGrokEvent(state, eventName, promptText, paneKey, hookPayloadRecord)
+      payload = normalizeGrokEvent(
+        state,
+        eventName,
+        promptText,
+        paneKey,
+        hookPayloadRecord,
+        readGrokHomeEnvelope(record)
+      )
       break
     case 'copilot':
       payload = normalizeCopilotEvent(state, eventName, promptText, paneKey, hookPayloadRecord)

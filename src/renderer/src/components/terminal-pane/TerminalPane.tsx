@@ -99,6 +99,7 @@ import {
 } from '@/lib/pane-manager/mobile-driver-state'
 import { shouldChatTakeOverMobileSurface } from '../native-chat/native-chat-send-eligibility'
 import { canToggleNativeChat } from '../native-chat/native-chat-availability'
+import { isNativeChatTranscriptLocalReadable } from '@/lib/native-chat-transcript-readability'
 import type { AgentType } from '../../../../shared/agent-status-types'
 import { resolvePaneKeyForManager } from '@/lib/pane-manager/pane-key-resolution'
 import { safeFit } from '@/lib/pane-manager/pane-tree-ops'
@@ -316,6 +317,9 @@ export default function TerminalPane({
     }
     return connectionId
   })
+  const nativeChatTranscriptIsLocalReadable = useAppStore((store) =>
+    isNativeChatTranscriptLocalReadable(getConnectionIdFromState(store, worktreeId))
+  )
   // Which machine's SSH store this target belongs to: a remote Orca server's
   // per-environment bucket, or null for this machine's local SSH maps. The
   // explicit-owner resolver never lets a merely focused runtime make a
@@ -719,6 +723,7 @@ export default function TerminalPane({
         launchAgent: detectedAgent ? null : terminalTab?.launchAgent,
         detectedAgent,
         resolvedAgent: detectedAgent ? null : resolveTitleAgentForLeaf(leafId),
+        nativeChatTranscriptIsLocalReadable,
         isChatViewMode: isChatViewForLeaf
       })
     },
@@ -727,6 +732,7 @@ export default function TerminalPane({
       effectiveChatViewMode,
       chatLeafId,
       nativeChatEnabled,
+      nativeChatTranscriptIsLocalReadable,
       terminalTab?.launchAgent,
       resolveTitleAgentForLeaf
     ]

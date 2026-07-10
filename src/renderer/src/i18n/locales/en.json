@@ -5305,11 +5305,11 @@
           "0e89a574ae": "Floating animated pet in the bottom-right corner.",
           "nativeChat": {
             "title": "Native chat",
-            "description": "Preview the desktop chat surface for Claude and Codex terminal sessions.",
-            "copy": "Adds a native chat view you can switch to from supported Claude and Codex terminal panes. Experimental while we tune transcript fidelity, streaming, and terminal parity.",
+            "description": "Preview the desktop chat surface for supported agent terminal sessions.",
+            "copy": "Adds a native chat view you can switch to from supported agent terminal panes. Experimental while we tune transcript fidelity, streaming, and terminal parity.",
             "toggleLabel": "Toggle native chat",
             "defaultTitle": "Default view",
-            "defaultCopy": "Choose how new Claude and Codex terminal tabs open.",
+            "defaultCopy": "Choose how new supported agent terminal tabs open.",
             "defaultViewLabel": "Default native chat view",
             "defaultViewTerminal": "Terminal chat",
             "defaultViewNative": "Native chat"
@@ -7511,7 +7511,8 @@
             "87d99e634b": "Pet",
             "nativeChat": {
               "title": "Native chat",
-              "description": "Preview the desktop chat surface for Claude and Codex terminal sessions."
+              "description": "Preview the desktop chat surface for supported agent terminal sessions.",
+              "grok": "grok"
             }
           }
         },

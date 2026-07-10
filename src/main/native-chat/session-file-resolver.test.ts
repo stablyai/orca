@@ -1,7 +1,8 @@
 import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { dirname, join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
+
 import { resolveSessionFilePath } from './session-file-resolver'
 
 let tempRoots: string[] = []
@@ -62,6 +63,35 @@ describe('resolveSessionFilePath', () => {
     await expect(resolveSessionFilePath('grok', 'sess-long-1', { grokSessionsDir })).resolves.toBe(
       target
     )
+  })
+
+  it('ignores nested Grok decoys outside the direct group/session layout', async () => {
+    const root = await makeRoot('orca-native-chat-resolve-grok-decoy-')
+    const grokSessionsDir = join(root, 'grok-sessions')
+    const decoy = join(
+      grokSessionsDir,
+      'group',
+      'other-session',
+      'nested',
+      'sess-decoy',
+      'chat_history.jsonl'
+    )
+    await mkdir(dirname(decoy), { recursive: true })
+    await writeFile(decoy, '{}\n')
+
+    await expect(
+      resolveSessionFilePath('grok', 'sess-decoy', { grokSessionsDir })
+    ).resolves.toBeNull()
+  })
+
+  it('rejects unsafe Grok session ids before filesystem discovery', async () => {
+    const root = await makeRoot('orca-native-chat-resolve-grok-invalid-')
+    const grokSessionsDir = join(root, 'grok-sessions')
+    await mkdir(grokSessionsDir, { recursive: true })
+
+    await expect(
+      resolveSessionFilePath('grok', '../escape', { grokSessionsDir })
+    ).resolves.toBeNull()
   })
 
   it('resolves Grok sessions under GROK_HOME when no override is passed', async () => {

@@ -5290,11 +5290,11 @@
           },
           "nativeChat": {
             "title": "原生聊天",
-            "description": "预览 Claude 和 Codex 终端会话的桌面聊天界面。",
-            "copy": "添加一个原生聊天视图，可从受支持的 Claude 和 Codex 终端窗格切换进入。在我们调校记录保真度、流式输出和终端一致性期间，此功能仍为实验性。",
+            "description": "预览受支持的智能体终端会话的桌面聊天界面。",
+            "copy": "添加可从受支持的智能体终端窗格切换的原生聊天视图。在我们调整记录保真度、流式传输和终端一致性期间，此功能仍处于实验阶段。",
             "toggleLabel": "切换原生聊天",
             "defaultTitle": "默认视图",
-            "defaultCopy": "选择新的 Claude 和 Codex 终端标签页如何打开。",
+            "defaultCopy": "选择如何打开受支持智能体的新终端标签页。",
             "defaultViewLabel": "默认原生聊天视图",
             "defaultViewTerminal": "终端聊天",
             "defaultViewNative": "原生聊天"
@@ -7459,7 +7459,8 @@
             },
             "nativeChat": {
               "title": "原生聊天",
-              "description": "预览 Claude 和 Codex 终端会话的桌面聊天界面。"
+              "description": "预览受支持的智能体终端会话的桌面聊天界面。",
+              "grok": "grok"
             }
           }
         },

@@ -88,12 +88,20 @@ describe('GrokHookService', () => {
     expect(script).toContain('/hook/grok')
     if (process.platform === 'win32') {
       expect(script).toContain('%SystemRoot%\\System32\\curl.exe')
+      expect(script).toContain('set "ORCA_GROK_HOME=%GROK_HOME%"')
+      expect(script).toContain('%GROK_HOME:~4096,1%')
+      expect(script).toContain(
+        'if "%ORCA_GROK_HOME:~-1%"=="\\" set "ORCA_GROK_HOME=%ORCA_GROK_HOME%."'
+      )
+      expect(script).toContain('--data-urlencode "grokHome=%ORCA_GROK_HOME%"')
     } else {
       // Why: payload is piped to curl via stdin (`payload@-`) so it never lands
       // on the curl command line (EDR oversized-command-line false positive).
       expect(script).toContain('payload=$(cat)')
       expect(script).toContain('printf \'%s\' "$payload" | curl')
       expect(script).toContain('--data-urlencode "payload@-"')
+      expect(script).toContain('${#GROK_HOME}" -le 4096')
+      expect(script).toContain('--data-urlencode "grokHome=${grok_home}"')
       expect(script).not.toContain('--data-urlencode "payload=${payload}"')
     }
   })

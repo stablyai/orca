@@ -201,7 +201,7 @@ describe('launchAgentInNewTab', () => {
     })
   })
 
-  it('keeps unsupported submit-after-ready launches in terminal mode and does not seed chat', async () => {
+  it('opens local Grok submit-after-ready launches in native chat', async () => {
     store.settings = {
       agentCmdOverrides: {},
       agentDefaultArgs: {},
@@ -220,9 +220,36 @@ describe('launchAgentInNewTab', () => {
     })
 
     expect(mockCreateTab).toHaveBeenCalledWith('wt-1', undefined, undefined, {
-      launchAgent: 'grok'
+      launchAgent: 'grok',
+      quickCommandLabel: undefined,
+      viewMode: 'chat'
     })
-    expect(mockSeedNativeChatLaunchPrompt).not.toHaveBeenCalled()
+    expect(mockSeedNativeChatLaunchPrompt).toHaveBeenCalledWith({
+      tabId: 'tab-1',
+      agent: 'grok',
+      text: 'large generated prompt',
+      createdAt: expect.any(Number)
+    })
+  })
+
+  it('keeps Model-A SSH Grok launches in terminal mode', async () => {
+    store.settings = {
+      agentCmdOverrides: {},
+      agentDefaultArgs: {},
+      agentDefaultEnv: {},
+      activeRuntimeEnvironmentId: null,
+      experimentalNativeChat: true,
+      openAgentTabsInChatByDefault: true
+    }
+    store.repos = [{ id: 'repo-1', connectionId: 'ssh-target-1', path: '/repo' }]
+    const { launchAgentInNewTab } = await import('./launch-agent-in-new-tab')
+
+    launchAgentInNewTab({ agent: 'grok', worktreeId: 'wt-1' })
+
+    expect(mockCreateTab).toHaveBeenCalledWith('wt-1', undefined, undefined, {
+      launchAgent: 'grok',
+      quickCommandLabel: undefined
+    })
   })
 
   it('passes quick command labels only to locally-created agent tabs', async () => {

@@ -18,6 +18,7 @@ import { normalizeTerminalLineHeight } from '../../../../shared/terminal-line-he
 import { normalizeTerminalTuiMouseWheelMultiplier } from '@/lib/pane-manager/pane-terminal-mouse-wheel'
 import { buildWindowsPtyCompatibilityOptions } from '@/lib/pane-manager/windows-pty-compatibility'
 import { buildTerminalKeyboardProtocolOptions } from '@/lib/pane-manager/terminal-keyboard-protocol'
+import { resolvePaneKeyboardProtocolAgent } from './terminal-keyboard-protocol-pane-agent'
 import { useAppStore } from '@/store'
 import {
   createFilePathLinkProvider,
@@ -1374,9 +1375,12 @@ export function useTerminalPaneLifecycle({
           (candidate) => candidate.id === tabId
         )
         const platformInfo = window.api.platform?.get?.()
-        // Why: Grok on local Windows ConPTY needs KKP for modified Enter; pass
-        // known agent so the ConPTY withhold (#2434) does not blank Grok chords.
-        const knownTuiAgent = startup?.launchAgent ?? currentTab?.launchAgent ?? null
+        // Why: launch identity belongs only to the pane consuming this one-shot
+        // startup. A tab-wide hint would leak Grok's KKP exception to shell splits.
+        const knownTuiAgent = resolvePaneKeyboardProtocolAgent(
+          ptyDeps.startup,
+          currentTab?.launchAgent
+        )
         const ptyBackendContext = {
           userAgent: navigator.userAgent,
           osRelease: platformInfo?.osRelease,

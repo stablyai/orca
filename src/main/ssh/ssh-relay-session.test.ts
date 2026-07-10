@@ -172,6 +172,39 @@ describe('SshRelaySession', () => {
     expect(registerSshGitProvider).toHaveBeenCalledWith('target-1', expect.anything())
   })
 
+  it.each([
+    ['/bin/bash', "'/bin/bash' -lc 'printenv GROK_HOME | head -c 4097'"],
+    ['/usr/bin/fish', "'/usr/bin/fish' -lc 'printenv GROK_HOME | head -c 4097'"],
+    ['/bin/tcsh', "'/bin/tcsh' -lc 'printenv GROK_HOME | head -c 4097'"],
+    ['/bin/sh', "'/bin/sh' -c 'printenv GROK_HOME | head -c 4097'"]
+  ])('uses a shell-independent GROK_HOME probe with login shell %s', async (shell, command) => {
+    process.env.ORCA_FEATURE_REMOTE_AGENT_HOOKS = '1'
+    muxRequestMock.mockImplementation(async (method: string) =>
+      method === 'session.resolveHome' ? { resolvedPath: '/home/orca' } : { ok: true }
+    )
+    vi.mocked(execCommand).mockResolvedValueOnce(`${shell}\n`).mockResolvedValueOnce('/srv/grok\n')
+    const sftp = { end: vi.fn() }
+    const { mockStore, mockPortForward, getMainWindow } = createMockDeps()
+    const mockConn = { sftp: vi.fn().mockResolvedValue(sftp) } as unknown as SshConnection
+    const session = new SshRelaySession('target-1', getMainWindow, mockStore, mockPortForward)
+
+    await session.establish(mockConn)
+
+    expect(execCommand).toHaveBeenNthCalledWith(
+      1,
+      mockConn,
+      "printenv SHELL || printf '/bin/sh\\n'",
+      { timeoutMs: 8_000 }
+    )
+    expect(execCommand).toHaveBeenNthCalledWith(2, mockConn, command, {
+      wrapCommand: false,
+      timeoutMs: 8_000
+    })
+    expect(installRemoteManagedAgentHooksMock).toHaveBeenCalledWith(sftp, '/home/orca', {
+      grokHomeDir: '/srv/grok'
+    })
+  })
+
   it('installs remote managed hooks and relay-owned plugin assets before registering the SSH PTY provider', async () => {
     process.env.ORCA_FEATURE_REMOTE_AGENT_HOOKS = '1'
     muxRequestMock.mockImplementation(async (method: string) => {
@@ -181,6 +214,9 @@ describe('SshRelaySession', () => {
       return { ok: true }
     })
     const sftp = { end: vi.fn() }
+    vi.mocked(execCommand)
+      .mockResolvedValueOnce('/bin/bash\n')
+      .mockResolvedValueOnce('/srv/grok profile\n')
     const { mockStore, mockPortForward, getMainWindow } = createMockDeps()
     const mockConn = {
       sftp: vi.fn().mockResolvedValue(sftp)
@@ -199,7 +235,9 @@ describe('SshRelaySession', () => {
       ompExtensionSource: expect.stringContaining('/hook/omp')
     })
     expect(mockConn.sftp).toHaveBeenCalledTimes(1)
-    expect(installRemoteManagedAgentHooksMock).toHaveBeenCalledWith(sftp, '/home/orca')
+    expect(installRemoteManagedAgentHooksMock).toHaveBeenCalledWith(sftp, '/home/orca', {
+      grokHomeDir: '/srv/grok profile'
+    })
     expect(sftp.end).toHaveBeenCalledTimes(1)
     expect(installRemoteManagedAgentHooksMock.mock.invocationCallOrder[0]).toBeLessThan(
       muxRequestMock.mock.invocationCallOrder[installPluginsCallIndex]
@@ -207,6 +245,26 @@ describe('SshRelaySession', () => {
     expect(muxRequestMock.mock.invocationCallOrder[installPluginsCallIndex]).toBeLessThan(
       vi.mocked(registerSshPtyProvider).mock.invocationCallOrder[0]
     )
+  })
+
+  it('falls back to login-home Grok config when the remote env probe is invalid', async () => {
+    process.env.ORCA_FEATURE_REMOTE_AGENT_HOOKS = '1'
+    muxRequestMock.mockImplementation(async (method: string) =>
+      method === 'session.resolveHome' ? { resolvedPath: '/home/orca' } : { ok: true }
+    )
+    vi.mocked(execCommand)
+      .mockResolvedValueOnce('/bin/bash\n')
+      .mockResolvedValueOnce('relative/grok-home\n')
+    const sftp = { end: vi.fn() }
+    const { mockStore, mockPortForward, getMainWindow } = createMockDeps()
+    const mockConn = { sftp: vi.fn().mockResolvedValue(sftp) } as unknown as SshConnection
+    const session = new SshRelaySession('target-1', getMainWindow, mockStore, mockPortForward)
+
+    await session.establish(mockConn)
+
+    expect(installRemoteManagedAgentHooksMock).toHaveBeenCalledWith(sftp, '/home/orca', {
+      grokHomeDir: '/home/orca/.grok'
+    })
   })
 
   it('does not run POSIX managed hook installers on Windows remotes', async () => {

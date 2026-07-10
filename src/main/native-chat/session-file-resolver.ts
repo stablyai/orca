@@ -1,12 +1,11 @@
 import { existsSync } from 'node:fs'
 import { homedir } from 'node:os'
-import { basename, dirname, extname, join } from 'node:path'
+import { basename, extname, join } from 'node:path'
 import type { AgentType } from '../../shared/native-chat-types'
 import { walkSessionFiles } from '../ai-vault/session-scanner-discovery'
 import { getOrcaManagedCodexHomePath } from '../codex/codex-home-paths'
 import {
-  GROK_CHAT_HISTORY_FILE,
-  findGrokChatHistoryBySessionIdSync,
+  findGrokChatHistoryBySessionId,
   resolveGrokSessionsDir
 } from '../../shared/grok-session-paths'
 
@@ -134,19 +133,8 @@ async function resolveGrokSessionFile(
   sessionId: string,
   sessionsDir: string
 ): Promise<string | null> {
-  // Why: walk by session id so long-cwd slug groups and GROK_HOME layouts still
-  // resolve (shared with hook last-assistant path resolution).
-  const syncHit = findGrokChatHistoryBySessionIdSync(sessionsDir, sessionId)
-  if (syncHit) {
-    return syncHit
-  }
-  if (!existsSync(sessionsDir)) {
-    return null
-  }
-  const files = await walkSessionFiles(sessionsDir, 'grok', [], {
-    extensions: new Set(['.jsonl']),
-    filePredicate: (path) =>
-      basename(path) === GROK_CHAT_HISTORY_FILE && basename(dirname(path)) === sessionId
-  })
-  return files[0] ?? null
+  // Why: Native Chat runs on the main thread; use the bounded async direct-layout
+  // lookup instead of blocking, then repeating, a recursive full-tree scan.
+  const history = await findGrokChatHistoryBySessionId(sessionsDir, sessionId)
+  return history
 }

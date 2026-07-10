@@ -5305,11 +5305,11 @@
           },
           "nativeChat": {
             "title": "Chat nativo",
-            "description": "Previsualiza la superficie de chat de escritorio para sesiones de terminal de Claude y Codex.",
-            "copy": "Agrega una vista de chat nativa a la que puedes cambiar desde paneles de terminal compatibles de Claude y Codex. Experimental mientras ajustamos la fidelidad de transcripción, streaming y paridad con el terminal.",
+            "description": "Previsualiza la interfaz de chat de escritorio para sesiones de terminal de agentes compatibles.",
+            "copy": "Añade una vista de chat nativo a la que puedes cambiar desde paneles de terminal de agentes compatibles. Es experimental mientras ajustamos la fidelidad de las transcripciones, la transmisión y la paridad con el terminal.",
             "toggleLabel": "Alternar chat nativo",
             "defaultTitle": "Vista predeterminada",
-            "defaultCopy": "Elige cómo se abren las nuevas pestañas de terminal de Claude y Codex.",
+            "defaultCopy": "Elige cómo se abren las nuevas pestañas de terminal de agentes compatibles.",
             "defaultViewLabel": "Vista predeterminada de chat nativo",
             "defaultViewTerminal": "Chat en terminal",
             "defaultViewNative": "Chat nativo"
@@ -7474,7 +7474,8 @@
             },
             "nativeChat": {
               "title": "Chat nativo",
-              "description": "Previsualiza la vista de chat de escritorio para sesiones de terminal de Claude y Codex."
+              "description": "Previsualiza la interfaz de chat de escritorio para sesiones de terminal de agentes compatibles.",
+              "grok": "grok"
             }
           }
         },

@@ -26,6 +26,8 @@ import {
 // lifecycle hooks never fire. `.*` matches every tool name (same as Command
 // Code's managed hooks).
 const GROK_TOOL_EVENT_MATCHER = '.*'
+const GROK_HOME_ENVELOPE_MAX_LENGTH = 4096
+const WINDOWS_HOOK_PAYLOAD_FORM_LINE = '  --data-urlencode "payload@-" >nul 2>nul'
 
 const GROK_EVENTS = [
   { eventName: 'SessionStart', definition: { hooks: [{ type: 'command', command: '' }] } },
@@ -63,12 +65,35 @@ function getConfigPath(): string {
   return join(resolveGrokHomeDir(), 'hooks', 'orca-status.json')
 }
 
-/** Remote Grok home under the guest login home (remote env is not probed). */
-function getRemoteGrokHome(remoteHome: string): string {
+/** Validated guest Grok home with a login-home fallback. */
+function getRemoteGrokHome(remoteHome: string, remoteGrokHome?: string): string {
   // Why: SFTP paths are always POSIX — never use host path.join here.
   const home = remoteHome.replace(/\/+$/, '') || remoteHome
+  const candidate = remoteGrokHome?.trim()
+  if (
+    candidate &&
+    candidate === remoteGrokHome &&
+    candidate.startsWith('/') &&
+    !candidate.includes('\\') &&
+    candidate.length <= GROK_HOME_ENVELOPE_MAX_LENGTH &&
+    !hasControlCharacter(candidate)
+  ) {
+    return candidate.replace(/\/+$/, '') || '/'
+  }
   return `${home}/.grok`
 }
+
+function hasControlCharacter(value: string): boolean {
+  return Array.from(value).some((character) => {
+    const code = character.charCodeAt(0)
+    return code <= 0x1f || code === 0x7f
+  })
+}
+
+const WINDOWS_GROK_HOOK_POST_COMMAND = buildWindowsAgentHookPostCommand('grok').replace(
+  WINDOWS_HOOK_PAYLOAD_FORM_LINE,
+  `  --data-urlencode "grokHome=%ORCA_GROK_HOME%" ^\r\n${WINDOWS_HOOK_PAYLOAD_FORM_LINE}`
+)
 
 function getManagedScriptFileName(): string {
   return process.platform === 'win32' ? 'grok-hook.cmd' : 'grok-hook.sh'
@@ -93,7 +118,12 @@ function getManagedScript(target: 'local' | 'posix' = 'local'): string {
       'if "%ORCA_AGENT_HOOK_PORT%"=="" exit /b 0',
       'if "%ORCA_AGENT_HOOK_TOKEN%"=="" exit /b 0',
       'if "%ORCA_PANE_KEY%"=="" exit /b 0',
-      buildWindowsAgentHookPostCommand('grok'),
+      'set "ORCA_GROK_HOME=%GROK_HOME%"',
+      `if not "%GROK_HOME:~${GROK_HOME_ENVELOPE_MAX_LENGTH},1%"=="" set "ORCA_GROK_HOME="`,
+      // Why: a trailing backslash escapes curl's closing argv quote on Windows,
+      // merging the payload option into grokHome and dropping the hook body.
+      'if "%ORCA_GROK_HOME:~-1%"=="\\" set "ORCA_GROK_HOME=%ORCA_GROK_HOME%."',
+      WINDOWS_GROK_HOOK_POST_COMMAND,
       'exit /b 0',
       ''
     ].join('\r\n')
@@ -111,6 +141,10 @@ function getManagedScript(target: 'local' | 'posix' = 'local'): string {
     'if [ -z "$payload" ]; then',
     '  exit 0',
     'fi',
+    'grok_home=',
+    `if [ -n "\${GROK_HOME:-}" ] && [ "\${#GROK_HOME}" -le ${GROK_HOME_ENVELOPE_MAX_LENGTH} ]; then`,
+    '  grok_home=$GROK_HOME',
+    'fi',
     // Timeout caps best-effort hook posts if the local listener stalls.
     // Why: pipe payload to curl's stdin (`payload@-`) instead of an inline
     // `payload=$VALUE` arg, so tens-of-KB tool output stays off the curl
@@ -125,6 +159,7 @@ function getManagedScript(target: 'local' | 'posix' = 'local'): string {
     '  --data-urlencode "worktreeId=${ORCA_WORKTREE_ID}" \\',
     '  --data-urlencode "env=${ORCA_AGENT_HOOK_ENV}" \\',
     '  --data-urlencode "version=${ORCA_AGENT_HOOK_VERSION}" \\',
+    '  --data-urlencode "grokHome=${grok_home}" \\',
     '  --data-urlencode "payload@-" >/dev/null 2>&1 || true',
     'exit 0',
     ''
@@ -235,12 +270,15 @@ export class GrokHookService {
     return this.getStatus()
   }
 
-  async installRemote(sftp: SFTPWrapper, remoteHome: string): Promise<AgentHookInstallStatus> {
+  async installRemote(
+    sftp: SFTPWrapper,
+    remoteHome: string,
+    remoteGrokHome?: string
+  ): Promise<AgentHookInstallStatus> {
     const home = remoteHome.replace(/\/$/, '')
-    // Why: remote install has no guest GROK_HOME probe yet — place hooks under
-    // the guest login home's .grok tree (same layout as default local home).
-    // Do not apply the *local* process.env.GROK_HOME to remote paths.
-    const remoteConfigPath = `${getRemoteGrokHome(home)}/hooks/orca-status.json`
+    // Why: only a guest-resolved path can describe remote Grok; never apply the
+    // host process's GROK_HOME to SFTP paths.
+    const remoteConfigPath = `${getRemoteGrokHome(home, remoteGrokHome)}/hooks/orca-status.json`
     const remoteScriptPath = `${home}/.orca/agent-hooks/grok-hook.sh`
     try {
       const config = await readHooksJsonRemote(sftp, remoteConfigPath)
