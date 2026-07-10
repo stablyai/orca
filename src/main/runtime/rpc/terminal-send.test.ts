@@ -605,6 +605,8 @@ describe('terminal send RPC', () => {
 
   it('refuses guarded terminal sends when no agent is recognized after the guarded probe', async () => {
     const runtime = stubRuntime({
+      // Why: terminal.send resolves via resolveLiveLeafForHandle (stale-handle
+      // safety #7718); the stub must match that API or the guard path never runs.
       resolveLiveLeafForHandle: vi.fn().mockReturnValue({ ptyId: 'pty-1' }),
       getDriver: vi.fn().mockReturnValue({ kind: 'desktop' }),
       getTerminalAgentStatusForGuardedSend: vi.fn().mockResolvedValue({
