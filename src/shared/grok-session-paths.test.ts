@@ -203,6 +203,18 @@ describe('grok-session-paths', () => {
     const beyondBound = join(sessionsDir, 'z-target-group', 'sess-bounded', 'chat_history.jsonl')
     mkdirSync(dirname(beyondBound), { recursive: true })
     writeFileSync(beyondBound, '{}\n')
+    setGrokSessionDirectoryOpenerForTests(async () => ({
+      async *[Symbol.asyncIterator]() {
+        for (const name of ['a-group', 'b-group', 'z-target-group']) {
+          yield {
+            name,
+            isDirectory: () => true,
+            isSymbolicLink: () => false
+          }
+        }
+      },
+      async close() {}
+    }))
 
     await expect(findGrokChatHistoryBySessionId(sessionsDir, 'sess-bounded', 2)).resolves.toBeNull()
     await expect(findGrokChatHistoryBySessionId(sessionsDir, 'sess-bounded', 3)).resolves.toBe(
