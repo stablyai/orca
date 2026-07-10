@@ -157,7 +157,9 @@ export async function finalizeClaudeSessionParseState(
   // the row UI shows the count without expanding details, and for zero-turn
   // transcripts it doubles as the recoverable-content signal. The sibling dir
   // lives on the host that owns the transcript, so content fetched from a
-  // remote (SSH) host must not readdir this machine's disk.
+  // remote (SSH) host must not readdir this machine's disk. Runtime hosts scan
+  // their own local disk (their host id is stamped after parse), so they are
+  // already covered by the undefined-executionHostId branch.
   const ownsTranscriptDisk =
     !options.executionHostId || options.executionHostId === LOCAL_EXECUTION_HOST_ID
   if (ownsTranscriptDisk) {

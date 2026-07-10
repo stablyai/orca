@@ -10,7 +10,11 @@ import type {
 } from '../../shared/ai-vault-types'
 import { sessionIdFromFileName, sessionSortTime } from './session-scanner-accumulator'
 import { parseClaudeSessionFile } from './session-scanner-primary-parsers'
-import { subagentTranscriptsDirFor } from './session-scanner-subagent-transcripts'
+import {
+  isSubagentTranscriptFileName,
+  subagentTranscriptsDirFor,
+  SUBAGENT_TRANSCRIPT_PREFIX
+} from './session-scanner-subagent-transcripts'
 import {
   asRecord,
   errorMessage,
@@ -19,7 +23,6 @@ import {
   parseJsonObject
 } from './session-scanner-values'
 
-const SUBAGENT_TRANSCRIPT_PREFIX = 'agent-'
 // A subagent writing nothing for this long without a terminal notification is
 // treated as no longer running (its status stays unknown rather than stale).
 const SUBAGENT_RUNNING_RECENCY_MS = 5 * 60_000
@@ -29,6 +32,11 @@ const SUBAGENT_PARSE_CONCURRENCY = 8
 
 const TASK_NOTIFICATION_MARKER = '<task-notification>'
 const TOOL_USE_RESULT_MARKER = '"toolUseResult"'
+// A sync-Task toolUseResult sets a status only when it carries an agentId. Tool
+// output records (Read/Bash) also carry "toolUseResult" and are the largest lines
+// in a transcript, so gating on this second marker keeps the status pass from
+// JSON-parsing ~all of the file's bytes on every on-demand fetch.
+const TOOL_USE_RESULT_AGENT_ID_MARKER = '"agentId"'
 const TASK_ID_PATTERN = /<task-id>([^<]+)<\/task-id>/
 const TASK_STATUS_PATTERN = /<status>([a-z_]+)<\/status>/
 
@@ -69,7 +77,7 @@ export async function listClaudeSubagentSessions(args: {
   }
 
   const transcriptNames = entries
-    .filter((entry) => isSubagentTranscriptEntry(entry.name, entry.isFile()))
+    .filter((entry) => isSubagentTranscriptFileName(entry.name, entry.isFile()))
     .map((entry) => entry.name)
   if (transcriptNames.length === 0) {
     return { sessions: [], issues }
@@ -106,14 +114,6 @@ export async function listClaudeSubagentSessions(args: {
       .sort((left, right) => sessionSortTime(right) - sessionSortTime(left)),
     issues
   }
-}
-
-function isSubagentTranscriptEntry(name: string, isFile: boolean): boolean {
-  return (
-    isFile &&
-    name.startsWith(SUBAGENT_TRANSCRIPT_PREFIX) &&
-    extname(name).toLowerCase() === '.jsonl'
-  )
 }
 
 function subagentIdFromFileName(name: string): string {
@@ -194,7 +194,9 @@ async function collectSubagentTaskStatuses(parentFilePath: string): Promise<Map<
     })
     for await (const line of lines) {
       const hasNotification = line.includes(TASK_NOTIFICATION_MARKER)
-      if (!hasNotification && !line.includes(TOOL_USE_RESULT_MARKER)) {
+      const hasTaskResult =
+        line.includes(TOOL_USE_RESULT_MARKER) && line.includes(TOOL_USE_RESULT_AGENT_ID_MARKER)
+      if (!hasNotification && !hasTaskResult) {
         continue
       }
       const record = parseJsonObject(line)
@@ -205,6 +207,11 @@ async function collectSubagentTaskStatuses(parentFilePath: string): Promise<Map<
       // (or a sync-Task toolUseResult report) that merely quotes one also trips
       // the raw-line prefilter, so it must not consume the record — fall through
       // to the toolUseResult branch below rather than dropping a real status.
+      // Accepted limitation: a user message that BEGINS with a verbatim
+      // notification is indistinguishable from a real delivery (records carry no
+      // provenance marker), so it can set a bogus status. The impact is a wrong
+      // dot on a view-only row, so we don't gate on user-type markers here (that
+      // would risk dropping genuine harness-delivered statuses).
       if (hasNotification) {
         const text = taskNotificationText(record)
         if (text.startsWith(TASK_NOTIFICATION_MARKER)) {
@@ -257,8 +264,8 @@ function taskNotificationBlockText(block: unknown): string {
   return extractString(record?.text) ?? extractString(record?.content) ?? ''
 }
 
-// Claude writes an `agent-<id>.meta.json` sidecar carrying the Task tool's
-// `description` and `subagent_type` for every subagent transcript.
+// Claude writes an `agent-<id>.meta.json` sidecar for every subagent transcript,
+// carrying the Task tool's spawn `description` and its resolved `agentType`.
 async function readSubagentMeta(transcriptPath: string): Promise<ClaudeSubagentMeta> {
   const metaPath = `${transcriptPath.slice(0, -extname(transcriptPath).length)}.meta.json`
   try {
