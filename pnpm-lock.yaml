@@ -58,6 +58,9 @@ importers:
       posthog-node:
         specifier: ^5.33.3
         version: 5.33.3
+      proper-lockfile:
+        specifier: 4.1.2
+        version: 4.1.2
       qrcode:
         specifier: ^1.5.4
         version: 1.5.4

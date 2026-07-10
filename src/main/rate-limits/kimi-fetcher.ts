@@ -2,7 +2,11 @@ import { existsSync, readFileSync } from 'node:fs'
 import { net } from 'electron'
 import type { ProviderRateLimits, RateLimitWindow } from '../../shared/rate-limit-types'
 import { resolveKimiCredentialLocation } from './kimi-credential-location'
-import { refreshKimiCredentials, type KimiCredentials } from './kimi-oauth-refresh'
+import {
+  KimiRefreshError,
+  refreshKimiCredentials,
+  type KimiCredentials
+} from './kimi-oauth-refresh'
 
 // Why: Kimi Code's managed coding plan exposes subscription usage at
 // `${base}/usages` (see packages/oauth/src/managed-usage.ts in the CLI bundle).
@@ -235,9 +239,19 @@ export async function fetchKimiRateLimits(): Promise<ProviderRateLimits> {
     if (typeof creds.refresh_token !== 'string' || creds.refresh_token.length === 0) {
       return result('error', 'Kimi token expired — open Kimi to refresh')
     }
-    const refreshed = await refreshKimiCredentials(creds, location).catch(() => null)
+    let refreshed: KimiCredentials | null
+    try {
+      refreshed = await refreshKimiCredentials(creds, location)
+    } catch (error) {
+      return result(
+        'error',
+        error instanceof KimiRefreshError && error.kind === 'unauthorized'
+          ? 'Kimi token refresh unauthorized - run kimi login'
+          : 'Kimi token refresh failed - run kimi login'
+      )
+    }
     if (!refreshed) {
-      return result('error', 'Kimi token refresh failed — run kimi login')
+      return result('error', 'Kimi token refresh failed - run kimi login')
     }
     creds.access_token = refreshed.access_token
   }

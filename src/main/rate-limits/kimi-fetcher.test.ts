@@ -243,6 +243,24 @@ describe('fetchKimiRateLimits', () => {
     expect(fsState.renames).toHaveLength(0)
   })
 
+  it('returns user-safe unauthorized refresh copy after persisting revocation', async () => {
+    fsState.credentials = JSON.stringify({
+      access_token: 'tok-old',
+      refresh_token: 'refresh-old',
+      expires_at: 1
+    })
+    netFetchMock.mockResolvedValueOnce(jsonResponse({ error: 'invalid_grant' }, 401))
+
+    const result = await fetchKimiRateLimits()
+
+    expect(result.status).toBe('error')
+    expect(result.error).toBe('Kimi token refresh unauthorized - run kimi login')
+    expect(JSON.parse(fsState.credentials ?? '{}')).toMatchObject({
+      access_token: '',
+      refresh_token: ''
+    })
+  })
+
   it('does NOT refresh or call the API when the expired token has no refresh token', async () => {
     fsState.credentials = JSON.stringify({ access_token: 'tok-old', expires_at: 1 })
 
