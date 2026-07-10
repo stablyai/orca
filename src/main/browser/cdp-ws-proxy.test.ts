@@ -89,33 +89,99 @@ describe('CdpWsProxy', () => {
     client.close()
   })
 
-  it('handles Target.attachToBrowserTarget locally and keeps session-scoped commands on the proxy path', async () => {
+  it('routes Playwright nested browser and page sessions on the proxy path', async () => {
     const client = await connect(endpoint)
 
-    const attachResponse = await sendAndReceive(client, {
+    const primaryPageAttachResponse = await sendAndReceive(client, {
       id: 31,
+      method: 'Target.attachToTarget',
+      params: { targetId: 'orca-proxy-target', flatten: true }
+    })
+
+    expect(primaryPageAttachResponse).toEqual({
+      id: 31,
+      result: { sessionId: 'orca-proxy-session' }
+    })
+
+    const attachResponse = await sendAndReceive(client, {
+      id: 32,
       method: 'Target.attachToBrowserTarget',
       params: {}
     })
 
     expect(attachResponse).toEqual({
-      id: 31,
-      result: { sessionId: 'orca-proxy-session' }
+      id: 32,
+      result: { sessionId: 'orca-proxy-browser-session' }
     })
     expect(getSendCommandMethods(mock)).not.toContain('Target.attachToBrowserTarget')
 
-    const sessionResponse = await sendAndReceive(client, {
-      id: 32,
-      method: 'Runtime.evaluate',
-      params: { expression: 'document.title' },
-      sessionId: 'orca-proxy-session'
+    const pageAttachResponse = await sendAndReceive(client, {
+      id: 33,
+      method: 'Target.attachToTarget',
+      params: { targetId: 'orca-proxy-target', flatten: true },
+      sessionId: 'orca-proxy-browser-session'
     })
 
-    expect(sessionResponse).toEqual({ id: 32, result: {} })
+    expect(pageAttachResponse).toEqual({
+      id: 33,
+      result: { sessionId: 'orca-proxy-session-2' },
+      sessionId: 'orca-proxy-browser-session'
+    })
+
+    const sessionResponse = await sendAndReceive(client, {
+      id: 34,
+      method: 'Runtime.evaluate',
+      params: { expression: 'document.title' },
+      sessionId: 'orca-proxy-session-2'
+    })
+
+    expect(sessionResponse).toEqual({
+      id: 34,
+      result: {},
+      sessionId: 'orca-proxy-session-2'
+    })
     expect(getSendCommandCalls(mock)).toContainEqual([
       'Runtime.evaluate',
       { expression: 'document.title' }
     ])
+
+    const detachResponse = await sendAndReceive(client, {
+      id: 35,
+      method: 'Target.detachFromTarget',
+      params: { sessionId: 'orca-proxy-session-2' },
+      sessionId: 'orca-proxy-browser-session'
+    })
+
+    expect(detachResponse).toEqual({
+      id: 35,
+      result: {},
+      sessionId: 'orca-proxy-browser-session'
+    })
+
+    const primaryPageResponse = await sendAndReceive(client, {
+      id: 36,
+      method: 'Runtime.evaluate',
+      params: { expression: 'document.URL' },
+      sessionId: 'orca-proxy-session'
+    })
+
+    expect(primaryPageResponse).toEqual({
+      id: 36,
+      result: {},
+      sessionId: 'orca-proxy-session'
+    })
+
+    const browserSessionResponse = await sendAndReceive(client, {
+      id: 37,
+      method: 'Target.getTargets',
+      params: {},
+      sessionId: 'orca-proxy-browser-session'
+    })
+
+    expect(browserSessionResponse).toMatchObject({
+      id: 37,
+      sessionId: 'orca-proxy-browser-session'
+    })
     client.close()
   })
 
@@ -160,7 +226,7 @@ describe('CdpWsProxy', () => {
 
     expect(reattachResponse).toEqual({
       id: 35,
-      result: { sessionId: 'orca-proxy-session' }
+      result: { sessionId: 'orca-proxy-session-2' }
     })
     client.close()
   })
