@@ -1,7 +1,7 @@
 import { mkdtemp, mkdir, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { ServeSimStateWatcher, type ServeSimStateDetectedEvent } from './serve-sim-state-watcher'
 
 const TEST_UDID = '11111111-2222-3333-4444-555555555555'
@@ -39,6 +39,22 @@ describe('ServeSimStateWatcher', () => {
     await Promise.all(
       cleanupPaths.splice(0).map((path) => rm(path, { recursive: true, force: true }))
     )
+  })
+
+  it('does not rescan state files for an unchanged PTY binding', () => {
+    const watcher = createIsolatedWatcher()
+    const scanExistingStateFiles = vi.spyOn(
+      watcher as unknown as { scanExistingStateFiles: () => void },
+      'scanExistingStateFiles'
+    )
+
+    watcher.bindPty('pty-1', 'worktree-1')
+    watcher.bindPty('pty-1', 'worktree-1')
+    expect(scanExistingStateFiles).toHaveBeenCalledTimes(1)
+
+    watcher.bindPty('pty-1', 'worktree-2')
+    expect(scanExistingStateFiles).toHaveBeenCalledTimes(2)
+    watcher.stop()
   })
 
   it('attaches to the serve-sim state directory when it appears after startup', async () => {
@@ -102,6 +118,31 @@ describe('ServeSimStateWatcher', () => {
     expect(events).toHaveLength(1)
     expect(events[0]?.info.deviceUdid).toBe(TEST_UDID)
 
+    watcher.stop()
+  })
+
+  it('detects a serve-sim payload split across ordinary PTY chunks', () => {
+    const watcher = createIsolatedWatcher()
+    const events: ServeSimStateDetectedEvent[] = []
+    const payload = JSON.stringify({
+      device: TEST_UDID,
+      streamUrl: 'http://127.0.0.1:3100/stream.mjpeg',
+      wsUrl: 'ws://127.0.0.1:3100/ws',
+      pid: 12345
+    })
+    const firstSplit = payload.indexOf('streamUrl')
+    const secondSplit = payload.indexOf('wsUrl')
+
+    watcher.bindPty('pty-1', 'worktree-1')
+    watcher.onDetected((event) => events.push(event))
+    watcher.ingestPtyOutput('pty-1', 'ordinary terminal output\n')
+    watcher.ingestPtyOutput('pty-1', payload.slice(0, firstSplit))
+    watcher.ingestPtyOutput('pty-1', payload.slice(firstSplit, secondSplit))
+    expect(events).toHaveLength(0)
+    watcher.ingestPtyOutput('pty-1', payload.slice(secondSplit))
+
+    expect(events).toHaveLength(1)
+    expect(events[0]?.info.helperPid).toBe(12345)
     watcher.stop()
   })
 

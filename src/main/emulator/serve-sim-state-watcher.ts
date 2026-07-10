@@ -25,6 +25,7 @@ export type ServeSimStateDetectedEvent = {
 const DEFAULT_STATE_DIR = join(tmpdir(), 'serve-sim')
 const STATE_FILE_RE = /^server-([0-9A-F-]{36})\.json$/i
 const PTY_JSON_RE = /\{[^{}]*"streamUrl"\s*:\s*"[^"]+"[^{}]*"wsUrl"\s*:\s*"[^"]+"[^{}]*\}/g
+const PTY_JSON_BUFFER_LIMIT = 16 * 1024
 
 function parseHelperInfo(raw: unknown, fallbackUdid?: string): ServeSimHelperInfo | null {
   if (!raw || typeof raw !== 'object') {
@@ -99,7 +100,12 @@ export class ServeSimStateWatcher {
   }
 
   bindPty(ptyId: string, worktreeId: string): void {
+    if (this.ptyToWorktree.get(ptyId) === worktreeId) {
+      return
+    }
     this.ptyToWorktree.set(ptyId, worktreeId)
+    // Why: a first binding or actual re-home may reveal an existing external
+    // helper; repeated per-chunk bindings must never rescan files synchronously.
     this.scanExistingStateFiles()
   }
 
@@ -132,11 +138,33 @@ export class ServeSimStateWatcher {
       return
     }
 
-    const prev = this.ptyBuffers.get(ptyId) ?? ''
-    const combined = (prev + data).slice(-16_384)
-    this.ptyBuffers.set(ptyId, combined)
+    const previous = this.ptyBuffers.get(ptyId)
+    const source = previous
+      ? `${previous}${data}`.slice(-PTY_JSON_BUFFER_LIMIT)
+      : data.length > PTY_JSON_BUFFER_LIMIT
+        ? data.slice(-PTY_JSON_BUFFER_LIMIT)
+        : data
+    const firstOpen = source.indexOf('{')
+    if (firstOpen === -1) {
+      this.ptyBuffers.delete(ptyId)
+      return
+    }
+    const candidateText = source.slice(firstOpen)
+    const lastOpen = candidateText.lastIndexOf('{')
+    const lastClose = candidateText.lastIndexOf('}')
+    // Why: this sees every raw PTY chunk. Only an unfinished object can match
+    // after more data arrives; retaining ordinary transcript caused a 16 KB
+    // copy and regex scan for every unrelated terminal update.
+    if (lastOpen > lastClose) {
+      this.ptyBuffers.set(ptyId, candidateText.slice(lastOpen))
+    } else {
+      this.ptyBuffers.delete(ptyId)
+    }
+    if (lastClose === -1) {
+      return
+    }
 
-    const matches = combined.match(PTY_JSON_RE)
+    const matches = candidateText.slice(0, lastClose + 1).match(PTY_JSON_RE)
     if (!matches) {
       return
     }
