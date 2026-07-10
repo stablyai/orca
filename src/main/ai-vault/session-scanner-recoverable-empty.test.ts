@@ -1,4 +1,4 @@
-import { mkdtemp, rm, writeFile } from 'node:fs/promises'
+import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
@@ -243,5 +243,19 @@ describe('countSubagentTranscripts', () => {
     await writeFile(join(subagentsDir, 'agent-a.meta.json'), '{}')
 
     expect(await countSubagentTranscripts(transcriptPath)).toBe(2)
+  })
+
+  it('excludes non-agent .jsonl files and directories named like transcripts', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'orca-ai-vault-sub-predicate-'))
+    tempRoots.push(root)
+    const transcriptPath = join(root, 'session.jsonl')
+    const subagentsDir = join(root, 'session', 'subagents')
+    await writeJsonlFile(join(subagentsDir, 'agent-a.jsonl'), [{ type: 'user' }])
+    // A stray sibling artifact and a directory would inflate the row badge past
+    // what the on-demand lister shows; both must fail the shared predicate.
+    await writeFile(join(subagentsDir, 'notes.jsonl'), '{}')
+    await mkdir(join(subagentsDir, 'agent-x.jsonl'))
+
+    expect(await countSubagentTranscripts(transcriptPath)).toBe(1)
   })
 })
