@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
+  advanceTerminalTailWaitState,
   appendNormalizedToTailBuffer,
   buildPreview,
   computeTerminalTailWaitState,
@@ -7,11 +8,9 @@ import {
   type TerminalTailWaitState
 } from './orca-runtime'
 
-// These tests pin the onPtyData wait-detection memoization: caching the
-// post-append wait state and reusing it as the next chunk's pre-append state
-// must produce byte-for-byte the same waitBlockedAt stamping as recomputing the
-// full-tail scan on both sides of every chunk (the pre-memoization behavior),
-// while doing roughly half the full-tail work.
+// These tests pin the onPtyData wait-detection memoization: compactly advancing
+// anchor-free output must produce byte-for-byte the same waitBlockedAt stamps
+// as recomputing the full retained tail on both sides of every chunk.
 
 type RedrawCursor = ReturnType<typeof appendNormalizedToTailBuffer>['redrawCursor']
 
@@ -38,18 +37,24 @@ type Compute = typeof computeTerminalTailWaitState
 
 // Mirrors the memoized onPtyData tail loop: reuse the cached tail-derived state
 // as the previous state; only recompute it on a preview-fallback (empty tail).
-function stepMemoized(sim: TailSim, chunk: string, at: number, compute: Compute): void {
+function stepMemoized(sim: TailSim, chunk: string, at: number): void {
   const previousWaitState =
     sim.tailWaitState?.fromTail === true
       ? sim.tailWaitState
-      : compute(sim.tailBuffer, sim.tailPartialLine, sim.preview)
+      : computeTerminalTailWaitState(sim.tailBuffer, sim.tailPartialLine, sim.preview)
   const nextTail = appendNormalizedToTailBuffer(
     sim.tailBuffer,
     sim.tailPartialLine,
     chunk,
     sim.tailRedrawCursor
   )
-  const nextWaitState = compute(nextTail.lines, nextTail.partialLine, sim.preview)
+  const nextWaitState = advanceTerminalTailWaitState(
+    previousWaitState,
+    nextTail.lines,
+    nextTail.partialLine,
+    sim.preview,
+    chunk
+  )
   if (tailGainedNewerBlockedReason(previousWaitState, nextWaitState, chunk)) {
     sim.waitBlockedAt = at
   }
@@ -87,7 +92,7 @@ function runBoth(chunks: string[]): { memoized: (number | null)[]; reference: (n
   const reference: (number | null)[] = []
   chunks.forEach((chunk, index) => {
     const at = index + 1
-    stepMemoized(memoSim, chunk, at, computeTerminalTailWaitState)
+    stepMemoized(memoSim, chunk, at)
     stepReference(refSim, chunk, at, computeTerminalTailWaitState)
     memoized.push(memoSim.waitBlockedAt)
     reference.push(refSim.waitBlockedAt)
@@ -118,6 +123,15 @@ const SCENARIOS: Record<string, string[]> = {
   ]
 }
 
+const BLOCKED_PROMPT_CASES = [
+  ['Update available! Press Enter to continue.', 'codex-update-prompt'],
+  ['Choose working directory to resume. Press Enter to continue.', 'codex-cwd-prompt'],
+  ['Codex just got an upgrade. Press Enter to continue.', 'codex-model-migration-prompt'],
+  ['Hooks need review. Press Enter to confirm.', 'codex-hooks-review-prompt'],
+  ['Do you trust this workspace directory?', 'codex-trust-workspace'],
+  ['Codex permission request. Press Enter to view.', 'codex-interactive-prompt']
+] as const
+
 describe('onPtyData tail wait memoization', () => {
   it('computeTerminalTailWaitState reports fromTail and blocked signals', () => {
     const empty = computeTerminalTailWaitState([], '', '')
@@ -127,6 +141,13 @@ describe('onPtyData tail wait memoization', () => {
     const previewOnly = computeTerminalTailWaitState([], '', 'short preview')
     expect(previewOnly.fromTail).toBe(false)
     expect(previewOnly.waitText).toBe('short preview')
+
+    const blockedPreview = computeTerminalTailWaitState(
+      [],
+      '',
+      'Update available! Press Enter to continue.'
+    )
+    expect(blockedPreview.signal?.reason).toBe('codex-update-prompt')
 
     const blocked = computeTerminalTailWaitState(
       ['Update available! Press Enter to continue.'],
@@ -141,6 +162,17 @@ describe('onPtyData tail wait memoization', () => {
     it(`memoized stamping matches recompute reference: ${name}`, () => {
       const { memoized, reference } = runBoth(chunks)
       expect(memoized).toEqual(reference)
+    })
+  }
+
+  for (const [prompt, reason] of BLOCKED_PROMPT_CASES) {
+    it(`falls back for the ${reason} anchor`, () => {
+      const sim = newSim()
+      stepMemoized(sim, 'ordinary output\n', 1)
+      stepMemoized(sim, `${prompt}\n`, 2)
+
+      expect(sim.tailWaitState?.signal?.reason).toBe(reason)
+      expect(sim.waitBlockedAt).toBe(2)
     })
   }
 
@@ -178,7 +210,7 @@ describe('onPtyData tail wait memoization', () => {
     let at = 0
     const feed = (chunk: string): void => {
       at += 1
-      stepMemoized(memoSim, chunk, at, computeTerminalTailWaitState)
+      stepMemoized(memoSim, chunk, at)
       stepReference(refSim, chunk, at, computeTerminalTailWaitState)
       memoOut.push(memoSim.waitBlockedAt)
       refOut.push(refSim.waitBlockedAt)
@@ -194,34 +226,29 @@ describe('onPtyData tail wait memoization', () => {
     expect(memoSim.waitBlockedAt).not.toBeNull()
   })
 
-  it('does roughly half the full-tail wait scans of the recompute reference', () => {
+  it('falls back to the authoritative tail when a redraw introduces a prompt', () => {
+    const sim = newSim()
+    stepMemoized(sim, 'ordinary output', 1)
+    stepMemoized(sim, '\rUpdate available! Press Enter to continue.\n', 2)
+
+    expect(sim.tailWaitState?.signal?.reason).toBe('codex-update-prompt')
+    expect(sim.waitBlockedAt).toBe(2)
+  })
+
+  it('keeps anchor-free streaming output in compact scan state', () => {
     const chunks: string[] = []
     for (let i = 0; i < 500; i += 1) {
       chunks.push(`streaming line ${i}\n`)
     }
-
-    let memoCalls = 0
-    const countingMemo: Compute = (lines, partial, preview) => {
-      memoCalls += 1
-      return computeTerminalTailWaitState(lines, partial, preview)
-    }
-    let refCalls = 0
-    const countingRef: Compute = (lines, partial, preview) => {
-      refCalls += 1
-      return computeTerminalTailWaitState(lines, partial, preview)
-    }
-
     const memoSim = newSim()
-    const refSim = newSim()
     chunks.forEach((chunk, index) => {
-      stepMemoized(memoSim, chunk, index + 1, countingMemo)
-      stepReference(refSim, chunk, index + 1, countingRef)
+      stepMemoized(memoSim, chunk, index + 1)
     })
 
-    // Reference recomputes both sides every chunk: 2 per chunk.
-    expect(refCalls).toBe(chunks.length * 2)
-    // Memoized reuses the cached previous state on every non-empty-tail chunk:
-    // 1 per chunk plus a single first-chunk cold miss.
-    expect(memoCalls).toBe(chunks.length + 1)
+    expect(memoSim.tailWaitState?.signal).toBeNull()
+    expect(memoSim.tailWaitState?.waitText).toBe('')
+    const scanTail = memoSim.tailWaitState?.anchorFreeScanTail
+    expect(scanTail).toBeDefined()
+    expect(scanTail?.length ?? Number.POSITIVE_INFINITY).toBeLessThanOrEqual(1024)
   })
 })

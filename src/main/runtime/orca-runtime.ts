@@ -328,6 +328,11 @@ import {
 } from './headless-tab-group-split-layout'
 import { RuntimeEmulatorCommands, setEmulatorBridge } from './orca-runtime-emulator'
 import { serveSimStateWatcher } from '../emulator/serve-sim-state-watcher'
+import {
+  advanceAnchorFreeTerminalTailWaitState,
+  createAnchorFreeTerminalTailWaitState,
+  type TerminalTailWaitState
+} from './terminal-tail-wait-state'
 import type { EmulatorBridge } from '../emulator/emulator-bridge'
 import { RuntimeFileCommands } from './orca-runtime-files'
 import { RuntimeGitCommands } from './orca-runtime-git'
@@ -5445,10 +5450,12 @@ export class OrcaRuntimeService {
         normalized.text,
         pty.tailRedrawCursor
       )
-      const nextWaitState = computeTerminalTailWaitState(
+      const nextWaitState = advanceTerminalTailWaitState(
+        previousWaitState,
         nextTail.lines,
         nextTail.partialLine,
-        pty.preview
+        pty.preview,
+        normalized.text
       )
       if (tailGainedNewerBlockedReason(previousWaitState, nextWaitState, normalized.text)) {
         pty.waitBlockedAt = at
@@ -5547,10 +5554,12 @@ export class OrcaRuntimeService {
           normalized.text,
           leaf.tailRedrawCursor
         )
-        const nextWaitState = computeTerminalTailWaitState(
+        const nextWaitState = advanceTerminalTailWaitState(
+          previousWaitState,
           nextTail.lines,
           nextTail.partialLine,
-          leaf.preview
+          leaf.preview,
+          normalized.text
         )
         if (tailGainedNewerBlockedReason(previousWaitState, nextWaitState, normalized.text)) {
           leaf.waitBlockedAt = at
@@ -23708,27 +23717,21 @@ function buildTerminalWaitText(lines: string[], partialLine: string, preview: st
   return waitText.length > 0 ? waitText : preview
 }
 
-export type TerminalTailWaitState = {
-  waitText: string
-  signal: { reason: RuntimeTerminalWaitBlockedReason; index: number } | null
-  // Why: the retained tail is authoritative; `preview` is only a fallback for an
-  // empty tail. A preview-derived state depends on a value that is recomputed
-  // after each append, so it must not be reused as the next chunk's previous
-  // state — reuse is gated on fromTail.
-  fromTail: boolean
-}
+export type { TerminalTailWaitState } from './terminal-tail-wait-state'
 
-// Why: onPtyData runs per raw PTY chunk (hundreds/sec under load). Building the
-// wait text (a full map/trim/filter/join over the up-to-256KB retained tail)
-// and lower-casing + scanning it once per chunk is unavoidable, but the old
-// code did it twice — once for the pre-append tail and once for the post-append
-// tail — every chunk. Caching the post-append state lets the next chunk reuse it
-// as its pre-append state, halving the per-chunk full-tail work.
+// Why: prompt-bearing or redrawn tails need an authoritative rebuild of the
+// up-to-256KB wait text. Anchor-free append-only output takes the compact path
+// above this fallback, while cached post-append state remains the next chunk's
+// exact pre-append state.
 export function computeTerminalTailWaitState(
   lines: string[],
   partialLine: string,
   preview: string
 ): TerminalTailWaitState {
+  const anchorFreeState = createAnchorFreeTerminalTailWaitState(lines, partialLine, preview)
+  if (anchorFreeState) {
+    return anchorFreeState
+  }
   const tailText = buildTailLines(lines, partialLine)
     .map((line) => line.trim())
     .filter(Boolean)
@@ -23740,6 +23743,19 @@ export function computeTerminalTailWaitState(
     signal: findActionableTerminalWaitBlockedSignal(waitText.toLowerCase()),
     fromTail
   }
+}
+
+export function advanceTerminalTailWaitState(
+  previous: TerminalTailWaitState,
+  lines: string[],
+  partialLine: string,
+  preview: string,
+  appendedText: string
+): TerminalTailWaitState {
+  return (
+    advanceAnchorFreeTerminalTailWaitState(previous, appendedText) ??
+    computeTerminalTailWaitState(lines, partialLine, preview)
+  )
 }
 
 // Why: decides whether the appended chunk introduced a newer actionable blocked
