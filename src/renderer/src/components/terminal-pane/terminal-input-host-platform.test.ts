@@ -61,6 +61,30 @@ describe('resolveTerminalInputHostPlatform', () => {
     ).toBe('win32')
   })
 
+  it('uses the SSH execution host when the transport has no connection id', () => {
+    const worktreeId = 'repo::C:\\repo'
+    expect(
+      resolveTerminalInputHostPlatform({
+        clientPlatform: 'darwin',
+        state: state({
+          repos: [
+            {
+              id: 'repo',
+              path: 'C:\\repo',
+              displayName: 'repo',
+              badgeColor: '#000',
+              addedAt: 0,
+              executionHostId: 'ssh:ssh-win'
+            }
+          ],
+          sshConnectionStates: new Map([['ssh-win', { remotePlatform: 'win32' } as never]])
+        }),
+        worktreeId,
+        transport: { getConnectionId: () => null }
+      })
+    ).toBe('win32')
+  })
+
   it('keeps the client platform for local terminals', () => {
     expect(
       resolveTerminalInputHostPlatform({
