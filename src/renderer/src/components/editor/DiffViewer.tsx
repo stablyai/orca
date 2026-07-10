@@ -24,6 +24,7 @@ import { useDiffViewerLargeDiffLifecycle } from './useDiffViewerLargeDiffLifecyc
 import { getDiffViewerLargeDiffSaveAction } from './diff-viewer-large-diff-save-action'
 import type { DiffViewerProps } from './diff-viewer-props'
 import { buildDiffEditorWordWrapOptions } from './diff-editor-word-wrap-options'
+import { resolveEditorEditContextEnabled } from './monaco-input-mode'
 
 export default function DiffViewer({
   modelKey,
@@ -449,6 +450,7 @@ export default function DiffViewer({
             options={{
               readOnly: !editable,
               originalEditable: false,
+              editContext: resolveEditorEditContextEnabled(settings?.editorExperimentalInput),
               renderSideBySide: sideBySide,
               minimap: { enabled: false },
               scrollBeyondLastLine: false,

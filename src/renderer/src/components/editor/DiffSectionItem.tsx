@@ -69,6 +69,7 @@ export function DiffSectionItem({
     terminalFontSize?: number
     terminalFontFamily?: string
     diffWordWrap?: boolean
+    editorExperimentalInput?: boolean
   } | null
   sectionHeight: number | undefined
   worktreeId?: string
@@ -432,6 +433,7 @@ export function DiffSectionItem({
           diffEditorFontSize={diffEditorFontSize}
           diffWordWrap={settings?.diffWordWrap}
           terminalFontFamily={settings?.terminalFontFamily}
+          experimentalInput={settings?.editorExperimentalInput}
           onCancelComment={() => setPopover(null)}
           onSubmitComment={handleSubmitComment}
           onRetrySection={retrySection}

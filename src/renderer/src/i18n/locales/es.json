@@ -5368,7 +5368,9 @@
           "bf16ef0af2": "Desactivado",
           "3f6892f307": "Activado",
           "b82f86d7d2": "Corrector ortográfico de Rich Markdown",
-          "5195f0b9ef": "Muestra subrayados y sugerencias ortográficas del navegador al editar Rich Markdown."
+          "5195f0b9ef": "Muestra subrayados y sugerencias ortográficas del navegador al editar Rich Markdown.",
+          "30baaa4a0f": "Experimental Editor Input",
+          "f5663213a9": "Use a newer text-input engine (EditContext) for editors. If typing ever stops working, turn this off to use the classic input path, which is more reliable."
         },
         "AdvancedNetworkSettingsSection": {
           "3e431564b5": "localhost, 127.0.0.1, *.internal",
@@ -7640,7 +7642,15 @@
             "defaultProjectRuntime": "Runtime de proyecto predeterminado",
             "defaultProjectRuntimeDescription": "Elige el runtime que heredarán los proyectos locales de Windows.",
             "d2d2d929c0": "Corrector ortográfico de Rich Markdown",
-            "4497e2e2bb": "Muestra subrayados y sugerencias ortográficas del navegador al editar Rich Markdown."
+            "4497e2e2bb": "Muestra subrayados y sugerencias ortográficas del navegador al editar Rich Markdown.",
+            "86dc23cb35": "Experimental Editor Input",
+            "be7ff2a967": "Use a newer text-input engine (EditContext) for editors. If typing ever stops working, turn this off to use the classic input path, which is more reliable.",
+            "7bf4b9e46d": "editcontext",
+            "713c107d7b": "input",
+            "7fe71eb34c": "typing",
+            "0b6c2fd17b": "ime",
+            "47246d06a5": "keyboard",
+            "f1eb2a2473": "experimental"
           }
         },
         "git": {

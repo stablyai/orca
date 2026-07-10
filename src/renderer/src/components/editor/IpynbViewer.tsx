@@ -58,6 +58,7 @@ import {
 } from './editor-shortcuts'
 import { getIpynbCodeCellEditorHeight, getIpynbCodeCellPreviewLines } from './ipynb-code-cell-lines'
 import MonacoCodeExcerpt from './MonacoCodeExcerpt'
+import { resolveEditorEditContextEnabled } from './monaco-input-mode'
 import {
   deleteIpynbCell,
   insertIpynbCell,
@@ -409,6 +410,7 @@ function CodeCell({
         onChange={(value) => onChange(value ?? '')}
         options={{
           automaticLayout: true,
+          editContext: resolveEditorEditContextEnabled(settings?.editorExperimentalInput),
           fontFamily: settings?.terminalFontFamily || 'monospace',
           fontSize,
           glyphMargin: false,

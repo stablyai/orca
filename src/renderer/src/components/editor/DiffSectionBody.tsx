@@ -6,6 +6,7 @@ import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import { DiffCommentPopover } from '../diff-comments/DiffCommentPopover'
 import { combinedDiffSectionScrollbarOptions } from './diff-editor-scrollbar-options'
+import { resolveEditorEditContextEnabled } from './monaco-input-mode'
 import type { DiffSection } from './diff-section-types'
 import { translate } from '@/i18n/i18n'
 import { LargeDiffFallback } from './LargeDiffFallback'
@@ -37,6 +38,7 @@ type DiffSectionBodyProps = {
   diffEditorFontSize: number
   diffWordWrap?: boolean
   terminalFontFamily?: string
+  experimentalInput?: boolean
   onCancelComment: () => void
   onSubmitComment: (body: string) => Promise<void>
   onRetrySection: (index: number) => void
@@ -62,6 +64,7 @@ export function DiffSectionBody({
   diffEditorFontSize,
   diffWordWrap,
   terminalFontFamily,
+  experimentalInput,
   onCancelComment,
   onSubmitComment,
   onRetrySection,
@@ -187,6 +190,7 @@ export function DiffSectionBody({
           options={{
             readOnly: !isEditable,
             originalEditable: false,
+            editContext: resolveEditorEditContextEnabled(experimentalInput),
             renderSideBySide: sideBySide,
             minimap: { enabled: false },
             scrollBeyondLastLine: false,
