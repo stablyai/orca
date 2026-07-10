@@ -25,6 +25,7 @@ export type ServeSimStateDetectedEvent = {
 const DEFAULT_STATE_DIR = join(tmpdir(), 'serve-sim')
 const STATE_FILE_RE = /^server-([0-9A-F-]{36})\.json$/i
 const PTY_JSON_RE = /\{[^{}]*"streamUrl"\s*:\s*"[^"]+"[^{}]*"wsUrl"\s*:\s*"[^"]+"[^{}]*\}/g
+const PTY_JSON_BUFFER_LIMIT = 16_384
 
 function parseHelperInfo(raw: unknown, fallbackUdid?: string): ServeSimHelperInfo | null {
   if (!raw || typeof raw !== 'object') {
@@ -132,9 +133,27 @@ export class ServeSimStateWatcher {
       return
     }
 
-    const prev = this.ptyBuffers.get(ptyId) ?? ''
-    const combined = (prev + data).slice(-16_384)
-    this.ptyBuffers.set(ptyId, combined)
+    const previous = this.ptyBuffers.get(ptyId) ?? ''
+    const firstObjectStart = previous.length === 0 ? data.indexOf('{') : 0
+    if (firstObjectStart === -1) {
+      return
+    }
+    const combined = `${previous}${data.slice(firstObjectStart)}`.slice(-PTY_JSON_BUFFER_LIMIT)
+
+    // Why: only an unmatched object can become a split serve-sim payload in a
+    // later PTY chunk. Retaining completed shell output made every future chunk
+    // copy and regex-scan a saturated 16 KiB rolling buffer.
+    const lastObjectStart = combined.lastIndexOf('{')
+    const lastObjectEnd = combined.lastIndexOf('}')
+    if (lastObjectStart > lastObjectEnd) {
+      this.ptyBuffers.set(ptyId, combined.slice(lastObjectStart))
+    } else {
+      this.ptyBuffers.delete(ptyId)
+    }
+
+    if (!combined.includes('"streamUrl"') || !combined.includes('"wsUrl"')) {
+      return
+    }
 
     const matches = combined.match(PTY_JSON_RE)
     if (!matches) {

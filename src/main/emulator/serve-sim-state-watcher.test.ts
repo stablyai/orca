@@ -105,6 +105,71 @@ describe('ServeSimStateWatcher', () => {
     watcher.stop()
   })
 
+  it('detects a serve-sim payload split across small PTY chunks', () => {
+    const watcher = createIsolatedWatcher()
+    const events: ServeSimStateDetectedEvent[] = []
+    const payload = JSON.stringify({
+      device: TEST_UDID,
+      streamUrl: 'http://127.0.0.1:3100/stream.mjpeg',
+      wsUrl: 'ws://127.0.0.1:3100/ws',
+      pid: 12345
+    })
+
+    watcher.bindPty('pty-1', 'worktree-1')
+    watcher.onDetected((event) => events.push(event))
+    for (let offset = 0; offset < payload.length; offset += 7) {
+      watcher.ingestPtyOutput('pty-1', payload.slice(offset, offset + 7))
+    }
+
+    expect(events).toHaveLength(1)
+    expect(events[0]?.info).toMatchObject({
+      deviceUdid: TEST_UDID,
+      helperPid: 12345
+    })
+    watcher.stop()
+  })
+
+  it('detects multiple payloads after ordinary output and completed objects', () => {
+    const watcher = createIsolatedWatcher()
+    const events: ServeSimStateDetectedEvent[] = []
+    const makePayload = (port: number, pid: number): string =>
+      JSON.stringify({
+        device: TEST_UDID,
+        streamUrl: `http://127.0.0.1:${port}/stream.mjpeg`,
+        wsUrl: `ws://127.0.0.1:${port}/ws`,
+        pid
+      })
+
+    watcher.bindPty('pty-1', 'worktree-1')
+    watcher.onDetected((event) => events.push(event))
+    watcher.ingestPtyOutput('pty-1', 'shell output {"unrelated":true}\nmore output\n')
+    watcher.ingestPtyOutput('pty-1', makePayload(3100, 12345))
+    watcher.ingestPtyOutput('pty-1', `ordinary output\n${makePayload(3101, 23456)}`)
+
+    expect(events.map((event) => event.info.helperPid)).toEqual([12345, 23456])
+    watcher.stop()
+  })
+
+  it('does not replay a completed payload after the PTY is rebound', () => {
+    const watcher = createIsolatedWatcher()
+    const events: ServeSimStateDetectedEvent[] = []
+    const payload = JSON.stringify({
+      device: TEST_UDID,
+      streamUrl: 'http://127.0.0.1:3100/stream.mjpeg',
+      wsUrl: 'ws://127.0.0.1:3100/ws',
+      pid: 12345
+    })
+
+    watcher.onDetected((event) => events.push(event))
+    watcher.bindPty('pty-1', 'worktree-1')
+    watcher.ingestPtyOutput('pty-1', payload)
+    watcher.bindPty('pty-1', 'worktree-2')
+    watcher.ingestPtyOutput('pty-1', 'ordinary shell output\n')
+
+    expect(events.map((event) => event.worktreeId)).toEqual(['worktree-1'])
+    watcher.stop()
+  })
+
   it('prunes worktree-scoped dedupe keys on forget so a re-bound worktree re-emits', () => {
     const watcher = createIsolatedWatcher()
     const events: ServeSimStateDetectedEvent[] = []
