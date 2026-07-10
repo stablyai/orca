@@ -10,21 +10,22 @@ export async function getCliStatus(
   const metadata = tryReadMetadata(userDataPath)
   const transport = metadata ? findTransport(metadata, 'unix', 'named-pipe') : null
   if (!transport || !metadata?.authToken) {
+    const running = metadata ? isProcessRunning(metadata.pid) : false
     return buildCliStatusResponse({
       app: {
-        running: false,
-        pid: null
+        running,
+        pid: running ? metadata!.pid : null
       },
       runtime: {
         // Why: distinguishing "never started" from "was running but died"
         // gives the user a better signal about what happened. If the metadata
         // file exists, Orca was running at some point.
-        state: metadata ? 'stale_bootstrap' : 'not_running',
+        state: metadata ? (running ? 'starting' : 'stale_bootstrap') : 'not_running',
         reachable: false,
         runtimeId: null
       },
       graph: {
-        state: 'not_running'
+        state: running ? 'starting' : 'not_running'
       }
     })
   }
