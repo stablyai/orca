@@ -1063,6 +1063,11 @@ export function clearProviderPtyState(id: string): void {
   ptySizes.delete(id)
   lastInputAtByPty.delete(id)
   interactiveOutputCharsByPty.delete(id)
+  // Why: teardown paths without a renderer exit event (SSH connection drop,
+  // synthetic-kill dedup) must still release this PTY's pending delivery queue
+  // and in-flight ACK budget, or both leak for the process lifetime and the
+  // stuck in-flight chars throttle every other terminal (STA-1397).
+  clearPtyRendererDeliveryState(id)
   activeRendererPtys.delete(id)
   visibleRendererPtys.delete(id)
   rendererVisibilityKnownPtys.delete(id)
@@ -1197,6 +1202,11 @@ let readPtyRendererDeliveryDebugSnapshot = (): PtyRendererDeliveryDebugSnapshot 
   ...EMPTY_PTY_RENDERER_DELIVERY_DEBUG_SNAPSHOT
 })
 let resetPtyRendererDeliveryDebugSnapshot = (): void => {}
+// Why: pendingData/rendererInFlightCharsByPty live in the registerPtyHandlers
+// closure, so teardown paths that bypass sendPtyExitToRenderer (SSH connection
+// shutdown, synthetic-kill dedup) stranded them forever (STA-1397). This hook
+// lets clearProviderPtyState release both from module scope.
+let clearPtyRendererDeliveryState: (id: string) => void = () => {}
 
 export function getPtyRendererDeliveryDebugSnapshot(): PtyRendererDeliveryDebugSnapshot {
   return readPtyRendererDeliveryDebugSnapshot()
@@ -1500,6 +1510,31 @@ export function registerPtyHandlers(
     ackGatedFlushSkipCount = 0
     recordPtyRendererDeliveryPressure()
   }
+  clearPtyRendererDeliveryState = (id: string) => {
+    // Why flush-then-clear: teardown callers run in either order relative to
+    // sendPtyExitToRenderer; delivering the queued tail first keeps the
+    // "last <=8ms of output" guarantee while still guaranteeing release.
+    const remaining = pendingData.get(id)
+    if (remaining && !mainWindow.isDestroyed()) {
+      mainWindow.webContents.send(
+        'pty:data',
+        makePtyDataPayload(
+          id,
+          remaining.data,
+          remaining.startSeq,
+          remaining.containsBackgroundOutput,
+          remaining.droppedBacklog
+        )
+      )
+    }
+    pendingData.delete(id)
+    const inFlight = rendererInFlightCharsByPty.get(id)
+    if (inFlight !== undefined) {
+      rendererInFlightTotalChars = Math.max(0, rendererInFlightTotalChars - inFlight)
+      rendererInFlightCharsByPty.delete(id)
+    }
+    recordPtyRendererDeliveryPressure()
+  }
 
   function isLikelyInteractiveRedraw(data: string): boolean {
     if (data.length <= INTERACTIVE_OUTPUT_MAX_CHARS) {
@@ -1708,6 +1743,8 @@ export function registerPtyHandlers(
       const chunk = data.slice(0, PTY_BATCH_FLUSH_CHUNK_CHARS)
       const remaining = data.slice(PTY_BATCH_FLUSH_CHUNK_CHARS)
       if (remaining) {
+        // Why: the dropped flag marks the hole BEFORE the queued data; the head
+        // chunk carries it to the renderer, the remainder is contiguous.
         const nextPending: PendingPtyData = { data: remaining }
         if (typeof pending.startSeq === 'number') {
           nextPending.startSeq = pending.startSeq + chunk.length
@@ -1868,18 +1905,28 @@ export function registerPtyHandlers(
       if (rendererData.length === 0) {
         return
       }
+      // Why: pty:kill already flushed and deleted this PTY's pending delivery
+      // via its synthetic exit. Daemon buffers can drain late output for the
+      // rest of the dedup window, and the swallowed real exit would strand a
+      // repopulated entry forever (STA-1397) — drop renderer delivery only;
+      // runtime/status consumers above already saw the bytes.
+      if (syntheticKillExitPtyIds.has(payload.id)) {
+        return
+      }
       const containsBackgroundOutput =
         rendererPtyIsKnownHidden(payload.id) || ptyHasHiddenRendererResizeOutput(payload.id)
       if (containsBackgroundOutput) {
         markHiddenRendererResizeOutputDelivered(payload.id)
       }
       const existing = pendingData.get(payload.id)
-      const pending = appendPendingPtyData(
-        existing,
-        rendererData,
-        startSeq,
-        preservesSeq,
-        containsBackgroundOutput
+      const pending = capPendingPtyData(
+        appendPendingPtyData(
+          existing,
+          rendererData,
+          startSeq,
+          preservesSeq,
+          containsBackgroundOutput
+        )
       )
       const nextData = pending.data
       const isInteractiveOutput = shouldSendInteractiveOutputNow(

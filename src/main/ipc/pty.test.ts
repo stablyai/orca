@@ -7607,6 +7607,113 @@ describe('registerPtyHandlers', () => {
     }
   })
 
+  it('releases pending delivery and in-flight budget when provider state is cleared', async () => {
+    vi.useFakeTimers()
+    const mockProc = createMockProc()
+    spawnMock.mockReturnValue(mockProc.proc)
+
+    try {
+      registerPtyHandlers(mainWindow as never)
+      const spawnResult = (await handlers.get('pty:spawn')!(null, {
+        cols: 80,
+        rows: 24,
+        cwd: '/tmp'
+      })) as { id: string }
+      mainWindow.webContents.send.mockClear()
+
+      mockProc.emitData('x'.repeat(600 * 1024))
+      vi.advanceTimersByTime(8)
+      for (let index = 0; index < 31; index++) {
+        vi.advanceTimersByTime(1)
+      }
+      expect(getPtyRendererDeliveryDebugSnapshot()).toMatchObject({
+        pendingPtyCount: 1,
+        pendingChars: 88 * 1024,
+        rendererInFlightChars: 512 * 1024
+      })
+      mainWindow.webContents.send.mockClear()
+
+      // Teardown paths without a renderer exit event (SSH connection drop,
+      // synthetic-kill dedup) must not strand the queue or the ACK budget.
+      clearProviderPtyState(spawnResult.id)
+
+      expect(mainWindow.webContents.send).toHaveBeenCalledTimes(1)
+      expect(mainWindow.webContents.send).toHaveBeenCalledWith('pty:data', {
+        id: spawnResult.id,
+        data: 'x'.repeat(88 * 1024)
+      })
+      expect(getPtyRendererDeliveryDebugSnapshot()).toMatchObject({
+        pendingPtyCount: 0,
+        pendingChars: 0,
+        rendererInFlightPtyCount: 0,
+        rendererInFlightChars: 0
+      })
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('drops renderer delivery for output arriving inside the synthetic-kill window', async () => {
+    vi.useFakeTimers()
+    const dataListeners = new Set<(payload: { id: string; data: string }) => void>()
+    const runtime = {
+      setPtyController: vi.fn(),
+      onPtyData: vi.fn(),
+      onPtyExit: vi.fn()
+    }
+    setLocalPtyProvider({
+      spawn: vi.fn(),
+      write: vi.fn(),
+      resize: vi.fn(),
+      shutdown: vi.fn(async () => undefined),
+      sendSignal: vi.fn(),
+      getCwd: vi.fn(),
+      getInitialCwd: vi.fn(),
+      clearBuffer: vi.fn(),
+      acknowledgeDataEvent: vi.fn(),
+      hasChildProcesses: vi.fn(),
+      getForegroundProcess: vi.fn(),
+      serialize: vi.fn(),
+      revive: vi.fn(),
+      onData: vi.fn((listener: (payload: { id: string; data: string }) => void) => {
+        dataListeners.add(listener)
+        return () => dataListeners.delete(listener)
+      }),
+      onReplay: vi.fn(() => () => {}),
+      onExit: vi.fn(() => () => {}),
+      listProcesses: vi.fn(async () => []),
+      attach: vi.fn(),
+      getDefaultShell: vi.fn(),
+      getProfiles: vi.fn()
+    } as never)
+    handlers.clear()
+
+    try {
+      registerPtyHandlers(mainWindow as never, runtime as never)
+
+      await handlers.get('pty:kill')!(null, { id: 'local-pty' })
+      mainWindow.webContents.send.mockClear()
+
+      // The daemon's socket backlog can drain output for the rest of the dedup
+      // window after pty:kill's synthetic exit already deleted the pending
+      // entry; repopulating it would strand it forever (STA-1397).
+      for (const listener of dataListeners) {
+        listener({ id: 'local-pty', data: 'late-after-kill' })
+      }
+      vi.advanceTimersByTime(20)
+
+      expect(getPtyRendererDeliveryDebugSnapshot()).toMatchObject({
+        pendingPtyCount: 0,
+        pendingChars: 0
+      })
+      expect(
+        mainWindow.webContents.send.mock.calls.filter((call) => call[0] === 'pty:data')
+      ).toEqual([])
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
   it('forwards only actually in-flight bytes to provider ACK backpressure', async () => {
     vi.useFakeTimers()
     const acknowledgeDataEvent = vi.fn()
