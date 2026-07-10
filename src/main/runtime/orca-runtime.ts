@@ -23410,8 +23410,14 @@ export function appendRecentPtyPathCandidates(
   previous: string[] | undefined,
   data: string
 ): string[] {
+  const extractedCandidates = extractTerminalOutputPathCandidates(data)
+  if (extractedCandidates.length === 0) {
+    // Why: pathless output is the common hot path. Reuse immutable history so
+    // each PTY chunk does not clone and byte-scan up to 1,024 old candidates.
+    return previous ?? []
+  }
   const next = previous ? previous.slice() : []
-  for (const candidate of extractTerminalOutputPathCandidates(data)) {
+  for (const candidate of extractedCandidates) {
     if (Buffer.byteLength(candidate, 'utf8') > RECENT_PTY_PATH_CANDIDATE_MAX_BYTES) {
       continue
     }
