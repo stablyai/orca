@@ -10,16 +10,41 @@ type MockClient = {
   sendRequest: ReturnType<typeof vi.fn>
 }
 
-vi.mock('react-native', () => ({
-  ActivityIndicator: 'ActivityIndicator',
-  Pressable: 'Pressable',
-  StyleSheet: {
-    create: (styles: unknown) => styles,
-    hairlineWidth: 1
-  },
-  Text: 'Text',
-  View: 'View'
-}))
+vi.mock('react-native', async () => {
+  const React = await import('react')
+  return {
+    ActivityIndicator: 'ActivityIndicator',
+    FlatList: (props: {
+      data: unknown[]
+      keyExtractor: (item: unknown, index: number) => string
+      renderItem: (info: {
+        item: unknown
+        index: number
+        separators: Record<string, never>
+      }) => unknown
+      ListFooterComponent?: unknown
+    }) =>
+      React.createElement(
+        'FlatList',
+        props,
+        props.data.map((item, index) =>
+          React.createElement(
+            'FlatListItem',
+            { key: props.keyExtractor(item, index) },
+            props.renderItem({ item, index, separators: {} })
+          )
+        ),
+        props.ListFooterComponent ?? null
+      ),
+    Pressable: 'Pressable',
+    StyleSheet: {
+      create: (styles: unknown) => styles,
+      hairlineWidth: 1
+    },
+    Text: 'Text',
+    View: 'View'
+  }
+})
 
 vi.mock('lucide-react-native', () => ({
   ArrowUp: 'ArrowUp',
@@ -144,31 +169,27 @@ function renderedText(renderer: ReactTestRenderer): string {
     .join(' | ')
 }
 
-async function pressRowByText(renderer: ReactTestRenderer, text: string): Promise<void> {
+async function pressPressableWithText(
+  renderer: ReactTestRenderer,
+  matches: (text: string) => boolean,
+  label: string
+): Promise<void> {
   const pressable = renderer.root
     .findAllByType('Pressable')
-    .find((node) => node.findAllByType('Text').some((t) => textOf(t.props.children) === text))
+    .find((node) => node.findAllByType('Text').some((t) => matches(textOf(t.props.children))))
   if (!pressable) {
-    throw new Error(`Unable to find pressable row with text: ${text}`)
+    throw new Error(`Unable to find pressable: ${label}`)
   }
   await act(async () => {
     pressable.props.onPress()
   })
 }
 
-async function pressAddButton(renderer: ReactTestRenderer): Promise<void> {
-  const pressable = renderer.root
-    .findAllByType('Pressable')
-    .find((node) =>
-      node.findAllByType('Text').some((t) => textOf(t.props.children).startsWith('Add '))
-    )
-  if (!pressable) {
-    throw new Error('Unable to find the Add button')
-  }
-  await act(async () => {
-    pressable.props.onPress()
-  })
-}
+const pressRowByText = (renderer: ReactTestRenderer, text: string) =>
+  pressPressableWithText(renderer, (t) => t === text, `row "${text}"`)
+
+const pressAddButton = (renderer: ReactTestRenderer) =>
+  pressPressableWithText(renderer, (t) => t.startsWith('Add '), 'Add button')
 
 function defaultProps(client: MockClient | null): ModalProps {
   return { visible: true, client, onAdded: vi.fn(), onClose: vi.fn() }

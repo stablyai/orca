@@ -5,46 +5,77 @@ import {
   Pressable,
   StyleSheet,
   ActivityIndicator,
+  FlatList,
   type StyleProp,
   type ViewStyle
 } from 'react-native'
 import { ArrowUp, ChevronRight, Folder, FolderGit2, FolderPlus } from 'lucide-react-native'
 import type { RpcClient } from '../transport/rpc-client'
-import type { RpcSuccess } from '../transport/types'
+import type { RpcResponse, RpcSuccess } from '../transport/types'
 import type { DirEntry } from '../../../src/shared/types'
 import { colors, radii, spacing, typography } from '../theme/mobile-theme'
 import { BottomDrawer } from './BottomDrawer'
+import { pathBasename } from './path-basename'
 
 type BrowseListing = {
   resolvedPath: string
   entries: DirEntry[]
 }
 
-// Why: folders like node_modules can hold thousands of entries; cap what a
-// single drawer renders so a stray tap doesn't hang the JS thread.
+// Why: folders like node_modules can hold thousands of entries; even with a
+// virtualized list, cap the rows so absurd folders stay responsive.
 const MAX_VISIBLE_DIRECTORIES = 300
+
+// Sentinel row for "go up one level"; a real entry can never be named "..".
+const UP_ENTRY: DirEntry = { name: '..', isDirectory: true, isSymlink: false }
 
 function isFilesystemRoot(path: string): boolean {
   return path === '/' || /^[A-Za-z]:[\\/]?$/.test(path)
 }
 
-function folderBasename(path: string): string {
-  return /([^\\/]+)[\\/]*$/.exec(path)?.[1] ?? path
+// Why: browse and add must both discard completions that land after their
+// epoch was invalidated (a newer request, or the drawer being reopened) —
+// one guard, parameterized by which epoch invalidates it.
+async function runEpochGuardedRequest<T>(args: {
+  epochRef: { current: number }
+  epoch: number
+  setBusy: (busy: boolean) => void
+  setError: (message: string) => void
+  fallbackError: string
+  request: () => Promise<RpcResponse>
+  onSuccess: (result: T) => void
+}): Promise<void> {
+  const { epochRef, epoch } = args
+  args.setBusy(true)
+  args.setError('')
+  try {
+    const response = await args.request()
+    if (epochRef.current !== epoch) {
+      return
+    }
+    if (!response.ok) {
+      args.setError(response.error.message)
+      return
+    }
+    args.onSuccess((response as RpcSuccess).result as T)
+  } catch (e) {
+    if (epochRef.current === epoch) {
+      args.setError(e instanceof Error ? e.message : args.fallbackError)
+    }
+  } finally {
+    if (epochRef.current === epoch) {
+      args.setBusy(false)
+    }
+  }
 }
 
 type IconButtonProps = {
   connected: boolean
   onPress: () => void
   style: StyleProp<ViewStyle>
-  iconSize?: number
 }
 
-export function AddProjectIconButton({
-  connected,
-  onPress,
-  style,
-  iconSize = 16
-}: IconButtonProps) {
+export function AddProjectIconButton({ connected, onPress, style }: IconButtonProps) {
   return (
     <Pressable
       style={[style, !connected && styles.iconButtonDisabled]}
@@ -53,7 +84,7 @@ export function AddProjectIconButton({
       accessibilityRole="button"
       accessibilityLabel="Add project"
     >
-      <FolderPlus size={iconSize} color={connected ? colors.textSecondary : colors.textMuted} />
+      <FolderPlus size={16} color={connected ? colors.textSecondary : colors.textMuted} />
     </Pressable>
   )
 }
@@ -83,32 +114,16 @@ export function AddProjectModal({ visible, client, onAdded, onClose }: Props) {
       if (!client) {
         return
       }
-      const epoch = ++requestEpochRef.current
-      setLoading(true)
-      setError('')
-      try {
-        const response = await client.sendRequest(
-          'files.browseServerDir',
-          { path: target },
-          { timeoutMs: 15_000 }
-        )
-        if (requestEpochRef.current !== epoch) {
-          return
-        }
-        if (!response.ok) {
-          setError(response.error.message)
-          return
-        }
-        setListing((response as RpcSuccess).result as BrowseListing)
-      } catch (e) {
-        if (requestEpochRef.current === epoch) {
-          setError(e instanceof Error ? e.message : 'Failed to browse host folders')
-        }
-      } finally {
-        if (requestEpochRef.current === epoch) {
-          setLoading(false)
-        }
-      }
+      await runEpochGuardedRequest<BrowseListing>({
+        epochRef: requestEpochRef,
+        epoch: ++requestEpochRef.current,
+        setBusy: setLoading,
+        setError,
+        fallbackError: 'Failed to browse host folders',
+        request: () =>
+          client.sendRequest('files.browseServerDir', { path: target }, { timeoutMs: 15_000 }),
+        onSuccess: setListing
+      })
     },
     [client]
   )
@@ -133,43 +148,48 @@ export function AddProjectModal({ visible, client, onAdded, onClose }: Props) {
   )
   const visibleDirectories = directories.slice(0, MAX_VISIBLE_DIRECTORIES)
   const hasUpRow = path != null && !isFilesystemRoot(path)
+  const rows = hasUpRow ? [UP_ENTRY, ...visibleDirectories] : visibleDirectories
   const canAdd = path != null && !adding && !loading
 
   async function handleAdd() {
     if (!client || !path) {
       return
     }
-    const session = sessionEpochRef.current
-    setAdding(true)
-    setError('')
-    try {
-      const response = await client.sendRequest(
-        'repo.add',
-        { path, kind: isGitRepo ? 'git' : 'folder' },
-        { timeoutMs: 30_000 }
-      )
-      if (sessionEpochRef.current !== session) {
-        return
+    await runEpochGuardedRequest({
+      epochRef: sessionEpochRef,
+      epoch: sessionEpochRef.current,
+      setBusy: setAdding,
+      setError,
+      fallbackError: 'Failed to add project',
+      request: () =>
+        client.sendRequest(
+          'repo.add',
+          { path, kind: isGitRepo ? 'git' : 'folder' },
+          { timeoutMs: 30_000 }
+        ),
+      onSuccess: () => {
+        onClose()
+        onAdded()
       }
-      if (!response.ok) {
-        setError(response.error.message)
-        return
-      }
-      onClose()
-      onAdded()
-    } catch (e) {
-      if (sessionEpochRef.current === session) {
-        setError(e instanceof Error ? e.message : 'Failed to add project')
-      }
-    } finally {
-      if (sessionEpochRef.current === session) {
-        setAdding(false)
-      }
-    }
+    })
   }
 
+  const listFooter =
+    directories.length === 0 ? (
+      <Text style={styles.emptyDirText}>No subfolders</Text>
+    ) : directories.length > visibleDirectories.length ? (
+      <Text style={styles.truncatedText}>
+        Showing {visibleDirectories.length} of {directories.length} folders
+      </Text>
+    ) : null
+
   return (
-    <BottomDrawer visible={visible} onClose={onClose}>
+    <BottomDrawer
+      visible={visible}
+      onClose={onClose}
+      dragContentToDismiss={false}
+      contentScrollable={false}
+    >
       <View style={styles.header}>
         <Text style={styles.title}>Add Project</Text>
         <Text style={styles.subtitle}>Pick a folder on the host to add as a project.</Text>
@@ -184,57 +204,44 @@ export function AddProjectModal({ visible, client, onAdded, onClose }: Props) {
         ) : null}
       </View>
 
-      <View style={styles.listGroup}>
-        {listing == null ? (
-          <View style={styles.loadingContainer}>
-            {loading ? (
-              <ActivityIndicator size="small" color={colors.textSecondary} />
-            ) : (
-              <Text style={styles.emptyText}>Unable to browse host folders</Text>
-            )}
-          </View>
-        ) : (
-          <>
-            {hasUpRow ? (
-              <Pressable
-                style={({ pressed }) => [styles.row, pressed && styles.rowPressed]}
-                // Why: the server resolves paths with platform-native
-                // path.resolve, and Windows accepts mixed separators, so
-                // joining with '/' is safe for both hosts.
-                onPress={() => void browse(`${path}/..`)}
-              >
+      {listing == null ? (
+        <View style={[styles.listGroup, styles.loadingContainer]}>
+          {loading ? (
+            <ActivityIndicator size="small" color={colors.textSecondary} />
+          ) : (
+            <Text style={styles.emptyText}>Unable to browse host folders</Text>
+          )}
+        </View>
+      ) : (
+        <FlatList
+          data={rows}
+          keyExtractor={(entry) => entry.name}
+          style={styles.listGroup}
+          keyboardShouldPersistTaps="handled"
+          nestedScrollEnabled
+          ItemSeparatorComponent={RowSeparator}
+          ListFooterComponent={listFooter}
+          renderItem={({ item }) => (
+            <Pressable
+              style={({ pressed }) => [styles.row, pressed && styles.rowPressed]}
+              // Why: the server resolves paths with platform-native
+              // path.resolve, and Windows accepts mixed separators, so
+              // joining with '/' is safe for both hosts.
+              onPress={() => void browse(`${path}/${item.name}`)}
+            >
+              {item === UP_ENTRY ? (
                 <ArrowUp size={14} color={colors.textSecondary} />
-                <Text style={styles.rowText} numberOfLines={1}>
-                  ..
-                </Text>
-              </Pressable>
-            ) : null}
-            {visibleDirectories.map((entry, i) => (
-              <View key={entry.name}>
-                {(hasUpRow || i > 0) && <View style={styles.rowSeparator} />}
-                <Pressable
-                  style={({ pressed }) => [styles.row, pressed && styles.rowPressed]}
-                  onPress={() => void browse(`${path}/${entry.name}`)}
-                >
-                  <Folder size={14} color={colors.textSecondary} />
-                  <Text style={styles.rowText} numberOfLines={1}>
-                    {entry.name}
-                  </Text>
-                  <ChevronRight size={14} color={colors.textMuted} />
-                </Pressable>
-              </View>
-            ))}
-            {directories.length > visibleDirectories.length ? (
-              <Text style={styles.truncatedText}>
-                Showing {visibleDirectories.length} of {directories.length} folders
+              ) : (
+                <Folder size={14} color={colors.textSecondary} />
+              )}
+              <Text style={styles.rowText} numberOfLines={1}>
+                {item.name}
               </Text>
-            ) : null}
-            {directories.length === 0 ? (
-              <Text style={styles.emptyDirText}>No subfolders</Text>
-            ) : null}
-          </>
-        )}
-      </View>
+              {item === UP_ENTRY ? null : <ChevronRight size={14} color={colors.textMuted} />}
+            </Pressable>
+          )}
+        />
+      )}
 
       {listing != null ? (
         <View style={styles.kindHint}>
@@ -261,13 +268,17 @@ export function AddProjectModal({ visible, client, onAdded, onClose }: Props) {
             <ActivityIndicator size="small" color={colors.bgBase} />
           ) : (
             <Text style={styles.addText} numberOfLines={1}>
-              {path ? `Add "${folderBasename(path)}"` : 'Add'}
+              {path ? `Add "${pathBasename(path) || path}"` : 'Add'}
             </Text>
           )}
         </Pressable>
       </View>
     </BottomDrawer>
   )
+}
+
+function RowSeparator() {
+  return <View style={styles.rowSeparator} />
 }
 
 const styles = StyleSheet.create({
@@ -305,6 +316,10 @@ const styles = StyleSheet.create({
     backgroundColor: colors.bgPanel,
     borderRadius: radii.input,
     overflow: 'hidden',
+    // Why: the drawer content is static (contentScrollable={false}); bound the
+    // list so it scrolls internally and the Add button stays reachable.
+    maxHeight: 420,
+    flexGrow: 0,
     marginBottom: spacing.md
   },
   loadingContainer: {
