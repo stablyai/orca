@@ -4,6 +4,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   buildRuntimeClientEventEnvironmentKey,
   buildNewWorkspaceShortcutModalData,
+  getRemovedRemoteTerminalTabIds,
   getNewlyConnectedRuntimeEnvironmentIds,
   getNewlyDisconnectedRuntimeEnvironmentIds,
   getRuntimeProjectRefreshEnvironmentIds,
@@ -32,6 +33,23 @@ const FUTURE_PANE_KEY = makePaneKey('tab-future', FUTURE_LEAF_ID)
 const STALE_PANE_KEY = makePaneKey('tab-future', STALE_LEAF_ID)
 const ORPHAN_PANE_KEY = makePaneKey('tab-orphan', ORPHAN_LEAF_ID)
 const TAB_1_PANE_KEY = makePaneKey('tab-1', TAB_1_LEAF_ID)
+
+describe('getRemovedRemoteTerminalTabIds', () => {
+  it('returns only target-owned tabs removed from the authoritative host snapshot', () => {
+    expect(
+      getRemovedRemoteTerminalTabIds({
+        currentTabsByWorktree: {
+          'remote-wt': [{ id: 'tab-kept' }, { id: 'tab-closed' }],
+          'local-wt': [{ id: 'tab-local' }]
+        },
+        remoteTabsByWorktree: {
+          'remote-wt': [{ id: 'tab-kept' }]
+        },
+        targetWorktreeIds: new Set(['remote-wt'])
+      })
+    ).toEqual(['tab-closed'])
+  })
+})
 
 describe('buildRuntimeClientEventEnvironmentKey', () => {
   it('treats runtime environment ids as a stable set', () => {
