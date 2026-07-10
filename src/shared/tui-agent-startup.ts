@@ -219,6 +219,11 @@ export function buildAgentResumeStartupPlan(args: {
     expectedProcess: config.expectedProcess,
     followupPrompt: null,
     launchConfig,
+    // Why: the resume target (`codex resume <id>`) is payload-bearing Codex
+    // startup text, which the markerless fast path can drop to rc-file noise —
+    // silently launching a fresh session instead of resuming. Mirror the
+    // prompt/draft launch plans and force shell-ready delivery for Codex.
+    ...(args.agent === 'codex' ? { startupCommandDelivery: 'shell-ready' as const } : {}),
     ...(args.agentEnv ? { env: { ...args.agentEnv } } : {})
   }
 }

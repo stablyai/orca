@@ -57,6 +57,13 @@ describe('agent process recognition', () => {
       agent: 'claude',
       processName: 'claude'
     })
+    // Why (#5232/#5356): the Codex resume launch must be recognized as codex so
+    // the spawn path applies Codex's shell-ready delivery — otherwise the
+    // `resume <id>` payload can be dropped and a fresh session launches instead.
+    expect(recognizeAgentProcessFromCommandLine('codex resume sess-1')).toEqual({
+      agent: 'codex',
+      processName: 'codex'
+    })
   })
 
   it('recognizes Command Code without classifying Windows cmd.exe as an agent', () => {

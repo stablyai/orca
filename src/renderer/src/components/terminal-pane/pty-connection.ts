@@ -380,6 +380,12 @@ type ColdRestoreAgentResumeStartup = PendingStartupCommand & {
   agent: ResumableTuiAgent
   launchConfig: NonNullable<ReturnType<typeof buildAgentResumeStartupPlan>>['launchConfig']
   launchToken: string
+  // Why: carries Codex's shell-ready delivery flag so the fresh replacement
+  // spawn injects `codex resume <id>` after rc-file startup instead of racing
+  // it (markerless delivery can drop the resume payload → a blank new session).
+  startupCommandDelivery?: NonNullable<
+    ReturnType<typeof buildAgentResumeStartupPlan>
+  >['startupCommandDelivery']
   useLiveEntry: boolean
   hasSleepingRecord: boolean
   sleepingRecordEntry: { paneKey: string; record: SleepingAgentSessionRecord } | null
@@ -3627,6 +3633,9 @@ export function connectPanePty(
         },
         launchConfig: startupPlan.launchConfig,
         launchToken: coldRestoreLaunchToken,
+        ...(startupPlan.startupCommandDelivery
+          ? { startupCommandDelivery: startupPlan.startupCommandDelivery }
+          : {}),
         useLiveEntry: Boolean(useLiveEntry),
         hasSleepingRecord: Boolean(sleepingRecord),
         sleepingRecordEntry
@@ -3786,6 +3795,9 @@ export function connectPanePty(
         ...(coldRestoreOverride ? { launchConfig: coldRestoreOverride.launchConfig } : {}),
         ...(coldRestoreOverride ? { launchToken: coldRestoreOverride.launchToken } : {}),
         ...(coldRestoreOverride ? { launchAgent: coldRestoreOverride.agent } : {}),
+        ...(coldRestoreOverride?.startupCommandDelivery
+          ? { startupCommandDelivery: coldRestoreOverride.startupCommandDelivery }
+          : {}),
         callbacks: {
           onData: dataCallback,
           onReplayData: replayDataCallback,
@@ -5797,6 +5809,9 @@ export function connectPanePty(
                 ? { launchToken: coldRestoreStartup.launchToken }
                 : {}),
               ...(coldRestoreStartup?.agent ? { launchAgent: coldRestoreStartup.agent } : {}),
+              ...(coldRestoreStartup?.startupCommandDelivery
+                ? { startupCommandDelivery: coldRestoreStartup.startupCommandDelivery }
+                : {}),
               callbacks: {
                 onData: dataCallback,
                 onReplayData: replayDataCallback,
@@ -5980,6 +5995,9 @@ export function connectPanePty(
           : {}),
         ...(coldRestoreStartup?.launchToken ? { launchToken: coldRestoreStartup.launchToken } : {}),
         ...(coldRestoreStartup?.agent ? { launchAgent: coldRestoreStartup.agent } : {}),
+        ...(coldRestoreStartup?.startupCommandDelivery
+          ? { startupCommandDelivery: coldRestoreStartup.startupCommandDelivery }
+          : {}),
         callbacks: {
           onData: dataCallback,
           onReplayData: replayDataCallback,
