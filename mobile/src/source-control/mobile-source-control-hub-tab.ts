@@ -13,7 +13,7 @@ export const SOURCE_CONTROL_HUB_TABS: readonly SourceControlHubTab[] = [
 export const SOURCE_CONTROL_HUB_TAB_LABELS: Record<SourceControlHubTab, string> = {
   changes: 'Changes',
   pr: 'Pull Request',
-  history: 'History'
+  history: 'Commits'
 }
 
 // Normalize a route param (possibly an array from expo-router, possibly unknown)

@@ -5,6 +5,8 @@ import type { GitHubPrReadOutcome } from './github-pr-rpc'
 import {
   classifyPrSidebarFailure,
   emptyPrSidebarDetails,
+  isPrSidebarDetailsPlaceholder,
+  prSidebarDetailsNeedFetch,
   loadPrSidebarData,
   loadPrSidebarDetails,
   resolvePrSidebarDetailsAfterPhase2,
@@ -240,6 +242,29 @@ describe('resolvePrSidebarDetailsAfterPhase2', () => {
     expect(empty.comments).toEqual([])
     expect(empty.item.number).toBe(7)
     expect(empty.item.type).toBe('pr')
+    expect(isPrSidebarDetailsPlaceholder(empty)).toBe(true)
+  })
+})
+
+describe('isPrSidebarDetailsPlaceholder / prSidebarDetailsNeedFetch', () => {
+  it('detects the synthetic hyphen id, not the host pr:n shape', () => {
+    const placeholder = emptyPrSidebarDetails(PR)
+    expect(isPrSidebarDetailsPlaceholder(placeholder)).toBe(true)
+    expect(isPrSidebarDetailsPlaceholder(DETAILS)).toBe(false)
+    // Host work-item ids use a colon (`pr:7`); placeholders use a hyphen (`pr-7`).
+    expect(
+      isPrSidebarDetailsPlaceholder({
+        ...DETAILS,
+        item: { ...DETAILS.item, id: `pr:${PR.number}` }
+      })
+    ).toBe(false)
+  })
+
+  it('needs fetch for null and placeholders, not real details', () => {
+    expect(prSidebarDetailsNeedFetch(null)).toBe(true)
+    expect(prSidebarDetailsNeedFetch(undefined)).toBe(true)
+    expect(prSidebarDetailsNeedFetch(emptyPrSidebarDetails(PR))).toBe(true)
+    expect(prSidebarDetailsNeedFetch(DETAILS)).toBe(false)
   })
 })
 

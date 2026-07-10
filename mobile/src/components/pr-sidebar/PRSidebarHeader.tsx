@@ -16,11 +16,21 @@ type Props = {
   details: GitHubWorkItemDetails | null
   // Inline title-edit action; the pencil affordance only shows when the PR is editable.
   titleAction: MobilePrTitleAction
+  // Hub chrome already surfaces open-on-web; hide the duplicate icon in that case.
+  showOpenOnWeb?: boolean
+  // When true, render without section chrome so identity can share a card with actions.
+  bare?: boolean
 }
 
-// Header: state badge (incl. draft — display-only), title, author, head->base.
-// The title is inline-editable on an open/draft PR (desktop parity).
-export function PRSidebarHeader({ pr, details, titleAction }: Props) {
+// Compact identity: state + # + author on one meta row, title, head→base.
+// # lives only in the meta row (not also after the title) to avoid repetition.
+export function PRSidebarHeader({
+  pr,
+  details,
+  titleAction,
+  showOpenOnWeb = true,
+  bare = false
+}: Props) {
   const item = details?.item
   const badge = prStateBadge(pr.state)
   const badgeColor = statusColor(badge.token)
@@ -29,14 +39,12 @@ export function PRSidebarHeader({ pr, details, titleAction }: Props) {
   const baseRef = item?.baseRefName ?? null
   const headRef = item?.branchName ?? null
   const editable = canEditPRTitle(pr.state)
-  // Badge, #number, and the flush-right external-link control all open pr.url
-  // (canonical host web URL) in the phone browser.
   const openPr = pr.url ? () => openMobilePrUrl(pr.url) : undefined
 
-  return (
-    <View style={styles.section}>
-      <View style={styles.sectionBody}>
-        <View style={styles.badgeRow}>
+  const body = (
+    <>
+      <View style={styles.metaRow}>
+        <View style={styles.metaLeft}>
           <Pressable
             onPress={openPr}
             disabled={!openPr}
@@ -50,50 +58,60 @@ export function PRSidebarHeader({ pr, details, titleAction }: Props) {
           >
             <Text style={[styles.badgeText, { color: badgeColor }]}>{badge.label}</Text>
           </Pressable>
-          {openPr ? (
-            <Pressable
-              onPress={openPr}
-              hitSlop={8}
-              accessibilityRole="link"
-              accessibilityLabel={`Open pull request #${pr.number} in browser`}
-              style={({ pressed }) => [styles.iconButton, pressed && { opacity: 0.6 }]}
-            >
-              <ExternalLink size={16} color={colors.textSecondary} strokeWidth={2.2} />
-            </Pressable>
-          ) : null}
+          <Text
+            style={styles.prMetaStrong}
+            onPress={openPr}
+            accessibilityRole="link"
+            accessibilityLabel={`Open pull request #${pr.number} on the web`}
+          >
+            #{pr.number}
+          </Text>
+          {author ? <Text style={styles.prMeta}>· {author}</Text> : null}
         </View>
-        <PRTitle
-          title={title}
-          number={pr.number}
-          editable={editable}
-          openPr={openPr}
-          titleAction={titleAction}
-        />
-        {author ? <Text style={styles.prMeta}>by {author}</Text> : null}
-        {baseRef && headRef ? (
-          // head -> base reads in merge direction (desktop ChecksPanel parity).
-          <View style={styles.branchRow}>
-            <Text style={styles.branchPill}>{headRef}</Text>
-            <ArrowRight size={12} color={colors.textSecondary} strokeWidth={2.2} />
-            <Text style={styles.branchPill}>{baseRef}</Text>
-          </View>
+        {showOpenOnWeb && openPr ? (
+          <Pressable
+            onPress={openPr}
+            hitSlop={8}
+            accessibilityRole="link"
+            accessibilityLabel={`Open pull request #${pr.number} in browser`}
+            style={({ pressed }) => [styles.iconButton, pressed && { opacity: 0.6 }]}
+          >
+            <ExternalLink size={16} color={colors.textSecondary} strokeWidth={2.2} />
+          </Pressable>
         ) : null}
       </View>
+      <PRTitle title={title} editable={editable} titleAction={titleAction} />
+      {baseRef && headRef ? (
+        <View style={styles.branchRow}>
+          <Text style={styles.branchPill} numberOfLines={1}>
+            {headRef}
+          </Text>
+          <ArrowRight size={12} color={colors.textSecondary} strokeWidth={2.2} />
+          <Text style={styles.branchPill} numberOfLines={1}>
+            {baseRef}
+          </Text>
+        </View>
+      ) : null}
+    </>
+  )
+
+  if (bare) {
+    return <View style={styles.identityBlock}>{body}</View>
+  }
+  return (
+    <View style={styles.section}>
+      <View style={styles.sectionBody}>{body}</View>
     </View>
   )
 }
 
 function PRTitle({
   title,
-  number,
   editable,
-  openPr,
   titleAction
 }: {
   title: string
-  number: number
   editable: boolean
-  openPr: (() => void) | undefined
   titleAction: MobilePrTitleAction
 }) {
   const [editing, setEditing] = useState(false)
@@ -119,7 +137,7 @@ function PRTitle({
 
   if (editing) {
     return (
-      <View>
+      <View style={composerStyles.container}>
         <TextInput
           style={composerStyles.input}
           value={draft}
@@ -165,17 +183,7 @@ function PRTitle({
       accessibilityRole={editable ? 'button' : undefined}
       accessibilityLabel={editable ? 'Edit pull request title' : undefined}
     >
-      <Text style={styles.prTitle}>
-        {title}{' '}
-        <Text
-          style={styles.prMeta}
-          onPress={openPr}
-          accessibilityRole="link"
-          accessibilityLabel={`Open pull request #${number} on the web`}
-        >
-          #{number}
-        </Text>
-      </Text>
+      <Text style={styles.prTitle}>{title}</Text>
       {editable ? (
         <View style={styles.titleEditButton}>
           <Pencil size={14} color={colors.textSecondary} strokeWidth={2} />

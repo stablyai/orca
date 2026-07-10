@@ -848,6 +848,43 @@ async function fetchIssueWorkItem(
   return mapIssueWorkItem(JSON.parse(stdout) as Record<string, unknown>)
 }
 
+// REST /pulls/{n} has requested_reviewers but not latestReviews. When the JSON
+// `gh pr view` path fails, still pull review fields from gh so mobile/desktop
+// reviewer lists (CodeRabbit COMMENTED, etc.) are not silently empty.
+const WORK_ITEM_PR_REVIEW_JSON_FIELDS = 'reviewRequests,latestReviews'
+
+async function fetchPullRequestReviewFields(
+  number: number,
+  ownerRepo: OwnerRepo | null,
+  ghOptions: GhExecOptions
+): Promise<Pick<MainWorkItem, 'reviewRequests' | 'latestReviews'>> {
+  try {
+    const args = ownerRepo
+      ? [
+          'pr',
+          'view',
+          String(number),
+          '--repo',
+          `${ownerRepo.owner}/${ownerRepo.repo}`,
+          '--json',
+          WORK_ITEM_PR_REVIEW_JSON_FIELDS
+        ]
+      : ['pr', 'view', String(number), '--json', WORK_ITEM_PR_REVIEW_JSON_FIELDS]
+    const { stdout } = await ghExecFileAsync(args, ghOptions)
+    const item = JSON.parse(stdout) as Record<string, unknown>
+    return {
+      ...(item.reviewRequests !== undefined
+        ? { reviewRequests: usersFromUnknown(item.reviewRequests) }
+        : {}),
+      ...(item.latestReviews !== undefined
+        ? { latestReviews: latestReviewsFromUnknown(item.latestReviews) }
+        : {})
+    }
+  } catch {
+    return {}
+  }
+}
+
 async function fetchPullRequestWorkItem(
   repoPath: string,
   ownerRepo: OwnerRepo | null,
@@ -872,24 +909,36 @@ async function fetchPullRequestWorkItem(
       )
       const item = JSON.parse(stdout) as Record<string, unknown>
       const mapped = mapPullRequestWorkItem(item, ownerRepo)
+      // Why: merge-metadata GraphQL is best-effort. A failure here must not fall
+      // through to the REST path below — that path drops latestReviews and blanks
+      // the mobile/desktop reviewer list for bots that only left a review.
       const baseRefName = typeof item.baseRefName === 'string' ? item.baseRefName : undefined
-      const mergeMetadata = await detectRepositoryMergeMetadata(ownerRepo, baseRefName, ghOptions)
-      return {
-        ...mapped,
-        mergeQueueRequired: mergeMetadata.mergeQueueRequired,
-        ...(mergeMetadata.autoMergeAllowed !== null
-          ? { autoMergeAllowed: mergeMetadata.autoMergeAllowed }
-          : {}),
-        ...(mergeMetadata.mergeMethodSettings
-          ? { mergeMethodSettings: mergeMetadata.mergeMethodSettings }
-          : {})
+      try {
+        const mergeMetadata = await detectRepositoryMergeMetadata(ownerRepo, baseRefName, ghOptions)
+        return {
+          ...mapped,
+          mergeQueueRequired: mergeMetadata.mergeQueueRequired,
+          ...(mergeMetadata.autoMergeAllowed !== null
+            ? { autoMergeAllowed: mergeMetadata.autoMergeAllowed }
+            : {}),
+          ...(mergeMetadata.mergeMethodSettings
+            ? { mergeMethodSettings: mergeMetadata.mergeMethodSettings }
+            : {})
+        }
+      } catch {
+        return mapped
       }
     } catch {
       const { stdout } = await ghExecFileAsync(
         ['api', `repos/${ownerRepo.owner}/${ownerRepo.repo}/pulls/${number}`],
         ghOptions
       )
-      return mapPullRequestWorkItem(JSON.parse(stdout) as Record<string, unknown>, ownerRepo)
+      const mapped = mapPullRequestWorkItem(
+        JSON.parse(stdout) as Record<string, unknown>,
+        ownerRepo
+      )
+      const reviewFields = await fetchPullRequestReviewFields(number, ownerRepo, ghOptions)
+      return { ...mapped, ...reviewFields }
     }
   }
 

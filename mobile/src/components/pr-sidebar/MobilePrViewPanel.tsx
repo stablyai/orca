@@ -62,6 +62,8 @@ export function MobilePrViewPanelBody({
         gitStatus={gitStatus}
         headSha={headSha}
         bottomInset={insets.bottom}
+        // Hub header already hosts open-on-web while this segment is active.
+        showOpenOnWeb={false}
       />
     </View>
   )

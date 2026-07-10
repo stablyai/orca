@@ -16,6 +16,7 @@ import type { SourceControlHubTab } from './mobile-source-control-hub-tab'
 import { buildMobilePrChipSummary, countUnresolvedReviewThreads } from './mobile-pr-chip-summary'
 import { isMobileConflictAborting } from './mobile-source-control-conflict-abort'
 import { useMobilePrSidebarController } from '../session/use-mobile-pr-sidebar-controller'
+import { prSidebarDetailsNeedFetch } from '../session/mobile-pr-sidebar-state'
 import { MobilePrViewPanelBody } from '../components/pr-sidebar/MobilePrViewPanel'
 import { openMobilePrUrl } from '../components/MobilePrComposeSheet'
 
@@ -177,8 +178,11 @@ export function MobileSourceControlPanel({
   // none). Keyed by PR number — not a boolean — so a same-branch PR swap during a
   // chip-only soft refresh re-arms phase 2 for the new PR instead of leaving its
   // comments on a forever-spinner (a stale ensure bails on the number mismatch).
+  // Placeholder details (failed phase 2) also count as missing so reopening the
+  // PR tab retries instead of leaving empty Description/Comments forever.
   const prDetailsMissingFor =
-    prController.prSidebarState.kind === 'ready' && prController.prSidebarState.data.details == null
+    prController.prSidebarState.kind === 'ready' &&
+    prSidebarDetailsNeedFetch(prController.prSidebarState.data.details)
       ? prController.prSidebarState.data.pr.number
       : null
 
@@ -299,6 +303,8 @@ export function MobileSourceControlPanel({
   // Controller + chip state still live for instant re-open without a full cold start.
   const showPrBody = ready && activeTab === 'pr'
   const conflictOperation = status?.conflictOperation ?? null
+  // Git status always reports a conflictOperation enum; 'unknown' means none.
+  const hasActiveConflict = conflictOperation != null && conflictOperation !== 'unknown'
   const conflictAborting = isMobileConflictAborting(busyAction, conflictOperation)
 
   return (
@@ -313,7 +319,11 @@ export function MobileSourceControlPanel({
 
       <MobileSourceControlSegments active={activeTab} onSelect={selectTab} />
 
-      {ready ? (
+      {/* Branch card + PR chip are the Changes/Commits glance layer. On the PR
+          tab they duplicate the ready PR body (#, state, checks rollup, branch
+          trajectory), so hide the whole card there and let the PR panel own it —
+          unless a merge/rebase conflict is active, which only this card can abort. */}
+      {ready && (activeTab !== 'pr' || hasActiveConflict) ? (
         <MobileSourceControlBranchCard
           branchLabel={branchLabel}
           syncLabel={syncLabel}

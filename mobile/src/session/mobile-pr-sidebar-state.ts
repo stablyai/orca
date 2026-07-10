@@ -157,6 +157,7 @@ export function resolvePrSidebarDetailsAfterPhase2(args: {
 }
 
 // Placeholder details so Description/Comments leave the spinner after a failed phase 2.
+// The synthetic id is the only id shape we mint — real GitHub node ids never match.
 export function emptyPrSidebarDetails(pr: PRInfo): GitHubWorkItemDetails {
   return {
     item: {
@@ -173,6 +174,20 @@ export function emptyPrSidebarDetails(pr: PRInfo): GitHubWorkItemDetails {
     body: '',
     comments: []
   }
+}
+
+// True when phase 2 failed and we synthesized a stand-in (no body/comments/reviews).
+export function isPrSidebarDetailsPlaceholder(details: GitHubWorkItemDetails): boolean {
+  return details.item.id === `pr-${details.item.number}`
+}
+
+// Phase-2 still needs a real payload: null (in flight / not started) or a
+// synthetic placeholder from a failed fetch. Real details (including empty body)
+// do not qualify — ensure/retry must not re-pull those.
+export function prSidebarDetailsNeedFetch(
+  details: GitHubWorkItemDetails | null | undefined
+): boolean {
+  return details == null || isPrSidebarDetailsPlaceholder(details)
 }
 
 // Soft head refresh may restart an in-flight phase-1 load; only skip when there is

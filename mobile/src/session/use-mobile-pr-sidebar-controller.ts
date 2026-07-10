@@ -11,6 +11,7 @@ import {
 import {
   loadPrSidebarData,
   loadPrSidebarDetails,
+  prSidebarDetailsNeedFetch,
   resolvePrSidebarDetailsAfterPhase2,
   shouldApplyResult,
   shouldSoftRefreshPrSidebarOnHeadChange,
@@ -103,12 +104,21 @@ export function useMobilePrSidebarController(input: PrSidebarControllerInput) {
     if (!probeReady || !client) {
       return
     }
-    void fetchGithubRepoSlug(client, worktreeId).then((outcome) => {
-      if (!cancelled) {
-        setIsGithubRepo(outcome.ok && outcome.result !== null)
-        setRepoProbeLoaded(true)
-      }
-    })
+    void fetchGithubRepoSlug(client, worktreeId)
+      .then((outcome) => {
+        if (!cancelled) {
+          setIsGithubRepo(outcome.ok && outcome.result !== null)
+          setRepoProbeLoaded(true)
+        }
+      })
+      .catch(() => {
+        // Why: sendGithubPrRead already normalizes throws, but a cancelled
+        // unmount + any unexpected rejection must not surface as LogBox.
+        if (!cancelled) {
+          setIsGithubRepo(false)
+          setRepoProbeLoaded(true)
+        }
+      })
     return () => {
       cancelled = true
     }
@@ -228,9 +238,12 @@ export function useMobilePrSidebarController(input: PrSidebarControllerInput) {
 
   // Phase-2 only — used when the hub opens the PR segment after a chip-only load.
   // Uses detailsSeqRef (not loadSeqRef) so it cannot cancel a concurrent soft phase-1.
+  // Retries synthetic placeholders too: a failed phase-2 installs non-null empty
+  // details so Description/Comments leave the spinner, and without this ensure
+  // would never re-fetch on tab re-open.
   const ensurePrSidebarDetails = useCallback(async () => {
     const current = stateRef.current
-    if (current.kind !== 'ready' || current.data.details != null) {
+    if (current.kind !== 'ready' || !prSidebarDetailsNeedFetch(current.data.details)) {
       return
     }
     const deps = buildDeps()
@@ -303,7 +316,8 @@ export function useMobilePrSidebarController(input: PrSidebarControllerInput) {
       (state.kind !== 'ready' && state.kind !== 'loading')
     ) {
       void load({ includeDetails: true })
-    } else if (state.kind === 'ready' && state.data.details == null) {
+    } else if (state.kind === 'ready' && prSidebarDetailsNeedFetch(state.data.details)) {
+      // Retries phase-2 placeholders too (failed details load, not only null).
       void ensurePrSidebarDetails()
     }
   }, [identity, state, load, ensurePrSidebarDetails])

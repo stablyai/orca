@@ -4,29 +4,29 @@ import { colors, radii, spacing, typography } from '../theme/mobile-theme'
 // Styles for the hub's segmented control and the branch-card PR chip. Split from
 // mobile-source-control-styles.ts so neither file crosses the line limit.
 export const hubStyles = StyleSheet.create({
+  // Full-width tab bar under the hub header. Edge-to-edge, no inset track and no
+  // inner padding — segments share height evenly so the control doesn't float in a
+  // pill frame with gaps above/below the active cell.
   segments: {
     flexDirection: 'row',
-    marginHorizontal: spacing.lg,
-    marginTop: spacing.sm,
-    padding: 3,
-    borderRadius: radii.button + 2,
-    backgroundColor: colors.bgRaised,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.borderSubtle,
-    gap: 2
+    alignItems: 'stretch',
+    width: '100%',
+    backgroundColor: colors.bgPanel,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: colors.borderSubtle
   },
   segment: {
     flex: 1,
-    minHeight: 34,
-    borderRadius: radii.button,
+    minHeight: 40,
     alignItems: 'center',
     justifyContent: 'center',
-    paddingHorizontal: spacing.xs
+    paddingHorizontal: spacing.xs,
+    // Reserved so active underline doesn't change layout height.
+    borderBottomWidth: 2,
+    borderBottomColor: 'transparent'
   },
   segmentActive: {
-    backgroundColor: colors.bgPanel,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.borderSubtle
+    borderBottomColor: colors.textPrimary
   },
   segmentPressed: {
     opacity: 0.7
