@@ -25,6 +25,11 @@ import {
   type TaskSourceContext
 } from '../../../shared/task-source-context'
 import { isRuntimeProviderSearchQueryWithinLimit } from './runtime-provider-search-bounds'
+import type { LinearIssueAttributeFilter } from '../../../shared/linear-issue-attribute-filter'
+import {
+  canonicalizeLinearIssueAttributeFilter,
+  isEmptyLinearIssueAttributeFilter
+} from '../../../shared/linear-issue-attribute-filter'
 
 export type RuntimeLinearSettings =
   | Pick<GlobalSettings, 'activeRuntimeEnvironmentId'>
@@ -189,22 +194,26 @@ export async function linearListIssues(
   settings: RuntimeLinearSettings,
   filter?: LinearIssueFilter,
   limit?: number,
-  workspaceId?: LinearWorkspaceSelection | null
+  workspaceId?: LinearWorkspaceSelection | null,
+  attributeFilter?: LinearIssueAttributeFilter | null
 ): Promise<LinearCollectionResult<LinearIssue>> {
   const target = getLinearRuntimeTarget(settings)
+  const canonicalAttributeFilter =
+    attributeFilter && !isEmptyLinearIssueAttributeFilter(attributeFilter)
+      ? canonicalizeLinearIssueAttributeFilter(attributeFilter)
+      : undefined
+  const payload = {
+    filter,
+    limit,
+    workspaceId: workspaceId ?? undefined,
+    ...(canonicalAttributeFilter ? { attributeFilter: canonicalAttributeFilter } : {})
+  }
   const result =
     target.kind === 'environment'
-      ? await callRuntimeRpc<unknown>(
-          target,
-          'linear.listIssues',
-          { filter, limit, workspaceId: workspaceId ?? undefined },
-          { timeoutMs: 30_000 }
-        )
-      : await window.api.linear.listIssues({
-          filter,
-          limit,
-          workspaceId: workspaceId ?? undefined
+      ? await callRuntimeRpc<unknown>(target, 'linear.listIssues', payload, {
+          timeoutMs: 30_000
         })
+      : await window.api.linear.listIssues(payload)
   return normalizeLinearIssueCollectionResult(result)
 }
 

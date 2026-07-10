@@ -130,17 +130,71 @@ describe('createLinearSlice caching', () => {
       .mockResolvedValueOnce({ items: [issue('LIN-1')] })
       .mockResolvedValueOnce({ items: [issue('LIN-2')] })
 
-    await expect(store.getState().listLinearIssues('all', 36)).resolves.toMatchObject({
-      items: [{ id: 'LIN-1' }]
-    })
-    await expect(store.getState().listLinearIssues('all', 36)).resolves.toMatchObject({
+    await expect(
+      store.getState().listLinearIssues({ kind: 'list', filter: 'all', limit: 36 })
+    ).resolves.toMatchObject({
       items: [{ id: 'LIN-1' }]
     })
     await expect(
-      store.getState().listLinearIssues('all', 36, { force: true })
+      store.getState().listLinearIssues({ kind: 'list', filter: 'all', limit: 36 })
+    ).resolves.toMatchObject({
+      items: [{ id: 'LIN-1' }]
+    })
+    await expect(
+      store.getState().listLinearIssues({ kind: 'list', filter: 'all', limit: 36 }, { force: true })
     ).resolves.toMatchObject({ items: [{ id: 'LIN-2' }] })
 
     expect(linearListIssues).toHaveBeenCalledTimes(2)
+  })
+
+  it('isolates list cache entries by attribute filter signature', async () => {
+    const store = createTestStore()
+    store.setState({
+      linearStatus: { connected: true, viewer: null, selectedWorkspaceId: 'workspace-1' }
+    })
+    const filtered = {
+      stateIds: ['state-1'],
+      priorities: [1],
+      assignee: null as null,
+      labelIds: [] as string[]
+    }
+    linearListIssues
+      .mockResolvedValueOnce({ items: [issue('LIN-ALL')] })
+      .mockResolvedValueOnce({ items: [issue('LIN-FILTERED')] })
+
+    await store.getState().listLinearIssues({ kind: 'list', filter: 'all', limit: 36 })
+    await store.getState().listLinearIssues({
+      kind: 'list',
+      filter: 'all',
+      limit: 36,
+      attributeFilter: filtered
+    })
+
+    expect(linearListIssues).toHaveBeenCalledTimes(2)
+    expect(
+      store.getState().getCachedLinearIssues({ kind: 'list', filter: 'all', limit: 36 })
+    ).toMatchObject({ items: [{ id: 'LIN-ALL' }] })
+    expect(
+      store.getState().getCachedLinearIssues({
+        kind: 'list',
+        filter: 'all',
+        limit: 36,
+        attributeFilter: filtered
+      })
+    ).toMatchObject({ items: [{ id: 'LIN-FILTERED' }] })
+
+    store.getState().invalidateLinearIssueLists()
+    expect(
+      store.getState().getCachedLinearIssues({
+        kind: 'list',
+        filter: 'all',
+        limit: 36,
+        attributeFilter: filtered
+      })
+    ).toBeNull()
+    expect(
+      store.getState().getCachedLinearIssues({ kind: 'list', filter: 'all', limit: 36 })
+    ).toMatchObject({ items: [{ id: 'LIN-ALL' }] })
   })
 
   it('lets forced list refresh bypass older in-flight reads without stale cache overwrite', async () => {
@@ -154,8 +208,12 @@ describe('createLinearSlice caching', () => {
       .mockReturnValueOnce(staleRequest.promise)
       .mockReturnValueOnce(forcedRequest.promise)
 
-    const stalePromise = store.getState().listLinearIssues('all', 36)
-    const forcedPromise = store.getState().listLinearIssues('all', 36, { force: true })
+    const stalePromise = store
+      .getState()
+      .listLinearIssues({ kind: 'list', filter: 'all', limit: 36 })
+    const forcedPromise = store
+      .getState()
+      .listLinearIssues({ kind: 'list', filter: 'all', limit: 36 }, { force: true })
 
     expect(linearListIssues).toHaveBeenCalledTimes(2)
 
@@ -206,13 +264,13 @@ describe('createLinearSlice caching', () => {
     store.setState({
       linearStatus: { connected: true, viewer: null, selectedWorkspaceId: 'workspace-1' },
       linearListCache: {
-        'workspace-1::list::all::36': { data: { items: [issue('LIN-CACHED')] }, fetchedAt: 1 }
+        'workspace-1::list::all::36::': { data: { items: [issue('LIN-CACHED')] }, fetchedAt: 1 }
       }
     })
     linearListIssues.mockRejectedValueOnce(new Error('network down'))
 
     await expect(
-      store.getState().listLinearIssues('all', 36, { force: true })
+      store.getState().listLinearIssues({ kind: 'list', filter: 'all', limit: 36 }, { force: true })
     ).resolves.toMatchObject({ items: [{ id: 'LIN-CACHED' }] })
   })
 
@@ -222,7 +280,7 @@ describe('createLinearSlice caching', () => {
     store.setState({
       linearStatus: { connected: true, viewer: null, selectedWorkspaceId: 'workspace-1' },
       linearListCache: {
-        'workspace-1::list::all::36': { data: { items: [issue('LIN-CACHED')] }, fetchedAt: 1 }
+        'workspace-1::list::all::36::': { data: { items: [issue('LIN-CACHED')] }, fetchedAt: 1 }
       }
     })
     linearStatus.mockResolvedValue({
@@ -233,7 +291,7 @@ describe('createLinearSlice caching', () => {
     linearListIssues.mockRejectedValueOnce(error)
 
     await expect(
-      store.getState().listLinearIssues('all', 36, { force: true })
+      store.getState().listLinearIssues({ kind: 'list', filter: 'all', limit: 36 }, { force: true })
     ).resolves.toMatchObject({ items: [] })
     expect(linearStatus).toHaveBeenCalled()
   })
@@ -274,7 +332,7 @@ describe('createLinearSlice caching', () => {
     })
 
     await expect(
-      store.getState().listLinearIssues('all', 36, { force: true })
+      store.getState().listLinearIssues({ kind: 'list', filter: 'all', limit: 36 }, { force: true })
     ).resolves.toMatchObject({ items: [{ id: 'LIN-OK' }] })
     await vi.waitFor(() => {
       expect(store.getState().linearStatus.credentialError).toBeUndefined()
@@ -725,7 +783,7 @@ describe('createLinearSlice caching', () => {
     store.setState({
       linearStatus: { connected: true, viewer: null, selectedWorkspaceId: 'workspace-1' },
       linearListCache: {
-        'workspace-1::list::all::36': { data: { items: [issue('LIN-1')] }, fetchedAt: 1 }
+        'workspace-1::list::all::36::': { data: { items: [issue('LIN-1')] }, fetchedAt: 1 }
       }
     })
 
@@ -739,7 +797,7 @@ describe('createLinearSlice caching', () => {
     store.setState({
       linearStatus: { connected: true, viewer: null, selectedWorkspaceId: 'workspace-1' },
       linearListCache: {
-        'workspace-1::list::all::36': { data: { items: [issue('LIST')] }, fetchedAt: Date.now() }
+        'workspace-1::list::all::36::': { data: { items: [issue('LIST')] }, fetchedAt: Date.now() }
       }
     })
     linearSearchIssues.mockResolvedValueOnce([issue('SEARCH')])
@@ -781,12 +839,20 @@ describe('createLinearSlice caching', () => {
     const sourceResult = deferred<LinearCollectionResult<LinearIssue>>()
     linearListIssues.mockReturnValueOnce(sourceResult.promise)
 
-    const request = store.getState().listLinearIssues('all', 36, { sourceContext })
+    const request = store
+      .getState()
+      .listLinearIssues({ kind: 'list', filter: 'all', limit: 36 }, { sourceContext })
     store.setState({ settings: { activeRuntimeEnvironmentId: 'focused-runtime' } as never })
 
     sourceResult.resolve({ items: [issue('LIN-SOURCE')] })
     await expect(request).resolves.toMatchObject({ items: [{ id: 'LIN-SOURCE' }] })
-    expect(linearListIssues).toHaveBeenCalledWith(sourceContext, 'all', 36, 'workspace-1')
+    expect(linearListIssues).toHaveBeenCalledWith(
+      sourceContext,
+      'all',
+      36,
+      'workspace-1',
+      undefined
+    )
     expect(
       store
         .getState()
@@ -860,7 +926,7 @@ describe('createLinearSlice caching', () => {
         'workspace-1::issue-id': { data: issue('issue-id'), fetchedAt: Date.now() }
       },
       linearListCache: {
-        'workspace-1::list::all::36': {
+        'workspace-1::list::all::36::': {
           data: { items: [issue('issue-id')] },
           fetchedAt: Date.now()
         }
@@ -884,7 +950,7 @@ describe('createLinearSlice caching', () => {
     expect(store.getState().linearIssueCache['workspace-1::issue-id'].data?.title).toBe('Updated')
     expect(store.getState().linearIssueCache['workspace-1::issue-id'].fetchedAt).toBe(0)
     expect(
-      store.getState().linearListCache['workspace-1::list::all::36'].data?.items[0]?.title
+      store.getState().linearListCache['workspace-1::list::all::36::'].data?.items[0]?.title
     ).toBe('Updated')
     expect(
       store.getState().linearProjectIssueCache['workspace-1::project-issues::project-1::20'].data
@@ -1065,9 +1131,13 @@ describe('createLinearSlice', () => {
     const store = createTestStore()
     store.setState({ linearStatus: { connected: true, viewer: null } })
 
-    const localRequest = store.getState().listLinearIssues('assigned', 20)
+    const localRequest = store
+      .getState()
+      .listLinearIssues({ kind: 'list', filter: 'assigned', limit: 20 })
     store.setState({ settings: { activeRuntimeEnvironmentId: 'runtime-1' } as never })
-    const remoteRequest = store.getState().listLinearIssues('assigned', 20)
+    const remoteRequest = store
+      .getState()
+      .listLinearIssues({ kind: 'list', filter: 'assigned', limit: 20 })
 
     remoteList.resolve({ items: [issue('LIN-REMOTE')] })
     await remoteRequest

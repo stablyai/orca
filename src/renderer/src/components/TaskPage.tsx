@@ -199,6 +199,24 @@ import {
   type TaskPageRepoSourceState
 } from '@/components/task-page-cache-selectors'
 import { shouldHideTaskPageListChrome } from '@/components/task-page-list-chrome-visibility'
+import LinearIssueAttributeFilterDropdowns from '@/components/linear-issue-attribute-filter-dropdowns'
+import { resolveLinearIssueAttributeFilterPrimaryTeam } from '@/components/linear-issue-attribute-filter-primary-team'
+import {
+  buildLinearIssueListReadArgs,
+  buildLinearIssueListRequestSignature,
+  isLinearIssueSearchActive,
+  shouldForceLinearIssueListRead,
+  teamDerivedFacetsForPrimaryTeamChange
+} from '@/components/task-page-linear-issue-request'
+import {
+  resolveLinearIssueEmptyKind,
+  shouldOfferLinearIssueFetchMore
+} from '@/components/task-page-linear-issue-empty-state'
+import {
+  emptyLinearIssueAttributeFilter,
+  linearIssueAttributeFilterSignature,
+  type LinearIssueAttributeFilter
+} from '../../../shared/linear-issue-attribute-filter'
 import {
   isNewIssueDraftContentful,
   resolveNewIssueOpenSeed,
@@ -652,27 +670,28 @@ function LinearStateCell({
       }
 
       setPending(true)
-      patchLinearIssue(issue.id, { state: nextState })
+      patchLinearIssue(issue.id, { state: nextState }, { sourceContext })
       void linearUpdateIssue(providerSettings, issue.id, { stateId }, issue.workspaceId)
         .then((result) => {
           if (reqId !== reqRef.current) {
             return
           }
           if (result.ok === false) {
-            patchLinearIssue(issue.id, { state: previousState })
+            patchLinearIssue(issue.id, { state: previousState }, { sourceContext })
             toast.error(
               result.error ??
                 translate('auto.components.TaskPage.6775c05483', 'Failed to update Linear state')
             )
             return
           }
+          useAppStore.getState().invalidateLinearIssueLists({ sourceContext })
           useAppStore.getState().recordFeatureInteraction('linear-tasks')
         })
         .catch(() => {
           if (reqId !== reqRef.current) {
             return
           }
-          patchLinearIssue(issue.id, { state: previousState })
+          patchLinearIssue(issue.id, { state: previousState }, { sourceContext })
           toast.error(
             translate('auto.components.TaskPage.6775c05483', 'Failed to update Linear state')
           )
@@ -691,6 +710,7 @@ function LinearStateCell({
       patchLinearIssue,
       pending,
       providerSettings,
+      sourceContext,
       states.data
     ]
   )
@@ -3054,6 +3074,8 @@ export default function TaskPage(): React.JSX.Element {
   const selectLinearWorkspace = useAppStore((s) => s.selectLinearWorkspace)
   const searchLinearIssues = useAppStore((s) => s.searchLinearIssues)
   const listLinearIssues = useAppStore((s) => s.listLinearIssues)
+  const linearListInvalidationToken = useAppStore((s) => s.linearListInvalidationToken)
+  const invalidateLinearIssueLists = useAppStore((s) => s.invalidateLinearIssueLists)
   const getCachedLinearIssues = useAppStore((s) => s.getCachedLinearIssues)
   const getCachedLinearTeams = useAppStore((s) => s.getCachedLinearTeams)
   const listLinearTeams = useAppStore((s) => s.listLinearTeams)
@@ -3452,6 +3474,13 @@ export default function TaskPage(): React.JSX.Element {
       selectedLinearWorkspaceId
     ]
   )
+  // Why: only react to invalidation tokens for this TaskPage source scope.
+  const linearListInvalidationVersionForSource = useMemo(() => {
+    const scope = linearTaskSourceContext
+      ? getTaskSourceCacheScope(linearTaskSourceContext)
+      : 'local'
+    return linearListInvalidationToken.scope === scope ? linearListInvalidationToken.version : 0
+  }, [linearListInvalidationToken, linearTaskSourceContext])
   const jiraTaskSourceContext = useMemo(
     () =>
       normalizeTaskSourceContext({
@@ -4355,6 +4384,14 @@ export default function TaskPage(): React.JSX.Element {
   const [linearError, setLinearError] = useState<string | null>(null)
   const [linearSearchInput, setLinearSearchInput] = useState('')
   const [appliedLinearSearch, setAppliedLinearSearch] = useState('')
+  const [linearAttributeFilter, setLinearAttributeFilter] = useState<LinearIssueAttributeFilter>(
+    () => emptyLinearIssueAttributeFilter()
+  )
+  const linearAttributeFilterSignatureRef = useRef(
+    linearIssueAttributeFilterSignature(emptyLinearIssueAttributeFilter())
+  )
+  const linearPrimaryTeamIdRef = useRef<string | null>(null)
+  const previousLinearWorkspaceIdForFiltersRef = useRef<string | null | undefined>(undefined)
   const [linearViewMode, setLinearViewMode] = useState<LinearViewMode>('list')
   const [linearGroupBy, setLinearGroupBy] = useState<LinearGroupBy>('none')
   const [linearOrderBy, setLinearOrderBy] = useState<LinearOrderBy>('priority')
@@ -5100,6 +5137,57 @@ export default function TaskPage(): React.JSX.Element {
     )
   }, [linearTeamOptions, defaultLinearTeamSelection])
 
+  const linearAttributePrimaryTeam = useMemo(
+    () =>
+      resolveLinearIssueAttributeFilterPrimaryTeam({
+        selectedTeamIds: [...linearTeamSelection],
+        availableTeams: linearTeamOptions
+      }),
+    [linearTeamOptions, linearTeamSelection]
+  )
+
+  const applyLinearAttributeFilter = useCallback((next: LinearIssueAttributeFilter) => {
+    // Why: batch filter + limit/page reset in one transition so the fetch
+    // effect never issues an old expanded-limit request for the new filter.
+    setLinearAttributeFilter(next)
+    setLinearIssueLimit(LINEAR_ITEM_LIMIT)
+    setLinearIssuePage(0)
+    setLinearIssueLoadingTargetPage(null)
+  }, [])
+
+  useEffect(() => {
+    const workspaceId = selectedLinearWorkspaceId ?? null
+    const previous = previousLinearWorkspaceIdForFiltersRef.current
+    previousLinearWorkspaceIdForFiltersRef.current = workspaceId
+    if (previous === undefined || previous === workspaceId) {
+      return
+    }
+    applyLinearAttributeFilter(emptyLinearIssueAttributeFilter())
+  }, [applyLinearAttributeFilter, selectedLinearWorkspaceId])
+
+  useEffect(() => {
+    const nextId = linearAttributePrimaryTeam?.id ?? null
+    const previousId = linearPrimaryTeamIdRef.current
+    linearPrimaryTeamIdRef.current = nextId
+    if (previousId === null || previousId === nextId) {
+      return
+    }
+    // Why: status/assignee/labels are team-scoped; clearing them is a filter change
+    // and must reset limit/page via applyLinearAttributeFilter (R6), not a bare set.
+    const next = teamDerivedFacetsForPrimaryTeamChange(linearAttributeFilter)
+    if (
+      linearIssueAttributeFilterSignature(linearAttributeFilter) ===
+      linearIssueAttributeFilterSignature(next)
+    ) {
+      return
+    }
+    applyLinearAttributeFilter(next)
+  }, [applyLinearAttributeFilter, linearAttributeFilter, linearAttributePrimaryTeam?.id])
+
+  const linearSearchActive = isLinearIssueSearchActive(linearSearchInput, appliedLinearSearch)
+  const showLinearAttributeFilters =
+    linearMode === 'issues' && !activeLinearIssueContextLabel && !linearSearchActive
+
   const filteredLinearIssues = useMemo(() => {
     if (activeLinearIssueContextLabel) {
       return displayedLinearIssues
@@ -5418,7 +5506,7 @@ export default function TaskPage(): React.JSX.Element {
           color: workflowState.color
         }
 
-        patchLinearIssue(issue.id, { state: nextState })
+        patchLinearIssue(issue.id, { state: nextState }, { sourceContext: linearTaskSourceContext })
         patchScopedLinearIssue(issue.id, { state: nextState })
         applyFallbackState(nextState)
 
@@ -5429,7 +5517,11 @@ export default function TaskPage(): React.JSX.Element {
           issue.workspaceId
         )
         if (result.ok === false) {
-          patchLinearIssue(issue.id, { state: previousState })
+          patchLinearIssue(
+            issue.id,
+            { state: previousState },
+            { sourceContext: linearTaskSourceContext }
+          )
           patchScopedLinearIssue(issue.id, { state: previousState })
           applyFallbackState(previousState)
           toast.error(
@@ -5438,9 +5530,14 @@ export default function TaskPage(): React.JSX.Element {
           )
           return
         }
+        invalidateLinearIssueLists({ sourceContext: linearTaskSourceContext })
         useAppStore.getState().recordFeatureInteraction('linear-tasks')
       } catch {
-        patchLinearIssue(issue.id, { state: previousState })
+        patchLinearIssue(
+          issue.id,
+          { state: previousState },
+          { sourceContext: linearTaskSourceContext }
+        )
         patchScopedLinearIssue(issue.id, { state: previousState })
         applyFallbackState(previousState)
         toast.error(
@@ -5456,6 +5553,7 @@ export default function TaskPage(): React.JSX.Element {
     },
     [
       filteredLinearIssues,
+      invalidateLinearIssueLists,
       linearBoardDraggingIssueId,
       linearBoardUpdatingIssueIds,
       linearStatusBoardEnabled,
@@ -7177,9 +7275,8 @@ export default function TaskPage(): React.JSX.Element {
     taskSource
   ])
 
-  // Why: fetch Linear issues when the tab is active and the account is
-  // connected. An empty search falls back to `listLinearIssues` (assigned
-  // issues) so the default view shows the user's own work.
+  // Why: fetch Linear issues when the tab is active and connected. Empty search
+  // uses the plain `all` list with optional server-side attribute filters.
   useEffect(() => {
     if (!taskResumeApplied) {
       return
@@ -7199,10 +7296,17 @@ export default function TaskPage(): React.JSX.Element {
 
     const trimmed = appliedLinearSearch.trim()
     const effectiveLinearIssueLimit = clampLinearIssueListLimit(linearIssueLimit)
-    const readArgs =
-      trimmed.length > 0
-        ? ({ kind: 'search', query: trimmed, limit: LINEAR_ITEM_LIMIT } as const)
-        : ({ kind: 'list', filter: 'all', limit: effectiveLinearIssueLimit } as const)
+    const searchActive = trimmed.length > 0
+    const listReadArgs = buildLinearIssueListReadArgs({
+      filter: 'all',
+      limit: effectiveLinearIssueLimit,
+      attributeFilter: linearAttributeFilter,
+      searchActive,
+      allowAttributeFilter: selectedLinearWorkspaceId !== 'all'
+    })
+    const readArgs = searchActive
+      ? ({ kind: 'search', query: trimmed, limit: LINEAR_ITEM_LIMIT } as const)
+      : listReadArgs
     const cachedResult = getCachedLinearIssues(readArgs, { sourceContext: linearTaskSourceContext })
     if (readArgs.kind === 'search') {
       setLinearIssuesHasMore(false)
@@ -7217,15 +7321,29 @@ export default function TaskPage(): React.JSX.Element {
       )
     }
 
-    const requestSignature =
-      trimmed.length > 0
-        ? `${selectedLinearWorkspaceId ?? 'default'}::search::${trimmed}::${LINEAR_ITEM_LIMIT}`
-        : `${selectedLinearWorkspaceId ?? 'default'}::list::all::${effectiveLinearIssueLimit}`
+    const nextFilterSignature = linearIssueAttributeFilterSignature(linearAttributeFilter)
+    const previousFilterSignature = linearAttributeFilterSignatureRef.current
+    linearAttributeFilterSignatureRef.current = nextFilterSignature
+    const filterForce = shouldForceLinearIssueListRead({
+      previousFilterSignature,
+      nextFilterSignature,
+      refreshForced: false
+    })
+
+    const requestSignature = buildLinearIssueListRequestSignature({
+      sourceContext: linearTaskSourceContext,
+      workspaceId: selectedLinearWorkspaceId,
+      filter: 'all',
+      limit: effectiveLinearIssueLimit,
+      attributeFilter: linearAttributeFilter,
+      searchQuery: searchActive ? trimmed : undefined
+    })
     const previousRequest = lastLinearRequestRef.current
     const forceRefresh =
-      linearRefreshNonce > 0 &&
-      previousRequest?.nonce !== linearRefreshNonce &&
-      previousRequest?.signature === requestSignature
+      filterForce ||
+      (linearRefreshNonce > 0 &&
+        previousRequest?.nonce !== linearRefreshNonce &&
+        previousRequest?.signature === requestSignature)
     lastLinearRequestRef.current = { nonce: linearRefreshNonce, signature: requestSignature }
     const shouldProbeOnLanding =
       !forceRefresh &&
@@ -7248,7 +7366,7 @@ export default function TaskPage(): React.JSX.Element {
             force: forceRefresh || shouldProbeOnLanding,
             sourceContext: linearTaskSourceContext
           })
-        : listLinearIssues(readArgs.filter, effectiveLinearIssueLimit, {
+        : listLinearIssues(listReadArgs, {
             force: forceRefresh || shouldProbeOnLanding,
             sourceContext: linearTaskSourceContext
           })
@@ -7311,6 +7429,8 @@ export default function TaskPage(): React.JSX.Element {
     appliedLinearSearch,
     linearIssueLimit,
     linearRefreshNonce,
+    linearAttributeFilter,
+    linearListInvalidationVersionForSource,
     taskResumeApplied,
     getCachedLinearIssues,
     linearTaskSourceContext
@@ -8593,7 +8713,18 @@ export default function TaskPage(): React.JSX.Element {
                     </div>
 
                     {linearMode === 'issues' ? (
-                      <div className="mt-3 flex min-w-0 items-center gap-3">
+                      <div className="mt-3 flex min-w-0 items-center gap-2">
+                        {showLinearAttributeFilters ? (
+                          <LinearIssueAttributeFilterDropdowns
+                            value={linearAttributeFilter}
+                            onChange={applyLinearAttributeFilter}
+                            workspaceId={selectedLinearWorkspaceId ?? null}
+                            isAllWorkspaces={selectedLinearWorkspaceId === 'all'}
+                            primaryTeam={linearAttributePrimaryTeam}
+                            selectedTeamCount={linearTeamSelection.size}
+                            settings={linearTaskSourceContext ?? settings}
+                          />
+                        ) : null}
                         <div className="relative min-w-0 flex-1 basis-64">
                           <Search className="pointer-events-none absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" />
                           <Input
@@ -10537,20 +10668,37 @@ export default function TaskPage(): React.JSX.Element {
                       {translate('auto.components.TaskPage.903c7af49f', 'No Linear issues found')}
                     </p>
                     <p className="mt-2 text-sm text-muted-foreground">
-                      {activeLinearIssueContextLabel
-                        ? translate(
+                      {(() => {
+                        const emptyKind = resolveLinearIssueEmptyKind({
+                          hasContextLabel: Boolean(activeLinearIssueContextLabel),
+                          searchActive: linearSearchActive,
+                          attributeFilter: linearAttributeFilter,
+                          serverIssueCount: activeLinearIssues.length,
+                          filteredIssueCount: filteredLinearIssues.length
+                        })
+                        if (emptyKind === 'context') {
+                          return translate(
                             'auto.components.TaskPage.25ff84769a',
                             'No issues match this Linear context.'
                           )
-                        : linearSearchInput
-                          ? translate(
-                              'auto.components.TaskPage.2bdefbcac3',
-                              'Try a different search query.'
-                            )
-                          : translate(
-                              'auto.components.TaskPage.d079be2dc8',
-                              'No assigned issues. Try searching for something.'
-                            )}
+                        }
+                        if (emptyKind === 'search') {
+                          return translate(
+                            'auto.components.TaskPage.2bdefbcac3',
+                            'Try a different search query.'
+                          )
+                        }
+                        if (emptyKind === 'server-attribute-filter') {
+                          return translate(
+                            'auto.components.TaskPage.linearEmptyAttributeFilter',
+                            'No issues match the selected filters. Clear a filter or try different criteria.'
+                          )
+                        }
+                        return translate(
+                          'auto.components.TaskPage.linearEmptyUnfilteredScope',
+                          'No issues in this workspace scope. Try searching or adjusting teams.'
+                        )
+                      })()}
                     </p>
                   </div>
                 ) : null}
@@ -10571,6 +10719,27 @@ export default function TaskPage(): React.JSX.Element {
                         'Try selecting more teams or refreshing; team filters apply to the current fetched issue set.'
                       )}
                     </p>
+                    {shouldOfferLinearIssueFetchMore({
+                      emptyKind: 'client-team',
+                      serverHasMore: linearIssuesHasMore
+                    }) ? (
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        className="mt-3 h-7 text-xs"
+                        onClick={() => {
+                          setLinearIssueLimit((limit) =>
+                            Math.min(
+                              clampLinearIssueListLimit(limit + LINEAR_ITEM_LIMIT),
+                              LINEAR_ISSUE_LIST_MAX
+                            )
+                          )
+                        }}
+                      >
+                        {translate('auto.components.TaskPage.linearFetchMore', 'Fetch more')}
+                      </Button>
+                    ) : null}
                   </div>
                 ) : null}
 

@@ -480,7 +480,8 @@ import {
   updateIssueForAgent as updateLinearIssueForAgent,
   updateIssue as updateLinearIssue,
   LinearWriteFailure,
-  type LinearListFilter
+  type LinearListFilter,
+  type LinearIssueListOptions
 } from '../linear/issues'
 import {
   LinearAgentAccessError,
@@ -20799,7 +20800,9 @@ export class OrcaRuntimeService {
       : null
     const workspaceId = team?.workspaceId ?? params.workspaceId
     try {
-      const result = await listLinearIssues(filter, limit, workspaceId, team?.id)
+      const result = await listLinearIssues(filter, limit, workspaceId, {
+        teamId: team?.id
+      })
       return {
         issues: result.items.map((issue) => ({
           id: issue.id,
@@ -20927,9 +20930,9 @@ export class OrcaRuntimeService {
     filter?: LinearListFilter,
     limit = 20,
     workspaceId?: LinearWorkspaceSelection,
-    teamId?: string
+    options?: LinearIssueListOptions
   ): ReturnType<typeof listLinearIssues> {
-    return listLinearIssues(filter, clampLinearIssueListLimit(limit), workspaceId, teamId)
+    return listLinearIssues(filter, clampLinearIssueListLimit(limit), workspaceId, options)
   }
 
   linearCreateIssue(

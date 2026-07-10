@@ -39,6 +39,7 @@ import type {
 } from '../shared/orca-profiles'
 import type { TerminalPaneSplitSource } from '../shared/feature-education-telemetry'
 import type { TaskSourceContext } from '../shared/task-source-context'
+import type { LinearIssueAttributeFilter } from '../shared/linear-issue-attribute-filter'
 import type { ProjectExecutionRuntimeResolution } from '../shared/project-execution-runtime'
 import type { StartupCommandDelivery } from '../shared/codex-startup-delivery'
 import type { SleepingAgentLaunchConfig } from '../shared/agent-session-resume'
@@ -1776,6 +1777,7 @@ export type PreloadApi = {
       filter?: 'assigned' | 'created' | 'all' | 'completed'
       limit?: number
       workspaceId?: LinearWorkspaceSelection
+      attributeFilter?: LinearIssueAttributeFilter
     }) => Promise<LinearCollectionResult<LinearIssue>>
     createIssue: (args: {
       teamId: string

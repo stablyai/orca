@@ -1731,7 +1731,10 @@
         "searchIssues": "이슈 검색",
         "useIssueNumber": "이슈 #{{value0}} 사용",
         "noMatchingIssuesLoaded": "일치하는 이슈를 불러오지 않았습니다.",
-        "editReviewersWithCurrent": "리뷰어 편집: {{value0}}"
+        "editReviewersWithCurrent": "리뷰어 편집: {{value0}}",
+        "linearEmptyAttributeFilter": "No issues match the selected filters. Clear a filter or try different criteria.",
+        "linearEmptyUnfilteredScope": "No issues in this workspace scope. Try searching or adjusting teams.",
+        "linearFetchMore": "Fetch more"
       },
       "Terminal": {
         "73768427cf": "닫기",
@@ -12754,6 +12757,29 @@
             }
           }
         }
+      },
+      "linear-issue-attribute-filter-dropdowns": {
+        "removeFilter": "Remove {{value0}} filter",
+        "teamRequired": "Select a team to load status, assignees, and labels for this workspace.",
+        "filters": "Filters",
+        "allWorkspacesTitle": "Select one workspace",
+        "allWorkspacesBody": "Status, assignee, and label filters use ids from a single Linear workspace. Choose one workspace to filter by those attributes.",
+        "optionsFromTeam": "Options from {{team}}",
+        "clearAll": "Clear all filters"
+      },
+      "linear-issue-attribute-filter-sections": {
+        "status": "Status",
+        "priority": "Priority",
+        "assignee": "Assignee",
+        "unassigned": "Unassigned",
+        "labels": "Labels",
+        "countSelected": "{{count}} selected",
+        "selected": "selected",
+        "searchPriority": "Filter priority…",
+        "searchStatus": "Filter status…",
+        "searchLabels": "Filter labels…",
+        "searchAssignee": "Filter assignee…",
+        "back": "Back"
       }
     },
     "i18n": {
