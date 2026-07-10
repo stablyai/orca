@@ -2,59 +2,43 @@ import type { WorkspacePortScanResult } from '../../../shared/workspace-ports'
 
 export type KeyedPortScan = { key: string; result: WorkspacePortScanResult }
 
-export type PortScanDebounceState = {
-  /** Last reachable scan (no unavailableReason) per scan key. */
-  lastGood: Map<string, WorkspacePortScanResult>
-  /** Consecutive failure count per scan key. */
-  failures: Map<string, number>
+type PortScanDebounceEntry = {
+  consecutiveFailures: number
+  publishedResult: WorkspacePortScanResult
 }
 
-export function createPortScanDebounceState(): PortScanDebounceState {
-  return { lastGood: new Map(), failures: new Map() }
-}
+export type PortScanDebounceState = Map<string, PortScanDebounceEntry>
 
-/**
- * Smooth transient per-host port-scan failures so a worktree's live-port
- * indicator stays solid across a single dropped poll.
- *
- * A reachable host reporting no ports has no `unavailableReason`, so it is
- * recorded as the new good state and a genuine port close clears immediately.
- * A failed scan (thrown error or `unavailableReason`) reuses the host's last
- * good scan until `tolerance` consecutive failures accumulate, after which the
- * unavailable result is surfaced. `state` is mutated in place; keys absent from
- * `results` are pruned so the maps stay bounded as hosts come and go.
- */
+/** Keeps each host's last reachable scan through brief failures; reachable empty scans apply now. */
 export function reconcileTransientPortScanFailures(
   results: KeyedPortScan[],
+  publishedScans: Record<string, WorkspacePortScanResult>,
   state: PortScanDebounceState,
-  tolerance: number
+  failureThreshold: number,
+  activeKeys: ReadonlySet<string> = new Set(results.map(({ key }) => key))
 ): KeyedPortScan[] {
-  const { lastGood, failures } = state
-  const activeKeys = new Set(results.map(({ key }) => key))
-  // Prune state for hosts no longer present. Iterate each map independently — a
-  // host that has only ever failed has a `failures` entry but no `lastGood`, so
-  // walking `lastGood` alone would leak its counter and carry a stale streak if
-  // the host reappears.
-  for (const map of [lastGood, failures]) {
-    for (const key of map.keys()) {
-      if (!activeKeys.has(key)) {
-        map.delete(key)
-      }
+  for (const key of state.keys()) {
+    if (!activeKeys.has(key)) {
+      state.delete(key)
     }
   }
 
   return results.map(({ key, result }) => {
+    const previous = state.get(key)
+    const publishedResult = publishedScans[key]
+    // A different object was published by another refresh path, so it breaks this poller's streak.
+    const previousFailures =
+      previous && previous.publishedResult === publishedResult ? previous.consecutiveFailures : 0
     if (!result.unavailableReason) {
-      lastGood.set(key, result)
-      failures.delete(key)
+      state.set(key, { consecutiveFailures: 0, publishedResult: result })
       return { key, result }
     }
-    const failureCount = (failures.get(key) ?? 0) + 1
-    failures.set(key, failureCount)
-    const previous = lastGood.get(key)
-    if (failureCount < tolerance && previous) {
-      return { key, result: previous }
-    }
-    return { key, result }
+    const failures = previousFailures + 1
+    const nextResult =
+      failures < failureThreshold && publishedResult && !publishedResult.unavailableReason
+        ? publishedResult
+        : result
+    state.set(key, { consecutiveFailures: failures, publishedResult: nextResult })
+    return { key, result: nextResult }
   })
 }
