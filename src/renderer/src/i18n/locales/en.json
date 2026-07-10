@@ -28,7 +28,8 @@
         "minimaxToggleDescription": "Show MiniMax subscription usage for the active workspace.",
         "sshToggleDescription": "Show configured SSH and remote Orca hosts when any are available.",
         "resourceUsageToggleDescription": "Show the Resource Manager. Click it for CPU, memory, sessions, daemon controls, and workspace disk scans.",
-        "portsToggleDescription": "Show live workspace ports. Click it for workspace-scoped ports and external listeners."
+        "portsToggleDescription": "Show live workspace ports. Click it for workspace-scoped ports and external listeners.",
+        "antigravityToggleDescription": "Show Antigravity subscription usage for the active workspace."
       }
     }
   },
@@ -3028,7 +3029,9 @@
             "f077f586db": "Don't ask again",
             "c0e972d726": "Cancel",
             "06741a2f3d": "Open MiniMax usage details",
-            "3bbf140864": "MiniMax Usage"
+            "3bbf140864": "MiniMax Usage",
+            "antigravityUsageDetails": "Open Antigravity usage details",
+            "antigravityUsage": "Antigravity Usage"
           },
           "StatusBarUsageEmptyCta": {
             "828c764a79": "Connect an account",
@@ -7176,7 +7179,9 @@
               "cardLayout": "card layout",
               "workspaceOptions": "workspace options",
               "detailed": "detailed"
-            }
+            },
+            "antigravityUsageTitle": "Antigravity Usage",
+            "antigravityUsageDescription": "Show Antigravity subscription usage in the status bar."
           }
         },
         "auto": {

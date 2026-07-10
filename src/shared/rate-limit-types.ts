@@ -44,7 +44,7 @@ export type UsageRateLimitMetadata = {
 }
 
 export type ProviderRateLimits = {
-  provider: 'claude' | 'codex' | 'gemini' | 'opencode-go' | 'kimi' | 'minimax'
+  provider: 'claude' | 'codex' | 'gemini' | 'opencode-go' | 'kimi' | 'antigravity' | 'minimax'
   /** 5-hour session window, null if not available. */
   session: RateLimitWindow | null
   /** 7-day weekly window, null if not available. */
@@ -101,6 +101,7 @@ export type RateLimitState = {
   gemini: ProviderRateLimits | null
   opencodeGo: ProviderRateLimits | null
   kimi: ProviderRateLimits | null
+  antigravity: ProviderRateLimits | null
   minimax: ProviderRateLimits | null
   /**
    * True when a MiniMax session cookie is persisted on disk. The cookie lives

@@ -8,6 +8,10 @@ export type UsageProviderSettings = Pick<
   | 'opencodeSessionCookie'
   | 'geminiCliOAuthEnabled'
 > & {
+  // Why: Antigravity has no separate persisted usage credential in Orca. The
+  // checked status-bar item is the durable user signal; StatusBar only sets
+  // this after PATH detection says the agent is available.
+  antigravityUsageConfigured: boolean
   // Why: the MiniMax cookie lives in the file system, not GlobalSettings, so
   // we can't derive durability from settings alone. The renderer threads the
   // flag from RateLimitState (pushed by the main process) so the bar stays
@@ -21,6 +25,7 @@ type UsageProviderSnapshots = {
   gemini: ProviderRateLimits | null
   opencodeGo: ProviderRateLimits | null
   kimi: ProviderRateLimits | null
+  antigravity: ProviderRateLimits | null
   minimax: ProviderRateLimits | null
 }
 
@@ -66,6 +71,7 @@ export function hasUsageProviderSettings(
     (settings?.claudeManagedAccounts?.length ?? 0) > 0 ||
     settings?.geminiCliOAuthEnabled === true ||
     Boolean(settings?.opencodeSessionCookie?.trim()) ||
+    settings?.antigravityUsageConfigured === true ||
     settings?.minimaxCookieConfigured === true
   )
 }
@@ -88,6 +94,9 @@ export function hasUsageProviderSettingsForProvider(
   }
   if (providerId === 'opencode-go') {
     return Boolean(settings.opencodeSessionCookie?.trim())
+  }
+  if (providerId === 'antigravity') {
+    return settings.antigravityUsageConfigured === true
   }
   if (providerId === 'minimax') {
     return settings.minimaxCookieConfigured === true
@@ -134,12 +143,16 @@ export function isUsageEmptyState(
   // Why: system-default Claude/Codex accounts have no persisted account row;
   // their first durable signal is the usage snapshot, so wait for snapshots to
   // settle before teaching the user to connect an account.
+  const antigravitySnapshotPending =
+    hasUsageProviderSettingsForProvider('antigravity', settings) &&
+    isProviderSnapshotPending(providers.antigravity)
   if (
     isProviderSnapshotPending(providers.claude) ||
     isProviderSnapshotPending(providers.codex) ||
     isProviderSnapshotPending(providers.gemini) ||
     isProviderSnapshotPending(providers.opencodeGo) ||
     isProviderSnapshotPending(providers.kimi) ||
+    antigravitySnapshotPending ||
     isProviderSnapshotPending(providers.minimax)
   ) {
     return false
@@ -151,6 +164,7 @@ export function isUsageEmptyState(
     !isProviderConfigured(providers.gemini) &&
     !isProviderConfigured(providers.opencodeGo) &&
     !isProviderConfigured(providers.kimi) &&
+    !isProviderConfigured(providers.antigravity) &&
     !isProviderConfigured(providers.minimax)
   )
 }

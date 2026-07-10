@@ -412,6 +412,31 @@ describe('AppearancePane', () => {
     expect(mocks.state.toggleStatusBarItem).toHaveBeenCalledWith('minimax')
   })
 
+  it('records Antigravity status bar toggles as usage tracking interactions', async () => {
+    mocks.state.availableStatusBarToggles = [
+      {
+        id: 'antigravity',
+        title: 'Antigravity Usage',
+        description: 'Show Antigravity subscription usage in the status bar.',
+        toggleDescription: 'Show Antigravity subscription usage for the active workspace.',
+        keywords: ['status bar', 'antigravity', 'usage']
+      }
+    ]
+    mocks.state.settingsSearchQuery = 'antigravity'
+    const container = await renderAppearancePane(getDefaultSettings('/tmp'))
+    const antigravitySwitch = container.querySelector<HTMLButtonElement>(
+      'button[role="switch"][aria-label="Antigravity Usage"]'
+    )
+
+    expect(antigravitySwitch).not.toBeNull()
+    await act(async () => {
+      antigravitySwitch?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+    })
+
+    expect(mocks.state.recordFeatureInteraction).toHaveBeenCalledWith('usage-tracking')
+    expect(mocks.state.toggleStatusBarItem).toHaveBeenCalledWith('antigravity')
+  })
+
   it('collapses sibling sections so only the Interface section is expanded by default', async () => {
     mocks.state.settingsSearchQuery = ''
     const container = await renderAppearancePane(getDefaultSettings('/tmp'))

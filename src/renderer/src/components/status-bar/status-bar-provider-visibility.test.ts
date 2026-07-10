@@ -70,6 +70,7 @@ function usageSettings(overrides: Partial<UsageProviderSettings> = {}): UsagePro
     claudeManagedAccounts: [],
     opencodeSessionCookie: '',
     geminiCliOAuthEnabled: false,
+    antigravityUsageConfigured: false,
     minimaxCookieConfigured: false,
     ...overrides
   }
@@ -118,6 +119,7 @@ describe('hasUsageProviderSettings', () => {
     expect(
       hasUsageProviderSettings(usageSettings({ opencodeSessionCookie: ' session=abc ' }))
     ).toBe(true)
+    expect(hasUsageProviderSettings(usageSettings({ antigravityUsageConfigured: true }))).toBe(true)
     expect(hasUsageProviderSettings(usageSettings({ minimaxCookieConfigured: true }))).toBe(true)
   })
 
@@ -148,6 +150,17 @@ describe('hasUsageProviderSettingsForProvider', () => {
     ).toBe(true)
     expect(hasUsageProviderSettingsForProvider('claude', usageSettings())).toBe(false)
     expect(hasUsageProviderSettingsForProvider('kimi', usageSettings())).toBe(false)
+  })
+
+  it('treats checked Antigravity Usage as the durable signal for Antigravity', () => {
+    expect(
+      hasUsageProviderSettingsForProvider(
+        'antigravity',
+        usageSettings({ antigravityUsageConfigured: true })
+      )
+    ).toBe(true)
+    expect(hasUsageProviderSettingsForProvider('antigravity', usageSettings())).toBe(false)
+    expect(hasUsageProviderSettingsForProvider('antigravity', null)).toBe(false)
   })
 
   it('treats minimaxCookieConfigured as the durable signal for MiniMax', () => {
@@ -259,6 +272,20 @@ describe('getVisibleUsageProvider', () => {
       )
     ).toBe(null)
   })
+
+  it('keeps Antigravity visible while the snapshot is pending when its status item is checked', () => {
+    const visible = getVisibleUsageProvider(
+      'antigravity',
+      null,
+      usageSettings({ antigravityUsageConfigured: true })
+    )
+    expect(visible).toMatchObject({
+      provider: 'antigravity',
+      status: 'fetching',
+      session: null,
+      weekly: null
+    })
+  })
 })
 
 describe('isUsageEmptyState', () => {
@@ -271,6 +298,7 @@ describe('isUsageEmptyState', () => {
           gemini: null,
           opencodeGo: null,
           kimi: null,
+          antigravity: null,
           minimax: null
         },
         usageSettings()
@@ -287,6 +315,7 @@ describe('isUsageEmptyState', () => {
           gemini: provider('unavailable'),
           opencodeGo: provider('unavailable', { provider: 'opencode-go' }),
           kimi: provider('unavailable', { provider: 'kimi' }),
+          antigravity: provider('unavailable', { provider: 'antigravity' }),
           minimax: provider('unavailable', { provider: 'minimax' })
         },
         usageSettings()
@@ -303,6 +332,7 @@ describe('isUsageEmptyState', () => {
           gemini: provider('unavailable'),
           opencodeGo: provider('unavailable', { provider: 'opencode-go' }),
           kimi: provider('unavailable', { provider: 'kimi' }),
+          antigravity: provider('unavailable', { provider: 'antigravity' }),
           minimax: provider('unavailable', { provider: 'minimax' })
         },
         usageSettings({
@@ -330,6 +360,7 @@ describe('isUsageEmptyState', () => {
           gemini: null,
           opencodeGo: null,
           kimi: null,
+          antigravity: null,
           minimax: null
         },
         null
@@ -346,10 +377,28 @@ describe('isUsageEmptyState', () => {
           gemini: provider('unavailable'),
           opencodeGo: provider('unavailable', { provider: 'opencode-go' }),
           kimi: provider('unavailable', { provider: 'kimi' }),
+          antigravity: null,
           minimax: provider('unavailable', { provider: 'minimax' })
         },
         usageSettings()
       )
     ).toBe(true)
+  })
+
+  it('does not show the setup CTA while checked Antigravity usage is awaiting a snapshot', () => {
+    expect(
+      isUsageEmptyState(
+        {
+          claude: provider('unavailable', { provider: 'claude' }),
+          codex: provider('unavailable', { provider: 'codex' }),
+          gemini: provider('unavailable'),
+          opencodeGo: provider('unavailable', { provider: 'opencode-go' }),
+          kimi: provider('unavailable', { provider: 'kimi' }),
+          antigravity: null,
+          minimax: provider('unavailable', { provider: 'minimax' })
+        },
+        usageSettings({ antigravityUsageConfigured: true })
+      )
+    ).toBe(false)
   })
 })
