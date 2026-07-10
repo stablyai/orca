@@ -535,6 +535,20 @@ describe('Store', () => {
     expect(settings.notifications.suppressWhenFocused).toBe(true)
   })
 
+  it('repairs a persisted terminal line height outside xterm bounds', async () => {
+    const persisted = getDefaultPersistedState(testState.dir)
+    writeDataFile({
+      ...persisted,
+      settings: { ...persisted.settings, terminalLineHeight: 0.85 }
+    })
+
+    const store = await createStore()
+
+    expect(store.getSettings().terminalLineHeight).toBe(1)
+    store.flush()
+    expect((readDataFile() as PersistedState).settings.terminalLineHeight).toBe(1)
+  })
+
   it('returns default UI state when no data file exists', async () => {
     const store = await createStore()
     const ui = store.getUI()

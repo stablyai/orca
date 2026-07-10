@@ -18,6 +18,7 @@ import { normalizeUiLanguage } from '../../shared/ui-language'
 import { applyAppIcon } from '../app-icon'
 import { normalizeTerminalCustomThemes } from '../../shared/terminal-custom-themes'
 import { normalizeDesktopTerminalScrollbackRows } from '../../shared/terminal-scrollback-policy'
+import { normalizeTerminalLineHeight } from '../../shared/terminal-line-height-settings'
 import { prepareLocalWorktreeRootsForRepos } from '../worktree-root-preparation'
 import { scheduleCurrentWorktreeBaseDirectoryWatcherSync } from './worktree-base-directory-watcher'
 
@@ -94,6 +95,9 @@ export function registerSettingsHandlers(
       sanitizedArgs.terminalScrollbackRows = normalizeDesktopTerminalScrollbackRows(
         args.terminalScrollbackRows
       )
+    }
+    if ('terminalLineHeight' in args) {
+      sanitizedArgs.terminalLineHeight = normalizeTerminalLineHeight(args.terminalLineHeight)
     }
     if ('uiLanguage' in args) {
       sanitizedArgs.uiLanguage = normalizeUiLanguage(args.uiLanguage)

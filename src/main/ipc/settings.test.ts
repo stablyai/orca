@@ -306,6 +306,24 @@ describe('registerSettingsHandlers', () => {
     )
   })
 
+  it('normalizes terminal line height updates before persistence', async () => {
+    store.getSettings.mockReturnValue({ terminalLineHeight: 1 })
+    store.updateSettings.mockReturnValue({ terminalLineHeight: 1 })
+    registerSettingsHandlers(store as never)
+
+    const handler = handleMock.mock.calls.find((call) => call[0] === 'settings:set')?.[1] as (
+      _event: unknown,
+      args: unknown
+    ) => Promise<unknown>
+
+    await handler(settingsInvokeEvent, { terminalLineHeight: 0.85 })
+
+    expect(store.updateSettings).toHaveBeenCalledWith(
+      { terminalLineHeight: 1 },
+      { notifyListeners: true, originWebContentsId: 1 }
+    )
+  })
+
   it('normalizes custom terminal themes from renderer settings IPC', async () => {
     store.getSettings.mockReturnValue({ terminalCustomThemes: [] })
     store.updateSettings.mockReturnValue({ terminalCustomThemes: [] })

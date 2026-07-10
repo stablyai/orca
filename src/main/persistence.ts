@@ -203,6 +203,7 @@ import {
   normalizeTuiAgentEnvRecord
 } from '../shared/tui-agent-launch-defaults'
 import { normalizeTerminalCursorStyleDefault } from '../shared/terminal-cursor-style-settings'
+import { normalizeTerminalLineHeight } from '../shared/terminal-line-height-settings'
 import { normalizeUiLanguage } from '../shared/ui-language'
 import { normalizeBrowserPageZoomLevel } from '../shared/browser-page-zoom'
 import { persistedUIValuesEqual } from '../shared/persisted-ui-equality'
@@ -2987,6 +2988,15 @@ export class Store {
           parsed.settings
         )
         const migratedTerminalCursorStyle = normalizeTerminalCursorStyleDefault(parsed.settings)
+        const migratedTerminalLineHeight = normalizeTerminalLineHeight(
+          parsed.settings?.terminalLineHeight
+        )
+        if (
+          parsed.settings?.terminalLineHeight !== undefined &&
+          parsed.settings.terminalLineHeight !== migratedTerminalLineHeight
+        ) {
+          this.loadNeedsSave = true
+        }
         const rawTaskProviderSettings = normalizeTaskProviderSettings({
           visibleTaskProviders: parsed.settings?.visibleTaskProviders,
           defaultTaskSource: parsed.settings?.defaultTaskSource
@@ -3119,6 +3129,7 @@ export class Store {
               primarySelectionDefaultedForTerminalDefaults || stampPrimarySelectionTerminalDefaults,
             ...migratedAutoRenameBranchFromWork,
             ...migratedTerminalCursorStyle,
+            terminalLineHeight: migratedTerminalLineHeight,
             ...migratedTerminalTuiScrollSensitivity.settings,
             experimentalActivity: migratedExperimentalActivity,
             experimentalActivityDefaultedOffForAllUsers: true,
