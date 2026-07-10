@@ -1206,6 +1206,27 @@ export function handleActivityFilterFocusShortcut({
   return true
 }
 
+export function shouldAutoAcknowledgeSelectedThread(args: {
+  manuallyUnreadPaneKey: string | null
+  selectedPaneKey: string | null
+  selectedThreadHasDetailOnlyView: boolean
+  selectedThreadIsVisibleTerminal: boolean
+  selectedThreadPaneKey: string | null
+  selectedThreadUnread: boolean
+  stagedThread: boolean
+}): boolean {
+  if (
+    !args.selectedThreadPaneKey ||
+    !args.selectedThreadUnread ||
+    args.stagedThread ||
+    args.selectedThreadPaneKey !== args.selectedPaneKey ||
+    args.manuallyUnreadPaneKey === args.selectedThreadPaneKey
+  ) {
+    return false
+  }
+  return args.selectedThreadHasDetailOnlyView || args.selectedThreadIsVisibleTerminal
+}
+
 function ThreadAgentStateIndicator({ thread }: { thread: AgentPaneThread }): React.JSX.Element {
   const state = threadAgentState(thread)
   const label = threadAgentStateLabel(thread)
@@ -1464,6 +1485,10 @@ export default function ActivityPrototypePage(): React.JSX.Element {
   const activityFilterInputRef = useRef<HTMLInputElement | null>(null)
   const [compactMode, setCompactMode] = useState(false)
   const [selectedPaneKey, setSelectedPaneKey] = useState<string | null>(null)
+  // Why: marking the currently visible thread unread updates the same store
+  // observed by the auto-ack effect below. Remember that explicit user intent
+  // so the effect does not immediately flip the thread back to read.
+  const manuallyUnreadSelectedPaneKeyRef = useRef<string | null>(null)
   const [displayedPaneKey, setDisplayedPaneKey] = useState<string | null>(null)
   const [activePortalSlotId, setActivePortalSlotId] =
     useState<ActivityTerminalPortalSlotId>('primary')
@@ -1760,10 +1785,16 @@ export default function ActivityPrototypePage(): React.JSX.Element {
   }, [activePortalTargetEl, inactivePortalTargetEl])
 
   const markThreadRead = (thread: AgentPaneThread): void => {
+    if (manuallyUnreadSelectedPaneKeyRef.current === thread.paneKey) {
+      manuallyUnreadSelectedPaneKeyRef.current = null
+    }
     storeData.acknowledgeAgents([thread.paneKey])
   }
 
   const markThreadUnread = (thread: AgentPaneThread): void => {
+    if (thread.paneKey === effectiveSelectedPaneKey) {
+      manuallyUnreadSelectedPaneKeyRef.current = thread.paneKey
+    }
     storeData.unacknowledgeAgents([thread.paneKey])
   }
 
@@ -1797,24 +1828,39 @@ export default function ActivityPrototypePage(): React.JSX.Element {
   }
 
   const selectThread = (thread: AgentPaneThread): void => {
+    const reselectsManuallyUnreadThread =
+      manuallyUnreadSelectedPaneKeyRef.current === thread.paneKey &&
+      effectiveSelectedPaneKey === thread.paneKey
+    manuallyUnreadSelectedPaneKeyRef.current = null
     setSelectedPaneKey(thread.paneKey)
     activateThreadTerminal(thread)
+    // Why: the normal auto-ack effect only reruns after a selection/portal
+    // change. A click on the already-selected manually-unread row has neither,
+    // so acknowledge it directly as the user's explicit reopen action.
+    if (reselectsManuallyUnreadThread) {
+      storeData.acknowledgeAgents([thread.paneKey])
+    }
   }
 
   useEffect(() => {
-    if (
-      !selectedThread ||
-      !selectedThread.unread ||
-      stagedThread ||
-      selectedThread.paneKey !== effectiveSelectedPaneKey
-    ) {
+    if (!selectedThread) {
       return
     }
     const selectedThreadHasDetailOnlyView =
       !selectedHasLiveTab || selectedThread.migrationUnsupportedPtyId !== undefined
     const selectedThreadIsVisibleTerminal =
       visibleThread?.paneKey === effectiveSelectedPaneKey && visiblePortalReady
-    if (selectedThreadHasDetailOnlyView || selectedThreadIsVisibleTerminal) {
+    if (
+      shouldAutoAcknowledgeSelectedThread({
+        manuallyUnreadPaneKey: manuallyUnreadSelectedPaneKeyRef.current,
+        selectedPaneKey: effectiveSelectedPaneKey,
+        selectedThreadHasDetailOnlyView,
+        selectedThreadIsVisibleTerminal,
+        selectedThreadPaneKey: selectedThread.paneKey,
+        selectedThreadUnread: selectedThread.unread,
+        stagedThread: stagedThread !== null
+      })
+    ) {
       storeData.acknowledgeAgents([selectedThread.paneKey])
     }
   }, [
@@ -1843,6 +1889,7 @@ export default function ActivityPrototypePage(): React.JSX.Element {
     if (unreadKeys.length === 0) {
       return
     }
+    manuallyUnreadSelectedPaneKeyRef.current = null
     storeData.acknowledgeAgents(unreadKeys)
   }
 

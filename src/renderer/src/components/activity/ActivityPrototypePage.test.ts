@@ -16,6 +16,7 @@ import {
   handleActivityFilterFocusShortcut,
   isActivityFilterFocusShortcut,
   shouldIgnoreActivityFilterFocusShortcutTarget,
+  shouldAutoAcknowledgeSelectedThread,
   buildActivityThreadGroups,
   buildActivityEvents,
   buildAgentPaneThreads,
@@ -38,6 +39,37 @@ const UNKNOWN_PANE_KEY = makePaneKey('tab-unknown', LEAF_ID_UNKNOWN)
 const PANE_KEY_A1 = makePaneKey('tab-a1', LEAF_ID_A1)
 const PANE_KEY_B1 = makePaneKey('tab-b1', LEAF_ID_B1)
 const PANE_KEY_A2 = makePaneKey('tab-a2', LEAF_ID_A2)
+
+describe('shouldAutoAcknowledgeSelectedThread', () => {
+  const visibleSelectedThread = {
+    manuallyUnreadPaneKey: null,
+    selectedPaneKey: PANE_KEY,
+    selectedThreadHasDetailOnlyView: false,
+    selectedThreadIsVisibleTerminal: true,
+    selectedThreadPaneKey: PANE_KEY,
+    selectedThreadUnread: true,
+    stagedThread: false
+  }
+
+  it('keeps an explicitly unread selected thread unread until it is reopened', () => {
+    expect(
+      shouldAutoAcknowledgeSelectedThread({
+        ...visibleSelectedThread,
+        manuallyUnreadPaneKey: PANE_KEY
+      })
+    ).toBe(false)
+    expect(shouldAutoAcknowledgeSelectedThread(visibleSelectedThread)).toBe(true)
+  })
+
+  it('does not acknowledge a selected thread before its detail is visible', () => {
+    expect(
+      shouldAutoAcknowledgeSelectedThread({
+        ...visibleSelectedThread,
+        selectedThreadIsVisibleTerminal: false
+      })
+    ).toBe(false)
+  })
+})
 
 function makeRepo(): Repo {
   return {
