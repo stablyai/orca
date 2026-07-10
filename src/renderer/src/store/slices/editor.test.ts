@@ -1147,6 +1147,35 @@ describe('createEditorSlice split-group editor routing', () => {
 
     expect(findUnifiedTabByEntity(store, '/repo/explicit.ts')?.groupId).toBe(terminalGroupId)
   })
+
+  it('opens implicit files in a focused browser split group instead of stealing an editor pane (#6891)', () => {
+    const store = createEditorTabsStore()
+    const { editorGroupId } = seedTerminalAndEditorGroups(store)
+
+    // Regression #6891: with a split like Agent | Browser, focusing the browser
+    // pane and opening a file sent it to another pane. A focused browser pane
+    // was treated like a focused agent terminal, so the open was stolen into an
+    // existing editor pane instead of the focused group.
+    const browserGroupId = store.getState().createEmptySplitGroup('wt-1', editorGroupId, 'right')
+    if (!browserGroupId) {
+      throw new Error('Expected split browser group')
+    }
+    store.getState().createUnifiedTab('wt-1', 'browser', {
+      id: 'browser-tab',
+      entityId: 'browser-tab',
+      label: 'Browser',
+      targetGroupId: browserGroupId
+    })
+    store.setState({
+      activeGroupIdByWorktree: { 'wt-1': browserGroupId },
+      activeTabType: 'browser',
+      activeTabTypeByWorktree: { 'wt-1': 'browser' }
+    } as Partial<AppState>)
+
+    openSourceFile(store, '/repo/from-browser.ts')
+
+    expect(findUnifiedTabByEntity(store, '/repo/from-browser.ts')?.groupId).toBe(browserGroupId)
+  })
 })
 
 describe('createEditorSlice untitled cleanup routing', () => {

@@ -903,7 +903,10 @@ function resolveEditorOpenTargetGroupId(
     groups.find((group) => group.id === state.activeGroupIdByWorktree?.[worktreeId]) ??
     fallbackGroup
   const activeTab = getGroupActiveTab(activeGroup, tabsById)
-  if (!activeTab || isEditorTabContentType(activeTab.contentType)) {
+  // Why: only a focused agent *terminal* should defer to an existing editor pane
+  // (#6891). Editor, browser, and simulator panes open the file in the focused
+  // group so it lands where the user is looking instead of a stale editor pane.
+  if (!activeTab || activeTab.contentType !== 'terminal') {
     return activeGroup.id
   }
 
