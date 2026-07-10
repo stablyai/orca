@@ -11326,6 +11326,121 @@ describe('OrcaRuntimeService', () => {
     unsubscribe()
   })
 
+  // #7970: on a headless serve there is no renderer syncing tab.agentStatus, so
+  // hook-only transitions must republish the PTY-backed snapshot themselves and
+  // the snapshot must carry the retained hook payload, not just title evidence.
+  it('republishes mobile session tabs with hook payloads for title-less OSC 9999 transitions', async () => {
+    const spawn = vi.fn().mockResolvedValue({ id: 'hook-only-pty' })
+    const runtime = new OrcaRuntimeService(store)
+    runtime.setPtyController({
+      spawn,
+      write: () => true,
+      kill: () => true,
+      getForegroundProcess: async () => null
+    })
+    const events: RuntimeMobileSessionTabsResult[] = []
+    const unsubscribe = runtime.onMobileSessionTabsChanged((snapshot) => events.push(snapshot))
+
+    await runtime.createTerminal(`id:${TEST_WORKTREE_ID}`, {
+      tabId: 'hook-tab',
+      leafId: HEADLESS_LEAF_ID
+    })
+    events.length = 0
+
+    runtime.onPtyData(
+      'hook-only-pty',
+      '\x1b]9999;{"state":"working","prompt":"fix the tests","agentType":"opencode"}\x07',
+      100
+    )
+
+    expect(events).toHaveLength(1)
+    expect(events[0]?.tabs[0]).toEqual(
+      expect.objectContaining({
+        type: 'terminal',
+        agentStatus: expect.objectContaining({
+          state: 'working',
+          prompt: 'fix the tests',
+          agentType: 'opencode'
+        })
+      })
+    )
+
+    runtime.onPtyData(
+      'hook-only-pty',
+      '\x1b]9999;{"state":"waiting","prompt":"fix the tests","agentType":"opencode"}\x07',
+      101
+    )
+
+    expect(events).toHaveLength(2)
+    expect(events[1]?.tabs[0]?.type === 'terminal' && events[1].tabs[0].agentStatus).toEqual(
+      expect.objectContaining({ state: 'waiting' })
+    )
+
+    unsubscribe()
+  })
+
+  it('does not republish mobile session tabs for repeated identical OSC 9999 payloads', async () => {
+    const spawn = vi.fn().mockResolvedValue({ id: 'hook-ping-pty' })
+    const runtime = new OrcaRuntimeService(store)
+    runtime.setPtyController({
+      spawn,
+      write: () => true,
+      kill: () => true,
+      getForegroundProcess: async () => null
+    })
+    const events: RuntimeMobileSessionTabsResult[] = []
+    const unsubscribe = runtime.onMobileSessionTabsChanged((snapshot) => events.push(snapshot))
+
+    await runtime.createTerminal(`id:${TEST_WORKTREE_ID}`, {
+      tabId: 'hook-ping-tab',
+      leafId: HEADLESS_LEAF_ID
+    })
+    events.length = 0
+
+    const payload = '\x1b]9999;{"state":"working","prompt":"same","agentType":"codex"}\x07'
+    runtime.onPtyData('hook-ping-pty', payload, 100)
+    runtime.onPtyData('hook-ping-pty', payload, 101)
+    runtime.onPtyData('hook-ping-pty', payload, 102)
+
+    expect(events).toHaveLength(1)
+
+    unsubscribe()
+  })
+
+  it('suppresses a retained hook working status once the shell owns the pane title again', async () => {
+    const spawn = vi.fn().mockResolvedValue({ id: 'hook-exit-pty' })
+    const runtime = new OrcaRuntimeService(store)
+    runtime.setPtyController({
+      spawn,
+      write: () => true,
+      kill: () => true,
+      getForegroundProcess: async () => null
+    })
+    const events: RuntimeMobileSessionTabsResult[] = []
+    const unsubscribe = runtime.onMobileSessionTabsChanged((snapshot) => events.push(snapshot))
+
+    await runtime.createTerminal(`id:${TEST_WORKTREE_ID}`, {
+      tabId: 'hook-exit-tab',
+      leafId: HEADLESS_LEAF_ID
+    })
+    events.length = 0
+
+    runtime.onPtyData(
+      'hook-exit-pty',
+      '\x1b]9999;{"state":"working","prompt":"long task","agentType":"codex"}\x07',
+      100
+    )
+    // Agent exits without a hook done event; the shell takes the title back.
+    // The stuck-spinner guard (#1437) must win over the retained hook row.
+    runtime.onPtyData('hook-exit-pty', '\x1b]0;zsh\x07', 101)
+
+    const last = events.at(-1)?.tabs[0]
+    expect(last?.type).toBe('terminal')
+    expect(last?.type === 'terminal' ? last.agentStatus : null).toBeFalsy()
+
+    unsubscribe()
+  })
+
   it('stores normalized Pi idle OSC titles that still classify as idle', async () => {
     const runtime = new OrcaRuntimeService(store)
     syncSinglePty(runtime)

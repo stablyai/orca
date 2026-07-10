@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { ActivityIndicator, Pressable, Text, TextInput, View } from 'react-native'
-import { ArrowRight, Pencil } from 'lucide-react-native'
+import { ArrowRight, ExternalLink, Pencil } from 'lucide-react-native'
 import { colors } from '../../theme/mobile-theme'
 import type { GitHubWorkItemDetails, PRInfo } from '../../../../src/shared/types'
 import type { MobilePrTitleAction } from '../../session/use-mobile-pr-title-action'
@@ -36,19 +36,32 @@ export function PRSidebarHeader({ pr, details, titleAction }: Props) {
   return (
     <View style={styles.section}>
       <View style={styles.sectionBody}>
-        <Pressable
-          onPress={openPr}
-          disabled={!openPr}
-          accessibilityRole="link"
-          accessibilityLabel={`Open pull request #${pr.number} on the web`}
-          style={({ pressed }) => [
-            styles.badge,
-            { borderColor: badgeColor },
-            pressed && { opacity: 0.6 }
-          ]}
-        >
-          <Text style={[styles.badgeText, { color: badgeColor }]}>{badge.label}</Text>
-        </Pressable>
+        <View style={styles.badgeRow}>
+          <Pressable
+            onPress={openPr}
+            disabled={!openPr}
+            accessibilityRole="link"
+            accessibilityLabel={`Open pull request #${pr.number} on the web`}
+            style={({ pressed }) => [
+              styles.badge,
+              { borderColor: badgeColor },
+              pressed && { opacity: 0.6 }
+            ]}
+          >
+            <Text style={[styles.badgeText, { color: badgeColor }]}>{badge.label}</Text>
+          </Pressable>
+          {openPr ? (
+            <Pressable
+              onPress={openPr}
+              hitSlop={8}
+              accessibilityRole="link"
+              accessibilityLabel={`Open pull request #${pr.number} in browser`}
+              style={({ pressed }) => [styles.iconButton, pressed && { opacity: 0.6 }]}
+            >
+              <ExternalLink size={16} color={colors.textSecondary} strokeWidth={2.2} />
+            </Pressable>
+          ) : null}
+        </View>
         <PRTitle
           title={title}
           number={pr.number}

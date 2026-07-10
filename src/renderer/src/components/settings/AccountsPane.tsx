@@ -64,6 +64,14 @@ import { getCodexAccountAuthWarning } from './codex-account-auth-warning'
 import { translate } from '@/i18n/i18n'
 import { cn } from '@/lib/utils'
 import { GrokAccountsSection } from './GrokAccountsSection'
+import {
+  hasRemoteProviderAccountOwner,
+  removeClaudeProviderAccount,
+  removeCodexProviderAccount,
+  selectClaudeProviderAccount,
+  selectCodexProviderAccount,
+  watchProviderAccounts
+} from '@/runtime/runtime-provider-accounts-client'
 
 export { getAccountsPaneSearchEntries }
 
@@ -207,21 +215,23 @@ function getClaudeAccountLabel(
 }
 
 function getCodexAccountRuntimeLabel(
-  account: CodexRateLimitAccountsState['accounts'][number]
+  account: CodexRateLimitAccountsState['accounts'][number],
+  hostLabel = getHostRuntimeLabel()
 ): string {
   if (account.managedHomeRuntime === 'wsl') {
     return account.wslDistro ? `WSL ${account.wslDistro}` : 'WSL'
   }
-  return getHostRuntimeLabel()
+  return hostLabel
 }
 
 function getClaudeAccountRuntimeLabel(
-  account: ClaudeRateLimitAccountsState['accounts'][number]
+  account: ClaudeRateLimitAccountsState['accounts'][number],
+  hostLabel = getHostRuntimeLabel()
 ): string {
   if (account.managedAuthRuntime === 'wsl') {
     return account.wslDistro ? `WSL ${account.wslDistro}` : 'WSL'
   }
-  return getHostRuntimeLabel()
+  return hostLabel
 }
 
 function getCodexAccountErrorDescription(error: unknown): string {
@@ -342,22 +352,41 @@ export function AccountsPane({
   const miniMaxRateLimits = useAppStore((s) => s.rateLimits.minimax)
   const recordFeatureInteraction = useAppStore((s) => s.recordFeatureInteraction)
   const fetchSettings = useAppStore((s) => s.fetchSettings)
+  const runtimeEnvironments = useAppStore((s) => s.runtimeEnvironments)
   const recordedOpenCodeSettingEditsRef = useRef<Set<'cookie' | 'workspaceId'>>(new Set())
   const [miniMaxCookieDraft, setMiniMaxCookieDraft] = useState('')
   const [miniMaxConfigured, setMiniMaxConfigured] = useState(false)
   const [miniMaxCredentialBusy, setMiniMaxCredentialBusy] = useState(false)
-  const accountRuntime = getSelectedAccountRuntime(
+  const localAccountRuntime = getSelectedAccountRuntime(
     settings,
     wslSupportedPlatform,
     wslAvailable,
     wslDistros,
     wslCapabilitiesLoading
   )
+  // Why: with a Remote Orca Server active the server owns provider accounts
+  // (see #7973); every list/select/remove below must scope to it, not host/WSL.
+  const isRemoteAccountScope = hasRemoteProviderAccountOwner(settings)
+  const activeRuntimeEnvironmentId = settings.activeRuntimeEnvironmentId?.trim() || null
+  const remoteServerLabel = isRemoteAccountScope
+    ? (runtimeEnvironments.find((environment) => environment.id === activeRuntimeEnvironmentId)
+        ?.name ??
+      translate('auto.components.settings.AccountsPane.remoteServerFallback', 'the remote server'))
+    : null
+  const accountRuntime: LocalAccountRuntime = isRemoteAccountScope
+    ? { runtime: 'host', label: remoteServerLabel ?? '' }
+    : localAccountRuntime
   // Why: host runtime labels are standalone UI labels; interpolated prose needs sentence casing.
   const accountRuntimeSentenceLabel =
-    accountRuntime.runtime === 'host' && !navigator.userAgent.includes('Windows')
+    !isRemoteAccountScope &&
+    accountRuntime.runtime === 'host' &&
+    !navigator.userAgent.includes('Windows')
       ? `${accountRuntime.label.charAt(0).toLocaleLowerCase()}${accountRuntime.label.slice(1)}`
       : accountRuntime.label
+  const localAccountRuntimeSentenceLabel =
+    localAccountRuntime.runtime === 'host' && !navigator.userAgent.includes('Windows')
+      ? `${localAccountRuntime.label.charAt(0).toLocaleLowerCase()}${localAccountRuntime.label.slice(1)}`
+      : localAccountRuntime.label
 
   const [codexAccounts, setCodexAccounts] = useState<CodexRateLimitAccountsState>({
     accounts: [],
@@ -386,15 +415,18 @@ export function AccountsPane({
   )
   const activeCodexAccountId = getActiveCodexAccountIdForRuntime(codexAccounts, accountRuntime)
   const activeClaudeAccountId = getActiveClaudeAccountIdForRuntime(claudeAccounts, accountRuntime)
-  const activeCodexAuthWarning = codexAccountsLoaded
-    ? getCodexAccountAuthWarning({
-        limits: codexRateLimits,
-        target: codexRateLimitTarget,
-        runtime: accountRuntime,
-        activeAccountId: activeCodexAccountId,
-        accountId: activeCodexAccountId
-      })
-    : null
+  // Why: the auth warning is derived from the desktop's own rate-limit poll;
+  // with a remote owner it would misattribute local auth state to the server.
+  const activeCodexAuthWarning =
+    codexAccountsLoaded && !isRemoteAccountScope
+      ? getCodexAccountAuthWarning({
+          limits: codexRateLimits,
+          target: codexRateLimitTarget,
+          runtime: accountRuntime,
+          activeAccountId: activeCodexAccountId,
+          accountId: activeCodexAccountId
+        })
+      : null
   const systemCodexNeedsReauthentication =
     activeCodexAccountId === null && Boolean(activeCodexAuthWarning)
   const accountRuntimeUnavailable =
@@ -479,21 +511,22 @@ export function AccountsPane({
   }, [])
 
   useEffect(() => {
-    let stale = false
-
-    const loadCodexAccounts = async (): Promise<void> => {
-      try {
-        const nextCodex = await window.api.codexAccounts.list()
-        if (!stale) {
-          setCodexAccounts(nextCodex)
+    // Why: remote snapshots stream usage refreshes after the synchronous ready
+    // message, so the watcher stays open for the pane's lifetime; the local
+    // path resolves once and the close() is a no-op.
+    const watcher = watchProviderAccounts(
+      { activeRuntimeEnvironmentId },
+      {
+        onSnapshot: (snapshot) => {
+          setCodexAccounts(snapshot.codex)
+          setClaudeAccounts(snapshot.claude)
           setCodexAccountsLoaded(true)
-        }
-      } catch (error) {
-        if (!stale) {
+        },
+        onError: (error) => {
           toast.error(
             translate(
-              'auto.components.settings.AccountsPane.b8c2905c2b',
-              'Could not load Codex accounts.'
+              'auto.components.settings.AccountsPane.loadAccountsFailed',
+              'Could not load provider accounts.'
             ),
             {
               description: String((error as Error)?.message ?? error)
@@ -501,46 +534,27 @@ export function AccountsPane({
           )
         }
       }
-    }
-
-    const loadClaudeAccounts = async (): Promise<void> => {
-      try {
-        const nextClaude = await window.api.claudeAccounts.list()
-        if (!stale) {
-          setClaudeAccounts(nextClaude)
-        }
-      } catch (error) {
-        if (!stale) {
-          toast.error(
-            translate(
-              'auto.components.settings.AccountsPane.9107406589',
-              'Could not load Claude accounts.'
-            ),
-            {
-              description: String((error as Error)?.message ?? error)
-            }
-          )
-        }
-      }
-    }
-
-    void loadCodexAccounts()
-    void loadClaudeAccounts()
+    )
 
     return () => {
-      stale = true
+      watcher.close()
     }
-  }, [])
+  }, [activeRuntimeEnvironmentId])
 
   const syncCodexAccounts = async (next: CodexRateLimitAccountsState): Promise<void> => {
     setCodexAccounts(next)
     setCodexAccountsLoaded(true)
-    await fetchSettings()
+    // Why: remote mutations never change local GlobalSettings account fields.
+    if (!isRemoteAccountScope) {
+      await fetchSettings()
+    }
   }
 
   const syncClaudeAccounts = async (next: ClaudeRateLimitAccountsState): Promise<void> => {
     setClaudeAccounts(next)
-    await fetchSettings()
+    if (!isRemoteAccountScope) {
+      await fetchSettings()
+    }
   }
 
   const formatAccountTimestamp = (timestamp: number): string => {
@@ -737,6 +751,7 @@ export function AccountsPane({
 
   const visibleSections = [
     wslSupportedPlatform &&
+    !isRemoteAccountScope &&
     matchesSettingsSearch(searchQuery, getAccountsLocationSearchEntries()) ? (
       <section key="account-runtime" id="accounts-runtime" className="space-y-3 scroll-mt-6">
         {accountRuntimeControls}
@@ -772,11 +787,17 @@ export function AccountsPane({
                 {translate('auto.components.settings.AccountsPane.94d351af4a', 'Accounts')}
               </Label>
               <p className="text-xs text-muted-foreground">
-                {translate(
-                  'auto.components.settings.AccountsPane.c0a52abfc5',
-                  'Showing accounts for {{value0}}. New accounts are added there.',
-                  { value0: accountRuntimeSentenceLabel }
-                )}
+                {isRemoteAccountScope
+                  ? translate(
+                      'auto.components.settings.AccountsPane.remoteScopeAccounts',
+                      'Showing accounts managed by {{value0}}. Add or re-authenticate accounts on that server.',
+                      { value0: accountRuntimeSentenceLabel }
+                    )
+                  : translate(
+                      'auto.components.settings.AccountsPane.c0a52abfc5',
+                      'Showing accounts for {{value0}}. New accounts are added there.',
+                      { value0: accountRuntimeSentenceLabel }
+                    )}
               </p>
             </div>
             <div className="flex shrink-0 items-center gap-1.5">
@@ -792,7 +813,12 @@ export function AccountsPane({
                   )
                 }
                 disabled={
-                  claudeAction !== 'idle' || wslCapabilitiesLoading || accountRuntimeUnavailable
+                  // Why: interactive `claude login` needs a desktop browser and
+                  // would authenticate against this device, not the server.
+                  isRemoteAccountScope ||
+                  claudeAction !== 'idle' ||
+                  wslCapabilitiesLoading ||
+                  accountRuntimeUnavailable
                 }
                 className="gap-1.5"
               >
@@ -822,7 +848,7 @@ export function AccountsPane({
               type="button"
               onClick={() =>
                 void runClaudeAccountAction('select:system', () =>
-                  window.api.claudeAccounts.select({
+                  selectClaudeProviderAccount(settings, {
                     accountId: null,
                     runtime: accountRuntime.runtime,
                     wslDistro: accountRuntime.wslDistro
@@ -864,11 +890,17 @@ export function AccountsPane({
             </button>
             {visibleClaudeAccounts.length === 0 ? (
               <div className="rounded-md border border-dashed border-border/70 px-3 py-4 text-xs text-muted-foreground">
-                {translate(
-                  'auto.components.settings.AccountsPane.3fe7862418',
-                  "No managed Claude accounts for {{value0}}. Orca will use that environment's system default Claude login until you add one here.",
-                  { value0: accountRuntimeSentenceLabel }
-                )}
+                {isRemoteAccountScope
+                  ? translate(
+                      'auto.components.settings.AccountsPane.remoteEmptyClaudeAccounts',
+                      'No managed Claude accounts on {{value0}}. It uses its system default Claude login; add accounts on that server.',
+                      { value0: accountRuntimeSentenceLabel }
+                    )
+                  : translate(
+                      'auto.components.settings.AccountsPane.3fe7862418',
+                      "No managed Claude accounts for {{value0}}. Orca will use that environment's system default Claude login until you add one here.",
+                      { value0: accountRuntimeSentenceLabel }
+                    )}
               </div>
             ) : (
               visibleClaudeAccounts.map((account) => {
@@ -890,7 +922,7 @@ export function AccountsPane({
                         type="button"
                         onClick={() =>
                           void runClaudeAccountAction(`select:${account.id}`, () =>
-                            window.api.claudeAccounts.select({
+                            selectClaudeProviderAccount(settings, {
                               accountId: account.id,
                               runtime: account.managedAuthRuntime ?? 'host',
                               wslDistro: account.wslDistro ?? null
@@ -906,7 +938,7 @@ export function AccountsPane({
                             variant="outline"
                             className="h-4 shrink-0 rounded px-1.5 text-[10px] font-medium leading-none text-foreground/70"
                           >
-                            {getClaudeAccountRuntimeLabel(account)}
+                            {getClaudeAccountRuntimeLabel(account, accountRuntime.label)}
                           </Badge>
                           {isActive ? (
                             <Badge
@@ -922,7 +954,7 @@ export function AccountsPane({
                         </div>
                         <span className="truncate text-[11px] text-muted-foreground">
                           {account.organizationName
-                            ? `${account.organizationName} · ${formatAccountTimestamp(account.lastAuthenticatedAt)}`
+                            ? `${account.organizationName} 路 ${formatAccountTimestamp(account.lastAuthenticatedAt)}`
                             : formatAccountTimestamp(account.lastAuthenticatedAt)}
                         </span>
                       </button>
@@ -936,7 +968,7 @@ export function AccountsPane({
                               window.api.claudeAccounts.reauthenticate({ accountId: account.id })
                             )
                           }}
-                          disabled={isBusy}
+                          disabled={isRemoteAccountScope || isBusy}
                           className="h-6 px-2 text-muted-foreground hover:text-foreground"
                         >
                           {isReauthing ? (
@@ -986,10 +1018,16 @@ export function AccountsPane({
             )}
           </p>
           <p className="text-xs text-muted-foreground">
-            {translate(
-              'auto.components.settings.AccountsPane.340d6f7a85',
-              'Each account keeps its own local sign-in context in Orca. Account auth stays on this device.'
-            )}
+            {isRemoteAccountScope
+              ? translate(
+                  'auto.components.settings.AccountsPane.remoteScopeAuthContext',
+                  'Each account keeps its own sign-in context on {{value0}}.',
+                  { value0: accountRuntimeSentenceLabel }
+                )
+              : translate(
+                  'auto.components.settings.AccountsPane.340d6f7a85',
+                  'Each account keeps its own local sign-in context in Orca. Account auth stays on this device.'
+                )}
           </p>
         </div>
 
@@ -1038,11 +1076,17 @@ export function AccountsPane({
                 {translate('auto.components.settings.AccountsPane.94d351af4a', 'Accounts')}
               </Label>
               <p className="text-xs text-muted-foreground">
-                {translate(
-                  'auto.components.settings.AccountsPane.c0a52abfc5',
-                  'Showing accounts for {{value0}}. New accounts are added there.',
-                  { value0: accountRuntimeSentenceLabel }
-                )}
+                {isRemoteAccountScope
+                  ? translate(
+                      'auto.components.settings.AccountsPane.remoteScopeAccounts',
+                      'Showing accounts managed by {{value0}}. Add or re-authenticate accounts on that server.',
+                      { value0: accountRuntimeSentenceLabel }
+                    )
+                  : translate(
+                      'auto.components.settings.AccountsPane.c0a52abfc5',
+                      'Showing accounts for {{value0}}. New accounts are added there.',
+                      { value0: accountRuntimeSentenceLabel }
+                    )}
               </p>
             </div>
             <Button
@@ -1057,7 +1101,12 @@ export function AccountsPane({
                 )
               }
               disabled={
-                codexAction !== 'idle' || wslCapabilitiesLoading || accountRuntimeUnavailable
+                // Why: interactive `codex login` needs a desktop browser and
+                // would authenticate against this device, not the server.
+                isRemoteAccountScope ||
+                codexAction !== 'idle' ||
+                wslCapabilitiesLoading ||
+                accountRuntimeUnavailable
               }
               className="gap-1.5"
             >
@@ -1075,7 +1124,7 @@ export function AccountsPane({
               type="button"
               onClick={() =>
                 void runCodexAccountAction('select:system', () =>
-                  window.api.codexAccounts.select({
+                  selectCodexProviderAccount(settings, {
                     accountId: null,
                     runtime: accountRuntime.runtime,
                     wslDistro: accountRuntime.wslDistro
@@ -1140,22 +1189,32 @@ export function AccountsPane({
             </button>
             {visibleCodexAccounts.length === 0 ? (
               <div className="rounded-md border border-dashed border-border/70 px-3 py-4 text-xs text-muted-foreground">
-                {translate(
-                  'auto.components.settings.AccountsPane.b4c9450319',
-                  "No managed Codex accounts for {{value0}}. Orca will use that environment's system default Codex login until you add one here.",
-                  { value0: accountRuntimeSentenceLabel }
-                )}
+                {isRemoteAccountScope
+                  ? translate(
+                      'auto.components.settings.AccountsPane.remoteEmptyCodexAccounts',
+                      'No managed Codex accounts on {{value0}}. It uses its system default Codex login; add accounts on that server.',
+                      { value0: accountRuntimeSentenceLabel }
+                    )
+                  : translate(
+                      'auto.components.settings.AccountsPane.b4c9450319',
+                      "No managed Codex accounts for {{value0}}. Orca will use that environment's system default Codex login until you add one here.",
+                      { value0: accountRuntimeSentenceLabel }
+                    )}
               </div>
             ) : (
               visibleCodexAccounts.map((account) => {
                 const isActive = activeCodexAccountId === account.id
-                const accountAuthWarning = getCodexAccountAuthWarning({
-                  limits: codexRateLimits,
-                  target: codexRateLimitTarget,
-                  runtime: accountRuntime,
-                  activeAccountId: activeCodexAccountId,
-                  accountId: account.id
-                })
+                // Why: same remote gate as the section-level warning 鈥?the
+                // desktop's rate-limit poll says nothing about server accounts.
+                const accountAuthWarning = isRemoteAccountScope
+                  ? null
+                  : getCodexAccountAuthWarning({
+                      limits: codexRateLimits,
+                      target: codexRateLimitTarget,
+                      runtime: accountRuntime,
+                      activeAccountId: activeCodexAccountId,
+                      accountId: account.id
+                    })
                 const needsReauthentication = Boolean(accountAuthWarning)
                 const isReauthing = codexAction === `reauth:${account.id}`
                 const isRemoving = codexAction === `remove:${account.id}`
@@ -1177,7 +1236,7 @@ export function AccountsPane({
                         type="button"
                         onClick={() =>
                           void runCodexAccountAction(`select:${account.id}`, () =>
-                            window.api.codexAccounts.select({
+                            selectCodexProviderAccount(settings, {
                               accountId: account.id,
                               runtime: account.managedHomeRuntime ?? 'host',
                               wslDistro: account.wslDistro ?? null
@@ -1193,7 +1252,7 @@ export function AccountsPane({
                             variant="outline"
                             className="h-4 shrink-0 rounded px-1.5 text-[10px] font-medium leading-none text-foreground/70"
                           >
-                            {getCodexAccountRuntimeLabel(account)}
+                            {getCodexAccountRuntimeLabel(account, accountRuntime.label)}
                           </Badge>
                           {isActive ? (
                             <Badge
@@ -1234,7 +1293,7 @@ export function AccountsPane({
                             <span className="truncate">{account.workspaceLabel}</span>
                           ) : null}
                           {needsReauthentication || account.workspaceLabel ? (
-                            <span className="shrink-0 opacity-50">•</span>
+                            <span className="shrink-0 opacity-50">鈥?/span>
                           ) : null}
                           <span className="shrink-0">
                             {formatAccountTimestamp(account.lastAuthenticatedAt)}
@@ -1255,7 +1314,7 @@ export function AccountsPane({
                               window.api.codexAccounts.reauthenticate({ accountId: account.id })
                             )
                           }}
-                          disabled={isBusy}
+                          disabled={isRemoteAccountScope || isBusy}
                           className="h-6 px-2 text-muted-foreground hover:text-foreground"
                         >
                           {isReauthing ? (
@@ -1344,7 +1403,7 @@ export function AccountsPane({
               {translate(
                 'auto.components.settings.AccountsPane.c2aee76420',
                 'Extracts OAuth credentials from your local Gemini CLI installation to authenticate with Google for {{value0}}. This uses credentials issued to the Gemini CLI app, not Orca. May break if Google updates the CLI. Use at your own risk.',
-                { value0: accountRuntimeSentenceLabel }
+                { value0: localAccountRuntimeSentenceLabel }
               )}
             </p>
           </div>
@@ -1413,7 +1472,7 @@ export function AccountsPane({
               }}
               placeholder={translate(
                 'auto.components.settings.AccountsPane.a7e38affcd',
-                'Fe26.2**… token or auth=Fe26.2**… header'
+                'Fe26.2**鈥?token or auth=Fe26.2**鈥?header'
               )}
               spellCheck={false}
               className="flex-1 text-xs"
@@ -1438,18 +1497,18 @@ export function AccountsPane({
               'Paste either the raw token value (e.g.'
             )}
             <code className="text-xs">
-              {translate('auto.components.settings.AccountsPane.922b51e02d', 'Fe26.2**…')}
+              {translate('auto.components.settings.AccountsPane.922b51e02d', 'Fe26.2**鈥?)}
             </code>
             {translate(
               'auto.components.settings.AccountsPane.338820326a',
               ') or the full cookie header (e.g.'
             )}
             <code className="text-xs">
-              {translate('auto.components.settings.AccountsPane.8951c5309f', 'auth=Fe26.2**…')}
+              {translate('auto.components.settings.AccountsPane.8951c5309f', 'auth=Fe26.2**鈥?)}
             </code>
             {translate(
               'auto.components.settings.AccountsPane.7ce0e1907c',
-              "). Find it in your browser's DevTools → Network → any opencode.ai request → Cookie header. OpenCode Go auth is web-based and shared across Windows and WSL terminals."
+              "). Find it in your browser's DevTools 鈫?Network 鈫?any opencode.ai request 鈫?Cookie header. OpenCode Go auth is web-based and shared across Windows and WSL terminals."
             )}
           </p>
         </SearchableSetting>
@@ -1479,7 +1538,7 @@ export function AccountsPane({
               }}
               placeholder={translate(
                 'auto.components.settings.AccountsPane.a122332371',
-                'wrk_… (leave blank for automatic lookup)'
+                'wrk_鈥?(leave blank for automatic lookup)'
               )}
               spellCheck={false}
               className="flex-1 text-xs"
@@ -1506,7 +1565,7 @@ export function AccountsPane({
             <code className="text-xs">
               {translate(
                 'auto.components.settings.AccountsPane.ae3b21eb6c',
-                'opencode.ai/workspace/wrk_…/go'
+                'opencode.ai/workspace/wrk_鈥?go'
               )}
             </code>
             ).
@@ -1651,7 +1710,7 @@ export function AccountsPane({
           <p className="text-xs text-muted-foreground">
             {translate(
               'auto.components.settings.AccountsPane.79418c782a',
-              'Open platform.minimax.io/console/usage in your browser, sign in, then copy the Cookie request header from DevTools (Network → any remains request → Cookie).'
+              'Open platform.minimax.io/console/usage in your browser, sign in, then copy the Cookie request header from DevTools (Network 鈫?any remains request 鈫?Cookie).'
             )}
           </p>
           {miniMaxConfigured &&
@@ -1779,7 +1838,7 @@ export function AccountsPane({
                 }
                 setRemoveAccountId(null)
                 void runCodexAccountAction(`remove:${accountId}`, () =>
-                  window.api.codexAccounts.remove({ accountId })
+                  removeCodexProviderAccount(settings, accountId)
                 )
               }}
             >
@@ -1820,7 +1879,7 @@ export function AccountsPane({
                 }
                 setRemoveClaudeAccountId(null)
                 void runClaudeAccountAction(`remove:${accountId}`, () =>
-                  window.api.claudeAccounts.remove({ accountId })
+                  removeClaudeProviderAccount(settings, accountId)
                 )
               }}
             >

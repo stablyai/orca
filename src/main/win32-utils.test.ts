@@ -3,6 +3,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import {
+  getCmdExePath,
   getSpawnArgsForWindows,
   isPermissionError,
   isWindowsBatchScript,
@@ -63,6 +64,26 @@ describe('getSpawnArgsForWindows', () => {
         process.env.ComSpec = originalComSpec
       }
     }
+  })
+
+  it('preserves VS Code WSL remote arguments with spaces through .cmd launchers', () => {
+    withPlatform('win32', () => {
+      const { spawnCmd, spawnArgs } = getSpawnArgsForWindows('C:\\tools\\code.cmd', [
+        '--remote',
+        'wsl+Ubuntu Preview',
+        '/home/Ada Lovelace/project'
+      ])
+
+      expect(spawnCmd).toBe(getCmdExePath())
+      expect(spawnArgs).toEqual([
+        '/d',
+        '/c',
+        'C:\\tools\\code.cmd',
+        '--remote',
+        'wsl+Ubuntu Preview',
+        '/home/Ada Lovelace/project'
+      ])
+    })
   })
 
   it('passes .exe through unchanged on win32', () => {

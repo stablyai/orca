@@ -7,7 +7,9 @@ import type {
 import {
   buildClaudeStatusSwitchGroups,
   buildCodexStatusSwitchGroups,
-  getStatusBarPreferredWslDistro
+  getStatusBarPreferredWslDistro,
+  resolveClaudeStatusAccountState,
+  resolveCodexStatusAccountState
 } from './StatusBar'
 
 const hostLabel = navigator.userAgent.includes('Windows') ? 'Windows' : 'This device'
@@ -132,5 +134,98 @@ describe('status bar runtime switch groups', () => {
         ['Ubuntu']
       )
     ).toBe('Fedora')
+  })
+
+  it('labels the host account group with the active remote server name', () => {
+    const state: CodexRateLimitAccountsState = {
+      accounts: [],
+      activeAccountId: null,
+      activeAccountIdsByRuntime: { host: null, wsl: {} }
+    }
+
+    expect(
+      buildCodexStatusSwitchGroups(
+        state,
+        { runtime: 'host', wslDistro: null },
+        { hostLabel: 'Repro Server' }
+      )[0]?.label
+    ).toBe('Repro Server')
+  })
+
+  it('prefers the runtime snapshot over local settings accounts when a remote server is active', () => {
+    const remoteState: CodexRateLimitAccountsState = {
+      accounts: [
+        {
+          id: 'server-codex-1',
+          email: 'server@example.com',
+          managedHomeRuntime: 'host',
+          wslDistro: null,
+          providerAccountId: null,
+          workspaceLabel: null,
+          workspaceAccountId: null,
+          createdAt: 1,
+          updatedAt: 1,
+          lastAuthenticatedAt: 1
+        }
+      ],
+      activeAccountId: 'server-codex-1',
+      activeAccountIdsByRuntime: { host: 'server-codex-1', wsl: {} }
+    }
+    const settings = {
+      activeRuntimeEnvironmentId: 'env-1',
+      activeCodexManagedAccountId: 'desktop-codex-1',
+      activeCodexManagedAccountIdsByRuntime: { host: 'desktop-codex-1', wsl: {} },
+      codexManagedAccounts: [
+        {
+          id: 'desktop-codex-1',
+          email: 'desktop@example.com',
+          managedHomePath: '/tmp/desktop-codex-1',
+          createdAt: 1,
+          updatedAt: 1,
+          lastAuthenticatedAt: 1
+        }
+      ]
+    } as GlobalSettings
+
+    expect(resolveCodexStatusAccountState(settings, remoteState)).toBe(remoteState)
+    // Without a remote owner, settings-derived accounts win as before.
+    expect(
+      resolveCodexStatusAccountState(
+        { ...settings, activeRuntimeEnvironmentId: null },
+        remoteState
+      ).accounts.map((account) => account.id)
+    ).toEqual(['desktop-codex-1'])
+  })
+
+  it('prefers the runtime snapshot for Claude accounts when a remote server is active', () => {
+    const remoteState: ClaudeRateLimitAccountsState = {
+      accounts: [],
+      activeAccountId: null,
+      activeAccountIdsByRuntime: { host: null, wsl: {} }
+    }
+    const settings = {
+      activeRuntimeEnvironmentId: 'env-1',
+      activeClaudeManagedAccountId: 'desktop-claude-1',
+      activeClaudeManagedAccountIdsByRuntime: { host: 'desktop-claude-1', wsl: {} },
+      claudeManagedAccounts: [
+        {
+          id: 'desktop-claude-1',
+          email: 'desktop@example.com',
+          managedAuthPath: '/tmp/desktop-claude-1',
+          authMethod: 'subscription-oauth',
+          createdAt: 1,
+          updatedAt: 1,
+          lastAuthenticatedAt: 1
+        }
+      ]
+    } as GlobalSettings
+
+    expect(resolveClaudeStatusAccountState(settings, remoteState)).toBe(remoteState)
+    expect(
+      resolveClaudeStatusAccountState(
+        { ...settings, activeRuntimeEnvironmentId: '   ' },
+        remoteState
+      ).accounts.map((account) => account.id)
+    ).toEqual(['desktop-claude-1'])
   })
 })

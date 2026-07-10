@@ -72,6 +72,11 @@ import {
   useWindowsTerminalCapabilities
 } from '@/lib/windows-terminal-capabilities'
 import { getActiveRuntimeTarget } from '@/runtime/runtime-rpc-client'
+import {
+  fetchProviderAccountsSnapshot,
+  selectClaudeProviderAccount,
+  selectCodexProviderAccount
+} from '@/runtime/runtime-provider-accounts-client'
 import { translate } from '@/i18n/i18n'
 
 type StatusBarProps = {
@@ -132,6 +137,7 @@ export type ClaudeStatusSwitchGroup = {
 type StatusSwitchGroupOptions = {
   fallbackWslDistro?: string | null
   includeFallbackWsl?: boolean
+  hostLabel?: string
 }
 
 function getHostRuntimeLabel(): string {
@@ -157,9 +163,12 @@ function getCodexStatusWslKey(wslDistro: string | null | undefined): string {
   return trimmed ? trimmed : '__default__'
 }
 
-function getCodexStatusRuntimeLabel(target: CodexStatusRuntimeTarget): string {
+function getCodexStatusRuntimeLabel(
+  target: CodexStatusRuntimeTarget,
+  hostLabel = getHostRuntimeLabel()
+): string {
   if (target.runtime === 'host') {
-    return getHostRuntimeLabel()
+    return hostLabel
   }
   return target.wslDistro ? `WSL ${target.wslDistro}` : 'WSL default'
 }
@@ -261,7 +270,7 @@ export function buildCodexStatusSwitchGroups(
     const accountsForTarget = getCodexStatusAccountsForTarget(state, target)
     return {
       key: getCodexStatusRuntimeKey(target),
-      label: getCodexStatusRuntimeLabel(target),
+      label: getCodexStatusRuntimeLabel(target, options.hostLabel),
       runtimeTarget: target,
       targets: [
         {
@@ -420,7 +429,7 @@ export function buildClaudeStatusSwitchGroups(
     const accountsForTarget = getClaudeStatusAccountsForTarget(state, target)
     return {
       key: getCodexStatusRuntimeKey(target),
-      label: getCodexStatusRuntimeLabel(target),
+      label: getCodexStatusRuntimeLabel(target, options.hostLabel),
       runtimeTarget: target,
       targets: [
         {
@@ -508,6 +517,29 @@ function getClaudeStatusAccountsFromSettings(
       wsl: { ...settings.activeClaudeManagedAccountIdsByRuntime?.wsl }
     }
   }
+}
+
+// Why: with a Remote Orca Server active, accounts persisted in local
+// GlobalSettings describe this desktop, not the account owner; the snapshot
+// fetched from the server must win (#7973).
+export function resolveCodexStatusAccountState(
+  settings: GlobalSettings | null | undefined,
+  runtimeState: CodexRateLimitAccountsState
+): CodexRateLimitAccountsState {
+  if (settings?.activeRuntimeEnvironmentId?.trim()) {
+    return runtimeState
+  }
+  return getCodexStatusAccountsFromSettings(settings) ?? runtimeState
+}
+
+export function resolveClaudeStatusAccountState(
+  settings: GlobalSettings | null | undefined,
+  runtimeState: ClaudeRateLimitAccountsState
+): ClaudeRateLimitAccountsState {
+  if (settings?.activeRuntimeEnvironmentId?.trim()) {
+    return runtimeState
+  }
+  return getClaudeStatusAccountsFromSettings(settings) ?? runtimeState
 }
 
 function CodexRestartStatusPrompt(): React.JSX.Element | null {
@@ -648,8 +680,15 @@ function ClaudeSwitcherMenu({
   const inactiveClaudeAccounts = useAppStore((s) => s.rateLimits.inactiveClaudeAccounts)
   const claudeTarget = useAppStore((s) => s.rateLimits.claudeTarget)
   const settings = useAppStore((s) => s.settings)
+  const runtimeEnvironments = useAppStore((s) => s.runtimeEnvironments)
   const hasActiveRuntimeEnvironment = Boolean(settings?.activeRuntimeEnvironmentId?.trim())
   const runtimeTarget = useMemo(() => getActiveRuntimeTarget(settings), [settings])
+  const providerAccountHostLabel = hasActiveRuntimeEnvironment
+    ? (runtimeEnvironments.find(
+        (environment) => environment.id === settings?.activeRuntimeEnvironmentId?.trim()
+      )?.name ??
+      translate('auto.components.status.bar.StatusBar.remoteServerLabel', 'Remote server'))
+    : undefined
   const windowsTerminalCapabilities = useWindowsTerminalCapabilities(
     navigator.userAgent.includes('Windows') || hasActiveRuntimeEnvironment,
     false,
@@ -661,9 +700,9 @@ function ClaudeSwitcherMenu({
     if (!settings) {
       return 'no-settings'
     }
-    return `${settings.activeClaudeManagedAccountId ?? 'system'}:${JSON.stringify(settings.activeClaudeManagedAccountIdsByRuntime ?? null)}:${settings.claudeManagedAccounts.map((account) => `${account.id}:${account.updatedAt}`).join('|')}`
+    return `${settings.activeRuntimeEnvironmentId?.trim() || 'local'}:${settings.activeClaudeManagedAccountId ?? 'system'}:${JSON.stringify(settings.activeClaudeManagedAccountIdsByRuntime ?? null)}:${settings.claudeManagedAccounts.map((account) => `${account.id}:${account.updatedAt}`).join('|')}`
   })
-  const accountState = getClaudeStatusAccountsFromSettings(settings) ?? accounts
+  const accountState = resolveClaudeStatusAccountState(settings, accounts)
 
   useEffect(() => {
     mountedRef.current = true
@@ -672,12 +711,15 @@ function ClaudeSwitcherMenu({
     }
   }, [])
 
+  const activeRuntimeEnvironmentId = settings?.activeRuntimeEnvironmentId?.trim() || null
+  // Why: keyed on the owner id, not the settings object identity, so routine
+  // settings mutations don't re-run the remote snapshot round trip.
   const loadAccounts = useCallback(async () => {
-    const next = await window.api.claudeAccounts.list()
+    const snapshot = await fetchProviderAccountsSnapshot({ activeRuntimeEnvironmentId })
     if (mountedRef.current) {
-      setAccounts(next)
+      setAccounts(snapshot.claude)
     }
-  }, [])
+  }, [activeRuntimeEnvironmentId])
 
   useEffect(() => {
     void loadAccounts().catch((error) => {
@@ -694,13 +736,14 @@ function ClaudeSwitcherMenu({
 
   // Why: inactive-account usage is needed only for the explicit switcher
   // expansion, so fetch it on that event instead of one render later.
+  // Remote-owned accounts have no local inactive-usage cache to fill.
   const handleAccountsExpandedToggle = useCallback((): void => {
     const nextExpanded = !accountsExpanded
     setAccountsExpanded(nextExpanded)
-    if (nextExpanded) {
+    if (nextExpanded && !hasActiveRuntimeEnvironment) {
       void fetchInactiveClaudeAccountUsage()
     }
-  }, [accountsExpanded, fetchInactiveClaudeAccountUsage])
+  }, [accountsExpanded, fetchInactiveClaudeAccountUsage, hasActiveRuntimeEnvironment])
 
   const handleSelectAccount = async (
     accountId: string | null,
@@ -711,7 +754,7 @@ function ClaudeSwitcherMenu({
     }
     setIsSwitching(true)
     try {
-      const next = await window.api.claudeAccounts.select({
+      const next = await selectClaudeProviderAccount(settings, {
         accountId,
         runtime: target.runtime,
         wslDistro: target.wslDistro
@@ -720,7 +763,11 @@ function ClaudeSwitcherMenu({
       if (mountedRef.current) {
         setAccounts(next)
       }
-      await fetchSettings()
+      // Why: remote selections live on the server; local GlobalSettings
+      // account fields are untouched, so refetching them is pure churn.
+      if (!hasActiveRuntimeEnvironment) {
+        await fetchSettings()
+      }
       if (mountedRef.current) {
         setAccountsExpanded(false)
       }
@@ -760,7 +807,8 @@ function ClaudeSwitcherMenu({
     toCodexStatusRuntimeTarget(claudeTarget),
     {
       fallbackWslDistro,
-      includeFallbackWsl: shouldIncludeSettingsWslRuntime(settings)
+      includeFallbackWsl: !hasActiveRuntimeEnvironment && shouldIncludeSettingsWslRuntime(settings),
+      hostLabel: providerAccountHostLabel
     }
   )
   const selectedGroup =
@@ -1201,8 +1249,15 @@ function CodexSwitcherMenu({
   const inactiveCodexAccounts = useAppStore((s) => s.rateLimits.inactiveCodexAccounts)
   const codexTarget = useAppStore((s) => s.rateLimits.codexTarget)
   const settings = useAppStore((s) => s.settings)
+  const runtimeEnvironments = useAppStore((s) => s.runtimeEnvironments)
   const hasActiveRuntimeEnvironment = Boolean(settings?.activeRuntimeEnvironmentId?.trim())
   const runtimeTarget = useMemo(() => getActiveRuntimeTarget(settings), [settings])
+  const providerAccountHostLabel = hasActiveRuntimeEnvironment
+    ? (runtimeEnvironments.find(
+        (environment) => environment.id === settings?.activeRuntimeEnvironmentId?.trim()
+      )?.name ??
+      translate('auto.components.status.bar.StatusBar.remoteServerLabel', 'Remote server'))
+    : undefined
   const windowsTerminalCapabilities = useWindowsTerminalCapabilities(
     navigator.userAgent.includes('Windows') || hasActiveRuntimeEnvironment,
     false,
@@ -1214,16 +1269,19 @@ function CodexSwitcherMenu({
     if (!settings) {
       return 'no-settings'
     }
-    return `${settings.activeCodexManagedAccountId ?? 'system'}:${JSON.stringify(settings.activeCodexManagedAccountIdsByRuntime ?? null)}:${settings.codexManagedAccounts.map((account) => `${account.id}:${account.updatedAt}`).join('|')}`
+    return `${settings.activeRuntimeEnvironmentId?.trim() || 'local'}:${settings.activeCodexManagedAccountId ?? 'system'}:${JSON.stringify(settings.activeCodexManagedAccountIdsByRuntime ?? null)}:${settings.codexManagedAccounts.map((account) => `${account.id}:${account.updatedAt}`).join('|')}`
   })
-  const accountState = getCodexStatusAccountsFromSettings(settings) ?? accounts
+  const accountState = resolveCodexStatusAccountState(settings, accounts)
 
+  const activeRuntimeEnvironmentId = settings?.activeRuntimeEnvironmentId?.trim() || null
+  // Why: keyed on the owner id, not the settings object identity, so routine
+  // settings mutations don't re-run the remote snapshot round trip.
   const loadAccounts = useCallback(async () => {
-    const next = await window.api.codexAccounts.list()
+    const snapshot = await fetchProviderAccountsSnapshot({ activeRuntimeEnvironmentId })
     if (mountedRef.current) {
-      setAccounts(next)
+      setAccounts(snapshot.codex)
     }
-  }, [])
+  }, [activeRuntimeEnvironmentId])
 
   useEffect(() => {
     mountedRef.current = true
@@ -1256,7 +1314,7 @@ function CodexSwitcherMenu({
     const previousActiveAccountId = getCodexStatusActiveId(accountState, target)
     setIsSwitching(true)
     try {
-      const next = await window.api.codexAccounts.select({
+      const next = await selectCodexProviderAccount(settings, {
         accountId,
         runtime: target.runtime,
         wslDistro: target.wslDistro
@@ -1265,7 +1323,11 @@ function CodexSwitcherMenu({
       if (mountedRef.current) {
         setAccounts(next)
       }
-      await fetchSettings()
+      // Why: remote selections live on the server; local GlobalSettings
+      // account fields are untouched, so refetching them is pure churn.
+      if (!hasActiveRuntimeEnvironment) {
+        await fetchSettings()
+      }
       const nextActiveAccountId = getCodexStatusActiveId(next, target)
       if (previousActiveAccountId !== nextActiveAccountId) {
         await markLiveCodexSessionsForRestart({
@@ -1381,12 +1443,13 @@ function CodexSwitcherMenu({
   const handleAccountsExpandedToggle = useCallback((): void => {
     const nextExpanded = !accountsExpanded
     setAccountsExpanded(nextExpanded)
-    if (nextExpanded) {
+    if (nextExpanded && !hasActiveRuntimeEnvironment) {
       // Why: inactive-account usage is needed only for the explicit switcher
       // expansion, so fetch it on that event instead of one render later.
+      // Remote-owned accounts have no local inactive-usage cache to fill.
       void fetchInactiveCodexAccountUsage()
     }
-  }, [accountsExpanded, fetchInactiveCodexAccountUsage])
+  }, [accountsExpanded, fetchInactiveCodexAccountUsage, hasActiveRuntimeEnvironment])
 
   const selectedRuntimeKey = getCodexStatusRuntimeKey(
     normalizeCodexStatusRuntimeTarget(accountState, toCodexStatusRuntimeTarget(codexTarget))
@@ -1400,7 +1463,8 @@ function CodexSwitcherMenu({
     toCodexStatusRuntimeTarget(codexTarget),
     {
       fallbackWslDistro,
-      includeFallbackWsl: shouldIncludeSettingsWslRuntime(settings)
+      includeFallbackWsl: !hasActiveRuntimeEnvironment && shouldIncludeSettingsWslRuntime(settings),
+      hostLabel: providerAccountHostLabel
     }
   )
   const selectedGroup =
@@ -1411,7 +1475,10 @@ function CodexSwitcherMenu({
     resetCreditCount !== null
       ? formatResetCreditExpiry(codex.rateLimitResetCredits?.nextExpiresAt, resetCreditCount)
       : null
-  const canRedeemReset = resetCreditCount !== null && resetCreditCount > 0
+  // Why: reset credits redeem against the desktop's own Codex login; with a
+  // remote account owner the credit does not apply to the server's account.
+  const canRedeemReset =
+    !hasActiveRuntimeEnvironment && resetCreditCount !== null && resetCreditCount > 0
 
   return (
     <ProviderDetailsMenu
@@ -1550,7 +1617,10 @@ function CodexSwitcherMenu({
                   const inactiveUsage = target.id
                     ? inactiveCodexAccounts.find((a) => a.accountId === target.id)
                     : null
+                  // Why: sign-in spawns a local `codex login`; a remote-owned
+                  // account cannot be re-authenticated from this desktop.
                   const showSignInAction =
+                    !hasActiveRuntimeEnvironment &&
                     !target.active &&
                     target.id !== null &&
                     isUnavailableInactiveUsage(inactiveUsage?.rateLimits)

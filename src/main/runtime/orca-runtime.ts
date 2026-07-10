@@ -5535,8 +5535,11 @@ export class OrcaRuntimeService {
       }
     }
 
-    this.emitTerminalAgentStatusEvents(ptyId, agentStatusChunk)
-    if (shouldTouchPtyBackedSessionTabs) {
+    const retainedAgentStatusChanged = this.emitTerminalAgentStatusEvents(ptyId, agentStatusChunk)
+    // Why: hook (OSC 9999) transitions often arrive without a title change, so
+    // headless-serve snapshots would never republish and paired remote clients
+    // kept the stale agent state until the next title change (#7970).
+    if (shouldTouchPtyBackedSessionTabs || retainedAgentStatusChanged) {
       this.touchMobileSessionSnapshotsForPty(ptyId)
     }
 
@@ -5633,12 +5636,14 @@ export class OrcaRuntimeService {
     return worktreePath && isWindowsAbsolutePathLike(worktreePath) ? 'win32' : 'posix'
   }
 
-  private emitTerminalAgentStatusEvents(ptyId: string, chunk: ProcessedAgentStatusChunk): void {
+  /** Returns true when any retained agent-row snapshot changed in a
+   *  client-visible way, so the caller can republish session snapshots. */
+  private emitTerminalAgentStatusEvents(ptyId: string, chunk: ProcessedAgentStatusChunk): boolean {
     // Why: snapshot retention (for mobile worktree.ps) must run even when no
     // renderer listener is attached, so we don't early-return on a missing
     // onTerminalAgentStatus — only the per-target emit below is gated on it.
     if (chunk.payloads.length === 0) {
-      return
+      return false
     }
     const targets = new Map<
       string,
@@ -5671,9 +5676,17 @@ export class OrcaRuntimeService {
         connectionId
       })
     }
+    let retainedChanged = false
     for (const payload of chunk.payloads) {
       for (const target of targets.values()) {
-        this.retainAgentRowSnapshot(ptyId, target.paneKey, target.worktreeId, target.tabId, payload)
+        retainedChanged =
+          this.retainAgentRowSnapshot(
+            ptyId,
+            target.paneKey,
+            target.worktreeId,
+            target.tabId,
+            payload
+          ) || retainedChanged
         if (!this.onTerminalAgentStatus) {
           continue
         }
@@ -5694,6 +5707,7 @@ export class OrcaRuntimeService {
         }
       }
     }
+    return retainedChanged
   }
 
   private retainAgentRowSnapshot(
@@ -5702,7 +5716,7 @@ export class OrcaRuntimeService {
     worktreeId: string | undefined,
     tabId: string | undefined,
     payload: ParsedAgentStatusPayload
-  ): void {
+  ): boolean {
     const now = Date.now()
     const previous = this.latestAgentStatusByPaneKey.get(paneKey)
     // Why: stateStartedAt must mark the transition into the current state, not
@@ -5719,6 +5733,17 @@ export class OrcaRuntimeService {
       stateStartedAt,
       updatedAt: now
     })
+    // Client-visible change detection: snapshot republish is gated on this so
+    // repeated same-state hook pings don't fan a rebuild out to every client.
+    return (
+      !previous ||
+      previous.payload.state !== payload.state ||
+      previous.payload.prompt !== payload.prompt ||
+      (previous.payload.agentType ?? null) !== (payload.agentType ?? null) ||
+      (previous.payload.toolName ?? null) !== (payload.toolName ?? null) ||
+      (previous.payload.interactivePrompt ?? null) !== (payload.interactivePrompt ?? null) ||
+      (previous.payload.interrupted ?? false) !== (payload.interrupted ?? false)
+    )
   }
 
   private clearAgentRowSnapshotsForPty(ptyId: string): void {
@@ -19347,43 +19372,115 @@ export class OrcaRuntimeService {
     tab: RuntimeMobileSessionTerminalTab,
     terminalHandle: string | null
   ): { agentStatus: AgentStatusEntry } | Record<string, never> {
-    if (!pty?.lastAgentStatus) {
+    const paneKey = this.getMobileTerminalPaneKey(tab)
+    const retained = this.getFreshRetainedAgentStatusForMobileTab(paneKey, pty, tab)
+    if (!pty?.lastAgentStatus && !retained) {
       return {}
     }
-    const ptyTitle = getLatestAgentCandidateTitle(
-      { title: pty.title, updatedAt: pty.titleUpdatedAt },
-      { title: pty.lastOscTitle, updatedAt: pty.lastOscTitleAt }
-    )
+    const leaf = this.leaves.get(this.getLeafKey(tab.parentTabId, tab.leafId)) ?? null
+    const ptyTitle = pty
+      ? getLatestAgentCandidateTitle(
+          { title: pty.title, updatedAt: pty.titleUpdatedAt },
+          { title: pty.lastOscTitle, updatedAt: pty.lastOscTitleAt }
+        )
+      : leaf
+        ? getLatestAgentCandidateTitle(
+            { title: leaf.paneTitle, updatedAt: leaf.paneTitleUpdatedAt },
+            { title: leaf.lastOscTitle, updatedAt: leaf.lastOscTitleAt }
+          )
+        : null
     const ptyTitleClassification = classifyAgentTitle(ptyTitle)
     if (ptyTitle !== null && ptyTitleClassification !== 'agent') {
-      return {}
+      // Why: a non-agent title means the shell owns the pane again (the agent
+      // exited or was replaced) — suppressing here is what clears stuck
+      // spinners (#1437). A live hook signal (question card / active tool) is
+      // authoritative agent activity even under a task-named title, so it
+      // survives the suppression, mirroring the renderer-synced branch above.
+      const hasLiveHookSignal =
+        retained?.payload.interactivePrompt != null || retained?.payload.toolName != null
+      if (!hasLiveHookSignal) {
+        return {}
+      }
     }
-    const now = pty.lastOutputAt ?? Date.now()
-    const ownerAgent = tab.launchAgent ?? pty.launchAgent ?? pty.foregroundAgent ?? null
+    const ownerAgent = tab.launchAgent ?? pty?.launchAgent ?? pty?.foregroundAgent ?? null
+    const terminalTitle = normalizeCompatibleAgentTitleForOwner(
+      (pty ? getLatestPtyTitle(pty) : null) ?? tab.title,
+      ownerAgent
+    )
+    // Why: hook (OSC 9999) payloads carry the real state, prompt, and agent
+    // identity; the title heuristic below is a fallback with none of that.
+    // Without this, headless-serve clients only ever saw title-derived rows
+    // and hook-only transitions (e.g. opencode waiting) never surfaced (#7970).
+    if (retained) {
+      return {
+        agentStatus: normalizeCompatibleAgentStatusEntryForOwner(
+          {
+            ...retained.payload,
+            paneKey,
+            updatedAt: retained.updatedAt,
+            stateStartedAt: retained.stateStartedAt,
+            stateHistory: [],
+            ...(terminalHandle ? { terminalHandle } : {}),
+            ...((pty?.worktreeId ?? retained.worktreeId)
+              ? { worktreeId: pty?.worktreeId ?? retained.worktreeId }
+              : {}),
+            tabId: tab.parentTabId,
+            terminalTitle
+          },
+          ownerAgent
+        )
+      }
+    }
+    const now = pty!.lastOutputAt ?? Date.now()
     const agentType = ownerAgent ?? undefined
     return {
       agentStatus: {
         state:
-          pty.lastAgentStatus === 'working'
+          pty!.lastAgentStatus === 'working'
             ? 'working'
-            : pty.lastAgentStatus === 'permission'
+            : pty!.lastAgentStatus === 'permission'
               ? 'blocked'
               : 'done',
         prompt: '',
         updatedAt: now,
         stateStartedAt: now,
-        paneKey: this.getMobileTerminalPaneKey(tab),
+        paneKey,
         ...(terminalHandle ? { terminalHandle } : {}),
         ...(agentType ? { agentType } : {}),
-        worktreeId: pty.worktreeId,
+        worktreeId: pty!.worktreeId,
         tabId: tab.parentTabId,
-        terminalTitle: normalizeCompatibleAgentTitleForOwner(
-          getLatestPtyTitle(pty) ?? tab.title,
-          ownerAgent
-        ),
+        terminalTitle,
         stateHistory: []
       }
     }
+  }
+
+  /** The retained OSC 9999 hook row for this mobile tab, when fresh enough to
+   *  trust. Looked up by pane identity first, then by PTY ownership because
+   *  legacy `pane:N` leaf ids can drift from the hook-side pane key. */
+  private getFreshRetainedAgentStatusForMobileTab(
+    paneKey: string,
+    pty: RuntimePtyWorktreeRecord | null,
+    tab: RuntimeMobileSessionTerminalTab
+  ): RuntimeAgentRowSnapshot | null {
+    let retained = this.latestAgentStatusByPaneKey.get(paneKey) ?? null
+    if (!retained) {
+      const ptyId = pty?.ptyId ?? tab.ptyId ?? null
+      if (ptyId) {
+        for (const snapshot of this.latestAgentStatusByPaneKey.values()) {
+          if (snapshot.ptyId !== ptyId) {
+            continue
+          }
+          if (!retained || snapshot.updatedAt > retained.updatedAt) {
+            retained = snapshot
+          }
+        }
+      }
+    }
+    if (!retained || Date.now() - retained.updatedAt > AGENT_STATUS_STALE_AFTER_MS) {
+      return null
+    }
+    return retained
   }
 
   private findPtyForMobileTerminalTab(

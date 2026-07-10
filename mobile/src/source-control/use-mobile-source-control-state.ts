@@ -42,6 +42,9 @@ export type MobileSourceControlStateParams = {
   onRequestClose?: () => void
   onFileOpenStart?: () => void
   onOpenedFileDiff?: (relativePath: string) => void
+  // When the panel runs inside the hub, "History" switches the segment instead of
+  // pushing the standalone route. Absent for the standalone/dock usage.
+  onOpenHistory?: () => void
 }
 
 export function useMobileSourceControlState(params: MobileSourceControlStateParams) {
@@ -53,7 +56,8 @@ export function useMobileSourceControlState(params: MobileSourceControlStatePara
     embedded,
     onRequestClose,
     onFileOpenStart,
-    onOpenedFileDiff
+    onOpenedFileDiff,
+    onOpenHistory
   } = params
   const insets = useSafeAreaInsets()
   const { client, state: connState } = useHostClient(hostId)
@@ -197,7 +201,8 @@ export function useMobileSourceControlState(params: MobileSourceControlStatePara
     setShowBranchPicker,
     setCreatedPrUrl,
     setCreatedPrWarning,
-    recordCommitFailure
+    recordCommitFailure,
+    onOpenHistory
   })
   const createPrAction = useMobileSourceControlCreatePrAction({
     client,

@@ -86,7 +86,8 @@ describe('panelRouteDescriptor', () => {
       pathname: '/h/[hostId]/files/[worktreeId]'
     })
     expect(panelRouteDescriptor('pr')).toEqual({
-      pathname: '/h/[hostId]/pr/[worktreeId]'
+      pathname: '/h/[hostId]/source-control/[worktreeId]',
+      params: { tab: 'pr' }
     })
   })
 })

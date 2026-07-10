@@ -1033,6 +1033,12 @@ export function useIpcEvents(): void {
       getDesiredEnvironmentIds: getRuntimeClientEventEnvironmentIds,
       subscribe: (environmentId, onEvent, onError) =>
         subscribeRuntimeClientEvents(environmentId, onEvent, onError, () => {
+          // Why: worktreesChanged/reposChanged during the transport gap are
+          // lost, not queued. A quick drop can replay without ever flipping the
+          // env unreachable, so the reachability-transition refetch never runs
+          // and a server-created worktree stays invisible until relaunch
+          // (#7970). The scheduler debounces, so this stays cheap.
+          runtimeProjectRefreshScheduler.request(environmentId)
           if (isPairedWebClientWindow()) {
             return
           }
