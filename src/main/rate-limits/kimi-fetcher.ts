@@ -1,29 +1,17 @@
 import { existsSync, readFileSync } from 'node:fs'
-import { homedir } from 'node:os'
-import { join } from 'node:path'
 import { net } from 'electron'
 import type { ProviderRateLimits, RateLimitWindow } from '../../shared/rate-limit-types'
+import { resolveKimiCredentialLocation } from './kimi-credential-location'
 import { refreshKimiCredentials, type KimiCredentials } from './kimi-oauth-refresh'
 
 // Why: Kimi Code's managed coding plan exposes subscription usage at
 // `${base}/usages` (see packages/oauth/src/managed-usage.ts in the CLI bundle).
 // The base URL is overridable via the same env var the CLI honours so Orca
 // stays aligned with a user's self-hosted/staging config.
-const KIMI_BASE_URL = process.env.KIMI_CODE_BASE_URL ?? 'https://api.kimi.com/coding/v1'
 const API_TIMEOUT_MS = 10_000
 
 const SESSION_WINDOW_MINUTES = 300 // 5h
 const WEEKLY_WINDOW_MINUTES = 10080 // 7d
-
-function getKimiHome(): string {
-  // Why: match the CLI's `KIMI_CODE_HOME ?? ~/.kimi-code` resolution so we read
-  // the same OAuth credentials the running Kimi CLI writes.
-  return process.env.KIMI_CODE_HOME ?? join(homedir(), '.kimi-code')
-}
-
-function getCredentialsPath(): string {
-  return join(getKimiHome(), 'credentials', 'kimi-code.json')
-}
 
 type CredentialsReadResult =
   | { status: 'missing' }
@@ -56,8 +44,7 @@ function parseCredentials(value: unknown): KimiCredentials | null {
   return credentials
 }
 
-function readCredentials(): CredentialsReadResult {
-  const path = getCredentialsPath()
+function readCredentials(path: string): CredentialsReadResult {
   if (!existsSync(path)) {
     return { status: 'missing' }
   }
@@ -84,13 +71,6 @@ function isAccessTokenFresh(creds: KimiCredentials): boolean {
     // expires mid-flight. The CLI refreshes the file on its next run.
     creds.expires_at - Math.floor(Date.now() / 1000) > 5
   )
-}
-
-function readFreshCredentials(): KimiCredentials | null {
-  const latest = readCredentials()
-  return latest.status === 'ok' && isAccessTokenFresh(latest.credentials)
-    ? latest.credentials
-    : null
 }
 
 // ---------------------------------------------------------------------------
@@ -239,7 +219,8 @@ function result(status: ProviderRateLimits['status'], error: string | null): Pro
  * Moonshot gates to approved coding agents) is never touched here.
  */
 export async function fetchKimiRateLimits(): Promise<ProviderRateLimits> {
-  const readResult = readCredentials()
+  const location = resolveKimiCredentialLocation()
+  const readResult = readCredentials(location.credentialsPath)
   if (readResult.status === 'missing') {
     return result('unavailable', 'Not signed in to Kimi Code')
   }
@@ -254,16 +235,15 @@ export async function fetchKimiRateLimits(): Promise<ProviderRateLimits> {
     if (typeof creds.refresh_token !== 'string' || creds.refresh_token.length === 0) {
       return result('error', 'Kimi token expired — open Kimi to refresh')
     }
-    const refreshed = await refreshKimiCredentials(creds, getCredentialsPath()).catch(() => null)
-    const activeCredentials = refreshed ?? readFreshCredentials()
-    if (!activeCredentials) {
+    const refreshed = await refreshKimiCredentials(creds, location).catch(() => null)
+    if (!refreshed) {
       return result('error', 'Kimi token refresh failed — run kimi login')
     }
-    creds.access_token = activeCredentials.access_token
+    creds.access_token = refreshed.access_token
   }
 
   try {
-    const res = await net.fetch(`${KIMI_BASE_URL.replace(/\/$/, '')}/usages`, {
+    const res = await net.fetch(location.usageUrl, {
       // Why: identical to the CLI's fetchManagedUsage — bearer token + Accept.
       // No extra User-Agent: the usages endpoint authenticates by token only.
       headers: { Authorization: `Bearer ${creds.access_token}`, Accept: 'application/json' },

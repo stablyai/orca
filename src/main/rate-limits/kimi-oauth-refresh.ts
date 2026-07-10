@@ -1,10 +1,22 @@
-import { renameSync, writeFileSync } from 'node:fs'
+import {
+  appendFileSync,
+  existsSync,
+  mkdirSync,
+  readFileSync,
+  rmSync,
+  statSync,
+  utimesSync
+} from 'node:fs'
+import { dirname } from 'node:path'
 import { net } from 'electron'
+import { writeSecureJsonFile } from '../../shared/secure-file'
+import type { KimiCredentialLocation } from './kimi-credential-location'
 
-const KIMI_OAUTH_HOST =
-  process.env.KIMI_CODE_OAUTH_HOST ?? process.env.KIMI_OAUTH_HOST ?? 'https://auth.kimi.com'
 const KIMI_OAUTH_CLIENT_ID = '17e5f671-d194-4dfb-9706-5516cb48c098'
 const API_TIMEOUT_MS = 10_000
+const LOCK_STALE_MS = 5_000
+const LOCK_RETRY_MS = 500
+const LOCK_RETRIES = 120
 
 export type KimiCredentials = {
   access_token?: string
@@ -24,8 +36,30 @@ type KimiTokenEndpointResponse = {
   token_type?: unknown
 }
 
-function getKimiOAuthTokenUrl(): string {
-  return `${KIMI_OAUTH_HOST.replace(/\/$/, '')}/api/oauth/token`
+export type KimiRefreshDependencies = {
+  acquireLock: <T>(target: string, action: () => Promise<T>) => Promise<T>
+  readCredentials: (path: string) => KimiCredentials | null
+  saveCredentials: (path: string, credentials: KimiCredentials) => void
+  fetchToken: (url: string, init: RequestInit) => Promise<Response>
+  nowSeconds: () => number
+}
+
+function isFresh(credentials: KimiCredentials, nowSeconds: number): boolean {
+  return (
+    typeof credentials.access_token === 'string' &&
+    credentials.access_token.length > 0 &&
+    typeof credentials.expires_at === 'number' &&
+    credentials.expires_at - nowSeconds > 5
+  )
+}
+
+function readCredentials(path: string): KimiCredentials | null {
+  try {
+    const parsed: unknown = JSON.parse(readFileSync(path, 'utf-8'))
+    return typeof parsed === 'object' && parsed !== null ? (parsed as KimiCredentials) : null
+  } catch {
+    return null
+  }
 }
 
 function applyRefreshedCredentials(
@@ -36,8 +70,6 @@ function applyRefreshedCredentials(
   if (typeof response.access_token !== 'string' || response.access_token.length === 0) {
     return null
   }
-  // Why: match isAccessTokenFresh's 5s skew. Zero/negative/tiny TTLs would be
-  // persisted as a "successful" refresh but still fail the freshness check.
   if (
     typeof response.expires_in !== 'number' ||
     !Number.isFinite(response.expires_in) ||
@@ -69,42 +101,122 @@ function applyRefreshedCredentials(
   }
 }
 
-function saveCredentials(credentialsPath: string, credentials: KimiCredentials): void {
-  const tmpPath = `${credentialsPath}.${process.pid}.${Date.now()}.tmp`
-  writeFileSync(tmpPath, `${JSON.stringify(credentials, null, 2)}\n`, {
-    encoding: 'utf-8',
-    mode: 0o600
-  })
-  renameSync(tmpPath, credentialsPath)
+function sleep(milliseconds: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, milliseconds))
 }
 
-export async function refreshKimiCredentials(
-  credentials: KimiCredentials,
-  credentialsPath: string
+function removeStaleLock(lockPath: string): void {
+  try {
+    if (Date.now() - statSync(lockPath).mtimeMs > LOCK_STALE_MS) {
+      rmSync(lockPath, { recursive: true, force: true })
+    }
+  } catch {
+    // A competing process may have released or replaced the lock.
+  }
+}
+
+async function acquireKimiRefreshLock<T>(target: string, action: () => Promise<T>): Promise<T> {
+  if (process.platform === 'win32' || process.env.KIMI_DISABLE_OAUTH_LOCK === '1') {
+    return action()
+  }
+  mkdirSync(dirname(target), { recursive: true, mode: 0o700 })
+  if (!existsSync(target)) {
+    appendFileSync(target, '', { mode: 0o600 })
+  }
+  const lockPath = `${target}.lock`
+  let acquired = false
+  for (let attempt = 0; attempt <= LOCK_RETRIES; attempt += 1) {
+    try {
+      mkdirSync(lockPath, { mode: 0o700 })
+      acquired = true
+      break
+    } catch (error) {
+      removeStaleLock(lockPath)
+      if (attempt === LOCK_RETRIES) {
+        throw error
+      }
+      await sleep(LOCK_RETRY_MS)
+    }
+  }
+  if (!acquired) {
+    throw new Error('Unable to acquire Kimi OAuth refresh lock')
+  }
+  // Why: Kimi treats a 5-second-old lock as stale, so long token requests must
+  // refresh the lock mtime while the rotating refresh token is in flight.
+  const heartbeat = setInterval(() => {
+    try {
+      const now = new Date()
+      utimesSync(lockPath, now, now)
+    } catch {
+      // Lock loss is surfaced by the protected operation or the next refresh.
+    }
+  }, LOCK_STALE_MS / 2)
+  heartbeat.unref()
+  try {
+    return await action()
+  } finally {
+    clearInterval(heartbeat)
+    try {
+      rmSync(lockPath, { recursive: true, force: true })
+    } catch {
+      // Kimi ignores release errors as well.
+    }
+  }
+}
+
+const defaultDependencies: KimiRefreshDependencies = {
+  acquireLock: acquireKimiRefreshLock,
+  readCredentials,
+  saveCredentials: writeSecureJsonFile,
+  fetchToken: (url, init) => net.fetch(url, init),
+  nowSeconds: () => Math.floor(Date.now() / 1000)
+}
+
+async function refreshUnderLock(
+  initial: KimiCredentials,
+  location: KimiCredentialLocation,
+  dependencies: KimiRefreshDependencies
 ): Promise<KimiCredentials | null> {
-  if (typeof credentials.refresh_token !== 'string' || credentials.refresh_token.length === 0) {
+  const latest = dependencies.readCredentials(location.credentialsPath) ?? initial
+  if (isFresh(latest, dependencies.nowSeconds())) {
+    return latest
+  }
+  if (typeof latest.refresh_token !== 'string' || latest.refresh_token.length === 0) {
     return null
   }
-  const res = await net.fetch(getKimiOAuthTokenUrl(), {
+  const response = await dependencies.fetchToken(location.tokenUrl, {
     method: 'POST',
     headers: { 'Content-Type': 'application/x-www-form-urlencoded', Accept: 'application/json' },
     body: new URLSearchParams({
       client_id: KIMI_OAUTH_CLIENT_ID,
       grant_type: 'refresh_token',
-      refresh_token: credentials.refresh_token
+      refresh_token: latest.refresh_token
     }).toString(),
     signal: AbortSignal.timeout(API_TIMEOUT_MS)
   })
-  if (!res.ok) {
-    return null
+  if (!response.ok) {
+    await sleep(100)
+    const winner = dependencies.readCredentials(location.credentialsPath)
+    return winner &&
+      winner.refresh_token !== latest.refresh_token &&
+      isFresh(winner, dependencies.nowSeconds())
+      ? winner
+      : null
   }
-  const data = (await res.json()) as KimiTokenEndpointResponse
-  const refreshed = applyRefreshedCredentials(credentials, data, Math.floor(Date.now() / 1000))
-  if (!refreshed) {
-    return null
+  const data = (await response.json()) as KimiTokenEndpointResponse
+  const refreshed = applyRefreshedCredentials(latest, data, dependencies.nowSeconds())
+  if (refreshed) {
+    dependencies.saveCredentials(location.credentialsPath, refreshed)
   }
-  // Why: Kimi Code rotates refresh tokens; persisting before /usages prevents a
-  // short-lived in-memory success from stranding the next background refresh.
-  saveCredentials(credentialsPath, refreshed)
   return refreshed
+}
+
+export async function refreshKimiCredentials(
+  credentials: KimiCredentials,
+  location: KimiCredentialLocation,
+  dependencies: KimiRefreshDependencies = defaultDependencies
+): Promise<KimiCredentials | null> {
+  return dependencies.acquireLock(location.lockTarget, () =>
+    refreshUnderLock(credentials, location, dependencies)
+  )
 }
