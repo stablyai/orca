@@ -521,9 +521,9 @@ class RemoteRuntimeTerminalMultiplexer {
     if (this.streams.get(stream.streamId) !== stream || !this.ready || !this.subscription) {
       return Promise.resolve(null)
     }
-    // Initial/recovery replay already owns the snapshot frame lane; callers can
-    // retry afterward instead of racing two untagged snapshot frame groups.
-    if (!stream.initialSnapshotReceived || stream.resyncInFlight) {
+    // Recovery uses an untagged snapshot frame group; callers can retry after
+    // it completes instead of racing another request onto the same frame lane.
+    if (stream.resyncInFlight) {
       return Promise.resolve(null)
     }
     if (stream.pendingSnapshotRequest) {
