@@ -4108,6 +4108,29 @@ describe('worktree remote runtime mutations', () => {
     expect(store.getState().worktreesByRepo['repo-ssh']).toEqual([])
   })
 
+  it('flags a populated-submodule removal failure as force-retryable', async () => {
+    const store = createTestStore()
+    const wt = makeWorktree({ id: 'repo1::/path/wt1', repoId: 'repo1', path: '/path/wt1' })
+    mockApi.worktrees.remove.mockRejectedValueOnce(
+      new Error('fatal: working trees containing submodules cannot be moved or removed')
+    )
+    store.setState({
+      worktreesByRepo: { repo1: [wt] }
+    } as Partial<AppState>)
+
+    const result = await store.getState().removeWorktree(wt.id)
+
+    expect(result).toEqual({
+      ok: false,
+      error: 'fatal: working trees containing submodules cannot be moved or removed'
+    })
+    expect(store.getState().deleteStateByWorktreeId[wt.id]).toEqual({
+      isDeleting: false,
+      error: 'fatal: working trees containing submodules cannot be moved or removed',
+      canForceDelete: true
+    })
+  })
+
   it('persists worktree metadata through the active remote runtime environment', async () => {
     const store = createTestStore()
     const wt = makeWorktree({ id: 'repo1::/path/wt1', repoId: 'repo1', path: '/path/wt1' })

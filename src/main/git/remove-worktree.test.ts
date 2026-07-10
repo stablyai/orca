@@ -272,6 +272,117 @@ branch refs/heads/main
     expect(getGitCalls()).toContain('git worktree remove --force /repo-feature')
   })
 
+  it('retries with --force after re-verifying cleanliness when only a populated submodule blocks removal', async () => {
+    mockGitCommands({
+      'git worktree list --porcelain': {
+        stdout: `worktree /repo
+HEAD abc123
+branch refs/heads/main
+
+worktree /repo-feature
+HEAD def456
+branch refs/heads/feature/test
+`
+      },
+      'git worktree remove /repo-feature': {
+        error: new Error('fatal: working trees containing submodules cannot be moved or removed')
+      },
+      'git status --porcelain --untracked-files=all --ignore-submodules=none': {
+        stdout: ''
+      },
+      'git worktree remove --force /repo-feature': {
+        stdout: ''
+      }
+    })
+
+    await expect(removeWorktree('/repo', '/repo-feature')).resolves.toEqual({})
+
+    expect(getGitCalls()).toEqual([
+      'git worktree list --porcelain -z',
+      'git worktree remove /repo-feature',
+      'git status --porcelain --untracked-files=all --ignore-submodules=none',
+      'git worktree remove --force /repo-feature',
+      'git branch -d -- feature/test'
+    ])
+  })
+
+  it('does not auto-force when the submodule-blocked worktree is also dirty', async () => {
+    mockGitCommands({
+      'git worktree list --porcelain': {
+        stdout: `worktree /repo
+HEAD abc123
+branch refs/heads/main
+
+worktree /repo-feature
+HEAD def456
+branch refs/heads/feature/test
+`
+      },
+      'git worktree remove /repo-feature': {
+        error: new Error('fatal: working trees containing submodules cannot be moved or removed')
+      },
+      'git status --porcelain --untracked-files=all --ignore-submodules=none': {
+        stdout: '?? scratch.txt\n'
+      }
+    })
+
+    await expect(removeWorktree('/repo', '/repo-feature')).rejects.toMatchObject({
+      message: 'Worktree has uncommitted or untracked changes.',
+      stdout: '?? scratch.txt\n'
+    })
+
+    const calls = getGitCalls()
+    expect(calls).toEqual([
+      'git worktree list --porcelain -z',
+      'git worktree remove /repo-feature',
+      'git status --porcelain --untracked-files=all --ignore-submodules=none'
+    ])
+    expect(calls).not.toContain('git worktree remove --force /repo-feature')
+    expect(calls).not.toContain('git branch -d -- feature/test')
+  })
+
+  it('still runs branch cleanup after an auto-force submodule retry, preserving an unmerged branch', async () => {
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    mockGitCommands({
+      'git worktree list --porcelain': {
+        stdout: `worktree /repo
+HEAD abc123
+branch refs/heads/main
+
+worktree /repo-feature
+HEAD def456
+branch refs/heads/feature/test
+`
+      },
+      'git worktree remove /repo-feature': {
+        error: new Error('fatal: working trees containing submodules cannot be moved or removed')
+      },
+      'git status --porcelain --untracked-files=all --ignore-submodules=none': {
+        stdout: ''
+      },
+      'git worktree remove --force /repo-feature': {
+        stdout: ''
+      },
+      'git branch -d -- feature/test': {
+        error: new Error('branch delete failed'),
+        stderr: 'error: the branch feature/test is not fully merged'
+      }
+    })
+
+    await expect(removeWorktree('/repo', '/repo-feature')).resolves.toEqual({
+      preservedBranch: { branchName: 'feature/test', head: 'def456' }
+    })
+
+    const calls = getGitCalls()
+    expect(calls).toContain('git worktree remove --force /repo-feature')
+    expect(calls).toContain('git branch -d -- feature/test')
+    expect(warnSpy).toHaveBeenCalledWith(
+      '[git] Preserved local branch "feature/test" after removing worktree (not fully merged)',
+      expect.any(Error)
+    )
+    warnSpy.mockRestore()
+  })
+
   it('matches Windows worktree paths before deleting the branch', async () => {
     mockGitCommands({
       'git worktree list --porcelain': {
@@ -719,6 +830,28 @@ describe('assertWorktreeCleanForRemoval', () => {
     gitExecFileAsyncMock.mockRejectedValueOnce(error)
 
     await expect(assertWorktreeCleanForRemoval('/repo-feature')).rejects.toBe(error)
+  })
+
+  it('does not add --ignore-submodules when no statusOptions are given (default preflight unchanged)', async () => {
+    gitExecFileAsyncMock.mockResolvedValueOnce({ stdout: '', stderr: '' })
+
+    await assertWorktreeCleanForRemoval('/repo-feature')
+
+    expect(gitExecFileAsyncMock).toHaveBeenCalledWith(
+      ['status', '--porcelain', '--untracked-files=all'],
+      { cwd: '/repo-feature' }
+    )
+  })
+
+  it('appends --ignore-submodules=none when the stricter re-assert is requested', async () => {
+    gitExecFileAsyncMock.mockResolvedValueOnce({ stdout: '', stderr: '' })
+
+    await assertWorktreeCleanForRemoval('/repo-feature', false, {}, { ignoreSubmodules: 'none' })
+
+    expect(gitExecFileAsyncMock).toHaveBeenCalledWith(
+      ['status', '--porcelain', '--untracked-files=all', '--ignore-submodules=none'],
+      { cwd: '/repo-feature' }
+    )
   })
 })
 

@@ -302,6 +302,14 @@ const FORCE_RETRYABLE_WORKTREE_REMOVAL_MESSAGES = [
 const FORMATTED_DIRTY_WORKTREE_REMOVAL_PATTERN =
   /Failed to delete worktree at [^\n]*\.\s*(?:(?:[MADRCUT][ MADRCUT]| [MADRCUT]|\?\?)\s+\S)/
 
+// Why: git's own worktree-remove refusal for a populated submodule (raw,
+// unformatted fatal — e.g. surfaced through a path that does not go through
+// the local auto-force recovery, such as the SSH/relay provider) is also
+// safe to retry with force: it fires even on an otherwise-clean worktree, so
+// force here does not risk discarding uncommitted work.
+const SUBMODULE_WORKTREE_REMOVAL_PATTERN =
+  /working trees? containing submodules cannot be moved or removed/i
+
 function canRetryWorktreeRemovalWithForce(error: string, force: boolean | undefined): boolean {
   if (force) {
     return false
@@ -310,7 +318,8 @@ function canRetryWorktreeRemovalWithForce(error: string, force: boolean | undefi
   // retry with user confirmation; transport/provider errors need recovery first.
   return (
     FORCE_RETRYABLE_WORKTREE_REMOVAL_MESSAGES.some((message) => error.includes(message)) ||
-    FORMATTED_DIRTY_WORKTREE_REMOVAL_PATTERN.test(error)
+    FORMATTED_DIRTY_WORKTREE_REMOVAL_PATTERN.test(error) ||
+    SUBMODULE_WORKTREE_REMOVAL_PATTERN.test(error)
   )
 }
 
