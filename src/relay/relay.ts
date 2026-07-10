@@ -454,10 +454,7 @@ async function main(): Promise<void> {
 
   const ptyHandler = new PtyHandler(dispatcher, graceTimeMs)
   const fsHandler = new FsHandler(dispatcher, context)
-  // Why: GitHandler registers its own request handlers on construction,
-  // so we hold the reference only for potential future disposal.
-  const _gitHandler = new GitHandler(dispatcher, context)
-  void _gitHandler
+  const gitHandler = new GitHandler(dispatcher, context)
 
   const _preflightHandler = new PreflightHandler(dispatcher)
   const _externalAutomationsHandler = new ExternalAutomationsHandler(dispatcher)
@@ -1013,6 +1010,7 @@ async function main(): Promise<void> {
     dispatcher.dispose()
     ptyHandler.dispose()
     fsHandler.dispose()
+    gitHandler.dispose()
     hookServer.stop()
     // Why: Node's Unix server.close() can unlink the listen path. If the path
     // was externally removed and rebound by a newer relay, closing this older
