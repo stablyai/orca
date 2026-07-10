@@ -866,7 +866,7 @@ path=(/custom/bin $path)
         // non-login flow used by local panes so both restore paths stay pinned.
         // Login must still load user .zshrc (via wrapper .zshrc after .zprofile)
         // and leave final ZDOTDIR at the user home after .zlogin restore.
-        for (const args of [['-i'], ['-l', '-i']] as const) {
+        for (const args of [['-i'], ['-l', '-i']]) {
           const result = spawnSync(
             'zsh',
             [
