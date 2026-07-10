@@ -2,6 +2,8 @@ import {
   AGY_AGENT_NAME_RE,
   DROID_AGENT_NAME_RE,
   HERMES_AGENT_NAME_RE,
+  isQoderTerminalTitle,
+  QODER_TERMINAL_LABEL,
   titleHasAgentName
 } from './agent-name-token-match'
 import {
@@ -29,23 +31,9 @@ export function containsBrailleSpinner(title: string): boolean {
   return false
 }
 
-export function isGeminiTerminalTitle(title: string): boolean {
-  // Why: Gemini OSC glyphs are stronger evidence than any cwd/session text.
-  if (
-    title.includes(GEMINI_PERMISSION) ||
-    title.includes(GEMINI_WORKING) ||
-    title.includes(GEMINI_SILENT_WORKING) ||
-    title.includes(GEMINI_IDLE)
-  ) {
-    return true
-  }
-  // Why: Pi/OMP titles include cwd/session text; substring matching made
-  // paths like "gemini-project" masquerade as Gemini CLI.
-  if (isPiAgentTitle(title)) {
-    return false
-  }
-  return titleHasAgentName(title, 'gemini')
-}
+import { isGeminiTerminalTitle } from './gemini-terminal-title'
+
+export { isGeminiTerminalTitle } from './gemini-terminal-title'
 
 export function isPiTerminalTitle(title: string): boolean {
   return isLegacyPiCompatibleTitle(title) && !containsBrailleSpinner(title)
@@ -133,6 +121,10 @@ export function getAgentLabel(title: string): string | null {
   ) {
     return 'Claude Code'
   }
+  // Why: Qoder reuses Gemini OSC glyphs; explicit qodercli markers win first.
+  if (isQoderTerminalTitle(title)) {
+    return QODER_TERMINAL_LABEL
+  }
   if (isGeminiTerminalTitle(title)) {
     return 'Gemini CLI'
   }
@@ -215,6 +207,7 @@ const TITLE_LABEL_TO_AGENT: Partial<Record<string, TuiAgent>> = {
   OpenClaude: 'openclaude',
   Codex: 'codex',
   'Gemini CLI': 'gemini',
+  'Qoder CLI': 'qoder',
   'GitHub Copilot': 'copilot',
   Grok: 'grok',
   Devin: 'devin',

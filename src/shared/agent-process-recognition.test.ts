@@ -75,6 +75,22 @@ describe('agent process recognition', () => {
     expect(recognizeAgentProcess('cmd.exe')).toBeNull()
   })
 
+  it('recognizes Qoder CLI foreground process names', () => {
+    expect(recognizeAgentProcess('qodercli')).toEqual({
+      agent: 'qoder',
+      processName: 'qodercli'
+    })
+    expect(
+      recognizeAgentProcess(String.raw`C:\Users\dev\AppData\Local\Programs\qodercli\qodercli.exe`)
+    ).toEqual({
+      agent: 'qoder',
+      processName: 'qodercli'
+    })
+    expect(isRecognizedAgentType('qodercli')).toBe(true)
+    expect(isExpectedAgentProcess('/usr/local/bin/qodercli', 'qodercli')).toBe(true)
+    expect(recognizeAgentProcess('qoder-demo')).toBeNull()
+  })
+
   it('recognizes Ante without classifying ante-prefixed path fragments as the agent', () => {
     expect(recognizeAgentProcess('ante')).toEqual({
       agent: 'ante',
