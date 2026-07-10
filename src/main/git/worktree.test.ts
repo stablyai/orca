@@ -344,7 +344,8 @@ branch refs/heads/feature/test
 
     expect(gitExecFileAsyncMock).toHaveBeenCalledTimes(1)
     expect(gitExecFileAsyncMock).toHaveBeenCalledWith(['worktree', 'list', '--porcelain', '-z'], {
-      cwd: '/repo'
+      cwd: '/repo',
+      timeout: 30_000
     })
   })
 

@@ -31,6 +31,7 @@ type SparseWorktreeCreateError = Error & {
 export type GitWorktreeExecOptions = {
   wslDistro?: string
   signal?: AbortSignal
+  timeout?: number
 }
 
 export type AddWorktreeOptions = GitWorktreeExecOptions & {
@@ -67,6 +68,7 @@ type LocalBaseRefRefreshability =
     }
 
 const SPARSE_CHECKOUT_DETECTION_CONCURRENCY = 8
+const GIT_WORKTREE_LIST_TIMEOUT_MS = 30_000
 
 // Why: bound `git worktree add` so a OneDrive cloud-placeholder base path can't
 // stall its checkout writes for minutes (STA-1292) — a stuck create then fails
@@ -82,6 +84,18 @@ function gitExecOptions(
     cwd,
     ...(options.wslDistro ? { wslDistro: options.wslDistro } : {}),
     ...(options.signal ? { signal: options.signal } : {})
+  }
+}
+
+function gitWorktreeListExecOptions(
+  cwd: string,
+  options: GitWorktreeExecOptions = {}
+): { cwd: string; wslDistro?: string; signal?: AbortSignal; timeout: number } {
+  return {
+    ...gitExecOptions(cwd, options),
+    // Why: Windows startup traces show slow `git worktree list` during renderer
+    // death; keep enumeration from becoming an unbounded startup read.
+    timeout: options.timeout ?? GIT_WORKTREE_LIST_TIMEOUT_MS
   }
 }
 
@@ -557,8 +571,7 @@ async function readWorktreeList(
 ): Promise<GitWorktreeInfo[]> {
   try {
     const { stdout } = await gitExecFileAsync(['worktree', 'list', '--porcelain', '-z'], {
-      cwd: repoPath,
-      ...options
+      ...gitWorktreeListExecOptions(repoPath, options)
     })
     return normalizeMainWorktreePath(
       repoPath,
@@ -574,8 +587,7 @@ async function readWorktreeList(
   // Why: `-z` is required to preserve worktree paths containing newlines, but
   // Git <2.36 rejects it. Keep the old parser as a compatibility fallback.
   const { stdout } = await gitExecFileAsync(['worktree', 'list', '--porcelain'], {
-    cwd: repoPath,
-    ...options
+    ...gitWorktreeListExecOptions(repoPath, options)
   })
   return normalizeMainWorktreePath(repoPath, parseWorktreeList(stdout), options)
 }
