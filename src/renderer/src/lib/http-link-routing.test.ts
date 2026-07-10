@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../shared/constants'
-import type { WorkspacePort, WorkspacePortScanResult } from '../../../shared/workspace-ports'
+import type { WorkspacePortScanResult } from '../../../shared/workspace-ports'
 import * as floatingMod from './floating-terminal'
 import {
   openHttpLink,
@@ -135,8 +135,8 @@ describe('openHttpLink', () => {
               worktreeId: 'wt-1',
               displayName: 'wt',
               path: '/wt',
-              confidence: 'cwd'
-            } as WorkspacePort & { kind: 'workspace' }
+              confidence: 'cwd' as const
+            }
           }
         ]
       }
@@ -146,7 +146,11 @@ describe('openHttpLink', () => {
     openHttpLink('http://localhost:5180/', { worktreeId: 'wt-1' })
     await Promise.resolve()
 
-    expect(createBrowserTabMock).toHaveBeenCalledWith(FLOATING_TERMINAL_WORKTREE_ID, 'http://labeled.orca.local', { activate: true })
+    expect(createBrowserTabMock).toHaveBeenCalledWith(
+      FLOATING_TERMINAL_WORKTREE_ID,
+      'http://labeled.orca.local',
+      { activate: true }
+    )
     expect(floatingMod.requestOpenFloatingTerminal).toHaveBeenCalled()
   })
 
