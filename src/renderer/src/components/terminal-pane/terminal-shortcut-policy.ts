@@ -76,8 +76,8 @@ export function resolveTerminalShortcutAction(
   isWindows: boolean = false,
   keybindings?: KeybindingOverrides,
   // Why: lazily reports whether the active pane is a local native Windows
-  // ConPTY. Only consulted for Shift+Enter and Ctrl+Arrow, so execution-host
-  // lookup stays off every other keystroke.
+  // ConPTY. Only consulted for Ctrl+Arrow, so execution-host lookup stays off
+  // every other keystroke.
   isLocalWindowsConptyPane?: () => boolean,
   // Why: lazily reports whether the active pane's application has enabled the
   // kitty keyboard protocol (CSI > u). Gates the Option-as-Alt compensation
@@ -90,7 +90,10 @@ export function resolveTerminalShortcutAction(
   layoutBaseCharacterForCode?: (code: string) => string | undefined,
   // Why: lazily resolves the active pane's Windows encoding. Only consulted for
   // Shift+Enter so agent-state lookup stays off every other keystroke.
-  getWindowsShiftEnterEncoding?: () => WindowsShiftEnterEncoding
+  getWindowsShiftEnterEncoding?: () => WindowsShiftEnterEncoding,
+  // Why: keybindings follow the client OS, but terminal byte protocols follow
+  // the PTY host. They differ for macOS clients attached to Windows runtimes.
+  isWindowsTerminalHost: () => boolean = () => isWindows
 ): TerminalShortcutAction | null {
   const platform: NodeJS.Platform = isMac ? 'darwin' : isWindows ? 'win32' : 'linux'
   if (!event.repeat) {
@@ -150,18 +153,17 @@ export function resolveTerminalShortcutAction(
     event.shiftKey &&
     event.key === 'Enter'
   ) {
-    // Why: Droid needs CSI-u but Codex needs Esc+CR; preserve legacy bytes for
-    // SSH/WSL/remote peers that cannot be safely classified from this client.
-    const useLocalWindowsCapability = isWindows && isLocalWindowsConptyPane?.() !== false
-    const encoding = useLocalWindowsCapability
+    // Why: the PTY host selects Windows rules, while trusted pane evidence
+    // preserves Droid's distinct Windows encoding.
+    const windowsHost = isWindowsTerminalHost()
+    const encoding = windowsHost
       ? (getWindowsShiftEnterEncoding?.() ?? 'alt-enter')
-      : isWindows
-        ? 'alt-enter'
-        : 'csi-u'
+      : 'csi-u'
     // Why: CSI-u is application input, not a universal terminal sequence. Off
-    // Windows, only send it while the pane's application has KKP active.
+    // Windows, only send it while the pane's application has KKP active;
+    // trusted Windows agent evidence remains sufficient on its own.
     const canSendCsiU =
-      encoding === 'csi-u' && (useLocalWindowsCapability || isKittyKeyboardActivePane?.() === true)
+      encoding === 'csi-u' && (windowsHost || isKittyKeyboardActivePane?.() === true)
     return { type: 'sendInput', data: canSendCsiU ? '\x1b[13;2u' : '\x1b\r' }
   }
 
