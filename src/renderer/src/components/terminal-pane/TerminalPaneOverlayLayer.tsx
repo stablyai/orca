@@ -12,6 +12,7 @@ import {
 import TerminalPane from './TerminalPane'
 import { closeTerminalTab } from '../terminal/terminal-tab-actions'
 import { useNativeChatToggleShortcut } from '../native-chat/use-native-chat-toggle-shortcut'
+import { getTerminalOverlayPaintStyle } from './terminal-overlay-paint-style'
 import { shouldDeferParkedPtyExitTabClose } from './terminal-parked-tab-watchers'
 import { useTerminalTabColdParking } from './use-terminal-tab-cold-parking'
 
@@ -187,9 +188,7 @@ const TerminalOverlaySlot = memo(function TerminalOverlaySlot({
             left: `anchor(${anchorName} left)`,
             width: `anchor-size(${anchorName} width)`,
             height: `anchor-size(${anchorName} height)`,
-            display: isVisible || shouldMeasureHiddenStartup ? 'flex' : 'none',
-            opacity: isVisible ? 1 : 0,
-            pointerEvents: isVisible ? 'auto' : 'none'
+            ...getTerminalOverlayPaintStyle(isVisible, shouldMeasureHiddenStartup)
           }
         : anchorName
           ? {
@@ -201,9 +200,7 @@ const TerminalOverlaySlot = memo(function TerminalOverlaySlot({
               left: measuredFallbackRect?.left ?? 0,
               width: measuredFallbackRect?.width ?? '100%',
               height: measuredFallbackRect?.height ?? 'calc(100% - 32px)',
-              display: isVisible || shouldMeasureHiddenStartup ? 'flex' : 'none',
-              opacity: isVisible ? 1 : 0,
-              pointerEvents: isVisible ? 'auto' : 'none'
+              ...getTerminalOverlayPaintStyle(isVisible, shouldMeasureHiddenStartup)
             }
           : {
               position: 'absolute',
