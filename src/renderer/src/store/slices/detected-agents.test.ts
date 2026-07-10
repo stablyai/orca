@@ -107,6 +107,21 @@ describe('createDetectedAgentsSlice WSL context', () => {
     })
   })
 
+  it('keeps explicit local context results separate from the shared local bucket', async () => {
+    const store = createTestStore()
+
+    await expect(store.getState().ensureDetectedAgents({ wslDistro: 'Ubuntu' })).resolves.toEqual([
+      'claude'
+    ])
+    await expect(store.getState().ensureDetectedAgents({ wslDistro: 'Ubuntu' })).resolves.toEqual([
+      'claude'
+    ])
+
+    expect(detectAgents).toHaveBeenCalledTimes(1)
+    expect(store.getState().localDetectedAgentIdsByContext['wsl:Ubuntu']).toEqual(['claude'])
+    expect(store.getState().detectedAgentIds).toBeNull()
+  })
+
   it('detects local agents inside the active WSL worktree distro', async () => {
     const store = createTestStore({
       repos: [makeRepo({ id: 'repo-1', path: 'C:\\repo' })],

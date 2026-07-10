@@ -4,6 +4,9 @@ import type {
   ShellHydrationFailureReason
 } from '../../../../shared/shell-path-hydration-types'
 import type { TuiAgent } from '../../../../shared/tui-agent'
+import type { LocalPreflightContext } from '@/lib/local-preflight-context'
+
+export type LocalDetectedAgentInput = string | null | NonNullable<LocalPreflightContext>
 
 export type LocalDetectedAgentState = {
   detectedAgentIds: TuiAgent[] | null
@@ -14,8 +17,8 @@ export type LocalDetectedAgentState = {
   isRefreshingLocalAgentsByContext: Record<string, boolean>
   pathSource: PathSource | null
   pathFailureReason: ShellHydrationFailureReason | null
-  ensureDetectedAgents: (worktreeId?: string | null) => Promise<TuiAgent[]>
-  refreshDetectedAgents: (worktreeId?: string | null) => Promise<TuiAgent[]>
+  ensureDetectedAgents: (worktreeIdOrContext?: LocalDetectedAgentInput) => Promise<TuiAgent[]>
+  refreshDetectedAgents: (worktreeIdOrContext?: LocalDetectedAgentInput) => Promise<TuiAgent[]>
   clearLocalDetectedAgentContextsForProjects: (projectIds: readonly string[]) => void
   clearLocalDetectedAgents: () => void
 }
