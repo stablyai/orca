@@ -40,6 +40,11 @@ export type SharedControlLogicalSubscription<TResult = unknown> = {
   // response is the authoritative re-emitted snapshot and gets tagged so
   // monotonic freshness gates don't drop it (#7718).
   pendingReplayTag?: boolean
+  // Why: true from the moment a reconnect replay clears remoteSubscriptionId
+  // until the resubscribe response arrives. A close() during this window has no
+  // id to unsubscribe by yet, so it must defer instead of finishing locally —
+  // otherwise the resubscribe the server is about to accept leaks.
+  awaitingResubscribe?: boolean
 }
 
 export type SharedControlReadyWaiter = {

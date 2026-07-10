@@ -154,6 +154,9 @@ export function handleSharedControlSubscriptionResponse(
     if (subscriptionId) {
       subscription.remoteSubscriptionId = subscriptionId
     }
+    // Why: the resubscribe landed — the id-less replay window is over, so a
+    // later close cleans up by id through the normal path.
+    subscription.awaitingResubscribe = false
   }
   let delivered = response
   if (subscription.pendingReplayTag) {
