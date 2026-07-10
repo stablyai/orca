@@ -1,5 +1,6 @@
 import type React from 'react'
 import { ClaudeIcon, DroidIcon, OpenAIIcon } from '@/components/status-bar/icons'
+import hermesLogoUrl from '../../../../resources/hermes.png?url'
 import openClaudeLogoUrl from '../../../../resources/openclaude-logo.png?url'
 import type { TuiAgent } from '../../../shared/types'
 import { getTuiAgentLaunchCommand, TUI_AGENT_CONFIG } from '../../../shared/tui-agent-config'
@@ -272,7 +273,9 @@ export const getAgentCatalog = createLocalizedCatalog((): AgentCatalogEntry[] =>
     id: 'hermes',
     label: translate('auto.lib.agent.catalog.8a9ba743cc', 'Hermes'),
     cmd: 'hermes',
-    faviconDomain: 'nousresearch.com',
+    // Why: package the official Hermes Desktop icon so activity rows stay
+    // recognizable offline and do not fall back to a generic favicon.
+    iconUrl: hermesLogoUrl,
     homepageUrl: 'https://hermes-agent.nousresearch.com/docs/'
   },
   {

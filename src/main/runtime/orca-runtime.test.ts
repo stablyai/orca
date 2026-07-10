@@ -13423,6 +13423,84 @@ describe('OrcaRuntimeService', () => {
     ])
   })
 
+  it('replaces a stale saved Hermes status with a newer explicit PTY hook', async () => {
+    const runtime = new OrcaRuntimeService(store)
+    const leafId = '11111111-1111-4111-8111-111111111111'
+    const paneKey = `hermes-tab:${leafId}`
+    runtime.attachWindow(1)
+    runtime.syncWindowGraph(1, {
+      tabs: [
+        {
+          tabId: 'hermes-tab',
+          worktreeId: TEST_WORKTREE_ID,
+          title: 'Hermes UI check',
+          activeLeafId: leafId,
+          layout: null
+        }
+      ],
+      leaves: [
+        {
+          tabId: 'hermes-tab',
+          worktreeId: TEST_WORKTREE_ID,
+          leafId,
+          paneRuntimeId: 1,
+          ptyId: 'pty-hermes',
+          paneTitle: 'Hermes UI check'
+        }
+      ],
+      mobileSessionTabs: [
+        {
+          worktree: TEST_WORKTREE_ID,
+          publicationEpoch: 'renderer-stale',
+          snapshotVersion: 1,
+          activeGroupId: null,
+          activeTabId: `hermes-tab::${leafId}`,
+          activeTabType: 'terminal',
+          tabs: [
+            {
+              type: 'terminal',
+              id: `hermes-tab::${leafId}`,
+              parentTabId: 'hermes-tab',
+              leafId,
+              ptyId: 'pty-hermes',
+              title: 'Hermes UI check',
+              launchAgent: 'hermes',
+              agentStatus: {
+                state: 'done',
+                prompt: 'previous task',
+                updatedAt: 1_700_000_000_000,
+                stateStartedAt: 1_699_999_999_000,
+                agentType: 'hermes',
+                paneKey,
+                stateHistory: []
+              },
+              isActive: true
+            }
+          ]
+        }
+      ]
+    })
+
+    runtime.onPtyData(
+      'pty-hermes',
+      '\x1b]9999;{"state":"working","prompt":"run check","agentType":"hermes"}\x07',
+      123
+    )
+    const result = await runtime.listMobileSessionTabs(`id:${TEST_WORKTREE_ID}`)
+
+    expect(result.tabs[0]).toEqual(
+      expect.objectContaining({
+        type: 'terminal',
+        title: 'Hermes UI check',
+        agentStatus: expect.objectContaining({
+          state: 'working',
+          agentType: 'hermes',
+          prompt: 'run check'
+        })
+      })
+    )
+  })
+
   it('preserves authoritative OMP identity for Pi-compatible remote terminal snapshots', async () => {
     const runtime = new OrcaRuntimeService(store)
     const leafId = '11111111-1111-4111-8111-111111111111'
@@ -15968,6 +16046,95 @@ describe('OrcaRuntimeService', () => {
       })
     ])
     expect(events[1]!.snapshotVersion).toBeGreaterThan(events[0]!.snapshotVersion)
+
+    unsubscribe()
+  })
+
+  it('pushes explicit Hermes hook transitions for a custom-titled PTY', async () => {
+    const spawn = vi.fn().mockResolvedValue({ id: 'hermes-created-pty' })
+    const runtime = new OrcaRuntimeService(store)
+    runtime.setPtyController({
+      spawn,
+      write: () => true,
+      kill: () => true,
+      getForegroundProcess: async () => 'hermes'
+    })
+    const events: RuntimeMobileSessionTabsResult[] = []
+    const unsubscribe = runtime.onMobileSessionTabsChanged((snapshot) => events.push(snapshot))
+
+    await runtime.createTerminal(`id:${TEST_WORKTREE_ID}`, {
+      tabId: 'hermes-tab',
+      leafId: HEADLESS_LEAF_ID,
+      title: 'Hermes UI check',
+      command: 'hermes --tui --yolo',
+      launchAgent: 'hermes'
+    })
+    events.length = 0
+
+    runtime.onPtyData(
+      'hermes-created-pty',
+      '\x1b]9999;{"state":"done","prompt":"previous","agentType":"hermes"}\x07',
+      123
+    )
+    runtime.onPtyData(
+      'hermes-created-pty',
+      '\x1b]9999;{"state":"working","prompt":"run check","agentType":"hermes","toolName":"terminal","toolInput":"sleep 60"}\x07',
+      124
+    )
+    runtime.onPtyData(
+      'hermes-created-pty',
+      '\x1b]9999;{"state":"waiting","prompt":"run check","agentType":"hermes"}\x07',
+      125
+    )
+    runtime.onPtyData(
+      'hermes-created-pty',
+      '\x1b]9999;{"state":"done","prompt":"run check","agentType":"hermes","lastAssistantMessage":"OK"}\x07',
+      126
+    )
+
+    expect(events).toHaveLength(4)
+    expect(events[0]?.tabs[0]).toEqual(
+      expect.objectContaining({
+        type: 'terminal',
+        title: 'Hermes UI check',
+        agentStatus: expect.objectContaining({
+          state: 'done',
+          agentType: 'hermes'
+        })
+      })
+    )
+    expect(events[1]?.tabs[0]).toEqual(
+      expect.objectContaining({
+        type: 'terminal',
+        title: 'Hermes UI check',
+        agentStatus: expect.objectContaining({
+          state: 'working',
+          agentType: 'hermes',
+          prompt: 'run check',
+          toolName: 'terminal',
+          toolInput: 'sleep 60'
+        })
+      })
+    )
+    expect(events[2]?.tabs[0]).toEqual(
+      expect.objectContaining({
+        type: 'terminal',
+        agentStatus: expect.objectContaining({
+          state: 'waiting',
+          agentType: 'hermes'
+        })
+      })
+    )
+    expect(events[3]?.tabs[0]).toEqual(
+      expect.objectContaining({
+        type: 'terminal',
+        agentStatus: expect.objectContaining({
+          state: 'done',
+          agentType: 'hermes',
+          lastAssistantMessage: 'OK'
+        })
+      })
+    )
 
     unsubscribe()
   })

@@ -15,6 +15,7 @@ import { NativeChatSessionGate } from './NativeChatSessionGate'
 import { useNativeChatInteractiveSend } from './use-native-chat-interactive-send'
 import { findTabAgentEntry } from './native-chat-tab-agent-entry'
 import {
+  nativeChatHookTurnCompletedByTranscript,
   shouldClearNativeChatWorkingSuppression,
   shouldShowNativeChatWorking
 } from './native-chat-working-suppression'
@@ -176,10 +177,11 @@ function NativeChatResolvedView({
   // Live hook state for this pane, selected directly so the working indicator
   // flips the instant the agent reports 'working' — even when switching to chat
   // mid-turn before the transcript merge has caught up.
-  const hookWorking = useAppStore((s) => s.agentStatusByPaneKey[paneKey]?.state === 'working')
+  const hookEntry = useAppStore((s) => s.agentStatusByPaneKey[paneKey])
+  const hookWorking = hookEntry?.state === 'working'
   // The agent's in-progress reply preview (hook), shown as a live streaming
   // bubble while it works — before the completed turn flushes to the transcript.
-  const hookPreview = useAppStore((s) => s.agentStatusByPaneKey[paneKey]?.lastAssistantMessage)
+  const hookPreview = hookEntry?.lastAssistantMessage
   const canSend = useNativeChatCanSend(targetPtyId)
   // Reuse the verified composer send path for interactive cards and composer
   // stop (Stop sends ESC, the agent-TUI interrupt key).
@@ -326,6 +328,17 @@ function NativeChatResolvedView({
   // agent is mid-turn, the merged transcript may not yet reflect the in-flight
   // turn, but the hook already says 'working' — show the indicator immediately.
   const viewWorking = viewState.kind === 'ready' && viewState.isWorking
+  // A remote runtime can briefly leave its hook row on `working` after the
+  // transcript has already flushed the matching user turn and final assistant
+  // reply. Treat that completed transcript turn as authoritative so Chat View
+  // does not spin forever while the next status snapshot catches up.
+  const hookTurnCompletedByTranscript = useMemo(
+    () =>
+      hookWorking && hookEntry
+        ? nativeChatHookTurnCompletedByTranscript(session.messages, hookEntry.stateStartedAt)
+        : false,
+    [hookEntry, hookWorking, session.messages]
+  )
   useEffect(() => {
     if (shouldClearNativeChatWorkingSuppression({ viewWorking, hookWorking })) {
       setWorkingInterrupted(false)
@@ -335,6 +348,7 @@ function NativeChatResolvedView({
     isConversation,
     viewWorking,
     hookWorking,
+    hookTurnCompletedByTranscript,
     interrupted: workingInterrupted
   })
 

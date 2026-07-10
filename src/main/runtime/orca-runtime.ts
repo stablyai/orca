@@ -19257,10 +19257,53 @@ export class OrcaRuntimeService {
         leafTitle ?? ptyTitle ?? syncedTab?.title ?? tab.title,
         ownerAgent
       )
+      // Why: web/mobile clients hold these handles across renderer graph syncs;
+      // leaf handles are graph-epoch-bound, but PTY handles remain streamable.
+      const terminalHandle = liveLeafPtyId
+        ? this.issuePtyHandle(
+            this.recordPtyWorktree(liveLeafPtyId, snapshot.worktree, {
+              tabId: tab.parentTabId,
+              paneKey,
+              connected: true
+            })
+          )
+        : livePty
+          ? this.issuePtyHandle(livePty)
+          : null
       const liveTitleEvidence = leafTitle ?? ptyTitle
       const liveTitleEvidenceClassification = classifyAgentTitle(liveTitleEvidence)
-      const normalizedTabAgentStatus = tab.agentStatus
-        ? normalizeCompatibleAgentStatusEntryForOwner(tab.agentStatus, ownerAgent)
+      const retainedAgentStatus = this.latestAgentStatusByPaneKey.get(paneKey)
+      const retainedAgentStatusToUse =
+        retainedAgentStatus &&
+        (!tab.agentStatus || retainedAgentStatus.updatedAt >= tab.agentStatus.updatedAt)
+          ? retainedAgentStatus
+          : null
+      // Why: a renderer/mobile tab snapshot can lag behind OSC 9999 hooks from
+      // the live PTY. Prefer the newer explicit payload so paired clients see
+      // working/tool transitions instead of retaining an old done row.
+      const freshestAgentStatus = retainedAgentStatusToUse
+        ? {
+            ...retainedAgentStatusToUse.payload,
+            prompt: retainedAgentStatusToUse.payload.prompt || tab.agentStatus?.prompt || '',
+            updatedAt: retainedAgentStatusToUse.updatedAt,
+            stateStartedAt: retainedAgentStatusToUse.stateStartedAt,
+            paneKey,
+            stateHistory: tab.agentStatus?.stateHistory ?? [],
+            ...(terminalHandle ? { terminalHandle } : {}),
+            ...(retainedAgentStatusToUse.worktreeId
+              ? { worktreeId: retainedAgentStatusToUse.worktreeId }
+              : {}),
+            ...(retainedAgentStatusToUse.tabId ? { tabId: retainedAgentStatusToUse.tabId } : {}),
+            ...(tab.agentStatus?.orchestration
+              ? { orchestration: tab.agentStatus.orchestration }
+              : {}),
+            ...(tab.agentStatus?.providerSession
+              ? { providerSession: tab.agentStatus.providerSession }
+              : {})
+          }
+        : tab.agentStatus
+      const normalizedTabAgentStatus = freshestAgentStatus
+        ? normalizeCompatibleAgentStatusEntryForOwner(freshestAgentStatus, ownerAgent)
         : null
       // Why: keep the rich hook-driven status when the agent has a live
       // interactive prompt or an active tool — those are authoritative agent
@@ -19268,7 +19311,12 @@ export class OrcaRuntimeService {
       // shows a task/branch name). Otherwise the mobile/web client falls back to
       // the OSC-title-only status and never sees interactivePrompt (the question
       // card never renders).
+      const hasFreshRetainedAgentSignal =
+        retainedAgentStatusToUse !== null &&
+        Date.now() - retainedAgentStatusToUse.updatedAt <= AGENT_STATUS_STALE_AFTER_MS &&
+        normalizedTabAgentStatus?.state !== 'done'
       const hasLiveAgentSignal =
+        hasFreshRetainedAgentSignal ||
         normalizedTabAgentStatus?.interactivePrompt != null ||
         normalizedTabAgentStatus?.toolName != null
       const keepFullAgentStatus =
@@ -19298,19 +19346,6 @@ export class OrcaRuntimeService {
                   : {})
               }
             }
-          : null
-      // Why: web/mobile clients hold these handles across renderer graph syncs;
-      // leaf handles are graph-epoch-bound, but PTY handles remain streamable.
-      const terminalHandle = liveLeafPtyId
-        ? this.issuePtyHandle(
-            this.recordPtyWorktree(liveLeafPtyId, snapshot.worktree, {
-              tabId: tab.parentTabId,
-              paneKey,
-              connected: true
-            })
-          )
-        : livePty
-          ? this.issuePtyHandle(livePty)
           : null
       tabs.push({
         type: 'terminal',
