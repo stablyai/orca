@@ -18,8 +18,10 @@ export function isOrcaDispatchPrompt(prompt: string): boolean {
 }
 
 /**
- * True when orchestration labels belong to the live dispatch preamble (same taskId).
- * Sticky completed-dispatch metadata must not rename a later dispatch turn.
+ * True when orchestration labels may label the live dispatch turn.
+ * Reject only when both sides expose a taskId and they differ — sticky completed
+ * metadata must not rename a later dispatch. When the live prompt is truncated
+ * (agent-status fields are short) and has no parseable taskId, trust labels.
  */
 export function orchestrationLabelsMatchLiveDispatch(
   entry: Pick<AgentStatusEntry, 'orchestration' | 'prompt'>
@@ -32,7 +34,10 @@ export function orchestrationLabelsMatchLiveDispatch(
     return false
   }
   const liveTaskId = getOrcaDispatchTaskId(entry.prompt)
-  return liveTaskId !== null && liveTaskId === orchestrationTaskId
+  if (!liveTaskId) {
+    return true
+  }
+  return liveTaskId === orchestrationTaskId
 }
 
 export function getAgentRowPrimaryText(

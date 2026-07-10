@@ -9,11 +9,7 @@ describe('getAgentRowPrimaryText', () => {
   it('prefers orchestration display name over the raw hook prompt', () => {
     expect(
       getAgentRowPrimaryText({
-        prompt: `You are working inside Orca, a multi-agent IDE. You are a dispatched worker.
-Your task ID is: task-1
-
-=== TASK ===
-Checkout race body`,
+        prompt: 'You are working inside Orca, a multi-agent IDE.',
         orchestration: {
           taskId: 'task-1',
           dispatchId: 'ctx-1',
@@ -27,11 +23,7 @@ Checkout race body`,
   it('falls back to task title when display name is absent', () => {
     expect(
       getAgentRowPrimaryText({
-        prompt: `You are working inside Orca, a multi-agent IDE. You are a dispatched worker.
-Your task ID is: task-1
-
-=== TASK ===
-Checkout race body`,
+        prompt: 'You are working inside Orca, a multi-agent IDE.',
         orchestration: {
           taskId: 'task-1',
           dispatchId: 'ctx-1',
