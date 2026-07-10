@@ -5934,17 +5934,149 @@ describe('useIpcEvents agent status snapshot integration', () => {
     )
   })
 
-  it('keeps a completed worktree-attributed row when main reports pane teardown', async () => {
+  it('cancels only the torn-down pane pending status before it can be replayed', async () => {
+    const otherLeafId = '22222222-2222-4222-8222-222222222222'
+    const otherPaneKey = makePaneKey('tab-other', otherLeafId)
+    const setAgentStatus = vi.fn()
     const removeAgentStatus = vi.fn()
-    const onClearListenerRef: {
-      current: ((data: AgentStatusClearIpcPayload) => void) | null
-    } = {
+    const onSetListenerRef: { current: ((data: AgentStatusSetData) => void) | null } = {
       current: null
     }
+    const onClearListenerRef: { current: ((data: { paneKey: string }) => void) | null } = {
+      current: null
+    }
+    const subscribeListenerRef: { current: StoreSubscribeListener | null } = { current: null }
 
     const storeState: StoreLike = buildStoreState({
+      setAgentStatus,
       removeAgentStatus,
       workspaceSessionReady: true,
+      settings: { terminalFontSize: 13, notifications: { enabled: false } },
+      tabsByWorktree: { 'wt-1': [] },
+      terminalLayoutsByTabId: {}
+    })
+
+    stubReactSyncEffect()
+    vi.doMock('../store', () => ({
+      useAppStore: {
+        subscribe: vi.fn((listener: StoreSubscribeListener) => {
+          subscribeListenerRef.current = listener
+          return () => {
+            subscribeListenerRef.current = null
+          }
+        }),
+        getState: () => storeState
+      }
+    }))
+    stubAuxiliaryModules()
+    vi.stubGlobal(
+      'window',
+      buildWindowApi({
+        onSet: (cb) => {
+          onSetListenerRef.current = cb
+          return () => {}
+        },
+        onClear: (cb) => {
+          onClearListenerRef.current = cb
+          return () => {}
+        }
+      })
+    )
+
+    const { useIpcEvents } = await import('./useIpcEvents')
+
+    useIpcEvents()
+    await Promise.resolve()
+
+    if (typeof onSetListenerRef.current !== 'function') {
+      throw new Error('Expected agentStatus.onSet listener to be registered')
+    }
+    if (typeof onClearListenerRef.current !== 'function') {
+      throw new Error('Expected agentStatus.onClear listener to be registered')
+    }
+
+    onSetListenerRef.current({
+      paneKey: FUTURE_PANE_KEY,
+      state: 'working',
+      prompt: 'torn-down worker',
+      agentType: 'grok',
+      receivedAt: 1_700_000_000_100,
+      stateStartedAt: 1_699_999_999_100
+    })
+    onSetListenerRef.current({
+      paneKey: otherPaneKey,
+      state: 'working',
+      prompt: 'surviving worker',
+      agentType: 'claude',
+      receivedAt: 1_700_000_000_200,
+      stateStartedAt: 1_699_999_999_200
+    })
+
+    expect(setAgentStatus).not.toHaveBeenCalled()
+    onClearListenerRef.current({ paneKey: FUTURE_PANE_KEY })
+
+    storeState.tabsByWorktree = {
+      'wt-1': [
+        { id: 'tab-future', ptyId: 'pty-1', worktreeId: 'wt-1', title: 'Future Tab' },
+        { id: 'tab-other', ptyId: 'pty-2', worktreeId: 'wt-1', title: 'Other Tab' }
+      ]
+    }
+    storeState.terminalLayoutsByTabId = {
+      'tab-future': {
+        root: { type: 'leaf', leafId: FUTURE_LEAF_ID },
+        activeLeafId: FUTURE_LEAF_ID,
+        expandedLeafId: null
+      },
+      'tab-other': {
+        root: { type: 'leaf', leafId: otherLeafId },
+        activeLeafId: otherLeafId,
+        expandedLeafId: null
+      }
+    }
+    if (typeof subscribeListenerRef.current !== 'function') {
+      throw new Error('Expected useAppStore.subscribe listener to be registered')
+    }
+    subscribeListenerRef.current(storeState)
+
+    expect(removeAgentStatus).toHaveBeenCalledTimes(1)
+    expect(removeAgentStatus).toHaveBeenCalledWith(FUTURE_PANE_KEY)
+    expect(setAgentStatus).toHaveBeenCalledTimes(1)
+    expect(setAgentStatus).toHaveBeenCalledWith(
+      otherPaneKey,
+      expect.objectContaining({ state: 'working', prompt: 'surviving worker' }),
+      'Other Tab',
+      { updatedAt: 1_700_000_000_200, stateStartedAt: 1_699_999_999_200 },
+      expectWorktreeRouting('wt-1'),
+      undefined
+    )
+  })
+
+it('keeps a completed worktree-attributed row when main reports pane teardown', async () => {
+    const setAgentStatus = vi.fn()
+    const removeAgentStatus = vi.fn()
+    const onSetListenerRef: { current: ((data: AgentStatusSetData) => void) | null } = {
+      current: null
+    }
+    const onClearListenerRef: { current: ((data: { paneKey: string }) => void) | null } = {
+      current: null
+    }
+    const subscribeListenerRef: { current: StoreSubscribeListener | null } = { current: null }
+
+    const storeState: StoreLike = buildStoreState({
+      setAgentStatus,
+      removeAgentStatus,
+      workspaceSessionReady: true,
+      settings: { terminalFontSize: 13, notifications: { enabled: false } },
+      tabsByWorktree: {
+        'wt-1': [{ id: 'tab-future', ptyId: 'pty-1', worktreeId: 'wt-1', title: 'Future Tab' }]
+      },
+      terminalLayoutsByTabId: {
+        'tab-future': {
+          root: { type: 'leaf', leafId: STALE_LEAF_ID },
+          activeLeafId: STALE_LEAF_ID,
+          expandedLeafId: null
+        }
+      },
       agentStatusByPaneKey: {
         [FUTURE_PANE_KEY]: {
           state: 'done',
@@ -5962,7 +6094,12 @@ describe('useIpcEvents agent status snapshot integration', () => {
     stubReactSyncEffect()
     vi.doMock('../store', () => ({
       useAppStore: {
-        subscribe: vi.fn(() => () => {}),
+        subscribe: vi.fn((listener: StoreSubscribeListener) => {
+          subscribeListenerRef.current = listener
+          return () => {
+            subscribeListenerRef.current = null
+          }
+        }),
         getState: () => storeState
       }
     }))
@@ -5970,7 +6107,10 @@ describe('useIpcEvents agent status snapshot integration', () => {
     vi.stubGlobal(
       'window',
       buildWindowApi({
-        onSet: () => () => {},
+        onSet: (cb) => {
+          onSetListenerRef.current = cb
+          return () => {}
+        },
         onClear: (cb) => {
           onClearListenerRef.current = cb
           return () => {}
@@ -5983,13 +6123,39 @@ describe('useIpcEvents agent status snapshot integration', () => {
     useIpcEvents()
     await Promise.resolve()
 
+    if (typeof onSetListenerRef.current !== 'function') {
+      throw new Error('Expected agentStatus.onSet listener to be registered')
+    }
     if (typeof onClearListenerRef.current !== 'function') {
       throw new Error('Expected agentStatus.onClear listener to be registered')
     }
 
+    onSetListenerRef.current({
+      paneKey: FUTURE_PANE_KEY,
+      state: 'working',
+      prompt: 'late stale worker',
+      agentType: 'grok',
+      receivedAt: 1_700_000_000_300,
+      stateStartedAt: 1_700_000_000_300
+    })
+    expect(setAgentStatus).not.toHaveBeenCalled()
+
     onClearListenerRef.current({ paneKey: FUTURE_PANE_KEY })
 
+    storeState.terminalLayoutsByTabId = {
+      'tab-future': {
+        root: { type: 'leaf', leafId: FUTURE_LEAF_ID },
+        activeLeafId: FUTURE_LEAF_ID,
+        expandedLeafId: null
+      }
+    }
+    if (typeof subscribeListenerRef.current !== 'function') {
+      throw new Error('Expected useAppStore.subscribe listener to be registered')
+    }
+    subscribeListenerRef.current(storeState)
+
     expect(removeAgentStatus).not.toHaveBeenCalled()
+    expect(setAgentStatus).not.toHaveBeenCalled()
   })
 
   it('does not retain a Cursor spinner terminal title when the hook reports done', async () => {
@@ -6402,14 +6568,20 @@ describe('useIpcEvents agent status snapshot integration', () => {
   })
 
   it('buffers ready push events until a mounted tab contains the pane leaf', async () => {
-    const setAgentStatus = vi.fn()
+    const otherLeafId = '22222222-2222-4222-8222-222222222222'
+    const otherPaneKey = makePaneKey('tab-other', otherLeafId)
     const track = vi.fn()
     const onSetListenerRef: { current: ((data: AgentStatusSetData) => void) | null } = {
       current: null
     }
     const subscribeListenerRef: { current: StoreSubscribeListener | null } = { current: null }
+    let storeState: StoreLike
+    const setAgentStatus = vi.fn(() => {
+      // Zustand notifies subscribers synchronously after a successful state write.
+      subscribeListenerRef.current?.(storeState)
+    })
 
-    const storeState: StoreLike = buildStoreState({
+    storeState = buildStoreState({
       setAgentStatus,
       workspaceSessionReady: true,
       settings: { terminalFontSize: 13, notifications: { enabled: false } },
@@ -6475,13 +6647,20 @@ describe('useIpcEvents agent status snapshot integration', () => {
       receivedAt: 1_700_000_000_200,
       stateStartedAt: 1_699_999_999_100
     })
+    onSetListenerRef.current({
+      paneKey: otherPaneKey,
+      state: 'working',
+      prompt: 'still unresolved',
+      agentType: 'claude',
+      receivedAt: 1_700_000_000_300,
+      stateStartedAt: 1_699_999_999_300
+    })
 
     expect(setAgentStatus).not.toHaveBeenCalled()
     expect(track).toHaveBeenCalledWith('agent_hook_unattributed', {
       reason: 'unknown_tab_id'
     })
 
-    const previousStoreState = { ...storeState }
     storeState.terminalLayoutsByTabId = {
       'tab-future': {
         root: { type: 'leaf', leafId: FUTURE_LEAF_ID },
@@ -6492,7 +6671,7 @@ describe('useIpcEvents agent status snapshot integration', () => {
     if (typeof subscribeListenerRef.current !== 'function') {
       throw new Error('Expected useAppStore.subscribe listener to be registered')
     }
-    subscribeListenerRef.current(storeState, previousStoreState)
+    subscribeListenerRef.current(storeState)
 
     expect(setAgentStatus).toHaveBeenCalledTimes(2)
     expect(setAgentStatus).toHaveBeenNthCalledWith(
@@ -6515,6 +6694,41 @@ describe('useIpcEvents agent status snapshot integration', () => {
       }),
       'Future Tab',
       { updatedAt: 1_700_000_000_200, stateStartedAt: 1_699_999_999_100 },
+      expectWorktreeRouting('wt-1'),
+      undefined
+    )
+
+    storeState.tabsByWorktree = {
+      'wt-1': [
+        { id: 'tab-future', ptyId: 'pty-1', worktreeId: 'wt-1', title: 'Future Tab' },
+        { id: 'tab-other', ptyId: 'pty-2', worktreeId: 'wt-1', title: 'Other Tab' }
+      ]
+    }
+    storeState.terminalLayoutsByTabId = {
+      'tab-future': {
+        root: { type: 'leaf', leafId: FUTURE_LEAF_ID },
+        activeLeafId: FUTURE_LEAF_ID,
+        expandedLeafId: null
+      },
+      'tab-other': {
+        root: { type: 'leaf', leafId: otherLeafId },
+        activeLeafId: otherLeafId,
+        expandedLeafId: null
+      }
+    }
+    subscribeListenerRef.current(storeState)
+
+    expect(setAgentStatus).toHaveBeenCalledTimes(3)
+    expect(setAgentStatus).toHaveBeenNthCalledWith(
+      3,
+      otherPaneKey,
+      expect.objectContaining({
+        state: 'working',
+        prompt: 'still unresolved',
+        agentType: 'claude'
+      }),
+      'Other Tab',
+      { updatedAt: 1_700_000_000_300, stateStartedAt: 1_699_999_999_300 },
       expectWorktreeRouting('wt-1'),
       undefined
     )
