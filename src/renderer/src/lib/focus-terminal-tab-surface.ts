@@ -1,9 +1,20 @@
+import {
+  beginActiveSurfaceFocus,
+  isActiveSurfaceFocusCurrent
+} from '@/lib/active-surface-focus-generation'
+
 /**
  * Move keyboard focus into the xterm instance for a freshly-mounted terminal
  * tab. Handles the two-step race where React must first mount the new
  * TerminalPane/xterm before the hidden .xterm-helper-textarea exists —
  * double-rAF waits for that commit so focus lands on the new tab instead of
  * whatever surface (menu trigger, body, previous tab) just relinquished it.
+ *
+ * Unlike focus-editor-tab-surface this has no multi-frame retry budget: two
+ * frames cover the local xterm commit, but a cold/still-connecting destination
+ * (notably a remote SSH workspace whose PTY hasn't attached) may miss it and get
+ * no focus — an accepted trade-off, since "no focus" is recoverable and beats the
+ * pre-fix bug of focusing the *previous* workspace's xterm.
  */
 function cssAttributeString(value: string): string {
   return value.replace(/\\/g, '\\\\').replace(/"/g, '\\"')
@@ -31,10 +42,16 @@ function canUseSinglePaneStaleLeafFallback(tabId: string, leafId: string): boole
 
 export function focusTerminalTabSurface(tabId: string, leafId?: string | null): void {
   cancelPendingFocusFrames()
+  const token = beginActiveSurfaceFocus()
   const firstFrameId = requestAnimationFrame(() => {
     pendingFocusFrameIds = pendingFocusFrameIds.filter((frameId) => frameId !== firstFrameId)
     const secondFrameId = requestAnimationFrame(() => {
       pendingFocusFrameIds = pendingFocusFrameIds.filter((frameId) => frameId !== secondFrameId)
+      // Bail if a newer navigation superseded this one (see the shared token
+      // module) — otherwise a late frame could refocus the previous destination.
+      if (!isActiveSurfaceFocusCurrent(token)) {
+        return
+      }
       // Why: this can be queued before inline tab rename mounts. If it runs
       // afterward, focusing xterm blurs the rename input and commits it closed.
       if (document.querySelector('[data-tab-rename-input="true"]')) {

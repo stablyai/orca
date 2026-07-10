@@ -1,3 +1,4 @@
+import { focusEditorTabSurface } from '@/lib/focus-editor-tab-surface'
 import { focusTerminalTabSurface } from '@/lib/focus-terminal-tab-surface'
 import { getRuntimeEnvironmentIdForWorktree } from '@/lib/worktree-runtime-owner'
 import {
@@ -105,11 +106,16 @@ export function activateWorkspaceTabPaletteResult(
     }
     state.setActiveTab(result.entityId)
     state.setActiveTabType('terminal')
-    focusTerminalTabSurface(result.entityId)
+    const leafId = state.terminalLayoutsByTabId[result.entityId]?.activeLeafId ?? null
+    focusTerminalTabSurface(result.entityId, leafId)
     return { status: 'activated' }
   }
 
   state.setActiveFile(result.entityId)
   state.setActiveTabType('editor')
+  // Why: mirror the terminal branch — without an explicit focus the editor tab
+  // opens with the cursor unfocused, since the Cmd+J modal teardown races the
+  // destination editor mount. See focus-editor-tab-surface.
+  focusEditorTabSurface()
   return { status: 'activated' }
 }

@@ -36,6 +36,13 @@ import { getLiveAgentStatusByWorktreeId, isInactiveWorkspace } from '@/lib/workt
 import { orderEmptyQueryWorktrees } from '@/lib/order-empty-query-worktrees'
 import StatusIndicator from '@/components/sidebar/StatusIndicator'
 import { cn } from '@/lib/utils'
+import { focusEditorTabSurface } from '@/lib/focus-editor-tab-surface'
+import { focusTerminalTabSurface } from '@/lib/focus-terminal-tab-surface'
+import {
+  beginActiveSurfaceFocus,
+  isActiveSurfaceFocusCurrent
+} from '@/lib/active-surface-focus-generation'
+import { resolveWorktreeActiveSurfaceFocus } from '@/lib/worktree-active-surface-focus'
 import { getWorktreeStatus, getWorktreeStatusLabel } from '@/lib/worktree-status'
 import { activateAndRevealWorktree } from '@/lib/worktree-activation'
 import { findWorktreeById } from '@/store/slices/worktree-helpers'
@@ -1154,6 +1161,11 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
 
   useEffect(() => {
     if (visible && !wasVisibleRef.current) {
+      // Reopening Cmd-J means the user is navigating again: supersede any still-
+      // running focus retry from a prior jump so it can't later steal focus off
+      // whatever this navigation lands on — including the browser/simulator/
+      // settings paths that don't run their own focus routine to bump the token.
+      beginActiveSurfaceFocus()
       recordFeatureInteraction('cmd-j')
       createLookupGuard.invalidate()
       activeGroupSnapshotRef.current = captureCmdJActiveGroupSnapshot(
@@ -1245,16 +1257,26 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
 
   const focusFallbackSurface = useCallback(() => {
     cancelFallbackFocusFrames()
+    const token = beginActiveSurfaceFocus()
     fallbackFocusOuterFrameRef.current = requestAnimationFrame(() => {
       fallbackFocusOuterFrameRef.current = null
       fallbackFocusInnerFrameRef.current = requestAnimationFrame(() => {
         fallbackFocusInnerFrameRef.current = null
+        // Bail if a newer navigation superseded this fallback (shared token) so
+        // a late frame can't yank focus back off the newer destination.
+        if (!isActiveSurfaceFocusCurrent(token)) {
+          return
+        }
         const xterm = document.querySelector('.xterm-helper-textarea') as HTMLElement | null
         if (xterm) {
           xterm.focus()
           return
         }
-        const monaco = document.querySelector('.monaco-editor textarea') as HTMLElement | null
+        // Monaco 0.52+ replaces the editing textarea with `.native-edit-context`;
+        // match both so this last-resort path still lands on an editor surface.
+        const monaco = document.querySelector(
+          '.monaco-editor .native-edit-context, .monaco-editor textarea.inputarea'
+        ) as HTMLElement | null
         if (monaco) {
           monaco.focus()
         }
@@ -1272,6 +1294,25 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
       )
     },
     []
+  )
+
+  // Why: focus the given workspace's active tab surface, scoped to its actual
+  // terminal tab/leaf or editor. The generic fallback grabs the first xterm in
+  // the DOM, which races the modal teardown and often lands on a hidden
+  // workspace's surface, leaving the cursor unfocused — both on jump (Enter) and
+  // on dismiss (Esc).
+  const focusWorktreeActiveSurface = useCallback(
+    (worktreeId: string) => {
+      const target = resolveWorktreeActiveSurfaceFocus(useAppStore.getState(), worktreeId)
+      if (target.kind === 'terminal') {
+        focusTerminalTabSurface(target.tabId, target.leafId)
+      } else if (target.kind === 'editor') {
+        focusEditorTabSurface()
+      } else {
+        focusFallbackSurface()
+      }
+    },
+    [focusFallbackSurface]
   )
 
   const handleOpenChange = useCallback(
@@ -1294,10 +1335,10 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
         return
       }
       if (previousWorktreeIdRef.current) {
-        focusFallbackSurface()
+        focusWorktreeActiveSurface(previousWorktreeIdRef.current)
       }
     },
-    [closeModal, focusFallbackSurface, requestBrowserFocus]
+    [closeModal, focusWorktreeActiveSurface, requestBrowserFocus]
   )
 
   const handleSelectWorktree = useCallback(
@@ -1314,9 +1355,9 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
       skipRestoreFocusRef.current = true
       closeModal()
       setSelectedItemId('')
-      focusFallbackSurface()
+      focusWorktreeActiveSurface(worktreeId)
     },
-    [closeModal, focusFallbackSurface, recordFeatureInteraction]
+    [closeModal, focusWorktreeActiveSurface, recordFeatureInteraction]
   )
 
   const handleSelectBrowserPage = useCallback(
@@ -1473,12 +1514,12 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
         return
       }
       if (previousWorktreeIdRef.current) {
-        focusFallbackSurface()
+        focusWorktreeActiveSurface(previousWorktreeIdRef.current)
       }
     },
     [
       closeModal,
-      focusFallbackSurface,
+      focusWorktreeActiveSurface,
       recordFeatureInteraction,
       requestBrowserFocus,
       revealSidebarRow

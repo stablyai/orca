@@ -9,6 +9,7 @@ const mocks = vi.hoisted(() => {
     openFiles: { id: string; worktreeId: string }[]
     repos: unknown[]
     settings: Record<string, unknown>
+    terminalLayoutsByTabId: Record<string, { activeLeafId: string | null }>
     activeGroupIdByWorktree: Record<string, string>
     focusGroup: ReturnType<typeof vi.fn>
     activateTab: ReturnType<typeof vi.fn>
@@ -49,6 +50,7 @@ const mocks = vi.hoisted(() => {
     openFiles: [],
     repos: [],
     settings: {},
+    terminalLayoutsByTabId: {},
     activeGroupIdByWorktree: { 'wt-1': 'group-1' },
     focusGroup: vi.fn(),
     activateTab: vi.fn(),
@@ -61,6 +63,7 @@ const mocks = vi.hoisted(() => {
     activateAndRevealWorktree: vi.fn(),
     activateWebRuntimeSessionTab: vi.fn(),
     focusTerminalTabSurface: vi.fn(),
+    focusEditorTabSurface: vi.fn(),
     getRuntimeEnvironmentIdForWorktree: vi.fn(),
     isWebRuntimeSessionActive: vi.fn()
   }
@@ -74,6 +77,10 @@ vi.mock('@/store', () => ({
 
 vi.mock('@/lib/focus-terminal-tab-surface', () => ({
   focusTerminalTabSurface: mocks.focusTerminalTabSurface
+}))
+
+vi.mock('@/lib/focus-editor-tab-surface', () => ({
+  focusEditorTabSurface: mocks.focusEditorTabSurface
 }))
 
 vi.mock('@/lib/worktree-runtime-owner', () => ({
@@ -146,6 +153,7 @@ function resetStore(): void {
     ]
   }
   mocks.store.openFiles = []
+  mocks.store.terminalLayoutsByTabId = {}
 }
 
 describe('activateWorkspaceTabPaletteResult', () => {
@@ -165,7 +173,16 @@ describe('activateWorkspaceTabPaletteResult', () => {
     expect(mocks.store.activateTab).toHaveBeenCalledWith('unified-terminal-1')
     expect(mocks.store.setActiveTab).toHaveBeenCalledWith('terminal-1')
     expect(mocks.store.setActiveTabType).toHaveBeenCalledWith('terminal')
-    expect(mocks.focusTerminalTabSurface).toHaveBeenCalledWith('terminal-1')
+    expect(mocks.focusTerminalTabSurface).toHaveBeenCalledWith('terminal-1', null)
+    expect(mocks.focusEditorTabSurface).not.toHaveBeenCalled()
+  })
+
+  it('focuses the active leaf when the terminal tab has a persisted layout', () => {
+    mocks.store.terminalLayoutsByTabId = { 'terminal-1': { activeLeafId: 'leaf-9' } }
+
+    expect(activateWorkspaceTabPaletteResult(makeResult())).toEqual({ status: 'activated' })
+
+    expect(mocks.focusTerminalTabSurface).toHaveBeenCalledWith('terminal-1', 'leaf-9')
   })
 
   it('uses the web-runtime terminal activation path when active', () => {
@@ -225,6 +242,7 @@ describe('activateWorkspaceTabPaletteResult', () => {
     expect(mocks.store.activateTab).toHaveBeenLastCalledWith('diff-tab-1')
     expect(mocks.store.setActiveTabType).toHaveBeenCalledWith('editor')
     expect(mocks.focusTerminalTabSurface).not.toHaveBeenCalled()
+    expect(mocks.focusEditorTabSurface).toHaveBeenCalledTimes(1)
   })
 
   it.each([
