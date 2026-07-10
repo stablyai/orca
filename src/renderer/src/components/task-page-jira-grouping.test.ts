@@ -1,203 +1,171 @@
-import { describe, expect, it } from 'vitest'
-import type { JiraIssue } from '../../../shared/types'
+// @vitest-environment happy-dom
 
-describe('TaskPage Jira grouping functionality', () => {
-  function jiraIssue(key: string, title: string, statusName: string, siteId = 'site-1'): JiraIssue {
-    return {
-      id: `${siteId}:${key}`,
-      key,
-      title,
-      url: `https://example.atlassian.net/browse/${key}`,
-      siteId,
-      siteName: 'Example Jira',
-      project: { id: '10000', key: 'ALP', name: 'Alpha', siteId },
-      issueType: { id: '10001', name: 'Bug' },
-      status: { id: '1', name: statusName, categoryKey: 'new', categoryName: statusName },
-      labels: [],
-      createdAt: '2026-01-01T00:00:00.000Z',
-      updatedAt: '2026-01-01T00:00:00.000Z'
-    }
+import '@testing-library/jest-dom/vitest'
+
+import React from 'react'
+import { afterEach, describe, expect, it, vi } from 'vitest'
+import { cleanup, render, screen } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
+
+import { TooltipProvider } from '@/components/ui/tooltip'
+import { groupJiraIssuesByStatus, TaskPageJiraIssueList } from './task-page-jira-issue-list'
+import {
+  getSingleJiraProjectScope,
+  loadTaskPageJiraProjectStatusOrder
+} from './task-page-jira-status-order'
+import type { JiraIssue, JiraProjectStatusOrder } from '../../../shared/types'
+
+const { jiraGetProjectStatusOrderMock } = vi.hoisted(() => ({
+  jiraGetProjectStatusOrderMock: vi.fn()
+}))
+
+vi.mock('@/runtime/runtime-jira-client', () => ({
+  jiraGetProjectStatusOrder: (...args: unknown[]) => jiraGetProjectStatusOrderMock(...args)
+}))
+
+afterEach(() => {
+  cleanup()
+  vi.restoreAllMocks()
+  jiraGetProjectStatusOrderMock.mockReset()
+})
+
+function jiraIssue(
+  key: string,
+  title: string,
+  statusId: string,
+  statusName: string,
+  options: { projectKey?: string; siteId?: string } = {}
+): JiraIssue {
+  const siteId = options.siteId ?? 'site-1'
+  const projectKey = options.projectKey ?? 'ALP'
+  return {
+    id: `${siteId}:${key}`,
+    key,
+    title,
+    url: `https://example.atlassian.net/browse/${key}`,
+    siteId,
+    siteName: 'Example Jira',
+    project: { id: projectKey, key: projectKey, name: projectKey, siteId },
+    issueType: { id: '10001', name: 'Bug' },
+    status: { id: statusId, name: statusName, categoryKey: 'new', categoryName: statusName },
+    labels: [],
+    createdAt: '2026-01-01T00:00:00.000Z',
+    updatedAt: '2026-01-01T00:00:00.000Z'
   }
+}
 
-  describe('jira issue sections grouping', () => {
-    it('groups issues by status name', () => {
-      const issues = [
-        jiraIssue('ALP-1', 'Issue 1', 'To Do'),
-        jiraIssue('ALP-2', 'Issue 2', 'In Progress'),
-        jiraIssue('ALP-3', 'Issue 3', 'To Do'),
-        jiraIssue('ALP-4', 'Issue 4', 'Done')
-      ]
+function statusOrder(statusIdsByColumn: string[][]): JiraProjectStatusOrder {
+  return { statusIdsByColumn }
+}
 
-      const sectionsMap = new Map<string, JiraIssue[]>()
-      for (const issue of issues) {
-        const statusName = issue.status.name
-        if (!sectionsMap.has(statusName)) {
-          sectionsMap.set(statusName, [])
-        }
-        sectionsMap.get(statusName)!.push(issue)
-      }
+describe('Jira issue status grouping', () => {
+  it('groups issues through the production implementation and preserves row order', () => {
+    const first = jiraIssue('ALP-1', 'First', '1', 'To Do')
+    const second = jiraIssue('ALP-2', 'Second', '2', 'In Progress')
+    const third = jiraIssue('ALP-3', 'Third', '1', 'To Do')
 
-      expect(sectionsMap.size).toBe(3)
-      expect(sectionsMap.get('To Do')?.length).toBe(2)
-      expect(sectionsMap.get('In Progress')?.length).toBe(1)
-      expect(sectionsMap.get('Done')?.length).toBe(1)
-    })
+    const sections = groupJiraIssuesByStatus([first, second, third], null)
 
-    it('sorts sections by agile board column configuration when available', () => {
-      const issues = [
-        jiraIssue('ALP-1', 'Issue 1', 'Done'),
-        jiraIssue('ALP-2', 'Issue 2', 'To Do'),
-        jiraIssue('ALP-3', 'Issue 3', 'In Progress')
-      ]
-
-      const jiraProjectStatuses: Record<string, string[]> = {
-        ALP: ['In Progress', 'To Do', 'Done']
-      }
-
-      const sectionsMap = new Map<string, JiraIssue[]>()
-      for (const issue of issues) {
-        const statusName = issue.status.name
-        if (!sectionsMap.has(statusName)) {
-          sectionsMap.set(statusName, [])
-        }
-        sectionsMap.get(statusName)!.push(issue)
-      }
-
-      const sections: { key: string; label: string; issues: JiraIssue[] }[] = []
-      sectionsMap.forEach((issues, statusName) => {
-        sections.push({
-          key: statusName,
-          label: statusName,
-          issues
-        })
-      })
-
-      const getStatusIndex = (statusName: string): number => {
-        for (const projectKey of Object.keys(jiraProjectStatuses)) {
-          const list = jiraProjectStatuses[projectKey]
-          if (list) {
-            const idx = list.indexOf(statusName)
-            if (idx !== -1) {
-              return idx
-            }
-          }
-        }
-        return 99999
-      }
-
-      sections.sort((a, b) => {
-        const idxA = getStatusIndex(a.label)
-        const idxB = getStatusIndex(b.label)
-        if (idxA !== idxB) {
-          return idxA - idxB
-        }
-        return a.label.localeCompare(b.label)
-      })
-
-      expect(sections.at(0)?.label).toBe('In Progress')
-      expect(sections.at(1)?.label).toBe('To Do')
-      expect(sections.at(2)?.label).toBe('Done')
-    })
-
-    it('falls back to alphabetical sorting when no board configuration exists', () => {
-      const issues = [
-        jiraIssue('ALP-1', 'Issue 1', 'Done'),
-        jiraIssue('ALP-2', 'Issue 2', 'To Do'),
-        jiraIssue('ALP-3', 'Issue 3', 'In Progress')
-      ]
-
-      const jiraProjectStatuses: Record<string, string[]> = {}
-
-      const sectionsMap = new Map<string, JiraIssue[]>()
-      for (const issue of issues) {
-        const statusName = issue.status.name
-        if (!sectionsMap.has(statusName)) {
-          sectionsMap.set(statusName, [])
-        }
-        sectionsMap.get(statusName)!.push(issue)
-      }
-
-      const sections: { key: string; label: string; issues: JiraIssue[] }[] = []
-      sectionsMap.forEach((issues, statusName) => {
-        sections.push({
-          key: statusName,
-          label: statusName,
-          issues
-        })
-      })
-
-      const getStatusIndex = (statusName: string): number => {
-        for (const projectKey of Object.keys(jiraProjectStatuses)) {
-          const list = jiraProjectStatuses[projectKey]
-          if (list) {
-            const idx = list.indexOf(statusName)
-            if (idx !== -1) {
-              return idx
-            }
-          }
-        }
-        return 99999
-      }
-
-      sections.sort((a, b) => {
-        const idxA = getStatusIndex(a.label)
-        const idxB = getStatusIndex(b.label)
-        if (idxA !== idxB) {
-          return idxA - idxB
-        }
-        return a.label.localeCompare(b.label)
-      })
-
-      expect(sections.at(0)?.label).toBe('Done')
-      expect(sections.at(1)?.label).toBe('In Progress')
-      expect(sections.at(2)?.label).toBe('To Do')
-    })
+    expect(sections.map((section) => section.label)).toEqual(['In Progress', 'To Do'])
+    expect(sections[1]?.issues).toEqual([first, third])
   })
 
-  describe('collapsed groups state management', () => {
-    it('toggles group collapse state correctly', () => {
-      let collapsedGroups = new Set<string>(['To Do'])
+  it('uses Jira column order while sorting statuses in the same column alphabetically', () => {
+    const sections = groupJiraIssuesByStatus(
+      [
+        jiraIssue('ALP-1', 'Done issue', '3', 'Done'),
+        jiraIssue('ALP-2', 'To do issue', '1', 'To Do'),
+        jiraIssue('ALP-3', 'Progress issue', '2', 'In Progress')
+      ],
+      statusOrder([['1', '2'], ['3']])
+    )
 
-      const toggleGroup = (groupKey: string, current: Set<string>) => {
-        const next = new Set(current)
-        if (next.has(groupKey)) {
-          next.delete(groupKey)
-        } else {
-          next.add(groupKey)
-        }
-        return next
-      }
+    expect(sections.map((section) => section.label)).toEqual(['In Progress', 'To Do', 'Done'])
+  })
 
-      collapsedGroups = toggleGroup('To Do', collapsedGroups)
-      expect(collapsedGroups.has('To Do')).toBe(false)
+  it('places statuses missing from board configuration last in alphabetical order', () => {
+    const sections = groupJiraIssuesByStatus(
+      [
+        jiraIssue('ALP-1', 'Done issue', '3', 'Done'),
+        jiraIssue('ALP-2', 'To do issue', '1', 'To Do'),
+        jiraIssue('ALP-3', 'Progress issue', '2', 'In Progress')
+      ],
+      statusOrder([['2']])
+    )
 
-      collapsedGroups = toggleGroup('In Progress', collapsedGroups)
-      expect(collapsedGroups.has('In Progress')).toBe(true)
-      expect(collapsedGroups.has('To Do')).toBe(false)
+    expect(sections.map((section) => section.label)).toEqual(['In Progress', 'Done', 'To Do'])
+  })
 
-      collapsedGroups = toggleGroup('To Do', collapsedGroups)
-      expect(collapsedGroups.has('To Do')).toBe(true)
-      expect(collapsedGroups.has('In Progress')).toBe(true)
+  it('only selects a board-order scope for one Jira site and project', () => {
+    const singleScope = getSingleJiraProjectScope([
+      jiraIssue('ALP-1', 'First', '1', 'To Do'),
+      jiraIssue('ALP-2', 'Second', '2', 'In Progress')
+    ])
+    const multipleSites = getSingleJiraProjectScope([
+      jiraIssue('ALP-1', 'First', '1', 'To Do', { siteId: 'site-1' }),
+      jiraIssue('ALP-2', 'Second', '2', 'In Progress', { siteId: 'site-2' })
+    ])
+    const multipleProjects = getSingleJiraProjectScope([
+      jiraIssue('ALP-1', 'First', '1', 'To Do', { projectKey: 'ALP' }),
+      jiraIssue('BRV-1', 'Second', '2', 'In Progress', { projectKey: 'BRV' })
+    ])
+    const missingSite = jiraIssue('ALP-3', 'Third', '3', 'Done')
+    delete missingSite.siteId
+    delete missingSite.project.siteId
+
+    expect(singleScope).toMatchObject({ projectKey: 'ALP', siteId: 'site-1' })
+    expect(multipleSites).toBeNull()
+    expect(multipleProjects).toBeNull()
+    expect(getSingleJiraProjectScope([missingSite])).toBeNull()
+  })
+
+  it('uses alphabetical fallback when status-order metadata is unavailable', async () => {
+    const error = new Error('Unknown RPC method')
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    jiraGetProjectStatusOrderMock.mockRejectedValueOnce(error)
+    const scope = getSingleJiraProjectScope([jiraIssue('ALP-1', 'First', '1', 'To Do')])
+    if (!scope) {
+      throw new Error('Expected one Jira project scope')
+    }
+
+    await expect(loadTaskPageJiraProjectStatusOrder(null, 'runtime:old', scope)).resolves.toEqual({
+      statusIdsByColumn: []
     })
+    expect(warn).toHaveBeenCalledWith('[jira] Failed to load project status order:', error)
+  })
 
-    it('filters issues based on collapsed state', () => {
-      const collapsedGroups = new Set<string>(['To Do'])
+  it('collapses and expands a status group through its accessible trigger', async () => {
+    const user = userEvent.setup()
+    render(
+      React.createElement(
+        TooltipProvider,
+        null,
+        React.createElement(TaskPageJiraIssueList, {
+          formatUpdatedAt: () => 'today',
+          getStatusTone: () => 'border-border',
+          issues: [
+            jiraIssue('ALP-1', 'First issue', '1', 'To Do'),
+            jiraIssue('ALP-2', 'Second issue', '1', 'To Do')
+          ],
+          onOpenIssue: vi.fn(),
+          onStartWorkspace: vi.fn(),
+          selectedIssue: null,
+          showSiteContext: false,
+          statusOrder: null
+        })
+      )
+    )
 
-      const sections = [
-        { key: 'To Do', label: 'To Do', issues: [jiraIssue('ALP-1', 'Issue 1', 'To Do')] },
-        {
-          key: 'In Progress',
-          label: 'In Progress',
-          issues: [jiraIssue('ALP-2', 'Issue 2', 'In Progress')]
-        }
-      ]
+    const trigger = screen.getByRole('button', { name: 'To Do 2' })
+    expect(trigger).toHaveAttribute('data-variant', 'ghost')
+    expect(trigger).toHaveAttribute('aria-expanded', 'true')
+    expect(screen.getByText('First issue')).toBeInTheDocument()
 
-      const visibleIssues = sections
-        .filter((section) => !collapsedGroups.has(section.key))
-        .flatMap((section) => section.issues)
+    await user.click(trigger)
+    expect(trigger).toHaveAttribute('aria-expanded', 'false')
+    expect(screen.queryByText('First issue')).not.toBeInTheDocument()
 
-      expect(visibleIssues.length).toBe(1)
-      expect(visibleIssues.at(0)?.key).toBe('ALP-2')
-    })
+    await user.click(trigger)
+    expect(screen.getByText('First issue')).toBeInTheDocument()
   })
 })

@@ -6,6 +6,7 @@ import {
   createIssue,
   getIssue,
   getIssueComments,
+  getProjectStatusOrder,
   listAssignableUsers,
   listCreateFields,
   listIssueTypes,
@@ -14,8 +15,7 @@ import {
   listProjects,
   listTransitions,
   searchIssues,
-  updateIssue,
-  getProjectStatuses
+  updateIssue
 } from '../jira/issues'
 import type {
   JiraConnectArgs,
@@ -262,12 +262,12 @@ export function registerJiraHandlers(): void {
   })
 
   ipcMain.handle(
-    'jira:getProjectStatuses',
+    'jira:getProjectStatusOrder',
     async (_event, args: { projectKey: string; siteId?: string }) => {
       if (typeof args?.projectKey !== 'string' || !args.projectKey.trim()) {
-        return []
+        return { statusIdsByColumn: [] }
       }
-      return getProjectStatuses(args.projectKey.trim(), normalizeSiteId(args.siteId))
+      return getProjectStatusOrder(args.projectKey.trim(), normalizeSiteId(args.siteId))
     }
   )
 }

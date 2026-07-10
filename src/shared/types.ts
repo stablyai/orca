@@ -1844,6 +1844,7 @@ export type {
   JiraMutationResult,
   JiraPriority,
   JiraProject,
+  JiraProjectStatusOrder,
   JiraSite,
   JiraSiteSelection,
   JiraStatus,

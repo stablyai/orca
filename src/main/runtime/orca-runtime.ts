@@ -528,6 +528,7 @@ import {
   createIssue as createJiraIssue,
   getIssue as getJiraIssue,
   getIssueComments as getJiraIssueComments,
+  getProjectStatusOrder as getJiraProjectStatusOrder,
   listAssignableUsers as listJiraAssignableUsers,
   listCreateFields as listJiraCreateFields,
   listIssueTypes as listJiraIssueTypes,
@@ -536,8 +537,7 @@ import {
   listProjects as listJiraProjects,
   listTransitions as listJiraTransitions,
   searchIssues as searchJiraIssues,
-  updateIssue as updateJiraIssue,
-  getProjectStatuses as getJiraProjectStatuses
+  updateIssue as updateJiraIssue
 } from '../jira/issues'
 import {
   clearProjectItemFieldValue,
@@ -22569,11 +22569,11 @@ export class OrcaRuntimeService {
     return listJiraTransitions(key, siteId)
   }
 
-  jiraGetProjectStatuses(
+  jiraGetProjectStatusOrder(
     projectKey: string,
     siteId?: string
-  ): ReturnType<typeof getJiraProjectStatuses> {
-    return getJiraProjectStatuses(projectKey, siteId)
+  ): ReturnType<typeof getJiraProjectStatusOrder> {
+    return getJiraProjectStatusOrder(projectKey, siteId)
   }
 
   // ── Browser automation ──

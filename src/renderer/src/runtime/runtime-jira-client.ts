@@ -12,6 +12,7 @@ import type {
   JiraMutationResult,
   JiraPriority,
   JiraProject,
+  JiraProjectStatusOrder,
   JiraSiteSelection,
   JiraTransition,
   JiraUser,
@@ -281,14 +282,16 @@ export async function jiraListTransitions(
     : window.api.jira.listTransitions(args)
 }
 
-export async function jiraGetProjectStatuses(
+export async function jiraGetProjectStatusOrder(
   settings: RuntimeJiraSettings,
   projectKey: string,
   siteId?: string | null
-): Promise<string[]> {
+): Promise<JiraProjectStatusOrder> {
   const target = getJiraRuntimeTarget(settings)
   const args = { projectKey, siteId: siteId ?? undefined }
   return target.kind === 'environment'
-    ? callRuntimeRpc<string[]>(target, 'jira.getProjectStatuses', args, { timeoutMs: 30_000 })
-    : (window.api.jira.getProjectStatuses(args) as Promise<string[]>)
+    ? callRuntimeRpc<JiraProjectStatusOrder>(target, 'jira.getProjectStatusOrder', args, {
+        timeoutMs: 30_000
+      })
+    : window.api.jira.getProjectStatusOrder(args)
 }

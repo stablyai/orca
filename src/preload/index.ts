@@ -25,6 +25,7 @@ import type {
   GitHubAssignableUser,
   GitHubCommentResult,
   GitHubWorkItem,
+  JiraProjectStatusOrder,
   GitPushTarget,
   GitStagingArea,
   GitForkSyncExpectedUpstream,
@@ -1638,8 +1639,10 @@ const api = {
 
     listTransitions: (args: { key: string; siteId?: string }): Promise<unknown[]> =>
       ipcRenderer.invoke('jira:listTransitions', args),
-    getProjectStatuses: (args: { projectKey: string; siteId?: string }): Promise<unknown> =>
-      ipcRenderer.invoke('jira:getProjectStatuses', args)
+    getProjectStatusOrder: (args: {
+      projectKey: string
+      siteId?: string
+    }): Promise<JiraProjectStatusOrder> => ipcRenderer.invoke('jira:getProjectStatusOrder', args)
   },
 
   starNag: {

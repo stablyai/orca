@@ -88,7 +88,7 @@ const AssignableUsers = z.object({
   siteId: OptionalString
 })
 
-const ProjectStatuses = z.object({
+const ProjectStatusOrder = z.object({
   projectKey: requiredString('Project key is required'),
   siteId: OptionalString
 })
@@ -211,9 +211,9 @@ export const JIRA_METHODS: RpcMethod[] = [
       runtime.jiraListTransitions(params.key.trim(), params.siteId)
   }),
   defineMethod({
-    name: 'jira.getProjectStatuses',
-    params: ProjectStatuses,
+    name: 'jira.getProjectStatusOrder',
+    params: ProjectStatusOrder,
     handler: async (params, { runtime }) =>
-      runtime.jiraGetProjectStatuses(params.projectKey.trim(), params.siteId)
+      runtime.jiraGetProjectStatusOrder(params.projectKey.trim(), params.siteId)
   })
 ]

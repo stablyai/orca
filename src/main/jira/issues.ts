@@ -14,6 +14,7 @@ import type {
   JiraMutationResult,
   JiraPriority,
   JiraProject,
+  JiraProjectStatusOrder,
   JiraSite,
   JiraSiteSelection,
   JiraStatus,
@@ -108,6 +109,13 @@ function asRecord(value: unknown): JiraRecord {
 
 function asString(value: unknown, fallback = ''): string {
   return typeof value === 'string' ? value : fallback
+}
+
+function asIdentifier(value: unknown): string {
+  if (typeof value === 'string') {
+    return value
+  }
+  return typeof value === 'number' && Number.isFinite(value) ? String(value) : ''
 }
 
 function asStringArray(value: unknown): string[] {
@@ -811,96 +819,75 @@ export async function listTransitions(
   }
 }
 
-export async function getProjectStatuses(
+export async function getProjectStatusOrder(
   projectKey: string,
   siteId?: string | null
-): Promise<string[]> {
-  const entry = getClients(siteId)[0]
+): Promise<JiraProjectStatusOrder> {
+  // Why: an omitted site can resolve to the persisted "all" selection; board
+  // metadata is only truthful when exactly one Jira connection owns the project.
+  const entries = getClients(siteId)
+  const entry = entries.length === 1 ? entries[0] : undefined
   if (!entry) {
-    return []
+    return { statusIdsByColumn: [] }
   }
   await acquire()
   try {
-    const statusesResponse = await jiraRequest<unknown>(
+    // Why: without an explicit board picker there is no truthful way to choose
+    // among multiple project boards, so ambiguous projects keep alphabetical order.
+    const params = new URLSearchParams({ projectKeyOrId: projectKey, maxResults: '2' })
+    const boardsResponse = await jiraRequest<JiraPagedResponse<JiraRecord>>(
       entry,
-      `/rest/api/3/project/${encodeURIComponent(projectKey)}/statuses`
+      `/rest/agile/1.0/board?${params.toString()}`
     )
-    const statusMap = new Map<string, string>()
-    if (Array.isArray(statusesResponse)) {
-      for (const issueType of statusesResponse) {
-        const typeRecord = asRecord(issueType)
-        if (Array.isArray(typeRecord.statuses)) {
-          for (const s of typeRecord.statuses) {
-            const statusRecord = asRecord(s)
-            const id = asString(statusRecord.id)
-            const name = asString(statusRecord.name)
-            if (id && name) {
-              statusMap.set(id, name)
-            }
-          }
-        }
-      }
+    const boards = boardsResponse.values ?? []
+    const boardCount = asFiniteNumber(boardsResponse.total)
+    const singleBoardIsProven =
+      boards.length === 1 &&
+      boardsResponse.isLast !== false &&
+      (boardCount === 1 || (boardCount === null && boardsResponse.isLast === true))
+    const boardId = singleBoardIsProven ? asIdentifier(asRecord(boards[0]).id) : ''
+    if (!boardId) {
+      return { statusIdsByColumn: [] }
     }
 
-    const boardsResponse = await jiraRequest<{ values?: unknown[] }>(
+    const configResponse = await jiraRequest<unknown>(
       entry,
-      `/rest/agile/1.0/board?projectKeyOrId=${encodeURIComponent(projectKey)}`
+      `/rest/agile/1.0/board/${encodeURIComponent(boardId)}/configuration`
     )
-
-    if (
-      boardsResponse &&
-      Array.isArray(boardsResponse.values) &&
-      boardsResponse.values.length > 0
-    ) {
-      const boardId = asRecord(boardsResponse.values[0]).id
-      if (boardId) {
-        const configResponse = await jiraRequest<{ columnConfig?: { columns?: unknown[] } }>(
-          entry,
-          `/rest/agile/1.0/board/${boardId}/configuration`
-        )
-
-        if (
-          configResponse &&
-          configResponse.columnConfig &&
-          Array.isArray(configResponse.columnConfig.columns)
-        ) {
-          const orderedNames: string[] = []
-          const seen = new Set<string>()
-          for (const col of configResponse.columnConfig.columns) {
-            const colRecord = asRecord(col)
-            if (Array.isArray(colRecord.statuses)) {
-              for (const statusRef of colRecord.statuses) {
-                const refRecord = asRecord(statusRef)
-                const refId = asString(refRecord.id)
-                if (refId) {
-                  const name = statusMap.get(refId)
-                  if (name && !seen.has(name)) {
-                    seen.add(name)
-                    orderedNames.push(name)
-                  }
-                }
-              }
-            }
-          }
-          for (const name of statusMap.values()) {
-            if (!seen.has(name)) {
-              seen.add(name)
-              orderedNames.push(name)
-            }
-          }
-          return orderedNames
-        }
-      }
+    const columns = asRecord(asRecord(configResponse).columnConfig).columns
+    if (!Array.isArray(columns)) {
+      return { statusIdsByColumn: [] }
     }
 
-    return Array.from(statusMap.values())
+    // Why: issues already carry status names and IDs, so returning board IDs
+    // avoids a second metadata request and keeps duplicate names unambiguous.
+    const seenStatusIds = new Set<string>()
+    const statusIdsByColumn: string[][] = []
+    for (const column of columns) {
+      const statuses = asRecord(column).statuses
+      if (!Array.isArray(statuses)) {
+        continue
+      }
+      const columnStatusIds: string[] = []
+      for (const status of statuses) {
+        const statusId = asIdentifier(asRecord(status).id)
+        if (statusId && !seenStatusIds.has(statusId)) {
+          seenStatusIds.add(statusId)
+          columnStatusIds.push(statusId)
+        }
+      }
+      if (columnStatusIds.length > 0) {
+        statusIdsByColumn.push(columnStatusIds)
+      }
+    }
+    return { statusIdsByColumn }
   } catch (error) {
     if (isAuthError(error)) {
       clearToken(entry.site.id)
       throw error
     }
-    console.warn('[jira] getProjectStatuses failed:', error)
-    return []
+    console.warn('[jira] getProjectStatusOrder failed:', error)
+    return { statusIdsByColumn: [] }
   } finally {
     release()
   }
