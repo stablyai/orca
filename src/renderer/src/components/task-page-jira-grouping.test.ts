@@ -83,6 +83,20 @@ describe('Jira issue status grouping', () => {
     expect(sections.map((section) => section.label)).toEqual(['In Progress', 'To Do', 'Done'])
   })
 
+  it('reverses Jira column order for descending status sort', () => {
+    const sections = groupJiraIssuesByStatus(
+      [
+        jiraIssue('ALP-1', 'Done issue', '3', 'Done'),
+        jiraIssue('ALP-2', 'To do issue', '1', 'To Do'),
+        jiraIssue('ALP-3', 'Progress issue', '2', 'In Progress')
+      ],
+      statusOrder([['1', '2'], ['3']]),
+      'desc'
+    )
+
+    expect(sections.map((section) => section.label)).toEqual(['Done', 'To Do', 'In Progress'])
+  })
+
   it('places statuses missing from board configuration last in alphabetical order', () => {
     const sections = groupJiraIssuesByStatus(
       [

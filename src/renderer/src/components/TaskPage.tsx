@@ -329,6 +329,7 @@ import {
   jiraListProjects,
   jiraListPriorities
 } from '@/runtime/runtime-jira-client'
+import { sortJiraIssues } from './jira-issue-sorter'
 import {
   normalizeVisibleTaskProviders,
   restoreAvailableDefaultTaskProvider,
@@ -4604,15 +4605,26 @@ export default function TaskPage(): React.JSX.Element {
       setJiraPriorities([])
       return
     }
+    let cancelled = false
+    setJiraPriorities([])
     const siteId =
       jiraTaskSourceContext?.providerIdentity?.provider === 'jira'
         ? jiraTaskSourceContext.providerIdentity.siteId
         : undefined
-    jiraListPriorities(jiraTaskSourceContext ?? settings, siteId)
+    void jiraListPriorities(jiraTaskSourceContext ?? settings, siteId)
       .then((p) => {
-        setJiraPriorities(p)
+        if (!cancelled) {
+          setJiraPriorities(p)
+        }
       })
-      .catch(() => {})
+      .catch(() => {
+        if (!cancelled) {
+          setJiraPriorities([])
+        }
+      })
+    return () => {
+      cancelled = true
+    }
   }, [jiraConnected, jiraTaskSourceContext, settings])
 
   const handleJiraSort = useCallback(
@@ -5658,70 +5670,9 @@ export default function TaskPage(): React.JSX.Element {
       ? jiraProjectStatusOrder.order
       : null
 
-  const getJiraPriorityWeight = useCallback(
-    (priorityName?: string, priorityId?: string): number => {
-      if (!priorityName) {
-        return 99
-      }
-      if (jiraPriorities.length > 0) {
-        const idx = jiraPriorities.findIndex(
-          (p) => p.id === priorityId || p.name.toLowerCase() === priorityName.toLowerCase()
-        )
-        if (idx !== -1) {
-          return idx
-        }
-      }
-      const nameKey = priorityName.toLowerCase()
-      const JIRA_PRIORITY_ORDER: Record<string, number> = {
-        blocker: 1,
-        highest: 1,
-        critical: 1,
-        high: 2,
-        major: 2,
-        medium: 3,
-        normal: 3,
-        low: 4,
-        minor: 4,
-        lowest: 5,
-        trivial: 5
-      }
-      if (nameKey in JIRA_PRIORITY_ORDER) {
-        return JIRA_PRIORITY_ORDER[nameKey]
-      }
-      if (priorityId) {
-        const parsed = Number.parseInt(priorityId, 10)
-        if (!Number.isNaN(parsed)) {
-          return parsed
-        }
-      }
-      return 3
-    },
-    [jiraPriorities]
-  )
-
   const sortedJiraIssues = useMemo(() => {
-    return [...displayedJiraIssues].sort((a, b) => {
-      let comparison = 0
-      if (jiraOrderBy === 'key') {
-        comparison = a.key.localeCompare(b.key, undefined, { numeric: true })
-      } else if (jiraOrderBy === 'title') {
-        comparison = a.title.localeCompare(b.title)
-      } else if (jiraOrderBy === 'status') {
-        comparison = 0
-      } else if (jiraOrderBy === 'priority') {
-        const weightA = getJiraPriorityWeight(a.priority?.name, a.priority?.id)
-        const weightB = getJiraPriorityWeight(b.priority?.name, b.priority?.id)
-        comparison = weightB - weightA
-      } else if (jiraOrderBy === 'assignee') {
-        const userA = a.assignee?.displayName ?? ''
-        const userB = b.assignee?.displayName ?? ''
-        comparison = userA.localeCompare(userB)
-      } else if (jiraOrderBy === 'updated') {
-        comparison = new Date(a.updatedAt).getTime() - new Date(b.updatedAt).getTime()
-      }
-      return jiraOrderDirection === 'asc' ? comparison : -comparison
-    })
-  }, [displayedJiraIssues, jiraOrderBy, jiraOrderDirection, getJiraPriorityWeight])
+    return sortJiraIssues(displayedJiraIssues, jiraOrderBy, jiraOrderDirection, jiraPriorities)
+  }, [displayedJiraIssues, jiraOrderBy, jiraOrderDirection, jiraPriorities])
 
   // New Linear project dialog state
   const [newLinearProjectOpen, setNewLinearProjectOpen] = useState(false)
@@ -10112,7 +10063,7 @@ export default function TaskPage(): React.JSX.Element {
                   </div>
                 </div>
 
-                <div className="grid h-8 flex-none grid-cols-[90px_minmax(0,1fr)_128px_92px_80px] items-center gap-3 border-b border-border/50 bg-muted/25 px-3 text-[11px] font-medium uppercase tracking-[0.08em] text-muted-foreground max-md:!hidden lg:grid-cols-[96px_minmax(0,1.25fr)_132px_120px_136px_96px_64px] xl:grid-cols-[104px_minmax(0,1.45fr)_144px_132px_160px_128px_72px]">
+                <div className="grid h-8 flex-none grid-cols-[90px_minmax(0,1fr)_128px_92px_80px_64px] items-center gap-3 border-b border-border/50 bg-muted/25 px-3 text-[11px] font-medium uppercase tracking-[0.08em] text-muted-foreground max-md:!hidden lg:grid-cols-[96px_minmax(0,1.25fr)_132px_120px_136px_96px_64px] xl:grid-cols-[104px_minmax(0,1.45fr)_144px_132px_160px_128px_72px]">
                   {(
                     [
                       { id: 'key', label: translate('auto.components.TaskPage.37e7ee311e', 'Key') },
@@ -10148,7 +10099,7 @@ export default function TaskPage(): React.JSX.Element {
                       type="button"
                       onClick={() => handleJiraSort(col.id)}
                       className={cn(
-                        'flex items-center gap-1 hover:text-foreground text-left focus:outline-none uppercase font-semibold text-[11px] tracking-[0.08em] select-none',
+                        'flex items-center gap-1 rounded-sm text-left uppercase font-semibold text-[11px] tracking-[0.08em] select-none hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50',
                         col.className
                       )}
                     >
