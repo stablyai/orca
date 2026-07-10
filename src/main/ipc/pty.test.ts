@@ -1678,6 +1678,7 @@ describe('registerPtyHandlers', () => {
     getSettings?: () => {
       enableGitHubAttribution?: boolean
       agentStatusHooksEnabled?: boolean
+      disabledTuiAgents?: readonly string[]
       httpProxyUrl?: string
       httpProxyBypassRules?: string
     },
@@ -2596,6 +2597,42 @@ describe('registerPtyHandlers', () => {
         materializeDefaultHome: true
       })
       expect(env.ORCA_PI_SOURCE_AGENT_DIR).toBe('/tmp/default-pi-agent')
+    })
+
+    it('skips Pi managed extensions when Pi is disabled in Settings > Agents', async () => {
+      // Why: #7814 — global agentStatusHooksEnabled must not install orca-*.ts
+      // into ~/.pi when the user turned Pi off per-agent.
+      const env = await spawnAndGetEnv(
+        undefined,
+        { PI_CODING_AGENT_DIR: '/tmp/user-pi-agent' },
+        undefined,
+        () => ({ disabledTuiAgents: ['pi'] })
+      )
+      expect(piBuildPtyEnvMock).not.toHaveBeenCalledWith(
+        expect.any(String),
+        expect.anything(),
+        'pi'
+      )
+      // OMP shadow prep still runs for non-omp launches unless omp is disabled.
+      expect(piBuildPtyEnvMock).toHaveBeenCalledWith(expect.any(String), undefined, 'omp')
+      expect(env.ORCA_PI_SOURCE_AGENT_DIR).toBeUndefined()
+    })
+
+    it('skips OMP managed extensions when OMP is disabled in Settings > Agents', async () => {
+      const env = await spawnAndGetEnv(
+        undefined,
+        { PI_CODING_AGENT_DIR: '/tmp/user-omp-agent' },
+        undefined,
+        () => ({ disabledTuiAgents: ['omp'] }),
+        'omp'
+      )
+      expect(piBuildPtyEnvMock).not.toHaveBeenCalledWith(
+        expect.any(String),
+        expect.anything(),
+        'omp'
+      )
+      expect(env.ORCA_OMP_STATUS_EXTENSION).toBeUndefined()
+      expect(env.ORCA_OMP_SOURCE_AGENT_DIR).toBeUndefined()
     })
 
     it('threads command: "omp" through to piBuildPtyEnv and emits OMP status metadata', async () => {
