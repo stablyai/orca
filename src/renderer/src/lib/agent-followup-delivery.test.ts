@@ -70,6 +70,23 @@ describe('sendFollowupPromptWhenAgentReady — interpreter-wrapped agents', () =
       expect(delivered).toBe(false)
       expect(sendRuntimePtyInputVerified).not.toHaveBeenCalled()
     })
+
+    it(`refuses to type into a ${agent} wrapper without a live child`, async () => {
+      vi.mocked(inspectRuntimeTerminalProcess).mockResolvedValue({
+        foregroundProcess: 'python3',
+        hasChildProcesses: false
+      })
+
+      const delivered = await sendFollowupPromptWhenAgentReady({
+        ptyId: 'pty-1',
+        expectedProcess,
+        prompt: 'ship it',
+        settings: null
+      })
+
+      expect(delivered).toBe(false)
+      expect(sendRuntimePtyInputVerified).not.toHaveBeenCalled()
+    })
   }
 
   it('types immediately when the resolver already returns the agent name (local ps path)', async () => {

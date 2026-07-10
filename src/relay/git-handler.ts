@@ -243,22 +243,24 @@ export class GitHandler {
     this.dispatcher.onRequest('git.exec', (p, context) => this.exec(p, context))
     this.dispatcher.onRequest('git.clone', (p, context) => this.clone(p, context))
     this.dispatcher.onRequest('git.isGitRepo', (p) => this.isGitRepo(p))
-    this.dispatcher.onNotification('git.responseAck', (p) => this.responseAck(p))
-    this.dispatcher.onNotification('git.cancelResponseStream', (p) => this.cancelResponseStream(p))
+    this.dispatcher.onNotification('git.responseAck', (p, context) => this.responseAck(p, context))
+    this.dispatcher.onNotification('git.cancelResponseStream', (p, context) =>
+      this.cancelResponseStream(p, context)
+    )
   }
 
-  private responseAck(params: Record<string, unknown>): void {
+  private responseAck(params: Record<string, unknown>, context: RequestContext): void {
     const streamId = params.streamId
     const seq = params.seq
     if (typeof streamId === 'number' && typeof seq === 'number') {
-      this.responseStreams.recordAck(streamId, seq)
+      this.responseStreams.recordAck(streamId, seq, context.clientId)
     }
   }
 
-  private cancelResponseStream(params: Record<string, unknown>): void {
+  private cancelResponseStream(params: Record<string, unknown>, context: RequestContext): void {
     const streamId = params.streamId
     if (typeof streamId === 'number') {
-      this.responseStreams.abort(streamId)
+      this.responseStreams.abort(streamId, context.clientId)
     }
   }
 

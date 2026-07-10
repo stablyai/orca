@@ -77,12 +77,13 @@ type RemoteRuntimeMultiplexedTerminalState = {
   snapshotInfo: RemoteRuntimeSnapshotInfo | null
   initialSnapshotReceived: boolean
   pendingSnapshotRequest: RemoteRuntimeSnapshotRequest | null
-  // Why: Output frames carry a byte high-water `seq`; a jump past the expected
-  // next offset means the server dropped frames under websocket backpressure.
+  // Why: Output frames carry a UTF-16 offset high-water `seq`; a jump past the
+  // expected next offset means the server dropped frames under backpressure.
   // Track it so a gap triggers a self-healing snapshot resync instead of
   // silently rendering corrupt/missing output (frame-drop resync).
   expectedSeq: number | undefined
   resyncInFlight: boolean
+  resyncPendingSend: boolean
 }
 
 type RemoteRuntimeSnapshotInfo = {
@@ -159,7 +160,8 @@ class RemoteRuntimeTerminalMultiplexer {
       initialSnapshotReceived: false,
       pendingSnapshotRequest: null,
       expectedSeq: undefined,
-      resyncInFlight: false
+      resyncInFlight: false,
+      resyncPendingSend: false
     }
     this.streams.set(streamId, state)
 
@@ -344,20 +346,21 @@ class RemoteRuntimeTerminalMultiplexer {
     }
     if (frame.opcode === TerminalStreamOpcode.Output) {
       const data = decodeTerminalStreamText(frame.payload)
+      const rawLength = data.length
       // Why: a resync snapshot is authoritative; drop live output that arrives
       // while it is in flight so the corrupt post-gap tail is never rendered.
       if (stream.resyncInFlight) {
         return
       }
       const seq = typeof frame.seq === 'number' && frame.seq > 0 ? frame.seq : undefined
-      if (this.detectOutputGap(stream, seq, data.length)) {
+      if (this.detectOutputGap(stream, seq, rawLength)) {
         this.requestResyncSnapshot(stream)
         return
       }
       if (typeof seq === 'number') {
         stream.expectedSeq = seq
       }
-      stream.callbacks.onData(data, { seq, rawLength: data.length })
+      stream.callbacks.onData(data, { seq, rawLength })
       return
     }
     if (frame.opcode === TerminalStreamOpcode.SnapshotStart) {
@@ -420,32 +423,37 @@ class RemoteRuntimeTerminalMultiplexer {
         clearPendingSnapshotRequest(stream)
       }
       clearSnapshot(stream)
-      // Why: the snapshot is the new authoritative byte high-water; align the
+      // Why: the snapshot is the new authoritative output high-water; align the
       // gap detector to it and re-open the live path (used by both the initial
       // snapshot and a frame-drop resync, which reuses the 'initial' target).
       if (target === 'initial') {
         stream.expectedSeq = typeof info?.seq === 'number' ? info.seq : undefined
         stream.resyncInFlight = false
+        stream.resyncPendingSend = false
         stream.initialSnapshotReceived = true
         stream.callbacks.onSubscribed?.()
+      } else {
+        this.sendDeferredResyncSnapshot(stream)
       }
       return
     }
     if (frame.opcode === TerminalStreamOpcode.Error) {
       clearSnapshot(stream)
-      // Why: a failed resync must re-open the live path or output stalls forever.
-      stream.resyncInFlight = false
       const pendingSnapshotRequest = stream.pendingSnapshotRequest
       if (pendingSnapshotRequest) {
         clearPendingSnapshotRequest(stream)
         pendingSnapshotRequest.reject(new Error(decodeTerminalStreamText(frame.payload)))
+        this.sendDeferredResyncSnapshot(stream)
         return
       }
+      // Why: a failed resync must re-open the live path or output stalls forever.
+      stream.resyncInFlight = false
+      stream.resyncPendingSend = false
       stream.callbacks.onError?.(decodeTerminalStreamText(frame.payload))
     }
   }
 
-  // Why: Output `seq` is the byte high-water at the end of a chunk, so a chunk
+  // Why: Output `seq` is the UTF-16 high-water at the end of a chunk, so a chunk
   // that begins after the last high-water (startSeq > expectedSeq) means the
   // server dropped intervening frames under backpressure. Only flag a gap when
   // both offsets are known, and never on the first seq (nothing to compare to).
@@ -471,6 +479,24 @@ class RemoteRuntimeTerminalMultiplexer {
     }
     stream.resyncInFlight = true
     stream.expectedSeq = undefined
+    if (stream.pendingSnapshotRequest) {
+      // Why: snapshot frame groups are not multiplexed; wait for the manual
+      // snapshot to finish so its response cannot be mistaken for recovery.
+      stream.resyncPendingSend = true
+      return
+    }
+    this.sendResyncSnapshot(stream)
+  }
+
+  private sendDeferredResyncSnapshot(stream: RemoteRuntimeMultiplexedTerminalState): void {
+    if (!stream.resyncInFlight || !stream.resyncPendingSend || stream.pendingSnapshotRequest) {
+      return
+    }
+    this.sendResyncSnapshot(stream)
+  }
+
+  private sendResyncSnapshot(stream: RemoteRuntimeMultiplexedTerminalState): void {
+    stream.resyncPendingSend = false
     const sent = this.sendFrame(
       stream.streamId,
       TerminalStreamOpcode.SnapshotRequest,
@@ -495,6 +521,11 @@ class RemoteRuntimeTerminalMultiplexer {
     if (this.streams.get(stream.streamId) !== stream || !this.ready || !this.subscription) {
       return Promise.resolve(null)
     }
+    // Initial/recovery replay already owns the snapshot frame lane; callers can
+    // retry afterward instead of racing two untagged snapshot frame groups.
+    if (!stream.initialSnapshotReceived || stream.resyncInFlight) {
+      return Promise.resolve(null)
+    }
     if (stream.pendingSnapshotRequest) {
       return Promise.reject(new Error('Remote terminal snapshot already in flight.'))
     }
@@ -502,8 +533,9 @@ class RemoteRuntimeTerminalMultiplexer {
     return new Promise((resolve, reject) => {
       const timer = setTimeout(() => {
         if (stream.pendingSnapshotRequest?.timer === timer) {
-          stream.pendingSnapshotRequest = null
+          clearPendingSnapshotRequest(stream)
           reject(new Error('Remote terminal snapshot timed out.'))
+          this.sendDeferredResyncSnapshot(stream)
         }
       }, REMOTE_TERMINAL_SNAPSHOT_REQUEST_TIMEOUT_MS)
       if (typeof timer.unref === 'function') {

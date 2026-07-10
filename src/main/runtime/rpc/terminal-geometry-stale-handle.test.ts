@@ -151,4 +151,72 @@ describe('terminal geometry family still mutates the live PTY for a fresh handle
       undefined
     )
   })
+
+  it('terminal.setDisplayMode mutates the resolved PTY when the handle is live', async () => {
+    const setMobileDisplayMode = vi.fn()
+    const applyMobileDisplayMode = vi.fn().mockResolvedValue(undefined)
+    const updateMobileSubscriberViewport = vi.fn()
+    const markMobileActor = vi.fn()
+    const runtime = {
+      getRuntimeId: () => 'test-runtime',
+      resolveLiveLeafForHandle: vi.fn().mockReturnValue({ ptyId: 'pty-a' }),
+      setMobileDisplayMode,
+      applyMobileDisplayMode,
+      updateMobileSubscriberViewport,
+      markMobileActor,
+      getLayout: vi.fn().mockReturnValue({ seq: 42 })
+    } as unknown as OrcaRuntimeService
+    const dispatcher = new RpcDispatcher({ runtime, methods: TERMINAL_METHODS })
+
+    const response = await dispatcher.dispatch(
+      makeRequest('terminal.setDisplayMode', {
+        terminal: 'live-terminal',
+        mode: 'auto',
+        client: { id: 'client-1', type: 'mobile' },
+        viewport: { cols: 80, rows: 24 }
+      })
+    )
+
+    expect(response.ok).toBe(true)
+    if (!response.ok) {
+      throw new Error(response.error.message)
+    }
+    expect(updateMobileSubscriberViewport).toHaveBeenCalledWith('pty-a', 'client-1', {
+      cols: 80,
+      rows: 24
+    })
+    expect(markMobileActor).toHaveBeenCalledWith('pty-a', 'client-1')
+    expect(setMobileDisplayMode).toHaveBeenCalledWith('pty-a', 'auto')
+    expect(applyMobileDisplayMode).toHaveBeenCalledWith('pty-a')
+    expect(response.result).toEqual({ mode: 'auto', seq: 42 })
+  })
+
+  it('terminal.updateViewport updates the resolved PTY when the handle is live', async () => {
+    const updateMobileViewport = vi.fn().mockResolvedValue({ updated: true, applied: true })
+    const runtime = {
+      getRuntimeId: () => 'test-runtime',
+      resolveLiveLeafForHandle: vi.fn().mockReturnValue({ ptyId: 'pty-a' }),
+      updateMobileViewport,
+      getLayout: vi.fn().mockReturnValue({ seq: 7 })
+    } as unknown as OrcaRuntimeService
+    const dispatcher = new RpcDispatcher({ runtime, methods: TERMINAL_METHODS })
+
+    const response = await dispatcher.dispatch(
+      makeRequest('terminal.updateViewport', {
+        terminal: 'live-terminal',
+        client: { id: 'client-1', type: 'mobile' },
+        viewport: { cols: 80, rows: 24 }
+      })
+    )
+
+    expect(response.ok).toBe(true)
+    if (!response.ok) {
+      throw new Error(response.error.message)
+    }
+    expect(updateMobileViewport).toHaveBeenCalledWith('pty-a', 'client-1', {
+      cols: 80,
+      rows: 24
+    })
+    expect(response.result).toEqual({ updated: true, applied: true, seq: 7 })
+  })
 })

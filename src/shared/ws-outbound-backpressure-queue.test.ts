@@ -115,4 +115,14 @@ describe('ws outbound backpressure queue', () => {
     expect(h.sent).toEqual([])
     expect(h.queue.queuedBytes()).toBe(0)
   })
+
+  it('does not fast-path a frame while the socket is unwritable', () => {
+    const h = createHarness({ writable: false })
+
+    h.queue.enqueue('data')
+
+    expect(h.sent).toEqual([])
+    expect(h.queue.queuedBytes()).toBe('data'.length)
+    expect(h.hasTimer()).toBe(true)
+  })
 })

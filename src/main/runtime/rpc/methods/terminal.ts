@@ -1237,7 +1237,7 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
         if (closed) {
           return false
         }
-        // Why: Output `seq` is a byte high-water the client uses for frame-drop
+        // Why: Output `seq` is a UTF-16 high-water the client uses for frame-drop
         // gap detection, so a seq-less Output chunk must carry the sentinel 0
         // (== "no seq") rather than the cursor value that orders control frames;
         // a cursor value would poison the client's expected-seq tracker.

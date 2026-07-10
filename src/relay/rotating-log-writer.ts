@@ -64,7 +64,11 @@ export class RotatingLogWriter {
     if (!this.active || this.fd === null) {
       return
     }
-    const buf = typeof chunk === 'string' ? Buffer.from(chunk, 'utf-8') : Buffer.from(chunk)
+    const encoded = typeof chunk === 'string' ? Buffer.from(chunk, 'utf-8') : Buffer.from(chunk)
+    // Why: one pathological log write must not bypass the disk cap. Preserve
+    // the newest tail because it carries the most useful failure context.
+    const buf =
+      encoded.length > this.maxBytes ? encoded.subarray(encoded.length - this.maxBytes) : encoded
     try {
       // Rotate BEFORE writing when the incoming write would cross the cap, so a
       // single large line still lands wholly in the fresh file.

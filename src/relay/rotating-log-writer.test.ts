@@ -66,6 +66,18 @@ describe('RotatingLogWriter', () => {
     }
   })
 
+  it('bounds a single oversized log write and keeps its newest tail', () => {
+    const cap = 1024
+    const writer = new RotatingLogWriter(logPath, cap)
+    try {
+      writer.write(`${'old'.repeat(1000)}LATEST-CONTEXT`)
+      expect(statSync(logPath).size).toBeLessThanOrEqual(cap)
+      expect(readFileSync(logPath, 'utf-8')).toContain('LATEST-CONTEXT')
+    } finally {
+      writer.dispose()
+    }
+  })
+
   it('caps total footprint to ~2x maxBytes (current + one archive)', () => {
     const cap = 8 * 1024
     const writer = new RotatingLogWriter(logPath, cap)
@@ -78,7 +90,7 @@ describe('RotatingLogWriter', () => {
       const archiveSize = existsSync(`${logPath}.1`) ? statSync(`${logPath}.1`).size : 0
       // Never more than the current file + a single archived generation.
       expect(currentSize).toBeLessThanOrEqual(cap)
-      expect(archiveSize).toBeLessThanOrEqual(cap * 2)
+      expect(archiveSize).toBeLessThanOrEqual(cap)
       expect(existsSync(`${logPath}.2`)).toBe(false)
     } finally {
       writer.dispose()
@@ -106,12 +118,14 @@ describe('RotatingLogWriter', () => {
     }
   })
 
-  it('installRelayLogRotation routes process.stderr through the rotator and restores', () => {
+  it('installRelayLogRotation routes stdout/stderr through the rotator and restores', () => {
     const cap = 2 * 1024
     const { restore } = installRelayLogRotation(logPath, cap)
     try {
       process.stderr.write('via-stderr-line\n')
+      process.stdout.write('via-stdout-line\n')
       expect(readFileSync(logPath, 'utf-8')).toContain('via-stderr-line')
+      expect(readFileSync(logPath, 'utf-8')).toContain('via-stdout-line')
     } finally {
       restore()
     }
@@ -125,5 +139,23 @@ describe('RotatingLogWriter', () => {
       spy.mockRestore()
     }
     expect(statSync(logPath).size).toBe(sizeAfterRestore)
+  })
+
+  it('leaves the original streams active when the log cannot be opened', () => {
+    mkdirSync(logPath)
+    const stdout = vi.spyOn(process.stdout, 'write').mockReturnValue(true)
+    const stderr = vi.spyOn(process.stderr, 'write').mockReturnValue(true)
+    try {
+      const { writer, restore } = installRelayLogRotation(logPath)
+      expect(writer.active).toBe(false)
+      process.stdout.write('stdout fallback\n')
+      process.stderr.write('stderr fallback\n')
+      expect(stdout).toHaveBeenCalledWith('stdout fallback\n')
+      expect(stderr).toHaveBeenCalledWith('stderr fallback\n')
+      restore()
+    } finally {
+      stdout.mockRestore()
+      stderr.mockRestore()
+    }
   })
 })

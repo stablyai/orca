@@ -154,7 +154,13 @@ export function requestGitStreamable(
       armInactivity()
       // Why: credit-based flow control — the relay caps unacked chunks so a big
       // response cannot queue unbounded ahead of interactive pty.data frames.
-      mux.notify('git.responseAck', { streamId: streamIdRef.current, seq })
+      if (!mux.isDisposed()) {
+        try {
+          mux.notify('git.responseAck', { streamId: streamIdRef.current, seq })
+        } catch {
+          // Disposal can race the check; the ACK is best-effort during teardown.
+        }
+      }
     }
 
     const handleEnd = (p: Record<string, unknown>): void => {

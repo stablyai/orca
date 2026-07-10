@@ -76,11 +76,21 @@ export type GitResponseStreamMarker = {
 }
 
 export function isGitResponseStreamMarker(value: unknown): value is GitResponseStreamMarker {
+  if (typeof value !== 'object' || value === null || !('__orcaGitResponseStream' in value)) {
+    return false
+  }
+  const marker = (value as { __orcaGitResponseStream?: unknown }).__orcaGitResponseStream
+  if (typeof marker !== 'object' || marker === null) {
+    return false
+  }
+  const fields = marker as Record<string, unknown>
   return (
-    typeof value === 'object' &&
-    value !== null &&
-    typeof (value as GitResponseStreamMarker).__orcaGitResponseStream === 'object' &&
-    (value as GitResponseStreamMarker).__orcaGitResponseStream !== null
+    Number.isInteger(fields.streamId) &&
+    (fields.streamId as number) > 0 &&
+    Number.isInteger(fields.totalBytes) &&
+    (fields.totalBytes as number) >= 0 &&
+    Number.isInteger(fields.chunkCount) &&
+    (fields.chunkCount as number) >= 0
   )
 }
 

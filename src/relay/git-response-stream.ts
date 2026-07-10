@@ -12,6 +12,7 @@ import {
 } from './protocol'
 
 type GitResponseStreamEntry = {
+  ownerClientId: number
   aborted: boolean
   /** Highest chunk seq the client acknowledged (in-order; -1 = none yet). */
   ackedThroughSeq: number
@@ -33,15 +34,25 @@ export class GitResponseStreamRegistry {
   private streams = new Map<number, GitResponseStreamEntry>()
   private nextId = 1
 
-  private register(): number {
+  private register(ownerClientId: number): number {
     const streamId = this.nextId++
-    this.streams.set(streamId, { aborted: false, ackedThroughSeq: -1, ackWaiters: new Set() })
+    this.streams.set(streamId, {
+      ownerClientId,
+      aborted: false,
+      ackedThroughSeq: -1,
+      ackWaiters: new Set()
+    })
     return streamId
   }
 
-  recordAck(streamId: number, seq: number): void {
+  recordAck(streamId: number, seq: number, clientId: number): void {
     const entry = this.streams.get(streamId)
-    if (!entry || typeof seq !== 'number' || !Number.isFinite(seq)) {
+    if (
+      !entry ||
+      entry.ownerClientId !== clientId ||
+      typeof seq !== 'number' ||
+      !Number.isFinite(seq)
+    ) {
       return
     }
     if (seq > entry.ackedThroughSeq) {
@@ -50,9 +61,9 @@ export class GitResponseStreamRegistry {
     this.wake(entry)
   }
 
-  abort(streamId: number): void {
+  abort(streamId: number, clientId: number): void {
     const entry = this.streams.get(streamId)
-    if (entry) {
+    if (entry?.ownerClientId === clientId) {
       entry.aborted = true
       this.wake(entry)
     }
@@ -104,7 +115,7 @@ export class GitResponseStreamRegistry {
     dispatcher: RelayDispatcher,
     context: RequestContext
   ): GitResponseStreamMarker {
-    const streamId = this.register()
+    const streamId = this.register(context.clientId)
     const chunks = encodeChunks(payload)
     // Why: kick the pump off the response task so the client sees the sentinel
     // (and can subscribe/reassemble) before the first chunk frame arrives.
@@ -167,14 +178,18 @@ export class GitResponseStreamRegistry {
         )
       }
       if (endReason === 'end') {
-        dispatcher.notify('git.responseEnd', { streamId })
+        await dispatcher.notifyBulk('git.responseEnd', { streamId }, { clientId })
       }
     } catch (err) {
       if (!context.isStale() && !entry.aborted) {
-        dispatcher.notify('git.responseError', {
-          streamId,
-          message: err instanceof Error ? err.message : String(err)
-        })
+        await dispatcher.notifyBulk(
+          'git.responseError',
+          {
+            streamId,
+            message: err instanceof Error ? err.message : String(err)
+          },
+          { clientId }
+        )
       }
     } finally {
       this.streams.delete(streamId)
@@ -182,8 +197,9 @@ export class GitResponseStreamRegistry {
   }
 
   disposeAll(): void {
-    for (const id of Array.from(this.streams.keys())) {
-      this.abort(id)
+    for (const entry of this.streams.values()) {
+      entry.aborted = true
+      this.wake(entry)
     }
     this.streams.clear()
   }

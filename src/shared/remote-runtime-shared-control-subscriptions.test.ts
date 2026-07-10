@@ -101,4 +101,50 @@ describe('closeSharedControlLogicalSubscription — replay-window leak', () => {
     expect(request).not.toHaveBeenCalled()
     expect(subscriptions.size).toBe(0)
   })
+
+  it('finishes a deferred close locally when replay returns an error', () => {
+    const { subscriptions, subscription } = makeSubscriptions()
+    subscription.sent = true
+    subscription.remoteSubscriptionId = 'server-sub-1'
+    replaySharedControlSubscriptions({ subscriptions, send: vi.fn(), tagReplayedResponses: true })
+
+    const request = vi.fn()
+    closeSharedControlLogicalSubscription({ subscriptions, subscription, request })
+    handleSharedControlLogicalResponse({
+      subscriptions,
+      subscription,
+      response: {
+        ok: false,
+        id: 'req-1',
+        error: { code: 'replay_failed', message: 'replay failed' }
+      } as RuntimeRpcResponse<unknown>,
+      request
+    })
+
+    expect(request).not.toHaveBeenCalled()
+    expect(subscriptions.size).toBe(0)
+  })
+
+  it('does not leave a later close waiting after replay already failed', () => {
+    const { subscriptions, subscription } = makeSubscriptions()
+    subscription.sent = true
+    subscription.remoteSubscriptionId = 'server-sub-1'
+    replaySharedControlSubscriptions({ subscriptions, send: vi.fn(), tagReplayedResponses: true })
+
+    handleSharedControlLogicalResponse({
+      subscriptions,
+      subscription,
+      response: {
+        ok: false,
+        id: 'req-1',
+        error: { code: 'replay_failed', message: 'replay failed' }
+      } as RuntimeRpcResponse<unknown>,
+      request: vi.fn()
+    })
+
+    const request = vi.fn()
+    closeSharedControlLogicalSubscription({ subscriptions, subscription, request })
+    expect(request).not.toHaveBeenCalled()
+    expect(subscriptions.size).toBe(0)
+  })
 })

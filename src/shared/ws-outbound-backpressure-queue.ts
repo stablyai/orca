@@ -68,6 +68,7 @@ export function createWsOutboundBackpressureQueue<TFrame>(
   }
 
   const queue: { frame: TFrame; bytes: number }[] = []
+  let queueHead = 0
   let queued = 0
   let timer: ReturnType<typeof setTimeout> | null = null
   let overflowed = false
@@ -82,6 +83,7 @@ export function createWsOutboundBackpressureQueue<TFrame>(
 
   const dropBacklog = (): void => {
     queue.length = 0
+    queueHead = 0
     queued = 0
     stopTimer()
   }
@@ -97,14 +99,18 @@ export function createWsOutboundBackpressureQueue<TFrame>(
       dropBacklog()
       return
     }
-    while (queue.length > 0 && bufferedAmount() <= softCapBytes) {
-      const entry = queue.shift()!
+    while (queueHead < queue.length && bufferedAmount() <= softCapBytes) {
+      const entry = queue[queueHead++]
       queued -= entry.bytes
       options.send(entry.frame)
     }
-    if (queue.length > 0) {
+    if (queueHead < queue.length) {
       timer = setTimer(drain, drainPollMs)
     } else {
+      // Why: resetting the drained array keeps enqueue/drain O(1) per frame;
+      // repeated Array.shift() would make recovery from a large backlog O(n²).
+      queue.length = 0
+      queueHead = 0
       stopTimer()
     }
   }
@@ -115,7 +121,7 @@ export function createWsOutboundBackpressureQueue<TFrame>(
         return
       }
       // Fast path: nothing parked and the wire is under the cap — send directly.
-      if (queue.length === 0 && bufferedAmount() <= softCapBytes) {
+      if (queueHead === queue.length && options.isWritable() && bufferedAmount() <= softCapBytes) {
         options.send(frame)
         return
       }

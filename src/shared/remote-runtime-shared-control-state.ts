@@ -149,14 +149,18 @@ export function handleSharedControlSubscriptionResponse(
   subscription: SharedControlLogicalSubscription<unknown>,
   response: RuntimeRpcResponse<unknown>
 ): void {
+  // The replay window ends on either success or error. An error created no
+  // remote subscription, so a later close must finish locally instead of
+  // waiting forever for an id that will never arrive.
+  subscription.awaitingResubscribe = false
+  if (!response.ok) {
+    subscription.sent = false
+  }
   if (response.ok) {
     const subscriptionId = getSubscriptionId(response.result)
     if (subscriptionId) {
       subscription.remoteSubscriptionId = subscriptionId
     }
-    // Why: the resubscribe landed — the id-less replay window is over, so a
-    // later close cleans up by id through the normal path.
-    subscription.awaitingResubscribe = false
   }
   let delivered = response
   if (subscription.pendingReplayTag) {
