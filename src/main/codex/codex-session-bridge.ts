@@ -1,13 +1,4 @@
-import {
-  copyFileSync,
-  existsSync,
-  linkSync,
-  lstatSync,
-  mkdirSync,
-  readlinkSync,
-  renameSync,
-  rmSync
-} from 'node:fs'
+import { existsSync, lstatSync, mkdirSync, readlinkSync, renameSync, rmSync } from 'node:fs'
 import { dirname, isAbsolute, join, relative, sep } from 'node:path'
 import { getOrcaManagedCodexHomePath, getSystemCodexHomePath } from './codex-home-paths'
 import {
@@ -21,6 +12,12 @@ import {
   readLegacyCopiedSessionMarker,
   writeLegacyCopiedSessionMarker
 } from './codex-session-copy-markers'
+import {
+  migrateLegacyCopiedSessionBridge,
+  refreshCopiedSessionBridgeIfSourceGrew,
+  tryCopySystemCodexSessionFile,
+  tryHardlinkSystemCodexSessionFile
+} from './codex-session-bridge-link'
 
 export type { CodexSessionBridgeIncrementalOptions } from './codex-session-file-listing'
 
@@ -136,8 +133,18 @@ function bridgeSystemCodexSessionFile(
     ) {
       return true
     }
-    migrateLegacyCopiedSessionBridge(systemSessionFilePath, managedSessionFilePath, relativePath)
-    return false
+    if (
+      migrateLegacyCopiedSessionBridge(systemSessionFilePath, managedSessionFilePath, relativePath)
+    ) {
+      return true
+    }
+    // Why: hardlink failure leaves a copy. When the system session appends,
+    // refresh the managed copy so Codex resume is not stuck on a truncated log.
+    return refreshCopiedSessionBridgeIfSourceGrew(
+      systemSessionFilePath,
+      managedSessionFilePath,
+      relativePath
+    )
   }
   mkdirSync(dirname(managedSessionFilePath), { recursive: true })
   return linkSystemCodexSessionFile(systemSessionFilePath, managedSessionFilePath, relativePath)
@@ -158,39 +165,6 @@ function linkSystemCodexSessionFile(
   // Why: Codex resume ignores symlinks; cross-volume hardlink failure must
   // copy so the managed home still has a resume-visible regular file.
   return tryCopySystemCodexSessionFile(sourcePath, targetPath, relativePath)
-}
-
-/**
- * Attempts a hardlink so resume sees one physical JSONL session log.
- */
-function tryHardlinkSystemCodexSessionFile(sourcePath: string, targetPath: string): boolean {
-  try {
-    // Why: Codex resume ignores symlinked JSONL sessions, while a hardlink
-    // preserves one physical log without copy divergence.
-    linkSync(sourcePath, targetPath)
-    return true
-  } catch {
-    return false
-  }
-}
-
-/**
- * Copies a session file and records a marker so later scans can keep the copy
- * coherent until a hardlink migration succeeds.
- */
-function tryCopySystemCodexSessionFile(
-  sourcePath: string,
-  targetPath: string,
-  relativePath: string
-): boolean {
-  try {
-    copyFileSync(sourcePath, targetPath)
-    writeLegacyCopiedSessionMarker(relativePath, sourcePath, targetPath)
-    return true
-  } catch (error) {
-    console.warn('[codex-session-bridge] Failed to copy system Codex session:', sourcePath, error)
-    return false
-  }
 }
 
 /**
@@ -242,48 +216,6 @@ function replaceSymlinkSessionBridgeWithHardlink(
     }
   }
   return false
-}
-
-/**
- * Migrates a legacy copied bridge to a hardlink when the copied file still
- * matches its marker. Leaves the copy in place when hardlink is unavailable.
- */
-function migrateLegacyCopiedSessionBridge(
-  sourcePath: string,
-  targetPath: string,
-  relativePath: string
-): void {
-  const marker = readLegacyCopiedSessionMarker(relativePath)
-  if (!marker || marker.sourcePath !== sourcePath) {
-    return
-  }
-  let replacementPath: string | null = null
-  try {
-    const targetStat = lstatSync(targetPath)
-    if (targetStat.isSymbolicLink()) {
-      clearLegacyCopiedSessionMarker(relativePath)
-      return
-    }
-    if (!fileStatsMatchMarker(targetStat, marker, 'target')) {
-      return
-    }
-    replacementPath = `${targetPath}.orca-link-${process.pid}-${Date.now()}`
-    if (!tryHardlinkSystemCodexSessionFile(sourcePath, replacementPath)) {
-      return
-    }
-    rmSync(targetPath, { force: true })
-    renameSync(replacementPath, targetPath)
-    clearLegacyCopiedSessionMarker(relativePath)
-  } catch (error) {
-    console.warn(
-      '[codex-session-bridge] Failed to migrate copied system Codex session:',
-      sourcePath,
-      error
-    )
-    if (replacementPath) {
-      rmSync(replacementPath, { force: true })
-    }
-  }
 }
 
 /**

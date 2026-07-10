@@ -147,6 +147,19 @@ export function releaseAgentStartupDeliveryAttempt(args: {
   releaseAgentStartupDeliveryConsumed(deliveryKey(args))
 }
 
+function requeueFailedAgentStartupDelivery(
+  key: string,
+  delivery: PendingAgentStartupDelivery
+): void {
+  releaseAgentStartupDeliveryAttempt(delivery)
+  // Why: beginAgentStartupDeliveryAttempt removed the entry; put it back so
+  // the next store subscription / readiness path can try again.
+  if (!isAgentStartupDeliveryConsumed(key)) {
+    pendingAgentStartupDeliveries.set(key, delivery)
+    ensurePendingAgentStartupSubscription()
+  }
+}
+
 function flushPendingAgentStartupDeliveries(): void {
   const state = useAppStore.getState()
   for (const [key, delivery] of pendingAgentStartupDeliveries) {
@@ -172,18 +185,19 @@ function flushPendingAgentStartupDeliveries(): void {
     }
     // Why: once the launch-bound PTY exists, the bounded readiness/paste path
     // owns success or failure. Consume before awaiting so store churn cannot
-    // duplicate a linked-work-item draft; release on failed paste so Codex
-    // (and other cautious agents) can retry when readiness was premature.
+    // duplicate a linked-work-item draft; on failed paste release the guard
+    // *and* re-queue so a later readiness tick can retry (release alone left
+    // nothing in the pending map and the prompt was silently dropped).
     if (beginAgentStartupDeliveryAttempt(delivery)) {
       void delivery
         .deliver(tabId, ptyId, delivery.startup)
         .then((delivered) => {
           if (delivered === false) {
-            releaseAgentStartupDeliveryAttempt(delivery)
+            requeueFailedAgentStartupDelivery(key, delivery)
           }
         })
         .catch((error) => {
-          releaseAgentStartupDeliveryAttempt(delivery)
+          requeueFailedAgentStartupDelivery(key, delivery)
           console.warn('Queued agent startup delivery failed', error)
         })
     }

@@ -1,5 +1,13 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { existsSync, mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import {
+  existsSync,
+  lstatSync,
+  mkdtempSync,
+  mkdirSync,
+  readFileSync,
+  rmSync,
+  writeFileSync
+} from 'node:fs'
 import { tmpdir } from 'node:os'
 import type * as NodeOs from 'node:os'
 import { join } from 'node:path'
@@ -246,7 +254,7 @@ describe('syncSystemConfigIntoManagedCodexHome', () => {
     )
   })
 
-  it('links free-standing profile-v2 *.config.toml overlays into the runtime home', () => {
+  it('mirrors free-standing profile-v2 *.config.toml overlays into the runtime home', () => {
     writeFileSync(getSystemConfigPath(), 'model = "system-model"\n', 'utf-8')
     const systemOverlayPath = join(getSystemCodexHomePath(), 'work.config.toml')
     writeFileSync(systemOverlayPath, 'model = "work-profile"\n', 'utf-8')
@@ -255,7 +263,21 @@ describe('syncSystemConfigIntoManagedCodexHome', () => {
 
     const runtimeOverlayPath = join(userDataDir, 'codex-runtime-home', 'home', 'work.config.toml')
     expect(existsSync(runtimeOverlayPath)).toBe(true)
+    expect(lstatSync(runtimeOverlayPath).isSymbolicLink()).toBe(false)
     expect(readFileSync(runtimeOverlayPath, 'utf-8')).toBe('model = "work-profile"\n')
+  })
+
+  it('rewrites relative path keys in profile-v2 overlays against system CODEX_HOME', () => {
+    writeFileSync(getSystemConfigPath(), 'model = "system-model"\n', 'utf-8')
+    const systemOverlayPath = join(getSystemCodexHomePath(), 'work.config.toml')
+    writeFileSync(systemOverlayPath, 'log_dir = "logs"\nmodel = "work-profile"\n', 'utf-8')
+
+    syncSystemConfigIntoManagedCodexHome()
+
+    const runtimeOverlayPath = join(userDataDir, 'codex-runtime-home', 'home', 'work.config.toml')
+    const overlay = readFileSync(runtimeOverlayPath, 'utf-8')
+    expect(overlay).toContain(`log_dir = '${join(getSystemCodexHomePath(), 'logs')}'`)
+    expect(overlay).toContain('model = "work-profile"')
   })
 
   it('does not treat lines inside multiline arrays as headers or path keys', () => {

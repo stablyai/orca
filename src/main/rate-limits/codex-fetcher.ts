@@ -548,7 +548,9 @@ export function normalizeCodexBackendBaseUrl(raw: string | null | undefined): st
       const path = url.pathname.replace(/\/+$/, '')
       return `${url.origin}${path === '' || path === '/' ? '' : path}/backend-api`
     }
-    return `${url.origin}${url.pathname.replace(/\/+$/, '') || ''}`.replace(/\/+$/, '') || url.origin
+    return (
+      `${url.origin}${url.pathname.replace(/\/+$/, '') || ''}`.replace(/\/+$/, '') || url.origin
+    )
   } catch {
     return trimmed
   }
@@ -588,6 +590,32 @@ async function readCodexChatGptBaseUrl(codexHomePath?: string | null): Promise<s
 async function resolveCodexBackendBaseUrl(codexHomePath?: string | null): Promise<string> {
   const fromConfig = await readCodexChatGptBaseUrl(codexHomePath)
   return normalizeCodexBackendBaseUrl(fromConfig)
+}
+
+
+// Why: Codex reports remaining minutes in `windowDurationMins` for known
+// primary/secondary meters. Snap that remaining value up to the smallest
+// standard window that can contain it so additional limit_ids are not all
+// forced to 5h/weekly when the API says otherwise.
+const STANDARD_WINDOW_MINUTES = [5, 15, 60, 300, 1440, 10080, 43200] as const
+
+function inferAdditionalWindowMinutes(
+  reportedRemainingMins: number | undefined,
+  fallback: number
+): number {
+  if (
+    typeof reportedRemainingMins !== 'number' ||
+    !Number.isFinite(reportedRemainingMins) ||
+    reportedRemainingMins < 0
+  ) {
+    return fallback
+  }
+  for (const window of STANDARD_WINDOW_MINUTES) {
+    if (reportedRemainingMins <= window) {
+      return window
+    }
+  }
+  return Math.max(fallback, Math.ceil(reportedRemainingMins))
 }
 
 function preferredRpcRateLimitSnapshot(
@@ -651,11 +679,20 @@ function mapRpcRateLimitsPayload(wrapper: RpcRateLimitsResponse | undefined): {
       continue
     }
     const name = limitSnapshotDisplayName(id, snapshot)
-    const primary = mapRpcWindow(snapshot.primary, 300)
+    // Why: additional meters are not guaranteed to be 5h/weekly. Prefer the
+    // API's windowDurationMins (snapped to a standard window) over forcing the
+    // preferred-plan labels onto every limit_id.
+    const primary = mapRpcWindow(
+      snapshot.primary,
+      inferAdditionalWindowMinutes(snapshot.primary?.windowDurationMins, 300)
+    )
     if (primary) {
       buckets.push({ name, ...primary })
     }
-    const secondary = mapRpcWindow(snapshot.secondary, 10080)
+    const secondary = mapRpcWindow(
+      snapshot.secondary,
+      inferAdditionalWindowMinutes(snapshot.secondary?.windowDurationMins, 10080)
+    )
     if (secondary) {
       buckets.push({ name: `${name} weekly`, ...secondary })
     }

@@ -394,6 +394,26 @@ describe('syncSystemCodexSessionsIntoManagedHome', () => {
     expect(readFileSync(runtimeSessionPath, 'utf-8')).toBe('{"id":"legacy"}\n')
   })
 
+  it('refreshes a copied session when the system source appends after hardlink failure', () => {
+    // Why: cross-volume copy is a snapshot; Codex may keep writing the system
+    // log. Re-sync so resume does not stay on a truncated managed copy.
+    fsMockState.failLink = true
+    const relativeSessionPath = join('2026', '05', '26', 'rollout-copy-append.jsonl')
+    const systemSessionPath = join(getSystemCodexHomePath(), 'sessions', relativeSessionPath)
+    const runtimeSessionPath = join(getRuntimeCodexHomePath(), 'sessions', relativeSessionPath)
+    mkdirSync(dirname(systemSessionPath), { recursive: true })
+    writeFileSync(systemSessionPath, '{"id":"line-1"}\n', 'utf-8')
+
+    syncSystemCodexSessionsIntoManagedHome()
+    expect(readFileSync(runtimeSessionPath, 'utf-8')).toBe('{"id":"line-1"}\n')
+
+    writeFileSync(systemSessionPath, '{"id":"line-1"}\n{"id":"line-2"}\n', 'utf-8')
+    syncSystemCodexSessionsIntoManagedHome()
+
+    expect(lstatSync(runtimeSessionPath).isSymbolicLink()).toBe(false)
+    expect(readFileSync(runtimeSessionPath, 'utf-8')).toBe('{"id":"line-1"}\n{"id":"line-2"}\n')
+  })
+
   it('incrementally bridges session files without requiring the synchronous launch path', async () => {
     const systemSessionRoot = join(getSystemCodexHomePath(), 'sessions', '2026', '06', '18')
     mkdirSync(systemSessionRoot, { recursive: true })

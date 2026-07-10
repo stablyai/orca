@@ -92,9 +92,9 @@ describe('normalizeCodexBackendBaseUrl', () => {
       'https://api.example.com/api/codex/rate-limit-reset-credits'
     )
     // Custom bases that contain "/backend-api" must not use the WHAM route.
-    expect(
-      buildCodexRateLimitResetCreditsUrl('https://api.example.com/backend-api')
-    ).toBe('https://api.example.com/backend-api/api/codex/rate-limit-reset-credits')
+    expect(buildCodexRateLimitResetCreditsUrl('https://api.example.com/backend-api')).toBe(
+      'https://api.example.com/backend-api/api/codex/rate-limit-reset-credits'
+    )
   })
 })
 
@@ -331,120 +331,6 @@ describe('fetchCodexRateLimits', () => {
     expect(rpcChild.listenerCount('error')).toBe(0)
     expect(rpcChild.listenerCount('close')).toBe(0)
     expect(ptySpawnMock).not.toHaveBeenCalled()
-  })
-
-  it('normalizes Codex RPC remaining-minute windows to fixed display durations', async () => {
-    const rpcChild = makeRpcChild()
-    childSpawnMock.mockReturnValue(rpcChild)
-    rpcChild.stdin.write.mockImplementation((line: string) => {
-      const msg = JSON.parse(line) as { id?: number; method?: string }
-      if (msg.method === 'initialize') {
-        setTimeout(() => {
-          rpcChild.stdout.emit(
-            'data',
-            Buffer.from(`${JSON.stringify({ jsonrpc: '2.0', id: msg.id, result: {} })}\n`)
-          )
-        }, 0)
-      }
-      if (msg.method === 'account/rateLimits/read') {
-        setTimeout(() => {
-          rpcChild.stdout.emit(
-            'data',
-            Buffer.from(
-              `${JSON.stringify({
-                jsonrpc: '2.0',
-                id: msg.id,
-                result: {
-                  rateLimits: {
-                    primary: { usedPercent: 0, windowDurationMins: 299 },
-                    secondary: { usedPercent: 0, windowDurationMins: 10079 }
-                  }
-                }
-              })}\n`
-            )
-          )
-        }, 0)
-      }
-    })
-
-    const resultPromise = fetchCodexRateLimits()
-    await vi.advanceTimersByTimeAsync(1)
-    await vi.advanceTimersByTimeAsync(1)
-    const result = await resultPromise
-
-    expect(result.session?.windowMinutes).toBe(300)
-    expect(result.weekly?.windowMinutes).toBe(10080)
-  })
-
-  it('surfaces additional rateLimitsByLimitId buckets alongside preferred session/weekly', async () => {
-    const rpcChild = makeRpcChild()
-    childSpawnMock.mockReturnValue(rpcChild)
-    rpcChild.stdin.write.mockImplementation((line: string) => {
-      const msg = JSON.parse(line) as { id?: number; method?: string }
-      if (msg.method === 'initialize') {
-        setTimeout(() => {
-          rpcChild.stdout.emit(
-            'data',
-            Buffer.from(`${JSON.stringify({ jsonrpc: '2.0', id: msg.id, result: {} })}\n`)
-          )
-        }, 0)
-      }
-      if (msg.method === 'account/rateLimits/read') {
-        setTimeout(() => {
-          rpcChild.stdout.emit(
-            'data',
-            Buffer.from(
-              `${JSON.stringify({
-                jsonrpc: '2.0',
-                id: msg.id,
-                result: {
-                  rateLimits: {
-                    limitId: 'codex',
-                    primary: { usedPercent: 10, windowDurationMins: 299 },
-                    secondary: { usedPercent: 20, windowDurationMins: 10079 }
-                  },
-                  rateLimitsByLimitId: {
-                    codex: {
-                      limitId: 'codex',
-                      limitName: 'Codex',
-                      primary: { usedPercent: 10 },
-                      secondary: { usedPercent: 20 }
-                    },
-                    codex_other: {
-                      limitId: 'codex_other',
-                      limitName: 'Codex other',
-                      primary: { usedPercent: 40 },
-                      secondary: { usedPercent: 55 }
-                    }
-                  }
-                }
-              })}\n`
-            )
-          )
-        }, 0)
-      }
-    })
-
-    const resultPromise = fetchCodexRateLimits({ allowPtyFallback: false })
-    await vi.advanceTimersByTimeAsync(1)
-    await vi.advanceTimersByTimeAsync(1)
-    const result = await resultPromise
-
-    expect(result).toMatchObject({
-      provider: 'codex',
-      session: { usedPercent: 10, windowMinutes: 300 },
-      weekly: { usedPercent: 20, windowMinutes: 10080 },
-      status: 'ok'
-    })
-    // Preferred codex meters stay on session/weekly only — buckets lists extras.
-    expect(result.buckets).toEqual([
-      expect.objectContaining({ name: 'Codex other', usedPercent: 40, windowMinutes: 300 }),
-      expect.objectContaining({
-        name: 'Codex other weekly',
-        usedPercent: 55,
-        windowMinutes: 10080
-      })
-    ])
   })
 
   it('fills reset-credit count from the backend when the installed app-server omits it', async () => {

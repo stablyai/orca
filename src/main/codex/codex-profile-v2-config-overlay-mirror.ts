@@ -1,15 +1,8 @@
-import {
-  cpSync,
-  existsSync,
-  lstatSync,
-  readdirSync,
-  readlinkSync,
-  rmSync,
-  symlinkSync,
-  unlinkSync
-} from 'node:fs'
+import { existsSync, lstatSync, readdirSync, readFileSync, rmSync, unlinkSync } from 'node:fs'
 import { join } from 'node:path'
+import { writeFileAtomically } from '../codex-accounts/fs-utils'
 import { getOrcaManagedCodexHomePath, getSystemCodexHomePath } from './codex-home-paths'
+import { rewriteRelativePathConfigValues } from './codex-config-path-reference-rewrite'
 
 function isProfileV2ConfigOverlayName(fileName: string): boolean {
   return fileName.endsWith('.config.toml') && fileName !== 'config.toml'
@@ -17,6 +10,9 @@ function isProfileV2ConfigOverlayName(fileName: string): boolean {
 
 // Why: Codex profile-v2 loads `${CODEX_HOME}/<name>.config.toml` when selected.
 // Resource linking covers the profile-v2/ directory, not free-standing overlays.
+// Relative AbsolutePathBuf values must be rewritten against system CODEX_HOME
+// the same way the main config.toml mirror does — symlink/copy alone leaves
+// paths resolving from the managed home.
 export function syncSystemProfileV2ConfigOverlaysIntoManagedHome(): void {
   const systemHomePath = getSystemCodexHomePath()
   const managedHomePath = getOrcaManagedCodexHomePath()
@@ -30,11 +26,11 @@ export function syncSystemProfileV2ConfigOverlaysIntoManagedHome(): void {
     if (!isProfileV2ConfigOverlayName(fileName)) {
       continue
     }
-    linkSystemProfileV2ConfigOverlay(systemHomePath, managedHomePath, fileName)
+    mirrorSystemProfileV2ConfigOverlay(systemHomePath, managedHomePath, fileName)
   }
 }
 
-function linkSystemProfileV2ConfigOverlay(
+function mirrorSystemProfileV2ConfigOverlay(
   systemHomePath: string,
   managedHomePath: string,
   fileName: string
@@ -44,45 +40,44 @@ function linkSystemProfileV2ConfigOverlay(
   if (!existsSync(sourcePath)) {
     return
   }
+
+  let raw: string
   try {
-    if (
-      lstatSync(targetPath).isSymbolicLink() &&
-      profileOverlayLinkTargetsMatch(readlinkSync(targetPath), sourcePath)
-    ) {
-      return
-    }
-  } catch {
-    // Target missing or unreadable — create below.
+    raw = readFileSync(sourcePath, 'utf-8')
+  } catch (error) {
+    console.warn('[codex-config] Failed to read profile-v2 config overlay:', fileName, error)
+    return
   }
-  if (existsSync(targetPath)) {
-    try {
-      if (!lstatSync(targetPath).isSymbolicLink()) {
-        // Why: leave non-link runtime files alone; they may be user-edited copies.
-        return
+
+  // Why: rewrite relative path keys against the *system* home so assets stay
+  // reachable after the overlay lives under managed CODEX_HOME.
+  const rewritten = rewriteRelativePathConfigValues(raw, systemHomePath)
+
+  try {
+    if (existsSync(targetPath)) {
+      const targetStat = lstatSync(targetPath)
+      if (targetStat.isSymbolicLink()) {
+        // Why: a bare symlink keeps relative paths resolving against managed
+        // home (or whatever Codex canonicalizes to). Replace with a rewritten
+        // regular file.
+        unlinkSync(targetPath)
+      } else {
+        try {
+          if (readFileSync(targetPath, 'utf-8') === rewritten) {
+            return
+          }
+        } catch {
+          // Rewrite below.
+        }
       }
-      unlinkSync(targetPath)
-    } catch {
-      return
     }
-  }
-  try {
-    symlinkSync(sourcePath, targetPath)
-  } catch {
+    writeFileAtomically(targetPath, rewritten)
+  } catch (error) {
+    console.warn('[codex-config] Failed to mirror profile-v2 config overlay:', fileName, error)
     try {
       rmSync(targetPath, { force: true })
-      cpSync(sourcePath, targetPath, { force: false, errorOnExist: true })
-    } catch (error) {
-      console.warn('[codex-config] Failed to link profile-v2 config overlay:', fileName, error)
+    } catch {
+      // best-effort cleanup
     }
   }
-}
-
-function profileOverlayLinkTargetsMatch(actualTarget: string, expectedTarget: string): boolean {
-  if (process.platform !== 'win32') {
-    return actualTarget === expectedTarget
-  }
-  return (
-    actualTarget.replace(/^\\\\\?\\/, '').toLowerCase() ===
-    expectedTarget.replace(/^\\\\\?\\/, '').toLowerCase()
-  )
 }
