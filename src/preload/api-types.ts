@@ -2113,7 +2113,7 @@ export type PreloadApi = {
   browser: BrowserApi
   emulator: EmulatorApi
   hooks: {
-    check: (args: { repoId: string }) => Promise<{
+    check: (args: { repoId: string; hostId?: ExecutionHostId }) => Promise<{
       status?: 'ok' | 'error'
       hasHooks: boolean
       hooks: OrcaHooks | null
