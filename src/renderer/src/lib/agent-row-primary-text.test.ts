@@ -29,6 +29,24 @@ describe('getAgentRowPrimaryText', () => {
     ).toBe('Checkout race')
   })
 
+  it('uses the task block when orchestration metadata has not arrived yet', () => {
+    expect(
+      getAgentRowPrimaryText({
+        prompt: `You are working inside Orca, a multi-agent IDE. You are a dispatched worker.
+Your coordinator's terminal handle is: term_parent
+Your task ID is: task_1
+
+=== CLI COMMANDS ===
+orca orchestration send --to term_parent
+
+=== TASK ===
+Review dispatch prompts and make worker labels distinct
+
+Keep the raw preamble out of the sidebar.`
+      })
+    ).toBe('Review dispatch prompts and make worker labels distinct')
+  })
+
   it('falls back to the raw prompt outside orchestration workers', () => {
     expect(getAgentRowPrimaryText({ prompt: 'Fix checkout race' })).toBe('Fix checkout race')
   })

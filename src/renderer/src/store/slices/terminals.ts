@@ -582,7 +582,11 @@ export type TerminalSlice = {
   setActiveTab: (tabId: string) => void
   setActiveTabForWorktree: (worktreeId: string, tabId: string) => void
   updateTabTitle: (tabId: string, title: string) => void
-  setGeneratedTabTitleFromAgentPrompt: (paneKey: string, prompt: string) => void
+  setGeneratedTabTitleFromAgentPrompt: (
+    paneKey: string,
+    prompt: string,
+    options?: { replaceExistingGeneratedTitle?: boolean }
+  ) => void
   clearTabLaunchAgent: (tabId: string) => void
   setRuntimePaneTitle: (tabId: string, paneId: number, title: string) => void
   clearRuntimePaneTitle: (tabId: string, paneId: number) => void
@@ -1547,9 +1551,13 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
     })
   },
 
-  setGeneratedTabTitleFromAgentPrompt: (paneKey, prompt) => {
+  setGeneratedTabTitleFromAgentPrompt: (paneKey, prompt, options) => {
     const tabId = getTabIdFromPaneKey(paneKey)
     if (!tabId || prompt.length === 0) {
+      return
+    }
+    const generatedTitle = deriveGeneratedTabTitle(prompt)
+    if (!generatedTitle) {
       return
     }
     set((s) => {
@@ -1563,16 +1571,15 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
       const tabs = s.tabsByWorktree[ownerWorktreeId] ?? []
       const tabIndex = tabs.findIndex((tab) => tab.id === tabId)
       const currentTab = tabs[tabIndex]
-      if (
-        !currentTab ||
-        currentTab.customTitle?.trim() ||
-        currentTab.quickCommandLabel?.trim() ||
-        currentTab.generatedTitle?.trim()
-      ) {
+      if (!currentTab || currentTab.customTitle?.trim() || currentTab.quickCommandLabel?.trim()) {
         return s
       }
-      const generatedTitle = deriveGeneratedTabTitle(prompt)
-      if (!generatedTitle) {
+      const existingGeneratedTitle = currentTab.generatedTitle?.trim()
+      if (
+        existingGeneratedTitle &&
+        (existingGeneratedTitle === generatedTitle ||
+          options?.replaceExistingGeneratedTitle !== true)
+      ) {
         return s
       }
       const ownerTabs = tabs.map((tab) => (tab.id === tabId ? { ...tab, generatedTitle } : tab))

@@ -24,6 +24,7 @@ import {
 } from '../../../../shared/agent-status-identity'
 import type { TerminalTab } from '../../../../shared/types'
 import { isExplicitAgentStatusFresh } from '@/lib/agent-status'
+import { getAgentRowGeneratedTitleText } from '@/lib/agent-row-primary-text'
 import { createFreshnessScheduler } from './agent-status-freshness-scheduler'
 
 /** Snapshot of a finished (or vanished) agent status entry, kept around so
@@ -914,6 +915,7 @@ export const createAgentStatusSlice: StateCreator<AppState, [], [], AgentStatusS
     recentlyClosedAgentStatusTabIds: {},
 
     setRuntimeAgentOrchestrationByPaneKey: (entries) => {
+      const generatedTitleUpdates: AgentStatusEntry[] = []
       set((s) => {
         const runtimeMapChanged = !orchestrationMapsEqual(
           s.runtimeAgentOrchestrationByPaneKey,
@@ -936,7 +938,11 @@ export const createAgentStatusSlice: StateCreator<AppState, [], [], AgentStatusS
                 nextLive = { ...nextLive }
                 liveChanged = true
               }
-              nextLive[paneKey] = { ...liveEntry, orchestration: merged }
+              const nextEntry = { ...liveEntry, orchestration: merged }
+              nextLive[paneKey] = nextEntry
+              if (merged.displayName || merged.taskTitle) {
+                generatedTitleUpdates.push(nextEntry)
+              }
             }
           }
 
@@ -970,6 +976,15 @@ export const createAgentStatusSlice: StateCreator<AppState, [], [], AgentStatusS
           ...(liveChanged ? { agentStatusEpoch: s.agentStatusEpoch + 1 } : {})
         }
       })
+      for (const entry of generatedTitleUpdates) {
+        get().setGeneratedTabTitleFromAgentPrompt(
+          entry.paneKey,
+          getAgentRowGeneratedTitleText(entry),
+          {
+            replaceExistingGeneratedTitle: true
+          }
+        )
+      }
     },
 
     registerAgentLaunchConfig: (paneKey, launchConfig, metadata) => {
@@ -1071,6 +1086,7 @@ export const createAgentStatusSlice: StateCreator<AppState, [], [], AgentStatusS
       }
       let completionRefreshWorktreeId: string | null = null
       let suppressedInheritedTerminalStatus = false
+      const generatedTitleEntry: { current: AgentStatusEntry | null } = { current: null }
       set((s) => {
         const existing = s.agentStatusByPaneKey[paneKey]
         // Why: snapshots and live pushes share receivedAt from the same main-side
@@ -1245,6 +1261,7 @@ export const createAgentStatusSlice: StateCreator<AppState, [], [], AgentStatusS
           // it when a new turn starts (working → Stop reprices it).
           interrupted: payload.interrupted
         }
+        generatedTitleEntry.current = entry
         if (
           isAgentCompletionState(entry.state) &&
           existing !== undefined &&
@@ -1385,7 +1402,22 @@ export const createAgentStatusSlice: StateCreator<AppState, [], [], AgentStatusS
       if (suppressedInheritedTerminalStatus) {
         return
       }
-      get().setGeneratedTabTitleFromAgentPrompt(paneKey, payload.prompt)
+      const entryForGeneratedTitle = generatedTitleEntry.current
+      if (!entryForGeneratedTitle) {
+        return
+      }
+      const generatedTitlePrompt = getAgentRowGeneratedTitleText(entryForGeneratedTitle)
+      const shouldReplaceGeneratedTitle = Boolean(
+        entryForGeneratedTitle.orchestration?.displayName ||
+        entryForGeneratedTitle.orchestration?.taskTitle
+      )
+      if (shouldReplaceGeneratedTitle) {
+        get().setGeneratedTabTitleFromAgentPrompt(paneKey, generatedTitlePrompt, {
+          replaceExistingGeneratedTitle: true
+        })
+      } else {
+        get().setGeneratedTabTitleFromAgentPrompt(paneKey, generatedTitlePrompt)
+      }
       // Why: schedule after set completes so the timer reads the updated map.
       // queueMicrotask avoids re-entry into the zustand store during set.
       queueMicrotask(() => freshness.schedule())

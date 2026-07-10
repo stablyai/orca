@@ -65,6 +65,45 @@ describe('generated agent tab titles', () => {
     )
   })
 
+  it('replaces a raw dispatch preamble title when orchestration display metadata arrives', () => {
+    vi.useFakeTimers()
+    const store = createTestStore()
+    const tabId = seedWorktree(store, true)
+    const paneKey = makePaneKey(tabId, LEAF_ID)
+
+    store.getState().setAgentStatus(paneKey, {
+      state: 'working',
+      prompt: `You are working inside Orca, a multi-agent IDE. You are a dispatched worker.
+
+=== CLI COMMANDS ===
+orca orchestration send --to term_parent
+
+=== TASK ===
+Implement the detailed worker instructions that should not be the short label`,
+      agentType: 'codex'
+    })
+
+    expect(store.getState().tabsByWorktree[WORKTREE_ID][0].generatedTitle).toBe(
+      'Implement the detailed worker'
+    )
+
+    store.getState().setRuntimeAgentOrchestrationByPaneKey({
+      [paneKey]: {
+        taskId: 'task-1',
+        dispatchId: 'ctx-1',
+        taskTitle: 'Implement worker instructions',
+        displayName: 'Better worker label'
+      }
+    })
+
+    expect(store.getState().tabsByWorktree[WORKTREE_ID][0].generatedTitle).toBe(
+      'Better worker label'
+    )
+    expect(store.getState().unifiedTabsByWorktree[WORKTREE_ID][0].generatedLabel).toBe(
+      'Better worker label'
+    )
+  })
+
   it('does not trim the full paste-sized prompt before generating an optional title', () => {
     vi.useFakeTimers()
     const trimSpy = vi.spyOn(String.prototype, 'trim')
