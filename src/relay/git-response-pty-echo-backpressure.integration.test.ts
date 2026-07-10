@@ -286,4 +286,24 @@ describe('large git response vs pty.data echo head-of-line blocking', () => {
       harness.dispose()
     }
   }, 30_000)
+
+  it('rejects with an inactivity timeout when the stream stalls after the sentinel', async () => {
+    const harness = createHarness({ congested: false })
+    try {
+      // Deliver the sentinel so reassembly begins, then stop delivering chunks
+      // to model a relay pump that wedged while the channel stayed up. Without
+      // the client-side inactivity deadline this promise would hang forever.
+      const streamedPromise = requestGitStreamable(
+        harness.mux,
+        'git.diff',
+        { worktreePath: repoDir, filePath: 'big.txt', staged: true },
+        { inactivityTimeoutMs: 250 }
+      )
+      await waitUntil(() => harness.queuedBytes() > 0, 'sentinel queued')
+      harness.deliverAll() // sentinel only; chunks stay undelivered
+      await expect(streamedPromise).rejects.toThrow(/stalled/)
+    } finally {
+      harness.dispose()
+    }
+  }, 30_000)
 })

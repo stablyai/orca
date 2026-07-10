@@ -3,6 +3,18 @@ import { RelayErrorCode, isGitResponseStreamMarker } from './relay-protocol'
 
 const SENTINEL_STREAM_ID = -1
 
+/** Reject if no stream frame (chunk/end/error) arrives within this window,
+ * reset on each frame. mux.request's own timeout only bounds the fast sentinel
+ * response; without this, a relay pump that breaks on staleness (which sends no
+ * responseEnd) while the SSH channel stays up would hang the client forever. */
+const STREAM_INACTIVITY_TIMEOUT_MS = 30_000
+
+/** Bound transient buffering of other concurrent streams' chunks while this
+ * reader awaits its sentinel: every reader sees all git.responseChunk frames
+ * and can't filter by streamId until its own sentinel resolves. Foreign frames
+ * are dropped on drain anyway; this just caps the pre-sentinel backlog. */
+const MAX_PENDING_FRAMES = 64
+
 export class GitResponseStreamError extends Error {
   readonly code = RelayErrorCode.StreamProtocolError
   constructor(message: string) {
@@ -31,7 +43,13 @@ export function requestGitStreamable(
   mux: SshChannelMultiplexer,
   method: string,
   params: Record<string, unknown>,
-  options?: { signal?: AbortSignal }
+  options?: {
+    signal?: AbortSignal
+    /** Bounds only the sentinel request (forwarded to mux.request), like today. */
+    timeoutMs?: number
+    /** Bounds the post-sentinel reassembly stall; resets on each chunk. */
+    inactivityTimeoutMs?: number
+  }
 ): Promise<unknown> {
   // Why: subscribe to chunk/end/error BEFORE awaiting the sentinel response so a
   // chunk that lands in the same dispatch tick as the response is not dropped
@@ -59,6 +77,29 @@ export function requestGitStreamable(
     let metadataReady = false
     const pending: PendingFrame[] = []
 
+    const inactivityMs = options?.inactivityTimeoutMs ?? STREAM_INACTIVITY_TIMEOUT_MS
+    let inactivityTimer: ReturnType<typeof setTimeout> | null = null
+    const clearInactivity = (): void => {
+      if (inactivityTimer) {
+        clearTimeout(inactivityTimer)
+        inactivityTimer = null
+      }
+    }
+    // Why: reset on every stream frame so a legitimately long stream is not
+    // killed, but a wedged stream (no frames arriving) rejects instead of
+    // hanging the caller forever.
+    const armInactivity = (): void => {
+      clearInactivity()
+      inactivityTimer = setTimeout(() => {
+        fail(
+          new GitResponseStreamError(
+            `Git response stream stalled (>${inactivityMs}ms without data)`
+          )
+        )
+      }, inactivityMs)
+      inactivityTimer.unref?.()
+    }
+
     const cancel = (): void => {
       if (streamIdRef.current !== SENTINEL_STREAM_ID && !mux.isDisposed()) {
         try {
@@ -73,6 +114,7 @@ export function requestGitStreamable(
         return
       }
       settled = true
+      clearInactivity()
       cancel()
       cleanup()
       reject(err)
@@ -82,6 +124,7 @@ export function requestGitStreamable(
         return
       }
       settled = true
+      clearInactivity()
       cleanup()
       resolve(value)
     }
@@ -108,6 +151,7 @@ export function requestGitStreamable(
       parts.push(decoded)
       receivedBytes += decoded.length
       expectedSeq += 1
+      armInactivity()
       // Why: credit-based flow control — the relay caps unacked chunks so a big
       // response cannot queue unbounded ahead of interactive pty.data frames.
       mux.notify('git.responseAck', { streamId: streamIdRef.current, seq })
@@ -156,10 +200,22 @@ export function requestGitStreamable(
       }
     }
 
+    // Why: pre-sentinel we cannot filter by streamId (our id is unknown yet), so
+    // every concurrent reader transiently buffers all readers' chunks. Cap the
+    // backlog by dropping the oldest; foreign frames are dropped on drain anyway,
+    // and if our own seq-0 were ever dropped the seq check fails loudly rather
+    // than corrupting. The sentinel normally resolves long before this cap.
+    const pushPending = (frame: PendingFrame): void => {
+      pending.push(frame)
+      if (pending.length > MAX_PENDING_FRAMES) {
+        pending.shift()
+      }
+    }
+
     unsubscribers.push(
       mux.onNotificationByMethod('git.responseChunk', (p) => {
         if (!metadataReady) {
-          pending.push({ kind: 'chunk', params: p })
+          pushPending({ kind: 'chunk', params: p })
           return
         }
         handleChunk(p)
@@ -168,7 +224,7 @@ export function requestGitStreamable(
     unsubscribers.push(
       mux.onNotificationByMethod('git.responseEnd', (p) => {
         if (!metadataReady) {
-          pending.push({ kind: 'end', params: p })
+          pushPending({ kind: 'end', params: p })
           return
         }
         handleEnd(p)
@@ -177,7 +233,7 @@ export function requestGitStreamable(
     unsubscribers.push(
       mux.onNotificationByMethod('git.responseError', (p) => {
         if (!metadataReady) {
-          pending.push({ kind: 'error', params: p })
+          pushPending({ kind: 'error', params: p })
           return
         }
         handleStreamError(p)
@@ -212,11 +268,17 @@ export function requestGitStreamable(
       unsubscribers.push(() => signal.removeEventListener('abort', onAbort))
     }
 
-    // Why: forward options only when present so callers that previously issued a
-    // 2-arg mux.request keep the same call shape (and their tests).
+    // Why: forward only the mux-request options (signal/timeoutMs) and omit them
+    // entirely when absent, so callers that previously issued a 2-arg
+    // mux.request keep the same call shape (and their tests). inactivityTimeoutMs
+    // governs reassembly here, not the sentinel request.
     const streamParams = { ...params, __streamResponse: true }
-    const requestPromise = options
-      ? mux.request(method, streamParams, options)
+    const requestOptions =
+      options?.signal !== undefined || options?.timeoutMs !== undefined
+        ? { signal: options.signal, timeoutMs: options.timeoutMs }
+        : undefined
+    const requestPromise = requestOptions
+      ? mux.request(method, streamParams, requestOptions)
       : mux.request(method, streamParams)
     void requestPromise
       .then((result) => {
@@ -233,6 +295,9 @@ export function requestGitStreamable(
         chunkCount = marker.chunkCount
         streamIdRef.current = marker.streamId
         metadataReady = true
+        // Why: start the inactivity deadline now — mux.request's timeout only
+        // covered the sentinel; the reassembly phase needs its own guard.
+        armInactivity()
         drainPending()
       })
       .catch((err) => fail(err as Error))
