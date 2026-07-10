@@ -57,6 +57,7 @@ import { recognizeAgentProcessFromCommandLine } from '../../shared/agent-process
 import { readWindowsConptyProcessIds } from './windows-conpty-process-membership'
 import { shouldUseShellReadyStartupDelivery } from '../../shared/codex-startup-delivery'
 import { assertSafeAgentStartupCwd, resolveSafePtyDefaultCwd } from './pty-default-cwd'
+import { ORCA_HERMES_STARTUP_QUERY_ENV } from '../../shared/hermes-startup-query'
 
 const PANE_IDENTITY_ENV_KEYS = [
   'ORCA_PANE_KEY',
@@ -566,6 +567,11 @@ export class LocalPtyProvider implements IPtyProvider {
           // Why: managed WSL Claude accounts pass a Linux CLAUDE_CONFIG_DIR
           // through Windows wsl.exe; non-default env vars need WSLENV import.
           addWslEnvKeys(finalEnv, ['CLAUDE_CONFIG_DIR'])
+        }
+        if (finalEnv[ORCA_HERMES_STARTUP_QUERY_ENV] !== undefined) {
+          // Why: the startup wrapper expands this only inside WSL; wsl.exe
+          // otherwise drops custom Windows environment variables.
+          addWslEnvKeys(finalEnv, [ORCA_HERMES_STARTUP_QUERY_ENV])
         }
       } else if (codexHomeWslInfo || isWslCodexHomeForHost(finalEnv.CODEX_HOME)) {
         // Why: WSL-managed Codex homes are Linux paths. Windows Codex cannot use

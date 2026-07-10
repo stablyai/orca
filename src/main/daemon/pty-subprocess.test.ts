@@ -2291,6 +2291,7 @@ describe('createPtySubprocess', () => {
         cwd: '\\\\wsl.localhost\\Ubuntu\\home\\jin\\repo',
         env: {
           ORCA_TERMINAL_HANDLE: 'term_wsl',
+          ORCA_HERMES_STARTUP_QUERY: 'line one\nline two',
           WSLENV: 'FOO/u'
         }
       })
@@ -2317,7 +2318,12 @@ describe('createPtySubprocess', () => {
     // Why: the daemon inherits optional agent-hook env in development. This
     // test owns only the terminal handle and Powerlevel10k WSLENV contract.
     expect(spawnCall[2].env.WSLENV?.split(':')).toEqual(
-      expect.arrayContaining(['FOO/u', 'ORCA_TERMINAL_HANDLE/u', POWERLEVEL10K_WIZARD_DISABLE_ENV])
+      expect.arrayContaining([
+        'FOO/u',
+        'ORCA_TERMINAL_HANDLE/u',
+        'ORCA_HERMES_STARTUP_QUERY',
+        POWERLEVEL10K_WIZARD_DISABLE_ENV
+      ])
     )
   })
 
