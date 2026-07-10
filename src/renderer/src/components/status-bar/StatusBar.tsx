@@ -1921,7 +1921,9 @@ function StatusBarInner({ floatingTerminalOpen }: StatusBarProps): React.JSX.Ele
   // bars when the agent isn't installed on PATH.
   // Why: Antigravity usage has no separate persisted credential. A checked
   // status item plus detected CLI is the durable signal that the user wants
-  // its usage slot visible while the first snapshot is still pending.
+  // its usage slot visible while the first snapshot is still pending. The
+  // visibility module additionally requires geminiCliOAuthEnabled (already in
+  // settings) because the snapshot mirrors the Gemini fetch.
   const antigravityUsageConfigured =
     statusBarItems.includes('antigravity') &&
     isStatusBarItemAvailable('antigravity', detectedAgentIds)
