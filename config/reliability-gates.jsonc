@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "updatedAt": "2026-07-08",
+  "updatedAt": "2026-07-09",
   "policy": {
     "maturityLevels": [
       "experimental",
@@ -104,6 +104,134 @@
         "SSH and remote providers are intentionally unknown-liveness paths and need separate provider-contract gates."
       ],
       "demotionRule": "Demote or quarantine if the gate flakes once without a product bug or harness bug filed to the owner."
+    },
+    {
+      "id": "terminal-session.kill-all-surface-cleanup",
+      "title": "Kill all sessions removes only the confirmed terminal surfaces and current bindings",
+      "maturity": "experimental",
+      "protection": "partial",
+      "owner": "terminal-runtime",
+      "layer": "renderer-main-contract",
+      "surfaces": [
+        "terminal lifecycle",
+        "terminal tab cleanup",
+        "PTY shutdown",
+        "Manage Sessions",
+        "Resource Manager"
+      ],
+      "platforms": [
+        "macos",
+        "linux",
+        "windows"
+      ],
+      "providers": [
+        "local",
+        "daemon",
+        "ssh",
+        "wsl",
+        "remote-runtime",
+        "mobile-relay"
+      ],
+      "coveredPlatforms": [
+        "macos"
+      ],
+      "coveredProviders": [
+        "local",
+        "daemon",
+        "ssh"
+      ],
+      "coverageNotes": "Local macOS deterministic evidence covers the renderer snapshot/coordinator, exact local and SSH-shaped PTY request settlement, active-last and pinned terminal-tab routing, component-unmount continuation, and the existing current/legacy daemon management contract. Windows Electron process absence, live SSH/WSL behavior, and remote-runtime/mobile host completion remain explicit gaps.",
+      "motivatingLinks": [
+        "https://github.com/stablyai/orca/issues/8001"
+      ],
+      "invariant": "Every terminal surface confirmed in the invoking renderer is force-closed exactly once after daemon management settles, later-created surfaces and non-terminal tabs survive, and exact shutdown requests are limited to deduplicated current non-runtime PTY bindings of the confirmed surfaces.",
+      "oracle": "Snapshot terminal entity IDs before the first await; mutate ownership, active selection, bindings, and tab presence while daemon management is pending; then assert only the immutable targets disappear from both terminal stores, active targets close last with valid editor/browser/deactivated post-state, every captured exact PTY promise settles before callbacks, and no provider inventory sweep or late-tab kill occurs.",
+      "commands": [
+        "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/shared/kill-all-terminal-surfaces.test.ts src/renderer/src/components/shared/useDaemonActions.test.tsx src/renderer/src/components/terminal/terminal-tab-actions-kill-all.test.ts src/main/ipc/pty-management.test.ts"
+      ],
+      "testFiles": [
+        "src/renderer/src/components/shared/kill-all-terminal-surfaces.test.ts",
+        "src/renderer/src/components/shared/useDaemonActions.test.tsx",
+        "src/renderer/src/components/terminal/terminal-tab-actions-kill-all.test.ts",
+        "src/main/ipc/pty-management.test.ts"
+      ],
+      "assertionRefs": [
+        {
+          "file": "src/renderer/src/components/shared/kill-all-terminal-surfaces.test.ts",
+          "assertions": [
+            "snapshot deduplicates legacy, unified-only, split, multi-worktree, and floating terminal surfaces while excluding editor tabs",
+            "cleanup-time moves, active-worktree switches, rebinding, missing targets, and later-created tabs preserve the confirmation boundary and active-last order",
+            "current exact PTY bindings are deduplicated, remote runtime IDs and stale/late bindings are excluded, and all per-PTY settlements finish before completion",
+            "the production dependency path calls daemon management exactly once and never invokes listSessions for a post-kill sweep",
+            "management rejection and per-close/provider failures do not stop remaining cleanup and produce bounded count/latency diagnostics",
+            "a real 100-tab Zustand fixture records 100 close attempts and exact kills, at least 100 writes, 49 event-loop yields, and no close batch over 50 ms"
+          ]
+        },
+        {
+          "file": "src/renderer/src/components/shared/useDaemonActions.test.tsx",
+          "assertions": [
+            "the hook snapshots before onKillAllStart and before coordinator work",
+            "unmounting the invoking component does not revoke cleanup while React callbacks remain mount-gated",
+            "error and settled callbacks run only after coordinator settlement",
+            "closed terminal tabs report success instead of the no-sessions informational state when daemon management reports zero"
+          ]
+        },
+        {
+          "file": "src/renderer/src/components/terminal/terminal-tab-actions-kill-all.test.ts",
+          "assertions": [
+            "force closes pinned terminals without a second confirmation",
+            "closing the last active terminal preserves and activates editor or browser content, otherwise deactivates without auto-spawn"
+          ]
+        },
+        {
+          "file": "src/main/ipc/pty-management.test.ts",
+          "assertions": [
+            "killAll fires one shutdown for each initial daemon session and polls those initial IDs until empty",
+            "freshly respawned session IDs are excluded from remainingCount",
+            "per-session shutdown rejection does not stop the daemon batch and refused initial sessions remain reported"
+          ]
+        }
+      ],
+      "evidenceRuns": [
+        {
+          "date": "2026-07-09",
+          "runner": "local",
+          "platform": "macos",
+          "command": "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/shared/kill-all-terminal-surfaces.test.ts src/renderer/src/components/shared/useDaemonActions.test.tsx src/renderer/src/components/terminal/terminal-tab-actions-kill-all.test.ts src/main/ipc/pty-management.test.ts",
+          "result": "passed",
+          "durationSeconds": 1.31,
+          "summary": "4 test files and 27 tests passed locally, including the existing daemon handler contract and a real 100-terminal Zustand cleanup fixture."
+        }
+      ],
+      "runtimeBudget": {
+        "p95Seconds": 10,
+        "scope": "focused renderer/main unit and performance-count tests"
+      },
+      "flakeHistory": {
+        "status": "unknown",
+        "evidence": "The focused 27-test slice passed locally once; it needs CI and soak history before promotion."
+      },
+      "redGreenEvidence": {
+        "status": "partial",
+        "evidence": "The initial 100-tab implementation exposed a 145.82 ms close batch and failed the 50 ms budget; two-close event-loop batching reduced the focused run below the budget. Saved CI artifacts and intentional-break evidence for the confirmation-boundary assertions are still needed."
+      },
+      "performanceBudget": {
+        "required": true,
+        "evidence": "The coordinator performs one existing management call, zero provider inventory sweeps, one close per present unique target, and at most one exact kill per unique current non-runtime PTY binding. A real 100-tab Zustand fixture asserts 100 close attempts, 100 exact kill calls, at least 100 store writes, 49 event-loop yields, and a maximum two-close batch at or below 50 ms."
+      },
+      "promotionCriteria": [
+        "Run the focused gate for at least 100 consecutive passes or 14 days across required CI platforms.",
+        "Attach Windows Electron evidence for both entry points, empty and established terminals, later-tab survival, xterm removal, and initial PTY absence after settlement.",
+        "Exercise the SSH fixture and WSL when available, or keep their live process-absence gaps explicit.",
+        "Propagate and align runtime-host tab-close completion before claiming verified remote-runtime shutdown."
+      ],
+      "knownGaps": [
+        "Windows Electron screenshots and live process/xterm absence evidence were not produced by this local macOS run.",
+        "Live SSH and WSL process absence, Linux local/daemon behavior, and mobile/relay shutdown remain unproved.",
+        "Runtime-host terminal close is best-effort because closeTerminalTab still discards the existing async host result and its close-intent lifetime is shorter than the possible RPC flow.",
+        "Daemon adapter listing failures remain suppressed by the existing management API, so reported daemon counts are not authoritative verification of every process."
+      ],
+      "demotionRule": "Keep experimental or demote to protection none if the gate flakes, permits a late-created tab or unrelated PTY to close, or exceeds the 50 ms maximum close-batch budget without a tracked product or harness bug."
     },
     {
       "id": "terminal-session.startup-cwd-missing-dir-recovery",

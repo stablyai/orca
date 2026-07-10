@@ -1,12 +1,12 @@
 import { describe, expect, it, vi } from 'vitest'
 import {
   countRecordKeysByReference,
-  getCenteringScrollPadding,
   getScrollTopToRevealBounds,
   resolvePendingSidebarReveal,
   WORKTREE_SIDEBAR_REVEAL_TOP_INSET,
   shouldAdjustWorktreeSidebarMeasuredRowScroll
 } from './WorktreeList'
+import { revealElementInScrollContainer } from './worktree-sidebar-reveal'
 import {
   extractWorktreeVirtualRowIndexes,
   estimateRenderRowSize,
@@ -125,21 +125,6 @@ describe('shouldAdjustWorktreeSidebarMeasuredRowScroll', () => {
 })
 
 describe('getScrollTopToRevealBounds', () => {
-  it('requests leading space when the first target would be clamped above center', () => {
-    const container = makeScrollContainer(0, 400)
-
-    expect(
-      getCenteringScrollPadding(
-        container,
-        {
-          start: 34,
-          end: 74
-        },
-        WORKTREE_SIDEBAR_REVEAL_TOP_INSET
-      )
-    ).toEqual({ start: 163, end: 0 })
-  })
-
   it('centers a fully visible target', () => {
     const container = makeScrollContainer(100, 400)
 
@@ -170,19 +155,22 @@ describe('getScrollTopToRevealBounds', () => {
     ).toBe(136)
   })
 
-  it('requests trailing space when the last target would be clamped below center', () => {
-    const container = makeScrollContainer(100, 400, 500)
+  it('clamps a boundary target to the list edge instead of padding the list', () => {
+    // Regression (#8019 follow-up): centering first/last rows via temporary
+    // paddingStart/paddingEnd left a permanent phantom gap in the sidebar once
+    // the reveal finished, since nothing cleared the padding afterwards.
+    const container = {
+      scrollTop: 100,
+      clientHeight: 200,
+      contains: () => true,
+      getBoundingClientRect: () => ({ top: 0, bottom: 200 })
+    } as unknown as HTMLElement
+    const firstRow = {
+      getBoundingClientRect: () => ({ top: -40, bottom: 20 })
+    } as unknown as Element
 
-    expect(
-      getCenteringScrollPadding(
-        container,
-        {
-          start: 430,
-          end: 470
-        },
-        WORKTREE_SIDEBAR_REVEAL_TOP_INSET
-      )
-    ).toEqual({ start: 0, end: 133 })
+    expect(revealElementInScrollContainer(container, firstRow)).toBe(true)
+    expect(container.scrollTop).toBe(0)
   })
 })
 

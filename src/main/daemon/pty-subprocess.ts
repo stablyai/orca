@@ -674,11 +674,10 @@ export function createPtySubprocess(opts: PtySubprocessOptions): SubprocessHandl
       env.CHERE_INVOKING ??= '1'
     }
     const codexHomeWslInfo = env.CODEX_HOME ? parseWslPath(env.CODEX_HOME) : null
-    const grokHomeWslInfo = env.GROK_HOME ? parseWslPath(env.GROK_HOME) : null
     if (pathWin32.basename(shellPath).toLowerCase() === 'wsl.exe') {
-      const launchWslDistro =
-        cwdWslInfo?.distro ?? sessionWslContext?.distro ?? preferredWslContext?.distro
       if (codexHomeWslInfo) {
+        const launchWslDistro =
+          cwdWslInfo?.distro ?? sessionWslContext?.distro ?? preferredWslContext?.distro
         if (launchWslDistro && launchWslDistro !== codexHomeWslInfo.distro) {
           delete env.CODEX_HOME
           delete env.ORCA_CODEX_HOME
@@ -712,38 +711,6 @@ export function createPtySubprocess(opts: PtySubprocessOptions): SubprocessHandl
       } else if (env.CODEX_HOME) {
         addWslEnvKeys(env, ['CODEX_HOME', 'ORCA_CODEX_HOME'])
       }
-      if (grokHomeWslInfo) {
-        if (launchWslDistro && launchWslDistro !== grokHomeWslInfo.distro) {
-          delete env.GROK_HOME
-        } else {
-          env.GROK_HOME = grokHomeWslInfo.linuxPath
-          addWslEnvKeys(env, ['GROK_HOME'])
-          // Why: mirror Codex — when wsl.exe has no distro yet, pin shellArgs/
-          // spawnCwd to the managed GROK_HOME distro so the Linux path exists.
-          if (!launchWslDistro) {
-            const resolved = resolveWindowsShellLaunchArgs(
-              shellPath,
-              requestedCwd,
-              getDefaultCwd(),
-              {
-                distro: grokHomeWslInfo.distro
-              },
-              opts.command
-            )
-            shellArgs = resolved.shellArgs
-            spawnCwd = resolved.effectiveCwd
-            validationCwd = resolved.validationCwd
-            startupCommandDeliveredInShellArgs =
-              resolved.startupCommandDeliveredInShellArgs === true
-          }
-        }
-      } else if (isHostCodexHomeForWsl(env.GROK_HOME)) {
-        // Why: Grok managed accounts are host-local unless explicitly
-        // represented as a WSL path; WSL Grok must use its Linux-side home.
-        delete env.GROK_HOME
-      } else if (env.GROK_HOME) {
-        addWslEnvKeys(env, ['GROK_HOME'])
-      }
       if (env.CLAUDE_CONFIG_DIR) {
         // Why: managed WSL Claude accounts pass a Linux CLAUDE_CONFIG_DIR
         // through Windows wsl.exe; non-default env vars need WSLENV import.
@@ -755,11 +722,6 @@ export function createPtySubprocess(opts: PtySubprocessOptions): SubprocessHandl
       // CODEX_HOME from it after user profiles run.
       delete env.CODEX_HOME
       delete env.ORCA_CODEX_HOME
-    }
-    if (pathWin32.basename(shellPath).toLowerCase() !== 'wsl.exe') {
-      if (grokHomeWslInfo || isWslCodexHomeForHost(env.GROK_HOME)) {
-        delete env.GROK_HOME
-      }
     }
     if (pathWin32.basename(shellPath).toLowerCase() === 'wsl.exe') {
       addOrcaWslInteropEnv(env)

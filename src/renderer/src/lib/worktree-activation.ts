@@ -250,12 +250,7 @@ function buildCreatedAgentReopenStartup(worktree: Worktree): WorktreeStartupPayl
     prompt: '',
     cmdOverrides: state.settings?.agentCmdOverrides ?? {},
     agentArgs: resolveTuiAgentLaunchArgs(agent, state.settings?.agentDefaultArgs),
-    agentEnv: resolveTuiAgentLaunchEnv(agent, state.settings?.agentDefaultEnv, {
-      settings: state.settings,
-      isRemote: repo ? repoIsRemote(repo) : false,
-      launchPlatform,
-      hostPlatform: CLIENT_PLATFORM
-    }),
+    agentEnv: resolveTuiAgentLaunchEnv(agent, state.settings?.agentDefaultEnv),
     platform: launchPlatform,
     isRemote: repo ? repoIsRemote(repo) : false,
     allowEmptyPromptLaunch: true

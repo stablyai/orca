@@ -2046,38 +2046,6 @@ describe('createPtySubprocess', () => {
     )
   })
 
-  it('does not pass a Windows Grok home into daemon WSL terminals', () => {
-    const proc = mockPtyProcess()
-    spawnMock.mockReturnValue(proc)
-    const platform = Object.getOwnPropertyDescriptor(process, 'platform')
-
-    Object.defineProperty(process, 'platform', { value: 'win32' })
-
-    try {
-      createPtySubprocess({
-        sessionId: 'test',
-        cols: 80,
-        rows: 24,
-        cwd: '\\\\wsl.localhost\\Ubuntu\\home\\jin\\repo',
-        env: { GROK_HOME: 'C:\\Users\\jin\\AppData\\Roaming\\Orca\\grok-accounts\\a\\home' }
-      })
-    } finally {
-      if (platform) {
-        Object.defineProperty(process, 'platform', platform)
-      }
-    }
-
-    expect(spawnMock).toHaveBeenCalledWith(
-      'wsl.exe',
-      ['-d', 'Ubuntu', '--', 'sh', '-c', expect.stringContaining("cd '/home/jin/repo'")],
-      expect.objectContaining({
-        env: expect.not.objectContaining({
-          GROK_HOME: expect.anything()
-        })
-      })
-    )
-  })
-
   it('does not pass a WSL managed Codex home into daemon Windows terminals', () => {
     const proc = mockPtyProcess()
     spawnMock.mockReturnValue(proc)

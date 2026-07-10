@@ -23,7 +23,6 @@ import {
   getAgentGeneratedTabTitlesTitle
 } from './agent-generated-tab-title-copy'
 import { getAgentStatusHooksDescription, getAgentStatusHooksTitle } from './agent-status-hooks-copy'
-import { CLIENT_PLATFORM } from '@/lib/new-workspace'
 import {
   SettingsBadge,
   SettingsSegmentedControl,
@@ -888,11 +887,7 @@ export function AgentsPane({
                 isDefault={defaultAgent === agent.id}
                 cmdOverride={cmdOverrides[agent.id]}
                 argsOverride={resolveTuiAgentLaunchArgs(agent.id, agentDefaultArgs)}
-                envOverride={resolveTuiAgentLaunchEnv(agent.id, agentDefaultEnv, {
-                  settings,
-                  launchPlatform: CLIENT_PLATFORM,
-                  hostPlatform: CLIENT_PLATFORM
-                })}
+                envOverride={resolveTuiAgentLaunchEnv(agent.id, agentDefaultEnv)}
                 onSetDefault={() => setDefault(agent.id)}
                 onSetEnabled={(enabled) => setAgentEnabled(agent.id, enabled)}
                 onSaveOverride={(v) => saveOverride(agent.id, v)}
@@ -941,11 +936,7 @@ export function AgentsPane({
                 isDefault={false}
                 cmdOverride={undefined}
                 argsOverride={resolveTuiAgentLaunchArgs(agent.id, agentDefaultArgs)}
-                envOverride={resolveTuiAgentLaunchEnv(agent.id, agentDefaultEnv, {
-                  settings,
-                  launchPlatform: CLIENT_PLATFORM,
-                  hostPlatform: CLIENT_PLATFORM
-                })}
+                envOverride={resolveTuiAgentLaunchEnv(agent.id, agentDefaultEnv)}
                 onSetDefault={() => {}}
                 onSetEnabled={(enabled) => setAgentEnabled(agent.id, enabled)}
                 onSaveOverride={() => {}}

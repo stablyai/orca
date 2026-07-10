@@ -239,6 +239,26 @@ describe('SttService', () => {
     expect(worker!.messages.filter((message) => message.type === 'feed')).toHaveLength(0)
   })
 
+  it('drops in-flight audio while stop is waiting for the worker', async () => {
+    const service = new SttService({
+      getModelState: vi.fn().mockResolvedValue({ id: 'model-a', status: 'ready' }),
+      getModelDir: vi.fn().mockReturnValue('/tmp/model-a')
+    } as never)
+
+    await service.startDictation('model-a', vi.fn(), undefined, 'desktop:1')
+    const worker = getLastWorker()
+    expect(worker).toBeDefined()
+    worker!.emitStoppedOnStop = false
+
+    const stopPromise = service.stopDictation('desktop:1')
+    await Promise.resolve()
+    service.feedAudio(new Float32Array([1]), 16000, 'desktop:1')
+    expect(worker!.messages.filter((message) => message.type === 'feed')).toHaveLength(0)
+
+    worker!.emit('message', { type: 'stopped' })
+    await stopPromise
+  })
+
   it('rejects deletion prep while the target model is starting', async () => {
     let resolveModelState: (state: { id: string; status: string }) => void = () => {}
     const modelStatePromise = new Promise<{ id: string; status: string }>((resolve) => {

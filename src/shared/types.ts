@@ -2329,29 +2329,6 @@ export type ClaudeManagedAccountRuntimeSelection = {
   wsl: Record<string, string | null>
 }
 
-export type GrokManagedAccount = {
-  id: string
-  email: string
-  managedHomePath: string
-  createdAt: number
-  updatedAt: number
-  lastAuthenticatedAt: number
-}
-
-export type GrokManagedAccountSummary = {
-  id: string
-  email: string
-  managedHomePath: string
-  createdAt: number
-  updatedAt: number
-  lastAuthenticatedAt: number
-}
-
-export type GrokRateLimitAccountsState = {
-  accounts: GrokManagedAccountSummary[]
-  activeAccountId: string | null
-}
-
 /** All AI coding agents Orca knows how to launch. Used for the agent picker in the new-workspace
  *  flow and for the default-agent setting. Extend this union as new agents are added. */
 export type TuiAgent =
@@ -2740,10 +2717,6 @@ export type GlobalSettings = {
   claudeManagedAccounts: ClaudeManagedAccount[]
   activeClaudeManagedAccountId: string | null
   activeClaudeManagedAccountIdsByRuntime?: ClaudeManagedAccountRuntimeSelection
-  /** Why: Grok CLI honors GROK_HOME, so Orca can isolate accounts without
-   *  copying credentials into the user's default ~/.grok directory. */
-  grokManagedAccounts: GrokManagedAccount[]
-  activeGrokManagedAccountId: string | null
   /** When true, each worktree gets its own shell history file so ArrowUp
    *  does not surface commands from other worktrees. Defaults to true.
    *  Disable to revert to shared global shell history. */
@@ -3181,8 +3154,8 @@ export type StatusBarItem =
   | 'antigravity'
   | 'opencode-go'
   | 'kimi'
-  | 'grok'
   | 'minimax'
+  | 'grok'
   | 'ssh'
   | 'resource-usage'
   | 'ports'

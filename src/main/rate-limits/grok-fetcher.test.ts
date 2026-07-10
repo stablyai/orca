@@ -1,128 +1,31 @@
-import { EventEmitter } from 'node:events'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const netFetchMock = vi.hoisted(() => vi.fn())
-const spawnMock = vi.hoisted(() => vi.fn())
-const fsState = vi.hoisted<{
-  authJson: string | null
-  lastExistsPath: string | null
-  lastReadPath: string | null
-}>(() => ({
-  authJson: null,
-  lastExistsPath: null,
-  lastReadPath: null
-}))
-const grokVersionMock = vi.hoisted(() => vi.fn(() => 'grok 0.2.91 (abc) [stable]\n'))
-const hydrateShellPathMock = vi.hoisted(() => vi.fn())
-const mergePathSegmentsMock = vi.hoisted(() => vi.fn())
+const authState = vi.hoisted<{
+  file: string | null
+  readError: Error | null
+}>(() => ({ file: null, readError: null }))
 
 vi.mock('electron', () => ({
   net: { fetch: netFetchMock }
 }))
 
-vi.mock('node:child_process', () => ({
-  spawn: spawnMock,
-  execFileSync: grokVersionMock
-}))
-
 vi.mock('node:fs', () => ({
-  existsSync: (path: string) => {
-    fsState.lastExistsPath = path
-    return fsState.authJson !== null
-  },
-  readFileSync: (path: string) => {
-    fsState.lastReadPath = path
-    if (fsState.authJson === null) {
+  existsSync: () => authState.file !== null,
+  readFileSync: () => {
+    if (authState.readError) {
+      throw authState.readError
+    }
+    if (authState.file === null) {
       throw new Error('ENOENT')
     }
-    return fsState.authJson
+    return authState.file
   }
 }))
 
 vi.mock('node:os', () => ({ homedir: () => '/home/test' }))
 
-vi.mock('../startup/hydrate-shell-path', () => ({
-  hydrateShellPath: hydrateShellPathMock,
-  mergePathSegments: mergePathSegmentsMock
-}))
-
-import { fetchGrokRateLimits, mapGrokBillingPayload } from './grok-fetcher'
-
-type JsonRpcMessage = {
-  id?: number
-  method?: string
-  params?: unknown
-}
-
-class FakeGrokProcess extends EventEmitter {
-  readonly stdout = new EventEmitter()
-  readonly stderr = new EventEmitter()
-  readonly stdin = Object.assign(new EventEmitter(), {
-    write: vi.fn((chunk: string, callback?: (error?: Error | null) => void) => {
-      const message = JSON.parse(chunk.trim()) as JsonRpcMessage
-      this.requests.push(message)
-      if (message.method === 'initialize') {
-        this.emitStdout({
-          jsonrpc: '2.0',
-          id: message.id,
-          result: {
-            authMethods: [
-              {
-                id: 'cached_token',
-                name: 'cached_token',
-                description: 'Cached token from ~/.grok/auth.json'
-              }
-            ]
-          }
-        })
-      }
-      if (message.method === 'authenticate') {
-        fsState.authJson = authJson('tok-after-auth')
-        this.emitStdout({
-          jsonrpc: '2.0',
-          id: message.id,
-          result: { _meta: { subscription_tier: 'X Premium+' } }
-        })
-      }
-      callback?.(null)
-      return true
-    }),
-    end: vi.fn()
-  })
-  readonly requests: JsonRpcMessage[] = []
-  killedWith: NodeJS.Signals | null = null
-
-  kill(signal?: NodeJS.Signals): boolean {
-    this.killedWith = signal ?? null
-    return true
-  }
-
-  private emitStdout(value: unknown): void {
-    setImmediate(() => {
-      this.stdout.emit('data', `${JSON.stringify(value)}\n`)
-    })
-  }
-}
-
-function authJson(token: string): string {
-  return JSON.stringify({
-    'https://auth.x.ai::client-id': {
-      key: token,
-      auth_mode: 'oidc',
-      expires_at: '2099-01-01T00:00:00Z'
-    }
-  })
-}
-
-function expiredAuthJson(token: string): string {
-  return JSON.stringify({
-    'https://auth.x.ai::client-id': {
-      key: token,
-      auth_mode: 'oidc',
-      expires_at: '2000-01-01T00:00:00Z'
-    }
-  })
-}
+import { fetchGrokRateLimits } from './grok-fetcher'
 
 function jsonResponse(body: unknown, status = 200): Response {
   return {
@@ -134,230 +37,128 @@ function jsonResponse(body: unknown, status = 200): Response {
 
 const BILLING_RESPONSE = {
   config: {
-    creditUsagePercent: 53,
+    creditUsagePercent: 42,
     currentPeriod: {
       type: 'USAGE_PERIOD_TYPE_WEEKLY',
-      start: '2026-07-05T02:24:47.122004+00:00',
-      end: '2026-07-12T02:24:47.122004+00:00'
+      start: '2026-06-30T18:36:14.268512+00:00',
+      end: '2026-07-07T18:36:14.268512+00:00'
     },
-    productUsage: [
-      { product: 'GrokBuild', usagePercent: 52 },
-      { product: 'GrokChat', usagePercent: 1 }
-    ],
-    billingPeriodStart: '2026-07-05T02:24:47.122004+00:00',
-    billingPeriodEnd: '2026-07-12T02:24:47.122004+00:00'
+    subscriptionTier: 'SuperGrok',
+    isUnifiedBillingUser: true
   }
 }
 
-describe('mapGrokBillingPayload', () => {
-  it('uses the GrokBuild product usage as the weekly usage window', () => {
-    const result = mapGrokBillingPayload(BILLING_RESPONSE, 123)
-
-    expect(result).toMatchObject({
-      provider: 'grok',
-      status: 'ok',
-      session: null,
-      weekly: {
-        usedPercent: 52,
-        windowMinutes: 10080,
-        resetsAt: new Date('2026-07-12T02:24:47.122004+00:00').getTime()
-      },
-      updatedAt: 123,
-      error: null,
-      usageMetadata: { source: 'cli' }
-    })
+function freshAuthJson(): string {
+  return JSON.stringify({
+    'https://auth.x.ai::client': {
+      key: 'access-token',
+      user_id: 'user-1',
+      email: 'dev@example.com',
+      expires_at: '2099-01-01T00:00:00.000Z'
+    }
   })
-
-  it('falls back to total credit usage when product usage is unavailable', () => {
-    const result = mapGrokBillingPayload(
-      {
-        config: {
-          creditUsagePercent: 37,
-          billingPeriodEnd: '2026-07-12T02:24:47.122004+00:00'
-        }
-      },
-      456
-    )
-
-    expect(result.status).toBe('ok')
-    expect(result.weekly?.usedPercent).toBe(37)
-  })
-
-  it('returns a parse error when the billing payload has no usable usage percentage', () => {
-    const result = mapGrokBillingPayload({ config: {} }, 789)
-
-    expect(result.provider).toBe('grok')
-    expect(result.status).toBe('error')
-    expect(result.usageMetadata?.failureKind).toBe('parse')
-  })
-})
+}
 
 describe('fetchGrokRateLimits', () => {
-  let fakeProcess: FakeGrokProcess
-
   beforeEach(() => {
-    vi.clearAllMocks()
-    vi.unstubAllEnvs()
-    fsState.authJson = authJson('tok-before-auth')
-    fsState.lastExistsPath = null
-    fsState.lastReadPath = null
-    fakeProcess = new FakeGrokProcess()
-    spawnMock.mockReturnValue(fakeProcess)
-    netFetchMock.mockResolvedValue(jsonResponse(BILLING_RESPONSE))
-    hydrateShellPathMock.mockResolvedValue({
-      segments: ['/home/test/.grok/bin'],
-      ok: true,
-      failureReason: 'none'
-    })
+    netFetchMock.mockReset()
+    authState.file = null
+    authState.readError = null
   })
 
   afterEach(() => {
     vi.unstubAllEnvs()
   })
 
-  it('uses a fresh cached token directly without spawning Grok ACP', async () => {
+  it('returns unavailable when not signed in', async () => {
     const result = await fetchGrokRateLimits()
-
-    expect(spawnMock).not.toHaveBeenCalled()
-    expect(grokVersionMock).not.toHaveBeenCalled()
-    expect(netFetchMock).toHaveBeenCalledWith(
-      'https://cli-chat-proxy.grok.com/v1/billing?format=credits',
-      expect.objectContaining({
-        headers: expect.objectContaining({
-          Authorization: 'Bearer tok-before-auth'
-        })
-      })
-    )
-    expect(netFetchMock.mock.calls[0]?.[1]?.headers).not.toHaveProperty('x-grok-client-version')
     expect(result.provider).toBe('grok')
-    expect(result.status).toBe('ok')
-    expect(result.weekly?.usedPercent).toBe(52)
+    expect(result.status).toBe('unavailable')
+    expect(netFetchMock).not.toHaveBeenCalled()
   })
 
-  it('authenticates through Grok ACP only after billing rejects the cached token', async () => {
-    netFetchMock
-      .mockResolvedValueOnce(jsonResponse({}, 401))
-      .mockResolvedValueOnce(jsonResponse(BILLING_RESPONSE))
+  it('maps weekly credit usage from billing config', async () => {
+    authState.file = freshAuthJson()
+    netFetchMock.mockResolvedValueOnce(jsonResponse(BILLING_RESPONSE))
 
     const result = await fetchGrokRateLimits()
-
-    expect(spawnMock).toHaveBeenCalledWith('grok', ['--no-auto-update', 'agent', 'stdio'], {
-      stdio: ['pipe', 'pipe', 'ignore']
-    })
-    expect(fakeProcess.requests.map((request) => request.method)).toEqual([
-      'initialize',
-      'authenticate'
-    ])
-    expect(netFetchMock).toHaveBeenNthCalledWith(
-      1,
-      'https://cli-chat-proxy.grok.com/v1/billing?format=credits',
-      expect.objectContaining({
-        headers: expect.objectContaining({
-          Authorization: 'Bearer tok-before-auth'
-        })
-      })
-    )
-    expect(netFetchMock).toHaveBeenNthCalledWith(
-      2,
-      'https://cli-chat-proxy.grok.com/v1/billing?format=credits',
-      expect.objectContaining({
-        headers: expect.objectContaining({
-          Authorization: 'Bearer tok-after-auth'
-        })
-      })
-    )
     expect(result.status).toBe('ok')
-    expect(result.weekly?.usedPercent).toBe(52)
-  })
+    expect(result.weekly?.usedPercent).toBe(42)
+    expect(result.weekly?.windowMinutes).toBe(10_080)
+    expect(result.usageMetadata?.source).toBe('oauth')
+    expect(result.usageMetadata?.authProvenance).toContain('SuperGrok')
 
-  it('hydrates shell PATH before spawning Grok ACP for an expired cached token', async () => {
-    fsState.authJson = expiredAuthJson('tok-expired')
-
-    await fetchGrokRateLimits()
-
-    expect(hydrateShellPathMock).toHaveBeenCalledTimes(1)
-    expect(mergePathSegmentsMock).toHaveBeenCalledWith(['/home/test/.grok/bin'])
-    expect(spawnMock).toHaveBeenCalledTimes(1)
     expect(netFetchMock).toHaveBeenCalledWith(
       'https://cli-chat-proxy.grok.com/v1/billing?format=credits',
       expect.objectContaining({
         headers: expect.objectContaining({
-          Authorization: 'Bearer tok-after-auth'
+          Authorization: 'Bearer access-token',
+          'X-XAI-Token-Auth': 'xai-grok-cli',
+          'x-userid': 'user-1'
         })
       })
     )
   })
 
-  it('honors GROK_HOME and GROK_CLI_CHAT_PROXY_BASE_URL', async () => {
-    vi.stubEnv('GROK_HOME', '/custom/grok-home')
-    vi.stubEnv('GROK_CLI_CHAT_PROXY_BASE_URL', 'https://proxy.example.test/v1/')
-
-    await fetchGrokRateLimits()
-
-    expect(netFetchMock).toHaveBeenCalledWith(
-      'https://proxy.example.test/v1/billing?format=credits',
-      expect.anything()
-    )
-    expect(fsState.lastReadPath).toBe('/custom/grok-home/auth.json')
-  })
-
-  it('uses a managed Grok home for credential reads and ACP refresh', async () => {
-    fsState.authJson = expiredAuthJson('tok-expired')
-
-    await fetchGrokRateLimits({ grokHomePath: '/managed/grok-home' })
-
-    expect(fsState.lastExistsPath).toBe('/managed/grok-home/auth.json')
-    expect(fsState.lastReadPath).toBe('/managed/grok-home/auth.json')
-    expect(spawnMock).toHaveBeenCalledWith('grok', ['--no-auto-update', 'agent', 'stdio'], {
-      stdio: ['pipe', 'pipe', 'ignore'],
-      env: expect.objectContaining({
-        GROK_HOME: '/managed/grok-home'
-      })
-    })
-  })
-
-  it('returns unavailable without spawning when Grok is not signed in', async () => {
-    fsState.authJson = null
-
+  it('returns unavailable when not signed in even if a token-less auth file exists', async () => {
+    authState.file = JSON.stringify({})
     const result = await fetchGrokRateLimits()
-
     expect(result.status).toBe('unavailable')
-    expect(result.usageMetadata?.failureKind).toBe('missing-credentials')
-    expect(spawnMock).not.toHaveBeenCalled()
     expect(netFetchMock).not.toHaveBeenCalled()
   })
 
-  it('returns unavailable when Grok is not installed', async () => {
-    fsState.authJson = expiredAuthJson('tok-expired')
-    const error = Object.assign(new Error('spawn grok ENOENT'), { code: 'ENOENT' })
-    spawnMock.mockImplementationOnce(() => {
-      const proc = new FakeGrokProcess()
-      setImmediate(() => proc.emit('error', error))
-      return proc
-    })
+  it('returns unavailable when billing has no credit usage', async () => {
+    authState.file = freshAuthJson()
+    netFetchMock.mockResolvedValueOnce(jsonResponse({ config: { subscriptionTier: 'Enterprise' } }))
 
     const result = await fetchGrokRateLimits()
-
     expect(result.status).toBe('unavailable')
-    expect(result.usageMetadata?.failureKind).toBe('cli-unavailable')
-    expect(netFetchMock).not.toHaveBeenCalled()
+    expect(result.weekly).toBeNull()
   })
 
-  it('returns promptly when Grok ACP exits before authentication completes', async () => {
-    fsState.authJson = expiredAuthJson('tok-expired')
-    spawnMock.mockImplementationOnce(() => {
-      const proc = new FakeGrokProcess()
-      proc.stdin.write.mockImplementation((chunk: string) => {
-        proc.requests.push(JSON.parse(chunk.trim()) as JsonRpcMessage)
-        return true
-      })
-      setImmediate(() => proc.emit('close', 1))
-      return proc
-    })
+  it('returns unavailable when billing response has no config', async () => {
+    authState.file = freshAuthJson()
+    netFetchMock.mockResolvedValueOnce(jsonResponse({}))
 
     const result = await fetchGrokRateLimits()
+    expect(result.status).toBe('unavailable')
+  })
 
+  it('aborts the billing request when the caller aborts', async () => {
+    authState.file = freshAuthJson()
+    const controller = new AbortController()
+    let requestSignal: AbortSignal | undefined
+    netFetchMock.mockImplementationOnce((_url, init: RequestInit) => {
+      requestSignal = init.signal as AbortSignal
+      return new Promise((_resolve, reject) => {
+        requestSignal?.addEventListener('abort', () => reject(new Error('aborted')), {
+          once: true
+        })
+      })
+    })
+
+    const resultPromise = fetchGrokRateLimits({ signal: controller.signal })
+    await Promise.resolve()
+
+    expect(requestSignal?.aborted).toBe(false)
+    controller.abort()
+    expect(requestSignal?.aborted).toBe(true)
+
+    const result = await resultPromise
     expect(result.status).toBe('error')
-    expect(result.usageMetadata?.failureKind).toBe('cli-unavailable')
+    expect(result.error).toBe('aborted')
+  })
+
+  it('returns error when the session token is expired', async () => {
+    authState.file = JSON.stringify({
+      'https://auth.x.ai::client': {
+        key: 'stale',
+        expires_at: '2000-01-01T00:00:00.000Z'
+      }
+    })
+    const result = await fetchGrokRateLimits()
+    expect(result.status).toBe('error')
+    expect(result.error).toMatch(/expired/i)
+    expect(netFetchMock).not.toHaveBeenCalled()
   })
 })

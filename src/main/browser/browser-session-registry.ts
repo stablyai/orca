@@ -26,6 +26,7 @@ import type { BrowserSessionProfile, BrowserSessionProfileScope } from '../../sh
 import { browserManager } from './browser-manager'
 import { hasSystemMediaAccess, requestSystemMediaAccess } from './browser-media-access'
 import { cleanElectronUserAgent, setupClientHintsOverride } from './browser-session-ua'
+import { resolveChromiumCookiesPath } from './chromium-cookie-path'
 import { isAutoGrantedBrowserSessionPermission } from './browser-session-permission-policy'
 import {
   allowsBrowserWebAuthnPermission,
@@ -101,7 +102,10 @@ class BrowserSessionRegistry {
 
   private static partitionCookiesPath(partition: string): string {
     const partitionName = partition.replace('persist:', '')
-    return join(app.getPath('userData'), 'Partitions', partitionName, 'Cookies')
+    const partitionDir = join(app.getPath('userData'), 'Partitions', partitionName)
+    // Why: replay must overwrite the same modern or legacy database that the
+    // importing Electron partition already uses.
+    return resolveChromiumCookiesPath(partitionDir) ?? join(partitionDir, 'Cookies')
   }
 
   // Why: write-to-temp-then-rename is atomic on all supported platforms.

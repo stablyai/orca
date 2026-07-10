@@ -96,35 +96,6 @@ export const getAccountsCodexSearchEntries = createLocalizedCatalog(() => [
   }
 ])
 
-export const getAccountsGrokSearchEntries = createLocalizedCatalog(() => [
-  {
-    title: translate('auto.components.settings.accounts.search.913f2f40f9', 'Grok Accounts'),
-    description: translate(
-      'auto.components.settings.accounts.search.4f0a71c893',
-      'Optional account switching for Grok using isolated GROK_HOME directories.'
-    ),
-    keywords: [
-      ...translateSearchKeyword('auto.components.settings.accounts.search.c61b14be7c', 'grok'),
-      ...translateSearchKeyword('auto.components.settings.accounts.search.06662af91e', 'account'),
-      ...translateSearchKeyword(
-        'auto.components.settings.accounts.search.e949b08ffb',
-        'rate limit'
-      ),
-      ...translateSearchKeyword(
-        'auto.components.settings.accounts.search.86edc96bc9',
-        'status bar'
-      ),
-      ...translateSearchKeyword('auto.components.settings.accounts.search.c759741d77', 'quota'),
-      ...translateSearchKeyword('auto.components.settings.accounts.search.f2d666a886', 'optional'),
-      ...translateSearchKeyword(
-        'auto.components.settings.accounts.search.77e32a2ad3',
-        'reauthenticate'
-      ),
-      ...translateSearchKeyword('auto.components.settings.accounts.search.a51c85f205', 'GROK_HOME')
-    ]
-  }
-])
-
 export const getAccountsGeminiSearchEntries = createLocalizedCatalog(() => [
   {
     title: translate(
@@ -220,12 +191,33 @@ export const getAccountsMiniMaxSearchEntries = createLocalizedCatalog(() => [
   }
 ])
 
+export const getAccountsGrokSearchEntries = createLocalizedCatalog(() => [
+  {
+    title: translate('auto.components.settings.accounts.search.f4a8c2e1b7', 'Grok (xAI) Usage'),
+    description: translate(
+      'auto.components.settings.accounts.search.e3b7d1f9a2',
+      'OAuth sign-in via Grok CLI (grok login) for weekly credit usage.'
+    ),
+    keywords: [
+      ...translateSearchKeyword('auto.components.settings.accounts.search.d2c6a0e8f1', 'grok'),
+      ...translateSearchKeyword('auto.components.settings.accounts.search.c1b5f9d7e0', 'xai'),
+      ...translateSearchKeyword('auto.components.settings.accounts.search.b0a4e8c6d9', 'oauth'),
+      ...translateSearchKeyword('auto.components.settings.accounts.search.a9f3d7b5c8', 'login'),
+      ...translateSearchKeyword(
+        'auto.components.settings.accounts.search.e949b08ffb',
+        'rate limit'
+      ),
+      ...translateSearchKeyword('auto.components.settings.accounts.search.86edc96bc9', 'status bar')
+    ]
+  }
+])
+
 export const getAccountsPaneSearchEntries = createLocalizedCatalog((): SettingsSearchEntry[] => [
   ...getAccountsLocationSearchEntries(),
   ...getAccountsClaudeSearchEntries(),
   ...getAccountsCodexSearchEntries(),
-  ...getAccountsGrokSearchEntries(),
   ...getAccountsGeminiSearchEntries(),
   ...getAccountsOpencodeSearchEntries(),
-  ...getAccountsMiniMaxSearchEntries()
+  ...getAccountsMiniMaxSearchEntries(),
+  ...getAccountsGrokSearchEntries()
 ])

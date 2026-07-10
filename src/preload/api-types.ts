@@ -39,6 +39,7 @@ import type {
 } from '../shared/orca-profiles'
 import type { TerminalPaneSplitSource } from '../shared/feature-education-telemetry'
 import type { TaskSourceContext } from '../shared/task-source-context'
+import type { LinearIssueAttributeFilter } from '../shared/linear-issue-attribute-filter'
 import type { ProjectExecutionRuntimeResolution } from '../shared/project-execution-runtime'
 import type { StartupCommandDelivery } from '../shared/codex-startup-delivery'
 import type { SleepingAgentLaunchConfig } from '../shared/agent-session-resume'
@@ -71,7 +72,6 @@ import type {
   FsChangedPayload,
   GhosttyImportPreview,
   GlobalSettings,
-  GrokRateLimitAccountsState,
   GitBranchCompareResult,
   GitCommitCompareResult,
   GitConflictOperation,
@@ -352,6 +352,7 @@ import type {
 } from '../shared/claude-usage-types'
 import type {
   CodexRateLimitResetResult,
+  GrokAccountStatus,
   RateLimitRuntimeTarget,
   RateLimitState
 } from '../shared/rate-limit-types'
@@ -1777,6 +1778,7 @@ export type PreloadApi = {
       filter?: 'assigned' | 'created' | 'all' | 'completed'
       limit?: number
       workspaceId?: LinearWorkspaceSelection
+      attributeFilter?: LinearIssueAttributeFilter
     }) => Promise<LinearCollectionResult<LinearIssue>>
     createIssue: (args: {
       teamId: string
@@ -2005,13 +2007,6 @@ export type PreloadApi = {
       runtime?: 'host' | 'wsl'
       wslDistro?: string | null
     }) => Promise<CodexRateLimitAccountsState>
-  }
-  grokAccounts: {
-    list: () => Promise<GrokRateLimitAccountsState>
-    add: () => Promise<GrokRateLimitAccountsState>
-    reauthenticate: (args: { accountId: string }) => Promise<GrokRateLimitAccountsState>
-    remove: (args: { accountId: string }) => Promise<GrokRateLimitAccountsState>
-    select: (args: { accountId: string | null }) => Promise<GrokRateLimitAccountsState>
   }
   claudeAccounts: {
     list: () => Promise<ClaudeRateLimitAccountsState>
@@ -2882,12 +2877,16 @@ export type PreloadApi = {
     fetchInactiveClaudeAccounts: () => Promise<void>
     fetchInactiveCodexAccounts: () => Promise<void>
     refreshMiniMax: () => Promise<RateLimitState>
+    refreshGrok: () => Promise<RateLimitState>
     onUpdate: (callback: (state: RateLimitState) => void) => () => void
   }
   minimaxCredentials: {
     getStatus: () => Promise<{ configured: boolean }>
     saveCookie: (cookie: string) => Promise<{ configured: boolean }>
     clearCookie: () => Promise<{ configured: boolean }>
+  }
+  grokAccounts: {
+    getStatus: () => Promise<GrokAccountStatus>
   }
   ssh: {
     listTargets: () => Promise<SshTarget[]>

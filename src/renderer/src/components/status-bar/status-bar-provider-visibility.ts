@@ -12,11 +12,9 @@ export type UsageProviderSettings = Pick<
   // checked status-bar item is the durable user signal; StatusBar only sets
   // this after PATH detection says the agent is available.
   antigravityUsageConfigured: boolean
-  // Why: the MiniMax cookie lives in the file system, not GlobalSettings, so
-  // we can't derive durability from settings alone. The renderer threads the
-  // flag from RateLimitState (pushed by the main process) so the bar stays
-  // visible across reloads and between snapshot refreshes.
+  // Why: MiniMax/Grok sign-in live on disk, not in settings; main sets these each poll.
   minimaxCookieConfigured: boolean
+  grokAuthConfigured: boolean
 }
 
 type UsageProviderSnapshots = {
@@ -26,8 +24,8 @@ type UsageProviderSnapshots = {
   opencodeGo: ProviderRateLimits | null
   kimi: ProviderRateLimits | null
   antigravity: ProviderRateLimits | null
-  grok: ProviderRateLimits | null
   minimax: ProviderRateLimits | null
+  grok: ProviderRateLimits | null
 }
 
 type UsageProviderId = ProviderRateLimits['provider']
@@ -73,7 +71,8 @@ export function hasUsageProviderSettings(
     settings?.geminiCliOAuthEnabled === true ||
     Boolean(settings?.opencodeSessionCookie?.trim()) ||
     settings?.antigravityUsageConfigured === true ||
-    settings?.minimaxCookieConfigured === true
+    settings?.minimaxCookieConfigured === true ||
+    settings?.grokAuthConfigured === true
   )
 }
 
@@ -101,6 +100,9 @@ export function hasUsageProviderSettingsForProvider(
   }
   if (providerId === 'minimax') {
     return settings.minimaxCookieConfigured === true
+  }
+  if (providerId === 'grok') {
+    return settings.grokAuthConfigured === true
   }
   return false
 }
@@ -154,8 +156,8 @@ export function isUsageEmptyState(
     isProviderSnapshotPending(providers.opencodeGo) ||
     isProviderSnapshotPending(providers.kimi) ||
     antigravitySnapshotPending ||
-    isProviderSnapshotPending(providers.grok) ||
-    isProviderSnapshotPending(providers.minimax)
+    isProviderSnapshotPending(providers.minimax) ||
+    isProviderSnapshotPending(providers.grok)
   ) {
     return false
   }
@@ -167,7 +169,7 @@ export function isUsageEmptyState(
     !isProviderConfigured(providers.opencodeGo) &&
     !isProviderConfigured(providers.kimi) &&
     !isProviderConfigured(providers.antigravity) &&
-    !isProviderConfigured(providers.grok) &&
-    !isProviderConfigured(providers.minimax)
+    !isProviderConfigured(providers.minimax) &&
+    !isProviderConfigured(providers.grok)
   )
 }

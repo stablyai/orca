@@ -35,6 +35,10 @@ export class SttService {
   private canceledOwners = new Set<string>()
   private eventSink: SttEventSink | null = null
   private idleTeardownTimer: NodeJS.Timeout | null = null
+  // Why: stop resolves only after the worker flushes; in-flight feedAudio IPC
+  // must not enqueue samples after that flush or they stick on the warm worker
+  // and contaminate the next dictation session.
+  private stopping = false
   // Why: warm workers intentionally keep lifecycle listeners while reusable;
   // stale workers must not retain this service after error, exit, or teardown.
   private cleanupWorkerLifecycleListeners: (() => void) | null = null
@@ -259,6 +263,9 @@ export class SttService {
   }
 
   feedAudio(samples: Float32Array, sampleRate: number, owner = 'desktop'): void {
+    if (this.stopping) {
+      return
+    }
     const currentOwner = this.activeOwner ?? this.startingOwner
     if (!currentOwner) {
       return
@@ -288,92 +295,97 @@ export class SttService {
       throw new Error('dictation_owner_mismatch')
     }
 
-    if (this.cloudSession) {
-      const session = this.cloudSession
-      this.cloudSession = null
-      try {
-        const text = await session.finish()
-        if (text) {
-          this.eventSink?.({ type: 'final', text })
+    this.stopping = true
+    try {
+      if (this.cloudSession) {
+        const session = this.cloudSession
+        this.cloudSession = null
+        try {
+          const text = await session.finish()
+          if (text) {
+            this.eventSink?.({ type: 'final', text })
+          }
+        } catch (error) {
+          this.eventSink?.({
+            type: 'error',
+            error: error instanceof Error ? error.message : String(error)
+          })
+        } finally {
+          this.eventSink?.({ type: 'stopped' })
+          this.activeModelId = null
+          this.activeHotwordsFilePath = undefined
+          this.activeOwner = null
+          this.eventSink = null
         }
-      } catch (error) {
-        this.eventSink?.({
-          type: 'error',
-          error: error instanceof Error ? error.message : String(error)
-        })
-      } finally {
-        this.eventSink?.({ type: 'stopped' })
-        this.activeModelId = null
-        this.activeHotwordsFilePath = undefined
-        this.activeOwner = null
-        this.eventSink = null
-      }
-      return
-    }
-
-    const worker = this.worker
-    if (!worker) {
-      return
-    }
-    worker.postMessage({ type: 'stop' })
-
-    let forcedTeardown = false
-    await new Promise<void>((resolve) => {
-      let settled = false
-      let timeout: ReturnType<typeof setTimeout> | null = null
-
-      const cleanup = (): void => {
-        if (timeout) {
-          clearTimeout(timeout)
-          timeout = null
-        }
-        worker.off('message', onStopped)
+        return
       }
 
-      const finish = (): void => {
-        if (settled) {
-          return
-        }
-        settled = true
-        cleanup()
-        resolve()
+      const worker = this.worker
+      if (!worker) {
+        return
       }
+      worker.postMessage({ type: 'stop' })
 
-      const onStopped = (msg: { type: string; text?: string; error?: string }) => {
-        if (msg.type === 'stopped') {
-          finish()
+      let forcedTeardown = false
+      await new Promise<void>((resolve) => {
+        let settled = false
+        let timeout: ReturnType<typeof setTimeout> | null = null
+
+        const cleanup = (): void => {
+          if (timeout) {
+            clearTimeout(timeout)
+            timeout = null
+          }
+          worker.off('message', onStopped)
+        }
+
+        const finish = (): void => {
+          if (settled) {
+            return
+          }
+          settled = true
+          cleanup()
+          resolve()
+        }
+
+        const onStopped = (msg: { type: string; text?: string; error?: string }) => {
+          if (msg.type === 'stopped') {
+            finish()
+          }
+        }
+
+        timeout = setTimeout(() => {
+          if (settled) {
+            return
+          }
+          settled = true
+          forcedTeardown = true
+          cleanup()
+          // Why: a worker that cannot finish dictation is no longer reusable; do
+          // not keep it in the warm-worker slot or retain its message listeners.
+          this.cleanupActiveWorkerLifecycleListeners()
+          worker.removeAllListeners()
+          void worker.terminate().finally(resolve)
+        }, STOP_DICTATION_TIMEOUT_MS)
+
+        worker.on('message', onStopped)
+      })
+
+      if (this.worker === worker) {
+        if (forcedTeardown) {
+          this.worker = null
+          this.activeModelId = null
+          this.activeHotwordsFilePath = undefined
+          this.activeOwner = null
+          this.eventSink = null
+        } else {
+          this.activeOwner = null
+          this.eventSink = null
+          this.scheduleIdleTeardown()
         }
       }
-
-      timeout = setTimeout(() => {
-        if (settled) {
-          return
-        }
-        settled = true
-        forcedTeardown = true
-        cleanup()
-        // Why: a worker that cannot finish dictation is no longer reusable; do
-        // not keep it in the warm-worker slot or retain its message listeners.
-        this.cleanupActiveWorkerLifecycleListeners()
-        worker.removeAllListeners()
-        void worker.terminate().finally(resolve)
-      }, STOP_DICTATION_TIMEOUT_MS)
-
-      worker.on('message', onStopped)
-    })
-
-    if (this.worker === worker) {
-      if (forcedTeardown) {
-        this.worker = null
-        this.activeModelId = null
-        this.activeHotwordsFilePath = undefined
-        this.activeOwner = null
-        this.eventSink = null
-      } else {
-        this.activeOwner = null
-        this.eventSink = null
-        this.scheduleIdleTeardown()
-      }
+    } finally {
+      this.stopping = false
     }
   }
 

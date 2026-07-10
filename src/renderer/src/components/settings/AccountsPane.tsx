@@ -42,12 +42,13 @@ import {
   getAccountsClaudeSearchEntries,
   getAccountsCodexSearchEntries,
   getAccountsGeminiSearchEntries,
-  getAccountsGrokSearchEntries,
   getAccountsLocationSearchEntries,
+  getAccountsGrokSearchEntries,
   getAccountsMiniMaxSearchEntries,
   getAccountsOpencodeSearchEntries,
   getAccountsPaneSearchEntries
 } from './accounts-search'
+import { GrokAccountsSection } from './GrokAccountsSection'
 import { SearchableSetting } from './SearchableSetting'
 import { SettingsRow, SettingsSegmentedControl } from './SettingsFormControls'
 import { matchesSettingsSearch } from './settings-search'
@@ -63,7 +64,6 @@ import {
 import { getCodexAccountAuthWarning } from './codex-account-auth-warning'
 import { translate } from '@/i18n/i18n'
 import { cn } from '@/lib/utils'
-import { GrokAccountsSection } from './GrokAccountsSection'
 import {
   hasRemoteProviderAccountOwner,
   removeClaudeProviderAccount,
@@ -1354,9 +1354,6 @@ export function AccountsPane({
         </SearchableSetting>
       </section>
     ) : null,
-    matchesSettingsSearch(searchQuery, getAccountsGrokSearchEntries()) ? (
-      <GrokAccountsSection key="grok-accounts" />
-    ) : null,
     matchesSettingsSearch(searchQuery, getAccountsGeminiSearchEntries()) ? (
       <section key="gemini" id="accounts-gemini" className="space-y-4 scroll-mt-6">
         <div className="space-y-1">
@@ -1801,6 +1798,9 @@ export function AccountsPane({
           </SearchableSetting>
         </div>
       </section>
+    ) : null,
+    matchesSettingsSearch(searchQuery, getAccountsGrokSearchEntries()) ? (
+      <GrokAccountsSection key="grok" />
     ) : null
   ].filter(Boolean)
 

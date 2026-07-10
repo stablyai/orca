@@ -1,6 +1,5 @@
 import type { StatusBarItem, TuiAgent } from '../../../../shared/types'
 
-// Why: Claude/Codex/Gemini/Antigravity usage bars are surface noise when the underlying
 // Why: CLI-backed usage bars are surface noise when the underlying
 // CLI isn't installed (e.g. a fresh Ubuntu install showing "Gemini Usage"
 // when no Gemini CLI is on PATH). We hide both the bar and its toggle when

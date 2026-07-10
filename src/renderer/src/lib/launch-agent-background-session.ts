@@ -69,6 +69,7 @@ export async function launchAgentBackgroundSession(
   }
   const cmdOverrides = store.settings?.agentCmdOverrides ?? {}
   const agentArgs = resolveTuiAgentLaunchArgs(agent, store.settings?.agentDefaultArgs)
+  const agentEnv = resolveTuiAgentLaunchEnv(agent, store.settings?.agentDefaultEnv)
   const launchPlatform = repo
     ? getAgentLaunchPlatformForRepo(
         repo,
@@ -78,12 +79,6 @@ export async function launchAgentBackgroundSession(
   // Why: SSH remotes deploy the CLI shim as plain `orca`, so the Linux-only
   // `orca-ide` rename must not be applied for remote launches.
   const isRemote = repo ? repoIsRemote(repo) : false
-  const agentEnv = resolveTuiAgentLaunchEnv(agent, store.settings?.agentDefaultEnv, {
-    settings: store.settings,
-    isRemote,
-    launchPlatform,
-    hostPlatform: CLIENT_PLATFORM
-  })
   const trimmedPrompt = prompt?.trim() ?? ''
   const hasPrompt = trimmedPrompt.length > 0
   const isFollowupPath = TUI_AGENT_CONFIG[agent].promptInjectionMode === 'stdin-after-start'

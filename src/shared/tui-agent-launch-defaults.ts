@@ -1,18 +1,6 @@
 import { isTuiAgent } from './tui-agent-config'
 import { YOLO_TUI_AGENT_ARGS, YOLO_TUI_AGENT_ENV } from './tui-agent-permissions'
-import type { GlobalSettings, TuiAgent } from './types'
-
-type TuiAgentLaunchEnvSettings = {
-  grokManagedAccounts?: GlobalSettings['grokManagedAccounts']
-  activeGrokManagedAccountId?: GlobalSettings['activeGrokManagedAccountId']
-}
-
-type TuiAgentLaunchEnvOptions = {
-  settings?: TuiAgentLaunchEnvSettings | null
-  isRemote?: boolean
-  launchPlatform?: NodeJS.Platform
-  hostPlatform?: NodeJS.Platform
-}
+import type { TuiAgent } from './types'
 
 const UNSUPPORTED_TUI_AGENT_ARGS: Partial<Record<TuiAgent, readonly string[]>> = {
   opencode: ['--dangerously-skip-permissions'],
@@ -107,23 +95,10 @@ export function resolveTuiAgentLaunchArgs(
 
 export function resolveTuiAgentLaunchEnv(
   agent: TuiAgent,
-  configuredEnv: Partial<Record<TuiAgent, Record<string, string>>> | null | undefined,
-  options: TuiAgentLaunchEnvOptions = {}
+  configuredEnv: Partial<Record<TuiAgent, Record<string, string>>> | null | undefined
 ): Record<string, string> {
-  const env =
-    configuredEnv && Object.prototype.hasOwnProperty.call(configuredEnv, agent)
-      ? { ...configuredEnv[agent] }
-      : getTuiAgentDefaultEnv(agent)
-  const hostPlatform =
-    options.hostPlatform ?? (typeof process === 'undefined' ? undefined : process.platform)
-  const launchPlatform = options.launchPlatform ?? hostPlatform
-  const isHostLocalLaunch =
-    options.isRemote !== true &&
-    (!hostPlatform || !launchPlatform || launchPlatform === hostPlatform)
-  if (agent !== 'grok' || !isHostLocalLaunch) {
-    return env
+  if (configuredEnv && Object.prototype.hasOwnProperty.call(configuredEnv, agent)) {
+    return { ...configuredEnv[agent] }
   }
-  // Why: managed Grok homes require marker/root validation that shared renderer
-  // code cannot perform. Main-process PTY spawn injects the verified home.
-  return env
+  return getTuiAgentDefaultEnv(agent)
 }

@@ -497,8 +497,6 @@ export type BuildPtyHostEnvOptions = {
   isPackaged: boolean
   userDataPath: string
   selectedCodexHomePath: string | null
-  selectedGrokHomePath?: string | null
-  hasSelectedGrokManagedAccount?: boolean
   skipCodexHomeEnv?: boolean
   githubAttributionEnabled: boolean
   /** The launch command the renderer chose for this PTY (e.g. 'pi', 'omp',
@@ -915,11 +913,6 @@ export function buildPtyHostEnv(
     // restore this runtime home before Codex can be launched from the prompt.
     baseEnv.ORCA_CODEX_HOME = opts.selectedCodexHomePath
   }
-  if (opts.selectedGrokHomePath) {
-    baseEnv.GROK_HOME = opts.selectedGrokHomePath
-  } else if (opts.hasSelectedGrokManagedAccount) {
-    delete baseEnv.GROK_HOME
-  }
 
   // Why: WSL shells need the managed userData root for shell-ready wrappers; dev-mode terminals need the same export so `orca` targets the live dev instance.
   if (opts.isWsl) {
@@ -1263,7 +1256,6 @@ export function registerPtyHandlers(
   store?: Store,
   options?: {
     awaitLocalPtyStartup?: () => Promise<void>
-    getSelectedGrokHomePath?: () => string | null
     // Why: returns true (once, consuming the flag) for the crash-recovery reload
     // so its did-finish-load skips the orphan sweep and keeps live PTYs (#5787).
     isRecoveryReloadInFlight?: (webContentsId: number) => boolean
@@ -1326,14 +1318,10 @@ export function registerPtyHandlers(
           codexSelectionTarget,
           getSelectedCodexHomePath?.(codexSelectionTarget) ?? null
         )
-        const selectedGrokHomePath =
-          ctx?.isWsl === true ? null : (options?.getSelectedGrokHomePath?.() ?? null)
         const env = buildPtyHostEnv(id, baseEnv, {
           isPackaged: app.isPackaged,
           userDataPath: app.getPath('userData'),
           selectedCodexHomePath,
-          selectedGrokHomePath,
-          hasSelectedGrokManagedAccount: Boolean(getSettings?.().activeGrokManagedAccountId),
           skipCodexHomeEnv: ctx?.isWsl === true && !selectedCodexHomePath,
           githubAttributionEnabled: getSettings?.()?.enableGitHubAttribution ?? false,
           launchCommand: ctx?.command,
@@ -2182,9 +2170,6 @@ export function registerPtyHandlers(
             getSelectedCodexHomePath?.(codexSelectionTarget) ?? null
           )
         : null
-      const selectedGrokHomePath = isDaemonHostSpawn
-        ? (options?.getSelectedGrokHomePath?.() ?? null)
-        : null
       const skipCodexHomeEnv =
         isDaemonHostSpawn &&
         shouldSkipCodexHomeEnvForWindowsShell(daemonShellOverride, cwd) &&
@@ -2197,8 +2182,6 @@ export function registerPtyHandlers(
           isPackaged: app.isPackaged,
           userDataPath: app.getPath('userData'),
           selectedCodexHomePath,
-          selectedGrokHomePath,
-          hasSelectedGrokManagedAccount: Boolean(getSettings?.().activeGrokManagedAccountId),
           skipCodexHomeEnv,
           githubAttributionEnabled: getSettings?.()?.enableGitHubAttribution ?? false,
           launchCommand: args.command,
@@ -2945,9 +2928,6 @@ export function registerPtyHandlers(
             getSelectedCodexHomePath?.(codexSelectionTarget) ?? null
           )
         : null
-      const selectedGrokHomePath = isDaemonHostSpawn
-        ? (options?.getSelectedGrokHomePath?.() ?? null)
-        : null
       const skipCodexHomeEnv =
         isDaemonHostSpawn &&
         shouldSkipCodexHomeEnvForWindowsShell(effectiveShellOverride, cwd) &&
@@ -2975,8 +2955,6 @@ export function registerPtyHandlers(
             isPackaged: app.isPackaged,
             userDataPath: app.getPath('userData'),
             selectedCodexHomePath,
-            selectedGrokHomePath,
-            hasSelectedGrokManagedAccount: Boolean(getSettings?.().activeGrokManagedAccountId),
             skipCodexHomeEnv,
             githubAttributionEnabled: getSettings?.()?.enableGitHubAttribution ?? false,
             launchCommand: args.command,
@@ -3926,8 +3904,7 @@ export function registerHeadlessPtyRuntime(
   getSelectedCodexHomePath?: GetSelectedCodexHomePath,
   getSettings?: () => GlobalSettings,
   prepareClaudeAuth?: PrepareClaudeAuth,
-  store?: Store,
-  getSelectedGrokHomePath?: () => string | null
+  store?: Store
 ): void {
   // Why: headless `orca serve` has no renderer window, but the runtime still
   // needs the same PTY controller and provider listeners as desktop so remote
@@ -3946,13 +3923,12 @@ export function registerHeadlessPtyRuntime(
     getSelectedCodexHomePath,
     getSettings,
     prepareClaudeAuth,
-    store,
-    { getSelectedGrokHomePath }
+    store
   )
 }
 
 /**
- * Kill all PTY processes. Call on app quit.
+ * Kill in-process local PTYs. Daemon-backed PTYs are preserved by daemon disconnect.
  */
 export function killAllPty(): void {
   if (localProvider instanceof LocalPtyProvider) {

@@ -102,7 +102,9 @@ describe('linear RPC methods', () => {
     )
 
     expect(runtime.linearSearchIssues).toHaveBeenCalledWith('bug', 30, 'all')
-    expect(runtime.linearListIssues).toHaveBeenCalledWith('assigned', 20, 'workspace-1')
+    expect(runtime.linearListIssues).toHaveBeenCalledWith('assigned', 20, 'workspace-1', {
+      attributeFilter: undefined
+    })
     expect(runtime.linearGetIssue).toHaveBeenCalledWith('issue-3', 'workspace-1')
     expect(runtime.linearCreateIssue).toHaveBeenCalledWith(
       'team-1',

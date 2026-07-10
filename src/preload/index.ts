@@ -79,6 +79,7 @@ import type {
 } from '../shared/mobile-markdown-document'
 import type {
   CodexRateLimitResetResult,
+  GrokAccountStatus,
   RateLimitRuntimeTarget,
   RateLimitState
 } from '../shared/rate-limit-types'
@@ -1462,6 +1463,7 @@ const api = {
       filter?: 'assigned' | 'created' | 'all' | 'completed'
       limit?: number
       workspaceId?: string
+      attributeFilter?: unknown
     }): Promise<unknown> => ipcRenderer.invoke('linear:listIssues', args),
 
     createIssue: (args: {
@@ -1783,17 +1785,6 @@ const api = {
       runtime?: 'host' | 'wsl'
       wslDistro?: string | null
     }): Promise<unknown> => ipcRenderer.invoke('codexAccounts:select', args)
-  },
-
-  grokAccounts: {
-    list: (): Promise<unknown> => ipcRenderer.invoke('grokAccounts:list'),
-    add: (): Promise<unknown> => ipcRenderer.invoke('grokAccounts:add'),
-    reauthenticate: (args: { accountId: string }): Promise<unknown> =>
-      ipcRenderer.invoke('grokAccounts:reauthenticate', args),
-    remove: (args: { accountId: string }): Promise<unknown> =>
-      ipcRenderer.invoke('grokAccounts:remove', args),
-    select: (args: { accountId: string | null }): Promise<unknown> =>
-      ipcRenderer.invoke('grokAccounts:select', args)
   },
 
   claudeAccounts: {
@@ -3861,6 +3852,7 @@ const api = {
     fetchInactiveCodexAccounts: (): Promise<void> =>
       ipcRenderer.invoke('rateLimits:fetchInactiveCodexAccounts'),
     refreshMiniMax: (): Promise<RateLimitState> => ipcRenderer.invoke('rateLimits:refreshMiniMax'),
+    refreshGrok: (): Promise<RateLimitState> => ipcRenderer.invoke('rateLimits:refreshGrok'),
     onUpdate: (callback: (state: RateLimitState) => void): (() => void) => {
       const listener = (_event: Electron.IpcRendererEvent, state: RateLimitState) => callback(state)
       ipcRenderer.on('rateLimits:update', listener)
@@ -3875,6 +3867,10 @@ const api = {
       ipcRenderer.invoke('minimaxCredentials:saveCookie', cookie),
     clearCookie: (): Promise<{ configured: boolean }> =>
       ipcRenderer.invoke('minimaxCredentials:clearCookie')
+  },
+
+  grokAccounts: {
+    getStatus: (): Promise<GrokAccountStatus> => ipcRenderer.invoke('grokAccounts:getStatus')
   },
 
   ssh: {

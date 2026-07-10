@@ -29,8 +29,8 @@
         "sshToggleDescription": "Muestra hosts SSH configurados y hosts remotos de Orca cuando haya alguno disponible.",
         "resourceUsageToggleDescription": "Muestra el Administrador de recursos. Haz clic para ver CPU, memoria, sesiones, controles del servicio en segundo plano y análisis de disco de los espacios de trabajo.",
         "portsToggleDescription": "Muestra los puertos activos de los espacios de trabajo. Haz clic para ver los puertos de cada espacio de trabajo y los puertos externos.",
-        "antigravityToggleDescription": "Show Antigravity subscription usage for the active workspace.",
-        "grokToggleDescription": "Muestra el uso de la suscripción de Grok para el espacio de trabajo activo."
+        "antigravityToggleDescription": "Muestra el uso de suscripción de Antigravity para el espacio de trabajo activo.",
+        "grokToggleDescription": "Muestra el uso de créditos de suscripción de Grok cuando has iniciado sesión con Grok CLI."
       }
     }
   },
@@ -564,10 +564,10 @@
         "wslDefault": "WSL predeterminado"
       },
       "sidebarWorktreeActivation": {
-        "wakeEphemeralVmFailed": "No se pudo reactivar el espacio de trabajo de la VM efímera"
+        "wakeEphemeralVmFailed": "Error al activar el espacio de trabajo VM efímera"
       },
       "ephemeralVmWorkspaceTarget": {
-        "projectRootRegistrationFailed": "No se pudo registrar en el host la raíz del proyecto creada por la receta."
+        "projectRootRegistrationFailed": "Error al registrar la raíz del proyecto creada por la receta en el entorno de ejecución"
       },
       "blocked": {
         "notification": {
@@ -593,8 +593,8 @@
         "chooseOrAddProjectBeforeWorkspace": "Elige o agrega un proyecto antes de crear un espacio de trabajo.",
         "folderWorkspaceCreateFailedTitle": "No se pudo crear el espacio de trabajo de carpeta",
         "folderWorkspaceCreateFailedMessage": "No se pudo crear el espacio de trabajo de carpeta. Revisa los detalles del error de arriba e inténtalo de nuevo.",
-        "setupAgentStartupPolicySaveFailed": "No se pudo guardar el comportamiento de inicio del setup.",
-        "5f3d2c8a1b": "No se pudo resolver la base del MR."
+        "setupAgentStartupPolicySaveFailed": "Error al guardar el comportamiento de inicio",
+        "5f3d2c8a1b": "Error al resolver la base del MR"
       },
       "useGlobalFileDrop": {
         "38c9f034ff": "No se pudieron cargar los archivos soltados.",
@@ -637,7 +637,7 @@
         "94a5afe910": "Hosts SSH",
         "40d80bad8a": "Beta",
         "de0c2907a1": "Servidores remotos de Orca",
-        "b351014180": "Estadísticas de Orca más análisis de uso de Claude, Codex y OpenCode.",
+        "b351014180": "Estadísticas de Orca más análisis de tokens de Claude, Codex y OpenCode y uso de suscripción de Grok.",
         "d72a58b5b9": "Estadísticas y uso",
         "dcd0d9b74f": "Atajos de teclado para acciones comunes.",
         "94295ebfb3": "Atajos",
@@ -678,14 +678,14 @@
         "cd50cec5d7": "Coordina múltiples coding agents a través de Orca.",
         "58a868e8e4": "Orquestación",
         "7c79d3b7bf": "Opcional",
-        "b1c2f8b0ac": "Cambio de cuenta opcional para Claude, Codex, Gemini y OpenCode Go.",
+        "b1c2f8b0ac": "Configuración opcional de cuentas y uso para Claude, Codex, Gemini, OpenCode Go, MiniMax y Grok.",
         "f70ac54d38": "Cuentas de proveedores de IA",
         "4121f7a0a2": "Administra agentes de IA, define uno predeterminado y personaliza comandos.",
         "b49abbd2f7": "Agentes",
-        "dev": "Dev Tools",
-        "devDescription": "Herramientas solo para dev para probar estados de UI.",
+        "dev": "Herramientas de desarrollo",
+        "devDescription": "Herramientas exclusivas para desarrolladores para probar estados de UI.",
         "devBadge": "Dev",
-        "devSearchNotificationPlayground": "Panel de prueba de notificaciones",
+        "devSearchNotificationPlayground": "Área de pruebas de notificaciones",
         "devSearchNotificationPlaygroundDescription": "Activa estados representativos de notificaciones y toasts en la interfaz.",
         "devSearchKeywordDev": "dev",
         "devSearchKeywordToast": "toast",
@@ -903,17 +903,17 @@
           "someone": "alguien",
           "assigned": "asignó a",
           "unassigned": "quitó a",
-          "mentioned": "mencionó esto",
+          "mentioned": "mencionó este issue",
           "in": "en",
-          "closed": "cerró esto",
-          "reopened": "reabrió esto",
-          "moved": "movió esto",
+          "closed": "cerró este issue",
+          "reopened": "reabrió este issue",
+          "moved": "movió este issue",
           "from": "de",
           "to": "a",
           "activity": "Actividad",
-          "noActivity": "Aún no hay actividad."
+          "noActivity": "Sin actividad aún."
         },
-        "checkActionRequiredHint": "Este check requiere una acción manual en GitHub (por ejemplo, aprobar la ejecución del workflow) antes de desbloquear el merge."
+        "checkActionRequiredHint": "Esta verificación necesita una acción manual en GitHub (por ejemplo, aprobar la ejecución del workflow) antes de que se desbloquee la fusión."
       },
       "GitLabItemDialog": {
         "65e784c1f1": "Reabrir",
@@ -1383,7 +1383,7 @@
         "8ff5ae8866": "Asignados",
         "82c87eceb9": "Editar asignados",
         "1ff5d979df": "Nadie asignado",
-        "checkActionRequiredHint": "Este check requiere una acción manual en GitHub (por ejemplo, aprobar la ejecución del workflow) antes de desbloquear el merge.",
+        "checkActionRequiredHint": "Esta verificación necesita una acción manual en GitHub (por ejemplo, aprobar la ejecución del workflow) antes de que se desbloquee la fusión.",
         "dd5d9a4f17": "actualizado {{value0}}",
         "71a3c0f9d2": "Iniciar espacio de trabajo"
       },
@@ -1733,7 +1733,10 @@
         "searchIssues": "Buscar issues",
         "useIssueNumber": "Usar issue #{{value0}}",
         "noMatchingIssuesLoaded": "No se cargaron issues coincidentes.",
-        "editReviewersWithCurrent": "Editar revisores: {{value0}}"
+        "editReviewersWithCurrent": "Editar revisores: {{value0}}",
+        "linearEmptyAttributeFilter": "Ningún issue coincide con los filtros seleccionados. Limpia un filtro o prueba con otros criterios.",
+        "linearEmptyUnfilteredScope": "No hay issues en el alcance de este espacio de trabajo. Intenta buscar o ajustar los equipos.",
+        "linearFetchMore": "Cargar más"
       },
       "Terminal": {
         "73768427cf": "Cerrar",
@@ -2595,7 +2598,7 @@
                   "c00421d320": "Se copió el contexto del fork. Inicia un agente y pégalo para iniciar el fork.",
                   "f62b40e2c7": "No hay contexto de terminal para copiar",
                   "373a3103e7": "Contexto copiado",
-                  "3fc568a49d": "No se pudo copiar el contexto."
+                  "3fc568a49d": "Error al copiar el contexto."
                 }
               }
             },
@@ -2650,9 +2653,9 @@
             "title": "Se requiere conexión SSH",
             "connectingButton": "Conectando...",
             "connectButton": "Conectar",
-            "removedTitle": "SSH host removed",
-            "removedBody": "The SSH host for this workspace was removed, so it can no longer connect. Remove the workspace to clear it — remote files are left untouched.",
-            "removeWorkspaceButton": "Remove workspace"
+            "removedTitle": "Host SSH eliminado",
+            "removedBody": "El host SSH de este espacio de trabajo fue eliminado, por lo que ya no puede conectarse. Elimina el espacio de trabajo para limpiarlo — los archivos remotos permanecen intactos.",
+            "removeWorkspaceButton": "Eliminar espacio de trabajo"
           }
         }
       },
@@ -2862,7 +2865,7 @@
             "a768f428f1": "Cerrar pestaña"
           },
           "TerminalTabSplitMenuSection": {
-            "splitTerminal": "Split terminal"
+            "splitTerminal": "Dividir terminal"
           }
         }
       },
@@ -3031,13 +3034,11 @@
             "c0e972d726": "Cancelar",
             "06741a2f3d": "Abrir detalles de uso de MiniMax",
             "3bbf140864": "Uso de MiniMax",
-            "antigravityUsage": "Antigravity Usage",
-            "grokUsage": "Grok Usage",
-            "antigravityUsageDetails": "Open Antigravity usage details",
-            "grokUsageDetails": "Open Grok usage details",
-            "5131f6a8a7": "Uso de Grok",
-            "8e2c5b7d43": "Abrir detalles de uso de Grok",
-            "remoteServerLabel": "Servidor remoto"
+            "remoteServerLabel": "Servidor remoto",
+            "antigravityUsage": "Uso de Antigravity",
+            "antigravityUsageDetails": "Abrir detalles de uso de Antigravity",
+            "grokUsageAria": "Abrir detalles de uso de Grok",
+            "grokUsageMenu": "Uso de Grok"
           },
           "StatusBarUsageEmptyCta": {
             "828c764a79": "Conectar una cuenta",
@@ -3385,7 +3386,8 @@
           "b2cf4310ce": "Resumen",
           "908c470587": "codex",
           "eb6a066185": "claude",
-          "eee19cfade": "resumen"
+          "eee19cfade": "resumen",
+          "grokUsageTab": "Grok"
         },
         "UsageOverviewPane": {
           "22ed1b7669": "sesiones",
@@ -3436,8 +3438,13 @@
             "0bba8ca244": "estadísticas",
             "0e2a0b6431": "uso",
             "372debfac0": "estadísticas",
-            "26bb901fcd": "Estadísticas de Orca más analíticas de uso combinadas de Claude, Codex y OpenCode: tokens, caché, modelos y sesiones.",
-            "cb2430ae6a": "Estadísticas y uso"
+            "26bb901fcd": "Estadísticas de Orca más análisis de tokens de Claude, Codex y OpenCode y uso de suscripción de Grok.",
+            "cb2430ae6a": "Estadísticas y uso",
+            "f8a1b2c3d4": "grok",
+            "e7f0a1b2c3": "suscripción",
+            "d6e9f0a1b2": "créditos",
+            "a3b6c7d8e9": "uso de grok",
+            "9f2a3b4c5d": "xai"
           }
         },
         "usage": {
@@ -3487,6 +3494,17 @@
           "faf3444859": "Entrada",
           "a8b7487ff7": "Salida",
           "cfe2282ffa": "Desconocido"
+        },
+        "GrokUsagePane": {
+          "g8h9i0j1k2": "Uso de Grok",
+          "b2d3e4f5c6": "Créditos semanales de suscripción desde OAuth de Grok CLI (~/.grok/auth.json). Es la misma fuente que la barra de estado.",
+          "c3e4f5a6b7": "Configurar en Cuentas",
+          "h9i0j1k2l3": " • {{value0}}",
+          "i0j1k2l3m4": "Actualizar uso de Grok",
+          "d4f5a6b7c8": "Actualizar",
+          "e5a6b7c8d9": "Créditos semanales usados",
+          "f6b7c8d9e0": "Restablecimiento del periodo de facturación",
+          "a7b8c9d0e1": "Configuración de la cuenta de Grok"
         }
       },
       "sparse": {
@@ -4203,7 +4221,7 @@
           "hostDisconnected": "Desconectado",
           "failedNestWorkspace": "No se pudo anidar el espacio de trabajo",
           "sidebarRowMissing": "El destino ya no existe",
-          "failedUnnestWorkspace": "No se pudo quitar la anidación del espacio de trabajo"
+          "failedUnnestWorkspace": "Error al expandir el espacio de trabajo"
         },
         "WorktreeMetaDialog": {
           "3db0a2a593": "Cancelar",
@@ -4500,14 +4518,14 @@
           "7a8b9c0d1e": "Abrir ajustes",
           "8b9c0d1e2f": "Quitar host",
           "workspacesFailed": "Could not remove {{count}} of this host’s workspaces. The host was kept so you can retry.",
-          "oneWorkspace": "1 workspace",
+          "oneWorkspace": "1 espacio de trabajo",
           "manyWorkspaces": "{{count}} workspaces",
           "hostHasWorkspacesDefault": "Removes {{value0}} and its credentials from this computer. Its {{value1}} stay in Orca — remote files are not touched.",
           "alsoDeleteRemote": "Also delete these {{value0}} on {{value1}}",
           "alsoForgetLocal": "Also remove these {{value0}} from Orca",
           "advanced": "Advanced",
-          "alsoDeleteRemoteHint": "Permanently deletes the remote Git worktrees and their branches. Cannot be undone.",
-          "alsoForgetLocalHint": "Clears them from Orca only. Remote files, worktrees, and branches are left untouched."
+          "alsoDeleteRemoteHint": "Elimina permanentemente los espacios de trabajo Git remotos y sus ramas. Esta acción no se puede deshacer.",
+          "alsoForgetLocalHint": "Solo limpia de Orca. Los archivos, espacios de trabajo y ramas remotas permanecen intactos."
         },
         "HostRenameDialog": {
           "1a2b3c4d5e": "Renombrar host",
@@ -4622,14 +4640,14 @@
           "sshPersistenceDefault": "Los terminales remotos en este host seguirán activos hasta que los cierres o restablezcas el relay."
         },
         "ForgetSshWorkspaceDialog": {
-          "reconnectFailed": "Reconnection failed",
+          "reconnectFailed": "Error de reconexión",
           "forgetBody": "Removes this workspace from Orca only. Files, the Git worktree, and branches on {{host}} are left untouched.",
           "title": "Delete “{{name}}”?",
-          "disconnectedBody": "The SSH host for this workspace is not connected. Reconnect to delete it on the remote too, or remove it from Orca only.",
+          "disconnectedBody": "El host SSH de este espacio de trabajo no está conectado. Reconéctalo para eliminarlo también en el remoto, o elimínalo solo de Orca.",
           "ghostBody": "{{host}} is no longer a saved SSH host, so this workspace is no longer connected to a live host. It can only be removed from Orca — files and branches on the remote are left untouched.",
           "cancel": "Cancel",
-          "forget": "Remove from Orca",
-          "reconnectAndDelete": "Reconnect & Delete"
+          "forget": "Eliminar de Orca",
+          "reconnectAndDelete": "Reconectar y eliminar"
         }
       },
       "shared": {
@@ -4650,7 +4668,17 @@
           "87412c2a68": "Se terminó {{value0}} sesión.",
           "a2f040ac1c": "Se terminaron {{value0}} sesiones.",
           "63520148e2": "La sesión {{value0}} se negó a salir.",
-          "cc0a26cb14": "{{value0}} sesiones se negaron a salir."
+          "cc0a26cb14": "{{value0}} sesiones se negaron a salir.",
+          "71a8d342b0": "Terminal tabs absent: {{value0}}/{{value1}}. Failed close attempts: {{value2}}. Exact PTY shutdown requests accepted: {{value3}}; failed: {{value4}}.",
+          "2e57c1a940": "El resultado del apagado del daemon no está verificado porque su solicitud de gestión falló.",
+          "993af6052c": "La gestión del daemon reportó salida: {{value0}}/{{value1}}; aún presente antes de la limpieza exacta: {{value2}}.",
+          "1f0d8ac762": "La limpieza del terminal terminó con errores.",
+          "80b6ea14cf": "La limpieza del terminal terminó con advertencias.",
+          "47cd2a50e9": "No se reportaron sesiones ni pestañas de terminal.",
+          "c34fb1098d": "Las pestañas de terminal se cerraron y se solicitó el apagado.",
+          "d9657ac204": "Se solicitó el apagado de la sesión de terminal.",
+          "e8f25bd903": "No se pudo completar la limpieza del terminal.",
+          "a702d4196e": "Esto cierra cada pestaña de terminal en todos los espacios de trabajo y solicita el apagado de sus sesiones de terminal actuales. Cualquier trabajo de terminal no guardado se pierde. El daemon en sí continúa ejecutándose y se pueden abrir terminales nuevas inmediatamente. Esta acción no se puede deshacer."
         }
       },
       "setup": {
@@ -4885,9 +4913,9 @@
           "agentPermissionsYolo": "Yolo",
           "agentPermissionsManual": "Manual",
           "3f1bdf3cb4": "El texto de entorno es demasiado grande para analizarlo de forma segura.",
-          "codexSessionSource": "Codex home to import from",
-          "codexSessionSourceInfo": "About importing Codex history",
-          "codexSessionSourceTooltip": "Orca runs Codex in an isolated home. Point this at your existing Codex home to import that session history. Empty uses ~/.codex."
+          "codexSessionSource": "Directorio Codex a importar",
+          "codexSessionSourceInfo": "Sobre la importación del historial de Codex",
+          "codexSessionSourceTooltip": "Orca ejecuta Codex en un directorio aislado. Señala aquí a tu directorio Codex existente para importar el historial de sesiones. Dejar vacío usa ~/.codex."
         },
         "AppIconSelector": {
           "d5a112dc9b": "Icono siguiente",
@@ -6270,7 +6298,7 @@
           "b5ee17826b": "Empareja runtimes remotos de Orca para sesiones persistentes, estado remoto más completo y traspaso web o móvil.",
           "7686cb5c36": "Conecta este navegador a un servidor Orca guardado.",
           "bd0181eeca": "Servidores remotos de Orca",
-          "8acf3f22e0": "Estadísticas de Orca más análisis de uso de Claude, Codex y OpenCode.",
+          "8acf3f22e0": "Estadísticas de Orca más análisis de tokens de Claude, Codex y OpenCode y uso de suscripción de Grok.",
           "954a8f5aef": "Estadísticas y uso",
           "a737a4bb22": "Atajos de teclado para acciones comunes.",
           "23bf7a1ad4": "Atajos",
@@ -6941,8 +6969,12 @@
             "d09fb5ca92": "Ubicación de cuentas",
             "733f9e2a93": "Uso de MiniMax",
             "f8374c3151": "Pega tu cookie de sesión de platform.minimax.io para obtener límites de uso locales.",
-            "913f2f40f9": "Grok Accounts",
-            "4f0a71c893": "Optional account switching for Grok using isolated GROK_HOME directories."
+            "f4a8c2e1b7": "Uso de Grok (xAI)",
+            "e3b7d1f9a2": "Inicio de sesión OAuth mediante Grok CLI (grok login) para el uso de créditos semanales.",
+            "d2c6a0e8f1": "grok",
+            "c1b5f9d7e0": "xai",
+            "b0a4e8c6d9": "OAuth",
+            "a9f3d7b5c8": "inicio de sesión"
           }
         },
         "advanced": {
@@ -7157,10 +7189,13 @@
             },
             "9a115966d3": "Minimizar a la bandeja al cerrar",
             "4d5b9427b5": "Cuando está activado, cerrar la ventana mantiene Orca en ejecución en la bandeja del sistema en lugar de salir.",
-            "antigravityUsageDescription": "Show Antigravity subscription usage in the status bar.",
-            "antigravityUsageTitle": "Antigravity Usage",
-            "798169c7f4": "Uso de Grok",
-            "b286fc6d86": "Muestra el uso de la suscripción de Grok en la barra de estado."
+            "antigravityUsageTitle": "Uso de Antigravity",
+            "antigravityUsageDescription": "Muestra el uso de suscripción de Antigravity en la barra de estado.",
+            "antigravityKeyword": "antigravity",
+            "f8e2a1c4b6": "Uso de Grok",
+            "e7d1b0f3a5": "Muestra el uso semanal de créditos de Grok desde OAuth de Grok CLI.",
+            "d6c0a9e2f4": "grok",
+            "c5b9f8d1e3": "xai"
           }
         },
         "auto": {
@@ -8485,7 +8520,7 @@
                   "supportedAgents": "Agentes compatibles con esta receta: {{value0}}.",
                   "unsupportedSavedAgent": "{{value0}} no puede ejecutar esta acción de generación de texto. Elige uno de los agentes compatibles a continuación.",
                   "resolveComments": "Inicia un agente a partir de comentarios de PR o MR sin resolver seleccionados.",
-                  "fixPushFailure": "Start an agent when a pre-push hook or git push fails."
+                  "fixPushFailure": "Inicia un agente cuando falla un hook pre-push o un git push."
                 }
               }
             }
@@ -8846,12 +8881,12 @@
           "notificationPlaygroundDescription": "Disparadores solo para desarrollo para comprobar el diseño de toasts, acciones de recuperación y ajuste de texto largo.",
           "devOnly": "Solo para desarrollo",
           "orcaCloud": "Orca Cloud",
-          "orcaCloudDescription": "Dev-only preview of first-party cloud sign-in. Hidden in production; in dev it also appears in the sidebar account switcher once ORCA_CLOUD_API_URL and ORCA_CLOUD_CLIENT_ID are set.",
-          "orcaCloudStatus": "Status",
-          "orcaCloudSignOut": "Sign out",
-          "orcaCloudConnect": "Connect profile",
-          "orcaCloudRefresh": "Refresh status",
-          "orcaCloudNotConfigured": "Set ORCA_CLOUD_API_URL and ORCA_CLOUD_CLIENT_ID to preview Orca Cloud sign-in in this dev build."
+          "orcaCloudDescription": "Vista previa solo para desarrolladores del inicio de sesión de la nube propia. Oculto en producción; en desarrollo también aparece en el selector de cuentas de la barra lateral cuando se configuran ORCA_CLOUD_API_URL y ORCA_CLOUD_CLIENT_ID.",
+          "orcaCloudStatus": "Estado",
+          "orcaCloudSignOut": "Cerrar sesión",
+          "orcaCloudConnect": "Conectar perfil",
+          "orcaCloudRefresh": "Actualizar estado",
+          "orcaCloudNotConfigured": "Configura ORCA_CLOUD_API_URL y ORCA_CLOUD_CLIENT_ID para previsualizar el inicio de sesión de Orca Cloud en esta versión de desarrollo."
         },
         "EphemeralVmRecipeRow": {
           "useInWorkspace": "Usar en el espacio de trabajo"
@@ -8908,57 +8943,50 @@
         },
         "SourceControlActionRepoOverrideNote": {
           "agent": "Agente",
-          "agentArgs": "Argumentos de la CLI",
-          "commandTemplate": "Plantilla del comando",
+          "agentArgs": "Argumentos CLI",
+          "commandTemplate": "Plantilla de comando",
           "more": "+{{count}} más",
-          "plural": "Guardar a nivel global no cambiará {{count}} repositorios con sus propias recetas.",
+          "plural": "Las guardadas globales no cambiarán {{count}} repositorios con sus propias recetas.",
           "recipe": "Receta",
-          "review": "Revisar",
+          "review": "Revisión",
           "reviewFirst": "Revisar primero",
-          "singular": "Guardar a nivel global no cambiará 1 repositorio con su propia receta.",
-          "tooltipTitle": "Anulaciones de repositorio"
-        },
-        "GrokAccountsSection": {
-          "09c0c774f6": "Could not load Grok accounts.",
-          "0edb3b4c8d": "Grok account updated.",
-          "a617606f43": "{{value0}} -> {{value1}}. Restart live Grok terminals before continuing old sessions.",
-          "53eab14cd4": "Grok account update failed.",
-          "f8d3c1d153": "Remove Grok Account?",
-          "a2d157c8b5": "Orca will delete the managed Grok home for this saved account. If it is currently active, Orca falls back to the system default Grok login.",
-          "dbb9626ed1": "Cancel",
-          "c2d2751587": "Remove Account",
-          "0baad2d5d2": "Grok",
-          "9434c099b4": "Optional. Add Grok accounts only if you want Orca-launched Grok terminals and usage reads to switch between isolated CLI homes.",
-          "603bfb6f0c": "Grok Accounts",
-          "caa4e95f6d": "Managed Grok accounts use isolated GROK_HOME directories.",
-          "94d351af4a": "Accounts",
-          "6f598b68c3": "New accounts are added on this device.",
-          "b0e948a4f9": "Add Account",
-          "f2a265f8c7": "System default",
-          "e74831fb6b": "Active",
-          "afd4795eef": "Use your current system Grok login.",
-          "264b67cb71": "No managed Grok accounts. Orca will use the system default Grok login until you add one here.",
-          "8a0f870153": "Re-authenticate"
+          "singular": "Las guardadas globales no cambiarán 1 repositorio con su propia receta.",
+          "tooltipTitle": "Sobrescrituras de repositorio"
         },
         "linear": {
           "agent": {
             "skill": {
               "install": {
                 "cta": {
-                  "copiedCommand": "Copied command.",
-                  "copyFailed": "Failed to copy command.",
-                  "skillLabel": "Agent skill:",
-                  "checking": "Checking...",
-                  "installed": "Installed",
-                  "notInstalled": "Not installed",
-                  "recheck": "Re-check",
-                  "installedDescription": "Agent skill installed. To update it, run:",
-                  "description": "Let your agents read and edit Linear tasks.",
-                  "copyCommand": "Copy command"
+                  "copiedCommand": "Comando copiado.",
+                  "copyFailed": "Error al copiar el comando.",
+                  "skillLabel": "Habilidad del agente:",
+                  "checking": "Verificando...",
+                  "installed": "Instalado",
+                  "notInstalled": "No instalado",
+                  "recheck": "Reverificar",
+                  "installedDescription": "Habilidad del agente instalada. Para actualizarla, ejecuta:",
+                  "description": "Permite que tus agentes lean y editen tareas de Linear.",
+                  "copyCommand": "Copiar comando"
                 }
               }
             }
           }
+        },
+        "GrokAccountsSection": {
+          "a1b2c3d4e5": "Grok (xAI)",
+          "f6e5d4c3b2": "Muestra el uso semanal de créditos desde tu inicio de sesión en Grok CLI (archivo de sesión ~/.grok/auth.json).",
+          "0d8e77bc40": "Documentación de Grok CLI",
+          "ad47a33f72": "Cargando…",
+          "b2c3d4e5f6": "Sesión iniciada",
+          "c3d4e5f6a7": "Sesión iniciada. Orca solo lee ese archivo en disco; ejecuta grok login de nuevo si falla el uso.",
+          "d4e5f6a7b8": "Sesión vencida; ejecuta grok login en una terminal para renovarla.",
+          "e5f6a7b8c9": "No has iniciado sesión en Grok CLI",
+          "f6a7b8c9d0": "En una terminal, ejecuta grok login y luego haz clic en Actualizar uso aquí.",
+          "3325d996cb": "Actualizar uso",
+          "a8f3e2c1b4": "Créditos semanales",
+          "b7e2d9f0a3": "El mismo porcentaje de créditos semanales que la pantalla grok /usage en la terminal.",
+          "c6d1a8f4e2": "Se restablece {{when}}"
         }
       },
       "right": {
@@ -9428,21 +9456,21 @@
             "d2b9g4f315": "{{value0}} commits por detrás de {{value1}}",
             "e9c2a5d416": "A la par con {{value0}}",
             "4b4a7de138": "Abrir página de revisión en el navegador",
-            "createPrIntentCommitBlockedSummary": "Commit bloqueado: {{value0}} Corrige el problema y vuelve a intentar Crear PR.",
+            "createPrIntentCommitBlockedSummary": "Commit bloqueado: {{value0}} Corrige el issue y reintenta crear PR.",
             "pushRecovery": {
-              "4b37ae99b0": "Start the default AI agent to fix this push failure",
-              "30b8d4f181": "Fix push failure with AI",
-              "dd43c47089": "Choose an agent for this push failure",
-              "ec7bfced55": "Choose agent to fix push failure",
-              "9e5ccd00aa": "Push failure context unavailable",
-              "054ead86b1": "Fix Push Failure With AI",
-              "15b7f210d7": "Choose the agent and edit the full command input before launch.",
-              "011f9713fc": "Push blocked",
-              "60bd988f0b": "AI Fix",
-              "03d238218c": "Details",
-              "a9bf7c171a": "Push Failed",
-              "834cb3f23d": "Fix with AI",
-              "783a808870": "Close"
+              "4b37ae99b0": "Iniciar el agente de AI predeterminado para corregir este fallo de push",
+              "30b8d4f181": "Corregir fallo de push con AI",
+              "dd43c47089": "Elegir un agente para este fallo de push",
+              "ec7bfced55": "Elegir agente para corregir fallo de push",
+              "9e5ccd00aa": "Contexto del fallo de push no disponible",
+              "054ead86b1": "Corregir Fallo de Push con AI",
+              "15b7f210d7": "Elige el agente y edita la entrada del comando completo antes de iniciar.",
+              "011f9713fc": "Push bloqueado",
+              "60bd988f0b": "Corrección AI",
+              "03d238218c": "Detalles",
+              "a9bf7c171a": "Push fallido",
+              "834cb3f23d": "Corregir con AI",
+              "783a808870": "Cerrar"
             }
           },
           "SourceControlAgentActionDialog": {
@@ -9696,30 +9724,30 @@
                 "push": {
                   "failure": {
                     "launch": {
-                      "216f762bd7": "Unable to resolve the workspace connection.",
-                      "4f4e0418a0": "Could not build the agent prompt.",
-                      "f2b47026e8": "Push failure prompt is empty. Update Source Control AI settings.",
-                      "d481ab22f9": "Saved AI agent is unavailable. Use Customize launch to choose another agent.",
-                      "9bbd9077a2": "No enabled AI agents. Configure agents in Settings.",
-                      "5540ff50cc": "Could not build the agent launch command.",
-                      "a8b97d2318": "Started an AI agent for the push failure."
+                      "216f762bd7": "No se pudo resolver la conexión del espacio de trabajo.",
+                      "4f4e0418a0": "No se pudo construir el prompt del agente.",
+                      "f2b47026e8": "El prompt de fallo de push está vacío. Actualiza la configuración de AI de Control de Código.",
+                      "d481ab22f9": "El agente de AI guardado no está disponible. Usa Inicio personalizado para elegir otro agente.",
+                      "9bbd9077a2": "No hay agentes de AI habilitados. Configura agentes en Configuración.",
+                      "5540ff50cc": "No se pudo construir el comando de inicio del agente.",
+                      "a8b97d2318": "Se inició un agente de AI para el fallo de push."
                     }
                   }
                 },
                 "recovery": {
                   "launch": {
-                    "4f4e0418a0": "Could not build the agent prompt.",
+                    "4f4e0418a0": "No se pudo construir el prompt del agente.",
                     "push": {
-                      "empty": "Push failure prompt is empty. Update Source Control AI settings."
+                      "empty": "El prompt de fallo de push está vacío. Actualiza la configuración de AI de Control de Código."
                     },
                     "commit": {
-                      "empty": "Commit failure prompt is empty. Update Source Control AI settings."
+                      "empty": "El prompt de fallo de commit está vacío. Actualiza la configuración de AI de Control de Código."
                     },
-                    "d481ab22f9": "Saved AI agent is unavailable. Use Customize launch to choose another agent.",
-                    "9bbd9077a2": "No enabled AI agents. Configure agents in Settings.",
-                    "5540ff50cc": "Could not build the agent launch command.",
-                    "216f762bd7": "Unable to resolve the workspace connection.",
-                    "success": "Started an AI agent for the {{value0}} failure."
+                    "d481ab22f9": "El agente de AI guardado no está disponible. Usa Inicio personalizado para elegir otro agente.",
+                    "9bbd9077a2": "No hay agentes de AI habilitados. Configura agentes en Configuración.",
+                    "5540ff50cc": "No se pudo construir el comando de inicio del agente.",
+                    "216f762bd7": "No se pudo resolver la conexión del espacio de trabajo.",
+                    "success": "Se inició un agente de AI para el fallo de {{value0}}."
                   }
                 }
               },
@@ -10608,7 +10636,7 @@
           },
           "FloatingTerminalToggleButton": {
             "3b04b065b5": "Mostrar espacio de trabajo flotante",
-            "4cb418b991": "Show floating workspace, new activity",
+            "4cb418b991": "Mostrar espacio de trabajo flotante, nueva actividad",
             "5785dd9148": "Minimizar el espacio de trabajo flotante",
             "bfe7809a70": "{{value0}} espacio de trabajo flotante ({{value1}})"
           },
@@ -11772,22 +11800,22 @@
           "5a8e1d4f23": " · "
         },
         "ExternalFileChangeBanner": {
-          "7c41e90d12": "This file changed on disk while you have unsaved edits. Saving will overwrite the newer disk content.",
-          "3fa2b8d417": "Reload from Disk",
-          "a95d02c644": "Keep My Edits",
-          "5c02de9b31": "Reloaded from disk",
-          "d1e830fa22": "Undo",
-          "90b2ce7d43": "Compare"
+          "7c41e90d12": "Este archivo cambió en el disco mientras tenías ediciones sin guardar. Guardar sobrescribirá el contenido más reciente del disco.",
+          "3fa2b8d417": "Recargar desde disco",
+          "a95d02c644": "Mantener mis ediciones",
+          "5c02de9b31": "Recargado desde disco",
+          "d1e830fa22": "Deshacer",
+          "90b2ce7d43": "Comparar"
         },
         "ExternalFileChangeCompareDialog": {
-          "4b8de20a11": "File changed on disk",
-          "90cc31e4d7": "Disk version on the left, your unsaved edits on the right.",
-          "8fe30ab254": "Reading file from disk...",
-          "e2b1cd0393": "Could not read the file from disk: {{value0}}",
-          "b6cf20d514": "The file on disk is binary — no text comparison available.",
-          "3fa2b8d417": "Reload from Disk",
-          "a95d02c644": "Keep My Edits",
-          "2c8f1e07b9": "Loading comparison..."
+          "4b8de20a11": "Archivo cambiado en disco",
+          "90cc31e4d7": "Versión del disco a la izquierda, tus ediciones sin guardar a la derecha.",
+          "8fe30ab254": "Leyendo archivo desde disco...",
+          "e2b1cd0393": "No se pudo leer el archivo desde el disco: {{value0}}",
+          "b6cf20d514": "El archivo en disco es binario — comparación de texto no disponible.",
+          "3fa2b8d417": "Recargar desde disco",
+          "a95d02c644": "Mantener mis ediciones",
+          "2c8f1e07b9": "Cargando comparación..."
         }
       },
       "diff": {
@@ -12476,7 +12504,7 @@
             "fdd26d81cc": "Ajustes de cuenta de Atlassian",
             "8090504a3e": "Crea un token en",
             "7b3967c12f": "Token API de Atlassian",
-            "3d81bf3ab3": "API token",
+            "3d81bf3ab3": "Token de API",
             "e91b9a4073": "you@example.com",
             "2849ddb295": "Email de Atlassian",
             "70fcd360c4": "https://example.atlassian.net",
@@ -12790,6 +12818,29 @@
             }
           }
         }
+      },
+      "linear-issue-attribute-filter-dropdowns": {
+        "removeFilter": "Eliminar filtro de {{value0}}",
+        "teamRequired": "Selecciona un equipo para cargar el estado, asignatarios y etiquetas de este espacio de trabajo.",
+        "filters": "Filtros",
+        "allWorkspacesTitle": "Selecciona un espacio de trabajo",
+        "allWorkspacesBody": "Los filtros de estado, asignatario y etiquetas usan IDs de un solo espacio de trabajo de Linear. Elige un espacio de trabajo para filtrar por esos atributos.",
+        "optionsFromTeam": "Opciones de {{team}}",
+        "clearAll": "Limpiar todos los filtros"
+      },
+      "linear-issue-attribute-filter-sections": {
+        "status": "Estado",
+        "priority": "Prioridad",
+        "assignee": "Asignatario",
+        "unassigned": "Sin asignar",
+        "labels": "Etiquetas",
+        "countSelected": "{{count}} seleccionados",
+        "selected": "seleccionados",
+        "searchPriority": "Filtrar prioridad…",
+        "searchStatus": "Filtrar estado…",
+        "searchLabels": "Filtrar etiquetas…",
+        "searchAssignee": "Filtrar asignatario…",
+        "back": "Atrás"
       }
     },
     "i18n": {
@@ -12823,9 +12874,9 @@
         "localAttachmentUnsupported": "Los archivos adjuntos locales no están disponibles para sesiones remotas.",
         "removeAttachment": "Quitar archivo adjunto",
         "pastedImageLabel": "Imagen pegada",
-        "imagePasteFailed": "Image paste failed.",
-        "worktreeNotReady": "Worktree not ready — try again in a moment.",
-        "uploadingAttachments": "Uploading {{value0}} file{{value1}} to remote…"
+        "imagePasteFailed": "Error al pegar imagen.",
+        "worktreeNotReady": "Worktree no está listo — intenta de nuevo en un momento.",
+        "uploadingAttachments": "Subiendo {{value0}} archivo{{value1}} al remoto…"
       },
       "tool": {
         "running": "Ejecutando…",
@@ -12878,7 +12929,7 @@
         "allow": "Permitir",
         "deny": "Denegar"
       },
-      "launchPromptNotDelivered": "No se entregó; revisa el terminal"
+      "launchPromptNotDelivered": "No entregado — revisa la terminal"
     },
     "tab": {
       "bar": {

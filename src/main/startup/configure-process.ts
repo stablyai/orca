@@ -1,6 +1,5 @@
 import { app } from 'electron'
 import { existsSync, readFileSync } from 'node:fs'
-import { homedir } from 'node:os'
 import { join } from 'node:path'
 import { getVersionManagerBinPaths } from '../codex-cli/command'
 import { getMainE2EConfig } from '../e2e-config'
@@ -127,14 +126,7 @@ export function patchPackagedProcessPath(): void {
   const home = process.env.HOME ?? ''
   const extraPaths: string[] = []
 
-  if (process.platform === 'win32') {
-    const windowsHome = process.env.USERPROFILE ?? homedir()
-    if (windowsHome) {
-      // Why: Grok's Windows installer defaults to %USERPROFILE%\.grok\bin,
-      // but packaged GUI launches can miss recent per-user PATH updates.
-      extraPaths.push(join(windowsHome, '.grok/bin'))
-    }
-  } else {
+  if (process.platform !== 'win32') {
     extraPaths.push(
       '/opt/homebrew/bin',
       '/opt/homebrew/sbin',
@@ -157,7 +149,6 @@ export function patchPackagedProcessPath(): void {
         // the Agents settings page reports them as "Not installed" even when the
         // user can run them from Terminal. See stablyai/orca#829.
         join(home, '.opencode/bin'),
-        join(home, '.grok/bin'),
         join(home, '.vite-plus/bin')
       )
     }

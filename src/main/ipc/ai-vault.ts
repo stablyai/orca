@@ -24,7 +24,6 @@ const AI_VAULT_ALL_HOST_RUNTIME_TIMEOUT_MS = 3_000
 
 type AiVaultHandlerOptions = {
   getAdditionalCodexHomePaths?: () => readonly string[]
-  getAdditionalGrokHomePaths?: () => readonly string[]
   getActiveRuntimeAiVaultHostInfos?: () => readonly RuntimeAiVaultHostInfo[]
   scanRuntimeAiVaultSessions?: (
     environmentId: string,
@@ -214,14 +213,10 @@ async function scanLocalAiVaultSessions(args?: AiVaultListArgs): Promise<AiVault
   const additionalCodexSessionsDirs =
     handlerOptions.getAdditionalCodexHomePaths?.().map((homePath) => join(homePath, 'sessions')) ??
     []
-  const additionalGrokSessionsDirs =
-    handlerOptions.getAdditionalGrokHomePaths?.().map((homePath) => join(homePath, 'sessions')) ??
-    []
   return scanAiVaultSessions({
     limit: args?.limit,
     scopePaths: args?.scopePaths,
     additionalCodexSessionsDirs,
-    additionalGrokSessionsDirs,
     wslHomeDirs: await getAiVaultWslHomeDirs(),
     executionHostId: LOCAL_EXECUTION_HOST_ID
   })

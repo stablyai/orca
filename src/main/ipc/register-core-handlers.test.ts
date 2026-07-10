@@ -33,11 +33,11 @@ const {
   registerAiVaultHandlersMock,
   registerOrcaProfileHandlersMock,
   registerCodexAccountHandlersMock,
-  registerGrokAccountHandlersMock,
   registerAgentHookHandlersMock,
   registerAgentTrustHandlersMock,
   registerClaudeAccountHandlersMock,
   registerMiniMaxCredentialsHandlersMock,
+  registerGrokAccountHandlersMock,
   registerClipboardHandlersMock,
   setTrustedClipboardRendererWebContentsIdMock,
   registerUpdaterHandlersMock,
@@ -94,11 +94,11 @@ const {
   registerAiVaultHandlersMock: vi.fn(),
   registerOrcaProfileHandlersMock: vi.fn(),
   registerCodexAccountHandlersMock: vi.fn(),
-  registerGrokAccountHandlersMock: vi.fn(),
   registerAgentHookHandlersMock: vi.fn(),
   registerAgentTrustHandlersMock: vi.fn(),
   registerClaudeAccountHandlersMock: vi.fn(),
   registerMiniMaxCredentialsHandlersMock: vi.fn(),
+  registerGrokAccountHandlersMock: vi.fn(),
   registerClipboardHandlersMock: vi.fn(),
   setTrustedClipboardRendererWebContentsIdMock: vi.fn(),
   registerUpdaterHandlersMock: vi.fn(),
@@ -295,10 +295,6 @@ vi.mock('./codex-accounts', () => ({
   registerCodexAccountHandlers: registerCodexAccountHandlersMock
 }))
 
-vi.mock('./grok-accounts', () => ({
-  registerGrokAccountHandlers: registerGrokAccountHandlersMock
-}))
-
 vi.mock('./agent-hooks', () => ({
   registerAgentHookHandlers: registerAgentHookHandlersMock
 }))
@@ -313,6 +309,10 @@ vi.mock('./claude-accounts', () => ({
 
 vi.mock('./minimax-credentials', () => ({
   registerMiniMaxCredentialsHandlers: registerMiniMaxCredentialsHandlersMock
+}))
+
+vi.mock('./grok-accounts', () => ({
+  registerGrokAccountHandlers: registerGrokAccountHandlersMock
 }))
 
 vi.mock('../window/attach-main-window-services', () => ({
@@ -392,7 +392,6 @@ describe('registerCoreHandlers', () => {
     registerAiVaultHandlersMock.mockReset()
     registerOrcaProfileHandlersMock.mockReset()
     registerCodexAccountHandlersMock.mockReset()
-    registerGrokAccountHandlersMock.mockReset()
     registerAgentHookHandlersMock.mockReset()
     registerAgentTrustHandlersMock.mockReset()
     registerClaudeAccountHandlersMock.mockReset()
@@ -429,13 +428,11 @@ describe('registerCoreHandlers', () => {
     const codexUsage = { marker: 'codexUsage' }
     const openCodeUsage = { marker: 'openCodeUsage' }
     const codexAccounts = { marker: 'codexAccounts' }
-    const grokAccounts = { marker: 'grokAccounts' }
     const claudeAccounts = { marker: 'claudeAccounts' }
     const rateLimits = { marker: 'rateLimits' }
     const agentAwakeService = { marker: 'agentAwakeService' }
     const onBeforeRelaunch = vi.fn()
     const getAdditionalAiVaultCodexHomePaths = vi.fn(() => ['/runtime/codex/home'])
-    const getAdditionalAiVaultGrokHomePaths = vi.fn(() => ['/runtime/grok/home'])
 
     registerCoreHandlers(
       store as never,
@@ -445,7 +442,6 @@ describe('registerCoreHandlers', () => {
       codexUsage as never,
       openCodeUsage as never,
       codexAccounts as never,
-      grokAccounts as never,
       claudeAccounts as never,
       rateLimits as never,
       null,
@@ -454,7 +450,7 @@ describe('registerCoreHandlers', () => {
       agentAwakeService as never,
       undefined,
       undefined,
-      { getAdditionalAiVaultCodexHomePaths, getAdditionalAiVaultGrokHomePaths, onBeforeRelaunch }
+      { getAdditionalAiVaultCodexHomePaths, onBeforeRelaunch }
     )
 
     const aiVaultOptions = registerAiVaultHandlersMock.mock.calls[0]?.[0]
@@ -470,11 +466,11 @@ describe('registerCoreHandlers', () => {
     expect(registerOpenCodeUsageHandlersMock).toHaveBeenCalledWith(openCodeUsage)
     expect(registerAppHandlersMock).toHaveBeenCalledWith(store, { onBeforeRelaunch })
     expect(registerCodexAccountHandlersMock).toHaveBeenCalledWith(codexAccounts)
-    expect(registerGrokAccountHandlersMock).toHaveBeenCalledWith(grokAccounts)
     expect(registerAgentHookHandlersMock).toHaveBeenCalledWith(runtime)
     expect(registerPetHandlersMock).toHaveBeenCalled()
     expect(registerClaudeAccountHandlersMock).toHaveBeenCalledWith(claudeAccounts)
     expect(registerMiniMaxCredentialsHandlersMock).toHaveBeenCalledWith(rateLimits)
+    expect(registerGrokAccountHandlersMock).toHaveBeenCalled()
     expect(registerRateLimitHandlersMock).toHaveBeenCalledWith(rateLimits)
     expect(registerGitHubHandlersMock).toHaveBeenCalledWith(store, stats)
     expect(registerLinearHandlersMock).toHaveBeenCalled()
@@ -506,7 +502,6 @@ describe('registerCoreHandlers', () => {
     expect(registerAiVaultHandlersMock).toHaveBeenCalledWith(
       expect.objectContaining({
         getAdditionalCodexHomePaths: getAdditionalAiVaultCodexHomePaths,
-        getAdditionalGrokHomePaths: getAdditionalAiVaultGrokHomePaths,
         getActiveRuntimeAiVaultHostInfos: expect.any(Function),
         scanRuntimeAiVaultSessions: expect.any(Function)
       })
@@ -570,7 +565,6 @@ describe('registerCoreHandlers', () => {
     const codexUsage2 = { marker: 'codexUsage2' }
     const openCodeUsage2 = { marker: 'openCodeUsage2' }
     const codexAccounts2 = { marker: 'codexAccounts2' }
-    const grokAccounts2 = { marker: 'grokAccounts2' }
     const claudeAccounts2 = { marker: 'claudeAccounts2' }
     const rateLimits2 = { marker: 'rateLimits2' }
 
@@ -582,7 +576,6 @@ describe('registerCoreHandlers', () => {
       codexUsage2 as never,
       openCodeUsage2 as never,
       codexAccounts2 as never,
-      grokAccounts2 as never,
       claudeAccounts2 as never,
       rateLimits2 as never,
       42

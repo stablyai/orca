@@ -44,7 +44,8 @@ function recordStatusBarToggleInteraction(
     id === 'opencode-go' ||
     id === 'kimi' ||
     id === 'antigravity' ||
-    id === 'minimax'
+    id === 'minimax' ||
+    id === 'grok'
   ) {
     recordFeatureInteraction('usage-tracking')
   }

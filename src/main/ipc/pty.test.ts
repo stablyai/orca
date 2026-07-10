@@ -190,8 +190,7 @@ import {
   setLocalPtyProvider,
   rebindLocalProviderListeners,
   unregisterSshPtyProvider,
-  getLocalPtyProvider,
-  buildPtyHostEnv
+  getLocalPtyProvider
 } from './pty'
 import { hasLiveClaudePtys, markClaudePtySpawned } from '../claude-accounts/live-pty-gate'
 import * as livePtyGate from '../claude-accounts/live-pty-gate'
@@ -1217,42 +1216,6 @@ describe('registerPtyHandlers', () => {
       )
       expect(env.CODEX_HOME).toBe(TEST_CODEX_HOME)
       expect(env.ORCA_CODEX_HOME).toBe(TEST_CODEX_HOME)
-    })
-
-    it('drops renderer-provided GROK_HOME when the selected managed Grok account is invalid', () => {
-      const env = buildPtyHostEnv(
-        'pty-grok-invalid',
-        { GROK_HOME: '/untrusted/grok-home' },
-        {
-          isPackaged: true,
-          userDataPath: '/tmp/orca',
-          selectedCodexHomePath: null,
-          selectedGrokHomePath: null,
-          hasSelectedGrokManagedAccount: true,
-          githubAttributionEnabled: false,
-          agentStatusHooksEnabled: false
-        }
-      )
-
-      expect(env.GROK_HOME).toBeUndefined()
-    })
-
-    it('overrides renderer-provided GROK_HOME with the selected managed Grok home', () => {
-      const env = buildPtyHostEnv(
-        'pty-grok-selected',
-        { GROK_HOME: '/manual/grok-home' },
-        {
-          isPackaged: true,
-          userDataPath: '/tmp/orca',
-          selectedCodexHomePath: null,
-          selectedGrokHomePath: '/managed/grok-home',
-          hasSelectedGrokManagedAccount: true,
-          githubAttributionEnabled: false,
-          agentStatusHooksEnabled: false
-        }
-      )
-
-      expect(env.GROK_HOME).toBe('/managed/grok-home')
     })
 
     it('injects explicit proxy settings into local PTY env', async () => {

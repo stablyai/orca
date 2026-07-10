@@ -532,7 +532,6 @@ export class LocalPtyProvider implements IPtyProvider {
     }
     if (process.platform === 'win32') {
       const codexHomeWslInfo = finalEnv.CODEX_HOME ? parseWslPath(finalEnv.CODEX_HOME) : null
-      const grokHomeWslInfo = finalEnv.GROK_HOME ? parseWslPath(finalEnv.GROK_HOME) : null
       if (pathWin32.basename(shellPath).toLowerCase() === 'wsl.exe') {
         if (codexHomeWslInfo) {
           if (launchWslDistro && launchWslDistro !== codexHomeWslInfo.distro) {
@@ -562,20 +561,6 @@ export class LocalPtyProvider implements IPtyProvider {
         } else if (finalEnv.CODEX_HOME) {
           addWslEnvKeys(finalEnv, ['CODEX_HOME', 'ORCA_CODEX_HOME'])
         }
-        if (grokHomeWslInfo) {
-          if (launchWslDistro && launchWslDistro !== grokHomeWslInfo.distro) {
-            delete finalEnv.GROK_HOME
-          } else {
-            finalEnv.GROK_HOME = grokHomeWslInfo.linuxPath
-            addWslEnvKeys(finalEnv, ['GROK_HOME'])
-          }
-        } else if (isHostCodexHomeForWsl(finalEnv.GROK_HOME)) {
-          // Why: Grok managed accounts are host-local unless explicitly
-          // represented as a WSL path; WSL Grok must use its Linux-side home.
-          delete finalEnv.GROK_HOME
-        } else if (finalEnv.GROK_HOME) {
-          addWslEnvKeys(finalEnv, ['GROK_HOME'])
-        }
         if (finalEnv.CLAUDE_CONFIG_DIR) {
           // Why: managed WSL Claude accounts pass a Linux CLAUDE_CONFIG_DIR
           // through Windows wsl.exe; non-default env vars need WSLENV import.
@@ -587,11 +572,6 @@ export class LocalPtyProvider implements IPtyProvider {
         // CODEX_HOME from it after user profiles run.
         delete finalEnv.CODEX_HOME
         delete finalEnv.ORCA_CODEX_HOME
-      }
-      if (pathWin32.basename(shellPath).toLowerCase() !== 'wsl.exe') {
-        if (grokHomeWslInfo || isWslCodexHomeForHost(finalEnv.GROK_HOME)) {
-          delete finalEnv.GROK_HOME
-        }
       }
     }
     seedPowerlevel10kWizardEnv(finalEnv, { envToDelete: args.envToDelete })
@@ -1064,7 +1044,7 @@ export class LocalPtyProvider implements IPtyProvider {
     return ptyProcesses.get(id)
   }
 
-  /** Kill all PTYs. Call on app quit. */
+  /** Kill all in-process local PTYs. Call on app quit. */
   killAll(): void {
     for (const [id, proc] of ptyProcesses) {
       safeKillAndClean(id, proc)

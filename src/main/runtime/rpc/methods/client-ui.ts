@@ -47,8 +47,8 @@ const StatusBarItem = z.enum([
   'antigravity',
   'opencode-go',
   'kimi',
-  'grok',
   'minimax',
+  'grok',
   'ssh',
   'resource-usage',
   'ports'

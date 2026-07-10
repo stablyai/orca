@@ -112,8 +112,6 @@ function createSettings(overrides: Partial<GlobalSettings> = {}): GlobalSettings
     activeCodexManagedAccountId: null,
     claudeManagedAccounts: [],
     activeClaudeManagedAccountId: null,
-    grokManagedAccounts: [],
-    activeGrokManagedAccountId: null,
     terminalScopeHistoryByWorktree: true,
     defaultTuiAgent: null,
     disabledTuiAgents: [],

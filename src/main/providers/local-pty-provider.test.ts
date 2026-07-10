@@ -505,26 +505,6 @@ describe('LocalPtyProvider', () => {
       expect(spawnCall[2].env.ORCA_CODEX_HOME).toBeUndefined()
     })
 
-    it('does not pass a Windows Grok home into WSL terminals', async () => {
-      Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
-      provider.configure({
-        buildSpawnEnv: (_id, env) => {
-          env.GROK_HOME = 'C:\\Users\\jin\\AppData\\Roaming\\Orca\\grok-accounts\\a\\home'
-          return env
-        }
-      })
-
-      await provider.spawn({
-        cols: 80,
-        rows: 24,
-        cwd: '\\\\wsl.localhost\\Ubuntu\\home\\jin\\repo'
-      })
-
-      const spawnCall = spawnMock.mock.calls.at(-1)!
-      expect(spawnCall[0]).toBe('wsl.exe')
-      expect(spawnCall[2].env.GROK_HOME).toBeUndefined()
-    })
-
     it('does not pass a WSL managed Codex home into Windows terminals', async () => {
       Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
       provider.configure({

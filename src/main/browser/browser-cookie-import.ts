@@ -78,6 +78,7 @@ import type {
 } from '../../shared/types'
 import { browserSessionRegistry } from './browser-session-registry'
 import { setupClientHintsOverride } from './browser-session-ua'
+import { resolveChromiumCookiesPath } from './chromium-cookie-path'
 
 // ---------------------------------------------------------------------------
 // Browser detection
@@ -190,20 +191,6 @@ function browserRootPath(def: ChromiumBrowserDef): string | null {
   }
   const configHome = process.env.XDG_CONFIG_HOME ?? join(process.env.HOME ?? '', '.config')
   return join(configHome, def.linuxRoot)
-}
-
-// Why: Chromium 96+ moved the cookies DB from <Profile>/Cookies to
-// <Profile>/Network/Cookies. Try the newer path first, fall back to legacy.
-function resolveCookiesPath(profileDir: string): string | null {
-  const networkPath = join(profileDir, 'Network', 'Cookies')
-  if (existsSync(networkPath)) {
-    return networkPath
-  }
-  const legacyPath = join(profileDir, 'Cookies')
-  if (existsSync(legacyPath)) {
-    return legacyPath
-  }
-  return null
 }
 
 function isSafeBrowserProfileDirectory(directory: string): boolean {
@@ -373,7 +360,7 @@ export function detectInstalledBrowsers(): DetectedBrowser[] {
     // Use the first profile with a valid cookies path as the default selection.
     for (const profile of profiles) {
       const profileDir = join(root, profile.directory)
-      const cookiesPath = resolveCookiesPath(profileDir)
+      const cookiesPath = resolveChromiumCookiesPath(profileDir)
       if (cookiesPath) {
         detected.push({
           family: browser.family,
@@ -434,7 +421,7 @@ export function selectBrowserProfile(
     return null
   }
   const profileDir = join(root, profileDirectory)
-  const cookiesPath = resolveCookiesPath(profileDir)
+  const cookiesPath = resolveChromiumCookiesPath(profileDir)
   if (!cookiesPath) {
     return null
   }
@@ -1468,36 +1455,8 @@ export async function importCookiesFromBrowser(
     return importCookiesFromSafari(browser, targetPartition)
   }
 
-  // Why: the browser may hold a lock on the Cookies file. Copying to a temp
-  // location avoids lock contention and ensures we read a consistent snapshot.
-  const tmpDir = mkdtempSync(join(tmpdir(), 'orca-cookie-import-'))
-  const tmpCookiesPath = join(tmpDir, 'Cookies')
-
-  try {
-    copyFileSync(browser.cookiesPath, tmpCookiesPath)
-    // Why: when the source browser is running, it uses WAL journal mode. The most
-    // recently written cookies (including fresh auth tokens) may only exist in the
-    // WAL sidecar file, not yet flushed to the main DB. Copying WAL + SHM ensures
-    // our snapshot reflects the browser's current state.
-    for (const suffix of ['-wal', '-shm'] as const) {
-      const sidecar = browser.cookiesPath + suffix
-      if (existsSync(sidecar)) {
-        try {
-          copyFileSync(sidecar, tmpCookiesPath + suffix)
-        } catch {
-          // Why: sidecar copy is best-effort. The main DB alone may still have
-          // enough cookies for a usable session; missing the WAL just means
-          // we might miss the very latest writes.
-        }
-      }
-    }
-  } catch {
-    rmSync(tmpDir, { recursive: true, force: true })
-    return {
-      ok: false,
-      reason: `Could not copy ${browser.label} cookies database. Try closing ${browser.label} first.`
-    }
-  }
+  // Why: SQLite can coordinate with Chromium's live WAL locks without a pre-copy.
+  const sourceCookiesPath = browser.cookiesPath
 
   // Why: Electron's cookies.set() API rejects many valid cookie values (binary
   // bytes > 0x7F etc). Instead, decrypt from the source browser and write
@@ -1508,16 +1467,6 @@ export async function importCookiesFromBrowser(
   // In packaged builds where os_crypt IS active, CookieMonster will re-encrypt
   // plaintext cookies on its next flush, so this approach is safe in both modes.
 
-  // Why: only Chromium browsers reach this point — Firefox/Safari dispatched above.
-  const sourceKey = getEncryptionKey(browser.keychainService!, browser.keychainAccount!, browser)
-  if (!sourceKey) {
-    rmSync(tmpDir, { recursive: true, force: true })
-    return {
-      ok: false,
-      reason: `Could not access ${browser.label} encryption key. The OS may have denied access.`
-    }
-  }
-
   // Why: CookieMonster holds the live DB's data in memory and overwrites it
   // on flush/shutdown. Writing directly to the live DB is futile. Instead,
   // copy the live DB to a staging location, populate it there, and let the
@@ -1526,13 +1475,14 @@ export async function importCookiesFromBrowser(
   await targetSession.cookies.flushStore()
 
   const partitionName = targetPartition.replace('persist:', '')
-  const liveCookiesPath = join(app.getPath('userData'), 'Partitions', partitionName, 'Cookies')
+  const partitionDir = join(app.getPath('userData'), 'Partitions', partitionName)
+  let liveCookiesPath = resolveChromiumCookiesPath(partitionDir)
 
   // Why: Electron only creates the partition's Cookies SQLite file after the
   // session has actually stored a cookie. For newly created profiles that have
   // never been used by a webview, the file won't exist yet. Setting and
   // removing a throwaway cookie forces Electron to initialize the database.
-  if (!existsSync(liveCookiesPath)) {
+  if (!liveCookiesPath) {
     try {
       await targetSession.cookies.set({ url: 'https://localhost', name: '__init', value: '1' })
       await targetSession.cookies.remove('https://localhost', '__init')
@@ -1540,10 +1490,10 @@ export async function importCookiesFromBrowser(
     } catch {
       // ignore — the set/remove may fail but flushStore should still create the file
     }
+    liveCookiesPath = resolveChromiumCookiesPath(partitionDir)
   }
 
-  if (!existsSync(liveCookiesPath)) {
-    rmSync(tmpDir, { recursive: true, force: true })
+  if (!liveCookiesPath) {
     return { ok: false, reason: 'Target cookie database not found. Open a browser tab first.' }
   }
 
@@ -1557,7 +1507,6 @@ export async function importCookiesFromBrowser(
     mkdirSync(stagingDir, { recursive: true })
     copyFileSync(liveCookiesPath, stagingCookiesPath)
   } catch {
-    rmSync(tmpDir, { recursive: true, force: true })
     return { ok: false, reason: 'Could not create staging cookie database.' }
   }
 
@@ -1567,7 +1516,7 @@ export async function importCookiesFromBrowser(
   try {
     // Why: Chromium stores timestamps as microseconds since 1601, which can exceed
     // Number.MAX_SAFE_INTEGER (~9e15). readBigInts ensures no precision loss.
-    sourceDb = new DatabaseSync(tmpCookiesPath, { readOnly: true, readBigInts: true })
+    sourceDb = new DatabaseSync(sourceCookiesPath, { readOnly: true, readBigInts: true })
     stagingDb = new DatabaseSync(stagingCookiesPath)
 
     const targetColumnInfo = stagingDb
@@ -1590,8 +1539,35 @@ export async function importCookiesFromBrowser(
     if (sourceRows.length === 0) {
       stagingDb.close()
       stagingDb = null
-      rmSync(tmpDir, { recursive: true, force: true })
+      try {
+        unlinkSync(stagingCookiesPath)
+      } catch {
+        /* best-effort */
+      }
       return { ok: false, reason: `No cookies found in ${browser.label}.` }
+    }
+
+    const needsSourceKey = sourceRows.some((sourceRow) => {
+      const encRaw = sourceRow.encrypted_value
+      return encRaw instanceof Uint8Array && encRaw.length > 0
+    })
+    const sourceKey = needsSourceKey
+      ? getEncryptionKey(browser.keychainService!, browser.keychainAccount!, browser)
+      : null
+    if (needsSourceKey && !sourceKey) {
+      stagingDb.close()
+      stagingDb = null
+      // Why: key denial happens after staging, so failed retries must not leave
+      // one full target database copy behind each time.
+      try {
+        unlinkSync(stagingCookiesPath)
+      } catch {
+        /* best-effort */
+      }
+      return {
+        ok: false,
+        reason: `Could not access ${browser.label} encryption key. The OS may have denied access.`
+      }
     }
 
     // Why: Google's integrity cookies (SIDCC, __Secure-*PSIDCC, __Secure-STRP)
@@ -1652,7 +1628,7 @@ export async function importCookiesFromBrowser(
 
       let decryptedValue: Buffer
       if (encBuf && encBuf.length > 0) {
-        const raw = decryptCookieValueRaw(encBuf, sourceKey)
+        const raw = sourceKey ? decryptCookieValueRaw(encBuf, sourceKey) : null
         if (!raw) {
           skipped++
           continue
@@ -1709,7 +1685,6 @@ export async function importCookiesFromBrowser(
     stagingDb.close()
     stagingDb = null
 
-    rmSync(tmpDir, { recursive: true, force: true })
     diag(`  SQLite staging complete: ${imported} cookies, ${domainSet.size} domains`)
 
     // Why: clearing the session's in-memory cookie store before loading imported
@@ -1795,7 +1770,6 @@ export async function importCookiesFromBrowser(
     } catch {
       /* may already be closed */
     }
-    rmSync(tmpDir, { recursive: true, force: true })
     // Why: if the import fails after the staging DB was created, clean it up
     // to avoid a stale staged import being applied on the next cold start.
     try {

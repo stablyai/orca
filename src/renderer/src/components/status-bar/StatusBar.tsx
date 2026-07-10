@@ -1762,10 +1762,10 @@ export function ProviderDetailsMenu({
                         ? 'K'
                         : provider.provider === 'antigravity'
                           ? 'A'
-                          : provider.provider === 'grok'
-                            ? 'X'
-                            : provider.provider === 'minimax'
-                              ? 'M'
+                          : provider.provider === 'minimax'
+                            ? 'M'
+                            : provider.provider === 'grok'
+                              ? 'R'
                               : 'X'}
               </span>
             </span>
@@ -1912,7 +1912,7 @@ function StatusBarInner({ floatingTerminalOpen }: StatusBarProps): React.JSX.Ele
     return null
   }
 
-  const { claude, codex, gemini, opencodeGo, kimi, antigravity, grok, minimax } = rateLimits
+  const { claude, codex, gemini, opencodeGo, kimi, antigravity, minimax, grok } = rateLimits
 
   // Why: a provider earns a bar from either a usable live snapshot or durable
   // setup in Settings. The durable path keeps account switchers visible while
@@ -1930,15 +1930,16 @@ function StatusBarInner({ floatingTerminalOpen }: StatusBarProps): React.JSX.Ele
   const usageSettings = {
     ...settings,
     antigravityUsageConfigured,
-    minimaxCookieConfigured: rateLimits.minimaxCookieConfigured
+    minimaxCookieConfigured: rateLimits.minimaxCookieConfigured,
+    grokAuthConfigured: rateLimits.grokAuthConfigured
   }
   const visibleClaude = getVisibleUsageProvider('claude', claude, usageSettings)
   const visibleCodex = getVisibleUsageProvider('codex', codex, usageSettings)
   const visibleGemini = getVisibleUsageProvider('gemini', gemini, usageSettings)
   const visibleKimi = getVisibleUsageProvider('kimi', kimi, usageSettings)
   const visibleAntigravity = getVisibleUsageProvider('antigravity', antigravity, usageSettings)
-  const visibleGrok = getVisibleUsageProvider('grok', grok, usageSettings)
   const visibleMiniMax = getVisibleUsageProvider('minimax', minimax, usageSettings)
+  const visibleGrok = getVisibleUsageProvider('grok', grok, usageSettings)
   const showClaude =
     visibleClaude !== null &&
     statusBarItems.includes('claude') &&
@@ -1959,13 +1960,13 @@ function StatusBarInner({ floatingTerminalOpen }: StatusBarProps): React.JSX.Ele
     visibleAntigravity !== null &&
     statusBarItems.includes('antigravity') &&
     isStatusBarItemAvailable('antigravity', detectedAgentIds)
+  // Why: MiniMax is a cookie-auth provider, not a CLI on PATH, so detection-gating
+  // doesn't apply (same rationale as OpenCode Go below).
+  const showMiniMax = visibleMiniMax !== null && statusBarItems.includes('minimax')
   const showGrok =
     visibleGrok !== null &&
     statusBarItems.includes('grok') &&
     isStatusBarItemAvailable('grok', detectedAgentIds)
-  // Why: MiniMax is a cookie-auth provider, not a CLI on PATH, so detection-gating
-  // doesn't apply (same rationale as OpenCode Go below).
-  const showMiniMax = visibleMiniMax !== null && statusBarItems.includes('minimax')
   // Why: OpenCode Go is a web/cookie-auth provider, not a CLI on PATH, so
   // detection-gating doesn't apply.
   const visibleOpencodeGo = getVisibleUsageProvider('opencode-go', opencodeGo, usageSettings)
@@ -1982,15 +1983,15 @@ function StatusBarInner({ floatingTerminalOpen }: StatusBarProps): React.JSX.Ele
     showOpencodeGo ||
     showKimi ||
     showAntigravity ||
-    showGrok ||
     showMiniMax ||
+    showGrok ||
     showResourceUsage
   // Why: a brand-new user with no provider configured would otherwise see an
   // empty left side of the status bar and wonder what's missing. Settings are
   // included because managed accounts are durable even when live usage
   // snapshots are still hydrating or unavailable after an update.
   const isEmptyUsageState = isUsageEmptyState(
-    { claude, codex, gemini, opencodeGo, kimi, antigravity, grok, minimax },
+    { claude, codex, gemini, opencodeGo, kimi, antigravity, minimax, grok },
     usageSettings
   )
   // Why: the teaching CTA is a one-time nudge — once the user hides it, keep it
@@ -2003,8 +2004,8 @@ function StatusBarInner({ floatingTerminalOpen }: StatusBarProps): React.JSX.Ele
     opencodeGo?.status === 'fetching' ||
     kimi?.status === 'fetching' ||
     antigravity?.status === 'fetching' ||
-    grok?.status === 'fetching' ||
-    minimax?.status === 'fetching'
+    minimax?.status === 'fetching' ||
+    grok?.status === 'fetching'
 
   const compact = containerWidth < 900
   const iconOnly = containerWidth < 500
@@ -2071,17 +2072,6 @@ function StatusBarInner({ floatingTerminalOpen }: StatusBarProps): React.JSX.Ele
                 )}
               />
             )}
-            {showGrok && (
-              <ProviderDetailsMenu
-                provider={visibleGrok}
-                compact={compact}
-                iconOnly={iconOnly}
-                ariaLabel={translate(
-                  'auto.components.status.bar.StatusBar.grokUsageDetails',
-                  'Open Grok usage details'
-                )}
-              />
-            )}
             {showOpencodeGo && (
               <ProviderDetailsMenu
                 provider={visibleOpencodeGo}
@@ -2112,6 +2102,17 @@ function StatusBarInner({ floatingTerminalOpen }: StatusBarProps): React.JSX.Ele
                 ariaLabel={translate(
                   'auto.components.status.bar.StatusBar.06741a2f3d',
                   'Open MiniMax usage details'
+                )}
+              />
+            )}
+            {showGrok && (
+              <ProviderDetailsMenu
+                provider={visibleGrok}
+                compact={compact}
+                iconOnly={iconOnly}
+                ariaLabel={translate(
+                  'auto.components.status.bar.StatusBar.grokUsageAria',
+                  'Open Grok usage details'
                 )}
               />
             )}
@@ -2251,18 +2252,6 @@ function StatusBarInner({ floatingTerminalOpen }: StatusBarProps): React.JSX.Ele
               )}
             </DropdownMenuCheckboxItem>
           )}
-          {isStatusBarItemAvailable('grok', detectedAgentIds) && (
-            <DropdownMenuCheckboxItem
-              checked={statusBarItems.includes('grok')}
-              onCheckedChange={() => {
-                recordFeatureInteraction('usage-tracking')
-                toggleStatusBarItem('grok')
-              }}
-            >
-              <AgentIcon agent="grok" size={14} />
-              {translate('auto.components.status.bar.StatusBar.grokUsage', 'Grok Usage')}
-            </DropdownMenuCheckboxItem>
-          )}
           <DropdownMenuCheckboxItem
             checked={statusBarItems.includes('opencode-go')}
             onCheckedChange={() => {
@@ -2295,6 +2284,18 @@ function StatusBarInner({ floatingTerminalOpen }: StatusBarProps): React.JSX.Ele
             <MiniMaxIcon size={14} />
             {translate('auto.components.status.bar.StatusBar.3bbf140864', 'MiniMax Usage')}
           </DropdownMenuCheckboxItem>
+          {isStatusBarItemAvailable('grok', detectedAgentIds) && (
+            <DropdownMenuCheckboxItem
+              checked={statusBarItems.includes('grok')}
+              onCheckedChange={() => {
+                recordFeatureInteraction('usage-tracking')
+                toggleStatusBarItem('grok')
+              }}
+            >
+              <AgentIcon agent="grok" size={14} />
+              {translate('auto.components.status.bar.StatusBar.grokUsageMenu', 'Grok Usage')}
+            </DropdownMenuCheckboxItem>
+          )}
           <DropdownMenuCheckboxItem
             checked={statusBarItems.includes('ssh')}
             onCheckedChange={() => {

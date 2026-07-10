@@ -74,20 +74,6 @@ describe('listAiVaultSessions host routing', () => {
     expect(mocks.scanRemoteAiVaultSessions).not.toHaveBeenCalled()
   })
 
-  it('passes local managed Grok homes into local session scanning', async () => {
-    registerAiVaultHandlers({
-      getAdditionalGrokHomePaths: () => ['/managed/grok-one', '/managed/grok-two']
-    })
-
-    await _internals.listAiVaultSessions({ executionHostScope: 'local', force: true })
-
-    expect(mocks.scanAiVaultSessions).toHaveBeenCalledWith(
-      expect.objectContaining({
-        additionalGrokSessionsDirs: ['/managed/grok-one/sessions', '/managed/grok-two/sessions']
-      })
-    )
-  })
-
   it('routes SSH scope to only that SSH target', async () => {
     await _internals.listAiVaultSessions({
       executionHostScope: 'ssh:dev-box',

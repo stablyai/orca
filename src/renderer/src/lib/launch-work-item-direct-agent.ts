@@ -10,12 +10,11 @@ import type { AgentStartedTelemetry } from '@/lib/worktree-activation'
 import type { SleepingAgentLaunchConfig } from '../../../shared/agent-session-resume'
 import type { LaunchSource } from '../../../shared/telemetry-events'
 import type { StartupCommandDelivery } from '../../../shared/codex-startup-delivery'
-import type { GlobalSettings, TuiAgent } from '../../../shared/types'
+import type { TuiAgent } from '../../../shared/types'
 import {
   resolveTuiAgentLaunchArgs,
   resolveTuiAgentLaunchEnv
 } from '../../../shared/tui-agent-launch-defaults'
-import { CLIENT_PLATFORM } from '@/lib/new-workspace'
 import { translate } from '@/i18n/i18n'
 
 export function buildDirectWorkItemAgentStartupPlan(args: {
@@ -28,8 +27,6 @@ export function buildDirectWorkItemAgentStartupPlan(args: {
         agentCmdOverrides?: Partial<Record<TuiAgent, string>>
         agentDefaultArgs?: Partial<Record<TuiAgent, string>>
         agentDefaultEnv?: Partial<Record<TuiAgent, Record<string, string>>>
-        grokManagedAccounts?: GlobalSettings['grokManagedAccounts']
-        activeGrokManagedAccountId?: GlobalSettings['activeGrokManagedAccountId']
       }
     | null
     | undefined
@@ -50,12 +47,7 @@ export function buildDirectWorkItemAgentStartupPlan(args: {
     args.agentArgs === undefined
       ? resolveTuiAgentLaunchArgs(args.agent, args.settings?.agentDefaultArgs)
       : args.agentArgs
-  const effectiveAgentEnv = resolveTuiAgentLaunchEnv(args.agent, args.settings?.agentDefaultEnv, {
-    settings: args.settings,
-    isRemote: args.isRemote,
-    launchPlatform: args.launchPlatform,
-    hostPlatform: CLIENT_PLATFORM
-  })
+  const effectiveAgentEnv = resolveTuiAgentLaunchEnv(args.agent, args.settings?.agentDefaultEnv)
   const draftLaunchPlan =
     args.promptDelivery === 'submit-after-ready'
       ? null

@@ -9,11 +9,6 @@ type SidebarRevealBounds = {
   end: number
 }
 
-type SidebarCenteringScrollPadding = {
-  start: number
-  end: number
-}
-
 function getElementScrollBounds(container: HTMLElement, element: Element): SidebarRevealBounds {
   const containerRect = container.getBoundingClientRect()
   const elementRect = element.getBoundingClientRect()
@@ -36,30 +31,6 @@ export function getScrollTopToRevealBounds(
   return targetCenter - viewportCenterOffset
 }
 
-export function getCenteringScrollPadding(
-  container: HTMLElement,
-  bounds: SidebarRevealBounds,
-  topInset = 0
-): SidebarCenteringScrollPadding {
-  const desiredScrollTop = getScrollTopToRevealBounds(container, bounds, topInset)
-  const maxScrollTop = Math.max(0, container.scrollHeight - container.clientHeight)
-  return {
-    start: Math.ceil(Math.max(0, -desiredScrollTop)),
-    end: Math.ceil(Math.max(0, desiredScrollTop - maxScrollTop))
-  }
-}
-
-export function getElementCenteringScrollPadding(
-  container: HTMLElement,
-  element: Element,
-  topInset = WORKTREE_SIDEBAR_REVEAL_TOP_INSET
-): SidebarCenteringScrollPadding | null {
-  if (!container.contains(element)) {
-    return null
-  }
-  return getCenteringScrollPadding(container, getElementScrollBounds(container, element), topInset)
-}
-
 export function revealElementInScrollContainer(container: HTMLElement, element: Element): boolean {
   if (!container.contains(element)) {
     return false
@@ -70,7 +41,8 @@ export function revealElementInScrollContainer(container: HTMLElement, element: 
     WORKTREE_SIDEBAR_REVEAL_TOP_INSET
   )
   // Why: sidebar reveal is a focus handoff, so reposition immediately instead
-  // of making the user track an animated list.
+  // of making the user track an animated list. Boundary rows clamp to the list
+  // edge — padding the list so they can center leaves a phantom gap behind.
   container.scrollTop = Math.max(0, nextScrollTop)
   return true
 }
