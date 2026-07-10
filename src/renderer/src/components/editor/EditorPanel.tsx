@@ -1,4 +1,4 @@
-import React, { useCallback, useRef, useState } from 'react'
+import React, { useCallback, useMemo, useRef, useState } from 'react'
 import { useAppStore } from '@/store'
 import { getConnectionId } from '@/lib/connection-context'
 import { detectLanguage } from '@/lib/language-detect'
@@ -22,6 +22,7 @@ import {
   selectEditorPanelGitBranchEntries,
   selectEditorPanelGitStatusEntries
 } from './editor-panel-git-entry-selector'
+import { createEditorPanelDraftSelector } from './editor-panel-draft-selector'
 
 function EditorPanelInner({
   activeFileId: activeFileIdProp,
@@ -60,7 +61,11 @@ function EditorPanelInner({
   const setMarkdownTableOfContentsVisible = useAppStore((s) => s.setMarkdownTableOfContentsVisible)
   const closeFile = useAppStore((s) => s.closeFile)
   const clearUntitled = useAppStore((s) => s.clearUntitled)
-  const editorDrafts = useAppStore((s) => s.editorDrafts)
+  const editorDraftSelector = useMemo(
+    () => createEditorPanelDraftSelector(activeFile),
+    [activeFile]
+  )
+  const editorDrafts = useAppStore(editorDraftSelector)
   const setEditorDraft = useAppStore((s) => s.setEditorDraft)
   const settings = useAppStore((s) => s.settings)
   const panelRef = useRef<HTMLDivElement>(null)
