@@ -161,8 +161,33 @@ describe('browserManager', () => {
 
     const handler = guestSetWindowOpenHandlerMock.mock.calls[0][0] as (details: {
       url: string
+      features?: string
     }) => { action: 'allow' | 'deny' }
-    expect(handler({ url: 'https://example.com/login' })).toEqual({ action: 'allow' })
+    expect(handler({ url: 'about:blank' })).toMatchObject({ action: 'allow' })
+    expect(
+      handler({
+        url: 'https://example.com/login',
+        features: 'alwaysOnTop=yes,frame=no,fullscreen=yes,kiosk=yes,modal=yes,transparent=yes'
+      })
+    ).toEqual({
+      action: 'allow',
+      overrideBrowserWindowOptions: {
+        alwaysOnTop: false,
+        closable: true,
+        focusable: true,
+        frame: true,
+        fullscreen: false,
+        kiosk: false,
+        modal: false,
+        movable: true,
+        opacity: 1,
+        show: true,
+        simpleFullscreen: false,
+        skipTaskbar: false,
+        titleBarStyle: 'default',
+        transparent: false
+      }
+    })
 
     expect(shellOpenExternalMock).not.toHaveBeenCalled()
     expect(rendererSendMock).not.toHaveBeenCalled()
@@ -201,6 +226,9 @@ describe('browserManager', () => {
       url: string
     }) => { action: 'allow' | 'deny' }
     expect(handler({ url: 'javascript:alert(1)' })).toEqual({ action: 'deny' })
+    expect(handler({ url: 'file:///etc/passwd' })).toEqual({ action: 'deny' })
+    expect(handler({ url: 'file:///C:/Users/example/.ssh/id_rsa' })).toEqual({ action: 'deny' })
+    expect(handler({ url: 'file://server/share/private.txt' })).toEqual({ action: 'deny' })
 
     expect(shellOpenExternalMock).not.toHaveBeenCalled()
     expect(rendererSendMock).not.toHaveBeenCalledWith(
@@ -900,6 +928,7 @@ describe('browserManager', () => {
   })
 
   it('attaches guest policies to created popup child windows', () => {
+    const rendererSendMock = vi.fn()
     const childSetBackgroundThrottlingMock = vi.fn()
     const childSetWindowOpenHandlerMock = vi.fn()
     const childOnMock = vi.fn()
@@ -925,9 +954,22 @@ describe('browserManager', () => {
       off: guestOffMock,
       openDevTools: guestOpenDevToolsMock
     }
-    webContentsFromIdMock.mockReturnValue(guest)
+    webContentsFromIdMock.mockImplementation((id: number) => {
+      if (id === guest.id) {
+        return guest
+      }
+      if (id === rendererWebContentsId) {
+        return { isDestroyed: vi.fn(() => false), send: rendererSendMock }
+      }
+      return null
+    })
 
     browserManager.attachGuestPolicies(guest as never)
+    browserManager.registerGuest({
+      browserPageId: 'browser-1',
+      webContentsId: guest.id,
+      rendererWebContentsId
+    })
 
     const didCreateWindowHandler = guestOnMock.mock.calls.find(
       ([event]) => event === 'did-create-window'
@@ -943,6 +985,133 @@ describe('browserManager', () => {
     )
     expect(childOnMock.mock.calls.filter(([event]) => event === 'will-navigate')).toHaveLength(1)
     expect(childOnMock.mock.calls.filter(([event]) => event === 'will-redirect')).toHaveLength(1)
+
+    const childWindowOpenHandler = childSetWindowOpenHandlerMock.mock.calls[0][0] as (details: {
+      url: string
+    }) => { action: 'allow' | 'deny' }
+    expect(childWindowOpenHandler({ url: 'https://identity.example.com/login' })).toMatchObject({
+      action: 'allow'
+    })
+    expect(childWindowOpenHandler({ url: 'file:///etc/passwd' })).toEqual({ action: 'deny' })
+    expect(rendererSendMock).toHaveBeenCalledWith('browser:popup', {
+      browserPageId: 'browser-1',
+      origin: 'null',
+      action: 'blocked'
+    })
+    browserManager.notifyPermissionDenied({
+      guestWebContentsId: childGuest.id,
+      permission: 'notifications',
+      rawUrl: 'https://identity.example.com/login'
+    })
+    expect(rendererSendMock).toHaveBeenCalledWith('browser:permission-denied', {
+      browserPageId: 'browser-1',
+      permission: 'notifications',
+      origin: 'https://identity.example.com'
+    })
+
+    const childDidFailLoadHandler = childOnMock.mock.calls.find(
+      ([event]) => event === 'did-fail-load'
+    )?.[1] as
+      | ((
+          event: Electron.Event,
+          errorCode: number,
+          errorDescription: string,
+          validatedURL: string,
+          isMainFrame: boolean
+        ) => void)
+      | undefined
+    childDidFailLoadHandler?.(
+      {} as Electron.Event,
+      -105,
+      'Name not resolved',
+      'https://identity.example.com/unavailable',
+      true
+    )
+    expect(rendererSendMock).not.toHaveBeenCalledWith(
+      'browser:guest-load-failed',
+      expect.anything()
+    )
+
+    const childDownloadItem = createDownloadItem()
+    browserManager.handleGuestWillDownload({
+      guestWebContentsId: childGuest.id,
+      item: childDownloadItem
+    })
+    expect(rendererSendMock).toHaveBeenCalledWith(
+      'browser:download-requested',
+      expect.objectContaining({ browserPageId: 'browser-1' })
+    )
+    const childDownloadDoneHandler = getDownloadItemEventHandler(childDownloadItem, 'once', 'done')
+    childDownloadDoneHandler?.({} as Electron.Event, 'completed')
+
+    const managerState = browserManager as unknown as {
+      popupOwnerContextByGuestId: Map<number, unknown>
+    }
+    expect(managerState.popupOwnerContextByGuestId.has(childGuest.id)).toBe(true)
+
+    const cleanupChildOnMock = vi.fn()
+    const cleanupChildGuest = {
+      ...childGuest,
+      id: 4041,
+      on: cleanupChildOnMock,
+      off: vi.fn(),
+      setBackgroundThrottling: vi.fn(),
+      setWindowOpenHandler: vi.fn()
+    }
+    const childDidCreateWindowHandler = childOnMock.mock.calls.find(
+      ([event]) => event === 'did-create-window'
+    )?.[1] as ((window: { webContents: typeof cleanupChildGuest }) => void) | undefined
+    childDidCreateWindowHandler?.({ webContents: cleanupChildGuest })
+    expect(managerState.popupOwnerContextByGuestId.has(cleanupChildGuest.id)).toBe(true)
+    const cleanupChildWindowOpenHandler = cleanupChildGuest.setWindowOpenHandler.mock
+      .calls[0][0] as (details: { url: string }) => { action: 'allow' | 'deny' }
+    expect(
+      cleanupChildWindowOpenHandler({ url: 'https://identity.example.com/continue' })
+    ).toMatchObject({ action: 'allow' })
+    const cleanupChildDestroyedHandler = cleanupChildOnMock.mock.calls.find(
+      ([event]) => event === 'destroyed'
+    )?.[1] as (() => void) | undefined
+    cleanupChildDestroyedHandler?.()
+    expect(managerState.popupOwnerContextByGuestId.has(cleanupChildGuest.id)).toBe(false)
+
+    const replacementGuest = {
+      ...guest,
+      id: 405,
+      on: vi.fn(),
+      off: vi.fn(),
+      setBackgroundThrottling: vi.fn(),
+      setWindowOpenHandler: vi.fn()
+    }
+    webContentsFromIdMock.mockImplementation((id: number) => {
+      if (id === guest.id) {
+        return guest
+      }
+      if (id === replacementGuest.id) {
+        return replacementGuest
+      }
+      if (id === rendererWebContentsId) {
+        return { isDestroyed: vi.fn(() => false), send: rendererSendMock }
+      }
+      return null
+    })
+    browserManager.attachGuestPolicies(replacementGuest as never)
+    browserManager.registerGuest({
+      browserPageId: 'browser-1',
+      webContentsId: replacementGuest.id,
+      rendererWebContentsId
+    })
+
+    expect(childWindowOpenHandler({ url: 'https://identity.example.com/next' })).toEqual({
+      action: 'deny'
+    })
+    expect(shellOpenExternalMock).toHaveBeenCalledWith('https://identity.example.com/next')
+    expect(managerState.popupOwnerContextByGuestId.has(childGuest.id)).toBe(false)
+
+    const childDestroyedHandler = childOnMock.mock.calls.find(
+      ([event]) => event === 'destroyed'
+    )?.[1] as (() => void) | undefined
+    childDestroyedHandler?.()
+    expect(managerState.popupOwnerContextByGuestId.has(childGuest.id)).toBe(false)
 
     browserManager.unregisterAll()
 

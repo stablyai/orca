@@ -5,6 +5,7 @@ in one file avoids scattering the browser security boundary across modules. */
 import { randomUUID } from 'node:crypto'
 
 import { shell, webContents } from 'electron'
+import { ORCA_BROWSER_BLANK_URL } from '../../shared/constants'
 import {
   normalizeBrowserNavigationUrl,
   normalizeExternalBrowserUrl,
@@ -140,6 +141,27 @@ export type BrowserGuestRegistration = {
 type PendingPermissionEvent = Omit<BrowserPermissionDeniedEvent, 'browserPageId'>
 type PendingPopupEvent = Omit<BrowserPopupEvent, 'browserPageId'>
 type BrowserDownloadDoneState = 'completed' | 'cancelled' | 'interrupted'
+type PopupOwnerContext = {
+  browserTabId: string
+  rootGuestWebContentsId: number
+}
+
+const SAFE_POPUP_WINDOW_OPTIONS = {
+  alwaysOnTop: false,
+  closable: true,
+  focusable: true,
+  frame: true,
+  fullscreen: false,
+  kiosk: false,
+  modal: false,
+  movable: true,
+  opacity: 1,
+  show: true,
+  simpleFullscreen: false,
+  skipTaskbar: false,
+  titleBarStyle: 'default',
+  transparent: false
+} satisfies Electron.BrowserWindowConstructorOptions
 
 type ActiveDownload = {
   downloadId: string
@@ -181,6 +203,7 @@ export class BrowserManager {
   // Why: reverse map enables O(1) guest→tab lookups instead of O(N) linear
   // scans on every mouse event, load failure, permission, and popup event.
   private readonly tabIdByWebContentsId = new Map<number, string>()
+  private readonly popupOwnerContextByGuestId = new Map<number, PopupOwnerContext>()
   // Why: guest registration is keyed by browser page id, but renderer
   // visibility/focus state is keyed by browser workspace id. Screenshot prep
   // has to bridge that mismatch to activate the right tab before capture.
@@ -293,7 +316,23 @@ export class BrowserManager {
   }
 
   private resolveBrowserTabIdForGuestWebContentsId(guestWebContentsId: number): string | null {
-    return this.tabIdByWebContentsId.get(guestWebContentsId) ?? null
+    return this.resolvePopupOwnerContext(guestWebContentsId)?.browserTabId ?? null
+  }
+
+  private resolvePopupOwnerContext(guestWebContentsId: number): PopupOwnerContext | null {
+    const browserTabId = this.tabIdByWebContentsId.get(guestWebContentsId)
+    if (browserTabId) {
+      return { browserTabId, rootGuestWebContentsId: guestWebContentsId }
+    }
+    const inherited = this.popupOwnerContextByGuestId.get(guestWebContentsId)
+    if (
+      inherited &&
+      this.webContentsIdByTabId.get(inherited.browserTabId) === inherited.rootGuestWebContentsId
+    ) {
+      return inherited
+    }
+    this.popupOwnerContextByGuestId.delete(guestWebContentsId)
+    return null
   }
 
   private resolveRendererForBrowserTab(browserTabId: string): Electron.WebContents | null {
@@ -558,11 +597,17 @@ export class BrowserManager {
     }
   }
 
-  attachGuestPolicies(guest: Electron.WebContents): void {
+  attachGuestPolicies(
+    guest: Electron.WebContents,
+    inheritedOwnerContext: PopupOwnerContext | null = null
+  ): void {
     if (this.policyAttachedGuestIds.has(guest.id)) {
       return
     }
     this.policyAttachedGuestIds.add(guest.id)
+    if (inheritedOwnerContext) {
+      this.popupOwnerContextByGuestId.set(guest.id, inheritedOwnerContext)
+    }
 
     // Why: Cloudflare Turnstile and similar bot detectors probe browser APIs
     // (navigator.webdriver, plugins, window.chrome) that differ in Electron
@@ -576,7 +621,9 @@ export class BrowserManager {
     // the compositor stops producing frames and capturePage() returns empty.
     guest.setBackgroundThrottling(false)
     const handleDidCreateWindow = (window: Electron.BrowserWindow): void => {
-      this.attachGuestPolicies(window.webContents)
+      // Why: popup descendants inherit the opener's owner context for routing,
+      // but must not replace its primary guest registration.
+      this.attachGuestPolicies(window.webContents, this.resolvePopupOwnerContext(guest.id))
     }
     guest.on('did-create-window', handleDidCreateWindow)
     guest.setWindowOpenHandler(({ url }) => {
@@ -584,8 +631,13 @@ export class BrowserManager {
       const browserUrl = normalizeBrowserNavigationUrl(url)
       const externalUrl = normalizeExternalBrowserUrl(url)
 
-      if (browserTabId && browserUrl) {
-        return { action: 'allow' }
+      // Why: file URLs are valid for user-opened in-pane previews, but remote
+      // content must not create native child windows targeting local paths.
+      const canOpenAsChild = Boolean(externalUrl || browserUrl === ORCA_BROWSER_BLANK_URL)
+      if (browserTabId && canOpenAsChild) {
+        // Why: OAuth may request ordinary size/position features, but browser
+        // content must not create deceptive or inescapable native chrome.
+        return { action: 'allow', overrideBrowserWindowOptions: SAFE_POPUP_WINDOW_OPTIONS }
       } else if (externalUrl) {
         // Why: a target=_blank click on a Kagi search result page produces a
         // popup URL that still contains the bearer token; redact before
@@ -683,17 +735,28 @@ export class BrowserManager {
     // swaps renderer processes. Late events from the dead guest must stop
     // resolving to the live page, or stale download/popup/permission callbacks
     // can be delivered to the wrong session after the swap.
-    this.tabIdByWebContentsId.delete(previousWebContentsId)
     this.cleanupGuestPolicyAttachment(previousWebContentsId)
+    this.tabIdByWebContentsId.delete(previousWebContentsId)
   }
 
   private cleanupGuestPolicyAttachment(guestWebContentsId: number): void {
+    const isPrimaryGuest = this.tabIdByWebContentsId.has(guestWebContentsId)
     const policyCleanup = this.policyCleanupByGuestId.get(guestWebContentsId)
     if (policyCleanup) {
       policyCleanup()
       this.policyCleanupByGuestId.delete(guestWebContentsId)
     }
     this.policyAttachedGuestIds.delete(guestWebContentsId)
+    this.popupOwnerContextByGuestId.delete(guestWebContentsId)
+    // Why: a popup must stop inheriting authorization as soon as its primary
+    // owner is retired, even if Chromium has not destroyed the child yet.
+    if (isPrimaryGuest) {
+      for (const [popupGuestId, owner] of this.popupOwnerContextByGuestId) {
+        if (owner.rootGuestWebContentsId === guestWebContentsId) {
+          this.popupOwnerContextByGuestId.delete(popupGuestId)
+        }
+      }
+    }
     this.pendingLoadFailuresByGuestId.delete(guestWebContentsId)
     this.pendingPermissionEventsByGuestId.delete(guestWebContentsId)
     this.pendingPopupEventsByGuestId.delete(guestWebContentsId)
@@ -879,6 +942,7 @@ export class BrowserManager {
     }
     this.policyCleanupByGuestId.clear()
     this.tabIdByWebContentsId.clear()
+    this.popupOwnerContextByGuestId.clear()
     this.worktreeIdByTabId.clear()
     this.sessionProfileIdByPageId.clear()
     this.pendingLoadFailuresByGuestId.clear()
@@ -1769,7 +1833,6 @@ export class BrowserManager {
       }
     })
   }
-
 }
 
 export const browserManager = new BrowserManager()
