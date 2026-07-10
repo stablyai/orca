@@ -12878,7 +12878,7 @@
         "pastedImageLabel": "粘贴的图片",
         "imagePasteFailed": "图片粘贴失败。",
         "worktreeNotReady": "Worktree 未就绪 — 请稍后重试。",
-        "uploadingAttachments": "正在上传 {{value0}} 个文件到远程…"
+        "uploadingAttachments": "正在上传文件到远程（{{value0}}）…"
       },
       "tool": {
         "running": "正在运行…",

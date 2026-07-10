@@ -12878,7 +12878,7 @@
         "pastedImageLabel": "Imagen pegada",
         "imagePasteFailed": "Error al pegar imagen.",
         "worktreeNotReady": "Worktree no está listo — intenta de nuevo en un momento.",
-        "uploadingAttachments": "Subiendo {{value0}} archivo{{value1}} al remoto…"
+        "uploadingAttachments": "Subiendo archivos al remoto ({{value0}})…"
       },
       "tool": {
         "running": "Ejecutando…",
