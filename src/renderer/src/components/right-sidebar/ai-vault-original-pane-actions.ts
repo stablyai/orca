@@ -1,4 +1,4 @@
-import { useCallback } from 'react'
+import { useCallback, useMemo } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 import { toast } from 'sonner'
 import { activateTabAndFocusPane } from '@/lib/activate-tab-and-focus-pane'
@@ -7,10 +7,12 @@ import { useAppStore } from '@/store'
 import type { AgentStatusState } from '../../../../shared/agent-status-types'
 import type { AiVaultSession } from '../../../../shared/ai-vault-types'
 import { translate } from '@/i18n/i18n'
+import { findOriginalAiVaultSessionPane } from './ai-vault-original-pane'
 import {
-  findAiVaultSessionLiveState,
-  findOriginalAiVaultSessionPane
-} from './ai-vault-original-pane'
+  buildAiVaultOriginalPaneIndex,
+  findAiVaultSessionLiveStateInIndex,
+  findOriginalAiVaultSessionPaneInIndex
+} from './ai-vault-original-pane-index'
 
 export function useAiVaultOriginalPaneActions(): {
   getOriginalPaneTarget: (
@@ -29,15 +31,22 @@ export function useAiVaultOriginalPaneActions(): {
       terminalLayoutsByTabId: s.terminalLayoutsByTabId
     }))
   )
-
-  const getOriginalPaneTarget = useCallback(
-    (session: AiVaultSession) => findOriginalAiVaultSessionPane(originalPaneLookupState, session),
+  // Why: the virtual list asks both questions for every visible row. Build the
+  // collection indexes once per immutable store snapshot instead of rescanning
+  // every live, retained, and sleeping agent for each row.
+  const originalPaneIndex = useMemo(
+    () => buildAiVaultOriginalPaneIndex(originalPaneLookupState),
     [originalPaneLookupState]
   )
 
+  const getOriginalPaneTarget = useCallback(
+    (session: AiVaultSession) => findOriginalAiVaultSessionPaneInIndex(originalPaneIndex, session),
+    [originalPaneIndex]
+  )
+
   const getSessionLiveState = useCallback(
-    (session: AiVaultSession) => findAiVaultSessionLiveState(originalPaneLookupState, session),
-    [originalPaneLookupState]
+    (session: AiVaultSession) => findAiVaultSessionLiveStateInIndex(originalPaneIndex, session),
+    [originalPaneIndex]
   )
 
   const jumpToOriginalPane = useCallback((session: AiVaultSession): void => {
