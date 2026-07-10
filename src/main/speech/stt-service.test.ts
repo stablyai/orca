@@ -1,5 +1,3 @@
-/* eslint-disable max-lines -- Why: stop lifecycle race tests need one hoisted
-worker mock so concurrent events share the same mocked Worker module. */
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const {
