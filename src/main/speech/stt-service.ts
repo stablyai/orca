@@ -144,7 +144,8 @@ export class SttService {
       if (
         this.worker === worker &&
         this.activeModelId === modelId &&
-        this.activeHotwordsFilePath === hotwordsFilePath
+        this.activeHotwordsFilePath === hotwordsFilePath &&
+        this.stopInFlight?.worker !== worker
       ) {
         this.eventSink = sink
         sink({ type: 'ready' })
@@ -372,8 +373,10 @@ export class SttService {
     })
     this.stopInFlight = { worker, owner, promise: stopPromise }
     this.stopping = true
-    worker.postMessage({ type: 'stop' })
     try {
+      // Why: keep the stop message inside the try so a postMessage throw still
+      // clears `stopping` — otherwise feedAudio silently drops all future audio.
+      worker.postMessage({ type: 'stop' })
       await stopPromise
     } finally {
       this.stopping = false
