@@ -52,7 +52,7 @@ describe('fetchCodexRateLimits multi-meter windows', () => {
     vi.useFakeTimers()
     vi.clearAllMocks()
     resolveCodexCommandMock.mockReturnValue('codex')
-    vi.mocked(codexAuthExists).mockReturnValue(true)
+    vi.mocked(codexAuthExists).mockResolvedValue(true)
     readFileMock.mockRejectedValue(new Error('no auth fixture'))
     vi.stubGlobal('fetch', vi.fn())
   })

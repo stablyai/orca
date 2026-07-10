@@ -4,6 +4,7 @@ differences and ensure account-scoped env handling stays identical. */
 import type {
   CodexRateLimitResetOutcome,
   ProviderRateLimits,
+  RateLimitBucket,
   RateLimitWindow
 } from '../../shared/rate-limit-types'
 import { spawn } from 'node:child_process'
@@ -83,10 +84,15 @@ type RpcRateLimitsResult = {
   secondary?: RpcRateWindow
 }
 
+type RpcRateLimitSnapshot = RpcRateLimitsResult & {
+  limitId?: string
+  limitName?: string
+}
+
 // Why: the Codex app-server wraps rate limit data inside a `rateLimits` key.
 // The actual response shape is `{ rateLimits: { primary, secondary, ... } }`.
 type RpcRateLimitsResponse = {
-  rateLimits?: RpcRateLimitsResult
+  rateLimits?: RpcRateLimitSnapshot
   // Why: multi-meter plans return several snapshots keyed by limit_id.
   rateLimitsByLimitId?: Record<string, RpcRateLimitSnapshot | undefined> | null
   rateLimitResetCredits?: {
