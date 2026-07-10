@@ -29,6 +29,7 @@ import type {
   Worktree,
   WorktreeMeta
 } from '../../shared/types'
+import { getRepoExecutionHostId, type ExecutionHostId } from '../../shared/execution-host'
 import {
   buildKnownOrcaWorkspaceLayouts,
   isLegacyRepoForExternalWorktreeVisibility,
@@ -100,6 +101,28 @@ import {
 
 type CreateWorktreeArgsWithSystemProvenance = CreateWorktreeArgs & {
   automationProvenance?: AutomationWorkspaceProvenance
+}
+
+type RemoveWorktreeArgs = {
+  worktreeId: string
+  hostId?: ExecutionHostId
+  force?: boolean
+  skipArchive?: boolean
+}
+
+function getRepoForWorktreeRemoval(
+  store: Store,
+  repoId: string,
+  hostId?: ExecutionHostId
+): Repo | undefined {
+  if (!hostId) {
+    return store.getRepo(repoId)
+  }
+  // Why: one project can have repo rows on several hosts; a bare repo id can
+  // otherwise route an SSH workspace deletion through local Git.
+  return store
+    .getRepos()
+    .find((repo) => repo.id === repoId && getRepoExecutionHostId(repo) === hostId)
 }
 import { classifyWorkspaceCreateError } from './workspace-create-error-classifier'
 import { advertisedUrlWatcher } from '../ports/advertised-url-watcher'
@@ -1345,7 +1368,7 @@ export function registerWorktreeHandlers(
 
   ipcMain.handle(
     'worktrees:remove',
-    async (_event, args: { worktreeId: string; force?: boolean; skipArchive?: boolean }) => {
+    async (_event, args: RemoveWorktreeArgs): Promise<RemoveWorktreeResult> => {
       const optionsKey = getWorktreeRemovalOptionsKey(args)
       const inFlightRemoval = worktreeRemovalsInFlight.get(args.worktreeId)
       if (inFlightRemoval) {
@@ -1360,7 +1383,7 @@ export function registerWorktreeHandlers(
       // operation so only one path touches Git and the filesystem.
       const removal = (async (): Promise<RemoveWorktreeResult> => {
         const { repoId, worktreePath } = parseWorktreeId(args.worktreeId)
-        const repo = store.getRepo(repoId)
+        const repo = getRepoForWorktreeRemoval(store, repoId, args.hostId)
         if (!repo) {
           throw new Error(`Repo not found: ${repoId}`)
         }
@@ -1816,7 +1839,10 @@ export function registerWorktreeHandlers(
   // no branches, no files are deleted there.
   ipcMain.handle(
     'worktrees:forgetLocal',
-    async (_event, args: { worktreeId: string }): Promise<RemoveWorktreeResult> => {
+    async (
+      _event,
+      args: Pick<RemoveWorktreeArgs, 'worktreeId' | 'hostId'>
+    ): Promise<RemoveWorktreeResult> => {
       // Why: share the removal in-flight map (not a separate one) so a concurrent
       // worktrees:remove and worktrees:forgetLocal on the same id cannot both
       // mutate metadata. A forget takes no force/skipArchive options.
@@ -1831,7 +1857,7 @@ export function registerWorktreeHandlers(
 
       const forget = (async (): Promise<RemoveWorktreeResult> => {
         const { repoId } = parseWorktreeId(args.worktreeId)
-        const repo = store.getRepo(repoId)
+        const repo = getRepoForWorktreeRemoval(store, repoId, args.hostId)
         if (!repo) {
           throw new Error(`Repo not found: ${repoId}`)
         }

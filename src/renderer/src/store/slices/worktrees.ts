@@ -3168,14 +3168,15 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
       const worktreeBeforeRemoval = get()
         .allWorktrees()
         .find((entry) => entry.id === worktreeId)
+      const hostId = worktreeBeforeRemoval?.hostId
       // Why: forget-local always clears Orca's own records via the local IPC
       // handler regardless of the workspace's execution host — the whole point
       // is that the remote (SSH relay / runtime) is gone or unreachable.
       const target = getActiveRuntimeTarget(settingsForWorktreeOwner(get(), worktreeId))
       const removalResult = await (forgetLocalOnly
-        ? window.api.worktrees.forgetLocal({ worktreeId })
+        ? window.api.worktrees.forgetLocal({ worktreeId, hostId })
         : target.kind === 'local'
-          ? window.api.worktrees.remove({ worktreeId, force, skipArchive })
+          ? window.api.worktrees.remove({ worktreeId, hostId, force, skipArchive })
           : callRuntimeRpc<RemoveWorktreeResult>(
               target,
               'worktree.rm',
