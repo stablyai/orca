@@ -117,7 +117,9 @@ type RemoteRuntimeSnapshotRequest = {
 const CONTROL_STREAM_ID = 0
 const MAX_REMOTE_TERMINAL_SNAPSHOT_BYTES = 2 * 1024 * 1024
 const REMOTE_TERMINAL_SNAPSHOT_REQUEST_TIMEOUT_MS = 10_000
-const REMOTE_TERMINAL_SNAPSHOT_TOO_LARGE =
+// Why: exported so the transport can classify it as benign — the snapshot was
+// skipped but live output continues, so it must not surface a fatal red banner.
+export const REMOTE_TERMINAL_SNAPSHOT_TOO_LARGE =
   'Remote terminal snapshot exceeded the 2 MiB replay limit; live output will continue.'
 
 class RemoteRuntimeTerminalMultiplexer {

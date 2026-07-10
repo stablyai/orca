@@ -1990,9 +1990,9 @@ describe('createRemoteRuntimePtyTransport', () => {
     emitOutput(streamId, 'live-after-overflow')
 
     expect(onReplayData).not.toHaveBeenCalled()
-    expect(onError).toHaveBeenCalledWith(
-      'Remote terminal snapshot exceeded the 2 MiB replay limit; live output will continue.'
-    )
+    // Why: an oversized snapshot is skipped but live output continues, so the
+    // transport classifies it as benign and never surfaces a fatal red banner.
+    expect(onError).not.toHaveBeenCalled()
     expect(onConnect).toHaveBeenCalled()
     expect(onData).toHaveBeenCalledWith('live-after-overflow', expect.objectContaining({ seq: 1 }))
   })
