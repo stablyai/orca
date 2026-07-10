@@ -888,11 +888,17 @@ export function AccountsPane({
             </button>
             {visibleClaudeAccounts.length === 0 ? (
               <div className="rounded-md border border-dashed border-border/70 px-3 py-4 text-xs text-muted-foreground">
-                {translate(
-                  'auto.components.settings.AccountsPane.3fe7862418',
-                  "No managed Claude accounts for {{value0}}. Orca will use that environment's system default Claude login until you add one here.",
-                  { value0: accountRuntimeSentenceLabel }
-                )}
+                {isRemoteAccountScope
+                  ? translate(
+                      'auto.components.settings.AccountsPane.remoteEmptyClaudeAccounts',
+                      'No managed Claude accounts on {{value0}}. It uses its system default Claude login; add accounts on that server.',
+                      { value0: accountRuntimeSentenceLabel }
+                    )
+                  : translate(
+                      'auto.components.settings.AccountsPane.3fe7862418',
+                      "No managed Claude accounts for {{value0}}. Orca will use that environment's system default Claude login until you add one here.",
+                      { value0: accountRuntimeSentenceLabel }
+                    )}
               </div>
             ) : (
               visibleClaudeAccounts.map((account) => {
@@ -1181,22 +1187,32 @@ export function AccountsPane({
             </button>
             {visibleCodexAccounts.length === 0 ? (
               <div className="rounded-md border border-dashed border-border/70 px-3 py-4 text-xs text-muted-foreground">
-                {translate(
-                  'auto.components.settings.AccountsPane.b4c9450319',
-                  "No managed Codex accounts for {{value0}}. Orca will use that environment's system default Codex login until you add one here.",
-                  { value0: accountRuntimeSentenceLabel }
-                )}
+                {isRemoteAccountScope
+                  ? translate(
+                      'auto.components.settings.AccountsPane.remoteEmptyCodexAccounts',
+                      'No managed Codex accounts on {{value0}}. It uses its system default Codex login; add accounts on that server.',
+                      { value0: accountRuntimeSentenceLabel }
+                    )
+                  : translate(
+                      'auto.components.settings.AccountsPane.b4c9450319',
+                      "No managed Codex accounts for {{value0}}. Orca will use that environment's system default Codex login until you add one here.",
+                      { value0: accountRuntimeSentenceLabel }
+                    )}
               </div>
             ) : (
               visibleCodexAccounts.map((account) => {
                 const isActive = activeCodexAccountId === account.id
-                const accountAuthWarning = getCodexAccountAuthWarning({
-                  limits: codexRateLimits,
-                  target: codexRateLimitTarget,
-                  runtime: accountRuntime,
-                  activeAccountId: activeCodexAccountId,
-                  accountId: account.id
-                })
+                // Why: same remote gate as the section-level warning — the
+                // desktop's rate-limit poll says nothing about server accounts.
+                const accountAuthWarning = isRemoteAccountScope
+                  ? null
+                  : getCodexAccountAuthWarning({
+                      limits: codexRateLimits,
+                      target: codexRateLimitTarget,
+                      runtime: accountRuntime,
+                      activeAccountId: activeCodexAccountId,
+                      accountId: account.id
+                    })
                 const needsReauthentication = Boolean(accountAuthWarning)
                 const isReauthing = codexAction === `reauth:${account.id}`
                 const isRemoving = codexAction === `remove:${account.id}`
