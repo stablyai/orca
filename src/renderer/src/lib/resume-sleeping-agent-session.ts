@@ -4,8 +4,6 @@ import { CLIENT_PLATFORM } from '@/lib/new-workspace'
 import { buildAgentResumeStartupPlan } from '@/lib/tui-agent-startup'
 import { tuiAgentToAgentKind } from '@/lib/telemetry'
 import { reconcileTabOrder } from '@/components/tab-bar/reconcile-order'
-import { isWslUncPath } from '../../../shared/wsl-paths'
-import { getLocalProjectExecutionRuntimeContext } from '@/lib/local-preflight-context'
 import {
   resolveTuiAgentLaunchArgs,
   resolveTuiAgentLaunchEnv
@@ -21,23 +19,10 @@ import {
   isPassiveCompletedHibernationEvidence,
   recordPaneIsOwnedByPreservedPane
 } from './sleeping-agent-pane-ownership'
-
-function getResumeLaunchPlatform(worktreeId: string): NodeJS.Platform {
-  const state = useAppStore.getState()
-  const worktree = state.getKnownWorktreeById(worktreeId)
-  const repo = worktree ? state.repos.find((entry) => entry.id === worktree.repoId) : null
-  const projectRuntime = getLocalProjectExecutionRuntimeContext(state, worktreeId)
-  if (projectRuntime?.status === 'repair-required') {
-    return projectRuntime.repair.preferredRuntime.kind === 'wsl' ? 'linux' : CLIENT_PLATFORM
-  }
-  if (projectRuntime?.status === 'resolved' && projectRuntime.runtime.kind === 'wsl') {
-    return 'linux'
-  }
-  if (repo?.connectionId || (worktree?.path && isWslUncPath(worktree.path))) {
-    return 'linux'
-  }
-  return CLIENT_PLATFORM
-}
+import {
+  getResumeLaunchPlatform,
+  isRemoteResumeLaunch
+} from './resume-sleeping-agent-launch-platform'
 
 function appendTabToWorktreeOrder(worktreeId: string, tabId: string): void {
   const state = useAppStore.getState()
@@ -65,6 +50,7 @@ function launchSleepingAgentSession(
 ): boolean {
   const state = useAppStore.getState()
   const launchConfig = record.launchConfig
+  const resumeLaunchPlatform = getResumeLaunchPlatform(record.worktreeId)
   const startupPlan = buildAgentResumeStartupPlan({
     agent: record.agent,
     providerSession: record.providerSession,
@@ -76,9 +62,14 @@ function launchSleepingAgentSession(
     agentEnv:
       launchConfig !== undefined
         ? launchConfig.agentEnv
-        : resolveTuiAgentLaunchEnv(record.agent, state.settings?.agentDefaultEnv),
+        : resolveTuiAgentLaunchEnv(record.agent, state.settings?.agentDefaultEnv, {
+            settings: state.settings,
+            isRemote: isRemoteResumeLaunch(record.worktreeId),
+            launchPlatform: resumeLaunchPlatform,
+            hostPlatform: CLIENT_PLATFORM
+          }),
     ...(launchConfig?.agentCommand ? { agentCommand: launchConfig.agentCommand } : {}),
-    platform: getResumeLaunchPlatform(record.worktreeId)
+    platform: resumeLaunchPlatform
   })
   if (!startupPlan) {
     toast.error(

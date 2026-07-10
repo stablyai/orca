@@ -150,6 +150,7 @@ describe('hasUsageProviderSettingsForProvider', () => {
     ).toBe(true)
     expect(hasUsageProviderSettingsForProvider('claude', usageSettings())).toBe(false)
     expect(hasUsageProviderSettingsForProvider('kimi', usageSettings())).toBe(false)
+    expect(hasUsageProviderSettingsForProvider('grok', usageSettings())).toBe(false)
   })
 
   it('treats checked Antigravity Usage as the durable signal for Antigravity', () => {
@@ -299,6 +300,7 @@ describe('isUsageEmptyState', () => {
           opencodeGo: null,
           kimi: null,
           antigravity: null,
+          grok: null,
           minimax: null
         },
         usageSettings()
@@ -316,6 +318,7 @@ describe('isUsageEmptyState', () => {
           opencodeGo: provider('unavailable', { provider: 'opencode-go' }),
           kimi: provider('unavailable', { provider: 'kimi' }),
           antigravity: provider('unavailable', { provider: 'antigravity' }),
+          grok: provider('unavailable', { provider: 'grok' }),
           minimax: provider('unavailable', { provider: 'minimax' })
         },
         usageSettings()
@@ -333,6 +336,7 @@ describe('isUsageEmptyState', () => {
           opencodeGo: provider('unavailable', { provider: 'opencode-go' }),
           kimi: provider('unavailable', { provider: 'kimi' }),
           antigravity: provider('unavailable', { provider: 'antigravity' }),
+          grok: provider('unavailable', { provider: 'grok' }),
           minimax: provider('unavailable', { provider: 'minimax' })
         },
         usageSettings({
@@ -361,6 +365,7 @@ describe('isUsageEmptyState', () => {
           opencodeGo: null,
           kimi: null,
           antigravity: null,
+          grok: null,
           minimax: null
         },
         null
@@ -378,6 +383,7 @@ describe('isUsageEmptyState', () => {
           opencodeGo: provider('unavailable', { provider: 'opencode-go' }),
           kimi: provider('unavailable', { provider: 'kimi' }),
           antigravity: null,
+          grok: provider('unavailable', { provider: 'grok' }),
           minimax: provider('unavailable', { provider: 'minimax' })
         },
         usageSettings()

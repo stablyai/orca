@@ -85,6 +85,7 @@ export function buildAiVaultResumeStartupForWorktree(args: {
     args.session.executionHostPlatform
       ? args.session.executionHostPlatform
       : getAiVaultResumePlatform(args.state, args.worktreeId)
+  const isRemoteLaunch = platform !== CLIENT_PLATFORM
   const codexHome = getAiVaultResumeCodexHome(args.session.codexHome, platform)
   // Why: the queued command is typed verbatim into the freshly spawned tab whose
   // live shell is the configured Windows shell (default PowerShell). Hardcoding
@@ -108,7 +109,12 @@ export function buildAiVaultResumeStartupForWorktree(args: {
         args.session.agent,
         args.state.settings?.agentDefaultArgs
       ),
-      agentEnv: resolveTuiAgentLaunchEnv(args.session.agent, args.state.settings?.agentDefaultEnv)
+      agentEnv: resolveTuiAgentLaunchEnv(args.session.agent, args.state.settings?.agentDefaultEnv, {
+        settings: args.state.settings,
+        isRemote: isRemoteLaunch,
+        launchPlatform: platform,
+        hostPlatform: CLIENT_PLATFORM
+      })
     })
     if (startupPlan) {
       return {

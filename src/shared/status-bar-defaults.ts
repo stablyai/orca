@@ -7,6 +7,7 @@ export const DEFAULT_STATUS_BAR_ITEMS: StatusBarItem[] = [
   'antigravity',
   'opencode-go',
   'kimi',
+  'grok',
   'minimax',
   'ssh',
   'resource-usage',

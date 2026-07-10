@@ -3343,7 +3343,17 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
           agentArgs: agent
             ? resolveTuiAgentLaunchArgs(agent, settings?.agentDefaultArgs)
             : undefined,
-          agentEnv: agent ? resolveTuiAgentLaunchEnv(agent, settings?.agentDefaultEnv) : undefined,
+          agentEnv: agent
+            ? resolveTuiAgentLaunchEnv(agent, settings?.agentDefaultEnv, {
+                settings: {
+                  grokManagedAccounts: settings?.grokManagedAccounts,
+                  activeGrokManagedAccountId: settings?.activeGrokManagedAccountId
+                },
+                isRemote: folderTargetIsRemote,
+                launchPlatform: CLIENT_PLATFORM,
+                hostPlatform: CLIENT_PLATFORM
+              })
+            : undefined,
           isRemote: folderTargetIsRemote,
           launchSource: telemetrySource === 'onboarding' ? 'onboarding' : 'new_workspace_composer',
           runtimeEnvironmentId: folderTargetRuntimeEnvironmentId,
@@ -3399,6 +3409,8 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
       settings?.agentDefaultArgs,
       settings?.agentDefaultEnv,
       settings?.autoRenameBranchFromWork,
+      settings?.grokManagedAccounts,
+      settings?.activeGrokManagedAccountId,
       telemetrySource
     ]
   )
@@ -3596,7 +3608,15 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
         prompt: submitStartupPrompt,
         cmdOverrides: settings?.agentCmdOverrides ?? {},
         agentArgs: resolveTuiAgentLaunchArgs(tuiAgent, settings?.agentDefaultArgs),
-        agentEnv: resolveTuiAgentLaunchEnv(tuiAgent, settings?.agentDefaultEnv),
+        agentEnv: resolveTuiAgentLaunchEnv(tuiAgent, settings?.agentDefaultEnv, {
+          settings: {
+            grokManagedAccounts: settings?.grokManagedAccounts,
+            activeGrokManagedAccountId: settings?.activeGrokManagedAccountId
+          },
+          isRemote: selectedRepoIsRemote,
+          launchPlatform: selectedRepoAgentLaunchPlatform,
+          hostPlatform: CLIENT_PLATFORM
+        }),
         platform: selectedRepoAgentLaunchPlatform,
         isRemote: selectedRepoIsRemote
       })
@@ -3776,6 +3796,8 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
     settings?.agentDefaultArgs,
     settings?.agentDefaultEnv,
     settings?.autoRenameBranchFromWork,
+    settings?.grokManagedAccounts,
+    settings?.activeGrokManagedAccountId,
     smartNameMode,
     setSidebarOpen,
     setupDecision,
@@ -4013,7 +4035,15 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
                 draft: quickDraftPrompt,
                 cmdOverrides: settings?.agentCmdOverrides ?? {},
                 agentArgs: resolveTuiAgentLaunchArgs(agent, settings?.agentDefaultArgs),
-                agentEnv: resolveTuiAgentLaunchEnv(agent, settings?.agentDefaultEnv),
+                agentEnv: resolveTuiAgentLaunchEnv(agent, settings?.agentDefaultEnv, {
+                  settings: {
+                    grokManagedAccounts: settings?.grokManagedAccounts,
+                    activeGrokManagedAccountId: settings?.activeGrokManagedAccountId
+                  },
+                  isRemote: selectedRepoIsRemote,
+                  launchPlatform: selectedRepoAgentLaunchPlatform,
+                  hostPlatform: CLIENT_PLATFORM
+                }),
                 platform: selectedRepoAgentLaunchPlatform,
                 isRemote: selectedRepoIsRemote
               })
@@ -4037,7 +4067,15 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
             prompt: quickPrompt,
             cmdOverrides: settings?.agentCmdOverrides ?? {},
             agentArgs: resolveTuiAgentLaunchArgs(agent, settings?.agentDefaultArgs),
-            agentEnv: resolveTuiAgentLaunchEnv(agent, settings?.agentDefaultEnv),
+            agentEnv: resolveTuiAgentLaunchEnv(agent, settings?.agentDefaultEnv, {
+              settings: {
+                grokManagedAccounts: settings?.grokManagedAccounts,
+                activeGrokManagedAccountId: settings?.activeGrokManagedAccountId
+              },
+              isRemote: selectedRepoIsRemote,
+              launchPlatform: selectedRepoAgentLaunchPlatform,
+              hostPlatform: CLIENT_PLATFORM
+            }),
             platform: selectedRepoAgentLaunchPlatform,
             isRemote: selectedRepoIsRemote,
             allowEmptyPromptLaunch: true
@@ -4225,6 +4263,8 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
       settings?.agentDefaultArgs,
       settings?.agentDefaultEnv,
       settings?.autoRenameBranchFromWork,
+      settings?.grokManagedAccounts,
+      settings?.activeGrokManagedAccountId,
       smartNameMode,
       disabledTuiAgents,
       setupDecision,

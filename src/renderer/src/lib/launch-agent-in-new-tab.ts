@@ -81,9 +81,7 @@ export type LaunchAgentInNewTabResult = {
  * action. It mirrors the `+` button's path (`createNewTerminalTab`) — createTab,
  * flip `activeTabType` to terminal, and persist the appended tab-bar order —
  * then queues the agent startup through the same `pendingStartupByTabId`
- * channel the new-workspace ("cmd+N") flow uses. TerminalPane consumes the
- * queued command on first mount and the local PTY provider writes it once the
- * shell is ready (see `pty-connection.ts`: startup-command path).
+ * channel the new-workspace ("cmd+N") flow uses.
  *
  * Default submission mode follows `promptInjectionMode`: argv/flag agents
  * include the prompt directly in the launch command, while followup-path
@@ -131,7 +129,12 @@ export function launchAgentInNewTab(args: LaunchAgentInNewTabArgs): LaunchAgentI
     agentArgs !== undefined
       ? agentArgs
       : resolveTuiAgentLaunchArgs(agent, store.settings?.agentDefaultArgs)
-  const agentEnv = resolveTuiAgentLaunchEnv(agent, store.settings?.agentDefaultEnv)
+  const agentEnv = resolveTuiAgentLaunchEnv(agent, store.settings?.agentDefaultEnv, {
+    settings: store.settings,
+    isRemote,
+    launchPlatform: resolvedLaunchPlatform,
+    hostPlatform: CLIENT_PLATFORM
+  })
   const startupPlanBase = {
     agent,
     cmdOverrides,
@@ -379,8 +382,7 @@ export function launchAgentInNewTab(args: LaunchAgentInNewTabArgs): LaunchAgentI
     editorIds,
     browserIds
   )
-  const order = base.filter((id) => id !== tab.id)
-  order.push(tab.id)
+  const order = [...base.filter((id) => id !== tab.id), tab.id]
   fresh.setTabBarOrder(worktreeId, order)
 
   return {

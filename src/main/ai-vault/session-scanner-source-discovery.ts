@@ -161,10 +161,13 @@ function grokDiscoveries(
   limit: number,
   issues: AiVaultScanIssue[]
 ): Promise<SessionFileDiscovery>[] {
-  return sessionRootDirs(options.grokSessionsDir ?? GROK_SESSIONS_DIR, wslHomeDirs, [
-    '.grok',
-    'sessions'
-  ]).map((rootDir) =>
+  return [
+    ...sessionRootDirs(options.grokSessionsDir ?? GROK_SESSIONS_DIR, wslHomeDirs, [
+      '.grok',
+      'sessions'
+    ]),
+    ...(options.additionalGrokSessionsDirs ?? [])
+  ].map((rootDir) =>
     discoverFiles({
       rootDir,
       limit,

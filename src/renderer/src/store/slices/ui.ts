@@ -266,6 +266,7 @@ const DEFAULT_ON_PORTS_STATUS_BAR_ITEM: StatusBarItem = 'ports'
 const DEFAULT_ON_KIMI_STATUS_BAR_ITEM: StatusBarItem = 'kimi'
 const DEFAULT_ON_MINIMAX_STATUS_BAR_ITEM: StatusBarItem = 'minimax'
 const DEFAULT_ON_ANTIGRAVITY_STATUS_BAR_ITEM: StatusBarItem = 'antigravity'
+const DEFAULT_ON_GROK_STATUS_BAR_ITEM: StatusBarItem = 'grok'
 
 function normalizeHydratedVisibleWorkspaceHostIds(ui: PersistedUIState): VisibleWorkspaceHostIds {
   const visibleHostIds = normalizeVisibleExecutionHostIds(ui.visibleWorkspaceHostIds)
@@ -2268,20 +2269,26 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
         ui._antigravityStatusBarDefaultAdded || statusBarItemsWithMiniMax.includes('antigravity')
           ? statusBarItemsWithMiniMax
           : [...statusBarItemsWithMiniMax, DEFAULT_ON_ANTIGRAVITY_STATUS_BAR_ITEM]
+      const statusBarItemsWithGrok =
+        ui._grokStatusBarDefaultAdded || statusBarItemsWithAntigravity.includes('grok')
+          ? statusBarItemsWithAntigravity
+          : [...statusBarItemsWithAntigravity, DEFAULT_ON_GROK_STATUS_BAR_ITEM]
       if (
         (!ui._portsStatusBarDefaultAdded ||
           !ui._kimiStatusBarDefaultAdded ||
           !ui._minimaxStatusBarDefaultAdded ||
-          !ui._antigravityStatusBarDefaultAdded) &&
+          !ui._antigravityStatusBarDefaultAdded ||
+          !ui._grokStatusBarDefaultAdded) &&
         typeof window !== 'undefined'
       ) {
         window.api.ui
           .set({
-            statusBarItems: statusBarItemsWithAntigravity,
+            statusBarItems: statusBarItemsWithGrok,
             _portsStatusBarDefaultAdded: true,
             _kimiStatusBarDefaultAdded: true,
             _minimaxStatusBarDefaultAdded: true,
-            _antigravityStatusBarDefaultAdded: true
+            _antigravityStatusBarDefaultAdded: true,
+            _grokStatusBarDefaultAdded: true
           })
           .catch(console.error)
       }
@@ -2346,7 +2353,7 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
         workspaceBoardOpacity: clampWorkspaceBoardOpacity(ui.workspaceBoardOpacity),
         workspaceBoardColumnWidth: clampWorkspaceBoardColumnWidth(ui.workspaceBoardColumnWidth),
         syncTaskStatusFromWorkspaceBoard: ui.syncTaskStatusFromWorkspaceBoard === true,
-        statusBarItems: statusBarItemsWithAntigravity,
+        statusBarItems: statusBarItemsWithGrok,
         statusBarVisible: ui.statusBarVisible ?? true,
         // Why: absent → true so existing users see the pet the first time
         // they enable the experimental flag. Only an explicit Hide pet

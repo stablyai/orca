@@ -32,6 +32,8 @@ describe('patchPackagedProcessPath', () => {
   const originalPlatform = Object.getOwnPropertyDescriptor(process, 'platform')
   const originalHome = process.env.HOME
   const originalPath = process.env.PATH
+  const originalWindowsPath = process.env.Path
+  const originalUserProfile = process.env.USERPROFILE
 
   function setPlatform(platform: NodeJS.Platform): void {
     Object.defineProperty(process, 'platform', {
@@ -54,9 +56,19 @@ describe('patchPackagedProcessPath', () => {
     } else {
       process.env.PATH = originalPath
     }
+    if (originalWindowsPath === undefined) {
+      delete process.env.Path
+    } else {
+      process.env.Path = originalWindowsPath
+    }
+    if (originalUserProfile === undefined) {
+      delete process.env.USERPROFILE
+    } else {
+      process.env.USERPROFILE = originalUserProfile
+    }
   })
 
-  it('prepends agent-CLI install dirs (~/.opencode/bin, ~/.vite-plus/bin) for packaged darwin runs', async () => {
+  it('prepends agent-CLI install dirs for packaged darwin runs', async () => {
     const { app } = await import('electron')
     const { patchPackagedProcessPath } = await import('./configure-process')
 
@@ -68,11 +80,12 @@ describe('patchPackagedProcessPath', () => {
     patchPackagedProcessPath()
 
     const segments = (process.env.PATH ?? '').split(':')
-    // Why: issue #829 — ~/.opencode/bin and ~/.vite-plus/bin are the documented
-    // fallback install locations for the opencode and Pi CLI install scripts.
+    // Why: issue #829 — these are documented fallback install locations for
+    // agent CLI install scripts.
     // Without them on PATH, GUI-launched Orca reports both as "Not installed"
     // even when `which` resolves them in the user's shell.
     expect(segments).toContain(join('/Users/tester', '.opencode/bin'))
+    expect(segments).toContain(join('/Users/tester', '.grok/bin'))
     expect(segments).toContain(join('/Users/tester', '.vite-plus/bin'))
     expect(segments).toContain(join('/Users/tester', 'bin'))
   })
@@ -97,14 +110,17 @@ describe('patchPackagedProcessPath', () => {
 
     setPlatform('win32')
     Object.defineProperty(app, 'isPackaged', { configurable: true, value: true })
-    const pathDelimiter = process.platform === 'win32' ? ';' : ':'
-    process.env.PATH = `C:\\Windows\\System32${pathDelimiter}C:\\Windows`
+    process.env.USERPROFILE = 'C:\\Users\\tester'
+    process.env.Path = 'C:\\Windows\\System32;C:\\Windows'
 
     patchPackagedProcessPath()
 
-    const segments = (process.env.PATH ?? '').split(pathDelimiter)
+    const segments = (process.env.Path ?? '').split(';')
+    const grokBin = join('C:\\Users\\tester', '.grok/bin')
     const userLocalBin = join(homedir(), '.local', 'bin')
+    expect(segments).toContain(grokBin)
     expect(segments).toContain(userLocalBin)
+    expect(segments.indexOf(grokBin)).toBeLessThan(segments.indexOf('C:\\Windows\\System32'))
     expect(segments.indexOf(userLocalBin)).toBeLessThan(segments.indexOf('C:\\Windows\\System32'))
   })
 })

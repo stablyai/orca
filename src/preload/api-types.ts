@@ -71,6 +71,7 @@ import type {
   FsChangedPayload,
   GhosttyImportPreview,
   GlobalSettings,
+  GrokRateLimitAccountsState,
   GitBranchCompareResult,
   GitCommitCompareResult,
   GitConflictOperation,
@@ -2004,6 +2005,13 @@ export type PreloadApi = {
       runtime?: 'host' | 'wsl'
       wslDistro?: string | null
     }) => Promise<CodexRateLimitAccountsState>
+  }
+  grokAccounts: {
+    list: () => Promise<GrokRateLimitAccountsState>
+    add: () => Promise<GrokRateLimitAccountsState>
+    reauthenticate: (args: { accountId: string }) => Promise<GrokRateLimitAccountsState>
+    remove: (args: { accountId: string }) => Promise<GrokRateLimitAccountsState>
+    select: (args: { accountId: string | null }) => Promise<GrokRateLimitAccountsState>
   }
   claudeAccounts: {
     list: () => Promise<ClaudeRateLimitAccountsState>

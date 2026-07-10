@@ -72,7 +72,13 @@ export function FloatingTerminalWindowControls({
       prompt: '',
       cmdOverrides: state.settings?.agentCmdOverrides ?? {},
       agentArgs: resolveTuiAgentLaunchArgs(defaultAgent, state.settings?.agentDefaultArgs),
-      agentEnv: resolveTuiAgentLaunchEnv(defaultAgent, state.settings?.agentDefaultEnv),
+      agentEnv: resolveTuiAgentLaunchEnv(defaultAgent, state.settings?.agentDefaultEnv, {
+        settings: state.settings,
+        // Why: the floating terminal worktree is always local (no connectionId).
+        isRemote: false,
+        launchPlatform: CLIENT_PLATFORM,
+        hostPlatform: CLIENT_PLATFORM
+      }),
       platform: CLIENT_PLATFORM,
       allowEmptyPromptLaunch: true
     })

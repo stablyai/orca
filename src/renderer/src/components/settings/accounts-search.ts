@@ -96,6 +96,35 @@ export const getAccountsCodexSearchEntries = createLocalizedCatalog(() => [
   }
 ])
 
+export const getAccountsGrokSearchEntries = createLocalizedCatalog(() => [
+  {
+    title: translate('auto.components.settings.accounts.search.913f2f40f9', 'Grok Accounts'),
+    description: translate(
+      'auto.components.settings.accounts.search.4f0a71c893',
+      'Optional account switching for Grok using isolated GROK_HOME directories.'
+    ),
+    keywords: [
+      ...translateSearchKeyword('auto.components.settings.accounts.search.c61b14be7c', 'grok'),
+      ...translateSearchKeyword('auto.components.settings.accounts.search.06662af91e', 'account'),
+      ...translateSearchKeyword(
+        'auto.components.settings.accounts.search.e949b08ffb',
+        'rate limit'
+      ),
+      ...translateSearchKeyword(
+        'auto.components.settings.accounts.search.86edc96bc9',
+        'status bar'
+      ),
+      ...translateSearchKeyword('auto.components.settings.accounts.search.c759741d77', 'quota'),
+      ...translateSearchKeyword('auto.components.settings.accounts.search.f2d666a886', 'optional'),
+      ...translateSearchKeyword(
+        'auto.components.settings.accounts.search.77e32a2ad3',
+        'reauthenticate'
+      ),
+      ...translateSearchKeyword('auto.components.settings.accounts.search.a51c85f205', 'GROK_HOME')
+    ]
+  }
+])
+
 export const getAccountsGeminiSearchEntries = createLocalizedCatalog(() => [
   {
     title: translate(
@@ -195,6 +224,7 @@ export const getAccountsPaneSearchEntries = createLocalizedCatalog((): SettingsS
   ...getAccountsLocationSearchEntries(),
   ...getAccountsClaudeSearchEntries(),
   ...getAccountsCodexSearchEntries(),
+  ...getAccountsGrokSearchEntries(),
   ...getAccountsGeminiSearchEntries(),
   ...getAccountsOpencodeSearchEntries(),
   ...getAccountsMiniMaxSearchEntries()

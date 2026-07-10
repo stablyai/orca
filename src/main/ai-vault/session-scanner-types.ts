@@ -19,6 +19,7 @@ export type AiVaultScanOptions = {
   // here so they don't depend on the real ~/.local/share/opencode.
   opencodeDbPaths?: readonly string[]
   grokSessionsDir?: string
+  additionalGrokSessionsDirs?: readonly string[]
   devinTranscriptsDir?: string
   hermesSessionsDir?: string
   rovoSessionsDir?: string

@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const { childSpawnMock, resolveCodexCommandMock, ptySpawnMock } = vi.hoisted(() => ({
   childSpawnMock: vi.fn(),
@@ -33,7 +33,13 @@ describe('fetchCodexRateLimits PTY settle timers', () => {
   beforeEach(() => {
     vi.useFakeTimers()
     vi.clearAllMocks()
+    vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new Error('offline')))
     resolveCodexCommandMock.mockReturnValue('codex')
+  })
+
+  afterEach(() => {
+    vi.useRealTimers()
+    vi.unstubAllGlobals()
   })
 
   it('coalesces the PTY fallback status settle timer while output keeps streaming', async () => {

@@ -796,6 +796,8 @@ type RuntimeStore = {
     agentCmdOverrides?: GlobalSettings['agentCmdOverrides']
     agentDefaultArgs?: GlobalSettings['agentDefaultArgs']
     agentDefaultEnv?: GlobalSettings['agentDefaultEnv']
+    grokManagedAccounts?: GlobalSettings['grokManagedAccounts']
+    activeGrokManagedAccountId?: GlobalSettings['activeGrokManagedAccountId']
     terminalWindowsShell?: GlobalSettings['terminalWindowsShell']
     agentStatusHooksEnabled?: GlobalSettings['agentStatusHooksEnabled']
     defaultTaskSource?: GlobalSettings['defaultTaskSource']
@@ -12693,7 +12695,12 @@ export class OrcaRuntimeService {
       draft: content,
       cmdOverrides: settings.agentCmdOverrides ?? {},
       agentArgs: resolveTuiAgentLaunchArgs(agent, settings.agentDefaultArgs),
-      agentEnv: resolveTuiAgentLaunchEnv(agent, settings.agentDefaultEnv),
+      agentEnv: resolveTuiAgentLaunchEnv(agent, settings.agentDefaultEnv, {
+        settings,
+        isRemote,
+        launchPlatform: agentLaunchPlatform,
+        hostPlatform: process.platform
+      }),
       platform: agentLaunchPlatform,
       shell: queuedShell,
       isRemote
@@ -12717,7 +12724,12 @@ export class OrcaRuntimeService {
       prompt: '',
       cmdOverrides: settings.agentCmdOverrides ?? {},
       agentArgs: resolveTuiAgentLaunchArgs(agent, settings.agentDefaultArgs),
-      agentEnv: resolveTuiAgentLaunchEnv(agent, settings.agentDefaultEnv),
+      agentEnv: resolveTuiAgentLaunchEnv(agent, settings.agentDefaultEnv, {
+        settings,
+        isRemote,
+        launchPlatform: agentLaunchPlatform,
+        hostPlatform: process.platform
+      }),
       platform: agentLaunchPlatform,
       shell: queuedShell,
       isRemote,
@@ -12766,7 +12778,12 @@ export class OrcaRuntimeService {
       prompt: prompt ?? '',
       cmdOverrides: settings.agentCmdOverrides ?? {},
       agentArgs: resolveTuiAgentLaunchArgs(agent, settings.agentDefaultArgs),
-      agentEnv: resolveTuiAgentLaunchEnv(agent, settings.agentDefaultEnv),
+      agentEnv: resolveTuiAgentLaunchEnv(agent, settings.agentDefaultEnv, {
+        settings,
+        isRemote,
+        launchPlatform: agentLaunchPlatform,
+        hostPlatform: process.platform
+      }),
       platform: agentLaunchPlatform,
       shell: queuedShell,
       isRemote,
@@ -15996,7 +16013,12 @@ export class OrcaRuntimeService {
       prompt: '',
       cmdOverrides: settings.agentCmdOverrides ?? {},
       agentArgs: resolveTuiAgentLaunchArgs(agent, settings.agentDefaultArgs),
-      agentEnv: resolveTuiAgentLaunchEnv(agent, settings.agentDefaultEnv),
+      agentEnv: resolveTuiAgentLaunchEnv(agent, settings.agentDefaultEnv, {
+        settings,
+        isRemote,
+        launchPlatform: platform,
+        hostPlatform: process.platform
+      }),
       platform,
       shell: queuedShell,
       isRemote,
@@ -16609,7 +16631,12 @@ export class OrcaRuntimeService {
       prompt: '',
       cmdOverrides: settings.agentCmdOverrides ?? {},
       agentArgs: resolveTuiAgentLaunchArgs(opts.agent, settings.agentDefaultArgs),
-      agentEnv: resolveTuiAgentLaunchEnv(opts.agent, settings.agentDefaultEnv),
+      agentEnv: resolveTuiAgentLaunchEnv(opts.agent, settings.agentDefaultEnv, {
+        settings,
+        isRemote,
+        launchPlatform: platform,
+        hostPlatform: process.platform
+      }),
       platform,
       shell: queuedShell,
       isRemote,

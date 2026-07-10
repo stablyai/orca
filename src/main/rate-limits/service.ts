@@ -20,6 +20,7 @@ import {
   type NormalizedClaudeAccountSelectionTarget
 } from '../claude-accounts/runtime-selection'
 import { fetchGeminiRateLimits } from './gemini-usage-fetcher'
+import { fetchGrokRateLimits } from './grok-fetcher'
 import { fetchKimiRateLimits } from './kimi-fetcher'
 import { hasMiniMaxSessionCookie } from '../minimax/minimax-cookie-store'
 import { fetchMiniMaxRateLimits } from './minimax-fetcher'
@@ -36,6 +37,7 @@ export type InactiveCodexAccountInfo = {
 }
 
 type CodexHomePathResolver = (target?: CodexAccountSelectionTarget) => string | null
+type GrokHomePathResolver = () => string | null
 type ClaudeAuthPreparationResolver = (
   target?: ClaudeAccountSelectionTarget
 ) => Promise<ClaudeRuntimeAuthPreparation>
@@ -78,6 +80,7 @@ type InternalRateLimitState = {
   opencodeGo: ProviderRateLimits | null
   kimi: ProviderRateLimits | null
   antigravity: ProviderRateLimits | null
+  grok: ProviderRateLimits | null
   minimax: ProviderRateLimits | null
 }
 
@@ -112,6 +115,7 @@ export class RateLimitService {
     opencodeGo: null,
     kimi: null,
     antigravity: null,
+    grok: null,
     minimax: null
   }
   private pollInterval: number = DEFAULT_POLL_MS
@@ -128,11 +132,13 @@ export class RateLimitService {
   private fetchIdleResolvers: (() => void)[] = []
   private codexFetchGeneration = 0
   private claudeFetchGeneration = 0
+  private grokFetchGeneration = 0
   private opencodeFetchGeneration = 0
   private minimaxFetchGeneration = 0
   private lastOpencodeConfigHash = ''
   private lastMiniMaxConfigHash = ''
   private codexHomePathResolver: CodexHomePathResolver | null = null
+  private grokHomePathResolver: GrokHomePathResolver | null = null
   private codexFetchTarget: NormalizedCodexAccountSelectionTarget = {
     runtime: 'host',
     wslDistro: null
@@ -169,6 +175,10 @@ export class RateLimitService {
 
   setCodexHomePathResolver(resolver: CodexHomePathResolver): void {
     this.codexHomePathResolver = resolver
+  }
+
+  setGrokHomePathResolver(resolver: GrokHomePathResolver): void {
+    this.grokHomePathResolver = resolver
   }
 
   setCodexFetchTarget(target?: CodexAccountSelectionTarget): void {
@@ -404,6 +414,18 @@ export class RateLimitService {
       claude: this.withFetchingStatus(targetChanged ? null : this.state.claude, 'claude')
     })
     await this.fetchClaudeOnly({ force: true })
+    return this.getState()
+  }
+
+  async refreshGrokForAccountChange(): Promise<RateLimitState> {
+    this.grokFetchGeneration += 1
+    // Why: Grok account switching swaps GROK_HOME. Clear the old account's
+    // usage immediately so it cannot be displayed under the new account label.
+    this.updateState({
+      ...this.state,
+      grok: this.withFetchingStatus(null, 'grok')
+    })
+    await this.fetchAll({ force: true })
     return this.getState()
   }
 
@@ -1027,7 +1049,15 @@ export class RateLimitService {
 
   private withFetchingStatus(
     current: ProviderRateLimits | null,
-    provider: 'claude' | 'codex' | 'gemini' | 'opencode-go' | 'kimi' | 'minimax'
+    provider:
+      | 'claude'
+      | 'codex'
+      | 'gemini'
+      | 'opencode-go'
+      | 'kimi'
+      | 'antigravity'
+      | 'grok'
+      | 'minimax'
   ): ProviderRateLimits {
     if (!current) {
       return {
@@ -1057,6 +1087,9 @@ export class RateLimitService {
     const codexHomePath = this.codexHomePathResolver?.(codexTarget) ?? null
     const codexProvenance = this.getCodexProvenance(codexTarget, codexHomePath)
     const codexGeneration = this.codexFetchGeneration
+    const grokHomePath = this.grokHomePathResolver?.() ?? null
+    const grokProvenance = grokHomePath ?? 'system'
+    const grokGeneration = this.grokFetchGeneration
     const previousState = this.state
     const openCodeGoConfig = this.openCodeGoConfigResolver?.()
     const cookie = openCodeGoConfig?.sessionCookie ?? ''
@@ -1097,6 +1130,8 @@ export class RateLimitService {
         ? this.withFetchingStatus(null, 'opencode-go')
         : this.withFetchingStatus(previousState.opencodeGo, 'opencode-go'),
       kimi: this.withFetchingStatus(previousState.kimi, 'kimi'),
+      antigravity: this.withFetchingStatus(previousState.antigravity, 'antigravity'),
+      grok: this.withFetchingStatus(previousState.grok, 'grok'),
       minimax: miniMaxConfigChanged
         ? this.withFetchingStatus(null, 'minimax')
         : this.withFetchingStatus(previousState.minimax, 'minimax')
@@ -1105,32 +1140,40 @@ export class RateLimitService {
     const missingWslCodexHome = codexHomePath
       ? null
       : this.getMissingWslCodexHomeResult(codexTarget)
-    const [claudeResult, codexResult, geminiResult, opencodeGoResult, kimiResult, miniMaxResult] =
-      await Promise.allSettled([
-        fetchClaudeRateLimits({
-          authPreparation: claudeAuthPreparation,
-          allowPtyFallback: this.shouldAllowClaudePtyFallback(claudeAuthPreparation),
-          allowUsagePanelSupplement: this.shouldAllowClaudeUsagePanelSupplement(),
-          networkProxySettings: this.networkProxySettingsResolver?.(),
+    const [
+      claudeResult,
+      codexResult,
+      geminiResult,
+      opencodeGoResult,
+      kimiResult,
+      grokResult,
+      miniMaxResult
+    ] = await Promise.allSettled([
+      fetchClaudeRateLimits({
+        authPreparation: claudeAuthPreparation,
+        allowPtyFallback: this.shouldAllowClaudePtyFallback(claudeAuthPreparation),
+        allowUsagePanelSupplement: this.shouldAllowClaudeUsagePanelSupplement(),
+        networkProxySettings: this.networkProxySettingsResolver?.(),
+        signal
+      }),
+      missingWslCodexHome ??
+        fetchCodexRateLimits({
+          codexHomePath,
+          allowPtyFallback: this.shouldAllowCodexPtyFallback(),
           signal
         }),
-        missingWslCodexHome ??
-          fetchCodexRateLimits({
-            codexHomePath,
-            allowPtyFallback: this.shouldAllowCodexPtyFallback(),
-            signal
-          }),
-        fetchGeminiRateLimits(geminiCliOAuthEnabled),
-        fetchOpenCodeGoRateLimits(cookie, workspaceIdOverride || undefined),
-        fetchKimiRateLimits(),
-        miniMaxConfigResult.error
-          ? Promise.resolve(this.getMiniMaxCredentialError(miniMaxConfigResult.error))
-          : fetchMiniMaxRateLimits({
-              cookie: miniMaxCookie,
-              groupId: miniMaxGroupId,
-              models: miniMaxModels
-            })
-      ])
+      fetchGeminiRateLimits(geminiCliOAuthEnabled),
+      fetchOpenCodeGoRateLimits(cookie, workspaceIdOverride || undefined),
+      fetchKimiRateLimits(),
+      fetchGrokRateLimits({ grokHomePath, signal }),
+      miniMaxConfigResult.error
+        ? Promise.resolve(this.getMiniMaxCredentialError(miniMaxConfigResult.error))
+        : fetchMiniMaxRateLimits({
+            cookie: miniMaxCookie,
+            groupId: miniMaxGroupId,
+            models: miniMaxModels
+          })
+    ])
 
     if (signal.aborted) {
       return
@@ -1175,6 +1218,14 @@ export class RateLimitService {
             status: 'error'
           } satisfies ProviderRateLimits)
 
+    // Why: Antigravity shares Google/Gemini usage credentials today; mirror the
+    // Gemini snapshot under provider 'antigravity' so status-bar UI that checks
+    // antigravity state receives a real fetch lifecycle instead of staying null.
+    const antigravity: ProviderRateLimits = {
+      ...gemini,
+      provider: 'antigravity'
+    }
+
     const opencodeGo =
       opencodeGoResult.status === 'fulfilled'
         ? opencodeGoResult.value
@@ -1203,6 +1254,18 @@ export class RateLimitService {
             status: 'error'
           } satisfies ProviderRateLimits)
 
+    const grok =
+      grokResult.status === 'fulfilled'
+        ? grokResult.value
+        : ({
+            provider: 'grok',
+            session: null,
+            weekly: null,
+            updatedAt: Date.now(),
+            error: grokResult.reason instanceof Error ? grokResult.reason.message : 'Unknown error',
+            status: 'error'
+          } satisfies ProviderRateLimits)
+
     const miniMax =
       miniMaxResult.status === 'fulfilled'
         ? miniMaxResult.value
@@ -1219,12 +1282,14 @@ export class RateLimitService {
           } satisfies ProviderRateLimits)
 
     const latestCodexHomePath = this.codexHomePathResolver?.(codexTarget) ?? null
+    const latestGrokHomePath = this.grokHomePathResolver?.() ?? null
     const latestClaudeAuthPreparation = await this.claudeAuthPreparationResolver?.(claudeTarget)
     if (signal.aborted) {
       return
     }
     const latestClaudeProvenance = latestClaudeAuthPreparation?.provenance ?? 'system'
     const latestCodexProvenance = this.getCodexProvenance(codexTarget, latestCodexHomePath)
+    const latestGrokProvenance = latestGrokHomePath ?? 'system'
     const shouldApplyCodex =
       codexGeneration === this.codexFetchGeneration && codexProvenance === latestCodexProvenance
     const shouldApplyClaude =
@@ -1233,6 +1298,8 @@ export class RateLimitService {
       this.isSameClaudeTarget(claudeTarget, this.claudeFetchTarget)
     const shouldApplyOpencode = opencodeGeneration === this.opencodeFetchGeneration
     const shouldApplyMiniMax = miniMaxGeneration === this.minimaxFetchGeneration
+    const shouldApplyGrok =
+      grokGeneration === this.grokFetchGeneration && grokProvenance === latestGrokProvenance
 
     // Why: account switches can race in-flight Codex fetches. Only apply a
     // Codex result if both the selected-account provenance and the request
@@ -1253,6 +1320,8 @@ export class RateLimitService {
           : this.applyStalePolicy(opencodeGo, previousState.opencodeGo)
         : this.state.opencodeGo,
       kimi: this.applyStalePolicy(kimi, previousState.kimi),
+      antigravity: this.applyStalePolicy(antigravity, previousState.antigravity),
+      grok: shouldApplyGrok ? this.applyStalePolicy(grok, previousState.grok) : this.state.grok,
       minimax: shouldApplyMiniMax
         ? miniMaxConfigChanged
           ? miniMax

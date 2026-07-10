@@ -29,7 +29,8 @@
         "sshToggleDescription": "当有可用的 SSH 和远程 Orca 主机时显示它们。",
         "resourceUsageToggleDescription": "显示资源管理器。点击可查看 CPU、内存、会话、守护进程控制和工作区磁盘扫描。",
         "portsToggleDescription": "显示实时工作区端口。单击它可获取工作区范围的端口和外部侦听器。",
-        "antigravityToggleDescription": "Show Antigravity subscription usage for the active workspace."
+        "antigravityToggleDescription": "Show Antigravity subscription usage for the active workspace.",
+        "grokToggleDescription": "显示当前工作区的 Grok 订阅使用情况。"
       }
     }
   },
@@ -3030,8 +3031,10 @@
             "c0e972d726": "取消",
             "06741a2f3d": "打开 MiniMax 使用量详情",
             "3bbf140864": "MiniMax 使用量",
+            "antigravityUsage": "Antigravity Usage",
             "antigravityUsageDetails": "Open Antigravity usage details",
-            "antigravityUsage": "Antigravity Usage"
+            "5131f6a8a7": "Grok 用量",
+            "8e2c5b7d43": "打开 Grok 用量详情"
           },
           "StatusBarUsageEmptyCta": {
             "828c764a79": "连接账户",
@@ -6913,7 +6916,9 @@
             "b84a5b0c8a": "选择是否在此设备上或 WSL 中检查和添加提供商账户。",
             "d09fb5ca92": "账户位置",
             "733f9e2a93": "MiniMax 使用量",
-            "f8374c3151": "粘贴 platform.minimax.io 会话 Cookie 以在本地获取速率限制。"
+            "f8374c3151": "粘贴 platform.minimax.io 会话 Cookie 以在本地获取速率限制。",
+            "913f2f40f9": "Grok Accounts",
+            "4f0a71c893": "Optional account switching for Grok using isolated GROK_HOME directories."
           }
         },
         "advanced": {
@@ -7128,8 +7133,10 @@
             },
             "9a115966d3": "关闭时最小化到托盘",
             "4d5b9427b5": "启用后，关闭窗口会让 Orca 继续在系统托盘中运行，而不是退出。",
+            "antigravityUsageDescription": "Show Antigravity subscription usage in the status bar.",
             "antigravityUsageTitle": "Antigravity Usage",
-            "antigravityUsageDescription": "Show Antigravity subscription usage in the status bar."
+            "798169c7f4": "Grok 用量",
+            "b286fc6d86": "在状态栏显示 Grok 订阅使用情况。"
           }
         },
         "auto": {
@@ -8901,6 +8908,28 @@
           "reviewFirst": "Review first",
           "singular": "Global saves won't change 1 repository with its own recipe.",
           "tooltipTitle": "Repository overrides"
+        },
+        "GrokAccountsSection": {
+          "09c0c774f6": "Could not load Grok accounts.",
+          "0edb3b4c8d": "Grok account updated.",
+          "a617606f43": "{{value0}} -> {{value1}}. Restart live Grok terminals before continuing old sessions.",
+          "53eab14cd4": "Grok account update failed.",
+          "f8d3c1d153": "Remove Grok Account?",
+          "a2d157c8b5": "Orca will delete the managed Grok home for this saved account. If it is currently active, Orca falls back to the system default Grok login.",
+          "dbb9626ed1": "Cancel",
+          "c2d2751587": "Remove Account",
+          "0baad2d5d2": "Grok",
+          "9434c099b4": "Optional. Add Grok accounts only if you want Orca-launched Grok terminals and usage reads to switch between isolated CLI homes.",
+          "603bfb6f0c": "Grok Accounts",
+          "caa4e95f6d": "Managed Grok accounts use isolated GROK_HOME directories.",
+          "94d351af4a": "Accounts",
+          "6f598b68c3": "New accounts are added on this device.",
+          "b0e948a4f9": "Add Account",
+          "f2a265f8c7": "System default",
+          "e74831fb6b": "Active",
+          "afd4795eef": "Use your current system Grok login.",
+          "264b67cb71": "No managed Grok accounts. Orca will use the system default Grok login until you add one here.",
+          "8a0f870153": "Re-authenticate"
         }
       },
       "right": {

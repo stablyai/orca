@@ -1785,6 +1785,17 @@ const api = {
     }): Promise<unknown> => ipcRenderer.invoke('codexAccounts:select', args)
   },
 
+  grokAccounts: {
+    list: (): Promise<unknown> => ipcRenderer.invoke('grokAccounts:list'),
+    add: (): Promise<unknown> => ipcRenderer.invoke('grokAccounts:add'),
+    reauthenticate: (args: { accountId: string }): Promise<unknown> =>
+      ipcRenderer.invoke('grokAccounts:reauthenticate', args),
+    remove: (args: { accountId: string }): Promise<unknown> =>
+      ipcRenderer.invoke('grokAccounts:remove', args),
+    select: (args: { accountId: string | null }): Promise<unknown> =>
+      ipcRenderer.invoke('grokAccounts:select', args)
+  },
+
   claudeAccounts: {
     list: (): Promise<unknown> => ipcRenderer.invoke('claudeAccounts:list'),
     add: (args?: { runtime?: 'host' | 'wsl'; wslDistro?: string | null }): Promise<unknown> =>

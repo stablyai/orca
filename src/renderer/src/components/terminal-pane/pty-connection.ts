@@ -3608,7 +3608,12 @@ export function connectPanePty(
         agentEnv:
           launchConfig !== undefined
             ? launchConfig.agentEnv
-            : resolveTuiAgentLaunchEnv(agent, state.settings?.agentDefaultEnv),
+            : resolveTuiAgentLaunchEnv(agent, state.settings?.agentDefaultEnv, {
+                settings: state.settings,
+                isRemote: resumePlatform !== CLIENT_PLATFORM,
+                launchPlatform: resumePlatform,
+                hostPlatform: CLIENT_PLATFORM
+              }),
         ...(launchConfig?.agentCommand ? { agentCommand: launchConfig.agentCommand } : {}),
         platform: resumePlatform
       })
