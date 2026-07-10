@@ -922,6 +922,52 @@ describe('generateCommitMessageFromContext', () => {
     )
   })
 
+  it('spawns the real binary with leading VAR=value override tokens applied to the env', async () => {
+    const listeners = new Map<string, (value: unknown) => void>()
+    const child = {
+      pid: 123,
+      kill: vi.fn(),
+      stdout: { on: vi.fn((event, callback) => listeners.set(`stdout:${event}`, callback)) },
+      stderr: { on: vi.fn((event, callback) => listeners.set(`stderr:${event}`, callback)) },
+      stdin: { end: vi.fn() },
+      on: vi.fn((event, callback) => listeners.set(event, callback))
+    }
+    spawnMock.mockReturnValue(child as never)
+
+    const pending = generateCommitMessageFromContext(
+      {
+        branch: 'main',
+        stagedSummary: 'M\tREADME.md',
+        stagedPatch: '+hello'
+      },
+      {
+        agentId: 'claude',
+        model: 'sonnet',
+        agentCommandOverride: 'CLAUDE_CODE_NO_FLICKER=1 claude'
+      },
+      {
+        kind: 'local',
+        cwd: '/repo'
+      }
+    )
+
+    listeners.get('stdout:data')?.(Buffer.from('Add README note\n'))
+    listeners.get('close')?.(0)
+
+    await expect(pending).resolves.toMatchObject({
+      success: true,
+      message: 'Add README note'
+    })
+    // Why: the env-assignment prefix must become an env var, not the binary.
+    expect(spawnMock).toHaveBeenCalledWith(
+      'claude',
+      expect.not.arrayContaining(['CLAUDE_CODE_NO_FLICKER=1']),
+      expect.objectContaining({
+        env: expect.objectContaining({ CLAUDE_CODE_NO_FLICKER: '1' })
+      })
+    )
+  })
+
   it('routes WSL local commit generation through the selected distro login shell', async () => {
     await withPlatform('win32', async () => {
       process.env.ORCA_HOST_ONLY_SECRET = 'do-not-leak'

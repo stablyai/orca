@@ -333,6 +333,68 @@ describe('planCommitMessageGeneration', () => {
     })
   })
 
+  it('parses leading env assignments in a preset override into plan.env, spawning the real binary', () => {
+    const result = planCommitMessageGeneration(
+      {
+        agentId: 'claude',
+        model: 'sonnet',
+        agentCommandOverride: 'CLAUDE_CODE_NO_FLICKER=1 claude'
+      },
+      'PROMPT'
+    )
+
+    expect(result).toMatchObject({
+      ok: true,
+      plan: {
+        binary: 'claude',
+        env: { CLAUDE_CODE_NO_FLICKER: '1' }
+      }
+    })
+    // Why: the env-assignment token must not leak into the binary or argv.
+    if (result.ok) {
+      expect(result.plan.binary).toBe('claude')
+      expect(result.plan.args).not.toContain('CLAUDE_CODE_NO_FLICKER=1')
+    }
+  })
+
+  it('keeps env assignments before a wrapper binary in the override', () => {
+    const result = planCommitMessageGeneration(
+      {
+        agentId: 'codex',
+        model: 'gpt-5.4-mini',
+        agentCommandOverride: 'FOO=bar npx codex'
+      },
+      'PROMPT'
+    )
+
+    expect(result).toMatchObject({
+      ok: true,
+      plan: {
+        binary: 'npx',
+        env: { FOO: 'bar' }
+      }
+    })
+    if (result.ok) {
+      expect(result.plan.args.slice(0, 2)).toEqual(['codex', 'exec'])
+    }
+  })
+
+  it('omits plan.env when the override carries no env assignments', () => {
+    const result = planCommitMessageGeneration(
+      {
+        agentId: 'codex',
+        model: 'gpt-5.4-mini',
+        agentCommandOverride: 'npx codex'
+      },
+      'PROMPT'
+    )
+
+    expect(result.ok).toBe(true)
+    if (result.ok) {
+      expect(result.plan).not.toHaveProperty('env')
+    }
+  })
+
   it('rejects invalid preset agent command overrides before spawning', () => {
     const result = planCommitMessageGeneration(
       {

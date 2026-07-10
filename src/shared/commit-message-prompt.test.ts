@@ -3,6 +3,7 @@ import {
   buildCommitPrompt,
   cleanGeneratedCommitMessage,
   extractAgentErrorMessage,
+  extractLeadingEnvAssignments,
   planCustomCommand,
   STAGED_DIFF_BYTE_BUDGET,
   tokenizeCustomCommandTemplate,
@@ -281,10 +282,74 @@ describe('tokenizeCustomCommandTemplate', () => {
   })
 })
 
+describe('extractLeadingEnvAssignments', () => {
+  it('peels a single leading VAR=value token off the front', () => {
+    const r = extractLeadingEnvAssignments(['CLAUDE_CODE_NO_FLICKER=1', 'claude', '-p'])
+    expect(r).toEqual({ env: { CLAUDE_CODE_NO_FLICKER: '1' }, rest: ['claude', '-p'] })
+  })
+
+  it('peels multiple consecutive assignments', () => {
+    const r = extractLeadingEnvAssignments(['FOO=bar', 'BAZ=qux', 'claude'])
+    expect(r).toEqual({ env: { FOO: 'bar', BAZ: 'qux' }, rest: ['claude'] })
+  })
+
+  it('stops at the first non-assignment token (later VAR=val stays an arg)', () => {
+    const r = extractLeadingEnvAssignments(['FOO=bar', 'claude', 'KEY=val'])
+    expect(r).toEqual({ env: { FOO: 'bar' }, rest: ['claude', 'KEY=val'] })
+  })
+
+  it('splits on the first = so values may contain =', () => {
+    const r = extractLeadingEnvAssignments(['URL=https://x?a=b', 'claude'])
+    expect(r).toEqual({ env: { URL: 'https://x?a=b' }, rest: ['claude'] })
+  })
+
+  it('allows empty values', () => {
+    const r = extractLeadingEnvAssignments(['EMPTY=', 'claude'])
+    expect(r).toEqual({ env: { EMPTY: '' }, rest: ['claude'] })
+  })
+
+  it('does not treat =value or a digit-led name as an assignment', () => {
+    expect(extractLeadingEnvAssignments(['=foo', 'claude'])).toEqual({
+      env: {},
+      rest: ['=foo', 'claude']
+    })
+    expect(extractLeadingEnvAssignments(['1AB=x', 'claude'])).toEqual({
+      env: {},
+      rest: ['1AB=x', 'claude']
+    })
+  })
+
+  it('returns an empty env when there are no assignments', () => {
+    expect(extractLeadingEnvAssignments(['claude', '-p'])).toEqual({
+      env: {},
+      rest: ['claude', '-p']
+    })
+  })
+})
+
 describe('planCustomCommand', () => {
   it('routes prompt via stdin when {prompt} is absent', () => {
     const r = planCustomCommand('claude -p', 'COMMIT MSG')
     expect(r).toEqual({ ok: true, binary: 'claude', args: ['-p'], stdinPayload: 'COMMIT MSG' })
+  })
+
+  it('peels leading env assignments and spawns the real binary, not VAR=value', () => {
+    const r = planCustomCommand('CLAUDE_CODE_NO_FLICKER=1 claude -p', 'COMMIT MSG')
+    expect(r).toEqual({
+      ok: true,
+      binary: 'claude',
+      args: ['-p'],
+      stdinPayload: 'COMMIT MSG',
+      env: { CLAUDE_CODE_NO_FLICKER: '1' }
+    })
+  })
+
+  it('errors when the command is only env assignments', () => {
+    const r = planCustomCommand('FOO=bar', 'PROMPT')
+    expect(r.ok).toBe(false)
+    if (!r.ok) {
+      expect(r.error).toMatch(/binary name/i)
+    }
   })
 
   it('substitutes {prompt} as a whole token via argv', () => {

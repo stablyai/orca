@@ -223,6 +223,9 @@ export class SshGitProvider implements IGitProvider {
         cwd,
         stdin: plan.stdinPayload,
         timeoutMs,
+        // Why: forward leading `VAR=value` env assignments from the override so
+        // the remote CLI runs with the same environment as a local spawn.
+        ...(plan.env ? { env: plan.env } : {}),
         operation
       },
       undefined,

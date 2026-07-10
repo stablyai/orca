@@ -3,7 +3,11 @@ import {
   getCommitMessageModel,
   isCustomAgentId
 } from './commit-message-agent-spec'
-import { planCustomCommand, tokenizeCustomCommandTemplate } from './commit-message-prompt'
+import {
+  extractLeadingEnvAssignments,
+  planCustomCommand,
+  tokenizeCustomCommandTemplate
+} from './commit-message-prompt'
 import type { TuiAgent } from './types'
 
 // Why: planning is a pure transformation from "user request + prompt text"
@@ -28,6 +32,12 @@ export type CommitMessagePlan = {
   stdinPayload: string | null
   /** Human-readable label used in error prefixes (e.g. "Claude failed: ..."). */
   label: string
+  /**
+   * Environment variables parsed from leading `VAR=value` tokens in the agent
+   * command override / custom command. Merged over the spawn environment.
+   * Present only when assignments were supplied.
+   */
+  env?: Record<string, string>
 }
 
 export type CommitMessagePlanResult =
@@ -37,21 +47,24 @@ export type CommitMessagePlanResult =
 export function planAgentBinary(
   defaultBinary: string,
   commandOverride: string | undefined
-): { ok: true; binary: string; prefixArgs: string[] } | { ok: false; error: string } {
+):
+  | { ok: true; binary: string; prefixArgs: string[]; env: Record<string, string> }
+  | { ok: false; error: string } {
   const command = commandOverride?.trim()
   if (!command) {
-    return { ok: true, binary: defaultBinary, prefixArgs: [] }
+    return { ok: true, binary: defaultBinary, prefixArgs: [], env: {} }
   }
 
   const tokenized = tokenizeCustomCommandTemplate(command)
   if (!tokenized.ok) {
     return { ok: false, error: `Agent command override is invalid: ${tokenized.error}` }
   }
-  const [binary, ...prefixArgs] = tokenized.tokens
+  const { env, rest } = extractLeadingEnvAssignments(tokenized.tokens)
+  const [binary, ...prefixArgs] = rest
   if (!binary) {
     return { ok: false, error: 'Agent command override must start with a binary name.' }
   }
-  return { ok: true, binary, prefixArgs }
+  return { ok: true, binary, prefixArgs, env }
 }
 
 function planAdditionalAgentArgs(
@@ -126,7 +139,8 @@ export function planCommitMessageGeneration(
         stdinPayload: planned.stdinPayload,
         // Why: a custom command has no friendly name, so the binary doubles
         // as the label in error prefixes ("ollama failed: ...").
-        label: planned.binary
+        label: planned.binary,
+        ...(planned.env ? { env: planned.env } : {})
       }
     }
   }
@@ -180,7 +194,8 @@ export function planCommitMessageGeneration(
       binary: command.binary,
       args: [...command.prefixArgs, ...args],
       stdinPayload: spec.promptDelivery === 'stdin' ? prompt : null,
-      label: spec.label
+      label: spec.label,
+      ...(Object.keys(command.env).length ? { env: command.env } : {})
     }
   }
 }

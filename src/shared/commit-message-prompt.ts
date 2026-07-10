@@ -207,8 +207,44 @@ export function tokenizeCustomCommandTemplate(template: string): TokenizeCustomC
   return { ok: true, tokens }
 }
 
+// Why: POSIX `VAR=value cmd` env-assignment prefix. We spawn via argv (no
+// shell), so without this a token like `CLAUDE_CODE_NO_FLICKER=1` would be
+// treated as the binary name and fail with ENOENT. Names follow the shell
+// rule: a letter/underscore followed by word chars, up to the first `=`.
+const ENV_ASSIGNMENT_PATTERN = /^[A-Za-z_][A-Za-z0-9_]*=/
+
+/**
+ * Splits leading `VAR=value` tokens off the front of a tokenized command into
+ * an environment map, returning the remaining tokens (binary + argv). Stops at
+ * the first non-assignment token, so a `KEY=val` appearing after the binary is
+ * preserved as a normal argument.
+ */
+export function extractLeadingEnvAssignments(tokens: string[]): {
+  env: Record<string, string>
+  rest: string[]
+} {
+  const env: Record<string, string> = {}
+  let i = 0
+  for (; i < tokens.length; i++) {
+    const token = tokens[i]
+    if (!ENV_ASSIGNMENT_PATTERN.test(token)) {
+      break
+    }
+    const eq = token.indexOf('=')
+    env[token.slice(0, eq)] = token.slice(eq + 1)
+  }
+  return { env, rest: tokens.slice(i) }
+}
+
 export type CustomCommandPlan =
-  | { ok: true; binary: string; args: string[]; stdinPayload: string | null }
+  | {
+      ok: true
+      binary: string
+      args: string[]
+      stdinPayload: string | null
+      /** Present only when the command carried leading `VAR=value` assignments. */
+      env?: Record<string, string>
+    }
   | { ok: false; error: string }
 
 /**
@@ -228,23 +264,26 @@ export function planCustomCommand(template: string, prompt: string): CustomComma
   if (tokenized.tokens.length === 0) {
     return { ok: false, error: 'Custom command is empty.' }
   }
-  const [binary, ...rest] = tokenized.tokens
+  const { env, rest: commandTokens } = extractLeadingEnvAssignments(tokenized.tokens)
+  const [binary, ...rest] = commandTokens
   if (!binary) {
     return { ok: false, error: 'Custom command must start with a binary name.' }
   }
+  const envFields = Object.keys(env).length ? { env } : {}
 
   const substitute = (token: string): string =>
     token.includes(CUSTOM_PROMPT_PLACEHOLDER)
       ? token.split(CUSTOM_PROMPT_PLACEHOLDER).join(prompt)
       : token
-  const usesPlaceholder = tokenized.tokens.some((t) => t.includes(CUSTOM_PROMPT_PLACEHOLDER))
+  const usesPlaceholder = commandTokens.some((t) => t.includes(CUSTOM_PROMPT_PLACEHOLDER))
   if (usesPlaceholder) {
     return {
       ok: true,
       binary: substitute(binary),
       args: rest.map(substitute),
-      stdinPayload: null
+      stdinPayload: null,
+      ...envFields
     }
   }
-  return { ok: true, binary, args: rest, stdinPayload: prompt }
+  return { ok: true, binary, args: rest, stdinPayload: prompt, ...envFields }
 }
