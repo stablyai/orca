@@ -67,6 +67,14 @@ let autoUpdateCheckTimer: ReturnType<typeof setTimeout> | null = null
 let nudgeCheckTimer: ReturnType<typeof setTimeout> | null = null
 let pendingQuitAndInstallTimer: ReturnType<typeof setTimeout> | null = null
 let quitAndInstallInProgress = false
+// Why: once quitAndInstall has committed (Win/Linux install, or macOS with
+// Squirrel ready), late autoUpdater 'error' events must not clear
+// quittingForUpdate — that would re-enable dock activate mid-installer.
+let updateInstallCommitted = false
+// Why: quit-and-install recovery must only run after the native
+// quitAndInstall call. Pre-native cleanup-time autoUpdater errors must not
+// clear quittingForUpdate or look like install recovery.
+let quitAndInstallNativeInvoked = false
 let persistLastUpdateCheckAt: ((timestamp: number) => void) | null = null
 let _getLastUpdateCheckAt: (() => number | null) | null = null
 let backgroundCheckLaunchPending = false
@@ -586,6 +594,31 @@ async function performQuitAndInstall(): Promise<void> {
       span.addEvent('pre_quit_cleanup_start')
       await runBeforeUpdateQuitCleanup()
       span.addEvent('pre_quit_cleanup_done')
+
+      recordUpdaterLifecycle('quit_and_install_invoking_native', {
+        version: pendingVersion || null
+      })
+      // Why: defensive — state should stay in-progress until native invoke, but
+      // never call quitAndInstall if recovery/reset already cleared the handoff.
+      if (!quitAndInstallInProgress) {
+        return
+      }
+      // Why: mark before the call so a sync 'error' during quitAndInstall can
+      // recover; pre-native errors must not look like install failure.
+      quitAndInstallNativeInvoked = true
+      // Why: invoke quitAndInstall before killAllPty/remove close listeners so a
+      // sync 'error' (common "no filepath" path) recovers while windows and
+      // local PTYs are still intact.
+      getAutoUpdater().quitAndInstall(false, true)
+      span.addEvent('native_quit_and_install_invoked')
+
+      // Why: handleQuitAndInstallFailure may clear quitAndInstallInProgress
+      // synchronously during quitAndInstall (Win/Linux dispatchError). Skip
+      // destructive prep if recovery already ran.
+      if (!quitAndInstallInProgress) {
+        return
+      }
+
       killAllPty()
       span.addEvent('local_pty_kill_all')
 
@@ -596,11 +629,13 @@ async function performQuitAndInstall(): Promise<void> {
         windowCount: BrowserWindow.getAllWindows().length
       })
 
-      recordUpdaterLifecycle('quit_and_install_invoking_native', {
-        version: pendingVersion || null
-      })
-      getAutoUpdater().quitAndInstall(false, true)
-      span.addEvent('native_quit_and_install_invoked')
+      // Why: committed installs must keep quittingForUpdate true so dock
+      // activate cannot reopen the old process mid-ShipIt/installer. macOS
+      // without Squirrel ready stays uncommitted so late native errors can
+      // still recover flags (PTYs may already be dead — residual OK).
+      if (process.platform !== 'darwin' || isMacInstallerReady()) {
+        updateInstallCommitted = true
+      }
     })
   } catch (error) {
     resetQuitForUpdateState()
@@ -621,24 +656,34 @@ async function performQuitAndInstall(): Promise<void> {
 function resetQuitForUpdateState(): void {
   quitAndInstallInProgress = false
   quittingForUpdate = false
+  updateInstallCommitted = false
+  quitAndInstallNativeInvoked = false
   resetMacInstallState()
 }
 
-// electron-updater surfaces the common "no staged update" quitAndInstall
-// failure through the async 'error' event rather than a thrown error, so
-// performQuitAndInstall's try/catch never sees it. Without this recovery a
-// failed install leaves quitAndInstallInProgress/quittingForUpdate stuck true
-// after PTYs were killed — the activate handler then refuses to reopen a window
-// and the app is trapped half-transitioned.
-function handleQuitAndInstallFailure(): void {
-  if (!quitAndInstallInProgress) {
-    return
+// Why: electron-updater often reports quitAndInstall failures via the 'error'
+// event. On Win/Linux this is frequently synchronous (dispatchError inside
+// install()); on macOS/spawn it can be async. Recover only after native invoke
+// and only when install has not been committed — after commit, clearing
+// quittingForUpdate would allow dock activate to reopen the old process
+// mid-installer.
+function handleQuitAndInstallFailure(): boolean {
+  if (!quitAndInstallInProgress || !quitAndInstallNativeInvoked || updateInstallCommitted) {
+    return false
   }
   resetQuitForUpdateState()
   recordUpdaterLifecycle('quit_and_install_failed_via_event', undefined, {
     level: 'warn',
     message: 'Update install could not start; recovered app state'
   })
+  sendErrorStatus('Could not restart to install the update. Quit and reopen Orca, then try again.')
+  return true
+}
+
+// Why: while quit-and-install owns the process (pre-native cleanup through
+// post-commit handoff), general check/download error UI must not run.
+function isQuitAndInstallHandoffActive(): boolean {
+  return quitAndInstallInProgress
 }
 
 async function runBeforeUpdateQuitCleanup(): Promise<void> {
@@ -1379,6 +1424,7 @@ export function setupAutoUpdater(
     getPendingInstallVersion,
     getUserInitiatedCheck: () => userInitiatedCheck,
     handleQuitAndInstallFailure,
+    isQuitAndInstallHandoffActive,
     hasNewerDownloadedVersion,
     shouldHandleUpdaterErrorEvent,
     performQuitAndInstall,

@@ -28,7 +28,8 @@ type UpdaterHandlerContext = {
   getKnownReleaseUrl: () => string | undefined
   getPendingInstallVersion: () => string
   getUserInitiatedCheck: () => boolean
-  handleQuitAndInstallFailure: () => void
+  handleQuitAndInstallFailure: () => boolean
+  isQuitAndInstallHandoffActive: () => boolean
   hasNewerDownloadedVersion: () => boolean
   shouldHandleUpdaterErrorEvent: () => boolean
   clearUpdateAvailableEventPending: (attemptId: number | null) => void
@@ -67,6 +68,7 @@ export function registerAutoUpdaterHandlers({
   getPendingInstallVersion,
   getUserInitiatedCheck,
   handleQuitAndInstallFailure,
+  isQuitAndInstallHandoffActive,
   hasNewerDownloadedVersion,
   shouldHandleUpdaterErrorEvent,
   clearUpdateAvailableEventPending,
@@ -284,10 +286,17 @@ export function registerAutoUpdaterHandlers({
   autoUpdater.on('error', (err) => {
     const message = err?.message ?? 'Unknown error'
     // Why: quitAndInstall reports the common "no staged update" failure through
-    // this event, not a thrown error. Recover the quit-for-update flags before
-    // any suppression guard can early-return, so a failed install never leaves
-    // the app half-transitioned with PTYs killed and windows unable to reopen.
-    handleQuitAndInstallFailure()
+    // this event (often sync on Win/Linux, async on macOS/spawn). Recover
+    // quit-for-update flags before any suppression guard can early-return, but
+    // only after native invoke and only when install is not yet committed.
+    if (handleQuitAndInstallFailure()) {
+      return
+    }
+    // Why: handoff still owns the process (cleanup, native in-flight, or
+    // post-commit). Do not treat as check/download error or reset mac install.
+    if (isQuitAndInstallHandoffActive()) {
+      return
+    }
     // Why: primary/fallback promise handlers may already own this failure; do
     // not let their delayed paired error event consume fallback context.
     if (shouldSuppressMissingManifestPrereleaseFallbackEvent(message, err)) {
