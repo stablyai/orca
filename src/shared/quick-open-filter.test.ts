@@ -85,6 +85,9 @@ describe('buildExcludePathPrefixes', () => {
     expect(buildExcludePathPrefixes('C:\\repo', ['C:\\repo\\packages\\app'])).toEqual([
       'packages/app'
     ])
+    expect(
+      buildExcludePathPrefixes('//Server/Share/Repo', ['//server/share/repo/packages/app'])
+    ).toEqual(['packages/app'])
   })
 
   it('strips trailing slashes', () => {

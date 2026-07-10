@@ -41,7 +41,10 @@ describe('Quick Open git directory collapse', () => {
     const { primary, ignoredPass } = buildGitLsFilesArgsForQuickOpen()
     const [primaryResult, ignoredResult] = await Promise.all(
       [primary, ignoredPass].map((args) =>
-        execFileAsync('git', ['ls-files', ...args], { cwd: root, encoding: 'buffer' })
+        execFileAsync('git', ['-c', 'core.excludesFile=', 'ls-files', ...args], {
+          cwd: root,
+          encoding: 'buffer'
+        })
       )
     )
     const primaryPaths = primaryResult.stdout.toString().split('\0').filter(Boolean)

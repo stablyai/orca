@@ -104,8 +104,8 @@ function pathFlavor(rootPath: string): typeof posix | typeof win32 {
   if (/^[a-zA-Z]:[\\/]/.test(rootPath)) {
     return win32
   }
-  // UNC \\server\share
-  if (rootPath.startsWith('\\\\')) {
+  // UNC \\server\share or //server/share
+  if (rootPath.startsWith('\\\\') || rootPath.startsWith('//')) {
     return win32
   }
   return posix

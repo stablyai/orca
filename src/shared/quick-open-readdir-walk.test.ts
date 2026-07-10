@@ -25,7 +25,8 @@ import {
   expandQuickOpenGitFileListing,
   isQuickOpenReaddirBudgetError,
   listQuickOpenFilesWithReaddir,
-  parseQuickOpenGitLsFilesEntry
+  parseQuickOpenGitLsFilesEntry,
+  QUICK_OPEN_READDIR_MAX_FILES
 } from './quick-open-readdir-walk'
 import { isFileListingCancellation } from './file-listing-cancellation'
 
@@ -243,6 +244,90 @@ describe('quick-open readdir walk', () => {
     expect(walkedPaths).not.toContain(join(root, '.local', 'share'))
   })
 
+  it('batches many allowed directory placeholders with bounded concurrency', async () => {
+    const root = await makeTempRoot()
+    const directoryPaths = Array.from({ length: 40 }, (_, index) => `generated-${index}/`)
+    await Promise.all(
+      directoryPaths.map((directoryPath, index) =>
+        writeRel(root, `${directoryPath}file-${index}.ts`)
+      )
+    )
+
+    const actual = await vi.importActual<typeof import('node:fs/promises')>('node:fs/promises') // eslint-disable-line @typescript-eslint/consistent-type-imports -- vi.importActual requires inline import()
+    let activeReads = 0
+    let maxActiveReads = 0
+    readdirMock.mockImplementation(async (...args: Parameters<typeof actual.readdir>) => {
+      activeReads++
+      maxActiveReads = Math.max(maxActiveReads, activeReads)
+      await new Promise((resolve) => setTimeout(resolve, 5))
+      try {
+        return await actual.readdir(...args)
+      } finally {
+        activeReads--
+      }
+    })
+
+    try {
+      const files = await expandQuickOpenGitFileListing({
+        rootPath: root,
+        gitPaths: [],
+        directoryPaths
+      })
+      expect(files).toHaveLength(directoryPaths.length)
+      expect(maxActiveReads).toBeGreaterThan(1)
+      expect(maxActiveReads).toBeLessThanOrEqual(32)
+    } finally {
+      readdirMock.mockImplementation(actual.readdir)
+    }
+  })
+
+  it('preserves symlink leaves from collapsed Git directories without following them', async () => {
+    const root = await makeTempRoot()
+    await mkdirRel(root, 'scratch')
+    await writeRel(root, 'target/file.ts')
+
+    try {
+      await symlink(join(root, 'target', 'file.ts'), join(root, 'scratch', 'link.ts'))
+      await symlink(join(root, 'target'), join(root, 'scratch', 'linked-dir'), 'dir')
+    } catch (err) {
+      if ((err as NodeJS.ErrnoException).code === 'EPERM') {
+        return
+      }
+      throw err
+    }
+
+    await expect(
+      expandQuickOpenGitFileListing({
+        rootPath: root,
+        gitPaths: [],
+        directoryPaths: ['scratch/']
+      })
+    ).resolves.toEqual(['scratch/link.ts', 'scratch/linked-dir'])
+  })
+
+  it('does not follow a collapsed directory replaced by a symlink', async () => {
+    const root = await makeTempRoot()
+    const outsideRoot = await makeTempRoot()
+    await writeRel(outsideRoot, 'secret.ts')
+
+    try {
+      await symlink(outsideRoot, join(root, 'dist'), 'dir')
+    } catch (err) {
+      if ((err as NodeJS.ErrnoException).code === 'EPERM') {
+        return
+      }
+      throw err
+    }
+
+    await expect(
+      expandQuickOpenGitFileListing({
+        rootPath: root,
+        gitPaths: [],
+        directoryPaths: ['dist/']
+      })
+    ).resolves.toEqual([])
+  })
+
   it('rejects instead of returning a partial ignored-directory expansion', async () => {
     const root = await makeTempRoot()
     await writeRel(root, 'dist/a.js')
@@ -256,6 +341,29 @@ describe('quick-open readdir walk', () => {
         budget: createQuickOpenReaddirBudget({ maxFiles: 1 })
       })
     ).rejects.toThrow('File listing exceeded')
+  })
+
+  it('keeps the default safety cap for a very large collapsed directory', async () => {
+    const root = await makeTempRoot()
+    await mkdirRel(root, 'dist')
+    readdirMock.mockResolvedValueOnce(
+      Array.from({ length: QUICK_OPEN_READDIR_MAX_FILES + 1 }, (_, index) => ({
+        name: `file-${index}.ts`,
+        isDirectory: () => false,
+        isFile: () => true,
+        isSymbolicLink: () => false
+      }))
+    )
+
+    // Why: directory collapse prevents generated trees from flooding the relay;
+    // the Git fallback must reject rather than silently return a partial list.
+    await expect(
+      expandQuickOpenGitFileListing({
+        rootPath: root,
+        gitPaths: [],
+        directoryPaths: ['dist/']
+      })
+    ).rejects.toThrow('File listing exceeded 10000 files')
   })
 
   it('identifies budget errors so callers can translate only those to install-rg guidance', () => {

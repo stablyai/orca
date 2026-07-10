@@ -127,7 +127,7 @@ describe('relay quick open ignored file listing', () => {
       ignoredProc.emit('close', 0, null)
     }, 10)
 
-    await expect(promise).resolves.toEqual(['src/index.ts', 'tab\tfile.txt', 'dist/generated.js'])
+    await expect(promise).resolves.toEqual(['dist/generated.js', 'src/index.ts', 'tab\tfile.txt'])
 
     const ignoredArgs = spawnMock.mock.calls[1][1] as string[]
     expect(ignoredArgs.slice(0, 6)).toEqual([

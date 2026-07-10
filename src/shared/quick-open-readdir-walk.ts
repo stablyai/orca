@@ -9,6 +9,7 @@ import {
 
 export const QUICK_OPEN_READDIR_MAX_FILES = 10_000
 export const QUICK_OPEN_READDIR_TIMEOUT_MS = 10_000
+const QUICK_OPEN_READDIR_CONCURRENCY = 32
 
 export type QuickOpenReaddirBudget = {
   remainingFiles: number
@@ -162,52 +163,111 @@ export async function listQuickOpenFilesWithReaddir(
     signal?: AbortSignal
   } = {}
 ): Promise<string[]> {
+  return listQuickOpenFilesFromRoots(
+    [
+      {
+        rootPath,
+        excludePathPrefixes: opts.excludePathPrefixes ?? [],
+        workspaceRelPathPrefix: opts.workspaceRelPathPrefix
+      }
+    ],
+    opts.budget ?? createQuickOpenReaddirBudget(),
+    opts.signal
+  )
+}
+
+type QuickOpenReaddirRoot = {
+  rootPath: string
+  excludePathPrefixes: readonly string[]
+  workspaceRelPathPrefix?: string
+  outputPathPrefix?: string
+  includeSymlinks?: boolean
+}
+
+type QuickOpenPendingDirectory = {
+  root: QuickOpenReaddirRoot
+  absPath: string
+}
+
+async function listQuickOpenFilesFromRoots(
+  roots: readonly QuickOpenReaddirRoot[],
+  budget: QuickOpenReaddirBudget,
+  signal?: AbortSignal
+): Promise<string[]> {
   const files: string[] = []
-  const budget = opts.budget ?? createQuickOpenReaddirBudget()
-  const excludePathPrefixes = opts.excludePathPrefixes ?? []
+  let pendingDirectories: QuickOpenPendingDirectory[] = roots.map((root) => ({
+    root,
+    absPath: root.rootPath
+  }))
 
-  async function walk(dir: string): Promise<void> {
-    // Why: an abandoned scan (workspace switch) must stop consuming IO and
-    // event-loop time on the single-threaded relay, not just run to budget.
-    throwIfFileListingCancelled(opts.signal)
-    assertWithinDeadline(budget)
-
-    let entries
-    try {
-      entries = await readdir(dir, { withFileTypes: true })
-    } catch {
-      // Why: permission denied on an individual subtree is common for broad
-      // roots. Skipping that subtree preserves the existing relay fallback.
-      return
-    }
-
-    for (const entry of entries) {
-      throwIfFileListingCancelled(opts.signal)
+  while (pendingDirectories.length > 0) {
+    const nextDirectories: QuickOpenPendingDirectory[] = []
+    for (
+      let offset = 0;
+      offset < pendingDirectories.length;
+      offset += QUICK_OPEN_READDIR_CONCURRENCY
+    ) {
+      // Why: batch only the filesystem calls. Result processing stays serial,
+      // so the shared cap remains exact while shallow placeholder-heavy repos
+      // do not pay one relay event-loop turn per directory.
+      throwIfFileListingCancelled(signal)
       assertWithinDeadline(budget)
+      const batch = pendingDirectories.slice(offset, offset + QUICK_OPEN_READDIR_CONCURRENCY)
+      const entryGroups = await Promise.all(
+        batch.map(async (pending) => {
+          try {
+            // Why: Git's placeholder may have been replaced with a symlink
+            // before expansion. Never let readdir follow it outside the root.
+            const stat = await lstat(pending.absPath)
+            if (!stat.isDirectory()) {
+              return { pending, entries: [] }
+            }
+            const entries = await readdir(pending.absPath, { withFileTypes: true })
+            return { pending, entries }
+          } catch {
+            // Why: permission denied on one subtree is common for broad roots.
+            return { pending, entries: [] }
+          }
+        })
+      )
 
-      const name = entry.name
-      const absPath = join(dir, name)
-      const relPath = toRelPath(rootPath, absPath)
-      const workspaceRelPath = opts.workspaceRelPathPrefix
-        ? `${opts.workspaceRelPathPrefix}/${relPath}`
-        : relPath
-      if (shouldExcludeQuickOpenRelPath(relPath, excludePathPrefixes)) {
-        continue
-      }
-      if (entry.isDirectory()) {
-        if (shouldDescend(name) && shouldIncludeQuickOpenPath(workspaceRelPath)) {
-          await walk(absPath)
+      for (const { pending, entries } of entryGroups) {
+        for (const entry of entries) {
+          throwIfFileListingCancelled(signal)
+          assertWithinDeadline(budget)
+
+          const name = entry.name
+          const absPath = join(pending.absPath, name)
+          const relPath = toRelPath(pending.root.rootPath, absPath)
+          const workspaceRelPath = pending.root.workspaceRelPathPrefix
+            ? `${pending.root.workspaceRelPathPrefix}/${relPath}`
+            : relPath
+          if (shouldExcludeQuickOpenRelPath(relPath, pending.root.excludePathPrefixes)) {
+            continue
+          }
+          if (entry.isDirectory()) {
+            if (shouldDescend(name) && shouldIncludeQuickOpenPath(workspaceRelPath)) {
+              nextDirectories.push({ root: pending.root, absPath })
+            }
+            continue
+          }
+          if (
+            (entry.isFile() || (pending.root.includeSymlinks && entry.isSymbolicLink())) &&
+            shouldIncludeQuickOpenPath(workspaceRelPath)
+          ) {
+            consumeFileBudget(budget)
+            files.push(
+              pending.root.outputPathPrefix
+                ? `${pending.root.outputPathPrefix}/${relPath}`
+                : relPath
+            )
+          }
         }
-        continue
-      }
-      if (entry.isFile() && shouldIncludeQuickOpenPath(workspaceRelPath)) {
-        consumeFileBudget(budget)
-        files.push(relPath)
       }
     }
+    pendingDirectories = nextDirectories
   }
 
-  await walk(rootPath)
   return files
 }
 
@@ -222,6 +282,7 @@ export async function expandQuickOpenGitFileListing(opts: {
   const files = new Set<string>()
   const excludePathPrefixes = opts.excludePathPrefixes ?? []
   const budget = opts.budget ?? createQuickOpenReaddirBudget()
+  const expansionPaths = new Map<string, boolean>()
 
   const addFinalPath = (relPath: string): void => {
     if (!relPath) {
@@ -248,18 +309,7 @@ export async function expandQuickOpenGitFileListing(opts: {
       continue
     }
 
-    const nestedFiles = await listQuickOpenFilesWithReaddir(joinRootRel(opts.rootPath, relPath), {
-      // Why: exclude prefixes are workspace-root-relative; rebase them onto the
-      // nested repo so the walk prunes excluded subtrees during traversal
-      // instead of burning the shared budget and filtering them at the end.
-      excludePathPrefixes: rebaseExcludePrefixesForSubtree(excludePathPrefixes, relPath),
-      workspaceRelPathPrefix: relPath,
-      budget,
-      signal: opts.signal
-    })
-    for (const nestedFile of nestedFiles) {
-      addFinalPath(`${relPath}/${nestedFile}`)
-    }
+    expansionPaths.set(relPath, false)
   }
 
   for (const rawPath of opts.directoryPaths ?? []) {
@@ -277,17 +327,28 @@ export async function expandQuickOpenGitFileListing(opts: {
       continue
     }
 
-    const ignoredFiles = await listQuickOpenFilesWithReaddir(joinRootRel(opts.rootPath, relPath), {
+    // Why: before directory collapse, Git returned untracked symlink entries
+    // without following them. Preserve those paths when expanding placeholders.
+    expansionPaths.set(relPath, true)
+  }
+
+  const expandedFiles = await listQuickOpenFilesFromRoots(
+    Array.from(expansionPaths, ([relPath, includeSymlinks]) => ({
+      rootPath: joinRootRel(opts.rootPath, relPath),
+      // Why: exclude prefixes are workspace-root-relative; rebase them onto
+      // each expanded subtree so blocked work is pruned before consuming cap.
       excludePathPrefixes: rebaseExcludePrefixesForSubtree(excludePathPrefixes, relPath),
       // Why: Git can collapse `.local/share/` to `.local/`; keep workspace
       // context so the walker still prunes the multi-segment blocklist.
       workspaceRelPathPrefix: relPath,
-      budget,
-      signal: opts.signal
-    })
-    for (const ignoredFile of ignoredFiles) {
-      addFinalPath(`${relPath}/${ignoredFile}`)
-    }
+      outputPathPrefix: relPath,
+      includeSymlinks
+    })),
+    budget,
+    opts.signal
+  )
+  for (const expandedFile of expandedFiles) {
+    addFinalPath(expandedFile)
   }
 
   return Array.from(files)

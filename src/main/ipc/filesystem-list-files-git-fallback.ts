@@ -6,6 +6,7 @@ import {
   expandQuickOpenGitFileListing,
   listQuickOpenFilesWithReaddir
 } from '../../shared/quick-open-readdir-walk'
+import { fileListingCancellationError } from '../../shared/file-listing-cancellation'
 
 /**
  * Fallback file lister using git ls-files. Used when rg is not available.
@@ -16,9 +17,13 @@ import {
  */
 async function isInsideGitWorkTree(
   rootPath: string,
-  localGitOptions: { wslDistro?: string }
+  localGitOptions: { wslDistro?: string },
+  signal?: AbortSignal
 ): Promise<boolean> {
-  return new Promise((resolve) => {
+  if (signal?.aborted) {
+    throw fileListingCancellationError(signal)
+  }
+  return new Promise((resolve, reject) => {
     const child = gitSpawn(['rev-parse', '--is-inside-work-tree'], {
       cwd: rootPath,
       ...(localGitOptions.wslDistro ? { wslDistro: localGitOptions.wslDistro } : {}),
@@ -26,22 +31,37 @@ async function isInsideGitWorkTree(
     })
     let done = false
     let timer: ReturnType<typeof setTimeout>
+    const cleanup = (): void => {
+      clearTimeout(timer)
+      child.off('error', handleError)
+      child.off('close', handleClose)
+      signal?.removeEventListener('abort', handleAbort)
+    }
     const finish = (isGitRepo: boolean): void => {
       if (done) {
         return
       }
       done = true
-      clearTimeout(timer)
-      child.off('error', handleError)
-      child.off('close', handleClose)
+      cleanup()
       resolve(isGitRepo)
+    }
+    const cancel = (): void => {
+      if (done) {
+        return
+      }
+      done = true
+      child.kill()
+      cleanup()
+      reject(fileListingCancellationError(signal))
     }
     const handleError = (): void => finish(false)
     const handleClose = (code: number | null, signal: NodeJS.Signals | null): void =>
       finish(code === 0 && signal === null)
+    const handleAbort = (): void => cancel()
 
     child.once('error', handleError)
     child.once('close', handleClose)
+    signal?.addEventListener('abort', handleAbort, { once: true })
     timer = setTimeout(() => {
       child.kill()
       finish(false)
@@ -52,12 +72,18 @@ async function isInsideGitWorkTree(
 export async function listFilesWithGit(
   rootPath: string,
   excludePathPrefixes: readonly string[],
-  localGitOptions: { wslDistro?: string }
+  localGitOptions: { wslDistro?: string },
+  signal?: AbortSignal
 ): Promise<string[]> {
-  if (!(await isInsideGitWorkTree(rootPath, localGitOptions))) {
+  const isGitWorkTree = await isInsideGitWorkTree(rootPath, localGitOptions, signal)
+  if (signal?.aborted) {
+    throw fileListingCancellationError(signal)
+  }
+  if (!isGitWorkTree) {
     return listQuickOpenFilesWithReaddir(rootPath, {
       excludePathPrefixes,
-      budget: createQuickOpenReaddirBudget()
+      budget: createQuickOpenReaddirBudget(),
+      signal
     })
   }
 
@@ -173,7 +199,7 @@ export async function listFilesWithGit(
     })
   }
 
-  const killSurvivors = (): void => {
+  const killSurvivors = (reason = 'git ls-files canceled after sibling failure'): void => {
     // Why: Promise.all rejects on the first failed pass; cancel the sibling so
     // a stuck git process cannot keep scanning after Quick Open has failed.
     for (const entry of children) {
@@ -183,21 +209,32 @@ export async function listFilesWithGit(
       if (entry.child.exitCode === null && entry.child.signalCode === null) {
         entry.child.kill()
       }
-      entry.reject(new Error('git ls-files canceled after sibling failure'))
+      entry.reject(new Error(reason))
     }
   }
 
+  const onAbort = (): void => killSurvivors('git ls-files cancelled')
+  signal?.addEventListener('abort', onAbort, { once: true })
   try {
     await Promise.all([runGitLsFiles(primary), runGitLsFiles(ignoredPass)])
   } catch (err) {
     killSurvivors()
+    if (signal?.aborted) {
+      throw fileListingCancellationError(signal)
+    }
     throw err
+  } finally {
+    signal?.removeEventListener('abort', onAbort)
   }
 
-  return expandQuickOpenGitFileListing({
+  const files = await expandQuickOpenGitFileListing({
     rootPath,
     gitPaths,
     directoryPaths,
-    excludePathPrefixes
+    excludePathPrefixes,
+    signal
   })
+  // Why: directory placeholders are expanded after Git exits; restore Git's
+  // path order so empty queries and fuzzy-score ties remain stable.
+  return files.sort()
 }

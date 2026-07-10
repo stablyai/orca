@@ -177,15 +177,18 @@ export function listFilesWithGit(
   signal?.addEventListener('abort', onAbort, { once: true })
 
   return Promise.all([runGitLsFiles(primary), runGitLsFiles(ignoredPass)])
-    .then(() =>
-      expandQuickOpenGitFileListing({
+    .then(async () => {
+      const files = await expandQuickOpenGitFileListing({
         rootPath,
         gitPaths,
         directoryPaths,
         excludePathPrefixes,
         signal
       })
-    )
+      // Why: directory placeholders are expanded after Git exits; restore
+      // Git's path order for empty queries and fuzzy-score ties over SSH.
+      return files.sort()
+    })
     .catch((err) => {
       killSurvivors('git ls-files canceled after sibling failure')
       if (signal?.aborted) {
