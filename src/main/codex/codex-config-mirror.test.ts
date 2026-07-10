@@ -25,6 +25,7 @@ vi.mock('node:os', async () => {
 
 import {
   prepareSystemConfigForFreshRuntimeMirror,
+  resolveCodexConfigMirrorSourceDirectory,
   syncSystemConfigIntoManagedCodexHome
 } from './codex-config-mirror'
 
@@ -402,6 +403,20 @@ describe('syncSystemConfigIntoManagedCodexHome', () => {
 })
 
 describe('prepareSystemConfigForFreshRuntimeMirror', () => {
+  it('uses the Linux-side directory for WSL UNC source homes', () => {
+    const sourceDir = resolveCodexConfigMirrorSourceDirectory(
+      '\\\\wsl.localhost\\Ubuntu\\home\\alice\\.codex'
+    )
+
+    expect(sourceDir).toBe('/home/alice/.codex')
+    expect(
+      prepareSystemConfigForFreshRuntimeMirror(
+        'model_instructions_file = "instructions.md"\n',
+        sourceDir
+      )
+    ).toContain("model_instructions_file = '/home/alice/.codex/instructions.md'")
+  })
+
   it('rewrites relative paths against a Linux-side home and strips hook trust', () => {
     const prepared = prepareSystemConfigForFreshRuntimeMirror(
       [

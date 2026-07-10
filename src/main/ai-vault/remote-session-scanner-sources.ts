@@ -5,10 +5,8 @@ import { parseCodexSessionContent } from './session-scanner-codex-parser'
 import { parseDevinSessionContent } from './session-scanner-devin-parser'
 import { parseDroidSessionContent } from './session-scanner-droid-parser'
 import { parseMessageGraphSessionContent } from './session-scanner-graph-parsers'
-import {
-  parseClaudeSessionContent,
-  parseGeminiSessionContent
-} from './session-scanner-primary-parsers'
+import { parseClaudeSessionContent } from './session-scanner-primary-parsers'
+import { parseGeminiSessionContent } from './session-scanner-gemini-parsers'
 import {
   parseCopilotSessionContent,
   parseCursorSessionContent,
@@ -36,13 +34,19 @@ export function remoteSessionSources(
 ): RemoteSessionSource[] {
   return [
     ...remoteCodexSources(remoteHome, hostPlatform),
-    jsonlSource(
-      'claude',
-      remoteHome,
-      hostPlatform,
-      ['.claude', 'projects'],
-      parseClaudeSessionContent
-    ),
+    {
+      ...jsonlSource(
+        'claude',
+        remoteHome,
+        hostPlatform,
+        ['.claude', 'projects'],
+        parseClaudeSessionContent
+      ),
+      // The remote host owns the transcript disk, so the local readdir in the
+      // Claude parser is skipped; the walked listing supplies the sibling
+      // subagent counts instead.
+      collectSubagentSiblingCounts: true
+    },
     source(
       'gemini',
       remoteHome,

@@ -5,6 +5,7 @@ import { folderWorkspaceKey } from '../../../../shared/workspace-scope'
 import { resolveAiVaultSessionLaunchTarget } from './ai-vault-session-launch-actions'
 import {
   aiVaultSessionResumeLabel,
+  aiVaultSessionRowResumeGating,
   type AiVaultSessionResumeTargetState,
   resolveAiVaultSessionResumeActions,
   resolveAiVaultSessionResumeState
@@ -564,5 +565,47 @@ describe('aiVaultSessionResumeLabel', () => {
   it('names the session worktree action distinctly from the active-workspace fallback', () => {
     expect(aiVaultSessionResumeLabel({ usesSessionWorktree: true })).toBe('Resume in Worktree')
     expect(aiVaultSessionResumeLabel({ usesSessionWorktree: false })).toBe('Resume in New Tab')
+  })
+})
+
+describe('aiVaultSessionRowResumeGating', () => {
+  const zeroTurnSession = { messageCount: 0, previewMessages: [] }
+  const sessionWithTurns = { messageCount: 3, previewMessages: [] }
+  const unblocked = { blocked: false }
+
+  it('withholds every resume affordance for a zero-turn session', () => {
+    expect(aiVaultSessionRowResumeGating(zeroTurnSession, unblocked)).toEqual({
+      resumeDisabled: true,
+      canCopyResumeCommand: false
+    })
+  })
+
+  it('keeps copy-resume available when only the workspace target is blocked', () => {
+    expect(aiVaultSessionRowResumeGating(sessionWithTurns, { blocked: true })).toEqual({
+      resumeDisabled: true,
+      canCopyResumeCommand: true
+    })
+    expect(aiVaultSessionRowResumeGating(sessionWithTurns, null)).toEqual({
+      resumeDisabled: true,
+      canCopyResumeCommand: true
+    })
+  })
+
+  it('treats user/assistant previews as resumable content when the turn count is unknown', () => {
+    const previewOnlySession = {
+      messageCount: 0,
+      previewMessages: [{ role: 'user' as const, text: 'hello', timestamp: null }]
+    }
+    expect(aiVaultSessionRowResumeGating(previewOnlySession, unblocked)).toEqual({
+      resumeDisabled: false,
+      canCopyResumeCommand: true
+    })
+  })
+
+  it('enables resume for an unblocked session with turns', () => {
+    expect(aiVaultSessionRowResumeGating(sessionWithTurns, unblocked)).toEqual({
+      resumeDisabled: false,
+      canCopyResumeCommand: true
+    })
   })
 })

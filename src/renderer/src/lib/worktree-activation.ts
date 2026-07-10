@@ -25,7 +25,6 @@ import { CLIENT_PLATFORM } from './new-workspace'
 import { tuiAgentToAgentKind } from './telemetry'
 import { agentKindToTuiAgent } from '../../../shared/agent-kind'
 import { useAppStore } from '@/store'
-import type { PendingSidebarWorktreeReveal } from '@/store/slices/ui'
 import { tabHasLivePty } from '@/lib/tab-has-live-pty'
 import {
   activateWebRuntimeSessionWorktree,
@@ -183,7 +182,6 @@ function ensureFolderWorkspaceInitialTerminal(
 export function activateAndRevealFolderWorkspace(
   folderWorkspaceId: string,
   opts?: {
-    sidebarRevealBehavior?: PendingSidebarWorktreeReveal['behavior']
     startup?: WorktreeStartupPayload
     runtimeEnvironmentId?: string | null
   }
@@ -227,11 +225,7 @@ export function activateAndRevealFolderWorkspace(
   resumeSleepingAgentSessionsForWorktree(workspaceKey)
   const primaryTabId = ensureFolderWorkspaceInitialTerminal(folderWorkspace, opts?.startup)
 
-  if (opts?.sidebarRevealBehavior) {
-    state.revealWorktreeInSidebar(workspaceKey, { behavior: opts.sidebarRevealBehavior })
-  } else {
-    state.revealWorktreeInSidebar(workspaceKey)
-  }
+  state.revealWorktreeInSidebar(workspaceKey)
 
   return { primaryTabId }
 }
@@ -289,7 +283,6 @@ export function activateAndRevealWorktree(
     setup?: WorktreeSetupLaunch
     defaultTabs?: WorktreeDefaultTabsLaunch
     issueCommand?: IssueCommandLaunch
-    sidebarRevealBehavior?: PendingSidebarWorktreeReveal['behavior']
     notifyHostRuntime?: boolean
     revealInSidebar?: boolean
   }
@@ -389,11 +382,7 @@ export function activateAndRevealWorktree(
 
   // 6. Reveal in sidebar
   if (opts?.revealInSidebar !== false) {
-    if (opts?.sidebarRevealBehavior) {
-      state.revealWorktreeInSidebar(worktreeId, { behavior: opts.sidebarRevealBehavior })
-    } else {
-      state.revealWorktreeInSidebar(worktreeId)
-    }
+    state.revealWorktreeInSidebar(worktreeId)
   }
 
   if (opts?.notifyHostRuntime !== false) {

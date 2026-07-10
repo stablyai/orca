@@ -1,5 +1,5 @@
 import { ActivityIndicator, Pressable, SectionList, Text, TextInput, View } from 'react-native'
-import { GitBranch, Minus, MoreHorizontal, Plus, Sparkles } from 'lucide-react-native'
+import { Minus, MoreHorizontal, Plus, Sparkles } from 'lucide-react-native'
 import { colors, spacing } from '../theme/mobile-theme'
 import { MobileSourceControlCreatePrEntry } from './MobileSourceControlCreatePrEntry'
 import { MobileCommitFailurePanel } from './MobileCommitFailurePanel'
@@ -7,12 +7,13 @@ import { KEYBOARD_COMMIT_BAR_CLEARANCE } from './mobile-source-control-screen-st
 import { makeRenderFileRow, BranchCompareFooter } from './MobileSourceControlFileRows'
 import type { MobileSourceControlState } from './use-mobile-source-control-state'
 import { styles } from './mobile-source-control-styles'
+import { hubStyles } from './mobile-source-control-hub-styles'
 
 type Props = {
   state: MobileSourceControlState
 }
 
-// The ready-state body: summary card, changed-files list, and commit bar.
+// The ready-state Changes segment body: quick actions, changed-files list, and commit bar.
 export function MobileSourceControlContent({ state }: Props) {
   const {
     insets,
@@ -29,23 +30,17 @@ export function MobileSourceControlContent({ state }: Props) {
     keyboardLift,
     openingPath,
     openingBranchPath,
-    status,
     sections,
-    branchEntries,
     hasVisibleChanges,
     stageablePaths,
     unstageablePaths,
     stagedCount,
-    unstagedCount,
-    branchLabel,
-    syncLabel,
     primaryAction,
     createPrAction,
     stageAll,
     unstageAll,
     generateCommitMessage,
     cancelGenerateCommitMessage,
-    abortConflictOperation,
     openFile,
     openBranchDiff,
     runGitAction
@@ -66,41 +61,7 @@ export function MobileSourceControlContent({ state }: Props) {
           <Text style={styles.reconnectBannerText}>Reconnecting to desktop...</Text>
         </View>
       ) : null}
-      <View style={styles.summaryCard}>
-        <View style={styles.summaryHeader}>
-          <View style={styles.branchLine}>
-            <GitBranch size={15} color={colors.textSecondary} strokeWidth={2.1} />
-            <Text style={styles.branchText} numberOfLines={1}>
-              {branchLabel}
-            </Text>
-          </View>
-          {syncLabel ? <Text style={styles.syncText}>{syncLabel}</Text> : null}
-        </View>
-        <View style={styles.countRow}>
-          <Text style={styles.countText}>{unstagedCount} changed</Text>
-          <Text style={styles.countText}>{stagedCount} staged</Text>
-          {branchEntries.length > 0 ? (
-            <Text style={styles.countText}>{branchEntries.length} on branch</Text>
-          ) : null}
-          {status && status.conflictOperation !== 'unknown' ? (
-            <View style={styles.conflictRow}>
-              <Text style={styles.conflictText}>{status.conflictOperation}</Text>
-              {(status.conflictOperation === 'merge' || status.conflictOperation === 'rebase') && (
-                <Pressable
-                  style={({ pressed }) => [styles.abortButton, pressed && styles.abortPressed]}
-                  disabled={busyAction !== null}
-                  onPress={() => void abortConflictOperation(status.conflictOperation)}
-                >
-                  <Text style={styles.abortText}>
-                    {busyAction === `abort-${status.conflictOperation}`
-                      ? 'Aborting…'
-                      : `Abort ${status.conflictOperation}`}
-                  </Text>
-                </Pressable>
-              )}
-            </View>
-          ) : null}
-        </View>
+      <View style={hubStyles.changesControls}>
         {commitFailureRecovery ? (
           <MobileCommitFailurePanel
             failure={commitFailureRecovery}
@@ -170,6 +131,7 @@ export function MobileSourceControlContent({ state }: Props) {
         </View>
       ) : (
         <SectionList
+          style={hubStyles.tabBody}
           sections={sections}
           renderItem={makeRenderFileRow({
             busyAction,

@@ -70,6 +70,10 @@ const aiVaultListResultSchema = z.object({
       messageCount: z.number(),
       totalTokens: z.number(),
       previewMessages: z.array(aiVaultSessionPreviewMessageSchema),
+      // Default keeps remote hosts running an older build (no recoverable-signal
+      // fields) parseable; they simply report no recoverable-empty sessions.
+      queuedMessageCount: z.number().default(0),
+      subagentTranscriptCount: z.number().default(0),
       resumeCommand: z.string()
     })
   ),

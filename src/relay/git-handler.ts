@@ -216,7 +216,7 @@ export class GitHandler {
     this.dispatcher.onRequest('git.rebaseFromBase', (p) => this.rebaseFromBase(p))
     this.dispatcher.onRequest('git.branchDiff', (p) => this.branchDiff(p))
     this.dispatcher.onRequest('git.commitDiff', (p) => this.commitDiff(p))
-    this.dispatcher.onRequest('git.listWorktrees', (p) => this.listWorktrees(p))
+    this.dispatcher.onRequest('git.listWorktrees', (p, context) => this.listWorktrees(p, context))
     this.dispatcher.onRequest('git.addWorktree', (p) => this.addWorktree(p))
     this.dispatcher.onRequest('git.removeWorktree', (p) => this.removeWorktree(p))
     this.dispatcher.onRequest('git.worktreeIsClean', (p) => this.worktreeIsClean(p))
@@ -1263,10 +1263,12 @@ export class GitHandler {
     return normalized
   }
 
-  private async listWorktrees(params: Record<string, unknown>) {
+  private async listWorktrees(params: Record<string, unknown>, context?: RequestContext) {
     const repoPath = params.repoPath as string
     try {
-      const { stdout } = await this.git(['worktree', 'list', '--porcelain', '-z'], repoPath)
+      const { stdout } = await this.git(['worktree', 'list', '--porcelain', '-z'], repoPath, {
+        signal: context?.signal
+      })
       return this.normalizeMainWorktreePath(
         repoPath,
         parseWorktreeList(stdout, { nulDelimited: true })
@@ -1280,7 +1282,9 @@ export class GitHandler {
     // Why: `-z` keeps newline-containing SSH worktree paths intact, but older
     // Git rejects it. Fall back to the original line-block parser there.
     try {
-      const { stdout } = await this.git(['worktree', 'list', '--porcelain'], repoPath)
+      const { stdout } = await this.git(['worktree', 'list', '--porcelain'], repoPath, {
+        signal: context?.signal
+      })
       return this.normalizeMainWorktreePath(repoPath, parseWorktreeList(stdout))
     } catch {
       return []

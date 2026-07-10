@@ -16,7 +16,6 @@ import {
   wrapWindowsCmdHookCommand,
   writeHooksJson,
   writeManagedScript,
-  type HookCommandConfig,
   type HookDefinition
 } from '../agent-hooks/installer-utils'
 import {
@@ -44,6 +43,21 @@ import {
 } from './config-toml-trust'
 import { getOrcaManagedCodexHomePath, getSystemCodexHomePath } from './codex-home-paths'
 import { syncSystemConfigIntoManagedCodexHome } from './codex-config-mirror'
+import {
+  createCodexWslRuntimeHookInstallPlan,
+  type CodexWslRuntimeHookInstallPlan,
+  type CodexWslRuntimeHookTarget
+} from './codex-wsl-hook-install-plan'
+import {
+  CODEX_HOOK_EVENT_LABEL,
+  createCodexHookTrustEntry,
+  getCodexHookTrustSignature,
+  getCodexManagedScriptFileName
+} from './codex-hook-identity'
+import {
+  promoteCodexRuntimeHookApprovalsToSystem,
+  snapshotCodexRuntimeHookTrustProvenance
+} from './hook-trust-promotion'
 
 // Why: PreToolUse/PostToolUse give the dashboard a live readout of the
 // in-flight tool (name + input preview) between UserPromptSubmit and Stop.
@@ -73,28 +87,20 @@ function getCodexConfigTomlPath(): string {
   return join(getOrcaManagedCodexHomePath(), 'config.toml')
 }
 
-// Why: Codex's hash key uses the snake_case event label (see
-// codex-rs/hooks/src/lib.rs::hook_event_key_label). Our hooks.json uses the
-// PascalCase serde-rename. Map between them at one place so the trust-write
-// path can't drift from the install path.
+// Why: the managed-event subset of the shared PascalCase→label map; the
+// full mapping lives in codex-hook-identity.ts so promotion can't drift.
 const CODEX_EVENT_LABEL: Record<(typeof CODEX_EVENTS)[number], CodexEventLabel> = {
-  SessionStart: 'session_start',
-  UserPromptSubmit: 'user_prompt_submit',
-  PreToolUse: 'pre_tool_use',
-  PermissionRequest: 'permission_request',
-  PostToolUse: 'post_tool_use',
-  Stop: 'stop'
+  SessionStart: CODEX_HOOK_EVENT_LABEL.SessionStart!,
+  UserPromptSubmit: CODEX_HOOK_EVENT_LABEL.UserPromptSubmit!,
+  PreToolUse: CODEX_HOOK_EVENT_LABEL.PreToolUse!,
+  PermissionRequest: CODEX_HOOK_EVENT_LABEL.PermissionRequest!,
+  PostToolUse: CODEX_HOOK_EVENT_LABEL.PostToolUse!,
+  Stop: CODEX_HOOK_EVENT_LABEL.Stop!
 }
 
 const CODEX_MANAGED_EVENT_LABELS = new Set<CodexEventLabel>(
   CODEX_EVENTS.map((eventName) => CODEX_EVENT_LABEL[eventName])
 )
-
-const CODEX_HOOK_EVENT_LABEL: Record<string, CodexEventLabel> = {
-  ...CODEX_EVENT_LABEL,
-  PreCompact: 'pre_compact',
-  PostCompact: 'post_compact'
-}
 
 const CODEX_PLUGIN_ONLY_HOOK_PLACEHOLDERS = [
   '${CLAUDE_PLUGIN_ROOT}',
@@ -112,18 +118,24 @@ type MirroredRuntimeUserHookTrustEntry = {
   enabled: boolean
 }
 
-function getManagedScriptFileName(): string {
-  return process.platform === 'win32' ? 'codex-hook.cmd' : 'codex-hook.sh'
-}
-
 function getManagedScriptPath(): string {
-  return getSharedManagedScriptPath(getManagedScriptFileName())
+  return getSharedManagedScriptPath(getCodexManagedScriptFileName())
 }
 
 function getManagedCommand(scriptPath: string): string {
   return process.platform === 'win32'
     ? wrapWindowsCmdHookCommand(scriptPath)
     : wrapPosixHookCommand(scriptPath)
+}
+
+export { createCodexWslRuntimeHookInstallPlan }
+export type { CodexWslRuntimeHookInstallPlan }
+
+function wrapReadablePosixHookCommand(scriptPath: string): string {
+  const quoted = `'${scriptPath.replaceAll("'", "'\\''")}'`
+  // Why: WSL runtime hooks are written from Windows through UNC, where the
+  // executable bit is not reliable. /bin/sh only needs the script to be readable.
+  return `if [ -r ${quoted} ]; then /bin/sh ${quoted}; fi`
 }
 
 function getSystemConfigPath(): string {
@@ -151,7 +163,7 @@ function collectManagedTrustEntries(
       if (!isManagedCommand(hook.command)) {
         return
       }
-      const entry = createHookTrustEntry(
+      const entry = createCodexHookTrustEntry(
         sourcePath,
         eventName,
         groupIndex,
@@ -165,32 +177,6 @@ function collectManagedTrustEntries(
     })
   })
   return entries
-}
-
-function createHookTrustEntry(
-  sourcePath: string,
-  eventName: string,
-  groupIndex: number,
-  handlerIndex: number,
-  definition: HookDefinition,
-  hook: HookCommandConfig
-): CodexTrustEntry | null {
-  const eventLabel = CODEX_HOOK_EVENT_LABEL[eventName]
-  if (!eventLabel || !hook.command) {
-    return null
-  }
-
-  return {
-    sourcePath,
-    eventLabel,
-    groupIndex,
-    handlerIndex,
-    command: hook.command,
-    ...(typeof hook.timeout === 'number' ? { timeoutSec: hook.timeout } : {}),
-    ...(typeof hook.async === 'boolean' ? { async: hook.async } : {}),
-    ...(typeof definition.matcher === 'string' ? { matcher: definition.matcher } : {}),
-    ...(typeof hook.statusMessage === 'string' ? { statusMessage: hook.statusMessage } : {})
-  }
 }
 
 function removeMatchingTrustEntries(configPath: string, entries: readonly CodexTrustEntry[]): void {
@@ -218,7 +204,7 @@ function removeStaleRuntimeHookTrustEntries(
   const expectedHashes = new Map(
     expectedEntries.map((entry) => [
       normalizeHookTrustKeyForLookup(computeTrustKey(entry)),
-      computeTrustedHash(entry)
+      entry.trustedHash ?? computeTrustedHash(entry)
     ])
   )
   const canonicalRuntimeHooksPath = getCodexCanonicalTrustPath(runtimeHooksPath)
@@ -236,17 +222,6 @@ function removeStaleRuntimeHookTrustEntries(
   if (staleKeys.length > 0) {
     removeHookTrustEntries(tomlPath, staleKeys)
   }
-}
-
-function getTrustSignature(entry: CodexTrustEntry): string {
-  return JSON.stringify({
-    eventLabel: entry.eventLabel,
-    command: entry.command,
-    timeoutSec: Math.max(1, entry.timeoutSec ?? 600),
-    async: entry.async ?? false,
-    matcher: entry.matcher ?? null,
-    statusMessage: entry.statusMessage ?? null
-  })
 }
 
 function commandUsesCodexPluginOnlyPlaceholder(command: string | undefined): boolean {
@@ -316,12 +291,17 @@ function getRuntimeHooksWithSystemUserHooks(
   }
 }
 
+type TrustedSystemHookSignatureState = {
+  enabled: boolean
+  trustedHash: string
+}
+
 function getTrustedSystemUserHookSignatures(
   systemConfigPath: string,
   systemHooks: Record<string, HookDefinition[]>,
   isManagedCommand: (command: string | undefined) => boolean
-): Map<string, boolean> {
-  const signatures = new Map<string, boolean>()
+): Map<string, TrustedSystemHookSignatureState> {
+  const signatures = new Map<string, TrustedSystemHookSignatureState>()
   let trustEntries: Map<string, CodexHookTrustState>
   try {
     trustEntries = readHookTrustEntries(getSystemCodexConfigTomlPath())
@@ -342,7 +322,7 @@ function getTrustedSystemUserHookSignatures(
         if (isManagedCommand(hook.command)) {
           return
         }
-        const entry = createHookTrustEntry(
+        const entry = createCodexHookTrustEntry(
           systemConfigPath,
           eventName,
           groupIndex,
@@ -353,25 +333,45 @@ function getTrustedSystemUserHookSignatures(
         if (!entry) {
           return
         }
-        const expectedHash = computeTrustedHash(entry)
-        const state = trustEntries.get(computeTrustKey(entry))
-        const enabled =
-          state?.trustedHash === expectedHash
-            ? state.enabled !== false
-            : trustedHashesByEvent.get(entry.eventLabel)?.get(expectedHash)
-        if (enabled === undefined) {
+        const state = resolveTrustedSystemHookState(entry, trustEntries, trustedHashesByEvent)
+        if (!state) {
           return
         }
-        const signature = getTrustSignature(entry)
+        const signature = getCodexHookTrustSignature(entry)
         // Why: runtime deduping collapses identical system hook definitions;
         // if any duplicate remains enabled, keep the mirrored hook enabled.
-        if (enabled || !signatures.has(signature)) {
-          signatures.set(signature, enabled)
+        if (state.enabled || !signatures.has(signature)) {
+          signatures.set(signature, state)
         }
       })
     })
   }
   return signatures
+}
+
+function resolveTrustedSystemHookState(
+  entry: CodexTrustEntry,
+  trustEntries: ReadonlyMap<string, CodexHookTrustState>,
+  trustedHashesByEvent: ReadonlyMap<CodexEventLabel, Map<string, boolean>>
+): TrustedSystemHookSignatureState | null {
+  const expectedHash = computeTrustedHash(entry)
+  const state = trustEntries.get(computeTrustKey(entry))
+  if (state?.trustedHash === expectedHash) {
+    return { enabled: state.enabled !== false, trustedHash: expectedHash }
+  }
+  const reorderedEnabled = trustedHashesByEvent.get(entry.eventLabel)?.get(expectedHash)
+  if (reorderedEnabled !== undefined) {
+    return { enabled: reorderedEnabled, trustedHash: expectedHash }
+  }
+  if (state?.trustedHash) {
+    // Why: carry a key-matched system hash verbatim instead of dropping it as
+    // stale. Codex is the authority on its own hash algorithm; recomputing
+    // here is what turned #7110-style hash drift into an endless re-approval
+    // loop. If the hash is genuinely stale (edited hook), Codex prompts —
+    // exactly what a plain ~/.codex session would do.
+    return { enabled: state.enabled !== false, trustedHash: state.trustedHash }
+  }
+  return null
 }
 
 function getTrustedSystemHookHashesByEvent(
@@ -406,7 +406,7 @@ function getTrustedSystemHookHashesByEvent(
 function collectMirroredRuntimeUserHookTrustEntries(
   runtimeConfigPath: string,
   runtimeHooks: Record<string, HookDefinition[]>,
-  trustedSystemHookSignatures: ReadonlyMap<string, boolean>,
+  trustedSystemHookSignatures: ReadonlyMap<string, TrustedSystemHookSignatureState>,
   isManagedCommand: (command: string | undefined) => boolean
 ): MirroredRuntimeUserHookTrustEntry[] {
   if (trustedSystemHookSignatures.size === 0) {
@@ -424,7 +424,7 @@ function collectMirroredRuntimeUserHookTrustEntries(
         if (isManagedCommand(hook.command)) {
           return
         }
-        const entry = createHookTrustEntry(
+        const entry = createCodexHookTrustEntry(
           runtimeConfigPath,
           eventName,
           groupIndex,
@@ -435,10 +435,13 @@ function collectMirroredRuntimeUserHookTrustEntries(
         if (!entry) {
           return
         }
-        const signature = getTrustSignature(entry)
-        const enabled = trustedSystemHookSignatures.get(signature)
-        if (enabled !== undefined) {
-          entries.push({ entry, enabled })
+        const signature = getCodexHookTrustSignature(entry)
+        const state = trustedSystemHookSignatures.get(signature)
+        if (state !== undefined) {
+          entries.push({
+            entry: { ...entry, trustedHash: state.trustedHash },
+            enabled: state.enabled
+          })
         }
       })
     })
@@ -533,7 +536,7 @@ function cleanupLegacySystemManagedHooks(): void {
     return
   }
 
-  const isManagedCommand = createManagedCommandMatcher(getManagedScriptFileName())
+  const isManagedCommand = createManagedCommandMatcher(getCodexManagedScriptFileName())
   const nextHooks = { ...config.hooks }
   const trustEntries: CodexTrustEntry[] = []
   let removedManagedHook = false
@@ -674,6 +677,52 @@ function removeRuntimeManagedHookTrustEntries(configPath: string): void {
   }
 }
 
+function removeWslRuntimeManagedHookTrustEntries(plan: CodexWslRuntimeHookInstallPlan): void {
+  try {
+    const existingEntries = readHookTrustEntries(plan.tomlPath)
+    const command = wrapReadablePosixHookCommand(plan.commandScriptPath)
+    const managedEventLabels = new Set<CodexEventLabel>(
+      CODEX_EVENTS.map((event) => CODEX_EVENT_LABEL[event])
+    )
+    const canonicalConfigPath = getCodexCanonicalTrustPath(plan.trustConfigPath)
+    const ourKeys: string[] = []
+    for (const [key, state] of existingEntries) {
+      const parts = parseTrustKey(key)
+      if (parts === null) {
+        continue
+      }
+      if (getCodexCanonicalTrustPath(parts.sourcePath) !== canonicalConfigPath) {
+        continue
+      }
+      if (!managedEventLabels.has(parts.eventLabel)) {
+        continue
+      }
+      const expectedEntry: CodexTrustEntry = {
+        sourcePath: plan.trustConfigPath,
+        eventLabel: parts.eventLabel,
+        groupIndex: parts.groupIndex,
+        handlerIndex: parts.handlerIndex,
+        command,
+        timeoutSec: MANAGED_HOOK_TIMEOUT_SECONDS
+      }
+      const recognizedHashes = new Set([
+        computeTrustedHash(expectedEntry),
+        computeTrustedHash({ ...expectedEntry, timeoutSec: undefined })
+      ])
+      if (state.trustedHash && recognizedHashes.has(state.trustedHash)) {
+        ourKeys.push(key)
+      }
+    }
+    if (ourKeys.length > 0) {
+      removeHookTrustEntries(plan.tomlPath, ourKeys)
+    }
+  } catch (error) {
+    // Why: removing disabled WSL status hooks should be best-effort like the
+    // host cleanup path; stale trust is inert once hooks.json no longer points at us.
+    console.warn('[codex-hook-service] failed to clean WSL trust entries', error)
+  }
+}
+
 function getManagedScript(target: 'local' | 'posix' = 'local'): string {
   if (target === 'local' && process.platform === 'win32') {
     return [
@@ -698,8 +747,30 @@ function getManagedScript(target: 'local' | 'posix' = 'local'): string {
     // Why: see claude/hook-service.ts for rationale. Sourcing refreshes
     // PORT/TOKEN/ENV/VERSION from the current Orca so a surviving PTY keeps
     // reporting after a restart.
+    'load_hook_endpoint() {',
+    '  endpoint_path="$1"',
+    '  case "$endpoint_path" in',
+    '    *.cmd)',
+    // Why: Windows passes endpoint.cmd into WSL through WSLENV path translation.
+    // Parse only Orca's known assignments; cmd.exe `set` lines are not shell syntax.
+    '      endpoint_cr=$(printf "\\r")',
+    '      while IFS= read -r endpoint_line || [ -n "$endpoint_line" ]; do',
+    '        endpoint_line=${endpoint_line%"$endpoint_cr"}',
+    '        case "$endpoint_line" in',
+    '          "set ORCA_AGENT_HOOK_PORT="*) ORCA_AGENT_HOOK_PORT=${endpoint_line#*=} ;;',
+    '          "set ORCA_AGENT_HOOK_TOKEN="*) ORCA_AGENT_HOOK_TOKEN=${endpoint_line#*=} ;;',
+    '          "set ORCA_AGENT_HOOK_ENV="*) ORCA_AGENT_HOOK_ENV=${endpoint_line#*=} ;;',
+    '          "set ORCA_AGENT_HOOK_VERSION="*) ORCA_AGENT_HOOK_VERSION=${endpoint_line#*=} ;;',
+    '        esac',
+    '      done < "$endpoint_path"',
+    '      ;;',
+    '    *)',
+    '      . "$endpoint_path" 2>/dev/null || :',
+    '      ;;',
+    '  esac',
+    '}',
     'if [ -n "$ORCA_AGENT_HOOK_ENDPOINT" ] && [ -r "$ORCA_AGENT_HOOK_ENDPOINT" ]; then',
-    '  . "$ORCA_AGENT_HOOK_ENDPOINT" 2>/dev/null || :',
+    '  load_hook_endpoint "$ORCA_AGENT_HOOK_ENDPOINT"',
     'fi',
     'if [ -z "$ORCA_AGENT_HOOK_PORT" ] || [ -z "$ORCA_AGENT_HOOK_TOKEN" ] || [ -z "$ORCA_PANE_KEY" ]; then',
     '  exit 0',
@@ -708,6 +779,10 @@ function getManagedScript(target: 'local' | 'posix' = 'local'): string {
     'if [ -z "$payload" ]; then',
     '  exit 0',
     'fi',
+    'post_codex_hook() {',
+    '  curl_bin="$1"',
+    '  connect_timeout="${2:-0.5}"',
+    '  max_time="${3:-1.5}"',
     // Why: worktreeId embeds a filesystem path, so hand-building JSON in POSIX
     // shell is not safe once a path contains quotes or newlines. Post the raw
     // hook payload plus metadata as form fields and let the receiver parse it.
@@ -715,23 +790,164 @@ function getManagedScript(target: 'local' | 'posix' = 'local'): string {
     // Why: pipe payload to curl's stdin (`payload@-`) instead of an inline
     // `payload=$VALUE` arg, so tens-of-KB tool output stays off the curl
     // command line (EDR command-line false positives). Wire body is identical.
-    'printf \'%s\' "$payload" | curl -sS -X POST "http://127.0.0.1:${ORCA_AGENT_HOOK_PORT}/hook/codex" \\',
-    '  --connect-timeout 0.5 --max-time 1.5 \\',
-    '  -H "Content-Type: application/x-www-form-urlencoded" \\',
-    '  -H "X-Orca-Agent-Hook-Token: ${ORCA_AGENT_HOOK_TOKEN}" \\',
-    '  --data-urlencode "paneKey=${ORCA_PANE_KEY}" \\',
-    '  --data-urlencode "tabId=${ORCA_TAB_ID}" \\',
-    '  --data-urlencode "launchToken=${ORCA_AGENT_LAUNCH_TOKEN}" \\',
-    '  --data-urlencode "worktreeId=${ORCA_WORKTREE_ID}" \\',
-    '  --data-urlencode "env=${ORCA_AGENT_HOOK_ENV}" \\',
-    '  --data-urlencode "version=${ORCA_AGENT_HOOK_VERSION}" \\',
-    '  --data-urlencode "payload@-" >/dev/null 2>&1 || true',
+    '  printf \'%s\' "$payload" | "$curl_bin" -sS -X POST "http://127.0.0.1:${ORCA_AGENT_HOOK_PORT}/hook/codex" \\',
+    '    --connect-timeout "$connect_timeout" --max-time "$max_time" \\',
+    '    --noproxy "127.0.0.1" \\',
+    '    -H "Content-Type: application/x-www-form-urlencoded" \\',
+    '    -H "X-Orca-Agent-Hook-Token: ${ORCA_AGENT_HOOK_TOKEN}" \\',
+    '    --data-urlencode "paneKey=${ORCA_PANE_KEY}" \\',
+    '    --data-urlencode "tabId=${ORCA_TAB_ID}" \\',
+    '    --data-urlencode "launchToken=${ORCA_AGENT_LAUNCH_TOKEN}" \\',
+    '    --data-urlencode "worktreeId=${ORCA_WORKTREE_ID}" \\',
+    '    --data-urlencode "env=${ORCA_AGENT_HOOK_ENV}" \\',
+    '    --data-urlencode "version=${ORCA_AGENT_HOOK_VERSION}" \\',
+    '    --data-urlencode "payload@-"',
+    '}',
+    'is_wsl_runtime() {',
+    '  [ -n "$WSL_DISTRO_NAME" ] && return 0',
+    '  grep -qiE "microsoft|wsl" /proc/sys/kernel/osrelease /proc/version 2>/dev/null',
+    '}',
+    'if post_codex_hook curl >/dev/null 2>&1; then',
+    '  exit 0',
+    'fi',
+    'if is_wsl_runtime; then',
+    '  windows_curl=$(command -v curl.exe 2>/dev/null || true)',
+    '  if [ -n "$windows_curl" ] && [ -x "$windows_curl" ]; then',
+    '    post_codex_hook "$windows_curl" 3 5 >/dev/null 2>&1 || true',
+    '  fi',
+    'fi',
     'exit 0',
     ''
   ].join('\n')
 }
 
+function installManagedHooksIntoWslRuntime(
+  plan: CodexWslRuntimeHookInstallPlan
+): AgentHookInstallStatus {
+  const config = readHooksJson(plan.configPath)
+  if (!config) {
+    return {
+      agent: 'codex',
+      state: 'error',
+      configPath: plan.configPath,
+      managedHooksPresent: false,
+      detail: 'Could not parse Codex hooks.json'
+    }
+  }
+
+  const isManagedCommand = createManagedCommandMatcher('codex-hook.sh')
+  const command = wrapReadablePosixHookCommand(plan.commandScriptPath)
+  const nextHooks = { ...config.hooks }
+  const managedEvents = new Set<string>(CODEX_EVENTS)
+  for (const [eventName, definitions] of Object.entries(nextHooks)) {
+    if (managedEvents.has(eventName) || !Array.isArray(definitions)) {
+      continue
+    }
+    const cleaned = removeManagedCommands(definitions, isManagedCommand)
+    if (cleaned.length === 0) {
+      delete nextHooks[eventName]
+    } else {
+      nextHooks[eventName] = cleaned
+    }
+  }
+
+  const trustEntries: CodexTrustEntry[] = []
+  for (const eventName of CODEX_EVENTS) {
+    const current = Array.isArray(nextHooks[eventName]) ? nextHooks[eventName] : []
+    const cleaned = removeManagedCommands(current, isManagedCommand)
+    const definition: HookDefinition = {
+      hooks: [buildManagedCommandHook(command)]
+    }
+    nextHooks[eventName] = [definition, ...cleaned]
+    trustEntries.push({
+      sourcePath: plan.trustConfigPath,
+      eventLabel: CODEX_EVENT_LABEL[eventName],
+      groupIndex: 0,
+      handlerIndex: 0,
+      command,
+      timeoutSec: MANAGED_HOOK_TIMEOUT_SECONDS
+    })
+  }
+
+  config.hooks = nextHooks
+  writeManagedScript(plan.scriptPath, getManagedScript('posix'))
+  writeCodexHooksJson(plan.configPath, nextHooks)
+  try {
+    // Why: WSL runtime homes may carry user hook approvals we did not rebuild
+    // here; only upsert Orca's entries instead of sweeping the whole source.
+    upsertHookTrustEntries(plan.tomlPath, trustEntries)
+  } catch (error) {
+    return {
+      agent: 'codex',
+      state: 'error',
+      configPath: plan.configPath,
+      managedHooksPresent: true,
+      detail: `Hooks installed but trust entries could not be written: ${error instanceof Error ? error.message : String(error)}. Run /hooks in Codex to approve.`
+    }
+  }
+
+  return {
+    agent: 'codex',
+    state: 'installed',
+    configPath: plan.configPath,
+    managedHooksPresent: true,
+    detail: null
+  }
+}
+
+function refreshWslRuntimeUserHooks(plan: CodexWslRuntimeHookInstallPlan): AgentHookInstallStatus {
+  const config = readHooksJson(plan.configPath)
+  if (!config) {
+    return {
+      agent: 'codex',
+      state: 'error',
+      configPath: plan.configPath,
+      managedHooksPresent: false,
+      detail: 'Could not parse Codex hooks.json'
+    }
+  }
+
+  const isManagedCommand = createManagedCommandMatcher('codex-hook.sh')
+  const nextHooks = { ...config.hooks }
+  for (const [eventName, definitions] of Object.entries(nextHooks)) {
+    if (!Array.isArray(definitions)) {
+      continue
+    }
+    const cleaned = removeManagedCommands(definitions, isManagedCommand)
+    if (cleaned.length === 0) {
+      delete nextHooks[eventName]
+    } else {
+      nextHooks[eventName] = cleaned
+    }
+  }
+  writeCodexHooksJson(plan.configPath, nextHooks)
+  removeWslRuntimeManagedHookTrustEntries(plan)
+  return {
+    agent: 'codex',
+    state: 'not_installed',
+    configPath: plan.configPath,
+    managedHooksPresent: false,
+    detail: null
+  }
+}
+
 export class CodexHookService {
+  installForRuntimeHome(
+    runtimeHomePath: string | null | undefined,
+    target?: CodexWslRuntimeHookTarget
+  ): AgentHookInstallStatus | null {
+    const wslPlan = createCodexWslRuntimeHookInstallPlan(runtimeHomePath, target)
+    return wslPlan ? installManagedHooksIntoWslRuntime(wslPlan) : null
+  }
+
+  refreshRuntimeUserHooksForRuntimeHome(
+    runtimeHomePath: string | null | undefined,
+    target?: CodexWslRuntimeHookTarget
+  ): AgentHookInstallStatus | null {
+    const wslPlan = createCodexWslRuntimeHookInstallPlan(runtimeHomePath, target)
+    return wslPlan ? refreshWslRuntimeUserHooks(wslPlan) : null
+  }
+
   getStatus(): AgentHookInstallStatus {
     const configPath = getConfigPath()
     const scriptPath = getManagedScriptPath()
@@ -853,6 +1069,11 @@ export class CodexHookService {
   install(): AgentHookInstallStatus {
     const configPath = getConfigPath()
     const scriptPath = getManagedScriptPath()
+    // Why: must run before this install rewrites hooks.json/config.toml —
+    // approvals the user made inside Orca-launched Codex are keyed to the
+    // previous launch's runtime layout, and stale-trust cleanup below would
+    // delete them once the system config stops backing them.
+    promoteCodexRuntimeHookApprovalsToSystem()
     const config = readHooksJson(configPath)
     if (!config) {
       return {
@@ -868,7 +1089,7 @@ export class CodexHookService {
     // install sweeps stale entries left by older builds or a different
     // Electron userData path (dev vs. prod). Without this, repeated installs
     // accumulate duplicate hook entries pointing at defunct scripts.
-    const isManagedCommand = createManagedCommandMatcher(getManagedScriptFileName())
+    const isManagedCommand = createManagedCommandMatcher(getCodexManagedScriptFileName())
     const command = getManagedCommand(scriptPath)
     const hookPlan = getRuntimeHooksWithSystemUserHooks(config.hooks, isManagedCommand)
     const nextHooks = hookPlan.hooks
@@ -953,6 +1174,7 @@ export class CodexHookService {
         detail: `Hooks installed but trust entries could not be written: ${error instanceof Error ? error.message : String(error)}. Run /hooks in Codex to approve.`
       }
     }
+    snapshotCodexRuntimeHookTrustProvenance()
     try {
       cleanupLegacySystemManagedHooks()
       cleanupLegacyCodexProfileHooks()
@@ -1060,6 +1282,9 @@ export class CodexHookService {
 
   refreshRuntimeUserHooks(): AgentHookInstallStatus {
     const configPath = getConfigPath()
+    // Why: same as install() — capture in-Orca approvals before this refresh
+    // rewrites the runtime files they are keyed against.
+    promoteCodexRuntimeHookApprovalsToSystem()
     const config = readHooksJson(configPath)
     if (!config) {
       // Why: disabled launch prep used to call remove(); preserve its legacy
@@ -1074,7 +1299,7 @@ export class CodexHookService {
       }
     }
 
-    const isManagedCommand = createManagedCommandMatcher(getManagedScriptFileName())
+    const isManagedCommand = createManagedCommandMatcher(getCodexManagedScriptFileName())
     const hookPlan = getRuntimeHooksWithSystemUserHooks(config.hooks, isManagedCommand)
     config.hooks = hookPlan.hooks
     writeCodexHooksJson(configPath, hookPlan.hooks)
@@ -1099,6 +1324,7 @@ export class CodexHookService {
         detail: `User hooks refreshed but trust entries could not be written: ${error instanceof Error ? error.message : String(error)}. Run /hooks in Codex to approve.`
       }
     }
+    snapshotCodexRuntimeHookTrustProvenance()
 
     cleanupLegacyManagedHookRepresentations()
     return this.getStatus()
@@ -1124,7 +1350,7 @@ export class CodexHookService {
     const nextHooks = { ...config.hooks }
     // Why: same broad matcher as install(), so remove() also cleans up stale
     // entries from older builds even if the current scriptPath has moved.
-    const isManagedCommand = createManagedCommandMatcher(getManagedScriptFileName())
+    const isManagedCommand = createManagedCommandMatcher(getCodexManagedScriptFileName())
     for (const [eventName, definitions] of Object.entries(nextHooks)) {
       if (!Array.isArray(definitions)) {
         // Why: a malformed hooks.json entry (non-array value for an event name)
@@ -1157,3 +1383,9 @@ export class CodexHookService {
 }
 
 export const codexHookService = new CodexHookService()
+
+export const _internals = {
+  getManagedScript,
+  installManagedHooksIntoWslRuntime,
+  refreshWslRuntimeUserHooks
+}

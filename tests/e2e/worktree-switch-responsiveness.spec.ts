@@ -33,8 +33,8 @@ async function prepareSidebarForSwitchTest(page: Page): Promise<[string, string]
     if ((state.tabsByWorktree[second.id] ?? []).length === 0) {
       state.createTab(second.id, undefined, undefined, { pendingActivationSpawn: true })
     }
-    state.revealWorktreeInSidebar(first.id, { behavior: 'auto' })
-    state.revealWorktreeInSidebar(second.id, { behavior: 'auto' })
+    state.revealWorktreeInSidebar(first.id)
+    state.revealWorktreeInSidebar(second.id)
     state.setActiveWorktree(first.id)
     return [first.id, second.id]
   })

@@ -201,6 +201,79 @@ describe('scanRemoteAiVaultSessions', () => {
     })
   })
 
+  it('counts remote sibling subagent transcripts for zero-turn Claude sessions', async () => {
+    const provider = new MemoryRemoteProvider()
+    provider.addFile(
+      '/home/ada/.claude/projects/repo/lost-session.jsonl',
+      jsonLines([{ type: 'mode', mode: 'default', sessionId: 'lost-session' }]),
+      50
+    )
+    provider.addFile(
+      '/home/ada/.claude/projects/repo/lost-session/subagents/agent-a.jsonl',
+      jsonLines([{ type: 'user', message: { role: 'user', content: 'Subtask A' } }]),
+      51
+    )
+    provider.addFile(
+      '/home/ada/.claude/projects/repo/lost-session/subagents/agent-b.jsonl',
+      jsonLines([{ type: 'user', message: { role: 'user', content: 'Subtask B' } }]),
+      52
+    )
+
+    const result = await scanRemoteAiVaultSessions({
+      provider,
+      executionHostId: 'ssh:dev-box',
+      remoteHome: '/home/ada',
+      hostPlatform: getRemoteHostPlatform('linux-x64')
+    })
+
+    expect(result.issues).toEqual([])
+    // Subagent transcripts must not surface as standalone sessions; they only
+    // contribute recoverable signal to their zero-turn parent.
+    expect(result.sessions).toHaveLength(1)
+    expect(result.sessions[0]).toMatchObject({
+      agent: 'claude',
+      sessionId: 'lost-session',
+      messageCount: 0,
+      subagentTranscriptCount: 2,
+      filePath: '/home/ada/.claude/projects/repo/lost-session.jsonl'
+    })
+  })
+
+  it('ignores remote subagent siblings for Claude sessions with real turns', async () => {
+    const provider = new MemoryRemoteProvider()
+    provider.addFile(
+      '/home/ada/.claude/projects/repo/live-session.jsonl',
+      jsonLines([
+        {
+          sessionId: 'live-session',
+          type: 'user',
+          message: { content: [{ type: 'text', text: 'Do the thing' }] }
+        }
+      ]),
+      60
+    )
+    provider.addFile(
+      '/home/ada/.claude/projects/repo/live-session/subagents/agent-a.jsonl',
+      jsonLines([{ type: 'user', message: { role: 'user', content: 'Subtask' } }]),
+      61
+    )
+
+    const result = await scanRemoteAiVaultSessions({
+      provider,
+      executionHostId: 'ssh:dev-box',
+      remoteHome: '/home/ada',
+      hostPlatform: getRemoteHostPlatform('linux-x64')
+    })
+
+    expect(result.issues).toEqual([])
+    expect(result.sessions).toHaveLength(1)
+    expect(result.sessions[0]).toMatchObject({
+      sessionId: 'live-session',
+      messageCount: 1,
+      subagentTranscriptCount: 0
+    })
+  })
+
   it('builds resume commands with the remote host platform', async () => {
     const provider = new MemoryRemoteProvider()
     provider.addFile(

@@ -210,7 +210,8 @@
         },
         "workspace": {
           "cleanup": {
-            "9d6e531da6": "워크스페이스가 더 이상 존재하지 않습니다."
+            "9d6e531da6": "워크스페이스가 더 이상 존재하지 않습니다.",
+            "changedSinceConfirmation": "확인 후 워크스페이스가 변경되었습니다. 제거하기 전에 새로 고쳐 검토하세요."
           }
         },
         "worktrees": {
@@ -247,7 +248,9 @@
           "a8e4b3af5b": "프로젝트가 이미 추가되었습니다.",
           "6d3318e813": "repos를 가져오지 못했습니다.",
           "3be0f7df04": "선택한 런타임에서 폴더를 열 수 없습니다.",
-          "15cf5319ec": "{{path}}이(가) {{hostName}}에서 확인되었지만 해당 호스트가 사용 가능한 폴더를 보고하지 않았습니다."
+          "15cf5319ec": "{{path}}이(가) {{hostName}}에서 확인되었지만 해당 호스트가 사용 가능한 폴더를 보고하지 않았습니다.",
+          "2dcd706774": "프로젝트가 다른 프로필에도 있습니다",
+          "presenceProfileOverflow": "{{names}} 외 {{count}}개"
         },
         "settings": {
           "e12dab333b": "서버를 전환하지 못했습니다.",
@@ -262,6 +265,24 @@
         },
         "linear": {
           "37d36984d0": "더 새로운 요청이 있어 Linear 연결 요청을 건너뛰었습니다."
+        },
+        "orca": {
+          "profiles": {
+            "612f7f6861": "프로필을 생성하지 못했습니다",
+            "319d7cf39b": "클라우드 프로필이 생성되었습니다",
+            "d6e764e7db": "이 프로필을 다시 연결하세요",
+            "f0c9e11a6d": "클라우드 프로필을 생성하지 못했습니다",
+            "8b8fa73174": "Orca Cloud 로그인이 구성되어 있지 않습니다",
+            "33290e88ed": "프로필을 연결하지 못했습니다",
+            "9fcb07a796": "프로필이 연결되었습니다",
+            "2f6c78a039": "프로필 인증을 새로 고치지 못했습니다",
+            "a37b5e6d37": "프로필에서 로그아웃했습니다",
+            "83600521e7": "로그아웃하지 못했습니다",
+            "76deec8f58": "조직을 전환하지 못했습니다",
+            "7d4bc516ee": "프로필을 전환하지 못했습니다",
+            "f518e89aa5": "프로젝트가 해당 프로필에 이미 있습니다",
+            "f03ae7f27b": "프로젝트를 전송하지 못했습니다"
+          }
         }
       }
     },
@@ -545,6 +566,13 @@
       },
       "ephemeralVmWorkspaceTarget": {
         "projectRootRegistrationFailed": "Failed to register the recipe-created project root on the runtime."
+      },
+      "blocked": {
+        "notification": {
+          "fallback": {
+            "de50bef680": "macOS가 Orca 알림을 차단하고 있습니다"
+          }
+        }
       }
     },
     "hooks": {
@@ -2312,7 +2340,61 @@
             "gitFilter": "Git",
             "contextFilter": "문맥",
             "sortBy": "정렬 기준",
-            "sortDirection": "방향"
+            "sortDirection": "방향",
+            "1d3503357d": "삭제가 계속되는 동안 이 창을 닫고 나중에 돌아올 수 있습니다.",
+            "4c2990886e": "{{value0}}/{{value1}}개 삭제됨",
+            "86ba852118": "{{value0}}, {{value1}}개 실패",
+            "7b7bde5181": "지금까지 확인한 워크스페이스: {{value0}}",
+            "deletingCount": "삭제 중인 워크스페이스: {{value0}}",
+            "deleteCount": "워크스페이스 삭제: {{value0}}?",
+            "selectedForDeletionCount": "삭제 대상으로 선택됨: {{value0}}",
+            "deleteButtonCount": "{{value0}}개 삭제",
+            "archivedStatus": "보관됨",
+            "readyStatus": "준비됨"
+          },
+          "backgroundRemoval": {
+            "removed": "삭제된 워크스페이스: {{value0}}",
+            "failed": "삭제되지 않은 워크스페이스: {{value0}}",
+            "error": "워크스페이스 정리 실패",
+            "skippedAncestor": "중첩된 워크스페이스를 제거할 수 없어 건너뛰었습니다.",
+            "timedOut": "{{value0}} 제거가 예상보다 오래 걸리고 있습니다. 백그라운드에서 계속 실행됩니다."
+          },
+          "candidateRow": {
+            "gitLabel": "Git",
+            "commitsLabel": "커밋",
+            "contextLabel": "문맥",
+            "flagsLabel": "플래그",
+            "collapseDetails": "세부 정보 접기",
+            "expandDetails": "세부 정보 펼치기",
+            "cleanGit": "Git 깨끗함",
+            "dirtyGit": "Git 변경 있음",
+            "unpushedCommits": "푸시되지 않은 커밋",
+            "gitUnknown": "Git 알 수 없음",
+            "gitStatusUnknown": "Git 상태 알 수 없음",
+            "noUnpushedCommits": "푸시되지 않은 커밋 없음",
+            "unpushedCommitsCount": "푸시되지 않은 커밋: {{value0}}",
+            "uncommittedChanges": "커밋되지 않은 변경 사항",
+            "terminalTabsCount": "터미널 탭: {{value0}}",
+            "editorTabsCount": "편집기 탭: {{value0}}",
+            "browserTabsCount": "브라우저 탭: {{value0}}",
+            "diffNotesCount": "Diff 메모: {{value0}}",
+            "completedAgentsCount": "완료된 에이전트: {{value0}}",
+            "contextCount": "문맥: {{value0}}",
+            "mainWorkspaceBlocker": "기본 워크스페이스",
+            "folderProjectBlocker": "폴더 프로젝트",
+            "pinnedBlocker": "고정됨",
+            "activeWorkspaceBlocker": "활성 워크스페이스",
+            "runningTerminalBlocker": "실행 중인 터미널 프로세스",
+            "terminalLivenessUnknownBlocker": "터미널 상태 알 수 없음",
+            "dirtyEditorBufferBlocker": "저장되지 않은 편집기 버퍼",
+            "volatileLocalContextBlocker": "휘발성 로컬 문맥",
+            "recentVisibleContextBlocker": "최근 방문한 탭",
+            "liveAgentBlocker": "활성 에이전트",
+            "sshDisconnectedBlocker": "원격을 사용할 수 없음",
+            "gitStatusErrorBlocker": "Git 상태를 사용할 수 없음",
+            "dirtyFilesBlocker": "변경된 파일",
+            "unknownBaseBlocker": "푸시되지 않은 커밋을 확인할 수 없음",
+            "dismissedBlocker": "무시됨"
           }
         }
       },
@@ -2946,7 +3028,8 @@
             "f077f586db": "다시 묻지 않기",
             "c0e972d726": "취소",
             "06741a2f3d": "MiniMax 사용량 세부 정보 열기",
-            "3bbf140864": "MiniMax 사용량"
+            "3bbf140864": "MiniMax 사용량",
+            "remoteServerLabel": "원격 서버"
           },
           "StatusBarUsageEmptyCta": {
             "828c764a79": "계정 연결",
@@ -3958,7 +4041,8 @@
           "runtimeHostProject": "Orca 서버의 프로젝트",
           "automationCreated": "자동화로 생성됨",
           "branchIdentity": "브랜치",
-          "branchFolderPathIdentity": "브랜치 또는 폴더 경로"
+          "branchFolderPathIdentity": "브랜치 또는 폴더 경로",
+          "ef18787206": "삭제 대기 중"
         },
         "WorktreeCardAgents": {
           "1b0a156717": "에이전트"
@@ -4691,7 +4775,13 @@
           "435df0ee51": "Request Headers에서 Cookie 값을 복사합니다.",
           "7492fb3bba": "여기에 붙여넣고 저장을 클릭합니다.",
           "9fec52de4b": "Cookie 복사 방법",
-          "4e32e030b2": "로컬에 저장됩니다. Orca는 사용량 새로 고침을 위해 platform.minimax.io로만 전송합니다."
+          "4e32e030b2": "로컬에 저장됩니다. Orca는 사용량 새로 고침을 위해 platform.minimax.io로만 전송합니다.",
+          "remoteServerFallback": "원격 서버",
+          "loadAccountsFailed": "프로바이더 계정을 불러오지 못했습니다.",
+          "remoteScopeAccounts": "{{value0}}에서 관리하는 계정을 표시하고 있습니다. 계정 추가나 재인증은 해당 서버에서 진행하세요.",
+          "remoteScopeAuthContext": "각 계정은 {{value0}}에 자체 로그인 컨텍스트를 유지합니다.",
+          "remoteEmptyClaudeAccounts": "{{value0}}에 관리되는 Claude 계정이 없습니다. 해당 서버의 시스템 기본 Claude 로그인을 사용하며, 계정 추가는 그 서버에서 진행하세요.",
+          "remoteEmptyCodexAccounts": "{{value0}}에 관리되는 Codex 계정이 없습니다. 해당 서버의 시스템 기본 Codex 로그인을 사용하며, 계정 추가는 그 서버에서 진행하세요."
         },
         "AdvancedPane": {
           "40b29e0bf3": "다시 시작",
@@ -8740,7 +8830,14 @@
           "behindBaseRefToastDescription": "인라인 설정 링크와 바닥글 작업이 있는 영구 프롬프트입니다.",
           "notificationPlayground": "Notification playground",
           "notificationPlaygroundDescription": "Dev-only triggers for checking toast layout, recovery actions, and long-copy wrapping.",
-          "devOnly": "Dev only"
+          "devOnly": "Dev only",
+          "orcaCloud": "Orca Cloud",
+          "orcaCloudDescription": "Dev-only preview of first-party cloud sign-in. Hidden in production; in dev it also appears in the sidebar account switcher once ORCA_CLOUD_API_URL and ORCA_CLOUD_CLIENT_ID are set.",
+          "orcaCloudStatus": "Status",
+          "orcaCloudSignOut": "Sign out",
+          "orcaCloudConnect": "Connect profile",
+          "orcaCloudRefresh": "Refresh status",
+          "orcaCloudNotConfigured": "Set ORCA_CLOUD_API_URL and ORCA_CLOUD_CLIENT_ID to preview Orca Cloud sign-in in this dev build."
         },
         "EphemeralVmRecipeRow": {
           "useInWorkspace": "워크스페이스에서 사용"
@@ -8806,6 +8903,26 @@
           "reviewFirst": "Review first",
           "singular": "Global saves won't change 1 repository with its own recipe.",
           "tooltipTitle": "Repository overrides"
+        },
+        "linear": {
+          "agent": {
+            "skill": {
+              "install": {
+                "cta": {
+                  "copiedCommand": "Copied command.",
+                  "copyFailed": "Failed to copy command.",
+                  "skillLabel": "Agent skill:",
+                  "checking": "Checking...",
+                  "installed": "Installed",
+                  "notInstalled": "Not installed",
+                  "recheck": "Re-check",
+                  "installedDescription": "Agent skill installed. To update it, run:",
+                  "description": "Let your agents read and edit Linear tasks.",
+                  "copyCommand": "Copy command"
+                }
+              }
+            }
+          }
         }
       },
       "right": {
@@ -9803,7 +9920,13 @@
             "sessionRole": "세션",
             "jumpToOriginalPane": "원래 창으로 이동",
             "worktree": "작업 트리",
-            "jumpToWorktree": "작업 트리로 이동"
+            "jumpToWorktree": "작업 트리로 이동",
+            "conversationNotSaved": "대화가 저장되지 않음",
+            "recoverableEmptyDetail": "이 세션에는 저장된 대화가 없지만 복구 가능한 항목이 {{value0}}개 남아 있습니다.",
+            "recoverableEmptyOpenLogHint": "로그를 열어 복구하세요.",
+            "emptyConversationDetail": "이 세션에는 저장된 대화가 없어 재개할 수 없습니다.",
+            "queuedMessages": "대기 중인 메시지 {{value0}}개",
+            "subagentTranscripts": "서브에이전트 대화 기록 {{value0}}개"
           },
           "AiVaultSessionRow": {
             "resumeAgentSession": "{{value0}} 세션 재개",
@@ -9829,7 +9952,8 @@
             "systemRole": "시스템",
             "sessionRole": "세션",
             "jumpToOriginalPane": "원래 창으로 이동",
-            "jumpToWorktree": "작업 트리로 이동"
+            "jumpToWorktree": "작업 트리로 이동",
+            "recoverableBadge": "저장 안 됨"
           },
           "FileExplorerNameFilter": {
             "26fb73c6e3": "파일 찾기",
@@ -10008,7 +10132,15 @@
           "3cd5374e22": "알림 설정이 아직 로드 중입니다.",
           "b6a994e36e": "알림음을 재생할 수 없습니다.",
           "c0692baa52": "사용자 정의 파일 선택",
-          "ac80d97e02": "사용자 정의 파일 변경"
+          "ac80d97e02": "사용자 정의 파일 변경",
+          "56b836215c": "알림 권한을 확인하는 중…",
+          "fd84d3e9b8": "알림이 활성화되었습니다",
+          "4f7bce5644": "에이전트가 완료되거나 터미널에 주의가 필요할 때 macOS가 알려 줍니다.",
+          "95d99b52fa": "Orca 알림 허용",
+          "94562ba367": "macOS가 권한을 요청하고 있습니다. 대화 상자에서 허용을 클릭하면 이 단계가 자동으로 업데이트됩니다.",
+          "4f6a1da718": "시스템 설정 열기",
+          "90b5d2e363": "macOS가 Orca 알림을 전달하지 않고 있습니다",
+          "2c47f5465f": "시스템 설정에서 Orca에 대한 알림 허용을 켜세요. 활성화되면 이 단계가 자동으로 업데이트됩니다."
         },
         "OnboardingFlow": {
           "1b5e182e9f": "Orca에 오신 것을 환영합니다",
@@ -10134,6 +10266,17 @@
           "windowsDefault": "Windows 기본값",
           "rightClickBehavior": "오른쪽 클릭 동작",
           "rightClickBehaviorDescription": "Windows에서 익숙한 terminal 마우스 동작을 선택하세요."
+        },
+        "mac": {
+          "notification": {
+            "permission": {
+              "card": {
+                "f696515944": "macOS 대화 상자에서 허용을 클릭하세요.",
+                "3d18cf71f9": "자동으로 업데이트됩니다.",
+                "721d2bedb6": "시스템 설정에서 Orca에 대한 알림 허용을 켜세요."
+              }
+            }
+          }
         }
       },
       "new": {
@@ -10429,6 +10572,7 @@
           },
           "FloatingTerminalToggleButton": {
             "3b04b065b5": "플로팅 워크스페이스 표시",
+            "4cb418b991": "Show floating workspace, new activity",
             "5785dd9148": "플로팅 워크스페이스 최소화",
             "bfe7809a70": "{{value0}} 플로팅 워크스페이스({{value1}})"
           },
@@ -12457,6 +12601,158 @@
       "nativeChat": {
         "contextMenu": {
           "copy": "복사"
+        }
+      },
+      "orca": {
+        "profiles": {
+          "switcher": {
+            "cloud": {
+              "unavailable": "클라우드 로그인을 사용할 수 없습니다"
+            },
+            "reconnect": "프로필 다시 연결",
+            "connect": "프로필 연결",
+            "organization": "조직",
+            "create": {
+              "profile": {
+                "for": {
+                  "org": "조직용 프로필 만들기"
+                }
+              }
+            },
+            "signout": "로그아웃",
+            "16e3681072": "새 로컬 프로필",
+            "e3b91a3d90": "프로젝트와 워크트리를 분리할 빈 프로필을 만듭니다.",
+            "f322e1f4d6": "프로필 이름",
+            "cfa59f8ad1": "만들고 전환",
+            "b4f9d1125d": "로컬",
+            "4815f7d163": "프로필 전환",
+            "d00d853e2a": "프로필 관리",
+            "c106c674fe": "새 로컬 프로필",
+            "account": "계정",
+            "org": {
+              "members": "조직 구성원"
+            }
+          },
+          "management": {
+            "04e7bd2a23": "전송",
+            "128c7dfe64": "복사 대상",
+            "df8b7d876b": "이동 대상",
+            "9aa26347b3": "프로젝트를 이동했습니다",
+            "816ce624b6": "프로젝트를 복사했습니다",
+            "2c45bda8d3": "프로필 관리",
+            "2db945e4a0": "활성 프로필의 프로젝트를 다른 로컬 프로필로 복사하거나 이동합니다.",
+            "8668cb2946": "이 프로필에는 프로젝트가 없습니다.",
+            "93034915ab": "프로젝트를 복사하려면 먼저 다른 프로필을 만드세요.",
+            "projectCountSingular": "{{count}}개의 프로젝트",
+            "projectCountPlural": "{{count}}개의 프로젝트"
+          },
+          "project": {
+            "transfer": {
+              "confirm": {
+                "move": {
+                  "title": "프로젝트를 이동하시겠습니까?",
+                  "description": "{{repoName}}을(를) {{targetName}}(으)로 이동합니다. Orca가 {{activeProfileName}}에서 제거하고 파일은 그대로 유지한 채 {{targetName}}(으)로 다시 시작합니다.",
+                  "action": "프로젝트 이동"
+                },
+                "copy": {
+                  "title": "프로젝트를 복사하시겠습니까?",
+                  "description": "{{repoName}}을(를) {{targetName}}(으)로 복사합니다. 두 프로필은 같은 파일을 가리키며 Orca 메타데이터는 별도로 유지됩니다.",
+                  "action": "프로젝트 복사"
+                },
+                "live": {
+                  "work": "이 프로젝트에서 진행 중인 작업"
+                },
+                "cancel": "취소",
+                "terminalSingular": "{{count}}개의 실행 중인 터미널 탭",
+                "terminalPlural": "{{count}}개의 실행 중인 터미널 탭",
+                "agentSingular": "{{count}}개의 활성 에이전트",
+                "agentPlural": "{{count}}개의 활성 에이전트",
+                "browserSingular": "{{count}}개의 브라우저 워크스페이스",
+                "browserPlural": "{{count}}개의 브라우저 워크스페이스"
+              }
+            }
+          },
+          "signout": {
+            "confirm": {
+              "title": "로그아웃하시겠습니까?",
+              "description": "{{profileName}}에서 로그아웃하고 해당 프로젝트, 워크트리 및 로컬 메타데이터는 이 기기에 유지합니다.",
+              "cancel": "취소",
+              "action": "로그아웃"
+            }
+          },
+          "switch": {
+            "confirm": {
+              "target": "선택한 프로필",
+              "title": "프로필을 전환하시겠습니까?",
+              "description": "{{targetName}}(으)로 전환하면 Orca가 다시 시작되고 {{activeProfileName}}의 워크스페이스가 다시 로드됩니다.",
+              "live": {
+                "work": "이 프로필에서 진행 중인 작업"
+              },
+              "cancel": "취소",
+              "switch": "프로필 전환",
+              "terminalSingular": "{{count}}개의 실행 중인 터미널 탭",
+              "terminalPlural": "{{count}}개의 실행 중인 터미널 탭",
+              "agentSingular": "{{count}}개의 활성 에이전트",
+              "agentPlural": "{{count}}개의 활성 에이전트",
+              "browserSingular": "{{count}}개의 브라우저 워크스페이스",
+              "browserPlural": "{{count}}개의 브라우저 워크스페이스"
+            }
+          },
+          "org": {
+            "members": {
+              "role": {
+                "label": "역할",
+                "owner": "소유자",
+                "admin": "관리자",
+                "member": "구성원"
+              },
+              "not": {
+                "signed": {
+                  "in": "아직 Orca에 로그인하지 않았습니다."
+                }
+              },
+              "remove": {
+                "confirm": "삭제",
+                "cancel": "취소",
+                "label": "구성원 삭제"
+              },
+              "title": "조직 구성원",
+              "load": {
+                "error": "조직 구성원을 불러오지 못했습니다."
+              },
+              "retry": "다시 시도",
+              "pending": {
+                "title": "대기 중인 초대",
+                "revoke": "철회"
+              },
+              "invite": {
+                "title": "초대",
+                "placeholder": "teammate@example.com",
+                "role": "초대 역할",
+                "submit": "보내기"
+              },
+              "error": {
+                "forbidden": "현재 역할로는 이 작업을 수행할 수 없습니다.",
+                "conflict": "이미 구성원이거나 초대되었습니다.",
+                "remove": {
+                  "self": "자신은 삭제할 수 없습니다."
+                },
+                "own": {
+                  "role": "자신의 역할은 변경할 수 없습니다."
+                },
+                "not": {
+                  "found": "해당 구성원이 더 이상 이 조직에 없습니다."
+                },
+                "reconnect": "구성원을 관리하려면 프로필을 다시 연결하세요.",
+                "unconfigured": "이 빌드에서는 조직 관리를 사용할 수 없습니다.",
+                "failed": "문제가 발생했습니다. 다시 시도하세요."
+              },
+              "subtitle": {
+                "named": "{{orgName}}에서 Orca로 협업할 수 있는 사용자입니다.",
+                "default": "조직에서 Orca로 협업할 수 있는 사용자입니다."
+              }
+            }
+          }
         }
       }
     },

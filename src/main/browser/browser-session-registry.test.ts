@@ -28,6 +28,11 @@ vi.mock('./browser-manager', () => ({
 import { browserSessionRegistry } from './browser-session-registry'
 import { setupClientHintsOverride } from './browser-session-ua'
 import { ORCA_BROWSER_PARTITION } from '../../shared/constants'
+import {
+  DEFAULT_LOCAL_ORCA_PROFILE_ID,
+  getOrcaProfileBrowserDefaultPartition,
+  getOrcaProfileBrowserSessionPartition
+} from '../../shared/orca-profiles'
 
 describe('BrowserSessionRegistry', () => {
   beforeEach(() => {
@@ -278,6 +283,30 @@ describe('BrowserSessionRegistry', () => {
       webAuthnCallback
     )
     expect(webAuthnCallback).toHaveBeenCalledWith('credential-1')
+  })
+
+  it('uses profile-owned partitions for non-default Orca profiles', () => {
+    const orcaProfileId = 'local-work'
+    browserSessionRegistry.configureForOrcaProfile({
+      orcaProfileId,
+      profileDirectory: '/profiles/local-work'
+    })
+
+    expect(browserSessionRegistry.getDefaultProfile().partition).toBe(
+      getOrcaProfileBrowserDefaultPartition(orcaProfileId)
+    )
+    expect(browserSessionRegistry.isAllowedPartition(ORCA_BROWSER_PARTITION)).toBe(false)
+
+    const profile = browserSessionRegistry.createProfile('isolated', 'Work Browser')
+    expect(profile).not.toBeNull()
+    expect(profile!.partition).toBe(
+      getOrcaProfileBrowserSessionPartition(orcaProfileId, profile!.id)
+    )
+
+    browserSessionRegistry.configureForOrcaProfile({
+      orcaProfileId: DEFAULT_LOCAL_ORCA_PROFILE_ID,
+      profileDirectory: '/profiles/local-default'
+    })
   })
 
   describe('setupClientHintsOverride', () => {

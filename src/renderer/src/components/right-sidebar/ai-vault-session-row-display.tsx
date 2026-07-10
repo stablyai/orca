@@ -5,7 +5,11 @@ import { AgentIcon } from '@/lib/agent-catalog'
 import { useRepoById } from '@/store/selectors'
 import { resolveRepoBadgeColor } from '../../../../shared/repo-badge-color'
 import { splitWorktreeIdForFilesystem } from '../../../../shared/worktree-id'
-import type { AiVaultScope, AiVaultSession } from '../../../../shared/ai-vault-types'
+import {
+  isAiVaultSessionRecoverableEmpty,
+  type AiVaultScope,
+  type AiVaultSession
+} from '../../../../shared/ai-vault-types'
 import { translate } from '@/i18n/i18n'
 import { SessionTime } from './AiVaultSessionDetails'
 import { agentLabel } from './ai-vault-session-filters'
@@ -45,6 +49,17 @@ export function SessionMetadata({
             { value0: session.messageCount }
           )}
         </span>
+        {isAiVaultSessionRecoverableEmpty(session) ? (
+          <>
+            <span className="shrink-0 text-muted-foreground/55">·</span>
+            <span className="shrink-0 rounded-sm border border-dashed border-border/70 px-1 py-0 text-[10px] font-medium leading-4 text-muted-foreground">
+              {translate(
+                'auto.components.right.sidebar.AiVaultSessionRow.recoverableBadge',
+                'Not saved'
+              )}
+            </span>
+          </>
+        ) : null}
         <span className="shrink-0 text-muted-foreground/55">·</span>
         <SessionTime value={updatedAt} />
       </div>

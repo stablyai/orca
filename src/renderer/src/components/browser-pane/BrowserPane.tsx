@@ -60,6 +60,7 @@ import { Popover, PopoverAnchor, PopoverContent } from '@/components/ui/popover'
 import { useAppStore } from '@/store'
 import { getRuntimeEnvironmentIdForWorktree } from '@/lib/worktree-runtime-owner'
 import { ORCA_BROWSER_BLANK_URL, ORCA_BROWSER_PARTITION } from '../../../../shared/constants'
+import { getOrcaProfileBrowserDefaultPartition } from '../../../../shared/orca-profiles'
 import type {
   BrowserLoadError,
   BrowserPage as BrowserPageState,
@@ -2842,10 +2843,20 @@ function BrowserPagePane({
   const createBrowserTab = useAppStore((s) => s.createBrowserTab)
   const consumeAddressBarFocusRequest = useAppStore((s) => s.consumeAddressBarFocusRequest)
   const browserSessionProfiles = useAppStore((s) => s.browserSessionProfiles)
+  const activeOrcaProfileId = useAppStore((s) => s.activeOrcaProfileId)
+  const fallbackBrowserPartition = activeOrcaProfileId
+    ? getOrcaProfileBrowserDefaultPartition(activeOrcaProfileId)
+    : null
+  const defaultSessionProfile = browserSessionProfiles.find((p) => p.id === 'default') ?? null
   const sessionProfile = sessionProfileId
     ? (browserSessionProfiles.find((p) => p.id === sessionProfileId) ?? null)
-    : null
-  const webviewPartition = sessionPartition ?? sessionProfile?.partition ?? ORCA_BROWSER_PARTITION
+    : defaultSessionProfile
+  const webviewPartition =
+    sessionPartition ??
+    sessionProfile?.partition ??
+    defaultSessionProfile?.partition ??
+    fallbackBrowserPartition ??
+    ORCA_BROWSER_PARTITION
   const browserSessionImportState = useAppStore((s) => s.browserSessionImportState)
   const clearBrowserSessionImportState = useAppStore((s) => s.clearBrowserSessionImportState)
   const showBrowserZoomFeedback = useCallback((level: number): void => {

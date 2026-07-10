@@ -51,22 +51,22 @@ export function isPiTerminalTitle(title: string): boolean {
   return isLegacyPiCompatibleTitle(title) && !containsBrailleSpinner(title)
 }
 
-// Why: Grok Build's working OSC titles interpolate a rotating status/tool phrase
-// between the spinner and its name — "⠋ - Waiting for response… - grok",
-// "⠴ - Thinking - grok", "⠦ - Sleep 2s… - grok" — so every frame is a distinct
-// title that flips the tab and sidebar labels. Require the identity suffix
-// " - grok" (not arbitrary task text ending in "grok") so Claude/Codex titles
-// like "⠋ wire up grok" stay intact. Spinner marks working; no-spinner session
-// titles ("Fix the auth bug - grok") pass through. The bare "spinner + grok"
-// branch keeps our own collapsed label idempotent under re-normalization.
-const GROK_FRAME_IDENTITY_SUFFIX_RE = / - grok\s*$/i
+// Why: Grok Build's working OSC titles use a fixed frame shape —
+// "spinner - <rotating phrase> - grok" — so every frame is a distinct title
+// that flips tab and sidebar labels. Require BOTH the post-spinner " - "
+// delimiter and the trailing identity " - grok" so Claude/Codex task text
+// like "⠋ fix the flaky suite - grok" or "⠋ wire up grok" is not mislabeled.
+// Spinner marks working; no-spinner session titles ("Fix the auth bug - grok")
+// pass through. The bare "spinner + grok" branch keeps our own collapsed
+// label idempotent under re-normalization.
+const GROK_ROTATING_FRAME_RE = /^[\u2800-\u28FF]+\s+-\s+[\s\S]+?\s-\s+grok\s*$/i
 const GROK_COLLAPSED_WORKING_TITLE_RE = /^[\u2800-\u28FF]+\s+grok\s*$/i
 
 export function isGrokRotatingWorkingTitle(title: string): boolean {
   if (!containsBrailleSpinner(title)) {
     return false
   }
-  return GROK_FRAME_IDENTITY_SUFFIX_RE.test(title) || GROK_COLLAPSED_WORKING_TITLE_RE.test(title)
+  return GROK_ROTATING_FRAME_RE.test(title) || GROK_COLLAPSED_WORKING_TITLE_RE.test(title)
 }
 
 export function isPiAgentTitle(title: string): boolean {

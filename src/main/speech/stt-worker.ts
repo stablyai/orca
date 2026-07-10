@@ -2,6 +2,7 @@
 import { parentPort, workerData } from 'node:worker_threads'
 import { readdirSync } from 'node:fs'
 import { resampleToRate } from './stt-audio-resample'
+import { OfflineAudioChunker } from './stt-offline-audio-chunker'
 
 type WorkerMessage =
   | {
@@ -27,7 +28,7 @@ let sherpa: any = null
 let recognizer: any = null
 let stream: any = null
 let isStreaming = false
-let offlineBuffer: Float32Array[] = []
+let offlineChunker: OfflineAudioChunker | null = null
 let offlineSampleRate = 16000
 
 function loadSherpa(): any {
@@ -111,7 +112,7 @@ function handleInit(msg: Extract<WorkerMessage, { type: 'init' }>): void {
 
     const { modelDir, modelType, streaming, sampleRate, files } = msg
     isStreaming = streaming
-    offlineBuffer = []
+    offlineChunker = streaming ? null : new OfflineAudioChunker(sampleRate)
     offlineSampleRate = sampleRate
 
     const tokens = resolveTokens(files, modelDir)
@@ -203,6 +204,17 @@ function handleInit(msg: Extract<WorkerMessage, { type: 'init' }>): void {
   }
 }
 
+// Why: an offline stream is single-use — decode one bounded chunk, then
+// recreate the stream so the recognizer is ready for the next chunk.
+function decodeOfflineChunk(samples: Float32Array): string {
+  sherpa.acceptWaveformOffline(stream, { sampleRate: offlineSampleRate, samples })
+  sherpa.decodeOfflineStream(recognizer, stream)
+  const resultJson = sherpa.getOfflineStreamResultAsJson(stream)
+  stream = sherpa.createOfflineStream(recognizer)
+  const result = JSON.parse(resultJson)
+  return result?.text?.trim() ?? ''
+}
+
 function handleFeed(msg: Extract<WorkerMessage, { type: 'feed' }>): void {
   if (!recognizer || !stream) {
     return
@@ -236,9 +248,17 @@ function handleFeed(msg: Extract<WorkerMessage, { type: 'feed' }>): void {
         sherpa.reset(recognizer, stream)
       }
     } else {
-      // Why: offline recognizers cannot decode incrementally — they need all
-      // audio buffered first, then decoded in one shot when dictation stops.
-      offlineBuffer.push(new Float32Array(samples))
+      // Why: decoding one unbounded capture in a single call makes ONNX tensor
+      // sizes scale with dictation length until a >=2 GiB allocation SIGTRAPs
+      // the whole app (#7925). Decode bounded chunks as they fill instead;
+      // each consumer already appends multiple 'final' segments per session.
+      const readyChunks = offlineChunker?.push(new Float32Array(samples)) ?? []
+      for (const chunk of readyChunks) {
+        const text = decodeOfflineChunk(chunk)
+        if (text) {
+          parentPort?.postMessage({ type: 'final', text })
+        }
+      }
     }
   } catch (err) {
     parentPort?.postMessage({ type: 'error', error: String(err) })
@@ -265,27 +285,15 @@ function handleStop(): void {
       }
       stream = sherpa.createOnlineStream(recognizer)
     } else {
-      // Why: offline recognizer decodes all audio at once — concatenate
-      // buffered chunks into a single Float32Array and feed it to the stream.
-      const totalLength = offlineBuffer.reduce((sum, chunk) => sum + chunk.length, 0)
-      if (totalLength > 0) {
-        const combined = new Float32Array(totalLength)
-        let offset = 0
-        for (const chunk of offlineBuffer) {
-          combined.set(chunk, offset)
-          offset += chunk.length
-        }
-        sherpa.acceptWaveformOffline(stream, { sampleRate: offlineSampleRate, samples: combined })
-        sherpa.decodeOfflineStream(recognizer, stream)
-        const resultJson = sherpa.getOfflineStreamResultAsJson(stream)
-        const result = JSON.parse(resultJson)
-        const text = result?.text?.trim()
+      // Why: the remainder is below the chunk limit by construction, so this
+      // last decode is bounded too.
+      const remaining = offlineChunker?.flush()
+      if (remaining && remaining.length > 0) {
+        const text = decodeOfflineChunk(remaining)
         if (text) {
           parentPort?.postMessage({ type: 'final', text })
         }
       }
-      offlineBuffer = []
-      stream = sherpa.createOfflineStream(recognizer)
     }
   } catch (err) {
     parentPort?.postMessage({ type: 'error', error: String(err) })
@@ -298,7 +306,7 @@ function handleTeardown(): void {
   stream = null
   recognizer = null
   sherpa = null
-  offlineBuffer = []
+  offlineChunker = null
   process.exit(0)
 }
 

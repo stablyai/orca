@@ -3,6 +3,12 @@ import { dirname, join } from 'node:path'
 import { writeFileAtomically } from '../codex-accounts/fs-utils'
 import { getOrcaManagedCodexHomePath, getSystemCodexHomePath } from './codex-home-paths'
 import { rewriteRelativePathConfigValues } from './codex-config-path-reference-rewrite'
+import { parseWslUncPath } from '../../shared/wsl-paths'
+import {
+  promoteCodexRuntimeSettingsToSystem,
+  snapshotCodexRuntimeSettingsBaseline,
+  type CodexSettingsPromotionHomes
+} from './config-settings-promotion'
 import {
   createTomlLineScanState,
   getTomlTableHeader,
@@ -10,25 +16,37 @@ import {
   updateTomlLineScanState
 } from './config-toml-line-scan'
 
-function getRuntimeCodexConfigTomlPath(): string {
-  return join(getOrcaManagedCodexHomePath(), 'config.toml')
-}
-
-function getSystemCodexConfigTomlPath(): string {
-  return join(getSystemCodexHomePath(), 'config.toml')
-}
-
-export function syncSystemConfigIntoManagedCodexHome(): void {
+export function syncSystemConfigIntoManagedCodexHome(
+  homes: CodexSettingsPromotionHomes = {
+    runtimeHomePath: getOrcaManagedCodexHomePath(),
+    systemHomePath: getSystemCodexHomePath()
+  }
+): void {
+  // Why: the mirror overwrites runtime settings from ~/.codex, so changes the
+  // user made inside Orca-launched Codex (/model, /approvals) must be written
+  // back to ~/.codex first or this very pass silently reverts them.
+  if (!promoteCodexRuntimeSettingsToSystem(homes)) {
+    // Why: mirroring after a failed write-back would erase the runtime change;
+    // leave both runtime and its old baseline intact so the next launch retries.
+    return
+  }
   try {
-    syncSystemConfigIntoManagedCodexHomeUnsafe()
+    syncSystemConfigIntoManagedCodexHomeUnsafe(homes)
   } catch (error) {
     console.warn('[codex-config] Failed to mirror system Codex config:', error)
+    return
   }
+  // Why: the baseline advances only after a successful mirror; recording an
+  // unpromoted runtime change as Orca-written would strand it forever.
+  snapshotCodexRuntimeSettingsBaseline(homes.runtimeHomePath)
 }
 
-function syncSystemConfigIntoManagedCodexHomeUnsafe(): void {
-  const systemConfigPath = getSystemCodexConfigTomlPath()
-  const runtimeConfigPath = getRuntimeCodexConfigTomlPath()
+function syncSystemConfigIntoManagedCodexHomeUnsafe({
+  runtimeHomePath,
+  systemHomePath
+}: CodexSettingsPromotionHomes): void {
+  const systemConfigPath = join(systemHomePath, 'config.toml')
+  const runtimeConfigPath = join(runtimeHomePath, 'config.toml')
   const systemConfigExists = existsSync(systemConfigPath)
   const runtimeConfigExists = existsSync(runtimeConfigPath)
   if (!systemConfigExists && !runtimeConfigExists) {
@@ -36,23 +54,25 @@ function syncSystemConfigIntoManagedCodexHomeUnsafe(): void {
   }
 
   const rawSystemConfig = systemConfigExists ? readFileSync(systemConfigPath, 'utf-8') : ''
+  const sourceConfigDir = resolveCodexConfigMirrorSourceDirectory(systemHomePath)
   if (!runtimeConfigExists) {
     writeFileAtomically(
       runtimeConfigPath,
-      prepareSystemConfigForFreshRuntimeMirror(rawSystemConfig, dirname(systemConfigPath))
+      prepareSystemConfigForFreshRuntimeMirror(rawSystemConfig, sourceConfigDir)
     )
     return
   }
 
-  const systemConfig = prepareSystemConfigForRuntimeMirror(
-    rawSystemConfig,
-    dirname(systemConfigPath)
-  )
+  const systemConfig = prepareSystemConfigForRuntimeMirror(rawSystemConfig, sourceConfigDir)
   const runtimeConfig = readFileSync(runtimeConfigPath, 'utf-8')
   const mergedConfig = mergeSystemCodexConfigIntoRuntime(runtimeConfig, systemConfig)
   if (mergedConfig !== runtimeConfig) {
     writeFileAtomically(runtimeConfigPath, mergedConfig)
   }
+}
+
+export function resolveCodexConfigMirrorSourceDirectory(systemHomePath: string): string {
+  return parseWslUncPath(systemHomePath)?.linuxPath ?? dirname(join(systemHomePath, 'config.toml'))
 }
 
 function prepareSystemConfigForRuntimeMirror(config: string, systemConfigDir: string): string {

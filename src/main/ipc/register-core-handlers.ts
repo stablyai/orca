@@ -50,6 +50,7 @@ import { registerUIHandlers, setTrustedUIRendererWebContentsId } from './ui'
 import { registerEmulatorFrameStreamHandlers } from './emulator-frame-stream'
 import { registerEmulatorVideoStreamHandlers } from './emulator-video-stream'
 import { registerSpeechHandlers } from './speech'
+import { registerOrcaProfileHandlers } from './orca-profiles'
 import { registerCodexAccountHandlers } from './codex-accounts'
 import { registerAgentHookHandlers } from './agent-hooks'
 import { registerAgentTrustHandlers } from './agent-trust'
@@ -156,6 +157,9 @@ export function registerCoreHandlers(
     registerKeybindingHandlers(keybindings)
   }
   registerTelemetryHandlers(store)
+  registerOrcaProfileHandlers(store, {
+    onBeforeRelaunch: lifecycleOptions.onBeforeRelaunch
+  })
   registerBrowserHandlers()
   registerShellHandlers()
   registerPetHandlers()

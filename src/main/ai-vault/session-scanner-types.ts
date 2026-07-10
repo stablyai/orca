@@ -100,6 +100,9 @@ export type SessionAccumulator = {
   messageCount: number
   totalTokens: number
   previewMessages: AiVaultSessionPreviewMessage[]
+  // Recoverable signal for a zero-turn transcript (see AiVaultSession).
+  queuedMessageCount: number
+  subagentTranscriptCount: number
   latestTimestampMs: number
 }
 

@@ -158,6 +158,49 @@ export function resetFloatingVisibleTabCountSelectorCacheForTest(): void {
   floatingVisibleTabCountCache = null
 }
 
+type FloatingWorkspaceUnreadState = Pick<
+  AppState,
+  'tabsByWorktree' | 'unreadTerminalTabs' | 'unreadAgentCompletionPanes'
+>
+
+/**
+ * True when any terminal tab in the floating workspace has an unacknowledged
+ * bell or agent completion — the signal behind the launcher attention dot.
+ *
+ * Derives from the existing "show until interact" unread maps rather than a
+ * bespoke flag, so it clears exactly when the user engages with (or closes) the
+ * offending tab, and reflects only tabs that still exist (stale map entries for
+ * removed tabs cannot light it). Bells mark `unreadTerminalTabs[tabId]`;
+ * completions mark `unreadAgentCompletionPanes[paneKey]` — both ungated.
+ *
+ * Returns a primitive boolean, so subscribers re-render only when it flips, and
+ * the empty-workspace early return keeps the common case O(1) despite Zustand
+ * rerunning selectors on every write.
+ */
+export function selectFloatingWorkspaceHasUnread(state: FloatingWorkspaceUnreadState): boolean {
+  const tabs = state.tabsByWorktree[FLOATING_TERMINAL_WORKTREE_ID]
+  if (!tabs || tabs.length === 0) {
+    return false
+  }
+  const floatingTabIds = new Set<string>()
+  for (const tab of tabs) {
+    if (state.unreadTerminalTabs[tab.id]) {
+      return true
+    }
+    floatingTabIds.add(tab.id)
+  }
+  // paneKey is `${tabId}:${leafId}` and tabIds never contain ":", so the prefix
+  // up to the first ":" is the owning tab id.
+  for (const paneKey of Object.keys(state.unreadAgentCompletionPanes)) {
+    const separatorIndex = paneKey.indexOf(':')
+    const tabId = separatorIndex === -1 ? paneKey : paneKey.slice(0, separatorIndex)
+    if (floatingTabIds.has(tabId)) {
+      return true
+    }
+  }
+  return false
+}
+
 export function getAllWorktreesFromState(state: Pick<AppState, 'worktreesByRepo'>): Worktree[] {
   return getCachedAllWorktrees(state.worktreesByRepo)
 }

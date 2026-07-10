@@ -337,6 +337,31 @@ describe('Store', () => {
     expect(store.getRepos()).toEqual([])
   }, 15_000)
 
+  it('loads state from an explicit profile data file path', async () => {
+    const profileDataDirectory = join(testState.dir, 'profiles', 'local-default')
+    const profileDataFile = join(profileDataDirectory, 'orca-data.json')
+    mkdirSync(profileDataDirectory, { recursive: true })
+    writeDataFile({
+      schemaVersion: 1,
+      repos: [makeRepo({ id: 'legacy-root-repo', path: '/legacy' })]
+    })
+    writeFileSync(
+      profileDataFile,
+      JSON.stringify({
+        schemaVersion: 1,
+        repos: [makeRepo({ id: 'profile-repo', path: '/profile' })]
+      }),
+      'utf-8'
+    )
+
+    vi.resetModules()
+    const { Store, initDataPath } = await import('./persistence')
+    initDataPath()
+    const store = new Store({ dataFile: profileDataFile })
+
+    expect(store.getRepos().map((repo) => repo.id)).toEqual(['profile-repo'])
+  }, 15_000)
+
   it('backfills project host setup compatibility records from legacy repos on load', async () => {
     writeDataFile({
       schemaVersion: 1,
@@ -502,7 +527,7 @@ describe('Store', () => {
     expect(settings.experimentalActivity).toBe(false)
     expect(settings.experimentalActivityDefaultedOffForAllUsers).toBe(true)
     expect(settings.experimentalTerminalAttention).toBe(false)
-    expect(settings.experimentalNewWorktreeCardStyle).toBe(true)
+    expect(settings.experimentalNewWorktreeCardStyle).toBe(false)
     expect(settings.floatingTerminalEnabled).toBe(true)
     expect(settings.floatingTerminalDefaultedForAllUsers).toBe(true)
     expect(settings.notifications.customSoundPath).toBeNull()
@@ -633,7 +658,7 @@ describe('Store', () => {
     expect(store.getUI().setupGuideSidebarDismissed).toBe(false)
   })
 
-  it('defaults new worktree card style on while onboarding is open', async () => {
+  it('keeps new worktree card style off while onboarding is open', async () => {
     writeDataFile({
       settings: {},
       onboarding: {
@@ -648,7 +673,7 @@ describe('Store', () => {
 
     const store = await createStore()
 
-    expect(store.getSettings().experimentalNewWorktreeCardStyle).toBe(true)
+    expect(store.getSettings().experimentalNewWorktreeCardStyle).toBe(false)
   })
 
   it('preserves explicit new worktree card style opt-out while onboarding is open', async () => {
@@ -669,6 +694,20 @@ describe('Store', () => {
     const store = await createStore()
 
     expect(store.getSettings().experimentalNewWorktreeCardStyle).toBe(false)
+  })
+
+  it('preserves explicit new worktree card style opt-in on load', async () => {
+    writeDataFile({
+      schemaVersion: 1,
+      settings: {
+        experimentalNewWorktreeCardStyle: true
+      },
+      ui: {}
+    })
+
+    const store = await createStore()
+
+    expect(store.getSettings().experimentalNewWorktreeCardStyle).toBe(true)
   })
 
   it('keeps new worktree card style off for existing users backfilled as completed', async () => {
@@ -5009,6 +5048,33 @@ describe('Store', () => {
     expect(restarted.getGitHubCache().pr['o/r#7']).toEqual({ fetchedAt: 7 })
   })
 
+  it('keeps GitHub cache sidecars scoped to explicit profile data files', async () => {
+    const profileADir = join(testState.dir, 'profiles', 'a')
+    const profileBDir = join(testState.dir, 'profiles', 'b')
+    const profileADataFile = join(profileADir, 'orca-data.json')
+    const profileBDataFile = join(profileBDir, 'orca-data.json')
+    mkdirSync(profileADir, { recursive: true })
+    mkdirSync(profileBDir, { recursive: true })
+
+    vi.resetModules()
+    const { Store, initDataPath } = await import('./persistence')
+    initDataPath()
+    const profileAStore = new Store({ dataFile: profileADataFile })
+    profileAStore.setGitHubCache({ pr: { 'o/r#a': { fetchedAt: 10 } as never }, issue: {} })
+    profileAStore.flush()
+
+    const profileBStore = new Store({ dataFile: profileBDataFile })
+    expect(profileBStore.getGitHubCache().pr['o/r#a']).toBeUndefined()
+    profileBStore.setGitHubCache({ pr: { 'o/r#b': { fetchedAt: 20 } as never }, issue: {} })
+    profileBStore.flush()
+
+    const restartedProfileA = new Store({ dataFile: profileADataFile })
+    const restartedProfileB = new Store({ dataFile: profileBDataFile })
+    expect(restartedProfileA.getGitHubCache().pr['o/r#a']).toEqual({ fetchedAt: 10 })
+    expect(restartedProfileA.getGitHubCache().pr['o/r#b']).toBeUndefined()
+    expect(restartedProfileB.getGitHubCache().pr['o/r#b']).toEqual({ fetchedAt: 20 })
+  })
+
   it('keeps a legacy in-file cache as the seed and strips it from disk', async () => {
     writeDataFile({ githubCache: { pr: { legacy: { fetchedAt: 1 } }, issue: {} } })
 
@@ -6378,6 +6444,49 @@ describe('Store', () => {
     })
     const ref = session.terminalLayoutsByTabId['remote-tab'].scrollbackRefsByLeafId?.[TEST_LEAF_2]
     expect(ref ? store.readTerminalScrollbackSnapshot(ref) : null).toBe('remote-scrollback')
+  })
+
+  it('stores terminal scrollback snapshots beside explicit profile data files', async () => {
+    const profileDataDirectory = join(testState.dir, 'profiles', 'local-default')
+    const profileDataFile = join(profileDataDirectory, 'orca-data.json')
+    mkdirSync(profileDataDirectory, { recursive: true })
+
+    vi.resetModules()
+    const { Store, initDataPath } = await import('./persistence')
+    initDataPath()
+    const store = new Store({ dataFile: profileDataFile })
+    store.addRepo(makeRepo({ id: 'remote-repo', connectionId: 'ssh-target-1' }))
+    const session = makeSessionWithTerminalBuffers()
+    store.setWorkspaceSession({
+      ...session,
+      tabsByWorktree: { 'remote-repo::/remote': session.tabsByWorktree['remote-repo::/remote'] },
+      terminalLayoutsByTabId: { 'remote-tab': session.terminalLayoutsByTabId['remote-tab'] }
+    })
+
+    const ref =
+      store.getWorkspaceSession().terminalLayoutsByTabId['remote-tab'].scrollbackRefsByLeafId?.[
+        TEST_LEAF_2
+      ]
+    expect(ref).toEqual(expect.stringMatching(/^v1-[0-9a-f]{32}$/))
+    expect(existsSync(join(profileDataDirectory, 'terminal-scrollback', `${ref}.bin`))).toBe(true)
+    expect(existsSync(join(testState.dir, 'terminal-scrollback', `${ref}.bin`))).toBe(false)
+  })
+
+  it('reads legacy terminal scrollback snapshots for explicit profile data files', async () => {
+    const profileDataDirectory = join(testState.dir, 'profiles', 'local-default')
+    const profileDataFile = join(profileDataDirectory, 'orca-data.json')
+    const ref = 'v1-11111111111111111111111111111111'
+    const legacySnapshotDir = join(testState.dir, 'terminal-scrollback')
+    mkdirSync(profileDataDirectory, { recursive: true })
+    mkdirSync(legacySnapshotDir, { recursive: true })
+    writeFileSync(join(legacySnapshotDir, `${ref}.bin`), 'legacy-scrollback', 'utf-8')
+
+    vi.resetModules()
+    const { Store, initDataPath } = await import('./persistence')
+    initDataPath()
+    const store = new Store({ dataFile: profileDataFile })
+
+    expect(store.readTerminalScrollbackSnapshot(ref)).toBe('legacy-scrollback')
   })
 
   it('caps oversized browser history when setting workspace session', async () => {

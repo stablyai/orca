@@ -1,15 +1,13 @@
 import { createReadStream } from 'node:fs'
-import { readFile } from 'node:fs/promises'
 import { createInterface } from 'node:readline'
 import type { AiVaultSession } from '../../shared/ai-vault-types'
-import type { ExecutionHostId } from '../../shared/execution-host'
+import { LOCAL_EXECUTION_HOST_ID, type ExecutionHostId } from '../../shared/execution-host'
 import type {
   FileWithMtime,
   ResumableSessionParseState,
   SessionAccumulator
 } from './session-scanner-types'
 import {
-  accumulatorFoldResumeState,
   addPreviewContent,
   createAccumulator,
   finalizeSession,
@@ -17,16 +15,14 @@ import {
   updateLatestLocation,
   updateTimeline
 } from './session-scanner-accumulator'
+import { countSubagentTranscripts } from './session-scanner-subagent-transcripts'
 import {
-  arrayValue,
   asRecord,
   claudeUsageTotal,
-  extractContentText,
   extractMessageText,
   extractString,
   normalizeTitleText,
-  parseJsonObject,
-  tokenTotal
+  parseJsonObject
 } from './session-scanner-values'
 
 type ParserSessionOptions = {
@@ -102,6 +98,22 @@ export function consumeClaudeSessionLine(state: ClaudeSessionParseState, line: s
     return
   }
 
+  if (record.type === 'queue-operation') {
+    // Enqueued prompts hold real content (e.g. queued subagent messages) that
+    // survives even when the conversation was never persisted — recoverable
+    // signal for an otherwise-empty session, but not a conversation turn.
+    // Count net of remove/dequeue: consumed or user-removed prompts are written
+    // as later queue-operation records and are no longer queued. Accepted gap:
+    // a dequeue/remove of an uncounted empty-content enqueue can undercount,
+    // which only hides the recoverable badge — it never fabricates one.
+    if (record.operation === 'enqueue' && (extractString(record.content)?.trim().length ?? 0) > 0) {
+      accumulator.queuedMessageCount++
+    } else if (record.operation === 'remove' || record.operation === 'dequeue') {
+      accumulator.queuedMessageCount = Math.max(0, accumulator.queuedMessageCount - 1)
+    }
+    return
+  }
+
   if (record.type === 'user') {
     accumulator.messageCount++
     const title = extractMessageText(record.message)
@@ -129,11 +141,11 @@ export function consumeClaudeSessionLine(state: ClaudeSessionParseState, line: s
   }
 }
 
-export function finalizeClaudeSessionParseState(
+export async function finalizeClaudeSessionParseState(
   state: ClaudeSessionParseState,
   platform: NodeJS.Platform,
   options: ParserSessionOptions = {}
-): AiVaultSession | null {
+): Promise<AiVaultSession | null> {
   // Finalize a snapshot: the live state (and its preview array) may keep
   // accumulating appended lines after this session object is handed out.
   const snapshot = cloneClaudeSessionParseState(state)
@@ -141,6 +153,17 @@ export function finalizeClaudeSessionParseState(
   // session name (ai-title) should outrank the raw first prompt when present.
   snapshot.accumulator.fallbackTitle =
     snapshot.generatedTitle ?? snapshot.firstUserTitle ?? snapshot.metaTitle
+  // Only a zero-turn transcript needs its sibling subagent transcripts counted;
+  // for normal sessions the extra directory read is skipped. The sibling dir
+  // lives on the host that owns the transcript, so content fetched from a
+  // remote (SSH) host must not readdir this machine's disk.
+  const ownsTranscriptDisk =
+    !options.executionHostId || options.executionHostId === LOCAL_EXECUTION_HOST_ID
+  if (snapshot.accumulator.messageCount === 0 && ownsTranscriptDisk) {
+    snapshot.accumulator.subagentTranscriptCount = await countSubagentTranscripts(
+      snapshot.accumulator.filePath
+    )
+  }
   return finalizeSession(snapshot.accumulator, platform, options)
 }
 
@@ -197,134 +220,4 @@ async function parseClaudeSessionLines(args: {
     consumeClaudeSessionLine(state, line)
   }
   return finalizeClaudeSessionParseState(state, args.platform, args.options)
-}
-
-export async function parseGeminiSessionFile(
-  file: FileWithMtime,
-  platform: NodeJS.Platform = process.platform
-): Promise<AiVaultSession | null> {
-  if (file.path.endsWith('.jsonl')) {
-    return parseGeminiJsonlSessionFile(file, platform)
-  }
-
-  return parseGeminiJsonSessionContent(file, await readFile(file.path, 'utf-8'), platform)
-}
-
-export async function parseGeminiSessionContent(
-  file: FileWithMtime,
-  content: string,
-  platform: NodeJS.Platform = process.platform,
-  options: ParserSessionOptions = {}
-): Promise<AiVaultSession | null> {
-  if (file.path.endsWith('.jsonl')) {
-    return parseGeminiJsonlSessionLines({
-      file,
-      lines: content.split(/\r?\n/),
-      platform,
-      options
-    })
-  }
-  return parseGeminiJsonSessionContent(file, content, platform, options)
-}
-
-function parseGeminiJsonSessionContent(
-  file: FileWithMtime,
-  content: string,
-  platform: NodeJS.Platform,
-  options: ParserSessionOptions = {}
-): AiVaultSession | null {
-  const record = asRecord(JSON.parse(content) as unknown)
-  if (!record) {
-    return null
-  }
-  const accumulator = createAccumulator({
-    agent: 'gemini',
-    file,
-    sessionId: extractString(record.sessionId) ?? sessionIdFromFileName(file.path)
-  })
-  updateTimeline(accumulator, extractString(record.startTime))
-  updateTimeline(accumulator, extractString(record.lastUpdated))
-  for (const message of arrayValue(record.messages)) {
-    consumeGeminiMessage(accumulator, asRecord(message))
-  }
-  return finalizeSession(accumulator, platform, options)
-}
-
-export async function parseGeminiJsonlSessionFile(
-  file: FileWithMtime,
-  platform: NodeJS.Platform
-): Promise<AiVaultSession | null> {
-  const lines = createInterface({
-    input: createReadStream(file.path, { encoding: 'utf-8' }),
-    crlfDelay: Infinity
-  })
-  return parseGeminiJsonlSessionLines({ file, lines, platform })
-}
-
-function consumeGeminiJsonlRecordLine(accumulator: SessionAccumulator, line: string): void {
-  const record = parseJsonObject(line)
-  if (!record) {
-    return
-  }
-  const setRecord = asRecord(record.$set)
-  if (setRecord) {
-    updateTimeline(accumulator, extractString(setRecord.lastUpdated))
-    return
-  }
-  const sessionId = extractString(record.sessionId)
-  if (sessionId) {
-    accumulator.sessionId = sessionId
-  }
-  updateTimeline(accumulator, extractString(record.startTime))
-  updateTimeline(accumulator, extractString(record.lastUpdated))
-  consumeGeminiMessage(accumulator, record)
-}
-
-// Resumable only for the JSONL log format; Gemini's legacy single-JSON
-// session documents are rewritten in place and must be re-read whole.
-export function createGeminiJsonlSessionResumeState(
-  file: FileWithMtime
-): ResumableSessionParseState {
-  return accumulatorFoldResumeState(
-    createAccumulator({ agent: 'gemini', file, sessionId: sessionIdFromFileName(file.path) }),
-    consumeGeminiJsonlRecordLine
-  )
-}
-
-async function parseGeminiJsonlSessionLines(args: {
-  file: FileWithMtime
-  lines: AsyncIterable<string> | Iterable<string>
-  platform: NodeJS.Platform
-  options?: ParserSessionOptions
-}): Promise<AiVaultSession | null> {
-  const state = createGeminiJsonlSessionResumeState(args.file)
-  for await (const line of args.lines) {
-    state.consumeLine(line)
-  }
-  return state.finalize(args.platform, args.options)
-}
-
-export function consumeGeminiMessage(
-  accumulator: SessionAccumulator,
-  record: Record<string, unknown> | null
-): void {
-  if (!record) {
-    return
-  }
-  updateTimeline(accumulator, extractString(record.timestamp))
-  if (record.type === 'user') {
-    accumulator.messageCount++
-    accumulator.title ??= extractContentText(record.content)
-    addPreviewContent(accumulator, 'user', record.content, record.timestamp)
-    return
-  }
-  if (record.type === 'gemini') {
-    accumulator.messageCount++
-    addPreviewContent(accumulator, 'assistant', record.content, record.timestamp)
-    const model = extractString(record.model)
-    if (model) {
-      accumulator.model = model
-    }
-    accumulator.totalTokens += tokenTotal(record.tokens)
-  }
 }

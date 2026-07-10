@@ -21,6 +21,8 @@ const baseSession: AiVaultSession = {
   messageCount: 4,
   totalTokens: 1200,
   previewMessages: [],
+  queuedMessageCount: 0,
+  subagentTranscriptCount: 0,
   resumeCommand: "cd '/Users/ada/orca' && claude --resume 'session-1'"
 }
 

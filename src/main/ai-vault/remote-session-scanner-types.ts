@@ -21,6 +21,9 @@ export type RemoteSessionSource = {
   rootDir: string
   extensions: readonly string[]
   filePredicate?: (path: string) => boolean
+  // Claude layout: count `<session>/subagents/*.jsonl` siblings from the walked
+  // listing and drop them from candidates instead of indexing them as sessions.
+  collectSubagentSiblingCounts?: boolean
   parse: (
     file: FileWithMtime,
     content: string,
@@ -31,4 +34,5 @@ export type RemoteSessionSource = {
 export type RemoteSessionCandidate = {
   source: RemoteSessionSource
   file: FileWithMtime
+  subagentTranscriptCount?: number
 }

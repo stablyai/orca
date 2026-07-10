@@ -11,7 +11,11 @@ import type {
   AiVaultSession,
   AiVaultSort
 } from '../../../../shared/ai-vault-types'
-import { aiVaultAgentLabel } from '../../../../shared/ai-vault-types'
+import {
+  aiVaultAgentLabel,
+  isAiVaultSessionRecoverableEmpty,
+  isAiVaultSessionResumableContent
+} from '../../../../shared/ai-vault-types'
 import { sessionPreviewSearchText } from './ai-vault-session-display'
 import type { AiVaultSessionProject } from './ai-vault-session-projects'
 
@@ -64,7 +68,15 @@ export function filterAiVaultSessions(
       if (!agentSet.has(session.agent)) {
         return false
       }
-      if (filters.hideEmptySessions && session.messageCount === 0) {
+      // Hide plain empty sessions, but keep sessions with resumable content
+      // (some parsers only learn turns from previews, e.g. Grok) and zero-turn
+      // sessions that still carry recoverable content (queued prompts /
+      // subagent transcripts) so a lost conversation is surfaced distinctly.
+      if (
+        filters.hideEmptySessions &&
+        !isAiVaultSessionResumableContent(session) &&
+        !isAiVaultSessionRecoverableEmpty(session)
+      ) {
         return false
       }
       if (filters.scope === 'workspace') {

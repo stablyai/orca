@@ -82,10 +82,7 @@ const NonGitFolderDialog = React.memo(function NonGitFolderDialog() {
               onboarding,
               hadProjectBeforeAdd
             )
-            activateAndRevealWorktree(folderWorktree.id, {
-              sidebarRevealBehavior: 'auto',
-              ...(startup ? { startup } : {})
-            })
+            activateAndRevealWorktree(folderWorktree.id, startup ? { startup } : undefined)
           }
         } catch (err) {
           // This code path calls addRemote directly (not through the store),

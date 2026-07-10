@@ -213,9 +213,7 @@ describe('useCreateRepo default-checkout handoff', () => {
       kind: 'git'
     })
     expect(mocks.fetchWorktrees).toHaveBeenCalledWith(repo.id)
-    expect(mocks.activateAndRevealWorktree).toHaveBeenCalledWith(worktree.id, {
-      sidebarRevealBehavior: 'auto'
-    })
+    expect(mocks.activateAndRevealWorktree).toHaveBeenCalledWith(worktree.id)
     expect(mocks.markOnboardingProjectAdded).toHaveBeenCalledWith('addedFolder')
     expect(closeModal).toHaveBeenCalled()
     expect(mocks.onGitRepoReady).not.toHaveBeenCalled()

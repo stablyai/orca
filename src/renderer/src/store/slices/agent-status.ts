@@ -192,6 +192,7 @@ export type AgentStatusSlice = {
    *  quit flush so provider session ids survive an app restart. */
   captureAllSleepingAgentSessions: () => void
   clearSleepingAgentSession: (paneKey: string) => void
+  clearSleepingAgentSessionsByPaneKey: (paneKeys: readonly string[]) => void
   clearSleepingAgentSessionsByWorktree: (worktreeId: string) => void
   pruneSleepingAgentSessions: (validWorktreeIds: Set<string>) => void
 
@@ -865,6 +866,41 @@ export const createAgentStatusSlice: StateCreator<AppState, [], [], AgentStatusS
       }))
     }
   })
+
+  const clearSleepingAgentSessionsByPaneKey = (paneKeys: readonly string[]): void => {
+    if (paneKeys.length === 0) {
+      return
+    }
+    const uniquePaneKeys = new Set(paneKeys)
+    set((s) => {
+      let nextSleeping = s.sleepingAgentSessionsByPaneKey
+      let nextLaunchConfigs = s.agentLaunchConfigByPaneKey
+      for (const paneKey of uniquePaneKeys) {
+        if (paneKey in nextSleeping) {
+          if (nextSleeping === s.sleepingAgentSessionsByPaneKey) {
+            nextSleeping = { ...nextSleeping }
+          }
+          delete nextSleeping[paneKey]
+        }
+        if (paneKey in nextLaunchConfigs) {
+          if (nextLaunchConfigs === s.agentLaunchConfigByPaneKey) {
+            nextLaunchConfigs = { ...nextLaunchConfigs }
+          }
+          delete nextLaunchConfigs[paneKey]
+        }
+      }
+      if (
+        nextSleeping === s.sleepingAgentSessionsByPaneKey &&
+        nextLaunchConfigs === s.agentLaunchConfigByPaneKey
+      ) {
+        return s
+      }
+      return {
+        sleepingAgentSessionsByPaneKey: nextSleeping,
+        agentLaunchConfigByPaneKey: nextLaunchConfigs
+      }
+    })
+  }
 
   return {
     agentStatusByPaneKey: {},
@@ -2073,31 +2109,8 @@ export const createAgentStatusSlice: StateCreator<AppState, [], [], AgentStatusS
       })
     },
 
-    clearSleepingAgentSession: (paneKey) => {
-      set((s) => {
-        const hasSleepingRecord = paneKey in s.sleepingAgentSessionsByPaneKey
-        const hasLaunchConfig = paneKey in s.agentLaunchConfigByPaneKey
-        if (!hasSleepingRecord && !hasLaunchConfig) {
-          return s
-        }
-        const nextSleeping = hasSleepingRecord
-          ? { ...s.sleepingAgentSessionsByPaneKey }
-          : s.sleepingAgentSessionsByPaneKey
-        if (hasSleepingRecord) {
-          delete nextSleeping[paneKey]
-        }
-        const nextLaunchConfigs = hasLaunchConfig
-          ? { ...s.agentLaunchConfigByPaneKey }
-          : s.agentLaunchConfigByPaneKey
-        if (hasLaunchConfig) {
-          delete nextLaunchConfigs[paneKey]
-        }
-        return {
-          sleepingAgentSessionsByPaneKey: nextSleeping,
-          agentLaunchConfigByPaneKey: nextLaunchConfigs
-        }
-      })
-    },
+    clearSleepingAgentSession: (paneKey) => clearSleepingAgentSessionsByPaneKey([paneKey]),
+    clearSleepingAgentSessionsByPaneKey,
 
     clearSleepingAgentSessionsByWorktree: (worktreeId) => {
       set((s) => {

@@ -5,7 +5,9 @@ import { join } from 'node:path'
 // assigns a random port. Paired mobile devices store ws://ip:port endpoints,
 // so a port that changes on every restart permanently orphans those pairings
 // (STA-1511). Persist the assigned fallback so the same instance re-binds the
-// same port next launch.
+// same port next launch — the transport binds a persisted fallback BEFORE the
+// preferred port, so pairings survive even when the preferred port is free
+// again.
 
 const FALLBACK_PORT_FILE = 'mobile-ws-fallback-port.json'
 

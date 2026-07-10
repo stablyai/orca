@@ -64,7 +64,7 @@ export function VaultSessionRow({
   resumeActions: AiVaultSessionResumeActions
   onResumeInWorktree: () => void
   onResumeInNewTab: () => void
-  onCopyResume: () => void
+  onCopyResume?: () => void
   onCopyId: () => void
   onCopyPath: () => void
   onOpenLog?: () => void

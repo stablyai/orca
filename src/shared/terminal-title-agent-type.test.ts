@@ -21,10 +21,14 @@ describe('isGrokRotatingWorkingTitle', () => {
     expect(isGrokRotatingWorkingTitle('⠋ ~/grok-scratch/ready')).toBe(false) // path fragment, not a trailing token
     expect(isGrokRotatingWorkingTitle('⠋ grokking the plan')).toBe(false) // "grok" not a whole trailing token
     expect(isGrokRotatingWorkingTitle('⠋ Codex')).toBe(false)
-    // Task text ending in "grok" is not the Grok Build identity suffix " - grok".
+    // Task text ending in "grok" is not the Grok frame shape "spinner - phrase - grok".
     expect(isGrokRotatingWorkingTitle('⠋ wire up grok')).toBe(false)
     expect(isGrokRotatingWorkingTitle('⠋ Codex is thinking about grok')).toBe(false)
     expect(isGrokRotatingWorkingTitle('⠋ support for Grok')).toBe(false)
+    // Why: Claude/Codex braille + task can end with " - grok" without the
+    // post-spinner delimiter that marks a real Grok Build frame.
+    expect(isGrokRotatingWorkingTitle('⠋ fix the flaky suite - grok')).toBe(false)
+    expect(isGrokRotatingWorkingTitle('⠋ review grok integration - claude')).toBe(false)
   })
 })
 

@@ -30,6 +30,7 @@ export { getRepoIdFromWorktreeId } from '../../../../shared/worktree-id'
 
 export type WorktreeDeleteState = {
   isDeleting: boolean
+  phase?: 'deleting' | 'queued'
   error: string | null
   canForceDelete: boolean
 }
@@ -181,9 +182,10 @@ export type WorktreeSlice = {
     // 'forget-local' drops the workspace from Orca only (no remote Git/FS work)
     // for workspaces pinned to a removed/disconnected SSH host. Reuses the same
     // renderer-side teardown/purge as a normal remove.
-    options?: { mode?: 'remove' | 'forget-local' }
+    options?: { mode?: 'remove' | 'forget-local'; suppressPreservedBranchToast?: boolean }
   ) => Promise<({ ok: true } & RemoveWorktreeResult) | { ok: false; error: string }>
   markWorktreesDeleting: (worktreeIds: readonly string[]) => void
+  markWorktreesQueuedForDeletion: (worktreeIds: readonly string[]) => void
   forceDeletePreservedBranch: (
     worktreeId: string,
     branchName: string,

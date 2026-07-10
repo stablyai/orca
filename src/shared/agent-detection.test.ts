@@ -5,7 +5,8 @@ import {
   extractAllOscTitles,
   extractLastOscTitle,
   getAgentLabel,
-  MAX_OSC_TITLE_CHARS
+  MAX_OSC_TITLE_CHARS,
+  normalizeTerminalTitle
 } from './agent-detection'
 import {
   hasCompatibleAgentTitleIdentity,
@@ -88,13 +89,25 @@ describe('Pi-compatible title detection', () => {
   it.each([
     ['\u280b OMP', 'OMP', 'working'],
     ['OMP ready', 'OMP', 'idle'],
+    ['OMP', 'OMP', 'idle'],
     ['OMP - action required', 'OMP', 'permission'],
     ['\u280b Pi', 'Pi', 'working'],
     ['Pi ready', 'Pi', 'idle'],
+    // Why: normalizeTerminalTitle collapses idle π frames to bare "Pi"; re-detection
+    // from stored lastOscTitle must still classify idle, not neutral.
+    ['Pi', 'Pi', 'idle'],
     ['Pi - action required', 'Pi', 'permission']
   ] as const)('classifies synthesized %s', (title, expectedLabel, expectedStatus) => {
     expect(getAgentLabel(title)).toBe(expectedLabel)
     expect(detectAgentStatusFromTitle(title)).toBe(expectedStatus)
+  })
+
+  it('re-detects status after display-title normalization for Pi idle frames', () => {
+    expect(normalizeTerminalTitle('π - my-project')).toBe('Pi')
+    expect(detectAgentStatusFromTitle(normalizeTerminalTitle('π - my-project'))).toBe('idle')
+    expect(detectAgentStatusFromTitle(normalizeTerminalTitle('\u280b π - my-project'))).toBe(
+      'working'
+    )
   })
 
   it.each([

@@ -183,6 +183,9 @@ function handleChildMessage(message: WatcherToHostMessage): void {
     } else {
       record.callback(new Error(message.message), [])
     }
+    // Why: a failed last subscribe empties the records map without any
+    // unsubscribe ever being called — tear down the idle child here too.
+    killWatcherChildIfIdle()
     return
   }
   if (message.op === 'events') {
@@ -243,6 +246,25 @@ function handleChildGone(proc: ChildProcess): void {
   }
 }
 
+// Why: the last record gone leaves the child idle until app shutdown. Killing
+// it releases native handles without running watcher.node's crash-prone async
+// teardown (same rationale as disposeWatcherProcess) and reclaims the process;
+// the next subscribe forks a fresh child. `child = null` before kill so the
+// exit event neither counts as a crash nor respawns. Process death also
+// completes any still-pending unsubscribe acks.
+function killWatcherChildIfIdle(): void {
+  const proc = child
+  if (!proc || records.size > 0) {
+    return
+  }
+  child = null
+  for (const resolve of pendingUnsubscribes.values()) {
+    resolve()
+  }
+  pendingUnsubscribes.clear()
+  proc.kill()
+}
+
 function makeSubscription(record: SubscriptionRecord): WatcherProcessSubscription {
   return {
     unsubscribe: (): Promise<void> => {
@@ -251,6 +273,10 @@ function makeSubscription(record: SubscriptionRecord): WatcherProcessSubscriptio
       }
       const proc = child
       if (!proc?.connected) {
+        return Promise.resolve()
+      }
+      if (records.size === 0) {
+        killWatcherChildIfIdle()
         return Promise.resolve()
       }
       return new Promise((resolve) => {

@@ -454,6 +454,77 @@ describe('WebSocketTransport', () => {
       return port
     }
 
+    it('binds the persisted fallback port even when the preferred port is free', async () => {
+      // Why: regression for the STA-1511 follow-up — devices paired while the
+      // fallback port was active store ws://ip:<fallback>. A later launch that
+      // finds the preferred port free must still bind the fallback, or those
+      // pairings go permanently dead until the user re-pairs.
+      const preferredPort = await reserveFreePort()
+      const fallbackPort = await reserveFreePort()
+
+      const transport = new WebSocketTransport({
+        host: '127.0.0.1',
+        port: preferredPort,
+        fallbackPort
+      })
+      transports.push(transport)
+      await transport.start()
+      expect(transport.resolvedPort).toBe(fallbackPort)
+    })
+
+    it('binds the preferred port when the persisted fallback is taken', async () => {
+      const fallbackHolder = new WebSocketTransport({ host: '127.0.0.1', port: 0 })
+      transports.push(fallbackHolder)
+      await fallbackHolder.start()
+      const takenFallbackPort = fallbackHolder.resolvedPort
+      const preferredPort = await reserveFreePort()
+
+      const transport = new WebSocketTransport({
+        host: '127.0.0.1',
+        port: preferredPort,
+        fallbackPort: takenFallbackPort
+      })
+      transports.push(transport)
+      await transport.start()
+      expect(transport.resolvedPort).toBe(preferredPort)
+    })
+
+    it('falls through to the preferred port when the fallback bind fails with a non-EADDRINUSE error', async () => {
+      // Why: a persisted fallback can land in an OS-reserved range on a later
+      // launch (Windows Hyper-V excluded ports → EACCES). That must degrade to
+      // the preferred port instead of disabling the transport for the session.
+      const preferredPort = await reserveFreePort()
+      const fallbackPort = await reserveFreePort()
+      const transport = new WebSocketTransport({
+        host: '127.0.0.1',
+        port: preferredPort,
+        fallbackPort
+      })
+      transports.push(transport)
+      const withListen = transport as unknown as { tryListen(port: number): Promise<void> }
+      const realTryListen = withListen.tryListen.bind(transport)
+      withListen.tryListen = (port: number) =>
+        port === fallbackPort
+          ? Promise.reject(Object.assign(new Error('listen EACCES'), { code: 'EACCES' }))
+          : realTryListen(port)
+
+      await transport.start()
+      expect(transport.resolvedPort).toBe(preferredPort)
+    })
+
+    it('still throws when the preferred port fails with a non-EADDRINUSE error', async () => {
+      const transport = new WebSocketTransport({
+        host: '127.0.0.1',
+        port: await reserveFreePort()
+      })
+      transports.push(transport)
+      const withListen = transport as unknown as { tryListen(port: number): Promise<void> }
+      withListen.tryListen = () =>
+        Promise.reject(Object.assign(new Error('listen EACCES'), { code: 'EACCES' }))
+
+      await expect(transport.start()).rejects.toThrow('listen EACCES')
+    })
+
     it('retries the persisted fallback port before an OS-assigned one', async () => {
       const holder = new WebSocketTransport({ host: '127.0.0.1', port: 0 })
       transports.push(holder)

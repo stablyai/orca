@@ -35,6 +35,12 @@ export type WorkspaceCleanupRemoveResult = {
   failures: WorkspaceCleanupFailure[]
 }
 
+export type WorkspaceCleanupRemoveOptions = {
+  // Why: rows are removed long after the confirm click; the confirm-time
+  // candidate records how much git risk the user actually approved.
+  approvedCandidates?: readonly WorkspaceCleanupCandidate[]
+}
+
 type WorkspaceCleanupViewedCandidate = {
   viewedAt: number
   fingerprint: string
@@ -55,7 +61,8 @@ export type WorkspaceCleanupSlice = {
   ) => Promise<void>
   resetWorkspaceCleanupDismissals: () => Promise<void>
   removeWorkspaceCleanupCandidates: (
-    worktreeIds: readonly string[]
+    worktreeIds: readonly string[],
+    options?: WorkspaceCleanupRemoveOptions
   ) => Promise<WorkspaceCleanupRemoveResult>
 }
 
@@ -72,15 +79,32 @@ type WorkspaceCleanupEnrichmentCacheEntry = {
 const RECENT_VISIBLE_CONTEXT_MS = 24 * 60 * 60 * 1000
 const VIEWED_FROM_CLEANUP_MS = 2 * 60 * 60 * 1000
 const WORKSPACE_CLEANUP_PREFLIGHT_CONCURRENCY = 4
+// Why: dirty-files/unpushed-commits are concrete known work at risk; unknown-base
+// and git-status-error only mean "couldn't verify". A row approved while
+// unverifiable must still fail if real work becomes visible before removal.
+const WORKSPACE_CLEANUP_CONCRETE_RISK_BLOCKERS = ['dirty-files', 'unpushed-commits'] as const
 
 let inFlightWorkspaceCleanupScan: {
   key: string
   promise: Promise<WorkspaceCleanupScanResult>
 } | null = null
 let latestWorkspaceCleanupScanToken = 0
+let finalizedWorkspaceCleanupScanToken = 0
+let workspaceCleanupProgressQueue: {
+  scanToken: number
+  promise: Promise<void>
+} | null = null
 let workspaceCleanupEnrichmentCache: {
   scanToken: number
   entries: Map<string, WorkspaceCleanupEnrichmentCacheEntry>
+} | null = null
+// Why: cleanup progress can append thousands of rows; keep one scan-local
+// index so each streamed row does not rebuild a map of every previous row.
+let workspaceCleanupProgressCandidateIndex: {
+  scanToken: number
+  scanId: string
+  candidates: WorkspaceCleanupCandidate[]
+  indexesByWorktreeId: Map<string, number>
 } | null = null
 
 const SHELL_PROCESS_NAMES = new Set([
@@ -160,10 +184,13 @@ export const createWorkspaceCleanupSlice: StateCreator<AppState, [], [], Workspa
       workspaceCleanupError: null
     })
     const scanToken = ++latestWorkspaceCleanupScanToken
+    finalizedWorkspaceCleanupScanToken = 0
+    workspaceCleanupProgressQueue = null
     workspaceCleanupEnrichmentCache = { scanToken, entries: new Map() }
+    workspaceCleanupProgressCandidateIndex = null
     const promise = (async () => {
       const scan = await window.api.workspaceCleanup.scan(scanArgs, (progress) => {
-        void applyWorkspaceCleanupProgress(progress, scanToken, get, set)
+        enqueueWorkspaceCleanupProgress(progress, scanToken, get, set)
       })
       const enriched = await enrichWorkspaceCleanupCandidatesForScan(
         scan.candidates,
@@ -172,10 +199,13 @@ export const createWorkspaceCleanupSlice: StateCreator<AppState, [], [], Workspa
       )
       const result = { ...scan, candidates: enriched }
       if (scanToken === latestWorkspaceCleanupScanToken) {
+        finalizedWorkspaceCleanupScanToken = scanToken
+        workspaceCleanupEnrichmentCache = null
+        workspaceCleanupProgressCandidateIndex = null
         set({
           workspaceCleanupScan: result,
           workspaceCleanupProgress: {
-            scanId: get().workspaceCleanupProgress?.scanId ?? '',
+            scanId: get().workspaceCleanupProgress?.scanId ?? scanArgs.scanId ?? '',
             scannedAt: result.scannedAt,
             scannedWorktreeCount: result.candidates.length,
             totalWorktreeCount: result.candidates.length,
@@ -266,14 +296,22 @@ export const createWorkspaceCleanupSlice: StateCreator<AppState, [], [], Workspa
     await window.api.workspaceCleanup.clearDismissals()
   },
 
-  removeWorkspaceCleanupCandidates: async (worktreeIds) => {
+  removeWorkspaceCleanupCandidates: async (worktreeIds, options) => {
     const removedIds: string[] = []
     const failures: WorkspaceCleanupFailure[] = []
+    const approvedCandidatesByWorktreeId = new Map(
+      (options?.approvedCandidates ?? []).map((candidate) => [candidate.worktreeId, candidate])
+    )
 
     const preflights = await mapWithConcurrency(
       worktreeIds,
       WORKSPACE_CLEANUP_PREFLIGHT_CONCURRENCY,
-      (worktreeId) => preflightWorkspaceCleanupCandidate(worktreeId, get)
+      (worktreeId) =>
+        preflightWorkspaceCleanupCandidate(
+          worktreeId,
+          get,
+          approvedCandidatesByWorktreeId.get(worktreeId)
+        )
     )
     const candidatesToRemove: WorkspaceCleanupCandidate[] = []
 
@@ -290,7 +328,10 @@ export const createWorkspaceCleanupSlice: StateCreator<AppState, [], [], Workspa
     for (const candidate of [...candidatesToRemove].sort((a, b) => b.path.length - a.path.length)) {
       const result = await get().removeWorktree(
         candidate.worktreeId,
-        shouldForceWorkspaceCleanupRemoval(candidate)
+        shouldForceWorkspaceCleanupRemoval(candidate),
+        // Why: cleanup reports outcomes in its own summary toasts; per-row
+        // preserved-branch warnings would stack one toast per removed row.
+        { suppressPreservedBranchToast: true }
       )
       if (result.ok) {
         removedIds.push(candidate.worktreeId)
@@ -304,8 +345,10 @@ export const createWorkspaceCleanupSlice: StateCreator<AppState, [], [], Workspa
     }
 
     if (removedIds.length > 0) {
+      invalidateWorkspaceCleanupScanProgress()
       const removedIdSet = new Set(removedIds)
       set((state) => ({
+        workspaceCleanupLoading: false,
         workspaceCleanupScan: state.workspaceCleanupScan
           ? {
               ...state.workspaceCleanupScan,
@@ -327,6 +370,43 @@ function getWorkspaceCleanupScanKey(args: WorkspaceCleanupScanArgs): string {
   })
 }
 
+function invalidateWorkspaceCleanupScanProgress(): void {
+  latestWorkspaceCleanupScanToken += 1
+  finalizedWorkspaceCleanupScanToken = 0
+  inFlightWorkspaceCleanupScan = null
+  workspaceCleanupProgressQueue = null
+  workspaceCleanupEnrichmentCache = null
+  workspaceCleanupProgressCandidateIndex = null
+}
+
+function enqueueWorkspaceCleanupProgress(
+  progress: WorkspaceCleanupScanProgress,
+  scanToken: number,
+  getState: () => AppState,
+  setState: (
+    partial: Partial<AppState> | ((state: AppState) => Partial<AppState>),
+    replace?: false
+  ) => void
+): void {
+  if (
+    scanToken !== latestWorkspaceCleanupScanToken ||
+    scanToken === finalizedWorkspaceCleanupScanToken
+  ) {
+    return
+  }
+  const previous =
+    workspaceCleanupProgressQueue?.scanToken === scanToken
+      ? workspaceCleanupProgressQueue.promise
+      : Promise.resolve()
+  const promise = previous
+    .catch(() => undefined)
+    .then(() => applyWorkspaceCleanupProgress(progress, scanToken, getState, setState))
+    .catch((error: unknown) => {
+      console.error('Workspace cleanup progress update failed', error)
+    })
+  workspaceCleanupProgressQueue = { scanToken, promise }
+}
+
 async function applyWorkspaceCleanupProgress(
   progress: WorkspaceCleanupScanProgress,
   scanToken: number,
@@ -336,6 +416,12 @@ async function applyWorkspaceCleanupProgress(
     replace?: false
   ) => void
 ): Promise<void> {
+  if (
+    scanToken !== latestWorkspaceCleanupScanToken ||
+    scanToken === finalizedWorkspaceCleanupScanToken
+  ) {
+    return
+  }
   const state = getState()
   const previousCandidates =
     progress.candidateMode === 'append' &&
@@ -347,11 +433,23 @@ async function applyWorkspaceCleanupProgress(
     state,
     scanToken
   )
-  const candidates =
-    progress.candidateMode === 'append'
-      ? appendWorkspaceCleanupProgressCandidates(previousCandidates, enrichedProgressCandidates)
-      : enrichedProgressCandidates
-  if (scanToken !== latestWorkspaceCleanupScanToken) {
+  if (
+    scanToken !== latestWorkspaceCleanupScanToken ||
+    scanToken === finalizedWorkspaceCleanupScanToken
+  ) {
+    return
+  }
+  const candidates = mergeWorkspaceCleanupProgressCandidates({
+    previousCandidates,
+    nextCandidates: enrichedProgressCandidates,
+    progress,
+    scanToken
+  })
+  if (
+    scanToken !== latestWorkspaceCleanupScanToken ||
+    scanToken === finalizedWorkspaceCleanupScanToken
+  ) {
+    workspaceCleanupProgressCandidateIndex = null
     return
   }
   setState((state) => {
@@ -387,28 +485,72 @@ async function enrichWorkspaceCleanupCandidatesForScan(
   )
 }
 
-function appendWorkspaceCleanupProgressCandidates(
-  previousCandidates: readonly WorkspaceCleanupCandidate[],
+function mergeWorkspaceCleanupProgressCandidates({
+  previousCandidates,
+  nextCandidates,
+  progress,
+  scanToken
+}: {
+  previousCandidates: readonly WorkspaceCleanupCandidate[]
   nextCandidates: readonly WorkspaceCleanupCandidate[]
-): WorkspaceCleanupCandidate[] {
-  if (nextCandidates.length === 0) {
-    return [...previousCandidates]
+  progress: WorkspaceCleanupScanProgress
+  scanToken: number
+}): WorkspaceCleanupCandidate[] {
+  if (progress.candidateMode !== 'append') {
+    workspaceCleanupProgressCandidateIndex = null
+    return [...nextCandidates]
   }
 
-  const indexesByWorktreeId = new Map(
-    previousCandidates.map((candidate, index) => [candidate.worktreeId, index])
+  if (nextCandidates.length === 0) {
+    return previousCandidates as WorkspaceCleanupCandidate[]
+  }
+
+  const indexCache = getWorkspaceCleanupProgressCandidateIndex(
+    previousCandidates,
+    progress.scanId,
+    scanToken
   )
-  const merged = [...previousCandidates]
+  const merged = [...indexCache.candidates]
   for (const candidate of nextCandidates) {
-    const existingIndex = indexesByWorktreeId.get(candidate.worktreeId)
+    const existingIndex = indexCache.indexesByWorktreeId.get(candidate.worktreeId)
     if (existingIndex === undefined) {
-      indexesByWorktreeId.set(candidate.worktreeId, merged.length)
+      indexCache.indexesByWorktreeId.set(candidate.worktreeId, merged.length)
       merged.push(candidate)
       continue
     }
     merged[existingIndex] = candidate
   }
+  workspaceCleanupProgressCandidateIndex = {
+    scanToken,
+    scanId: progress.scanId,
+    candidates: merged,
+    indexesByWorktreeId: indexCache.indexesByWorktreeId
+  }
   return merged
+}
+
+function getWorkspaceCleanupProgressCandidateIndex(
+  candidates: readonly WorkspaceCleanupCandidate[],
+  scanId: string,
+  scanToken: number
+): {
+  candidates: WorkspaceCleanupCandidate[]
+  indexesByWorktreeId: Map<string, number>
+} {
+  if (
+    workspaceCleanupProgressCandidateIndex?.scanToken === scanToken &&
+    workspaceCleanupProgressCandidateIndex.scanId === scanId &&
+    workspaceCleanupProgressCandidateIndex.candidates === candidates
+  ) {
+    return workspaceCleanupProgressCandidateIndex
+  }
+
+  return {
+    candidates: [...candidates],
+    indexesByWorktreeId: new Map(
+      candidates.map((candidate, index) => [candidate.worktreeId, index])
+    )
+  }
 }
 
 async function mapWithConcurrency<T, R>(
@@ -681,7 +823,8 @@ function applyDismissal(
 
 async function preflightWorkspaceCleanupCandidate(
   worktreeId: string,
-  getState: () => AppState
+  getState: () => AppState,
+  approvedCandidate?: WorkspaceCleanupCandidate
 ): Promise<
   | { ok: true; candidate: WorkspaceCleanupCandidate }
   | { ok: false; failure: WorkspaceCleanupFailure }
@@ -712,6 +855,33 @@ async function preflightWorkspaceCleanupCandidate(
         message: candidate.blockers.length
           ? candidate.blockers.join(', ')
           : 'Workspace needs another look before removal.'
+      }
+    }
+  }
+  // Why: this row may be removed minutes after the confirm click. If it now
+  // needs a force removal the user never approved (new dirt, unpushed work,
+  // or a git error since confirmation), fail it instead of force-deleting.
+  if (approvedCandidate) {
+    const escalatedToForce =
+      shouldForceWorkspaceCleanupRemoval(candidate) &&
+      !shouldForceWorkspaceCleanupRemoval(approvedCandidate)
+    // Why: an approved row that was already force-flagged for an unverifiable
+    // reason must still fail when real dirt/unpushed work is now visible.
+    const revealedConcreteRisk = WORKSPACE_CLEANUP_CONCRETE_RISK_BLOCKERS.some(
+      (blocker) =>
+        candidate.blockers.includes(blocker) && !approvedCandidate.blockers.includes(blocker)
+    )
+    if (escalatedToForce || revealedConcreteRisk) {
+      return {
+        ok: false,
+        failure: {
+          worktreeId,
+          displayName: candidate.displayName,
+          message: translate(
+            'auto.store.slices.workspace.cleanup.changedSinceConfirmation',
+            'Workspace changed after confirmation. Refresh to review it before removing.'
+          )
+        }
       }
     }
   }

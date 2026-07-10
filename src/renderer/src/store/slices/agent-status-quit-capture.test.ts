@@ -462,6 +462,55 @@ describe('captureAllSleepingAgentSessions', () => {
     })
   })
 
+  it('clears multiple sleeping records and launch configs in one update', () => {
+    const store = createTestStore()
+    const sleeping = {
+      'tab-1:leaf-1': { paneKey: 'tab-1:leaf-1' },
+      'tab-2:leaf-2': { paneKey: 'tab-2:leaf-2' },
+      'tab-3:leaf-3': { paneKey: 'tab-3:leaf-3' }
+    } as unknown as AppState['sleepingAgentSessionsByPaneKey']
+    const launchConfigs = {
+      'tab-1:leaf-1': {
+        launchConfig: { agentArgs: '', agentEnv: {} },
+        registeredAt: 1,
+        identity: {}
+      },
+      'tab-2:leaf-2': {
+        launchConfig: { agentArgs: '', agentEnv: {} },
+        registeredAt: 1,
+        identity: {}
+      },
+      'tab-3:leaf-3': {
+        launchConfig: { agentArgs: '', agentEnv: {} },
+        registeredAt: 1,
+        identity: {}
+      }
+    } as AppState['agentLaunchConfigByPaneKey']
+    store.setState({
+      sleepingAgentSessionsByPaneKey: sleeping,
+      agentLaunchConfigByPaneKey: launchConfigs
+    })
+    let changedUpdates = 0
+    const unsubscribe = store.subscribe((next, previous) => {
+      if (
+        next.sleepingAgentSessionsByPaneKey !== previous.sleepingAgentSessionsByPaneKey ||
+        next.agentLaunchConfigByPaneKey !== previous.agentLaunchConfigByPaneKey
+      ) {
+        changedUpdates += 1
+      }
+    })
+
+    store
+      .getState()
+      .clearSleepingAgentSessionsByPaneKey(['tab-1:leaf-1', 'tab-2:leaf-2', 'tab-2:leaf-2'])
+    unsubscribe()
+
+    const state = store.getState()
+    expect(changedUpdates).toBe(1)
+    expect(Object.keys(state.sleepingAgentSessionsByPaneKey)).toEqual(['tab-3:leaf-3'])
+    expect(Object.keys(state.agentLaunchConfigByPaneKey)).toEqual(['tab-3:leaf-3'])
+  })
+
   it('clears launch config registry entries when invalid sleeping sessions are pruned', () => {
     const store = createTestStore()
     store.setState({

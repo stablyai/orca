@@ -1766,11 +1766,14 @@ describe('updater', () => {
     expect(setPendingUpdateNudgeId).toHaveBeenCalledWith(null)
   })
 
-  // Why: issue #631 — the Windows auto-updater fails because installed
-  // versions signed with the wrong certificate have a stale publisherName
-  // in app-update.yml. verifyUpdateCodeSignature must be overridden on
-  // Windows so electron-updater skips Authenticode verification.
-  it('overrides verifyUpdateCodeSignature on Windows to skip signing verification', async () => {
+  // Why: the Windows auto-updater must keep electron-updater's built-in
+  // Authenticode verification, which checks the downloaded installer against
+  // the SignPath Foundation publisherName that electron-builder embeds in
+  // app-update.yml. A no-op verifyUpdateCodeSignature override would silently
+  // accept every installer, so setup must NOT install one. (The issue #631
+  // stale-publisherName problem that once justified an override is resolved now
+  // that SignPath builds embed the correct publisherName.)
+  it('does not disable Windows Authenticode verification on win32', async () => {
     vi.stubGlobal('process', { ...process, platform: 'win32' })
 
     const { setupAutoUpdater } = await import('./updater')
@@ -1780,11 +1783,7 @@ describe('updater', () => {
 
     setupAutoUpdater(mainWindow as never)
 
-    // The override should be set on the autoUpdater mock
-    const override = (autoUpdaterMock as Record<string, unknown>).verifyUpdateCodeSignature
-    expect(override).toBeTypeOf('function')
-    // Calling it should resolve to null (meaning "signature valid, skip check")
-    await expect((override as () => Promise<string | null>)()).resolves.toBeNull()
+    expect((autoUpdaterMock as Record<string, unknown>).verifyUpdateCodeSignature).toBeUndefined()
   })
 
   it('does not override verifyUpdateCodeSignature on non-Windows platforms', async () => {

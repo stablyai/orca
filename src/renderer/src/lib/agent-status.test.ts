@@ -411,12 +411,16 @@ describe('normalizeTerminalTitle', () => {
     // Names "grok" mid-title but ends with another agent → not a Grok frame.
     expect(normalizeTerminalTitle('⠋ debugging grok - claude')).toBe('⠋ debugging grok - claude')
     // Claude/Codex task text ending in "grok" must not collapse — only the
-    // Grok Build identity suffix " - grok" is the rotating-frame signal.
+    // Grok frame shape "spinner - phrase - grok" is the rotating-frame signal.
     expect(normalizeTerminalTitle('⠋ wire up grok')).toBe('⠋ wire up grok')
     expect(normalizeTerminalTitle('⠋ Codex is thinking about grok')).toBe(
       '⠋ Codex is thinking about grok'
     )
     expect(normalizeTerminalTitle('⠋ support for Grok')).toBe('⠋ support for Grok')
+    // Trailing " - grok" alone is not enough without the post-spinner delimiter.
+    expect(normalizeTerminalTitle('⠋ fix the flaky suite - grok')).toBe(
+      '⠋ fix the flaky suite - grok'
+    )
   })
 
   it('collapses Pi spinner and idle titles to stable labels', () => {

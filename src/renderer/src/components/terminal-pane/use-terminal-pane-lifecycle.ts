@@ -113,8 +113,10 @@ import {
 import {
   SPLIT_TERMINAL_PANE_EVENT,
   CLOSE_TERMINAL_PANE_EVENT,
+  WAKE_HIBERNATED_AGENTS_WORKTREE_EVENT,
   type SplitTerminalPaneDetail,
-  type CloseTerminalPaneDetail
+  type CloseTerminalPaneDetail,
+  type WakeHibernatedAgentsWorktreeDetail
 } from '@/constants/terminal'
 import { acquireWebviewsDragPassthrough } from '../browser-pane/webview-registry'
 import { recordCreatedTerminalPaneSplit } from './terminal-pane-split-completion'
@@ -881,11 +883,12 @@ export function useTerminalPaneLifecycle({
         imeNativeTextForwarderDisposablesRef.current.set(pane.id, imeNativeTextForwarder)
         pane.terminal.attachCustomKeyEventHandler((e) => {
           const now = Date.now()
-          const pendingCandidateReleaseGuardActive = shouldApplyTerminalImePendingCandidateKeyRelease(
-            e,
-            pendingTerminalImeCandidateKeyReleases,
-            now
-          )
+          const pendingCandidateReleaseGuardActive =
+            shouldApplyTerminalImePendingCandidateKeyRelease(
+              e,
+              pendingTerminalImeCandidateKeyReleases,
+              now
+            )
           const imeKeyboardOptions = {
             compositionActive: imeCompositionTracker.isActive(),
             candidateKeyGuardActive:
@@ -1745,6 +1748,37 @@ export function useTerminalPaneLifecycle({
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tabId, cwd])
+
+  // Why: mobile wake fanout — this pane self-selects by worktreeId and fires its
+  // own armed hibernation --resume while staying hidden on the desktop (no
+  // reveal, no focus/navigation change). Not-yet-mounted panes are covered by
+  // the background-mount fresh-connect cold-restore path instead.
+  useEffect(() => {
+    const onWakeHibernatedAgents = (event: Event): void => {
+      const detail = (event as CustomEvent<WakeHibernatedAgentsWorktreeDetail>).detail
+      if (!detail || detail.worktreeId !== worktreeId) {
+        return
+      }
+      for (const panePtyBinding of panePtyBindingsRef.current.values()) {
+        const claimKey = (
+          panePtyBinding as IDisposable & {
+            wakeHibernatedAgentIfArmed?: (claimedProviderSessions?: Set<string>) => string | null
+          }
+        ).wakeHibernatedAgentIfArmed?.(detail.wokenClaimKeys)
+        // Why: the dispatcher's follow-up generic resume must skip provider
+        // sessions this pane woke (or latched) in place — the sleeping record
+        // is only cleared after the in-place spawn succeeds, so without this
+        // the same session would resume twice.
+        if (claimKey) {
+          detail.wokenClaimKeys?.add(claimKey)
+        }
+      }
+    }
+    window.addEventListener(WAKE_HIBERNATED_AGENTS_WORKTREE_EVENT, onWakeHibernatedAgents)
+    return () => {
+      window.removeEventListener(WAKE_HIBERNATED_AGENTS_WORKTREE_EVENT, onWakeHibernatedAgents)
+    }
+  }, [worktreeId, panePtyBindingsRef])
 
   useEffect(() => {
     const previousIsVisible = getPreviousVisibleForTerminalPane({

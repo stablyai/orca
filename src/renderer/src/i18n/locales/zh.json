@@ -210,7 +210,8 @@
         },
         "workspace": {
           "cleanup": {
-            "9d6e531da6": "工作区不再存在。"
+            "9d6e531da6": "工作区不再存在。",
+            "changedSinceConfirmation": "工作区在确认后发生了更改。请刷新并在删除前重新检查。"
           }
         },
         "worktrees": {
@@ -247,7 +248,9 @@
           "a8e4b3af5b": "项目已添加过了",
           "6d3318e813": "导入存储库失败",
           "3be0f7df04": "无法在所选运行时打开文件夹",
-          "15cf5319ec": "已在 {{hostName}} 上检查 {{path}}，但该主机未报告可用文件夹。"
+          "15cf5319ec": "已在 {{hostName}} 上检查 {{path}}，但该主机未报告可用文件夹。",
+          "2dcd706774": "该项目也存在于另一个配置文件中",
+          "presenceProfileOverflow": "{{names}} 及另外 {{count}} 个"
         },
         "settings": {
           "e12dab333b": "切换服务器失败",
@@ -262,6 +265,24 @@
         },
         "linear": {
           "37d36984d0": "Linear 连接已被新的请求取代。"
+        },
+        "orca": {
+          "profiles": {
+            "612f7f6861": "创建配置文件失败",
+            "319d7cf39b": "已创建云配置文件",
+            "d6e764e7db": "请重新连接此配置文件",
+            "f0c9e11a6d": "创建云配置文件失败",
+            "8b8fa73174": "未配置 Orca Cloud 登录",
+            "33290e88ed": "连接配置文件失败",
+            "9fcb07a796": "配置文件已连接",
+            "2f6c78a039": "刷新配置文件身份验证失败",
+            "a37b5e6d37": "已退出配置文件",
+            "83600521e7": "退出登录失败",
+            "76deec8f58": "切换组织失败",
+            "7d4bc516ee": "切换配置文件失败",
+            "f518e89aa5": "该项目已存在于那个配置文件中",
+            "f03ae7f27b": "转移项目失败"
+          }
         }
       }
     },
@@ -545,6 +566,13 @@
       },
       "ephemeralVmWorkspaceTarget": {
         "projectRootRegistrationFailed": "在运行时上注册环境模板创建的项目根目录失败"
+      },
+      "blocked": {
+        "notification": {
+          "fallback": {
+            "de50bef680": "macOS 正在阻止 Orca 通知"
+          }
+        }
       }
     },
     "hooks": {
@@ -2312,7 +2340,61 @@
             "gitFilter": "Git",
             "contextFilter": "上下文",
             "sortBy": "排序依据",
-            "sortDirection": "方向"
+            "sortDirection": "方向",
+            "1d3503357d": "删除继续期间，你可以关闭此窗口并稍后回来。",
+            "4c2990886e": "已删除 {{value0}}/{{value1}}",
+            "86ba852118": "{{value0}}，{{value1}} 个失败",
+            "7b7bde5181": "到目前为止已检查工作区：{{value0}}",
+            "deletingCount": "正在删除工作区：{{value0}}",
+            "deleteCount": "删除工作区：{{value0}}？",
+            "selectedForDeletionCount": "已选择删除：{{value0}}",
+            "deleteButtonCount": "删除 {{value0}}",
+            "archivedStatus": "已归档",
+            "readyStatus": "就绪"
+          },
+          "backgroundRemoval": {
+            "removed": "已删除工作区：{{value0}}",
+            "failed": "未删除工作区：{{value0}}",
+            "error": "工作区清理失败",
+            "skippedAncestor": "由于无法删除嵌套工作区，已跳过。",
+            "timedOut": "删除 {{value0}} 的时间比预期长。它将在后台继续运行。"
+          },
+          "candidateRow": {
+            "gitLabel": "Git",
+            "commitsLabel": "提交",
+            "contextLabel": "上下文",
+            "flagsLabel": "标记",
+            "collapseDetails": "收起详情",
+            "expandDetails": "展开详情",
+            "cleanGit": "Git 干净",
+            "dirtyGit": "Git 有更改",
+            "unpushedCommits": "未推送提交",
+            "gitUnknown": "Git 未知",
+            "gitStatusUnknown": "Git 状态未知",
+            "noUnpushedCommits": "没有未推送提交",
+            "unpushedCommitsCount": "未推送提交：{{value0}}",
+            "uncommittedChanges": "未提交的更改",
+            "terminalTabsCount": "终端标签页：{{value0}}",
+            "editorTabsCount": "编辑器标签页：{{value0}}",
+            "browserTabsCount": "浏览器标签页：{{value0}}",
+            "diffNotesCount": "Diff 备注：{{value0}}",
+            "completedAgentsCount": "已完成智能体：{{value0}}",
+            "contextCount": "上下文：{{value0}}",
+            "mainWorkspaceBlocker": "主工作区",
+            "folderProjectBlocker": "文件夹项目",
+            "pinnedBlocker": "已固定",
+            "activeWorkspaceBlocker": "活动工作区",
+            "runningTerminalBlocker": "正在运行的终端进程",
+            "terminalLivenessUnknownBlocker": "终端状态未知",
+            "dirtyEditorBufferBlocker": "未保存的编辑器缓冲区",
+            "volatileLocalContextBlocker": "易变本地上下文",
+            "recentVisibleContextBlocker": "最近访问的标签页",
+            "liveAgentBlocker": "活动智能体",
+            "sshDisconnectedBlocker": "远程不可用",
+            "gitStatusErrorBlocker": "Git 状态不可用",
+            "dirtyFilesBlocker": "已更改文件",
+            "unknownBaseBlocker": "无法验证未推送提交",
+            "dismissedBlocker": "已忽略"
           }
         }
       },
@@ -2946,7 +3028,8 @@
             "f077f586db": "不再询问",
             "c0e972d726": "取消",
             "06741a2f3d": "打开 MiniMax 使用量详情",
-            "3bbf140864": "MiniMax 使用量"
+            "3bbf140864": "MiniMax 使用量",
+            "remoteServerLabel": "远程服务器"
           },
           "StatusBarUsageEmptyCta": {
             "828c764a79": "连接账户",
@@ -3958,7 +4041,8 @@
           "runtimeHostProject": "Orca 服务器上的项目",
           "automationCreated": "由自动化创建",
           "branchIdentity": "分支",
-          "branchFolderPathIdentity": "分支或文件夹路径"
+          "branchFolderPathIdentity": "分支或文件夹路径",
+          "ef18787206": "已排队删除"
         },
         "WorktreeCardAgents": {
           "1b0a156717": "智能体"
@@ -4691,7 +4775,13 @@
           "435df0ee51": "在请求头中，复制 Cookie 的值。",
           "7492fb3bba": "在此粘贴并点击保存。",
           "9fec52de4b": "如何复制 Cookie",
-          "4e32e030b2": "存储在本地。Orca 仅将其发送到 platform.minimax.io 以刷新使用量。"
+          "4e32e030b2": "存储在本地。Orca 仅将其发送到 platform.minimax.io 以刷新使用量。",
+          "remoteServerFallback": "远程服务器",
+          "loadAccountsFailed": "无法加载提供商账户。",
+          "remoteScopeAccounts": "正在显示由 {{value0}} 管理的账户。请在该服务器上添加或重新验证账户。",
+          "remoteScopeAuthContext": "每个账户在 {{value0}} 上保留自己的登录上下文。",
+          "remoteEmptyClaudeAccounts": "{{value0}} 上没有受管理的 Claude 账户。它使用其系统默认的 Claude 登录；请在该服务器上添加账户。",
+          "remoteEmptyCodexAccounts": "{{value0}} 上没有受管理的 Codex 账户。它使用其系统默认的 Codex 登录；请在该服务器上添加账户。"
         },
         "AdvancedPane": {
           "40b29e0bf3": "重新启动",
@@ -8740,7 +8830,14 @@
           "behindBaseRefToastDescription": "带有内联设置链接和底部操作按钮的持久提示。",
           "notificationPlayground": "通知测试面板",
           "notificationPlaygroundDescription": "用于检查提示布局、恢复操作和长文案换行的开发触发器。",
-          "devOnly": "仅开发"
+          "devOnly": "仅开发",
+          "orcaCloud": "Orca Cloud",
+          "orcaCloudDescription": "Dev-only preview of first-party cloud sign-in. Hidden in production; in dev it also appears in the sidebar account switcher once ORCA_CLOUD_API_URL and ORCA_CLOUD_CLIENT_ID are set.",
+          "orcaCloudStatus": "Status",
+          "orcaCloudSignOut": "Sign out",
+          "orcaCloudConnect": "Connect profile",
+          "orcaCloudRefresh": "Refresh status",
+          "orcaCloudNotConfigured": "Set ORCA_CLOUD_API_URL and ORCA_CLOUD_CLIENT_ID to preview Orca Cloud sign-in in this dev build."
         },
         "EphemeralVmRecipeRow": {
           "useInWorkspace": "在工作区中使用"
@@ -8806,6 +8903,26 @@
           "reviewFirst": "Review first",
           "singular": "Global saves won't change 1 repository with its own recipe.",
           "tooltipTitle": "Repository overrides"
+        },
+        "linear": {
+          "agent": {
+            "skill": {
+              "install": {
+                "cta": {
+                  "copiedCommand": "Copied command.",
+                  "copyFailed": "Failed to copy command.",
+                  "skillLabel": "Agent skill:",
+                  "checking": "Checking...",
+                  "installed": "Installed",
+                  "notInstalled": "Not installed",
+                  "recheck": "Re-check",
+                  "installedDescription": "Agent skill installed. To update it, run:",
+                  "description": "Let your agents read and edit Linear tasks.",
+                  "copyCommand": "Copy command"
+                }
+              }
+            }
+          }
         }
       },
       "right": {
@@ -9803,7 +9920,13 @@
             "sessionRole": "会话",
             "jumpToOriginalPane": "跳转到原始窗格",
             "worktree": "工作树",
-            "jumpToWorktree": "跳转到工作树"
+            "jumpToWorktree": "跳转到工作树",
+            "conversationNotSaved": "对话未保存",
+            "recoverableEmptyDetail": "此会话没有已保存的对话，但仍有 {{value0}} 个可恢复项。",
+            "recoverableEmptyOpenLogHint": "打开日志以恢复它们。",
+            "emptyConversationDetail": "此会话没有已保存的对话，无法恢复。",
+            "queuedMessages": "{{value0}} 条排队消息",
+            "subagentTranscripts": "{{value0}} 个子代理记录"
           },
           "AiVaultSessionRow": {
             "resumeAgentSession": "恢复 {{value0}} 会话",
@@ -9829,7 +9952,8 @@
             "systemRole": "系统",
             "sessionRole": "会话",
             "jumpToOriginalPane": "跳转到原始窗格",
-            "jumpToWorktree": "跳转到工作树"
+            "jumpToWorktree": "跳转到工作树",
+            "recoverableBadge": "未保存"
           },
           "FileExplorerNameFilter": {
             "26fb73c6e3": "查找文件",
@@ -10008,7 +10132,15 @@
           "3cd5374e22": "通知设置仍在加载中",
           "b6a994e36e": "无法播放通知声音",
           "c0692baa52": "选择自定义文件",
-          "ac80d97e02": "更改自定义文件"
+          "ac80d97e02": "更改自定义文件",
+          "56b836215c": "正在检查通知权限…",
+          "fd84d3e9b8": "通知已启用",
+          "4f7bce5644": "当代理完成或终端需要处理时，macOS 会提醒你。",
+          "95d99b52fa": "允许 Orca 发送通知",
+          "94562ba367": "macOS 正在请求权限。在对话框中点按允许，此步骤会自动更新。",
+          "4f6a1da718": "打开系统设置",
+          "90b5d2e363": "macOS 未送达 Orca 的通知",
+          "2c47f5465f": "在系统设置中启用 Orca 的允许通知。启用后此步骤会自动更新。"
         },
         "OnboardingFlow": {
           "1b5e182e9f": "欢迎使用 Orca",
@@ -10134,6 +10266,17 @@
           "windowsDefault": "Windows 默认值",
           "rightClickBehavior": "右键单击行为",
           "rightClickBehaviorDescription": "选择符合你在 Windows 上使用习惯的终端鼠标行为。"
+        },
+        "mac": {
+          "notification": {
+            "permission": {
+              "card": {
+                "f696515944": "在 macOS 对话框中点按允许。",
+                "3d18cf71f9": "将自动更新。",
+                "721d2bedb6": "在系统设置中为 Orca 开启允许通知。"
+              }
+            }
+          }
         }
       },
       "new": {
@@ -10429,6 +10572,7 @@
           },
           "FloatingTerminalToggleButton": {
             "3b04b065b5": "显示浮动工作区",
+            "4cb418b991": "Show floating workspace, new activity",
             "5785dd9148": "最小化浮动工作区",
             "bfe7809a70": "{{value0}} 浮动工作区 ({{value1}})"
           },
@@ -12457,6 +12601,158 @@
       "nativeChat": {
         "contextMenu": {
           "copy": "复制"
+        }
+      },
+      "orca": {
+        "profiles": {
+          "switcher": {
+            "cloud": {
+              "unavailable": "云登录不可用"
+            },
+            "reconnect": "重新连接配置文件",
+            "connect": "连接配置文件",
+            "organization": "组织",
+            "create": {
+              "profile": {
+                "for": {
+                  "org": "为组织创建配置文件"
+                }
+              }
+            },
+            "signout": "退出登录",
+            "16e3681072": "新建本地配置文件",
+            "e3b91a3d90": "创建一个空配置文件，用于分开管理项目和工作树。",
+            "f322e1f4d6": "配置文件名称",
+            "cfa59f8ad1": "创建并切换",
+            "b4f9d1125d": "本地",
+            "4815f7d163": "切换配置文件",
+            "d00d853e2a": "管理配置文件",
+            "c106c674fe": "新建本地配置文件",
+            "account": "帐户",
+            "org": {
+              "members": "组织成员"
+            }
+          },
+          "management": {
+            "04e7bd2a23": "转移",
+            "128c7dfe64": "复制到",
+            "df8b7d876b": "移动到",
+            "9aa26347b3": "项目已移动",
+            "816ce624b6": "项目已复制",
+            "2c45bda8d3": "管理配置文件",
+            "2db945e4a0": "将项目从当前配置文件复制或移动到另一个本地配置文件。",
+            "8668cb2946": "此配置文件中没有项目。",
+            "93034915ab": "复制项目前，请先创建另一个配置文件。",
+            "projectCountSingular": "{{count}} 个项目",
+            "projectCountPlural": "{{count}} 个项目"
+          },
+          "project": {
+            "transfer": {
+              "confirm": {
+                "move": {
+                  "title": "移动项目？",
+                  "description": "将 {{repoName}} 移动到 {{targetName}}。Orca 会将其从 {{activeProfileName}} 中移除，保留文件原位，并重新启动进入 {{targetName}}。",
+                  "action": "移动项目"
+                },
+                "copy": {
+                  "title": "复制项目？",
+                  "description": "将 {{repoName}} 复制到 {{targetName}}。两个配置文件将指向相同的文件，但使用各自独立的 Orca 元数据。",
+                  "action": "复制项目"
+                },
+                "live": {
+                  "work": "此项目中正在进行的工作"
+                },
+                "cancel": "取消",
+                "terminalSingular": "{{count}} 个正在运行的终端选项卡",
+                "terminalPlural": "{{count}} 个正在运行的终端选项卡",
+                "agentSingular": "{{count}} 个活动的智能体",
+                "agentPlural": "{{count}} 个活动的智能体",
+                "browserSingular": "{{count}} 个浏览器工作区",
+                "browserPlural": "{{count}} 个浏览器工作区"
+              }
+            }
+          },
+          "signout": {
+            "confirm": {
+              "title": "退出登录？",
+              "description": "退出 {{profileName}}，并在此设备上保留其项目、工作树和本地元数据。",
+              "cancel": "取消",
+              "action": "退出登录"
+            }
+          },
+          "switch": {
+            "confirm": {
+              "target": "所选配置文件",
+              "title": "切换配置文件？",
+              "description": "切换到 {{targetName}} 将重新启动 Orca 并重新加载 {{activeProfileName}} 的工作区。",
+              "live": {
+                "work": "此配置文件中正在进行的工作"
+              },
+              "cancel": "取消",
+              "switch": "切换配置文件",
+              "terminalSingular": "{{count}} 个正在运行的终端选项卡",
+              "terminalPlural": "{{count}} 个正在运行的终端选项卡",
+              "agentSingular": "{{count}} 个活动的智能体",
+              "agentPlural": "{{count}} 个活动的智能体",
+              "browserSingular": "{{count}} 个浏览器工作区",
+              "browserPlural": "{{count}} 个浏览器工作区"
+            }
+          },
+          "org": {
+            "members": {
+              "role": {
+                "label": "角色",
+                "owner": "所有者",
+                "admin": "管理员",
+                "member": "成员"
+              },
+              "not": {
+                "signed": {
+                  "in": "他们尚未登录 Orca。"
+                }
+              },
+              "remove": {
+                "confirm": "移除",
+                "cancel": "取消",
+                "label": "移除成员"
+              },
+              "title": "组织成员",
+              "load": {
+                "error": "无法加载组织成员。"
+              },
+              "retry": "重试",
+              "pending": {
+                "title": "待处理的邀请",
+                "revoke": "撤销"
+              },
+              "invite": {
+                "title": "邀请",
+                "placeholder": "teammate@example.com",
+                "role": "邀请角色",
+                "submit": "发送"
+              },
+              "error": {
+                "forbidden": "你的角色无法执行此操作。",
+                "conflict": "已是成员或已被邀请。",
+                "remove": {
+                  "self": "无法移除你自己。"
+                },
+                "own": {
+                  "role": "无法更改你自己的角色。"
+                },
+                "not": {
+                  "found": "该成员已不在此组织中。"
+                },
+                "reconnect": "请重新连接你的配置文件以管理成员。",
+                "unconfigured": "此版本不支持组织管理。",
+                "failed": "出现问题。请重试。"
+              },
+              "subtitle": {
+                "named": "{{orgName}} 中可以协作使用 Orca 的成员。",
+                "default": "你的组织中可以协作使用 Orca 的成员。"
+              }
+            }
+          }
         }
       }
     },

@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { ActivityIndicator, Pressable, Text, TextInput, View } from 'react-native'
-import { ArrowRight, Pencil } from 'lucide-react-native'
+import { ArrowRight, ExternalLink, Pencil } from 'lucide-react-native'
 import { colors } from '../../theme/mobile-theme'
 import type { GitHubWorkItemDetails, PRInfo } from '../../../../src/shared/types'
 import type { MobilePrTitleAction } from '../../session/use-mobile-pr-title-action'
@@ -29,26 +29,39 @@ export function PRSidebarHeader({ pr, details, titleAction }: Props) {
   const baseRef = item?.baseRefName ?? null
   const headRef = item?.branchName ?? null
   const editable = canEditPRTitle(pr.state)
-  // Tapping the state badge or the #number opens the PR on its host (GitHub/etc.)
-  // in the phone browser — pr.url is the canonical web URL.
+  // Badge, #number, and the flush-right external-link control all open pr.url
+  // (canonical host web URL) in the phone browser.
   const openPr = pr.url ? () => openMobilePrUrl(pr.url) : undefined
 
   return (
     <View style={styles.section}>
       <View style={styles.sectionBody}>
-        <Pressable
-          onPress={openPr}
-          disabled={!openPr}
-          accessibilityRole="link"
-          accessibilityLabel={`Open pull request #${pr.number} on the web`}
-          style={({ pressed }) => [
-            styles.badge,
-            { borderColor: badgeColor },
-            pressed && { opacity: 0.6 }
-          ]}
-        >
-          <Text style={[styles.badgeText, { color: badgeColor }]}>{badge.label}</Text>
-        </Pressable>
+        <View style={styles.badgeRow}>
+          <Pressable
+            onPress={openPr}
+            disabled={!openPr}
+            accessibilityRole="link"
+            accessibilityLabel={`Open pull request #${pr.number} on the web`}
+            style={({ pressed }) => [
+              styles.badge,
+              { borderColor: badgeColor },
+              pressed && { opacity: 0.6 }
+            ]}
+          >
+            <Text style={[styles.badgeText, { color: badgeColor }]}>{badge.label}</Text>
+          </Pressable>
+          {openPr ? (
+            <Pressable
+              onPress={openPr}
+              hitSlop={8}
+              accessibilityRole="link"
+              accessibilityLabel={`Open pull request #${pr.number} in browser`}
+              style={({ pressed }) => [styles.iconButton, pressed && { opacity: 0.6 }]}
+            >
+              <ExternalLink size={16} color={colors.textSecondary} strokeWidth={2.2} />
+            </Pressable>
+          ) : null}
+        </View>
         <PRTitle
           title={title}
           number={pr.number}

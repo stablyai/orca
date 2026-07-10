@@ -6412,7 +6412,7 @@ describe('setWorktreesPinnedAndReveal', () => {
     store.getState().setWorktreesPinnedAndReveal([wt.id], true)
 
     expect(store.getState().worktreesByRepo.repo1[0].isPinned).toBe(true)
-    expect(reveal).toHaveBeenCalledWith(wt.id, { behavior: 'smooth', highlight: true })
+    expect(reveal).toHaveBeenCalledWith(wt.id, { highlight: true })
   })
 
   it('reveals on unpin so the viewport follows the row back to its status group', () => {
@@ -6427,7 +6427,7 @@ describe('setWorktreesPinnedAndReveal', () => {
     store.getState().setWorktreesPinnedAndReveal([wt.id], false)
 
     expect(store.getState().worktreesByRepo.repo1[0].isPinned).toBe(false)
-    expect(reveal).toHaveBeenCalledWith(wt.id, { behavior: 'smooth', highlight: true })
+    expect(reveal).toHaveBeenCalledWith(wt.id, { highlight: true })
   })
 
   it('skips a no-op toggle without requesting a reveal', () => {
@@ -6492,7 +6492,7 @@ describe('setWorktreesPinnedAndReveal', () => {
     store.getState().setWorktreesPinnedAndReveal([alreadyPinned.id, first.id, second.id], true)
 
     expect(reveal).toHaveBeenCalledTimes(1)
-    expect(reveal).toHaveBeenCalledWith(first.id, { behavior: 'smooth', highlight: true })
+    expect(reveal).toHaveBeenCalledWith(first.id, { highlight: true })
     // Every targeted row is pinned, not just the revealed one, and the
     // already-pinned row is left untouched.
     expect(store.getState().worktreesByRepo.repo1[0].isPinned).toBe(true)
