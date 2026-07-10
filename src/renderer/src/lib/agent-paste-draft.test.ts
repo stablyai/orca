@@ -482,6 +482,57 @@ describe('pasteDraftWhenAgentReady', () => {
     expect(testState.sendRuntimePtyInputVerified).not.toHaveBeenCalled()
   })
 
+  it('pastes Hermes on the pty-bound path via the quiet window without a handshake', async () => {
+    const promise = pasteDraftToAgentPtyWhenReady({
+      tabId: 'tab-1',
+      ptyId: 'pty-1',
+      content: ISSUE_URL,
+      agent: 'hermes',
+      forcePaste: true
+    })
+    await flushMicrotasks()
+
+    // Hermes's prompt_toolkit TUI never emits DECSET 2004; it just renders.
+    testState.ptyObserver?.('Hermes Agent - AI assistant\x1b[2J\x1b[H> ')
+    await flushMicrotasks()
+
+    await vi.advanceTimersByTimeAsync(1500)
+
+    await expect(promise).resolves.toBe(true)
+    expect(testState.sendRuntimePtyInputVerified).toHaveBeenCalledWith(
+      {},
+      'pty-1',
+      PASTED_ISSUE_URL
+    )
+  })
+
+  it('skips the process-name fallback for Hermes when readiness times out on the pty-bound path', async () => {
+    const onTimeout = vi.fn()
+    // Never resolves: if the fallback ran, it would poll inspectRuntimeTerminalProcess.
+    testState.inspectRuntimeTerminalProcess.mockReturnValue(new Promise(() => {}))
+
+    const promise = pasteDraftToAgentPtyWhenReady({
+      tabId: 'tab-1',
+      ptyId: 'pty-1',
+      content: ISSUE_URL,
+      agent: 'hermes',
+      forcePaste: true,
+      timeoutMs: 10,
+      onTimeout
+    })
+    await flushMicrotasks()
+
+    // No PTY output: the quiet window never arms, so readiness fails at timeoutMs.
+    await vi.advanceTimersByTimeAsync(10)
+    await flushMicrotasks(5)
+
+    await expect(promise).resolves.toBe(false)
+    expect(onTimeout).toHaveBeenCalledTimes(1)
+    // process-ready must NOT fall back to the python3-vs-hermes process check.
+    expect(testState.inspectRuntimeTerminalProcess).not.toHaveBeenCalled()
+    expect(testState.sendRuntimePtyInputVerified).not.toHaveBeenCalled()
+  })
+
   it('routes tab-owned paste writes through the worktree runtime owner', async () => {
     testState.appState.settings = { activeRuntimeEnvironmentId: 'focused-runtime' }
     testState.appState.tabsByWorktree = { 'wt-1': [{ id: 'tab-1' }] }

@@ -113,7 +113,7 @@ export async function pasteDraftWhenAgentReady(args: {
     // the foreground process name, but wrapped interpreter launches surface as
     // `python3 .../hermes` — `isExpectedAgentProcess('python3','hermes')` fails,
     // so the fallback can never confirm readiness and would only drop the paste.
-    // Trust the quiet-window signal for this signal; do not fall back.
+    // Trust the quiet-window signal for this agent; do not fall back.
     if (readySignal === 'process-ready') {
       onTimeout?.()
       return false
@@ -161,6 +161,14 @@ export async function pasteDraftToAgentPtyWhenReady(args: {
   const readySignal = agentConfig?.draftPasteReadySignal ?? 'render-quiet-after-bracketed-paste'
   const ready = await waitForAgentDraftInputReady(ptyId, budget, readySignal, settings)
   if (!ready) {
+    // Why: `process-ready` agents (e.g. Hermes) surface as a wrapped interpreter
+    // (`python3 .../hermes`), so the process-name fallback below can never match
+    // `expectedProcess` and would only burn ~1s before dropping the paste. Trust
+    // the quiet-window signal here too, matching `pasteDraftWhenAgentReady`.
+    if (readySignal === 'process-ready') {
+      onTimeout?.()
+      return false
+    }
     const fallbackReady = agentConfig
       ? await waitForExpectedAgentOnPty(ptyId, agentConfig.expectedProcess, 1000, settings)
       : false
