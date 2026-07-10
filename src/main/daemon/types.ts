@@ -3,13 +3,11 @@ import type { TerminalOscLinkRange } from '../../shared/terminal-osc-link-ranges
 // ─── Protocol Version ────────────────────────────────────────────────
 import type { StartupCommandDelivery } from '../../shared/codex-startup-delivery'
 
-// Why: daemons can survive app updates. Bump for IPC wire-shape changes, or
-// when daemon-baked behavior cannot be delivered by on-disk wrapper refresh.
-// Why: bump when adding daemon wire behavior so same-version old daemons do
-// not silently accept the handshake and then reject new RPCs.
-export const PROTOCOL_VERSION = 18
+// Why: daemons survive app updates; bump for IPC shape or baked behavior that
+// wrapper refresh cannot deliver, so old daemons reject unsupported RPCs.
+export const PROTOCOL_VERSION = 19
 export const PREVIOUS_DAEMON_PROTOCOL_VERSIONS = [
-  1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17
+  1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18
 ] as const
 
 // ─── Session State Machine ──────────────────────────────────────────
@@ -268,6 +266,8 @@ export type TakePendingOutputResult = {
   snapshot: TerminalSnapshot | null
 }
 
+export type SeedHistoryRequest = Omit<WriteRequest, 'type'> & { type: 'seedHistory' }
+
 export type DaemonRequest =
   | CreateOrAttachRequest
   | CancelCreateOrAttachRequest
@@ -287,6 +287,7 @@ export type DaemonRequest =
   | GetSnapshotRequest
   | GetSizeRequest
   | TakePendingOutputRequest
+  | SeedHistoryRequest
 
 // ─── RPC Responses (Daemon → Client, on control socket) ────────────
 

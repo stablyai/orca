@@ -938,7 +938,7 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
       expect(existsSync(join(historyDir, getHistorySessionDirName(id)))).toBe(true)
     })
 
-    it('persists final take records that are not represented in the snapshot', async () => {
+    itOnPosix('persists final take records that are not represented in the snapshot', async () => {
       historyAdapter = new DaemonPtyAdapter({ socketPath, tokenPath, historyPath: historyDir })
 
       const { id } = await historyAdapter.spawn({
@@ -1518,6 +1518,43 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
       expect(meta.cwd).toBe('/tmp')
       expect(meta.cols).toBe(80)
       expect(meta.rows).toBe(24)
+    })
+
+    it('keeps recovered scrollback when the fresh daemon session re-anchors history', async () => {
+      const sessionId = 'cold-restore-reanchor'
+      const sessionDir = join(historyDir, getHistorySessionDirName(sessionId))
+      mkdirSync(sessionDir, { recursive: true })
+      writeFileSync(
+        join(sessionDir, 'meta.json'),
+        JSON.stringify({
+          cwd: '/tmp',
+          cols: 80,
+          rows: 24,
+          startedAt: '2026-07-10T08:00:00Z',
+          endedAt: null,
+          exitCode: null
+        })
+      )
+      writeFileSync(join(sessionDir, 'scrollback.bin'), 'recovered marker\r\n')
+      const adapterClass = DaemonPtyAdapter as unknown as { CHECKPOINT_INTERVAL_MS: number }
+      const previousInterval = adapterClass.CHECKPOINT_INTERVAL_MS
+      adapterClass.CHECKPOINT_INTERVAL_MS = 10
+
+      try {
+        historyAdapter = new DaemonPtyAdapter({ socketPath, tokenPath, historyPath: historyDir })
+        const result = await historyAdapter.spawn({ cols: 80, rows: 24, sessionId })
+        expect(result.coldRestore?.scrollback).toContain('recovered marker')
+
+        lastSubprocess._simulateData('fresh shell output\r\n')
+        const checkpointPath = join(sessionDir, 'checkpoint.json')
+        await waitFor(() => existsSync(checkpointPath))
+        const checkpoint = JSON.parse(readFileSync(checkpointPath, 'utf8'))
+
+        expect(checkpoint.snapshotAnsi).toContain('recovered marker')
+        expect(checkpoint.snapshotAnsi).toContain('fresh shell output')
+      } finally {
+        adapterClass.CHECKPOINT_INTERVAL_MS = previousInterval
+      }
     })
 
     it('does not cold-restore for clean shutdown (endedAt set)', async () => {

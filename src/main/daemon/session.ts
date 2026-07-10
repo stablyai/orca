@@ -234,6 +234,15 @@ export class Session {
     return this.emulator.getSnapshot()
   }
 
+  seedHistory(data: string): boolean {
+    if (this._disposed || this._state === 'exited' || data.length === 0) {
+      return false
+    }
+    // Why: recovered scrollback must live in the new daemon emulator before
+    // its first full checkpoint, or that checkpoint erases the recovery source.
+    return this.emulator.writeSync(data)
+  }
+
   // Why: the size the PTY actually applied (emulator dims, which Session.resize
   // advances atomically with the subprocess), so the renderer can detect a
   // resize that was dropped here (exited/disposed/invalid) instead of trusting

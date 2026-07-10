@@ -258,16 +258,35 @@ export class DaemonPtyAdapter implements IPtyProvider {
       const scrollback = isAltScreen
         ? restoreInfo.scrollbackAnsi || restoreInfo.snapshotAnsi || null
         : restoreInfo.rehydrateSequences + restoreInfo.snapshotAnsi
+      let canReanchorHistory = true
+      if (scrollback) {
+        try {
+          const seed = await this.client.request<{ seeded: boolean }>('seedHistory', {
+            sessionId,
+            data: scrollback
+          })
+          canReanchorHistory = seed.seeded
+        } catch (err) {
+          canReanchorHistory = false
+          console.warn('[history] failed to seed recovered daemon scrollback:', sessionId, err)
+        }
+      }
       // Why: use registerWriter (not openSession) to avoid deleting the
       // existing checkpoint.json. If the revived daemon crashes again before
       // the next 5s tick, the checkpoint is the only recovery data available.
       if (this.historyManager) {
-        this.historyManager.registerWriter(sessionId)
-        this.sessionsNeedingFullCheckpoint.add(sessionId)
-        // Why: the revived generation has no valid checkpoint of its own; a
-        // cooldown inherited from the pre-crash generation (daemon respawn
-        // within one adapter) must not defer this re-anchor.
-        this.lastFullCheckpointAt.delete(sessionId)
+        if (canReanchorHistory) {
+          this.historyManager.registerWriter(sessionId)
+          this.sessionsNeedingFullCheckpoint.add(sessionId)
+          // Why: the revived generation has no valid checkpoint of its own; a
+          // cooldown inherited from the pre-crash generation (daemon respawn
+          // within one adapter) must not defer this re-anchor.
+          this.lastFullCheckpointAt.delete(sessionId)
+        } else {
+          // Preserve the old recovery files when the new daemon cannot include
+          // them; a fresh-only checkpoint would make the data loss permanent.
+          this.historyManager.suspendSession(sessionId)
+        }
       }
       if (scrollback) {
         const coldRestore = { scrollback, cwd: restoreInfo.cwd, oscLinks: restoreInfo.oscLinks }

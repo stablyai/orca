@@ -969,7 +969,7 @@
       "id": "terminal-platform.windows-conpty-liveness",
       "title": "Windows ConPTY terminals stay input-live, render-live, and geometry-live",
       "maturity": "experimental",
-      "protection": "none",
+      "protection": "partial",
       "owner": "terminal-platform",
       "layer": "windows-electron-conpty",
       "surfaces": [
@@ -987,34 +987,76 @@
         "daemon",
         "wsl"
       ],
-      "coveredPlatforms": [],
-      "coveredProviders": [],
-      "coverageNotes": "Registered gap only; no executable coverage is wired yet.",
+      "coveredPlatforms": [
+        "windows"
+      ],
+      "coveredProviders": [
+        "daemon"
+      ],
+      "coverageNotes": "Issue #8048 now has deterministic wrapper and cold-restore re-anchor tests plus a Windows PR-CI harness that drives the built daemon through 25 real ConPTY workspace-close races while an unrelated witness PTY stays alive. Keyboard reset, CJK repaint, WSL, and full visible Electron coverage remain gaps.",
       "motivatingLinks": [
         "https://github.com/stablyai/orca/pull/6541",
         "https://github.com/stablyai/orca/pull/6858",
         "https://github.com/stablyai/orca/pull/6876",
         "https://github.com/stablyai/orca/pull/6968",
         "https://github.com/stablyai/orca/pull/6970",
-        "https://github.com/stablyai/orca/pull/6999"
+        "https://github.com/stablyai/orca/pull/6999",
+        "https://github.com/stablyai/orca/issues/8048"
       ],
-      "invariant": "Windows local and daemon terminals must spawn with the intended shell, accept normal Enter/Backspace/Arrow input after agent or TUI exit, render cursor/CJK/wide-glyph redraws without stale cells, and converge to nonzero applied size.",
-      "oracle": "A Windows live gate proves shell echo, command submission, keyboard reset, resize readback, cursor visibility, and CJK/wide-glyph redraw using PTY input logs plus visible buffer/pixel evidence.",
-      "commands": [],
-      "testFiles": [],
-      "assertionRefs": [],
-      "evidenceRuns": [],
+      "invariant": "Windows local and daemon terminals must spawn with the intended shell, survive overlapping graceful/forced workspace teardown without affecting unrelated PTYs, retain recovered scrollback across the fresh daemon's first checkpoint, accept normal Enter/Backspace/Arrow input after agent or TUI exit, render cursor/CJK/wide-glyph redraws without stale cells, and converge to nonzero applied size.",
+      "oracle": "The issue #8048 slice asserts one node-pty ConPTY close for a graceful-then-force sequence, replays recovered history into the new daemon emulator before re-anchoring, and runs 25 built-daemon close races while checking a stable daemon PID and live witness PTY after each iteration. A broader Windows live gate still needs shell input, resize, cursor, and CJK/wide-glyph pixel evidence.",
+      "commands": [
+        "pnpm vitest run src/main/daemon/pty-subprocess.test.ts src/main/daemon/daemon-pty-adapter.test.ts",
+        "pnpm build:electron-vite && node config/scripts/windows-daemon-workspace-close-repro.mjs",
+        "node config/scripts/windows-daemon-workspace-close-repro.mjs"
+      ],
+      "testFiles": [
+        "src/main/daemon/pty-subprocess.test.ts",
+        "src/main/daemon/daemon-pty-adapter.test.ts",
+        "config/scripts/windows-daemon-workspace-close-repro.mjs"
+      ],
+      "assertionRefs": [
+        {
+          "file": "src/main/daemon/pty-subprocess.test.ts",
+          "assertions": [
+            "graceful kill followed by force and dispose invokes Windows node-pty kill exactly once and never retries the dead child PID"
+          ]
+        },
+        {
+          "file": "src/main/daemon/daemon-pty-adapter.test.ts",
+          "assertions": [
+            "the first checkpoint of a cold-restored fresh daemon session contains both recovered scrollback and new shell output"
+          ]
+        },
+        {
+          "file": "config/scripts/windows-daemon-workspace-close-repro.mjs",
+          "assertions": [
+            "the built daemon PID and an unrelated witness PowerShell remain alive through 25 overlapping graceful/immediate victim shutdowns"
+          ]
+        }
+      ],
+      "evidenceRuns": [
+        {
+          "date": "2026-07-10",
+          "runner": "local",
+          "platform": "windows",
+          "command": "node config/scripts/windows-daemon-workspace-close-repro.mjs",
+          "result": "passed",
+          "durationSeconds": 7.7,
+          "summary": "The built daemon and witness PTY survived 25 real ConPTY workspace-close races. Both focused unit regressions also produced intentional red failures before their fixes and passed afterward."
+        }
+      ],
       "runtimeBudget": {
         "p95Seconds": 90,
         "scope": "Windows focused Electron ConPTY gate"
       },
       "flakeHistory": {
-        "status": "not-started",
-        "evidence": "Windows live E2E remains a known weak area; gate must soak before blocking."
+        "status": "unknown",
+        "evidence": "The built-daemon issue #8048 harness passed locally once and is wired into Windows PR CI; it needs repeated CI history before promotion."
       },
       "redGreenEvidence": {
-        "status": "missing",
-        "evidence": "Needs proof against stale keyboard-protocol mode, shell resolution failure, dropped resize, and CJK repaint regression."
+        "status": "partial",
+        "evidence": "The ConPTY double-close and cold-restore re-anchor assertions were each observed failing before the fix and passing afterward. Keyboard protocol, shell resolution, resize, and CJK repaint still need red/green proof."
       },
       "performanceBudget": {
         "required": true,
@@ -1026,8 +1068,8 @@
         "Split shell parity, keyboard reset, and CJK repaint into smaller gates if a combined gate is flaky."
       ],
       "knownGaps": [
-        "No manifest command yet.",
-        "Real IME composition may require a separate lower-layer/native-text-forwarding gate."
+        "Real IME composition may require a separate lower-layer/native-text-forwarding gate.",
+        "The built-daemon harness proves process/session liveness but not renderer pixels; visible shell input, resize, cursor, and CJK repaint remain uncovered."
       ],
       "demotionRule": "Cannot promote while Windows E2E is flaky, silently skipped, or screenshot-only."
     },

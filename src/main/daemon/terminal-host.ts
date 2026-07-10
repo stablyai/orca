@@ -269,6 +269,10 @@ export class TerminalHost {
     return session.getSnapshot()
   }
 
+  seedHistory(sessionId: string, data: string): boolean {
+    return this.getAliveSession(sessionId).seedHistory(data)
+  }
+
   // Why: read-only readback of the size the PTY actually applied (null-not-throw
   // like getSnapshot). The renderer compares this against xterm to detect a
   // resize that was dropped/coerced daemon-side and re-assert it.

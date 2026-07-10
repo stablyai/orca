@@ -132,6 +132,13 @@ export class HistoryManager {
     })
   }
 
+  suspendSession(sessionId: string): void {
+    // Why: if a fresh daemon cannot accept recovered scrollback, leaving its
+    // writer active would let the next checkpoint overwrite the only good copy.
+    this.writers.delete(sessionId)
+    this.disabledSessions.delete(sessionId)
+  }
+
   /** Appends one take batch to the incremental log. Returns 'needs-checkpoint'
    *  when the log is at capacity — the caller must take a full snapshot, which
    *  subsumes the un-appended records (they were already applied to the live
