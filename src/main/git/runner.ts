@@ -275,6 +275,7 @@ type GitExecOptions = {
   env?: NodeJS.ProcessEnv
   signal?: AbortSignal
   wslDistro?: string
+  successExitCodes?: readonly number[]
   useConfiguredSshCommandForNetwork?: boolean
 }
 
@@ -305,6 +306,28 @@ function shouldRetryWindowsCommandShim(error: unknown, resolved: ResolvedCommand
     !hasPathSeparator(resolved.binary) &&
     !/\.[A-Za-z0-9]+$/.test(resolved.binary)
   )
+}
+
+function exitCodeFromError(error: unknown): number | null {
+  if (!error || typeof error !== 'object') {
+    return null
+  }
+  const code = (error as { code?: unknown }).code
+  if (typeof code === 'number' && Number.isFinite(code)) {
+    return code
+  }
+  if (typeof code === 'string' && /^-?\d+$/.test(code)) {
+    return Number(code)
+  }
+  return null
+}
+
+function isConfiguredSuccessExit(
+  error: unknown,
+  successExitCodes: readonly number[] | undefined
+): boolean {
+  const code = exitCodeFromError(error)
+  return code !== null && successExitCodes?.includes(code) === true
 }
 
 function createAbortError(): Error {
@@ -340,6 +363,29 @@ type ExecFileCaptureOptions = Omit<ExecFileOptions, 'timeout'> & {
 
 function emptyExecFileOutput(options: ExecFileCaptureOptions): string | Buffer {
   return options.encoding === 'buffer' ? Buffer.alloc(0) : ''
+}
+
+function capturedExecErrorOutput(
+  error: unknown,
+  options: ExecFileCaptureOptions
+): { stdout: string | Buffer; stderr: string | Buffer } {
+  if (!error || typeof error !== 'object') {
+    return {
+      stdout: emptyExecFileOutput(options),
+      stderr: emptyExecFileOutput(options)
+    }
+  }
+  const captured = error as { stdout?: unknown; stderr?: unknown }
+  return {
+    stdout:
+      typeof captured.stdout === 'string' || Buffer.isBuffer(captured.stdout)
+        ? captured.stdout
+        : emptyExecFileOutput(options),
+    stderr:
+      typeof captured.stderr === 'string' || Buffer.isBuffer(captured.stderr)
+        ? captured.stderr
+        : emptyExecFileOutput(options)
+  }
 }
 
 function isExecFileResultObject(
@@ -812,19 +858,25 @@ export async function gitExecFileAsync(
         ? await buildNetworkSshPolicyEnv(options)
         : { env: nonInteractiveGitEnv(options.env), mode: 'default' as const }
       let result: { stdout: string | Buffer; stderr: string | Buffer }
+      const execOptions = {
+        cwd: resolved.cwd,
+        encoding: (options.encoding ?? 'utf-8') as BufferEncoding,
+        maxBuffer: options.maxBuffer,
+        timeout: options.timeout,
+        stdin: options.stdin,
+        // Why: never let a git read-path call block on an interactive prompt
+        // (issue #5308) — fail fast instead of hanging the runtime.
+        env: policy.env,
+        signal: options.signal
+      }
       try {
-        result = await execFileCapture(resolved.binary, resolved.args, {
-          cwd: resolved.cwd,
-          encoding: (options.encoding ?? 'utf-8') as BufferEncoding,
-          maxBuffer: options.maxBuffer,
-          timeout: options.timeout,
-          stdin: options.stdin,
-          // Why: never let a git read-path call block on an interactive prompt
-          // (issue #5308) — fail fast instead of hanging the runtime.
-          env: policy.env,
-          signal: options.signal
-        })
+        result = await execFileCapture(resolved.binary, resolved.args, execOptions)
       } catch (error) {
+        if (isConfiguredSuccessExit(error, options.successExitCodes)) {
+          result = capturedExecErrorOutput(error, execOptions)
+          const { stdout, stderr } = result
+          return { stdout: stdout as string, stderr: stderr as string }
+        }
         if (options.useConfiguredSshCommandForNetwork && error && typeof error === 'object') {
           Object.assign(error, { gitSshPolicyMode: policy.mode })
         }
