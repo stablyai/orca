@@ -101,7 +101,7 @@ function HookProbe({
     activeFile,
     isChangesMode: false,
     openFiles,
-    gitStatusByWorktree,
+    gitStatusEntries: activeFile ? gitStatusByWorktree[activeFile.worktreeId] : undefined,
     editorViewMode: {}
   })
   latestFileContents = state.fileContents
