@@ -417,7 +417,7 @@ describe('terminal send RPC', () => {
 
   it('routes terminal restore fit through the runtime driver state machine', async () => {
     const runtime = stubRuntime({
-      resolveLeafForHandle: vi.fn().mockReturnValue({ ptyId: 'pty-1' }),
+      resolveLiveLeafForHandle: vi.fn().mockReturnValue({ ptyId: 'pty-1' }),
       reclaimTerminalForDesktop: vi.fn().mockResolvedValue(true)
     })
     const dispatcher = new RpcDispatcher({ runtime, methods: TERMINAL_METHODS })

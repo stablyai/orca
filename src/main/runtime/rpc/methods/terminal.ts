@@ -1083,7 +1083,10 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
     name: 'terminal.resizeForClient',
     params: TerminalResizeForClient,
     handler: async (params, { runtime }) => {
-      const leaf = runtime.resolveLeafForHandle(params.terminal)
+      // Why: guarded resolution — a stale handle (pane's PTY replaced under it)
+      // must fail with terminal_handle_stale instead of resizing the wrong PTY
+      // (#7718). Clients recover by re-deriving the handle.
+      const leaf = runtime.resolveLiveLeafForHandle(params.terminal)
       if (!leaf?.ptyId) {
         throw new Error('no_connected_pty')
       }
@@ -1137,7 +1140,10 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
     name: 'terminal.setDisplayMode',
     params: TerminalSetDisplayMode,
     handler: async (params, { runtime }) => {
-      const leaf = runtime.resolveLeafForHandle(params.terminal)
+      // Why: guarded resolution — a stale handle must fail with
+      // terminal_handle_stale instead of mutating the wrong PTY's display
+      // mode/viewport (#7718). Clients recover by re-deriving the handle.
+      const leaf = runtime.resolveLiveLeafForHandle(params.terminal)
       if (!leaf?.ptyId) {
         throw new Error('no_connected_pty')
       }
@@ -1159,7 +1165,10 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
     name: 'terminal.restoreFit',
     params: TerminalHandle,
     handler: async (params, { runtime }) => {
-      const leaf = runtime.resolveLeafForHandle(params.terminal)
+      // Why: guarded resolution — a stale handle must fail with
+      // terminal_handle_stale instead of reclaiming the wrong PTY back to
+      // desktop dims (#7718). Clients recover by re-deriving the handle.
+      const leaf = runtime.resolveLiveLeafForHandle(params.terminal)
       if (!leaf?.ptyId) {
         throw new Error('no_connected_pty')
       }
@@ -1180,7 +1189,10 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
     name: 'terminal.updateViewport',
     params: TerminalUpdateViewport,
     handler: async (params, { runtime }) => {
-      const leaf = runtime.resolveLeafForHandle(params.terminal)
+      // Why: guarded resolution — a stale handle must fail with
+      // terminal_handle_stale instead of writing viewport state to the wrong
+      // PTY (#7718). Clients recover by re-deriving the handle.
+      const leaf = runtime.resolveLiveLeafForHandle(params.terminal)
       if (!leaf?.ptyId) {
         throw new Error('no_connected_pty')
       }
