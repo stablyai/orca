@@ -1443,10 +1443,9 @@ const api = {
       sourceContext?: TaskSourceContext | null
     }): Promise<GitHubAssignableUser[]> => ipcRenderer.invoke('gh:listAssignableUsers', args),
 
-    // Why: every renderer subscribes to local mutation broadcasts so each
-    // window's work-item-details cache invalidates the affected entry. The
-    // event fires after a successful mutation in any window — see
-    // src/main/ipc/github.ts broadcastWorkItemMutated.
+    // Why: the app renderer owns the work-item-details cache. Main targets this
+    // bridge for non-origin mutations; origin callers already updated their
+    // cache optimistically — see src/main/ipc/github.ts.
     onWorkItemMutated: (
       callback: (payload: {
         repoPath: string
