@@ -9,7 +9,9 @@ export const GROK_CHAT_HISTORY_FILE = 'chat_history.jsonl'
 // session by id under the tree, not only via encodeURIComponent(cwd).
 export const GROK_ENCODED_CWD_DIR_MAX_BYTES = 255
 
-export type GrokSessionPathEnv = Pick<NodeJS.ProcessEnv, 'GROK_HOME' | 'HOME' | 'USERPROFILE'>
+export type GrokSessionPathEnv =
+  | NodeJS.ProcessEnv
+  | Partial<Record<'GROK_HOME' | 'HOME' | 'USERPROFILE', string | undefined>>
 
 /**
  * Resolve the Grok home directory. Official Grok Build uses `GROK_HOME` when
@@ -160,9 +162,7 @@ function walkForChatHistory(
 
 /** True when path looks like a Grok chat_history under a session id directory. */
 export function isGrokChatHistoryPath(path: string, sessionId: string): boolean {
-  return (
-    basename(path) === GROK_CHAT_HISTORY_FILE && basename(dirname(path)) === sessionId.trim()
-  )
+  return basename(path) === GROK_CHAT_HISTORY_FILE && basename(dirname(path)) === sessionId.trim()
 }
 
 export function isDirectoryExisting(path: string): boolean {
