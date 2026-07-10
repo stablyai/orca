@@ -64,6 +64,11 @@ export function refreshSharedControlPendingRequestTimeouts(
   pendingRequests: Map<string, SharedControlPendingRequest<unknown>>
 ): void {
   for (const pending of pendingRequests.values()) {
+    // Why: only long-poll requests opted into keepalive refresh; refreshing an
+    // ordinary short RPC would keep a genuinely-stuck server call alive forever.
+    if (!pending.refreshTimeoutOnKeepalive) {
+      continue
+    }
     const timeout = pending.timeout as ReturnType<typeof setTimeout> & { refresh?: () => void }
     timeout.refresh?.()
   }

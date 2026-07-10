@@ -12,6 +12,12 @@ export type SharedControlPendingRequest<TResult> = {
   resolve: (response: RuntimeRpcResponse<TResult>) => void
   reject: (error: Error) => void
   timeout: ReturnType<typeof setTimeout>
+  // Why: keepalives on the shared socket are armed for an unrelated long-poll,
+  // not this request. Only requests that opt in (long-polls issued via the
+  // short-RPC path) may have their deadline refreshed by a keepalive; ordinary
+  // short RPCs keep an absolute deadline so a stuck server call still times
+  // out, tears the socket down, and reconnects/replays as designed.
+  refreshTimeoutOnKeepalive: boolean
 }
 
 export type SharedControlSubscriptionCallbacks<TResult> = {
