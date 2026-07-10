@@ -1,7 +1,7 @@
 import { lstat, readdir } from 'node:fs/promises'
 import { join, relative } from 'node:path'
 import { throwIfFileListingCancelled } from './file-listing-cancellation'
-import { addQuickOpenExpansionPath } from './quick-open-expansion-paths'
+import { collapseQuickOpenExpansionPaths } from './quick-open-expansion-paths'
 import {
   HIDDEN_DIR_BLOCKLIST,
   shouldExcludeQuickOpenRelPath,
@@ -316,7 +316,7 @@ export async function expandQuickOpenGitFileListing(opts: {
       continue
     }
 
-    addQuickOpenExpansionPath(expansionPaths, relPath, false)
+    expansionPaths.set(relPath, expansionPaths.get(relPath) ?? false)
   }
 
   for (const rawPath of opts.directoryPaths ?? []) {
@@ -336,11 +336,11 @@ export async function expandQuickOpenGitFileListing(opts: {
 
     // Why: before directory collapse, Git returned untracked symlink entries
     // without following them. Preserve those paths when expanding placeholders.
-    addQuickOpenExpansionPath(expansionPaths, relPath, true)
+    expansionPaths.set(relPath, true)
   }
 
   const expandedFiles = await listQuickOpenFilesFromRoots(
-    Array.from(expansionPaths, ([relPath, includeSymlinks]) => ({
+    collapseQuickOpenExpansionPaths(expansionPaths).map(([relPath, includeSymlinks]) => ({
       rootPath: joinRootRel(opts.rootPath, relPath),
       // Why: exclude prefixes are workspace-root-relative; rebase them onto
       // each expanded subtree so blocked work is pruned before consuming cap.

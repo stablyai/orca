@@ -1,24 +1,37 @@
 /**
- * Add one Git directory placeholder while removing redundant descendants.
- * The boolean records whether that subtree must preserve symlink leaves.
+ * Remove descendant placeholders already covered by an ancestor. Sorting puts
+ * ancestors first; prefix lookups avoid quadratic scans across sibling paths.
  */
-export function addQuickOpenExpansionPath(
-  expansionPaths: Map<string, boolean>,
-  relPath: string,
-  includeSymlinks: boolean
-): void {
-  let mergedIncludeSymlinks = includeSymlinks
-  for (const [existingPath, existingIncludeSymlinks] of expansionPaths) {
-    if (relPath === existingPath || relPath.startsWith(`${existingPath}/`)) {
-      expansionPaths.set(existingPath, existingIncludeSymlinks || includeSymlinks)
-      return
+export function collapseQuickOpenExpansionPaths(
+  expansionPaths: ReadonlyMap<string, boolean>
+): [string, boolean][] {
+  const sortedPaths = Array.from(expansionPaths).sort(([left], [right]) =>
+    left < right ? -1 : left > right ? 1 : 0
+  )
+  const collapsedPaths = new Map<string, boolean>()
+
+  for (const [relPath, includeSymlinks] of sortedPaths) {
+    let ancestorPath: string | undefined
+    let slashIndex = relPath.indexOf('/')
+    while (slashIndex !== -1) {
+      const candidate = relPath.substring(0, slashIndex)
+      if (collapsedPaths.has(candidate)) {
+        ancestorPath = candidate
+        break
+      }
+      slashIndex = relPath.indexOf('/', slashIndex + 1)
     }
-    if (existingPath.startsWith(`${relPath}/`)) {
-      // Why: primary and ignored Git passes can emit overlapping placeholders;
-      // the ancestor walk already covers the descendant and must count it once.
-      mergedIncludeSymlinks ||= existingIncludeSymlinks
-      expansionPaths.delete(existingPath)
+
+    if (ancestorPath) {
+      // Why: primary and ignored passes can overlap; the ancestor walk covers
+      // the descendant, but must preserve either pass's symlink-leaf contract.
+      if (includeSymlinks) {
+        collapsedPaths.set(ancestorPath, true)
+      }
+      continue
     }
+    collapsedPaths.set(relPath, includeSymlinks)
   }
-  expansionPaths.set(relPath, mergedIncludeSymlinks)
+
+  return Array.from(collapsedPaths)
 }

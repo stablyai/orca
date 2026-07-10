@@ -236,7 +236,7 @@ describe('quick-open readdir walk', () => {
         excludePathPrefixes: ['excluded'],
         budget: createQuickOpenReaddirBudget({ maxFiles: 2 })
       })
-    ).resolves.toEqual(['dist/generated.js', '.local/config.toml'])
+    ).resolves.toEqual(['.local/config.toml', 'dist/generated.js'])
 
     const walkedPaths = readdirMock.mock.calls.map(([path]) => path)
     expect(walkedPaths).toContain(join(root, 'dist'))
