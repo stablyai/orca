@@ -78,6 +78,7 @@ import type {
 } from '../../shared/types'
 import { browserSessionRegistry } from './browser-session-registry'
 import { setupClientHintsOverride } from './browser-session-ua'
+import { resolveChromiumCookiesPath } from './chromium-cookie-path'
 
 // ---------------------------------------------------------------------------
 // Browser detection
@@ -190,20 +191,6 @@ function browserRootPath(def: ChromiumBrowserDef): string | null {
   }
   const configHome = process.env.XDG_CONFIG_HOME ?? join(process.env.HOME ?? '', '.config')
   return join(configHome, def.linuxRoot)
-}
-
-// Why: Chromium 96+ moved the cookies DB from <Profile>/Cookies to
-// <Profile>/Network/Cookies. Try the newer path first, fall back to legacy.
-function resolveCookiesPath(profileDir: string): string | null {
-  const networkPath = join(profileDir, 'Network', 'Cookies')
-  if (existsSync(networkPath)) {
-    return networkPath
-  }
-  const legacyPath = join(profileDir, 'Cookies')
-  if (existsSync(legacyPath)) {
-    return legacyPath
-  }
-  return null
 }
 
 function isSafeBrowserProfileDirectory(directory: string): boolean {
@@ -373,7 +360,7 @@ export function detectInstalledBrowsers(): DetectedBrowser[] {
     // Use the first profile with a valid cookies path as the default selection.
     for (const profile of profiles) {
       const profileDir = join(root, profile.directory)
-      const cookiesPath = resolveCookiesPath(profileDir)
+      const cookiesPath = resolveChromiumCookiesPath(profileDir)
       if (cookiesPath) {
         detected.push({
           family: browser.family,
@@ -434,7 +421,7 @@ export function selectBrowserProfile(
     return null
   }
   const profileDir = join(root, profileDirectory)
-  const cookiesPath = resolveCookiesPath(profileDir)
+  const cookiesPath = resolveChromiumCookiesPath(profileDir)
   if (!cookiesPath) {
     return null
   }
@@ -1489,7 +1476,7 @@ export async function importCookiesFromBrowser(
 
   const partitionName = targetPartition.replace('persist:', '')
   const partitionDir = join(app.getPath('userData'), 'Partitions', partitionName)
-  let liveCookiesPath = resolveCookiesPath(partitionDir)
+  let liveCookiesPath = resolveChromiumCookiesPath(partitionDir)
 
   // Why: Electron only creates the partition's Cookies SQLite file after the
   // session has actually stored a cookie. For newly created profiles that have
@@ -1503,7 +1490,7 @@ export async function importCookiesFromBrowser(
     } catch {
       // ignore — the set/remove may fail but flushStore should still create the file
     }
-    liveCookiesPath = resolveCookiesPath(partitionDir)
+    liveCookiesPath = resolveChromiumCookiesPath(partitionDir)
   }
 
   if (!liveCookiesPath) {
@@ -1552,6 +1539,11 @@ export async function importCookiesFromBrowser(
     if (sourceRows.length === 0) {
       stagingDb.close()
       stagingDb = null
+      try {
+        unlinkSync(stagingCookiesPath)
+      } catch {
+        /* best-effort */
+      }
       return { ok: false, reason: `No cookies found in ${browser.label}.` }
     }
 
@@ -1565,6 +1557,13 @@ export async function importCookiesFromBrowser(
     if (needsSourceKey && !sourceKey) {
       stagingDb.close()
       stagingDb = null
+      // Why: key denial happens after staging, so failed retries must not leave
+      // one full target database copy behind each time.
+      try {
+        unlinkSync(stagingCookiesPath)
+      } catch {
+        /* best-effort */
+      }
       return {
         ok: false,
         reason: `Could not access ${browser.label} encryption key. The OS may have denied access.`
