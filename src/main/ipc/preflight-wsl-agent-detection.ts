@@ -114,7 +114,7 @@ function parseWslDetectedCommands(stdout: string): Set<string> {
     }
     const command = payload.slice(0, separatorIndex)
     const resolvedPath = payload.slice(separatorIndex + 1)
-    if (path.posix.isAbsolute(resolvedPath) || path.win32.isAbsolute(resolvedPath)) {
+    if (path.posix.isAbsolute(resolvedPath)) {
       found.add(command)
     }
   }
