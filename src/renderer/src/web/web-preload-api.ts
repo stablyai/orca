@@ -613,6 +613,7 @@ function createWebPreloadApi(): Partial<PreloadApi> {
         Promise.resolve({
           localFileEnabled: false,
           bundleEnabled: false,
+          perfDumpEnabled: false,
           traceFilePath: '',
           traceFamilySize: 0
         }),
@@ -620,7 +621,19 @@ function createWebPreloadApi(): Partial<PreloadApi> {
       openBundlePreview: () => Promise.reject(new Error('Review files are unavailable on web.')),
       discardBundlePreview: () => Promise.resolve(),
       uploadBundle: () => Promise.reject(new Error('Sending diagnostics is unavailable on web.')),
-      deleteBundle: () => Promise.reject(new Error('Sent diagnostics are unavailable on web.'))
+      deleteBundle: () => Promise.reject(new Error('Sent diagnostics are unavailable on web.')),
+      capturePerfDump: () =>
+        Promise.reject(
+          new Error(
+            translate(
+              'auto.web.web.preload.api.2ce4f81b9d',
+              'Performance reports are unavailable on web.'
+            )
+          )
+        ),
+      onPerfDumpProgress: () => () => {},
+      onPerfMetricsRequest: () => () => {},
+      sendPerfMetrics: () => {}
     },
     session: {
       // hostId mirrors the desktop bridge: omitted/'local' targets the existing

@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { toast } from 'sonner'
-import { FileText } from 'lucide-react'
+import { Gauge, FileText } from 'lucide-react'
 import type {
   DiagnosticsBundlePayload,
-  DiagnosticsStatusPayload
+  DiagnosticsStatusPayload,
+  PerfDumpProgressPayload
 } from '../../../../preload/api-types'
 import { Label } from '../ui/label'
 import { Separator } from '../ui/separator'
@@ -11,6 +12,7 @@ import {
   getDiagnosticBundleDescription,
   PrivacyDiagnosticBundleControls
 } from './PrivacyDiagnosticBundleControls'
+import { getPerfDumpDescription, PrivacyPerfDumpControls } from './PrivacyPerfDumpControls'
 import { translate } from '@/i18n/i18n'
 
 export function PrivacyDiagnosticsSection(): React.JSX.Element {
@@ -24,6 +26,8 @@ export function PrivacyDiagnosticsSection(): React.JSX.Element {
   const [discarding, setDiscarding] = useState(false)
   const [copyingTicket, setCopyingTicket] = useState(false)
   const [deletingTicket, setDeletingTicket] = useState(false)
+  const [capturingPerfDump, setCapturingPerfDump] = useState(false)
+  const [perfDumpStage, setPerfDumpStage] = useState<PerfDumpProgressPayload['stage'] | null>(null)
   const mountedRef = useRef(true)
   const activeBundleSubmissionIdRef = useRef<string | null>(null)
 
@@ -50,6 +54,14 @@ export function PrivacyDiagnosticsSection(): React.JSX.Element {
         void window.api.diagnostics.discardBundlePreview(activeBundleSubmissionIdRef.current)
       }
     }
+  }, [])
+
+  useEffect(() => {
+    return window.api.diagnostics.onPerfDumpProgress((payload) => {
+      if (mountedRef.current) {
+        setPerfDumpStage(payload.stage)
+      }
+    })
   }, [])
 
   const handleCollectBundle = useCallback(async (): Promise<void> => {
@@ -235,6 +247,45 @@ export function PrivacyDiagnosticsSection(): React.JSX.Element {
     }
   }, [ticketId])
 
+  const handleCapturePerfDump = useCallback(async (): Promise<void> => {
+    setCapturingPerfDump(true)
+    setPerfDumpStage(null)
+    try {
+      const result = await window.api.diagnostics.capturePerfDump()
+      if ('canceled' in result) {
+        return
+      }
+      // Why: capture runs ~10+ s and the artifact is already on disk —
+      // report it (global toast + reveal) even if Settings unmounted.
+      toast.success(
+        translate(
+          'auto.components.settings.PrivacyDiagnosticsSection.1e6f70a2d4',
+          'Performance report saved'
+        )
+      )
+      void window.api.shell.openInFileManager(result.filePath)
+    } catch (error) {
+      if (mountedRef.current) {
+        toast.error(
+          getDiagnosticsErrorMessage(
+            error,
+            translate(
+              'auto.components.settings.PrivacyDiagnosticsSection.9b2ce80f13',
+              'Could not capture performance report'
+            )
+          )
+        )
+      }
+    } finally {
+      if (mountedRef.current) {
+        setCapturingPerfDump(false)
+        setPerfDumpStage(null)
+      }
+    }
+  }, [])
+
+  const showPerfDumpRow = status?.perfDumpEnabled !== false
+
   return (
     <>
       {status?.disabledReason ? (
@@ -269,6 +320,22 @@ export function PrivacyDiagnosticsSection(): React.JSX.Element {
           onDismissTicket={() => setTicketId(null)}
         />
       </PrivacyDiagnosticsRow>
+      {showPerfDumpRow ? (
+        <PrivacyDiagnosticsRow
+          icon={<Gauge className="size-4" />}
+          title={translate(
+            'auto.components.settings.PrivacyDiagnosticsSection.5d1a9cc0e7',
+            'Capture performance report'
+          )}
+          description={getPerfDumpDescription(capturingPerfDump ? perfDumpStage : null)}
+        >
+          <PrivacyPerfDumpControls
+            status={status}
+            capturing={capturingPerfDump}
+            onCapture={handleCapturePerfDump}
+          />
+        </PrivacyDiagnosticsRow>
+      ) : null}
     </>
   )
 }

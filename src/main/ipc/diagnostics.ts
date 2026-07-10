@@ -1,5 +1,5 @@
 // IPC surface for the error-tracking lane (telemetry-error-tracking.md
-// §User controls). Six renderer-facing channels:
+// §User controls). Renderer-facing channels:
 //
 //   diagnostics:getStatus            — read-only snapshot for the Privacy pane.
 //   diagnostics:collectBundle        — assemble and retain a redacted payload.
@@ -7,6 +7,7 @@
 //   diagnostics:discardBundlePreview — delete a retained, unuploaded payload.
 //   diagnostics:uploadBundle         — POST the main-retained payload.
 //   diagnostics:deleteBundle         — delete an uploaded bundle by ticket ID.
+//   diagnostics:capturePerfDump      — local CPU-profile performance report.
 //
 // Same threat model as the product-telemetry IPC (`ipc/telemetry.ts`):
 // renderer can pass anything over the wire, type-narrow here. Everything
@@ -18,11 +19,19 @@
 // renderer triggers the flow; main reads the URL from a build-time
 // constant or env var and does the POST itself.
 
-import { app, dialog, ipcMain, shell } from 'electron'
+import {
+  app,
+  dialog,
+  ipcMain,
+  shell,
+  webContents as electronWebContents,
+  type WebContents
+} from 'electron'
 import { existsSync, mkdirSync, unlinkSync, writeFileSync } from 'node:fs'
 import { arch as osArch, platform as osPlatform, release as osRelease } from 'node:os'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import { captureRendererPerfDump, type PerfDumpProgressStage } from '../observability/perf-dump'
 import {
   collectDiagnosticBundle,
   deleteDiagnosticBundle,
@@ -36,12 +45,14 @@ import {
   resolveDiagnosticOrcaChannel,
   resolveDiagnosticTokenEndpoint
 } from '../observability/diagnostic-upload-endpoint'
+import { collectRendererPerfMetrics } from '../observability/renderer-perf'
 
 export type DiagnosticsBundlePreview = Omit<CollectedBundle, 'payload'>
 type UploadBundleIpcResult = UploadBundleResult | { canceled: true }
 
 const PENDING_BUNDLE_TTL_MS = 15 * 60 * 1000
 const MAX_PENDING_BUNDLES = 8
+let diagnosticsRendererWebContentsId: number | null = null
 
 type PendingBundle = {
   bundle: CollectedBundle
@@ -52,6 +63,10 @@ type PendingBundle = {
 }
 
 const pendingBundles = new Map<string, PendingBundle>()
+
+export function setDiagnosticsRendererWebContentsId(webContentsId: number | null): void {
+  diagnosticsRendererWebContentsId = webContentsId
+}
 
 function prunePendingBundles(now = Date.now()): void {
   for (const [id, pending] of pendingBundles) {
@@ -190,6 +205,13 @@ function isTicketId(value: unknown): value is string {
   return typeof value === 'string' && /^[A-Za-z0-9_-]{16,64}$/.test(value)
 }
 
+export function getDiagnosticsRendererWebContents(): WebContents | null {
+  if (diagnosticsRendererWebContentsId == null) {
+    return null
+  }
+  return electronWebContents.fromId(diagnosticsRendererWebContentsId) ?? null
+}
+
 async function confirmBundleUpload(bundle: CollectedBundle): Promise<boolean> {
   const result = await dialog.showMessageBox({
     type: 'question',
@@ -212,7 +234,7 @@ export function registerDiagnosticsHandlers(): void {
 
   ipcMain.handle(
     'diagnostics:collectBundle',
-    (_event, lookbackMinutesIn: unknown): DiagnosticsBundlePreview => {
+    async (_event, lookbackMinutesIn: unknown): Promise<DiagnosticsBundlePreview> => {
       // Consent gate: main is the consent enforcement boundary; the
       // renderer-side button-hide is UX, not security. A compromised or
       // malicious renderer must not be able to assemble a bundle when the
@@ -228,18 +250,36 @@ export function registerDiagnosticsHandlers(): void {
         typeof lookbackMinutesIn === 'number' && Number.isFinite(lookbackMinutesIn)
           ? Math.max(1, Math.min(30 * 24 * 60, Math.floor(lookbackMinutesIn)))
           : undefined
+      const perfRecord = await collectRendererPerfMetrics(getDiagnosticsRendererWebContents)
       const bundle = collectDiagnosticBundle({
         appVersion: app.getVersion(),
         platform: osPlatform(),
         arch: osArch(),
         osRelease: osRelease(),
         orcaChannel: resolveDiagnosticOrcaChannel(),
+        extraRecords: [perfRecord],
         ...(lookbackMinutes !== undefined ? { lookbackMinutes } : {})
       })
       rememberBundle(bundle)
       return toBundlePreview(bundle)
     }
   )
+
+  ipcMain.handle('diagnostics:capturePerfDump', async (event): Promise<unknown> => {
+    const status = getDiagnosticsStatus()
+    if (!status.perfDumpEnabled) {
+      throw new Error('performance reports are disabled')
+    }
+    const sender = event.sender
+    return captureRendererPerfDump({
+      getRendererWebContents: getDiagnosticsRendererWebContents,
+      onProgress: (stage: PerfDumpProgressStage) => {
+        if (!sender.isDestroyed()) {
+          sender.send('diagnostics:perfDump:progress', { stage })
+        }
+      }
+    })
+  })
 
   ipcMain.handle(
     'diagnostics:uploadBundle',

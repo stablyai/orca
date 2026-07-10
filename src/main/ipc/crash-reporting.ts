@@ -22,6 +22,8 @@ import {
 } from '../crash-reporting/crash-breadcrumb-store'
 import { collectDiagnosticBundle, getDiagnosticsStatus } from '../observability'
 import { resolveDiagnosticOrcaChannel } from '../observability/diagnostic-upload-endpoint'
+import { collectRendererPerfMetrics } from '../observability/renderer-perf'
+import { getDiagnosticsRendererWebContents } from './diagnostics'
 import { startSpan } from '../observability/tracer'
 import type { FeedbackDiagnosticBundleAttachment } from './feedback'
 import {
@@ -334,7 +336,7 @@ function skippedCrashDiagnosticBundle(): CrashDiagnosticBundleAttachment {
   }
 }
 
-function collectCrashDiagnosticBundleAttachment(): CrashDiagnosticBundleAttachment {
+async function collectCrashDiagnosticBundleAttachment(): Promise<CrashDiagnosticBundleAttachment> {
   const status = getDiagnosticsStatus()
   if (!status.bundleEnabled) {
     return {
@@ -345,6 +347,9 @@ function collectCrashDiagnosticBundleAttachment(): CrashDiagnosticBundleAttachme
     }
   }
 
+  const perfRecord = await collectRendererPerfMetrics(getDiagnosticsRendererWebContents, {
+    timeoutMs: 750
+  })
   let bundle: ReturnType<typeof collectDiagnosticBundle>
   try {
     bundle = collectDiagnosticBundle({
@@ -355,7 +360,8 @@ function collectCrashDiagnosticBundleAttachment(): CrashDiagnosticBundleAttachme
       orcaChannel: resolveDiagnosticOrcaChannel(),
       // Why: Help > Report Crash is often used after relaunch, long after the
       // default 30 minute support bundle window would miss the failure context.
-      lookbackMinutes: CRASH_REPORT_LOG_LOOKBACK_MINUTES
+      lookbackMinutes: CRASH_REPORT_LOG_LOOKBACK_MINUTES,
+      extraRecords: [perfRecord]
     })
   } catch (error) {
     return { diagnosticBundle: { status: 'not_uploaded', reason: formatUnknownError(error) } }
@@ -451,7 +457,7 @@ export function registerCrashReportingHandlers(store: CrashReportStore): void {
         const diagnosticUpload =
           args.includeDiagnosticLogs === false
             ? skippedCrashDiagnosticBundle()
-            : collectCrashDiagnosticBundleAttachment()
+            : await collectCrashDiagnosticBundleAttachment()
         const diagnosticBundle = diagnosticUpload.diagnosticBundle
         const result = await submitFeedback({
           feedback: buildUncapturedCrashReportText(args.notes, diagnosticBundle),
@@ -494,7 +500,7 @@ export function registerCrashReportingHandlers(store: CrashReportStore): void {
         const diagnosticUpload =
           args.includeDiagnosticLogs === false
             ? skippedCrashDiagnosticBundle()
-            : collectCrashDiagnosticBundleAttachment()
+            : await collectCrashDiagnosticBundleAttachment()
         const diagnosticBundle = diagnosticUpload.diagnosticBundle
         const result = await submitFeedback({
           feedback: formatCrashReportText(report, args.notes, diagnosticBundle),

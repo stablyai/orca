@@ -160,7 +160,8 @@
             "36761d9604": "Se ignoró la acción de atajo desconocida \"{{value0}}\".",
             "d2e43e426a": "{{value0}} debe ser un objeto.",
             "fb290366b2": "No está disponible en la web.",
-            "76122208ca": "Se ignoró el atajo para \"{{value0}}\": {{value1}}"
+            "76122208ca": "Se ignoró el atajo para \"{{value0}}\": {{value1}}",
+            "2ce4f81b9d": "Los informes de rendimiento no están disponibles en la web."
           }
         },
         "runtime": {
@@ -5893,7 +5894,10 @@
           "860bca9ec9": "Archivo de revisión descartado",
           "49fc6c80e8": "Diagnósticos enviados",
           "db3228e01a": "Archivo de revisión abierto",
-          "a2b3505c77": "Archivo de revisión creado"
+          "a2b3505c77": "Archivo de revisión creado",
+          "1e6f70a2d4": "Informe de rendimiento guardado",
+          "9b2ce80f13": "No se pudo capturar el informe de rendimiento",
+          "5d1a9cc0e7": "Capturar informe de rendimiento"
         },
         "PrivacyPane": {
           "36e0e2e63b": "variable de entorno. Quítala y reinicia para volver a habilitarla.",
@@ -7997,7 +8001,12 @@
             "4104f6f0f3": "analíticas",
             "10124159f1": "privacidad",
             "aa3b794c17": "Datos anónimos de uso del producto, diagnósticos y controles de telemetría.",
-            "5c508bad41": "Privacidad y telemetría"
+            "5c508bad41": "Privacidad y telemetría",
+            "68d450145b": "rendimiento",
+            "3b1f4c07da": "informe de rendimiento",
+            "7de2b90c14": "perfil de cpu",
+            "ec083fb9e1": "lento",
+            "900d529b12": "retraso"
           }
         },
         "quick": {
@@ -8941,6 +8950,14 @@
         "ephemeralVmsExperimentalSetting": {
           "description": "Muestra controles de configuración y destinos de ejecución de espacios de trabajo para entornos bajo demanda del repositorio.",
           "toggleLabel": "Activar o desactivar entornos por espacio de trabajo"
+        },
+        "PrivacyPerfDumpControls": {
+          "05d8e75876": "Comprimiendo…",
+          "7c31a80d92": "Los informes de rendimiento están desactivados.",
+          "4b6e08d217": "Capturar informe de rendimiento",
+          "2a90ef73c4": "Recopilando métricas de la aplicación…",
+          "8de51c30b5": "Perfilando la actividad de CPU (10 s)…",
+          "6dc19f4ab3": "Graba unos 10 segundos de actividad de CPU de la interfaz y del proceso en segundo plano, además de métricas de la aplicación. Contiene nombres de funciones de Orca y nombres de carpetas de tus espacios de trabajo — sin texto del terminal; se guarda solo en tu equipo, no se sube nada."
         },
         "SourceControlActionRepoOverrideNote": {
           "agent": "Agente",
@@ -12862,6 +12879,17 @@
           "b3d7e0f1a8": "solicitud de fusión",
           "a2c6d9e0f7": "Solicitud de fusión",
           "91b5c8d7e6": "GitLab"
+        }
+      }
+    },
+    "main": {
+      "observability": {
+        "perfDump": {
+          "e6735719a0": "Capturar",
+          "8d1d1d5725": "Cancelar",
+          "3f8be4a51c": "¿Capturar informe de rendimiento?",
+          "9c27d41e88": "Guarda un informe de rendimiento local para soporte.",
+          "b52ce7d316": "Orca grabará unos 10 segundos de actividad de CPU de su interfaz y su proceso en segundo plano, además de métricas de la aplicación. El informe contiene datos de tiempos, nombres de funciones y rutas de código de Orca, y nombres de carpetas de tus espacios de trabajo — no incluye texto del terminal ni el contenido de tus archivos. Se guarda solo en tu equipo; no se sube nada."
         }
       }
     }

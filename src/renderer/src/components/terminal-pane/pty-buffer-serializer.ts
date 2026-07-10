@@ -114,6 +114,10 @@ export function hasPtySerializer(ptyId: string): boolean {
   return serializersByPtyId.has(ptyId)
 }
 
+export function getRegisteredPtySerializerCount(): number {
+  return serializersByPtyId.size
+}
+
 function ensureSerializerListener(): void {
   if (listenerAttached) {
     return

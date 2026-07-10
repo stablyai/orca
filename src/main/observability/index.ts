@@ -176,6 +176,7 @@ export function getObservabilityConsent(): ObservabilityConsent | null {
 export type DiagnosticsStatus = {
   readonly localFileEnabled: boolean
   readonly bundleEnabled: boolean
+  readonly perfDumpEnabled: boolean
   readonly traceFilePath: string
   readonly traceFamilySize: number
   readonly disabledReason?: ObservabilityConsent['disabledReason']
@@ -188,6 +189,7 @@ export function getDiagnosticsStatus(): DiagnosticsStatus {
   return {
     localFileEnabled: c.localFileEnabled,
     bundleEnabled: c.bundleEnabled,
+    perfDumpEnabled: c.disabledReason !== 'ci' && c.disabledReason !== 'orca_diagnostics_disabled',
     traceFilePath,
     traceFamilySize,
     ...(c.disabledReason ? { disabledReason: c.disabledReason } : {})
@@ -202,7 +204,13 @@ export function getDiagnosticsStatus(): DiagnosticsStatus {
 export function collectDiagnosticBundle(
   meta: Pick<
     CollectBundleOptions,
-    'appVersion' | 'platform' | 'arch' | 'osRelease' | 'orcaChannel' | 'lookbackMinutes'
+    | 'appVersion'
+    | 'platform'
+    | 'arch'
+    | 'osRelease'
+    | 'orcaChannel'
+    | 'lookbackMinutes'
+    | 'extraRecords'
   >
 ): CollectedBundle {
   // Flush the active sink first so the very latest spans are present in the

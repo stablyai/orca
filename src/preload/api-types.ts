@@ -287,6 +287,7 @@ import type { BrowserSetAnnotationViewportBridgeArgs } from '../shared/browser-a
 import type { CliInstallStatus } from '../shared/cli-install-types'
 import type { E2EConfig } from '../shared/e2e-config'
 import type { AgentHookInstallStatus } from '../shared/agent-hook-types'
+import type { RendererPerfMetrics } from '../shared/renderer-perf-metrics'
 import type {
   AgentStatusIpcPayload,
   MigrationUnsupportedPtyEntry
@@ -673,6 +674,7 @@ export type StatsApi = {
 export type DiagnosticsStatusPayload = {
   readonly localFileEnabled: boolean
   readonly bundleEnabled: boolean
+  readonly perfDumpEnabled: boolean
   readonly traceFilePath: string
   readonly traceFamilySize: number
   readonly disabledReason?:
@@ -692,6 +694,17 @@ export type DiagnosticsUploadPayload =
     }
   | {
       readonly canceled: true
+    }
+export type PerfDumpProgressPayload = {
+  readonly stage: 'metrics' | 'profile' | 'compressing'
+}
+export type PerfDumpCapturePayload =
+  | {
+      readonly canceled: true
+    }
+  | {
+      readonly filePath: string
+      readonly bytes: number
     }
 
 export type MemoryApi = {
@@ -1973,6 +1986,10 @@ export type PreloadApi = {
     discardBundlePreview: (bundleSubmissionId: string) => Promise<void>
     uploadBundle: (bundleSubmissionId: string) => Promise<DiagnosticsUploadPayload>
     deleteBundle: (ticketId: string) => Promise<void>
+    capturePerfDump: () => Promise<PerfDumpCapturePayload>
+    onPerfDumpProgress: (callback: (payload: PerfDumpProgressPayload) => void) => () => void
+    onPerfMetricsRequest: (callback: (payload: { requestId: string }) => void) => () => void
+    sendPerfMetrics: (requestId: string, metrics: RendererPerfMetrics) => void
   }
   /** Read-only view of effective consent state, including the reason if
    *  disabled (env var / user opt-out / CI / pending banner). Used by the

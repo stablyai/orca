@@ -440,6 +440,45 @@ document.addEventListener(
 
 const startupDiagnosticsEnabled = process.env.ORCA_STARTUP_DIAGNOSTICS === '1'
 
+function getV8HeapStatisticsBytes(): Record<string, number> | undefined {
+  const heapStats = (
+    process as NodeJS.Process & { getHeapStatistics?: () => Record<string, number> }
+  ).getHeapStatistics?.()
+  if (!heapStats) {
+    return undefined
+  }
+  return {
+    totalHeapSizeBytes: toBytes(readHeapStat(heapStats, 'total_heap_size', 'totalHeapSize')),
+    totalHeapSizeExecutableBytes: toBytes(
+      readHeapStat(heapStats, 'total_heap_size_executable', 'totalHeapSizeExecutable')
+    ),
+    totalPhysicalSizeBytes: toBytes(
+      readHeapStat(heapStats, 'total_physical_size', 'totalPhysicalSize')
+    ),
+    totalAvailableSizeBytes: toBytes(
+      readHeapStat(heapStats, 'total_available_size', 'totalAvailableSize')
+    ),
+    usedHeapSizeBytes: toBytes(readHeapStat(heapStats, 'used_heap_size', 'usedHeapSize')),
+    heapSizeLimitBytes: toBytes(readHeapStat(heapStats, 'heap_size_limit', 'heapSizeLimit')),
+    mallocedMemoryBytes: toBytes(readHeapStat(heapStats, 'malloced_memory', 'mallocedMemory')),
+    peakMallocedMemoryBytes: toBytes(
+      readHeapStat(heapStats, 'peak_malloced_memory', 'peakMallocedMemory')
+    ),
+    externalMemoryBytes: toBytes(readHeapStat(heapStats, 'external_memory', 'externalMemory'))
+  }
+}
+
+function readHeapStat(stats: object, snakeKey: string, camelKey: string): unknown {
+  const record = stats as Record<string, unknown>
+  return record[snakeKey] ?? record[camelKey]
+}
+
+function toBytes(value: unknown): number {
+  return typeof value === 'number' && Number.isFinite(value)
+    ? Math.max(0, Math.floor(value * 1024))
+    : 0
+}
+
 // Custom APIs for renderer
 const api = {
   app: {
@@ -1732,7 +1771,35 @@ const api = {
     uploadBundle: (bundleSubmissionId: string): Promise<unknown> =>
       ipcRenderer.invoke('diagnostics:uploadBundle', bundleSubmissionId),
     deleteBundle: (ticketId: string): Promise<void> =>
-      ipcRenderer.invoke('diagnostics:deleteBundle', ticketId)
+      ipcRenderer.invoke('diagnostics:deleteBundle', ticketId),
+    capturePerfDump: (): Promise<unknown> => ipcRenderer.invoke('diagnostics:capturePerfDump'),
+    onPerfDumpProgress: (callback: (payload: { stage?: unknown }) => void): (() => void) => {
+      const listener = (_event: Electron.IpcRendererEvent, payload?: { stage?: unknown }): void =>
+        callback(payload ?? {})
+      ipcRenderer.on('diagnostics:perfDump:progress', listener)
+      return () => ipcRenderer.removeListener('diagnostics:perfDump:progress', listener)
+    },
+    onPerfMetricsRequest: (callback: (payload: { requestId: string }) => void): (() => void) => {
+      const listener = (
+        _event: Electron.IpcRendererEvent,
+        payload?: { requestId?: unknown }
+      ): void => {
+        if (typeof payload?.requestId === 'string') {
+          callback({ requestId: payload.requestId })
+        }
+      }
+      ipcRenderer.on('diagnostics:rendererPerf:request', listener)
+      return () => ipcRenderer.removeListener('diagnostics:rendererPerf:request', listener)
+    },
+    sendPerfMetrics: (requestId: string, metrics: Record<string, unknown>): void => {
+      ipcRenderer.send('diagnostics:rendererPerf:response', {
+        requestId,
+        metrics: {
+          ...metrics,
+          v8HeapStatistics: getV8HeapStatisticsBytes()
+        }
+      })
+    }
   },
 
   settings: {

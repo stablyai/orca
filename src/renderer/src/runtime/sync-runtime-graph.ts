@@ -113,6 +113,16 @@ export function registerRuntimeTerminalTab(tab: RegisteredTerminalTab): () => vo
   }
 }
 
+export function listRegisteredTerminalTabPerfSources(): readonly {
+  readonly worktreeId: string
+  readonly getManager: () => PaneManager | null
+}[] {
+  return Array.from(registeredTabs.values(), ({ worktreeId, getManager }) => ({
+    worktreeId,
+    getManager
+  }))
+}
+
 export function focusRuntimeTerminalSurface(tabId: string, leafId?: string | null): boolean {
   const registered = registeredTabs.get(tabId)
   const manager = registered?.getManager()

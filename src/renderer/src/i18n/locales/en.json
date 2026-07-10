@@ -160,7 +160,8 @@
             "36761d9604": "Unknown keybinding action \"{{value0}}\" was ignored.",
             "d2e43e426a": "{{value0}} must be an object.",
             "fb290366b2": "Unavailable on web.",
-            "76122208ca": "Shortcut for \"{{value0}}\" was ignored: {{value1}}"
+            "76122208ca": "Shortcut for \"{{value0}}\" was ignored: {{value1}}",
+            "2ce4f81b9d": "Performance reports are unavailable on web."
           }
         },
         "runtime": {
@@ -5930,7 +5931,10 @@
           "860bca9ec9": "Review file discarded",
           "49fc6c80e8": "Diagnostics sent",
           "db3228e01a": "Review file opened",
-          "a2b3505c77": "Review file created"
+          "a2b3505c77": "Review file created",
+          "1e6f70a2d4": "Performance report saved",
+          "9b2ce80f13": "Could not capture performance report",
+          "5d1a9cc0e7": "Capture performance report"
         },
         "PrivacyPane": {
           "36e0e2e63b": "environment variable. Unset it and restart to re-enable.",
@@ -8034,7 +8038,12 @@
             "4104f6f0f3": "analytics",
             "10124159f1": "privacy",
             "aa3b794c17": "Anonymous product usage data, diagnostics, and telemetry controls.",
-            "5c508bad41": "Privacy & Telemetry"
+            "5c508bad41": "Privacy & Telemetry",
+            "68d450145b": "performance",
+            "3b1f4c07da": "performance report",
+            "7de2b90c14": "cpu profile",
+            "ec083fb9e1": "slow",
+            "900d529b12": "lag"
           }
         },
         "quick": {
@@ -8941,6 +8950,14 @@
         "ephemeralVmsExperimentalSetting": {
           "description": "Shows setup controls and workspace run targets for repo-owned, on-demand environments.",
           "toggleLabel": "Toggle per-workspace environments"
+        },
+        "PrivacyPerfDumpControls": {
+          "05d8e75876": "Compressing…",
+          "7c31a80d92": "Performance reports are disabled.",
+          "4b6e08d217": "Capture performance report",
+          "2a90ef73c4": "Collecting app metrics…",
+          "8de51c30b5": "Profiling CPU activity (10s)…",
+          "6dc19f4ab3": "Records about 10 seconds of CPU activity from the interface and background process, plus app metrics. Contains Orca function names and workspace folder names — no terminal text; saved to your computer only, nothing is uploaded."
         },
         "SourceControlActionRepoOverrideNote": {
           "agent": "Agent",
@@ -12862,6 +12879,17 @@
           "b3d7e0f1a8": "merge request",
           "a2c6d9e0f7": "Merge Request",
           "91b5c8d7e6": "GitLab"
+        }
+      }
+    },
+    "main": {
+      "observability": {
+        "perfDump": {
+          "e6735719a0": "Capture",
+          "8d1d1d5725": "Cancel",
+          "3f8be4a51c": "Capture performance report?",
+          "9c27d41e88": "This saves a local performance report for support.",
+          "b52ce7d316": "Orca will record about 10 seconds of CPU activity from its interface and background process, plus app metrics. The report contains timing data, Orca function names and source paths, and workspace folder names — not terminal text or file contents. It is saved to your computer only; nothing is uploaded."
         }
       }
     }

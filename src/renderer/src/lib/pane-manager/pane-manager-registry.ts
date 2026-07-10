@@ -14,6 +14,10 @@ export function unregisterLivePaneManager(manager: RegisteredPaneManager): void 
   liveManagers.delete(manager)
 }
 
+export function getLivePaneManagerCount(): number {
+  return liveManagers.size
+}
+
 /**
  * Resets the WebGL glyph atlases of every live pane manager, not just one.
  *

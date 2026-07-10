@@ -9,6 +9,7 @@ import {
   installRendererCrashDiagnostics,
   recordRendererCrashBreadcrumb
 } from './lib/crash-diagnostics'
+import { installRendererPerfSnapshotDiagnostics } from './lib/renderer-perf-snapshot'
 import { applyDocumentTheme } from './lib/document-theme'
 import { shouldEnableReactGrab } from './lib/react-grab-dev-gate'
 import { I18nProvider } from './i18n/I18nProvider'
@@ -16,6 +17,7 @@ import { translate } from './i18n/i18n'
 
 recordRendererCrashBreadcrumb('renderer_bootstrap_started', { dev: import.meta.env.DEV })
 installRendererCrashDiagnostics()
+installRendererPerfSnapshotDiagnostics()
 
 if (
   import.meta.env.DEV &&
