@@ -29,6 +29,12 @@ import {
   createAuthFilesystemOperation,
   type SharedAuthFilesystemOperation
 } from './auth-filesystem-operation'
+import {
+  createTomlLineScanState,
+  getTomlTableHeader,
+  isTomlStructuralLine,
+  updateTomlLineScanState
+} from '../codex/config-toml-line-scan'
 
 const RPC_TIMEOUT_MS = 10_000
 const WSL_RPC_TIMEOUT_MS = 25_000
@@ -494,36 +500,69 @@ function mapRpcWindow(
 
 function parseTopLevelTomlStringKey(config: string, key: string): string | null {
   const escapedKey = key.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+  // Why: quoted keys and values are valid TOML; bare-only matching misses them.
   const keyPattern = new RegExp(
-    `^[ \\t]*${escapedKey}[ \\t]*=[ \\t]*(?:"([^"]*)"|'([^']*)')`
+    `^[ \\t]*(?:"${escapedKey}"|'${escapedKey}'|${escapedKey})[ \\t]*=[ \\t]*(?:"([^"]*)"|'([^']*)')`
   )
+  // Why: multiline strings can contain `key = "..."` or `[` text; only match
+  // structural root lines via the shared TOML line scanner.
+  let scanState = createTomlLineScanState()
   for (const line of config.split('\n')) {
-    if (/^[ \t]*\[/.test(line)) {
-      break
+    if (isTomlStructuralLine(scanState)) {
+      if (getTomlTableHeader(line)) {
+        break
+      }
+      const match = keyPattern.exec(line)
+      if (match) {
+        return match[1] ?? match[2] ?? null
+      }
     }
-    const match = keyPattern.exec(line)
-    if (match) {
-      return match[1] ?? match[2] ?? null
-    }
+    scanState = updateTomlLineScanState(scanState, line)
   }
   return null
+}
+
+const OFFICIAL_CHATGPT_API_HOSTS = new Set([
+  'chatgpt.com',
+  'www.chatgpt.com',
+  'chat.openai.com',
+  'www.chat.openai.com'
+])
+
+function isOfficialChatGptApiHost(hostname: string): boolean {
+  return OFFICIAL_CHATGPT_API_HOSTS.has(hostname.toLowerCase())
+}
+
+function pathHasBackendApiSuffix(pathname: string): boolean {
+  const normalized = pathname.replace(/\/+$/, '') || '/'
+  return normalized === '/backend-api' || normalized.endsWith('/backend-api')
 }
 
 // Why: Codex backend-client normalizes ChatGPT hostnames onto /backend-api so
 // WHAM paths resolve; custom bases use the /api/codex path style instead.
 export function normalizeCodexBackendBaseUrl(raw: string | null | undefined): string {
-  let base = (raw?.trim() || DEFAULT_CHATGPT_BACKEND_BASE_URL).replace(/\/+$/, '')
-  if (
-    (base.startsWith('https://chatgpt.com') || base.startsWith('https://chat.openai.com')) &&
-    !base.includes('/backend-api')
-  ) {
-    base = `${base}/backend-api`
+  const trimmed = (raw?.trim() || DEFAULT_CHATGPT_BACKEND_BASE_URL).replace(/\/+$/, '')
+  try {
+    const url = new URL(trimmed)
+    if (isOfficialChatGptApiHost(url.hostname) && !pathHasBackendApiSuffix(url.pathname)) {
+      const path = url.pathname.replace(/\/+$/, '')
+      return `${url.origin}${path === '' || path === '/' ? '' : path}/backend-api`
+    }
+    return `${url.origin}${url.pathname.replace(/\/+$/, '') || ''}`.replace(/\/+$/, '') || url.origin
+  } catch {
+    return trimmed
   }
-  return base
 }
 
+// Why: only official ChatGPT hosts use the WHAM route; a custom base that
+// happens to contain "/backend-api" in the path must stay on /api/codex.
 function isChatGptApiBaseUrl(baseUrl: string): boolean {
-  return baseUrl.includes('/backend-api')
+  try {
+    const url = new URL(baseUrl)
+    return isOfficialChatGptApiHost(url.hostname) && pathHasBackendApiSuffix(url.pathname)
+  } catch {
+    return false
+  }
 }
 
 export function buildCodexRateLimitResetCreditsUrl(baseUrl: string): string {
@@ -554,18 +593,24 @@ async function resolveCodexBackendBaseUrl(codexHomePath?: string | null): Promis
 function preferredRpcRateLimitSnapshot(
   wrapper: RpcRateLimitsResponse | undefined
 ): { id: string | null; snapshot: RpcRateLimitSnapshot | undefined } {
+  // Why: rateLimits is the declared preferred meter; scanning by-id first can
+  // swap session/weekly onto a non-primary limit on multi-meter plans.
+  if (wrapper?.rateLimits) {
+    const limitId = wrapper.rateLimits.limitId?.trim() || null
+    return { id: limitId ?? 'codex', snapshot: wrapper.rateLimits }
+  }
   const byId = wrapper?.rateLimitsByLimitId
+  if (byId?.codex) {
+    return { id: 'codex', snapshot: byId.codex }
+  }
   if (byId) {
-    if (byId.codex) {
-      return { id: 'codex', snapshot: byId.codex }
-    }
     for (const [id, snapshot] of Object.entries(byId)) {
       if (snapshot) {
         return { id, snapshot }
       }
     }
   }
-  return { id: null, snapshot: wrapper?.rateLimits }
+  return { id: null, snapshot: undefined }
 }
 
 function limitSnapshotDisplayName(id: string, snapshot: RpcRateLimitSnapshot): string {

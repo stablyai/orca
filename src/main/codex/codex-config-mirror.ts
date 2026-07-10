@@ -21,9 +21,12 @@ import {
 // Why: multi-account vault assumes auth.json; keyring/auto stores credentials
 // outside managed homes and breaks account switching / presence detection.
 const CLI_AUTH_CREDENTIALS_STORE_FILE_LINE = 'cli_auth_credentials_store = "file"'
-const CLI_AUTH_CREDENTIALS_STORE_KEY_RE = /^[ \t]*cli_auth_credentials_store[ \t]*=/
+// Why: bare and quoted TOML keys are both valid; only matching bare keys left
+// duplicates when the system config used "cli_auth_credentials_store".
+const CLI_AUTH_CREDENTIALS_STORE_KEY_RE =
+  /^[ \t]*(?:"cli_auth_credentials_store"|'cli_auth_credentials_store'|cli_auth_credentials_store)[ \t]*=/
 const CLI_AUTH_CREDENTIALS_STORE_FILE_RE =
-  /^[ \t]*cli_auth_credentials_store[ \t]*=[ \t]*(?:"file"|'file')[ \t\r]*(?:#.*)?$/
+  /^[ \t]*(?:"cli_auth_credentials_store"|'cli_auth_credentials_store'|cli_auth_credentials_store)[ \t]*=[ \t]*(?:"file"|'file')[ \t\r]*(?:#.*)?$/
 
 export function syncSystemConfigIntoManagedCodexHome(
   homes: CodexSettingsPromotionHomes = {

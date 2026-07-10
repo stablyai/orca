@@ -543,4 +543,14 @@ describe('forceFileAuthCredentialsStore', () => {
     const input = 'cli_auth_credentials_store = "file"\nmodel = "gpt"\n'
     expect(forceFileAuthCredentialsStore(input)).toBe(input)
   })
+
+  it('recognizes quoted TOML keys and does not duplicate the setting', () => {
+    const input = '"cli_auth_credentials_store" = "keyring"\nmodel = "gpt"\n'
+    expect(forceFileAuthCredentialsStore(input)).toBe(
+      'cli_auth_credentials_store = "file"\nmodel = "gpt"\n'
+    )
+    expect(forceFileAuthCredentialsStore(input).match(/cli_auth_credentials_store/g)).toHaveLength(
+      1
+    )
+  })
 })

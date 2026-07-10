@@ -50,7 +50,12 @@ export function fileStatsMatchMarker(
 ): boolean {
   const expectedSize = kind === 'source' ? marker.sourceSize : marker.targetSize
   const expectedMtimeMs = kind === 'source' ? marker.sourceMtimeMs : marker.targetMtimeMs
-  return stat.size === expectedSize && stat.mtimeMs === expectedMtimeMs
+  // Why: WSL `stat -c %Y` is second-precision (*1000); Node lstat is ms. Floor
+  // both sides so copy markers still match after cp -p on Linux.
+  return (
+    stat.size === expectedSize &&
+    Math.floor(stat.mtimeMs / 1000) === Math.floor(expectedMtimeMs / 1000)
+  )
 }
 
 /** Removes the marker after a copy bridge has been migrated or retired. */

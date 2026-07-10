@@ -82,12 +82,19 @@ describe('normalizeCodexBackendBaseUrl', () => {
     expect(normalizeCodexBackendBaseUrl('https://chatgpt.com/')).toBe(
       'https://chatgpt.com/backend-api'
     )
+    expect(normalizeCodexBackendBaseUrl('https://ChatGPT.com/')).toBe(
+      'https://chatgpt.com/backend-api'
+    )
     expect(normalizeCodexBackendBaseUrl('https://api.example.com/v1/')).toBe(
       'https://api.example.com/v1'
     )
     expect(buildCodexRateLimitResetCreditsUrl('https://api.example.com')).toBe(
       'https://api.example.com/api/codex/rate-limit-reset-credits'
     )
+    // Custom bases that contain "/backend-api" must not use the WHAM route.
+    expect(
+      buildCodexRateLimitResetCreditsUrl('https://api.example.com/backend-api')
+    ).toBe('https://api.example.com/backend-api/api/codex/rate-limit-reset-credits')
   })
 })
 
