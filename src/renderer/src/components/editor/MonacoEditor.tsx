@@ -32,7 +32,10 @@ import {
   createMarkdownDocLinkDecorationController,
   type MarkdownDocLinkDecorationController
 } from './monaco-markdown-doc-link-decorations'
-import { buildGitConflictDecorations, hasGitConflictMarkers } from './monaco-conflict-decorations'
+import {
+  createGitConflictDecorationRefresher,
+  type GitConflictDecorationRefresher
+} from './monaco-conflict-decoration-refresh'
 import { findWorktreeById } from '@/store/slices/worktree-helpers'
 import type { DiffComment } from '../../../../shared/types'
 import { isMarkdownComment } from '@/lib/diff-comment-compat'
@@ -109,7 +112,8 @@ export default function MonacoEditor({
   const languageRef = useRef(language)
   languageRef.current = language
   const markdownDocLinkDecorationsRef = useRef<MarkdownDocLinkDecorationController | null>(null)
-  const conflictDecorationsRef = useRef<editor.IEditorDecorationsCollection | null>(null)
+  const conflictDecorationRefresherRef = useRef<GitConflictDecorationRefresher | null>(null)
+  const conflictScanFilePathRef = useRef<string | null>(null)
   const revealDecorationRef = useRef<editor.IEditorDecorationsCollection | null>(null)
   const revealHighlightTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const revealRafRef = useRef<number | null>(null)
@@ -502,8 +506,8 @@ export default function MonacoEditor({
           window.cancelAnimationFrame(autoHeightFrame)
           autoHeightFrame = null
         }
-        conflictDecorationsRef.current?.clear()
-        conflictDecorationsRef.current = null
+        conflictDecorationRefresherRef.current?.dispose()
+        conflictDecorationRefresherRef.current = null
         editorRef.current = null
         setMountedEditor(null)
         setCommentPopover(null)
@@ -726,20 +730,24 @@ export default function MonacoEditor({
       return
     }
 
-    if (!conflictDecorationsEnabled || !hasGitConflictMarkers(content)) {
-      conflictDecorationsRef.current?.clear()
+    // Why: the disabled check must stay ahead of any content scan so the
+    // default (non-conflict) editing path never pays a per-keystroke parse.
+    if (!conflictDecorationsEnabled) {
+      conflictDecorationRefresherRef.current?.clear()
       return
     }
 
     // Why: Git conflict marker lines are ordinary file text; Monaco needs
     // explicit decorations so unresolved blocks remain visible while editing.
-    const decorations = buildGitConflictDecorations(content)
-    if (!conflictDecorationsRef.current) {
-      conflictDecorationsRef.current = ed.createDecorationsCollection(decorations)
-      return
+    if (!conflictDecorationRefresherRef.current) {
+      conflictDecorationRefresherRef.current = createGitConflictDecorationRefresher(ed)
     }
-    conflictDecorationsRef.current.set(decorations)
-  }, [conflictDecorationsEnabled, content, mountedEditor])
+    // Why: this component is keyed per pane, so switching files reuses the
+    // instance; a file/model swap must redecorate immediately, not debounced.
+    const fileChanged = conflictScanFilePathRef.current !== filePath
+    conflictScanFilePathRef.current = filePath
+    conflictDecorationRefresherRef.current.refresh(content, { immediate: fileChanged })
+  }, [conflictDecorationsEnabled, content, mountedEditor, filePath])
 
   useEffect(() => {
     updateMarkdownCompletionDocuments()
@@ -752,8 +760,8 @@ export default function MonacoEditor({
       }
       markdownDocLinkDecorationsRef.current?.dispose()
       markdownDocLinkDecorationsRef.current = null
-      conflictDecorationsRef.current?.clear()
-      conflictDecorationsRef.current = null
+      conflictDecorationRefresherRef.current?.dispose()
+      conflictDecorationRefresherRef.current = null
     }
   }, [])
 
