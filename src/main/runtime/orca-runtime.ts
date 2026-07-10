@@ -24523,7 +24523,7 @@ export type TerminalTailWaitState = {
 }
 
 // Why: onPtyData runs per raw PTY chunk (hundreds/sec under load). Ordinary
-// tails take one allocation-free sentinel pass; only candidate-bearing tails
+// tails take one no-join sentinel pass; only candidate-bearing tails
 // build, lowercase, and parse the full 256 KiB text. The cached post-append
 // state also avoids repeating that work for the next chunk's previous state.
 export function computeTerminalTailWaitState(
