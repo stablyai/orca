@@ -6664,7 +6664,8 @@ export class OrcaRuntimeService {
           }
         },
         undefined,
-        owner
+        owner,
+        voice.language
       )
       if (this.mobileDictation?.id !== params.dictationId) {
         throw new Error('dictation_canceled')

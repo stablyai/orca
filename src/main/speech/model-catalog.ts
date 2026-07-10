@@ -138,6 +138,40 @@ export const SPEECH_MODEL_CATALOG: SpeechModelManifest[] = [
     streaming: false
   },
   {
+    id: 'whisper-large-v3-turbo',
+    label: 'Whisper Large v3 Turbo',
+    description:
+      '90+ languages with near large-v3 accuracy at a fraction of the cost. Best local choice for non-English dictation (e.g. Turkish).',
+    type: 'whisper',
+    provider: 'local',
+    language: 'multilingual',
+    sizeBytes: 563_790_207,
+    downloadUrl:
+      'https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/sherpa-onnx-whisper-turbo.tar.bz2',
+    archiveSha256: 'b11acbbcd660b44a8e0df33724feb5aaa709cf65668f2823d59f656312544f22',
+    archiveFormat: 'tar.bz2',
+    files: ['turbo-encoder.int8.onnx', 'turbo-decoder.int8.onnx', 'turbo-tokens.txt'],
+    sampleRate: 16000,
+    streaming: false
+  },
+  {
+    id: 'whisper-large-v3',
+    label: 'Whisper Large v3',
+    description:
+      '90+ languages, highest whisper accuracy. Large download and slow on CPU — prefer Turbo unless accuracy is critical.',
+    type: 'whisper',
+    provider: 'local',
+    language: 'multilingual',
+    sizeBytes: 1_068_482_488,
+    downloadUrl:
+      'https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/sherpa-onnx-whisper-large-v3.tar.bz2',
+    archiveSha256: '2d0e134b3b5fc4a0533baf24a0c9d473b629aa47f030af0a165a05f461df7a03',
+    archiveFormat: 'tar.bz2',
+    files: ['large-v3-encoder.int8.onnx', 'large-v3-decoder.int8.onnx', 'large-v3-tokens.txt'],
+    sampleRate: 16000,
+    streaming: false
+  },
+  {
     id: 'openai-gpt-4o-mini-transcribe',
     label: 'GPT-4o mini Transcribe',
     description:

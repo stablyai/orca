@@ -79,7 +79,8 @@ const {
 
     constructor(
       readonly modelId: string,
-      readonly readApiKey: () => string
+      readonly readApiKey: () => string,
+      readonly language?: string
     ) {
       HoistedMockOpenAiTranscriptionSession.instances.push(this)
     }
@@ -171,6 +172,22 @@ describe('SttService', () => {
     await service.startDictation('model-a', vi.fn(), undefined, 'desktop')
 
     expect(getCreatedWorkerCount()).toBe(1)
+  })
+
+  it('passes the dictation language to the worker and replaces the warm worker when it changes', async () => {
+    const service = new SttService({
+      getModelState: vi.fn().mockResolvedValue({ id: 'model-a', status: 'ready' }),
+      getModelDir: vi.fn().mockReturnValue('/tmp/model-a')
+    } as never)
+
+    await service.startDictation('model-a', vi.fn(), undefined, 'desktop', 'tr')
+    expect(getLastWorker()!.messages[0]).toMatchObject({ type: 'init', language: 'tr' })
+
+    await service.stopDictation('desktop')
+    await service.startDictation('model-a', vi.fn(), undefined, 'desktop', 'en')
+
+    expect(getCreatedWorkerCount()).toBe(2)
+    expect(getLastWorker()!.messages[0]).toMatchObject({ type: 'init', language: 'en' })
   })
 
   it('keeps an idle worker warm for an hour', async () => {
@@ -310,12 +327,13 @@ describe('SttService', () => {
       getModelDir: vi.fn().mockReturnValue('/tmp/model-a')
     } as never)
 
-    await service.startDictation('openai-model', sink, undefined, 'desktop')
+    await service.startDictation('openai-model', sink, undefined, 'desktop', 'tr')
     service.feedAudio(new Float32Array([0.25, -0.25]), 48000, 'desktop')
     await service.stopDictation('desktop')
 
     expect(getCreatedWorkerCount()).toBe(0)
     expect(getCloudSessions()).toHaveLength(1)
+    expect(getCloudSessions()[0].language).toBe('tr')
     expect(getCloudSessions()[0].feedCalls).toHaveLength(1)
     expect(sink).toHaveBeenCalledWith({ type: 'ready' })
     expect(sink).toHaveBeenCalledWith({

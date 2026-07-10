@@ -83,7 +83,8 @@ export class OpenAiTranscriptionSession {
 
   constructor(
     private readonly modelId: string,
-    private readonly readApiKey: () => string
+    private readonly readApiKey: () => string,
+    private readonly language?: string
   ) {}
 
   feedAudio(samples: Float32Array, sampleRate: number): void {
@@ -111,6 +112,11 @@ export class OpenAiTranscriptionSession {
     const form = new FormData()
     form.append('model', apiModel)
     form.append('response_format', 'json')
+    // Why: 'auto' (or unset) means the user wants automatic language detection,
+    // so omit the field rather than forcing detection off.
+    if (this.language && this.language !== 'auto') {
+      form.append('language', this.language)
+    }
     // Why: OpenAI's transcription endpoint expects a multipart file object;
     // a named WAV blob avoids filesystem temp files and works in packaged apps.
     form.append('file', new Blob([new Uint8Array(wav)], { type: 'audio/wav' }), 'dictation.wav')

@@ -6826,7 +6826,9 @@
           "f9a9cf6928": "启用语音听写之前需要麦克风许可。",
           "1eac933202": "打开 macOS 隐私和安全。授予访问权限后再次启用听写。",
           "cd9fe37556": "已授予麦克风权限",
-          "6fa734ed95": "删除 {{value0}}"
+          "6fa734ed95": "删除 {{value0}}",
+          "00ab56a6c0": "Dictation Language",
+          "90c0cbd280": "Spoken language for transcription. Applies to Whisper and OpenAI models."
         },
         "WorktreeSymlinksSection": {
           "1c1e35b219": "删除 {{value0}}",
