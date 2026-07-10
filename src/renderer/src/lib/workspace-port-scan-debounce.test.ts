@@ -1,7 +1,8 @@
 import { describe, it, expect } from 'vitest'
 import {
-  createPortScanDebounceState,
-  reconcileTransientPortScanFailures
+  reconcileTransientPortScanFailures,
+  type KeyedPortScan,
+  type PortScanDebounceState
 } from './workspace-port-scan-debounce'
 import type { WorkspacePortScanResult } from '../../../shared/workspace-ports'
 
@@ -9,7 +10,14 @@ function good(portIds: string[]): WorkspacePortScanResult {
   return {
     platform: 'unknown',
     scannedAt: 1,
-    ports: portIds.map((id) => ({ id, port: Number(id.split(':')[1] ?? 0) }) as never)
+    ports: portIds.map((id) => ({
+      id,
+      bindHost: '127.0.0.1',
+      connectHost: '127.0.0.1',
+      port: Number(id.split(':')[1] ?? 0),
+      protocol: 'http',
+      kind: 'external'
+    }))
   }
 }
 
@@ -17,136 +25,126 @@ function unavailable(): WorkspacePortScanResult {
   return { platform: 'unknown', scannedAt: 1, ports: [], unavailableReason: 'scan failed' }
 }
 
-const TOLERANCE = 2
+const FAILURE_THRESHOLD = 2
+
+function createHarness(): {
+  apply: (results: KeyedPortScan[]) => KeyedPortScan[]
+  publish: (key: string, result: WorkspacePortScanResult) => void
+  state: PortScanDebounceState
+} {
+  const state: PortScanDebounceState = new Map()
+  let publishedScans: Record<string, WorkspacePortScanResult> = {}
+  return {
+    apply: (results) => {
+      const reconciled = reconcileTransientPortScanFailures(
+        results,
+        publishedScans,
+        state,
+        FAILURE_THRESHOLD
+      )
+      publishedScans = Object.fromEntries(reconciled.map(({ key, result }) => [key, result]))
+      return reconciled
+    },
+    publish: (key, result) => {
+      publishedScans = { ...publishedScans, [key]: result }
+    },
+    state
+  }
+}
 
 describe('reconcileTransientPortScanFailures', () => {
   it('keeps the live indicator solid through a single transient failure', () => {
-    const state = createPortScanDebounceState()
+    const { apply } = createHarness()
 
-    const first = reconcileTransientPortScanFailures(
-      [{ key: 'host:all', result: good(['tcp:3000']) }],
-      state,
-      TOLERANCE
-    )
+    const first = apply([{ key: 'host:all', result: good(['tcp:3000']) }])
     expect(first[0].result.ports).toHaveLength(1)
 
-    // First failure: reuse last good ports (no flicker to zero).
-    const second = reconcileTransientPortScanFailures(
-      [{ key: 'host:all', result: unavailable() }],
-      state,
-      TOLERANCE
-    )
+    const second = apply([{ key: 'host:all', result: unavailable() }])
     expect(second[0].result.ports).toHaveLength(1)
     expect(second[0].result.unavailableReason).toBeUndefined()
   })
 
   it('drops ports only after failures reach the tolerance', () => {
-    const state = createPortScanDebounceState()
-    reconcileTransientPortScanFailures(
-      [{ key: 'h:all', result: good(['tcp:3000']) }],
-      state,
-      TOLERANCE
-    )
-    reconcileTransientPortScanFailures([{ key: 'h:all', result: unavailable() }], state, TOLERANCE)
+    const { apply } = createHarness()
+    apply([{ key: 'h:all', result: good(['tcp:3000']) }])
+    apply([{ key: 'h:all', result: unavailable() }])
 
-    // Second consecutive failure crosses tolerance -> surface unavailable.
-    const third = reconcileTransientPortScanFailures(
-      [{ key: 'h:all', result: unavailable() }],
-      state,
-      TOLERANCE
-    )
+    const third = apply([{ key: 'h:all', result: unavailable() }])
     expect(third[0].result.ports).toHaveLength(0)
     expect(third[0].result.unavailableReason).toBe('scan failed')
   })
 
   it('clears immediately when a reachable host reports zero ports', () => {
-    const state = createPortScanDebounceState()
-    reconcileTransientPortScanFailures(
-      [{ key: 'h:all', result: good(['tcp:3000']) }],
-      state,
-      TOLERANCE
-    )
+    const { apply } = createHarness()
+    apply([{ key: 'h:all', result: good(['tcp:3000']) }])
 
-    // Reachable scan with no ports is the real state -> no debounce.
-    const next = reconcileTransientPortScanFailures(
-      [{ key: 'h:all', result: good([]) }],
-      state,
-      TOLERANCE
-    )
+    const next = apply([{ key: 'h:all', result: good([]) }])
     expect(next[0].result.ports).toHaveLength(0)
     expect(next[0].result.unavailableReason).toBeUndefined()
   })
 
   it('resets the failure streak after a successful scan', () => {
-    const state = createPortScanDebounceState()
-    reconcileTransientPortScanFailures(
-      [{ key: 'h:all', result: good(['tcp:3000']) }],
-      state,
-      TOLERANCE
-    )
-    reconcileTransientPortScanFailures([{ key: 'h:all', result: unavailable() }], state, TOLERANCE)
-    reconcileTransientPortScanFailures(
-      [{ key: 'h:all', result: good(['tcp:3000']) }],
-      state,
-      TOLERANCE
-    )
+    const { apply } = createHarness()
+    apply([{ key: 'h:all', result: good(['tcp:3000']) }])
+    apply([{ key: 'h:all', result: unavailable() }])
+    apply([{ key: 'h:all', result: good(['tcp:3000']) }])
 
-    // One failure after recovery should again be tolerated, not dropped.
-    const afterRecovery = reconcileTransientPortScanFailures(
-      [{ key: 'h:all', result: unavailable() }],
-      state,
-      TOLERANCE
-    )
+    const afterRecovery = apply([{ key: 'h:all', result: unavailable() }])
     expect(afterRecovery[0].result.ports).toHaveLength(1)
   })
 
   it('isolates failures per host so a stable host stays solid', () => {
-    const state = createPortScanDebounceState()
-    reconcileTransientPortScanFailures(
-      [
-        { key: 'local:all', result: good(['tcp:3000']) },
-        { key: 'remote:all', result: good(['tcp:8080']) }
-      ],
-      state,
-      TOLERANCE
-    )
+    const { apply } = createHarness()
+    apply([
+      { key: 'local:all', result: good(['tcp:3000']) },
+      { key: 'remote:all', result: good(['tcp:8080']) }
+    ])
 
-    const next = reconcileTransientPortScanFailures(
-      [
-        { key: 'local:all', result: good(['tcp:3000']) },
-        { key: 'remote:all', result: unavailable() }
-      ],
-      state,
-      TOLERANCE
-    )
+    const next = apply([
+      { key: 'local:all', result: good(['tcp:3000']) },
+      { key: 'remote:all', result: unavailable() }
+    ])
     expect(next.find((r) => r.key === 'local:all')?.result.ports).toHaveLength(1)
     expect(next.find((r) => r.key === 'remote:all')?.result.ports).toHaveLength(1)
   })
 
   it('prunes state for hosts that disappear', () => {
-    const state = createPortScanDebounceState()
-    reconcileTransientPortScanFailures(
-      [{ key: 'gone:all', result: good(['tcp:3000']) }],
-      state,
-      TOLERANCE
-    )
-    reconcileTransientPortScanFailures(
-      [{ key: 'other:all', result: good(['tcp:4000']) }],
-      state,
-      TOLERANCE
-    )
-    expect(state.lastGood.has('gone:all')).toBe(false)
-    expect(state.lastGood.has('other:all')).toBe(true)
+    const { apply, state } = createHarness()
+    apply([{ key: 'gone:all', result: good(['tcp:3000']) }])
+    apply([{ key: 'other:all', result: good(['tcp:4000']) }])
+    expect(state.has('gone:all')).toBe(false)
+    expect(state.has('other:all')).toBe(true)
   })
 
   it('prunes the failure counter for a failed-only host that disappears', () => {
-    const state = createPortScanDebounceState()
-    // Host only ever fails -> it has a `failures` entry but never a `lastGood`.
-    reconcileTransientPortScanFailures([{ key: 'flaky:all', result: unavailable() }], state, TOLERANCE)
-    expect(state.failures.has('flaky:all')).toBe(true)
+    const { apply, state } = createHarness()
+    apply([{ key: 'flaky:all', result: unavailable() }])
+    expect(state.has('flaky:all')).toBe(true)
 
-    // It disappears; its counter must not linger (memory leak + stale streak).
-    reconcileTransientPortScanFailures([{ key: 'other:all', result: good(['tcp:4000']) }], state, TOLERANCE)
-    expect(state.failures.has('flaky:all')).toBe(false)
+    apply([{ key: 'other:all', result: good(['tcp:4000']) }])
+    expect(state.has('flaky:all')).toBe(false)
+  })
+
+  it('uses a newer manual result instead of resurrecting stale ports', () => {
+    const { apply, publish } = createHarness()
+    apply([{ key: 'h:all', result: good(['tcp:3000']) }])
+    publish('h:all', good([]))
+
+    const next = apply([{ key: 'h:all', result: unavailable() }])
+
+    expect(next[0].result.ports).toHaveLength(0)
+    expect(next[0].result.unavailableReason).toBeUndefined()
+  })
+
+  it('starts a fresh failure streak after a newer manual result', () => {
+    const { apply, publish } = createHarness()
+    apply([{ key: 'h:all', result: good(['tcp:3000']) }])
+    apply([{ key: 'h:all', result: unavailable() }])
+    const manualResult = good([])
+    publish('h:all', manualResult)
+
+    const next = apply([{ key: 'h:all', result: unavailable() }])
+
+    expect(next[0].result).toBe(manualResult)
   })
 })
