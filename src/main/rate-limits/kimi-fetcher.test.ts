@@ -337,7 +337,7 @@ describe('resolveKimiCredentialLocation', () => {
       {
         KIMI_CODE_HOME: '/kimi-home',
         KIMI_CODE_OAUTH_HOST: '  https://auth.example.com///  ',
-        KIMI_CODE_BASE_URL: 'https://api.example.com/coding/v1///'
+        KIMI_CODE_BASE_URL: '  https://api.example.com/coding/v1///  '
       },
       '/fallback-home'
     )

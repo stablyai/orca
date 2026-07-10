@@ -26,7 +26,9 @@ export function resolveKimiCredentialLocation(
   const oauthHost = (env.KIMI_CODE_OAUTH_HOST ?? env.KIMI_OAUTH_HOST ?? DEFAULT_OAUTH_HOST)
     .trim()
     .replace(/\/+$/, '')
-  const baseUrl = (env.KIMI_CODE_BASE_URL ?? DEFAULT_BASE_URL).replace(/\/+$/, '')
+  // Why: match oauthHost trimming so whitespace in KIMI_CODE_BASE_URL cannot
+  // skew storageName hashing or produce a malformed usageUrl.
+  const baseUrl = (env.KIMI_CODE_BASE_URL ?? DEFAULT_BASE_URL).trim().replace(/\/+$/, '')
   const isDefault = oauthHost === DEFAULT_OAUTH_HOST && baseUrl === DEFAULT_BASE_URL
   const suffix = isDefault
     ? ''
