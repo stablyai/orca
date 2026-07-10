@@ -178,7 +178,10 @@ import {
   subscribeTerminalPaneAttention
 } from './terminal-pane-attention-subscriptions'
 import { getCachedTerminalTabForWorktree } from './terminal-tab-lookup'
-import { getCachedTerminalGroupIdForWorktree } from './terminal-unified-tab-lookup'
+import {
+  getCachedTerminalGroupIdForWorktree,
+  getCachedUnifiedTerminalTabForWorktree
+} from './terminal-unified-tab-lookup'
 import { resolveNativeChatLeafTitleAgent } from './native-chat-leaf-title-agent'
 import { useRepoById } from '@/store/selectors'
 import {
@@ -646,23 +649,18 @@ export default function TerminalPane({
   // communicates the presence-lock inside the chat surface instead (U9/R8).
   const unifiedTabId = useAppStore(
     (store) =>
-      (store.unifiedTabsByWorktree[worktreeId] ?? []).find(
-        (t) => t.contentType === 'terminal' && t.entityId === tabId
-      )?.id
+      getCachedUnifiedTerminalTabForWorktree(store.unifiedTabsByWorktree, worktreeId, tabId)?.id
   )
   const isChatViewMode = useAppStore(
     (store) =>
-      (store.unifiedTabsByWorktree[worktreeId] ?? []).find(
-        (t) => t.contentType === 'terminal' && t.entityId === tabId
-      )?.viewMode === 'chat'
+      getCachedUnifiedTerminalTabForWorktree(store.unifiedTabsByWorktree, worktreeId, tabId)
+        ?.viewMode === 'chat'
   )
   const nativeChatEnabled = useAppStore((store) => store.settings?.experimentalNativeChat === true)
   const effectiveChatViewMode = nativeChatEnabled && isChatViewMode
   const unifiedTabLabel = useAppStore(
     (store) =>
-      (store.unifiedTabsByWorktree[worktreeId] ?? []).find(
-        (t) => t.contentType === 'terminal' && t.entityId === tabId
-      )?.label
+      getCachedUnifiedTerminalTabForWorktree(store.unifiedTabsByWorktree, worktreeId, tabId)?.label
   )
   const runtimePaneTitlesByPaneId = useAppStore(
     useShallow((store) => store.runtimePaneTitlesByTabId[tabId] ?? {})
