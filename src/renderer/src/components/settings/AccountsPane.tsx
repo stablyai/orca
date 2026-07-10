@@ -954,7 +954,7 @@ export function AccountsPane({
                         </div>
                         <span className="truncate text-[11px] text-muted-foreground">
                           {account.organizationName
-                            ? `${account.organizationName} 路 ${formatAccountTimestamp(account.lastAuthenticatedAt)}`
+                            ? `${account.organizationName} · ${formatAccountTimestamp(account.lastAuthenticatedAt)}`
                             : formatAccountTimestamp(account.lastAuthenticatedAt)}
                         </span>
                       </button>
@@ -1204,7 +1204,7 @@ export function AccountsPane({
             ) : (
               visibleCodexAccounts.map((account) => {
                 const isActive = activeCodexAccountId === account.id
-                // Why: same remote gate as the section-level warning 鈥?the
+                // Why: same remote gate as the section-level warning — the
                 // desktop's rate-limit poll says nothing about server accounts.
                 const accountAuthWarning = isRemoteAccountScope
                   ? null
@@ -1293,7 +1293,7 @@ export function AccountsPane({
                             <span className="truncate">{account.workspaceLabel}</span>
                           ) : null}
                           {needsReauthentication || account.workspaceLabel ? (
-                            <span className="shrink-0 opacity-50">鈥?/span>
+                            <span className="shrink-0 opacity-50">•</span>
                           ) : null}
                           <span className="shrink-0">
                             {formatAccountTimestamp(account.lastAuthenticatedAt)}
@@ -1472,7 +1472,7 @@ export function AccountsPane({
               }}
               placeholder={translate(
                 'auto.components.settings.AccountsPane.a7e38affcd',
-                'Fe26.2**鈥?token or auth=Fe26.2**鈥?header'
+                'Fe26.2**… token or auth=Fe26.2**… header'
               )}
               spellCheck={false}
               className="flex-1 text-xs"
@@ -1497,18 +1497,18 @@ export function AccountsPane({
               'Paste either the raw token value (e.g.'
             )}
             <code className="text-xs">
-              {translate('auto.components.settings.AccountsPane.922b51e02d', 'Fe26.2**鈥?)}
+              {translate('auto.components.settings.AccountsPane.922b51e02d', 'Fe26.2**…')}
             </code>
             {translate(
               'auto.components.settings.AccountsPane.338820326a',
               ') or the full cookie header (e.g.'
             )}
             <code className="text-xs">
-              {translate('auto.components.settings.AccountsPane.8951c5309f', 'auth=Fe26.2**鈥?)}
+              {translate('auto.components.settings.AccountsPane.8951c5309f', 'auth=Fe26.2**…')}
             </code>
             {translate(
               'auto.components.settings.AccountsPane.7ce0e1907c',
-              "). Find it in your browser's DevTools 鈫?Network 鈫?any opencode.ai request 鈫?Cookie header. OpenCode Go auth is web-based and shared across Windows and WSL terminals."
+              "). Find it in your browser's DevTools → Network → any opencode.ai request → Cookie header. OpenCode Go auth is web-based and shared across Windows and WSL terminals."
             )}
           </p>
         </SearchableSetting>
@@ -1538,7 +1538,7 @@ export function AccountsPane({
               }}
               placeholder={translate(
                 'auto.components.settings.AccountsPane.a122332371',
-                'wrk_鈥?(leave blank for automatic lookup)'
+                'wrk_… (leave blank for automatic lookup)'
               )}
               spellCheck={false}
               className="flex-1 text-xs"
@@ -1565,7 +1565,7 @@ export function AccountsPane({
             <code className="text-xs">
               {translate(
                 'auto.components.settings.AccountsPane.ae3b21eb6c',
-                'opencode.ai/workspace/wrk_鈥?go'
+                'opencode.ai/workspace/wrk_…/go'
               )}
             </code>
             ).
@@ -1710,7 +1710,7 @@ export function AccountsPane({
           <p className="text-xs text-muted-foreground">
             {translate(
               'auto.components.settings.AccountsPane.79418c782a',
-              'Open platform.minimax.io/console/usage in your browser, sign in, then copy the Cookie request header from DevTools (Network 鈫?any remains request 鈫?Cookie).'
+              'Open platform.minimax.io/console/usage in your browser, sign in, then copy the Cookie request header from DevTools (Network → any remains request → Cookie).'
             )}
           </p>
           {miniMaxConfigured &&
