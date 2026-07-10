@@ -43,6 +43,13 @@ export function getIndexedWorktreeMap(
   return getWorktreeSnapshot(worktreesByRepo).worktreeMap
 }
 
+export function getIndexedWorktreeById(
+  worktreesByRepo: AppState['worktreesByRepo'],
+  worktreeId: string
+): Worktree | undefined {
+  return getWorktreeSnapshot(worktreesByRepo).worktreeMap.get(worktreeId)
+}
+
 export function getIndexedRepoMap(repos: AppState['repos']): Map<string, Repo> {
   const cachedMap = repoMapCache.get(repos)
   if (cachedMap) {

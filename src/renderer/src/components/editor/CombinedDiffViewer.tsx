@@ -20,6 +20,7 @@ import { detectLanguage } from '@/lib/language-detect'
 import { setWithLRU } from '@/lib/scroll-cache'
 import { getConnectionId, getConnectionIdForFile } from '@/lib/connection-context'
 import { findWorktreeById } from '@/store/slices/worktree-helpers'
+import { selectWorktreeDiffCommentsOrEmpty } from '@/store/worktree-diff-comments-selector'
 import { writeRuntimeFile } from '@/runtime/runtime-file-client'
 import { settingsForRuntimeOwner } from '@/runtime/runtime-rpc-client'
 import { formatDiffComments } from '@/lib/diff-comments-format'
@@ -233,7 +234,9 @@ export default function CombinedDiffViewer({
   const openBranchAllDiffs = useAppStore((s) => s.openBranchAllDiffs)
   const updateSettings = useAppStore((s) => s.updateSettings)
   const clearDiffComments = useAppStore((s) => s.clearDiffComments)
-  const diffCommentsForWorktree = useAppStore((s) => s.getDiffComments(file.worktreeId))
+  const diffCommentsForWorktree = useAppStore((s) =>
+    selectWorktreeDiffCommentsOrEmpty(s, file.worktreeId)
+  )
   const activeGroupId = useAppStore((s) => s.activeGroupIdByWorktree[file.worktreeId])
   const isDark =
     settings?.theme === 'dark' ||

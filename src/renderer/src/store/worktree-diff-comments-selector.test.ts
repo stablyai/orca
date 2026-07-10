@@ -1,7 +1,11 @@
 import { describe, expect, it } from 'vitest'
 import type { DiffComment, Worktree } from '../../../shared/types'
 import type { AppState } from './types'
-import { selectWorktreeDiffComments } from './worktree-diff-comments-selector'
+import {
+  selectWorktreeDiffComments,
+  selectWorktreeDiffCommentsOrEmpty
+} from './worktree-diff-comments-selector'
+import { getIndexedWorktreeById } from './worktree-repo-index'
 
 function makeComment(id: string): DiffComment {
   return {
@@ -30,6 +34,7 @@ describe('selectWorktreeDiffComments', () => {
         const worktreeId = `worktree-${repoIndex}-${worktreeIndex}`
         const worktree = {
           repoId,
+          path: `/${repoId}/${worktreeId}`,
           ...(worktreeId === targetWorktreeId ? { diffComments: comments } : {})
         } as Worktree
         Object.defineProperty(worktree, 'id', {
@@ -44,10 +49,23 @@ describe('selectWorktreeDiffComments', () => {
     }
 
     for (let write = 0; write < 200; write += 1) {
-      // Model the three retained selector call sites on each Zustand notification.
+      // Model all seven comment selectors plus the rich-editor path selector.
       expect(selectWorktreeDiffComments({ worktreesByRepo }, targetWorktreeId)).toBe(comments)
       expect(selectWorktreeDiffComments({ worktreesByRepo }, targetWorktreeId)).toBe(comments)
       expect(selectWorktreeDiffComments({ worktreesByRepo }, targetWorktreeId)).toBe(comments)
+      expect(selectWorktreeDiffComments({ worktreesByRepo }, targetWorktreeId)).toBe(comments)
+      expect(selectWorktreeDiffCommentsOrEmpty({ worktreesByRepo }, targetWorktreeId)).toBe(
+        comments
+      )
+      expect(selectWorktreeDiffCommentsOrEmpty({ worktreesByRepo }, targetWorktreeId)).toBe(
+        comments
+      )
+      expect(selectWorktreeDiffCommentsOrEmpty({ worktreesByRepo }, targetWorktreeId)).toBe(
+        comments
+      )
+      expect(getIndexedWorktreeById(worktreesByRepo, targetWorktreeId)?.path).toBe(
+        '/repo-99/worktree-99-99'
+      )
     }
 
     expect(worktreeIdReads).toBe(10_000)
@@ -62,5 +80,8 @@ describe('selectWorktreeDiffComments', () => {
     expect(selectWorktreeDiffComments({ worktreesByRepo: first }, 'worktree-1')).toBe(firstComments)
     expect(selectWorktreeDiffComments({ worktreesByRepo: next }, 'worktree-1')).toBe(nextComments)
     expect(selectWorktreeDiffComments({ worktreesByRepo: next }, null)).toBeUndefined()
+    expect(selectWorktreeDiffCommentsOrEmpty({ worktreesByRepo: next }, null)).toBe(
+      selectWorktreeDiffCommentsOrEmpty({ worktreesByRepo: next }, undefined)
+    )
   })
 })

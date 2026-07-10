@@ -30,6 +30,7 @@ import {
   type LucideIcon
 } from 'lucide-react'
 import { useAppStore } from '@/store'
+import { selectWorktreeDiffCommentsOrEmpty } from '@/store/worktree-diff-comments-selector'
 import {
   isSyncPushStageError,
   resolveRemoteOperationErrorMessage
@@ -906,11 +907,13 @@ function SourceControlInner(): React.JSX.Element {
   const setRightSidebarOpen = useAppStore((s) => s.setRightSidebarOpen)
   const setRightSidebarTab = useAppStore((s) => s.setRightSidebarTab)
   // Why: pass activeWorktreeId directly (even when null/undefined) so the
-  // slice's getDiffComments returns its stable EMPTY_COMMENTS sentinel. An
+  // selector returns its stable empty sentinel. An
   // inline `[]` fallback would allocate a new array each store update, break
   // Zustand's Object.is equality, and cause this component plus the
   // diffCommentCountByPath memo to churn on every unrelated store change.
-  const diffCommentsForActive = useAppStore((s) => s.getDiffComments(activeWorktreeId))
+  const diffCommentsForActive = useAppStore((s) =>
+    selectWorktreeDiffCommentsOrEmpty(s, activeWorktreeId)
+  )
   const diffCommentCount = diffCommentsForActive.length
   // Why: per-file counts are fed into each UncommittedEntryRow so a comment
   // badge can appear next to the status letter. Compute once per render so
