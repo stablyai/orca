@@ -77,6 +77,12 @@ type RemoteRuntimeMultiplexedTerminalState = {
   snapshotInfo: RemoteRuntimeSnapshotInfo | null
   initialSnapshotReceived: boolean
   pendingSnapshotRequest: RemoteRuntimeSnapshotRequest | null
+  // Why: Output frames carry a byte high-water `seq`; a jump past the expected
+  // next offset means the server dropped frames under websocket backpressure.
+  // Track it so a gap triggers a self-healing snapshot resync instead of
+  // silently rendering corrupt/missing output (frame-drop resync).
+  expectedSeq: number | undefined
+  resyncInFlight: boolean
 }
 
 type RemoteRuntimeSnapshotInfo = {
@@ -149,7 +155,9 @@ class RemoteRuntimeTerminalMultiplexer {
       snapshotTarget: 'initial',
       snapshotInfo: null,
       initialSnapshotReceived: false,
-      pendingSnapshotRequest: null
+      pendingSnapshotRequest: null,
+      expectedSeq: undefined,
+      resyncInFlight: false
     }
     this.streams.set(streamId, state)
 
@@ -334,10 +342,20 @@ class RemoteRuntimeTerminalMultiplexer {
     }
     if (frame.opcode === TerminalStreamOpcode.Output) {
       const data = decodeTerminalStreamText(frame.payload)
-      stream.callbacks.onData(data, {
-        seq: typeof frame.seq === 'number' && frame.seq > 0 ? frame.seq : undefined,
-        rawLength: data.length
-      })
+      // Why: a resync snapshot is authoritative; drop live output that arrives
+      // while it is in flight so the corrupt post-gap tail is never rendered.
+      if (stream.resyncInFlight) {
+        return
+      }
+      const seq = typeof frame.seq === 'number' && frame.seq > 0 ? frame.seq : undefined
+      if (this.detectOutputGap(stream, seq, data.length)) {
+        this.requestResyncSnapshot(stream)
+        return
+      }
+      if (typeof seq === 'number') {
+        stream.expectedSeq = seq
+      }
+      stream.callbacks.onData(data, { seq, rawLength: data.length })
       return
     }
     if (frame.opcode === TerminalStreamOpcode.SnapshotStart) {
@@ -400,7 +418,12 @@ class RemoteRuntimeTerminalMultiplexer {
         clearPendingSnapshotRequest(stream)
       }
       clearSnapshot(stream)
+      // Why: the snapshot is the new authoritative byte high-water; align the
+      // gap detector to it and re-open the live path (used by both the initial
+      // snapshot and a frame-drop resync, which reuses the 'initial' target).
       if (target === 'initial') {
+        stream.expectedSeq = typeof info?.seq === 'number' ? info.seq : undefined
+        stream.resyncInFlight = false
         stream.initialSnapshotReceived = true
         stream.callbacks.onSubscribed?.()
       }
@@ -408,6 +431,8 @@ class RemoteRuntimeTerminalMultiplexer {
     }
     if (frame.opcode === TerminalStreamOpcode.Error) {
       clearSnapshot(stream)
+      // Why: a failed resync must re-open the live path or output stalls forever.
+      stream.resyncInFlight = false
       const pendingSnapshotRequest = stream.pendingSnapshotRequest
       if (pendingSnapshotRequest) {
         clearPendingSnapshotRequest(stream)
@@ -415,6 +440,43 @@ class RemoteRuntimeTerminalMultiplexer {
         return
       }
       stream.callbacks.onError?.(decodeTerminalStreamText(frame.payload))
+    }
+  }
+
+  // Why: Output `seq` is the byte high-water at the end of a chunk, so a chunk
+  // that begins after the last high-water (startSeq > expectedSeq) means the
+  // server dropped intervening frames under backpressure. Only flag a gap when
+  // both offsets are known, and never on the first seq (nothing to compare to).
+  private detectOutputGap(
+    stream: RemoteRuntimeMultiplexedTerminalState,
+    seq: number | undefined,
+    rawLength: number
+  ): boolean {
+    if (typeof seq !== 'number' || typeof stream.expectedSeq !== 'number') {
+      return false
+    }
+    const startSeq = seq - rawLength
+    return startSeq > stream.expectedSeq
+  }
+
+  // Why: on a detected gap, discard the corrupt tail and pull a fresh
+  // authoritative snapshot. The request carries no requestId so the server
+  // reply renders through the initial-snapshot path (full reset), self-healing
+  // without surfacing an error to the user.
+  private requestResyncSnapshot(stream: RemoteRuntimeMultiplexedTerminalState): void {
+    if (stream.resyncInFlight) {
+      return
+    }
+    stream.resyncInFlight = true
+    stream.expectedSeq = undefined
+    const sent = this.sendFrame(
+      stream.streamId,
+      TerminalStreamOpcode.SnapshotRequest,
+      encodeTerminalStreamJson({ scrollbackRows: undefined })
+    )
+    if (!sent) {
+      // Transport is down; the reconnect path re-subscribes from scratch.
+      stream.resyncInFlight = false
     }
   }
 

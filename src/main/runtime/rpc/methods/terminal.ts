@@ -1221,18 +1221,20 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
         opcode: TerminalStreamOpcode,
         payload: Uint8Array<ArrayBufferLike> = new Uint8Array(),
         seq?: number
-      ): void => {
+      ): boolean => {
         if (closed) {
-          return
+          return false
         }
-        sendBinary(
-          encodeTerminalStreamFrame({
-            opcode,
-            streamId,
-            seq: typeof seq === 'number' ? seq : cursor++,
-            payload
-          })
+        // Why: Output `seq` is a byte high-water the client uses for frame-drop
+        // gap detection, so a seq-less Output chunk must carry the sentinel 0
+        // (== "no seq") rather than the cursor value that orders control frames;
+        // a cursor value would poison the client's expected-seq tracker.
+        const resolvedSeq =
+          typeof seq === 'number' ? seq : opcode === TerminalStreamOpcode.Output ? 0 : cursor++
+        const sent = sendBinary(
+          encodeTerminalStreamFrame({ opcode, streamId, seq: resolvedSeq, payload })
         )
+        return sent !== false
       }
       const sendStreamError = (streamId: number, message: string): void => {
         sendFrame(streamId, TerminalStreamOpcode.Error, encodeTerminalStreamText(message))
