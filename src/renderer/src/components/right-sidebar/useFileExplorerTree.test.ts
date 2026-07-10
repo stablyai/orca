@@ -3,7 +3,7 @@ import type { SetStateAction } from 'react'
 import type { DirEntry } from '../../../../shared/types'
 import type { DirCache } from './file-explorer-types'
 import { createFileExplorerDirLoadTracker } from './file-explorer-dir-load-tracker'
-import { refreshFileExplorerExpandedDirs } from './useFileExplorerTree'
+import { refreshFileExplorerExpandedDirs } from './file-explorer-expanded-refresh'
 
 type CacheUpdate = SetStateAction<Record<string, DirCache>>
 

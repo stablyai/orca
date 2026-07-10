@@ -17,6 +17,7 @@ import { requestEditorSaveQuiesce } from '@/components/editor/editor-autosave'
 import { commitFileExplorerOp } from './fileExplorerUndoRedo'
 import { renameRuntimePath } from '@/runtime/runtime-file-client'
 import { getRightSidebarWorktreeRuntimeSettings } from './file-explorer-runtime-owner'
+import type { FileExplorerRoot } from './file-explorer-types'
 
 function extractIpcErrorMessage(err: unknown, fallback: string): string {
   if (!(err instanceof Error)) {
@@ -29,6 +30,7 @@ function extractIpcErrorMessage(err: unknown, fallback: string): string {
 type UseFileExplorerDragDropParams = {
   worktreePath: string | null
   activeWorktreeId: string | null
+  getRootForPath?: (path: string) => FileExplorerRoot | null
   expanded: Set<string>
   toggleDir: (worktreeId: string, dirPath: string) => void
   refreshDir: (dirPath: string) => Promise<void>
@@ -100,6 +102,7 @@ export function getDragEdgeScrollTarget({
 export function useFileExplorerDragDrop({
   worktreePath,
   activeWorktreeId,
+  getRootForPath,
   expanded,
   toggleDir,
   refreshDir,
@@ -194,6 +197,16 @@ export function useFileExplorerDragDrop({
       if (!worktreePath || !activeWorktreeId) {
         return
       }
+      const sourceRoot = getRootForPath?.(sourcePath) ?? null
+      const destinationRoot = getRootForPath?.(destDir) ?? null
+      // Why: each root may be an independent repo/worktree, so internal moves
+      // stay within one root until cross-root copy semantics are defined.
+      if (sourceRoot && destinationRoot && sourceRoot.id !== destinationRoot.id) {
+        return
+      }
+      const operationRoot = sourceRoot ?? destinationRoot
+      const operationWorktreeId = operationRoot?.worktreeId ?? activeWorktreeId
+      const operationWorktreePath = operationRoot?.path ?? worktreePath
       const fileName = basename(sourcePath),
         sourceDir = dirname(sourcePath)
 
@@ -215,8 +228,8 @@ export function useFileExplorerDragDrop({
         remapOpenEditorTabsForPathChange({
           fromPath,
           toPath,
-          worktreePath,
-          worktreeId: activeWorktreeId
+          worktreePath: operationWorktreePath,
+          worktreeId: operationWorktreeId
         })
 
       const run = async (): Promise<void> => {
@@ -236,12 +249,14 @@ export function useFileExplorerDragDrop({
         await Promise.all(filesToMove.map((file) => requestEditorSaveQuiesce({ fileId: file.id })))
 
         try {
-          const connectionId = getConnectionId(activeWorktreeId ?? null) ?? undefined
           const fileContext = {
-            settings: getRightSidebarWorktreeRuntimeSettings(activeWorktreeId),
-            worktreeId: activeWorktreeId,
-            worktreePath,
-            connectionId
+            settings: getRightSidebarWorktreeRuntimeSettings(operationWorktreeId),
+            worktreeId: operationWorktreeId,
+            worktreePath: operationWorktreePath,
+            connectionId:
+              operationRoot?.connectionId ??
+              getConnectionId(operationWorktreeId ?? null) ??
+              undefined
           }
           await renameRuntimePath(fileContext, sourcePath, newPath)
 
@@ -266,7 +281,7 @@ export function useFileExplorerDragDrop({
       }
       void run()
     },
-    [worktreePath, activeWorktreeId, openFiles, refreshDir]
+    [worktreePath, activeWorktreeId, getRootForPath, openFiles, refreshDir]
   )
 
   const clearNativeDragState = useCallback(() => {

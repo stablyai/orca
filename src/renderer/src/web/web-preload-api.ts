@@ -746,6 +746,19 @@ function createWebPreloadApi(): Partial<PreloadApi> {
       revokeRuntimeAccess: () => Promise.resolve({ revoked: false }),
       isWebSocketReady: () => Promise.resolve({ ready: Boolean(activeEnvironment), endpoint: null })
     },
+    mobileTunnel: {
+      list: () => Promise.resolve({ tunnels: [] }),
+      start: () =>
+        Promise.reject(
+          new Error(translate('auto.web.web.preload.api.fb290366b2', 'Unavailable on web.'))
+        ),
+      stop: () => Promise.resolve({ stopped: false }),
+      testEndpoint: () =>
+        Promise.reject(
+          new Error(translate('auto.web.web.preload.api.fb290366b2', 'Unavailable on web.'))
+        ),
+      onChanged: () => noopUnsubscribe
+    },
     telemetryTrack: () => Promise.resolve(),
     telemetrySetOptIn: () => Promise.resolve(),
     telemetryGetConsentState: () =>

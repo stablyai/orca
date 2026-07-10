@@ -380,6 +380,12 @@ import type {
   EnrichedDetectedPort
 } from '../shared/ssh-types'
 import type {
+  MobileReverseTunnelEntry,
+  MobileReverseTunnelListResult,
+  MobileReverseTunnelStartArgs,
+  MobileReverseTunnelStopResult
+} from '../shared/mobile-reverse-tunnel'
+import type {
   CodexUsageBreakdownKind,
   CodexUsageBreakdownRow,
   CodexUsageDailyPoint,
@@ -3026,6 +3032,13 @@ export type PreloadApi = {
     listRuntimeAccessGrants: () => Promise<{ grants: RuntimeAccessGrant[] }>
     revokeRuntimeAccess: (args: { deviceId: string }) => Promise<{ revoked: boolean }>
     isWebSocketReady: () => Promise<{ ready: boolean; endpoint: string | null }>
+  }
+  mobileTunnel: {
+    list: () => Promise<MobileReverseTunnelListResult>
+    start: (args: MobileReverseTunnelStartArgs) => Promise<MobileReverseTunnelEntry>
+    stop: (args: { id: string }) => Promise<MobileReverseTunnelStopResult>
+    testEndpoint: (args: { host: string; port: number }) => Promise<{ reachable: true }>
+    onChanged: (callback: (entry: MobileReverseTunnelEntry) => void) => () => void
   }
   speech: {
     getCatalog: () => Promise<SpeechModelManifest[]>

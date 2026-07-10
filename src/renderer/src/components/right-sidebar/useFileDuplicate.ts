@@ -35,6 +35,8 @@ export function useFileDuplicate({
       if (node.isDirectory || !worktreePath) {
         return
       }
+      const nodeWorktreeId = node.rootWorktreeId ?? activeWorktreeId
+      const nodeWorktreePath = node.rootPath ?? worktreePath
       const dir = dirname(node.path)
       const name = basename(node.path)
       const dotIndex = name.lastIndexOf('.')
@@ -43,10 +45,10 @@ export function useFileDuplicate({
 
       const run = async (): Promise<void> => {
         const context = {
-          settings: getRightSidebarWorktreeRuntimeSettings(activeWorktreeId),
-          worktreeId: activeWorktreeId,
-          worktreePath,
-          connectionId: getConnectionId(activeWorktreeId) ?? undefined
+          settings: getRightSidebarWorktreeRuntimeSettings(nodeWorktreeId),
+          worktreeId: nodeWorktreeId,
+          worktreePath: nodeWorktreePath,
+          connectionId: node.rootConnectionId ?? getConnectionId(nodeWorktreeId) ?? undefined
         }
         // Why: generate a unique "stem copy.ext", "stem copy 2.ext", … name
         // so we never collide with an existing file. pathExists checks are

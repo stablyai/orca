@@ -71,6 +71,11 @@ export async function activateFileExplorerNode(args: {
   if (!activeWorktreeId) {
     return
   }
+  const nodeWorktreeId = node.rootWorktreeId ?? activeWorktreeId
+  const nodeRuntimeEnvironmentId =
+    node.rootWorktreeId === undefined
+      ? runtimeEnvironmentId
+      : (node.rootRuntimeEnvironmentId ?? null)
   setSelectedPath(node.path)
   if (node.isDirectory) {
     if (!canToggleDirectories) {
@@ -119,8 +124,8 @@ export async function activateFileExplorerNode(args: {
     {
       filePath: node.path,
       relativePath: node.relativePath,
-      worktreeId: activeWorktreeId,
-      runtimeEnvironmentId: runtimeEnvironmentId ?? undefined,
+      worktreeId: nodeWorktreeId,
+      runtimeEnvironmentId: nodeRuntimeEnvironmentId ?? undefined,
       language: detectLanguage(node.name),
       mode: 'edit'
     },
@@ -128,7 +133,7 @@ export async function activateFileExplorerNode(args: {
       preview: true,
       // Why: explicit local opens must not inherit the active runtime, so we
       // encode "no runtime owner" via the fallback-suppression option.
-      suppressActiveRuntimeFallback: runtimeEnvironmentId === null
+      suppressActiveRuntimeFallback: nodeRuntimeEnvironmentId === null
     }
   )
 }

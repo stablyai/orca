@@ -8,6 +8,7 @@ import {
   type MobileNetworkInterface
 } from './mobile-network-interface-selection'
 import { MobileNetworkInterfaceSection } from './MobileNetworkInterfaceSection'
+import { MobileRemoteAccessSection } from './MobileRemoteAccessSection'
 import { MobilePairingQrSection } from './MobilePairingQrSection'
 import { MobilePairedDevicesSection, type PairedDevice } from './MobilePairedDevicesSection'
 import { MobileAutoRestoreFitSection } from './MobileAutoRestoreFitSection'
@@ -81,11 +82,12 @@ export function MobilePane(): React.JSX.Element {
   )
 
   const generateQR = useCallback(
-    async (opts: { rotate?: boolean } = {}) => {
+    async (opts: { rotate?: boolean; address?: string } = {}) => {
       setLoading(true)
       try {
+        const address = opts.address ?? selectedAddress
         const result = await window.api.mobile.getPairingQR({
-          ...(selectedAddress ? { address: selectedAddress } : {}),
+          ...(address ? { address } : {}),
           ...(opts.rotate ? { rotate: true } : {})
         })
         if (result.available) {
@@ -169,6 +171,16 @@ export function MobilePane(): React.JSX.Element {
         loading={loading}
         hasQrCode={qrDataUrl != null}
         onGenerateQr={() => void generateQR({ rotate: qrDataUrl != null })}
+      />
+
+      <MobileRemoteAccessSection
+        loadingQr={loading}
+        onGenerateTunnelQr={(address) => {
+          // Why: keep the shared pairing address pointed at the tunnel's public
+          // endpoint so later QR regeneration keeps using the reachable address.
+          setSelectedAddress(address)
+          void generateQR({ rotate: qrDataUrl != null, address })
+        }}
       />
 
       <MobilePairingQrSection

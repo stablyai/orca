@@ -125,6 +125,12 @@ import type {
   EnrichedDetectedPort
 } from '../shared/ssh-types'
 import type {
+  MobileReverseTunnelEntry,
+  MobileReverseTunnelListResult,
+  MobileReverseTunnelStartArgs,
+  MobileReverseTunnelStopResult
+} from '../shared/mobile-reverse-tunnel'
+import type {
   AgentStatusIpcPayload,
   MigrationUnsupportedPtyEntry
 } from '../shared/agent-status-types'
@@ -4098,6 +4104,22 @@ const api = {
 
     isWebSocketReady: (): Promise<{ ready: boolean; endpoint: string | null }> =>
       ipcRenderer.invoke('mobile:isWebSocketReady')
+  },
+
+  mobileTunnel: {
+    list: (): Promise<MobileReverseTunnelListResult> => ipcRenderer.invoke('mobileTunnel:list'),
+    start: (args: MobileReverseTunnelStartArgs): Promise<MobileReverseTunnelEntry> =>
+      ipcRenderer.invoke('mobileTunnel:start', args),
+    stop: (args: { id: string }): Promise<MobileReverseTunnelStopResult> =>
+      ipcRenderer.invoke('mobileTunnel:stop', args),
+    testEndpoint: (args: { host: string; port: number }): Promise<{ reachable: true }> =>
+      ipcRenderer.invoke('mobileTunnel:testEndpoint', args),
+    onChanged: (callback: (entry: MobileReverseTunnelEntry) => void): (() => void) => {
+      const listener = (_event: Electron.IpcRendererEvent, entry: MobileReverseTunnelEntry): void =>
+        callback(entry)
+      ipcRenderer.on('mobileTunnel:changed', listener)
+      return () => ipcRenderer.removeListener('mobileTunnel:changed', listener)
+    }
   },
 
   agentStatus: {

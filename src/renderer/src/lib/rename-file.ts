@@ -6,6 +6,7 @@ import { requestEditorSaveQuiesce } from '@/components/editor/editor-autosave'
 import { commitFileExplorerOp } from '@/components/right-sidebar/fileExplorerUndoRedo'
 import { renameRuntimePath } from '@/runtime/runtime-file-client'
 import { remapOpenEditorTabsForPathChange } from '@/lib/remap-open-editor-tabs-for-path-change'
+import { getSettingsForWorktreeRuntimeOwner } from '@/lib/worktree-runtime-owner'
 
 /**
  * Electron's ipcRenderer.invoke wraps errors as:
@@ -68,7 +69,7 @@ export async function renameFileOnDisk(args: RenameFileArgs): Promise<void> {
   )
   await Promise.all(filesToQuiesce.map((file) => requestEditorSaveQuiesce({ fileId: file.id })))
   const fileContext = {
-    settings: state.settings,
+    settings: getSettingsForWorktreeRuntimeOwner(state, worktreeId),
     worktreeId,
     worktreePath,
     connectionId
@@ -76,21 +77,36 @@ export async function renameFileOnDisk(args: RenameFileArgs): Promise<void> {
 
   try {
     await renameRuntimePath(fileContext, oldPath, newPath)
-    remapOpenEditorTabsForPathChange({ fromPath: oldPath, toPath: newPath, worktreePath })
+    remapOpenEditorTabsForPathChange({
+      fromPath: oldPath,
+      toPath: newPath,
+      worktreePath,
+      worktreeId
+    })
     commitFileExplorerOp({
       undo: async () => {
         await renameRuntimePath(fileContext, newPath, oldPath)
         if (refreshDir) {
           await refreshDir(parentDir)
         }
-        remapOpenEditorTabsForPathChange({ fromPath: newPath, toPath: oldPath, worktreePath })
+        remapOpenEditorTabsForPathChange({
+          fromPath: newPath,
+          toPath: oldPath,
+          worktreePath,
+          worktreeId
+        })
       },
       redo: async () => {
         await renameRuntimePath(fileContext, oldPath, newPath)
         if (refreshDir) {
           await refreshDir(parentDir)
         }
-        remapOpenEditorTabsForPathChange({ fromPath: oldPath, toPath: newPath, worktreePath })
+        remapOpenEditorTabsForPathChange({
+          fromPath: oldPath,
+          toPath: newPath,
+          worktreePath,
+          worktreeId
+        })
       }
     })
   } catch (err) {
