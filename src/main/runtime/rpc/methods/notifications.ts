@@ -27,10 +27,12 @@ const NotificationDispatchParams = z.object({
   worktree: OptionalString
 })
 
-// Why: notifications.subscribe streams desktop notification events to mobile
-// clients over WebSocket. The mobile client shows a local push notification
-// for each event. This avoids requiring Firebase/APNs — the existing
-// persistent WebSocket connection doubles as the push channel.
+/**
+ * Registers notification RPC methods for mobile subscriptions and agent dispatch.
+ *
+ * Mobile subscriptions reuse the persistent WebSocket as the push channel,
+ * while `notifications.dispatch` backs the CLI-triggered notification path.
+ */
 export const NOTIFICATION_METHODS: readonly RpcAnyMethod[] = [
   defineStreamingMethod({
     name: 'notifications.subscribe',

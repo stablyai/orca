@@ -312,12 +312,12 @@ function pruneRecentNotifications(recentNotifications: Map<string, number>, now:
   }
 }
 
-// Why: the native-delivery core (build options → mobile push → native
-// Notification with click-to-focus routing) is shared by the renderer-driven
-// IPC dispatch and the agent-driven runtime dispatch (`notifications.dispatch`).
-// The renderer-only gates (tray attention, focus suppression, burst dedupe)
-// stay in the IPC handler; this function is the part both paths reuse so a
-// notification behaves identically however it was triggered.
+/**
+ * Delivers a notification through the shared mobile and native channels.
+ *
+ * The renderer IPC path and agent RPC path reuse this core so click routing
+ * behaves identically; renderer-only gates stay in `registerNotificationHandlers`.
+ */
 export function performNotificationDelivery(
   store: Store,
   runtime: OrcaRuntimeService | undefined,

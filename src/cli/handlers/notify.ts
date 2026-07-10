@@ -16,6 +16,12 @@ function formatNotifyDispatch({ dispatch }: { dispatch: RuntimeNotificationDispa
   return `Notification delivered${target}.`
 }
 
+/**
+ * CLI handlers for agent-triggered Orca notifications.
+ *
+ * This gives scripts a first-party notification trigger instead of requiring
+ * third-party push services just to surface an agent status summary.
+ */
 export const NOTIFY_HANDLERS: Record<string, CommandHandler> = {
   // Why: gives an agent/orchestrator a native way to fire an Orca notification
   // on demand (an AI summary), deep-linking the tap to the pane it names —

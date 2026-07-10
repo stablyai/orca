@@ -24,6 +24,12 @@ const AGENT_TYPE_LABELS: Readonly<Record<string, string>> = {
   hermes: 'Hermes'
 }
 
+/**
+ * Converts an internal notification request into Electron display text.
+ *
+ * Dispatcher-triggered notifications carry agent-authored prose, while the
+ * existing automatic sources still use their compact generated copy.
+ */
 export function buildNotificationOptions(args: NotificationDispatchRequest): {
   title: string
   body: string

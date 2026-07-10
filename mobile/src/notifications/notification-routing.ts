@@ -28,6 +28,12 @@ function readNonEmptyString(value: unknown): string | null {
   return typeof value === 'string' && value.trim().length > 0 ? value : null
 }
 
+/**
+ * Builds serializable tap-routing data for a local mobile notification.
+ *
+ * A mobile notification is shown by the app from a desktop runtime event, so
+ * this keeps only the host/worktree/pane identifiers needed after the tap.
+ */
 export function buildLocalNotificationData(
   event: DesktopNotificationEvent,
   hostId: string
@@ -48,6 +54,12 @@ export function buildLocalNotificationData(
   return data
 }
 
+/**
+ * Resolves local notification data into the mobile route opened after a tap.
+ *
+ * Invalid or unknown-host payloads are ignored because notification data can
+ * outlive the active host list or come from an older app version.
+ */
 export function getNotificationNavigationPath(
   data: unknown,
   options: NotificationNavigationOptions = {}
