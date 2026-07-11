@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { createTerminalImeLinuxCandidateState } from './terminal-ime-linux-candidate-state'
 import type { XtermBypassEvent } from './xterm-bypass-policy'
 
+/** Creates a terminal keyboard event with default modifier state. */
 function event(overrides: Partial<XtermBypassEvent>): XtermBypassEvent {
   return {
     type: 'keydown',

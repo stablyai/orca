@@ -496,6 +496,7 @@ export function getPreviousVisibleForTerminalPane(args: {
   return args.previous.isVisible
 }
 
+/** Wires mounted terminal panes to renderer state and terminal event handling. */
 export function useTerminalPaneLifecycle({
   tabId,
   worktreeId,

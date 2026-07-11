@@ -1,7 +1,9 @@
 import type { XtermBypassEvent } from './xterm-bypass-policy'
 
 type TerminalImeLinuxCandidateState = {
+  /** Classifies an event before the state observes it. */
   classifyKeyboardEvent: (event: XtermBypassEvent) => { candidateDigitGuardActive: boolean }
+  /** Advances the state after the caller consumes an event classification. */
   observeKeyboardEvent: (
     event: XtermBypassEvent,
     classification: { candidateDigitGuardActive: boolean }
