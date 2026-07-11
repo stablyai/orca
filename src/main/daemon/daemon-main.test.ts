@@ -74,6 +74,28 @@ describe('startDaemon', () => {
     client.disconnect()
   })
 
+  it('passes idle-exit options through to the server', async () => {
+    let resolveExited!: () => void
+    const idleExited = new Promise<void>((resolve) => {
+      resolveExited = resolve
+    })
+    const onIdleExit = vi.fn(() => resolveExited())
+    daemon = await startDaemon({
+      socketPath,
+      tokenPath,
+      spawnSubprocess: () => createMockSubprocess(),
+      onIdleExit,
+      idleExitGraceMs: 40
+    })
+
+    await idleExited
+
+    expect(onIdleExit).toHaveBeenCalledTimes(1)
+    // The idle exit already shut the server down — connections are refused.
+    const client = new DaemonClient({ socketPath, tokenPath })
+    await expect(client.ensureConnected()).rejects.toThrow()
+  })
+
   it('shuts down cleanly', async () => {
     daemon = await startDaemon({
       socketPath,

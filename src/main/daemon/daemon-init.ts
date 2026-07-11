@@ -74,6 +74,7 @@ let adapter: DaemonProvider | null = null
 // the second entry would read the already-disposed current adapter and
 // race cleanupDaemonForProtocol against a half-spawned replacement.
 let restartInFlight: Promise<RestartDaemonResult> | null = null
+const LEGACY_SESSION_QUERY_TIMEOUT_MS = 1000
 
 function getRuntimeDir(): string {
   const dir = join(app.getPath('userData'), 'daemon')
@@ -160,13 +161,31 @@ async function getAliveDaemonSessionCount(
   protocolVersion = PROTOCOL_VERSION
 ): Promise<number | null> {
   const client = new DaemonClient({ socketPath, tokenPath, protocolVersion })
+  let timeout: ReturnType<typeof setTimeout> | null = null
   try {
-    await client.ensureConnected()
-    const result = await client.request<ListSessionsResult>('listSessions', undefined)
+    // Why: legacy versions are checked serially during startup. A daemon that
+    // accepts sockets but stops answering RPCs must fail-safe to adoption
+    // promptly instead of multiplying the client's 30s timeout by versions.
+    const result = await Promise.race([
+      (async () => {
+        await client.ensureConnected()
+        return client.request<ListSessionsResult>('listSessions', undefined)
+      })(),
+      new Promise<null>((resolve) => {
+        timeout = setTimeout(() => resolve(null), LEGACY_SESSION_QUERY_TIMEOUT_MS)
+        timeout.unref?.()
+      })
+    ])
+    if (!result) {
+      return null
+    }
     return result.sessions.filter((session) => session.isAlive).length
   } catch {
     return null
   } finally {
+    if (timeout) {
+      clearTimeout(timeout)
+    }
     client.disconnect()
   }
 }
@@ -889,6 +908,24 @@ async function createLegacyDaemonAdapters(runtimeDir: string): Promise<DaemonPty
           }
         }
       }
+      continue
+    }
+    // Why: an alive legacy daemon with zero live sessions has nothing left to
+    // preserve, but adoption would pin its node + node-pty processes forever —
+    // every protocol bump re-adopts it on the next launch. Reap it through the
+    // existing shutdown/cleanup path instead. A failed session-count query
+    // (null) fail-safes to adoption exactly as before, so a daemon whose
+    // sessions cannot be verified is never killed.
+    const liveSessionCount = await getAliveDaemonSessionCount(
+      socketPath,
+      tokenPath,
+      protocolVersion
+    )
+    if (liveSessionCount === 0) {
+      console.warn(
+        `[daemon] Shutting down idle legacy daemon (protocol v${protocolVersion}) with no live sessions`
+      )
+      await cleanupDaemonForProtocol(runtimeDir, protocolVersion)
       continue
     }
     // Why: old daemon PTYs can be running long-lived agents during an app

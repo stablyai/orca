@@ -1,6 +1,7 @@
 /* oxlint-disable max-lines */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { tmpdir } from 'node:os'
+import { createServer as createNetServer } from 'node:net'
 import { join } from 'node:path'
 import { mkdtempSync, mkdirSync, rmSync, existsSync, readFileSync, writeFileSync } from 'node:fs'
 import { DaemonClient } from './client'
@@ -1969,6 +1970,36 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
       ])
       expect(r1.id).toBeDefined()
       expect(r2.id).toBeDefined()
+      expect(respawnFn).toHaveBeenCalledOnce()
+
+      respawnAdapter.dispose()
+      await respawnServer?.shutdown()
+    })
+
+    it('classifies a socket destroyed before the hello response as daemon-gone and respawns', async () => {
+      // Why: a daemon entering shutdown (idle exit) destroys sockets that were
+      // accepted but had not completed hello. The client surfaces that as
+      // 'Connection closed before hello response', which must trigger the same
+      // respawn-and-retry as a dead socket — not surface to the caller.
+      await server.shutdown()
+      const barrier = createNetServer((socket) => socket.destroy())
+      await new Promise<void>((resolve) => barrier.listen(socketPath, resolve))
+
+      let respawnServer: DaemonServer | undefined
+      const respawnFn = vi.fn(async () => {
+        await new Promise<void>((resolve) => barrier.close(() => resolve()))
+        rmSync(socketPath, { force: true })
+        respawnServer = new DaemonServer({
+          socketPath,
+          tokenPath,
+          spawnSubprocess: () => createMockSubprocess()
+        })
+        await respawnServer.start()
+      })
+      const respawnAdapter = new DaemonPtyAdapter({ socketPath, tokenPath, respawn: respawnFn })
+
+      const result = await respawnAdapter.spawn({ cols: 80, rows: 24 })
+      expect(result.id).toBeDefined()
       expect(respawnFn).toHaveBeenCalledOnce()
 
       respawnAdapter.dispose()

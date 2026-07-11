@@ -1341,6 +1341,19 @@ function isDaemonGoneError(err: unknown): boolean {
   if ((errno.code === 'ENOENT' || errno.code === 'ECONNREFUSED') && errno.syscall === 'connect') {
     return true
   }
+  // Why: a daemon entering shutdown (idle exit) destroys sockets that were
+  // accepted but had not completed hello. Depending on whether the client's
+  // hello write had flushed, that surfaces as EPIPE on the write or as a clean
+  // close before the hello reply — both mean the daemon is going away and a
+  // respawn should be attempted. Hello *rejections* (bad token/version) reply
+  // ok:false with different messages, so they can never trigger a respawn.
+  if (errno.code === 'EPIPE' && errno.syscall === 'write') {
+    return true
+  }
   const msg = err.message
-  return msg === 'Connection lost' || msg === 'Not connected'
+  return (
+    msg === 'Connection lost' ||
+    msg === 'Not connected' ||
+    msg === 'Connection closed before hello response'
+  )
 }

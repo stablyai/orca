@@ -54,6 +54,8 @@ type DaemonServerPrivate = {
       streamSocket: Socket | null
     }
   >
+  idleExit: { isArmed(): boolean } | null
+  shuttingDown: boolean
   routeRequest(clientId: string, request: DaemonRequest): Promise<unknown>
 }
 
@@ -580,6 +582,175 @@ describe('DaemonServer', () => {
 
       const c = new DaemonClient({ socketPath, tokenPath })
       await expect(c.ensureConnected()).rejects.toThrow()
+    })
+  })
+
+  describe('idle self-exit', () => {
+    async function startServerWithIdleExit(
+      graceMs: number,
+      opts: { beforeStart?: (srv: DaemonServer) => Promise<void> } = {}
+    ): Promise<{
+      idleExited: Promise<void>
+      onIdleExit: ReturnType<typeof vi.fn>
+      lastSubprocess: () => ReturnType<typeof createMockSubprocess> | null
+    }> {
+      let resolveExited!: () => void
+      const idleExited = new Promise<void>((resolve) => {
+        resolveExited = resolve
+      })
+      const onIdleExit = vi.fn(() => resolveExited())
+      let subprocess: ReturnType<typeof createMockSubprocess> | null = null
+      server = new DaemonServer({
+        socketPath,
+        tokenPath,
+        spawnSubprocess: () => {
+          subprocess = createMockSubprocess()
+          return subprocess
+        },
+        onIdleExit,
+        idleExitGraceMs: graceMs
+      })
+      await opts.beforeStart?.(server)
+      await server.start()
+      return { idleExited, onIdleExit, lastSubprocess: () => subprocess }
+    }
+
+    function idleArmed(): boolean {
+      return (server as unknown as DaemonServerPrivate).idleExit?.isArmed() ?? false
+    }
+
+    it('shuts down cleanly and calls onIdleExit after the grace period with no clients and no sessions', async () => {
+      const { idleExited, onIdleExit } = await startServerWithIdleExit(40)
+
+      await idleExited
+
+      expect(onIdleExit).toHaveBeenCalledTimes(1)
+      // The clean shutdown ran before onIdleExit — the socket no longer accepts.
+      client = new DaemonClient({ socketPath, tokenPath })
+      await expect(client.ensureConnected()).rejects.toThrow()
+    })
+
+    it('is canceled by a client connect and re-armed by the disconnect', async () => {
+      // Why a huge grace: these assertions are about arm/cancel wiring, which
+      // is observable deterministically — the countdown must never actually
+      // fire during this test. Timing semantics live in daemon-idle-exit.test.
+      const { onIdleExit } = await startServerWithIdleExit(60_000)
+      expect(idleArmed()).toBe(true)
+
+      const control = await connectRawHello('control', 'idle-exit-client')
+      expect(idleArmed()).toBe(false)
+
+      control.destroy()
+      await waitFor(() => idleArmed())
+      expect(onIdleExit).not.toHaveBeenCalled()
+    })
+
+    it('destroys a pre-hello socket at idle exit instead of letting it hold the daemon open', async () => {
+      // Why: sockets that never complete hello are invisible to the client
+      // map. Without the shutdown barrier they would keep server.close() —
+      // and therefore onIdleExit — pending forever (zombie daemon), or worse,
+      // complete hello against a half-shut server.
+      const { idleExited, onIdleExit } = await startServerWithIdleExit(200)
+
+      const rawSocket = connect(socketPath)
+      const rawClosed = new Promise<void>((resolve) => rawSocket.once('close', resolve))
+      rawSocket.on('error', () => {})
+
+      await idleExited
+      await rawClosed
+
+      expect(onIdleExit).toHaveBeenCalledTimes(1)
+    })
+
+    it('refuses hello and createOrAttach once shutdown has begun', async () => {
+      const spawned: unknown[] = []
+      server = new DaemonServer({
+        socketPath,
+        tokenPath,
+        spawnSubprocess: () => {
+          const subprocess = createMockSubprocess()
+          spawned.push(subprocess)
+          return subprocess
+        }
+      })
+      await server.start()
+      await server.shutdown()
+
+      const daemon = server as unknown as DaemonServerPrivate
+      await expect(
+        daemon.routeRequest('late-client', {
+          id: 'req-late-1',
+          type: 'createOrAttach',
+          payload: { sessionId: 'late-session', cols: 80, rows: 24 }
+        })
+      ).rejects.toThrow(/shutting down/)
+      expect(spawned).toHaveLength(0)
+      expect(daemon.clients.size).toBe(0)
+    })
+
+    it('destroys sockets that connect or hello after the shutdown barrier is raised', async () => {
+      // Why raise only the flag: while the listener is still accepting, the
+      // handleConnection/handleFirstMessage barriers are the only defense
+      // against a socket becoming a client on a half-shut server.
+      await startServer()
+      const daemon = server as unknown as DaemonServerPrivate
+
+      // Admitted before the barrier, hello still unsent.
+      const preBarrier = connect(socketPath)
+      await new Promise<void>((resolve) => preBarrier.once('connect', resolve))
+      const preBarrierClosed = new Promise<void>((resolve) => preBarrier.once('close', resolve))
+      preBarrier.on('error', () => {})
+
+      daemon.shuttingDown = true
+
+      // A valid late hello must be destroyed unanswered, never registered.
+      preBarrier.write(
+        encodeNdjson({
+          type: 'hello',
+          version: PROTOCOL_VERSION,
+          token: readFileSync(tokenPath, 'utf-8').trim(),
+          clientId: 'late-hello',
+          role: 'control'
+        })
+      )
+      await preBarrierClosed
+      expect(daemon.clients.size).toBe(0)
+
+      // A brand-new connection after the barrier is destroyed on arrival.
+      const postBarrier = connect(socketPath)
+      const postBarrierClosed = new Promise<void>((resolve) => postBarrier.once('close', resolve))
+      postBarrier.on('error', () => {})
+      await postBarrierClosed
+      expect(daemon.clients.size).toBe(0)
+    })
+
+    it('never fires while a session is alive and exits after the last session ends', async () => {
+      // Why seed the session before start(): start() is what arms the
+      // countdown, so with a session already present the timer never arms at
+      // all. The invariant is proven deterministically instead of racing a
+      // cancel against a short grace on a loaded machine.
+      const { idleExited, onIdleExit, lastSubprocess } = await startServerWithIdleExit(75, {
+        beforeStart: async (srv) => {
+          // A session with zero connected clients — the exact state the
+          // daemon exists for (holding sessions across app restarts).
+          await (srv as unknown as DaemonServerPrivate).routeRequest('ghost-client', {
+            id: 'req-idle-1',
+            type: 'createOrAttach',
+            payload: { sessionId: 'idle-session', cols: 80, rows: 24 }
+          })
+        }
+      })
+      expect(idleArmed()).toBe(false)
+
+      // Bounded real-time check on top of the deterministic assertion above:
+      // 3x the grace elapses and the daemon must still be running.
+      await new Promise((resolve) => setTimeout(resolve, 250))
+      expect(onIdleExit).not.toHaveBeenCalled()
+
+      lastSubprocess()?._simulateExit(0)
+
+      await idleExited
+      expect(onIdleExit).toHaveBeenCalledTimes(1)
     })
   })
 })
