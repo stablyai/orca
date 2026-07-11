@@ -37,6 +37,7 @@ export function isTerminalImeCandidateSelectionKeyEvent(event: XtermBypassEvent)
   return isTerminalImeCandidateSelectionKey(event.key)
 }
 
+/** Returns whether an event is an unmodified IME candidate digit selector. */
 export function isTerminalImeCandidateDigitKeyEvent(event: XtermBypassEvent): boolean {
   return (
     isTerminalImeCandidateSelectionKeyEvent(event) && TERMINAL_IME_CANDIDATE_DIGITS.has(event.key)

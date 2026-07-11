@@ -910,6 +910,7 @@ export function useTerminalPaneLifecycle({
           const linuxCandidateClassification = linuxImeCandidateState?.classifyKeyboardEvent(e) ?? {
             candidateDigitGuardActive: false
           }
+          /** Advances the fallback state after every terminal key event path. */
           const observeLinuxCandidateEvent = (): void => {
             linuxImeCandidateState?.observeKeyboardEvent(e, linuxCandidateClassification)
           }

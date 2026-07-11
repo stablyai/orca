@@ -87,6 +87,7 @@ function isXtermHandledKeyEvent(type: string): boolean {
   return type === 'keydown' || type === 'keyup'
 }
 
+/** Returns whether xterm must not process an IME-owned keyboard event. */
 export function shouldSuppressTerminalImeKeyboardEvent(
   event: XtermBypassEvent,
   options: XtermImeKeyboardOptions
@@ -131,6 +132,7 @@ export function shouldSuppressTerminalImeKeyboardEvent(
   )
 }
 
+/** Returns whether a candidate keydown needs native default prevention. */
 export function shouldPreventDefaultTerminalImeCandidateKey(
   event: XtermBypassEvent,
   options: XtermImeKeyboardOptions

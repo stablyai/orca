@@ -43,6 +43,7 @@ export function createTerminalImeLinuxCandidateState(
   let candidateDigitUntil = 0
 
   return {
+    /** Classifies the current event before state is advanced for it. */
     classifyKeyboardEvent: (event) => {
       const at = now()
       return {
@@ -50,6 +51,7 @@ export function createTerminalImeLinuxCandidateState(
           event.type === 'keydown' && isPlainAsciiDigitKey(event) && candidateDigitUntil > at
       }
     },
+    /** Records the current event after its classification is consumed. */
     observeKeyboardEvent: (event, classification) => {
       const at = now()
       if (classification.candidateDigitGuardActive) {
