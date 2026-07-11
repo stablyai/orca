@@ -9,6 +9,7 @@ import {
   getTerminalHtmlFileOpenHint,
   getTerminalUrlOpenHint,
   installFilePathLinkClickFallback,
+  mapTerminalFilePath,
   isTerminalLinkActivation,
   openFilePathLinkAtBufferPosition,
   openDetectedFilePath
@@ -694,6 +695,69 @@ describe('handleOscLink', () => {
     expect(openFilePathMock).not.toHaveBeenCalled()
   })
 
+  it('maps POSIX OSC file links for a WSL worktree before opening them', async () => {
+    setPlatform('Windows')
+
+    handleOscLink(
+      '/root/workspace/myrepo/README.md:5:3',
+      { metaKey: false, ctrlKey: true },
+      {
+        ...deps,
+        startupCwd: '/root/workspace/myrepo',
+        worktreePath: '\\\\wsl.localhost\\Ubuntu\\home\\repo'
+      }
+    )
+    await flushAsyncWork()
+    await flushDoubleRaf()
+
+    expect(authorizeExternalPathMock).toHaveBeenCalledWith({
+      targetPath: '//wsl.localhost/Ubuntu/root/workspace/myrepo/README.md'
+    })
+    expect(openFileMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        filePath: '//wsl.localhost/Ubuntu/root/workspace/myrepo/README.md'
+      }),
+      { forceContentReload: true }
+    )
+    expect(setPendingEditorRevealMock).toHaveBeenNthCalledWith(2, {
+      filePath: '//wsl.localhost/Ubuntu/root/workspace/myrepo/README.md',
+      line: 5,
+      column: 3,
+      matchLength: 0
+    })
+  })
+
+  it('maps file URL OSC links for a WSL worktree before opening them', async () => {
+    setPlatform('Windows')
+
+    handleOscLink(
+      'file:///root/workspace/myrepo/README.md#L5C3',
+      { metaKey: false, ctrlKey: true },
+      {
+        ...deps,
+        worktreePath: '\\\\wsl.localhost\\Ubuntu\\home\\repo'
+      }
+    )
+    await flushAsyncWork()
+    await flushDoubleRaf()
+
+    expect(authorizeExternalPathMock).toHaveBeenCalledWith({
+      targetPath: '//wsl.localhost/Ubuntu/root/workspace/myrepo/README.md'
+    })
+    expect(openFileMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        filePath: '//wsl.localhost/Ubuntu/root/workspace/myrepo/README.md'
+      }),
+      { forceContentReload: true }
+    )
+    expect(setPendingEditorRevealMock).toHaveBeenNthCalledWith(2, {
+      filePath: '//wsl.localhost/Ubuntu/root/workspace/myrepo/README.md',
+      line: 5,
+      column: 3,
+      matchLength: 0
+    })
+  })
+
   it('opens tilde OSC file links against explicit terminal home when cwd is outside home', async () => {
     setPlatform('Macintosh')
 
@@ -1065,7 +1129,7 @@ describe('createFilePathLinkProvider range bounds', () => {
       1,
       {
         worktreeId: 'wt-1',
-        worktreePath: '/repo',
+        worktreePath: depsOverrides.worktreePath ?? '/repo',
         startupCwd: '/repo',
         managerRef,
         linkProviderDisposablesRef: { current: new Map<number, IDisposable>() },
@@ -1460,6 +1524,44 @@ describe('createFilePathLinkProvider range bounds', () => {
     expect(openFilePathMock).not.toHaveBeenCalled()
   })
 
+  it('maps POSIX file paths for a WSL direct-click fallback before opening them', async () => {
+    setPlatform('Windows')
+
+    const opened = openFilePathLinkAtBufferPosition(
+      makeBuffer([makeBufferLine('/root/workspace/myrepo/README.md:5:3')]),
+      { x: 10, y: 1 },
+      80,
+      {
+        startupCwd: '/root/workspace/myrepo',
+        worktreeId: 'wt-1',
+        worktreePath: '\\\\wsl.localhost\\Ubuntu\\home\\repo',
+        runtimeEnvironmentId: null,
+        pathExistsCache: new Map([
+          ['active\0//wsl.localhost/Ubuntu/root/workspace/myrepo/README.md', true]
+        ])
+      }
+    )
+    await flushAsyncWork()
+    await flushDoubleRaf()
+
+    expect(opened).toBe(true)
+    expect(statMock).toHaveBeenCalledWith({
+      filePath: '//wsl.localhost/Ubuntu/root/workspace/myrepo/README.md'
+    })
+    expect(openFileMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        filePath: '//wsl.localhost/Ubuntu/root/workspace/myrepo/README.md'
+      }),
+      { forceContentReload: true }
+    )
+    expect(setPendingEditorRevealMock).toHaveBeenNthCalledWith(2, {
+      filePath: '//wsl.localhost/Ubuntu/root/workspace/myrepo/README.md',
+      line: 5,
+      column: 3,
+      matchLength: 0
+    })
+  })
+
   it('switches to a known worktree root from direct fallback even when cache says missing', async () => {
     setPlatform('Macintosh')
     storeState.worktreesByRepo = {
@@ -1635,6 +1737,82 @@ describe('createFilePathLinkProvider range bounds', () => {
 
     expect(links.map((link) => link.text)).toEqual(['package.json'])
     expect(window.api.shell.pathExists).toHaveBeenCalledWith('/repo/package.json')
+  })
+
+  it.each([
+    ['modern', '\\\\wsl.localhost\\Ubuntu\\home\\repo'],
+    ['legacy', '\\\\wsl$\\Ubuntu\\home\\repo']
+  ])('maps POSIX terminal links for a %s WSL worktree', async (_label, worktreePath) => {
+    const mappedPath = '//wsl.localhost/Ubuntu/root/workspace/myrepo/README.md'
+    vi.mocked(window.api.shell.pathExists).mockImplementation(
+      async (pathValue) => pathValue === mappedPath
+    )
+    const { provider, linkTooltip } = createProviderSetup(
+      [makeBufferLine('/root/workspace/myrepo/README.md:5:3')],
+      new Map(),
+      { worktreePath, startupCwd: '/root/workspace/myrepo' }
+    )
+
+    const links = await new Promise<ILink[]>((resolve) => {
+      provider.provideLinks(1, (provided) => resolve(provided ?? []))
+    })
+
+    expect(links).toHaveLength(1)
+    expect(window.api.shell.pathExists).toHaveBeenCalledWith(mappedPath)
+    links[0]!.hover?.({} as MouseEvent, links[0]!.text)
+    expect(linkTooltip.textContent).toContain(mappedPath)
+    links[0]!.activate?.(
+      { ctrlKey: true, metaKey: false, shiftKey: false } as MouseEvent,
+      links[0]!.text
+    )
+    await flushAsyncWork()
+    await flushDoubleRaf()
+
+    expect(statMock).toHaveBeenCalledWith({ filePath: mappedPath })
+    expect(openFileMock).toHaveBeenCalledWith(expect.objectContaining({ filePath: mappedPath }), {
+      forceContentReload: true
+    })
+    expect(setPendingEditorRevealMock).toHaveBeenLastCalledWith({
+      filePath: mappedPath,
+      line: 5,
+      column: 3,
+      matchLength: 0
+    })
+  })
+
+  it('resolves relative POSIX terminal links against the pane cwd before mapping', async () => {
+    const mappedPath = '//wsl.localhost/Ubuntu/root/workspace/myrepo/README.md'
+    vi.mocked(window.api.shell.pathExists).mockImplementation(
+      async (pathValue) => pathValue === mappedPath
+    )
+    const { provider } = createProviderSetup([makeBufferLine('README.md:5')], new Map(), {
+      worktreePath: '\\\\wsl.localhost\\Ubuntu\\home\\repo',
+      startupCwd: '/stale',
+      getPaneLinkCwd: () => '/root/workspace/myrepo'
+    })
+
+    const links = await new Promise<ILink[]>((resolve) => {
+      provider.provideLinks(1, (provided) => resolve(provided ?? []))
+    })
+
+    expect(links).toHaveLength(1)
+    expect(window.api.shell.pathExists).toHaveBeenCalledWith(mappedPath)
+  })
+
+  it('preserves existing UNC and native paths', () => {
+    expect(
+      mapTerminalFilePath('//wsl.localhost/Ubuntu/root/file.md', '\\\\wsl.localhost\\Ubuntu\\repo')
+    ).toBe('//wsl.localhost/Ubuntu/root/file.md')
+    expect(
+      mapTerminalFilePath('\\\\server\\share\\file.md', '\\\\wsl.localhost\\Ubuntu\\repo')
+    ).toBe('\\\\server\\share\\file.md')
+    expect(mapTerminalFilePath('C:/repo/file.md', '\\\\wsl.localhost\\Ubuntu\\repo')).toBe(
+      'C:/repo/file.md'
+    )
+  })
+
+  it('does not map POSIX paths for a native Windows worktree', () => {
+    expect(mapTerminalFilePath('/repo/file.md', 'C:\\repo')).toBe('/repo/file.md')
   })
 
   it('opens an existing extensionless spaced prefix from direct fallback cache', async () => {

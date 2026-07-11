@@ -11,6 +11,7 @@ import { settingsForRuntimeOwner } from '@/runtime/runtime-rpc-client'
 import { useAppStore } from '@/store'
 import { activateAndRevealWorktree } from '@/lib/worktree-activation'
 import { resolveKnownWorktreeRootPathLink } from './terminal-worktree-path-link'
+import { parseWslUncPath } from '../../../../shared/wsl-paths'
 
 type TerminalFileOpenDeps = {
   worktreeId: string
@@ -47,6 +48,14 @@ export function getTerminalFileContext(
     worktreePath,
     connectionId: getConnectionId(worktreeId || null) ?? undefined
   }
+}
+
+export function mapTerminalFilePath(filePath: string, worktreePath: string): string {
+  const wslPath = parseWslUncPath(worktreePath)
+  if (!wslPath || !filePath.startsWith('/') || filePath.startsWith('//')) {
+    return filePath
+  }
+  return `//wsl.localhost/${wslPath.distro}${filePath}`
 }
 
 export function shouldOpenTerminalFileWithSystemDefault(
@@ -92,16 +101,20 @@ export function openDetectedFilePath(
   deps: TerminalFileOpenDeps
 ): void {
   const { openWithSystemDefault = false, runtimeEnvironmentId, worktreeId, worktreePath } = deps
+  const mappedFilePath = mapTerminalFilePath(filePath, worktreePath)
   const requestId = ++latestOpenDetectedFilePathRequestId
   cancelPendingEditorRevealFrames()
 
   void (async () => {
     let statResult
     const fileContext = getTerminalFileContext(worktreeId, worktreePath, runtimeEnvironmentId)
-    const canOpenWithSystemDefault = shouldOpenTerminalFileWithSystemDefault(fileContext, filePath)
+    const canOpenWithSystemDefault = shouldOpenTerminalFileWithSystemDefault(
+      fileContext,
+      mappedFilePath
+    )
 
     if (!openWithSystemDefault) {
-      const worktreeRootLink = resolveKnownWorktreeRootPathLink(filePath)
+      const worktreeRootLink = resolveKnownWorktreeRootPathLink(mappedFilePath)
       if (worktreeRootLink) {
         // Why: root workspace switching must work for SSH/runtime paths without
         // local auth/stat, while still coalescing provider + fallback clicks.
@@ -117,9 +130,9 @@ export function openDetectedFilePath(
     try {
       // Why: remote paths don't need local auth — the relay/runtime is the security boundary.
       if (canOpenWithSystemDefault) {
-        await window.api.fs.authorizeExternalPath({ targetPath: filePath })
+        await window.api.fs.authorizeExternalPath({ targetPath: mappedFilePath })
       }
-      statResult = await statRuntimePath(fileContext, filePath)
+      statResult = await statRuntimePath(fileContext, mappedFilePath)
     } catch {
       return
     }
@@ -131,7 +144,7 @@ export function openDetectedFilePath(
     if (openWithSystemDefault && canOpenWithSystemDefault) {
       // Why: Shift+Cmd/Ctrl mirrors URL links by escaping Orca and honoring the
       // user's OS file associations without adding editor-specific settings.
-      const openedWithSystemDefault = await window.api.shell.openFilePath(filePath)
+      const openedWithSystemDefault = await window.api.shell.openFilePath(mappedFilePath)
       if (openedWithSystemDefault || statResult.isDirectory) {
         return
       }
@@ -139,7 +152,7 @@ export function openDetectedFilePath(
 
     if (statResult.isDirectory) {
       if (canOpenWithSystemDefault) {
-        await window.api.shell.openFilePath(filePath)
+        await window.api.shell.openFilePath(mappedFilePath)
       }
       return
     }
@@ -147,16 +160,16 @@ export function openDetectedFilePath(
     // Why: local HTML files render in Orca's browser for ordinary Cmd/Ctrl-click,
     // and remain the fallback if Shift+Cmd/Ctrl cannot launch the OS default.
     if (
-      isHtmlFilePath(filePath) &&
-      shouldOpenTerminalFileWithSystemDefault(fileContext, filePath)
+      isHtmlFilePath(mappedFilePath) &&
+      shouldOpenTerminalFileWithSystemDefault(fileContext, mappedFilePath)
     ) {
-      openHtmlFileInBrowser(filePath, worktreeId)
+      openHtmlFileInBrowser(mappedFilePath, worktreeId)
       return
     }
 
-    let relativePath = filePath
-    if (worktreePath && isPathInsideWorktree(filePath, worktreePath)) {
-      const maybeRelative = toWorktreeRelativePath(filePath, worktreePath)
+    let relativePath = mappedFilePath
+    if (worktreePath && isPathInsideWorktree(mappedFilePath, worktreePath)) {
+      const maybeRelative = toWorktreeRelativePath(mappedFilePath, worktreePath)
       if (maybeRelative !== null && maybeRelative.length > 0) {
         relativePath = maybeRelative
       }
@@ -172,10 +185,10 @@ export function openDetectedFilePath(
 
     store.openFile(
       {
-        filePath,
+        filePath: mappedFilePath,
         relativePath,
         worktreeId: worktreeId || '',
-        language: detectLanguage(filePath),
+        language: detectLanguage(mappedFilePath),
         mode: 'edit',
         runtimeEnvironmentId
       },
@@ -190,7 +203,7 @@ export function openDetectedFilePath(
           return
         }
         store.setPendingEditorReveal({
-          filePath,
+          filePath: mappedFilePath,
           line,
           column: targetColumn,
           matchLength: 0
