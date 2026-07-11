@@ -58,6 +58,9 @@ test.describe('Markdown add-review-note shortcut', () => {
       await openMarkdownFixture(orcaPage, context, filePath)
       await waitForRichMarkdownEditor(orcaPage)
       await orcaPage.evaluate(() => {
+        // Why: switch to source mode through the store — the toolbar toggle is
+        // an icon menu that is brittle to locate; the store action is what it
+        // dispatches anyway, and the shortcut under test is mode-independent.
         const store = window.__store
         if (!store) {
           throw new Error('window.__store is not available')
