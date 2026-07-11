@@ -17701,7 +17701,12 @@ describe('connectPanePty', () => {
       )
       await flushAsyncTicks()
 
-      expect(window.api.pty.confirmForegroundProcess).toHaveBeenCalledTimes(3)
+      // The bounded ladder runs at least its initial read plus two retries; an
+      // incidental droid reconfirm can add one more, so assert the floor, not an
+      // exact count (matches the warm-reattach-to-shell sibling test above).
+      expect(
+        vi.mocked(window.api.pty.confirmForegroundProcess).mock.calls.length
+      ).toBeGreaterThanOrEqual(3)
       expect(mockStoreState.paneForegroundAgentByPaneKey[cacheKey]).toEqual({
         agent: null,
         shellForeground: true
