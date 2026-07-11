@@ -368,7 +368,7 @@ describe('tui agent startup plans', () => {
     })
 
     expect(unwrapPowerShellScript(plan?.launchCommand)).toContain(
-      "& 'hermes' 'chat' \"--query=$orcaHermesStartupQuery\" '--tui'"
+      "& 'hermes' 'chat' \"--query=$orcaHermesNativeQuery\" '--tui'"
     )
   })
 

@@ -10,6 +10,7 @@ const QUERY_PLACEHOLDER = '__ORCA_HERMES_STARTUP_QUERY__'
 const QUERY_ARG_PLACEHOLDER = `--query=${QUERY_PLACEHOLDER}`
 const POSIX_QUERY_VARIABLE = '__orca_hermes_startup_query'
 const POWERSHELL_QUERY_VARIABLE = 'orcaHermesStartupQuery'
+const POWERSHELL_NATIVE_QUERY_VARIABLE = 'orcaHermesNativeQuery'
 
 export const ORCA_HERMES_STARTUP_QUERY_ENV = 'ORCA_HERMES_STARTUP_QUERY'
 
@@ -149,11 +150,12 @@ function buildQueryCommand(argv: string[], shell: AgentStartupShell): string {
   if (shell !== 'posix') {
     const invocation = buildShellCommandFromArgv(argv, 'powershell').replace(
       quoteStartupArg(QUERY_ARG_PLACEHOLDER, 'powershell'),
-      `"--query=$${POWERSHELL_QUERY_VARIABLE}"`
+      `"--query=$${POWERSHELL_NATIVE_QUERY_VARIABLE}"`
     )
     // Why: startup prompts must not remain exported to Hermes tools; the
     // long-lived parent shell retains the transport env for compatibility.
-    const script = `$${POWERSHELL_QUERY_VARIABLE} = $env:${ORCA_HERMES_STARTUP_QUERY_ENV}; Remove-Item Env:${ORCA_HERMES_STARTUP_QUERY_ENV} -ErrorAction SilentlyContinue; ${invocation}`
+    // PowerShell 5 needs Windows-native quote escaping before building child argv.
+    const script = `$${POWERSHELL_QUERY_VARIABLE} = $env:${ORCA_HERMES_STARTUP_QUERY_ENV}; $${POWERSHELL_NATIVE_QUERY_VARIABLE} = $${POWERSHELL_QUERY_VARIABLE} -replace '(\\\\*)"', '$1$1\\"'; Remove-Item Env:${ORCA_HERMES_STARTUP_QUERY_ENV} -ErrorAction SilentlyContinue; ${invocation}`
     return `powershell.exe -NoProfile -EncodedCommand ${encodePowerShellCommand(script)}`
   }
   const invocation = buildShellCommandFromArgv(argv, 'posix').replace(
