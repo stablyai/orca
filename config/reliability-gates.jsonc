@@ -1669,10 +1669,11 @@
         "remote-runtime"
       ],
       "coveredPlatforms": [
-        "macos"
+        "macos",
+        "linux"
       ],
       "coveredProviders": [],
-      "coverageNotes": "Local macOS evidence on main@1282f5c2d, deterministic renderer-unit coverage for the Linux/Sogou candidate-key policy, and a local Electron/CDP live-PTY Sogou-style repro. Real Linux/Sogou OS IME automation, Windows ConPTY post-agent reset, and the CJK/Vietnamese/Arabic matrix remain registered gaps.",
+      "coverageNotes": "Local macOS and containerized Linux evidence, deterministic renderer-unit coverage for the Linux/Sogou candidate-key policy including the legacy orphaned-keyup fallback, and Electron/CDP live-PTY Sogou-style repros. Real Linux/Sogou OS IME automation, Windows ConPTY post-agent reset, and the CJK/Vietnamese/Arabic matrix remain registered gaps.",
       "motivatingLinks": [
         "https://github.com/stablyai/orca/pull/6699",
         "https://github.com/stablyai/orca/pull/6682",
@@ -1680,9 +1681,10 @@
         "https://github.com/stablyai/orca/pull/6999"
       ],
       "invariant": "Composition, native text forwarding, synthetic input, paste, and platform keyboard bypass paths must not send preedit/control bytes before commit and must commit text exactly once to the intended PTY.",
-      "oracle": "The current renderer-unit slice asserts native text commits route to the intended PTY once, composition/preedit bookkeeping does not leak premature text, input-source classification handles synthetic/native paths, paste/runtime forwarding avoids duplicate terminal payloads for covered fixtures, and Linux/Sogou candidate Space/digit selectors do not leak keydown/keypress/keyup while ordinary post-IME typing remains available. The Electron/CDP live-PTY repro verifies Sogou-style Space and digit candidate selectors submit only the committed Chinese text. Real IME paths and the full CJK/Vietnamese/Arabic/JIS-yen matrix run in follow-up platform soak where automation is possible.",
+      "oracle": "The current renderer-unit slice asserts native text commits route to the intended PTY once, composition/preedit bookkeeping does not leak premature text, input-source classification handles synthetic/native paths, paste/runtime forwarding avoids duplicate terminal payloads for covered fixtures, and Linux/Sogou candidate Space/digit selectors do not leak keydown/keypress/keyup while ordinary and long-held letter-to-digit typing remains available. The Electron/CDP live-PTY repro verifies Sogou-style Space and digit selectors submit only the committed Chinese text, while the legacy orphaned-letter-keyup sequence sends no selector byte to the PTY. Real legacy IME commit preservation and the full CJK/Vietnamese/Arabic/JIS-yen matrix run in follow-up platform soak where automation is possible.",
       "commands": [
         "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/terminal-pane/terminal-ime-native-text-forwarder.test.ts src/renderer/src/components/terminal-pane/terminal-ime-input-source.test.ts src/renderer/src/components/terminal-pane/terminal-paste-runtime.test.ts src/renderer/src/components/terminal-pane/terminal-ime-composition-tracker.test.ts src/renderer/src/components/terminal-pane/terminal-ime-candidate-key-release-guard.test.ts src/renderer/src/components/terminal-pane/xterm-bypass-policy-non-mac.test.ts src/renderer/src/components/terminal-pane/xterm-bypass-policy.test.ts",
+        "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/terminal-pane/terminal-ime-linux-candidate-state.test.ts",
         "pnpm run test:e2e -- tests/e2e/chinese-ime-chat-input-repro.spec.ts"
       ],
       "testFiles": [
@@ -1691,6 +1693,7 @@
         "src/renderer/src/components/terminal-pane/terminal-paste-runtime.test.ts",
         "src/renderer/src/components/terminal-pane/terminal-ime-composition-tracker.test.ts",
         "src/renderer/src/components/terminal-pane/terminal-ime-candidate-key-release-guard.test.ts",
+        "src/renderer/src/components/terminal-pane/terminal-ime-linux-candidate-state.test.ts",
         "src/renderer/src/components/terminal-pane/xterm-bypass-policy-non-mac.test.ts",
         "src/renderer/src/components/terminal-pane/xterm-bypass-policy.test.ts",
         "tests/e2e/chinese-ime-chat-input-repro.spec.ts"
@@ -1732,6 +1735,14 @@
           ]
         },
         {
+          "file": "src/renderer/src/components/terminal-pane/terminal-ime-linux-candidate-state.test.ts",
+          "assertions": [
+            "an orphaned plain-letter keyup arms exactly the next bare digit guard",
+            "ordinary, overlapping, shifted, and long-held letter keydowns keep following digits available",
+            "physical letter tracking survives cross-pane focus handoff and clears on renderer-window blur"
+          ]
+        },
+        {
           "file": "src/renderer/src/components/terminal-pane/xterm-bypass-policy-non-mac.test.ts",
           "assertions": [
             "standalone Linux 229 keydowns reach xterm while Windows 229 keydowns stay suppressed",
@@ -1749,11 +1760,39 @@
           "assertions": [
             "Sogou-style Space candidate selection submits only the committed Chinese character",
             "Sogou-style digit candidate selection submits only the committed Chinese phrase",
-            "Post-composition Sogou-style digit selection stays out of the PTY after compositionend"
+            "Post-composition Sogou-style digit selection stays out of the PTY after compositionend",
+            "Legacy orphaned-letter-keyup digit selection submits no selector byte to the PTY; real legacy candidate commit preservation remains a platform gap"
           ]
         }
       ],
       "evidenceRuns": [
+        {
+          "date": "2026-07-11",
+          "runner": "local",
+          "platform": "macos",
+          "command": "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/terminal-pane/terminal-ime-linux-candidate-state.test.ts",
+          "result": "passed",
+          "durationSeconds": 0.619,
+          "summary": "1 state test file and 10 tests passed on macOS, including orphan-keyup, shifted/modifier-changed releases, intervening-key cancellation, cross-pane focus handoff, window/terminal blur cleanup, and long-held-letter coverage; the complete 8-file slice also passed 158 tests."
+        },
+        {
+          "date": "2026-07-11",
+          "runner": "local",
+          "platform": "linux",
+          "command": "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/terminal-pane/terminal-ime-linux-candidate-state.test.ts",
+          "result": "passed",
+          "durationSeconds": 0.747,
+          "summary": "1 state test file and 10 tests passed in Debian 12 arm64 Docker under Node 24, including orphan-keyup, shifted/modifier-changed releases, intervening-key cancellation, cross-pane focus handoff, window/terminal blur cleanup, and long-held-letter coverage; the complete 8-file slice also passed 158 tests."
+        },
+        {
+          "date": "2026-07-11",
+          "runner": "local",
+          "platform": "linux",
+          "command": "pnpm run test:e2e -- tests/e2e/chinese-ime-chat-input-repro.spec.ts",
+          "result": "passed",
+          "durationSeconds": 30.3,
+          "summary": "Debian 12 arm64 Docker with Node 24 and Xvfb passed both live Electron/PTY IME scenarios; the orphaned-letter-keyup candidate digit submitted no selector byte, and the real-Codex opt-in scenario was skipped."
+        },
         {
           "date": "2026-07-07",
           "runner": "local",
@@ -1787,7 +1826,7 @@
       },
       "performanceBudget": {
         "required": true,
-        "evidence": "Terminal IME hot-path audit clean on 2026-07-07: candidate guard adds O(1) boolean checks plus a bounded Space/digit release map; composition listeners are disposed with pane lifecycle; no polling, IPC fan-out, subprocess work, or SSH/remote transport cost added."
+        "evidence": "Terminal IME hot-path audit clean on 2026-07-11: candidate guards add O(1) boolean checks plus bounded per-pane Space/digit state and one renderer-scoped currently pressed physical-letter set; ref-counted renderer and pane blur listeners are disposed with pane lifecycle; no per-pane keyboard-event fan-out, polling, IPC, subprocess work, or SSH/remote transport cost added."
       },
       "promotionCriteria": [
         "Cover deterministic byte/cell oracles first.",

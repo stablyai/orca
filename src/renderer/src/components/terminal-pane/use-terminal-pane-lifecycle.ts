@@ -66,7 +66,7 @@ import { parseOsc7 } from './parse-osc7'
 import { guardParserHandler } from './terminal-parser-handler-guard'
 import { resolveTerminalJisYenInput } from './terminal-jis-yen-input'
 import { installTerminalImeCompositionTracker } from './terminal-ime-composition-tracker'
-import { createTerminalImeLinuxCandidateState } from './terminal-ime-linux-candidate-state'
+import { installTerminalImeLinuxCandidateState } from './terminal-ime-linux-candidate-state'
 import {
   armTerminalImePendingCandidateKeyRelease,
   clearTerminalImePendingCandidateKeyRelease,
@@ -886,10 +886,17 @@ export function useTerminalPaneLifecycle({
           !isMac &&
           navigator.userAgent.includes('Linux') &&
           !/Android|CrOS/.test(navigator.userAgent)
-        const linuxImeCandidateState = isLinux ? createTerminalImeLinuxCandidateState() : null
+        const linuxImeCandidateState = isLinux
+          ? installTerminalImeLinuxCandidateState(pane.terminal.element)
+          : null
         const macNativeTextInputSourceTracker = isMac ? getMacNativeTextInputSourceTracker() : null
         const imeCompositionTracker = installTerminalImeCompositionTracker(pane.terminal.element)
-        imeCompositionDisposablesRef.current.set(pane.id, imeCompositionTracker)
+        imeCompositionDisposablesRef.current.set(pane.id, {
+          dispose: () => {
+            imeCompositionTracker.dispose()
+            linuxImeCandidateState?.dispose()
+          }
+        })
         // Why: only known macOS native text paths need xterm keydown bypass.
         // Source gates cover physical CJK/Vietnamese IME rewrites; synthetic
         // Unicode key events are detected by missing physical key identity.
