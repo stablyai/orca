@@ -21,7 +21,9 @@ else
   exit 1
 fi
 ORCA_BRIDGE_PS1_WIN=$(wslpath -w "$ORCA_BRIDGE_PS1")
-exec "$ORCA_POWERSHELL" -NoProfile -ExecutionPolicy Bypass -File "$ORCA_BRIDGE_PS1_WIN" "$ORCA_WIN_LAUNCHER" "$@"
+ORCA_WSL_CWD=$(pwd -P)
+ORCA_WSL_CWD_WIN=$(wslpath -w "$ORCA_WSL_CWD")
+exec "$ORCA_POWERSHELL" -NoProfile -ExecutionPolicy Bypass -File "$ORCA_BRIDGE_PS1_WIN" "$ORCA_WIN_LAUNCHER" "$ORCA_WSL_CWD_WIN" "$@"
 `
 }
 
@@ -31,23 +33,45 @@ param(
   [Parameter(Mandatory=$true)]
   [string]$OrcaLauncher,
 
+  [string]$WslCwd,
+
   [Parameter(ValueFromRemainingArguments=$true)]
   [string[]]$ForwardArgs
 )
 
+$previousCliCwdExists = Test-Path Env:ORCA_CLI_CWD
+$previousCliCwd = $env:ORCA_CLI_CWD
+$exitCode = 0
 try {
-  & $OrcaLauncher @ForwardArgs
-  if (-not $?) {
-    exit 1
+  if ([string]::IsNullOrEmpty($WslCwd)) {
+    Remove-Item Env:ORCA_CLI_CWD -ErrorAction SilentlyContinue
+  } else {
+    $env:ORCA_CLI_CWD = $WslCwd
   }
-  if ($null -eq $LASTEXITCODE) {
-    exit 0
+  Push-Location -LiteralPath (Split-Path -Parent $OrcaLauncher)
+  try {
+    & $OrcaLauncher @ForwardArgs
+    if (-not $?) {
+      $exitCode = 1
+    } elseif ($null -eq $LASTEXITCODE) {
+      $exitCode = 0
+    } else {
+      $exitCode = $LASTEXITCODE
+    }
+  } finally {
+    Pop-Location
   }
-  exit $LASTEXITCODE
 } catch {
   Write-Error $_
-  exit 1
+  $exitCode = 1
+} finally {
+  if ($previousCliCwdExists) {
+    $env:ORCA_CLI_CWD = $previousCliCwd
+  } else {
+    Remove-Item Env:ORCA_CLI_CWD -ErrorAction SilentlyContinue
+  }
 }
+exit $exitCode
 `
 }
 
