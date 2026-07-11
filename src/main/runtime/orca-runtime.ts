@@ -992,6 +992,7 @@ import {
 } from '../speech/speech-model-deletion'
 import type { CommitMessageAgentEnvironmentResolvers } from '../text-generation/commit-message-agent-environment'
 import { scanNestedRepos } from '../project-groups/nested-repo-discovery'
+import { persistWorktreeSortOrder } from '../worktree-sort-order-persistence'
 import {
   createNestedProjectGroupResolver,
   resolveNestedRepoSelection
@@ -23386,17 +23387,10 @@ export class OrcaRuntimeService {
     if (!this.store) {
       throw new Error('runtime_unavailable')
     }
-    const now = Date.now()
-    let updated = 0
-    for (let i = 0; i < orderedIds.length; i++) {
-      // Why: a sort-order snapshot must only reorder existing worktrees, never
-      // mint new meta — a stale id would otherwise resurrect an orphan workspace
-      // (setWorktreeMeta has no repo-existence check).
-      if (!this.store.getWorktreeMeta(orderedIds[i])) {
-        continue
-      }
-      this.store.setWorktreeMeta(orderedIds[i], { sortOrder: now - i * 1000 })
-      updated++
+    // Why: skip no-op smart-sort rewrites (#8277) and never mint meta for unknown ids (#9342).
+    const updated = persistWorktreeSortOrder(this.store, orderedIds)
+    if (updated === 0) {
+      return { updated: 0 }
     }
     this.invalidateResolvedWorktreeCache()
     this.notifyReposChanged()
