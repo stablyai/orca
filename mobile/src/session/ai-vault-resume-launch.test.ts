@@ -76,7 +76,9 @@ describe('buildMobileAiVaultResumeCommand', () => {
     ).toBe("cd '/Users/ada/repo' && omp --resume '/Users/ada/.omp/agent/sessions/repo/sess.jsonl'")
   })
 
-  it('uses cmd wrapping when the host Windows terminal is configured as cmd', () => {
+  it('uses direct cmd syntax when the host Windows terminal is already cmd', () => {
+    // Why: resume text is typed into the live host tab. Nested `cmd /d /s /c`
+    // wrappers break interactive cmd quoting (see buildAiVaultResumeShellCommand).
     const command = buildMobileAiVaultResumeCommand({
       session: session({
         agent: 'codex',
@@ -87,10 +89,9 @@ describe('buildMobileAiVaultResumeCommand', () => {
       hostPlatform: 'win32',
       hostTerminalWindowsShell: 'cmd.exe'
     })
-    expect(command).toContain('cmd /d /s /c')
-    expect(command).toContain('cd /d ""C:\\repo app""')
-    expect(command).toContain('set ""CODEX_HOME=C:\\Users\\Ada\\.codex""')
-    expect(command).toContain('codex resume ""codex-1""')
+    expect(command).toBe(
+      'cd /d "C:\\repo app" && set "CODEX_HOME=C:\\Users\\Ada\\.codex" && codex resume "codex-1"'
+    )
   })
 
   it('uses POSIX command construction and converts Codex home for WSL targets', () => {
