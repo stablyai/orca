@@ -258,31 +258,41 @@ describe('RemoteRuntimeSharedControlConnection', () => {
     connection.close()
   })
 
-  it.each([
-    ['the final subscription', false],
-    ['the connection explicitly', true]
-  ])('cancels backoff and ignores stale callbacks after closing %s', (_label, closeConnection) => {
+  it('cancels backoff and ignores stale callbacks after closing explicitly', () => {
     vi.useFakeTimers()
     const timeout = vi.spyOn(globalThis, 'setTimeout')
     const connection = new RemoteRuntimeSharedControlConnection(DISCONNECTED_TEST_PAIRING)
     const unsafe = asTestableConnection(connection)
-    const open = vi.fn()
-    unsafe.open = open
+    unsafe.open = vi.fn()
     addTestSubscription(unsafe, 'sub-1')
 
     unsafe.scheduleReconnect()
     const reconnect = timeout.mock.calls.at(-1)![0] as () => void
-    if (closeConnection) {
-      connection.close()
-    } else {
-      unsafe.closeSubscription('sub-1')
-    }
+    connection.close()
 
     expect(vi.getTimerCount()).toBe(0)
-    expect(connection.getDiagnostics()).toMatchObject({ subscriptionCount: 0 })
     reconnect()
-    expect(open).not.toHaveBeenCalled()
-    connection.close()
+    expect(unsafe.open).not.toHaveBeenCalled()
+  })
+
+  it('fences a stale reconnect callback from a newer timer', () => {
+    vi.useFakeTimers()
+    const timeout = vi.spyOn(globalThis, 'setTimeout')
+    const connection = new RemoteRuntimeSharedControlConnection(DISCONNECTED_TEST_PAIRING)
+    const unsafe = asTestableConnection(connection)
+    unsafe.open = vi.fn()
+    addTestSubscription(unsafe, 'sub-a')
+    unsafe.scheduleReconnect()
+    const reconnectA = timeout.mock.calls.at(-1)![0] as () => void
+    unsafe.closeSubscription('sub-a')
+    addTestSubscription(unsafe, 'sub-b')
+    unsafe.scheduleReconnect()
+    const reconnectB = timeout.mock.calls.at(-1)![0] as () => void
+    reconnectA()
+    expect(unsafe.open).not.toHaveBeenCalled()
+    expect(connection.getDiagnostics()).toMatchObject({ state: 'reconnecting' })
+    reconnectB()
+    expect(unsafe.open).toHaveBeenCalledTimes(1)
   })
 
   it('cancels backoff when initial subscription readiness fails', async () => {

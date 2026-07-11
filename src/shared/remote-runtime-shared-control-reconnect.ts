@@ -15,18 +15,24 @@ export function scheduleSharedControlReconnectWhileSubscribed(args: {
   isIntentionallyClosed: () => boolean
   reconnectAttempt: number
   subscriptions: Map<string, SharedControlLogicalSubscription<unknown>>
+  getCurrentTimer: () => ReturnType<typeof setTimeout> | null
   onTimerFired: () => void
   open: () => void
 }): { timer: ReturnType<typeof setTimeout> | null; reconnectAttempt: number } {
   if (args.subscriptions.size === 0) {
     return { timer: null, reconnectAttempt: args.reconnectAttempt }
   }
-  return scheduleSharedControlReconnect({
+  let timer: ReturnType<typeof setTimeout> | null = null
+  const scheduled = scheduleSharedControlReconnect({
     current: args.current,
     intentionallyClosed: args.isIntentionallyClosed(),
     reconnectAttempt: args.reconnectAttempt,
     delaysMs: REMOTE_RUNTIME_SHARED_CONTROL_RECONNECT_DELAYS_MS,
     open: () => {
+      // Why: a cancelled timer may still fire after a replacement is queued.
+      if (timer === null || args.getCurrentTimer() !== timer) {
+        return
+      }
       args.onTimerFired()
       if (args.subscriptions.size === 0 || args.isIntentionallyClosed()) {
         return
@@ -34,6 +40,8 @@ export function scheduleSharedControlReconnectWhileSubscribed(args: {
       args.open()
     }
   })
+  timer = scheduled.timer
+  return scheduled
 }
 
 export function handleSharedControlDisconnect(
