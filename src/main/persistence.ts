@@ -3141,12 +3141,14 @@ export class Store {
             ...migratedAutoRenameBranchFromWork,
             ...migratedTerminalCursorStyle,
             terminalLineHeight: migratedTerminalLineHeight,
-            // Why: the old global true default was ignored outside Windows.
-            // Reset those inherited values once before exposing the setting.
+            // Why: the old global true default was inherited, while false was
+            // always an explicit opt-out and must survive this one-shot reset.
             terminalRightClickToPaste: terminalRightClickToPasteDefaultedForPlatform
               ? (parsed.settings?.terminalRightClickToPaste ??
                 defaults.settings.terminalRightClickToPaste)
-              : defaults.settings.terminalRightClickToPaste,
+              : parsed.settings?.terminalRightClickToPaste === false
+                ? false
+                : defaults.settings.terminalRightClickToPaste,
             terminalRightClickToPasteDefaultedForPlatform: true,
             ...migratedTerminalTuiScrollSensitivity.settings,
             experimentalActivity: migratedExperimentalActivity,
