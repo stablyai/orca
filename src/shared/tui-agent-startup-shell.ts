@@ -50,7 +50,7 @@ function tokenizeWindowsStartupCommand(
     }
   }
   if (quote) {
-    return { ok: false, error: 'unterminated quoted argument' }
+    return { ok: false, error: 'Unclosed quote in command template.' }
   }
   if (tokenStarted) {
     tokens.push(token)

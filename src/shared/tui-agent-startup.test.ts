@@ -3,7 +3,8 @@ import {
   buildAgentDraftLaunchPlan,
   buildAgentResumeStartupPlan,
   buildAgentStartupPlan,
-  buildShellCommandFromArgv
+  buildShellCommandFromArgv,
+  planAgentCliArgsSuffix
 } from './tui-agent-startup'
 import { TUI_AGENT_CONFIG } from './tui-agent-config'
 import { normalizeTuiAgentArgsRecord, resolveTuiAgentLaunchArgs } from './tui-agent-launch-defaults'
@@ -28,6 +29,16 @@ function unwrapPowerShellScript(command: string | undefined): string {
 }
 
 describe('tui agent startup plans', () => {
+  it.each(['powershell', 'cmd'] as const)(
+    'keeps the established invalid-quote error on %s',
+    (shell) => {
+      expect(planAgentCliArgsSuffix('--model "unterminated', shell)).toEqual({
+        ok: false,
+        error: 'CLI arguments are invalid: Unclosed quote in command template.'
+      })
+    }
+  )
+
   it('uses POSIX quoting when the target shell is Linux', () => {
     const plan = buildAgentStartupPlan({
       agent: 'claude',
