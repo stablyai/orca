@@ -80,6 +80,7 @@
     "plugins": [
       "expo-router",
       "./plugins/android-respect-rotation-lock.js",
+      "./plugins/ios-uikit-scene-lifecycle.js",
       [
         "expo-splash-screen",
         {
