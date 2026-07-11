@@ -2,10 +2,13 @@
 
 import { act, renderHook } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { FolderWorkspace, ProjectGroup, Repo, Worktree } from '../../../shared/types'
+import type { FolderWorkspace, ProjectGroup, Repo } from '../../../shared/types'
 import { useAppStore } from '@/store'
 import { folderWorkspaceKey } from '../../../shared/workspace-scope'
 import { useFileDeletion } from '@/components/right-sidebar/useFileDeletion'
+import { getRightSidebarWorktreeRuntimeSettings } from '@/components/right-sidebar/file-explorer-runtime-owner'
+import { getFileExplorerOperationOwner } from '@/components/right-sidebar/file-explorer-operation-owner'
+import type { TreeNode } from '@/components/right-sidebar/file-explorer-types'
 import { createCompatibleRuntimeStatusResponseIfNeeded } from '@/runtime/runtime-compatibility-test-fixture'
 
 const { confirm, toastError } = vi.hoisted(() => ({
@@ -33,9 +36,9 @@ vi.mock('sonner', () => ({ toast: { error: toastError } }))
 const initialState = useAppStore.getInitialState()
 const SSH_CONNECTION_ID = 'ssh-target-1'
 const REMOTE_PATH = '/home/user/project/src/index.ts'
+const REMOTE_REPO_ID = 'repo-ssh'
+const REMOTE_WORKTREE_ID = `${REMOTE_REPO_ID}::/home/user/project`
 const FOLDER_WORKSPACE_ID = 'folder-workspace-1'
-const LOCAL_REPO_ID = 'repo-local'
-const LOCAL_WORKTREE_ID = `${LOCAL_REPO_ID}::/tmp/project`
 const LOCAL_PATH = '/tmp/project/src/index.ts'
 
 function makeFolderWorkspace(overrides: Partial<FolderWorkspace> = {}): FolderWorkspace {
@@ -84,28 +87,35 @@ function makeRepo(overrides: Partial<Repo> & { id: string; path: string }): Repo
   }
 }
 
-function makeWorktree(id: string, repoId: string, path: string): Worktree {
-  return {
-    id,
-    repoId,
-    path
-  } as Worktree
-}
-
-const remoteFile = {
+const remoteFile: TreeNode = {
   name: 'index.ts',
   path: REMOTE_PATH,
   relativePath: 'src/index.ts',
   isDirectory: false,
-  depth: 0
+  depth: 0,
+  operationOwner: { kind: 'ssh', connectionId: SSH_CONNECTION_ID }
 }
 
-const localFile = {
+const localFile: TreeNode = {
   name: 'index.ts',
   path: LOCAL_PATH,
   relativePath: 'src/index.ts',
   isDirectory: false,
-  depth: 0
+  depth: 0,
+  operationOwner: { kind: 'local' }
+}
+
+function renderDelete(activeWorktreeId: string) {
+  return renderHook(() =>
+    useFileDeletion({
+      activeWorktreeId,
+      openFiles: [],
+      closeFile: vi.fn(),
+      refreshDir: vi.fn().mockResolvedValue(undefined),
+      setSelectedPaths: vi.fn(),
+      isWindows: false
+    })
+  )
 }
 
 beforeEach(() => {
@@ -113,13 +123,14 @@ beforeEach(() => {
   fsReadFile.mockReset().mockResolvedValue({ content: 'remote', isBinary: false })
   fsDeletePath.mockReset().mockResolvedValue(undefined)
   runtimeEnvironmentCall.mockReset()
-  runtimeEnvironmentCall.mockImplementation((args: { method: string }) => {
+  runtimeEnvironmentCall.mockImplementation((args: { method: string; selector?: string }) => {
+    const runtimeId = args.selector ?? 'env-1'
     return (
-      createCompatibleRuntimeStatusResponseIfNeeded(args, 'env-1') ?? {
+      createCompatibleRuntimeStatusResponseIfNeeded(args, runtimeId) ?? {
         id: 'rpc-1',
         ok: true,
         result: null,
-        _meta: { runtimeId: 'env-1' }
+        _meta: { runtimeId }
       }
     )
   })
@@ -139,14 +150,14 @@ afterEach(() => {
 })
 
 describe('issue #8135: deleting a remote SSH folder file', () => {
-  it('keeps the resolved file owner on the filesystem route', async () => {
+  it('keeps an inferred SSH folder workspace off the focused runtime', async () => {
     useAppStore.setState({
+      settings: { activeRuntimeEnvironmentId: 'focused-env' } as never,
       folderWorkspaces: [makeFolderWorkspace()],
       projectGroups: [makeProjectGroup()],
       repos: [
-        makeRepo({ id: 'repo-local', path: '/home/user/project/local' }),
         makeRepo({
-          id: 'repo-ssh',
+          id: REMOTE_REPO_ID,
           path: '/home/user/project',
           connectionId: SSH_CONNECTION_ID,
           projectGroupId: 'group-1'
@@ -155,16 +166,15 @@ describe('issue #8135: deleting a remote SSH folder file', () => {
       worktreesByRepo: {}
     })
 
-    const { result } = renderHook(() =>
-      useFileDeletion({
-        activeWorktreeId: folderWorkspaceKey(FOLDER_WORKSPACE_ID),
-        openFiles: [],
-        closeFile: vi.fn(),
-        refreshDir: vi.fn().mockResolvedValue(undefined),
-        setSelectedPaths: vi.fn(),
-        isWindows: false
-      })
+    expect(getRightSidebarWorktreeRuntimeSettings(folderWorkspaceKey(FOLDER_WORKSPACE_ID))).toEqual(
+      { activeRuntimeEnvironmentId: null }
     )
+    expect(getFileExplorerOperationOwner(folderWorkspaceKey(FOLDER_WORKSPACE_ID))).toEqual({
+      kind: 'ssh',
+      connectionId: SSH_CONNECTION_ID
+    })
+
+    const { result } = renderDelete(folderWorkspaceKey(FOLDER_WORKSPACE_ID))
 
     await act(async () => {
       result.current.requestDelete(remoteFile)
@@ -178,6 +188,48 @@ describe('issue #8135: deleting a remote SSH folder file', () => {
       })
     })
     expect(toastError).not.toHaveBeenCalled()
+    expect(runtimeEnvironmentCall).not.toHaveBeenCalled()
+    expect(confirm).toHaveBeenCalledTimes(1)
+  })
+
+  it('fails closed for an ambiguous folder even when a runtime is focused', async () => {
+    useAppStore.setState({
+      settings: { activeRuntimeEnvironmentId: 'focused-env' } as never,
+      folderWorkspaces: [makeFolderWorkspace()],
+      projectGroups: [makeProjectGroup()],
+      repos: [
+        makeRepo({
+          id: 'repo-local',
+          path: '/home/user/project/local',
+          projectGroupId: 'group-1'
+        }),
+        makeRepo({
+          id: 'repo-ssh',
+          path: '/home/user/project',
+          connectionId: SSH_CONNECTION_ID,
+          projectGroupId: 'group-1'
+        })
+      ],
+      worktreesByRepo: {}
+    })
+    const operationOwner = getFileExplorerOperationOwner(folderWorkspaceKey(FOLDER_WORKSPACE_ID))
+    expect(operationOwner).toEqual({ kind: 'unresolved' })
+
+    const { result } = renderDelete(folderWorkspaceKey(FOLDER_WORKSPACE_ID))
+
+    await act(async () => {
+      result.current.requestDelete({ ...remoteFile, operationOwner })
+    })
+
+    await vi.waitFor(() => {
+      expect(toastError).toHaveBeenCalledWith(
+        "Couldn't determine which host owns this file. Check the workspace connection and try again."
+      )
+    })
+    expect(fsReadFile).not.toHaveBeenCalled()
+    expect(fsDeletePath).not.toHaveBeenCalled()
+    expect(runtimeEnvironmentCall).not.toHaveBeenCalled()
+    expect(confirm).not.toHaveBeenCalled()
   })
 
   it('stops while the SSH owner is unresolved instead of deleting locally', async () => {
@@ -185,53 +237,45 @@ describe('issue #8135: deleting a remote SSH folder file', () => {
       repos: [],
       worktreesByRepo: {}
     })
+    const operationOwner = getFileExplorerOperationOwner(REMOTE_WORKTREE_ID)
+    expect(operationOwner).toEqual({ kind: 'unresolved' })
 
-    const { result } = renderHook(() =>
-      useFileDeletion({
-        activeWorktreeId: `repo-ssh::/home/user/project`,
-        openFiles: [],
-        closeFile: vi.fn(),
-        refreshDir: vi.fn().mockResolvedValue(undefined),
-        setSelectedPaths: vi.fn(),
-        isWindows: false
-      })
-    )
+    const { result } = renderDelete(REMOTE_WORKTREE_ID)
 
     await act(async () => {
-      result.current.requestDelete(remoteFile)
+      result.current.requestDelete({ ...remoteFile, operationOwner })
     })
 
     await vi.waitFor(() => {
       expect(toastError).toHaveBeenCalledWith(
-        "Couldn't determine which host owns this file, so Orca won't delete it from the wrong machine."
+        "Couldn't determine which host owns this file. Check the workspace connection and try again."
       )
     })
     expect(fsReadFile).not.toHaveBeenCalled()
     expect(fsDeletePath).not.toHaveBeenCalled()
   })
 
-  it('keeps runtime-environment deletes on files.delete even when the repo owner is unresolved', async () => {
+  it('routes a runtime-owned folder workspace with its synthetic worktree path', async () => {
     useAppStore.setState({
-      settings: { activeRuntimeEnvironmentId: 'env-1' } as never,
+      settings: { activeRuntimeEnvironmentId: 'focused-env' } as never,
+      folderWorkspaces: [makeFolderWorkspace({ folderPath: '/tmp/project' })],
+      projectGroups: [
+        makeProjectGroup({
+          parentPath: '/tmp/project',
+          executionHostId: 'runtime:env-1'
+        })
+      ],
       repos: [],
-      worktreesByRepo: {
-        [LOCAL_REPO_ID]: [makeWorktree(LOCAL_WORKTREE_ID, LOCAL_REPO_ID, '/tmp/project')]
-      }
+      worktreesByRepo: {}
     })
 
-    const { result } = renderHook(() =>
-      useFileDeletion({
-        activeWorktreeId: LOCAL_WORKTREE_ID,
-        openFiles: [],
-        closeFile: vi.fn(),
-        refreshDir: vi.fn().mockResolvedValue(undefined),
-        setSelectedPaths: vi.fn(),
-        isWindows: false
-      })
-    )
+    const { result } = renderDelete(folderWorkspaceKey(FOLDER_WORKSPACE_ID))
 
     await act(async () => {
-      result.current.requestDelete(localFile)
+      result.current.requestDelete({
+        ...localFile,
+        operationOwner: { kind: 'runtime', environmentId: 'env-1' }
+      })
     })
 
     await vi.waitFor(() => {
@@ -239,7 +283,7 @@ describe('issue #8135: deleting a remote SSH folder file', () => {
         selector: 'env-1',
         method: 'files.delete',
         params: {
-          worktree: `id:${LOCAL_WORKTREE_ID}`,
+          worktree: `id:${folderWorkspaceKey(FOLDER_WORKSPACE_ID)}`,
           relativePath: 'src/index.ts',
           recursive: false
         },
@@ -248,39 +292,6 @@ describe('issue #8135: deleting a remote SSH folder file', () => {
     })
     expect(fsDeletePath).not.toHaveBeenCalled()
     expect(toastError).not.toHaveBeenCalled()
-  })
-
-  it('preserves ordinary local deletes when no remote owner exists', async () => {
-    useAppStore.setState({
-      repos: [makeRepo({ id: LOCAL_REPO_ID, path: '/tmp/project' })],
-      worktreesByRepo: {
-        [LOCAL_REPO_ID]: [makeWorktree(LOCAL_WORKTREE_ID, LOCAL_REPO_ID, '/tmp/project')]
-      }
-    })
-
-    const { result } = renderHook(() =>
-      useFileDeletion({
-        activeWorktreeId: LOCAL_WORKTREE_ID,
-        openFiles: [],
-        closeFile: vi.fn(),
-        refreshDir: vi.fn().mockResolvedValue(undefined),
-        setSelectedPaths: vi.fn(),
-        isWindows: false
-      })
-    )
-
-    await act(async () => {
-      result.current.requestDelete(localFile)
-    })
-
-    await vi.waitFor(() => {
-      expect(fsDeletePath).toHaveBeenCalledWith({
-        targetPath: LOCAL_PATH,
-        connectionId: undefined,
-        recursive: false
-      })
-    })
-    expect(runtimeEnvironmentCall).not.toHaveBeenCalled()
-    expect(toastError).not.toHaveBeenCalled()
+    expect(confirm).toHaveBeenCalledTimes(1)
   })
 })

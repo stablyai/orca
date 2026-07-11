@@ -9849,6 +9849,9 @@
               }
             }
           },
+          "fileExplorerOperationOwner": {
+            "unresolved": "このワークスペースを所有しているホストを特定できませんでした。接続を確認して、もう一度お試しください。"
+          },
           "useFileDeletion": {
             "72691dfebc": "{{value0}} '{{value1}}' に失敗しました。",
             "96affe1302": "「{{value0}}」は {{value1}} に移動されました",
@@ -9858,7 +9861,7 @@
             "92276aceb7": "削除",
             "7fb9435c86": "This permanently deletes the directory and its contents on the remote host. This cannot be undone.",
             "23e98f192f": "This permanently deletes the file on the remote host. This cannot be undone.",
-            "8b8ee9d22f": "このファイルを所有しているホストを特定できないため、Orca は誤ったマシンから削除しません。"
+            "8b8ee9d22f": "このファイルを所有しているホストを特定できませんでした。ワークスペースの接続を確認して、もう一度お試しください。"
           },
           "useFileExplorerHandlers": {
             "32cd9fd991": "シンボリックリンクターゲットを開けません"

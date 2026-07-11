@@ -9849,6 +9849,9 @@
               }
             }
           },
+          "fileExplorerOperationOwner": {
+            "unresolved": "Couldn't determine which host owns this workspace. Check the connection and try again."
+          },
           "useFileDeletion": {
             "72691dfebc": "Failed to {{value0}} '{{value1}}'.",
             "96affe1302": "'{{value0}}' moved to {{value1}}",
@@ -9858,7 +9861,7 @@
             "92276aceb7": "Delete",
             "7fb9435c86": "This permanently deletes the directory and its contents on the remote host. This cannot be undone.",
             "23e98f192f": "This permanently deletes the file on the remote host. This cannot be undone.",
-            "8b8ee9d22f": "Couldn't determine which host owns this file, so Orca won't delete it from the wrong machine."
+            "8b8ee9d22f": "Couldn't determine which host owns this file. Check the workspace connection and try again."
           },
           "useFileExplorerHandlers": {
             "32cd9fd991": "Cannot open symlink target"
