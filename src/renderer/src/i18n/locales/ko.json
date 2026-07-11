@@ -8994,6 +8994,10 @@
           "a8f3e2c1b4": "주간 크레딧",
           "b7e2d9f0a3": "터미널의 grok /usage 화면과 같은 주간 크레딧 비율입니다.",
           "c6d1a8f4e2": "{{when}}에 재설정"
+        },
+        "GeneralWorkspaceDefaultTabSetting": {
+          "d5ace069a0": "기본 탭",
+          "c8b1d50fbe": "사이드바에서 워크스페이스를 처음 열 때 표시되는 탭입니다."
         }
       },
       "right": {

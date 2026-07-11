@@ -4,6 +4,7 @@ import { OpenInMenuSetting } from './OpenInMenuSetting'
 import { SearchableSetting } from './SearchableSetting'
 import { SettingsSubsectionHeader, SettingsSwitchRow } from './SettingsFormControls'
 import { WorkspaceDirectorySetting } from './WorkspaceDirectorySetting'
+import { GeneralWorkspaceDefaultTabSetting } from './GeneralWorkspaceDefaultTabSetting'
 import { translate } from '@/i18n/i18n'
 
 type GeneralWorkspaceSettingsSectionProps = {
@@ -29,6 +30,8 @@ export function GeneralWorkspaceSettingsSection({
       />
 
       <WorkspaceDirectorySetting settings={settings} updateSettings={updateSettings} />
+
+      <GeneralWorkspaceDefaultTabSetting settings={settings} updateSettings={updateSettings} />
 
       <SearchableSetting
         title={translate(
