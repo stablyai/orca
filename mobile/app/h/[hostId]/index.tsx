@@ -47,6 +47,7 @@ import { NewWorkspaceFab, FAB_SIZE } from '../../../src/components/NewWorkspaceF
 import { AddProjectIconButton, AddProjectModal } from '../../../src/components/AddProjectModal'
 import { MobileRepoIcon } from '../../../src/components/MobileRepoIcon'
 import { WorktreeListRow } from '../../../src/components/WorktreeListRow'
+import { WorkspaceListSeparator } from '../../../src/components/WorkspaceListSeparator'
 import { useNow } from '../../../src/hooks/use-now'
 import { useActiveWorktreeScroll } from '../../../src/hooks/use-active-worktree-scroll'
 import type { RepoIcon } from '../../../../src/shared/repo-icon'
@@ -1241,7 +1242,7 @@ export function HostScreen({
               </Pressable>
             )
           }}
-          ItemSeparatorComponent={ListSeparator}
+          ItemSeparatorComponent={WorkspaceListSeparator}
           renderItem={({ item }) => (
             <WorktreeListRow
               item={item}
@@ -1478,10 +1479,6 @@ export default function HostWorktreeRoute() {
   return <HostScreen />
 }
 
-function ListSeparator() {
-  return <View style={styles.separator} />
-}
-
 const styles = StyleSheet.create({
   container: {
     flex: 1,
@@ -1693,12 +1690,6 @@ const styles = StyleSheet.create({
     fontSize: 11,
     color: colors.textMuted,
     marginLeft: spacing.xs
-  },
-  separator: {
-    height: 1,
-    backgroundColor: colors.borderSubtle,
-    marginLeft: spacing.lg + 24,
-    marginRight: spacing.lg
   },
   filterModalHeader: {
     flexDirection: 'row',
