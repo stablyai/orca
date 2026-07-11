@@ -7,10 +7,13 @@ import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
 import type { ExecutionHostId } from '../../../shared/execution-host'
 
+let latestActivationRequest = 0
+
 export async function activateWorktreeFromSidebar(
   worktreeId: string,
   executionHostId?: ExecutionHostId
 ): Promise<void> {
+  const activationRequest = ++latestActivationRequest
   const workspaceScope = parseWorkspaceKey(worktreeId)
   if (workspaceScope?.type === 'folder') {
     if (executionHostId) {
@@ -32,6 +35,9 @@ export async function activateWorktreeFromSidebar(
         await store.getState().refreshRuntimeEnvironmentStatus(runtime.runtimeEnvironmentId)
       }
     } catch (error) {
+      if (activationRequest !== latestActivationRequest) {
+        return
+      }
       toast.error(
         translate(
           'auto.lib.sidebarWorktreeActivation.wakeEphemeralVmFailed',
@@ -41,6 +47,11 @@ export async function activateWorktreeFromSidebar(
           description: error instanceof Error ? error.message : String(error)
         }
       )
+      return
+    }
+    // Why: VM resume can take seconds. A later sidebar click owns navigation;
+    // the older completion must not pull the user back to this workspace.
+    if (activationRequest !== latestActivationRequest) {
       return
     }
   }
