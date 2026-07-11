@@ -51,6 +51,7 @@ import {
   MAX_PERSISTED_PR_COMMENTS_LIST_SELECTIONS,
   clearPRCommentsListSelectionsForTests,
   getPRCommentsListSelectionCountForTests,
+  seedPRCommentsListSelectionForTests,
   type PRCommentsListSelectionClearRequest
 } from './pr-comments-list-selection'
 import { PRCommentsList } from './checks-panel-content'
@@ -449,19 +450,19 @@ describe('PRCommentsList comment resolution selection', () => {
 
   it('does not refresh LRU recency for an abandoned Suspense render', () => {
     const comments = [comment({ id: 1, threadId: 'thread-1', path: 'src/a.ts' })]
-    const queueContext = (contextKey: string): void => {
-      renderList({ comments, contextKey })
-      clickButton('Queue for agent')
+    const queuedGroupIds = ['thread:thread-1'] as const
+    const seedContext = (contextKey: string): void => {
+      seedPRCommentsListSelectionForTests(contextKey, queuedGroupIds)
     }
 
-    queueContext('review:oldest')
+    seedContext('review:oldest')
     for (let i = 0; i < MAX_PERSISTED_PR_COMMENTS_LIST_SELECTIONS - 1; i += 1) {
-      queueContext(`review:recent-${i}`)
+      seedContext(`review:recent-${i}`)
     }
 
     renderAbandonedList(comments, 'review:oldest')
     expect(container.textContent).toContain('Loading review')
-    queueContext('review:new')
+    seedContext('review:new')
 
     renderList({ comments, contextKey: 'review:oldest' })
     expect(hasButton('Send 1 queued comments to AI')).toBe(false)
@@ -471,21 +472,21 @@ describe('PRCommentsList comment resolution selection', () => {
 
   it('bounds persisted review contexts while retaining recently restored selections', () => {
     const comments = [comment({ id: 1, threadId: 'thread-1', path: 'src/a.ts', isResolved: false })]
-    const queueContext = (contextKey: string): void => {
-      renderList({ comments, contextKey })
-      clickButton('Queue for agent')
-      expect(hasButton('Send 1 queued comments to AI')).toBe(true)
+    const queuedGroupIds = ['thread:thread-1'] as const
+    const seedContext = (contextKey: string): void => {
+      seedPRCommentsListSelectionForTests(contextKey, queuedGroupIds)
     }
 
-    queueContext('review:keep')
+    seedContext('review:keep')
     for (let i = 0; i < MAX_PERSISTED_PR_COMMENTS_LIST_SELECTIONS - 1; i += 1) {
-      queueContext(`review:stale-${i}`)
+      seedContext(`review:stale-${i}`)
     }
 
+    // Why: committed remount must refresh LRU recency for the restored context.
     renderList({ comments, contextKey: 'review:keep' })
     expect(hasButton('Send 1 queued comments to AI')).toBe(true)
 
-    queueContext('review:new')
+    seedContext('review:new')
 
     expect(getPRCommentsListSelectionCountForTests()).toBe(
       MAX_PERSISTED_PR_COMMENTS_LIST_SELECTIONS

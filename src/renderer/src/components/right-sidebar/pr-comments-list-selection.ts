@@ -95,6 +95,19 @@ export function getPRCommentsListSelectionCountForTests(): number {
   return persistedSelectionByContextKey.size
 }
 
+// Why: bound/LRU tests need to fill the cache without 1024 React mounts per case.
+export function seedPRCommentsListSelectionForTests(
+  contextKey: string,
+  selectedGroupIds: Iterable<string>,
+  isSelectingForAI = true
+): void {
+  persistSelectionState({
+    contextKey,
+    isSelectingForAI,
+    selectedGroupIds: new Set(selectedGroupIds)
+  })
+}
+
 export function usePRCommentsListSelection(
   comments: PRComment[],
   selectionContextKey: string | undefined,
