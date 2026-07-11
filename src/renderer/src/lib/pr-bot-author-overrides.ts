@@ -1,6 +1,7 @@
 import { useMemo } from 'react'
 import { useAppStore } from '@/store'
 import { createBotAuthorOverrideSet, normalizePRCommentAuthorLogin } from './pr-comment-audience'
+import { MAX_PR_BOT_AUTHOR_OVERRIDES } from '../../../shared/pr-bot-author-overrides'
 
 let overrideUpdateQueue = Promise.resolve()
 
@@ -20,12 +21,16 @@ export function setPRBotAuthorOverride(author: string, isBot: boolean): void {
   // so marking two authors quickly cannot make the later write drop the first.
   overrideUpdateQueue = overrideUpdateQueue
     .then(async () => {
-      const { settings, updateSettings } = useAppStore.getState()
-      if (!settings) {
+      const { updateSettings } = useAppStore.getState()
+      // Why: paired web clients have no settings push; refresh before merging so
+      // a stale client cannot overwrite overrides saved by another surface.
+      const settings = await window.api.settings.get()
+      const current = createBotAuthorOverrideSet(settings.prBotAuthorOverrides)
+      if (current.has(normalized) === isBot) {
         return
       }
-      const current = createBotAuthorOverrideSet(settings?.prBotAuthorOverrides)
-      if (current.has(normalized) === isBot) {
+      if (isBot && current.size >= MAX_PR_BOT_AUTHOR_OVERRIDES) {
+        console.warn('PR bot author override limit reached')
         return
       }
       const next = new Set(current)

@@ -28,6 +28,16 @@ describe('PR bot author override updates', () => {
           })
         })
     )
+    Object.defineProperty(globalThis, 'window', {
+      configurable: true,
+      value: {
+        api: {
+          settings: {
+            get: vi.fn(async () => store.settings)
+          }
+        }
+      }
+    })
   })
 
   it('serializes rapid marks so later writes include earlier authors', async () => {
@@ -57,5 +67,32 @@ describe('PR bot author override updates', () => {
 
     await vi.waitFor(() => expect(store.updateSettings).toHaveBeenCalledTimes(2))
     expect(store.updateSettings).toHaveBeenLastCalledWith({ prBotAuthorOverrides: ['bob'] })
+  })
+
+  it('merges against canonical settings instead of a stale renderer snapshot', async () => {
+    vi.mocked(window.api.settings.get).mockResolvedValue({
+      prBotAuthorOverrides: ['alice']
+    } as Awaited<ReturnType<typeof window.api.settings.get>>)
+    store.updateSettings.mockResolvedValue(undefined)
+
+    setPRBotAuthorOverride('bob', true)
+
+    await vi.waitFor(() =>
+      expect(store.updateSettings).toHaveBeenCalledWith({
+        prBotAuthorOverrides: ['alice', 'bob']
+      })
+    )
+  })
+
+  it('does not evict an existing override when the limit is reached', async () => {
+    vi.mocked(window.api.settings.get).mockResolvedValue({
+      prBotAuthorOverrides: Array.from({ length: 500 }, (_, index) => `bot-${index}`)
+    } as Awaited<ReturnType<typeof window.api.settings.get>>)
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
+
+    setPRBotAuthorOverride('new-bot', true)
+
+    await vi.waitFor(() => expect(warn).toHaveBeenCalledWith('PR bot author override limit reached'))
+    expect(store.updateSettings).not.toHaveBeenCalled()
   })
 })
