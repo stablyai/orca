@@ -44,4 +44,18 @@ describe('PR bot author override updates', () => {
     })
     store.pending.shift()?.()
   })
+
+  it('continues processing updates after a settings write fails', async () => {
+    store.updateSettings
+      .mockRejectedValueOnce(new Error('settings unavailable'))
+      .mockImplementationOnce(async (updates: { prBotAuthorOverrides: string[] }) => {
+        store.settings = { ...store.settings!, ...updates }
+      })
+
+    setPRBotAuthorOverride('alice', true)
+    setPRBotAuthorOverride('bob', true)
+
+    await vi.waitFor(() => expect(store.updateSettings).toHaveBeenCalledTimes(2))
+    expect(store.updateSettings).toHaveBeenLastCalledWith({ prBotAuthorOverrides: ['bob'] })
+  })
 })

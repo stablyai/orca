@@ -18,21 +18,24 @@ export function setPRBotAuthorOverride(author: string, isBot: boolean): void {
   }
   // Why: settings writes are asynchronous; serialize read-modify-write updates
   // so marking two authors quickly cannot make the later write drop the first.
-  overrideUpdateQueue = overrideUpdateQueue.then(async () => {
-    const { settings, updateSettings } = useAppStore.getState()
-    if (!settings) {
-      return
-    }
-    const current = createBotAuthorOverrideSet(settings?.prBotAuthorOverrides)
-    if (current.has(normalized) === isBot) {
-      return
-    }
-    const next = new Set(current)
-    if (isBot) {
-      next.add(normalized)
-    } else {
-      next.delete(normalized)
-    }
-    await updateSettings({ prBotAuthorOverrides: [...next].sort() })
-  })
+  overrideUpdateQueue = overrideUpdateQueue
+    .then(async () => {
+      const { settings, updateSettings } = useAppStore.getState()
+      if (!settings) {
+        return
+      }
+      const current = createBotAuthorOverrideSet(settings?.prBotAuthorOverrides)
+      if (current.has(normalized) === isBot) {
+        return
+      }
+      const next = new Set(current)
+      if (isBot) {
+        next.add(normalized)
+      } else {
+        next.delete(normalized)
+      }
+      await updateSettings({ prBotAuthorOverrides: [...next].sort() })
+    })
+    // Why: one failed settings write must not poison every later override update.
+    .catch(() => undefined)
 }
