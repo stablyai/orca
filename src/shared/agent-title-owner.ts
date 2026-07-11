@@ -36,8 +36,8 @@ function getProfileForTitleLabel(label: string | null): TitleLabelProfileMatch |
  * Resolves the synthetic title profile matching a given terminal title.
  */
 function getProfileForTitle(title: string): TitleProfileMatch | null {
-  // Zellij/session wrappers prefix dynamic titles with ` | `, so inspect each
-  // suffix to preserve the inner compatible agent identity.
+  // Multiplexers/session wrappers prefix dynamic titles with ` | `, so inspect
+  // each suffix to preserve the inner compatible agent identity.
   const candidates = [title]
   let wrapperSeparatorIndex = title.indexOf(' | ')
   while (wrapperSeparatorIndex >= 0) {
