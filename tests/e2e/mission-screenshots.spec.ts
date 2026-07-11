@@ -47,9 +47,11 @@ test.describe('Mission screenshots', () => {
       const missionHeader = await createMission(missionName, `create-dialog-${theme}`)
       await createMission(`${missionName} Demo`)
 
-      // (1) Missions tab with two missions expanded.
-      await expect(orcaPage.locator('[data-mission-id]')).not.toHaveCount(0)
-      expect(await orcaPage.locator('[data-mission-id]').count()).toBeGreaterThanOrEqual(2)
+      // (1) Missions tab with two missions expanded (spec UI Quality Bar):
+      // both headers report aria-expanded and member cards are visible.
+      const expandedHeaders = orcaPage.locator('[data-mission-id] button[aria-expanded="true"]')
+      await expect(expandedHeaders.nth(1)).toBeVisible({ timeout: 30_000 })
+      expect(await expandedHeaders.count()).toBeGreaterThanOrEqual(2)
       await orcaPage.waitForTimeout(700)
       await shot(`mission-list-${theme}`)
 
