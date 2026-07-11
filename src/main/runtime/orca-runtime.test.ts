@@ -30,10 +30,7 @@ import {
   removeWorktree
 } from '../git/worktree'
 import * as gitRunner from '../git/runner'
-import {
-  clearSubmodulePathsCacheForTests,
-  listSubmodulePaths
-} from '../git/status'
+import { clearSubmodulePathsCacheForTests, listSubmodulePaths } from '../git/status'
 import {
   createSetupRunnerScript,
   getEffectiveHooks,
@@ -21843,6 +21840,38 @@ describe('OrcaRuntimeService', () => {
 
     await expect(stopPromise).rejects.toThrow('runtime_unavailable')
     expect(killed).toBe(false)
+  })
+
+  it('waits for verified terminal stops before completing a worktree stop', async () => {
+    const runtime = new OrcaRuntimeService(store)
+    let releaseStop = () => {}
+    const stopAndWait = vi.fn(
+      () =>
+        new Promise<boolean>((resolve) => {
+          releaseStop = () => resolve(true)
+        })
+    )
+    const kill = vi.fn(() => true)
+    runtime.setPtyController({
+      write: () => true,
+      kill,
+      stopAndWait,
+      getForegroundProcess: async () => null
+    })
+    syncSinglePty(runtime, 'pty-1')
+
+    let completed = false
+    const stopping = runtime.stopTerminalsForWorktree(TEST_WORKTREE_ID).then((result) => {
+      completed = true
+      return result
+    })
+    await vi.waitFor(() => expect(stopAndWait).toHaveBeenCalledWith('pty-1'))
+
+    expect(completed).toBe(false)
+    expect(kill).not.toHaveBeenCalled()
+    releaseStop()
+
+    await expect(stopping).resolves.toEqual({ stopped: 1 })
   })
 
   it('stops exactly the expected live PTYs for a worktree', async () => {
