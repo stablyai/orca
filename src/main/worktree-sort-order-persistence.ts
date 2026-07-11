@@ -10,6 +10,7 @@ function hasPersistedWorktreeSortOrder(
   let previous = Number.POSITIVE_INFINITY
   for (const id of orderedIds) {
     const current = store.getWorktreeMeta(id)?.sortOrder
+    // Why: timestamp gaps are a write format; idempotency only requires relative order.
     if (typeof current !== 'number' || !Number.isFinite(current) || current >= previous) {
       return false
     }
