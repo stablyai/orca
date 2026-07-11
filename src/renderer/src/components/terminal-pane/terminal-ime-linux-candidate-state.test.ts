@@ -61,4 +61,25 @@ describe('createTerminalImeLinuxCandidateState', () => {
     const digitKeydown = event({ key: '1', code: 'Digit1', keyCode: 49 })
     expect(state.classifyKeyboardEvent(digitKeydown).candidateDigitGuardActive).toBe(false)
   })
+
+  it('does not suppress a digit after overlapping ordinary letter key presses', () => {
+    let time = 100
+    const state = createTerminalImeLinuxCandidateState(() => time)
+
+    for (const keyboardEvent of [
+      event({ key: 'a', code: 'KeyA', keyCode: 65 }),
+      event({ key: 'b', code: 'KeyB', keyCode: 66 }),
+      event({ type: 'keyup', key: 'a', code: 'KeyA', keyCode: 65 }),
+      event({ type: 'keyup', key: 'b', code: 'KeyB', keyCode: 66 })
+    ]) {
+      const classification = state.classifyKeyboardEvent(keyboardEvent)
+      state.observeKeyboardEvent(keyboardEvent, classification)
+      time += 10
+    }
+
+    expect(
+      state.classifyKeyboardEvent(event({ key: '1', code: 'Digit1', keyCode: 49 }))
+        .candidateDigitGuardActive
+    ).toBe(false)
+  })
 })

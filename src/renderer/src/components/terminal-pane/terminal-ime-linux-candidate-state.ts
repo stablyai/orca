@@ -36,7 +36,7 @@ function isPlainAsciiDigitKey(event: XtermBypassEvent): boolean {
 export function createTerminalImeLinuxCandidateState(
   now: () => number = () => Date.now()
 ): TerminalImeLinuxCandidateState {
-  let lastPlainLetterKeydown: { code: string; at: number } | null = null
+  const pendingPlainLetterKeydownsByCode = new Map<string, number>()
   let candidateDigitUntil = 0
 
   return {
@@ -60,7 +60,7 @@ export function createTerminalImeLinuxCandidateState(
 
       if (event.type === 'keydown') {
         if (isPlainAsciiLetterKey(event) && event.code) {
-          lastPlainLetterKeydown = { code: event.code, at }
+          pendingPlainLetterKeydownsByCode.set(event.code, at)
           return
         }
         if (!isPlainAsciiDigitKey(event)) {
@@ -71,17 +71,16 @@ export function createTerminalImeLinuxCandidateState(
 
       if (event.type === 'keyup') {
         if (isPlainAsciiLetterKey(event) && event.code) {
+          const pressedAt = pendingPlainLetterKeydownsByCode.get(event.code)
           const matchingPlainLetterKeydown =
-            lastPlainLetterKeydown !== null &&
-            lastPlainLetterKeydown.code === event.code &&
-            at - lastPlainLetterKeydown.at <= ORPHAN_LETTER_KEYDOWN_MAX_AGE_MS
+            pressedAt !== undefined && at - pressedAt <= ORPHAN_LETTER_KEYDOWN_MAX_AGE_MS
           if (!matchingPlainLetterKeydown) {
             // Why: some legacy Linux IME paths commit a single-letter preedit
             // without composition/input events. The orphaned keyup is a narrow
             // hint that the next bare digit belongs to the candidate picker.
             candidateDigitUntil = at + CANDIDATE_DIGIT_WINDOW_MS
           }
-          lastPlainLetterKeydown = null
+          pendingPlainLetterKeydownsByCode.delete(event.code)
         }
       }
     }
