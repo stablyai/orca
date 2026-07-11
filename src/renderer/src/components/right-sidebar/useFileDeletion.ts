@@ -3,7 +3,7 @@ import { toast } from 'sonner'
 import { useAppStore } from '@/store'
 import { useConfirmationDialog } from '@/components/confirmation-dialog'
 import { dirname } from '@/lib/path'
-import { getConnectionId } from '@/lib/connection-context'
+import { getConnectionIdForFile } from '@/lib/connection-context'
 import { useShortcutLabel } from '@/hooks/useShortcutLabel'
 import { findWorktreeById } from '@/store/slices/worktree-helpers'
 import { isPathEqualOrDescendant } from './file-explorer-paths'
@@ -50,6 +50,10 @@ export function useFileDeletion({
 }: UseFileDeletionParams): UseFileDeletionResult {
   const confirm = useConfirmationDialog()
   const deleteShortcutLabel = useShortcutLabel('fileExplorer.delete')
+  const unresolvedDeleteOwnerError = translate(
+    'auto.components.right.sidebar.useFileDeletion.8b8ee9d22f',
+    "Couldn't determine which host owns this file, so Orca won't delete it from the wrong machine."
+  )
   // Why: track in-flight deletes per-path so repeated Del presses on the same
   // node don't issue duplicate IPC calls; the map is a ref to avoid re-renders.
   const inFlightRef = useRef<Set<string>>(new Set())
@@ -61,7 +65,8 @@ export function useFileDeletion({
       }
       inFlightRef.current.add(node.path)
 
-      const connectionId = getConnectionId(activeWorktreeId ?? null) ?? undefined
+      const resolvedConnectionId = getConnectionIdForFile(activeWorktreeId ?? null, node.path)
+      const connectionId = resolvedConnectionId ?? undefined
       const state = useAppStore.getState()
       const worktree = activeWorktreeId
         ? findWorktreeById(state.worktreesByRepo, activeWorktreeId)
@@ -72,10 +77,14 @@ export function useFileDeletion({
         worktreePath: worktree?.path ?? null,
         connectionId
       }
-      const isRemote =
-        connectionId !== undefined || isRemoteRuntimeFileOperation(fileContext, node.path)
+      const isRuntimeRemote = isRemoteRuntimeFileOperation(fileContext, node.path)
+      // Why: owner resolution is tri-state, undefined means unresolved, null means local, and a string means remote.
+      const isRemote = resolvedConnectionId !== null || isRuntimeRemote
 
       try {
+        if (resolvedConnectionId === undefined && !isRuntimeRemote) {
+          throw new Error(unresolvedDeleteOwnerError)
+        }
         // Why: remote deletes bypass OS Trash, and undo cannot recover
         // directories or unreadable files.
         if (isRemote) {
@@ -206,7 +215,15 @@ export function useFileDeletion({
         inFlightRef.current.delete(node.path)
       }
     },
-    [activeWorktreeId, closeFile, confirm, isWindows, openFiles, refreshDir]
+    [
+      activeWorktreeId,
+      closeFile,
+      confirm,
+      isWindows,
+      openFiles,
+      refreshDir,
+      unresolvedDeleteOwnerError
+    ]
   )
 
   const requestDelete = useCallback(

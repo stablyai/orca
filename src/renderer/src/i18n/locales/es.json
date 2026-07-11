@@ -9857,7 +9857,8 @@
             "a76c74f105": "destructivo",
             "92276aceb7": "Eliminar",
             "7fb9435c86": "Esto elimina permanentemente el directorio y su contenido en el host remoto. Esto no se puede deshacer.",
-            "23e98f192f": "Esto elimina permanentemente el archivo en el host remoto. Esto no se puede deshacer."
+            "23e98f192f": "Esto elimina permanentemente el archivo en el host remoto. Esto no se puede deshacer.",
+            "8b8ee9d22f": "No se pudo determinar qué host posee este archivo, así que Orca no lo eliminará de la máquina equivocada."
           },
           "useFileExplorerHandlers": {
             "32cd9fd991": "No se puede abrir el destino del enlace simbólico"
