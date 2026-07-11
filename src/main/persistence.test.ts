@@ -1727,14 +1727,20 @@ describe('Store', () => {
 
     const persisted = readDataFile() as { automationRuns: Record<string, unknown>[] }
     const template = persisted.automationRuns[0]
-    persisted.automationRuns = Array.from({ length: 250 }, (_, i) => ({
-      ...template,
-      id: `legacy-run-${i}`,
-      // Only final runs are evictable; the real-world blowup was skipped_precheck rows.
-      status: 'skipped_precheck',
-      createdAt: 1_000 + i,
-      scheduledFor: 1_000 + i
-    }))
+    persisted.automationRuns = Array.from({ length: 250 }, (_, i) => {
+      const legacy: Record<string, unknown> = {
+        ...template,
+        id: `legacy-run-${i}`,
+        // Only final runs are evictable; the real-world blowup was skipped_precheck rows.
+        status: 'skipped_precheck',
+        createdAt: 1_000 + i,
+        scheduledFor: 1_000 + i
+      }
+      // A real legacy file predates runNumber; backfill must run BEFORE the prune
+      // so survivors keep their true ordinals instead of restarting at 1.
+      delete legacy.runNumber
+      return legacy
+    })
     writeDataFile(persisted)
 
     vi.useFakeTimers()
@@ -1752,6 +1758,9 @@ describe('Store', () => {
     const healed = readDataFile() as { automationRuns: Record<string, unknown>[] }
     expect(healed.automationRuns).toHaveLength(100)
     expect(healed.automationRuns.at(-1)?.id).toBe('legacy-run-249')
+    // Survivors carry their true lifetime ordinals (151..250), not restarted ones.
+    expect(healed.automationRuns[0]?.runNumber).toBe(151)
+    expect(healed.automationRuns.at(-1)?.runNumber).toBe(250)
   })
 
   it('does not strand an in-flight run whose completion lands after the retention cap', async () => {
