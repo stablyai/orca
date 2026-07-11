@@ -1,6 +1,7 @@
 import { translate } from '@/i18n/i18n'
 import {
   sanitizeCrashReportString,
+  type CrashReportCopySubmissionFailure,
   type CrashReportDiagnosticBundle,
   type CrashReportSubmitResult
 } from '../../../../shared/crash-reporting'
@@ -37,6 +38,27 @@ function normalizedFailureMessage(error: unknown): string {
 
 function asSentence(message: string): string {
   return /[.!?]$/.test(message) ? message : `${message}.`
+}
+
+export function getCrashReportCopySubmissionFailure(
+  failure: CrashReportSubmitFailureLike
+): CrashReportCopySubmissionFailure {
+  const diagnosticContext =
+    failure.diagnosticBundle?.status === 'uploaded'
+      ? {
+          status: 'uploaded' as const,
+          ticketId: sanitizeCrashReportString(failure.diagnosticBundle.ticketId)
+        }
+      : failure.diagnosticBundle?.status === 'not_uploaded'
+        ? {
+            status: 'not_uploaded' as const,
+            reason: normalizedFailureMessage(failure.diagnosticBundle.reason)
+          }
+        : undefined
+  return {
+    error: normalizedFailureMessage(failure.error),
+    ...(diagnosticContext ? { diagnosticContext } : {})
+  }
 }
 
 export function getCrashReportSubmitFailureNotice(

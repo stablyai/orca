@@ -316,6 +316,7 @@ import type { ShellOpenLocalPathResult } from '../shared/shell-open-types'
 import type { SkillDiscoveryResult, SkillDiscoveryTarget } from '../shared/skills'
 import type {
   CrashReportBreadcrumbData,
+  CrashReportCopyDiagnosticsArgs,
   CrashReportRecord,
   CrashReportSubmitArgs,
   CrashReportSubmitResult,
@@ -1397,10 +1398,9 @@ export type PreloadApi = {
     ) => Promise<ReactErrorBoundaryReportResult>
     recordBreadcrumb: (args: { name: string; data?: CrashReportBreadcrumbData }) => void
     submit: (args: CrashReportSubmitArgs) => Promise<CrashReportSubmitResult>
-    copyLatestDiagnostics: (args?: {
-      reportId?: string
-      notes?: string
-    }) => Promise<{ ok: true } | { ok: false; error: string }>
+    copyLatestDiagnostics: (
+      args?: CrashReportCopyDiagnosticsArgs
+    ) => Promise<{ ok: true } | { ok: false; error: string }>
   }
   export: ExportApi
   gh: {

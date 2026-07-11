@@ -23,9 +23,11 @@ import type { GitHubViewer } from '../../../../shared/types'
 import { translate } from '@/i18n/i18n'
 import {
   CRASH_REPORT_SUBMIT_FAILURE_TOAST_ID,
+  getCrashReportCopySubmissionFailure,
   getCrashReportSubmitFailureNotice,
   getCrashReportSubmitWarningNotice
 } from './crash-report-submit-notice'
+import { useCrashReportCopy } from './use-crash-report-copy'
 
 function formatSummary(report: CrashReportRecord): string {
   if (isReactErrorBoundaryReport(report)) {
@@ -94,6 +96,7 @@ export function CrashReportDialogSurface({
     () => (report ? formatCrashReportText(report, deferredNotes) : ''),
     [deferredNotes, report]
   )
+  const copyCrashReportDetails = useCrashReportCopy(report, notes)
 
   const clearViewer = useCallback((): void => {
     viewerRequestIdRef.current += 1
@@ -127,27 +130,13 @@ export function CrashReportDialogSurface({
     loadViewerForOpenDialog()
   }, [clearViewer, loadViewerForOpenDialog, open])
 
-  const handleCopy = async (): Promise<void> => {
-    const result = await window.api.crashReports.copyLatestDiagnostics(
-      report ? { reportId: report.id, notes } : { notes }
-    )
-    if (!result.ok) {
-      toast.error(result.error)
-      return
-    }
-    toast.success(
-      translate('auto.components.crash.report.CrashReportDialog.8b8473c544', 'Crash report copied.')
-    )
-  }
-
   const showSubmitFailure = (
     error: unknown,
     diagnosticBundle?: CrashReportDiagnosticBundle
   ): void => {
-    const notice = getCrashReportSubmitFailureNotice(
-      { error, ...(diagnosticBundle ? { diagnosticBundle } : {}) },
-      includeDiagnosticLogs
-    )
+    const failure = { error, ...(diagnosticBundle ? { diagnosticBundle } : {}) }
+    const notice = getCrashReportSubmitFailureNotice(failure, includeDiagnosticLogs)
+    const copyFailure = getCrashReportCopySubmissionFailure(failure)
     toast.error(notice.title, {
       id: CRASH_REPORT_SUBMIT_FAILURE_TOAST_ID,
       description: notice.description,
@@ -156,7 +145,7 @@ export function CrashReportDialogSurface({
       action: {
         label: notice.actionLabel,
         onClick: () => {
-          void handleCopy()
+          void copyCrashReportDetails(copyFailure)
         }
       }
     })
@@ -321,7 +310,13 @@ export function CrashReportDialogSurface({
         </div>
 
         <DialogFooter className="gap-2">
-          <Button type="button" variant="outline" size="sm" onClick={handleCopy} disabled={loading}>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={() => void copyCrashReportDetails()}
+            disabled={loading}
+          >
             <Clipboard className="size-3.5" />
             {translate('auto.components.crash.report.CrashReportDialog.50b00dc327', 'Copy Details')}
           </Button>

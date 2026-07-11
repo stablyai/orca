@@ -119,6 +119,30 @@ describe('recordProcessGoneCrash', () => {
     expect(sink.flushMock).toHaveBeenCalledOnce()
   })
 
+  it('still persists the report when the forced trace flush fails', async () => {
+    const record = vi.fn().mockResolvedValue({ id: 'report-1' })
+    sink.flushMock.mockImplementation(() => {
+      throw new Error('trace disk unavailable')
+    })
+
+    expect(() =>
+      recordProcessGoneCrash({ record } as never, event(), new ProcessGoneDedupe())
+    ).not.toThrow()
+    await vi.waitFor(() => expect(record).toHaveBeenCalledOnce())
+  })
+
+  it('still persists the report when the trace sink handoff fails', async () => {
+    const record = vi.fn().mockResolvedValue({ id: 'report-1' })
+    sink.push = () => {
+      throw new Error('trace rotation failed')
+    }
+
+    expect(() =>
+      recordProcessGoneCrash({ record } as never, event(), new ProcessGoneDedupe())
+    ).not.toThrow()
+    await vi.waitFor(() => expect(record).toHaveBeenCalledOnce())
+  })
+
   it('durably records a sanitized crash-report persistence failure', async () => {
     const persistError = Object.assign(
       new Error('EPERM at C:\\Users\\alice\\AppData\\Roaming\\Orca\\crash-reports.json'),
@@ -148,5 +172,24 @@ describe('recordProcessGoneCrash', () => {
     )
     expect(JSON.stringify(sink.records)).not.toContain('alice')
     expect(sink.flushMock).toHaveBeenCalledTimes(2)
+  })
+
+  it('allows the same renderer crash to retry after persistence fails', async () => {
+    const record = vi
+      .fn()
+      .mockRejectedValueOnce(new Error('disk unavailable'))
+      .mockResolvedValueOnce({ id: 'report-2' })
+    const dedupe = new ProcessGoneDedupe()
+    vi.spyOn(console, 'error').mockImplementation(() => {})
+
+    recordProcessGoneCrash({ record } as never, event(), dedupe)
+    await vi.waitFor(() =>
+      expect(getCrashBreadcrumbSnapshot()).toEqual(
+        expect.arrayContaining([expect.objectContaining({ name: 'crash_report_persist_failed' })])
+      )
+    )
+    recordProcessGoneCrash({ record } as never, event(), dedupe)
+
+    await vi.waitFor(() => expect(record).toHaveBeenCalledTimes(2))
   })
 })

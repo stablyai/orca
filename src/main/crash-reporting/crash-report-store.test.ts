@@ -168,6 +168,28 @@ describe('CrashReportStore', () => {
     await expect(store.getLatestPending()).resolves.toMatchObject({ id: report.id })
   })
 
+  it.each(['EPERM', 'EACCES', 'EBUSY'] as const)(
+    'recovers a pending report after a transient Windows %s read failure',
+    async (code) => {
+      const { store, filePath } = await createStore()
+      const report = await store.record(input())
+      const reloaded = new CrashReportStore(filePath)
+      vi.spyOn(process, 'platform', 'get').mockReturnValue('win32')
+      const readError = Object.assign(new Error('temporary read failure'), { code })
+      const readFileSpy = vi.spyOn(fs, 'readFile').mockRejectedValueOnce(readError)
+
+      await expect(reloaded.getLatestPending()).resolves.toMatchObject({ id: report.id })
+
+      expect(readFileSpy).toHaveBeenCalledTimes(2)
+      if (code === 'EBUSY') {
+        expect(grantDirAclMock).not.toHaveBeenCalled()
+      } else {
+        expect(grantDirAclMock).toHaveBeenCalledOnce()
+        expect(grantDirAclMock).toHaveBeenCalledWith(path.dirname(filePath))
+      }
+    }
+  )
+
   it('retries a transient Windows rename lock', async () => {
     const { store } = await createStore()
     vi.spyOn(process, 'platform', 'get').mockReturnValue('win32')

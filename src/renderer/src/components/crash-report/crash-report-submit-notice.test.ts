@@ -1,10 +1,29 @@
 import { describe, expect, it } from 'vitest'
 import {
+  getCrashReportCopySubmissionFailure,
   getCrashReportSubmitFailureNotice,
   getCrashReportSubmitWarningNotice
 } from './crash-report-submit-notice'
 
 describe('crash report submit notices', () => {
+  it('builds an allow-listed copy context with the exact sanitized failure reasons', () => {
+    expect(
+      getCrashReportCopySubmissionFailure({
+        error: 'request failed at C:\\Users\\alice\\Orca',
+        diagnosticBundle: {
+          status: 'not_uploaded',
+          reason: 'attachment timeout token=super-secret-value'
+        }
+      })
+    ).toEqual({
+      error: 'request failed at [redacted-path]',
+      diagnosticContext: {
+        status: 'not_uploaded',
+        reason: 'attachment timeout token=[redacted]'
+      }
+    })
+  })
+
   it('keeps the returned error and points attached-log failures to the no-log retry', () => {
     const notice = getCrashReportSubmitFailureNotice({ error: 'status 413' }, true)
 

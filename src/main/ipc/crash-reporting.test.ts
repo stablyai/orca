@@ -185,6 +185,42 @@ describe('registerCrashReportingHandlers', () => {
     expect(listRecent).not.toHaveBeenCalled()
   })
 
+  it('copies sanitized submission and diagnostic omission failures for a captured report', async () => {
+    const pending = report('pending', 'crash-copy-failure')
+    registerCrashReportingHandlers({
+      getById: vi.fn(async () => pending),
+      dismiss: vi.fn(),
+      markSent: vi.fn(),
+      markDismissedSent: vi.fn(),
+      listRecent: vi.fn(async () => [pending]),
+      record: vi.fn(),
+      formatDiagnosticText: vi.fn()
+    } as never)
+
+    const result = await handlers.get('crashReports:copyLatestDiagnostics')?.(null, {
+      reportId: pending.id,
+      notes: 'current notes',
+      submissionFailure: {
+        error: 'fallback failed at C:\\Users\\alice\\Orca',
+        diagnosticContext: {
+          status: 'not_uploaded',
+          reason: 'attachment token=super-secret-value',
+          internalEndpointError: 'must-not-cross-copy-boundary'
+        },
+        diagnosticBundleFailure: 'must-not-cross-copy-boundary'
+      }
+    })
+
+    expect(result).toEqual({ ok: true })
+    const copiedText = String(clipboardWriteTextMock.mock.calls[0]?.[0])
+    expect(copiedText).toContain('Report ID: crash-copy-failure')
+    expect(copiedText).toContain('Submission failure:')
+    expect(copiedText).toContain('Report error: fallback failed at [redacted-path]')
+    expect(copiedText).toContain('Diagnostic logs not uploaded: attachment token=[redacted]')
+    expect(copiedText).not.toContain('alice')
+    expect(copiedText).not.toContain('must-not-cross-copy-boundary')
+  })
+
   it('returns dismissed unsent reports for the manual Help menu entry', async () => {
     const dismissed = report('dismissed', 'crash-help-menu')
     registerCrashReportingHandlers({
@@ -541,8 +577,9 @@ describe('registerCrashReportingHandlers', () => {
     const markSent = vi.fn()
     submitFeedbackMock.mockResolvedValue({
       ok: false,
-      status: 500,
-      error: 'status 500'
+      status: null,
+      error: 'report-only network failed',
+      diagnosticBundleFailure: { status: 500, error: 'status 500' }
     })
     registerCrashReportingHandlers({
       getById: vi.fn(async () => pending),
@@ -563,8 +600,8 @@ describe('registerCrashReportingHandlers', () => {
 
     expect(result).toEqual({
       ok: false,
-      status: 500,
-      error: 'status 500',
+      status: null,
+      error: 'report-only network failed',
       report: pending,
       diagnosticBundle: {
         status: 'not_uploaded',
@@ -574,6 +611,7 @@ describe('registerCrashReportingHandlers', () => {
         spanCount: 1
       }
     })
+    expect(result).not.toHaveProperty('diagnosticBundleFailure')
     expect(submitFeedbackMock).toHaveBeenCalledWith(
       expect.objectContaining({
         diagnosticBundle: {

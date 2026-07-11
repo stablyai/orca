@@ -11917,6 +11917,9 @@
               "sentWithoutDiagnostics": "Crash report sent without diagnostic logs",
               "diagnosticsReason": "Diagnostic logs were not attached: {{value0}}"
             }
+          },
+          "copy": {
+            "copyFailed": "无法复制崩溃报告详细信息。"
           }
         }
       },

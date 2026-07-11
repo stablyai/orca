@@ -77,7 +77,8 @@ export function recordProcessGoneCrash(
   }
 
   const key = getProcessGoneDedupeKey(event.source, event.processType, event.reason, event.exitCode)
-  if (!dedupe.shouldRecord(key)) {
+  const claim = dedupe.tryClaim(key)
+  if (!claim) {
     return
   }
   const crashDetails = buildProcessGoneCrashDetails(event.details)
@@ -121,6 +122,7 @@ export function recordProcessGoneCrash(
       breadcrumbs
     })
     .catch((error) => {
+      dedupe.release(claim)
       console.error('[crash-reporting] Failed to persist crash report:', error)
       const data = persistFailureData(event, error)
       recordDurableCrashBreadcrumb(

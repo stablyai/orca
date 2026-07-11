@@ -4,6 +4,7 @@ import os from 'node:os'
 import { app, clipboard, ipcMain } from 'electron'
 import {
   type CrashReportBreadcrumbData,
+  type CrashReportCopyDiagnosticsArgs,
   type CrashReportDiagnosticBundle,
   type ReactErrorBoundaryReportArgs,
   type ReactErrorBoundaryReportResult,
@@ -30,6 +31,7 @@ import {
   assertClipboardTextWriteWithinLimit,
   isClipboardTextWriteTooLargeError
 } from '../../shared/clipboard-text'
+import { formatCrashReportCopyText } from '../crash-reporting/crash-report-copy-text'
 
 const inFlightSubmissions = new Set<string>()
 const submittedReportIds = new Set<string>()
@@ -352,15 +354,16 @@ export function registerCrashReportingHandlers(store: CrashReportStore): void {
   ipcMain.removeHandler('crashReports:copyLatestDiagnostics')
   ipcMain.handle(
     'crashReports:copyLatestDiagnostics',
-    async (_event, args?: { reportId?: string; notes?: string }) => {
+    async (_event, args?: CrashReportCopyDiagnosticsArgs) => {
       const report = await getRequestedCrashReport(store, args)
-      if (!report) {
-        clipboard.writeText(buildUncapturedCrashReportText(args?.notes))
-        return { ok: true as const }
-      }
+      const baseText = report
+        ? formatCrashReportText(report, args?.notes)
+        : buildUncapturedCrashReportText(args?.notes)
       try {
         clipboard.writeText(
-          assertClipboardTextWriteWithinLimit(formatCrashReportText(report, args?.notes))
+          assertClipboardTextWriteWithinLimit(
+            formatCrashReportCopyText(baseText, args?.submissionFailure)
+          )
         )
       } catch (error) {
         if (isClipboardTextWriteTooLargeError(error)) {
@@ -411,7 +414,11 @@ export function registerCrashReportingHandlers(store: CrashReportStore): void {
         return result.ok
           ? { ok: true, report: null, diagnosticBundle: submittedDiagnosticBundle }
           : {
-              ...result,
+              // Why: the transport-only attachment failure may contain raw
+              // endpoint detail; only its sanitized bundle reason crosses IPC.
+              ok: false,
+              status: result.status,
+              error: result.error,
               report: null,
               diagnosticBundle: submittedDiagnosticBundle
             }
@@ -460,7 +467,11 @@ export function registerCrashReportingHandlers(store: CrashReportStore): void {
         const submittedDiagnosticBundle = resolveSubmittedDiagnosticBundle(diagnosticUpload, result)
         if (!result.ok) {
           return {
-            ...result,
+            // Why: keep the renderer contract allow-listed instead of leaking
+            // the transport's internal diagnosticBundleFailure object.
+            ok: false,
+            status: result.status,
+            error: result.error,
             report,
             diagnosticBundle: submittedDiagnosticBundle
           }

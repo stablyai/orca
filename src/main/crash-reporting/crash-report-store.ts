@@ -15,7 +15,7 @@ import {
 
 const MAX_REPORTS = 5
 const RELATED_CRASH_WINDOW_MS = 5_000
-const WINDOWS_WRITE_RETRY_DELAYS_MS = [50, 100, 150, 200, 250]
+const WINDOWS_FILE_OPERATION_RETRY_DELAYS_MS = [50, 100, 150, 200, 250]
 
 type CrashReportFile = {
   reports: CrashReportRecord[]
@@ -39,7 +39,7 @@ function isRelatedCrashEvent(anchor: CrashReportRecord, candidate: CrashReportRe
   )
 }
 
-function isRetryableWindowsWriteError(error: unknown): boolean {
+function isRetryableWindowsFileOperationError(error: unknown): boolean {
   const code = (error as NodeJS.ErrnoException).code
   return code === 'EPERM' || code === 'EACCES' || code === 'EBUSY'
 }
@@ -48,34 +48,33 @@ async function wait(delayMs: number): Promise<void> {
   await new Promise<void>((resolve) => setTimeout(resolve, delayMs))
 }
 
-async function runCrashReportWriteWithWindowsRecovery(
+async function runCrashReportFileOperationWithWindowsRecovery<T>(
   directory: string,
-  operation: () => Promise<void>
-): Promise<void> {
+  operation: () => Promise<T>
+): Promise<T> {
   let repairedAcl = false
   for (let attempt = 0; ; attempt += 1) {
     try {
-      await operation()
-      return
+      return await operation()
     } catch (error) {
       if (
         process.platform !== 'win32' ||
-        !isRetryableWindowsWriteError(error) ||
-        attempt >= WINDOWS_WRITE_RETRY_DELAYS_MS.length
+        !isRetryableWindowsFileOperationError(error) ||
+        attempt >= WINDOWS_FILE_OPERATION_RETRY_DELAYS_MS.length
       ) {
         throw error
       }
       if (!repairedAcl && isPermissionError(error)) {
         repairedAcl = true
         try {
-          // Why: Chromium can reset userData ACLs before the asynchronous
-          // startup grant finishes, exactly when an early crash must persist.
+          // Why: Chromium can reset userData ACLs before startup capture or
+          // recovery, so both the crash write and next prompt must repair it.
           grantDirAcl(directory)
         } catch {
           // The bounded retry below still handles transient file locks.
         }
       }
-      await wait(WINDOWS_WRITE_RETRY_DELAYS_MS[attempt])
+      await wait(WINDOWS_FILE_OPERATION_RETRY_DELAYS_MS[attempt])
     }
   }
 }
@@ -201,7 +200,10 @@ export class CrashReportStore {
 
   private async readReportsFromDisk(): Promise<CrashReportRecord[]> {
     try {
-      const raw = await fs.readFile(this.filePath, 'utf8')
+      const raw = await runCrashReportFileOperationWithWindowsRecovery(
+        path.dirname(this.filePath),
+        () => fs.readFile(this.filePath, 'utf8')
+      )
       const parsed = JSON.parse(raw) as Partial<CrashReportFile>
       return Array.isArray(parsed.reports) ? parsed.reports.slice(0, MAX_REPORTS) : []
     } catch (error) {
@@ -216,7 +218,7 @@ export class CrashReportStore {
     const directory = path.dirname(this.filePath)
     const tmpPath = `${this.filePath}.${process.pid}.${Date.now()}.${crypto.randomUUID()}.tmp`
     try {
-      await runCrashReportWriteWithWindowsRecovery(directory, async () => {
+      await runCrashReportFileOperationWithWindowsRecovery(directory, async () => {
         await fs.mkdir(directory, { recursive: true })
         await fs.writeFile(tmpPath, `${JSON.stringify({ reports }, null, 2)}${os.EOL}`, 'utf8')
         await fs.rename(tmpPath, this.filePath)

@@ -212,6 +212,7 @@ import type {
 } from '../shared/localhost-worktree-labels'
 import type {
   CrashReportBreadcrumbData,
+  CrashReportCopyDiagnosticsArgs,
   CrashReportSubmitArgs,
   CrashReportSubmitResult,
   ReactErrorBoundaryReportArgs,
@@ -1148,7 +1149,7 @@ const api = {
       ipcRenderer.send('crashReports:recordBreadcrumb', args),
     submit: (args: CrashReportSubmitArgs): Promise<CrashReportSubmitResult> =>
       ipcRenderer.invoke('crashReports:submit', args),
-    copyLatestDiagnostics: (args?: { reportId?: string; notes?: string }) =>
+    copyLatestDiagnostics: (args?: CrashReportCopyDiagnosticsArgs) =>
       ipcRenderer.invoke('crashReports:copyLatestDiagnostics', args)
   },
 
