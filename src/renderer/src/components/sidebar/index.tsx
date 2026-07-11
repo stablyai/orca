@@ -6,6 +6,7 @@ import SidebarHeader from './SidebarHeader'
 import SidebarNav from './SidebarNav'
 import SetupScriptPromptCard from './SetupScriptPromptCard'
 import WorktreeList from './WorktreeList'
+import MissionList from './MissionList'
 import SidebarToolbar from './SidebarToolbar'
 import WorkspaceKanbanDrawer from './WorkspaceKanbanDrawer'
 import type { VirtualizedScrollAnchor } from '@/hooks/useVirtualizedScrollAnchor'
@@ -22,6 +23,7 @@ const RemoveFolderDialog = lazyWithRetry(() => import('./RemoveFolderDialog'))
 const WorktreeVisibilityDialog = lazyWithRetry(() => import('./WorktreeVisibilityDialog'))
 const OrcaYamlTrustDialog = lazyWithRetry(() => import('./OrcaYamlTrustDialog'))
 const ForgetSshWorkspaceDialog = lazyWithRetry(() => import('./ForgetSshWorkspaceDialog'))
+const MissionCreateDialog = lazyWithRetry(() => import('./MissionCreateDialog'))
 
 const MIN_WIDTH = 220
 const MAX_WIDTH = 500
@@ -48,6 +50,7 @@ function Sidebar({
   const settings = useAppStore((s) => s.settings)
   const fetchAllWorktrees = useAppStore((s) => s.fetchAllWorktrees)
   const activeModal = useAppStore((s) => s.activeModal)
+  const sidebarListMode = useAppStore((s) => s.sidebarListMode)
   const statusBarVisible = useAppStore((s) => s.statusBarVisible)
   const systemPrefersDark = useSystemPrefersDark()
   const leftSidebarStyle = useMemo(
@@ -145,14 +148,18 @@ function Sidebar({
             <SidebarNav />
             <SidebarHeader onWorkspaceBoardMenuOpenChange={setWorkspaceBoardMenuOpen} />
 
-            <WorktreeList
-              scrollOffsetRef={worktreeScrollOffsetRef}
-              scrollAnchorRef={worktreeScrollAnchorRef}
-              workspaceBoardOpen={workspaceBoardOpen}
-              onWorkspaceBoardDragPreviewStart={previewWorkspaceBoardFromDrag}
-              onWorkspaceBoardDragPreviewCommit={solidifyWorkspaceBoardFromDrag}
-              onWorkspaceBoardDragPreviewCancel={cancelWorkspaceBoardDragPreview}
-            />
+            {sidebarListMode === 'missions' ? (
+              <MissionList />
+            ) : (
+              <WorktreeList
+                scrollOffsetRef={worktreeScrollOffsetRef}
+                scrollAnchorRef={worktreeScrollAnchorRef}
+                workspaceBoardOpen={workspaceBoardOpen}
+                onWorkspaceBoardDragPreviewStart={previewWorkspaceBoardFromDrag}
+                onWorkspaceBoardDragPreviewCommit={solidifyWorkspaceBoardFromDrag}
+                onWorkspaceBoardDragPreviewCancel={cancelWorkspaceBoardDragPreview}
+              />
+            )}
 
             <SetupScriptPromptCard />
 
@@ -209,6 +216,7 @@ function Sidebar({
         {activeModal === 'worktree-visibility' ? <WorktreeVisibilityDialog /> : null}
         {activeModal === 'confirm-orca-yaml-hooks' ? <OrcaYamlTrustDialog /> : null}
         {activeModal === 'forget-ssh-workspace' ? <ForgetSshWorkspaceDialog /> : null}
+        {activeModal === 'mission-create' ? <MissionCreateDialog /> : null}
       </React.Suspense>
       {sidebarOpen ? (
         <WorkspaceKanbanDrawer
