@@ -4504,7 +4504,9 @@
           "addRemoteHostTooltip": "ログインできるマシンには SSH を選択し、Orca サーバーにはリモート サーバーを選択します。",
           "addSshHostDetail": "SSH 経由で既存のマシンを使用します。",
           "addRemoteServerDetail": "別のコンピューターで実行されている Orca とペアリングします。",
-          "addRemoteHostDetail": "SSH ホストまたは Orca サーバー"
+          "addRemoteHostDetail": "SSH ホストまたは Orca サーバー",
+          "wsl": "WSL",
+          "wslDetail": "Open a project from a WSL distro"
         },
         "sidebarHostOptions": {
           "3e102f111c": "All hosts",
@@ -4654,6 +4656,22 @@
           "cancel": "キャンセル",
           "forget": "Orcaから削除",
           "reconnectAndDelete": "再接続して削除"
+        },
+        "WslSourcePicker": {
+          "browseOutsideDistro": "Choose a folder inside the selected WSL distro.",
+          "title": "Add a WSL project",
+          "description": "Open a Git repository or folder from a WSL distro.",
+          "distro": "Distro",
+          "selectDistro": "Select distro",
+          "wslNotAvailable": "WSL not available",
+          "refreshDistros": "Refresh distros",
+          "noDistros": "No WSL distros found. Install one, then refresh.",
+          "unavailable": "WSL is not available on this computer.",
+          "linuxPath": "Linux path",
+          "linuxPathPlaceholder": "/home/user/project",
+          "browseWsl": "Browse WSL filesystem",
+          "addGitProject": "Add Git Project",
+          "openAsFolder": "Open as Folder"
         }
       },
       "shared": {
@@ -8994,6 +9012,15 @@
           "a8f3e2c1b4": "週次クレジット",
           "b7e2d9f0a3": "ターミナルの grok /usage 画面と同じ週次クレジット率です。",
           "c6d1a8f4e2": "{{when}} にリセット"
+        },
+        "ProjectDefaultShellSetting": {
+          "defaultShell": "Default shell",
+          "wslLocked": "This project runs in WSL, which always uses the WSL shell.",
+          "description": "Shell used when opening new terminals for this project.",
+          "inherit": "Use global default",
+          "powershell": "PowerShell",
+          "cmd": "CMD",
+          "gitBash": "Git Bash"
         }
       },
       "right": {

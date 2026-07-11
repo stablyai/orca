@@ -4504,7 +4504,9 @@
           "addRemoteHostTooltip": "Elige SSH para una máquina donde puedas iniciar sesión, o servidor remoto para un servidor de Orca.",
           "addSshHostDetail": "Usa una máquina existente mediante SSH.",
           "addRemoteServerDetail": "Empareja con Orca ejecutándose en otro equipo.",
-          "addRemoteHostDetail": "Host SSH o servidor Orca"
+          "addRemoteHostDetail": "Host SSH o servidor Orca",
+          "wsl": "WSL",
+          "wslDetail": "Open a project from a WSL distro"
         },
         "sidebarHostOptions": {
           "3e102f111c": "Todos los hosts",
@@ -4654,6 +4656,22 @@
           "cancel": "Cancelar",
           "forget": "Eliminar de Orca",
           "reconnectAndDelete": "Reconectar y eliminar"
+        },
+        "WslSourcePicker": {
+          "browseOutsideDistro": "Choose a folder inside the selected WSL distro.",
+          "title": "Add a WSL project",
+          "description": "Open a Git repository or folder from a WSL distro.",
+          "distro": "Distro",
+          "selectDistro": "Select distro",
+          "wslNotAvailable": "WSL not available",
+          "refreshDistros": "Refresh distros",
+          "noDistros": "No WSL distros found. Install one, then refresh.",
+          "unavailable": "WSL is not available on this computer.",
+          "linuxPath": "Linux path",
+          "linuxPathPlaceholder": "/home/user/project",
+          "browseWsl": "Browse WSL filesystem",
+          "addGitProject": "Add Git Project",
+          "openAsFolder": "Open as Folder"
         }
       },
       "shared": {
@@ -8994,6 +9012,15 @@
           "a8f3e2c1b4": "Créditos semanales",
           "b7e2d9f0a3": "El mismo porcentaje de créditos semanales que la pantalla grok /usage en la terminal.",
           "c6d1a8f4e2": "Se restablece {{when}}"
+        },
+        "ProjectDefaultShellSetting": {
+          "defaultShell": "Default shell",
+          "wslLocked": "This project runs in WSL, which always uses the WSL shell.",
+          "description": "Shell used when opening new terminals for this project.",
+          "inherit": "Use global default",
+          "powershell": "PowerShell",
+          "cmd": "CMD",
+          "gitBash": "Git Bash"
         }
       },
       "right": {

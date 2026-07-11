@@ -148,7 +148,8 @@ export const addRepoExistingWorkspaceSourceSchema = z.enum([
   'runtime_server_path',
   'ssh_remote_path',
   'clone_url',
-  'create_project'
+  'create_project',
+  'wsl_path'
 ])
 export type AddRepoExistingWorkspaceSource = z.infer<typeof addRepoExistingWorkspaceSourceSchema>
 export const addRepoDefaultCheckoutHandoffSourceSchema = z.enum([
@@ -157,6 +158,7 @@ export const addRepoDefaultCheckoutHandoffSourceSchema = z.enum([
   'ssh_remote_path',
   'clone_url',
   'create_project',
+  'wsl_path',
   'onboarding_open_folder',
   'onboarding_clone_url',
   'project_added_compat'

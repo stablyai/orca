@@ -9,10 +9,12 @@ import { useAddRepoCloneFlow } from './useAddRepoCloneFlow'
 import { useAddRepoLocalFolderFlow } from './useAddRepoLocalFolderFlow'
 import { useAddRepoServerPathFlow } from './useAddRepoServerPathFlow'
 import { useAddRepoNestedImportFlow } from './useAddRepoNestedImportFlow'
-import { useAddRepoHostSelection } from './use-add-repo-host-selection'
+import { useAddRepoSourceSelection } from './use-add-repo-source-selection'
+import { useAddRepoWslFlow } from './useAddRepoWslFlow'
 import { useCompleteGitRepoAdd } from './use-complete-git-repo-add'
 import { useCreateProjectDefaults } from './useCreateProjectDefaults'
 import { useAddRepoHostChangeReset } from './use-add-repo-host-change-reset'
+import { useAddRepoDialogReset } from './use-add-repo-dialog-reset'
 import { AddRepoDialogChrome } from './AddRepoDialogChrome'
 import { AddRepoHostSelectorSlot } from './AddRepoHostSelectorSlot'
 import { useAddRepoRemoteNestedScan } from './use-add-repo-remote-nested-scan'
@@ -63,7 +65,7 @@ const AddRepoDialog = React.memo(function AddRepoDialog() {
     setStep
   })
 
-  const hostSelection = useAddRepoHostSelection({ isOpen: activeModal === 'add-repo', setStep })
+  const hostSelection = useAddRepoSourceSelection({ isOpen: activeModal === 'add-repo', setStep })
   const selectedRuntimeEnvironmentId =
     hostSelection.selectedParsedHost?.kind === 'runtime'
       ? hostSelection.selectedParsedHost.environmentId
@@ -194,6 +196,21 @@ const AddRepoDialog = React.memo(function AddRepoDialog() {
     setAddProjectBusyLabel
   })
   const {
+    wslDistro,
+    wslPath,
+    wslError,
+    isAddingWsl,
+    setWslDistro,
+    setWslPath,
+    resetWslFlow,
+    handleAddWsl
+  } = useAddRepoWslFlow({
+    closeModal,
+    fetchWorktrees,
+    onGitRepoReady: completeGitRepoAdd,
+    setAddProjectBusyLabel
+  })
+  const {
     handleImportNestedRepos,
     handleOpenNestedRootFolder,
     resetNestedImportFlow,
@@ -214,47 +231,20 @@ const AddRepoDialog = React.memo(function AddRepoDialog() {
     setIsAdding
   })
 
-  const resetState = useCallback(() => {
-    // Why: kill the git clone process if one is running, so backing out
-    // or closing the dialog doesn't leave a clone running on disk.
-    void window.api.repos.cloneAbort()
-    resetLocalFolderFlow()
-    setStep('add')
-    setIsAdding(false)
-    setAddProjectBusyLabel(null)
-    resetServerPathFlow()
-    resetCloneFlow()
-    resetNestedImportFlow()
-    resetNestedRepoReviewState()
-    resetCreateDefaultState()
-    resetCreateState()
-    resetRemoteState()
-  }, [
-    resetCloneFlow,
+  const { resetState, resetHostScopedState } = useAddRepoDialogReset({
+    setStep,
+    setIsAdding,
+    setAddProjectBusyLabel,
     resetLocalFolderFlow,
-    resetNestedRepoReviewState,
-    resetCreateDefaultState,
     resetServerPathFlow,
-    resetNestedImportFlow,
-    resetRemoteState,
-    resetCreateState
-  ])
-
-  const resetHostScopedState = useCallback(() => {
-    setIsAdding(false)
-    setAddProjectBusyLabel(null)
-    resetServerPathFlow()
-    resetCloneFlow()
-    resetCreateDefaultState()
-    resetCreateState()
-    resetRemoteState()
-  }, [
     resetCloneFlow,
+    resetNestedImportFlow,
+    resetNestedRepoReviewState,
     resetCreateDefaultState,
     resetCreateState,
     resetRemoteState,
-    resetServerPathFlow
-  ])
+    resetWslFlow
+  })
 
   useAddRepoHostChangeReset({
     isOpen,
@@ -327,6 +317,10 @@ const AddRepoDialog = React.memo(function AddRepoDialog() {
         createParent={createParent}
         createError={createError}
         isCreating={isCreating}
+        wslDistro={wslDistro}
+        wslPath={wslPath}
+        wslError={wslError}
+        isAddingWsl={isAddingWsl}
         hostSelector={<AddRepoHostSelectorSlot hostSelection={hostSelection} />}
         showRemoteAction={false}
         browseHostKind={
@@ -403,6 +397,9 @@ const AddRepoDialog = React.memo(function AddRepoDialog() {
           })
         }}
         onCreate={handleCreate}
+        onWslDistroChange={setWslDistro}
+        onWslPathChange={setWslPath}
+        onAddWsl={(kind) => void handleAddWsl(kind)}
       />
     </AddRepoDialogChrome>
   )
