@@ -458,6 +458,13 @@
               "all": "아직 댓글이 없습니다."
             }
           }
+        },
+        "bot": {
+          "author": {
+            "overrides": {
+              "6d5d52b53f": "Bot author override limit reached"
+            }
+          }
         }
       },
       "resume": {

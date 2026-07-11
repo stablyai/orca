@@ -1,4 +1,6 @@
 import { useMemo } from 'react'
+import { toast } from 'sonner'
+import { translate } from '@/i18n/i18n'
 import { useAppStore } from '@/store'
 import { createBotAuthorOverrideSet, normalizePRCommentAuthorLogin } from './pr-comment-audience'
 import { MAX_PR_BOT_AUTHOR_OVERRIDES } from '../../../shared/pr-bot-author-overrides'
@@ -30,7 +32,12 @@ export function setPRBotAuthorOverride(author: string, isBot: boolean): void {
       useAppStore.setState({ settings })
       const current = createBotAuthorOverrideSet(settings.prBotAuthorOverrides)
       if (isBot && !current.has(normalized) && current.size >= MAX_PR_BOT_AUTHOR_OVERRIDES) {
-        console.warn('PR bot author override limit reached')
+        toast.warning(
+          translate(
+            'auto.lib.pr.bot.author.overrides.6d5d52b53f',
+            'Bot author override limit reached'
+          )
+        )
       }
     })
     // Why: one failed settings write must not poison every later override update.

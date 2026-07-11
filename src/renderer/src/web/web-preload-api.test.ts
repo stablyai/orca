@@ -671,6 +671,35 @@ describe('web settings preload API', () => {
       }
     ])
   })
+
+  it('does not claim a paired bot-author update succeeded when the runtime rejects it', async () => {
+    vi.doMock('./web-runtime-client', () => ({
+      WebRuntimeClient: class {
+        call(): Promise<RuntimeRpcResponse<unknown>> {
+          return Promise.reject(new Error('runtime unavailable'))
+        }
+
+        close(): void {}
+      }
+    }))
+
+    const globals = installBrowserGlobals('Linux')
+    writeStoredRuntimeEnvironment(globals.storage)
+    const { installWebPreloadApi } = await import('./web-preload-api')
+    installWebPreloadApi()
+
+    await expect(
+      globals.window.api.settings.updatePRBotAuthorOverride({
+        author: 'gretelflux',
+        isBot: true
+      })
+    ).rejects.toThrow('runtime unavailable')
+
+    const stored = JSON.parse(globals.storage.getItem('orca.web.settings.v1') ?? '{}') as {
+      prBotAuthorOverrides?: string[]
+    }
+    expect(stored.prBotAuthorOverrides).toBeUndefined()
+  })
 })
 
 describe('web MiniMax preload API', () => {

@@ -3167,22 +3167,18 @@ async function updateRuntimePRBotAuthorOverride(args: {
 }): Promise<GlobalSettings> {
   const local = getStoredSettings()
   if (requireActiveEnvironmentOrNull()) {
-    try {
-      const result = await callRuntimeResult<{ settings: Partial<GlobalSettings> }>(
-        'settings.updatePRBotAuthorOverride',
-        args,
-        15_000
-      )
-      const next = mergeSettings(local, {
-        prBotAuthorOverrides: normalizePRBotAuthorOverrides(
-          result.settings.prBotAuthorOverrides
-        )
-      })
-      writeJson(SETTINGS_STORAGE_KEY, next)
-      return next
-    } catch {
-      // Why: an offline paired client keeps its local settings fallback usable.
-    }
+    // Why: a paired client must not report a successful mark that the
+    // authoritative runtime failed to persist and will later overwrite.
+    const result = await callRuntimeResult<{ settings: Partial<GlobalSettings> }>(
+      'settings.updatePRBotAuthorOverride',
+      args,
+      15_000
+    )
+    const next = mergeSettings(local, {
+      prBotAuthorOverrides: normalizePRBotAuthorOverrides(result.settings.prBotAuthorOverrides)
+    })
+    writeJson(SETTINGS_STORAGE_KEY, next)
+    return next
   }
   const next = mergeSettings(local, {
     prBotAuthorOverrides: applyPRBotAuthorOverride(

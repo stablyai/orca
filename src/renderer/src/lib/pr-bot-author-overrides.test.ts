@@ -4,8 +4,11 @@ import { applyPRBotAuthorOverride } from '../../../shared/pr-bot-author-override
 const store = vi.hoisted(() => ({
   settings: { prBotAuthorOverrides: [] as string[] },
   pending: [] as (() => void)[],
-  apiUpdate: vi.fn()
+  apiUpdate: vi.fn(),
+  warning: vi.fn()
 }))
+
+vi.mock('sonner', () => ({ toast: { warning: store.warning } }))
 
 vi.mock('@/store', () => ({
   useAppStore: Object.assign(vi.fn(), {
@@ -23,6 +26,7 @@ describe('PR bot author override updates', () => {
     store.settings = { prBotAuthorOverrides: [] }
     store.pending = []
     store.apiUpdate.mockReset()
+    store.warning.mockReset()
     store.apiUpdate.mockImplementation(
       (args: { author: string; isBot: boolean }) =>
         new Promise((resolve) => {
@@ -72,11 +76,12 @@ describe('PR bot author override updates', () => {
   it('warns without evicting an existing override when the limit is reached', async () => {
     const current = Array.from({ length: 500 }, (_, index) => `bot-${index}`)
     store.apiUpdate.mockResolvedValue({ prBotAuthorOverrides: current })
-    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
 
     setPRBotAuthorOverride('new-bot', true)
 
-    await vi.waitFor(() => expect(warn).toHaveBeenCalledWith('PR bot author override limit reached'))
+    await vi.waitFor(() =>
+      expect(store.warning).toHaveBeenCalledWith('Bot author override limit reached')
+    )
     expect(store.settings.prBotAuthorOverrides).toEqual(current)
   })
 })

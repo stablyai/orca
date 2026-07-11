@@ -458,6 +458,13 @@
               "all": "No comments yet."
             }
           }
+        },
+        "bot": {
+          "author": {
+            "overrides": {
+              "6d5d52b53f": "Bot author override limit reached"
+            }
+          }
         }
       },
       "resume": {
