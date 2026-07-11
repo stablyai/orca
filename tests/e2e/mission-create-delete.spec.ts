@@ -17,9 +17,8 @@ test.describe('Missions', () => {
     await orcaPage.getByRole('button', { name: 'Create Mission' }).click({ timeout: 10_000 })
 
     // Mission header and its member worktree card appear (DOM assertions).
-    await expect(orcaPage.getByRole('button', { name: 'Referral', exact: true })).toBeVisible({
-      timeout: 60_000
-    })
+    const missionHeader = orcaPage.locator('[data-mission-id]').filter({ hasText: 'Referral' })
+    await expect(missionHeader).toBeVisible({ timeout: 60_000 })
     await expect(orcaPage.getByText('Workspace missing')).not.toBeVisible()
 
     // The member worktree exists in the store on the mission branch.
@@ -32,10 +31,9 @@ test.describe('Missions', () => {
     })
     expect(memberWorktreeId).toBeTruthy()
 
-    // Delete the mission including its worktree via the header menu
-    // (the menu trigger's accessible name is the mission name).
-    await orcaPage.getByRole('button', { name: 'Referral', exact: true }).hover()
-    await orcaPage.getByRole('button', { name: 'Referral', exact: true }).click()
+    // Delete the mission including its worktree via the header menu.
+    await missionHeader.hover()
+    await missionHeader.getByRole('button', { name: 'Mission options' }).click()
     await orcaPage.getByRole('menuitem', { name: 'Delete mission' }).click()
     await orcaPage.getByRole('button', { name: 'Delete', exact: true }).click()
 

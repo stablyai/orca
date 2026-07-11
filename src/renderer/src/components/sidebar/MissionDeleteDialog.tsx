@@ -59,7 +59,7 @@ export function MissionDeleteDialog({
             )}
           </DialogDescription>
         </DialogHeader>
-        <ul className="max-h-40 space-y-1 overflow-y-auto text-xs text-muted-foreground">
+        <ul className="max-h-40 space-y-1 overflow-y-auto scrollbar-sleek text-xs text-muted-foreground">
           {mission?.members.map((member) => (
             <li key={member.repoId} className="truncate">
               {repoNameById.get(member.repoId) ?? member.repoId}
