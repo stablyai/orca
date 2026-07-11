@@ -101,6 +101,10 @@ export const getDefaultPrimarySelectionMiddleClickPaste = (
   platform = typeof process !== 'undefined' ? process.platform : ''
 ): boolean => platform === 'linux' || platform === 'darwin'
 
+export const getDefaultTerminalRightClickToPaste = (
+  platform = typeof process !== 'undefined' ? process.platform : ''
+): boolean => platform === 'win32'
+
 /**
  * Why: ProseMirror builds an in-memory tree for the entire document, so large
  * markdown files cause noticeable typing lag in the rich editor. Files above
@@ -240,10 +244,10 @@ export function getDefaultSettings(homedir: string): GlobalSettings {
     terminalActivePaneOpacity: 1,
     terminalPaneOpacityTransitionMs: 140,
     terminalDividerThicknessPx: 3,
-    // Default true so Windows users get native right-click paste out of the
-    // box. Other platforms ignore this field because the UI never exposes it,
-    // and Ctrl+right-click still opens the context menu when paste is enabled.
-    terminalRightClickToPaste: true,
+    // Why: Windows follows its native terminal paste convention, while macOS
+    // and Linux keep right-click available for the context menu by default.
+    terminalRightClickToPaste: getDefaultTerminalRightClickToPaste(),
+    terminalRightClickToPasteDefaultedForPlatform: true,
     terminalWindowsShell: 'powershell.exe',
     terminalWindowsWslDistro: null,
     localAccountRuntime: 'host',

@@ -2997,6 +2997,11 @@ export class Store {
         const migratedTerminalLineHeight = normalizeTerminalLineHeight(
           parsed.settings?.terminalLineHeight
         )
+        const terminalRightClickToPasteDefaultedForPlatform =
+          parsed.settings?.terminalRightClickToPasteDefaultedForPlatform === true
+        if (!terminalRightClickToPasteDefaultedForPlatform) {
+          this.loadNeedsSave = true
+        }
         if (
           parsed.settings?.terminalLineHeight !== undefined &&
           parsed.settings.terminalLineHeight !== migratedTerminalLineHeight
@@ -3136,6 +3141,13 @@ export class Store {
             ...migratedAutoRenameBranchFromWork,
             ...migratedTerminalCursorStyle,
             terminalLineHeight: migratedTerminalLineHeight,
+            // Why: the old global true default was ignored outside Windows.
+            // Reset those inherited values once before exposing the setting.
+            terminalRightClickToPaste: terminalRightClickToPasteDefaultedForPlatform
+              ? (parsed.settings?.terminalRightClickToPaste ??
+                defaults.settings.terminalRightClickToPaste)
+              : defaults.settings.terminalRightClickToPaste,
+            terminalRightClickToPasteDefaultedForPlatform: true,
             ...migratedTerminalTuiScrollSensitivity.settings,
             experimentalActivity: migratedExperimentalActivity,
             experimentalActivityDefaultedOffForAllUsers: true,

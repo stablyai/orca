@@ -6017,6 +6017,48 @@ describe('Store', () => {
     expect(store.getSettings().terminalMacOptionAsAltMigrated).toBe(true)
   })
 
+  it('migrates inherited right-click paste to each platform default once', async () => {
+    for (const [platform, expected] of [
+      ['win32', true],
+      ['darwin', false],
+      ['linux', false]
+    ] as const) {
+      await withPlatform(platform, async () => {
+        writeDataFile({
+          schemaVersion: 1,
+          repos: [],
+          worktreeMeta: {},
+          settings: { terminalRightClickToPaste: true },
+          ui: {},
+          githubCache: { pr: {}, issue: {} },
+          workspaceSession: {}
+        })
+        const store = await createStore()
+        expect(store.getSettings().terminalRightClickToPaste).toBe(expected)
+        expect(store.getSettings().terminalRightClickToPasteDefaultedForPlatform).toBe(true)
+      })
+    }
+  })
+
+  it('preserves right-click paste choices after the platform migration', async () => {
+    await withPlatform('darwin', async () => {
+      writeDataFile({
+        schemaVersion: 1,
+        repos: [],
+        worktreeMeta: {},
+        settings: {
+          terminalRightClickToPaste: true,
+          terminalRightClickToPasteDefaultedForPlatform: true
+        },
+        ui: {},
+        githubCache: { pr: {}, issue: {} },
+        workspaceSession: {}
+      })
+      const store = await createStore()
+      expect(store.getSettings().terminalRightClickToPaste).toBe(true)
+    })
+  })
+
   it('migrates inherited terminal bar cursor defaults to block on first load', async () => {
     writeDataFile({
       schemaVersion: 1,

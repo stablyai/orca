@@ -2573,10 +2573,12 @@ export type GlobalSettings = {
    *  system tray instead of quitting Orca; off keeps the default quit-on-close.
    *  The tray icon itself is always present on Windows regardless of this flag. */
   minimizeToTrayOnClose?: boolean
-  /** Why: Windows terminals conventionally use right-click as a paste gesture.
-   *  The setting stays Windows-only so macOS/Linux keep their existing context
-   *  menu behavior and users can still reach the menu with Ctrl+right-click. */
+  /** Why: Windows terminals conventionally use right-click as a paste gesture,
+   *  while macOS/Linux default to their existing context menu behavior. */
   terminalRightClickToPaste: boolean
+  /** One-shot guard that distinguishes the old global true default from a
+   *  choice made after the setting became available on every platform. */
+  terminalRightClickToPasteDefaultedForPlatform?: boolean
   /** Why: COMSPEC always points to cmd.exe on stock Windows, so without an
    *  explicit setting the terminal would always open CMD instead of the
    *  user's preferred shell. Defaults to 'powershell.exe' which is the
