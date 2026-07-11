@@ -12,7 +12,11 @@ import { isWslPath } from '../wsl'
 import { createWslWatcher } from './filesystem-watcher-wsl'
 import type { WatchedRoot } from './filesystem-watcher-wsl'
 import { getSshFilesystemProvider } from '../providers/ssh-filesystem-dispatch'
-import { MAX_BATCHED_WATCHER_EVENTS, queueWatcherEvents } from './filesystem-watcher-event-batch'
+import {
+  hasQueuedWatcherChanges,
+  MAX_BATCHED_WATCHER_EVENTS,
+  queueWatcherEvents
+} from './filesystem-watcher-event-batch'
 import { disposeWatcherProcess, subscribeViaWatcherProcess } from './parcel-watcher-process'
 // Why: high-churn directories are suppressed at the native watcher level so
 // events never leave the OS/daemon. This list is separate from the File
@@ -70,6 +74,7 @@ const pendingTeardowns = new Map<string, ReturnType<typeof setTimeout>>()
 // cleanup can start it before app shutdown, so will-quit must still await it.
 const pendingLocalUnsubscribes = new Set<Promise<void>>()
 type LocalWatcherInstallToken = {
+  abortController: AbortController
   cancelled: boolean
   listeners: Map<number, WebContents>
 }
@@ -78,6 +83,7 @@ type LocalWatcherInstallResult = 'installed' | 'unavailable' | 'cancelled'
 // the same root must share one install or later resolves can orphan listeners.
 const inFlightLocalInstalls = new Map<string, LocalWatcherInstallToken>()
 const pendingLocalInstallPromises = new Map<string, Promise<LocalWatcherInstallResult>>()
+let localWatcherLifecycleGeneration = 0
 
 function addInFlightLocalInstallListener(
   token: LocalWatcherInstallToken,
@@ -91,12 +97,17 @@ function addInFlightLocalInstallListener(
   registerSenderCleanup(sender)
 }
 
+function cancelLocalInstallIfUnused(token: LocalWatcherInstallToken): void {
+  if (token.listeners.size === 0) {
+    token.cancelled = true
+    token.abortController.abort()
+  }
+}
+
 function cleanupInFlightLocalInstallsForSender(senderId: number): void {
   for (const token of inFlightLocalInstalls.values()) {
     token.listeners.delete(senderId)
-    if (token.listeners.size === 0) {
-      token.cancelled = true
-    }
+    cancelLocalInstallIfUnused(token)
   }
 }
 
@@ -206,13 +217,19 @@ function emitOverflowPayload(rootKey: string, root: WatchedRoot): void {
 }
 
 async function flushBatch(rootKey: string, root: WatchedRoot): Promise<void> {
+  root.batch.timer = null
+  // Why: WSL can report attach-window changes before the pending renderer
+  // listener is installed; retain them until installation completes.
+  if (root.listeners.size === 0) {
+    root.batch.firstEventAt = 0
+    return
+  }
   const overflowed = root.batch.overflowed
   const rawEvents = root.batch.events.splice(0)
   root.batch.overflowed = false
-  root.batch.timer = null
   root.batch.firstEventAt = 0
 
-  if ((rawEvents.length === 0 && !overflowed) || root.listeners.size === 0) {
+  if (rawEvents.length === 0 && !overflowed) {
     return
   }
 
@@ -254,6 +271,14 @@ async function flushBatch(rootKey: string, root: WatchedRoot): Promise<void> {
 }
 
 function scheduleBatchFlush(rootKey: string, root: WatchedRoot): void {
+  if (root.listeners.size === 0) {
+    if (root.batch.timer) {
+      clearTimeout(root.batch.timer)
+      root.batch.timer = null
+    }
+    root.batch.firstEventAt = 0
+    return
+  }
   const now = Date.now()
 
   if (root.batch.firstEventAt === 0) {
@@ -418,10 +443,14 @@ function addLocalWatchListener(rootKey: string, sender: WebContents): void {
   }
   root.listeners.set(sender.id, sender)
   registerSenderCleanup(sender)
+  if (!root.batch.timer && hasQueuedWatcherChanges(root.batch)) {
+    scheduleBatchFlush(rootKey, root)
+  }
 }
 
 async function subscribe(worktreePath: string, sender: WebContents): Promise<void> {
   const rootKey = normalizeRootPath(worktreePath)
+  const lifecycleGeneration = localWatcherLifecycleGeneration
   if (sender.isDestroyed()) {
     return
   }
@@ -449,6 +478,22 @@ async function subscribe(worktreePath: string, sender: WebContents): Promise<voi
   const pendingInstall = pendingLocalInstallPromises.get(rootKey)
   if (pendingInstall) {
     const inFlight = inFlightLocalInstalls.get(rootKey)
+    if (inFlight?.abortController.signal.aborted) {
+      inFlight.listeners.set(sender.id, sender)
+      registerSenderCleanup(sender)
+      await pendingInstall.catch(() => undefined)
+      if (pendingLocalInstallPromises.get(rootKey) === pendingInstall) {
+        pendingLocalInstallPromises.delete(rootKey)
+      }
+      if (
+        lifecycleGeneration === localWatcherLifecycleGeneration &&
+        !sender.isDestroyed() &&
+        inFlight.listeners.has(sender.id)
+      ) {
+        await subscribe(worktreePath, sender)
+      }
+      return
+    }
     if (inFlight) {
       // Why: an unwatch may cancel an install while another renderer is still
       // awaiting the same root; a new live listener should keep it alive.
@@ -466,7 +511,11 @@ async function subscribe(worktreePath: string, sender: WebContents): Promise<voi
     return
   }
 
-  const cancelToken: LocalWatcherInstallToken = { cancelled: false, listeners: new Map() }
+  const cancelToken: LocalWatcherInstallToken = {
+    abortController: new AbortController(),
+    cancelled: false,
+    listeners: new Map()
+  }
   inFlightLocalInstalls.set(rootKey, cancelToken)
   addInFlightLocalInstallListener(cancelToken, sender)
   const installPromise = doInstallLocalWatcher(rootKey, worktreePath, cancelToken)
@@ -486,34 +535,47 @@ async function doInstallLocalWatcher(
   cancelToken: LocalWatcherInstallToken
 ): Promise<LocalWatcherInstallResult> {
   let root: WatchedRoot
+  // Why: stat is part of the published install too; every exit after token
+  // registration must release that exact token so shutdown and retries are clean.
   try {
-    const s = await stat(rootKey)
-    if (!s.isDirectory()) {
-      console.warn(`[filesystem-watcher] not a directory: ${rootKey}`)
+    try {
+      const s = await stat(rootKey)
+      if (!s.isDirectory()) {
+        console.warn(`[filesystem-watcher] not a directory: ${rootKey}`)
+        rememberUnwatchableRoot(rootKey)
+        return 'unavailable'
+      }
+    } catch {
+      if (cancelToken.abortController.signal.aborted) {
+        return 'cancelled'
+      }
+      console.warn(`[filesystem-watcher] cannot stat root: ${rootKey}`)
       rememberUnwatchableRoot(rootKey)
       return 'unavailable'
     }
-  } catch {
-    console.warn(`[filesystem-watcher] cannot stat root: ${rootKey}`)
-    rememberUnwatchableRoot(rootKey)
-    return 'unavailable'
-  }
+    if (cancelToken.abortController.signal.aborted) {
+      return 'cancelled'
+    }
 
-  try {
-    // Why: WSL paths use one snapshot subprocess inside the Linux distro so
-    // `wsl --shutdown` can kill it; native Windows paths use @parcel/watcher.
-    root = isWslPath(worktreePath)
-      ? await createWslWatcher(rootKey, worktreePath, {
-          ignoreDirs: WATCHER_IGNORE_DIRS,
-          scheduleBatchFlush,
-          watchedRoots
-        })
-      : await createWatcher(rootKey, rootKey)
-  } catch {
-    // Why: createWatcher / createWslWatcher already logged the error. Swallow
-    // it here so the renderer's watchWorktree call resolves without crashing.
-    rememberUnwatchableRoot(rootKey)
-    return 'unavailable'
+    try {
+      // Why: WSL paths are watched inside Linux so native kernel events remain
+      // reliable; native host paths use the platform watcher process.
+      root = isWslPath(worktreePath)
+        ? await createWslWatcher(rootKey, worktreePath, {
+            ignoreDirs: WATCHER_IGNORE_DIRS,
+            scheduleBatchFlush,
+            signal: cancelToken.abortController.signal
+          })
+        : await createWatcher(rootKey, rootKey)
+    } catch {
+      if (cancelToken.abortController.signal.aborted) {
+        return 'cancelled'
+      }
+      // Why: createWatcher / createWslWatcher already logged the error. Swallow
+      // it here so the renderer's watchWorktree call resolves without crashing.
+      rememberUnwatchableRoot(rootKey)
+      return 'unavailable'
+    }
   } finally {
     if (inFlightLocalInstalls.get(rootKey) === cancelToken) {
       inFlightLocalInstalls.delete(rootKey)
@@ -526,13 +588,18 @@ async function doInstallLocalWatcher(
   if (cancelToken.cancelled || liveListeners.size === 0) {
     if (root.batch.timer) {
       clearTimeout(root.batch.timer)
+      root.batch.timer = null
     }
-    void trackLocalUnsubscribe(rootKey, root)
+    root.batch.firstEventAt = 0
+    await trackLocalUnsubscribe(rootKey, root)
     return 'cancelled'
   }
 
   root.listeners = liveListeners
   watchedRoots.set(rootKey, root)
+  if (hasQueuedWatcherChanges(root.batch)) {
+    scheduleBatchFlush(rootKey, root)
+  }
   for (const listener of liveListeners.values()) {
     registerSenderCleanup(listener)
   }
@@ -544,7 +611,7 @@ function unsubscribe(worktreePath: string, senderId: number): void {
   const inFlight = inFlightLocalInstalls.get(rootKey)
   if (inFlight) {
     inFlight.listeners.delete(senderId)
-    inFlight.cancelled = inFlight.listeners.size === 0
+    cancelLocalInstallIfUnused(inFlight)
   }
 
   const root = watchedRoots.get(rootKey)
@@ -559,7 +626,9 @@ function unsubscribe(worktreePath: string, senderId: number): void {
   if (root.listeners.size === 0) {
     if (root.batch.timer) {
       clearTimeout(root.batch.timer)
+      root.batch.timer = null
     }
+    root.batch.firstEventAt = 0
 
     // Why: duplicate renderer cleanup can call unwatch more than once for a
     // root; keep one tracked grace timer instead of leaking overwritten timers.
@@ -595,7 +664,7 @@ export async function closeLocalWatcherForWorktreePath(worktreePath: string): Pr
     // Why: Windows keeps watched directories locked; deletion must be able to
     // cancel an in-flight subscription before Git tries to remove the tree.
     inFlight.listeners.clear()
-    inFlight.cancelled = true
+    cancelLocalInstallIfUnused(inFlight)
   }
   await pendingLocalInstallPromises.get(rootKey)?.catch(() => undefined)
 
@@ -904,6 +973,7 @@ export function registerFilesystemWatcherHandlers(): void {
 
 /** Tear down all watchers on app shutdown. */
 export async function closeAllWatchers(): Promise<void> {
+  localWatcherLifecycleGeneration += 1
   senderCleanupRegistered.clear()
   unwatchableRoots.clear()
 
@@ -925,16 +995,19 @@ export async function closeAllWatchers(): Promise<void> {
   }
   for (const token of inFlightLocalInstalls.values()) {
     token.listeners.clear()
-    token.cancelled = true
+    cancelLocalInstallIfUnused(token)
   }
-
+  const shutdownWork: Promise<unknown>[] = Array.from(pendingLocalInstallPromises.values())
   for (const [rootKey, root] of watchedRoots) {
     if (root.batch.timer) {
       clearTimeout(root.batch.timer)
+      root.batch.timer = null
     }
-    await trackLocalUnsubscribe(rootKey, root)
+    root.batch.firstEventAt = 0
+    shutdownWork.push(trackLocalUnsubscribe(rootKey, root))
   }
   watchedRoots.clear()
+  await Promise.allSettled(shutdownWork)
   await Promise.allSettled(Array.from(pendingLocalUnsubscribes))
   // Why: with every local subscription released, drop the forked watcher
   // process outright — process death frees any remaining native handles

@@ -7,6 +7,10 @@ export type WatcherEventBatchState = {
   overflowed: boolean
 }
 
+export function hasQueuedWatcherChanges(batch: WatcherEventBatchState): boolean {
+  return batch.overflowed || batch.events.length > 0
+}
+
 export function appendWatcherEvents(
   batchEvents: WatcherEvent[],
   incomingEvents: WatcherEvent[]

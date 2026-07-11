@@ -1,6 +1,8 @@
 import { spawnSync } from 'node:child_process'
+import { builtinModules } from 'node:module'
 import { join } from 'node:path'
 import type { NormalizedOutputOptions, OutputBundle, OutputChunk, Plugin } from 'rollup'
+import { parseAst } from 'rollup/parseAst'
 
 // Why: v1.4.129-rc.1 shipped a dead terminal daemon because a shared main
 // chunk gained `require("electron")` (an import edge added in #7642), and the
@@ -12,16 +14,204 @@ import type { NormalizedOutputOptions, OutputBundle, OutputChunk, Plugin } from 
 // graph still resolves.
 
 // Entries executed as plain Node (ELECTRON_RUN_AS_NODE / no electron runtime):
-// forked daemon, parcel-watcher and computer sidecars, and the CLI-run
+// forked daemon, parcel-watcher hosts, computer sidecar, and the CLI-run
 // agent-hooks entry. require("electron") throws MODULE_NOT_FOUND in all of them.
 const PLAIN_NODE_ENTRY_NAMES = [
   'daemon-entry',
   'parcel-watcher-process-entry',
+  'wsl-watcher-host',
   'computer-sidecar',
   'agent-hooks/managed-agent-hook-controls'
 ] as const
 
 const ELECTRON_REQUIRE_RE = /require\(\s*["']electron["']\s*\)/
+const NODE_BUILTINS = new Set(builtinModules.flatMap((name) => [name, `node:${name}`]))
+
+type AstNode = { type: string; [key: string]: unknown }
+
+function isAstNode(value: unknown): value is AstNode {
+  return Boolean(value && typeof value === 'object' && typeof (value as AstNode).type === 'string')
+}
+
+function walkAst(
+  node: AstNode,
+  visit: (node: AstNode, parent: AstNode | null, grandparent: AstNode | null) => void,
+  parent: AstNode | null = null,
+  grandparent: AstNode | null = null
+): void {
+  visit(node, parent, grandparent)
+  for (const value of Object.values(node)) {
+    if (isAstNode(value)) {
+      walkAst(value, visit, node, parent)
+    } else if (Array.isArray(value)) {
+      for (const item of value) {
+        if (isAstNode(item)) {
+          walkAst(item, visit, node, parent)
+        }
+      }
+    }
+  }
+}
+
+function isAllowedWslHostDependency(specifier: string): boolean {
+  return specifier === './watcher.node' || NODE_BUILTINS.has(specifier)
+}
+
+function literalSpecifier(argument: unknown): string | undefined {
+  if (!isAstNode(argument) || argument.type !== 'Literal') {
+    return undefined
+  }
+  return typeof argument.value === 'string' ? argument.value : undefined
+}
+
+function memberName(node: AstNode): string | undefined {
+  if (node.type !== 'MemberExpression' || !isAstNode(node.property)) {
+    return undefined
+  }
+  if (node.property.type === 'Identifier' && node.computed !== true) {
+    return typeof node.property.name === 'string' ? node.property.name : undefined
+  }
+  return node.property.type === 'Literal' && typeof node.property.value === 'string'
+    ? node.property.value
+    : undefined
+}
+
+function identifierName(node: unknown): string | undefined {
+  return isAstNode(node) && node.type === 'Identifier' && typeof node.name === 'string'
+    ? node.name
+    : undefined
+}
+
+function assertAllowedLoaderArgument(argument: unknown): void {
+  const specifier = literalSpecifier(argument)
+  if (!specifier || !isAllowedWslHostDependency(specifier)) {
+    throw new Error(
+      `[plain-node-entry-guard] "wsl-watcher-host" loads unavailable dependency ` +
+        `"${specifier ?? 'dynamic expression'}". Only Node built-ins and ./watcher.node are staged in WSL.`
+    )
+  }
+}
+
+function loaderProofError(kind: string): Error {
+  return new Error(
+    `[plain-node-entry-guard] "wsl-watcher-host" ${kind}, so its staged dependencies cannot be proven.`
+  )
+}
+
+function assertDirectWslHostLoaders(code: string): void {
+  const ast = parseAst(code) as unknown as AstNode
+  walkAst(ast, (node, parent, grandparent) => {
+    if (node.type === 'ImportExpression') {
+      assertAllowedLoaderArgument(node.source)
+      return
+    }
+    if (node.type === 'CallExpression') {
+      const callee = node.callee
+      const firstArgument = Array.isArray(node.arguments) ? node.arguments[0] : undefined
+      if (identifierName(callee) === 'require') {
+        assertAllowedLoaderArgument(firstArgument)
+        return
+      }
+      if (isAstNode(callee) && callee.type === 'MemberExpression') {
+        const owner = identifierName(callee.object)
+        const property = memberName(callee)
+        if (
+          (owner === 'require' && property === 'resolve') ||
+          (owner === 'module' && property === 'require') ||
+          (owner === 'process' && property === 'getBuiltinModule')
+        ) {
+          assertAllowedLoaderArgument(firstArgument)
+          return
+        }
+        if (property === 'createRequire') {
+          throw loaderProofError('uses createRequire')
+        }
+      }
+    }
+    if (node.type === 'Identifier' && node.name === 'createRequire') {
+      throw loaderProofError('uses createRequire')
+    }
+    if (node.type === 'Identifier' && node.name === 'require') {
+      const directCall = parent?.type === 'CallExpression' && parent.callee === node
+      const directResolve =
+        parent?.type === 'MemberExpression' &&
+        parent.object === node &&
+        memberName(parent) === 'resolve' &&
+        grandparent?.type === 'CallExpression' &&
+        grandparent.callee === parent
+      const propertyNameOnly =
+        parent?.type === 'MemberExpression' && parent.property === node && parent.computed !== true
+      const nonLoaderMetadata =
+        parent?.type === 'MemberExpression' &&
+        parent.object === node &&
+        ['cache', 'extensions', 'main'].includes(memberName(parent) ?? '')
+      if (!directCall && !directResolve && !propertyNameOnly && !nonLoaderMetadata) {
+        throw loaderProofError('aliases require')
+      }
+    }
+    if (
+      node.type === 'MemberExpression' &&
+      node.computed === true &&
+      ['Module', 'module', 'process', 'require'].includes(identifierName(node.object) ?? '')
+    ) {
+      throw loaderProofError('uses a computed module loader property')
+    }
+    if (node.type === 'MemberExpression' && memberName(node) === 'require') {
+      const directModuleCall =
+        identifierName(node.object) === 'module' &&
+        parent?.type === 'CallExpression' &&
+        parent.callee === node
+      if (!directModuleCall) {
+        throw loaderProofError('uses an indirect require loader')
+      }
+    }
+    if (
+      node.type === 'Property' &&
+      parent?.type === 'ObjectPattern' &&
+      (identifierName(node.key) === 'require' || literalSpecifier(node.key) === 'require')
+    ) {
+      throw loaderProofError('aliases require')
+    }
+  })
+}
+
+function assertWslWatcherHostSelfContained(
+  entry: OutputChunk,
+  byFileName: Map<string, OutputChunk>
+): void {
+  const linkedFiles = [
+    ...entry.imports,
+    ...entry.dynamicImports,
+    ...(entry.implicitlyLoadedBefore ?? [])
+  ]
+  for (const imported of linkedFiles) {
+    if (byFileName.has(imported)) {
+      throw new Error(
+        `[plain-node-entry-guard] "wsl-watcher-host" reaches shared chunk "${imported}". ` +
+          `The staged Linux host only ships host.js and watcher.node, so its JavaScript ` +
+          `module graph must be bundled into the entry.`
+      )
+    }
+    if (!isAllowedWslHostDependency(imported)) {
+      throw new Error(
+        `[plain-node-entry-guard] "wsl-watcher-host" imports external dependency ` +
+          `"${imported}". Only Node built-ins and ./watcher.node are staged in WSL.`
+      )
+    }
+  }
+
+  for (const referenced of entry.referencedFiles ?? []) {
+    const normalized = referenced.replaceAll('\\', '/')
+    if (normalized !== 'watcher.node' && normalized !== './watcher.node') {
+      throw new Error(
+        `[plain-node-entry-guard] "wsl-watcher-host" references unstaged asset ` +
+          `"${referenced}".`
+      )
+    }
+  }
+
+  assertDirectWslHostLoaders(entry.code)
+}
 
 function collectReachableChunks(
   entry: OutputChunk,
@@ -119,6 +309,9 @@ export function createPlainNodeEntryGuardPlugin(): Plugin {
         const entry = entryByName.get(entryName)
         if (entry) {
           assertNoElectronRequire(entryName, entry, byFileName)
+          if (entryName === 'wsl-watcher-host') {
+            assertWslWatcherHostSelfContained(entry, byFileName)
+          }
         }
       }
 

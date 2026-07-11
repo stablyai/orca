@@ -186,6 +186,9 @@ export default defineConfig({
           // Why: forked with ELECTRON_RUN_AS_NODE so @parcel/watcher faults
           // can't take down the main process (issue #7547).
           'parcel-watcher-process-entry': resolve('src/main/ipc/parcel-watcher-process-entry.ts'),
+          // Why: WSL needs a Linux-native watcher process beside its filesystem;
+          // packaging stages this plain-Node entry with the managed Linux runtime.
+          'wsl-watcher-host': resolve('src/main/ipc/wsl-watcher-host-entry.ts'),
           // Why: electron-vite cleans out/main in dev. The dev CLI imports
           // this path for `orca agent hooks ...`, so it must survive rebuilds.
           'agent-hooks/managed-agent-hook-controls': resolve(

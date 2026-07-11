@@ -30,6 +30,7 @@ vi.mock('../providers/ssh-filesystem-dispatch', () => ({
 import { closeAllWatchers, registerFilesystemWatcherHandlers } from './filesystem-watcher'
 import { stat } from 'node:fs/promises'
 import { subscribe as subscribeParcelWatcher } from '@parcel/watcher'
+import { createWslWatcher } from './filesystem-watcher-wsl'
 
 type HandlerMap = Record<string, (_event: unknown, args: unknown) => Promise<unknown> | unknown>
 
@@ -43,6 +44,7 @@ describe('registerFilesystemWatcherHandlers', () => {
     getSshFilesystemProviderMock.mockReset()
     vi.mocked(stat).mockReset()
     vi.mocked(subscribeParcelWatcher).mockReset()
+    vi.mocked(createWslWatcher).mockReset()
     Object.defineProperty(process, 'platform', {
       configurable: true,
       value: originalPlatform
@@ -77,6 +79,45 @@ describe('registerFilesystemWatcherHandlers', () => {
     )
 
     await closeAllWatchers()
+  })
+
+  it('retains WSL attach-window overflow until the renderer listener is installed', async () => {
+    vi.useFakeTimers()
+    Object.defineProperty(process, 'platform', {
+      configurable: true,
+      value: 'win32'
+    })
+    vi.mocked(stat).mockResolvedValue({ isDirectory: () => true } as never)
+    const sender = { isDestroyed: () => false, send: vi.fn(), once: vi.fn(), id: 1 }
+    const root = {
+      subscription: { unsubscribe: vi.fn(async () => undefined) },
+      listeners: new Map(),
+      batch: { events: [], overflowed: true, timer: null, firstEventAt: 0 }
+    }
+    let resolveWatcher!: (value: typeof root) => void
+    let normalizedRootKey!: string
+    vi.mocked(createWslWatcher).mockImplementation((rootKey, _worktreePath, deps) => {
+      normalizedRootKey = rootKey
+      deps.scheduleBatchFlush(rootKey, root as never)
+      return new Promise((resolve) => {
+        resolveWatcher = resolve
+      }) as never
+    })
+    const worktreePath = '\\\\wsl.localhost\\Ubuntu\\home\\me\\repo'
+    const pending = handlers['fs:watchWorktree']({ sender }, { worktreePath }) as Promise<unknown>
+    await vi.waitFor(() => expect(createWslWatcher).toHaveBeenCalledOnce())
+
+    await vi.advanceTimersByTimeAsync(500)
+    expect(root.batch.overflowed).toBe(true)
+    expect(sender.send).not.toHaveBeenCalled()
+
+    resolveWatcher(root)
+    await pending
+    await vi.advanceTimersByTimeAsync(150)
+    expect(sender.send).toHaveBeenCalledWith('fs:changed', {
+      worktreePath: normalizedRootKey,
+      events: [{ kind: 'overflow', absolutePath: normalizedRootKey }]
+    })
   })
 
   it('quietly skips SSH worktree watches while the filesystem provider is unavailable', async () => {

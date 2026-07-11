@@ -59,6 +59,7 @@
     "audit:localization": "node config/scripts/audit-localization-coverage.mjs",
     "build:cli": "tsc -p config/tsconfig.cli.json --outDir out --composite false --incremental false && node config/scripts/verify-cli-bin.mjs --fix-executable --fix-package-json && node config/scripts/install-dev-cli.mjs",
     "build:electron-vite": "node config/scripts/run-electron-vite-build.mjs",
+    "prepare:wsl-watcher": "node config/scripts/prepare-wsl-watcher-runtime.mjs",
     "build:web": "node config/scripts/run-vite-web-build.mjs && node config/scripts/verify-web-build.mjs",
     "build:desktop": "pnpm run typecheck && pnpm run build:relay && pnpm run build:cli && pnpm run build:electron-vite && pnpm run build:web",
     "build": "pnpm run build:desktop && pnpm run build:native",
