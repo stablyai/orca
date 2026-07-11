@@ -152,7 +152,12 @@ export function listWslDistros(): string[] {
   }
 }
 
-export async function listWslDistrosAsync(): Promise<string[]> {
+export async function listWslDistrosAsync(options?: { refresh?: boolean }): Promise<string[]> {
+  // Why: the distro cache is process-lifetime and failure-sticky; a picker whose
+  // repair story is "add a distro, then retry" must force a fresh probe.
+  if (options?.refresh) {
+    wslDistroCache = null
+  }
   if (wslDistroCache !== null) {
     return wslDistroCache
   }
@@ -260,6 +265,34 @@ export function isWslAvailable(): boolean {
       stdio: ['pipe', 'pipe', 'pipe'],
       timeout: 5000
     })
+    wslAvailableCache = true
+  } catch {
+    wslAvailableCache = false
+  }
+
+  return wslAvailableCache
+}
+
+/**
+ * Async counterpart to {@link isWslAvailable} for IPC handlers that must not
+ * block the main thread on wsl.exe. Shares the same process-lifetime cache;
+ * pass `{ refresh: true }` to force a re-probe past a sticky failure state.
+ */
+export async function isWslAvailableAsync(options?: { refresh?: boolean }): Promise<boolean> {
+  if (options?.refresh) {
+    wslAvailableCache = null
+  }
+  if (wslAvailableCache !== null) {
+    return wslAvailableCache
+  }
+
+  if (process.platform !== 'win32') {
+    wslAvailableCache = false
+    return false
+  }
+
+  try {
+    await execFileUtf8('wsl.exe', ['--status'])
     wslAvailableCache = true
   } catch {
     wslAvailableCache = false

@@ -534,7 +534,11 @@ const api = {
 
   wsl: {
     isAvailable: (): Promise<boolean> => ipcRenderer.invoke('wsl:isAvailable'),
-    listDistros: (): Promise<string[]> => ipcRenderer.invoke('wsl:listDistros')
+    listDistros: (): Promise<string[]> => ipcRenderer.invoke('wsl:listDistros'),
+    getDistroOptions: (options?: {
+      refresh?: boolean
+    }): Promise<{ available: boolean; distros: string[]; default: string | null }> =>
+      ipcRenderer.invoke('wsl:getDistroOptions', options)
   },
 
   pwsh: {

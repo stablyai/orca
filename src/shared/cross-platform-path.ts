@@ -1,3 +1,5 @@
+import { normalizeWslUncPrefix } from './wsl-paths'
+
 export function isWindowsAbsolutePathLike(value: string): boolean {
   return /^[A-Za-z]:[\\/]/.test(value) || value.startsWith('\\\\') || value.startsWith('//')
 }
@@ -11,7 +13,11 @@ export function normalizeRuntimePathSeparators(value: string): string {
 }
 
 export function normalizeRuntimePathForComparison(value: string): string {
-  const normalized = trimRuntimePathTrailingSlash(normalizeRuntimePathSeparators(value))
+  // Why: canonicalize the legacy \\wsl$\ share to \\wsl.localhost\ first so a
+  // repo added under either prefix dedups against the watcher-sourced form.
+  const normalized = trimRuntimePathTrailingSlash(
+    normalizeWslUncPrefix(normalizeRuntimePathSeparators(value))
+  )
   return isWindowsAbsolutePathLike(value) ? normalized.toLowerCase() : normalized
 }
 

@@ -1,19 +1,30 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type * as childProcess from 'node:child_process'
 
-const { execFileSyncMock } = vi.hoisted(() => ({
-  execFileSyncMock: vi.fn()
+const { execFileSyncMock, execFileMock } = vi.hoisted(() => ({
+  execFileSyncMock: vi.fn(),
+  execFileMock: vi.fn()
 }))
 
 vi.mock('child_process', async (importOriginal) => {
   const actual = await importOriginal<typeof childProcess>()
   return {
     ...actual,
-    execFileSync: execFileSyncMock
+    execFileSync: execFileSyncMock,
+    execFile: execFileMock
   }
 })
 
-import { toLinuxPath, toWindowsWslPath, parseWslPath, wslUncDirectoryExists } from './wsl'
+import {
+  toLinuxPath,
+  toWindowsWslPath,
+  parseWslPath,
+  wslUncDirectoryExists,
+  listWslDistrosAsync,
+  isWslAvailableAsync,
+  _resetWslCachesForTests,
+  _setWslCachesForTests
+} from './wsl'
 
 function withPlatform<T>(value: NodeJS.Platform, fn: () => T): T {
   const original = process.platform
@@ -107,5 +118,68 @@ describe('wslUncDirectoryExists', () => {
       withPlatform('linux', () => wslUncDirectoryExists('\\\\wsl.localhost\\Ubuntu\\home\\jin'))
     ).toBeNull()
     expect(execFileSyncMock).not.toHaveBeenCalled()
+  })
+})
+
+async function withPlatformAsync<T>(value: NodeJS.Platform, fn: () => Promise<T>): Promise<T> {
+  const original = process.platform
+  Object.defineProperty(process, 'platform', { configurable: true, value })
+  try {
+    return await fn()
+  } finally {
+    Object.defineProperty(process, 'platform', { configurable: true, value: original })
+  }
+}
+
+describe('WSL availability/distro cache refresh', () => {
+  afterEach(() => {
+    execFileMock.mockReset()
+    _resetWslCachesForTests()
+  })
+
+  it('serves the sticky distro cache until refresh forces a re-probe', async () => {
+    execFileMock.mockImplementation(
+      (_cmd: string, _args: string[], _opts: unknown, cb: (e: unknown, out: string) => void) => {
+        cb(null, 'Ubuntu\nDebian\n')
+      }
+    )
+    // A prior probe found nothing and stuck.
+    _setWslCachesForTests({ distros: [] })
+
+    const cached = await withPlatformAsync('win32', () => listWslDistrosAsync())
+    expect(cached).toEqual([])
+    expect(execFileMock).not.toHaveBeenCalled()
+
+    const refreshed = await withPlatformAsync('win32', () => listWslDistrosAsync({ refresh: true }))
+    expect(refreshed).toEqual(['Ubuntu', 'Debian'])
+    expect(execFileMock).toHaveBeenCalledWith(
+      'wsl.exe',
+      ['--list', '--quiet'],
+      expect.objectContaining({ timeout: 5000 }),
+      expect.any(Function)
+    )
+  })
+
+  it('serves the sticky availability cache until refresh forces a re-probe', async () => {
+    execFileMock.mockImplementation(
+      (_cmd: string, _args: string[], _opts: unknown, cb: (e: unknown, out: string) => void) => {
+        cb(null, '')
+      }
+    )
+    // A prior probe reported WSL missing and stuck.
+    _setWslCachesForTests({ available: false })
+
+    const cached = await withPlatformAsync('win32', () => isWslAvailableAsync())
+    expect(cached).toBe(false)
+    expect(execFileMock).not.toHaveBeenCalled()
+
+    const refreshed = await withPlatformAsync('win32', () => isWslAvailableAsync({ refresh: true }))
+    expect(refreshed).toBe(true)
+    expect(execFileMock).toHaveBeenCalledWith(
+      'wsl.exe',
+      ['--status'],
+      expect.objectContaining({ timeout: 5000 }),
+      expect.any(Function)
+    )
   })
 })

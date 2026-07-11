@@ -88,6 +88,13 @@ import { detectRepoIconAndUpstream } from '../repo-icon-autodetect'
 import { enrichMissingRepoGitRemoteIdentities } from '../repo-git-remote-identity-enrichment'
 import { getProjectHostSetupForRepo } from '../../shared/project-host-setup-projection'
 import { normalizeExecutionHostId, parseExecutionHostId } from '../../shared/execution-host'
+import { normalizeWslUncPrefix } from '../../shared/wsl-paths'
+import {
+  isWslAvailableAsync,
+  listWslDistrosAsync,
+  toWindowsWslPath,
+  wslUncDirectoryExists
+} from '../wsl'
 import { joinRemotePath } from '../ssh/ssh-remote-platform'
 import {
   assertFolderWorkspacePathUsable,
@@ -230,6 +237,70 @@ async function addLocalRepoFromPath(
   }
 
   store.addRepo(repo)
+  await prepareLocalWorktreeRootForRepo(store, repo)
+  return { repo, alreadyExisted: false }
+}
+
+// Why: WSL is not a distinct execution host — a WSL repo is a LOCAL repo whose
+// owning project carries a `{kind:'wsl',distro}` runtime preference, so git and
+// terminals route through `wsl.exe -d <distro>`. This mirrors the local git-add
+// identity but stores the UNC share and stamps that project preference.
+async function addLocalWslRepo(
+  store: Store,
+  wsl: { distro: string; linuxPath: string },
+  kind: 'git' | 'folder' = 'git'
+): Promise<{ repo: Repo; alreadyExisted: boolean } | { error: string }> {
+  // Why: the WSL share and wsl.exe only exist on Windows; off-platform we would
+  // persist an unresolvable UNC path, so reject instead.
+  if (process.platform !== 'win32') {
+    return { error: 'WSL projects are only supported on Windows.' }
+  }
+  const distro = wsl.distro?.trim()
+  const linuxPath = wsl.linuxPath?.trim()
+  if (!distro || !linuxPath || !linuxPath.startsWith('/')) {
+    return { error: 'A WSL distro and an absolute Linux path are required.' }
+  }
+  const repoKind = kind === 'folder' ? 'folder' : 'git'
+  // Arg order is (linuxPath, distro). Store the modern \\wsl.localhost\ form the
+  // WSL watcher emits so legacy \\wsl$\ imports dedup against the same repo.
+  const uncPath = normalizeWslUncPrefix(toWindowsWslPath(linuxPath, distro))
+
+  const pathKey = normalizeRuntimePathForComparison(uncPath)
+  const existing = store
+    .getRepos()
+    .find((repo) => !repo.connectionId && normalizeRuntimePathForComparison(repo.path) === pathKey)
+  if (existing) {
+    return { repo: existing, alreadyExisted: true }
+  }
+
+  // Why: native fs.stat is unreliable on the WSL 9P filesystem, so ask the distro
+  // directly. Only a definitive "missing" blocks the add; an inconclusive null
+  // (wsl.exe unavailable) still proceeds so the picker's retry story stays open.
+  if (wslUncDirectoryExists(uncPath) === false) {
+    return { error: `Directory does not exist in WSL: ${linuxPath}` }
+  }
+
+  const repo: Repo = {
+    id: randomUUID(),
+    path: uncPath,
+    displayName: getRepoName(uncPath),
+    badgeColor: DEFAULT_REPO_BADGE_COLOR,
+    addedAt: Date.now(),
+    kind: repoKind,
+    ...(repoKind === 'git'
+      ? {
+          externalWorktreeVisibility: 'hide' as const,
+          externalWorktreeVisibilityLegacy: false,
+          projectHostSetupMethod: 'imported-existing-folder' as const
+        }
+      : {})
+  }
+
+  store.addRepo(repo)
+  const setup = getProjectHostSetupForRepo(store.getProjectHostSetups(), repo)
+  store.updateProject(setup.projectId, {
+    localWindowsRuntimePreference: { kind: 'wsl', distro }
+  })
   await prepareLocalWorktreeRootForRepo(store, repo)
   return { repo, alreadyExisted: false }
 }
@@ -1162,6 +1233,7 @@ export function registerRepoHandlers(mainWindow: BrowserWindow, store: Store): v
   ipcMain.removeHandler('sparsePresets:list')
   ipcMain.removeHandler('sparsePresets:save')
   ipcMain.removeHandler('sparsePresets:remove')
+  ipcMain.removeHandler('wsl:getDistroOptions')
 
   ipcMain.handle('repos:list', () => {
     enrichMissingRepoGitRemoteIdentities(store, {
@@ -1646,9 +1718,20 @@ export function registerRepoHandlers(mainWindow: BrowserWindow, store: Store): v
     'repos:add',
     async (
       _event,
-      args: { path: string; kind?: 'git' | 'folder' }
+      args: {
+        path?: string
+        kind?: 'git' | 'folder'
+        wsl?: { distro: string; linuxPath: string }
+      }
     ): Promise<{ repo: Repo } | { error: string }> => {
-      const result = await addLocalRepoFromPath(store, args.path, args.kind)
+      let result: { repo: Repo; alreadyExisted: boolean } | { error: string }
+      if (args.wsl) {
+        result = await addLocalWslRepo(store, args.wsl, args.kind)
+      } else if (args.path) {
+        result = await addLocalRepoFromPath(store, args.path, args.kind)
+      } else {
+        return { error: 'A project path is required.' }
+      }
       if ('error' in result) {
         return result
       }
@@ -1659,6 +1742,25 @@ export function registerRepoHandlers(mainWindow: BrowserWindow, store: Store): v
       notifyReposChanged(mainWindow)
       emitRepoAdded('folder_picker', result.alreadyExisted, result.repo.kind === 'git')
       return { repo: result.repo }
+    }
+  )
+
+  // Distro source for the Add Project WSL picker. Separate from the terminal
+  // capability probe (`wsl:listDistros`, string[]) because this reports
+  // availability + default and, via `refresh`, forces a re-probe past wsl.ts's
+  // sticky process-lifetime caches (the "install WSL / add a distro" repair path).
+  ipcMain.handle(
+    'wsl:getDistroOptions',
+    async (
+      _event,
+      args?: { refresh?: boolean }
+    ): Promise<{ available: boolean; distros: string[]; default: string | null }> => {
+      const refresh = args?.refresh === true
+      const [available, distros] = await Promise.all([
+        isWslAvailableAsync({ refresh }),
+        listWslDistrosAsync({ refresh })
+      ])
+      return { available, distros, default: distros[0] ?? null }
     }
   )
 

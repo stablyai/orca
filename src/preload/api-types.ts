@@ -944,10 +944,13 @@ export type PreloadApi = {
   repos: {
     list: () => Promise<Repo[]>
     // Why: error union matches the IPC handler's return shape; renderer callers branch on `'error' in result`.
-    add: (args: {
-      path: string
-      kind?: 'git' | 'folder'
-    }) => Promise<{ repo: Repo } | { error: string }>
+    // A `wsl` source adds a local repo whose owning project routes through
+    // `wsl.exe -d <distro>` (no separate execution host); it excludes `path`.
+    add: (
+      args:
+        | { path: string; kind?: 'git' | 'folder' }
+        | { wsl: { distro: string; linuxPath: string }; kind?: 'git' | 'folder' }
+    ) => Promise<{ repo: Repo } | { error: string }>
     remove: (args: { repoId: string }) => Promise<void>
     // Forget a project on one execution host only, leaving the same repo id on
     // other hosts (local or a re-added SSH target) intact.
@@ -3085,6 +3088,9 @@ export type PreloadApi = {
   wsl: {
     isAvailable: () => Promise<boolean>
     listDistros: () => Promise<string[]>
+    getDistroOptions: (options?: {
+      refresh?: boolean
+    }) => Promise<{ available: boolean; distros: string[]; default: string | null }>
   }
   pwsh: {
     isAvailable: () => Promise<boolean>
