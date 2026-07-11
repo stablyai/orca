@@ -39,6 +39,12 @@ export type DraftPasteReadyScanResult = {
  *     the caller's hard timeout is the backstop if it never appears.
  *   - `render-quiet-after-bracketed-paste` (default): no signal marker; arms the
  *     quiet window once DECSET 2004 is seen.
+ *   - `process-ready`: no DECSET 2004 handshake and no marker. Used by agents
+ *     (e.g. Hermes's prompt_toolkit TUI) that never emit bracketed-paste
+ *     enable. Arms the quiet window on the first PTY output chunk; once the
+ *     agent's render burst settles (BRACKETED_PASTE_QUIET_MS of silence) the
+ *     caller pastes. The caller's existing process-ownership fallback is the
+ *     backstop if output never arrives.
  *
  * A 512-byte ring (`recent` / `postHandshakeRecent`) covers escape sequences
  * split across chunk boundaries without retaining terminal scrollback.
@@ -56,11 +62,18 @@ export function createDraftPasteReadyScanner(readySignal: DraftPasteReadySignal)
       : readySignal === 'render-cursor-after-bracketed-paste'
         ? DECTCEM_SHOW_CURSOR
         : null
+  const isProcessReady = readySignal === 'process-ready'
 
   return {
     observe(data: string): DraftPasteReadyScanResult {
       const combined = recent + data
       recent = combined.slice(-512)
+      // Why: agents using `process-ready` never emit DECSET 2004. Arm the quiet
+      // window on the first render output so the caller pastes once the TUI
+      // settles. No marker check, no 2004 gate.
+      if (isProcessReady) {
+        return { ready: false, armQuietTimer: true }
+      }
       if (!saw2004) {
         const markerIndex = combined.indexOf(DECSET_BRACKETED_PASTE)
         if (markerIndex === -1) {
