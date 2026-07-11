@@ -3,11 +3,13 @@ import os from 'node:os'
 import path from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
-const { grantDirAclMock } = vi.hoisted(() => ({ grantDirAclMock: vi.fn() }))
+const { grantDirAclAsyncMock } = vi.hoisted(() => ({
+  grantDirAclAsyncMock: vi.fn().mockResolvedValue(undefined)
+}))
 
 vi.mock('../win32-utils', async (importOriginal) => {
   const actual = (await importOriginal()) as Record<string, unknown>
-  return { ...actual, grantDirAcl: grantDirAclMock }
+  return { ...actual, grantDirAclAsync: grantDirAclAsyncMock }
 })
 
 import { CrashReportStore } from './crash-report-store'
@@ -47,7 +49,8 @@ function input(reason = 'crashed'): CrashReportCreateInput {
 
 afterEach(async () => {
   vi.restoreAllMocks()
-  grantDirAclMock.mockReset()
+  grantDirAclAsyncMock.mockReset()
+  grantDirAclAsyncMock.mockResolvedValue(undefined)
   await Promise.all(tempDirs.splice(0).map((dir) => fs.rm(dir, { recursive: true, force: true })))
 })
 
@@ -163,7 +166,7 @@ describe('CrashReportStore', () => {
 
     const report = await store.record(input())
 
-    expect(grantDirAclMock).toHaveBeenCalledWith(path.dirname(filePath))
+    expect(grantDirAclAsyncMock).toHaveBeenCalledWith(path.dirname(filePath))
     expect(writeFileSpy).toHaveBeenCalledTimes(2)
     await expect(store.getLatestPending()).resolves.toMatchObject({ id: report.id })
   })
@@ -182,10 +185,10 @@ describe('CrashReportStore', () => {
 
       expect(readFileSpy).toHaveBeenCalledTimes(2)
       if (code === 'EBUSY') {
-        expect(grantDirAclMock).not.toHaveBeenCalled()
+        expect(grantDirAclAsyncMock).not.toHaveBeenCalled()
       } else {
-        expect(grantDirAclMock).toHaveBeenCalledOnce()
-        expect(grantDirAclMock).toHaveBeenCalledWith(path.dirname(filePath))
+        expect(grantDirAclAsyncMock).toHaveBeenCalledOnce()
+        expect(grantDirAclAsyncMock).toHaveBeenCalledWith(path.dirname(filePath))
       }
     }
   )
@@ -199,7 +202,7 @@ describe('CrashReportStore', () => {
     await expect(store.record(input())).resolves.toMatchObject({ status: 'pending' })
 
     expect(renameSpy).toHaveBeenCalledTimes(2)
-    expect(grantDirAclMock).not.toHaveBeenCalled()
+    expect(grantDirAclAsyncMock).not.toHaveBeenCalled()
   })
 
   it('removes its temp file after a terminal write failure', async () => {

@@ -36,12 +36,15 @@ function processGoneBreadcrumbData(event: ProcessGoneCrashEvent) {
 }
 
 function persistFailureData(event: ProcessGoneCrashEvent, error: unknown) {
-  const nodeError = error as NodeJS.ErrnoException
+  const errorCode =
+    typeof error === 'object' && error !== null && 'code' in error && typeof error.code === 'string'
+      ? error.code
+      : undefined
   return {
     ...processGoneBreadcrumbData(event),
     errorName: error instanceof Error ? error.name : typeof error,
     errorMessage: sanitizeCrashReportString(error instanceof Error ? error.message : String(error)),
-    ...(typeof nodeError.code === 'string' ? { errorCode: nodeError.code } : {})
+    ...(errorCode ? { errorCode } : {})
   }
 }
 

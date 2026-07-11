@@ -174,6 +174,24 @@ describe('recordProcessGoneCrash', () => {
     expect(sink.flushMock).toHaveBeenCalledTimes(2)
   })
 
+  it('keeps null persistence rejections inside the fail-open diagnostic path', async () => {
+    const record = vi.fn().mockRejectedValue(null)
+    vi.spyOn(console, 'error').mockImplementation(() => {})
+
+    recordProcessGoneCrash({ record } as never, event(), new ProcessGoneDedupe())
+
+    await vi.waitFor(() =>
+      expect(getCrashBreadcrumbSnapshot()).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            name: 'crash_report_persist_failed',
+            data: expect.objectContaining({ errorName: 'object', errorMessage: 'null' })
+          })
+        ])
+      )
+    )
+  })
+
   it('allows the same renderer crash to retry after persistence fails', async () => {
     const record = vi
       .fn()

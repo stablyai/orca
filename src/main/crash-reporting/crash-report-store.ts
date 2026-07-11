@@ -3,7 +3,7 @@ import fs from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'
 import { app } from 'electron'
-import { grantDirAcl, isPermissionError } from '../win32-utils'
+import { grantDirAclAsync, isPermissionError } from '../win32-utils'
 import {
   formatCrashReportText,
   sanitizeCrashReportBreadcrumbs,
@@ -69,7 +69,7 @@ async function runCrashReportFileOperationWithWindowsRecovery<T>(
         try {
           // Why: Chromium can reset userData ACLs before startup capture or
           // recovery, so both the crash write and next prompt must repair it.
-          grantDirAcl(directory)
+          await grantDirAclAsync(directory)
         } catch {
           // The bounded retry below still handles transient file locks.
         }
