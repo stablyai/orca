@@ -644,9 +644,11 @@
       "invariant": "Search, link, WebGL, decoration, input-protocol, or keyboard-navigation errors must not unmount the terminal surface, crash React/window, break focus, or stop PTY input/output.",
       "oracle": "The current executable slice injects a core addon load throw and asserts pane opening continues through later addons, covers link provider throws as pane-scoped no-link results, covers search decoration positive-integer failures as false results instead of renderer crashes, and covers WebGL attach/refresh/recovery containment. Focused typed input echo after addon failure still needs a live/component follow-up.",
       "commands": [
-        "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/lib/pane-manager/terminal-link-provider-guard.test.ts src/renderer/src/components/terminal-search-safe-find.test.ts src/renderer/src/lib/pane-manager/pane-webgl-refresh-lifecycle.test.ts src/renderer/src/components/terminal-pane/terminal-webgl-atlas-recovery.test.ts src/renderer/src/lib/pane-manager/pane-webgl-context-recovery.test.ts src/renderer/src/lib/pane-manager/pane-webgl-renderer.test.ts src/renderer/src/lib/pane-manager/pane-reveal-repaint.test.ts src/renderer/src/components/terminal-pane/terminal-visibility-resume.test.ts"
+        "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/lib/pane-manager/terminal-link-provider-guard.test.ts src/renderer/src/components/terminal-search-safe-find.test.ts src/renderer/src/lib/pane-manager/pane-webgl-refresh-lifecycle.test.ts src/renderer/src/components/terminal-pane/terminal-webgl-atlas-recovery.test.ts src/renderer/src/lib/pane-manager/pane-webgl-context-recovery.test.ts src/renderer/src/lib/pane-manager/pane-webgl-renderer.test.ts src/renderer/src/lib/pane-manager/pane-reveal-repaint.test.ts src/renderer/src/components/terminal-pane/terminal-visibility-resume.test.ts",
+        "pnpm exec vitest run --config config/vitest.config.ts config/scripts/xterm-webgl-transparent-frame-patch.test.mjs src/renderer/src/lib/pane-manager/terminal-link-provider-guard.test.ts src/renderer/src/components/terminal-search-safe-find.test.ts src/renderer/src/lib/pane-manager/pane-webgl-refresh-lifecycle.test.ts src/renderer/src/components/terminal-pane/terminal-webgl-atlas-recovery.test.ts src/renderer/src/lib/pane-manager/pane-webgl-context-recovery.test.ts src/renderer/src/lib/pane-manager/pane-webgl-renderer.test.ts src/renderer/src/lib/pane-manager/pane-reveal-repaint.test.ts src/renderer/src/components/terminal-pane/terminal-visibility-resume.test.ts"
       ],
       "testFiles": [
+        "config/scripts/xterm-webgl-transparent-frame-patch.test.mjs",
         "src/renderer/src/lib/pane-manager/terminal-link-provider-guard.test.ts",
         "src/renderer/src/components/terminal-search-safe-find.test.ts",
         "src/renderer/src/lib/pane-manager/pane-webgl-refresh-lifecycle.test.ts",
@@ -657,6 +659,12 @@
         "src/renderer/src/components/terminal-pane/terminal-visibility-resume.test.ts"
       ],
       "assertionRefs": [
+        {
+          "file": "config/scripts/xterm-webgl-transparent-frame-patch.test.mjs",
+          "assertions": [
+            "the installed xterm source plus CommonJS and ESM bundles clear exactly once at the transparent-only renderer boundary"
+          ]
+        },
         {
           "file": "src/renderer/src/lib/pane-manager/terminal-link-provider-guard.test.ts",
           "assertions": [
