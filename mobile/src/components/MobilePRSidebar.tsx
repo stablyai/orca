@@ -95,7 +95,7 @@ export function MobilePRSidebar({
   const botAuthorOverrides = usePRBotAuthorOverrides(
     client,
     connState,
-    state.kind === 'ready' ? state.data : null
+    state.kind === 'ready' ? state.data.details : null
   )
 
   return (

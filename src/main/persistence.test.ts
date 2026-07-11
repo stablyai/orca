@@ -4477,6 +4477,27 @@ describe('Store', () => {
     expect(updated.branchPrefix).toBe('git-username')
   })
 
+  it('normalizes bot-author overrides on load and every settings write', async () => {
+    writeDataFile({
+      settings: {
+        prBotAuthorOverrides: [' GretelFlux ', 'gretelflux', 42, '', 'another-bot']
+      }
+    })
+    const store = await createStore()
+
+    expect(store.getSettings().prBotAuthorOverrides).toEqual(['another-bot', 'gretelflux'])
+
+    const oversized = Array.from(
+      { length: 600 },
+      (_, index) => ` bot-${String(index).padStart(4, '0')} `
+    )
+    const updated = store.updateSettings({ prBotAuthorOverrides: oversized })
+
+    expect(updated.prBotAuthorOverrides).toHaveLength(500)
+    expect(updated.prBotAuthorOverrides[0]).toBe('bot-0000')
+    expect(updated.prBotAuthorOverrides[499]).toBe('bot-0499')
+  })
+
   it('notifies settings listeners with changed keys only', async () => {
     const store = await createStore()
     const listener = vi.fn()

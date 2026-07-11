@@ -107,6 +107,7 @@ import { parseWorkspaceSession } from '../shared/workspace-session-schema'
 import { normalizeUsagePercentageDisplay } from '../shared/usage-percentage-display'
 import { isExistingPersistedProfile } from '../shared/project-order-manual-default-notice'
 import { resolveUsagePercentageDisplayChangeNoticeDismissed } from '../shared/usage-percentage-display-change-notice'
+import { normalizePRBotAuthorOverrides } from '../shared/pr-bot-author-overrides'
 import {
   LOCAL_EXECUTION_HOST_ID,
   normalizeExecutionHostOrder,
@@ -3124,6 +3125,9 @@ export class Store {
             // product intent was only to change the default, and the setting
             // stays user-toggleable.
             ...stripLegacyTerminalScrollbackBytes(parsed.settings),
+            prBotAuthorOverrides: normalizePRBotAuthorOverrides(
+              parsed.settings?.prBotAuthorOverrides
+            ),
             // Why: v1.3.42 renamed the cosmetic sidekick setting to pet. Carry
             // the old persisted flag forward once so enabled users don't lose it.
             experimentalPet:
@@ -5282,6 +5286,13 @@ export class Store {
     }
     if ('uiLanguage' in updates) {
       sanitizedUpdates.uiLanguage = normalizeUiLanguage(updates.uiLanguage)
+    }
+    if ('prBotAuthorOverrides' in updates) {
+      // Why: every writer (desktop IPC, paired web RPC, and migrations) reaches
+      // this boundary, so the persisted list stays bounded and well-formed.
+      sanitizedUpdates.prBotAuthorOverrides = normalizePRBotAuthorOverrides(
+        updates.prBotAuthorOverrides
+      )
     }
     const historyWithPreviousLayout = buildWorkspaceDirHistoryForUpdate(
       this.state.settings,

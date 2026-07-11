@@ -54,6 +54,7 @@ import { legacyBaseRefSearchResult } from '../../../shared/base-ref-search-resul
 import { EMPTY_PTY_MAIN_DELIVERY_DIAGNOSTICS } from '../../../shared/pty-delivery-diagnostics'
 import { createE2EConfig } from '../../../shared/e2e-config'
 import { relativePathInsideRoot } from '../../../shared/cross-platform-path'
+import { normalizePRBotAuthorOverrides } from '../../../shared/pr-bot-author-overrides'
 import {
   LOCAL_EXECUTION_HOST_ID,
   normalizeExecutionHostScope,
@@ -3099,6 +3100,11 @@ async function getRuntimeBackedStoredSettings(): Promise<GlobalSettings> {
     if (typeof result.settings.minimaxUsageModels === 'string') {
       runtimeSettings.minimaxUsageModels = result.settings.minimaxUsageModels
     }
+    if (Array.isArray(result.settings.prBotAuthorOverrides)) {
+      runtimeSettings.prBotAuthorOverrides = normalizePRBotAuthorOverrides(
+        result.settings.prBotAuthorOverrides
+      )
+    }
     const next = mergeSettings(local, runtimeSettings)
     writeJson(SETTINGS_STORAGE_KEY, next)
     return next
@@ -3127,6 +3133,11 @@ async function syncRuntimeBackedSettings(
   }
   if (typeof updates.minimaxUsageModels === 'string') {
     runtimeUpdates.minimaxUsageModels = updates.minimaxUsageModels
+  }
+  if (Array.isArray(updates.prBotAuthorOverrides)) {
+    runtimeUpdates.prBotAuthorOverrides = normalizePRBotAuthorOverrides(
+      updates.prBotAuthorOverrides
+    )
   }
   if (Object.keys(runtimeUpdates).length === 0) {
     return localNext

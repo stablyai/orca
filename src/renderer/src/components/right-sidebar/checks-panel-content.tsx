@@ -1654,6 +1654,7 @@ function PRCommentActionBadge({
 /** A single comment row — used for both root and reply comments. */
 function CommentRow({
   comment,
+  botAuthorOverrides,
   isReply,
   showResolve,
   showReply,
@@ -1670,6 +1671,7 @@ function CommentRow({
   onQueueForAgent
 }: {
   comment: PRComment
+  botAuthorOverrides: ReadonlySet<string>
   isReply: boolean
   showResolve: boolean
   showReply?: boolean
@@ -1685,7 +1687,6 @@ function CommentRow({
   onDeleteComment?: (comment: PRComment) => void | Promise<void>
   onQueueForAgent?: () => void
 }): React.JSX.Element {
-  const botAuthorOverrides = usePRBotAuthorOverrides()
   const automated = isBotPRComment(comment, botAuthorOverrides)
   const canMutateComment = isMutablePRConversationComment(comment)
   const [editing, setEditing] = useState(false)
@@ -1957,6 +1958,7 @@ function CommentRow({
 
 function PRCommentGroupView({
   group,
+  botAuthorOverrides,
   replyingGroupId,
   selectionControl,
   actionState,
@@ -1973,6 +1975,7 @@ function PRCommentGroupView({
   onQueueForAgent
 }: {
   group: PRCommentGroup
+  botAuthorOverrides: ReadonlySet<string>
   replyingGroupId: string | null
   selectionControl?: React.ReactNode
   actionState: PRCommentGroupActionState
@@ -2014,6 +2017,7 @@ function PRCommentGroupView({
     group.kind === 'standalone' ? presentation.groupStandalone : presentation.groupThread
   )
   const sharedRowProps = {
+    botAuthorOverrides,
     actionState,
     isQueued,
     replyDisabled,
@@ -2091,6 +2095,7 @@ function PRCommentGroupView({
 
 function ResolvedCommentGroupsSection({
   groups,
+  botAuthorOverrides,
   replyingGroupId,
   replyDisabled,
   replyDisabledReason,
@@ -2103,6 +2108,7 @@ function ResolvedCommentGroupsSection({
   onDeleteComment
 }: {
   groups: PRCommentGroup[]
+  botAuthorOverrides: ReadonlySet<string>
   replyingGroupId: string | null
   replyDisabled?: boolean
   replyDisabledReason?: string
@@ -2135,6 +2141,7 @@ function ResolvedCommentGroupsSection({
               <PRCommentGroupView
                 key={getPRCommentGroupId(group)}
                 group={group}
+                botAuthorOverrides={botAuthorOverrides}
                 replyingGroupId={replyingGroupId}
                 actionState="resolved"
                 isQueued={false}
@@ -2336,6 +2343,7 @@ export function PRCommentsList({
       <PRCommentGroupView
         key={groupId}
         group={group}
+        botAuthorOverrides={botAuthorOverrides}
         replyingGroupId={replyingGroupId}
         selectionControl={renderSelectionControl(group)}
         actionState={actionState}
@@ -2666,6 +2674,7 @@ export function PRCommentsList({
               {triageGroups.conversation.map(renderCommentGroup)}
               <ResolvedCommentGroupsSection
                 groups={triageGroups.resolved}
+                botAuthorOverrides={botAuthorOverrides}
                 replyingGroupId={replyingGroupId}
                 replyDisabled={commentsDisabled}
                 replyDisabledReason={commentsDisabledReason}

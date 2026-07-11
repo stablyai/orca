@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import type { ConnectionState } from '../transport/types'
 import type { RpcSuccess } from '../transport/types'
 import type { RpcClient } from '../transport/rpc-client'
@@ -15,9 +15,21 @@ export function usePRBotAuthorOverrides(
   refreshKey?: unknown
 ): ReadonlySet<string> {
   const [logins, setLogins] = useState<string[]>([])
+  const sourceClientRef = useRef<RpcClient | null>(null)
 
   useEffect(() => {
     if (!client || connState !== 'connected') {
+      sourceClientRef.current = null
+      setLogins([])
+      return
+    }
+    if (sourceClientRef.current !== client) {
+      // Why: overrides belong to the connected runtime; never render a prior
+      // host's classification while the replacement host is still loading.
+      sourceClientRef.current = client
+      setLogins([])
+    }
+    if (refreshKey == null) {
       return
     }
     let stale = false
@@ -31,9 +43,11 @@ export function usePRBotAuthorOverrides(
           settings?: { prBotAuthorOverrides?: unknown }
         } | null
         const overrides = result?.settings?.prBotAuthorOverrides
-        if (Array.isArray(overrides)) {
-          setLogins(overrides.filter((login): login is string => typeof login === 'string'))
-        }
+        setLogins(
+          Array.isArray(overrides)
+            ? overrides.filter((login): login is string => typeof login === 'string')
+            : []
+        )
       })
       .catch(() => {
         // Best-effort: without the setting the heuristics still classify most bots.
