@@ -4705,6 +4705,9 @@
           "8d3abfb48a": "Nombre de la misión",
           "7f94e6c670": "Guardar",
           "955a21f262": "Opciones de la misión"
+        },
+        "MissionMemberErrorCopy": {
+          "c8affe1f4b": "Este repositorio aún no tiene commits ni rama predeterminada. Crea un commit inicial (o define una rama predeterminada en la configuración del proyecto) y vuelve a intentarlo."
         }
       },
       "shared": {

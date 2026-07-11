@@ -3,6 +3,7 @@ import { ChevronRight, Flag, MoreHorizontal, Plus, RefreshCw, X } from 'lucide-r
 import { useAppStore } from '@/store'
 import { useAllWorktrees } from '@/store/selectors'
 import { missionMemberErrorKey } from '@/store/slices/missions'
+import { formatMissionMemberError } from './mission-member-error-copy'
 import { Button } from '@/components/ui/button'
 import {
   DropdownMenu,
@@ -62,8 +63,9 @@ function MissionMemberRows({ mission }: { mission: Mission }): React.JSX.Element
           >
             <span className="truncate">{repo?.displayName ?? member.repoId}</span>
             <span className="min-w-0 truncate text-[11px] text-muted-foreground/70" title={error}>
-              {error ??
-                translate('auto.components.sidebar.MissionList.280576fc92', 'Workspace missing')}
+              {error
+                ? formatMissionMemberError(error)
+                : translate('auto.components.sidebar.MissionList.280576fc92', 'Workspace missing')}
             </span>
             <Button
               variant="ghost"
