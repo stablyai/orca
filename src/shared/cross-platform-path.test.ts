@@ -29,6 +29,39 @@ describe('cross-platform path containment', () => {
     expect(isPathInsideOrEqual('\\\\Server\\Share\\Repo', '\\\\server\\share\\repo2')).toBe(false)
   })
 
+  it('treats WSL UNC aliases as the same case-sensitive filesystem', () => {
+    expect(
+      isPathInsideOrEqual(
+        '\\\\wsl$\\Ubuntu\\home\\Alice\\repo',
+        '\\\\wsl.localhost\\ubuntu\\home\\Alice\\repo\\src'
+      )
+    ).toBe(true)
+    expect(
+      relativePathInsideRoot(
+        '\\\\wsl$\\Ubuntu\\home\\Alice\\repo',
+        '\\\\wsl.localhost\\ubuntu\\home\\Alice\\repo\\Src'
+      )
+    ).toBe('Src')
+    expect(
+      isPathInsideOrEqual(
+        '\\\\wsl$\\Ubuntu\\home\\Alice\\repo',
+        '\\\\wsl.localhost\\ubuntu\\home\\alice\\repo\\src'
+      )
+    ).toBe(false)
+    expect(
+      relativePathInsideRoot(
+        '\\\\wsl$\\Ubuntu\\home\\Alice\\repo',
+        '\\\\wsl.localhost\\ubuntu\\home\\alice\\repo\\src'
+      )
+    ).toBeNull()
+    expect(
+      relativePathInsideRoot(
+        '\\\\wsl$\\Ubuntu\\home\\Alice\\repo',
+        '\\\\wsl.localhost\\ubuntu\\home\\Alice\\repo\\line\nbreak'
+      )
+    ).toBe('line\nbreak')
+  })
+
   it('resolves POSIX relative paths without using the process cwd', () => {
     expect(resolveRuntimePath('/repos/app/repo', '../worktrees/feature')).toBe(
       '/repos/app/worktrees/feature'

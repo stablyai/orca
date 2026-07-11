@@ -21,16 +21,22 @@ else
   exit 1
 fi
 ORCA_BRIDGE_PS1_WIN=$(wslpath -w "$ORCA_BRIDGE_PS1")
-ORCA_WSL_CWD=$(pwd -P)
+# Why: a shell can outlive a deleted worktree; keep explicit CLI selectors and
+# help usable even when there is no longer a physical cwd to preserve.
+ORCA_WSL_CWD=$(pwd -P 2>/dev/null) || {
+  ORCA_WSL_CWD=/
+  cd /
+}
 ORCA_WSL_CWD_WIN=$(wslpath -w "$ORCA_WSL_CWD")
-exec "$ORCA_POWERSHELL" -NoProfile -ExecutionPolicy Bypass -File "$ORCA_BRIDGE_PS1_WIN" "$ORCA_WIN_LAUNCHER" "$ORCA_WSL_CWD_WIN" "$@"
+exec "$ORCA_POWERSHELL" -NoProfile -ExecutionPolicy Bypass -File "$ORCA_BRIDGE_PS1_WIN" "$ORCA_WIN_LAUNCHER" -WslCwd "$ORCA_WSL_CWD_WIN" "$@"
 `
 }
 
 export function buildWslBridgeScript(): string {
   return `${BRIDGE_MANAGED_MARKER}
+[CmdletBinding(PositionalBinding=$false)]
 param(
-  [Parameter(Mandatory=$true)]
+  [Parameter(Mandatory=$true, Position=0)]
   [string]$OrcaLauncher,
 
   [string]$WslCwd,
@@ -39,8 +45,6 @@ param(
   [string[]]$ForwardArgs
 )
 
-$previousCliCwdExists = Test-Path Env:ORCA_CLI_CWD
-$previousCliCwd = $env:ORCA_CLI_CWD
 $exitCode = 0
 try {
   if ([string]::IsNullOrEmpty($WslCwd)) {
@@ -49,29 +53,19 @@ try {
     $env:ORCA_CLI_CWD = $WslCwd
   }
   Push-Location -LiteralPath (Split-Path -Parent $OrcaLauncher)
-  try {
-    & $OrcaLauncher @ForwardArgs
-    if ($null -eq $LASTEXITCODE) {
-      if (-not $?) {
-        $exitCode = 1
-      } else {
-        $exitCode = 0
-      }
+  & $OrcaLauncher @ForwardArgs
+  if ($null -eq $LASTEXITCODE) {
+    if (-not $?) {
+      $exitCode = 1
     } else {
-      $exitCode = $LASTEXITCODE
+      $exitCode = 0
     }
-  } finally {
-    Pop-Location
+  } else {
+    $exitCode = $LASTEXITCODE
   }
 } catch {
   Write-Error $_
   $exitCode = 1
-} finally {
-  if ($previousCliCwdExists) {
-    $env:ORCA_CLI_CWD = $previousCliCwd
-  } else {
-    Remove-Item Env:ORCA_CLI_CWD -ErrorAction SilentlyContinue
-  }
 }
 exit $exitCode
 `
