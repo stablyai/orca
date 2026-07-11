@@ -1,5 +1,13 @@
 import React, { useMemo, useState } from 'react'
-import { ChevronRight, Flag, MoreHorizontal, Plus, RefreshCw, X } from 'lucide-react'
+import {
+  ChevronRight,
+  Flag,
+  MoreHorizontal,
+  Plus,
+  RefreshCw,
+  SquareTerminal,
+  X
+} from 'lucide-react'
 import { useAppStore } from '@/store'
 import { useAllWorktrees } from '@/store/selectors'
 import { missionMemberErrorKey } from '@/store/slices/missions'
@@ -18,9 +26,58 @@ import WorktreeCard from './WorktreeCard'
 import { ProjectGroupNameDialog } from './ProjectGroupNameDialog'
 import { MissionDeleteDialog } from './MissionDeleteDialog'
 import { MissionAddProjectsDialog } from './MissionAddProjectsDialog'
+import { folderWorkspaceToWorktree } from '../../../../shared/folder-workspace-worktree'
+import { folderWorkspaceKey } from '../../../../shared/workspace-scope'
 import type { Mission } from '../../../../shared/types'
 
 const missionCollapseKey = (missionId: string): string => `mission:${missionId}`
+
+function MissionSessionRow({ mission }: { mission: Mission }): React.JSX.Element {
+  const sessionWorkspace = useAppStore(
+    (s) => s.folderWorkspaces.find((fw) => fw.missionId === mission.id) ?? null
+  )
+  const activeWorktreeId = useAppStore((s) => s.activeWorktreeId)
+  const setActiveWorktree = useAppStore((s) => s.setActiveWorktree)
+  const ensureMissionSession = useAppStore((s) => s.ensureMissionSession)
+  const [opening, setOpening] = useState(false)
+
+  if (sessionWorkspace) {
+    const worktree = folderWorkspaceToWorktree(sessionWorkspace)
+    return (
+      <WorktreeCard
+        worktree={worktree}
+        repo={undefined}
+        isActive={activeWorktreeId === worktree.id}
+        onActivate={() => setActiveWorktree(worktree.id)}
+        nativeDragEnabled={false}
+        flushSurface
+      />
+    )
+  }
+
+  return (
+    <button
+      type="button"
+      className="flex items-center gap-2 rounded-md px-2 py-1.5 text-left text-[13px] text-muted-foreground hover:bg-worktree-sidebar-accent disabled:opacity-60"
+      disabled={opening}
+      onClick={() => {
+        setOpening(true)
+        void (async () => {
+          const workspace = await ensureMissionSession(mission.id)
+          if (workspace) {
+            setActiveWorktree(folderWorkspaceKey(workspace.id))
+          }
+          setOpening(false)
+        })()
+      }}
+    >
+      <SquareTerminal className="size-3.5 shrink-0 text-muted-foreground" />
+      <span className="truncate">
+        {translate('auto.components.sidebar.MissionList.63a40a4f99', 'Open mission session')}
+      </span>
+    </button>
+  )
+}
 
 function MissionMemberRows({ mission }: { mission: Mission }): React.JSX.Element {
   const repos = useAppStore((s) => s.repos)
@@ -108,7 +165,18 @@ function MissionSection({
 }): React.JSX.Element {
   const collapsedGroups = useAppStore((s) => s.collapsedGroups)
   const toggleCollapsedGroup = useAppStore((s) => s.toggleCollapsedGroup)
+  const ensureMissionSession = useAppStore((s) => s.ensureMissionSession)
+  const setActiveWorktree = useAppStore((s) => s.setActiveWorktree)
   const collapsed = collapsedGroups.has(missionCollapseKey(mission.id))
+
+  const openSession = (): void => {
+    void (async () => {
+      const workspace = await ensureMissionSession(mission.id)
+      if (workspace) {
+        setActiveWorktree(folderWorkspaceKey(workspace.id))
+      }
+    })()
+  }
 
   return (
     <div className="flex flex-col">
@@ -153,6 +221,9 @@ function MissionSection({
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end">
+            <DropdownMenuItem onSelect={openSession}>
+              {translate('auto.components.sidebar.MissionList.63a40a4f99', 'Open mission session')}
+            </DropdownMenuItem>
             <DropdownMenuItem onSelect={() => onAddProjects(mission)}>
               {translate('auto.components.sidebar.MissionList.28833b5212', 'Add projects')}
             </DropdownMenuItem>
@@ -166,7 +237,12 @@ function MissionSection({
           </DropdownMenuContent>
         </DropdownMenu>
       </div>
-      {!collapsed ? <MissionMemberRows mission={mission} /> : null}
+      {!collapsed ? (
+        <div className="flex flex-col gap-0.5">
+          <MissionSessionRow mission={mission} />
+          <MissionMemberRows mission={mission} />
+        </div>
+      ) : null}
     </div>
   )
 }

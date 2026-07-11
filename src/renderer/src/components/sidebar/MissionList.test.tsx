@@ -11,6 +11,7 @@ vi.mock('@/store', async () => {
 
 import { useAppStore } from '@/store'
 import { TEST_REPO } from '@/store/slices/store-test-helpers'
+import { TooltipProvider } from '@/components/ui/tooltip'
 import MissionList from './MissionList'
 
 let root: Root | null = null
@@ -20,9 +21,25 @@ function renderMissionList(): HTMLDivElement {
   document.body.appendChild(container)
   root = createRoot(container)
   act(() => {
-    root?.render(<MissionList />)
+    root?.render(
+      <TooltipProvider>
+        <MissionList />
+      </TooltipProvider>
+    )
   })
   return container
+}
+
+function seedMissionListState(state: object): void {
+  act(() => {
+    ;(useAppStore as unknown as { setState: (s: object) => void }).setState({
+      repos: [TEST_REPO],
+      missions: [],
+      folderWorkspaces: [],
+      worktreesByRepo: {},
+      ...state
+    })
+  })
 }
 
 describe('MissionList', () => {
@@ -39,15 +56,70 @@ describe('MissionList', () => {
   })
 
   it('shows the empty state without missions', () => {
-    act(() => {
-      ;(useAppStore as unknown as { setState: (s: object) => void }).setState({
-        repos: [TEST_REPO],
-        missions: []
-      })
+    seedMissionListState({
+      missions: []
     })
     const container = renderMissionList()
     expect(container.textContent).toContain('No missions yet')
     expect(container.textContent).toContain('New Mission')
+  })
+
+  it('offers to open the mission session when none exists yet', () => {
+    const mission: Mission = {
+      id: 'm1',
+      name: 'Referral',
+      branchName: 'mission/referral',
+      members: [],
+      tabOrder: 0,
+      createdAt: 1,
+      updatedAt: 1
+    }
+    seedMissionListState({
+      missions: [mission],
+      folderWorkspaces: []
+    })
+    const container = renderMissionList()
+    expect(container.textContent).toContain('Open mission session')
+  })
+
+  it('renders the session card when the mission session workspace exists', () => {
+    const mission: Mission = {
+      id: 'm1',
+      name: 'Referral',
+      branchName: 'mission/referral',
+      members: [],
+      tabOrder: 0,
+      rootPath: '/tmp/orca/missions/referral',
+      createdAt: 1,
+      updatedAt: 1
+    }
+    seedMissionListState({
+      missions: [mission],
+      folderWorkspaces: [
+        {
+          id: 'fw-1',
+          projectGroupId: 'mission:m1',
+          missionId: 'm1',
+          name: 'Referral',
+          folderPath: '/tmp/orca/missions/referral',
+          connectionId: null,
+          linkedTask: null,
+          comment: '',
+          isArchived: false,
+          isUnread: false,
+          isPinned: false,
+          sortOrder: 1,
+          lastActivityAt: 0,
+          createdAt: 1,
+          updatedAt: 1
+        }
+      ]
+    })
+    const container = renderMissionList()
+    expect(container.textContent).not.toContain('Open mission session')
+    expect(
+      container.querySelector('[data-worktree-card-meta-row], [class*="rounded"]')
+    ).toBeTruthy()
   })
 
   it('renders a mission header with member count and a recreate row for missing worktrees', () => {
@@ -60,11 +132,8 @@ describe('MissionList', () => {
       createdAt: 1,
       updatedAt: 1
     }
-    act(() => {
-      ;(useAppStore as unknown as { setState: (s: object) => void }).setState({
-        repos: [TEST_REPO],
-        missions: [mission]
-      })
+    seedMissionListState({
+      missions: [mission]
     })
     const container = renderMissionList()
     expect(container.textContent).toContain('Referral')

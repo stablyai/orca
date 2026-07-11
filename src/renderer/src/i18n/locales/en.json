@@ -4704,7 +4704,8 @@
           "d56fdff6c8": "Rename Mission",
           "8d3abfb48a": "Mission Name",
           "7f94e6c670": "Save",
-          "955a21f262": "Mission options"
+          "955a21f262": "Mission options",
+          "63a40a4f99": "Open mission session"
         },
         "MissionMemberErrorCopy": {
           "c8affe1f4b": "This repository has no commits or default branch yet. Make an initial commit (or set a default branch in Project Settings), then retry."
