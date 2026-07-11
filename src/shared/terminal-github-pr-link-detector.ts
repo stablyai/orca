@@ -9,6 +9,7 @@
  */
 import type { RepoSlug } from './github-links'
 import { parseGitHubIssueOrPRLink } from './github-links'
+import { stripTerminalControls } from './terminal-controls'
 
 const GITHUB_PR_PATH_MARKER = '/pull/'
 const HTTP_SCHEME_PREFIXES = ['https://', 'http://'] as const
@@ -28,6 +29,9 @@ function trimTerminalUrl(candidate: string): string {
 
 function parseTerminalGitHubPRUrl(candidate: string): TerminalGitHubPRLink | null {
   const url = trimTerminalUrl(candidate)
+  if (url.includes('[')) {
+    return null
+  }
   const parsed = parseGitHubIssueOrPRLink(url)
   if (!parsed || parsed.type !== 'pr') {
     return null
@@ -128,10 +132,11 @@ export function createTerminalGitHubPRLinkDetector(): (data: string) => Terminal
   const seenUrls = new Set<string>()
 
   return (data: string): TerminalGitHubPRLink[] => {
-    const combined = carry ? carry + data : data
+    const rawCombined = carry ? carry + data : data
+    const combined = stripTerminalControls(rawCombined)
 
     if (!combined.includes(GITHUB_PR_PATH_MARKER)) {
-      carry = getPotentialGitHubPRCarry(combined)
+      carry = getPotentialGitHubPRCarry(rawCombined)
       return []
     }
 
@@ -154,7 +159,7 @@ export function createTerminalGitHubPRLinkDetector(): (data: string) => Terminal
       links.push(parsed)
     }
 
-    carry = getPotentialGitHubPRCarry(combined)
+    carry = getPotentialGitHubPRCarry(rawCombined)
     return links
   }
 }
