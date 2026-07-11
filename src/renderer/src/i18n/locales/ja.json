@@ -462,7 +462,7 @@
         "bot": {
           "author": {
             "overrides": {
-              "6d5d52b53f": "Bot author override limit reached"
+              "6d5d52b53f": "ボット作成者の上書き数が上限に達しました"
             }
           }
         }

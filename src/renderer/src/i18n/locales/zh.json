@@ -462,7 +462,7 @@
         "bot": {
           "author": {
             "overrides": {
-              "6d5d52b53f": "Bot author override limit reached"
+              "6d5d52b53f": "已达到机器人作者覆盖上限"
             }
           }
         }

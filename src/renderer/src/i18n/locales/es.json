@@ -462,7 +462,7 @@
         "bot": {
           "author": {
             "overrides": {
-              "6d5d52b53f": "Bot author override limit reached"
+              "6d5d52b53f": "Se alcanzó el límite de autores de bots personalizados"
             }
           }
         }
