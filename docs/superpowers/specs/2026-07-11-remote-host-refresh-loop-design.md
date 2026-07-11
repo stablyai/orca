@@ -142,6 +142,6 @@ Exact timestamps are regenerated on every write and therefore cannot establish i
 
 ## Delivery
 
-- One implementation PR from `bbingz/fix-8272-remote-host-refresh-loop` to `stablyai/orca:main`.
+- One implementation PR from the feature branch to the upstream default branch.
 - The PR body uses `Fixes #8272` and contains only sanitized reproduction evidence.
 - Commits remain scoped to the design/specification, tests, shared persistence behavior, and necessary call-site integration.

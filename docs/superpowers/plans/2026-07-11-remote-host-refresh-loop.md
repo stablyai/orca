@@ -10,7 +10,7 @@
 
 ## Global Constraints
 
-- Run every Node-based command with `PATH=/opt/homebrew/opt/node@24/bin:$PATH`.
+- Run every Node-based command with the repository-required Node 24 toolchain.
 - Do not modify `WorktreeList.tsx`, Smart ordering classes, pairing, heartbeat, transport, UI preferences, or protocol schemas.
 - Keep local `worktrees:persistSortOrder` return behavior `void`; keep runtime `worktree.persistSortOrder` returning `{ updated: number }`.
 - Do not add max-lines suppressions or increase baseline entries.
@@ -56,7 +56,7 @@ it('preserves a runtime catalog when an older local refresh finishes last', asyn
 Run:
 
 ```bash
-PATH=/opt/homebrew/opt/node@24/bin:$PATH pnpm exec vitest run \
+pnpm exec vitest run \
   --config config/vitest.config.ts \
   src/renderer/src/store/slices/repos-stale-fetch.test.ts
 ```
@@ -131,7 +131,7 @@ Seed `getWorktreeMeta` with finite descending values. Add a second test for `ord
 Run:
 
 ```bash
-PATH=/opt/homebrew/opt/node@24/bin:$PATH pnpm exec vitest run \
+pnpm exec vitest run \
   --config config/vitest.config.ts \
   src/main/runtime/orca-runtime-sort-order.test.ts \
   src/main/ipc/worktrees-sort-order.test.ts
@@ -225,7 +225,7 @@ The shorter delegation must leave `src/main/ipc/worktrees.ts` at or below its `o
 Run:
 
 ```bash
-PATH=/opt/homebrew/opt/node@24/bin:$PATH pnpm exec vitest run \
+pnpm exec vitest run \
   --config config/vitest.config.ts \
   src/main/worktree-sort-order-persistence.test.ts \
   src/main/runtime/orca-runtime-sort-order.test.ts \
@@ -273,7 +273,7 @@ git commit -m "fix: stop remote sort-order refresh loops"
 - [ ] **Step 1: Run focused behavioral tests**
 
 ```bash
-PATH=/opt/homebrew/opt/node@24/bin:$PATH pnpm exec vitest run \
+pnpm exec vitest run \
   --config config/vitest.config.ts \
   src/renderer/src/store/slices/repos-all-hosts.test.ts \
   src/renderer/src/store/slices/repos-stale-fetch.test.ts \
@@ -293,10 +293,10 @@ Expected: all selected files pass with zero failed tests.
 - [ ] **Step 2: Run repository gates**
 
 ```bash
-PATH=/opt/homebrew/opt/node@24/bin:$PATH pnpm lint
-PATH=/opt/homebrew/opt/node@24/bin:$PATH pnpm typecheck
-PATH=/opt/homebrew/opt/node@24/bin:$PATH pnpm check:max-lines-ratchet
-PATH=/opt/homebrew/opt/node@24/bin:$PATH pnpm build
+pnpm lint
+pnpm typecheck
+pnpm check:max-lines-ratchet
+pnpm build
 git diff --check origin/main...HEAD
 ```
 
