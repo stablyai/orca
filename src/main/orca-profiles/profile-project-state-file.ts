@@ -123,13 +123,20 @@ export function rebuildRepoBackedProjectState(state: TransferProfileState): Tran
     }))
   const projectedProjects = projection.projects.map((project) => {
     const existingProject = existingProjectsById.get(project.id)
-    return existingProject?.localWindowsRuntimePreference
+    const withRuntimePreference = existingProject?.localWindowsRuntimePreference
       ? {
           ...project,
           localWindowsRuntimePreference: existingProject.localWindowsRuntimePreference,
           updatedAt: Math.max(project.updatedAt, existingProject.updatedAt)
         }
       : project
+    return existingProject?.defaultShell
+      ? {
+          ...withRuntimePreference,
+          defaultShell: existingProject.defaultShell,
+          updatedAt: Math.max(withRuntimePreference.updatedAt, existingProject.updatedAt)
+        }
+      : withRuntimePreference
   })
   return {
     ...state,

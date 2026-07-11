@@ -71,6 +71,7 @@ import {
   deriveGlobalWindowsRuntimeDefaultFromLegacySettings,
   normalizeProjectRuntimePreference
 } from '../shared/project-execution-runtime'
+import { normalizeProjectDefaultShell } from '../shared/project-default-shell'
 import { projectHostSetupProjectionFromRepos } from '../shared/project-host-setup-projection'
 import type { GitRemoteIdentity } from '../shared/git-remote-identity'
 import {
@@ -2354,13 +2355,20 @@ function mergeProjectHostSetupCompatibilityState(
     }))
   const projectedProjects = projection.projects.map((project) => {
     const existingProject = existingProjectsById.get(project.id)
-    return existingProject?.localWindowsRuntimePreference
+    const withRuntimePreference = existingProject?.localWindowsRuntimePreference
       ? {
           ...project,
           localWindowsRuntimePreference: existingProject.localWindowsRuntimePreference,
           updatedAt: Math.max(project.updatedAt, existingProject.updatedAt)
         }
       : project
+    return existingProject?.defaultShell
+      ? {
+          ...withRuntimePreference,
+          defaultShell: existingProject.defaultShell,
+          updatedAt: Math.max(withRuntimePreference.updatedAt, existingProject.updatedAt)
+        }
+      : withRuntimePreference
   })
   return {
     projects: [...projectedProjects, ...independentProjects],
@@ -3783,6 +3791,13 @@ export class Store {
         project.localWindowsRuntimePreference = normalizeProjectRuntimePreference(
           updates.localWindowsRuntimePreference
         )
+      }
+    }
+    if ('defaultShell' in updates) {
+      if (updates.defaultShell === undefined) {
+        delete project.defaultShell
+      } else {
+        project.defaultShell = normalizeProjectDefaultShell(updates.defaultShell)
       }
     }
     project.updatedAt = Date.now()

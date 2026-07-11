@@ -479,6 +479,7 @@ function mergeProjectCompatibilityProject(base: Project, overlay: Project): Proj
     'localWindowsRuntimePreference' in overlay
       ? overlay.localWindowsRuntimePreference
       : base.localWindowsRuntimePreference
+  const defaultShell = 'defaultShell' in overlay ? overlay.defaultShell : base.defaultShell
   const project: Project = {
     ...base,
     ...overlay,
@@ -492,6 +493,11 @@ function mergeProjectCompatibilityProject(base: Project, overlay: Project): Proj
     delete project.localWindowsRuntimePreference
   } else {
     project.localWindowsRuntimePreference = localWindowsRuntimePreference
+  }
+  if (defaultShell === undefined) {
+    delete project.defaultShell
+  } else {
+    project.defaultShell = defaultShell
   }
   return project
 }
@@ -531,6 +537,16 @@ function mergeUpdatedProjectCompatibilityProject(
       delete project.localWindowsRuntimePreference
     } else {
       project.localWindowsRuntimePreference = localWindowsRuntimePreference
+    }
+  }
+  if ('defaultShell' in updates) {
+    const defaultShell = 'defaultShell' in updated ? updated.defaultShell : updates.defaultShell
+    // Why: project.update returns one host's project record, but preference
+    // clears must still override the cross-host metadata preservation merge.
+    if (defaultShell === undefined) {
+      delete project.defaultShell
+    } else {
+      project.defaultShell = defaultShell
     }
   }
   return project
@@ -611,6 +627,23 @@ function mergePreviousProjectMetadata(
     // Why: remote runtimes can have their own local Windows preference; they must
     // not overwrite the client-local project runtime setting.
     project.localWindowsRuntimePreference = previous.localWindowsRuntimePreference
+  }
+  if (hostId === LOCAL_EXECUTION_HOST_ID) {
+    // Why: `defaultShell` belongs to the local host; a local refresh that
+    // omits it is authoritative and should clear stale renderer state.
+    if ('defaultShell' in current) {
+      if (current.defaultShell === undefined) {
+        delete project.defaultShell
+      } else {
+        project.defaultShell = current.defaultShell
+      }
+    } else {
+      delete project.defaultShell
+    }
+  } else if (previous.defaultShell !== undefined) {
+    // Why: remote runtimes can have their own default shell; they must not
+    // overwrite the client-local project shell setting.
+    project.defaultShell = previous.defaultShell
   }
   return {
     ...project,

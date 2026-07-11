@@ -711,7 +711,8 @@ const LocalWindowsRuntimePreferenceIpcArgs = z.discriminatedUnion('kind', [
 const ProjectUpdateIpcArgs = z.object({
   projectId: z.string().min(1),
   updates: z.object({
-    localWindowsRuntimePreference: LocalWindowsRuntimePreferenceIpcArgs.optional()
+    localWindowsRuntimePreference: LocalWindowsRuntimePreferenceIpcArgs.optional(),
+    defaultShell: z.enum(['inherit', 'powershell', 'wsl', 'cmd', 'git-bash']).optional()
   })
 })
 
