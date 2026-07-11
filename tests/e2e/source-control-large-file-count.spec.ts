@@ -102,15 +102,34 @@ async function addAndActivateRepo(orcaPage: Page, repoPath: string): Promise<str
   )
 
   // Why: repo activation can finish sidebar routing after the store mutation;
-  // enter Source Control through the visible control before timing its render.
+  // assert the user-visible panel before timing its render. Clicking the
+  // already-active activity button races the first cold status scan and tests
+  // Playwright's two-frame actionability window instead of panel readiness.
   const sourceControlButton = orcaPage.getByRole('button', { name: /^Source Control/ })
   await expect(sourceControlButton).toBeVisible()
-  await sourceControlButton.click()
   await expect
     .poll(() => orcaPage.evaluate(() => window.__store?.getState().rightSidebarTab))
     .toBe('source-control')
+  await expect(orcaPage.getByRole('button', { name: 'Filter files by name' })).toBeVisible()
 
   return worktreeId
+}
+
+async function unregisterLargeFileCountRepos(
+  orcaPage: Page,
+  repoPaths: readonly string[]
+): Promise<void> {
+  // Why: remove disposable projects through the product so their terminals
+  // and watcher subscriptions begin shutting down before Electron teardown.
+  for (const repoPath of repoPaths) {
+    await orcaPage.evaluate(async (pathToRepo) => {
+      const store = window.__store
+      const repo = store?.getState().repos.find((entry) => entry.path === pathToRepo)
+      if (repo) {
+        await store?.getState().removeProject(repo.id)
+      }
+    }, repoPath)
+  }
 }
 
 /**
@@ -242,7 +261,8 @@ test.describe('Source Control large file count (#8013)', () => {
 
   test('thousands of untracked files under the status cap stay responsive', async ({
     orcaPage,
-    electronApp
+    electronApp,
+    registerPostElectronShutdownCleanup
   }) => {
     test.setTimeout(600_000)
     const untrackedFiles = Number(process.env.ORCA_LARGE_FILE_COUNT ?? '9500')
@@ -255,6 +275,7 @@ test.describe('Source Control large file count (#8013)', () => {
       untrackedFiles,
       untrackedFileBytes
     })
+    registerPostElectronShutdownCleanup(() => removeLargeFileCountRepo(fixture.repoPath))
     try {
       await waitForSessionReady(orcaPage)
       const worktreeId = await addAndActivateRepo(orcaPage, fixture.repoPath)
@@ -286,17 +307,19 @@ test.describe('Source Control large file count (#8013)', () => {
         )
       }
     } finally {
-      await removeLargeFileCountRepo(fixture.repoPath)
+      await unregisterLargeFileCountRepos(orcaPage, [fixture.repoPath])
     }
   })
 
   test('thousands of modified tracked files under the status cap stay responsive', async ({
     orcaPage,
-    electronApp
+    electronApp,
+    registerPostElectronShutdownCleanup
   }) => {
     test.setTimeout(600_000)
     const modifiedFiles = Number(process.env.ORCA_LARGE_FILE_COUNT ?? '5000')
     const fixture = createLargeFileCountRepo({ trackedFiles: modifiedFiles, modifiedFiles })
+    registerPostElectronShutdownCleanup(() => removeLargeFileCountRepo(fixture.repoPath))
     try {
       await waitForSessionReady(orcaPage)
       const worktreeId = await addAndActivateRepo(orcaPage, fixture.repoPath)
@@ -319,17 +342,19 @@ test.describe('Source Control large file count (#8013)', () => {
       expect(measurement.renderedRows).toBeLessThan(MAX_MOUNTED_ROWS)
       expect(measurement.maxLagMs).toBeLessThan(MAX_EVENT_LOOP_LAG_MS)
     } finally {
-      await removeLargeFileCountRepo(fixture.repoPath)
+      await unregisterLargeFileCountRepos(orcaPage, [fixture.repoPath])
     }
   })
 
   test('a change set over the status cap degrades to the too-many-changes state', async ({
     orcaPage,
-    electronApp
+    electronApp,
+    registerPostElectronShutdownCleanup
   }) => {
     test.setTimeout(600_000)
     const untrackedFiles = DEFAULT_GIT_STATUS_LIMIT + 1_000
     const fixture = createLargeFileCountRepo({ trackedFiles: 100, untrackedFiles })
+    registerPostElectronShutdownCleanup(() => removeLargeFileCountRepo(fixture.repoPath))
     try {
       await waitForSessionReady(orcaPage)
       const worktreeId = await addAndActivateRepo(orcaPage, fixture.repoPath)
@@ -361,11 +386,14 @@ test.describe('Source Control large file count (#8013)', () => {
       )
       expect(hugeState).not.toBeNull()
     } finally {
-      await removeLargeFileCountRepo(fixture.repoPath)
+      await unregisterLargeFileCountRepos(orcaPage, [fixture.repoPath])
     }
   })
 
-  test('untracked line-stat cache stays effective above 2,048 files', async ({ orcaPage }) => {
+  test('untracked line-stat cache stays effective above 2,048 files', async ({
+    orcaPage,
+    registerPostElectronShutdownCleanup
+  }) => {
     test.setTimeout(600_000)
     // Why: the untracked line-stat cache historically capped at 2,048 entries
     // with FIFO eviction, so a sequential scan over more files evicted every
@@ -380,6 +408,7 @@ test.describe('Source Control large file count (#8013)', () => {
       untrackedFiles: 2_000,
       untrackedFileBytes: fileBytes
     })
+    registerPostElectronShutdownCleanup(() => removeLargeFileCountRepo(smallRepo.repoPath))
     let largeRepo: ReturnType<typeof createLargeFileCountRepo> | null = null
     try {
       largeRepo = createLargeFileCountRepo({
@@ -387,6 +416,8 @@ test.describe('Source Control large file count (#8013)', () => {
         untrackedFiles: 4_000,
         untrackedFileBytes: fileBytes
       })
+      const largeRepoPath = largeRepo.repoPath
+      registerPostElectronShutdownCleanup(() => removeLargeFileCountRepo(largeRepoPath))
       await waitForSessionReady(orcaPage)
 
       const warmRescanPerFileMs = async (repoPath: string, files: number): Promise<number> => {
@@ -407,20 +438,22 @@ test.describe('Source Control large file count (#8013)', () => {
       )
       expect(largePerFileMs).toBeLessThan(smallPerFileMs * 2)
     } finally {
-      await removeLargeFileCountRepo(smallRepo.repoPath)
-      if (largeRepo) {
-        await removeLargeFileCountRepo(largeRepo.repoPath)
-      }
+      await unregisterLargeFileCountRepos(orcaPage, [
+        smallRepo.repoPath,
+        ...(largeRepo ? [largeRepo.repoPath] : [])
+      ])
     }
   })
 
   test('a large clean repo (tracked files only) loads instantly', async ({
     orcaPage,
-    electronApp
+    electronApp,
+    registerPostElectronShutdownCleanup
   }) => {
     test.setTimeout(600_000)
     const trackedFiles = Number(process.env.ORCA_LARGE_FILE_COUNT ?? '15000')
     const fixture = createLargeFileCountRepo({ trackedFiles })
+    registerPostElectronShutdownCleanup(() => removeLargeFileCountRepo(fixture.repoPath))
     try {
       await waitForSessionReady(orcaPage)
       const worktreeId = await addAndActivateRepo(orcaPage, fixture.repoPath)
@@ -440,7 +473,7 @@ test.describe('Source Control large file count (#8013)', () => {
       expect(measurement.entryCount).toBe(0)
       expect(measurement.maxLagMs).toBeLessThan(MAX_EVENT_LOOP_LAG_MS)
     } finally {
-      await removeLargeFileCountRepo(fixture.repoPath)
+      await unregisterLargeFileCountRepos(orcaPage, [fixture.repoPath])
     }
   })
 })
