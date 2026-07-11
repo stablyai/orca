@@ -8,6 +8,8 @@ export type MobileE2EEAuth = {
   clientCapabilities?: unknown
   v?: 2
   transcriptHashB64?: string
+  // Why: optional marketing model from the phone so desktop can rename "Mobile <date>".
+  deviceName?: string
 }
 
 export function isValidMobileE2EEAuthVersion(
@@ -17,12 +19,12 @@ export function isValidMobileE2EEAuthVersion(
   if (!v2Session) {
     return auth.v === undefined && auth.transcriptHashB64 === undefined
   }
+  const keys = Object.keys(auth).sort().join(',')
   // Why: mobile v2 keeps an exact transcript-bound shape; runtime capabilities use legacy paired-runtime auth.
-  return (
-    Object.keys(auth).sort().join(',') === 'deviceToken,transcriptHashB64,type,v' &&
-    auth.v === 2 &&
-    auth.transcriptHashB64 === v2Session.transcriptHashB64
-  )
+  const allowed =
+    keys === 'deviceToken,transcriptHashB64,type,v' ||
+    keys === 'deviceName,deviceToken,transcriptHashB64,type,v'
+  return allowed && auth.v === 2 && auth.transcriptHashB64 === v2Session.transcriptHashB64
 }
 
 export function authenticateMobileE2EE<TDevice extends { deviceToken: string }>(args: {

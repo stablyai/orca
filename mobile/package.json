@@ -32,6 +32,7 @@
     "expo-constants": "^55.0.16",
     "expo-crypto": "^55.0.14",
     "expo-dev-client": "~55.0.35",
+    "expo-device": "^55.0.14",
     "expo-document-picker": "^55.0.13",
     "expo-file-system": "55.0.19",
     "expo-haptics": "^55.0.14",

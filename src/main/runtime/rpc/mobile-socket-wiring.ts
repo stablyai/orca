@@ -170,8 +170,12 @@ export class MobileSocketWiring {
           }
           this.authenticatedSockets.set(ws, socket)
           transport.setClientId(ws, device.deviceToken)
-          // Why: deferred — the client's e2ee_authenticated must not wait on a secure-file rewrite.
+// Why: deferred — the client's e2ee_authenticated must not wait on a secure-file rewrite.
           this.deviceRegistry.updateLastSeenDeferred(device.deviceId)
+          // Why: phone reports marketing model on auth so Settings stops showing QR-time "Mobile <date>".
+          if (channel.reportedDeviceName) {
+            this.deviceRegistry.updateName(device.deviceId, channel.reportedDeviceName)
+          }
           this.onReady?.(socket)
         },
         onError: (code, reason) => {

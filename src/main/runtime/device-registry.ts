@@ -273,6 +273,24 @@ export class DeviceRegistry {
     }
   }
 
+  // Why: mobile clients report a marketing model (e.g. "iPhone 15 Pro Max")
+  // during e2ee_auth. Replace the QR-time placeholder ("Mobile <date>") so
+  // Settings → Paired Devices is recognizable. No-op when the name is empty
+  // or unchanged so reconnects do not thrash the registry file.
+  updateName(deviceId: string, name: string): boolean {
+    const device = this.devices.find((d) => d.deviceId === deviceId)
+    if (!device) {
+      return false
+    }
+    const next = name.trim()
+    if (!next || next === device.name) {
+      return false
+    }
+    device.name = next
+    this.save()
+    return true
+  }
+
   private load(): void {
     if (!existsSync(this.registryPath)) {
       this.devices = []

@@ -13,6 +13,7 @@ import {
 import type { RpcClient } from './rpc-client'
 import { connectionLogStore } from './connection-log-buffer'
 import { subscribeConnectionRevivalTriggers } from './connection-revival-triggers'
+import { resolveMobileDeviceDisplayName } from './device-identity'
 import { HostClientOpenRegistry } from './host-client-open-registry'
 import { loadHosts } from './host-store'
 import { openHostLogicalClient } from './host-logical-client'
@@ -133,7 +134,9 @@ export function RpcClientProvider({ children }: { children: ReactNode }) {
 
       let client: RpcClient
       try {
-        client = openHostLogicalClient(host, (entry) => connectionLogStore.append(hostId, entry))
+        client = openHostLogicalClient(host, (entry) => connectionLogStore.append(hostId, entry), {
+          deviceName: resolveMobileDeviceDisplayName()
+        })
       } catch {
         // Why: openHostLogicalClient can throw synchronously (bad public key / invalid URL); notify so the UI leaves 'connecting'.
         notifyHostState(hostId, 'disconnected')

@@ -134,6 +134,9 @@ export type ConnectOptions = {
   onStateChange?: (state: ConnectionState) => void
   // Fires for every lifecycle event so the UI can show where 'Connecting…' is stuck (e.g. broken Tailscale route).
   onLog?: ConnectionLogSink
+  // Why: the caller owns platform metadata so this transport stays usable in
+  // non-React-Native tests and tools without importing native modules.
+  deviceName?: string
 }
 
 export function connect(
@@ -149,6 +152,7 @@ export function connect(
       : (optionsOrLegacy ?? {})
   const onStateChange = options.onStateChange
   const onLog = options.onLog
+  const deviceName = options.deviceName
   let logCounter = 0
   function emitLog(level: ConnectionLogLevel, message: string, detail?: string) {
     if (!onLog) {
@@ -395,7 +399,14 @@ export function connect(
           const msg = JSON.parse(raw)
           if (msg.type === 'e2ee_ready') {
             emitLog('success', 'Received e2ee_ready', 'Sending device token')
-            sendEncrypted({ type: 'e2ee_auth', deviceToken })
+            // Why: report the marketing model (e.g. "iPhone 15 Pro Max") so the
+            // desktop Paired Devices list can replace the QR-time placeholder
+            // name "Mobile <date>". Optional on the wire for older desktops.
+            sendEncrypted({
+              type: 'e2ee_auth',
+              deviceToken,
+              ...(deviceName ? { deviceName } : {})
+            })
             return
           }
         } catch {

@@ -194,6 +194,22 @@ describe('mobile rpc-client connection timeout', () => {
     client.close()
   })
 
+  it('includes the supplied device name in encrypted auth', () => {
+    const client = connect('ws://desktop.invalid', 'token', 'server-key', {
+      deviceName: 'iPhone 15 Pro Max'
+    })
+    const socket = mockSockets[0]!
+
+    socket.open()
+    socket.receive(JSON.stringify({ type: 'e2ee_ready' }))
+
+    expect(socket.sent).toContain(
+      'encrypted:{"type":"e2ee_auth","deviceToken":"token","deviceName":"iPhone 15 Pro Max"}'
+    )
+
+    client.close()
+  })
+
   it('sends session tabs unsubscribe when a session tab stream is disposed', () => {
     const client = connect('ws://desktop.invalid', 'token', 'server-key')
     const socket = mockSockets[0]!
