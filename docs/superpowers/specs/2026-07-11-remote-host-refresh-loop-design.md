@@ -2,7 +2,7 @@
 
 **Issue:** [#8272](https://github.com/stablyai/orca/issues/8272)
 
-**Review state:** The implementation direction was approved on 2026-07-11; this written specification is awaiting final review before implementation planning.
+**Review state:** Approved for implementation on 2026-07-11 after an independent Grok review.
 
 ## Problem
 
@@ -37,6 +37,7 @@ The incident exposed two related defects:
 - `WorktreeList.tsx` remains unchanged; it is already grandfathered by the max-lines ratchet.
 - Existing runtime error behavior remains unchanged: an unavailable store still raises `runtime_unavailable`, and malformed RPC input remains rejected by the existing schema.
 - The public issue, tests, commit, and PR must omit network addresses, usernames, hostnames, local paths, runtime/device IDs, and repository names from the observed environment.
+- The owner runtime performs the remote metadata write. Dual-host validation and release notes must make clear that updating only the client does not stop the loop against an older runtime; both test hosts must run a build containing the fix.
 
 ## Design
 
@@ -59,17 +60,21 @@ export function persistWorktreeSortOrderIfChanged(
 
 The requested order is already persisted when every requested worktree has a finite `sortOrder` and those values are strictly descending in `orderedIds` order. Strict descent matters: equal or missing values cannot reliably restore the requested order after restart.
 
+Strict descent is the complete idempotency contract; existing values do not need to be exactly 1000 milliseconds apart. A one-item request with any finite `sortOrder` is already persisted. Empty input returns `{ updated: 0 }`. Missing, non-finite, tied, or non-descending values force a full rewrite of the requested IDs.
+
 When the order is already persisted, the function returns `{ updated: 0 }` without calling `setWorktreeMeta`. Otherwise it assigns `now - index * 1000` to every requested ID and returns the number written. Comparing relative order instead of exact timestamps makes repeated calls idempotent while preserving the existing cold-start ordering representation.
 
-The function intentionally evaluates only the IDs in the request. Hidden, archived, or other-host worktrees are outside that host-specific ordering request and must not force a rewrite.
+The function intentionally evaluates only the IDs in the request. Hidden, archived, or other-host worktrees are outside that host-specific ordering request and must not force a rewrite. The production caller supplies unique IDs; duplicate-ID validation is outside this change, so duplicate requests retain the existing rewrite behavior rather than gaining new protocol semantics.
 
 ### Local IPC integration
 
-Replace the timestamp loop in `worktrees:persistSortOrder` with the shared function. The handler keeps its existing empty-input guard and return behavior. Local persistence does not emit a catalog event today, and this design does not add one; it only avoids redundant metadata writes.
+Replace the timestamp loop in `worktrees:persistSortOrder` with the shared function. The handler keeps its existing empty-input guard and `void` return behavior; it must not change the preload contract merely to match the runtime RPC result. Local persistence does not emit a catalog event today, and this design does not add one; it only avoids redundant metadata writes.
 
 ### Runtime RPC integration
 
 Replace `OrcaRuntimeService.persistManagedWorktreeSortOrder`'s timestamp loop with the shared function. When `updated === 0`, return immediately without invalidating the resolved-worktree cache or calling `notifyReposChanged()`. When `updated > 0`, retain the current cache invalidation and notification behavior exactly once.
+
+Unlike the local IPC handler, the runtime method currently reaches cache invalidation and notification for an empty array. The shared function's `{ updated: 0 }` result must make that path an explicit no-op, and a runtime-level test must cover it.
 
 This terminates the feedback loop after at most one confirming no-op request:
 
@@ -100,6 +105,7 @@ The test guards the latest-state merge already present on `main`. It should fail
 - Repeating the same effective order returns `updated: 0`, performs no writes, and emits no second notification.
 - Reordering the same IDs writes again and emits one new notification.
 - Missing or tied stored order values are rewritten because they do not encode a stable requested order.
+- An empty runtime request returns `updated: 0` without cache invalidation or notification, while the local IPC handler remains `void` and keeps its existing early return.
 
 The repeated-order runtime test must fail against the pre-change implementation before production code is modified.
 
@@ -116,7 +122,7 @@ The repeated-order runtime test must fail against the pre-change implementation 
 - `pnpm typecheck`
 - `pnpm check:max-lines-ratchet`
 - `git diff --check`
-- A sanitized dual-host smoke test when a build containing the change is available; if no installable build is produced locally, record that limitation in the PR.
+- A sanitized dual-host smoke test with both client and owner runtime running a build containing the change; if no installable build is produced locally, record that limitation in the PR.
 
 All Node-based checks must run with the repository-required Node 24 toolchain.
 
