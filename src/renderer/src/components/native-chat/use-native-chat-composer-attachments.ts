@@ -19,6 +19,8 @@ export type UseNativeChatComposerAttachmentsArgs = {
   setNotice: (notice: string | null) => void
 }
 
+type AttachResolvedPathOptions = { allowRemotePaths?: boolean }
+
 export function useNativeChatComposerAttachments({
   attachmentScopeKey,
   caret,
@@ -30,7 +32,7 @@ export function useNativeChatComposerAttachments({
 }: UseNativeChatComposerAttachmentsArgs): {
   imageAttachments: NativeChatComposerImageAttachment[]
   appendImageAttachments: (paths: string[]) => void
-  attachResolvedPaths: (paths: string[]) => void
+  attachResolvedPaths: (paths: string[], options?: AttachResolvedPathOptions) => void
   clearImageAttachments: () => void
   removeImageAttachment: (id: string) => void
 } {
@@ -105,9 +107,12 @@ export function useNativeChatComposerAttachments({
   // already-uploaded remote paths for SSH worktrees (the composer uploads
   // before calling this — see native-chat-attachment-upload.ts).
   const attachResolvedPaths = useCallback(
-    (paths: string[]) => {
+    (paths: string[], options?: AttachResolvedPathOptions) => {
       const target = resolveTarget()
-      if (!target || nativeChatComposerTargetIsRemote(target.ptyId)) {
+      if (
+        !target ||
+        (nativeChatComposerTargetIsRemote(target.ptyId) && !options?.allowRemotePaths)
+      ) {
         setNotice(
           translate(
             'components.native-chat.composer.localAttachmentUnsupported',

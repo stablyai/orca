@@ -5,6 +5,7 @@ import {
   shouldInspectWindowsAgentForeground,
   type AgentForegroundResolutionOptions
 } from './windows-agent-foreground-process'
+import { getLinuxProcessTreeSnapshot } from './linux-process-tree'
 
 export type { AgentForegroundResolutionOptions } from './windows-agent-foreground-process'
 
@@ -58,7 +59,10 @@ export async function resolveAgentForegroundProcess(
   }
 
   try {
-    const rows = await getProcessTableSnapshot()
+    const rows =
+      process.platform === 'linux'
+        ? await getLinuxProcessTreeSnapshot(shellPid)
+        : await getProcessTableSnapshot()
     return resolveAgentForegroundProcessFromPs(rows, shellPid) ?? fallbackProcess
   } catch {
     // Fall through to node-pty's process name. Foreground process inspection is

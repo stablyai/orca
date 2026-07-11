@@ -18,7 +18,12 @@ describe('automation RPC methods', () => {
       updateAutomation: vi.fn().mockResolvedValue({ id: 'auto-1', name: 'Paused' }),
       deleteAutomation: vi.fn().mockReturnValue({ removed: true, id: 'auto-1' }),
       runAutomationNow: vi.fn().mockResolvedValue({ id: 'run-1', automationId: 'auto-1' }),
-      listAutomationRuns: vi.fn().mockReturnValue([{ id: 'run-1', automationId: 'auto-1' }])
+      listAutomationRuns: vi.fn().mockReturnValue([{ id: 'run-1', automationId: 'auto-1' }]),
+      listExternalAutomationManagers: vi.fn().mockResolvedValue([{ id: 'hermes:local' }]),
+      listExternalAutomationRuns: vi.fn().mockResolvedValue({ runs: [] }),
+      createExternalAutomation: vi.fn().mockResolvedValue(undefined),
+      updateExternalAutomation: vi.fn().mockResolvedValue(undefined),
+      runExternalAutomationAction: vi.fn().mockResolvedValue(undefined)
     } as unknown as OrcaRuntimeService
     const dispatcher = new RpcDispatcher({ runtime, methods: AUTOMATION_METHODS })
 
@@ -69,6 +74,24 @@ describe('automation RPC methods', () => {
     await dispatcher.dispatch(makeRequest('automation.delete', { id: 'auto-1' }))
     await dispatcher.dispatch(makeRequest('automation.runNow', { id: 'auto-1' }))
     await dispatcher.dispatch(makeRequest('automation.runs', { automationId: 'auto-1' }))
+    await dispatcher.dispatch(makeRequest('automation.externalManagers'))
+    await dispatcher.dispatch(
+      makeRequest('automation.externalRuns', {
+        managerId: 'hermes:runtime:gpu',
+        provider: 'hermes',
+        jobId: 'job-1',
+        page: 1,
+        pageSize: 25
+      })
+    )
+    await dispatcher.dispatch(
+      makeRequest('automation.externalAction', {
+        managerId: 'hermes:runtime:gpu',
+        provider: 'hermes',
+        jobId: 'job-1',
+        action: 'run'
+      })
+    )
 
     expect(runtime.listAutomations).toHaveBeenCalled()
     expect(runtime.showAutomation).toHaveBeenCalledWith('auto-1')
@@ -97,6 +120,13 @@ describe('automation RPC methods', () => {
     expect(runtime.deleteAutomation).toHaveBeenCalledWith('auto-1')
     expect(runtime.runAutomationNow).toHaveBeenCalledWith('auto-1')
     expect(runtime.listAutomationRuns).toHaveBeenCalledWith('auto-1')
+    expect(runtime.listExternalAutomationManagers).toHaveBeenCalled()
+    expect(runtime.listExternalAutomationRuns).toHaveBeenCalledWith(
+      expect.objectContaining({ jobId: 'job-1', page: 1, pageSize: 25 })
+    )
+    expect(runtime.runExternalAutomationAction).toHaveBeenCalledWith(
+      expect.objectContaining({ jobId: 'job-1', action: 'run' })
+    )
   })
 
   it('rejects unknown providers and invalid schedules', async () => {

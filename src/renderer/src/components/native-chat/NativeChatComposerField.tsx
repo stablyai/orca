@@ -14,6 +14,7 @@ import {
 import { NativeChatComposerActions } from './NativeChatComposerActions'
 import { nativeChatComposerPlaceholder } from './native-chat-composer-target'
 import type { DiscoveredSkill } from '../../../../shared/skills'
+import type { NativeChatCodexModelControlsProps } from './NativeChatCodexModelControls'
 
 export type NativeChatComposerFieldProps = {
   textareaRef: RefObject<HTMLTextAreaElement | null>
@@ -45,6 +46,7 @@ export type NativeChatComposerFieldProps = {
   onDictationHoldEnd: () => void
   onSend: () => void
   onStop?: () => void
+  codexModelControls?: NativeChatCodexModelControlsProps
 }
 
 export type NativeChatComposerImageAttachment = {
@@ -81,7 +83,8 @@ export function NativeChatComposerField({
   onDictationHoldStart,
   onDictationHoldEnd,
   onSend,
-  onStop
+  onStop,
+  codexModelControls
 }: NativeChatComposerFieldProps): React.JSX.Element {
   return (
     <div className="shrink-0 bg-background">
@@ -181,6 +184,7 @@ export function NativeChatComposerField({
                 onDictationHoldEnd={onDictationHoldEnd}
                 onSend={onSend}
                 onStop={onStop}
+                codexModelControls={codexModelControls}
               />
             </div>
           </div>

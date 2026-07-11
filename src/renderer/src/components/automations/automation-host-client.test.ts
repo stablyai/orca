@@ -3,6 +3,8 @@ import type { Automation, AutomationCreateInput } from '../../../../shared/autom
 import {
   createAutomationForTarget,
   getAutomationListTarget,
+  listExternalAutomationManagersForTarget,
+  runExternalAutomationActionForTarget,
   listAutomationsForTarget,
   runAutomationNowForTarget,
   updateAutomationForTarget
@@ -20,7 +22,12 @@ const mockApi = {
     create: vi.fn(),
     update: vi.fn(),
     delete: vi.fn(),
-    runNow: vi.fn()
+    runNow: vi.fn(),
+    listExternalManagers: vi.fn(),
+    listExternalRuns: vi.fn(),
+    createExternal: vi.fn(),
+    updateExternal: vi.fn(),
+    runExternalAction: vi.fn()
   }
 }
 
@@ -165,5 +172,76 @@ describe('automation host client', () => {
       { id: automation.id },
       { timeoutMs: 15_000 }
     )
+  })
+
+  it('routes Hermes managers and actions through the selected Orca runtime', async () => {
+    vi.mocked(callRuntimeRpc)
+      .mockResolvedValueOnce({
+        managers: [
+          {
+            id: 'hermes:local',
+            provider: 'hermes',
+            label: 'Hermes on this computer',
+            targetLabel: 'this computer',
+            target: { type: 'local' },
+            status: 'available',
+            error: null,
+            canManage: true,
+            jobs: [
+              {
+                id: 'job-1',
+                managerId: 'hermes:local',
+                provider: 'hermes',
+                name: 'Digest',
+                schedule: 'Hourly',
+                rawSchedule: '0 * * * *',
+                enabled: true,
+                state: 'active',
+                prompt: 'Digest',
+                promptPreview: 'Digest',
+                nextRunAt: null,
+                lastRunAt: null,
+                lastStatus: null,
+                lastError: null,
+                workdir: null,
+                runCount: 0,
+                runs: []
+              }
+            ]
+          }
+        ]
+      })
+      .mockResolvedValueOnce({ acted: true })
+
+    const managers = await listExternalAutomationManagersForTarget({
+      kind: 'environment',
+      environmentId: 'gpu'
+    })
+    await runExternalAutomationActionForTarget({
+      managerId: managers[0].id,
+      provider: 'hermes',
+      target: managers[0].target,
+      jobId: 'job-1',
+      action: 'run'
+    })
+
+    expect(managers[0]).toMatchObject({
+      id: 'hermes:runtime:gpu',
+      target: { type: 'runtime', environmentId: 'gpu' },
+      jobs: [{ managerId: 'hermes:runtime:gpu' }]
+    })
+    expect(callRuntimeRpc).toHaveBeenNthCalledWith(
+      2,
+      { kind: 'environment', environmentId: 'gpu' },
+      'automation.externalAction',
+      {
+        managerId: 'hermes:runtime:gpu',
+        provider: 'hermes',
+        jobId: 'job-1',
+        action: 'run'
+      },
+      { timeoutMs: 30_000 }
+    )
+    expect(mockApi.automations.runExternalAction).not.toHaveBeenCalled()
   })
 })

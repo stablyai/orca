@@ -20,7 +20,7 @@ export type NativeChatAttachmentOwner =
   | { kind: 'ssh'; connectionId: string; worktreePath: string }
   /** Runtime-owned (`remote:`) panes keep the composer's existing
    *  local-attachment block; runtime upload support is a separate seam. */
-  | { kind: 'runtime' }
+  | { kind: 'runtime'; environmentId: string }
   /** Store not hydrated / worktree unknown. Callers must not attach local
    *  paths in this window — the worktree may turn out to be remote, and the
    *  agent would silently receive paths it cannot read (see #6648). */
@@ -47,8 +47,9 @@ export function resolveNativeChatAttachmentOwner(
   if (!worktreeId) {
     return { kind: 'not-ready' }
   }
-  if (getRuntimeEnvironmentIdForWorktree(state, worktreeId)) {
-    return { kind: 'runtime' }
+  const runtimeEnvironmentId = getRuntimeEnvironmentIdForWorktree(state, worktreeId)
+  if (runtimeEnvironmentId) {
+    return { kind: 'runtime', environmentId: runtimeEnvironmentId }
   }
   const connectionId = getConnectionIdFromState(state, worktreeId)
   if (connectionId === undefined) {

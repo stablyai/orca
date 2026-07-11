@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import type { AppState } from '../types'
-import { createTestStore, makeUnifiedTab, makeTabGroup } from './store-test-helpers'
+import { createTestStore, makeUnifiedTab, makeTabGroup, makeTab } from './store-test-helpers'
 
 // Mock sonner (imported transitively by repos.ts via the full store).
 vi.mock('sonner', () => ({ toast: { info: vi.fn(), success: vi.fn(), error: vi.fn() } }))
@@ -19,6 +19,12 @@ function seedTwoLeafTabs(store: ReturnType<typeof createTestStore>): void {
   const left = makeUnifiedTab({ id: 'left-tab', worktreeId: WT, groupId: 'g-left' })
   const right = makeUnifiedTab({ id: 'right-tab', worktreeId: WT, groupId: 'g-right' })
   store.setState({
+    tabsByWorktree: {
+      [WT]: [
+        makeTab({ id: 'left-tab', worktreeId: WT }),
+        makeTab({ id: 'right-tab', worktreeId: WT })
+      ]
+    },
     unifiedTabsByWorktree: { [WT]: [left, right] },
     groupsByWorktree: {
       [WT]: [
@@ -43,6 +49,10 @@ function findTab(store: ReturnType<typeof createTestStore>, tabId: string) {
   return store.getState().unifiedTabsByWorktree[WT].find((tab) => tab.id === tabId)
 }
 
+function findTerminalTab(store: ReturnType<typeof createTestStore>, tabId: string) {
+  return store.getState().tabsByWorktree[WT].find((tab) => tab.id === tabId)
+}
+
 describe('tab view mode', () => {
   let store: ReturnType<typeof createTestStore>
 
@@ -56,16 +66,20 @@ describe('tab view mode', () => {
 
     store.getState().toggleTabViewMode('left-tab')
     expect(findTab(store, 'left-tab')?.viewMode).toBe('chat')
+    expect(findTerminalTab(store, 'left-tab')?.viewMode).toBe('chat')
 
     store.getState().toggleTabViewMode('left-tab')
     expect(findTab(store, 'left-tab')?.viewMode).toBe('terminal')
+    expect(findTerminalTab(store, 'left-tab')?.viewMode).toBe('terminal')
   })
 
   it('setTabViewMode sets an explicit mode', () => {
     store.getState().setTabViewMode('left-tab', 'chat')
     expect(findTab(store, 'left-tab')?.viewMode).toBe('chat')
+    expect(findTerminalTab(store, 'left-tab')?.viewMode).toBe('chat')
     store.getState().setTabViewMode('left-tab', 'terminal')
     expect(findTab(store, 'left-tab')?.viewMode).toBe('terminal')
+    expect(findTerminalTab(store, 'left-tab')?.viewMode).toBe('terminal')
   })
 
   it('mutates only the targeted tab, leaving a split sibling unchanged', () => {
@@ -74,6 +88,7 @@ describe('tab view mode', () => {
     expect(findTab(store, 'left-tab')?.viewMode).toBe('chat')
     // The sibling leaf's tab keeps its (default) view mode.
     expect(findTab(store, 'right-tab')?.viewMode).toBeUndefined()
+    expect(findTerminalTab(store, 'right-tab')?.viewMode).toBeUndefined()
   })
 
   it('is a no-op for an unknown tab id', () => {

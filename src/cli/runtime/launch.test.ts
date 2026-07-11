@@ -122,6 +122,38 @@ describe('serveOrcaApp', () => {
     )
   })
 
+  it('disables the Electron sandbox for a root-owned Linux server', async () => {
+    const platformDescriptor = Object.getOwnPropertyDescriptor(process, 'platform')
+    Object.defineProperty(process, 'platform', { configurable: true, value: 'linux' })
+    const getuidSpy = vi.spyOn(process, 'getuid').mockReturnValue(0)
+    const child = {
+      kill: vi.fn(),
+      once: vi.fn(
+        (event: string, handler: (code: number | null, signal: string | null) => void) => {
+          if (event === 'exit') {
+            queueMicrotask(() => handler(0, null))
+          }
+          return child
+        }
+      )
+    }
+    spawnMock.mockReturnValue(child)
+
+    try {
+      await expect(serveOrcaApp({ json: true })).resolves.toBe(0)
+      expect(spawnMock).toHaveBeenCalledWith(
+        '/Applications/Orca.app/Contents/MacOS/Orca',
+        ['--no-sandbox', '--serve', '--serve-json'],
+        expect.objectContaining({ cwd: resolve(__dirname, '../../..') })
+      )
+    } finally {
+      getuidSpy.mockRestore()
+      if (platformDescriptor) {
+        Object.defineProperty(process, 'platform', platformDescriptor)
+      }
+    }
+  })
+
   it('prints recipe JSON from a detached server child and exits', async () => {
     const child = new FakeChildProcess()
     spawnMock.mockReturnValue(child)

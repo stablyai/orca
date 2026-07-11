@@ -68,7 +68,7 @@ export function serveOrcaApp(
   } = {}
 ): Promise<number> {
   const executable = resolveForegroundOrcaExecutable()
-  const childArgs = [...getExecutableAppArgs(), '--serve']
+  const childArgs = [...getExecutableAppArgs(), ...getLinuxRootElectronArgs(), '--serve']
   if (args.json) {
     childArgs.push('--serve-json')
   }
@@ -137,6 +137,12 @@ export function serveOrcaApp(
       reject(new RuntimeClientError('runtime_serve_failed', `Orca serve exited via ${signal}`))
     })
   })
+}
+
+function getLinuxRootElectronArgs(): string[] {
+  // Headless VPS installs commonly run Orca under a root-owned systemd unit.
+  // Chromium refuses that configuration unless its process sandbox is disabled.
+  return process.platform === 'linux' && process.getuid?.() === 0 ? ['--no-sandbox'] : []
 }
 
 function waitForRecipeJson(child: ReturnType<typeof spawnProcess>): Promise<number> {

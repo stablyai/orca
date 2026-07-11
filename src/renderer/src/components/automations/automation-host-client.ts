@@ -3,7 +3,13 @@ import type {
   Automation,
   AutomationCreateInput,
   AutomationRun,
-  AutomationUpdateInput
+  AutomationUpdateInput,
+  ExternalAutomationActionInput,
+  ExternalAutomationCreateInput,
+  ExternalAutomationManager,
+  ExternalAutomationRunsInput,
+  ExternalAutomationRunsPage,
+  ExternalAutomationUpdateInput
 } from '../../../../shared/automations-types'
 import { parseExecutionHostId } from '../../../../shared/execution-host'
 import type { GlobalSettings } from '../../../../shared/types'
@@ -91,6 +97,102 @@ export async function listAutomationsForTarget(
     { timeoutMs: 15_000 }
   )
   return result.automations
+}
+
+function asRuntimeExternalManager(
+  manager: ExternalAutomationManager,
+  environmentId: string
+): ExternalAutomationManager {
+  const managerId = manager.id.replace(/:local$/, `:runtime:${environmentId}`)
+  return {
+    ...manager,
+    id: managerId,
+    label: manager.label.replace('this computer', 'remote Orca runtime'),
+    targetLabel: 'remote Orca runtime',
+    target: { type: 'runtime', environmentId },
+    jobs: manager.jobs.map((job) => ({ ...job, managerId }))
+  }
+}
+
+export async function listExternalAutomationManagersForTarget(
+  target: AutomationHostTarget
+): Promise<ExternalAutomationManager[]> {
+  if (target.kind === 'local') {
+    return await window.api.automations.listExternalManagers()
+  }
+  const result = await callRuntimeRpc<{ managers: ExternalAutomationManager[] }>(
+    target,
+    'automation.externalManagers',
+    undefined,
+    { timeoutMs: 15_000 }
+  )
+  return result.managers.map((manager) => asRuntimeExternalManager(manager, target.environmentId))
+}
+
+function runtimeTargetForExternalAutomation(
+  target: ExternalAutomationRunsInput['target']
+): AutomationHostTarget | null {
+  return target.type === 'runtime'
+    ? { kind: 'environment', environmentId: target.environmentId }
+    : null
+}
+
+export async function listExternalAutomationRunsForTarget(
+  input: ExternalAutomationRunsInput
+): Promise<ExternalAutomationRunsPage> {
+  const target = runtimeTargetForExternalAutomation(input.target)
+  if (!target || input.target.type !== 'runtime') {
+    return await window.api.automations.listExternalRuns(input)
+  }
+  const { target: _target, ...params } = input
+  const result = await callRuntimeRpc<{ page: ExternalAutomationRunsPage }>(
+    target,
+    'automation.externalRuns',
+    params,
+    { timeoutMs: 15_000 }
+  )
+  return {
+    ...result.page,
+    managerId: input.managerId,
+    target: input.target,
+    runs: result.page.runs.map((run) => ({ ...run, managerId: input.managerId }))
+  }
+}
+
+export async function createExternalAutomationForTarget(
+  input: ExternalAutomationCreateInput
+): Promise<void> {
+  const target = runtimeTargetForExternalAutomation(input.target)
+  if (!target) {
+    await window.api.automations.createExternal(input)
+    return
+  }
+  const { target: _target, ...params } = input
+  await callRuntimeRpc(target, 'automation.externalCreate', params, { timeoutMs: 30_000 })
+}
+
+export async function updateExternalAutomationForTarget(
+  input: ExternalAutomationUpdateInput
+): Promise<void> {
+  const target = runtimeTargetForExternalAutomation(input.target)
+  if (!target) {
+    await window.api.automations.updateExternal(input)
+    return
+  }
+  const { target: _target, ...params } = input
+  await callRuntimeRpc(target, 'automation.externalUpdate', params, { timeoutMs: 30_000 })
+}
+
+export async function runExternalAutomationActionForTarget(
+  input: ExternalAutomationActionInput
+): Promise<void> {
+  const target = runtimeTargetForExternalAutomation(input.target)
+  if (!target) {
+    await window.api.automations.runExternalAction(input)
+    return
+  }
+  const { target: _target, ...params } = input
+  await callRuntimeRpc(target, 'automation.externalAction', params, { timeoutMs: 30_000 })
 }
 
 export async function listAutomationRunsForTarget(

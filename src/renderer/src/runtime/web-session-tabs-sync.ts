@@ -130,6 +130,7 @@ export type WebSessionTabsSyncState = Pick<
   | 'activeWorktreeId'
   | 'agentStatusByPaneKey'
   | 'agentStatusEpoch'
+  | 'dismissedAgentStatusByPaneKey'
   | 'browserPagesByWorkspace'
   | 'browserTabsByWorktree'
   | 'groupsByWorktree'
@@ -652,7 +653,10 @@ function buildMirroredAgentStatusPatch(
   currentTerminalTabs: readonly TerminalTab[],
   terminalSurfaceTabs: readonly TerminalSurface[],
   now: number
-): Pick<WebSessionTabsSyncState, 'agentStatusByPaneKey' | 'agentStatusEpoch' | 'sortEpoch'> | null {
+): Pick<
+  WebSessionTabsSyncState,
+  'agentStatusByPaneKey' | 'agentStatusEpoch' | 'dismissedAgentStatusByPaneKey' | 'sortEpoch'
+> | null {
   const mirroredTabIds = new Set<string>()
   for (const tab of currentTerminalTabs) {
     if (isWebTerminalSurfaceTabId(tab.id)) {
@@ -668,10 +672,25 @@ function buildMirroredAgentStatusPatch(
   }
 
   const nextByPaneKey = new Map<string, AgentStatusEntry>()
+  let nextDismissedAgentStatusByPaneKey = state.dismissedAgentStatusByPaneKey
   for (const surface of terminalSurfaceTabs) {
     const entry = remapHostAgentStatus(surface)
     if (!entry) {
       continue
+    }
+    const dismissedAt = state.dismissedAgentStatusByPaneKey[entry.paneKey]
+    // Why: remote terminal surfaces can republish the same completed status
+    // with a freshly generated stateStartedAt. A timestamp comparison would
+    // therefore resurrect an explicitly dismissed row on every session sync.
+    // Keep completion hidden until the host proves a new active turn exists.
+    if (dismissedAt !== undefined && entry.state === 'done') {
+      continue
+    }
+    if (dismissedAt !== undefined) {
+      if (nextDismissedAgentStatusByPaneKey === state.dismissedAgentStatusByPaneKey) {
+        nextDismissedAgentStatusByPaneKey = { ...state.dismissedAgentStatusByPaneKey }
+      }
+      delete nextDismissedAgentStatusByPaneKey[entry.paneKey]
     }
     const existing = state.agentStatusByPaneKey[entry.paneKey]
     // Why: active web streams can report a fresher OSC 9999 status for the same
@@ -732,12 +751,14 @@ function buildMirroredAgentStatusPatch(
       !isAgentStatusFresh(existing, now)
   }
 
-  if (!changed) {
+  const dismissedChanged = nextDismissedAgentStatusByPaneKey !== state.dismissedAgentStatusByPaneKey
+  if (!changed && !dismissedChanged) {
     return null
   }
 
   return {
     agentStatusByPaneKey: nextAgentStatusByPaneKey,
+    dismissedAgentStatusByPaneKey: nextDismissedAgentStatusByPaneKey,
     agentStatusEpoch: sortRelevantChange ? state.agentStatusEpoch + 1 : state.agentStatusEpoch,
     sortEpoch: sortRelevantChange ? state.sortEpoch + 1 : state.sortEpoch
   }

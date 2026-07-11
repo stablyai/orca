@@ -82,7 +82,7 @@ describe('resolveNativeChatAttachmentOwner', () => {
         }),
         'tab-1'
       )
-    ).toEqual({ kind: 'runtime' })
+    ).toEqual({ kind: 'runtime', environmentId: 'env-1' })
   })
 
   it('routes unowned repos to the focused runtime host, matching terminal drops', () => {
@@ -91,7 +91,7 @@ describe('resolveNativeChatAttachmentOwner', () => {
         state({ settings: { activeRuntimeEnvironmentId: 'env-9' } as AppState['settings'] }),
         'tab-1'
       )
-    ).toEqual({ kind: 'runtime' })
+    ).toEqual({ kind: 'runtime', environmentId: 'env-9' })
   })
 
   it('reports not-ready when the tab has no worktree owner', () => {

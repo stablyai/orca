@@ -61,7 +61,10 @@ function getProviderLabel(manager: ExternalAutomationManager): string {
 }
 
 function getTargetKindLabel(manager: ExternalAutomationManager): string {
-  return manager.target.type === 'ssh' ? 'SSH host' : 'Local'
+  if (manager.target.type === 'ssh') {
+    return 'SSH host'
+  }
+  return manager.target.type === 'runtime' ? 'Orca Connect host' : 'Local'
 }
 
 function ExternalActionButton({

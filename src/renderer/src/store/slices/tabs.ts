@@ -203,6 +203,28 @@ function patchTerminalTabPinned(
   }
 }
 
+// Why: TerminalPane reads the unified tab while remote snapshot reconciliation
+// rebuilds it from the legacy TerminalTab. Keep both records in lockstep so a
+// status/output snapshot cannot restore a stale terminal mode after the user
+// switched the surface to native chat.
+function patchTerminalTabViewMode(
+  tabsByWorktree: Record<string, TerminalTab[]>,
+  worktreeId: string,
+  tabId: string,
+  viewMode: 'terminal' | 'chat'
+): Partial<Pick<AppState, 'tabsByWorktree'>> {
+  const tabs = tabsByWorktree[worktreeId]
+  if (!tabs?.some((tab) => tab.id === tabId)) {
+    return {}
+  }
+  return {
+    tabsByWorktree: {
+      ...tabsByWorktree,
+      [worktreeId]: tabs.map((tab) => (tab.id === tabId ? { ...tab, viewMode } : tab))
+    }
+  }
+}
+
 // Why: pin is host-authoritative for remote-server tabs, so mirror it to the
 // host (like setTabColor) or it's lost on reconnect/restart/other clients.
 // Dynamic import keeps this store slice off the runtime layer.
@@ -1075,7 +1097,21 @@ export const createTabsSlice: StateCreator<AppState, [], [], TabsSlice> = (set, 
   },
 
   setTabViewMode: (tabId, mode) => {
-    set((state) => patchTab(state.unifiedTabsByWorktree, tabId, { viewMode: mode }) ?? {})
+    set((state) => {
+      const found = findTabAndWorktree(state.unifiedTabsByWorktree, tabId)
+      if (!found) {
+        return {}
+      }
+      return {
+        ...patchTab(state.unifiedTabsByWorktree, tabId, { viewMode: mode }),
+        ...patchTerminalTabViewMode(
+          state.tabsByWorktree,
+          found.worktreeId,
+          found.tab.entityId,
+          mode
+        )
+      }
+    })
     mirrorTabViewModeToHost(get(), tabId, mode)
   },
 
@@ -1102,7 +1138,15 @@ export const createTabsSlice: StateCreator<AppState, [], [], TabsSlice> = (set, 
           (terminal) => terminal.id === found.tab.entityId
         )?.launchAgent ?? null
       toggled = { from: fromMode, to: nextMode, agent }
-      return patchTab(state.unifiedTabsByWorktree, tabId, { viewMode: nextMode }) ?? {}
+      return {
+        ...patchTab(state.unifiedTabsByWorktree, tabId, { viewMode: nextMode }),
+        ...patchTerminalTabViewMode(
+          state.tabsByWorktree,
+          found.worktreeId,
+          found.tab.entityId,
+          nextMode
+        )
+      }
     })
     // Why: emit after the state write so the event reflects the committed mode.
     const committed = toggled as {

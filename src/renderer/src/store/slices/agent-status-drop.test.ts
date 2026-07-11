@@ -168,6 +168,73 @@ describe('dropAgentStatus + retention suppressor', () => {
     expect(store.getState().retentionSuppressedPaneKeys['tab-1:0']).toBeUndefined()
   })
 
+  it('keeps a dismissed completion hidden across stale replays and admits a new turn', () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date('2026-07-10T16:00:00.000Z'))
+    const store = createTestStore()
+    const completedAt = Date.now() - 60_000
+
+    store
+      .getState()
+      .setAgentStatus(
+        'tab-1:0',
+        { state: 'done', prompt: 'finished', agentType: 'codex' },
+        undefined,
+        { updatedAt: completedAt, stateStartedAt: completedAt }
+      )
+    store.getState().dropAgentStatus('tab-1:0')
+
+    store
+      .getState()
+      .setAgentStatus(
+        'tab-1:0',
+        { state: 'done', prompt: 'finished', agentType: 'codex' },
+        undefined,
+        { updatedAt: Date.now() + 30_000, stateStartedAt: completedAt }
+      )
+    expect(store.getState().agentStatusByPaneKey['tab-1:0']).toBeUndefined()
+
+    const nextTurnAt = Date.now() + 60_000
+    store
+      .getState()
+      .setAgentStatus(
+        'tab-1:0',
+        { state: 'working', prompt: 'new turn', agentType: 'codex' },
+        undefined,
+        { updatedAt: nextTurnAt, stateStartedAt: nextTurnAt }
+      )
+    expect(store.getState().agentStatusByPaneKey['tab-1:0']?.prompt).toBe('new turn')
+    expect(store.getState().dismissedAgentStatusByPaneKey['tab-1:0']).toBeUndefined()
+  })
+
+  it('rejects a retained snapshot captured before the completed row was dismissed', () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date('2026-07-10T16:00:00.000Z'))
+    const store = createTestStore()
+    const paneKey = 'tab-retained:0'
+    const completedAt = Date.now() - 60_000
+    const retained: RetainedAgentEntry = {
+      entry: {
+        state: 'done',
+        prompt: 'finished',
+        updatedAt: completedAt,
+        stateStartedAt: completedAt,
+        paneKey,
+        stateHistory: []
+      },
+      worktreeId: 'wt-x',
+      tab: { id: 'tab-retained', title: 'codex' } as unknown as TerminalTab,
+      agentType: 'codex',
+      startedAt: completedAt
+    }
+
+    store.getState().retainAgents([retained])
+    store.getState().dropAgentStatus(paneKey)
+    store.getState().retainAgents([retained])
+
+    expect(store.getState().retainedAgentsByPaneKey[paneKey]).toBeUndefined()
+  })
+
   it('clearRetentionSuppressedPaneKeys removes present keys and returns a new map; absent keys are no-op (identity preserved)', () => {
     vi.useFakeTimers()
     const store = createTestStore()

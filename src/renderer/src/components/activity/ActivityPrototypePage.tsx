@@ -10,7 +10,8 @@ import {
   MessageSquareText,
   MoreVertical,
   Search,
-  TerminalSquare
+  TerminalSquare,
+  X
 } from 'lucide-react'
 
 import { AgentStateDot, agentStateLabel } from '@/components/AgentStateDot'
@@ -54,7 +55,13 @@ import {
   type ActivityTerminalPortalTarget
 } from './activity-terminal-portal'
 import { buildTitleDerivedAgentRows } from '../sidebar/worktree-title-derived-agent-rows'
-import type { Repo, TerminalLayoutSnapshot, TerminalTab, Worktree } from '../../../../shared/types'
+import type {
+  Project,
+  Repo,
+  TerminalLayoutSnapshot,
+  TerminalTab,
+  Worktree
+} from '../../../../shared/types'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
 import {
   AGENT_STATUS_STALE_AFTER_MS,
@@ -993,18 +1000,31 @@ export function ActivityThreadOptionsMenu({
   )
 }
 
-function EventRepoBadge({ repo }: { repo: Repo | null }): React.JSX.Element | null {
-  if (!repo) {
+function ProjectBadge({ project }: { project: Project | Repo | null }): React.JSX.Element | null {
+  if (!project) {
     return null
   }
   return (
     <div className="flex min-w-0 shrink-0 items-center gap-1.5 rounded-[4px] border border-border bg-accent px-1.5 py-0.5 dark:border-border/60 dark:bg-accent/50">
-      <RepoBadgeMark color={repo.badgeColor} />
+      <RepoBadgeMark color={project.badgeColor} />
       <span className="max-w-[6rem] truncate text-[10px] font-semibold leading-none text-foreground lowercase">
-        {repo.displayName}
+        {project.displayName}
       </span>
     </div>
   )
+}
+
+function projectForThread(
+  thread: AgentPaneThread,
+  projects: readonly Project[]
+): Project | Repo | null {
+  if (thread.worktree.projectId) {
+    const project = projects.find((candidate) => candidate.id === thread.worktree.projectId)
+    if (project) {
+      return project
+    }
+  }
+  return thread.repo
 }
 
 function threadAgentState(thread: AgentPaneThread): AgentStatusState {
@@ -1357,6 +1377,7 @@ function ThreadRow({
   onJump,
   onMarkRead,
   onMarkUnread,
+  onDismiss,
   canJump,
   compactMode
 }: {
@@ -1366,6 +1387,7 @@ function ThreadRow({
   onJump: () => void
   onMarkRead: () => void
   onMarkUnread: () => void
+  onDismiss?: () => void
   canJump: boolean
   compactMode: boolean
 }): React.JSX.Element {
@@ -1464,7 +1486,7 @@ function ThreadRow({
         </span>
       </div>
       <div className="flex min-w-0 items-center gap-1.5 pl-[42px]">
-        <EventRepoBadge repo={thread.repo} />
+        <ProjectBadge project={thread.repo} />
         <span className="min-w-0 flex-1 truncate text-[11px] text-muted-foreground">
           {thread.worktree.displayName}
         </span>
@@ -1508,6 +1530,35 @@ function ThreadRow({
               </TooltipContent>
             </Tooltip>
           </span>
+        ) : null}
+        {onDismiss && threadAgentState(thread) === 'done' ? (
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                className="size-6 shrink-0 text-muted-foreground hover:text-foreground"
+                aria-label={translate(
+                  'auto.components.activity.ActivityPrototypePage.dismissDoneThread',
+                  'Dismiss completed thread'
+                )}
+                onClick={(event) => {
+                  event.stopPropagation()
+                  onDismiss()
+                }}
+                onMouseDown={(event) => event.stopPropagation()}
+              >
+                <X className="size-3.5" />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent side="left">
+              {translate(
+                'auto.components.activity.ActivityPrototypePage.dismissDoneThread',
+                'Dismiss completed thread'
+              )}
+            </TooltipContent>
+          </Tooltip>
         ) : null}
       </div>
     </div>
@@ -1564,11 +1615,13 @@ export default function ActivityPrototypePage(): React.JSX.Element {
       ptyIdsByTabId: s.ptyIdsByTabId,
       terminalLayoutsByTabId: s.terminalLayoutsByTabId,
       runtimeAgentOrchestrationByPaneKey: s.runtimeAgentOrchestrationByPaneKey,
+      projects: s.projects,
       worktreeMap: getWorktreeMapFromState(s),
       repoMap: getRepoMapFromState(s),
       acknowledgedAgentsByPaneKey: s.acknowledgedAgentsByPaneKey,
       acknowledgeAgents: s.acknowledgeAgents,
-      unacknowledgeAgents: s.unacknowledgeAgents
+      unacknowledgeAgents: s.unacknowledgeAgents,
+      dropAgentStatus: s.dropAgentStatus
     }))
   )
   // Why: agentStatusEpoch is included in the dependency array (but not in the
@@ -1839,6 +1892,24 @@ export default function ActivityPrototypePage(): React.JSX.Element {
     storeData.unacknowledgeAgents([thread.paneKey])
   }
 
+  const dismissDoneThread = (thread: AgentPaneThread): void => {
+    if (threadAgentState(thread) !== 'done') {
+      return
+    }
+    if (selectedPaneKey === thread.paneKey) {
+      setSelectedPaneKey(null)
+    }
+    if (displayedPaneKey === thread.paneKey) {
+      setDisplayedPaneKey(null)
+    }
+    // Dismissal removes the cached row, but a late hook/cache replay can still
+    // recreate the same done event. Keep its read watermark so that replay is
+    // not mistaken for a new unread completion; a later turn has a newer
+    // timestamp and will still enter the inbox normally.
+    storeData.acknowledgeAgents([thread.paneKey])
+    storeData.dropAgentStatus(thread.paneKey)
+  }
+
   const activateThreadTerminal = (thread: AgentPaneThread): void => {
     const state = useAppStore.getState()
     const worktree = getWorktreeMapFromState(state).get(thread.worktree.id)
@@ -2073,6 +2144,7 @@ export default function ActivityPrototypePage(): React.JSX.Element {
                     onJump={() => jumpToWorkspace(thread)}
                     onMarkRead={() => markThreadRead(thread)}
                     onMarkUnread={() => markThreadUnread(thread)}
+                    onDismiss={() => dismissDoneThread(thread)}
                     canJump={storeData.worktreeMap.has(thread.worktree.id)}
                     compactMode={compactMode}
                   />
@@ -2136,10 +2208,10 @@ export default function ActivityPrototypePage(): React.JSX.Element {
                     </h2>
                   </div>
                   <div className="mt-1 flex min-w-0 items-center gap-1.5 pl-11">
-                    <EventRepoBadge repo={selectedThread.repo} />
                     <span className="truncate text-xs text-muted-foreground">
                       {selectedThread.worktree.displayName}
                     </span>
+                    <ProjectBadge project={projectForThread(selectedThread, storeData.projects)} />
                   </div>
                 </div>
               </div>

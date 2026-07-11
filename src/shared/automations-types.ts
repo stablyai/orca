@@ -220,6 +220,10 @@ export type ExternalAutomationTarget =
       type: 'ssh'
       connectionId: string
     }
+  | {
+      type: 'runtime'
+      environmentId: string
+    }
 
 export type ExternalAutomationJob = {
   id: string

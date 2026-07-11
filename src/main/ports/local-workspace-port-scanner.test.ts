@@ -6,6 +6,7 @@ import {
   parseLsofListeningOutput,
   parseNetstatListeningOutput,
   parseProcNetTcp,
+  parseSsListeningOutput,
   resetWorkspacePortScanTimeoutBackoffForTests,
   scanWorkspacePorts
 } from './local-workspace-port-scanner'
@@ -92,6 +93,27 @@ describe('local workspace port scanner parsing', () => {
     )
 
     expect(ports).toEqual([{ host: '127.0.0.1', port: 3000, inode: 12345 }])
+  })
+
+  it('parses Linux ss listeners with process ownership', () => {
+    const ports = parseSsListeningOutput(
+      [
+        'LISTEN 0 4096 127.0.0.1:15845 0.0.0.0:* users:(("docker-proxy",pid=3398783,fd=7))',
+        'LISTEN 0 128 [::]:8642 [::]:* users:(("hermes",pid=2510803,fd=31))',
+        'LISTEN 0 128 0.0.0.0:6768 0.0.0.0:*'
+      ].join('\n')
+    )
+
+    expect(ports).toEqual([
+      {
+        host: '127.0.0.1',
+        port: 15845,
+        pid: 3398783,
+        processName: 'docker-proxy'
+      },
+      { host: '::', port: 8642, pid: 2510803, processName: 'hermes' },
+      { host: '0.0.0.0', port: 6768 }
+    ])
   })
 
   it('parses Linux proc rows without whitespace regex splitting', () => {

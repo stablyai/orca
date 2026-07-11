@@ -18,7 +18,7 @@ export type UseNativeChatComposerPasteArgs = {
   /** Resolved at paste time: SSH panes must save the clipboard image on the
    *  remote host, or the attached path names a file the agent cannot read. */
   resolveAttachmentOwner: () => NativeChatAttachmentOwner
-  attachResolvedPaths: (paths: string[]) => void
+  attachResolvedPaths: (paths: string[], options?: { allowRemotePaths?: boolean }) => void
   insertTypedText: (text: string) => boolean
   setCaret: (caret: number) => void
   setNotice: (notice: string | null) => void
@@ -28,6 +28,7 @@ export type UseNativeChatComposerPasteArgs = {
  *  ClipboardEvent — the pane-level listener delivers the native one. */
 type ClipboardEventLike = {
   clipboardData: DataTransfer | null
+  target?: EventTarget | null
   preventDefault: () => void
   defaultPrevented: boolean
 }
@@ -66,6 +67,7 @@ export function useNativeChatComposerPaste({
   // the captured closure would otherwise attach/insert into a guarded composer.
   const disabledRef = useRef(disabled)
   disabledRef.current = disabled
+  const pasteFromClipboardRef = useRef<() => void>(() => {})
 
   // Distinguishes 'empty' (no image on the clipboard — text may fall through)
   // from 'failed' (save errored — the flow must stop and say why).
@@ -77,7 +79,11 @@ export function useNativeChatComposerPaste({
         // SSH panes save the image on the remote host (SFTP) so the attached
         // path is readable by the remote agent, matching terminal image paste.
         const tempPath = await window.api.ui.saveClipboardImageAsTempFile(
-          owner.kind === 'ssh' ? { connectionId: owner.connectionId } : undefined
+          owner.kind === 'ssh'
+            ? { connectionId: owner.connectionId }
+            : owner.kind === 'runtime'
+              ? { runtimeEnvironmentId: owner.environmentId }
+              : undefined
         )
         return tempPath ? { status: 'saved', tempPath } : { status: 'empty' }
       } catch (error) {
@@ -109,7 +115,7 @@ export function useNativeChatComposerPaste({
         )
         return
       }
-      attachResolvedPaths([result.path])
+      attachResolvedPaths([result.path], { allowRemotePaths: true })
       setNotice(null)
     },
     [agent, attachResolvedPaths, setNotice]
@@ -127,6 +133,14 @@ export function useNativeChatComposerPaste({
       // event target. (When the OS retargets the paste off the textarea the
       // pane listener still routes text via pasteFromClipboard.)
       if (!clipboardEventHasImage(event)) {
+        // The pane-level capture listener also receives Cmd/Ctrl+V when the
+        // focused element is the chat surface rather than the textarea. In
+        // that case route plain clipboard text through the same async path;
+        // when the textarea owns the event, leave native insertion untouched.
+        if (event.target !== undefined && !(event.target instanceof HTMLTextAreaElement)) {
+          event.preventDefault()
+          pasteFromClipboardRef.current()
+        }
         return
       }
       event.preventDefault()
@@ -193,6 +207,8 @@ export function useNativeChatComposerPaste({
     saveClipboardImageForOwner,
     setNotice
   ])
+
+  pasteFromClipboardRef.current = pasteFromClipboard
 
   return { handlePaste, pasteFromClipboard }
 }

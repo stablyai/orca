@@ -139,13 +139,16 @@ export function parseCodexModels(stdout: string): CommitMessageModel[] {
       models?: {
         slug?: string
         display_name?: string
+        visibility?: string
         supported_reasoning_levels?: { effort?: string }[]
         default_reasoning_level?: string
       }[]
     }
     return uniqueModels(
       (parsed.models ?? [])
-        .filter((model) => model.slug && model.display_name)
+        .filter(
+          (model) => model.slug && model.display_name && model.visibility?.toLowerCase() !== 'hide'
+        )
         .map((model) => ({
           id: model.slug!,
           label: model.display_name!,

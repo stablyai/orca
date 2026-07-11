@@ -56,6 +56,8 @@ describe('#6288 agent foreground inspection ps-scan volume', () => {
     resetProcessTableSnapshotForTests()
     psScanCount.value = 0
     platform = Object.getOwnPropertyDescriptor(process, 'platform')
+    // The full-table snapshot is now a macOS-only path. Linux reads the
+    // terminal shell's targeted /proc subtree instead.
     Object.defineProperty(process, 'platform', { configurable: true, value: 'darwin' })
     vi.useFakeTimers({ toFake: ['Date'] })
     vi.setSystemTime(0)

@@ -99,6 +99,31 @@ const AutomationRuns = z.object({
   automationId: OptionalString
 })
 
+const ExternalAutomationProvider = z.enum(['hermes', 'openclaw'])
+const ExternalAutomationIdentity = z.object({
+  managerId: requiredString('Missing external automation manager id'),
+  provider: ExternalAutomationProvider,
+  jobId: requiredString('Missing external automation job id')
+})
+const ExternalAutomationRuns = ExternalAutomationIdentity.extend({
+  page: OptionalPositiveInt,
+  pageSize: OptionalPositiveInt
+})
+const ExternalAutomationMutation = z.object({
+  managerId: requiredString('Missing external automation manager id'),
+  provider: ExternalAutomationProvider,
+  name: requiredString('Missing external automation name'),
+  prompt: requiredString('Missing external automation prompt'),
+  schedule: requiredString('Missing external automation schedule'),
+  workdir: OptionalNullablePlainString
+})
+const ExternalAutomationUpdate = ExternalAutomationMutation.extend({
+  jobId: requiredString('Missing external automation job id')
+})
+const ExternalAutomationAction = ExternalAutomationIdentity.extend({
+  action: z.enum(['pause', 'resume', 'run', 'delete'])
+})
+
 const AutomationCreate = z.object({
   name: requiredString('Missing automation name'),
   prompt: requiredString('Missing automation prompt'),
@@ -146,6 +171,48 @@ const AutomationUpdate = z.object({
 })
 
 export const AUTOMATION_METHODS: RpcMethod[] = [
+  defineMethod({
+    name: 'automation.externalManagers',
+    params: null,
+    handler: async (_params, { runtime }) => ({
+      managers: await runtime.listExternalAutomationManagers()
+    })
+  }),
+  defineMethod({
+    name: 'automation.externalRuns',
+    params: ExternalAutomationRuns,
+    handler: async (params, { runtime }) => ({
+      page: await runtime.listExternalAutomationRuns({
+        ...params,
+        page: params.page ?? 1,
+        pageSize: params.pageSize ?? 25
+      })
+    })
+  }),
+  defineMethod({
+    name: 'automation.externalCreate',
+    params: ExternalAutomationMutation,
+    handler: async (params, { runtime }) => {
+      await runtime.createExternalAutomation({ ...params, workdir: params.workdir ?? null })
+      return { created: true }
+    }
+  }),
+  defineMethod({
+    name: 'automation.externalUpdate',
+    params: ExternalAutomationUpdate,
+    handler: async (params, { runtime }) => {
+      await runtime.updateExternalAutomation({ ...params, workdir: params.workdir ?? null })
+      return { updated: true }
+    }
+  }),
+  defineMethod({
+    name: 'automation.externalAction',
+    params: ExternalAutomationAction,
+    handler: async (params, { runtime }) => {
+      await runtime.runExternalAutomationAction(params)
+      return { acted: true }
+    }
+  }),
   defineMethod({
     name: 'automation.list',
     params: null,

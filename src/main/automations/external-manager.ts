@@ -221,6 +221,14 @@ async function listLocalOpenClawManager(): Promise<ExternalAutomationManager | n
   }
 }
 
+export async function listLocalExternalAutomationManagers(): Promise<ExternalAutomationManager[]> {
+  const [localHermes, localOpenClaw] = await Promise.all([
+    listLocalHermesManager(),
+    listLocalOpenClawManager()
+  ])
+  return [...(localHermes ? [localHermes] : []), ...(localOpenClaw ? [localOpenClaw] : [])]
+}
+
 function remoteRelayErrorMessage(error: unknown): string {
   const message = error instanceof Error ? error.message : String(error)
   if (message.includes('-32601') || /method not found/i.test(message)) {
@@ -300,9 +308,8 @@ async function listRemoteManager(
 export async function listExternalAutomationManagers(
   store: Store
 ): Promise<ExternalAutomationManager[]> {
-  const [localHermes, localOpenClaw, remote] = await Promise.all([
-    listLocalHermesManager(),
-    listLocalOpenClawManager(),
+  const [local, remote] = await Promise.all([
+    listLocalExternalAutomationManagers(),
     Promise.all(
       store
         .getSshTargets()
@@ -312,11 +319,7 @@ export async function listExternalAutomationManagers(
         .flatMap((target) => [listRemoteHermesManager(target), listRemoteOpenClawManager(target)])
     )
   ])
-  return [
-    ...(localHermes ? [localHermes] : []),
-    ...(localOpenClaw ? [localOpenClaw] : []),
-    ...remote
-  ]
+  return [...local, ...remote]
 }
 
 export async function listExternalAutomationRuns(
@@ -353,6 +356,9 @@ export async function listExternalAutomationRuns(
       total: result.total,
       runs: mapHermesJobs(input.managerId, [{ id: input.jobId, runs: result.runs }])[0]?.runs ?? []
     }
+  }
+  if (input.target.type === 'runtime') {
+    throw new Error('Runtime external automation requests must be routed through runtime RPC.')
   }
   const mux = getActiveMultiplexer(input.target.connectionId)
   if (!mux || mux.isDisposed()) {
@@ -487,6 +493,9 @@ export async function createExternalAutomation(
     clearHermesCronOutputRunCountCache()
     return
   }
+  if (input.target.type === 'runtime') {
+    throw new Error('Runtime external automation requests must be routed through runtime RPC.')
+  }
   const mux = getActiveMultiplexer(input.target.connectionId)
   if (!mux || mux.isDisposed()) {
     throw new Error(`SSH target "${input.target.connectionId}" is not connected.`)
@@ -508,6 +517,9 @@ export async function updateExternalAutomation(
     await runLocalAutomationCommand('hermes', hermesCronEditArgs(input.jobId, normalized))
     clearHermesCronOutputRunCountCache(input.jobId)
     return
+  }
+  if (input.target.type === 'runtime') {
+    throw new Error('Runtime external automation requests must be routed through runtime RPC.')
   }
   const mux = getActiveMultiplexer(input.target.connectionId)
   if (!mux || mux.isDisposed()) {
@@ -536,6 +548,9 @@ export async function runExternalAutomationAction(
       clearHermesCronOutputRunCountCache(input.jobId)
     }
     return
+  }
+  if (input.target.type === 'runtime') {
+    throw new Error('Runtime external automation requests must be routed through runtime RPC.')
   }
   const mux = getActiveMultiplexer(input.target.connectionId)
   if (!mux || mux.isDisposed()) {

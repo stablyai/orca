@@ -1,3 +1,4 @@
+/* eslint-disable max-lines -- Why: composer input, attachments, voice, and provider controls share one focus and submission lifecycle. */
 import {
   forwardRef,
   useCallback,
@@ -10,8 +11,13 @@ import {
 import { useAppStore } from '../../store'
 import type { AgentType } from '../../../../shared/agent-status-types'
 import { NATIVE_FILE_DROP_TARGET } from '../../../../shared/native-file-drop'
-import { sendRuntimePtyInput } from '@/runtime/runtime-terminal-inspection'
+import {
+  sendRuntimePtyInput,
+  sendRuntimePtyInputVerified
+} from '@/runtime/runtime-terminal-inspection'
 import { getSettingsForAgentTabRuntimeOwner } from '@/lib/agent-paste-draft'
+import { discoverRuntimeCommitMessageModels } from '@/runtime/runtime-git-client'
+import type { CommitMessageModelCapability } from '../../../../shared/commit-message-agent-spec'
 import {
   sendNativeChatMessage,
   sendNativeChatMessageWithImageAttachments,
@@ -44,6 +50,11 @@ import { useNativeChatComposerPaste } from './use-native-chat-composer-paste'
 import { useNativeChatExternalAttachments } from './use-native-chat-external-attachments'
 import { dispatchDictationControl } from '../dictation/dictation-control-events'
 import { useNativeChatComposerKeyDown } from './use-native-chat-composer-keydown'
+import { resolveNativeChatFileLinkContext } from './native-chat-file-link'
+import {
+  buildCodexModelPickerStages,
+  CODEX_MODEL_PICKER_SETTLE_MS
+} from './native-chat-codex-model-picker'
 
 // Why: a plain ESC byte is what the agent TUIs read as the interrupt key over a
 // PTY (matching how xterm forwards Escape). The richer interrupt-intent
@@ -123,6 +134,12 @@ export const NativeChatComposer = forwardRef<NativeChatComposerHandle, NativeCha
     const [history, setHistory] = useState<HistoryState>(EMPTY_HISTORY)
     const [activeSuggestion, setActiveSuggestion] = useState(0)
     const [notice, setNotice] = useState<string | null>(null)
+    const [codexModels, setCodexModels] = useState<CommitMessageModelCapability[]>([])
+    const [codexModelId, setCodexModelId] = useState<string | null>(null)
+    const [codexEffortId, setCodexEffortId] = useState<string | null>(null)
+    const [codexModelsLoading, setCodexModelsLoading] = useState(false)
+    const [codexModelApplying, setCodexModelApplying] = useState(false)
+    const [codexModelError, setCodexModelError] = useState<string | null>(null)
     const [dictationPressed, setDictationPressed] = useState(false)
     const skills = useNativeChatSkills(agent, terminalTabId)
     const textareaRef = useRef<HTMLTextAreaElement>(null)
@@ -181,6 +198,120 @@ export const NativeChatComposer = forwardRef<NativeChatComposerHandle, NativeCha
     const sendButtonDisabled = isWorking
       ? !hasPty || !onStop
       : disabled || (draft.trim() === '' && imageAttachments.length === 0)
+
+    useEffect(() => {
+      if (agent !== 'codex') {
+        setCodexModels([])
+        setCodexModelId(null)
+        setCodexEffortId(null)
+        setCodexModelError(null)
+        return
+      }
+      let cancelled = false
+      const state = useAppStore.getState()
+      const context = resolveNativeChatFileLinkContext(state, terminalTabId)
+      if (!context) {
+        setCodexModelError('Model catalog is unavailable for this workspace.')
+        return
+      }
+      setCodexModelsLoading(true)
+      setCodexModelError(null)
+      void discoverRuntimeCommitMessageModels(
+        {
+          settings: getSettingsForAgentTabRuntimeOwner(terminalTabId),
+          worktreeId: context.worktreeId,
+          worktreePath: context.worktreePath
+        },
+        'codex'
+      )
+        .then((result) => {
+          if (cancelled) {
+            return
+          }
+          if (!result.success || result.models.length === 0) {
+            setCodexModelError(result.success ? 'No Codex models are available.' : result.error)
+            return
+          }
+          setCodexModels(result.models)
+          // `codex debug models` is ordered exactly like the picker, newest
+          // visible model first. Preserve an already-selected value; otherwise
+          // seed the interface from that first provider-owned entry.
+          setCodexModelId((current) =>
+            current && result.models.some((model) => model.id === current)
+              ? current
+              : result.models[0].id
+          )
+          setCodexEffortId((current) => {
+            const first = result.models[0]
+            const efforts = first.thinkingLevels ?? []
+            return current && efforts.some((effort) => effort.id === current)
+              ? current
+              : (first.defaultThinkingLevel ?? efforts[0]?.id ?? null)
+          })
+        })
+        .catch((error: unknown) => {
+          if (!cancelled) {
+            setCodexModelError(error instanceof Error ? error.message : String(error))
+          }
+        })
+        .finally(() => {
+          if (!cancelled) {
+            setCodexModelsLoading(false)
+          }
+        })
+      return () => {
+        cancelled = true
+      }
+    }, [agent, terminalTabId])
+
+    const selectCodexModel = useCallback(
+      (modelId: string) => {
+        const model = codexModels.find((entry) => entry.id === modelId)
+        const efforts = model?.thinkingLevels ?? []
+        setCodexModelId(modelId)
+        setCodexEffortId(model?.defaultThinkingLevel ?? efforts[0]?.id ?? null)
+        setCodexModelError(null)
+      },
+      [codexModels]
+    )
+
+    const applyCodexModel = useCallback(() => {
+      const target = resolveTarget()
+      const stages = codexModelId
+        ? buildCodexModelPickerStages(codexModels, codexModelId, codexEffortId)
+        : null
+      if (!target || disabled || isWorking || !stages) {
+        return
+      }
+      const selectedModel = codexModels.find((model) => model.id === codexModelId)
+      const selectedEffort = selectedModel?.thinkingLevels?.find(
+        (effort) => effort.id === codexEffortId
+      )
+      setCodexModelApplying(true)
+      setCodexModelError(null)
+      void (async () => {
+        try {
+          sendNativeChatMessage(target.settings, target.ptyId, '/model')
+          await new Promise((resolve) => setTimeout(resolve, CODEX_MODEL_PICKER_SETTLE_MS))
+          for (const stage of stages) {
+            const accepted = await sendRuntimePtyInputVerified(target.settings, target.ptyId, stage)
+            if (!accepted) {
+              throw new Error('The Codex model picker did not accept the selection.')
+            }
+            await new Promise((resolve) => setTimeout(resolve, CODEX_MODEL_PICKER_SETTLE_MS))
+          }
+          setNotice(
+            [selectedModel?.label, selectedEffort?.label].filter(Boolean).join(' · ') ||
+              'Codex model updated.'
+          )
+        } catch (error) {
+          sendRuntimePtyInput(target.settings, target.ptyId, ESC)
+          setCodexModelError(error instanceof Error ? error.message : String(error))
+        } finally {
+          setCodexModelApplying(false)
+        }
+      })()
+    }, [codexEffortId, codexModelId, codexModels, disabled, isWorking, resolveTarget])
 
     const insertTypedText = useCallback(
       (text: string): boolean => {
@@ -399,7 +530,7 @@ export const NativeChatComposer = forwardRef<NativeChatComposerHandle, NativeCha
       <NativeChatComposerField
         textareaRef={textareaRef}
         draft={draft}
-        disabled={disabled}
+        disabled={disabled || codexModelApplying}
         hasPty={hasPty}
         canSend={canSend}
         autocomplete={autocomplete}
@@ -445,6 +576,22 @@ export const NativeChatComposer = forwardRef<NativeChatComposerHandle, NativeCha
         onDictationHoldEnd={stopHoldDictation}
         onSend={send}
         onStop={onStop}
+        codexModelControls={
+          agent === 'codex'
+            ? {
+                models: codexModels,
+                modelId: codexModelId,
+                effortId: codexEffortId,
+                loading: codexModelsLoading,
+                applying: codexModelApplying,
+                disabled: disabled || isWorking,
+                error: codexModelError,
+                onModelChange: selectCodexModel,
+                onEffortChange: setCodexEffortId,
+                onApply: applyCodexModel
+              }
+            : undefined
+        }
       />
     )
   }

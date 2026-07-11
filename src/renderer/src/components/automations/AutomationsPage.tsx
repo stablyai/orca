@@ -130,6 +130,7 @@ import {
 } from './external-automation-source-availability'
 import {
   createAutomationForTarget,
+  createExternalAutomationForTarget,
   deleteAutomationForTarget,
   type AutomationHostTarget,
   getAutomationListTarget,
@@ -137,7 +138,11 @@ import {
   getAutomationTargetFromHostId,
   listAutomationRunsForTarget,
   listAutomationsForTarget,
+  listExternalAutomationManagersForTarget,
+  listExternalAutomationRunsForTarget,
   runAutomationNowForTarget,
+  runExternalAutomationActionForTarget,
+  updateExternalAutomationForTarget,
   updateAutomationForTarget
 } from './automation-host-client'
 import { getExternalAutomationScheduleDisplay } from './external-automation-schedule-display'
@@ -297,7 +302,37 @@ function getExternalProviderLabel(manager: ExternalAutomationManager): string {
 }
 
 function getExternalTargetKindLabel(manager: ExternalAutomationManager): string {
-  return manager.target.type === 'ssh' ? 'SSH host' : 'Local'
+  if (manager.target.type === 'ssh') {
+    return 'SSH host'
+  }
+  return manager.target.type === 'runtime' ? 'Orca Connect host' : 'Local'
+}
+
+function externalTargetMatchesRepo(
+  target: ExternalAutomationManager['target'],
+  repo: Repo | null | undefined
+): boolean {
+  if (!repo) {
+    return false
+  }
+  if (target.type === 'ssh') {
+    return repo.connectionId === target.connectionId
+  }
+  const parsedHost = parseExecutionHostId(getRepoExecutionHostId(repo))
+  if (target.type === 'runtime') {
+    return parsedHost?.kind === 'runtime' && parsedHost.environmentId === target.environmentId
+  }
+  return parsedHost?.kind === 'local'
+}
+
+function getExternalTargetForRepo(repo: Repo): ExternalAutomationManager['target'] {
+  if (repo.connectionId) {
+    return { type: 'ssh', connectionId: repo.connectionId }
+  }
+  const parsedHost = parseExecutionHostId(getRepoExecutionHostId(repo))
+  return parsedHost?.kind === 'runtime'
+    ? { type: 'runtime', environmentId: parsedHost.environmentId }
+    : { type: 'local' }
 }
 
 function getExternalRunStatusLabel(run: ExternalAutomationRun): string {
@@ -1001,7 +1036,7 @@ export default function AutomationsPage(): React.JSX.Element {
       const [nextAutomations, nextRuns, nextExternalManagers] = await Promise.all([
         listAutomationsForTarget(automationHostTarget),
         listAutomationRunsForTarget(automationHostTarget),
-        window.api.automations.listExternalManagers()
+        listExternalAutomationManagersForTarget(automationHostTarget)
       ])
       const currentSelectedId = useAppStore.getState().selectedAutomationId
       const hasCurrentSelection = nextAutomations.some(
@@ -1365,10 +1400,7 @@ export default function AutomationsPage(): React.JSX.Element {
         .flat()
         .find((worktree) => {
           const repo = repoMap.get(worktree.repoId)
-          const repoTargetMatches =
-            manager.target.type === 'local'
-              ? !repo?.connectionId
-              : repo?.connectionId === manager.target.connectionId
+          const repoTargetMatches = externalTargetMatchesRepo(manager.target, repo)
           return repoTargetMatches && job.workdir !== null && worktree.path === job.workdir
         }) ?? null
     const fallbackTarget = getDefaultTarget()
@@ -1509,13 +1541,8 @@ export default function AutomationsPage(): React.JSX.Element {
           )
           return
         }
-        const target =
-          editingExternalTarget?.manager.target ??
-          (repo.connectionId
-            ? { type: 'ssh' as const, connectionId: repo.connectionId }
-            : { type: 'local' as const })
-        const repoTargetMatches =
-          target.type === 'local' ? !repo.connectionId : repo.connectionId === target.connectionId
+        const target = editingExternalTarget?.manager.target ?? getExternalTargetForRepo(repo)
+        const repoTargetMatches = externalTargetMatchesRepo(target, repo)
         if (!repoTargetMatches) {
           toast.error(
             translate(
@@ -1528,7 +1555,11 @@ export default function AutomationsPage(): React.JSX.Element {
         const schedule = buildHermesCronSchedule(draft)
         const managerId =
           editingExternalTarget?.manager.id ??
-          (target.type === 'ssh' ? `hermes:ssh:${target.connectionId}` : 'hermes:local')
+          (target.type === 'ssh'
+            ? `hermes:ssh:${target.connectionId}`
+            : target.type === 'runtime'
+              ? `hermes:runtime:${target.environmentId}`
+              : 'hermes:local')
         const input = {
           managerId,
           provider: 'hermes' as const,
@@ -1539,11 +1570,11 @@ export default function AutomationsPage(): React.JSX.Element {
           workdir: selectedWorktree.path
         }
         await (editingExternalTarget
-          ? window.api.automations.updateExternal({
+          ? updateExternalAutomationForTarget({
               ...input,
               jobId: editingExternalTarget.job.id
             })
-          : window.api.automations.createExternal(input))
+          : createExternalAutomationForTarget(input))
         if (!editingExternalTarget) {
           useAppStore.getState().recordFeatureInteraction('automation-created')
         }
@@ -1858,7 +1889,7 @@ export default function AutomationsPage(): React.JSX.Element {
     const key = `${manager.id}:${job.id}:${action}`
     setExternalActionKey(key)
     try {
-      await window.api.automations.runExternalAction({
+      await runExternalAutomationActionForTarget({
         managerId: manager.id,
         provider: manager.provider,
         target: manager.target,
@@ -1911,14 +1942,8 @@ export default function AutomationsPage(): React.JSX.Element {
         runs: job.runs.slice(page * pageSize, page * pageSize + pageSize),
         totalCount: job.runCount
       }
-      const listExternalRuns = (
-        window.api.automations as Partial<Pick<typeof window.api.automations, 'listExternalRuns'>>
-      ).listExternalRuns
-      if (typeof listExternalRuns !== 'function') {
-        return fallbackRunsPage
-      }
       try {
-        const result = await listExternalRuns({
+        const result = await listExternalAutomationRunsForTarget({
           managerId: manager.id,
           provider: manager.provider,
           target: manager.target,

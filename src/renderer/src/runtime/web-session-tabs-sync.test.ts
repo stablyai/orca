@@ -72,6 +72,7 @@ function makeState(overrides: Partial<WebSessionTabsSyncState> = {}): WebSession
     activeWorktreeId: WT,
     agentStatusByPaneKey: {},
     agentStatusEpoch: 0,
+    dismissedAgentStatusByPaneKey: {},
     browserPagesByWorkspace: {},
     browserTabsByWorktree: {},
     groupsByWorktree: {},
@@ -1749,6 +1750,53 @@ describe('applyWebSessionTabsSnapshot', () => {
     expect(patch.agentStatusByPaneKey?.[hostPaneKey]).toBeUndefined()
     expect(patch.agentStatusEpoch).toBe(1)
     expect(patch.sortEpoch).toBe(1)
+  })
+
+  it('keeps a dismissed remote completion hidden until a new active turn arrives', () => {
+    const hostPaneKey = makePaneKey('host-tab-1', LEAF_ID)
+    const mirroredId = toWebTerminalSurfaceTabId('host-tab-1')
+    const mirroredPaneKey = makePaneKey(mirroredId, LEAF_ID)
+    const terminalSurface = (state: 'done' | 'working', stateStartedAt: number) => ({
+      type: 'terminal' as const,
+      id: HOST_SURFACE_ID,
+      title: `codex [${state}]`,
+      parentTabId: 'host-tab-1',
+      leafId: LEAF_ID,
+      isActive: true,
+      status: 'ready' as const,
+      terminal: 'terminal-1',
+      agentStatus: {
+        state,
+        prompt: 'fix web parity',
+        updatedAt: stateStartedAt,
+        stateStartedAt,
+        agentType: 'codex' as const,
+        paneKey: hostPaneKey,
+        terminalTitle: `codex [${state}]`,
+        stateHistory: []
+      }
+    })
+    const dismissedState = makeState({
+      dismissedAgentStatusByPaneKey: { [mirroredPaneKey]: NOW }
+    })
+
+    const replayPatch = applyWebSessionTabsSnapshot(
+      dismissedState,
+      makeSnapshot([terminalSurface('done', NOW + 60_000)]),
+      ENV,
+      NOW + 60_000
+    ) as Partial<WebSessionTabsSyncState>
+    expect(replayPatch.agentStatusByPaneKey?.[mirroredPaneKey]).toBeUndefined()
+    expect(replayPatch.dismissedAgentStatusByPaneKey).toBeUndefined()
+
+    const activePatch = applyWebSessionTabsSnapshot(
+      dismissedState,
+      makeSnapshot([terminalSurface('working', NOW + 120_000)]),
+      ENV,
+      NOW + 120_000
+    ) as Partial<WebSessionTabsSyncState>
+    expect(activePatch.agentStatusByPaneKey?.[mirroredPaneKey]?.state).toBe('working')
+    expect(activePatch.dismissedAgentStatusByPaneKey?.[mirroredPaneKey]).toBeUndefined()
   })
 
   it('keeps the mirrored state start stable across same-agent spinner snapshots', () => {

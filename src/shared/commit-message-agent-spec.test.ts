@@ -220,6 +220,19 @@ describe('model discovery parsers', () => {
     ])
   })
 
+  it('omits models hidden by the Codex catalog', () => {
+    expect(
+      parseCodexModels(
+        JSON.stringify({
+          models: [
+            { slug: 'gpt-5.6-sol', display_name: 'GPT-5.6-Sol', visibility: 'list' },
+            { slug: 'codex-auto-review', display_name: 'Codex Auto Review', visibility: 'hide' }
+          ]
+        })
+      ).map((model) => model.id)
+    ).toEqual(['gpt-5.6-sol'])
+  })
+
   it('parses one-model-per-line output', () => {
     expect(parseLineModels('opencode/gpt-5.4-mini\n\nopenai/gpt-5.5\n').map((m) => m.id)).toEqual([
       'opencode/gpt-5.4-mini',

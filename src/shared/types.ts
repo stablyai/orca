@@ -3293,6 +3293,10 @@ export type PersistedUIState = {
    *  stateStartedAt that beats the old ack via the existing comparison in
    *  WorktreeCardAgents. Renderer-owned, written through ui:set. */
   acknowledgedAgentsByPaneKey?: Record<string, number>
+  /** Per-pane completion dismissals from the Agents inbox. A remote runtime
+   *  may replay the same completion after reconnect, so these watermarks must
+   *  survive renderer/app restarts until a new active turn is observed. */
+  dismissedAgentStatusByPaneKey?: Record<string, number>
   /** User-hidden sidebar entry for the setup guide. The Help menu remains
    *  available so this is a reversible declutter preference, not completion. */
   setupGuideSidebarDismissed?: boolean

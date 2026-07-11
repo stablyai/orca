@@ -2,6 +2,8 @@ import { ArrowUp, Mic, Plus, Square } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { translate } from '@/i18n/i18n'
+import type { NativeChatCodexModelControlsProps } from './NativeChatCodexModelControls'
+import { NativeChatCodexModelControls } from './NativeChatCodexModelControls'
 
 export type NativeChatComposerActionsProps = {
   attachDisabled: boolean
@@ -16,6 +18,7 @@ export type NativeChatComposerActionsProps = {
   onDictationHoldEnd: () => void
   onSend: () => void
   onStop?: () => void
+  codexModelControls?: NativeChatCodexModelControlsProps
 }
 
 export function NativeChatComposerActions({
@@ -30,32 +33,36 @@ export function NativeChatComposerActions({
   onDictationHoldStart,
   onDictationHoldEnd,
   onSend,
-  onStop
+  onStop,
+  codexModelControls
 }: NativeChatComposerActionsProps): React.JSX.Element {
   const dictationLabel = isDictating
     ? translate('components.native-chat.composer.stopDictation', 'Stop dictation')
     : translate('components.native-chat.composer.startDictation', 'Start dictation')
   return (
     <div className="flex w-full items-center justify-between gap-2">
-      <Tooltip>
-        <TooltipTrigger asChild>
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon-sm"
-            aria-label={translate('components.native-chat.composer.attach', 'Attach file')}
-            disabled={attachDisabled}
-            onClick={onAttach}
-            className="pointer-coarse:size-11"
-          >
-            <Plus className="size-4" />
-          </Button>
-        </TooltipTrigger>
-        <TooltipContent side="top" sideOffset={4}>
-          {translate('components.native-chat.composer.attach', 'Attach file')}
-        </TooltipContent>
-      </Tooltip>
+      <div className="flex items-center gap-0.5">
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon-sm"
+              aria-label={translate('components.native-chat.composer.attach', 'Attach file')}
+              disabled={attachDisabled}
+              onClick={onAttach}
+              className="pointer-coarse:size-11"
+            >
+              <Plus className="size-4" />
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent side="top" sideOffset={4}>
+            {translate('components.native-chat.composer.attach', 'Attach file')}
+          </TooltipContent>
+        </Tooltip>
+      </div>
       <div className="ml-auto flex items-center gap-1.5">
+        {codexModelControls ? <NativeChatCodexModelControls {...codexModelControls} /> : null}
         <Tooltip>
           <TooltipTrigger asChild>
             <Button

@@ -162,7 +162,9 @@ describe('useNativeChatComposerPaste', () => {
       probe.latest().handlePaste(imagePasteEvent())
     })
     expect(mocks.saveClipboardImageAsTempFile).toHaveBeenCalledWith({ connectionId: 'conn-1' })
-    expect(attachResolvedPaths).toHaveBeenCalledWith(['/remote/tmp/orca-paste-1.png'])
+    expect(attachResolvedPaths).toHaveBeenCalledWith(['/remote/tmp/orca-paste-1.png'], {
+      allowRemotePaths: true
+    })
   })
 
   it('stops pasteFromClipboard on a failed save instead of falling through to text', async () => {

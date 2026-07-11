@@ -211,6 +211,14 @@ export function launchAgentInNewTab(args: LaunchAgentInNewTabArgs): LaunchAgentI
     return null
   }
 
+  // Compute this once so local and remote runtime launches receive the same
+  // initial surface preference.
+  const viewModePromptDelivery =
+    hasPrompt && isFollowupPath && promptDelivery === 'auto-submit' ? 'draft' : promptDelivery
+  const initialViewModeProps = initialAgentTabViewModeProps(store.settings, {
+    agent,
+    promptDelivery: viewModePromptDelivery
+  })
   const runtimeEnvironmentId = getRuntimeEnvironmentIdForWorktree(store, worktreeId)
   if (isWebRuntimeSessionActive(runtimeEnvironmentId) && pasteDraftAfterLaunch === null) {
     // Why: paired web tabs are host-owned and return tabId: null on success.
@@ -228,6 +236,7 @@ export function launchAgentInNewTab(args: LaunchAgentInNewTabArgs): LaunchAgentI
             ...(startupPlan.env ? { env: startupPlan.env } : {}),
             launchConfig: startupPlan.launchConfig,
             launchAgent: agent,
+            ...initialViewModeProps,
             ...(startupPlan.startupCommandDelivery
               ? { startupCommandDelivery: startupPlan.startupCommandDelivery }
               : {})
@@ -264,15 +273,10 @@ export function launchAgentInNewTab(args: LaunchAgentInNewTabArgs): LaunchAgentI
   // stays false), so gate the initial chat view like a `draft` launch —
   // otherwise a default `auto-submit` followup would open native chat with no
   // submitted turn to render.
-  const viewModePromptDelivery =
-    hasPrompt && isFollowupPath && promptDelivery === 'auto-submit' ? 'draft' : promptDelivery
   const tab = store.createTab(worktreeId, groupId, undefined, {
     launchAgent: agent,
     quickCommandLabel,
-    ...initialAgentTabViewModeProps(store.settings, {
-      agent,
-      promptDelivery: viewModePromptDelivery
-    })
+    ...initialViewModeProps
   })
   store.queueTabStartupCommand(tab.id, {
     command: startupPlan.launchCommand,

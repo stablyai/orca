@@ -176,6 +176,28 @@ export function parseNetstatListeningOutput(output: string): RawListeningPort[] 
   return dedupeRawPorts(ports)
 }
 
+export function parseSsListeningOutput(output: string): RawListeningPort[] {
+  const ports: RawListeningPort[] = []
+  for (const line of output.split('\n')) {
+    const fields = getProcessOutputFields(line, 5)
+    if (fields[0] !== 'LISTEN' || !fields[3]) {
+      continue
+    }
+    const parsed = parseAddressWithPort(fields[3])
+    if (!parsed) {
+      continue
+    }
+    const processMatch = line.match(/users:\(\("([^"]+)",pid=(\d+)/)
+    const pid = processMatch ? Number.parseInt(processMatch[2], 10) : undefined
+    ports.push({
+      ...parsed,
+      ...(processMatch?.[1] ? { processName: processMatch[1] } : {}),
+      ...(Number.isFinite(pid) ? { pid } : {})
+    })
+  }
+  return dedupeRawPorts(ports)
+}
+
 export function parseProcNetTcp(content: string): { host: string; port: number; inode: number }[] {
   const results: { host: string; port: number; inode: number }[] = []
   const lines = content.split('\n')
@@ -226,6 +248,22 @@ async function scanWindowsNetstatPorts(): Promise<RawListeningPort[]> {
 }
 
 async function scanLinuxProcPorts(): Promise<RawListeningPort[]> {
+  try {
+    const { stdout } = await runCommand('ss', ['-H', '-ltnp'])
+    const ports = parseSsListeningOutput(stdout)
+    const pids = new Set(ports.flatMap((port) => (port.pid ? [port.pid] : [])))
+    const metadata = new Map(
+      await Promise.all(
+        Array.from(pids, async (pid) => [pid, await loadLinuxProcessMetadata(pid)] as const)
+      )
+    )
+    return ports.map((port) => ({ ...metadata.get(port.pid ?? -1), ...port }))
+  } catch {
+    return scanLinuxProcPortsFallback()
+  }
+}
+
+async function scanLinuxProcPortsFallback(): Promise<RawListeningPort[]> {
   const [tcp4, tcp6] = await Promise.all([
     readProcNet('/proc/net/tcp'),
     readProcNet('/proc/net/tcp6')

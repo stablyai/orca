@@ -63,8 +63,21 @@ import type {
   AutomationCreateInput,
   AutomationRun,
   AutomationUpdateInput,
-  AutomationWorkspaceMode
+  AutomationWorkspaceMode,
+  ExternalAutomationActionInput,
+  ExternalAutomationCreateInput,
+  ExternalAutomationManager,
+  ExternalAutomationRunsInput,
+  ExternalAutomationRunsPage,
+  ExternalAutomationUpdateInput
 } from '../../shared/automations-types'
+import {
+  createExternalAutomation,
+  listExternalAutomationRuns,
+  listLocalExternalAutomationManagers,
+  runExternalAutomationAction,
+  updateExternalAutomation
+} from '../automations/external-manager'
 import type {
   AutomationWorkspaceProvenance,
   BaseRefSearchResult,
@@ -2548,6 +2561,28 @@ export class OrcaRuntimeService {
       throw new Error('runtime_unavailable')
     }
     return this.store.listAutomationRuns(automationId)
+  }
+
+  listExternalAutomationManagers(): Promise<ExternalAutomationManager[]> {
+    return listLocalExternalAutomationManagers()
+  }
+
+  listExternalAutomationRuns(
+    input: Omit<ExternalAutomationRunsInput, 'target'>
+  ): Promise<ExternalAutomationRunsPage> {
+    return listExternalAutomationRuns({ ...input, target: { type: 'local' } })
+  }
+
+  createExternalAutomation(input: Omit<ExternalAutomationCreateInput, 'target'>): Promise<void> {
+    return createExternalAutomation({ ...input, target: { type: 'local' } })
+  }
+
+  updateExternalAutomation(input: Omit<ExternalAutomationUpdateInput, 'target'>): Promise<void> {
+    return updateExternalAutomation({ ...input, target: { type: 'local' } })
+  }
+
+  runExternalAutomationAction(input: Omit<ExternalAutomationActionInput, 'target'>): Promise<void> {
+    return runExternalAutomationAction({ ...input, target: { type: 'local' } })
   }
 
   showAutomation(id: string): Automation {
@@ -16423,6 +16458,7 @@ export class OrcaRuntimeService {
       agent?: TuiAgent
       launchConfig?: SleepingAgentLaunchConfig
       launchAgent?: TuiAgent
+      viewMode?: 'terminal' | 'chat'
       activate?: boolean
       clientMutationId?: string
       signal?: AbortSignal
@@ -16465,6 +16501,7 @@ export class OrcaRuntimeService {
       agent?: TuiAgent
       launchConfig?: SleepingAgentLaunchConfig
       launchAgent?: TuiAgent
+      viewMode?: 'terminal' | 'chat'
       activate?: boolean
       clientMutationId?: string
       signal?: AbortSignal
@@ -16498,6 +16535,7 @@ export class OrcaRuntimeService {
           env: startupCommand.env,
           startupCommandDelivery: startupCommand.startupCommandDelivery,
           launchAgent: startupCommand.launchAgent,
+          viewMode: opts.viewMode,
           targetGroupId: opts.targetGroupId,
           launchConfig: startupCommand.launchConfig
         }
@@ -16546,6 +16584,7 @@ export class OrcaRuntimeService {
         ...(startupCommand.env ? { env: startupCommand.env } : {}),
         ...(startupCommand.launchConfig ? { launchConfig: startupCommand.launchConfig } : {}),
         ...(startupCommand.launchAgent ? { launchAgent: startupCommand.launchAgent } : {}),
+        ...(opts.viewMode ? { viewMode: opts.viewMode } : {}),
         startupCommandDelivery: startupCommand.startupCommandDelivery,
         source: 'runtime-session',
         activate: opts.activate
@@ -16732,6 +16771,7 @@ export class OrcaRuntimeService {
       startupCommandDelivery?: WorktreeStartupLaunch['startupCommandDelivery']
       identity?: { tabId: string; leafId: string; sessionId?: string }
       launchAgent?: TuiAgent
+      viewMode?: 'terminal' | 'chat'
       targetGroupId?: string
       launchConfig?: SleepingAgentLaunchConfig
     } = {}
@@ -16749,6 +16789,7 @@ export class OrcaRuntimeService {
       env: opts.env,
       ...(opts.launchConfig ? { launchConfig: opts.launchConfig } : {}),
       ...(opts.launchAgent ? { launchAgent: opts.launchAgent } : {}),
+      ...(opts.viewMode ? { viewMode: opts.viewMode } : {}),
       startupCommandDelivery: opts.startupCommandDelivery,
       ...(opts.identity
         ? {
@@ -16792,6 +16833,7 @@ export class OrcaRuntimeService {
       title: terminal.title ?? livePty.pty.title ?? 'Terminal',
       ...(cwd ? { startupCwd: cwd } : {}),
       ...(opts.launchAgent ? { launchAgent: opts.launchAgent } : {}),
+      ...(opts.viewMode ? { viewMode: opts.viewMode } : {}),
       parentLayout,
       isActive: activate
     }

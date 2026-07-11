@@ -121,6 +121,10 @@ export type AgentStatusSlice = {
    *  disappearance. Consumed by the retention sync as a one-shot suppressor. */
   retentionSuppressedPaneKeys: Record<string, true>
 
+  /** Completion timestamps explicitly dismissed from Agents. Late hook/cache
+   *  replays at or before the watermark must not recreate those rows. */
+  dismissedAgentStatusByPaneKey: Record<string, number>
+
   /** Terminal tabs explicitly closed in this renderer session. Used only to
    *  drop late in-flight IPC statuses and stale main-cache replays. */
   recentlyClosedAgentStatusTabIds: Record<string, true>
@@ -945,6 +949,7 @@ export const createAgentStatusSlice: StateCreator<AppState, [], [], AgentStatusS
     sleepingAgentSessionsByPaneKey: {},
     agentLaunchConfigByPaneKey: {},
     retentionSuppressedPaneKeys: {},
+    dismissedAgentStatusByPaneKey: {},
     recentlyClosedAgentStatusTabIds: {},
 
     setRuntimeAgentOrchestrationByPaneKey: (entries) => {
@@ -1130,6 +1135,15 @@ export const createAgentStatusSlice: StateCreator<AppState, [], [], AgentStatusS
       const generatedTitleEntry: { current: AgentStatusEntry | null } = { current: null }
       set((s) => {
         const existing = s.agentStatusByPaneKey[paneKey]
+        const dismissedAt = s.dismissedAgentStatusByPaneKey[paneKey]
+        const incomingStateStartedAt = timing?.stateStartedAt ?? updatedAt
+        if (dismissedAt !== undefined) {
+          // A replay of the dismissed completion must stay invisible. A newer
+          // stateStartedAt is a genuinely new turn and clears the tombstone.
+          if (incomingStateStartedAt <= dismissedAt && isAgentCompletionState(payload.state)) {
+            return s
+          }
+        }
         // Why: snapshots and live pushes share receivedAt from the same main-side
         // lastStatusByPaneKey.set, so equal timestamps carry identical data. Strict <
         // preserves live-after-live updates that land in the same millisecond.
@@ -1358,6 +1372,11 @@ export const createAgentStatusSlice: StateCreator<AppState, [], [], AgentStatusS
           nextRetentionSuppressedPaneKeys = { ...s.retentionSuppressedPaneKeys }
           delete nextRetentionSuppressedPaneKeys[paneKey]
         }
+        let nextDismissedAgentStatusByPaneKey = s.dismissedAgentStatusByPaneKey
+        if (dismissedAt !== undefined) {
+          nextDismissedAgentStatusByPaneKey = { ...s.dismissedAgentStatusByPaneKey }
+          delete nextDismissedAgentStatusByPaneKey[paneKey]
+        }
         // Why: pane keys are reused by the same terminal pane across turns.
         // Once a fresh live hook row arrives, any retained snapshot for that
         // pane is stale and must not render beside the live row in the sidebar.
@@ -1432,6 +1451,7 @@ export const createAgentStatusSlice: StateCreator<AppState, [], [], AgentStatusS
           agentLaunchConfigByPaneKey: nextLaunchConfigs,
           migrationUnsupportedByPtyId: migrationUnsupported.next,
           retentionSuppressedPaneKeys: nextRetentionSuppressedPaneKeys,
+          dismissedAgentStatusByPaneKey: nextDismissedAgentStatusByPaneKey,
           agentStatusEpoch:
             retentionRelevantChange || migrationUnsupported.changed
               ? s.agentStatusEpoch + 1
@@ -1647,6 +1667,17 @@ export const createAgentStatusSlice: StateCreator<AppState, [], [], AgentStatusS
         const hasLive = paneKey in s.agentStatusByPaneKey
         liveExisted = hasLive
         const hasRetained = paneKey in s.retainedAgentsByPaneKey
+        const liveEntry = s.agentStatusByPaneKey[paneKey]
+        const retainedEntry = s.retainedAgentsByPaneKey[paneKey]
+        const dismissedAt = Math.max(
+          liveEntry?.stateStartedAt ?? 0,
+          retainedEntry?.entry.stateStartedAt ?? 0,
+          Date.now()
+        )
+        const nextDismissedAgentStatusByPaneKey = {
+          ...s.dismissedAgentStatusByPaneKey,
+          [paneKey]: dismissedAt
+        }
         const migrationUnsupported = pruneMigrationUnsupportedEntries(
           s.migrationUnsupportedByPtyId,
           (entry) => entry.paneKey === paneKey
@@ -1677,15 +1708,19 @@ export const createAgentStatusSlice: StateCreator<AppState, [], [], AgentStatusS
           if (hasLaunchConfig) {
             return {
               agentLaunchConfigByPaneKey: nextLaunchConfigs,
+              dismissedAgentStatusByPaneKey: nextDismissedAgentStatusByPaneKey,
               ...(nextAck !== s.acknowledgedAgentsByPaneKey
                 ? { acknowledgedAgentsByPaneKey: nextAck }
                 : {})
             }
           }
           if (nextAck !== s.acknowledgedAgentsByPaneKey) {
-            return { acknowledgedAgentsByPaneKey: nextAck }
+            return {
+              acknowledgedAgentsByPaneKey: nextAck,
+              dismissedAgentStatusByPaneKey: nextDismissedAgentStatusByPaneKey
+            }
           }
-          return s
+          return { dismissedAgentStatusByPaneKey: nextDismissedAgentStatusByPaneKey }
         }
 
         const nextLive = hasLive ? { ...s.agentStatusByPaneKey } : s.agentStatusByPaneKey
@@ -1733,6 +1768,7 @@ export const createAgentStatusSlice: StateCreator<AppState, [], [], AgentStatusS
           agentStatusByPaneKey: nextLive,
           agentLaunchConfigByPaneKey: nextLaunchConfigs,
           retainedAgentsByPaneKey: nextRetained,
+          dismissedAgentStatusByPaneKey: nextDismissedAgentStatusByPaneKey,
           migrationUnsupportedByPtyId: migrationUnsupported.next,
           ...(nextAck !== s.acknowledgedAgentsByPaneKey
             ? { acknowledgedAgentsByPaneKey: nextAck }
@@ -2282,6 +2318,13 @@ export const createAgentStatusSlice: StateCreator<AppState, [], [], AgentStatusS
         return
       }
       set((s) => {
+        const admittedEntries = entries.filter((retained) => {
+          const dismissedAt = s.dismissedAgentStatusByPaneKey[retained.entry.paneKey]
+          return dismissedAt === undefined || retained.entry.stateStartedAt > dismissedAt
+        })
+        if (admittedEntries.length === 0) {
+          return s
+        }
         // Why: skip the allocation + set(...) entirely when every input entry
         // is already present by reference. Consumers of retainedAgentsByPaneKey
         // select on its identity (the inline agents list), so a spurious map
@@ -2289,7 +2332,7 @@ export const createAgentStatusSlice: StateCreator<AppState, [], [], AgentStatusS
         // the identity-preservation pattern used by pruneRetainedAgents and
         // clearRetentionSuppressedPaneKeys.
         let changed = false
-        for (const retained of entries) {
+        for (const retained of admittedEntries) {
           if (s.retainedAgentsByPaneKey[retained.entry.paneKey] !== retained) {
             changed = true
             break
@@ -2299,7 +2342,7 @@ export const createAgentStatusSlice: StateCreator<AppState, [], [], AgentStatusS
           return s
         }
         const next = { ...s.retainedAgentsByPaneKey }
-        for (const retained of entries) {
+        for (const retained of admittedEntries) {
           const runtimeOrchestration = s.runtimeAgentOrchestrationByPaneKey[retained.entry.paneKey]
           const mergedOrchestration = runtimeOrchestration
             ? mergeCurrentOrchestrationContext(retained.entry.orchestration, runtimeOrchestration)

@@ -635,6 +635,7 @@ function App(): React.JSX.Element {
   const showDotfilesByWorktree = useAppStore((s) => s.showDotfilesByWorktree)
   const filterRepoIds = useAppStore((s) => s.filterRepoIds)
   const acknowledgedAgentsByPaneKey = useAppStore((s) => s.acknowledgedAgentsByPaneKey)
+  const dismissedAgentStatusByPaneKey = useAppStore((s) => s.dismissedAgentStatusByPaneKey)
   const persistedUIReady = useAppStore((s) => s.persistedUIReady)
   const shouldMountContextualTourOverlay = activeContextualTourId !== null
   const shouldMountSetupGuideTelemetryObserver = persistedUIReady
@@ -1415,7 +1416,8 @@ function App(): React.JSX.Element {
         // agent-status.ts (close/dismiss) both flow to disk through map
         // identity changes. Without persisting, agent rows that survive
         // restart come back bold even when the user had already visited them.
-        acknowledgedAgentsByPaneKey
+        acknowledgedAgentsByPaneKey,
+        dismissedAgentStatusByPaneKey
       })
     }, 150)
 
@@ -1436,7 +1438,8 @@ function App(): React.JSX.Element {
     hideAutomationGeneratedWorkspaces,
     showDotfilesByWorktree,
     filterRepoIds,
-    acknowledgedAgentsByPaneKey
+    acknowledgedAgentsByPaneKey,
+    dismissedAgentStatusByPaneKey
   ])
 
   // Apply theme to document

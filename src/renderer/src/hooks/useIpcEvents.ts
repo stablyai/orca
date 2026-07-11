@@ -1692,6 +1692,7 @@ export function useIpcEvents(): void {
             ? {
                 ...(shouldActivate ? {} : { activate: false, recordInteraction: false }),
                 launchAgent: data.launchAgent,
+                ...(data.viewMode ? { viewMode: data.viewMode } : {}),
                 ...initialAgentTabViewModeProps(store.settings, {
                   agent: data.launchAgent
                 }),

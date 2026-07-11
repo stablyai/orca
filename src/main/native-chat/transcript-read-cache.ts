@@ -13,9 +13,9 @@ import { readNativeChatTranscript, type ReadTranscriptResult } from './transcrip
 // share one sessionId yet resolve to DIFFERENT files (the same session resumed
 // into a second worktree, which writes a new transcript file), and a
 // sessionId-only key let one worktree's cached parse be served to another when
-// their file mtimes momentarily coincided (#7326). The cache stores ONE
-// canonical, unwindowed parse; windowing and per-surface truncation stay in the
-// callers so the same parse is reused across all `limit` values and every client kind.
+// their file mtimes momentarily coincided (#7326). The cache stores a bounded
+// recent parse; callers still apply smaller per-surface windows so opening a
+// long conversation does not require parsing its entire history.
 
 type CachedTranscript = {
   result: ReadTranscriptResult

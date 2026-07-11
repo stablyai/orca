@@ -2414,6 +2414,9 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
         acknowledgedAgentsByPaneKey: sanitizeAcknowledgedAgentsByPaneKey(
           ui.acknowledgedAgentsByPaneKey
         ),
+        dismissedAgentStatusByPaneKey: sanitizeAcknowledgedAgentsByPaneKey(
+          ui.dismissedAgentStatusByPaneKey
+        ),
         workspaceCleanupDismissals: sanitizeWorkspaceCleanupDismissals(
           ui.workspaceCleanup?.dismissals
         ),
