@@ -59,6 +59,15 @@ type MiniMaxResolvedConfig = {
 }
 
 type GeminiCliOAuthEnabledResolver = () => boolean
+type ActiveRateLimitProvider = ProviderRateLimits['provider']
+type ActiveProviderState = {
+  provider: ActiveRateLimitProvider
+  limits: ProviderRateLimits | null
+}
+type ActiveWindowRefreshPlan =
+  | { kind: 'none' }
+  | { kind: 'full' }
+  | { kind: 'providers'; providers: ActiveRateLimitProvider[] }
 
 // Why: Claude's subscription usage endpoint has a tight request budget. Quota
 // state is informational, so prefer keeping a recent snapshot over polling it
@@ -67,6 +76,15 @@ const DEFAULT_POLL_MS = 15 * 60 * 1000 // 15 minutes
 const MIN_POLL_MS = 30 * 1000 // 30 seconds — renderer input should never create a tight loop.
 const MAX_POLL_MS = 2_147_483_647 // Max safe setInterval delay before Node clamps back to 1ms.
 const MIN_REFETCH_MS = 5 * 60 * 1000 // 5 minutes — debounce resume/manual refresh bursts
+const ACTIVE_FAILURE_REFETCH_MS = MIN_POLL_MS
+// Why: these providers have a dedicated fetch cycle, so an activation retry can
+// refresh just the failing one. Providers without one force a full fetchAll, so
+// their error retries stay on the 5-minute cadence to protect Claude's budget.
+const INDIVIDUALLY_REFRESHABLE_PROVIDERS: ReadonlySet<ActiveRateLimitProvider> = new Set([
+  'claude',
+  'codex',
+  'grok'
+])
 const STALE_THRESHOLD_MS = 30 * 60 * 1000 // 30 minutes — after this, stale data is dropped
 const INACTIVE_FETCH_DEBOUNCE_MS = 60 * 1000 // 60 seconds — debounce fetch-on-open
 const DEFERRED_STARTUP_ACTIVE_REFRESH_MS = 1000
@@ -122,7 +140,18 @@ export class RateLimitService {
   private pollInterval: number = DEFAULT_POLL_MS
   private timer: ReturnType<typeof setInterval> | null = null
   private deferredStartupRefreshTimer: ReturnType<typeof setTimeout> | null = null
-  private lastFetchAt = 0
+  // Why: after the first recovery attempt, repeated focus/show/restore events
+  // during the same outage should not create a tight provider retry loop.
+  private lastActiveFailureRetryAtByProvider: Record<ActiveRateLimitProvider, number> = {
+    claude: 0,
+    codex: 0,
+    gemini: 0,
+    'opencode-go': 0,
+    kimi: 0,
+    minimax: 0,
+    grok: 0,
+    antigravity: 0
+  }
   private mainWindow: BrowserWindow | null = null
   private detachWindowListeners: (() => void) | null = null
   private isFetching = false
@@ -698,17 +727,104 @@ export class RateLimitService {
     return this.mainWindow.isFocused()
   }
 
+  private getActiveProviderState(): ActiveProviderState[] {
+    // Why: key by provider so a newly added provider is compile-forced to have
+    // an active-refresh entry — a missing one silently never recovers from a
+    // startup error (antigravity was omitted once and needed a fix-up).
+    const byProvider: Record<ActiveRateLimitProvider, ProviderRateLimits | null> = {
+      claude: this.state.claude,
+      codex: this.state.codex,
+      gemini: this.state.gemini,
+      'opencode-go': this.state.opencodeGo,
+      kimi: this.state.kimi,
+      minimax: this.state.minimax,
+      grok: this.state.grok,
+      antigravity: this.state.antigravity
+    }
+    return Object.entries(byProvider).map(([provider, limits]) => ({
+      provider: provider as ActiveRateLimitProvider,
+      limits
+    }))
+  }
+
+  private getActiveWindowRefreshPlan(now: number): ActiveWindowRefreshPlan {
+    const retryableFailures: ActiveRateLimitProvider[] = []
+    for (const { provider, limits } of this.getActiveProviderState()) {
+      if (!limits || limits.status === 'idle' || limits.status === 'fetching') {
+        return { kind: 'full' }
+      }
+      if (limits.status === 'ok' || limits.status === 'unavailable') {
+        if (now - limits.updatedAt >= MIN_REFETCH_MS) {
+          return { kind: 'full' }
+        }
+        continue
+      }
+      // Why: a failed startup read is not fresh data. Keep it eligible for
+      // activation recovery while throttling repeated events per provider.
+      if (limits.status === 'error') {
+        const lastRetryAt = this.lastActiveFailureRetryAtByProvider[provider]
+        const throttleMs = INDIVIDUALLY_REFRESHABLE_PROVIDERS.has(provider)
+          ? ACTIVE_FAILURE_REFETCH_MS
+          : MIN_REFETCH_MS
+        if (now - lastRetryAt >= throttleMs) {
+          retryableFailures.push(provider)
+        }
+      }
+    }
+
+    if (retryableFailures.length === 0) {
+      return { kind: 'none' }
+    }
+    return { kind: 'providers', providers: retryableFailures }
+  }
+
+  private async runActiveWindowRefreshPlan(plan: ActiveWindowRefreshPlan): Promise<void> {
+    if (plan.kind === 'none') {
+      return
+    }
+    if (plan.kind === 'full') {
+      await this.fetchAll()
+      return
+    }
+
+    // Why: a fetch already in flight will refresh these providers; skip without
+    // consuming the per-provider retry throttle so the next activation retries.
+    if (this.isFetching) {
+      return
+    }
+
+    const now = Date.now()
+    for (const provider of plan.providers) {
+      this.lastActiveFailureRetryAtByProvider[provider] = now
+    }
+
+    const canRefreshIndividually = plan.providers.every((provider) =>
+      INDIVIDUALLY_REFRESHABLE_PROVIDERS.has(provider)
+    )
+    if (!canRefreshIndividually) {
+      await this.fetchAll()
+      return
+    }
+
+    // Why: partial failures of providers with a dedicated fetch cycle should
+    // recover without re-reading healthy providers still inside their debounce.
+    if (plan.providers.includes('claude')) {
+      await this.fetchClaudeOnly()
+    }
+    if (plan.providers.includes('codex')) {
+      await this.fetchCodexOnly()
+    }
+    if (plan.providers.includes('grok')) {
+      await this.fetchGrokOnly()
+    }
+  }
+
   private async refreshIfWindowActive(): Promise<void> {
     if (!this.shouldBackgroundPoll()) {
       return
     }
-    // Why: startup intentionally skips the pre-paint fetch. The first visible
-    // activation must still populate usage after update relaunches where the
-    // timer can be focus-gated for a long time.
-    if (Date.now() - this.lastFetchAt < MIN_REFETCH_MS) {
-      return
-    }
-    await this.fetchAll()
+    const plan = this.getActiveWindowRefreshPlan(Date.now())
+    await this.runActiveWindowRefreshPlan(plan)
   }
 
   private async fetchAll(options?: { force?: boolean }): Promise<void> {
@@ -1411,8 +1527,6 @@ export class RateLimitService {
       ...this.state,
       grok: this.applyStalePolicy(grok, previousState.grok)
     })
-
-    this.lastFetchAt = Date.now()
   }
 
   private async runFetchCodexOnlyCycle(signal: AbortSignal): Promise<void> {
@@ -1465,8 +1579,6 @@ export class RateLimitService {
       ...this.state,
       codex: shouldApplyCodex ? this.applyStalePolicy(codex, previousState.codex) : this.state.codex
     })
-
-    this.lastFetchAt = Date.now()
   }
 
   private async runFetchClaudeOnlyCycle(signal: AbortSignal): Promise<void> {
@@ -1524,8 +1636,6 @@ export class RateLimitService {
         ? this.applyStalePolicy(claude, previousState.claude)
         : this.state.claude
     })
-
-    this.lastFetchAt = Date.now()
   }
 
   private async runFetchGrokOnlyCycle(signal: AbortSignal): Promise<void> {
@@ -1563,8 +1673,6 @@ export class RateLimitService {
       ...this.state,
       grok: this.applyStalePolicy(grok, previousState.grok)
     })
-
-    this.lastFetchAt = Date.now()
   }
 
   private applyStalePolicy(
