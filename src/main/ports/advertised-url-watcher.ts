@@ -11,9 +11,6 @@
 // both straddle PTY write boundaries, so we cannot strip ANSI and scan one
 // chunk at a time. We accumulate raw bytes, finalize only at newline-anchored
 // boundaries, then run a stateless strip-and-scan on the finalized prefix.
-import { stripTerminalControls } from '../../shared/terminal-controls'
-
-export { stripTerminalControls } from '../../shared/terminal-controls'
 
 const PER_PTY_BUFFER_LIMIT = 4096
 const PENDING_PRE_BIND_LIMIT = 16 * 1024
@@ -23,6 +20,17 @@ const PENDING_PRE_BIND_LIMIT = 16 * 1024
 const MAX_PENDING_ENTRIES = 32
 const MAX_CACHE_ENTRIES = 256
 const URL_CANDIDATE_LIMIT = 2048
+
+// ANSI/OSC strippers mirror the runtime normalizer, with URL-specific cursor
+// move handling below to avoid fusing text that a real terminal would skip.
+const OSC_PATTERN = /\x1b\][^\x07\x1b]*(?:\x07|\x1b\\)/g
+// Why: cursor moves in differential redraws can skip cells that are already on
+// screen. Replacing them with a URL-invalid guard skips the damaged candidate.
+const CURSOR_MOVE_PATTERN = /\x1b\[[0-?]*[ -/]*[CDGHf]/g
+const CURSOR_MOVE_URL_GUARD = '['
+const CSI_PATTERN = /\x1b\[[0-?]*[ -/]*[@-~]/g
+const SINGLE_ESC_PATTERN = /\x1b[@-_]/g
+const CONTROL_PATTERN = /[\x00-\x08\x0b-\x1f\x7f]/g
 
 // Why: this is a permissive candidate matcher. Real validation happens via
 // `new URL()` below. Stopping at characters that cannot appear in a URL
@@ -106,6 +114,17 @@ function lastLineBreak(text: string): number {
     }
   }
   return -1
+}
+
+export function stripTerminalControls(text: string): string {
+  return text
+    .replace(/\r\n/g, '\n')
+    .replace(/\r/g, '\n')
+    .replace(OSC_PATTERN, '')
+    .replace(CURSOR_MOVE_PATTERN, CURSOR_MOVE_URL_GUARD)
+    .replace(CSI_PATTERN, '')
+    .replace(SINGLE_ESC_PATTERN, '')
+    .replace(CONTROL_PATTERN, '')
 }
 
 export function extractUrlCandidates(cleaned: string): URL[] {

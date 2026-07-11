@@ -51,6 +51,22 @@ describe('createTerminalGitHubPRLinkDetector', () => {
     expect(observe('https://github.com/owne\x1b[1Cr/repo/pull/10\n')).toEqual([])
   })
 
+  it('rejects PR URLs fused across terminal rows', () => {
+    for (const cursorMove of ['\x1b[1A', '\x1b[1B']) {
+      const observe = createTerminalGitHubPRLinkDetector()
+
+      expect(observe(`https://github.com/owner/repo/pull/${cursorMove}10\n`)).toEqual([])
+    }
+  })
+
+  it('does not fuse screen-editing controls into PR URLs', () => {
+    for (const screenEdit of ['\x08', '\x0b', '\x0c', '\x1bD', '\x1b[2J', '\x1b[2K', '\x1b[1S']) {
+      const observe = createTerminalGitHubPRLinkDetector()
+
+      expect(observe(`https://github.com/owner/repo/pull/1${screenEdit}0\n`)).toEqual([])
+    }
+  })
+
   it('deduplicates styled and plain instances', () => {
     const observe = createTerminalGitHubPRLinkDetector()
 

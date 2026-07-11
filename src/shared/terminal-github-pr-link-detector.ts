@@ -1,3 +1,4 @@
+/* eslint-disable no-control-regex -- ANSI SGR sequences are raw PTY input. */
 /**
  * Chunk-boundary-safe GitHub PR URL scan over PTY output.
  *
@@ -9,9 +10,11 @@
  */
 import type { RepoSlug } from './github-links'
 import { parseGitHubIssueOrPRLink } from './github-links'
-import { stripTerminalControls } from './terminal-controls'
 
 const GITHUB_PR_PATH_MARKER = '/pull/'
+const TERMINAL_SGR_PATTERN = /\x1b\[[0-?]*[ -/]*m/g
+const TERMINAL_CURSOR_CONTROL_PATTERN = /[\x08\x0b\x0c]/g
+const TERMINAL_CONTROL_GUARD = '\ufffd'
 const HTTP_SCHEME_PREFIXES = ['https://', 'http://'] as const
 const TRAILING_TERMINAL_PUNCTUATION_RE = /[),.;\]}]+$/
 const MAX_CARRY_LENGTH = 512
@@ -28,10 +31,10 @@ function trimTerminalUrl(candidate: string): string {
 }
 
 function parseTerminalGitHubPRUrl(candidate: string): TerminalGitHubPRLink | null {
-  const url = trimTerminalUrl(candidate)
-  if (url.includes('[')) {
+  if (candidate.includes('\x1b') || candidate.includes(TERMINAL_CONTROL_GUARD)) {
     return null
   }
+  const url = trimTerminalUrl(candidate)
   const parsed = parseGitHubIssueOrPRLink(url)
   if (!parsed || parsed.type !== 'pr') {
     return null
@@ -133,12 +136,18 @@ export function createTerminalGitHubPRLinkDetector(): (data: string) => Terminal
 
   return (data: string): TerminalGitHubPRLink[] => {
     const rawCombined = carry ? carry + data : data
-    const combined = stripTerminalControls(rawCombined)
 
-    if (!combined.includes(GITHUB_PR_PATH_MARKER)) {
+    // Why: PTY output is a hot path; avoid multi-pass ANSI normalization for
+    // chunks that cannot contain a GitHub pull-request URL.
+    if (!rawCombined.includes(GITHUB_PR_PATH_MARKER)) {
       carry = getPotentialGitHubPRCarry(rawCombined)
       return []
     }
+    // Why: SGR styling has no screen width, so removing it is safe. Cursor
+    // controls get a guard; other escape sequences remain URL-invalid.
+    const combined = rawCombined
+      .replace(TERMINAL_SGR_PATTERN, '')
+      .replace(TERMINAL_CURSOR_CONTROL_PATTERN, TERMINAL_CONTROL_GUARD)
 
     const links: TerminalGitHubPRLink[] = []
     // Why: PTY data may echo a huge pasted line. Scan URL candidates directly
