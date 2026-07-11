@@ -4815,6 +4815,8 @@
           "remoteServerFallback": "リモートサーバー",
           "loadAccountsFailed": "プロバイダーアカウントを読み込めませんでした。",
           "remoteScopeAccounts": "{{value0}} が管理するアカウントを表示しています。アカウントの追加や再認証はそのサーバー上で行ってください。",
+          "accountScopePrefix": "アカウントのスコープ",
+          "remoteScopeLocalAccountsKept": "このデスクトップで管理されているアカウントはそのまま残っています。デフォルトランタイムをローカルデスクトップに戻すと表示されます。",
           "remoteScopeAuthContext": "各アカウントは {{value0}} 上に独自のサインインコンテキストを保持します。",
           "remoteEmptyClaudeAccounts": "{{value0}} に管理対象の Claude アカウントはありません。システム既定の Claude ログインを使用します。アカウントの追加はそのサーバー上で行ってください。",
           "remoteEmptyCodexAccounts": "{{value0}} に管理対象の Codex アカウントはありません。システム既定の Codex ログインを使用します。アカウントの追加はそのサーバー上で行ってください。"

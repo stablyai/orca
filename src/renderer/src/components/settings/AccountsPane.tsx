@@ -49,6 +49,7 @@ import {
   getAccountsPaneSearchEntries
 } from './accounts-search'
 import { GrokAccountsSection } from './GrokAccountsSection'
+import { ProviderHostScopeControl } from './ProviderHostScopeControl'
 import { SearchableSetting } from './SearchableSetting'
 import { SettingsRow, SettingsSegmentedControl } from './SettingsFormControls'
 import { matchesSettingsSearch } from './settings-search'
@@ -387,6 +388,28 @@ export function AccountsPane({
     localAccountRuntime.runtime === 'host' && !navigator.userAgent.includes('Windows')
       ? `${localAccountRuntime.label.charAt(0).toLocaleLowerCase()}${localAccountRuntime.label.slice(1)}`
       : localAccountRuntime.label
+  // Why: users read the remote-scoped list as their desktop accounts being
+  // deleted (#8186); say they are intact and link the default-runtime control.
+  const remoteAccountScopeNotice = isRemoteAccountScope ? (
+    <ProviderHostScopeControl
+      labelPrefix={translate(
+        'auto.components.settings.AccountsPane.accountScopePrefix',
+        'Account scope'
+      )}
+      scope={{
+        label: translate(
+          'auto.components.settings.providerAccountScope.remoteServer',
+          'Remote server: {{value0}}',
+          { value0: remoteServerLabel ?? '' }
+        ),
+        description: translate(
+          'auto.components.settings.AccountsPane.remoteScopeLocalAccountsKept',
+          'Accounts managed on this desktop are unchanged. Switch the default runtime back to Local desktop to view them.'
+        )
+      }}
+      className="text-xs"
+    />
+  ) : null
 
   const [codexAccounts, setCodexAccounts] = useState<CodexRateLimitAccountsState>({
     accounts: [],
@@ -842,6 +865,7 @@ export function AccountsPane({
               ) : null}
             </div>
           </div>
+          {remoteAccountScopeNotice}
 
           <div className="space-y-2">
             <button
@@ -1118,6 +1142,7 @@ export function AccountsPane({
               {translate('auto.components.settings.AccountsPane.b0e948a4f9', 'Add Account')}
             </Button>
           </div>
+          {remoteAccountScopeNotice}
 
           <div className="space-y-2">
             <button

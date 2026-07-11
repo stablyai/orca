@@ -86,6 +86,10 @@ describe('AccountsPane', () => {
     expect(markup).toContain(
       'Showing accounts managed by the remote server. Add or re-authenticate accounts on that server.'
     )
+    // Both the Claude and Codex sections must say local accounts are intact and
+    // link the default-runtime control, so the scoped list never reads as loss.
+    expect(markup.split('Accounts managed on this desktop are unchanged').length - 1).toBe(2)
+    expect(markup.split('Open Remote Servers').length - 1).toBe(2)
     // The WSL account-location toggle is a local concern; a remote owner hides it.
     expect(markup).not.toContain('aria-label="Account location"')
     const addAccountIndex = markup.indexOf('Add Account')
@@ -99,6 +103,7 @@ describe('AccountsPane', () => {
     const markup = renderPane(getDefaultSettings('/tmp'))
 
     expect(markup).toContain('Showing accounts for this device. New accounts are added there.')
+    expect(markup).not.toContain('Open Remote Servers')
     const addAccountIndex = markup.indexOf('Add Account')
     expect(addAccountIndex).toBeGreaterThan(0)
     expect(

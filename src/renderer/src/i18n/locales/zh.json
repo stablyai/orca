@@ -4815,6 +4815,8 @@
           "remoteServerFallback": "远程服务器",
           "loadAccountsFailed": "无法加载提供商账户。",
           "remoteScopeAccounts": "正在显示由 {{value0}} 管理的账户。请在该服务器上添加或重新验证账户。",
+          "accountScopePrefix": "账户范围",
+          "remoteScopeLocalAccountsKept": "此桌面端管理的账户并未改变。将默认运行时切换回本地桌面即可查看。",
           "remoteScopeAuthContext": "每个账户在 {{value0}} 上保留自己的登录上下文。",
           "remoteEmptyClaudeAccounts": "{{value0}} 上没有受管理的 Claude 账户。它使用其系统默认的 Claude 登录；请在该服务器上添加账户。",
           "remoteEmptyCodexAccounts": "{{value0}} 上没有受管理的 Codex 账户。它使用其系统默认的 Codex 登录；请在该服务器上添加账户。"
