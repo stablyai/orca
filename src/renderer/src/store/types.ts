@@ -35,8 +35,10 @@ import type { CommitMessageGenerationSlice } from './slices/commit-message-gener
 import type { PinnedTabCloseConfirmSlice } from './slices/pinned-tab-close-confirm'
 import type { OrcaProfilesSlice } from './slices/orca-profiles'
 import type { NewIssueDraftSlice } from './slices/new-issue-draft'
+import type { MissionsSlice } from './slices/missions'
 
 export type AppState = RepoSlice &
+  MissionsSlice &
   SparsePresetsSlice &
   WorktreeSlice &
   TerminalSlice &

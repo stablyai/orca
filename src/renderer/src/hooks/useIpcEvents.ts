@@ -1119,6 +1119,7 @@ export function useIpcEvents(): void {
         }
         void state.fetchProjectGroups()
         void state.fetchFolderWorkspaces()
+        void state.fetchMissions()
         void state.fetchRepos()
       })
     )

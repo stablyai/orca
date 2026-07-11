@@ -429,6 +429,7 @@ function App(): React.JSX.Element {
       fetchProjectGroupsForAllHosts: s.fetchProjectGroupsForAllHosts,
       fetchFolderWorkspaces: s.fetchFolderWorkspaces,
       fetchFolderWorkspacesForAllHosts: s.fetchFolderWorkspacesForAllHosts,
+      fetchMissions: s.fetchMissions,
       fetchAllWorktrees: s.fetchAllWorktrees,
       fetchWorktreeLineage: s.fetchWorktreeLineage,
       fetchOrcaProfiles: s.fetchOrcaProfiles,
@@ -1118,6 +1119,7 @@ function App(): React.JSX.Element {
                 await actions.fetchReposForAllHosts()
                 await actions.fetchProjectGroupsForAllHosts()
                 await actions.fetchFolderWorkspacesForAllHosts()
+                await actions.fetchMissions()
               })
               if (!cancelled) {
                 await timeRendererStartupStep('remote-worktree-refresh', async () => {

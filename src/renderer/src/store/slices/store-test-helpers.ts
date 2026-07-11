@@ -45,6 +45,7 @@ import { createCommitMessageGenerationSlice } from './commit-message-generation'
 import { createPinnedTabCloseConfirmSlice } from './pinned-tab-close-confirm'
 import { createOrcaProfilesSlice } from './orca-profiles'
 import { createNewIssueDraftSlice } from './new-issue-draft'
+import { createMissionsSlice } from './missions'
 import { translate } from '@/i18n/i18n'
 
 export const TEST_REPO = {
@@ -58,6 +59,7 @@ export const TEST_REPO = {
 export function createTestStore() {
   return create<AppState>()((...a) => ({
     ...createRepoSlice(...a),
+    ...createMissionsSlice(...a),
     ...createSparsePresetsSlice(...a),
     ...createWorktreeSlice(...a),
     ...createTerminalSlice(...a),
