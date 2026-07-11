@@ -24,6 +24,7 @@ import type {
   GitHubPRRefreshReason,
   GitHubAssignableUser,
   GitHubCommentResult,
+  GitHubCreateIssueResult,
   GitHubWorkItem,
   JiraProjectStatusOrder,
   GitPushTarget,
@@ -1254,8 +1255,7 @@ const api = {
       body: string
       labels?: string[]
       assignees?: string[]
-    }): Promise<{ ok: true; number: number; url: string } | { ok: false; error: string }> =>
-      ipcRenderer.invoke('gh:createIssue', args),
+    }): Promise<GitHubCreateIssueResult> => ipcRenderer.invoke('gh:createIssue', args),
 
     countWorkItems: (args: {
       repoPath: string

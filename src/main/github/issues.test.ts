@@ -288,6 +288,30 @@ describe('issue source operations', () => {
     )
   })
 
+  it('recognizes the oversized-body response from structured gh stderr', async () => {
+    getIssueOwnerRepoMock.mockResolvedValueOnce({ owner: 'stablyai', repo: 'orca' })
+    ghExecFileAsyncMock
+      .mockRejectedValueOnce(
+        Object.assign(new Error('Command failed: gh'), {
+          stderr: 'gh: body is too long (maximum is 65536 characters) (HTTP 422)'
+        })
+      )
+      .mockResolvedValueOnce({
+        stdout: JSON.stringify({
+          number: 929,
+          html_url: 'https://github.com/stablyai/orca/issues/929'
+        })
+      })
+      .mockResolvedValueOnce({ stdout: '' })
+
+    await expect(createIssue('/repo-root', 'Image issue', 'data:image')).resolves.toEqual({
+      ok: true,
+      number: 929,
+      url: 'https://github.com/stablyai/orca/issues/929'
+    })
+    expect(ghExecFileAsyncMock).toHaveBeenCalledTimes(3)
+  })
+
   it('does not retry unrelated create failures', async () => {
     getIssueOwnerRepoMock.mockResolvedValueOnce({ owner: 'stablyai', repo: 'orca' })
     ghExecFileAsyncMock.mockRejectedValueOnce(new Error('HTTP 422: assignees is invalid'))
@@ -364,8 +388,10 @@ describe('issue source operations', () => {
       .mockRejectedValueOnce(new Error('HTTP 500: update failed'))
 
     await expect(createIssue('/repo-root', 'Partial issue', 'data:image')).resolves.toEqual({
-      ok: false,
-      error:
+      ok: true,
+      number: 928,
+      url: 'https://github.com/stablyai/orca/issues/928',
+      bodySaveWarning:
         'Issue https://github.com/stablyai/orca/issues/928 was created, but saving its body failed: HTTP 500: update failed'
     })
   })

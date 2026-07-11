@@ -6865,7 +6865,9 @@ export default function TaskPage(): React.JSX.Element {
               labels: newIssueLabels,
               assignees: newIssueAssignees.map((assignee) => assignee.login)
             },
-            { timeoutMs: 30_000 }
+            // Why: oversized-body recovery can require two 30-second writes
+            // after GitHub rejects the initial create request.
+            { timeoutMs: 65_000 }
           )
         : await window.api.gh.createIssue({
             repoPath: newIssueTargetRepo.path,
@@ -6883,28 +6885,42 @@ export default function TaskPage(): React.JSX.Element {
         )
         return
       }
-      toast.success(
-        translate('auto.components.TaskPage.3f9604efc7', 'Opened issue #{{value0}}', {
-          value0: result.number
-        }),
-        {
-          action: result.url
-            ? {
-                label: translate('auto.components.TaskPage.9c57663908', 'View'),
-                onClick: () => window.open(result.url, '_blank')
-              }
-            : undefined
-        }
+      const createdIssueToast = translate(
+        'auto.components.TaskPage.3f9604efc7',
+        'Opened issue #{{value0}}',
+        { value0: result.number }
       )
+      const createdIssueToastOptions = {
+        action: result.url
+          ? {
+              label: translate('auto.components.TaskPage.9c57663908', 'View'),
+              onClick: () => window.open(result.url, '_blank')
+            }
+          : undefined
+      }
+      if (result.bodySaveWarning) {
+        toast.warning(createdIssueToast, {
+          ...createdIssueToastOptions,
+          description: result.bodySaveWarning
+        })
+      } else {
+        toast.success(createdIssueToast, createdIssueToastOptions)
+      }
       setNewIssueOpen(false)
-      setNewIssueTitle('')
-      setNewIssueBody('')
-      setNewIssueLabels([])
-      setNewIssueAssignees([])
-      // Why: a successful submit is the only path that discards the recovery
-      // draft. Closing `newIssueOpen` in the same commit keeps the write-through
-      // effect (gated on it) from re-persisting the emptied fields.
-      clearNewIssueDraft()
+      if (result.bodySaveWarning) {
+        // Why: retain the unsaved body for recovery, but clear the title so
+        // reopening the composer cannot repeat the create with one click.
+        setNewIssueTitle('')
+        setNewIssueDraft({ title: '' })
+      } else {
+        setNewIssueTitle('')
+        setNewIssueBody('')
+        setNewIssueLabels([])
+        setNewIssueAssignees([])
+        // Why: only a complete success discards the recovery draft; a partial
+        // body save keeps the original text available without another create.
+        clearNewIssueDraft()
+      }
       // Why: bump the nonce so the list refetches and shows the new issue.
       setTaskRefreshNonce((current) => current + 1)
 
@@ -6973,7 +6989,8 @@ export default function TaskPage(): React.JSX.Element {
     newIssueTitle,
     openGitHubDetailPage,
     setDialogWorkItem,
-    clearNewIssueDraft
+    clearNewIssueDraft,
+    setNewIssueDraft
   ])
 
   const handleCreateNewLinearProject = useCallback(async (): Promise<void> => {

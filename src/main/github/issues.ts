@@ -6,6 +6,7 @@ import type {
   ClassifiedError,
   GitHubAssignableUser,
   GitHubCreateIssueFields,
+  GitHubCreateIssueResult,
   GitHubCommentResult,
   GitHubIssueUpdate,
   IssueInfo,
@@ -15,7 +16,7 @@ import type {
 import { mapIssueInfo } from './mappers'
 import type { LocalGitExecOptions, OwnerRepo } from './gh-utils'
 // prettier-ignore
-import { ghExecFileAsync, acquire, release, getIssueOwnerRepo, resolveIssueSource, classifyGhError, classifyListIssuesError, ghRepoExecOptions, githubRepoContext } from './gh-utils'
+import { ghExecFileAsync, acquire, release, getIssueOwnerRepo, resolveIssueSource, classifyGhError, classifyListIssuesError, ghRepoExecOptions, githubRepoContext, extractExecError } from './gh-utils'
 
 // Why: distinguishes a successful-empty listing from a failed fetch. The
 // previous `catch { return [] }` conflated a 403 on a private upstream with an
@@ -29,6 +30,11 @@ import { ghExecFileAsync, acquire, release, getIssueOwnerRepo, resolveIssueSourc
 export type IssueListResult = {
   items: IssueInfo[]
   error?: ClassifiedError
+}
+
+function githubIssueErrorMessage(error: unknown): string {
+  const { stderr, stdout } = extractExecError(error)
+  return stderr.trim() || stdout.trim()
 }
 
 /**
@@ -162,7 +168,7 @@ export async function createIssue(
   connectionId?: string | null,
   fields?: GitHubCreateIssueFields,
   localGitOptions: LocalGitExecOptions = {}
-): Promise<{ ok: true; number: number; url: string } | { ok: false; error: string }> {
+): Promise<GitHubCreateIssueResult> {
   const trimmedTitle = title.trim()
   if (!trimmedTitle) {
     return { ok: false, error: 'Title is required' }
@@ -208,12 +214,13 @@ export async function createIssue(
       const { stdout } = await ghExecFileAsync(createArgs(body), ghOptions)
       data = parseIssue(stdout)
     } catch (err) {
-      const message = err instanceof Error ? err.message : String(err)
+      const message = githubIssueErrorMessage(err)
       if (!/body is too long \(maximum is \d+ characters\)/i.test(message)) {
         return { ok: false, error: message }
       }
 
-      // Why: GitHub accepts the placeholder create even when the real body is too large, so we create first and PATCH the full body after.
+      // Why: GitHub rejects oversized bodies on create but accepts the same body
+      // on update, so establish the issue before attaching its body.
       const { stdout } = await ghExecFileAsync(createArgs(''), ghOptions)
       data = parseIssue(stdout)
       if (typeof data.number !== 'number') {
@@ -233,11 +240,13 @@ export async function createIssue(
           ghOptions
         )
       } catch (patchErr) {
-        const patchMessage = patchErr instanceof Error ? patchErr.message : String(patchErr)
+        const patchMessage = githubIssueErrorMessage(patchErr)
         const identity = data.html_url ?? data.url ?? `#${data.number}`
         return {
-          ok: false,
-          error: `Issue ${identity} was created, but saving its body failed: ${patchMessage}`
+          ok: true,
+          number: data.number,
+          url: String(data.html_url ?? data.url ?? ''),
+          bodySaveWarning: `Issue ${identity} was created, but saving its body failed: ${patchMessage}`
         }
       }
     }
@@ -251,8 +260,7 @@ export async function createIssue(
       url: String(data.html_url ?? data.url ?? '')
     }
   } catch (err) {
-    const message = err instanceof Error ? err.message : String(err)
-    return { ok: false, error: message }
+    return { ok: false, error: githubIssueErrorMessage(err) }
   } finally {
     release()
   }
