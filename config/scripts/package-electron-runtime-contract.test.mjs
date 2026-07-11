@@ -221,7 +221,7 @@ describe('Electron runtime package contract', () => {
     expect(installRun).not.toMatch(/throw\s+\$_/)
   })
 
-  it('temporarily allows publishing Windows after verifying the signed installer only', () => {
+  it('verifies Windows inner binary signatures fail-open before publishing', () => {
     const releaseWorkflow = readFileSync(
       join(projectDir, '.github/workflows/release-cut.yml'),
       'utf8'
@@ -230,12 +230,38 @@ describe('Electron runtime package contract', () => {
     const steps = parsedWorkflow.jobs.build.steps
     const stepNames = steps.map((step) => step.name)
     const outerVerifyIndex = stepNames.indexOf('Verify signed Windows installer')
-    const innerVerifyIndex = stepNames.indexOf('Verify signed Windows inner executable')
+    const innerVerifyIndex = stepNames.indexOf('Verify Windows inner binary signatures')
+    const evidenceIndex = stepNames.indexOf('Upload Windows inner signing evidence')
     const publishIndex = stepNames.indexOf('Publish signed Windows release artifacts')
 
     expect(outerVerifyIndex).toBeGreaterThan(-1)
-    expect(innerVerifyIndex).toBe(-1)
-    expect(publishIndex).toBe(outerVerifyIndex + 1)
+    expect(innerVerifyIndex).toBe(outerVerifyIndex + 1)
+    expect(evidenceIndex).toBe(innerVerifyIndex + 1)
+    expect(publishIndex).toBe(evidenceIndex + 1)
+
+    // Why fail-open: unsigned inner binaries must warn, not block, until the
+    // flow is proven on a real release (issue #7785). Flip this to 'true'
+    // together with the workflow env to make the gate required.
+    expect(steps[innerVerifyIndex].env.ORCA_WINDOWS_INNER_SIGNATURE_REQUIRED).toBe('false')
+
+    // Why: every step in the inner-signing chain must be unable to fail the
+    // release — a SignPath outage or timeout falls through to today's
+    // unsigned-inner flow instead of blocking the cut.
+    const innerChainStepNames = [
+      'Stage unsigned inner PE files for signing',
+      'Upload unsigned inner binaries for SignPath',
+      'Submit inner binaries signing request',
+      'Notify Slack that inner-binary signing is waiting for approval',
+      'Download signed inner binaries from SignPath',
+      'Restore signed inner binaries into unpacked app',
+      'Replace cached elevate.exe with the signed copy',
+      'Rebuild NSIS installer from signed unpacked app'
+    ]
+    for (const stepName of innerChainStepNames) {
+      const step = steps[stepNames.indexOf(stepName)]
+      expect(step, stepName).toBeDefined()
+      expect(step['continue-on-error'], stepName).toBe(true)
+    }
   })
 
   it('publishes both Linux release matrix entries', () => {

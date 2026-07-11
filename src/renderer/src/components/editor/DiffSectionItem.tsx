@@ -13,7 +13,7 @@ import { monaco } from '@/lib/monaco-setup'
 import { detectLanguage } from '@/lib/language-detect'
 import { useAppStore } from '@/store'
 import { computeDiffEditorFontSize } from '@/lib/editor-font-zoom'
-import { findWorktreeById } from '@/store/slices/worktree-helpers'
+import { selectWorktreeDiffComments } from '@/store/worktree-diff-comments-selector'
 import {
   useDiffCommentDecorator,
   type DecoratedDiffComment
@@ -27,7 +27,7 @@ import { DiffSectionHeader } from './DiffSectionHeader'
 import type { DiffSection } from './diff-section-types'
 import type { DiffComment } from '../../../../shared/types'
 import { isDiffComment } from '@/lib/diff-comment-compat'
-import { installEditorSaveShortcut } from './editor-shortcuts'
+import { installEditorSaveShortcut, installMonacoEditorFindShortcut } from './editor-shortcuts'
 import { DiffSectionBody } from './DiffSectionBody'
 import { useDiffSectionLayoutMetrics } from './useDiffSectionLayoutMetrics'
 import { disposeUnattachedMonacoModelPaths } from './diff-monaco-model-disposal'
@@ -106,7 +106,7 @@ export function DiffSectionItem({
   // memo. Selecting a fresh `.filter(...)` result would invalidate on every
   // store change and cause needless re-renders of this section.
   const allDiffComments = useAppStore((s): DiffComment[] | undefined =>
-    worktreeId ? findWorktreeById(s.worktreesByRepo, worktreeId)?.diffComments : undefined
+    selectWorktreeDiffComments(s, worktreeId)
   )
   const diffComments = useMemo(
     () => (allDiffComments ?? []).filter((c) => c.filePath === section.path && isDiffComment(c)),
@@ -343,9 +343,12 @@ export function DiffSectionItem({
     }
 
     modifiedEditorsRef.current.set(index, modified)
+    const original = editor.getOriginalEditor()
     const cleanupSaveShortcut = installEditorSaveShortcut(modified.getContainerDomNode(), () =>
       handleSectionSaveRef.current(index)
     )
+    const cleanupOriginalFindShortcut = installMonacoEditorFindShortcut(original)
+    const cleanupModifiedFindShortcut = installMonacoEditorFindShortcut(modified)
     const modelContentSub = modified.onDidChangeModelContent(() => {
       const current = modified.getValue()
       setSections((prev) => {
@@ -380,9 +383,11 @@ export function DiffSectionItem({
       })
     })
     modified.onDidDispose(() => {
-      // Why: editable diff sections own both the save shortcut and model-change
-      // subscription for this Monaco editor instance.
+      // Why: editable diff sections own both panes' shortcut bridges and the
+      // model subscription for the lifetime of this Monaco diff instance.
       cleanupSaveShortcut()
+      cleanupOriginalFindShortcut()
+      cleanupModifiedFindShortcut()
       modelContentSub.dispose()
     })
   }

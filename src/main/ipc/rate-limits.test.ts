@@ -16,11 +16,17 @@ import { registerRateLimitHandlers } from './rate-limits'
 import type { RateLimitService } from '../rate-limits/service'
 import type { RateLimitState } from '../../shared/rate-limit-types'
 
-function makeService(): { service: RateLimitService; refresh: ReturnType<typeof vi.fn> } {
+function makeService(): {
+  service: RateLimitService
+  refresh: ReturnType<typeof vi.fn>
+  refreshGrok: ReturnType<typeof vi.fn>
+} {
   const refresh = vi.fn(() => Promise.resolve({} as RateLimitState))
+  const refreshGrok = vi.fn(() => Promise.resolve({} as RateLimitState))
   const service = {
     getState: vi.fn(() => ({}) as RateLimitState),
     refresh,
+    refreshGrok,
     refreshCodexForTarget: vi.fn(() => Promise.resolve({} as RateLimitState)),
     refreshClaudeForTarget: vi.fn(() => Promise.resolve({} as RateLimitState)),
     consumeCodexRateLimitResetCredit: vi.fn(() =>
@@ -30,7 +36,7 @@ function makeService(): { service: RateLimitService; refresh: ReturnType<typeof 
     fetchInactiveClaudeAccountsOnOpen: vi.fn(() => Promise.resolve()),
     fetchInactiveCodexAccountsOnOpen: vi.fn(() => Promise.resolve())
   }
-  return { service: service as unknown as RateLimitService, refresh }
+  return { service: service as unknown as RateLimitService, refresh, refreshGrok }
 }
 
 describe('registerRateLimitHandlers', () => {
@@ -53,5 +59,15 @@ describe('registerRateLimitHandlers', () => {
     expect(ipcState.handleHandlers.has('rateLimits:get')).toBe(true)
     expect(ipcState.handleHandlers.has('rateLimits:refresh')).toBe(true)
     expect(ipcState.handleHandlers.has('rateLimits:refreshMiniMax')).toBe(true)
+    expect(ipcState.handleHandlers.has('rateLimits:refreshGrok')).toBe(true)
+  })
+
+  it('registers a refreshGrok channel that delegates to refreshGrok()', async () => {
+    const { service, refreshGrok } = makeService()
+    registerRateLimitHandlers(service)
+    const handler = ipcState.handleHandlers.get('rateLimits:refreshGrok')
+    expect(handler).toBeDefined()
+    await handler!({})
+    expect(refreshGrok).toHaveBeenCalledTimes(1)
   })
 })

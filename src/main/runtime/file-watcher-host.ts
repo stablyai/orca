@@ -13,10 +13,10 @@ import type { FileWatcherHostMessage, FileWatcherWorkerMessage } from './file-wa
 // exclusions silently fail and fseventsd delivers full node_modules churn.
 import {
   WATCHER_IGNORE_DIRS,
-  buildParcelWatcherIgnoreOption
+  buildParcelWatcherIgnoreOptions
 } from '../ipc/filesystem-watcher-ignore'
 
-const RUNTIME_FILE_WATCH_IGNORE = buildParcelWatcherIgnoreOption(WATCHER_IGNORE_DIRS)
+const RUNTIME_FILE_WATCH_IGNORE_OPTIONS = buildParcelWatcherIgnoreOptions(WATCHER_IGNORE_DIRS)
 
 // Why: clean teardown is async (the worker awaits subscription.unsubscribe()
 // before closing its port and exiting). Wait this long for the worker to exit on
@@ -66,7 +66,7 @@ export function watchFileExplorerInWorker(
 ): Promise<() => Promise<void>> {
   return new Promise((resolve, reject) => {
     const worker = new Worker(getFileWatcherWorkerPath(), {
-      workerData: { rootPath, ignore: RUNTIME_FILE_WATCH_IGNORE }
+      workerData: { rootPath, ignoreOptions: RUNTIME_FILE_WATCH_IGNORE_OPTIONS }
     })
 
     let ready = false

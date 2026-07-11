@@ -1,6 +1,8 @@
 import type { DaemonPtyAdapter } from './daemon-pty-adapter'
 import type {
   IPtyProvider,
+  PtyBackgroundStreamEvent,
+  PtyProviderBufferSnapshot,
   PtyProcessInfo,
   PtySpawnOptions,
   PtySpawnResult
@@ -11,7 +13,11 @@ export class DaemonPtyRouter implements IPtyProvider {
   private legacy: DaemonPtyAdapter[]
   private sessionAdapters = new Map<string, DaemonPtyAdapter>()
   private unsubscribers: (() => void)[] = []
-  private dataListeners: ((payload: { id: string; data: string }) => void)[] = []
+  private dataListeners: ((payload: {
+    id: string
+    data: string
+    sequenceChars?: number
+  }) => void)[] = []
   private exitListeners: ((payload: { id: string; code: number }) => void)[] = []
 
   constructor(opts: { current: DaemonPtyAdapter; legacy: DaemonPtyAdapter[] }) {
@@ -76,6 +82,18 @@ export class DaemonPtyRouter implements IPtyProvider {
     this.adapterFor(id).resize(id, cols, rows)
   }
 
+  pauseProducer(id: string): void {
+    this.adapterFor(id).pauseProducer(id)
+  }
+
+  resumeProducer(id: string): void {
+    this.adapterFor(id).resumeProducer(id)
+  }
+
+  setPtyBackgrounded(id: string, background: boolean): void {
+    this.adapterFor(id).setPtyBackgrounded(id, background)
+  }
+
   async shutdown(id: string, opts: { immediate?: boolean; keepHistory?: boolean }): Promise<void> {
     await this.adapterFor(id).shutdown(id, opts)
     // Why: sleep passes keepHistory=true and re-spawns against the same
@@ -105,6 +123,13 @@ export class DaemonPtyRouter implements IPtyProvider {
     return (await this.adapterFor(id).getAppliedSize?.(id)) ?? null
   }
 
+  async getBufferSnapshot(
+    id: string,
+    opts?: { scrollbackRows?: number }
+  ): Promise<PtyProviderBufferSnapshot | null> {
+    return await this.adapterFor(id).getBufferSnapshot(id, opts)
+  }
+
   async clearBuffer(id: string): Promise<void> {
     await this.adapterFor(id).clearBuffer(id)
   }
@@ -119,6 +144,10 @@ export class DaemonPtyRouter implements IPtyProvider {
 
   async getForegroundProcess(id: string): Promise<string | null> {
     return this.adapterFor(id).getForegroundProcess(id)
+  }
+
+  async confirmForegroundProcess(id: string): Promise<string | null> {
+    return this.adapterFor(id).confirmForegroundProcess(id)
   }
 
   async serialize(ids: string[]): Promise<string> {
@@ -144,12 +173,25 @@ export class DaemonPtyRouter implements IPtyProvider {
     return this.current.getProfiles()
   }
 
-  onData(callback: (payload: { id: string; data: string }) => void): () => void {
+  onData(
+    callback: (payload: { id: string; data: string; sequenceChars?: number }) => void
+  ): () => void {
     this.dataListeners.push(callback)
     return () => {
       const idx = this.dataListeners.indexOf(callback)
       if (idx !== -1) {
         this.dataListeners.splice(idx, 1)
+      }
+    }
+  }
+
+  onBackgroundStreamEvent(callback: (payload: PtyBackgroundStreamEvent) => void): () => void {
+    const unsubscribes = this.allAdapters().map((adapter) =>
+      adapter.onBackgroundStreamEvent(callback)
+    )
+    return () => {
+      for (const unsubscribe of unsubscribes) {
+        unsubscribe()
       }
     }
   }

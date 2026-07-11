@@ -1,4 +1,5 @@
 import { keybindingMatchesAction, type KeybindingOverrides } from '../../../../shared/keybindings'
+import type { WindowsShiftEnterEncoding } from './terminal-windows-shift-enter'
 
 export type TerminalShortcutEvent = {
   key: string
@@ -42,6 +43,26 @@ export type TerminalShortcutAction =
   | { type: 'scrollViewport'; position: 'top' | 'bottom' }
   | { type: 'sendInput'; data: string }
 
+/** Kitty keyboard protocol modifier field: 1 + shift(1) + alt(2). */
+function kittyAltModifiers(shiftKey: boolean): number {
+  return shiftKey ? 4 : 3
+}
+
+/** The un-shifted ASCII character for a physical key code (letters, digits,
+ *  and the punctuation map above), or undefined for unmapped codes. */
+function resolveUnshiftedCharacterForCode(code: string | undefined): string | undefined {
+  if (!code) {
+    return undefined
+  }
+  if (code.startsWith('Key') && code.length === 4) {
+    return code.charAt(3).toLowerCase()
+  }
+  if (code.startsWith('Digit') && code.length === 6) {
+    return code.charAt(5)
+  }
+  return PUNCTUATION_CODE_MAP[code]
+}
+
 /**
  * Resolves terminal keyboard events before xterm receives them.
  * Keeps configurable Orca shortcuts and terminal byte fallbacks in one
@@ -55,10 +76,21 @@ export function resolveTerminalShortcutAction(
   isWindows: boolean = false,
   keybindings?: KeybindingOverrides,
   // Why: lazily reports whether the active pane is a local native Windows
-  // ConPTY (PowerShell/cmd via PSReadLine). Only consulted for the Ctrl+Arrow
-  // word-nav rule below, so the execution-host lookup it performs stays off the
-  // hot path for every other keystroke.
-  isLocalWindowsConptyPane?: () => boolean
+  // ConPTY. Only consulted for Shift+Enter and Ctrl+Arrow, so execution-host
+  // lookup stays off every other keystroke.
+  isLocalWindowsConptyPane?: () => boolean,
+  // Why: lazily reports whether the active pane's application has enabled the
+  // kitty keyboard protocol (CSI > u). Gates the Option-as-Alt compensation
+  // below on the application's own opt-in, so shells keep composition.
+  isKittyKeyboardActivePane?: () => boolean,
+  // Why: kitty key reports carry the key's unshifted codepoint in the active
+  // layout; the physical-code table above is US QWERTY and reports the wrong
+  // key on Dvorak/Colemak/AZERTY-class layouts. This resolves through
+  // Chromium's KeyboardLayoutMap when it is available.
+  layoutBaseCharacterForCode?: (code: string) => string | undefined,
+  // Why: lazily resolves the active pane's Windows encoding. Only consulted for
+  // Shift+Enter so agent-state lookup stays off every other keystroke.
+  getWindowsShiftEnterEncoding?: () => WindowsShiftEnterEncoding
 ): TerminalShortcutAction | null {
   const platform: NodeJS.Platform = isMac ? 'darwin' : isWindows ? 'win32' : 'linux'
   if (!event.repeat) {
@@ -118,9 +150,15 @@ export function resolveTerminalShortcutAction(
     event.shiftKey &&
     event.key === 'Enter'
   ) {
-    // Why: Codex on Windows PowerShell treats CSI-u Shift+Enter as inert,
-    // while the Alt+Enter byte path inserts a composer newline.
-    return { type: 'sendInput', data: isWindows ? '\x1b\r' : '\x1b[13;2u' }
+    // Why: Droid needs CSI-u but Codex needs Esc+CR; preserve legacy bytes for
+    // SSH/WSL/remote peers that cannot be safely classified from this client.
+    const useLocalWindowsCapability = isWindows && isLocalWindowsConptyPane?.() !== false
+    const encoding = useLocalWindowsCapability
+      ? (getWindowsShiftEnterEncoding?.() ?? 'alt-enter')
+      : isWindows
+        ? 'alt-enter'
+        : 'csi-u'
+    return { type: 'sendInput', data: encoding === 'csi-u' ? '\x1b[13;2u' : '\x1b\r' }
   }
 
   if (
@@ -184,6 +222,11 @@ export function resolveTerminalShortcutAction(
     !event.shiftKey &&
     event.key === 'Backspace'
   ) {
+    // Why: a kitty-protocol TUI binds the CSI 127;3u that xterm's kitty
+    // encoder emits natively; the legacy \x1b\x7f fallback would bypass it.
+    if (isKittyKeyboardActivePane?.()) {
+      return null
+    }
     return { type: 'sendInput', data: '\x1b\x7f' }
   }
 
@@ -194,6 +237,11 @@ export function resolveTerminalShortcutAction(
     !event.shiftKey &&
     (event.key === 'ArrowLeft' || event.key === 'ArrowRight')
   ) {
+    // Why: a kitty-protocol TUI binds alt+arrow via the CSI 1;3D / 1;3C that
+    // xterm's kitty encoder emits natively; \eb/\ef would reach it as alt+b/f.
+    if (isKittyKeyboardActivePane?.()) {
+      return null
+    }
     // Why: xterm.js would otherwise emit \e[1;3D / \e[1;3C for option/alt+arrow,
     // which default readline (bash, zsh) does not bind to backward-word /
     // forward-word — so word navigation silently doesn't work without a custom
@@ -240,46 +288,61 @@ export function resolveTerminalShortcutAction(
   //
   // The handling depends on the macOptionAsAlt setting (mirrors Ghostty):
   // - 'true':  xterm handles all Option as Meta natively; nothing to do here.
+  // - kitty-protocol pane (any other mode): the TUI asked for modifier-accurate
+  //   keys, so every Option chord is encoded as kitty CSI-u with the physical
+  //   base key (Option+P → \x1b[112;3u). Without this, xterm's kitty encoder
+  //   reports the composed codepoint (alt+π), which no TUI binds — the chord
+  //   neither triggers the hotkey nor types the character (issue: OMP Alt+P /
+  //   Alt+M dead on compose layouts). Dead keys are exempt so composition
+  //   (Option+E → ´) keeps working.
   // - 'false': compensate the three most critical readline shortcuts (B/F/D).
   // - 'left'/'right': the designated Option key acts as full Meta (emit Esc+
   //   for any single letter); the other key composes, with B/F/D compensated.
-  if (isMac && !event.metaKey && !event.ctrlKey && event.altKey && !event.shiftKey) {
-    // Why: event.location on a character key reports that key's position (always
-    // 0 for standard keys), NOT which modifier is held. The caller must track
-    // the Option key's own keydown location and pass it as optionKeyLocation.
-    const isLeftOption = optionKeyLocation === 1
-    const isRightOption = optionKeyLocation === 2
-
-    const shouldActAsMeta =
-      (macOptionAsAlt === 'left' && isLeftOption) || (macOptionAsAlt === 'right' && isRightOption)
-
-    if (shouldActAsMeta) {
-      // Emit Esc+key for letter keys (e.g. Option+B → \x1bb)
-      if (event.code?.startsWith('Key') && event.code.length === 4) {
-        const letter = event.code.charAt(3).toLowerCase()
-        return { type: 'sendInput', data: `\x1b${letter}` }
-      }
-      // Emit Esc+digit for number keys (e.g. Option+1 → \x1b1)
-      if (event.code?.startsWith('Digit') && event.code.length === 6) {
-        return { type: 'sendInput', data: `\x1b${event.code.charAt(5)}` }
-      }
-      const punct = event.code ? PUNCTUATION_CODE_MAP[event.code] : undefined
-      if (punct) {
-        return { type: 'sendInput', data: `\x1b${punct}` }
+  if (isMac && !event.metaKey && !event.ctrlKey && event.altKey && macOptionAsAlt !== 'true') {
+    if (event.key !== 'Dead' && isKittyKeyboardActivePane?.()) {
+      const baseCharacter =
+        (event.code ? layoutBaseCharacterForCode?.(event.code) : undefined) ??
+        resolveUnshiftedCharacterForCode(event.code)
+      if (baseCharacter) {
+        return {
+          type: 'sendInput',
+          data: `\x1b[${baseCharacter.codePointAt(0)};${kittyAltModifiers(event.shiftKey)}u`
+        }
       }
     }
 
-    // In 'false', 'left', or 'right' mode, the compose-side Option key still
-    // needs the three most critical readline shortcuts patched.
-    if (macOptionAsAlt !== 'true' && !shouldActAsMeta) {
-      if (event.code === 'KeyB') {
-        return { type: 'sendInput', data: '\x1bb' }
+    if (!event.shiftKey) {
+      // Why: event.location on a character key reports that key's position
+      // (always 0 for standard keys), NOT which modifier is held. The caller
+      // must track the Option key's own keydown location and pass it as
+      // optionKeyLocation.
+      const isLeftOption = optionKeyLocation === 1
+      const isRightOption = optionKeyLocation === 2
+
+      const shouldActAsMeta =
+        (macOptionAsAlt === 'left' && isLeftOption) || (macOptionAsAlt === 'right' && isRightOption)
+
+      if (shouldActAsMeta) {
+        // Emit Esc+key (e.g. Option+B → \x1bb) for letters, digits, and
+        // mapped punctuation.
+        const character = resolveUnshiftedCharacterForCode(event.code)
+        if (character) {
+          return { type: 'sendInput', data: `\x1b${character}` }
+        }
       }
-      if (event.code === 'KeyF') {
-        return { type: 'sendInput', data: '\x1bf' }
-      }
-      if (event.code === 'KeyD') {
-        return { type: 'sendInput', data: '\x1bd' }
+
+      // In 'false', 'left', or 'right' mode, the compose-side Option key still
+      // needs the three most critical readline shortcuts patched.
+      if (!shouldActAsMeta) {
+        if (event.code === 'KeyB') {
+          return { type: 'sendInput', data: '\x1bb' }
+        }
+        if (event.code === 'KeyF') {
+          return { type: 'sendInput', data: '\x1bf' }
+        }
+        if (event.code === 'KeyD') {
+          return { type: 'sendInput', data: '\x1bd' }
+        }
       }
     }
   }

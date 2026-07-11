@@ -1,3 +1,4 @@
+import { resolveAgentTypeFromTerminalTitle } from '@/components/sidebar/worktree-title-derived-agent-rows'
 import { classifyTitleActivity } from '@/lib/pane-agent-evidence'
 import { tabHasLivePty } from '@/lib/tab-has-live-pty'
 import { resolveRuntimePaneTitleLeafIdFromRoot } from '@/lib/runtime-pane-title-leaf-id'
@@ -91,7 +92,7 @@ function tabHasStatus(
       ) {
         continue
       }
-      if (classifyTitleActivity(title) === status) {
+      if (classifyTitleActivity(title) === status && titleStatusIsAgentAttributable(title)) {
         return true
       }
     }
@@ -103,7 +104,17 @@ function tabHasStatus(
   if (agentStatusPaneIds && agentStatusPaneIds.size > 0) {
     return false
   }
-  return classifyTitleActivity(tab.title) === status
+  return classifyTitleActivity(tab.title) === status && titleStatusIsAgentAttributable(tab.title)
+}
+
+// Why: the title heuristic is only a fallback — hook-managed agents promote the
+// worktree via hasLiveWorking/hasPermission in resolveWorktreeStatus, not here.
+// A bare braille-spinner title (e.g. an exited agent's never-cleared "⠐ task"
+// frame) classifies as working yet produces no sidebar agent row, spinning the
+// worktree forever with "0 agents". Require the same agent attribution the row
+// builder uses, so a title only spins the dot when it would also show a row.
+function titleStatusIsAgentAttributable(title: string): boolean {
+  return resolveAgentTypeFromTerminalTitle(title) !== null
 }
 
 export function getWorktreeStatusLabel(status: WorktreeStatus): string {

@@ -87,6 +87,7 @@ import { getHostedReviewCacheKey, refreshHostedReviewCard } from '@/store/slices
 import { toast } from 'sonner'
 import { useConfirmationDialog } from '@/components/confirmation-dialog'
 import { type ChecksPanelReview, selectChecksPanelReview } from './checks-panel-review'
+import { selectReviewCacheEntry } from './review-cache-entry-selection'
 import {
   checksPanelAsyncResultKey,
   checksPanelHostedReviewAsyncResultKey,
@@ -394,7 +395,6 @@ export default function ChecksPanel(): React.JSX.Element {
   const settings = useAppStore((s) => s.settings)
   const updateSettings = useAppStore((s) => s.updateSettings)
   const updateRepo = useAppStore((s) => s.updateRepo)
-  const prCache = useAppStore((s) => s.prCache)
   const fetchPRForBranch = useAppStore((s) => s.fetchPRForBranch)
   const fetchHostedReviewForBranch = useAppStore((s) => s.fetchHostedReviewForBranch)
   const expireGitHubPRRefreshState = useAppStore((s) => s.expireGitHubPRRefreshState)
@@ -648,7 +648,9 @@ export default function ChecksPanel(): React.JSX.Element {
     refreshContextKeyRef.current = refreshContextKey
     refreshRequestKeyRef.current = null
   }
-  const prCacheEntry = prCacheKey ? prCache[prCacheKey] : undefined
+  // Why: background PR refreshes replace the cache map; Checks only renders
+  // the entry for the active repo and branch.
+  const prCacheEntry = useAppStore((s) => selectReviewCacheEntry(s.prCache, prCacheKey || null))
   const pr: PRInfo | null = prCacheEntry?.data ?? null
   const hostedReview = useAppStore((s) =>
     hostedReviewCacheKey ? (s.hostedReviewCache[hostedReviewCacheKey]?.data ?? null) : null

@@ -1,5 +1,13 @@
 import type { PRConflictSummary } from '../../shared/types'
+import {
+  isUnsupportedMergeTreeMergeBaseError,
+  isUnsupportedMergeTreeWriteTreeError
+} from '../../shared/git-merge-tree-capability'
 import { gitExecFileAsync } from '../git/runner'
+import {
+  clearGitCapabilityStateForTests,
+  getLocalGitCapabilityCache
+} from '../git/git-capability-state'
 import {
   __resetPRConflictSummaryDerivationCachesForTests,
   buildConflictSummaryCacheKey,
@@ -17,10 +25,8 @@ type LocalGitExecOptions = {
   wslDistro?: string
 }
 
-const mergeTreeMergeBaseUnsupportedRuntimes = new Set<string>()
-
 export function __resetPRConflictSummaryCachesForTests(): void {
-  mergeTreeMergeBaseUnsupportedRuntimes.clear()
+  clearGitCapabilityStateForTests()
   __resetPRConflictSummaryDerivationCachesForTests()
 }
 
@@ -213,7 +219,10 @@ async function loadConflictingFiles(
   baseOid: string,
   localGitOptions: LocalGitExecOptions
 ): Promise<string[]> {
-  const capabilityKey = getConflictSummaryGitRuntimeKey(localGitOptions.wslDistro)
+  const capabilities = getLocalGitCapabilityCache({
+    cwd: repoPath,
+    wslDistro: localGitOptions.wslDistro
+  })
   const modernArgs = [
     'merge-tree',
     '--write-tree',
@@ -235,32 +244,41 @@ async function loadConflictingFiles(
     baseOid
   ]
 
-  if (mergeTreeMergeBaseUnsupportedRuntimes.has(capabilityKey)) {
-    return loadConflictingFilesWithLegacyMergeTree(repoPath, legacyArgs, localGitOptions)
-  }
-
-  try {
-    const result = await gitExecFileAsync(modernArgs, {
-      cwd: repoPath,
-      ...(localGitOptions.wslDistro ? { wslDistro: localGitOptions.wslDistro } : {})
-    })
-    return parseMergeTreeNameOnlyOutput(result.stdout)
-  } catch (error) {
-    // Why: `git merge-tree --write-tree` exits with status 1 when it finds
-    // conflicts, but still writes the conflicted file list to stdout. Treat
-    // that stdout as the useful result instead of dropping the summary.
-    const stdoutFromError = getGitErrorOutput(error, 'stdout')
-    if (stdoutFromError) {
-      return parseMergeTreeNameOnlyOutput(stdoutFromError)
-    }
-
-    if (!isUnsupportedMergeBaseOption(error)) {
-      throw error
-    }
-
-    mergeTreeMergeBaseUnsupportedRuntimes.add(capabilityKey)
-    return loadConflictingFilesWithLegacyMergeTree(repoPath, legacyArgs, localGitOptions)
-  }
+  return capabilities.runWithFallback(
+    'merge-tree-write-tree',
+    () =>
+      capabilities.runWithFallback(
+        'merge-tree-merge-base',
+        async () => {
+          try {
+            const result = await gitExecFileAsync(modernArgs, {
+              cwd: repoPath,
+              ...(localGitOptions.wslDistro ? { wslDistro: localGitOptions.wslDistro } : {})
+            })
+            return parseMergeTreeNameOnlyOutput(result.stdout)
+          } catch (error) {
+            if (isUnsupportedMergeTreeWriteTreeError(error)) {
+              throw error
+            }
+            // Why: `git merge-tree --write-tree` exits 1 for conflicts but still
+            // writes the useful file list; only option rejection reaches fallback.
+            const stdoutFromError = getGitErrorOutput(error, 'stdout')
+            if (stdoutFromError) {
+              return parseMergeTreeNameOnlyOutput(stdoutFromError)
+            }
+            throw error
+          }
+        },
+        () => loadConflictingFilesWithLegacyMergeTree(repoPath, legacyArgs, localGitOptions),
+        isUnsupportedMergeTreeMergeBaseError
+      ),
+    async () => {
+      // Why: Git before 2.38 cannot derive a reliable real-merge conflict list;
+      // fail closed without respawning the same rejected command every refresh.
+      throw new Error('Git merge-tree --write-tree is unavailable on this execution host.')
+    },
+    isUnsupportedMergeTreeWriteTreeError
+  )
 }
 
 async function loadConflictingFilesWithLegacyMergeTree(
@@ -299,13 +317,4 @@ function getGitErrorOutput(error: unknown, key: 'stdout' | 'stderr'): string {
   }
   const output = (error as Partial<Record<'stdout' | 'stderr', unknown>>)[key]
   return typeof output === 'string' ? output : ''
-}
-
-function isUnsupportedMergeBaseOption(error: unknown): boolean {
-  const output = `${getGitErrorOutput(error, 'stderr')}\n${
-    error instanceof Error ? error.message : ''
-  }`
-  return /(?:unknown|unrecognized) option(?::|\s+)[`']?(?:--?)?merge-base[`']?(?:\s|$)/i.test(
-    output
-  )
 }

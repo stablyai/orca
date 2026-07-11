@@ -121,6 +121,58 @@ describe('process-table-snapshot reader', () => {
     expect(scans).toBe(2)
   })
 
+  it('forces a post-request scan even when a same-tick cache exists', async () => {
+    let scans = 0
+    const reader = createProcessTableSnapshotReader({
+      runPs: async () => `scan-${++scans}`,
+      now: () => 0
+    })
+
+    expect(await reader.getSnapshot()).toBe('scan-1')
+    expect(await reader.getFreshSnapshot()).toBe('scan-2')
+    expect(scans).toBe(2)
+  })
+
+  it('shares same-turn fresh requests but queues one scan after a pre-existing scan', async () => {
+    let scans = 0
+    const first = deferred<string>()
+    const second = deferred<string>()
+    const reader = createProcessTableSnapshotReader({
+      runPs: () => {
+        scans += 1
+        return scans === 1 ? first.promise : second.promise
+      },
+      now: () => 0
+    })
+
+    const stale = reader.getSnapshot()
+    const freshA = reader.getFreshSnapshot()
+    const freshB = reader.getFreshSnapshot()
+    expect(scans).toBe(1)
+    first.resolve('stale')
+    expect(await stale).toBe('stale')
+    await Promise.resolve()
+    expect(scans).toBe(2)
+    second.resolve('fresh')
+    expect(await freshA).toBe('fresh')
+    expect(await freshB).toBe('fresh')
+    expect(scans).toBe(2)
+  })
+
+  it('does not let an ordinary same-turn miss race a queued fresh scan', async () => {
+    let scans = 0
+    const reader = createProcessTableSnapshotReader({
+      runPs: async () => `scan-${++scans}`,
+      now: () => 0
+    })
+
+    const fresh = reader.getFreshSnapshot()
+    const ordinary = reader.getSnapshot()
+
+    await expect(Promise.all([fresh, ordinary])).resolves.toEqual(['scan-1', 'scan-1'])
+    expect(scans).toBe(1)
+  })
+
   it('shares one parsed-rows array across a burst so panes do not each re-parse', async () => {
     // Mirrors the POSIX default reader: runPs parses inside the deduped scan, so
     // every caller in the TTL window gets the SAME ProcessTableRow[] instance

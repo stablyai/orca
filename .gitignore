@@ -60,6 +60,9 @@ pnpm-debug.log*
 # Coverage
 coverage/
 
+# Prod release scan output (accidental adds)
+prod-release-scan-*.md
+
 # Benchmark run output
 /tools/benchmarks/results/*.json
 /.bench-fixtures/
@@ -119,3 +122,6 @@ src/renderer/src/i18n/locales/.zh-catalog-cache.json
 src/renderer/src/i18n/locales/.ko-catalog-cache.json
 src/renderer/src/i18n/locales/.ja-catalog-cache.json
 src/renderer/src/i18n/locales/.es-catalog-cache.json
+
+# Bench result JSONs are working artifacts; headline numbers live in notes/terminal-performance-initiative.md
+tools/benchmarks/results/terminal-pipeline-*.json

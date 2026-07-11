@@ -18,7 +18,7 @@ import { gitExecFileAsync } from '../git/runner'
 import { getSshGitUsername, resolveLocalGitUsername } from '../git/git-username'
 import { getSshGitProvider } from '../providers/ssh-git-dispatch'
 import {
-  branchHasUpstream,
+  probeBranchUpstream,
   renameCurrentBranch,
   resolveUniqueBranchName,
   type GitExec
@@ -207,8 +207,19 @@ async function runAutoRename(
     return stop(`branch "${currentBranch}" is not an auto-generated name`, true)
   }
   // Never rewrite a branch that's already been published.
-  if (await branchHasUpstream(exec)) {
+  const upstreamProbe = await probeBranchUpstream(exec)
+  if (upstreamProbe.outcome === 'has-upstream') {
     return stop(`branch "${currentBranch}" already has an upstream`, true)
+  }
+  if (upstreamProbe.outcome === 'probe-failed') {
+    // Why: settling an unreadable probe as "has upstream" made this failure
+    // silent and permanent via the settled cache (issue #7808).
+    const probeError = upstreamProbe.message.replace(/\s+/g, ' ').trim()
+    deps.setRenameError(
+      worktreeId,
+      `Could not check whether the branch is published: ${probeError}`
+    )
+    return retry(`upstream probe failed: ${probeError}`)
   }
 
   const settings = deps.getSettings()
@@ -249,8 +260,13 @@ async function runAutoRename(
   if (branchNow !== currentBranch) {
     return retry(`branch changed during generation (${currentBranch} -> ${branchNow})`)
   }
-  if (await branchHasUpstream(exec)) {
-    return retry(`branch "${currentBranch}" was pushed during generation`)
+  const postGenerationProbe = await probeBranchUpstream(exec)
+  if (postGenerationProbe.outcome !== 'no-upstream') {
+    return retry(
+      postGenerationProbe.outcome === 'has-upstream'
+        ? `branch "${currentBranch}" was pushed during generation`
+        : `upstream probe failed after generation: ${postGenerationProbe.message}`
+    )
   }
 
   const username = provider

@@ -70,7 +70,9 @@ function usageSettings(overrides: Partial<UsageProviderSettings> = {}): UsagePro
     claudeManagedAccounts: [],
     opencodeSessionCookie: '',
     geminiCliOAuthEnabled: false,
+    antigravityUsageConfigured: false,
     minimaxCookieConfigured: false,
+    grokAuthConfigured: false,
     ...overrides
   }
 }
@@ -118,7 +120,13 @@ describe('hasUsageProviderSettings', () => {
     expect(
       hasUsageProviderSettings(usageSettings({ opencodeSessionCookie: ' session=abc ' }))
     ).toBe(true)
+    // Why: antigravity durability requires the Gemini OAuth opt-in; the
+    // checked item alone must not suppress the usage setup CTA.
+    expect(hasUsageProviderSettings(usageSettings({ antigravityUsageConfigured: true }))).toBe(
+      false
+    )
     expect(hasUsageProviderSettings(usageSettings({ minimaxCookieConfigured: true }))).toBe(true)
+    expect(hasUsageProviderSettings(usageSettings({ grokAuthConfigured: true }))).toBe(true)
   })
 
   it('does not treat empty or unloaded settings as configured', () => {
@@ -148,6 +156,32 @@ describe('hasUsageProviderSettingsForProvider', () => {
     ).toBe(true)
     expect(hasUsageProviderSettingsForProvider('claude', usageSettings())).toBe(false)
     expect(hasUsageProviderSettingsForProvider('kimi', usageSettings())).toBe(false)
+    expect(hasUsageProviderSettingsForProvider('grok', usageSettings())).toBe(false)
+  })
+
+  it('requires both a checked Antigravity item and Gemini OAuth as the durable Antigravity signal', () => {
+    expect(
+      hasUsageProviderSettingsForProvider(
+        'antigravity',
+        usageSettings({ antigravityUsageConfigured: true, geminiCliOAuthEnabled: true })
+      )
+    ).toBe(true)
+    // Why: the snapshot mirrors the Gemini fetch — without the OAuth opt-in it
+    // is permanently unavailable, so the checked item alone is not durable.
+    expect(
+      hasUsageProviderSettingsForProvider(
+        'antigravity',
+        usageSettings({ antigravityUsageConfigured: true })
+      )
+    ).toBe(false)
+    expect(
+      hasUsageProviderSettingsForProvider(
+        'antigravity',
+        usageSettings({ geminiCliOAuthEnabled: true })
+      )
+    ).toBe(false)
+    expect(hasUsageProviderSettingsForProvider('antigravity', usageSettings())).toBe(false)
+    expect(hasUsageProviderSettingsForProvider('antigravity', null)).toBe(false)
   })
 
   it('treats minimaxCookieConfigured as the durable signal for MiniMax', () => {
@@ -159,6 +193,14 @@ describe('hasUsageProviderSettingsForProvider', () => {
     ).toBe(true)
     expect(hasUsageProviderSettingsForProvider('minimax', usageSettings())).toBe(false)
     expect(hasUsageProviderSettingsForProvider('minimax', null)).toBe(false)
+  })
+
+  it('treats grokAuthConfigured as the durable signal for Grok', () => {
+    expect(
+      hasUsageProviderSettingsForProvider('grok', usageSettings({ grokAuthConfigured: true }))
+    ).toBe(true)
+    expect(hasUsageProviderSettingsForProvider('grok', usageSettings())).toBe(false)
+    expect(hasUsageProviderSettingsForProvider('grok', null)).toBe(false)
   })
 })
 
@@ -235,6 +277,20 @@ describe('getVisibleUsageProvider', () => {
     })
   })
 
+  it('keeps Grok visible while the snapshot is pending when CLI auth is configured', () => {
+    const visible = getVisibleUsageProvider(
+      'grok',
+      null,
+      usageSettings({ grokAuthConfigured: true })
+    )
+    expect(visible).toMatchObject({
+      provider: 'grok',
+      status: 'fetching',
+      session: null,
+      weekly: null
+    })
+  })
+
   it('keeps MiniMax visible when the fetch returns unavailable for a configured cookie', () => {
     const unavailable = provider('unavailable', {
       provider: 'minimax',
@@ -259,6 +315,42 @@ describe('getVisibleUsageProvider', () => {
       )
     ).toBe(null)
   })
+
+  it('keeps Antigravity visible while the snapshot is pending when checked and Gemini OAuth is on', () => {
+    const visible = getVisibleUsageProvider(
+      'antigravity',
+      null,
+      usageSettings({ antigravityUsageConfigured: true, geminiCliOAuthEnabled: true })
+    )
+    expect(visible).toMatchObject({
+      provider: 'antigravity',
+      status: 'fetching',
+      session: null,
+      weekly: null
+    })
+  })
+
+  it('hides Antigravity while Gemini OAuth is off even when its status item is checked', () => {
+    // Why: without the OAuth opt-in the mirrored snapshot is permanently
+    // 'unavailable'; the default-on item must not pin a dead bar.
+    expect(
+      getVisibleUsageProvider(
+        'antigravity',
+        null,
+        usageSettings({ antigravityUsageConfigured: true })
+      )
+    ).toBe(null)
+    expect(
+      getVisibleUsageProvider(
+        'antigravity',
+        provider('unavailable', {
+          provider: 'antigravity',
+          error: 'Gemini CLI OAuth is disabled in settings'
+        }),
+        usageSettings({ antigravityUsageConfigured: true })
+      )
+    ).toBe(null)
+  })
 })
 
 describe('isUsageEmptyState', () => {
@@ -271,7 +363,9 @@ describe('isUsageEmptyState', () => {
           gemini: null,
           opencodeGo: null,
           kimi: null,
-          minimax: null
+          antigravity: null,
+          minimax: null,
+          grok: null
         },
         usageSettings()
       )
@@ -287,7 +381,9 @@ describe('isUsageEmptyState', () => {
           gemini: provider('unavailable'),
           opencodeGo: provider('unavailable', { provider: 'opencode-go' }),
           kimi: provider('unavailable', { provider: 'kimi' }),
-          minimax: provider('unavailable', { provider: 'minimax' })
+          antigravity: provider('unavailable', { provider: 'antigravity' }),
+          minimax: provider('unavailable', { provider: 'minimax' }),
+          grok: provider('unavailable', { provider: 'grok' })
         },
         usageSettings()
       )
@@ -303,7 +399,9 @@ describe('isUsageEmptyState', () => {
           gemini: provider('unavailable'),
           opencodeGo: provider('unavailable', { provider: 'opencode-go' }),
           kimi: provider('unavailable', { provider: 'kimi' }),
-          minimax: provider('unavailable', { provider: 'minimax' })
+          antigravity: provider('unavailable', { provider: 'antigravity' }),
+          minimax: provider('unavailable', { provider: 'minimax' }),
+          grok: provider('unavailable', { provider: 'grok' })
         },
         usageSettings({
           codexManagedAccounts: [
@@ -330,7 +428,9 @@ describe('isUsageEmptyState', () => {
           gemini: null,
           opencodeGo: null,
           kimi: null,
-          minimax: null
+          antigravity: null,
+          minimax: null,
+          grok: null
         },
         null
       )
@@ -346,9 +446,49 @@ describe('isUsageEmptyState', () => {
           gemini: provider('unavailable'),
           opencodeGo: provider('unavailable', { provider: 'opencode-go' }),
           kimi: provider('unavailable', { provider: 'kimi' }),
-          minimax: provider('unavailable', { provider: 'minimax' })
+          antigravity: null,
+          minimax: provider('unavailable', { provider: 'minimax' }),
+          grok: provider('unavailable', { provider: 'grok' })
         },
         usageSettings()
+      )
+    ).toBe(true)
+  })
+
+  it('does not show the setup CTA while checked Antigravity usage is awaiting a snapshot', () => {
+    expect(
+      isUsageEmptyState(
+        {
+          claude: provider('unavailable', { provider: 'claude' }),
+          codex: provider('unavailable', { provider: 'codex' }),
+          gemini: provider('unavailable'),
+          opencodeGo: provider('unavailable', { provider: 'opencode-go' }),
+          kimi: provider('unavailable', { provider: 'kimi' }),
+          antigravity: null,
+          grok: provider('unavailable', { provider: 'grok' }),
+          minimax: provider('unavailable', { provider: 'minimax' })
+        },
+        usageSettings({ antigravityUsageConfigured: true, geminiCliOAuthEnabled: true })
+      )
+    ).toBe(false)
+  })
+
+  it('still shows the setup CTA when Antigravity is checked but Gemini OAuth is off', () => {
+    // Why: the default-on Antigravity item is not configured usage on its own;
+    // it must not hide the teaching CTA from users who set nothing up.
+    expect(
+      isUsageEmptyState(
+        {
+          claude: provider('unavailable', { provider: 'claude' }),
+          codex: provider('unavailable', { provider: 'codex' }),
+          gemini: provider('unavailable'),
+          opencodeGo: provider('unavailable', { provider: 'opencode-go' }),
+          kimi: provider('unavailable', { provider: 'kimi' }),
+          antigravity: null,
+          grok: provider('unavailable', { provider: 'grok' }),
+          minimax: provider('unavailable', { provider: 'minimax' })
+        },
+        usageSettings({ antigravityUsageConfigured: true })
       )
     ).toBe(true)
   })

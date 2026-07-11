@@ -1136,6 +1136,7 @@ function Settings(): React.JSX.Element {
                       wslAvailable={windowsTerminalCapabilities.wslAvailable}
                       wslDistros={windowsTerminalCapabilities.wslDistros}
                       wslCapabilitiesLoading={windowsTerminalCapabilities.isLoading}
+                      accountOwnerPlatform={windowsTerminalCapabilities.hostPlatform}
                     />
                   ) : null}
                 </SettingsSection>
@@ -1490,7 +1491,7 @@ function Settings(): React.JSX.Element {
                   title={translate('auto.components.settings.Settings.954a8f5aef', 'Stats & Usage')}
                   description={translate(
                     'auto.components.settings.Settings.8acf3f22e0',
-                    'Orca stats plus Claude, Codex, and OpenCode usage analytics.'
+                    'Orca stats plus Claude, Codex, OpenCode token analytics and Grok subscription usage.'
                   )}
                   searchEntries={getSectionSearchEntries('stats')}
                 >

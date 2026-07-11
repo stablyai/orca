@@ -1,7 +1,11 @@
+import { recordTerminalWebglDiagnostic } from '../../../../shared/terminal-webgl-diagnostics'
+import type { PaneRenderingDiagnostics } from './pane-manager-types'
+
 type RegisteredPaneManager = {
   resetWebglTextureAtlases(): void
   fitAllPanes?: () => void
   refreshAllPanes?: () => void
+  getRenderingDiagnostics?: () => PaneRenderingDiagnostics[]
 }
 
 const liveManagers = new Set<RegisteredPaneManager>()
@@ -35,6 +39,9 @@ export function resetAllTerminalWebglAtlases(): void {
 }
 
 export function resetAndRefreshAllTerminalWebglAtlases(): void {
+  // Why: the atlas wipe is the heavy recovery path; recording it lets a freeze
+  // report show whether a post-wake repaint actually ran. Silent breadcrumb.
+  recordTerminalWebglDiagnostic('webgl-atlas-reset', { managers: liveManagers.size })
   const resetManagers: RegisteredPaneManager[] = []
   for (const manager of liveManagers) {
     try {
@@ -53,6 +60,27 @@ export function resetAndRefreshAllTerminalWebglAtlases(): void {
       // managers still need to repaint from their xterm buffers.
     }
   }
+}
+
+/**
+ * Per-pane WebGL renderer state across all live managers, for the one-paste
+ * freeze report. Lets a post-wake garble report show, per pane, whether it
+ * held a live WebGL addon or had fallen back after a context loss — the state
+ * that distinguishes "missed repaint" from "atlas corrupted".
+ */
+export function getAllPaneRenderingDiagnostics(): PaneRenderingDiagnostics[] {
+  const all: PaneRenderingDiagnostics[] = []
+  for (const manager of liveManagers) {
+    try {
+      const diagnostics = manager.getRenderingDiagnostics?.()
+      if (diagnostics) {
+        all.push(...diagnostics)
+      }
+    } catch {
+      // Why: best-effort during teardown; one manager must not sink the report.
+    }
+  }
+  return all
 }
 
 export function refitAndRefreshAllTerminalPanes(): void {

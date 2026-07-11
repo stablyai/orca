@@ -7,7 +7,9 @@ import { TERMINAL_PATH_TAP_JS } from './terminal-path-tap-injected'
 import { XTERM_ENGINE_CSS, XTERM_ENGINE_JS } from './terminal-webview-engine.generated'
 import { TERMINAL_REFLOW_JS } from './terminal-webview-reflow-injected'
 import { TERMINAL_TAP_DISPATCH_JS } from './terminal-webview-tap-dispatch-injected'
+import { TERMINAL_WEBVIEW_THEME_JS } from './terminal-webview-theme-injected'
 import { URL_TAP_WEBVIEW_JS } from './terminal-webview-url-tap'
+import { TERMINAL_WEBGL_RECOVERY_JS } from './terminal-webview-webgl-recovery-injected'
 
 const DEFAULT_TERMINAL_THEME: RuntimeMobileTerminalTheme['theme'] = {
   background: colors.terminalBg,
@@ -292,7 +294,10 @@ window.onerror = function(msg) {
   var initRows = 24;
   var terminalGeneration = 0;
   var defaultTheme = ${JSON.stringify(DEFAULT_TERMINAL_THEME)};
+  var terminalThemeInput = null;
   var terminalTheme = defaultTheme;
+  var webglAddon = null;
+  var webglRecoveryTimer = null;
   var activeAltScreenSnapshot = false;
   var trackedMouseTrackingMode = 'none';
   var sgrMouseMode = false;
@@ -380,27 +385,7 @@ window.onerror = function(msg) {
     }, 550);
   }
 
-  function normalizeTerminalTheme(input) {
-    var source = input && typeof input === 'object' && input.theme && typeof input.theme === 'object'
-      ? input.theme
-      : null;
-    if (!source) return defaultTheme;
-    var next = {};
-    var keys = Object.keys(defaultTheme);
-    for (var i = 0; i < keys.length; i++) {
-      var key = keys[i];
-      if (typeof source[key] === 'string') next[key] = source[key];
-    }
-    return Object.assign({}, defaultTheme, next);
-  }
-
-  function applyTerminalTheme(input) {
-    terminalTheme = normalizeTerminalTheme(input);
-    var background = terminalTheme.background || '${colors.terminalBg}';
-    document.documentElement.style.background = background;
-    document.body.style.background = background;
-    if (term) term.options.theme = terminalTheme;
-  }
+${TERMINAL_WEBVIEW_THEME_JS}
 
   function getCellHeight() {
     if (!term || !term._core) return 15;
@@ -679,6 +664,8 @@ window.onerror = function(msg) {
     pumpWrites(terminalGeneration);
   }
 
+${TERMINAL_WEBGL_RECOVERY_JS}
+
   function init(cols, rows, initialData, nextTheme, nextFontScale, preserveScroll, nextOscLinks) {
     if (typeof nextFontScale === 'number' && nextFontScale > 0) currentTextScale = nextFontScale;
     // Why: a width-reflow re-stream rewraps the same content at new cols.
@@ -688,6 +675,8 @@ window.onerror = function(msg) {
     var scrollAnchorRows = prevB ? Math.max(0, (prevB.baseY || 0) - (prevB.viewportY || 0)) : -1;
     terminalGeneration++;
     var gen = terminalGeneration;
+    cancelWebglContextRecovery();
+    webglAddon = null;
     ready = false;
     resetWriteQueue();
     statusDotPendingSelector = false;
@@ -750,9 +739,7 @@ window.onerror = function(msg) {
       allowProposedApi: true
     });
     term.open(surface);
-    if (window.WebglAddon && window.WebglAddon.WebglAddon) {
-      try { var webglAddon = new window.WebglAddon.WebglAddon(); term.loadAddon(webglAddon); if (webglAddon.onContextLoss) webglAddon.onContextLoss(function() { try { webglAddon && webglAddon.dispose && webglAddon.dispose(); } catch (e) {} }); } catch (e) {}
-    }
+    attachWebglAddon(true);
     if (window.Unicode11Addon && window.Unicode11Addon.Unicode11Addon) try { term.loadAddon(new window.Unicode11Addon.Unicode11Addon()); term.unicode.activeVersion = '11'; } catch (e) {}
     if (typeof replayData === 'string' && replayData.length > 0) {
       enqueueWrite(replayData);
@@ -936,7 +923,9 @@ window.onerror = function(msg) {
       handledMessageIds.push(msg.id);
       if (handledMessageIds.length > 256) handledMessageIds.shift();
     }
-    if (msg.type === 'init') {
+    if (msg.type === 'ping') {
+      notify({ type: 'pong', pingId: msg.id });
+    } else if (msg.type === 'init') {
       init(msg.cols, msg.rows, msg.initialData, msg.terminalTheme, msg.fontScale, msg.preserveScroll, msg.oscLinks);
     } else if (msg.type === 'set-font-scale') {
       // Why: ignore RN echoing back the value a pinch just set (msg.fontScale ===

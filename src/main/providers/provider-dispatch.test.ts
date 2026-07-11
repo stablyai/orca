@@ -17,6 +17,9 @@ vi.mock('electron', () => ({
     on: onMock,
     removeHandler: removeHandlerMock,
     removeAllListeners: removeAllListenersMock
+  },
+  powerMonitor: {
+    on: vi.fn()
   }
 }))
 

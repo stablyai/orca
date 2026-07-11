@@ -1,4 +1,7 @@
-import { describe, expect, it } from 'vitest'
+import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import {
   encodePowerShellCommand,
   getPowerShellOsc133Bootstrap
@@ -17,6 +20,24 @@ function expectedWslArgs(linuxCwd: string, distro?: string): string[] {
 }
 
 describe('resolveWindowsShellLaunchArgs', () => {
+  let previousUserDataPath: string | undefined
+  let userDataPath: string
+
+  beforeEach(() => {
+    previousUserDataPath = process.env.ORCA_USER_DATA_PATH
+    userDataPath = mkdtempSync(join(tmpdir(), 'windows-shell-args-test-'))
+    process.env.ORCA_USER_DATA_PATH = userDataPath
+  })
+
+  afterEach(() => {
+    if (previousUserDataPath === undefined) {
+      delete process.env.ORCA_USER_DATA_PATH
+    } else {
+      process.env.ORCA_USER_DATA_PATH = previousUserDataPath
+    }
+    rmSync(userDataPath, { recursive: true, force: true })
+  })
+
   it('returns cmd.exe args with chcp 65001 for UTF-8 output', () => {
     const result = resolveWindowsShellLaunchArgs('cmd.exe', 'C:\\Users\\alice', 'C:\\Users\\alice')
     expect(result.shellArgs).toEqual(['/K', 'chcp 65001 > nul'])
@@ -199,6 +220,27 @@ describe('resolveWindowsShellLaunchArgs', () => {
     // user's Windows home and we inject the Linux cd into the shellArgs above.
     expect(result.effectiveCwd).toBe('C:\\Users\\alice')
     expect(result.validationCwd).toBe('C:\\Users\\alice\\code')
+  })
+
+  it('materializes shell-ready wrappers before building WSL shell args', () => {
+    const result = resolveWindowsShellLaunchArgs(
+      'wsl.exe',
+      'C:\\Users\\alice\\code',
+      'C:\\Users\\alice'
+    )
+
+    expect(result.shellArgs).toEqual(expectedWslArgs('/mnt/c/Users/alice/code'))
+    expect(existsSync(join(userDataPath, 'shell-ready', 'bash', 'rcfile'))).toBe(true)
+    expect(existsSync(join(userDataPath, 'shell-ready', 'zsh', '.zshenv'))).toBe(true)
+
+    // Why: the point of materializing wrappers for WSL is that a typed `omp`
+    // picks up Orca's status extension; pin that shim end to end.
+    const bashRcfile = readFileSync(join(userDataPath, 'shell-ready', 'bash', 'rcfile'), 'utf8')
+    const zshLogin = readFileSync(join(userDataPath, 'shell-ready', 'zsh', '.zlogin'), 'utf8')
+    for (const wrapperFile of [bashRcfile, zshLogin]) {
+      expect(wrapperFile).toContain('command omp --extension "${ORCA_OMP_STATUS_EXTENSION}" "$@"')
+      expect(wrapperFile).toContain('omp() { __orca_omp "$@"; }')
+    }
   })
 
   it('translates MSYS drive cwd to /mnt/<drive>/... for wsl.exe', () => {

@@ -7,6 +7,10 @@ vi.mock('@/i18n/i18n', () => ({
 import { getProviderDisplayName } from './usage-error-copy'
 
 describe('getProviderDisplayName', () => {
+  it('returns the Antigravity brand name', () => {
+    expect(getProviderDisplayName('antigravity')).toBe('Antigravity')
+  })
+
   it('returns the MiniMax brand name', () => {
     expect(getProviderDisplayName('minimax')).toBe('MiniMax')
   })
@@ -17,6 +21,7 @@ describe('getProviderDisplayName', () => {
     expect(getProviderDisplayName('gemini')).toBe('Gemini')
     expect(getProviderDisplayName('opencode-go')).toBe('OpenCode Go')
     expect(getProviderDisplayName('kimi')).toBe('Kimi')
+    expect(getProviderDisplayName('grok')).toBe('Grok')
   })
 
   it('falls back to the raw provider id when no mapping exists', () => {

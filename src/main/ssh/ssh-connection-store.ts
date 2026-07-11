@@ -2,12 +2,27 @@ import type { Store } from '../persistence'
 import type { SshTarget } from '../../shared/ssh-types'
 import { RUNTIME_OWNED_SSH_TARGET_ID_PREFIX } from '../../shared/execution-host'
 import { loadUserSshConfig, sshConfigHostsToTargets } from './ssh-config-parser'
+import {
+  buildRemovedSshTargetTombstone,
+  readoptOrphanedWorkspacesForTarget
+} from './ssh-target-readoption'
 
 export class SshConnectionStore {
   constructor(private store: Store) {}
 
   listTargets(): SshTarget[] {
     return this.store.getSshTargets().filter((target) => !isRuntimeOwnedSshTarget(target))
+  }
+
+  /** Map of removed-target id → its last known label, from the re-adoption
+   *  tombstones. Lets the renderer show a friendly host name for a workspace
+   *  still pinned to a target that no longer exists. */
+  listRemovedTargetLabels(): Record<string, string> {
+    const labels: Record<string, string> = {}
+    for (const tombstone of this.store.getRemovedSshTargetTombstones()) {
+      labels[tombstone.oldTargetId] = tombstone.label
+    }
+    return labels
   }
 
   getTarget(id: string): SshTarget | undefined {
@@ -27,8 +42,16 @@ export class SshConnectionStore {
     // keep it — lift any tombstone so config sync stops suppressing this alias.
     this.reclaimAlias(full.configHost ?? full.label)
     this.store.addSshTarget(full)
+    // Why: re-adopt workspaces that were orphaned when the same host was removed
+    // (repos/worktrees still point at the old, now-dead target id). Track the
+    // count so the IPC layer knows whether to refresh the repo list.
+    this.lastReadoptedRepoCount = readoptOrphanedWorkspacesForTarget(this.store, full)
     return full
   }
+
+  /** Repos re-adopted by the most recent addTarget/importFromSshConfig call.
+   *  Lets the IPC layer broadcast repos:changed only when workspaces reattached. */
+  lastReadoptedRepoCount = 0
 
   upsertRuntimeOwnedTarget(
     runtimeId: string,
@@ -75,6 +98,13 @@ export class SshConnectionStore {
         this.store.addDeletedSshConfigAlias(alias)
       }
     }
+    // Why: record the removed target's host identity (for ALL user-facing
+    // targets, config-managed or manual) so a later re-add of the same host can
+    // re-adopt any workspaces orphaned on this id. Runtime-owned targets manage
+    // their own lifecycle and are never re-adopted.
+    if (target && !isRuntimeOwnedSshTarget(target)) {
+      this.store.addRemovedSshTargetTombstone(buildRemovedSshTargetTombstone(target, Date.now()))
+    }
     this.store.removeSshTarget(id)
   }
 
@@ -90,6 +120,7 @@ export class SshConnectionStore {
    * manual targets. Returns the inserted and updated targets.
    */
   importFromSshConfig(options?: { reAdopt?: boolean }): SshTarget[] {
+    let readoptedThisImport = 0
     // Why: the explicit Import action re-adopts every config host, so it clears
     // all tombstones first. The passive on-open sync passes no flag and keeps
     // deleted hosts suppressed.
@@ -178,10 +209,15 @@ export class SshConnectionStore {
       } else {
         const inserted: SshTarget = { ...candidate, source: 'ssh-config' }
         this.store.addSshTarget(inserted)
+        // Why: a freshly-inserted config host may be one the user removed and is
+        // now re-importing — re-adopt its orphaned workspaces. Updated-in-place
+        // targets keep their id, so their repos were never orphaned.
+        readoptedThisImport += readoptOrphanedWorkspacesForTarget(this.store, inserted)
         changed.push(inserted)
       }
     }
 
+    this.lastReadoptedRepoCount = readoptedThisImport
     return changed
   }
 }

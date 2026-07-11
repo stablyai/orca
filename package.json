@@ -1,6 +1,6 @@
 {
   "name": "orca",
-  "version": "1.4.127-rc.0",
+  "version": "1.4.135-rc.5",
   "description": "Next-gen IDE for parallel agentic development",
   "homepage": "https://github.com/stablyai/orca",
   "author": "stablyai",
@@ -27,10 +27,10 @@
     "tc:cli": "pnpm run typecheck:cli",
     "tc:web": "pnpm run typecheck:web",
     "tc": "pnpm run typecheck",
-    "typecheck:node": "tsgo --noEmit -p config/tsconfig.node.json",
-    "typecheck:cli": "tsgo --noEmit -p config/tsconfig.tc.cli.json",
-    "typecheck:web": "tsgo --noEmit -p config/tsconfig.tc.web.json",
-    "typecheck": "tsgo --noEmit -p config/tsconfig.node.json && tsgo --noEmit -p config/tsconfig.tc.cli.json && tsgo --noEmit -p config/tsconfig.tc.web.json",
+    "typecheck:node": "tsc --noEmit -p config/tsconfig.node.json",
+    "typecheck:cli": "tsc --noEmit -p config/tsconfig.tc.cli.json",
+    "typecheck:web": "tsc --noEmit -p config/tsconfig.tc.web.json",
+    "typecheck": "tsc --noEmit -p config/tsconfig.node.json && tsc --noEmit -p config/tsconfig.tc.cli.json && tsc --noEmit -p config/tsconfig.tc.web.json",
     "typecheck:tsc:node": "tsc --noEmit -p config/tsconfig.node.json --composite false",
     "typecheck:tsc:cli": "tsc --noEmit -p config/tsconfig.cli.json --composite false",
     "typecheck:tsc:web": "tsc --noEmit -p config/tsconfig.web.json --composite false",
@@ -42,6 +42,7 @@
     "dev:web": "vite --config vite.web.config.ts --host 127.0.0.1",
     "build:relay": "node config/scripts/build-relay.mjs",
     "build:computer-macos": "node config/scripts/build-computer-macos.mjs",
+    "build:notification-status-macos": "node config/scripts/build-notification-status-macos.mjs",
     "build:native": "node config/scripts/build-native-for-platform.mjs",
     "smoke:computer": "node config/scripts/computer-use-smoke.mjs",
     "verify:computer-native": "node config/scripts/verify-computer-native.mjs",
@@ -68,8 +69,8 @@
     "build:unpack": "pnpm run build && pnpm run ensure:electron-runtime && electron-builder --config config/electron-builder.config.cjs --dir",
     "build:win": "pnpm run build:desktop && pnpm run ensure:electron-runtime && electron-builder --config config/electron-builder.config.cjs --win",
     "build:icons": "bash resources/icon-source/generate.sh",
-    "build:mac": "pnpm run build:desktop && pnpm run build:computer-macos && pnpm run ensure:electron-runtime && electron-builder --config config/electron-builder.config.cjs --mac",
-    "build:mac:release": "node config/scripts/verify-macos-release-env.mjs && ORCA_MAC_RELEASE=1 pnpm run build:desktop && ORCA_MAC_RELEASE=1 pnpm run build:computer-macos && pnpm run ensure:electron-runtime && ORCA_MAC_RELEASE=1 electron-builder --config config/electron-builder.config.cjs --mac",
+    "build:mac": "pnpm run build:desktop && pnpm run build:computer-macos && pnpm run build:notification-status-macos && pnpm run ensure:electron-runtime && electron-builder --config config/electron-builder.config.cjs --mac",
+    "build:mac:release": "node config/scripts/verify-macos-release-env.mjs && ORCA_MAC_RELEASE=1 pnpm run build:desktop && ORCA_MAC_RELEASE=1 pnpm run build:computer-macos && ORCA_MAC_RELEASE=1 pnpm run build:notification-status-macos && pnpm run ensure:electron-runtime && ORCA_MAC_RELEASE=1 electron-builder --config config/electron-builder.config.cjs --mac",
     "build:linux": "pnpm run build:desktop && pnpm run ensure:electron-runtime && electron-builder --config config/electron-builder.config.cjs --linux AppImage deb",
     "test:e2e": "pnpm run ensure:electron-runtime && npx playwright test --config tests/playwright.config.ts --project electron-headless",
     "test:e2e:floating-mobile-emulator": "pnpm run ensure:electron-runtime && npx playwright test tests/e2e/floating-mobile-emulator-tab.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=1",
@@ -80,7 +81,10 @@
     "test:e2e:terminal-perf:scale:report": "pnpm run ensure:electron-runtime && node config/scripts/run-terminal-scale-perf-report-gate.mjs",
     "test:e2e:terminal-perf:check-report": "node config/scripts/check-terminal-perf-report-budgets.mjs",
     "test:e2e:terminal-perf:summarize": "node config/scripts/summarize-terminal-perf-report.mjs",
+    "test:e2e:terminal-perf:html-report": "node config/scripts/generate-terminal-perf-html-report.mjs",
     "test:e2e:ssh-docker-perf": "node config/scripts/run-ssh-docker-perf-e2e.mjs",
+    "test:e2e:source-control-scale": "pnpm run ensure:electron-runtime && npx playwright test tests/e2e/source-control-large-file-count.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=1",
+    "win-update-e2e": "node tools/win-update-e2e/run.mjs",
     "test:e2e:ssh-codex-artifacts-repro": "node config/scripts/run-ssh-codex-artifacts-repro-e2e.mjs",
     "test:e2e:headful": "pnpm run ensure:electron-runtime && npx playwright test --config tests/playwright.config.ts --project electron-headful",
     "test:e2e:computer": "vitest run --config tests/e2e/vitest.config.ts",
@@ -88,6 +92,7 @@
     "bench:startup": "pnpm run ensure:electron-runtime && node tools/benchmarks/startup-time-bench.mjs",
     "bench:daemon-coldstart": "pnpm run ensure:electron-runtime && node tools/benchmarks/daemon-coldstart-bench.mjs",
     "bench:main-thread-jank": "pnpm run ensure:electron-runtime && node tools/benchmarks/main-thread-jank-bench.mjs",
+    "bench:multi-workspace-typing": "pnpm run ensure:electron-runtime && node config/scripts/run-multi-workspace-typing-bench.mjs",
     "bench:compare": "node config/scripts/compare-benchmark-artifacts.mjs"
   },
   "dependencies": {
@@ -118,7 +123,7 @@
     "@dnd-kit/core": "^6.3.1",
     "@dnd-kit/sortable": "^10.0.0",
     "@electron-toolkit/tsconfig": "^2.0.0",
-    "@electron/rebuild": "^4.0.4",
+    "@electron/rebuild": "^4.2.0",
     "@monaco-editor/react": "^4.7.0",
     "@playwright/test": "^1.59.1",
     "@stablyai/playwright-test": "^2.1.14",
@@ -149,7 +154,6 @@
     "@types/react-dom": "^19.2.3",
     "@types/ssh2": "^1.15.5",
     "@types/ws": "^8.18.1",
-    "@typescript/native-preview": "7.0.0-dev.20260421.2",
     "@vitejs/plugin-react": "^5.2.0",
     "@xterm/addon-fit": "0.12.0-beta.287",
     "@xterm/addon-ligatures": "0.11.0-beta.287",
@@ -162,7 +166,7 @@
     "clsx": "^2.1.1",
     "cmdk": "^1.1.1",
     "dompurify": "^3.4.11",
-    "electron": "^42.3.3",
+    "electron": "^43.1.0",
     "electron-builder": "^26.8.1",
     "electron-vite": "^5.0.0",
     "emoji-picker-react": "^4.19.1",
@@ -201,7 +205,8 @@
     "tailwind-merge": "^3.5.0",
     "tailwindcss": "^4.2.4",
     "tw-animate-css": "^1.4.0",
-    "typescript": "^5.9.3",
+    "typescript": "^7.0.2",
+    "typescript-api": "npm:typescript@6.0.3",
     "unified": "^11.0.5",
     "vite": "^7.3.6",
     "vitest": "^4.1.5",
@@ -231,6 +236,9 @@
   },
   "packageManager": "pnpm@10.24.0+sha512.01ff8ae71b4419903b65c60fb2dc9d34cf8bb6e06d03bde112ef38f7a34d6904c424ba66bea5cdcf12890230bf39f9580473140ed9c946fef328b6e5238a345a",
   "pnpm": {
+    "overrides": {
+      "monaco-editor>dompurify": "3.4.11"
+    },
     "supportedArchitectures": {
       "os": [
         "current",
@@ -254,7 +262,8 @@
     "patchedDependencies": {
       "node-pty@1.1.0": "config/patches/node-pty@1.1.0.patch",
       "@xterm/addon-ligatures@0.11.0-beta.287": "config/patches/@xterm__addon-ligatures@0.11.0-beta.287.patch",
-      "@xterm/addon-webgl@0.20.0-beta.286": "config/patches/@xterm__addon-webgl@0.20.0-beta.286.patch"
+      "@xterm/addon-webgl@0.20.0-beta.286": "config/patches/@xterm__addon-webgl@0.20.0-beta.286.patch",
+      "@xterm/addon-serialize@0.15.0-beta.287": "config/patches/@xterm__addon-serialize@0.15.0-beta.287.patch"
     }
   },
   "reactDoctor": {

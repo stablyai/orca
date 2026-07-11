@@ -1,8 +1,10 @@
 import { describe, expect, it } from 'vitest'
 import {
   getResourceUsageAllWorktrees,
+  getResourceUsagePtyIdsByTabId,
   getResourceUsageRepos,
   getResourceUsageRuntimePaneTitlesByTabId,
+  getResourceUsageTerminalLayoutsByTabId,
   getResourceUsageTabsByWorktree
 } from './resource-usage-open-slices'
 import type { AppState } from '../../store'
@@ -41,11 +43,21 @@ const worktree = (): AppState['worktreesByRepo'][string][number] => ({
 describe('resource usage open slices', () => {
   it('returns stable empty slices while the popover is closed', () => {
     const tabsByWorktree = { 'wt-1': [terminalTab('tab-1')] }
+    const ptyIdsByTabId = { 'tab-1': ['pty-1'] }
+    const terminalLayoutsByTabId = {
+      'tab-1': {
+        root: { type: 'leaf' as const, leafId: 'leaf-1' },
+        activeLeafId: 'leaf-1',
+        expandedLeafId: null
+      }
+    }
     const runtimePaneTitlesByTabId = {
       'tab-1': { 'tab-1:0': 'Working' }
     } as AppState['runtimePaneTitlesByTabId']
 
     const closedTabs = getResourceUsageTabsByWorktree({ tabsByWorktree }, false)
+    const closedPtyIds = getResourceUsagePtyIdsByTabId({ ptyIdsByTabId }, false)
+    const closedLayouts = getResourceUsageTerminalLayoutsByTabId({ terminalLayoutsByTabId }, false)
     const closedTitles = getResourceUsageRuntimePaneTitlesByTabId(
       { runtimePaneTitlesByTabId },
       false
@@ -55,17 +67,35 @@ describe('resource usage open slices', () => {
     expect(closedTitles).toBe(
       getResourceUsageRuntimePaneTitlesByTabId({ runtimePaneTitlesByTabId: {} }, false)
     )
+    expect(closedPtyIds).toBe(getResourceUsagePtyIdsByTabId({ ptyIdsByTabId: {} }, false))
+    expect(closedLayouts).toBe(
+      getResourceUsageTerminalLayoutsByTabId({ terminalLayoutsByTabId: {} }, false)
+    )
     expect(closedTabs).toEqual({})
+    expect(closedPtyIds).toEqual({})
+    expect(closedLayouts).toEqual({})
     expect(closedTitles).toEqual({})
   })
 
   it('returns live slices while the popover is open', () => {
     const tabsByWorktree = { 'wt-1': [terminalTab('tab-1')] }
+    const ptyIdsByTabId = { 'tab-1': ['pty-1'] }
+    const terminalLayoutsByTabId = {
+      'tab-1': {
+        root: { type: 'leaf' as const, leafId: 'leaf-1' },
+        activeLeafId: 'leaf-1',
+        expandedLeafId: null
+      }
+    }
     const runtimePaneTitlesByTabId = {
       'tab-1': { 'tab-1:0': 'Working' }
     } as AppState['runtimePaneTitlesByTabId']
 
     expect(getResourceUsageTabsByWorktree({ tabsByWorktree }, true)).toBe(tabsByWorktree)
+    expect(getResourceUsagePtyIdsByTabId({ ptyIdsByTabId }, true)).toBe(ptyIdsByTabId)
+    expect(getResourceUsageTerminalLayoutsByTabId({ terminalLayoutsByTabId }, true)).toBe(
+      terminalLayoutsByTabId
+    )
     expect(getResourceUsageRuntimePaneTitlesByTabId({ runtimePaneTitlesByTabId }, true)).toBe(
       runtimePaneTitlesByTabId
     )

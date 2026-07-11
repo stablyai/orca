@@ -64,7 +64,7 @@ export function SessionRowTrailingActions({
   showJumpToWorktree: boolean
   onJumpToWorktree?: () => void
   onResume: () => void
-  onCopyResume: () => void
+  onCopyResume?: () => void
   onCopyId: () => void
   onCopyPath: () => void
   onOpenLog?: () => void

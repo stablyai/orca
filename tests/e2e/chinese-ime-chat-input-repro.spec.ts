@@ -629,7 +629,9 @@ test.describe('Chinese IME terminal chat input repro', () => {
       const postCompositionLog = await readImeEventLog(orcaPage)
       const postCompositionEndIndex = postCompositionLog.findIndex(
         (entry, index) =>
-          index >= postCompositionLogStart && entry.type === 'compositionend' && entry.data === '再见'
+          index >= postCompositionLogStart &&
+          entry.type === 'compositionend' &&
+          entry.data === '再见'
       )
       const postCompositionSelectorIndex = postCompositionLog.findIndex(
         (entry, index) =>

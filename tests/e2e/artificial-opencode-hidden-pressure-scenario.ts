@@ -1,8 +1,12 @@
 import type { Page, TestInfo } from '@stablyai/playwright-test'
 import { expect } from '@stablyai/playwright-test'
 import { randomUUID } from 'node:crypto'
-import { mkdirSync, rmSync, writeFileSync } from 'node:fs'
+import { rmSync } from 'node:fs'
 import path from 'node:path'
+import {
+  type HiddenPressureOutputMode,
+  writePressureOutputScript
+} from './artificial-opencode-hidden-pressure-script'
 import {
   ensureTerminalVisible,
   getActiveWorktreeId,
@@ -47,13 +51,13 @@ type HiddenPressureDeps<TMeasurement, TDebug, TScheduler, TMainPressure, TAckGat
   readTerminalPtyOutputDebug: (page: Page) => Promise<TDebug | null>
   releaseTerminalAckGate: (page: Page) => Promise<void>
   resetTerminalPtyOutputDebug: (page: Page) => Promise<void>
-  waitForMainPtyPressureBacklog: (page: Page) => Promise<TMainPressure>
   writeInteractivePromptScript: (scriptPath: string, runId: string) => void
 }
 
+// Why: the renderer hidden-skip counters are gone with the skip grammar —
+// withheld hidden output is observed via main's delivery-drop counters only.
 type HiddenPressureDebug = {
-  hiddenRendererSkipCount: number
-  hiddenRendererSkippedChars: number
+  hiddenRendererMode2031ReplyCount: number
 }
 
 type HiddenPressureMeasurement = {
@@ -66,66 +70,45 @@ type HiddenPressureMainSnapshot = {
   peakPendingChars: number
   peakRendererInFlightChars: number
   ackGatedFlushSkipCount: number
+  hiddenDeliveryDroppedChars: number
+  hiddenDeliveryGatedPtyCount: number
+}
+
+type HiddenPressureSchedulerSnapshot = {
+  peakQueuedChars: number
+  droppedBacklogCount: number
 }
 
 type HiddenPressureAckGate = {
   heldAckChars: number
 }
 
-// Why: this is a throughput/drain metric — the time to switch back and replay the
-// full 8MB+ held backlog into xterm, measured through repeated (expensive) terminal
-// serialization polls. The real responsiveness guards are the typing-latency
-// asserts above (median/worst), which hold. Under 8MB of in-flight backpressure on
-// a loaded OSS runner the drain-plus-poll overhead was seen at ~3.2s, so keep a
-// ceiling with headroom that still catches an order-of-magnitude regression.
-const MAX_HIDDEN_RESTORE_LATENCY_MS = 4_000
+// Why: restore still has to finish promptly, but parallel Electron workers on
+// Linux CI can overshoot the 1s product target without a responsiveness regression.
+// Main relaxed this to 4s for drain-plus-poll overhead on loaded OSS runners;
+// this branch KEEPS the strict budget — the background keep-tail global budget
+// bounds the aggregate a reveal drains, so a slow restore here is a regression.
+const MAX_HIDDEN_RESTORE_LATENCY_MS = 1_500
+// Why: Phase-4 hidden-delivery gate contract — hidden PTY bytes are dropped in
+// main after model ingestion, so renderer-delivery pressure must stay FAR
+// below the old 2 MB ACK-backpressure target instead of reaching it.
+const MAIN_RENDERER_PRESSURE_TARGET_CHARS = 2 * 1024 * 1024
 // Why: in this hidden real-PTY pressure case, maxTimerDriftMs and worst-key
 // latency catch the same isolated CI starvation spike; median remains strict.
 const MAX_HIDDEN_PRESSURE_TIMER_DRIFT_MS = 3_000
-
-export function pressureOutputScript(runId: string): string {
-  return `
-const paneIndex = process.argv[2] ?? '0'
-const targetChars = Number(process.argv[3] ?? '0')
-const delayMs = Number(process.argv[4] ?? '0')
-const header = 'OPENCODE_PRESSURE_START_${runId}_' + paneIndex + '\\n'
-const chunkBody = '#'.repeat(8192)
-let written = 0
-process.stdout.write(header)
-function writeMore() {
-  let canContinue = true
-  while (canContinue && written < targetChars) {
-    const frame = String(written).padStart(8, '0')
-    const chunk = '\\x1b[?2026h\\x1b[1;1Hpressure pane=' + paneIndex + ' frame=' + frame + ' ' + chunkBody + '\\x1b[?2026l\\n'
-    written += chunk.length
-    canContinue = process.stdout.write(chunk)
-  }
-  if (written < targetChars) {
-    process.stdout.once('drain', writeMore)
-    return
-  }
-  process.stdout.write('OPENCODE_PRESSURE_DONE_${runId}_' + paneIndex + '\\n')
-}
-setTimeout(writeMore, Number.isFinite(delayMs) && delayMs > 0 ? delayMs : 0)
-`
-}
-
-export function writePressureOutputScript(scriptPath: string, runId: string): void {
-  mkdirSync(path.dirname(scriptPath), { recursive: true })
-  writeFileSync(scriptPath, pressureOutputScript(runId))
-}
 
 export async function runHiddenRealPtyPressureScenario<
   TMeasurement extends HiddenPressureMeasurement,
   TDebug extends HiddenPressureDebug,
   TMainPressure extends HiddenPressureMainSnapshot,
   TAckGate extends HiddenPressureAckGate,
-  TScheduler
+  TScheduler extends HiddenPressureSchedulerSnapshot
 >({
   deps,
   annotationSuffix,
   hiddenPaneCount,
   pressureOutputChars,
+  pressureOutputMode = 'tui',
   pressureStartDelayMs,
   testInfo,
   testRepoPath,
@@ -135,6 +118,7 @@ export async function runHiddenRealPtyPressureScenario<
   annotationSuffix?: string
   hiddenPaneCount: number
   pressureOutputChars: number
+  pressureOutputMode?: HiddenPressureOutputMode
   pressureStartDelayMs: number
   testInfo: TestInfo
   testRepoPath: string
@@ -164,7 +148,7 @@ export async function runHiddenRealPtyPressureScenario<
     `.orca-opencode-hidden-pressure-load-${runId}.mjs`
   )
   deps.writeInteractivePromptScript(typingScriptPath, runId)
-  writePressureOutputScript(pressureScriptPath, runId)
+  writePressureOutputScript(pressureScriptPath, runId, pressureOutputMode)
 
   await deps.resetTerminalPtyOutputDebug(orcaPage)
   await deps.holdTerminalAckGate(
@@ -182,7 +166,11 @@ export async function runHiddenRealPtyPressureScenario<
     await switchToTypingWorkspace(orcaPage, firstWorktreeId)
     const typingPtyId = await waitForActivePanePtyId(orcaPage)
 
-    const pressureBeforeTyping = await deps.waitForMainPtyPressureBacklog(orcaPage)
+    // Why: under the Phase-4 hidden-delivery gate the hidden panes' bytes are
+    // dropped in main after model ingestion, so renderer-delivery pressure
+    // never builds. Wait for the gate to drop at least one pane's worth of
+    // output instead of the old 2 MB ACK-backpressure target.
+    await waitForMainHiddenDeliveryDrops(orcaPage, deps, pressureOutputChars)
     const measurement = await deps.measureTypingDuringLoad(
       orcaPage,
       typingScriptPath,
@@ -190,6 +178,7 @@ export async function runHiddenRealPtyPressureScenario<
       runId
     )
     const debug = await deps.readTerminalPtyOutputDebug(orcaPage)
+    const scheduler = await deps.readTerminalOutputSchedulerDebug(orcaPage)
     const mainPressure = await deps.readMainPtyPressureDebug(orcaPage)
     const ackGate = await deps.readTerminalAckGateDebug(orcaPage)
     deps.annotateTypingMeasurement(
@@ -198,19 +187,26 @@ export async function runHiddenRealPtyPressureScenario<
       hiddenPanes.length + 1,
       measurement,
       debug,
-      await deps.readTerminalOutputSchedulerDebug(orcaPage),
+      scheduler,
       mainPressure,
       ackGate
     )
 
-    expect(debug?.hiddenRendererSkipCount ?? 0).toBe(0)
-    expect(debug?.hiddenRendererSkippedChars ?? 0).toBe(0)
-    expect(pressureBeforeTyping.peakPendingChars).toBeGreaterThan(0)
-    expect(pressureBeforeTyping.ackGatedFlushSkipCount).toBeGreaterThan(0)
-    expect(mainPressure?.peakRendererInFlightChars ?? 0).toBeGreaterThanOrEqual(8 * 1024 * 1024)
-    expect(ackGate?.heldAckChars ?? 0).toBeGreaterThan(0)
-    // Why: median is the robust responsiveness guard — it proves typing stays
-    // instant even while hidden PTYs replay 8MB+ of ACK-backpressured output.
+    // Hidden-delivery contract (all pressure modes): bytes never reach the
+    // renderer — main's drop counter is the withheld-output signal (the
+    // renderer skip counters were deleted with the skip grammar) — and main's
+    // renderer-delivery pressure must stay clearly below the old 2 MB
+    // backpressure target.
+    expect(mainPressure?.hiddenDeliveryDroppedChars ?? 0).toBeGreaterThanOrEqual(
+      pressureOutputChars
+    )
+    expect(mainPressure?.peakRendererInFlightChars ?? 0).toBeLessThan(
+      MAIN_RENDERER_PRESSURE_TARGET_CHARS
+    )
+    // Why: the renderer scheduler queue must stay ~empty (no hidden bytes to
+    // queue) and must never drop a backlog — strict, per the gate contract.
+    expect(scheduler?.peakQueuedChars ?? 0).toBeLessThan(pressureOutputChars)
+    expect(scheduler?.droppedBacklogCount ?? Number.POSITIVE_INFINITY).toBe(0)
     expect(measurement.medianLatencyMs).toBeLessThan(75)
     // Why: worst *single-key echo* under 8MB synthetic backpressure lands behind
     // whichever flush it collides with, so on a contended OSS shard it is
@@ -230,9 +226,11 @@ export async function runHiddenRealPtyPressureScenario<
       type: `opencode-hidden-real-pty-restore${annotationSuffix ?? ''}`,
       description: `panes=${hiddenPanes.length + 1} restore=${restoreLatencyMs.toFixed(
         1
-      )}ms hiddenSkippedChars=${debug?.hiddenRendererSkippedChars ?? 0} mainPeakInFlightChars=${
-        mainPressure?.peakRendererInFlightChars ?? 0
-      } heldAckChars=${ackGate?.heldAckChars ?? 0}`
+      )}ms hiddenDeliveryDroppedChars=${
+        mainPressure?.hiddenDeliveryDroppedChars ?? 0
+      } mainPeakInFlightChars=${mainPressure?.peakRendererInFlightChars ?? 0} heldAckChars=${
+        ackGate?.heldAckChars ?? 0
+      }`
     })
     expect(restoreLatencyMs).toBeLessThan(MAX_HIDDEN_RESTORE_LATENCY_MS)
   } finally {
@@ -246,6 +244,22 @@ export async function runHiddenRealPtyPressureScenario<
       typingScriptPath
     })
   }
+}
+
+// Why: replaces the old waitForMainPtyPressureBacklog premise — the Phase-4
+// gate drops hidden bytes in main, so renderer-delivery pressure never builds;
+// readiness is the gate reporting one pane's worth of dropped output.
+async function waitForMainHiddenDeliveryDrops<TMainPressure extends HiddenPressureMainSnapshot>(
+  orcaPage: Page,
+  deps: { readMainPtyPressureDebug: (page: Page) => Promise<TMainPressure | null> },
+  pressureOutputChars: number
+): Promise<void> {
+  await expect
+    .poll(
+      async () => (await deps.readMainPtyPressureDebug(orcaPage))?.hiddenDeliveryDroppedChars ?? 0,
+      { timeout: 30_000, message: 'Main hidden-delivery gate did not drop hidden PTY output' }
+    )
+    .toBeGreaterThanOrEqual(pressureOutputChars)
 }
 
 async function measureHiddenOutputRestoreLatency(

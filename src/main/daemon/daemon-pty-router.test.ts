@@ -1,10 +1,11 @@
 import { describe, expect, it, vi } from 'vitest'
 import { DaemonPtyRouter } from './daemon-pty-router'
 import type { DaemonPtyAdapter } from './daemon-pty-adapter'
-import type { PtySpawnOptions, PtySpawnResult } from '../providers/types'
+import type { PtyBackgroundStreamEvent, PtySpawnOptions, PtySpawnResult } from '../providers/types'
 
 type AdapterMock = DaemonPtyAdapter & {
-  emitData: (id: string, data: string) => void
+  emitData: (id: string, data: string, sequenceChars?: number) => void
+  emitBackground: (event: PtyBackgroundStreamEvent) => void
   emitExit: (id: string, code: number) => void
 }
 
@@ -24,7 +25,9 @@ function createAdapter(
   reconcileResult?: { alive: string[]; killed: string[] }
 ): AdapterMock {
   const writes: { id: string; data: string }[] = []
-  const dataListeners: ((payload: { id: string; data: string }) => void)[] = []
+  const dataListeners: ((payload: { id: string; data: string; sequenceChars?: number }) => void)[] =
+    []
+  const backgroundListeners: ((payload: PtyBackgroundStreamEvent) => void)[] = []
   const exitListeners: ((payload: { id: string; code: number }) => void)[] = []
   return {
     spawn: vi.fn(async (opts: PtySpawnOptions): Promise<PtySpawnResult> => {
@@ -44,6 +47,8 @@ function createAdapter(
       writes.push({ id, data })
     }),
     resize: vi.fn(),
+    setPtyBackgrounded: vi.fn(),
+    getBufferSnapshot: vi.fn(async () => null),
     shutdown: vi.fn(async (id: string) => {
       const idx = sessions.indexOf(id)
       if (idx !== -1) {
@@ -58,16 +63,28 @@ function createAdapter(
     acknowledgeDataEvent: vi.fn(),
     hasChildProcesses: vi.fn(async () => false),
     getForegroundProcess: vi.fn(async () => null),
+    confirmForegroundProcess: vi.fn(async () => `${label}-confirmed`),
     serialize: vi.fn(async () => '{}'),
     revive: vi.fn(async () => {}),
     getDefaultShell: vi.fn(async () => '/bin/zsh'),
     getProfiles: vi.fn(async () => []),
-    onData: vi.fn((callback: (payload: { id: string; data: string }) => void) => {
-      dataListeners.push(callback)
+    onData: vi.fn(
+      (callback: (payload: { id: string; data: string; sequenceChars?: number }) => void) => {
+        dataListeners.push(callback)
+        return () => {
+          const idx = dataListeners.indexOf(callback)
+          if (idx !== -1) {
+            dataListeners.splice(idx, 1)
+          }
+        }
+      }
+    ),
+    onBackgroundStreamEvent: vi.fn((callback: (payload: PtyBackgroundStreamEvent) => void) => {
+      backgroundListeners.push(callback)
       return () => {
-        const idx = dataListeners.indexOf(callback)
+        const idx = backgroundListeners.indexOf(callback)
         if (idx !== -1) {
-          dataListeners.splice(idx, 1)
+          backgroundListeners.splice(idx, 1)
         }
       }
     }),
@@ -85,9 +102,14 @@ function createAdapter(
     reconcileOnStartup: vi.fn(async () => reconcileResult ?? { alive: sessions, killed: [] }),
     dispose: vi.fn(),
     disconnectOnly: vi.fn(async () => {}),
-    emitData: (id: string, data: string) => {
+    emitData: (id: string, data: string, sequenceChars?: number) => {
       for (const listener of dataListeners) {
-        listener({ id, data })
+        listener({ id, data, ...(sequenceChars === undefined ? {} : { sequenceChars }) })
+      }
+    },
+    emitBackground: (event: PtyBackgroundStreamEvent) => {
+      for (const listener of backgroundListeners) {
+        listener(event)
       }
     },
     emitExit: (id: string, code: number) => {
@@ -100,6 +122,22 @@ function createAdapter(
 }
 
 describe('DaemonPtyRouter', () => {
+  it('routes fresh foreground confirmation to the session-owning daemon', async () => {
+    const current = createAdapter('current', ['current-session'])
+    const legacy = createAdapter('legacy', ['legacy-session'])
+    const router = new DaemonPtyRouter({ current, legacy: [legacy] })
+    await router.discoverLegacySessions()
+
+    await expect(router.confirmForegroundProcess('legacy-session')).resolves.toBe(
+      'legacy-confirmed'
+    )
+    await expect(router.confirmForegroundProcess('current-session')).resolves.toBe(
+      'current-confirmed'
+    )
+    expect(legacy.confirmForegroundProcess).toHaveBeenCalledWith('legacy-session')
+    expect(current.confirmForegroundProcess).toHaveBeenCalledWith('current-session')
+  })
+
   it('routes existing legacy sessions to their old daemon and new sessions to current daemon', async () => {
     const current = createAdapter('current')
     const legacy = createAdapter('legacy', ['legacy-session'])
@@ -116,6 +154,62 @@ describe('DaemonPtyRouter', () => {
     expect(current.spawn).toHaveBeenCalledWith({ cols: 80, rows: 24 })
     expect(legacy.write).toHaveBeenCalledWith('legacy-session', 'old\n')
     expect(current.write).toHaveBeenCalledWith(fresh.id, 'new\n')
+  })
+
+  it('routes background hints and authoritative snapshots to the session owner', async () => {
+    const current = createAdapter('current')
+    const legacy = createAdapter('legacy', ['legacy-session'])
+    const snapshot = {
+      data: 'legacy frame',
+      cols: 80,
+      rows: 24,
+      seq: 42,
+      source: 'headless' as const
+    }
+    vi.mocked(legacy.getBufferSnapshot).mockResolvedValue(snapshot)
+    const router = new DaemonPtyRouter({ current, legacy: [legacy] })
+    await router.discoverLegacySessions()
+
+    router.setPtyBackgrounded('legacy-session', true)
+    await expect(
+      router.getBufferSnapshot('legacy-session', { scrollbackRows: 50_000 })
+    ).resolves.toEqual(snapshot)
+
+    expect(legacy.setPtyBackgrounded).toHaveBeenCalledWith('legacy-session', true)
+    expect(current.setPtyBackgrounded).not.toHaveBeenCalled()
+    expect(legacy.getBufferSnapshot).toHaveBeenCalledWith('legacy-session', {
+      scrollbackRows: 50_000
+    })
+  })
+
+  it('forwards gap events and explicit sequence accounting from every adapter', () => {
+    const current = createAdapter('current')
+    const legacy = createAdapter('legacy')
+    const router = new DaemonPtyRouter({ current, legacy: [legacy] })
+    const dataSpy = vi.fn()
+    const backgroundSpy = vi.fn()
+    router.onData(dataSpy)
+    router.onBackgroundStreamEvent(backgroundSpy)
+
+    current.emitData('current-session', '\x1b[6n', 0)
+    legacy.emitBackground({
+      id: 'legacy-session',
+      kind: 'dataGap',
+      droppedChars: 512,
+      sequenceChars: 508
+    })
+
+    expect(dataSpy).toHaveBeenCalledWith({
+      id: 'current-session',
+      data: '\x1b[6n',
+      sequenceChars: 0
+    })
+    expect(backgroundSpy).toHaveBeenCalledWith({
+      id: 'legacy-session',
+      kind: 'dataGap',
+      droppedChars: 512,
+      sequenceChars: 508
+    })
   })
 
   it('drops a legacy mapping after the routed session exits', async () => {

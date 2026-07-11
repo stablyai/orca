@@ -133,7 +133,7 @@ describe('agent hibernation cold-restore (alt-screen TUI)', () => {
     // src/renderer/src/components/terminal-pane/layout-serialization.ts (copied
     // as a literal because a main-process test must not import a renderer module).
     const POST_REPLAY_MODE_RESET =
-      '\x1b[0 q\x1b[<99u\x1b[=0u\x1b[?25h\x1b[?1000l\x1b[?1002l\x1b[?1003l\x1b[?1004l\x1b[?1006l\x1b[?2004l'
+      '\x1b[0 q\x1b[<99u\x1b[=0u\x1b[?25h\x1b[?9l\x1b[?1000l\x1b[?1002l\x1b[?1003l\x1b[?1006l\x1b[?1016l\x1b[?1004l\x1b[?2004l'
     const fresh = new HeadlessEmulator({ cols: 80, rows: 24 })
     fresh.writeSync('\x1b[2J\x1b[3J\x1b[H')
     fresh.writeSync(adapterScrollback as string)

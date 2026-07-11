@@ -48,6 +48,7 @@ import { isPathInsideOrEqual } from '../../../../shared/cross-platform-path'
 import { getRepoIdFromWorktreeId } from '../../../../shared/worktree-id'
 import { selectProjectGroupRemovalTargets } from './project-group-removal-targets'
 import { reconcileFetchedRepos } from './repo-identity-reconcile'
+import { pruneSupersededSshRepoRows } from './superseded-ssh-repo-rows'
 import { splitRepoReorderByHost } from './repo-reorder-host-split'
 import { omitSparsePresetsForRepos } from './sparse-presets'
 import {
@@ -74,7 +75,8 @@ import {
   LOCAL_EXECUTION_HOST_ID,
   parseExecutionHostId,
   toRuntimeExecutionHostId,
-  toSshExecutionHostId
+  toSshExecutionHostId,
+  type ExecutionHostId
 } from '../../../../shared/execution-host'
 import { cleanupEphemeralVmRuntimesForDeleted } from '@/lib/ephemeral-vm-runtime-cleanup'
 import { folderWorkspaceKey, parseWorkspaceKey } from '../../../../shared/workspace-scope'
@@ -260,6 +262,51 @@ function getProjectUpdateRuntimeTarget(
 
 function getSafeAutoForkSyncKey(repo: Repo): string {
   return `${getRepoExecutionHostId(repo)}:${repo.id}:${repo.path}`
+}
+
+function formatProjectPresenceProfileNames(profileNames: readonly string[]): string {
+  const names = [...new Set(profileNames.map((name) => name.trim()).filter(Boolean))]
+  if (names.length <= 3) {
+    return names.join(', ')
+  }
+  // Why: the "+N more" overflow suffix is user-visible toast copy and must localize.
+  return translate('auto.store.slices.repos.presenceProfileOverflow', '{{names}} +{{count}} more', {
+    names: names.slice(0, 3).join(', '),
+    count: names.length - 3
+  })
+}
+
+async function warnIfProjectKnownInAnotherProfile(
+  repo: Repo,
+  activeOrcaProfileId: string | null
+): Promise<void> {
+  const findProjectProfiles = window.api.orcaProfiles?.findProjectProfiles
+  // Why: without a loaded active profile ID the scan cannot exclude the
+  // current profile and would false-positive on the project just added.
+  if (!findProjectProfiles || !activeOrcaProfileId) {
+    return
+  }
+  try {
+    const result = await findProjectProfiles({
+      path: repo.path,
+      connectionId: repo.connectionId ?? null,
+      executionHostId: getRepoExecutionHostId(repo),
+      excludeProfileId: activeOrcaProfileId
+    })
+    const description = formatProjectPresenceProfileNames(
+      result.projects.map((project) => project.profileName)
+    )
+    if (!description) {
+      return
+    }
+    toast.warning(
+      translate('auto.store.slices.repos.2dcd706774', 'Project also exists in another profile'),
+      { description }
+    )
+  } catch (err) {
+    // Why: adding a project should not fail because an advisory profile scan failed.
+    console.warn('Failed to check project presence in other profiles:', err)
+  }
 }
 
 function scheduleSafeAutoForkSync(get: () => AppState, repos: readonly Repo[]): void {
@@ -1038,8 +1085,12 @@ async function listRuntimeEnvironmentsForAllHostLoad(): Promise<{ id: string }[]
   }
 }
 
-function settingsForRepoOwner(state: Pick<AppState, 'repos' | 'settings'>, repoId: string) {
-  const repo = findRepoForHost(state.repos, repoId, { settings: state.settings })
+function settingsForRepoOwner(
+  state: Pick<AppState, 'repos' | 'settings'>,
+  repoId: string,
+  hostId?: ExecutionHostId
+) {
+  const repo = findRepoForHost(state.repos, repoId, { settings: state.settings, hostId })
   if (!repo) {
     return state.settings
   }
@@ -1371,7 +1422,9 @@ export type RepoSlice = {
     groupId: string | null,
     order?: number
   ) => Promise<boolean>
-  removeProject: (projectId: string) => Promise<void>
+  // options.hostId disambiguates which host's row to remove when the same repo
+  // id exists on multiple hosts; without it the focused host is assumed.
+  removeProject: (projectId: string, options?: { hostId?: ExecutionHostId }) => Promise<void>
   updateProject: (projectId: string, updates: ProjectUpdate) => Promise<boolean>
   updateRepo: (projectId: string, updates: RepoUpdate) => Promise<boolean>
   setActiveRepo: (projectId: string | null) => void
@@ -1408,18 +1461,26 @@ export const createRepoSlice: StateCreator<AppState, [], [], RepoSlice> = (set, 
         return
       }
       set((s) => {
-        const validRepoIds = new Set(reconciledRepos.map((repo) => repo.id))
+        // Why: after re-adoption re-points a repo onto a re-added SSH target, the
+        // per-host merge leaves the stale row on the old (removed) target id — a
+        // ghost a terminal pane can bind to and fail with "SSH target not found".
+        // Drop rows on unknown SSH targets that a live-host sibling supersedes.
+        const prunedRepos = pruneSupersededSshRepoRows(
+          reconciledRepos,
+          new Set(s.sshTargetLabels.keys())
+        )
+        const validRepoIds = new Set(prunedRepos.map((repo) => repo.id))
         const mergedProjectCompatibility = mergeFetchedProjectCompatibilityForHost({
           previous: {
             projects: s.projects,
             projectHostSetups: s.projectHostSetups
           },
           fetched: projectCompatibility,
-          repos: reconciledRepos,
+          repos: prunedRepos,
           hostId
         })
         return {
-          repos: reconciledRepos,
+          repos: prunedRepos,
           ...mergedProjectCompatibility,
           folderWorkspacePathStatuses: {},
           activeRepoId: s.activeRepoId && validRepoIds.has(s.activeRepoId) ? s.activeRepoId : null,
@@ -2222,6 +2283,9 @@ export const createRepoSlice: StateCreator<AppState, [], [], RepoSlice> = (set, 
             description: repo.displayName
           }
         )
+        // Why: the design requires the cross-profile advisory for SSH-added
+        // projects too — the presence lookup already keys on connection/host.
+        await warnIfProjectKnownInAnotherProfile(repo, get().activeOrcaProfileId)
       }
       return repo
     } catch (err) {
@@ -2539,9 +2603,15 @@ export const createRepoSlice: StateCreator<AppState, [], [], RepoSlice> = (set, 
     }
   },
 
-  removeProject: async (projectId) => {
+  removeProject: async (projectId, options) => {
     try {
-      const ownerRepo = findRepoForHost(get().repos, projectId, { settings: get().settings })
+      // Why: pass an explicit hostId (e.g. when removing an SSH host's root repo)
+      // so a duplicate id across hosts resolves to the intended row instead of
+      // falling back to the focused host.
+      const ownerRepo = findRepoForHost(get().repos, projectId, {
+        settings: get().settings,
+        hostId: options?.hostId
+      })
       if (!ownerRepo) {
         return
       }
@@ -2556,9 +2626,23 @@ export const createRepoSlice: StateCreator<AppState, [], [], RepoSlice> = (set, 
           runtimeOwnedSshTargetIds: [ownerRepo.connectionId as string]
         })
       }
-      const target = getActiveRuntimeTarget(settingsForRepoOwner(get(), projectId))
+      // Why: derive the runtime target from the owner's own settings, passing the
+      // explicit options.hostId so a duplicate repo id across hosts resolves to the
+      // intended row. settingsForRepoOwner clears the focused runtime for SSH/local
+      // owners (routing local) and pins runtime owners to their environment, so an
+      // SSH host removal never routes repo.rm to the focused runtime.
+      const target = getActiveRuntimeTarget(settingsForRepoOwner(get(), projectId, options?.hostId))
+      // Why: the same repo id can exist on multiple hosts (local + an SSH target,
+      // or a re-added SSH target). Main's repos:remove is repo-id-only and would
+      // delete every host's row. Scope the local-side removal to the owning host
+      // so a cross-host duplicate id keeps its other rows.
+      const idExistsOnOtherHost = get().repos.some(
+        (repo) => repo.id === projectId && getRepoExecutionHostId(repo) !== ownerHostId
+      )
       await (target.kind === 'local'
-        ? window.api.repos.remove({ repoId: projectId })
+        ? idExistsOnOtherHost
+          ? window.api.repos.removeForHost({ repoId: projectId, hostId: ownerHostId })
+          : window.api.repos.remove({ repoId: projectId })
         : callRuntimeRpc(target, 'repo.rm', { repo: projectId }, { timeoutMs: 15_000 }))
 
       get().clearOrcaHookTrustForRepo(projectId)

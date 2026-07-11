@@ -74,6 +74,7 @@ import {
   searchBaseRefDetails
 } from '../git/repo'
 import { getSshGitProvider } from '../providers/ssh-git-dispatch'
+import { getSshGitCapabilityCache } from '../git/git-capability-state'
 import { getSshFilesystemProvider } from '../providers/ssh-filesystem-dispatch'
 import { getSshGitUsername, resolveLocalGitUsername } from '../git/git-username'
 import { enrichRepoGitUsernames } from '../repo-git-username-enrichment'
@@ -1118,6 +1119,7 @@ export function registerRepoHandlers(mainWindow: BrowserWindow, store: Store): v
   ipcMain.removeHandler('repos:list')
   ipcMain.removeHandler('repos:add')
   ipcMain.removeHandler('repos:remove')
+  ipcMain.removeHandler('repos:removeForHost')
   ipcMain.removeHandler('repos:reorder')
   ipcMain.removeHandler('repos:update')
   ipcMain.removeHandler('projects:list')
@@ -1926,6 +1928,22 @@ export function registerRepoHandlers(mainWindow: BrowserWindow, store: Store): v
     notifyReposChanged(mainWindow)
   })
 
+  // Why: forget a project on a single execution host without disturbing the
+  // same repo id on other hosts (local or a re-added SSH target). Used by the
+  // SSH-workspace forget flow when a host is removed/disconnected.
+  ipcMain.handle(
+    'repos:removeForHost',
+    async (_event, args: { repoId: string; hostId: string }) => {
+      const hostId = normalizeExecutionHostId(args.hostId)
+      if (!hostId) {
+        throw new Error(`Invalid host ID: ${args.hostId}`)
+      }
+      store.removeProjectForHost(args.repoId, hostId)
+      invalidateAuthorizedRootsCache()
+      notifyReposChanged(mainWindow)
+    }
+  )
+
   ipcMain.handle(
     'repos:update',
     (
@@ -2531,32 +2549,33 @@ async function searchBaseRefDetailsForRepo(
         .split('\n')
         .map((line) => line.trim())
         .filter(Boolean)
+      const capabilities = getSshGitCapabilityCache(provider)
       const runSearch = async (patternGroup?: 'segmented' | 'branchRoot'): Promise<string> => {
-        try {
-          return (
-            await provider.exec(
-              buildSearchBaseRefsArgv(normalizedQuery, limit, {
-                remoteNames: remotes,
-                patternGroup
-              }),
-              repo.path
-            )
-          ).stdout
-        } catch (err) {
-          if (!isForEachRefExcludeUnsupportedError(err)) {
-            throw err
-          }
-          return (
-            await provider.exec(
-              buildSearchBaseRefsArgv(normalizedQuery, limit, {
-                excludeRemoteHead: false,
-                remoteNames: remotes,
-                patternGroup
-              }),
-              repo.path
-            )
-          ).stdout
-        }
+        return capabilities.runWithFallback(
+          'for-each-ref-exclude',
+          async () =>
+            (
+              await provider.exec(
+                buildSearchBaseRefsArgv(normalizedQuery, limit, {
+                  remoteNames: remotes,
+                  patternGroup
+                }),
+                repo.path
+              )
+            ).stdout,
+          async () =>
+            (
+              await provider.exec(
+                buildSearchBaseRefsArgv(normalizedQuery, limit, {
+                  excludeRemoteHead: false,
+                  remoteNames: remotes,
+                  patternGroup
+                }),
+                repo.path
+              )
+            ).stdout,
+          isForEachRefExcludeUnsupportedError
+        )
       }
       // Why: delegate the NUL-parse + HEAD filter + dedup + limit pipeline
       // to the shared helper so the SSH and local paths cannot diverge.

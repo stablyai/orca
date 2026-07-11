@@ -18,6 +18,8 @@ vi.mock('./runner', () => ({
   translateWslOutputPaths: translateWslOutputPathsMock
 }))
 
+import { clearGitCapabilityStateForTests } from './git-capability-state'
+
 import {
   addSparseWorktree,
   addWorktree,
@@ -28,6 +30,10 @@ import {
   removeWorktree,
   WORKTREE_ADD_TIMEOUT_MS
 } from './worktree'
+
+beforeEach(() => {
+  clearGitCapabilityStateForTests()
+})
 
 describe('listWorktrees in-flight sharing', () => {
   beforeEach(() => {
@@ -98,6 +104,47 @@ describe('listWorktrees in-flight sharing', () => {
 })
 
 describe('parseWorktreeList', () => {
+  it('preserves a locked marker and its reason', () => {
+    expect(
+      parseWorktreeList(
+        'worktree /repo\nHEAD abc\nbranch refs/heads/main\n\nworktree /locked\nHEAD def\nbranch refs/heads/feature\nlocked active agent session\n'
+      )[1]
+    ).toMatchObject({
+      path: '/locked',
+      locked: true,
+      lockReason: 'active agent session'
+    })
+  })
+
+  it('decodes C-quoted lock reasons from legacy line porcelain output', () => {
+    const output =
+      'worktree /repo\nHEAD abc\nbranch refs/heads/main\n\nworktree /locked\nHEAD def\nbranch refs/heads/feature\nlocked "first line\\nsecond line \\303\\251"\n'
+
+    expect(parseWorktreeList(output)[1]).toMatchObject({
+      locked: true,
+      lockReason: 'first line\nsecond line é'
+    })
+  })
+
+  it('keeps NUL-delimited lock reasons raw', () => {
+    const output = [
+      'worktree /repo',
+      'HEAD abc',
+      'branch refs/heads/main',
+      '',
+      'worktree /locked',
+      'HEAD def',
+      'branch refs/heads/feature',
+      'locked "literal\\nquote"',
+      ''
+    ].join('\0')
+
+    expect(parseWorktreeList(output, { nulDelimited: true })[1]).toMatchObject({
+      locked: true,
+      lockReason: '"literal\\nquote"'
+    })
+  })
+
   it('parses regular and bare worktree blocks from porcelain output', () => {
     const output = `
 worktree /repo

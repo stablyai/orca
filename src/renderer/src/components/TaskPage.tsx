@@ -159,6 +159,12 @@ import {
   LinearProjectTable
 } from '@/components/linear-project-view-surfaces'
 import JiraIssueWorkspace from '@/components/JiraIssueWorkspace'
+import { TaskPageJiraIssueList } from '@/components/task-page-jira-issue-list'
+import {
+  getSingleJiraProjectScope,
+  getTaskPageJiraStatusOrderScopeKey,
+  loadTaskPageJiraProjectStatusOrder
+} from '@/components/task-page-jira-status-order'
 import { JiraIcon } from '@/components/icons/JiraIcon'
 import { cn } from '@/lib/utils'
 import {
@@ -199,6 +205,30 @@ import {
   type TaskPageRepoSourceState
 } from '@/components/task-page-cache-selectors'
 import { shouldHideTaskPageListChrome } from '@/components/task-page-list-chrome-visibility'
+import LinearIssueAttributeFilterDropdowns from '@/components/linear-issue-attribute-filter-dropdowns'
+import { resolveLinearIssueAttributeFilterPrimaryTeam } from '@/components/linear-issue-attribute-filter-primary-team'
+import {
+  buildLinearIssueListReadArgs,
+  buildLinearIssueListRequestSignature,
+  isLinearIssueSearchActive,
+  shouldForceLinearIssueListRead,
+  teamDerivedFacetsForPrimaryTeamChange
+} from '@/components/task-page-linear-issue-request'
+import {
+  resolveLinearIssueEmptyKind,
+  shouldOfferLinearIssueFetchMore
+} from '@/components/task-page-linear-issue-empty-state'
+import {
+  emptyLinearIssueAttributeFilter,
+  linearIssueAttributeFilterSignature,
+  type LinearIssueAttributeFilter
+} from '../../../shared/linear-issue-attribute-filter'
+import {
+  isNewIssueDraftContentful,
+  resolveNewIssueOpenSeed,
+  resolveUserRepoSwitchReset,
+  resolveVanishedNewIssueRepoReset
+} from '@/components/task-page-new-issue-draft'
 import { findTaskPageJiraIssue } from '@/components/task-page-jira-cache-selectors'
 import { getRepoBackedTaskEmptyState } from '@/components/task-page-empty-state'
 import {
@@ -253,6 +283,8 @@ import type {
   JiraIssue,
   JiraIssueType,
   JiraProject,
+  JiraProjectStatusOrder,
+  JiraPriority,
   LinearIssue,
   LinearProjectDetail,
   LinearProjectSummary,
@@ -292,8 +324,16 @@ import {
   jiraGetIssue,
   jiraListCreateFields,
   jiraListIssueTypes,
-  jiraListProjects
+  jiraListProjects,
+  jiraListPriorities
 } from '@/runtime/runtime-jira-client'
+import {
+  sortJiraIssues,
+  type JiraIssueSortColumn,
+  type JiraIssueSortDirection,
+  type JiraPrioritiesBySite
+} from './jira-issue-sorter'
+import { TaskPageJiraSortControls } from './task-page-jira-sort-controls'
 import {
   normalizeVisibleTaskProviders,
   restoreAvailableDefaultTaskProvider,
@@ -646,27 +686,28 @@ function LinearStateCell({
       }
 
       setPending(true)
-      patchLinearIssue(issue.id, { state: nextState })
+      patchLinearIssue(issue.id, { state: nextState }, { sourceContext })
       void linearUpdateIssue(providerSettings, issue.id, { stateId }, issue.workspaceId)
         .then((result) => {
           if (reqId !== reqRef.current) {
             return
           }
           if (result.ok === false) {
-            patchLinearIssue(issue.id, { state: previousState })
+            patchLinearIssue(issue.id, { state: previousState }, { sourceContext })
             toast.error(
               result.error ??
                 translate('auto.components.TaskPage.6775c05483', 'Failed to update Linear state')
             )
             return
           }
+          useAppStore.getState().invalidateLinearIssueLists({ sourceContext })
           useAppStore.getState().recordFeatureInteraction('linear-tasks')
         })
         .catch(() => {
           if (reqId !== reqRef.current) {
             return
           }
-          patchLinearIssue(issue.id, { state: previousState })
+          patchLinearIssue(issue.id, { state: previousState }, { sourceContext })
           toast.error(
             translate('auto.components.TaskPage.6775c05483', 'Failed to update Linear state')
           )
@@ -685,6 +726,7 @@ function LinearStateCell({
       patchLinearIssue,
       pending,
       providerSettings,
+      sourceContext,
       states.data
     ]
   )
@@ -3048,6 +3090,8 @@ export default function TaskPage(): React.JSX.Element {
   const selectLinearWorkspace = useAppStore((s) => s.selectLinearWorkspace)
   const searchLinearIssues = useAppStore((s) => s.searchLinearIssues)
   const listLinearIssues = useAppStore((s) => s.listLinearIssues)
+  const linearListInvalidationToken = useAppStore((s) => s.linearListInvalidationToken)
+  const invalidateLinearIssueLists = useAppStore((s) => s.invalidateLinearIssueLists)
   const getCachedLinearIssues = useAppStore((s) => s.getCachedLinearIssues)
   const getCachedLinearTeams = useAppStore((s) => s.getCachedLinearTeams)
   const listLinearTeams = useAppStore((s) => s.listLinearTeams)
@@ -3446,6 +3490,13 @@ export default function TaskPage(): React.JSX.Element {
       selectedLinearWorkspaceId
     ]
   )
+  // Why: only react to invalidation tokens for this TaskPage source scope.
+  const linearListInvalidationVersionForSource = useMemo(() => {
+    const scope = linearTaskSourceContext
+      ? getTaskSourceCacheScope(linearTaskSourceContext)
+      : 'local'
+    return linearListInvalidationToken.scope === scope ? linearListInvalidationToken.version : 0
+  }, [linearListInvalidationToken, linearTaskSourceContext])
   const jiraTaskSourceContext = useMemo(
     () =>
       normalizeTaskSourceContext({
@@ -3466,6 +3517,9 @@ export default function TaskPage(): React.JSX.Element {
       selectedJiraSiteId
     ]
   )
+  const jiraTaskSourceScopeKey = jiraTaskSourceContext
+    ? getTaskSourceCacheScope(jiraTaskSourceContext)
+    : providerRuntimeContextKey
   const accountBackedTaskSourceHostAvailability = useMemo<TaskSourceHostAvailability[]>(() => {
     if (taskSource !== 'linear' && taskSource !== 'jira') {
       return []
@@ -4052,6 +4106,16 @@ export default function TaskPage(): React.JSX.Element {
   const [newIssueAssignees, setNewIssueAssignees] = useState<GitHubAssignableUser[]>([])
   const [newIssueSubmitting, setNewIssueSubmitting] = useState(false)
   const [newIssueRepoId, setNewIssueRepoId] = useState<string | null>(null)
+  // Why: session-only draft slice backs recovery of an in-progress issue after
+  // an accidental dismissal (outside click/Escape/Cancel) and across a Tasks
+  // view unmount. Component `useState` stays the inputs' immediate source; the
+  // store is the durable-across-remount backing. See task-page-new-issue-draft.
+  // The draft value is read imperatively at open time (getState) rather than
+  // subscribed: it's only consumed in the `+` open handler, and the write-through
+  // rewrites it on every keystroke — subscribing would re-render all of TaskPage
+  // per keystroke while the modal is open. Actions are stable refs (no churn).
+  const setNewIssueDraft = useAppStore((s) => s.setNewIssueDraft)
+  const clearNewIssueDraft = useAppStore((s) => s.clearNewIssueDraft)
 
   // Why: resolve the target repo from the user's choice, falling back to the
   // first selected repo if the chosen id drops out of the selection while the
@@ -4096,10 +4160,62 @@ export default function TaskPage(): React.JSX.Element {
     { runtimeEnvironmentId: newIssueOpen ? (newIssueRuntimeTarget?.environmentId ?? null) : null }
   )
 
+  // Why: repo-scoped labels/assignees can't cross repos. A reactive clear keyed
+  // on the derived target id can't tell a restore apart from a user switch, so
+  // it would wipe just-restored fields and corrupt the recovery draft via the
+  // write-through below. Decompose by cause instead: this guard only handles the
+  // "chosen repo vanished from the selection" case (removed/deselected). A
+  // genuine user switch clears imperatively in the repo Select's handler; a
+  // restore always seeds an in-selection repoId, so neither path fires here.
   useEffect(() => {
+    const reset = resolveVanishedNewIssueRepoReset(
+      newIssueRepoId,
+      selectedRepos.map((r) => r.id)
+    )
+    if (!reset) {
+      return
+    }
     setNewIssueLabels([])
     setNewIssueAssignees([])
-  }, [newIssueTargetRepo?.id])
+    setNewIssueRepoId(reset.repoId)
+  }, [newIssueRepoId, selectedRepos])
+
+  // Why: mirror the live fields into the session draft while the modal is open
+  // so an accidental dismissal doesn't lose input. Content-gate the write so an
+  // untouched open never pins a meaningless draft (repoId alone is not content),
+  // and clear any stale draft once the form is emptied back out.
+  useEffect(() => {
+    if (!newIssueOpen) {
+      return
+    }
+    if (
+      isNewIssueDraftContentful({
+        title: newIssueTitle,
+        body: newIssueBody,
+        labels: newIssueLabels,
+        assignees: newIssueAssignees
+      })
+    ) {
+      setNewIssueDraft({
+        title: newIssueTitle,
+        body: newIssueBody,
+        labels: newIssueLabels,
+        assignees: newIssueAssignees,
+        repoId: newIssueRepoId
+      })
+    } else {
+      clearNewIssueDraft()
+    }
+  }, [
+    newIssueOpen,
+    newIssueTitle,
+    newIssueBody,
+    newIssueLabels,
+    newIssueAssignees,
+    newIssueRepoId,
+    setNewIssueDraft,
+    clearNewIssueDraft
+  ])
 
   const [selectedLinearIssueId, setSelectedLinearIssueId] = useState<string | null>(null)
   const [selectedLinearIssueFallback, setSelectedLinearIssueFallback] =
@@ -4287,6 +4403,14 @@ export default function TaskPage(): React.JSX.Element {
   const [linearError, setLinearError] = useState<string | null>(null)
   const [linearSearchInput, setLinearSearchInput] = useState('')
   const [appliedLinearSearch, setAppliedLinearSearch] = useState('')
+  const [linearAttributeFilter, setLinearAttributeFilter] = useState<LinearIssueAttributeFilter>(
+    () => emptyLinearIssueAttributeFilter()
+  )
+  const linearAttributeFilterSignatureRef = useRef(
+    linearIssueAttributeFilterSignature(emptyLinearIssueAttributeFilter())
+  )
+  const linearPrimaryTeamIdRef = useRef<string | null>(null)
+  const previousLinearWorkspaceIdForFiltersRef = useRef<string | null | undefined>(undefined)
   const [linearViewMode, setLinearViewMode] = useState<LinearViewMode>('list')
   const [linearGroupBy, setLinearGroupBy] = useState<LinearGroupBy>('none')
   const [linearOrderBy, setLinearOrderBy] = useState<LinearOrderBy>('priority')
@@ -4470,6 +4594,70 @@ export default function TaskPage(): React.JSX.Element {
   const [appliedJiraSearch, setAppliedJiraSearch] = useState('')
   const [activeJiraPreset, setActiveJiraPreset] = useState<JiraPresetId>('assigned')
   const [jiraRefreshNonce, setJiraRefreshNonce] = useState(0)
+  const [jiraProjectStatusOrder, setJiraProjectStatusOrder] = useState<{
+    order: JiraProjectStatusOrder
+    scopeKey: string
+  } | null>(null)
+  const [jiraOrderBy, setJiraOrderBy] = useState<JiraIssueSortColumn>('updated')
+  const [jiraOrderDirection, setJiraOrderDirection] = useState<JiraIssueSortDirection>('desc')
+  const [jiraPrioritiesBySite, setJiraPrioritiesBySite] = useState<JiraPrioritiesBySite>(
+    () => new Map()
+  )
+  const jiraPrioritySiteIdsKey = useMemo(() => {
+    const siteIds =
+      selectedJiraSiteId && selectedJiraSiteId !== 'all'
+        ? [selectedJiraSiteId]
+        : jiraIssues.flatMap((issue) => (issue.siteId ? [issue.siteId] : []))
+    // Why: result refreshes replace the issue array; depend on the represented sites, not identity.
+    return JSON.stringify([...new Set(siteIds)].sort())
+  }, [jiraIssues, selectedJiraSiteId])
+
+  useEffect(() => {
+    if (taskSource !== 'jira' || !jiraConnected || jiraOrderBy !== 'priority') {
+      setJiraPrioritiesBySite((current) => (current.size === 0 ? current : new Map()))
+      return
+    }
+    let cancelled = false
+    const jiraPrioritySiteIds = JSON.parse(jiraPrioritySiteIdsKey) as string[]
+    void Promise.all(
+      jiraPrioritySiteIds.map(async (siteId) => {
+        try {
+          return [
+            siteId,
+            await jiraListPriorities(jiraTaskSourceContext ?? settings, siteId)
+          ] as const
+        } catch {
+          return [siteId, [] as JiraPriority[]] as const
+        }
+      })
+    ).then((prioritiesBySite) => {
+      if (!cancelled) {
+        setJiraPrioritiesBySite(new Map(prioritiesBySite))
+      }
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [
+    jiraConnected,
+    jiraOrderBy,
+    jiraPrioritySiteIdsKey,
+    jiraTaskSourceContext,
+    settings,
+    taskSource
+  ])
+
+  const handleJiraSort = useCallback(
+    (column: JiraIssueSortColumn) => {
+      if (jiraOrderBy === column) {
+        setJiraOrderDirection((prevDir) => (prevDir === 'asc' ? 'desc' : 'asc'))
+      } else {
+        setJiraOrderBy(column)
+        setJiraOrderDirection(column === 'updated' || column === 'status' ? 'desc' : 'asc')
+      }
+    },
+    [jiraOrderBy]
+  )
 
   useEffect(() => {
     if (taskResumeAppliedRef.current || !persistedUIReady || !settings) {
@@ -5032,6 +5220,57 @@ export default function TaskPage(): React.JSX.Element {
     )
   }, [linearTeamOptions, defaultLinearTeamSelection])
 
+  const linearAttributePrimaryTeam = useMemo(
+    () =>
+      resolveLinearIssueAttributeFilterPrimaryTeam({
+        selectedTeamIds: [...linearTeamSelection],
+        availableTeams: linearTeamOptions
+      }),
+    [linearTeamOptions, linearTeamSelection]
+  )
+
+  const applyLinearAttributeFilter = useCallback((next: LinearIssueAttributeFilter) => {
+    // Why: batch filter + limit/page reset in one transition so the fetch
+    // effect never issues an old expanded-limit request for the new filter.
+    setLinearAttributeFilter(next)
+    setLinearIssueLimit(LINEAR_ITEM_LIMIT)
+    setLinearIssuePage(0)
+    setLinearIssueLoadingTargetPage(null)
+  }, [])
+
+  useEffect(() => {
+    const workspaceId = selectedLinearWorkspaceId ?? null
+    const previous = previousLinearWorkspaceIdForFiltersRef.current
+    previousLinearWorkspaceIdForFiltersRef.current = workspaceId
+    if (previous === undefined || previous === workspaceId) {
+      return
+    }
+    applyLinearAttributeFilter(emptyLinearIssueAttributeFilter())
+  }, [applyLinearAttributeFilter, selectedLinearWorkspaceId])
+
+  useEffect(() => {
+    const nextId = linearAttributePrimaryTeam?.id ?? null
+    const previousId = linearPrimaryTeamIdRef.current
+    linearPrimaryTeamIdRef.current = nextId
+    if (previousId === null || previousId === nextId) {
+      return
+    }
+    // Why: status/assignee/labels are team-scoped; clearing them is a filter change
+    // and must reset limit/page via applyLinearAttributeFilter (R6), not a bare set.
+    const next = teamDerivedFacetsForPrimaryTeamChange(linearAttributeFilter)
+    if (
+      linearIssueAttributeFilterSignature(linearAttributeFilter) ===
+      linearIssueAttributeFilterSignature(next)
+    ) {
+      return
+    }
+    applyLinearAttributeFilter(next)
+  }, [applyLinearAttributeFilter, linearAttributeFilter, linearAttributePrimaryTeam?.id])
+
+  const linearSearchActive = isLinearIssueSearchActive(linearSearchInput, appliedLinearSearch)
+  const showLinearAttributeFilters =
+    linearMode === 'issues' && !activeLinearIssueContextLabel && !linearSearchActive
+
   const filteredLinearIssues = useMemo(() => {
     if (activeLinearIssueContextLabel) {
       return displayedLinearIssues
@@ -5350,7 +5589,7 @@ export default function TaskPage(): React.JSX.Element {
           color: workflowState.color
         }
 
-        patchLinearIssue(issue.id, { state: nextState })
+        patchLinearIssue(issue.id, { state: nextState }, { sourceContext: linearTaskSourceContext })
         patchScopedLinearIssue(issue.id, { state: nextState })
         applyFallbackState(nextState)
 
@@ -5361,7 +5600,11 @@ export default function TaskPage(): React.JSX.Element {
           issue.workspaceId
         )
         if (result.ok === false) {
-          patchLinearIssue(issue.id, { state: previousState })
+          patchLinearIssue(
+            issue.id,
+            { state: previousState },
+            { sourceContext: linearTaskSourceContext }
+          )
           patchScopedLinearIssue(issue.id, { state: previousState })
           applyFallbackState(previousState)
           toast.error(
@@ -5370,9 +5613,14 @@ export default function TaskPage(): React.JSX.Element {
           )
           return
         }
+        invalidateLinearIssueLists({ sourceContext: linearTaskSourceContext })
         useAppStore.getState().recordFeatureInteraction('linear-tasks')
       } catch {
-        patchLinearIssue(issue.id, { state: previousState })
+        patchLinearIssue(
+          issue.id,
+          { state: previousState },
+          { sourceContext: linearTaskSourceContext }
+        )
         patchScopedLinearIssue(issue.id, { state: previousState })
         applyFallbackState(previousState)
         toast.error(
@@ -5388,6 +5636,7 @@ export default function TaskPage(): React.JSX.Element {
     },
     [
       filteredLinearIssues,
+      invalidateLinearIssueLists,
       linearBoardDraggingIssueId,
       linearBoardUpdatingIssueIds,
       linearStatusBoardEnabled,
@@ -5429,7 +5678,26 @@ export default function TaskPage(): React.JSX.Element {
       ),
     [jiraIssues, jiraCacheSnapshot.issueCache, jiraCacheSnapshot.searchCache, jiraTaskSourceContext]
   )
+  const displayedJiraProjectScope = useMemo(
+    () => getSingleJiraProjectScope(displayedJiraIssues),
+    [displayedJiraIssues]
+  )
+  const displayedJiraStatusOrderScopeKey = displayedJiraProjectScope
+    ? getTaskPageJiraStatusOrderScopeKey(jiraTaskSourceScopeKey, displayedJiraProjectScope)
+    : null
+  const displayedJiraStatusOrder =
+    jiraProjectStatusOrder && displayedJiraStatusOrderScopeKey === jiraProjectStatusOrder.scopeKey
+      ? jiraProjectStatusOrder.order
+      : null
 
+  const sortedJiraIssues = useMemo(() => {
+    return sortJiraIssues(
+      displayedJiraIssues,
+      jiraOrderBy,
+      jiraOrderDirection,
+      jiraPrioritiesBySite
+    )
+  }, [displayedJiraIssues, jiraOrderBy, jiraOrderDirection, jiraPrioritiesBySite])
   // New Linear project dialog state
   const [newLinearProjectOpen, setNewLinearProjectOpen] = useState(false)
   const [newLinearProjectName, setNewLinearProjectName] = useState('')
@@ -6597,7 +6865,9 @@ export default function TaskPage(): React.JSX.Element {
               labels: newIssueLabels,
               assignees: newIssueAssignees.map((assignee) => assignee.login)
             },
-            { timeoutMs: 30_000 }
+            // Why: oversized-body recovery can require two 30-second writes
+            // after GitHub rejects the initial create request.
+            { timeoutMs: 65_000 }
           )
         : await window.api.gh.createIssue({
             repoPath: newIssueTargetRepo.path,
@@ -6615,24 +6885,42 @@ export default function TaskPage(): React.JSX.Element {
         )
         return
       }
-      toast.success(
-        translate('auto.components.TaskPage.3f9604efc7', 'Opened issue #{{value0}}', {
-          value0: result.number
-        }),
-        {
-          action: result.url
-            ? {
-                label: translate('auto.components.TaskPage.9c57663908', 'View'),
-                onClick: () => window.open(result.url, '_blank')
-              }
-            : undefined
-        }
+      const createdIssueToast = translate(
+        'auto.components.TaskPage.3f9604efc7',
+        'Opened issue #{{value0}}',
+        { value0: result.number }
       )
+      const createdIssueToastOptions = {
+        action: result.url
+          ? {
+              label: translate('auto.components.TaskPage.9c57663908', 'View'),
+              onClick: () => window.open(result.url, '_blank')
+            }
+          : undefined
+      }
+      if (result.bodySaveWarning) {
+        toast.warning(createdIssueToast, {
+          ...createdIssueToastOptions,
+          description: result.bodySaveWarning
+        })
+      } else {
+        toast.success(createdIssueToast, createdIssueToastOptions)
+      }
       setNewIssueOpen(false)
-      setNewIssueTitle('')
-      setNewIssueBody('')
-      setNewIssueLabels([])
-      setNewIssueAssignees([])
+      if (result.bodySaveWarning) {
+        // Why: retain the unsaved body for recovery, but clear the title so
+        // reopening the composer cannot repeat the create with one click.
+        setNewIssueTitle('')
+        setNewIssueDraft({ title: '' })
+      } else {
+        setNewIssueTitle('')
+        setNewIssueBody('')
+        setNewIssueLabels([])
+        setNewIssueAssignees([])
+        // Why: only a complete success discards the recovery draft; a partial
+        // body save keeps the original text available without another create.
+        clearNewIssueDraft()
+      }
       // Why: bump the nonce so the list refetches and shows the new issue.
       setTaskRefreshNonce((current) => current + 1)
 
@@ -6700,7 +6988,9 @@ export default function TaskPage(): React.JSX.Element {
     newIssueTargetRepo,
     newIssueTitle,
     openGitHubDetailPage,
-    setDialogWorkItem
+    setDialogWorkItem,
+    clearNewIssueDraft,
+    setNewIssueDraft
   ])
 
   const handleCreateNewLinearProject = useCallback(async (): Promise<void> => {
@@ -7104,9 +7394,8 @@ export default function TaskPage(): React.JSX.Element {
     taskSource
   ])
 
-  // Why: fetch Linear issues when the tab is active and the account is
-  // connected. An empty search falls back to `listLinearIssues` (assigned
-  // issues) so the default view shows the user's own work.
+  // Why: fetch Linear issues when the tab is active and connected. Empty search
+  // uses the plain `all` list with optional server-side attribute filters.
   useEffect(() => {
     if (!taskResumeApplied) {
       return
@@ -7126,10 +7415,17 @@ export default function TaskPage(): React.JSX.Element {
 
     const trimmed = appliedLinearSearch.trim()
     const effectiveLinearIssueLimit = clampLinearIssueListLimit(linearIssueLimit)
-    const readArgs =
-      trimmed.length > 0
-        ? ({ kind: 'search', query: trimmed, limit: LINEAR_ITEM_LIMIT } as const)
-        : ({ kind: 'list', filter: 'all', limit: effectiveLinearIssueLimit } as const)
+    const searchActive = trimmed.length > 0
+    const listReadArgs = buildLinearIssueListReadArgs({
+      filter: 'all',
+      limit: effectiveLinearIssueLimit,
+      attributeFilter: linearAttributeFilter,
+      searchActive,
+      allowAttributeFilter: selectedLinearWorkspaceId !== 'all'
+    })
+    const readArgs = searchActive
+      ? ({ kind: 'search', query: trimmed, limit: LINEAR_ITEM_LIMIT } as const)
+      : listReadArgs
     const cachedResult = getCachedLinearIssues(readArgs, { sourceContext: linearTaskSourceContext })
     if (readArgs.kind === 'search') {
       setLinearIssuesHasMore(false)
@@ -7144,15 +7440,29 @@ export default function TaskPage(): React.JSX.Element {
       )
     }
 
-    const requestSignature =
-      trimmed.length > 0
-        ? `${selectedLinearWorkspaceId ?? 'default'}::search::${trimmed}::${LINEAR_ITEM_LIMIT}`
-        : `${selectedLinearWorkspaceId ?? 'default'}::list::all::${effectiveLinearIssueLimit}`
+    const nextFilterSignature = linearIssueAttributeFilterSignature(linearAttributeFilter)
+    const previousFilterSignature = linearAttributeFilterSignatureRef.current
+    linearAttributeFilterSignatureRef.current = nextFilterSignature
+    const filterForce = shouldForceLinearIssueListRead({
+      previousFilterSignature,
+      nextFilterSignature,
+      refreshForced: false
+    })
+
+    const requestSignature = buildLinearIssueListRequestSignature({
+      sourceContext: linearTaskSourceContext,
+      workspaceId: selectedLinearWorkspaceId,
+      filter: 'all',
+      limit: effectiveLinearIssueLimit,
+      attributeFilter: linearAttributeFilter,
+      searchQuery: searchActive ? trimmed : undefined
+    })
     const previousRequest = lastLinearRequestRef.current
     const forceRefresh =
-      linearRefreshNonce > 0 &&
-      previousRequest?.nonce !== linearRefreshNonce &&
-      previousRequest?.signature === requestSignature
+      filterForce ||
+      (linearRefreshNonce > 0 &&
+        previousRequest?.nonce !== linearRefreshNonce &&
+        previousRequest?.signature === requestSignature)
     lastLinearRequestRef.current = { nonce: linearRefreshNonce, signature: requestSignature }
     const shouldProbeOnLanding =
       !forceRefresh &&
@@ -7175,7 +7485,7 @@ export default function TaskPage(): React.JSX.Element {
             force: forceRefresh || shouldProbeOnLanding,
             sourceContext: linearTaskSourceContext
           })
-        : listLinearIssues(readArgs.filter, effectiveLinearIssueLimit, {
+        : listLinearIssues(listReadArgs, {
             force: forceRefresh || shouldProbeOnLanding,
             sourceContext: linearTaskSourceContext
           })
@@ -7238,6 +7548,8 @@ export default function TaskPage(): React.JSX.Element {
     appliedLinearSearch,
     linearIssueLimit,
     linearRefreshNonce,
+    linearAttributeFilter,
+    linearListInvalidationVersionForSource,
     taskResumeApplied,
     getCachedLinearIssues,
     linearTaskSourceContext
@@ -7599,6 +7911,26 @@ export default function TaskPage(): React.JSX.Element {
         }
         setJiraIssues(issues)
         setJiraLoading(false)
+        const projectScope = getSingleJiraProjectScope(issues)
+        if (!projectScope) {
+          return
+        }
+        const statusOrderScopeKey = getTaskPageJiraStatusOrderScopeKey(
+          jiraTaskSourceScopeKey,
+          projectScope
+        )
+        void loadTaskPageJiraProjectStatusOrder(
+          jiraTaskSourceContext ?? settings,
+          jiraTaskSourceScopeKey,
+          projectScope
+        ).then((order) => {
+          if (!cancelled) {
+            setJiraProjectStatusOrder({
+              order,
+              scopeKey: statusOrderScopeKey
+            })
+          }
+        })
       })
       .catch((err) => {
         if (cancelled) {
@@ -7622,7 +7954,8 @@ export default function TaskPage(): React.JSX.Element {
     activeJiraPreset,
     jiraRefreshNonce,
     taskResumeApplied,
-    jiraTaskSourceContext
+    jiraTaskSourceContext,
+    jiraTaskSourceScopeKey
   ])
 
   useEffect(() => {
@@ -8234,11 +8567,20 @@ export default function TaskPage(): React.JSX.Element {
                               variant="outline"
                               size="icon"
                               onClick={() => {
-                                setNewIssueTitle('')
-                                setNewIssueBody('')
-                                setNewIssueLabels([])
-                                setNewIssueAssignees([])
-                                setNewIssueRepoId(primaryRepo?.id ?? null)
+                                // Why: restore a content-non-empty draft instead
+                                // of resetting, so an accidental dismissal is
+                                // recoverable. The empty-default branch stays live
+                                // so a stale draft never hijacks a fresh open after
+                                // the user changed their primary/selected repo.
+                                const seed = resolveNewIssueOpenSeed({
+                                  draft: useAppStore.getState().newIssueDraft,
+                                  selectedRepoIds: selectedRepos.map((r) => r.id)
+                                })
+                                setNewIssueTitle(seed.title)
+                                setNewIssueBody(seed.body)
+                                setNewIssueLabels(seed.labels)
+                                setNewIssueAssignees(seed.assignees)
+                                setNewIssueRepoId(seed.repoId)
                                 setNewIssueOpen(true)
                               }}
                               disabled={!newIssueTargetRepo}
@@ -8511,7 +8853,18 @@ export default function TaskPage(): React.JSX.Element {
                     </div>
 
                     {linearMode === 'issues' ? (
-                      <div className="mt-3 flex min-w-0 items-center gap-3">
+                      <div className="mt-3 flex min-w-0 items-center gap-2">
+                        {showLinearAttributeFilters ? (
+                          <LinearIssueAttributeFilterDropdowns
+                            value={linearAttributeFilter}
+                            onChange={applyLinearAttributeFilter}
+                            workspaceId={selectedLinearWorkspaceId ?? null}
+                            isAllWorkspaces={selectedLinearWorkspaceId === 'all'}
+                            primaryTeam={linearAttributePrimaryTeam}
+                            selectedTeamCount={linearTeamSelection.size}
+                            settings={linearTaskSourceContext ?? settings}
+                          />
+                        ) : null}
                         <div className="relative min-w-0 flex-1 basis-64">
                           <Search className="pointer-events-none absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" />
                           <Input
@@ -9751,17 +10104,11 @@ export default function TaskPage(): React.JSX.Element {
                   </div>
                 </div>
 
-                <div className="grid h-8 flex-none grid-cols-[90px_minmax(0,1fr)_128px_92px_80px] items-center gap-3 border-b border-border/50 bg-muted/25 px-3 text-[11px] font-medium uppercase tracking-[0.08em] text-muted-foreground max-md:!hidden lg:grid-cols-[96px_minmax(0,1.25fr)_132px_120px_136px_96px_64px] xl:grid-cols-[104px_minmax(0,1.45fr)_144px_132px_160px_128px_72px]">
-                  <span>{translate('auto.components.TaskPage.37e7ee311e', 'Key')}</span>
-                  <span>{translate('auto.components.TaskPage.b1eaa18ace', 'Issue')}</span>
-                  <span>{translate('auto.components.TaskPage.154b0fa623', 'Status')}</span>
-                  <span>{translate('auto.components.TaskPage.c8d5bec5f7', 'Priority')}</span>
-                  <span className="block max-lg:!hidden">
-                    {translate('auto.components.TaskPage.d2a876ca53', 'Assignee')}
-                  </span>
-                  <span>{translate('auto.components.TaskPage.f362667d55', 'Updated')}</span>
-                  <span />
-                </div>
+                <TaskPageJiraSortControls
+                  direction={jiraOrderDirection}
+                  onSort={handleJiraSort}
+                  orderBy={jiraOrderBy}
+                />
 
                 <div
                   className="min-h-0 flex-1 overflow-y-auto scrollbar-sleek"
@@ -9813,185 +10160,17 @@ export default function TaskPage(): React.JSX.Element {
                     </div>
                   ) : null}
 
-                  <div className="divide-y divide-border/50">
-                    {displayedJiraIssues.map((issue) => {
-                      const selected = issue.key === selectedJiraIssueKey
-                      const labels = issue.labels.slice(0, 3)
-                      const contextLabel =
-                        selectedJiraSiteId === 'all' && issue.siteName
-                          ? `${issue.siteName} / ${issue.project.key}`
-                          : issue.project.key
-                      return (
-                        <div
-                          key={`${issue.siteId ?? 'site'}:${issue.key}`}
-                          role="button"
-                          tabIndex={0}
-                          aria-current={selected ? 'true' : undefined}
-                          data-current={selected ? 'true' : undefined}
-                          onClick={() => openJiraDetailPage(issue)}
-                          onKeyDown={(e) => {
-                            if (e.target !== e.currentTarget) {
-                              return
-                            }
-                            if (e.key === 'Enter' || e.key === ' ') {
-                              e.preventDefault()
-                              openJiraDetailPage(issue)
-                            }
-                          }}
-                          className={cn(
-                            'group/row grid min-h-12 cursor-pointer grid-cols-[minmax(0,1fr)_auto] items-center gap-3 px-3 py-2 text-left transition hover:bg-accent focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring md:grid-cols-[90px_minmax(0,1fr)_128px_92px_80px] lg:grid-cols-[96px_minmax(0,1.25fr)_132px_120px_136px_96px_64px] xl:grid-cols-[104px_minmax(0,1.45fr)_144px_132px_160px_128px_72px]',
-                            selected && 'bg-accent'
-                          )}
-                        >
-                          <span className="block truncate font-mono text-[12px] text-muted-foreground max-md:!hidden">
-                            {issue.key}
-                          </span>
-
-                          <div className="min-w-0">
-                            <div className="flex min-w-0 items-center gap-2">
-                              <span className="shrink-0 font-mono text-[11px] text-muted-foreground md:hidden">
-                                {issue.key}
-                              </span>
-                              <h3 className="min-w-0 truncate text-[13px] font-medium text-foreground">
-                                {issue.title}
-                              </h3>
-                            </div>
-                            <div className="mt-1 flex min-w-0 items-center gap-1.5 md:!hidden">
-                              <span
-                                className={cn(
-                                  'inline-flex min-w-0 items-center rounded-full border px-1.5 py-0.5 text-[11px] font-medium',
-                                  getJiraStatusTone(issue.status.categoryKey)
-                                )}
-                              >
-                                <span className="truncate">{issue.status.name}</span>
-                              </span>
-                              <span className="shrink-0 text-[11px] text-muted-foreground">
-                                {issue.priority?.name ??
-                                  translate('auto.components.TaskPage.713179dfdc', 'No priority')}
-                              </span>
-                              <span className="min-w-0 truncate text-[11px] text-muted-foreground">
-                                {issue.assignee?.displayName ??
-                                  translate('auto.components.TaskPage.42a9160321', 'Unassigned')}
-                              </span>
-                            </div>
-                            <div className="mt-1 flex min-w-0 items-center gap-1 max-lg:!hidden">
-                              <span className="max-w-[160px] truncate text-[10px] text-muted-foreground xl:!hidden">
-                                {contextLabel}
-                              </span>
-                              {labels.map((label) => (
-                                <span
-                                  key={label}
-                                  className="max-w-[140px] truncate rounded-full border border-border/50 bg-muted/35 px-1.5 py-0.5 text-[10px] text-muted-foreground"
-                                >
-                                  {label}
-                                </span>
-                              ))}
-                              {issue.labels.length > labels.length ? (
-                                <span className="text-[10px] text-muted-foreground">
-                                  +{issue.labels.length - labels.length}
-                                </span>
-                              ) : null}
-                            </div>
-                          </div>
-
-                          <div className="flex min-w-0 max-md:!hidden">
-                            <span
-                              className={cn(
-                                'inline-flex max-w-full items-center rounded-full border px-2 py-0.5 text-[11px] font-medium',
-                                getJiraStatusTone(issue.status.categoryKey)
-                              )}
-                            >
-                              <span className="truncate">{issue.status.name}</span>
-                            </span>
-                          </div>
-
-                          <span className="block truncate text-[12px] text-muted-foreground max-md:!hidden">
-                            {issue.priority?.name ??
-                              translate('auto.components.TaskPage.713179dfdc', 'No priority')}
-                          </span>
-
-                          <div className="flex min-w-0 items-center gap-2 text-[12px] text-muted-foreground max-lg:!hidden">
-                            {issue.assignee?.avatarUrl ? (
-                              <img
-                                src={issue.assignee.avatarUrl}
-                                alt={issue.assignee.displayName}
-                                className="size-5 shrink-0 rounded-full"
-                              />
-                            ) : (
-                              <span className="flex size-5 shrink-0 items-center justify-center rounded-full border border-border/50 bg-muted/40 text-[10px]">
-                                {issue.assignee?.displayName?.slice(0, 1) ?? '-'}
-                              </span>
-                            )}
-                            <span className="truncate">
-                              {issue.assignee?.displayName ??
-                                translate('auto.components.TaskPage.42a9160321', 'Unassigned')}
-                            </span>
-                          </div>
-
-                          <Tooltip>
-                            <TooltipTrigger asChild>
-                              <div className="block min-w-0 truncate text-[12px] text-muted-foreground max-md:!hidden">
-                                {formatRelativeTime(issue.updatedAt)}
-                              </div>
-                            </TooltipTrigger>
-                            <TooltipContent side="bottom" sideOffset={6}>
-                              {new Date(issue.updatedAt).toLocaleString()}
-                            </TooltipContent>
-                          </Tooltip>
-
-                          <div className="flex shrink-0 items-center justify-end gap-1 md:opacity-0 md:transition-opacity md:group-hover/row:opacity-100 md:group-focus-within/row:opacity-100">
-                            <Tooltip>
-                              <TooltipTrigger asChild>
-                                <Button
-                                  variant="ghost"
-                                  size="icon-xs"
-                                  onClick={(event) => {
-                                    event.stopPropagation()
-                                    handleUseJiraItem(issue)
-                                  }}
-                                  aria-label={translate(
-                                    'auto.components.TaskPage.ff90d0abc7',
-                                    'Start workspace from {{value0}}',
-                                    { value0: issue.key }
-                                  )}
-                                >
-                                  <ArrowRight className="size-3.5" />
-                                </Button>
-                              </TooltipTrigger>
-                              <TooltipContent side="bottom" sideOffset={6}>
-                                {translate(
-                                  'auto.components.TaskPage.9497f2787c',
-                                  'Start workspace'
-                                )}
-                              </TooltipContent>
-                            </Tooltip>
-                            <Tooltip>
-                              <TooltipTrigger asChild>
-                                <Button
-                                  variant="ghost"
-                                  size="icon-xs"
-                                  onClick={(event) => {
-                                    event.stopPropagation()
-                                    window.api.shell.openUrl(issue.url)
-                                  }}
-                                  aria-label={translate(
-                                    'auto.components.TaskPage.4ac8ff2275',
-                                    'Open {{value0}} in Jira',
-                                    { value0: issue.key }
-                                  )}
-                                >
-                                  <ExternalLink className="size-3.5" />
-                                </Button>
-                              </TooltipTrigger>
-                              <TooltipContent side="bottom" sideOffset={6}>
-                                {translate('auto.components.TaskPage.eee68073b2', 'Open in Jira')}
-                              </TooltipContent>
-                            </Tooltip>
-                          </div>
-                        </div>
-                      )
-                    })}
-                  </div>
+                  <TaskPageJiraIssueList
+                    formatUpdatedAt={formatRelativeTime}
+                    getStatusTone={getJiraStatusTone}
+                    issues={sortedJiraIssues}
+                    onOpenIssue={openJiraDetailPage}
+                    onStartWorkspace={handleUseJiraItem}
+                    selectedIssue={selectedJiraIssue}
+                    showSiteContext={selectedJiraSiteId === 'all'}
+                    statusDirection={jiraOrderBy === 'status' ? jiraOrderDirection : 'asc'}
+                    statusOrder={displayedJiraStatusOrder}
+                  />
                 </div>
                 <JiraIssueWorkspace
                   issue={selectedJiraIssue}
@@ -10455,20 +10634,37 @@ export default function TaskPage(): React.JSX.Element {
                       {translate('auto.components.TaskPage.903c7af49f', 'No Linear issues found')}
                     </p>
                     <p className="mt-2 text-sm text-muted-foreground">
-                      {activeLinearIssueContextLabel
-                        ? translate(
+                      {(() => {
+                        const emptyKind = resolveLinearIssueEmptyKind({
+                          hasContextLabel: Boolean(activeLinearIssueContextLabel),
+                          searchActive: linearSearchActive,
+                          attributeFilter: linearAttributeFilter,
+                          serverIssueCount: activeLinearIssues.length,
+                          filteredIssueCount: filteredLinearIssues.length
+                        })
+                        if (emptyKind === 'context') {
+                          return translate(
                             'auto.components.TaskPage.25ff84769a',
                             'No issues match this Linear context.'
                           )
-                        : linearSearchInput
-                          ? translate(
-                              'auto.components.TaskPage.2bdefbcac3',
-                              'Try a different search query.'
-                            )
-                          : translate(
-                              'auto.components.TaskPage.d079be2dc8',
-                              'No assigned issues. Try searching for something.'
-                            )}
+                        }
+                        if (emptyKind === 'search') {
+                          return translate(
+                            'auto.components.TaskPage.2bdefbcac3',
+                            'Try a different search query.'
+                          )
+                        }
+                        if (emptyKind === 'server-attribute-filter') {
+                          return translate(
+                            'auto.components.TaskPage.linearEmptyAttributeFilter',
+                            'No issues match the selected filters. Clear a filter or try different criteria.'
+                          )
+                        }
+                        return translate(
+                          'auto.components.TaskPage.linearEmptyUnfilteredScope',
+                          'No issues in this workspace scope. Try searching or adjusting teams.'
+                        )
+                      })()}
                     </p>
                   </div>
                 ) : null}
@@ -10489,6 +10685,27 @@ export default function TaskPage(): React.JSX.Element {
                         'Try selecting more teams or refreshing; team filters apply to the current fetched issue set.'
                       )}
                     </p>
+                    {shouldOfferLinearIssueFetchMore({
+                      emptyKind: 'client-team',
+                      serverHasMore: linearIssuesHasMore
+                    }) ? (
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        className="mt-3 h-7 text-xs"
+                        onClick={() => {
+                          setLinearIssueLimit((limit) =>
+                            Math.min(
+                              clampLinearIssueListLimit(limit + LINEAR_ITEM_LIMIT),
+                              LINEAR_ISSUE_LIST_MAX
+                            )
+                          )
+                        }}
+                      >
+                        {translate('auto.components.TaskPage.linearFetchMore', 'Fetch more')}
+                      </Button>
+                    ) : null}
                   </div>
                 ) : null}
 
@@ -11057,7 +11274,15 @@ export default function TaskPage(): React.JSX.Element {
                 </label>
                 <Select
                   value={newIssueRepoId ?? undefined}
-                  onValueChange={(v) => setNewIssueRepoId(v)}
+                  onValueChange={(v) => {
+                    // Why: repo-scoped labels/assignees can't cross a genuine
+                    // user repo switch, so clear them imperatively here (co-located
+                    // with the cause). Restore never routes through this handler.
+                    setNewIssueRepoId(v)
+                    const reset = resolveUserRepoSwitchReset()
+                    setNewIssueLabels(reset.labels)
+                    setNewIssueAssignees(reset.assignees)
+                  }}
                   disabled={newIssueSubmitting}
                 >
                   <SelectTrigger>

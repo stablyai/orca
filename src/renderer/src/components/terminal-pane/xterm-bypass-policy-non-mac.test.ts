@@ -166,7 +166,11 @@ describe('shouldSuppressTerminalImeKeyboardEvent — Windows/Linux', () => {
   // Post-compositionend guard: the tracker is already inactive but the
   // committing key's trailing press/release must still be absorbed.
   const linuxPostCompositionGuard = { ...linuxIdle, candidateKeyGuardActive: true }
-  const windowsComposing = { ...windowsIdle, compositionActive: true, candidateKeyGuardActive: true }
+  const windowsComposing = {
+    ...windowsIdle,
+    compositionActive: true,
+    candidateKeyGuardActive: true
+  }
 
   it('suppresses keyboard events while Chromium reports active IME composition', () => {
     for (const options of [windowsIdle, linuxIdle]) {
@@ -268,9 +272,9 @@ describe('shouldSuppressTerminalImeKeyboardEvent — Windows/Linux', () => {
     it('suppresses Space and digit keydowns and keyups while the candidate guard is active', () => {
       for (const options of [linuxComposing, linuxPostCompositionGuard]) {
         for (const key of [' ', '0', '2', '9']) {
-          expect(
-            shouldSuppressTerminalImeKeyboardEvent(event({ key, code: '' }), options)
-          ).toBe(true)
+          expect(shouldSuppressTerminalImeKeyboardEvent(event({ key, code: '' }), options)).toBe(
+            true
+          )
           expect(
             shouldSuppressTerminalImeKeyboardEvent(event({ type: 'keyup', key, code: '' }), options)
           ).toBe(true)
@@ -296,7 +300,10 @@ describe('shouldSuppressTerminalImeKeyboardEvent — Windows/Linux', () => {
     it('leaves Space and digits alone once the guard has expired', () => {
       for (const type of ['keydown', 'keyup', 'keypress']) {
         expect(
-          shouldSuppressTerminalImeKeyboardEvent(event({ type, key: ' ', code: 'Space' }), linuxIdle)
+          shouldSuppressTerminalImeKeyboardEvent(
+            event({ type, key: ' ', code: 'Space' }),
+            linuxIdle
+          )
         ).toBe(false)
         expect(
           shouldSuppressTerminalImeKeyboardEvent(
@@ -336,10 +343,7 @@ describe('shouldSuppressTerminalImeKeyboardEvent — Windows/Linux', () => {
 
     it('does not apply the Linux/Sogou candidate guard to Windows', () => {
       expect(
-        shouldSuppressTerminalImeKeyboardEvent(
-          event({ key: ' ', code: 'Space' }),
-          windowsComposing
-        )
+        shouldSuppressTerminalImeKeyboardEvent(event({ key: ' ', code: 'Space' }), windowsComposing)
       ).toBe(false)
       expect(
         shouldSuppressTerminalImeKeyboardEvent(
@@ -390,7 +394,10 @@ describe('shouldSuppressTerminalImeKeyboardEvent — Windows/Linux', () => {
         shouldPreventDefaultTerminalImeCandidateKey(event({ key: ' ', code: 'Space' }), linuxIdle)
       ).toBe(false)
       expect(
-        shouldPreventDefaultTerminalImeCandidateKey(event({ key: 'a', code: 'KeyA' }), linuxComposing)
+        shouldPreventDefaultTerminalImeCandidateKey(
+          event({ key: 'a', code: 'KeyA' }),
+          linuxComposing
+        )
       ).toBe(false)
       expect(
         shouldPreventDefaultTerminalImeCandidateKey(

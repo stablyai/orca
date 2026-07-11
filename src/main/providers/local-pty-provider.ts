@@ -51,9 +51,10 @@ import {
   resolveWindowsGitBashShellPath
 } from '../git-bash'
 import { WINDOWS_GIT_BASH_SHELL } from '../../shared/windows-terminal-shell'
-import { resolveAgentForegroundProcess } from './agent-foreground-process'
+import { resolveAgentForegroundProcessWithAvailability } from './agent-foreground-process'
 import { getAgentForegroundContextPaths } from './agent-foreground-context-paths'
 import { recognizeAgentProcessFromCommandLine } from '../../shared/agent-process-recognition'
+import { readWindowsConptyProcessIds } from './windows-conpty-process-membership'
 import { shouldUseShellReadyStartupDelivery } from '../../shared/codex-startup-delivery'
 import { assertSafeAgentStartupCwd, resolveSafePtyDefaultCwd } from './pty-default-cwd'
 
@@ -842,6 +843,26 @@ export class LocalPtyProvider implements IPtyProvider {
     ptyProcesses.get(id)?.resize(cols, rows)
   }
 
+  // Why: node-pty pause() stops reading the pty master fd, so the kernel
+  // buffer fills and a flooding child blocks on write — true producer
+  // backpressure. Best-effort: a PTY torn down mid-call must never throw
+  // into the flow-control path.
+  pauseProducer(id: string): void {
+    try {
+      ptyProcesses.get(id)?.pause()
+    } catch {
+      /* PTY already destroyed */
+    }
+  }
+
+  resumeProducer(id: string): void {
+    try {
+      ptyProcesses.get(id)?.resume()
+    } catch {
+      /* PTY already destroyed */
+    }
+  }
+
   // Why: node-pty caches the last winsize it applied on the IPty handle, so its
   // cols/rows are the authoritative applied size (node-pty clamps invalid dims
   // and a resize on a dead handle is a no-op, neither of which the requested
@@ -951,13 +972,45 @@ export class LocalPtyProvider implements IPtyProvider {
       return null
     }
     try {
-      return await resolveAgentForegroundProcess(
+      const resolution = await resolveAgentForegroundProcessWithAvailability(
         proc.pid,
         resolveForegroundFallbackProcess(proc.process || null, ptyShellName.get(id)),
         {
           contextPaths: ptyAgentForegroundContextPaths.get(id)
         }
       )
+      return resolution.processName
+    } catch {
+      return null
+    }
+  }
+
+  async confirmForegroundProcess(id: string): Promise<string | null> {
+    const proc = ptyProcesses.get(id)
+    if (!proc) {
+      return null
+    }
+    try {
+      const resolution = await resolveAgentForegroundProcessWithAvailability(
+        proc.pid,
+        resolveForegroundFallbackProcess(proc.process || null, ptyShellName.get(id)),
+        {
+          contextPaths: ptyAgentForegroundContextPaths.get(id),
+          fresh: true,
+          ...(process.platform === 'win32'
+            ? {
+                forceProcessScan: true,
+                readWindowsConptyProcessIds: () => readWindowsConptyProcessIds(proc.pid)
+              }
+            : {})
+        }
+      )
+      // Why: a fresh scan can outlive this PTY id; never publish identity from
+      // an exited process or a replacement session that reused the same id.
+      if (ptyProcesses.get(id) !== proc) {
+        return null
+      }
+      return resolution.available ? resolution.processName : null
     } catch {
       return null
     }
@@ -1044,7 +1097,7 @@ export class LocalPtyProvider implements IPtyProvider {
     return ptyProcesses.get(id)
   }
 
-  /** Kill all PTYs. Call on app quit. */
+  /** Kill all in-process local PTYs. Call on app quit. */
   killAll(): void {
     for (const [id, proc] of ptyProcesses) {
       safeKillAndClean(id, proc)

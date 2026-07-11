@@ -44,12 +44,17 @@ export function useRepoLabelsBySlug(
     error: null
   })
   const activeKeyRef = useRef<string | null>(null)
+  // Why: parent selectors can pass a fresh settings object each render; keying
+  // the effect on the primitive env id keeps a failure's setState from re-running
+  // the effect and re-issuing the fetch in a render-paced loop (same class as
+  // the seedKey stabilization below).
+  const activeRuntimeEnvironmentId = settings?.activeRuntimeEnvironmentId ?? null
 
   useEffect(() => {
     if (!owner || !repo) {
       return
     }
-    const target = getActiveRuntimeTarget(settings)
+    const target = getActiveRuntimeTarget({ activeRuntimeEnvironmentId })
     const key =
       target.kind === 'environment'
         ? `runtime:${target.environmentId}:${owner}/${repo}`
@@ -57,8 +62,6 @@ export function useRepoLabelsBySlug(
 
     const cached = getFreshMetadata(slugLabelStore, key)
     if (cached) {
-      // Why: parent selectors can pass a fresh settings object each render;
-      // only the first cached hit for this key should write React state.
       if (activeKeyRef.current !== key) {
         setState({ data: cached.data, loading: false, error: null })
       }
@@ -110,7 +113,7 @@ export function useRepoLabelsBySlug(
           error: err instanceof Error ? err.message : 'Failed to load labels'
         }))
       })
-  }, [owner, repo, settings])
+  }, [owner, repo, activeRuntimeEnvironmentId])
 
   return state
 }
@@ -131,12 +134,15 @@ export function useRepoAssigneesBySlug(
   // the joined-string identity so the effect doesn't re-fire on every render
   // — this is the assignee popover refetch-storm fix.
   const seedKey = (seedLogins ?? []).slice().sort().join(',')
+  // Why: see useRepoLabelsBySlug — primitive env id keeps failure setState from
+  // re-arming the effect through a fresh settings object identity.
+  const activeRuntimeEnvironmentId = settings?.activeRuntimeEnvironmentId ?? null
 
   useEffect(() => {
     if (!owner || !repo) {
       return
     }
-    const target = getActiveRuntimeTarget(settings)
+    const target = getActiveRuntimeTarget({ activeRuntimeEnvironmentId })
     const key =
       target.kind === 'environment'
         ? `runtime:${target.environmentId}:${owner}/${repo}#${seedKey}`
@@ -202,7 +208,7 @@ export function useRepoAssigneesBySlug(
           error: err instanceof Error ? err.message : 'Failed to load assignees'
         }))
       })
-  }, [owner, repo, seedKey, settings])
+  }, [owner, repo, seedKey, activeRuntimeEnvironmentId])
 
   return state
 }
