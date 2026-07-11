@@ -1,6 +1,10 @@
 import { describe, expect, it, vi, beforeEach } from 'vitest'
 import { createTestStore } from './store-test-helpers'
 import type { Repo } from '../../../../shared/types'
+import {
+  createCompatibleRuntimeStatusResponseIfNeeded,
+  type RuntimeEnvironmentCallRequest
+} from '../../runtime/runtime-compatibility-test-fixture'
 import { clearRuntimeCompatibilityCacheForTests } from '../../runtime/runtime-rpc-client'
 
 const localRepo: Repo = {
@@ -20,13 +24,40 @@ const remoteRepo: Repo = {
 }
 
 const reposList = vi.fn()
+const runtimeEnvironmentCall = vi.fn()
 
 beforeEach(() => {
   clearRuntimeCompatibilityCacheForTests()
   reposList.mockReset()
-  // Only repos.list is exercised here — the missing projects API makes
+  runtimeEnvironmentCall.mockReset()
+  runtimeEnvironmentCall.mockImplementation((args: RuntimeEnvironmentCallRequest) => {
+    const compatibleStatus = createCompatibleRuntimeStatusResponseIfNeeded(args)
+    if (compatibleStatus) {
+      return compatibleStatus
+    }
+    if (args.method === 'repo.list') {
+      return {
+        id: 'rpc-repo-list',
+        ok: true,
+        result: { repos: [remoteRepo] },
+        _meta: { runtimeId: 'runtime-remote' }
+      }
+    }
+    return {
+      id: 'rpc-other',
+      ok: true,
+      result: { projects: [], setups: [] },
+      _meta: { runtimeId: 'runtime-remote' }
+    }
+  })
+  // Local fetches only exercise repos.list — the missing projects API makes
   // fetchProjectHostSetupCompatibility fall back to deriving from repos.
-  vi.stubGlobal('window', { api: { repos: { list: reposList } } })
+  vi.stubGlobal('window', {
+    api: {
+      repos: { list: reposList },
+      runtimeEnvironments: { call: runtimeEnvironmentCall }
+    }
+  })
 })
 
 // A repos:changed burst (deleting a project group with contained projects) starts
@@ -73,5 +104,23 @@ describe('repos slice stale-fetch race (#7020)', () => {
     resolveStale([localRepo, remoteRepo])
     await stale
     expect(store.getState().repos).toEqual([])
+  })
+})
+
+describe('repos slice cross-host stale-fetch race (#8272)', () => {
+  it('preserves a runtime catalog when an older local refresh finishes last', async () => {
+    const { promise: localResponse, resolve: resolveLocal } = Promise.withResolvers<Repo[]>()
+    reposList.mockReturnValueOnce(localResponse)
+    const store = createTestStore()
+
+    const localLoad = store.getState().fetchRepos()
+    await store.getState().fetchRuntimeEnvironmentRepos('env-1')
+    resolveLocal([localRepo])
+    await localLoad
+
+    expect(store.getState().repos).toEqual([
+      { ...remoteRepo, executionHostId: 'runtime:env-1' },
+      { ...localRepo, executionHostId: 'local' }
+    ])
   })
 })
