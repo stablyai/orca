@@ -121,7 +121,7 @@ export function getSshTargetDraftConnectionFields(draft: EditingTarget): {
   const host = parsed?.host ?? draft.host.trim()
   const configHost = draft.configHost.trim() || parsed?.configHost || host
   const username = draft.username.trim() || parsed?.username || ''
-  const parsedPort = parseInt(draft.port, 10)
+  const parsedPort = Number.parseInt(draft.port, 10)
   const port =
     parsed?.invalidPort === true
       ? Number.NaN
@@ -138,13 +138,13 @@ export function getSshTargetDraftConnectionFields(draft: EditingTarget): {
 }
 
 export function parseRelayGracePeriodSeconds(draft: EditingTarget): number {
-  return draft.relayKeepAliveUntilReset ? 0 : parseInt(draft.relayGracePeriodSeconds, 10)
+  return draft.relayKeepAliveUntilReset ? 0 : Number.parseInt(draft.relayGracePeriodSeconds, 10)
 }
 
 export function isRelayGracePeriodValid(draft: EditingTarget, graceSeconds: number): boolean {
   return (
     draft.relayKeepAliveUntilReset ||
-    (!isNaN(graceSeconds) &&
+    (!Number.isNaN(graceSeconds) &&
       graceSeconds >= MIN_SSH_RELAY_GRACE_PERIOD_SECONDS &&
       graceSeconds <= MAX_SSH_RELAY_GRACE_PERIOD_SECONDS)
   )

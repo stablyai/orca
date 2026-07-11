@@ -7,7 +7,7 @@ import {
 } from '@/lib/pane-manager/pane-terminal-output-scheduler'
 import { enforceTerminalCurrentScrollIntent } from '@/lib/pane-manager/terminal-scroll-intent'
 import { fitAndFocusPanes, fitPanes, focusActivePane } from './pane-helpers'
-import { scheduleTerminalWebglAtlasRecovery } from './terminal-webgl-atlas-recovery'
+import { scheduleTabRevealWebglAtlasRecovery } from './terminal-webgl-atlas-recovery'
 
 const VISIBLE_RESUME_FLUSH_CHARS = 256 * 1024
 const WINDOW_WAKE_FLUSH_CHARS = 64 * 1024
@@ -40,6 +40,7 @@ type HideTerminalVisibilityResult = {
 type RecoverVisibleTerminalWindowWakeArgs = {
   manager: PaneManager
   isActive: boolean
+  clearGlyphAtlases: boolean
 }
 
 export function resumeTerminalVisibility({
@@ -62,7 +63,10 @@ export function resumeTerminalVisibility({
       // overlay's delayed geometry fit. Still request hidden-output recovery:
       // agent TUIs can suppress hidden bytes until the pane is foregrounded.
       requestLightTabBacklogRecovery(manager)
-      scheduleTerminalWebglAtlasRecovery()
+      // Why: reveal recovery must be immediate, not the terminal-output debounce
+      // — a background agent streaming in another pane must not defer this tab's
+      // atlas rebuild.
+      scheduleTabRevealWebglAtlasRecovery()
       if (isActive) {
         focusActivePane(manager)
       }
@@ -120,7 +124,8 @@ export function hideTerminalVisibility({
 
 export function recoverVisibleTerminalWindowWake({
   manager,
-  isActive
+  isActive,
+  clearGlyphAtlases
 }: RecoverVisibleTerminalWindowWakeArgs): void {
   // Why: macOS screensaver/display wake can leave xterm visible but with a
   // stale renderer/input surface; Orca's own hidden-state resume never runs.
@@ -135,8 +140,19 @@ export function recoverVisibleTerminalWindowWake({
     fitPanes(manager)
   }
   enforceTerminalViewportIntents(manager)
-  resetAndRefreshAllTerminalWebglAtlases()
-  manager.scheduleRevealRepaint()
+  if (clearGlyphAtlases) {
+    // Why: only a genuine wake may wipe the shared glyph atlas. The wipe makes
+    // every same-config pane re-rasterize at once, and xterm's atlas page-merge
+    // clear-model flag is consumed by one renderer (xterm.js #4480), so panes
+    // that lose that race paint garbled glyphs mid-stream.
+    resetAndRefreshAllTerminalWebglAtlases()
+    manager.scheduleRevealRepaint()
+  } else {
+    // Why: the reveal repaint clears each pane's texture atlas (a shared,
+    // same-config wipe), so a plain refocus must use the atlas-preserving
+    // present instead — otherwise it re-arms the same mid-stream garble race.
+    manager.scheduleRevealPresent()
+  }
 }
 
 function requestLightTabBacklogRecovery(manager: PaneManager): void {

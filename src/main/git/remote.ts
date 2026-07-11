@@ -7,6 +7,7 @@ import type { GitRuntimeOptions } from './git-runtime-options'
 import { gitOptionsForWorktree } from './git-runtime-options'
 import { validateGitPushTarget } from './push-target-validation'
 import { gitExecFileAsync } from './runner'
+import { runWithGitReadCacheInvalidation } from './status'
 
 async function getConfiguredPushTarget(
   worktreePath: string,
@@ -249,7 +250,9 @@ export async function gitPull(
   // Why: plain `git pull` uses the user's configured pull strategy (merge by
   // default) so diverged branches reconcile instead of erroring out. Conflicts
   // surface through the existing conflict-resolution flow.
-  await gitPullWithArgs(worktreePath, [], pushTarget, options)
+  await runWithGitReadCacheInvalidation(() =>
+    gitPullWithArgs(worktreePath, [], pushTarget, options)
+  )
 }
 
 export async function gitFastForward(
@@ -257,7 +260,9 @@ export async function gitFastForward(
   pushTarget?: GitPushTarget,
   options: GitRuntimeOptions = {}
 ): Promise<void> {
-  await gitPullWithArgs(worktreePath, ['--ff-only'], pushTarget, options)
+  await runWithGitReadCacheInvalidation(() =>
+    gitPullWithArgs(worktreePath, ['--ff-only'], pushTarget, options)
+  )
 }
 
 export async function gitPullRebaseFromBase(
@@ -265,18 +270,20 @@ export async function gitPullRebaseFromBase(
   baseRef: string,
   options: GitRuntimeOptions = {}
 ): Promise<void> {
-  try {
-    const source = await resolveGitRemoteRebaseSource(
-      (args) => gitExecFileAsync(args, gitOptionsForWorktree(worktreePath, options)),
-      baseRef
-    )
-    await gitExecFileAsync(
-      ['pull', '--rebase', source.remoteName, source.branchName],
-      gitOptionsForWorktree(worktreePath, options)
-    )
-  } catch (error) {
-    throw new Error(normalizeGitErrorMessage(error, 'pull'))
-  }
+  await runWithGitReadCacheInvalidation(async () => {
+    try {
+      const source = await resolveGitRemoteRebaseSource(
+        (args) => gitExecFileAsync(args, gitOptionsForWorktree(worktreePath, options)),
+        baseRef
+      )
+      await gitExecFileAsync(
+        ['pull', '--rebase', source.remoteName, source.branchName],
+        gitOptionsForWorktree(worktreePath, options)
+      )
+    } catch (error) {
+      throw new Error(normalizeGitErrorMessage(error, 'pull'))
+    }
+  })
 }
 
 export async function gitFetch(

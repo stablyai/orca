@@ -3,6 +3,8 @@ import { test, expect } from './helpers/orca-app'
 import { ensureTerminalVisible, waitForActiveWorktree, waitForSessionReady } from './helpers/store'
 import {
   execInTerminal,
+  focusLastTerminalPane,
+  splitActiveTerminalPane,
   waitForActivePanePtyId,
   waitForActiveTerminalManager,
   waitForTerminalOutput
@@ -18,11 +20,26 @@ const RUN_DOCKER_SSH = process.env.ORCA_E2E_SSH_DOCKER === '1'
 const KEY_LATENCY_SAMPLES = 'abcdefghij'
 const MAX_MEDIAN_KEY_LATENCY_MS = 500
 const MAX_WORST_KEY_LATENCY_MS = 2_000
+const MIN_HELD_SSH_ACK_CHARS = 256 * 1024
 
 type TypingMeasurement = {
   latencies: number[]
   medianLatencyMs: number
   worstLatencyMs: number
+}
+
+type SshPtyAckGateSnapshot = {
+  gatedPtyCount: number
+  heldAckCount: number
+  heldAckChars: number
+}
+
+type SshPtyAckGateWindow = Window & {
+  __terminalPtyAckGate?: {
+    hold: (ptyIds: string[]) => void
+    release: () => void
+    snapshot: () => SshPtyAckGateSnapshot
+  }
 }
 
 type ConnectedDockerRemote = {
@@ -56,6 +73,22 @@ function remoteTypingLoadScript(runId: string): string {
   ].join(';')
 }
 
+function remoteBackgroundFloodScript(runId: string): string {
+  return [
+    "process.stdin.setEncoding('utf8')",
+    'if (process.stdin.isTTY) process.stdin.setRawMode(true)',
+    'process.stdin.resume()',
+    `process.stdout.write('REMOTE_ACK_FLOOD_READY_${runId}\\n')`,
+    'let frame = 0',
+    'let timer = null',
+    "const chunk = 'R'.repeat(8192)",
+    'function stop() { if (timer) clearInterval(timer); process.exit(0) }',
+    "function start() { if (timer) return; timer = setInterval(() => { frame += 1; process.stdout.write('REMOTE_ACK_FLOOD_' + frame + '_' + chunk + '\\n') }, 2) }",
+    "process.stdin.on('data', (chunk) => { if (chunk.includes(String.fromCharCode(3))) stop(); if (chunk.includes('g')) start() })",
+    "process.on('SIGINT', stop)"
+  ].join(';')
+}
+
 async function connectDockerRemote(
   page: Page,
   target: DockerSshRelayTarget
@@ -70,7 +103,7 @@ async function connectDockerRemote(
         void window.api.ssh.submitCredential({ requestId: request.requestId, value: null })
       })
       try {
-        const createdTarget = await window.api.ssh.addTarget({
+        const { target: createdTarget, repoReadoptions } = await window.api.ssh.addTarget({
           target: {
             label: `Docker SSH Relay Perf ${Date.now()}`,
             host: '127.0.0.1',
@@ -81,6 +114,7 @@ async function connectDockerRemote(
             relayGracePeriodSeconds: 1
           }
         })
+        store.getState().recordSshRepoReadoptions(repoReadoptions)
         const state = await window.api.ssh.connect({ targetId: createdTarget.id })
         if (!state || state.status !== 'connected') {
           throw new Error(`SSH target did not connect: ${JSON.stringify(state)}`)
@@ -148,6 +182,28 @@ async function measureRemoteTyping(
   }
 }
 
+async function holdSshPtyAckGate(page: Page, ptyIds: string[]): Promise<void> {
+  await page.evaluate((heldPtyIds) => {
+    const gate = (window as SshPtyAckGateWindow).__terminalPtyAckGate
+    if (!gate) {
+      throw new Error('terminal PTY ACK gate is unavailable')
+    }
+    gate.hold(heldPtyIds)
+  }, ptyIds)
+}
+
+async function releaseSshPtyAckGate(page: Page): Promise<void> {
+  await page.evaluate(() => {
+    ;(window as SshPtyAckGateWindow).__terminalPtyAckGate?.release()
+  })
+}
+
+async function readSshPtyAckGate(page: Page): Promise<SshPtyAckGateSnapshot | null> {
+  return page.evaluate(
+    () => (window as SshPtyAckGateWindow).__terminalPtyAckGate?.snapshot() ?? null
+  )
+}
+
 async function stopRemoteLoad(page: Page, ptyId: string): Promise<void> {
   await page.evaluate((targetPtyId) => window.api.pty.write(targetPtyId, '\x03'), ptyId)
 }
@@ -199,6 +255,182 @@ test.describe('Docker SSH relay perf', () => {
         type: 'docker-ssh-relay-typing',
         description: summary
       })
+      expect(measurement.medianLatencyMs).toBeLessThan(MAX_MEDIAN_KEY_LATENCY_MS)
+      expect(measurement.worstLatencyMs).toBeLessThan(MAX_WORST_KEY_LATENCY_MS)
+      await stopRemoteLoad(orcaPage, ptyId)
+    } finally {
+      cleanupDockerSshRelayTarget(target)
+    }
+  })
+
+  test('keeps active remote typing responsive while a background SSH PTY stream is ACK-stalled', async ({
+    orcaPage
+  }, testInfo) => {
+    test.slow()
+    let target: DockerSshRelayTarget | null = null
+    let backgroundPtyId: string | null = null
+    let activePtyId: string | null = null
+    try {
+      target = startDockerSshRelayTarget(testInfo)
+      await waitForSessionReady(orcaPage)
+      await waitForActiveWorktree(orcaPage)
+      await connectDockerRemote(orcaPage, target)
+      await ensureTerminalVisible(orcaPage, 45_000)
+      await waitForActiveTerminalManager(orcaPage, 60_000)
+      backgroundPtyId = await waitForActivePanePtyId(orcaPage, 60_000)
+
+      const runId = String(Date.now())
+      await execInTerminal(
+        orcaPage,
+        backgroundPtyId,
+        `node -e ${shellQuote(remoteBackgroundFloodScript(runId))}`
+      )
+      await waitForTerminalOutput(orcaPage, `REMOTE_ACK_FLOOD_READY_${runId}`, 30_000, 80_000)
+      await holdSshPtyAckGate(orcaPage, [backgroundPtyId])
+      await orcaPage.evaluate((ptyId) => window.api.pty.write(ptyId, 'g'), backgroundPtyId)
+
+      await splitActiveTerminalPane(orcaPage, 'vertical')
+      await focusLastTerminalPane(orcaPage)
+      activePtyId = await waitForActivePanePtyId(orcaPage, 60_000)
+      expect(activePtyId).not.toBe(backgroundPtyId)
+
+      const activeRunId = `${runId}_active`
+      await execInTerminal(
+        orcaPage,
+        activePtyId,
+        `node -e ${shellQuote(remoteTypingLoadScript(activeRunId))}`
+      )
+      await waitForTerminalOutput(orcaPage, `REMOTE_TUI_READY_${activeRunId}`, 30_000, 80_000)
+      await expect
+        .poll(async () => (await readSshPtyAckGate(orcaPage))?.heldAckChars ?? 0, {
+          timeout: 30_000,
+          message: 'remote background SSH PTY stream did not build held ACK pressure'
+        })
+        .toBeGreaterThan(MIN_HELD_SSH_ACK_CHARS)
+
+      const measurement = await measureRemoteTyping(orcaPage, activePtyId, activeRunId)
+      const ackGate = await readSshPtyAckGate(orcaPage)
+      const summary = `median=${measurement.medianLatencyMs.toFixed(
+        1
+      )}ms worst=${measurement.worstLatencyMs.toFixed(1)}ms heldAckChars=${
+        ackGate?.heldAckChars ?? 0
+      } heldPtys=${ackGate?.heldAckCount ?? 0} samples=${measurement.latencies
+        .map((value) => value.toFixed(1))
+        .join(',')}`
+      console.log(`[docker-ssh-relay-pty-ack-pressure] ${summary}`)
+      testInfo.annotations.push({
+        type: 'docker-ssh-relay-pty-ack-pressure',
+        description: summary
+      })
+      expect(ackGate?.heldAckChars ?? 0).toBeGreaterThan(MIN_HELD_SSH_ACK_CHARS)
+      expect(measurement.medianLatencyMs).toBeLessThan(MAX_MEDIAN_KEY_LATENCY_MS)
+      expect(measurement.worstLatencyMs).toBeLessThan(MAX_WORST_KEY_LATENCY_MS)
+
+      await releaseSshPtyAckGate(orcaPage)
+      const releasedAckGate = await readSshPtyAckGate(orcaPage)
+      expect(releasedAckGate?.heldAckChars ?? 0).toBe(0)
+    } finally {
+      await releaseSshPtyAckGate(orcaPage).catch(() => undefined)
+      if (activePtyId) {
+        await stopRemoteLoad(orcaPage, activePtyId).catch(() => undefined)
+      }
+      if (backgroundPtyId) {
+        await stopRemoteLoad(orcaPage, backgroundPtyId).catch(() => undefined)
+      }
+      cleanupDockerSshRelayTarget(target)
+    }
+  })
+
+  test('keeps remote typing responsive while relay file streams and git churn are active', async ({
+    orcaPage
+  }, testInfo) => {
+    test.slow()
+    let target: DockerSshRelayTarget | null = null
+    try {
+      target = startDockerSshRelayTarget(testInfo)
+      await waitForSessionReady(orcaPage)
+      await waitForActiveWorktree(orcaPage)
+      const remote = await connectDockerRemote(orcaPage, target)
+      await ensureTerminalVisible(orcaPage, 45_000)
+      await waitForActiveTerminalManager(orcaPage, 60_000)
+      const ptyId = await waitForActivePanePtyId(orcaPage, 60_000)
+
+      const runId = String(Date.now())
+      // Large remote binaries: each read streams ~8MB of fs.streamChunk frames
+      // over the same SSH channel that carries the pty echo.
+      const loadFiles = [
+        `${DOCKER_SSH_RELAY_REMOTE_REPO_PATH}/stream-load-a.png`,
+        `${DOCKER_SSH_RELAY_REMOTE_REPO_PATH}/stream-load-b.png`
+      ]
+      await execInTerminal(
+        orcaPage,
+        ptyId,
+        `dd if=/dev/urandom of=${shellQuote(loadFiles[0])} bs=1M count=8 status=none && ` +
+          `dd if=/dev/urandom of=${shellQuote(loadFiles[1])} bs=1M count=8 status=none && ` +
+          `echo LOAD_FILES_READY_${runId}`
+      )
+      await waitForTerminalOutput(orcaPage, `LOAD_FILES_READY_${runId}`, 60_000, 80_000)
+
+      await execInTerminal(orcaPage, ptyId, `node -e ${shellQuote(remoteTypingLoadScript(runId))}`)
+      await waitForTerminalOutput(orcaPage, `REMOTE_TUI_READY_${runId}`, 30_000, 80_000)
+
+      // Background relay pressure: continuous large file reads plus git status
+      // refreshes, mirroring file preview + source-control churn while typing.
+      await orcaPage.evaluate(
+        ({ targetId, files, repoPath }) => {
+          const state = { stopped: false, reads: 0, errors: [] as string[] }
+          ;(window as unknown as { __sshRelayLoad: typeof state }).__sshRelayLoad = state
+          const loop = async (run: () => Promise<unknown>): Promise<void> => {
+            while (!state.stopped) {
+              try {
+                await run()
+                state.reads += 1
+              } catch (err) {
+                state.errors.push(String(err))
+                await new Promise((r) => setTimeout(r, 100))
+              }
+            }
+          }
+          for (const filePath of files) {
+            void loop(() => window.api.fs.readFile({ filePath, connectionId: targetId }))
+          }
+          void loop(() => window.api.git.status({ worktreePath: repoPath, connectionId: targetId }))
+        },
+        {
+          targetId: remote.targetId,
+          files: loadFiles,
+          repoPath: DOCKER_SSH_RELAY_REMOTE_REPO_PATH
+        }
+      )
+      // Let the bulk load ramp before measuring.
+      await orcaPage.waitForTimeout(1_000)
+
+      const measurement = await measureRemoteTyping(orcaPage, ptyId, runId)
+      const load = await orcaPage.evaluate(() => {
+        const state = (
+          window as unknown as {
+            __sshRelayLoad: { stopped: boolean; reads: number; errors: string[] }
+          }
+        ).__sshRelayLoad
+        state.stopped = true
+        return { reads: state.reads, errors: state.errors.slice(0, 3) }
+      })
+
+      const summary =
+        `median=${measurement.medianLatencyMs.toFixed(1)}ms ` +
+        `worst=${measurement.worstLatencyMs.toFixed(1)}ms ` +
+        `bulkReads=${load.reads} ` +
+        `samples=${measurement.latencies.map((value) => value.toFixed(1)).join(',')}`
+      console.log(`[docker-ssh-relay-perf:busy] ${summary}`)
+      testInfo.annotations.push({
+        type: 'docker-ssh-relay-typing-busy',
+        description: summary
+      })
+
+      // The load must actually have been streaming and error-free, otherwise
+      // the latency numbers prove nothing.
+      expect(load.errors).toEqual([])
+      expect(load.reads).toBeGreaterThan(0)
       expect(measurement.medianLatencyMs).toBeLessThan(MAX_MEDIAN_KEY_LATENCY_MS)
       expect(measurement.worstLatencyMs).toBeLessThan(MAX_WORST_KEY_LATENCY_MS)
       await stopRemoteLoad(orcaPage, ptyId)

@@ -469,6 +469,87 @@ describe('ensureWorktreeHasInitialTerminal', () => {
     })
   })
 
+  it('keeps draft startup payloads in terminal mode even when native chat is configured', () => {
+    const store = createMockStore({
+      settings: {
+        experimentalNativeChat: true,
+        openAgentTabsInChatByDefault: true
+      }
+    })
+
+    ensureWorktreeHasInitialTerminal(
+      store,
+      'wt-1',
+      {
+        command: 'claude',
+        launchAgent: 'claude',
+        draftPrompt: 'Review before sending'
+      },
+      undefined,
+      undefined
+    )
+
+    expect(store.createTab).toHaveBeenCalledWith('wt-1', undefined, undefined, {
+      pendingActivationSpawn: true,
+      launchAgent: 'claude'
+    })
+  })
+
+  it('opens the startup default tab in native chat when configured', () => {
+    let createdIndex = 0
+    const createTab = vi.fn(() => ({ id: `tab-${++createdIndex}` }))
+    const store = createMockStore({
+      createTab,
+      settings: {
+        experimentalNativeChat: true,
+        openAgentTabsInChatByDefault: true
+      }
+    })
+
+    ensureWorktreeHasInitialTerminal(
+      store,
+      'wt-1',
+      { command: 'claude', launchAgent: 'claude' },
+      undefined,
+      undefined,
+      { runCommands: true, tabs: [{ title: 'Claude', command: 'claude' }] }
+    )
+
+    expect(createTab).toHaveBeenNthCalledWith(1, 'wt-1', undefined, undefined, {
+      pendingActivationSpawn: true,
+      recordInteraction: false,
+      launchAgent: 'claude',
+      viewMode: 'chat'
+    })
+  })
+
+  it('keeps a draft startup default tab in terminal mode even when native chat is configured', () => {
+    let createdIndex = 0
+    const createTab = vi.fn(() => ({ id: `tab-${++createdIndex}` }))
+    const store = createMockStore({
+      createTab,
+      settings: {
+        experimentalNativeChat: true,
+        openAgentTabsInChatByDefault: true
+      }
+    })
+
+    ensureWorktreeHasInitialTerminal(
+      store,
+      'wt-1',
+      { command: 'claude', launchAgent: 'claude', draftPrompt: 'Review before sending' },
+      undefined,
+      undefined,
+      { runCommands: true, tabs: [{ title: 'Claude', command: 'claude' }] }
+    )
+
+    expect(createTab).toHaveBeenNthCalledWith(1, 'wt-1', undefined, undefined, {
+      pendingActivationSpawn: true,
+      recordInteraction: false,
+      launchAgent: 'claude'
+    })
+  })
+
   it('gates startup behind setup completion when both are provided in new-tab mode', () => {
     setSetupScriptLaunchMode('new-tab')
     let createdIndex = 0

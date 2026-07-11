@@ -79,24 +79,42 @@ async function seedProjectHeaderSortScenario(
     state.setSidebarOpen(true)
     state.setGroupBy('repo')
     state.setProjectOrderBy('manual')
-    await state.fetchRepos()
+    // Why: repos.add broadcasts repos:changed, which schedules background
+    // fetchRepos() calls; those bump reposFetchGeneration and can make our awaited
+    // fetchRepos() drop its own complete result as superseded (#7020), leaving the
+    // store transiently missing the last-added repo. Re-fetch until every seeded
+    // repo is present rather than racing a single fetch (converges once the adds
+    // stop firing repos:changed).
+    const findSeededRepos = () =>
+      paths.map((repoPath) =>
+        store.getState().repos.find((candidate) => candidate.path === repoPath)
+      )
+    let repos = findSeededRepos()
+    const deadline = Date.now() + 10_000
+    while (repos.some((repo) => !repo) && Date.now() < deadline) {
+      await state.fetchRepos()
+      repos = findSeededRepos()
+      if (repos.every((repo) => repo)) {
+        break
+      }
+      await new Promise((resolve) => setTimeout(resolve, 100))
+    }
 
-    const repos = paths.map((repoPath) => {
-      const repo = store.getState().repos.find((candidate) => candidate.path === repoPath)
+    const resolvedRepos = repos.map((repo, index) => {
       if (!repo) {
-        throw new Error(`Expected project repo to be loaded: ${repoPath}`)
+        throw new Error(`Expected project repo to be loaded: ${paths[index]}`)
       }
       return repo
     })
 
-    for (const repo of repos) {
+    for (const repo of resolvedRepos) {
       await store.getState().fetchWorktrees(repo.id)
     }
 
     return {
-      alphaId: repos[0]!.id,
-      bravoId: repos[1]!.id,
-      charlieId: repos[2]!.id
+      alphaId: resolvedRepos[0]!.id,
+      bravoId: resolvedRepos[1]!.id,
+      charlieId: resolvedRepos[2]!.id
     }
   }, repoPaths)
 }

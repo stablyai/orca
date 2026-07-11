@@ -28,3 +28,31 @@ export function installEditorSaveShortcut(target: HTMLElement, onSave: () => voi
   target.addEventListener('keydown', handleKeyDown, true)
   return () => target.removeEventListener('keydown', handleKeyDown, true)
 }
+
+export function installEditorFindShortcut(target: HTMLElement, onFind: () => void): () => void {
+  const handleKeyDown = (event: KeyboardEvent): void => {
+    if (!editorShortcutMatches('editor.find', event)) {
+      return
+    }
+    event.preventDefault()
+    event.stopPropagation()
+    // Why: matched repeats must stay consumed so Monaco cannot reopen or reset find.
+    if (!event.repeat) {
+      onFind()
+    }
+  }
+
+  target.addEventListener('keydown', handleKeyDown, true)
+  return () => target.removeEventListener('keydown', handleKeyDown, true)
+}
+
+type MonacoFindShortcutEditor = {
+  getAction: (id: string) => { run: () => void | Promise<void> } | null
+  getContainerDomNode: () => HTMLElement
+}
+
+export function installMonacoEditorFindShortcut(editor: MonacoFindShortcutEditor): () => void {
+  return installEditorFindShortcut(editor.getContainerDomNode(), () => {
+    void editor.getAction('actions.find')?.run()
+  })
+}

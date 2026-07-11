@@ -87,7 +87,12 @@ async function probeSmallMouseWheelReports(
             value: physicalMouseWheelDelta
           })
           pane.terminal.element.dispatchEvent(event)
-          await new Promise((resolve) => setTimeout(resolve, 0))
+          // Why: space notches past TUI_WHEEL_BURST_MAX_INTERVAL_MS (45ms) so
+          // burst-acceleration (which intentionally coalesces fast trackpad
+          // flicks into multi-row reports) does not engage — a notched mouse
+          // wheel maps 1:1. At setTimeout(0) the ticks land <45ms apart and
+          // the burst path fires, yielding [1,1,3,3] instead of [1,1,1,1].
+          await new Promise((resolve) => setTimeout(resolve, 60))
           samples.push({
             reportCount: reports.length,
             reportDelta: reports.length - before,

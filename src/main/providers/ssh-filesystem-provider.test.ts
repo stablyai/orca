@@ -1,6 +1,3 @@
-/* eslint-disable max-lines -- Why: SSH filesystem provider coverage keeps relay fallback,
-SFTP binary writes, watch fan-out, and provider lifecycle tests together so
-transport parity regressions are visible in one suite. */
 import { describe, expect, it, vi, beforeEach } from 'vitest'
 import { SshFilesystemProvider } from './ssh-filesystem-provider'
 import { JsonRpcErrorCode } from '../ssh/relay-protocol'
@@ -420,7 +417,11 @@ describe('SshFilesystemProvider', () => {
   it('listFiles sends fs.listFiles request', async () => {
     mux.request.mockResolvedValue(['src/index.ts', 'package.json'])
     const result = await provider.listFiles('/home/user/project')
-    expect(mux.request).toHaveBeenCalledWith('fs.listFiles', { rootPath: '/home/user/project' })
+    expect(mux.request).toHaveBeenCalledWith(
+      'fs.listFiles',
+      { rootPath: '/home/user/project' },
+      { signal: undefined }
+    )
     expect(result).toEqual(['src/index.ts', 'package.json'])
   })
 
@@ -429,16 +430,35 @@ describe('SshFilesystemProvider', () => {
     await provider.listFiles('/home/user/project', {
       excludePaths: ['/home/user/project/worktrees/b']
     })
-    expect(mux.request).toHaveBeenCalledWith('fs.listFiles', {
-      rootPath: '/home/user/project',
-      excludePaths: ['/home/user/project/worktrees/b']
-    })
+    expect(mux.request).toHaveBeenCalledWith(
+      'fs.listFiles',
+      {
+        rootPath: '/home/user/project',
+        excludePaths: ['/home/user/project/worktrees/b']
+      },
+      { signal: undefined }
+    )
   })
 
   it('listFiles omits excludePaths when empty', async () => {
     mux.request.mockResolvedValue([])
     await provider.listFiles('/home/user/project', { excludePaths: [] })
-    expect(mux.request).toHaveBeenCalledWith('fs.listFiles', { rootPath: '/home/user/project' })
+    expect(mux.request).toHaveBeenCalledWith(
+      'fs.listFiles',
+      { rootPath: '/home/user/project' },
+      { signal: undefined }
+    )
+  })
+
+  it('listFiles forwards the cancellation signal to the mux request (#7721)', async () => {
+    mux.request.mockResolvedValue([])
+    const controller = new AbortController()
+    await provider.listFiles('/home/user/project', { signal: controller.signal })
+    expect(mux.request).toHaveBeenCalledWith(
+      'fs.listFiles',
+      { rootPath: '/home/user/project' },
+      { signal: controller.signal }
+    )
   })
 
   describe('watch', () => {

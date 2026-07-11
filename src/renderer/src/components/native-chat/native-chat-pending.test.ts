@@ -8,11 +8,14 @@ import {
   clearPendingSendCacheForTests,
   commandMarkersAsMessages,
   isCommandMarkerId,
+  isLaunchPromptMessageId,
   isPendingMessageId,
+  launchPromptAsMessage,
   pendingSendsAsMessages,
   prunePendingSends,
   readCommandMarkerCache,
   readPendingSendCache,
+  shouldPruneLaunchPrompt,
   writePendingSendCache,
   type NativeChatPendingSend
 } from './native-chat-pending'
@@ -135,6 +138,86 @@ describe('pendingSendsAsMessages', () => {
   })
 })
 
+describe('launchPromptAsMessage', () => {
+  it('maps a launch prompt to a tab-keyed scrape-source user message', () => {
+    expect(
+      launchPromptAsMessage({
+        tabId: 'tab-1',
+        agent: 'codex',
+        text: 'Fix failing checks',
+        createdAt: 42
+      })
+    ).toEqual({
+      id: 'launch-pending:tab-1',
+      role: 'user',
+      blocks: [{ type: 'text', text: 'Fix failing checks' }],
+      timestamp: 42,
+      source: 'scrape'
+    })
+  })
+
+  it('hides the launch prompt while its transcript user turn is visible', () => {
+    expect(
+      launchPromptAsMessage(
+        {
+          tabId: 'tab-1',
+          agent: 'codex',
+          text: 'Fix failing checks',
+          createdAt: 42
+        },
+        [userMessage('u1', 'Fix failing checks')]
+      )
+    ).toBeNull()
+  })
+
+  it('uses pending-send normalization for large multiline generated prompts', () => {
+    const prompt = [
+      '[Image #1] Resolve the failing checks:',
+      '',
+      'Resolve the failing checks:',
+      '',
+      '- lint failed',
+      '  fix spacing'
+    ].join('\n')
+    const transcript = [
+      userMessage(
+        'u1',
+        'Resolve the failing checks: Resolve the failing checks: - lint failed fix spacing'
+      ),
+      assistantMessage('a1', 'I will fix it')
+    ]
+
+    expect(
+      shouldPruneLaunchPrompt(
+        {
+          tabId: 'tab-1',
+          agent: 'codex',
+          text: prompt,
+          createdAt: 42
+        },
+        transcript
+      )
+    ).toBe(true)
+  })
+
+  it('keeps the launch prompt until the transcript advances past the user turn', () => {
+    const prompt = {
+      tabId: 'tab-1',
+      agent: 'claude' as const,
+      text: 'Fix failing checks',
+      createdAt: 42
+    }
+
+    expect(shouldPruneLaunchPrompt(prompt, [userMessage('u1', 'Fix failing checks')])).toBe(false)
+    expect(
+      shouldPruneLaunchPrompt(prompt, [
+        userMessage('u1', 'Fix failing checks'),
+        assistantMessage('a1', 'working')
+      ])
+    ).toBe(true)
+  })
+})
+
 describe('pending send cache', () => {
   it('persists optimistic sends for the same pane and agent', () => {
     clearPendingSendCacheForTests()
@@ -162,6 +245,13 @@ describe('isPendingMessageId', () => {
   it('recognizes the pending id prefix', () => {
     expect(isPendingMessageId('pending:p1')).toBe(true)
     expect(isPendingMessageId('transcript-123')).toBe(false)
+  })
+})
+
+describe('isLaunchPromptMessageId', () => {
+  it('recognizes the launch prompt id prefix', () => {
+    expect(isLaunchPromptMessageId('launch-pending:tab-1')).toBe(true)
+    expect(isLaunchPromptMessageId('pending:p1')).toBe(false)
   })
 })
 
@@ -255,5 +345,44 @@ describe('applyCommandMarkerBoundaries', () => {
         { id: 'c2', command: '/clear', sentAt: 20 }
       ]).map((message) => message.id)
     ).toEqual(['new'])
+  })
+})
+
+describe('scope-cache key counts stay bounded (memory-leak regression)', () => {
+  // The per-key arrays were capped at 8, but the KEY count (paneKey/agent/session,
+  // all ephemeral) was unbounded, so distinct panes/sessions accumulated forever.
+  // Both caches now LRU-bound the key count at 128 (shared helper, #7566).
+  const CAP = 128
+
+  it('appendCommandMarkerCache evicts the oldest scope key past the cap', () => {
+    clearCommandMarkerCacheForTests()
+    for (let i = 0; i < CAP + 5; i++) {
+      appendCommandMarkerCache(
+        { paneKey: 'tab:leaf', agent: 'claude', sessionId: `s${i}` },
+        '/clear'
+      )
+    }
+    // Oldest sessions evicted; the most-recent CAP survive.
+    expect(
+      readCommandMarkerCache({ paneKey: 'tab:leaf', agent: 'claude', sessionId: 's0' })
+    ).toEqual([])
+    expect(
+      readCommandMarkerCache({ paneKey: 'tab:leaf', agent: 'claude', sessionId: 's4' })
+    ).toEqual([])
+    expect(
+      readCommandMarkerCache({ paneKey: 'tab:leaf', agent: 'claude', sessionId: `s${CAP + 4}` })
+    ).toHaveLength(1)
+  })
+
+  it('writePendingSendCache evicts the oldest scope key past the cap', () => {
+    clearPendingSendCacheForTests()
+    const send = (id: string): NativeChatPendingSend => ({ id, text: id, sentAt: 1 })
+    for (let i = 0; i < CAP + 5; i++) {
+      writePendingSendCache({ paneKey: `tab-${i}:leaf`, agent: 'claude' }, [send(`m${i}`)])
+    }
+    expect(readPendingSendCache({ paneKey: 'tab-0:leaf', agent: 'claude' })).toEqual([])
+    expect(readPendingSendCache({ paneKey: `tab-${CAP + 4}:leaf`, agent: 'claude' })).toHaveLength(
+      1
+    )
   })
 })

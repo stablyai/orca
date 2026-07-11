@@ -267,6 +267,27 @@ describe('SshPortForwardManager', () => {
     )
   })
 
+  it('keeps only a bounded tail of a chatty forward stderr (memory-leak regression)', async () => {
+    const onForwardClosed = vi.fn()
+    manager.setCallbacks({ onForwardClosed })
+    const forward = createFakeSystemSshForward()
+    startSystemSshPortForwardProcessMock.mockReturnValue(forward)
+    const conn = createSystemSshConn()
+
+    await manager.addForward('conn-1', conn as never, 3000, '127.0.0.1', 8080)
+    // A long-lived forward against a chatty remote sshd: emit >64 KB of stderr.
+    forward.process.stderr.emit('data', Buffer.from(`HEAD_MARKER${'x'.repeat(70 * 1024)}`))
+    forward.process.stderr.emit('data', Buffer.from('TAIL_MARKER'))
+    forward.process.emit('exit', 255)
+
+    const detail = onForwardClosed.mock.calls[0]?.[1]?.detail as string
+    // The oldest bytes are trimmed; the most-recent tail is retained.
+    expect(detail).toContain('TAIL_MARKER')
+    expect(detail).not.toContain('HEAD_MARKER')
+    // Bounded well below the ~70 KB produced.
+    expect(detail.length).toBeLessThan(66 * 1024)
+  })
+
   it('lists forwards filtered by connectionId', async () => {
     const conn = createMockConn()
     await manager.addForward('conn-1', conn as never, 3000, 'localhost', 8080)

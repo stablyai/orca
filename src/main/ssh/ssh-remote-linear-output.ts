@@ -114,6 +114,9 @@ function formatLinearIssue(result: LinearIssueContextResult): string {
       lines.push(`${section[0].toUpperCase()}${section.slice(1)}: ${meta.returned}`)
     }
   }
+  if (result.inlineMedia?.length) {
+    lines.push(`Inline media: ${result.inlineMedia.length} (use --json for URLs)`)
+  }
   return lines.join('\n')
 }
 

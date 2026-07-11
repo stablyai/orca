@@ -1,4 +1,3 @@
-/* eslint-disable max-lines -- Scheduler E2E coverage shares one booted Electron app and debug API. */
 /**
  * E2E repro for terminal output bursts from many background tabs.
  *

@@ -41,6 +41,8 @@ describe('mobile session startup', () => {
     expect(startupEffect.indexOf("sendRequest('worktree.activate'")).toBeLessThan(
       startupEffect.indexOf('await fetchSessionTabs()')
     )
+    expect(startupEffect).toContain('headlessActivationNeedsHostRenderer(response.result)')
+    expect(startupEffect).toContain("showToast('Open Orca on the host to wake sleeping agents.'")
   })
 
   it('activates an already-selected pending terminal tab after hydration', () => {

@@ -22,10 +22,19 @@ vi.mock('../git/runner', async (importOriginal) => {
 // normally — none of them trigger IO until a runtime method is called.
 import { OrcaRuntimeService } from './orca-runtime'
 
+function isFetchArgs(argv: unknown): argv is string[] {
+  if (!Array.isArray(argv)) {
+    return false
+  }
+  let commandIndex = 0
+  while (argv[commandIndex] === '-c' && typeof argv[commandIndex + 1] === 'string') {
+    commandIndex += 2
+  }
+  return argv[commandIndex] === 'fetch'
+}
+
 function fetchCallCount(): number {
-  return gitExecFileAsyncMock.mock.calls.filter(
-    ([argv]) => Array.isArray(argv) && argv[0] === 'fetch'
-  ).length
+  return gitExecFileAsyncMock.mock.calls.filter(([argv]) => isFetchArgs(argv)).length
 }
 
 function exactBaseRefreshOptions(cwd: string): {
@@ -34,6 +43,21 @@ function exactBaseRefreshOptions(cwd: string): {
   useConfiguredSshCommandForNetwork: boolean
 } {
   return { cwd, timeout: 60_000, useConfiguredSshCommandForNetwork: true }
+}
+
+function exactBaseRefreshArgs(branch = 'main'): string[] {
+  return [
+    '-c',
+    'maintenance.auto=false',
+    '-c',
+    'maintenance.commit-graph.auto=0',
+    '-c',
+    'gc.auto=0',
+    'fetch',
+    '--no-tags',
+    'origin',
+    `+refs/heads/${branch}:refs/remotes/origin/${branch}`
+  ]
 }
 
 // Why (STA-1292): the broad create-path fetch must carry a timeout so a Windows
@@ -188,8 +212,20 @@ describe('OrcaRuntimeService.fetchRemoteWithCache', () => {
     })
 
     expect(gitExecFileAsyncMock).toHaveBeenCalledWith(
-      ['fetch', '--no-tags', 'origin', '+refs/heads/main:refs/remotes/origin/main'],
+      exactBaseRefreshArgs(),
       exactBaseRefreshOptions('/repo/f')
+    )
+  })
+
+  it('keeps automatic maintenance enabled for ordinary full remote fetches', async () => {
+    mockFetchResults([{ stdout: '', stderr: '' }])
+    const runtime = new OrcaRuntimeService(null)
+
+    await runtime.getOrStartRemoteFetch('/repo/full-maintenance', 'origin')
+
+    expect(gitExecFileAsyncMock).toHaveBeenCalledWith(
+      ['fetch', 'origin'],
+      fullRemoteFetchOptions('/repo/full-maintenance')
     )
   })
 
@@ -297,14 +333,9 @@ describe('OrcaRuntimeService.fetchRemoteWithCache', () => {
       { ok: true },
       { ok: true }
     ])
-    const fetchCalls = gitExecFileAsyncMock.mock.calls.filter(
-      ([argv]) => Array.isArray(argv) && argv[0] === 'fetch'
-    )
+    const fetchCalls = gitExecFileAsyncMock.mock.calls.filter(([argv]) => isFetchArgs(argv))
     expect(fetchCalls).toEqual([
-      [
-        ['fetch', '--no-tags', 'origin', '+refs/heads/main:refs/remotes/origin/main'],
-        exactBaseRefreshOptions('/repo/h')
-      ],
+      [exactBaseRefreshArgs(), exactBaseRefreshOptions('/repo/h')],
       [['fetch', 'origin'], fullRemoteFetchOptions('/repo/h')]
     ])
   })
@@ -343,15 +374,10 @@ describe('OrcaRuntimeService.fetchRemoteWithCache', () => {
       { ok: true },
       { ok: true }
     ])
-    const fetchCalls = gitExecFileAsyncMock.mock.calls.filter(
-      ([argv]) => Array.isArray(argv) && argv[0] === 'fetch'
-    )
+    const fetchCalls = gitExecFileAsyncMock.mock.calls.filter(([argv]) => isFetchArgs(argv))
     expect(fetchCalls).toEqual([
       [['fetch', 'origin'], fullRemoteFetchOptions('/repo/i')],
-      [
-        ['fetch', '--no-tags', 'origin', '+refs/heads/main:refs/remotes/origin/main'],
-        exactBaseRefreshOptions('/repo/i')
-      ]
+      [exactBaseRefreshArgs(), exactBaseRefreshOptions('/repo/i')]
     ])
   })
 
@@ -389,15 +415,10 @@ describe('OrcaRuntimeService.fetchRemoteWithCache', () => {
       { ok: false, errorKind: 'git_error' },
       { ok: true }
     ])
-    const fetchCalls = gitExecFileAsyncMock.mock.calls.filter(
-      ([argv]) => Array.isArray(argv) && argv[0] === 'fetch'
-    )
+    const fetchCalls = gitExecFileAsyncMock.mock.calls.filter(([argv]) => isFetchArgs(argv))
     expect(fetchCalls).toEqual([
       [['fetch', 'origin'], fullRemoteFetchOptions('/repo/i-fail')],
-      [
-        ['fetch', '--no-tags', 'origin', '+refs/heads/main:refs/remotes/origin/main'],
-        exactBaseRefreshOptions('/repo/i-fail')
-      ]
+      [exactBaseRefreshArgs(), exactBaseRefreshOptions('/repo/i-fail')]
     ])
   })
 })

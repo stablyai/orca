@@ -329,7 +329,7 @@ export function TerminalInteractionSection({
           )}
           description={translate(
             'auto.components.settings.TerminalPane.69c64a479c',
-            'Let tmux, Neovim, and fzf copy to the system clipboard over the PTY (including over SSH).'
+            'Let Grok, tmux, Neovim, and fzf copy to the system clipboard over the PTY (including over SSH).'
           )}
           keywords={[
             'osc 52',
@@ -339,6 +339,7 @@ export function TerminalInteractionSection({
             'neovim',
             'nvim',
             'fzf',
+            'grok',
             'ssh',
             'remote',
             'copy',
@@ -352,7 +353,7 @@ export function TerminalInteractionSection({
             )}
             description={translate(
               'auto.components.settings.TerminalPane.6e6480a7df',
-              'Let programs in the terminal (tmux, Neovim, fzf, SSH) copy to your system clipboard.'
+              'Let programs in the terminal (Grok, tmux, Neovim, fzf, SSH) copy to your system clipboard.'
             )}
             checked={settings.terminalAllowOsc52Clipboard}
             onChange={() =>

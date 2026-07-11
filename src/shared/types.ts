@@ -1,6 +1,6 @@
 /* eslint-disable max-lines */
 import type { ExecutionHostId } from './execution-host'
-import type { SshRemotePtyLease, SshTarget } from './ssh-types'
+import type { RemovedSshTargetTombstone, SshRemotePtyLease, SshTarget } from './ssh-types'
 import type { Automation, AutomationExecutionTargetType, AutomationRun } from './automations-types'
 import type { WorkspaceSource } from './workspace-source'
 import type { GitHubProjectSettings } from './github-project-types'
@@ -427,6 +427,8 @@ export type GitWorktreeInfo = {
   branch: string
   isBare: boolean
   isSparse?: boolean
+  locked?: boolean
+  lockReason?: string
   /** True for the repo's main working tree (the first entry from `git worktree list`).
    *  Linked worktrees created via `git worktree add` have this set to false. */
   isMainWorktree: boolean
@@ -1022,6 +1024,14 @@ export type PersistedOpenFile = {
   runtimeEnvironmentId?: string | null
   /** Unsaved editor buffer captured for hot exit; presence restores the tab dirty. */
   dirtyDraftContent?: string
+  /** Signature of the disk content the dirty draft is based on; lets restore
+   *  re-derive a changed-on-disk conflict from ground truth. */
+  lastKnownDiskSignature?: string
+  /** Why: a read-only tab (AI Vault View Log) must survive restart still
+   *  read-only; persisted only when true so old sessions stay writable. */
+  readOnly?: boolean
+  /** Opt-in streaming append for a read-only local log tab. */
+  liveTail?: boolean
 }
 
 export type WorkspaceSessionState = {
@@ -1137,6 +1147,13 @@ export type PRInfo = {
   // of the PR's own commits (behind update-branch/web commits). Cache staleness
   // checks must honor that confirmation without re-querying GitHub.
   confirmedContainedHeadOid?: string
+  // Why: the worktree HEAD OID this merged linked PR was confirmed to have
+  // diverged from (a definite not-contained probe). Head-scoped, not a bare
+  // boolean, so a PR-number-coalesced refresh broadcast cannot clear a sibling
+  // worktree whose own head is still on the PR's line of work. Clearing a
+  // durable linked PR requires this positive signal for that exact head, never
+  // the mere absence of a containment confirmation after a rate-limit/error.
+  headDivergedFromMergedPRAtOid?: string
   /** Target branch name for PR-created worktree compare-base repair. */
   baseRefName?: string
   prRepo?: GitHubRepositoryIdentity
@@ -1179,6 +1196,10 @@ export type GitHubPRRefreshAlias = {
   linkedPRNumber?: number | null
   fallbackPRNumber?: number | null
   fallbackPRSource?: 'explicit' | 'pr-cache' | 'hosted-review' | null
+  // Why: request-time worktree HEAD. Merged branch-matched PRs are only visible
+  // for heads that belong to the PR, and refresh consumers need this snapshot to
+  // clear a durable linked PR once main confirms the head diverged.
+  currentHeadOid?: string | null
 }
 
 export type GitHubPRRefreshCandidate = GitHubPRRefreshAlias & {
@@ -1196,10 +1217,6 @@ export type GitHubPRRefreshCandidate = GitHubPRRefreshAlias & {
   cachedMergeable?: PRMergeableState | null
   cachedMergeStateStatus?: string | null
   localGitOptions?: { wslDistro?: string }
-  // Why: merged branch-matched PRs are only visible for heads that belong to
-  // the PR; without the worktree head, a panel-supplied fallback number would
-  // keep a merged PR alive head-blind after the branch moves on.
-  currentHeadOid?: string | null
 }
 
 export type GitHubPRRefreshSkippedReason =
@@ -1726,6 +1743,10 @@ export type GitHubCreateIssueFields = {
   assignees?: string[]
 }
 
+export type GitHubCreateIssueResult =
+  | { ok: true; number: number; url: string; bodySaveWarning?: string }
+  | { ok: false; error: string }
+
 export type GitHubIssueCloseReason = 'completed' | 'not_planned' | 'duplicate'
 
 export type GitHubIssueUpdate = {
@@ -1834,6 +1855,7 @@ export type {
   JiraMutationResult,
   JiraPriority,
   JiraProject,
+  JiraProjectStatusOrder,
   JiraSite,
   JiraSiteSelection,
   JiraStatus,
@@ -2586,8 +2608,8 @@ export type GlobalSettings = {
    *  paste with Cmd/Ctrl+V without an intervening Cmd/Ctrl+Shift+C. Defaults
    *  to false so existing users keep the explicit-copy behavior. */
   terminalClipboardOnSelect: boolean
-  /** Why: lets TUIs like tmux, nvim, and fzf copy to the system clipboard via
-   *  the OSC 52 escape sequence — essential for SSH-hosted workflows where
+  /** Why: lets TUIs like Grok, tmux, nvim, and fzf copy to the system clipboard
+   *  via the OSC 52 escape sequence — essential for SSH-hosted workflows where
    *  the terminal is the only bridge to the local clipboard. Defaults to
    *  false because OSC 52 is a classic data-exfiltration vector (any
    *  process piping untrusted output into the terminal — `cat attacker.log`
@@ -2711,6 +2733,28 @@ export type GlobalSettings = {
    *  does not surface commands from other worktrees. Defaults to true.
    *  Disable to revert to shared global shell history. */
   terminalScopeHistoryByWorktree: boolean
+  /** Kill switch for hidden terminal view parking — unmounting long-hidden
+   *  terminal panes while a pane-less watcher keeps PTY side effects alive.
+   *  Defaults to true; `false` disables parking entirely.
+   *  See docs/reference/terminal-hidden-view-parking.md. */
+  terminalHiddenViewParking?: boolean
+  /** Kill switch for main-process terminal side-effect authority: when true
+   *  (default), local-daemon/SSH PTY title/bell/agent facts are consumed from
+   *  the `pty:sideEffect` channel and renderer byte parsers stay unregistered
+   *  for those PTYs; `false` restores renderer byte parsing.
+   *  See docs/reference/terminal-side-effect-authority.md. */
+  terminalMainSideEffectAuthority?: boolean
+  /** Kill switch for main's hidden-delivery gate (Phase 4): when true
+   *  (default) AND terminalMainSideEffectAuthority is on, main drops PTY byte
+   *  delivery to hidden renderer views after model ingestion; reveal restores
+   *  from the model snapshot. `false` restores hidden byte delivery. */
+  terminalHiddenDeliveryGate?: boolean
+  /** Kill switch for the main model query responder (Phase 5): when true
+   *  (default) AND both Phase-4 gate switches are on, main answers terminal
+   *  queries (DA1/CPR/DECRPM, …) embedded in hidden-dropped chunks from the
+   *  runtime emulator. `false` silences the responder without changing drops.
+   *  See docs/reference/terminal-query-authority.md. */
+  terminalModelQueryAuthority?: boolean
   /** Which agent to pre-select in the new-workspace composer.
    *  - null: auto (first detected agent)
    *  - 'blank': blank terminal (no agent launched)
@@ -2777,6 +2821,16 @@ export type GlobalSettings = {
   geminiCliOAuthEnabled: boolean
   /** Per-agent CLI command overrides. A missing key means use the catalog default binary name. */
   agentCmdOverrides: Partial<Record<TuiAgent, string>>
+  /** Why: Orca bridges Codex session history from the user's real Codex home into
+   *  its managed home so /resume finds it, but defaults to ~/.codex. Users who run
+   *  Codex with a custom CODEX_HOME can point history discovery at that folder here.
+   *  History-only: this does not change which account/config/hooks Orca uses. */
+  codexSessionSourceHome?: {
+    /** Absolute host path; empty/undefined falls back to ~/.codex. */
+    host?: string
+    /** Per-WSL-distro absolute Linux path; missing distro falls back to <wslHome>/.codex. */
+    wsl?: Record<string, string>
+  }
   /** Per-agent default CLI arguments appended after the binary/path and before prompts. */
   agentDefaultArgs?: Partial<Record<TuiAgent, string>>
   /** Per-agent launch environment defaults used when yolo mode is exposed as env. */
@@ -3006,7 +3060,9 @@ export type NotificationDispatchRequest = {
 
 export type NotificationDispatchResult = {
   delivered: boolean
-  /** Present when delivered is false. Tells the caller why delivery was skipped. */
+  /** Present when delivered is false. Tells the caller why delivery was skipped.
+   *  'blocked-by-system' means the OS-level permission readout says macOS
+   *  would silently swallow the notification (denied or prompt unanswered). */
   reason?:
     | 'disabled'
     | 'source-disabled'
@@ -3014,6 +3070,7 @@ export type NotificationDispatchResult = {
     | 'cooldown'
     | 'not-supported'
     | 'not-displayed'
+    | 'blocked-by-system'
 }
 
 export type NotificationDismissResult = {
@@ -3086,6 +3143,18 @@ export type NotificationPermissionStatusResult = {
   requested: boolean
 }
 
+/** Outcome of a macOS notification permission check. Preferred source is the
+ *  bundled native helper reading UNUserNotificationCenter authorization
+ *  (authoritative); when unavailable, a silent delivery probe supplies weaker
+ *  scheduling-based evidence. 'awaiting-decision' means the macOS permission
+ *  dialog has not been answered yet. */
+export type NotificationDeliveryProbeResult = {
+  state: 'delivered' | 'blocked' | 'awaiting-decision' | 'unsupported'
+  /** True when the state comes from the native authorization readout. Silent
+   *  to poll; probe-based fallbacks flash a banner when delivery works. */
+  authoritative: boolean
+}
+
 export type WorktreeCardProperty =
   | 'status'
   | 'unread'
@@ -3116,9 +3185,11 @@ export type StatusBarItem =
   | 'claude'
   | 'codex'
   | 'gemini'
+  | 'antigravity'
   | 'opencode-go'
   | 'kimi'
   | 'minimax'
+  | 'grok'
   | 'ssh'
   | 'resource-usage'
   | 'ports'
@@ -3234,6 +3305,10 @@ export type PersistedUIState = {
   _kimiStatusBarDefaultAdded?: boolean
   /** One-shot migration flag for adding the default-on MiniMax status item. */
   _minimaxStatusBarDefaultAdded?: boolean
+  /** One-shot migration flag for adding the default-on Antigravity status item. */
+  _antigravityStatusBarDefaultAdded?: boolean
+  /** One-shot migration flag for adding the default-on Grok status item. */
+  _grokStatusBarDefaultAdded?: boolean
   statusBarItems: StatusBarItem[]
   statusBarVisible: boolean
   dismissedUpdateVersion: string | null
@@ -3491,7 +3566,18 @@ export type PersistedState = {
    *  pre-partition builds keep working. Optional/absent on legacy files. */
   workspaceSessionsByHostId?: Partial<Record<ExecutionHostId, WorkspaceSessionState>>
   sshTargets: SshTarget[]
+  /** SSH config aliases the user explicitly deleted. Suppresses re-import of the
+   *  matching ~/.ssh/config host on the next sync so a deleted host does not
+   *  reappear. Cleared for an alias when the user re-adds it or re-adopts config. */
+  deletedSshConfigAliases: string[]
+  /** Identity records for removed SSH targets. Lets a re-added host re-adopt
+   *  workspaces that were orphaned on the old target id. Pruned by age/count. */
+  removedSshTargetTombstones?: RemovedSshTargetTombstone[]
   sshRemotePtyLeases: SshRemotePtyLease[]
+  /** Daemon session ids of live local Claude launches. Seeds the Claude
+   *  live-PTY gate on startup so an early OAuth refresh cannot rotate the
+   *  single-use refresh token out from under a still-running daemon CLI. */
+  claudeLivePtySessionIds?: string[]
   migrationUnsupportedPtyEntries: MigrationUnsupportedPtyEntry[]
   legacyPaneKeyAliasEntries: LegacyPaneKeyAliasEntry[]
   automations: Automation[]

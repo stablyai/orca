@@ -385,8 +385,13 @@ export function GitHubMarkdownComposer({
       {attachmentFooter}
       {linkBubble ? (
         <RichMarkdownLinkBubble
+          anchorElement={rootRef.current}
           linkBubble={linkBubble}
           isEditing={isEditingLink}
+          onDismiss={() => {
+            setLinkBubble(null)
+            setIsEditingLink(false)
+          }}
           onSave={handleLinkSave}
           onRemove={handleLinkRemove}
           onEditStart={() => setIsEditingLink(true)}

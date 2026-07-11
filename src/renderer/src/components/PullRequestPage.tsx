@@ -169,6 +169,7 @@ import {
 import { lookupGitHubWorkItemDetailsForSource } from '@/lib/github-work-item-source-lookup'
 import {
   canUseGitHubRepoContext,
+  getGitHubMutationRoutingSettings,
   getGitHubRuntimeRepoId,
   getGitHubSourceRuntimeHost
 } from '@/lib/github-source-runtime-context'
@@ -1620,9 +1621,9 @@ function patchCachedWorkItemBody(cacheKey: string, body: string): void {
 }
 
 // Why: install once at module load — every dialog instance shares the cache,
-// so a single subscription is enough. The preload bridge re-emits the
-// main-process broadcast for every window, so each renderer invalidates its
-// own cache when any window's mutation lands. We track the unsubscribe so
+// so a single subscription is enough. Main targets the registered app renderer
+// for non-origin mutations, and this listener invalidates the matching entry.
+// We track the unsubscribe so
 // Vite HMR doesn't accumulate listeners across module reloads in dev.
 let workItemMutatedUnsub: (() => void) | undefined
 let workItemDetailsCacheEventUnsub: (() => void) | undefined
@@ -3841,7 +3842,11 @@ function PRActionsPanel({
   const actionItem = { ...item, state: localState }
   const mergePresentation = presentGitHubPRMergeState(actionItem)
   const mergeMethods = resolveGitHubPRMergeMethods(actionItem.mergeMethodSettings)
-  const sourceSettings = getTaskSourceRuntimeSettings(sourceContext)
+  const sourceSettings = useAppStore(
+    useShallow((s) =>
+      getGitHubMutationRoutingSettings(s, item.repoId ?? repoId ?? null, sourceContext)
+    )
+  )
   const mergeTarget = getActiveRuntimeTarget(sourceSettings)
   const canMutateWithRepoContext =
     !!repoPath || !!projectOrigin || mergeTarget.kind === 'environment'
@@ -5731,32 +5736,36 @@ async function runPullRequestStateUpdate(args: {
     }
     return
   }
-  const runtimeHost = getGitHubSourceRuntimeHost(args.sourceContext)
-  if (!args.repoPath && !runtimeHost) {
+  // Why: close/reopen must route by the repo owner host like merge (#6957).
+  const target = getActiveRuntimeTarget(
+    getGitHubMutationRoutingSettings(useAppStore.getState(), args.repoId, args.sourceContext)
+  )
+  if (!args.repoPath && target.kind !== 'environment') {
     throw new Error('No repo context available for this pull request.')
   }
-  const res = runtimeHost
-    ? await callRuntimeRpc<Awaited<ReturnType<typeof window.api.gh.updatePRState>>>(
-        { kind: 'environment', environmentId: runtimeHost.environmentId },
-        'github.updatePRState',
-        {
-          repo: getGitHubRuntimeRepoId(args.sourceContext, args.repoId ?? ''),
+  const res =
+    target.kind === 'environment'
+      ? await callRuntimeRpc<Awaited<ReturnType<typeof window.api.gh.updatePRState>>>(
+          target,
+          'github.updatePRState',
+          {
+            repo: getGitHubRuntimeRepoId(args.sourceContext, args.repoId ?? ''),
+            prNumber: args.number,
+            updates: args.updates
+          },
+          { timeoutMs: 30_000 }
+        )
+      : await window.api.gh.updatePRState({
+          repoPath: args.repoPath ?? '',
+          repoId: args.repoId ?? undefined,
+          sourceContext: args.sourceContext,
           prNumber: args.number,
           updates: args.updates
-        },
-        { timeoutMs: 30_000 }
-      )
-    : await window.api.gh.updatePRState({
-        repoPath: args.repoPath ?? '',
-        repoId: args.repoId ?? undefined,
-        sourceContext: args.sourceContext,
-        prNumber: args.number,
-        updates: args.updates
-      })
+        })
   if (!res.ok) {
     throw new Error(res.error)
   }
-  if (runtimeHost) {
+  if (target.kind === 'environment') {
     notifyWorkItemDetailsMutation(
       {
         repoPath: args.repoPath ?? '',

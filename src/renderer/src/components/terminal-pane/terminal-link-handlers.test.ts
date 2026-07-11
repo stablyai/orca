@@ -1987,6 +1987,84 @@ describe('createFilePathLinkProvider range bounds', () => {
     expect(continuationLink!.range).toEqual(firstRowLink!.range)
   })
 
+  it('returns all three sibling links and the same boundary link from either row over SSH', async () => {
+    const firstPath = 'validation-screenshots/01-before-white-terminal-scrollbar-gutter.png'
+    const middleStart = 'validation-screenshots/02-after-'
+    const middleEnd = 'transparent-terminal-scrollbar-gutter.png'
+    const middlePath = middleStart + middleEnd
+    const thirdPath = 'validation-screenshots/03-after-light-theme.png'
+    const rows = [
+      makeBufferLine(`${firstPath} · ${middleStart}`),
+      makeBufferLine(`${middleEnd} · ${thirdPath}`)
+    ]
+    const completePaths = new Set([firstPath, middlePath, thirdPath].map((path) => `/repo/${path}`))
+    vi.mocked(getConnectionId).mockReturnValue('ssh-wrapped')
+    fsPathExistsMock.mockImplementation(async ({ filePath }) => completePaths.has(filePath))
+    const { provider } = createProviderSetup(rows, new Map())
+    const provide = (line: number): Promise<ILink[]> =>
+      new Promise((resolve) => provider.provideLinks(line, (links) => resolve(links ?? [])))
+
+    const firstRowLinks = await provide(1)
+    const secondRowLinks = await provide(2)
+    const firstMiddle = firstRowLinks.find((link) => link.text === middlePath)
+    const secondMiddle = secondRowLinks.find((link) => link.text === middlePath)
+
+    expect(firstRowLinks.map((link) => link.text)).toEqual([firstPath, middlePath])
+    expect(secondRowLinks.map((link) => link.text)).toEqual([middlePath, thirdPath])
+    expect(new Set([...firstRowLinks, ...secondRowLinks].map((link) => link.text))).toEqual(
+      new Set([firstPath, middlePath, thirdPath])
+    )
+    expect(firstMiddle?.range).toEqual({
+      start: { x: firstPath.length + ' · '.length + 1, y: 1 },
+      end: { x: middleEnd.length, y: 2 }
+    })
+    expect(secondMiddle?.range).toEqual(firstMiddle?.range)
+    expect([...firstRowLinks, ...secondRowLinks].every((link) => !link.text.includes(' · '))).toBe(
+      true
+    )
+    expect(fsPathExistsMock).toHaveBeenCalledWith({
+      filePath: `/repo/${middlePath}`,
+      connectionId: 'ssh-wrapped'
+    })
+    expect(window.api.shell.pathExists).not.toHaveBeenCalled()
+  })
+
+  it('opens the same boundary path from direct clicks on both physical halves', async () => {
+    setPlatform('Macintosh')
+    const firstPath = 'validation-screenshots/01-before-white-terminal-scrollbar-gutter.png'
+    const middleStart = 'validation-screenshots/02-after-'
+    const middleEnd = 'transparent-terminal-scrollbar-gutter.png'
+    const middlePath = middleStart + middleEnd
+    const thirdPath = 'validation-screenshots/03-after-light-theme.png'
+    const rows = [
+      makeBufferLine(`${firstPath} · ${middleStart}`),
+      makeBufferLine(`${middleEnd} · ${thirdPath}`)
+    ]
+    const pathExistsCache = new Map([[`active\0/repo/${middlePath}`, true]])
+    const positions = [
+      { x: firstPath.length + ' · '.length + 2, y: 1 },
+      { x: 2, y: 2 }
+    ]
+
+    for (const position of positions) {
+      const opened = openFilePathLinkAtBufferPosition(makeBuffer(rows), position, 133, {
+        startupCwd: '/repo',
+        worktreeId: 'wt-1',
+        worktreePath: '/repo',
+        runtimeEnvironmentId: null,
+        pathExistsCache
+      })
+      await flushDoubleRaf()
+
+      expect(opened).toBe(true)
+      expect(openFileMock).toHaveBeenLastCalledWith(
+        expect.objectContaining({ filePath: `/repo/${middlePath}` }),
+        { forceContentReload: true }
+      )
+    }
+    expect(openFileMock).toHaveBeenCalledTimes(2)
+  })
+
   it('maps file link columns through multi-code-unit characters before the path', async () => {
     const text = 'e\u0301 src/main.ts'
     const columns = [0, 0, 1]

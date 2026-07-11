@@ -55,6 +55,15 @@ export function getForegroundTerminalTabLastSeenAtById(): Record<string, number>
   return Object.fromEntries(foregroundTerminalTabLastSeenAtById)
 }
 
+// Why: retired terminal tab ids never recur, so their last-seen timestamps would
+// accumulate for the renderer's whole session. Drop them when a tab is closed or
+// its worktree is removed (mirrors forgetAgentHibernationTabOutput).
+export function forgetForegroundTerminalTabs(tabIds: Iterable<string>): void {
+  for (const tabId of tabIds) {
+    foregroundTerminalTabLastSeenAtById.delete(tabId)
+  }
+}
+
 export function resetForegroundTerminalTabIdsForTests(): void {
   explicitForegroundTerminalTabIds = new Set()
   visibleTerminalTabClaimsByToken.clear()

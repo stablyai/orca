@@ -94,7 +94,10 @@ import {
   RightPanelCommentComposer,
   type RightPanelCommentSubmitResult
 } from './right-panel-comment-composer'
-import { usePRCommentsListSelection } from './pr-comments-list-selection'
+import {
+  usePRCommentsListSelection,
+  type PRCommentsListSelectionClearRequest
+} from './pr-comments-list-selection'
 import { translate } from '@/i18n/i18n'
 import { useActiveWorktree } from '@/store/selectors'
 import { useAppStore } from '@/store'
@@ -2171,6 +2174,7 @@ export function PRCommentsList({
   commentsDisabled,
   commentsDisabledReason,
   selectionContextKey,
+  selectionClearRequest,
   resolveCommentsWithAIDisabled,
   resolveCommentsWithAIDisabledReason,
   onAddComment,
@@ -2186,6 +2190,7 @@ export function PRCommentsList({
   commentsDisabled?: boolean
   commentsDisabledReason?: string
   selectionContextKey?: string
+  selectionClearRequest?: PRCommentsListSelectionClearRequest | null
   resolveCommentsWithAIDisabled?: boolean
   resolveCommentsWithAIDisabledReason?: string
   onAddComment?: (body: string) => Promise<RightPanelCommentSubmitResult>
@@ -2212,7 +2217,7 @@ export function PRCommentsList({
     addGroupToSelection,
     clearSelection,
     toggleGroupSelection
-  } = usePRCommentsListSelection(comments, selectionContextKey)
+  } = usePRCommentsListSelection(comments, selectionContextKey, selectionClearRequest)
   const visibleComments = React.useMemo(
     () => filterPRCommentsByAudience(comments, commentFilter),
     [commentFilter, comments]
@@ -2353,7 +2358,14 @@ export function PRCommentsList({
   return (
     <div className="border-t border-border">
       {/* Header */}
-      <div className={presentation.sectionHeader}>
+      <div
+        className={cn(
+          presentation.sectionHeader,
+          // Why: the checks sidebar scrolls as one column; pinning this header keeps
+          // filter and add-comment actions reachable while reading long threads.
+          'sticky top-0 z-10 bg-sidebar/95 backdrop-blur-sm'
+        )}
+      >
         <div className="flex min-w-0 items-center gap-2">
           <MessageSquare className="size-3.5 text-muted-foreground" />
           <span className={presentation.sectionHeaderLabel}>

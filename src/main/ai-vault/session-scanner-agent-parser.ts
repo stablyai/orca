@@ -6,7 +6,8 @@ import { parseMessageGraphSessionFile, parseRovoSessionFile } from './session-sc
 import { parseKimiSessionFile } from './session-scanner-kimi-parser'
 import { splitOpenCodeSqliteCandidate } from './session-scanner-opencode-sqlite-paths'
 import { parseOpenCodeSqliteSession } from './session-scanner-opencode-sqlite'
-import { parseClaudeSessionFile, parseGeminiSessionFile } from './session-scanner-primary-parsers'
+import { parseClaudeSessionFile } from './session-scanner-primary-parsers'
+import { parseGeminiSessionFile } from './session-scanner-gemini-parsers'
 import { parseCodexSessionFile } from './session-scanner-codex-parser'
 import {
   parseCopilotSessionFile,
@@ -64,6 +65,8 @@ export async function parseAgentSessionFile(
       return parseMessageGraphSessionFile('openclaw', candidate.file, platform)
     case 'pi':
       return parseMessageGraphSessionFile('pi', candidate.file, platform)
+    case 'omp':
+      return parseMessageGraphSessionFile('omp', candidate.file, platform)
     case 'droid':
       return parseDroidSessionFile(candidate.file, platform)
     case 'devin':

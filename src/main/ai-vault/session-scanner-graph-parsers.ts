@@ -4,8 +4,13 @@ import { basename, dirname, join } from 'node:path'
 import { createInterface } from 'node:readline'
 import type { AiVaultSession } from '../../shared/ai-vault-types'
 import type { ExecutionHostId } from '../../shared/execution-host'
-import type { FileWithMtime, SessionAccumulator } from './session-scanner-types'
+import type {
+  FileWithMtime,
+  ResumableSessionParseState,
+  SessionAccumulator
+} from './session-scanner-types'
 import {
+  accumulatorFoldResumeState,
   addPreviewContent,
   addPreviewMessage,
   createAccumulator,
@@ -158,8 +163,12 @@ export function rovoPartsText(parts: unknown[], role: 'user' | 'assistant'): str
   return extractContentText(textParts)
 }
 
+// Agents whose transcripts are append-only message-graph JSONL (session +
+// model_change + message records). OMP is a Pi fork and shares the format.
+export type MessageGraphAgent = 'openclaw' | 'pi' | 'omp'
+
 export async function parseMessageGraphSessionFile(
-  agent: 'openclaw' | 'pi',
+  agent: MessageGraphAgent,
   file: FileWithMtime,
   platform: NodeJS.Platform = process.platform
 ): Promise<AiVaultSession | null> {
@@ -171,7 +180,7 @@ export async function parseMessageGraphSessionFile(
 }
 
 export async function parseMessageGraphSessionContent(
-  agent: 'openclaw' | 'pi',
+  agent: MessageGraphAgent,
   file: FileWithMtime,
   content: string,
   platform: NodeJS.Platform = process.platform,
@@ -186,53 +195,64 @@ export async function parseMessageGraphSessionContent(
   })
 }
 
+function consumeMessageGraphRecordLine(accumulator: SessionAccumulator, line: string): void {
+  const record = parseJsonObject(line)
+  if (!record) {
+    return
+  }
+  updateTimeline(accumulator, extractString(record.timestamp))
+  if (record.type === 'session') {
+    const sessionId = extractString(record.id)
+    if (sessionId) {
+      accumulator.sessionId = sessionId
+    }
+    accumulator.cwd = extractString(record.cwd) ?? accumulator.cwd
+    return
+  }
+  if (record.type === 'model_change') {
+    // Pi writes `modelId`; OMP writes `model`. Prefer either so an in-progress
+    // session shows its model before the first assistant reply lands.
+    accumulator.model =
+      extractString(record.modelId) ?? extractString(record.model) ?? accumulator.model
+    return
+  }
+  if (record.type !== 'message') {
+    return
+  }
+  const message = asRecord(record.message)
+  const role = extractString(message?.role)
+  if (role === 'user' || role === 'assistant') {
+    accumulator.messageCount++
+    if (role === 'user') {
+      accumulator.title ??= extractMessageText(message)
+    } else {
+      accumulator.model = extractString(message?.model) ?? accumulator.model
+      accumulator.totalTokens += tokenTotal(message?.usage)
+    }
+    addPreviewContent(accumulator, role, message?.content, record.timestamp)
+  }
+}
+
+export function createMessageGraphSessionResumeState(
+  agent: MessageGraphAgent,
+  file: FileWithMtime
+): ResumableSessionParseState {
+  return accumulatorFoldResumeState(
+    createAccumulator({ agent, file, sessionId: sessionIdFromFileName(file.path) }),
+    consumeMessageGraphRecordLine
+  )
+}
+
 async function parseMessageGraphSessionLines(args: {
-  agent: 'openclaw' | 'pi'
+  agent: MessageGraphAgent
   file: FileWithMtime
   lines: AsyncIterable<string> | Iterable<string>
   platform: NodeJS.Platform
   options?: ParserSessionOptions
 }): Promise<AiVaultSession | null> {
-  const accumulator = createAccumulator({
-    agent: args.agent,
-    file: args.file,
-    sessionId: sessionIdFromFileName(args.file.path)
-  })
-
+  const state = createMessageGraphSessionResumeState(args.agent, args.file)
   for await (const line of args.lines) {
-    const record = parseJsonObject(line)
-    if (!record) {
-      continue
-    }
-    updateTimeline(accumulator, extractString(record.timestamp))
-    if (record.type === 'session') {
-      const sessionId = extractString(record.id)
-      if (sessionId) {
-        accumulator.sessionId = sessionId
-      }
-      accumulator.cwd = extractString(record.cwd) ?? accumulator.cwd
-      continue
-    }
-    if (record.type === 'model_change') {
-      accumulator.model = extractString(record.modelId) ?? accumulator.model
-      continue
-    }
-    if (record.type !== 'message') {
-      continue
-    }
-    const message = asRecord(record.message)
-    const role = extractString(message?.role)
-    if (role === 'user' || role === 'assistant') {
-      accumulator.messageCount++
-      if (role === 'user') {
-        accumulator.title ??= extractMessageText(message)
-      } else {
-        accumulator.model = extractString(message?.model) ?? accumulator.model
-        accumulator.totalTokens += tokenTotal(message?.usage)
-      }
-      addPreviewContent(accumulator, role, message?.content, record.timestamp)
-    }
+    state.consumeLine(line)
   }
-
-  return finalizeSession(accumulator, args.platform, args.options)
+  return state.finalize(args.platform, args.options)
 }

@@ -10,10 +10,14 @@
 
 import { watch, type FSWatcher } from 'node:fs'
 import { open, stat } from 'node:fs/promises'
-import type { Readable } from 'node:stream'
 import type { AgentType, NativeChatMessage } from '../../shared/native-chat-types'
 import { resolveSessionFilePath, type ResolveSessionFileOptions } from './session-file-resolver'
-import { decodeClaudeTranscriptLine, decodeCodexTranscriptLine } from './transcript-line-decoders'
+import {
+  decodeClaudeTranscriptLine,
+  decodeCodexTranscriptLine,
+  decodeGrokTranscriptLine
+} from './transcript-line-decoders'
+import { decodeTranscriptStream } from './transcript-stream-lines'
 
 export type SubscribeNativeChatTranscriptArgs = ResolveSessionFileOptions & {
   agent: AgentType
@@ -57,6 +61,9 @@ function lineDecoderForAgent(
   if (agent === 'codex') {
     return decodeCodexTranscriptLine
   }
+  if (agent === 'grok') {
+    return decodeGrokTranscriptLine
+  }
   return null
 }
 
@@ -94,51 +101,17 @@ async function readAppendedMessages(
       end: end - 1,
       autoClose: false
     })
-    const { messages, consumedBytes } = await decodeStreamLines(stream, filePath, start, decode)
+    const { messages, consumedBytes } = await decodeTranscriptStream(
+      stream,
+      filePath,
+      start,
+      decode,
+      false
+    )
     return { messages, consumedTo: start + consumedBytes }
   } finally {
     await handle.close()
   }
-}
-
-async function decodeStreamLines(
-  stream: Readable,
-  filePath: string,
-  start: number,
-  decode: (line: string, fallbackId: string) => NativeChatMessage | null
-): Promise<{ messages: NativeChatMessage[]; consumedBytes: number }> {
-  const text = await readStreamText(stream)
-  const completeEnd = text.lastIndexOf('\n')
-  if (completeEnd === -1) {
-    return { messages: [], consumedBytes: 0 }
-  }
-
-  // Why: transcript writers can flush mid-record. Only advance through
-  // newline-terminated JSONL so invalid partial JSON is retried on the next
-  // append instead of being lost forever.
-  const completeText = text.slice(0, completeEnd + 1)
-  const lines = completeText.split('\n')
-  const messages: NativeChatMessage[] = []
-  for (const [index, line] of lines.entries()) {
-    if (!line) {
-      continue
-    }
-    // Fallback id embeds the byte offset so ids stay stable+unique across
-    // appends even when a record carries no intrinsic id.
-    const message = decode(line, `${filePath}:${start}:${index}`)
-    if (message) {
-      messages.push(message)
-    }
-  }
-  return { messages, consumedBytes: Buffer.byteLength(completeText, 'utf8') }
-}
-
-async function readStreamText(stream: Readable): Promise<string> {
-  const chunks: string[] = []
-  for await (const chunk of stream) {
-    chunks.push(typeof chunk === 'string' ? chunk : Buffer.from(chunk).toString('utf8'))
-  }
-  return chunks.join('')
 }
 
 /**

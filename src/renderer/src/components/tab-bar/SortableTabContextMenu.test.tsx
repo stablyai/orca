@@ -50,10 +50,20 @@ vi.mock('@/components/ui/dropdown-menu', () => ({
 }))
 
 vi.mock('lucide-react', () => ({
+  ArrowDown: () => null,
+  ArrowLeft: () => null,
+  ArrowRight: () => null,
+  ArrowUp: () => null,
+  Columns2: () => null,
+  ListX: () => null,
+  MessageSquare: () => null,
   PanelBottomClose: () => null,
   PanelRightClose: () => null,
+  Pencil: () => null,
   Pin: () => null,
-  PinOff: () => null
+  PinOff: () => null,
+  SquareTerminal: () => null,
+  X: () => null
 }))
 
 vi.mock('@/i18n/i18n', () => ({
@@ -218,6 +228,7 @@ describe('SortableTabContextMenu', () => {
     const { container } = renderMenu()
 
     expect(container.textContent).toContain('Move Tab to Split')
+    expect(container.textContent).toContain('Split terminal')
 
     act(() => getButton(container, 'Right').click())
     expect(storeMock.dropUnifiedTab).toHaveBeenCalledWith('tab-1', {
@@ -226,7 +237,7 @@ describe('SortableTabContextMenu', () => {
     })
   })
 
-  it('hides split actions for a single-tab group', () => {
+  it('hides move-tab split actions for a single-tab group', () => {
     storeMock.state = {
       ...storeMock.state,
       groupsByWorktree: {
@@ -243,5 +254,6 @@ describe('SortableTabContextMenu', () => {
     const { container } = renderMenu()
 
     expect(container.textContent).not.toContain('Move Tab to Split')
+    expect(container.textContent).toContain('Split terminal right')
   })
 })

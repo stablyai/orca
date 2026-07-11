@@ -17,6 +17,8 @@ import { TUI_AGENT_CONFIG } from '../../../../shared/tui-agent-config'
 import { isWindowsAbsolutePathLike } from '../../../../shared/cross-platform-path'
 import type { FolderWorkspace, ProjectGroup, TuiAgent } from '../../../../shared/types'
 import { isWslUncPath } from '../../../../shared/wsl-paths'
+import { resolveLocalWindowsAgentStartupShell } from '../../../../shared/windows-terminal-shell'
+import type { AgentStartupShell } from '../../../../shared/tui-agent-startup-shell'
 import type { LaunchSource } from '../../../../shared/telemetry-events'
 import { folderWorkspaceKey } from '../../../../shared/workspace-scope'
 import {
@@ -44,6 +46,7 @@ type SubmitFolderWorkspaceCreateParams = {
   agentCmdOverrides: Record<string, string> | undefined
   agentArgs?: string | null
   agentEnv?: Record<string, string>
+  terminalWindowsShell?: string | null
   isRemote?: boolean
   launchSource?: LaunchSource
   runtimeEnvironmentId?: string | null
@@ -61,7 +64,7 @@ export function getFolderWorkspaceAgentLaunchPlatform(
   return parentPath && isWslUncPath(parentPath) ? 'linux' : CLIENT_PLATFORM
 }
 
-function buildFolderWorkspaceLinkedStartupPlan(args: {
+export function buildFolderWorkspaceLinkedStartupPlan(args: {
   agent: TuiAgent
   linkedWorkItem: LinkedWorkItemSummary
   note: string
@@ -69,6 +72,7 @@ function buildFolderWorkspaceLinkedStartupPlan(args: {
   agentArgs?: string | null
   agentEnv?: Record<string, string>
   platform: NodeJS.Platform
+  shell?: AgentStartupShell
   isRemote: boolean
 }): AgentStartupPlan | null {
   const { prompt, draftPrompt } = resolveQuickCreateLinkedWorkItemPrompt(
@@ -84,6 +88,7 @@ function buildFolderWorkspaceLinkedStartupPlan(args: {
         agentArgs: args.agentArgs,
         agentEnv: args.agentEnv,
         platform: args.platform,
+        shell: args.shell,
         isRemote: args.isRemote
       })
     : null
@@ -110,6 +115,7 @@ function buildFolderWorkspaceLinkedStartupPlan(args: {
     agentArgs: args.agentArgs,
     agentEnv: args.agentEnv,
     platform: args.platform,
+    shell: args.shell,
     isRemote: args.isRemote,
     allowEmptyPromptLaunch: true
   })
@@ -153,6 +159,7 @@ export async function submitFolderWorkspaceCreate({
   agentCmdOverrides,
   agentArgs,
   agentEnv,
+  terminalWindowsShell,
   launchSource = 'sidebar',
   runtimeEnvironmentId = null,
   createFolderWorkspace,
@@ -168,6 +175,11 @@ export async function submitFolderWorkspaceCreate({
   // Why: an SSH folder group runs the plain `orca` relay shim, so the Linux-only
   // `orca-ide` rename must not be applied for remote launches.
   const launchIsRemote = Boolean(projectGroup.connectionId)
+  const launchShell = resolveLocalWindowsAgentStartupShell({
+    platform: launchPlatform,
+    isRemote: launchIsRemote,
+    terminalWindowsShell
+  })
   const startupPlan =
     quickAgent && linkedWorkItem
       ? buildFolderWorkspaceLinkedStartupPlan({
@@ -178,6 +190,7 @@ export async function submitFolderWorkspaceCreate({
           agentArgs,
           agentEnv,
           platform: launchPlatform,
+          shell: launchShell,
           isRemote: launchIsRemote
         })
       : quickAgent
@@ -188,6 +201,7 @@ export async function submitFolderWorkspaceCreate({
             agentArgs,
             agentEnv,
             platform: launchPlatform,
+            shell: launchShell,
             isRemote: launchIsRemote,
             allowEmptyPromptLaunch: true
           })

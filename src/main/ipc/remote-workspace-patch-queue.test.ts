@@ -1,4 +1,3 @@
-/* oxlint-disable max-lines -- Why: queue/cache regression cases share one mocked IPC harness so stale revision sequencing stays visible. */
 import { ipcMain } from 'electron'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Store } from '../persistence'

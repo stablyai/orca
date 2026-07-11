@@ -163,6 +163,7 @@ function FileExplorerFiles(): React.JSX.Element {
       hasNameFilter
         ? {
             query: nameFilterQuery,
+            operationOwner: nameFilterFiles.operationOwner,
             relativePaths: nameFilterQueryTooLarge
               ? []
               : nameFilterFiles.loading && nameFilterFiles.files.length === 0
@@ -174,6 +175,7 @@ function FileExplorerFiles(): React.JSX.Element {
       hasNameFilter,
       nameFilterFiles.files,
       nameFilterFiles.loading,
+      nameFilterFiles.operationOwner,
       nameFilterQuery,
       nameFilterQueryTooLarge
     ]
@@ -746,6 +748,7 @@ function FileExplorerFiles(): React.JSX.Element {
                 runtimeDownloadContext={runtimeDownloadContext}
                 onClick={handleRowClick}
                 onDoubleClick={handleDoubleClick}
+                onViewFile={handleClick}
                 onContextMenuSelect={preserveSelectionForContextMenu}
                 onCopyPaths={copyPathsForNode}
                 onStartNew={startNew}

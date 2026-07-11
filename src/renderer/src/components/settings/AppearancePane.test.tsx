@@ -129,7 +129,10 @@ function createWarpThemesStub() {
 
 async function renderAppearancePane(
   settings: GlobalSettings,
-  updateSettings: (updates: Partial<GlobalSettings>) => void = vi.fn()
+  updateSettings: (updates: Partial<GlobalSettings>) => void = vi.fn(),
+  options: {
+    onRequestFontSuggestions?: () => void
+  } = {}
 ): Promise<HTMLDivElement> {
   const container = document.createElement('div')
   document.body.appendChild(container)
@@ -146,6 +149,7 @@ async function renderAppearancePane(
             applyTheme={vi.fn()}
             fontSuggestions={[]}
             terminalFontSuggestions={[]}
+            onRequestFontSuggestions={options.onRequestFontSuggestions}
             systemPrefersDark={false}
             ghostty={createGhosttyStub() as never}
             warpThemes={createWarpThemesStub() as never}
@@ -296,6 +300,25 @@ describe('AppearancePane', () => {
     expect(container.textContent).not.toContain('Code & Markdown')
   })
 
+  it('requests installed font suggestions only after the IDE font picker is used', async () => {
+    mocks.state.settingsSearchQuery = ''
+    const requestFontSuggestions = vi.fn()
+    const container = await renderAppearancePane(getDefaultSettings('/tmp'), vi.fn(), {
+      onRequestFontSuggestions: requestFontSuggestions
+    })
+
+    expect(requestFontSuggestions).not.toHaveBeenCalled()
+
+    const input = container.querySelector<HTMLInputElement>('input[role="combobox"]')
+    expect(input).not.toBeNull()
+
+    await act(async () => {
+      input?.focus()
+    })
+
+    expect(requestFontSuggestions).toHaveBeenCalledOnce()
+  })
+
   it('keeps the app icon control at the bottom of the pane, after the section rows', async () => {
     mocks.state.settingsSearchQuery = ''
     const container = await renderAppearancePane(getDefaultSettings('/tmp'))
@@ -387,6 +410,31 @@ describe('AppearancePane', () => {
 
     expect(mocks.state.recordFeatureInteraction).toHaveBeenCalledWith('usage-tracking')
     expect(mocks.state.toggleStatusBarItem).toHaveBeenCalledWith('minimax')
+  })
+
+  it('records Antigravity status bar toggles as usage tracking interactions', async () => {
+    mocks.state.availableStatusBarToggles = [
+      {
+        id: 'antigravity',
+        title: 'Antigravity Usage',
+        description: 'Show Antigravity subscription usage in the status bar.',
+        toggleDescription: 'Show Antigravity subscription usage for the active workspace.',
+        keywords: ['status bar', 'antigravity', 'usage']
+      }
+    ]
+    mocks.state.settingsSearchQuery = 'antigravity'
+    const container = await renderAppearancePane(getDefaultSettings('/tmp'))
+    const antigravitySwitch = container.querySelector<HTMLButtonElement>(
+      'button[role="switch"][aria-label="Antigravity Usage"]'
+    )
+
+    expect(antigravitySwitch).not.toBeNull()
+    await act(async () => {
+      antigravitySwitch?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+    })
+
+    expect(mocks.state.recordFeatureInteraction).toHaveBeenCalledWith('usage-tracking')
+    expect(mocks.state.toggleStatusBarItem).toHaveBeenCalledWith('antigravity')
   })
 
   it('collapses sibling sections so only the Interface section is expanded by default', async () => {

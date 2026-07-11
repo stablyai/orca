@@ -58,7 +58,6 @@ test.describe('PR comments sidebar cards view', () => {
     await expect(orcaPage.getByText('Needs review · 1')).toBeVisible()
     await expect(orcaPage.getByText('Please update this handler before merge.')).toBeVisible()
     await expect(orcaPage.getByText('alice')).toBeVisible()
-    await expect(orcaPage.getByText('Open', { exact: true })).toBeVisible()
     await expect(orcaPage.getByText('LGTM on the overall approach.')).toBeVisible()
 
     const openThreadCard = orcaPage.getByTestId('pr-comment-group').filter({

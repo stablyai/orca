@@ -46,6 +46,25 @@ export function getRuntimeEnvironmentIdForRepo(
   return state.settings?.activeRuntimeEnvironmentId?.trim() || null
 }
 
+// Why: PR mutations must not fall back to the globally focused runtime — a
+// repo without an explicit owner is a local repo, and routing it to the
+// focused runtime sends the mutation to a host that does not own it (#6957).
+export function getExplicitRuntimeOwnerEnvironmentId(
+  state: RepoRuntimeOwnerState,
+  repoId: string | null | undefined
+): string | null {
+  if (!repoId) {
+    return null
+  }
+  const repo = findRepoOwner(state, repoId)
+  const hasExplicitOwner = Boolean(repo?.executionHostId?.trim() || repo?.connectionId?.trim())
+  if (!repo || !hasExplicitOwner) {
+    return null
+  }
+  const parsed = parseExecutionHostId(getRepoExecutionHostId(repo))
+  return parsed?.kind === 'runtime' ? parsed.environmentId : null
+}
+
 export function getSettingsForRepoRuntimeOwner(
   state: RepoRuntimeOwnerState,
   repoId: string | null | undefined

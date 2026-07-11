@@ -23,6 +23,11 @@ import { parseWslUncPath } from '../../shared/wsl-paths'
 import { toWindowsWslPath } from '../wsl'
 import { buildEncodedWslBashCommand } from '../wsl-bash-command'
 import {
+  buildWslCodexAvailabilityArgs,
+  buildWslCodexLoginArgs,
+  WSL_CODEX_AVAILABILITY_TIMEOUT_MS
+} from './wsl-codex-command'
+import {
   getCodexSelectionTargetForAccount,
   getSelectedCodexAccountIdForTarget,
   normalizeCodexAccountSelectionTarget,
@@ -805,15 +810,7 @@ export class CodexAccountService {
       const spawnConfig = wslInfo
         ? {
             command: 'wsl.exe',
-            // Why: nvm and similar WSL installs often initialize PATH from interactive shell config.
-            args: [
-              '-d',
-              wslInfo.distro,
-              '--exec',
-              'bash',
-              '-ic',
-              `export CODEX_HOME=${shellQuote(wslInfo.linuxPath)}; exec codex login`
-            ],
+            args: buildWslCodexLoginArgs(wslInfo.distro, wslInfo.linuxPath),
             env: process.env,
             codexCommand: 'codex'
           }
@@ -923,18 +920,10 @@ export class CodexAccountService {
 
   private assertWslCodexCliAvailable(wslInfo: { distro: string; linuxPath: string }): void {
     try {
-      execFileSync(
-        'wsl.exe',
-        [
-          '-d',
-          wslInfo.distro,
-          '--exec',
-          'bash',
-          '-ic',
-          buildEncodedWslBashCommand('command -v codex >/dev/null 2>&1')
-        ],
-        { encoding: 'utf-8', timeout: 5000 }
-      )
+      execFileSync('wsl.exe', buildWslCodexAvailabilityArgs(wslInfo.distro), {
+        encoding: 'utf-8',
+        timeout: WSL_CODEX_AVAILABILITY_TIMEOUT_MS
+      })
     } catch (error) {
       throw new Error(
         `Codex CLI is not available in WSL ${wslInfo.distro}. Install Codex in that distro or switch Account location to Windows.`,

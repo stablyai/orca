@@ -35,7 +35,7 @@ describe('joinRemotePath', () => {
 
 describe('detectRemoteHostPlatform', () => {
   it('uses uname when the remote is POSIX', async () => {
-    vi.mocked(execCommand).mockResolvedValueOnce('Darwin arm64')
+    vi.mocked(execCommand).mockResolvedValueOnce('__ORCA_REMOTE_PLATFORM__ Darwin arm64')
 
     await expect(detectRemoteHostPlatform(conn)).resolves.toMatchObject({
       relayPlatform: 'darwin-arm64',
@@ -46,7 +46,7 @@ describe('detectRemoteHostPlatform', () => {
   it('falls back to PowerShell when uname is unavailable on Windows', async () => {
     vi.mocked(execCommand)
       .mockRejectedValueOnce(new Error('uname not recognized'))
-      .mockResolvedValueOnce('Windows AMD64')
+      .mockResolvedValueOnce('__ORCA_REMOTE_PLATFORM__ Windows AMD64')
 
     await expect(detectRemoteHostPlatform(conn)).resolves.toMatchObject({
       relayPlatform: 'win32-x64',
@@ -59,5 +59,6 @@ describe('detectRemoteHostPlatform', () => {
     expect(script).toContain('$arch = $env:PROCESSOR_ARCHITECTURE')
     expect(script).toContain('try { $runtimeArch =')
     expect(script).toContain('catch {}')
+    expect(script).toContain('Write-Output ("`n__ORCA_REMOTE_PLATFORM__ Windows " + $arch)')
   })
 })

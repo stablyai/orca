@@ -853,9 +853,10 @@ export default function SmartWorkspaceNameField({
     const trimmed = debouncedQuery.trim()
     const request = trimmed
       ? searchLinearIssues(trimmed, RESULT_LIMIT, { sourceContext: linearSourceContext })
-      : listLinearIssues('assigned', RESULT_LIMIT, { sourceContext: linearSourceContext }).then(
-          (result) => result.items
-        )
+      : listLinearIssues(
+          { kind: 'list', filter: 'assigned', limit: RESULT_LIMIT },
+          { sourceContext: linearSourceContext }
+        ).then((result) => result.items)
     void request
       .then((issues) => {
         if (!stale) {

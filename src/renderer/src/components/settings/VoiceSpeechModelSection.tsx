@@ -82,12 +82,14 @@ export function VoiceSpeechModelSection({
               <DropdownMenuItem
                 key={manifest.id}
                 disabled={isDownloading}
-                onSelect={() => {
+                onSelect={(event) => {
                   if (isReady) {
                     onUpdateVoiceSettings({ sttModel: manifest.id })
                   } else if (isCloud) {
                     onOpenOpenAiDialog(manifest.id)
                   } else if (!isDownloading) {
+                    // Why: download progress appears in this menu, so starting one should not dismiss it.
+                    event.preventDefault()
                     void window.api.speech
                       .downloadModel(manifest.id)
                       .catch(() =>

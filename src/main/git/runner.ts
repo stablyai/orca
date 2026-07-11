@@ -19,6 +19,15 @@ import {
 } from 'node:child_process'
 import { StringDecoder } from 'node:string_decoder'
 import { withGitSpan } from '../observability/instrumentation'
+import { recordSubprocessSpawn } from '../diagnostics/main-thread-churn-probe'
+import {
+  classifyGhRateLimitBucket,
+  createGhRateLimitBlockedError,
+  getGhRateLimitBlockedUntilMs,
+  isGhPrimaryRateLimitStderr,
+  isGhRateLimitProbe,
+  notifyGhPrimaryRateLimit
+} from './gh-rate-limit-breaker'
 import { getDefaultWslDistro, parseWslPath, toWindowsWslPath, type WslPathInfo } from '../wsl'
 import { getSpawnArgsForWindows, isWindowsBatchScript, resolveWindowsCommand } from '../win32-utils'
 import {
@@ -26,8 +35,17 @@ import {
   escapeWslShCommandForWindows,
   quotePosixShell
 } from '../../shared/wsl-login-shell-command'
+import { UNTRANSLATED_GIT_OUTPUT_ENV } from '../../shared/git-output-locale'
+import { endSubprocessStdin } from '../../shared/subprocess-stdin-write'
 
 // ─── Core resolution ────────────────────────────────────────────────
+
+// `LANGUAGE=en LC_ALL=en_US.UTF-8 LANG=en_US.UTF-8` — env-assignment prefix for
+// WSL-routed git, where spawn env cannot cross the wsl.exe boundary. Values are
+// shell-safe unquoted (alnum, dot, dash, underscore only).
+const GIT_OUTPUT_LOCALE_SHELL_PREFIX = Object.entries(UNTRANSLATED_GIT_OUTPUT_ENV)
+  .map(([key, value]) => `${key}=${value}`)
+  .join(' ')
 
 type ResolvedCommand = {
   binary: string
@@ -193,6 +211,10 @@ function resolveCommand(
   }
 
   const translatedArgs = translateArgsForWsl(args)
+  // Why: env set on wsl.exe stays on the Windows side (WSLENV forwards only
+  // named vars), so the untranslated-output locale must ride the command
+  // string for git stderr parsers to work inside the distro (issue #7808).
+  const localePrefix = command === 'git' ? `${GIT_OUTPUT_LOCALE_SHELL_PREFIX} ` : ''
   const escapedCommand = quotePosixShell(command)
   // Why: shell-escape each argument to prevent word splitting / glob expansion
   // inside the bash -c string. Single quotes are safe for all chars except
@@ -205,8 +227,8 @@ function resolveCommand(
   // doesn't need a particular cwd for global calls like `api rate_limit`.
   const linuxCwd = cwdWsl?.linuxPath ?? (cwd && wslDistroOverride ? translateArgForWsl(cwd) : null)
   const shellCmd = linuxCwd
-    ? `cd ${quotePosixShell(linuxCwd)} && ${escapedCommand} ${escapedArgs.join(' ')}`
-    : `${escapedCommand} ${escapedArgs.join(' ')}`
+    ? `cd ${quotePosixShell(linuxCwd)} && ${localePrefix}${escapedCommand} ${escapedArgs.join(' ')}`
+    : `${localePrefix}${escapedCommand} ${escapedArgs.join(' ')}`
 
   if (options.useWslLoginShell) {
     return {
@@ -381,6 +403,7 @@ function execFileCapture(
     }
 
     try {
+      const spawnStartedAt = performance.now()
       child = execFile(
         command,
         args,
@@ -399,6 +422,7 @@ function execFileCapture(
           finish(error, stdout, stderr)
         }
       )
+      recordSubprocessSpawn(command, args, performance.now() - spawnStartedAt)
     } catch (error) {
       finish(error instanceof Error ? error : new Error(String(error)))
       return
@@ -407,7 +431,7 @@ function execFileCapture(
     child.once('error', (error) => finish(error))
 
     if (options.stdin !== undefined) {
-      child.stdin?.end(options.stdin)
+      endSubprocessStdin(child.stdin, options.stdin)
     }
 
     // Why: Node's native execFile timeout waits for the child to exit after
@@ -441,12 +465,14 @@ async function spawnCommandCapture(
     let stderr = ''
     let stdoutBytes = 0
     let stderrBytes = 0
+    const spawnStartedAt = performance.now()
     const child = spawn(spawnCmd, spawnArgs, {
       cwd: options.cwd,
       env: options.env,
       stdio: ['ignore', 'pipe', 'pipe'],
       windowsHide: true
     })
+    recordSubprocessSpawn(spawnCmd, spawnArgs, performance.now() - spawnStartedAt)
     let timer: NodeJS.Timeout | null = null
     const onAbort = (): void => {
       killSpawnedCommandTree(child)
@@ -547,10 +573,21 @@ export function appendGitConfigEnv(
   return next
 }
 
+/**
+ * Pin Orca-spawned git to untranslated English output so stderr/progress
+ * parsers keep working under any user locale (issue #7808; see
+ * UNTRANSLATED_GIT_OUTPUT_ENV for the full rationale). Terminal git is
+ * untouched. Injected by every git runner in this module; WSL-routed spawns
+ * get the same values via GIT_OUTPUT_LOCALE_SHELL_PREFIX instead.
+ */
+export function untranslatedGitOutputEnv(env: NodeJS.ProcessEnv = process.env): NodeJS.ProcessEnv {
+  return { ...env, ...UNTRANSLATED_GIT_OUTPUT_ENV }
+}
+
 export function promptGuardGitEnv(env: NodeJS.ProcessEnv = process.env): NodeJS.ProcessEnv {
   return appendGitConfigEnv(
     {
-      ...env,
+      ...untranslatedGitOutputEnv(env),
       GIT_TERMINAL_PROMPT: '0',
       GIT_ASKPASS: env.GIT_ASKPASS ?? '',
       SSH_ASKPASS: env.SSH_ASKPASS ?? '',
@@ -857,7 +894,8 @@ export async function gitExecFileAsyncBuffer(
   const { stdout } = (await execFileCapture(resolved.binary, resolved.args, {
     cwd: resolved.cwd,
     encoding: 'buffer',
-    maxBuffer: options.maxBuffer
+    maxBuffer: options.maxBuffer,
+    env: untranslatedGitOutputEnv()
   })) as { stdout: Buffer }
   return { stdout }
 }
@@ -1033,12 +1071,20 @@ export function gitExecFileSync(
   }
 ): string {
   const resolved = resolveCommand('git', args, options.cwd)
-  return execFileSync(resolved.binary, resolved.args, {
-    cwd: resolved.cwd,
-    encoding: options.encoding ?? 'utf-8',
-    stdio: options.stdio ?? ['pipe', 'pipe', 'pipe'],
-    timeout: options.timeout ?? GIT_EXEC_SYNC_TIMEOUT_MS
-  }) as string
+  const spawnStartedAt = performance.now()
+  try {
+    return execFileSync(resolved.binary, resolved.args, {
+      cwd: resolved.cwd,
+      encoding: options.encoding ?? 'utf-8',
+      env: untranslatedGitOutputEnv(),
+      stdio: options.stdio ?? ['pipe', 'pipe', 'pipe'],
+      timeout: options.timeout ?? GIT_EXEC_SYNC_TIMEOUT_MS
+    }) as string
+  } finally {
+    // Sync exec holds the main thread for its whole duration, so the entire
+    // call is main-thread block time — the cost issue #7576 flags.
+    recordSubprocessSpawn(resolved.binary, resolved.args, performance.now() - spawnStartedAt)
+  }
 }
 
 /**
@@ -1053,10 +1099,14 @@ export function gitSpawn(
   const resolved = resolveCommand('git', args, options.cwd, wslDistro, {
     useWslLoginShell: Boolean(wslDistro)
   })
-  return spawn(resolved.binary, resolved.args, {
+  const spawnStartedAt = performance.now()
+  const child = spawn(resolved.binary, resolved.args, {
     ...spawnOptions,
+    env: untranslatedGitOutputEnv(spawnOptions.env ?? process.env),
     cwd: resolved.cwd
   })
+  recordSubprocessSpawn(resolved.binary, resolved.args, performance.now() - spawnStartedAt)
+  return child
 }
 
 // ─── gh CLI runners ─────────────────────────────────────────────────
@@ -1356,6 +1406,16 @@ export async function ghExecFileAsync(
   args: string[],
   options: GhExecOptions = {}
 ): Promise<{ stdout: string; stderr: string }> {
+  // Why: while a bucket's primary rate limit is exhausted, every spawn would
+  // return the same 403 — fail fast without paying the subprocess cost. The
+  // rate_limit probe itself is exempt so the breaker can learn the reset time.
+  const rateLimitBucket = classifyGhRateLimitBucket(args)
+  if (!isGhRateLimitProbe(args)) {
+    const blockedUntilMs = getGhRateLimitBlockedUntilMs(rateLimitBucket)
+    if (blockedUntilMs !== null) {
+      throw createGhRateLimitBlockedError(rateLimitBucket, blockedUntilMs)
+    }
+  }
   let resolved = resolveCommand('gh', args, options.cwd, options.wslDistro)
   let lastError: unknown
   let attemptedHostFallback = false
@@ -1375,6 +1435,9 @@ export async function ghExecFileAsync(
     } catch (err) {
       lastError = err
       const { stderr } = extractExecError(err)
+      if (isGhPrimaryRateLimitStderr(stderr)) {
+        notifyGhPrimaryRateLimit(rateLimitBucket)
+      }
       if (
         process.platform === 'win32' &&
         !attemptedDefaultWslFallback &&
@@ -1444,6 +1507,7 @@ type GlabExecOptions = Omit<GitExecOptions, 'cwd'> & {
   cwd?: string
   wslDistro?: string
   idempotent?: boolean
+  allowDefaultWslFallback?: boolean
 }
 
 /**
@@ -1508,6 +1572,7 @@ export async function glabExecFileAsync(
         resolved.wsl === null &&
         !options.cwd &&
         !options.wslDistro &&
+        options.allowDefaultWslFallback !== false &&
         isHostCommandMissing(err, 'glab')
       ) {
         const wslResolved = resolveDefaultWslCli('glab', args)
@@ -1554,10 +1619,13 @@ export function wslAwareSpawn(
   const resolved = resolveCommand(command, args, options.cwd, wslDistro, {
     useWslLoginShell
   })
-  return spawn(resolved.binary, resolved.args, {
+  const spawnStartedAt = performance.now()
+  const child = spawn(resolved.binary, resolved.args, {
     ...spawnOptions,
     cwd: resolved.cwd
   })
+  recordSubprocessSpawn(resolved.binary, resolved.args, performance.now() - spawnStartedAt)
+  return child
 }
 
 // ─── Path translation helpers ───────────────────────────────────────

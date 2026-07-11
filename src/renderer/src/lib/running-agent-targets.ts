@@ -1,11 +1,8 @@
 import type { AppState } from '@/store/types'
-import {
-  AGENT_STATUS_STALE_AFTER_MS,
-  type AgentStatusEntry
-} from '../../../shared/agent-status-types'
+import type { AgentStatusEntry } from '../../../shared/agent-status-types'
 import type { TerminalTab } from '../../../shared/types'
 import { parsePaneKey } from '../../../shared/stable-pane-id'
-import { isExplicitAgentStatusFresh } from './agent-status'
+import { resolvePaneAgentActivity } from '@/lib/pane-agent-evidence'
 import { detectAgentSendTitleStatus } from './agent-send-title-status'
 import { resolveRuntimePaneTitleLeafResolution } from './runtime-pane-title-leaf-id'
 
@@ -58,12 +55,23 @@ export function deriveRunningAgentSendTargets(
         : null
     let disabledReason: string | undefined
 
+    // Why: the shared resolver gates hook freshness; a null hookState means the
+    // entry is stale (entries here always exist), and otherwise carries the
+    // fresh entry.state. The live-title layer stays local because it needs the
+    // send-gated detector (label + strict idle-send gate), which the resolver's
+    // raw titleStatus does not reproduce.
+    const decision = resolvePaneAgentActivity({
+      explicitEntry: entry,
+      liveTitle: null,
+      hasLivePty: ptyId !== null,
+      now
+    })
     // Why: hook-backed rows can go stale while the same PTY is still a live
     // agent; live titles are the runtime proof that the row remains targetable.
     const liveTitleStatus = ptyId
       ? detectLiveAgentPaneStatus(state, parsed.tabId, parsed.leafId, tab.title)
       : null
-    if (!isExplicitAgentStatusFresh(entry, now, AGENT_STATUS_STALE_AFTER_MS)) {
+    if (decision.hookState === null) {
       if (liveTitleStatus === 'permission') {
         disabledReason = 'Agent needs permission'
       } else if (liveTitleStatus === null) {
@@ -71,7 +79,7 @@ export function deriveRunningAgentSendTargets(
       }
     } else if (!ptyId) {
       disabledReason = 'Terminal is no longer available'
-    } else if (entry.state === 'blocked' || entry.state === 'waiting') {
+    } else if (decision.hookState === 'blocked' || decision.hookState === 'waiting') {
       disabledReason = 'Agent needs permission'
     } else if (liveTitleStatus === 'permission') {
       disabledReason = 'Agent needs permission'

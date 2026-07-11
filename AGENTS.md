@@ -12,7 +12,9 @@ Keep comments short — one or two lines. Capture only the non-obvious reason (s
 
 ## Lint Rules: Do Not Disable Max Lines
 
-Never add a `max-lines` disable (`eslint-disable max-lines`, `oxlint-disable max-lines`, or line-specific variants). Split the file, extract focused modules, move fixtures/builders into named files, or otherwise reduce the counted lines instead.
+Never add a `max-lines` disable (`eslint-disable max-lines`, `oxlint-disable max-lines`, or line-specific variants), and never add a per-file `max-lines` bump in `mobile/.oxlintrc.json`. Split the file, extract focused modules, move fixtures/builders into named files, or otherwise reduce the counted lines instead.
+
+This is enforced in CI by `pnpm check:max-lines-ratchet` (`config/scripts/check-max-lines-ratchet.mjs`). Files already over the limit are grandfathered in `config/max-lines-baseline.txt`; that list may only **shrink**. Adding a new suppression fails the build. If you remove a suppression (great — split it!), run `pnpm check:max-lines-ratchet --prune` to drop its baseline line.
 
 ## File and Module Naming
 
@@ -33,6 +35,18 @@ Orca targets macOS, Linux, and Windows. Keep all platform-dependent behavior beh
 ## SSH Use Case
 
 All changes must consider the SSH use case. Don't assume local-only execution.
+
+## Git Binary Compatibility
+
+Orca runs the user's Git binary on native, WSL, and SSH hosts, which may all have different versions. Treat Git 2.25 as the core-workflow baseline and follow [`docs/reference/git-compatibility.md`](./docs/reference/git-compatibility.md).
+
+When adding or changing a Git command:
+
+- Check when every subcommand and option was introduced. For newer behavior, keep a baseline-compatible fallback or degrade safely.
+- Use `GitCapabilityCache` with a narrow unsupported-error predicate so recurring operations do not retry a known-invalid command. Do not rely only on `git --version`; wrappers such as `simple-git` do not remove host-version differences.
+- Scope capability state to the host that executes Git: native, WSL distro, SSH provider, or relay connection. Cover the first fallback, later cached calls, concurrent probes, and relevant host isolation in tests.
+- Keep the real-binary compatibility contract in PR CI current. When adopting a newer Git feature, add its version boundary so the preferred command and fallback both run against representative Git releases.
+- Preserve commands that begin with global Git options such as `-c` before the subcommand, including auto-maintenance suppression used by worktree-create fetches.
 
 ## Git Provider Compatibility
 

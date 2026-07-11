@@ -1,6 +1,22 @@
-import { execFileSync } from 'node:child_process'
+import { execFile, execFileSync, type ExecFileOptionsWithStringEncoding } from 'node:child_process'
 import { delimiter, join } from 'node:path'
 import { existsSync } from 'node:fs'
+
+function execFileWithoutBlocking(
+  command: string,
+  args: string[],
+  options: ExecFileOptionsWithStringEncoding
+): Promise<string> {
+  return new Promise((resolve, reject) => {
+    execFile(command, args, options, (error, stdout) => {
+      if (error) {
+        reject(error)
+        return
+      }
+      resolve(stdout)
+    })
+  })
+}
 
 /**
  * Full path to icacls.exe. Electron's main process may have a stripped PATH
@@ -8,6 +24,11 @@ import { existsSync } from 'node:fs'
  */
 export function getIcaclsExePath(): string {
   return `${process.env.SystemRoot ?? 'C:\\Windows'}\\System32\\icacls.exe`
+}
+
+/** Absolute path because service-launched Electron can omit System32 from PATH. */
+export function getWhoamiExePath(): string {
+  return `${process.env.SystemRoot ?? 'C:\\Windows'}\\System32\\whoami.exe`
 }
 
 /**
@@ -78,13 +99,10 @@ export function isPermissionError(error: unknown): boolean {
 // and hardened envs where USERNAME is unset. Fall back to the SID via
 // `whoami /user` (same strategy as runtime-metadata.ts), which is authoritative
 // and always available on Windows. Cached because it never changes in-process.
-let cachedIdentity: string | null | undefined
+let cachedIdentity: string | undefined
+let pendingIdentityResolution: Promise<string | null> | null = null
 
-export function resolveCurrentWindowsIdentity(): string | null {
-  return resolveCurrentIdentity()
-}
-
-function resolveCurrentIdentity(): string | null {
+function cachedOrEnvironmentIdentity(): string | undefined {
   if (cachedIdentity !== undefined) {
     return cachedIdentity
   }
@@ -92,20 +110,75 @@ function resolveCurrentIdentity(): string | null {
     cachedIdentity = process.env.USERNAME
     return cachedIdentity
   }
+  return undefined
+}
+
+function identityFromWhoamiOutput(output: string): string | null {
+  // CSV columns: "DOMAIN\\user","S-1-5-21-..."
+  const sidMatch = /"(S-[\d-]+)"\s*$/.exec(output.trim())
+  return sidMatch ? `*${sidMatch[1]}` : null
+}
+
+export function resolveCurrentWindowsIdentity(): string | null {
+  return resolveCurrentIdentity()
+}
+
+function resolveCurrentIdentity(): string | null {
+  const knownIdentity = cachedOrEnvironmentIdentity()
+  if (knownIdentity !== undefined) {
+    return knownIdentity
+  }
   try {
-    const output = execFileSync('whoami', ['/user', '/fo', 'csv', '/nh'], {
+    const output = execFileSync(getWhoamiExePath(), ['/user', '/fo', 'csv', '/nh'], {
       encoding: 'utf-8',
       stdio: ['ignore', 'pipe', 'ignore'],
       windowsHide: true,
       timeout: 5000
-    }).trim()
-    // CSV columns: "DOMAIN\\user","S-1-5-21-..."
-    const sidMatch = /"(S-[\d-]+)"\s*$/.exec(output)
-    cachedIdentity = sidMatch ? `*${sidMatch[1]}` : null
+    })
+    const resolvedIdentity = identityFromWhoamiOutput(output)
+    if (resolvedIdentity) {
+      cachedIdentity = resolvedIdentity
+    }
+    return resolvedIdentity
   } catch {
-    cachedIdentity = null
+    return null
   }
-  return cachedIdentity
+}
+
+async function resolveCurrentIdentityAsync(): Promise<string | null> {
+  const knownIdentity = cachedOrEnvironmentIdentity()
+  if (knownIdentity !== undefined) {
+    return knownIdentity
+  }
+  if (!pendingIdentityResolution) {
+    pendingIdentityResolution = (async () => {
+      try {
+        const stdout = await execFileWithoutBlocking(
+          getWhoamiExePath(),
+          ['/user', '/fo', 'csv', '/nh'],
+          {
+            encoding: 'utf-8',
+            windowsHide: true,
+            timeout: 5000
+          }
+        )
+        // Why: a synchronous caller may resolve identity while async whoami
+        // is in flight; its authoritative cached result must win the race.
+        const resolvedIdentity = identityFromWhoamiOutput(stdout)
+        if (cachedIdentity === undefined && resolvedIdentity) {
+          cachedIdentity = resolvedIdentity
+        }
+        return cachedIdentity ?? resolvedIdentity
+      } catch {
+        // Why: transient service/PATH failures must not permanently disable
+        // ACL repair for every later crash attempt in this process.
+        return cachedIdentity ?? null
+      }
+    })().finally(() => {
+      pendingIdentityResolution = null
+    })
+  }
+  return pendingIdentityResolution
 }
 
 /**
@@ -136,6 +209,24 @@ export function grantDirAcl(dirPath: string, options?: { recursive?: boolean }):
     windowsHide: true,
     timeout
   })
+}
+
+export async function grantDirAclAsync(dirPath: string): Promise<void> {
+  const identity = await resolveCurrentIdentityAsync()
+  if (!identity) {
+    return
+  }
+  // Why: crash recovery runs on Electron's main thread; an asynchronous
+  // icacls child keeps its worst-case timeout from freezing every window.
+  await execFileWithoutBlocking(
+    getIcaclsExePath(),
+    [dirPath, '/grant:r', `${identity}:(OI)(CI)(F)`],
+    {
+      encoding: 'utf-8',
+      windowsHide: true,
+      timeout: 10_000
+    }
+  )
 }
 
 /**

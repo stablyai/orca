@@ -1,6 +1,3 @@
-/* eslint-disable max-lines -- Why: shell-ready wrapper coverage keeps zsh,
-   bash, marker scanning, and env restoration cases in one suite so the
-   generated wrapper contract is reviewed as a unit. */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { spawnSync } from 'node:child_process'
 import { tmpdir } from 'node:os'
@@ -515,11 +512,16 @@ describePosix('daemon shell-ready launch config', () => {
 
     expect(bashRc).toContain('printf "\\033]133;D;%s\\007"')
     expect(bashRc).toContain('printf "\\033]133;C\\007"')
+    // precmd is prepended (captures $? first) and the epilogue is appended last,
+    // so a framework that must be last in PROMPT_COMMAND stays between them.
     expect(bashRc).toContain(
-      'PROMPT_COMMAND="__orca_osc133_precmd${PROMPT_COMMAND:+;${PROMPT_COMMAND}}"'
+      'PROMPT_COMMAND="__orca_osc133_precmd${PROMPT_COMMAND:+;${PROMPT_COMMAND}};__orca_osc133_epilogue"'
     )
-    expect(bashRc.indexOf("trap '__orca_osc133_preexec' DEBUG")).toBeGreaterThan(
-      bashRc.indexOf('if [[ "${ORCA_SHELL_READY_MARKER:-0}" == "1" ]]; then')
+    // The final DEBUG arming runs after PROMPT_COMMAND setup so the rcfile's own
+    // commands are not mistaken for a foreground command (lastIndexOf skips the
+    // identical re-arm inside __orca_osc133_epilogue).
+    expect(bashRc.lastIndexOf("trap '__orca_osc133_preexec' DEBUG")).toBeGreaterThan(
+      bashRc.indexOf('PROMPT_COMMAND="__orca_osc133_precmd')
     )
     expect(zshrc).toContain('printf "\\033]133;D;%s\\007"')
     expect(zshrc).toContain('printf "\\033]133;C\\007"')
@@ -553,6 +555,82 @@ describePosix('daemon shell-ready launch config', () => {
       expect(output).toContain('PROMPT_HOOK')
       expect(output).toContain('USER_DEBUG_AFTER')
       expectBashOsc133Lifecycle(output)
+    }
+  )
+
+  itWithBash(
+    'still emits 133;C when bash-preexec re-arms the DEBUG trap at first prompt',
+    async () => {
+      const { getDaemonBashShellReadyRcfileContent } = await importFreshShellReady()
+      // Minimal bash-preexec imitation (iTerm2/starship setups): re-arms its own
+      // DEBUG trap from PROMPT_COMMAND at the first prompt — silencing Orca's
+      // trap — and dispatches preexec_functions with the command as $1.
+      writeFileSync(
+        join(userDataPath, '.bash_profile'),
+        [
+          'preexec_functions=()',
+          '__bp_preexec_invoke_exec() {',
+          '  [[ -n "${__bp_interactive_mode:-}" ]] || return',
+          '  __bp_interactive_mode=""',
+          '  local f',
+          '  for f in "${preexec_functions[@]}"; do "$f" "$BASH_COMMAND"; done',
+          '}',
+          "__bp_arm() { __bp_interactive_mode=1; trap '__bp_preexec_invoke_exec' DEBUG; }",
+          'PROMPT_COMMAND="${PROMPT_COMMAND:+$PROMPT_COMMAND;}__bp_arm"'
+        ].join('\n')
+      )
+
+      const output = runInteractiveBashRcfile(getDaemonBashShellReadyRcfileContent(), userDataPath)
+
+      expectBashOsc133Lifecycle(output)
+    }
+  )
+
+  itWithBash(
+    'dispatches a non-empty preexec_functions against the real command, not Orca hooks',
+    async () => {
+      const { getDaemonBashShellReadyRcfileContent } = await importFreshShellReady()
+      // Why: Orca's epilogue captures bash-preexec's re-armed DEBUG trap and
+      // chains it. A real preexec callback must fire against the user's command —
+      // not __orca_osc133_epilogue. Mirror upstream bash-preexec faithfully: it
+      // enables `functrace` (so Orca's `trap -p DEBUG` capture sees its trap),
+      // defers that install to the first prompt via PROMPT_COMMAND, and reads the
+      // command from `history` (so DEBUG fires on prompt hooks never dispatch a
+      // phantom). The naive `$BASH_COMMAND` imitation does none of these.
+      writeFileSync(
+        join(userDataPath, '.bash_profile'),
+        [
+          'preexec_functions=(__user_preexec)',
+          '__user_preexec() { printf \'USER_PREEXEC:%s\\n\' "$1"; }',
+          '__bp_inside=0',
+          '__bp_last_hist=""',
+          '__bp_preexec_invoke_exec() {',
+          '  (( __bp_inside > 0 )) && return',
+          '  [[ -n "${__bp_interactive_mode:-}" ]] || return',
+          '  local __bp_inside=1',
+          '  local this_command',
+          '  this_command="$(builtin history 1)"',
+          '  this_command="${this_command#"${this_command%%[![:space:]]*}"}"',
+          '  this_command="${this_command#* }"',
+          '  this_command="${this_command#"${this_command%%[![:space:]]*}"}"',
+          '  [[ -n "$this_command" && "$this_command" != "$__bp_last_hist" ]] || return',
+          '  __bp_last_hist="$this_command"',
+          '  __bp_interactive_mode=""',
+          '  local f',
+          '  for f in "${preexec_functions[@]}"; do "$f" "$this_command"; done',
+          '}',
+          "__bp_arm() { set -o functrace; __bp_interactive_mode=1; trap '__bp_preexec_invoke_exec' DEBUG; }",
+          'PROMPT_COMMAND="${PROMPT_COMMAND:+$PROMPT_COMMAND;}__bp_arm"'
+        ].join('\n')
+      )
+
+      const output = runInteractiveBashRcfile(getDaemonBashShellReadyRcfileContent(), userDataPath)
+
+      expectBashOsc133Lifecycle(output)
+      expect(output).toContain('USER_PREEXEC:true')
+      expect(output).toContain('USER_PREEXEC:false')
+      expect(output).not.toContain('USER_PREEXEC:__orca_osc133')
+      expect(output).not.toContain('USER_PREEXEC:__bp_')
     }
   )
 

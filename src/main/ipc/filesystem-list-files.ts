@@ -19,7 +19,8 @@ import { listFilesWithGit } from './filesystem-list-files-git-fallback'
 export async function listQuickOpenFiles(
   rootPath: string,
   store: Store,
-  excludePaths?: string[]
+  excludePaths?: string[],
+  signal?: AbortSignal
 ): Promise<string[]> {
   const authorizedRootPath = await resolveAuthorizedPath(rootPath, store)
   const localGitOptions = getLocalGitOptionsForRegisteredWorktree(
@@ -40,7 +41,7 @@ export async function listQuickOpenFiles(
   // can run.
   const rgAvailable = await checkRgAvailable(authorizedRootPath, localGitOptions.wslDistro)
   if (!rgAvailable) {
-    return listFilesWithGit(authorizedRootPath, excludePathPrefixes, localGitOptions)
+    return listFilesWithGit(authorizedRootPath, excludePathPrefixes, localGitOptions, signal)
   }
 
   const files = new Set<string>()

@@ -129,7 +129,12 @@ export class PrActionsEngine {
     return f
   }
 
+  // Why: action start pairs setBusy + setError(null); skip notify when unchanged
+  // so we don't force a full PR panel re-render for free.
   private setBusy(key: PrActionBusyKey | null): void {
+    if (key === null ? this.busy === null : busyKeyEquals(this.busy, key)) {
+      return
+    }
     this.busy = key
     this.cfg.onChange()
   }
@@ -143,6 +148,9 @@ export class PrActionsEngine {
   }
 
   private setError(message: string | null): void {
+    if (this.error === message) {
+      return
+    }
     this.error = message
     this.cfg.onChange()
   }
@@ -180,7 +188,14 @@ export class PrActionsEngine {
     }
     if (outcome.ok) {
       handlers.onSuccess()
-      await this.cfg.refetch()
+      // Why: void engine.merge() callers are fire-and-forget; refetch must not LogBox.
+      try {
+        await this.cfg.refetch()
+      } catch (err) {
+        if (this.identity === identity) {
+          this.setError(err instanceof Error ? err.message : 'Failed to refresh pull request.')
+        }
+      }
       return
     }
     // Both failure classes clear optimism to authoritative; only the message
@@ -205,6 +220,10 @@ export class PrActionsEngine {
         prRepo: cfg.prRepo
       })
       await this.settle(identity, outcome, { onSuccess: () => {}, onRevert: () => {} })
+    } catch (err) {
+      if (this.identity === identity) {
+        this.setError(err instanceof Error ? err.message : 'Failed to merge pull request.')
+      }
     } finally {
       this.clearBusyIfOwned(identity, { kind: 'merge' })
     }

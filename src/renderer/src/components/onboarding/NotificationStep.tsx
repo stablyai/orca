@@ -1,8 +1,7 @@
-/* eslint-disable max-lines -- Why: this onboarding step owns the full notification setup surface, including macOS guidance, sound choices, and upload controls. */
-import { useCallback, useEffect, useRef, useState } from 'react'
-import { BellRing, FileAudio, Settings, Upload } from 'lucide-react'
+import { useCallback, useRef, useState } from 'react'
+import { BellRing, FileAudio, Upload } from 'lucide-react'
 import { toast } from 'sonner'
-import type { GlobalSettings, NotificationPermissionStatusResult } from '../../../../shared/types'
+import type { GlobalSettings } from '../../../../shared/types'
 import { Button } from '@/components/ui/button'
 import {
   Select,
@@ -14,6 +13,10 @@ import {
 } from '@/components/ui/select'
 import { sendNotificationSettingsTestNotification } from '@/components/settings/NotificationsPane'
 import { getNotificationSoundOptions } from '@/components/notification-sound-options'
+import {
+  MacNotificationPermissionCard,
+  useMacNotificationPermissionState
+} from '@/components/notifications/mac-notification-permission-card'
 import { useMountedRef } from '@/hooks/useMountedRef'
 import { translate } from '@/i18n/i18n'
 
@@ -40,8 +43,11 @@ export function NotificationStep({
 }: NotificationStepProps): React.JSX.Element {
   const notificationSettings = settings?.notifications
   const notificationSettingsRef = useRef(notificationSettings)
-  const [permissionStatus, setPermissionStatus] =
-    useState<NotificationPermissionStatusResult | null>(null)
+  // Why: undefined settings are still loading — assume enabled (the default)
+  // so the fresh-install permission flow starts without waiting.
+  const [macPermissionState, setMacPermissionState] = useMacNotificationPermissionState(
+    notificationSettings?.enabled !== false
+  )
   const [isPickingSound, setIsPickingSound] = useState(false)
   const [selectPortalRoot, setSelectPortalRoot] = useState<HTMLElement | null>(null)
   const syncedNotificationSettingsRef = useRef(notificationSettings)
@@ -58,18 +64,6 @@ export function NotificationStep({
     // Why: onboarding sits above body-level portals, so the select menu must
     // portal into the overlay to stay clickable.
     setSelectPortalRoot(node?.closest<HTMLElement>('[data-onboarding-overlay]') ?? node)
-  }, [])
-
-  useEffect(() => {
-    let cancelled = false
-    void window.api.notifications.getPermissionStatus().then((status) => {
-      if (!cancelled) {
-        setPermissionStatus(status)
-      }
-    })
-    return () => {
-      cancelled = true
-    }
   }, [])
 
   const updateNotificationSettings = async (
@@ -91,14 +85,6 @@ export function NotificationStep({
 
   const getCustomSoundVolume = (): number =>
     notificationSettingsRef.current?.customSoundVolume ?? 100
-
-  const handleMacPermission = async (): Promise<void> => {
-    const status = await window.api.notifications.requestPermission()
-    if (mountedRef.current) {
-      setPermissionStatus(status)
-    }
-    await window.api.notifications.openSystemSettings()
-  }
 
   const previewSound = async (
     customSoundId: GlobalSettings['notifications']['customSoundId']
@@ -156,7 +142,22 @@ export function NotificationStep({
       )
       return
     }
-    await sendNotificationSettingsTestNotification(notificationSettings, getCustomSoundVolume())
+    const showsMacPermissionCard = macPermissionState !== null
+    const outcome = await sendNotificationSettingsTestNotification(
+      notificationSettings,
+      getCustomSoundVolume(),
+      showsMacPermissionCard ? { suppressSystemPermissionToasts: true } : undefined
+    )
+    if (!mountedRef.current || !showsMacPermissionCard) {
+      return
+    }
+    // Why: the test doubles as a permission re-check — its confirmed outcome
+    // is fresher than whatever the mount-time probe reported.
+    if (outcome === 'delivered') {
+      setMacPermissionState('enabled')
+    } else if (outcome === 'not-displayed') {
+      setMacPermissionState('blocked')
+    }
   }
 
   if (!notificationSettings) {
@@ -173,43 +174,10 @@ export function NotificationStep({
   const customPath = notificationSettings.customSoundPath
   const selectedSoundId = notificationSettings.customSoundId
   const soundOptions = getNotificationSoundOptions(customPath)
-  const isMac = permissionStatus?.platform === 'darwin'
 
   return (
     <div ref={setSelectPortalHost} className="space-y-5">
-      {isMac ? (
-        <section className="rounded-xl border border-border bg-card px-5 py-4">
-          <div className="flex flex-wrap items-start justify-between gap-4">
-            <div className="min-w-0 space-y-1">
-              <div className="flex items-center gap-2 text-sm font-semibold text-foreground">
-                <Settings className="size-4" />
-                {translate(
-                  'auto.components.onboarding.NotificationStep.d2dba86837',
-                  'Allow Orca in macOS'
-                )}
-              </div>
-              <p className="max-w-[58ch] text-[13px] leading-relaxed text-muted-foreground">
-                {translate(
-                  'auto.components.onboarding.NotificationStep.aa36281b00',
-                  'Open System Settings and make sure Orca is allowed to send notifications.'
-                )}
-              </p>
-            </div>
-            <Button
-              type="button"
-              size="sm"
-              className="gap-2"
-              onClick={() => void handleMacPermission()}
-            >
-              <Settings className="size-3.5" />
-              {translate(
-                'auto.components.onboarding.NotificationStep.8124d085a6',
-                'Open Mac Settings'
-              )}
-            </Button>
-          </div>
-        </section>
-      ) : null}
+      <MacNotificationPermissionCard state={macPermissionState} />
 
       <section className="space-y-3">
         <div className="space-y-1">

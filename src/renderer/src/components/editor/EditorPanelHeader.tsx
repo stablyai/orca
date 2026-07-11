@@ -1,6 +1,7 @@
 import { useMemo } from 'react'
 import { Columns2, Eye, FileText, ListTree, Rows2 } from 'lucide-react'
 import { useAppStore } from '@/store'
+import { selectWorktreeDiffCommentsOrEmpty } from '@/store/worktree-diff-comments-selector'
 import type { OpenFile } from '@/store/slices/editor'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import EditorViewToggle, {
@@ -81,7 +82,9 @@ export function EditorPanelHeader({
   onToggleMarkdownFrontmatter,
   onExportMarkdownToPdf
 }: EditorPanelHeaderProps): React.JSX.Element {
-  const diffComments = useAppStore((s) => s.getDiffComments(activeFile.worktreeId))
+  const diffComments = useAppStore((s) =>
+    selectWorktreeDiffCommentsOrEmpty(s, activeFile.worktreeId)
+  )
   const activeGroupId = useAppStore((s) => s.activeGroupIdByWorktree[activeFile.worktreeId])
   const diffWordWrap = useAppStore((s) => s.settings?.diffWordWrap === true)
   const updateSettings = useAppStore((s) => s.updateSettings)
@@ -100,6 +103,31 @@ export function EditorPanelHeader({
         onOpenMarkdownPreview={onOpenMarkdownPreview}
         onOpenContainingFolder={onOpenContainingFolder}
       />
+      {canOpenPreviewToSide && (
+        <TooltipProvider delayDuration={300}>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <button
+                type="button"
+                className="p-1 rounded hover:bg-accent text-muted-foreground hover:text-foreground transition-colors flex-shrink-0"
+                onClick={onOpenPreviewToSide}
+                aria-label={translate(
+                  'auto.components.editor.EditorPanelHeader.fb8331694e',
+                  'Open Preview to the Side'
+                )}
+              >
+                <Eye size={14} />
+              </button>
+            </TooltipTrigger>
+            <TooltipContent side="bottom" sideOffset={4}>
+              {translate(
+                'auto.components.editor.EditorPanelHeader.fb8331694e',
+                'Open Preview to the Side'
+              )}
+            </TooltipContent>
+          </Tooltip>
+        </TooltipProvider>
+      )}
       {isSingleDiff && (
         <TooltipProvider delayDuration={300}>
           <Tooltip>
@@ -148,31 +176,6 @@ export function EditorPanelHeader({
           triggerClassName="h-6 shrink-0 gap-1 rounded-full border border-border/70 bg-muted/40 px-2 text-[11px] font-medium leading-none text-foreground/80 hover:bg-accent hover:text-foreground"
           iconClassName="size-3"
         />
-      )}
-      {canOpenPreviewToSide && (
-        <TooltipProvider delayDuration={300}>
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <button
-                type="button"
-                className="p-1 rounded hover:bg-accent text-muted-foreground hover:text-foreground transition-colors flex-shrink-0"
-                onClick={onOpenPreviewToSide}
-                aria-label={translate(
-                  'auto.components.editor.EditorPanelHeader.fb8331694e',
-                  'Open Preview to the Side'
-                )}
-              >
-                <Eye size={14} />
-              </button>
-            </TooltipTrigger>
-            <TooltipContent side="bottom" sideOffset={4}>
-              {translate(
-                'auto.components.editor.EditorPanelHeader.fb8331694e',
-                'Open Preview to the Side'
-              )}
-            </TooltipContent>
-          </Tooltip>
-        </TooltipProvider>
       )}
       {isDiffSurface && (
         <TooltipProvider delayDuration={300}>

@@ -1,7 +1,7 @@
 import { open, readFile, stat } from 'node:fs/promises'
 import { extname } from 'node:path'
 import type { RelayDispatcher, RequestContext } from './dispatcher'
-import { STREAM_CHUNK_SIZE, RelayErrorCode } from './protocol'
+import { STREAM_ACK_WINDOW_CHUNKS, STREAM_CHUNK_SIZE, RelayErrorCode } from './protocol'
 import type { RelayStreamRegistry, TooManyStreamsError } from './fs-stream-registry'
 import {
   BINARY_PROBE_BYTES,
@@ -61,11 +61,21 @@ type StreamChunkReader = {
   ): Promise<{ bytesRead: number }>
 }
 
+export type StreamPumpOptions = {
+  /** Client that requested the stream. Chunks go only to it — broadcasting
+   * bulk frames would let one slow secondary client stall the requester. */
+  clientId?: number
+  /** True when the client declared `flowControl: 'ack'` — it sends
+   * fs.streamAck per processed chunk and the pump caps unacked chunks. */
+  paceWithAcks: boolean
+}
+
 export async function readRelayFileStreamMetadata(
   filePath: string,
   dispatcher: RelayDispatcher,
   registry: RelayStreamRegistry,
-  context: RequestContext
+  context: RequestContext,
+  pumpOptions?: StreamPumpOptions
 ): Promise<StreamMetadata> {
   const stats = await stat(filePath)
   const mimeType = IMAGE_MIME_TYPES[extname(filePath).toLowerCase()]
@@ -106,8 +116,9 @@ export async function readRelayFileStreamMetadata(
   // Why: pumpChunks owns its own try/finally for handle release; the outer
   // setImmediate kicks the pump off the metadata-response task so the client
   // sees the response before the first chunk frame.
+  const resolvedPumpOptions = pumpOptions ?? { paceWithAcks: false }
   setImmediate(() => {
-    void pumpChunks(streamId, stats.size, dispatcher, registry, context)
+    void pumpChunks(streamId, stats.size, dispatcher, registry, context, resolvedPumpOptions)
   })
 
   return {
@@ -126,7 +137,8 @@ async function pumpChunks(
   totalSize: number,
   dispatcher: RelayDispatcher,
   registry: RelayStreamRegistry,
-  context: RequestContext
+  context: RequestContext,
+  pumpOptions: StreamPumpOptions
 ): Promise<void> {
   const entry = registry.get(streamId)
   if (!entry) {
@@ -150,6 +162,27 @@ async function pumpChunks(
           endReason = 'aborted'
           break
         }
+        // Why: credit window — bulk chunks share one ordered SSH channel with
+        // interactive pty.data frames. Waiting for client acks bounds how many
+        // stream bytes a keystroke echo can queue behind, and yields the relay
+        // event loop so incoming keystrokes are handled between chunks.
+        if (pumpOptions.paceWithAcks) {
+          while (
+            seq - registry.ackedThroughSeq(streamId) > STREAM_ACK_WINDOW_CHUNKS &&
+            !context.isStale() &&
+            !registry.isAborted(streamId)
+          ) {
+            await registry.waitForAck(streamId)
+          }
+          if (context.isStale()) {
+            endReason = 'stale'
+            break
+          }
+          if (registry.isAborted(streamId)) {
+            endReason = 'aborted'
+            break
+          }
+        }
         const want = Math.min(STREAM_CHUNK_SIZE, totalSize - offset)
         const bytesRead = await readFullStreamChunk(entry.handle, buffer, want, offset)
         if (bytesRead !== want) {
@@ -167,7 +200,14 @@ async function pumpChunks(
           break
         }
         const data = buffer.subarray(0, bytesRead).toString('base64')
-        dispatcher.notify('fs.streamChunk', { streamId, seq, data })
+        // Why: the bulk lane waits out sink saturation, so a flood of chunk
+        // frames cannot pile up in the outbound pipe ahead of interactive
+        // pty.data frames written via plain notify().
+        await dispatcher.notifyBulk(
+          'fs.streamChunk',
+          { streamId, seq, data },
+          pumpOptions.clientId !== undefined ? { clientId: pumpOptions.clientId } : undefined
+        )
         offset += bytesRead
         seq += 1
       }

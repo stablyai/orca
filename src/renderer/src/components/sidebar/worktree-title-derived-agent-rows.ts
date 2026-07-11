@@ -1,9 +1,6 @@
 import type { DashboardAgentRow } from '@/components/dashboard/useDashboardData'
-import {
-  detectAgentStatusFromTitle,
-  getAgentLabel,
-  isClaudeManagementTitle
-} from '@/lib/agent-status'
+import { isClaudeManagementTitle } from '@/lib/agent-status'
+import { classifyTitleActivity, resolveTitleActivityLabel } from '@/lib/pane-agent-evidence'
 import { tabHasLivePty } from '@/lib/tab-has-live-pty'
 import type {
   AgentStatusEntry,
@@ -135,8 +132,8 @@ function buildTitleDerivedAgentRow(args: {
   // Why: `claude agents` is a live Claude Code Agent Teams surface, but the
   // shared detector keeps it neutral so runtime liveness probes do not treat
   // the management/list screen as active work.
-  const status = isClaudeAgentsTitle ? 'idle' : detectAgentStatusFromTitle(title)
-  const label = isClaudeAgentsTitle ? 'Claude Code' : getAgentLabel(title)
+  const status = isClaudeAgentsTitle ? 'idle' : classifyTitleActivity(title)
+  const label = isClaudeAgentsTitle ? 'Claude Code' : resolveTitleActivityLabel(title)
   if (!status || !label) {
     return null
   }
@@ -199,7 +196,7 @@ export function resolveAgentTypeFromTerminalTitle(
     return null
   }
   const normalizedTitle = normalizeCompatibleAgentTitleForOwner(title, ownerAgentType)
-  const label = getAgentLabel(normalizedTitle)
+  const label = resolveTitleActivityLabel(normalizedTitle)
   return label
     ? (resolveCompatibleAgentTypeForOwner(
         resolveTitleDerivedAgentType(normalizedTitle, label),

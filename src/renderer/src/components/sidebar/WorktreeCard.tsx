@@ -23,6 +23,7 @@ import CacheTimer, { usePromptCacheCountdownStartedAt } from './CacheTimer'
 import WorktreeContextMenu from './WorktreeContextMenu'
 import { SshDisconnectedDialog } from './SshDisconnectedDialog'
 import { AutoRenameFailedDialog } from './AutoRenameFailedDialog'
+import { LinearAgentSkillSetupPrompt } from './LinearAgentSkillSetupPrompt'
 import WorktreeCardAgents from './WorktreeCardAgents'
 import { useWorktreeAgentRows } from './useWorktreeAgentRows'
 import { WorktreeCardStatusSlot } from './WorktreeCardStatusSlot'
@@ -606,6 +607,10 @@ const WorktreeCard = React.memo(function WorktreeCard({
   const legacyCardTitleDisplay = coerceWorktreeCardVisibleTitle(worktree.displayName)
   const visibleCardTitle = newCardStyle ? cardTitleDisplay : legacyCardTitleDisplay
   const isDeleting = deleteState?.isDeleting ?? false
+  const isQueuedForDeletion = deleteState?.phase === 'queued'
+  const deleteLabel = isQueuedForDeletion
+    ? translate('auto.components.sidebar.WorktreeCard.ef18787206', 'Queued for deletion')
+    : translate('auto.components.sidebar.WorktreeCard.691ccfd622', 'Deleting…')
   const deleteModifierPressed = useWorkspaceDeleteModifierPressed()
 
   const showStatus = cardProps.includes('status')
@@ -1723,6 +1728,15 @@ const WorktreeCard = React.memo(function WorktreeCard({
           </div>
         )}
 
+        {isActive && worktree.linkedLinearIssue ? (
+          <LinearAgentSkillSetupPrompt
+            linked
+            remote={Boolean(repo?.connectionId || settings?.activeRuntimeEnvironmentId?.trim())}
+            surface="modal"
+            settings={settings}
+          />
+        ) : null}
+
         {/* Why: inline agent list. Gated on the 'inline-agents' card
              property so users can hide it. Layout coupling: this block
              grows the card height dynamically — WorktreeList uses
@@ -1877,8 +1891,10 @@ const WorktreeCard = React.memo(function WorktreeCard({
       {isDeleting && (
         <div className="absolute inset-0 z-10 flex items-center justify-center rounded-lg bg-background/50 backdrop-blur-[1px]">
           <div className="inline-flex items-center gap-1.5 rounded-full bg-background px-3 py-1 text-[11px] font-medium text-foreground shadow-sm border border-border/50">
-            <LoaderCircle className="size-3.5 animate-spin text-muted-foreground" />
-            {translate('auto.components.sidebar.WorktreeCard.691ccfd622', 'Deleting…')}
+            {!isQueuedForDeletion ? (
+              <LoaderCircle className="size-3.5 animate-spin text-muted-foreground" />
+            ) : null}
+            {deleteLabel}
           </div>
         </div>
       )}

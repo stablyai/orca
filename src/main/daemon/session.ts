@@ -9,6 +9,7 @@ import {
   type ShellReadyScanState
 } from '../shell-ready-marker-scanner'
 import { isPowerShellProcess } from '../../shared/shell-process-detection'
+import type { TuiAgent } from '../../shared/types'
 import type {
   PendingOutputRecord,
   SessionState,
@@ -31,17 +32,29 @@ const KILL_TIMEOUT_MS = 5_000
 // Worst-case wire size for a full take is ~6x this (each control char
 // JSON-escapes to six bytes) and must stay under NDJSON_MAX_LINE_BYTES (16MB).
 const PENDING_OUTPUT_MAX_BYTES = 2 * 1024 * 1024
+// Why: producer pause is requested over a fire-and-forget notification, so the
+// matching resume can be lost (main crash, dropped socket). A lost resume must
+// never wedge a shell: auto-resume after this window; a still-flooded main
+// re-asserts the pause on its next watermark check.
+export const PRODUCER_PAUSE_FAILSAFE_MS = 5_000
 
 export type SubprocessHandle = {
   pid: number
   /** Live foreground process name of the PTY (node-pty's `.process`), e.g.
    *  'claude' / 'codex' / 'zsh'. Null once the child has exited. */
   getForegroundProcess(): string | null
+  /** Await process-table evidence captured after this confirmation request. */
+  confirmForegroundProcess?(): Promise<string | null>
   /** True when shell launch args already delivered the startup command, so the
    *  terminal host must skip its stdin fallback write. */
   startupCommandDeliveredInShellArgs?: boolean
   write(data: string): void
   resize(cols: number, rows: number): void
+  /** Stop reading the PTY fd (node-pty pause()) so the kernel/ConPTY buffer
+   *  fills and a flooding child blocks on write. Optional: handles that
+   *  cannot pause simply omit it and flow control degrades to a no-op. */
+  pause?(): void
+  resume?(): void
   /** Resync the native PTY's own screen state after a frontend clear.
    *  No-op except on Windows/ConPTY, where a stale ConPTY cursor row makes
    *  the next prompt repaint land below a blank gap. */
@@ -62,9 +75,11 @@ export type SessionOptions = {
   cols: number
   rows: number
   terminalHandle?: string
+  launchAgent?: TuiAgent
   subprocess: SubprocessHandle
   shellReadySupported: boolean
   shellReadyTimeoutMs?: number
+  historySeed?: string
   scrollback?: number
   // Why: fired once the session reaches a terminal state (natural exit or
   // kill-timeout force-dispose) so the owner (TerminalHost) can reap it —
@@ -83,6 +98,7 @@ type AttachedClient = {
 export class Session {
   readonly sessionId: string
   readonly terminalHandle: string | null
+  readonly launchAgent: TuiAgent | null
   private _state: SessionState = 'running'
   private _shellState: ShellReadyState
   private _exitCode: number | null = null
@@ -101,10 +117,15 @@ export class Session {
   private pendingOutputBytes = 0
   private pendingOutputOverflowed = false
   private pendingOutputSeq = 0
+  private outputSequence = 0
+  private producerPaused = false
+  private producerPauseFailsafeTimer: ReturnType<typeof setTimeout> | null = null
+  private readonly _historySeeded: boolean | undefined
 
   constructor(opts: SessionOptions) {
     this.sessionId = opts.sessionId
     this.terminalHandle = opts.terminalHandle ?? null
+    this.launchAgent = opts.launchAgent ?? null
     this.subprocess = opts.subprocess
     this.onSessionExit = opts.onExit
     const size = normalizePtySize(opts.cols, opts.rows)
@@ -117,6 +138,10 @@ export class Session {
       // responder; any daemon reply races ahead via in-process parsing and
       // clobbers the renderer's answer. See the comment in HeadlessEmulator.
     })
+    // Why: recovery must precede listener registration; shells can emit their
+    // prompt synchronously as soon as onData subscribes.
+    this._historySeeded =
+      opts.historySeed === undefined ? undefined : this.emulator.writeSync(opts.historySeed)
 
     if (opts.shellReadySupported) {
       this._shellState = 'pending'
@@ -139,6 +164,10 @@ export class Session {
 
   get shellState(): ShellReadyState {
     return this._shellState
+  }
+
+  get historySeeded(): boolean | undefined {
+    return this._historySeeded
   }
 
   get exitCode(): number | null {
@@ -188,12 +217,52 @@ export class Session {
     this.subprocess.resize(cols, rows)
   }
 
+  /** Producer-side flow control: stop reading the PTY fd so the flooding
+   *  child blocks on write (kernel backpressure). Arms the lost-resume
+   *  failsafe; re-pausing re-arms it (main re-asserts during long floods). */
+  pauseProducer(): void {
+    if (this._state === 'exited' || this._disposed) {
+      return
+    }
+    this.producerPaused = true
+    this.subprocess.pause?.()
+    if (this.producerPauseFailsafeTimer) {
+      clearTimeout(this.producerPauseFailsafeTimer)
+    }
+    this.producerPauseFailsafeTimer = setTimeout(() => {
+      this.producerPauseFailsafeTimer = null
+      this.producerPaused = false
+      this.subprocess.resume?.()
+    }, PRODUCER_PAUSE_FAILSAFE_MS)
+  }
+
+  resumeProducer(): void {
+    this.releaseProducerPause({ resume: true })
+  }
+
+  private releaseProducerPause(opts: { resume: boolean }): void {
+    if (this.producerPauseFailsafeTimer) {
+      clearTimeout(this.producerPauseFailsafeTimer)
+      this.producerPauseFailsafeTimer = null
+    }
+    if (!this.producerPaused) {
+      return
+    }
+    this.producerPaused = false
+    if (opts.resume) {
+      this.subprocess.resume?.()
+    }
+  }
+
   kill(): void {
     if (this._state === 'exited' || this._isTerminating) {
       return
     }
     this._isTerminating = true
 
+    // Why: a paused child can be blocked inside write(); resume before
+    // signalling so it can run signal handlers and actually exit.
+    this.releaseProducerPause({ resume: true })
     this.subprocess.kill()
 
     this.killTimer = setTimeout(() => {
@@ -221,17 +290,30 @@ export class Session {
     if (idx !== -1) {
       this.attachedClients.splice(idx, 1)
     }
+    // Why: with no attached client, nobody will ever send resumePty — a
+    // paused shell would sit wedged until the failsafe. Resume eagerly.
+    if (this.attachedClients.length === 0) {
+      this.releaseProducerPause({ resume: true })
+    }
   }
 
   detachAllClients(): void {
     this.attachedClients.length = 0
+    this.releaseProducerPause({ resume: true })
   }
 
-  getSnapshot(): TerminalSnapshot | null {
+  getSnapshot(opts: { scrollbackRows?: number } = {}): TerminalSnapshot | null {
     if (this._disposed) {
       return null
     }
-    return this.emulator.getSnapshot()
+    return { ...this.emulator.getSnapshot(opts), outputSequence: this.outputSequence }
+  }
+
+  getPartialEscapeTailAnsi(): string {
+    if (this._disposed) {
+      return ''
+    }
+    return this.emulator.partialEscapeTailAnsi
   }
 
   // Why: the size the PTY actually applied (emulator dims, which Session.resize
@@ -272,7 +354,7 @@ export class Session {
         : records,
       seq: this.pendingOutputSeq,
       overflowed,
-      snapshot: includeSnapshot ? this.emulator.getSnapshot() : null
+      snapshot: includeSnapshot ? this.getSnapshot() : null
     }
   }
 
@@ -282,6 +364,10 @@ export class Session {
 
   getForegroundProcess(): string | null {
     return this.subprocess.getForegroundProcess()
+  }
+
+  async confirmForegroundProcess(): Promise<string | null> {
+    return this.subprocess.confirmForegroundProcess?.() ?? this.subprocess.getForegroundProcess()
   }
 
   clearScrollback(): void {
@@ -414,6 +500,9 @@ export class Session {
       return
     }
     this._disposed = true
+    // Why: never leave a paused fd behind on any teardown path — the handle's
+    // own dead-guard makes this a no-op when the child is already reaped.
+    this.releaseProducerPause({ resume: true })
     if (this.killTimer) {
       clearTimeout(this.killTimer)
       this.killTimer = null
@@ -480,6 +569,10 @@ export class Session {
       return
     }
 
+    // Why: daemon stream thinning can omit bytes before main sees them. The
+    // absolute count lets an authoritative snapshot cover those gaps while
+    // renderer reconciliation deduplicates any queued post-snapshot tail.
+    this.outputSequence += data.length
     // Feed data to headless emulator for state tracking
     this.emulator.write(data)
     this.recordPendingOutput({ kind: 'output', data })
@@ -497,6 +590,9 @@ export class Session {
 
     this._exitCode = code
     this._state = 'exited'
+    // Why resume:false — the child is reaped, so there is nothing to unblock;
+    // only the failsafe timer must not outlive the session.
+    this.releaseProducerPause({ resume: false })
     this.releaseHeldShellReadyBytes()
 
     if (this.killTimer) {

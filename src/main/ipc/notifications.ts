@@ -13,6 +13,7 @@ import thumpSoundPath from '../../../resources/notification-sounds/thump.mp3?ass
 import twoToneSoundPath from '../../../resources/notification-sounds/two-tone.mp3?asset'
 import type { Store } from '../persistence'
 import type {
+  NotificationDeliveryProbeResult,
   NotificationDispatchRequest,
   NotificationDispatchResult,
   NotificationDismissResult,
@@ -23,7 +24,10 @@ import type {
 import { getRepoIdFromWorktreeId } from '../../shared/worktree-id'
 import type { OrcaRuntimeService } from '../runtime/orca-runtime'
 import { buildNotificationOptions } from './notification-options'
+import { readNotificationAuthorizationStatus } from './notification-authorization-status'
 import { parsePaneKey } from '../../shared/stable-pane-id'
+import { setTrayAttention } from '../tray/system-tray'
+import { isMainWindowVisible } from '../window/main-window-visibility'
 
 const NOTIFICATION_COOLDOWN_MS = 5000
 const MAX_RECENT_NOTIFICATION_KEYS = 50
@@ -94,6 +98,113 @@ function retainNotificationUntilRelease(
   }
 
   return release
+}
+
+const NOTIFICATION_PROBE_RESULT_TIMEOUT_MS = 3000
+const NOTIFICATION_PROBE_BANNER_CLOSE_DELAY_MS = 4000
+
+// Why: Electron has no API to read macOS UNUserNotificationCenter
+// authorization, so the freshest signal we have is what happened to the last
+// notification we scheduled. Session-scoped on purpose: OS-level permission
+// can change between runs, and a stale positive renders a false green card.
+let lastObservedDeliveryOutcome: 'delivered' | 'failed' | null = null
+let deliveryProbeInFlight: Promise<NotificationDeliveryProbeResult> | null = null
+// Why: firing one probe notification is what instantiates Electron's
+// presenter and pops the macOS permission dialog. Once per session is enough
+// while the authorization readout reports the decision as pending.
+let permissionDialogTriggeredThisSession = false
+
+/**
+ * Fallback signal for hosts without the native helper. Schedules a silent
+ * probe notification and reports whether macOS accepted it. 'failed' means
+ * the request was rejected (permission denied, or an unsigned build). On a
+ * fresh install the probe also instantiates Electron's notification
+ * presenter, which is what makes macOS pop the "Allow notifications?" dialog.
+ *
+ * Known ambiguity with no public API to resolve it (verified on macOS 26):
+ * while the dialog is unanswered — and when notifications are toggled off in
+ * System Settings after being authorized — macOS still accepts requests and
+ * silently swallows them, so 'delivered' can over-report. 'failed' fires for
+ * hard rejections (unsigned builds, dialog-level denial). The bundled
+ * notification-status helper exists precisely to avoid this ambiguity.
+ */
+function probeNotificationDelivery(): Promise<NotificationDeliveryProbeResult> {
+  if (deliveryProbeInFlight) {
+    return deliveryProbeInFlight
+  }
+  permissionDialogTriggeredThisSession = true
+
+  const probe = new Notification({
+    title: 'Orca notifications are on',
+    body: 'Orca will alert you when agents finish or terminals need attention.',
+    silent: true
+  })
+  activeNotifications.add(probe)
+
+  deliveryProbeInFlight = new Promise<NotificationDeliveryProbeResult>((resolve) => {
+    let settled = false
+    let timeoutTimer: ReturnType<typeof setTimeout> | null = null
+
+    function releaseProbe(): void {
+      activeNotifications.delete(probe)
+      probe.removeListener('show', onShow)
+      probe.removeListener('failed', onFailed)
+      probe.close()
+    }
+
+    function settle(state: 'delivered' | 'blocked'): void {
+      if (settled) {
+        return
+      }
+      settled = true
+      if (timeoutTimer) {
+        clearTimeout(timeoutTimer)
+        timeoutTimer = null
+      }
+      lastObservedDeliveryOutcome = state === 'delivered' ? 'delivered' : 'failed'
+      resolve({ state, authoritative: false })
+    }
+
+    function onShow(): void {
+      settle('delivered')
+      // Why: when delivery works the probe banner is visible, so it doubles
+      // as the user-facing confirmation — let it linger briefly instead of
+      // vanishing the instant it appears.
+      const closeTimer = setTimeout(releaseProbe, NOTIFICATION_PROBE_BANNER_CLOSE_DELAY_MS)
+      if (typeof closeTimer.unref === 'function') {
+        closeTimer.unref()
+      }
+    }
+
+    function onFailed(_event: unknown, _error?: string): void {
+      // Why: a rejected probe is an expected outcome (denied permission), not
+      // an anomaly — logging it would spam the console on every poll while
+      // the onboarding card waits for the user to allow notifications.
+      settle('blocked')
+      releaseProbe()
+    }
+
+    probe.once('show', onShow)
+    probe.once('failed', onFailed)
+    // Why: don't record a 'failed' outcome on timeout — a missing callback is
+    // ambiguous, while the 'failed' event is a definitive rejection.
+    timeoutTimer = setTimeout(() => {
+      if (!settled) {
+        settled = true
+        resolve({ state: 'blocked', authoritative: false })
+        releaseProbe()
+      }
+    }, NOTIFICATION_PROBE_RESULT_TIMEOUT_MS)
+    if (typeof timeoutTimer.unref === 'function') {
+      timeoutTimer.unref()
+    }
+
+    probe.show()
+  }).finally(() => {
+    deliveryProbeInFlight = null
+  })
+
+  return deliveryProbeInFlight
 }
 
 function getMacNotificationSettingsUrl(): string {
@@ -203,10 +314,15 @@ function pruneRecentNotifications(recentNotifications: Map<string, number>, now:
 
 export function registerNotificationHandlers(store: Store, runtime?: OrcaRuntimeService): void {
   const recentNotifications = new Map<string, number>()
+  // Why: handler registration marks a fresh session — permission evidence
+  // from a previous registration must not leak into the new one.
+  lastObservedDeliveryOutcome = null
+  deliveryProbeInFlight = null
+  permissionDialogTriggeredThisSession = false
 
   ipcMain.removeHandler('notifications:openSystemSettings')
   ipcMain.removeHandler('notifications:getPermissionStatus')
-  ipcMain.removeHandler('notifications:requestPermission')
+  ipcMain.removeHandler('notifications:probeDelivery')
   ipcMain.handle('notifications:openSystemSettings', (): void => {
     openNotificationSystemSettings()
   })
@@ -225,10 +341,52 @@ export function registerNotificationHandlers(store: Store, runtime?: OrcaRuntime
   })
 
   ipcMain.handle('notifications:getPermissionStatus', getPermissionStatus)
-  ipcMain.handle('notifications:requestPermission', (): NotificationPermissionStatusResult => {
-    triggerStartupNotificationRegistration(store)
-    return getPermissionStatus()
-  })
+  ipcMain.handle(
+    'notifications:probeDelivery',
+    async (_event, args?: { force?: boolean }): Promise<NotificationDeliveryProbeResult> => {
+      // Why: macOS-only. Windows/Linux have no equivalent first-use permission
+      // dialog, so the onboarding card that consumes this never renders there.
+      if (process.platform !== 'darwin' || !Notification.isSupported()) {
+        return { state: 'unsupported', authoritative: false }
+      }
+      // Why: probes (and the native helper's first-launch path) surface the
+      // macOS permission dialog — mark the one-shot startup registration as
+      // done so it can't fire a second prompt later.
+      if (store.getUI().notificationPermissionRequested !== true) {
+        store.updateUI({ notificationPermissionRequested: true })
+      }
+      // Preferred source: the bundled helper reads the real
+      // UNUserNotificationCenter authorization. Silent, so polling with it
+      // tracks System Settings changes live without flashing banners.
+      const authorization = await readNotificationAuthorizationStatus()
+      if (authorization === 'authorized') {
+        lastObservedDeliveryOutcome = 'delivered'
+        return { state: 'delivered', authoritative: true }
+      }
+      if (authorization === 'denied') {
+        lastObservedDeliveryOutcome = 'failed'
+        return { state: 'blocked', authoritative: true }
+      }
+      if (authorization === 'not-determined') {
+        // Why: the dialog only appears once something asks — fire a single
+        // probe per session to trigger it, then report the pending decision.
+        if (!permissionDialogTriggeredThisSession) {
+          void probeNotificationDelivery()
+        }
+        return { state: 'awaiting-decision', authoritative: true }
+      }
+      // Helper unavailable ('unknown' status is also unusable evidence):
+      // fall back to scheduling-based probes with session caching, which
+      // avoids repeated probe banners when delivery works.
+      if (!args?.force && lastObservedDeliveryOutcome !== null) {
+        return {
+          state: lastObservedDeliveryOutcome === 'delivered' ? 'delivered' : 'blocked',
+          authoritative: false
+        }
+      }
+      return probeNotificationDelivery()
+    }
+  )
 
   ipcMain.removeHandler('notifications:dismiss')
   ipcMain.handle('notifications:dismiss', (_event, ids: string[]): NotificationDismissResult => {
@@ -255,6 +413,22 @@ export function registerNotificationHandlers(store: Store, runtime?: OrcaRuntime
       _event,
       args: NotificationDispatchRequest
     ): NotificationDispatchResult | Promise<NotificationDispatchResult> => {
+      // Why: a terminal bell or agent completion that arrives while the window
+      // is minimized/hidden lights the tray attention dot — a passive cue that
+      // clears on window show/restore (see index.ts). Placed before the
+      // focus-suppression, cooldown, and enabled gates below so those do not
+      // hold back the dot. It rides the notification dispatch, so it follows the
+      // renderer's per-source decision to notify: bells always reach here, while
+      // an agent completion is suppressed upstream when its notification is
+      // disabled. Tray exists only on Windows, so setTrayAttention no-ops
+      // elsewhere.
+      if (args.source === 'agent-task-complete' || args.source === 'terminal-bell') {
+        const activeWindow = BrowserWindow.getAllWindows().find((win) => !win.isDestroyed()) ?? null
+        if (!isMainWindowVisible(activeWindow)) {
+          setTrayAttention(true)
+        }
+      }
+
       const settings = store.getSettings().notifications
       if (!settings.enabled) {
         return { delivered: false, reason: 'disabled' }
@@ -317,116 +491,140 @@ export function registerNotificationHandlers(store: Store, runtime?: OrcaRuntime
         return { delivered: false, reason: 'not-supported' }
       }
 
-      if (getEffectiveNotificationSoundId(settings) !== 'system') {
-        notificationOptions.silent = true
-      } else if (process.platform === 'darwin') {
-        // Why: macOS treats an unset notification sound as silent. When Orca is
-        // using the OS sound, ask Electron for the default notification sound.
-        notificationOptions.sound = 'default'
-      }
-      const notification = new Notification(notificationOptions)
-      if (args.notificationId) {
-        const previous = activeNotificationsById.get(args.notificationId)
-        if (previous) {
-          previous.notification.close()
-          previous.release()
+      function deliverNativeNotification():
+        | NotificationDispatchResult
+        | Promise<NotificationDispatchResult> {
+        if (getEffectiveNotificationSoundId(settings) !== 'system') {
+          notificationOptions.silent = true
+        } else if (process.platform === 'darwin') {
+          // Why: macOS treats an unset notification sound as silent. When Orca is
+          // using the OS sound, ask Electron for the default notification sound.
+          notificationOptions.sound = 'default'
         }
-      }
-
-      // Why: prevent GC from collecting the notification (and its click
-      // handler) while it's still visible in macOS Notification Center.
-      let clickHandler: (() => void) | null = null
-      let failedHandler: ((_event: unknown, error?: string) => void) | null = null
-      const entryForId: { notification: Notification; release: () => void } | null =
-        args.notificationId ? { notification, release: () => {} } : null
-      const release = retainNotificationUntilRelease(notification, () => {
-        if (clickHandler) {
-          notification.removeListener('click', clickHandler)
-          clickHandler = null
-        }
-        if (failedHandler) {
-          notification.removeListener('failed', failedHandler)
-          failedHandler = null
-        }
-        if (
-          args.notificationId &&
-          activeNotificationsById.get(args.notificationId) === entryForId
-        ) {
-          activeNotificationsById.delete(args.notificationId)
-        }
-      })
-      if (entryForId && args.notificationId) {
-        entryForId.release = release
-        activeNotificationsById.set(args.notificationId, entryForId)
-      }
-
-      failedHandler = (_event, error) => {
-        // Why: Electron 42's macOS UNNotification backend reports unsigned
-        // apps and native delivery errors here; release immediately instead
-        // of retaining a dead notification until the fallback timer.
-        logNativeNotificationFailure(args.source, error)
-        release()
-      }
-      notification.on('failed', failedHandler)
-
-      // Why: clicking a notification should bring Orca to the foreground and
-      // switch to the worktree/pane that triggered it. Worktree activation owns
-      // repo/sidebar state; the optional focusTerminal follow-up uses the stable
-      // pane leaf id so split-pane notifications land on the exact pane.
-      // Why: worktreeId is formatted as "repoId::worktreePath".  If the
-      // separator is missing we cannot reliably extract a repoId, so skip
-      // the click-to-navigate binding — the notification still fires but
-      // clicking it will not attempt to switch to an unknown worktree.
-      if (args.worktreeId && args.worktreeId.includes('::')) {
-        const repoId = getRepoIdFromWorktreeId(args.worktreeId)
-        clickHandler = () => {
-          release()
-          const win = BrowserWindow.getAllWindows().find((w) => !w.isDestroyed())
-          if (!win) {
-            return
-          }
-          if (process.platform === 'darwin') {
-            app.focus({ steal: true })
-          }
-          if (win.isMinimized()) {
-            win.restore()
-          }
-          win.focus()
-          win.webContents.send('ui:activateWorktree', {
-            repoId,
-            worktreeId: args.worktreeId
-          })
-          const paneTarget = args.paneKey ? parsePaneKey(args.paneKey) : null
-          if (paneTarget) {
-            win.webContents.send('ui:focusTerminal', {
-              tabId: paneTarget.tabId,
-              worktreeId: args.worktreeId,
-              leafId: paneTarget.leafId,
-              ackPaneKeyOnSuccess: args.paneKey,
-              flashFocusedPane: true,
-              scrollToBottomIfOutputSinceLastView: true
-            })
+        const notification = new Notification(notificationOptions)
+        if (args.notificationId) {
+          const previous = activeNotificationsById.get(args.notificationId)
+          if (previous) {
+            previous.notification.close()
+            previous.release()
           }
         }
-        notification.on('click', clickHandler)
-      }
 
-      const displayConfirmation = args.requireDisplayConfirmation
-        ? waitForNotificationDisplay(notification)
-        : null
-      notification.show()
-
-      if (displayConfirmation) {
-        return displayConfirmation.then((displayed) => {
-          if (!displayed) {
-            release()
-            return { delivered: false, reason: 'not-displayed' }
+        // Why: prevent GC from collecting the notification (and its click
+        // handler) while it's still visible in macOS Notification Center.
+        let clickHandler: (() => void) | null = null
+        let failedHandler: ((_event: unknown, error?: string) => void) | null = null
+        const entryForId: { notification: Notification; release: () => void } | null =
+          args.notificationId ? { notification, release: () => {} } : null
+        const release = retainNotificationUntilRelease(notification, () => {
+          if (clickHandler) {
+            notification.removeListener('click', clickHandler)
+            clickHandler = null
           }
-          return { delivered: true }
+          if (failedHandler) {
+            notification.removeListener('failed', failedHandler)
+            failedHandler = null
+          }
+          if (
+            args.notificationId &&
+            activeNotificationsById.get(args.notificationId) === entryForId
+          ) {
+            activeNotificationsById.delete(args.notificationId)
+          }
         })
+        if (entryForId && args.notificationId) {
+          entryForId.release = release
+          activeNotificationsById.set(args.notificationId, entryForId)
+        }
+
+        failedHandler = (_event, error) => {
+          // Why: Electron 42's macOS UNNotification backend reports unsigned
+          // apps and native delivery errors here; release immediately instead
+          // of retaining a dead notification until the fallback timer.
+          logNativeNotificationFailure(args.source, error)
+          // A definitive rejection — feeds the permission card's evidence.
+          lastObservedDeliveryOutcome = 'failed'
+          release()
+        }
+        notification.on('failed', failedHandler)
+
+        // Why: clicking a notification should bring Orca to the foreground and
+        // switch to the worktree/pane that triggered it. Worktree activation owns
+        // repo/sidebar state; the optional focusTerminal follow-up uses the stable
+        // pane leaf id so split-pane notifications land on the exact pane.
+        // Why: worktreeId is formatted as "repoId::worktreePath".  If the
+        // separator is missing we cannot reliably extract a repoId, so skip
+        // the click-to-navigate binding — the notification still fires but
+        // clicking it will not attempt to switch to an unknown worktree.
+        if (args.worktreeId && args.worktreeId.includes('::')) {
+          const repoId = getRepoIdFromWorktreeId(args.worktreeId)
+          clickHandler = () => {
+            release()
+            const win = BrowserWindow.getAllWindows().find((w) => !w.isDestroyed())
+            if (!win) {
+              return
+            }
+            if (process.platform === 'darwin') {
+              app.focus({ steal: true })
+            }
+            if (win.isMinimized()) {
+              win.restore()
+            }
+            win.focus()
+            win.webContents.send('ui:activateWorktree', {
+              repoId,
+              worktreeId: args.worktreeId
+            })
+            const paneTarget = args.paneKey ? parsePaneKey(args.paneKey) : null
+            if (paneTarget) {
+              win.webContents.send('ui:focusTerminal', {
+                tabId: paneTarget.tabId,
+                worktreeId: args.worktreeId,
+                leafId: paneTarget.leafId,
+                ackPaneKeyOnSuccess: args.paneKey,
+                flashFocusedPane: true,
+                scrollToBottomIfOutputSinceLastView: true
+              })
+            }
+          }
+          notification.on('click', clickHandler)
+        }
+
+        const displayConfirmation = args.requireDisplayConfirmation
+          ? waitForNotificationDisplay(notification)
+          : null
+        notification.show()
+
+        if (displayConfirmation) {
+          return displayConfirmation.then((displayed) => {
+            if (!displayed) {
+              release()
+              return { delivered: false, reason: 'not-displayed' }
+            }
+            lastObservedDeliveryOutcome = 'delivered'
+            return { delivered: true }
+          })
+        }
+
+        return { delivered: true }
       }
 
-      return { delivered: true }
+      if (process.platform !== 'darwin') {
+        return deliverNativeNotification()
+      }
+      // Why: macOS silently swallows accepted notifications while permission
+      // is denied or the permission dialog is unanswered (verified on macOS
+      // 26). Skip the doomed native notification and tell the caller, so the
+      // renderer can surface an in-app fallback pointing at System Settings.
+      // The mobile dispatch above is unaffected — paired devices have their
+      // own notification channel.
+      return readNotificationAuthorizationStatus().then((authorization) => {
+        if (authorization === 'denied' || authorization === 'not-determined') {
+          lastObservedDeliveryOutcome = 'failed'
+          return { delivered: false, reason: 'blocked-by-system' }
+        }
+        return deliverNativeNotification()
+      })
     }
   )
 
@@ -564,6 +762,7 @@ export function triggerStartupNotificationRegistration(store: Store): void {
     // Why: Electron 42 requires code-signed macOS apps for UNNotification
     // delivery. Unsigned builds fail here instead of producing the permission UI.
     logNativeNotificationFailure('startup registration', error)
+    lastObservedDeliveryOutcome = 'failed'
     cleanup()
   }
 

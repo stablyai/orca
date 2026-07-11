@@ -13,9 +13,13 @@
     "../src/main/codex/codex-config-mirror.ts",
     "../src/main/codex/codex-config-path-reference-rewrite.ts",
     "../src/main/codex/codex-home-paths.ts",
+    "../src/main/codex/codex-hook-identity.ts",
+    "../src/main/codex/codex-wsl-hook-install-plan.ts",
+    "../src/main/codex/config-settings-promotion.ts",
     "../src/main/codex/config-toml-line-scan.ts",
     "../src/main/codex/config-toml-trust.ts",
     "../src/main/codex/hook-service.ts",
+    "../src/main/codex/hook-trust-promotion.ts",
     "../src/main/codex-accounts/fs-utils.ts",
     "../src/main/command-code/command-code-managed-script.ts",
     "../src/main/command-code/hook-service.ts",
@@ -36,8 +40,9 @@
   ],
   "compilerOptions": {
     "composite": true,
-    "module": "CommonJS",
-    "moduleResolution": "Node",
+    // TypeScript 7 removed node10 resolution; Node16 preserves CommonJS emit for this package.
+    "module": "Node16",
+    "moduleResolution": "Node16",
     "rootDir": "../src",
     "outDir": "../out"
   }

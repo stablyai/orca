@@ -5,6 +5,8 @@
 
 import { isTextBlock, type NativeChatMessage } from '../../../../shared/native-chat-types'
 import { stripImagePromptMarker } from './native-chat-image-transcript-markers'
+import { setBoundedScopeCacheEntry } from './native-chat-composer-scope-cache'
+import type { NativeChatLaunchPrompt } from '@/lib/native-chat-launch-prompt'
 
 /** An optimistic, not-yet-confirmed composer send. */
 export type NativeChatPendingSend = {
@@ -43,7 +45,10 @@ export function writePendingSendCache(
   if (next.length === 0) {
     pendingSendCache.delete(key)
   } else {
-    pendingSendCache.set(key, next)
+    // Why: the empty-drain path above clears keys on the normal confirm flow,
+    // but a pane closed with an unconfirmed send (agent crash / early close)
+    // would strand its entry forever. LRU-bound the key count too.
+    setBoundedScopeCacheEntry(pendingSendCache, key, next)
   }
   return [...next]
 }
@@ -152,6 +157,43 @@ export function isPendingMessageId(id: string): boolean {
   return id.startsWith('pending:')
 }
 
+// Why: the seeded prompt has a synthetic id that never matches the real turn's,
+// so dedup/prune match on normalized user-message text instead — this hides the
+// optimistic bubble once the transcript's own copy of the turn catches up.
+export function launchPromptAsMessage(
+  entry: NativeChatLaunchPrompt | null,
+  existingMessages: NativeChatMessage[] = []
+): NativeChatMessage | null {
+  if (!entry) {
+    return null
+  }
+  const represented = matchingUserMessageTexts(existingMessages)
+  if (represented.has(normalize(entry.text))) {
+    return null
+  }
+  return {
+    id: `launch-pending:${entry.tabId}`,
+    role: 'user' as const,
+    blocks: entry.text.trim().length > 0 ? [{ type: 'text' as const, text: entry.text }] : [],
+    timestamp: entry.createdAt,
+    source: 'scrape' as const
+  }
+}
+
+// Why: prune only once an assistant turn has landed after the matching user
+// text — keeping the optimistic bubble through the user-only phase avoids a
+// first-turn flash before the transcript's own copy of the turn catches up.
+export function shouldPruneLaunchPrompt(
+  entry: NativeChatLaunchPrompt,
+  messages: NativeChatMessage[]
+): boolean {
+  return advancedPastUserMessageTexts(messages).has(normalize(entry.text))
+}
+
+export function isLaunchPromptMessageId(id: string): boolean {
+  return id.startsWith('launch-pending:')
+}
+
 /** A locally-recorded slash command (e.g. `/clear`). Slash commands dispatch to
  *  the agent's TUI and are not chat turns, so we surface a small system line as
  *  feedback that the command ran rather than echoing a user bubble. */
@@ -195,7 +237,11 @@ export function appendCommandMarkerCache(
     ...(commandMarkerCache.get(key) ?? []),
     { id: `${sentAt}-${commandMarkerCounter}`, command, sentAt }
   ].slice(-COMMAND_MARKER_LIMIT)
-  commandMarkerCache.set(key, next)
+  // Why: the per-key array is capped at 8, but the KEY (paneKey\0agent\0sessionId,
+  // sessionId changes on every /clear) is ephemeral and was never evicted, so it
+  // grew one entry per (pane, session) for the renderer's whole life. LRU-bound
+  // the key count (mirrors the #7566 draft/attachment caches in this folder).
+  setBoundedScopeCacheEntry(commandMarkerCache, key, next)
   return [...next]
 }
 

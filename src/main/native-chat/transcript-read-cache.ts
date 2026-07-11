@@ -21,6 +21,9 @@ type CachedTranscript = {
   result: ReadTranscriptResult
   /** mtime of the resolved file when cached; a newer mtime invalidates it. */
   mtimeMs: number
+  /** On-disk byte size of the resolved file — a cheap, monotonic proxy for this
+   *  entry's parsed memory footprint, used to bound the cache by total bytes. */
+  bytes: number
 }
 
 const cache = new Map<string, CachedTranscript>()
@@ -28,19 +31,36 @@ const cache = new Map<string, CachedTranscript>()
 // Why: cap the cache so a long-lived process browsing many sessions can't grow
 // it unbounded. Map preserves insertion order, so evicting the first key drops
 // the oldest entry (a simple LRU once re-inserts bump recency; see setCached).
-// Entry-count cap is fine for v1; a byte-aware cap is the follow-up if profiling
-// shows RSS pressure now that one process serves many remote clients.
 const MAX_CACHE_ENTRIES = 50
+// Why: a heavy Claude/Codex coding session's JSONL is routinely tens of MB (tool
+// results embed whole file contents, command output, and diffs), and each cached
+// entry is the full unwindowed parse. The count cap alone let 50 such entries
+// retain multiple GB in the one process that now serves desktop + every paired
+// web/mobile client. Bound total cached file bytes too; we always keep the most-
+// recent entry (see setCached) so an active transcript is never re-parsed on
+// every read, which caps the regression to extra re-parses only past this budget.
+const MAX_CACHE_BYTES = 128 * 1024 * 1024
+// Overridable only from tests so the byte-eviction path can be exercised without
+// writing hundreds of MB of fixtures; production always uses MAX_CACHE_BYTES.
+let maxCacheBytes = MAX_CACHE_BYTES
 
 function setCached(key: string, value: CachedTranscript): void {
   // Re-insert moves the key to the most-recent position for LRU eviction.
   cache.delete(key)
   cache.set(key, value)
-  while (cache.size > MAX_CACHE_ENTRIES) {
+  let totalBytes = 0
+  for (const entry of cache.values()) {
+    totalBytes += entry.bytes
+  }
+  // Evict oldest until within BOTH caps, but never drop the most-recent entry
+  // (cache.size > 1): a single active transcript larger than the whole budget
+  // must stay cached or every read would re-parse the full file.
+  while (cache.size > 1 && (cache.size > MAX_CACHE_ENTRIES || totalBytes > maxCacheBytes)) {
     const oldest = cache.keys().next().value
     if (oldest === undefined) {
       break
     }
+    totalBytes -= cache.get(oldest)?.bytes ?? 0
     cache.delete(oldest)
   }
 }
@@ -49,11 +69,12 @@ function cacheKey(agent: AgentType, filePath: string): string {
   return `${agent}:${filePath}`
 }
 
-async function fileMtimeMs(filePath: string): Promise<number> {
+async function fileStat(filePath: string): Promise<{ mtimeMs: number; bytes: number }> {
   try {
-    return (await stat(filePath)).mtimeMs
+    const stats = await stat(filePath)
+    return { mtimeMs: stats.mtimeMs, bytes: stats.size }
   } catch {
-    return Number.NaN
+    return { mtimeMs: Number.NaN, bytes: 0 }
   }
 }
 
@@ -74,7 +95,7 @@ export async function readNativeChatTranscriptCached(
   }
 
   const key = cacheKey(agent, filePath)
-  const mtimeMs = await fileMtimeMs(filePath)
+  const { mtimeMs, bytes } = await fileStat(filePath)
   const cached = cache.get(key)
   if (cached && Number.isFinite(mtimeMs) && cached.mtimeMs === mtimeMs) {
     // Bump recency so a frequently-read session survives eviction.
@@ -84,7 +105,7 @@ export async function readNativeChatTranscriptCached(
 
   const result = await readNativeChatTranscript(agent, sessionId, { filePath })
   if (Number.isFinite(mtimeMs)) {
-    setCached(key, { result, mtimeMs })
+    setCached(key, { result, mtimeMs, bytes })
   }
   return result
 }
@@ -92,4 +113,9 @@ export async function readNativeChatTranscriptCached(
 /** Test-only: drop the transcript parse cache between runs. */
 export function clearNativeChatTranscriptCache(): void {
   cache.clear()
+}
+
+/** Test-only: override the byte budget (pass no arg to restore the default). */
+export function setNativeChatTranscriptCacheMaxBytesForTests(bytes?: number): void {
+  maxCacheBytes = bytes ?? MAX_CACHE_BYTES
 }

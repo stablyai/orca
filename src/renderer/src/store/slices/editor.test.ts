@@ -17,6 +17,7 @@ import type {
   GitStatusEntry,
   Tab
 } from '../../../../shared/types'
+import { isSyncPushStageError } from '@/lib/source-control-remote-error'
 
 const { toastErrorMock } = vi.hoisted(() => ({
   toastErrorMock: vi.fn()
@@ -3498,6 +3499,20 @@ describe('createEditorSlice remote branch actions', () => {
     expect(store.getState().isRemoteOperationActive).toBe(false)
   })
 
+  it('maps pre-push hook failures to hook-specific guidance instead of remote access', async () => {
+    const store = createEditorStore()
+    const pushError = new Error(
+      "git push failed: Command failed: git push origin main\nerror: failed to push some refs to 'origin'\nhusky - pre-push hook exited with code 1\neslint found 2 errors"
+    )
+    gitPushMock.mockRejectedValueOnce(pushError)
+
+    await expect(store.getState().pushBranch('wt-1', '/repo', false)).rejects.toThrow(
+      pushError.message
+    )
+
+    expect(toastErrorMock).toHaveBeenCalledWith('Push blocked — lint failed during push.')
+  })
+
   it('uses a fallback message for generic push errors', async () => {
     const store = createEditorStore()
     const pushError = new Error('network timeout')
@@ -3770,6 +3785,52 @@ describe('createEditorSlice remote branch actions', () => {
     expect(toastErrorMock).toHaveBeenCalledWith(
       'Sync failed — remote moved while syncing. Try again.'
     )
+  })
+
+  it('marks syncBranch inner push hook failures as sync push-stage failures', async () => {
+    const store = createEditorStore()
+    const pushError = new Error(
+      "git push failed: Command failed: git push origin feature\nerror: failed to push some refs to 'origin'\nhusky - pre-push hook exited with code 1"
+    )
+    gitPushMock.mockRejectedValueOnce(pushError)
+
+    let thrown: unknown
+    try {
+      await store.getState().syncBranch('wt-1', '/repo')
+    } catch (error) {
+      thrown = error
+    }
+
+    expect(thrown).toBe(pushError)
+    expect(isSyncPushStageError(thrown)).toBe(true)
+    expect(toastErrorMock).toHaveBeenCalledTimes(1)
+    expect(toastErrorMock).toHaveBeenCalledWith('Sync blocked — pre-push hook failed.')
+  })
+
+  it('does not classify syncBranch fetch-stage hook-looking failures as push blocked', async () => {
+    const store = createEditorStore()
+    gitFetchMock.mockRejectedValueOnce(
+      new Error('fetch failed before push\npre-push hook docs mention eslint')
+    )
+
+    await expect(store.getState().syncBranch('wt-1', '/repo')).rejects.toThrow()
+
+    expect(toastErrorMock).toHaveBeenCalledTimes(1)
+    expect(toastErrorMock).toHaveBeenCalledWith('Sync failed. Check your connection and try again.')
+    expect(gitPushMock).not.toHaveBeenCalled()
+  })
+
+  it('does not classify syncBranch upstream-status hook-looking failures as push blocked', async () => {
+    const store = createEditorStore()
+    gitUpstreamStatusMock.mockRejectedValueOnce(
+      new Error('upstream status failed before push\npre-push hook docs mention eslint')
+    )
+
+    await expect(store.getState().syncBranch('wt-1', '/repo')).rejects.toThrow()
+
+    expect(toastErrorMock).toHaveBeenCalledTimes(1)
+    expect(toastErrorMock).toHaveBeenCalledWith('Sync failed. Check your connection and try again.')
+    expect(gitPushMock).not.toHaveBeenCalled()
   })
 
   it('surfaces the pull-blocked toast when syncBranch pull stage fails', async () => {
@@ -4485,5 +4546,128 @@ describe('closeFile host mirroring', () => {
       '/other/b.ts'
     )
     expect(store.getState().openFiles).toHaveLength(0)
+  })
+})
+
+describe('read-only editor tabs (AI Vault View Log)', () => {
+  const LOG_PATH = '/home/user/.claude/sessions/log.jsonl'
+
+  const openReadOnlyLog = (store: StoreApi<AppState>): void =>
+    store.getState().openFile(
+      {
+        filePath: LOG_PATH,
+        relativePath: LOG_PATH,
+        worktreeId: 'wt-1',
+        language: 'jsonl',
+        mode: 'edit',
+        readOnly: true,
+        liveTail: true,
+        runtimeEnvironmentId: null
+      },
+      { preview: false, forceContentReload: true, suppressActiveRuntimeFallback: true }
+    )
+
+  it('creates a permanent read-only edit tab', () => {
+    const store = createEditorStore()
+    openReadOnlyLog(store)
+
+    expect(store.getState().openFiles[0]).toEqual(
+      expect.objectContaining({
+        filePath: LOG_PATH,
+        mode: 'edit',
+        readOnly: true,
+        liveTail: true,
+        isPreview: undefined,
+        runtimeEnvironmentId: null
+      })
+    )
+  })
+
+  it('bumps the reload nonce on repeated View Log of a clean read-only tab', () => {
+    const store = createEditorStore()
+    openReadOnlyLog(store)
+    expect(store.getState().openFiles[0]?.fileContentReloadNonce).toBeUndefined()
+
+    openReadOnlyLog(store)
+    expect(store.getState().openFiles[0]?.fileContentReloadNonce).toBe(1)
+  })
+
+  it('keeps read-only sticky when the same path is opened writable (no silent upgrade)', () => {
+    const store = createEditorStore()
+    openReadOnlyLog(store)
+
+    store.getState().openFile({
+      filePath: LOG_PATH,
+      relativePath: LOG_PATH,
+      worktreeId: 'wt-1',
+      language: 'jsonl',
+      mode: 'edit',
+      runtimeEnvironmentId: null
+    })
+
+    expect(store.getState().openFiles).toHaveLength(1)
+    expect(store.getState().openFiles[0]?.readOnly).toBe(true)
+  })
+
+  it('never flips an existing writable tab to read-only on View Log', () => {
+    const store = createEditorStore()
+    store.getState().openFile({
+      filePath: LOG_PATH,
+      relativePath: LOG_PATH,
+      worktreeId: 'wt-1',
+      language: 'jsonl',
+      mode: 'edit',
+      runtimeEnvironmentId: null
+    })
+
+    openReadOnlyLog(store)
+
+    expect(store.getState().openFiles).toHaveLength(1)
+    expect(store.getState().openFiles[0]?.readOnly).toBeUndefined()
+  })
+
+  it('markFileDirty and setEditorDraft hard no-op for read-only tabs', () => {
+    const store = createEditorStore()
+    openReadOnlyLog(store)
+
+    store.getState().markFileDirty(LOG_PATH, true)
+    store.getState().setEditorDraft(LOG_PATH, 'stray edit')
+
+    expect(store.getState().openFiles[0]?.isDirty).toBe(false)
+    expect(store.getState().editorDrafts[LOG_PATH]).toBeUndefined()
+  })
+
+  it('hydrates a persisted read-only tab clean and ignores any persisted dirty draft', () => {
+    const store = createEditorStore()
+    store.setState({
+      worktreesByRepo: { 'repo-1': [{ id: 'wt-1' }] },
+      folderWorkspaces: []
+    } as never)
+
+    store.getState().hydrateEditorSession({
+      openFilesByWorktree: {
+        'wt-1': [
+          {
+            filePath: LOG_PATH,
+            relativePath: LOG_PATH,
+            worktreeId: 'wt-1',
+            language: 'jsonl',
+            readOnly: true,
+            liveTail: true,
+            // Why: a corrupt/legacy session could carry a draft; hydrate must
+            // hard-strip it so the restored log can never come back writable.
+            dirtyDraftContent: 'should be ignored',
+            lastKnownDiskSignature: 'sig'
+          }
+        ]
+      }
+    } as never)
+
+    const restored = store.getState().openFiles.find((f) => f.filePath === LOG_PATH)
+    expect(restored).toEqual(
+      expect.objectContaining({ readOnly: true, liveTail: true, isDirty: false, mode: 'edit' })
+    )
+    expect(restored?.pendingDiskBaselineVerification).toBeUndefined()
+    expect(store.getState().editorDrafts[LOG_PATH]).toBeUndefined()
   })
 })
