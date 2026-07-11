@@ -1,9 +1,9 @@
 // Why: a half-open tunnel (devtunnel/NAT drop) never delivers a ws `close`,
 // so edge-triggered reconnect logic on the client side never fires while the
 // server has long since reaped its end (#7718/#7489). This monitor gives
-// client sockets a level-based liveness check: ping on a cadence and declare
-// the socket dead when no inbound traffic (frames, pings, or pongs) arrives
-// within the window, so the existing close/reconnect path can run.
+// client sockets a level-based liveness check: send a probe after inbound
+// silence, then declare the socket dead only if that probe gets a full
+// unanswered window, so the existing close/reconnect path can run.
 
 // Why: pings ride the RFC 6455 control-frame layer, which every supported
 // server (and the `ws` package it embeds) answers automatically — this stays
@@ -23,6 +23,15 @@ export type RemoteRuntimeSocketLivenessMonitor = {
   stop: () => void
 }
 
+export function isRemoteRuntimeLivenessTickDelayed(args: {
+  now: number
+  lastTickAt: number
+  intervalMs: number
+}): boolean {
+  const elapsed = args.now - args.lastTickAt
+  return elapsed < 0 || elapsed >= args.intervalMs * 2
+}
+
 export function startRemoteRuntimeSocketLiveness(args: {
   ping: () => void
   onDead: () => void
@@ -34,24 +43,45 @@ export function startRemoteRuntimeSocketLiveness(args: {
   const livenessTimeoutMs =
     args.options?.livenessTimeoutMs ?? REMOTE_RUNTIME_SOCKET_LIVENESS_TIMEOUT_MS
   let lastActivityAt = now()
+  let lastTickAt = lastActivityAt
+  let probeSentAt: number | null = null
   let stopped = false
 
-  const timer = setInterval(() => {
+  const runTick = (): void => {
     if (stopped) {
       return
     }
-    if (now() - lastActivityAt > livenessTimeoutMs) {
+    const current = now()
+    if (
+      isRemoteRuntimeLivenessTickDelayed({
+        now: current,
+        lastTickAt,
+        intervalMs: pingIntervalMs
+      })
+    ) {
+      lastTickAt = current
+      lastActivityAt = current
+      probeSentAt = null
+      return
+    }
+    lastTickAt = current
+    if (probeSentAt !== null && current - probeSentAt >= livenessTimeoutMs) {
       stop()
       args.onDead()
       return
     }
-    try {
-      args.ping()
-    } catch {
-      // Why: ping() can throw while a socket is mid-teardown; the liveness
-      // window (or the close handler) settles the socket's fate either way.
+    if (probeSentAt === null && current - lastActivityAt >= livenessTimeoutMs) {
+      try {
+        args.ping()
+        probeSentAt = current
+      } catch {
+        // Why: ping() can throw while a socket is mid-teardown; the close path
+        // or the unanswered probe window decides the socket's fate.
+      }
     }
-  }, pingIntervalMs)
+  }
+
+  const timer = setInterval(runTick, pingIntervalMs)
   // Why: mobile typechecks shared code with DOM timer types where unref is absent.
   const unrefable = timer as unknown as { unref?: () => void }
   if (typeof unrefable.unref === 'function') {
@@ -69,6 +99,7 @@ export function startRemoteRuntimeSocketLiveness(args: {
   return {
     noteActivity: () => {
       lastActivityAt = now()
+      probeSentAt = null
     },
     stop
   }
