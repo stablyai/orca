@@ -1,4 +1,5 @@
 import type { AppState } from '@/store'
+import { joinPath } from '@/lib/path'
 import type { OpenFile } from '@/store/slices/editor'
 
 type EditorDraftState = Pick<AppState, 'editorDrafts'>
@@ -17,7 +18,12 @@ export function createEditorPanelDraftSelector(
           [
             activeFile.id,
             activeFile.markdownPreviewSourceFileId,
-            activeFile.conflictReview?.selectedFileId
+            activeFile.conflictReview?.selectedFileId,
+            ...(activeFile.mode === 'conflict-review' && !activeFile.conflictReview?.selectedFileId
+              ? (activeFile.conflictReview?.entries ?? []).map((entry) =>
+                  joinPath(activeFile.filePath, entry.path)
+                )
+              : [])
           ].filter((fileId): fileId is string => Boolean(fileId))
         )
       )

@@ -75,4 +75,35 @@ describe('createEditorPanelDraftSelector', () => {
     })
     expect(selectNoDrafts({ editorDrafts })).toEqual({})
   })
+
+  it('includes overview conflict drafts and ignores unrelated draft replacements', () => {
+    const conflictReview = makeFile('review', {
+      filePath: 'C:\\repo',
+      mode: 'conflict-review',
+      conflictReview: {
+        source: 'live-summary',
+        snapshotTimestamp: 1,
+        entries: [
+          { path: 'src/a.ts', conflictKind: 'both_modified' },
+          { path: 'src\\b.ts', conflictKind: 'both_modified' }
+        ]
+      }
+    })
+    const selectDrafts = createEditorPanelDraftSelector(conflictReview)
+    const editorDrafts = {
+      'C:\\repo\\src\\a.ts': 'draft a',
+      'C:\\repo\\src\\b.ts': '',
+      unrelated: 'other draft'
+    }
+
+    const selection = selectDrafts({ editorDrafts })
+    expect(selection).toEqual({
+      'C:\\repo\\src\\a.ts': 'draft a',
+      'C:\\repo\\src\\b.ts': ''
+    })
+
+    expect(
+      selectDrafts({ editorDrafts: { ...editorDrafts, unrelated: 'changed elsewhere' } })
+    ).toBe(selection)
+  })
 })
