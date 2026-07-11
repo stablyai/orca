@@ -67,6 +67,7 @@ import { homedir } from 'node:os'
 import { isAbsolute, join, resolve } from 'node:path'
 import { mkdir, readFile, readdir, rm, stat } from 'node:fs/promises'
 import { resolveWorktreeCreateBase } from '../worktree-create-base'
+import { persistWorktreeSortOrderIfChanged } from '../worktree-sort-order-persistence'
 import { resolveWorktreeAddBaseRef } from '../../shared/worktree-base-ref'
 import { OrchestrationDb } from './orchestration/db'
 import { formatMessagesForInjection } from './orchestration/formatter'
@@ -16284,15 +16285,14 @@ export class OrcaRuntimeService {
     if (!this.store) {
       throw new Error('runtime_unavailable')
     }
-    const now = Date.now()
-    let updated = 0
-    for (let i = 0; i < orderedIds.length; i++) {
-      this.store.setWorktreeMeta(orderedIds[i], { sortOrder: now - i * 1000 })
-      updated++
+    const result = persistWorktreeSortOrderIfChanged(this.store, orderedIds)
+    if (result.updated === 0) {
+      // Why: refreshing unchanged timestamps would feed Smart sort back into this RPC.
+      return result
     }
     this.invalidateResolvedWorktreeCache()
     this.notifyReposChanged()
-    return { updated }
+    return result
   }
 
   async resolveManagedPrBase(args: {

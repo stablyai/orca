@@ -4,6 +4,7 @@ import { ipcMain } from 'electron'
 import { readFile, stat } from 'node:fs/promises'
 import { randomUUID } from 'node:crypto'
 import type { Store } from '../persistence'
+import { persistWorktreeSortOrderIfChanged } from '../worktree-sort-order-persistence'
 import { isFolderRepo } from '../../shared/repo-kind'
 import {
   isWorkspaceKey,
@@ -2066,13 +2067,7 @@ export function registerWorktreeHandlers(
     if (!Array.isArray(args?.orderedIds) || args.orderedIds.length === 0) {
       return
     }
-    const now = Date.now()
-    for (let i = 0; i < args.orderedIds.length; i++) {
-      // Descending timestamps so that the first item has the highest
-      // sortOrder value (most recent), making b.sortOrder - a.sortOrder
-      // a natural "first wins" comparator on cold start.
-      store.setWorktreeMeta(args.orderedIds[i], { sortOrder: now - i * 1000 })
-    }
+    persistWorktreeSortOrderIfChanged(store, args.orderedIds)
   })
 
   ipcMain.handle(
