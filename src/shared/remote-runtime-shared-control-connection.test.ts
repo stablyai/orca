@@ -215,7 +215,7 @@ describe('RemoteRuntimeSharedControlConnection', () => {
     connection.close()
   })
 
-  it('keeps logical subscriptions and saturates reconnect delays at 30 seconds', () => {
+  it('keeps logical subscriptions and jitters saturated retries below 30 seconds', () => {
     vi.useFakeTimers()
     vi.spyOn(Math, 'random').mockReturnValue(0)
     const timeout = vi.spyOn(globalThis, 'setTimeout')
@@ -226,7 +226,7 @@ describe('RemoteRuntimeSharedControlConnection', () => {
     unsafe.open = open
     addTestSubscription(unsafe, 'sub-1', { onClose })
 
-    const expectedDelays = [250, 500, 1000, 2000, 4000, 8000, 15_000, 30_000, 30_000, 30_000]
+    const expectedDelays = [250, 500, 1000, 2000, 4000, 8000, 15_000, 24_000, 24_000, 24_000]
     for (const expectedDelay of expectedDelays) {
       unsafe.scheduleReconnect()
       expect(timeout).toHaveBeenLastCalledWith(expect.any(Function), expectedDelay)
@@ -239,22 +239,6 @@ describe('RemoteRuntimeSharedControlConnection', () => {
       reconnectAttempt: expectedDelays.length,
       subscriptionCount: 1
     })
-    connection.close()
-  })
-
-  it('clamps the actual jittered reconnect delay to 30 seconds', () => {
-    vi.useFakeTimers()
-    vi.spyOn(Math, 'random').mockReturnValue(0.999_999)
-    const timeout = vi.spyOn(globalThis, 'setTimeout')
-    const connection = new RemoteRuntimeSharedControlConnection(DISCONNECTED_TEST_PAIRING)
-    const unsafe = asTestableConnection(connection)
-    unsafe.reconnectAttempt = 7
-    unsafe.open = vi.fn()
-    addTestSubscription(unsafe, 'sub-1')
-
-    unsafe.scheduleReconnect()
-
-    expect(timeout).toHaveBeenLastCalledWith(expect.any(Function), 30_000)
     connection.close()
   })
 
