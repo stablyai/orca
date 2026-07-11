@@ -9,7 +9,11 @@ import { app, ipcMain, net } from 'electron'
 const FEEDBACK_API_URL = 'https://www.onorca.dev/v1/feedback'
 const FEEDBACK_API_FALLBACK_URL = 'https://api.onorca.dev/v1/feedback'
 const FEEDBACK_REQUEST_TIMEOUT_MS = 10_000
+const FEEDBACK_ATTACHMENT_REQUEST_TIMEOUT_MS = 60_000
 const DIAGNOSTIC_BUNDLE_CONTENT_TYPE = 'application/x-ndjson'
+// Why: corporate filters can reject multipart with 403 while allowing the
+// small JSON report, so content-shaped failures should shed the attachment.
+const DIAGNOSTIC_BUNDLE_JSON_RETRY_STATUSES = new Set([400, 403, 408, 413, 415, 422])
 
 export type FeedbackSubmissionType = 'feedback' | 'crash'
 
@@ -39,13 +43,21 @@ type FeedbackSubmitBody = {
   diagnosticBundle?: FeedbackDiagnosticBundleAttachment
 }
 
+export type FeedbackRequestFailure = {
+  status: number | null
+  error: string
+}
+
 export type FeedbackSubmitResult =
-  | { ok: true }
-  | { ok: false; status: number | null; error: string }
+  | { ok: true; diagnosticBundleFailure?: FeedbackRequestFailure }
+  | ({ ok: false } & FeedbackRequestFailure & {
+        diagnosticBundleFailure?: FeedbackRequestFailure
+      })
 
 type InternalFeedbackSubmitArgs = FeedbackSubmitArgs & {
   submissionType?: FeedbackSubmissionType
   diagnosticBundle?: FeedbackDiagnosticBundleAttachment
+  feedbackWithoutDiagnosticBundle?: string
 }
 
 // Why: the Slack notification and any follow-up investigation need to know
@@ -74,11 +86,15 @@ function buildSubmitBody(args: InternalFeedbackSubmitArgs): FeedbackSubmitBody {
   }
 }
 
-async function postFeedback(url: string, body: FeedbackSubmitBody): Promise<Response> {
+async function postFeedback(
+  url: string,
+  body: FeedbackSubmitBody,
+  timeoutMs = FEEDBACK_REQUEST_TIMEOUT_MS
+): Promise<Response> {
   const controller = new AbortController()
   // Why: a silent feedback endpoint should not leave IPC or crash-report
   // submission flows pending forever.
-  const timeout = setTimeout(() => controller.abort(), FEEDBACK_REQUEST_TIMEOUT_MS)
+  const timeout = setTimeout(() => controller.abort(), timeoutMs)
   try {
     const init: RequestInit = {
       method: 'POST',
@@ -86,6 +102,13 @@ async function postFeedback(url: string, body: FeedbackSubmitBody): Promise<Resp
       signal: controller.signal
     }
     return await net.fetch(url, init)
+  } catch (error) {
+    // Why: Electron and Node use different AbortError messages. Normalize our
+    // client deadline so support logs explain which request budget expired.
+    if (controller.signal.aborted) {
+      throw new Error(`request timed out after ${timeoutMs / 1000} seconds`)
+    }
+    throw error
   } finally {
     clearTimeout(timeout)
   }
@@ -140,6 +163,14 @@ function messageFromError(error: unknown): string {
   return error instanceof Error ? error.message : String(error)
 }
 
+function responseFailure(response: Response): FeedbackRequestFailure {
+  return { status: response.status, error: `status ${response.status}` }
+}
+
+function errorFailure(error: unknown): FeedbackRequestFailure {
+  return { status: null, error: messageFromError(error) }
+}
+
 async function submitFallbackFeedback(
   body: FeedbackSubmitBody,
   primaryError?: unknown
@@ -163,10 +194,82 @@ async function submitFallbackFeedback(
   }
 }
 
+function diagnosticRetryUrl(status: number): string | null {
+  if (DIAGNOSTIC_BUNDLE_JSON_RETRY_STATUSES.has(status)) {
+    return FEEDBACK_API_URL
+  }
+  if (status === 404 || status >= 500) {
+    return FEEDBACK_API_FALLBACK_URL
+  }
+  return null
+}
+
+async function submitFeedbackWithoutDiagnosticBundle(
+  url: string,
+  body: FeedbackSubmitBody,
+  diagnosticBundleFailure: FeedbackRequestFailure
+): Promise<FeedbackSubmitResult> {
+  try {
+    const response = await postFeedback(url, body)
+    if (response.ok) {
+      return { ok: true, diagnosticBundleFailure }
+    }
+    return { ok: false, ...responseFailure(response), diagnosticBundleFailure }
+  } catch (error) {
+    return { ok: false, ...errorFailure(error), diagnosticBundleFailure }
+  }
+}
+
+async function submitFeedbackWithDiagnosticBundle(
+  body: FeedbackSubmitBody,
+  bodyWithoutDiagnosticBundle: FeedbackSubmitBody | null
+): Promise<FeedbackSubmitResult> {
+  try {
+    // Why: diagnostic bundles can approach 4 MiB and need more upload time than
+    // the small JSON report-only path, especially on constrained connections.
+    const response = await postFeedback(
+      FEEDBACK_API_URL,
+      body,
+      FEEDBACK_ATTACHMENT_REQUEST_TIMEOUT_MS
+    )
+    if (response.ok) {
+      return { ok: true }
+    }
+    const failure = responseFailure(response)
+    if (bodyWithoutDiagnosticBundle) {
+      const retryUrl = diagnosticRetryUrl(response.status)
+      if (retryUrl) {
+        return submitFeedbackWithoutDiagnosticBundle(retryUrl, bodyWithoutDiagnosticBundle, failure)
+      }
+    }
+    return { ok: false, ...failure }
+  } catch (error) {
+    const failure = errorFailure(error)
+    return bodyWithoutDiagnosticBundle
+      ? submitFeedbackWithoutDiagnosticBundle(
+          FEEDBACK_API_FALLBACK_URL,
+          bodyWithoutDiagnosticBundle,
+          failure
+        )
+      : { ok: false, ...failure }
+  }
+}
+
 export async function submitFeedback(
   args: InternalFeedbackSubmitArgs
 ): Promise<FeedbackSubmitResult> {
   const body = buildSubmitBody(args)
+  if (body.diagnosticBundle) {
+    const bodyWithoutDiagnosticBundle =
+      args.feedbackWithoutDiagnosticBundle !== undefined
+        ? buildSubmitBody({
+            ...args,
+            feedback: args.feedbackWithoutDiagnosticBundle,
+            diagnosticBundle: undefined
+          })
+        : null
+    return submitFeedbackWithDiagnosticBundle(body, bodyWithoutDiagnosticBundle)
+  }
   try {
     const res = await postFeedback(FEEDBACK_API_URL, body)
     if (res.ok) {

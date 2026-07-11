@@ -112,6 +112,12 @@ export function setActiveSink(sink: TracerSink | null): void {
   activeSink = sink
 }
 
+/** Force records already handed to the tracer onto disk. Reserve this for
+ * crash boundaries where the process may not survive the normal batch window. */
+export function flushActiveSink(): void {
+  activeSink?.flush()
+}
+
 /** Get the current parent context, or `undefined` if we are at the top of
  *  the trace tree. Renderer-IPC entry points capture this, embed it in
  *  span-event attributes (so cross-process spans can be visually linked

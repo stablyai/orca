@@ -244,7 +244,8 @@ describe('registerCrashReportingHandlers', () => {
         content: diagnosticBundle().payload,
         bytes: 25,
         spanCount: 1
-      }
+      },
+      feedbackWithoutDiagnosticBundle: expect.stringContaining('Status: not uploaded')
     })
     expect(markSent).toHaveBeenCalledWith(pending.id)
   })
@@ -294,7 +295,8 @@ describe('registerCrashReportingHandlers', () => {
         content: diagnosticBundle().payload,
         bytes: 25,
         spanCount: 1
-      }
+      },
+      feedbackWithoutDiagnosticBundle: expect.stringContaining('Status: not uploaded')
     })
     expect(submitFeedbackMock).toHaveBeenCalledWith(
       expect.objectContaining({ feedback: expect.stringContaining('Status: attached') })
@@ -343,6 +345,52 @@ describe('registerCrashReportingHandlers', () => {
           bytes: 25,
           spanCount: 1
         }
+      })
+    )
+  })
+
+  it('marks the report sent when transport retries successfully without diagnostic logs', async () => {
+    const pending = report('pending', 'crash-degraded')
+    const sent = report('sent', pending.id)
+    const markSent = vi.fn(async () => sent)
+    submitFeedbackMock.mockResolvedValueOnce({
+      ok: true,
+      diagnosticBundleFailure: { status: 413, error: 'status 413' }
+    })
+    registerCrashReportingHandlers({
+      getById: vi.fn(async () => pending),
+      dismiss: vi.fn(),
+      markSent,
+      markDismissedSent: vi.fn(),
+      listRecent: vi.fn(async () => [pending]),
+      record: vi.fn(),
+      formatDiagnosticText: vi.fn()
+    } as never)
+
+    const result = await handlers.get('crashReports:submit')?.(null, {
+      reportId: pending.id,
+      notes: 'manual report',
+      submitAnonymously: true,
+      githubLogin: null,
+      githubEmail: null
+    })
+
+    expect(result).toEqual({
+      ok: true,
+      report: sent,
+      diagnosticBundle: {
+        status: 'not_uploaded',
+        reason: 'diagnostic log attachment failed: status 413',
+        bundleSubmissionId: 'bundleabcdefghijklmnop',
+        bytes: 25,
+        spanCount: 1
+      }
+    })
+    expect(markSent).toHaveBeenCalledWith(pending.id)
+    expect(submitFeedbackMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        feedback: expect.stringContaining('Status: attached'),
+        feedbackWithoutDiagnosticBundle: expect.stringContaining('Status: not uploaded')
       })
     )
   })
@@ -459,7 +507,8 @@ describe('registerCrashReportingHandlers', () => {
         content: diagnosticBundle().payload,
         bytes: 25,
         spanCount: 1
-      }
+      },
+      feedbackWithoutDiagnosticBundle: expect.stringContaining('Status: not uploaded')
     })
     expect(markDismissedSent).toHaveBeenCalledWith(dismissed.id)
   })
@@ -516,7 +565,14 @@ describe('registerCrashReportingHandlers', () => {
       ok: false,
       status: 500,
       error: 'status 500',
-      report: pending
+      report: pending,
+      diagnosticBundle: {
+        status: 'not_uploaded',
+        reason: 'diagnostic log attachment failed: status 500',
+        bundleSubmissionId: 'bundleabcdefghijklmnop',
+        bytes: 25,
+        spanCount: 1
+      }
     })
     expect(submitFeedbackMock).toHaveBeenCalledWith(
       expect.objectContaining({

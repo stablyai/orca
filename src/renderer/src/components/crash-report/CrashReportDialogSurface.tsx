@@ -16,10 +16,16 @@ import { useMountedRef } from '@/hooks/useMountedRef'
 import {
   formatCrashReportText,
   isReactErrorBoundaryReport,
+  type CrashReportDiagnosticBundle,
   type CrashReportRecord
 } from '../../../../shared/crash-reporting'
 import type { GitHubViewer } from '../../../../shared/types'
 import { translate } from '@/i18n/i18n'
+import {
+  CRASH_REPORT_SUBMIT_FAILURE_TOAST_ID,
+  getCrashReportSubmitFailureNotice,
+  getCrashReportSubmitWarningNotice
+} from './crash-report-submit-notice'
 
 function formatSummary(report: CrashReportRecord): string {
   if (isReactErrorBoundaryReport(report)) {
@@ -134,6 +140,28 @@ export function CrashReportDialogSurface({
     )
   }
 
+  const showSubmitFailure = (
+    error: unknown,
+    diagnosticBundle?: CrashReportDiagnosticBundle
+  ): void => {
+    const notice = getCrashReportSubmitFailureNotice(
+      { error, ...(diagnosticBundle ? { diagnosticBundle } : {}) },
+      includeDiagnosticLogs
+    )
+    toast.error(notice.title, {
+      id: CRASH_REPORT_SUBMIT_FAILURE_TOAST_ID,
+      description: notice.description,
+      duration: Infinity,
+      dismissible: true,
+      action: {
+        label: notice.actionLabel,
+        onClick: () => {
+          void handleCopy()
+        }
+      }
+    })
+  }
+
   const dismissReportIfNeeded = async (): Promise<void> => {
     if (report?.status === 'pending') {
       await window.api.crashReports.dismiss({ reportId: report.id })
@@ -164,22 +192,7 @@ export function CrashReportDialogSurface({
         githubEmail: null
       })
       if (!result.ok) {
-        if (result.diagnosticBundle?.status === 'uploaded') {
-          toast.error(
-            translate(
-              'auto.components.crash.report.CrashReportDialog.b2e36f53a1',
-              'Failed to send crash report. Diagnostic ticket {{value0}} was uploaded but not linked.',
-              { value0: result.diagnosticBundle.ticketId }
-            )
-          )
-        } else {
-          toast.error(
-            translate(
-              'auto.components.crash.report.CrashReportDialog.56a3dfa283',
-              'Failed to send crash report.'
-            )
-          )
-        }
+        showSubmitFailure(result.error, result.diagnosticBundle)
         console.error('Failed to submit crash report:', result.error)
         return
       }
@@ -188,17 +201,21 @@ export function CrashReportDialogSurface({
       }
       onReportChange(result.report)
       setNotes('')
-      toast.success(
-        translate('auto.components.crash.report.CrashReportDialog.8e24fe4f75', 'Crash report sent.')
-      )
+      toast.dismiss(CRASH_REPORT_SUBMIT_FAILURE_TOAST_ID)
+      const warningNotice = getCrashReportSubmitWarningNotice(result, includeDiagnosticLogs)
+      if (warningNotice) {
+        toast.warning(warningNotice.title, { description: warningNotice.description })
+      } else {
+        toast.success(
+          translate(
+            'auto.components.crash.report.CrashReportDialog.8e24fe4f75',
+            'Crash report sent.'
+          )
+        )
+      }
       onOpenChange(false)
     } catch (error) {
-      toast.error(
-        translate(
-          'auto.components.crash.report.CrashReportDialog.56a3dfa283',
-          'Failed to send crash report.'
-        )
-      )
+      showSubmitFailure(error)
       console.error('Failed to submit crash report:', error)
     } finally {
       if (mountedRef.current) {
