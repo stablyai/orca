@@ -1,8 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import type { AppState } from '@/store/types'
-import { buildAiVaultResumeCommand } from '../../../shared/ai-vault-types'
 import {
-  buildAiVaultResumeCommandForWorktree,
+  buildAiVaultResumeCopyCommandForWorktree,
   buildAiVaultResumeStartupForWorktree,
   getAiVaultResumePlatform
 } from './ai-vault-resume-command'
@@ -63,6 +62,12 @@ function makeState(args: {
   } as unknown as AiVaultResumeCommandState
 }
 
+function buildQueuedAiVaultResumeCommand(
+  args: Parameters<typeof buildAiVaultResumeStartupForWorktree>[0]
+): string {
+  return buildAiVaultResumeStartupForWorktree(args).command
+}
+
 describe('ai vault resume command runtime', () => {
   it('queues a PowerShell-valid command for the default Windows shell', () => {
     // Why: the queued command is typed into the live tab shell (default
@@ -70,7 +75,7 @@ describe('ai vault resume command runtime', () => {
     const state = makeState({ worktreePath: 'C:\\Users\\alice\\repo' })
 
     expect(
-      buildAiVaultResumeCommandForWorktree({
+      buildQueuedAiVaultResumeCommand({
         state,
         worktreeId: 'repo-1::worktree-1',
         session: {
@@ -83,14 +88,14 @@ describe('ai vault resume command runtime', () => {
     ).toBe("Set-Location -LiteralPath 'C:\\Users\\alice\\repo'; claude '--resume' 'session one'")
   })
 
-  it('keeps the cmd wrapper when the configured Windows shell is cmd.exe', () => {
+  it('queues direct cmd syntax when the configured Windows shell is cmd.exe', () => {
     const state = makeState({
       worktreePath: 'C:\\Users\\alice\\repo',
       terminalWindowsShell: 'cmd.exe'
     })
 
     expect(
-      buildAiVaultResumeCommandForWorktree({
+      buildQueuedAiVaultResumeCommand({
         state,
         worktreeId: 'repo-1::worktree-1',
         session: {
@@ -100,7 +105,7 @@ describe('ai vault resume command runtime', () => {
           codexHome: null
         }
       })
-    ).toBe('cmd /d /s /c "cd /d ""C:\\Users\\alice\\repo"" && claude ""--resume"" ""session one"""')
+    ).toBe('cd /d "C:\\Users\\alice\\repo" && claude "--resume" "session one"')
   })
 
   it('queues a POSIX command for the Git Bash Windows shell', () => {
@@ -110,7 +115,7 @@ describe('ai vault resume command runtime', () => {
     })
 
     expect(
-      buildAiVaultResumeCommandForWorktree({
+      buildQueuedAiVaultResumeCommand({
         state,
         worktreeId: 'repo-1::worktree-1',
         session: {
@@ -128,7 +133,7 @@ describe('ai vault resume command runtime', () => {
     // path, and queued Windows commands must match the live tab shell.
     const state = makeState({ worktreePath: 'C:\\Users\\alice\\repo' })
 
-    const command = buildAiVaultResumeCommandForWorktree({
+    const command = buildQueuedAiVaultResumeCommand({
       state,
       worktreeId: 'repo-1::worktree-1',
       session: {
@@ -146,14 +151,14 @@ describe('ai vault resume command runtime', () => {
     expect(command).not.toContain('019f27cd-4268-7000-96e7-62f42a55c144')
   })
 
-  it('keeps cmd quoting for local OMP resume when cmd.exe is configured', () => {
+  it('queues a direct local OMP resume when cmd.exe is configured', () => {
     const state = makeState({
       worktreePath: 'C:\\Users\\alice\\repo',
       terminalWindowsShell: 'cmd.exe'
     })
 
     expect(
-      buildAiVaultResumeCommandForWorktree({
+      buildQueuedAiVaultResumeCommand({
         state,
         worktreeId: 'repo-1::worktree-1',
         session: {
@@ -165,22 +170,28 @@ describe('ai vault resume command runtime', () => {
         }
       })
     ).toBe(
-      'cmd /d /s /c "cd /d ""C:\\Users\\alice\\repo"" && omp --resume ""C:\\Users\\alice\\.omp\\agent\\sessions\\repo\\sess.jsonl"""'
+      'cd /d "C:\\Users\\alice\\repo" && omp --resume "C:\\Users\\alice\\.omp\\agent\\sessions\\repo\\sess.jsonl"'
     )
   })
 
   it('keeps the cmd wrapper for the copy-to-clipboard command on Windows', () => {
-    // Regression guard: the copy path is self-contained for pasting into cmd.exe
-    // and must stay cmd-wrapped even though the queued path now follows the shell.
+    const state = makeState({
+      worktreePath: 'C:\\Users\\alice\\repo',
+      terminalWindowsShell: 'cmd.exe'
+    })
+
     expect(
-      buildAiVaultResumeCommand({
-        agent: 'claude',
-        sessionId: 'session one',
-        cwd: 'C:\\Users\\alice\\repo',
-        platform: 'win32',
-        codexHome: null
+      buildAiVaultResumeCopyCommandForWorktree({
+        state,
+        worktreeId: 'repo-1::worktree-1',
+        session: {
+          agent: 'claude',
+          sessionId: 'session one',
+          cwd: 'C:\\Users\\alice\\repo',
+          codexHome: null
+        }
       })
-    ).toBe('cmd /d /s /c "cd /d ""C:\\Users\\alice\\repo"" && claude --resume ""session one"""')
+    ).toBe('cmd /d /s /c "cd /d ""C:\\Users\\alice\\repo"" && claude ""--resume"" ""session one"""')
   })
 
   it('uses configured agent defaults for resumable session history entries', () => {
@@ -225,7 +236,7 @@ describe('ai vault resume command runtime', () => {
 
     expect(getAiVaultResumePlatform(state, 'repo-1::worktree-1')).toBe('linux')
     expect(
-      buildAiVaultResumeCommandForWorktree({
+      buildQueuedAiVaultResumeCommand({
         state,
         worktreeId: 'repo-1::worktree-1',
         session: {
@@ -244,7 +255,7 @@ describe('ai vault resume command runtime', () => {
 
     expect(getAiVaultResumePlatform(state, 'repo-1::worktree-1')).toBe('linux')
     expect(
-      buildAiVaultResumeCommandForWorktree({
+      buildQueuedAiVaultResumeCommand({
         state,
         worktreeId: 'repo-1::worktree-1',
         session: {
@@ -273,7 +284,7 @@ describe('ai vault resume command runtime', () => {
 
     expect(getAiVaultResumePlatform(state, 'folder:folder-1')).toBe('linux')
     expect(
-      buildAiVaultResumeCommandForWorktree({
+      buildQueuedAiVaultResumeCommand({
         state,
         worktreeId: 'folder:folder-1',
         session: {
@@ -301,7 +312,7 @@ describe('ai vault resume command runtime', () => {
 
     expect(getAiVaultResumePlatform(state, 'folder:folder-1')).toBe('linux')
     expect(
-      buildAiVaultResumeCommandForWorktree({
+      buildQueuedAiVaultResumeCommand({
         state,
         worktreeId: 'folder:folder-1',
         session: {
@@ -328,7 +339,7 @@ describe('ai vault resume command runtime', () => {
     })
 
     expect(
-      buildAiVaultResumeCommandForWorktree({
+      buildQueuedAiVaultResumeCommand({
         state,
         worktreeId: 'repo-1::worktree-1',
         session: {
@@ -366,7 +377,7 @@ describe('ai vault resume command runtime', () => {
     state.repos = [{ id: 'repo-1', path: '/home/alice/repo', connectionId: 'ssh-1' }] as never
 
     expect(
-      buildAiVaultResumeCommandForWorktree({
+      buildQueuedAiVaultResumeCommand({
         state,
         worktreeId: 'repo-1::worktree-1',
         commandOverride: '   ',
@@ -387,7 +398,7 @@ describe('ai vault resume command runtime', () => {
     state.repos = [{ id: 'repo-1', path: '/home/alice/repo', connectionId: 'ssh-1' }] as never
 
     expect(
-      buildAiVaultResumeCommandForWorktree({
+      buildQueuedAiVaultResumeCommand({
         state,
         worktreeId: 'repo-1::worktree-1',
         commandOverride: 'my-codex',
@@ -404,11 +415,14 @@ describe('ai vault resume command runtime', () => {
   })
 
   it('rebuilds overridden remote commands with the recorded remote host platform', () => {
-    const state = makeState({ worktreePath: '/home/alice/repo' })
+    const state = makeState({
+      worktreePath: '/home/alice/repo',
+      terminalWindowsShell: 'cmd.exe'
+    })
     state.repos = [{ id: 'repo-1', path: '/home/alice/repo', connectionId: 'ssh-1' }] as never
 
     expect(
-      buildAiVaultResumeCommandForWorktree({
+      buildQueuedAiVaultResumeCommand({
         state,
         worktreeId: 'repo-1::worktree-1',
         commandOverride: 'my-codex',
@@ -433,7 +447,7 @@ describe('ai vault resume command runtime', () => {
     state.repos = [{ id: 'repo-1', path: '/home/alice/repo', connectionId: 'ssh-1' }] as never
 
     expect(
-      buildAiVaultResumeCommandForWorktree({
+      buildQueuedAiVaultResumeCommand({
         state,
         worktreeId: 'repo-1::worktree-1',
         session: {

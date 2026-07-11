@@ -154,9 +154,12 @@ export function buildAiVaultResumeCommand(args: {
   // home) the file was discovered under, where an id-prefix lookup scoped to
   // the default store would miss it. Falls back to the id if no path is known.
   const resumeTarget = agent === 'omp' && resumeFilePath?.trim() ? resumeFilePath.trim() : sessionId
-  const sessionArg = shell
-    ? quoteStartupArg(resumeTarget, shell)
-    : quoteShellArg(resumeTarget, platform)
+  const sessionArg =
+    shell === 'cmd'
+      ? quoteWindowsCmdArg(resumeTarget)
+      : shell
+        ? quoteStartupArg(resumeTarget, shell)
+        : quoteShellArg(resumeTarget, platform)
   const resumeCommand = buildAgentResumeInvocation(agent, baseCommand, sessionArg)
 
   return buildAiVaultResumeShellCommand({
@@ -180,10 +183,8 @@ export function buildAiVaultResumeShellCommand(args: {
 }): string {
   const { cwd, platform, codexHome, shell } = args
 
-  // Why: on Windows the queued command must target the configured live shell
-  // (default PowerShell). PowerShell mis-parses the cmd `""`-doubled wrapper and
-  // reports "operable program or batch file", so only re-wrap with cmd when the
-  // live shell actually is cmd (or when no shell is given, i.e. the copy path).
+  // Why: queued commands are parsed by an already-running shell, while copied
+  // commands need a self-contained cmd wrapper that also works from PowerShell.
   if (platform === 'win32' && shell && shell !== 'cmd') {
     return buildResumeShellCommandForShell({
       resumeCommand: args.resumeCommand,
@@ -196,6 +197,11 @@ export function buildAiVaultResumeShellCommand(args: {
   const resumeCommand = `${codexHomeEnvPrefix(codexHome?.trim() || null, platform)}${
     args.resumeCommand
   }`
+  if (platform === 'win32' && shell === 'cmd') {
+    // Why: an interactive cmd splits the doubled quotes required by a nested
+    // `cmd /s /c` wrapper, so queued commands must use direct cmd syntax.
+    return cwd ? `cd /d ${quoteWindowsCmdArg(cwd)} && ${resumeCommand}` : resumeCommand
+  }
   if (!cwd) {
     return resumeCommand
   }

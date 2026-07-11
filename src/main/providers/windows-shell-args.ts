@@ -55,15 +55,8 @@ function getCmdShellArgStartupCommand(command?: string): string | null {
   if (!command || command.length > STARTUP_COMMAND_TEXT_MAX_CHARS) {
     return null
   }
-  // Why: a `/K` startup command reaches ConPTY through node-pty's C-runtime
-  // argv escaping, which emits backslash-escaped quotes (\") that cmd.exe cannot
-  // parse. A quoted resume command such as
-  // `cmd /d /s /c "cd /d ""cwd"" && claude ""--resume"" ""id"""` then arrives as
-  // `\"cd /d \"\"cwd\"\" && ...` and cmd rejects it with "is not recognized as
-  // an internal or external command". Unlike PowerShell's -EncodedCommand,
-  // cmd.exe has no robust argv-quoting story, so any command carrying a double
-  // quote must fall back to stdin delivery, where cmd's interactive parser
-  // handles the "" doubling correctly.
+  // Why: node-pty's C-runtime argv escaping changes normal cmd quotes in `/K`
+  // delivery, while the interactive parser preserves them through stdin.
   if (command.includes('"')) {
     return null
   }

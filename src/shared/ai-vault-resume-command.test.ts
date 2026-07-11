@@ -14,6 +14,21 @@ describe('buildAiVaultResumeCommand', () => {
     ).toBe('cmd /d /s /c "cd /d ""C:\\Users\\Ada Lovelace\\repo"" && codex resume ""session-1"""')
   })
 
+  it('builds a direct queued command for a live cmd shell', () => {
+    expect(
+      buildAiVaultResumeCommand({
+        agent: 'omp',
+        sessionId: 'session-one',
+        resumeFilePath: 'C:\\Users\\Ada Lovelace\\.omp\\sessions\\A&B session one.jsonl',
+        cwd: 'C:\\Users\\Ada Lovelace\\A&B repo',
+        platform: 'win32',
+        shell: 'cmd'
+      })
+    ).toBe(
+      'cd /d "C:\\Users\\Ada Lovelace\\A&B repo" && omp --resume "C:\\Users\\Ada Lovelace\\.omp\\sessions\\A&B session one.jsonl"'
+    )
+  })
+
   it('carries non-default Codex homes in copied resume commands', () => {
     expect(
       buildAiVaultResumeCommand({
