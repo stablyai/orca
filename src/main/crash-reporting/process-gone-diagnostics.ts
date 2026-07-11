@@ -21,6 +21,18 @@ type ProcessMetricBucket = {
 
 const PROCESS_METRIC_BUCKETS = ['browser', 'renderer', 'gpu', 'utility', 'other'] as const
 
+const GPU_FEATURE_STATUS_FIELDS = [
+  ['2d_canvas', 'gpuFeature2dCanvas'],
+  ['gpu_compositing', 'gpuFeatureCompositing'],
+  ['multiple_raster_threads', 'gpuFeatureMultipleRasterThreads'],
+  ['native_gpu_memory_buffers', 'gpuFeatureNativeMemoryBuffers'],
+  ['rasterization', 'gpuFeatureRasterization'],
+  ['video_decode', 'gpuFeatureVideoDecode'],
+  ['video_encode', 'gpuFeatureVideoEncode'],
+  ['webgl', 'gpuFeatureWebgl'],
+  ['webgl2', 'gpuFeatureWebgl2']
+] as const
+
 type ProcessMetricBucketName = (typeof PROCESS_METRIC_BUCKETS)[number]
 
 function safeString(value: unknown): string | undefined {
@@ -109,13 +121,46 @@ function getProcessGoneMetricDetails(): CrashReportDetails {
   }
 }
 
-export function buildProcessGoneCrashDetails(details: Record<string, unknown>): CrashReportDetails {
+export function collectGpuFeatureStatusDetails(
+  status: unknown,
+  gpuFallbackActive: boolean
+): CrashReportDetails {
+  const details: CrashReportDetails = { gpuFallbackActive }
+  if (typeof status !== 'object' || status === null) {
+    return details
+  }
+  const statusRecord = status as Record<string, unknown>
+  for (const [electronKey, detailKey] of GPU_FEATURE_STATUS_FIELDS) {
+    const value = safeString(statusRecord[electronKey])
+    if (value) {
+      details[detailKey] = value.slice(0, 80)
+    }
+  }
+  return details
+}
+
+function getGpuFeatureStatusDetails(gpuFallbackActive: boolean): CrashReportDetails {
+  try {
+    return collectGpuFeatureStatusDetails(app.getGPUFeatureStatus(), gpuFallbackActive)
+  } catch (error) {
+    const errorName = error instanceof Error ? error.name : typeof error
+    return { gpuFallbackActive, gpuFeatureStatusError: errorName }
+  }
+}
+
+export function buildProcessGoneCrashDetails(
+  details: Record<string, unknown>,
+  gpuFallbackActive: boolean
+): CrashReportDetails {
   const sanitizedDetails = sanitizeCrashReportDetails(details)
   // Why: low-JS-heap renderer kills can still be native/process memory pressure.
   // Capture Electron process buckets at process-gone time before recovery reloads.
   return {
     ...sanitizedDetails,
-    ...getProcessGoneMetricDetails()
+    ...getProcessGoneMetricDetails(),
+    // Why: GPU failures are hardware-specific; fixed status keys distinguish
+    // disabled/software paths without collecting the full GPU-info payload.
+    ...getGpuFeatureStatusDetails(gpuFallbackActive)
   }
 }
 

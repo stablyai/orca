@@ -1258,7 +1258,7 @@ function recordProcessGoneCrash(
   if (!processGoneDedupe.shouldRecord(key)) {
     return
   }
-  const crashDetails = buildProcessGoneCrashDetails(details)
+  const crashDetails = buildProcessGoneCrashDetails(details, gpuFallbackActiveThisLaunch)
   const span = startSpan('electron.process_gone', {
     attributes: {
       'crash.source': source,
