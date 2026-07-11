@@ -3283,6 +3283,9 @@ export type PersistedUIState = {
    *  header drag; 'recent' orders by each project's most recent visible
    *  workspace activity. */
   projectOrderBy: ProjectOrderBy
+  /** Which list the left sidebar shows: the classic project tree or the
+   *  mission (task-group) list. Defaults to projects for existing users. */
+  sidebarListMode?: 'projects' | 'missions'
   /** Deprecated; the Active only filter is retired and ignored on hydration. */
   showActiveOnly: boolean
   /** Hide sleeping/inactive workspaces from workspace navigation. Off by default. */

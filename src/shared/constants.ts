@@ -470,6 +470,7 @@ export function getDefaultUIState(): PersistedUIState {
     groupBy: 'repo',
     sortBy: 'recent',
     projectOrderBy: 'manual',
+    sidebarListMode: 'projects',
     showActiveOnly: false,
     hideSleepingWorkspaces: DEFAULT_HIDE_SLEEPING_WORKSPACES,
     workspaceHostScope: 'all',
