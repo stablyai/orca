@@ -23,6 +23,7 @@ import { DEFAULT_OPEN_IN_APPLICATIONS } from './open-in-applications'
 import { DEFAULT_BROWSER_PAGE_ZOOM_LEVEL } from './browser-page-zoom'
 import { DEFAULT_DISABLED_TUI_AGENTS } from './tui-agent-selection'
 import { DEFAULT_TUI_AGENT_ARGS, DEFAULT_TUI_AGENT_ENV } from './tui-agent-launch-defaults'
+import { DEFAULT_WORKSPACE_TAB } from './default-workspace-tab'
 import { UI_LANGUAGE_SYSTEM } from './ui-language'
 import {
   DEFAULT_LEFT_SIDEBAR_TINT_COLOR,
@@ -276,6 +277,7 @@ export function getDefaultSettings(homedir: string): GlobalSettings {
     localhostWorktreeLabelsEnabled: false,
     openLinksInAppPreferencePrompted: false,
     openAgentTabsInChatByDefault: false,
+    defaultWorkspaceTab: { ...DEFAULT_WORKSPACE_TAB },
     experimentalNativeChat: false,
     openInApplications: [...DEFAULT_OPEN_IN_APPLICATIONS],
     rightSidebarOpenByDefault: true,

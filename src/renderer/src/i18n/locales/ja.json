@@ -8994,6 +8994,10 @@
           "a8f3e2c1b4": "週次クレジット",
           "b7e2d9f0a3": "ターミナルの grok /usage 画面と同じ週次クレジット率です。",
           "c6d1a8f4e2": "{{when}} にリセット"
+        },
+        "GeneralWorkspaceDefaultTabSetting": {
+          "d5ace069a0": "デフォルトタブ",
+          "c8b1d50fbe": "サイドバーからワークスペースを初めて開いたときに表示されるタブです。"
         }
       },
       "right": {

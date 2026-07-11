@@ -12,6 +12,7 @@ import type {
 import type { VoiceSettings } from './speech-types'
 import type { WorkspaceCleanupUIState } from './workspace-cleanup'
 import type { LargeDiffRenderLimit } from './large-diff-render-limit'
+import type { DefaultWorkspaceTab } from './default-workspace-tab'
 import type { GitLabProjectSettings } from './gitlab-types'
 import type { TaskProvider } from './task-providers'
 import type { FeatureTipId } from './feature-tips'
@@ -2647,6 +2648,11 @@ export type GlobalSettings = {
    *  view instead of the raw terminal. Off by default so existing workflows are
    *  unchanged. Optional for legacy-settings compatibility; defaults applied. */
   openAgentTabsInChatByDefault?: boolean
+  /** Which surface a workspace opens into when first activated from the sidebar
+   *  and it has no existing tab. Mirrors the "+" new-tab menu (terminal, a
+   *  specific shell, a coding agent, or a browser). Defaults to a plain terminal
+   *  so existing behavior is unchanged. Optional for legacy-settings compat. */
+  defaultWorkspaceTab?: DefaultWorkspaceTab
   /** Experimental: native chat surface for Claude/Codex terminal sessions.
    *  Off by default while the desktop UX is still being exercised. */
   experimentalNativeChat?: boolean

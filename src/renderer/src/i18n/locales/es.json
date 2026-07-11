@@ -8994,6 +8994,10 @@
           "a8f3e2c1b4": "Créditos semanales",
           "b7e2d9f0a3": "El mismo porcentaje de créditos semanales que la pantalla grok /usage en la terminal.",
           "c6d1a8f4e2": "Se restablece {{when}}"
+        },
+        "GeneralWorkspaceDefaultTabSetting": {
+          "d5ace069a0": "Pestaña predeterminada",
+          "c8b1d50fbe": "La pestaña que se muestra al abrir un espacio de trabajo por primera vez desde la barra lateral."
         }
       },
       "right": {
