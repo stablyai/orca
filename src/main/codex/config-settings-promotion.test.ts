@@ -473,7 +473,7 @@ describe('codex settings write-back promotion', () => {
     syncSystemConfigIntoManagedCodexHome()
 
     expect(readSystemConfig()).toBe('model = "gpt-5"\n')
-    expect(readRuntimeConfig()).toBe('model = "o4"\n')
+    expect(readRuntimeConfig()).toBe('cli_auth_credentials_store = "file"\nmodel = "o4"\n')
     expect(readFileSync(baselinePath(), 'utf-8')).toBe(baselineBeforeFailure)
 
     promotionTestState.failAtomicWrite = false

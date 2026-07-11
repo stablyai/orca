@@ -1,5 +1,13 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { existsSync, mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import {
+  existsSync,
+  lstatSync,
+  mkdtempSync,
+  mkdirSync,
+  readFileSync,
+  rmSync,
+  writeFileSync
+} from 'node:fs'
 import { tmpdir } from 'node:os'
 import type * as NodeOs from 'node:os'
 import { join } from 'node:path'
@@ -29,6 +37,7 @@ import {
   syncSystemConfigIntoLegacySharedCodexHome,
   syncSystemConfigIntoManagedCodexHome
 } from './codex-config-mirror'
+import { forceFileAuthCredentialsStore } from './codex-config-auth-store'
 
 let fakeHomeDir: string
 let userDataDir: string
@@ -172,12 +181,18 @@ describe('syncSystemConfigIntoManagedCodexHome', () => {
     writeFileSync(
       getSystemConfigPath(),
       [
+        'js_repl_node_path = "bin/node"',
+        '',
         '[profiles.fast]',
         'model_catalog_json = "catalogs/fast.json"',
+        'js_repl_node_path = "bin/profile-node"',
         '',
         '[debug.config_lockfile]',
         'load_path = "locks/config.lock.toml"',
         'export_dir = "locks"',
+        '',
+        '[otel.exporter.tls]',
+        'ca-certificate = "certs/ca.pem"',
         ''
       ].join('\n'),
       'utf-8'
@@ -187,12 +202,71 @@ describe('syncSystemConfigIntoManagedCodexHome', () => {
 
     const runtimeConfig = readFileSync(getRuntimeConfigPath(), 'utf-8')
     expect(runtimeConfig).toContain(
+      `js_repl_node_path = '${join(getSystemCodexHomePath(), 'bin', 'node')}'`
+    )
+    expect(runtimeConfig).toContain(
       `model_catalog_json = '${join(getSystemCodexHomePath(), 'catalogs', 'fast.json')}'`
+    )
+    expect(runtimeConfig).toContain(
+      `js_repl_node_path = '${join(getSystemCodexHomePath(), 'bin', 'profile-node')}'`
     )
     expect(runtimeConfig).toContain(
       `load_path = '${join(getSystemCodexHomePath(), 'locks', 'config.lock.toml')}'`
     )
     expect(runtimeConfig).toContain(`export_dir = '${join(getSystemCodexHomePath(), 'locks')}'`)
+    expect(runtimeConfig).toContain(
+      `ca-certificate = '${join(getSystemCodexHomePath(), 'certs', 'ca.pem')}'`
+    )
+  })
+
+  it('mirrors free-standing profile-v2 config overlays into the runtime home', () => {
+    writeFileSync(getSystemConfigPath(), 'model = "system-model"\n', 'utf-8')
+    writeFileSync(
+      join(getSystemCodexHomePath(), 'work.config.toml'),
+      'model = "work-profile"\n',
+      'utf-8'
+    )
+
+    syncSystemConfigIntoManagedCodexHome()
+
+    const runtimeOverlayPath = join(userDataDir, 'codex-runtime-home', 'home', 'work.config.toml')
+    expect(existsSync(runtimeOverlayPath)).toBe(true)
+    expect(lstatSync(runtimeOverlayPath).isSymbolicLink()).toBe(false)
+    expect(readFileSync(runtimeOverlayPath, 'utf-8')).toBe(
+      'cli_auth_credentials_store = "file"\nmodel = "work-profile"\n'
+    )
+  })
+
+  it('rewrites relative overlay paths against the system Codex home', () => {
+    writeFileSync(getSystemConfigPath(), 'model = "system-model"\n', 'utf-8')
+    writeFileSync(
+      join(getSystemCodexHomePath(), 'work.config.toml'),
+      'log_dir = "logs"\nmodel = "work-profile"\n',
+      'utf-8'
+    )
+
+    syncSystemConfigIntoManagedCodexHome()
+
+    const runtimeOverlayPath = join(userDataDir, 'codex-runtime-home', 'home', 'work.config.toml')
+    expect(readFileSync(runtimeOverlayPath, 'utf-8')).toContain(
+      `log_dir = '${join(getSystemCodexHomePath(), 'logs')}'`
+    )
+  })
+
+  it('forces file-backed auth in BOM-prefixed profile config overlays', () => {
+    writeFileSync(getSystemConfigPath(), 'model = "system-model"\n', 'utf-8')
+    writeFileSync(
+      join(getSystemCodexHomePath(), 'work.config.toml'),
+      '\uFEFFcli_auth_credentials_store = "keyring"\nmodel = "work-profile"\n',
+      'utf-8'
+    )
+
+    syncSystemConfigIntoManagedCodexHome()
+
+    const runtimeOverlayPath = join(userDataDir, 'codex-runtime-home', 'home', 'work.config.toml')
+    expect(readFileSync(runtimeOverlayPath, 'utf-8')).toBe(
+      '\uFEFFcli_auth_credentials_store = "file"\nmodel = "work-profile"\n'
+    )
   })
 
   it('does not treat lines inside multiline arrays as headers or path keys', () => {
@@ -807,5 +881,46 @@ describe('prepareSystemConfigForFreshRuntimeMirror', () => {
     expect(prepared).not.toContain('codex_hooks')
     expect(prepared).toContain('[projects."/home/alice/repo"]')
     expect(prepared).not.toContain('[hooks.state."system-hooks:stop:0:0"]')
+  })
+})
+
+describe('forceFileAuthCredentialsStore', () => {
+  it('inserts the file store setting when missing', () => {
+    expect(forceFileAuthCredentialsStore('model = "gpt"\n')).toBe(
+      'cli_auth_credentials_store = "file"\nmodel = "gpt"\n'
+    )
+  })
+
+  it('keeps a UTF-8 BOM at the start when inserting the setting', () => {
+    expect(forceFileAuthCredentialsStore('\uFEFFmodel = "gpt"\n')).toBe(
+      '\uFEFFcli_auth_credentials_store = "file"\nmodel = "gpt"\n'
+    )
+  })
+
+  it('overrides quoted root keys without touching nested tables', () => {
+    const input = [
+      '"cli_auth_credentials_store" = "keyring"',
+      'model = "gpt"',
+      '',
+      '[features]',
+      'cli_auth_credentials_store = "auto"',
+      ''
+    ].join('\n')
+
+    expect(forceFileAuthCredentialsStore(input)).toBe(
+      [
+        'cli_auth_credentials_store = "file"',
+        'model = "gpt"',
+        '',
+        '[features]',
+        'cli_auth_credentials_store = "auto"',
+        ''
+      ].join('\n')
+    )
+  })
+
+  it('is idempotent when the file store is already set', () => {
+    const input = 'cli_auth_credentials_store = "file"\nmodel = "gpt"\n'
+    expect(forceFileAuthCredentialsStore(input)).toBe(input)
   })
 })

@@ -143,7 +143,19 @@ export function getWindowSections(
 ): { label: string; window: RateLimitWindow | null }[] {
   if (p.buckets?.length) {
     const bucketSections = p.buckets.map((b) => ({ label: b.name, window: b as RateLimitWindow }))
+    // Why: Codex buckets contain only additional limit IDs; its preferred
+    // primary meter remains in session, unlike Gemini's bucket-only model.
+    const preferredCodexSection =
+      p.provider === 'codex'
+        ? [
+            {
+              label: translate('auto.components.status.bar.tooltip.94038ad2fa', 'Session'),
+              window: p.session
+            }
+          ]
+        : []
     return [
+      ...preferredCodexSection,
       ...bucketSections,
       {
         label: translate('auto.components.status.bar.tooltip.252c096536', 'Weekly'),

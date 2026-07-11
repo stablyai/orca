@@ -1176,7 +1176,9 @@ function VerboseProviderUsage({
   p: ProviderRateLimits
   display: UsagePercentageDisplay
 }): React.JSX.Element {
-  if (p.buckets && p.buckets.length > 0) {
+  // Why: Codex buckets are additional meters; preferred session/weekly remain
+  // authoritative in the compact/verbose bar. Gemini buckets replace them.
+  if (p.provider !== 'codex' && p.buckets && p.buckets.length > 0) {
     const visibleBuckets = p.buckets.filter((bucket) => STATUS_BAR_BUCKET_NAMES.has(bucket.name))
     return (
       <>

@@ -6,9 +6,11 @@ import {
   writeFileAtomically,
   writeFileAtomicallyIfUnchanged
 } from '../codex-accounts/fs-utils'
+import { forceFileAuthCredentialsStore } from './codex-config-auth-store'
 import { getOrcaManagedCodexHomePath, getSystemCodexHomePath } from './codex-home-paths'
 import { rewriteRelativePathConfigValues } from './codex-config-path-reference-rewrite'
 import { normalizeDeprecatedCodexHookFeatureFlag } from './config-toml-deprecated-hook-flag'
+import { syncCodexProfileConfigOverlaysIntoManagedHome } from './codex-profile-config-overlay-mirror'
 import { parseWslUncPath } from '../../shared/wsl-paths'
 import {
   promoteCodexRuntimeSettingsToSystem,
@@ -145,6 +147,14 @@ function syncSystemConfigIntoManagedCodexHomeUnsafe(
   const runtimeConfigPath = join(runtimeHomePath, 'config.toml')
   const systemConfigExists = existsSync(systemConfigPath)
   const runtimeConfigExists = existsSync(runtimeConfigPath)
+  const sourceConfigDir = resolveCodexConfigMirrorSourceDirectory(systemHomePath)
+  // Why: profile overlays live beside config.toml; keep managed copies in sync
+  // even when the primary config is blank / missing so auth-store profiles land.
+  syncCodexProfileConfigOverlaysIntoManagedHome({
+    runtimeHomePath,
+    sourceConfigDir,
+    systemHomePath
+  })
   const rawSystemConfig = systemConfigExists ? readAgentStateFileSync(systemConfigPath) : ''
   // Why: a missing or blank source is not an authoritative empty config. Merging
   // it would erase every ordinary setting from an existing managed runtime, and
@@ -155,7 +165,6 @@ function syncSystemConfigIntoManagedCodexHomeUnsafe(
       : { status: 'mirrored', preservedConflictKeys: new Set() }
   }
 
-  const sourceConfigDir = resolveCodexConfigMirrorSourceDirectory(systemHomePath)
   if (!runtimeConfigExists) {
     writeFileAtomically(
       runtimeConfigPath,
@@ -181,9 +190,11 @@ export function resolveCodexConfigMirrorSourceDirectory(systemHomePath: string):
 }
 
 function prepareSystemConfigForRuntimeMirror(config: string, systemConfigDir: string): string {
-  return rewriteRelativePathConfigValues(
-    normalizeDeprecatedCodexHookFeatureFlag(config),
-    systemConfigDir
+  return forceFileAuthCredentialsStore(
+    rewriteRelativePathConfigValues(
+      normalizeDeprecatedCodexHookFeatureFlag(config),
+      systemConfigDir
+    )
   )
 }
 

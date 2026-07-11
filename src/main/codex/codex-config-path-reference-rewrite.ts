@@ -10,12 +10,13 @@ import {
 // Why: codex-rs types these settings AbsolutePathBuf and resolves relative
 // values against the defining config.toml's directory (= CODEX_HOME for the
 // user config). experimental_instructions_file only exists in older Codex
-// releases; keeping it is harmless since Codex ignores unknown keys.
+// releases, while js_repl_node_path remains a typed deprecated path.
 const EXACT_PATH_CONFIG_KEYS = new Set([
   'debug.config_lockfile.export_dir',
   'debug.config_lockfile.load_path',
   'experimental_compact_prompt_file',
   'experimental_instructions_file',
+  'js_repl_node_path',
   'log_dir',
   'model_catalog_json',
   'model_instructions_file',
@@ -87,9 +88,11 @@ function isPathConfigKey(tablePath: string, key: string): boolean {
   return (
     /^agents\..+\.config_file$/.test(fullPath) ||
     /^model_providers\..+\.auth\.cwd$/.test(fullPath) ||
+    // Why: Codex models OTEL TLS material as paths with kebab-case TOML keys.
+    /^otel\..+\.(?:ca-certificate|client-certificate|client-private-key)$/.test(fullPath) ||
     // Why: profiles mirror the top-level file settings that Codex reads (and
     // can abort on) during config load.
-    /^profiles\..+\.(?:experimental_compact_prompt_file|model_catalog_json|model_instructions_file)$/.test(
+    /^profiles\..+\.(?:experimental_compact_prompt_file|js_repl_node_path|model_catalog_json|model_instructions_file)$/.test(
       fullPath
     )
   )

@@ -66,6 +66,10 @@ afterEach(() => {
   }
 })
 
+function withFileAuthStore(config: string): string {
+  return `cli_auth_credentials_store = "file"\n${config}`
+}
+
 function createSettings(overrides: TestSettingsOverrides = {}): GlobalSettings {
   const appFontFamily = overrides.appFontFamily ?? 'Geist'
   const agentStatusHooksEnabled = overrides.agentStatusHooksEnabled ?? true
@@ -417,6 +421,47 @@ describe('CodexAccountService config sync', () => {
     expect(readFileSync(join(managedHomePath, 'config.toml'), 'utf-8')).toBe(canonicalConfig)
     expect(readFileSync(join(managedHomePath, 'auth.json'), 'utf-8')).toBe(
       '{"account":"managed"}\n'
+    )
+  })
+
+  it('overrides a canonical keyring preference in managed homes', async () => {
+    const canonicalConfigPath = join(testState.fakeHomeDir, '.codex', 'config.toml')
+    writeFileSync(
+      canonicalConfigPath,
+      'approval_policy = "never"\ncli_auth_credentials_store = "keyring"\n',
+      'utf-8'
+    )
+    const managedHomePath = createManagedHome(
+      testState.userDataDir,
+      'account-1',
+      'approval_policy = "on-request"\n',
+      '{"account":"managed"}\n'
+    )
+    const settings = createSettings({
+      codexManagedAccounts: [
+        {
+          id: 'account-1',
+          email: 'user@example.com',
+          managedHomePath,
+          providerAccountId: null,
+          workspaceLabel: null,
+          workspaceAccountId: null,
+          createdAt: 1,
+          updatedAt: 1,
+          lastAuthenticatedAt: 1
+        }
+      ]
+    })
+
+    const { CodexAccountService } = await import('./service')
+    new CodexAccountService(
+      createStore(settings) as never,
+      createRateLimits() as never,
+      createRuntimeHome() as never
+    )
+
+    expect(readFileSync(join(managedHomePath, 'config.toml'), 'utf-8')).toBe(
+      'approval_policy = "never"\ncli_auth_credentials_store = "file"\n'
     )
   })
 

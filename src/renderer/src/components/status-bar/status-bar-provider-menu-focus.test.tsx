@@ -37,7 +37,8 @@ vi.mock('./tooltip', () => ({
     return { type: 'ProviderPanel', props }
   },
   barColor: () => 'bg-green-500',
-  clampUsedPercent: (n: number) => Math.max(0, Math.min(100, Math.round(n)))
+  clampUsedPercent: (n: number) => Math.max(0, Math.min(100, Math.round(n))),
+  getProviderUsageStatusLabel: () => 'Codex'
 }))
 
 vi.mock('@/components/ui/dropdown-menu', () => ({
@@ -82,6 +83,31 @@ function findChildByType(node: unknown, typeName: string): ReactElementLike {
     }
   }
   throw new Error(`Could not find ${typeName}`)
+}
+
+function findChildrenByType(node: unknown, typeName: string): ReactElementLike[] {
+  const matches: ReactElementLike[] = []
+  const stack = [node]
+  while (stack.length > 0) {
+    const current = stack.pop()
+    if (current == null || typeof current === 'string' || typeof current === 'number') {
+      continue
+    }
+    if (Array.isArray(current)) {
+      stack.push(...current)
+      continue
+    }
+    const element = current as ReactElementLike
+    const type = element.type as { name?: string } | string | undefined
+    const matchedName = typeof type === 'string' ? type : type?.name
+    if (matchedName === typeName) {
+      matches.push(element)
+    }
+    if (element.props && 'children' in element.props) {
+      stack.push(element.props.children)
+    }
+  }
+  return matches
 }
 
 async function renderProviderDetailsMenu(): Promise<unknown> {
@@ -138,5 +164,49 @@ describe('ProviderDetailsMenu focus handoff', () => {
       preventDefault
     })
     expect(preventDefault).not.toHaveBeenCalled()
+  })
+
+  it('keeps Codex session and weekly windows when dynamic buckets are present', async () => {
+    const { ProviderDetailsMenu } = await import('./StatusBar')
+    const menu = ProviderDetailsMenu({
+      provider: {
+        provider: 'codex',
+        status: 'ok',
+        error: null,
+        updatedAt: Date.now(),
+        session: {
+          usedPercent: 10,
+          resetsAt: null,
+          resetDescription: null,
+          windowMinutes: 300
+        },
+        weekly: {
+          usedPercent: 20,
+          resetsAt: null,
+          resetDescription: null,
+          windowMinutes: 10_080
+        },
+        buckets: [
+          {
+            name: 'Short',
+            usedPercent: 40,
+            resetsAt: null,
+            resetDescription: null,
+            windowMinutes: 50
+          }
+        ]
+      },
+      compact: false,
+      iconOnly: false,
+      ariaLabel: 'Open Codex usage details'
+    })
+    const segment = findChildByType(menu, 'ProviderSegment')
+    const rendered = (segment.type as (props: Record<string, unknown>) => unknown)(segment.props)
+
+    expect(
+      findChildrenByType(rendered, 'WindowLabel')
+        .map((element) => element.props.label)
+        .sort()
+    ).toEqual(['5h', 'wk'])
   })
 })

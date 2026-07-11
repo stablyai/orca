@@ -28,6 +28,7 @@ import type {
 } from '../../shared/codex-reset-credit-attempt-ledger'
 import type { CodexRuntimeHomeService } from './runtime-home-service'
 import { writeFileAtomically } from './fs-utils'
+import { forceFileAuthCredentialsStore } from '../codex/codex-config-auth-store'
 import { rewriteRelativePathConfigValues } from '../codex/codex-config-path-reference-rewrite'
 import { stripCodexManagedHookTrustEntriesFromConfig } from '../codex/codex-managed-trust-reconciliation'
 import { isCodexSystemDefaultRealHomeEnabled } from '../codex/codex-real-home-flag'
@@ -1354,15 +1355,16 @@ export class CodexAccountService {
   }
 
   private writeManagedConfig(managedHomePath: string, contents: string): void {
+    const managedContents = forceFileAuthCredentialsStore(contents)
     const configPath = join(managedHomePath, 'config.toml')
     try {
-      if (existsSync(configPath) && readFileSync(configPath, 'utf-8') === contents) {
+      if (existsSync(configPath) && readFileSync(configPath, 'utf-8') === managedContents) {
         return
       }
     } catch {
       // Why: a read error must not make a stale config look current; atomic write owns ACL repair and error surfacing.
     }
-    writeFileAtomically(configPath, contents)
+    writeFileAtomically(configPath, managedContents)
   }
 
   private getManagedAccountsRoot(): string {

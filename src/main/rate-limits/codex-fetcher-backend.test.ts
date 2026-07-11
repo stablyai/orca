@@ -137,6 +137,38 @@ describe('Codex backend rate-limit requests', () => {
     expect(ptySpawnMock).not.toHaveBeenCalled()
   })
 
+  it('uses the selected custom backend for the reset-credit follow-up', async () => {
+    readFileMock.mockImplementation(async (path: string) =>
+      path.endsWith('config.toml')
+        ? 'chatgpt_base_url = "https://api.example.com/v1"\n'
+        : JSON.stringify({ tokens: { access_token: 'access-token' } })
+    )
+    vi.mocked(fetch)
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ plan_type: 'plus', rate_limit: null })
+      } as Response)
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ available_count: 2 })
+      } as Response)
+
+    await expect(
+      fetchCodexRateLimits({
+        codexHomePath: '\\\\wsl.localhost\\Ubuntu\\home\\alice\\.codex'
+      })
+    ).resolves.toMatchObject({
+      rateLimitResetCredits: { availableCount: 2 },
+      status: 'ok'
+    })
+
+    expect(fetch).toHaveBeenNthCalledWith(
+      2,
+      'https://api.example.com/v1/api/codex/rate-limit-reset-credits',
+      expect.anything()
+    )
+  })
+
   it('aborts callers while sharing one stalled backend auth read', async () => {
     let resolveRead!: (content: string) => void
     readFileMock.mockImplementation(

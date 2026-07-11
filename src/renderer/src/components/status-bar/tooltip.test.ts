@@ -326,6 +326,32 @@ describe('getWindowSections', () => {
     ])
   })
 
+  it('keeps the preferred Codex session beside additional meter buckets', () => {
+    const p: ProviderRateLimits = {
+      provider: 'codex',
+      session: { usedPercent: 10, windowMinutes: 300, resetsAt: null, resetDescription: null },
+      weekly: { usedPercent: 20, windowMinutes: 10080, resetsAt: null, resetDescription: null },
+      buckets: [
+        {
+          name: 'Short',
+          usedPercent: 40,
+          windowMinutes: 60,
+          resetsAt: null,
+          resetDescription: null
+        }
+      ],
+      updatedAt: Date.now(),
+      error: null,
+      status: 'ok'
+    }
+
+    expect(getWindowSections(p)).toEqual([
+      { label: 'Session', window: p.session },
+      { label: 'Short', window: p.buckets![0] },
+      { label: 'Weekly', window: p.weekly }
+    ])
+  })
+
   it('returns session and weekly when buckets are absent', () => {
     const p: ProviderRateLimits = {
       provider: 'claude',
