@@ -49,6 +49,7 @@ import type {
   Repo,
   ProjectGroup,
   FolderWorkspace,
+  Mission,
   SparsePreset,
   WorktreeMeta,
   WorktreeLineage,
@@ -187,6 +188,13 @@ import {
   normalizeProjectGroupName,
   normalizeProjectGroups
 } from '../shared/project-groups'
+import {
+  clearMissingMissionMembers,
+  createMission,
+  getNextMissionTabOrder,
+  normalizeMissionName,
+  normalizeMissions
+} from '../shared/missions'
 import { createNestedProjectGroupResolver } from './project-groups/nested-repo-import'
 import {
   mergeLegacyCommitMessageAiIntoSourceControlAi,
@@ -3103,6 +3111,7 @@ export class Store {
             parsed.folderWorkspaces,
             normalizedProjectGroups
           ),
+          missions: normalizeMissions(parsed.missions),
           worktreeLineageById: parsed.worktreeLineageById ?? {},
           workspaceLineageByChildKey: normalizeWorkspaceLineageByChildKey(
             parsed.workspaceLineageByChildKey
@@ -3448,6 +3457,11 @@ export class Store {
     }
 
     const repos = clearMissingProjectGroupMemberships(result.repos, result.projectGroups ?? [])
+    const missionSanitize = clearMissingMissionMembers(result.missions ?? [], repos)
+    result.missions = missionSanitize.missions
+    if (missionSanitize.changed) {
+      this.loadNeedsSave = true
+    }
     const projectHostSetupCompatibility = mergeProjectHostSetupCompatibilityState(result, repos)
     if (!projectHostSetupCompatibilityStateEqual(result, projectHostSetupCompatibility)) {
       this.loadNeedsSave = true
@@ -4177,6 +4191,104 @@ export class Store {
     this.state.repos.push(repo)
     this.syncProjectHostSetupCompatibilityState()
     this.scheduleSave()
+  }
+
+  getMissions(): Mission[] {
+    return [...(this.state.missions ?? [])].sort(
+      (left, right) => left.tabOrder - right.tabOrder || left.name.localeCompare(right.name)
+    )
+  }
+
+  getMission(missionId: string): Mission | null {
+    return (this.state.missions ?? []).find((mission) => mission.id === missionId) ?? null
+  }
+
+  createMission(input: { name: string; branchName?: string | null; repoIds: string[] }): Mission {
+    const mission = createMission({
+      ...input,
+      tabOrder: getNextMissionTabOrder(this.state.missions ?? [])
+    })
+    this.state.missions = [...(this.state.missions ?? []), mission]
+    this.scheduleSave()
+    return mission
+  }
+
+  updateMission(
+    missionId: string,
+    updates: Partial<Pick<Mission, 'name' | 'tabOrder'>>
+  ): Mission | null {
+    const mission = this.getMission(missionId)
+    if (!mission) {
+      return null
+    }
+    if (updates.name !== undefined) {
+      mission.name = normalizeMissionName(updates.name, mission.name)
+    }
+    if (updates.tabOrder !== undefined && Number.isFinite(updates.tabOrder)) {
+      mission.tabOrder = updates.tabOrder
+    }
+    mission.updatedAt = Date.now()
+    this.scheduleSave()
+    return mission
+  }
+
+  deleteMission(missionId: string): boolean {
+    const before = this.state.missions?.length ?? 0
+    this.state.missions = (this.state.missions ?? []).filter((m) => m.id !== missionId)
+    if ((this.state.missions?.length ?? 0) === before) {
+      return false
+    }
+    this.scheduleSave()
+    return true
+  }
+
+  addMissionMembers(missionId: string, repoIds: string[]): Mission | null {
+    const mission = this.getMission(missionId)
+    if (!mission) {
+      return null
+    }
+    const now = Date.now()
+    const existing = new Set(mission.members.map((member) => member.repoId))
+    for (const repoId of repoIds) {
+      if (!repoId || existing.has(repoId)) {
+        continue
+      }
+      existing.add(repoId)
+      mission.members.push({ repoId, worktreeId: null, addedAt: now })
+    }
+    mission.updatedAt = now
+    this.scheduleSave()
+    return mission
+  }
+
+  removeMissionMember(missionId: string, repoId: string): Mission | null {
+    const mission = this.getMission(missionId)
+    if (!mission) {
+      return null
+    }
+    mission.members = mission.members.filter((member) => member.repoId !== repoId)
+    mission.updatedAt = Date.now()
+    this.scheduleSave()
+    return mission
+  }
+
+  setMissionMemberWorktree(
+    missionId: string,
+    repoId: string,
+    worktreeId: string | null
+  ): Mission | null {
+    const mission = this.getMission(missionId)
+    if (!mission) {
+      return null
+    }
+    const member = mission.members.find((entry) => entry.repoId === repoId)
+    if (!member) {
+      return null
+    }
+    member.worktreeId = worktreeId
+    mission.updatedAt = Date.now()
+    this.scheduleSave()
+    return mission
   }
 
   // Why: returns false on a stale permutation (concurrent add/remove races

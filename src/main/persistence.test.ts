@@ -9811,3 +9811,71 @@ describe('Store native-chat tab viewMode persistence', () => {
     expect(legacyTab?.viewMode).toBeUndefined()
   })
 })
+
+describe('missions persistence', () => {
+  it('creates, updates, and deletes missions with member bookkeeping', async () => {
+    writeDataFile({
+      schemaVersion: 1,
+      repos: [
+        { id: 'r1', path: '/tmp/r1', displayName: 'R1', badgeColor: '#000', addedAt: 1 },
+        { id: 'r2', path: '/tmp/r2', displayName: 'R2', badgeColor: '#000', addedAt: 1 }
+      ],
+      worktreeMeta: {},
+      settings: {},
+      ui: {},
+      githubCache: { pr: {}, issue: {} }
+    })
+    const store = await createStore()
+
+    const mission = store.createMission({ name: 'Referral', repoIds: ['r1', 'r2'] })
+    expect(mission.branchName).toBe('mission/referral')
+    expect(store.getMissions()).toHaveLength(1)
+    expect(store.getMission(mission.id)?.members.map((m) => m.repoId)).toEqual(['r1', 'r2'])
+
+    store.setMissionMemberWorktree(mission.id, 'r1', 'r1::/tmp/wt')
+    expect(store.getMission(mission.id)?.members[0].worktreeId).toBe('r1::/tmp/wt')
+
+    expect(store.updateMission(mission.id, { name: 'Referral v2' })?.name).toBe('Referral v2')
+    expect(store.removeMissionMember(mission.id, 'r2')?.members).toHaveLength(1)
+    expect(store.addMissionMembers(mission.id, ['r2', 'r2'])?.members).toHaveLength(2)
+
+    expect(store.deleteMission(mission.id)).toBe(true)
+    expect(store.getMissions()).toHaveLength(0)
+    expect(store.deleteMission(mission.id)).toBe(false)
+  })
+
+  it('normalizes and sanitizes persisted missions on load', async () => {
+    writeDataFile({
+      schemaVersion: 1,
+      repos: [{ id: 'r1', path: '/tmp/r1', displayName: 'R1', badgeColor: '#000', addedAt: 1 }],
+      worktreeMeta: {},
+      settings: {},
+      ui: {},
+      githubCache: { pr: {}, issue: {} },
+      missions: [
+        {
+          id: 'm1',
+          name: 'Keep',
+          branchName: 'mission/keep',
+          tabOrder: 0,
+          members: [
+            { repoId: 'r1', worktreeId: null, addedAt: 1 },
+            { repoId: 'ghost', worktreeId: null, addedAt: 1 }
+          ],
+          createdAt: 1,
+          updatedAt: 1
+        },
+        { id: 'm1', name: 'Duplicate' },
+        'garbage'
+      ]
+    })
+
+    const store = await createStore()
+
+    const missions = store.getMissions()
+    expect(missions).toHaveLength(1)
+    expect(missions[0].name).toBe('Keep')
+    // The ghost member's repo does not exist: clearMissingMissionMembers ran.
+    expect(missions[0].members).toEqual([{ repoId: 'r1', worktreeId: null, addedAt: 1 }])
+  })
+})
