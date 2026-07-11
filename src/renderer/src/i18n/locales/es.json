@@ -3902,7 +3902,11 @@
           "5c9c7c16aa": "Agregar un proyecto para crear espacios de trabajo",
           "ca6f729da2": "Nuevo espacio de trabajo ({{value0}})",
           "a30e34eb5c": "Cerrar tablero del espacio de trabajo",
-          "25a95899c9": "Agregar proyecto"
+          "25a95899c9": "Agregar proyecto",
+          "d2a0089e45": "Proyectos",
+          "b6cd1198f2": "Espacios de trabajo",
+          "ea1ec23452": "Misiones",
+          "60c23631f0": "Nueva misión"
         },
         "SidebarNav": {
           "80611a8b10": "Buscar",
@@ -4091,7 +4095,8 @@
           "automationCreated": "Creado por automatización",
           "branchIdentity": "Rama",
           "branchFolderPathIdentity": "Rama o ruta de carpeta",
-          "ef18787206": "En cola para eliminación"
+          "ef18787206": "En cola para eliminación",
+          "0c5bd538d7": "Misión: {{value0}}"
         },
         "WorktreeCardAgents": {
           "1b0a156717": "Agents"
@@ -4225,7 +4230,8 @@
           "hostDisconnected": "Desconectado",
           "failedNestWorkspace": "No se pudo anidar el espacio de trabajo",
           "sidebarRowMissing": "El destino ya no existe",
-          "failedUnnestWorkspace": "Error al expandir el espacio de trabajo"
+          "failedUnnestWorkspace": "Error al expandir el espacio de trabajo",
+          "3a2edfac81": "Añadir a misión"
         },
         "WorktreeMetaDialog": {
           "3db0a2a593": "Cancelar",
@@ -4654,6 +4660,48 @@
           "cancel": "Cancelar",
           "forget": "Eliminar de Orca",
           "reconnectAndDelete": "Reconectar y eliminar"
+        },
+        "MissionAddProjectsDialog": {
+          "6ec97cd26f": "Añadir proyectos",
+          "02449d01cc": "Cada proyecto añadido recibe un espacio de trabajo en {{value0}}.",
+          "eb3a71b1fd": "Todos los proyectos ya están en esta misión.",
+          "d5aae76bca": "Cancelar",
+          "e81ed87ddd": "Añadiendo...",
+          "36cc45b3fb": "Añadir"
+        },
+        "MissionCreateDialog": {
+          "0655a02f86": "Nueva misión",
+          "4608f14ade": "Cada proyecto seleccionado recibe un espacio de trabajo en una rama de misión compartida.",
+          "48ec5c5b11": "Nombre de la misión",
+          "0c9fe9ce6d": "Rama",
+          "bcea32d392": "Proyectos",
+          "741e98ec23": "Cancelar",
+          "131ac9a3ca": "Creando...",
+          "470b9ba02f": "Crear misión"
+        },
+        "MissionDeleteDialog": {
+          "7c84ee0d7d": "Eliminar misión",
+          "3a89f8d9b8": "¿Eliminar \"{{value0}}\"?",
+          "cef9382dc6": "Eliminar también los espacios de trabajo miembros",
+          "b74a531d8d": "No se pudieron eliminar algunos espacios de trabajo. Resuelve los errores e inténtalo de nuevo.",
+          "e0a412c615": "Cancelar",
+          "fd82d0130a": "Eliminando...",
+          "9ce0f98166": "Eliminar"
+        },
+        "MissionList": {
+          "280576fc92": "Falta el espacio de trabajo",
+          "d241d824cb": "Recrear",
+          "edb3b75817": "Quitar de la misión",
+          "745def31cd": "{{value0}} proyectos",
+          "28833b5212": "Añadir proyectos",
+          "d12c29d655": "Renombrar",
+          "b32972019a": "Eliminar misión",
+          "c9de5b6d5a": "Aún no hay misiones",
+          "d5d9aa29fa": "Agrupa proyectos por tarea. Cada proyecto recibe un espacio de trabajo en una rama de misión compartida.",
+          "e4cb2a2294": "Nueva misión",
+          "d56fdff6c8": "Renombrar misión",
+          "8d3abfb48a": "Nombre de la misión",
+          "7f94e6c670": "Guardar"
         }
       },
       "shared": {

@@ -3883,7 +3883,11 @@
           "5c9c7c16aa": "添加项目以创建工作区",
           "ca6f729da2": "新工作区 ({{value0}})",
           "a30e34eb5c": "关闭工作区板",
-          "25a95899c9": "添加项目"
+          "25a95899c9": "添加项目",
+          "d2a0089e45": "项目",
+          "b6cd1198f2": "工作区",
+          "ea1ec23452": "任务组",
+          "60c23631f0": "新建任务组"
         },
         "SidebarNav": {
           "80611a8b10": "搜索",
@@ -4072,7 +4076,8 @@
           "automationCreated": "由自动化创建",
           "branchIdentity": "分支",
           "branchFolderPathIdentity": "分支或文件夹路径",
-          "ef18787206": "已排队删除"
+          "ef18787206": "已排队删除",
+          "0c5bd538d7": "任务组：{{value0}}"
         },
         "WorktreeCardAgents": {
           "1b0a156717": "智能体"
@@ -4206,7 +4211,8 @@
           "hostDisconnected": "已断开连接",
           "failedNestWorkspace": "无法嵌套工作区",
           "sidebarRowMissing": "目标不再存在",
-          "failedUnnestWorkspace": "展开工作区失败"
+          "failedUnnestWorkspace": "展开工作区失败",
+          "3a2edfac81": "添加到任务组"
         },
         "WorktreeMetaDialog": {
           "3db0a2a593": "取消",
@@ -4654,6 +4660,48 @@
           "cancel": "取消",
           "forget": "从 Orca 中移除",
           "reconnectAndDelete": "重新连接并删除"
+        },
+        "MissionAddProjectsDialog": {
+          "6ec97cd26f": "添加项目",
+          "02449d01cc": "每个新增项目都会在 {{value0}} 上创建工作区。",
+          "eb3a71b1fd": "所有项目都已在该任务组中。",
+          "d5aae76bca": "取消",
+          "e81ed87ddd": "添加中...",
+          "36cc45b3fb": "添加"
+        },
+        "MissionCreateDialog": {
+          "0655a02f86": "新建任务组",
+          "4608f14ade": "每个选中的项目都会在共享任务分支上创建一个工作区。",
+          "48ec5c5b11": "任务组名称",
+          "0c9fe9ce6d": "分支",
+          "bcea32d392": "项目",
+          "741e98ec23": "取消",
+          "131ac9a3ca": "创建中...",
+          "470b9ba02f": "创建任务组"
+        },
+        "MissionDeleteDialog": {
+          "7c84ee0d7d": "删除任务组",
+          "3a89f8d9b8": "删除“{{value0}}”？",
+          "cef9382dc6": "同时删除成员工作区",
+          "b74a531d8d": "部分工作区无法删除。请解决错误后重试。",
+          "e0a412c615": "取消",
+          "fd82d0130a": "删除中...",
+          "9ce0f98166": "删除"
+        },
+        "MissionList": {
+          "280576fc92": "缺少工作区",
+          "d241d824cb": "重新创建",
+          "edb3b75817": "从任务组中移除",
+          "745def31cd": "{{value0}} 个项目",
+          "28833b5212": "添加项目",
+          "d12c29d655": "重命名",
+          "b32972019a": "删除任务组",
+          "c9de5b6d5a": "还没有任务组",
+          "d5d9aa29fa": "按任务分组项目。每个项目都会在共享任务分支上创建一个工作区。",
+          "e4cb2a2294": "新建任务组",
+          "d56fdff6c8": "重命名任务组",
+          "8d3abfb48a": "任务组名称",
+          "7f94e6c670": "保存"
         }
       },
       "shared": {
