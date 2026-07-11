@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest'
-import { DEFAULT_OPEN_IN_APPLICATIONS, normalizeOpenInApplications } from './open-in-applications'
+import {
+  DEFAULT_OPEN_IN_APPLICATIONS,
+  moveOpenInApplicationToFront,
+  normalizeOpenInApplications
+} from './open-in-applications'
 
 describe('normalizeOpenInApplications', () => {
   it('trims fields, drops invalid rows, keeps first duplicate id, and caps list', () => {
@@ -50,5 +54,26 @@ describe('normalizeOpenInApplications', () => {
       DEFAULT_OPEN_IN_APPLICATIONS
     )
     expect(normalizeOpenInApplications([], { seedDefaults: true })).toEqual([])
+  })
+})
+
+describe('moveOpenInApplicationToFront', () => {
+  const apps = [
+    { id: 'a', label: 'A', command: 'a' },
+    { id: 'b', label: 'B', command: 'b' },
+    { id: 'c', label: 'C', command: 'c' }
+  ]
+
+  it('moves a matching non-first id to the front', () => {
+    expect(moveOpenInApplicationToFront(apps, 'c')).toEqual([
+      { id: 'c', label: 'C', command: 'c' },
+      { id: 'a', label: 'A', command: 'a' },
+      { id: 'b', label: 'B', command: 'b' }
+    ])
+  })
+
+  it('returns the same array reference when already first or not found', () => {
+    expect(moveOpenInApplicationToFront(apps, 'a')).toBe(apps)
+    expect(moveOpenInApplicationToFront(apps, 'missing')).toBe(apps)
   })
 })

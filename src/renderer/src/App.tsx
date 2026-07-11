@@ -42,6 +42,9 @@ import {
   ContextMenuTrigger
 } from '@/components/ui/context-menu'
 import { useAppStore } from './store'
+import { findWorktreeById } from './store/slices/worktree-helpers'
+import { getWorktreeConnectionId } from './store/slices/editor'
+import { openWorktreePath } from './components/sidebar/WorktreeOpenInMenu'
 import { useShallow } from 'zustand/react/shallow'
 import { isRemoteWorkspaceSnapshotApplyInProgress, useIpcEvents } from './hooks/useIpcEvents'
 import { useAutomationDispatchEvents } from './hooks/useAutomationDispatchEvents'
@@ -1810,6 +1813,26 @@ function App(): React.JSX.Element {
         const store = useAppStore.getState()
         store.setSidebarOpen(true)
         requestScrollToCurrentWorkspaceRevealAndRename()
+        return
+      }
+
+      // Why: reuses whichever app the user last picked from the "Open in" menu
+      // (tracked as index 0 of settings.openInApplications); no-op until one is picked.
+      if (matchShortcut('workspace.openInLastUsedApp') && activeWorktreeId) {
+        const store = useAppStore.getState()
+        const worktree = findWorktreeById(store.worktreesByRepo, activeWorktreeId)
+        const lastUsedApp = store.settings?.openInApplications?.[0]
+        if (worktree && lastUsedApp) {
+          input.preventDefault()
+          notifyTerminalCapture('workspace.openInLastUsedApp')
+          void openWorktreePath({
+            target: 'external-editor',
+            worktreePath: worktree.path,
+            connectionId: getWorktreeConnectionId(store, activeWorktreeId),
+            command: lastUsedApp.command,
+            appId: lastUsedApp.id
+          })
+        }
         return
       }
 

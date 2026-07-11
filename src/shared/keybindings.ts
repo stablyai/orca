@@ -36,6 +36,7 @@ export type KeybindingActionId =
   | 'app.forceReload'
   | 'workspace.create'
   | 'workspace.rename'
+  | 'workspace.openInLastUsedApp'
   | 'workspace.delete'
   | 'workspace.openBoard'
   | 'workspace.selectByIndex'
@@ -265,6 +266,28 @@ export const KEYBINDING_DEFINITIONS: readonly KeybindingDefinition[] = [
     // taken, so users bind it explicitly in Settings.
     defaultBindings: {
       darwin: ['Mod+Alt+R'],
+      linux: [],
+      win32: []
+    }
+  },
+  {
+    id: 'workspace.openInLastUsedApp',
+    title: 'Open workspace in last-used app',
+    group: 'Global',
+    scope: 'global',
+    searchKeywords: [
+      'shortcut',
+      'global',
+      'worktree',
+      'workspace',
+      'open in',
+      'editor',
+      'zed',
+      'ide'
+    ],
+    // Why: no safe default chord to claim yet; user binds it explicitly in Settings.
+    defaultBindings: {
+      darwin: [],
       linux: [],
       win32: []
     }

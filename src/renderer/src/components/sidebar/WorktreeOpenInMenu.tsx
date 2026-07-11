@@ -12,6 +12,7 @@ import { useAppStore } from '@/store'
 import { isLocalPathOpenBlocked, showLocalPathOpenBlockedToast } from '@/lib/local-path-open-guard'
 import { getLocalFileManagerLabel } from '@/lib/local-file-manager-label'
 import { OpenInApplicationIcon } from '@/lib/open-in-app-catalog'
+import { moveOpenInApplicationToFront } from '../../../../shared/open-in-applications'
 import type { ShellOpenLocalPathFailureReason } from '../../../../shared/shell-open-types'
 import type { OpenInApplication } from '../../../../shared/types'
 import { translate } from '@/i18n/i18n'
@@ -105,6 +106,7 @@ export async function openWorktreePath(args: {
   worktreePath: string
   connectionId?: string | null
   command?: string
+  appId?: string
 }): Promise<void> {
   if (
     isLocalPathOpenBlocked(useAppStore.getState().settings, {
@@ -121,6 +123,17 @@ export async function openWorktreePath(args: {
       : await window.api.shell.openInExternalEditor(args.worktreePath, args.command)
   if (!result.ok) {
     showOpenFailureToast(result.reason)
+    return
+  }
+
+  // Why: "last used" for the open-in-last-used-app shortcut is just index 0.
+  if (args.target === 'external-editor' && args.appId) {
+    const store = useAppStore.getState()
+    const current = store.settings?.openInApplications ?? []
+    const reordered = moveOpenInApplicationToFront(current, args.appId)
+    if (reordered !== current) {
+      void store.updateSettings({ openInApplications: reordered })
+    }
   }
 }
 
@@ -129,11 +142,12 @@ function useOpenInWorktreePath({
   connectionId
 }: WorktreeOpenInMenuItemsProps): (
   target: 'file-manager' | 'external-editor',
-  command?: string
+  command?: string,
+  appId?: string
 ) => Promise<void> {
   return useCallback(
-    async (target, command) => {
-      await openWorktreePath({ target, worktreePath, connectionId, command })
+    async (target, command, appId) => {
+      await openWorktreePath({ target, worktreePath, connectionId, command, appId })
     },
     [connectionId, worktreePath]
   )
@@ -157,7 +171,7 @@ export function WorktreeOpenInMenuItems({
           key={entry.id}
           onClick={stopMenuPropagation}
           onSelect={() => {
-            void openInWorktreePath(entry.target, entry.command)
+            void openInWorktreePath(entry.target, entry.command, entry.id)
           }}
           disabled={disabled}
         >

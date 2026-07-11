@@ -60,3 +60,18 @@ export function normalizeOpenInApplications(
 
   return normalized
 }
+
+// Why: "last used" is just index 0 — no separate lastUsedAppId field to keep in sync.
+export function moveOpenInApplicationToFront(
+  apps: OpenInApplication[],
+  id: string
+): OpenInApplication[] {
+  const index = apps.findIndex((app) => app.id === id)
+  if (index <= 0) {
+    return apps
+  }
+  const next = [...apps]
+  const [app] = next.splice(index, 1)
+  next.unshift(app)
+  return next
+}

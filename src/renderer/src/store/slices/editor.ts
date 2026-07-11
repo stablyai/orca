@@ -1335,7 +1335,7 @@ function shouldDeleteUntouchedUntitledFile(file: OpenFile | undefined, hasDraft:
   )
 }
 
-function getWorktreeConnectionId(state: AppState, worktreeId: string): string | undefined {
+export function getWorktreeConnectionId(state: AppState, worktreeId: string): string | undefined {
   const worktree = findWorktreeById(state.worktreesByRepo ?? {}, worktreeId)
   const repoId = worktree?.repoId ?? getRepoIdFromWorktreeId(worktreeId)
   const repo = (state.repos ?? []).find((candidate) => candidate.id === repoId)
