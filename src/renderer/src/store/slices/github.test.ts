@@ -2218,7 +2218,10 @@ describe('createGitHubSlice.fetchPRForBranch', () => {
     expect(updateWorktreeMeta).toHaveBeenCalledWith(
       worktreeId,
       { linkedPR: null },
-      { shouldApply: expect.any(Function) }
+      {
+        shouldApply: expect.any(Function),
+        precondition: expect.objectContaining({ expectedLinkedPR: 12 })
+      }
     )
     expect(store.getState().worktreesByRepo[repoId]?.[0]?.linkedPR).toBeNull()
     expect(store.getState().prCache[`${repoId}::${branch}`]).toBeUndefined()
@@ -2267,7 +2270,10 @@ describe('createGitHubSlice.fetchPRForBranch', () => {
     expect(updateWorktreeMeta).toHaveBeenCalledWith(
       worktreeId,
       { linkedPR: null },
-      { shouldApply: expect.any(Function) }
+      {
+        shouldApply: expect.any(Function),
+        precondition: expect.objectContaining({ expectedLinkedPR: 12 })
+      }
     )
     expect(store.getState().worktreesByRepo[repoId]?.[0]?.linkedPR).toBeNull()
   })
@@ -2583,7 +2589,10 @@ describe('createGitHubSlice.fetchPRForBranch', () => {
     expect(updateWorktreeMeta).toHaveBeenCalledWith(
       worktreeId,
       { linkedPR: null },
-      { shouldApply: expect.any(Function) }
+      {
+        shouldApply: expect.any(Function),
+        precondition: expect.objectContaining({ expectedLinkedPR: 12 })
+      }
     )
     expect(store.getState().worktreesByRepo[repoId]?.[0]?.linkedPR).toBe(12)
     expect(store.getState().prCache[`${repoId}::${branch}`]).toMatchObject({
@@ -3121,7 +3130,10 @@ describe('createGitHubSlice.fetchPRForBranch', () => {
     expect(updateWorktreeMeta).toHaveBeenCalledWith(
       worktreeId,
       { linkedPR: null },
-      { shouldApply: expect.any(Function) }
+      {
+        shouldApply: expect.any(Function),
+        precondition: expect.objectContaining({ expectedLinkedPR: 12 })
+      }
     )
     expect(store.getState().worktreesByRepo[repoId]?.[0]?.linkedPR).toBeNull()
   })

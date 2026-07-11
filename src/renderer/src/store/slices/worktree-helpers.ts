@@ -27,6 +27,7 @@ import type {
   WorktreeCreationPhase
 } from '@/lib/pending-worktree-creation'
 import { getRepoIdFromWorktreeId } from '../../../../shared/worktree-id'
+import type { WorktreeMetaPrecondition } from '../../../../shared/worktree-meta-precondition'
 export { getRepoIdFromWorktreeId } from '../../../../shared/worktree-id'
 
 export type WorktreeDeleteState = {
@@ -42,6 +43,13 @@ export type WorktreeMetaUpdateGuard = (worktree: Worktree | DetectedWorktree | u
 
 export type WorktreeMetaUpdateOptions = {
   shouldApply?: WorktreeMetaUpdateGuard
+  /**
+   * Optional main-side compare-and-set (STA-1394). When present, main
+   * re-validates it against its authoritative worktree state at write time and
+   * rejects the write on mismatch. `shouldApply` stays the cheap renderer-local
+   * early-out; this is the authoritative backstop.
+   */
+  precondition?: WorktreeMetaPrecondition
 }
 
 export type WorktreeRenameRequest = {

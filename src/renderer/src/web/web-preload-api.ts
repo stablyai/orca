@@ -1424,18 +1424,24 @@ function createWorktreesApi(): NonNullable<Partial<PreloadApi>['worktrees']> {
         branchName,
         expectedHead
       }),
-    updateMeta: async ({ worktreeId, updates }) => {
+    updateMeta: async ({ worktreeId, updates, precondition }) => {
       const rpcUpdates =
         Object.prototype.hasOwnProperty.call(updates, 'pushTarget') &&
         updates.pushTarget === undefined
           ? { ...updates, pushTarget: null }
           : updates
-      return (
-        await callRuntimeResult<{ worktree: Worktree }>('worktree.set', {
+      // Why: surface the REAL `applied` from the RPC (never hardcode true) so
+      // the main-side CAS is authoritative for web/paired/mobile clients too —
+      // the SSH/paired multi-window scenario STA-1394 must cover.
+      const response = await callRuntimeResult<{ worktree: Worktree; applied?: boolean }>(
+        'worktree.set',
+        {
           worktree: toRuntimeWorktreeSelector(worktreeId),
-          ...rpcUpdates
-        })
-      ).worktree
+          ...rpcUpdates,
+          ...(precondition ? { precondition } : {})
+        }
+      )
+      return { applied: response.applied ?? true }
     },
     listLineage: async () =>
       await callRuntimeResult<{

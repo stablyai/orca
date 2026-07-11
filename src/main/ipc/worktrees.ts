@@ -4,6 +4,7 @@ import { ipcMain } from 'electron'
 import { readFile, stat } from 'node:fs/promises'
 import { randomUUID } from 'node:crypto'
 import type { Store } from '../persistence'
+import type { WorktreeMetaPrecondition } from '../../shared/worktree-meta-precondition'
 import { isFolderRepo } from '../../shared/repo-kind'
 import {
   isWorkspaceKey,
@@ -2013,7 +2014,28 @@ export function registerWorktreeHandlers(
 
   ipcMain.handle(
     'worktrees:updateMeta',
-    (_event, args: { worktreeId: string; updates: Partial<WorktreeMeta> }) => {
+    async (
+      _event,
+      args: {
+        worktreeId: string
+        updates: Partial<WorktreeMeta>
+        precondition?: WorktreeMetaPrecondition
+      }
+    ): Promise<{ applied: boolean }> => {
+      const { precondition } = args
+      // Why: main re-validates the caller's precondition against its authoritative
+      // worktree state (shared with the SSH/runtime write path) and rejects a
+      // stale write — the multi-window stale-clear race, STA-1394.
+      if (
+        precondition &&
+        !(await runtime.worktreeMetaPreconditionAllowsWrite(args.worktreeId, precondition))
+      ) {
+        console.warn(
+          `[ipc] Rejected stale worktree meta write for ${args.worktreeId}: precondition no longer holds`
+        )
+        // The renderer refetches and re-syncs its optimistic apply on applied:false.
+        return { applied: false }
+      }
       const updates =
         args.updates.displayName !== undefined
           ? {
@@ -2022,14 +2044,14 @@ export function registerWorktreeHandlers(
               firstAgentMessageRenameError: null
             }
           : args.updates
-      const meta = store.setWorktreeMeta(args.worktreeId, stripOrcaProvenanceMetaUpdates(updates))
+      store.setWorktreeMeta(args.worktreeId, stripOrcaProvenanceMetaUpdates(updates))
       // Do NOT call notifyWorktreesChanged here. The renderer applies meta
       // updates optimistically before calling this IPC, so a notification
       // would trigger a redundant fetchWorktrees round-trip that bumps
       // sortEpoch and reorders the sidebar — the exact bug PR #209 tried
       // to fix (clicking a card would clear isUnread → updateMeta →
       // worktrees:changed → fetchWorktrees → sortEpoch++ → re-sort).
-      return meta
+      return { applied: true }
     }
   )
 

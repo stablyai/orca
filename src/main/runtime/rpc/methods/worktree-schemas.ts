@@ -211,6 +211,16 @@ export const WorktreeSet = WorktreeSelector.extend({
     .optional(),
   diffComments: z.array(z.unknown()).optional(),
   mobileDiffReview: z.unknown().optional(),
+  // Why: optional main-side compare-and-set. When present, the runtime
+  // re-validates it against its authoritative worktree state and rejects a
+  // stale write (STA-1394). Absent = last-write-wins, today's behavior.
+  precondition: z
+    .object({
+      expectedLinkedPR: z.union([z.number(), z.null()]).optional(),
+      expectedBranch: z.string().optional(),
+      expectedHead: z.union([z.string(), z.null()]).optional()
+    })
+    .optional(),
   parentWorktree: OptionalString,
   noParent: OptionalBoolean
 }).superRefine((params, ctx) => {

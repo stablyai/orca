@@ -282,6 +282,7 @@ describe('registerWorktreeHandlers', () => {
     resolveManagedMrBase: ReturnType<typeof vi.fn>
     createTerminal: ReturnType<typeof vi.fn>
     splitTerminal: ReturnType<typeof vi.fn>
+    worktreeMetaPreconditionAllowsWrite: ReturnType<typeof vi.fn>
   }
 
   beforeEach(() => {
@@ -490,7 +491,8 @@ describe('registerWorktreeHandlers', () => {
         handle: 'term-setup',
         tabId: 'tab-startup',
         paneRuntimeId: -1
-      })
+      }),
+      worktreeMetaPreconditionAllowsWrite: vi.fn().mockResolvedValue(true)
     }
     registerWorktreeHandlers(mainWindow as never, store as never, runtimeStub as never)
   })
@@ -721,10 +723,10 @@ describe('registerWorktreeHandlers', () => {
     ])
   }
 
-  it('strips Orca provenance fields from renderer metadata updates', () => {
+  it('strips Orca provenance fields from renderer metadata updates', async () => {
     store.setWorktreeMeta.mockImplementation((_worktreeId, meta) => meta)
 
-    const result = handlers['worktrees:updateMeta'](null, {
+    const result = await handlers['worktrees:updateMeta'](null, {
       worktreeId: 'repo-1::/workspace/feature-wt',
       updates: {
         comment: 'keep me',
@@ -739,7 +741,61 @@ describe('registerWorktreeHandlers', () => {
       comment: 'keep me',
       isPinned: true
     })
-    expect(result).toMatchObject({ comment: 'keep me', isPinned: true })
+    expect(result).toEqual({ applied: true })
+  })
+
+  it('applies a diverged-clear when the CAS precondition still holds', async () => {
+    store.setWorktreeMeta.mockImplementation((_worktreeId, meta) => ({ linkedPR: null, ...meta }))
+    runtimeStub.worktreeMetaPreconditionAllowsWrite.mockResolvedValue(true)
+
+    const result = await handlers['worktrees:updateMeta'](null, {
+      worktreeId: 'repo-1::/workspace/feature-wt',
+      updates: { linkedPR: null },
+      precondition: { expectedLinkedPR: 42, expectedBranch: 'feature/x', expectedHead: 'aaaa' }
+    })
+
+    expect(runtimeStub.worktreeMetaPreconditionAllowsWrite).toHaveBeenCalledWith(
+      'repo-1::/workspace/feature-wt',
+      { expectedLinkedPR: 42, expectedBranch: 'feature/x', expectedHead: 'aaaa' }
+    )
+    expect(store.setWorktreeMeta).toHaveBeenCalledWith('repo-1::/workspace/feature-wt', {
+      linkedPR: null
+    })
+    expect(result).toEqual({ applied: true })
+  })
+
+  it('rejects a stale diverged-clear when the runtime CAS backstop denies the write', async () => {
+    store.setWorktreeMeta.mockImplementation((_worktreeId, meta) => meta)
+    // STA-1394: main's authoritative state no longer matches the precondition
+    // (e.g. the head moved back onto the PR), so the clear must not persist.
+    runtimeStub.worktreeMetaPreconditionAllowsWrite.mockResolvedValue(false)
+
+    const result = await handlers['worktrees:updateMeta'](null, {
+      worktreeId: 'repo-1::/workspace/feature-wt',
+      updates: { linkedPR: null },
+      precondition: { expectedLinkedPR: 42, expectedBranch: 'feature/x', expectedHead: 'X' }
+    })
+
+    expect(runtimeStub.worktreeMetaPreconditionAllowsWrite).toHaveBeenCalledWith(
+      'repo-1::/workspace/feature-wt',
+      { expectedLinkedPR: 42, expectedBranch: 'feature/x', expectedHead: 'X' }
+    )
+    expect(store.setWorktreeMeta).not.toHaveBeenCalled()
+    expect(result).toEqual({ applied: false })
+  })
+
+  it('does not consult the runtime CAS backstop for ordinary (no-precondition) writes', async () => {
+    store.setWorktreeMeta.mockImplementation((_worktreeId, meta) => meta)
+
+    await handlers['worktrees:updateMeta'](null, {
+      worktreeId: 'repo-1::/workspace/feature-wt',
+      updates: { isUnread: false }
+    })
+
+    expect(runtimeStub.worktreeMetaPreconditionAllowsWrite).not.toHaveBeenCalled()
+    expect(store.setWorktreeMeta).toHaveBeenCalledWith('repo-1::/workspace/feature-wt', {
+      isUnread: false
+    })
   })
 
   it('does not trust renderer-authored automation provenance during local create', async () => {

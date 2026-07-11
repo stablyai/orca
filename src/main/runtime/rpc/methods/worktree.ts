@@ -154,44 +154,52 @@ export const WORKTREE_METHODS: RpcMethod[] = [
   defineMethod({
     name: 'worktree.set',
     params: WorktreeSet,
-    handler: async (params, { runtime }) => ({
-      worktree: await runtime.updateManagedWorktreeMeta(params.worktree, {
-        displayName: params.displayName,
-        linkedIssue: params.linkedIssue,
-        linkedPR: params.linkedPR,
-        linkedLinearIssue: params.linkedLinearIssue,
-        linkedLinearIssueWorkspaceId: params.linkedLinearIssueWorkspaceId,
-        linkedLinearIssueOrganizationUrlKey: params.linkedLinearIssueOrganizationUrlKey,
-        linkedGitLabMR: params.linkedGitLabMR,
-        linkedGitLabIssue: params.linkedGitLabIssue,
-        linkedBitbucketPR: params.linkedBitbucketPR,
-        linkedAzureDevOpsPR: params.linkedAzureDevOpsPR,
-        linkedGiteaPR: params.linkedGiteaPR,
-        comment: params.comment,
-        isArchived: params.isArchived,
-        isUnread: params.isUnread,
-        isPinned: params.isPinned,
-        sortOrder: params.sortOrder,
-        manualOrder: params.manualOrder,
-        lastActivityAt: params.lastActivityAt,
-        createdAt: params.createdAt,
-        sparseDirectories: params.sparseDirectories,
-        sparseBaseRef: params.sparseBaseRef,
-        sparsePresetId: params.sparsePresetId,
-        baseRef: params.baseRef,
-        workspaceStatus: params.workspaceStatus,
-        pushTarget: params.pushTarget,
-        diffComments: params.diffComments,
-        mobileDiffReview: params.mobileDiffReview,
-        lineage:
-          params.parentWorktree || params.noParent === true
-            ? {
-                parentWorktree: params.parentWorktree,
-                noParent: params.noParent === true
-              }
-            : undefined
-      } as Parameters<typeof runtime.updateManagedWorktreeMeta>[1])
-    })
+    // Why: return is additive ({ worktree, applied }) — `applied` carries the
+    // main-side CAS result (STA-1394) while existing consumers keep reading
+    // `.worktree`.
+    handler: async (params, { runtime }) => {
+      const { worktree, applied } = await runtime.updateManagedWorktreeMeta(
+        params.worktree,
+        {
+          displayName: params.displayName,
+          linkedIssue: params.linkedIssue,
+          linkedPR: params.linkedPR,
+          linkedLinearIssue: params.linkedLinearIssue,
+          linkedLinearIssueWorkspaceId: params.linkedLinearIssueWorkspaceId,
+          linkedLinearIssueOrganizationUrlKey: params.linkedLinearIssueOrganizationUrlKey,
+          linkedGitLabMR: params.linkedGitLabMR,
+          linkedGitLabIssue: params.linkedGitLabIssue,
+          linkedBitbucketPR: params.linkedBitbucketPR,
+          linkedAzureDevOpsPR: params.linkedAzureDevOpsPR,
+          linkedGiteaPR: params.linkedGiteaPR,
+          comment: params.comment,
+          isArchived: params.isArchived,
+          isUnread: params.isUnread,
+          isPinned: params.isPinned,
+          sortOrder: params.sortOrder,
+          manualOrder: params.manualOrder,
+          lastActivityAt: params.lastActivityAt,
+          createdAt: params.createdAt,
+          sparseDirectories: params.sparseDirectories,
+          sparseBaseRef: params.sparseBaseRef,
+          sparsePresetId: params.sparsePresetId,
+          baseRef: params.baseRef,
+          workspaceStatus: params.workspaceStatus,
+          pushTarget: params.pushTarget,
+          diffComments: params.diffComments,
+          mobileDiffReview: params.mobileDiffReview,
+          lineage:
+            params.parentWorktree || params.noParent === true
+              ? {
+                  parentWorktree: params.parentWorktree,
+                  noParent: params.noParent === true
+                }
+              : undefined
+        } as Parameters<typeof runtime.updateManagedWorktreeMeta>[1],
+        params.precondition
+      )
+      return { worktree, applied }
+    }
   }),
   defineMethod({
     name: 'worktree.persistSortOrder',

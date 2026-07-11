@@ -2996,7 +2996,15 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
                   linkedPRNumber,
                   branch,
                   requestHeadOid: currentHeadOid
-                })
+                }),
+              // Why: shouldApply is renderer-local; the precondition lets main
+              // reject this clear if its authoritative head has since moved back
+              // onto the PR (the multi-window stale-clear race, STA-1394).
+              precondition: {
+                expectedLinkedPR: linkedPRNumber,
+                expectedBranch: branch,
+                expectedHead: currentHeadOid
+              }
             }
           )
         }
@@ -3150,7 +3158,14 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
                     linkedPRNumber,
                     branch,
                     requestHeadOid
-                  })
+                  }),
+                // Why: main re-validates the precondition against its authoritative
+                // head so a stale window can't win this diverged-clear race (STA-1394).
+                precondition: {
+                  expectedLinkedPR: linkedPRNumber,
+                  expectedBranch: branch,
+                  expectedHead: requestHeadOid
+                }
               }
             )
           }
@@ -4108,7 +4123,14 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
               linkedPRNumber: clear.linkedPRNumber,
               branch: clear.branch,
               requestHeadOid: clear.requestHeadOid
-            })
+            }),
+          // Why: main re-validates the precondition against its authoritative
+          // head so a stale window can't win this diverged-clear race (STA-1394).
+          precondition: {
+            expectedLinkedPR: clear.linkedPRNumber,
+            expectedBranch: clear.branch,
+            expectedHead: clear.requestHeadOid
+          }
         }
       )
     }

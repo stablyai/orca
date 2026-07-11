@@ -59,6 +59,7 @@ import {
   type ExecutionHostId
 } from '../../../../shared/execution-host'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
+import type { WorktreeMetaPrecondition } from '../../../../shared/worktree-meta-precondition'
 import {
   folderWorkspaceKey,
   isWorkspaceKey,
@@ -1221,22 +1222,35 @@ function mergeWorkspaceLineageForHost(
 async function persistWorktreeMeta(
   settings: AppState['settings'],
   worktreeId: string,
-  updates: Partial<WorktreeMeta>
-): Promise<void> {
+  updates: Partial<WorktreeMeta>,
+  precondition?: WorktreeMetaPrecondition
+): Promise<{ applied: boolean }> {
   const target = getActiveRuntimeTarget(settings)
   if (target.kind === 'local') {
-    await window.api.worktrees.updateMeta({ worktreeId, updates })
-    return
+    const response = await window.api.worktrees.updateMeta({
+      worktreeId,
+      updates,
+      ...(precondition ? { precondition } : {})
+    })
+    // Why: default to applied when the response omits the flag (older main /
+    // LWW writes) — only an explicit `applied: false` is a CAS rejection.
+    return { applied: response?.applied ?? true }
   }
-  await callRuntimeRpc(
+  // Why: the runtime RPC return is additive ({ worktree, applied }) so paired/web
+  // and CLI consumers that read `.worktree` keep working; surface the real
+  // `applied` so the CAS is authoritative for SSH-mode multi-window writes too.
+  // Older remote runtimes omit `applied` → treat as applied (LWW back-compat).
+  const result = await callRuntimeRpc<{ applied?: boolean }>(
     target,
     'worktree.set',
     {
       worktree: toRuntimeWorktreeSelector(worktreeId),
-      ...encodePushTargetClearForRuntimeRpc(updates)
+      ...encodePushTargetClearForRuntimeRpc(updates),
+      ...(precondition ? { precondition } : {})
     },
     { timeoutMs: 15_000 }
   )
+  return { applied: result?.applied ?? true }
 }
 
 // Why: an SSH-mode per-workspace-env registers a project whose host is the runtime-owned SSH
@@ -3856,7 +3870,19 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
     }
 
     try {
-      await persistWorktreeMeta(settingsForWorktreeOwner(get(), worktreeId), worktreeId, enriched)
+      const { applied } = await persistWorktreeMeta(
+        settingsForWorktreeOwner(get(), worktreeId),
+        worktreeId,
+        enriched,
+        options?.precondition
+      )
+      if (!applied) {
+        // Why: main's CAS rejected this write (its authoritative worktree state
+        // no longer matches the precondition), so the optimistic local apply was
+        // wrong — refetch to re-sync from main's authoritative state.
+        void get().fetchWorktrees(getRepoIdFromWorktreeId(worktreeId))
+        return
+      }
       if (reviewRepo && reviewBranch && typeof get().fetchHostedReviewForBranch === 'function') {
         // Why: the old cache entry may have been populated by the previous
         // provider link. Refetch against the post-update links so stale lookups

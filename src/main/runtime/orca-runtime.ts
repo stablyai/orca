@@ -182,6 +182,11 @@ import {
   splitWorktreeIdForFilesystem
 } from '../../shared/worktree-id'
 import {
+  worktreeMetaPreconditionHolds,
+  type WorktreeMetaPrecondition,
+  type WorktreeMetaPreconditionState
+} from '../../shared/worktree-meta-precondition'
+import {
   getProjectHostSetupForRepo,
   getProjectHostSetupWorktreeMeta
 } from '../../shared/project-host-setup-projection'
@@ -15756,6 +15761,89 @@ export class OrcaRuntimeService {
     return { base, behind: drift.behind, recentSubjects }
   }
 
+  /**
+   * Read the target worktree's authoritative { linkedPR, branch, head } for a
+   * compare-and-set (STA-1394). Forces a FRESH single-repo scan (never the
+   * 1s-TTL resolved cache, which a terminal `git checkout` can silently outrun)
+   * so a stale diverged-clear is deterministically rejected. Returns null when
+   * the worktree is unresolvable (deleted/renamed/scan failed); CAS callers
+   * treat null as a precondition failure and reject the write.
+   */
+  async resolveWorktreePreconditionState(
+    worktreeId: string
+  ): Promise<WorktreeMetaPreconditionState | null> {
+    const store = this.store
+    if (!store) {
+      return null
+    }
+    const parsed = splitWorktreeIdForFilesystem(worktreeId)
+    if (!parsed?.repoId || !parsed.worktreePath) {
+      return null
+    }
+    const repo = store.getRepos().find((entry) => entry.id === parsed.repoId)
+    if (!repo) {
+      return null
+    }
+    let scan: RuntimeWorktreeScanResult
+    try {
+      // Why: bound the CAS scan like computeResolvedWorktrees does — a slow
+      // (but connected) SSH target repo must not hang the awaiting updateMeta
+      // write. A timeout yields ok:false → treated as unresolvable → reject.
+      scan = await withTimeout(
+        this.listRepoWorktreesForResolution(repo),
+        RESOLVED_WORKTREE_REPO_TIMEOUT_MS,
+        {
+          ok: false,
+          worktrees: []
+        }
+      )
+    } catch {
+      return null
+    }
+    // Why: a non-authoritative scan (e.g. disconnected SSH provider) can't prove
+    // the real head, so treat it as unresolvable and let the caller reject
+    // rather than accept a possibly-stale clear.
+    if (!scan.ok) {
+      return null
+    }
+    const gitWorktree = scan.worktrees.find((entry) =>
+      areWorktreePathsEqual(entry.path, parsed.worktreePath)
+    )
+    if (!gitWorktree) {
+      return null
+    }
+    return {
+      linkedPR: store.getWorktreeMeta(worktreeId)?.linkedPR ?? null,
+      branch: gitWorktree.branch,
+      head: gitWorktree.head
+    }
+  }
+
+  /**
+   * Evaluate a CAS precondition against main's authoritative state. Branch/head
+   * preconditions force a fresh target-repo scan (see
+   * resolveWorktreePreconditionState); a linkedPR-only precondition reads the
+   * in-memory store with no git cost. Reuses the shared pure comparator so the
+   * renderer early-out and this backstop cannot drift.
+   */
+  async worktreeMetaPreconditionAllowsWrite(
+    worktreeId: string,
+    precondition: WorktreeMetaPrecondition
+  ): Promise<boolean> {
+    if (precondition.expectedBranch !== undefined || precondition.expectedHead !== undefined) {
+      const state = await this.resolveWorktreePreconditionState(worktreeId)
+      if (!state) {
+        return false
+      }
+      return worktreeMetaPreconditionHolds(precondition, state)
+    }
+    return worktreeMetaPreconditionHolds(precondition, {
+      linkedPR: this.store?.getWorktreeMeta(worktreeId)?.linkedPR ?? null,
+      branch: undefined,
+      head: undefined
+    })
+  }
+
   async updateManagedWorktreeMeta(
     worktreeSelector: string,
     updates: Omit<Partial<WorktreeMeta>, 'pushTarget'> & {
@@ -15764,12 +15852,25 @@ export class OrcaRuntimeService {
         parentWorktree?: string
         noParent?: boolean
       }
-    }
-  ) {
+    },
+    precondition?: WorktreeMetaPrecondition
+  ): Promise<{ worktree: ResolvedWorktree; applied: boolean }> {
     if (!this.store) {
       throw new Error('runtime_unavailable')
     }
     const worktree = await this.resolveWorktreeSelector(worktreeSelector)
+    // CAS backstop (STA-1394): reject a stale write (e.g. the multi-window
+    // diverged-clear race) before touching the store, so remote/SSH windows
+    // funneling through this one runtime can't win the race either.
+    if (
+      precondition &&
+      !(await this.worktreeMetaPreconditionAllowsWrite(worktree.id, precondition))
+    ) {
+      console.warn(
+        `[runtime] Rejected stale worktree meta write for ${worktree.id}: precondition no longer holds`
+      )
+      return { worktree, applied: false }
+    }
     const { lineage, ...metaUpdates } = updates
     const shouldClearPushTarget =
       Object.prototype.hasOwnProperty.call(metaUpdates, 'pushTarget') &&
@@ -15835,7 +15936,7 @@ export class OrcaRuntimeService {
     // explicit push so the editor refreshes metadata changed outside the UI.
     this.invalidateResolvedWorktreeCache()
     this.notifyWorktreesChanged(worktree.repoId)
-    return await this.showManagedWorktree(`id:${worktree.id}`)
+    return { worktree: await this.showManagedWorktree(`id:${worktree.id}`), applied: true }
   }
 
   persistManagedWorktreeSortOrder(orderedIds: string[]): { updated: number } {

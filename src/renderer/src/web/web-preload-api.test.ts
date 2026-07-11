@@ -1983,6 +1983,53 @@ describe('web worktree preload API', () => {
       }
     ])
   })
+
+  it('forwards the CAS precondition and surfaces a rejected applied:false (never hardcodes true)', async () => {
+    const runtimeCalls: { method: string; params: unknown }[] = []
+    vi.doMock('./web-runtime-client', () => ({
+      WebRuntimeClient: class {
+        call(method: string, params?: unknown): Promise<RuntimeRpcResponse<unknown>> {
+          runtimeCalls.push({ method, params })
+          return Promise.resolve({
+            id: `call-${runtimeCalls.length}`,
+            ok: true,
+            result: {
+              worktree: { id: 'repo-1::/workspace/review', path: '/workspace/review' },
+              applied: false
+            },
+            _meta: { runtimeId: 'runtime-1' }
+          })
+        }
+
+        close(): void {}
+      }
+    }))
+
+    const globals = installBrowserGlobals('Linux')
+    writeStoredRuntimeEnvironment(globals.storage)
+    const { installWebPreloadApi } = await import('./web-preload-api')
+    installWebPreloadApi()
+
+    const result = await globals.window.api.worktrees.updateMeta({
+      worktreeId: 'repo-1::/workspace/review',
+      updates: { linkedPR: null },
+      precondition: { expectedLinkedPR: 42, expectedBranch: 'feature/x', expectedHead: 'aaaa' }
+    })
+
+    // The wrapper must surface the REAL applied from the RPC, not hardcode true,
+    // or the CAS is silently defeated for web/paired/mobile clients (STA-1394).
+    expect(result.applied).toBe(false)
+    expect(runtimeCalls).toEqual([
+      {
+        method: 'worktree.set',
+        params: {
+          worktree: 'id:repo-1::/workspace/review',
+          linkedPR: null,
+          precondition: { expectedLinkedPR: 42, expectedBranch: 'feature/x', expectedHead: 'aaaa' }
+        }
+      }
+    ])
+  })
 })
 
 describe('web file preload API', () => {

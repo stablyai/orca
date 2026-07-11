@@ -709,7 +709,9 @@ describe('worktree RPC methods', () => {
   it('forwards Linear metadata through worktree.set', async () => {
     const runtime = {
       getRuntimeId: () => 'test-runtime',
-      updateManagedWorktreeMeta: vi.fn().mockResolvedValue({ id: 'wt-1' })
+      updateManagedWorktreeMeta: vi
+        .fn()
+        .mockResolvedValue({ worktree: { id: 'wt-1' }, applied: true })
     } as unknown as OrcaRuntimeService
     const dispatcher = new RpcDispatcher({ runtime, methods: WORKTREE_METHODS })
 
@@ -729,14 +731,17 @@ describe('worktree RPC methods', () => {
         linkedLinearIssue: 'STA-335',
         linkedLinearIssueWorkspaceId: null,
         linkedLinearIssueOrganizationUrlKey: 'stably'
-      })
+      }),
+      undefined
     )
   })
 
   it('forwards push target clears through worktree.set', async () => {
     const runtime = {
       getRuntimeId: () => 'test-runtime',
-      updateManagedWorktreeMeta: vi.fn().mockResolvedValue({ id: 'wt-1' })
+      updateManagedWorktreeMeta: vi
+        .fn()
+        .mockResolvedValue({ worktree: { id: 'wt-1' }, applied: true })
     } as unknown as OrcaRuntimeService
     const dispatcher = new RpcDispatcher({ runtime, methods: WORKTREE_METHODS })
 
@@ -754,7 +759,33 @@ describe('worktree RPC methods', () => {
       expect.objectContaining({
         linkedPR: null,
         pushTarget: null
+      }),
+      undefined
+    )
+  })
+
+  it('forwards the CAS precondition and surfaces a rejected applied:false', async () => {
+    const runtime = {
+      getRuntimeId: () => 'test-runtime',
+      updateManagedWorktreeMeta: vi
+        .fn()
+        .mockResolvedValue({ worktree: { id: 'wt-1' }, applied: false })
+    } as unknown as OrcaRuntimeService
+    const dispatcher = new RpcDispatcher({ runtime, methods: WORKTREE_METHODS })
+
+    const response = await dispatcher.dispatch(
+      makeRequest('worktree.set', {
+        worktree: 'id:wt-1',
+        linkedPR: null,
+        precondition: { expectedLinkedPR: 42, expectedBranch: 'feature/x', expectedHead: 'aaaa' }
       })
+    )
+
+    expect(response).toMatchObject({ ok: true, result: { applied: false } })
+    expect(runtime.updateManagedWorktreeMeta).toHaveBeenCalledWith(
+      'id:wt-1',
+      expect.objectContaining({ linkedPR: null }),
+      { expectedLinkedPR: 42, expectedBranch: 'feature/x', expectedHead: 'aaaa' }
     )
   })
 

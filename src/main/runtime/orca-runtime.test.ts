@@ -2610,8 +2610,11 @@ describe('OrcaRuntimeService', () => {
     await expect(
       runtime.updateManagedWorktreeMeta(`id:${result.worktree.id}`, { comment: 'note' })
     ).resolves.toMatchObject({
-      id: result.worktree.id,
-      comment: 'note'
+      applied: true,
+      worktree: {
+        id: result.worktree.id,
+        comment: 'note'
+      }
     })
     await expect(
       runtime.removeManagedWorktree('id:folder-repo::/workspace/folder')
@@ -22709,6 +22712,61 @@ describe('OrcaRuntimeService', () => {
     })
 
     expect(setWorktreeMeta).toHaveBeenCalledWith(TEST_WORKTREE_ID, { comment: 'keep me' })
+  })
+
+  it('applies a diverged-clear through the runtime CAS when the precondition holds', async () => {
+    const metaById: Record<string, WorktreeMeta> = {
+      [TEST_WORKTREE_ID]: makeWorktreeMeta({ instanceId: 'wt-instance', linkedPR: 42 })
+    }
+    const setWorktreeMeta = vi.fn((worktreeId: string, meta: Partial<WorktreeMeta>) => {
+      metaById[worktreeId] = { ...metaById[worktreeId], ...meta }
+      return metaById[worktreeId]
+    })
+    const runtimeStore = {
+      ...store,
+      getAllWorktreeMeta: () => metaById,
+      getWorktreeMeta: (worktreeId: string) => metaById[worktreeId],
+      setWorktreeMeta
+    }
+    const runtime = new OrcaRuntimeService(runtimeStore as never)
+
+    // MOCK_GIT_WORKTREES reports head 'abc' / branch 'feature/foo' for the fresh scan.
+    const result = await runtime.updateManagedWorktreeMeta(
+      `id:${TEST_WORKTREE_ID}`,
+      { linkedPR: null },
+      { expectedLinkedPR: 42, expectedBranch: 'feature/foo', expectedHead: 'abc' }
+    )
+
+    expect(result.applied).toBe(true)
+    expect(setWorktreeMeta).toHaveBeenCalledWith(TEST_WORKTREE_ID, { linkedPR: null })
+  })
+
+  it('rejects a stale diverged-clear when the freshly-scanned head has moved on', async () => {
+    const metaById: Record<string, WorktreeMeta> = {
+      [TEST_WORKTREE_ID]: makeWorktreeMeta({ instanceId: 'wt-instance', linkedPR: 42 })
+    }
+    const setWorktreeMeta = vi.fn((worktreeId: string, meta: Partial<WorktreeMeta>) => {
+      metaById[worktreeId] = { ...metaById[worktreeId], ...meta }
+      return metaById[worktreeId]
+    })
+    const runtimeStore = {
+      ...store,
+      getAllWorktreeMeta: () => metaById,
+      getWorktreeMeta: (worktreeId: string) => metaById[worktreeId],
+      setWorktreeMeta
+    }
+    const runtime = new OrcaRuntimeService(runtimeStore as never)
+
+    // Cache-lag regression (STA-1394): caller believed head was 'STALE', but the
+    // forced fresh scan reads the true current head 'abc' — reject the clear.
+    const result = await runtime.updateManagedWorktreeMeta(
+      `id:${TEST_WORKTREE_ID}`,
+      { linkedPR: null },
+      { expectedLinkedPR: 42, expectedBranch: 'feature/foo', expectedHead: 'STALE' }
+    )
+
+    expect(result.applied).toBe(false)
+    expect(setWorktreeMeta).not.toHaveBeenCalled()
   })
 
   it('ignores stale instance-mismatched lineage when validating manual cycle repairs', async () => {

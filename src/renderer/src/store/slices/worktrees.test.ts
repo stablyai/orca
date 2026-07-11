@@ -68,7 +68,7 @@ const mockApi = {
     forceDeletePreservedBranch: vi.fn().mockResolvedValue({ deleted: true }),
     resolvePrBase: vi.fn(),
     resolveMrBase: vi.fn(),
-    updateMeta: vi.fn().mockResolvedValue(undefined),
+    updateMeta: vi.fn().mockResolvedValue({ applied: true, meta: {} }),
     updateLineage: vi.fn().mockResolvedValue(null)
   },
   pty: {
@@ -1908,6 +1908,60 @@ describe('worktree lineage state', () => {
     })
     expect(store.getState().worktreeLineageById).toEqual({})
     expect(store.getState().worktreesByRepo.repo1?.[0]).toEqual(updatedChild)
+  })
+})
+
+describe('updateWorktreeMeta CAS reconcile', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    resetRemoteRuntimeMocks()
+  })
+
+  it('refetches worktrees when main rejects the write (applied:false)', async () => {
+    const store = createTestStore()
+    const existing = makeWorktree({
+      id: 'repo1::/path/wt1',
+      repoId: 'repo1',
+      path: '/path/wt1',
+      linkedPR: 12
+    })
+    store.setState({ worktreesByRepo: { repo1: [existing] } } as Partial<AppState>)
+    mockApi.worktrees.updateMeta.mockResolvedValueOnce({ applied: false, meta: {} })
+
+    await store.getState().updateWorktreeMeta(
+      'repo1::/path/wt1',
+      { linkedPR: null },
+      {
+        precondition: { expectedLinkedPR: 12, expectedBranch: 'feature', expectedHead: 'abc123' }
+      }
+    )
+
+    // A rejected clear means the optimistic local apply was wrong → re-sync.
+    expect(mockApi.worktrees.listDetected).toHaveBeenCalledWith(
+      expect.objectContaining({ repoId: 'repo1' })
+    )
+  })
+
+  it('does not refetch when main applies the write (applied:true)', async () => {
+    const store = createTestStore()
+    const existing = makeWorktree({
+      id: 'repo1::/path/wt1',
+      repoId: 'repo1',
+      path: '/path/wt1',
+      linkedPR: 12
+    })
+    store.setState({ worktreesByRepo: { repo1: [existing] } } as Partial<AppState>)
+    mockApi.worktrees.updateMeta.mockResolvedValueOnce({ applied: true, meta: {} })
+
+    await store.getState().updateWorktreeMeta(
+      'repo1::/path/wt1',
+      { linkedPR: null },
+      {
+        precondition: { expectedLinkedPR: 12, expectedBranch: 'feature', expectedHead: 'abc123' }
+      }
+    )
+
+    expect(mockApi.worktrees.listDetected).not.toHaveBeenCalled()
   })
 })
 
