@@ -22,9 +22,11 @@ export {
 export { isOpenCodeNativeTitle, isMeaningfulOpenCodeTerminalTitle } from './opencode-terminal-title'
 export { getAgentLabel, isClaudeAgent } from './agent-title-identity'
 export {
+  CODEX_NATIVE_ACTION_REQUIRED_TITLE_RE,
   clearWorkingIndicators,
   createAgentStatusTracker,
   detectAgentStatusFromTitle,
+  isCodexNativeActionRequiredTitle,
   isQuarterCircleSpinnerOnlyAgentTitle,
   normalizeTerminalTitle
 } from './agent-title-status'

@@ -45,12 +45,14 @@ import {
   normalizeCodexProjectPathForLookup,
   normalizeHookTrustKeyForLookup,
   parseTrustKey,
+  moveHookTrustEntriesInContent,
   readHookTrustEntries,
   removeHookTrustEntries,
   upsertHookTrustEntriesInContent,
   upsertHookTrustEntries,
   writeConfigAtomically,
   type CodexEventLabel,
+  type CodexHookTrustKeyMove,
   type CodexHookTrustState,
   type CodexTrustEntry
 } from './config-toml-trust'
@@ -83,7 +85,11 @@ import {
 import type { CodexTrustGrantLedgerHome } from './codex-trust-grant-ledger'
 import { mutateRealHomeHooksPreservingUserTrust } from './codex-user-hook-trust-rebase'
 
-// Why: Pre/PostToolUse feed the live in-flight-tool readout; PermissionRequest exits with no decision so Codex still shows its approval UI while Orca flips the pane to waiting.
+// Why: PreToolUse/PostToolUse give the dashboard a live readout of the
+// in-flight tool (name + input preview) between UserPromptSubmit and Stop.
+// SubagentStart/SubagentStop keep the parent turn visible while a subagent
+// runs. PermissionRequest remains the human-input boundary: the managed script
+// exits without a decision so Codex still shows its normal approval UI.
 const CODEX_EVENTS = [
   'SessionStart',
   'UserPromptSubmit',
@@ -1021,6 +1027,66 @@ function getWslReconciliationKey(runtimeHomePath: string): string {
   return normalizeCodexProjectPathForLookup(runtimeHomePath)
 }
 
+// Why: repeated remote installs may find Orca before or after user hooks. Match
+// user content across cleanup so only approvals whose real index changed move.
+function collectPrependedRemoteUserTrustMoves(
+  sourcePath: string,
+  eventName: (typeof CODEX_EVENTS)[number],
+  current: readonly HookDefinition[],
+  cleaned: readonly HookDefinition[],
+  isManagedCommand: (command: string | undefined) => boolean
+): CodexHookTrustKeyMove[] {
+  const oldEntriesBySignature = new Map<string, CodexTrustEntry[]>()
+  current.forEach((definition, groupIndex) => {
+    const hooks = Array.isArray(definition.hooks) ? definition.hooks : []
+    hooks.forEach((hook, handlerIndex) => {
+      if (isManagedCommand(hook.command)) {
+        return
+      }
+      const entry = createCodexHookTrustEntry(
+        sourcePath,
+        eventName,
+        groupIndex,
+        handlerIndex,
+        definition,
+        hook
+      )
+      if (!entry) {
+        return
+      }
+      const signature = getCodexHookTrustSignature(entry)
+      const entries = oldEntriesBySignature.get(signature) ?? []
+      entries.push(entry)
+      oldEntriesBySignature.set(signature, entries)
+    })
+  })
+
+  const moves: CodexHookTrustKeyMove[] = []
+  cleaned.forEach((definition, cleanedGroupIndex) => {
+    const hooks = Array.isArray(definition.hooks) ? definition.hooks : []
+    hooks.forEach((hook, handlerIndex) => {
+      const nextEntry = createCodexHookTrustEntry(
+        sourcePath,
+        eventName,
+        cleanedGroupIndex + 1,
+        handlerIndex,
+        definition,
+        hook
+      )
+      if (!nextEntry) {
+        return
+      }
+      const oldEntries = oldEntriesBySignature.get(getCodexHookTrustSignature(nextEntry))
+      const oldEntry = oldEntries?.shift()
+      if (!oldEntry) {
+        return
+      }
+      moves.push({ fromKey: computeTrustKey(oldEntry), toKey: computeTrustKey(nextEntry) })
+    })
+  })
+  return moves
+}
+
 export class CodexHookService {
   async refreshManagedScripts(): Promise<void> {
     await refreshManagedScriptIfPresent(getManagedScriptPath(), getManagedScript())
@@ -1443,17 +1509,29 @@ export class CodexHookService {
       }
 
       const trustEntries: CodexTrustEntry[] = []
+      const userTrustMoves: CodexHookTrustKeyMove[] = []
       for (const eventName of CODEX_EVENTS) {
         const current = Array.isArray(nextHooks[eventName]) ? nextHooks[eventName] : []
         const cleaned = removeManagedCommands(current, isManagedCommand)
         const definition: HookDefinition = {
           hooks: [buildManagedCommandHook(command)]
         }
-        nextHooks[eventName] = [...cleaned, definition]
+        // Why: local installs already place Orca first; remote installs must
+        // not wait behind slow user hooks before publishing terminal status.
+        nextHooks[eventName] = [definition, ...cleaned]
+        userTrustMoves.push(
+          ...collectPrependedRemoteUserTrustMoves(
+            remoteConfigPath,
+            eventName,
+            current,
+            cleaned,
+            isManagedCommand
+          )
+        )
         trustEntries.push({
           sourcePath: remoteConfigPath,
           eventLabel: CODEX_EVENT_LABEL[eventName],
-          groupIndex: cleaned.length,
+          groupIndex: 0,
           handlerIndex: 0,
           command,
           timeoutSec: MANAGED_HOOK_TIMEOUT_SECONDS
@@ -1478,7 +1556,8 @@ export class CodexHookService {
           }
         }
         const existingToml = existingTomlRaw ?? ''
-        const updatedToml = upsertHookTrustEntriesInContent(existingToml, trustEntries)
+        const movedUserTrust = moveHookTrustEntriesInContent(existingToml, userTrustMoves)
+        const updatedToml = upsertHookTrustEntriesInContent(movedUserTrust, trustEntries)
         if (updatedToml !== existingToml) {
           await writeTextFileRemoteAtomic(sftp, remoteTomlPath, updatedToml)
         }

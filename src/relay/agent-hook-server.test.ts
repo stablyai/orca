@@ -105,6 +105,46 @@ describe('RelayAgentHookServer', () => {
     }
   })
 
+  it('forwards Codex SessionStart identity with the next real status event', async () => {
+    const forward = vi.fn<(envelope: AgentHookRelayEnvelope) => void>()
+    const server = new RelayAgentHookServer({ endpointDir: dir, forward })
+    await server.start()
+    try {
+      const { port, token } = server.getCoordinates()
+      const post = (payload: Record<string, unknown>): Promise<Response> =>
+        fetch(`http://127.0.0.1:${port}/hook/codex`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-Orca-Agent-Hook-Token': token
+          },
+          body: JSON.stringify({ paneKey: PANE_KEY, tabId: 'tab-1', payload })
+        })
+
+      expect(
+        (
+          await post({
+            hook_event_name: 'SessionStart',
+            session_id: 'codex-relay-session'
+          })
+        ).status
+      ).toBe(204)
+      expect(forward).not.toHaveBeenCalled()
+
+      expect(
+        (await post({ hook_event_name: 'UserPromptSubmit', prompt: 'relay this status' })).status
+      ).toBe(204)
+      expect(forward).toHaveBeenCalledTimes(1)
+      expect(forward.mock.calls[0][0]).toMatchObject({
+        source: 'codex',
+        providerSession: { key: 'session_id', id: 'codex-relay-session' },
+        payload: { state: 'working', prompt: 'relay this status' }
+      })
+    } finally {
+      server.stop()
+    }
+  })
+
   it('rejects requests with the wrong bearer token (403)', async () => {
     const forward = vi.fn()
     const server = new RelayAgentHookServer({ endpointDir: dir, forward })

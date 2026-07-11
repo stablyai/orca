@@ -5053,7 +5053,7 @@ describe('Codex hook normalization', () => {
     expect(result?.payload.toolInput).toBeUndefined()
   })
 
-  it('SessionStart clears cached tool state from a prior session', () => {
+  it('SessionStart clears cached tool state without reporting working', () => {
     // Seed a Stop snapshot with an assistant message.
     _internals.normalizeHookPayload(
       'codex',
@@ -5063,13 +5063,20 @@ describe('Codex hook normalization', () => {
       }),
       'production'
     )
-    const result = _internals.normalizeHookPayload(
+    const started = _internals.normalizeHookPayload(
       'codex',
-      buildBody({ hook_event_name: 'SessionStart' }),
+      buildBody({ hook_event_name: 'SessionStart', session_id: 'codex-session-next' }),
       'production'
     )
-    expect(result?.payload.state).toBe('working')
-    expect(result?.payload.lastAssistantMessage).toBeUndefined()
+    const prompted = _internals.normalizeHookPayload(
+      'codex',
+      buildBody({ hook_event_name: 'UserPromptSubmit', prompt: 'Next turn' }),
+      'production'
+    )
+    expect(started).toBeNull()
+    expect(prompted?.payload.state).toBe('working')
+    expect(prompted?.payload.lastAssistantMessage).toBeUndefined()
+    expect(prompted?.providerSession).toEqual({ key: 'session_id', id: 'codex-session-next' })
   })
 
   it('SessionStart clears the cached prompt from a prior session until a new prompt arrives', () => {
@@ -5081,13 +5088,24 @@ describe('Codex hook normalization', () => {
       }),
       'production'
     )
-    const result = _internals.normalizeHookPayload(
+    const started = _internals.normalizeHookPayload(
       'codex',
-      buildBody({ hook_event_name: 'SessionStart' }),
+      buildBody({ hook_event_name: 'SessionStart', session_id: 'codex-session-fresh' }),
       'production'
     )
-    expect(result?.payload.state).toBe('working')
-    expect(result?.payload.prompt).toBe('')
+    const nextTool = _internals.normalizeHookPayload(
+      'codex',
+      buildBody({
+        hook_event_name: 'PreToolUse',
+        tool_name: 'Bash',
+        tool_input: { command: 'pwd' }
+      }),
+      'production'
+    )
+    expect(started).toBeNull()
+    expect(nextTool?.payload.state).toBe('working')
+    expect(nextTool?.payload.prompt).toBe('')
+    expect(nextTool?.providerSession).toEqual({ key: 'session_id', id: 'codex-session-fresh' })
   })
 })
 
