@@ -3091,6 +3091,8 @@ export type PreloadApi = {
     getDistroOptions: (options?: {
       refresh?: boolean
     }) => Promise<{ available: boolean; distros: string[]; default: string | null }>
+    /** 9P-safe existence check for a \\wsl.localhost\... path (terminal POSIX links, #8156). */
+    pathExists: (uncPath: string) => Promise<boolean | null>
   }
   pwsh: {
     isAvailable: () => Promise<boolean>

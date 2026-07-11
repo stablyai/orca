@@ -538,7 +538,9 @@ const api = {
     getDistroOptions: (options?: {
       refresh?: boolean
     }): Promise<{ available: boolean; distros: string[]; default: string | null }> =>
-      ipcRenderer.invoke('wsl:getDistroOptions', options)
+      ipcRenderer.invoke('wsl:getDistroOptions', options),
+    pathExists: (uncPath: string): Promise<boolean | null> =>
+      ipcRenderer.invoke('wsl:pathExists', uncPath)
   },
 
   pwsh: {

@@ -1,5 +1,7 @@
 import { execFile, execFileSync } from 'node:child_process'
-import { parseWslUncPath } from '../shared/wsl-paths'
+import { parseWslUncPath, toWindowsWslPath } from '../shared/wsl-paths'
+
+export { toWindowsWslPath } from '../shared/wsl-paths'
 
 export type WslPathInfo = {
   distro: string
@@ -28,18 +30,18 @@ export function isWslPath(path: string): boolean {
 }
 
 /**
- * Check whether a WSL UNC working directory exists by testing it inside the
- * distro itself, returning null when the answer can't be determined.
+ * Test whether a WSL UNC path exists inside its distro, returning null when
+ * the answer can't be determined.
  *
  * Why: Win32 fs.statSync against the WSL 9P filesystem (\\wsl.localhost\...)
- * is unreliable for repos that live on the WSL side — it can report ENOENT for
- * directories that exist, which made opening a WSL worktree fail with
- * "Working directory ... does not exist". `wsl.exe -d <distro> test -d` asks
- * the distro directly, which is the authoritative answer. Returns null (rather
- * than false) when wsl.exe is unavailable or errors so callers can fall back to
- * the fs check instead of falsely rejecting a valid directory.
+ * is unreliable — it can report ENOENT for paths that exist on the Linux
+ * side, which made opening a WSL worktree fail with "Working directory ...
+ * does not exist". `wsl.exe -d <distro> test <flag>` asks the distro
+ * directly, which is the authoritative answer. Returns null (rather than
+ * false) when wsl.exe is unavailable or errors so callers can fall back to
+ * another check instead of falsely rejecting a valid path.
  */
-export function wslUncDirectoryExists(uncPath: string): boolean | null {
+function testWslUncPath(uncPath: string, testFlag: '-d' | '-e'): boolean | null {
   if (process.platform !== 'win32') {
     return null
   }
@@ -48,13 +50,13 @@ export function wslUncDirectoryExists(uncPath: string): boolean | null {
     return null
   }
   try {
-    execFileSync('wsl.exe', ['-d', info.distro, '--', 'test', '-d', info.linuxPath], {
+    execFileSync('wsl.exe', ['-d', info.distro, '--', 'test', testFlag, info.linuxPath], {
       stdio: ['pipe', 'pipe', 'pipe'],
       timeout: 5000
     })
     return true
   } catch (error) {
-    // A non-zero exit (directory missing) surfaces as an error with a numeric
+    // A non-zero exit (path missing) surfaces as an error with a numeric
     // `status`; treat that as a definitive "does not exist". Any other failure
     // (wsl.exe missing, distro not running, timeout) is inconclusive -> null.
     if (typeof (error as { status?: unknown })?.status === 'number') {
@@ -62,6 +64,16 @@ export function wslUncDirectoryExists(uncPath: string): boolean | null {
     }
     return null
   }
+}
+
+/** Directory-only existence check — used for cwd validation (worktree open, PTY spawn). */
+export function wslUncDirectoryExists(uncPath: string): boolean | null {
+  return testWslUncPath(uncPath, '-d')
+}
+
+/** Any-kind (file or directory) existence check — used for terminal link resolution (#8156). */
+export function wslUncPathExists(uncPath: string): boolean | null {
+  return testWslUncPath(uncPath, '-e')
 }
 
 /**
@@ -87,26 +99,6 @@ export function toLinuxPath(windowsPath: string): string {
   const driveLetter = driveMatch[1].toLowerCase()
   const rest = driveMatch[2].replace(/\\/g, '/')
   return `/mnt/${driveLetter}/${rest}`
-}
-
-/**
- * Convert a Linux path inside a WSL distro to a Windows path.
- *
- * Why two forms: paths under /mnt/<drive>/... are Windows-native filesystem
- * paths that WSL exposes via the DrvFs mount. These map back to their native
- * Windows form (e.g. /mnt/c/Users → C:\Users). All other paths live on the
- * WSL virtual filesystem and use the UNC form (\\wsl.localhost\Distro\...).
- */
-export function toWindowsWslPath(linuxPath: string, distro: string): string {
-  // /mnt/c/Users/... → C:\Users\...
-  const mntMatch = linuxPath.match(/^\/mnt\/([a-z])(\/.*)?$/)
-  if (mntMatch) {
-    const driveLetter = mntMatch[1].toUpperCase()
-    const rest = (mntMatch[2] || '').replace(/\//g, '\\')
-    return `${driveLetter}:${rest || '\\'}`
-  }
-
-  return `\\\\wsl.localhost\\${distro}${linuxPath.replace(/\//g, '\\')}`
 }
 
 // ─── WSL home directory resolution ──────────────────────────────────

@@ -23,6 +23,11 @@ function normalizeSegments(pathValue: string): string[] {
   return stack
 }
 
+/** True for a POSIX-form absolute path (e.g. `/home/j/app`), not a Windows drive or UNC path. */
+export function isPosixAbsolutePath(pathValue: string): boolean {
+  return normalizeAbsolutePath(pathValue)?.rootKind === 'posix'
+}
+
 export function normalizeAbsolutePath(pathValue: string): NormalizedAbsolutePath | null {
   const windowsDriveMatch = /^([A-Za-z]):[\\/]*(.*)$/.exec(pathValue)
   if (windowsDriveMatch) {

@@ -1,5 +1,9 @@
 import { describe, it, expect } from 'vitest'
-import { getRepoDisplayPath, isWslRuntimeResolution } from './wsl-repo-identity'
+import {
+  getRepoDisplayPath,
+  getWslRuntimeDistro,
+  isWslRuntimeResolution
+} from './wsl-repo-identity'
 
 describe('getRepoDisplayPath', () => {
   it('POSIX for wsl.localhost UNC', () => {
@@ -23,5 +27,20 @@ describe('isWslRuntimeResolution', () => {
     ).toBe(false)
     expect(isWslRuntimeResolution(undefined)).toBe(false)
     expect(isWslRuntimeResolution({ status: 'repair-required', repair: {} as never })).toBe(false)
+  })
+})
+describe('getWslRuntimeDistro', () => {
+  it('returns the distro only for resolved wsl', () => {
+    expect(
+      getWslRuntimeDistro({
+        status: 'resolved',
+        runtime: { kind: 'wsl', distro: 'Ubuntu' } as never
+      })
+    ).toBe('Ubuntu')
+    expect(
+      getWslRuntimeDistro({ status: 'resolved', runtime: { kind: 'windows-host' } as never })
+    ).toBeNull()
+    expect(getWslRuntimeDistro(undefined)).toBeNull()
+    expect(getWslRuntimeDistro({ status: 'repair-required', repair: {} as never })).toBeNull()
   })
 })

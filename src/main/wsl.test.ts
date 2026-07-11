@@ -20,6 +20,7 @@ import {
   toWindowsWslPath,
   parseWslPath,
   wslUncDirectoryExists,
+  wslUncPathExists,
   listWslDistrosAsync,
   isWslAvailableAsync,
   _resetWslCachesForTests,
@@ -118,6 +119,49 @@ describe('wslUncDirectoryExists', () => {
       withPlatform('linux', () => wslUncDirectoryExists('\\\\wsl.localhost\\Ubuntu\\home\\jin'))
     ).toBeNull()
     expect(execFileSyncMock).not.toHaveBeenCalled()
+  })
+})
+
+describe('wslUncPathExists', () => {
+  afterEach(() => {
+    execFileSyncMock.mockReset()
+  })
+
+  it('tests any path kind (`test -e`), not just directories', () => {
+    execFileSyncMock.mockReturnValue('')
+    const result = withPlatform('win32', () =>
+      wslUncPathExists('\\\\wsl.localhost\\Ubuntu\\home\\j\\app\\src\\x.ts')
+    )
+    expect(result).toBe(true)
+    expect(execFileSyncMock).toHaveBeenCalledWith(
+      'wsl.exe',
+      ['-d', 'Ubuntu', '--', 'test', '-e', '/home/j/app/src/x.ts'],
+      expect.objectContaining({ timeout: 5000 })
+    )
+  })
+
+  it('returns false when the path is missing', () => {
+    execFileSyncMock.mockImplementation(() => {
+      const error = new Error('Command failed') as Error & { status: number }
+      error.status = 1
+      throw error
+    })
+    const result = withPlatform('win32', () =>
+      wslUncPathExists('\\\\wsl.localhost\\Ubuntu\\home\\j\\missing.ts')
+    )
+    expect(result).toBe(false)
+  })
+
+  it('returns null when wsl.exe is unavailable (inconclusive)', () => {
+    execFileSyncMock.mockImplementation(() => {
+      const error = new Error('spawn wsl.exe ENOENT') as Error & { code: string }
+      error.code = 'ENOENT'
+      throw error
+    })
+    const result = withPlatform('win32', () =>
+      wslUncPathExists('\\\\wsl.localhost\\Ubuntu\\home\\j\\app\\src\\x.ts')
+    )
+    expect(result).toBeNull()
   })
 })
 

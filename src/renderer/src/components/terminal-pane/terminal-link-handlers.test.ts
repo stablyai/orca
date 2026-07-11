@@ -37,6 +37,7 @@ const runtimeEnvironmentTransportCallMock = vi.fn()
 const setActiveWorktreeMock = vi.fn()
 const createBrowserTabMock = vi.fn()
 const setPendingEditorRevealMock = vi.fn()
+const wslPathExistsMock = vi.fn().mockResolvedValue(true)
 
 const deps = { worktreeId: 'wt-1', worktreePath: '/tmp' }
 const storeState = {
@@ -51,7 +52,25 @@ const storeState = {
   createBrowserTab: createBrowserTabMock,
   openFile: openFileMock,
   setPendingEditorReveal: setPendingEditorRevealMock,
-  worktreesByRepo: {} as Record<string, { id: string; path: string }[]>
+  worktreesByRepo: {} as Record<
+    string,
+    { id: string; path: string; repoId?: string; projectId?: string; hostId?: string }[]
+  >,
+  repos: [] as {
+    id: string
+    path: string
+    displayName: string
+    connectionId?: string
+    executionHostId?: string
+  }[],
+  projects: [] as {
+    id: string
+    displayName: string
+    sourceRepoIds?: string[]
+    localWindowsRuntimePreference?: unknown
+  }[],
+  activeRepoId: undefined as string | undefined,
+  activeWorktreeId: undefined as string | undefined
 }
 
 vi.mock('@/store', () => ({
@@ -106,8 +125,13 @@ beforeEach(() => {
   })
   vi.mocked(getConnectionId).mockReturnValue(null)
   openFilePathMock.mockResolvedValue(true)
+  wslPathExistsMock.mockResolvedValue(true)
   storeState.settings = undefined
   storeState.worktreesByRepo = {}
+  storeState.repos = []
+  storeState.projects = []
+  storeState.activeRepoId = undefined
+  storeState.activeWorktreeId = undefined
   registerHttpLinkStoreAccessor(() => storeState)
   vi.stubGlobal('window', {
     dispatchEvent: vi.fn(),
@@ -123,6 +147,7 @@ beforeEach(() => {
         pathExists: fsPathExistsMock,
         stat: statMock
       },
+      wsl: { pathExists: wslPathExistsMock },
       runtimeEnvironments: { call: runtimeEnvironmentTransportCallMock }
     }
   })
@@ -2115,5 +2140,89 @@ describe('createFilePathLinkProvider range bounds', () => {
     expect(containsBufferPoint(link!, 'trace '.length + 1, 1)).toBe(true)
     expect(containsBufferPoint(link!, 'nested/file.ts'.length, 2)).toBe(true)
     expect(containsBufferPoint(link!, 'nested/file.ts'.length + 1, 2)).toBe(false)
+  })
+
+  describe('WSL POSIX terminal link resolution (#8156)', () => {
+    const wslWorktreePath = '\\\\wsl.localhost\\Ubuntu\\home\\j\\app'
+
+    beforeEach(() => {
+      // Why: getLocalProjectExecutionRuntimeContext derives the WSL distro from
+      // this worktree/repo pairing — see getWslDistroFromPath in
+      // local-preflight-context.ts. No project override needed for wt-1 to
+      // resolve as a WSL-runtime pane.
+      storeState.repos = [{ id: 'repo-1', path: wslWorktreePath, displayName: 'app' }]
+      storeState.worktreesByRepo = {
+        'repo-1': [{ id: 'wt-1', path: wslWorktreePath, repoId: 'repo-1', projectId: 'repo-1' }]
+      }
+    })
+
+    it('resolves a POSIX terminal path to the WSL UNC share, checks existence 9P-safely, and opens it', async () => {
+      setPlatform('Windows')
+      const { provider } = createProviderSetup(
+        [makeBufferLine('/home/j/app/src/x.ts:12')],
+        new Map(),
+        { worktreeId: 'wt-1', worktreePath: wslWorktreePath, startupCwd: '/home/j/app' }
+      )
+
+      const links = await new Promise<ILink[]>((resolve) => {
+        provider.provideLinks(1, (provided) => resolve(provided ?? []))
+      })
+
+      expect(wslPathExistsMock).toHaveBeenCalledWith(
+        '\\\\wsl.localhost\\Ubuntu\\home\\j\\app\\src\\x.ts'
+      )
+      expect(window.api.shell.pathExists).not.toHaveBeenCalled()
+      expect(links.map((link) => link.text)).toEqual(['/home/j/app/src/x.ts:12'])
+
+      links[0]!.activate?.({ metaKey: false, ctrlKey: true } as MouseEvent, links[0]!.text)
+      await flushAsyncWork()
+      await flushDoubleRaf()
+
+      expect(openFileMock).toHaveBeenCalledWith(
+        expect.objectContaining({
+          filePath: '\\\\wsl.localhost\\Ubuntu\\home\\j\\app\\src\\x.ts'
+        }),
+        { forceContentReload: true }
+      )
+      expect(setPendingEditorRevealMock).toHaveBeenCalledWith({
+        filePath: '\\\\wsl.localhost\\Ubuntu\\home\\j\\app\\src\\x.ts',
+        line: 12,
+        column: 1,
+        matchLength: 0
+      })
+    })
+
+    it('does not linkify a WSL POSIX path the distro reports missing', async () => {
+      setPlatform('Windows')
+      wslPathExistsMock.mockResolvedValue(false)
+      const { provider } = createProviderSetup(
+        [makeBufferLine('/home/j/app/src/missing.ts')],
+        new Map(),
+        { worktreeId: 'wt-1', worktreePath: wslWorktreePath, startupCwd: '/home/j/app' }
+      )
+
+      const links = await new Promise<ILink[]>((resolve) => {
+        provider.provideLinks(1, (provided) => resolve(provided ?? []))
+      })
+
+      expect(links).toEqual([])
+    })
+
+    it('leaves a non-WSL pane on the existing local existence check', async () => {
+      setPlatform('Windows')
+      storeState.worktreesByRepo = {}
+      const { provider } = createProviderSetup(
+        [makeBufferLine('/home/j/app/src/x.ts')],
+        new Map([['active\0/home/j/app/src/x.ts', true]]),
+        { worktreeId: 'wt-1', worktreePath: '/repo', startupCwd: '/repo' }
+      )
+
+      const links = await new Promise<ILink[]>((resolve) => {
+        provider.provideLinks(1, (provided) => resolve(provided ?? []))
+      })
+
+      expect(wslPathExistsMock).not.toHaveBeenCalled()
+      expect(links.map((link) => link.text)).toEqual(['/home/j/app/src/x.ts'])
+    })
   })
 })

@@ -12,6 +12,11 @@ import {
   openFilePathLinkAtBufferPosition
 } from './terminal-file-link-hit-testing'
 import {
+  getPaneWslRuntimeDistro,
+  resolveWslLinkAbsolutePath,
+  wslLinkPathExists
+} from './terminal-wsl-link-resolution'
+import {
   getTerminalFileContext,
   isHtmlFilePath,
   openDetectedFilePath,
@@ -121,6 +126,10 @@ export function createFilePathLinkProvider(
         return
       }
 
+      // Why: WSL-runtime terminals report POSIX cwds/paths; mapped onto the
+      // distro's UNC share per candidate below (see terminal-wsl-link-resolution).
+      const wslDistro = getPaneWslRuntimeDistro(worktreeId)
+
       void Promise.all(
         logicalLines.flatMap((logicalLine) =>
           extractTerminalFileLinkCandidates(logicalLine.text).map(
@@ -132,6 +141,8 @@ export function createFilePathLinkProvider(
               if (!resolved) {
                 return null
               }
+              const wslAbsolutePath = resolveWslLinkAbsolutePath(resolved.absolutePath, wslDistro)
+              const absolutePath = wslAbsolutePath ?? resolved.absolutePath
               const range = rangeForParsedFileLink(logicalLine, parsed.startIndex, parsed.endIndex)
               if (!range) {
                 return null
@@ -144,17 +155,14 @@ export function createFilePathLinkProvider(
                 worktreePath,
                 runtimeEnvironmentId
               )
-              const isRemoteRuntimePath = isRemoteRuntimeFileOperation(
-                fileContext,
-                resolved.absolutePath
-              )
+              const isRemoteRuntimePath = isRemoteRuntimeFileOperation(fileContext, absolutePath)
               const cacheKey = getTerminalPathExistsCacheKey({
-                absolutePath: resolved.absolutePath,
+                absolutePath,
                 connectionId: fileContext.connectionId,
                 isRemoteRuntimePath,
                 runtimeEnvironmentId
               })
-              const worktreeRootLink = resolveKnownWorktreeRootPathLink(resolved.absolutePath)
+              const worktreeRootLink = resolveKnownWorktreeRootPathLink(absolutePath)
               if (/[\\/]$/.test(parsed.pathText) && !worktreeRootLink) {
                 return null
               }
@@ -164,9 +172,11 @@ export function createFilePathLinkProvider(
                 const cachedExists = readTerminalPathExistsCache(pathExistsCache, cacheKey)
                 const exists =
                   cachedExists ??
-                  (fileContext.connectionId || isRemoteRuntimePath
-                    ? await runtimePathExists(fileContext, resolved.absolutePath)
-                    : await window.api.shell.pathExists(resolved.absolutePath))
+                  (wslAbsolutePath
+                    ? await wslLinkPathExists(wslAbsolutePath)
+                    : fileContext.connectionId || isRemoteRuntimePath
+                      ? await runtimePathExists(fileContext, absolutePath)
+                      : await window.api.shell.pathExists(absolutePath))
                 writeTerminalPathExistsCache(pathExistsCache, cacheKey, exists)
                 if (!exists) {
                   return null
@@ -182,7 +192,7 @@ export function createFilePathLinkProvider(
                     if (!isTerminalLinkActivation(event)) {
                       return
                     }
-                    openDetectedFilePath(resolved.absolutePath, resolved.line, resolved.column, {
+                    openDetectedFilePath(absolutePath, resolved.line, resolved.column, {
                       worktreeId,
                       worktreePath,
                       runtimeEnvironmentId,
@@ -194,16 +204,16 @@ export function createFilePathLinkProvider(
                     // default escape hatch; remote paths may not exist locally.
                     const canOpenWithSystemDefault = shouldOpenTerminalFileWithSystemDefault(
                       fileContext,
-                      resolved.absolutePath
+                      absolutePath
                     )
                     const hint = worktreeRootLink
                       ? getTerminalWorktreePathOpenHint(canOpenWithSystemDefault)
                       : canOpenWithSystemDefault
-                        ? isHtmlFilePath(resolved.absolutePath)
+                        ? isHtmlFilePath(absolutePath)
                           ? getTerminalHtmlFileOpenHint()
                           : openLinkHint
                         : getTerminalOrcaFileOpenHint()
-                    linkTooltip.textContent = `${resolved.absolutePath} (${hint})`
+                    linkTooltip.textContent = `${absolutePath} (${hint})`
                     linkTooltip.style.display = ''
                   },
                   leave: () => {
