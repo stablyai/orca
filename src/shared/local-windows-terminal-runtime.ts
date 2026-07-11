@@ -1,4 +1,5 @@
 import type { ProjectExecutionRuntimeResolution } from './project-execution-runtime'
+import { resolveDefaultShell, type ProjectDefaultShell } from './project-default-shell'
 import type { GlobalSettings } from './types'
 
 type LocalWindowsTerminalRuntimeSettings =
@@ -32,6 +33,8 @@ export function resolveLocalWindowsTerminalRuntimeOptions(args: {
   settings: LocalWindowsTerminalRuntimeSettings
   projectRuntime: ProjectExecutionRuntimeResolution | undefined
   fallbackHostShell?: string
+  /** Terminal default-shell axis (T2's Project.defaultShell) — windows-host only. */
+  projectDefaultShell?: ProjectDefaultShell
 }): LocalWindowsTerminalRuntimeOptions {
   const settingsShell = args.settings?.terminalWindowsShell
   const settingsWslDistro = args.settings?.terminalWindowsWslDistro ?? null
@@ -57,11 +60,20 @@ export function resolveLocalWindowsTerminalRuntimeOptions(args: {
   }
 
   return {
-    shellOverride: getHostShellForProjectRuntime(
-      args.requestedShellOverride,
-      settingsShell,
-      args.fallbackHostShell
-    ),
+    // Why: resolveDefaultShell owns the creationOverride > project > global
+    // precedence (T2); the global fallback still runs through
+    // getHostShellForProjectRuntime so a WSL-named global setting can't leak
+    // into a windows-host spawn.
+    shellOverride: resolveDefaultShell({
+      creationOverride: args.requestedShellOverride,
+      projectDefaultShell: args.projectDefaultShell ?? 'inherit',
+      runtime: projectRuntime,
+      globalDefaultShell: getHostShellForProjectRuntime(
+        undefined,
+        settingsShell,
+        args.fallbackHostShell
+      )
+    }),
     terminalWindowsWslDistro: null
   }
 }

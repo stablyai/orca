@@ -154,7 +154,10 @@ import {
   getFolderWorkspacePathStatus
 } from '../project-groups/folder-workspace-path-status'
 import { getSshFilesystemProvider } from '../providers/ssh-filesystem-dispatch'
-import { resolveLocalProjectRuntimeForWorktreeId } from '../local-project-runtime-resolution'
+import {
+  resolveLocalProjectDefaultShellForWorktreeId,
+  resolveLocalProjectRuntimeForWorktreeId
+} from '../local-project-runtime-resolution'
 
 // ─── Provider Registry ──────────────────────────────────────────────
 // Routes PTY operations by connectionId. null = local provider.
@@ -2924,6 +2927,10 @@ export function registerPtyHandlers(
               requestedShellOverride: undefined,
               settings: getSettings?.(),
               projectRuntime: resolveLocalProjectRuntimeForWorktreeId(store, args.worktreeId),
+              projectDefaultShell: resolveLocalProjectDefaultShellForWorktreeId(
+                store,
+                args.worktreeId
+              ),
               fallbackHostShell: process.env.COMSPEC || 'powershell.exe'
             })
           : { shellOverride: undefined, terminalWindowsWslDistro: null }
@@ -3641,6 +3648,10 @@ export function registerPtyHandlers(
               requestedShellOverride: args.shellOverride,
               settings: getSettings?.(),
               projectRuntime: args.projectRuntime,
+              projectDefaultShell: resolveLocalProjectDefaultShellForWorktreeId(
+                store,
+                args.worktreeId
+              ),
               fallbackHostShell: process.env.COMSPEC || 'powershell.exe'
             })
           : { shellOverride: args.shellOverride, terminalWindowsWslDistro: null }
