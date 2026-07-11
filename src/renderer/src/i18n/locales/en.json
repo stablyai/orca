@@ -3205,6 +3205,19 @@
           },
           "SshTargetStatusRow": {
             "sshHost": "SSH Host"
+          },
+          "GitBranchStatusSegment": {
+            "action_failed": "Git action failed",
+            "aria_label": "Current branch and remote sync status",
+            "detached_head": "Detached HEAD — no branch to sync",
+            "no_upstream": "No upstream branch set",
+            "in_sync": "Up to date with remote",
+            "ahead_behind": "{{value0}} ahead, {{value1}} behind",
+            "sync": "Sync (Pull then Push)",
+            "fetch": "Fetch",
+            "pull": "Pull",
+            "push": "Push",
+            "open_source_control": "Open Source Control…"
           }
         }
       },

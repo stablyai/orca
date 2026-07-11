@@ -3205,6 +3205,19 @@
           },
           "SshTargetStatusRow": {
             "sshHost": "SSH ホスト"
+          },
+          "GitBranchStatusSegment": {
+            "action_failed": "Git action failed",
+            "aria_label": "Current branch and remote sync status",
+            "detached_head": "Detached HEAD — no branch to sync",
+            "no_upstream": "No upstream branch set",
+            "in_sync": "Up to date with remote",
+            "ahead_behind": "{{value0}} ahead, {{value1}} behind",
+            "sync": "Sync (Pull then Push)",
+            "fetch": "Fetch",
+            "pull": "Pull",
+            "push": "Push",
+            "open_source_control": "Open Source Control…"
           }
         }
       },
@@ -12914,7 +12927,7 @@
         "pastedImageLabel": "貼り付けた画像",
         "imagePasteFailed": "画像の貼り付けに失敗しました。",
         "worktreeNotReady": "Worktreeが準備できていません — しばらくしてから再試行してください。",
-        "uploadingAttachments": "{{value0}}個のファイルをリモートにアップロード中…"
+        "uploadingAttachments": "Uploading {{value0}} file{{value1}} to remote…"
       },
       "tool": {
         "running": "実行中…",

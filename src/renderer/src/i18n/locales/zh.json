@@ -3205,6 +3205,19 @@
           },
           "SshTargetStatusRow": {
             "sshHost": "SSH 主机"
+          },
+          "GitBranchStatusSegment": {
+            "action_failed": "Git action failed",
+            "aria_label": "Current branch and remote sync status",
+            "detached_head": "Detached HEAD — no branch to sync",
+            "no_upstream": "No upstream branch set",
+            "in_sync": "Up to date with remote",
+            "ahead_behind": "{{value0}} ahead, {{value1}} behind",
+            "sync": "Sync (Pull then Push)",
+            "fetch": "Fetch",
+            "pull": "Pull",
+            "push": "Push",
+            "open_source_control": "Open Source Control…"
           }
         }
       },
@@ -12914,7 +12927,7 @@
         "pastedImageLabel": "粘贴的图片",
         "imagePasteFailed": "图片粘贴失败。",
         "worktreeNotReady": "Worktree 未就绪 — 请稍后重试。",
-        "uploadingAttachments": "正在上传 {{value0}} 个文件到远程…"
+        "uploadingAttachments": "Uploading {{value0}} file{{value1}} to remote…"
       },
       "tool": {
         "running": "正在运行…",
