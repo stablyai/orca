@@ -4672,6 +4672,15 @@
           "browseWsl": "Browse WSL filesystem",
           "addGitProject": "Add Git Project",
           "openAsFolder": "Open as Folder"
+        },
+        "WslProjectBadge": {
+          "wslRepairLabel": "WSL",
+          "wslHealthyLabel": "WSL: {{value0}}",
+          "wslRepairAriaLabel": "WSL runtime needs attention. Open runtime settings.",
+          "wslHealthyAriaLabel": "Runs in WSL ({{value0}}). Open runtime settings.",
+          "wslUnavailable": "WSL is not available. Open runtime settings to repair.",
+          "wslDistroMissing": "The configured distro is missing. Open runtime settings to choose another.",
+          "wslDistroRequired": "Choose a WSL distro in runtime settings."
         }
       },
       "shared": {
