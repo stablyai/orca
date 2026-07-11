@@ -12,6 +12,7 @@ import {
   CircleX,
   Ellipsis,
   Eye,
+  Flag,
   FolderInput,
   FolderPlus,
   FolderX,
@@ -1404,6 +1405,8 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
   const canReorderProjectGroupHeaders = groupBy === 'repo' && hasProjectGroups
   const moveProjectToGroup = useAppStore((s) => s.moveProjectToGroup)
   const updateProjectGroup = useAppStore((s) => s.updateProjectGroup)
+  const missions = useAppStore((s) => s.missions)
+  const addMissionMembers = useAppStore((s) => s.addMissionMembers)
   const lastVisibleRefreshKeyRef = useRef('')
   const reportVisibleGitHubPRRefreshCandidates = useAppStore(
     (s) => s.reportVisibleGitHubPRRefreshCandidates
@@ -4605,6 +4608,34 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
                                   'Remove from group'
                                 )}
                               </DropdownMenuItem>
+                            ) : null}
+                            {missions.length > 0 ? (
+                              <DropdownMenuSub>
+                                <DropdownMenuSubTrigger>
+                                  <Flag className="size-3.5" />
+                                  {translate(
+                                    'auto.components.sidebar.WorktreeList.3a2edfac81',
+                                    'Add to mission'
+                                  )}
+                                </DropdownMenuSubTrigger>
+                                <DropdownMenuSubContent>
+                                  {missions.map((mission) => (
+                                    <DropdownMenuItem
+                                      key={mission.id}
+                                      disabled={mission.members.some(
+                                        (member) => member.repoId === row.repo?.id
+                                      )}
+                                      onSelect={() => {
+                                        if (row.repo) {
+                                          void addMissionMembers(mission.id, [row.repo.id])
+                                        }
+                                      }}
+                                    >
+                                      <span className="max-w-48 truncate">{mission.name}</span>
+                                    </DropdownMenuItem>
+                                  ))}
+                                </DropdownMenuSubContent>
+                              </DropdownMenuSub>
                             ) : null}
                             <DropdownMenuSeparator />
                             <DropdownMenuItem
