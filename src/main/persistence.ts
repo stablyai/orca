@@ -192,6 +192,7 @@ import {
   clearMissingMissionMembers,
   createMission,
   getNextMissionTabOrder,
+  missionSentinelGroupId,
   normalizeMissionName,
   normalizeMissions
 } from '../shared/missions'
@@ -4225,6 +4226,12 @@ export class Store {
     }
     if (updates.name !== undefined) {
       mission.name = normalizeMissionName(updates.name, mission.name)
+      const sessionWorkspace = this.getMissionSessionWorkspace(missionId)
+      if (sessionWorkspace) {
+        // Why: the session card carries the mission's identity in the sidebar.
+        sessionWorkspace.name = mission.name
+        sessionWorkspace.updatedAt = Date.now()
+      }
     }
     if (updates.tabOrder !== undefined && Number.isFinite(updates.tabOrder)) {
       mission.tabOrder = updates.tabOrder
@@ -4240,8 +4247,72 @@ export class Store {
     if ((this.state.missions?.length ?? 0) === before) {
       return false
     }
+    const sessionWorkspace = this.getMissionSessionWorkspace(missionId)
+    if (sessionWorkspace) {
+      this.state.workspaceSession = removeWorkspaceSessionOwner(
+        this.state.workspaceSession,
+        folderWorkspaceKey(sessionWorkspace.id)
+      )!
+      this.removeWorkspaceLineageForFolderParent(sessionWorkspace.id)
+      this.state.folderWorkspaces = (this.state.folderWorkspaces ?? []).filter(
+        (workspace) => workspace.id !== sessionWorkspace.id
+      )
+    }
     this.scheduleSave()
     return true
+  }
+
+  setMissionRootPath(missionId: string, rootPath: string): Mission | null {
+    const mission = this.getMission(missionId)
+    if (!mission) {
+      return null
+    }
+    mission.rootPath = rootPath
+    mission.updatedAt = Date.now()
+    this.scheduleSave()
+    return mission
+  }
+
+  getMissionSessionWorkspace(missionId: string): FolderWorkspace | null {
+    return (
+      (this.state.folderWorkspaces ?? []).find((workspace) => workspace.missionId === missionId) ??
+      null
+    )
+  }
+
+  ensureMissionSessionWorkspace(missionId: string): FolderWorkspace {
+    const existing = this.getMissionSessionWorkspace(missionId)
+    if (existing) {
+      return existing
+    }
+    const mission = this.getMission(missionId)
+    if (!mission) {
+      throw new Error('mission_not_found')
+    }
+    if (!mission.rootPath) {
+      throw new Error('mission_root_not_ready')
+    }
+    const now = Date.now()
+    const workspace: FolderWorkspace = {
+      id: randomUUID(),
+      projectGroupId: missionSentinelGroupId(mission.id),
+      missionId: mission.id,
+      name: mission.name,
+      folderPath: mission.rootPath,
+      connectionId: null,
+      linkedTask: null,
+      comment: '',
+      isArchived: false,
+      isUnread: false,
+      isPinned: false,
+      sortOrder: now,
+      lastActivityAt: now,
+      createdAt: now,
+      updatedAt: now
+    }
+    this.state.folderWorkspaces = [...(this.state.folderWorkspaces ?? []), workspace]
+    this.scheduleSave()
+    return workspace
   }
 
   addMissionMembers(missionId: string, repoIds: string[]): Mission | null {
