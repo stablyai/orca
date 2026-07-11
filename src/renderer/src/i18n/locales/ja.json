@@ -11441,8 +11441,8 @@
           "9b80bbe1de": "ファイルタブを開く",
           "f0fd4174b5": "ファイル タブを開いてリッチ markdown 編集を使用する",
           "a10d9b8337": "ファイルを開く",
-          "2076ecfc9c": "Previous change",
-          "631dab0df3": "Next change"
+          "2076ecfc9c": "前の変更",
+          "631dab0df3": "次の変更"
         },
         "EditorPanelMarkdownActionsMenu": {
           "3e0ce48c24": "PDFとしてエクスポート",

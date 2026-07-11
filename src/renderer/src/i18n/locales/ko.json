@@ -11441,8 +11441,8 @@
           "9b80bbe1de": "파일 탭 열기",
           "f0fd4174b5": "풍부한 markdown 편집을 사용하려면 파일 탭을 엽니다.",
           "a10d9b8337": "파일 열기",
-          "2076ecfc9c": "Previous change",
-          "631dab0df3": "Next change"
+          "2076ecfc9c": "이전 변경",
+          "631dab0df3": "다음 변경"
         },
         "EditorPanelMarkdownActionsMenu": {
           "3e0ce48c24": "PDF로 내보내기",

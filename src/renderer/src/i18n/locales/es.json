@@ -11441,8 +11441,8 @@
           "9b80bbe1de": "Abrir pestaña de archivo",
           "f0fd4174b5": "Abre la pestaña de archivo para usar la edición enriquecida de Markdown",
           "a10d9b8337": "Abrir archivo",
-          "2076ecfc9c": "Previous change",
-          "631dab0df3": "Next change"
+          "2076ecfc9c": "Cambio anterior",
+          "631dab0df3": "Cambio siguiente"
         },
         "EditorPanelMarkdownActionsMenu": {
           "3e0ce48c24": "Exportar como PDF",

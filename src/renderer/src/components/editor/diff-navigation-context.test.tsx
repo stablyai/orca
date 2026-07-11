@@ -16,6 +16,7 @@ type FakeDiffEditor = editor.IStandaloneDiffEditor & {
   fireUpdate: () => void
   goToDiff: ReturnType<typeof vi.fn>
   disposeUpdate: ReturnType<typeof vi.fn>
+  containerNode: HTMLElement
 }
 
 function createFakeEditor(initialCount: number): FakeDiffEditor {
@@ -24,9 +25,11 @@ function createFakeEditor(initialCount: number): FakeDiffEditor {
   const disposeUpdate = vi.fn(() => {
     updateCallback = null
   })
+  const containerNode = document.createElement('div')
   const editor = {
     getLineChanges: () => (count > 0 ? Array.from({ length: count }, () => ({})) : []),
     goToDiff: vi.fn(),
+    getContainerDomNode: () => containerNode,
     onDidUpdateDiff: (cb: () => void) => {
       updateCallback = cb
       return {
@@ -37,7 +40,8 @@ function createFakeEditor(initialCount: number): FakeDiffEditor {
       count = next
     },
     fireUpdate: () => updateCallback?.(),
-    disposeUpdate
+    disposeUpdate,
+    containerNode
   } as unknown as FakeDiffEditor
   return editor
 }
@@ -152,5 +156,18 @@ describe('DiffNavigationProvider', () => {
 
     expect(editor.disposeUpdate).toHaveBeenCalledOnce()
     root = null
+  })
+
+  it('installs a capture-phase key listener on register and removes it on unregister', () => {
+    mount()
+    const editor = createFakeEditor(2)
+    const addSpy = vi.spyOn(editor.containerNode, 'addEventListener')
+    const removeSpy = vi.spyOn(editor.containerNode, 'removeEventListener')
+
+    act(() => registration?.registerDiffEditor(editor))
+    expect(addSpy).toHaveBeenCalledWith('keydown', expect.any(Function), true)
+
+    act(() => registration?.unregisterDiffEditor(editor))
+    expect(removeSpy).toHaveBeenCalledWith('keydown', expect.any(Function), true)
   })
 })
