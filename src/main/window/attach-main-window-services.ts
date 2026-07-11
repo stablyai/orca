@@ -10,6 +10,7 @@ import type {
   WorktreeStartupLaunch
 } from '../../shared/types'
 import { registerRepoHandlers } from '../ipc/repos'
+import { registerMissionHandlers } from '../ipc/missions'
 import { registerWorktreeHandlers } from '../ipc/worktrees'
 import { registerWorkspaceCleanupHandlers } from '../ipc/workspace-cleanup'
 import { getLocalPtyProvider, registerPtyHandlers } from '../ipc/pty'
@@ -83,6 +84,7 @@ export function attachMainWindowServices(
   registerAppReloadHandler(mainWindow, options?.onBeforeRendererReload)
   registerRepoHandlers(mainWindow, store)
   registerWorktreeHandlers(mainWindow, store, runtime)
+  registerMissionHandlers(mainWindow, store, runtime)
   // Why: repo/settings mutations resync watchers through this attached main-window context.
   setWorktreeBaseDirectoryWatcherSyncContext(store, mainWindow)
   scheduleWorktreeBaseDirectoryWatcherSync(store, mainWindow)
