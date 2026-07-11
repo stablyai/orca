@@ -84,6 +84,8 @@ export function resolveLocalWindowsTerminalShellOverrideForTab(args: {
   isWslWorktree: boolean
   projectRuntime: ProjectExecutionRuntimeResolution | undefined
   fallbackHostShell?: string
+  /** Terminal default-shell axis (T2's Project.defaultShell) — windows-host only. */
+  projectDefaultShell?: ProjectDefaultShell
 }): string | undefined {
   if (args.projectRuntime?.status === 'repair-required') {
     // Why: repair-required WSL still owns the project runtime; the tab should
@@ -99,7 +101,11 @@ export function resolveLocalWindowsTerminalShellOverrideForTab(args: {
         terminalWindowsWslDistro: null
       },
       projectRuntime: args.projectRuntime,
-      fallbackHostShell: args.fallbackHostShell
+      fallbackHostShell: args.fallbackHostShell,
+      // Why: keep the tab label in sync with main's authoritative spawn
+      // decision (resolveLocalWindowsTerminalRuntimeOptions), which already
+      // honors this axis — see 2287f47af.
+      projectDefaultShell: args.projectDefaultShell
     }).shellOverride
   }
 

@@ -1,5 +1,8 @@
 import { describe, it, expect } from 'vitest'
-import { resolveLocalWindowsTerminalRuntimeOptions } from './local-windows-terminal-runtime'
+import {
+  resolveLocalWindowsTerminalRuntimeOptions,
+  resolveLocalWindowsTerminalShellOverrideForTab
+} from './local-windows-terminal-runtime'
 
 const host = { status: 'resolved', runtime: { kind: 'windows-host' } } as never
 const wsl = { status: 'resolved', runtime: { kind: 'wsl', distro: 'Ubuntu' } } as never
@@ -70,5 +73,43 @@ describe('resolveLocalWindowsTerminalRuntimeOptions', () => {
         projectDefaultShell: 'cmd'
       })
     ).toThrow('Project runtime requires repair before terminal spawn')
+  })
+})
+
+describe('resolveLocalWindowsTerminalShellOverrideForTab', () => {
+  it("threads the project's defaultShell into the tab label, matching main's spawn decision", () => {
+    expect(
+      resolveLocalWindowsTerminalShellOverrideForTab({
+        explicitShellOverride: undefined,
+        defaultWindowsShell: 'cmd.exe',
+        isWslWorktree: false,
+        projectRuntime: host,
+        projectDefaultShell: 'powershell'
+      })
+    ).toBe('powershell.exe')
+  })
+
+  it('WSL runtime keeps wsl.exe regardless of a conflicting project defaultShell', () => {
+    expect(
+      resolveLocalWindowsTerminalShellOverrideForTab({
+        explicitShellOverride: undefined,
+        defaultWindowsShell: 'cmd.exe',
+        isWslWorktree: false,
+        projectRuntime: wsl,
+        projectDefaultShell: 'powershell'
+      })
+    ).toBe('wsl.exe')
+  })
+
+  it('falls back to the settings shell unchanged when the project inherits', () => {
+    expect(
+      resolveLocalWindowsTerminalShellOverrideForTab({
+        explicitShellOverride: undefined,
+        defaultWindowsShell: 'cmd.exe',
+        isWslWorktree: false,
+        projectRuntime: host,
+        projectDefaultShell: 'inherit'
+      })
+    ).toBe('cmd.exe')
   })
 })
