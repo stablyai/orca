@@ -148,6 +148,8 @@ El editor de VS Code con autoguardado en todas partes — arrastra archivos o im
 
 Los agentes también manejan Orca — automatiza cualquier flujo de trabajo con `orca worktree create`, `snapshot`, `click` y `fill`.
 
+En Linux la CLI se instala como `orca-ide` (el nombre `orca` lo usa el lector de pantalla GNOME Orca). Usa `orca-ide` en lugar de `orca` o, si no usas ese lector de pantalla, crea un enlace simbólico con el nombre corto: `mkdir -p ~/.local/bin && ln -s "$(command -v orca-ide)" ~/.local/bin/orca`.
+
 [Docs →](https://www.onorca.dev/docs/cli/overview)
 
 </td>

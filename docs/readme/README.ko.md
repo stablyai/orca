@@ -148,6 +148,8 @@ diff의 어느 줄에든 코멘트를 남기고 에이전트에게 바로 보내
 
 에이전트도 Orca를 조작할 수 있습니다 — `orca worktree create`, `snapshot`, `click`, `fill`로 모든 워크플로를 스크립팅하세요.
 
+Linux에서는 CLI가 `orca-ide`로 설치됩니다(`orca`라는 이름은 GNOME Orca 스크린 리더가 사용 중이기 때문입니다). `orca` 대신 `orca-ide`를 사용하거나, 해당 스크린 리더를 사용하지 않는다면 짧은 이름으로 심볼릭 링크를 만드세요: `mkdir -p ~/.local/bin && ln -s "$(command -v orca-ide)" ~/.local/bin/orca`.
+
 [문서 →](https://www.onorca.dev/docs/cli/overview)
 
 </td>

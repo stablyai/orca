@@ -148,6 +148,8 @@ VS Code's editor with autosave everywhere — drag files or images straight into
 
 Agents drive Orca too — script every workflow with `orca worktree create`, `snapshot`, `click`, and `fill`.
 
+On Linux the CLI is installed as `orca-ide` (the name `orca` is taken by the GNOME Orca screen reader). Use `orca-ide` in place of `orca`, or — if you don't use that screen reader — symlink the shorter name: `mkdir -p ~/.local/bin && ln -s "$(command -v orca-ide)" ~/.local/bin/orca`.
+
 [Docs →](https://www.onorca.dev/docs/cli/overview)
 
 </td>

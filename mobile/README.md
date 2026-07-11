@@ -81,6 +81,8 @@ If the phone has a stale host entry, remove it from the app and pair again.
 
 The phone can be inspected through the connected device tooling:
 
+On Linux, use `orca-ide` in place of `orca` in the commands below (the name `orca` is taken by the GNOME Orca screen reader).
+
 ```bash
 orca snapshot --json
 orca click --element @e3 --json
