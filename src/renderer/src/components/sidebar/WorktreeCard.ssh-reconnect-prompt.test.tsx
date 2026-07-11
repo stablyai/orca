@@ -29,6 +29,7 @@ vi.mock('@/store', () => ({
       linearIssueCache: {},
       openModal,
       projectGroups: [],
+      missions: [],
       remoteBranchConflictByWorktreeId: {},
       runtimeStatusByEnvironmentId,
       settings: null,

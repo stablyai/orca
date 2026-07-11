@@ -110,7 +110,10 @@ function MissionSection({
 
   return (
     <div className="flex flex-col">
-      <div className="group/mission-header flex h-7 items-center gap-1 rounded-md px-1 hover:bg-worktree-sidebar-accent">
+      <div
+        data-mission-id={mission.id}
+        className="group/mission-header flex h-7 items-center gap-1 rounded-md px-1 hover:bg-worktree-sidebar-accent"
+      >
         <button
           type="button"
           className="flex min-w-0 flex-1 items-center gap-1.5 text-left"
@@ -139,7 +142,10 @@ function MissionSection({
               variant="ghost"
               size="icon-xs"
               className="shrink-0 text-muted-foreground opacity-0 group-hover/mission-header:opacity-100 data-[state=open]:opacity-100"
-              aria-label={mission.name}
+              aria-label={translate(
+                'auto.components.sidebar.MissionList.955a21f262',
+                'Mission options'
+              )}
             >
               <MoreHorizontal className="size-3.5" />
             </Button>
