@@ -180,25 +180,68 @@ export async function createIssue(
   }
   await acquire()
   try {
-    const args = [
-      'api',
-      '-X',
-      'POST',
-      `repos/${ownerRepo.owner}/${ownerRepo.repo}/issues`,
-      '--raw-field',
-      `title=${trimmedTitle}`,
-      '--raw-field',
-      `body=${body}`
-    ]
-    for (const label of fields?.labels ?? []) {
-      args.push('--raw-field', `labels[]=${label}`)
-    }
-    for (const assignee of fields?.assignees ?? []) {
-      args.push('--raw-field', `assignees[]=${assignee}`)
+    const createArgs = (issueBody: string) => {
+      const args = [
+        'api',
+        '-X',
+        'POST',
+        `repos/${ownerRepo.owner}/${ownerRepo.repo}/issues`,
+        '--raw-field',
+        `title=${trimmedTitle}`,
+        '--raw-field',
+        `body=${issueBody}`
+      ]
+      for (const label of fields?.labels ?? []) {
+        args.push('--raw-field', `labels[]=${label}`)
+      }
+      for (const assignee of fields?.assignees ?? []) {
+        args.push('--raw-field', `assignees[]=${assignee}`)
+      }
+      return args
     }
 
-    const { stdout } = await ghExecFileAsync(args, ghOptions)
-    const data = JSON.parse(stdout) as { number?: number; html_url?: string; url?: string }
+    const parseIssue = (stdout: string) =>
+      JSON.parse(stdout) as { number?: number; html_url?: string; url?: string }
+
+    let data: { number?: number; html_url?: string; url?: string }
+    try {
+      const { stdout } = await ghExecFileAsync(createArgs(body), ghOptions)
+      data = parseIssue(stdout)
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err)
+      if (!/body is too long \(maximum is \d+ characters\)/i.test(message)) {
+        return { ok: false, error: message }
+      }
+
+      // Why: GitHub accepts the placeholder create even when the real body is too large, so we create first and PATCH the full body after.
+      const { stdout } = await ghExecFileAsync(createArgs(''), ghOptions)
+      data = parseIssue(stdout)
+      if (typeof data.number !== 'number') {
+        return { ok: false, error: 'Unexpected response from GitHub' }
+      }
+
+      try {
+        await ghExecFileAsync(
+          [
+            'api',
+            '-X',
+            'PATCH',
+            `repos/${ownerRepo.owner}/${ownerRepo.repo}/issues/${data.number}`,
+            '--raw-field',
+            `body=${body}`
+          ],
+          ghOptions
+        )
+      } catch (patchErr) {
+        const patchMessage = patchErr instanceof Error ? patchErr.message : String(patchErr)
+        const identity = data.html_url ?? data.url ?? `#${data.number}`
+        return {
+          ok: false,
+          error: `Issue ${identity} was created, but saving its body failed: ${patchMessage}`
+        }
+      }
+    }
+
     if (typeof data.number !== 'number') {
       return { ok: false, error: 'Unexpected response from GitHub' }
     }
