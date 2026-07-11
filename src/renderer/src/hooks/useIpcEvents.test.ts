@@ -499,7 +499,9 @@ describe('useIpcEvents rate-limit hydration', () => {
       claudeTarget: { runtime: 'host', wslDistro: null },
       codexTarget: { runtime: 'host', wslDistro: null },
       inactiveClaudeAccounts: [],
-      inactiveCodexAccounts: []
+      inactiveCodexAccounts: [],
+      antigravityAccounts: [],
+      inactiveAntigravityAccounts: []
     }
     const freshState = {
       ...staleState,

@@ -7,7 +7,8 @@ import type {
   CodexRateLimitResetResult,
   RateLimitState,
   ProviderRateLimits,
-  InactiveAccountUsage
+  InactiveAccountUsage,
+  AntigravityAccountSummary
 } from '../../shared/rate-limit-types'
 import { fetchClaudeRateLimits, fetchManagedAccountUsage } from './claude-fetcher'
 import type { InactiveClaudeAccountInfo } from './claude-fetcher'
@@ -31,6 +32,18 @@ import {
   type CodexAccountSelectionTarget,
   type NormalizedCodexAccountSelectionTarget
 } from '../codex-accounts/runtime-selection'
+import { fetchAntigravityRateLimits, readAntigravityCredentials } from './antigravity-fetcher'
+import {
+  fetchAccountEmail,
+  getAccountCredentials,
+  getActiveAccountCredentials,
+  getActiveAccountId,
+  listAccounts,
+  removeAccount,
+  setActiveAccount,
+  upsertAccount
+} from './antigravity-account-store'
+import { writeAntigravityKeyringCredentials } from './antigravity-keyring'
 
 export type InactiveCodexAccountInfo = {
   id: string
@@ -137,6 +150,10 @@ export class RateLimitService {
     grok: null
   }
   private grokAuthConfigured = readGrokAuthSession().status === 'ok'
+  // Why: multi-account Antigravity keeps a summary + per-inactive-account usage
+  // so the status-bar switcher can render without re-reading the store each paint.
+  private antigravityAccountsSummary: AntigravityAccountSummary[] = []
+  private antigravityInactiveAccounts: InactiveAccountUsage[] = []
   private pollInterval: number = DEFAULT_POLL_MS
   private timer: ReturnType<typeof setInterval> | null = null
   private deferredStartupRefreshTimer: ReturnType<typeof setTimeout> | null = null
@@ -316,7 +333,9 @@ export class RateLimitService {
       inactiveCodexAccounts: this.buildInactiveArray(
         this.inactiveCodexCache,
         this.inactiveCodexFetching
-      )
+      ),
+      antigravityAccounts: this.antigravityAccountsSummary,
+      inactiveAntigravityAccounts: this.antigravityInactiveAccounts
     }
   }
 
@@ -1344,32 +1363,42 @@ export class RateLimitService {
       (reason) => ({ status: 'rejected', reason }) as const
     )
 
-    const [claudeResult, codexResult, geminiResult, opencodeGoResult, kimiResult, miniMaxResult] =
-      await Promise.allSettled([
-        fetchClaudeRateLimits({
-          authPreparation: claudeAuthPreparation,
-          allowPtyFallback: this.shouldAllowClaudePtyFallback(claudeAuthPreparation),
-          allowUsagePanelSupplement: this.shouldAllowClaudeUsagePanelSupplement(),
-          networkProxySettings: this.networkProxySettingsResolver?.(),
+    const [
+      claudeResult,
+      codexResult,
+      geminiResult,
+      opencodeGoResult,
+      kimiResult,
+      miniMaxResult,
+      antigravityResult
+    ] = await Promise.allSettled([
+      fetchClaudeRateLimits({
+        authPreparation: claudeAuthPreparation,
+        allowPtyFallback: this.shouldAllowClaudePtyFallback(claudeAuthPreparation),
+        allowUsagePanelSupplement: this.shouldAllowClaudeUsagePanelSupplement(),
+        networkProxySettings: this.networkProxySettingsResolver?.(),
+        signal
+      }),
+      missingWslCodexHome ??
+        fetchCodexRateLimits({
+          codexHomePath,
+          allowPtyFallback: this.shouldAllowCodexPtyFallback(),
           signal
         }),
-        missingWslCodexHome ??
-          fetchCodexRateLimits({
-            codexHomePath,
-            allowPtyFallback: this.shouldAllowCodexPtyFallback(),
-            signal
+      fetchGeminiRateLimits(geminiCliOAuthEnabled),
+      fetchOpenCodeGoRateLimits(cookie, workspaceIdOverride || undefined),
+      fetchKimiRateLimits(),
+      miniMaxConfigResult.error
+        ? Promise.resolve(this.getMiniMaxCredentialError(miniMaxConfigResult.error))
+        : fetchMiniMaxRateLimits({
+            cookie: miniMaxCookie,
+            groupId: miniMaxGroupId,
+            models: miniMaxModels
           }),
-        fetchGeminiRateLimits(geminiCliOAuthEnabled),
-        fetchOpenCodeGoRateLimits(cookie, workspaceIdOverride || undefined),
-        fetchKimiRateLimits(),
-        miniMaxConfigResult.error
-          ? Promise.resolve(this.getMiniMaxCredentialError(miniMaxConfigResult.error))
-          : fetchMiniMaxRateLimits({
-              cookie: miniMaxCookie,
-              groupId: miniMaxGroupId,
-              models: miniMaxModels
-            })
-      ])
+      // Why: real Antigravity Code Assist quota (not a Gemini mirror). Prefer
+      // the multi-account store active token; fall back to file / agy keyring.
+      fetchAntigravityRateLimits(getActiveAccountCredentials())
+    ])
 
     if (signal.aborted) {
       return
@@ -1414,13 +1443,20 @@ export class RateLimitService {
             status: 'error'
           } satisfies ProviderRateLimits)
 
-    // Why: Antigravity shares Google/Gemini usage credentials today; mirror the
-    // Gemini snapshot under provider 'antigravity' so status-bar UI that checks
-    // antigravity state receives a real fetch lifecycle instead of staying null.
-    const antigravity: ProviderRateLimits = {
-      ...gemini,
-      provider: 'antigravity'
-    }
+    const antigravity =
+      antigravityResult.status === 'fulfilled'
+        ? antigravityResult.value
+        : ({
+            provider: 'antigravity',
+            session: null,
+            weekly: null,
+            updatedAt: Date.now(),
+            error:
+              antigravityResult.reason instanceof Error
+                ? antigravityResult.reason.message
+                : 'Unknown error',
+            status: 'error'
+          } satisfies ProviderRateLimits)
 
     const opencodeGo =
       opencodeGoResult.status === 'fulfilled'
@@ -1527,6 +1563,99 @@ export class RateLimitService {
       ...this.state,
       grok: this.applyStalePolicy(grok, previousState.grok)
     })
+
+    // Why: keep the multi-account switcher in sync after every full poll so a
+    // new agy login surfaces without waiting for the user to open the popover.
+    await this.refreshAntigravityAccounts()
+  }
+
+  /**
+   * Refresh the Antigravity account switcher: seed the store from the current
+   * agy / file token, then fetch per-account usage for every non-active account.
+   */
+  private async refreshAntigravityAccounts(): Promise<void> {
+    try {
+      // Why: auto-follow agy so a new Google login surfaces without a manual step.
+      const creds = await readAntigravityCredentials()
+      if (creds && creds.expiry_date >= Date.now()) {
+        const email = await fetchAccountEmail(creds.access_token)
+        if (email) {
+          upsertAccount(email, creds, true)
+        }
+      }
+    } catch {
+      // Best-effort capture; still rebuild the switcher below.
+    }
+    await this.rebuildAntigravityAccountsState()
+  }
+
+  /**
+   * Rebuild the account summary + per-account usage from the store and push it,
+   * WITHOUT capturing the current agy account (used after explicit removal).
+   */
+  private async rebuildAntigravityAccountsState(): Promise<void> {
+    try {
+      const accounts = listAccounts()
+      const activeId = getActiveAccountId()
+      const inactive = accounts.filter((a) => a.id !== activeId)
+      const inactiveUsage: InactiveAccountUsage[] = await Promise.all(
+        inactive.map(async (account) => {
+          const creds = getAccountCredentials(account.id)
+          const rateLimits = creds ? await fetchAntigravityRateLimits(creds) : null
+          return { accountId: account.id, rateLimits, updatedAt: Date.now(), isFetching: false }
+        })
+      )
+      this.antigravityAccountsSummary = accounts
+      this.antigravityInactiveAccounts = inactiveUsage
+      this.pushToRenderer()
+    } catch {
+      // Best-effort: keep the last known account summary / inactive usage.
+    }
+  }
+
+  /**
+   * Switch the active Antigravity account. Updates Orca's display pointer and,
+   * on Windows, writes the selected token back to the gemini:antigravity keyring
+   * so agy itself uses the account on next launch.
+   */
+  async selectAntigravityAccount(id: string): Promise<void> {
+    if (!setActiveAccount(id)) {
+      return
+    }
+    const creds = getAccountCredentials(id)
+    if (creds) {
+      writeAntigravityKeyringCredentials(creds)
+    }
+    await this.refresh()
+  }
+
+  /** Capture the account agy is currently signed into as a stored account. */
+  async addCurrentAntigravityAccount(): Promise<{ ok: boolean; email: string | null }> {
+    const creds = await readAntigravityCredentials()
+    if (!creds || creds.expiry_date < Date.now()) {
+      return { ok: false, email: null }
+    }
+    const email = await fetchAccountEmail(creds.access_token)
+    if (!email) {
+      return { ok: false, email: null }
+    }
+    upsertAccount(email, creds, true)
+    await this.refresh()
+    return { ok: true, email }
+  }
+
+  /**
+   * Remove a stored Antigravity account without immediately re-capturing the
+   * current agy login (so remove stays sticky until the next open/poll capture).
+   */
+  async removeAntigravityAccount(id: string): Promise<void> {
+    removeAccount(id)
+    await this.rebuildAntigravityAccountsState()
+  }
+
+  /** Capture the current agy account when the usage popover opens. */
+  async refreshAntigravityAccountsOnOpen(): Promise<void> {
+    await this.refreshAntigravityAccounts()
   }
 
   private async runFetchCodexOnlyCycle(signal: AbortSignal): Promise<void> {

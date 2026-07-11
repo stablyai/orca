@@ -2988,6 +2988,10 @@ export type PreloadApi = {
     fetchInactiveCodexAccounts: () => Promise<void>
     refreshMiniMax: () => Promise<RateLimitState>
     refreshGrok: () => Promise<RateLimitState>
+    selectAntigravityAccount: (id: string) => Promise<void>
+    addCurrentAntigravityAccount: () => Promise<{ ok: boolean; email: string | null }>
+    removeAntigravityAccount: (id: string) => Promise<void>
+    refreshAntigravityAccounts: () => Promise<void>
     onUpdate: (callback: (state: RateLimitState) => void) => () => void
   }
   minimaxCredentials: {

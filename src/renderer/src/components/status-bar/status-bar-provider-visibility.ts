@@ -8,11 +8,9 @@ export type UsageProviderSettings = Pick<
   | 'opencodeSessionCookie'
   | 'geminiCliOAuthEnabled'
 > & {
-  // Why: Antigravity has no separate persisted usage credential in Orca. The
-  // checked status-bar item is the durable user signal; StatusBar only sets
-  // this after PATH detection says the agent is available. Durability further
-  // requires geminiCliOAuthEnabled — the snapshot mirrors the Gemini fetch,
-  // which never yields data while that opt-in is off.
+  // Why: retained for StatusBar call sites and tests. Real Antigravity usage is
+  // snapshot-driven (agy keyring / account store) like Kimi — not a settings
+  // durable signal — so a checked item alone must not pin a dead bar.
   antigravityUsageConfigured: boolean
   // Why: MiniMax/Grok sign-in live on disk, not in settings; main sets these each poll.
   minimaxCookieConfigured: boolean
@@ -72,8 +70,7 @@ export function hasUsageProviderSettings(
     (settings?.claudeManagedAccounts?.length ?? 0) > 0 ||
     settings?.geminiCliOAuthEnabled === true ||
     Boolean(settings?.opencodeSessionCookie?.trim()) ||
-    // Antigravity's durable signal requires geminiCliOAuthEnabled, so it is
-    // already covered by the gemini term above.
+    // Antigravity is snapshot-driven (see hasUsageProviderSettingsForProvider).
     settings?.minimaxCookieConfigured === true ||
     settings?.grokAuthConfigured === true
   )
@@ -99,10 +96,11 @@ export function hasUsageProviderSettingsForProvider(
     return Boolean(settings.opencodeSessionCookie?.trim())
   }
   if (providerId === 'antigravity') {
-    // Why: the Antigravity snapshot mirrors the Gemini fetch, which stays
-    // 'unavailable' until the user opts into Gemini CLI OAuth. Without that
-    // gate the default-on checked item would pin a permanently dead bar.
-    return settings.antigravityUsageConfigured === true && settings.geminiCliOAuthEnabled === true
+    // Why: credentials live in the agy keyring / multi-account store. Until a
+    // real snapshot is configured (ok/error with data), do not treat PATH or a
+    // checked item as durable — that would pin a permanent "--" bar for users
+    // without an agy login (same posture as Kimi).
+    return false
   }
   if (providerId === 'minimax') {
     return settings.minimaxCookieConfigured === true
@@ -119,7 +117,7 @@ function createPendingProviderSnapshot(providerId: UsageProviderId): ProviderRat
     session: null,
     weekly: null,
     ...(providerId === 'opencode-go' ? { monthly: null } : {}),
-    ...(providerId === 'gemini' ? { buckets: [] } : {}),
+    ...(providerId === 'gemini' || providerId === 'antigravity' ? { buckets: [] } : {}),
     updatedAt: 0,
     error: null,
     status: 'fetching'
