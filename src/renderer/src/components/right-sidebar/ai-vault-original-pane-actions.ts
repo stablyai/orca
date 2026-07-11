@@ -9,7 +9,7 @@ import type { AiVaultSession } from '../../../../shared/ai-vault-types'
 import { translate } from '@/i18n/i18n'
 import { findOriginalAiVaultSessionPane } from './ai-vault-original-pane'
 import {
-  buildAiVaultOriginalPaneIndex,
+  createLazyAiVaultOriginalPaneIndex,
   findAiVaultSessionLiveStateInIndex,
   findOriginalAiVaultSessionPaneInIndex
 } from './ai-vault-original-pane-index'
@@ -31,22 +31,23 @@ export function useAiVaultOriginalPaneActions(): {
       terminalLayoutsByTabId: s.terminalLayoutsByTabId
     }))
   )
-  // Why: the virtual list asks both questions for every visible row. Build the
-  // collection indexes once per immutable store snapshot instead of rescanning
-  // every live, retained, and sleeping agent for each row.
-  const originalPaneIndex = useMemo(
-    () => buildAiVaultOriginalPaneIndex(originalPaneLookupState),
+  // Why: loading, filtered, or collapsed views may render no session rows.
+  // Build once on the first actual lookup, then share it across visible rows.
+  const getOriginalPaneIndex = useMemo(
+    () => createLazyAiVaultOriginalPaneIndex(originalPaneLookupState),
     [originalPaneLookupState]
   )
 
   const getOriginalPaneTarget = useCallback(
-    (session: AiVaultSession) => findOriginalAiVaultSessionPaneInIndex(originalPaneIndex, session),
-    [originalPaneIndex]
+    (session: AiVaultSession) =>
+      findOriginalAiVaultSessionPaneInIndex(getOriginalPaneIndex(), session),
+    [getOriginalPaneIndex]
   )
 
   const getSessionLiveState = useCallback(
-    (session: AiVaultSession) => findAiVaultSessionLiveStateInIndex(originalPaneIndex, session),
-    [originalPaneIndex]
+    (session: AiVaultSession) =>
+      findAiVaultSessionLiveStateInIndex(getOriginalPaneIndex(), session),
+    [getOriginalPaneIndex]
   )
 
   const jumpToOriginalPane = useCallback((session: AiVaultSession): void => {

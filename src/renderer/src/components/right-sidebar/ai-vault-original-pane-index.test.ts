@@ -3,6 +3,7 @@ import type { AgentStatusEntry } from '../../../../shared/agent-status-types'
 import type { AiVaultSession } from '../../../../shared/ai-vault-types'
 import {
   buildAiVaultOriginalPaneIndex,
+  createLazyAiVaultOriginalPaneIndex,
   findAiVaultSessionLiveStateInIndex,
   findOriginalAiVaultSessionPaneInIndex
 } from './ai-vault-original-pane-index'
@@ -65,6 +66,42 @@ function unrelatedEntry(index: number): AgentStatusEntry {
 }
 
 describe('AI Vault original-pane index', () => {
+  it('builds lazily on the first lookup and shares one index across callbacks', () => {
+    const live = countedRecord(500, unrelatedEntry)
+    const retained = countedRecord(500, (index) => ({
+      entry: unrelatedEntry(index),
+      worktreeId: 'other-worktree',
+      tab: { id: `other-tab-${index}` },
+      agentType: 'claude',
+      startedAt: index
+    }))
+    const sleeping = countedRecord(500, (index) => ({
+      paneKey: `other-tab-${index}:11111111-1111-4111-8111-111111111111`,
+      tabId: `other-tab-${index}`,
+      worktreeId: 'other-worktree',
+      agent: 'claude',
+      providerSession: { key: 'session_id', id: `other-session-${index}` },
+      prompt: `Other task ${index}`,
+      state: 'done',
+      capturedAt: index,
+      updatedAt: index,
+      origin: 'live'
+    }))
+    const getIndex = createLazyAiVaultOriginalPaneIndex({
+      agentStatusByPaneKey: live.record,
+      retainedAgentsByPaneKey: retained.record,
+      sleepingAgentSessionsByPaneKey: sleeping.record,
+      tabsByWorktree: {},
+      terminalLayoutsByTabId: {}
+    } as never)
+
+    expect(live.reads.value + retained.reads.value + sleeping.reads.value).toBe(0)
+    expect(findAiVaultSessionLiveStateInIndex(getIndex(), SESSION)).toBeNull()
+    expect(live.reads.value + retained.reads.value + sleeping.reads.value).toBe(1_500)
+    expect(findOriginalAiVaultSessionPaneInIndex(getIndex(), SESSION)).toBeNull()
+    expect(live.reads.value + retained.reads.value + sleeping.reads.value).toBe(1_500)
+  })
+
   it('builds once instead of rescanning every agent collection for every visible row', () => {
     const live = countedRecord(500, unrelatedEntry)
     const retained = countedRecord(500, (index) => ({

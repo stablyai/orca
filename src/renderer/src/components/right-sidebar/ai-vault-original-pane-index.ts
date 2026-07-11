@@ -24,6 +24,8 @@ export type AiVaultOriginalPaneIndex = {
 }
 
 function providerKey(agent: string, sessionId: string): string {
+  // Why: unlike punctuation delimiters, NUL cannot collide with agent or
+  // provider-session text, so distinct identity pairs stay distinct keys.
   return `${agent}\u0000${sessionId}`
 }
 
@@ -84,6 +86,16 @@ export function buildAiVaultOriginalPaneIndex(state: OriginalPaneState): AiVault
     retainedByProvider,
     retainedWithoutProviderByAgent,
     sleepingByProvider
+  }
+}
+
+export function createLazyAiVaultOriginalPaneIndex(
+  state: OriginalPaneState
+): () => AiVaultOriginalPaneIndex {
+  let index: AiVaultOriginalPaneIndex | null = null
+  return () => {
+    index ??= buildAiVaultOriginalPaneIndex(state)
+    return index
   }
 }
 
