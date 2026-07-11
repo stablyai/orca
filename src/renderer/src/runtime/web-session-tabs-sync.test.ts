@@ -7,16 +7,19 @@ import { makePaneKey } from '../../../shared/stable-pane-id'
 import { toWebTerminalSurfaceTabId } from '../../../shared/terminal-surface-id'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../shared/constants'
 import {
+  peekWebSessionFocusIntent,
   recordWebSessionFocusIntent,
   resetWebSessionFocusIntentForTests
 } from './web-session-focus-intent'
 import {
+  isWebSessionCloseIntentPending,
   recordWebSessionCloseIntent,
   resetWebSessionCloseIntentForTests
 } from './web-session-close-intent'
 import {
   recordWebSessionReorderIntent,
-  resetWebSessionReorderIntentForTests
+  resetWebSessionReorderIntentForTests,
+  resolveWebSessionReorderedOrder
 } from './web-session-reorder-intent'
 import type { BrowserPage, BrowserWorkspace, Tab, TerminalTab } from '../../../shared/types'
 import type { OpenFile } from '../store/slices/editor'
@@ -45,6 +48,7 @@ vi.mock('../store', () => ({
 
 const WT = 'repo::/worktree'
 const ENV = 'web-env-1'
+const INTENT_SCOPE = { environmentId: ENV, worktreeId: WT }
 const NOW = 1_700_000_000_000
 const LEAF_ID = '11111111-1111-4111-8111-111111111111'
 const SECOND_LEAF_ID = '22222222-2222-4222-8222-222222222222'
@@ -257,7 +261,7 @@ describe('applyWebSessionTabsSnapshot', () => {
       isActive: true
     }
     // Client closed host-tab-1; an in-flight pre-close snapshot still lists it.
-    recordWebSessionCloseIntent(WT, 'host-tab-1', NOW)
+    recordWebSessionCloseIntent(INTENT_SCOPE, 'host-tab-1', NOW, 'epoch-1')
     const stalePreClose = applyWebSessionTabsSnapshot(
       makeState(),
       makeSnapshot([surface]),
@@ -313,7 +317,7 @@ describe('applyWebSessionTabsSnapshot', () => {
 
     // Client dragged tab 2 ahead of tab 1; an in-flight snapshot still has the
     // original host order.
-    recordWebSessionReorderIntent(WT, 'host-group-1', [local2, local1], NOW)
+    recordWebSessionReorderIntent(INTENT_SCOPE, 'host-group-1', [local2, local1], NOW, 'epoch-1')
     const stalePreMove = applyWebSessionTabsSnapshot(
       makeState(),
       makeSnapshot(surfaces, { tabGroups: groupWithOrder(['host-tab-1', 'host-tab-2']) }),
@@ -582,6 +586,9 @@ describe('applyWebSessionTabsSnapshot', () => {
       freshness: 1,
       hostMappings: 1
     })
+    recordWebSessionFocusIntent(INTENT_SCOPE, 'host-browser-page', 'epoch-1')
+    recordWebSessionCloseIntent(INTENT_SCOPE, 'host-browser-unified', NOW, 'epoch-1')
+    recordWebSessionReorderIntent(INTENT_SCOPE, 'host-group-1', ['tab-b', 'tab-a'], NOW, 'epoch-1')
 
     applyFreshWebSessionTabsSnapshot(
       afterHostSnapshot,
@@ -603,6 +610,19 @@ describe('applyWebSessionTabsSnapshot', () => {
       freshness: 0,
       hostMappings: 0
     })
+    expect(peekWebSessionFocusIntent(INTENT_SCOPE, 'epoch-1')).toBeNull()
+    expect(
+      isWebSessionCloseIntentPending(INTENT_SCOPE, 'host-browser-unified', NOW + 1, 'epoch-1')
+    ).toBe(false)
+    expect(
+      resolveWebSessionReorderedOrder(
+        INTENT_SCOPE,
+        'host-group-1',
+        ['tab-a', 'tab-b'],
+        NOW + 1,
+        'epoch-1'
+      )
+    ).toEqual(['tab-a', 'tab-b'])
   })
 
   it('clears web session tracking maps for one runtime environment on teardown', () => {
@@ -659,6 +679,13 @@ describe('applyWebSessionTabsSnapshot', () => {
       freshness: 2,
       hostMappings: 2
     })
+    const otherScope = { environmentId: 'web-env-2', worktreeId: 'repo::/other-worktree' }
+    recordWebSessionFocusIntent(INTENT_SCOPE, 'host-tab-a')
+    recordWebSessionFocusIntent(otherScope, 'host-tab-b')
+    recordWebSessionCloseIntent(INTENT_SCOPE, 'host-tab-a', NOW)
+    recordWebSessionCloseIntent(otherScope, 'host-tab-b', NOW)
+    recordWebSessionReorderIntent(INTENT_SCOPE, 'group-a', ['b', 'a'], NOW)
+    recordWebSessionReorderIntent(otherScope, 'group-b', ['d', 'c'], NOW)
 
     clearWebSessionTabsTrackingForEnvironment(ENV)
 
@@ -666,6 +693,16 @@ describe('applyWebSessionTabsSnapshot', () => {
       freshness: 1,
       hostMappings: 1
     })
+    expect(peekWebSessionFocusIntent(INTENT_SCOPE, 'epoch-1')).toBeNull()
+    expect(peekWebSessionFocusIntent(otherScope, 'epoch-1')).toBe('host-tab-b')
+    expect(isWebSessionCloseIntentPending(INTENT_SCOPE, 'host-tab-a', NOW, 'epoch-1')).toBe(false)
+    expect(isWebSessionCloseIntentPending(otherScope, 'host-tab-b', NOW, 'epoch-1')).toBe(true)
+    expect(
+      resolveWebSessionReorderedOrder(INTENT_SCOPE, 'group-a', ['a', 'b'], NOW, 'epoch-1')
+    ).toEqual(['a', 'b'])
+    expect(
+      resolveWebSessionReorderedOrder(otherScope, 'group-b', ['c', 'd'], NOW, 'epoch-1')
+    ).toEqual(['d', 'c'])
   })
 
   it('replaces stale local agent quick-launch tabs once host mirrors arrive', () => {
@@ -1988,13 +2025,11 @@ describe('applyWebSessionTabsSnapshot', () => {
     })
   })
 
-  it('focuses a brand-new remote terminal that the snapshot marks active', () => {
+  it('retains focus intent across a same-generation reconnect longer than 60 seconds', () => {
     // Why: opening a new terminal must take focus. Distinct from the #5435 case
     // above (existing tab echoed active = keep focus); here the active tab is new.
     const existingTabId = toWebTerminalSurfaceTabId('host-tab-1')
     const newTabId = toWebTerminalSurfaceTabId('host-tab-2')
-    // Simulate createWebRuntimeSessionTerminal recording focus intent for the new tab.
-    recordWebSessionFocusIntent(WT, `host-tab-2::${SECOND_LEAF_ID}`)
     const existingUnifiedTab: Tab = {
       id: existingTabId,
       entityId: existingTabId,
@@ -2010,77 +2045,86 @@ describe('applyWebSessionTabsSnapshot', () => {
       isPinned: false
     }
 
-    const patch = applyWebSessionTabsSnapshot(
-      makeState({
-        activeTabId: existingTabId,
-        activeTabIdByWorktree: { [WT]: existingTabId },
-        activeTabType: 'terminal',
-        activeTabTypeByWorktree: { [WT]: 'terminal' },
-        tabsByWorktree: {
-          [WT]: [
-            {
-              id: existingTabId,
-              ptyId: 'remote:web-env-1@@terminal-1',
-              worktreeId: WT,
-              title: 'shell',
-              customTitle: null,
-              color: null,
-              sortOrder: 0,
-              createdAt: NOW
-            }
-          ]
-        },
-        unifiedTabsByWorktree: { [WT]: [existingUnifiedTab] },
-        tabBarOrderByWorktree: { [WT]: [existingTabId] },
-        groupsByWorktree: {
-          [WT]: [
-            {
-              id: 'host-group-1',
-              worktreeId: WT,
-              activeTabId: existingTabId,
-              tabOrder: [existingTabId],
-              recentTabIds: [existingTabId]
-            }
-          ]
-        }
-      }),
-      makeSnapshot(
-        [
+    const state = makeState({
+      activeTabId: existingTabId,
+      activeTabIdByWorktree: { [WT]: existingTabId },
+      activeTabType: 'terminal',
+      activeTabTypeByWorktree: { [WT]: 'terminal' },
+      tabsByWorktree: {
+        [WT]: [
           {
-            type: 'terminal',
-            id: `host-tab-1::${LEAF_ID}`,
+            id: existingTabId,
+            ptyId: 'remote:web-env-1@@terminal-1',
+            worktreeId: WT,
             title: 'shell',
-            parentTabId: 'host-tab-1',
-            leafId: LEAF_ID,
-            isActive: false,
-            status: 'ready',
-            terminal: 'terminal-1'
-          },
-          {
-            type: 'terminal',
-            id: `host-tab-2::${SECOND_LEAF_ID}`,
-            title: 'new shell',
-            parentTabId: 'host-tab-2',
-            leafId: SECOND_LEAF_ID,
-            isActive: true,
-            status: 'ready',
-            terminal: 'terminal-2'
+            customTitle: null,
+            color: null,
+            sortOrder: 0,
+            createdAt: NOW
           }
-        ],
+        ]
+      },
+      unifiedTabsByWorktree: { [WT]: [existingUnifiedTab] },
+      tabBarOrderByWorktree: { [WT]: [existingTabId] },
+      groupsByWorktree: {
+        [WT]: [
+          {
+            id: 'host-group-1',
+            worktreeId: WT,
+            activeTabId: existingTabId,
+            tabOrder: [existingTabId],
+            recentTabIds: [existingTabId]
+          }
+        ]
+      }
+    })
+    const snapshot = makeSnapshot(
+      [
         {
-          activeTabId: `host-tab-2::${SECOND_LEAF_ID}`,
-          activeTabType: 'terminal',
-          tabGroups: [
-            {
-              id: 'host-group-1',
-              activeTabId: 'host-tab-2',
-              tabOrder: ['host-tab-1', 'host-tab-2']
-            }
-          ]
+          type: 'terminal',
+          id: `host-tab-1::${LEAF_ID}`,
+          title: 'shell',
+          parentTabId: 'host-tab-1',
+          leafId: LEAF_ID,
+          isActive: false,
+          status: 'ready',
+          terminal: 'terminal-1'
+        },
+        {
+          type: 'terminal',
+          id: `host-tab-2::${SECOND_LEAF_ID}`,
+          title: 'new shell',
+          parentTabId: 'host-tab-2',
+          leafId: SECOND_LEAF_ID,
+          isActive: true,
+          status: 'ready',
+          terminal: 'terminal-2'
         }
-      ),
+      ],
+      {
+        activeTabId: `host-tab-2::${SECOND_LEAF_ID}`,
+        activeTabType: 'terminal',
+        tabGroups: [
+          {
+            id: 'host-group-1',
+            activeTabId: 'host-tab-2',
+            tabOrder: ['host-tab-1', 'host-tab-2']
+          }
+        ]
+      }
+    )
+
+    // Prime the host-owned generation, then model a transport reconnect replay
+    // of that exact snapshot after a long outage. Reconnect must not expire or
+    // clear the action that was recorded against the still-running host.
+    applyFreshWebSessionTabsSnapshot(state, snapshot, ENV, NOW)
+    recordWebSessionFocusIntent(INTENT_SCOPE, `host-tab-2::${SECOND_LEAF_ID}`)
+    acceptReplayedWebSessionTabsSnapshot(ENV, WT)
+    const patch = applyFreshWebSessionTabsSnapshot(
+      state,
+      snapshot,
       ENV,
-      NOW + 10
+      NOW + 120_000
     ) as Partial<WebSessionTabsSyncState>
 
     expect(patch.activeTabIdByWorktree?.[WT]).toBe(newTabId)

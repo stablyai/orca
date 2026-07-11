@@ -1,23 +1,58 @@
-// Why: reordering a remote tab updates the local group order immediately for
-// responsiveness, then asks the host to move the tab. But an in-flight host
-// snapshot (published before the host processed the move, or the move RPC's own
-// pre-move subscribe replay) can still carry the OLD order and arrive after the
-// local reorder — the reconcile then overwrites the optimistic order, snapping
-// the tab back to where it was. Close has the same hazard and guards it with a
-// close-intent; reorder had no equivalent, so it always lost the race.
-//
-// The client records its intended local tab order per group here. The reconcile
-// substitutes it for the host order until a snapshot confirms the move (host
-// order matches the intent) or the group membership changes (a newer truth), at
-// which point the intent clears. A TTL guards a never-confirmed move (e.g. a
-// rejected RPC) from pinning a stale order forever.
+import {
+  getWebSessionPublicationEpoch,
+  webSessionIntentEnvironmentPrefix,
+  webSessionIntentScopeKey,
+  type WebSessionIntentScope
+} from './web-session-intent-scope'
 
-const REORDER_INTENT_TTL_MS = 10_000
+// Why: optimistic paired-client reorders must suppress an in-flight old host
+// order. Lifecycle cleanup and caps bound retention without a correctness TTL.
+export const MAX_WEB_SESSION_REORDER_INTENT_SCOPES = 256
+export const MAX_WEB_SESSION_REORDER_INTENTS_PER_SCOPE = 256
 
-type ReorderIntent = { order: string[]; recordedAt: number }
+type ReorderIntent = {
+  token: number
+  order: string[]
+  publicationEpoch: string | null
+}
 
-// worktreeId -> (groupId -> intent)
-const pendingReorderByWorktree = new Map<string, Map<string, ReorderIntent>>()
+// host/runtime + worktree -> (group id -> intent)
+const pendingReorderByScope = new Map<string, Map<string, ReorderIntent>>()
+let nextReorderIntentToken = 0
+
+function deleteEmptyReorderIntentScope(
+  scopeKey: string,
+  byGroup: Map<string, ReorderIntent>
+): void {
+  if (byGroup.size === 0) {
+    pendingReorderByScope.delete(scopeKey)
+  }
+}
+
+function refreshReorderIntentScope(scopeKey: string, byGroup: Map<string, ReorderIntent>): void {
+  pendingReorderByScope.delete(scopeKey)
+  pendingReorderByScope.set(scopeKey, byGroup)
+}
+
+function trimWebSessionReorderIntentScopes(): void {
+  while (pendingReorderByScope.size > MAX_WEB_SESSION_REORDER_INTENT_SCOPES) {
+    const oldestScopeKey = pendingReorderByScope.keys().next().value
+    if (oldestScopeKey === undefined) {
+      break
+    }
+    pendingReorderByScope.delete(oldestScopeKey)
+  }
+}
+
+function trimWebSessionReorderIntents(byGroup: Map<string, ReorderIntent>): void {
+  while (byGroup.size > MAX_WEB_SESSION_REORDER_INTENTS_PER_SCOPE) {
+    const oldestGroupId = byGroup.keys().next().value
+    if (oldestGroupId === undefined) {
+      break
+    }
+    byGroup.delete(oldestGroupId)
+  }
+}
 
 function sameMembership(a: readonly string[], b: readonly string[]): boolean {
   if (a.length !== b.length) {
@@ -32,68 +67,107 @@ function sameOrder(a: readonly string[], b: readonly string[]): boolean {
 }
 
 export function recordWebSessionReorderIntent(
-  worktreeId: string,
+  scope: WebSessionIntentScope,
   groupId: string,
   order: readonly string[],
-  now: number
-): void {
-  if (!worktreeId || !groupId || order.length === 0) {
-    return
+  _now: number,
+  publicationEpoch = getWebSessionPublicationEpoch(scope)
+): number | null {
+  const scopeKey = webSessionIntentScopeKey(scope)
+  if (!scopeKey || !groupId || order.length === 0) {
+    return null
   }
-  let byGroup = pendingReorderByWorktree.get(worktreeId)
-  if (!byGroup) {
-    byGroup = new Map()
-    pendingReorderByWorktree.set(worktreeId, byGroup)
-  }
-  byGroup.set(groupId, { order: [...order], recordedAt: now })
+  const byGroup = pendingReorderByScope.get(scopeKey) ?? new Map<string, ReorderIntent>()
+  refreshReorderIntentScope(scopeKey, byGroup)
+  const token = ++nextReorderIntentToken
+  byGroup.delete(groupId)
+  byGroup.set(groupId, { token, order: [...order], publicationEpoch })
+  trimWebSessionReorderIntents(byGroup)
+  trimWebSessionReorderIntentScopes()
+  return token
 }
 
-/**
- * Resolve the local tab order a reconcile should apply for a group. When the
- * client has a pending reorder for this group whose membership still matches the
- * host order, the intended order wins (suppressing a stale pre-move snapshot).
- * The intent clears once the host confirms it (orders match), the membership
- * diverges (add/close changed the truth), or the TTL lapses.
- */
 export function resolveWebSessionReorderedOrder(
-  worktreeId: string,
+  scope: WebSessionIntentScope,
   groupId: string,
   hostOrder: string[],
-  now: number
+  _now: number,
+  snapshotPublicationEpoch: string
 ): string[] {
-  const byGroup = pendingReorderByWorktree.get(worktreeId)
+  const scopeKey = webSessionIntentScopeKey(scope)
+  const byGroup = scopeKey ? pendingReorderByScope.get(scopeKey) : undefined
   const intent = byGroup?.get(groupId)
-  if (!intent) {
+  if (!scopeKey || !byGroup || !intent) {
     return hostOrder
   }
   const clear = (): void => {
-    byGroup!.delete(groupId)
-    if (byGroup!.size === 0) {
-      pendingReorderByWorktree.delete(worktreeId)
-    }
+    byGroup.delete(groupId)
+    deleteEmptyReorderIntentScope(scopeKey, byGroup)
   }
-  if (now - intent.recordedAt > REORDER_INTENT_TTL_MS) {
-    clear()
+  if (intent.publicationEpoch === null) {
+    intent.publicationEpoch = snapshotPublicationEpoch
+  }
+  if (intent.publicationEpoch !== snapshotPublicationEpoch) {
     return hostOrder
   }
-  // Why: a membership change (tab added/closed elsewhere) is a newer truth than
-  // a pending reorder — defer to the host and drop the now-ambiguous intent.
+  // Why: membership changes are newer host truth than a pending reorder.
   if (!sameMembership(intent.order, hostOrder)) {
     clear()
     return hostOrder
   }
   if (sameOrder(intent.order, hostOrder)) {
-    // Host confirmed the move; nothing left to suppress.
     clear()
     return hostOrder
   }
+  refreshReorderIntentScope(scopeKey, byGroup)
   return [...intent.order]
 }
 
-export function clearWebSessionReorderIntentsForWorktree(worktreeId: string): void {
-  pendingReorderByWorktree.delete(worktreeId)
+export function clearWebSessionReorderIntent(
+  scope: WebSessionIntentScope,
+  groupId: string,
+  token: number
+): void {
+  const scopeKey = webSessionIntentScopeKey(scope)
+  const byGroup = scopeKey ? pendingReorderByScope.get(scopeKey) : undefined
+  if (!scopeKey || !byGroup) {
+    return
+  }
+  if (byGroup.get(groupId)?.token !== token) {
+    return
+  }
+  byGroup.delete(groupId)
+  deleteEmptyReorderIntentScope(scopeKey, byGroup)
+}
+
+export function clearWebSessionReorderIntentsForWorktree(scope: WebSessionIntentScope): void {
+  const scopeKey = webSessionIntentScopeKey(scope)
+  if (scopeKey) {
+    pendingReorderByScope.delete(scopeKey)
+  }
+}
+
+export function clearWebSessionReorderIntentsForEnvironment(environmentId: string): void {
+  const prefix = webSessionIntentEnvironmentPrefix(environmentId)
+  if (!prefix) {
+    return
+  }
+  for (const key of pendingReorderByScope.keys()) {
+    if (key.startsWith(prefix)) {
+      pendingReorderByScope.delete(key)
+    }
+  }
 }
 
 export function resetWebSessionReorderIntentForTests(): void {
-  pendingReorderByWorktree.clear()
+  pendingReorderByScope.clear()
+  nextReorderIntentToken = 0
+}
+
+export function getWebSessionReorderIntentCountsForTests(): { scopes: number; groups: number } {
+  let groups = 0
+  for (const byGroup of pendingReorderByScope.values()) {
+    groups += byGroup.size
+  }
+  return { scopes: pendingReorderByScope.size, groups }
 }

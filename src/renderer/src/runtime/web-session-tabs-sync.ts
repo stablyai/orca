@@ -51,15 +51,29 @@ import {
 import { resolvePaneAgentOwner } from '../../../shared/pane-agent-owner'
 import { resolveTerminalLayoutRoot } from './remote-terminal-layout-resolution'
 import { toRuntimeWorktreeSelector } from './runtime-worktree-selector'
-import { clearWebSessionFocusIntent, peekWebSessionFocusIntent } from './web-session-focus-intent'
 import {
+  clearWebSessionFocusIntent,
+  clearWebSessionFocusIntentsForEnvironment,
+  consumeWebSessionFocusIntent
+} from './web-session-focus-intent'
+import {
+  clearWebSessionCloseIntentsForWorktree,
+  clearWebSessionCloseIntentsForEnvironment,
   isWebSessionCloseIntentPending,
   reconcileWebSessionCloseIntents
 } from './web-session-close-intent'
 import {
+  clearWebSessionReorderIntentsForEnvironment,
   clearWebSessionReorderIntentsForWorktree,
   resolveWebSessionReorderedOrder
 } from './web-session-reorder-intent'
+import {
+  clearWebSessionPublicationEpoch,
+  clearWebSessionPublicationEpochsForEnvironment,
+  rememberWebSessionPublicationEpoch,
+  resetWebSessionPublicationEpochsForTests,
+  type WebSessionIntentScope
+} from './web-session-intent-scope'
 import {
   beginWebRuntimeWakeTerminalRespawn,
   clearAllWebRuntimeWakeTerminalRespawn,
@@ -227,6 +241,10 @@ export function shouldApplyWebSessionTabsSnapshot(
     publicationEpoch: snapshot.publicationEpoch,
     snapshotVersion: snapshot.snapshotVersion
   })
+  rememberWebSessionPublicationEpoch(
+    { environmentId, worktreeId: snapshot.worktree },
+    snapshot.publicationEpoch
+  )
   return true
 }
 
@@ -297,6 +315,7 @@ export function resetWebSessionTabsSnapshotFreshnessForTests(): void {
   latestSessionTabsSnapshotByWorktree.clear()
   lastHostTerminalTabCountByWorktree.clear()
   hostSessionTabIdByLocalKey.clear()
+  resetWebSessionPublicationEpochsForTests()
 }
 
 export function _getWebSessionTabsTrackingCountsForTest(): {
@@ -310,11 +329,15 @@ export function _getWebSessionTabsTrackingCountsForTest(): {
 }
 
 function clearWebSessionTabsTrackingForWorktree(environmentId: string, worktreeId: string): void {
+  const intentScope = { environmentId, worktreeId }
   const key = sessionTabsFreshnessKey(environmentId, worktreeId)
   latestSessionTabsSnapshotByWorktree.delete(key)
   lastHostTerminalTabCountByWorktree.delete(key)
   clearWebRuntimeWakeTerminalRespawnForWorktree(worktreeId)
-  clearWebSessionReorderIntentsForWorktree(worktreeId)
+  clearWebSessionFocusIntent(intentScope)
+  clearWebSessionCloseIntentsForWorktree(intentScope)
+  clearWebSessionReorderIntentsForWorktree(intentScope)
+  clearWebSessionPublicationEpoch(intentScope)
   const keyPrefix = `${environmentId}:${worktreeId}:`
   for (const key of hostSessionTabIdByLocalKey.keys()) {
     if (key.startsWith(keyPrefix)) {
@@ -344,6 +367,10 @@ export function clearWebSessionTabsTrackingForEnvironment(environmentId: string)
       hostSessionTabIdByLocalKey.delete(key)
     }
   }
+  clearWebSessionFocusIntentsForEnvironment(trimmedEnvironmentId)
+  clearWebSessionCloseIntentsForEnvironment(trimmedEnvironmentId)
+  clearWebSessionReorderIntentsForEnvironment(trimmedEnvironmentId)
+  clearWebSessionPublicationEpochsForEnvironment(trimmedEnvironmentId)
   clearAllWebRuntimeWakeTerminalRespawn()
 }
 
@@ -1179,18 +1206,22 @@ function buildMirroredHostGroups({
   currentGroups,
   hostGroups,
   hostToLocalTabId,
+  intentScope,
   mirroredUnifiedIds,
   nextActiveUnifiedTabId,
   now,
+  publicationEpoch,
   validUnifiedTabIds,
   worktreeId
 }: {
   currentGroups: readonly TabGroup[]
   hostGroups: readonly RuntimeMobileSessionTabGroup[]
   hostToLocalTabId: ReadonlyMap<string, string>
+  intentScope: WebSessionIntentScope
   mirroredUnifiedIds: ReadonlySet<string>
   nextActiveUnifiedTabId: string | null
   now: number
+  publicationEpoch: string
   validUnifiedTabIds: ReadonlySet<string>
   worktreeId: string
 }): TabGroup[] | null {
@@ -1219,7 +1250,13 @@ function buildMirroredHostGroups({
     ]
     // Why: a pending client reorder for this group wins over a stale pre-move
     // host order until the host echoes the move (or membership changes).
-    const tabOrder = resolveWebSessionReorderedOrder(worktreeId, hostGroup.id, hostTabOrder, now)
+    const tabOrder = resolveWebSessionReorderedOrder(
+      intentScope,
+      hostGroup.id,
+      hostTabOrder,
+      now,
+      publicationEpoch
+    )
     if (tabOrder.length === 0) {
       continue
     }
@@ -1625,6 +1662,7 @@ export function applyWebSessionTabsSnapshot(
   if (worktreeId === FLOATING_TERMINAL_WORKTREE_ID) {
     return state
   }
+  const intentScope = { environmentId, worktreeId }
   // Why: a remote close prunes the local mirror immediately, but an in-flight
   // pre-close snapshot can still list the tab and flash it back. Drop any tab
   // the client is closing until the host confirms removal; reconcile the intents
@@ -1637,16 +1675,29 @@ export function applyWebSessionTabsSnapshot(
   const snapshotHostTabId = (tab: RuntimeMobileSessionTabsResult['tabs'][number]): string =>
     tab.type === 'terminal' ? tab.parentTabId : tab.id
   reconcileWebSessionCloseIntents(
-    worktreeId,
-    new Set(rawSnapshot.tabs.map((tab) => snapshotHostTabId(tab)))
+    intentScope,
+    new Set(rawSnapshot.tabs.map((tab) => snapshotHostTabId(tab))),
+    now,
+    rawSnapshot.publicationEpoch
   )
   const snapshot: RuntimeMobileSessionTabsResult = rawSnapshot.tabs.some((tab) =>
-    isWebSessionCloseIntentPending(worktreeId, snapshotHostTabId(tab), now)
+    isWebSessionCloseIntentPending(
+      intentScope,
+      snapshotHostTabId(tab),
+      now,
+      rawSnapshot.publicationEpoch
+    )
   )
     ? {
         ...rawSnapshot,
         tabs: rawSnapshot.tabs.filter(
-          (tab) => !isWebSessionCloseIntentPending(worktreeId, snapshotHostTabId(tab), now)
+          (tab) =>
+            !isWebSessionCloseIntentPending(
+              intentScope,
+              snapshotHostTabId(tab),
+              now,
+              rawSnapshot.publicationEpoch
+            )
         )
       }
     : rawSnapshot
@@ -1655,20 +1706,21 @@ export function applyWebSessionTabsSnapshot(
   // An unsolicited server-active (e.g. an agent "thinking" echo) must not steal
   // focus — that's the #5435 contract. Intent matches by the host active tab id
   // (terminal session id, or browserPageId for browser tabs); consume it once.
-  const focusIntentHostTabId = peekWebSessionFocusIntent(worktreeId)
-  const honorSnapshotActiveFocus =
-    focusIntentHostTabId !== null &&
-    snapshot.activeTabId !== null &&
-    (snapshot.activeTabId === focusIntentHostTabId ||
-      snapshot.tabs.some(
-        (tab) =>
-          tab.id === snapshot.activeTabId &&
-          tab.type === 'browser' &&
-          tab.browserPageId === focusIntentHostTabId
-      ))
-  if (honorSnapshotActiveFocus) {
-    clearWebSessionFocusIntent(worktreeId)
+  const activeHostTabIds = new Set<string>()
+  if (snapshot.activeTabId !== null) {
+    activeHostTabIds.add(snapshot.activeTabId)
+    const activeSnapshotTab = snapshot.tabs.find((tab) => tab.id === snapshot.activeTabId)
+    if (activeSnapshotTab?.type === 'terminal') {
+      activeHostTabIds.add(activeSnapshotTab.parentTabId)
+    } else if (activeSnapshotTab?.type === 'browser' && activeSnapshotTab.browserPageId) {
+      activeHostTabIds.add(activeSnapshotTab.browserPageId)
+    }
   }
+  const honorSnapshotActiveFocus = consumeWebSessionFocusIntent(
+    intentScope,
+    rawSnapshot.publicationEpoch,
+    activeHostTabIds
+  )
   const currentTerminalTabs = state.tabsByWorktree[worktreeId] ?? []
   const existingTerminalById = new Map(currentTerminalTabs.map((tab) => [tab.id, tab]))
   const terminalSurfaceTabs = snapshot.tabs.filter(isTerminalSurfaceTab)
@@ -1979,9 +2031,11 @@ export function applyWebSessionTabsSnapshot(
         currentGroups,
         hostGroups: snapshot.tabGroups,
         hostToLocalTabId,
+        intentScope,
         mirroredUnifiedIds,
         nextActiveUnifiedTabId,
         now,
+        publicationEpoch: snapshot.publicationEpoch,
         validUnifiedTabIds,
         worktreeId
       })

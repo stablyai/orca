@@ -29,6 +29,7 @@ import {
 
 const WT = 'repo::/worktree'
 const ENV = 'web-env-1'
+const INTENT_SCOPE = { environmentId: ENV, worktreeId: WT }
 const NOW = 1_700_000_000_000
 const LEAF_A = '11111111-1111-4111-8111-111111111111'
 const LEAF_B = '22222222-2222-4222-8222-222222222222'
@@ -188,7 +189,7 @@ describe('parity §3: remote terminal create appends rightmost (matches local)',
       localTerminal('host-tab-1', 0, true),
       localTerminal('host-tab-2', 1, false)
     ])
-    recordWebSessionFocusIntent(WT, `host-tab-3::${LEAF_C}`)
+    recordWebSessionFocusIntent(INTENT_SCOPE, `host-tab-3::${LEAF_C}`, 'epoch-1')
     const patch = applyWebSessionTabsSnapshot(
       prior,
       makeSnapshot([
@@ -215,7 +216,7 @@ describe('parity §3: remote terminal create appends rightmost (matches local)',
       localTerminal('host-tab-1', 0, false),
       localTerminal('host-tab-2', 1, true)
     ])
-    recordWebSessionFocusIntent(WT, `host-tab-3::${LEAF_C}`)
+    recordWebSessionFocusIntent(INTENT_SCOPE, `host-tab-3::${LEAF_C}`, 'epoch-1')
     const patch = applyWebSessionTabsSnapshot(
       prior,
       makeSnapshot([
@@ -240,7 +241,7 @@ describe('parity §3: remote terminal create appends rightmost (matches local)',
 describe('parity §4: remote create focuses new tab; echoes never steal focus', () => {
   it('a client-initiated create focuses the new terminal (intent honored)', () => {
     const prior = stateWithLocalTerminals([localTerminal('host-tab-1', 0, true)])
-    recordWebSessionFocusIntent(WT, `host-tab-2::${LEAF_B}`)
+    recordWebSessionFocusIntent(INTENT_SCOPE, `host-tab-2::${LEAF_B}`, 'epoch-1')
     const patch = applyWebSessionTabsSnapshot(
       prior,
       makeSnapshot([
@@ -303,7 +304,7 @@ describe('parity §11: remote browser create focuses the new browser tab', () =>
   it('honors focus intent for a newly created browser session tab', () => {
     const pageId = 'browser-page-1'
     const prior = stateWithLocalTerminals([localTerminal('host-tab-1', 0, true)])
-    recordWebSessionFocusIntent(WT, pageId)
+    recordWebSessionFocusIntent(INTENT_SCOPE, pageId, 'epoch-1')
     const patch = applyWebSessionTabsSnapshot(
       prior,
       makeSnapshot([{ parentTab: 'host-tab-1', leaf: LEAF_A, active: false }], {
