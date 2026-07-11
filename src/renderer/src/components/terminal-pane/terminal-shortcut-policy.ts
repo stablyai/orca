@@ -153,17 +153,13 @@ export function resolveTerminalShortcutAction(
     event.shiftKey &&
     event.key === 'Enter'
   ) {
-    // Why: the PTY host selects Windows rules, while trusted pane evidence
-    // preserves Droid's distinct Windows encoding.
+    // Why: negotiated KKP is authoritative on every host; trusted pane
+    // evidence additionally preserves Droid's Windows encoding without KKP.
     const windowsHost = isWindowsTerminalHost()
-    const encoding = windowsHost
-      ? (getWindowsShiftEnterEncoding?.() ?? 'alt-enter')
-      : 'csi-u'
-    // Why: CSI-u is application input, not a universal terminal sequence. Off
-    // Windows, only send it while the pane's application has KKP active;
-    // trusted Windows agent evidence remains sufficient on its own.
-    const canSendCsiU =
-      encoding === 'csi-u' && (windowsHost || isKittyKeyboardActivePane?.() === true)
+    const hasTrustedWindowsCsiU = windowsHost && getWindowsShiftEnterEncoding?.() === 'csi-u'
+    // Why: CSI-u is application input, not a universal terminal sequence.
+    // Without trusted Windows agent evidence, require active KKP negotiation.
+    const canSendCsiU = hasTrustedWindowsCsiU || isKittyKeyboardActivePane?.() === true
     return { type: 'sendInput', data: canSendCsiU ? '\x1b[13;2u' : '\x1b\r' }
   }
 

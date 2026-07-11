@@ -248,8 +248,9 @@ describe('resolveTerminalShortcutAction', () => {
     expect(isKittyKeyboardActivePane).toHaveBeenCalledTimes(1)
   })
 
-  it('uses the Windows sequence for a Windows PTY reached from macOS', () => {
-    expect(
+  it('honors Kitty negotiation for a Windows PTY reached from macOS', () => {
+    const getWindowsShiftEnterEncoding = vi.fn(() => 'alt-enter' as const)
+    const resolve = (kittyActive: boolean) =>
       resolveTerminalShortcutAction(
         event({ key: 'Enter', code: 'Enter', shiftKey: true }),
         true,
@@ -258,12 +259,14 @@ describe('resolveTerminalShortcutAction', () => {
         false,
         undefined,
         undefined,
+        () => kittyActive,
         undefined,
-        undefined,
-        undefined,
+        getWindowsShiftEnterEncoding,
         () => true
       )
-    ).toEqual({ type: 'sendInput', data: '\x1b\r' })
+    expect(resolve(true)).toEqual({ type: 'sendInput', data: '\x1b[13;2u' })
+    expect(resolve(false)).toEqual({ type: 'sendInput', data: '\x1b\r' })
+    expect(getWindowsShiftEnterEncoding).toHaveBeenCalledTimes(2)
   })
 
   it('forwards Ctrl+Enter as the kitty CSI-u chord so TUIs can cue instead of send', () => {

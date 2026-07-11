@@ -32,7 +32,10 @@ export type PtyBufferSnapshot = {
   pendingEscapeTailAnsi?: string
 }
 
-export type LocalPtySessionMetadata = { cwd?: string; shellOverride?: string }
+export type LocalPtySessionMetadata = {
+  cwd?: string
+  shellOverride?: string
+}
 
 export type PtyConnectResult = {
   id: string
@@ -116,6 +119,9 @@ export type PtyTransport = {
   isConnected: () => boolean
   getPtyId: () => string | null
   getConnectionId?: () => string | null | undefined
+  /** The runtime captured by this transport; legacy remote PTY ids do not
+   * encode their owner, and current worktree settings may have changed. */
+  getRuntimeEnvironmentId?: () => string | null
   getLocalSessionMetadata?: () => LocalPtySessionMetadata | null
   /** Drop cross-chunk parser carries (partial OSC-9999 prefix). Called when a
    *  model-restore marker reports dropped bytes — a carry spanning the gap
