@@ -2,9 +2,12 @@ import { describe, expect, it } from 'vitest'
 import {
   clearMissingMissionMembers,
   createMission,
+  getMissionRootDirName,
   getMissionWorktreeName,
   getNextMissionTabOrder,
   isMissionEligibleRepo,
+  isMissionOwnedFolderWorkspace,
+  missionSentinelGroupId,
   normalizeMissionName,
   normalizeMissions,
   slugifyMissionBranch
@@ -118,6 +121,31 @@ describe('clearMissingMissionMembers', () => {
     const result = clearMissingMissionMembers(missions, [{ id: 'kept' }])
     expect(result.changed).toBe(false)
     expect(result.missions).toBe(missions as Mission[])
+  })
+})
+
+describe('getMissionRootDirName', () => {
+  it('produces a directory-safe slug with fallback', () => {
+    expect(getMissionRootDirName('Referral Flow!')).toBe('referral-flow')
+    expect(getMissionRootDirName('###')).toBe('mission')
+  })
+})
+
+describe('mission-owned folder workspace helpers', () => {
+  it('builds a namespaced sentinel group id and detects ownership', () => {
+    expect(missionSentinelGroupId('m1')).toBe('mission:m1')
+    expect(isMissionOwnedFolderWorkspace({ missionId: 'm1' })).toBe(true)
+    expect(isMissionOwnedFolderWorkspace({ missionId: null })).toBe(false)
+    expect(isMissionOwnedFolderWorkspace({})).toBe(false)
+  })
+})
+
+describe('normalizeMissions rootPath', () => {
+  it('round-trips a string rootPath and nulls junk', () => {
+    const withRoot = normalizeMissions([makeMission({ id: 'a', rootPath: '/x/missions/a' })])
+    expect(withRoot[0].rootPath).toBe('/x/missions/a')
+    const withJunk = normalizeMissions([makeMission({ id: 'b', rootPath: 42 as never })])
+    expect(withJunk[0].rootPath).toBeNull()
   })
 })
 

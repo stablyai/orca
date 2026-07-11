@@ -3087,6 +3087,7 @@ export class Store {
           this.loadNeedsSave = true
         }
         const normalizedProjectGroups = normalizeProjectGroups(parsed.projectGroups)
+        const normalizedMissions = normalizeMissions(parsed.missions)
         const loadedCompactWorktreeCards =
           parsed.settings?.compactWorktreeCards ??
           parsed.settings?.experimentalCompactWorktreeCards ??
@@ -3109,9 +3110,10 @@ export class Store {
           projectGroups: normalizedProjectGroups,
           folderWorkspaces: normalizeFolderWorkspaces(
             parsed.folderWorkspaces,
-            normalizedProjectGroups
+            normalizedProjectGroups,
+            normalizedMissions
           ),
-          missions: normalizeMissions(parsed.missions),
+          missions: normalizedMissions,
           worktreeLineageById: parsed.worktreeLineageById ?? {},
           workspaceLineageByChildKey: normalizeWorkspaceLineageByChildKey(
             parsed.workspaceLineageByChildKey

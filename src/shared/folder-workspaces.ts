@@ -1,5 +1,6 @@
-import type { FolderWorkspace, FolderWorkspaceLinkedTask, ProjectGroup } from './types'
+import type { FolderWorkspace, FolderWorkspaceLinkedTask, Mission, ProjectGroup } from './types'
 import { isTuiAgent } from './tui-agent-config'
+import { missionSentinelGroupId } from './missions'
 
 export function normalizeFolderWorkspaceName(
   name: string | null | undefined,
@@ -55,9 +56,54 @@ export function normalizeFolderWorkspaceLinkedTask(
   }
 }
 
+type CommonFolderWorkspaceFields = Omit<
+  FolderWorkspace,
+  'id' | 'projectGroupId' | 'missionId' | 'folderPath' | 'connectionId'
+>
+
+function normalizeCommonFolderWorkspaceFields(
+  raw: Partial<FolderWorkspace>,
+  now: number
+): CommonFolderWorkspaceFields {
+  return {
+    name: normalizeFolderWorkspaceName(raw.name),
+    linkedTask: normalizeFolderWorkspaceLinkedTask(raw.linkedTask),
+    comment: typeof raw.comment === 'string' ? raw.comment : '',
+    isArchived: raw.isArchived === true,
+    isUnread: raw.isUnread === true,
+    isPinned: raw.isPinned === true,
+    sortOrder:
+      typeof raw.sortOrder === 'number' && Number.isFinite(raw.sortOrder) ? raw.sortOrder : now,
+    ...(typeof raw.manualOrder === 'number' && Number.isFinite(raw.manualOrder)
+      ? { manualOrder: raw.manualOrder }
+      : {}),
+    ...(typeof raw.workspaceStatus === 'string' && raw.workspaceStatus.trim().length > 0
+      ? { workspaceStatus: raw.workspaceStatus }
+      : {}),
+    ...(isTuiAgent(raw.createdWithAgent) ? { createdWithAgent: raw.createdWithAgent } : {}),
+    ...(raw.pendingFirstAgentMessageRename === true
+      ? { pendingFirstAgentMessageRename: true }
+      : {}),
+    ...(typeof raw.firstAgentMessageRenameError === 'string'
+      ? { firstAgentMessageRenameError: raw.firstAgentMessageRenameError }
+      : raw.firstAgentMessageRenameError === null
+        ? { firstAgentMessageRenameError: null }
+        : {}),
+    lastActivityAt:
+      typeof raw.lastActivityAt === 'number' && Number.isFinite(raw.lastActivityAt)
+        ? raw.lastActivityAt
+        : 0,
+    createdAt:
+      typeof raw.createdAt === 'number' && Number.isFinite(raw.createdAt) ? raw.createdAt : now,
+    updatedAt:
+      typeof raw.updatedAt === 'number' && Number.isFinite(raw.updatedAt) ? raw.updatedAt : now
+  }
+}
+
 export function normalizeFolderWorkspaces(
   value: unknown,
-  projectGroups: readonly ProjectGroup[]
+  projectGroups: readonly ProjectGroup[],
+  missions: readonly Pick<Mission, 'id' | 'rootPath'>[] = []
 ): FolderWorkspace[] {
   if (!Array.isArray(value)) {
     return []
@@ -68,6 +114,7 @@ export function normalizeFolderWorkspaces(
       folderGroups.set(group.id, group)
     }
   }
+  const missionsById = new Map(missions.map((mission) => [mission.id, mission]))
 
   const workspaces: FolderWorkspace[] = []
   const seen = new Set<string>()
@@ -76,13 +123,36 @@ export function normalizeFolderWorkspaces(
       continue
     }
     const raw = candidate as Partial<FolderWorkspace>
-    if (
-      typeof raw.id !== 'string' ||
-      raw.id.trim().length === 0 ||
-      seen.has(raw.id) ||
-      typeof raw.projectGroupId !== 'string' ||
-      !folderGroups.has(raw.projectGroupId)
-    ) {
+    if (typeof raw.id !== 'string' || raw.id.trim().length === 0 || seen.has(raw.id)) {
+      continue
+    }
+    // Why: mission session workspaces carry a sentinel projectGroupId; they
+    // live and die with their mission, not with any project group.
+    const owningMission =
+      typeof raw.missionId === 'string' && raw.missionId.length > 0
+        ? missionsById.get(raw.missionId)
+        : undefined
+    if (typeof raw.missionId === 'string' && raw.missionId.length > 0) {
+      const missionFolderPath =
+        typeof raw.folderPath === 'string' && raw.folderPath.trim().length > 0
+          ? raw.folderPath
+          : owningMission?.rootPath
+      if (!owningMission || !missionFolderPath) {
+        continue
+      }
+      const now = Date.now()
+      seen.add(raw.id)
+      workspaces.push({
+        ...normalizeCommonFolderWorkspaceFields(raw, now),
+        id: raw.id,
+        projectGroupId: missionSentinelGroupId(owningMission.id),
+        missionId: owningMission.id,
+        folderPath: missionFolderPath,
+        connectionId: null
+      })
+      continue
+    }
+    if (typeof raw.projectGroupId !== 'string' || !folderGroups.has(raw.projectGroupId)) {
       continue
     }
     const group = folderGroups.get(raw.projectGroupId)
@@ -96,46 +166,16 @@ export function normalizeFolderWorkspaces(
     const now = Date.now()
     seen.add(raw.id)
     workspaces.push({
+      ...normalizeCommonFolderWorkspaceFields(raw, now),
       id: raw.id,
       projectGroupId: raw.projectGroupId,
-      name: normalizeFolderWorkspaceName(raw.name),
       folderPath,
       connectionId:
         typeof raw.connectionId === 'string'
           ? raw.connectionId
           : raw.connectionId === null
             ? null
-            : (group?.connectionId ?? null),
-      linkedTask: normalizeFolderWorkspaceLinkedTask(raw.linkedTask),
-      comment: typeof raw.comment === 'string' ? raw.comment : '',
-      isArchived: raw.isArchived === true,
-      isUnread: raw.isUnread === true,
-      isPinned: raw.isPinned === true,
-      sortOrder:
-        typeof raw.sortOrder === 'number' && Number.isFinite(raw.sortOrder) ? raw.sortOrder : now,
-      ...(typeof raw.manualOrder === 'number' && Number.isFinite(raw.manualOrder)
-        ? { manualOrder: raw.manualOrder }
-        : {}),
-      ...(typeof raw.workspaceStatus === 'string' && raw.workspaceStatus.trim().length > 0
-        ? { workspaceStatus: raw.workspaceStatus }
-        : {}),
-      ...(isTuiAgent(raw.createdWithAgent) ? { createdWithAgent: raw.createdWithAgent } : {}),
-      ...(raw.pendingFirstAgentMessageRename === true
-        ? { pendingFirstAgentMessageRename: true }
-        : {}),
-      ...(typeof raw.firstAgentMessageRenameError === 'string'
-        ? { firstAgentMessageRenameError: raw.firstAgentMessageRenameError }
-        : raw.firstAgentMessageRenameError === null
-          ? { firstAgentMessageRenameError: null }
-          : {}),
-      lastActivityAt:
-        typeof raw.lastActivityAt === 'number' && Number.isFinite(raw.lastActivityAt)
-          ? raw.lastActivityAt
-          : 0,
-      createdAt:
-        typeof raw.createdAt === 'number' && Number.isFinite(raw.createdAt) ? raw.createdAt : now,
-      updatedAt:
-        typeof raw.updatedAt === 'number' && Number.isFinite(raw.updatedAt) ? raw.updatedAt : now
+            : (group?.connectionId ?? null)
     })
   }
   return workspaces.sort(
