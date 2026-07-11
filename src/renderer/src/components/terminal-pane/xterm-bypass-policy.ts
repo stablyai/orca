@@ -1,5 +1,8 @@
 import { keybindingMatchesInput } from '../../../../shared/keybindings'
-import { isTerminalImeCandidateSelectionKeyEvent } from './terminal-ime-candidate-key-release-guard'
+import {
+  isTerminalImeCandidateDigitKeyEvent,
+  isTerminalImeCandidateSelectionKeyEvent
+} from './terminal-ime-candidate-key-release-guard'
 
 // Why: when a CLI activates kitty progressive enhancement (CSI > N u), xterm's
 // KittyKeyboard encoder turns every modifier chord — including plain Cmd+C —
@@ -42,6 +45,9 @@ export type XtermImeKeyboardOptions = {
   candidateKeyGuardActive: boolean
   /** True when the pending-release guard already matched this specific event. */
   pendingCandidateKeyReleaseActive: boolean
+  /** True for the narrow Linux path where the IME emits an orphaned letter
+   *  keyup but no composition/input events before its candidate digit. */
+  linuxOrphanCandidateDigitGuardActive?: boolean
   // Required so no caller silently falls back to non-mac 229 suppression,
   // which re-swallows the first key after a macOS IME input-source switch.
   isMac: boolean
@@ -89,13 +95,17 @@ export function shouldSuppressTerminalImeKeyboardEvent(
     compositionActive,
     candidateKeyGuardActive,
     pendingCandidateKeyReleaseActive,
+    linuxOrphanCandidateDigitGuardActive = false,
     isMac,
     isLinux
   } = options
+  const suppressOrphanCandidateDigit =
+    isLinux && linuxOrphanCandidateDigitGuardActive && isTerminalImeCandidateDigitKeyEvent(event)
   const suppressCandidateKey =
     isLinux &&
     (pendingCandidateKeyReleaseActive ||
-      (candidateKeyGuardActive && isTerminalImeCandidateSelectionKeyEvent(event)))
+      (candidateKeyGuardActive && isTerminalImeCandidateSelectionKeyEvent(event)) ||
+      suppressOrphanCandidateDigit)
   if (event.type === 'keypress') {
     // Why: a suppressed candidate keydown is not preventDefault-ed by xterm,
     // so its native keypress still fires and _keyPress would forward the
@@ -132,8 +142,9 @@ export function shouldPreventDefaultTerminalImeCandidateKey(
   return (
     event.type === 'keydown' &&
     options.isLinux &&
-    options.candidateKeyGuardActive &&
-    isTerminalImeCandidateSelectionKeyEvent(event)
+    ((options.candidateKeyGuardActive && isTerminalImeCandidateSelectionKeyEvent(event)) ||
+      (options.linuxOrphanCandidateDigitGuardActive === true &&
+        isTerminalImeCandidateDigitKeyEvent(event)))
   )
 }
 

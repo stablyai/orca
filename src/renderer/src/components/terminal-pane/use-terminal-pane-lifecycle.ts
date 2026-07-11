@@ -66,6 +66,7 @@ import { parseOsc7 } from './parse-osc7'
 import { guardParserHandler } from './terminal-parser-handler-guard'
 import { resolveTerminalJisYenInput } from './terminal-jis-yen-input'
 import { installTerminalImeCompositionTracker } from './terminal-ime-composition-tracker'
+import { createTerminalImeLinuxCandidateState } from './terminal-ime-linux-candidate-state'
 import {
   armTerminalImePendingCandidateKeyRelease,
   clearTerminalImePendingCandidateKeyRelease,
@@ -884,6 +885,7 @@ export function useTerminalPaneLifecycle({
           !isMac &&
           navigator.userAgent.includes('Linux') &&
           !/Android|CrOS/.test(navigator.userAgent)
+        const linuxImeCandidateState = isLinux ? createTerminalImeLinuxCandidateState() : null
         const macNativeTextInputSourceTracker = isMac ? getMacNativeTextInputSourceTracker() : null
         const imeCompositionTracker = installTerminalImeCompositionTracker(pane.terminal.element)
         imeCompositionDisposablesRef.current.set(pane.id, imeCompositionTracker)
@@ -905,6 +907,12 @@ export function useTerminalPaneLifecycle({
             }
         imeNativeTextForwarderDisposablesRef.current.set(pane.id, imeNativeTextForwarder)
         pane.terminal.attachCustomKeyEventHandler((e) => {
+          const linuxCandidateClassification = linuxImeCandidateState?.classifyKeyboardEvent(e) ?? {
+            candidateDigitGuardActive: false
+          }
+          const observeLinuxCandidateEvent = (): void => {
+            linuxImeCandidateState?.observeKeyboardEvent(e, linuxCandidateClassification)
+          }
           const now = Date.now()
           const pendingCandidateReleaseGuardActive =
             shouldApplyTerminalImePendingCandidateKeyRelease(
@@ -918,6 +926,8 @@ export function useTerminalPaneLifecycle({
               imeCompositionTracker.isCandidateKeyGuardActive() ||
               pendingCandidateReleaseGuardActive,
             pendingCandidateKeyReleaseActive: pendingCandidateReleaseGuardActive,
+            linuxOrphanCandidateDigitGuardActive:
+              linuxCandidateClassification.candidateDigitGuardActive,
             isMac,
             isLinux
           }
@@ -935,11 +945,13 @@ export function useTerminalPaneLifecycle({
                 now
               )
             }
+            observeLinuxCandidateEvent()
             return false
           }
           clearTerminalImePendingCandidateKeyRelease(pendingTerminalImeCandidateKeyReleases, e)
           if (pendingTerminalInterruptKeyup && shouldSuppressTerminalInterruptKeyup(e)) {
             pendingTerminalInterruptKeyup = false
+            observeLinuxCandidateEvent()
             return false
           }
           if (
@@ -959,11 +971,13 @@ export function useTerminalPaneLifecycle({
             } else {
               pendingTerminalInterruptKeyup = false
             }
+            observeLinuxCandidateEvent()
             return false
           }
           if (shouldSuppressTerminalModifierKeyboardEvent(e)) {
             // Why: stale Kitty keyboard reporting can encode standalone
             // modifier presses before Ctrl+C reaches the interrupt handler.
+            observeLinuxCandidateEvent()
             return false
           }
 
@@ -977,6 +991,7 @@ export function useTerminalPaneLifecycle({
               // Keep it on xterm's onData path so PTY input guards still run.
               pane.terminal.input(jisYenInput.data)
             }
+            observeLinuxCandidateEvent()
             return false
           }
 
@@ -992,13 +1007,16 @@ export function useTerminalPaneLifecycle({
           if (imeNativeTextForwarder.claimKeyEvent(e)) {
             // Why: bypass xterm's kitty encoder for native text keydowns so the
             // committed glyph survives via the input event.
+            observeLinuxCandidateEvent()
             return false
           }
 
-          return !shouldBypassXtermKeyboardEvent(e, {
+          const shouldBypass = shouldBypassXtermKeyboardEvent(e, {
             isMac,
             hasSelection: pane.terminal.hasSelection()
           })
+          observeLinuxCandidateEvent()
+          return !shouldBypass
         })
 
         const linkProviderDisposable = pane.terminal.registerLinkProvider(

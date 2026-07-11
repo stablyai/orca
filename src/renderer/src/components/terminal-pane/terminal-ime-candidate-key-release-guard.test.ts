@@ -3,6 +3,7 @@ import {
   armTerminalImePendingCandidateKeyRelease,
   clearTerminalImePendingCandidateKeyRelease,
   createTerminalImePendingCandidateKeyReleases,
+  isTerminalImeCandidateDigitKeyEvent,
   isTerminalImeCandidateSelectionKeyEvent,
   shouldApplyTerminalImePendingCandidateKeyRelease
 } from './terminal-ime-candidate-key-release-guard'
@@ -17,6 +18,12 @@ describe('terminal IME candidate key release guard', () => {
     expect(isTerminalImeCandidateSelectionKeyEvent(event({ key: ' ', ctrlKey: true }))).toBe(false)
     // Shift+Space is fcitx's full-/half-width toggle, not a candidate selector.
     expect(isTerminalImeCandidateSelectionKeyEvent(event({ key: ' ', shiftKey: true }))).toBe(false)
+  })
+
+  it('recognizes unmodified digits but not Space as digit candidate selectors', () => {
+    expect(isTerminalImeCandidateDigitKeyEvent(event({ key: '2' }))).toBe(true)
+    expect(isTerminalImeCandidateDigitKeyEvent(event({ key: ' ' }))).toBe(false)
+    expect(isTerminalImeCandidateDigitKeyEvent(event({ key: '2', ctrlKey: true }))).toBe(false)
   })
 
   it('arms a pending release guard from a suppressed candidate keydown', () => {
