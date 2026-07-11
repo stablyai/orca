@@ -1,6 +1,7 @@
 import { readdirSync } from 'node:fs'
 import { opendir } from 'node:fs/promises'
 import { join } from 'node:path'
+import { isCodexSessionRolloutFileName } from '../ai-vault/session-scanner-codex-paths'
 
 export type CodexSessionBridgeIncrementalOptions = {
   /** Directory entries to process before yielding back to the event loop. */
@@ -27,7 +28,7 @@ export function listCodexSessionJsonlFiles(rootPath: string): string[] {
         appendSessionFilePaths(files, listCodexSessionJsonlFiles(childPath))
         continue
       }
-      if (entry.isFile() && entry.name.endsWith('.jsonl')) {
+      if (entry.isFile() && isCodexSessionRolloutFileName(entry.name)) {
         files.push(childPath)
       }
     }
@@ -74,7 +75,7 @@ export async function* listCodexSessionJsonlFilesIncrementally(
         const childPath = join(currentDirectory, entry.name)
         if (entry.isDirectory()) {
           pendingDirectories.push(childPath)
-        } else if (entry.isFile() && entry.name.endsWith('.jsonl')) {
+        } else if (entry.isFile() && isCodexSessionRolloutFileName(entry.name)) {
           yield childPath
         }
         entriesSinceYield += 1

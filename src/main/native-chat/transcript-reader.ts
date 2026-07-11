@@ -1,5 +1,7 @@
 import { createReadStream } from 'node:fs'
 import type { AgentType, NativeChatMessage } from '../../shared/native-chat-types'
+import { isCodexCompressedRolloutPath } from '../ai-vault/session-scanner-codex-paths'
+import { openCodexRolloutStream } from '../ai-vault/session-scanner-codex-rollout-read'
 import { errorMessage } from '../ai-vault/session-scanner-values'
 import { resolveSessionFilePath, type ResolveSessionFileOptions } from './session-file-resolver'
 import {
@@ -61,7 +63,10 @@ async function readTranscript(
   filePath: string,
   decode: (line: string, fallbackId: string) => NativeChatMessage | null
 ): Promise<NativeChatMessage[]> {
-  const stream = createReadStream(filePath, { encoding: 'utf-8' })
+  // Why: Codex cold-compresses older rollouts; other agents remain plain JSONL.
+  const stream = isCodexCompressedRolloutPath(filePath)
+    ? openCodexRolloutStream(filePath)
+    : createReadStream(filePath, { encoding: 'utf-8' })
   const { messages } = await decodeTranscriptStream(stream, filePath, 0, decode, true)
   return messages
 }

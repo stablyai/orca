@@ -65,11 +65,16 @@ describe('syncWslCodexSessionsIntoManagedHome', () => {
     expect(shellCommand).toContain(
       "managed_sessions_root='/home/alice/.local/share/orca/codex-runtime-home/home/sessions'"
     )
-    expect(shellCommand).toContain(`find "\\$source_sessions_root" -type f -name '*.jsonl' -print0`)
+    expect(shellCommand).toContain(
+      `find "\\$source_sessions_root" -type f \\( -name '*.jsonl' -o -name '*.jsonl.zst' \\) -print0`
+    )
     expect(shellCommand).toContain('ln -- "\\$source_file" "\\$target_file"')
-    expect(shellCommand).toContain('if [ -e "\\$target_file" ] || [ -L "\\$target_file" ]; then')
+    expect(shellCommand).toContain('cp -p -- "\\$source_file" "\\$replacement_file"')
+    expect(shellCommand).toContain('ln -- "\\$replacement_file" "\\$target_file"')
+    expect(shellCommand).toContain('.orca-session-copies')
+    expect(shellCommand).toContain('if [ -L "\\$target_file" ]; then')
+    expect(shellCommand).toContain('if [ -e "\\$target_file" ]; then')
     expect(shellCommand).not.toContain('ln -s')
-    expect(shellCommand).not.toContain('cp ')
     expect(shellCommand).not.toContain('sqlite')
   })
 
@@ -152,7 +157,44 @@ describe('buildWslCodexSessionBridgeShellCommand', () => {
       `source_sessions_root='/home/alice/.codex/sessions with '\\''quote'\\'''`
     )
     expect(shellCommand).toContain(`-name '*.jsonl'`)
+    expect(shellCommand).toContain(`-name '*.jsonl.zst'`)
+    expect(shellCommand).toContain('cp -p --')
+    expect(shellCommand).toContain('.orca-session-copies')
     expect(shellCommand).not.toContain('.sqlite')
+  })
+
+  it('refreshes only marker-owned copies that still match the source prefix', () => {
+    const shellCommand = buildWslCodexSessionBridgeShellCommand({
+      systemSessionsRoot: '/home/alice/.codex/sessions',
+      managedSessionsRoot: '/home/alice/.local/share/orca/codex-runtime-home/home/sessions'
+    })
+
+    expect(shellCommand).toContain(
+      'copy_marker_matches "\\$marker_file" "\\$source_file" "\\$target_file"'
+    )
+    expect(shellCommand).toContain(
+      '[ "\\$marker_content" = "\\${marker_prefix}\\${stored_source_mtime}\\${marker_suffix}" ]'
+    )
+    expect(shellCommand).toContain('"sourcePath":"%s","sourceSize":%s')
+    expect(shellCommand).toContain('[ "\\$target_size" -lt "\\$source_size" ]')
+    expect(shellCommand).toContain(
+      'cmp --silent --bytes="\\$target_size" -- "\\$target_file" "\\$source_file"'
+    )
+    expect(shellCommand).toContain('cp -p -- "\\$source_file" "\\$replacement_file"')
+    expect(shellCommand).toContain('target_fingerprint_before=\\$(file_sha256 "\\$target_file")')
+    expect(shellCommand).toContain('target_fingerprint_after=\\$(file_sha256 "\\$target_file")')
+    expect(shellCommand).toContain('ln -- "\\$target_file" "\\$preserved_file"')
+    expect(shellCommand).toContain('mv -- "\\$target_file" "\\$displaced_file"')
+    expect(shellCommand).toContain('ln -- "\\$replacement_file" "\\$target_file"')
+    expect(shellCommand).toContain('ln -- "\\$displaced_file" "\\$target_file"')
+    expect(shellCommand).toContain('.orca-session-preserved')
+    expect(shellCommand).toContain('preserved copy requires review')
+    expect(shellCommand).toContain('value=\\${value//\\\\/\\\\\\\\}')
+    expect(shellCommand).toContain('source_path_json=\\$(json_escape "\\$source_file")')
+    expect(shellCommand).toContain('"version":2')
+    expect(shellCommand).toContain('"mtimePrecision":"seconds"')
+    expect(shellCommand).toContain('"targetFingerprintSha256":"%s"')
+    expect(shellCommand).toContain('"displacedTargetPath":"%s"')
   })
 
   it('escapes Linux-side shell variable expansion for wsl.exe argv', () => {

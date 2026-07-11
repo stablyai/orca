@@ -144,6 +144,27 @@ describe('filterSkillSuggestions', () => {
     ])
     expect(filterSkillSuggestions(skills, 'h')).toEqual([])
   })
+
+  it('dedupes same-name skills and prefers the repository source', () => {
+    const skills = [
+      skill({
+        id: 'home-review',
+        name: 'review',
+        sourceKind: 'home',
+        skillFilePath: '/Users/test/.agents/skills/review/SKILL.md'
+      }),
+      skill({
+        id: 'repo-review',
+        name: 'Review',
+        sourceKind: 'repo',
+        skillFilePath: '/repo/.agents/skills/review/SKILL.md'
+      })
+    ]
+
+    const filtered = filterSkillSuggestions(skills, 'rev')
+    expect(filtered).toHaveLength(1)
+    expect(filtered[0]?.skillFilePath).toBe('/repo/.agents/skills/review/SKILL.md')
+  })
 })
 
 describe('history recall', () => {

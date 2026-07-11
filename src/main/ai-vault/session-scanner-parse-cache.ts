@@ -50,7 +50,11 @@ function resumableStateFactoryFor(
     case 'claude':
       return () => createClaudeSessionResumeState(candidate.file)
     case 'codex':
-      return () => createCodexSessionResumeState(candidate.file, candidate.codexHome)
+      // Why: byte offsets only describe plain append-only JSONL. Cold zstd
+      // sessions must be decompressed from the beginning after each change.
+      return candidate.file.path.endsWith('.jsonl.zst')
+        ? null
+        : () => createCodexSessionResumeState(candidate.file, candidate.codexHome)
     case 'cursor':
       return () => createCursorSessionResumeState(candidate.file)
     case 'copilot':

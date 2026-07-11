@@ -124,6 +124,26 @@ describe('resolveSessionFilePath', () => {
     expect(resolved).toBe(target)
   })
 
+  it('matches cold-compressed Codex rollouts and prefers a plain sibling', async () => {
+    const root = await makeRoot('orca-native-chat-resolve-codex-zst-')
+    const codexSessionsDir = join(root, 'codex-sessions')
+    const dayDir = join(codexSessionsDir, '2026', '06', '04')
+    await mkdir(dayDir, { recursive: true })
+    const compressed = join(dayDir, 'rollout-2026-06-04T10-00-00-dual-session.jsonl.zst')
+    await writeFile(compressed, 'zstd')
+
+    await expect(
+      resolveSessionFilePath('codex', 'dual-session', { codexSessionsDirs: [codexSessionsDir] })
+    ).resolves.toBe(compressed)
+
+    const plain = join(dayDir, 'rollout-2026-06-04T10-00-00-dual-session.jsonl')
+    await writeFile(plain, '{}\n')
+
+    await expect(
+      resolveSessionFilePath('codex', 'dual-session', { codexSessionsDirs: [codexSessionsDir] })
+    ).resolves.toBe(plain)
+  })
+
   it('resolves a rollout from the orca-managed Codex home (ORCA_USER_DATA_PATH)', async () => {
     // Orca launches Codex with its own managed CODEX_HOME, so rollout files land
     // under <userData>/codex-runtime-home/home/sessions, NOT ~/.codex/sessions.
@@ -199,6 +219,25 @@ describe('resolveSessionFilePath', () => {
       transcriptPath: realFile
     })
     expect(resolved).toBe(realFile)
+  })
+
+  it('accepts a hook-reported .jsonl.zst path only for Codex', async () => {
+    const root = await makeRoot('orca-native-chat-resolve-hook-zst-')
+    const compressed = join(root, 'rollout-hook-session.jsonl.zst')
+    await writeFile(compressed, 'zstd')
+
+    await expect(
+      resolveSessionFilePath('codex', 'hook-session', {
+        codexSessionsDirs: [],
+        transcriptPath: compressed
+      })
+    ).resolves.toBe(compressed)
+    await expect(
+      resolveSessionFilePath('claude', 'hook-session', {
+        claudeProjectsDir: join(root, 'empty'),
+        transcriptPath: compressed
+      })
+    ).resolves.toBeNull()
   })
 
   it('falls back to the id glob when the hook transcriptPath does not exist', async () => {

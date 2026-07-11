@@ -1,13 +1,16 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
+  closeSync,
   existsSync,
   lstatSync,
   mkdtempSync,
   mkdirSync,
+  openSync,
   readFileSync,
   readlinkSync,
   rmSync,
   symlinkSync,
+  writeSync,
   writeFileSync
 } from 'node:fs'
 import type * as NodeFs from 'node:fs'
@@ -23,6 +26,10 @@ const { fsMockState } = vi.hoisted(() => ({
   fsMockState: {
     failLink: false,
     failSymlink: false,
+    failReplacementInstall: false,
+    afterReplacementCopy: null as null | (() => void),
+    afterFailedSourceLink: null as null | (() => void),
+    beforePreservedRestoreLink: null as null | (() => void),
     fakeSymlinks: new Map<string, string>()
   }
 }))
@@ -39,8 +46,42 @@ vi.mock('node:fs', async () => {
   const actual = await vi.importActual<typeof NodeFs>('node:fs')
   return {
     ...actual,
+    copyFileSync: (...args: Parameters<typeof actual.copyFileSync>) => {
+      const result = actual.copyFileSync(...args)
+      if (
+        String(args[1]).includes('.orca-link-') &&
+        fsMockState.afterReplacementCopy !== null
+      ) {
+        const callback = fsMockState.afterReplacementCopy
+        fsMockState.afterReplacementCopy = null
+        callback()
+      }
+      return result
+    },
     linkSync: (...args: Parameters<typeof actual.linkSync>) => {
-      if (fsMockState.failLink) {
+      const [sourcePath, targetPath] = args
+      if (
+        String(sourcePath).includes('.orca-preserved.displaced-') &&
+        fsMockState.beforePreservedRestoreLink !== null
+      ) {
+        const callback = fsMockState.beforePreservedRestoreLink
+        fsMockState.beforePreservedRestoreLink = null
+        callback()
+      }
+      if (
+        fsMockState.failReplacementInstall &&
+        String(sourcePath).includes('.orca-link-') &&
+        !String(targetPath).includes('.orca-preserved')
+      ) {
+        fsMockState.failReplacementInstall = false
+        throw new Error('replacement install disabled for test')
+      }
+      if (fsMockState.failLink && !String(sourcePath).includes('codex-runtime-home')) {
+        if (fsMockState.afterFailedSourceLink !== null) {
+          const callback = fsMockState.afterFailedSourceLink
+          fsMockState.afterFailedSourceLink = null
+          callback()
+        }
         throw new Error('hardlink disabled for test')
       }
       return actual.linkSync(...args)
@@ -120,6 +161,18 @@ function getRuntimeCodexHomePath(): string {
   return join(userDataDir, 'codex-runtime-home', 'home')
 }
 
+function getPreservedSessionPath(relativePath: string): string {
+  return join(
+    getRuntimeCodexHomePath(),
+    '.orca-session-preserved',
+    `${relativePath}.orca-preserved`
+  )
+}
+
+function getPreservedSessionRecordPath(relativePath: string): string {
+  return join(getRuntimeCodexHomePath(), '.orca-session-preserved', `${relativePath}.json`)
+}
+
 function normalizeLinkTarget(linkTarget: string): string {
   return process.platform === 'win32'
     ? linkTarget.replace(/^\\\\\?\\/, '').toLowerCase()
@@ -159,6 +212,10 @@ function writeLegacyCopyMarker(relativePath: string, sourcePath: string, targetP
 beforeEach(() => {
   fsMockState.failLink = false
   fsMockState.failSymlink = false
+  fsMockState.failReplacementInstall = false
+  fsMockState.afterReplacementCopy = null
+  fsMockState.afterFailedSourceLink = null
+  fsMockState.beforePreservedRestoreLink = null
   fsMockState.fakeSymlinks.clear()
   fakeHomeDir = mkdtempSync(join(tmpdir(), 'orca-codex-session-home-'))
   userDataDir = mkdtempSync(join(tmpdir(), 'orca-codex-session-user-data-'))
@@ -260,7 +317,7 @@ describe('syncSystemCodexSessionsIntoManagedHome', () => {
     ).toBe(false)
   })
 
-  it('falls back to symlinks when hardlinks are unavailable', () => {
+  it('falls back to a marked regular-file copy when hardlinks are unavailable', () => {
     fsMockState.failLink = true
     const systemSessionPath = join(
       getSystemCodexHomePath(),
@@ -268,7 +325,7 @@ describe('syncSystemCodexSessionsIntoManagedHome', () => {
       '2026',
       '05',
       '26',
-      'rollout-symlink-fallback.jsonl'
+      'rollout-copy-fallback.jsonl'
     )
     mkdirSync(dirname(systemSessionPath), { recursive: true })
     writeFileSync(systemSessionPath, '{"id":"system"}\n', 'utf-8')
@@ -281,12 +338,62 @@ describe('syncSystemCodexSessionsIntoManagedHome', () => {
       '2026',
       '05',
       '26',
-      'rollout-symlink-fallback.jsonl'
+      'rollout-copy-fallback.jsonl'
     )
-    expect(lstatSync(runtimeSessionPath).isSymbolicLink()).toBe(true)
-    expect(normalizeLinkTarget(readlinkSync(runtimeSessionPath))).toBe(
-      normalizeLinkTarget(systemSessionPath)
+    expect(lstatSync(runtimeSessionPath).isSymbolicLink()).toBe(false)
+    expect(lstatSync(runtimeSessionPath).ino).not.toBe(lstatSync(systemSessionPath).ino)
+    expect(readFileSync(runtimeSessionPath, 'utf-8')).toBe('{"id":"system"}\n')
+    const markerPath = join(
+      getRuntimeCodexHomePath(),
+      '.orca-session-copies',
+      '2026',
+      '05',
+      '26',
+      'rollout-copy-fallback.jsonl.json'
     )
+    expect(existsSync(markerPath)).toBe(true)
+    expect(JSON.parse(readFileSync(markerPath, 'utf-8'))).toMatchObject({
+      version: 2,
+      mtimePrecision: 'milliseconds',
+      targetFingerprintSha256: expect.stringMatching(/^[a-f0-9]{64}$/)
+    })
+  })
+
+  it('never overwrites a target that appears during initial copy fallback', () => {
+    fsMockState.failLink = true
+    const relativeSessionPath = join('2026', '05', '26', 'rollout-copy-race-new.jsonl')
+    const systemSessionPath = join(getSystemCodexHomePath(), 'sessions', relativeSessionPath)
+    const runtimeSessionPath = join(getRuntimeCodexHomePath(), 'sessions', relativeSessionPath)
+    mkdirSync(dirname(systemSessionPath), { recursive: true })
+    writeFileSync(systemSessionPath, '{"id":"source"}\n', 'utf-8')
+    fsMockState.afterFailedSourceLink = () => {
+      mkdirSync(dirname(runtimeSessionPath), { recursive: true })
+      writeFileSync(runtimeSessionPath, '{"id":"concurrent"}\n', 'utf-8')
+    }
+
+    syncSystemCodexSessionsIntoManagedHome()
+
+    expect(readFileSync(runtimeSessionPath, 'utf-8')).toBe('{"id":"concurrent"}\n')
+  })
+
+  it('copies an existing symlink bridge when hardlink replacement is unavailable', () => {
+    const relativeSessionPath = join('sessions', '2026', '05', '26', 'rollout-symlink-copy.jsonl')
+    const systemSessionPath = join(getSystemCodexHomePath(), relativeSessionPath)
+    const runtimeSessionPath = join(getRuntimeCodexHomePath(), relativeSessionPath)
+    mkdirSync(dirname(systemSessionPath), { recursive: true })
+    mkdirSync(dirname(runtimeSessionPath), { recursive: true })
+    writeFileSync(systemSessionPath, '{"id":"system"}\n', 'utf-8')
+    symlinkSync(
+      systemSessionPath,
+      runtimeSessionPath,
+      process.platform === 'win32' ? 'file' : undefined
+    )
+    fsMockState.failLink = true
+
+    syncSystemCodexSessionsIntoManagedHome()
+
+    expect(lstatSync(runtimeSessionPath).isSymbolicLink()).toBe(false)
+    expect(readFileSync(runtimeSessionPath, 'utf-8')).toBe('{"id":"system"}\n')
   })
 
   it('does not overwrite runtime-owned session files', () => {
@@ -322,27 +429,30 @@ describe('syncSystemCodexSessionsIntoManagedHome', () => {
     expectResourceLinked(runtimeSessionPath, systemSessionPath)
   })
 
-  it('does not create independent session copies when file links are unavailable', () => {
-    fsMockState.failLink = true
-    fsMockState.failSymlink = true
+  it('bridges cold-compressed .jsonl.zst session files', () => {
     const systemSessionPath = join(
       getSystemCodexHomePath(),
       'sessions',
       '2026',
       '05',
       '26',
-      'rollout-unlinked.jsonl'
+      'rollout-cold.jsonl.zst'
     )
     mkdirSync(dirname(systemSessionPath), { recursive: true })
-    writeFileSync(systemSessionPath, '{"id":"system"}\n', 'utf-8')
+    writeFileSync(systemSessionPath, 'fake-zstd-bytes', 'utf-8')
 
     syncSystemCodexSessionsIntoManagedHome()
 
-    expect(
-      existsSync(
-        join(getRuntimeCodexHomePath(), 'sessions', '2026', '05', '26', 'rollout-unlinked.jsonl')
-      )
-    ).toBe(false)
+    const runtimeSessionPath = join(
+      getRuntimeCodexHomePath(),
+      'sessions',
+      '2026',
+      '05',
+      '26',
+      'rollout-cold.jsonl.zst'
+    )
+    expect(readFileSync(runtimeSessionPath, 'utf-8')).toBe('fake-zstd-bytes')
+    expectResourceLinked(runtimeSessionPath, systemSessionPath)
   })
 
   it('replaces unchanged legacy copied sessions with links', () => {
@@ -359,9 +469,13 @@ describe('syncSystemCodexSessionsIntoManagedHome', () => {
 
     expect(readFileSync(runtimeSessionPath, 'utf-8')).toBe('{"id":"legacy"}\n')
     expectResourceLinked(runtimeSessionPath, systemSessionPath)
+    expect(readFileSync(getPreservedSessionPath(relativeSessionPath), 'utf-8')).toBe(
+      '{"id":"legacy"}\n'
+    )
+    expect(existsSync(getPreservedSessionRecordPath(relativeSessionPath))).toBe(true)
   })
 
-  it('preserves unchanged legacy copied sessions when relinking fails', () => {
+  it('preserves unchanged copied sessions when hardlink migration fails', () => {
     const relativeSessionPath = join('2026', '05', '26', 'rollout-legacy-unlinked.jsonl')
     const systemSessionPath = join(getSystemCodexHomePath(), 'sessions', relativeSessionPath)
     const runtimeSessionPath = join(getRuntimeCodexHomePath(), 'sessions', relativeSessionPath)
@@ -371,12 +485,155 @@ describe('syncSystemCodexSessionsIntoManagedHome', () => {
     writeFileSync(runtimeSessionPath, '{"id":"legacy"}\n', 'utf-8')
     writeLegacyCopyMarker(relativeSessionPath, systemSessionPath, runtimeSessionPath)
     fsMockState.failLink = true
-    fsMockState.failSymlink = true
 
     syncSystemCodexSessionsIntoManagedHome()
 
     expect(lstatSync(runtimeSessionPath).isSymbolicLink()).toBe(false)
     expect(readFileSync(runtimeSessionPath, 'utf-8')).toBe('{"id":"legacy"}\n')
+  })
+
+  it('refreshes an unchanged copy when its source appends', () => {
+    fsMockState.failLink = true
+    const relativeSessionPath = join('2026', '05', '26', 'rollout-copy-append.jsonl')
+    const systemSessionPath = join(getSystemCodexHomePath(), 'sessions', relativeSessionPath)
+    const runtimeSessionPath = join(getRuntimeCodexHomePath(), 'sessions', relativeSessionPath)
+    mkdirSync(dirname(systemSessionPath), { recursive: true })
+    writeFileSync(systemSessionPath, '{"id":"line-1"}\n', 'utf-8')
+
+    syncSystemCodexSessionsIntoManagedHome()
+    writeFileSync(systemSessionPath, '{"id":"line-1"}\n{"id":"line-2"}\n', 'utf-8')
+    syncSystemCodexSessionsIntoManagedHome()
+
+    expect(lstatSync(runtimeSessionPath).isSymbolicLink()).toBe(false)
+    expect(readFileSync(runtimeSessionPath, 'utf-8')).toBe('{"id":"line-1"}\n{"id":"line-2"}\n')
+    expect(readFileSync(getPreservedSessionPath(relativeSessionPath), 'utf-8')).toBe(
+      '{"id":"line-1"}\n'
+    )
+  })
+
+  it('preserves late writes through an already-open target descriptor', () => {
+    fsMockState.failLink = true
+    const relativeSessionPath = join('2026', '05', '26', 'rollout-copy-late-write.jsonl')
+    const systemSessionPath = join(getSystemCodexHomePath(), 'sessions', relativeSessionPath)
+    const runtimeSessionPath = join(getRuntimeCodexHomePath(), 'sessions', relativeSessionPath)
+    mkdirSync(dirname(systemSessionPath), { recursive: true })
+    writeFileSync(systemSessionPath, '{"id":"line-1"}\n', 'utf-8')
+    syncSystemCodexSessionsIntoManagedHome()
+
+    const descriptor = openSync(runtimeSessionPath, 'a')
+    writeFileSync(systemSessionPath, '{"id":"line-1"}\n{"id":"line-2"}\n', 'utf-8')
+    syncSystemCodexSessionsIntoManagedHome()
+    writeSync(descriptor, '{"id":"late-target-write"}\n')
+    closeSync(descriptor)
+
+    expect(readFileSync(runtimeSessionPath, 'utf-8')).toBe('{"id":"line-1"}\n{"id":"line-2"}\n')
+    expect(readFileSync(getPreservedSessionPath(relativeSessionPath), 'utf-8')).toBe(
+      '{"id":"line-1"}\n{"id":"late-target-write"}\n'
+    )
+  })
+
+  it('refuses further automatic refresh after preserving one target inode', () => {
+    fsMockState.failLink = true
+    const relativeSessionPath = join('2026', '05', '26', 'rollout-copy-bounded.jsonl')
+    const systemSessionPath = join(getSystemCodexHomePath(), 'sessions', relativeSessionPath)
+    const runtimeSessionPath = join(getRuntimeCodexHomePath(), 'sessions', relativeSessionPath)
+    mkdirSync(dirname(systemSessionPath), { recursive: true })
+    writeFileSync(systemSessionPath, 'one\n', 'utf-8')
+    syncSystemCodexSessionsIntoManagedHome()
+    writeFileSync(systemSessionPath, 'one\ntwo\n', 'utf-8')
+    syncSystemCodexSessionsIntoManagedHome()
+    writeFileSync(systemSessionPath, 'one\ntwo\nthree\n', 'utf-8')
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
+
+    syncSystemCodexSessionsIntoManagedHome()
+
+    expect(readFileSync(runtimeSessionPath, 'utf-8')).toBe('one\ntwo\n')
+    expect(readFileSync(getPreservedSessionPath(relativeSessionPath), 'utf-8')).toBe('one\n')
+    expect(warn).toHaveBeenCalledWith(
+      expect.stringContaining('preserved copy requires review'),
+      expect.any(String)
+    )
+  })
+
+  it('does not overwrite a managed copy that diverged after the bridge marker', () => {
+    fsMockState.failLink = true
+    const relativeSessionPath = join('2026', '05', '26', 'rollout-copy-diverged.jsonl')
+    const systemSessionPath = join(getSystemCodexHomePath(), 'sessions', relativeSessionPath)
+    const runtimeSessionPath = join(getRuntimeCodexHomePath(), 'sessions', relativeSessionPath)
+    mkdirSync(dirname(systemSessionPath), { recursive: true })
+    writeFileSync(systemSessionPath, '{"id":"source-1"}\n', 'utf-8')
+
+    syncSystemCodexSessionsIntoManagedHome()
+    // Same byte length as the original source and written in the same second:
+    // local markers must still use millisecond precision to detect divergence.
+    writeFileSync(runtimeSessionPath, '{"id":"target-1"}\n', 'utf-8')
+    writeFileSync(systemSessionPath, '{"id":"source-1"}\n{"id":"source-2"}\n', 'utf-8')
+    syncSystemCodexSessionsIntoManagedHome()
+
+    expect(readFileSync(runtimeSessionPath, 'utf-8')).toBe('{"id":"target-1"}\n')
+  })
+
+  it('revalidates a managed copy after preparing its replacement', () => {
+    fsMockState.failLink = true
+    const relativeSessionPath = join('2026', '05', '26', 'rollout-copy-race.jsonl')
+    const systemSessionPath = join(getSystemCodexHomePath(), 'sessions', relativeSessionPath)
+    const runtimeSessionPath = join(getRuntimeCodexHomePath(), 'sessions', relativeSessionPath)
+    mkdirSync(dirname(systemSessionPath), { recursive: true })
+    writeFileSync(systemSessionPath, '{"id":"source-1"}\n', 'utf-8')
+    syncSystemCodexSessionsIntoManagedHome()
+
+    writeFileSync(systemSessionPath, '{"id":"source-1"}\n{"id":"source-2"}\n', 'utf-8')
+    fsMockState.afterReplacementCopy = () => {
+      writeFileSync(runtimeSessionPath, '{"id":"target-raced"}\n', 'utf-8')
+    }
+    syncSystemCodexSessionsIntoManagedHome()
+
+    expect(readFileSync(runtimeSessionPath, 'utf-8')).toBe('{"id":"target-raced"}\n')
+  })
+
+  it('rolls back the original managed copy when replacement install fails', () => {
+    fsMockState.failLink = true
+    const relativeSessionPath = join('2026', '05', '26', 'rollout-copy-rollback.jsonl')
+    const systemSessionPath = join(getSystemCodexHomePath(), 'sessions', relativeSessionPath)
+    const runtimeSessionPath = join(getRuntimeCodexHomePath(), 'sessions', relativeSessionPath)
+    mkdirSync(dirname(systemSessionPath), { recursive: true })
+    writeFileSync(systemSessionPath, '{"id":"source-1"}\n', 'utf-8')
+    syncSystemCodexSessionsIntoManagedHome()
+
+    writeFileSync(systemSessionPath, '{"id":"source-1"}\n{"id":"source-2"}\n', 'utf-8')
+    fsMockState.failReplacementInstall = true
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
+    syncSystemCodexSessionsIntoManagedHome()
+
+    expect(readFileSync(runtimeSessionPath, 'utf-8')).toBe('{"id":"source-1"}\n')
+    expect(readFileSync(getPreservedSessionPath(relativeSessionPath), 'utf-8')).toBe(
+      '{"id":"source-1"}\n'
+    )
+    expect(existsSync(getPreservedSessionRecordPath(relativeSessionPath))).toBe(true)
+    expect(warn).toHaveBeenCalled()
+  })
+
+  it('never overwrites a target that appears during exclusive preserved restore', () => {
+    fsMockState.failLink = true
+    const relativeSessionPath = join('2026', '05', '26', 'rollout-restore-race.jsonl')
+    const systemSessionPath = join(getSystemCodexHomePath(), 'sessions', relativeSessionPath)
+    const runtimeSessionPath = join(getRuntimeCodexHomePath(), 'sessions', relativeSessionPath)
+    mkdirSync(dirname(systemSessionPath), { recursive: true })
+    writeFileSync(systemSessionPath, 'source-one\n', 'utf-8')
+    syncSystemCodexSessionsIntoManagedHome()
+    writeFileSync(systemSessionPath, 'source-one\nsource-two\n', 'utf-8')
+    fsMockState.failReplacementInstall = true
+    fsMockState.beforePreservedRestoreLink = () => {
+      writeFileSync(runtimeSessionPath, 'concurrent-target\n', 'utf-8')
+    }
+    vi.spyOn(console, 'warn').mockImplementation(() => undefined)
+
+    syncSystemCodexSessionsIntoManagedHome()
+
+    expect(readFileSync(runtimeSessionPath, 'utf-8')).toBe('concurrent-target\n')
+    expect(readFileSync(getPreservedSessionPath(relativeSessionPath), 'utf-8')).toBe(
+      'source-one\n'
+    )
   })
 
   it('incrementally bridges session files without requiring the synchronous launch path', async () => {

@@ -2,7 +2,7 @@ import { mkdir, mkdtemp, rm, stat, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
-import { parseCodexSessionFile } from './session-scanner-codex-parser'
+import { parseCodexSessionContent, parseCodexSessionFile } from './session-scanner-codex-parser'
 
 let tempRoots: string[] = []
 
@@ -16,6 +16,56 @@ function jsonLines(records: unknown[]): string {
 }
 
 describe('parseCodexSessionFile', () => {
+  it('parses paginated item_completed turn items for preview and title', async () => {
+    const session = await parseCodexSessionContent({
+      file: {
+        path: '/tmp/rollout-paginated.jsonl',
+        mtimeMs: 1,
+        modifiedAt: '2026-06-18T10:00:00.000Z'
+      },
+      content: jsonLines([
+        {
+          timestamp: '2026-06-18T10:00:00.000Z',
+          type: 'session_meta',
+          payload: {
+            id: 'paginated-session',
+            cwd: '/repo/app',
+            history_mode: 'paginated'
+          }
+        },
+        {
+          timestamp: '2026-06-18T10:00:01.000Z',
+          type: 'event_msg',
+          payload: {
+            type: 'item_completed',
+            item: {
+              type: 'user_message',
+              id: 'item-user-1',
+              content: [{ type: 'text', text: 'Paginated user prompt' }]
+            }
+          }
+        },
+        {
+          timestamp: '2026-06-18T10:00:02.000Z',
+          type: 'event_msg',
+          payload: {
+            type: 'item_completed',
+            item: {
+              type: 'AgentMessage',
+              id: 'item-agent-1',
+              content: [{ type: 'text', text: 'Paginated assistant reply' }]
+            }
+          }
+        }
+      ])
+    })
+
+    expect(session?.sessionId).toBe('paginated-session')
+    expect(session?.title).toBe('Paginated user prompt')
+    expect(session?.messageCount).toBe(2)
+    expect(session?.previewMessages?.map((message) => message.role)).toEqual(['user', 'assistant'])
+  })
+
   it('does not double-count usage when token count formats switch', async () => {
     const root = await mkdtemp(join(tmpdir(), 'orca-ai-vault-codex-token-switch-'))
     tempRoots.push(root)

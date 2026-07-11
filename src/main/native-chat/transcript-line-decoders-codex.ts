@@ -8,6 +8,7 @@ import {
   timestampMs
 } from '../ai-vault/session-scanner-values'
 import { claudeContentBlocks, toolResultOutput } from './transcript-record-blocks'
+import { codexTurnItem } from './transcript-codex-turn-items'
 
 export function decodeCodexTranscriptLine(
   line: string,
@@ -98,6 +99,12 @@ function codexEventMessage(
     return text
       ? { id, role: 'assistant', blocks: [{ type: 'text', text }], timestamp, source: 'transcript' }
       : null
+  }
+  // Why: paginated history emits completed TurnItems instead of the legacy
+  // user_message/agent_message event variants.
+  if (payload.type === 'item_completed') {
+    const item = asRecord(payload.item)
+    return item ? codexTurnItem(item, extractString(item.id) ?? id, timestamp) : null
   }
   return null
 }

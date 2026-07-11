@@ -1,6 +1,7 @@
 import { homedir } from 'node:os'
 import { basename, join } from 'node:path'
 import type { AiVaultScanIssue } from '../../shared/ai-vault-types'
+import { codexSessionDiscoveries } from './session-scanner-codex-discovery'
 import { uniqueCodexSessionsDirs } from './session-scanner-codex-paths'
 import { SUBAGENT_DIR_NAME } from './session-scanner-subagent-transcripts'
 import { discoverFiles, discoverOpenClawFiles } from './session-scanner-discovery'
@@ -74,7 +75,7 @@ export async function discoverAiVaultSessionSources(args: {
     // and the SQLite scanner (1.17.x); dedup by sessionId happens inside.
     ...opencodeDiscoveries(options, wslHomeDirs, limitPerAgent, issues),
     ...claudeDiscoveries(options, wslHomeDirs, limitPerAgent, issues),
-    ...codexDiscoveries(codexSessionsDirs, limitPerAgent, issues),
+    ...codexSessionDiscoveries(codexSessionsDirs, limitPerAgent, issues),
     ...standardDiscoveries(options, wslHomeDirs, limitPerAgent, issues),
     openClawDiscovery(options, wslHomeDirs, limitPerAgent, issues),
     ...droidDiscoveries(options, wslHomeDirs, limitPerAgent, issues),
@@ -104,16 +105,6 @@ function claudeDiscoveries(
       // their parent instead.
       directoryPredicate: (name) => name !== SUBAGENT_DIR_NAME
     })
-  )
-}
-
-function codexDiscoveries(
-  rootDirs: readonly string[],
-  limit: number,
-  issues: AiVaultScanIssue[]
-): Promise<SessionFileDiscovery>[] {
-  return rootDirs.map((rootDir) =>
-    discoverFiles({ rootDir, limit, agent: 'codex', issues, extensions: ['.jsonl'] })
   )
 }
 

@@ -75,16 +75,39 @@ export function filterSkillSuggestions(
 ): DiscoveredSkill[] {
   const normalized = query.toLowerCase()
   const installed = skills.filter((skill) => skill.installed)
-  if (normalized === '') {
-    return installed.slice(0, 12)
+  const matched =
+    normalized === ''
+      ? installed
+      : installed.filter((skill) => {
+          const name = skill.name.toLowerCase()
+          const dirName = skill.directoryPath.split(/[\\/]/).findLast(Boolean)?.toLowerCase()
+          return name.startsWith(normalized) || dirName?.startsWith(normalized)
+        })
+  return dedupeSkillSuggestions(matched).slice(0, 12)
+}
+
+const SKILL_SOURCE_PRIORITY: Record<DiscoveredSkill['sourceKind'], number> = {
+  repo: 0,
+  home: 1,
+  plugin: 2,
+  bundled: 3
+}
+
+function dedupeSkillSuggestions(skills: readonly DiscoveredSkill[]): DiscoveredSkill[] {
+  // Why: PTY fallback inserts only `$name`; prefer the repository definition
+  // when multiple roots expose an otherwise ambiguous name.
+  const byName = new Map<string, DiscoveredSkill>()
+  for (const skill of skills) {
+    const key = skill.name.toLowerCase()
+    const existing = byName.get(key)
+    if (
+      !existing ||
+      SKILL_SOURCE_PRIORITY[skill.sourceKind] < SKILL_SOURCE_PRIORITY[existing.sourceKind]
+    ) {
+      byName.set(key, skill)
+    }
   }
-  return installed
-    .filter((skill) => {
-      const name = skill.name.toLowerCase()
-      const dirName = skill.directoryPath.split(/[\\/]/).findLast(Boolean)?.toLowerCase()
-      return name.startsWith(normalized) || dirName?.startsWith(normalized)
-    })
-    .slice(0, 12)
+  return [...byName.values()]
 }
 
 export type HistoryState = {

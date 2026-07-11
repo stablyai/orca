@@ -12,12 +12,14 @@ export async function discoverFiles(args: {
   extensions: string[]
   filePredicate?: (path: string) => boolean
   directoryPredicate?: (name: string) => boolean
+  candidatePathSelector?: (paths: readonly string[]) => string[]
 }): Promise<SessionFileDiscovery> {
-  const paths = await walkSessionFiles(args.rootDir, args.agent, args.issues, {
+  const discoveredPaths = await walkSessionFiles(args.rootDir, args.agent, args.issues, {
     extensions: new Set(args.extensions),
     filePredicate: args.filePredicate,
     directoryPredicate: args.directoryPredicate
   })
+  const paths = args.candidatePathSelector?.(discoveredPaths) ?? discoveredPaths
   const files: FileWithMtime[] = []
   for (const path of paths) {
     try {
