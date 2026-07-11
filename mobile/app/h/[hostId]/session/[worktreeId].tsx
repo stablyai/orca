@@ -36,9 +36,9 @@ import {
   GitBranch,
   Globe,
   Keyboard as KeyboardIcon,
-  ListChecks,
   MessageSquare,
   Monitor,
+  MoreHorizontal,
   Plus,
   RefreshCw,
   Send,
@@ -71,10 +71,14 @@ import {
   type ActivePanel,
   canDockSessionPanel,
   resolvePanelAction,
+  shouldShowSessionHeaderChecksAction,
   panelRouteDescriptor
 } from '../../../../src/session/session-panel-host'
 import { useMobilePrBranchContext } from '../../../../src/session/use-mobile-pr-branch-context'
 import { SessionDockColumn } from '../../../../src/session/SessionDockColumn'
+import { MobileSessionHeaderIconButton } from '../../../../src/session/MobileSessionHeaderIconButton'
+import { MobileSessionHeaderMoreActionsSheet } from '../../../../src/session/MobileSessionHeaderMoreActionsSheet'
+import { MOBILE_AI_VAULT_CAPABILITY } from '../../../../src/agent-history/agent-history-capability'
 import type { ConnectionState, RpcFailure, RpcSuccess } from '../../../../src/transport/types'
 import { headlessActivationNeedsHostRenderer } from '../../../../src/worktree/worktree-activation-result'
 import { useMobileDictation } from '../../../../src/hooks/use-mobile-dictation'
@@ -940,6 +944,7 @@ export default function SessionScreen() {
     useState<MobileNewTabAgentLoadState>('idle')
   const [createTabAgentOptions, setCreateTabAgentOptions] = useState<MobileNewTabAgentOption[]>([])
   const [showCreateBrowserModal, setShowCreateBrowserModal] = useState(false)
+  const [showHeaderMoreActions, setShowHeaderMoreActions] = useState(false)
   const [actionTarget, setActionTarget] = useState<Terminal | null>(null)
   const [markdownActionTarget, setMarkdownActionTarget] = useState<Extract<
     MobileSessionTab,
@@ -1101,6 +1106,12 @@ export default function SessionScreen() {
     activeSessionTab?.type !== 'browser'
   const liveInputEnabled = activeHandle ? liveInputTerminalHandles.has(activeHandle) : false
   const [browserScreencastSupported, setBrowserScreencastSupported] = useState<boolean | null>(null)
+  // Why: hosts without aiVault.v1 reject aiVault.listSessions, so the header
+  // entry stays hidden there (mirrors the gated host-list action) instead of
+  // opening a dead-end "update this host" panel.
+  const [agentSessionHistorySupported, setAgentSessionHistorySupported] = useState<boolean | null>(
+    null
+  )
   // Why: stable callbacks (handleFileTap) read the live value via this ref, since
   // the capability probe resolves after the callbacks are created.
   const browserScreencastSupportedRef = useRef(browserScreencastSupported)
@@ -2416,6 +2427,7 @@ export default function SessionScreen() {
   useEffect(() => {
     if (!client || connState !== 'connected') {
       setBrowserScreencastSupported(null)
+      setAgentSessionHistorySupported(null)
       return
     }
     let stale = false
@@ -2429,10 +2441,14 @@ export default function SessionScreen() {
         setBrowserScreencastSupported(
           status.capabilities?.includes('browser.screencast.v1') === true
         )
+        setAgentSessionHistorySupported(
+          status.capabilities?.includes(MOBILE_AI_VAULT_CAPABILITY) === true
+        )
       })
       .catch(() => {
         if (!stale) {
           setBrowserScreencastSupported(false)
+          setAgentSessionHistorySupported(false)
         }
       })
     return () => {
@@ -4451,6 +4467,19 @@ export default function SessionScreen() {
     })
   }
 
+  const openAgentSessionHistory = () => {
+    const params = new URLSearchParams({ name: worktreeName || '' })
+    router.push(`/h/${hostId}/agent-history/${encodeURIComponent(worktreeId)}?${params.toString()}`)
+  }
+  const showAgentSessionHistoryAction =
+    !isFolderWorkspaceRoute && agentSessionHistorySupported === true
+  const showChecksAction = shouldShowSessionHeaderChecksAction({
+    isFolderWorkspaceRoute,
+    repoContextLoaded: prRepoContextLoaded,
+    hostedChecksSupported: prIsGithubRepo
+  })
+  const showHeaderMoreButton = showAgentSessionHistoryAction || showChecksAction
+
   return (
     <View ref={setMobileSessionRootRef} style={styles.container}>
       <View style={styles.kavInner}>
@@ -4486,45 +4515,27 @@ export default function SessionScreen() {
                 </Text>
               </Pressable>
             </View>
-            <Pressable
-              style={({ pressed }) => [
-                styles.filesButton,
-                pressed && styles.filesButtonPressed,
-                activePanel === 'files' && styles.filesButtonActive
-              ]}
-              onPress={() => handlePanelTap('files')}
-              hitSlop={8}
+            <MobileSessionHeaderIconButton
+              active={activePanel === 'files'}
               accessibilityLabel="Open file explorer"
-            >
-              <Folder size={18} color={colors.textSecondary} strokeWidth={2.1} />
-            </Pressable>
+              icon={Folder}
+              onPress={() => handlePanelTap('files')}
+            />
             {!isFolderWorkspaceRoute && (
-              <Pressable
-                style={({ pressed }) => [
-                  styles.filesButton,
-                  pressed && styles.filesButtonPressed,
-                  activePanel === 'sourceControl' && styles.filesButtonActive
-                ]}
-                onPress={() => handlePanelTap('sourceControl')}
-                hitSlop={8}
+              <MobileSessionHeaderIconButton
+                active={activePanel === 'sourceControl'}
                 accessibilityLabel="Open source control"
-              >
-                <GitBranch size={18} color={colors.textSecondary} strokeWidth={2.1} />
-              </Pressable>
+                icon={GitBranch}
+                onPress={() => handlePanelTap('sourceControl')}
+              />
             )}
-            {prRepoContextLoaded && prIsGithubRepo ? (
-              <Pressable
-                style={({ pressed }) => [
-                  styles.filesButton,
-                  pressed && styles.filesButtonPressed,
-                  activePanel === 'pr' && styles.filesButtonActive
-                ]}
-                onPress={() => handlePanelTap('pr')}
-                hitSlop={8}
-                accessibilityLabel="Open pull request"
-              >
-                <ListChecks size={18} color={colors.textSecondary} strokeWidth={2.1} />
-              </Pressable>
+            {showHeaderMoreButton ? (
+              <MobileSessionHeaderIconButton
+                active={activePanel === 'pr'}
+                accessibilityLabel="More session actions"
+                icon={MoreHorizontal}
+                onPress={() => setShowHeaderMoreActions(true)}
+              />
             ) : null}
           </View>
 
@@ -5140,6 +5151,15 @@ export default function SessionScreen() {
           )}
         </View>
       </View>
+
+      <MobileSessionHeaderMoreActionsSheet
+        visible={showHeaderMoreActions}
+        showAgentSessionHistory={showAgentSessionHistoryAction}
+        showChecks={showChecksAction}
+        onOpenAgentSessionHistory={openAgentSessionHistory}
+        onOpenChecks={() => handlePanelTap('pr')}
+        onClose={() => setShowHeaderMoreActions(false)}
+      />
 
       <ActionSheetModal
         visible={showCreateTabDrawer}

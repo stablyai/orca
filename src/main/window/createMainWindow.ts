@@ -6,6 +6,7 @@ import {
   Menu,
   nativeTheme,
   Notification,
+  powerMonitor,
   screen,
   shell
 } from 'electron'
@@ -312,6 +313,19 @@ export function createMainWindow(
       forceRepaint(mainWindow)
     })
   }
+
+  // Why: a focus-preserving system/display wake fires no window focus or
+  // visibility events in the renderer, so terminal wake recovery would never
+  // run. Relay powerMonitor resume explicitly (supported on mac/win/linux)
+  // and force a repaint so stale compositor surfaces recover too.
+  const onSystemResume = (): void => {
+    if (mainWindow.isDestroyed() || mainWindow.webContents.isDestroyed?.() === true) {
+      return
+    }
+    forceRepaint(mainWindow)
+    mainWindow.webContents.send('system:resumed')
+  }
+  powerMonitor.on('resume', onSystemResume)
 
   mainWindow.webContents.on('dom-ready', () => {
     const level = store?.getUI().uiZoomLevel ?? 0
@@ -1203,6 +1217,9 @@ export function createMainWindow(
     ipcMain.removeListener(terminalInputFocusChannel, onTerminalInputFocused)
     ipcMain.removeListener(floatingTerminalInputFocusChannel, onFloatingTerminalInputFocused)
     ipcMain.removeListener(shortcutRecorderFocusChannel, onShortcutRecorderFocused)
+    // Why: powerMonitor is app-global; without this the closed window's
+    // resume relay would leak and fire against a destroyed webContents.
+    powerMonitor.removeListener('resume', onSystemResume)
     clearTrustedUIRendererWebContentsId(rendererWebContentsId)
     // Why: on updater-triggered shutdown, BrowserWindow can emit `closed`
     // after its webContents has already been destroyed. The destroyed

@@ -41,7 +41,7 @@ type UseEditorPanelContentStateParams = {
   activeFile: OpenFile | null
   isChangesMode: boolean
   openFiles: OpenFile[]
-  gitStatusByWorktree: GitStatusByWorktree
+  gitStatusEntries: GitStatusByWorktree[string] | undefined
   editorViewMode: EditorViewModeByFile
 }
 
@@ -94,7 +94,7 @@ export function useEditorPanelContentState({
   activeFile,
   isChangesMode,
   openFiles,
-  gitStatusByWorktree,
+  gitStatusEntries,
   editorViewMode
 }: UseEditorPanelContentStateParams): UseEditorPanelContentStateResult {
   const [fileContents, setFileContents] = useState<Record<string, FileContent>>({})
@@ -362,7 +362,7 @@ export function useEditorPanelContentState({
       }
 
       const snapshotPaths = new Set(snapshotEntries.map((entry) => entry.path))
-      const liveEntries = gitStatusByWorktree[activeFile.worktreeId] ?? []
+      const liveEntries = gitStatusEntries ?? []
       for (const entry of liveEntries) {
         if (
           !snapshotPaths.has(entry.path) ||
@@ -411,7 +411,7 @@ export function useEditorPanelContentState({
     activeFile?.conflictReview?.snapshotTimestamp,
     selectedConflictReviewFile?.id,
     isChangesMode,
-    gitStatusByWorktree
+    gitStatusEntries
   ])
 
   useEditorPanelFileLoadRetry({
@@ -423,9 +423,7 @@ export function useEditorPanelContentState({
     setFileContents
   })
 
-  const changesStatusEntries = activeFile?.worktreeId
-    ? gitStatusByWorktree[activeFile.worktreeId]
-    : undefined
+  const changesStatusEntries = activeFile?.worktreeId ? gitStatusEntries : undefined
   const activeFileGitStatusEntries = useMemo(() => {
     if (!activeFile?.relativePath || !changesStatusEntries) {
       return undefined

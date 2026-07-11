@@ -1,12 +1,17 @@
 import { app, ipcMain } from 'electron'
-import { join, resolve } from 'node:path'
+import { resolve } from 'node:path'
+import {
+  configureAiVaultSessionSources,
+  getAiVaultWslHomeDirs,
+  listAiVaultSessions as listCachedLocalAiVaultSessions,
+  resetAiVaultSessionListCacheForTests,
+  type AiVaultSessionSources
+} from '../ai-vault/cached-session-list'
 import { scanRemoteAiVaultSessions } from '../ai-vault/remote-session-scanner'
 import { listClaudeSubagentSessions } from '../ai-vault/session-scanner-claude-subagents'
 import { claudeProjectsRootDirs } from '../ai-vault/session-scanner-source-discovery'
-import { scanAiVaultSessions } from '../ai-vault/session-scanner'
 import { isPathInsideOrEqual } from '../../shared/cross-platform-path'
 import { aiVaultScanIssueResult, mergeAiVaultListResults } from '../ai-vault/session-list-results'
-import { getWslHomeAsync, listWslDistrosAsync } from '../wsl'
 import type {
   AiVaultListArgs,
   AiVaultListResult,
@@ -30,8 +35,7 @@ import { getActiveSshAiVaultHostInfo, getActiveSshAiVaultHostInfos } from './ssh
 const AI_VAULT_CACHE_TTL_MS = 15_000
 const AI_VAULT_ALL_HOST_RUNTIME_TIMEOUT_MS = 3_000
 
-type AiVaultHandlerOptions = {
-  getAdditionalCodexHomePaths?: () => readonly string[]
+type AiVaultHandlerOptions = AiVaultSessionSources & {
   getActiveRuntimeAiVaultHostInfos?: () => readonly RuntimeAiVaultHostInfo[]
   scanRuntimeAiVaultSessions?: (
     environmentId: string,
@@ -64,6 +68,13 @@ async function listAiVaultSessions(args?: AiVaultListArgs): Promise<AiVaultListR
   const executionHostScope = normalizeExecutionHostScope(
     args?.executionHostScope ?? LOCAL_EXECUTION_HOST_ID
   )
+  // Why: local-scope scans go straight to the shared cache module (also used by
+  // the runtime RPC method), so the desktop panel and a paired mobile client
+  // never double-scan the same transcripts; the cache below only has to dedupe
+  // the multi-host (ssh/runtime/all) merges that exist on the desktop side.
+  if (executionHostScope === LOCAL_EXECUTION_HOST_ID) {
+    return scanLocalAiVaultSessions(args)
+  }
   // Scope paths change the result set, so they must be part of the cache key.
   const key = JSON.stringify({
     limit: args?.limit ?? 'default',
@@ -105,10 +116,6 @@ async function scanAiVaultSessionsByHostScope(
   args: AiVaultListArgs | undefined,
   executionHostScope: ExecutionHostScope
 ): Promise<AiVaultListResult> {
-  if (executionHostScope === LOCAL_EXECUTION_HOST_ID) {
-    return scanLocalAiVaultSessions(args)
-  }
-
   if (executionHostScope === 'all') {
     const runtimeHosts = getActiveRuntimeAiVaultHostInfosResult()
     const runtimeResults = runtimeHosts.issue ? [runtimeHosts.issue] : []
@@ -218,15 +225,13 @@ function runtimeHostDiscoveryIssueResult(message: string): AiVaultListResult {
 }
 
 async function scanLocalAiVaultSessions(args?: AiVaultListArgs): Promise<AiVaultListResult> {
-  const additionalCodexSessionsDirs =
-    handlerOptions.getAdditionalCodexHomePaths?.().map((homePath) => join(homePath, 'sessions')) ??
-    []
-  return scanAiVaultSessions({
+  // Why: the shared cache module owns codex-home/WSL sourcing and the local
+  // scan cache, so the desktop IPC path and the runtime RPC method (mobile)
+  // share one cache instance and one source of managed-Codex homes.
+  return listCachedLocalAiVaultSessions({
     limit: args?.limit,
-    scopePaths: args?.scopePaths,
-    additionalCodexSessionsDirs,
-    wslHomeDirs: await getAiVaultWslHomeDirs(),
-    executionHostId: LOCAL_EXECUTION_HOST_ID
+    force: args?.force,
+    scopePaths: args?.scopePaths
   })
 }
 
@@ -268,6 +273,11 @@ function sshScanIssueResult(args: {
 
 export function registerAiVaultHandlers(options: AiVaultHandlerOptions = {}): void {
   handlerOptions = options
+  // Why: configure the SAME shared cache module the runtime RPC method uses so
+  // there is exactly one cache instance and neither caller drops codex-home or
+  // WSL injection. The runtime also configures these sources from its deps
+  // (serve-mode reachable); this desktop path supplies the same source.
+  configureAiVaultSessionSources(options)
   ipcMain.handle('aiVault:listSessions', (_event, args?: AiVaultListArgs) =>
     listAiVaultSessions(args)
   )
@@ -324,20 +334,13 @@ function resetAiVaultCacheForTests(): void {
   inflightList = null
   inflightKey = null
   handlerOptions = {}
+  // The local leg delegates to the shared cache module; reset it too so tests
+  // never see a scan cached by an earlier case.
+  resetAiVaultSessionListCacheForTests()
 }
 
 export const _internals = {
   listAiVaultSessions,
   listAiVaultSubagentSessions,
   resetAiVaultCacheForTests
-}
-
-async function getAiVaultWslHomeDirs(): Promise<string[]> {
-  if (process.platform !== 'win32') {
-    return []
-  }
-  const homes = await Promise.all(
-    (await listWslDistrosAsync()).map((distro) => getWslHomeAsync(distro))
-  )
-  return homes.filter((homeDir): homeDir is string => Boolean(homeDir))
 }

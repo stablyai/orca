@@ -842,6 +842,26 @@ export class LocalPtyProvider implements IPtyProvider {
     ptyProcesses.get(id)?.resize(cols, rows)
   }
 
+  // Why: node-pty pause() stops reading the pty master fd, so the kernel
+  // buffer fills and a flooding child blocks on write — true producer
+  // backpressure. Best-effort: a PTY torn down mid-call must never throw
+  // into the flow-control path.
+  pauseProducer(id: string): void {
+    try {
+      ptyProcesses.get(id)?.pause()
+    } catch {
+      /* PTY already destroyed */
+    }
+  }
+
+  resumeProducer(id: string): void {
+    try {
+      ptyProcesses.get(id)?.resume()
+    } catch {
+      /* PTY already destroyed */
+    }
+  }
+
   // Why: node-pty caches the last winsize it applied on the IPty handle, so its
   // cols/rows are the authoritative applied size (node-pty clamps invalid dims
   // and a resize on a dead handle is a no-op, neither of which the requested

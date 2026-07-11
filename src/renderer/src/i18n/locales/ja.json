@@ -29,6 +29,7 @@
         "sshToggleDescription": "設定済み SSH ホストとリモート Orca ホストがある場合に表示します。",
         "resourceUsageToggleDescription": "リソースマネージャーを表示します。これをクリックすると、CPU、メモリ、セッション、デーモン コントロール、およびワークスペース ディスク スキャンが行われます。",
         "portsToggleDescription": "ライブワークスペースポートを表示します。ワークスペーススコープのポートと外部リスナーの場合はこれをクリックします。",
+        "antigravityToggleDescription": "アクティブなワークスペースの Antigravity サブスクリプション使用量を表示します。",
         "grokToggleDescription": "Grok CLI でサインインしている場合に Grok サブスクリプションのクレジット使用量を表示します。"
       }
     }
@@ -2998,9 +2999,9 @@
             "2483c60695": "・・・",
             "c35af53b73": "サインイン",
             "f19a63e7cd": "サインインして使用状況を確認する",
-            "5c938d39ac": "%週",
-            "54e8d6bb2d": "% Fable",
-            "d79c3362c4": "% 5時間",
+            "5c938d39ac": "週",
+            "54e8d6bb2d": "Fable",
+            "d79c3362c4": "5時間",
             "a79c64f87e": "Fable",
             "8295903d17": "切り替え後に古い会話を続ける前に、ライブ Claude terminals を再起動します。",
             "c98ea88392": "他のアカウントはありません",
@@ -3034,6 +3035,8 @@
             "06741a2f3d": "MiniMax の使用量詳細を開く",
             "3bbf140864": "MiniMax 使用量",
             "remoteServerLabel": "リモートサーバー",
+            "antigravityUsage": "Antigravity の使用状況",
+            "antigravityUsageDetails": "Antigravity の使用状況詳細を開く",
             "grokUsageAria": "Grok の使用状況詳細を開く",
             "grokUsageMenu": "Grok の使用状況"
           },
@@ -3166,7 +3169,7 @@
             }
           },
           "tooltip": {
-            "cedb7b99e3": "％ 左",
+            "cedb7b99e3": "％ 使用",
             "6d6df77f41": "利用可能なデータがありません",
             "7f7f208060": "毎月",
             "252c096536": "毎週",
@@ -5290,11 +5293,11 @@
           },
           "nativeChat": {
             "title": "ネイティブチャット",
-            "description": "Claude と Codex の terminal セッションのデスクトップ チャット サーフェスをプレビューします。",
-            "copy": "サポートされている Claude および Codex の terminal ペインから切り替えることができるネイティブ チャット ビューを追加します。トランスクリプトの忠実度、ストリーミング、ターミナルのパリティを調整するための実験です。",
+            "description": "対応エージェントのターミナルセッション用デスクトップチャット画面をプレビューします。",
+            "copy": "対応エージェントのターミナルペインから切り替えられるネイティブチャットビューを追加します。トランスクリプトの忠実度、ストリーミング、ターミナルとの同等性を調整しているため、試験運用中です。",
             "toggleLabel": "ネイティブチャットの切り替え",
             "defaultTitle": "デフォルトのビュー",
-            "defaultCopy": "新規 Claude および Codex の terminal タブを開く方法を選択します。",
+            "defaultCopy": "対応エージェントの新しいターミナルタブを開く方法を選択します。",
             "defaultViewLabel": "デフォルトのネイティブ チャット ビュー",
             "defaultViewTerminal": "Terminal チャット",
             "defaultViewNative": "ネイティブチャット"
@@ -6705,9 +6708,9 @@
           "d23b43c5be": "セットアップスクリプトの場所",
           "34a0dfa06e": "新規ワークスペースの作成時に repos セットアップ スクリプトが実行される場所。",
           "21f8da2078": "ワークスペースセットアップスクリプト",
-          "6e6480a7df": "terminal 内のプログラム (tmux、Neovim、fzf、SSH) をシステムのクリップボードにコピーします。",
+          "6e6480a7df": "terminal 内のプログラム (Grok、tmux、Neovim、fzf、SSH) をシステムのクリップボードにコピーします。",
           "3338dcf8c1": "TUI クリップボードへの書き込みを許可する (OSC 52)",
-          "69c64a479c": "tmux、Neovim、および fzf が PTY 経由 (SSH 経由を含む) でシステム クリップボードにコピーできるようにします。",
+          "69c64a479c": "Grok、tmux、Neovim、および fzf が PTY 経由 (SSH 経由を含む) でシステム クリップボードにコピーできるようにします。",
           "4729c645fc": "terminal の選択内容をクリップボードに自動的にコピーします。",
           "902f5dee1f": "選択時にコピー",
           "9129b7e805": "terminal ペインにマウスを移動すると、クリックしなくても terminal ペインがアクティブになります。",
@@ -7208,6 +7211,9 @@
             },
             "9a115966d3": "閉じるときにトレイへ最小化",
             "4d5b9427b5": "有効にすると、ウィンドウを閉じてもOrcaは終了せず、システムトレイで実行を続けます。",
+            "antigravityUsageTitle": "Antigravity の使用状況",
+            "antigravityUsageDescription": "ステータスバーに Antigravity サブスクリプションの使用量を表示します。",
+            "antigravityKeyword": "antigravity",
             "f8e2a1c4b6": "Grok の使用状況",
             "e7d1b0f3a5": "Grok CLI OAuth から Grok の週次クレジット使用量を表示します。",
             "d6c0a9e2f4": "grok",
@@ -7496,7 +7502,8 @@
             },
             "nativeChat": {
               "title": "ネイティブチャット",
-              "description": "Claude と Codex の terminal セッションのデスクトップ チャット サーフェスをプレビューします。"
+              "description": "対応エージェントのターミナルセッション用デスクトップチャット画面をプレビューします。",
+              "grok": "grok"
             }
           }
         },
@@ -10989,11 +10996,11 @@
                 "945865332e": "サインインする"
               },
               "UsagePage": {
-                "64265cb295": "71% 5時間",
+                "64265cb295": "29% 使用 5時間",
                 "be5a165875": "に切り替えます",
                 "277a9c65a9": "Codex アカウント",
                 "4dce5ca3aa": "4d 3h でリセット",
-                "05ce4ecdd3": "62%残っています",
+                "05ce4ecdd3": "38%使用",
                 "0470aaed99": "毎週",
                 "f421abf962": "セッション",
                 "5e45fb1238": "1分前に更新されました",

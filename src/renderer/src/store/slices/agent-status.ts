@@ -607,6 +607,34 @@ export function collectHibernatedCompletionEvidenceForWorktree(
   return retained
 }
 
+// Why: the periodic resume-record capture re-runs on an interval; comparing
+// everything except capturedAt lets an unchanged agent skip the store write
+// entirely, so idle ticks never dirty the session persistence pipeline.
+function sleepingRecordsEquivalentIgnoringCaptureTime(
+  existing: SleepingAgentSessionRecord | undefined,
+  next: SleepingAgentSessionRecord
+): boolean {
+  if (!existing) {
+    return false
+  }
+  return (
+    existing.paneKey === next.paneKey &&
+    existing.tabId === next.tabId &&
+    existing.worktreeId === next.worktreeId &&
+    existing.agent === next.agent &&
+    existing.providerSession.key === next.providerSession.key &&
+    existing.providerSession.id === next.providerSession.id &&
+    existing.prompt === next.prompt &&
+    existing.state === next.state &&
+    existing.updatedAt === next.updatedAt &&
+    existing.terminalTitle === next.terminalTitle &&
+    existing.lastAssistantMessage === next.lastAssistantMessage &&
+    existing.interrupted === next.interrupted &&
+    existing.origin === next.origin &&
+    launchConfigsEqual(existing.launchConfig, next.launchConfig)
+  )
+}
+
 function recoveryRecordMatches(
   existing: SleepingAgentSessionRecord | undefined,
   next: SleepingAgentSessionRecord
@@ -2239,7 +2267,10 @@ export const createAgentStatusSlice: StateCreator<AppState, [], [], AgentStatusS
             launchConfig: getLaunchConfigForEntry(s, entry),
             origin: 'quit'
           })
-          if (record && next[record.paneKey] !== record) {
+          if (
+            record &&
+            !sleepingRecordsEquivalentIgnoringCaptureTime(next[record.paneKey], record)
+          ) {
             next[record.paneKey] = record
             changed = true
           }

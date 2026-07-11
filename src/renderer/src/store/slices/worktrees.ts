@@ -71,6 +71,8 @@ export type { WorktreeSlice, WorktreeDeleteState } from './worktree-helpers'
 // Why: old runtime servers only have `worktree.list`; preserve the large-list
 // UI hydration parity this slice used before `worktree.detectedList` existed.
 const REMOTE_WORKTREE_LIST_PARITY_LIMIT = 10_000
+const WORKTREE_REMOVAL_AMBIGUOUS_ERROR =
+  'Workspace identity is ambiguous across hosts. Refresh projects and try again.'
 const ACTIVE_WORKTREE_TERMINAL_PREP_DELAY_MS = 300
 const ACTIVE_WORKTREE_TERMINAL_PREP_INPUT_QUIET_MS = 450
 const ACTIVE_WORKTREE_TERMINAL_PREP_IDLE_TIMEOUT_MS = 180
@@ -1156,6 +1158,41 @@ function getWorktreeHostId(
   }
   const repo = findRepoForHost(state.repos, repoId, { settings: state.settings })
   return repo ? getRepoExecutionHostId(repo) : null
+}
+
+function resolveWorktreeRemovalHost(
+  state: Pick<AppState, 'repos' | 'settings' | 'worktreesByRepo' | 'detectedWorktreesByRepo'>,
+  worktreeId: string
+): { hostId: ExecutionHostId | null; ambiguous: boolean } {
+  const hostIds = new Set<ExecutionHostId>()
+  for (const worktrees of Object.values(state.worktreesByRepo)) {
+    for (const worktree of worktrees) {
+      if (worktree.id === worktreeId && worktree.hostId) {
+        hostIds.add(worktree.hostId)
+      }
+    }
+  }
+  for (const result of Object.values(state.detectedWorktreesByRepo)) {
+    for (const worktree of result.worktrees) {
+      if (worktree.id === worktreeId && worktree.hostId) {
+        hostIds.add(worktree.hostId)
+      }
+    }
+  }
+  if (hostIds.size > 1) {
+    return { hostId: null, ambiguous: true }
+  }
+  if (hostIds.size === 1) {
+    return { hostId: hostIds.values().next().value ?? null, ambiguous: false }
+  }
+
+  const repoId = getRepoIdFromWorktreeId(worktreeId)
+  const repoHostIds = new Set(
+    state.repos.filter((repo) => repo.id === repoId).map(getRepoExecutionHostId)
+  )
+  return repoHostIds.size > 1
+    ? { hostId: null, ambiguous: true }
+    : { hostId: repoHostIds.values().next().value ?? null, ambiguous: false }
 }
 
 function mergeLineageForHost(
@@ -3145,6 +3182,11 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
   },
 
   removeWorktree: async (worktreeId, force, options) => {
+    const removalOwner = resolveWorktreeRemovalHost(get(), worktreeId)
+    if (removalOwner.ambiguous) {
+      return { ok: false, error: WORKTREE_REMOVAL_AMBIGUOUS_ERROR }
+    }
+    const hostId = removalOwner.hostId ?? undefined
     const forgetLocalOnly = options?.mode === 'forget-local'
     set((s) => ({
       deleteStateByWorktreeId: {
@@ -3163,20 +3205,35 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
       // and no need to prompt for hook trust.
       const skipArchive = forgetLocalOnly
         ? true
-        : (await ensureHooksConfirmed(get(), getRepoIdFromWorktreeId(worktreeId), 'archive')) ===
-          'skip'
+        : (await ensureHooksConfirmed(
+            get(),
+            getRepoIdFromWorktreeId(worktreeId),
+            'archive',
+            hostId
+          )) === 'skip'
 
       const worktreeBeforeRemoval = get()
         .allWorktrees()
         .find((entry) => entry.id === worktreeId)
+      const currentOwner = resolveWorktreeRemovalHost(get(), worktreeId)
+      if (
+        currentOwner.ambiguous ||
+        (hostId && currentOwner.hostId && currentOwner.hostId !== hostId)
+      ) {
+        throw new Error(WORKTREE_REMOVAL_AMBIGUOUS_ERROR)
+      }
       // Why: forget-local always clears Orca's own records via the local IPC
       // handler regardless of the workspace's execution host — the whole point
       // is that the remote (SSH relay / runtime) is gone or unreachable.
-      const target = getActiveRuntimeTarget(settingsForWorktreeOwner(get(), worktreeId))
+      const target = getActiveRuntimeTarget(
+        hostId
+          ? settingsForExecutionHostOwner(get().settings, hostId)
+          : settingsForWorktreeOwner(get(), worktreeId)
+      )
       const removalResult = await (forgetLocalOnly
-        ? window.api.worktrees.forgetLocal({ worktreeId })
+        ? window.api.worktrees.forgetLocal({ worktreeId, hostId })
         : target.kind === 'local'
-          ? window.api.worktrees.remove({ worktreeId, force, skipArchive })
+          ? window.api.worktrees.remove({ worktreeId, hostId, force, skipArchive })
           : callRuntimeRpc<RemoveWorktreeResult>(
               target,
               'worktree.rm',

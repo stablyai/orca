@@ -29,6 +29,7 @@
         "sshToggleDescription": "当有可用的 SSH 和远程 Orca 主机时显示它们。",
         "resourceUsageToggleDescription": "显示资源管理器。点击可查看 CPU、内存、会话、守护进程控制和工作区磁盘扫描。",
         "portsToggleDescription": "显示实时工作区端口。单击它可获取工作区范围的端口和外部侦听器。",
+        "antigravityToggleDescription": "显示当前工作区的 Antigravity 订阅使用量。",
         "grokToggleDescription": "通过 Grok CLI 登录后显示 Grok 订阅额度使用量。"
       }
     }
@@ -2998,9 +2999,9 @@
             "2483c60695": "···",
             "c35af53b73": "登录",
             "f19a63e7cd": "登录查看使用情况",
-            "5c938d39ac": "% 周",
-            "54e8d6bb2d": "% Fable",
-            "d79c3362c4": "% 5小时",
+            "5c938d39ac": "周",
+            "54e8d6bb2d": "Fable",
+            "d79c3362c4": "5小时",
             "a79c64f87e": "Fable",
             "8295903d17": "切换后继续旧对话之前，请重新启动实时 Claude 终端。",
             "c98ea88392": "没有其他账户",
@@ -3034,6 +3035,8 @@
             "06741a2f3d": "打开 MiniMax 使用量详情",
             "3bbf140864": "MiniMax 使用量",
             "remoteServerLabel": "远程服务器",
+            "antigravityUsage": "Antigravity 使用量",
+            "antigravityUsageDetails": "打开 Antigravity 使用详情",
             "grokUsageAria": "打开 Grok 使用详情",
             "grokUsageMenu": "Grok 使用量"
           },
@@ -3166,7 +3169,7 @@
             }
           },
           "tooltip": {
-            "cedb7b99e3": "剩余 %",
+            "cedb7b99e3": "% 已用",
             "6d6df77f41": "无可用数据",
             "7f7f208060": "每月",
             "252c096536": "每周",
@@ -5290,11 +5293,11 @@
           },
           "nativeChat": {
             "title": "原生聊天",
-            "description": "预览 Claude 和 Codex 终端会话的桌面聊天界面。",
-            "copy": "添加一个原生聊天视图，可从受支持的 Claude 和 Codex 终端窗格切换进入。在我们调校记录保真度、流式输出和终端一致性期间，此功能仍为实验性。",
+            "description": "预览受支持的智能体终端会话的桌面聊天界面。",
+            "copy": "添加可从受支持的智能体终端窗格切换的原生聊天视图。在我们调整记录保真度、流式传输和终端一致性期间，此功能仍处于实验阶段。",
             "toggleLabel": "切换原生聊天",
             "defaultTitle": "默认视图",
-            "defaultCopy": "选择新的 Claude 和 Codex 终端标签页如何打开。",
+            "defaultCopy": "选择如何打开受支持智能体的新终端标签页。",
             "defaultViewLabel": "默认原生聊天视图",
             "defaultViewTerminal": "终端聊天",
             "defaultViewNative": "原生聊天"
@@ -6668,9 +6671,9 @@
           "d23b43c5be": "安装脚本位置",
           "34a0dfa06e": "创建新工作区时运行存储库设置脚本的位置。",
           "21f8da2078": "工作区设置脚本",
-          "6e6480a7df": "让终端中的程序（tmux、Neovim、fzf、SSH）复制到系统剪贴板。",
+          "6e6480a7df": "让终端中的程序（Grok、tmux、Neovim、fzf、SSH）复制到系统剪贴板。",
           "3338dcf8c1": "允许 TUI 剪贴板写入 (OSC 52)",
-          "69c64a479c": "让 tmux、Neovim 和 fzf 通过 PTY（包括通过 SSH）复制到系统剪贴板。",
+          "69c64a479c": "让 Grok、tmux、Neovim 和 fzf 通过 PTY（包括通过 SSH）复制到系统剪贴板。",
           "4729c645fc": "自动将终端选择复制到剪贴板。",
           "902f5dee1f": "选择时复制",
           "9129b7e805": "将鼠标悬停在终端窗格上即可将其激活，无需单击。",
@@ -7171,6 +7174,9 @@
             },
             "9a115966d3": "关闭时最小化到托盘",
             "4d5b9427b5": "启用后，关闭窗口会让 Orca 继续在系统托盘中运行，而不是退出。",
+            "antigravityUsageTitle": "Antigravity 使用量",
+            "antigravityUsageDescription": "在状态栏中显示 Antigravity 订阅使用量。",
+            "antigravityKeyword": "antigravity",
             "f8e2a1c4b6": "Grok 使用量",
             "e7d1b0f3a5": "显示来自 Grok CLI OAuth 的 Grok 每周额度使用量。",
             "d6c0a9e2f4": "grok",
@@ -7459,7 +7465,8 @@
             },
             "nativeChat": {
               "title": "原生聊天",
-              "description": "预览 Claude 和 Codex 终端会话的桌面聊天界面。"
+              "description": "预览受支持的智能体终端会话的桌面聊天界面。",
+              "grok": "grok"
             }
           }
         },
@@ -10989,11 +10996,11 @@
                 "945865332e": "登录"
               },
               "UsagePage": {
-                "64265cb295": "71% 5小时",
+                "64265cb295": "29% 已用 5小时",
                 "be5a165875": "切换到",
                 "277a9c65a9": "Codex 账户",
                 "4dce5ca3aa": "4d 3h后重置",
-                "05ce4ecdd3": "还剩 62%",
+                "05ce4ecdd3": "已用 38%",
                 "0470aaed99": "每周",
                 "f421abf962": "会话",
                 "5e45fb1238": "更新于 1 分钟前",

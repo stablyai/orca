@@ -1844,6 +1844,7 @@ export type {
   JiraMutationResult,
   JiraPriority,
   JiraProject,
+  JiraProjectStatusOrder,
   JiraSite,
   JiraSiteSelection,
   JiraStatus,
@@ -2596,8 +2597,8 @@ export type GlobalSettings = {
    *  paste with Cmd/Ctrl+V without an intervening Cmd/Ctrl+Shift+C. Defaults
    *  to false so existing users keep the explicit-copy behavior. */
   terminalClipboardOnSelect: boolean
-  /** Why: lets TUIs like tmux, nvim, and fzf copy to the system clipboard via
-   *  the OSC 52 escape sequence — essential for SSH-hosted workflows where
+  /** Why: lets TUIs like Grok, tmux, nvim, and fzf copy to the system clipboard
+   *  via the OSC 52 escape sequence — essential for SSH-hosted workflows where
    *  the terminal is the only bridge to the local clipboard. Defaults to
    *  false because OSC 52 is a classic data-exfiltration vector (any
    *  process piping untrusted output into the terminal — `cat attacker.log`
@@ -2721,6 +2722,28 @@ export type GlobalSettings = {
    *  does not surface commands from other worktrees. Defaults to true.
    *  Disable to revert to shared global shell history. */
   terminalScopeHistoryByWorktree: boolean
+  /** Kill switch for hidden terminal view parking — unmounting long-hidden
+   *  terminal panes while a pane-less watcher keeps PTY side effects alive.
+   *  Defaults to true; `false` disables parking entirely.
+   *  See docs/reference/terminal-hidden-view-parking.md. */
+  terminalHiddenViewParking?: boolean
+  /** Kill switch for main-process terminal side-effect authority: when true
+   *  (default), local-daemon/SSH PTY title/bell/agent facts are consumed from
+   *  the `pty:sideEffect` channel and renderer byte parsers stay unregistered
+   *  for those PTYs; `false` restores renderer byte parsing.
+   *  See docs/reference/terminal-side-effect-authority.md. */
+  terminalMainSideEffectAuthority?: boolean
+  /** Kill switch for main's hidden-delivery gate (Phase 4): when true
+   *  (default) AND terminalMainSideEffectAuthority is on, main drops PTY byte
+   *  delivery to hidden renderer views after model ingestion; reveal restores
+   *  from the model snapshot. `false` restores hidden byte delivery. */
+  terminalHiddenDeliveryGate?: boolean
+  /** Kill switch for the main model query responder (Phase 5): when true
+   *  (default) AND both Phase-4 gate switches are on, main answers terminal
+   *  queries (DA1/CPR/DECRPM, …) embedded in hidden-dropped chunks from the
+   *  runtime emulator. `false` silences the responder without changing drops.
+   *  See docs/reference/terminal-query-authority.md. */
+  terminalModelQueryAuthority?: boolean
   /** Which agent to pre-select in the new-workspace composer.
    *  - null: auto (first detected agent)
    *  - 'blank': blank terminal (no agent launched)
@@ -3151,6 +3174,7 @@ export type StatusBarItem =
   | 'claude'
   | 'codex'
   | 'gemini'
+  | 'antigravity'
   | 'opencode-go'
   | 'kimi'
   | 'minimax'
@@ -3270,6 +3294,8 @@ export type PersistedUIState = {
   _kimiStatusBarDefaultAdded?: boolean
   /** One-shot migration flag for adding the default-on MiniMax status item. */
   _minimaxStatusBarDefaultAdded?: boolean
+  /** One-shot migration flag for adding the default-on Antigravity status item. */
+  _antigravityStatusBarDefaultAdded?: boolean
   /** One-shot migration flag for adding the default-on Grok status item. */
   _grokStatusBarDefaultAdded?: boolean
   statusBarItems: StatusBarItem[]

@@ -25,6 +25,7 @@ import type {
   GitHubAssignableUser,
   GitHubCommentResult,
   GitHubWorkItem,
+  JiraProjectStatusOrder,
   GitPushTarget,
   GitStagingArea,
   GitForkSyncExpectedUpstream,
@@ -53,6 +54,13 @@ import type {
   WorktreeDefaultTabsLaunch,
   WorktreeRemoteBranchConflictEvent
 } from '../shared/types'
+import type { PtyModelRestoreNeededEvent } from '../shared/pty-model-restore-marker'
+import type {
+  PtyRendererDeliveryHealthReply,
+  PtyRendererDeliveryStateReport
+} from '../shared/pty-renderer-delivery-health'
+import type { TerminalViewAttributes } from '../shared/terminal-view-attributes'
+import type { PtyMainDeliveryDiagnostics } from '../shared/pty-delivery-diagnostics'
 import type {
   WarpThemeImportPreview,
   WarpThemeImportSource
@@ -130,6 +138,7 @@ import type {
   MigrationUnsupportedPtyEntry
 } from '../shared/agent-status-types'
 import type { AgentInterruptInferenceRequest } from '../shared/agent-interrupt-intent'
+import type { TerminalSideEffectBatch } from '../shared/terminal-side-effect-facts'
 import type {
   SpeechErrorEvent,
   SpeechLifecycleEvent,
@@ -141,6 +150,7 @@ import type { TelemetryConsentState } from '../shared/telemetry-consent-types'
 import type { PreflightRuntimeContext, RefreshAgentsResult } from './api-types'
 import type { AgentKind, LaunchSource, RequestKind } from '../shared/telemetry-events'
 import type { AppStarSource } from '../shared/gh-star-source'
+import type { ExecutionHostId } from '../shared/execution-host'
 import type {
   Automation,
   AutomationCreateInput,
@@ -790,6 +800,10 @@ const api = {
       shellOverride?: string
       projectRuntime?: ProjectExecutionRuntimeResolution
       terminalColorQueryReplies?: { foreground?: string; background?: string }
+      // Why: hidden-at-spawn declaration — main marks the PTY hidden before
+      // its first byte so the delivery gate + model responder own spawn-time
+      // queries (terminal-query-authority.md §races).
+      initiallyHidden?: boolean
       // Why: closes the SIGKILL race documented in INVESTIGATION.md by
       // letting main patch + sync-flush the (worktreeId, tabId, leafId →
       // ptyId) binding before pty:spawn returns. Only the renderer's
@@ -849,14 +863,65 @@ const api = {
     ackColdRestore: (id: string): void => {
       ipcRenderer.send('pty:ackColdRestore', { id })
     },
-    ackData: (id: string, charCount: number): void => {
-      ipcRenderer.send('pty:ackData', { id, charCount })
+    /** charCount is the legacy per-chunk delta; processedChars is the
+     *  cumulative per-pty total (self-healing under lost ACK messages). */
+    ackData: (id: string, charCount: number, processedChars?: number): void => {
+      ipcRenderer.send('pty:ackData', {
+        id,
+        charCount,
+        ...(typeof processedChars === 'number' ? { processedChars } : {})
+      })
+    },
+    /** Main asks for the renderer's cumulative processed totals when terminal
+     *  delivery looks stuck on lost ACKs. */
+    onDeliveryResyncRequest: (callback: (payload: { requestId: number }) => void): (() => void) => {
+      const listener = (_event: Electron.IpcRendererEvent, payload: { requestId: number }) =>
+        callback(payload)
+      ipcRenderer.on('pty:requestDeliveryResync', listener)
+      return () => ipcRenderer.removeListener('pty:requestDeliveryResync', listener)
+    },
+    respondDeliveryResync: (payload: {
+      requestId: number
+      processedCharsByPty: Record<string, number>
+    }): void => {
+      ipcRenderer.send('pty:deliveryResyncResponse', payload)
+    },
+    /** Renderer-initiated delivery health/heal lane. Rides invoke because the
+     *  field wedge (v1.4.121-rc.0 snapshot) kills main→renderer push events
+     *  while invoke stays alive — push-initiated recovery can't reach it. */
+    reportRendererDeliveryState: (
+      report: PtyRendererDeliveryStateReport
+    ): Promise<PtyRendererDeliveryHealthReply> =>
+      ipcRenderer.invoke('pty:reportRendererDeliveryState', report),
+    /** Sync count of live pty:data listeners on this preload's emitter — the
+     *  watchdog's "listener detached" vs "channel dead" discriminator. */
+    getPtyDataListenerCount: (): number => ipcRenderer.listenerCount('pty:data'),
+    rendererDispatcherReady: (): void => {
+      ipcRenderer.send('pty:rendererDispatcherReady')
     },
     setActiveRendererPty: (id: string, active: boolean): void => {
       ipcRenderer.send('pty:setActiveRendererPty', { id, active })
     },
     setRendererPtyVisible: (id: string, visible: boolean): void => {
       ipcRenderer.send('pty:setRendererPtyVisible', { id, visible })
+    },
+    /** Hidden-delivery gate (Phase 4): hidden=true lets main DROP renderer
+     *  byte delivery after model ingestion; reveal restores from the model
+     *  snapshot. Fire-and-forget like setActiveRendererPty. */
+    setHiddenRendererPty: (id: string, hidden: boolean): void => {
+      ipcRenderer.send('pty:setHiddenRendererPty', { id, hidden })
+    },
+    /** Delivery-interest signal: any renderer party that needs raw bytes
+     *  (dispatcher sidecars, eager pre-mount buffers) suppresses the
+     *  hidden-delivery gate for that PTY while registered. */
+    setPtyDeliveryInterest: (id: string, interested: boolean): void => {
+      ipcRenderer.send('pty:setPtyDeliveryInterest', { id, interested })
+    },
+    /** View-attribute bridge (Phase 5 slice 2): app-global composed terminal
+     *  appearance push that lets main's model responder answer OSC 4/10/11/12
+     *  and DSR ?996n for hidden-gated PTYs with renderer-true values. */
+    publishTerminalViewAttributes: (attributes: TerminalViewAttributes): void => {
+      ipcRenderer.send('pty:terminalViewAttributes', attributes)
     },
 
     kill: (id: string, opts?: { keepHistory?: boolean }): Promise<void> =>
@@ -875,8 +940,10 @@ const api = {
       rows: number
       cwd?: string | null
       seq?: number
+      pendingDeliveryStartSeq?: number
       source?: 'headless' | 'renderer'
       alternateScreen?: boolean
+      scrollbackAnsi?: string
       pendingEscapeTailAnsi?: string
     } | null> => ipcRenderer.invoke('pty:getMainBufferSnapshot', { id, opts }),
 
@@ -894,6 +961,18 @@ const api = {
       peakRendererInFlightChars: number
       peakMaxRendererInFlightCharsByPty: number
       ackGatedFlushSkipCount: number
+      hiddenDeliveryGatedPtyCount: number
+      hiddenDeliveryGatedVisiblePtyCount: number
+      hiddenDeliveryGatedActivePtyCount: number
+      deliveryInterestPtyCount: number
+      hiddenDeliveryDroppedChars: number
+      hiddenDeliveryDroppedChunks: number
+      pendingDroppedChars: number
+      diagnostics: PtyMainDeliveryDiagnostics
+      rendererLifecycleResetCount: number
+      lastLifecycleResetClearedChars: number
+      rendererPtyDispatcherReady: boolean
+      rendererDispatcherReadyForcedCount: number
     }> => ipcRenderer.invoke('pty:getRendererDeliveryDebugSnapshot'),
 
     resetRendererDeliveryDebug: (): Promise<void> =>
@@ -925,7 +1004,7 @@ const api = {
         seq?: number
         rawLength?: number
         background?: boolean
-        droppedBacklog?: boolean
+        droppedOutput?: boolean
       }) => void
     ): (() => void) => {
       const listener = (
@@ -936,7 +1015,7 @@ const api = {
           seq?: number
           rawLength?: number
           background?: boolean
-          droppedBacklog?: boolean
+          droppedOutput?: boolean
         }
       ) => callback(data)
       ipcRenderer.on('pty:data', listener)
@@ -949,6 +1028,32 @@ const api = {
       ipcRenderer.on('pty:replay', listener)
       return () => ipcRenderer.removeListener('pty:replay', listener)
     },
+
+    /** Out-of-band signal that main dropped renderer-bound bytes for a PTY
+     *  (hidden-delivery gate / pending cap) — the pane must restore from the
+     *  model snapshot. Deliberately NOT on pty:data: an in-band marker is
+     *  ambiguous with chunks fully stripped by OSC-9999 cleaning. */
+    onModelRestoreNeeded: (callback: (event: PtyModelRestoreNeededEvent) => void): (() => void) => {
+      const listener = (_event: Electron.IpcRendererEvent, event: PtyModelRestoreNeededEvent) =>
+        callback(event)
+      ipcRenderer.on('pty:modelRestoreNeeded', listener)
+      return () => ipcRenderer.removeListener('pty:modelRestoreNeeded', listener)
+    },
+
+    /** Batched derived side-effect facts (title/bell/agent transitions) for
+     *  PTYs whose bytes transit local main. Per-PTY in-order; deliberately not
+     *  synchronized with pty:data (terminal-side-effect-authority.md). */
+    onSideEffect: (callback: (batch: TerminalSideEffectBatch) => void): (() => void) => {
+      const listener = (_event: Electron.IpcRendererEvent, batch: TerminalSideEffectBatch) =>
+        callback(batch)
+      ipcRenderer.on('pty:sideEffect', listener)
+      return () => ipcRenderer.removeListener('pty:sideEffect', listener)
+    },
+
+    /** Title-only replay snapshot applied on (re)attach — attention facts
+     *  (bells/completions) never replay. */
+    getSideEffectSnapshot: (id: string): Promise<TerminalSideEffectBatch | null> =>
+      ipcRenderer.invoke('pty:sideEffectSnapshot', { id }),
 
     onExit: (callback: (data: { id: string; code: number }) => void): (() => void) => {
       const listener = (_event: Electron.IpcRendererEvent, data: { id: string; code: number }) =>
@@ -1658,7 +1763,11 @@ const api = {
     }): Promise<unknown[]> => ipcRenderer.invoke('jira:listAssignableUsers', args),
 
     listTransitions: (args: { key: string; siteId?: string }): Promise<unknown[]> =>
-      ipcRenderer.invoke('jira:listTransitions', args)
+      ipcRenderer.invoke('jira:listTransitions', args),
+    getProjectStatusOrder: (args: {
+      projectKey: string
+      siteId?: string
+    }): Promise<JiraProjectStatusOrder> => ipcRenderer.invoke('jira:getProjectStatusOrder', args)
   },
 
   starNag: {
@@ -1725,6 +1834,10 @@ const api = {
 
   settings: {
     get: (): Promise<unknown> => ipcRenderer.invoke('settings:get'),
+
+    // Why: blocking read for the few startup decisions (terminal side-effect
+    // authority) that cannot wait for async hydration. Call sparingly.
+    getSync: (): unknown => ipcRenderer.sendSync('settings:get-sync'),
 
     set: (args: Record<string, unknown>): Promise<unknown> =>
       ipcRenderer.invoke('settings:set', args),
@@ -2466,6 +2579,7 @@ const api = {
   hooks: {
     check: (args: {
       repoId: string
+      hostId?: ExecutionHostId
     }): Promise<{
       status?: 'ok' | 'error'
       hasHooks: boolean
@@ -3492,11 +3606,6 @@ const api = {
       ipcRenderer.on('terminal:zoom', listener)
       return () => ipcRenderer.removeListener('terminal:zoom', listener)
     },
-    onSystemResumed: (callback: () => void): (() => void) => {
-      const listener = (_event: Electron.IpcRendererEvent) => callback()
-      ipcRenderer.on('system:resumed', listener)
-      return () => ipcRenderer.removeListener('system:resumed', listener)
-    },
     readClipboardText: (options?: ReadClipboardTextOptions): Promise<string> =>
       ipcRenderer.invoke('clipboard:readText', options),
     readSelectionClipboardText: (options?: ReadClipboardTextOptions): Promise<string> =>
@@ -3561,6 +3670,14 @@ const api = {
         callback(isFullScreen)
       ipcRenderer.on('window:fullscreen-changed', listener)
       return () => ipcRenderer.removeListener('window:fullscreen-changed', listener)
+    },
+    /** Fired when the OS resumes from sleep (main relays powerMonitor). A
+     *  focus-preserving display wake fires no renderer focus/visibility
+     *  events, so terminal wake recovery listens to this explicit signal. */
+    onSystemResumed: (callback: () => void): (() => void) => {
+      const listener = () => callback()
+      ipcRenderer.on('system:resumed', listener)
+      return () => ipcRenderer.removeListener('system:resumed', listener)
     },
     /** Desktop custom titlebar only: minimize via renderer-drawn window controls. */
     minimize: (): void => {

@@ -1381,8 +1381,9 @@
 /* ── Link Bubble ──────────────────────────────────────── */
 
 .rich-markdown-link-bubble {
-  position: absolute;
-  z-index: 30;
+  position: fixed;
+  z-index: 60;
+  -webkit-app-region: no-drag;
   display: flex;
   align-items: center;
   gap: 2px;

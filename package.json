@@ -1,6 +1,6 @@
 {
   "name": "orca",
-  "version": "1.4.133",
+  "version": "1.4.135-rc.3",
   "description": "Next-gen IDE for parallel agentic development",
   "homepage": "https://github.com/stablyai/orca",
   "author": "stablyai",
@@ -81,6 +81,7 @@
     "test:e2e:terminal-perf:scale:report": "pnpm run ensure:electron-runtime && node config/scripts/run-terminal-scale-perf-report-gate.mjs",
     "test:e2e:terminal-perf:check-report": "node config/scripts/check-terminal-perf-report-budgets.mjs",
     "test:e2e:terminal-perf:summarize": "node config/scripts/summarize-terminal-perf-report.mjs",
+    "test:e2e:terminal-perf:html-report": "node config/scripts/generate-terminal-perf-html-report.mjs",
     "test:e2e:ssh-docker-perf": "node config/scripts/run-ssh-docker-perf-e2e.mjs",
     "test:e2e:source-control-scale": "pnpm run ensure:electron-runtime && npx playwright test tests/e2e/source-control-large-file-count.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=1",
     "win-update-e2e": "node tools/win-update-e2e/run.mjs",
@@ -91,6 +92,7 @@
     "bench:startup": "pnpm run ensure:electron-runtime && node tools/benchmarks/startup-time-bench.mjs",
     "bench:daemon-coldstart": "pnpm run ensure:electron-runtime && node tools/benchmarks/daemon-coldstart-bench.mjs",
     "bench:main-thread-jank": "pnpm run ensure:electron-runtime && node tools/benchmarks/main-thread-jank-bench.mjs",
+    "bench:multi-workspace-typing": "pnpm run ensure:electron-runtime && node config/scripts/run-multi-workspace-typing-bench.mjs",
     "bench:compare": "node config/scripts/compare-benchmark-artifacts.mjs"
   },
   "dependencies": {
@@ -257,7 +259,8 @@
     "patchedDependencies": {
       "node-pty@1.1.0": "config/patches/node-pty@1.1.0.patch",
       "@xterm/addon-ligatures@0.11.0-beta.287": "config/patches/@xterm__addon-ligatures@0.11.0-beta.287.patch",
-      "@xterm/addon-webgl@0.20.0-beta.286": "config/patches/@xterm__addon-webgl@0.20.0-beta.286.patch"
+      "@xterm/addon-webgl@0.20.0-beta.286": "config/patches/@xterm__addon-webgl@0.20.0-beta.286.patch",
+      "@xterm/addon-serialize@0.15.0-beta.287": "config/patches/@xterm__addon-serialize@0.15.0-beta.287.patch"
     }
   },
   "reactDoctor": {

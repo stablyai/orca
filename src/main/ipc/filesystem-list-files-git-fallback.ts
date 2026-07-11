@@ -216,7 +216,19 @@ export async function listFilesWithGit(
   const onAbort = (): void => killSurvivors('git ls-files cancelled')
   signal?.addEventListener('abort', onAbort, { once: true })
   try {
-    await Promise.all([runGitLsFiles(primary), runGitLsFiles(ignoredPass)])
+    await Promise.all([
+      runGitLsFiles(primary),
+      // Why: ignored files are supplementary — a failed or timed-out ignored
+      // pass must not discard the primary listing the user actually needs
+      // (#7719 root cause: the all-or-nothing failure showed zero files).
+      // Entries streamed before the failure are kept; a cancelled scan still
+      // rejects via the primary pass or the expansion's cancellation check.
+      runGitLsFiles(ignoredPass).catch((err: Error) => {
+        if (!signal?.aborted) {
+          console.warn('[quick-open] git ignored-file pass failed; keeping primary results:', err)
+        }
+      })
+    ])
   } catch (err) {
     killSurvivors()
     if (signal?.aborted) {

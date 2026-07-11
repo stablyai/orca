@@ -1,13 +1,18 @@
 import { describe, expect, it, vi } from 'vitest'
 import { Terminal } from '@xterm/headless'
-import type { ManagedPane } from '@/lib/pane-manager/pane-manager'
+import type { ManagedPane, PaneManager } from '@/lib/pane-manager/pane-manager'
+import { getDefaultSettings } from '../../../../shared/constants'
 import {
+  applyTerminalAppearance,
   hexToRgba,
   installMode2031Handlers,
   maybePushMode2031Flip,
-  mode2031SequenceFor
+  mode2031SequenceFor,
+  publishTerminalViewAttributesAtAppStart
 } from './terminal-appearance'
 import { replayIntoTerminal, type ReplayingPanesRef } from './replay-guard'
+import { _resetTerminalViewAttributesPublisherForTest } from './terminal-view-attributes-publisher'
+import type { TerminalViewAttributes } from '../../../../shared/terminal-view-attributes'
 
 function fakeTransport(overrides?: { connected?: boolean; sendOk?: boolean }): {
   isConnected: () => boolean
@@ -370,6 +375,133 @@ describe('installMode2031Handlers', () => {
       term1.dispose()
       term2.dispose()
     }
+  })
+})
+
+describe('applyTerminalAppearance theme assignment', () => {
+  // xterm's OptionsService fires the theme change on object IDENTITY, and
+  // ThemeService._setTheme then rebuilds the palette, discarding OSC
+  // 4/10/11/12 SET mutations. Attribute-neutral applies (font size, padding,
+  // zoom) compose a fresh-but-value-identical theme; assigning it anyway
+  // wipes TUI color mutations on visible panes while the deduped publisher
+  // keeps hidden overlays — so the assignment must be value-gated.
+  function makePane(id: number): ManagedPane {
+    return { id, terminal: { options: {}, cols: 80, rows: 24 } } as unknown as ManagedPane
+  }
+
+  function makeManager(panes: ManagedPane[]): PaneManager {
+    return {
+      getPanes: () => panes,
+      setPaneLigaturesEnabled: vi.fn(),
+      setPaneStyleOptions: vi.fn()
+    } as unknown as PaneManager
+  }
+
+  function apply(pane: ManagedPane, settings: ReturnType<typeof getDefaultSettings>): void {
+    applyTerminalAppearance(
+      makeManager([pane]),
+      settings,
+      true,
+      new Map(),
+      new Map(),
+      'false',
+      new Map(),
+      new Map()
+    )
+  }
+
+  it('keeps options.theme identity across attribute-neutral applies (font size tweak)', () => {
+    const pane = makePane(1)
+    const settings = getDefaultSettings('/tmp')
+
+    apply(pane, settings)
+    const firstTheme = pane.terminal.options.theme
+    expect(firstTheme).toBeDefined()
+
+    apply(pane, { ...settings, terminalFontSize: settings.terminalFontSize + 2 })
+
+    // Identity-stable theme means xterm never re-runs _setTheme, so a TUI's
+    // modifyColors mutation survives the font tweak.
+    expect(pane.terminal.options.theme).toBe(firstTheme)
+    expect(pane.terminal.options.fontSize).toBe(settings.terminalFontSize + 2)
+  })
+
+  it('still assigns a fresh theme when composed values actually change', () => {
+    const pane = makePane(1)
+    const settings = getDefaultSettings('/tmp')
+
+    apply(pane, settings)
+    const firstTheme = pane.terminal.options.theme
+
+    apply(pane, { ...settings, terminalColorOverrides: { background: '#102030' } })
+
+    expect(pane.terminal.options.theme).not.toBe(firstTheme)
+    expect(pane.terminal.options.theme?.background).toBe('#102030')
+  })
+})
+
+describe('publishTerminalViewAttributesAtAppStart', () => {
+  // Phase 6 prerequisite (terminal-query-authority.md): hidden-at-launch
+  // PTYs can query OSC 10/11 before any terminal pane mounts; the app-start
+  // publication must go out with no pane manager involved at all.
+  it('publishes composed attributes without any pane mount and dedupes repeats', () => {
+    _resetTerminalViewAttributesPublisherForTest()
+    const sent: TerminalViewAttributes[] = []
+    const send = (attributes: TerminalViewAttributes): boolean => {
+      sent.push(attributes)
+      return true
+    }
+    const settings = getDefaultSettings('/tmp')
+
+    expect(publishTerminalViewAttributesAtAppStart(settings, true, send)).toBe(true)
+    expect(sent).toHaveLength(1)
+    expect(sent[0]!.ansi).toHaveLength(256)
+    expect(sent[0]!.cursorStyle).toBe(settings.terminalCursorStyle ?? 'block')
+
+    expect(publishTerminalViewAttributesAtAppStart(settings, true, send)).toBe(false)
+    expect(sent).toHaveLength(1)
+  })
+
+  it('makes the later pane-mount applyTerminalAppearance a deduped no-op re-push', () => {
+    _resetTerminalViewAttributesPublisherForTest()
+    const publishMock = vi.fn()
+    ;(globalThis as unknown as { window: unknown }).window = {
+      api: { pty: { publishTerminalViewAttributes: publishMock } }
+    }
+    try {
+      const settings = getDefaultSettings('/tmp')
+      publishTerminalViewAttributesAtAppStart(settings, true)
+      expect(publishMock).toHaveBeenCalledTimes(1)
+
+      // The first pane mount composes the identical app-global snapshot, so
+      // the publisher dedupe keeps it a single push.
+      const manager = {
+        getPanes: () => [],
+        setPaneLigaturesEnabled: vi.fn(),
+        setPaneStyleOptions: vi.fn()
+      } as unknown as PaneManager
+      applyTerminalAppearance(
+        manager,
+        settings,
+        true,
+        new Map(),
+        new Map(),
+        'false',
+        new Map(),
+        new Map()
+      )
+      expect(publishMock).toHaveBeenCalledTimes(1)
+    } finally {
+      delete (globalThis as { window?: unknown }).window
+      _resetTerminalViewAttributesPublisherForTest()
+    }
+  })
+
+  it('publishes nothing before settings are loaded', () => {
+    _resetTerminalViewAttributesPublisherForTest()
+    const send = vi.fn(() => true)
+    expect(publishTerminalViewAttributesAtAppStart(null, true, send)).toBe(false)
+    expect(send).not.toHaveBeenCalled()
   })
 })
 

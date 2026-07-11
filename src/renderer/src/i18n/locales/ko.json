@@ -29,6 +29,7 @@
         "sshToggleDescription": "사용 가능한 SSH 및 원격 Orca 호스트가 있으면 표시합니다.",
         "resourceUsageToggleDescription": "리소스 관리자를 표시합니다. 클릭하면 CPU, 메모리, 세션, 데몬 제어, 워크스페이스 디스크 스캔을 볼 수 있습니다.",
         "portsToggleDescription": "라이브 워크스페이스 포트를 표시합니다. 워크스페이스 범위 포트 및 외부 수신기를 보려면 클릭하세요.",
+        "antigravityToggleDescription": "활성 워크스페이스에 대한 Antigravity 구독 사용량을 표시합니다.",
         "grokToggleDescription": "Grok CLI로 로그인한 경우 Grok 구독 크레딧 사용량을 표시합니다."
       }
     }
@@ -2998,9 +2999,9 @@
             "2483c60695": "···",
             "c35af53b73": "로그인",
             "f19a63e7cd": "사용량을 보려면 로그인하세요.",
-            "5c938d39ac": "%주간",
-            "54e8d6bb2d": "% Fable",
-            "d79c3362c4": "% 5h",
+            "5c938d39ac": "주간",
+            "54e8d6bb2d": "Fable",
+            "d79c3362c4": "5h",
             "a79c64f87e": "Fable",
             "8295903d17": "전환 후 이전 대화를 계속하기 전에 라이브 Claude terminals을 다시 시작하십시오.",
             "c98ea88392": "다른 계정 없음",
@@ -3034,6 +3035,8 @@
             "06741a2f3d": "MiniMax 사용량 세부 정보 열기",
             "3bbf140864": "MiniMax 사용량",
             "remoteServerLabel": "원격 서버",
+            "antigravityUsage": "Antigravity 사용량",
+            "antigravityUsageDetails": "Antigravity 사용량 세부 정보 열기",
             "grokUsageAria": "Grok 사용량 세부 정보 열기",
             "grokUsageMenu": "Grok 사용량"
           },
@@ -3166,7 +3169,7 @@
             }
           },
           "tooltip": {
-            "cedb7b99e3": "% 남음",
+            "cedb7b99e3": "% 사용",
             "6d6df77f41": "데이터가 없습니다",
             "7f7f208060": "월간",
             "252c096536": "주간",
@@ -5290,11 +5293,11 @@
           },
           "nativeChat": {
             "title": "네이티브 채팅",
-            "description": "Claude 및 Codex terminal 세션에 대한 데스크톱 채팅 화면을 미리 봅니다.",
-            "copy": "지원되는 Claude 및 Codex terminal 창에서 전환할 수 있는 기본 채팅 보기를 추가합니다. 성적표 충실도, 스트리밍 및 terminal 패리티를 조정하는 동안 실험적입니다.",
+            "description": "지원되는 에이전트 터미널 세션의 데스크톱 채팅 화면을 미리 봅니다.",
+            "copy": "지원되는 에이전트 터미널 창에서 전환할 수 있는 네이티브 채팅 보기를 추가합니다. 대화 기록 충실도, 스트리밍, 터미널 동작 일치를 조정하는 동안 실험적으로 제공됩니다.",
             "toggleLabel": "기본 채팅 전환",
             "defaultTitle": "기본 보기",
-            "defaultCopy": "새로운 Claude 및 Codex terminal 탭이 열리는 방식을 선택하세요.",
+            "defaultCopy": "지원되는 에이전트의 새 터미널 탭을 여는 방식을 선택합니다.",
             "defaultViewLabel": "기본 기본 채팅 보기",
             "defaultViewTerminal": "Terminal 채팅",
             "defaultViewNative": "네이티브 채팅"
@@ -6668,9 +6671,9 @@
           "d23b43c5be": "설정 스크립트 위치",
           "34a0dfa06e": "새 워크스페이스를 만들 때 repos 설정 스크립트를 실행할 위치입니다.",
           "21f8da2078": "워크스페이스 설정 스크립트",
-          "6e6480a7df": "terminal의 프로그램(tmux, Neovim, fzf, SSH)이 시스템 클립보드에 복사할 수 있게 합니다.",
+          "6e6480a7df": "terminal의 프로그램(Grok, tmux, Neovim, fzf, SSH)이 시스템 클립보드에 복사할 수 있게 합니다.",
           "3338dcf8c1": "TUI 클립보드 쓰기 허용(OSC 52)",
-          "69c64a479c": "tmux, Neovim 및 fzf가 PTY(SSH 포함)를 통해 시스템 클립보드에 복사하도록 합니다.",
+          "69c64a479c": "Grok, tmux, Neovim 및 fzf가 PTY(SSH 포함)를 통해 시스템 클립보드에 복사하도록 합니다.",
           "4729c645fc": "terminal 선택 사항을 클립보드에 자동으로 복사합니다.",
           "902f5dee1f": "선택 시 복사",
           "9129b7e805": "terminal 패널에 마우스를 가리키면 클릭하지 않고도 활성화됩니다.",
@@ -7171,6 +7174,9 @@
               "workspaceOptions": "워크스페이스 옵션",
               "detailed": "상세"
             },
+            "antigravityUsageTitle": "Antigravity 사용량",
+            "antigravityUsageDescription": "상태 표시줄에 Antigravity 구독 사용량을 표시합니다.",
+            "antigravityKeyword": "antigravity",
             "f8e2a1c4b6": "Grok 사용량",
             "e7d1b0f3a5": "Grok CLI OAuth에서 Grok 주간 크레딧 사용량을 표시합니다.",
             "d6c0a9e2f4": "grok",
@@ -7459,7 +7465,8 @@
             },
             "nativeChat": {
               "title": "네이티브 채팅",
-              "description": "Claude 및 Codex terminal 세션에 대한 데스크톱 채팅 화면을 미리 봅니다."
+              "description": "지원되는 에이전트 터미널 세션의 데스크톱 채팅 화면을 미리 봅니다.",
+              "grok": "grok"
             }
           }
         },
@@ -10989,11 +10996,11 @@
                 "945865332e": "로그인 중"
               },
               "UsagePage": {
-                "64265cb295": "71% 5시간",
+                "64265cb295": "29% 사용 5시간",
                 "be5a165875": "다음으로 전환",
                 "277a9c65a9": "Codex 계정",
                 "4dce5ca3aa": "4일 3시간 후에 재설정됩니다.",
-                "05ce4ecdd3": "62% 남음",
+                "05ce4ecdd3": "38% 사용",
                 "0470aaed99": "주간",
                 "f421abf962": "세션",
                 "5e45fb1238": "1분 전에 업데이트됨",

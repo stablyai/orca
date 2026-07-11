@@ -29,6 +29,7 @@
         "sshToggleDescription": "Show configured SSH and remote Orca hosts when any are available.",
         "resourceUsageToggleDescription": "Show the Resource Manager. Click it for CPU, memory, sessions, daemon controls, and workspace disk scans.",
         "portsToggleDescription": "Show live workspace ports. Click it for workspace-scoped ports and external listeners.",
+        "antigravityToggleDescription": "Show Antigravity subscription usage for the active workspace.",
         "grokToggleDescription": "Show Grok subscription credit usage when signed in via Grok CLI."
       }
     }
@@ -2998,9 +2999,9 @@
             "2483c60695": "···",
             "c35af53b73": "Sign in",
             "f19a63e7cd": "Sign in to see usage",
-            "5c938d39ac": "% wk",
-            "54e8d6bb2d": "% Fable",
-            "d79c3362c4": "% 5h",
+            "5c938d39ac": "wk",
+            "54e8d6bb2d": "Fable",
+            "d79c3362c4": "5h",
             "a79c64f87e": "Fable",
             "8295903d17": "Restart live Claude terminals before continuing old conversations after switching.",
             "c98ea88392": "No other accounts",
@@ -3034,6 +3035,8 @@
             "06741a2f3d": "Open MiniMax usage details",
             "3bbf140864": "MiniMax Usage",
             "remoteServerLabel": "Remote server",
+            "antigravityUsage": "Antigravity Usage",
+            "antigravityUsageDetails": "Open Antigravity usage details",
             "grokUsageAria": "Open Grok usage details",
             "grokUsageMenu": "Grok Usage"
           },
@@ -3166,7 +3169,7 @@
             }
           },
           "tooltip": {
-            "cedb7b99e3": "% left",
+            "cedb7b99e3": "% used",
             "6d6df77f41": "No data available",
             "7f7f208060": "Monthly",
             "252c096536": "Weekly",
@@ -5305,11 +5308,11 @@
           "0e89a574ae": "Floating animated pet in the bottom-right corner.",
           "nativeChat": {
             "title": "Native chat",
-            "description": "Preview the desktop chat surface for Claude and Codex terminal sessions.",
-            "copy": "Adds a native chat view you can switch to from supported Claude and Codex terminal panes. Experimental while we tune transcript fidelity, streaming, and terminal parity.",
+            "description": "Preview the desktop chat surface for supported agent terminal sessions.",
+            "copy": "Adds a native chat view you can switch to from supported agent terminal panes. Experimental while we tune transcript fidelity, streaming, and terminal parity.",
             "toggleLabel": "Toggle native chat",
             "defaultTitle": "Default view",
-            "defaultCopy": "Choose how new Claude and Codex terminal tabs open.",
+            "defaultCopy": "Choose how new supported agent terminal tabs open.",
             "defaultViewLabel": "Default native chat view",
             "defaultViewTerminal": "Terminal chat",
             "defaultViewNative": "Native chat"
@@ -6720,9 +6723,9 @@
           "d23b43c5be": "Setup Script Location",
           "34a0dfa06e": "Where the repository setup script runs when a new workspace is created.",
           "21f8da2078": "Workspace Setup Script",
-          "6e6480a7df": "Let programs in the terminal (tmux, Neovim, fzf, SSH) copy to your system clipboard.",
+          "6e6480a7df": "Let programs in the terminal (Grok, tmux, Neovim, fzf, SSH) copy to your system clipboard.",
           "3338dcf8c1": "Allow TUI Clipboard Writes (OSC 52)",
-          "69c64a479c": "Let tmux, Neovim, and fzf copy to the system clipboard over the PTY (including over SSH).",
+          "69c64a479c": "Let Grok, tmux, Neovim, and fzf copy to the system clipboard over the PTY (including over SSH).",
           "4729c645fc": "Automatically copy terminal selections to the clipboard.",
           "902f5dee1f": "Copy on Select",
           "9129b7e805": "Hovering a terminal pane activates it without needing to click.",
@@ -7223,6 +7226,9 @@
               "workspaceOptions": "workspace options",
               "detailed": "detailed"
             },
+            "antigravityUsageTitle": "Antigravity Usage",
+            "antigravityUsageDescription": "Show Antigravity subscription usage in the status bar.",
+            "antigravityKeyword": "antigravity",
             "f8e2a1c4b6": "Grok Usage",
             "e7d1b0f3a5": "Show Grok weekly credit usage from Grok CLI OAuth.",
             "d6c0a9e2f4": "grok",
@@ -7511,7 +7517,8 @@
             "87d99e634b": "Pet",
             "nativeChat": {
               "title": "Native chat",
-              "description": "Preview the desktop chat surface for Claude and Codex terminal sessions."
+              "description": "Preview the desktop chat surface for supported agent terminal sessions.",
+              "grok": "grok"
             }
           }
         },
@@ -10989,11 +10996,11 @@
                 "945865332e": "Signing in"
               },
               "UsagePage": {
-                "64265cb295": "71% 5h",
+                "64265cb295": "29% used 5h",
                 "be5a165875": "Switch to",
                 "277a9c65a9": "Codex Account",
                 "4dce5ca3aa": "Resets in 4d 3h",
-                "05ce4ecdd3": "62% left",
+                "05ce4ecdd3": "38% used",
                 "0470aaed99": "Weekly",
                 "f421abf962": "Session",
                 "5e45fb1238": "Updated 1m ago",
@@ -12878,7 +12885,7 @@
         "pastedImageLabel": "Pasted image",
         "imagePasteFailed": "Image paste failed.",
         "worktreeNotReady": "Worktree not ready — try again in a moment.",
-        "uploadingAttachments": "Uploading attachments to remote ({{value0}})…"
+        "uploadingAttachments": "Uploading {{value0}} file(s) to remote…"
       },
       "tool": {
         "running": "Running…",

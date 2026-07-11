@@ -152,7 +152,13 @@ export class HistoryReader {
     })
     try {
       if (checkpoint) {
-        if (!emulator.writeSync(checkpoint.rehydrateSequences + checkpoint.snapshotAnsi)) {
+        if (
+          !emulator.writeSync(
+            (checkpoint.scrollbackAnsi ?? '') +
+              checkpoint.rehydrateSequences +
+              checkpoint.snapshotAnsi
+          )
+        ) {
           return null
         }
         emulator.setRestoredOscLinks(checkpoint.oscLinks)
@@ -198,12 +204,8 @@ export class HistoryReader {
     cwd: string | null,
     meta: SessionMeta
   ): ColdRestoreInfo {
-    // Why: HeadlessEmulator.getSnapshot() doesn't populate scrollbackAnsi
-    // (it's always ''). For non-alt-screen snapshots, snapshotAnsi IS the
-    // normal buffer content and is safe to use as scrollback. For alt-screen
-    // snapshots, snapshotAnsi is the serialized TUI buffer (not raw PTY
-    // stream); return empty instead — the adapter skips cold restore when
-    // scrollbackAnsi is falsy.
+    // Why: legacy normal snapshots stored their buffer only in snapshotAnsi;
+    // current alt snapshots carry their normal buffer in scrollbackAnsi.
     const scrollbackAnsi =
       snapshot.scrollbackAnsi || (snapshot.modes?.alternateScreen ? '' : snapshot.snapshotAnsi)
     return {

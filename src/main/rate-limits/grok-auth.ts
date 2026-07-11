@@ -1,10 +1,10 @@
 import { existsSync, readFileSync } from 'node:fs'
-import { homedir } from 'node:os'
 import { join } from 'node:path'
+import { resolveGrokHomeDir } from '../../shared/grok-session-paths'
 
 // Why: when GROK_HOME is set, auth.json must be the same path Grok CLI uses.
 export function getGrokHome(): string {
-  return process.env.GROK_HOME?.trim() || join(homedir(), '.grok')
+  return resolveGrokHomeDir()
 }
 
 export function getGrokAuthPath(): string {

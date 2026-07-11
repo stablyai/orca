@@ -1,3 +1,4 @@
+import type { ExecutionHostId } from '../../../src/shared/execution-host'
 import type { RuntimeWorktreeAgentRow } from '../../../src/shared/runtime-types'
 
 export type Worktree = {
@@ -5,18 +6,25 @@ export type Worktree = {
   workspaceKind?: 'git' | 'folder-workspace'
   worktreeId: string
   repoId: string
+  hostId?: ExecutionHostId
+  terminalPlatform?: NodeJS.Platform
   repo: string
   branch: string
   displayName: string
   workspaceStatus?: string
   sortOrder?: number
   manualOrder?: number
+  lastActivityAt?: number
+  createdAt?: number
   // Why: on-disk worktree directory path. Needed by NewWorktreeModal so the
   // marine-creature fallback dedupes against filesystem basenames.
   path: string
   isArchived?: boolean
   isMainWorktree?: boolean
   hasHostSidebarActivity?: boolean
+  worktreeInstanceId?: string
+  lineageWorktreeInstanceId?: string
+  parentWorktreeInstanceId?: string
   parentWorktreeId?: string | null
   childWorktreeIds?: string[]
   lineageDepth?: number

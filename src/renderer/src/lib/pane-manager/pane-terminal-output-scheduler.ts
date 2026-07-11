@@ -11,6 +11,16 @@ import {
   captureTerminalWriteScrollIntent,
   enforceTerminalWriteScrollIntent
 } from './terminal-scroll-intent'
+import { runGuardedWriteCompletionStep } from './xterm-write-callback-guard'
+import { recordRendererCrashBreadcrumb } from '@/lib/crash-breadcrumb-recorder'
+import {
+  discardInFlightTerminalOutputAckCredits,
+  registerTerminalOutputAckCredits
+} from './pane-terminal-output-ack-credit'
+import {
+  TERMINAL_OUTPUT_BACKLOG_MIN_CAP_CHARS,
+  terminalOutputBacklogCapChars
+} from '../../../../shared/terminal-scrollback-policy'
 
 type TerminalOutputTarget = ForegroundTerminalOutputTarget
 
@@ -22,6 +32,12 @@ type WriteTerminalOutputOptions = {
   foreground: boolean
   beforeWrite?: TerminalOutputBeforeWrite
   onParsed?: TerminalOutputParsedCallback
+  /** Parse-deferred delivery ACK (terminal-pty-ack-gate). The scheduler MUST
+   *  invoke it exactly when the chunk's bytes are parsed by xterm OR discarded
+   *  by any drop path. A missed credit permanently shrinks
+   *  main's in-flight window for this PTY (the callback is fire-once, so
+   *  double invocation is safe; omission is not). */
+  ackCredit?: () => void
   onBackgroundBacklogDropped?: () => void
   latencySensitive?: boolean
   forceForegroundRefresh?: boolean
@@ -38,6 +54,7 @@ type QueueChunk = {
   followupForegroundRefresh: boolean
   stripTransientCursorShows: boolean
   onParsed?: TerminalOutputParsedCallback
+  ackCredit?: () => void
 }
 
 type QueuedWrite = {
@@ -47,6 +64,7 @@ type QueuedWrite = {
   followupForegroundRefresh: boolean
   stripTransientCursorShows: boolean
   onParsed?: TerminalOutputParsedCallback
+  ackCredits: (() => void)[]
 }
 
 type QueueEntry = {
@@ -71,12 +89,26 @@ const BACKGROUND_DRAIN_INTERVAL_MS = 16
 const HIGH_PRIORITY_DRAIN_INTERVAL_MS = 4
 const BACKGROUND_CHUNK_CHARS = 16 * 1024
 const MAX_WRITES_PER_DRAIN = 2
-const HIGH_PRIORITY_MAX_WRITES_PER_DRAIN = 2
+// Why 8: with the parse-clock pacer, high-priority ticks fire only after
+// xterm confirms the previous batch parsed, and Chromium clamps chained
+// timers to ~4ms — so per-tick volume (8 x 16KB = 128KB ≈ 1.3ms of parse)
+// sets the sustained ceiling (~30MB/s) while staying far inside
+// DRAIN_TIME_BUDGET_MS. At 2 the ceiling was 8MB/s against a ~100MB/s
+// parser (see pane-terminal-output-scheduler-throughput.bench.test.ts).
+const HIGH_PRIORITY_MAX_WRITES_PER_DRAIN = 8
 const DRAIN_TIME_BUDGET_MS = 8
 const LARGE_BACKLOG_CHARS = 512 * 1024
 const SYNC_FOREGROUND_FLUSH_CHARS = 256 * 1024
-const MAX_BACKGROUND_QUEUE_CHARS = 2 * 1024 * 1024
+// Why mutable: the cap scales with the user's scrollback setting (see
+// terminalOutputBacklogCapChars); the terminal lifecycle configures it when
+// settings are applied. The chunk-count cap stays fixed — it bounds queue
+// bookkeeping, not retained content.
+let maxQueueChars = TERMINAL_OUTPUT_BACKLOG_MIN_CAP_CHARS
 const MAX_BACKGROUND_QUEUE_CHUNKS = 4096
+
+export function configureTerminalOutputBacklogCap(scrollbackRows: unknown): void {
+  maxQueueChars = terminalOutputBacklogCapChars(scrollbackRows)
+}
 const PARSE_SETTLE_TIMEOUT_MS = 250
 const FOREGROUND_COALESCE_DELAY_MS = 1000
 const FOREGROUND_HOLD_SAFETY_DELAY_MS = 250
@@ -88,9 +120,15 @@ const CURSOR_SHOW_SEQUENCE = '\x1b[?25h'
 const CURSOR_HIDE_SEQUENCE = '\x1b[?25l'
 const SYNCHRONIZED_OUTPUT_END_SEQUENCE = '\x1b[?2026l'
 // Why: CAN aborts a partial escape sequence before resetting style and showing
-// the lossy-backlog warning.
+// the lossy-backlog warning. Cap-agnostic wording: the byte limit scales with
+// the scrollback setting.
 const BACKGROUND_BACKLOG_WARNING =
-  '\x18\x1b[0m\r\n[Orca skipped hidden terminal output because the backlog exceeded 2 MB.]\r\n'
+  '\x18\x1b[0m\r\n[Orca skipped hidden terminal output because the backlog grew too large.]\r\n'
+// Why a separate foreground message: a visible pane hitting the cap means the
+// drain could not keep up with a flood (starved renderer) — the output was
+// skipped, not merely produced while hidden.
+const FOREGROUND_BACKLOG_WARNING =
+  '\x18\x1b[0m\r\n[Orca skipped a burst of terminal output because the backlog grew too large.]\r\n'
 
 const queuedByTerminal = new Map<TerminalOutputTarget, QueueEntry>()
 const backlogRecoveryByTerminal = new WeakMap<
@@ -99,6 +137,47 @@ const backlogRecoveryByTerminal = new WeakMap<
 >()
 let drainTimer: ReturnType<typeof setTimeout> | null = null
 let drainTimerDelayMs: number | null = null
+// Why a MessageChannel for zero-delay drains: Chromium clamps nested
+// setTimeout(0) to ~4ms, which stacks a dead gap onto every parse-clocked
+// drain tick under flood (measured: standing queue ~18ms vs VS Code ~7ms).
+// A posted message is still a macrotask — input events and paint are
+// serviced between posts — so the cooperative yield survives without the
+// clamp. Cancellation is by generation: posts carry the generation they
+// were armed with and no-op when it has moved on.
+let drainImmediatePending = false
+let drainImmediateGeneration = 0
+let useMessageChannelDrain = typeof MessageChannel !== 'undefined' && !isVitestEnv()
+let drainChannel: MessageChannel | null = null
+
+function isVitestEnv(): boolean {
+  // Why: vitest fake timers cannot advance MessageChannel macrotasks; the
+  // timer path keeps the existing suites' virtual clock authoritative.
+  return typeof process !== 'undefined' && process.env?.VITEST === 'true'
+}
+
+function getDrainChannel(): MessageChannel {
+  if (drainChannel === null) {
+    drainChannel = new MessageChannel()
+    drainChannel.port1.onmessage = (event: MessageEvent) => {
+      if (event.data !== drainImmediateGeneration || !drainImmediatePending) {
+        return
+      }
+      drainImmediatePending = false
+      drainQueuedOutput()
+    }
+  }
+  return drainChannel
+}
+
+function cancelImmediateDrain(): void {
+  drainImmediateGeneration++
+  drainImmediatePending = false
+}
+
+export function setUseMessageChannelDrainForTesting(value: boolean | null): void {
+  cancelImmediateDrain()
+  useMessageChannelDrain = value ?? (typeof MessageChannel !== 'undefined' && !isVitestEnv())
+}
 const debugEnabled = e2eConfig.exposeStore
 
 // Why the cap is lossy: a hidden/backgrounded Chromium document can throttle
@@ -219,6 +298,10 @@ function exposeDebugApi(): void {
 }
 
 function scheduleDrain(delayMs: number): void {
+  if (drainImmediatePending) {
+    // An immediate drain is already armed — nothing can beat zero delay.
+    return
+  }
   if (drainTimer !== null) {
     if (drainTimerDelayMs !== null && drainTimerDelayMs <= delayMs) {
       return
@@ -232,6 +315,11 @@ function scheduleDrain(delayMs: number): void {
   }
   if (debugEnabled) {
     debugState.scheduledDrainCount++
+  }
+  if (delayMs === 0 && useMessageChannelDrain) {
+    drainImmediatePending = true
+    getDrainChannel().port2.postMessage(drainImmediateGeneration)
+    return
   }
   drainTimer = setTimeout(drainQueuedOutput, delayMs)
   drainTimerDelayMs = delayMs
@@ -485,6 +573,7 @@ function takeQueuedChunk(entry: QueueEntry, limit: number): QueuedWrite | null {
   let followupForegroundRefresh = false
   let stripTransientCursorShows = false
   const parsedCallbacks: TerminalOutputParsedCallback[] = []
+  const ackCredits: (() => void)[] = []
 
   while (remaining > 0 && entry.chunkIndex < entry.chunks.length) {
     const chunk = entry.chunks[entry.chunkIndex]
@@ -503,13 +592,13 @@ function takeQueuedChunk(entry: QueueEntry, limit: number): QueuedWrite | null {
       if (chunk.onParsed) {
         parsedCallbacks.push(chunk.onParsed)
       }
+      if (chunk.ackCredit) {
+        ackCredits.push(chunk.ackCredit)
+      }
       continue
     }
 
     data += chunk.data.slice(0, remaining)
-    if (chunk.onParsed) {
-      parsedCallbacks.push(chunk.onParsed)
-    }
     entry.chunks[entry.chunkIndex] = {
       ...chunk,
       data: chunk.data.slice(remaining)
@@ -537,7 +626,8 @@ function takeQueuedChunk(entry: QueueEntry, limit: number): QueuedWrite | null {
                   callback()
                 }
               }
-            : undefined
+            : undefined,
+        ackCredits
       }
     : null
 }
@@ -566,6 +656,7 @@ function enqueueChunk(
     followupForegroundRefresh?: boolean
     stripTransientCursorShows?: boolean
     onParsed?: TerminalOutputParsedCallback
+    ackCredit?: () => void
   }
 ): void {
   entry.chunks.push({
@@ -574,18 +665,49 @@ function enqueueChunk(
     forceForegroundRefresh: options?.forceForegroundRefresh === true,
     followupForegroundRefresh: options?.followupForegroundRefresh === true,
     stripTransientCursorShows: options?.stripTransientCursorShows === true,
-    onParsed: options?.onParsed
+    onParsed: options?.onParsed,
+    ackCredit: options?.ackCredit
   })
   entry.queuedChars += data.length
   recordQueueDebugPressure()
 }
 
-function replaceBacklogWithWarning(entry: QueueEntry): void {
+// Fires the delivery ACK credits of every not-yet-consumed queued chunk.
+// Every discard path MUST call this before clearing/replacing the queue —
+// a dropped chunk still counts as consumed for main's in-flight window, or
+// the window shrinks permanently and the PTY wedges behind lost credit.
+function fireQueuedAckCredits(entry: QueueEntry): void {
+  for (let index = entry.chunkIndex; index < entry.chunks.length; index += 1) {
+    entry.chunks[index].ackCredit?.()
+  }
+}
+
+function queueCapExceeded(entry: QueueEntry): boolean {
+  return (
+    entry.queuedChars > maxQueueChars ||
+    entry.chunks.length - entry.chunkIndex > MAX_BACKGROUND_QUEUE_CHUNKS
+  )
+}
+
+function replaceBacklogWithWarning(
+  entry: QueueEntry,
+  warning: string = BACKGROUND_BACKLOG_WARNING
+): void {
   const shouldNotify = !entry.backgroundBacklogDropped
+  if (shouldNotify) {
+    // Why: field visibility for cap tuning — how often drops happen and at
+    // what size decides whether the cap is too small (issue #2836 / #7017).
+    recordRendererCrashBreadcrumb('terminal_output_backlog_dropped', {
+      foreground: warning === FOREGROUND_BACKLOG_WARNING,
+      droppedChars: entry.queuedChars,
+      capChars: maxQueueChars
+    })
+  }
   clearForegroundHoldSafety(entry)
+  fireQueuedAckCredits(entry)
   entry.chunks = [
     {
-      data: BACKGROUND_BACKLOG_WARNING,
+      data: warning,
       foreground: false,
       forceForegroundRefresh: false,
       followupForegroundRefresh: false,
@@ -593,7 +715,7 @@ function replaceBacklogWithWarning(entry: QueueEntry): void {
     }
   ]
   entry.chunkIndex = 0
-  entry.queuedChars = BACKGROUND_BACKLOG_WARNING.length
+  entry.queuedChars = warning.length
   entry.backgroundBacklogDropped = true
   entry.highPriority = true
   entry.foregroundHold = false
@@ -637,26 +759,34 @@ function writeBackgroundTerminalChunk(
   data: string,
   onParsed?: TerminalOutputParsedCallback
 ): void {
+  // Why guarded: these callbacks run inside xterm's WriteBuffer loop, where an
+  // escaping throw permanently wedges the terminal (see
+  // xterm-write-callback-guard.ts).
+  const runOnParsed = onParsed
+    ? (): void => runGuardedWriteCompletionStep('background-on-parsed', onParsed)
+    : undefined
   const scrollIntent = captureTerminalWriteScrollIntent(terminal)
   if (!scrollIntent) {
-    if (!onParsed || terminal.write.length < 2) {
+    if (!runOnParsed || terminal.write.length < 2) {
       terminal.write(data)
-      onParsed?.()
+      runOnParsed?.()
       return
     }
-    terminal.write(data, onParsed)
+    terminal.write(data, runOnParsed)
     return
+  }
+  const runScrollIntentThenParsed = (): void => {
+    runGuardedWriteCompletionStep('background-scroll-intent', () =>
+      enforceTerminalWriteScrollIntent(terminal, scrollIntent)
+    )
+    runOnParsed?.()
   }
   if (terminal.write.length < 2) {
     terminal.write(data)
-    enforceTerminalWriteScrollIntent(terminal, scrollIntent)
-    onParsed?.()
+    runScrollIntentThenParsed()
     return
   }
-  terminal.write(data, () => {
-    enforceTerminalWriteScrollIntent(terminal, scrollIntent)
-    onParsed?.()
-  })
+  terminal.write(data, runScrollIntentThenParsed)
 }
 
 function writeForegroundTerminalChunkWithIntent(
@@ -682,6 +812,25 @@ function writeForegroundTerminalChunkWithIntent(
 }
 
 function takeNextDrainableEntry(): QueueEntry | null {
+  let largeBacklogEntry: QueueEntry | null = null
+  for (const entry of queuedByTerminal.values()) {
+    if (!isEntryDrainable(entry)) {
+      continue
+    }
+    // Why: active/foreground output should be chosen first, not just widen the
+    // drain budget while older background terminals keep their insertion order.
+    if (entry.highPriority) {
+      queuedByTerminal.delete(entry.terminal)
+      return entry
+    }
+    if (!largeBacklogEntry && entry.queuedChars > LARGE_BACKLOG_CHARS) {
+      largeBacklogEntry = entry
+    }
+  }
+  if (largeBacklogEntry) {
+    queuedByTerminal.delete(largeBacklogEntry.terminal)
+    return largeBacklogEntry
+  }
   for (const entry of queuedByTerminal.values()) {
     if (!isEntryDrainable(entry)) {
       continue
@@ -692,11 +841,50 @@ function takeNextDrainableEntry(): QueueEntry | null {
   return null
 }
 
+// Why: the parse-completion pacer re-arms a zero-delay drain as soon as xterm
+// reports the previous high-priority batch parsed. Without it, cadence is a
+// fixed 4/16ms nap per <=32KB batch — a ~2-8 MB/s drip against xterm's
+// ~100 MB/s parse rate (measured: scheduler-throughput bench + baseline-jul02).
+// Only high-priority (visible-pane) backlogs are pacer-clocked; background
+// panes keep the fixed cadence that protects the focused terminal.
+function makeParseClockPacer(): () => void {
+  return () => {
+    try {
+      if (queuedByTerminal.size > 0 && hasHighPriorityBacklog()) {
+        scheduleDrain(0)
+      }
+    } catch {
+      // Why: runs inside xterm's write-callback chain; a throw here would
+      // wedge the terminal (see xterm-write-callback-guard.ts).
+    }
+  }
+}
+
+function composeParsedCallback(
+  onParsed: TerminalOutputParsedCallback | undefined,
+  ackCreditsParsed: (() => void) | undefined,
+  pacer: (() => void) | undefined
+): TerminalOutputParsedCallback | undefined {
+  if (!onParsed && !ackCreditsParsed && !pacer) {
+    return undefined
+  }
+  return () => {
+    try {
+      onParsed?.()
+    } finally {
+      ackCreditsParsed?.()
+      pacer?.()
+    }
+  }
+}
+
 function writeQueuedChunk(entry: QueueEntry): 'foreground' | 'background' | null {
   const queuedWrite = takeQueuedChunk(entry, BACKGROUND_CHUNK_CHARS)
   if (!queuedWrite) {
     return null
   }
+  const pacer = entry.highPriority ? makeParseClockPacer() : undefined
+  const ackCreditsParsed = registerTerminalOutputAckCredits(entry.terminal, queuedWrite.ackCredits)
   try {
     entry.beforeWrite?.(queuedWrite.data)
     if (queuedWrite.foreground) {
@@ -708,16 +896,22 @@ function writeQueuedChunk(entry: QueueEntry): 'foreground' | 'background' | null
         {
           forceViewportRefresh: queuedWrite.forceForegroundRefresh,
           followupViewportRefresh: queuedWrite.followupForegroundRefresh,
-          onParsed: queuedWrite.onParsed
+          onParsed: composeParsedCallback(queuedWrite.onParsed, ackCreditsParsed, pacer)
         }
       )
     } else {
-      writeBackgroundTerminalChunk(entry.terminal, queuedWrite.data, queuedWrite.onParsed)
+      writeBackgroundTerminalChunk(
+        entry.terminal,
+        queuedWrite.data,
+        composeParsedCallback(queuedWrite.onParsed, ackCreditsParsed, pacer)
+      )
     }
   } catch {
     // Why: pane.terminal.dispose() can race with a queued late-arriving PTY ping;
     // a write to a disposed terminal throws. Drop the entry rather than crashing
     // the scheduler for other panes still draining.
+    ackCreditsParsed?.()
+    fireQueuedAckCredits(entry)
     entry.chunks.length = 0
     entry.chunkIndex = 0
     entry.queuedChars = 0
@@ -781,8 +975,17 @@ function drainQueuedOutput(): void {
   }
   recordQueueDebugPressure()
   if (queuedByTerminal.size > 0 && hasDrainableBacklog()) {
+    // Why 0 on the channel path: the 4ms high-priority interval existed to
+    // yield between ticks, but a posted message already yields — Chromium
+    // services input and paint between macrotasks. The explicit sleep only
+    // deepened the standing queue (~4ms per 128KB tick). Timer path keeps
+    // the interval so fake-timer tests retain stepwise drain semantics.
     scheduleDrain(
-      hasHighPriorityBacklog() ? HIGH_PRIORITY_DRAIN_INTERVAL_MS : BACKGROUND_DRAIN_INTERVAL_MS
+      hasHighPriorityBacklog()
+        ? useMessageChannelDrain
+          ? 0
+          : HIGH_PRIORITY_DRAIN_INTERVAL_MS
+        : BACKGROUND_DRAIN_INTERVAL_MS
     )
   }
 }
@@ -794,6 +997,9 @@ export function writeTerminalOutput(
 ): void {
   exposeDebugApi()
   if (!data) {
+    // Why: an empty write still consumed its delivery — credit or main's
+    // in-flight window leaks.
+    options.ackCredit?.()
     return
   }
 
@@ -810,11 +1016,19 @@ export function writeTerminalOutput(
         forceForegroundRefresh: options.forceForegroundRefresh,
         followupForegroundRefresh: options.followupForegroundRefresh,
         stripTransientCursorShows: options.stripTransientCursorShows,
-        onParsed: options.onParsed
+        onParsed: options.onParsed,
+        ackCredit: options.ackCredit
       })
       if (debugEnabled) {
         debugState.foregroundWriteCount++
         debugState.deferredForegroundEnqueueCount++
+      }
+      // Why: a visible pane's queue was previously uncapped — a flood the
+      // drain can't keep up with ballooned renderer memory without bound.
+      if (queueCapExceeded(queued)) {
+        replaceBacklogWithWarning(queued, FOREGROUND_BACKLOG_WARNING)
+        scheduleDrain(0)
+        return
       }
       if (options.holdForeground) {
         // Why: synchronized-output start/body chunks contain transient cursor
@@ -877,11 +1091,15 @@ export function writeTerminalOutput(
         forceForegroundRefresh: options.forceForegroundRefresh,
         followupForegroundRefresh: options.followupForegroundRefresh,
         stripTransientCursorShows: options.stripTransientCursorShows,
-        onParsed: options.onParsed
+        onParsed: options.onParsed,
+        ackCredit: options.ackCredit
       })
       if (debugEnabled) {
         debugState.foregroundWriteCount++
         debugState.deferredForegroundEnqueueCount++
+      }
+      if (queueCapExceeded(entry)) {
+        replaceBacklogWithWarning(entry, FOREGROUND_BACKLOG_WARNING)
       }
       // Why: returning from a hidden window can have megabytes queued. Keep
       // byte order, but drain it asynchronously so the first foreground frame
@@ -904,11 +1122,15 @@ export function writeTerminalOutput(
         forceForegroundRefresh: options.forceForegroundRefresh,
         followupForegroundRefresh: options.followupForegroundRefresh,
         stripTransientCursorShows: options.stripTransientCursorShows,
-        onParsed: options.onParsed
+        onParsed: options.onParsed,
+        ackCredit: options.ackCredit
       })
       if (debugEnabled) {
         debugState.foregroundWriteCount++
         debugState.deferredForegroundEnqueueCount++
+      }
+      if (queueCapExceeded(queued)) {
+        replaceBacklogWithWarning(queued, FOREGROUND_BACKLOG_WARNING)
       }
       // Why: visible command floods are throughput work, not keystroke echo.
       // Queue them behind a zero-delay drain so one IPC callback cannot pin
@@ -920,16 +1142,27 @@ export function writeTerminalOutput(
     if (debugEnabled) {
       debugState.foregroundWriteCount++
     }
-    options.beforeWrite?.(data)
-    writeForegroundTerminalChunkWithIntent(
+    const ackCreditsParsed = registerTerminalOutputAckCredits(
       terminal,
-      options.stripTransientCursorShows ? removeTransientCursorShowSequences(data) : data,
-      {
-        forceViewportRefresh: options.forceForegroundRefresh === true,
-        followupViewportRefresh: options.followupForegroundRefresh === true,
-        onParsed: options.onParsed
-      }
+      options.ackCredit ? [options.ackCredit] : []
     )
+    try {
+      options.beforeWrite?.(data)
+      writeForegroundTerminalChunkWithIntent(
+        terminal,
+        options.stripTransientCursorShows ? removeTransientCursorShowSequences(data) : data,
+        {
+          forceViewportRefresh: options.forceForegroundRefresh === true,
+          followupViewportRefresh: options.followupForegroundRefresh === true,
+          onParsed: composeParsedCallback(options.onParsed, ackCreditsParsed, undefined)
+        }
+      )
+    } catch (error) {
+      // beforeWrite can throw before xterm owns the callback; consume the
+      // delivery here. xterm write throws are caught by the foreground writer.
+      ackCreditsParsed?.()
+      throw error
+    }
     return
   }
 
@@ -943,12 +1176,10 @@ export function writeTerminalOutput(
     entry.onBackgroundBacklogDropped = options.onBackgroundBacklogDropped
   }
   enqueueChunk(entry, data, {
-    onParsed: options.onParsed
+    onParsed: options.onParsed,
+    ackCredit: options.ackCredit
   })
-  if (
-    entry.queuedChars > MAX_BACKGROUND_QUEUE_CHARS ||
-    entry.chunks.length - entry.chunkIndex > MAX_BACKGROUND_QUEUE_CHUNKS
-  ) {
+  if (queueCapExceeded(entry)) {
     replaceBacklogWithWarning(entry)
   }
   if (debugEnabled) {
@@ -977,6 +1208,7 @@ export function flushTerminalOutput(
     return
   }
   if (entry.backgroundBacklogDropped && requestRegisteredTerminalBacklogRecovery(terminal)) {
+    fireQueuedAckCredits(entry)
     entry.chunks.length = 0
     entry.chunkIndex = 0
     entry.queuedChars = 0
@@ -994,6 +1226,7 @@ export function flushTerminalOutput(
     if (debugEnabled) {
       debugState.flushWriteCount++
     }
+    const ackCreditsParsed = registerTerminalOutputAckCredits(terminal, queuedWrite.ackCredits)
     try {
       entry.beforeWrite?.(queuedWrite.data)
       if (queuedWrite.foreground) {
@@ -1005,16 +1238,23 @@ export function flushTerminalOutput(
           {
             forceViewportRefresh: queuedWrite.forceForegroundRefresh,
             followupViewportRefresh: queuedWrite.followupForegroundRefresh,
-            onParsed: queuedWrite.onParsed
+            onParsed: composeParsedCallback(queuedWrite.onParsed, ackCreditsParsed, undefined)
           }
         )
       } else {
-        writeBackgroundTerminalChunk(terminal, queuedWrite.data, queuedWrite.onParsed)
+        writeBackgroundTerminalChunk(
+          terminal,
+          queuedWrite.data,
+          composeParsedCallback(queuedWrite.onParsed, ackCreditsParsed, undefined)
+        )
       }
     } catch {
       // Why: pane.terminal.dispose() can race with a queued late-arriving PTY ping;
       // a write to a disposed terminal throws. Drop the entry rather than crashing
-      // the scheduler for other panes still draining.
+      // the scheduler for other panes still draining. Consumed + abandoned
+      // chunks both credit their deliveries.
+      ackCreditsParsed?.()
+      fireQueuedAckCredits(entry)
       clearForegroundHoldSafety(entry)
       clearForegroundCoalesce(entry)
       recordQueueDebugPressure()
@@ -1089,6 +1329,13 @@ export function waitForTerminalOutputParsed(terminal: TerminalOutputTarget): Pro
 
 export function discardTerminalOutput(terminal: TerminalOutputTarget): void {
   exposeDebugApi()
+  const entry = queuedByTerminal.get(terminal)
+  if (entry) {
+    // Why: discarded queued chunks still consumed their deliveries — credit
+    // them or main's in-flight window leaks (see fireQueuedAckCredits).
+    fireQueuedAckCredits(entry)
+  }
+  discardInFlightTerminalOutputAckCredits(terminal)
   queuedByTerminal.delete(terminal)
   discardForegroundRenderSettle(terminal)
   recordQueueDebugPressure()

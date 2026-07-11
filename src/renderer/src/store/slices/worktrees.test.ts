@@ -4101,11 +4101,45 @@ describe('worktree remote runtime mutations', () => {
     expect(result).toEqual({ ok: true })
     expect(mockApi.worktrees.remove).toHaveBeenCalledWith({
       worktreeId: wt.id,
+      hostId: 'ssh:ssh-1',
       force: undefined,
       skipArchive: false
     })
     expect(runtimeEnvironmentCall).not.toHaveBeenCalled()
     expect(store.getState().worktreesByRepo['repo-ssh']).toEqual([])
+  })
+
+  it('fails closed before deleting an exact worktree id owned by multiple hosts', async () => {
+    const store = createTestStore()
+    const worktreeId = 'repo-shared::/same/path'
+    store.setState({
+      repos: [
+        { id: 'repo-shared', path: '/local', displayName: 'Local', badgeColor: '#000', addedAt: 0 },
+        {
+          id: 'repo-shared',
+          path: '/remote',
+          displayName: 'SSH',
+          badgeColor: '#111',
+          addedAt: 1,
+          connectionId: 'ssh-1'
+        }
+      ],
+      worktreesByRepo: {
+        'repo-shared': [
+          makeWorktree({ id: worktreeId, repoId: 'repo-shared', hostId: 'local' }),
+          makeWorktree({ id: worktreeId, repoId: 'repo-shared', hostId: 'ssh:ssh-1' })
+        ]
+      }
+    } as Partial<AppState>)
+
+    const result = await store.getState().removeWorktree(worktreeId)
+
+    expect(result).toEqual({
+      ok: false,
+      error: 'Workspace identity is ambiguous across hosts. Refresh projects and try again.'
+    })
+    expect(mockApi.worktrees.remove).not.toHaveBeenCalled()
+    expect(runtimeEnvironmentCall).not.toHaveBeenCalled()
   })
 
   it('persists worktree metadata through the active remote runtime environment', async () => {

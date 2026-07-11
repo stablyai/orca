@@ -82,6 +82,37 @@ describe('createIpcPtyTransport', () => {
     transport.disconnect()
   })
 
+  it('leaves the transport silently unbound after a failed connect — sendInput drops with no write IPC (frozen-terminal repro)', async () => {
+    const { createIpcPtyTransport } = await import('./pty-transport')
+    const spawn = window.api.pty.spawn as unknown as ReturnType<typeof vi.fn>
+    const write = window.api.pty.write as unknown as ReturnType<typeof vi.fn>
+    const transport = createIpcPtyTransport({})
+
+    // Generic spawn failure (e.g. daemon not ready during a startup restore):
+    // the error IS surfaced via onError, but the transport stays unbound and
+    // every later keystroke is dropped with no further signal.
+    spawn.mockRejectedValueOnce(new Error('daemon socket not ready'))
+    const onError = vi.fn()
+    await transport.connect({ url: '', callbacks: { onError } })
+    expect(onError).toHaveBeenCalled()
+    expect(transport.isConnected()).toBe(false)
+    expect(transport.sendInput('echo hello\r')).toBe(false)
+    await flushPtySideEffects()
+    expect(write).not.toHaveBeenCalled()
+
+    // The tombstoned-session rejection is swallowed with NO callback at all —
+    // a restored pane that hits it renders persisted content while eating
+    // keystrokes with zero user-visible signal (Discord #performance / #2836).
+    spawn.mockRejectedValueOnce(new Error('TerminalKilledError: session xyz was explicitly killed'))
+    const onErrorKilled = vi.fn()
+    await transport.connect({ url: '', callbacks: { onError: onErrorKilled } })
+    expect(onErrorKilled).not.toHaveBeenCalled()
+    expect(transport.isConnected()).toBe(false)
+    expect(transport.sendInput('echo hello\r')).toBe(false)
+    await flushPtySideEffects()
+    expect(write).not.toHaveBeenCalled()
+  })
+
   it('ignores a stale exit for a previous PTY after reconnecting the same transport', async () => {
     const { createIpcPtyTransport } = await import('./pty-transport')
     const spawn = window.api.pty.spawn as unknown as ReturnType<typeof vi.fn>
@@ -291,6 +322,42 @@ describe('createIpcPtyTransport', () => {
 
     expect(onTitleChange).toHaveBeenCalledWith('title-one', 'title-one')
     transport.disconnect()
+  })
+
+  it('runs title side effects even when the data callback does not render the chunk', async () => {
+    const { createIpcPtyTransport } = await import('./pty-transport')
+    const onTitleChange = vi.fn()
+    const onDataCallback = vi.fn()
+    const transport = createIpcPtyTransport({ onTitleChange })
+
+    await transport.connect({ url: '', callbacks: { onData: onDataCallback } })
+
+    onData?.({ id: 'pty-1', data: '\u001b]0;hidden-title\u0007' })
+
+    expect(onDataCallback).toHaveBeenCalledWith('\u001b]0;hidden-title\u0007')
+    expect(onTitleChange).not.toHaveBeenCalled()
+
+    await flushPtySideEffects()
+
+    expect(onTitleChange).toHaveBeenCalledWith('hidden-title', 'hidden-title')
+    transport.disconnect()
+  })
+
+  it('drops the OSC-9999 cross-chunk carry on resetAgentStatusCarry', async () => {
+    // Why: a model-restore marker means bytes were dropped between chunks —
+    // a partial OSC-9999 prefix carried across that gap would swallow the
+    // next live chunk's head as bogus status payload.
+    const { createPtyOutputProcessor } = await import('./pty-transport')
+    const processor = createPtyOutputProcessor({})
+    const callbacks = { onData: vi.fn() }
+
+    processor.processData('\x1b]9999;', callbacks)
+    expect(callbacks.onData).toHaveBeenLastCalledWith('')
+
+    processor.resetAgentStatusCarry()
+    processor.processData('plain output after the gap', callbacks)
+
+    expect(callbacks.onData).toHaveBeenLastCalledWith('plain output after the gap')
   })
 
   it('does not schedule PTY side-effect drains for ordinary output with no working title', async () => {

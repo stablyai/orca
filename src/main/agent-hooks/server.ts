@@ -31,6 +31,7 @@ import {
   parseFormEncodedBody,
   readRequestBody,
   resolveHookSource,
+  preparePendingGrokResultDiscovery,
   warnOnHookEnvOrVersionMismatch,
   writeEndpointFile,
   type AgentHookEventPayload,
@@ -804,7 +805,8 @@ export class AgentHookServer {
     source: AgentHookSource,
     body: unknown,
     original: EnrichedAgentHookEventPayload,
-    attempt = 1
+    attempt = 1,
+    discoveryReady = false
   ): void {
     if (
       original.payload.lastAssistantMessage ||
@@ -814,28 +816,27 @@ export class AgentHookServer {
       return
     }
     this.clearAssistantMessageRetry(original.paneKey)
+    if (!discoveryReady) {
+      const discovery = preparePendingGrokResultDiscovery(source, body)
+      if (discovery) {
+        // Why: slug-group discovery can outlive the bounded transcript-flush
+        // timers. Its completion must drive the first retry deterministically.
+        void discovery
+          .then(() => {
+            if (this.server) {
+              this.applyAssistantMessageRetry(source, body, original, 1, true)
+            }
+          })
+          .catch((err) => {
+            console.error('[agent-hooks] Grok result discovery failed:', err)
+          })
+        return
+      }
+    }
     const timer = setTimeout(() => {
       try {
         this.assistantMessageRetryTimers.delete(original.paneKey)
-        const current = this.state.lastStatusByPaneKey.get(original.paneKey) as
-          | EnrichedAgentHookEventPayload
-          | undefined
-        if (
-          !current ||
-          current.payload.agentType !== original.payload.agentType ||
-          current.payload.prompt !== original.payload.prompt ||
-          current.payload.lastAssistantMessage
-        ) {
-          return
-        }
-        const normalized = normalizeHookPayload(this.state, source, body, this.env)
-        if (!normalized?.payload.lastAssistantMessage) {
-          this.scheduleAssistantMessageRetry(source, body, original, attempt + 1)
-          return
-        }
-        // Why: some agents POST Stop before their transcript/chat-history line
-        // is flushed. Retry from a timer so the hook request returns immediately.
-        this.applyNormalizedStatus(normalized)
+        this.applyAssistantMessageRetry(source, body, original, attempt + 1, discoveryReady)
       } catch (err) {
         console.error('[agent-hooks] assistant message retry failed:', err)
       }
@@ -844,6 +845,35 @@ export class AgentHookServer {
     if (typeof timer.unref === 'function') {
       timer.unref()
     }
+  }
+
+  private applyAssistantMessageRetry(
+    source: AgentHookSource,
+    body: unknown,
+    original: EnrichedAgentHookEventPayload,
+    nextAttempt: number,
+    requireExactOriginal: boolean
+  ): void {
+    const current = this.state.lastStatusByPaneKey.get(original.paneKey) as
+      | EnrichedAgentHookEventPayload
+      | undefined
+    if (
+      !current ||
+      (requireExactOriginal && current !== original) ||
+      current.payload.agentType !== original.payload.agentType ||
+      current.payload.prompt !== original.payload.prompt ||
+      current.payload.lastAssistantMessage
+    ) {
+      return
+    }
+    const normalized = normalizeHookPayload(this.state, source, body, this.env)
+    if (!normalized?.payload.lastAssistantMessage) {
+      this.scheduleAssistantMessageRetry(source, body, original, nextAttempt, requireExactOriginal)
+      return
+    }
+    // Why: some agents POST Stop before their transcript/chat-history line is
+    // flushed. Discovery is event-driven; subsequent content retries stay timed.
+    this.applyNormalizedStatus(normalized)
   }
 
   setPaneKeyAliasPersistenceListener(listener: PaneKeyAliasPersistenceListener | null): void {

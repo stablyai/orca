@@ -127,6 +127,23 @@ describe('computer-use e2e workflow', () => {
     expect(daemonSmokeIndex).toBeGreaterThan(buildIndex)
   })
 
+  it('runs the Windows workspace-close daemon repro after the main build', () => {
+    const workflow = parse(
+      readFileSync(join(projectDir, '.github/workflows/computer-e2e.yml'), 'utf8')
+    )
+    const steps = workflow.jobs['native-smoke'].steps
+    const buildIndex = steps.findIndex((step) => step.run === 'pnpm build:electron-vite')
+    const reproIndex = steps.findIndex(
+      (step) => step.run === 'node config/scripts/windows-daemon-workspace-close-repro.mjs'
+    )
+
+    expect(reproIndex).toBeGreaterThan(buildIndex)
+    expect(steps[reproIndex].if).toBe("runner.os == 'Windows'")
+    expect(workflow.on.pull_request.paths).toContain(
+      'config/scripts/windows-daemon-workspace-close-repro.mjs'
+    )
+  })
+
   it('re-runs the native-smoke job when the daemon bundle graph changes', () => {
     const workflow = parse(
       readFileSync(join(projectDir, '.github/workflows/computer-e2e.yml'), 'utf8')
@@ -136,6 +153,7 @@ describe('computer-use e2e workflow', () => {
     expect(triggerPaths).toEqual(
       expect.arrayContaining([
         'config/scripts/daemon-boot-smoke.mjs',
+        'config/scripts/windows-daemon-workspace-close-repro.mjs',
         'electron.vite.config.ts',
         'build-plugins/**',
         'src/main/daemon/**'

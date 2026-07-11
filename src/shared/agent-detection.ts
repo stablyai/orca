@@ -1,34 +1,35 @@
 /**
- * Compatibility barrel for terminal-title agent detection — used by the main
- * process (stats collection), the renderer (activity indicators, unread
- * badges), and shared siblings.
+ * Compatibility barrel for shared terminal agent-title detection.
  *
- * The implementation was split into domain modules in Phase 3 of the title
- * evidence work: identity/label detection → `terminal-title-agent-type`, status
- * classification → `terminal-title-status`, and display normalization →
- * `terminal-title-display`. This barrel is kept so the existing main/mobile/
- * renderer import paths that reference `agent-detection` stay stable.
+ * Why shared: main and renderer both consume OSC titles for facts, stats, and
+ * UI state. Keep existing imports stable while the implementation stays split
+ * into focused modules that satisfy max-lines. (main's #7612 split into
+ * `terminal-title-*` modules coexists — those files stay on disk for their
+ * direct `resolveTerminalTitleAgentType`/`synthetic-agent-title` consumers.)
  */
 
-export { titleHasAgentName } from './agent-name-token-match'
+export type { AgentStatus } from './agent-title-core'
+export {
+  isClaudeManagementTitle,
+  isCursorNativeAgentTitle,
+  isGeminiTerminalTitle,
+  isPiTerminalTitle,
+  STRONG_IDLE_KEYWORDS_RE,
+  STRONG_WORKING_KEYWORDS_RE
+} from './agent-title-core'
+export { getAgentLabel, isClaudeAgent } from './agent-title-identity'
+export {
+  clearWorkingIndicators,
+  createAgentStatusTracker,
+  detectAgentStatusFromTitle,
+  normalizeTerminalTitle
+} from './agent-title-status'
+
+// Re-export so existing `agent-detection` importers keep working.
+export { AGENT_NAMES, titleHasAgentName } from './agent-name-token-match'
 export {
   extractAllOscTitles,
   extractLastOscTitle,
   MAX_OSC_TITLE_CHARS
 } from './osc-title-extraction'
 export { isShellProcess } from './shell-process-detection'
-export {
-  getAgentLabel,
-  isClaudeAgent,
-  isClaudeManagementTitle,
-  isGeminiTerminalTitle,
-  isPiTerminalTitle
-} from './terminal-title-agent-type'
-export type { AgentStatus } from './terminal-title-status'
-export {
-  createAgentStatusTracker,
-  detectAgentStatusFromTitle,
-  STRONG_IDLE_KEYWORDS_RE,
-  STRONG_WORKING_KEYWORDS_RE
-} from './terminal-title-status'
-export { clearWorkingIndicators, normalizeTerminalTitle } from './terminal-title-display'

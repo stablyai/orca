@@ -126,6 +126,8 @@ import { getRuntimeEnvironmentIdForWorktree } from '@/lib/worktree-runtime-owner
 import { translate } from '@/i18n/i18n'
 import { closeTerminalTab } from '@/components/terminal/terminal-tab-actions'
 import { initialAgentTabViewModeProps } from '@/lib/native-chat-initial-view-mode'
+import { getConnectionIdFromState } from '@/lib/connection-context'
+import { isNativeChatTranscriptLocalReadable } from '@/lib/native-chat-transcript-readability'
 
 function getShortcutPlatform(): NodeJS.Platform {
   if (navigator.userAgent.includes('Mac')) {
@@ -1511,7 +1513,11 @@ export function useIpcEvents(): void {
                       ? {
                           launchAgent,
                           ...initialAgentTabViewModeProps(store.settings, {
-                            agent: launchAgent
+                            agent: launchAgent,
+                            nativeChatTranscriptIsLocalReadable:
+                              isNativeChatTranscriptLocalReadable(
+                                getConnectionIdFromState(store, worktreeId)
+                              )
                           })
                         }
                       : {}),
@@ -1694,7 +1700,10 @@ export function useIpcEvents(): void {
                 launchAgent: data.launchAgent,
                 ...(data.viewMode ? { viewMode: data.viewMode } : {}),
                 ...initialAgentTabViewModeProps(store.settings, {
-                  agent: data.launchAgent
+                  agent: data.launchAgent,
+                  nativeChatTranscriptIsLocalReadable: isNativeChatTranscriptLocalReadable(
+                    getConnectionIdFromState(store, worktreeId)
+                  )
                 }),
                 ...(data.cwd ? { startupCwd: data.cwd } : {})
               }

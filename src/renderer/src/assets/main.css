@@ -2433,7 +2433,7 @@
 }
 
 /* Brief one-shot pulse when the Codex limits popover swaps accounts and the
-   "100% left" label flashes from red to green. */
+   "0% used" label flashes from red to green. */
 @keyframes feature-wall-meta-pulse {
   0% {
     color: rgb(220 38 38);

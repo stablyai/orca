@@ -37,6 +37,7 @@ import { createAgentStatusOscProcessor } from '../../../shared/agent-status-osc'
 import type { RuntimeTerminalCreate } from '../../../shared/runtime-types'
 import { createSshBackgroundStartupDelivery } from '@/lib/ssh-background-startup-delivery'
 import { shouldUseShellReadyStartupDelivery } from '../../../shared/codex-startup-delivery'
+import { isMainTerminalSideEffectAuthorityForPty } from '@/components/terminal-pane/terminal-side-effect-facts-handler'
 
 function runBestEffortCleanup(action: () => void): void {
   try {
@@ -163,6 +164,12 @@ export async function launchAgentBackgroundSession(
     useAppStore.getState().clearAgentLaunchConfig(paneKey)
     onExit?.(exitPtyId, code)
   }
+  // Why: local/SSH status facts already pass through main's authoritative
+  // scanner; remote-runtime bytes still need this renderer-side store write.
+  const mainOwnsAgentStatusWrites = isMainTerminalSideEffectAuthorityForPty({
+    settings: store.settings,
+    runtimeEnvironmentId: runtimeTarget.kind === 'environment' ? runtimeTarget.environmentId : null
+  })
   const processAgentStatus = createAgentStatusOscProcessor()
   const handleData = (data: string): void => {
     data = sshStartupDelivery.handleData(data)
@@ -170,9 +177,11 @@ export async function launchAgentBackgroundSession(
     sshStartupDelivery.schedule(ptyId)
     const processed = processAgentStatus(data)
     for (const payload of processed.payloads) {
-      useAppStore.getState().setAgentStatus(paneKey, payload, undefined, undefined, undefined, {
-        launchToken
-      })
+      if (!mainOwnsAgentStatusWrites) {
+        useAppStore.getState().setAgentStatus(paneKey, payload, undefined, undefined, undefined, {
+          launchToken
+        })
+      }
       onAgentStatus?.(payload)
     }
   }

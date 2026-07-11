@@ -85,7 +85,7 @@ export async function uploadNativeChatAttachmentPaths(
   const pending = toast.loading(
     translate(
       'components.native-chat.composer.uploadingAttachments',
-      'Uploading attachments to remote ({{value0}})…',
+      'Uploading {{value0}} file(s) to remote…',
       { value0: paths.length }
     )
   )

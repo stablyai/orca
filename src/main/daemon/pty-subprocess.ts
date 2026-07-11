@@ -1068,6 +1068,30 @@ export function createPtySubprocess(opts: PtySubprocessOptions): SubprocessHandl
         dead = true
       }
     },
+    // Why pause/resume work on Windows too: node-pty's base Terminal
+    // implements both as socket pause/resume (lib/terminal.js), and
+    // WindowsTerminal wires _socket to the ConPTY conout pipe — pausing stops
+    // conout reads so ConPTY's bounded buffer backpressures the child.
+    pause: () => {
+      if (dead) {
+        return
+      }
+      try {
+        proc.pause()
+      } catch {
+        /* native handle already torn down — flow control is best-effort */
+      }
+    },
+    resume: () => {
+      if (dead) {
+        return
+      }
+      try {
+        proc.resume()
+      } catch {
+        /* native handle already torn down — flow control is best-effort */
+      }
+    },
     clear: () => {
       if (dead) {
         return
@@ -1094,7 +1118,9 @@ export function createPtySubprocess(opts: PtySubprocessOptions): SubprocessHandl
       // has run, proc.pid refers to a recycled pid. Sending SIGKILL would
       // terminate an unrelated process. The fd release is handled by
       // dispose()/destroy(); forceKill is strictly for signalling a live child.
-      if (dead) {
+      // Why: Windows node-pty kill already closes ConPTY; retrying it through
+      // forceKill can double-close the native handle during workspace teardown.
+      if (dead || (process.platform === 'win32' && nodePtyKillIssued)) {
         return
       }
       try {

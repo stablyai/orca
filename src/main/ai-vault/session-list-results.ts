@@ -25,6 +25,29 @@ export function aiVaultScanIssueResult(args: {
   }
 }
 
+// Why: the serving-side scan is host-local and cached once for every caller
+// (desktop parent, web, mobile), so callers that address this host by a runtime
+// id get the cached result restamped on the way out instead of a per-host scan.
+// Mirrors the scanner's stamp recipe so ids stay stable across both paths.
+export function restampAiVaultListResult(
+  result: AiVaultListResult,
+  executionHostId: ExecutionHostId
+): AiVaultListResult {
+  return {
+    sessions: result.sessions.map((session) =>
+      session.executionHostId === executionHostId
+        ? session
+        : {
+            ...session,
+            executionHostId,
+            id: `${executionHostId}:${session.agent}:${session.sessionId}:${session.filePath}`
+          }
+    ),
+    issues: result.issues.map((issue) => ({ ...issue, executionHostId })),
+    scannedAt: result.scannedAt
+  }
+}
+
 export function mergeAiVaultListResults(
   results: readonly AiVaultListResult[],
   rawLimit: number | undefined

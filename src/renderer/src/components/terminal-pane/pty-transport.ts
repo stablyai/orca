@@ -26,7 +26,7 @@ import { drainPreHandlerPtyData, drainPreHandlerPtyExit } from './pty-pre-handle
 import { createPtyInputWriteQueue } from './pty-input-write-queue'
 import type { PtyDataMeta } from './pty-dispatcher'
 import type { IpcPtyTransportOptions, PtyConnectResult, PtyTransport } from './pty-transport-types'
-import { createBellDetector } from './bell-detector'
+import { createBellDetector } from '../../../../shared/terminal-bell-detector'
 import {
   hasTerminalDisplayContent,
   trimIncompleteTerminalControlTail
@@ -79,7 +79,12 @@ type PtyOutputProcessorOptions = Pick<
   | 'onAgentBecameWorking'
   | 'onAgentExited'
   | 'onAgentStatus'
->
+> & {
+  /** Seed for processors that start mid-session (parked-tab byte watchers):
+   *  the pane's last known title, so a working agent that finishes while the
+   *  processor owns the stream still yields a working→idle transition. */
+  initialAgentTitle?: string
+}
 
 type ProcessPtyOutputOptions = {
   replayingBufferedData?: boolean
@@ -105,7 +110,8 @@ export function createPtyOutputProcessor({
   onAgentBecameIdle,
   onAgentBecameWorking,
   onAgentExited,
-  onAgentStatus
+  onAgentStatus,
+  initialAgentTitle
 }: PtyOutputProcessorOptions): {
   processData: (
     data: string,
@@ -117,10 +123,18 @@ export function createPtyOutputProcessor({
   clearStaleTitleTimer: () => void
   flushPendingSideEffects: () => void
   resetBellDetector: () => void
+  resetAgentStatusCarry: () => void
 } {
   const bellDetector = createBellDetector()
-  const processAgentStatusChunk = createAgentStatusOscProcessor()
-  let lastEmittedTitle: string | null = null
+  // Why `let`: a model-restore marker means bytes were dropped between
+  // chunks; a partial OSC-9999 prefix carried across that gap would swallow
+  // the next live chunk's head as bogus payload. Reset recreates the parser.
+  let processAgentStatusChunk = createAgentStatusOscProcessor()
+  // Why: seed both the emitted-title memory (stale-title probe) and the agent
+  // tracker so a mid-session processor behaves as if it had observed the
+  // pane's last live title — full parity with the live path it replaces.
+  let lastEmittedTitle: string | null =
+    initialAgentTitle !== undefined ? normalizeTerminalTitle(initialAgentTitle) : null
   let staleTitleTimer: ReturnType<typeof setTimeout> | null = null
   let sideEffectDrainTimer: ReturnType<typeof setTimeout> | null = null
   let pendingSideEffects: PendingPtySideEffect[] = []
@@ -133,7 +147,8 @@ export function createPtyOutputProcessor({
             onAgentBecameIdle?.(title)
           },
           onAgentBecameWorking,
-          onAgentExited
+          onAgentExited,
+          initialAgentTitle
         )
       : null
 
@@ -444,7 +459,10 @@ export function createPtyOutputProcessor({
     clearAccumulatedState,
     clearStaleTitleTimer,
     flushPendingSideEffects,
-    resetBellDetector: () => bellDetector.reset()
+    resetBellDetector: () => bellDetector.reset(),
+    resetAgentStatusCarry: () => {
+      processAgentStatusChunk = createAgentStatusOscProcessor()
+    }
   }
 }
 
@@ -673,6 +691,10 @@ export function createIpcPtyTransport(opts: IpcPtyTransportOptions = {}): PtyTra
             : {}),
           ...(connectionId ? { connectionId } : {}),
           ...(options.sessionId ? { sessionId: options.sessionId } : {}),
+          // Why: hidden-at-spawn mark must land in main before the PTY's
+          // first byte, so it rides the spawn IPC instead of the pane's
+          // first visibility sync (terminal-query-authority.md).
+          ...(options.initiallyHidden ? { initiallyHidden: true } : {}),
           worktreeId,
           ...(tabId ? { tabId } : {}),
           ...(leafId ? { leafId } : {}),
@@ -957,6 +979,13 @@ export function createIpcPtyTransport(opts: IpcPtyTransportOptions = {}): PtyTra
         ...(cwd ? { cwd } : {}),
         ...(shellOverride ? { shellOverride } : {})
       }
+    },
+
+    resetCrossChunkParserState() {
+      // Why: only the OSC-9999 carry spans the dropped-byte gap a
+      // model-restore marker reports; title/bell trackers re-sync from the
+      // snapshot's side-effect replay and must not be reset here.
+      outputProcessor.resetAgentStatusCarry()
     },
 
     destroy() {

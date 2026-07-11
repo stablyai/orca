@@ -29,6 +29,7 @@
         "sshToggleDescription": "Muestra hosts SSH configurados y hosts remotos de Orca cuando haya alguno disponible.",
         "resourceUsageToggleDescription": "Muestra el Administrador de recursos. Haz clic para ver CPU, memoria, sesiones, controles del servicio en segundo plano y análisis de disco de los espacios de trabajo.",
         "portsToggleDescription": "Muestra los puertos activos de los espacios de trabajo. Haz clic para ver los puertos de cada espacio de trabajo y los puertos externos.",
+        "antigravityToggleDescription": "Muestra el uso de suscripción de Antigravity para el espacio de trabajo activo.",
         "grokToggleDescription": "Muestra el uso de créditos de suscripción de Grok cuando has iniciado sesión con Grok CLI."
       }
     }
@@ -2998,9 +2999,9 @@
             "2483c60695": "···",
             "c35af53b73": "Iniciar sesión",
             "f19a63e7cd": "Inicia sesión para ver el uso",
-            "5c938d39ac": "% semana",
-            "54e8d6bb2d": "% Fable",
-            "d79c3362c4": "% 5h",
+            "5c938d39ac": "semana",
+            "54e8d6bb2d": "Fable",
+            "d79c3362c4": "5h",
             "a79c64f87e": "Fable",
             "8295903d17": "Reinicia los terminales Claude activos antes de continuar conversaciones antiguas después de cambiar.",
             "c98ea88392": "Ninguna otra cuenta",
@@ -3034,6 +3035,8 @@
             "06741a2f3d": "Abrir detalles de uso de MiniMax",
             "3bbf140864": "Uso de MiniMax",
             "remoteServerLabel": "Servidor remoto",
+            "antigravityUsage": "Uso de Antigravity",
+            "antigravityUsageDetails": "Abrir detalles de uso de Antigravity",
             "grokUsageAria": "Abrir detalles de uso de Grok",
             "grokUsageMenu": "Uso de Grok"
           },
@@ -3166,7 +3169,7 @@
             }
           },
           "tooltip": {
-            "cedb7b99e3": "% restante",
+            "cedb7b99e3": "% usado",
             "6d6df77f41": "No hay datos disponibles",
             "7f7f208060": "Mensual",
             "252c096536": "Semanal",
@@ -5305,11 +5308,11 @@
           },
           "nativeChat": {
             "title": "Chat nativo",
-            "description": "Previsualiza la superficie de chat de escritorio para sesiones de terminal de Claude y Codex.",
-            "copy": "Agrega una vista de chat nativa a la que puedes cambiar desde paneles de terminal compatibles de Claude y Codex. Experimental mientras ajustamos la fidelidad de transcripción, streaming y paridad con el terminal.",
+            "description": "Previsualiza la interfaz de chat de escritorio para sesiones de terminal de agentes compatibles.",
+            "copy": "Añade una vista de chat nativo a la que puedes cambiar desde paneles de terminal de agentes compatibles. Es experimental mientras ajustamos la fidelidad de las transcripciones, la transmisión y la paridad con el terminal.",
             "toggleLabel": "Alternar chat nativo",
             "defaultTitle": "Vista predeterminada",
-            "defaultCopy": "Elige cómo se abren las nuevas pestañas de terminal de Claude y Codex.",
+            "defaultCopy": "Elige cómo se abren las nuevas pestañas de terminal de agentes compatibles.",
             "defaultViewLabel": "Vista predeterminada de chat nativo",
             "defaultViewTerminal": "Chat en terminal",
             "defaultViewNative": "Chat nativo"
@@ -6683,9 +6686,9 @@
           "d23b43c5be": "Ubicación del script de configuración",
           "34a0dfa06e": "Dónde se ejecuta el script de configuración del repositorio cuando se crea un nuevo espacio de trabajo.",
           "21f8da2078": "Script de configuración del espacio de trabajo",
-          "6e6480a7df": "Permite que los programas del terminal (tmux, Neovim, fzf, SSH) copien al portapapeles del sistema.",
+          "6e6480a7df": "Permite que los programas del terminal (Grok, tmux, Neovim, fzf, SSH) copien al portapapeles del sistema.",
           "3338dcf8c1": "Permitir escrituras en el portapapeles TUI (OSC 52)",
-          "69c64a479c": "Permite que tmux, Neovim y fzf copien al portapapeles del sistema a través de PTY (incluso por SSH).",
+          "69c64a479c": "Permite que Grok, tmux, Neovim y fzf copien al portapapeles del sistema a través de PTY (incluso por SSH).",
           "4729c645fc": "Copia automáticamente las selecciones del terminal al portapapeles.",
           "902f5dee1f": "Copiar al seleccionar",
           "9129b7e805": "Al pasar el cursor sobre un panel de terminal, se activa sin necesidad de hacer clic.",
@@ -7186,6 +7189,9 @@
             },
             "9a115966d3": "Minimizar a la bandeja al cerrar",
             "4d5b9427b5": "Cuando está activado, cerrar la ventana mantiene Orca en ejecución en la bandeja del sistema en lugar de salir.",
+            "antigravityUsageTitle": "Uso de Antigravity",
+            "antigravityUsageDescription": "Muestra el uso de suscripción de Antigravity en la barra de estado.",
+            "antigravityKeyword": "antigravity",
             "f8e2a1c4b6": "Uso de Grok",
             "e7d1b0f3a5": "Muestra el uso semanal de créditos de Grok desde OAuth de Grok CLI.",
             "d6c0a9e2f4": "grok",
@@ -7474,7 +7480,8 @@
             },
             "nativeChat": {
               "title": "Chat nativo",
-              "description": "Previsualiza la vista de chat de escritorio para sesiones de terminal de Claude y Codex."
+              "description": "Previsualiza la interfaz de chat de escritorio para sesiones de terminal de agentes compatibles.",
+              "grok": "grok"
             }
           }
         },
@@ -10989,11 +10996,11 @@
                 "945865332e": "Iniciando sesión"
               },
               "UsagePage": {
-                "64265cb295": "71% 5h",
+                "64265cb295": "29% usado 5h",
                 "be5a165875": "Cambiar a",
                 "277a9c65a9": "Cuenta de Codex",
                 "4dce5ca3aa": "Se restablece en 4d 3h",
-                "05ce4ecdd3": "62% restante",
+                "05ce4ecdd3": "38% usado",
                 "0470aaed99": "Semanal",
                 "f421abf962": "Sesión",
                 "5e45fb1238": "Actualizado hace 1 min",
@@ -12878,7 +12885,7 @@
         "pastedImageLabel": "Imagen pegada",
         "imagePasteFailed": "Error al pegar imagen.",
         "worktreeNotReady": "Worktree no está listo — intenta de nuevo en un momento.",
-        "uploadingAttachments": "Subiendo archivos al remoto ({{value0}})…"
+        "uploadingAttachments": "Subiendo {{value0}} archivo(s) al remoto…"
       },
       "tool": {
         "running": "Ejecutando…",

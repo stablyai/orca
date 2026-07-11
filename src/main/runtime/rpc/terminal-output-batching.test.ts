@@ -15,6 +15,9 @@ import {
 function stubRuntime(overrides: Partial<OrcaRuntimeService> = {}): OrcaRuntimeService {
   return {
     getRuntimeId: () => 'test-runtime',
+    // Why: subscribe streams register as remote view subscribers for Phase-5
+    // query-authority suppression (terminal-query-authority.md).
+    registerRemoteTerminalViewSubscriber: () => () => {},
     ...overrides
   } as OrcaRuntimeService
 }
@@ -52,7 +55,10 @@ describe('terminal output batching', () => {
         }),
         waitForTerminal: vi.fn(() => new Promise<RuntimeTerminalWait>(() => {}))
       })
-      const dispatcher = new RpcDispatcher({ runtime, methods: TERMINAL_METHODS })
+      const dispatcher = new RpcDispatcher({
+        runtime,
+        methods: TERMINAL_METHODS
+      })
 
       const dispatchPromise = dispatcher.dispatchStreaming(
         makeRequest('terminal.subscribe', {
@@ -78,7 +84,9 @@ describe('terminal output batching', () => {
         .map((msg) => JSON.parse(msg))
         .filter((message) => message.result?.type === 'data')
       expect(dataMessages).toHaveLength(1)
-      expect(dataMessages[0]).toMatchObject({ result: { type: 'data', chunk: 'ab' } })
+      expect(dataMessages[0]).toMatchObject({
+        result: { type: 'data', chunk: 'ab' }
+      })
 
       runtime.cleanupSubscription('terminal-1:desktop-1')
       await dispatchPromise
@@ -123,7 +131,10 @@ describe('terminal output batching', () => {
         sendTerminal: vi.fn().mockResolvedValue({ accepted: true }),
         updateMobileViewport: vi.fn().mockResolvedValue(false)
       })
-      const dispatcher = new RpcDispatcher({ runtime, methods: TERMINAL_METHODS })
+      const dispatcher = new RpcDispatcher({
+        runtime,
+        methods: TERMINAL_METHODS
+      })
 
       const dispatchPromise = dispatcher.dispatchStreaming(
         makeRequest('terminal.subscribe', {
@@ -134,7 +145,9 @@ describe('terminal output batching', () => {
         (msg) => messages.push(msg),
         {
           connectionId: 'conn-1',
-          sendBinary: (bytes) => binaryFrames.push(bytes)
+          sendBinary: (bytes) => {
+            binaryFrames.push(bytes)
+          }
         }
       )
 
@@ -144,7 +157,10 @@ describe('terminal output batching', () => {
       const subscribed = messages
         .map((msg) => JSON.parse(msg))
         .find((msg) => msg.result?.type === 'subscribed')
-      expect(subscribed?.result).toMatchObject({ type: 'subscribed', streamId: expect.any(Number) })
+      expect(subscribed?.result).toMatchObject({
+        type: 'subscribed',
+        streamId: expect.any(Number)
+      })
       await vi.waitFor(() => expect(dataListenerRef.current).toBeDefined())
 
       const emitData = dataListenerRef.current
@@ -206,7 +222,10 @@ describe('terminal output batching', () => {
         sendTerminal: vi.fn().mockResolvedValue({ accepted: true }),
         updateMobileViewport: vi.fn().mockResolvedValue(false)
       })
-      const dispatcher = new RpcDispatcher({ runtime, methods: TERMINAL_METHODS })
+      const dispatcher = new RpcDispatcher({
+        runtime,
+        methods: TERMINAL_METHODS
+      })
 
       const dispatchPromise = dispatcher.dispatchStreaming(
         makeRequest('terminal.subscribe', {
@@ -286,7 +305,10 @@ describe('terminal output batching', () => {
       sendTerminal: vi.fn().mockResolvedValue({ accepted: true }),
       updateMobileViewport: vi.fn().mockResolvedValue(false)
     })
-    const dispatcher = new RpcDispatcher({ runtime, methods: TERMINAL_METHODS })
+    const dispatcher = new RpcDispatcher({
+      runtime,
+      methods: TERMINAL_METHODS
+    })
     const messages: string[] = []
 
     const dispatchPromise = dispatcher.dispatchStreaming(

@@ -31,6 +31,7 @@ export type CreateOrAttachOptions = {
   terminalWindowsPowerShellImplementation?: 'auto' | 'powershell.exe' | 'pwsh.exe'
   shellReadySupported?: boolean
   shellReadyTimeoutMs?: number
+  historySeed?: string
   streamClient: { onData: (data: string) => void; onExit: (code: number) => void }
 }
 
@@ -39,6 +40,7 @@ export type CreateOrAttachResult = {
   snapshot: TerminalSnapshot | null
   pid: number | null
   shellState: ShellReadyState
+  historySeeded?: boolean
   attachToken: symbol
 }
 
@@ -105,6 +107,7 @@ export class TerminalHost {
         snapshot,
         pid: existing.pid,
         shellState: existing.shellState,
+        ...(existing.historySeeded !== undefined ? { historySeeded: existing.historySeeded } : {}),
         attachToken: token
       }
     }
@@ -140,6 +143,7 @@ export class TerminalHost {
       terminalHandle: opts.env?.ORCA_TERMINAL_HANDLE,
       subprocess,
       shellReadySupported: opts.shellReadySupported ?? false,
+      historySeed: opts.historySeed,
       // Why: reap the dead session (dispose emulator + drop from the map) the
       // moment its subprocess exits, instead of retaining it for the daemon's
       // lifetime. Nothing reads a dead session's emulator (getSnapshot/
@@ -180,6 +184,7 @@ export class TerminalHost {
       snapshot: null,
       pid: subprocess.pid,
       shellState: session.shellState,
+      ...(session.historySeeded !== undefined ? { historySeeded: session.historySeeded } : {}),
       attachToken: token
     }
   }
@@ -190,6 +195,21 @@ export class TerminalHost {
 
   resize(sessionId: string, cols: number, rows: number): void {
     this.getAliveSession(sessionId).resize(cols, rows)
+  }
+
+  // Why null-not-throw (unlike write/resize): pause/resume are best-effort
+  // flow-control hints; a session that exited while the notify was in flight
+  // must not surface an error or a synthetic exit.
+  pauseProducer(sessionId: string): void {
+    const session = this.sessions.get(sessionId)
+    if (!session || !session.isAlive) {
+      return
+    }
+    session.pauseProducer()
+  }
+
+  resumeProducer(sessionId: string): void {
+    this.sessions.get(sessionId)?.resumeProducer()
   }
 
   kill(sessionId: string, opts: { immediate?: boolean } = {}): void {
@@ -261,12 +281,22 @@ export class TerminalHost {
   // Why: unlike getAliveSession (which throws), this returns null for dead/missing
   // sessions. Checkpoint is best-effort — a session that exited between the timer
   // firing and the RPC arriving should not throw.
-  getSnapshot(sessionId: string): TerminalSnapshot | null {
+  getSnapshot(sessionId: string, opts: { scrollbackRows?: number } = {}): TerminalSnapshot | null {
     const session = this.sessions.get(sessionId)
     if (!session || !session.isAlive) {
       return null
     }
-    return session.getSnapshot()
+    return session.getSnapshot(opts)
+  }
+
+  // Why: scan-authority handoff seed (null-not-throw like getSnapshot) — the
+  // emulator's dangling incomplete escape at the current stream position.
+  getPartialEscapeTailAnsi(sessionId: string): string {
+    const session = this.sessions.get(sessionId)
+    if (!session || !session.isAlive) {
+      return ''
+    }
+    return session.getPartialEscapeTailAnsi()
   }
 
   // Why: read-only readback of the size the PTY actually applied (null-not-throw

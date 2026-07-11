@@ -408,6 +408,72 @@ describe('DaemonServer', () => {
         vi.useRealTimers()
       }
     })
+
+    it('keeps exit behind final output held by the shallow socket gate', async () => {
+      vi.useFakeTimers()
+      try {
+        let subprocess: ReturnType<typeof createMockSubprocess>
+        server = new DaemonServer({
+          socketPath,
+          tokenPath,
+          spawnSubprocess: () => {
+            subprocess = createMockSubprocess()
+            return subprocess
+          }
+        })
+        const daemon = server as unknown as DaemonServerPrivate
+        const refillCallbacks: (() => void)[] = []
+        const controlSocket = { destroy: vi.fn() } as unknown as Socket
+        const streamSocket = {
+          destroyed: false,
+          destroy: vi.fn(),
+          writableLength: 128 * 1024,
+          write: vi.fn((_line: string, callback?: () => void) => {
+            if (callback) {
+              refillCallbacks.push(callback)
+            }
+            return true
+          })
+        } as unknown as Socket & {
+          write: ReturnType<typeof vi.fn>
+          writableLength: number
+        }
+
+        daemon.clients.set('client-1', {
+          clientId: 'client-1',
+          controlSocket,
+          streamSocket
+        })
+        await daemon.routeRequest('client-1', {
+          id: 'req-1',
+          type: 'createOrAttach',
+          payload: { sessionId: 'test-session', cols: 80, rows: 24 }
+        })
+
+        const finalOutput = 'final-output'.repeat(1024)
+        subprocess!._simulateData(finalOutput)
+        subprocess!._simulateExit(42)
+
+        // Only the refill sentinel may enter the already-deep socket; exit
+        // remains queued behind the final data for this session.
+        expect(refillCallbacks).toHaveLength(1)
+        const beforeRefill = streamSocket.write.mock.calls.map(([line]) => JSON.parse(String(line)))
+        expect(beforeRefill).toHaveLength(1)
+        expect(beforeRefill[0]).toMatchObject({ event: 'data', payload: { data: '' } })
+
+        streamSocket.writableLength = 0
+        refillCallbacks[0]()
+        const delivered = streamSocket.write.mock.calls
+          .map(
+            ([line]) => JSON.parse(String(line)) as { event: string; payload: { data?: string } }
+          )
+          .filter((message) => message.payload.data !== '')
+        expect(delivered.map((message) => message.event)).toEqual(['data', 'exit'])
+        expect(delivered[0]?.payload.data).toBe(finalOutput)
+      } finally {
+        vi.useRealTimers()
+      }
+    })
   })
 
   describe('authentication', () => {

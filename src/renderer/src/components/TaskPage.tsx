@@ -159,6 +159,12 @@ import {
   LinearProjectTable
 } from '@/components/linear-project-view-surfaces'
 import JiraIssueWorkspace from '@/components/JiraIssueWorkspace'
+import { TaskPageJiraIssueList } from '@/components/task-page-jira-issue-list'
+import {
+  getSingleJiraProjectScope,
+  getTaskPageJiraStatusOrderScopeKey,
+  loadTaskPageJiraProjectStatusOrder
+} from '@/components/task-page-jira-status-order'
 import { JiraIcon } from '@/components/icons/JiraIcon'
 import { cn } from '@/lib/utils'
 import {
@@ -277,6 +283,7 @@ import type {
   JiraIssue,
   JiraIssueType,
   JiraProject,
+  JiraProjectStatusOrder,
   LinearIssue,
   LinearProjectDetail,
   LinearProjectSummary,
@@ -3501,6 +3508,9 @@ export default function TaskPage(): React.JSX.Element {
       selectedJiraSiteId
     ]
   )
+  const jiraTaskSourceScopeKey = jiraTaskSourceContext
+    ? getTaskSourceCacheScope(jiraTaskSourceContext)
+    : providerRuntimeContextKey
   const accountBackedTaskSourceHostAvailability = useMemo<TaskSourceHostAvailability[]>(() => {
     if (taskSource !== 'linear' && taskSource !== 'jira') {
       return []
@@ -4575,6 +4585,10 @@ export default function TaskPage(): React.JSX.Element {
   const [appliedJiraSearch, setAppliedJiraSearch] = useState('')
   const [activeJiraPreset, setActiveJiraPreset] = useState<JiraPresetId>('assigned')
   const [jiraRefreshNonce, setJiraRefreshNonce] = useState(0)
+  const [jiraProjectStatusOrder, setJiraProjectStatusOrder] = useState<{
+    order: JiraProjectStatusOrder
+    scopeKey: string
+  } | null>(null)
 
   useEffect(() => {
     if (taskResumeAppliedRef.current || !persistedUIReady || !settings) {
@@ -5595,6 +5609,17 @@ export default function TaskPage(): React.JSX.Element {
       ),
     [jiraIssues, jiraCacheSnapshot.issueCache, jiraCacheSnapshot.searchCache, jiraTaskSourceContext]
   )
+  const displayedJiraProjectScope = useMemo(
+    () => getSingleJiraProjectScope(displayedJiraIssues),
+    [displayedJiraIssues]
+  )
+  const displayedJiraStatusOrderScopeKey = displayedJiraProjectScope
+    ? getTaskPageJiraStatusOrderScopeKey(jiraTaskSourceScopeKey, displayedJiraProjectScope)
+    : null
+  const displayedJiraStatusOrder =
+    jiraProjectStatusOrder && displayedJiraStatusOrderScopeKey === jiraProjectStatusOrder.scopeKey
+      ? jiraProjectStatusOrder.order
+      : null
 
   // New Linear project dialog state
   const [newLinearProjectOpen, setNewLinearProjectOpen] = useState(false)
@@ -7792,6 +7817,26 @@ export default function TaskPage(): React.JSX.Element {
         }
         setJiraIssues(issues)
         setJiraLoading(false)
+        const projectScope = getSingleJiraProjectScope(issues)
+        if (!projectScope) {
+          return
+        }
+        const statusOrderScopeKey = getTaskPageJiraStatusOrderScopeKey(
+          jiraTaskSourceScopeKey,
+          projectScope
+        )
+        void loadTaskPageJiraProjectStatusOrder(
+          jiraTaskSourceContext ?? settings,
+          jiraTaskSourceScopeKey,
+          projectScope
+        ).then((order) => {
+          if (!cancelled) {
+            setJiraProjectStatusOrder({
+              order,
+              scopeKey: statusOrderScopeKey
+            })
+          }
+        })
       })
       .catch((err) => {
         if (cancelled) {
@@ -7815,7 +7860,8 @@ export default function TaskPage(): React.JSX.Element {
     activeJiraPreset,
     jiraRefreshNonce,
     taskResumeApplied,
-    jiraTaskSourceContext
+    jiraTaskSourceContext,
+    jiraTaskSourceScopeKey
   ])
 
   useEffect(() => {
@@ -10026,185 +10072,16 @@ export default function TaskPage(): React.JSX.Element {
                     </div>
                   ) : null}
 
-                  <div className="divide-y divide-border/50">
-                    {displayedJiraIssues.map((issue) => {
-                      const selected = issue.key === selectedJiraIssueKey
-                      const labels = issue.labels.slice(0, 3)
-                      const contextLabel =
-                        selectedJiraSiteId === 'all' && issue.siteName
-                          ? `${issue.siteName} / ${issue.project.key}`
-                          : issue.project.key
-                      return (
-                        <div
-                          key={`${issue.siteId ?? 'site'}:${issue.key}`}
-                          role="button"
-                          tabIndex={0}
-                          aria-current={selected ? 'true' : undefined}
-                          data-current={selected ? 'true' : undefined}
-                          onClick={() => openJiraDetailPage(issue)}
-                          onKeyDown={(e) => {
-                            if (e.target !== e.currentTarget) {
-                              return
-                            }
-                            if (e.key === 'Enter' || e.key === ' ') {
-                              e.preventDefault()
-                              openJiraDetailPage(issue)
-                            }
-                          }}
-                          className={cn(
-                            'group/row grid min-h-12 cursor-pointer grid-cols-[minmax(0,1fr)_auto] items-center gap-3 px-3 py-2 text-left transition hover:bg-accent focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring md:grid-cols-[90px_minmax(0,1fr)_128px_92px_80px] lg:grid-cols-[96px_minmax(0,1.25fr)_132px_120px_136px_96px_64px] xl:grid-cols-[104px_minmax(0,1.45fr)_144px_132px_160px_128px_72px]',
-                            selected && 'bg-accent'
-                          )}
-                        >
-                          <span className="block truncate font-mono text-[12px] text-muted-foreground max-md:!hidden">
-                            {issue.key}
-                          </span>
-
-                          <div className="min-w-0">
-                            <div className="flex min-w-0 items-center gap-2">
-                              <span className="shrink-0 font-mono text-[11px] text-muted-foreground md:hidden">
-                                {issue.key}
-                              </span>
-                              <h3 className="min-w-0 truncate text-[13px] font-medium text-foreground">
-                                {issue.title}
-                              </h3>
-                            </div>
-                            <div className="mt-1 flex min-w-0 items-center gap-1.5 md:!hidden">
-                              <span
-                                className={cn(
-                                  'inline-flex min-w-0 items-center rounded-full border px-1.5 py-0.5 text-[11px] font-medium',
-                                  getJiraStatusTone(issue.status.categoryKey)
-                                )}
-                              >
-                                <span className="truncate">{issue.status.name}</span>
-                              </span>
-                              <span className="shrink-0 text-[11px] text-muted-foreground">
-                                {issue.priority?.name ??
-                                  translate('auto.components.TaskPage.713179dfdc', 'No priority')}
-                              </span>
-                              <span className="min-w-0 truncate text-[11px] text-muted-foreground">
-                                {issue.assignee?.displayName ??
-                                  translate('auto.components.TaskPage.42a9160321', 'Unassigned')}
-                              </span>
-                            </div>
-                            <div className="mt-1 flex min-w-0 items-center gap-1 max-lg:!hidden">
-                              <span className="max-w-[160px] truncate text-[10px] text-muted-foreground xl:!hidden">
-                                {contextLabel}
-                              </span>
-                              {labels.map((label) => (
-                                <span
-                                  key={label}
-                                  className="max-w-[140px] truncate rounded-full border border-border/50 bg-muted/35 px-1.5 py-0.5 text-[10px] text-muted-foreground"
-                                >
-                                  {label}
-                                </span>
-                              ))}
-                              {issue.labels.length > labels.length ? (
-                                <span className="text-[10px] text-muted-foreground">
-                                  +{issue.labels.length - labels.length}
-                                </span>
-                              ) : null}
-                            </div>
-                          </div>
-
-                          <div className="flex min-w-0 max-md:!hidden">
-                            <span
-                              className={cn(
-                                'inline-flex max-w-full items-center rounded-full border px-2 py-0.5 text-[11px] font-medium',
-                                getJiraStatusTone(issue.status.categoryKey)
-                              )}
-                            >
-                              <span className="truncate">{issue.status.name}</span>
-                            </span>
-                          </div>
-
-                          <span className="block truncate text-[12px] text-muted-foreground max-md:!hidden">
-                            {issue.priority?.name ??
-                              translate('auto.components.TaskPage.713179dfdc', 'No priority')}
-                          </span>
-
-                          <div className="flex min-w-0 items-center gap-2 text-[12px] text-muted-foreground max-lg:!hidden">
-                            {issue.assignee?.avatarUrl ? (
-                              <img
-                                src={issue.assignee.avatarUrl}
-                                alt={issue.assignee.displayName}
-                                className="size-5 shrink-0 rounded-full"
-                              />
-                            ) : (
-                              <span className="flex size-5 shrink-0 items-center justify-center rounded-full border border-border/50 bg-muted/40 text-[10px]">
-                                {issue.assignee?.displayName?.slice(0, 1) ?? '-'}
-                              </span>
-                            )}
-                            <span className="truncate">
-                              {issue.assignee?.displayName ??
-                                translate('auto.components.TaskPage.42a9160321', 'Unassigned')}
-                            </span>
-                          </div>
-
-                          <Tooltip>
-                            <TooltipTrigger asChild>
-                              <div className="block min-w-0 truncate text-[12px] text-muted-foreground max-md:!hidden">
-                                {formatRelativeTime(issue.updatedAt)}
-                              </div>
-                            </TooltipTrigger>
-                            <TooltipContent side="bottom" sideOffset={6}>
-                              {new Date(issue.updatedAt).toLocaleString()}
-                            </TooltipContent>
-                          </Tooltip>
-
-                          <div className="flex shrink-0 items-center justify-end gap-1 md:opacity-0 md:transition-opacity md:group-hover/row:opacity-100 md:group-focus-within/row:opacity-100">
-                            <Tooltip>
-                              <TooltipTrigger asChild>
-                                <Button
-                                  variant="ghost"
-                                  size="icon-xs"
-                                  onClick={(event) => {
-                                    event.stopPropagation()
-                                    handleUseJiraItem(issue)
-                                  }}
-                                  aria-label={translate(
-                                    'auto.components.TaskPage.ff90d0abc7',
-                                    'Start workspace from {{value0}}',
-                                    { value0: issue.key }
-                                  )}
-                                >
-                                  <ArrowRight className="size-3.5" />
-                                </Button>
-                              </TooltipTrigger>
-                              <TooltipContent side="bottom" sideOffset={6}>
-                                {translate(
-                                  'auto.components.TaskPage.9497f2787c',
-                                  'Start workspace'
-                                )}
-                              </TooltipContent>
-                            </Tooltip>
-                            <Tooltip>
-                              <TooltipTrigger asChild>
-                                <Button
-                                  variant="ghost"
-                                  size="icon-xs"
-                                  onClick={(event) => {
-                                    event.stopPropagation()
-                                    window.api.shell.openUrl(issue.url)
-                                  }}
-                                  aria-label={translate(
-                                    'auto.components.TaskPage.4ac8ff2275',
-                                    'Open {{value0}} in Jira',
-                                    { value0: issue.key }
-                                  )}
-                                >
-                                  <ExternalLink className="size-3.5" />
-                                </Button>
-                              </TooltipTrigger>
-                              <TooltipContent side="bottom" sideOffset={6}>
-                                {translate('auto.components.TaskPage.eee68073b2', 'Open in Jira')}
-                              </TooltipContent>
-                            </Tooltip>
-                          </div>
-                        </div>
-                      )
-                    })}
-                  </div>
+                  <TaskPageJiraIssueList
+                    formatUpdatedAt={formatRelativeTime}
+                    getStatusTone={getJiraStatusTone}
+                    issues={displayedJiraIssues}
+                    onOpenIssue={openJiraDetailPage}
+                    onStartWorkspace={handleUseJiraItem}
+                    selectedIssue={selectedJiraIssue}
+                    showSiteContext={selectedJiraSiteId === 'all'}
+                    statusOrder={displayedJiraStatusOrder}
+                  />
                 </div>
                 <JiraIssueWorkspace
                   issue={selectedJiraIssue}

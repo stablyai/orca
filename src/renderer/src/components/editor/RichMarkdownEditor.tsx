@@ -346,6 +346,7 @@ export default function RichMarkdownEditor({
     <RichMarkdownEditorSurface
       editor={editor}
       editorFontZoomLevel={editorFontZoomLevel}
+      rootElement={rootRef.current}
       rootRef={setRootElement}
       scrollContainerRef={scrollContainerRef}
       headerSlot={headerSlot}
@@ -380,6 +381,10 @@ export default function RichMarkdownEditor({
       searchState={searchState}
       searchActions={searchActions}
       linkBubbleActions={{
+        dismissLinkBubble: () => {
+          setLinkBubble(null)
+          setIsEditingLink(false)
+        },
         handleLinkSave,
         handleLinkRemove,
         handleLinkEditCancel,

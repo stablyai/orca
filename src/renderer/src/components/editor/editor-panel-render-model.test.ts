@@ -34,12 +34,13 @@ function renderModel(args: {
   isChangesMode?: boolean
   gitStatusByWorktree?: Record<string, GitStatusEntry[]>
 }) {
+  const activeFile = args.activeFile ?? markdownFile()
   return getEditorPanelRenderModel({
-    activeFile: args.activeFile ?? markdownFile(),
+    activeFile,
     fileContents: args.fileContents ?? { '/repo/README.md': textContent() },
     editorDrafts: args.editorDrafts ?? {},
-    gitStatusByWorktree: args.gitStatusByWorktree ?? {},
-    gitBranchChangesByWorktree: {},
+    gitStatusEntries: args.gitStatusByWorktree?.[activeFile.worktreeId],
+    gitBranchEntries: undefined,
     markdownViewMode: args.markdownViewMode ?? {},
     isChangesMode: args.isChangesMode ?? false
   })

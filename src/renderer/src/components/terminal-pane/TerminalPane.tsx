@@ -43,6 +43,7 @@ import {
   serializeTerminalLayout
 } from './layout-serialization'
 import { makePaneKey } from '../../../../shared/stable-pane-id'
+import type { TerminalKittyKeyboardModeTracker } from '../../../../shared/terminal-kitty-keyboard-mode-tracker'
 import {
   applyExpandedLayoutTo,
   cancelPendingPaneSizeRefreshFrames,
@@ -99,6 +100,7 @@ import {
 } from '@/lib/pane-manager/mobile-driver-state'
 import { shouldChatTakeOverMobileSurface } from '../native-chat/native-chat-send-eligibility'
 import { canToggleNativeChat } from '../native-chat/native-chat-availability'
+import { isNativeChatTranscriptLocalReadable } from '@/lib/native-chat-transcript-readability'
 import type { AgentType } from '../../../../shared/agent-status-types'
 import { resolvePaneKeyForManager } from '@/lib/pane-manager/pane-key-resolution'
 import { safeFit } from '@/lib/pane-manager/pane-tree-ops'
@@ -295,6 +297,10 @@ export default function TerminalPane({
   // read this map at dispatch time to pass cwd into splitPane.
   const paneCwdRef = useRef<Map<number, { cwd: string; confirmed: boolean }>>(new Map())
   const paneMode2031Ref = useRef<Map<number, boolean>>(new Map())
+  // Why: per-pane mirror of the kitty keyboard flags negotiated by the pane's
+  // application (fed from PTY output in pty-connection). The keyboard policy
+  // reads it to encode Option chords as kitty CSI-u for opted-in TUIs.
+  const paneKittyKeyboardModesRef = useRef<Map<number, TerminalKittyKeyboardModeTracker>>(new Map())
   const paneLastThemeModeRef = useRef<Map<number, 'dark' | 'light'>>(new Map())
   const panePtyBindingsRef = useRef<Map<number, IDisposable>>(new Map())
   // Why: tracks panes currently replaying recorded PTY bytes into xterm
@@ -316,6 +322,9 @@ export default function TerminalPane({
     }
     return connectionId
   })
+  const nativeChatTranscriptIsLocalReadable = useAppStore((store) =>
+    isNativeChatTranscriptLocalReadable(getConnectionIdFromState(store, worktreeId))
+  )
   // Which machine's SSH store this target belongs to: a remote Orca server's
   // per-environment bucket, or null for this machine's local SSH maps. The
   // explicit-owner resolver never lets a merely focused runtime make a
@@ -719,6 +728,7 @@ export default function TerminalPane({
         launchAgent: detectedAgent ? null : terminalTab?.launchAgent,
         detectedAgent,
         resolvedAgent: detectedAgent ? null : resolveTitleAgentForLeaf(leafId),
+        nativeChatTranscriptIsLocalReadable,
         isChatViewMode: isChatViewForLeaf
       })
     },
@@ -727,6 +737,7 @@ export default function TerminalPane({
       effectiveChatViewMode,
       chatLeafId,
       nativeChatEnabled,
+      nativeChatTranscriptIsLocalReadable,
       terminalTab?.launchAgent,
       resolveTitleAgentForLeaf
     ]
@@ -1466,6 +1477,7 @@ export default function TerminalPane({
     paneTransportsRef,
     paneCwdRef,
     paneMode2031Ref,
+    paneKittyKeyboardModesRef,
     paneLastThemeModeRef,
     panePtyBindingsRef,
     replayingPanesRef,
@@ -1690,6 +1702,7 @@ export default function TerminalPane({
         startup: { command: 'codex' },
         paneTransportsRef,
         paneMode2031Ref,
+        paneKittyKeyboardModesRef,
         paneLastThemeModeRef,
         replayingPanesRef,
         isActiveRef,
@@ -1789,6 +1802,7 @@ export default function TerminalPane({
     searchOpenRef,
     searchStateRef,
     macOptionAsAltRef,
+    paneKittyKeyboardModesRef,
     keybindings,
     terminalShortcutPolicy: settings?.terminalShortcutPolicy ?? 'orca-first'
   })

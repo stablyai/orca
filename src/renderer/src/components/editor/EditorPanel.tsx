@@ -18,6 +18,10 @@ import { useEditorPanelContentState } from './useEditorPanelContentState'
 import { useMarkdownPreviewShortcut } from './useMarkdownPreviewShortcut'
 import { useUntitledFileRename } from './useUntitledFileRename'
 import { extractFrontMatter } from './markdown-frontmatter'
+import {
+  selectEditorPanelGitBranchEntries,
+  selectEditorPanelGitStatusEntries
+} from './editor-panel-git-entry-selector'
 
 function EditorPanelInner({
   activeFileId: activeFileIdProp,
@@ -33,10 +37,17 @@ function EditorPanelInner({
   const activeFileId = activeFileIdProp ?? globalActiveFileId
   const activeViewStateId = activeViewStateIdProp ?? activeFileId
   const activeFile = openFiles.find((f) => f.id === activeFileId) ?? null
+  const activeWorktreeId = activeFile?.worktreeId
   const markFileDirty = useAppStore((s) => s.markFileDirty)
   const pendingEditorReveal = useAppStore((s) => s.pendingEditorReveal)
-  const gitStatusByWorktree = useAppStore((s) => s.gitStatusByWorktree)
-  const gitBranchChangesByWorktree = useAppStore((s) => s.gitBranchChangesByWorktree)
+  // Why: background Git refreshes for other worktrees must not wake every
+  // mounted Monaco/rich editor pane.
+  const gitStatusEntries = useAppStore((s) =>
+    selectEditorPanelGitStatusEntries(s, activeWorktreeId)
+  )
+  const gitBranchEntries = useAppStore((s) =>
+    selectEditorPanelGitBranchEntries(s, activeWorktreeId)
+  )
   const markdownViewMode = useAppStore((s) => s.markdownViewMode)
   const setMarkdownViewMode = useAppStore((s) => s.setMarkdownViewMode)
   const editorViewMode = useAppStore((s) => s.editorViewMode)
@@ -96,7 +107,7 @@ function EditorPanelInner({
     activeFile,
     isChangesMode: requestedChangesMode,
     openFiles,
-    gitStatusByWorktree,
+    gitStatusEntries,
     editorViewMode
   })
   const isChangesMode =
@@ -225,8 +236,8 @@ function EditorPanelInner({
     activeFile,
     fileContents,
     editorDrafts,
-    gitStatusByWorktree,
-    gitBranchChangesByWorktree,
+    gitStatusEntries,
+    gitBranchEntries,
     markdownViewMode,
     isChangesMode
   })

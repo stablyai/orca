@@ -6935,6 +6935,169 @@ describe('registerWorktreeHandlers', () => {
     expect(provider.removeWorktree).toHaveBeenCalledWith('/remote/feature-wt', undefined)
   })
 
+  it('uses the workspace host when duplicate repo ids exist across local and SSH', async () => {
+    const localRepo = {
+      id: 'repo-shared',
+      path: '/local/repo',
+      displayName: 'local',
+      badgeColor: '#000',
+      addedAt: 0,
+      worktreeBaseRef: null
+    }
+    const sshRepo = {
+      ...localRepo,
+      path: '/remote/repo',
+      displayName: 'ssh',
+      connectionId: 'conn-1'
+    }
+    const provider = {
+      listWorktrees: vi.fn().mockResolvedValue([
+        {
+          path: sshRepo.path,
+          head: 'main',
+          branch: 'main',
+          isBare: false,
+          isMainWorktree: true
+        },
+        {
+          path: '/remote/feature-wt',
+          head: 'feature',
+          branch: 'feature',
+          isBare: false,
+          isMainWorktree: false
+        }
+      ]),
+      removeWorktree: vi.fn().mockResolvedValue(undefined),
+      worktreeIsClean: vi.fn().mockResolvedValue({ clean: true })
+    }
+    store.getRepo.mockReturnValue(localRepo)
+    store.getRepos.mockReturnValue([localRepo, sshRepo])
+    getSshGitProviderMock.mockReturnValue(provider)
+
+    await handlers['worktrees:remove'](null, {
+      worktreeId: 'repo-shared::/remote/feature-wt',
+      hostId: 'ssh:conn-1'
+    })
+
+    expect(provider.removeWorktree).toHaveBeenCalledWith('/remote/feature-wt', undefined)
+    expect(removeWorktreeMock).not.toHaveBeenCalled()
+  })
+
+  it('fails closed when duplicate repo ids are deleted without a host', async () => {
+    const localRepo = {
+      id: 'repo-shared',
+      path: '/local/repo',
+      displayName: 'local',
+      badgeColor: '#000',
+      addedAt: 0
+    }
+    const sshRepo = { ...localRepo, path: '/remote/repo', connectionId: 'conn-1' }
+    store.getRepos.mockReturnValue([localRepo, sshRepo])
+
+    await expect(
+      handlers['worktrees:remove'](null, {
+        worktreeId: 'repo-shared::/remote/feature-wt'
+      })
+    ).rejects.toThrow('Repo not found: repo-shared')
+
+    expect(removeWorktreeMock).not.toHaveBeenCalled()
+    expect(getSshGitProviderMock).not.toHaveBeenCalled()
+  })
+
+  it('inspects hooks on the requested host when repo ids collide', async () => {
+    const localRepo = {
+      id: 'repo-shared',
+      path: '/local/repo',
+      displayName: 'local',
+      badgeColor: '#000',
+      addedAt: 0
+    }
+    const sshRepo = { ...localRepo, path: '/remote/repo', connectionId: 'conn-1' }
+    const fsProvider = {
+      readFile: vi.fn().mockResolvedValue({
+        content: 'scripts:\n  archive: remote-cleanup',
+        isBinary: false
+      })
+    }
+    store.getRepos.mockReturnValue([localRepo, sshRepo])
+    getSshFilesystemProviderMock.mockReturnValue(fsProvider)
+    parseOrcaYamlMock.mockReturnValue({ scripts: { archive: 'remote-cleanup' } })
+
+    await expect(
+      handlers['hooks:check'](null, {
+        repoId: 'repo-shared',
+        hostId: 'ssh:conn-1'
+      })
+    ).resolves.toEqual({
+      status: 'ok',
+      hasHooks: true,
+      hooks: { scripts: { archive: 'remote-cleanup' } },
+      mayNeedUpdate: false
+    })
+    expect(fsProvider.readFile).toHaveBeenCalledWith('/remote/repo/orca.yaml')
+    expect(hasHooksFileMock).not.toHaveBeenCalled()
+  })
+
+  it('fails hook inspection closed when duplicate repo ids omit the host', async () => {
+    const localRepo = {
+      id: 'repo-shared',
+      path: '/local/repo',
+      displayName: 'local',
+      badgeColor: '#000',
+      addedAt: 0
+    }
+    const sshRepo = { ...localRepo, path: '/remote/repo', connectionId: 'conn-1' }
+    store.getRepos.mockReturnValue([localRepo, sshRepo])
+
+    await expect(handlers['hooks:check'](null, { repoId: 'repo-shared' })).resolves.toEqual({
+      status: 'error',
+      hasHooks: false,
+      hooks: null,
+      mayNeedUpdate: false
+    })
+    expect(getSshFilesystemProviderMock).not.toHaveBeenCalled()
+    expect(hasHooksFileMock).not.toHaveBeenCalled()
+  })
+
+  it('does not coalesce forget requests for the same id on different hosts', async () => {
+    const localRepo = {
+      id: 'repo-shared',
+      path: '/local/repo',
+      displayName: 'local',
+      badgeColor: '#000',
+      addedAt: 0
+    }
+    const sshRepo = { ...localRepo, path: '/remote/repo', connectionId: 'conn-1' }
+    store.getRepos.mockReturnValue([localRepo, sshRepo])
+    let finishFirst!: () => void
+    killAllProcessesForWorktreeMock
+      .mockImplementationOnce(
+        () =>
+          new Promise((resolve) => {
+            finishFirst = () =>
+              resolve({ runtimeStopped: 0, providerStopped: 0, registryStopped: 0 })
+          })
+      )
+      .mockResolvedValueOnce({ runtimeStopped: 0, providerStopped: 0, registryStopped: 0 })
+
+    const first = handlers['worktrees:forgetLocal'](null, {
+      worktreeId: 'repo-shared::/same/path',
+      hostId: 'local'
+    }) as Promise<unknown>
+    await vi.waitFor(() => expect(killAllProcessesForWorktreeMock).toHaveBeenCalledTimes(1))
+
+    await expect(
+      handlers['worktrees:forgetLocal'](null, {
+        worktreeId: 'repo-shared::/same/path',
+        hostId: 'ssh:conn-1'
+      })
+    ).resolves.toEqual({})
+    expect(killAllProcessesForWorktreeMock).toHaveBeenCalledTimes(2)
+
+    finishFirst()
+    await expect(first).resolves.toEqual({})
+  })
+
   it('preserves the branch on remove for worktrees created from an existing local branch', async () => {
     mockKnownFeatureWorktree()
     removeWorktreeMock.mockResolvedValue(undefined)
@@ -7257,14 +7420,16 @@ describe('registerWorktreeHandlers', () => {
     await mkdir(adminWorktreePath, { recursive: true })
     await writeFile(join(orphanPath, '.git'), `gitdir: ${adminWorktreePath}\n`)
     await writeFile(join(adminWorktreePath, 'gitdir'), `${join(orphanPath, '.git')}\n`)
-    store.getRepo.mockReturnValue({
+    const repo = {
       id: 'repo-1',
       path: repoPath,
       displayName: 'repo',
       badgeColor: '#000',
       addedAt: 0,
       worktreeBaseRef: null
-    })
+    }
+    store.getRepo.mockReturnValue(repo)
+    store.getRepos.mockReturnValue([repo])
     mockKnownFeatureWorktree(join(parentDir, 'real-feature'), repoPath)
     store.getWorktreeMeta.mockReturnValue(makeWorktreeMeta({ createdAt: Date.now() }))
 
@@ -7298,14 +7463,16 @@ describe('registerWorktreeHandlers', () => {
     await mkdir(adminWorktreePath, { recursive: true })
     await writeFile(join(orphanPath, '.git'), `gitdir: ${adminWorktreePath}\n`)
     await writeFile(join(adminWorktreePath, 'gitdir'), `${join(orphanPath, '.git')}\n`)
-    store.getRepo.mockReturnValue({
+    const repo = {
       id: 'repo-1',
       path: repoPath,
       displayName: 'repo',
       badgeColor: '#000',
       addedAt: 0,
       worktreeBaseRef: null
-    })
+    }
+    store.getRepo.mockReturnValue(repo)
+    store.getRepos.mockReturnValue([repo])
     mockKnownFeatureWorktree(join(parentDir, 'real-feature'), repoPath)
     store.getWorktreeMeta.mockReturnValue(
       makeWorktreeMeta({ orcaCreatedAt: Date.now(), orcaCreationSource: 'runtime' })
@@ -7527,6 +7694,7 @@ describe('registerWorktreeHandlers', () => {
     }) as Promise<unknown>
     const second = handlers['worktrees:remove'](null, {
       worktreeId: 'repo-1::/workspace/feature-wt',
+      hostId: 'local',
       force: true
     }) as Promise<unknown>
 
@@ -7564,6 +7732,7 @@ describe('registerWorktreeHandlers', () => {
     await expect(
       handlers['worktrees:remove'](null, {
         worktreeId: 'repo-1::/workspace/feature-wt',
+        hostId: 'local',
         force: true
       })
     ).rejects.toThrow('Worktree deletion already in progress')

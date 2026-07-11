@@ -1,3 +1,4 @@
+import { Terminal } from '@xterm/headless'
 import { describe, expect, it } from 'vitest'
 import { isTerminalQueryReply } from './terminal-query-reply'
 
@@ -34,6 +35,23 @@ describe('isTerminalQueryReply', () => {
     expect(isTerminalQueryReply('\x1bP1$r0m\x1b\\')).toBe(true)
     expect(isTerminalQueryReply('\x1bP0$r\x1b\\')).toBe(true)
     expect(isTerminalQueryReply('\x1bP>|xterm.js(5.6.0)\x1b\\')).toBe(true)
+  })
+
+  it('classifies the fully framed XTVERSION reply emitted by real xterm', async () => {
+    const terminal = new Terminal()
+    const replies: string[] = []
+    const disposable = terminal.onData((data) => replies.push(data))
+    try {
+      await new Promise<void>((resolve) => terminal.write('\x1b[>q', resolve))
+      expect(replies).toHaveLength(1)
+      const reply = replies[0]
+      expect(reply.startsWith('\x1bP>|xterm.js(')).toBe(true)
+      expect(reply.endsWith(')\x1b\\')).toBe(true)
+      expect(isTerminalQueryReply(reply)).toBe(true)
+    } finally {
+      disposable.dispose()
+      terminal.dispose()
+    }
   })
 
   it('documents the accepted modified-F3/CPR collision', () => {

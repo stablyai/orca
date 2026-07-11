@@ -57,6 +57,10 @@ import {
   restorePtyDataHandlersAfterFailedShutdown,
   unregisterPtyDataHandlers
 } from '@/components/terminal-pane/pty-transport'
+// Why: import the store-free registry, not terminal-parked-tab-watchers —
+// that module imports @/store, and a slice importing it would re-enter store
+// creation before this slice finishes evaluating.
+import { disposeParkedTerminalWatchersForPtyIds } from '@/components/terminal-pane/terminal-parked-watcher-registry'
 import {
   normalizeTerminalLayoutSnapshot,
   resolvePtyBoundActiveLeafId
@@ -2281,6 +2285,11 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
     // Removing the data handlers first ensures the final flush is a no-op.
     if (expectedRuntimePtyIds.length === 0) {
       unregisterPtyDataHandlers(shutdownPtyIds)
+      // Why: parked-tab byte watchers observe the same flush through dispatcher
+      // sidecars, which the call above does not touch — dispose them now or a
+      // just-slept/deleted worktree still gets unread marks and delayed
+      // bell/completion OS notifications from its teardown bytes.
+      disposeParkedTerminalWatchersForPtyIds(shutdownPtyIds)
     }
 
     // Why (ordering invariant — DESIGN_DOC §3.3.c): on sleep, capture every

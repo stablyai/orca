@@ -562,7 +562,7 @@ describe('removeWorktree cascade', () => {
       seedStore(store, {
         settings: { ...getDefaultSettings('/tmp'), activeRuntimeEnvironmentId: 'env-1' },
         worktreesByRepo: {
-          repo1: [makeWorktree({ id: worktreeId, repoId: 'repo1' })]
+          repo1: [makeWorktree({ id: worktreeId, repoId: 'repo1', hostId: 'runtime:env-1' })]
         },
         tabsByWorktree: {},
         ptyIdsByTabId: {},

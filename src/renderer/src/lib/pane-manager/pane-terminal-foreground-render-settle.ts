@@ -1,3 +1,5 @@
+import { runGuardedWriteCompletionStep } from './xterm-write-callback-guard'
+
 export type ForegroundTerminalOutputTarget = {
   buffer?: {
     active?: {
@@ -131,18 +133,24 @@ export function writeForegroundTerminalChunk(
   const beforeWriteViewport = options.forceViewportRefresh
     ? captureViewportSnapshot(terminal)
     : null
-  try {
-    terminal.write(data, () => {
-      if (beforeWriteViewport) {
-        settleForegroundRender(terminal, beforeWriteViewport, options)
-      }
-      options.onParsed?.()
-    })
-  } catch {
+  // Why guarded steps: this callback runs inside xterm's WriteBuffer loop,
+  // where an escaping throw permanently wedges the terminal (see
+  // xterm-write-callback-guard.ts). Guard settle and onParsed separately so a
+  // renderer/WebGL failure during settle can't starve the replay-guard release.
+  const runCompletionSteps = (): void => {
     if (beforeWriteViewport) {
-      settleForegroundRender(terminal, beforeWriteViewport, options)
+      runGuardedWriteCompletionStep('foreground-render-settle', () =>
+        settleForegroundRender(terminal, beforeWriteViewport, options)
+      )
     }
-    options.onParsed?.()
+    if (options.onParsed) {
+      runGuardedWriteCompletionStep('foreground-on-parsed', options.onParsed)
+    }
+  }
+  try {
+    terminal.write(data, runCompletionSteps)
+  } catch {
+    runCompletionSteps()
   }
 }
 

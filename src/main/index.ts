@@ -179,6 +179,7 @@ import {
   type SyntheticTitleSpinnerEntry
 } from './synthetic-title-spinner'
 import { shouldSendSyntheticTitleFrame } from './synthetic-title-visibility'
+import { shouldCopySyntheticTitleFrameToPtyData } from './synthetic-title-frame-routing'
 import { isCrashReportReason } from '../shared/crash-reporting'
 import {
   getSyntheticAgentTitleProfile,
@@ -187,6 +188,7 @@ import {
 } from '../shared/synthetic-agent-title'
 import type { AgentStatusState } from '../shared/agent-status-types'
 import { resolveTuiAgentPermissionMode } from '../shared/tui-agent-permissions'
+import type { TerminalSideEffectBatch } from '../shared/terminal-side-effect-facts'
 import { KeybindingService } from './keybindings/keybinding-service'
 import { applyElectronProxySettings } from './network/proxy-settings'
 import { preserveAgentAuthBeforeRestart } from './agent-auth-restart-preservation'
@@ -1504,7 +1506,17 @@ function sendSyntheticTitle(ptyId: string, data: string, options: { force?: bool
   ) {
     return
   }
-  mainWindow.webContents.send('pty:data', { id: ptyId, data })
+  // Why: feed the per-PTY tracker directly (never onPtyData — emulator state,
+  // tails, transcripts, and stats must not see fabricated bytes) so synthetic
+  // titles/BELs reach pty:sideEffect consumers when main holds side-effect
+  // authority.
+  runtime?.ingestSyntheticTitleFrame(ptyId, data)
+  // Why: only the kill-switch-off renderer still byte-parses synthetic frames;
+  // under main authority the copy would just mint phantom ACKs for unmetered
+  // bytes (see synthetic-title-frame-routing.ts).
+  if (shouldCopySyntheticTitleFrameToPtyData(store?.getSettings())) {
+    mainWindow.webContents.send('pty:data', { id: ptyId, data })
+  }
 }
 
 function isSyntheticTitleWindowVisible(): boolean {
@@ -1809,9 +1821,28 @@ app.whenReady().then(async () => {
     onTerminalAgentStatus: (event) => {
       agentHookServer.ingestTerminalStatus(event)
     },
+    // Why: derived title/bell/agent facts ride one batched main→renderer
+    // channel (terminal-side-effect-authority.md). The renderer's authority
+    // kill switch decides whether to consume. Headless serve never creates a
+    // window, so the dep is omitted entirely — the runtime then skips fact
+    // batch construction and the per-chunk bell walk.
+    ...(isServeMode
+      ? {}
+      : {
+          onTerminalSideEffects: (batch: TerminalSideEffectBatch) => {
+            if (mainWindow && !mainWindow.isDestroyed()) {
+              mainWindow.webContents.send('pty:sideEffect', batch)
+            }
+          }
+        }),
     // Why: hook-reported agent status is the same source the desktop sidebar
     // reads. worktree.ps pulls it at query time so mobile shows the same agents.
     getAgentStatusSnapshot: () => agentHookServer.getStatusSnapshot(),
+    // Why: source codex-home here (runs in BOTH window and serve modes) so the
+    // aiVault.listSessions RPC includes managed-Codex sessions on remote/SSH
+    // hosts; the window-only registerCoreHandlers path never runs under serve.
+    getAdditionalAiVaultCodexHomePaths: () =>
+      codexRuntimeHome ? [codexRuntimeHome.getHostRuntimeHomePath()] : [],
     buildAgentHookPtyEnv: () =>
       isAgentStatusHooksEnabled(store?.getSettings()) ? agentHookServer.buildPtyEnv() : {}
   })

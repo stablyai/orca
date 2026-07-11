@@ -1,5 +1,6 @@
 import { WebglAddon } from '@xterm/addon-webgl'
 import type { ManagedPaneInternal } from './pane-manager-types'
+import { recordTerminalWebglDiagnostic } from '../../../../shared/terminal-webgl-diagnostics'
 import { forceRepaintThroughRenderPause } from './terminal-render-pause-release'
 import {
   getTerminalWebglAutoDecision,
@@ -170,6 +171,10 @@ export function attachWebgl(pane: ManagedPaneInternal): void {
         pane.id,
         '— falling back to DOM renderer'
       )
+      // Why: a lost context is the decisive signal for a post-wake garble
+      // report — it means the glyph atlas was wiped (needs a full reset), not
+      // just a missed repaint. Silent breadcrumb; the console.warn stays.
+      recordTerminalWebglDiagnostic('webgl-context-loss', { paneId: pane.id })
       // Why: Chromium starts reclaiming terminal contexts under pressure.
       // Recreating WebGL for this pane can loop context loss and leave xterm
       // visually blank, so keep the pane on the DOM renderer until the next

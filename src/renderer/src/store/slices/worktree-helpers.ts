@@ -20,7 +20,7 @@ import type {
   WorktreeMeta,
   WorkspaceKey
 } from '../../../../shared/types'
-import type { TerminalGitHubPRLink } from '@/lib/terminal-github-pr-link-detector'
+import type { TerminalGitHubPRLink } from '../../../../shared/terminal-github-pr-link-detector'
 import type {
   PendingWorktreeCreation,
   WorktreeCreationPhase

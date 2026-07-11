@@ -11,6 +11,7 @@ on:
       - 'config/scripts/computer-use-smoke.mjs'
       - 'config/scripts/computer-use-smoke.test.mjs'
       - 'config/scripts/daemon-boot-smoke.mjs'
+      - 'config/scripts/windows-daemon-workspace-close-repro.mjs'
       - 'config/scripts/verify-computer-native.mjs'
       # Why: the native-smoke job boots the built terminal daemon under plain
       # Node, so any change to the daemon bundle graph or the main build must
@@ -111,6 +112,11 @@ jobs:
       # the PR when the built daemon cannot start on ubuntu-22.04 / windows.
       - name: Daemon boot smoke
         run: node config/scripts/daemon-boot-smoke.mjs
+      # Why: workspace removal overlaps graceful renderer teardown with the
+      # forced main-process sweep; exercise that exact pair against real ConPTY.
+      - name: Windows daemon workspace-close repro
+        if: runner.os == 'Windows'
+        run: node config/scripts/windows-daemon-workspace-close-repro.mjs
       - if: runner.os == 'Linux'
         env:
           ORCA_COMPUTER_E2E: '1'

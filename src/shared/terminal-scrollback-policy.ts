@@ -28,6 +28,23 @@ export function normalizeDesktopTerminalScrollbackRows(value: unknown): number {
   return clampRows(value, DESKTOP_TERMINAL_SCROLLBACK_ROWS_MIN)
 }
 
+// Why the backlog cap scales with scrollback: pending-output caps exist to
+// bound memory while a starved display catches up, but a user who raised
+// scrollback to 50k rows can retain more history than the flat 2 MB floor —
+// dropping at the floor would discard lines their scrollback would have kept.
+// 120 chars/row ≈ 80-col text plus escape-sequence overhead; the cap is a
+// memory bound, not an exact retention guarantee.
+export const TERMINAL_OUTPUT_BACKLOG_MIN_CAP_CHARS = 2 * 1024 * 1024
+const OUTPUT_BACKLOG_CHARS_PER_SCROLLBACK_ROW = 120
+
+export function terminalOutputBacklogCapChars(scrollbackRows: unknown): number {
+  const rows = normalizeDesktopTerminalScrollbackRows(scrollbackRows)
+  return Math.max(
+    TERMINAL_OUTPUT_BACKLOG_MIN_CAP_CHARS,
+    rows * OUTPUT_BACKLOG_CHARS_PER_SCROLLBACK_ROW
+  )
+}
+
 export function normalizeDesktopTerminalSnapshotRows(value: unknown): number | undefined {
   if (!isFiniteNumber(value)) {
     return undefined

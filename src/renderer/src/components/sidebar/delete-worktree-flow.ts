@@ -1,6 +1,7 @@
 import { toast } from 'sonner'
 import { useAppStore } from '@/store'
 import { getWorktreeMapFromState } from '@/store/selectors'
+import { findRepoForHost } from '@/store/slices/repo-host-identity'
 import { activateAndRevealWorktree } from '@/lib/worktree-activation'
 import { prepareActiveWorktreeFocusAfterDelete } from './active-worktree-focus-after-delete'
 import { showDeleteWorktreeFailureToast } from './delete-worktree-failure-toast'
@@ -262,7 +263,12 @@ export function runWorktreeDelete(worktreeId: string): void {
   // misclassify every SSH repo as a ghost, routing to a forget dialog whose
   // local-only backend is unavailable there. Their normal worktree.rm RPC path
   // already handles the delete against the desktop runtime.
-  const repo = state.repos.find((entry) => entry.id === target.repoId) ?? null
+  const matchingRepos = state.repos.filter((entry) => entry.id === target.repoId)
+  const repo = target.hostId
+    ? findRepoForHost(matchingRepos, target.repoId, { hostId: target.hostId })
+    : matchingRepos.length === 1
+      ? matchingRepos[0]
+      : null
   const sshResolution = isPairedWebClientWindow()
     ? { kind: 'not-ssh' as const }
     : resolveSshWorkspaceForget({
