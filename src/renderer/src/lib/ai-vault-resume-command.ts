@@ -54,19 +54,16 @@ type AiVaultResumeWorktreeArgs = {
 }
 
 export function buildAiVaultResumeCopyCommandForWorktree(args: AiVaultResumeWorktreeArgs): string {
-  return buildAiVaultResumeForWorktree(args, 'copy').command
+  return buildAiVaultResumeForWorktree(args).command
 }
 
 export function buildAiVaultResumeStartupForWorktree(
   args: AiVaultResumeWorktreeArgs
 ): AiVaultResumeStartup {
-  return buildAiVaultResumeForWorktree(args, 'queued')
+  return buildAiVaultResumeForWorktree(args)
 }
 
-function buildAiVaultResumeForWorktree(
-  args: AiVaultResumeWorktreeArgs,
-  delivery: 'copy' | 'queued'
-): AiVaultResumeStartup {
+function buildAiVaultResumeForWorktree(args: AiVaultResumeWorktreeArgs): AiVaultResumeStartup {
   if (
     args.session.executionHostId &&
     args.session.executionHostId !== LOCAL_EXECUTION_HOST_ID &&
@@ -87,15 +84,11 @@ function buildAiVaultResumeForWorktree(
   // Why: local shell settings do not describe a remote Windows host, whose
   // queued resume command uses the remote default PowerShell syntax.
   const liveShell: AgentStartupShell | undefined =
-    delivery === 'queued' && platform === 'win32'
+    platform === 'win32'
       ? isLocalSession
         ? resolveWindowsShellStartupFamily(args.state.settings?.terminalWindowsShell)
         : 'powershell'
       : undefined
-  // Why: copied Windows commands need cmd quoting inside their self-contained
-  // wrapper, independent of the shell configured for queued terminals.
-  const invocationShell: AgentStartupShell | undefined =
-    delivery === 'copy' && platform === 'win32' ? 'cmd' : liveShell
   if (isResumableTuiAgent(args.session.agent)) {
     const startupPlan = buildAgentResumeStartupPlan({
       agent: args.session.agent,
@@ -105,7 +98,7 @@ function buildAiVaultResumeForWorktree(
         ...(args.commandOverride?.trim() ? { [args.session.agent]: args.commandOverride } : {})
       },
       platform,
-      shell: invocationShell,
+      shell: liveShell,
       agentArgs: resolveTuiAgentLaunchArgs(
         args.session.agent,
         args.state.settings?.agentDefaultArgs

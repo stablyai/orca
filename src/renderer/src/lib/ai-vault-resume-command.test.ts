@@ -195,7 +195,7 @@ describe('ai vault resume command runtime', () => {
     )
   })
 
-  it('keeps the cmd wrapper for the copy-to-clipboard command on Windows', () => {
+  it('copies syntax that matches the configured cmd shell', () => {
     const state = makeState({
       worktreePath: 'C:\\Users\\alice\\repo',
       terminalWindowsShell: 'cmd.exe'
@@ -212,7 +212,24 @@ describe('ai vault resume command runtime', () => {
           codexHome: null
         }
       })
-    ).toBe('cmd /d /s /c "cd /d ""C:\\Users\\alice\\repo"" && claude ""--resume"" ""session one"""')
+    ).toBe('cd /d "C:\\Users\\alice\\repo" && claude "--resume" "session one"')
+  })
+
+  it('copies syntax that matches the configured PowerShell shell', () => {
+    const state = makeState({ worktreePath: 'C:\\Users\\alice\\repo' })
+
+    expect(
+      buildAiVaultResumeCopyCommandForWorktree({
+        state,
+        worktreeId: 'repo-1::worktree-1',
+        session: {
+          agent: 'claude',
+          sessionId: 'session one',
+          cwd: 'C:\\Users\\alice\\repo',
+          codexHome: null
+        }
+      })
+    ).toBe("Set-Location -LiteralPath 'C:\\Users\\alice\\repo'; claude '--resume' 'session one'")
   })
 
   it('uses configured agent defaults for resumable session history entries', () => {

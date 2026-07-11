@@ -211,14 +211,14 @@ export function buildAiVaultResumeShellCommand(args: {
   platform: NodeJS.Platform
   codexHome?: string | null
   // Why: the QUEUED resume command is typed into the live tab shell, so its
-  // cd/env prefix must match that shell. The copy-to-clipboard string omits this
-  // and keeps the self-contained `cmd /d /s /c` wrapper (its documented purpose).
+  // cd/env prefix must match that shell. Shell-less persisted commands keep the
+  // legacy self-contained `cmd /d /s /c` wrapper.
   shell?: AgentStartupShell
 }): string {
   const { cwd, platform, codexHome, shell } = args
 
-  // Why: queued commands are parsed by an already-running shell, while copied
-  // commands need a self-contained cmd wrapper that also works from PowerShell.
+  // Why: shell-aware commands are parsed by a known running shell, while
+  // shell-less persisted commands keep the legacy self-contained cmd wrapper.
   if (platform === 'win32' && shell && shell !== 'cmd') {
     return buildResumeShellCommandForShell({
       resumeCommand: args.resumeCommand,

@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest'
 import { buildAiVaultResumeCommand } from './ai-vault-types'
 
 describe('buildAiVaultResumeCommand', () => {
-  it('wraps Windows cwd changes in cmd so PowerShell and cmd launch the same resume command', () => {
+  it('builds a self-contained cmd wrapper when no live shell is known', () => {
     expect(
       buildAiVaultResumeCommand({
         agent: 'codex',
