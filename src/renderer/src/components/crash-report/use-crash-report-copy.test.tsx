@@ -95,6 +95,24 @@ describe('useCrashReportCopy', () => {
     expect(JSON.stringify(copyLatestDiagnostics.mock.calls)).not.toContain('private notes for B')
   })
 
+  it('keeps a returned copy failure visible with its safe reason', async () => {
+    copyLatestDiagnostics.mockResolvedValueOnce({
+      ok: false,
+      error: 'Crash diagnostics are too large to copy safely.'
+    })
+    const { result } = renderHook(() => useCrashReportCopy(report(), 'current notes'))
+
+    await act(async () => result.current())
+
+    expect(toast.error).toHaveBeenCalledWith('Crash report details could not be copied.', {
+      id: CRASH_REPORT_COPY_FAILURE_TOAST_ID,
+      description: 'Crash diagnostics are too large to copy safely.',
+      duration: Infinity,
+      dismissible: true
+    })
+    expect(toast.success).not.toHaveBeenCalled()
+  })
+
   it('shows a safe sticky error toast when copy IPC rejects', async () => {
     copyLatestDiagnostics.mockRejectedValueOnce(
       new Error('renderer destroyed with token=must-not-be-shown')
