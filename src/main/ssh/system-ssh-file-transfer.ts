@@ -14,6 +14,7 @@ import {
 import { spawnSystemSshCommand } from './system-ssh-command'
 import { isWindowsRemoteHost, joinRemotePath, type RemoteHostPlatform } from './ssh-remote-platform'
 import { powerShellCommand, powerShellLiteral } from './ssh-remote-powershell'
+import { buildTeleportSshCommand } from './teleport-ssh-command'
 import {
   awaitWithSystemSshAbort,
   killProcess,
@@ -40,19 +41,27 @@ export async function uploadDirectoryViaSystemSsh(
     return
   }
 
-  const sshPath = findSystemSsh()
-  if (!sshPath) {
-    throw new Error('No system ssh binary found. Install OpenSSH to use system SSH transport.')
-  }
-
   const tarCreate = spawn('tar', ['-czf', '-', '-C', localDir, '.'], {
     stdio: ['ignore', 'pipe', 'pipe'],
     windowsHide: true
   })
   const remoteCommand = `mkdir -p ${shellEscape(remoteDir)} && tar -xzf - -C ${shellEscape(remoteDir)}`
+  const teleportCommand = buildTeleportSshCommand(
+    target,
+    options?.resolvedConfig,
+    wrapRemoteCommandForPosixShell(remoteCommand)
+  )
+  const sshPath = teleportCommand ? teleportCommand.executable : findSystemSsh()
+  if (!sshPath) {
+    killProcess(tarCreate)
+    throw new Error('No system ssh binary found. Install OpenSSH to use system SSH transport.')
+  }
   const sshExtract = spawn(
     sshPath,
-    [...buildSshArgs(target, options), wrapRemoteCommandForPosixShell(remoteCommand)],
+    teleportCommand?.args ?? [
+      ...buildSshArgs(target, options),
+      wrapRemoteCommandForPosixShell(remoteCommand)
+    ],
     {
       stdio: ['pipe', 'pipe', 'pipe'],
       windowsHide: true

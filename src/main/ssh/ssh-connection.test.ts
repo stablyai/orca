@@ -1003,6 +1003,22 @@ describe('SshConnection', () => {
     )
   })
 
+  it('does not apply OpenSSH ControlMaster retries to direct Teleport commands', async () => {
+    getOrcaControlSocketPathMock.mockReturnValue('/tmp/orca-ssh-501/stale-socket')
+    spawnSystemSshCommandMock.mockImplementationOnce(() =>
+      createFailingSystemCommandChannel(255, 'Teleport access denied')
+    )
+    const conn = new SshConnection(
+      createTarget({ proxyCommand: 'tsh ssh root@%h' }),
+      createCallbacks()
+    )
+
+    await expect(conn.connect()).rejects.toThrow('Teleport access denied')
+
+    expect(spawnSystemSshCommandMock).toHaveBeenCalledTimes(1)
+    expect(removeControlSocketPathMock).not.toHaveBeenCalled()
+  })
+
   it('falls back to system SSH when ssh2 hits a local network policy reachability error', async () => {
     connectBehavior = 'error'
     connectErrorMessage = 'connect EHOSTUNREACH 192.168.0.210:22 - Local (192.168.0.2:52112)'

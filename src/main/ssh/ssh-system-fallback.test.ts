@@ -393,6 +393,16 @@ describe('spawnSystemSsh', () => {
     )
   })
 
+  it('spawns tsh directly for Teleport SSH proxy commands', () => {
+    spawnSystemSshCommand(createTarget({ proxyCommand: 'tsh ssh root@%h' }), 'echo hello')
+
+    expect(spawnMock).toHaveBeenCalledWith(
+      'tsh',
+      ['ssh', 'root@example.com', "exec /bin/sh -c 'echo hello'"],
+      expect.objectContaining({ stdio: ['pipe', 'pipe', 'pipe'] })
+    )
+  })
+
   it('spawns port forwards before the ssh destination terminator', () => {
     spawnSystemSshPortForward(createTarget({ configHost: 'fdpass-host' }), 5173, '127.0.0.1', 3000)
 
@@ -420,6 +430,21 @@ describe('spawnSystemSsh', () => {
       SYSTEM_SSH_PATH,
       expect.any(Array),
       expect.objectContaining({ stdio: ['ignore', 'ignore', 'pipe'] })
+    )
+  })
+
+  it('spawns Teleport local forwarding directly through tsh', () => {
+    spawnSystemSshPortForward(
+      createTarget({ proxyCommand: 'tsh ssh root@%h' }),
+      5173,
+      '127.0.0.1',
+      3000
+    )
+
+    expect(spawnMock).toHaveBeenCalledWith(
+      'tsh',
+      ['ssh', '-L', '127.0.0.1:5173:127.0.0.1:3000', 'root@example.com'],
+      expect.objectContaining({ stdio: ['pipe', 'ignore', 'pipe'] })
     )
   })
 
@@ -488,6 +513,29 @@ describe('spawnSystemSsh', () => {
     const standaloneControlIdx = args.indexOf('-S')
     expect(standaloneControlIdx).toBeGreaterThan(-1)
     expect(args[standaloneControlIdx + 1]).toBe('none')
+  })
+
+  it('streams POSIX directory uploads through direct Teleport commands', async () => {
+    const tarCreate = createMockChildProcess()
+    const tshExtract = createMockChildProcess()
+    spawnMock.mockReturnValueOnce(tarCreate).mockReturnValueOnce(tshExtract)
+
+    const upload = uploadDirectoryViaSystemSsh(
+      createTarget({ proxyCommand: 'tsh ssh root@%h' }),
+      '/tmp/local-relay',
+      '/tmp/remote-relay'
+    )
+    tarCreate.stdout.end('archive')
+    tarCreate.emit('close', 0)
+    tshExtract.emit('close', 0)
+
+    await expect(upload).resolves.toBeUndefined()
+    expect(spawnMock.mock.calls[1]?.[0]).toBe('tsh')
+    expect(spawnMock.mock.calls[1]?.[1]).toEqual([
+      'ssh',
+      'root@example.com',
+      expect.stringContaining('tar -xzf -')
+    ])
   })
 
   it('writes files to Windows system SSH targets with PowerShell stdin bytes', async () => {
@@ -612,6 +660,18 @@ describe('spawnSystemSsh', () => {
     expect(result.pid).toBe(12345)
     expect(typeof result.kill).toBe('function')
     expect(typeof result.onExit).toBe('function')
+  })
+
+  it('settles direct Teleport process startup when tsh is missing', () => {
+    const proc = createEventedProcess()
+    spawnMock.mockReturnValue(proc)
+    const result = spawnSystemSsh(createTarget({ proxyCommand: 'tsh ssh root@%h' }))
+    const onExit = vi.fn()
+
+    result.onExit(onExit)
+    proc.emit('error', new Error('spawn tsh ENOENT'))
+
+    expect(onExit).toHaveBeenCalledWith(null)
   })
 })
 

@@ -5,6 +5,7 @@ import type { SshTarget } from '../../shared/ssh-types'
 import { wrapRemoteCommandForPosixShell, type SshExecOptions } from './ssh-connection-utils'
 import { buildSshArgs, type SystemSshBuildArgsOptions } from './system-ssh-args'
 import { findSystemSsh } from './system-ssh-binary'
+import { buildTeleportSshCommand } from './teleport-ssh-command'
 
 export type SystemSshProcess = {
   stdin: NodeJS.WritableStream
@@ -32,6 +33,11 @@ export function spawnSystemSsh(
   target: SshTarget,
   options?: SystemSshBuildArgsOptions
 ): SystemSshProcess {
+  const teleportCommand = buildTeleportSshCommand(target, options?.resolvedConfig)
+  if (teleportCommand) {
+    return wrapChildProcess(spawnSshProcess(teleportCommand.executable, teleportCommand.args))
+  }
+
   const sshPath = findSystemSsh()
   if (!sshPath) {
     throw new Error(
@@ -40,10 +46,7 @@ export function spawnSystemSsh(
   }
 
   const args = buildSshArgs(target, options)
-  const proc = spawn(sshPath, args, {
-    stdio: ['pipe', 'pipe', 'pipe'],
-    windowsHide: true
-  })
+  const proc = spawnSshProcess(sshPath, args)
 
   return wrapChildProcess(proc)
 }
@@ -53,6 +56,13 @@ export function spawnSystemSshCommand(
   command: string,
   options?: SystemSshCommandOptions
 ): SystemSshCommandChannel {
+  const remoteCommand =
+    options?.wrapCommand === false ? command : wrapRemoteCommandForPosixShell(command)
+  const teleportCommand = buildTeleportSshCommand(target, options?.resolvedConfig, remoteCommand)
+  if (teleportCommand) {
+    return wrapCommandProcess(spawnSshProcess(teleportCommand.executable, teleportCommand.args))
+  }
+
   const sshPath = findSystemSsh()
   if (!sshPath) {
     throw new Error(
@@ -60,13 +70,15 @@ export function spawnSystemSshCommand(
     )
   }
 
-  const remoteCommand =
-    options?.wrapCommand === false ? command : wrapRemoteCommandForPosixShell(command)
-  const proc = spawn(sshPath, [...buildSshArgs(target, options), remoteCommand], {
+  const proc = spawnSshProcess(sshPath, [...buildSshArgs(target, options), remoteCommand])
+  return wrapCommandProcess(proc)
+}
+
+function spawnSshProcess(executable: string, args: string[]): ChildProcess {
+  return spawn(executable, args, {
     stdio: ['pipe', 'pipe', 'pipe'],
     windowsHide: true
   })
-  return wrapCommandProcess(proc)
 }
 
 function wrapChildProcess(proc: ChildProcess): SystemSshProcess {
@@ -83,7 +95,18 @@ function wrapChildProcess(proc: ChildProcess): SystemSshProcess {
       }
     },
     onExit: (cb) => {
-      proc.on('exit', (code) => cb(code))
+      const onError = (): void => {
+        proc.off('exit', onExit)
+        cb(null)
+      }
+      const onExit = (code: number | null): void => {
+        proc.off('error', onError)
+        cb(code)
+      }
+      // Why: direct tsh paths are resolved by spawn rather than findSystemSsh;
+      // a missing executable must settle startup instead of emitting unhandled.
+      proc.once('error', onError)
+      proc.once('exit', onExit)
     }
   }
 }

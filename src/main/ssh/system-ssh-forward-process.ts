@@ -2,6 +2,7 @@ import { spawn, type ChildProcess } from 'node:child_process'
 import { connect, createServer } from 'node:net'
 import { buildSshArgs, findSystemSsh, type SystemSshBuildArgsOptions } from './ssh-system-fallback'
 import type { SshTarget } from '../../shared/ssh-types'
+import { buildTeleportSshPortForwardCommand } from './teleport-ssh-command'
 
 export const SYSTEM_SSH_FORWARD_STARTUP_GRACE_MS = 750
 export const SYSTEM_SSH_FORWARD_LISTENER_PROBE_INTERVAL_MS = 50
@@ -21,6 +22,22 @@ export function spawnSystemSshPortForward(
   remotePort: number,
   options?: SystemSshBuildArgsOptions
 ): ChildProcess {
+  const teleportCommand = buildTeleportSshPortForwardCommand(
+    target,
+    localPort,
+    remoteHost,
+    remotePort,
+    options?.resolvedConfig
+  )
+  if (teleportCommand) {
+    // Why: tsh has no no-session mode equivalent to `ssh -N`; an open stdin
+    // keeps its non-TTY session and local forward alive until Orca closes it.
+    return spawn(teleportCommand.executable, teleportCommand.args, {
+      stdio: ['pipe', 'ignore', 'pipe'],
+      windowsHide: true
+    })
+  }
+
   const sshPath = findSystemSsh()
   if (!sshPath) {
     throw new Error(

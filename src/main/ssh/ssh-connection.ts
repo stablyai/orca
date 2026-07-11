@@ -36,6 +36,7 @@ import {
 } from './ssh-connection-utils'
 import type { RemoteHostPlatform } from './ssh-remote-platform'
 import { isSshSessionLimitError } from './ssh-session-limit-error'
+import { buildTeleportSshCommand } from './teleport-ssh-command'
 export type { SshConnectionCallbacks } from './ssh-connection-utils'
 
 type SshRemoteFileOptions = {
@@ -102,6 +103,9 @@ export class SshConnection {
   canRunConcurrentExecCommands(): boolean {
     if (!this.useSystemSshTransport) {
       return true
+    }
+    if (buildTeleportSshCommand(this.target, this.systemSshResolvedConfig)) {
+      return false
     }
     return (
       getOrcaControlSocketPath(this.target, {
@@ -690,9 +694,11 @@ export class SshConnection {
   ): Promise<void> {
     this.systemSshResolvedConfig = cloneResolvedConfig(resolved)
     this.systemSshControlMasterDisabledForSession = false
-    const controlPath = getOrcaControlSocketPath(this.target, {
-      resolvedConfig: this.systemSshResolvedConfig
-    })
+    const controlPath = buildTeleportSshCommand(this.target, this.systemSshResolvedConfig)
+      ? null
+      : getOrcaControlSocketPath(this.target, {
+          resolvedConfig: this.systemSshResolvedConfig
+        })
     try {
       await this.doSystemSshProbe(connectGeneration)
     } catch (err) {
@@ -1063,9 +1069,11 @@ export class SshConnection {
         throw this.createCancelledConnectAttemptError()
       }
       this.systemSshResolvedConfig = cloneResolvedConfig(resolved)
-      const controlPath = getOrcaControlSocketPath(this.target, {
-        resolvedConfig: this.systemSshResolvedConfig
-      })
+      const controlPath = buildTeleportSshCommand(this.target, this.systemSshResolvedConfig)
+        ? null
+        : getOrcaControlSocketPath(this.target, {
+            resolvedConfig: this.systemSshResolvedConfig
+          })
       const proc = await this.spawnSystemSshWithControlMasterRetry(controlPath, connectGeneration)
       if (!this.isCurrentConnectAttempt(connectGeneration)) {
         if (this.systemSsh === proc) {

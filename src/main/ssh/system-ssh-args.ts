@@ -148,7 +148,7 @@ function shouldUseOpenSshConfigHost(target: SshTarget): boolean {
   return isOpenSshConfigBackedTarget(target)
 }
 
-function isOpenSshConfigBackedTarget(target: SshTarget): boolean {
+export function isOpenSshConfigBackedTarget(target: SshTarget): boolean {
   if (target.source === 'ssh-config') {
     return true
   }
