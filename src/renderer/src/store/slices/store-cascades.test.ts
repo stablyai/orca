@@ -1,5 +1,5 @@
 /* eslint-disable max-lines */
-import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { afterEach, describe, it, expect, vi, beforeEach } from 'vitest'
 import { buildWorktreeComparator } from '@/components/sidebar/smart-sort'
 import type * as AgentStatusModule from '@/lib/agent-status'
 import { getDefaultSettings } from '../../../../shared/constants'
@@ -84,6 +84,13 @@ import {
   loadSessionCommitDrafts,
   saveSessionCommitDrafts
 } from '@/lib/source-control-commit-draft-session'
+import {
+  _clearTerminalScrollIntentKeysForTest,
+  _getTerminalScrollIntentKeyCountForTest,
+  _getTerminalScrollIntentSnapshotCountForTest,
+  bindTerminalScrollIntentKey,
+  writeTerminalScrollIntentKey
+} from '@/lib/pane-manager/terminal-scroll-intent-key-store'
 
 // ─── Tests ────────────────────────────────────────────────────────────
 
@@ -767,6 +774,109 @@ describe('removeWorktree cascade', () => {
 
     expect(result).toEqual({ ok: true })
     expect(callOrder).toEqual(['remove', 'kill'])
+  })
+})
+
+describe('terminal scroll intent store retirement', () => {
+  afterEach(() => {
+    _clearTerminalScrollIntentKeysForTest()
+  })
+
+  it('retires scroll intent when a cold-parked tab closes without a pane manager', () => {
+    const store = createTestStore()
+    const wt = 'repo1::/path/wt1'
+    const tabId = 'parked-tab'
+    const leafId = '11111111-1111-4111-8111-111111111111'
+    const parkedTerminal = {}
+    bindTerminalScrollIntentKey(parkedTerminal, leafId)
+    writeTerminalScrollIntentKey(parkedTerminal, {
+      kind: 'pinnedViewport',
+      bufferType: 'normal',
+      viewportY: 42,
+      baseY: 100
+    })
+    seedStore(store, {
+      tabsByWorktree: { [wt]: [makeTab({ id: tabId, worktreeId: wt })] },
+      terminalLayoutsByTabId: {
+        [tabId]: {
+          root: null,
+          activeLeafId: leafId,
+          expandedLeafId: null,
+          ptyIdsByLeafId: { [leafId]: 'parked-pty' }
+        }
+      }
+    })
+
+    store.getState().closeTab(tabId)
+
+    expect(_getTerminalScrollIntentKeyCountForTest()).toBe(0)
+    expect(_getTerminalScrollIntentSnapshotCountForTest()).toBe(0)
+  })
+
+  it('retires scroll intent when bulk worktree purge removes parked tabs', () => {
+    const store = createTestStore()
+    const wt = 'repo1::/path/wt1'
+    const tabId = 'parked-tab'
+    const leafId = '22222222-2222-4222-8222-222222222222'
+    const parkedTerminal = {}
+    bindTerminalScrollIntentKey(parkedTerminal, leafId)
+    writeTerminalScrollIntentKey(parkedTerminal, {
+      kind: 'followOutput',
+      bufferType: 'normal',
+      viewportY: 100,
+      baseY: 100
+    })
+    seedStore(store, {
+      tabsByWorktree: { [wt]: [makeTab({ id: tabId, worktreeId: wt })] },
+      terminalLayoutsByTabId: {
+        [tabId]: {
+          root: { type: 'leaf', leafId },
+          activeLeafId: leafId,
+          expandedLeafId: null
+        }
+      }
+    })
+
+    store.getState().purgeWorktreeTerminalState([wt])
+
+    expect(_getTerminalScrollIntentKeyCountForTest()).toBe(0)
+    expect(_getTerminalScrollIntentSnapshotCountForTest()).toBe(0)
+  })
+
+  it('retires PTY-only rootless intent before worktree shutdown scrubs its leaf id', async () => {
+    const store = createTestStore()
+    const wt = 'repo1::/path/wt1'
+    const tabId = 'parked-tab'
+    const leafId = '33333333-3333-4333-8333-333333333333'
+    const parkedTerminal = {}
+    bindTerminalScrollIntentKey(parkedTerminal, leafId)
+    writeTerminalScrollIntentKey(parkedTerminal, {
+      kind: 'pinnedViewport',
+      bufferType: 'normal',
+      viewportY: 42,
+      baseY: 100
+    })
+    mockApi.worktrees.remove.mockResolvedValueOnce(undefined)
+    seedStore(store, {
+      worktreesByRepo: {
+        repo1: [makeWorktree({ id: wt, repoId: 'repo1', path: '/path/wt1' })]
+      },
+      tabsByWorktree: { [wt]: [makeTab({ id: tabId, worktreeId: wt })] },
+      ptyIdsByTabId: { [tabId]: ['parked-pty'] },
+      terminalLayoutsByTabId: {
+        [tabId]: {
+          root: null,
+          activeLeafId: null,
+          expandedLeafId: null,
+          ptyIdsByLeafId: { [leafId]: 'parked-pty' }
+        }
+      }
+    })
+
+    await store.getState().removeWorktree(wt)
+
+    expect(_getTerminalScrollIntentKeyCountForTest()).toBe(0)
+    expect(_getTerminalScrollIntentSnapshotCountForTest()).toBe(0)
   })
 })
 

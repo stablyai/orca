@@ -20,6 +20,7 @@ import { disposeWebgl } from './pane-webgl-renderer'
 import { clearPendingSplitScrollRestore, scheduleSplitScrollRestore } from './pane-split-scroll'
 import { reattachWebglIfNeeded } from './pane-webgl-reattach'
 import { toPublicPane } from './pane-public-view'
+import { clearTerminalScrollIntentKey } from './terminal-scroll-intent'
 
 type MovedPaneSplitState = {
   pane: ManagedPaneInternal
@@ -174,6 +175,11 @@ function teardownManagedPane(args: CloseManagedPaneArgs, reason: 'close' | 'deta
   const closedLeafId = pane.leafId
   args.releasePaneIdentity(args.paneId)
   removePaneContainer(args, pane)
+  if (reason === 'close') {
+    // Why: detach remounts the same leaf in a new tab, but close retires the
+    // durable leaf id and its keyed scroll-intent snapshot.
+    clearTerminalScrollIntentKey(closedLeafId)
+  }
   const nextActivePaneId = activateReplacementPane(args)
   applyPaneOpacity(args.panes.values(), nextActivePaneId, args.styleOptions)
   for (const p of args.panes.values()) {

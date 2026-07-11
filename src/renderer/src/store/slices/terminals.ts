@@ -69,6 +69,7 @@ import {
   normalizeTerminalLayoutSnapshot,
   resolvePtyBoundActiveLeafId
 } from '@/components/terminal-pane/terminal-layout-leaf-ids'
+import { retireTerminalScrollIntentsForTabs } from '@/components/terminal-pane/terminal-scroll-intent-tab-retirement'
 import { shutdownBufferCaptures } from '@/components/terminal-pane/shutdown-buffer-captures'
 import { callRuntimeRpc } from '@/runtime/runtime-rpc-client'
 import { parseRemoteRuntimePtyId } from '@/runtime/runtime-terminal-stream'
@@ -926,8 +927,10 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
 
   createTab: (worktreeId, targetGroupId, shellOverride, options) => {
     let tab!: TerminalTab
+    const stateBeforeCreate = get()
+    const orphanTerminalIds = getOrphanTerminalIds(stateBeforeCreate, worktreeId)
+    retireTerminalScrollIntentsForTabs(stateBeforeCreate.terminalLayoutsByTabId, orphanTerminalIds)
     set((s) => {
-      const orphanTerminalIds = getOrphanTerminalIds(s, worktreeId)
       const orphanCleanupPatch = buildOrphanTerminalCleanupPatch(s, worktreeId, orphanTerminalIds)
       const existing = (s.tabsByWorktree[worktreeId] ?? []).filter(
         (entry) => !orphanTerminalIds.has(entry.id)
@@ -1188,6 +1191,7 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
   },
 
   closeTab: (tabId, opts) => {
+    retireTerminalScrollIntentsForTabs(get().terminalLayoutsByTabId, [tabId])
     set((s) => {
       const next = { ...s.tabsByWorktree }
       let closingPtyId: string | null = null
@@ -2704,6 +2708,9 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
   },
 
   setTabLayout: (tabId, layout) => {
+    if (!layout) {
+      retireTerminalScrollIntentsForTabs(get().terminalLayoutsByTabId, [tabId])
+    }
     set((s) => {
       const next = { ...s.terminalLayoutsByTabId }
       if (layout) {

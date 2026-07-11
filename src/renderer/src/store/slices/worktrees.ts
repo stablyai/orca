@@ -49,6 +49,7 @@ import { markInputQuietSchedulerInput, scheduleAfterInputQuiet } from '@/lib/inp
 import { clearSessionCommitDraftForWorktree } from '@/lib/source-control-commit-draft-session'
 import { showLocalBaseRefUpdateSuggestionToast } from '@/components/sidebar/local-base-ref-suggestion-toast'
 import { showPreservedBranchToast } from '@/components/sidebar/preserved-branch-toast'
+import { retireTerminalScrollIntentsForTabs } from '@/components/terminal-pane/terminal-scroll-intent-tab-retirement'
 import { translate } from '@/i18n/i18n'
 import {
   getRepoExecutionHostId,
@@ -1913,6 +1914,7 @@ function buildWorktreePurgeState(s: AppState, worktreeIds: string[]): Partial<Ap
     // module-level map doesn't retain removed worktrees for the whole session.
     detachedHeadAutoDerivedDisplayNames.delete(id)
   }
+  retireTerminalScrollIntentsForTabs(s.terminalLayoutsByTabId, doomedTabIds)
   // Why: same rationale for the doomed tabs' foreground last-seen timestamps and
   // consumed agent-startup delivery guards — retired tab ids never recur.
   forgetForegroundTerminalTabs(doomedTabIds)
@@ -3227,6 +3229,11 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
               { timeoutMs: 60_000 }
             ))
 
+      // Why: terminal shutdown scrubs PTY-only leaf identity from rootless
+      // layouts, so retain the successful deletion's pre-shutdown snapshot.
+      const tabIds = new Set((get().tabsByWorktree[worktreeId] ?? []).map((tab) => tab.id))
+      const terminalLayoutsBeforeShutdown = get().terminalLayoutsByTabId
+
       const worktreeDisplayName = worktreeBeforeRemoval?.displayName?.trim()
       if (worktreeDisplayName) {
         try {
@@ -3263,8 +3270,7 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
       // Remove the now-orphaned project that pointed at the destroyed runtime-owned SSH target so it
       // can't surface as a dead, never-connectable project in the composer.
       await purgeOrphanedRuntimeSshProjects(get, destroyedRuntimeSshTargetIds)
-      const tabs = get().tabsByWorktree[worktreeId] ?? []
-      const tabIds = new Set(tabs.map((t) => t.id))
+      retireTerminalScrollIntentsForTabs(terminalLayoutsBeforeShutdown, tabIds)
 
       // Why: this path deletes tabsByWorktree wholesale (not via closeTab), so
       // purge the module-level maps keyed by this worktree/its tabs here too —

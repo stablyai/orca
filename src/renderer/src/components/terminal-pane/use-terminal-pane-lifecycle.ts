@@ -1781,7 +1781,7 @@ export function useTerminalPaneLifecycle({
       }
       panePtyBindings.clear()
       paneTransports.clear()
-      manager.destroy()
+      manager.destroy({ preserveTerminalScrollIntent: tabStillExists })
       releaseWebviewDragPassthrough?.()
       releaseWebviewDragPassthrough = null
       managerRef.current = null

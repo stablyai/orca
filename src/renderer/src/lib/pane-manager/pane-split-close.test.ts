@@ -3,10 +3,16 @@ import type { ManagedPaneInternal, ScrollState } from './pane-manager-types'
 import type { TerminalLeafId } from '../../../../shared/stable-pane-id'
 
 const captureScrollState = vi.hoisted(() => vi.fn())
+const findPaneChildren = vi.hoisted(() => vi.fn())
+const promoteSibling = vi.hoisted(() => vi.fn())
+const removeDividers = vi.hoisted(() => vi.fn())
+const safeFit = vi.hoisted(() => vi.fn())
 const wrapInSplit = vi.hoisted(() => vi.fn())
 const openTerminal = vi.hoisted(() => vi.fn())
+const disposePane = vi.hoisted(() => vi.fn())
 const disposeWebgl = vi.hoisted(() => vi.fn())
 const clearPendingSplitScrollRestore = vi.hoisted(() => vi.fn())
+const clearTerminalScrollIntentKey = vi.hoisted(() => vi.fn())
 const scheduleSplitScrollRestore = vi.hoisted(() => vi.fn())
 const updateMultiPaneState = vi.hoisted(() => vi.fn())
 const applyPaneOpacity = vi.hoisted(() => vi.fn())
@@ -14,15 +20,15 @@ const applyDividerStyles = vi.hoisted(() => vi.fn())
 
 vi.mock('./pane-tree-ops', () => ({
   captureScrollState,
-  findPaneChildren: vi.fn(),
-  promoteSibling: vi.fn(),
-  removeDividers: vi.fn(),
-  safeFit: vi.fn(),
+  findPaneChildren,
+  promoteSibling,
+  removeDividers,
+  safeFit,
   wrapInSplit
 }))
 
 vi.mock('./pane-lifecycle', () => ({
-  disposePane: vi.fn(),
+  disposePane,
   openTerminal
 }))
 
@@ -35,6 +41,10 @@ vi.mock('./pane-split-scroll', () => ({
   scheduleSplitScrollRestore
 }))
 
+vi.mock('./terminal-scroll-intent', () => ({
+  clearTerminalScrollIntentKey
+}))
+
 vi.mock('./pane-drag-reorder', () => ({
   updateMultiPaneState
 }))
@@ -44,7 +54,11 @@ vi.mock('./pane-divider', () => ({
   applyPaneOpacity
 }))
 
-import { splitManagedPane } from './pane-split-close'
+import {
+  closeManagedPane,
+  detachManagedPaneForExternalMove,
+  splitManagedPane
+} from './pane-split-close'
 
 const TEST_LEAF_ID = '11111111-1111-4111-8111-111111111111' as TerminalLeafId
 
@@ -67,6 +81,10 @@ class MockElement {
 
   querySelectorAll(): MockElement[] {
     return this.descendants
+  }
+
+  remove(): void {
+    this.parentElement = null
   }
 }
 
@@ -191,5 +209,62 @@ describe('splitManagedPane', () => {
       expect.any(Function),
       expect.any(Function)
     )
+  })
+
+  it('clears keyed scroll intent when a pane is permanently closed', () => {
+    const pane = createPane(1, null)
+    const siblingPane = createPane(2, null)
+    const root = new MockElement(['root'])
+    ;(pane.container as unknown as MockElement).parentElement = root
+    const panes = new Map<number, ManagedPaneInternal>([
+      [pane.id, pane],
+      [siblingPane.id, siblingPane]
+    ])
+    const onPaneClosed = vi.fn()
+
+    closeManagedPane({
+      paneId: pane.id,
+      activePaneId: pane.id,
+      panes,
+      root: root as unknown as HTMLElement,
+      styleOptions: {},
+      managerOptions: { onPaneClosed },
+      getDragCallbacks: () => ({}) as never,
+      releasePaneIdentity: vi.fn(),
+      setActivePaneId: vi.fn()
+    })
+
+    expect(clearTerminalScrollIntentKey).toHaveBeenCalledWith(TEST_LEAF_ID)
+    expect(onPaneClosed).toHaveBeenCalledWith(pane.id, {
+      paneId: pane.id,
+      leafId: TEST_LEAF_ID,
+      reason: 'close'
+    })
+  })
+
+  it('preserves keyed scroll intent when a pane is detached to a new tab', () => {
+    const pane = createPane(1, null)
+    const siblingPane = createPane(2, null)
+    const root = new MockElement(['root'])
+    ;(pane.container as unknown as MockElement).parentElement = root
+    const panes = new Map<number, ManagedPaneInternal>([
+      [pane.id, pane],
+      [siblingPane.id, siblingPane]
+    ])
+
+    const detached = detachManagedPaneForExternalMove({
+      paneId: pane.id,
+      activePaneId: pane.id,
+      panes,
+      root: root as unknown as HTMLElement,
+      styleOptions: {},
+      managerOptions: {},
+      getDragCallbacks: () => ({}) as never,
+      releasePaneIdentity: vi.fn(),
+      setActivePaneId: vi.fn()
+    })
+
+    expect(detached).toBe(true)
+    expect(clearTerminalScrollIntentKey).not.toHaveBeenCalled()
   })
 })

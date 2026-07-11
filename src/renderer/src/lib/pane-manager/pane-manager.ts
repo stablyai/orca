@@ -50,6 +50,7 @@ import {
 } from './pane-split-close'
 import { FIRST_PANE_ID } from '../../../../shared/pane-key'
 import { splitPaneAroundMountedSubtree } from './pane-subtree-split'
+import { clearTerminalScrollIntentKey } from './terminal-scroll-intent'
 
 export type {
   PaneManagerOptions,
@@ -357,13 +358,21 @@ export class PaneManager {
     beginPaneDragFromPointerDown(handle, paneId, this.dragState, this.getDragCallbacks(), event)
   }
 
-  destroy(): void {
+  destroy(options: { preserveTerminalScrollIntent?: boolean } = {}): void {
     this.destroyed = true
     unregisterLivePaneManager(this)
     cancelActivePaneDrag(this.dragState)
     this.cancelPendingPaneReparentFrames()
+    const scrollIntentLeafIds = options.preserveTerminalScrollIntent
+      ? []
+      : Array.from(this.panes.values(), (pane) => pane.leafId)
     for (const pane of this.panes.values()) {
       disposePane(pane, this.panes)
+    }
+    for (const leafId of scrollIntentLeafIds) {
+      // Why: permanent manager teardown retires every leaf id. Tab rehomes pass
+      // preserveTerminalScrollIntent so the remount can restore scroll position.
+      clearTerminalScrollIntentKey(leafId)
     }
     this.identities.clear()
     disposeDividersIn(this.root)

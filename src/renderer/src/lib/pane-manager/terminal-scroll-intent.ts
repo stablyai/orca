@@ -1,4 +1,20 @@
 import type { IDisposable } from '@xterm/xterm'
+import {
+  bindTerminalScrollIntentKey,
+  readTerminalScrollIntentKey,
+  writeTerminalScrollIntentKey
+} from './terminal-scroll-intent-key-store'
+import type {
+  TerminalScrollIntent,
+  TerminalScrollIntentKey
+} from './terminal-scroll-intent-key-store'
+
+export {
+  _clearTerminalScrollIntentKeysForTest,
+  _getTerminalScrollIntentKeyCountForTest,
+  _getTerminalScrollIntentSnapshotCountForTest,
+  clearTerminalScrollIntentKey
+} from './terminal-scroll-intent-key-store'
 
 type TerminalScrollIntentKind = 'followOutput' | 'pinnedViewport'
 
@@ -16,15 +32,6 @@ type TerminalScrollIntentTarget = {
   scrollToLine?: (line: number) => void
 }
 
-type TerminalScrollIntentKey = string
-
-type TerminalScrollIntent = {
-  kind: TerminalScrollIntentKind
-  bufferType: BufferType
-  viewportY: number
-  baseY: number
-}
-
 type TerminalScrollIntentWriteSnapshot = {
   kind: TerminalScrollIntentKind
   bufferType: BufferType
@@ -35,11 +42,6 @@ const terminalScrollIntentByTerminal = new WeakMap<
   TerminalScrollIntentTarget,
   TerminalScrollIntent
 >()
-const terminalScrollIntentKeyByTerminal = new WeakMap<
-  TerminalScrollIntentTarget,
-  TerminalScrollIntentKey
->()
-const terminalScrollIntentByKey = new Map<TerminalScrollIntentKey, TerminalScrollIntent>()
 
 const BOTTOM_TOLERANCE_ROWS = 1
 const XTERM_SCROLL_INTENT_POINTER_TARGET_CLASSES = [
@@ -81,10 +83,7 @@ function writeIntent(
   }
   const intent = { kind, ...snapshot }
   terminalScrollIntentByTerminal.set(terminal, intent)
-  const key = terminalScrollIntentKeyByTerminal.get(terminal)
-  if (key) {
-    terminalScrollIntentByKey.set(key, intent)
-  }
+  writeTerminalScrollIntentKey(terminal, intent)
   return intent
 }
 
@@ -93,23 +92,7 @@ function readStoredIntent(terminal: TerminalScrollIntentTarget): TerminalScrollI
   if (terminalIntent) {
     return terminalIntent
   }
-  const key = terminalScrollIntentKeyByTerminal.get(terminal)
-  return key ? terminalScrollIntentByKey.get(key) : undefined
-}
-
-function bindTerminalScrollIntentKey(
-  terminal: TerminalScrollIntentTarget,
-  key: TerminalScrollIntentKey | undefined
-): TerminalScrollIntent | undefined {
-  if (!key) {
-    return terminalScrollIntentByTerminal.get(terminal)
-  }
-  terminalScrollIntentKeyByTerminal.set(terminal, key)
-  const existing = terminalScrollIntentByKey.get(key)
-  if (existing) {
-    terminalScrollIntentByTerminal.set(terminal, existing)
-  }
-  return existing
+  return readTerminalScrollIntentKey(terminal)
 }
 
 function clampViewportY(viewportY: number, baseY: number): number {
@@ -256,7 +239,12 @@ export function attachTerminalScrollIntentTracking(
   host: HTMLElement,
   intentKey?: TerminalScrollIntentKey
 ): IDisposable {
-  if (!bindTerminalScrollIntentKey(terminal, intentKey)) {
+  const existingIntent = intentKey
+    ? bindTerminalScrollIntentKey(terminal, intentKey)
+    : terminalScrollIntentByTerminal.get(terminal)
+  if (existingIntent) {
+    terminalScrollIntentByTerminal.set(terminal, existingIntent)
+  } else {
     syncTerminalScrollIntentFromViewport(terminal)
   }
   let pointerScrollActive = false

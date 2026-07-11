@@ -1,7 +1,11 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
+  _clearTerminalScrollIntentKeysForTest,
+  _getTerminalScrollIntentKeyCountForTest,
+  _getTerminalScrollIntentSnapshotCountForTest,
   attachTerminalScrollIntentTracking,
   captureTerminalWriteScrollIntent,
+  clearTerminalScrollIntentKey,
   enforceTerminalCurrentScrollIntent,
   enforceTerminalWriteScrollIntent,
   getTerminalScrollIntentKind,
@@ -36,6 +40,23 @@ function createTerminal({
     })
   }
   return terminal
+}
+
+function installDeferredScrollIntentHarness(): () => Promise<void> {
+  const frameCallbacks: FrameRequestCallback[] = []
+  vi.stubGlobal('requestAnimationFrame', (callback: FrameRequestCallback) => {
+    frameCallbacks.push(callback)
+    return frameCallbacks.length
+  })
+  vi.useFakeTimers()
+
+  return async (): Promise<void> => {
+    await Promise.resolve()
+    while (frameCallbacks.length > 0) {
+      frameCallbacks.shift()?.(16)
+    }
+    await vi.runAllTimersAsync()
+  }
 }
 
 class TestElement extends EventTarget {
@@ -83,6 +104,7 @@ class TestElement extends EventTarget {
 
 describe('terminal scroll intent', () => {
   afterEach(() => {
+    _clearTerminalScrollIntentKeysForTest()
     vi.useRealTimers()
     vi.unstubAllGlobals()
   })
@@ -250,6 +272,82 @@ describe('terminal scroll intent', () => {
     expect(getTerminalScrollIntentKind(remountedTerminal)).toBe('pinnedViewport')
 
     firstDisposable.dispose()
+    remountedDisposable.dispose()
+  })
+
+  it('clears pane-keyed intent when the durable leaf id is retired', () => {
+    vi.stubGlobal('Element', TestElement)
+    const terminal = createTerminal({ viewportY: 76, baseY: 100 })
+    const host = new TestElement() as unknown as HTMLElement
+    const disposable = attachTerminalScrollIntentTracking(terminal, host, 'retired-leaf')
+    markTerminalPinnedViewport(terminal)
+
+    expect(_getTerminalScrollIntentKeyCountForTest()).toBe(1)
+
+    clearTerminalScrollIntentKey('retired-leaf')
+    expect(_getTerminalScrollIntentKeyCountForTest()).toBe(0)
+
+    const remountedTerminal = createTerminal({ viewportY: 100, baseY: 100 })
+    const remountedHost = new TestElement() as unknown as HTMLElement
+    const remountedDisposable = attachTerminalScrollIntentTracking(
+      remountedTerminal,
+      remountedHost,
+      'retired-leaf'
+    )
+
+    expect(getTerminalScrollIntentKind(remountedTerminal)).toBe('followOutput')
+
+    disposable.dispose()
+    remountedDisposable.dispose()
+  })
+
+  it('does not resurrect a retired key from deferred scroll sampling', async () => {
+    const flushDeferredScrollIntent = installDeferredScrollIntentHarness()
+    vi.stubGlobal('Element', TestElement)
+    const terminal = createTerminal({ viewportY: 100, baseY: 100 })
+    const host = new TestElement() as unknown as HTMLElement
+    const disposable = attachTerminalScrollIntentTracking(terminal, host, 'retired-leaf')
+
+    terminal.buffer.active.viewportY = 45
+    syncTerminalScrollIntentSoon(terminal)
+    disposable.dispose()
+    clearTerminalScrollIntentKey('retired-leaf')
+
+    await flushDeferredScrollIntent()
+
+    expect(_getTerminalScrollIntentKeyCountForTest()).toBe(0)
+    expect(_getTerminalScrollIntentSnapshotCountForTest()).toBe(0)
+  })
+
+  it('does not let a retired terminal overwrite a reused key', async () => {
+    const flushDeferredScrollIntent = installDeferredScrollIntentHarness()
+    vi.stubGlobal('Element', TestElement)
+    const oldTerminal = createTerminal({ viewportY: 100, baseY: 100 })
+    const oldHost = new TestElement() as unknown as HTMLElement
+    const oldDisposable = attachTerminalScrollIntentTracking(oldTerminal, oldHost, 'reused-leaf')
+
+    oldTerminal.buffer.active.viewportY = 20
+    syncTerminalScrollIntentSoon(oldTerminal)
+    oldDisposable.dispose()
+    clearTerminalScrollIntentKey('reused-leaf')
+
+    const newTerminal = createTerminal({ viewportY: 70, baseY: 100 })
+    const newHost = new TestElement() as unknown as HTMLElement
+    const newDisposable = attachTerminalScrollIntentTracking(newTerminal, newHost, 'reused-leaf')
+
+    await flushDeferredScrollIntent()
+
+    const remountedTerminal = createTerminal({ viewportY: 0, baseY: 100 })
+    const remountedHost = new TestElement() as unknown as HTMLElement
+    const remountedDisposable = attachTerminalScrollIntentTracking(
+      remountedTerminal,
+      remountedHost,
+      'reused-leaf'
+    )
+    enforceTerminalCurrentScrollIntent(remountedTerminal)
+
+    expect(remountedTerminal.scrollToLine).toHaveBeenCalledWith(70)
+    newDisposable.dispose()
     remountedDisposable.dispose()
   })
 

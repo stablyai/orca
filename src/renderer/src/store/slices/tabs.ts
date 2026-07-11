@@ -39,6 +39,7 @@ import {
   addAdditionalValidWorkspaceKeys,
   type WorkspaceSessionHydrationOptions
 } from '@/lib/workspace-session-hydration-keys'
+import { retireTerminalScrollIntentsForTabs } from '@/components/terminal-pane/terminal-scroll-intent-tab-retirement'
 
 export type TabSplitDirection = 'left' | 'right' | 'up' | 'down'
 
@@ -1838,6 +1839,7 @@ export const createTabsSlice: StateCreator<AppState, [], [], TabsSlice> = (set, 
       return livePtyIds.length > 0 || tab.ptyId != null
     })
     const orphanTerminalIds = getOrphanTerminalIds(state, worktreeId)
+    retireTerminalScrollIntentsForTabs(state.terminalLayoutsByTabId, orphanTerminalIds)
     const ensuredGroupState =
       legacyRuntimeTerminalTabs.length > 0
         ? ensureGroup(
