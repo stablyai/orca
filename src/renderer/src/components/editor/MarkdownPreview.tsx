@@ -1605,6 +1605,7 @@ export default function MarkdownPreview({
               }`.trim()}
               data-source-line={range.startLine}
               data-source-end-line={range.endLine}
+              data-annotation-block-key={blockKey}
               onClick={(event) => handleAnnotatedMarkdownBlockClick(range, event)}
             >
               <span className="markdown-annotation-list-content">{children}</span>
