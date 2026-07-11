@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest'
 import {
   buildProcessGoneCrashDetails,
   buildSuppressedProcessGoneBreadcrumbData,
+  collectGpuFeatureStatusDetails,
   collectProcessGoneMetricDetails
 } from './process-gone-diagnostics'
 
@@ -11,13 +12,15 @@ type MetricFixture = {
   memory: { workingSetSize: number }
 }
 
-const { appMetricsMock } = vi.hoisted(() => ({
-  appMetricsMock: vi.fn<() => MetricFixture[]>(() => [])
+const { appMetricsMock, gpuFeatureStatusMock } = vi.hoisted(() => ({
+  appMetricsMock: vi.fn<() => MetricFixture[]>(() => []),
+  gpuFeatureStatusMock: vi.fn<() => Record<string, unknown>>(() => ({}))
 }))
 
 vi.mock('electron', () => ({
   app: {
-    getAppMetrics: appMetricsMock
+    getAppMetrics: appMetricsMock,
+    getGPUFeatureStatus: gpuFeatureStatusMock
   }
 }))
 
@@ -56,11 +59,44 @@ describe('process gone diagnostics', () => {
       { pid: 22, type: 'Tab', memory: { workingSetSize: 1024 * 400 } }
     ])
 
-    expect(buildProcessGoneCrashDetails({ processType: 'renderer' })).toMatchObject({
+    expect(buildProcessGoneCrashDetails({ processType: 'renderer' }, false)).toMatchObject({
       processType: 'renderer',
       processMetricsCount: 2,
       processMetricsRendererWorkingSetMB: 400,
-      processMetricsLargestPid: 22
+      processMetricsLargestPid: 22,
+      gpuFallbackActive: false
+    })
+  })
+
+  it('captures only allowlisted GPU feature statuses and fallback state', () => {
+    expect(
+      collectGpuFeatureStatusDetails(
+        {
+          gpu_compositing: 'enabled',
+          rasterization: 'disabled_software',
+          webgl2: 'unavailable_off',
+          driver_vendor: 'not collected',
+          diagnostics: 'not collected'
+        },
+        true
+      )
+    ).toEqual({
+      gpuFallbackActive: true,
+      gpuFeatureCompositing: 'enabled',
+      gpuFeatureRasterization: 'disabled_software',
+      gpuFeatureWebgl2: 'unavailable_off'
+    })
+  })
+
+  it('keeps process-gone reporting usable when Electron GPU status collection fails', () => {
+    gpuFeatureStatusMock.mockImplementationOnce(() => {
+      throw new Error('GPU process unavailable')
+    })
+
+    expect(buildProcessGoneCrashDetails({ processType: 'child' }, true)).toMatchObject({
+      processType: 'child',
+      gpuFallbackActive: true,
+      gpuFeatureStatusError: 'Error'
     })
   })
 
