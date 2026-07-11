@@ -1,6 +1,6 @@
 import type WebSocket from 'ws'
 import type { PairingOffer } from './pairing'
-import type { RemoteRuntimeClientError } from './remote-runtime-client-error'
+import { RemoteRuntimeClientError } from './remote-runtime-client-error'
 import { remoteRuntimeUnavailableError } from './remote-runtime-request-frames'
 import {
   openRemoteRuntimeWebSocket,
@@ -32,9 +32,14 @@ export function openSharedControlSocket(
   const opened = openRemoteRuntimeWebSocket(pairing, {
     onClose: (ws, code, reason) => {
       if (callbacks.getCurrentSocket() === ws) {
+        const message = formatSharedControlCloseMessage(code, reason)
+        // Why: the E2EE server uses 4001 for fatal authentication/protocol
+        // failures, including when no encrypted error frame reaches the client.
         callbacks.onClose(
           { code, reason: reason.toString() },
-          remoteRuntimeUnavailableError(formatSharedControlCloseMessage(code, reason))
+          code === 4001
+            ? new RemoteRuntimeClientError('invalid_runtime_response', message)
+            : remoteRuntimeUnavailableError(message)
         )
       }
     },

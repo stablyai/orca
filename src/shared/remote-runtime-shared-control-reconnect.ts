@@ -1,26 +1,54 @@
-import { remoteRuntimeUnavailableError } from './remote-runtime-request-frames'
+import type { RemoteRuntimeClientError } from './remote-runtime-client-error'
+import { isRecoverableRemoteRuntimeConnectionError } from './remote-runtime-client-error-classification'
 import {
-  finishSharedControlSubscription,
+  finishSharedControlSubscriptions,
   scheduleSharedControlReconnect
 } from './remote-runtime-shared-control-state'
 import type { SharedControlLogicalSubscription } from './remote-runtime-shared-control-types'
 
-export function scheduleSharedControlReconnectOrFinish(args: {
+const REMOTE_RUNTIME_SHARED_CONTROL_RECONNECT_DELAYS_MS = [
+  250, 500, 1000, 2000, 4000, 8000, 15_000, 30_000
+] as const
+
+export function scheduleSharedControlReconnectWhileSubscribed(args: {
   current: ReturnType<typeof setTimeout> | null
-  intentionallyClosed: boolean
+  isIntentionallyClosed: () => boolean
   reconnectAttempt: number
-  delaysMs: readonly number[]
   subscriptions: Map<string, SharedControlLogicalSubscription<unknown>>
+  onTimerFired: () => void
   open: () => void
 }): { timer: ReturnType<typeof setTimeout> | null; reconnectAttempt: number } {
-  if (args.reconnectAttempt >= args.delaysMs.length) {
-    const error = remoteRuntimeUnavailableError(
-      'Remote Orca runtime connection could not be restored.'
-    )
-    for (const subscription of Array.from(args.subscriptions.values())) {
-      finishSharedControlSubscription(args.subscriptions, subscription, true, error)
-    }
+  if (args.subscriptions.size === 0) {
     return { timer: null, reconnectAttempt: args.reconnectAttempt }
   }
-  return scheduleSharedControlReconnect(args)
+  return scheduleSharedControlReconnect({
+    current: args.current,
+    intentionallyClosed: args.isIntentionallyClosed(),
+    reconnectAttempt: args.reconnectAttempt,
+    delaysMs: REMOTE_RUNTIME_SHARED_CONTROL_RECONNECT_DELAYS_MS,
+    open: () => {
+      args.onTimerFired()
+      if (args.subscriptions.size === 0 || args.isIntentionallyClosed()) {
+        return
+      }
+      args.open()
+    }
+  })
+}
+
+export function handleSharedControlDisconnect(
+  error: RemoteRuntimeClientError,
+  subscriptions: Map<string, SharedControlLogicalSubscription<unknown>>,
+  intentionallyClosed: boolean,
+  clearReconnectTimer: () => void
+): boolean {
+  if (subscriptions.size === 0 || intentionallyClosed) {
+    return false
+  }
+  if (isRecoverableRemoteRuntimeConnectionError(error)) {
+    return true
+  }
+  clearReconnectTimer()
+  finishSharedControlSubscriptions(subscriptions, true, error)
+  return false
 }

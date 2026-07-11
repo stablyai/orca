@@ -10,7 +10,7 @@ import {
   isSharedControlReady,
   waitForSharedControlReadyWithTimeout
 } from './remote-runtime-shared-control-ready'
-import { scheduleSharedControlReconnectOrFinish } from './remote-runtime-shared-control-reconnect'
+import * as sharedControlReconnect from './remote-runtime-shared-control-reconnect'
 import { requestSharedControl } from './remote-runtime-shared-control-requests'
 import { SharedControlReadyStableResetTimer } from './remote-runtime-shared-control-stability'
 import * as sharedControlState from './remote-runtime-shared-control-state'
@@ -21,7 +21,7 @@ import {
 import { closeSharedControlSocket } from './remote-runtime-shared-control-socket-close'
 import type { RemoteRuntimeSocketLivenessOptions } from './remote-runtime-socket-liveness'
 import * as sharedControlSubscriptions from './remote-runtime-shared-control-subscriptions'
-import { startSharedControlSubscription } from './remote-runtime-shared-control-subscription-start'
+import * as sharedControlSubscriptionLifecycle from './remote-runtime-shared-control-subscription-start'
 import type {
   RemoteRuntimeSharedConnectionDiagnostics,
   RemoteRuntimeSharedSubscription,
@@ -84,14 +84,15 @@ export class RemoteRuntimeSharedControlConnection {
     timeoutMs: number,
     callbacks: SharedControlSubscriptionCallbacks<TResult>
   ): Promise<RemoteRuntimeSharedSubscription> {
-    return startSharedControlSubscription({
+    return sharedControlSubscriptionLifecycle.startSharedControlSubscription({
       subscriptions: this.subscriptions,
       method,
       params,
       callbacks,
       ensureReady: () => this.ensureReadyWithTimeout(timeoutMs),
       sendSubscription: (subscription) => this.sendSubscription(subscription),
-      closeSubscription: (requestId) => this.closeSubscription(requestId)
+      closeSubscription: (requestId) => this.closeSubscription(requestId),
+      onSubscriptionsEmpty: () => this.clearReconnectTimer()
     })
   }
 
@@ -227,14 +228,12 @@ export class RemoteRuntimeSharedControlConnection {
   }
 
   private closeSubscription(requestId: string): void {
-    const subscription = this.subscriptions.get(requestId)
-    if (!subscription) {
-      return
-    }
-    sharedControlSubscriptions.closeSharedControlLogicalSubscription({
+    sharedControlSubscriptionLifecycle.closeSharedControlSubscriptionByRequestId({
       subscriptions: this.subscriptions,
-      subscription,
-      request: (method, params) => this.sendSubscriptionCleanupRequest(method, params)
+      requestId,
+      deviceToken: this.pairing.deviceToken,
+      send: (payload) => this.sendEncrypted(payload),
+      onSubscriptionsEmpty: () => this.clearReconnectTimer()
     })
   }
 
@@ -247,19 +246,17 @@ export class RemoteRuntimeSharedControlConnection {
     })
   }
 
-  private sendSubscriptionCleanupRequest(method: string, params: unknown): void {
-    sharedControlSubscriptions.sendSharedControlCleanupRequest({
-      deviceToken: this.pairing.deviceToken,
-      method,
-      params,
-      send: (payload) => this.sendEncrypted(payload)
-    })
-  }
-
   private handleSocketClosed(error: RemoteRuntimeClientError): void {
     this.lastError = error.message
     this.closeSocket(error)
-    if (this.subscriptions.size > 0 && !this.intentionallyClosed) {
+    if (
+      sharedControlReconnect.handleSharedControlDisconnect(
+        error,
+        this.subscriptions,
+        this.intentionallyClosed,
+        () => this.clearReconnectTimer()
+      )
+    ) {
       this.scheduleReconnect()
     }
   }
@@ -286,14 +283,15 @@ export class RemoteRuntimeSharedControlConnection {
   }
 
   private scheduleReconnect(): void {
-    const scheduled = scheduleSharedControlReconnectOrFinish({
+    const scheduled = sharedControlReconnect.scheduleSharedControlReconnectWhileSubscribed({
       current: this.reconnectTimer,
-      intentionallyClosed: this.intentionallyClosed,
+      isIntentionallyClosed: () => this.intentionallyClosed,
       reconnectAttempt: this.reconnectAttempt,
-      delaysMs: [250, 500, 1000, 2000, 4000, 8000, 15_000],
       subscriptions: this.subscriptions,
-      open: () => {
+      onTimerFired: () => {
         this.reconnectTimer = null
+      },
+      open: () => {
         this.open()
       }
     })
