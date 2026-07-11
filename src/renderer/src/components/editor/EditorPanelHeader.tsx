@@ -161,7 +161,8 @@ export function EditorPanelHeader({
           </Tooltip>
         </TooltipProvider>
       )}
-      {isSingleDiff && fileDiffComments.length > 0 && (
+      {/* Why: Changes mode is a diff surface too, so batch-send stays at parity (#6048). */}
+      {isDiffSurface && fileDiffComments.length > 0 && (
         <DiffNotesSendMenu
           worktreeId={activeFile.worktreeId}
           groupId={activeGroupId ?? activeFile.worktreeId}
