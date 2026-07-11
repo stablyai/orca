@@ -65,6 +65,7 @@ export type EditorConfigParams = {
   markdownSourceLineOffsetRef: MutableRefObject<number>
   flushPendingSerialization: () => void
   openSearchRef: MutableRefObject<() => void>
+  openAnnotationPopoverRef: MutableRefObject<() => void>
   syncAnnotationTarget: (editor: Editor) => void
   clearAnnotationTarget: () => void
   scrollRichMarkdownReviewNoteCardIntoView: (commentId: string) => void
@@ -112,6 +113,7 @@ export function createRichMarkdownEditorConfig(params: EditorConfigParams): UseE
     markdownSourceLineOffsetRef,
     flushPendingSerialization,
     openSearchRef,
+    openAnnotationPopoverRef,
     syncAnnotationTarget,
     clearAnnotationTarget,
     scrollRichMarkdownReviewNoteCardIntoView,
@@ -172,6 +174,7 @@ export function createRichMarkdownEditorConfig(params: EditorConfigParams): UseE
         typedEmptyOrderedListMarkerRef,
         flushPendingSerialization,
         openSearchRef,
+        openAnnotationPopoverRef,
         setIsEditingLink,
         setLinkBubble,
         setSelectedCommandIndex,

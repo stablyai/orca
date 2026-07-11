@@ -99,6 +99,7 @@ export default function RichMarkdownEditor({
   const onOpenDocLinkRef = useRef(onOpenDocLink)
   const handleLocalImagePickRef = useRef<() => void>(() => {})
   const openSearchRef = useRef<() => void>(() => {})
+  const openAnnotationPopoverRef = useRef<() => void>(() => {})
   // Why: ProseMirror keeps the initial handleKeyDown closure, so `editor` stays
   // stuck at the first-render null value unless we read the live instance here.
   const editorRef = useRef<Editor | null>(null)
@@ -153,6 +154,7 @@ export default function RichMarkdownEditor({
   onSaveRef.current = onSave
   onOpenDocLinkRef.current = onOpenDocLink
   isEditingLinkRef.current = isEditingLink
+  openAnnotationPopoverRef.current = review.openAnnotationPopover
 
   const flushPendingSerialization = useCallback(() => {
     if (serializeTimerRef.current === null) {
@@ -230,6 +232,7 @@ export default function RichMarkdownEditor({
     markdownSourceLineOffsetRef: review.markdownSourceLineOffsetRef,
     flushPendingSerialization,
     openSearchRef,
+    openAnnotationPopoverRef,
     syncAnnotationTarget: review.syncAnnotationTarget,
     clearAnnotationTarget: review.clearAnnotationTarget,
     scrollRichMarkdownReviewNoteCardIntoView: review.scrollRichMarkdownReviewNoteCardIntoView,

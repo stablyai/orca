@@ -74,6 +74,7 @@ function createContext(editor: Editor): KeyHandlerContext {
     typedEmptyOrderedListMarkerRef: { current: false },
     flushPendingSerialization: vi.fn(),
     openSearchRef: { current: vi.fn() },
+    openAnnotationPopoverRef: { current: vi.fn() },
     setIsEditingLink: vi.fn(),
     setLinkBubble: vi.fn(),
     setSelectedCommandIndex: vi.fn(),

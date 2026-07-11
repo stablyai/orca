@@ -38,6 +38,7 @@ export type KeyHandlerContext = {
   typedEmptyOrderedListMarkerRef: MutableRefObject<boolean>
   flushPendingSerialization: () => void
   openSearchRef: MutableRefObject<() => void>
+  openAnnotationPopoverRef: MutableRefObject<() => void>
   setIsEditingLink: (editing: boolean) => void
   setLinkBubble: (bubble: LinkBubbleState | null) => void
   setSelectedCommandIndex: Dispatch<SetStateAction<number>>
@@ -120,6 +121,13 @@ export function createRichMarkdownKeyHandler(
       ctx.lastCommittedMarkdownRef.current = markdown
       ctx.onContentChangeRef.current(markdown)
       ctx.onSaveRef.current(markdown)
+      return true
+    }
+    if (editorShortcutMatches('editor.addReviewNote', event)) {
+      event.preventDefault()
+      // No-ops without a selection or with annotations disabled — the
+      // controller guards on a live annotation target.
+      ctx.openAnnotationPopoverRef.current()
       return true
     }
 

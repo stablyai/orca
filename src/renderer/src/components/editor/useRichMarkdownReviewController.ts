@@ -202,15 +202,19 @@ export function useRichMarkdownReviewController({
   )
 
   const openAnnotationPopover = useCallback((): void => {
-    if (!annotationTarget || !canAnnotateRichMarkdown) {
+    if (!canAnnotateRichMarkdown) {
       return
     }
     const editor = editorRef.current
     const root = rootRef.current
+    // Why: the keyboard shortcut can fire before the render that syncs
+    // annotationTarget state, so the live selection target must win over it.
     const liveTarget = editor && root ? getRichMarkdownAnnotationTarget(editor, root) : null
-    const target = editor
-      ? clampRichMarkdownAnnotationTarget(editor, liveTarget ?? annotationTarget)
-      : annotationTarget
+    const baseTarget = liveTarget ?? annotationTarget
+    if (!baseTarget) {
+      return
+    }
+    const target = editor ? clampRichMarkdownAnnotationTarget(editor, baseTarget) : baseTarget
     if (
       !target ||
       hasRichMarkdownCommentForRange(markdownComments, target, markdownSourceLineOffset)

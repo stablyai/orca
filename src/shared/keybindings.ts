@@ -90,6 +90,7 @@ export type KeybindingActionId =
   | 'editor.save'
   | 'editor.markdownPreview'
   | 'editor.copyContext'
+  | 'editor.addReviewNote'
   | 'fileExplorer.undo'
   | 'fileExplorer.redo'
   | 'fileExplorer.copyPath'
@@ -825,6 +826,14 @@ export const KEYBINDING_DEFINITIONS: readonly KeybindingDefinition[] = [
     scope: 'editor',
     searchKeywords: ['shortcut', 'editor', 'copy', 'context'],
     defaultBindings: platformBindings(['Mod+Alt+C'])
+  },
+  {
+    id: 'editor.addReviewNote',
+    title: 'Add Review Note',
+    group: 'Editors',
+    scope: 'editor',
+    searchKeywords: ['shortcut', 'editor', 'markdown', 'note', 'comment', 'annotation', 'review'],
+    defaultBindings: platformBindings(['Mod+Alt+N'])
   },
   {
     id: 'fileExplorer.undo',

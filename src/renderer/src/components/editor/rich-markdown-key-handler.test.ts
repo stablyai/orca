@@ -4,6 +4,12 @@ import StarterKit from '@tiptap/starter-kit'
 import { Markdown } from '@tiptap/markdown'
 import { createRichMarkdownKeyHandler, type KeyHandlerContext } from './rich-markdown-key-handler'
 
+// Why: keybinding matching resolves the platform from navigator.userAgent,
+// which is environment-dependent under vitest; pin it for determinism.
+vi.mock('@/lib/shortcut-platform', () => ({
+  getShortcutPlatform: () => 'darwin' as NodeJS.Platform
+}))
+
 const extensions = [StarterKit, Markdown.configure({ markedOptions: { gfm: true } })]
 
 function createEditor(content: object): Editor {
@@ -67,6 +73,7 @@ function createContext(editor: Editor, typedMarker: boolean): KeyHandlerContext 
     typedEmptyOrderedListMarkerRef: { current: typedMarker },
     flushPendingSerialization: vi.fn(),
     openSearchRef: { current: vi.fn() },
+    openAnnotationPopoverRef: { current: vi.fn() },
     setIsEditingLink: vi.fn(),
     setLinkBubble: vi.fn(),
     setSelectedCommandIndex: vi.fn(),
@@ -90,6 +97,21 @@ function emptyTopLevelOrderedList(): object {
 }
 
 describe('rich markdown key handler', () => {
+  it('opens the review-note composer on the add-review-note shortcut', () => {
+    const editor = createEditor(emptyTopLevelOrderedList())
+
+    try {
+      const ctx = createContext(editor, false)
+      const event = keyEvent('n', { metaKey: true, altKey: true, code: 'KeyN' })
+
+      expect(createRichMarkdownKeyHandler(ctx)(null, event)).toBe(true)
+      expect(event.preventDefault).toHaveBeenCalled()
+      expect(ctx.openAnnotationPopoverRef.current).toHaveBeenCalledTimes(1)
+    } finally {
+      editor.destroy()
+    }
+  })
+
   it('preserves a typed empty ordered-list shortcut on Enter', () => {
     const editor = createEditor(emptyTopLevelOrderedList())
 

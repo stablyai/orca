@@ -60,6 +60,7 @@ function createConfigParams(overrides: Partial<EditorConfigParams> = {}): Editor
     markdownSourceLineOffsetRef: ref(0),
     flushPendingSerialization: vi.fn(),
     openSearchRef: ref(vi.fn()),
+    openAnnotationPopoverRef: ref(vi.fn()),
     syncAnnotationTarget: vi.fn(),
     clearAnnotationTarget: vi.fn(),
     scrollRichMarkdownReviewNoteCardIntoView: vi.fn(),

@@ -67,6 +67,10 @@ import {
   isMarkdownPreviewFindShortcut,
   setActiveMarkdownPreviewSearchMatch
 } from './markdown-preview-search'
+import {
+  getMarkdownAnnotationBlockKeyForSelection,
+  isMarkdownPreviewAddReviewNoteShortcut
+} from './markdown-preview-annotation-shortcut'
 import { usePreserveSectionDuringExternalEdit } from './usePreserveSectionDuringExternalEdit'
 import { openHttpLink } from '@/lib/http-link-routing'
 import { getShortcutPlatform } from '@/lib/shortcut-platform'
@@ -861,6 +865,20 @@ export default function MarkdownPreview({
         return
       }
 
+      if (
+        isMarkdownPreviewAddReviewNoteShortcut(event, getShortcutPlatform(), keybindings) &&
+        targetInsidePreview &&
+        markdownAnnotationsEnabled
+      ) {
+        const blockKey = getMarkdownAnnotationBlockKeyForSelection(root, window.getSelection())
+        if (blockKey) {
+          event.preventDefault()
+          event.stopPropagation()
+          setActiveAnnotationBlockKey(blockKey)
+        }
+        return
+      }
+
       if (!isSearchOpen) {
         return
       }
@@ -875,7 +893,7 @@ export default function MarkdownPreview({
 
     window.addEventListener('keydown', handleKeyDown, { capture: true })
     return () => window.removeEventListener('keydown', handleKeyDown, { capture: true })
-  }, [closeSearch, isSearchOpen, keybindings, openSearch])
+  }, [closeSearch, isSearchOpen, keybindings, markdownAnnotationsEnabled, openSearch])
 
   const handleCopyMarkdownReviewNotes = useCallback(async (): Promise<void> => {
     if (markdownReviewNotes.length === 0) {
@@ -1193,6 +1211,7 @@ export default function MarkdownPreview({
           className={`markdown-annotation-block ${hasReviewNotes ? 'has-review-notes' : ''}`.trim()}
           data-source-line={range.startLine}
           data-source-end-line={range.endLine}
+          data-annotation-block-key={blockKey}
           onClick={(event) => handleAnnotatedMarkdownBlockClick(range, event)}
         >
           {rendered}

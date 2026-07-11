@@ -17,7 +17,11 @@ vi.mock('@/store', () => ({
   }
 }))
 
-import { installEditorFindShortcut, installMonacoEditorFindShortcut } from './editor-shortcuts'
+import {
+  installEditorAddReviewNoteShortcut,
+  installEditorFindShortcut,
+  installMonacoEditorFindShortcut
+} from './editor-shortcuts'
 
 type ShortcutFixture = {
   container: HTMLDivElement
@@ -175,6 +179,49 @@ describe('installEditorFindShortcut', () => {
     expect(event.defaultPrevented).toBe(false)
     expect(fixture.onFind).not.toHaveBeenCalled()
     expect(fixture.onDownstreamKeyDown).toHaveBeenCalledTimes(1)
+  })
+
+  it('invokes add-review-note on its default binding and honors overrides', () => {
+    const container = document.createElement('div')
+    const input = document.createElement('textarea')
+    const onAddReviewNote = vi.fn()
+    container.appendChild(input)
+    document.body.appendChild(container)
+    const dispose = installEditorAddReviewNoteShortcut(container, onAddReviewNote)
+
+    const defaultEvent = dispatchKeyDown(input, {
+      key: 'n',
+      code: 'KeyN',
+      metaKey: true,
+      altKey: true
+    })
+    const repeatEvent = dispatchKeyDown(input, {
+      key: 'n',
+      code: 'KeyN',
+      metaKey: true,
+      altKey: true,
+      repeat: true
+    })
+    const unrelatedEvent = dispatchKeyDown(input, { key: 'n', code: 'KeyN', metaKey: true })
+
+    expect(defaultEvent.defaultPrevented).toBe(true)
+    expect(repeatEvent.defaultPrevented).toBe(false)
+    expect(unrelatedEvent.defaultPrevented).toBe(false)
+    expect(onAddReviewNote).toHaveBeenCalledTimes(1)
+
+    shortcutState.keybindings = { 'editor.addReviewNote': ['Mod+Shift+A'] }
+    const overriddenEvent = dispatchKeyDown(input, {
+      key: 'a',
+      code: 'KeyA',
+      metaKey: true,
+      shiftKey: true
+    })
+    expect(overriddenEvent.defaultPrevented).toBe(true)
+    expect(onAddReviewNote).toHaveBeenCalledTimes(2)
+
+    dispose()
+    dispatchKeyDown(input, { key: 'a', code: 'KeyA', metaKey: true, shiftKey: true })
+    expect(onAddReviewNote).toHaveBeenCalledTimes(2)
   })
 
   it('runs Monaco existing find action through the shared bridge', () => {

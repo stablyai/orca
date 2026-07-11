@@ -46,6 +46,23 @@ export function installEditorFindShortcut(target: HTMLElement, onFind: () => voi
   return () => target.removeEventListener('keydown', handleKeyDown, true)
 }
 
+export function installEditorAddReviewNoteShortcut(
+  target: HTMLElement,
+  onAddReviewNote: () => void
+): () => void {
+  const handleKeyDown = (event: KeyboardEvent): void => {
+    if (event.repeat || !editorShortcutMatches('editor.addReviewNote', event)) {
+      return
+    }
+    event.preventDefault()
+    event.stopPropagation()
+    onAddReviewNote()
+  }
+
+  target.addEventListener('keydown', handleKeyDown, true)
+  return () => target.removeEventListener('keydown', handleKeyDown, true)
+}
+
 type MonacoFindShortcutEditor = {
   getAction: (id: string) => { run: () => void | Promise<void> } | null
   getContainerDomNode: () => HTMLElement
