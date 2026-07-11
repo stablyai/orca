@@ -9663,8 +9663,8 @@
                 "f5cf324efa": "Comment display options",
                 "5e6e5a13fa": "보기",
                 "actionRequiredHint": "This check needs a manual action on GitHub (for example, approving the workflow run) before merging is unblocked.",
-                "b3195cba33": "Unmark author as bot",
-                "f588b46a6c": "Mark author as bot"
+                "b3195cba33": "작성자의 봇 지정 해제",
+                "f588b46a6c": "작성자를 봇으로 지정"
               },
               "empty": {
                 "state": {

@@ -9663,8 +9663,8 @@
                 "f5cf324efa": "Opciones de visualización de comentarios",
                 "5e6e5a13fa": "Vista",
                 "actionRequiredHint": "Este check requiere una acción manual en GitHub (por ejemplo, aprobar la ejecución del workflow) antes de que el merge quede desbloqueado.",
-                "b3195cba33": "Unmark author as bot",
-                "f588b46a6c": "Mark author as bot"
+                "b3195cba33": "Desmarcar autor como bot",
+                "f588b46a6c": "Marcar autor como bot"
               },
               "empty": {
                 "state": {

@@ -9663,8 +9663,8 @@
                 "f5cf324efa": "评论显示选项",
                 "5e6e5a13fa": "查看",
                 "actionRequiredHint": "此检查需要在 GitHub 上执行手动操作（例如批准工作流运行）后才能解除合并阻止。",
-                "b3195cba33": "Unmark author as bot",
-                "f588b46a6c": "Mark author as bot"
+                "b3195cba33": "取消将作者标记为机器人",
+                "f588b46a6c": "将作者标记为机器人"
               },
               "empty": {
                 "state": {
