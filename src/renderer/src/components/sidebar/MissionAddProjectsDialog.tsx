@@ -11,6 +11,7 @@ import { Button } from '@/components/ui/button'
 import RepoMultiCombobox from '@/components/ui/repo-multi-combobox'
 import { useAppStore } from '@/store'
 import { translate } from '@/i18n/i18n'
+import { isMissionEligibleRepo } from '../../../../shared/missions'
 import type { Mission } from '../../../../shared/types'
 
 export function MissionAddProjectsDialog({
@@ -30,7 +31,7 @@ export function MissionAddProjectsDialog({
     [mission]
   )
   const candidates = useMemo(
-    () => repos.filter((repo) => !memberIds.has(repo.id)),
+    () => repos.filter((repo) => isMissionEligibleRepo(repo) && !memberIds.has(repo.id)),
     [repos, memberIds]
   )
 

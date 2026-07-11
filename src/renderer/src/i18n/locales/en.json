@@ -4677,7 +4677,9 @@
           "bcea32d392": "Projects",
           "741e98ec23": "Cancel",
           "131ac9a3ca": "Creating...",
-          "470b9ba02f": "Create Mission"
+          "470b9ba02f": "Create Mission",
+          "507155ae18": "Some workspaces could not be created. You can retry from the mission list.",
+          "009decc6e5": "Done"
         },
         "MissionDeleteDialog": {
           "7c84ee0d7d": "Delete Mission",

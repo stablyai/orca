@@ -145,6 +145,12 @@ export function clearMissingMissionMembers(
   return { missions: changed ? next : (missions as Mission[]), changed }
 }
 
+/** Missions are local-host persisted state (V1): local and SSH-connection
+ *  repos qualify; runtime-environment-owned repos are not offered. */
+export function isMissionEligibleRepo(repo: { executionHostId?: string | null }): boolean {
+  return !repo.executionHostId?.startsWith('runtime:')
+}
+
 export function getNextMissionTabOrder(missions: readonly Mission[]): number {
   let max = -1
   for (const mission of missions) {

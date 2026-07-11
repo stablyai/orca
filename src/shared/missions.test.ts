@@ -4,6 +4,7 @@ import {
   createMission,
   getMissionWorktreeName,
   getNextMissionTabOrder,
+  isMissionEligibleRepo,
   normalizeMissionName,
   normalizeMissions,
   slugifyMissionBranch
@@ -117,6 +118,16 @@ describe('clearMissingMissionMembers', () => {
     const result = clearMissingMissionMembers(missions, [{ id: 'kept' }])
     expect(result.changed).toBe(false)
     expect(result.missions).toBe(missions as Mission[])
+  })
+})
+
+describe('isMissionEligibleRepo', () => {
+  it('accepts local and ssh repos, rejects runtime-owned repos', () => {
+    expect(isMissionEligibleRepo({})).toBe(true)
+    expect(isMissionEligibleRepo({ executionHostId: null })).toBe(true)
+    expect(isMissionEligibleRepo({ executionHostId: 'local' })).toBe(true)
+    expect(isMissionEligibleRepo({ executionHostId: 'ssh:target-1' })).toBe(true)
+    expect(isMissionEligibleRepo({ executionHostId: 'runtime:env-1' })).toBe(false)
   })
 })
 

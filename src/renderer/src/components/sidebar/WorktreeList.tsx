@@ -69,6 +69,7 @@ import type {
   WorkspaceStatusDefinition
 } from '../../../../shared/types'
 import { DEFAULT_SHOW_SLEEPING_WORKSPACES } from '../../../../shared/constants'
+import { isMissionEligibleRepo } from '../../../../shared/missions'
 import { buildWorktreeComparator, compareWorktreeSortLabel } from './smart-sort'
 import {
   buildAttentionByWorktree,
@@ -4609,7 +4610,7 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
                                 )}
                               </DropdownMenuItem>
                             ) : null}
-                            {missions.length > 0 ? (
+                            {missions.length > 0 && isMissionEligibleRepo(row.repo) ? (
                               <DropdownMenuSub>
                                 <DropdownMenuSubTrigger>
                                   <Flag className="size-3.5" />

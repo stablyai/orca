@@ -4677,7 +4677,9 @@
           "bcea32d392": "Proyectos",
           "741e98ec23": "Cancelar",
           "131ac9a3ca": "Creando...",
-          "470b9ba02f": "Crear misión"
+          "470b9ba02f": "Crear misión",
+          "507155ae18": "No se pudieron crear algunos espacios de trabajo. Puedes reintentarlo desde la lista de la misión.",
+          "009decc6e5": "Hecho"
         },
         "MissionDeleteDialog": {
           "7c84ee0d7d": "Eliminar misión",
