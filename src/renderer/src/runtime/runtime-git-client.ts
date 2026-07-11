@@ -22,7 +22,7 @@ import type { HostedReviewProvider } from '../../../shared/hosted-review'
 import type { ResolvedSourceControlAiGenerationParams } from '../../../shared/source-control-ai'
 import { getCommitMessageModelDiscoveryHostKeyForScope } from '../../../shared/commit-message-host-key'
 import type { GitHistoryOptions, GitHistoryResult } from '../../../shared/git-history'
-import { getRepoIdFromWorktreeId } from '../../../shared/worktree-id'
+import { getRepoIdFromWorktreeId, splitWorktreeIdForFilesystem } from '../../../shared/worktree-id'
 import { callRuntimeRpc, getActiveRuntimeTarget } from './runtime-rpc-client'
 import { toRuntimeWorktreeSelector } from './runtime-worktree-selector'
 
@@ -130,8 +130,11 @@ export async function getRuntimeGitStatus(
     ? { bypassEffectiveUpstreamNegativeCache: true }
     : {}
   if (target.kind === 'local' || !context.worktreeId) {
+    const worktreePath = context.worktreeId
+      ? (splitWorktreeIdForFilesystem(context.worktreeId)?.worktreePath ?? context.worktreePath)
+      : context.worktreePath
     return window.api.git.status({
-      worktreePath: context.worktreePath,
+      worktreePath,
       connectionId: context.connectionId,
       ...includeIgnoredArgs,
       ...upstreamCacheBypassArgs

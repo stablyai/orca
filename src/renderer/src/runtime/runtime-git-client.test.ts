@@ -104,6 +104,22 @@ describe('runtime git client', () => {
     expect(runtimeEnvironmentCall).not.toHaveBeenCalled()
   })
 
+  it('uses the backing folder path for local folder-workspace status', async () => {
+    gitStatus.mockResolvedValue({ entries: [], conflictOperation: 'unknown' })
+    const workspaceId = '123e4567-e89b-12d3-a456-426614174000'
+
+    await getRuntimeGitStatus({
+      settings: { activeRuntimeEnvironmentId: null },
+      worktreeId: `folder-repo::/home/user::workspace:${workspaceId}`,
+      worktreePath: `/home/user::workspace:${workspaceId}`
+    })
+
+    expect(gitStatus).toHaveBeenCalledWith({
+      worktreePath: '/home/user',
+      connectionId: undefined
+    })
+  })
+
   it('forwards includeIgnored to local git status only when enabled', async () => {
     gitStatus.mockResolvedValue({ entries: [], conflictOperation: 'unknown' })
 
