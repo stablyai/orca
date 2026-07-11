@@ -56,7 +56,11 @@ describe('suggestCommands', () => {
   })
 
   it('only considers commands of the same depth', () => {
-    expect(suggestCommands(specs, ['worktree'])).toEqual([])
+    expect(suggestCommands(specs, ['worktree', 'list', 'extra'])).toEqual([])
+  })
+
+  it('suggests a top-level command group near-miss', () => {
+    expect(suggestCommands(specs, ['worktre'])).toEqual(['worktree'])
   })
 
   it('ranks closer matches first', () => {

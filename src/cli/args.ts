@@ -9,11 +9,10 @@ export type ParsedArgs = {
 
 export type CommandSpec = {
   path: string[]
-  // Why: alternate command paths that resolve to this same canonical spec, so
-  // agents reaching for a conventional verb (git's `worktree remove`) succeed
-  // instead of dead-ending. Each alias is a full command path. Additive only —
-  // dispatch always keys on the canonical `path`, never the alias.
+  // Why: conventional alternate verbs should resolve without duplicating specs
+  // or handler registrations.
   aliases?: string[][]
+  argumentMode?: 'parsed' | 'passthrough'
   summary: string
   usage: string
   allowedFlags: string[]
@@ -23,6 +22,7 @@ export type CommandSpec = {
 }
 
 export const GLOBAL_FLAGS = ['help', 'json', 'pairing-code', 'environment']
+const GLOBAL_VALUE_FLAGS = new Set(['pairing-code', 'environment'])
 export const BOOLEAN_FLAGS = new Set([
   'all',
   'attachments',
@@ -74,7 +74,23 @@ function setFlagValue(flags: Map<string, string | boolean>, name: string, value:
   flags.set(name, value)
 }
 
-export function parseArgs(argv: string[]): ParsedArgs {
+function commandPathStartsAt(argv: string[], tokenIndex: number, path: string[]): boolean {
+  let cursor = tokenIndex
+  for (const part of path) {
+    while (argv[cursor]?.startsWith('--')) {
+      const assignment = argv[cursor].slice(2)
+      const flag = assignment.split('=', 1)[0]
+      cursor += assignment.includes('=') || BOOLEAN_FLAGS.has(flag) ? 1 : 2
+    }
+    if (argv[cursor] !== part) {
+      return false
+    }
+    cursor += 1
+  }
+  return true
+}
+
+export function parseArgs(argv: string[], commandPaths?: readonly string[][]): ParsedArgs {
   const commandPath: string[] = []
   const flags = new Map<string, string | boolean>()
 
@@ -97,6 +113,13 @@ export function parseArgs(argv: string[]): ParsedArgs {
 
     const flag = assignment
     if (BOOLEAN_FLAGS.has(flag)) {
+      flags.set(flag, true)
+      continue
+    }
+    // Why: a pre-command flag must not consume a registry-resolvable command path.
+    const startsCommandAt = (tokenIndex: number): boolean =>
+      commandPaths?.some((path) => commandPathStartsAt(argv, tokenIndex, path)) ?? false
+    if (commandPath.length === 0 && startsCommandAt(i + 1) && !startsCommandAt(i + 2)) {
       flags.set(flag, true)
       continue
     }
@@ -153,7 +176,8 @@ export function supportsBrowserPageFlag(commandPath: string[]): boolean {
       'emulator',
       'note',
       'diagnostics',
-      'linear'
+      'linear',
+      'agent-context'
     ].includes(commandPath[0])
   ) {
     return false
@@ -168,11 +192,11 @@ export function supportsBrowserPageFlag(commandPath: string[]): boolean {
   ].includes(joined)
 }
 
-// Why: the flags a command actually accepts are its own allowedFlags plus the
-// always-accepted globals and the conditional --page. validateCommandAndFlags and
-// agent-context must report the same effective set so the schema doesn't
-// under-report valid flags like --json/--help.
+// Why: validation and agent discovery must expose the same effective flag set.
 export function effectiveAllowedFlags(spec: CommandSpec): string[] {
+  if (spec.argumentMode === 'passthrough') {
+    return []
+  }
   return [
     ...new Set([
       ...GLOBAL_FLAGS,
@@ -220,16 +244,11 @@ export function isCommandGroup(commandPath: string[]): boolean {
 export function normalizeCommandPositionals(specs: CommandSpec[], parsed: ParsedArgs): ParsedArgs {
   for (const spec of specs) {
     const positionalArgs = spec.positionalArgs ?? []
-    // Why: a spec with no positionals AND no aliases has nothing to normalize.
-    // Aliased specs still fall through so an aliased path is canonicalized even
-    // when the command takes no positionals (e.g. `worktree remove` → `rm`).
+    // Why: aliased paths still need canonicalization when there are no positionals.
     if (positionalArgs.length === 0 && !spec.aliases) {
       continue
     }
-    // Why: match against the canonical path AND any alias so an aliased
-    // invocation is rewritten to the canonical path here, before dispatch and
-    // validation run. This is the single canonicalization point — dispatch then
-    // keys the handler map on `spec.path`, never the alias the user typed.
+    // Why: canonicalize aliases before validation and dispatch so both use one key.
     for (const base of specPaths(spec)) {
       // Why: `< 0` (not `<= 0`) so an exact base match with zero positionals
       // still canonicalizes an aliased path; upper bound guards over-consumption.
@@ -285,8 +304,11 @@ export function validateCommandAndFlags(specs: CommandSpec[], parsed: ParsedArgs
   }
 
   const pageAllowed = supportsBrowserPageFlag(spec.path)
-  for (const flag of parsed.flags.keys()) {
+  for (const [flag, value] of parsed.flags) {
     const isGlobalFlag = GLOBAL_FLAGS.includes(flag)
+    if (GLOBAL_VALUE_FLAGS.has(flag) && (typeof value !== 'string' || value.length === 0)) {
+      throw new RuntimeClientError('invalid_argument', `Flag --${flag} requires a value.`)
+    }
     if (!isGlobalFlag && !spec.allowedFlags.includes(flag) && !(flag === 'page' && pageAllowed)) {
       throw new RuntimeClientError(
         'invalid_argument',

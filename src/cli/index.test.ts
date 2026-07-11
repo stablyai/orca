@@ -6,6 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const {
   callMock,
+  runtimeClientConstructorMock,
   serveOrcaAppMock,
   getDefaultUserDataPathMock,
   addEnvironmentFromPairingCodeMock,
@@ -13,6 +14,7 @@ const {
   spawnMock
 } = vi.hoisted(() => ({
   callMock: vi.fn(),
+  runtimeClientConstructorMock: vi.fn(),
   serveOrcaAppMock: vi.fn(),
   getDefaultUserDataPathMock: vi.fn(() => '/tmp/orca-user-data'),
   addEnvironmentFromPairingCodeMock: vi.fn(),
@@ -33,6 +35,7 @@ vi.mock('./runtime-client', () => {
       remotePairingCode?: string | null,
       environmentSelector?: string | null
     ) {
+      runtimeClientConstructorMock()
       const effectivePairingCode =
         remotePairingCode === undefined
           ? (process.env.ORCA_PAIRING_CODE ?? process.env.ORCA_REMOTE_PAIRING)
@@ -120,9 +123,7 @@ import { encodePairingOffer, PAIRING_OFFER_VERSION } from '../shared/pairing'
 
 describe('COMMAND_SPECS collision check', () => {
   it('has no duplicate command or alias paths', () => {
-    // Why: resolution is first-match-wins over canonical paths AND aliases, so a
-    // duplicate alias (colliding with a canonical path or another alias) would
-    // silently shadow a real command. Fail the build if one is ever introduced.
+    // Why: first-match resolution would silently shadow duplicate aliases.
     const seen = new Set<string>()
     for (const spec of COMMAND_SPECS) {
       for (const path of specPaths(spec)) {
@@ -194,9 +195,11 @@ describe('command aliases dispatch to the canonical handler', () => {
   })
 
   it('serves `agent-context --json` without contacting the runtime', async () => {
+    runtimeClientConstructorMock.mockClear()
     await main(['agent-context', '--json'], '/tmp/repo')
 
     // Why: pure local read — proves the SSH/offline property (no RPC).
+    expect(runtimeClientConstructorMock).not.toHaveBeenCalled()
     expect(callMock).not.toHaveBeenCalled()
     const schema = JSON.parse(String(logSpy.mock.calls.at(-1)?.[0]))
     expect(schema.schemaVersion).toBe(1)
@@ -204,6 +207,19 @@ describe('command aliases dispatch to the canonical handler', () => {
       (command: { command: string }) => command.command === 'worktree rm'
     )
     expect(rm.aliases).toContainEqual(['worktree', 'remove'])
+  })
+
+  it('keeps `agent-context` local when remote environment variables are set', async () => {
+    vi.stubEnv('ORCA_PAIRING_CODE', 'pairing-code')
+    vi.stubEnv('ORCA_ENVIRONMENT', 'stale-environment')
+    try {
+      await main(['agent-context', '--json'], '/tmp/repo')
+
+      expect(process.exitCode).not.toBe(1)
+      expect(callMock).not.toHaveBeenCalled()
+    } finally {
+      vi.unstubAllEnvs()
+    }
   })
 })
 
@@ -228,9 +244,79 @@ describe('unknown command surfaces a suggestion', () => {
     expect(stderr).toContain('Unknown command: worktree remov')
     expect(stderr).toContain('orca worktree')
   })
+
+  it('reports a mistyped pre-command flag without swallowing the command', async () => {
+    await main(['--jso', 'worktree', 'list'], '/tmp/repo')
+
+    expect(process.exitCode).toBe(1)
+    const stderr = errorSpy.mock.calls.map((call) => String(call[0])).join('\n')
+    expect(stderr).toContain('Unknown flag --jso for command: worktree list')
+    expect(stderr).toContain('--json')
+  })
+
+  it('reports a pre-command flag that belongs to another command', async () => {
+    await main(['--workspace', 'worktree', 'list'], '/tmp/repo')
+
+    expect(process.exitCode).toBe(1)
+    const stderr = errorSpy.mock.calls.map((call) => String(call[0])).join('\n')
+    expect(stderr).toContain('Unknown flag --workspace for command: worktree list')
+  })
+
+  it('reports a pre-command typo when a global flag splits the command path', async () => {
+    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
+
+    await main(['--jso', 'worktree', '--json', 'list'], '/tmp/repo')
+
+    expect(process.exitCode).toBe(1)
+    expect(logSpy.mock.calls.flat().join('\n')).toContain(
+      'Unknown flag --jso for command: worktree list'
+    )
+    expect(callMock).not.toHaveBeenCalled()
+    logSpy.mockRestore()
+  })
+
+  it.each(['environment', 'pairing-code'])(
+    'rejects --%s without a selector before runtime construction',
+    async (flag) => {
+      runtimeClientConstructorMock.mockClear()
+
+      await main([`--${flag}`, 'worktree', 'list'], '/tmp/repo')
+
+      expect(process.exitCode).toBe(1)
+      const stderr = errorSpy.mock.calls.map((call) => String(call[0])).join('\n')
+      expect(stderr).toContain(`Flag --${flag} requires a value.`)
+      expect(runtimeClientConstructorMock).not.toHaveBeenCalled()
+      expect(callMock).not.toHaveBeenCalled()
+    }
+  )
+})
+
+describe('unknown help command surfaces a suggestion', () => {
+  it.each([
+    ['help prefix', ['help', 'worktree', 'remov']],
+    ['help flag', ['worktree', 'remov', '--help']]
+  ])('prints did-you-mean for the %s form', async (_label, argv) => {
+    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
+
+    await main(argv, '/tmp/repo')
+
+    expect(process.exitCode).toBe(1)
+    expect(logSpy.mock.calls.flat().join('\n')).toContain('Did you mean: orca worktree')
+    logSpy.mockRestore()
+    process.exitCode = 0
+  })
 })
 
 describe('orca root help', () => {
+  it('advertises machine-readable agent discovery', async () => {
+    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
+
+    await main([], '/tmp/repo')
+
+    expect(logSpy.mock.calls.flat().join('\n')).toContain('agent-context')
+    logSpy.mockRestore()
+  })
+
   it('advertises computer-use capabilities discovery', async () => {
     const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
 

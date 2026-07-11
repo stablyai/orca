@@ -20,6 +20,7 @@ export const CORE_COMMAND_SPECS: CommandSpec[] = [
   },
   {
     path: ['claude-teams'],
+    argumentMode: 'passthrough',
     summary: 'Start Claude Code Agent Teams in the current Orca terminal',
     usage: 'orca claude-teams [claude args...]',
     allowedFlags: [...GLOBAL_FLAGS],

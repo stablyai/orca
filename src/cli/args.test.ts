@@ -46,6 +46,73 @@ describe('parseArgs', () => {
     expect(parsed.flags.get('url')).toBe('https://example.com')
   })
 
+  it('does not consume a command token after an unknown flag', () => {
+    const parsed = parseArgs(['--jso', 'worktree', 'list'], [['worktree', 'list']])
+
+    expect(parsed.commandPath).toEqual(['worktree', 'list'])
+    expect(parsed.flags.get('jso')).toBe(true)
+  })
+
+  it('does not consume a command token after a flag valid on another command', () => {
+    const parsed = parseArgs(['--workspace', 'worktree', 'list'], [['worktree', 'list']])
+
+    expect(parsed.commandPath).toEqual(['worktree', 'list'])
+    expect(parsed.flags.get('workspace')).toBe(true)
+  })
+
+  it('recognizes a command path with a boolean flag between its segments', () => {
+    const parsed = parseArgs(['--jso', 'worktree', '--json', 'list'], [['worktree', 'list']])
+
+    expect(parsed.commandPath).toEqual(['worktree', 'list'])
+    expect(parsed.flags.get('jso')).toBe(true)
+    expect(parsed.flags.get('json')).toBe(true)
+  })
+
+  it('recognizes a command path with a value flag between its segments', () => {
+    const parsed = parseArgs(
+      ['--jso', 'worktree', '--repo', 'id:abc', 'list'],
+      [['worktree', 'list']]
+    )
+
+    expect(parsed.commandPath).toEqual(['worktree', 'list'])
+    expect(parsed.flags.get('jso')).toBe(true)
+    expect(parsed.flags.get('repo')).toBe('id:abc')
+  })
+
+  it('still consumes a pre-command flag value before a later command path', () => {
+    const parsed = parseArgs(['--workspace', 'team-1', 'linear', 'list'], [['linear', 'list']])
+
+    expect(parsed.commandPath).toEqual(['linear', 'list'])
+    expect(parsed.flags.get('workspace')).toBe('team-1')
+  })
+
+  it('preserves existing pre-command selector values', () => {
+    const parsed = parseArgs(['--repo', 'id:abc', 'worktree', 'list'], [['worktree', 'list']])
+
+    expect(parsed.commandPath).toEqual(['worktree', 'list'])
+    expect(parsed.flags.get('repo')).toBe('id:abc')
+  })
+
+  it('preserves a selector value that is also a registered command', () => {
+    const parsed = parseArgs(
+      ['--environment', 'status', 'worktree', 'list'],
+      [['status'], ['worktree', 'list']]
+    )
+
+    expect(parsed.commandPath).toEqual(['worktree', 'list'])
+    expect(parsed.flags.get('environment')).toBe('status')
+  })
+
+  it('preserves a selector value that is also a command group', () => {
+    const parsed = parseArgs(
+      ['--environment', 'worktree', 'status'],
+      [['status'], ['worktree', 'list']]
+    )
+
+    expect(parsed.commandPath).toEqual(['status'])
+    expect(parsed.flags.get('environment')).toBe('worktree')
+  })
+
   it('parses emulator reinstall as a boolean flag', () => {
     const parsed = parseArgs(['emulator', 'install', 'app.apk', '--reinstall', '--device', 'emu'])
 
@@ -161,6 +228,10 @@ describe('supportsBrowserPageFlag', () => {
   it('does not expose browser page targeting on orchestration commands', () => {
     expect(supportsBrowserPageFlag(['orchestration', 'send'])).toBe(false)
   })
+
+  it('does not expose browser page targeting on local agent discovery', () => {
+    expect(supportsBrowserPageFlag(['agent-context'])).toBe(false)
+  })
 })
 
 describe('validateCommandAndFlags', () => {
@@ -184,6 +255,18 @@ describe('validateCommandAndFlags', () => {
     ])
 
     expect(() => validateCommandAndFlags(specs, parsed)).not.toThrow()
+  })
+
+  it.each(['environment', 'pairing-code'])('rejects --%s without a value', (flag) => {
+    const parsed = parseArgs([`--${flag}`, 'demo'], [['demo']])
+
+    expect(() => validateCommandAndFlags(specs, parsed)).toThrow(`Flag --${flag} requires a value.`)
+  })
+
+  it.each(['environment', 'pairing-code'])('rejects an empty --%s= value', (flag) => {
+    const parsed = parseArgs(['demo', `--${flag}=`])
+
+    expect(() => validateCommandAndFlags(specs, parsed)).toThrow(`Flag --${flag} requires a value.`)
   })
 
   it('still rejects unknown command-specific flags', () => {

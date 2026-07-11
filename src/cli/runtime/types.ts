@@ -23,7 +23,8 @@ export class RuntimeRpcFailureError extends RuntimeClientError {
   readonly response: RuntimeRpcFailure
 
   constructor(response: RuntimeRpcFailure) {
-    super(response.error.code, response.error.message)
+    // Why: all client errors expose recovery through the same inherited channel.
+    super(response.error.code, response.error.message, response.error.data)
     this.response = response
   }
 }

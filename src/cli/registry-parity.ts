@@ -1,8 +1,6 @@
 import type { CommandSpec } from './args'
 
-// Why: specs (validation/help) and handlers (dispatch) are two parallel
-// registries. Nothing structurally prevents a handler without a spec, or a spec
-// without a handler. This guard makes that drift a build failure.
+// Why: validation/help and dispatch use parallel registries that must not drift.
 
 export type RegistryParityGaps = {
   handlersWithoutSpec: string[]
@@ -13,9 +11,7 @@ export function findRegistryParityGaps(
   specs: CommandSpec[],
   handlerKeys: Iterable<string>
 ): RegistryParityGaps {
-  // Why: alias paths are deliberately NOT canonical spec paths and never get a
-  // dedicated handler — they resolve to the canonical path before dispatch. So
-  // parity is checked against canonical paths only; aliases are naturally exempt.
+  // Why: aliases resolve before dispatch and deliberately have no handler key.
   const canonical = new Set(specs.map((spec) => spec.path.join(' ')))
   const handlers = new Set(handlerKeys)
   return {

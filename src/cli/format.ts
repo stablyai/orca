@@ -80,23 +80,17 @@ export function formatCliError(error: unknown, context: CliErrorContext = {}): s
   if (error instanceof RuntimeClientError && error.code === 'runtime_unavailable') {
     return `${message}\nOrca is not running. Run 'orca open' first.`
   }
-  if (
-    error instanceof RuntimeClientError &&
-    error.code === 'invalid_argument' &&
-    context.commandPath?.[0] === 'computer'
-  ) {
-    return formatMessageWithNextSteps(
-      message,
-      computerUseErrorRecoveryData('invalid_argument')?.nextSteps ?? []
-    )
-  }
-  // Why: errors carrying a structured recovery payload (did-you-mean,
-  // valid-flag enumeration) render their nextSteps the same way computer errors
-  // do. RuntimeRpcFailureError has no `data`, so it falls through to its branch.
+  // Why: error-specific recovery must win over the generic computer fallback.
   if (error instanceof RuntimeClientError) {
     const nextSteps = nextStepsFromData(error.data)
     if (nextSteps.length > 0) {
       return formatMessageWithNextSteps(message, nextSteps)
+    }
+    if (error.code === 'invalid_argument' && context.commandPath?.[0] === 'computer') {
+      return formatMessageWithNextSteps(
+        message,
+        computerUseErrorRecoveryData('invalid_argument')?.nextSteps ?? []
+      )
     }
   }
   if (
@@ -156,8 +150,7 @@ function nextStepsFromData(data: unknown): string[] {
 }
 
 function localCliErrorData(error: unknown, context: CliErrorContext): unknown {
-  // Why: an error's own structured payload (command/flag suggestions) wins; the
-  // computer special case stays as a fallback for errors that don't carry data.
+  // Why: error-specific recovery must win over the generic computer fallback.
   if (error instanceof RuntimeClientError && error.data !== undefined) {
     return error.data
   }

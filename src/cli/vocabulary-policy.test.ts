@@ -30,6 +30,18 @@ describe('findVocabularyViolations (fixtures)', () => {
     expect(violations).toEqual([])
   })
 
+  it('rejects a canonical verb alias under an unrelated command prefix', () => {
+    const violations = findVocabularyViolations([spec(['gadget', 'delete'], [['other', 'rm']])])
+    expect(violations).toHaveLength(1)
+  })
+
+  it('rejects a canonical verb alias at a different command depth', () => {
+    const violations = findVocabularyViolations([
+      spec(['gadget', 'delete'], [['gadget', 'nested', 'rm']])
+    ])
+    expect(violations).toHaveLength(1)
+  })
+
   it('passes the canonical deletion verb outright', () => {
     expect(findVocabularyViolations([spec(['gadget', 'rm'])])).toEqual([])
   })

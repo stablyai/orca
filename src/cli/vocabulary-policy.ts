@@ -1,10 +1,7 @@
 import type { CommandSpec } from './args'
 
-// Why: agents predict verbs from a generalized CLI model. Splitting deletion
-// across rm/remove/delete or reads across show/get forces relearning and failed
-// guesses. This policy keeps NEW commands on the canonical verb (or bridged to it
-// by an alias), enforced mechanically rather than by review. Existing divergences
-// are grandfathered via allowlists; renames are out of scope.
+// Why: predictable verbs prevent failed agent guesses; existing divergences stay
+// grandfathered because renaming them would break compatibility.
 
 type VerbFamily = {
   name: string
@@ -45,7 +42,11 @@ function terminalVerb(path: string[]): string {
 }
 
 function hasCanonicalAlias(spec: CommandSpec, canonical: string): boolean {
-  return (spec.aliases ?? []).some((alias) => terminalVerb(alias) === canonical)
+  const expected = [...spec.path.slice(0, -1), canonical]
+  return (spec.aliases ?? []).some(
+    (alias) =>
+      alias.length === expected.length && alias.every((part, index) => part === expected[index])
+  )
 }
 
 export function findVocabularyViolations(specs: CommandSpec[]): VocabularyViolation[] {

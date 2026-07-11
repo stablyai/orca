@@ -1,9 +1,7 @@
 import type { CommandSpec } from './args'
 import { specPaths } from './args'
 
-// Why: an unknown command is a dead end for an agent unless the error names the
-// real command. Suggestions are ranked by edit distance over the actual command
-// registry (canonical paths plus aliases), so they never drift from reality.
+// Why: rank the live registry so typo recovery cannot drift from accepted paths.
 
 const SUGGESTION_THRESHOLD = 3
 const MAX_SUGGESTIONS = 3
@@ -37,9 +35,7 @@ export function levenshtein(a: string, b: string): number {
   return prev[n]
 }
 
-// Why: keep only near matches (within the edit-distance threshold, excluding the
-// exact input), closest first, capped — the shared ranking for both command and
-// flag suggestions.
+// Why: one bounded near-match ranking keeps command and flag recovery consistent.
 function rankByDistance(scored: { label: string; distance: number }[]): string[] {
   return scored
     .filter((entry) => entry.distance > 0 && entry.distance <= SUGGESTION_THRESHOLD)
@@ -48,15 +44,16 @@ function rankByDistance(scored: { label: string; distance: number }[]): string[]
     .map((entry) => entry.label)
 }
 
-// Why: only compare against commands of the same depth (segment count). A typo is
-// almost always in one segment, not a missing/extra one, and same-depth matching
-// avoids suggesting a parent group or an unrelated longer command.
+// Why: same-depth matching avoids suggesting parent groups or unrelated commands.
 export function suggestCommands(specs: CommandSpec[], commandPath: string[]): string[] {
   const input = commandPath.join(' ')
   const seen = new Set<string>()
   const scored: { label: string; distance: number }[] = []
   for (const spec of specs) {
-    for (const candidate of specPaths(spec)) {
+    const candidates = specPaths(spec).map((path) =>
+      commandPath.length === 1 ? path.slice(0, 1) : path
+    )
+    for (const candidate of candidates) {
       if (candidate.length !== commandPath.length) {
         continue
       }
@@ -91,9 +88,7 @@ function suggestFlags(flag: string, validFlags: string[]): string[] {
   )
 }
 
-// Why: a rejected flag should tell the agent what the command DOES accept, so it
-// can correct without a separate `--help` round-trip. `validFlags` is the exact
-// set validation accepts (command flags, globals, and the conditional --page).
+// Why: include the accepted set so agents can recover without another help call.
 export function unknownFlagData(flag: string, validFlags: string[]): FlagErrorData {
   const sortedValid = [...validFlags].sort((a, b) => a.localeCompare(b))
   const suggestions = suggestFlags(flag, sortedValid)

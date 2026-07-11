@@ -77,4 +77,17 @@ describe('agent-context over the live registry', () => {
     const schema = buildAgentContext(COMMAND_SPECS)
     expect(formatAgentContextSummary(schema)).toContain(`${schema.commandCount} commands`)
   })
+
+  it('does not advertise browser page targeting for local discovery', () => {
+    const schema = buildAgentContext(COMMAND_SPECS)
+    const agentContext = schema.commands.find((command) => command.command === 'agent-context')
+    expect(agentContext?.flags).not.toContain('page')
+  })
+
+  it('marks raw passthrough commands without synthesizing Orca flags', () => {
+    const schema = buildAgentContext(COMMAND_SPECS)
+    const claudeTeams = schema.commands.find((command) => command.command === 'claude-teams')
+    expect(claudeTeams?.argumentMode).toBe('passthrough')
+    expect(claudeTeams?.flags).toEqual([])
+  })
 })
