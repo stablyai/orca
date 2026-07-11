@@ -2,6 +2,7 @@ import { createReadStream } from 'node:fs'
 import { createInterface } from 'node:readline'
 import type { AiVaultSession } from '../../shared/ai-vault-types'
 import { LOCAL_EXECUTION_HOST_ID, type ExecutionHostId } from '../../shared/execution-host'
+import { isHarnessInjectedUserTurnText } from '../../shared/harness-injected-user-turns'
 import type {
   FileWithMtime,
   ResumableSessionParseState,
@@ -119,8 +120,10 @@ export function consumeClaudeSessionLine(state: ClaudeSessionParseState, line: s
     const title = extractMessageText(record.message)
     addPreviewContent(accumulator, 'user', asRecord(record.message)?.content, record.timestamp)
     if (title) {
-      // Meta prompts (injected context) only seed the last-resort title.
-      if (record.isMeta === true) {
+      // Meta prompts (injected context) only seed the last-resort title. Some
+      // injected turns (task notifications) carry no isMeta, so also gate on
+      // the shared machinery-text classifier.
+      if (record.isMeta === true || isHarnessInjectedUserTurnText(title)) {
         state.metaTitle ??= title
       } else {
         state.firstUserTitle ??= title

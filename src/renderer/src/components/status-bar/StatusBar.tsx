@@ -717,6 +717,11 @@ function ClaudeSwitcherMenu({
   // settings mutations don't re-run the remote snapshot round trip.
   const loadAccounts = useCallback(async () => {
     const snapshot = await fetchProviderAccountsSnapshot({ activeRuntimeEnvironmentId })
+    // Why: a failed Claude half is a substituted empty roster; keep prior state.
+    if (snapshot.failedProviders?.includes('claude')) {
+      console.error('Claude account list failed; keeping previous status bar state.')
+      return
+    }
     if (mountedRef.current) {
       setAccounts(snapshot.claude)
     }
@@ -1285,6 +1290,11 @@ function CodexSwitcherMenu({
   // settings mutations don't re-run the remote snapshot round trip.
   const loadAccounts = useCallback(async () => {
     const snapshot = await fetchProviderAccountsSnapshot({ activeRuntimeEnvironmentId })
+    // Why: a failed Codex half is a substituted empty roster; keep prior state.
+    if (snapshot.failedProviders?.includes('codex')) {
+      console.error('Codex account list failed; keeping previous status bar state.')
+      return
+    }
     if (mountedRef.current) {
       setAccounts(snapshot.codex)
     }

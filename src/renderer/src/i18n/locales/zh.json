@@ -1736,7 +1736,11 @@
         "editReviewersWithCurrent": "编辑评审人：{{value0}}",
         "linearEmptyAttributeFilter": "没有匹配所选筛选条件的问题。请清除筛选条件或尝试其他条件。",
         "linearEmptyUnfilteredScope": "此工作区范围内没有问题。请尝试搜索或调整团队。",
-        "linearFetchMore": "加载更多"
+        "linearFetchMore": "加载更多",
+        "jiraSortAscending": "升序",
+        "jiraSortDescending": "降序",
+        "jiraSortBy": "排序方式",
+        "jiraToggleSortDirection": "按{{value0}}排序"
       },
       "Terminal": {
         "73768427cf": "关闭",
@@ -3799,7 +3803,7 @@
           "8c097ef04e": "来自 Orca。它仍保留在您的磁盘上。",
           "e62415c3d0": "这仅删除",
           "b79b39d865": "删除项目",
-          "fromOrcaSsh": "from Orca. Its files stay on {{value0}} — re-add that SSH host to recover it."
+          "fromOrcaSsh": "从 Orca 中移除。其文件保留在 {{value0}} 上 — 重新添加该 SSH 主机即可恢复。"
         },
         "ScrollToCurrentWorkspaceToolbarButton": {
           "23989bb663": "显示活动工作区"
@@ -4081,7 +4085,7 @@
           "3e65e11cc6": "工作区元数据",
           "c7fa72ead0": "编辑笔记",
           "93cbea12c2": "笔记",
-          "eace1d2cf6": "Neutral",
+          "eace1d2cf6": "中性",
           "dbe2d18972": "更多 {{value0}} 操作",
           "ae76907ca6": "取消链接 {{value0}}",
           "ad25c3ff05": "在 {{value0}} 上查看",
@@ -4187,7 +4191,7 @@
           "045a8aed48": "孩子们",
           "2ca6e29a3c": "仓库",
           "bb85cd86ba": "为 {{value0}} 创建工作区",
-          "ebadb7eadb": "{{value0}} {{value1}} child {{value2}}",
+          "ebadb7eadb": "{{value0}} {{value1}} 子项 {{value2}}",
           "20bebf9c7f": "显示 {{value0}} 个子工作区",
           "c1f4a31623": "显示 {{value0}} 个子工作区",
           "e97297cb75": "隐藏 {{value0}} 个子工作区",
@@ -4285,7 +4289,9 @@
               "1d0fa5c0a5": "无法删除工作区 {{value0}}",
               "ead7b8ee15": "它已更改文件。无论如何，请使用强制删除将其删除。",
               "905fc8efac": "Git 已经删除了这个工作区。使用强制删除将其从 Orca 中清除。",
-              "0899ebdb28": "Git 已经忘记了这个工作区，但它的目录仍然在磁盘上。使用强制删除来删除孤立目录。"
+              "0899ebdb28": "Git 已经忘记了这个工作区，但它的目录仍然在磁盘上。使用强制删除来删除孤立目录。",
+              "locked": "此工作区被 Git 锁定。请在其仓库中运行 git worktree unlock <worktree-path>，然后重试删除。",
+              "lockedReason": "此工作区被 Git 锁定。Git 报告：{{value0}}。请在其仓库中运行 git worktree unlock <worktree-path>，然后重试删除。"
             }
           }
         },
@@ -4517,13 +4523,13 @@
           "6f7a8b9c0d": "取消",
           "7a8b9c0d1e": "打开设置",
           "8b9c0d1e2f": "删除主机",
-          "workspacesFailed": "Could not remove {{count}} of this host’s workspaces. The host was kept so you can retry.",
+          "workspacesFailed": "无法移除此主机的 {{count}} 个工作区。主机已保留，您可以重试。",
           "oneWorkspace": "1 个工作区",
-          "manyWorkspaces": "{{count}} workspaces",
-          "hostHasWorkspacesDefault": "Removes {{value0}} and its credentials from this computer. Its {{value1}} stay in Orca — remote files are not touched.",
-          "alsoDeleteRemote": "Also delete these {{value0}} on {{value1}}",
-          "alsoForgetLocal": "Also remove these {{value0}} from Orca",
-          "advanced": "Advanced",
+          "manyWorkspaces": "{{count}} 个工作区",
+          "hostHasWorkspacesDefault": "从此计算机移除 {{value0}} 及其凭据。其 {{value1}} 保留在 Orca 中 — 远程文件不会被删除。",
+          "alsoDeleteRemote": "同时在 {{value1}} 上删除这些 {{value0}}",
+          "alsoForgetLocal": "同时从 Orca 中移除这些 {{value0}}",
+          "advanced": "高级",
           "alsoDeleteRemoteHint": "永久删除远程 Git worktree 及其分支。此操作不可撤销。",
           "alsoForgetLocalHint": "仅从 Orca 中清除。远程文件、worktree 和分支不受影响。"
         },
@@ -4641,11 +4647,11 @@
         },
         "ForgetSshWorkspaceDialog": {
           "reconnectFailed": "重新连接失败",
-          "forgetBody": "Removes this workspace from Orca only. Files, the Git worktree, and branches on {{host}} are left untouched.",
-          "title": "Delete “{{name}}”?",
+          "forgetBody": "仅从 Orca 中移除此工作区。文件、Git 工作树和 {{host}} 上的分支保持不变。",
+          "title": "从 Orca 中移除“{{name}}”？",
           "disconnectedBody": "此工作区的 SSH 主机未连接。重新连接以同时在远程删除，或仅从 Orca 中移除。",
-          "ghostBody": "{{host}} is no longer a saved SSH host, so this workspace is no longer connected to a live host. It can only be removed from Orca — files and branches on the remote are left untouched.",
-          "cancel": "Cancel",
+          "ghostBody": "{{host}} 不再是已保存的 SSH 主机，因此此工作区不再连接到活跃主机。只能从 Orca 中移除 — 远程文件和分支保持不变。",
+          "cancel": "取消",
           "forget": "从 Orca 中移除",
           "reconnectAndDelete": "重新连接并删除"
         }
@@ -4669,7 +4675,7 @@
           "a2f040ac1c": "已终止 {{value0}} 个会话。",
           "63520148e2": "{{value0}} 个会话拒绝退出。",
           "cc0a26cb14": "{{value0}} 个会话拒绝退出。",
-          "71a8d342b0": "Terminal tabs absent: {{value0}}/{{value1}}. Failed close attempts: {{value2}}. Exact PTY shutdown requests accepted: {{value3}}; failed: {{value4}}.",
+          "71a8d342b0": "终端标签页缺失：{{value0}}/{{value1}}。关闭尝试失败：{{value2}}。精确 PTY 关闭请求已接受：{{value3}}；失败：{{value4}}。",
           "2e57c1a940": "守护进程关闭结果未经验证，因为其管理请求失败。",
           "993af6052c": "守护进程管理报告已退出：{{value0}}/{{value1}}；在精确清理前仍存在：{{value2}}。",
           "1f0d8ac762": "终端清理完成，但有错误。",
@@ -9526,7 +9532,7 @@
             "bar": {
               "buttons": {
                 "1fd284e931": "更多侧边栏选项卡",
-                "f1132ea95d": "Neutral"
+                "f1132ea95d": "中性"
               }
             }
           },
@@ -9843,6 +9849,9 @@
               }
             }
           },
+          "fileExplorerOperationOwner": {
+            "unresolved": "无法确定哪个主机拥有此工作区。请检查连接后重试。"
+          },
           "useFileDeletion": {
             "72691dfebc": "无法 {{value0}}“{{value1}}”。",
             "96affe1302": "“{{value0}}”已移至 {{value1}}",
@@ -9851,7 +9860,8 @@
             "a76c74f105": "destructive",
             "92276aceb7": "删除",
             "7fb9435c86": "这会永久删除远程主机上的目录及其内容。此操作无法撤销。",
-            "23e98f192f": "这会永久删除远程主机上的文件。此操作无法撤销。"
+            "23e98f192f": "这会永久删除远程主机上的文件。此操作无法撤销。",
+            "8b8ee9d22f": "无法确定哪个主机拥有此文件。请检查工作区连接后重试。"
           },
           "useFileExplorerHandlers": {
             "32cd9fd991": "无法打开符号链接目标"
@@ -9991,7 +10001,7 @@
             "recoverableEmptyOpenLogHint": "打开日志以恢复它们。",
             "emptyConversationDetail": "此会话没有已保存的对话，无法恢复。",
             "queuedMessages": "{{value0}} 条排队消息",
-            "subagentTranscripts": "{{value0}} 个子代理记录"
+            "subagentTranscripts": "{{value0}} 个子智能体记录"
           },
           "AiVaultSessionRow": {
             "resumeAgentSession": "恢复 {{value0}} 会话",
@@ -10019,8 +10029,8 @@
             "jumpToOriginalPane": "跳转到原始窗格",
             "jumpToWorktree": "跳转到工作树",
             "recoverableBadge": "未保存",
-            "subagentCountSingular": "1 subagent",
-            "subagentCountPlural": "{{value0}} subagents"
+            "subagentCountSingular": "1 个子智能体",
+            "subagentCountPlural": "{{value0}} 个子智能体"
           },
           "FileExplorerNameFilter": {
             "26fb73c6e3": "查找文件",
@@ -10077,9 +10087,14 @@
             "noActiveWorktreeTarget": "没有可用的活动工作树。"
           },
           "AiVaultSessionSubagents": {
-            "subagentsCount": "Subagents ({{value0}})",
-            "messageCount": "{{value0}} msgs",
-            "viewLog": "View Log"
+            "subagentsCount": "子智能体（{{value0}}）",
+            "messageCount": "{{value0}} 条消息",
+            "viewLog": "查看日志"
+          },
+          "aiVaultSessionLogOpen": {
+            "workspaceGone": "Couldn't open log — workspace is no longer available.",
+            "notAuthorized": "Couldn't open log — path not authorized.",
+            "alreadyEditable": "Log is already open for editing."
           }
         }
       },
@@ -10479,7 +10494,7 @@
           "e1c7b4a92d": "在设置 > 移动端中配置。",
           "a4f8c2d91e": "从左侧边栏隐藏 Orca 手机端",
           "b7e3d1c84a": "在左侧边栏显示 Orca 手机端",
-          "f3d8e5b71a": "Adds the shortcut back to the left sidebar."
+          "f3d8e5b71a": "将快捷方式添加回左侧边栏。"
         },
         "PhoneCarousel": {
           "96d651cb87": "终端会话",
@@ -11894,6 +11909,21 @@
             "ead6fc0510": "没有捕获到自动崩溃报告。你仍然可以发送详情，并在可用时包含最近的诊断日志。",
             "b082f27490": "附加最近的诊断日志",
             "e59f0b9427": "随报告发送经过删减且有大小限制的日志包。"
+          },
+          "submit": {
+            "notice": {
+              "unknownError": "The crash report request failed before it returned a reason.",
+              "ticketUploaded": "Diagnostic ticket {{value0}} was uploaded but not linked.",
+              "uncheckDiagnostics": "Uncheck \"Attach recent diagnostic logs\" and try again, or copy the details.",
+              "checkConnection": "Check your connection and try again, or copy the details.",
+              "notSent": "Crash report wasn't sent",
+              "copyDetails": "Copy Details",
+              "sentWithoutDiagnostics": "Crash report sent without diagnostic logs",
+              "diagnosticsReason": "Diagnostic logs were not attached: {{value0}}"
+            }
+          },
+          "copy": {
+            "copyFailed": "无法复制崩溃报告详细信息。"
           }
         }
       },

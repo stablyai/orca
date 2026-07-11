@@ -122,6 +122,94 @@ describe('Codex WSL runtime hook install', () => {
     expect(plan?.configPath).toBe(pathWin32.join(runtimeHome, 'hooks.json'))
   })
 
+  it('removes managed trust when the WSL canonical path changes', () => {
+    const plan = createTestPlan()
+    writeFileSync(plan.configPath, '{"hooks":{}}\n', 'utf-8')
+    writeFileSync(plan.tomlPath, '', 'utf-8')
+
+    const oldPlan = {
+      ...plan,
+      commandScriptPath: '/old/home/.orca/agent-hooks/codex-hook.sh',
+      trustConfigPath: '/old/home/hooks.json'
+    }
+    expect(_internals.installManagedHooksIntoWslRuntime(oldPlan).state).toBe('installed')
+    const oldCommand = `if [ -r '${oldPlan.commandScriptPath}' ]; then /bin/sh '${oldPlan.commandScriptPath}'; fi`
+    const oldKey = computeTrustKey(getManagedTrustEntry(oldPlan, oldCommand))
+
+    const newPlan = {
+      ...plan,
+      commandScriptPath: '/new/home/.orca/agent-hooks/codex-hook.sh',
+      trustConfigPath: '/new/home/hooks.json'
+    }
+    expect(_internals.installManagedHooksIntoWslRuntime(newPlan).state).toBe('installed')
+    const newCommand = `if [ -r '${newPlan.commandScriptPath}' ]; then /bin/sh '${newPlan.commandScriptPath}'; fi`
+    const newKey = computeTrustKey(getManagedTrustEntry(newPlan, newCommand))
+    const trustEntries = readHookTrustEntries(plan.tomlPath)
+
+    expect(trustEntries.has(oldKey)).toBe(false)
+    expect(trustEntries.has(newKey)).toBe(true)
+  })
+
+  it('sweeps all managed WSL trust for disable or confirmed absence', () => {
+    // Why: disable and confirmed absence intentionally pass []. Transient
+    // unavailability must NOT use this path — last known-good trust remains.
+    const plan = createTestPlan()
+    writeFileSync(plan.configPath, '{"hooks":{}}\n', 'utf-8')
+    writeFileSync(plan.tomlPath, '', 'utf-8')
+    expect(_internals.installManagedHooksIntoWslRuntime(plan).state).toBe('installed')
+
+    _internals.removeStaleWslRuntimeManagedHookTrustEntries(plan.tomlPath, [])
+
+    expect(readHookTrustEntries(plan.tomlPath).size).toBe(0)
+  })
+
+  it('reconciles only current, conclusive WSL path settlements', () => {
+    expect(
+      _internals.getWslHookReconciliationAction({
+        settlement: { status: 'unavailable' },
+        isCurrentGeneration: true,
+        installedTrustConfigPath: '/mnt/d/home/hooks.json',
+        resolvedTrustConfigPath: null
+      })
+    ).toBe('none')
+
+    expect(
+      _internals.getWslHookReconciliationAction({
+        settlement: { status: 'missing' },
+        isCurrentGeneration: false,
+        installedTrustConfigPath: '/mnt/d/home/hooks.json',
+        resolvedTrustConfigPath: null
+      })
+    ).toBe('none')
+
+    expect(
+      _internals.getWslHookReconciliationAction({
+        settlement: { status: 'missing' },
+        isCurrentGeneration: true,
+        installedTrustConfigPath: '/mnt/d/home/hooks.json',
+        resolvedTrustConfigPath: null
+      })
+    ).toBe('remove')
+
+    expect(
+      _internals.getWslHookReconciliationAction({
+        settlement: { status: 'resolved', canonicalPath: '/windows/d/home' },
+        isCurrentGeneration: true,
+        installedTrustConfigPath: '/windows/d/home/hooks.json',
+        resolvedTrustConfigPath: '/windows/d/home/hooks.json'
+      })
+    ).toBe('none')
+
+    expect(
+      _internals.getWslHookReconciliationAction({
+        settlement: { status: 'resolved', canonicalPath: '/windows/d/home' },
+        isCurrentGeneration: true,
+        installedTrustConfigPath: '/mnt/d/home/hooks.json',
+        resolvedTrustConfigPath: '/windows/d/home/hooks.json'
+      })
+    ).toBe('reinstall')
+  })
+
   it('generates a POSIX hook that bridges WSL loopback failures through Windows curl', () => {
     const script = _internals.getManagedScript('posix')
     expect(script).toContain('load_hook_endpoint()')

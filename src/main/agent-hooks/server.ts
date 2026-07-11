@@ -26,12 +26,14 @@ import {
   getEndpointFileName,
   hasPendingAgentResultText,
   HOOK_REQUEST_SLOWLORIS_MS,
+  markClaudeLeadTurnInterrupted,
   MAX_PANE_KEY_LEN,
   normalizeHookPayload,
   parseFormEncodedBody,
   readRequestBody,
   resolveHookSource,
   preparePendingGrokResultDiscovery,
+  seedClaudeSubagentRosterFromSnapshots,
   warnOnHookEnvOrVersionMismatch,
   writeEndpointFile,
   type AgentHookEventPayload,
@@ -253,6 +255,10 @@ function toAgentStatusIpcPayload(entry: EnrichedAgentHookEventPayload): AgentSta
   }
 }
 
+// Why: OSC-only dedupe (ingestTerminalStatus). Deliberately omits `subagents`:
+// OSC payloads never carry them, and including the field would make every
+// hook-cached entry with child rows non-equivalent — the OSC ping would then
+// apply and wipe the roster. Do not reuse this for hook-path comparisons.
 function equivalentParsedAgentStatusPayload(
   a: ParsedAgentStatusPayload,
   b: ParsedAgentStatusPayload
@@ -555,7 +561,20 @@ export class AgentHookServer {
     ) {
       return false
     }
+    // Why: a 'working' pane can be child-driven (lead already idle, background
+    // subagent running). Ctrl+C at the TUI does not stop background children,
+    // so inferring a terminal done here would wrongly retire live child rows;
+    // their own hook events keep the row truthful instead.
+    if (payload.subagents?.some((subagent) => subagent.state === 'working')) {
+      return false
+    }
 
+    // Why: keep the listener's Claude lead-turn record in sync — a later
+    // child lifecycle event would otherwise re-emit the stale pre-interrupt
+    // 'working' lead state and resurrect the cancelled pane.
+    if (agentType === 'claude') {
+      markClaudeLeadTurnInterrupted(this.state, existing.paneKey)
+    }
     const inferred = this.applyNormalizedStatus({
       paneKey: existing.paneKey,
       tabId: existing.tabId,
@@ -566,7 +585,10 @@ export class AgentHookServer {
         state: 'done',
         prompt: payload.prompt,
         agentType,
-        interrupted: true
+        interrupted: true,
+        // Why: idle children are display state; dropping them on an inferred
+        // interrupt would blank the child rows a later hook would restore.
+        ...(payload.subagents ? { subagents: payload.subagents } : {})
       }
     })
     console.debug('[agent-hooks] inferred interrupted agent status', {
@@ -1558,6 +1580,17 @@ export class AgentHookServer {
       const entry = sanitizeHydratedEntry(resolvedPaneKey, rawResolvedEntry)
       if (entry && entry.receivedAt >= ttlCutoff) {
         this.state.lastStatusByPaneKey.set(resolvedPaneKey, entry)
+        // Why: the in-memory subagent roster died with the previous process.
+        // Reseed it from the persisted snapshot so the next teammate-bearing
+        // Stop (whose task ids never match lifecycle ids) doesn't silently
+        // drop the replayed child rows.
+        if (entry.payload.subagents) {
+          seedClaudeSubagentRosterFromSnapshots(
+            this.state,
+            resolvedPaneKey,
+            entry.payload.subagents
+          )
+        }
         hydrated += 1
       } else {
         dropped += 1

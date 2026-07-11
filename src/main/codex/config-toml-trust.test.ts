@@ -1515,6 +1515,34 @@ describe('readHookTrustEntries', () => {
     }
   )
 
+  it.skipIf(process.platform !== 'win32')(
+    'keeps WSL hook trust paths case-sensitive on a Windows host',
+    () => {
+      const upperKey = '/windows/d/Repo/hooks.json:session_start:0:0'
+      const lowerKey = '/windows/d/repo/hooks.json:session_start:0:0'
+      writeFileSync(
+        configPath,
+        [
+          `[hooks.state."${upperKey}"]`,
+          'enabled = true',
+          'trusted_hash = "sha256:UPPER"',
+          '',
+          `[hooks.state."${lowerKey}"]`,
+          'enabled = true',
+          'trusted_hash = "sha256:LOWER"',
+          ''
+        ].join('\n'),
+        'utf-8'
+      )
+
+      const result = readHookTrustEntries(configPath)
+
+      expect(result.get(upperKey)?.trustedHash).toBe('sha256:UPPER')
+      expect(result.get(lowerKey)?.trustedHash).toBe('sha256:LOWER')
+      expect(result.size).toBe(2)
+    }
+  )
+
   it('reads entries from a CRLF-terminated config', () => {
     const key = '/x/hooks.json:pre_tool_use:0:0'
     const original = [

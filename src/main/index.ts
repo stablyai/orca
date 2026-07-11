@@ -26,7 +26,6 @@ import { closeAllWatchers } from './ipc/filesystem-watcher'
 import { disposeWorktreeBaseDirectoryWatchers } from './ipc/worktree-base-directory-watcher'
 import { registerCoreHandlers } from './ipc/register-core-handlers'
 import { initObservability, shutdownObservability } from './observability'
-import { startSpan } from './observability/tracer'
 import { registerMobileHandlers } from './ipc/mobile'
 import { initTelemetry, shutdownTelemetry, trackAppOpenedOnce, track } from './telemetry/client'
 import { classifyError } from './telemetry/classify-error'
@@ -159,28 +158,21 @@ import { buildHeadlessAutomationWorktreeCreateArgs } from './automations/headles
 import { AgentAwakeService } from './agent-awake-service'
 import { registerSystemResumeBroadcast } from './system-resume-broadcast'
 import {
-  getCrashBreadcrumbSnapshot,
   recordCoalescedCrashBreadcrumb,
   recordCrashBreadcrumb
 } from './crash-reporting/crash-breadcrumb-store'
 import { CrashReportStore } from './crash-reporting/crash-report-store'
 import {
-  shouldRecordProcessGoneCrash,
   shouldRecoverRendererAfterProcessGone,
   type ExpectedTeardownScope
 } from './crash-reporting/process-gone-classification'
-import {
-  buildProcessGoneCrashDetails,
-  buildSuppressedProcessGoneBreadcrumbData
-} from './crash-reporting/process-gone-diagnostics'
-import { getProcessGoneDedupeKey, processGoneDedupe } from './crash-reporting/process-gone-dedupe'
+import { recordProcessGoneCrash as recordProcessGoneCrashEvent } from './crash-reporting/process-gone-recorder'
 import {
   advanceSyntheticTitleSpinnerEntries,
   type SyntheticTitleSpinnerEntry
 } from './synthetic-title-spinner'
 import { shouldSendSyntheticTitleFrame } from './synthetic-title-visibility'
 import { shouldCopySyntheticTitleFrameToPtyData } from './synthetic-title-frame-routing'
-import { isCrashReportReason } from '../shared/crash-reporting'
 import {
   getSyntheticAgentTitleProfile,
   shouldDriveSyntheticAgentTitleFromHook,
@@ -833,14 +825,6 @@ function openMainWindow(): BrowserWindow {
         webContentsId
       )
     },
-    shouldRecordRendererCrash: (details, webContentsId) =>
-      shouldRecordProcessGoneCrash({
-        source: 'renderer',
-        processType: 'renderer',
-        reason: details.reason,
-        exitCode: details.exitCode ?? null,
-        expectedTeardown: getExpectedTeardownScope(webContentsId)
-      }),
     shouldRecoverRenderer: (details, webContentsId) =>
       shouldRecoverRendererAfterProcessGone({
         reason: details.reason,
@@ -1229,75 +1213,14 @@ function recordProcessGoneCrash(
   details: Record<string, unknown>,
   webContentsId?: number
 ): void {
-  if (!crashReports || !isCrashReportReason(reason)) {
-    return
-  }
-  if (
-    !shouldRecordProcessGoneCrash({
-      source,
-      processType,
-      serviceName: typeof details.serviceName === 'string' ? details.serviceName : undefined,
-      reason,
-      exitCode,
-      expectedTeardown: getExpectedTeardownScope(webContentsId)
-    })
-  ) {
-    recordCrashBreadcrumb(
-      'process_gone_suppressed',
-      buildSuppressedProcessGoneBreadcrumbData({
-        source,
-        processType,
-        reason,
-        exitCode,
-        details
-      })
-    )
-    return
-  }
-  const key = getProcessGoneDedupeKey(source, processType, reason, exitCode)
-  if (!processGoneDedupe.shouldRecord(key)) {
-    return
-  }
-  const crashDetails = buildProcessGoneCrashDetails(details)
-  const span = startSpan('electron.process_gone', {
-    attributes: {
-      'crash.source': source,
-      'crash.process_type': processType,
-      'crash.reason': reason,
-      ...(exitCode !== null ? { 'crash.exit_code': exitCode } : {}),
-      'app.version': app.getVersion(),
-      platform: process.platform,
-      osRelease: os.release(),
-      arch: process.arch,
-      electronVersion: process.versions.electron,
-      chromeVersion: process.versions.chrome,
-      details: crashDetails,
-      breadcrumbs: getCrashBreadcrumbSnapshot()
-    }
+  recordProcessGoneCrashEvent(crashReports, {
+    source,
+    processType,
+    reason,
+    exitCode,
+    expectedTeardown: getExpectedTeardownScope(webContentsId),
+    details
   })
-  // Why: renderer/child crashes belong in the local trace lane so the
-  // diagnostic bundle has the same process-gone signal as the startup prompt.
-  span.fail(`${source} process gone: ${processType} ${reason} (${exitCode ?? 'unknown'})`)
-  void crashReports
-    .record({
-      source,
-      processType,
-      reason,
-      exitCode,
-      appVersion: app.getVersion(),
-      platform: process.platform,
-      osRelease: os.release(),
-      arch: process.arch,
-      electronVersion: process.versions.electron,
-      chromeVersion: process.versions.chrome,
-      details: crashDetails,
-      // Why: breadcrumbs stay memory-only during normal operation. Persist a
-      // snapshot only after Electron reports a crash-like process exit.
-      breadcrumbs: getCrashBreadcrumbSnapshot()
-    })
-    .catch((error) => {
-      console.error('[crash-reporting] Failed to persist crash report:', error)
-    })
 }
 
 function shutdownWatchersOnce(): Promise<void> {

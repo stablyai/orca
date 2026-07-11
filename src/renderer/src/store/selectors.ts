@@ -4,6 +4,11 @@ import type { Repo, Worktree, TerminalTab } from '../../../shared/types'
 import type { AppState } from './types'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../shared/constants'
 import { getProjectHostSetupProjectionFromState } from './project-host-setup-selector'
+import {
+  getIndexedAllWorktrees as getCachedAllWorktrees,
+  getIndexedRepoMap as getCachedRepoMap,
+  getIndexedWorktreeMap as getCachedWorktreeMap
+} from './worktree-repo-index'
 
 export { getProjectHostSetupProjectionFromState } from './project-host-setup-selector'
 
@@ -12,10 +17,6 @@ const EMPTY_TABS: TerminalTab[] = []
 const EMPTY_BROWSER_TABS: NonNullable<AppState['browserTabsByWorktree'][string]> = []
 const EMPTY_UNIFIED_TABS: NonNullable<AppState['unifiedTabsByWorktree'][string]> = []
 
-type WorktreeSnapshot = {
-  allWorktrees: Worktree[]
-  worktreeMap: Map<string, Worktree>
-}
 type FloatingVisibleTabCountState = Pick<
   AppState,
   'browserTabsByWorktree' | 'openFiles' | 'tabsByWorktree' | 'unifiedTabsByWorktree'
@@ -28,50 +29,8 @@ type FloatingVisibleTabCountCache = {
   count: number
 }
 
-// Why: Zustand reruns selectors on every write, so hot-path flatten/map work
-// needs cross-render caching. WeakMap ties each snapshot to the store slice ref
-// without pinning old test/dev instances in memory once that slice is replaced.
-const worktreeSnapshotCache = new WeakMap<AppState['worktreesByRepo'], WorktreeSnapshot>()
 const hasAnyWorktreesCache = new WeakMap<AppState['worktreesByRepo'], boolean>()
-const repoMapCache = new WeakMap<AppState['repos'], Map<string, Repo>>()
 let floatingVisibleTabCountCache: FloatingVisibleTabCountCache | null = null
-
-function getWorktreeSnapshot(worktreesByRepo: AppState['worktreesByRepo']): WorktreeSnapshot {
-  const cachedSnapshot = worktreeSnapshotCache.get(worktreesByRepo)
-  if (cachedSnapshot) {
-    return cachedSnapshot
-  }
-
-  // Why: a race between createWorktree (which appends) and fetchWorktrees
-  // (which replaces) can produce duplicate entries for the same worktree ID
-  // within a single repo's array. Deduplicating here prevents React from
-  // seeing duplicate keys, which can corrupt terminal DOM containers.
-  const worktreeMap = new Map<string, Worktree>()
-  // Why: this selector sits on hot Zustand subscription paths; avoid building
-  // a transient flattened array just to populate the snapshot cache.
-  for (const worktrees of Object.values(worktreesByRepo)) {
-    for (const worktree of worktrees) {
-      worktreeMap.set(worktree.id, worktree)
-    }
-  }
-  const allWorktrees = Array.from(worktreeMap.values())
-
-  const snapshot = { allWorktrees, worktreeMap }
-  worktreeSnapshotCache.set(worktreesByRepo, snapshot)
-  return snapshot
-}
-
-function getCachedAllWorktrees(worktreesByRepo: AppState['worktreesByRepo']): Worktree[] {
-  return getWorktreeSnapshot(worktreesByRepo).allWorktrees
-}
-
-function getCachedWorktreeMap(worktreesByRepo: AppState['worktreesByRepo']): Map<string, Worktree> {
-  const snapshot = worktreeSnapshotCache.get(worktreesByRepo)
-  if (snapshot) {
-    return snapshot.worktreeMap
-  }
-  return getWorktreeSnapshot(worktreesByRepo).worktreeMap
-}
 
 function getCachedHasAnyWorktrees(worktreesByRepo: AppState['worktreesByRepo']): boolean {
   const cached = hasAnyWorktreesCache.get(worktreesByRepo)
@@ -84,17 +43,6 @@ function getCachedHasAnyWorktrees(worktreesByRepo: AppState['worktreesByRepo']):
   const hasWorktrees = Object.values(worktreesByRepo).some((worktrees) => worktrees.length > 0)
   hasAnyWorktreesCache.set(worktreesByRepo, hasWorktrees)
   return hasWorktrees
-}
-
-function getCachedRepoMap(repos: AppState['repos']): Map<string, Repo> {
-  const cachedMap = repoMapCache.get(repos)
-  if (cachedMap) {
-    return cachedMap
-  }
-
-  const repoMap = new Map(repos.map((repo) => [repo.id, repo]))
-  repoMapCache.set(repos, repoMap)
-  return repoMap
 }
 
 export function selectFloatingVisibleTabCount(state: FloatingVisibleTabCountState): number {

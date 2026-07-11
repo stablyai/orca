@@ -1,7 +1,6 @@
 import type { IDisposable, IParser, ITheme } from '@xterm/xterm'
 import type { PaneManager } from '@/lib/pane-manager/pane-manager'
 import type { GlobalSettings } from '../../../../shared/types'
-import { mode2031SequenceFor } from '../../../../shared/terminal-color-scheme-protocol'
 import { resolveTerminalFontWeights } from '../../../../shared/terminal-fonts'
 import { resolveTerminalLigaturesEnabled } from '../../../../shared/terminal-ligatures'
 import {
@@ -24,8 +23,7 @@ import { HEX_COLOR_RE } from '../../../../shared/color-validation'
 import type { TerminalViewAttributes } from '../../../../shared/terminal-view-attributes'
 import { publishTerminalViewAttributes } from './terminal-view-attributes-publisher'
 import { normalizeTerminalLineHeight } from '../../../../shared/terminal-line-height-settings'
-
-export { mode2031SequenceFor }
+import { maybePushMode2031Flip } from './terminal-mode-2031-replies'
 
 // Why Pick<IParser, ...> over a hand-rolled structural type: keeps the helper
 // tied to xterm's canonical signature so any upstream tightening (added
@@ -110,33 +108,6 @@ export function installMode2031Handlers(deps: Mode2031HandlerDeps): IDisposable[
       })
     )
   ]
-}
-
-// Gate on actual mode flip so font/size/opacity tweaks — which also re-run
-// applyTerminalAppearance — don't spam subscribed TUIs with CSI 997. The
-// subscribe/last-mode maps are mutated in place so callers share state with
-// the lifecycle hook's seed path.
-export function maybePushMode2031Flip(
-  paneId: number,
-  mode: 'dark' | 'light',
-  transport: Pick<PtyTransport, 'isConnected' | 'sendInput'>,
-  paneMode2031: Map<number, boolean>,
-  paneLastThemeMode: Map<number, 'dark' | 'light'>
-): boolean {
-  if (!transport.isConnected()) {
-    return false
-  }
-  if (!paneMode2031.get(paneId)) {
-    return false
-  }
-  if (paneLastThemeMode.get(paneId) === mode) {
-    return false
-  }
-  if (!transport.sendInput(mode2031SequenceFor(mode))) {
-    return false
-  }
-  paneLastThemeMode.set(paneId, mode)
-  return true
 }
 
 export function hexToRgba(hex: string, alpha: number): string {

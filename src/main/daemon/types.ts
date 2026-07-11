@@ -1,15 +1,24 @@
 import type { TerminalOscLinkRange } from '../../shared/terminal-osc-link-ranges'
+import type {
+  ConfirmForegroundProcessRequest,
+  GetForegroundProcessRequest
+} from './daemon-foreground-process-protocol'
+
+export type {
+  ConfirmForegroundProcessRequest,
+  GetForegroundProcessRequest
+} from './daemon-foreground-process-protocol'
 
 // ─── Protocol Version ────────────────────────────────────────────────
 import type { StartupCommandDelivery } from '../../shared/codex-startup-delivery'
-
+import type { TuiAgent } from '../../shared/types'
 // Why: daemons can survive app updates. Bump for IPC wire-shape changes, or
 // when daemon-baked behavior cannot be delivered by on-disk wrapper refresh.
 // Why: bump when adding daemon wire behavior so same-version old daemons do
 // not silently accept the handshake and then reject new RPCs.
-export const PROTOCOL_VERSION = 20
+export const PROTOCOL_VERSION = 21
 export const PREVIOUS_DAEMON_PROTOCOL_VERSIONS = [
-  1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19
+  1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20
 ] as const
 
 // ─── Session State Machine ──────────────────────────────────────────
@@ -98,6 +107,7 @@ export type CreateOrAttachRequest = {
     envToDelete?: string[]
     command?: string
     startupCommandDelivery?: StartupCommandDelivery
+    launchAgent?: TuiAgent
     /** Explicit Windows shell override selected by the user (e.g. 'wsl.exe').
      *  The daemon forwards this to its subprocess spawner so each tab honors
      *  the shell picked in the "+" menu or the persisted default-shell setting,
@@ -216,14 +226,6 @@ export type GetCwdRequest = {
   }
 }
 
-export type GetForegroundProcessRequest = {
-  id: string
-  type: 'getForegroundProcess'
-  payload: {
-    sessionId: string
-  }
-}
-
 export type ClearScrollbackRequest = {
   id: string
   type: 'clearScrollback'
@@ -330,6 +332,7 @@ export type DaemonRequest =
   | DetachRequest
   | GetCwdRequest
   | GetForegroundProcessRequest
+  | ConfirmForegroundProcessRequest
   | ClearScrollbackRequest
   | ShutdownRequest
   | PingRequest
@@ -361,8 +364,8 @@ export type CreateOrAttachResult = {
   pid: number | null
   shellState: ShellReadyState
   historySeeded?: boolean
+  launchAgent?: TuiAgent
 }
-
 export type GetSnapshotResult = {
   snapshot: TerminalSnapshot | null
 }

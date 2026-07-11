@@ -7,8 +7,10 @@
  */
 import { existsSync } from 'node:fs'
 import * as path from 'node:path'
+import { decodeGitCQuotedPath } from '../shared/git-cquoted-path'
 import { isBinaryBuffer } from '../shared/binary-buffer'
 import type { GitLineStats } from '../shared/git-uncommitted-line-stats'
+export { isUnsupportedWorktreeListZError } from '../shared/git-worktree-command-capabilities'
 
 export function parseBranchStatusChar(char: string): string {
   switch (char) {
@@ -133,36 +135,6 @@ export function parseBranchDiff(
 
 // ─── Worktree parsing ────────────────────────────────────────────────
 
-function getErrorText(error: unknown): string {
-  if (typeof error === 'object' && error !== null) {
-    const parts: string[] = []
-    if ('message' in error && typeof error.message === 'string') {
-      parts.push(error.message)
-    }
-    if ('stderr' in error && typeof error.stderr === 'string') {
-      parts.push(error.stderr)
-    }
-    return parts.join('\n')
-  }
-  return String(error)
-}
-
-function getErrorCode(error: unknown): string | undefined {
-  return typeof error === 'object' && error !== null && 'code' in error
-    ? String((error as { code?: unknown }).code)
-    : undefined
-}
-
-export function isUnsupportedWorktreeListZError(error: unknown): boolean {
-  // `-z` is this command's only flag older Git (<2.36) lacks, so its usage exit
-  // 129 signals the rejection in any locale; key for SSH remotes on old Git.
-  if (getErrorCode(error) === '129') {
-    return true
-  }
-
-  return /(?:unknown|invalid|unrecognized) (?:switch|option).*`?-?z'?/i.test(getErrorText(error))
-}
-
 export function parseWorktreeList(
   output: string,
   options: { nulDelimited?: boolean } = {}
@@ -178,6 +150,8 @@ export function parseWorktreeList(
     let head = ''
     let branch = ''
     let isBare = false
+    let locked = false
+    let lockReason = ''
 
     for (const line of lines) {
       if (line.startsWith('worktree ')) {
@@ -188,6 +162,10 @@ export function parseWorktreeList(
         branch = line.slice('branch '.length)
       } else if (line === 'bare') {
         isBare = true
+      } else if (line === 'locked' || line.startsWith('locked ')) {
+        locked = true
+        const rawReason = line.slice('locked'.length).trim()
+        lockReason = options.nulDelimited ? rawReason : decodeGitCQuotedPath(rawReason)
       }
     }
 
@@ -197,6 +175,8 @@ export function parseWorktreeList(
         head,
         branch,
         isBare,
+        ...(locked ? { locked: true } : {}),
+        ...(lockReason ? { lockReason } : {}),
         isMainWorktree: worktrees.length === 0
       })
     }

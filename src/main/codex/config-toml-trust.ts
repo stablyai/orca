@@ -529,7 +529,11 @@ export function normalizeHookTrustKeyForLookup(key: string): string {
   const separated = parsed
     ? `${normalizeWindowsPathSeparators(parsed.sourcePath)}:${parsed.eventLabel}:${parsed.groupIndex}:${parsed.handlerIndex}`
     : normalizeWindowsPathSeparators(key)
-  return process.platform === 'win32' ? separated.toLowerCase() : separated
+  // Why: Windows-native paths are case-insensitive, but WSL and SSH trust
+  // sources remain case-sensitive even when Orca's host process is Windows.
+  const caseInsensitiveWindowsPath =
+    process.platform === 'win32' && usesWindowsPathSeparators(parsed?.sourcePath ?? key)
+  return caseInsensitiveWindowsPath ? separated.toLowerCase() : separated
 }
 
 function findTrustBlockRanges(content: string, key: string): TrustBlockRange[] {
@@ -587,7 +591,9 @@ function parseHookStateHeaderKey(line: string): string | null {
 }
 
 export function parseCodexProjectHeaderPath(line: string): string | null {
-  const trimmed = line.trimStart()
+  // Why: mirror section headers come from split CRLF files and retain the
+  // terminal carriage return, while direct upserts scan CR-stripped lines.
+  const trimmed = line.replace(/\r$/, '').trimStart()
   const prefixMatch = /^\[[ \t]*projects[ \t]*\.[ \t]*/.exec(trimmed)
   if (!prefixMatch) {
     return null

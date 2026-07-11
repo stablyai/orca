@@ -251,8 +251,8 @@
           "6d3318e813": "No se pudieron importar repositorios",
           "3be0f7df04": "No se puede abrir la carpeta en el host seleccionado",
           "15cf5319ec": "{{path}} se verificó en {{hostName}}, pero ese host no reportó ninguna carpeta utilizable.",
-          "2dcd706774": "Project also exists in another profile",
-          "presenceProfileOverflow": "{{names}} +{{count}} more"
+          "2dcd706774": "El proyecto también existe en otro perfil",
+          "presenceProfileOverflow": "{{names}} +{{count}} más"
         },
         "settings": {
           "e12dab333b": "No se pudo cambiar de servidor",
@@ -270,20 +270,20 @@
         },
         "orca": {
           "profiles": {
-            "612f7f6861": "Failed to create profile",
-            "319d7cf39b": "Cloud profile created",
-            "d6e764e7db": "Reconnect this profile",
-            "f0c9e11a6d": "Failed to create cloud profile",
-            "8b8fa73174": "Orca Cloud sign-in is not configured",
-            "33290e88ed": "Failed to connect profile",
-            "9fcb07a796": "Profile connected",
-            "2f6c78a039": "Failed to refresh profile auth",
-            "a37b5e6d37": "Signed out of profile",
-            "83600521e7": "Failed to sign out",
-            "76deec8f58": "Failed to switch organization",
-            "7d4bc516ee": "Failed to switch profile",
-            "f518e89aa5": "Project already exists in that profile",
-            "f03ae7f27b": "Failed to transfer project"
+            "612f7f6861": "Error al crear perfil",
+            "319d7cf39b": "Perfil en la nube creado",
+            "d6e764e7db": "Reconectar este perfil",
+            "f0c9e11a6d": "Error al crear perfil en la nube",
+            "8b8fa73174": "El inicio de sesión de Orca Cloud no está configurado",
+            "33290e88ed": "Error al conectar perfil",
+            "9fcb07a796": "Perfil conectado",
+            "2f6c78a039": "Error al actualizar autenticación del perfil",
+            "a37b5e6d37": "Sesión cerrada del perfil",
+            "83600521e7": "Error al cerrar sesión",
+            "76deec8f58": "Error al cambiar organización",
+            "7d4bc516ee": "Error al cambiar perfil",
+            "f518e89aa5": "El proyecto ya existe en ese perfil",
+            "f03ae7f27b": "Error al transferir proyecto"
           }
         }
       }
@@ -1736,7 +1736,11 @@
         "editReviewersWithCurrent": "Editar revisores: {{value0}}",
         "linearEmptyAttributeFilter": "Ningún issue coincide con los filtros seleccionados. Limpia un filtro o prueba con otros criterios.",
         "linearEmptyUnfilteredScope": "No hay issues en el alcance de este espacio de trabajo. Intenta buscar o ajustar los equipos.",
-        "linearFetchMore": "Cargar más"
+        "linearFetchMore": "Cargar más",
+        "jiraSortAscending": "ascendente",
+        "jiraSortDescending": "descendente",
+        "jiraSortBy": "Ordenar por",
+        "jiraToggleSortDirection": "Ordenar de forma {{value0}}"
       },
       "Terminal": {
         "73768427cf": "Cerrar",
@@ -4304,7 +4308,9 @@
               "1d0fa5c0a5": "No se pudo eliminar el espacio de trabajo {{value0}}",
               "ead7b8ee15": "Tiene archivos modificados. Usa Forzar eliminación para eliminarlo de todos modos.",
               "905fc8efac": "Git ya eliminó este espacio de trabajo. Usa Forzar eliminación para borrarlo de Orca.",
-              "0899ebdb28": "Git ya olvidó este espacio de trabajo, pero su directorio todavía está en disco. Usa Forzar eliminación para eliminar el directorio huérfano."
+              "0899ebdb28": "Git ya olvidó este espacio de trabajo, pero su directorio todavía está en disco. Usa Forzar eliminación para eliminar el directorio huérfano.",
+              "locked": "Este espacio de trabajo está bloqueado por Git. Ejecute git worktree unlock <worktree-path> desde su repositorio, luego intente la eliminación de nuevo.",
+              "lockedReason": "Este espacio de trabajo está bloqueado por Git. Git reportó: {{value0}}. Ejecute git worktree unlock <worktree-path> desde su repositorio, luego intente la eliminación de nuevo."
             }
           }
         },
@@ -4517,13 +4523,13 @@
           "6f7a8b9c0d": "Cancelar",
           "7a8b9c0d1e": "Abrir ajustes",
           "8b9c0d1e2f": "Quitar host",
-          "workspacesFailed": "Could not remove {{count}} of this host’s workspaces. The host was kept so you can retry.",
+          "workspacesFailed": "No se pudieron eliminar {{count}} espacios de trabajo de este anfitrión. El anfitrión se conservó para que pueda reintentar.",
           "oneWorkspace": "1 espacio de trabajo",
-          "manyWorkspaces": "{{count}} workspaces",
-          "hostHasWorkspacesDefault": "Removes {{value0}} and its credentials from this computer. Its {{value1}} stay in Orca — remote files are not touched.",
-          "alsoDeleteRemote": "Also delete these {{value0}} on {{value1}}",
-          "alsoForgetLocal": "Also remove these {{value0}} from Orca",
-          "advanced": "Advanced",
+          "manyWorkspaces": "{{count}} espacios de trabajo",
+          "hostHasWorkspacesDefault": "Elimina {{value0}} y sus credenciales de esta computadora. Sus {{value1}} permanecen en Orca — los archivos remotos no se tocan.",
+          "alsoDeleteRemote": "También eliminar estos {{value0}} en {{value1}}",
+          "alsoForgetLocal": "También eliminar estos {{value0}} de Orca",
+          "advanced": "Avanzado",
           "alsoDeleteRemoteHint": "Elimina permanentemente los espacios de trabajo Git remotos y sus ramas. Esta acción no se puede deshacer.",
           "alsoForgetLocalHint": "Solo limpia de Orca. Los archivos, espacios de trabajo y ramas remotas permanecen intactos."
         },
@@ -4641,11 +4647,11 @@
         },
         "ForgetSshWorkspaceDialog": {
           "reconnectFailed": "Error de reconexión",
-          "forgetBody": "Removes this workspace from Orca only. Files, the Git worktree, and branches on {{host}} are left untouched.",
-          "title": "Delete “{{name}}”?",
+          "forgetBody": "Elimina este espacio de trabajo solo de Orca. Los archivos, el worktree de Git y las ramas en {{host}} permanecen intactos.",
+          "title": "¿Eliminar “{{name}}”?",
           "disconnectedBody": "El host SSH de este espacio de trabajo no está conectado. Reconéctalo para eliminarlo también en el remoto, o elimínalo solo de Orca.",
-          "ghostBody": "{{host}} is no longer a saved SSH host, so this workspace is no longer connected to a live host. It can only be removed from Orca — files and branches on the remote are left untouched.",
-          "cancel": "Cancel",
+          "ghostBody": "{{host}} ya no es un host SSH guardado, por lo que este espacio de trabajo ya no está conectado a un host activo. Solo se puede eliminar de Orca — los archivos y ramas en el remoto permanecen intactos.",
+          "cancel": "Cancelar",
           "forget": "Eliminar de Orca",
           "reconnectAndDelete": "Reconectar y eliminar"
         }
@@ -4669,7 +4675,7 @@
           "a2f040ac1c": "Se terminaron {{value0}} sesiones.",
           "63520148e2": "La sesión {{value0}} se negó a salir.",
           "cc0a26cb14": "{{value0}} sesiones se negaron a salir.",
-          "71a8d342b0": "Terminal tabs absent: {{value0}}/{{value1}}. Failed close attempts: {{value2}}. Exact PTY shutdown requests accepted: {{value3}}; failed: {{value4}}.",
+          "71a8d342b0": "Pestañas de terminal ausentes: {{value0}}/{{value1}}. Intentos de cierre fallidos: {{value2}}. Solicitudes de apagado PTY exactas aceptadas: {{value3}}; fallidas: {{value4}}.",
           "2e57c1a940": "El resultado del apagado del daemon no está verificado porque su solicitud de gestión falló.",
           "993af6052c": "La gestión del daemon reportó salida: {{value0}}/{{value1}}; aún presente antes de la limpieza exacta: {{value2}}.",
           "1f0d8ac762": "La limpieza del terminal terminó con errores.",
@@ -9843,6 +9849,9 @@
               }
             }
           },
+          "fileExplorerOperationOwner": {
+            "unresolved": "No se pudo determinar qué host posee este espacio de trabajo. Comprueba la conexión e inténtalo de nuevo."
+          },
           "useFileDeletion": {
             "72691dfebc": "No se pudo {{value0}} '{{value1}}'.",
             "96affe1302": "'{{value0}}' se movió a {{value1}}",
@@ -9851,7 +9860,8 @@
             "a76c74f105": "destructivo",
             "92276aceb7": "Eliminar",
             "7fb9435c86": "Esto elimina permanentemente el directorio y su contenido en el host remoto. Esto no se puede deshacer.",
-            "23e98f192f": "Esto elimina permanentemente el archivo en el host remoto. Esto no se puede deshacer."
+            "23e98f192f": "Esto elimina permanentemente el archivo en el host remoto. Esto no se puede deshacer.",
+            "8b8ee9d22f": "No se pudo determinar qué host posee este archivo. Comprueba la conexión del espacio de trabajo e inténtalo de nuevo."
           },
           "useFileExplorerHandlers": {
             "32cd9fd991": "No se puede abrir el destino del enlace simbólico"
@@ -10019,8 +10029,8 @@
             "jumpToOriginalPane": "Saltar al panel original",
             "jumpToWorktree": "Saltar al worktree",
             "recoverableBadge": "No guardada",
-            "subagentCountSingular": "1 subagent",
-            "subagentCountPlural": "{{value0}} subagents"
+            "subagentCountSingular": "1 subagente",
+            "subagentCountPlural": "{{value0}} subagentes"
           },
           "FileExplorerNameFilter": {
             "26fb73c6e3": "Buscar archivos",
@@ -10077,9 +10087,14 @@
             "noActiveWorktreeTarget": "No hay ningún worktree activo disponible."
           },
           "AiVaultSessionSubagents": {
-            "subagentsCount": "Subagents ({{value0}})",
+            "subagentsCount": "Subagentes ({{value0}})",
             "messageCount": "{{value0}} msgs",
-            "viewLog": "View Log"
+            "viewLog": "Ver registro"
+          },
+          "aiVaultSessionLogOpen": {
+            "workspaceGone": "Couldn't open log — workspace is no longer available.",
+            "notAuthorized": "Couldn't open log — path not authorized.",
+            "alreadyEditable": "Log is already open for editing."
           }
         }
       },
@@ -10477,8 +10492,8 @@
           "fb5f28330e": "Mostrar en la barra lateral",
           "c669abcf8f": "Ocultar de la barra lateral",
           "e1c7b4a92d": "Configúralo en Ajustes > Móvil.",
-          "a4f8c2d91e": "Remove Orca Mobile from left sidebar",
-          "b7e3d1c84a": "Show Orca Mobile in left sidebar",
+          "a4f8c2d91e": "Eliminar Orca Mobile de la barra lateral izquierda",
+          "b7e3d1c84a": "Mostrar Orca Mobile en la barra lateral izquierda",
           "f3d8e5b71a": "Vuelve a añadir el acceso directo a la barra lateral."
         },
         "PhoneCarousel": {
@@ -11894,6 +11909,21 @@
             "ead6fc0510": "No se capturó ningún informe de fallo automático. Aun así puedes enviar detalles e incluir logs de diagnóstico recientes cuando estén disponibles.",
             "b082f27490": "Adjuntar logs de diagnóstico recientes",
             "e59f0b9427": "Envía un paquete limitado de logs redactados junto con el informe."
+          },
+          "submit": {
+            "notice": {
+              "unknownError": "The crash report request failed before it returned a reason.",
+              "ticketUploaded": "Diagnostic ticket {{value0}} was uploaded but not linked.",
+              "uncheckDiagnostics": "Uncheck \"Attach recent diagnostic logs\" and try again, or copy the details.",
+              "checkConnection": "Check your connection and try again, or copy the details.",
+              "notSent": "Crash report wasn't sent",
+              "copyDetails": "Copy Details",
+              "sentWithoutDiagnostics": "Crash report sent without diagnostic logs",
+              "diagnosticsReason": "Diagnostic logs were not attached: {{value0}}"
+            }
+          },
+          "copy": {
+            "copyFailed": "No se pudieron copiar los detalles del informe de fallo."
           }
         }
       },
@@ -12680,149 +12710,149 @@
         "profiles": {
           "switcher": {
             "cloud": {
-              "unavailable": "Cloud sign-in unavailable"
+              "unavailable": "Inicio de sesión en la nube no disponible"
             },
-            "account": "Account",
-            "reconnect": "Reconnect profile",
-            "connect": "Connect profile",
-            "organization": "Organization",
+            "account": "Cuenta",
+            "reconnect": "Reconectar perfil",
+            "connect": "Conectar perfil",
+            "organization": "Organización",
             "create": {
               "profile": {
                 "for": {
-                  "org": "Create profile for org"
+                  "org": "Crear perfil para organización"
                 }
               }
             },
-            "signout": "Sign out",
-            "16e3681072": "New local profile",
-            "e3b91a3d90": "Create an empty profile for separate projects and worktrees.",
-            "f322e1f4d6": "Profile name",
-            "cfa59f8ad1": "Create and Switch",
+            "signout": "Cerrar sesión",
+            "16e3681072": "Nuevo perfil local",
+            "e3b91a3d90": "Crear un perfil vacío para proyectos y worktrees separados.",
+            "f322e1f4d6": "Nombre del perfil",
+            "cfa59f8ad1": "Crear y cambiar",
             "b4f9d1125d": "Local",
-            "4815f7d163": "Switch profile",
-            "d00d853e2a": "Manage profiles",
-            "c106c674fe": "New local profile",
+            "4815f7d163": "Cambiar perfil",
+            "d00d853e2a": "Gestionar perfiles",
+            "c106c674fe": "Nuevo perfil local",
             "org": {
-              "members": "Organization members"
+              "members": "Miembros de la organización"
             }
           },
           "management": {
-            "04e7bd2a23": "Transfer",
-            "128c7dfe64": "Copy to",
-            "df8b7d876b": "Move to",
-            "9aa26347b3": "Project moved",
-            "816ce624b6": "Project copied",
-            "2c45bda8d3": "Manage profiles",
-            "2db945e4a0": "Copy or move projects from the active profile to another local profile.",
-            "8668cb2946": "No projects in this profile.",
-            "93034915ab": "Create another profile before copying projects.",
-            "projectCountSingular": "{{count}} project",
-            "projectCountPlural": "{{count}} projects"
+            "04e7bd2a23": "Transferir",
+            "128c7dfe64": "Copiar a",
+            "df8b7d876b": "Mover a",
+            "9aa26347b3": "Proyecto movido",
+            "816ce624b6": "Proyecto copiado",
+            "2c45bda8d3": "Gestionar perfiles",
+            "2db945e4a0": "Copiar o mover proyectos del perfil activo a otro perfil local.",
+            "8668cb2946": "No hay proyectos en este perfil.",
+            "93034915ab": "Cree otro perfil antes de copiar proyectos.",
+            "projectCountSingular": "{{count}} proyecto",
+            "projectCountPlural": "{{count}} proyectos"
           },
           "project": {
             "transfer": {
               "confirm": {
                 "move": {
-                  "title": "Move project?",
-                  "description": "Move {{repoName}} to {{targetName}}. Orca removes it from {{activeProfileName}}, keeps files in place, and relaunches into {{targetName}}.",
-                  "action": "Move project"
+                  "title": "¿Mover proyecto?",
+                  "description": "Mover {{repoName}} a {{targetName}}. Orca lo elimina de {{activeProfileName}}, mantiene los archivos en su lugar y relanza en {{targetName}}.",
+                  "action": "Mover proyecto"
                 },
                 "copy": {
-                  "title": "Copy project?",
-                  "description": "Copy {{repoName}} to {{targetName}}. Both profiles will point at the same files with separate Orca metadata.",
-                  "action": "Copy project"
+                  "title": "¿Copiar proyecto?",
+                  "description": "Copiar {{repoName}} a {{targetName}}. Ambos perfiles apuntarán a los mismos archivos con metadatos de Orca separados.",
+                  "action": "Copiar proyecto"
                 },
                 "live": {
-                  "work": "Live work in this project"
+                  "work": "Trabajo activo en este proyecto"
                 },
-                "cancel": "Cancel",
-                "terminalSingular": "{{count}} live terminal tab",
-                "terminalPlural": "{{count}} live terminal tabs",
-                "agentSingular": "{{count}} active agent",
-                "agentPlural": "{{count}} active agents",
-                "browserSingular": "{{count}} browser workspace",
-                "browserPlural": "{{count}} browser workspaces"
+                "cancel": "Cancelar",
+                "terminalSingular": "{{count}} pestaña de terminal activa",
+                "terminalPlural": "{{count}} pestañas de terminal activas",
+                "agentSingular": "{{count}} agente activo",
+                "agentPlural": "{{count}} agentes activos",
+                "browserSingular": "{{count}} espacio de trabajo del navegador",
+                "browserPlural": "{{count}} espacios de trabajo del navegador"
               }
             }
           },
           "signout": {
             "confirm": {
-              "title": "Sign out?",
-              "description": "Sign out of {{profileName}} and keep its projects, worktrees, and local metadata on this device.",
-              "cancel": "Cancel",
-              "action": "Sign out"
+              "title": "¿Cerrar sesión?",
+              "description": "Cerrar sesión de {{profileName}} y mantener sus proyectos, worktrees y metadatos locales en este dispositivo.",
+              "cancel": "Cancelar",
+              "action": "Cerrar sesión"
             }
           },
           "switch": {
             "confirm": {
-              "target": "the selected profile",
-              "title": "Switch profiles?",
-              "description": "Switching to {{targetName}} will relaunch Orca and reload the workspace for {{activeProfileName}}.",
+              "target": "el perfil seleccionado",
+              "title": "¿Cambiar perfiles?",
+              "description": "Cambiar a {{targetName}} relanzará Orca y recargará el espacio de trabajo de {{activeProfileName}}.",
               "live": {
-                "work": "Live work in this profile"
+                "work": "Trabajo activo en este perfil"
               },
-              "cancel": "Cancel",
-              "switch": "Switch profile",
-              "terminalSingular": "{{count}} live terminal tab",
-              "terminalPlural": "{{count}} live terminal tabs",
-              "agentSingular": "{{count}} active agent",
-              "agentPlural": "{{count}} active agents",
-              "browserSingular": "{{count}} browser workspace",
-              "browserPlural": "{{count}} browser workspaces"
+              "cancel": "Cancelar",
+              "switch": "Cambiar perfil",
+              "terminalSingular": "{{count}} pestaña de terminal activa",
+              "terminalPlural": "{{count}} pestañas de terminal activas",
+              "agentSingular": "{{count}} agente activo",
+              "agentPlural": "{{count}} agentes activos",
+              "browserSingular": "{{count}} espacio de trabajo del navegador",
+              "browserPlural": "{{count}} espacios de trabajo del navegador"
             }
           },
           "org": {
             "members": {
               "role": {
-                "label": "Role",
-                "owner": "Owner",
-                "admin": "Admin",
-                "member": "Member"
+                "label": "Rol",
+                "owner": "Propietario",
+                "admin": "Administrador",
+                "member": "Miembro"
               },
               "not": {
                 "signed": {
-                  "in": "They haven't signed in to Orca yet."
+                  "in": "Aún no han iniciado sesión en Orca."
                 }
               },
               "remove": {
-                "confirm": "Remove",
-                "cancel": "Cancel",
-                "label": "Remove teammate"
+                "confirm": "Eliminar",
+                "cancel": "Cancelar",
+                "label": "Eliminar compañero"
               },
-              "title": "Organization members",
+              "title": "Miembros de la organización",
               "load": {
-                "error": "Couldn't load organization members."
+                "error": "No se pudieron cargar los miembros de la organización."
               },
-              "retry": "Try again",
+              "retry": "Intentar de nuevo",
               "pending": {
-                "title": "Pending invites",
-                "revoke": "Revoke"
+                "title": "Invitaciones pendientes",
+                "revoke": "Revocar"
               },
               "invite": {
-                "title": "Invite",
+                "title": "Invitar",
                 "placeholder": "teammate@example.com",
-                "role": "Invite role",
-                "submit": "Send"
+                "role": "Rol de invitación",
+                "submit": "Enviar"
               },
               "error": {
-                "forbidden": "Your role can't do that.",
-                "conflict": "Already a member or invited.",
+                "forbidden": "Tu rol no puede hacer eso.",
+                "conflict": "Ya es miembro o fue invitado.",
                 "remove": {
-                  "self": "You can't remove yourself."
+                  "self": "No puedes eliminarte a ti mismo."
                 },
                 "own": {
-                  "role": "You can't change your own role."
+                  "role": "No puedes cambiar tu propio rol."
                 },
                 "not": {
-                  "found": "That teammate is no longer in this organization."
+                  "found": "Ese compañero ya no está en esta organización."
                 },
-                "reconnect": "Reconnect your profile to manage members.",
-                "unconfigured": "Organization management is unavailable in this build.",
-                "failed": "Something went wrong. Please try again."
+                "reconnect": "Reconecta tu perfil para gestionar miembros.",
+                "unconfigured": "La gestión de organización no está disponible en esta compilación.",
+                "failed": "Algo salió mal. Por favor, intenta de nuevo."
               },
               "subtitle": {
-                "named": "People in {{orgName}} who can collaborate on Orca.",
-                "default": "People in your organization who can collaborate on Orca."
+                "named": "Personas en {{orgName}} que pueden colaborar en Orca.",
+                "default": "Personas en tu organización que pueden colaborar en Orca."
               }
             }
           }

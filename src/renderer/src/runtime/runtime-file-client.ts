@@ -37,6 +37,7 @@ export type RuntimeReadableFileContent = {
   isBinary: boolean
   isImage?: boolean
   mimeType?: string
+  fileIdentity?: string
 }
 
 export type RuntimeFileReadArgs = {
@@ -45,6 +46,7 @@ export type RuntimeFileReadArgs = {
   relativePath?: string
   worktreeId?: string
   connectionId?: string
+  includeLocalLogMetadata?: boolean
 }
 
 export type RuntimeFileOperationArgs = {
@@ -147,14 +149,15 @@ export async function readRuntimeFileContent({
   filePath,
   relativePath,
   worktreeId,
-  connectionId
+  connectionId,
+  includeLocalLogMetadata
 }: RuntimeFileReadArgs): Promise<RuntimeReadableFileContent> {
   const target = getActiveRuntimeTarget(settings)
   if (target.kind !== 'environment') {
-    return window.api.fs.readFile({ filePath, connectionId })
+    return window.api.fs.readFile({ filePath, connectionId, includeLocalLogMetadata })
   }
   if (!worktreeId) {
-    return window.api.fs.readFile({ filePath, connectionId })
+    return window.api.fs.readFile({ filePath, connectionId, includeLocalLogMetadata })
   }
   if (!canReadRelativeRuntimeFile(relativePath)) {
     throw new Error('Remote file is outside the owning runtime worktree')

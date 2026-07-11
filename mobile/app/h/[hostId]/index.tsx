@@ -1,13 +1,5 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
-import {
-  View,
-  Text,
-  StyleSheet,
-  SectionList,
-  Pressable,
-  ActivityIndicator,
-  TextInput
-} from 'react-native'
+import { View, Text, StyleSheet, SectionList, Pressable, ActivityIndicator } from 'react-native'
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useFocusEffect, useLocalSearchParams, usePathname, useRouter } from 'expo-router'
 import {
@@ -56,6 +48,7 @@ import { ConfirmModal } from '../../../src/components/ConfirmModal'
 import { BottomDrawer } from '../../../src/components/BottomDrawer'
 import { ProtocolBlockScreen } from '../../../src/components/ProtocolBlockScreen'
 import { AuthFailedBanner } from '../../../src/components/AuthFailedBanner'
+import { MobileSearchField } from '../../../src/components/MobileSearchField'
 import { WorkspaceDetailPlaceholder } from '../../../src/components/WorkspaceDetailPlaceholder'
 import { getCachedWorktrees } from '../../../src/cache/worktree-cache'
 import { setCachedRepos } from '../../../src/cache/repo-cache'
@@ -1134,22 +1127,16 @@ export function HostScreen({
       {/* Search bar */}
       {showSearch && (
         <View style={styles.searchBar}>
-          <Search size={14} color={colors.textMuted} />
-          <TextInput
-            style={styles.searchInput}
+          <MobileSearchField
             value={search}
             onChangeText={setSearch}
             placeholder="Search worktrees…"
-            placeholderTextColor={colors.textMuted}
-            autoCapitalize="none"
-            autoCorrect={false}
             autoFocus
+            // Why: new key each open remounts focus effect if the field stays mounted
+            // across rapid toggles; pairs with delayed focus so the keyboard appears.
+            focusKey={showSearch}
+            accessibilityLabel="Search worktrees"
           />
-          {search.length > 0 && (
-            <Pressable onPress={() => setSearch('')}>
-              <X size={14} color={colors.textSecondary} />
-            </Pressable>
-          )}
         </View>
       )}
 
@@ -1181,6 +1168,9 @@ export function HostScreen({
           sections={sections}
           keyExtractor={(w) => w.sectionListKey ?? w.worktreeId}
           stickySectionHeadersEnabled={false}
+          // Why: keep the search IME up while tapping clear / scrolling results.
+          keyboardShouldPersistTaps="handled"
+          keyboardDismissMode="on-drag"
           onScrollToIndexFailed={onScrollToIndexFailed}
           // Why: edge-to-edge — the list scrolls under the system nav bar
           // while reserving insets.bottom keeps the last worktree row reachable
@@ -1615,20 +1605,11 @@ const styles = StyleSheet.create({
     padding: spacing.xs
   },
   searchBar: {
-    flexDirection: 'row',
-    alignItems: 'center',
     paddingHorizontal: spacing.md,
-    paddingVertical: spacing.xs + 2,
-    gap: spacing.sm,
-    borderBottomWidth: 1,
+    paddingVertical: spacing.sm,
+    borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: colors.borderSubtle,
     backgroundColor: colors.bgPanel
-  },
-  searchInput: {
-    flex: 1,
-    color: colors.textPrimary,
-    fontSize: 13,
-    paddingVertical: 2
   },
   centered: {
     flex: 1,

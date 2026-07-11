@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import type { FolderWorkspace, ProjectGroup, Repo } from '../../../shared/types'
+import type { FolderWorkspace, ProjectGroup, Repo, Worktree } from '../../../shared/types'
 import { useAppStore } from '@/store'
 import type { AppState } from '@/store/types'
 import {
@@ -519,6 +519,56 @@ describe('getConnectionIdFromState', () => {
     }
 
     expect(getConnectionIdFromState(state, 'repo-ssh::/home/neil/repo-feature')).toBe('ssh-2')
+  })
+
+  it('indexes immutable worktree and repo snapshots once across repeated selector calls', () => {
+    let worktreeIdReads = 0
+    let repoIdReads = 0
+    const targetWorktreeId = 'worktree-99-99'
+    const targetRepoId = 'repo-99'
+    const worktreesByRepo: AppState['worktreesByRepo'] = {}
+    const repos: Repo[] = []
+
+    for (let repoIndex = 0; repoIndex < 100; repoIndex += 1) {
+      const repoId = `repo-${repoIndex}`
+      const repo = makeRepo({
+        id: repoId,
+        ...(repoId === targetRepoId ? { connectionId: 'ssh-target' } : {})
+      })
+      Object.defineProperty(repo, 'id', {
+        enumerable: true,
+        get: () => {
+          repoIdReads += 1
+          return repoId
+        }
+      })
+      repos.push(repo)
+      worktreesByRepo[repoId] = Array.from({ length: 100 }, (_, worktreeIndex) => {
+        const worktreeId = `worktree-${repoIndex}-${worktreeIndex}`
+        const worktree = { repoId } as Worktree
+        Object.defineProperty(worktree, 'id', {
+          enumerable: true,
+          get: () => {
+            worktreeIdReads += 1
+            return worktreeId
+          }
+        })
+        return worktree
+      })
+    }
+    const state: ConnectionContextState = {
+      folderWorkspaces: [],
+      projectGroups: [],
+      repos,
+      worktreesByRepo
+    }
+
+    for (let lookup = 0; lookup < 200; lookup += 1) {
+      expect(getConnectionIdFromState(state, targetWorktreeId)).toBe('ssh-target')
+    }
+
+    expect(worktreeIdReads).toBe(10_000)
+    expect(repoIdReads).toBe(100)
   })
 
   it('returns null for a null worktreeId', () => {

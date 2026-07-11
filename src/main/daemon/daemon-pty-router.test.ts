@@ -63,6 +63,7 @@ function createAdapter(
     acknowledgeDataEvent: vi.fn(),
     hasChildProcesses: vi.fn(async () => false),
     getForegroundProcess: vi.fn(async () => null),
+    confirmForegroundProcess: vi.fn(async () => `${label}-confirmed`),
     serialize: vi.fn(async () => '{}'),
     revive: vi.fn(async () => {}),
     getDefaultShell: vi.fn(async () => '/bin/zsh'),
@@ -121,6 +122,22 @@ function createAdapter(
 }
 
 describe('DaemonPtyRouter', () => {
+  it('routes fresh foreground confirmation to the session-owning daemon', async () => {
+    const current = createAdapter('current', ['current-session'])
+    const legacy = createAdapter('legacy', ['legacy-session'])
+    const router = new DaemonPtyRouter({ current, legacy: [legacy] })
+    await router.discoverLegacySessions()
+
+    await expect(router.confirmForegroundProcess('legacy-session')).resolves.toBe(
+      'legacy-confirmed'
+    )
+    await expect(router.confirmForegroundProcess('current-session')).resolves.toBe(
+      'current-confirmed'
+    )
+    expect(legacy.confirmForegroundProcess).toHaveBeenCalledWith('legacy-session')
+    expect(current.confirmForegroundProcess).toHaveBeenCalledWith('current-session')
+  })
+
   it('routes existing legacy sessions to their old daemon and new sessions to current daemon', async () => {
     const current = createAdapter('current')
     const legacy = createAdapter('legacy', ['legacy-session'])

@@ -58,11 +58,8 @@ import {
 import { resolveTerminalLayoutActiveLeafId } from './terminal-layout-leaf-ids'
 import { makePaneKey } from '../../../../shared/stable-pane-id'
 import { applyExpandedLayoutTo, restoreExpandedLayoutFrom } from './expand-collapse'
-import {
-  applyTerminalAppearance,
-  installMode2031Handlers,
-  mode2031SequenceFor
-} from './terminal-appearance'
+import { applyTerminalAppearance, installMode2031Handlers } from './terminal-appearance'
+import { pushMode2031SeedReply } from './terminal-mode-2031-replies'
 import { handleOsc52ClipboardRequest } from './osc52-clipboard'
 import { showOsc52ClipboardBlockedToast } from './osc52-clipboard-blocked-toast'
 import { parseOsc7 } from './parse-osc7'
@@ -578,6 +575,7 @@ export function useTerminalPaneLifecycle({
   const selectionDisposablesRef = useRef(new Map<number, IDisposable>())
   const selectionCaptureTimersRef = useRef(new Map<number, number>())
   const mode2031DisposablesRef = useRef(new Map<number, IDisposable[]>())
+  const mode2031SeedAttemptTokensRef = useRef(new Map<number, symbol>())
   const osc52DisposablesRef = useRef(new Map<number, IDisposable>())
   const osc7DisposablesRef = useRef(new Map<number, IDisposable>())
   const mouseHideDisposablesRef = useRef(new Map<number, IDisposable>())
@@ -604,34 +602,27 @@ export function useTerminalPaneLifecycle({
   }
 
   const pushMode2031ForPane = (paneId: number): void => {
-    let attempts = 0
-    const send = (): void => {
-      if (!managerRef.current?.getPanes().some((pane) => pane.id === paneId)) {
-        return
+    const attemptToken = Symbol()
+    mode2031SeedAttemptTokensRef.current.set(paneId, attemptToken)
+    pushMode2031SeedReply(paneId, {
+      hasPane: (candidateId) =>
+        managerRef.current?.getPanes().some((pane) => pane.id === candidateId) === true,
+      isSubscribed: (candidateId) => paneMode2031Ref.current.get(candidateId) === true,
+      // Why: an older connect retry must not answer a later resubscription.
+      isCurrentAttempt: (candidateId) =>
+        mode2031SeedAttemptTokensRef.current.get(candidateId) === attemptToken,
+      getTransport: (candidateId) => paneTransportsRef.current.get(candidateId),
+      getMode: () => {
+        const currentSettings = settingsRef.current
+        return currentSettings
+          ? resolveEffectiveTerminalAppearance(currentSettings, systemPrefersDarkRef.current).mode
+          : null
+      },
+      recordMode: (candidateId, mode) => paneLastThemeModeRef.current.set(candidateId, mode),
+      schedule: (callback, delayMs) => {
+        window.setTimeout(callback, delayMs)
       }
-      const transport = paneTransportsRef.current.get(paneId)
-      if (!transport?.isConnected()) {
-        // Why: TUIs can subscribe before pty:spawn resolves. Retry briefly so
-        // the recorded subscription still receives the initial dark/light seed.
-        attempts += 1
-        if (attempts < 8) {
-          window.setTimeout(send, 25)
-        }
-        return
-      }
-      const currentSettings = settingsRef.current
-      if (!currentSettings) {
-        return
-      }
-      const { mode } = resolveEffectiveTerminalAppearance(
-        currentSettings,
-        systemPrefersDarkRef.current
-      )
-      if (transport.sendInput(mode2031SequenceFor(mode))) {
-        paneLastThemeModeRef.current.set(paneId, mode)
-      }
-    }
-    send()
+    })
   }
 
   // Initialize PaneManager instance once
@@ -1237,6 +1228,7 @@ export function useTerminalPaneLifecycle({
           mode2031DisposablesRef.current.delete(paneId)
         }
         paneMode2031Ref.current.delete(paneId)
+        mode2031SeedAttemptTokensRef.current.delete(paneId)
         paneKittyKeyboardModesRef.current.delete(paneId)
         paneLastThemeModeRef.current.delete(paneId)
         const osc52Disposable = osc52DisposablesRef.current.get(paneId)
@@ -1871,6 +1863,28 @@ export function useTerminalPaneLifecycle({
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps -- Why: visibility and terminal identity changes must refresh existing PTY process tracking even though the ref object identity is stable.
   }, [cwd, isVisible, isVisibleRef, panePtyBindingsRef, tabId])
+
+  useEffect(() => {
+    if (!isActive || !isVisible || typeof window === 'undefined') {
+      return
+    }
+    const onWindowFocus = (): void => {
+      const activePane = managerRef.current?.getActivePane()
+      if (!activePane) {
+        return
+      }
+      const binding = panePtyBindingsRef.current.get(activePane.id) as
+        | (IDisposable & { sampleForegroundAgentOnFocus?: () => void })
+        | undefined
+      // Why: window refocus does not change the active leaf, so the pane
+      // manager's onActivePaneChange hook is not fired. Re-sample the same
+      // pane to revoke stale launch-only identity and confirm current Droid
+      // ownership before the next Windows Shift+Enter.
+      binding?.sampleForegroundAgentOnFocus?.()
+    }
+    window.addEventListener('focus', onWindowFocus)
+    return () => window.removeEventListener('focus', onWindowFocus)
+  }, [isActive, isVisible, managerRef, panePtyBindingsRef])
 
   useEffect(() => {
     const manager = managerRef.current

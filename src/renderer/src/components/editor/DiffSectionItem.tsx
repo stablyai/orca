@@ -13,7 +13,7 @@ import { monaco } from '@/lib/monaco-setup'
 import { detectLanguage } from '@/lib/language-detect'
 import { useAppStore } from '@/store'
 import { computeDiffEditorFontSize } from '@/lib/editor-font-zoom'
-import { findWorktreeById } from '@/store/slices/worktree-helpers'
+import { selectWorktreeDiffComments } from '@/store/worktree-diff-comments-selector'
 import {
   useDiffCommentDecorator,
   type DecoratedDiffComment
@@ -106,7 +106,7 @@ export function DiffSectionItem({
   // memo. Selecting a fresh `.filter(...)` result would invalidate on every
   // store change and cause needless re-renders of this section.
   const allDiffComments = useAppStore((s): DiffComment[] | undefined =>
-    worktreeId ? findWorktreeById(s.worktreesByRepo, worktreeId)?.diffComments : undefined
+    selectWorktreeDiffComments(s, worktreeId)
   )
   const diffComments = useMemo(
     () => (allDiffComments ?? []).filter((c) => c.filePath === section.path && isDiffComment(c)),

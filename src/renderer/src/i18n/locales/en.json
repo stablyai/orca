@@ -1736,7 +1736,11 @@
         "editReviewersWithCurrent": "Edit reviewers: {{value0}}",
         "linearEmptyAttributeFilter": "No issues match the selected filters. Clear a filter or try different criteria.",
         "linearEmptyUnfilteredScope": "No issues in this workspace scope. Try searching or adjusting teams.",
-        "linearFetchMore": "Fetch more"
+        "linearFetchMore": "Fetch more",
+        "jiraSortAscending": "ascending",
+        "jiraSortDescending": "descending",
+        "jiraSortBy": "Sort by",
+        "jiraToggleSortDirection": "Sort {{value0}}"
       },
       "Terminal": {
         "73768427cf": "Close",
@@ -4327,7 +4331,9 @@
               "1d0fa5c0a5": "Failed to delete workspace {{value0}}",
               "ead7b8ee15": "It has changed files. Use Force Delete to delete it anyway.",
               "905fc8efac": "Git already removed this workspace. Use Force Delete to clear it from Orca.",
-              "0899ebdb28": "Git already forgot this workspace, but its directory is still on disk. Use Force Delete to remove the orphaned directory."
+              "0899ebdb28": "Git already forgot this workspace, but its directory is still on disk. Use Force Delete to remove the orphaned directory.",
+              "locked": "This workspace is locked by Git. Run git worktree unlock <worktree-path> from its repository, then retry deletion.",
+              "lockedReason": "This workspace is locked by Git. Git reported: {{value0}}. Run git worktree unlock <worktree-path> from its repository, then retry deletion."
             }
           }
         },
@@ -9843,6 +9849,9 @@
               }
             }
           },
+          "fileExplorerOperationOwner": {
+            "unresolved": "Couldn't determine which host owns this workspace. Check the connection and try again."
+          },
           "useFileDeletion": {
             "72691dfebc": "Failed to {{value0}} '{{value1}}'.",
             "96affe1302": "'{{value0}}' moved to {{value1}}",
@@ -9851,7 +9860,8 @@
             "a76c74f105": "destructive",
             "92276aceb7": "Delete",
             "7fb9435c86": "This permanently deletes the directory and its contents on the remote host. This cannot be undone.",
-            "23e98f192f": "This permanently deletes the file on the remote host. This cannot be undone."
+            "23e98f192f": "This permanently deletes the file on the remote host. This cannot be undone.",
+            "8b8ee9d22f": "Couldn't determine which host owns this file. Check the workspace connection and try again."
           },
           "useFileExplorerHandlers": {
             "32cd9fd991": "Cannot open symlink target"
@@ -10080,6 +10090,11 @@
             "subagentsCount": "Subagents ({{value0}})",
             "messageCount": "{{value0}} msgs",
             "viewLog": "View Log"
+          },
+          "aiVaultSessionLogOpen": {
+            "workspaceGone": "Couldn't open log — workspace is no longer available.",
+            "notAuthorized": "Couldn't open log — path not authorized.",
+            "alreadyEditable": "Log is already open for editing."
           }
         }
       },
@@ -11894,6 +11909,21 @@
             "ead6fc0510": "No automatic crash report was captured. You can still send details and include recent diagnostic logs when available.",
             "b082f27490": "Attach recent diagnostic logs",
             "e59f0b9427": "Sends a capped redacted log bundle with the report."
+          },
+          "submit": {
+            "notice": {
+              "unknownError": "The crash report request failed before it returned a reason.",
+              "ticketUploaded": "Diagnostic ticket {{value0}} was uploaded but not linked.",
+              "uncheckDiagnostics": "Uncheck \"Attach recent diagnostic logs\" and try again, or copy the details.",
+              "checkConnection": "Check your connection and try again, or copy the details.",
+              "notSent": "Crash report wasn't sent",
+              "copyDetails": "Copy Details",
+              "sentWithoutDiagnostics": "Crash report sent without diagnostic logs",
+              "diagnosticsReason": "Diagnostic logs were not attached: {{value0}}"
+            }
+          },
+          "copy": {
+            "copyFailed": "Crash report details could not be copied."
           }
         }
       },

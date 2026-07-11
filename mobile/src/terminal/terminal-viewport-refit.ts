@@ -1,7 +1,9 @@
 import { useCallback, useEffect, useRef, type RefObject } from 'react'
-import { useWindowDimensions } from 'react-native'
+import { AppState, Platform, useWindowDimensions, type AppStateStatus } from 'react-native'
 import type { RpcClient } from '../transport/rpc-client'
+import type { ConnectionState } from '../transport/types'
 import type { TerminalWebViewHandle } from './TerminalWebView'
+import { shouldRecoverTerminalOnAppStateChange } from './terminal-foreground-recovery'
 import {
   isTerminalUpdateViewportApplied,
   isTerminalUpdateViewportUpdated,
@@ -19,6 +21,7 @@ type TerminalViewportRefitOptions = {
   clientRef: RefObject<RpcClient | null>
   deviceTokenRef: RefObject<string | null>
   initializedHandlesRef: RefObject<Set<string>>
+  connState: ConnectionState
   tabStripVisible: boolean
   // Why: terminal text size (font scale) — changing it changes the cell size, so
   // the PTY must be re-fitted to a new column count and reflowed.
@@ -49,6 +52,7 @@ export function useTerminalViewportRefit(options: TerminalViewportRefitOptions):
     clientRef,
     deviceTokenRef,
     initializedHandlesRef,
+    connState,
     tabStripVisible,
     textScale,
     terminalFrameWidth,
@@ -58,6 +62,7 @@ export function useTerminalViewportRefit(options: TerminalViewportRefitOptions):
 
   const refitTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const refitRunSeqRef = useRef(0)
+  const forceNextRefitRef = useRef(false)
   const disposedRef = useRef(false)
   const scheduleViewportRefit = useCallback(() => {
     if (refitTimerRef.current) {
@@ -93,8 +98,10 @@ export function useTerminalViewportRefit(options: TerminalViewportRefitOptions):
         if (!dims) {
           return
         }
+        const forceRefit = forceNextRefitRef.current
+        forceNextRefitRef.current = false
         const prev = viewportRef.current
-        if (prev && prev.cols === dims.cols && prev.rows === dims.rows) {
+        if (!forceRefit && prev && prev.cols === dims.cols && prev.rows === dims.rows) {
           return
         }
         viewportRef.current = dims
@@ -152,6 +159,10 @@ export function useTerminalViewportRefit(options: TerminalViewportRefitOptions):
     unsubscribeTerminal,
     subscribeToTerminal
   ])
+  const scheduleForcedViewportRefit = useCallback(() => {
+    forceNextRefitRef.current = true
+    scheduleViewportRefit()
+  }, [scheduleViewportRefit])
 
   // Why: the tab strip is hidden when only one terminal exists and shown
   // once a second is created. Crossing the 1↔2 boundary changes the
@@ -214,6 +225,42 @@ export function useTerminalViewportRefit(options: TerminalViewportRefitOptions):
     viewportMeasuredRef.current = false
     scheduleViewportRefit()
   }, [terminalFrameWidth, viewportMeasuredRef, scheduleViewportRefit])
+
+  useEffect(() => {
+    if (Platform.OS !== 'ios') {
+      return
+    }
+    let previousAppState: AppStateStatus | null = AppState.currentState
+    const sub = AppState.addEventListener('change', (nextAppState: AppStateStatus) => {
+      const shouldRefit = shouldRecoverTerminalOnAppStateChange(
+        previousAppState,
+        nextAppState,
+        Platform.OS
+      )
+      previousAppState = nextAppState
+      if (!shouldRefit) {
+        return
+      }
+      // Why: the cached grid can match while the host PTY changed in background;
+      // reasserting equal dimensions is the convergence signal after iOS resume.
+      viewportMeasuredRef.current = false
+      scheduleForcedViewportRefit()
+    })
+    return () => sub.remove()
+  }, [viewportMeasuredRef, scheduleForcedViewportRefit])
+
+  const previousConnStateRef = useRef(connState)
+  useEffect(() => {
+    const previous = previousConnStateRef.current
+    previousConnStateRef.current = connState
+    if (previous === 'connected' || connState !== 'connected') {
+      return
+    }
+    // Why: reconnect can restore a PTY whose host-side size changed while the
+    // socket was down, so equal cached dimensions still need reassertion.
+    viewportMeasuredRef.current = false
+    scheduleForcedViewportRefit()
+  }, [connState, viewportMeasuredRef, scheduleForcedViewportRefit])
 
   useEffect(() => {
     disposedRef.current = false

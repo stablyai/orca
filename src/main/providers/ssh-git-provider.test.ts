@@ -1054,6 +1054,42 @@ describe('SshGitProvider', () => {
     expect(mux.request).toHaveBeenCalledTimes(3)
   })
 
+  it.each([
+    [
+      'clone',
+      (provider: SshGitProvider) =>
+        provider.clone(['clone', '--', 'https://example.com/repo.git', 'repo'], '/projects')
+    ],
+    [
+      'mutating git.exec',
+      (provider: SshGitProvider) =>
+        provider.exec(['commit', '--allow-empty', '-m', 'initialize'], '/home/user/repo')
+    ]
+  ])('clears pending diff RPCs when %s runs', async (_name, mutate) => {
+    const diff = {
+      kind: 'text',
+      originalContent: 'old',
+      modifiedContent: 'new',
+      originalIsBinary: false,
+      modifiedIsBinary: false
+    }
+    const pendingDiff = deferredValue(diff)
+    mux.request.mockReturnValueOnce(pendingDiff.promise)
+
+    const first = provider.getDiff('/home/user/repo', 'src/file.ts', false, true)
+    await waitForRequestCount(mux.request, 1)
+
+    mux.request.mockResolvedValueOnce({ stdout: '', stderr: '' })
+    await mutate(provider)
+
+    mux.request.mockResolvedValueOnce(diff)
+    const second = provider.getDiff('/home/user/repo', 'src/file.ts', false, true)
+
+    pendingDiff.resolve()
+    await expect(Promise.all([first, second])).resolves.toEqual([diff, diff])
+    expect(mux.request).toHaveBeenCalledTimes(3)
+  })
+
   it('clears pending branch diff RPCs when a ref-moving provider operation runs', async () => {
     const diff = {
       kind: 'text',

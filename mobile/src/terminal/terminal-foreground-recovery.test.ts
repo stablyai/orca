@@ -127,5 +127,11 @@ describe('terminal foreground recovery', () => {
     expect(foregroundPredicate).toContain('Platform.OS')
     expect(sessionSource).toContain('recoverActiveTerminalAfterForeground({')
     expect(sessionSource).toContain("AppState.addEventListener('change'")
+    const readinessInvalidation = sessionSource.indexOf(
+      'terminalRef.prepareForForegroundRecovery()'
+    )
+    const replay = sessionSource.indexOf('recoverActiveTerminalAfterForeground({')
+    expect(readinessInvalidation).toBeGreaterThanOrEqual(0)
+    expect(replay).toBeGreaterThan(readinessInvalidation)
   })
 })

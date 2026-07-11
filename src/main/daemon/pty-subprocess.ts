@@ -41,7 +41,8 @@ import {
 } from '../pty/powerlevel10k-wizard-env'
 import { isWindowsGitBashShellPath, resolveWindowsGitBashShellPath } from '../git-bash'
 import { WINDOWS_GIT_BASH_SHELL } from '../../shared/windows-terminal-shell'
-import { resolveAgentForegroundProcess } from '../providers/agent-foreground-process'
+import { resolveAgentForegroundProcessWithAvailability } from '../providers/agent-foreground-process'
+import { readWindowsConptyProcessIds } from '../providers/windows-conpty-process-membership'
 import {
   isAgentForegroundWrapperProcess,
   recognizeAgentProcess,
@@ -55,6 +56,7 @@ import { isShellProcess } from '../../shared/shell-process-detection'
 import { parsePtySessionId } from './pty-session-id'
 import { getAgentForegroundContextPaths } from '../providers/agent-foreground-context-paths'
 import { assertSafeAgentStartupCwd, resolveSafePtyDefaultCwd } from '../providers/pty-default-cwd'
+import { ORCA_HERMES_STARTUP_QUERY_ENV } from '../../shared/hermes-startup-query'
 
 const PANE_IDENTITY_ENV_KEYS = [
   'ORCA_PANE_KEY',
@@ -716,6 +718,11 @@ export function createPtySubprocess(opts: PtySubprocessOptions): SubprocessHandl
         // through Windows wsl.exe; non-default env vars need WSLENV import.
         addWslEnvKeys(env, ['CLAUDE_CONFIG_DIR'])
       }
+      if (env[ORCA_HERMES_STARTUP_QUERY_ENV] !== undefined) {
+        // Why: the startup wrapper expands this only inside WSL; wsl.exe
+        // otherwise drops custom Windows environment variables.
+        addWslEnvKeys(env, [ORCA_HERMES_STARTUP_QUERY_ENV])
+      }
     } else if (codexHomeWslInfo || isWslCodexHomeForHost(env.CODEX_HOME)) {
       // Why: WSL-managed Codex homes are Linux paths. Windows Codex cannot use
       // them. ORCA_CODEX_HOME must go too because shell-ready scripts restore
@@ -940,10 +947,10 @@ export function createPtySubprocess(opts: PtySubprocessOptions): SubprocessHandl
     // Why: daemon foreground reads are sync and run on the IPC hot path.
     // Refresh derived identities (shell/wrapper/helper -> codex/claude/etc.)
     // in the background and serve them from a short cache on later reads.
-    void resolveAgentForegroundProcess(proc.pid, fallbackProcess, {
+    void resolveAgentForegroundProcessWithAvailability(proc.pid, fallbackProcess, {
       contextPaths: agentForegroundContextPaths
     })
-      .then((processName) => {
+      .then(({ processName }) => {
         if (dead) {
           return
         }
@@ -1041,6 +1048,56 @@ export function createPtySubprocess(opts: PtySubprocessOptions): SubprocessHandl
           return activeStartupAgentForeground.processName
         }
         return fallbackProcess
+      } catch {
+        return null
+      }
+    },
+    confirmForegroundProcess: async () => {
+      if (dead || !proc.pid) {
+        return null
+      }
+      try {
+        const fallbackProcess = getFallbackForegroundProcess()
+        if (
+          !fallbackProcess ||
+          (recognizeAgentProcess(fallbackProcess) && process.platform !== 'win32') ||
+          (process.platform !== 'win32' && !shouldInspectFallbackForegroundProcess(fallbackProcess))
+        ) {
+          return fallbackProcess
+        }
+        // Why: cached/in-flight scans may predate the OSC command boundary.
+        // Confirmation requires one shared process snapshot started afterward.
+        const resolution = await resolveAgentForegroundProcessWithAvailability(
+          proc.pid,
+          fallbackProcess,
+          {
+            contextPaths: agentForegroundContextPaths,
+            fresh: true,
+            ...(process.platform === 'win32'
+              ? {
+                  forceProcessScan: true,
+                  readWindowsConptyProcessIds: () => readWindowsConptyProcessIds(proc.pid)
+                }
+              : {})
+          }
+        )
+        if (dead || !resolution.available) {
+          return null
+        }
+        const recognized = recognizeAgentProcess(resolution.processName)
+        if (recognized) {
+          cachedAgentForeground = {
+            processName: recognized.processName,
+            refreshedAt: Date.now()
+          }
+          startupAgentForeground = null
+          return recognized.processName
+        }
+        // Why: a successful post-boundary scan that resolves no agent is the
+        // authority that retires stale cached/startup identity.
+        cachedAgentForeground = null
+        startupAgentForeground = null
+        return resolution.processName
       } catch {
         return null
       }

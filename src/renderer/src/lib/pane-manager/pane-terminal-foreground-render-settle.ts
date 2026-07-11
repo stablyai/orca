@@ -19,6 +19,7 @@ export type ForegroundTerminalOutputTarget = {
 type ForegroundTerminalWriteOptions = {
   forceViewportRefresh?: boolean
   followupViewportRefresh?: boolean
+  shouldRefreshViewportSynchronously?: () => boolean
   onParsed?: () => void
 }
 
@@ -32,7 +33,10 @@ type ViewportSnapshot = {
   viewportY: number | null
 }
 
-function refreshVisibleRowsNow(terminal: ForegroundTerminalOutputTarget): void {
+function refreshVisibleRows(
+  terminal: ForegroundTerminalOutputTarget,
+  synchronously: boolean
+): void {
   if (typeof terminal.rows !== 'number' || terminal.rows < 1) {
     return
   }
@@ -40,14 +44,17 @@ function refreshVisibleRowsNow(terminal: ForegroundTerminalOutputTarget): void {
   const start = 0
   const end = Math.max(0, terminal.rows - 1)
   try {
-    // Why: xterm's DOM renderer batches row paints; Windows ConPTY CR-style
-    // rewrites can leave stale CJK glyph cells until a resize unless we paint
-    // the parsed foreground state before Chromium's next frame.
-    if (typeof terminal._core?.refresh === 'function') {
+    // Why: DOM-rendered Windows ConPTY rewrites need an immediate repair, while
+    // WebGL can merge this full-grid request into xterm's already-queued frame.
+    if (synchronously && typeof terminal._core?.refresh === 'function') {
       terminal._core.refresh(start, end, true)
       return
     }
-    terminal.refresh?.(start, end)
+    if (typeof terminal.refresh === 'function') {
+      terminal.refresh(start, end)
+      return
+    }
+    terminal._core?.refresh?.(start, end, false)
   } catch {
     // Ignore disposed terminals; PTY output can race pane teardown.
   }
@@ -90,12 +97,15 @@ function cancelScheduledViewportSettleRefresh(terminal: ForegroundTerminalOutput
   clearTimeout(pending.id)
 }
 
-function scheduleViewportSettleRefresh(terminal: ForegroundTerminalOutputTarget): void {
+function scheduleViewportSettleRefresh(
+  terminal: ForegroundTerminalOutputTarget,
+  shouldRefreshSynchronously?: () => boolean
+): void {
   cancelScheduledViewportSettleRefresh(terminal)
   if (typeof requestAnimationFrame === 'function') {
     const id = requestAnimationFrame(() => {
       pendingViewportSettleRefreshByTerminal.delete(terminal)
-      refreshVisibleRowsNow(terminal)
+      refreshVisibleRows(terminal, shouldRefreshSynchronously?.() ?? true)
     })
     pendingViewportSettleRefreshByTerminal.set(terminal, { kind: 'raf', id })
     return
@@ -103,7 +113,7 @@ function scheduleViewportSettleRefresh(terminal: ForegroundTerminalOutputTarget)
 
   const id = setTimeout(() => {
     pendingViewportSettleRefreshByTerminal.delete(terminal)
-    refreshVisibleRowsNow(terminal)
+    refreshVisibleRows(terminal, shouldRefreshSynchronously?.() ?? true)
   }, 16)
   pendingViewportSettleRefreshByTerminal.set(terminal, { kind: 'timeout', id })
 }
@@ -113,7 +123,7 @@ function settleForegroundRender(
   beforeWriteViewport: ViewportSnapshot,
   options: ForegroundTerminalWriteOptions
 ): void {
-  refreshVisibleRowsNow(terminal)
+  refreshVisibleRows(terminal, options.shouldRefreshViewportSynchronously?.() ?? true)
   // Why: when output advances the viewport, Chromium can paint the freshly
   // scrolled top row one frame later than xterm finishes parsing. Repaint once
   // more after the scroll settles so the user doesn't need to jiggle the window.
@@ -121,7 +131,7 @@ function settleForegroundRender(
     options.followupViewportRefresh ||
     viewportChangedDuringWrite(terminal, beforeWriteViewport)
   ) {
-    scheduleViewportSettleRefresh(terminal)
+    scheduleViewportSettleRefresh(terminal, options.shouldRefreshViewportSynchronously)
   }
 }
 

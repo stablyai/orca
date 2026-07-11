@@ -31,6 +31,7 @@ import {
   isMaxBufferOverflowError
 } from '../git/max-buffer-overflow'
 import { InFlightPromiseDedupe, stableInFlightKey } from '../../shared/in-flight-promise-dedupe'
+import { gitExecMutatesRepository } from '../../shared/git-exec-mutation'
 
 type NonInteractiveExecQueueEntry = {
   started: boolean
@@ -761,9 +762,13 @@ export class SshGitProvider implements IGitProvider {
     cwd: string,
     options?: { signal?: AbortSignal; timeoutMs?: number }
   ): Promise<{ stdout: string; stderr: string }> {
-    const result = options
-      ? await requestGitStreamable(this.mux, 'git.exec', { args, cwd }, options)
-      : await requestGitStreamable(this.mux, 'git.exec', { args, cwd })
+    const run = () =>
+      options
+        ? requestGitStreamable(this.mux, 'git.exec', { args, cwd }, options)
+        : requestGitStreamable(this.mux, 'git.exec', { args, cwd })
+    const result = gitExecMutatesRepository(args)
+      ? await this.runWithDiffDedupeClear(run)
+      : await run()
     return result as {
       stdout: string
       stderr: string
@@ -779,6 +784,7 @@ export class SshGitProvider implements IGitProvider {
       onProgress?: (progress: { phase: string; percent: number }) => void
     }
   ): Promise<{ stdout: string; stderr: string }> {
+    this.gitDiffReadDedupe.clear()
     const progressId = `clone-${Date.now()}-${Math.random().toString(36).slice(2)}`
     const unsubscribe = options?.onProgress
       ? this.mux.onNotificationByMethod('git.cloneProgress', (params) => {
@@ -811,6 +817,7 @@ export class SshGitProvider implements IGitProvider {
       throw error
     } finally {
       unsubscribe?.()
+      this.gitDiffReadDedupe.clear()
     }
   }
 

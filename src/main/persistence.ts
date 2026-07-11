@@ -130,6 +130,11 @@ import {
 } from './agent-hooks/migration-unsupported-pty-state'
 import { agentHookServer } from './agent-hooks/server'
 import { pruneLocalTerminalScrollbackBuffers } from '../shared/workspace-session-terminal-buffers'
+import {
+  backfillAutomationRunNumbers,
+  nextAutomationRunNumber,
+  pruneAutomationRuns
+} from '../shared/automation-run-retention'
 import { pruneWorkspaceSessionBrowserHistory } from '../shared/workspace-session-browser-history'
 import {
   FOLDER_WORKSPACE_INSTANCE_SEPARATOR,
@@ -3387,7 +3392,18 @@ export class Store {
             parsed.legacyPaneKeyAliasEntries
           ),
           automations: Array.isArray(parsed.automations) ? parsed.automations : [],
-          automationRuns: Array.isArray(parsed.automationRuns) ? parsed.automationRuns : [],
+          automationRuns: (() => {
+            if (!Array.isArray(parsed.automationRuns)) {
+              return []
+            }
+            const runs = pruneAutomationRuns(backfillAutomationRunNumbers(parsed.automationRuns))
+            // Why: nothing else on the load path marks state dirty, so without
+            // this an oversized legacy file only shrinks at the next unrelated save.
+            if (runs.length !== parsed.automationRuns.length) {
+              this.loadNeedsSave = true
+            }
+            return runs
+          })(),
           onboarding: normalizedOnboarding
         }
       }
@@ -4701,12 +4717,15 @@ export class Store {
       return existing
     }
     const now = Date.now()
-    const runNumber =
-      (this.state.automationRuns ?? []).filter((run) => run.automationId === automation.id).length +
-      1
+    // Why: retention prunes old runs, so the count of retained runs is no longer
+    // the run's ordinal — carry the number forward from the newest survivor.
+    const runNumber = nextAutomationRunNumber(
+      (this.state.automationRuns ?? []).filter((run) => run.automationId === automation.id)
+    )
     const run: AutomationRun = {
       id: randomUUID(),
       automationId: automation.id,
+      runNumber,
       runContext: automation.runContext ?? null,
       sourceContext: automation.sourceContext ?? null,
       title: `${automation.name} run ${runNumber}`,
@@ -4728,7 +4747,7 @@ export class Store {
       dispatchedAt: null,
       createdAt: now
     }
-    this.state.automationRuns = [...(this.state.automationRuns ?? []), run]
+    this.state.automationRuns = pruneAutomationRuns([...(this.state.automationRuns ?? []), run])
     if (trigger === 'manual') {
       this.recordFeatureInteraction('automation-run')
     }
@@ -6122,16 +6141,16 @@ export class Store {
   /**
    * Re-point every repo and worktree meta pinned to a removed SSH target id
    * onto a re-added target's id, so orphaned workspaces reattach to the live
-   * host instead of remaining un-removable ghosts. Returns the number of repos
-   * re-pointed (0 when nothing referenced the old id).
+   * host instead of remaining un-removable ghosts. Returns the ids of repos
+   * re-pointed (empty when nothing referenced the old id).
    */
-  reassignSshTargetId(oldTargetId: string, newTargetId: string): number {
+  reassignSshTargetId(oldTargetId: string, newTargetId: string): string[] {
     if (oldTargetId === newTargetId) {
-      return 0
+      return []
     }
     const oldHostId = toSshExecutionHostId(oldTargetId)
     const newHostId = toSshExecutionHostId(newTargetId)
-    let repoCount = 0
+    const repoIds = new Set<string>()
     for (const repo of this.state.repos) {
       const matchesConnection = repo.connectionId === oldTargetId
       const matchesHost = repo.executionHostId === oldHostId
@@ -6148,7 +6167,7 @@ export class Store {
       if (matchesHost) {
         repo.executionHostId = newHostId
       }
-      repoCount++
+      repoIds.add(repo.id)
     }
     // Re-point worktree metas whose hostId pointed at the old SSH host.
     let metaChanged = false
@@ -6219,13 +6238,13 @@ export class Store {
     // Why: repo-row and host-setup rewrites can affect host-setup compatibility,
     // but meta-only rewrites cannot — keep that sync under this gate. Persist
     // whenever anything changed, so partial re-points aren't lost on quit.
-    if (repoCount > 0 || setupsChanged) {
+    if (repoIds.size > 0 || setupsChanged) {
       this.syncProjectHostSetupCompatibilityState()
     }
-    if (repoCount > 0 || metaChanged || carrierChanged || setupsChanged) {
+    if (repoIds.size > 0 || metaChanged || carrierChanged || setupsChanged) {
       this.scheduleSave()
     }
-    return repoCount
+    return [...repoIds]
   }
 
   // ── SSH Remote PTY Leases ──────────────────────────────────────────

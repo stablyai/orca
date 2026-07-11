@@ -18,6 +18,8 @@ vi.mock('./runner', () => ({
   translateWslOutputPaths: translateWslOutputPathsMock
 }))
 
+import { clearGitCapabilityStateForTests } from './git-capability-state'
+
 import {
   addSparseWorktree,
   addWorktree,
@@ -28,6 +30,10 @@ import {
   removeWorktree,
   WORKTREE_ADD_TIMEOUT_MS
 } from './worktree'
+
+beforeEach(() => {
+  clearGitCapabilityStateForTests()
+})
 
 describe('listWorktrees in-flight sharing', () => {
   beforeEach(() => {
@@ -98,6 +104,47 @@ describe('listWorktrees in-flight sharing', () => {
 })
 
 describe('parseWorktreeList', () => {
+  it('preserves a locked marker and its reason', () => {
+    expect(
+      parseWorktreeList(
+        'worktree /repo\nHEAD abc\nbranch refs/heads/main\n\nworktree /locked\nHEAD def\nbranch refs/heads/feature\nlocked active agent session\n'
+      )[1]
+    ).toMatchObject({
+      path: '/locked',
+      locked: true,
+      lockReason: 'active agent session'
+    })
+  })
+
+  it('decodes C-quoted lock reasons from legacy line porcelain output', () => {
+    const output =
+      'worktree /repo\nHEAD abc\nbranch refs/heads/main\n\nworktree /locked\nHEAD def\nbranch refs/heads/feature\nlocked "first line\\nsecond line \\303\\251"\n'
+
+    expect(parseWorktreeList(output)[1]).toMatchObject({
+      locked: true,
+      lockReason: 'first line\nsecond line é'
+    })
+  })
+
+  it('keeps NUL-delimited lock reasons raw', () => {
+    const output = [
+      'worktree /repo',
+      'HEAD abc',
+      'branch refs/heads/main',
+      '',
+      'worktree /locked',
+      'HEAD def',
+      'branch refs/heads/feature',
+      'locked "literal\\nquote"',
+      ''
+    ].join('\0')
+
+    expect(parseWorktreeList(output, { nulDelimited: true })[1]).toMatchObject({
+      locked: true,
+      lockReason: '"literal\\nquote"'
+    })
+  })
+
   it('parses regular and bare worktree blocks from porcelain output', () => {
     const output = `
 worktree /repo
@@ -1204,6 +1251,43 @@ describe('addWorktree', () => {
     expect(gitExecFileAsyncMock.mock.calls[1]).toEqual([
       ['rev-list', '--left-right', '--count', 'refs/heads/main...refs/remotes/origin/main'],
       { cwd: '/repo' }
+    ])
+  })
+
+  it('skips advisory owner probes when the local base is already current', async () => {
+    gitExecFileAsyncMock
+      .mockResolvedValueOnce({ stdout: 'abc123\n' }) // resolve creation base
+      .mockResolvedValueOnce({ stdout: '0\t0\n' }) // local base is current
+      .mockResolvedValueOnce({ stdout: '' }) // worktree add
+      .mockResolvedValueOnce({ stdout: '' }) // persist branch base
+      .mockResolvedValueOnce({ stdout: 'true\n' }) // push.autoSetupRemote already set
+
+    await expect(
+      addWorktree('/repo', '/repo-feature', 'feature/test', 'origin/main', false, false, {
+        suggestLocalBaseRefUpdate: true
+      })
+    ).resolves.toEqual({})
+
+    expect(gitExecFileAsyncMock.mock.calls.map(([args]) => args)).toEqual([
+      ['rev-parse', '--verify', '--quiet', 'refs/remotes/origin/main^{commit}'],
+      ['rev-list', '--left-right', '--count', 'refs/heads/main...refs/remotes/origin/main'],
+      [
+        'worktree',
+        'add',
+        '--no-track',
+        '-b',
+        'feature/test',
+        '/repo-feature',
+        'refs/remotes/origin/main'
+      ],
+      [
+        'config',
+        '--local',
+        '--replace-all',
+        'branch.feature/test.base',
+        'refs/remotes/origin/main'
+      ],
+      ['config', '--get', 'push.autoSetupRemote']
     ])
   })
 

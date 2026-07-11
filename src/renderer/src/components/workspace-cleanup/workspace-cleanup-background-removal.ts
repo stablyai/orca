@@ -10,8 +10,14 @@ import type {
   WorkspaceCleanupRemoveResult
 } from '@/store/slices/workspace-cleanup'
 import { translate } from '@/i18n/i18n'
+import {
+  getWorkspaceCleanupTimeoutFailure,
+  trackWorkspaceCleanupLateSettlement,
+  waitForWorkspaceCleanupRemovalWithTimeout
+} from './workspace-cleanup-removal-settlement'
 
 const DEFAULT_WORKSPACE_CLEANUP_REMOVAL_TIMEOUT_MS = 120_000
+const DEFAULT_WORKSPACE_CLEANUP_SETTLEMENT_GRACE_MS = 5_000
 
 export type WorkspaceCleanupRemovalProgress = {
   totalCount: number
@@ -28,12 +34,16 @@ export type WorkspaceCleanupBackgroundRemovalArgs = {
   ) => Promise<WorkspaceCleanupRemoveResult>
   onProgress: (progress: WorkspaceCleanupRemovalProgress) => void
   onResult?: (result: WorkspaceCleanupRemoveResult) => void
+  // Why: the timeout is provisional because renderer IPC cannot be cancelled;
+  // consumers need the eventual outcome to replace stale timeout UI.
+  onLateResult?: (result: WorkspaceCleanupRemoveResult) => void
   onError?: (error: unknown) => void
   // Why: a row can fail before its removal starts (preflight failure or a
   // skipped nested workspace); report it now so its queued overlay can clear
   // instead of waiting for the whole batch to settle.
   onRowFailed?: (failure: WorkspaceCleanupFailure) => void
   removalTimeoutMs?: number
+  removalSettlementGraceMs?: number
 }
 
 export function startWorkspaceCleanupBackgroundRemoval({
@@ -41,9 +51,11 @@ export function startWorkspaceCleanupBackgroundRemoval({
   removeCandidates,
   onProgress,
   onResult,
+  onLateResult,
   onError,
   onRowFailed,
-  removalTimeoutMs = DEFAULT_WORKSPACE_CLEANUP_REMOVAL_TIMEOUT_MS
+  removalTimeoutMs = DEFAULT_WORKSPACE_CLEANUP_REMOVAL_TIMEOUT_MS,
+  removalSettlementGraceMs = DEFAULT_WORKSPACE_CLEANUP_SETTLEMENT_GRACE_MS
 }: WorkspaceCleanupBackgroundRemovalArgs): void {
   if (candidates.length === 0) {
     try {
@@ -58,6 +70,7 @@ export function startWorkspaceCleanupBackgroundRemoval({
   const removedIds: string[] = []
   const failures: WorkspaceCleanupFailure[] = []
   const failedCandidates: WorkspaceCleanupCandidate[] = []
+  const detachLateResultReconcilers: (() => void)[] = []
   let processedCount = 0
 
   const emitProgress = (): void => {
@@ -109,11 +122,46 @@ export function startWorkspaceCleanupBackgroundRemoval({
         continue
       }
       try {
-        const result = await withWorkspaceCleanupRemovalTimeout(
+        const outcome = await waitForWorkspaceCleanupRemovalWithTimeout(
           removeCandidates([candidate.worktreeId], { approvedCandidates: [candidate] }),
-          candidate,
-          removalTimeoutMs
+          removalTimeoutMs,
+          removalSettlementGraceMs
         )
+        if (outcome.status === 'rejected') {
+          throw outcome.error
+        }
+        if (outcome.status === 'unresolved') {
+          const timeoutFailure = getWorkspaceCleanupTimeoutFailure(candidate)
+          failedCandidates.push(candidate)
+          reportFailures([timeoutFailure])
+          // Why: renderer IPC cannot be cancelled at the timeout boundary. Keep
+          // its authoritative settlement without letting an unknown child
+          // outcome permit deletion of an ancestor.
+          detachLateResultReconcilers.push(
+            trackWorkspaceCleanupLateSettlement(
+              outcome.settlement,
+              candidate,
+              (lateResult) => {
+                const timeoutIndex = failures.indexOf(timeoutFailure)
+                if (timeoutIndex >= 0) {
+                  failures.splice(timeoutIndex, 1)
+                }
+                removedIds.push(...lateResult.removedIds)
+                reportFailures(lateResult.failures)
+                if (lateResult.failures.length === 0) {
+                  const failedCandidateIndex = failedCandidates.indexOf(candidate)
+                  if (failedCandidateIndex >= 0) {
+                    failedCandidates.splice(failedCandidateIndex, 1)
+                  }
+                }
+                emitProgress()
+              },
+              (lateResult) => reportLateWorkspaceCleanupResult(lateResult, onLateResult)
+            )
+          )
+          continue
+        }
+        const result = outcome.result
         removedIds.push(...result.removedIds)
         reportFailures(result.failures)
         if (result.failures.length > 0) {
@@ -134,6 +182,9 @@ export function startWorkspaceCleanupBackgroundRemoval({
       }
     }
 
+    for (const detach of detachLateResultReconcilers) {
+      detach()
+    }
     const result = { removedIds, failures }
     try {
       onResult?.(result)
@@ -141,33 +192,11 @@ export function startWorkspaceCleanupBackgroundRemoval({
       console.error('Workspace cleanup result callback failed', callbackError)
     }
 
-    if (result.removedIds.length > 0) {
-      toast.success(
-        translate(
-          'auto.components.workspace.cleanup.backgroundRemoval.removed',
-          'Removed workspaces: {{value0}}',
-          {
-            value0: result.removedIds.length
-          }
-        )
-      )
-    }
-
-    if (result.failures.length > 0) {
-      toast.error(
-        translate(
-          'auto.components.workspace.cleanup.backgroundRemoval.failed',
-          'Workspaces not removed: {{value0}}',
-          {
-            value0: result.failures.length
-          }
-        ),
-        {
-          description: result.failures.map((failure) => failure.message).join('; ')
-        }
-      )
-    }
+    showWorkspaceCleanupRemovalResultToasts(result)
   })().catch((error: unknown) => {
+    for (const detach of detachLateResultReconcilers) {
+      detach()
+    }
     onError?.(error)
     toast.error(
       translate(
@@ -181,40 +210,37 @@ export function startWorkspaceCleanupBackgroundRemoval({
   })
 }
 
-async function withWorkspaceCleanupRemovalTimeout(
-  promise: Promise<WorkspaceCleanupRemoveResult>,
-  candidate: WorkspaceCleanupCandidate,
-  timeoutMs: number
-): Promise<WorkspaceCleanupRemoveResult> {
-  if (timeoutMs <= 0 || !Number.isFinite(timeoutMs)) {
-    return promise
-  }
-
-  let timeout: ReturnType<typeof setTimeout> | null = null
+function reportLateWorkspaceCleanupResult(
+  result: WorkspaceCleanupRemoveResult,
+  onLateResult: WorkspaceCleanupBackgroundRemovalArgs['onLateResult']
+): void {
   try {
-    return await Promise.race([
-      promise,
-      new Promise<WorkspaceCleanupRemoveResult>((_resolve, reject) => {
-        timeout = setTimeout(() => {
-          // Why: the underlying removal cannot be cancelled from the renderer,
-          // so the row stays "Deleting" and this message must not claim the
-          // removal stopped.
-          reject(
-            new Error(
-              translate(
-                'auto.components.workspace.cleanup.backgroundRemoval.timedOut',
-                'Removing {{value0}} is taking longer than expected. It will keep running in the background.',
-                { value0: candidate.displayName }
-              )
-            )
-          )
-        }, timeoutMs)
-      })
-    ])
-  } finally {
-    if (timeout) {
-      clearTimeout(timeout)
-    }
+    onLateResult?.(result)
+  } catch (callbackError) {
+    console.error('Workspace cleanup late result callback failed', callbackError)
+  }
+  showWorkspaceCleanupRemovalResultToasts(result)
+}
+
+function showWorkspaceCleanupRemovalResultToasts(result: WorkspaceCleanupRemoveResult): void {
+  if (result.removedIds.length > 0) {
+    toast.success(
+      translate(
+        'auto.components.workspace.cleanup.backgroundRemoval.removed',
+        'Removed workspaces: {{value0}}',
+        { value0: result.removedIds.length }
+      )
+    )
+  }
+  if (result.failures.length > 0) {
+    toast.error(
+      translate(
+        'auto.components.workspace.cleanup.backgroundRemoval.failed',
+        'Workspaces not removed: {{value0}}',
+        { value0: result.failures.length }
+      ),
+      { description: result.failures.map((failure) => failure.message).join('; ') }
+    )
   }
 }
 

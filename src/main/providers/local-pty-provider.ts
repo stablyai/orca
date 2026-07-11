@@ -51,11 +51,13 @@ import {
   resolveWindowsGitBashShellPath
 } from '../git-bash'
 import { WINDOWS_GIT_BASH_SHELL } from '../../shared/windows-terminal-shell'
-import { resolveAgentForegroundProcess } from './agent-foreground-process'
+import { resolveAgentForegroundProcessWithAvailability } from './agent-foreground-process'
 import { getAgentForegroundContextPaths } from './agent-foreground-context-paths'
 import { recognizeAgentProcessFromCommandLine } from '../../shared/agent-process-recognition'
+import { readWindowsConptyProcessIds } from './windows-conpty-process-membership'
 import { shouldUseShellReadyStartupDelivery } from '../../shared/codex-startup-delivery'
 import { assertSafeAgentStartupCwd, resolveSafePtyDefaultCwd } from './pty-default-cwd'
+import { ORCA_HERMES_STARTUP_QUERY_ENV } from '../../shared/hermes-startup-query'
 
 const PANE_IDENTITY_ENV_KEYS = [
   'ORCA_PANE_KEY',
@@ -566,6 +568,11 @@ export class LocalPtyProvider implements IPtyProvider {
           // through Windows wsl.exe; non-default env vars need WSLENV import.
           addWslEnvKeys(finalEnv, ['CLAUDE_CONFIG_DIR'])
         }
+        if (finalEnv[ORCA_HERMES_STARTUP_QUERY_ENV] !== undefined) {
+          // Why: the startup wrapper expands this only inside WSL; wsl.exe
+          // otherwise drops custom Windows environment variables.
+          addWslEnvKeys(finalEnv, [ORCA_HERMES_STARTUP_QUERY_ENV])
+        }
       } else if (codexHomeWslInfo || isWslCodexHomeForHost(finalEnv.CODEX_HOME)) {
         // Why: WSL-managed Codex homes are Linux paths. Windows Codex cannot use
         // them. ORCA_CODEX_HOME must go too because shell-ready scripts restore
@@ -971,13 +978,45 @@ export class LocalPtyProvider implements IPtyProvider {
       return null
     }
     try {
-      return await resolveAgentForegroundProcess(
+      const resolution = await resolveAgentForegroundProcessWithAvailability(
         proc.pid,
         resolveForegroundFallbackProcess(proc.process || null, ptyShellName.get(id)),
         {
           contextPaths: ptyAgentForegroundContextPaths.get(id)
         }
       )
+      return resolution.processName
+    } catch {
+      return null
+    }
+  }
+
+  async confirmForegroundProcess(id: string): Promise<string | null> {
+    const proc = ptyProcesses.get(id)
+    if (!proc) {
+      return null
+    }
+    try {
+      const resolution = await resolveAgentForegroundProcessWithAvailability(
+        proc.pid,
+        resolveForegroundFallbackProcess(proc.process || null, ptyShellName.get(id)),
+        {
+          contextPaths: ptyAgentForegroundContextPaths.get(id),
+          fresh: true,
+          ...(process.platform === 'win32'
+            ? {
+                forceProcessScan: true,
+                readWindowsConptyProcessIds: () => readWindowsConptyProcessIds(proc.pid)
+              }
+            : {})
+        }
+      )
+      // Why: a fresh scan can outlive this PTY id; never publish identity from
+      // an exited process or a replacement session that reused the same id.
+      if (ptyProcesses.get(id) !== proc) {
+        return null
+      }
+      return resolution.available ? resolution.processName : null
     } catch {
       return null
     }

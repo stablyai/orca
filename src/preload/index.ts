@@ -24,6 +24,7 @@ import type {
   GitHubPRRefreshReason,
   GitHubAssignableUser,
   GitHubCommentResult,
+  GitHubCreateIssueResult,
   GitHubWorkItem,
   JiraProjectStatusOrder,
   GitPushTarget,
@@ -129,6 +130,8 @@ import {
 } from '../shared/rich-markdown-context-menu'
 import type {
   SshConnectionState,
+  SshConfigImportResult,
+  SshTargetAddResult,
   SshTarget,
   PortForwardEntry,
   EnrichedDetectedPort
@@ -195,6 +198,12 @@ import {
   type NativeFileDropPayload,
   type NativeFileDropPathEntry
 } from '../shared/native-file-drop'
+import type {
+  LocalLogTailChangedPayload,
+  LocalLogTailReadArgs,
+  LocalLogTailReadResult,
+  LocalLogTailWatchArgs
+} from '../shared/local-log-tail-types'
 import { subscribeRuntimeEnvironmentFromPreload } from './runtime-environment-subscriptions'
 import type { RuntimeEnvironmentSubscriptionHandle } from './runtime-environment-subscriptions'
 import type { HostedReviewForBranchArgs } from '../shared/hosted-review'
@@ -205,6 +214,7 @@ import type {
 } from '../shared/localhost-worktree-labels'
 import type {
   CrashReportBreadcrumbData,
+  CrashReportCopyDiagnosticsArgs,
   CrashReportSubmitArgs,
   CrashReportSubmitResult,
   ReactErrorBoundaryReportArgs,
@@ -839,6 +849,9 @@ const api = {
     resize: (id: string, cols: number, rows: number): void => {
       ipcRenderer.send('pty:resize', { id, cols, rows })
     },
+    claimViewport: (id: string, cols: number, rows: number): void => {
+      ipcRenderer.send('pty:claimViewport', { id, cols, rows })
+    },
 
     /** Why: measurement-only sibling of resize. Fires when a desktop pane
      * container measures real geometry (e.g. previously hidden tab becomes
@@ -986,6 +999,8 @@ const api = {
     /** Return the PTY foreground process basename when available (e.g. "codex"). */
     getForegroundProcess: (id: string): Promise<string | null> =>
       ipcRenderer.invoke('pty:getForegroundProcess', { id }),
+    confirmForegroundProcess: (id: string): Promise<string | null> =>
+      ipcRenderer.invoke('pty:confirmForegroundProcess', { id }),
 
     /** Resolve the live cwd of a PTY via `/proc` (Linux) or `lsof` (macOS).
      *  Returns `''` when the id is unknown or the platform cannot resolve one. */
@@ -1139,7 +1154,7 @@ const api = {
       ipcRenderer.send('crashReports:recordBreadcrumb', args),
     submit: (args: CrashReportSubmitArgs): Promise<CrashReportSubmitResult> =>
       ipcRenderer.invoke('crashReports:submit', args),
-    copyLatestDiagnostics: (args?: { reportId?: string; notes?: string }) =>
+    copyLatestDiagnostics: (args?: CrashReportCopyDiagnosticsArgs) =>
       ipcRenderer.invoke('crashReports:copyLatestDiagnostics', args)
   },
 
@@ -1254,8 +1269,7 @@ const api = {
       body: string
       labels?: string[]
       assignees?: string[]
-    }): Promise<{ ok: true; number: number; url: string } | { ok: false; error: string }> =>
-      ipcRenderer.invoke('gh:createIssue', args),
+    }): Promise<GitHubCreateIssueResult> => ipcRenderer.invoke('gh:createIssue', args),
 
     countWorkItems: (args: {
       repoPath: string
@@ -1443,10 +1457,9 @@ const api = {
       sourceContext?: TaskSourceContext | null
     }): Promise<GitHubAssignableUser[]> => ipcRenderer.invoke('gh:listAssignableUsers', args),
 
-    // Why: every renderer subscribes to local mutation broadcasts so each
-    // window's work-item-details cache invalidates the affected entry. The
-    // event fires after a successful mutation in any window — see
-    // src/main/ipc/github.ts broadcastWorkItemMutated.
+    // Why: the app renderer owns the work-item-details cache. Main targets this
+    // bridge for non-origin mutations; origin callers already updated their
+    // cache optimistically — see src/main/ipc/github.ts.
     onWorkItemMutated: (
       callback: (payload: {
         repoPath: string
@@ -2719,8 +2732,30 @@ const api = {
     readFile: (args: {
       filePath: string
       connectionId?: string
-    }): Promise<{ content: string; isBinary: boolean; isImage?: boolean; mimeType?: string }> =>
-      ipcRenderer.invoke('fs:readFile', args),
+      includeLocalLogMetadata?: boolean
+    }): Promise<{
+      content: string
+      isBinary: boolean
+      isImage?: boolean
+      mimeType?: string
+      fileIdentity?: string
+    }> => ipcRenderer.invoke('fs:readFile', args),
+    readLocalLogTail: (args: LocalLogTailReadArgs): Promise<LocalLogTailReadResult> =>
+      ipcRenderer.invoke('fs:readLocalLogTail', args),
+    startLocalLogTail: (args: LocalLogTailWatchArgs): Promise<void> =>
+      ipcRenderer.invoke('fs:startLocalLogTail', args),
+    stopLocalLogTail: (args: { subscriptionId: string }): Promise<void> =>
+      ipcRenderer.invoke('fs:stopLocalLogTail', args),
+    onLocalLogTailChanged: (
+      callback: (payload: LocalLogTailChangedPayload) => void
+    ): (() => void) => {
+      const listener = (
+        _event: Electron.IpcRendererEvent,
+        payload: LocalLogTailChangedPayload
+      ): void => callback(payload)
+      ipcRenderer.on('fs:localLogTailChanged', listener)
+      return () => ipcRenderer.removeListener('fs:localLogTailChanged', listener)
+    },
     downloadFile: (args: {
       filePath: string
       connectionId: string
@@ -3849,7 +3884,7 @@ const api = {
     call: (args: { method: string; params?: unknown }): Promise<RuntimeRpcResponse<unknown>> =>
       ipcRenderer.invoke('runtime:call', args),
     getTerminalFitOverrides: (): Promise<
-      { ptyId: string; mode: 'mobile-fit'; cols: number; rows: number }[]
+      { ptyId: string; mode: 'mobile-fit' | 'remote-desktop-fit'; cols: number; rows: number }[]
     > => ipcRenderer.invoke('runtime:getTerminalFitOverrides'),
     getTerminalDrivers: (): Promise<
       {
@@ -3870,14 +3905,19 @@ const api = {
     onTerminalFitOverrideChanged: (
       callback: (event: {
         ptyId: string
-        mode: 'mobile-fit' | 'desktop-fit'
+        mode: 'mobile-fit' | 'remote-desktop-fit' | 'desktop-fit'
         cols: number
         rows: number
       }) => void
     ): (() => void) => {
       const listener = (
         _event: Electron.IpcRendererEvent,
-        data: { ptyId: string; mode: 'mobile-fit' | 'desktop-fit'; cols: number; rows: number }
+        data: {
+          ptyId: string
+          mode: 'mobile-fit' | 'remote-desktop-fit' | 'desktop-fit'
+          cols: number
+          rows: number
+        }
       ) => callback(data)
       ipcRenderer.on('runtime:terminalFitOverrideChanged', listener)
       return () => ipcRenderer.removeListener('runtime:terminalFitOverrideChanged', listener)
@@ -3998,7 +4038,7 @@ const api = {
     listRemovedTargetLabels: (): Promise<Record<string, string>> =>
       ipcRenderer.invoke('ssh:listRemovedTargetLabels'),
 
-    addTarget: (args: { target: Omit<SshTarget, 'id'> }): Promise<SshTarget> =>
+    addTarget: (args: { target: Omit<SshTarget, 'id'> }): Promise<SshTargetAddResult> =>
       ipcRenderer.invoke('ssh:addTarget', args),
 
     updateTarget: (args: {
@@ -4009,7 +4049,7 @@ const api = {
     removeTarget: (args: { id: string }): Promise<void> =>
       ipcRenderer.invoke('ssh:removeTarget', args),
 
-    importConfig: (args?: { reAdopt?: boolean }): Promise<SshTarget[]> =>
+    importConfig: (args?: { reAdopt?: boolean }): Promise<SshConfigImportResult> =>
       ipcRenderer.invoke('ssh:importConfig', args),
 
     connect: (args: { targetId: string }): Promise<SshConnectionState | null> =>

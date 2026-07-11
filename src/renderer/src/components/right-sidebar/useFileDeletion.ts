@@ -3,11 +3,10 @@ import { toast } from 'sonner'
 import { useAppStore } from '@/store'
 import { useConfirmationDialog } from '@/components/confirmation-dialog'
 import { dirname } from '@/lib/path'
-import { getConnectionId } from '@/lib/connection-context'
 import { useShortcutLabel } from '@/hooks/useShortcutLabel'
-import { findWorktreeById } from '@/store/slices/worktree-helpers'
 import { isPathEqualOrDescendant } from './file-explorer-paths'
 import type { TreeNode } from './file-explorer-types'
+import { getFileExplorerOperationRoute } from './file-explorer-operation-owner'
 import {
   requestEditorFileSave,
   requestEditorSaveQuiesce
@@ -15,7 +14,6 @@ import {
 import { commitFileExplorerOp } from './fileExplorerUndoRedo'
 import {
   deleteRuntimePath,
-  isRemoteRuntimeFileOperation,
   readRuntimeFileContent,
   writeRuntimeFile
 } from '@/runtime/runtime-file-client'
@@ -50,6 +48,10 @@ export function useFileDeletion({
 }: UseFileDeletionParams): UseFileDeletionResult {
   const confirm = useConfirmationDialog()
   const deleteShortcutLabel = useShortcutLabel('fileExplorer.delete')
+  const unresolvedDeleteOwnerError = translate(
+    'auto.components.right.sidebar.useFileDeletion.8b8ee9d22f',
+    "Couldn't determine which host owns this file. Check the workspace connection and try again."
+  )
   // Why: track in-flight deletes per-path so repeated Del presses on the same
   // node don't issue duplicate IPC calls; the map is a ref to avoid re-renders.
   const inFlightRef = useRef<Set<string>>(new Set())
@@ -61,21 +63,28 @@ export function useFileDeletion({
       }
       inFlightRef.current.add(node.path)
 
-      const connectionId = getConnectionId(activeWorktreeId ?? null) ?? undefined
-      const state = useAppStore.getState()
-      const worktree = activeWorktreeId
-        ? findWorktreeById(state.worktreesByRepo, activeWorktreeId)
-        : null
-      const fileContext = {
-        settings: state.settings,
-        worktreeId: activeWorktreeId,
-        worktreePath: worktree?.path ?? null,
-        connectionId
-      }
-      const isRemote =
-        connectionId !== undefined || isRemoteRuntimeFileOperation(fileContext, node.path)
+      const operationOwner = node.operationOwner ?? { kind: 'unresolved' as const }
+      const operationRoute = getFileExplorerOperationRoute(operationOwner)
+      // Why: treat every non-local owner (ssh, runtime, unresolved) as remote
+      // for confirm/error copy, then fail closed below when the route is null
+      // so an unresolved owner never reaches local filesystem authorization.
+      const isRemote = operationOwner.kind !== 'local'
 
       try {
+        if (!operationRoute) {
+          throw new Error(unresolvedDeleteOwnerError)
+        }
+        // Why: cached nodes can outlive host hydration changes; preserve the
+        // listing-time owner so deletion cannot jump to a same-path file elsewhere.
+        const state = useAppStore.getState()
+        const worktree = activeWorktreeId ? state.getKnownWorktreeById(activeWorktreeId) : null
+        const connectionId = operationRoute.connectionId
+        const fileContext = {
+          settings: operationRoute.settings,
+          worktreeId: activeWorktreeId,
+          worktreePath: worktree?.path ?? null,
+          connectionId
+        }
         // Why: remote deletes bypass OS Trash, and undo cannot recover
         // directories or unreadable files.
         if (isRemote) {
@@ -206,7 +215,15 @@ export function useFileDeletion({
         inFlightRef.current.delete(node.path)
       }
     },
-    [activeWorktreeId, closeFile, confirm, isWindows, openFiles, refreshDir]
+    [
+      activeWorktreeId,
+      closeFile,
+      confirm,
+      isWindows,
+      openFiles,
+      refreshDir,
+      unresolvedDeleteOwnerError
+    ]
   )
 
   const requestDelete = useCallback(

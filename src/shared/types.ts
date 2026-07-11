@@ -427,6 +427,8 @@ export type GitWorktreeInfo = {
   branch: string
   isBare: boolean
   isSparse?: boolean
+  locked?: boolean
+  lockReason?: string
   /** True for the repo's main working tree (the first entry from `git worktree list`).
    *  Linked worktrees created via `git worktree add` have this set to false. */
   isMainWorktree: boolean
@@ -1025,6 +1027,11 @@ export type PersistedOpenFile = {
   /** Signature of the disk content the dirty draft is based on; lets restore
    *  re-derive a changed-on-disk conflict from ground truth. */
   lastKnownDiskSignature?: string
+  /** Why: a read-only tab (AI Vault View Log) must survive restart still
+   *  read-only; persisted only when true so old sessions stay writable. */
+  readOnly?: boolean
+  /** Opt-in streaming append for a read-only local log tab. */
+  liveTail?: boolean
 }
 
 export type WorkspaceSessionState = {
@@ -1735,6 +1742,10 @@ export type GitHubCreateIssueFields = {
   labels?: string[]
   assignees?: string[]
 }
+
+export type GitHubCreateIssueResult =
+  | { ok: true; number: number; url: string; bodySaveWarning?: string }
+  | { ok: false; error: string }
 
 export type GitHubIssueCloseReason = 'completed' | 'not_planned' | 'duplicate'
 

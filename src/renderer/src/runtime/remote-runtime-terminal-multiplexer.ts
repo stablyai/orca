@@ -25,7 +25,7 @@ type TerminalMultiplexEvent =
   | {
       type: 'fit-override-changed'
       streamId: number
-      mode: 'mobile-fit' | 'desktop-fit'
+      mode: 'mobile-fit' | 'remote-desktop-fit' | 'desktop-fit'
       cols: number
       rows: number
     }
@@ -43,7 +43,7 @@ export type RemoteRuntimeMultiplexedTerminalCallbacks = {
   onEnd?: () => void
   onError?: (message: string) => void
   onFitOverrideChanged?: (event: {
-    mode: 'mobile-fit' | 'desktop-fit'
+    mode: 'mobile-fit' | 'remote-desktop-fit' | 'desktop-fit'
     cols: number
     rows: number
   }) => void
@@ -57,6 +57,7 @@ export type RemoteRuntimeMultiplexedTerminal = {
   streamId: number
   sendInput: (text: string) => boolean
   resize: (cols: number, rows: number) => boolean
+  claimViewport: (cols: number, rows: number) => boolean
   serializeBuffer: (opts?: { scrollbackRows?: number }) => Promise<{
     data: string
     cols: number
@@ -247,6 +248,22 @@ class RemoteRuntimeTerminalMultiplexer {
           TerminalStreamOpcode.Resize,
           encodeTerminalStreamJson({ cols, rows })
         ),
+      claimViewport: (cols, rows) => {
+        const claimed = this.sendFrame(
+          streamId,
+          TerminalStreamOpcode.ClaimViewport,
+          encodeTerminalStreamJson({ cols, rows })
+        )
+        // Why: older runtimes ignore the claim opcode but still understand
+        // Resize. Claim first keeps new-runtime ownership precise and leaves a
+        // backwards-compatible resize immediately behind it.
+        const resized = this.sendFrame(
+          streamId,
+          TerminalStreamOpcode.Resize,
+          encodeTerminalStreamJson({ cols, rows })
+        )
+        return claimed && resized
+      },
       serializeBuffer: (opts) => this.requestSnapshot(state, opts),
       close: () => {
         if (this.streams.get(streamId) === state) {
@@ -271,7 +288,8 @@ class RemoteRuntimeTerminalMultiplexer {
           terminal: args.terminal,
           client: args.client,
           viewport: args.viewport,
-          capabilities: args.client.type === 'desktop' ? { ackOutput: 1 } : undefined
+          capabilities:
+            args.client.type === 'desktop' ? { ackOutput: 1, desktopViewportClaims: 1 } : undefined
         })
       )
       if (!sent) {
@@ -389,7 +407,9 @@ class RemoteRuntimeTerminalMultiplexer {
       )
     } else if (event.type === 'fit-override-changed') {
       if (
-        (event.mode !== 'mobile-fit' && event.mode !== 'desktop-fit') ||
+        (event.mode !== 'mobile-fit' &&
+          event.mode !== 'remote-desktop-fit' &&
+          event.mode !== 'desktop-fit') ||
         typeof event.cols !== 'number' ||
         typeof event.rows !== 'number'
       ) {

@@ -1,50 +1,82 @@
+import type { SshRepoReadoption } from '../../../../shared/ssh-types'
 import type { Repo } from '../../../../shared/types'
-import { isRuntimeOwnedSshTargetId } from '../../../../shared/execution-host'
+import { getRepoExecutionHostId, toSshExecutionHostId } from '../../../../shared/execution-host'
+
+export type SshRepoReconciliation = {
+  repos: Repo[]
+  pendingReadoptions: SshRepoReadoption[]
+}
+
+function repoBelongsToTarget(repo: Repo, targetId: string): boolean {
+  return (
+    repo.connectionId === targetId &&
+    getRepoExecutionHostId(repo) === toSshExecutionHostId(targetId)
+  )
+}
+
+function repoOwnerKey(hostId: string, repoId: string): string {
+  return `${hostId}\0${repoId}`
+}
 
 /**
- * Drops repo rows left stranded on a removed SSH target after re-adoption
- * re-pointed the same repo onto a re-added host.
- *
- * Re-adoption (main) rewrites a repo's connectionId from the old (dead) target
- * id to the new one, but the renderer's per-host repo merge preserves rows on
- * "other hosts" — and the dead SSH host still looks like another host, so its
- * stale row lingers. A terminal pane bound to that ghost row then fails with
- * "SSH target not found".
- *
- * A row is superseded (and pruned) only when ALL hold:
- *  - it targets an SSH connection that is NOT a currently-known target, and
- *  - the same repo id also exists on a DIFFERENT host that IS known/live.
- *
- * This never removes a legitimate lone project-only ghost host (its repo id
- * exists only on the dead host, so there is no live sibling to supersede it) —
- * those are kept on purpose so the sidebar can still surface and forget them.
+ * Drops old-host rows only when main reports the exact repo re-adoption and the
+ * renderer has received the corresponding new-host row. Evidence stays pending
+ * across the add-response/repos:changed race until that row arrives.
  */
-export function pruneSupersededSshRepoRows(
+export function reconcileReadoptedSshRepoRows(
   repos: readonly Repo[],
-  knownSshTargetIds: ReadonlySet<string>
-): Repo[] {
-  const isDeadSshRow = (repo: Repo): boolean => {
-    const connectionId = repo.connectionId?.trim()
-    if (!connectionId || isRuntimeOwnedSshTargetId(connectionId)) {
-      return false
+  readoptions: readonly SshRepoReadoption[]
+): SshRepoReconciliation {
+  const prunedOwners = new Set<string>()
+  const pendingReadoptions: SshRepoReadoption[] = []
+  const directSshOwners = new Set(
+    repos.flatMap((repo) =>
+      repo.connectionId && repoBelongsToTarget(repo, repo.connectionId)
+        ? [repoOwnerKey(getRepoExecutionHostId(repo), repo.id)]
+        : []
+    )
+  )
+
+  for (const readoption of readoptions) {
+    const pendingRepoIds: string[] = []
+    for (const repoId of readoption.repoIds) {
+      const newOwner = repoOwnerKey(toSshExecutionHostId(readoption.newTargetId), repoId)
+      const hasNewRow = directSshOwners.has(newOwner)
+      if (!hasNewRow) {
+        pendingRepoIds.push(repoId)
+        continue
+      }
+      prunedOwners.add(repoOwnerKey(toSshExecutionHostId(readoption.oldTargetId), repoId))
     }
-    return !knownSshTargetIds.has(connectionId)
+    if (pendingRepoIds.length > 0) {
+      pendingReadoptions.push({ ...readoption, repoIds: pendingRepoIds })
+    }
   }
 
-  // Repo ids that have at least one row on a known/live host (local or a live
-  // SSH/runtime target). Only these can supersede a dead-host sibling.
-  const idsWithLiveHost = new Set<string>()
-  for (const repo of repos) {
-    if (!isDeadSshRow(repo)) {
-      idsWithLiveHost.add(repo.id)
-    }
+  if (prunedOwners.size === 0) {
+    return { repos: [...repos], pendingReadoptions }
   }
+  return {
+    repos: repos.filter(
+      (repo) => !prunedOwners.has(repoOwnerKey(getRepoExecutionHostId(repo), repo.id))
+    ),
+    pendingReadoptions
+  }
+}
 
-  return repos.filter((repo) => {
-    if (!isDeadSshRow(repo)) {
-      return true
-    }
-    // Keep a lone ghost (no live sibling); drop only a superseded leftover.
-    return !idsWithLiveHost.has(repo.id)
+export function mergeSshRepoReadoptions(
+  pending: readonly SshRepoReadoption[],
+  incoming: readonly SshRepoReadoption[]
+): SshRepoReadoption[] {
+  const repoIdsByMigration = new Map<string, Set<string>>()
+  for (const readoption of [...pending, ...incoming]) {
+    const key = `${readoption.oldTargetId}\0${readoption.newTargetId}`
+    const repoIds = repoIdsByMigration.get(key) ?? new Set<string>()
+    readoption.repoIds.forEach((repoId) => repoIds.add(repoId))
+    repoIdsByMigration.set(key, repoIds)
+  }
+  return [...repoIdsByMigration].map(([key, repoIds]) => {
+    const [oldTargetId, newTargetId] = key.split('\0')
+    return { oldTargetId, newTargetId, repoIds: [...repoIds] }
   })
 }

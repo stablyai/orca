@@ -93,6 +93,13 @@ export function attachEditorAutosaveController(store: AppStoreApi): () => void {
           return
         }
 
+        // Why: hard no-op for read-only tabs (AI Vault View Log) even if a stray
+        // user/autosave save reached the queue — the integrity invariant is that
+        // View Log never writes the agent-owned artifact through editor paths.
+        if (liveFile.readOnly === true) {
+          return
+        }
+
         // Why: explicit user saves proceed even while suspended (the banner
         // warned) and clear both suspension flags below.
         if (trigger === 'autosave' && isAutosaveSuspendedForFile(liveFile)) {

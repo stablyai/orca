@@ -20,6 +20,7 @@ export const CORE_COMMAND_SPECS: CommandSpec[] = [
   },
   {
     path: ['claude-teams'],
+    argumentMode: 'passthrough',
     summary: 'Start Claude Code Agent Teams in the current Orca terminal',
     usage: 'orca claude-teams [claude args...]',
     allowedFlags: [...GLOBAL_FLAGS],
@@ -157,6 +158,12 @@ export const CORE_COMMAND_SPECS: CommandSpec[] = [
   },
   {
     path: ['worktree', 'rm'],
+    // Why: agents reach for git's `remove`/`delete` verbs; accept them as
+    // aliases so a conventional guess resolves instead of dead-ending.
+    aliases: [
+      ['worktree', 'remove'],
+      ['worktree', 'delete']
+    ],
     summary: 'Remove a worktree from Orca and git',
     usage: 'orca worktree rm --worktree <selector> [--force] [--run-hooks] [--json]',
     allowedFlags: [...GLOBAL_FLAGS, 'worktree', 'force', 'run-hooks'],
@@ -235,17 +242,13 @@ export const CORE_COMMAND_SPECS: CommandSpec[] = [
   },
   {
     path: ['terminal', 'switch'],
+    // Why: `focus` is the legacy verb for this action; keep it working as an
+    // alias rather than a duplicate spec + handler registration.
+    aliases: [['terminal', 'focus']],
     summary: 'Switch to a terminal tab in the UI',
     usage: 'orca terminal switch [--terminal <handle>] [--json]',
     allowedFlags: [...GLOBAL_FLAGS, 'terminal'],
     examples: ['orca terminal switch --terminal term_abc123']
-  },
-  {
-    path: ['terminal', 'focus'],
-    summary: 'Switch to a terminal tab in the UI (alias for terminal switch)',
-    usage: 'orca terminal focus [--terminal <handle>] [--json]',
-    allowedFlags: [...GLOBAL_FLAGS, 'terminal'],
-    examples: ['orca terminal focus --terminal term_abc123']
   },
   {
     path: ['terminal', 'close'],

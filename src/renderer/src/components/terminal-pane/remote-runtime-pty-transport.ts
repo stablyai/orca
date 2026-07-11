@@ -32,6 +32,7 @@ import {
   createRemoteRuntimePtyTextBatcher,
   createRemoteRuntimeViewportBatcher
 } from './remote-runtime-pty-batching'
+import { createBrowserUuid } from '@/lib/browser-uuid'
 import { setFitOverride } from '@/lib/pane-manager/mobile-fit-overrides'
 import { setDriverForPty } from '@/lib/pane-manager/mobile-driver-state'
 import { isWebTerminalSurfaceTabId, toHostSessionTabId } from '@/runtime/web-terminal-surface-id'
@@ -89,7 +90,22 @@ export function createRemoteRuntimePtyTransport(
   let desiredViewport: { cols: number; rows: number } | null = null
   let storedCallbacks: Parameters<PtyTransport['connect']>[0]['callbacks'] = {}
   let resubscribing = false
-  const clientId = `desktop:${tabId ?? 'tab'}:${leafId ?? 'leaf'}`
+  let resubscribeRequested = false
+  let subscriptionGeneration = 0
+  let pendingViewportClaim = false
+  let pendingClaimInput = ''
+  const viewportClaimReadyWaiters = new Set<(ready: boolean) => void>()
+  const clearPendingViewportClaim = (): void => {
+    pendingViewportClaim = false
+    pendingClaimInput = ''
+    for (const resolve of viewportClaimReadyWaiters) {
+      resolve(false)
+    }
+    viewportClaimReadyWaiters.clear()
+  }
+  // Why: tab/leaf ids identify the mirrored host pane, so every paired viewer
+  // shares them. The instance suffix keeps one viewer's refresh off peer records.
+  const clientId = `desktop:${tabId ?? 'tab'}:${leafId ?? 'leaf'}:${createBrowserUuid()}`
   const outputProcessor = createPtyOutputProcessor({
     onTitleChange,
     onBell,
@@ -262,6 +278,14 @@ export function createRemoteRuntimePtyTransport(
     if (!connected || handle !== targetHandle) {
       return false
     }
+    if (pendingViewportClaim && !getCurrentMultiplexedStream(targetHandle)) {
+      const ready = await new Promise<boolean>((resolve) => {
+        viewportClaimReadyWaiters.add(resolve)
+      })
+      if (!ready || !connected || handle !== targetHandle) {
+        return false
+      }
+    }
     // Why: normal remote sendInput may be waiting on yielded size validation;
     // drain it before acknowledged writes so terminal bytes stay ordered.
     const text = `${inputBatcher.takePending()}${data}`
@@ -283,7 +307,8 @@ export function createRemoteRuntimePtyTransport(
         const result = await callRuntime<{ send: RuntimeTerminalSend }>('terminal.send', {
           terminal: targetHandle,
           text: chunk,
-          client: { id: clientId, type: 'desktop' }
+          client: { id: clientId, type: 'desktop' },
+          ...(desiredViewport ? { viewport: desiredViewport, claimViewport: true as const } : {})
         })
         if (result.send.accepted !== true) {
           return false
@@ -303,30 +328,46 @@ export function createRemoteRuntimePtyTransport(
     if (!connected || !targetHandle) {
       return
     }
-    if (getCurrentMultiplexedStream(targetHandle)?.sendInput(text)) {
+    const stream = getCurrentMultiplexedStream(targetHandle)
+    if (stream?.sendInput(text)) {
+      return
+    }
+    if (pendingViewportClaim) {
+      // Why: a claim during subscribe/reconnect has no stream record to own
+      // yet. Hold its input until the stream can emit claim+input in one order.
+      pendingClaimInput += text
       return
     }
     void callRuntime('terminal.send', {
       terminal: targetHandle,
       text,
-      client: { id: clientId, type: 'desktop' }
+      client: { id: clientId, type: 'desktop' },
+      ...(desiredViewport ? { viewport: desiredViewport, claimViewport: true as const } : {})
     }).catch((error) => {
       handleRemoteTerminalError(error)
     })
   })
 
-  function sendViewportUpdate(cols: number, rows: number): void {
+  function sendViewportUpdate(cols: number, rows: number, claim = false): void {
     const targetHandle = handle
     if (!connected || !targetHandle) {
       return
     }
-    if (getCurrentMultiplexedStream(targetHandle)?.resize(cols, rows)) {
+    const stream = getCurrentMultiplexedStream(targetHandle)
+    if (claim ? stream?.claimViewport(cols, rows) : stream?.resize(cols, rows)) {
+      if (claim) {
+        pendingViewportClaim = false
+      }
       return
+    }
+    if (claim) {
+      pendingViewportClaim = true
     }
     void callRuntime('terminal.updateViewport', {
       terminal: targetHandle,
       client: { id: clientId, type: 'desktop' },
-      viewport: { cols, rows }
+      viewport: { cols, rows },
+      ...(claim ? { claim: true } : {})
     }).catch(() => {})
   }
 
@@ -363,6 +404,7 @@ export function createRemoteRuntimePtyTransport(
 
   function retireRemoteTerminalId(): void {
     connected = false
+    clearPendingViewportClaim()
     const stalePtyId = remotePtyId
     handle = null
     remotePtyId = null
@@ -414,20 +456,55 @@ export function createRemoteRuntimePtyTransport(
     await subscribeToHandle()
   }
 
+  function scheduleResubscribeAfterTransportClose(): void {
+    if (destroyed || !connected || !handle) {
+      return
+    }
+    if (resubscribing) {
+      resubscribeRequested = true
+      return
+    }
+    resubscribing = true
+    const resubscribeHandle = handle
+    void resubscribeAfterTransportClose(resubscribeHandle)
+      .catch((error) => {
+        if (!destroyed && connected && handle) {
+          clearPendingViewportClaim()
+          handleRemoteTerminalError(error)
+        }
+      })
+      .finally(() => {
+        resubscribing = false
+        if (resubscribeRequested) {
+          resubscribeRequested = false
+          scheduleResubscribeAfterTransportClose()
+        }
+      })
+  }
+
   async function subscribeToHandle(): Promise<void> {
     if (!handle) {
       return
     }
     const subscribedHandle = handle
     const subscribedPtyId = remotePtyId
+    const generation = ++subscriptionGeneration
+    let transportClosed = false
+    // Why: the viewport we hand the subscribe request. A resize landing during
+    // the round-trip falls back to the one-shot RPC, which is refresh-only (no
+    // leak) and no-ops before the stream record exists — so replay the latest
+    // remembered viewport through the stream once it's current (below).
+    const subscribedViewport = desiredViewport
     const isCurrentSubscription = (): boolean =>
+      !transportClosed &&
+      generation === subscriptionGeneration &&
       isCurrentRemoteTerminal(subscribedHandle, subscribedPtyId)
     const nextStream = await getRemoteRuntimeTerminalMultiplexer(
       currentRuntimeEnvironmentId
     ).subscribeTerminal({
       terminal: subscribedHandle,
       client: { id: clientId, type: 'desktop' },
-      viewport: desiredViewport ?? undefined,
+      viewport: subscribedViewport ?? undefined,
       callbacks: {
         onData: (data, meta) => {
           if (isCurrentSubscription()) {
@@ -464,6 +541,7 @@ export function createRemoteRuntimePtyTransport(
           remotePtyId = null
           multiplexedStream = null
           multiplexedStreamHandle = null
+          clearPendingViewportClaim()
           storedCallbacks.onExit?.(0)
           storedCallbacks.onDisconnect?.()
           if (subscribedPtyId) {
@@ -486,35 +564,59 @@ export function createRemoteRuntimePtyTransport(
           }
         },
         onTransportClose: () => {
-          if (!isCurrentSubscription()) {
+          transportClosed = true
+          if (generation !== subscriptionGeneration) {
             return
+          }
+          if (!isCurrentSubscription()) {
+            // isCurrentSubscription excludes the just-closed stream by design.
+            if (!isCurrentRemoteTerminal(subscribedHandle, subscribedPtyId)) {
+              return
+            }
           }
           multiplexedStream = null
           multiplexedStreamHandle = null
-          if (destroyed || !connected || !handle || resubscribing) {
-            return
-          }
-          resubscribing = true
-          const resubscribeHandle = handle
-          void resubscribeAfterTransportClose(resubscribeHandle)
-            .catch((error) => {
-              if (!destroyed && connected && handle) {
-                handleRemoteTerminalError(error)
-              }
-            })
-            .finally(() => {
-              resubscribing = false
-            })
+          scheduleResubscribeAfterTransportClose()
         }
       }
     })
-    if (destroyed || !connected || handle !== subscribedHandle || remotePtyId !== subscribedPtyId) {
+    if (
+      transportClosed ||
+      generation !== subscriptionGeneration ||
+      destroyed ||
+      !connected ||
+      handle !== subscribedHandle ||
+      remotePtyId !== subscribedPtyId
+    ) {
       nextStream.close()
       return
     }
     closeMultiplexedStream()
     multiplexedStream = nextStream
     multiplexedStreamHandle = subscribedHandle
+    // Why: a viewport change that landed during the subscribe round-trip took
+    // the now-no-op one-shot fallback, so the stream record is still at the
+    // subscribe-time size. Replay the latest remembered viewport so the PTY
+    // tracks the current width instead of stalling until the next resize.
+    if (pendingViewportClaim && desiredViewport) {
+      nextStream.claimViewport(desiredViewport.cols, desiredViewport.rows)
+      pendingViewportClaim = false
+      const queuedInput = pendingClaimInput
+      pendingClaimInput = ''
+      if (queuedInput) {
+        nextStream.sendInput(queuedInput)
+      }
+      for (const resolve of viewportClaimReadyWaiters) {
+        resolve(true)
+      }
+      viewportClaimReadyWaiters.clear()
+    } else if (
+      desiredViewport &&
+      (desiredViewport.cols !== subscribedViewport?.cols ||
+        desiredViewport.rows !== subscribedViewport?.rows)
+    ) {
+      nextStream.resize(desiredViewport.cols, desiredViewport.rows)
+    }
   }
 
   return {
@@ -618,6 +720,7 @@ export function createRemoteRuntimePtyTransport(
         if (handle === targetHandle && multiplexedStreamHandle !== targetHandle) {
           closeMultiplexedStream()
         }
+        clearPendingViewportClaim()
         handleRemoteTerminalError(error)
       })
     },
@@ -631,6 +734,7 @@ export function createRemoteRuntimePtyTransport(
         return
       }
       connected = false
+      clearPendingViewportClaim()
       const id = remotePtyId
       closeMultiplexedStream()
       handle = null
@@ -647,6 +751,7 @@ export function createRemoteRuntimePtyTransport(
       viewportBatcher.flush()
       outputProcessor.clearAccumulatedState()
       connected = false
+      clearPendingViewportClaim()
       closeMultiplexedStream()
       storedCallbacks = {}
     },
@@ -696,10 +801,15 @@ export function createRemoteRuntimePtyTransport(
       if (stream?.sendInput(text)) {
         return true
       }
+      if (pendingViewportClaim) {
+        pendingClaimInput += text
+        return true
+      }
       void callRuntime('terminal.send', {
         terminal: targetHandle,
         text,
-        client: { id: clientId, type: 'desktop' }
+        client: { id: clientId, type: 'desktop' },
+        ...(desiredViewport ? { viewport: desiredViewport, claimViewport: true as const } : {})
       }).catch((error) => {
         handleRemoteTerminalError(error)
       })
@@ -708,11 +818,26 @@ export function createRemoteRuntimePtyTransport(
 
     sendInputAccepted: sendInputAcceptedToRuntime,
 
-    resize(cols: number, rows: number): boolean {
+    claimViewport(cols: number, rows: number): boolean {
       if (!connected || !handle) {
         return false
       }
       rememberViewport(cols, rows)
+      viewportBatcher.clear()
+      sendViewportUpdate(cols, rows, true)
+      return true
+    },
+
+    resize(cols: number, rows: number, meta): boolean {
+      if (!connected || !handle) {
+        return false
+      }
+      rememberViewport(cols, rows)
+      if (meta?.claim) {
+        viewportBatcher.clear()
+        sendViewportUpdate(cols, rows, true)
+        return true
+      }
       // Why: xterm fit can emit resize bursts while the user drags panes or
       // restores layouts. Remote runtimes only need the last viewport in a frame.
       viewportBatcher.queue(cols, rows)

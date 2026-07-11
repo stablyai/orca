@@ -188,9 +188,12 @@ export function buildAiVaultResumeCommand(args: {
   // home) the file was discovered under, where an id-prefix lookup scoped to
   // the default store would miss it. Falls back to the id if no path is known.
   const resumeTarget = agent === 'omp' && resumeFilePath?.trim() ? resumeFilePath.trim() : sessionId
-  const sessionArg = shell
-    ? quoteStartupArg(resumeTarget, shell)
-    : quoteShellArg(resumeTarget, platform)
+  const sessionArg =
+    shell === 'cmd'
+      ? quoteWindowsCmdArg(resumeTarget)
+      : shell
+        ? quoteStartupArg(resumeTarget, shell)
+        : quoteShellArg(resumeTarget, platform)
   const resumeCommand = buildAgentResumeInvocation(agent, baseCommand, sessionArg)
 
   return buildAiVaultResumeShellCommand({
@@ -208,16 +211,14 @@ export function buildAiVaultResumeShellCommand(args: {
   platform: NodeJS.Platform
   codexHome?: string | null
   // Why: the QUEUED resume command is typed into the live tab shell, so its
-  // cd/env prefix must match that shell. The copy-to-clipboard string omits this
-  // and keeps the self-contained `cmd /d /s /c` wrapper (its documented purpose).
+  // cd/env prefix must match that shell. Shell-less persisted commands keep the
+  // legacy self-contained `cmd /d /s /c` wrapper.
   shell?: AgentStartupShell
 }): string {
   const { cwd, platform, codexHome, shell } = args
 
-  // Why: on Windows the queued command must target the configured live shell
-  // (default PowerShell). PowerShell mis-parses the cmd `""`-doubled wrapper and
-  // reports "operable program or batch file", so only re-wrap with cmd when the
-  // live shell actually is cmd (or when no shell is given, i.e. the copy path).
+  // Why: shell-aware commands are parsed by a known running shell, while
+  // shell-less persisted commands keep the legacy self-contained cmd wrapper.
   if (platform === 'win32' && shell && shell !== 'cmd') {
     return buildResumeShellCommandForShell({
       resumeCommand: args.resumeCommand,
@@ -230,6 +231,11 @@ export function buildAiVaultResumeShellCommand(args: {
   const resumeCommand = `${codexHomeEnvPrefix(codexHome?.trim() || null, platform)}${
     args.resumeCommand
   }`
+  if (platform === 'win32' && shell === 'cmd') {
+    // Why: an interactive cmd splits the doubled quotes required by a nested
+    // `cmd /s /c` wrapper, so queued commands must use direct cmd syntax.
+    return cwd ? `cd /d ${quoteWindowsCmdArg(cwd)} && ${resumeCommand}` : resumeCommand
+  }
   if (!cwd) {
     return resumeCommand
   }

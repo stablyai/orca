@@ -148,18 +148,22 @@ export function runWorktreeDeleteWithToast(
       }
       const state = useAppStore.getState().deleteStateByWorktreeId[worktreeId]
       const canForceDelete = state?.canForceDelete ?? false
+      const hasKnownChanges =
+        (useAppStore.getState().gitStatusByWorktree[worktreeId]?.length ?? 0) > 0
       showDeleteWorktreeFailureToast({
         error: result.error,
         canForceDelete,
+        forceDeleteReason: state?.forceDeleteReason ?? null,
+        lockReason: state?.lockReason ?? null,
+        hasKnownChanges,
         onViewChanges: () => viewWorktreeDiff(worktreeId),
         onForceDelete: () => {
           // Why: recapture at click time — the user may have navigated away
           // while the failed-delete toast was open, so focus only hands off
           // when this is still the workspace they are viewing.
           const commitForceFocus = prepareActiveWorktreeFocusAfterDelete(worktreeId)
-          useAppStore
-            .getState()
-            .removeWorktree(worktreeId, true)
+          const forceRemoval = useAppStore.getState().removeWorktree(worktreeId, true)
+          forceRemoval
             .then((forceResult) => {
               if (!forceResult.ok) {
                 toast.error(

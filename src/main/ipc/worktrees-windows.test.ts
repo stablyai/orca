@@ -10,6 +10,7 @@ const {
   removeWorktreeMock,
   resolveLocalGitUsernameMock,
   getDefaultBaseRefMock,
+  resolveDefaultBaseRefWithLocalGitMock,
   resolveDefaultBaseRefViaExecMock,
   getBranchConflictKindMock,
   getPRForBranchMock,
@@ -38,6 +39,7 @@ const {
   removeWorktreeMock: vi.fn(),
   resolveLocalGitUsernameMock: vi.fn(),
   getDefaultBaseRefMock: vi.fn(),
+  resolveDefaultBaseRefWithLocalGitMock: vi.fn(),
   resolveDefaultBaseRefViaExecMock: vi.fn(),
   getBranchConflictKindMock: vi.fn(),
   getPRForBranchMock: vi.fn(),
@@ -84,6 +86,7 @@ vi.mock('../git/runner', () => ({
 
 vi.mock('../git/repo', () => ({
   getDefaultBaseRef: getDefaultBaseRefMock,
+  resolveDefaultBaseRefWithLocalGit: resolveDefaultBaseRefWithLocalGitMock,
   resolveDefaultBaseRefViaExec: resolveDefaultBaseRefViaExecMock,
   getBranchConflictKind: getBranchConflictKindMock
 }))
@@ -164,6 +167,7 @@ describe('registerWorktreeHandlers – Windows path handling', () => {
     removeWorktreeMock.mockReset()
     resolveLocalGitUsernameMock.mockReset()
     getDefaultBaseRefMock.mockReset()
+    resolveDefaultBaseRefWithLocalGitMock.mockReset()
     resolveDefaultBaseRefViaExecMock.mockReset()
     getBranchConflictKindMock.mockReset()
     getPRForBranchMock.mockReset()
@@ -230,6 +234,7 @@ describe('registerWorktreeHandlers – Windows path handling', () => {
     store.setWorktreeMeta.mockReturnValue({})
     resolveLocalGitUsernameMock.mockResolvedValue('')
     getDefaultBaseRefMock.mockReturnValue('origin/main')
+    resolveDefaultBaseRefWithLocalGitMock.mockResolvedValue('origin/main')
     resolveDefaultBaseRefViaExecMock.mockResolvedValue('origin/main')
     getBranchConflictKindMock.mockResolvedValue(null)
     getPRForBranchMock.mockResolvedValue(null)
@@ -287,6 +292,7 @@ describe('registerWorktreeHandlers – Windows path handling', () => {
       'origin/main',
       false
     )
+    expect(resolveLocalGitUsernameMock).not.toHaveBeenCalled()
     expect(store.setWorktreeMeta).toHaveBeenCalledWith(
       'repo-1::C:/workspaces/improve-dashboard',
       expect.objectContaining({
@@ -300,6 +306,39 @@ describe('registerWorktreeHandlers – Windows path handling', () => {
         branch: 'refs/heads/improve-dashboard'
       })
     })
+  })
+
+  it('resolves the Git username when the configured prefix consumes it', async () => {
+    store.getSettings.mockReturnValue({
+      branchPrefix: 'git-username',
+      nestWorkspaces: false,
+      refreshLocalBaseRefOnWorktreeCreate: false,
+      workspaceDir: 'C:\\workspaces'
+    })
+    resolveLocalGitUsernameMock.mockResolvedValue('octocat')
+    listWorktreesMock.mockResolvedValue([
+      {
+        path: 'C:/workspaces/improve-dashboard',
+        head: 'abc123',
+        branch: 'refs/heads/octocat/improve-dashboard',
+        isBare: false,
+        isMainWorktree: false
+      }
+    ])
+
+    await handlers['worktrees:create'](null, {
+      repoId: 'repo-1',
+      name: 'improve-dashboard'
+    })
+
+    expect(resolveLocalGitUsernameMock).toHaveBeenCalledWith('C:\\repo')
+    expect(addWorktreeMock).toHaveBeenCalledWith(
+      'C:\\repo',
+      'C:\\workspaces\\improve-dashboard',
+      'octocat/improve-dashboard',
+      'origin/main',
+      false
+    )
   })
 
   it('preserves create-time metadata on the next list when Windows path formatting differs', async () => {

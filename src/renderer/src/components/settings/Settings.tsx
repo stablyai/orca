@@ -1136,6 +1136,7 @@ function Settings(): React.JSX.Element {
                       wslAvailable={windowsTerminalCapabilities.wslAvailable}
                       wslDistros={windowsTerminalCapabilities.wslDistros}
                       wslCapabilitiesLoading={windowsTerminalCapabilities.isLoading}
+                      accountOwnerPlatform={windowsTerminalCapabilities.hostPlatform}
                     />
                   ) : null}
                 </SettingsSection>

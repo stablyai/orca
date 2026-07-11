@@ -1,7 +1,17 @@
 import fs from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
+
+const { grantDirAclAsyncMock } = vi.hoisted(() => ({
+  grantDirAclAsyncMock: vi.fn().mockResolvedValue(undefined)
+}))
+
+vi.mock('../win32-utils', async (importOriginal) => {
+  const actual = (await importOriginal()) as Record<string, unknown>
+  return { ...actual, grantDirAclAsync: grantDirAclAsyncMock }
+})
+
 import { CrashReportStore } from './crash-report-store'
 import type { CrashReportCreateInput } from '../../shared/crash-reporting'
 
@@ -38,6 +48,9 @@ function input(reason = 'crashed'): CrashReportCreateInput {
 }
 
 afterEach(async () => {
+  vi.restoreAllMocks()
+  grantDirAclAsyncMock.mockReset()
+  grantDirAclAsyncMock.mockResolvedValue(undefined)
   await Promise.all(tempDirs.splice(0).map((dir) => fs.rm(dir, { recursive: true, force: true })))
 })
 
@@ -133,5 +146,73 @@ describe('CrashReportStore', () => {
     await Promise.all(Array.from({ length: 5 }, (_, index) => store.record(input(`oom-${index}`))))
 
     await expect(store.listRecent()).resolves.toHaveLength(5)
+  })
+
+  it('waits for an in-flight crash write before reading the pending report', async () => {
+    const { store } = await createStore()
+
+    const recordPromise = store.record(input())
+    const pendingPromise = store.getLatestPending()
+    const report = await recordPromise
+
+    await expect(pendingPromise).resolves.toMatchObject({ id: report.id, status: 'pending' })
+  })
+
+  it('repairs the Windows userData ACL and retries a denied crash write', async () => {
+    const { store, filePath } = await createStore()
+    vi.spyOn(process, 'platform', 'get').mockReturnValue('win32')
+    const permissionError = Object.assign(new Error('permission denied'), { code: 'EPERM' })
+    const writeFileSpy = vi.spyOn(fs, 'writeFile').mockRejectedValueOnce(permissionError)
+
+    const report = await store.record(input())
+
+    expect(grantDirAclAsyncMock).toHaveBeenCalledWith(path.dirname(filePath))
+    expect(writeFileSpy).toHaveBeenCalledTimes(2)
+    await expect(store.getLatestPending()).resolves.toMatchObject({ id: report.id })
+  })
+
+  it.each(['EPERM', 'EACCES', 'EBUSY'] as const)(
+    'recovers a pending report after a transient Windows %s read failure',
+    async (code) => {
+      const { store, filePath } = await createStore()
+      const report = await store.record(input())
+      const reloaded = new CrashReportStore(filePath)
+      vi.spyOn(process, 'platform', 'get').mockReturnValue('win32')
+      const readError = Object.assign(new Error('temporary read failure'), { code })
+      const readFileSpy = vi.spyOn(fs, 'readFile').mockRejectedValueOnce(readError)
+
+      await expect(reloaded.getLatestPending()).resolves.toMatchObject({ id: report.id })
+
+      expect(readFileSpy).toHaveBeenCalledTimes(2)
+      if (code === 'EBUSY') {
+        expect(grantDirAclAsyncMock).not.toHaveBeenCalled()
+      } else {
+        expect(grantDirAclAsyncMock).toHaveBeenCalledOnce()
+        expect(grantDirAclAsyncMock).toHaveBeenCalledWith(path.dirname(filePath))
+      }
+    }
+  )
+
+  it('retries a transient Windows rename lock', async () => {
+    const { store } = await createStore()
+    vi.spyOn(process, 'platform', 'get').mockReturnValue('win32')
+    const busyError = Object.assign(new Error('file busy'), { code: 'EBUSY' })
+    const renameSpy = vi.spyOn(fs, 'rename').mockRejectedValueOnce(busyError)
+
+    await expect(store.record(input())).resolves.toMatchObject({ status: 'pending' })
+
+    expect(renameSpy).toHaveBeenCalledTimes(2)
+    expect(grantDirAclAsyncMock).not.toHaveBeenCalled()
+  })
+
+  it('removes its temp file after a terminal write failure', async () => {
+    const { store, filePath } = await createStore()
+    const ioError = Object.assign(new Error('disk error'), { code: 'EIO' })
+    vi.spyOn(fs, 'rename').mockRejectedValueOnce(ioError)
+
+    await expect(store.record(input())).rejects.toBe(ioError)
+
+    const entries = await fs.readdir(path.dirname(filePath))
+    expect(entries.filter((entry) => entry.endsWith('.tmp'))).toEqual([])
   })
 })

@@ -6,6 +6,7 @@ export type AgentPromptInjectionMode =
   | 'flag-prompt'
   | 'flag-prompt-interactive'
   | 'flag-interactive'
+  | 'hermes-query'
   | 'stdin-after-start'
 
 export type DraftPasteReadySignal =
@@ -63,6 +64,9 @@ export type TuiAgentConfig = {
    * `›` prompt only when the composer row exists, so Orca can paste as soon
    * as that prompt appears after bracketed paste is enabled. */
   draftPasteReadySignal?: DraftPasteReadySignal
+  /** Windows Shift+Enter override. Omitted agents keep the legacy Esc+CR path
+   * because the renderer cannot infer every local or remote TUI's decoder. */
+  windowsShiftEnterEncoding?: 'csi-u'
 }
 
 export const TUI_AGENT_CONFIG: Record<TuiAgent, TuiAgentConfig> = {
@@ -281,7 +285,10 @@ export const TUI_AGENT_CONFIG: Record<TuiAgent, TuiAgentConfig> = {
     detectCmd: 'droid',
     launchCmd: 'droid',
     expectedProcess: 'droid',
-    promptInjectionMode: 'argv'
+    promptInjectionMode: 'argv',
+    // Why: Droid decodes CSI-u on Windows and treats Orca's legacy Esc+CR
+    // fallback as plain Enter, which submits instead of inserting a newline.
+    windowsShiftEnterEncoding: 'csi-u'
   },
   kimi: {
     detectCmd: 'kimi',
@@ -319,7 +326,9 @@ export const TUI_AGENT_CONFIG: Record<TuiAgent, TuiAgentConfig> = {
     // `--tui` starts the full-screen agent UI Orca is designed to host.
     launchCmd: 'hermes --tui',
     expectedProcess: 'hermes',
-    promptInjectionMode: 'stdin-after-start'
+    // Why: Hermes owns prompt delivery through its startup-query contract,
+    // which submits only after the TUI composer and session are ready.
+    promptInjectionMode: 'hermes-query'
   },
   openclaw: {
     detectCmd: 'openclaw',

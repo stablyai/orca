@@ -1699,6 +1699,60 @@ describe('web worktree preload API', () => {
     vi.doUnmock('./web-runtime-client')
   })
 
+  it('forwards force and archive-hook intent through worktree removal', async () => {
+    const runtimeCalls: { method: string; params: unknown }[] = []
+    vi.doMock('./web-runtime-client', () => ({
+      WebRuntimeClient: class {
+        call(method: string, params?: unknown): Promise<RuntimeRpcResponse<unknown>> {
+          runtimeCalls.push({ method, params })
+          return Promise.resolve({
+            id: `call-${runtimeCalls.length}`,
+            ok: true,
+            result: { removed: true },
+            _meta: { runtimeId: 'runtime-1' }
+          })
+        }
+
+        close(): void {}
+      }
+    }))
+
+    const globals = installBrowserGlobals('Linux')
+    writeStoredRuntimeEnvironment(globals.storage)
+    const { installWebPreloadApi } = await import('./web-preload-api')
+    installWebPreloadApi()
+
+    await globals.window.api.worktrees.remove({
+      worktreeId: 'repo-1::/workspace/locked',
+      force: true,
+      skipArchive: false
+    })
+    await globals.window.api.worktrees.remove({
+      worktreeId: 'repo-1::/workspace/dirty',
+      force: true,
+      skipArchive: true
+    })
+
+    expect(runtimeCalls).toEqual([
+      {
+        method: 'worktree.rm',
+        params: {
+          worktree: 'id:repo-1::/workspace/locked',
+          force: true,
+          runHooks: true
+        }
+      },
+      {
+        method: 'worktree.rm',
+        params: {
+          worktree: 'id:repo-1::/workspace/dirty',
+          force: true,
+          runHooks: false
+        }
+      }
+    ])
+  })
+
   it('falls back to legacy worktree.list when detectedList is unavailable', async () => {
     const runtimeCalls: { method: string; params: unknown }[] = []
     const worktree = {

@@ -10,6 +10,8 @@ import { PROTOCOL_VERSION, type DaemonRequest } from './types'
 import type { SubprocessHandle } from './session'
 import { getDaemonSocketPath } from './daemon-spawner'
 
+const confirmForegroundProcessMock = vi.fn(async () => 'droid')
+
 function createTestDir(): string {
   return mkdtempSync(join(tmpdir(), 'daemon-server-test-'))
 }
@@ -23,6 +25,7 @@ function createMockSubprocess(): SubprocessHandle & {
   return {
     pid: 55555,
     getForegroundProcess: vi.fn(() => null),
+    confirmForegroundProcess: confirmForegroundProcessMock,
     write: vi.fn(),
     resize: vi.fn(),
     kill: vi.fn(() => setTimeout(() => onExitCb?.(0), 5)),
@@ -65,6 +68,7 @@ describe('DaemonServer', () => {
   let client: DaemonClient
 
   beforeEach(() => {
+    confirmForegroundProcessMock.mockClear()
     dir = createTestDir()
     socketPath = getDaemonSocketPath(dir)
     tokenPath = join(dir, 'test.token')
@@ -174,6 +178,34 @@ describe('DaemonServer', () => {
       })
     })
 
+    it('persists only an allowlisted launch identity across reattach', async () => {
+      await startServer()
+      const c = await connectClient()
+
+      const first = await c.request('createOrAttach', {
+        sessionId: 'agent-session',
+        cols: 80,
+        rows: 24,
+        launchAgent: 'droid'
+      })
+      expect(first).toMatchObject({ isNew: true, launchAgent: 'droid' })
+
+      const second = await c.request('createOrAttach', {
+        sessionId: 'agent-session',
+        cols: 80,
+        rows: 24
+      })
+      expect(second).toMatchObject({ isNew: false, launchAgent: 'droid' })
+
+      const unknown = await c.request('createOrAttach', {
+        sessionId: 'unknown-agent-session',
+        cols: 80,
+        rows: 24,
+        launchAgent: 'not-an-agent'
+      } as never)
+      expect(unknown).not.toHaveProperty('launchAgent')
+    })
+
     it('handles listSessions', async () => {
       await startServer()
       const c = await connectClient()
@@ -277,6 +309,19 @@ describe('DaemonServer', () => {
       // happens to match would legitimately return a path and we don't want
       // this test to flake on whatever happens to be running on the host.
       expect(result.cwd === null || typeof result.cwd === 'string').toBe(true)
+    })
+
+    it('awaits fresh foreground confirmation', async () => {
+      await startServer()
+      const c = await connectClient()
+      await c.request('createOrAttach', { sessionId: 'test-session', cols: 80, rows: 24 })
+
+      await expect(
+        c.request<{ foregroundProcess: string | null }>('confirmForegroundProcess', {
+          sessionId: 'test-session'
+        })
+      ).resolves.toEqual({ foregroundProcess: 'droid' })
+      expect(confirmForegroundProcessMock).toHaveBeenCalledTimes(1)
     })
 
     it('returns error for unknown session operations', async () => {

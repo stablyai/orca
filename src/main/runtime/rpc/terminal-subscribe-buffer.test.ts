@@ -21,9 +21,12 @@ function stubRuntime(overrides: Partial<OrcaRuntimeService> = {}): OrcaRuntimeSe
   } as OrcaRuntimeService
 }
 
-function makeRequest(method: string, params?: unknown): RpcRequest {
-  return { id: 'req-1', authToken: 'tok', method, params }
-}
+const makeRequest = (method: string, params?: unknown): RpcRequest => ({
+  id: 'req-1',
+  authToken: 'tok',
+  method,
+  params
+})
 
 describe('terminal subscribe buffering', () => {
   it('settles mobile subscribe waits when the stream signal aborts before PTY spawn', async () => {
@@ -43,10 +46,7 @@ describe('terminal subscribe buffering', () => {
         ),
         readTerminal: vi.fn().mockResolvedValue({ tail: [], truncated: false })
       })
-      const dispatcher = new RpcDispatcher({
-        runtime,
-        methods: TERMINAL_METHODS
-      })
+      const dispatcher = new RpcDispatcher({ runtime, methods: TERMINAL_METHODS })
 
       const dispatchPromise = dispatcher.dispatchStreaming(
         makeRequest('terminal.subscribe', {
@@ -79,6 +79,95 @@ describe('terminal subscribe buffering', () => {
     }
   })
 
+  it('captures live queries before awaiting mobile fit and delivers them after the snapshot', async () => {
+    const binaryFrames: Uint8Array<ArrayBufferLike>[] = []
+    const cleanups = new Map<string, () => void>()
+    let dataListener:
+      | ((data: string, meta?: { seq?: number; rawLength?: number }) => void)
+      | undefined
+    let resolveMobileSubscribe: () => void = () => {}
+    const registerRemoteTerminalViewSubscriber = vi.fn(() => vi.fn())
+    const runtime = stubRuntime({
+      resolveLeafForHandle: vi.fn().mockReturnValue({ ptyId: 'pty-1' }),
+      handleMobileSubscribe: vi.fn(
+        () =>
+          new Promise<boolean>((resolve) => {
+            resolveMobileSubscribe = () => resolve(true)
+          })
+      ),
+      handleMobileUnsubscribe: vi.fn(),
+      subscribeToTerminalData: vi.fn((_ptyId, listener) => {
+        dataListener = listener
+        return vi.fn()
+      }),
+      registerRemoteTerminalViewSubscriber,
+      readTerminal: vi.fn().mockResolvedValue({ tail: [], truncated: false }),
+      serializeTerminalBuffer: vi
+        .fn()
+        .mockResolvedValue({ data: 'snapshot', cols: 80, rows: 24, seq: 4 }),
+      getTerminalSize: vi.fn().mockReturnValue({ cols: 80, rows: 24 }),
+      getMobileDisplayMode: vi.fn().mockReturnValue('auto'),
+      getLayout: vi.fn().mockReturnValue({ seq: 1 }),
+      isTerminalAlternateScreen: vi.fn().mockReturnValue(false),
+      subscribeToTerminalResize: vi.fn().mockReturnValue(vi.fn()),
+      subscribeToFitOverrideChanges: vi.fn().mockReturnValue(vi.fn()),
+      registerSubscriptionCleanup: vi.fn((id: string, cleanup: () => void) => {
+        cleanups.set(id, cleanup)
+      }),
+      cleanupSubscription: vi.fn((id: string) => {
+        cleanups.get(id)?.()
+        cleanups.delete(id)
+      }),
+      waitForTerminal: vi.fn(() => new Promise<RuntimeTerminalWait>(() => {}))
+    })
+    const dispatcher = new RpcDispatcher({ runtime, methods: TERMINAL_METHODS })
+
+    const dispatchPromise = dispatcher.dispatchStreaming(
+      makeRequest('terminal.subscribe', {
+        terminal: 'terminal-1',
+        client: { id: 'phone-1', type: 'mobile' },
+        capabilities: { terminalBinaryStream: 1 }
+      }),
+      vi.fn(),
+      {
+        connectionId: 'conn-phone',
+        sendBinary: (bytes) => {
+          binaryFrames.push(bytes)
+        },
+        registerBinaryStreamHandler: vi.fn(() => vi.fn())
+      }
+    )
+
+    await vi.waitFor(() => expect(runtime.handleMobileSubscribe).toHaveBeenCalled())
+    expect(dataListener).toBeDefined()
+    expect(registerRemoteTerminalViewSubscriber).toHaveBeenCalledWith('pty-1')
+    dataListener?.('\x1b[6n', { seq: 4, rawLength: 4 })
+    resolveMobileSubscribe()
+
+    await vi.waitFor(() =>
+      expect(
+        binaryFrames.some((bytes) => {
+          const frame = decodeTerminalStreamFrame(bytes)
+          return (
+            frame?.opcode === TerminalStreamOpcode.Output &&
+            decodeTerminalStreamText(frame.payload) === '\x1b[6n'
+          )
+        })
+      ).toBe(true)
+    )
+    const queryOutputFrames = binaryFrames.filter((bytes) => {
+      const frame = decodeTerminalStreamFrame(bytes)
+      return (
+        frame?.opcode === TerminalStreamOpcode.Output &&
+        decodeTerminalStreamText(frame.payload) === '\x1b[6n'
+      )
+    })
+    expect(queryOutputFrames).toHaveLength(1)
+
+    runtime.cleanupSubscription('terminal-1:phone-1')
+    await dispatchPromise
+  })
+
   it('marks scrollback-only subscribed previews truncated when the uncursored read is limited', async () => {
     const messages: string[] = []
     const runtime = stubRuntime({
@@ -89,10 +178,7 @@ describe('terminal subscribe buffering', () => {
         limited: true
       })
     })
-    const dispatcher = new RpcDispatcher({
-      runtime,
-      methods: TERMINAL_METHODS
-    })
+    const dispatcher = new RpcDispatcher({ runtime, methods: TERMINAL_METHODS })
 
     await dispatcher.dispatchStreaming(
       makeRequest('terminal.subscribe', { terminal: 'terminal-1' }),
@@ -214,7 +300,14 @@ describe('terminal subscribe buffering', () => {
       expect(await outcomePromise).toBe('settled')
       expect(runtime.subscribeToTerminalData).not.toHaveBeenCalled()
       expect(runtime.subscribeToFitOverrideChanges).not.toHaveBeenCalled()
-      expect(runtime.registerSubscriptionCleanup).not.toHaveBeenCalled()
+      // Cleanup must exist before snapshot work so an abort cannot orphan a
+      // desktop width floor, but the abort must consume it before listeners start.
+      expect(runtime.registerSubscriptionCleanup).toHaveBeenCalledWith(
+        'terminal-1:desktop-1',
+        expect.any(Function),
+        'conn-legacy-json'
+      )
+      expect(runtime.cleanupSubscription).toHaveBeenCalledWith('terminal-1:desktop-1')
       expect(runtime.waitForTerminal).not.toHaveBeenCalled()
       expect(messages).toEqual([])
     } finally {

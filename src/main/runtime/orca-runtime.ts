@@ -53,6 +53,7 @@ import {
   buildAgentPromptPasteBytes
 } from '../../shared/agent-prompt-injection'
 import { gitExecFileAsync, gitSpawn } from '../git/runner'
+import { runWithGitReadCacheInvalidation } from '../git/status'
 import {
   cleanupClaimedCloneTarget,
   claimCloneTarget,
@@ -152,6 +153,7 @@ import type {
   WorkspaceSessionState,
   DirEntry
 } from '../../shared/types'
+import { assertWorktreeUnlockedForRemoval } from '../../shared/worktree-removal'
 import {
   getRepoExecutionHostId,
   parseExecutionHostId,
@@ -482,8 +484,8 @@ import {
   toLocalWorktreeRuntimePath
 } from '../local-worktree-filesystem'
 import {
-  pruneStaleLocalWorktreeRegistrationAfterFilesystemRemoval,
-  recoverLocalWindowsLongPathWorktreeRemoval
+  removeStaleLocalWorktreeRegistrationAfterFilesystemRemoval,
+  recoverLocalWindowsWorktreeRemoval
 } from '../local-worktree-removal-recovery'
 import {
   connect as connectLinear,
@@ -611,7 +613,6 @@ import type {
 } from '../../shared/github-project-types'
 import {
   getBaseRefDefault,
-  getDefaultBaseRef,
   getDefaultRemote,
   getBranchConflictKind,
   isGitRepo,
@@ -622,6 +623,7 @@ import {
   parseAndFilterSearchRefDetails,
   parseRemoteCount,
   resolveDefaultBaseRefViaExec,
+  resolveDefaultBaseRefWithLocalGit,
   buildSearchBaseRefsArgv,
   isForEachRefExcludeUnsupportedError,
   mergeBaseRefSearchResultGroups,
@@ -631,6 +633,7 @@ import {
 import { hasCommitObjectViaGitExec } from '../git/commit-object-ref'
 import { hasWorktreeBaseCommitRef } from '../git/worktree-base-ref-probe'
 import { resolveLocalGitUsername } from '../git/git-username'
+import { getSshGitCapabilityCache } from '../git/git-capability-state'
 import {
   listWorktrees,
   listWorktreesStrict,
@@ -1388,7 +1391,7 @@ type RuntimeNotifier = {
   resumeSleepingAgents?(worktreeId: string): void
   terminalFitOverrideChanged(
     ptyId: string,
-    mode: 'mobile-fit' | 'desktop-fit',
+    mode: 'mobile-fit' | 'remote-desktop-fit' | 'desktop-fit',
     cols: number,
     rows: number
   ): void
@@ -2072,6 +2075,7 @@ export type DriverState = RuntimeTerminalDriverState
 export type PtyLayoutTarget =
   | { kind: 'desktop'; cols: number; rows: number }
   | { kind: 'phone'; cols: number; rows: number; ownerClientId: string }
+  | { kind: 'remote-desktop'; cols: number; rows: number; ownerSubscriptionKey: string }
 
 // Why: authoritative layout state with monotonic seq. Bumped on every
 // applyLayout success; emitted on mobile subscribe-stream events so clients
@@ -2194,7 +2198,13 @@ export class OrcaRuntimeService {
   // invoked from resizeForClient and onClientDisconnected/onPtyExit.
   private fitOverrideListeners = new Map<
     string,
-    Set<(event: { mode: 'mobile-fit' | 'desktop-fit'; cols: number; rows: number }) => void>
+    Set<
+      (event: {
+        mode: 'mobile-fit' | 'remote-desktop-fit' | 'desktop-fit'
+        cols: number
+        rows: number
+      }) => void
+    >
   >()
   private driverListeners = new Map<string, Set<(driver: DriverState) => void>>()
   private subscriptionCleanups = new Map<string, () => void>()
@@ -2342,6 +2352,20 @@ export class OrcaRuntimeService {
   // docs/mobile-presence-lock.md.
   private currentDriver = new Map<string, DriverState>()
   private currentBrowserDriver = new Map<string, RuntimeBrowserDriverState>()
+
+  // Why: remote (relay/shared-control) desktop viewers of a PTY are keyed by
+  // subscription, not client, because one client can open duplicate streams and
+  // each stream must release only the width floor it registered.
+  private remoteDesktopViewers = new Map<
+    string,
+    Map<string, { clientId: string; cols: number; rows: number; activity: number }>
+  >()
+  private remoteDesktopOwners = new Map<string, string>()
+  private remoteDesktopActivity = 0
+  private remoteDesktopHostReclaimTargets = new Map<string, { cols: number; rows: number }>()
+  // Why: a completed host reclaim must not consume the cache if a newer
+  // viewer mutation landed while that serialized layout was in flight.
+  private remoteDesktopViewerRevisions = new Map<string, number>()
 
   // Why: resubscribe-grace window. When the last mobile subscriber for a
   // PTY unsubscribes, we hold the driver=mobile{clientId} state and the
@@ -3014,6 +3038,14 @@ export class OrcaRuntimeService {
   // methods, so they need a public entry point onto the client-event stream.
   notifySshStateChanged(targetId: string, state: SshConnectionState): void {
     this.emitClientEvent({ type: 'sshStateChanged', targetId, state })
+  }
+
+  // Why: renderer-initiated meta updates intentionally skip the renderer
+  // notifier (the renderer already applied them optimistically), but remote
+  // clients hold no optimistic copy and need the invalidation event.
+  notifyWorktreesChangedForRemoteClients(repoId: string): void {
+    this.invalidateResolvedWorktreeCache()
+    this.emitClientEvent({ type: 'worktreesChanged', repoId })
   }
 
   private notifyActivateWorktree(
@@ -6524,9 +6556,38 @@ export class OrcaRuntimeService {
     return (this.mobileSubscribers.get(ptyId)?.size ?? 0) > 0
   }
 
+  isMobileTerminalQueryReplyAuthority(ptyId: string, clientId: string): boolean {
+    // Why: a passive phone watching desktop-sized output must not race the
+    // desktop xterm. Mobile becomes reply authority only with the mobile floor.
+    if (this.getDriver(ptyId).kind !== 'mobile') {
+      return false
+    }
+    const subscribers = this.mobileSubscribers.get(ptyId)
+    if (!subscribers) {
+      return false
+    }
+    // Why: soft-leave resubscribe preserves the original subscription time but
+    // reinserts the record. Elect fitted responders from that stable age, not
+    // mutable Map order or passive desktop-mode watchers.
+    let earliest: { clientId: string; subscribedAt: number } | null = null
+    for (const subscriber of subscribers.values()) {
+      if (!subscriber.wasResizedToPhone) {
+        continue
+      }
+      if (earliest === null || subscriber.subscribedAt < earliest.subscribedAt) {
+        earliest = subscriber
+      }
+    }
+    return earliest?.clientId === clientId
+  }
+
   subscribeToFitOverrideChanges(
     ptyId: string,
-    listener: (event: { mode: 'mobile-fit' | 'desktop-fit'; cols: number; rows: number }) => void
+    listener: (event: {
+      mode: 'mobile-fit' | 'remote-desktop-fit' | 'desktop-fit'
+      cols: number
+      rows: number
+    }) => void
   ): () => void {
     return addListenerToMap(this.fitOverrideListeners, ptyId, listener)
   }
@@ -6537,7 +6598,7 @@ export class OrcaRuntimeService {
 
   private notifyFitOverrideListeners(
     ptyId: string,
-    mode: 'mobile-fit' | 'desktop-fit',
+    mode: 'mobile-fit' | 'remote-desktop-fit' | 'desktop-fit',
     cols: number,
     rows: number
   ): void {
@@ -7814,10 +7875,25 @@ export class OrcaRuntimeService {
     return this.terminalFitOverrides.get(ptyId) ?? null
   }
 
-  getAllTerminalFitOverrides(): Map<string, { mode: 'mobile-fit'; cols: number; rows: number }> {
-    const result = new Map<string, { mode: 'mobile-fit'; cols: number; rows: number }>()
+  getAllTerminalFitOverrides(): Map<
+    string,
+    { mode: 'mobile-fit' | 'remote-desktop-fit'; cols: number; rows: number }
+  > {
+    const result = new Map<
+      string,
+      { mode: 'mobile-fit' | 'remote-desktop-fit'; cols: number; rows: number }
+    >()
     for (const [ptyId, override] of this.terminalFitOverrides) {
       result.set(ptyId, { mode: override.mode, cols: override.cols, rows: override.rows })
+    }
+    for (const [ptyId] of this.remoteDesktopOwners) {
+      if (result.has(ptyId)) {
+        continue
+      }
+      const size = this.getTerminalSize(ptyId)
+      if (size) {
+        result.set(ptyId, { mode: 'remote-desktop-fit', ...size })
+      }
     }
     return result
   }
@@ -7899,7 +7975,16 @@ export class OrcaRuntimeService {
       // at phone dims after the phone disconnects; the desktop banner's
       // Restore button is the explicit return path. See
       // docs/mobile-fit-hold.md.
-      if (cur?.kind === 'phone' && this.getAutoRestoreFitMs() != null) {
+      if (this.hasRemoteDesktopViewers(ptyId)) {
+        this.setDriver(ptyId, { kind: 'idle' })
+        void this.applyRemoteDesktopLayout(ptyId)
+        continue
+      } else if (cur?.kind === 'phone' && this.getAutoRestoreFitMs() != null) {
+        if (this.remoteDesktopHostReclaimTargets.has(ptyId)) {
+          this.setDriver(ptyId, { kind: 'idle' })
+          void this.applyRemoteDesktopLayout(ptyId)
+          continue
+        }
         // Use the soft-leaver's snapshot baseline as a hint, falling
         // through to resolveDesktopRestoreTarget for missing values.
         const fallback = this.resolveDesktopRestoreTarget(ptyId)
@@ -7938,7 +8023,16 @@ export class OrcaRuntimeService {
     for (const { ptyId, baseline } of ptysToRestore) {
       const cur = this.layouts.get(ptyId)
       // Why: Indefinite hold gate — see soft-leaver branch above.
-      if (cur?.kind === 'phone' && this.getAutoRestoreFitMs() != null) {
+      if (this.hasRemoteDesktopViewers(ptyId)) {
+        this.setDriver(ptyId, { kind: 'idle' })
+        void this.applyRemoteDesktopLayout(ptyId)
+        continue
+      } else if (cur?.kind === 'phone' && this.getAutoRestoreFitMs() != null) {
+        if (this.remoteDesktopHostReclaimTargets.has(ptyId)) {
+          this.setDriver(ptyId, { kind: 'idle' })
+          void this.applyRemoteDesktopLayout(ptyId)
+          continue
+        }
         const fallback = this.resolveDesktopRestoreTarget(ptyId)
         const cols = baseline?.cols ?? fallback.cols
         const rows = baseline?.rows ?? fallback.rows
@@ -8067,6 +8161,10 @@ export class OrcaRuntimeService {
       this.currentDriver.delete(ptyId)
       this.notifier?.terminalDriverChanged(ptyId, { kind: 'idle' })
     }
+    this.remoteDesktopViewers.delete(ptyId)
+    this.remoteDesktopOwners.delete(ptyId)
+    this.remoteDesktopHostReclaimTargets.delete(ptyId)
+    this.remoteDesktopViewerRevisions.delete(ptyId)
     this.disposeHeadlessTerminal(ptyId)
     this.agentDetector?.onExit(ptyId)
     const pty = this.ptysById.get(ptyId)
@@ -8119,6 +8217,326 @@ export class OrcaRuntimeService {
       for (const listener of listeners) {
         listener(next)
       }
+    }
+  }
+
+  // Why: the host's own fit cascade (window resize, split drag, tab reveal,
+  // "+"-new-tab re-render) must not resize a PTY whose width a remote client
+  // owns — that is the remote "porridge" bug. True while a phone (mobile driver)
+  // OR an active remote desktop viewer owns the PTY. Input is deliberately NOT gated
+  // here (see the `writePtyInput` mobile-only checks): shared-control desktop
+  // viewers may still type alongside the host.
+  // Note: this is intentionally NOT a driver kind. An active remote viewer needs
+  // only resize suppression, not the mobile driver machinery (input lock,
+  // phone-fit, driver-change banners), so it lives in its own registry and does
+  // not perturb the presence-lock state machine. It also coexists with mobile:
+  // while a phone drives, the registry still suppresses host resize, and when
+  // the phone leaves the surviving viewer keeps the PTY suppressed.
+  isPtyResizeDrivenRemotely(ptyId: string): boolean {
+    if (this.getDriver(ptyId).kind === 'mobile') {
+      return true
+    }
+    return this.isRemoteDesktopResizeDriven(ptyId)
+  }
+
+  isRemoteDesktopResizeDriven(ptyId: string): boolean {
+    return this.remoteDesktopOwners.has(ptyId)
+  }
+
+  isRemoteDesktopViewerOwner(ptyId: string, subscriptionKey: string): boolean {
+    return this.remoteDesktopOwners.get(ptyId) === subscriptionKey
+  }
+
+  getRemoteDesktopFitHold(
+    ptyId: string,
+    subscriptionKey: string
+  ): { mode: 'remote-desktop-fit' | 'desktop-fit'; cols: number; rows: number } {
+    const size = this.getTerminalSize(ptyId) ?? { cols: 0, rows: 0 }
+    return {
+      mode: this.isRemoteDesktopViewerOwner(ptyId, subscriptionKey)
+        ? 'desktop-fit'
+        : 'remote-desktop-fit',
+      ...size
+    }
+  }
+
+  private hasRemoteDesktopViewers(ptyId: string): boolean {
+    const viewers = this.remoteDesktopViewers.get(ptyId)
+    return viewers !== undefined && viewers.size > 0
+  }
+
+  private activeRemoteDesktopViewport(ptyId: string): { cols: number; rows: number } | null {
+    const owner = this.remoteDesktopOwners.get(ptyId)
+    return owner ? (this.remoteDesktopViewers.get(ptyId)?.get(owner) ?? null) : null
+  }
+
+  private resolveRemoteDesktopHostReclaimTarget(ptyId: string): { cols: number; rows: number } {
+    const target = this.remoteDesktopHostReclaimTargets.get(ptyId)
+    if (target) {
+      return target
+    }
+    // Why: a viewer can join while a phone owns the actual PTY size. The
+    // mobile restore chain retains the pre-phone desktop geometry; current
+    // PTY size alone would incorrectly capture the phone grid as host truth.
+    return this.resolveDesktopRestoreTarget(ptyId)
+  }
+
+  private ensureRemoteDesktopHostReclaimTarget(ptyId: string): void {
+    if (!this.remoteDesktopHostReclaimTargets.has(ptyId)) {
+      this.remoteDesktopHostReclaimTargets.set(
+        ptyId,
+        this.resolveRemoteDesktopHostReclaimTarget(ptyId)
+      )
+    }
+  }
+
+  recordRemoteDesktopHostReclaimTarget(ptyId: string, cols: number, rows: number): void {
+    // Why: phone presence also suppresses host resize, but must not seed the
+    // separate remote-viewer cache when no desktop stream owns a width floor.
+    if (!this.remoteDesktopOwners.has(ptyId) || cols <= 0 || rows <= 0) {
+      return
+    }
+    this.remoteDesktopHostReclaimTargets.set(ptyId, { cols, rows })
+  }
+
+  private hasRemoteDesktopLayoutState(ptyId: string): boolean {
+    return this.remoteDesktopOwners.has(ptyId) || this.remoteDesktopHostReclaimTargets.has(ptyId)
+  }
+
+  private bumpRemoteDesktopViewerRevision(ptyId: string): number {
+    const revision = (this.remoteDesktopViewerRevisions.get(ptyId) ?? 0) + 1
+    this.remoteDesktopViewerRevisions.set(ptyId, revision)
+    return revision
+  }
+
+  async applyRemoteDesktopLayout(ptyId: string): Promise<boolean> {
+    if (this.getDriver(ptyId).kind === 'mobile') {
+      return true
+    }
+    const target = this.activeRemoteDesktopViewport(ptyId)
+    const reclaimingHost = !target
+    const viewerRevision = this.remoteDesktopViewerRevisions.get(ptyId) ?? 0
+    const layoutTarget: PtyLayoutTarget = target
+      ? {
+          kind: 'remote-desktop',
+          cols: target.cols,
+          rows: target.rows,
+          ownerSubscriptionKey: this.remoteDesktopOwners.get(ptyId)!
+        }
+      : { kind: 'desktop', ...this.resolveRemoteDesktopHostReclaimTarget(ptyId) }
+    this.freshSubscribeGuard.add(ptyId)
+    try {
+      const result = await this.enqueueLayout(ptyId, layoutTarget)
+      // Why: only drop the recorded host size once the reclaim resize actually
+      // landed. If it failed, the PTY is still at the remote-viewer width, so
+      // keep the target for the next reclaim (otherwise it resolves via the
+      // stale remote width and never restores true host geometry).
+      if (
+        reclaimingHost &&
+        result.ok &&
+        !this.remoteDesktopOwners.has(ptyId) &&
+        this.remoteDesktopViewerRevisions.get(ptyId) === viewerRevision
+      ) {
+        this.remoteDesktopHostReclaimTargets.delete(ptyId)
+      }
+      return result.ok
+    } finally {
+      this.freshSubscribeGuard.delete(ptyId)
+    }
+  }
+
+  // Why: attachment only records geometry. Passive hydration/reconnect must not
+  // steal the shared PTY from the desktop where the user is actively working.
+  async updateRemoteDesktopViewer(
+    ptyId: string,
+    subscriptionKey: string,
+    clientId: string,
+    cols: number,
+    rows: number,
+    claim = true
+  ): Promise<boolean> {
+    const viewport = clampTerminalViewport(cols, rows)
+    if (claim) {
+      this.ensureRemoteDesktopHostReclaimTarget(ptyId)
+    }
+    let viewers = this.remoteDesktopViewers.get(ptyId)
+    if (!viewers) {
+      viewers = new Map<
+        string,
+        { clientId: string; cols: number; rows: number; activity: number }
+      >()
+      this.remoteDesktopViewers.set(ptyId, viewers)
+    }
+    const prior = viewers.get(subscriptionKey)
+    if (
+      prior &&
+      prior.cols === viewport.cols &&
+      prior.rows === viewport.rows &&
+      (!claim || this.remoteDesktopOwners.get(ptyId) === subscriptionKey)
+    ) {
+      if (claim && this.remoteDesktopOwners.get(ptyId) === subscriptionKey) {
+        const size = this.getTerminalSize(ptyId)
+        if (size?.cols !== viewport.cols || size.rows !== viewport.rows) {
+          return this.applyRemoteDesktopLayout(ptyId)
+        }
+      }
+      return true
+    }
+    const activity = claim ? ++this.remoteDesktopActivity : (prior?.activity ?? 0)
+    viewers.set(subscriptionKey, { clientId, cols: viewport.cols, rows: viewport.rows, activity })
+    this.bumpRemoteDesktopViewerRevision(ptyId)
+    if (claim) {
+      this.remoteDesktopOwners.set(ptyId, subscriptionKey)
+      return this.applyRemoteDesktopLayout(ptyId)
+    }
+    return true
+  }
+
+  claimRemoteDesktopViewer(ptyId: string, subscriptionKey: string): Promise<boolean> {
+    const viewer = this.remoteDesktopViewers.get(ptyId)?.get(subscriptionKey)
+    if (!viewer) {
+      return Promise.resolve(false)
+    }
+    if (this.remoteDesktopOwners.get(ptyId) === subscriptionKey) {
+      const size = this.getTerminalSize(ptyId)
+      return size?.cols === viewer.cols && size.rows === viewer.rows
+        ? Promise.resolve(true)
+        : this.applyRemoteDesktopLayout(ptyId)
+    }
+    this.ensureRemoteDesktopHostReclaimTarget(ptyId)
+    viewer.activity = ++this.remoteDesktopActivity
+    this.remoteDesktopOwners.set(ptyId, subscriptionKey)
+    this.bumpRemoteDesktopViewerRevision(ptyId)
+    return this.applyRemoteDesktopLayout(ptyId)
+  }
+
+  claimRemoteDesktopHost(ptyId: string, cols: number, rows: number): Promise<boolean> {
+    if (!this.remoteDesktopOwners.has(ptyId)) {
+      // Why: disconnect can remove the owner before its queued host resize
+      // lands. A host input in that window must join the reclaim, not pass it.
+      return this.remoteDesktopHostReclaimTargets.has(ptyId)
+        ? this.applyRemoteDesktopLayout(ptyId)
+        : Promise.resolve(true)
+    }
+    const viewport = clampTerminalViewport(cols, rows)
+    this.remoteDesktopHostReclaimTargets.set(ptyId, viewport)
+    this.remoteDesktopOwners.delete(ptyId)
+    this.bumpRemoteDesktopViewerRevision(ptyId)
+    return this.applyRemoteDesktopLayout(ptyId)
+  }
+
+  unregisterRemoteDesktopViewer(ptyId: string, subscriptionKey: string): Promise<boolean> {
+    return this.unregisterRemoteDesktopViewers(ptyId, [subscriptionKey])
+  }
+
+  unregisterRemoteDesktopViewers(
+    ptyId: string,
+    subscriptionKeys: Iterable<string>
+  ): Promise<boolean> {
+    const viewers = this.remoteDesktopViewers.get(ptyId)
+    if (!viewers) {
+      return Promise.resolve(false)
+    }
+    let changed = false
+    let removedOwner = false
+    for (const subscriptionKey of subscriptionKeys) {
+      removedOwner = this.remoteDesktopOwners.get(ptyId) === subscriptionKey || removedOwner
+      changed = viewers.delete(subscriptionKey) || changed
+    }
+    if (!changed) {
+      return Promise.resolve(false)
+    }
+    if (viewers.size === 0) {
+      this.remoteDesktopViewers.delete(ptyId)
+    }
+    if (removedOwner) {
+      let fallback: { key: string; activity: number } | null = null
+      for (const [key, viewer] of viewers) {
+        if (viewer.activity > 0 && (!fallback || viewer.activity > fallback.activity)) {
+          fallback = { key, activity: viewer.activity }
+        }
+      }
+      if (fallback) {
+        this.remoteDesktopOwners.set(ptyId, fallback.key)
+      } else {
+        this.remoteDesktopOwners.delete(ptyId)
+      }
+    }
+    this.bumpRemoteDesktopViewerRevision(ptyId)
+    return removedOwner ? this.applyRemoteDesktopLayout(ptyId) : Promise.resolve(true)
+  }
+
+  // Why: the one-shot `terminal.updateViewport` RPC has no disconnect hook, so
+  // it must never *create* a width floor (that floor would leak — nothing
+  // releases it, pinning the host at a stale width after the viewer is gone).
+  // It only refreshes the floor(s) this client already owns via its stream
+  // subscription, keyed by clientId. Mirrors the mobile `updateMobileViewport`
+  // no-op-without-subscription invariant. Returns false when the client owns no
+  // floor (passive/stream-less viewer) — a stream-less viewer must not lock host
+  // resize.
+  refreshRemoteDesktopViewer(
+    ptyId: string,
+    clientId: string,
+    cols: number,
+    rows: number,
+    claim = false
+  ): Promise<boolean> {
+    const viewers = this.remoteDesktopViewers.get(ptyId)
+    if (!viewers) {
+      return Promise.resolve(false)
+    }
+    const viewport = clampTerminalViewport(cols, rows)
+    if (claim) {
+      // Why: terminal.send may be the first activity while the stream is only
+      // passively registered. Snapshot host truth before this refresh owns it.
+      this.ensureRemoteDesktopHostReclaimTarget(ptyId)
+    }
+    let changed = false
+    for (const [subscriptionKey, viewer] of viewers) {
+      if (viewer.clientId === clientId) {
+        const activity = claim ? ++this.remoteDesktopActivity : viewer.activity
+        viewers.set(subscriptionKey, {
+          ...viewer,
+          cols: viewport.cols,
+          rows: viewport.rows,
+          activity
+        })
+        if (claim) {
+          this.remoteDesktopOwners.set(ptyId, subscriptionKey)
+        }
+        changed = true
+      }
+    }
+    if (!changed) {
+      return Promise.resolve(false)
+    }
+    this.bumpRemoteDesktopViewerRevision(ptyId)
+    return this.remoteDesktopOwners.has(ptyId)
+      ? this.applyRemoteDesktopLayout(ptyId)
+      : Promise.resolve(true)
+  }
+
+  async updateDesktopViewport(
+    ptyId: string,
+    viewport: { cols: number; rows: number }
+  ): Promise<boolean> {
+    const { cols, rows } = clampTerminalViewport(viewport.cols, viewport.rows)
+    if (this.terminalFitOverrides.has(ptyId) || this.getDriver(ptyId).kind === 'mobile') {
+      this.recordRendererGeometry(ptyId, cols, rows)
+      return true
+    }
+    if (this.isResizeSuppressed()) {
+      return false
+    }
+    this.freshSubscribeGuard.add(ptyId)
+    try {
+      const result = await this.enqueueLayout(ptyId, { kind: 'desktop', cols, rows })
+      if (result.ok) {
+        this.refreshRendererGeometry(ptyId, cols, rows)
+      }
+      return result.ok
+    } finally {
+      this.freshSubscribeGuard.delete(ptyId)
     }
   }
 
@@ -8222,78 +8640,65 @@ export class OrcaRuntimeService {
     return { updated: true, applied: result.ok }
   }
 
-  // Why: remote desktop clients do not have the local `pty:resize` IPC path.
-  // Their measured xterm size still has to resize the source PTY so TUIs
-  // reflow to the visible client dimensions.
-  async updateDesktopViewport(
-    ptyId: string,
-    viewport: { cols: number; rows: number }
-  ): Promise<boolean> {
-    const { cols, rows } = clampTerminalViewport(viewport.cols, viewport.rows)
-    if (this.terminalFitOverrides.has(ptyId)) {
-      // Why: remote desktop panes do not have the local pty:reportGeometry
-      // IPC. While phone-fit holds the PTY, treat their viewport RPC as a
-      // measurement-only restore target, not a resize intent.
-      this.recordRendererGeometry(ptyId, cols, rows)
-      return true
-    }
-    if (this.isResizeSuppressed() || this.getDriver(ptyId).kind === 'mobile') {
-      return false
-    }
-    let resized = false
-    try {
-      resized = this.ptyController?.resize?.(ptyId, cols, rows) ?? false
-    } catch {
-      return false
-    }
-    if (!resized) {
-      return false
-    }
-    this.onExternalPtyResize(ptyId, cols, rows)
-    return true
-  }
-
   // Why: invoked from `runtime:restoreTerminalFit` IPC (the desktop "Take
-  // back" / "Restore" button). Forces the PTY back to desktop dims and
-  // flips the driver to `desktop`, suppressing further mobile-driven dim
-  // changes until a mobile actor takes the floor again. Two cases:
-  //   1. Active mobile subscriber: route through applyMobileDisplayMode so
-  //      the existing 'resized' event reaches the phone.
-  //   2. Held with no mobile subscriber (post-indefinite-hold): no inner
-  //      subscriber to notify; resolve restore target and enqueueLayout
-  //      directly. applyLayout is the SOLE writer of terminalFitOverrides on
-  //      the normal path, so the held branch defers the mutation to it — the
-  //      one exception is the dead-pty orphan cleanup below, which mirrors
-  //      onPtyExit's sanctioned delete. See docs/mobile-fit-hold.md.
+  // back" / "Restore" button). Forces the PTY back to desktop dims and flips
+  // the driver to `desktop`, suppressing further mobile-driven dim changes
+  // until a mobile actor takes the floor again. Three cases, each ending in
+  // releaseDesktopTakeBack:
+  //   1. Active mobile subscriber: route through applyMobileDisplayMode so the
+  //      existing 'resized' event reaches the phone.
+  //   2. Held override, no subscriber (post-indefinite-hold): resolve the
+  //      restore target and enqueueLayout directly.
+  //   3. Stale mobile driver, no subscriber and no override: nothing to resize,
+  //      just drop the lock. See docs/mobile-fit-hold.md.
   //
-  // Returns `true` only when the pty ends converged (no fit-override held);
-  // `false` when a restore was attempted but the resize failed (#7588), or
-  // when there was nothing to reclaim. On a failed-restore `false`, driver/mode
-  // are left unchanged so a driving phone keeps its lock and the modal
-  // truthfully stays — the user can retry.
+  // Why: explicit desktop take-back is a user command to reclaim input control
+  // NOW. Unlike the auto-restore timer and phone-initiated setDisplayMode paths
+  // (which keep the lock when a resize can't converge, #7588), this gesture
+  // ALWAYS drops the presence lock and banner. "Take back all terminals"
+  // reclaims several PTYs at once; a background pane whose desktop resize can't
+  // converge must not strand its banner on the other terminals. The resize is
+  // best-effort — the desktop renderer refits the PTY on its next settled
+  // frame. Returns `true` whenever there was a lock to reclaim, `false` only
+  // when there was nothing to reclaim.
   async reclaimTerminalForDesktop(ptyId: string): Promise<boolean> {
     if (this.isMobileSubscriberActive(ptyId)) {
-      // Why (#7588): capture the prior mode so a failed restore can roll the
-      // routing-only 'desktop' write back — driver/mode transitions must be
-      // gated on convergence, not committed before we know the resize took.
-      const priorMode = this.getMobileDisplayMode(ptyId)
       this.setMobileDisplayMode(ptyId, 'desktop')
-      const converged = await this.applyMobileDisplayMode(ptyId)
-      if (!converged) {
-        // Resize failed — override still held. Leave the driver on its mobile
-        // lock and undo the mode write so nothing is left lying at 'desktop'.
-        this.setMobileDisplayMode(ptyId, priorMode)
-        return false
-      }
-      this.setDriver(ptyId, { kind: 'desktop' })
-      // Why: a desktop-initiated reclaim is "I'm taking over right now",
-      // not a sticky preference. The next mobile subscribe (e.g. user
-      // switches back to the terminal tab on the phone) must default to
-      // phone-fit again, not stay in passive desktop-watch mode.
+      await this.applyMobileDisplayMode(ptyId)
+      this.releaseDesktopTakeBack(ptyId)
+      // Why: a desktop-initiated reclaim is "I'm taking over right now", not a
+      // sticky preference. The next mobile subscribe (e.g. user switches back to
+      // the terminal tab on the phone) must default to phone-fit again, not stay
+      // in passive desktop-watch mode.
       this.setMobileDisplayMode(ptyId, 'auto')
+      if (this.hasRemoteDesktopLayoutState(ptyId)) {
+        return this.applyRemoteDesktopLayout(ptyId)
+      }
       return true
     }
     const heldOverride = this.terminalFitOverrides.get(ptyId)
+    if (heldOverride && this.hasRemoteDesktopLayoutState(ptyId)) {
+      const pending = this.pendingRestoreTimers.get(ptyId)
+      if (pending) {
+        clearTimeout(pending.timer)
+        this.pendingRestoreTimers.delete(ptyId)
+      }
+      const softLeaver = this.pendingSoftLeavers.get(ptyId)
+      if (softLeaver) {
+        clearTimeout(softLeaver.timer)
+        this.pendingSoftLeavers.delete(ptyId)
+      }
+      const priorDriver = this.getDriver(ptyId)
+      this.setDriver(ptyId, { kind: 'idle' })
+      const converged = await this.applyRemoteDesktopLayout(ptyId)
+      if (!converged) {
+        this.setDriver(ptyId, priorDriver)
+        return false
+      }
+      this.setDriver(ptyId, { kind: 'desktop' })
+      this.setMobileDisplayMode(ptyId, 'auto')
+      return true
+    }
     if (heldOverride) {
       const pending = this.pendingRestoreTimers.get(ptyId)
       if (pending) {
@@ -8308,34 +8713,36 @@ export class OrcaRuntimeService {
       const renderer = this.lastRendererSizes.get(ptyId)
       const cols = renderer?.cols ?? heldOverride.previousCols ?? fallback.cols
       const rows = renderer?.rows ?? heldOverride.previousRows ?? fallback.rows
-      const result = await this.enqueueLayout(ptyId, { kind: 'desktop', cols, rows })
-      if (result.ok) {
-        this.setDriver(ptyId, { kind: 'desktop' })
-        // Why: a desktop-initiated reclaim is "I'm taking over right now",
-        // not a sticky preference. Reset to auto so the next mobile subscribe
-        // re-enters phone-fit. (Held-PTY branch may not have an entry, but
-        // calling setMobileDisplayMode('auto') is a no-op deletion in that
-        // case — safe and idempotent.)
-        this.setMobileDisplayMode(ptyId, 'auto')
-        return true
-      }
-      // Why (#7588): the layout entry is gone (pty exited) but the override is
-      // still held — unreachable via public APIs today (onPtyExit deletes both
-      // in lockstep), but reporting success while stranding the override would
-      // re-show the modal on the next hydrate. Run the same cleanup onPtyExit
-      // does (delete override + paired desktop-fit 0×0) so the renderer
-      // converges; nothing to resize on a dead pty.
-      if (result.reason === 'pty-exited' && this.terminalFitOverrides.has(ptyId)) {
-        this.terminalFitOverrides.delete(ptyId)
-        this.notifier?.terminalFitOverrideChanged(ptyId, 'desktop-fit', 0, 0)
-        this.notifyFitOverrideListeners(ptyId, 'desktop-fit', 0, 0)
-        return true
-      }
-      // resize-failed: the override remains held; report the truth so the
-      // modal correctly stays and the user can retry. Driver/mode untouched.
-      return false
+      await this.enqueueLayout(ptyId, { kind: 'desktop', cols, rows })
+      this.releaseDesktopTakeBack(ptyId)
+      this.setMobileDisplayMode(ptyId, 'auto')
+      return true
+    }
+    // Why: a stale lock — driver still reads mobile with no active subscriber
+    // and no held override (e.g. reclaimed inside the soft-leave grace, or a
+    // subscriber that dropped without a clean unsubscribe). Release it so the
+    // banner can't linger; there is nothing to resize.
+    if (this.getDriver(ptyId).kind === 'mobile') {
+      this.releaseDesktopTakeBack(ptyId)
+      return true
     }
     return false
+  }
+
+  // Why: the shared "banner must be gone now" step for an explicit desktop
+  // take-back. Releases the presence lock (driver → desktop) and, if the
+  // best-effort resize left a fit-override held (resize didn't converge),
+  // clears it optimistically with a paired desktop-fit 0×0 — the same signal
+  // onPtyExit emits — so neither the presence-lock banner nor the held-fit
+  // banner can survive the reclaim. The desktop renderer refits the PTY to real
+  // dims on its next settled frame.
+  private releaseDesktopTakeBack(ptyId: string): void {
+    this.setDriver(ptyId, { kind: 'desktop' })
+    if (this.terminalFitOverrides.has(ptyId)) {
+      this.terminalFitOverrides.delete(ptyId)
+      this.notifier?.terminalFitOverrideChanged(ptyId, 'desktop-fit', 0, 0)
+      this.notifyFitOverrideListeners(ptyId, 'desktop-fit', 0, 0)
+    }
   }
 
   // Why: read-side clamp for mobileAutoRestoreFitMs. `null` means
@@ -8508,6 +8915,11 @@ export class OrcaRuntimeService {
     if (prev.kind === 'phone' && next.kind === 'phone') {
       return prev.ownerClientId === next.ownerClientId
     }
+    if (prev.kind === 'remote-desktop' && next.kind === 'remote-desktop') {
+      // Why: each owner's claim promise gates its following input. Sharing a
+      // waiter across owners could release A's input only after B's grid lands.
+      return prev.ownerSubscriptionKey === next.ownerSubscriptionKey
+    }
     return true
   }
 
@@ -8645,9 +9057,9 @@ export class OrcaRuntimeService {
       this.resizeHeadlessTerminal(ptyId, target.cols, target.rows)
     }
 
-    // Why: emit fit-override-changed when the *mode* flips. Layouts can
-    // change dims without flipping mode (keyboard show/hide while phone),
-    // and waking the renderer on every viewport tick is wasteful churn.
+    // Why: remote desktop ownership is a fit hold for the host and passive
+    // peer viewers. Emit every remote layout so owner changes at equal geometry
+    // still park/release the correct clients without relying on resize deltas.
     // Defense-in-depth (#7588): also emit when the override's presence
     // changed even without a kind flip. applyLayout is the sole writer and
     // keeps override presence in lockstep with layout kind, so overrideChanged
@@ -8655,7 +9067,7 @@ export class OrcaRuntimeService {
     // only if that invariant is ever violated, repairing the renderer instead
     // of stranding the held modal.
     const overrideChanged = (prevFitOverride != null) !== (target.kind === 'phone')
-    if (modeChanged || overrideChanged) {
+    if (target.kind === 'remote-desktop' || modeChanged || overrideChanged) {
       // Why: phone→desktop arms the renderer-cascade suppress window
       // before the collateral safeFit IPCs arrive. See "Renderer cascade
       // suppression".
@@ -8665,13 +9077,21 @@ export class OrcaRuntimeService {
       }
       this.notifier?.terminalFitOverrideChanged(
         ptyId,
-        target.kind === 'phone' ? 'mobile-fit' : 'desktop-fit',
+        target.kind === 'phone'
+          ? 'mobile-fit'
+          : target.kind === 'remote-desktop'
+            ? 'remote-desktop-fit'
+            : 'desktop-fit',
         target.cols,
         target.rows
       )
       this.notifyFitOverrideListeners(
         ptyId,
-        target.kind === 'phone' ? 'mobile-fit' : 'desktop-fit',
+        target.kind === 'phone'
+          ? 'mobile-fit'
+          : target.kind === 'remote-desktop'
+            ? 'remote-desktop-fit'
+            : 'desktop-fit',
         target.cols,
         target.rows
       )
@@ -8991,6 +9411,9 @@ export class OrcaRuntimeService {
       this.pendingSoftLeavers.delete(ptyId)
       if (!this.mobileSubscribers.has(ptyId)) {
         this.setDriver(ptyId, { kind: 'idle' })
+        if (this.hasRemoteDesktopViewers(ptyId)) {
+          void this.applyRemoteDesktopLayout(ptyId)
+        }
       }
     }, SOFT_LEAVE_GRACE_MS)
     if (typeof softTimer.unref === 'function') {
@@ -9041,6 +9464,10 @@ export class OrcaRuntimeService {
         const timer = setTimeout(() => {
           this.pendingRestoreTimers.delete(ptyId)
           if (this.isMobileSubscriberActive(ptyId)) {
+            return
+          }
+          if (this.hasRemoteDesktopLayoutState(ptyId)) {
+            void this.applyRemoteDesktopLayout(ptyId)
             return
           }
           void this.enqueueLayout(ptyId, {
@@ -9178,6 +9605,11 @@ export class OrcaRuntimeService {
     if (activeOverride && activeOverride.cols === cols && activeOverride.rows === rows) {
       return
     }
+    // Why: a successful host resize supersedes any target retained after a
+    // failed viewer reclaim; a later viewer cycle must capture this new truth.
+    if (!this.hasRemoteDesktopViewers(ptyId)) {
+      this.remoteDesktopHostReclaimTargets.delete(ptyId)
+    }
     this.resizeHeadlessTerminal(ptyId, cols, rows)
     this.refreshRendererGeometry(ptyId, cols, rows)
   }
@@ -9197,6 +9629,11 @@ export class OrcaRuntimeService {
   recordRendererGeometry(ptyId: string, cols: number, rows: number): void {
     if (cols <= 0 || rows <= 0) {
       return
+    }
+    // Why: a viewer may leave while phone-fit still owns the PTY. Keep its
+    // deferred host reclaim cache aligned with later trusted pane measurements.
+    if (this.remoteDesktopHostReclaimTargets.has(ptyId)) {
+      this.remoteDesktopHostReclaimTargets.set(ptyId, { cols, rows })
     }
     this.refreshRendererGeometry(ptyId, cols, rows)
   }
@@ -11524,12 +11961,14 @@ export class OrcaRuntimeService {
 
     try {
       await previous
-      return await this.cloneRepoAfterPathLock(
-        trimmedUrl,
-        trimmedDestination,
-        clonePath,
-        clonePathKey,
-        executionHostId
+      return await runWithGitReadCacheInvalidation(() =>
+        this.cloneRepoAfterPathLock(
+          trimmedUrl,
+          trimmedDestination,
+          clonePath,
+          clonePathKey,
+          executionHostId
+        )
       )
     } finally {
       release()
@@ -11867,32 +12306,33 @@ export class OrcaRuntimeService {
         .split('\n')
         .map((line) => line.trim())
         .filter(Boolean)
+      const capabilities = getSshGitCapabilityCache(provider)
       const runSearch = async (patternGroup?: 'segmented' | 'branchRoot'): Promise<string> => {
-        try {
-          return (
-            await provider.exec(
-              buildSearchBaseRefsArgv(normalizedQuery, limit, {
-                remoteNames: remotes,
-                patternGroup
-              }),
-              repo.path
-            )
-          ).stdout
-        } catch (err) {
-          if (!isForEachRefExcludeUnsupportedError(err)) {
-            throw err
-          }
-          return (
-            await provider.exec(
-              buildSearchBaseRefsArgv(normalizedQuery, limit, {
-                excludeRemoteHead: false,
-                remoteNames: remotes,
-                patternGroup
-              }),
-              repo.path
-            )
-          ).stdout
-        }
+        return capabilities.runWithFallback(
+          'for-each-ref-exclude',
+          async () =>
+            (
+              await provider.exec(
+                buildSearchBaseRefsArgv(normalizedQuery, limit, {
+                  remoteNames: remotes,
+                  patternGroup
+                }),
+                repo.path
+              )
+            ).stdout,
+          async () =>
+            (
+              await provider.exec(
+                buildSearchBaseRefsArgv(normalizedQuery, limit, {
+                  excludeRemoteHead: false,
+                  remoteNames: remotes,
+                  patternGroup
+                }),
+                repo.path
+              )
+            ).stdout,
+          isForEachRefExcludeUnsupportedError
+        )
       }
       const searchTokens = normalizedQuery.split('/').filter((token) => token.length > 0)
       if (searchTokens.length > 1) {
@@ -14302,15 +14742,20 @@ export class OrcaRuntimeService {
     const requestedDisplayName = args.displayName?.trim() || undefined
     const sanitizedName = sanitizeWorktreeName(args.name)
     let effectiveSanitizedName = sanitizedName
-    const username = await resolveLocalGitUsername(repo.path)
+    // Why: explicit branches and non-username prefix modes never consume this
+    // value; skipping the probes preserves the exact generated branch name.
+    const username =
+      !args.branchNameOverride && settings.branchPrefix === 'git-username'
+        ? await resolveLocalGitUsername(repo.path)
+        : ''
 
     const baseBranch = await resolveWorktreeCreateBase({
       requestedBaseBranch: args.baseBranch,
       repoWorktreeBaseRef: repo.worktreeBaseRef,
       resolveDefaultBaseRef: () =>
         hasLocalWorktreeGitOptions
-          ? resolveDefaultBaseRefViaExec((argv) => gitExecFileAsync(argv, localGitExecOptions))
-          : Promise.resolve(getDefaultBaseRef(repo.path)),
+          ? resolveDefaultBaseRefWithLocalGit(localGitExecOptions)
+          : getBaseRefDefault(repo.path),
       isBaseUsable: async (baseBranchCandidate) => {
         const remoteTrackingBase = await this.resolveRemoteTrackingBase(
           repo.path,
@@ -14341,10 +14786,8 @@ export class OrcaRuntimeService {
       }
     })
     if (!baseBranch) {
-      // Why: getDefaultBaseRef returns null when no suitable ref exists.
-      // Don't fabricate 'origin/main' — passing it to addWorktree would
-      // produce an opaque git failure. Surface a clear error so the CLI
-      // caller can pick an explicit --base ref.
+      // Why: a null default means no suitable ref exists; fail clearly instead
+      // of handing Git a fabricated origin/main ref.
       throw new Error(
         'Could not resolve a default base ref for this repo. Pass an explicit --base and try again.'
       )
@@ -16611,8 +17054,16 @@ export class OrcaRuntimeService {
       const canonicalWorktreePath = registeredWorktree.path
       const deleteBranch = removedMeta?.preserveBranchOnDelete !== true
 
+      // Why: a Git lock must block before archive hooks or linked-path cleanup
+      // mutate the workspace; dirty-file force is a separate permission.
+      try {
+        assertWorktreeUnlockedForRemoval(registeredWorktree)
+      } catch (error) {
+        throw new Error(formatWorktreeRemovalError(error, canonicalWorktreePath, force))
+      }
+
       // Why: a prior forced Windows recovery can delete the directory but leave
-      // Git's stale registration; retry by pruning instead of removing a missing path.
+      // Git's stale registration; recover and verify it before clearing metadata.
       if (
         !repo.connectionId &&
         force === true &&
@@ -16621,7 +17072,7 @@ export class OrcaRuntimeService {
         removedMeta &&
         (await isRuntimeWorktreePathMissing(repo, canonicalWorktreePath, localWorktreeGitOptions))
       ) {
-        const removalResult = await pruneStaleLocalWorktreeRegistrationAfterFilesystemRemoval({
+        const removalResult = await removeStaleLocalWorktreeRegistrationAfterFilesystemRemoval({
           canonicalWorktreePath,
           repoPath: repo.path,
           localWorktreeGitOptions,
@@ -16649,9 +17100,10 @@ export class OrcaRuntimeService {
         return removalResult ?? {}
       }
       if (repo.connectionId) {
-        const rawRemovalResult = await (deleteBranch
-          ? provider!.removeWorktree(canonicalWorktreePath, force)
-          : provider!.removeWorktree(canonicalWorktreePath, force, { deleteBranch }))
+        const remoteRemoveOptions = !deleteBranch ? { deleteBranch } : {}
+        const rawRemovalResult = await (Object.keys(remoteRemoveOptions).length > 0
+          ? provider!.removeWorktree(canonicalWorktreePath, force, remoteRemoveOptions)
+          : provider!.removeWorktree(canonicalWorktreePath, force))
         const removalResult = this.preserveBranchHeadFallback(
           rawRemovalResult,
           registeredWorktree.head
@@ -16694,6 +17146,27 @@ export class OrcaRuntimeService {
         // Runtime RPC calls have no renderer trust prompt, so hooks require explicit CLI opt-in.
         warning = `orca.yaml archive hook skipped for ${canonicalWorktreePath}; pass --run-hooks to run it.`
         console.warn(`[hooks] ${warning}`)
+      }
+
+      const refreshedWorktrees = hasLocalWorktreeGitOptions
+        ? await listWorktreesStrict(repo.path, localWorktreeGitOptions)
+        : await listWorktreesStrict(repo.path)
+      const refreshedRegisteredWorktree = findRegisteredDeletableWorktree(
+        repo.path,
+        canonicalWorktreePath,
+        refreshedWorktrees
+      )
+      if (!refreshedRegisteredWorktree) {
+        throw new Error(
+          `Worktree registration changed during deletion: ${canonicalWorktreePath}. Retry deletion.`
+        )
+      }
+      try {
+        // Why: an archive hook can race another Git client that locks the row;
+        // recheck before linked-path, watcher, or terminal teardown side effects.
+        assertWorktreeUnlockedForRemoval(refreshedRegisteredWorktree)
+      } catch (error) {
+        throw new Error(formatWorktreeRemovalError(error, canonicalWorktreePath, force))
       }
 
       let shouldTearDownPtys = true
@@ -16750,23 +17223,23 @@ export class OrcaRuntimeService {
           ...(!deleteBranch ? { deleteBranch } : {}),
           // Why: removal already validated the Git row under the selected
           // project runtime; keep branch cleanup on that same canonical row.
-          knownRemovedWorktree: registeredWorktree,
+          knownRemovedWorktree: refreshedRegisteredWorktree,
           ...localWorktreeGitOptions
         }
         removalResult = this.preserveBranchHeadFallback(
           await removeWorktree(repo.path, canonicalWorktreePath, force, removeOptions),
-          registeredWorktree.head
+          refreshedRegisteredWorktree.head
         )
       } catch (error) {
-        // Why: Git for Windows can fail long-path directory deletion after
-        // Orca has already validated the target and explicit force delete.
-        const recoveredRemovalResult = await recoverLocalWindowsLongPathWorktreeRemoval({
+        // Why: Git for Windows can deregister a clean worktree before its
+        // recursive filesystem deletion fails transiently.
+        const recoveredRemovalResult = await recoverLocalWindowsWorktreeRemoval({
           error,
           force,
           canonicalWorktreePath,
           repoPath: repo.path,
           localWorktreeGitOptions,
-          registeredWorktree,
+          registeredWorktree: refreshedRegisteredWorktree,
           deleteBranch,
           closeWatcher: (worktreePath) =>
             closeLocalWatcherForWorktreePath(worktreePath).catch((err) => {
@@ -16835,7 +17308,7 @@ export class OrcaRuntimeService {
       this.rememberPreservedBranchCleanupTarget(
         removalTarget.id,
         removalResult,
-        registeredWorktree.head,
+        refreshedRegisteredWorktree.head,
         removedPushTarget
       )
       this.clearOptimisticReconcileToken(removalTarget.id)
@@ -24361,8 +24834,14 @@ export function appendRecentPtyPathCandidates(
   previous: string[] | undefined,
   data: string
 ): string[] {
+  const extractedCandidates = extractTerminalOutputPathCandidates(data)
+  if (extractedCandidates.length === 0) {
+    // Why: pathless output is the common hot path. Reuse immutable history so
+    // each PTY chunk does not clone and byte-scan up to 1,024 old candidates.
+    return previous ?? []
+  }
   const next = previous ? previous.slice() : []
-  for (const candidate of extractTerminalOutputPathCandidates(data)) {
+  for (const candidate of extractedCandidates) {
     if (Buffer.byteLength(candidate, 'utf8') > RECENT_PTY_PATH_CANDIDATE_MAX_BYTES) {
       continue
     }
@@ -24669,17 +25148,28 @@ export type TerminalTailWaitState = {
   fromTail: boolean
 }
 
-// Why: onPtyData runs per raw PTY chunk (hundreds/sec under load). Building the
-// wait text (a full map/trim/filter/join over the up-to-256KB retained tail)
-// and lower-casing + scanning it once per chunk is unavoidable, but the old
-// code did it twice — once for the pre-append tail and once for the post-append
-// tail — every chunk. Caching the post-append state lets the next chunk reuse it
-// as its pre-append state, halving the per-chunk full-tail work.
+// Why: onPtyData runs per raw PTY chunk (hundreds/sec under load). Ordinary
+// tails take one no-join sentinel pass; only candidate-bearing tails
+// build, lowercase, and parse the full 256 KiB text. The cached post-append
+// state also avoids repeating that work for the next chunk's previous state.
 export function computeTerminalTailWaitState(
   lines: string[],
   partialLine: string,
   preview: string
 ): TerminalTailWaitState {
+  const tailShape = inspectTerminalWaitTail(lines, partialLine)
+  if (!tailShape.fromTail) {
+    return {
+      waitText: preview,
+      signal: findActionableTerminalWaitBlockedSignal(preview.toLowerCase()),
+      fromTail: false
+    }
+  }
+  if (!tailShape.mayContainBlockedSignal) {
+    // Why: tailGainedNewerBlockedReason reads waitText only when signal exists;
+    // avoid retaining a rebuilt 256 KiB string for the overwhelmingly common case.
+    return { waitText: '', signal: null, fromTail: true }
+  }
   const tailText = buildTailLines(lines, partialLine)
     .map((line) => line.trim())
     .filter(Boolean)
@@ -24691,6 +25181,29 @@ export function computeTerminalTailWaitState(
     signal: findActionableTerminalWaitBlockedSignal(waitText.toLowerCase()),
     fromTail
   }
+}
+
+function inspectTerminalWaitTail(
+  lines: string[],
+  partialLine: string
+): { fromTail: boolean; mayContainBlockedSignal: boolean } {
+  let fromTail = false
+  let mayContainBlockedSignal = false
+  for (const line of lines) {
+    if (!fromTail && line.trim().length > 0) {
+      fromTail = true
+    }
+    if (!mayContainBlockedSignal && TERMINAL_WAIT_BLOCKED_SENTINEL_RE.test(line)) {
+      mayContainBlockedSignal = true
+    }
+  }
+  if (!fromTail && partialLine.trim().length > 0) {
+    fromTail = true
+  }
+  if (!mayContainBlockedSignal && TERMINAL_WAIT_BLOCKED_SENTINEL_RE.test(partialLine)) {
+    mayContainBlockedSignal = true
+  }
+  return { fromTail, mayContainBlockedSignal }
 }
 
 // Why: decides whether the appended chunk introduced a newer actionable blocked
@@ -25663,18 +26176,62 @@ function findActionableTerminalWaitBlockedSignal(
   if (blockedSignal === null) {
     return null
   }
-  const readyIndex = findKnownReadyPromptIndex(normalized)
+  const dismissedModalIndex = findDismissedStartupModalIndex(normalized)
   // Why: retained terminal tails can include stale startup modals. If a known
-  // ready prompt appears after that modal, the latest signal is ready.
-  return readyIndex !== null && readyIndex > blockedSignal.index ? null : blockedSignal
+  // agent's live prompt appears after that modal, the modal was dismissed and
+  // the signal is no longer actionable — even if the agent is still mid-run
+  // (Cursor never reports idle via OSC title, so its busy prompt clears too).
+  return dismissedModalIndex !== null && dismissedModalIndex > blockedSignal.index
+    ? null
+    : blockedSignal
+}
+
+// Why: a recognized agent's live prompt (idle OR busy) proves its startup modal
+// was dismissed. Broader than the idle-only ready set so a mid-run Cursor lane
+// stops reporting a stale trust hit for the rest of the session.
+function findDismissedStartupModalIndex(normalized: string): number | null {
+  const indexes = [
+    findCodexReadyPromptIndex(normalized),
+    findAntigravityReadyPromptIndex(normalized),
+    findCursorActivePromptIndex(normalized)
+  ].filter((index): index is number => index !== null)
+  return indexes.length > 0 ? Math.max(...indexes) : null
 }
 
 function findKnownReadyPromptIndex(normalized: string): number | null {
   const indexes = [
     findCodexReadyPromptIndex(normalized),
-    findAntigravityReadyPromptIndex(normalized)
+    findAntigravityReadyPromptIndex(normalized),
+    findCursorReadyPromptIndex(normalized)
   ].filter((index): index is number => index !== null)
   return indexes.length > 0 ? Math.max(...indexes) : null
+}
+
+// Why: cursor-agent keeps a persistent TUI — a printed "Cursor Agent" banner and
+// a "→" input-prompt line appear once its trust dialog is dismissed, in both
+// busy and idle states. The banner is matched by its last occurrence so the
+// trust dialog's own "Cursor Agent" body text (which precedes the banner) does
+// not win. The "→" glyph is cursor-agent's input prompt marker ("→ Plan,
+// search, build anything" fresh, "→ Add a follow-up" after the first turn).
+function findCursorActivePromptIndex(normalized: string): number | null {
+  const headerIndex = normalized.lastIndexOf('cursor agent')
+  if (headerIndex === -1) {
+    return null
+  }
+  return normalized.includes('→', headerIndex) ? headerIndex : null
+}
+
+// Why: cursor-agent never emits an idle OSC title (its bare title is dropped),
+// so tui-idle can only resolve from the tail. Busy frames draw a braille
+// spinner in the on-screen status line; its absence past the banner is idle.
+const CURSOR_BUSY_SPINNER_RE = /[⠁-⣿]/
+
+function findCursorReadyPromptIndex(normalized: string): number | null {
+  const activeIndex = findCursorActivePromptIndex(normalized)
+  if (activeIndex === null) {
+    return null
+  }
+  return CURSOR_BUSY_SPINNER_RE.test(normalized.slice(activeIndex)) ? null : activeIndex
 }
 
 function findCodexReadyPromptIndex(normalized: string): number | null {
@@ -25734,9 +26291,17 @@ function isTerminalWaitWhitespace(value: string, index: number): boolean {
   return code === 32 || (code >= 9 && code <= 13)
 }
 
+const TERMINAL_WAIT_BLOCKED_SENTINEL_RE =
+  /update available|choose working directory to|codex just got an upgrade|hooks need review|do you trust|trust this|trusted workspace|press enter to (?:confirm|continue|view|insert)|press t to trust/i
+
 function findTerminalWaitBlockedSignal(
   normalized: string
 ): { reason: RuntimeTerminalWaitBlockedReason; index: number } | null {
+  // Why: this runs once per PTY chunk over a tail up to 256 KiB. One combined
+  // negative scan avoids a dozen full-tail searches when no prompt can match.
+  if (!TERMINAL_WAIT_BLOCKED_SENTINEL_RE.test(normalized)) {
+    return null
+  }
   const candidates: { reason: RuntimeTerminalWaitBlockedReason; index: number }[] = []
   const updateIndex = normalized.lastIndexOf('update available')
   if (updateIndex !== -1 && normalized.includes('press enter to continue', updateIndex)) {

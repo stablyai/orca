@@ -36,6 +36,7 @@ export type LocalPtySessionMetadata = { cwd?: string; shellOverride?: string }
 
 export type PtyConnectResult = {
   id: string
+  launchAgent?: TuiAgent
   launchConfig?: SleepingAgentLaunchConfig
   snapshot?: string
   snapshotCols?: number
@@ -100,10 +101,17 @@ export type PtyTransport = {
   // (preserving order) and sends the reply immediately.
   sendInputImmediate: (data: string) => boolean
   sendInputAccepted?: (data: string) => Promise<boolean>
+  claimViewport?: (cols: number, rows: number) => boolean
   resize: (
     cols: number,
     rows: number,
-    meta?: { widthPx?: number; heightPx?: number; cellW?: number; cellH?: number }
+    meta?: {
+      widthPx?: number
+      heightPx?: number
+      cellW?: number
+      cellH?: number
+      claim?: boolean
+    }
   ) => boolean
   isConnected: () => boolean
   getPtyId: () => string | null

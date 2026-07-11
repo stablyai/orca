@@ -9,6 +9,7 @@ import {
   type ShellReadyScanState
 } from '../shell-ready-marker-scanner'
 import { isPowerShellProcess } from '../../shared/shell-process-detection'
+import type { TuiAgent } from '../../shared/types'
 import type {
   PendingOutputRecord,
   SessionState,
@@ -42,6 +43,8 @@ export type SubprocessHandle = {
   /** Live foreground process name of the PTY (node-pty's `.process`), e.g.
    *  'claude' / 'codex' / 'zsh'. Null once the child has exited. */
   getForegroundProcess(): string | null
+  /** Await process-table evidence captured after this confirmation request. */
+  confirmForegroundProcess?(): Promise<string | null>
   /** True when shell launch args already delivered the startup command, so the
    *  terminal host must skip its stdin fallback write. */
   startupCommandDeliveredInShellArgs?: boolean
@@ -72,6 +75,7 @@ export type SessionOptions = {
   cols: number
   rows: number
   terminalHandle?: string
+  launchAgent?: TuiAgent
   subprocess: SubprocessHandle
   shellReadySupported: boolean
   shellReadyTimeoutMs?: number
@@ -94,6 +98,7 @@ type AttachedClient = {
 export class Session {
   readonly sessionId: string
   readonly terminalHandle: string | null
+  readonly launchAgent: TuiAgent | null
   private _state: SessionState = 'running'
   private _shellState: ShellReadyState
   private _exitCode: number | null = null
@@ -120,6 +125,7 @@ export class Session {
   constructor(opts: SessionOptions) {
     this.sessionId = opts.sessionId
     this.terminalHandle = opts.terminalHandle ?? null
+    this.launchAgent = opts.launchAgent ?? null
     this.subprocess = opts.subprocess
     this.onSessionExit = opts.onExit
     const size = normalizePtySize(opts.cols, opts.rows)
@@ -358,6 +364,10 @@ export class Session {
 
   getForegroundProcess(): string | null {
     return this.subprocess.getForegroundProcess()
+  }
+
+  async confirmForegroundProcess(): Promise<string | null> {
+    return this.subprocess.confirmForegroundProcess?.() ?? this.subprocess.getForegroundProcess()
   }
 
   clearScrollback(): void {

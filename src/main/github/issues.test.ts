@@ -239,6 +239,163 @@ describe('issue source operations', () => {
     )
   })
 
+  it('recovers issue 7704 oversized inline-image creation', async () => {
+    const imagePrefix = 'data:image/png;base64,'
+    const body = imagePrefix + 'x'.repeat(133596 - imagePrefix.length)
+    expect(body).toContain('data:image')
+    expect(body).toHaveLength(133596)
+
+    getIssueOwnerRepoMock.mockResolvedValueOnce({ owner: 'stablyai', repo: 'orca' })
+    ghExecFileAsyncMock
+      .mockRejectedValueOnce(new Error('HTTP 422: body is too long (maximum is 65536 characters)'))
+      .mockResolvedValueOnce({
+        stdout: JSON.stringify({
+          number: 926,
+          html_url: 'https://github.com/stablyai/orca/issues/926'
+        })
+      })
+      .mockResolvedValueOnce({ stdout: '' })
+
+    await expect(
+      createIssue('/repo-root', 'Image issue', body, undefined, undefined, {
+        labels: ['bug'],
+        assignees: ['octo']
+      })
+    ).resolves.toEqual({
+      ok: true,
+      number: 926,
+      url: 'https://github.com/stablyai/orca/issues/926'
+    })
+    expect(ghExecFileAsyncMock).toHaveBeenNthCalledWith(
+      1,
+      expect.arrayContaining([
+        `body=${body}`,
+        'title=Image issue',
+        'labels[]=bug',
+        'assignees[]=octo'
+      ]),
+      { cwd: '/repo-root' }
+    )
+    expect(ghExecFileAsyncMock).toHaveBeenNthCalledWith(
+      2,
+      expect.arrayContaining(['body=', 'title=Image issue', 'labels[]=bug', 'assignees[]=octo']),
+      { cwd: '/repo-root' }
+    )
+    expect(ghExecFileAsyncMock).toHaveBeenNthCalledWith(
+      3,
+      ['api', '-X', 'PATCH', 'repos/stablyai/orca/issues/926', '--raw-field', `body=${body}`],
+      { cwd: '/repo-root' }
+    )
+  })
+
+  it('recognizes the oversized-body response from structured gh stderr', async () => {
+    getIssueOwnerRepoMock.mockResolvedValueOnce({ owner: 'stablyai', repo: 'orca' })
+    ghExecFileAsyncMock
+      .mockRejectedValueOnce(
+        Object.assign(new Error('Command failed: gh'), {
+          stderr: 'gh: body is too long (maximum is 65536 characters) (HTTP 422)'
+        })
+      )
+      .mockResolvedValueOnce({
+        stdout: JSON.stringify({
+          number: 929,
+          html_url: 'https://github.com/stablyai/orca/issues/929'
+        })
+      })
+      .mockResolvedValueOnce({ stdout: '' })
+
+    await expect(createIssue('/repo-root', 'Image issue', 'data:image')).resolves.toEqual({
+      ok: true,
+      number: 929,
+      url: 'https://github.com/stablyai/orca/issues/929'
+    })
+    expect(ghExecFileAsyncMock).toHaveBeenCalledTimes(3)
+  })
+
+  it('does not retry unrelated create failures', async () => {
+    getIssueOwnerRepoMock.mockResolvedValueOnce({ owner: 'stablyai', repo: 'orca' })
+    ghExecFileAsyncMock.mockRejectedValueOnce(new Error('HTTP 422: assignees is invalid'))
+
+    await expect(createIssue('/repo-root', 'Invalid issue', 'Body')).resolves.toEqual({
+      ok: false,
+      error: 'HTTP 422: assignees is invalid'
+    })
+    expect(ghExecFileAsyncMock).toHaveBeenCalledTimes(1)
+  })
+
+  it('stops when placeholder create fails during oversized-body recovery', async () => {
+    const body = `data:image/png;base64,${'x'.repeat(100)}`
+    getIssueOwnerRepoMock.mockResolvedValueOnce({ owner: 'stablyai', repo: 'orca' })
+    ghExecFileAsyncMock
+      .mockRejectedValueOnce(new Error('body is too long (maximum is 65536 characters)'))
+      .mockRejectedValueOnce(new Error('HTTP 500: create failed'))
+
+    await expect(createIssue('/repo-root', 'Placeholder failure', body)).resolves.toEqual({
+      ok: false,
+      error: 'HTTP 500: create failed'
+    })
+    expect(ghExecFileAsyncMock).toHaveBeenCalledTimes(2)
+  })
+
+  it('preserves fields during oversized-body recovery', async () => {
+    const localGitOptions = { wslDistro: 'Ubuntu' }
+    const body = `data:image/png;base64,${'x'.repeat(100)}`
+    getIssueOwnerRepoMock.mockResolvedValueOnce({ owner: 'stablyai', repo: 'orca' })
+    ghExecFileAsyncMock
+      .mockRejectedValueOnce(new Error('body is too long (maximum is 65536 characters)'))
+      .mockResolvedValueOnce({ stdout: JSON.stringify({ number: 927, url: 'issue-url' }) })
+      .mockResolvedValueOnce({ stdout: '' })
+
+    await expect(
+      createIssue(
+        '/repo-root',
+        'Fields issue',
+        body,
+        undefined,
+        null,
+        {
+          labels: ['bug'],
+          assignees: ['octo']
+        },
+        localGitOptions
+      )
+    ).resolves.toEqual({ ok: true, number: 927, url: 'issue-url' })
+    const firstCreateArgs = [...ghExecFileAsyncMock.mock.calls[0][0]]
+    const fallbackCreateArgs = [...ghExecFileAsyncMock.mock.calls[1][0]]
+    firstCreateArgs[firstCreateArgs.indexOf(`body=${body}`)] = 'body='
+    expect(fallbackCreateArgs).toEqual(firstCreateArgs)
+    expect(ghExecFileAsyncMock.mock.calls.every((call) => call[1]?.wslDistro === 'Ubuntu')).toBe(
+      true
+    )
+    expect(resolveIssueSourceMock).toHaveBeenCalledWith(
+      '/repo-root',
+      undefined,
+      null,
+      localGitOptions
+    )
+  })
+
+  it('reports partial success when oversized-body patch fails', async () => {
+    getIssueOwnerRepoMock.mockResolvedValueOnce({ owner: 'stablyai', repo: 'orca' })
+    ghExecFileAsyncMock
+      .mockRejectedValueOnce(new Error('body is too long (maximum is 65536 characters)'))
+      .mockResolvedValueOnce({
+        stdout: JSON.stringify({
+          number: 928,
+          html_url: 'https://github.com/stablyai/orca/issues/928'
+        })
+      })
+      .mockRejectedValueOnce(new Error('HTTP 500: update failed'))
+
+    await expect(createIssue('/repo-root', 'Partial issue', 'data:image')).resolves.toEqual({
+      ok: true,
+      number: 928,
+      url: 'https://github.com/stablyai/orca/issues/928',
+      bodySaveWarning:
+        'Issue https://github.com/stablyai/orca/issues/928 was created, but saving its body failed: HTTP 500: update failed'
+    })
+  })
+
   it('updates issue body through the REST issue endpoint', async () => {
     getIssueOwnerRepoMock.mockResolvedValueOnce({ owner: 'stablyai', repo: 'orca' })
     ghExecFileAsyncMock.mockResolvedValueOnce({ stdout: '' })

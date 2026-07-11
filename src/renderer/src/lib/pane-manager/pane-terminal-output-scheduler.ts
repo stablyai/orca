@@ -27,6 +27,7 @@ type TerminalOutputTarget = ForegroundTerminalOutputTarget
 type TerminalOutputBeforeWrite = (data: string) => void
 type TerminalBacklogRecoveryRequest = () => boolean
 type TerminalOutputParsedCallback = () => void
+type ForegroundRefreshSyncResolver = () => boolean
 
 type WriteTerminalOutputOptions = {
   foreground: boolean
@@ -42,6 +43,7 @@ type WriteTerminalOutputOptions = {
   latencySensitive?: boolean
   forceForegroundRefresh?: boolean
   followupForegroundRefresh?: boolean
+  shouldRefreshForegroundSynchronously?: ForegroundRefreshSyncResolver
   stripTransientCursorShows?: boolean
   coalesceForeground?: boolean
   holdForeground?: boolean
@@ -52,7 +54,9 @@ type QueueChunk = {
   foreground: boolean
   forceForegroundRefresh: boolean
   followupForegroundRefresh: boolean
+  shouldRefreshForegroundSynchronously: ForegroundRefreshSyncResolver
   stripTransientCursorShows: boolean
+  beforeWrite?: TerminalOutputBeforeWrite
   onParsed?: TerminalOutputParsedCallback
   ackCredit?: () => void
 }
@@ -62,7 +66,9 @@ type QueuedWrite = {
   foreground: boolean
   forceForegroundRefresh: boolean
   followupForegroundRefresh: boolean
+  shouldRefreshForegroundSynchronously: ForegroundRefreshSyncResolver
   stripTransientCursorShows: boolean
+  beforeWrite?: TerminalOutputBeforeWrite
   onParsed?: TerminalOutputParsedCallback
   ackCredits: (() => void)[]
 }
@@ -72,7 +78,6 @@ type QueueEntry = {
   chunks: QueueChunk[]
   chunkIndex: number
   queuedChars: number
-  beforeWrite?: TerminalOutputBeforeWrite
   onBackgroundBacklogDropped?: () => void
   backgroundBacklogDropped: boolean
   highPriority: boolean
@@ -129,6 +134,7 @@ const BACKGROUND_BACKLOG_WARNING =
 // skipped, not merely produced while hidden.
 const FOREGROUND_BACKLOG_WARNING =
   '\x18\x1b[0m\r\n[Orca skipped a burst of terminal output because the backlog grew too large.]\r\n'
+const ALWAYS_REFRESH_FOREGROUND_SYNCHRONOUSLY = (): boolean => true
 
 const queuedByTerminal = new Map<TerminalOutputTarget, QueueEntry>()
 const backlogRecoveryByTerminal = new WeakMap<
@@ -334,7 +340,6 @@ function createQueueEntry(
     chunks: [],
     chunkIndex: 0,
     queuedChars: 0,
-    beforeWrite: options.beforeWrite,
     onBackgroundBacklogDropped: options.onBackgroundBacklogDropped,
     backgroundBacklogDropped: false,
     highPriority: true,
@@ -571,7 +576,11 @@ function takeQueuedChunk(entry: QueueEntry, limit: number): QueuedWrite | null {
   let foreground: boolean | null = null
   let forceForegroundRefresh = false
   let followupForegroundRefresh = false
+  let shouldRefreshForegroundSynchronously: ForegroundRefreshSyncResolver | null = null
+  let additionalRefreshSyncResolvers: ForegroundRefreshSyncResolver[] | null = null
   let stripTransientCursorShows = false
+  let beforeWrite: TerminalOutputBeforeWrite | undefined
+  let additionalBeforeWriteCallbacks: TerminalOutputBeforeWrite[] | null = null
   const parsedCallbacks: TerminalOutputParsedCallback[] = []
   const ackCredits: (() => void)[] = []
 
@@ -583,7 +592,30 @@ function takeQueuedChunk(entry: QueueEntry, limit: number): QueuedWrite | null {
     foreground ??= chunk.foreground
     forceForegroundRefresh ||= chunk.forceForegroundRefresh
     followupForegroundRefresh ||= chunk.followupForegroundRefresh
+    // Why: one drained write can combine chunks from different renderer
+    // states or producers; preserve every forced policy and preparation hook.
+    if (chunk.forceForegroundRefresh) {
+      if (shouldRefreshForegroundSynchronously === null) {
+        shouldRefreshForegroundSynchronously = chunk.shouldRefreshForegroundSynchronously
+      } else if (
+        chunk.shouldRefreshForegroundSynchronously !== shouldRefreshForegroundSynchronously &&
+        !additionalRefreshSyncResolvers?.includes(chunk.shouldRefreshForegroundSynchronously)
+      ) {
+        additionalRefreshSyncResolvers ??= []
+        additionalRefreshSyncResolvers.push(chunk.shouldRefreshForegroundSynchronously)
+      }
+    }
     stripTransientCursorShows ||= chunk.stripTransientCursorShows
+    if (!beforeWrite) {
+      beforeWrite = chunk.beforeWrite
+    } else if (
+      chunk.beforeWrite &&
+      chunk.beforeWrite !== beforeWrite &&
+      !additionalBeforeWriteCallbacks?.includes(chunk.beforeWrite)
+    ) {
+      additionalBeforeWriteCallbacks ??= []
+      additionalBeforeWriteCallbacks.push(chunk.beforeWrite)
+    }
     if (chunk.data.length <= remaining) {
       data += chunk.data
       remaining -= chunk.data.length
@@ -618,7 +650,22 @@ function takeQueuedChunk(entry: QueueEntry, limit: number): QueuedWrite | null {
         foreground: foreground === true,
         forceForegroundRefresh,
         followupForegroundRefresh,
+        shouldRefreshForegroundSynchronously:
+          additionalRefreshSyncResolvers && shouldRefreshForegroundSynchronously
+            ? () =>
+                shouldRefreshForegroundSynchronously() ||
+                additionalRefreshSyncResolvers.some((resolve) => resolve())
+            : (shouldRefreshForegroundSynchronously ?? ALWAYS_REFRESH_FOREGROUND_SYNCHRONOUSLY),
         stripTransientCursorShows,
+        beforeWrite:
+          additionalBeforeWriteCallbacks && beforeWrite
+            ? (queuedData) => {
+                beforeWrite(queuedData)
+                for (const callback of additionalBeforeWriteCallbacks) {
+                  callback(queuedData)
+                }
+              }
+            : beforeWrite,
         onParsed:
           parsedCallbacks.length > 0
             ? () => {
@@ -654,7 +701,9 @@ function enqueueChunk(
     foreground?: boolean
     forceForegroundRefresh?: boolean
     followupForegroundRefresh?: boolean
+    shouldRefreshForegroundSynchronously?: ForegroundRefreshSyncResolver
     stripTransientCursorShows?: boolean
+    beforeWrite?: TerminalOutputBeforeWrite
     onParsed?: TerminalOutputParsedCallback
     ackCredit?: () => void
   }
@@ -664,7 +713,10 @@ function enqueueChunk(
     foreground: options?.foreground === true,
     forceForegroundRefresh: options?.forceForegroundRefresh === true,
     followupForegroundRefresh: options?.followupForegroundRefresh === true,
+    shouldRefreshForegroundSynchronously:
+      options?.shouldRefreshForegroundSynchronously ?? ALWAYS_REFRESH_FOREGROUND_SYNCHRONOUSLY,
     stripTransientCursorShows: options?.stripTransientCursorShows === true,
+    beforeWrite: options?.beforeWrite,
     onParsed: options?.onParsed,
     ackCredit: options?.ackCredit
   })
@@ -703,6 +755,13 @@ function replaceBacklogWithWarning(
       capChars: maxQueueChars
     })
   }
+  let beforeWrite: TerminalOutputBeforeWrite | undefined
+  for (let index = entry.chunks.length - 1; index >= entry.chunkIndex; index--) {
+    if (entry.chunks[index]?.beforeWrite) {
+      beforeWrite = entry.chunks[index].beforeWrite
+      break
+    }
+  }
   clearForegroundHoldSafety(entry)
   fireQueuedAckCredits(entry)
   entry.chunks = [
@@ -711,7 +770,9 @@ function replaceBacklogWithWarning(
       foreground: false,
       forceForegroundRefresh: false,
       followupForegroundRefresh: false,
-      stripTransientCursorShows: false
+      shouldRefreshForegroundSynchronously: ALWAYS_REFRESH_FOREGROUND_SYNCHRONOUSLY,
+      stripTransientCursorShows: false,
+      beforeWrite
     }
   ]
   entry.chunkIndex = 0
@@ -795,6 +856,7 @@ function writeForegroundTerminalChunkWithIntent(
   options: {
     forceViewportRefresh: boolean
     followupViewportRefresh: boolean
+    shouldRefreshViewportSynchronously: ForegroundRefreshSyncResolver
     onParsed?: TerminalOutputParsedCallback
   }
 ): void {
@@ -802,6 +864,7 @@ function writeForegroundTerminalChunkWithIntent(
   writeForegroundTerminalChunk(terminal, data, {
     forceViewportRefresh: options.forceViewportRefresh,
     followupViewportRefresh: options.followupViewportRefresh,
+    shouldRefreshViewportSynchronously: options.shouldRefreshViewportSynchronously,
     onParsed: () => {
       // Why: recovery must repaint from the scrolled buffer state that xterm
       // will keep, not from a pre-intent-restored viewport snapshot.
@@ -886,7 +949,7 @@ function writeQueuedChunk(entry: QueueEntry): 'foreground' | 'background' | null
   const pacer = entry.highPriority ? makeParseClockPacer() : undefined
   const ackCreditsParsed = registerTerminalOutputAckCredits(entry.terminal, queuedWrite.ackCredits)
   try {
-    entry.beforeWrite?.(queuedWrite.data)
+    queuedWrite.beforeWrite?.(queuedWrite.data)
     if (queuedWrite.foreground) {
       writeForegroundTerminalChunkWithIntent(
         entry.terminal,
@@ -896,6 +959,7 @@ function writeQueuedChunk(entry: QueueEntry): 'foreground' | 'background' | null
         {
           forceViewportRefresh: queuedWrite.forceForegroundRefresh,
           followupViewportRefresh: queuedWrite.followupForegroundRefresh,
+          shouldRefreshViewportSynchronously: queuedWrite.shouldRefreshForegroundSynchronously,
           onParsed: composeParsedCallback(queuedWrite.onParsed, ackCreditsParsed, pacer)
         }
       )
@@ -1007,7 +1071,6 @@ export function writeTerminalOutput(
     const entry = queuedByTerminal.get(terminal)
     if (entry?.highPriority || options.coalesceForeground || options.holdForeground) {
       const queued = entry ?? createQueueEntry(terminal, options)
-      queued.beforeWrite = options.beforeWrite
       queued.onBackgroundBacklogDropped = options.onBackgroundBacklogDropped
       queued.highPriority = true
       queuedByTerminal.set(terminal, queued)
@@ -1015,7 +1078,9 @@ export function writeTerminalOutput(
         foreground: true,
         forceForegroundRefresh: options.forceForegroundRefresh,
         followupForegroundRefresh: options.followupForegroundRefresh,
+        shouldRefreshForegroundSynchronously: options.shouldRefreshForegroundSynchronously,
         stripTransientCursorShows: options.stripTransientCursorShows,
+        beforeWrite: options.beforeWrite,
         onParsed: options.onParsed,
         ackCredit: options.ackCredit
       })
@@ -1084,13 +1149,14 @@ export function writeTerminalOutput(
       return
     }
     if (entry && entry.queuedChars > SYNC_FOREGROUND_FLUSH_CHARS) {
-      entry.beforeWrite = options.beforeWrite
       entry.highPriority = true
       enqueueChunk(entry, data, {
         foreground: true,
         forceForegroundRefresh: options.forceForegroundRefresh,
         followupForegroundRefresh: options.followupForegroundRefresh,
+        shouldRefreshForegroundSynchronously: options.shouldRefreshForegroundSynchronously,
         stripTransientCursorShows: options.stripTransientCursorShows,
+        beforeWrite: options.beforeWrite,
         onParsed: options.onParsed,
         ackCredit: options.ackCredit
       })
@@ -1113,7 +1179,6 @@ export function writeTerminalOutput(
         queued = createQueueEntry(terminal, options)
         queuedByTerminal.set(terminal, queued)
       } else {
-        queued.beforeWrite = options.beforeWrite
         queued.onBackgroundBacklogDropped = options.onBackgroundBacklogDropped
         queued.highPriority = true
       }
@@ -1121,7 +1186,9 @@ export function writeTerminalOutput(
         foreground: true,
         forceForegroundRefresh: options.forceForegroundRefresh,
         followupForegroundRefresh: options.followupForegroundRefresh,
+        shouldRefreshForegroundSynchronously: options.shouldRefreshForegroundSynchronously,
         stripTransientCursorShows: options.stripTransientCursorShows,
+        beforeWrite: options.beforeWrite,
         onParsed: options.onParsed,
         ackCredit: options.ackCredit
       })
@@ -1154,6 +1221,8 @@ export function writeTerminalOutput(
         {
           forceViewportRefresh: options.forceForegroundRefresh === true,
           followupViewportRefresh: options.followupForegroundRefresh === true,
+          shouldRefreshViewportSynchronously:
+            options.shouldRefreshForegroundSynchronously ?? ALWAYS_REFRESH_FOREGROUND_SYNCHRONOUSLY,
           onParsed: composeParsedCallback(options.onParsed, ackCreditsParsed, undefined)
         }
       )
@@ -1172,10 +1241,10 @@ export function writeTerminalOutput(
     entry.highPriority = false
     queuedByTerminal.set(terminal, entry)
   } else {
-    entry.beforeWrite = options.beforeWrite
     entry.onBackgroundBacklogDropped = options.onBackgroundBacklogDropped
   }
   enqueueChunk(entry, data, {
+    beforeWrite: options.beforeWrite,
     onParsed: options.onParsed,
     ackCredit: options.ackCredit
   })
@@ -1228,7 +1297,7 @@ export function flushTerminalOutput(
     }
     const ackCreditsParsed = registerTerminalOutputAckCredits(terminal, queuedWrite.ackCredits)
     try {
-      entry.beforeWrite?.(queuedWrite.data)
+      queuedWrite.beforeWrite?.(queuedWrite.data)
       if (queuedWrite.foreground) {
         writeForegroundTerminalChunkWithIntent(
           terminal,
@@ -1238,6 +1307,7 @@ export function flushTerminalOutput(
           {
             forceViewportRefresh: queuedWrite.forceForegroundRefresh,
             followupViewportRefresh: queuedWrite.followupForegroundRefresh,
+            shouldRefreshViewportSynchronously: queuedWrite.shouldRefreshForegroundSynchronously,
             onParsed: composeParsedCallback(queuedWrite.onParsed, ackCreditsParsed, undefined)
           }
         )

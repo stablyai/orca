@@ -5,13 +5,22 @@ import { gitExecFileSync, gitExecFileAsync } from './runner'
 import type { BaseRefSearchResult } from '../../shared/types'
 import { parseGitRevListAheadBehindCounts } from '../../shared/git-rev-list-output'
 import { normalizeRuntimePathSeparators } from '../../shared/cross-platform-path'
+import { isForEachRefExcludeUnsupportedError } from '../../shared/git-ref-command-capabilities'
 import { parseWslUncPath } from '../../shared/wsl-paths'
 import { toWindowsWslPath } from '../wsl'
 import { buildHostedRemoteCommitUrl, buildHostedRemoteFileUrl } from './hosted-remote-url'
+import { getLocalGitCapabilityCache } from './git-capability-state'
 
 type LocalGitExecOptions = {
   wslDistro?: string
 }
+
+type LocalDefaultBaseRefGitOptions = {
+  cwd: string
+  wslDistro?: string
+}
+
+const DEFAULT_BASE_REF_PROBE_TIMEOUT_MS = 15_000
 
 type GitRepoProbeResult = 'repo' | 'not-repo' | 'indeterminate'
 type GitMarkerScanResult = { status: 'valid'; rootPath: string } | { status: 'absent' | 'invalid' }
@@ -649,13 +658,23 @@ export async function resolveDefaultBaseRefViaExec(exec: GitExec): Promise<strin
   return resolveDefaultBaseRefFromProbes((ref) => hasGitRefViaExec(exec, ref))
 }
 
+export function resolveDefaultBaseRefWithLocalGit(
+  options: LocalDefaultBaseRefGitOptions
+): Promise<string | null> {
+  return resolveDefaultBaseRefViaExec((argv) =>
+    gitExecFileAsync(argv, {
+      ...options,
+      // Why: async avoids main-thread stalls, but dead local/WSL filesystems still need a bound.
+      timeout: DEFAULT_BASE_REF_PROBE_TIMEOUT_MS
+    })
+  )
+}
+
 async function getDefaultBaseRefAsync(
   path: string,
   options: LocalGitExecOptions = {}
 ): Promise<string | null> {
-  return resolveDefaultBaseRefViaExec((argv) =>
-    gitExecFileAsync(argv, gitExecOptions(path, options))
-  )
+  return resolveDefaultBaseRefWithLocalGit(gitExecOptions(path, options))
 }
 
 /**
@@ -788,27 +807,27 @@ async function runSearchBaseRefsGit(
   limit: number,
   options: { remoteNames: readonly string[]; patternGroup?: RefSearchPatternGroup }
 ): Promise<{ stdout: string }> {
-  try {
-    return await gitExecFileAsync(
-      buildSearchBaseRefsArgv(normalizedQuery, limit, {
-        remoteNames: options.remoteNames,
-        patternGroup: options.patternGroup
-      }),
-      { cwd: path }
-    )
-  } catch (err) {
-    if (!isForEachRefExcludeUnsupportedError(err)) {
-      throw err
-    }
-    return gitExecFileAsync(
-      buildSearchBaseRefsArgv(normalizedQuery, limit, {
-        excludeRemoteHead: false,
-        remoteNames: options.remoteNames,
-        patternGroup: options.patternGroup
-      }),
-      { cwd: path }
-    )
-  }
+  return getLocalGitCapabilityCache({ cwd: path }).runWithFallback(
+    'for-each-ref-exclude',
+    () =>
+      gitExecFileAsync(
+        buildSearchBaseRefsArgv(normalizedQuery, limit, {
+          remoteNames: options.remoteNames,
+          patternGroup: options.patternGroup
+        }),
+        { cwd: path }
+      ),
+    () =>
+      gitExecFileAsync(
+        buildSearchBaseRefsArgv(normalizedQuery, limit, {
+          excludeRemoteHead: false,
+          remoteNames: options.remoteNames,
+          patternGroup: options.patternGroup
+        }),
+        { cwd: path }
+      ),
+    isForEachRefExcludeUnsupportedError
+  )
 }
 
 export function mergeBaseRefSearchResultGroups(
@@ -834,17 +853,7 @@ export function mergeBaseRefSearchResultGroups(
   return merged
 }
 
-export function isForEachRefExcludeUnsupportedError(error: unknown): boolean {
-  if (!error || typeof error !== 'object') {
-    return false
-  }
-  const maybe = error as { message?: unknown; stderr?: unknown; stdout?: unknown }
-  const text = [maybe.message, maybe.stderr, maybe.stdout]
-    .filter((value): value is string => typeof value === 'string')
-    .join('\n')
-    .toLowerCase()
-  return text.includes('unknown option') && text.includes('exclude')
-}
+export { isForEachRefExcludeUnsupportedError } from '../../shared/git-ref-command-capabilities'
 
 /**
  * Resolve the default push remote for a repo.

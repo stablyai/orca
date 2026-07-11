@@ -1,4 +1,12 @@
-import { ActivityIndicator, Pressable, SectionList, Text, TextInput, View } from 'react-native'
+import {
+  ActivityIndicator,
+  Pressable,
+  ScrollView,
+  SectionList,
+  Text,
+  TextInput,
+  View
+} from 'react-native'
 import { Minus, MoreHorizontal, Plus, Sparkles } from 'lucide-react-native'
 import { colors, spacing } from '../theme/mobile-theme'
 import { MobileSourceControlCreatePrEntry } from './MobileSourceControlCreatePrEntry'
@@ -13,7 +21,8 @@ type Props = {
   state: MobileSourceControlState
 }
 
-// The ready-state Changes segment body: quick actions, changed-files list, and commit bar.
+// Changes tab: local file changes only — uncommitted (staged/unstaged) plus
+// committed-on-branch vs base. PR conflicts and push status live elsewhere.
 export function MobileSourceControlContent({ state }: Props) {
   const {
     insets,
@@ -49,6 +58,21 @@ export function MobileSourceControlContent({ state }: Props) {
   const shouldShowGenerateButton = stagedCount > 0 || generatingMessage
   const createPrHeroActive =
     createPrAction.visible && !createPrAction.disabled && !createPrAction.pushFirst
+  const branchCompareFooter = (
+    <BranchCompareFooter
+      state={{
+        shouldShowBranchCompareSection: state.shouldShowBranchCompareSection,
+        branchCompareSummaryText: state.branchCompareSummaryText,
+        branchEntries: state.branchEntries,
+        branchCompareState: state.branchCompareState,
+        branchCompareResult: state.branchCompareResult,
+        busyAction,
+        openBranchDiff,
+        openingBranchPath,
+        openingPath
+      }}
+    />
+  )
 
   return (
     <>
@@ -126,9 +150,15 @@ export function MobileSourceControlContent({ state }: Props) {
 
       {!hasVisibleChanges ? (
         <View style={styles.state}>
-          <Text style={styles.stateTitle}>No Changes</Text>
+          <Text style={styles.stateTitle}>No local changes</Text>
           <Text style={styles.stateText}>Working tree is clean.</Text>
         </View>
+      ) : sections.length === 0 ? (
+        // Why: RN SectionList with empty `sections` often skips ListFooterComponent,
+        // which hid "Committed on Branch" when only branch files remain.
+        <ScrollView style={hubStyles.tabBody} contentContainerStyle={styles.listContent}>
+          {branchCompareFooter}
+        </ScrollView>
       ) : (
         <SectionList
           style={hubStyles.tabBody}
@@ -148,21 +178,7 @@ export function MobileSourceControlContent({ state }: Props) {
               <Text style={styles.sectionCount}>{section.data.length}</Text>
             </View>
           )}
-          ListFooterComponent={
-            <BranchCompareFooter
-              state={{
-                shouldShowBranchCompareSection: state.shouldShowBranchCompareSection,
-                branchCompareSummaryText: state.branchCompareSummaryText,
-                branchEntries: state.branchEntries,
-                branchCompareState: state.branchCompareState,
-                branchCompareResult: state.branchCompareResult,
-                busyAction,
-                openBranchDiff,
-                openingBranchPath,
-                openingPath
-              }}
-            />
-          }
+          ListFooterComponent={branchCompareFooter}
           stickySectionHeadersEnabled={false}
           contentContainerStyle={styles.listContent}
         />

@@ -56,8 +56,10 @@ import {
 } from './resource-session-navigation'
 import {
   getResourceUsageAllWorktrees,
+  getResourceUsagePtyIdsByTabId,
   getResourceUsageRepos,
   getResourceUsageRuntimePaneTitlesByTabId,
+  getResourceUsageTerminalLayoutsByTabId,
   getResourceUsageTabsByWorktree
 } from './resource-usage-open-slices'
 import {
@@ -73,9 +75,11 @@ import {
   countUnboundDaemonSessions,
   type ResourceSessionBindingInputs
 } from './resource-session-bindings'
+import { createClosedResourceSessionCountSelector } from './resource-session-count-selector'
 import { translate } from '@/i18n/i18n'
 
 const POLL_MS = 2_000
+const selectClosedResourceSessionCount = createClosedResourceSessionCountSelector()
 
 type SortOption = 'memory' | 'cpu' | 'name'
 
@@ -737,9 +741,7 @@ export function ResourceUsageStatusSegment({
   const memorySnapshotError = useAppStore((s) => s.memorySnapshotError)
   const fetchSnapshot = useAppStore((s) => s.fetchMemorySnapshot)
   const workspaceSessionReady = useAppStore((s) => s.workspaceSessionReady)
-  const ptyIdsByTabId = useAppStore((s) => s.ptyIdsByTabId)
-  const tabsByWorktreeForPtyBindings = useAppStore((s) => s.tabsByWorktree)
-  const terminalLayoutsByTabId = useAppStore((s) => s.terminalLayoutsByTabId)
+  const closedSessionCount = useAppStore(selectClosedResourceSessionCount)
   const setActiveView = useAppStore((s) => s.setActiveView)
   const openModal = useAppStore((s) => s.openModal)
   const openSpacePage = useAppStore((s) => s.openSpacePage)
@@ -774,17 +776,21 @@ export function ResourceUsageStatusSegment({
   const repos = useAppStore((s) => getResourceUsageRepos(s, open))
   const allWorktrees = useAppStore((s) => getResourceUsageAllWorktrees(s, open))
   const tabsByWorktree = useAppStore((s) => getResourceUsageTabsByWorktree(s, open))
+  // Why: the closed trigger owns a scalar selector. Full binding maps stay
+  // behind open sentinels so unchanged counts do not rerender the segment.
+  const ptyIdsByTabId = useAppStore((s) => getResourceUsagePtyIdsByTabId(s, open))
+  const terminalLayoutsByTabId = useAppStore((s) => getResourceUsageTerminalLayoutsByTabId(s, open))
   const resourceSnapshot = snapshot
   // Why: ptyIdsByTabId intentionally tracks mounted/live panes only. Resource
   // Manager also reads restored wake hints, but only for classification.
   const resourceSessionBindings = useMemo<ResourceSessionBindingInputs>(
     () => ({
       ptyIdsByTabId,
-      tabsByWorktree: tabsByWorktreeForPtyBindings,
+      tabsByWorktree,
       terminalLayoutsByTabId,
       workspaceSessionReady
     }),
-    [ptyIdsByTabId, tabsByWorktreeForPtyBindings, terminalLayoutsByTabId, workspaceSessionReady]
+    [ptyIdsByTabId, tabsByWorktree, terminalLayoutsByTabId, workspaceSessionReady]
   )
 
   // Why: after a kill confirms and the session unmounts, focus would otherwise
@@ -975,12 +981,6 @@ export function ResourceUsageStatusSegment({
     return countUnboundDaemonSessions(sessions, resourceSessionBindings)
   }, [open, sessions, resourceSessionBindings, workspaceSessionReady])
 
-  const closedSessionCount = useMemo(() => {
-    if (!workspaceSessionReady) {
-      return 0
-    }
-    return buildResourceSessionBindingIndex(resourceSessionBindings).boundPtyIds.size
-  }, [resourceSessionBindings, workspaceSessionReady])
   const triggerSessionCount = open ? sessions.length : closedSessionCount
 
   const { totalMemory, totalCpu, hostShare, memBadgeLabel } = useMemo(() => {

@@ -4,6 +4,7 @@ import type { AppState } from '../types'
 import {
   AGENT_STATUS_STALE_AFTER_MS,
   AGENT_STATE_HISTORY_MAX,
+  agentSubagentsEqual,
   type AgentStateHistoryEntry,
   type AgentStatusEntry,
   type AgentStatusOrchestrationContext,
@@ -1337,6 +1338,12 @@ export const createAgentStatusSlice: StateCreator<AppState, [], [], AgentStatusS
           // metadata expires. Only final done rows keep the previous lineage
           // fallback so completed children stay grouped.
           orchestration,
+          // Why: reuse the previous array reference when the roster is
+          // unchanged so subscribers comparing by identity skip re-renders on
+          // high-frequency same-roster pings.
+          subagents: agentSubagentsEqual(existing?.subagents, payload.subagents)
+            ? existing?.subagents
+            : payload.subagents,
           ...(providerSession ? { providerSession } : {}),
           // Why: interrupted lives on `done` only. parseAgentStatusPayload
           // already clamps it to `undefined` for non-done states, so writing
@@ -1384,6 +1391,7 @@ export const createAgentStatusSlice: StateCreator<AppState, [], [], AgentStatusS
             entry.toolInput !== existing.toolInput ||
             entry.lastAssistantMessage !== existing.lastAssistantMessage ||
             entry.orchestration !== existing.orchestration ||
+            entry.subagents !== existing.subagents ||
             entry.providerSession !== existing.providerSession ||
             entry.interrupted !== existing.interrupted)
         const retentionRelevantChange = sortRelevantChange || doneRetentionFieldsChanged

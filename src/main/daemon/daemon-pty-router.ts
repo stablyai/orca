@@ -146,6 +146,10 @@ export class DaemonPtyRouter implements IPtyProvider {
     return this.adapterFor(id).getForegroundProcess(id)
   }
 
+  async confirmForegroundProcess(id: string): Promise<string | null> {
+    return this.adapterFor(id).confirmForegroundProcess(id)
+  }
+
   async serialize(ids: string[]): Promise<string> {
     return this.current.serialize(ids)
   }

@@ -122,6 +122,7 @@ import {
   getVisibleWorktreeBrowserActivityTabs,
   getVisibleWorktreeTerminalActivityTabs
 } from './visible-worktree-activity-inputs'
+import { selectWorktreeListReviewCacheInputs } from './worktree-list-review-cache-inputs'
 import {
   VIRTUALIZED_SCROLL_ANCHOR_RECORD_EVENT,
   useVirtualizedScrollAnchor,
@@ -5268,20 +5269,8 @@ const WorktreeList = React.memo(function WorktreeList({
 
   const cardProps = useAppStore((s) => s.worktreeCardProperties)
 
-  // PR cache is needed for PR-status grouping and when the status lane can
-  // show PR state on quiet/done workspace cards.
-  const prCache = useAppStore((s) =>
-    groupBy === 'pr-status' ||
-    (s.settings?.experimentalNewWorktreeCardStyle === true
-      ? cardProps.includes('status')
-      : cardProps.includes('pr'))
-      ? s.prCache
-      : null
-  )
-  const hostedReviewCache = useAppStore((s) =>
-    s.settings?.experimentalNewWorktreeCardStyle === true && cardProps.includes('status')
-      ? s.hostedReviewCache
-      : null
+  const { prCache, hostedReviewCache } = useAppStore(
+    useShallow((s) => selectWorktreeListReviewCacheInputs(s, groupBy, cardProps))
   )
   const settings = useAppStore((s) => s.settings)
   const sshTargetLabels = useAppStore((s) => s.sshTargetLabels)

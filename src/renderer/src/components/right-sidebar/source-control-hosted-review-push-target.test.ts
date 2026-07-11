@@ -136,7 +136,12 @@ describe('hasPositiveHostedReviewNumberLink', () => {
     expect(hasPositiveHostedReviewNumberLink({ linkedBitbucketPR: 34 })).toBe(true)
     expect(hasPositiveHostedReviewNumberLink({ linkedAzureDevOpsPR: 56 })).toBe(true)
     expect(hasPositiveHostedReviewNumberLink({ linkedGiteaPR: 78 })).toBe(true)
-    expect(hasPositiveHostedReviewNumberLink({ linkedGitHubPR: 0, linkedGitLabMR: -1 })).toBe(false)
+    expect(
+      hasPositiveHostedReviewNumberLink({
+        linkedGitHubPR: 0,
+        linkedGitLabMR: -1
+      })
+    ).toBe(false)
     expect(hasPositiveHostedReviewNumberLink({ linkedGitHubPR: Number.NaN })).toBe(false)
     expect(hasPositiveHostedReviewNumberLink({})).toBe(false)
   })
@@ -187,18 +192,33 @@ describe('hasUsableHostedReviewPushTarget', () => {
     expect(
       hasUsableHostedReviewPushTarget({
         pushTarget: { remoteName: 'fork', branchName: 'feature' },
-        upstreamStatus: { hasUpstream: true, upstreamName: 'fork/feature', ahead: 1, behind: 0 }
+        upstreamStatus: {
+          hasUpstream: true,
+          upstreamName: 'fork/feature',
+          ahead: 1,
+          behind: 0
+        }
       })
     ).toBe(true)
     expect(
       hasUsableHostedReviewPushTarget({
-        upstreamStatus: { hasUpstream: false, ahead: 0, behind: 0, hasConfiguredPushTarget: true }
+        upstreamStatus: {
+          hasUpstream: false,
+          ahead: 0,
+          behind: 0,
+          hasConfiguredPushTarget: true
+        }
       })
     ).toBe(true)
     expect(
       hasUsableHostedReviewPushTarget({
         hasResolvableHostedReviewPushTargetLink: true,
-        upstreamStatus: { hasUpstream: false, ahead: 0, behind: 0, hasConfiguredPushTarget: true }
+        upstreamStatus: {
+          hasUpstream: false,
+          ahead: 0,
+          behind: 0,
+          hasConfiguredPushTarget: true
+        }
       })
     ).toBe(false)
     expect(
@@ -208,5 +228,69 @@ describe('hasUsableHostedReviewPushTarget', () => {
       })
     ).toBe(false)
     expect(hasUsableHostedReviewPushTarget({ upstreamStatus: unrelatedUpstream })).toBe(false)
+  })
+
+  it('treats a same-repo review upstream that already tracks the branch as usable', () => {
+    // Why: a same-repo review must not stay blocked while its push target is
+    // unhydrated — the real upstream already targets the review head.
+    expect(
+      hasUsableHostedReviewPushTarget({
+        hasResolvableHostedReviewPushTargetLink: true,
+        branchName: 'feature/foo',
+        upstreamStatus: {
+          hasUpstream: true,
+          upstreamName: 'origin/feature/foo',
+          ahead: 7,
+          behind: 2
+        }
+      })
+    ).toBe(true)
+  })
+
+  it('keeps blocking a review whose upstream tracks an unrelated fork/helper head', () => {
+    expect(
+      hasUsableHostedReviewPushTarget({
+        hasResolvableHostedReviewPushTargetLink: true,
+        branchName: 'feature',
+        upstreamStatus: unrelatedUpstream
+      })
+    ).toBe(false)
+  })
+
+  it('keeps blocking a resolvable review with no real upstream', () => {
+    expect(
+      hasUsableHostedReviewPushTarget({
+        hasResolvableHostedReviewPushTargetLink: true,
+        branchName: 'feature',
+        upstreamStatus: { hasUpstream: false, ahead: 0, behind: 0 }
+      })
+    ).toBe(false)
+  })
+})
+
+describe('resolveHostedReviewActionUpstreamStatus with a same-repo upstream', () => {
+  it('does not synthesize hasUpstream:false when the real upstream is the review head', () => {
+    const realUpstream = {
+      hasUpstream: true,
+      upstreamName: 'origin/mobile-resume-suspected-fixes',
+      ahead: 7,
+      behind: 2
+    }
+    const canUseHostedReviewPushTarget = hasUsableHostedReviewPushTarget({
+      hasResolvableHostedReviewPushTargetLink: true,
+      branchName: 'mobile-resume-suspected-fixes',
+      upstreamStatus: realUpstream
+    })
+    expect(canUseHostedReviewPushTarget).toBe(true)
+    expect(
+      resolveHostedReviewActionUpstreamStatus({
+        hasHostedReviewLink: true,
+        hasResolvableHostedReviewPushTargetLink: true,
+        hostedReviewState: 'open',
+        isHostedReviewStateLoading: false,
+        canUseHostedReviewPushTarget,
+        upstreamStatus: realUpstream
+      })
+    ).toBe(realUpstream)
   })
 })
