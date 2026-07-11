@@ -740,6 +740,7 @@ import type { ClaudeAccountService } from '../claude-accounts/service'
 import type { CodexAccountService } from '../codex-accounts/service'
 import type { RateLimitService } from '../rate-limits/service'
 import type { ClaudeRateLimitAccountsState, CodexRateLimitAccountsState } from '../../shared/types'
+import { applyPRBotAuthorOverride } from '../../shared/pr-bot-author-overrides'
 import type { RateLimitState } from '../../shared/rate-limit-types'
 import type { VoiceSettings } from '../../shared/speech-types'
 import { getSpeechModelManager, getSpeechSttService } from '../speech/speech-runtime-service'
@@ -2709,6 +2710,18 @@ export class OrcaRuntimeService {
     ) {
       applyAgentStatusHooksEnabled(updates.agentStatusHooksEnabled)
     }
+    return this.getClientSettings()
+  }
+
+  updateClientPRBotAuthorOverride(args: { author: string; isBot: boolean }) {
+    if (!this.store?.getSettings || !this.store.updateSettings) {
+      throw new Error('runtime_unavailable')
+    }
+    const current = this.store.getSettings().prBotAuthorOverrides
+    this.store.updateSettings(
+      { prBotAuthorOverrides: applyPRBotAuthorOverride(current, args.author, args.isBot) },
+      { notifyListeners: true }
+    )
     return this.getClientSettings()
   }
 

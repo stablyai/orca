@@ -54,7 +54,10 @@ import { legacyBaseRefSearchResult } from '../../../shared/base-ref-search-resul
 import { EMPTY_PTY_MAIN_DELIVERY_DIAGNOSTICS } from '../../../shared/pty-delivery-diagnostics'
 import { createE2EConfig } from '../../../shared/e2e-config'
 import { relativePathInsideRoot } from '../../../shared/cross-platform-path'
-import { normalizePRBotAuthorOverrides } from '../../../shared/pr-bot-author-overrides'
+import {
+  applyPRBotAuthorOverride,
+  normalizePRBotAuthorOverrides
+} from '../../../shared/pr-bot-author-overrides'
 import {
   LOCAL_EXECUTION_HOST_ID,
   normalizeExecutionHostScope,
@@ -591,6 +594,7 @@ function createWebPreloadApi(): Partial<PreloadApi> {
         writeJson(SETTINGS_STORAGE_KEY, next)
         return syncRuntimeBackedSettings(sanitizedUpdates, next)
       },
+      updatePRBotAuthorOverride: (args) => updateRuntimePRBotAuthorOverride(args),
       listFonts: () => Promise.resolve([]),
       onChanged: () => noopUnsubscribe
     } satisfies Partial<WebSettingsApi> as unknown as WebSettingsApi,
@@ -3155,6 +3159,40 @@ async function syncRuntimeBackedSettings(
     // Why: unpaired/offline web clients still need local settings persistence.
     return localNext
   }
+}
+
+async function updateRuntimePRBotAuthorOverride(args: {
+  author: string
+  isBot: boolean
+}): Promise<GlobalSettings> {
+  const local = getStoredSettings()
+  if (requireActiveEnvironmentOrNull()) {
+    try {
+      const result = await callRuntimeResult<{ settings: Partial<GlobalSettings> }>(
+        'settings.updatePRBotAuthorOverride',
+        args,
+        15_000
+      )
+      const next = mergeSettings(local, {
+        prBotAuthorOverrides: normalizePRBotAuthorOverrides(
+          result.settings.prBotAuthorOverrides
+        )
+      })
+      writeJson(SETTINGS_STORAGE_KEY, next)
+      return next
+    } catch {
+      // Why: an offline paired client keeps its local settings fallback usable.
+    }
+  }
+  const next = mergeSettings(local, {
+    prBotAuthorOverrides: applyPRBotAuthorOverride(
+      local.prBotAuthorOverrides,
+      args.author,
+      args.isBot
+    )
+  })
+  writeJson(SETTINGS_STORAGE_KEY, next)
+  return next
 }
 
 function getStoredOnboarding(): OnboardingState {

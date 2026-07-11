@@ -47,3 +47,25 @@ export function normalizePRBotAuthorOverrides(value: unknown): string[] {
   }
   return [...createBotAuthorOverrideSet(value)].sort()
 }
+
+/** Atomically derives the next persisted list from the authoritative setting. */
+export function applyPRBotAuthorOverride(
+  current: Iterable<unknown> | null | undefined,
+  author: string,
+  isBot: boolean
+): string[] {
+  const overrides = new Set(createBotAuthorOverrideSet(current))
+  const normalized = normalizePRCommentAuthorLogin(author)
+  if (!normalized || overrides.has(normalized) === isBot) {
+    return [...overrides].sort()
+  }
+  if (isBot) {
+    if (overrides.size >= MAX_PR_BOT_AUTHOR_OVERRIDES) {
+      return [...overrides].sort()
+    }
+    overrides.add(normalized)
+  } else {
+    overrides.delete(normalized)
+  }
+  return [...overrides].sort()
+}

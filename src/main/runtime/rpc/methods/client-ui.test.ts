@@ -155,6 +155,25 @@ describe('client UI RPC methods', () => {
     expect((update as { prBotAuthorOverrides: string[] }).prBotAuthorOverrides).toHaveLength(500)
   })
 
+  it('routes bot-author deltas to the runtime-owned atomic update', async () => {
+    const settings = { prBotAuthorOverrides: ['alice', 'bob'] }
+    const runtime = {
+      getRuntimeId: () => 'test-runtime',
+      updateClientPRBotAuthorOverride: vi.fn(() => settings)
+    } as unknown as OrcaRuntimeService
+    const dispatcher = new RpcDispatcher({ runtime, methods: CLIENT_UI_METHODS })
+
+    const response = await dispatcher.dispatch(
+      makeRequest('settings.updatePRBotAuthorOverride', { author: ' Bob ', isBot: true })
+    )
+
+    expect(runtime.updateClientPRBotAuthorOverride).toHaveBeenCalledWith({
+      author: ' Bob ',
+      isBot: true
+    })
+    expect(response).toMatchObject({ ok: true, result: { settings } })
+  })
+
   it('returns the runtime host persisted UI state', async () => {
     const ui: PersistedUIState = {
       ...getDefaultUIState(),

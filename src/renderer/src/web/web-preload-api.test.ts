@@ -634,6 +634,43 @@ describe('web settings preload API', () => {
       { method: 'settings.update', params: { prBotAuthorOverrides: ['gretelflux'] } }
     ])
   })
+
+  it('atomically updates a bot-author override through a paired runtime', async () => {
+    const runtimeCalls: { method: string; params: unknown }[] = []
+    vi.doMock('./web-runtime-client', () => ({
+      WebRuntimeClient: class {
+        call(method: string, params?: unknown): Promise<RuntimeRpcResponse<unknown>> {
+          runtimeCalls.push({ method, params })
+          return Promise.resolve({
+            id: 'call-1',
+            ok: true,
+            result: { settings: { prBotAuthorOverrides: ['gretelflux'] } },
+            _meta: { runtimeId: 'runtime-1' }
+          })
+        }
+
+        close(): void {}
+      }
+    }))
+
+    const globals = installBrowserGlobals('Linux')
+    writeStoredRuntimeEnvironment(globals.storage)
+    const { installWebPreloadApi } = await import('./web-preload-api')
+    installWebPreloadApi()
+
+    const settings = await globals.window.api.settings.updatePRBotAuthorOverride({
+      author: 'gretelflux',
+      isBot: true
+    })
+
+    expect(settings.prBotAuthorOverrides).toEqual(['gretelflux'])
+    expect(runtimeCalls).toEqual([
+      {
+        method: 'settings.updatePRBotAuthorOverride',
+        params: { author: 'gretelflux', isBot: true }
+      }
+    ])
+  })
 })
 
 describe('web MiniMax preload API', () => {

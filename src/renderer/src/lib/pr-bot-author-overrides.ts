@@ -21,25 +21,17 @@ export function setPRBotAuthorOverride(author: string, isBot: boolean): void {
   // so marking two authors quickly cannot make the later write drop the first.
   overrideUpdateQueue = overrideUpdateQueue
     .then(async () => {
-      const { updateSettings } = useAppStore.getState()
-      // Why: paired web clients have no settings push; refresh before merging so
-      // a stale client cannot overwrite overrides saved by another surface.
-      const settings = await window.api.settings.get()
+      // Why: the authoritative store owns the read-modify-write so concurrent
+      // desktop and paired-web clients cannot overwrite each other's updates.
+      const settings = await window.api.settings.updatePRBotAuthorOverride({
+        author: normalized,
+        isBot
+      })
+      useAppStore.setState({ settings })
       const current = createBotAuthorOverrideSet(settings.prBotAuthorOverrides)
-      if (current.has(normalized) === isBot) {
-        return
-      }
-      if (isBot && current.size >= MAX_PR_BOT_AUTHOR_OVERRIDES) {
+      if (isBot && !current.has(normalized) && current.size >= MAX_PR_BOT_AUTHOR_OVERRIDES) {
         console.warn('PR bot author override limit reached')
-        return
       }
-      const next = new Set(current)
-      if (isBot) {
-        next.add(normalized)
-      } else {
-        next.delete(normalized)
-      }
-      await updateSettings({ prBotAuthorOverrides: [...next].sort() })
     })
     // Why: one failed settings write must not poison every later override update.
     .catch(() => undefined)

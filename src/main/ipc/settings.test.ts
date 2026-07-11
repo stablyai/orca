@@ -108,6 +108,24 @@ describe('registerSettingsHandlers', () => {
     expect(event.returnValue).toEqual({ terminalMainSideEffectAuthority: false })
   })
 
+  it('applies bot-author deltas against the authoritative settings snapshot', () => {
+    store.getSettings
+      .mockReturnValueOnce({ prBotAuthorOverrides: ['alice'] })
+      .mockReturnValueOnce({ prBotAuthorOverrides: ['alice', 'bob'] })
+    registerSettingsHandlers(store as never)
+    const handler = handleMock.mock.calls.find(
+      (call) => call[0] === 'settings:update-pr-bot-author-override'
+    )?.[1] as (event: typeof settingsInvokeEvent, args: { author: string; isBot: boolean }) => unknown
+
+    const result = handler(settingsInvokeEvent, { author: ' Bob ', isBot: true })
+
+    expect(store.updateSettings).toHaveBeenCalledWith(
+      { prBotAuthorOverrides: ['alice', 'bob'] },
+      { notifyListeners: true, originWebContentsId: 1 }
+    )
+    expect(result).toEqual({ prBotAuthorOverrides: ['alice', 'bob'] })
+  })
+
   it('registers settings:previewWarpThemeImport handler', () => {
     registerSettingsHandlers(store as never)
     const channels = handleMock.mock.calls.map((call) => call[0])

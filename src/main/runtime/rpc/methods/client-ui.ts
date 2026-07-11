@@ -105,6 +105,7 @@ const FeatureInteractions = z
 const FeatureInteractionIdParam = z.custom<FeatureInteractionId>(isFeatureInteractionId, {
   message: 'Unknown feature interaction id'
 })
+const PRBotAuthorOverrideUpdate = z.object({ author: z.string(), isBot: z.boolean() }).strict()
 const GitHubProjectRef = z
   .object({
     owner: z.string(),
@@ -274,6 +275,11 @@ export const CLIENT_UI_METHODS: RpcMethod[] = [
     name: 'settings.update',
     params: SettingsUpdate,
     handler: (params, { runtime }) => ({ settings: runtime.updateClientSettings(params) })
+  }),
+  defineMethod({
+    name: 'settings.updatePRBotAuthorOverride',
+    params: PRBotAuthorOverrideUpdate,
+    handler: (params, { runtime }) => ({ settings: runtime.updateClientPRBotAuthorOverride(params) })
   }),
   defineMethod({
     name: 'ui.get',

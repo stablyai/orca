@@ -1,14 +1,18 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { applyPRBotAuthorOverride } from '../../../shared/pr-bot-author-overrides'
 
 const store = vi.hoisted(() => ({
-  settings: { prBotAuthorOverrides: [] as string[] } as { prBotAuthorOverrides: string[] } | null,
+  settings: { prBotAuthorOverrides: [] as string[] },
   pending: [] as (() => void)[],
-  updateSettings: vi.fn()
+  apiUpdate: vi.fn()
 }))
 
 vi.mock('@/store', () => ({
   useAppStore: Object.assign(vi.fn(), {
-    getState: () => ({ settings: store.settings, updateSettings: store.updateSettings })
+    getState: () => ({ settings: store.settings }),
+    setState: (next: { settings: typeof store.settings }) => {
+      store.settings = next.settings
+    }
   })
 }))
 
@@ -18,81 +22,61 @@ describe('PR bot author override updates', () => {
   beforeEach(() => {
     store.settings = { prBotAuthorOverrides: [] }
     store.pending = []
-    store.updateSettings.mockReset()
-    store.updateSettings.mockImplementation(
-      (updates: { prBotAuthorOverrides: string[] }) =>
-        new Promise<void>((resolve) => {
+    store.apiUpdate.mockReset()
+    store.apiUpdate.mockImplementation(
+      (args: { author: string; isBot: boolean }) =>
+        new Promise((resolve) => {
           store.pending.push(() => {
-            store.settings = { ...store.settings!, ...updates }
-            resolve()
+            store.settings = {
+              prBotAuthorOverrides: applyPRBotAuthorOverride(
+                store.settings.prBotAuthorOverrides,
+                args.author,
+                args.isBot
+              )
+            }
+            resolve(store.settings)
           })
         })
     )
     Object.defineProperty(globalThis, 'window', {
       configurable: true,
-      value: {
-        api: {
-          settings: {
-            get: vi.fn(async () => store.settings)
-          }
-        }
-      }
+      value: { api: { settings: { updatePRBotAuthorOverride: store.apiUpdate } } }
     })
   })
 
-  it('serializes rapid marks so later writes include earlier authors', async () => {
+  it('serializes rapid updates while the authoritative store merges each delta', async () => {
     setPRBotAuthorOverride('alice', true)
     setPRBotAuthorOverride('bob', true)
 
-    await vi.waitFor(() => expect(store.updateSettings).toHaveBeenCalledTimes(1))
-    expect(store.updateSettings).toHaveBeenLastCalledWith({ prBotAuthorOverrides: ['alice'] })
-
+    await vi.waitFor(() => expect(store.apiUpdate).toHaveBeenCalledTimes(1))
     store.pending.shift()?.()
-    await vi.waitFor(() => expect(store.updateSettings).toHaveBeenCalledTimes(2))
-    expect(store.updateSettings).toHaveBeenLastCalledWith({
-      prBotAuthorOverrides: ['alice', 'bob']
-    })
+    await vi.waitFor(() => expect(store.apiUpdate).toHaveBeenCalledTimes(2))
     store.pending.shift()?.()
-  })
-
-  it('continues processing updates after a settings write fails', async () => {
-    store.updateSettings
-      .mockRejectedValueOnce(new Error('settings unavailable'))
-      .mockImplementationOnce(async (updates: { prBotAuthorOverrides: string[] }) => {
-        store.settings = { ...store.settings!, ...updates }
-      })
-
-    setPRBotAuthorOverride('alice', true)
-    setPRBotAuthorOverride('bob', true)
-
-    await vi.waitFor(() => expect(store.updateSettings).toHaveBeenCalledTimes(2))
-    expect(store.updateSettings).toHaveBeenLastCalledWith({ prBotAuthorOverrides: ['bob'] })
-  })
-
-  it('merges against canonical settings instead of a stale renderer snapshot', async () => {
-    vi.mocked(window.api.settings.get).mockResolvedValue({
-      prBotAuthorOverrides: ['alice']
-    } as Awaited<ReturnType<typeof window.api.settings.get>>)
-    store.updateSettings.mockResolvedValue(undefined)
-
-    setPRBotAuthorOverride('bob', true)
-
     await vi.waitFor(() =>
-      expect(store.updateSettings).toHaveBeenCalledWith({
-        prBotAuthorOverrides: ['alice', 'bob']
-      })
+      expect(store.settings.prBotAuthorOverrides).toEqual(['alice', 'bob'])
     )
   })
 
-  it('does not evict an existing override when the limit is reached', async () => {
-    vi.mocked(window.api.settings.get).mockResolvedValue({
-      prBotAuthorOverrides: Array.from({ length: 500 }, (_, index) => `bot-${index}`)
-    } as Awaited<ReturnType<typeof window.api.settings.get>>)
+  it('continues processing updates after an atomic settings write fails', async () => {
+    store.apiUpdate
+      .mockRejectedValueOnce(new Error('settings unavailable'))
+      .mockResolvedValueOnce({ prBotAuthorOverrides: ['bob'] })
+
+    setPRBotAuthorOverride('alice', true)
+    setPRBotAuthorOverride('bob', true)
+
+    await vi.waitFor(() => expect(store.apiUpdate).toHaveBeenCalledTimes(2))
+    expect(store.settings.prBotAuthorOverrides).toEqual(['bob'])
+  })
+
+  it('warns without evicting an existing override when the limit is reached', async () => {
+    const current = Array.from({ length: 500 }, (_, index) => `bot-${index}`)
+    store.apiUpdate.mockResolvedValue({ prBotAuthorOverrides: current })
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
 
     setPRBotAuthorOverride('new-bot', true)
 
     await vi.waitFor(() => expect(warn).toHaveBeenCalledWith('PR bot author override limit reached'))
-    expect(store.updateSettings).not.toHaveBeenCalled()
+    expect(store.settings.prBotAuthorOverrides).toEqual(current)
   })
 })
