@@ -27,12 +27,18 @@ introducing a new execution host.
 
 ## 2. Scope
 
+The reference is VSCode's WSL Remote — its behavior set is well established, so we adopt it rather
+than re-deriving the UX.
+
 ### In scope
 - A **"WSL" source** in the Add Project flow: distro detection + POSIX filesystem browsing.
-- **POSIX display** of the project path in the file explorer / titles, plus a **`WSL: <distro>`
-  indicator badge** (VSCode remote-indicator parallel).
-- **WSL default-shell pivot** driven by the *resolved runtime*, with a **per-project shell
-  override** (absorbs #5111).
+- **POSIX display** of the project path in the file explorer / titles, plus a **clickable
+  `WSL: <distro>` indicator badge** (VSCode remote-indicator parallel).
+- **WSL default-shell pivot** driven by the *resolved runtime*, stored on a **dedicated per-project
+  `defaultShell` field** independent of the runtime axis (absorbs #5111).
+- **Clickable POSIX terminal file links** (#8156) — a path like `/home/u/app/src/x.ts:12` printed
+  in a WSL project's terminal opens the file (VSCode parity). Sequenced last; built on the
+  `isWslRepo` + POSIX-resolution primitives introduced here.
 - **Close the worktree-base watching gap** for WSL roots so new worktrees appear in the explorer.
 - **Unify UI and CLI repo-add normalization** so both resolve identical Git refs (addresses #6908).
 
@@ -43,8 +49,8 @@ introducing a new execution host.
 - **No change to canonical storage.** `Repo.path` remains the UNC form (every Windows `fs` code
   path depends on a Windows-readable path); POSIX is a **display/identity derivation only**.
 - **WSL over SSH** (a remote host that itself runs WSL) is not addressed.
-- Rich terminal POSIX file-link clickability (#8156) is adjacent; tracked separately unless the
-  reviewer wants it folded in.
+- **No in-place "move project to another distro."** Files live in one distro's filesystem; switching
+  distros is a **reopen/re-add** (identical to VSCode's "Reopen in WSL using Distro…"), not a move.
 
 ## 3. Existing architecture (context for reviewers)
 
@@ -100,16 +106,27 @@ introducing a new execution host.
 
 ### 4.3 Display layer (VSCode-style distinction)
 - File-explorer tree root, window/tab title, and path chips use `getRepoDisplayPath` (POSIX).
-- Project/repo rows show a **`WSL: <distro>` badge**, mirroring VSCode's remote indicator, so the
-  UI distinction the user asked for is visible without changing internal storage.
+- Project/repo rows show a **clickable `WSL: <distro>` badge**, mirroring VSCode's remote indicator
+  (which opens a command menu). Behavior by state:
+  - **Healthy** — badge is informational (`WSL: <distro>`, path in tooltip); clicking opens a small
+    menu with reopen/settings-style entries (e.g. open runtime settings, reopen in WSL using another
+    distro → routed through re-add, new WSL terminal).
+  - **`repair-required`** — badge turns into an actionable recovery affordance (retry / manage
+    runtime), because `getLocalProjectGitExecOptions` throws rather than falling back to host Git,
+    so the user needs a non-dead-end path.
 
-### 4.4 Shell pivot (absorbs #5111)
-- New-terminal default shell is decided from the **resolved runtime**, not a `cwd` string match:
-  if the runtime is `wsl{distro}`, default to that distro's WSL login shell.
-- Add a **per-project "Default Shell" override**. Resolution precedence:
-  **explicit creation override > per-project override > runtime-based default (WSL) > global setting.**
-- Threaded through the existing spawn path (`local-pty-provider.ts` /
-  `daemon/pty-subprocess.ts` / shared `windows-shell-args.ts`) — no new spawn pipeline.
+### 4.4 Default shell (absorbs #5111)
+- **Dedicated `Project.defaultShell?: 'inherit' | 'powershell' | 'wsl' | 'cmd' | 'git-bash'` field**,
+  kept **independent of `localWindowsRuntimePreference`** (runtime = *where* commands run; shell =
+  *what* a new terminal opens with — two orthogonal axes, matching VSCode's per-workspace
+  `terminal.integrated.defaultProfile` being separate from the remote). `'wsl'` resolves to the
+  runtime's distro.
+- The runtime only **informs the default** when `defaultShell` is `inherit`/unset: runtime
+  `wsl{distro}` → default WSL login shell. Resolution precedence:
+  **explicit creation override > project `defaultShell` > runtime-based default (WSL) > global setting.**
+- Decided from the **resolved runtime**, not a `cwd` string match. Threaded through the existing
+  spawn path (`local-pty-provider.ts` / `daemon/pty-subprocess.ts` / shared `windows-shell-args.ts`)
+  — no new spawn pipeline. Additive optional field → safe migration (no runtime-enum overload).
 
 ### 4.5 Gap closures
 - **Enable worktree-base watching for WSL roots**: remove the skip at
@@ -126,11 +143,20 @@ introducing a new execution host.
 - Legacy `\\wsl$\` vs modern `\\wsl.localhost\` provider prefixes are normalized at repo-add so
   watcher event-prefix matching fires (noted in PR #7968 review as a pre-existing mismatch).
 
-### 4.7 Testing
+### 4.7 Terminal file links (#8156)
+- In a WSL project's terminal, POSIX paths (`/home/u/app/src/x.ts[:line[:col]]`) become clickable
+  and open the file, matching VSCode's integrated-terminal link behavior.
+- Resolution reuses this feature's primitives: `isWslRepo` decides POSIX vs Windows interpretation,
+  then the POSIX path maps to the repo's UNC root for the editor open. Existence is checked
+  9P-safely (via WSL) rather than trusting Win32 `fs` over 9P.
+- **Sequenced last** so the core (open/navigate/shell) can land and be reviewed first; splittable
+  into its own follow-up commit/PR if review prefers.
+
+### 4.8 Testing
 - Unit: `getRepoDisplayPath` / `isWslRepo`, UNC↔POSIX conversion, runtime-resolve branches
-  (override → global → repair), shell-precedence resolution.
+  (override → global → repair), `defaultShell` precedence resolution, POSIX terminal-link parsing.
 - Integration: WSL add-flow parity with CLI `repo add` (#6908), worktree-base watching emits
-  create events for new WSL worktrees.
+  create events for new WSL worktrees, terminal link opens the correct file in a WSL project.
 - **Host scoping**: assert distro-A state does not leak into distro-B, per AGENTS.md host-scoping
   and `GitCapabilityCache` guidance. Cover first fallback, cached calls, and concurrent probes.
 
@@ -144,8 +170,14 @@ introducing a new execution host.
 - **Dependency**: benefits from PR #7968 but does not block on it — the current in-distro watcher
   is sufficient for correctness.
 
-## 6. Open questions
-1. Fold terminal POSIX file-link clickability (#8156) into this scope, or track separately?
-2. Should the `WSL: <distro>` badge also expose a quick "change distro / repair runtime" action?
-3. Per-project shell override storage: reuse `localWindowsRuntimePreference` shape or add a
-   dedicated `defaultShell` field on the project?
+## 6. Resolved decisions (VSCode-aligned)
+VSCode's WSL Remote is a well-established reference, so these are settled rather than left open:
+1. **Terminal POSIX file-link clickability (#8156): in scope**, sequenced last and built on the
+   `isWslRepo` + POSIX-resolution primitives introduced here (§4.7). VSCode clearly provides it.
+2. **`WSL: <distro>` badge: clickable/actionable** (§4.3). Healthy → informational + reopen/settings
+   menu; `repair-required` → recovery action. "Change distro" is **reopen/re-add** semantics, not an
+   in-place move (mirrors VSCode's "Reopen in WSL using Distro…").
+3. **Per-project shell: dedicated `Project.defaultShell` field** (§4.4), independent of the runtime
+   axis — mirrors VSCode's per-workspace `terminal.integrated.defaultProfile` being separate from
+   the remote, satisfies both #5311 (default WSL) and #5111 (arbitrary per-project shell), and is an
+   additive/safe migration.
