@@ -13,6 +13,7 @@ import {
 
 export function getLocalMissionMemberLinks(store: Store, mission: Mission): MissionRootLink[] {
   const links: MissionRootLink[] = []
+  const usedNames = new Set<string>()
   for (const member of mission.members) {
     if (!member.worktreeId) {
       continue
@@ -27,10 +28,18 @@ export function getLocalMissionMemberLinks(store: Store, mission: Mission): Miss
     if (!parsed) {
       continue
     }
-    links.push({
-      name: getMissionRootDirName(repo.displayName),
-      targetPath: parsed.worktreePath
-    })
+    // Why: sanitized display names can collide ("Dashboard" vs "Dashboard!");
+    // every local member must keep its own link, so suffix in member order.
+    let name = getMissionRootDirName(repo.displayName)
+    if (usedNames.has(name)) {
+      let suffix = 2
+      while (usedNames.has(`${name}-${suffix}`)) {
+        suffix += 1
+      }
+      name = `${name}-${suffix}`
+    }
+    usedNames.add(name)
+    links.push({ name, targetPath: parsed.worktreePath })
   }
   return links
 }
