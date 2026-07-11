@@ -123,6 +123,32 @@ describe('useAddRepoWslFlow', () => {
     expect(mocks.onGitRepoReady).not.toHaveBeenCalled()
   })
 
+  it('surfaces a rejected repos.add call as wslError instead of an unhandled rejection', async () => {
+    // Why: on a paired web client, window.api.repos.add({wsl}) throws
+    // synchronously-rejected — see web-preload-api.ts — rather than
+    // resolving with an {error} payload.
+    mocks.addRepo.mockRejectedValue(
+      new Error('Adding a WSL project is unavailable in paired web clients.')
+    )
+    const { useAddRepoWslFlow } = await import('./useAddRepoWslFlow')
+
+    const result = useAddRepoWslFlow({
+      closeModal: mocks.closeModal,
+      fetchWorktrees: mocks.fetchWorktrees,
+      onGitRepoReady: mocks.onGitRepoReady,
+      setAddProjectBusyLabel: mocks.setAddProjectBusyLabel
+    })
+
+    await expect(result.handleAddWsl('git')).resolves.toBeUndefined()
+
+    expect(mocks.stateSetters[2]).toHaveBeenCalledWith(
+      'Adding a WSL project is unavailable in paired web clients.'
+    )
+    expect(mocks.closeModal).not.toHaveBeenCalled()
+    expect(mocks.onGitRepoReady).not.toHaveBeenCalled()
+    expect(mocks.setAddProjectBusyLabel).toHaveBeenLastCalledWith(null)
+  })
+
   it('does nothing when distro or path is blank', async () => {
     mocks.stateValues = ['', '/home/user/project', null, false]
     const { useAddRepoWslFlow } = await import('./useAddRepoWslFlow')

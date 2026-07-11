@@ -72,6 +72,13 @@ export function useAddRepoWslFlow({
           await markOnboardingProjectAdded('addedFolder')
           closeModal()
         }
+      } catch (error) {
+        // Why: paired web clients reject repos.add({wsl}) outright (unsupported
+        // over the web bridge) instead of resolving an {error} payload — surface
+        // it the same way so it doesn't become an unhandled rejection.
+        if (gen === wslAddGenRef.current) {
+          setWslError(error instanceof Error ? error.message : String(error))
+        }
       } finally {
         if (gen === wslAddGenRef.current) {
           setIsAddingWsl(false)

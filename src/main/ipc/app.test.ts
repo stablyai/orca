@@ -357,18 +357,18 @@ describe('registerAppHandlers', () => {
     expect(grantFloatingWorkspaceDirectoryMock).toHaveBeenCalledWith(store, '/Users/kaylee/notes')
   })
 
-  it('delegates wsl:pathExists to the 9P-safe distro existence check', async () => {
-    const wslUncPathExistsSpy = vi
-      .spyOn(await import('../wsl'), 'wslUncPathExists')
-      .mockReturnValue(true)
+  it('delegates wsl:pathExists to the async 9P-safe distro existence check', async () => {
+    const wslUncPathExistsAsyncSpy = vi
+      .spyOn(await import('../wsl'), 'wslUncPathExistsAsync')
+      .mockResolvedValue(true)
     registerAppHandlers({} as never)
 
-    expect(
+    await expect(
       handlers.get('wsl:pathExists')?.(null, '\\\\wsl.localhost\\Ubuntu\\home\\j\\app\\src\\x.ts')
-    ).toBe(true)
-    expect(wslUncPathExistsSpy).toHaveBeenCalledWith(
+    ).resolves.toBe(true)
+    expect(wslUncPathExistsAsyncSpy).toHaveBeenCalledWith(
       '\\\\wsl.localhost\\Ubuntu\\home\\j\\app\\src\\x.ts'
     )
-    wslUncPathExistsSpy.mockRestore()
+    wslUncPathExistsAsyncSpy.mockRestore()
   })
 })

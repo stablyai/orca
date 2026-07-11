@@ -21,6 +21,7 @@ import {
   parseWslPath,
   wslUncDirectoryExists,
   wslUncPathExists,
+  wslUncPathExistsAsync,
   listWslDistrosAsync,
   isWslAvailableAsync,
   _resetWslCachesForTests,
@@ -174,6 +175,78 @@ async function withPlatformAsync<T>(value: NodeJS.Platform, fn: () => Promise<T>
     Object.defineProperty(process, 'platform', { configurable: true, value: original })
   }
 }
+
+describe('wslUncPathExistsAsync', () => {
+  afterEach(() => {
+    execFileMock.mockReset()
+    execFileSyncMock.mockReset()
+  })
+
+  it('resolves true when the distro reports the path exists, without blocking via execFileSync', async () => {
+    execFileMock.mockImplementation(
+      (_cmd: string, _args: string[], _opts: unknown, cb: (e: unknown, out: string) => void) => {
+        cb(null, '')
+      }
+    )
+    const result = await withPlatformAsync('win32', () =>
+      wslUncPathExistsAsync('\\\\wsl.localhost\\Ubuntu\\home\\j\\app\\src\\x.ts')
+    )
+    expect(result).toBe(true)
+    expect(execFileMock).toHaveBeenCalledWith(
+      'wsl.exe',
+      ['-d', 'Ubuntu', '--', 'test', '-e', '/home/j/app/src/x.ts'],
+      expect.objectContaining({ timeout: 5000 }),
+      expect.any(Function)
+    )
+    expect(execFileSyncMock).not.toHaveBeenCalled()
+  })
+
+  it('resolves false when the path is missing', async () => {
+    execFileMock.mockImplementation(
+      (_cmd: string, _args: string[], _opts: unknown, cb: (e: unknown, out: string) => void) => {
+        // Why: node's async execFile surfaces a non-zero exit as an Error with
+        // a numeric `code` (the exit code) — distinct from the string `code`
+        // (e.g. ENOENT) used for spawn failures.
+        const error = new Error('Command failed') as Error & { code: number }
+        error.code = 1
+        cb(error, '')
+      }
+    )
+    const result = await withPlatformAsync('win32', () =>
+      wslUncPathExistsAsync('\\\\wsl.localhost\\Ubuntu\\home\\j\\missing.ts')
+    )
+    expect(result).toBe(false)
+    expect(execFileSyncMock).not.toHaveBeenCalled()
+  })
+
+  it('resolves null when wsl.exe is unavailable (inconclusive)', async () => {
+    execFileMock.mockImplementation(
+      (_cmd: string, _args: string[], _opts: unknown, cb: (e: unknown, out: string) => void) => {
+        const error = new Error('spawn wsl.exe ENOENT') as Error & { code: string }
+        error.code = 'ENOENT'
+        cb(error, '')
+      }
+    )
+    const result = await withPlatformAsync('win32', () =>
+      wslUncPathExistsAsync('\\\\wsl.localhost\\Ubuntu\\home\\j\\app\\src\\x.ts')
+    )
+    expect(result).toBeNull()
+    expect(execFileSyncMock).not.toHaveBeenCalled()
+  })
+
+  it('resolves null for non-WSL paths and off Windows without spawning', async () => {
+    expect(
+      await withPlatformAsync('win32', () => wslUncPathExistsAsync('C:\\Users\\jin\\repo'))
+    ).toBeNull()
+    expect(
+      await withPlatformAsync('linux', () =>
+        wslUncPathExistsAsync('\\\\wsl.localhost\\Ubuntu\\home\\jin')
+      )
+    ).toBeNull()
+    expect(execFileMock).not.toHaveBeenCalled()
+    expect(execFileSyncMock).not.toHaveBeenCalled()
+  })
+})
 
 describe('WSL availability/distro cache refresh', () => {
   afterEach(() => {

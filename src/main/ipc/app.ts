@@ -9,7 +9,7 @@ import type { FloatingTerminalCwdRequest, MarkdownDocument } from '../../shared/
 import type { Store } from '../persistence'
 import { getDevInstanceIdentity } from '../startup/dev-instance-identity'
 import { isPwshAvailable } from '../pwsh'
-import { isWslAvailable, listWslDistros, wslUncPathExists } from '../wsl'
+import { isWslAvailable, listWslDistros, wslUncPathExistsAsync } from '../wsl'
 import { isGitBashAvailable } from '../git-bash'
 import { setUnreadDockBadgeCount } from '../dock/unread-badge'
 import { destroySystemTray } from '../tray/system-tray'
@@ -270,9 +270,12 @@ export function registerAppHandlers(store: Store, options: RegisterAppHandlersOp
   ipcMain.handle('wsl:isAvailable', (): boolean => isWslAvailable())
   ipcMain.handle('wsl:listDistros', (): string[] => listWslDistros())
   // Why: terminal POSIX-link resolution (#8156) needs a 9P-safe existence
-  // check for the mapped \\wsl.localhost\... path — see wslUncPathExists.
-  ipcMain.handle('wsl:pathExists', (_event, uncPath: string): boolean | null =>
-    wslUncPathExists(uncPath)
+  // check for the mapped \\wsl.localhost\... path — see wslUncPathExistsAsync.
+  // Async so probing many unique link candidates doesn't block the main
+  // process event loop (each probe can take up to 5s).
+  ipcMain.handle(
+    'wsl:pathExists',
+    (_event, uncPath: string): Promise<boolean | null> => wslUncPathExistsAsync(uncPath)
   )
   ipcMain.handle('pwsh:isAvailable', (): boolean => isPwshAvailable())
   ipcMain.handle('gitBash:isAvailable', (): boolean => isGitBashAvailable())

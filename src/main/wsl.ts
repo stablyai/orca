@@ -77,6 +77,34 @@ export function wslUncPathExists(uncPath: string): boolean | null {
 }
 
 /**
+ * Async counterpart to {@link wslUncPathExists} — the terminal-link resolver
+ * probes one unique path per link candidate, and the sync `execFileSync`
+ * version blocked the main process event loop up to 5s per path.
+ */
+export async function wslUncPathExistsAsync(uncPath: string): Promise<boolean | null> {
+  if (process.platform !== 'win32') {
+    return null
+  }
+  const info = parseWslUncPath(uncPath)
+  if (!info) {
+    return null
+  }
+  try {
+    await execFileUtf8('wsl.exe', ['-d', info.distro, '--', 'test', '-e', info.linuxPath])
+    return true
+  } catch (error) {
+    // Async execFile surfaces a non-zero exit as an Error with a numeric
+    // `code` (the exit code); anything else (spawn failure, timeout) is
+    // inconclusive -> null. Mirrors the `status`-based classification in
+    // testWslUncPath for the sync execFileSync path.
+    if (typeof (error as { code?: unknown })?.code === 'number') {
+      return false
+    }
+    return null
+  }
+}
+
+/**
  * Convert a Windows path to a Linux path for commands that will execute inside WSL.
  * Returns the path unchanged if it is already POSIX-style.
  *
