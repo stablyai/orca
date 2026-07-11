@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { create } from 'zustand'
+import { create, type StateCreator } from 'zustand'
 import { createMissionsSlice, missionMemberErrorKey, type MissionsSlice } from './missions'
 import type { Mission, MissionCreateResult } from '../../../../shared/types'
 
@@ -10,15 +10,27 @@ const missionsApi = {
   delete: vi.fn(),
   addMembers: vi.fn(),
   removeMember: vi.fn(),
-  recreateMemberWorktree: vi.fn()
+  recreateMemberWorktree: vi.fn(),
+  ensureSession: vi.fn()
 }
 
 vi.stubGlobal('window', {
   api: { missions: missionsApi }
 })
 
+type TestState = MissionsSlice & { fetchFolderWorkspaces: ReturnType<typeof vi.fn> }
+
 function makeStore() {
-  return create<MissionsSlice>()((...a) => ({ ...createMissionsSlice(...a) }))
+  const createSlice = createMissionsSlice as unknown as StateCreator<
+    TestState,
+    [],
+    [],
+    MissionsSlice
+  >
+  return create<TestState>()((...a) => ({
+    ...createSlice(...a),
+    fetchFolderWorkspaces: vi.fn(async () => {})
+  }))
 }
 
 const mission: Mission = {
@@ -65,6 +77,17 @@ describe('missions slice', () => {
       'Branch already exists'
     )
     expect(store.getState().missions).toEqual([mission])
+  })
+
+  it('ensureMissionSession refreshes folder workspaces before returning', async () => {
+    const workspace = { id: 'fw-1', missionId: 'm1' }
+    missionsApi.ensureSession.mockResolvedValue(workspace)
+    missionsApi.list.mockResolvedValue([mission])
+    const store = makeStore()
+    const result = await store.getState().ensureMissionSession('m1')
+    expect(result).toEqual(workspace)
+    expect(store.getState().fetchFolderWorkspaces).toHaveBeenCalled()
+    expect(missionsApi.ensureSession).toHaveBeenCalledWith({ missionId: 'm1' })
   })
 
   it('recreate clears the member error on success', async () => {

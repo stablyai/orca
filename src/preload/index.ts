@@ -649,7 +649,8 @@ const api = {
     delete: (args) => ipcRenderer.invoke('missions:delete', args),
     addMembers: (args) => ipcRenderer.invoke('missions:addMembers', args),
     removeMember: (args) => ipcRenderer.invoke('missions:removeMember', args),
-    recreateMemberWorktree: (args) => ipcRenderer.invoke('missions:recreateMemberWorktree', args)
+    recreateMemberWorktree: (args) => ipcRenderer.invoke('missions:recreateMemberWorktree', args),
+    ensureSession: (args) => ipcRenderer.invoke('missions:ensureSession', args)
   } satisfies PreloadApi['missions'],
 
   folderWorkspaces: {

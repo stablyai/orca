@@ -1091,6 +1091,7 @@ export type PreloadApi = {
       missionId: string
       repoId: string
     }) => Promise<MissionMemberResult>
+    ensureSession: (args: { missionId: string }) => Promise<FolderWorkspace>
   }
   folderWorkspaces: {
     list: () => Promise<FolderWorkspace[]>
