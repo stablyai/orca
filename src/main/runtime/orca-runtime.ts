@@ -853,7 +853,6 @@ type RuntimeStore = {
     minimaxGroupId?: GlobalSettings['minimaxGroupId']
     minimaxUsageModels?: GlobalSettings['minimaxUsageModels']
     gitlabProjects?: GlobalSettings['gitlabProjects']
-    experimentalWorktreeSymlinks?: boolean
     mobileAutoRestoreFitMs?: number | null
     mobileEmulatorEnabled?: boolean
     mobileEmulatorDefaultDeviceUdid?: string | null
@@ -15142,11 +15141,7 @@ export class OrcaRuntimeService {
       warnings: lineageWarnings
     } = this.recordCreatedWorktreeLineage(worktree, lineageResolution)
 
-    if (
-      settings.experimentalWorktreeSymlinks &&
-      repo.symlinkPaths &&
-      repo.symlinkPaths.length > 0
-    ) {
+    if (repo.symlinkPaths && repo.symlinkPaths.length > 0) {
       await createWorktreeLinkedPaths(repo.path, created.path, repo.symlinkPaths)
     }
 
