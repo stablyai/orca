@@ -66,6 +66,11 @@ import {
   normalizeWorktreeCardProperties
 } from '../../../../shared/constants'
 import {
+  cloneDefaultAiVaultViewOptions,
+  normalizeAiVaultViewOptions,
+  type AiVaultViewOptions
+} from '../../../../shared/ai-vault-view-options'
+import {
   DEFAULT_BROWSER_PAGE_ZOOM_LEVEL,
   normalizeBrowserPageZoomLevel
 } from '../../../../shared/browser-page-zoom'
@@ -826,6 +831,8 @@ export type UISlice = {
   dismissUsageEmptyState: () => void
   groupBy: 'none' | 'workspace-status' | 'repo' | 'pr-status'
   setGroupBy: (g: UISlice['groupBy']) => void
+  aiVaultViewOptions: AiVaultViewOptions
+  setAiVaultViewOptions: (options: AiVaultViewOptions) => void
   sortBy: 'name' | 'smart' | 'recent' | 'repo' | 'manual'
   setSortBy: (s: UISlice['sortBy']) => void
   projectOrderBy: ProjectOrderBy
@@ -1934,6 +1941,12 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
     set({ groupBy: g, collapsedGroups: new Set<string>() })
   },
 
+  aiVaultViewOptions: cloneDefaultAiVaultViewOptions(),
+  setAiVaultViewOptions: (options) => {
+    window.api.ui.set({ aiVaultViewOptions: options }).catch(console.error)
+    set({ aiVaultViewOptions: options })
+  },
+
   sortBy: 'recent',
   setSortBy: (s) => set({ sortBy: s }),
 
@@ -2365,6 +2378,7 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
         rightSidebarTab: rightSidebarRoute.rightSidebarTab,
         rightSidebarExplorerView: rightSidebarRoute.rightSidebarExplorerView,
         groupBy: (ui.groupBy as UISlice['groupBy'] | 'parent') === 'parent' ? 'repo' : ui.groupBy,
+        aiVaultViewOptions: normalizeAiVaultViewOptions(ui.aiVaultViewOptions),
         sortBy,
         // Why: main-process getUI() already normalized this to a valid value
         // (defaulting to 'manual'); read it through without migrating sortBy.

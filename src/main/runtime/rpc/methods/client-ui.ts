@@ -173,6 +173,17 @@ const UiUpdate = z
     rightSidebarExplorerView: z.enum(['files', 'search']).optional(),
     rightSidebarWidth: z.number().finite().optional(),
     markdownTocPanelWidth: z.number().finite().optional(),
+    aiVaultViewOptions: z
+      .object({
+        // Disabled agents (see AiVaultViewOptions); lenient on ids so persisted
+        // state survives agent-catalog changes.
+        disabledAgents: z.array(z.string()),
+        sort: z.enum(['updated', 'created']),
+        group: z.enum(['project', 'folder', 'agent']),
+        hideEmptySessions: z.boolean()
+      })
+      .strict()
+      .optional(),
     groupBy: z.enum(['none', 'workspace-status', 'repo', 'pr-status']).optional(),
     showWorkspaceLineage: z.boolean().optional(),
     sortBy: z.enum(['name', 'smart', 'recent', 'repo', 'manual']).optional(),

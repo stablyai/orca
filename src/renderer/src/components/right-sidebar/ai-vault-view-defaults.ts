@@ -4,12 +4,14 @@ import {
   type AiVaultGroup,
   type AiVaultSort
 } from '../../../../shared/ai-vault-types'
+import { DEFAULT_AI_VAULT_VIEW_OPTIONS } from '../../../../shared/ai-vault-view-options'
 
 // Why: hide-empty used to default true; keep initial state, badge count, and Reset view
 // on one constant so a default flip cannot leave Reset pointing at the old value.
-export const DEFAULT_AI_VAULT_HIDE_EMPTY_SESSIONS = false
-export const DEFAULT_AI_VAULT_SORT: AiVaultSort = 'updated'
-export const DEFAULT_AI_VAULT_GROUP: AiVaultGroup = 'project'
+// Derived from the shared DEFAULT_AI_VAULT_VIEW_OPTIONS so persistence + UI agree.
+export const DEFAULT_AI_VAULT_HIDE_EMPTY_SESSIONS = DEFAULT_AI_VAULT_VIEW_OPTIONS.hideEmptySessions
+export const DEFAULT_AI_VAULT_SORT: AiVaultSort = DEFAULT_AI_VAULT_VIEW_OPTIONS.sort
+export const DEFAULT_AI_VAULT_GROUP: AiVaultGroup = DEFAULT_AI_VAULT_VIEW_OPTIONS.group
 
 export function countAiVaultViewAdjustments(options: {
   agents: readonly AiVaultAgent[]

@@ -10,6 +10,7 @@ import type {
   WorkspaceSessionState,
   AgentActivityDisplayMode
 } from './types'
+import { cloneDefaultAiVaultViewOptions } from './ai-vault-view-options'
 import { DEFAULT_STATUS_BAR_ITEMS } from './status-bar-defaults'
 import { DEFAULT_TERMINAL_FONT_WEIGHT } from './terminal-fonts'
 import { getDefaultTerminalQuickCommands } from './terminal-quick-commands'
@@ -466,6 +467,7 @@ export function getDefaultUIState(): PersistedUIState {
     rightSidebarExplorerView: 'files',
     rightSidebarWidth: 350,
     markdownTocPanelWidth: 240,
+    aiVaultViewOptions: cloneDefaultAiVaultViewOptions(),
     groupBy: 'repo',
     sortBy: 'recent',
     projectOrderBy: 'manual',

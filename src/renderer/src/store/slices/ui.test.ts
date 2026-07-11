@@ -2,6 +2,10 @@
 import { createStore, type StoreApi } from 'zustand/vanilla'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { getDefaultUIState, getWorktreeCardModeProperties } from '../../../../shared/constants'
+import {
+  cloneDefaultAiVaultViewOptions,
+  type AiVaultViewOptions
+} from '../../../../shared/ai-vault-view-options'
 import type {
   GitHubWorkItem,
   JiraIssue,
@@ -907,6 +911,43 @@ describe('createUISlice hydratePersistedUI', () => {
       workspaceHostScope: 'runtime:env-1',
       visibleWorkspaceHostIds: ['runtime:env-1']
     })
+  })
+
+  it('defaults AI Vault view options to all agents, updated sort, project grouping, hide-empty off', () => {
+    expect(createUIStore().getState().aiVaultViewOptions).toEqual(cloneDefaultAiVaultViewOptions())
+  })
+
+  it('hydrates persisted AI Vault view options', () => {
+    const store = createUIStore()
+    const persisted: AiVaultViewOptions = {
+      disabledAgents: ['codex'],
+      sort: 'created',
+      group: 'agent',
+      hideEmptySessions: true
+    }
+    store.getState().hydratePersistedUI(makePersistedUI({ aiVaultViewOptions: persisted }))
+    expect(store.getState().aiVaultViewOptions).toEqual(persisted)
+  })
+
+  it('falls back to default AI Vault view options when older persisted state omits them', () => {
+    const store = createUIStore()
+    store.getState().hydratePersistedUI(makePersistedUI({ aiVaultViewOptions: undefined }))
+    expect(store.getState().aiVaultViewOptions).toEqual(cloneDefaultAiVaultViewOptions())
+  })
+
+  it('persists AI Vault view option changes', () => {
+    const setUI = vi.fn(() => Promise.resolve())
+    vi.stubGlobal('window', { api: { ui: { set: setUI } } })
+    const store = createUIStore()
+    const next: AiVaultViewOptions = {
+      disabledAgents: ['gemini'],
+      sort: 'created',
+      group: 'folder',
+      hideEmptySessions: true
+    }
+    store.getState().setAiVaultViewOptions(next)
+    expect(store.getState().aiVaultViewOptions).toEqual(next)
+    expect(setUI).toHaveBeenCalledWith({ aiVaultViewOptions: next })
   })
 
   it('persists visible workspace host changes independently of focused host', () => {

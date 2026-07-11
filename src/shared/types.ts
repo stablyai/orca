@@ -1,4 +1,5 @@
 /* eslint-disable max-lines */
+import type { AiVaultViewOptions } from './ai-vault-view-options'
 import type { ExecutionHostId } from './execution-host'
 import type { RemovedSshTargetTombstone, SshRemotePtyLease, SshTarget } from './ssh-types'
 import type { Automation, AutomationExecutionTargetType, AutomationRun } from './automations-types'
@@ -3239,6 +3240,9 @@ export type PersistedUIState = {
   rightSidebarExplorerView: RightSidebarExplorerView
   rightSidebarWidth: number
   markdownTocPanelWidth?: number
+  /** Persisted Agent Session History (AI Vault) view options — agent filter,
+   *  sort, grouping, hide-empty — kept across worktree switches and reopens. */
+  aiVaultViewOptions?: AiVaultViewOptions
   groupBy: 'none' | 'workspace-status' | 'repo' | 'pr-status'
   sortBy: 'name' | 'smart' | 'recent' | 'repo' | 'manual'
   /** Project header ordering in `groupBy: 'repo'`, independent of workspace
