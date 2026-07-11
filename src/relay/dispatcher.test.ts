@@ -396,6 +396,73 @@ describe('RelayDispatcher', () => {
     expect(listener).toHaveBeenCalledWith(1)
   })
 
+  it('detaches the primary client when its write throws (frame lost, trigger reconnect)', () => {
+    // Regression: a primary-client write throw dropped the frame (possibly
+    // pty.data/pty.exit) with no resend AND without notifying detach, so the
+    // owning Orca's reconnect + PTY-reattach path never engaged until the ~20s
+    // keepalive timeout — output/pane-death were silently lost in the meantime.
+    let throwOnWrite = false
+    const detachDispatcher = new RelayDispatcher((data) => {
+      if (throwOnWrite) {
+        throw new Error('socket closed')
+      }
+      written.push(Buffer.from(data))
+    })
+    try {
+      const detachListener = vi.fn()
+      detachDispatcher.onClientDetached(detachListener)
+
+      // A frame the owning Orca must not silently miss (e.g. a pane exit).
+      throwOnWrite = true
+      detachDispatcher.notify('pty.exit', { id: 'pty-1', code: 0 })
+
+      // Fix: the write failure detaches the primary so the reconnect/reattach
+      // machinery runs promptly instead of waiting for keepalive timeout.
+      expect(detachListener).toHaveBeenCalledWith(1)
+
+      // Recovery: a reconnecting socket swaps the write via setWrite; the client
+      // is usable again and later frames flow to the new sink.
+      throwOnWrite = false
+      const recovered: Buffer[] = []
+      detachDispatcher.setWrite((data) => {
+        recovered.push(Buffer.from(data))
+      })
+      detachDispatcher.notify('pty.data', { id: 'pty-1', data: 'x' })
+      expect(recovered.length).toBeGreaterThan(0)
+    } finally {
+      detachDispatcher.dispose()
+    }
+  })
+
+  it('aborts in-flight primary requests when a client write throws', () => {
+    let throwOnWrite = false
+    const detachDispatcher = new RelayDispatcher(() => {
+      if (throwOnWrite) {
+        throw new Error('socket closed')
+      }
+    })
+    let requestSignal: AbortSignal | undefined
+    try {
+      detachDispatcher.onRequest('slow.method', async (_params, context) => {
+        requestSignal = context.signal
+        await new Promise<void>((resolve) => {
+          context.signal?.addEventListener('abort', () => resolve(), { once: true })
+        })
+      })
+      detachDispatcher.feed(
+        encodeJsonRpcFrame({ jsonrpc: '2.0', id: 9, method: 'slow.method' }, 1, 0)
+      )
+
+      expect(requestSignal?.aborted).toBe(false)
+      throwOnWrite = true
+      detachDispatcher.notify('pty.exit', { id: 'pty-1', code: 0 })
+
+      expect(requestSignal?.aborted).toBe(true)
+    } finally {
+      detachDispatcher.dispose()
+    }
+  })
+
   describe('notifyBulk (bulk lane backpressure)', () => {
     it('resolves immediately when the sink accepts the frame', async () => {
       const frames: Buffer[] = []

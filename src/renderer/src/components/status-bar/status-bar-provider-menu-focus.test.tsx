@@ -28,7 +28,8 @@ vi.mock('./tooltip', () => ({
   ProviderPanel: function ProviderPanel(props: Record<string, unknown>) {
     return { type: 'ProviderPanel', props }
   },
-  barColor: () => 'bg-green-500'
+  barColor: () => 'bg-green-500',
+  clampUsedPercent: (n: number) => Math.max(0, Math.min(100, Math.round(n)))
 }))
 
 vi.mock('@/components/ui/dropdown-menu', () => ({

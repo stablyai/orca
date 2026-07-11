@@ -4,6 +4,7 @@ import {
   SOURCE_CONTROL_ACTION_VARIABLES,
   SOURCE_CONTROL_LAUNCH_ACTION_IDS,
   SOURCE_CONTROL_LAUNCH_ACTION_LABELS,
+  DEFAULT_SOURCE_CONTROL_ACTION_COMMAND_TEMPLATES,
   readSourceControlActionDefault,
   renderSourceControlActionCommandTemplate,
   resolveSourceControlActionCommandTemplate,
@@ -125,6 +126,31 @@ describe('source-control AI launch action defaults', () => {
       '{basePrompt}'
     )
     expect(SOURCE_CONTROL_ACTION_VARIABLES.resolveComments).toEqual(['basePrompt'])
+  })
+
+  it('exposes push failure recovery as a launch action with basePrompt defaults', () => {
+    expect(SOURCE_CONTROL_LAUNCH_ACTION_IDS).toContain('fixPushFailure')
+    expect(SOURCE_CONTROL_LAUNCH_ACTION_LABELS.fixPushFailure).toBe('Push failure fixes')
+    expect(DEFAULT_SOURCE_CONTROL_ACTION_COMMAND_TEMPLATES.fixPushFailure).toBe('{basePrompt}')
+    expect(resolveSourceControlActionCommandTemplate(undefined, 'fixPushFailure')).toBe(
+      '{basePrompt}'
+    )
+    expect(SOURCE_CONTROL_ACTION_VARIABLES.fixPushFailure).toEqual(['basePrompt'])
+    expect(
+      normalizeSourceControlAiActionDefaults({
+        fixPushFailure: {
+          agentId: 'codex',
+          commandInputTemplate: '{basePrompt}',
+          agentArgs: '--model gpt-5.4-mini'
+        }
+      })
+    ).toEqual({
+      fixPushFailure: {
+        agentId: 'codex',
+        commandInputTemplate: '{basePrompt}',
+        agentArgs: '--model gpt-5.4-mini'
+      }
+    })
   })
 
   it('renders known template variables and leaves unknown variables visible', () => {

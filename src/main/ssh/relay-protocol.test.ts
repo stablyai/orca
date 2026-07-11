@@ -8,9 +8,26 @@ import {
   FrameDecoder,
   parseJsonRpcMessage,
   parseUnameToRelayPlatform,
+  isGitResponseStreamMarker,
   type JsonRpcRequest,
   type DecodedFrame
 } from './relay-protocol'
+
+describe('git response stream marker', () => {
+  it('accepts only complete non-negative integer metadata', () => {
+    expect(
+      isGitResponseStreamMarker({
+        __orcaGitResponseStream: { streamId: 1, totalBytes: 1024, chunkCount: 2 }
+      })
+    ).toBe(true)
+    expect(isGitResponseStreamMarker({ __orcaGitResponseStream: {} })).toBe(false)
+    expect(
+      isGitResponseStreamMarker({
+        __orcaGitResponseStream: { streamId: -1, totalBytes: 1024, chunkCount: 2 }
+      })
+    ).toBe(false)
+  })
+})
 
 describe('frame encoding', () => {
   it('encodes a frame with 13-byte header', () => {

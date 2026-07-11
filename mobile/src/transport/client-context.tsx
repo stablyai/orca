@@ -20,6 +20,7 @@ import {
   type ReactNode
 } from 'react'
 import { connect, type RpcClient } from './rpc-client'
+import { connectionLogStore } from './connection-log-buffer'
 import { subscribeConnectionRevivalTriggers } from './connection-revival-triggers'
 import { loadHosts } from './host-store'
 import type { ConnectionState, HostProfile } from './types'
@@ -133,6 +134,11 @@ export function RpcClientProvider({ children }: { children: ReactNode }) {
           return null
         }
         if (!host) {
+          // Why: returning silently leaves mounted screens on a permanent
+          // spinner (STA-1511) — surface 'disconnected' so they can render
+          // their waiting/retry affordance instead.
+          notifyHostState(hostId, 'disconnected')
+          notifyAllHosts()
           return null
         }
       }
@@ -145,7 +151,12 @@ export function RpcClientProvider({ children }: { children: ReactNode }) {
 
       let client: RpcClient
       try {
-        client = connect(host.endpoint, host.deviceToken, host.publicKeyB64)
+        client = connect(host.endpoint, host.deviceToken, host.publicKeyB64, {
+          // Why: retain reconnect lifecycle events for the Connection Log
+          // screen — without this the reasons a host is stuck live only in
+          // console.log, which users can't see or share.
+          onLog: (entry) => connectionLogStore.append(hostId, entry)
+        })
       } catch {
         // Why: connect() can throw synchronously if the public key is
         // malformed or the endpoint URL is invalid. Notify so the UI
@@ -405,6 +416,12 @@ export function useHostClient(hostId: string | undefined): {
       const found = ctx.getAllClients().find((entry) => entry.hostId === hostId)
       if (found && found.client !== clientRef.current) {
         clientRef.current = found.client
+        force((n) => n + 1)
+      } else if (!found && clientRef.current) {
+        // Why: closeHost deletes the entry without a replacement; holding the
+        // closed client would let screens keep issuing requests that can never
+        // resolve (STA-1511). Null it so they render disconnected states.
+        clientRef.current = null
         force((n) => n + 1)
       }
     })

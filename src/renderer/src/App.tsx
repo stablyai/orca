@@ -7,6 +7,7 @@ import {
   useMemo,
   useRef,
   useState,
+  useSyncExternalStore,
   type SetStateAction
 } from 'react'
 import { lazyWithRetry as lazy } from '@/lib/lazy-with-retry'
@@ -64,6 +65,7 @@ import { onOnboardingReopened } from './components/onboarding/show-onboarding-ev
 import { shouldShowOnboarding } from './components/onboarding/should-show-onboarding'
 import { MarkdownTemplatePicker } from './components/editor/MarkdownTemplatePicker'
 import { FloatingTerminalToggleButton } from './components/floating-terminal/FloatingTerminalToggleButton'
+import { OrcaProfileSwitcher } from './components/orca-profiles/OrcaProfileSwitcher'
 import {
   TOGGLE_FLOATING_TERMINAL_EVENT,
   requestFloatingTerminalOpenMaximized
@@ -128,6 +130,8 @@ import {
 } from './startup/startup-diagnostics'
 import { shouldRenderPetOverlay } from './components/pet/pet-overlay-visibility'
 import { applyDocumentTheme } from './lib/document-theme'
+import { getSystemPrefersDark } from './lib/terminal-theme'
+import { publishTerminalViewAttributesAtAppStart } from './components/terminal-pane/terminal-appearance'
 import { isEditableTarget } from './lib/editable-target'
 import { getSelectedTextForFileSearch } from './lib/file-search-selection'
 import { useShortcutLabel } from './hooks/useShortcutLabel'
@@ -169,6 +173,15 @@ import { showTerminalShortcutCaptureNotification } from '@/lib/terminal-shortcut
 import { resolveMountedLazyModalIds, type LazyModalId } from './lazy-modal-mount-state'
 import { translate } from '@/i18n/i18n'
 import PinnedTabCloseDialog from './components/terminal-pane/PinnedTabCloseDialog'
+import {
+  hasRequestedBackgroundTerminalWorktreeMount,
+  subscribeBackgroundTerminalWorktreeMountRequests
+} from './components/terminal/background-terminal-worktree-mount'
+
+// Why: agents alive during a hard kill (crash, forced update install) need a
+// reasonably fresh resume record on disk; one minute bounds the lost window
+// without measurable per-tick cost (the capture skips unchanged records).
+const SLEEPING_AGENT_RESUME_CAPTURE_INTERVAL_MS = 60_000
 
 const isMac = navigator.userAgent.includes('Mac')
 const isWindows = !isMac && navigator.userAgent.includes('Windows')
@@ -418,6 +431,7 @@ function App(): React.JSX.Element {
       fetchFolderWorkspacesForAllHosts: s.fetchFolderWorkspacesForAllHosts,
       fetchAllWorktrees: s.fetchAllWorktrees,
       fetchWorktreeLineage: s.fetchWorktreeLineage,
+      fetchOrcaProfiles: s.fetchOrcaProfiles,
       fetchSettings: s.fetchSettings,
       fetchKeybindings: s.fetchKeybindings,
       initGitHubCache: s.initGitHubCache,
@@ -479,6 +493,11 @@ function App(): React.JSX.Element {
   const worktreeSidebarScrollAnchorRef = useRef<VirtualizedScrollAnchor>(null)
   const floatingVisibleTabCount = useAppStore(selectFloatingVisibleTabCount)
   const workspaceSessionReady = useAppStore((s) => s.workspaceSessionReady)
+  const backgroundTerminalMountRequested = useSyncExternalStore(
+    subscribeBackgroundTerminalWorktreeMountRequests,
+    hasRequestedBackgroundTerminalWorktreeMount,
+    hasRequestedBackgroundTerminalWorktreeMount
+  )
   const keybindings = useAppStore((s) => s.keybindings)
   const updateStatus = useAppStore((s) => s.updateStatus)
   const activeContextualTourId = useAppStore((s) => s.activeContextualTourId)
@@ -495,14 +514,16 @@ function App(): React.JSX.Element {
     floatingTerminalEnabled &&
     (floatingTerminalTriggerLocation === 'floating-button' || !statusBarVisible)
   const hasMountedTerminalWorkbenchRef = useRef(false)
-  if (activeWorktreeId !== null) {
+  if (activeWorktreeId !== null || backgroundTerminalMountRequested) {
     hasMountedTerminalWorkbenchRef.current = true
   }
   // Why: skip the terminal bundle on the no-workspace landing path, but once a
   // workspace has mounted, keep Terminal-owned hidden panes alive through sleep
   // and shutdown transitions where activeWorktreeId can briefly become null.
   const shouldMountTerminalWorkbench =
-    activeWorktreeId !== null || hasMountedTerminalWorkbenchRef.current
+    activeWorktreeId !== null ||
+    backgroundTerminalMountRequested ||
+    hasMountedTerminalWorkbenchRef.current
   // Why: visible worktree creation owns its faux tab strip from start to finish;
   // the previous workspace must stay mounted for retention without rendering
   // real chrome.
@@ -864,10 +885,22 @@ function App(): React.JSX.Element {
       const startupStartedAt = performance.now()
       logRendererStartupDiagnostic('startup-chain-start')
       try {
+        // Why: profile state only feeds the switcher and the add-project
+        // advisory — nothing in the hydration chain reads it synchronously,
+        // so it must not add a serial IPC round-trip before fetchSettings.
+        void actions.fetchOrcaProfiles()
         // Why: repo/worktree hydration routes through settings.activeRuntimeEnvironmentId.
         // Load settings first so a persisted remote runtime does not boot against
         // the local filesystem and then hydrate stale local workspace state.
         await timeRendererStartupStep('fetch-settings', () => actions.fetchSettings())
+        // Why here: hidden-at-launch PTYs (background terminal reconnects,
+        // agent sessions) can query OSC 10/11 before any terminal pane mounts
+        // and main's responder is silent-until-first-push. Publish composed
+        // view attributes as soon as settings exist, before any spawn below.
+        publishTerminalViewAttributesAtAppStart(
+          useAppStore.getState().settings,
+          getSystemPrefersDark()
+        )
         // Why: keybindings + onboarding are main-side reads with no dependency
         // on the catalog/session steps below, so start them now and await them
         // at their original positions — the round-trips overlap the local
@@ -1347,6 +1380,22 @@ function App(): React.JSX.Element {
     return () => window.removeEventListener('beforeunload', captureAndFlush)
   }, [])
 
+  // Why: beforeunload never fires on a hard kill (crash, forced update
+  // install, TerminateProcess), so agents alive at that moment would leave no
+  // resume record. This periodic capture stores only agent session ids — not
+  // scrollback, see the no-periodic-scrollback note below — and the store
+  // action skips unchanged records, so idle ticks write nothing; real changes
+  // flow through the debounced session-write subscriber.
+  useEffect(() => {
+    const timer = window.setInterval(() => {
+      if (!shouldPersistWorkspaceSession(useAppStore.getState())) {
+        return
+      }
+      useAppStore.getState().captureAllSleepingAgentSessions()
+    }, SLEEPING_AGENT_RESUME_CAPTURE_INTERVAL_MS)
+    return () => window.clearInterval(timer)
+  }, [])
+
   // Own the single window-close-request subscription at the always-mounted App
   // root. Why: the rich confirmation flow lives in Terminal, which is not
   // mounted on the no-workspace landing page (and is lazy-loaded elsewhere), so
@@ -1494,6 +1543,8 @@ function App(): React.JSX.Element {
   // Why: suppress right sidebar controls on full-page navigation surfaces
   // since those surfaces intentionally own the full content area.
   const showRightSidebarControls = !creationLayoutActive && canShowRightSidebarForView(activeView)
+  const showProfileSwitcherInSidebarFooter = showSidebar && sidebarOpen
+  const showProfileSwitcherInTopRight = !showProfileSwitcherInSidebarFooter
 
   const handleToggleExpand = (): void => {
     if (!effectiveActiveTabId) {
@@ -2135,6 +2186,7 @@ function App(): React.JSX.Element {
           </TooltipContent>
         </Tooltip>
       )}
+      {showProfileSwitcherInTopRight ? <OrcaProfileSwitcher /> : null}
       {/* Why: when the right sidebar is open, its own header renders
       an identical close button — hide this copy so only one is
       visible at a time. */}
@@ -2144,6 +2196,25 @@ function App(): React.JSX.Element {
       {hasCustomTitleBar && <div className="window-controls-titlebar-spacer" />}
     </>
   )
+  const workspaceProfileSwitcher =
+    showProfileSwitcherInTopRight &&
+    workspaceChromeActive &&
+    leftTitlebarChromeLayout.shouldMount &&
+    !stackedSidebarOpen ? (
+      <div
+        className="absolute top-0 z-10 flex h-[36px] items-center"
+        style={
+          {
+            right: showRightSidebarControls
+              ? 'calc(var(--window-controls-width) + 42px)'
+              : 'var(--window-controls-width)',
+            WebkitAppRegion: 'no-drag'
+          } as React.CSSProperties
+        }
+      >
+        <OrcaProfileSwitcher />
+      </div>
+    ) : null
 
   return (
     <div
@@ -2321,6 +2392,7 @@ function App(): React.JSX.Element {
                             {rightSidebarToggle}
                           </div>
                         )}
+                        {workspaceProfileSwitcher}
                         <div className="flex flex-1 min-w-0 min-h-0 flex-col">
                           {shouldMountTerminalWorkbench ? (
                             <div

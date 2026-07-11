@@ -18,6 +18,7 @@ if (reportPaths.length === 0) {
 const BUDGETS = {
   maxMedianKeyLatencyMs: 75,
   maxWorstKeyLatencyMs: 300,
+  maxRevisitLatencyMs: 300,
   maxTimerDriftMs: 150,
   maxScrollLatencyMs: 150,
   maxRestoreLatencyMs: 1000,
@@ -81,6 +82,12 @@ function validateRow(row) {
     'ms'
   )
   addBudgetCheck(
+    'revisit latency',
+    parseMs(row.revisit, 'revisit', row, failures),
+    BUDGETS.maxRevisitLatencyMs,
+    'ms'
+  )
+  addBudgetCheck(
     'timer drift',
     parseMs(row.maxTimerDrift, 'maxTimerDrift', row, failures),
     BUDGETS.maxTimerDriftMs,
@@ -113,6 +120,14 @@ function validateRow(row) {
     parseCount(row.rendererDroppedBacklogs, 'rendererDroppedBacklogs', row, failures),
     BUDGETS.maxRendererDroppedBacklogs
   )
+  // Why: parked-memory rows carry heap/view-count metrics with no latency
+  // budget; recognize them so memory-only scenarios pass the gate instead of
+  // tripping the "no recognized budget metrics" guard.
+  for (const fieldName of ['heapUsedMB', 'liveTerminals', 'livePaneManagers']) {
+    if (parseCount(row[fieldName], fieldName, row, failures) != null) {
+      checkedMetricCount += 1
+    }
+  }
   if (checkedMetricCount === 0) {
     failures.push(`${row.source} ${row.scenario}: no recognized budget metrics found`)
   }

@@ -93,8 +93,14 @@ export function ProviderIcon({ provider }: { provider: string }): React.JSX.Elem
   if (provider === 'kimi') {
     return <AgentIcon agent="kimi" size={13} />
   }
+  if (provider === 'antigravity') {
+    return <AgentIcon agent="antigravity" size={13} />
+  }
   if (provider === 'minimax') {
     return <MiniMaxIcon size={13} />
+  }
+  if (provider === 'grok') {
+    return <AgentIcon agent="grok" size={13} />
   }
   return <ClaudeIcon size={13} />
 }
@@ -185,13 +191,19 @@ export function getWindowSections(
 // `text-background` for primary text and `text-background/50` for secondary
 // to stay readable inside the inverted tooltip container.
 
-// Why: color-coded by remaining capacity so users can quickly gauge urgency.
-// Green = comfortable (>40% left), yellow = caution (20-40%), red = critical (<20%).
-export function barColor(leftPct: number): string {
-  if (leftPct > 40) {
+// Why: single clamp for bar width + label so status bar and tooltip never diverge.
+export function clampUsedPercent(usedPercent: number): number {
+  return Math.max(0, Math.min(100, Math.round(usedPercent)))
+}
+
+// Why: color-coded by consumption so users can quickly gauge urgency.
+// Matches common harness usage meters (Claude/Codex): bars fill with % used.
+// Green = comfortable (<60% used), yellow = caution (60-80%), red = critical (≥80%).
+export function barColor(usedPct: number): string {
+  if (usedPct < 60) {
     return 'bg-green-500'
   }
-  if (leftPct > 20) {
+  if (usedPct < 80) {
     return 'bg-yellow-500'
   }
   return 'bg-red-500'
@@ -276,7 +288,9 @@ export function ProviderPanel({
     if (!w) {
       return null
     }
-    const leftPct = Math.max(0, Math.round(100 - w.usedPercent))
+    // Why: show % used (consumption), not remaining — matches Claude/Codex
+    // harness meters and avoids the "full green bar = exhausted" misread (#7551).
+    const usedPct = clampUsedPercent(w.usedPercent)
     const resetLabel = w.resetsAt ? formatResetCountdown(w.resetsAt - Date.now()) : null
 
     return (
@@ -284,14 +298,14 @@ export function ProviderPanel({
         <div className={`font-medium ${textClass}`}>{label}</div>
         <div className={`h-[6px] w-full overflow-hidden rounded-full ${emptyBarClass}`}>
           <div
-            className={`h-full rounded-full ${barColor(leftPct)} transition-all duration-300`}
-            style={{ width: `${Math.min(100, Math.max(0, leftPct))}%` }}
+            className={`h-full rounded-full ${barColor(usedPct)} transition-all duration-300`}
+            style={{ width: `${usedPct}%` }}
           />
         </div>
         <div className={`flex justify-between ${mutedClass}`}>
           <span>
-            {leftPct}
-            {translate('auto.components.status.bar.tooltip.cedb7b99e3', '% left')}
+            {usedPct}
+            {translate('auto.components.status.bar.tooltip.cedb7b99e3', '% used')}
           </span>
           {resetLabel && <span>{resetLabel}</span>}
         </div>

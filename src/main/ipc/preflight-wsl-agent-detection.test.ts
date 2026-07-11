@@ -16,6 +16,8 @@ vi.mock('child_process', () => {
 })
 
 import { detectWslCommandsOnPath } from './preflight-wsl-agent-detection'
+import { buildPosixCommandPathLookupScript } from '../../shared/posix-command-path-lookup'
+import { escapeWslShCommandForWindows } from '../../shared/wsl-login-shell-command'
 
 function lastShCommandPayload(): string {
   const call = execFileAsyncMock.mock.calls.at(-1)
@@ -45,6 +47,20 @@ describe('detectWslCommandsOnPath', () => {
     // by a newline. Regression guard for issue #5325.
     expect(payload).not.toContain('fi done')
     expect(payload).toContain('fi\ndone')
+  })
+
+  it('uses the shared alias- and function-neutral PATH lookup', async () => {
+    execFileAsyncMock.mockResolvedValue({ stdout: '', stderr: '' })
+
+    await detectWslCommandsOnPath({ distro: 'Ubuntu' }, ['claude', 'codex'])
+
+    const payload = lastShCommandPayload()
+    const lookupScript = buildPosixCommandPathLookupScript({
+      kind: 'shell-variable',
+      name: 'cmd'
+    })
+    expect(payload).toContain(escapeWslShCommandForWindows(lookupScript))
+    expect(payload).not.toContain('type -P')
   })
 
   it('parses detected commands from prefixed stdout', async () => {

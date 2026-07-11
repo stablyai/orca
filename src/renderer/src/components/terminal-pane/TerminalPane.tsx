@@ -24,7 +24,17 @@ import TerminalSearch from '@/components/TerminalSearch'
 import type { PtyTransport } from './pty-transport'
 import { fitPanes, isWindowsUserAgent } from './pane-helpers'
 import { getConnectionId, getConnectionIdFromState } from '@/lib/connection-context'
-import { getRuntimeEnvironmentIdForWorktree } from '@/lib/worktree-runtime-owner'
+import {
+  getExplicitRuntimeEnvironmentIdForWorktree,
+  getRuntimeEnvironmentIdForWorktree
+} from '@/lib/worktree-runtime-owner'
+import {
+  selectRuntimeAwareSshStatus,
+  selectRuntimeAwareSshTargetLabel,
+  selectRuntimeAwareSshTargetRemoved
+} from '@/store/slices/runtime-environment-ssh'
+import { hydrateRuntimeEnvironmentSshState } from '@/runtime/runtime-environment-ssh-state'
+import { isPairedWebClientWindow } from '@/lib/desktop-window-chrome'
 import { handleInternalTerminalFileDrop } from './terminal-drop-handler'
 import { recordTerminalUserInputForLeaf } from './terminal-input-activity'
 import {
@@ -33,6 +43,7 @@ import {
   serializeTerminalLayout
 } from './layout-serialization'
 import { makePaneKey } from '../../../../shared/stable-pane-id'
+import type { TerminalKittyKeyboardModeTracker } from '../../../../shared/terminal-kitty-keyboard-mode-tracker'
 import {
   applyExpandedLayoutTo,
   cancelPendingPaneSizeRefreshFrames,
@@ -89,6 +100,7 @@ import {
 } from '@/lib/pane-manager/mobile-driver-state'
 import { shouldChatTakeOverMobileSurface } from '../native-chat/native-chat-send-eligibility'
 import { canToggleNativeChat } from '../native-chat/native-chat-availability'
+import { isNativeChatTranscriptLocalReadable } from '@/lib/native-chat-transcript-readability'
 import type { AgentType } from '../../../../shared/agent-status-types'
 import { resolvePaneKeyForManager } from '@/lib/pane-manager/pane-key-resolution'
 import { safeFit } from '@/lib/pane-manager/pane-tree-ops'
@@ -285,6 +297,10 @@ export default function TerminalPane({
   // read this map at dispatch time to pass cwd into splitPane.
   const paneCwdRef = useRef<Map<number, { cwd: string; confirmed: boolean }>>(new Map())
   const paneMode2031Ref = useRef<Map<number, boolean>>(new Map())
+  // Why: per-pane mirror of the kitty keyboard flags negotiated by the pane's
+  // application (fed from PTY output in pty-connection). The keyboard policy
+  // reads it to encode Option chords as kitty CSI-u for opted-in TUIs.
+  const paneKittyKeyboardModesRef = useRef<Map<number, TerminalKittyKeyboardModeTracker>>(new Map())
   const paneLastThemeModeRef = useRef<Map<number, 'dark' | 'light'>>(new Map())
   const panePtyBindingsRef = useRef<Map<number, IDisposable>>(new Map())
   // Why: tracks panes currently replaying recorded PTY bytes into xterm
@@ -306,16 +322,47 @@ export default function TerminalPane({
     }
     return connectionId
   })
+  const nativeChatTranscriptIsLocalReadable = useAppStore((store) =>
+    isNativeChatTranscriptLocalReadable(getConnectionIdFromState(store, worktreeId))
+  )
+  // Which machine's SSH store this target belongs to: a remote Orca server's
+  // per-environment bucket, or null for this machine's local SSH maps. The
+  // explicit-owner resolver never lets a merely focused runtime make a
+  // local-owned workspace look remote. The paired web client mirrors its one
+  // host through the local maps instead.
+  const sshReconnectEnvironmentId = useAppStore((store) =>
+    sshReconnectTargetId && !isPairedWebClientWindow()
+      ? getExplicitRuntimeEnvironmentIdForWorktree(store, worktreeId)
+      : null
+  )
   const sshReconnectStatus = useAppStore((store) =>
     sshReconnectTargetId
-      ? (store.sshConnectionStates.get(sshReconnectTargetId)?.status ?? 'disconnected')
+      ? selectRuntimeAwareSshStatus(store, sshReconnectEnvironmentId, sshReconnectTargetId)
       : null
   )
   const sshReconnectTargetLabel = useAppStore((store) =>
     sshReconnectTargetId
-      ? (store.sshTargetLabels.get(sshReconnectTargetId) ?? sshReconnectTargetId)
+      ? selectRuntimeAwareSshTargetLabel(store, sshReconnectEnvironmentId, sshReconnectTargetId)
       : ''
   )
+  // Why: the target was removed entirely (a ghost) when it's no longer a known
+  // SSH target on its owning host. Reconnecting to it can only fail ("SSH
+  // target not found"), so the overlay must offer to remove the workspace
+  // instead of Connect. The selector requires positive removal evidence.
+  const sshReconnectTargetRemoved = useAppStore((store) =>
+    sshReconnectTargetId
+      ? selectRuntimeAwareSshTargetRemoved(store, sshReconnectEnvironmentId, sshReconnectTargetId)
+      : false
+  )
+  useEffect(() => {
+    if (!sshReconnectEnvironmentId) {
+      return
+    }
+    // Why: an SSH-backed workspace can be mirrored before its owning
+    // environment's bucket ever hydrated (no-op once hydrated), and overlay
+    // state must come from fetched evidence, never from an empty default.
+    void hydrateRuntimeEnvironmentSshState(sshReconnectEnvironmentId).catch(() => {})
+  }, [sshReconnectEnvironmentId])
 
   useVisibleTerminalTabClaim({ isVisible, tabId })
 
@@ -681,6 +728,7 @@ export default function TerminalPane({
         launchAgent: detectedAgent ? null : terminalTab?.launchAgent,
         detectedAgent,
         resolvedAgent: detectedAgent ? null : resolveTitleAgentForLeaf(leafId),
+        nativeChatTranscriptIsLocalReadable,
         isChatViewMode: isChatViewForLeaf
       })
     },
@@ -689,6 +737,7 @@ export default function TerminalPane({
       effectiveChatViewMode,
       chatLeafId,
       nativeChatEnabled,
+      nativeChatTranscriptIsLocalReadable,
       terminalTab?.launchAgent,
       resolveTitleAgentForLeaf
     ]
@@ -1428,6 +1477,7 @@ export default function TerminalPane({
     paneTransportsRef,
     paneCwdRef,
     paneMode2031Ref,
+    paneKittyKeyboardModesRef,
     paneLastThemeModeRef,
     panePtyBindingsRef,
     replayingPanesRef,
@@ -1652,6 +1702,7 @@ export default function TerminalPane({
         startup: { command: 'codex' },
         paneTransportsRef,
         paneMode2031Ref,
+        paneKittyKeyboardModesRef,
         paneLastThemeModeRef,
         replayingPanesRef,
         isActiveRef,
@@ -1734,6 +1785,7 @@ export default function TerminalPane({
     keyboardScopeRef: containerRef,
     managerRef,
     paneTransportsRef,
+    panePtyBindingsRef,
     paneCwdRef,
     fallbackCwd: cwd ?? '',
     expandedPaneIdRef,
@@ -1751,6 +1803,7 @@ export default function TerminalPane({
     searchOpenRef,
     searchStateRef,
     macOptionAsAltRef,
+    paneKittyKeyboardModesRef,
     keybindings,
     terminalShortcutPolicy: settings?.terminalShortcutPolicy ?? 'orca-first'
   })
@@ -2972,6 +3025,9 @@ export default function TerminalPane({
           targetId={sshReconnectTargetId}
           targetLabel={sshReconnectTargetLabel}
           status={sshReconnectStatus}
+          targetRemoved={sshReconnectTargetRemoved}
+          worktreeId={worktreeId}
+          sshOwnerEnvironmentId={sshReconnectEnvironmentId}
         />
       ) : null}
       <DaemonActionDialog api={daemonActions} />

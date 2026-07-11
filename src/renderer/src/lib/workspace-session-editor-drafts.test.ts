@@ -78,4 +78,49 @@ describe('workspace session editor drafts', () => {
       })
     ])
   })
+
+  it('persists the disk baseline signature only alongside a dirty draft', () => {
+    const payload = buildWorkspaceSessionPayload(
+      createSnapshot({
+        openFiles: [
+          {
+            id: '/tmp/dirty.md',
+            filePath: '/tmp/dirty.md',
+            relativePath: 'dirty.md',
+            worktreeId: 'wt-1',
+            language: 'markdown',
+            mode: 'edit',
+            isDirty: true,
+            lastKnownDiskSignature: 'abc123'
+          } as never,
+          {
+            id: '/tmp/clean.md',
+            filePath: '/tmp/clean.md',
+            relativePath: 'clean.md',
+            worktreeId: 'wt-1',
+            language: 'markdown',
+            mode: 'edit',
+            isDirty: false,
+            lastKnownDiskSignature: 'def456'
+          } as never
+        ],
+        editorDrafts: {
+          '/tmp/dirty.md': 'unsaved edits'
+        }
+      })
+    )
+
+    expect(payload.openFilesByWorktree?.['wt-1']).toEqual([
+      expect.objectContaining({
+        filePath: '/tmp/dirty.md',
+        dirtyDraftContent: 'unsaved edits',
+        lastKnownDiskSignature: 'abc123'
+      }),
+      // Why: a clean tab has no draft to conflict-check on restore, and
+      // persisting the signature anyway would bloat every session write.
+      expect.not.objectContaining({
+        lastKnownDiskSignature: expect.any(String)
+      })
+    ])
+  })
 })

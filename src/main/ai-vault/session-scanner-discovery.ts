@@ -70,6 +70,8 @@ export async function walkSessionFiles(
   options: {
     extensions: Set<string>
     filePredicate?: (path: string) => boolean
+    // Return false to skip descending into a directory (matched by its name),
+    // so pruned subtrees are never stat'd or parsed.
     directoryPredicate?: (name: string) => boolean
   }
 ): Promise<string[]> {

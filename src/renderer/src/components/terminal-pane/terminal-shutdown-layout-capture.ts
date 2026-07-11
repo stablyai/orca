@@ -6,6 +6,7 @@ import { serializeTerminalLayout } from './layout-serialization'
 import { mergeCapturedLeafState } from './merge-captured-leaf-state'
 import { resolveTerminalLayoutActiveLeafId } from './terminal-layout-leaf-ids'
 import { TERMINAL_SCROLLBACK_SESSION_BUFFER_BYTE_LIMIT } from '../../../../shared/terminal-scrollback-limits'
+import { serializeWithAbsoluteCursor } from '../../../../shared/terminal-serialize-absolute-cursor'
 import { measureUtf8ByteLength } from '../../../../shared/utf8-byte-limits'
 
 const MAX_BUFFER_BYTES = TERMINAL_SCROLLBACK_SESSION_BUFFER_BYTE_LIMIT
@@ -66,7 +67,12 @@ export function captureTerminalShutdownLayout({
         flushTerminalOutput(pane.terminal)
         const leafId = pane.leafId
         let scrollback = pane.terminal.options.scrollback ?? 10_000
-        let serialized = pane.serializeAddon.serialize({ scrollback })
+        // Why serializeWithAbsoluteCursor: these buffers replay into fresh
+        // xterms on session restore, and SerializeAddon's relative cursor
+        // restore lands one column short after a wrap-pending final row.
+        let serialized = serializeWithAbsoluteCursor(pane.serializeAddon, pane.terminal, {
+          scrollback
+        })
         // Why: SSH sleep keeps this string in session JSON; cap by UTF-8
         // bytes so non-ASCII scrollback cannot bypass the intended bound.
         if (!fitsSessionScrollbackByteLimit(serialized) && scrollback > 1) {
@@ -75,7 +81,9 @@ export function captureTerminalShutdownLayout({
           let best = ''
           while (lo <= hi) {
             const mid = Math.floor((lo + hi) / 2)
-            const attempt = pane.serializeAddon.serialize({ scrollback: mid })
+            const attempt = serializeWithAbsoluteCursor(pane.serializeAddon, pane.terminal, {
+              scrollback: mid
+            })
             if (fitsSessionScrollbackByteLimit(attempt)) {
               best = attempt
               lo = mid + 1

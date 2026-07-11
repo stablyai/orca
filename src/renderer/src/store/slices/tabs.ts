@@ -1871,6 +1871,16 @@ export const createTabsSlice: StateCreator<AppState, [], [], TabsSlice> = (set, 
             }))
     const reconciledUnifiedTabs =
       restoredLegacyTabs.length > 0 ? [...unifiedTabs, ...restoredLegacyTabs] : unifiedTabs
+    // Why: when a freshly-ensured group has no active tab yet, seed it from the
+    // worktree's remembered selection before the first restored tab. Otherwise
+    // returning to a worktree whose terminals only exist in the runtime slice
+    // always reopens on Terminal 1 and drops the tab the user left on.
+    const rememberedLegacyActiveTabId = state.activeTabIdByWorktree[worktreeId]
+    const restoredLegacyTabIds = new Set(restoredLegacyTabs.map((tab) => tab.id))
+    const legacyFallbackActiveTabId =
+      rememberedLegacyActiveTabId && restoredLegacyTabIds.has(rememberedLegacyActiveTabId)
+        ? rememberedLegacyActiveTabId
+        : (restoredLegacyTabs[0]?.id ?? null)
     const reconciledGroups =
       restoredLegacyTabs.length > 0 && reconciliationGroup
         ? updateGroup(ensuredGroupState!.groupsByWorktree[worktreeId] ?? [], {
@@ -1879,7 +1889,7 @@ export const createTabsSlice: StateCreator<AppState, [], [], TabsSlice> = (set, 
             // after split groups became the source of truth. Restoring them
             // into the active/root group keeps existing live PTYs reachable
             // instead of making activation spawn a duplicate "Terminal 2".
-            activeTabId: reconciliationGroup.activeTabId ?? restoredLegacyTabs[0]?.id ?? null,
+            activeTabId: reconciliationGroup.activeTabId ?? legacyFallbackActiveTabId,
             tabOrder: dedupeTabOrder([
               ...reconciliationGroup.tabOrder,
               ...restoredLegacyTabs.map((tab) => tab.id)

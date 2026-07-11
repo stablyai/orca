@@ -135,7 +135,13 @@ export function buildEditorSessionData(
       language: f.language,
       isPreview: f.isPreview || undefined,
       runtimeEnvironmentId: f.runtimeEnvironmentId,
-      ...(dirtyDraftContent !== undefined ? { dirtyDraftContent } : {})
+      ...(dirtyDraftContent !== undefined ? { dirtyDraftContent } : {}),
+      // Why: the edit baseline travels with the dirty draft so a restore can
+      // re-derive a changed-on-disk conflict before autosave may overwrite an
+      // agent write that landed while the app was closed.
+      ...(dirtyDraftContent !== undefined && f.lastKnownDiskSignature
+        ? { lastKnownDiskSignature: f.lastKnownDiskSignature }
+        : {})
     })
     const ids =
       editFileIdsByWorktree[f.worktreeId] ?? (editFileIdsByWorktree[f.worktreeId] = new Set())

@@ -3,6 +3,10 @@
 // handler only sees plaintext JSON, identical to the Unix socket path.
 import type { WebSocket } from 'ws'
 import { deriveSharedKey, encrypt, decrypt, encryptBytes, decryptBytes } from './e2ee-crypto'
+import {
+  createWsOutboundBackpressureQueue,
+  type WsOutboundBackpressureQueue
+} from '../../../shared/ws-outbound-backpressure-queue'
 
 type ChannelState = 'awaiting_hello' | 'awaiting_auth' | 'ready'
 
@@ -48,6 +52,11 @@ export class E2EEChannel {
       ) => void)
     | null = null
   private binaryMessageHandler: ((plaintext: Uint8Array<ArrayBufferLike>) => void) | null = null
+  // Why: the streaming JSON reply path (e.g. legacy terminal.subscribe) has no
+  // seq/resync, so it must never drop frames under backpressure. Hold text
+  // replies in order while bufferedAmount is over the cap and drain as it
+  // clears; only a wedged link (hard cap) closes the socket for a clean resync.
+  private textReplyQueue: WsOutboundBackpressureQueue<string> | null = null
 
   deviceToken: string | null = null
 
@@ -128,7 +137,7 @@ export class E2EEChannel {
       if (!this.sharedKey || this.ws.readyState !== this.ws.OPEN) {
         return
       }
-      this.ws.send(encrypt(response, this.sharedKey))
+      this.ensureTextReplyQueue().enqueue(encrypt(response, this.sharedKey))
     }
     const encryptedBinaryReply = (response: Uint8Array<ArrayBufferLike>): boolean => {
       if (!this.sharedKey || this.ws.readyState !== this.ws.OPEN) {
@@ -215,6 +224,22 @@ export class E2EEChannel {
     this.onReady(this)
   }
 
+  private ensureTextReplyQueue(): WsOutboundBackpressureQueue<string> {
+    if (!this.textReplyQueue) {
+      this.textReplyQueue = createWsOutboundBackpressureQueue<string>({
+        send: (frame) => this.ws.send(frame),
+        // Encrypted replies are base64 ASCII strings, so length === byte count.
+        byteLengthOf: (frame) => frame.length,
+        getBufferedAmount: () => this.ws.bufferedAmount,
+        isWritable: () => Boolean(this.sharedKey) && this.ws.readyState === this.ws.OPEN,
+        // 1013 (Try Again Later): the link is wedged; drop the channel so the
+        // client reconnects and replays a full snapshot instead of unbounded RSS.
+        onOverflow: () => this.onError(1013, 'Outbound reply buffer overflow')
+      })
+    }
+    return this.textReplyQueue
+  }
+
   private sendEncryptedControl(message: unknown): void {
     if (this.ws.readyState === this.ws.OPEN && this.sharedKey) {
       this.ws.send(encrypt(JSON.stringify(message), this.sharedKey))
@@ -229,5 +254,7 @@ export class E2EEChannel {
     this.sharedKey = null
     this.messageHandler = null
     this.binaryMessageHandler = null
+    this.textReplyQueue?.dispose()
+    this.textReplyQueue = null
   }
 }

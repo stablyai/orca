@@ -36,7 +36,7 @@
 
 Monitore e conduza seus agentes pelo celular — receba uma notificação quando um agente terminar e envie instruções de acompanhamento de qualquer lugar.
 
-[App Store para iOS](https://apps.apple.com/us/app/orca-ide/id6766130217) · [TestFlight](https://testflight.apple.com/join/YjeGMQBA) · [APK Android 0.0.22](https://github.com/stablyai/orca/releases/download/mobile-android-v0.0.22/app-release.apk) · [Docs →](https://www.onorca.dev/docs/mobile)
+[App Store para iOS](https://apps.apple.com/us/app/orca-ide/id6766130217) · [TestFlight](https://testflight.apple.com/join/YjeGMQBA) · [APK Android 0.0.25](https://github.com/stablyai/orca/releases/download/mobile-android-v0.0.25/app-release.apk) · [Docs →](https://www.onorca.dev/docs/mobile)
 
 </td>
 <td width="50%">
@@ -230,7 +230,7 @@ yay -S stably-orca-bin
 Conecte ao app desktop para monitorar e conduzir seus agentes pelo celular.
 
 - **iOS:** [Baixar na App Store](https://apps.apple.com/us/app/orca-ide/id6766130217) ou [entrar no TestFlight](https://testflight.apple.com/join/YjeGMQBA)
-- **Android:** [Baixar APK 0.0.22](https://github.com/stablyai/orca/releases/download/mobile-android-v0.0.22/app-release.apk)
+- **Android:** [Baixar APK 0.0.25](https://github.com/stablyai/orca/releases/download/mobile-android-v0.0.25/app-release.apk)
 
 ---
 
@@ -238,10 +238,6 @@ Conecte ao app desktop para monitorar e conduzir seus agentes pelo celular.
 
 - **Discord:** Entre na comunidade no **[Discord](https://discord.gg/fzjDKHxv8Q)**.
 - **Twitter / X:** Siga **[@orca_build](https://x.com/orca_build)** para atualizações e anúncios.
-- **WeChat:** Escaneie o QR code para entrar na comunidade.
-
-  <img src="../assets/wechat-qr.png" alt="QR code do WeChat para a comunidade Orca" width="160" />
-
 - **Feedback e ideias:** Lançamos rápido. Sentiu falta de algo? [Peça um novo recurso](https://github.com/stablyai/orca/issues).
 - **Privacidade:** Veja a [documentação de privacidade e telemetria](https://www.onorca.dev/docs/telemetry) para saber quais dados anônimos de uso o Orca coleta e como desativar.
 - **Mostre apoio:** Dê uma [estrela](https://github.com/stablyai/orca) neste repositório para acompanhar nossos lançamentos diários.

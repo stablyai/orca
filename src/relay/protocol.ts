@@ -59,6 +59,27 @@ export const STREAM_ACK_WINDOW_CHUNKS = 4
  * (and its open file handle) forever. */
 export const STREAM_ACK_STALL_RECHECK_MS = 1_000
 
+// ── Git response streaming (see docs/relay-git-response-stream-design.md) ──
+
+/** Serialized-JSON size above which a streamable git response (diff family +
+ * exec) is chunked onto the bulk lane instead of one JSON-RPC frame, so a large
+ * diff cannot head-of-line-block interactive pty.data echo on the shared SSH
+ * channel. Below this, single-frame is cheaper and avoids stream overhead. */
+export const GIT_RESPONSE_STREAM_THRESHOLD = 256 * 1024
+
+/** Per-chunk size (UTF-8 bytes of the serialized result) for git response
+ * streaming. Independent from STREAM_CHUNK_SIZE — this offset math is not
+ * shared with fs streams, so tuning it here is cross-version safe as long as
+ * the client reassembles by concatenation (it does not depend on chunk size). */
+export const GIT_RESPONSE_CHUNK_SIZE = 128 * 1024
+
+/** Sentinel result returned in place of a large git response: the real payload
+ * follows as git.responseChunk frames on the bulk lane. Old relays never emit
+ * this, so a new client falls back to the plain result they return. */
+export type GitResponseStreamMarker = {
+  __orcaGitResponseStream: { streamId: number; totalBytes: number; chunkCount: number }
+}
+
 export const RelayErrorCode = {
   TooManyStreams: -33006,
   StreamProtocolError: -33007

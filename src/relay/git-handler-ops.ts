@@ -16,7 +16,7 @@ import { readWorkingDiffFile } from './git-working-file-read'
 export type GitExec = (
   args: string[],
   cwd: string,
-  opts?: { maxBuffer?: number; disableOptionalLocks?: boolean; stdin?: string }
+  opts?: { maxBuffer?: number; disableOptionalLocks?: boolean; stdin?: string; timeout?: number }
 ) => Promise<{ stdout: string; stderr: string }>
 
 export type GitBufferExec = (args: string[], cwd: string) => Promise<Buffer>

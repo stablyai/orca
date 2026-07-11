@@ -67,6 +67,9 @@ describe('GitHubItemDialog source host boundaries', () => {
     expect(helperSection).toContain("'github.project.updatePullRequestBySlug'")
     expect(helperSection).toContain("args.sourceContext?.provider === 'github'")
     expect(helperSection).toContain('getTaskSourceRuntimeSettings(args.sourceContext)')
+    expect(helperSection).toContain(
+      'getGitHubMutationRoutingSettings(useAppStore.getState(), args.repoId, args.sourceContext)'
+    )
     expect(helperSection).toContain('notifyWorkItemDetailsMutation(')
     expect(helperSection).toContain(
       "repo: getGitHubRuntimeRepoId(args.sourceContext, args.repoId ?? '')"
@@ -91,8 +94,8 @@ describe('GitHubItemDialog source host boundaries', () => {
     expect(source).toContain('sourceContext,')
     expect(cacheKeySection).toContain('sourceCacheScope')
     expect(source).toContain('getTaskSourceCacheScope(sourceContext)')
-    expect(matchInvalidationSection).toMatch(
-      /if \(removed\) {\s+workItemDetailsCacheGeneration \+= 1/
+    expect(matchInvalidationSection).toContain(
+      'if (removed) {\n    workItemDetailsCacheGeneration += 1'
     )
   })
 
@@ -182,7 +185,7 @@ describe('GitHubItemDialog source host boundaries', () => {
     expect(source).toContain('notifyWorkItemMutated({')
   })
 
-  it('routes merge actions through the task source context', () => {
+  it('routes merge actions through the repo owner host (#6957)', () => {
     const source = componentSource('GitHubItemDialog.tsx')
     const actionsSection = sourceBetween(
       source,
@@ -190,13 +193,9 @@ describe('GitHubItemDialog source host boundaries', () => {
       'function CommentReactions'
     )
 
-    expect(actionsSection).toContain('getSettingsForRepoRuntimeOwner(s, repoId ?? item.repoId')
-    expect(actionsSection).toContain('...repoOwnerSettings')
     expect(actionsSection).toContain(
-      'const sourceRuntimeSettings = getTaskSourceRuntimeSettings(sourceContext)'
+      'getGitHubMutationRoutingSettings(s, item.repoId ?? repoId ?? null, sourceContext)'
     )
-    expect(actionsSection).toContain('sourceRuntimeSettings.activeRuntimeEnvironmentId')
-    expect(actionsSection).toContain('...sourceRuntimeSettings')
     expect(actionsSection).toContain('getActiveRuntimeTarget(sourceSettings)')
     expect(actionsSection).toContain(
       'const canMergeWithRepoContext = !!repoPath || mergeTarget.kind ==='

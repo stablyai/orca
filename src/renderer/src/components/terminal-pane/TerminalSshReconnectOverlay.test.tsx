@@ -13,23 +13,44 @@ const toastMocks = vi.hoisted(() => ({
   error: vi.fn()
 }))
 
+const deleteFlowMocks = vi.hoisted(() => ({
+  runWorktreeDelete: vi.fn()
+}))
+
+const environmentSshMocks = vi.hoisted(() => ({
+  connectRuntimeEnvironmentSshTarget: vi.fn(),
+  resyncRuntimeEnvironmentSshTargets: vi.fn()
+}))
+
 vi.mock('sonner', () => ({
   toast: {
     error: toastMocks.error
   }
 }))
 
+vi.mock('../sidebar/delete-worktree-flow', () => ({
+  runWorktreeDelete: deleteFlowMocks.runWorktreeDelete
+}))
+
+vi.mock('@/runtime/runtime-environment-ssh-state', () => environmentSshMocks)
+
 vi.mock('@/i18n/i18n', () => ({
   translate: (_key: string, fallback: string, values?: Record<string, string>) =>
     fallback.replace('{{value0}}', values?.value0 ?? '')
 }))
 
-function installSshConnect(connect: ReturnType<typeof vi.fn>): void {
+function installSshConnect(
+  connect: ReturnType<typeof vi.fn>,
+  overrides: Record<string, ReturnType<typeof vi.fn>> = {}
+): void {
   Object.defineProperty(window, 'api', {
     configurable: true,
     value: {
       ssh: {
-        connect
+        connect,
+        listTargets: vi.fn().mockResolvedValue([]),
+        listRemovedTargetLabels: vi.fn().mockResolvedValue({}),
+        ...overrides
       }
     }
   })
@@ -39,6 +60,9 @@ describe('TerminalSshReconnectOverlay', () => {
   beforeEach(() => {
     useAppStore.setState(useAppStore.getInitialState(), true)
     toastMocks.error.mockReset()
+    deleteFlowMocks.runWorktreeDelete.mockReset()
+    environmentSshMocks.connectRuntimeEnvironmentSshTarget.mockReset()
+    environmentSshMocks.resyncRuntimeEnvironmentSshTargets.mockReset()
   })
 
   afterEach(() => {
@@ -99,6 +123,139 @@ describe('TerminalSshReconnectOverlay', () => {
 
     await waitFor(() => expect(toastMocks.error).toHaveBeenCalledWith('Passphrase rejected'))
     expect(screen.getByRole('button', { name: 'Connect' })).toBeEnabled()
+  })
+
+  it('resyncs target metadata after a failed connect so a stale overlay converges', async () => {
+    const connect = vi.fn().mockRejectedValue(new Error('SSH target "ssh-dead" not found'))
+    const listTargets = vi
+      .fn()
+      .mockResolvedValue([
+        { id: 'ssh-live', label: 'devbox', host: 'devbox', port: 22, username: 'me' }
+      ])
+    const listRemovedTargetLabels = vi.fn().mockResolvedValue({ 'ssh-dead': 'devbox (removed)' })
+    installSshConnect(connect, { listTargets, listRemovedTargetLabels })
+    const user = userEvent.setup()
+
+    render(
+      <TerminalSshReconnectOverlay targetId="ssh-dead" targetLabel="devbox" status="disconnected" />
+    )
+
+    await user.click(screen.getByRole('button', { name: 'Connect' }))
+
+    // Why: the metadata refresh is what flips TerminalPane's targetRemoved
+    // derivation, replacing the failing Connect loop with the ghost-host UI.
+    await waitFor(() => {
+      expect(useAppStore.getState().sshTargetLabels.get('ssh-live')).toBe('devbox')
+      expect(useAppStore.getState().removedSshTargetLabels.get('ssh-dead')).toBe('devbox (removed)')
+    })
+  })
+
+  it('still applies the target list when the removed-labels refresh fails', async () => {
+    const connect = vi.fn().mockRejectedValue(new Error('SSH target "ssh-dead" not found'))
+    const listTargets = vi
+      .fn()
+      .mockResolvedValue([
+        { id: 'ssh-live', label: 'devbox', host: 'devbox', port: 22, username: 'me' }
+      ])
+    const listRemovedTargetLabels = vi.fn().mockRejectedValue(new Error('unavailable'))
+    installSshConnect(connect, { listTargets, listRemovedTargetLabels })
+    const user = userEvent.setup()
+
+    render(
+      <TerminalSshReconnectOverlay targetId="ssh-dead" targetLabel="devbox" status="disconnected" />
+    )
+
+    await user.click(screen.getByRole('button', { name: 'Connect' }))
+
+    // Why: a removed-labels failure must not discard the refreshed target
+    // list — it alone is enough evidence for targetRemoved to converge.
+    await waitFor(() => {
+      expect(useAppStore.getState().sshTargetLabels.get('ssh-live')).toBe('devbox')
+      expect(useAppStore.getState().sshTargetsHydrated).toBe(true)
+    })
+  })
+
+  it('offers to remove the workspace (not Connect) when the SSH target was removed', async () => {
+    const connect = vi.fn().mockResolvedValue(undefined)
+    installSshConnect(connect)
+    const user = userEvent.setup()
+
+    render(
+      <TerminalSshReconnectOverlay
+        targetId="ssh-dead"
+        targetLabel="ssh-dead"
+        status="disconnected"
+        targetRemoved
+        worktreeId="repo::/work/wt"
+      />
+    )
+
+    expect(screen.getByText('SSH host removed')).toBeInTheDocument()
+    // No Connect button — reconnect is impossible for a removed target.
+    expect(screen.queryByRole('button', { name: 'Connect' })).not.toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: 'Remove workspace' }))
+    expect(deleteFlowMocks.runWorktreeDelete).toHaveBeenCalledWith('repo::/work/wt')
+    expect(connect).not.toHaveBeenCalled()
+  })
+
+  it('routes Connect to the owning environment runtime RPC for a remote-owned workspace', async () => {
+    const connect = vi.fn().mockResolvedValue(undefined)
+    installSshConnect(connect)
+    environmentSshMocks.connectRuntimeEnvironmentSshTarget.mockResolvedValue(null)
+    const user = userEvent.setup()
+
+    render(
+      <TerminalSshReconnectOverlay
+        targetId="ssh-remote-1"
+        targetLabel="devbox"
+        status="disconnected"
+        sshOwnerEnvironmentId="env-1"
+      />
+    )
+
+    await user.click(screen.getByRole('button', { name: 'Connect' }))
+
+    await waitFor(() =>
+      expect(environmentSshMocks.connectRuntimeEnvironmentSshTarget).toHaveBeenCalledWith(
+        'env-1',
+        'ssh-remote-1'
+      )
+    )
+    // The local ssh API must never see a remote host's target.
+    expect(connect).not.toHaveBeenCalled()
+  })
+
+  it('resyncs the owning environment (not the local store) after a failed remote connect', async () => {
+    const connect = vi.fn().mockResolvedValue(undefined)
+    const listTargets = vi.fn().mockResolvedValue([])
+    installSshConnect(connect, { listTargets })
+    environmentSshMocks.connectRuntimeEnvironmentSshTarget.mockRejectedValue(
+      new Error('SSH target "ssh-remote-dead" not found')
+    )
+    environmentSshMocks.resyncRuntimeEnvironmentSshTargets.mockResolvedValue(undefined)
+    const user = userEvent.setup()
+
+    render(
+      <TerminalSshReconnectOverlay
+        targetId="ssh-remote-dead"
+        targetLabel="devbox"
+        status="disconnected"
+        sshOwnerEnvironmentId="env-1"
+      />
+    )
+
+    await user.click(screen.getByRole('button', { name: 'Connect' }))
+
+    await waitFor(() =>
+      expect(toastMocks.error).toHaveBeenCalledWith('SSH target "ssh-remote-dead" not found')
+    )
+    await waitFor(() =>
+      expect(environmentSshMocks.resyncRuntimeEnvironmentSshTargets).toHaveBeenCalledWith('env-1')
+    )
+    // The failed-connect resync must not rewrite local target metadata.
+    expect(listTargets).not.toHaveBeenCalled()
+    expect(useAppStore.getState().sshTargetsHydrated).toBe(false)
   })
 
   it('publishes the returned SSH state so deferred terminal reattach can resume', async () => {

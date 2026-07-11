@@ -58,7 +58,10 @@ vi.mock('./windows-powershell-executable', () => ({
 }))
 
 vi.mock('./agent-foreground-process', () => ({
-  resolveAgentForegroundProcess: resolveAgentForegroundProcessMock
+  resolveAgentForegroundProcessWithAvailability: async (...args: unknown[]) => ({
+    available: true,
+    processName: await resolveAgentForegroundProcessMock(...args)
+  })
 }))
 
 vi.mock('../wsl', () => ({
@@ -92,6 +95,8 @@ describe('LocalPtyProvider', () => {
     onExit: ReturnType<typeof vi.fn>
     write: ReturnType<typeof vi.fn>
     resize: ReturnType<typeof vi.fn>
+    pause: ReturnType<typeof vi.fn>
+    resume: ReturnType<typeof vi.fn>
     kill: ReturnType<typeof vi.fn>
     process: string
     pid: number
@@ -138,6 +143,8 @@ describe('LocalPtyProvider', () => {
       }),
       write: vi.fn(),
       resize: vi.fn(),
+      pause: vi.fn(),
+      resume: vi.fn(),
       kill: vi.fn(() => {
         exitCb?.({ exitCode: -1 })
       }),
@@ -896,6 +903,39 @@ describe('LocalPtyProvider', () => {
     })
   })
 
+  describe('producer flow control', () => {
+    it('pauses and resumes the node-pty process directly', async () => {
+      const { id } = await provider.spawn({ cols: 80, rows: 24 })
+      provider.pauseProducer(id)
+      expect(mockProc.pause).toHaveBeenCalledTimes(1)
+      provider.resumeProducer(id)
+      expect(mockProc.resume).toHaveBeenCalledTimes(1)
+    })
+
+    it('is a no-op for unknown PTY ids', () => {
+      expect(() => {
+        provider.pauseProducer('nonexistent')
+        provider.resumeProducer('nonexistent')
+      }).not.toThrow()
+      expect(mockProc.pause).not.toHaveBeenCalled()
+      expect(mockProc.resume).not.toHaveBeenCalled()
+    })
+
+    it('swallows node-pty throws from a torn-down PTY', async () => {
+      const { id } = await provider.spawn({ cols: 80, rows: 24 })
+      mockProc.pause.mockImplementation(() => {
+        throw new Error('read EIO')
+      })
+      mockProc.resume.mockImplementation(() => {
+        throw new Error('read EIO')
+      })
+      expect(() => {
+        provider.pauseProducer(id)
+        provider.resumeProducer(id)
+      }).not.toThrow()
+    })
+  })
+
   describe('shutdown', () => {
     it('kills the PTY process', async () => {
       // Why: capture the spy reference before shutdown triggers onExit →
@@ -999,6 +1039,24 @@ describe('LocalPtyProvider', () => {
 
     it('returns null for unknown PTY ids', async () => {
       expect(await provider.getForegroundProcess('nonexistent')).toBeNull()
+    })
+  })
+
+  describe('confirmForegroundProcess', () => {
+    it('drops a delayed result after the PTY exits', async () => {
+      let resolveScan!: (processName: string) => void
+      resolveAgentForegroundProcessMock.mockReturnValue(
+        new Promise<string>((resolve) => {
+          resolveScan = resolve
+        })
+      )
+      const { id } = await provider.spawn({ cols: 80, rows: 24 })
+
+      const confirmation = provider.confirmForegroundProcess(id)
+      exitCb?.({ exitCode: 0 })
+      resolveScan('droid')
+
+      await expect(confirmation).resolves.toBeNull()
     })
   })
 

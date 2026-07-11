@@ -22,8 +22,8 @@ type EditorPanelRenderModelParams = {
   activeFile: OpenFile
   fileContents: Record<string, FileContent>
   editorDrafts: StoreState['editorDrafts']
-  gitStatusByWorktree: StoreState['gitStatusByWorktree']
-  gitBranchChangesByWorktree: StoreState['gitBranchChangesByWorktree']
+  gitStatusEntries: StoreState['gitStatusByWorktree'][string] | undefined
+  gitBranchEntries: StoreState['gitBranchChangesByWorktree'][string] | undefined
   markdownViewMode: StoreState['markdownViewMode']
   isChangesMode: boolean
 }
@@ -32,8 +32,8 @@ export function getEditorPanelRenderModel({
   activeFile,
   fileContents,
   editorDrafts,
-  gitStatusByWorktree,
-  gitBranchChangesByWorktree,
+  gitStatusEntries,
+  gitBranchEntries,
   markdownViewMode,
   isChangesMode
 }: EditorPanelRenderModelParams) {
@@ -54,8 +54,8 @@ export function getEditorPanelRenderModel({
     activeFile.mode === 'diff'
       ? detectLanguage(activeFile.relativePath)
       : detectLanguage(activeFile.filePath)
-  const worktreeEntries = gitStatusByWorktree[activeFile.worktreeId] ?? []
-  const branchEntries = gitBranchChangesByWorktree[activeFile.worktreeId] ?? []
+  const worktreeEntries = gitStatusEntries ?? []
+  const branchEntries = gitBranchEntries ?? []
   const matchingWorktreeEntry =
     activeFile.mode === 'diff' &&
     (activeFile.diffSource === 'staged' || activeFile.diffSource === 'unstaged')
@@ -71,6 +71,11 @@ export function getEditorPanelRenderModel({
     activeFile.mode === 'diff' && activeFile.diffSource === 'branch'
       ? (branchEntries.find((entry) => entry.path === activeFile.relativePath) ?? null)
       : null
+  const openFileState = getEditorHeaderOpenFileState(
+    activeFile,
+    matchingWorktreeEntry,
+    matchingBranchEntry
+  )
   const markdownViewModes = getMarkdownViewModes({
     language: resolvedLanguage,
     mode: activeFile.mode,
@@ -141,16 +146,17 @@ export function getEditorPanelRenderModel({
     isCombinedDiff,
     worktreeEntries,
     resolvedLanguage,
-    openFileState: getEditorHeaderOpenFileState(
-      activeFile,
-      matchingWorktreeEntry,
-      matchingBranchEntry
-    ),
+    openFileState,
     isMarkdown: resolvedLanguage === 'markdown',
     isMermaid: resolvedLanguage === 'mermaid',
     isCsv: resolvedLanguage === 'csv' || resolvedLanguage === 'tsv',
     isNotebook: resolvedLanguage === 'notebook',
-    canOpenPreviewToSide: activeFile.mode === 'edit' && canPreviewLanguage(resolvedLanguage),
+    // Why: the preview renders the on-disk file, so diff surfaces only get it
+    // when the modified side still exists on disk (canOpen excludes deleted
+    // files and commit diffs whose content may not match the working tree).
+    canOpenPreviewToSide:
+      canPreviewLanguage(resolvedLanguage) &&
+      (activeFile.mode === 'edit' || (isSingleDiff && openFileState.canOpen)),
     mdViewMode,
     hasViewModeToggle,
     availableEditorToggleModes,

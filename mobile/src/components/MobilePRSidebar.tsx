@@ -39,6 +39,8 @@ type Props = {
   gitStatus: MobileGitStatusResult | null
   headSha: string | null
   bottomInset?: number
+  // Hub chrome already shows open-on-web; hide the in-body icon there.
+  showOpenOnWeb?: boolean
 }
 
 // Mutation hooks run unconditionally here and gate internally until a PR is ready.
@@ -52,17 +54,15 @@ export function MobilePRSidebar({
   gitBranch,
   gitStatus,
   headSha,
-  bottomInset = 0
+  bottomInset = 0,
+  showOpenOnWeb = true
 }: Props) {
   const branch = prSidebarRenderBranch(state)
   // prNumber is 0 until ready; the hook gates on `ready` so it never fires early.
   const prNumber = state.kind === 'ready' ? state.data.pr.number : 0
-  const prRepo =
-    state.kind === 'ready'
-      ? state.data.pr.prRepo
-        ? { owner: state.data.pr.prRepo.owner, repo: state.data.pr.prRepo.repo }
-        : null
-      : null
+  // Prefer the stable PRInfo.prRepo reference — cloning owner/repo each render
+  // reallocates and thrash-updates the mutation/comment/title hooks.
+  const prRepo = state.kind === 'ready' ? (state.data.pr.prRepo ?? null) : null
   const actions = useMobilePrActions({
     client,
     connState,
@@ -95,6 +95,9 @@ export function MobilePRSidebar({
       style={{ flex: 1 }}
       contentContainerStyle={[styles.scrollContent, { paddingBottom: bottomInset }]}
       keyboardShouldPersistTaps="handled"
+      // Why: root-comment / reply composers sit at the bottom of this scroll
+      // area; without keyboard insets the focused field stays under the keyboard.
+      automaticallyAdjustKeyboardInsets
       showsVerticalScrollIndicator={false}
     >
       <PrSidebarContent
@@ -111,6 +114,7 @@ export function MobilePRSidebar({
         commentActions={commentActions}
         titleAction={titleAction}
         triage={triage}
+        showOpenOnWeb={showOpenOnWeb}
       />
     </ScrollView>
   )
@@ -129,7 +133,8 @@ function PrSidebarContent({
   actions,
   commentActions,
   titleAction,
-  triage
+  triage,
+  showOpenOnWeb
 }: {
   branch: ReturnType<typeof prSidebarRenderBranch>
   state: PrSidebarState
@@ -144,6 +149,7 @@ function PrSidebarContent({
   commentActions: MobilePrCommentActions
   titleAction: MobilePrTitleAction
   triage: MobilePrAiTriage
+  showOpenOnWeb: boolean
 }) {
   if (branch === 'loading') {
     return (
@@ -209,6 +215,7 @@ function PrSidebarContent({
         titleAction={titleAction}
         triage={triage}
         refetch={refetch}
+        showOpenOnWeb={showOpenOnWeb}
       />
     )
   }
@@ -223,7 +230,8 @@ function PrSidebarSections({
   commentActions,
   titleAction,
   triage,
-  refetch
+  refetch,
+  showOpenOnWeb
 }: {
   data: Extract<PrSidebarState, { kind: 'ready' }>['data']
   client: RpcClient | null
@@ -233,6 +241,7 @@ function PrSidebarSections({
   titleAction: MobilePrTitleAction
   triage: MobilePrAiTriage
   refetch: () => void
+  showOpenOnWeb: boolean
 }) {
   const pr = data.pr
   // Bind the triage launchers to this PR's data; the prompt builders are pure so
@@ -262,19 +271,30 @@ function PrSidebarSections({
     isBusy: triage.isBusy('resolve-conflicts'),
     error: triage.error
   }
+  // One card for identity + actions so the ready PR isn't a stack of thin
+  // duplicate blocks (badge row, title, branches, then another action band).
   return (
     <>
-      <PRSidebarHeader pr={data.pr} details={data.details} titleAction={titleAction} />
-      {/* Conflicting-files section mirrors desktop order: directly below the header,
-          before actions/checks. Renders only when the PR has merge conflicts. */}
+      <View style={styles.section}>
+        <View style={styles.sectionBody}>
+          <PRSidebarHeader
+            pr={data.pr}
+            details={data.details}
+            titleAction={titleAction}
+            showOpenOnWeb={showOpenOnWeb}
+            bare
+          />
+          <PRActionsSection
+            pr={data.pr}
+            actions={actions}
+            client={client}
+            worktreeId={worktreeId}
+            onUnlinked={refetch}
+          />
+        </View>
+      </View>
+      {/* Own titled section when present; null otherwise (no empty chrome). */}
       <PRConflictingFilesSection pr={data.pr} triage={conflictsTriage} />
-      <PRActionsSection
-        pr={data.pr}
-        actions={actions}
-        client={client}
-        worktreeId={worktreeId}
-        onUnlinked={refetch}
-      />
       <PRReviewersSection
         details={data.details}
         actions={actions}

@@ -21,6 +21,7 @@ import {
 } from '../../runtime/runtime-terminal-stream'
 import {
   getRemoteRuntimeTerminalMultiplexer,
+  REMOTE_TERMINAL_SNAPSHOT_TOO_LARGE,
   type RemoteRuntimeMultiplexedTerminal
 } from '../../runtime/remote-runtime-terminal-multiplexer'
 import {
@@ -182,6 +183,16 @@ export function createRemoteRuntimePtyTransport(
     return null
   }
 
+  async function listHostSessionHandle(hostTabId: string): Promise<string | null> {
+    if (!worktreeId) {
+      return null
+    }
+    const listed = await callRuntime<RuntimeMobileSessionTabsResult>('session.tabs.list', {
+      worktree: toRuntimeWorktreeSelector(worktreeId)
+    })
+    return findReadyHostSessionHandle(listed, hostTabId)
+  }
+
   async function attachHostSessionMirror(
     options: Parameters<PtyTransport['connect']>[0]
   ): Promise<PtyConnectResult | undefined> {
@@ -280,7 +291,9 @@ export function createRemoteRuntimePtyTransport(
       }
       return true
     } catch (error) {
-      storedCallbacks.onError?.(runtimeTerminalErrorMessage(error))
+      // Why: stale-handle errors must retire the mirror (recoverable via the
+      // next snapshot) rather than dead-end in a red xterm banner (#7718).
+      handleRemoteTerminalError(error)
       return false
     }
   }
@@ -298,7 +311,7 @@ export function createRemoteRuntimePtyTransport(
       text,
       client: { id: clientId, type: 'desktop' }
     }).catch((error) => {
-      storedCallbacks.onError?.(runtimeTerminalErrorMessage(error))
+      handleRemoteTerminalError(error)
     })
   })
 
@@ -361,6 +374,11 @@ export function createRemoteRuntimePtyTransport(
 
   function handleRemoteTerminalError(error: unknown): void {
     const message = runtimeTerminalErrorMessage(error)
+    if (message === REMOTE_TERMINAL_SNAPSHOT_TOO_LARGE) {
+      // Why: an oversized initial snapshot is skipped but live output keeps
+      // flowing — informational, not fatal, so never surface a red xterm banner.
+      return
+    }
     if (isRemoteTerminalGoneMessage(message)) {
       // Why: paired web clients consume host-published PTY handles. If the host
       // retires one between snapshots, clear this mirror and wait for the next
@@ -369,6 +387,31 @@ export function createRemoteRuntimePtyTransport(
       return
     }
     storedCallbacks.onError?.(message)
+  }
+
+  // Why: after a transport drop the host may have re-minted this pane's
+  // handle (reconnect, epoch or PTY change). Re-derive it from the current
+  // session snapshot instead of resubscribing the stale closure value, which
+  // would mirror (and type into) whatever PTY now sits behind it (#7718).
+  async function resubscribeAfterTransportClose(previousHandle: string): Promise<void> {
+    if (tabId && isWebTerminalSurfaceTabId(tabId)) {
+      const nextHandle = await listHostSessionHandle(toHostSessionTabId(tabId))
+      if (destroyed || !connected || handle !== previousHandle) {
+        return
+      }
+      if (!nextHandle) {
+        // Why: the host no longer publishes this surface; retire quietly and
+        // let the next session-tabs snapshot drive respawn/removal.
+        retireRemoteTerminalId()
+        return
+      }
+      if (nextHandle !== previousHandle) {
+        handle = nextHandle
+        remotePtyId = toRemoteRuntimePtyId(nextHandle, currentRuntimeEnvironmentId)
+        onPtySpawn?.(remotePtyId)
+      }
+    }
+    await subscribeToHandle()
   }
 
   async function subscribeToHandle(): Promise<void> {
@@ -391,11 +434,16 @@ export function createRemoteRuntimePtyTransport(
             outputProcessor.processData(data, storedCallbacks, undefined, meta)
           }
         },
-        onSnapshot: (data) => {
-          if (data && isCurrentSubscription()) {
+        onSnapshot: (data, meta) => {
+          // Why: a snapshot with no body can still carry a pending mid-escape
+          // tail that must be replayed so the next live chunk completes it.
+          if ((data || meta?.pendingEscapeTailAnsi) && isCurrentSubscription()) {
             outputProcessor.processData(data, storedCallbacks, {
               replayingBufferedData: true,
-              suppressAttentionEvents: true
+              suppressAttentionEvents: true,
+              ...(meta?.pendingEscapeTailAnsi
+                ? { pendingEscapeTailAnsi: meta.pendingEscapeTailAnsi }
+                : {})
             })
           }
         },
@@ -448,10 +496,9 @@ export function createRemoteRuntimePtyTransport(
           }
           resubscribing = true
           const resubscribeHandle = handle
-          const resubscribePtyId = remotePtyId
-          void subscribeToHandle()
+          void resubscribeAfterTransportClose(resubscribeHandle)
             .catch((error) => {
-              if (isCurrentRemoteTerminal(resubscribeHandle, resubscribePtyId)) {
+              if (!destroyed && connected && handle) {
                 handleRemoteTerminalError(error)
               }
             })
@@ -614,6 +661,49 @@ export function createRemoteRuntimePtyTransport(
       // Why: callers use \r or terminal.send's enter flag for semantic Enter;
       // literal LF bytes from paste/programmatic input must survive the stream.
       return inputBatcher.push(data)
+    },
+
+    // Why: terminal query replies (CPR/DSR/DA/OSC color/pixel size) are read by
+    // the querying program in raw mode with a short timeout. The 8ms input
+    // debounce makes the reply miss that window, so it lands on the shell prompt
+    // and is echoed literally / spliced into typed input (#7329). Flush any
+    // pending batched input first so byte order is preserved, then send the
+    // reply immediately without arming the debounce timer.
+    sendInputImmediate(data: string): boolean {
+      const targetHandle = handle
+      if (!connected || !targetHandle) {
+        return false
+      }
+      if (!data) {
+        return true
+      }
+      // Why: earlier input (e.g. a large paste) may still be in async byte-length
+      // validation, so it is captured in the batcher's validationTail and NOT in
+      // takePending(). Bypassing the queue here would send the reply ahead of it
+      // and reorder bytes on the wire. In that rare window, route the reply
+      // through the batcher's ordered queue and flush what is already validated;
+      // the reply lands right after the pending input once its validation
+      // resolves. Order correctness beats the immediacy that the debounce
+      // normally trades away.
+      if (inputBatcher.hasPendingValidation()) {
+        const accepted = inputBatcher.push(data)
+        inputBatcher.flush()
+        return accepted
+      }
+      const pending = inputBatcher.takePending()
+      const text = `${pending}${data}`
+      const stream = getCurrentMultiplexedStream(targetHandle)
+      if (stream?.sendInput(text)) {
+        return true
+      }
+      void callRuntime('terminal.send', {
+        terminal: targetHandle,
+        text,
+        client: { id: clientId, type: 'desktop' }
+      }).catch((error) => {
+        handleRemoteTerminalError(error)
+      })
+      return true
     },
 
     sendInputAccepted: sendInputAcceptedToRuntime,

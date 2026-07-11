@@ -1067,7 +1067,9 @@ describe('orchestration RPC methods', () => {
       setup()
       const task = db.createTask({ spec: 'work' })
       vi.spyOn(runtime, 'isTerminalRunningAgent').mockResolvedValue(true)
-      vi.spyOn(runtime, 'sendTerminal').mockRejectedValue(new Error('terminal_not_writable'))
+      vi.spyOn(runtime, 'sendTerminalAgentPrompt').mockRejectedValue(
+        new Error('terminal_not_writable')
+      )
 
       await expect(
         call('orchestration.dispatch', {
@@ -1085,7 +1087,7 @@ describe('orchestration RPC methods', () => {
       setup()
       const task = db.createTask({ spec: 'work' })
       vi.spyOn(runtime, 'isTerminalRunningAgent').mockResolvedValue(true)
-      const send = vi.spyOn(runtime, 'sendTerminal').mockResolvedValue({
+      const send = vi.spyOn(runtime, 'sendTerminalAgentPrompt').mockResolvedValue({
         handle: 'term_a',
         accepted: true,
         bytesWritten: 1
@@ -1098,7 +1100,35 @@ describe('orchestration RPC methods', () => {
         devMode: true
       })
 
-      expect(send.mock.calls[0]?.[1].text).toContain('orca-dev orchestration send')
+      expect(send).toHaveBeenCalledWith(
+        'term_a',
+        expect.stringContaining('orca-dev orchestration send')
+      )
+    })
+
+    it('injects preamble through the agent prompt path instead of raw terminal send', async () => {
+      setup()
+      const task = db.createTask({ spec: 'line one\nline two' })
+      vi.spyOn(runtime, 'isTerminalRunningAgent').mockResolvedValue(true)
+      const agentPrompt = vi.spyOn(runtime, 'sendTerminalAgentPrompt').mockResolvedValue({
+        handle: 'term_a',
+        accepted: true,
+        bytesWritten: 1
+      })
+      const rawSend = vi.spyOn(runtime, 'sendTerminal')
+
+      await call('orchestration.dispatch', {
+        task: task.id,
+        to: 'term_a',
+        inject: true,
+        from: 'term_coord'
+      })
+
+      expect(agentPrompt).toHaveBeenCalledWith(
+        'term_a',
+        expect.stringContaining('line one\nline two')
+      )
+      expect(rawSend).not.toHaveBeenCalled()
     })
 
     it('rejects inject to terminal without recognized agent', async () => {

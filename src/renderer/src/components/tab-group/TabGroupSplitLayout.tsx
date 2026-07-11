@@ -103,9 +103,9 @@ function ResizeHandle({
 
   return (
     <div
-      className={`shrink-0 ${
-        isHorizontal ? 'w-1 cursor-col-resize' : 'h-1 cursor-row-resize'
-      } ${dragging ? 'bg-accent' : 'bg-border hover:bg-accent/50'}`}
+      className={`tab-group-split-resize-handle ${
+        isHorizontal ? 'is-vertical' : 'is-horizontal'
+      }${dragging ? ' is-dragging' : ''}`}
       onPointerDown={onPointerDown}
     />
   )
@@ -121,6 +121,10 @@ function SplitNode({
   touchesTopEdge,
   touchesRightEdge,
   touchesLeftEdge,
+  touchesBottomEdge,
+  suppressLeftBorder,
+  suppressRightBorder,
+  suppressBottomBorder,
   isTabDragActive,
   hoveredTabInsertion
 }: {
@@ -133,6 +137,10 @@ function SplitNode({
   touchesTopEdge: boolean
   touchesRightEdge: boolean
   touchesLeftEdge: boolean
+  touchesBottomEdge: boolean
+  suppressLeftBorder: boolean
+  suppressRightBorder: boolean
+  suppressBottomBorder: boolean
   isTabDragActive: boolean
   hoveredTabInsertion: HoveredTabInsertion | null
 }): React.JSX.Element {
@@ -152,6 +160,10 @@ function SplitNode({
         hasSplitGroups={hasSplitGroups}
         touchesRightEdge={touchesRightEdge}
         touchesLeftEdge={touchesLeftEdge}
+        touchesBottomEdge={touchesBottomEdge}
+        suppressLeftBorder={suppressLeftBorder}
+        suppressRightBorder={suppressRightBorder}
+        suppressBottomBorder={suppressBottomBorder}
         reserveClosedExplorerToggleSpace={touchesTopEdge && touchesRightEdge}
         reserveCollapsedSidebarHeaderSpace={touchesTopEdge && touchesLeftEdge}
         isTabDragActive={isTabDragActive}
@@ -181,6 +193,12 @@ function SplitNode({
           touchesTopEdge={touchesTopEdge}
           touchesRightEdge={isHorizontal ? false : touchesRightEdge}
           touchesLeftEdge={touchesLeftEdge}
+          touchesBottomEdge={isHorizontal ? touchesBottomEdge : false}
+          suppressLeftBorder={suppressLeftBorder}
+          // Why: the resize handle paints the inner seam — pane borders here
+          // stack into a triple-line bar beside the divider.
+          suppressRightBorder={isHorizontal ? true : suppressRightBorder}
+          suppressBottomBorder={isHorizontal ? suppressBottomBorder : true}
           isTabDragActive={isTabDragActive}
           hoveredTabInsertion={hoveredTabInsertion}
         />
@@ -201,6 +219,10 @@ function SplitNode({
           touchesTopEdge={isHorizontal ? touchesTopEdge : false}
           touchesRightEdge={touchesRightEdge}
           touchesLeftEdge={isHorizontal ? false : touchesLeftEdge}
+          touchesBottomEdge={touchesBottomEdge}
+          suppressLeftBorder={isHorizontal ? true : suppressLeftBorder}
+          suppressRightBorder={suppressRightBorder}
+          suppressBottomBorder={suppressBottomBorder}
           isTabDragActive={isTabDragActive}
           hoveredTabInsertion={hoveredTabInsertion}
         />
@@ -275,6 +297,10 @@ export default function TabGroupSplitLayout({
               touchesTopEdge={true}
               touchesRightEdge={true}
               touchesLeftEdge={true}
+              touchesBottomEdge={false}
+              suppressLeftBorder={false}
+              suppressRightBorder={false}
+              suppressBottomBorder={false}
               isTabDragActive={dragSplit.activeDrag !== null}
               hoveredTabInsertion={dragSplit.hoveredTabInsertion}
             />

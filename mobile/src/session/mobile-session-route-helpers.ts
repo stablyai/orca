@@ -1,4 +1,4 @@
-import type { TerminalModes } from '../terminal/TerminalWebView'
+import type { TerminalModes } from '../terminal/terminal-webview-contract'
 import type { ConnectionState } from '../transport/types'
 
 export const MOBILE_SESSION_STATUS_LABELS: Record<ConnectionState, string> = {

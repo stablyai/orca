@@ -161,6 +161,9 @@ export type ManagedPaneInternal = {
   focusClassSyncCleanup?: (() => void) | null
   // Stored so disposePane() can remove user-scroll intent listeners.
   terminalScrollIntentDisposable?: IDisposable | null
+  // Stored so disposePane() can deregister the joiner; terminal.dispose()
+  // does not remove registered character joiners.
+  arabicShapingJoinerCleanup?: (() => void) | null
   // Why: splitPane reparents DOM; its delayed restore owns scroll until the
   // browser settles, so intermediate fits must not compete with it.
   pendingSplitScrollState: ScrollState | null

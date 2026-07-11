@@ -1,4 +1,5 @@
-import ts from 'typescript'
+// TypeScript 7 is a native CLI; AST consumers still need the legacy JavaScript API.
+import ts from 'typescript-api'
 
 const STYLED_SCROLLBAR_CLASSES = new Set(
   'scrollbar-sleek scrollbar-editor worktree-sidebar-scrollbar'.split(' ')

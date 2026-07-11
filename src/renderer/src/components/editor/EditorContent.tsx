@@ -33,6 +33,7 @@ import {
 import { getDiffContentSignature } from './diff-content-signature'
 import { translate } from '@/i18n/i18n'
 import { CheckRunDetailsPanel } from './CheckRunDetailsPanel'
+import { ExternalFileChangeBanner } from './ExternalFileChangeBanner'
 
 const MonacoEditor = lazy(() => import('./MonacoEditor'))
 const DiffViewer = lazy(() => import('./DiffViewer'))
@@ -139,7 +140,7 @@ export function EditorContent({
   handleDirtyStateHint,
   handleSave,
   handleSaveForFile,
-  reloadFileContent
+  reloadContent
 }: {
   activeFile: OpenFile
   viewStateScopeId: string
@@ -166,7 +167,7 @@ export function EditorContent({
   handleDirtyStateHint: (dirty: boolean) => void
   handleSave: (content: string) => Promise<void>
   handleSaveForFile: (file: OpenFile, content: string) => Promise<void>
-  reloadFileContent: (file: OpenFile) => void
+  reloadContent: (file: OpenFile) => void
 }): React.JSX.Element {
   const editorViewStateKey =
     viewStateScopeId === activeFile.id
@@ -505,10 +506,7 @@ export function EditorContent({
     if (fc.loadError) {
       return (
         <div className={className}>
-          <FileLoadErrorView
-            message={fc.loadError}
-            onRetry={() => reloadFileContent(contentFile)}
-          />
+          <FileLoadErrorView message={fc.loadError} onRetry={() => reloadContent(contentFile)} />
         </div>
       )
     }
@@ -709,9 +707,7 @@ export function EditorContent({
       )
     }
     if (fc.loadError) {
-      return (
-        <FileLoadErrorView message={fc.loadError} onRetry={() => reloadFileContent(activeFile)} />
-      )
+      return <FileLoadErrorView message={fc.loadError} onRetry={() => reloadContent(activeFile)} />
     }
     if (fc.isBinary) {
       return (
@@ -758,9 +754,7 @@ export function EditorContent({
       )
     }
     if (fc.loadError) {
-      return (
-        <FileLoadErrorView message={fc.loadError} onRetry={() => reloadFileContent(activeFile)} />
-      )
+      return <FileLoadErrorView message={fc.loadError} onRetry={() => reloadContent(activeFile)} />
     }
     if (fc.isBinary) {
       if (fc.isImage) {
@@ -777,8 +771,16 @@ export function EditorContent({
         </div>
       )
     }
+    const externalChangeBanner =
+      activeFile.externalMutation === 'changed' ? (
+        <ExternalFileChangeBanner
+          file={activeFile}
+          currentContent={editBuffers[activeFile.id] ?? fc.content}
+          reloadContent={reloadContent}
+        />
+      ) : null
     if (isChangesMode) {
-      return (
+      const changesView = (
         <ChangesModeView
           activeFile={activeFile}
           dc={diffContents[activeFile.id]}
@@ -792,9 +794,19 @@ export function EditorContent({
           onSave={isMarkdown ? md.mdSave : handleSave}
         />
       )
+      if (!externalChangeBanner) {
+        return changesView
+      }
+      return (
+        <div className="flex flex-1 min-h-0 flex-col">
+          {externalChangeBanner}
+          <div className="min-h-0 flex-1">{changesView}</div>
+        </div>
+      )
     }
     return (
       <div className="flex flex-1 min-h-0 flex-col">
+        {externalChangeBanner}
         {activeFile.conflict && (
           <ConflictBanner
             file={activeFile}
@@ -890,9 +902,20 @@ export function EditorContent({
     modifiedDiffBuffer === undefined &&
     dc.modifiedContent.length === 0
   )
+  // Why: rendered once for every diff sub-branch below (preview and source)
+  // so a dirty markdown diff in preview mode surfaces the conflict too.
+  const diffExternalChangeBanner =
+    activeFile.externalMutation === 'changed' ? (
+      <ExternalFileChangeBanner
+        file={activeFile}
+        currentContent={modifiedDiffContent}
+        reloadContent={reloadContent}
+      />
+    ) : null
   if (isMarkdown && mdViewMode === 'preview' && dc.largeDiffRenderLimit?.limited !== true) {
     return (
       <div className="flex h-full min-h-0 flex-col">
+        {diffExternalChangeBanner}
         <div className="border-b border-border/60 bg-muted/40 px-3 py-2 text-xs text-muted-foreground">
           {/* Why: a rendered markdown preview cannot express additions and
           deletions simultaneously, so preview mode intentionally shows the
@@ -927,7 +950,7 @@ export function EditorContent({
   const diffReloadNonce = activeFile.diffContentReloadNonce ?? 0
   const originalModelKey = `${diffViewStateKey}:original:${getDiffContentSignature(dc.originalContent)}`
   const modifiedModelKey = `${diffViewStateKey}:modified:${getDiffContentSignature(dc.modifiedContent)}:${diffReloadNonce}`
-  return (
+  const diffViewer = (
     <DiffViewer
       key={`${viewStateScopeId}:${diffReloadNonce}:${getDiffContentSignature(dc.modifiedContent)}`}
       modelKey={diffViewStateKey}
@@ -946,6 +969,22 @@ export function EditorContent({
       onContentChange={isEditable ? handleContentChange : undefined}
       onSave={isEditable ? (isMarkdown ? md.mdSave : handleSave) : undefined}
     />
+  )
+  // Why: editable unstaged diffs can hold unsaved edits, so they get the same
+  // changed-on-disk recovery banner as edit tabs; its reload refetches the
+  // diff body rather than plain file content.
+  if (activeFile.externalMutation !== 'changed') {
+    return diffViewer
+  }
+  return (
+    // Why: h-full (not flex-1) — the diff-mode container is not a flex parent,
+    // so flex-1 resolves to zero height and collapses this wrapper. The inner
+    // div must itself be a flex column because DiffViewer's root sizes with
+    // flex-1 and collapses to 0px inside a block parent.
+    <div className="flex h-full min-h-0 flex-col">
+      {diffExternalChangeBanner}
+      <div className="flex min-h-0 flex-1 flex-col">{diffViewer}</div>
+    </div>
   )
 }
 

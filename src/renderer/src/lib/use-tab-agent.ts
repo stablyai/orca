@@ -11,6 +11,8 @@ import {
   resolveSiblingTabAgent
 } from './tab-agent'
 import { resolveExplicitTerminalTitleAgentType } from '../../../shared/terminal-title-agent-type'
+import { resolveCompatibleAgentTypeForOwner } from '../../../shared/agent-title-owner'
+import { resolvePaneAgentOwner } from '../../../shared/pane-agent-owner'
 import type { TerminalTab, TuiAgent } from '../../../shared/types'
 
 // A shell name, or the tab's neutral default title — where Orca's
@@ -18,6 +20,19 @@ import type { TerminalTab, TuiAgent } from '../../../shared/types'
 function titleShowsNoAgent(title: string, defaultTitle?: string): boolean {
   const trimmed = title.trim()
   return trimmed.length > 0 && (isShellProcess(trimmed) || trimmed === defaultTitle?.trim())
+}
+
+/**
+ * Resolves wrapper-compatible signal identity against the launch owner.
+ */
+function resolveSignalAgentForLaunchOwner(
+  signalAgent: TuiAgent | null | undefined,
+  launchAgent: TuiAgent | null
+): TuiAgent | null {
+  if (!signalAgent) {
+    return null
+  }
+  return (resolveCompatibleAgentTypeForOwner(signalAgent, launchAgent) ?? signalAgent) as TuiAgent
 }
 
 /**
@@ -65,84 +80,138 @@ export function resolveTabAgentFromSignals(args: {
   siblingCompletedHookAgent?: TuiAgent | null
   processAgent?: TuiAgent | null
   processShellForeground?: boolean
+  sleepingSessionAgent?: TuiAgent | null
   launchAgent?: TuiAgent
 }): TuiAgent | null {
   const launchAgent = args.launchAgent ?? null
-  const explicitTitleAgent = resolveExplicitTerminalTitleAgentType(args.title)
-  // Why: when a pane is reused for a different agent, its launchAgent goes stale.
-  // A live title that explicitly names a *different* agent, once the pane has
-  // shown any activity, overrides that stale launch identity so the tab icon
-  // tracks what is actually running (codex launch reused for claude, etc.).
-  // Why: OSC 133;D proved this local pane's foreground is back at the shell,
-  // so any title-derived identity is stale by definition — a TUI that died
-  // with a stuck title must not keep painting the tab through the title layer.
+  // The focused pane's durable agent owner: launch intent first, then this
+  // pane's own host-stamped hook identity (live or completed), then its
+  // hibernated session record. It anchors every identity decision for THIS pane
+  // — it re-owns ambiguous Pi-compatible wrapper titles (OMP emits Pi's frames)
+  // and keeps a mirrored or restored pane, which dropped its host-owned
+  // launchAgent, resolving through the durable record instead of the title.
+  // Why: strictly focused-pane-scoped — a sibling split-pane's identity says
+  // nothing about which Pi-variant this pane runs, so it must not re-own the
+  // focused title (it would mislabel a genuine Pi pane as its sibling's OMP).
+  const owner = resolvePaneAgentOwner({
+    launchAgent,
+    hookAgent: args.hookAgent,
+    completedHookAgent: args.focusedCompletedHookAgent,
+    sleepingSessionAgent: args.sleepingSessionAgent
+  }) as TuiAgent | null
+
+  // A pane's identity comes from its hook record regardless of activity state —
+  // being idle between turns must not erase which agent is here. We keep the
+  // live/idle split only because it governs how a title may override identity: a
+  // LIVE hook is ground truth (a title never overrides it), while an IDLE record
+  // is durable but a cross-group title can reclaim a pane reused for a different
+  // agent. Sibling identities normalize against launchAgent only (the tab's
+  // shared launch intent), never the focused pane's own hook identity.
+  const liveFocusedIdentity = resolveSignalAgentForLaunchOwner(args.hookAgent, owner)
+  const liveSiblingIdentity = resolveSignalAgentForLaunchOwner(args.siblingHookAgent, launchAgent)
+  // Why: OSC 133;D proved this local pane's foreground is back at the shell, so
+  // the finished agent's idle identity is stale and must stop painting the tab.
+  // Remote titles lag their runtime, so keep the idle identity there.
   const processProvesShell = !args.isRemote && args.processShellForeground === true
-  const titleOverridesLaunch =
-    launchAgent !== null &&
-    explicitTitleAgent !== null &&
-    explicitTitleAgent !== launchAgent &&
-    args.hasObservedAgentSignal
-  const titleAgent = processProvesShell
-    ? null
-    : titleOverridesLaunch
-      ? explicitTitleAgent
-      : launchAgent
-        ? null
-        : explicitTitleAgent
   const hasCompletedHook = (args.focusedCompletedHookAgent ?? null) !== null
   const noAgentTitle = titleShowsNoAgent(args.title, args.defaultTitle)
-  // Why: remote pane titles can lag their runtime, so keep the last completed
-  // hook identity instead of flashing unknown when the title reads as a shell.
-  const completedHookAgent =
+  const idleIdentitySuppressed =
     !args.isRemote && (noAgentTitle || processProvesShell) && hasCompletedHook
-      ? null
-      : (args.focusedCompletedHookAgent ?? args.siblingCompletedHookAgent ?? null)
-  const focusedHookAgent = args.hookAgent ?? null
-  const fallbackHookAgent = args.siblingHookAgent ?? completedHookAgent ?? null
+  const idleFocusedIdentity = idleIdentitySuppressed
+    ? null
+    : resolveSignalAgentForLaunchOwner(args.focusedCompletedHookAgent, owner)
+  // Why: `idleIdentitySuppressed` is the FOCUSED pane's own exit evidence, so it
+  // must not clear a sibling split-pane's idle identity — a focused pane back at
+  // its shell says nothing about whether the sibling's agent has exited.
+  const idleSiblingIdentity = resolveSignalAgentForLaunchOwner(
+    args.siblingCompletedHookAgent,
+    launchAgent
+  )
+
+  // The title carries identity in only two roles: (a) a reuse override — it
+  // names a DIFFERENT-group agent than the pane's known identity, proving the
+  // pane was reused for a new agent — or (b) a legacy standalone identity when
+  // the pane has no hook at all. Within the same title-identity group it says
+  // nothing (OMP wraps Pi and emits identical frames), so the durable record
+  // wins; re-owning explicitTitleAgent through `owner` enforces that.
+  const explicitTitleAgent = resolveSignalAgentForLaunchOwner(
+    resolveExplicitTerminalTitleAgentType(args.title),
+    owner
+  )
+  const priorIdentity = idleFocusedIdentity ?? launchAgent
+  // Why: a completed hook is itself proof the pane has shown activity, so it
+  // arms the reuse override without waiting for `hasObservedAgentSignal` — which
+  // starts false for one mount commit and would otherwise flash the exited
+  // agent's idle identity before the new (hookless) agent's title reclaims.
+  const titleReclaimsReusedPane =
+    priorIdentity !== null &&
+    explicitTitleAgent !== null &&
+    explicitTitleAgent !== priorIdentity &&
+    (args.hasObservedAgentSignal || hasCompletedHook)
+  const titleAgent = processProvesShell
+    ? null
+    : titleReclaimsReusedPane
+      ? explicitTitleAgent
+      : priorIdentity
+        ? null
+        : explicitTitleAgent
+
   const launchedAgentExited = resolveLaunchedAgentExitEvidence({
     title: args.title,
     defaultTitle: args.defaultTitle,
     isRemote: args.isRemote,
     hasObservedAgentSignal: args.hasObservedAgentSignal,
-    hookAgent: focusedHookAgent,
-    siblingHookAgent: args.siblingHookAgent,
+    hookAgent: liveFocusedIdentity,
+    siblingHookAgent: liveSiblingIdentity,
     hasCompletedHook,
     processAgent: args.processAgent,
     processShellForeground: args.processShellForeground
   })
   const activeLaunchAgent = launchedAgentExited ? null : launchAgent
   const processAgent = args.processAgent ?? null
-  // Why: titleAgent ranks ahead of launch/fallback hooks because, once the
-  // pane has shown activity, a live explicit title is the freshest identity
-  // signal — it beats a launchAgent gone stale through pane reuse. Before any
-  // activity, titleAgent is null while launchAgent exists, so launch bootstrap
-  // still wins the startup window. Process identity (the recognized foreground
-  // process) is ground truth below hooks — it covers agents that emit neither
-  // hooks nor titles.
-  return focusedHookAgent ?? processAgent ?? titleAgent ?? activeLaunchAgent ?? fallbackHookAgent
+  const sleepingSessionAgent = args.sleepingSessionAgent ?? null
+  // Identity-first precedence. The live focused hook is ground truth while the
+  // agent works; process identity covers agents with neither hook nor title; the
+  // title then acts only in its reuse-override / legacy roles; and the pane's
+  // durable idle identity — the record for an agent that ran here and went idle —
+  // ranks above the hibernated session, the launch bootstrap, and sibling panes.
+  return (
+    liveFocusedIdentity ??
+    processAgent ??
+    titleAgent ??
+    idleFocusedIdentity ??
+    sleepingSessionAgent ??
+    activeLaunchAgent ??
+    liveSiblingIdentity ??
+    idleSiblingIdentity
+  )
 }
 
 /**
  * Resolve which coding-harness agent a terminal tab is running, for its tab-bar
  * icon. Identity flows through the same already-computed state as the sidebar
- * agent rows — no foreground probing. Layered signals, most-authoritative
- * first:
+ * agent rows — no foreground probing. It is a pane's IDENTITY, kept separate
+ * from its activity state: a hook record identifies the pane whether the agent
+ * is working or idle. Identity-first precedence:
  *
- * 1. Hook status — provider identity from native integrations; the live entry
- *    for the pane, dropped by the same OSC 133 command-finished machinery that
- *    clears the sidebar row when the process exits.
+ * 1. Live focused hook — provider identity from native integrations while the
+ *    agent is actively working; ground truth, never overridden by a title.
  * 2. Process identity — the recognized foreground process, read at OSC 133
  *    command boundaries (local panes only); covers agents that emit neither
- *    hooks nor titles, and its shell-foreground mark is title-independent
- *    exit evidence.
- * 3. launchAgent — what Orca launched here; instant bootstrap before hooks
- *    arrive, cleared once hook/process/title evidence shows the launched
- *    agent exited.
- * 4. Title — legacy/unknown-session fallback, and the live override when a pane
- *    is reused: once the pane has shown activity, a title that explicitly names
- *    a different agent than launchAgent wins over that stale launch identity.
- *    Otherwise it is ignored while launchAgent exists, and generic spinner-only
- *    titles never identify an agent.
+ *    hooks nor titles, and its shell-foreground mark is title-independent exit
+ *    evidence.
+ * 3. Title — only as a reuse override (it names a DIFFERENT-group agent than the
+ *    pane's known identity, proving reuse) or as a legacy standalone identity
+ *    when the pane has no hook. Within the same title-identity group it carries
+ *    no identity (OMP wraps Pi with identical frames), so the record wins.
+ * 4. Idle focused identity — the pane's own hook record after the agent went
+ *    idle between turns; the durable answer to "which agent is this" once the
+ *    live hook, process, and any reuse-title are absent. Suppressed on a local
+ *    pane once OSC 133;D proves the agent exited.
+ * 5. Sleeping session identity — a hibernated pane's captured session record.
+ * 6. launchAgent — what Orca launched here; the bootstrap before any hook, hook
+ *    record, or process signal exists, cleared once exit evidence shows it left.
+ * 7. Sibling-pane identity (live, then idle) — split-tab fallback.
  */
 export function useTabAgent(tab: TerminalTab): TuiAgent | null {
   const focusedHookAgent = useAppStore((s) =>
@@ -178,6 +247,12 @@ export function useTabAgent(tab: TerminalTab): TuiAgent | null {
     focusedPaneKey
       ? Boolean(s.paneForegroundAgentByPaneKey[focusedPaneKey]?.shellForeground)
       : false
+  )
+  // Why: a hibernated pane's persisted session record is pane-scoped evidence of
+  // which agent actually ran here — the freshest identity once the PTY, hook,
+  // and process signals are all gone, and proof a stale launchAgent was reused.
+  const sleepingSessionAgent = useAppStore((s) =>
+    focusedPaneKey ? (s.sleepingAgentSessionsByPaneKey[focusedPaneKey]?.agent ?? null) : null
   )
 
   // The focused pane's PTY (single-pane tabs have exactly one leaf). Only used
@@ -299,6 +374,7 @@ export function useTabAgent(tab: TerminalTab): TuiAgent | null {
     siblingCompletedHookAgent,
     processAgent,
     processShellForeground,
+    sleepingSessionAgent,
     launchAgent: tab.launchAgent
   })
 }

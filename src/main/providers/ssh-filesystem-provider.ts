@@ -283,12 +283,20 @@ export class SshFilesystemProvider implements IFilesystemProvider {
     return (await this.mux.request('fs.search', opts)) as SearchResult
   }
 
-  async listFiles(rootPath: string, options?: { excludePaths?: string[] }): Promise<string[]> {
+  async listFiles(
+    rootPath: string,
+    options?: { excludePaths?: string[]; signal?: AbortSignal }
+  ): Promise<string[]> {
     const params: Record<string, unknown> = { rootPath }
     if (options?.excludePaths && options.excludePaths.length > 0) {
       params.excludePaths = options.excludePaths
     }
-    return (await this.mux.request('fs.listFiles', params)) as string[]
+    // Why #7721: the signal lets a workspace switch send rpc.cancel so the
+    // relay aborts the full-tree scan instead of stacking abandoned scans
+    // that starve interactive fs.readDir/fs.stat on the shared SSH channel.
+    return (await this.mux.request('fs.listFiles', params, {
+      signal: options?.signal
+    })) as string[]
   }
 
   async watch(rootPath: string, callback: (events: FsChangeEvent[]) => void): Promise<() => void> {

@@ -6,6 +6,10 @@
 // terminal titles anywhere in the data flow.
 
 import type { AgentProviderSessionMetadata } from './agent-session-resume'
+import {
+  compactDispatchPromptForStatus,
+  isOrcaDispatchStatusPrompt
+} from './orca-dispatch-status-prompt'
 
 export const AGENT_STATUS_STATES = ['working', 'blocked', 'waiting', 'done'] as const
 export type AgentStatusState = (typeof AGENT_STATUS_STATES)[number]
@@ -223,6 +227,15 @@ export const AGENT_STATUS_INTERACTIVE_PROMPT_MAX_LENGTH = 16000
  * dashboard + hover only display hook-reported data as-is.
  */
 export const AGENT_STATUS_STALE_AFTER_MS = 30 * 60 * 1000
+
+export function isFreshNonDoneAgentStatus(
+  entry: Pick<AgentStatusEntry, 'state' | 'updatedAt'> | undefined,
+  now = Date.now(),
+  staleAfterMs = AGENT_STATUS_STALE_AFTER_MS
+): boolean {
+  return Boolean(entry && entry.state !== 'done' && now - entry.updatedAt <= staleAfterMs)
+}
+
 const SINGLE_LINE_FIELD_SCAN_OVERHEAD = 64
 const SINGLE_LINE_FIELD_SCAN_MULTIPLIER = 8
 
@@ -256,6 +269,21 @@ function normalizeField(value: unknown, maxLength: number = AGENT_STATUS_MAX_FIE
     return ''
   }
   return normalizeSingleLinePreview(value, maxLength)
+}
+
+/** Normalize the agent prompt field, compacting Orca dispatch preambles. */
+function normalizePromptField(value: unknown): string {
+  if (typeof value !== 'string') {
+    return ''
+  }
+  if (isOrcaDispatchStatusPrompt(value)) {
+    return compactDispatchPromptForStatus(
+      value,
+      AGENT_STATUS_MAX_FIELD_LENGTH,
+      normalizeSingleLinePreview
+    )
+  }
+  return normalizeSingleLinePreview(value, AGENT_STATUS_MAX_FIELD_LENGTH)
 }
 
 function normalizeSingleLinePreview(value: string, maxLength: number): string {
@@ -432,7 +460,7 @@ function normalizeAgentStatusObject(parsed: unknown): ParsedAgentStatusPayload |
   }
   return {
     state: state as AgentStatusState,
-    prompt: normalizeField(obj.prompt),
+    prompt: normalizePromptField(obj.prompt),
     // Why: route through normalizeOptionalField so agentType gets the same
     // trim / collapse-newlines / truncate / empty→undefined treatment as the
     // other single-line string fields (toolName, toolInput, prompt). Inline

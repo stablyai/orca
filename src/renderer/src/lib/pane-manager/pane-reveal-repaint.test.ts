@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { ManagedPaneInternal } from './pane-manager-types'
-import { schedulePaneRevealRepaint } from './pane-reveal-repaint'
+import { schedulePaneRevealPresent, schedulePaneRevealRepaint } from './pane-reveal-repaint'
 import { resetTerminalWebglSuggestion } from './pane-webgl-renderer'
 
 type FakeWebglAddon = { clearTextureAtlas: ReturnType<typeof vi.fn> }
@@ -143,5 +143,33 @@ describe('schedulePaneRevealRepaint', () => {
 
     expect(webglAddon.clearTextureAtlas).toHaveBeenCalledTimes(1)
     vi.useRealTimers()
+  })
+
+  describe('schedulePaneRevealPresent', () => {
+    it('presents the settled buffer without wiping the shared glyph atlas', () => {
+      // The plain-refocus path must NOT clear the atlas — the clear is a
+      // same-config shared wipe that re-arms the mid-stream page-merge race.
+      const webglAddon = { clearTextureAtlas: vi.fn() }
+      const pane = createPane({ webglAddon })
+      schedulePaneRevealPresent(() => [pane])
+
+      flushFrame()
+      expect(pane.terminal.refresh).not.toHaveBeenCalled()
+
+      flushFrame()
+      expect(webglAddon.clearTextureAtlas).not.toHaveBeenCalled()
+      expect(pane.terminal.refresh).toHaveBeenCalledWith(0, 23)
+    })
+
+    it('still retries a missing WebGL attach on the settled frame', () => {
+      const pane = createPane()
+      schedulePaneRevealPresent(() => [pane])
+
+      flushFrame()
+      flushFrame()
+
+      expect(pane.webglAddon).not.toBeNull()
+      expect(pane.terminal.refresh).toHaveBeenCalled()
+    })
   })
 })

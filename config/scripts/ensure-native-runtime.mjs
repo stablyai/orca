@@ -279,10 +279,12 @@ function getPatchedNodePtyRebuildReason() {
   // Why: a loadable upstream node-pty prebuild is not enough; Orca's Unix
   // patch only lands in the source-built build/Release artifacts.
   const nodePtyDir = resolve(projectDir, 'node_modules', 'node-pty')
-  const missingArtifact = [
-    resolve(nodePtyDir, 'build', 'Release', 'pty.node'),
-    resolve(nodePtyDir, 'build', 'Release', 'spawn-helper')
-  ].find((artifactPath) => !existsSync(artifactPath))
+  const artifactPaths = [resolve(nodePtyDir, 'build', 'Release', 'pty.node')]
+  // Why: node-pty only builds spawn-helper on macOS; Linux builds only pty.node.
+  if (process.platform === 'darwin') {
+    artifactPaths.push(resolve(nodePtyDir, 'build', 'Release', 'spawn-helper'))
+  }
+  const missingArtifact = artifactPaths.find((artifactPath) => !existsSync(artifactPath))
 
   if (!missingArtifact) {
     return null

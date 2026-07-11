@@ -97,7 +97,14 @@ import {
   getDefaultWorkspaceSession
 } from '../../../../shared/constants'
 import { folderWorkspaceKey, worktreeWorkspaceKey } from '../../../../shared/workspace-scope'
-import { createTestStore, makeLayout, makeTab, makeWorktree, seedStore } from './store-test-helpers'
+import {
+  createTestStore,
+  makeLayout,
+  makeTab,
+  makeWorktree,
+  seedStore,
+  TEST_REPO
+} from './store-test-helpers'
 import { canGoBackWorktreeHistory } from './worktree-nav-history'
 
 describe('hydrateWorkspaceSession', () => {
@@ -416,6 +423,40 @@ describe('hydrateWorkspaceSession', () => {
       expect.objectContaining({ id: 'tab-2', ptyId: 'pty-2' }),
       expect.objectContaining({ id: 'tab-3', ptyId: 'pty-3' })
     ])
+  })
+
+  it('stashes deferred SSH session ids for worktrees not yet in worktreesByRepo', async () => {
+    // Why: at cold start SSH worktrees are absent from worktreesByRepo (relay
+    // discovery needs the connection). The deferred stash must fall back to
+    // the repo id embedded in the composite worktree id — otherwise restored
+    // SSH panes fresh-spawn into a missing PTY provider and strand an
+    // "SSH connection is not active" toast.
+    const store = createTestStore()
+    const worktreeId = 'repo1::/home/user/remote-project'
+    const sshSessionId = 'ssh:ssh-target-1@@pty-7'
+    seedStore(store, {
+      repos: [{ ...TEST_REPO, connectionId: 'ssh-target-1' }],
+      worktreesByRepo: {}
+    })
+
+    const session: WorkspaceSessionState = {
+      activeRepoId: 'repo1',
+      activeWorktreeId: worktreeId,
+      activeTabId: 'tab-1',
+      tabsByWorktree: {
+        [worktreeId]: [makeTab({ id: 'tab-1', worktreeId, ptyId: null })]
+      },
+      terminalLayoutsByTabId: {},
+      activeWorktreeIdsOnShutdown: [worktreeId],
+      remoteSessionIdsByTabId: { 'tab-1': sshSessionId }
+    }
+
+    store.getState().hydrateWorkspaceSession(session)
+    await store.getState().reconnectPersistedTerminals()
+
+    expect(store.getState().deferredSshSessionIdsByTabId).toMatchObject({
+      'tab-1': sshSessionId
+    })
   })
 
   it('resets persisted agent titles to the fallback label on hydration', () => {

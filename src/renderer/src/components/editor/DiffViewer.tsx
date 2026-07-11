@@ -16,7 +16,7 @@ import {
 import { applyDiffEditorLineNumberOptions } from './diff-editor-line-number-options'
 import type { DiffComment } from '../../../../shared/types'
 import { isDiffComment } from '@/lib/diff-comment-compat'
-import { installEditorSaveShortcut } from './editor-shortcuts'
+import { installEditorSaveShortcut, installMonacoEditorFindShortcut } from './editor-shortcuts'
 import { diffEditorScrollbarOptions } from './diff-editor-scrollbar-options'
 import { LargeDiffFallback } from './LargeDiffFallback'
 import { getLargeDiffRenderLimit } from './large-diff-render-limit'
@@ -336,15 +336,19 @@ export default function DiffViewer({
             onSaveRef.current?.(modifiedEditor.getValue())
           }
         )
+        const cleanupOriginalFindShortcut = installMonacoEditorFindShortcut(originalEditor)
+        const cleanupModifiedFindShortcut = installMonacoEditorFindShortcut(modifiedEditor)
 
         // Track changes
         const modelContentSub = modifiedEditor.onDidChangeModelContent(() => {
           onContentChangeRef.current?.(modifiedEditor.getValue())
         })
         modifiedEditor.onDidDispose(() => {
-          // Why: editable diff views own both the save shortcut and
-          // model-change subscription for this Monaco editor instance.
+          // Why: editable diff views own both panes' shortcut bridges and the
+          // model subscription for the lifetime of this Monaco diff instance.
           cleanupSaveShortcut()
+          cleanupOriginalFindShortcut()
+          cleanupModifiedFindShortcut()
           modelContentSub.dispose()
         })
 

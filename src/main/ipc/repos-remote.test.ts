@@ -12,6 +12,7 @@ import { join } from 'node:path'
 import type * as RepoModule from '../git/repo'
 import { DEFAULT_REPO_BADGE_COLOR } from '../../shared/constants'
 import { getGitRepoRoot, isGitRepo } from '../git/repo'
+import { clearGitCapabilityStateForTests } from '../git/git-capability-state'
 
 const {
   handleMock,
@@ -146,6 +147,10 @@ vi.mock('./ssh', () => ({
 }))
 
 import { registerRepoHandlers } from './repos'
+
+beforeEach(() => {
+  clearGitCapabilityStateForTests()
+})
 
 describe('projectGroups IPC validation', () => {
   const handlers = new Map<string, (_event: unknown, args: unknown) => unknown>()
@@ -2698,15 +2703,22 @@ describe('repos:searchBaseRefs SSH relay', () => {
       query: '',
       limit: 1
     })
+    const repeatedResult = await handlers.get('repos:searchBaseRefs')!(null, {
+      repoId: 'r1',
+      query: '',
+      limit: 1
+    })
 
     expect(result).toEqual(['origin/main'])
+    expect(repeatedResult).toEqual(['origin/main'])
     const forEachRefCalls = mockGitProvider.exec.mock.calls.filter(
       (call) => (call[0] as string[])[0] === 'for-each-ref'
     )
-    expect(forEachRefCalls).toHaveLength(2)
+    expect(forEachRefCalls).toHaveLength(3)
     expect(forEachRefCalls[0][0]).toContain('--exclude=refs/remotes/**/HEAD')
     expect(forEachRefCalls[1][0]).not.toContain('--exclude=refs/remotes/**/HEAD')
     expect(forEachRefCalls[1][0]).toContain('--count=104')
+    expect(forEachRefCalls[2][0]).not.toContain('--exclude=refs/remotes/**/HEAD')
   })
 
   it('sends the widened `**` argv so all remotes and slash-named branches are discoverable', async () => {

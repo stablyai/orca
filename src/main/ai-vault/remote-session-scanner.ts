@@ -11,6 +11,7 @@ import type { FileStat, IFilesystemProvider } from '../providers/types'
 import type { RemoteHostPlatform } from '../ssh/ssh-remote-platform'
 import { joinRemotePath } from '../ssh/ssh-remote-platform'
 import { sessionSortTime } from './session-scanner-accumulator'
+import { partitionSubagentTranscriptPaths } from './session-scanner-subagent-transcripts'
 import type { FileWithMtime } from './session-scanner-types'
 import { errorMessage } from './session-scanner-values'
 import { remoteSessionSources } from './remote-session-scanner-sources'
@@ -77,11 +78,15 @@ async function discoverRemoteSourceCandidates(args: {
   context: RemoteScannerContext
   issues: AiVaultScanIssue[]
 }): Promise<RemoteSessionCandidate[]> {
-  const paths = await walkRemoteSessionFiles(
+  const walked = await walkRemoteSessionFiles(
     args.source,
     args.context.provider,
     args.context.hostPlatform
   )
+  const partition = args.source.collectSubagentSiblingCounts
+    ? partitionSubagentTranscriptPaths(walked)
+    : null
+  const paths = partition ? partition.sessionFilePaths : walked
   const files = await mapRemoteScanConcurrently(paths, (path) =>
     statRemoteFile(
       args.context.provider,
@@ -93,7 +98,11 @@ async function discoverRemoteSourceCandidates(args: {
   )
   return files
     .filter((file): file is FileWithMtime => Boolean(file))
-    .map((file) => ({ source: args.source, file }))
+    .map((file) => ({
+      source: args.source,
+      file,
+      subagentTranscriptCount: partition?.subagentTranscriptCounts.get(file.path) ?? 0
+    }))
 }
 
 async function walkRemoteSessionFiles(
@@ -199,7 +208,15 @@ async function parseRemoteSessionCandidate(
     if (read.isBinary) {
       return null
     }
-    return candidate.source.parse(candidate.file, read.content, context)
+    const session = await candidate.source.parse(candidate.file, read.content, context)
+    // Mirror the local rule: every session carries its sibling subagent
+    // transcript count (row badge; recoverable signal at zero turns). The
+    // walk listing supplies it — the parser can't readdir a remote disk.
+    const subagentTranscriptCount = candidate.subagentTranscriptCount ?? 0
+    if (session && subagentTranscriptCount > 0) {
+      return { ...session, subagentTranscriptCount }
+    }
+    return session
   } catch (err) {
     issues.push({
       executionHostId: context.executionHostId,

@@ -18,6 +18,9 @@ export type AgentDotState =
   | 'blocked'
   | 'waiting'
   | 'interrupted'
+  // Why: AI Vault subagent rows report a transcript-derived failure, which is
+  // an outcome (like 'done'), not a live attention state like 'blocked'.
+  | 'failed'
   | 'done'
   | 'idle'
   // Why: the sidebar's title-based status flow (StatusIndicator/WorktreeCard)
@@ -37,6 +40,8 @@ export function agentStateLabel(state: AgentDotState): string {
       return 'Waiting for input'
     case 'interrupted':
       return 'Interrupted'
+    case 'failed':
+      return 'Failed'
     case 'done':
       return 'Done'
     case 'idle':
@@ -105,7 +110,7 @@ export const AgentStateDot = React.memo(function AgentStateDot({
           inner,
           state === 'permission' || state === 'waiting'
             ? 'bg-amber-500'
-            : state === 'blocked' || state === 'interrupted'
+            : state === 'blocked' || state === 'interrupted' || state === 'failed'
               ? 'bg-red-500'
               : 'bg-neutral-500/40'
         )}
