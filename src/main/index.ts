@@ -122,6 +122,8 @@ import {
 } from './codex-accounts/runtime-selection'
 import { normalizeClaudeRuntimeSelection } from './claude-accounts/runtime-selection'
 import { codexHookService } from './codex/hook-service'
+import { scheduleManagedCodexSessionExportFromHook } from './codex/codex-session-history-hook'
+import { resolveHostCodexSessionSourceHome } from './codex/codex-session-source-home'
 import { getDefaultWslDistro } from './wsl'
 import { ClaudeAccountService } from './claude-accounts/service'
 import { ClaudeRuntimeAuthService } from './claude-accounts/runtime-auth-service'
@@ -750,6 +752,7 @@ function openMainWindow(): BrowserWindow {
   if (!store) {
     throw new Error('Store must be initialized before opening the main window')
   }
+  const mainWindowStore = store
   if (!runtime) {
     throw new Error('Runtime must be initialized before opening the main window')
   }
@@ -1016,9 +1019,14 @@ function openMainWindow(): BrowserWindow {
       receivedAt,
       stateStartedAt,
       launchToken,
+      hookEventName,
       providerSession,
       isReplay
     }) => {
+      scheduleManagedCodexSessionExportFromHook(
+        { connectionId, hookEventName, payload, providerSession, isReplay },
+        resolveHostCodexSessionSourceHome(mainWindowStore.getSettings())
+      )
       if (mainWindow?.isDestroyed()) {
         return
       }

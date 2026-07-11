@@ -85,29 +85,34 @@ export function buildWslCodexSessionBridgeShellCommand(
 ): string {
   const shellCommand = [
     'set -u',
-    `source_sessions_root=${quoteBashString(paths.systemSessionsRoot)}`,
+    `system_sessions_root=${quoteBashString(paths.systemSessionsRoot)}`,
     `managed_sessions_root=${quoteBashString(paths.managedSessionsRoot)}`,
     'scanned_files=0',
     'linked_files=0',
-    'if [ ! -d "$source_sessions_root" ]; then',
-    `  printf '{"scannedFiles":0,"linkedFiles":0}\\n'`,
-    '  exit 0',
-    'fi',
-    "while IFS= read -r -d '' source_file; do",
-    '  scanned_files=$((scanned_files + 1))',
-    '  relative_path=${source_file#"$source_sessions_root"/}',
-    '  target_file="$managed_sessions_root/$relative_path"',
-    '  if [ -e "$target_file" ] || [ -L "$target_file" ]; then',
-    '    continue',
-    '  fi',
-    '  target_dir=${target_file%/*}',
-    '  mkdir -p -- "$target_dir" || continue',
+    'bridge_session_tree() {',
+    '  local source_root=$1',
+    '  local target_root=$2',
+    '  [ -d "$source_root" ] || return 0',
+    "  while IFS= read -r -d '' source_file; do",
+    '    scanned_files=$((scanned_files + 1))',
+    '    relative_path=${source_file#"$source_root"/}',
+    '    target_file="$target_root/$relative_path"',
+    '    if [ -e "$target_file" ] || [ -L "$target_file" ]; then',
+    '      continue',
+    '    fi',
+    '    target_dir=${target_file%/*}',
+    '    mkdir -p -- "$target_dir" || continue',
     // Why: Codex resume ignores symlinked JSONL, so WSL links must be
     // Linux hardlinks created inside the distro filesystem.
-    '  if ln -- "$source_file" "$target_file"; then',
-    '    linked_files=$((linked_files + 1))',
-    '  fi',
-    `done < <(find "$source_sessions_root" -type f -name '*.jsonl' -print0 2>/dev/null)`,
+    '    if ln -- "$source_file" "$target_file"; then',
+    '      linked_files=$((linked_files + 1))',
+    '    fi',
+    `  done < <(find "$source_root" -type f -name '*.jsonl' -print0 2>/dev/null)`,
+    '}',
+    // Why: export first so Orca-created WSL sessions survive collisions; the
+    // import pass then makes external sessions available in Orca as before.
+    'bridge_session_tree "$managed_sessions_root" "$system_sessions_root"',
+    'bridge_session_tree "$system_sessions_root" "$managed_sessions_root"',
     `printf '{"scannedFiles":%s,"linkedFiles":%s}\\n' "$scanned_files" "$linked_files"`
   ].join('\n')
   return escapeWslShCommandForWindows(shellCommand)

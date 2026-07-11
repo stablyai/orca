@@ -180,6 +180,32 @@ afterEach(() => {
 })
 
 describe('syncSystemCodexSessionsIntoManagedHome', () => {
+  it('exports Orca-created sessions into the external Codex history root', () => {
+    const relativeSessionPath = join('sessions', '2026', '07', '10', 'rollout-orca.jsonl')
+    const runtimeSessionPath = join(getRuntimeCodexHomePath(), relativeSessionPath)
+    const systemSessionPath = join(getSystemCodexHomePath(), relativeSessionPath)
+    mkdirSync(dirname(runtimeSessionPath), { recursive: true })
+    writeFileSync(
+      runtimeSessionPath,
+      `${JSON.stringify({
+        timestamp: '2026-07-10T00:00:00.000Z',
+        type: 'session_meta',
+        payload: {
+          id: '00000000-0000-4000-8000-000000004444',
+          cwd: join(fakeHomeDir, 'orca', 'workspaces', 'project', 'fix-4444')
+        }
+      })}\n`,
+      'utf-8'
+    )
+
+    syncSystemCodexSessionsIntoManagedHome()
+
+    expect(readFileSync(systemSessionPath, 'utf-8')).toContain(
+      '00000000-0000-4000-8000-000000004444'
+    )
+    expectResourceLinked(systemSessionPath, runtimeSessionPath)
+  })
+
   it('bridges system Codex session jsonl files into the managed runtime home', () => {
     const systemSessionPath = join(
       getSystemCodexHomePath(),
@@ -241,6 +267,16 @@ describe('syncSystemCodexSessionsIntoManagedHome', () => {
     )
     mkdirSync(dirname(defaultSessionPath), { recursive: true })
     writeFileSync(defaultSessionPath, '{"id":"default"}\n', 'utf-8')
+    const managedExportPath = join(
+      getRuntimeCodexHomePath(),
+      'sessions',
+      '2026',
+      '05',
+      '26',
+      'rollout-managed-custom.jsonl'
+    )
+    mkdirSync(dirname(managedExportPath), { recursive: true })
+    writeFileSync(managedExportPath, '{"id":"managed-custom"}\n', 'utf-8')
 
     syncSystemCodexSessionsIntoManagedHome(customSourceHome)
 
@@ -256,6 +292,24 @@ describe('syncSystemCodexSessionsIntoManagedHome', () => {
     expect(
       existsSync(
         join(getRuntimeCodexHomePath(), 'sessions', '2026', '05', '26', 'rollout-default.jsonl')
+      )
+    ).toBe(false)
+    expect(
+      readFileSync(
+        join(customSourceHome, 'sessions', '2026', '05', '26', 'rollout-managed-custom.jsonl'),
+        'utf-8'
+      )
+    ).toBe('{"id":"managed-custom"}\n')
+    expect(
+      existsSync(
+        join(
+          getSystemCodexHomePath(),
+          'sessions',
+          '2026',
+          '05',
+          '26',
+          'rollout-managed-custom.jsonl'
+        )
       )
     ).toBe(false)
   })

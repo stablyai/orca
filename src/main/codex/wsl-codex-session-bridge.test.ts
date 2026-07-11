@@ -35,7 +35,7 @@ beforeEach(() => {
 })
 
 describe('syncWslCodexSessionsIntoManagedHome', () => {
-  it('runs a WSL hardlink bridge from the WSL system sessions into the managed home', async () => {
+  it('runs a bidirectional WSL hardlink bridge between system and managed histories', async () => {
     mockExecFileSuccess()
 
     const summary = await syncWslCodexSessionsIntoManagedHome({
@@ -61,13 +61,19 @@ describe('syncWslCodexSessionsIntoManagedHome', () => {
     expect(options.windowsHide).toBe(true)
 
     const shellCommand = args[5]
-    expect(shellCommand).toContain("source_sessions_root='/home/alice/.codex/sessions'")
+    expect(shellCommand).toContain("system_sessions_root='/home/alice/.codex/sessions'")
     expect(shellCommand).toContain(
       "managed_sessions_root='/home/alice/.local/share/orca/codex-runtime-home/home/sessions'"
     )
-    expect(shellCommand).toContain(`find "\\$source_sessions_root" -type f -name '*.jsonl' -print0`)
+    expect(shellCommand).toContain(`find "\\$source_root" -type f -name '*.jsonl' -print0`)
     expect(shellCommand).toContain('ln -- "\\$source_file" "\\$target_file"')
     expect(shellCommand).toContain('if [ -e "\\$target_file" ] || [ -L "\\$target_file" ]; then')
+    expect(shellCommand).toContain(
+      'bridge_session_tree "\\$managed_sessions_root" "\\$system_sessions_root"'
+    )
+    expect(shellCommand).toContain(
+      'bridge_session_tree "\\$system_sessions_root" "\\$managed_sessions_root"'
+    )
     expect(shellCommand).not.toContain('ln -s')
     expect(shellCommand).not.toContain('cp ')
     expect(shellCommand).not.toContain('sqlite')
@@ -149,7 +155,7 @@ describe('buildWslCodexSessionBridgeShellCommand', () => {
     })
 
     expect(shellCommand).toContain(
-      `source_sessions_root='/home/alice/.codex/sessions with '\\''quote'\\'''`
+      `system_sessions_root='/home/alice/.codex/sessions with '\\''quote'\\'''`
     )
     expect(shellCommand).toContain(`-name '*.jsonl'`)
     expect(shellCommand).not.toContain('.sqlite')
@@ -161,7 +167,8 @@ describe('buildWslCodexSessionBridgeShellCommand', () => {
       managedSessionsRoot: '/home/alice/.local/share/orca/codex-runtime-home/home/sessions'
     })
 
-    expect(shellCommand).toContain('\\$source_sessions_root')
+    expect(shellCommand).toContain('\\$system_sessions_root')
+    expect(shellCommand).toContain('\\$source_root')
     expect(shellCommand).toContain('\\$source_file')
     expect(shellCommand).toContain('\\$((scanned_files + 1))')
   })

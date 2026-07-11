@@ -486,6 +486,111 @@
       "demotionRule": "Demote or quarantine if failures are non-actionable or if a duplicate resume escape occurs outside the modeled matrix."
     },
     {
+      "id": "agent-session.codex-external-history-bridge",
+      "title": "Orca-created Codex sessions remain visible in external Codex history",
+      "maturity": "experimental",
+      "protection": "partial",
+      "owner": "agent-session",
+      "layer": "main-filesystem-contract",
+      "surfaces": [
+        "Codex launch",
+        "Codex session creation",
+        "session history persistence",
+        "upgrade recovery"
+      ],
+      "platforms": ["macos", "linux", "windows"],
+      "providers": ["local", "wsl"],
+      "coveredPlatforms": ["macos"],
+      "coveredProviders": ["local"],
+      "coverageNotes": "Synthetic host filesystem evidence runs on macOS. WSL has command-construction coverage for bidirectional in-distro hardlinks, but no live Windows/WSL run; Linux and Windows host behavior awaits CI evidence.",
+      "motivatingLinks": ["https://github.com/stablyai/orca/issues/4444"],
+      "invariant": "A valid Codex session created under Orca's managed CODEX_HOME must become discoverable from the configured external Codex history root without overwriting either history, following symlink escapes, or creating divergent copies.",
+      "oracle": "Synthetic managed and system homes prove an Orca-created JSONL becomes one shared hardlinked log in both roots, concurrent appends remain coherent, repeated and raced exports are idempotent, independent relative-path collisions preserve both originals, EXDEV/EPERM failures preserve the managed original without an external copy, and a live SessionStart schedules exact-file export with UserPromptSubmit as an event-driven retry when creation was not yet observable.",
+      "commands": [
+        "pnpm exec vitest run --config config/vitest.config.ts src/main/codex/codex-session-bridge.test.ts src/main/codex/codex-session-managed-export.test.ts src/main/codex/codex-session-managed-export-failure.test.ts src/main/codex/codex-session-history-hook.test.ts src/main/codex/wsl-codex-session-bridge.test.ts"
+      ],
+      "testFiles": [
+        "src/main/codex/codex-session-bridge.test.ts",
+        "src/main/codex/codex-session-managed-export.test.ts",
+        "src/main/codex/codex-session-managed-export-failure.test.ts",
+        "src/main/codex/codex-session-history-hook.test.ts",
+        "src/main/codex/wsl-codex-session-bridge.test.ts"
+      ],
+      "assertionRefs": [
+        {
+          "file": "src/main/codex/codex-session-bridge.test.ts",
+          "assertions": [
+            "exports Orca-created sessions into the external Codex history root",
+            "does not overwrite runtime-owned session files"
+          ]
+        },
+        {
+          "file": "src/main/codex/codex-session-managed-export.test.ts",
+          "assertions": [
+            "creates one shared log and remains idempotent while either side appends",
+            "preserves independent histories when the relative path collides",
+            "does not follow a managed transcript symlink"
+          ]
+        },
+        {
+          "file": "src/main/codex/codex-session-managed-export-failure.test.ts",
+          "assertions": [
+            "preserves the managed log when link fails with EXDEV",
+            "preserves the managed log when link fails with EPERM",
+            "accepts a concurrent winner that creates the same hardlink"
+          ]
+        },
+        {
+          "file": "src/main/codex/codex-session-history-hook.test.ts",
+          "assertions": [
+            "exports a local managed transcript after a live Codex SessionStart",
+            "retries on the next prompt when SessionStart ran before the rollout existed"
+          ]
+        }
+      ],
+      "evidenceRuns": [
+        {
+          "date": "2026-07-10",
+          "runner": "local",
+          "platform": "macos",
+          "command": "pnpm exec vitest run --config config/vitest.config.ts src/main/codex/codex-session-bridge.test.ts src/main/codex/codex-session-managed-export.test.ts src/main/codex/codex-session-managed-export-failure.test.ts src/main/codex/codex-session-history-hook.test.ts src/main/codex/wsl-codex-session-bridge.test.ts",
+          "result": "passed",
+          "durationSeconds": 0.2,
+          "summary": "5 test files passed, 33 tests passed in the synthetic history bridge and WSL command-contract slice."
+        }
+      ],
+      "runtimeBudget": {
+        "p95Seconds": 5,
+        "scope": "focused main-process filesystem contract"
+      },
+      "flakeHistory": {
+        "status": "unknown",
+        "evidence": "Focused deterministic slice passed locally once; needs CI and cross-platform history before blocking promotion."
+      },
+      "redGreenEvidence": {
+        "status": "partial",
+        "evidence": "Before the fix, the exact production-boundary regression failed twice with ENOENT at the external system session path (1 failed, 9 skipped each run). After the fix, the combined 33-test slice passed. Live packaged Codex Mac/CLI evidence remains outstanding."
+      },
+      "performanceBudget": {
+        "required": true,
+        "evidence": "SessionStart schedules one O(1) exact-file hardlink and a bounded 1024-entry success cache suppresses later prompt work. Upgrade recovery adds one incremental managed-history walk per Codex launch, coalesced with existing bridge tasks; it adds no polling, hot typing work, subprocess, or startup await."
+      },
+      "promotionCriteria": [
+        "Pass this command in macOS, Linux, and Windows CI.",
+        "Capture packaged Codex CLI or Mac evidence that an Orca-created session appears externally during the same live session.",
+        "Run a live WSL bridge fixture and decide whether same-session hook-triggered WSL export is required before provider coverage.",
+        "Collect stable CI history before raising protection."
+      ],
+      "knownGaps": [
+        "Cross-volume and permission-blocked hardlinks fail safely but cannot make the session externally visible; copies and symlinks are deliberately not used because copies diverge and Codex resume ignores symlinked JSONL files.",
+        "Codex project pickers still apply Codex's cwd filter. Orca keeps the truthful worktree cwd so external users may need the worktree path or codex resume --all instead of resuming into the wrong checkout.",
+        "The gate does not synchronize managed session_index.jsonl rename metadata.",
+        "WSL bidirectional migration is covered at shell-command construction only and runs on the next bridge launch, not from a live WSL SessionStart.",
+        "SSH and remote-runtime Codex are unaffected because Orca does not redirect their history into the host managed CODEX_HOME; no live remote evidence is included."
+      ],
+      "demotionRule": "Demote or quarantine if the deterministic filesystem oracle flakes, a collision overwrites either original, or a bridge path creates divergent mutable copies."
+    },
+    {
       "id": "terminal-geometry.visible-convergence",
       "title": "Visible desktop terminals converge across xterm, fit, PTY, shell, and runtime mirror size",
       "maturity": "experimental",
