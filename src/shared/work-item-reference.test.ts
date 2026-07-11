@@ -41,6 +41,13 @@ describe('extractWorkIdentifier', () => {
     expect(extractWorkIdentifier('(see https://github.com/o/r/pull/5).')?.label).toBe('PR 5')
   })
 
+  it('reads a URL wrapped in markdown emphasis (trailing underscore/asterisk)', () => {
+    expect(extractWorkIdentifier('Review _https://github.com/o/r/pull/5_ now')?.label).toBe('PR 5')
+    expect(extractWorkIdentifier('Review **https://github.com/o/r/pull/1094**')?.label).toBe(
+      'PR 1094'
+    )
+  })
+
   it('reads textual references', () => {
     expect(extractWorkIdentifier('please review PR #1094')?.label).toBe('PR 1094')
     expect(extractWorkIdentifier('triage pull request 500')?.label).toBe('PR 500')

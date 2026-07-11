@@ -54,6 +54,12 @@ describe('deriveGeneratedTabTitle', () => {
     ).toBe('Issue 9 - Inspect then report')
   })
 
+  it('leads with the identifier for a URL wrapped in markdown emphasis, without leaking fragments', () => {
+    const title = deriveGeneratedTabTitle('Review _https://github.com/o/r/pull/5_ now')
+    expect(title).toBe('PR 5 - Review now')
+    expect(title).not.toMatch(/https|pull/)
+  })
+
   it('leads with a bare ticket key', () => {
     expect(deriveGeneratedTabTitle('implement ENG-456 login flow')).toBe(
       'ENG-456 - Implement login flow'

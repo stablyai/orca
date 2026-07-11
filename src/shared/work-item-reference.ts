@@ -95,7 +95,10 @@ function findUrlIdentifier(text: string): WorkIdentifier | null {
     return null
   }
   for (const raw of urls) {
-    const identifier = urlToIdentifier(raw.replace(/[.,;:!?]+$/, ''))
+    // Trim trailing sentence punctuation and markdown emphasis (`_`/`*`/`~`): a
+    // URL wrapped like `_…/pull/5_` otherwise keeps the `_`, breaking the path
+    // anchor so the identifier is lost. Interior `_` (`merge_requests`) is kept.
+    const identifier = urlToIdentifier(raw.replace(/[.,;:!?*_~]+$/, ''))
     if (identifier) {
       return identifier
     }
