@@ -25,7 +25,7 @@ import {
   UsageBar
 } from '../src/components/AccountUsage'
 import AsyncStorage from '@react-native-async-storage/async-storage'
-import { loadHosts, renameHost } from '../src/transport/host-store'
+import { loadHosts } from '../src/transport/host-store'
 import { removeHostAndCloseClient } from '../src/transport/host-removal-lifecycle'
 import { pickResumeWorktree } from '../src/worktree/resume-worktree'
 import type { RpcClient } from '../src/transport/rpc-client'
@@ -42,7 +42,6 @@ import { triggerMediumImpact } from '../src/platform/haptics'
 import { OrcaLogo } from '../src/components/OrcaLogo'
 import { StatusDot } from '../src/components/StatusDot'
 import { TaskProviderLogo } from '../src/components/TaskProviderLogo'
-import { TextInputModal } from '../src/components/TextInputModal'
 import { ActionSheetModal, type ActionSheetAction } from '../src/components/ActionSheetModal'
 import { ConfirmModal } from '../src/components/ConfirmModal'
 import { setCachedWorktrees, getCachedWorktrees } from '../src/cache/worktree-cache'
@@ -306,7 +305,6 @@ export default function HomeScreen() {
   const { isWideLayout, contentMaxWidth } = useResponsiveLayout()
   const [hosts, setHosts] = useState<HostProfile[]>([])
   const [actionTarget, setActionTarget] = useState<HostProfile | null>(null)
-  const [renameTarget, setRenameTarget] = useState<HostProfile | null>(null)
   const [confirmRemove, setConfirmRemove] = useState<HostProfile | null>(null)
   const [hostStates, setHostStates] = useState<Record<string, ConnectionState>>({})
   const [hostAttempts, setHostAttempts] = useState<Record<string, number>>({})
@@ -694,19 +692,6 @@ export default function HomeScreen() {
     </Pressable>
   )
 
-  async function handleRename(newName: string) {
-    if (!renameTarget) {
-      return
-    }
-    try {
-      await renameHost(renameTarget.id, newName)
-      setRenameTarget(null)
-      setHosts(await loadHosts())
-    } catch {
-      setRenameTarget(null)
-    }
-  }
-
   async function handleRemove() {
     if (!confirmRemove) {
       return
@@ -1079,11 +1064,11 @@ export default function HomeScreen() {
             })
           }
           items.push({
-            label: 'Rename',
+            label: 'Edit host',
             icon: Edit3,
             onPress: () => {
               setActionTarget(null)
-              setRenameTarget(host)
+              router.push(`/h/${host.id}/edit`)
             }
           })
           items.push({
@@ -1097,16 +1082,6 @@ export default function HomeScreen() {
           return items
         })()}
         onClose={() => setActionTarget(null)}
-      />
-
-      <TextInputModal
-        visible={renameTarget != null}
-        title="Rename Host"
-        message="Enter a new name for this host."
-        defaultValue={renameTarget?.name ?? ''}
-        placeholder="Host name"
-        onSubmit={(name) => void handleRename(name)}
-        onCancel={() => setRenameTarget(null)}
       />
 
       <ConfirmModal

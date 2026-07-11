@@ -249,6 +249,21 @@ export async function renameHost(hostId: string, newName: string): Promise<void>
   })
 }
 
+// Why: Edit host rewrites only the connection address when the same paired
+// desktop is reachable at a different IP (LAN vs Tailscale). deviceToken and
+// publicKey stay in place so workspaces do not need re-pairing.
+export async function updateHostEndpoint(hostId: string, endpoint: string): Promise<void> {
+  await mutateStoredHosts((hosts) => {
+    const index = hosts.findIndex((host) => host.id === hostId)
+    if (index < 0) {
+      throw new Error('Host not found')
+    }
+    const next = hosts.slice()
+    next[index] = { ...next[index]!, endpoint }
+    return next
+  })
+}
+
 export async function getNextHostName(): Promise<string> {
   await hostListMutation
   const hosts = await loadStoredHosts()
