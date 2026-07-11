@@ -30,7 +30,10 @@ import {
   removeWorktree
 } from '../git/worktree'
 import * as gitRunner from '../git/runner'
-import { clearSubmodulePathsCacheForTests, listSubmodulePaths } from '../git/status'
+import {
+  clearSubmodulePathsCacheForTests,
+  listSubmodulePaths
+} from '../git/status'
 import {
   createSetupRunnerScript,
   getEffectiveHooks,

@@ -137,12 +137,15 @@ export function useLinearAgentSkillSetupReminderToast({
     }
   }, [localDismissStorageKey, missingSetup])
 
-  useEffect(() => {
-    if (surface !== 'modal') {
-      return
-    }
-    return () => {
-      dismissLinearAgentSkillSetupReminderToast(localDismissStorageKey)
-    }
-  }, [localDismissStorageKey, surface])
+  useEffect(
+    () => {
+      if (surface !== 'modal') {
+        return
+      }
+      return () => {
+        dismissLinearAgentSkillSetupReminderToast(localDismissStorageKey)
+      }
+    },
+    [localDismissStorageKey, surface]
+  )
 }

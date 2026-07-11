@@ -1,5 +1,8 @@
 import { describe, expect, it } from 'vitest'
-import { DEFAULT_WARNING_DEDUPE_MAX_KEYS, shouldEmitBoundedWarning } from './bounded-warning-dedupe'
+import {
+  DEFAULT_WARNING_DEDUPE_MAX_KEYS,
+  shouldEmitBoundedWarning
+} from './bounded-warning-dedupe'
 
 describe('shouldEmitBoundedWarning', () => {
   it('keeps retained warning keys quiet without cascade eviction after saturation', () => {
@@ -26,6 +29,8 @@ describe('shouldEmitBoundedWarning', () => {
     )
 
     expect(keys.filter((key) => shouldEmitBoundedWarning(warningKeys, key))).toEqual(keys)
-    expect(keys.filter((key) => shouldEmitBoundedWarning(warningKeys, key))).toEqual([keys.at(-1)])
+    expect(keys.filter((key) => shouldEmitBoundedWarning(warningKeys, key))).toEqual([
+      keys.at(-1)
+    ])
   })
 })

@@ -155,7 +155,10 @@ vi.mock('./ssh', () => ({
 }))
 
 import { registerRepoHandlers } from './repos'
-import { clearSubmodulePathsCacheForTests, listSubmodulePaths } from '../git/status'
+import {
+  clearSubmodulePathsCacheForTests,
+  listSubmodulePaths
+} from '../git/status'
 
 beforeEach(() => {
   clearGitCapabilityStateForTests()

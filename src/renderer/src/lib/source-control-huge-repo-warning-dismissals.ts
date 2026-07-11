@@ -54,7 +54,11 @@ export function beginHugeRepoWarningProbe(
 
 export function hasDismissedHugeRepoWarning(probe: HugeRepoWarningProbe): boolean {
   const state = hugeRepoWarningStateByWorktreeId.get(probe.worktreeId)
-  if (!state || state.lifecycleToken !== probe.lifecycleToken || !state.dismissed) {
+  if (
+    !state ||
+    state.lifecycleToken !== probe.lifecycleToken ||
+    !state.dismissed
+  ) {
     return false
   }
   refreshHugeRepoWarningState(probe.worktreeId, state)
