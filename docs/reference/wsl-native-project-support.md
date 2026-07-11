@@ -58,16 +58,10 @@ findings and the resulting decisions.
 - **No mass migration** of existing `cwd`-sniffing (`git/runner.ts` etc.) — the new predicate governs
   new WSL-project code only.
 - **WSL over SSH** (a remote host that itself runs WSL) is not addressed.
-
-### Out of scope / non-goals
-- **No new `ExecutionHostId`** (`wsl:<distro>`). WSL stays a `local` sub-mode (Approach A, not B).
-  Rationale: the runtime resolver already threads `wslDistro` through every Git call; a full
-  provider (SSH-style) would duplicate that layer and fight the team's existing architecture.
-- **No change to canonical storage.** `Repo.path` remains the UNC form (every Windows `fs` code
-  path depends on a Windows-readable path); POSIX is a **display/identity derivation only**.
-- **WSL over SSH** (a remote host that itself runs WSL) is not addressed.
 - **No in-place "move project to another distro."** Files live in one distro's filesystem; switching
   distros is a **reopen/re-add** (identical to VSCode's "Reopen in WSL using Distro…"), not a move.
+- **`Open in VS Code` correctness (#7649)** is cited as motivating pain in §1 but tracked separately —
+  not scoped into this PR.
 
 ## 3. Existing architecture (context for reviewers)
 
@@ -237,7 +231,7 @@ findings and the resulting decisions.
 ## 6. Resolved decisions (VSCode-aligned)
 VSCode's WSL Remote is a well-established reference, so these are settled rather than left open:
 1. **Terminal POSIX file-link clickability (#8156): in scope**, sequenced last and built on the
-   `isWslRepo` + POSIX-resolution primitives introduced here (§4.7). VSCode clearly provides it.
+   `isWslRuntimeResolution` + POSIX-resolution primitives introduced here (§4.7). VSCode clearly provides it.
 2. **`WSL: <distro>` badge: clickable/actionable** (§4.3). Healthy → informational + reopen/settings
    menu; `repair-required` → recovery action. "Change distro" is **reopen/re-add** semantics, not an
    in-place move (mirrors VSCode's "Reopen in WSL using Distro…").
