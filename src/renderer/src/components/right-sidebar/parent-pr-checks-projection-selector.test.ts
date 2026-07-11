@@ -55,6 +55,38 @@ function review(number: number): HostedReviewInfo {
 }
 
 describe('parent PR checks projection selector', () => {
+  it('does not inspect tracked keys when cache map references are unchanged', () => {
+    const cacheRead = vi.fn()
+    const observedCache = new Proxy(
+      {},
+      {
+        get: (target, property, receiver) => {
+          cacheRead(property)
+          return Reflect.get(target, property, receiver)
+        }
+      }
+    )
+    const buildProjection = vi.fn(buildParentPrChecksProjection)
+    const select = createParentPrChecksProjectionSelector(
+      { worktrees: [worktree(0)], repos: [repo()], settings: null, refreshOutcomes: new Map() },
+      buildProjection
+    )
+    const state = {
+      hostedReviewCache: observedCache,
+      prCache: observedCache,
+      checksCache: observedCache
+    }
+    const projection = select(state)
+    cacheRead.mockClear()
+
+    for (let notification = 0; notification < 1_000; notification += 1) {
+      expect(select(state)).toBe(projection)
+    }
+
+    expect(cacheRead).not.toHaveBeenCalled()
+    expect(buildProjection).toHaveBeenCalledTimes(1)
+  })
+
   it('ignores unrelated global review-cache replacements at scale', () => {
     const worktrees = Array.from({ length: 100 }, (_, index) => worktree(index))
     const buildProjection = vi.fn(buildParentPrChecksProjection)

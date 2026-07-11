@@ -36,10 +36,23 @@ function trackCacheReads<K extends ReviewCacheName>(
 
 function dependenciesAreCurrent(
   state: ReviewCacheState,
+  previousState: ReviewCacheState,
   dependencies: readonly CacheDependency[]
 ): boolean {
   return dependencies.every(
-    ({ cacheName, key, value }) => Reflect.get(state[cacheName], key) === value
+    ({ cacheName, key, value }) =>
+      state[cacheName] === previousState[cacheName] || Reflect.get(state[cacheName], key) === value
+  )
+}
+
+function cacheReferencesAreCurrent(
+  state: ReviewCacheState,
+  previousState: ReviewCacheState
+): boolean {
+  return (
+    state.hostedReviewCache === previousState.hostedReviewCache &&
+    state.prCache === previousState.prCache &&
+    state.checksCache === previousState.checksCache
   )
 }
 
@@ -47,12 +60,22 @@ export function createParentPrChecksProjectionSelector(
   inputs: ProjectionInputs,
   buildProjection: ProjectionBuilder = buildParentPrChecksProjection
 ): (state: ReviewCacheState) => ParentPrChecksProjection {
-  let cached: { dependencies: CacheDependency[]; projection: ParentPrChecksProjection } | null =
-    null
+  let cached: {
+    cacheReferences: ReviewCacheState
+    dependencies: CacheDependency[]
+    projection: ParentPrChecksProjection
+  } | null = null
 
   return (state) => {
-    if (cached && dependenciesAreCurrent(state, cached.dependencies)) {
-      return cached.projection
+    if (cached) {
+      if (cacheReferencesAreCurrent(state, cached.cacheReferences)) {
+        return cached.projection
+      }
+      if (dependenciesAreCurrent(state, cached.cacheReferences, cached.dependencies)) {
+        // Why: adopting unrelated replacement maps keeps later store notifications O(1).
+        cached.cacheReferences = state
+        return cached.projection
+      }
     }
 
     const dependencies: CacheDependency[] = []
@@ -64,7 +87,7 @@ export function createParentPrChecksProjectionSelector(
       prCache: trackCacheReads(state, 'prCache', dependencies),
       checksCache: trackCacheReads(state, 'checksCache', dependencies)
     })
-    cached = { dependencies, projection }
+    cached = { cacheReferences: state, dependencies, projection }
     return projection
   }
 }
