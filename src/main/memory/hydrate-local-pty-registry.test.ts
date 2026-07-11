@@ -353,6 +353,45 @@ describe('hydrateLocalPtyRegistryAtBoot', () => {
     expect(listRegisteredPtys()).toHaveLength(activeRepoIds.length)
   })
 
+  it('scans a repo that only becomes visible on the post-enumeration re-read', async () => {
+    const { hydrate, listRegisteredPtys } = await loadFresh()
+
+    const sessionA = {
+      sessionId: 'repo-a::/local/repo-a@@00000001',
+      pid: 4001,
+      cwd: '/local/repo-a'
+    } as unknown as SessionInfo
+    const sessionB = {
+      sessionId: 'repo-b::/local/repo-b@@00000002',
+      pid: 4002,
+      cwd: '/local/repo-b'
+    } as unknown as SessionInfo
+    // Why: a briefly unreachable adapter can omit a session from the first
+    // listing; once it reappears on the re-read its repo must still be
+    // scanned and the session registered instead of silently dropped.
+    const listSessions = vi
+      .fn()
+      .mockResolvedValueOnce([sessionA])
+      .mockResolvedValue([sessionA, sessionB])
+    getDaemonProviderMock.mockReturnValue({ listSessions })
+    listRepoWorktreesMock.mockImplementation(async (repo: Repo) => [
+      { path: `/local/${repo.id}`, head: '', branch: '', isBare: false, isMainWorktree: true }
+    ])
+
+    await hydrate(makeStore([{ id: 'repo-a' }, { id: 'repo-b' }]))
+
+    expect(listRepoWorktreesMock.mock.calls.map(([repo]) => (repo as Repo).id)).toEqual([
+      'repo-a',
+      'repo-b'
+    ])
+    expect(listSessions).toHaveBeenCalledTimes(3)
+    const registered = listRegisteredPtys()
+    expect(registered.map((p) => p.ptyId).sort()).toEqual([
+      'repo-a::/local/repo-a@@00000001',
+      'repo-b::/local/repo-b@@00000002'
+    ])
+  })
+
   it('hydrates large daemon session lists', async () => {
     const { hydrate, listRegisteredPtys } = await loadFresh()
 

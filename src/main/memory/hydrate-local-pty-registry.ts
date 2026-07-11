@@ -74,49 +74,59 @@ export async function hydrateLocalPtyRegistryAtBoot(store: Pick<Store, 'getRepos
     // Why: ask the daemon which repos matter before launching Git worktree
     // enumeration. Most configured repos have no preserved session at boot,
     // so scanning all of them creates pure background subprocess churn.
-    const initialSessionInfos = await collectSessionInfos(provider)
-    const initiallyRegistered = new Set(listRegisteredPtys().map((p) => p.ptyId))
-    const referencedRepoIds = new Set<string>()
-    for (const info of initialSessionInfos) {
-      if (initiallyRegistered.has(info.sessionId)) {
-        continue
-      }
-      const { worktreeId } = parsePtySessionId(info.sessionId)
-      const parsedWorktreeId = worktreeId ? splitWorktreeId(worktreeId) : null
-      if (parsedWorktreeId) {
-        referencedRepoIds.add(parsedWorktreeId.repoId)
-      }
-    }
-    if (referencedRepoIds.size === 0) {
-      return
-    }
-
+    const reposById = new Map(store.getRepos().map((repo) => [repo.id, repo]))
     // Why: live git enumeration verifies that a referenced local worktree
     // still exists instead of resurrecting removed worktrees.
-    const repos = store.getRepos()
     const liveLocalWorktreeIds = new Set<string>()
+    const resolvedRepoIds = new Set<string>()
 
-    for (const repo of repos) {
-      if (!referencedRepoIds.has(repo.id)) {
-        continue
+    let sessionInfos = await collectSessionInfos(provider)
+    let alreadyRegistered = new Set(listRegisteredPtys().map((p) => p.ptyId))
+
+    // Why: repo selection and registration must come from the same daemon
+    // snapshot. Git enumeration can take seconds, so after each scan pass we
+    // re-read daemon and registry state; sessions that exited or were
+    // authoritatively registered meanwhile are not resurrected or overwritten,
+    // and a session that only became visible during a slow scan (e.g. a
+    // briefly unreachable legacy adapter) gets its repo scanned on the next
+    // pass instead of being silently dropped. Terminates because every pass
+    // permanently resolves at least one new repo id.
+    for (;;) {
+      const newlyReferencedRepos = new Map<string, ReturnType<(typeof store)['getRepos']>[number]>()
+      for (const info of sessionInfos) {
+        if (alreadyRegistered.has(info.sessionId)) {
+          continue
+        }
+        const { worktreeId } = parsePtySessionId(info.sessionId)
+        const parsedWorktreeId = worktreeId ? splitWorktreeId(worktreeId) : null
+        if (!parsedWorktreeId || resolvedRepoIds.has(parsedWorktreeId.repoId)) {
+          continue
+        }
+        const repo = reposById.get(parsedWorktreeId.repoId)
+        if (!repo || (repo.connectionId ?? null)) {
+          // Why: unknown repos can't be proven local, and SSH PTYs are never
+          // registered for local process sampling — resolve without git
+          // enumeration so neither can extend the loop.
+          resolvedRepoIds.add(parsedWorktreeId.repoId)
+          continue
+        }
+        newlyReferencedRepos.set(repo.id, repo)
       }
-      const connectionId = repo.connectionId ?? null
-      if (connectionId) {
-        // Why: SSH PTYs are never registered for local process sampling, so
-        // avoid startup SSH/git enumeration for repos we will skip anyway.
-        continue
+      if (newlyReferencedRepos.size === 0) {
+        break
       }
-      const worktrees = await listRepoWorktrees(repo)
-      for (const wt of worktrees) {
-        liveLocalWorktreeIds.add(`${repo.id}::${wt.path}`)
+
+      for (const repo of newlyReferencedRepos.values()) {
+        resolvedRepoIds.add(repo.id)
+        const worktrees = await listRepoWorktrees(repo)
+        for (const wt of worktrees) {
+          liveLocalWorktreeIds.add(`${repo.id}::${wt.path}`)
+        }
       }
+
+      sessionInfos = await collectSessionInfos(provider)
+      alreadyRegistered = new Set(listRegisteredPtys().map((p) => p.ptyId))
     }
-
-    // Why: Git enumeration can take seconds. Re-read daemon and registry state
-    // so sessions that exited or were authoritatively registered meanwhile do
-    // not get resurrected or overwritten from the stale selection snapshot.
-    const sessionInfos = await collectSessionInfos(provider)
-    const alreadyRegistered = new Set(listRegisteredPtys().map((p) => p.ptyId))
     for (const info of sessionInfos) {
       // Why: pid-write ordering — `pty:spawn` is the authoritative
       // writer for in-session sessions; if that fired before this loop
