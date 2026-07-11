@@ -62,6 +62,7 @@ vi.mock('../browser/browser-manager', () => ({
 
 import { createMainWindow, loadMainWindow } from './createMainWindow'
 import { ipcMain } from 'electron'
+import { shouldRecoverRendererAfterProcessGone } from '../crash-reporting/process-gone-classification'
 
 function withPlatform<T>(platform: NodeJS.Platform, run: () => T): T {
   const original = process.platform
@@ -2701,6 +2702,48 @@ describe('createMainWindow', () => {
     )
 
     consoleError.mockRestore()
+  })
+
+  it('bounds renderer launch-failed recovery with the crash-loop breaker', () => {
+    vi.useFakeTimers()
+
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {})
+    const onRendererRecoveryExhausted = vi.fn()
+    const { browserWindowInstance, windowHandlers } = createRendererRecoveryWindowHarness()
+
+    try {
+      createMainWindow(null, {
+        onRendererRecoveryExhausted,
+        shouldRecoverRenderer: (details) =>
+          shouldRecoverRendererAfterProcessGone({
+            reason: details.reason,
+            expectedTeardown: 'none'
+          })
+      })
+
+      const details = {
+        reason: 'launch-failed',
+        exitCode: 18
+      } as Electron.RenderProcessGoneDetails
+      const driveLaunchFailure = (): void => {
+        windowHandlers['render-process-gone']?.({} as never, details)
+        vi.advanceTimersByTime(250)
+      }
+
+      driveLaunchFailure()
+      driveLaunchFailure()
+      driveLaunchFailure()
+      expect(browserWindowInstance.loadFile).toHaveBeenCalledTimes(4)
+
+      driveLaunchFailure()
+      expect(browserWindowInstance.loadFile).toHaveBeenCalledTimes(4)
+      expect(onRendererRecoveryExhausted).toHaveBeenCalledOnce()
+      expect(onRendererRecoveryExhausted).toHaveBeenCalledWith(
+        expect.objectContaining({ details, recentRecoveryCount: 3 })
+      )
+    } finally {
+      consoleError.mockRestore()
+    }
   })
 
   function createStartupRevealWindowFixture() {
