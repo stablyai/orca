@@ -13,6 +13,7 @@ const CANDIDATE_DIGIT_WINDOW_MS = 1500
 const ASCII_LOWERCASE_LETTER = /^[a-z]$/
 const ASCII_DIGIT = /^[0-9]$/
 
+/** Returns whether an event is an unmodified lowercase Latin letter. */
 function isPlainAsciiLetterKey(event: XtermBypassEvent): boolean {
   return (
     ASCII_LOWERCASE_LETTER.test(event.key) &&
@@ -23,6 +24,7 @@ function isPlainAsciiLetterKey(event: XtermBypassEvent): boolean {
   )
 }
 
+/** Returns whether an event is an unmodified ASCII digit. */
 function isPlainAsciiDigitKey(event: XtermBypassEvent): boolean {
   return (
     ASCII_DIGIT.test(event.key) &&
@@ -33,6 +35,7 @@ function isPlainAsciiDigitKey(event: XtermBypassEvent): boolean {
   )
 }
 
+/** Tracks legacy desktop Linux IME candidate-selection event sequences. */
 export function createTerminalImeLinuxCandidateState(
   now: () => number = () => Date.now()
 ): TerminalImeLinuxCandidateState {
