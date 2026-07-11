@@ -151,6 +151,11 @@ export class AutomationService {
       claudeUsage: this.claudeUsage,
       codexUsage: this.codexUsage
     })
+    // Why: the run is final during the await above, so a concurrent create-time
+    // retention prune may have evicted it — the usage write must not throw then.
+    if (!this.store.listAutomationRuns(run.automationId).some((entry) => entry.id === run.id)) {
+      return run
+    }
     return this.store.updateAutomationRun({
       runId: run.id,
       status: run.status,
