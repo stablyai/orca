@@ -117,4 +117,41 @@ describe('grantDirAclAsync', () => {
       '*S-1-5-21-456:(OI)(CI)(F)'
     ])
   })
+
+  it('retries identity resolution after a transient whoami failure', async () => {
+    delete process.env.USERNAME
+    execFileMock
+      .mockImplementationOnce(
+        (_command: string, _args: string[], _options: unknown, callback: ExecCallback) => {
+          callback(new Error('whoami timed out'), '', '')
+          return {} as never
+        }
+      )
+      .mockImplementationOnce(
+        (_command: string, _args: string[], _options: unknown, callback: ExecCallback) => {
+          callback(null, '"DOMAIN\\alice","S-1-5-21-123"\r\n', '')
+          return {} as never
+        }
+      )
+      .mockImplementationOnce(
+        (_command: string, _args: string[], _options: unknown, callback: ExecCallback) => {
+          callback(null, '', '')
+          return {} as never
+        }
+      )
+    const { getWhoamiExePath, grantDirAclAsync } = await import('./win32-utils')
+
+    await grantDirAclAsync('C:\\Orca')
+    await grantDirAclAsync('C:\\Orca')
+
+    expect(
+      execFileMock.mock.calls.filter(([command]) => command === getWhoamiExePath())
+    ).toHaveLength(2)
+    expect(execFileMock.mock.calls[2]?.[1]).toEqual([
+      'C:\\Orca',
+      '/grant:r',
+      '*S-1-5-21-123:(OI)(CI)(F)'
+    ])
+    expect(execFileSyncMock).not.toHaveBeenCalled()
+  })
 })

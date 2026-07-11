@@ -99,10 +99,10 @@ export function isPermissionError(error: unknown): boolean {
 // and hardened envs where USERNAME is unset. Fall back to the SID via
 // `whoami /user` (same strategy as runtime-metadata.ts), which is authoritative
 // and always available on Windows. Cached because it never changes in-process.
-let cachedIdentity: string | null | undefined
+let cachedIdentity: string | undefined
 let pendingIdentityResolution: Promise<string | null> | null = null
 
-function cachedOrEnvironmentIdentity(): string | null | undefined {
+function cachedOrEnvironmentIdentity(): string | undefined {
   if (cachedIdentity !== undefined) {
     return cachedIdentity
   }
@@ -135,11 +135,14 @@ function resolveCurrentIdentity(): string | null {
       windowsHide: true,
       timeout: 5000
     })
-    cachedIdentity = identityFromWhoamiOutput(output)
+    const resolvedIdentity = identityFromWhoamiOutput(output)
+    if (resolvedIdentity) {
+      cachedIdentity = resolvedIdentity
+    }
+    return resolvedIdentity
   } catch {
-    cachedIdentity = null
+    return null
   }
-  return cachedIdentity ?? null
 }
 
 async function resolveCurrentIdentityAsync(): Promise<string | null> {
@@ -161,14 +164,14 @@ async function resolveCurrentIdentityAsync(): Promise<string | null> {
         )
         // Why: a synchronous caller may resolve identity while async whoami
         // is in flight; its authoritative cached result must win the race.
-        if (cachedIdentity === undefined) {
-          cachedIdentity = identityFromWhoamiOutput(stdout)
+        const resolvedIdentity = identityFromWhoamiOutput(stdout)
+        if (cachedIdentity === undefined && resolvedIdentity) {
+          cachedIdentity = resolvedIdentity
         }
-        return cachedIdentity ?? null
+        return cachedIdentity ?? resolvedIdentity
       } catch {
-        if (cachedIdentity === undefined) {
-          cachedIdentity = null
-        }
+        // Why: transient service/PATH failures must not permanently disable
+        // ACL repair for every later crash attempt in this process.
         return cachedIdentity ?? null
       }
     })().finally(() => {
