@@ -1736,7 +1736,11 @@
         "editReviewersWithCurrent": "Edit reviewers: {{value0}}",
         "linearEmptyAttributeFilter": "No issues match the selected filters. Clear a filter or try different criteria.",
         "linearEmptyUnfilteredScope": "No issues in this workspace scope. Try searching or adjusting teams.",
-        "linearFetchMore": "Fetch more"
+        "linearFetchMore": "Fetch more",
+        "jiraSortAscending": "ascending",
+        "jiraSortDescending": "descending",
+        "jiraSortBy": "Sort by",
+        "jiraToggleSortDirection": "Sort {{value0}}"
       },
       "Terminal": {
         "73768427cf": "Close",

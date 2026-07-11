@@ -1736,7 +1736,11 @@
         "editReviewersWithCurrent": "编辑评审人：{{value0}}",
         "linearEmptyAttributeFilter": "没有匹配所选筛选条件的问题。请清除筛选条件或尝试其他条件。",
         "linearEmptyUnfilteredScope": "此工作区范围内没有问题。请尝试搜索或调整团队。",
-        "linearFetchMore": "加载更多"
+        "linearFetchMore": "加载更多",
+        "jiraSortAscending": "升序",
+        "jiraSortDescending": "降序",
+        "jiraSortBy": "排序方式",
+        "jiraToggleSortDirection": "按{{value0}}排序"
       },
       "Terminal": {
         "73768427cf": "关闭",

@@ -1,27 +1,29 @@
 import type { JiraIssue, JiraPriority } from '../../../shared/types'
 
-// Explaining why JIRA_PRIORITY_ORDER maps specific terms to standard tiers:
-// Lowest/trivial maps to 1, while blocker/highest/critical maps to 99 so that ascending sort puts lowest first.
+export type JiraIssueSortColumn = 'key' | 'title' | 'status' | 'priority' | 'assignee' | 'updated'
+
+export type JiraIssueSortDirection = 'asc' | 'desc'
+export type JiraPrioritiesBySite = ReadonlyMap<string, readonly JiraPriority[]>
+
+// Why: Jira instances can use synonymous names for the same standard priority tier.
 export const JIRA_PRIORITY_ORDER: Record<string, number> = {
   blocker: 99,
   highest: 99,
   critical: 99,
-  high: 4,
-  major: 4,
-  medium: 3,
-  normal: 3,
-  low: 2,
-  minor: 2,
+  high: 75,
+  major: 75,
+  medium: 50,
+  normal: 50,
+  low: 25,
+  minor: 25,
   lowest: 1,
   trivial: 1
 }
 
-// Explaining why the fallback weight is 0:
-// We assign 0 for missing priorities so they always sort to the beginning (as the lowest).
 export function getJiraPriorityWeight(
   priorityName?: string,
   priorityId?: string,
-  jiraPriorities: JiraPriority[] = []
+  jiraPriorities: readonly JiraPriority[] = []
 ): number {
   if (!priorityName) {
     return 0
@@ -31,29 +33,26 @@ export function getJiraPriorityWeight(
       (p) => p.id === priorityId || p.name.toLowerCase() === priorityName.toLowerCase()
     )
     if (idx !== -1) {
-      // Invert index because jiraPriorities is returned from Jira API ordered Highest-to-Lowest.
-      // So index 0 is Highest (largest weight) and index length-1 is Lowest (weight 0).
-      return jiraPriorities.length - 1 - idx
+      // Why: site schemes have different tier counts, so raw indices are not cross-site comparable.
+      if (jiraPriorities.length === 1) {
+        return 50
+      }
+      return 1 + ((jiraPriorities.length - 1 - idx) / (jiraPriorities.length - 1)) * 98
     }
   }
   const nameKey = priorityName.toLowerCase()
   if (nameKey in JIRA_PRIORITY_ORDER) {
     return JIRA_PRIORITY_ORDER[nameKey]
   }
-  if (priorityId) {
-    const parsed = Number.parseInt(priorityId, 10)
-    if (!Number.isNaN(parsed)) {
-      return parsed
-    }
-  }
-  return 3
+  // Why: custom priority IDs are opaque identifiers, not ordering ranks.
+  return 50
 }
 
 export function sortJiraIssues(
-  issues: JiraIssue[],
-  orderBy: 'key' | 'title' | 'status' | 'priority' | 'assignee' | 'updated',
-  orderDirection: 'asc' | 'desc',
-  jiraPriorities: JiraPriority[] = []
+  issues: readonly JiraIssue[],
+  orderBy: JiraIssueSortColumn,
+  orderDirection: JiraIssueSortDirection,
+  jiraPrioritiesBySite: JiraPrioritiesBySite = new Map()
 ): JiraIssue[] {
   return [...issues].sort((a, b) => {
     let comparison = 0
@@ -64,10 +63,10 @@ export function sortJiraIssues(
     } else if (orderBy === 'status') {
       comparison = 0
     } else if (orderBy === 'priority') {
-      const weightA = getJiraPriorityWeight(a.priority?.name, a.priority?.id, jiraPriorities)
-      const weightB = getJiraPriorityWeight(b.priority?.name, b.priority?.id, jiraPriorities)
-      // Explaining why weightA - weightB is used:
-      // Lowest priority has weight 1 and highest priority has weight 99, so ascending sort shows lowest first.
+      const prioritiesA = jiraPrioritiesBySite.get(a.siteId ?? '')
+      const prioritiesB = jiraPrioritiesBySite.get(b.siteId ?? '')
+      const weightA = getJiraPriorityWeight(a.priority?.name, a.priority?.id, prioritiesA)
+      const weightB = getJiraPriorityWeight(b.priority?.name, b.priority?.id, prioritiesB)
       comparison = weightA - weightB
     } else if (orderBy === 'assignee') {
       const userA = a.assignee?.displayName ?? ''
@@ -78,56 +77,4 @@ export function sortJiraIssues(
     }
     return orderDirection === 'asc' ? comparison : -comparison
   })
-}
-
-// Explaining why we map category keys to numbers:
-// We order status groups by 'new' (0), 'indeterminate' (1), and 'done' (2) as standard workflow progression.
-export const JIRA_STATUS_CATEGORY_ORDER: Record<string, number> = {
-  new: 0,
-  indeterminate: 1,
-  done: 2
-}
-
-export type JiraIssueSection = {
-  key: string
-  label: string
-  categoryKey: string
-  issues: JiraIssue[]
-}
-
-export function getJiraIssueSections(
-  sortedIssues: JiraIssue[],
-  orderBy: 'key' | 'title' | 'status' | 'priority' | 'assignee' | 'updated',
-  orderDirection: 'asc' | 'desc'
-): JiraIssueSection[] {
-  const sections: JiraIssueSection[] = []
-  const sectionsMap = new Map<string, { categoryKey: string; issues: JiraIssue[] }>()
-
-  for (const issue of sortedIssues) {
-    const statusName = issue.status.name
-    if (!sectionsMap.has(statusName)) {
-      sectionsMap.set(statusName, { categoryKey: issue.status.categoryKey, issues: [] })
-    }
-    sectionsMap.get(statusName)!.issues.push(issue)
-  }
-
-  sectionsMap.forEach(({ categoryKey, issues }, statusName) => {
-    sections.push({
-      key: statusName,
-      label: statusName,
-      categoryKey,
-      issues
-    })
-  })
-
-  sections.sort(
-    (a, b) =>
-      (JIRA_STATUS_CATEGORY_ORDER[a.categoryKey] ?? 99) -
-        (JIRA_STATUS_CATEGORY_ORDER[b.categoryKey] ?? 99) || a.label.localeCompare(b.label)
-  )
-
-  if (orderBy === 'status' && orderDirection === 'desc') {
-    return sections.toReversed()
-  }
-  return sections
 }

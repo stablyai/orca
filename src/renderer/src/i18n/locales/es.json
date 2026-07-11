@@ -1736,7 +1736,11 @@
         "editReviewersWithCurrent": "Editar revisores: {{value0}}",
         "linearEmptyAttributeFilter": "Ningún issue coincide con los filtros seleccionados. Limpia un filtro o prueba con otros criterios.",
         "linearEmptyUnfilteredScope": "No hay issues en el alcance de este espacio de trabajo. Intenta buscar o ajustar los equipos.",
-        "linearFetchMore": "Cargar más"
+        "linearFetchMore": "Cargar más",
+        "jiraSortAscending": "ascendente",
+        "jiraSortDescending": "descendente",
+        "jiraSortBy": "Ordenar por",
+        "jiraToggleSortDirection": "Ordenar de forma {{value0}}"
       },
       "Terminal": {
         "73768427cf": "Cerrar",

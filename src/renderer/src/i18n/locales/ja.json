@@ -1736,7 +1736,11 @@
         "editReviewersWithCurrent": "レビュアーを編集: {{value0}}",
         "linearEmptyAttributeFilter": "選択したフィルターに一致するイシューがありません。フィルターを解除するか、異なる条件を試してください。",
         "linearEmptyUnfilteredScope": "このワークスペーススコープにイシューがありません。検索するか、チームを調整してください。",
-        "linearFetchMore": "さらに読み込む"
+        "linearFetchMore": "さらに読み込む",
+        "jiraSortAscending": "昇順",
+        "jiraSortDescending": "降順",
+        "jiraSortBy": "並べ替え",
+        "jiraToggleSortDirection": "{{value0}}に並べ替え"
       },
       "Terminal": {
         "73768427cf": "閉じる",

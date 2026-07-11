@@ -1736,7 +1736,11 @@
         "editReviewersWithCurrent": "리뷰어 편집: {{value0}}",
         "linearEmptyAttributeFilter": "선택한 필터와 일치하는 이슈가 없습니다. 필터를 지우거나 다른 조건을 시도하세요.",
         "linearEmptyUnfilteredScope": "이 워크트리 범위에 이슈가 없습니다. 검색하거나 팀을 조정해 보세요.",
-        "linearFetchMore": "더 불러오기"
+        "linearFetchMore": "더 불러오기",
+        "jiraSortAscending": "오름차순",
+        "jiraSortDescending": "내림차순",
+        "jiraSortBy": "정렬 기준",
+        "jiraToggleSortDirection": "{{value0}}으로 정렬"
       },
       "Terminal": {
         "73768427cf": "닫기",

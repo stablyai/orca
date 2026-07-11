@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { JiraIssue, JiraPriority } from '../../../shared/types'
-import { getJiraPriorityWeight, sortJiraIssues, getJiraIssueSections } from './jira-issue-sorter'
+import { getJiraPriorityWeight, sortJiraIssues } from './jira-issue-sorter'
 
 describe('TaskPage Jira sorting functionality', () => {
   function jiraIssue(
@@ -51,25 +51,29 @@ describe('TaskPage Jira sorting functionality', () => {
         jiraPriority('4', 'Low')
       ]
 
-      expect(getJiraPriorityWeight('High', '2', jiraPriorities)).toBe(2)
-      expect(getJiraPriorityWeight('Medium', '3', jiraPriorities)).toBe(1)
+      expect(getJiraPriorityWeight('High', '2', jiraPriorities)).toBeCloseTo(66.33, 2)
+      expect(getJiraPriorityWeight('Medium', '3', jiraPriorities)).toBeCloseTo(33.67, 2)
+    })
+
+    it('keeps missing priority below the lowest configured priority', () => {
+      const jiraPriorities = [jiraPriority('1', 'High'), jiraPriority('2', 'Low')]
+
+      expect(getJiraPriorityWeight(undefined, undefined, jiraPriorities)).toBe(0)
+      expect(getJiraPriorityWeight('Low', '2', jiraPriorities)).toBe(1)
     })
 
     it('falls back to priority name mapping when not in priorities list', () => {
       expect(getJiraPriorityWeight('Blocker', '1', [])).toBe(99)
-      expect(getJiraPriorityWeight('High', '2', [])).toBe(4)
-      expect(getJiraPriorityWeight('Medium', '3', [])).toBe(3)
-      expect(getJiraPriorityWeight('Low', '4', [])).toBe(2)
+      expect(getJiraPriorityWeight('High', '2', [])).toBe(75)
+      expect(getJiraPriorityWeight('Medium', '3', [])).toBe(50)
+      expect(getJiraPriorityWeight('Low', '4', [])).toBe(25)
       expect(getJiraPriorityWeight('Lowest', '5', [])).toBe(1)
     })
 
-    it('parses priority ID as number when name mapping fails', () => {
-      expect(getJiraPriorityWeight('Custom Priority', '10', [])).toBe(10)
-      expect(getJiraPriorityWeight('Another', '5', [])).toBe(5)
-    })
-
-    it('returns default weight for unknown priority', () => {
-      expect(getJiraPriorityWeight('Unknown Priority', 'invalid', [])).toBe(3)
+    it('does not treat opaque custom priority IDs as ordering ranks', () => {
+      expect(getJiraPriorityWeight('Custom Priority', '10', [])).toBe(50)
+      expect(getJiraPriorityWeight('Another', '5', [])).toBe(50)
+      expect(getJiraPriorityWeight('Unknown Priority', 'invalid', [])).toBe(50)
     })
   })
 
@@ -128,6 +132,72 @@ describe('TaskPage Jira sorting functionality', () => {
       expect(sorted[0].priority?.name).toBe('Low')
       expect(sorted[1].priority?.name).toBe('Medium')
       expect(sorted[2].priority?.name).toBe('High')
+    })
+
+    it('uses each Jira site priority order when sorting an all-sites list', () => {
+      const issues = [
+        jiraIssue(
+          'BRV-1',
+          'Site B low by name',
+          'To Do',
+          'Low',
+          '2',
+          undefined,
+          undefined,
+          'site-b'
+        ),
+        jiraIssue(
+          'BRV-2',
+          'Site B high by name',
+          'To Do',
+          'High',
+          '1',
+          undefined,
+          undefined,
+          'site-b'
+        )
+      ]
+      const prioritiesBySite = new Map<string, JiraPriority[]>([
+        ['site-a', [jiraPriority('1', 'High'), jiraPriority('2', 'Low')]],
+        ['site-b', [jiraPriority('2', 'Low'), jiraPriority('1', 'High')]]
+      ])
+
+      const sorted = sortJiraIssues(issues, 'priority', 'asc', prioritiesBySite)
+
+      expect(sorted.map((issue) => issue.key)).toEqual(['BRV-2', 'BRV-1'])
+    })
+
+    it('normalizes priority ranks across sites with different tier counts', () => {
+      const issues = [
+        jiraIssue(
+          'ALP-1',
+          'Site A highest',
+          'To Do',
+          'Highest',
+          '1',
+          undefined,
+          undefined,
+          'site-a'
+        ),
+        jiraIssue('BRV-1', 'Site B medium', 'To Do', 'Medium', '3', undefined, undefined, 'site-b')
+      ]
+      const prioritiesBySite = new Map<string, JiraPriority[]>([
+        ['site-a', [jiraPriority('1', 'Highest'), jiraPriority('2', 'Lowest')]],
+        [
+          'site-b',
+          [
+            jiraPriority('1', 'Highest'),
+            jiraPriority('2', 'High'),
+            jiraPriority('3', 'Medium'),
+            jiraPriority('4', 'Low'),
+            jiraPriority('5', 'Lowest')
+          ]
+        ]
+      ])
+
+      const sorted = sortJiraIssues(issues, 'priority', 'asc', prioritiesBySite)
+
+      expect(sorted.map((issue) => issue.key)).toEqual(['BRV-1', 'ALP-1'])
     })
 
     it('sorts by assignee alphabetically', () => {
@@ -194,61 +264,6 @@ describe('TaskPage Jira sorting functionality', () => {
       expect(sorted[0].assignee?.displayName).toBeUndefined()
       expect(sorted[1].assignee?.displayName).toBe('Alice')
       expect(sorted[2].assignee?.displayName).toBe('Bob')
-    })
-  })
-
-  describe('issue sections with sorting', () => {
-    it('groups issues by status after sorting and orders sections by workflow category', () => {
-      const issues = [
-        jiraIssue('ALP-3', 'Issue 3', 'Done', 'High', '2', undefined, undefined, undefined, 'done'),
-        jiraIssue('ALP-1', 'Issue 1', 'To Do', 'Low', '4', undefined, undefined, undefined, 'new'),
-        jiraIssue(
-          'ALP-2',
-          'Issue 2',
-          'In Progress',
-          'Medium',
-          '3',
-          undefined,
-          undefined,
-          undefined,
-          'indeterminate'
-        )
-      ]
-
-      const sorted = sortJiraIssues(issues, 'priority', 'asc')
-      const sections = getJiraIssueSections(sorted, 'priority', 'asc')
-
-      expect(sections[0].label).toBe('To Do')
-      expect(sections[0].issues[0].key).toBe('ALP-1')
-      expect(sections[1].label).toBe('In Progress')
-      expect(sections[1].issues[0].key).toBe('ALP-2')
-      expect(sections[2].label).toBe('Done')
-      expect(sections[2].issues[0].key).toBe('ALP-3')
-    })
-
-    it('reverses section order when sorting by status descending', () => {
-      const issues = [
-        jiraIssue('ALP-3', 'Issue 3', 'Done', 'High', '2', undefined, undefined, undefined, 'done'),
-        jiraIssue('ALP-1', 'Issue 1', 'To Do', 'Low', '4', undefined, undefined, undefined, 'new'),
-        jiraIssue(
-          'ALP-2',
-          'Issue 2',
-          'In Progress',
-          'Medium',
-          '3',
-          undefined,
-          undefined,
-          undefined,
-          'indeterminate'
-        )
-      ]
-
-      const sorted = sortJiraIssues(issues, 'status', 'desc')
-      const sections = getJiraIssueSections(sorted, 'status', 'desc')
-
-      expect(sections[0].label).toBe('Done')
-      expect(sections[1].label).toBe('In Progress')
-      expect(sections[2].label).toBe('To Do')
     })
   })
 })
