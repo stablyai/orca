@@ -9,9 +9,11 @@ import {
 } from '../../../../shared/execution-host'
 import { parseWorkspaceKey } from '../../../../shared/workspace-scope'
 import { translate } from '@/i18n/i18n'
-import { getExplicitRuntimeEnvironmentIdForWorktree } from '@/lib/worktree-runtime-owner'
+import {
+  getExplicitRuntimeEnvironmentIdForWorktree,
+  getSettingsForWorktreeRuntimeOwner
+} from '@/lib/worktree-runtime-owner'
 import type { FileExplorerOperationOwner } from './file-explorer-types'
-import { getRightSidebarWorktreeRuntimeSettingsFromState } from './file-explorer-runtime-owner'
 
 export type FileExplorerOperationRoute = {
   settings: { activeRuntimeEnvironmentId: string | null }
@@ -60,8 +62,13 @@ export function getFileExplorerOperationOwnerFromState(
   if (connectionId === undefined && explicitRuntimeEnvironmentId === null) {
     return { kind: 'unresolved' }
   }
-  const settings = getRightSidebarWorktreeRuntimeSettingsFromState(state, worktreeId)
-  const runtimeEnvironmentId = settings.activeRuntimeEnvironmentId?.trim()
+  const settings = getSettingsForWorktreeRuntimeOwner(state, worktreeId)
+  // Why: inferred SSH ownership outranks global runtime focus, but an explicit
+  // workspace runtime still owns its files.
+  const runtimeEnvironmentId =
+    connectionId && explicitRuntimeEnvironmentId === null
+      ? null
+      : settings.activeRuntimeEnvironmentId?.trim()
   if (runtimeEnvironmentId) {
     return { kind: 'runtime', environmentId: runtimeEnvironmentId }
   }

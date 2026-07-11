@@ -6,7 +6,6 @@ import type { FolderWorkspace, ProjectGroup, Repo } from '../../../shared/types'
 import { useAppStore } from '@/store'
 import { folderWorkspaceKey } from '../../../shared/workspace-scope'
 import { useFileDeletion } from '@/components/right-sidebar/useFileDeletion'
-import { getRightSidebarWorktreeRuntimeSettings } from '@/components/right-sidebar/file-explorer-runtime-owner'
 import { getFileExplorerOperationOwner } from '@/components/right-sidebar/file-explorer-operation-owner'
 import type { TreeNode } from '@/components/right-sidebar/file-explorer-types'
 import { createCompatibleRuntimeStatusResponseIfNeeded } from '@/runtime/runtime-compatibility-test-fixture'
@@ -166,9 +165,6 @@ describe('issue #8135: deleting a remote SSH folder file', () => {
       worktreesByRepo: {}
     })
 
-    expect(getRightSidebarWorktreeRuntimeSettings(folderWorkspaceKey(FOLDER_WORKSPACE_ID))).toEqual(
-      { activeRuntimeEnvironmentId: null }
-    )
     expect(getFileExplorerOperationOwner(folderWorkspaceKey(FOLDER_WORKSPACE_ID))).toEqual({
       kind: 'ssh',
       connectionId: SSH_CONNECTION_ID
