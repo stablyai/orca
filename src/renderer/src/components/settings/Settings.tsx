@@ -11,6 +11,7 @@ import {
 } from 'react'
 import { toast } from 'sonner'
 import type { GlobalSettings, OrcaHooks } from '../../../../shared/types'
+import { getRepoDisplayPath } from '../../../../shared/wsl-repo-identity'
 import type { SpeechModelState } from '../../../../shared/speech-types'
 import type {
   SourceControlAiSettings,
@@ -1642,7 +1643,7 @@ function Settings(): React.JSX.Element {
                         'Project Settings > {{value0}}',
                         { value0: repo.displayName }
                       )}
-                      description={repo.path}
+                      description={getRepoDisplayPath(repo.path)}
                       searchEntries={getSectionSearchEntries(repoSectionId)}
                     >
                       {isSectionMounted(repoSectionId) ? (

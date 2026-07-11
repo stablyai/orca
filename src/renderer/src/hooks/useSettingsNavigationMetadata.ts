@@ -36,6 +36,7 @@ import {
 import { OrcaLogoSettingsIcon } from '@/components/settings/orca-logo-settings-icon'
 import type { Repo } from '../../../shared/types'
 import { getRepoKindLabel } from '../../../shared/repo-kind'
+import { getRepoDisplayPath } from '../../../shared/wsl-repo-identity'
 import { useAppStore } from '@/store'
 import { isMacUserAgent, isWindowsUserAgent } from '@/components/terminal-pane/pane-helpers'
 import type { SettingsNavSection } from '@/lib/settings-navigation-types'
@@ -540,7 +541,7 @@ export function buildSettingsNavigationMetadata({
     ...repos.map((repo) => ({
       id: `repo-${repo.id}`,
       title: repo.displayName,
-      description: `${getRepoKindLabel(repo)} • ${repo.path}`,
+      description: `${getRepoKindLabel(repo)} • ${getRepoDisplayPath(repo.path)}`,
       icon: SlidersHorizontal,
       searchEntries: getRepositoryPaneSearchEntries(repo, {
         windowsRuntimeSupported: isWindowsTerminalHost

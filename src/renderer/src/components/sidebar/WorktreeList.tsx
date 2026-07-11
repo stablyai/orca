@@ -226,6 +226,7 @@ import {
 } from '../../../../shared/worktree-ownership'
 import { RepoIconGlyph } from '@/components/repo/repo-icon'
 import { RepoForkIndicator } from '@/components/repo/repo-fork-indicator'
+import { WslProjectBadge } from './WslProjectBadge'
 import ImportedWorktreesVisibilityLine from './ImportedWorktreesVisibilityLine'
 import NewExternalWorktreesInboxLine from './NewExternalWorktreesInboxLine'
 import SuppressExternalWorktreeInboxDialog from './SuppressExternalWorktreeInboxDialog'
@@ -4321,6 +4322,9 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
                           {row.label}
                         </div>
                         <RepoForkIndicator upstream={row.repo?.upstream} />
+                        {row.repo ? (
+                          <WslProjectBadge repoId={row.repo.id} repoPath={row.repo.path} />
+                        ) : null}
                         <FolderPathStatusIndicator status={projectGroupPathStatus} />
                       </div>
                     </div>

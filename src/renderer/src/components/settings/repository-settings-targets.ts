@@ -12,6 +12,10 @@ export function getRepositorySourceControlAiSectionId(repoId: string): string {
   return `repo-${repoId}-source-control-ai`
 }
 
+export function getRepositoryRuntimeSectionId(repoId: string): string {
+  return `repo-${repoId}-runtime`
+}
+
 export function getRepositorySourceControlAiActionRecipeSectionId(
   repoId: string,
   actionId: SourceControlActionId

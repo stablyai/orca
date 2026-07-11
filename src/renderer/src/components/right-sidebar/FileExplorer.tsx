@@ -9,6 +9,7 @@ import { folderRelativePathToIncludeGlob } from './file-search-include-pattern'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { cn } from '@/lib/utils'
 import { isGitRepoKind } from '../../../../shared/repo-kind'
+import { getRepoDisplayPath } from '../../../../shared/wsl-repo-identity'
 import {
   getVisibleFileExplorerWorktreePath,
   shouldResetFileExplorerForVisibleWorktree
@@ -123,6 +124,9 @@ function FileExplorerFiles(): React.JSX.Element {
     worktreePath
   })
   const repoName = activeRepo?.displayName ?? (worktreePath ? basename(worktreePath) : '')
+  // Why: the label truncates to a short name; the tooltip shows the real root so a
+  // WSL project reads its native POSIX path (/home/u/app) instead of the UNC share.
+  const repoRootPath = worktreePath ? getRepoDisplayPath(worktreePath) : ''
   const activeRepoSupportsGit = activeRepo ? isGitRepoKind(activeRepo) : false
 
   const expanded = useMemo(
@@ -637,6 +641,7 @@ function FileExplorerFiles(): React.JSX.Element {
       >
         <FileExplorerToolbar
           repoName={repoName}
+          rootPath={repoRootPath}
           worktreePath={worktreePath}
           connectionId={activeRepo?.connectionId ?? null}
           refresh={manualRefresh}

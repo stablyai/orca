@@ -2,12 +2,14 @@ import type { GlobalSettings, Project, ProjectUpdateArgs } from '../../../../sha
 import { SearchableSetting } from './SearchableSetting'
 import type { SettingsSearchEntry } from './settings-search'
 import { matchesSettingsSearch } from './settings-search'
+import { getRepositoryRuntimeSectionId } from './repository-settings-targets'
 import { ProjectWindowsRuntimeSetting } from './ProjectWindowsRuntimeSetting'
 import { ProjectDefaultShellSetting } from './ProjectDefaultShellSetting'
 import type { ProjectRuntimeSessionSummary } from './repository-runtime-session-summary'
 import { translate } from '@/i18n/i18n'
 
 type RepositoryWindowsRuntimeSectionProps = {
+  repoId: string
   repoDisplayName: string
   project: Project | null
   settings: Pick<GlobalSettings, 'localWindowsRuntimeDefault'> | null
@@ -26,6 +28,7 @@ type RepositoryWindowsRuntimeSectionProps = {
 }
 
 export function RepositoryWindowsRuntimeSection({
+  repoId,
   repoDisplayName,
   project,
   settings,
@@ -66,6 +69,7 @@ export function RepositoryWindowsRuntimeSection({
         'git bash'
       ]}
       className="space-y-3"
+      id={getRepositoryRuntimeSectionId(repoId)}
       forceVisible={forceVisible || matchesSettingsSearch(searchQuery, searchEntries)}
     >
       <ProjectWindowsRuntimeSetting

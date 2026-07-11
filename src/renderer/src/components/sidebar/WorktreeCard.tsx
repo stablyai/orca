@@ -30,6 +30,7 @@ import { WorktreeCardStatusSlot } from './WorktreeCardStatusSlot'
 import { cn } from '@/lib/utils'
 import { activateWorktreeFromSidebar } from '@/lib/sidebar-worktree-activation'
 import { isFolderRepo } from '../../../../shared/repo-kind'
+import { getRepoDisplayPath } from '../../../../shared/wsl-repo-identity'
 import type { HostedReviewInfo } from '../../../../shared/hosted-review'
 import { hostedReviewInfoFromGitHubPRInfo } from '../../../../shared/hosted-review-github'
 import type {
@@ -1668,7 +1669,7 @@ const WorktreeCard = React.memo(function WorktreeCard({
               ) : isFolder && !newCardStyle ? (
                 <span
                   className="min-w-0 truncate font-mono text-[11px] leading-none text-muted-foreground"
-                  title={worktree.path}
+                  title={getRepoDisplayPath(worktree.path)}
                 >
                   {getDirectoryName(worktree.path)}
                 </span>
