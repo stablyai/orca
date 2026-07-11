@@ -23,7 +23,7 @@
 ### Task 1: Lock the cross-host repo race regression
 
 **Files:**
-- Modify: `src/renderer/src/store/slices/repos-all-hosts.test.ts`
+- Modify: `src/renderer/src/store/slices/repos-stale-fetch.test.ts`
 
 **Interfaces:**
 - Consumes: `fetchRepos(): Promise<void>` and `fetchRuntimeEnvironmentRepos(environmentId: string): Promise<Repo[]>` from `RepoSlice`.
@@ -31,24 +31,16 @@
 
 - [ ] **Step 1: Add the overlap regression**
 
-Add this test inside `describe('fetchReposForAllHosts', ...)`, next to the existing targeted-runtime latest-state test:
+Add this test to the focused stale-fetch suite. Extend its `window.api` fixture with the minimal compatible `runtimeEnvironments.call` responses needed by `fetchRuntimeEnvironmentRepos`; do not grow the near-limit all-host test file.
 
 ```ts
 it('preserves a runtime catalog when an older local refresh finishes last', async () => {
-  let resolveLocal!: (repos: Repo[]) => void
-  const localResponse = new Promise<Repo[]>((resolve) => {
-    resolveLocal = resolve
-  })
+  const { promise: localResponse, resolve: resolveLocal } = Promise.withResolvers<Repo[]>()
   reposList.mockReturnValueOnce(localResponse)
   const store = createTestStore()
 
   const localLoad = store.getState().fetchRepos()
   await store.getState().fetchRuntimeEnvironmentRepos('env-1')
-
-  expect(store.getState().repos).toEqual([
-    { ...remoteRepo, executionHostId: 'runtime:env-1' }
-  ])
-
   resolveLocal([localRepo])
   await localLoad
 
@@ -66,7 +58,7 @@ Run:
 ```bash
 PATH=/opt/homebrew/opt/node@24/bin:$PATH pnpm exec vitest run \
   --config config/vitest.config.ts \
-  src/renderer/src/store/slices/repos-all-hosts.test.ts
+  src/renderer/src/store/slices/repos-stale-fetch.test.ts
 ```
 
 Expected: PASS. This is coverage for the latest-state merge already delivered by `25ecf2eea`; no repo-slice production edit follows.
@@ -74,7 +66,7 @@ Expected: PASS. This is coverage for the latest-state merge already delivered by
 - [ ] **Step 3: Commit the regression**
 
 ```bash
-git add src/renderer/src/store/slices/repos-all-hosts.test.ts
+git add src/renderer/src/store/slices/repos-stale-fetch.test.ts
 git commit -m "test: cover cross-host repo refresh race"
 ```
 
