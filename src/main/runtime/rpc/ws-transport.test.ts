@@ -63,6 +63,25 @@ describe('WebSocketTransport', () => {
     })
   }
 
+  function createHeartbeatSweepFixture() {
+    const socket = { ping: vi.fn(), terminate: vi.fn() }
+    const transport = new WebSocketTransport({
+      host: '127.0.0.1',
+      port: 0,
+      heartbeatIntervalMs: 50
+    })
+    const internals = transport as unknown as {
+      wss: { clients: Set<typeof socket> }
+      wsAlive: WeakSet<typeof socket>
+      lastHeartbeatTickAt: number | null
+      runHeartbeatSweep: (now: number) => void
+    }
+    internals.wss = { clients: new Set([socket]) }
+    internals.wsAlive = new WeakSet()
+    internals.lastHeartbeatTickAt = 1_000
+    return { internals, socket }
+  }
+
   it('starts and stops cleanly', async () => {
     const { transport } = await createTransport()
 
@@ -425,6 +444,24 @@ describe('WebSocketTransport', () => {
 
     const ws = await connectWs(second.resolvedPort)
     ws.close()
+  })
+
+  it('re-probes instead of terminating on the first sweep after a runtime pause', () => {
+    const { internals, socket } = createHeartbeatSweepFixture()
+
+    internals.runHeartbeatSweep(2_000)
+
+    expect(socket.terminate).not.toHaveBeenCalled()
+    expect(socket.ping).toHaveBeenCalledTimes(1)
+  })
+
+  it('terminates an unresponsive client on the next normal-cadence sweep', () => {
+    const { internals, socket } = createHeartbeatSweepFixture()
+
+    internals.runHeartbeatSweep(2_000)
+    internals.runHeartbeatSweep(2_050)
+
+    expect(socket.terminate).toHaveBeenCalledTimes(1)
   })
 
   it('reaps a half-open client that stops responding to pings', async () => {
