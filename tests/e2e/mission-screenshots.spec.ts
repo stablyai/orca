@@ -22,26 +22,34 @@ test.describe('Mission screenshots', () => {
       await orcaPage.waitForTimeout(500)
     }
 
-    for (const theme of ['light', 'dark'] as const) {
-      await setTheme(theme)
-      const missionName = theme === 'light' ? 'Referral' : 'Referral Dark'
-
-      // (2) Create dialog with members picked.
-      await orcaPage.getByRole('button', { name: 'Missions', exact: true }).click()
+    const createMission = async (missionName: string, screenshotName?: string) => {
       await orcaPage.getByRole('button', { name: 'New Mission' }).first().click()
       await orcaPage.getByLabel('Mission Name').fill(missionName)
       await orcaPage.getByRole('combobox').click()
       await orcaPage.getByText('All projects', { exact: true }).click()
       await orcaPage.keyboard.press('Escape')
-      await shot(`create-dialog-${theme}`)
+      if (screenshotName) {
+        await shot(screenshotName)
+      }
       await orcaPage.getByRole('button', { name: 'Create Mission' }).click()
+      const header = orcaPage.locator('[data-mission-id]').filter({ hasText: missionName }).first()
+      await expect(header).toBeVisible({ timeout: 60_000 })
+      return header
+    }
 
-      // (1) Missions tab with the mission expanded.
-      const missionHeader = orcaPage
-        .locator('[data-mission-id]')
-        .filter({ hasText: missionName })
-        .first()
-      await expect(missionHeader).toBeVisible({ timeout: 60_000 })
+    for (const theme of ['light', 'dark'] as const) {
+      await setTheme(theme)
+      const missionName = theme === 'light' ? 'Referral' : 'Referral Dark'
+
+      // (2) Create dialog with members picked, then two missions so the
+      // mission-list screenshot shows two expanded missions (spec UI Quality Bar).
+      await orcaPage.getByRole('button', { name: 'Missions', exact: true }).click()
+      const missionHeader = await createMission(missionName, `create-dialog-${theme}`)
+      await createMission(`${missionName} Demo`)
+
+      // (1) Missions tab with two missions expanded.
+      await expect(orcaPage.locator('[data-mission-id]')).not.toHaveCount(0)
+      expect(await orcaPage.locator('[data-mission-id]').count()).toBeGreaterThanOrEqual(2)
       await orcaPage.waitForTimeout(700)
       await shot(`mission-list-${theme}`)
 
