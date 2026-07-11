@@ -38,9 +38,11 @@ export function NativeChatCodexModelControls({
 }: NativeChatCodexModelControlsProps): React.JSX.Element {
   const selectedModel = models.find((model) => model.id === modelId) ?? null
   const efforts = selectedModel?.thinkingLevels ?? []
+  const selectedEffort = efforts.find((effort) => effort.id === effortId) ?? null
   const busy = loading || applying
-  const triggerLabel =
-    selectedModel?.label ?? translate('components.native-chat.composer.model', 'Model')
+  const triggerLabel = selectedModel
+    ? [selectedModel.label, selectedEffort?.label].filter(Boolean).join(' · ')
+    : translate('components.native-chat.composer.model', 'Model')
 
   return (
     <Popover>
@@ -49,7 +51,7 @@ export function NativeChatCodexModelControls({
           type="button"
           variant="ghost"
           size="sm"
-          className="h-8 max-w-44 gap-1.5 px-2 text-xs text-muted-foreground"
+          className="h-8 max-w-56 gap-1.5 px-2 text-xs text-muted-foreground"
           disabled={disabled}
           aria-label={translate(
             'components.native-chat.composer.openModelPicker',

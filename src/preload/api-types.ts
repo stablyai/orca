@@ -407,7 +407,11 @@ import type {
   AiVaultSubagentListArgs,
   AiVaultSubagentListResult
 } from '../shared/ai-vault-types'
-import type { AgentType, NativeChatMessage } from '../shared/native-chat-types'
+import type {
+  AgentType,
+  NativeChatMessage,
+  NativeChatSessionModel
+} from '../shared/native-chat-types'
 import type { TelemetryConsentState } from '../shared/telemetry-consent-types'
 import type { AgentKind, LaunchSource, RequestKind } from '../shared/telemetry-events'
 import type { AppStarSource } from '../shared/gh-star-source'
@@ -802,7 +806,9 @@ export type AiVaultApi = {
   onWindowFocused: (callback: () => void) => () => void
 }
 
-export type NativeChatReadSessionResult = { messages: NativeChatMessage[] } | { error: string }
+export type NativeChatReadSessionResult =
+  | { messages: NativeChatMessage[]; sessionModel?: NativeChatSessionModel }
+  | { error: string }
 
 /** Messages appended to a live-tailed transcript since the previous emit. */
 export type NativeChatAppendedMessages = NativeChatMessage[]

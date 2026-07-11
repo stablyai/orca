@@ -1,5 +1,9 @@
 import { createReadStream } from 'node:fs'
-import type { AgentType, NativeChatMessage } from '../../shared/native-chat-types'
+import type {
+  AgentType,
+  NativeChatMessage,
+  NativeChatSessionModel
+} from '../../shared/native-chat-types'
 import { errorMessage } from '../ai-vault/session-scanner-values'
 import { resolveSessionFilePath, type ResolveSessionFileOptions } from './session-file-resolver'
 import {
@@ -8,8 +12,11 @@ import {
   decodeGrokTranscriptLine
 } from './transcript-line-decoders'
 import { decodeTranscriptStream } from './transcript-stream-lines'
+import { readCodexSessionModel } from './codex-session-model'
 
-export type ReadTranscriptResult = { messages: NativeChatMessage[] } | { error: string }
+export type ReadTranscriptResult =
+  | { messages: NativeChatMessage[]; sessionModel?: NativeChatSessionModel }
+  | { error: string }
 
 export type ReadTranscriptOptions = ResolveSessionFileOptions & {
   /** Resolve directly to this file, skipping path discovery (used by tests). */
@@ -41,8 +48,15 @@ export async function readNativeChatTranscript(
       }
     }
     if (agent === 'codex') {
+      const messages = await readTranscript(
+        filePath,
+        decodeCodexTranscriptLine,
+        options.maxMessages
+      )
+      const sessionModel = await readCodexSessionModel(filePath)
       return {
-        messages: await readTranscript(filePath, decodeCodexTranscriptLine, options.maxMessages)
+        messages,
+        ...(sessionModel ? { sessionModel } : {})
       }
     }
     if (agent === 'grok') {

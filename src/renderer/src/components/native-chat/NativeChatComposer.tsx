@@ -10,6 +10,7 @@ import {
 } from 'react'
 import { useAppStore } from '../../store'
 import type { AgentType } from '../../../../shared/agent-status-types'
+import type { NativeChatSessionModel } from '../../../../shared/native-chat-types'
 import { NATIVE_FILE_DROP_TARGET } from '../../../../shared/native-file-drop'
 import {
   sendRuntimePtyInput,
@@ -68,6 +69,8 @@ export type NativeChatComposerProps = {
   /** Specific split-pane PTY this chat view owns. */
   targetPtyId: string | null
   agent: AgentType
+  /** Provider-reported model for the latest turn in this exact session. */
+  sessionModel?: NativeChatSessionModel
   /**
    * Mobile presence-lock seam (R8): when a mobile client holds the pty, desktop
    * sends must be guarded rather than silently dropped. U9 wires the real lock
@@ -118,6 +121,7 @@ export const NativeChatComposer = forwardRef<NativeChatComposerHandle, NativeCha
       terminalTabId,
       targetPtyId,
       agent,
+      sessionModel,
       canSend = true,
       isWorking = false,
       onStop,
@@ -232,17 +236,21 @@ export const NativeChatComposer = forwardRef<NativeChatComposerHandle, NativeCha
             setCodexModelError(result.success ? 'No Codex models are available.' : result.error)
             return
           }
-          setCodexModels(result.models)
-          // `codex debug models` is ordered exactly like the picker, newest
-          // visible model first. Preserve an already-selected value; otherwise
-          // seed the interface from that first provider-owned entry.
+          // Internal auto recipes can appear in `codex debug models` without
+          // appearing in the interactive `/model` picker. Exclude them so the
+          // UI and keyboard indexes describe the same visible list.
+          const visibleModels = result.models.filter((model) => !model.id.startsWith('codex-auto-'))
+          setCodexModels(visibleModels)
           setCodexModelId((current) =>
-            current && result.models.some((model) => model.id === current)
+            current && visibleModels.some((model) => model.id === current)
               ? current
-              : result.models[0].id
+              : (visibleModels[0]?.id ?? null)
           )
           setCodexEffortId((current) => {
-            const first = result.models[0]
+            const first = visibleModels[0]
+            if (!first) {
+              return null
+            }
             const efforts = first.thinkingLevels ?? []
             return current && efforts.some((effort) => effort.id === current)
               ? current
@@ -263,6 +271,24 @@ export const NativeChatComposer = forwardRef<NativeChatComposerHandle, NativeCha
         cancelled = true
       }
     }, [agent, terminalTabId])
+
+    useEffect(() => {
+      if (agent !== 'codex' || !sessionModel || codexModels.length === 0) {
+        return
+      }
+      const model = codexModels.find((entry) => entry.id === sessionModel.model)
+      if (!model) {
+        return
+      }
+      setCodexModelId(model.id)
+      const efforts = model.thinkingLevels ?? []
+      setCodexEffortId(
+        sessionModel.reasoningEffort &&
+          efforts.some((effort) => effort.id === sessionModel.reasoningEffort)
+          ? sessionModel.reasoningEffort
+          : (model.defaultThinkingLevel ?? efforts[0]?.id ?? null)
+      )
+    }, [agent, codexModels, sessionModel])
 
     const selectCodexModel = useCallback(
       (modelId: string) => {

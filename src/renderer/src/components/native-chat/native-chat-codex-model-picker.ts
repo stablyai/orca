@@ -1,7 +1,6 @@
 import type { CommitMessageModelCapability } from '../../../../shared/commit-message-agent-spec'
 
 const HOME = '\x1b[H'
-const END = '\x1b[F'
 const DOWN = '\x1b[B'
 const ENTER = '\r'
 
@@ -11,10 +10,6 @@ export const CODEX_MODEL_PICKER_SETTLE_MS = 1_000
 
 function selectAt(index: number): string {
   return `${HOME}${DOWN.repeat(Math.max(0, index))}${ENTER}`
-}
-
-function isAutoModel(model: CommitMessageModelCapability): boolean {
-  return model.id.startsWith('codex-auto-')
 }
 
 /**
@@ -31,20 +26,11 @@ export function buildCodexModelPickerStages(
     return null
   }
 
-  const autoModels = models.filter(isAutoModel)
-  const regularModels = models.filter((model) => !isAutoModel(model))
+  const regularModels = models.filter((model) => !model.id.startsWith('codex-auto-'))
   const stages: string[] = []
 
-  if (isAutoModel(target)) {
-    const autoIndex = autoModels.findIndex((model) => model.id === modelId)
-    return autoIndex >= 0 ? [selectAt(autoIndex)] : null
-  }
-
-  // When auto presets exist, `/model` first shows those plus an "All models"
-  // row. End selects that stable final row; without auto presets it opens the
-  // full model list directly.
-  if (autoModels.length > 0) {
-    stages.push(`${END}${ENTER}`)
+  if (target.id.startsWith('codex-auto-')) {
+    return null
   }
 
   const modelIndex = regularModels.findIndex((model) => model.id === modelId)

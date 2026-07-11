@@ -32,17 +32,17 @@ describe('buildCodexModelPickerStages', () => {
     ])
   })
 
-  it('opens All models first when visible auto presets exist', () => {
+  it('ignores discovery-only auto presets that are absent from the picker', () => {
     expect(
       buildCodexModelPickerStages(
         [{ id: 'codex-auto-fast', label: 'Fast', defaultThinkingLevel: 'low' }, ...models],
         'gpt-5.6-sol',
         'high'
       )
-    ).toEqual(['\x1b[F\r', '\x1b[H\r', '\x1b[H\x1b[B\r'])
+    ).toEqual(['\x1b[H\r', '\x1b[H\x1b[B\r'])
   })
 
-  it('applies an auto preset directly', () => {
+  it('does not try to apply a discovery-only auto preset', () => {
     expect(
       buildCodexModelPickerStages(
         [
@@ -53,7 +53,7 @@ describe('buildCodexModelPickerStages', () => {
         'codex-auto-balanced',
         null
       )
-    ).toEqual(['\x1b[H\x1b[B\r'])
+    ).toBeNull()
   })
 
   it('rejects unknown model and effort ids', () => {

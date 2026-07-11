@@ -4,7 +4,8 @@ import {
   NATIVE_CHAT_SOURCE_PRIORITY,
   type AgentType,
   type NativeChatMessage,
-  type NativeChatSession
+  type NativeChatSession,
+  type NativeChatSessionModel
 } from '../../../../shared/native-chat-types'
 import {
   applyAppend,
@@ -79,7 +80,7 @@ function nextSubscriptionId(): string {
 
 type ReadState =
   | { phase: 'loading' }
-  | { phase: 'ready'; messages: NativeChatMessage[] }
+  | { phase: 'ready'; messages: NativeChatMessage[]; sessionModel?: NativeChatSessionModel }
   | { phase: 'error'; error: string }
 
 /**
@@ -191,7 +192,11 @@ export function useNativeChatLiveSession(
           return
         }
         const messages = result?.messages ?? []
-        setRead({ phase: 'ready', messages })
+        setRead({
+          phase: 'ready',
+          messages,
+          ...(result?.sessionModel ? { sessionModel: result.sessionModel } : {})
+        })
         setHasMore(hasMoreNativeChatHistory(messages.length, limitRef.current))
       })
       .catch((err: unknown) => {
@@ -262,7 +267,11 @@ export function useNativeChatLiveSession(
         limitRef.current = nextLimit
         // Read results are an ordered tail — replace the base list so the older
         // page prepends in order; live appends stay in their separate bucket.
-        setRead({ phase: 'ready', messages: result.messages })
+        setRead({
+          phase: 'ready',
+          messages: result.messages,
+          ...(result.sessionModel ? { sessionModel: result.sessionModel } : {})
+        })
         setHasMore(hasMoreNativeChatHistory(result.messages.length, nextLimit))
       })
       .catch(() => {
@@ -322,6 +331,12 @@ export function useNativeChatLiveSession(
       loading: read.phase === 'loading',
       ...(read.phase === 'error' ? { error: read.error } : {})
     })
-    return { ...session, hasMore, loadingEarlier, loadEarlier }
+    return {
+      ...session,
+      ...(read.phase === 'ready' && read.sessionModel ? { sessionModel: read.sessionModel } : {}),
+      hasMore,
+      loadingEarlier,
+      loadEarlier
+    }
   }, [assembledMessages, read, sessionId, agent, hookState, hasMore, loadingEarlier, loadEarlier])
 }

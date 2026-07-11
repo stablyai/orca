@@ -88,6 +88,11 @@ export const NATIVE_CHAT_SESSION_STATUSES = [
 ] as const
 export type NativeChatSessionStatus = (typeof NATIVE_CHAT_SESSION_STATUSES)[number]
 
+export type NativeChatSessionModel = {
+  model: string
+  reasoningEffort?: string
+}
+
 export type NativeChatSession = {
   messages: NativeChatMessage[]
   status: NativeChatSessionStatus
@@ -95,6 +100,8 @@ export type NativeChatSession = {
    *  one (the view shows live hook state and backfills later). */
   sessionId: string | null
   agent: AgentType
+  /** Model recorded by the provider for the latest turn in this session. */
+  sessionModel?: NativeChatSessionModel
   /** Human-readable error when `status === 'error'`. */
   error?: string
 }

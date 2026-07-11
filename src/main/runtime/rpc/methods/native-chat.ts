@@ -120,7 +120,7 @@ export const NATIVE_CHAT_METHODS: readonly RpcAnyMethod[] = [
       )
       // Window to the conversation tail (all clients); clip blocks for mobile only.
       return 'messages' in result
-        ? { messages: windowForClient(result.messages, clientKind, params.limit) }
+        ? { ...result, messages: windowForClient(result.messages, clientKind, params.limit) }
         : result
     }
   }),
