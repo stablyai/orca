@@ -727,6 +727,96 @@ describe('createUISlice hydratePersistedUI', () => {
     expect(createUIStore().getState().workspaceHostOrder).toEqual([])
   })
 
+  it('defaults the persisted active view to terminal', () => {
+    expect(getDefaultUIState().activeView).toBe('terminal')
+    expect(createUIStore().getState().activeView).toBe('terminal')
+  })
+
+  it('restores the persisted active top-level view on hydration', () => {
+    const store = createUIStore()
+
+    store.getState().hydratePersistedUI(makePersistedUI({ activeView: 'tasks' }), 'startup')
+
+    expect(store.getState().activeView).toBe('tasks')
+  })
+
+  it('falls back to terminal when persisted active view is missing (older data)', () => {
+    const store = createUIStore()
+    store.setState({ activeView: 'tasks' })
+
+    store.getState().hydratePersistedUI(
+      {
+        ...makePersistedUI(),
+        activeView: undefined as unknown as PersistedUIState['activeView']
+      },
+      'startup'
+    )
+
+    expect(store.getState().activeView).toBe('terminal')
+  })
+
+  it('falls back to terminal when the persisted active view is not a known view', () => {
+    const store = createUIStore()
+
+    store.getState().hydratePersistedUI(
+      makePersistedUI({
+        activeView: 'not-a-real-view' as unknown as PersistedUIState['activeView']
+      }),
+      'startup'
+    )
+
+    expect(store.getState().activeView).toBe('terminal')
+  })
+
+  it('drops a persisted activity view when experimental activity is disabled', () => {
+    const store = createUIStore()
+    store.setState({
+      settings: { experimentalActivity: false } as AppState['settings']
+    })
+
+    store.getState().hydratePersistedUI(makePersistedUI({ activeView: 'activity' }), 'startup')
+
+    expect(store.getState().activeView).toBe('terminal')
+  })
+
+  it('restores a persisted activity view when experimental activity is enabled', () => {
+    const store = createUIStore()
+    store.setState({
+      settings: { experimentalActivity: true } as AppState['settings']
+    })
+
+    store.getState().hydratePersistedUI(makePersistedUI({ activeView: 'activity' }), 'startup')
+
+    expect(store.getState().activeView).toBe('activity')
+  })
+
+  it('restores a default-on view (mobile) even when its nav button is hidden', () => {
+    const store = createUIStore()
+    store.setState({
+      settings: { showMobileButton: false } as AppState['settings']
+    })
+
+    store.getState().hydratePersistedUI(makePersistedUI({ activeView: 'mobile' }), 'startup')
+
+    expect(store.getState().activeView).toBe('mobile')
+  })
+
+  it('does not overwrite the current view on a later cross-window sync hydration', () => {
+    const store = createUIStore()
+    store.getState().hydratePersistedUI(makePersistedUI({ activeView: 'tasks' }), 'startup')
+    expect(store.getState().activeView).toBe('tasks')
+
+    store
+      .getState()
+      .hydratePersistedUI(
+        makePersistedUI({ activeView: 'terminal', rightSidebarOpen: false }),
+        'sync'
+      )
+
+    expect(store.getState().activeView).toBe('tasks')
+    expect(store.getState().rightSidebarOpen).toBe(false)
+  })
+
   it('preserves the current right sidebar width when older persisted UI omits it', () => {
     const store = createUIStore()
 

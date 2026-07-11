@@ -3230,9 +3230,25 @@ export type WorkspaceHostScope = 'all' | 'local' | `ssh:${string}` | `runtime:${
 export type VisibleWorkspaceHostIds = Exclude<WorkspaceHostScope, 'all'>[] | null
 export type WorkspaceHostOrder = Exclude<WorkspaceHostScope, 'all'>[]
 
+/** The active top-level section shown in the main content area. */
+export type TopLevelView =
+  | 'terminal'
+  | 'settings'
+  | 'tasks'
+  | 'activity'
+  | 'automations'
+  | 'space'
+  | 'skills'
+  | 'mobile'
+
 export type PersistedUIState = {
   lastActiveRepoId: string | null
   lastActiveWorktreeId: string | null
+  /** Active top-level view at save time, restored on reload/relaunch so the app
+   *  reopens where the user left off instead of snapping back to the terminal.
+   *  Sanitized on hydration (unknown value or a now-gated view falls back to
+   *  'terminal'). */
+  activeView: TopLevelView
   sidebarWidth: number
   rightSidebarOpen: boolean
   rightSidebarTab: RightSidebarTab

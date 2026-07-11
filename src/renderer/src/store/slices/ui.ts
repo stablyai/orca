@@ -27,7 +27,8 @@ import type {
   WorktreeCardMode,
   WorkspaceHostOrder,
   WorkspaceHostScope,
-  VisibleWorkspaceHostIds
+  VisibleWorkspaceHostIds,
+  TopLevelView
 } from '../../../../shared/types'
 import type { GitLabWorkItem } from '../../../../shared/gitlab-types'
 import type { LaunchSource } from '../../../../shared/telemetry-events'
@@ -492,6 +493,37 @@ function hydratedUIPartialMatchesState(state: AppState, hydrated: Partial<UISlic
   )
 }
 
+// Record keys are exhaustive over TopLevelView, so a new view can't be silently missed.
+const TOP_LEVEL_VIEW_LOOKUP: Record<TopLevelView, true> = {
+  terminal: true,
+  settings: true,
+  tasks: true,
+  activity: true,
+  automations: true,
+  space: true,
+  skills: true,
+  mobile: true
+}
+const KNOWN_TOP_LEVEL_VIEWS = new Set<string>(Object.keys(TOP_LEVEL_VIEW_LOOKUP))
+
+function sanitizeHydratedActiveView(
+  value: PersistedUIState['activeView'],
+  experimentalActivityEnabled: boolean
+): TopLevelView {
+  // Why: older data (pre-activeView) or a view a different build doesn't have
+  // falls back to terminal rather than rendering nothing.
+  if (typeof value !== 'string' || !KNOWN_TOP_LEVEL_VIEWS.has(value)) {
+    return 'terminal'
+  }
+  // Why: activity is hidden when its setting is off, so restoring it lands on a
+  // hidden page (same guard as closeSettingsPage). mobile/automations stay
+  // functional when hidden, so only activity is gated here.
+  if (value === 'activity' && !experimentalActivityEnabled) {
+    return 'terminal'
+  }
+  return value as TopLevelView
+}
+
 let agentSendTargetModeInstanceCounter = 0
 
 function createAgentSendTargetModeInstanceId(): string {
@@ -585,15 +617,7 @@ export type UISlice = {
   acknowledgedAgentsByPaneKey: Record<string, number>
   acknowledgeAgents: (paneKeys: string[]) => void
   unacknowledgeAgents: (paneKeys: string[]) => void
-  activeView:
-    | 'terminal'
-    | 'settings'
-    | 'tasks'
-    | 'activity'
-    | 'automations'
-    | 'space'
-    | 'skills'
-    | 'mobile'
+  activeView: TopLevelView
   previousViewBeforeTasks:
     | 'terminal'
     | 'settings'
@@ -931,7 +955,7 @@ export type UISlice = {
   setUIZoomLevel: (level: number) => void
   editorFontZoomLevel: number
   setEditorFontZoomLevel: (level: number) => void
-  hydratePersistedUI: (ui: PersistedUIState) => void
+  hydratePersistedUI: (ui: PersistedUIState, source?: 'startup' | 'sync') => void
   updateStatus: UpdateStatus
   setUpdateStatus: (status: UpdateStatus) => void
   // Why: cached changelog from the last 'available' status so the card still has
@@ -2275,7 +2299,7 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
   editorFontZoomLevel: 0,
   setEditorFontZoomLevel: (level) => set({ editorFontZoomLevel: level }),
 
-  hydratePersistedUI: (ui) =>
+  hydratePersistedUI: (ui, source = 'sync') =>
     set((s) => {
       const validRepoIds = new Set(s.repos.map((repo) => repo.id))
       const persistedFilterRepoIds = sanitizePersistedRepoIds(ui.filterRepoIds)
@@ -2469,6 +2493,14 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
         workspaceCleanupDismissals: sanitizeWorkspaceCleanupDismissals(
           ui.workspaceCleanup?.dismissals
         ),
+        // Why: restore the view only from the startup hydration. The same action also
+        // runs on every cross-window ui:stateChanged broadcast (source 'sync', the
+        // default); re-applying activeView there would yank the user's current
+        // per-window view (navigation state, not a synced preference).
+        activeView:
+          source === 'startup'
+            ? sanitizeHydratedActiveView(ui.activeView, s.settings?.experimentalActivity === true)
+            : s.activeView,
         persistedUIReady: true
       }
       // Why: main rebroadcasts UI written by any client. Identical hydration must
