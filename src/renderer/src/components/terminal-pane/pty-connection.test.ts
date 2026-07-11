@@ -27,6 +27,7 @@ import {
   beginAgentStartupDeliveryAttempt,
   resetAgentStartupDelayedDeliveryForTests
 } from '@/lib/agent-startup-delayed-delivery'
+import type { AgentDraftPasteContentOutcome } from '@/lib/agent-draft-paste-content'
 import type { PaneForegroundAgentEntry } from '@/store/slices/pane-foreground-agent'
 
 // Repro command:
@@ -232,7 +233,17 @@ type StoreState = {
   suppressedPtyExitIds: Record<string, true>
   agentLaunchConfigByPaneKey: Record<
     string,
-    { launchConfig: unknown; identity?: { agentType?: string } }
+    {
+      launchConfig: unknown
+      registeredAt?: number
+      identity?: {
+        agentType?: string
+        launchToken?: string
+        tabId?: string
+        leafId?: string
+        terminalHandle?: string
+      }
+    }
   >
   getAgentLaunchConfigForStatusEntry: ReturnType<typeof vi.fn>
   getAgentLaunchConfigForStatusMetadata: ReturnType<typeof vi.fn>
@@ -361,6 +372,37 @@ vi.mock('./terminal-webgl-atlas-recovery', () => ({
 function notifyStoreSubscribers(): void {
   for (const listener of storeSubscribers.slice()) {
     listener(mockStoreState)
+  }
+}
+
+function seedLaunchBoundStartupDraftState(
+  ptyId = 'pty-codex',
+  launchToken = 'launch-token-1'
+): void {
+  mockStoreState = {
+    ...mockStoreState,
+    tabsByWorktree: { 'wt-1': [{ id: 'tab-1', ptyId: null }] },
+    repos: [{ id: 'repo1', connectionId: null }],
+    ptyIdsByTabId: { 'tab-1': [ptyId] },
+    terminalLayoutsByTabId: {
+      'tab-1': {
+        root: { type: 'leaf', leafId: LEAF_1 },
+        activeLeafId: LEAF_1,
+        expandedLeafId: null,
+        ptyIdsByLeafId: { [LEAF_1]: ptyId }
+      }
+    },
+    agentLaunchConfigByPaneKey: {
+      [makePaneKey('tab-1', LEAF_1)]: {
+        launchConfig: { agentArgs: '', agentEnv: {} },
+        registeredAt: 1,
+        identity: {
+          tabId: 'tab-1',
+          leafId: LEAF_1,
+          launchToken
+        }
+      }
+    }
   }
 }
 
@@ -6520,7 +6562,7 @@ describe('connectPanePty', () => {
       }
     ).mock.calls[0]?.[0]('USER_DRAFT')
     ;(mockStoreState.recordTerminalInput as ReturnType<typeof vi.fn>).mockClear()
-    capturedDataCallback.current?.('\x1b[?2004h\x1b[2K› ')
+    capturedDataCallback.current?.('\x1b[?2004h\x1b[2K\x1b[1m›\x1b[0m Ask Codex to do anything')
     await flushAsyncTicks()
 
     expect(transport.sendInputAccepted).toHaveBeenCalledWith(
@@ -6604,6 +6646,279 @@ describe('connectPanePty', () => {
   })
 
   it('releases startup draft delivery when disposed before deferred connect starts', async () => {
+  it('retries the same startup draft after an explicit no-write result', async () => {
+    const draftPaste = await import('@/lib/agent-draft-paste-content')
+    const sendDraft = vi
+      .spyOn(draftPaste, 'sendAgentDraftPasteContentWithOutcome')
+      .mockResolvedValueOnce('not-written')
+      .mockResolvedValueOnce('delivered')
+    try {
+      const { connectPanePty } = await import('./pty-connection')
+      const { beginAgentStartupDeliveryAttempt: beginCurrentDeliveryAttempt } =
+        await import('@/lib/agent-startup-delayed-delivery')
+      const capturedDataCallback: { current: ((data: string) => void) | null } = { current: null }
+      const transport = createMockTransport('pty-codex')
+      transport.connect.mockImplementation(
+        async ({ callbacks }: { callbacks: ConnectCallbacks }) => {
+          capturedDataCallback.current = callbacks.onData ?? null
+          return 'pty-codex'
+        }
+      )
+      transportFactoryQueue.push(transport)
+      seedLaunchBoundStartupDraftState()
+
+      connectPanePty(
+        createPane(1) as never,
+        createManager(1) as never,
+        createDeps({
+          startup: {
+            command: 'codex',
+            launchAgent: 'codex',
+            launchConfig: { agentArgs: '', agentEnv: {} },
+            launchToken: 'launch-token-1',
+            draftPrompt: 'linked draft'
+          }
+        }) as never
+      )
+      await flushAsyncTicks()
+
+      capturedDataCallback.current?.('\x1b[?2004h› Ask Codex')
+      await flushAsyncTicks()
+      expect(sendDraft).toHaveBeenCalledTimes(2)
+
+      capturedDataCallback.current?.('composer redraw')
+      await flushAsyncTicks()
+
+      expect(sendDraft).toHaveBeenCalledTimes(2)
+      expect(sendDraft).toHaveBeenLastCalledWith(expect.anything(), 'pty-codex', 'linked draft')
+      expect(
+        beginCurrentDeliveryAttempt({
+          worktreeId: 'wt-1',
+          tabId: 'tab-1',
+          launchToken: 'launch-token-1'
+        })
+      ).toBe(false)
+    } finally {
+      sendDraft.mockRestore()
+    }
+  })
+
+  it.each(['delivery-uncertain', 'rejected promise'] as const)(
+    'does not retry a startup draft after %s',
+    async (failureMode) => {
+      const draftPaste = await import('@/lib/agent-draft-paste-content')
+      const sendDraft = vi.spyOn(draftPaste, 'sendAgentDraftPasteContentWithOutcome')
+      if (failureMode === 'rejected promise') {
+        sendDraft.mockRejectedValueOnce(new Error('runtime acknowledgement lost'))
+      } else {
+        sendDraft.mockResolvedValueOnce(failureMode)
+      }
+      try {
+        const { connectPanePty } = await import('./pty-connection')
+        const capturedDataCallback: { current: ((data: string) => void) | null } = { current: null }
+        const transport = createMockTransport('pty-codex')
+        transport.connect.mockImplementation(
+          async ({ callbacks }: { callbacks: ConnectCallbacks }) => {
+            capturedDataCallback.current = callbacks.onData ?? null
+            return 'pty-codex'
+          }
+        )
+        transportFactoryQueue.push(transport)
+        seedLaunchBoundStartupDraftState()
+
+        connectPanePty(
+          createPane(1) as never,
+          createManager(1) as never,
+          createDeps({
+            startup: {
+              command: 'codex',
+              launchAgent: 'codex',
+              launchConfig: { agentArgs: '', agentEnv: {} },
+              launchToken: 'launch-token-1',
+              draftPrompt: 'linked draft'
+            }
+          }) as never
+        )
+        await flushAsyncTicks()
+
+        capturedDataCallback.current?.('\x1b[?2004h› Ask Codex')
+        await flushAsyncTicks()
+        capturedDataCallback.current?.('composer redraw')
+        await flushAsyncTicks()
+
+        expect(sendDraft).toHaveBeenCalledTimes(1)
+      } finally {
+        sendDraft.mockRestore()
+      }
+    }
+  )
+
+  it.each(['delivered', 'not-written', 'delivery-uncertain', 'rejected promise'] as const)(
+    'keeps startup draft ownership across dispose and remount until an in-flight write settles with %s',
+    async (outcome) => {
+      vi.useFakeTimers()
+      globalThis.requestAnimationFrame = vi.fn((callback: FrameRequestCallback) => {
+        callback(0)
+        return 1
+      })
+      let resolveFirstWrite!: (value: AgentDraftPasteContentOutcome) => void
+      let rejectFirstWrite!: (reason: unknown) => void
+      let firstWriteSettled = false
+      const firstWrite = new Promise<AgentDraftPasteContentOutcome>((resolve, reject) => {
+        resolveFirstWrite = resolve
+        rejectFirstWrite = reject
+      })
+      const settleFirstWrite = (): void => {
+        firstWriteSettled = true
+        if (outcome === 'rejected promise') {
+          rejectFirstWrite(new Error('late write rejection'))
+        } else {
+          resolveFirstWrite(outcome)
+        }
+      }
+      const draftPaste = await import('@/lib/agent-draft-paste-content')
+      const sendDraft = vi
+        .spyOn(draftPaste, 'sendAgentDraftPasteContentWithOutcome')
+        .mockImplementationOnce(() => firstWrite)
+        .mockResolvedValueOnce('delivered')
+      let remountedBinding: { dispose: () => void } | null = null
+      try {
+        const { connectPanePty } = await import('./pty-connection')
+        const { beginAgentStartupDeliveryAttempt: beginCurrentDeliveryAttempt } =
+          await import('@/lib/agent-startup-delayed-delivery')
+        const dataCallbacks: ((data: string) => void)[] = []
+        const createConnectedTransport = (): MockTransport => {
+          const transport = createMockTransport('pty-codex')
+          transport.connect.mockImplementation(
+            async ({ callbacks }: { callbacks: ConnectCallbacks }) => {
+              if (callbacks.onData) {
+                dataCallbacks.push(callbacks.onData)
+              }
+              return 'pty-codex'
+            }
+          )
+          return transport
+        }
+        const startup = {
+          command: 'codex',
+          launchAgent: 'codex' as const,
+          launchConfig: { agentArgs: '', agentEnv: {} },
+          launchToken: 'launch-token-1',
+          draftPrompt: 'linked draft'
+        }
+        seedLaunchBoundStartupDraftState()
+
+        transportFactoryQueue.push(createConnectedTransport())
+        const firstBinding = connectPanePty(
+          createPane(1) as never,
+          createManager(1) as never,
+          createDeps({ startup }) as never
+        )
+        await vi.advanceTimersByTimeAsync(20)
+        await flushAsyncTicks()
+        dataCallbacks[0]?.('\x1b[?2004h› Ask Codex')
+        await flushAsyncTicks()
+        expect(sendDraft).toHaveBeenCalledTimes(1)
+
+        firstBinding.dispose()
+        transportFactoryQueue.push(createConnectedTransport())
+        remountedBinding = connectPanePty(
+          createPane(1) as never,
+          createManager(1) as never,
+          createDeps({ startup }) as never
+        )
+        await vi.advanceTimersByTimeAsync(20)
+        await flushAsyncTicks()
+        dataCallbacks[1]?.('\x1b[?2004h› Ask Codex')
+        await flushAsyncTicks()
+
+        expect(sendDraft).toHaveBeenCalledTimes(1)
+        settleFirstWrite()
+        await flushAsyncTicks()
+        dataCallbacks[1]?.('composer redraw')
+        await flushAsyncTicks()
+
+        expect(sendDraft).toHaveBeenCalledTimes(outcome === 'not-written' ? 2 : 1)
+        expect(
+          beginCurrentDeliveryAttempt({
+            worktreeId: 'wt-1',
+            tabId: 'tab-1',
+            launchToken: 'launch-token-1'
+          })
+        ).toBe(false)
+      } finally {
+        if (!firstWriteSettled) {
+          resolveFirstWrite('delivered')
+        }
+        remountedBinding?.dispose()
+        await flushAsyncTicks()
+        vi.clearAllTimers()
+        sendDraft.mockRestore()
+      }
+    }
+  )
+
+  it('drops a failed startup draft retry after its tab is deleted', async () => {
+    const firstWrite = createDeferred<AgentDraftPasteContentOutcome>()
+    const draftPaste = await import('@/lib/agent-draft-paste-content')
+    const sendDraft = vi
+      .spyOn(draftPaste, 'sendAgentDraftPasteContentWithOutcome')
+      .mockImplementationOnce(() => firstWrite.promise)
+      .mockResolvedValueOnce('delivered')
+    try {
+      const { connectPanePty } = await import('./pty-connection')
+      const capturedDataCallback: { current: ((data: string) => void) | null } = { current: null }
+      const transport = createMockTransport('pty-codex')
+      transport.connect.mockImplementation(
+        async ({ callbacks }: { callbacks: ConnectCallbacks }) => {
+          capturedDataCallback.current = callbacks.onData ?? null
+          return 'pty-codex'
+        }
+      )
+      transportFactoryQueue.push(transport)
+      seedLaunchBoundStartupDraftState()
+
+      connectPanePty(
+        createPane(1) as never,
+        createManager(1) as never,
+        createDeps({
+          startup: {
+            command: 'codex',
+            launchAgent: 'codex',
+            launchConfig: { agentArgs: '', agentEnv: {} },
+            launchToken: 'launch-token-1',
+            draftPrompt: 'linked draft'
+          }
+        }) as never
+      )
+      await flushAsyncTicks()
+
+      capturedDataCallback.current?.('\x1b[?2004h› Ask Codex')
+      await flushAsyncTicks()
+      expect(sendDraft).toHaveBeenCalledTimes(1)
+
+      mockStoreState = {
+        ...mockStoreState,
+        tabsByWorktree: { 'wt-1': [] }
+      }
+      firstWrite.resolve('not-written')
+      await flushAsyncTicks()
+
+      mockStoreState = {
+        ...mockStoreState,
+        tabsByWorktree: { 'wt-1': [{ id: 'tab-1', ptyId: null }] }
+      }
+      notifyStoreSubscribers()
+      capturedDataCallback.current?.('composer redraw')
+      await flushAsyncTicks()
+
+      expect(sendDraft).toHaveBeenCalledTimes(1)
+    } finally {
+      sendDraft.mockRestore()
+    }
+  })
+
+  it('does not consume startup draft delivery before deferred connect starts', async () => {
     const { connectPanePty } = await import('./pty-connection')
     globalThis.requestAnimationFrame = vi.fn(() => 1)
     const transport = createMockTransport('pty-codex')
@@ -6756,7 +7071,7 @@ describe('connectPanePty', () => {
     }
   })
 
-  it('waits for shell-ready for SSH Codex native prefill commands without an explicit hint', async () => {
+  it('waits for shell-ready for SSH Codex positional prompts when the plan opts in', async () => {
     const pendingTimeouts: (() => void)[] = []
     const originalSetTimeout = globalThis.setTimeout
     globalThis.setTimeout = vi.fn((fn: () => void) => {
@@ -6789,7 +7104,10 @@ describe('connectPanePty', () => {
       const pane = createPane(1)
       const manager = createManager(1)
       const deps = createDeps({
-        startup: { command: "codex --prefill 'linked issue context'" }
+        startup: {
+          command: "codex 'linked issue context'",
+          startupCommandDelivery: 'shell-ready'
+        }
       })
 
       connectPanePty(pane as never, manager as never, deps as never)
@@ -6804,7 +7122,7 @@ describe('connectPanePty', () => {
         fn()
       }
 
-      expect(transport.sendInput).toHaveBeenCalledWith("codex --prefill 'linked issue context'\r")
+      expect(transport.sendInput).toHaveBeenCalledWith("codex 'linked issue context'\r")
     } finally {
       globalThis.setTimeout = originalSetTimeout
     }
@@ -6846,8 +7164,9 @@ describe('connectPanePty', () => {
       const deps = createDeps({
         startup: {
           command: wrapperCommand,
+          startupCommandDelivery: 'shell-ready',
           env: {
-            [SETUP_AGENT_SEQUENCE_STARTUP_COMMAND_ENV]: "codex --prefill 'linked issue context'"
+            [SETUP_AGENT_SEQUENCE_STARTUP_COMMAND_ENV]: "codex 'linked issue context'"
           }
         }
       })

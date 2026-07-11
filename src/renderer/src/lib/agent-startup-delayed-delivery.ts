@@ -11,12 +11,21 @@ import {
 
 type AppStoreSnapshot = ReturnType<typeof useAppStore.getState>
 
+export type AgentStartupDeliveryOutcome =
+  | { kind: 'delivered' }
+  | { kind: 'retryable'; startup: AgentStartupPlan }
+  | { kind: 'delivery-uncertain' }
+
 type PendingAgentStartupDelivery = {
   worktreeId: string
   tabId: string
   launchToken: string
   startup: AgentStartupPlan
-  deliver: (tabId: string, ptyId: string, startup: AgentStartupPlan) => Promise<void>
+  deliver: (
+    tabId: string,
+    ptyId: string,
+    startup: AgentStartupPlan
+  ) => Promise<AgentStartupDeliveryOutcome>
 }
 
 const pendingAgentStartupDeliveries = new Map<string, PendingAgentStartupDelivery>()
@@ -173,6 +182,28 @@ export function releaseAgentStartupDeliveryAttempt(args: {
   releaseAgentStartupDeliveryConsumed(deliveryKey(args))
 }
 
+function requeueFailedAgentStartupDelivery(
+  key: string,
+  delivery: PendingAgentStartupDelivery,
+  retryStartup: AgentStartupPlan
+): void {
+  releaseAgentStartupDeliveryAttempt(delivery)
+  const retryDelivery = { ...delivery, startup: retryStartup }
+  const state = useAppStore.getState()
+  const queuedLaunchToken = getPendingStartupLaunchToken(state, delivery.tabId)
+  const launchRegistered = hasRegisteredStartupLaunch(state, delivery.tabId, delivery.launchToken)
+  // Why: the attempt removed this entry; keep it pending so a later
+  // launch/PTY state change can retry instead of silently losing the draft.
+  if (
+    worktreeStillOwnsStartupTab(state, delivery.worktreeId, delivery.tabId) &&
+    (queuedLaunchToken === delivery.launchToken || launchRegistered) &&
+    !isAgentStartupDeliveryConsumed(key)
+  ) {
+    pendingAgentStartupDeliveries.set(key, retryDelivery)
+    ensurePendingAgentStartupSubscription()
+  }
+}
+
 function flushPendingAgentStartupDeliveries(): void {
   const state = useAppStore.getState()
   for (const [key, delivery] of pendingAgentStartupDeliveries) {
@@ -198,11 +229,21 @@ function flushPendingAgentStartupDeliveries(): void {
     }
     // Why: once the launch-bound PTY exists, the bounded readiness/paste path
     // owns success or failure. Consume before awaiting so store churn cannot
-    // duplicate a linked-work-item draft.
+    // duplicate a linked-work-item draft. Only an explicit no-write outcome
+    // can requeue; a rejected or partial write has ambiguous delivery.
     if (beginAgentStartupDeliveryAttempt(delivery)) {
-      void delivery.deliver(tabId, ptyId, delivery.startup).catch((error) => {
-        console.warn('Queued agent startup delivery failed', error)
-      })
+      void delivery
+        .deliver(tabId, ptyId, delivery.startup)
+        .then((outcome) => {
+          if (outcome.kind === 'retryable') {
+            requeueFailedAgentStartupDelivery(key, delivery, outcome.startup)
+          }
+        })
+        .catch((error) => {
+          // Why: rejection cannot prove whether a remote write took effect.
+          // Keep the launch consumed instead of replaying user/task text.
+          console.warn('Queued agent startup delivery failed', error)
+        })
     }
   }
   stopPendingAgentStartupSubscriptionIfIdle()

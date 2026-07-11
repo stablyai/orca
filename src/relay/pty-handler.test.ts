@@ -875,18 +875,19 @@ describe('PtyHandler', () => {
   )
 
   it.skipIf(process.platform === 'win32')(
-    'emits shell-ready markers for renderer-delivered Codex native prefill commands',
+    'emits shell-ready markers for renderer-delivered Codex positional prompt commands',
     async () => {
       const oldShell = process.env.SHELL
       const oldHome = process.env.HOME
-      const homeDir = mkdtempSync(join(tmpdir(), 'relay-codex-prefill-spawn-'))
+      const homeDir = mkdtempSync(join(tmpdir(), 'relay-codex-prompt-spawn-'))
 
       process.env.SHELL = '/bin/bash'
       process.env.HOME = homeDir
       try {
         await dispatcher.callRequest('pty.spawn', {
           env: { HOME: homeDir },
-          command: "codex --prefill 'linked issue context'"
+          command: "codex 'linked issue context'",
+          startupCommandDelivery: 'shell-ready'
         })
       } finally {
         if (oldShell === undefined) {
@@ -960,10 +961,11 @@ describe('PtyHandler', () => {
         await dispatcher.callRequest('pty.spawn', {
           env: {
             HOME: homeDir,
-            [SETUP_AGENT_SEQUENCE_STARTUP_COMMAND_ENV]: "codex --prefill 'linked issue context'"
+            [SETUP_AGENT_SEQUENCE_STARTUP_COMMAND_ENV]: "codex 'linked issue context'"
           },
           command: 'bash -lc wait-for-setup-wrapper',
-          commandDelivery: 'provider'
+          commandDelivery: 'provider',
+          startupCommandDelivery: 'shell-ready'
         })
       } finally {
         if (oldShell === undefined) {

@@ -269,12 +269,12 @@ describe('launchAgentBackgroundSession remote runtime and SSH startup delivery',
     }
   })
 
-  it('waits for shell-ready for SSH background Codex native prefill commands without a hint', async () => {
+  it('keeps empty Codex override launches on the fast SSH path', async () => {
     vi.useFakeTimers()
     try {
       state.repos = [{ id: 'repo-1', connectionId: 'ssh-1', path: '/repo' }]
       state.settings = {
-        agentCmdOverrides: { codex: "codex --prefill 'draft from override'" },
+        agentCmdOverrides: { codex: 'codex --model gpt-5' },
         activeRuntimeEnvironmentId: null,
         terminalMainSideEffectAuthority: undefined
       }
@@ -288,22 +288,17 @@ describe('launchAgentBackgroundSession remote runtime and SSH startup delivery',
 
       expect(mockSpawn.mock.calls[0]?.[0]).toEqual(
         expect.objectContaining({
-          command:
-            "codex --prefill 'draft from override' '--dangerously-bypass-approvals-and-sandbox'"
+          command: "codex --model gpt-5 '--dangerously-bypass-approvals-and-sandbox'"
         })
       )
       expect(mockSpawn.mock.calls[0]?.[0]).not.toHaveProperty('startupCommandDelivery')
       const dataSidecar = mockSubscribeToPtyData.mock.calls[0]?.[1] as (data: string) => void
       dataSidecar('user@remote repo % ')
       vi.advanceTimersByTime(50)
-      expect(mockWrite).not.toHaveBeenCalled()
-
-      dataSidecar('\x1b]777;orca-shell-ready\x07user@remote repo % ')
-      vi.advanceTimersByTime(50)
 
       expect(mockWrite).toHaveBeenCalledWith(
         'pty-1',
-        "codex --prefill 'draft from override' '--dangerously-bypass-approvals-and-sandbox'\r"
+        "codex --model gpt-5 '--dangerously-bypass-approvals-and-sandbox'\r"
       )
     } finally {
       vi.useRealTimers()

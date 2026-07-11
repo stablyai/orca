@@ -419,6 +419,35 @@ describe('tui agent startup plans', () => {
     expect(plan?.startupCommandDelivery).toBe('shell-ready')
   })
 
+  it('falls back to post-ready delivery when a Codex prompt exceeds the Windows argv budget', () => {
+    const prompt = 'x'.repeat(25_000)
+    const plan = buildAgentStartupPlan({
+      agent: 'codex',
+      prompt,
+      cmdOverrides: {},
+      platform: 'win32'
+    })
+
+    expect(plan?.launchCommand).toBe('codex')
+    expect(plan?.followupPrompt).toBe(prompt)
+    expect(plan?.startupCommandDelivery).toBeUndefined()
+  })
+
+  it('uses the lower cmd.exe argv budget for Codex startup prompts', () => {
+    const prompt = 'x'.repeat(7_600)
+    const plan = buildAgentStartupPlan({
+      agent: 'codex',
+      prompt,
+      cmdOverrides: {},
+      platform: 'win32',
+      shell: 'cmd'
+    })
+
+    expect(plan?.launchCommand).toBe('codex')
+    expect(plan?.followupPrompt).toBe(prompt)
+    expect(plan?.startupCommandDelivery).toBeUndefined()
+  })
+
   it('keeps plain empty Codex startup on the fast delivery path', () => {
     const plan = buildAgentStartupPlan({
       agent: 'codex',
@@ -815,6 +844,18 @@ describe('tui agent startup plans', () => {
         draft: 'x'.repeat(25_000),
         cmdOverrides: {},
         platform: 'win32'
+      })
+    ).toBeNull()
+  })
+
+  it('uses the lower cmd.exe argv budget for native draft flags', () => {
+    expect(
+      buildAgentDraftLaunchPlan({
+        agent: 'claude',
+        draft: 'x'.repeat(7_600),
+        cmdOverrides: {},
+        platform: 'win32',
+        shell: 'cmd'
       })
     ).toBeNull()
   })

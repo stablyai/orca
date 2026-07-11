@@ -1,28 +1,45 @@
 import { describe, expect, it } from 'vitest'
-import { hasCodexNativeDraftFlag } from './codex-startup-delivery'
+import { shouldUseShellReadyStartupDelivery } from './codex-startup-delivery'
 
-describe('hasCodexNativeDraftFlag', () => {
-  it('matches Codex --prefill option tokens', () => {
-    expect(hasCodexNativeDraftFlag("codex --prefill 'linked issue context'")).toBe(true)
-    expect(hasCodexNativeDraftFlag("codex --model gpt-5 --prefill 'draft'")).toBe(true)
+describe('shouldUseShellReadyStartupDelivery', () => {
+  it('honors explicit shell-ready startup plans', () => {
+    expect(
+      shouldUseShellReadyStartupDelivery({
+        command: "codex 'fix it'",
+        startupCommandDelivery: 'shell-ready'
+      })
+    ).toBe(true)
   })
 
-  it('matches Codex --prefill=value option tokens', () => {
-    expect(hasCodexNativeDraftFlag('codex --prefill=review')).toBe(true)
-    expect(hasCodexNativeDraftFlag("codex --prefill='linked issue context'")).toBe(true)
+  it('stays on the fast path without an explicit shell-ready hint', () => {
+    expect(shouldUseShellReadyStartupDelivery({ command: 'codex' })).toBe(false)
+    expect(
+      shouldUseShellReadyStartupDelivery({
+        command: "codex 'please compare --prefill behavior'"
+      })
+    ).toBe(false)
   })
 
-  it('does not match quoted prompt text mentioning prefill', () => {
-    expect(hasCodexNativeDraftFlag("codex 'please compare --prefill behavior'")).toBe(false)
-    expect(hasCodexNativeDraftFlag("codex '--prefill=not-an-option'")).toBe(false)
+  it('does not treat mythical Codex --prefill tokens as native draft delivery', () => {
+    // Why: Codex has no --prefill flag. Only a startup plan that actually
+    // carries positional PROMPT may opt into shell-ready command delivery.
+    expect(
+      shouldUseShellReadyStartupDelivery({
+        command: "codex --prefill 'linked issue context'"
+      })
+    ).toBe(false)
+    expect(
+      shouldUseShellReadyStartupDelivery({
+        command: 'codex --prefill=review'
+      })
+    ).toBe(false)
   })
 
-  it('does not match non-Codex commands', () => {
-    expect(hasCodexNativeDraftFlag("claude --prefill 'review this'")).toBe(false)
-  })
-
-  it('leaves plain Codex and normal Codex arguments on the fast path', () => {
-    expect(hasCodexNativeDraftFlag('codex')).toBe(false)
-    expect(hasCodexNativeDraftFlag('codex --model gpt-5')).toBe(false)
+  it('does not force shell-ready for Claude native prefill', () => {
+    expect(
+      shouldUseShellReadyStartupDelivery({
+        command: "claude --prefill 'review this'"
+      })
+    ).toBe(false)
   })
 })

@@ -13,17 +13,22 @@ import {
 import { runTerminalPtyInputTransaction } from '@/components/terminal-pane/terminal-pty-input-transaction'
 import { waitForAgentReady } from './agent-ready-wait'
 import { getSettingsForWorktreeRuntimeOwner } from './worktree-runtime-owner'
-import { sendAgentDraftPasteContentNow } from './agent-draft-paste-content'
+import {
+  sendAgentDraftPasteContentNow,
+  type AgentDraftPasteContentOutcome
+} from './agent-draft-paste-content'
 import { agentDeliversDraftViaNativePrefill } from './agent-native-draft-prefill'
 import { waitForAgentDraftInputReady } from './agent-draft-readiness'
 import { isExpectedAgentProcess } from '../../../shared/agent-process-recognition'
+import { AGENT_PROMPT_SUBMIT_DELAY_MS } from '../../../shared/agent-prompt-injection'
 export {
   AGENT_DRAFT_PASTE_CHUNK_MAX_BYTES,
   AGENT_DRAFT_PASTE_DIRECT_MAX_BYTES,
   AGENT_DRAFT_PASTE_MAX_BYTES,
   chunkAgentDraftPasteContent,
   iterateAgentDraftPasteContentChunks,
-  sendAgentDraftPasteContent
+  sendAgentDraftPasteContent,
+  sendAgentDraftPasteContentWithOutcome
 } from './agent-draft-paste-content'
 
 // Why: bracketed paste markers let modern TUIs (Claude Code / Codex / Pi /
@@ -32,7 +37,8 @@ export {
 // line-edit shortcuts. Callers choose whether to append Enter after the paste.
 export const BRACKETED_PASTE_BEGIN = BRACKETED_PASTE_START
 export { BRACKETED_PASTE_END }
-export const POST_PASTE_SUBMIT_DELAY_MS = 50
+// Why: let the TUI leave bracketed-paste mode before Enter is interpreted.
+export const POST_PASTE_SUBMIT_DELAY_MS = AGENT_PROMPT_SUBMIT_DELAY_MS
 
 export function sanitizeBracketedPasteContent(content: string): string {
   return sanitizeTerminalPasteText(content)
@@ -138,11 +144,24 @@ export async function pasteDraftToAgentPtyWhenReady(args: {
   timeoutMs?: number
   onTimeout?: () => void
 }): Promise<boolean> {
+  return (await pasteDraftToAgentPtyWhenReadyWithOutcome(args)) === 'delivered'
+}
+
+export async function pasteDraftToAgentPtyWhenReadyWithOutcome(args: {
+  tabId: string
+  ptyId: string
+  content: string
+  agent?: TuiAgent
+  submit?: boolean
+  forcePaste?: boolean
+  timeoutMs?: number
+  onTimeout?: () => void
+}): Promise<AgentDraftPasteContentOutcome> {
   const { tabId, ptyId, content, agent, submit, forcePaste, timeoutMs, onTimeout } = args
   const agentConfig = agent ? TUI_AGENT_CONFIG[agent] : null
 
   if (agentDeliversDraftViaNativePrefill(agent, forcePaste)) {
-    return false
+    return 'not-written'
   }
 
   const budget = timeoutMs ?? READINESS_TIMEOUT_MS
@@ -155,11 +174,11 @@ export async function pasteDraftToAgentPtyWhenReady(args: {
       : false
     if (!fallbackReady) {
       onTimeout?.()
-      return false
+      return 'not-written'
     }
   }
 
-  return await sendBracketedPasteToAgent({
+  return await sendBracketedPasteToAgentWithOutcome({
     settings,
     ptyId,
     content,
@@ -193,13 +212,22 @@ async function sendBracketedPasteToAgent(args: {
   content: string
   submit: boolean
 }): Promise<boolean> {
+  return (await sendBracketedPasteToAgentWithOutcome(args)) === 'delivered'
+}
+
+async function sendBracketedPasteToAgentWithOutcome(args: {
+  settings?: Pick<GlobalSettings, 'activeRuntimeEnvironmentId'> | null
+  ptyId: string
+  content: string
+  submit: boolean
+}): Promise<AgentDraftPasteContentOutcome> {
   const { settings = useAppStore.getState().settings, ptyId, content, submit } = args
   try {
     // Why: paste + Enter must be one transaction, or a concurrent paste on this PTY
     // can slip between them and submit a half-written prompt.
     return await runTerminalPtyInputTransaction(ptyId, async () => {
       const pasted = await sendAgentDraftPasteContentNow(settings, ptyId, content)
-      if (!pasted || !submit) {
+      if (pasted !== 'delivered' || !submit) {
         return pasted
       }
 
@@ -207,10 +235,12 @@ async function sendBracketedPasteToAgent(args: {
       // Enter arrive in the same PTY write. Split the submit into the next turn so
       // the TUI processes bracketed-paste termination before handling Enter.
       await new Promise<void>((resolve) => window.setTimeout(resolve, POST_PASTE_SUBMIT_DELAY_MS))
-      return await sendRuntimePtyInputVerified(settings, ptyId, '\r')
+      return (await sendRuntimePtyInputVerified(settings, ptyId, '\r'))
+        ? 'delivered'
+        : 'delivery-uncertain'
     })
   } catch {
-    return false
+    return 'delivery-uncertain'
   }
 }
 

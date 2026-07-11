@@ -3,7 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 const {
   mockInspectRuntimeTerminalProcess,
   mockSendRuntimePtyInputVerified,
-  mockPasteDraftToAgentPtyWhenReady,
+  mockPasteDraftToAgentPtyWhenReadyWithOutcome,
   mockShowAutomationPromptNotSentToast,
   mockTrack,
   store,
@@ -12,7 +12,7 @@ const {
 } = vi.hoisted(() => ({
   mockInspectRuntimeTerminalProcess: vi.fn(),
   mockSendRuntimePtyInputVerified: vi.fn(),
-  mockPasteDraftToAgentPtyWhenReady: vi.fn(),
+  mockPasteDraftToAgentPtyWhenReadyWithOutcome: vi.fn(),
   mockShowAutomationPromptNotSentToast: vi.fn(),
   mockTrack: vi.fn(),
   storeListeners: new Set<(state: unknown, previousState: unknown) => void>(),
@@ -79,7 +79,7 @@ vi.mock('@/runtime/runtime-terminal-inspection', () => ({
 
 vi.mock('@/lib/agent-paste-draft', () => ({
   getSettingsForAgentTabRuntimeOwner: () => store.settings,
-  pasteDraftToAgentPtyWhenReady: mockPasteDraftToAgentPtyWhenReady
+  pasteDraftToAgentPtyWhenReadyWithOutcome: mockPasteDraftToAgentPtyWhenReadyWithOutcome
 }))
 
 vi.mock('@/lib/browser-uuid', () => ({
@@ -273,7 +273,7 @@ describe('ensureAgentStartupInTerminal prompt delivery', () => {
       hasChildProcesses: true
     })
     mockSendRuntimePtyInputVerified.mockResolvedValue(true)
-    mockPasteDraftToAgentPtyWhenReady.mockResolvedValue(true)
+    mockPasteDraftToAgentPtyWhenReadyWithOutcome.mockResolvedValue('delivered')
   })
 
   afterEach(() => {
@@ -365,7 +365,7 @@ describe('ensureAgentStartupInTerminal prompt delivery', () => {
       }
     })
 
-    const call = mockPasteDraftToAgentPtyWhenReady.mock.calls.at(-1)?.[0] as
+    const call = mockPasteDraftToAgentPtyWhenReadyWithOutcome.mock.calls.at(-1)?.[0] as
       | { onTimeout?: () => void }
       | undefined
     expect(call?.onTimeout).toBeTypeOf('function')
@@ -390,6 +390,7 @@ describe('ensureAgentStartupInTerminal prompt delivery', () => {
     ).resolves.toBeUndefined()
 
     expect(mockTrack).not.toHaveBeenCalledWith('agent_prompt_sent', expect.anything())
+    expect(mockShowAutomationPromptNotSentToast).not.toHaveBeenCalled()
   })
 
   it('does not track draft prompt delivery as a sent prompt', async () => {
@@ -405,7 +406,7 @@ describe('ensureAgentStartupInTerminal prompt delivery', () => {
       }
     })
 
-    expect(mockPasteDraftToAgentPtyWhenReady).toHaveBeenCalledWith({
+    expect(mockPasteDraftToAgentPtyWhenReadyWithOutcome).toHaveBeenCalledWith({
       tabId: 'tab-1',
       ptyId: 'pty-1',
       content: 'review this before sending',
@@ -449,7 +450,7 @@ describe('ensureAgentStartupInTerminal prompt delivery', () => {
       }
     })
 
-    expect(mockPasteDraftToAgentPtyWhenReady).toHaveBeenCalledWith({
+    expect(mockPasteDraftToAgentPtyWhenReadyWithOutcome).toHaveBeenCalledWith({
       tabId: 'agent-tab',
       ptyId: 'agent-pty',
       content: 'Linear context draft',
@@ -482,7 +483,7 @@ describe('ensureAgentStartupInTerminal prompt delivery', () => {
     await vi.advanceTimersByTimeAsync(5_000)
     await delivery
 
-    expect(mockPasteDraftToAgentPtyWhenReady).not.toHaveBeenCalled()
+    expect(mockPasteDraftToAgentPtyWhenReadyWithOutcome).not.toHaveBeenCalled()
 
     store.ptyIdsByTabId = { 'tab-1': ['pty-delayed'] }
     store.pendingStartupByTabId = {}
@@ -505,8 +506,8 @@ describe('ensureAgentStartupInTerminal prompt delivery', () => {
       listener(store, store)
     }
 
-    expect(mockPasteDraftToAgentPtyWhenReady).toHaveBeenCalledTimes(1)
-    expect(mockPasteDraftToAgentPtyWhenReady).toHaveBeenCalledWith({
+    expect(mockPasteDraftToAgentPtyWhenReadyWithOutcome).toHaveBeenCalledTimes(1)
+    expect(mockPasteDraftToAgentPtyWhenReadyWithOutcome).toHaveBeenCalledWith({
       tabId: 'tab-1',
       ptyId: 'pty-delayed',
       content: 'https://github.com/stablyai/orca/pull/2051',
@@ -560,7 +561,7 @@ describe('ensureAgentStartupInTerminal prompt delivery', () => {
       listener(store, store)
     }
 
-    expect(mockPasteDraftToAgentPtyWhenReady).not.toHaveBeenCalled()
+    expect(mockPasteDraftToAgentPtyWhenReadyWithOutcome).not.toHaveBeenCalled()
 
     store.ptyIdsByTabId = { 'tab-1': ['split-pty', 'startup-pty'] }
     store.terminalLayoutsByTabId = {
@@ -587,8 +588,8 @@ describe('ensureAgentStartupInTerminal prompt delivery', () => {
       listener(store, store)
     }
 
-    expect(mockPasteDraftToAgentPtyWhenReady).toHaveBeenCalledTimes(1)
-    expect(mockPasteDraftToAgentPtyWhenReady).toHaveBeenCalledWith({
+    expect(mockPasteDraftToAgentPtyWhenReadyWithOutcome).toHaveBeenCalledTimes(1)
+    expect(mockPasteDraftToAgentPtyWhenReadyWithOutcome).toHaveBeenCalledWith({
       tabId: 'tab-1',
       ptyId: 'startup-pty',
       content: 'linked draft',
@@ -643,7 +644,7 @@ describe('ensureAgentStartupInTerminal prompt delivery', () => {
       listener(store, store)
     }
 
-    expect(mockPasteDraftToAgentPtyWhenReady).toHaveBeenCalledTimes(1)
+    expect(mockPasteDraftToAgentPtyWhenReadyWithOutcome).toHaveBeenCalledTimes(1)
   })
 
   it('does not duplicate immediate delivery for the same launch token', async () => {
@@ -668,7 +669,57 @@ describe('ensureAgentStartupInTerminal prompt delivery', () => {
       startup
     })
 
-    expect(mockPasteDraftToAgentPtyWhenReady).toHaveBeenCalledTimes(1)
+    expect(mockPasteDraftToAgentPtyWhenReadyWithOutcome).toHaveBeenCalledTimes(1)
+  })
+
+  it('automatically requeues a failed immediate delivery for the same launch', async () => {
+    mockPasteDraftToAgentPtyWhenReadyWithOutcome
+      .mockResolvedValueOnce('not-written')
+      .mockResolvedValueOnce('delivered')
+    const startup = {
+      agent: 'codex' as const,
+      launchCommand: 'codex',
+      expectedProcess: 'codex',
+      followupPrompt: null,
+      launchConfig: { agentArgs: '', agentEnv: {} },
+      draftPrompt: 'linked draft',
+      launchToken: 'launch-token-1'
+    }
+
+    await ensureAgentStartupInTerminal({
+      worktreeId: 'wt-1',
+      primaryTabId: 'tab-1',
+      startup
+    })
+    await Promise.resolve()
+    await Promise.resolve()
+
+    expect(mockPasteDraftToAgentPtyWhenReadyWithOutcome).toHaveBeenCalledTimes(2)
+  })
+
+  it('does not resend a delivered follow-up when only the draft is retryable', async () => {
+    mockPasteDraftToAgentPtyWhenReadyWithOutcome
+      .mockResolvedValueOnce('not-written')
+      .mockResolvedValueOnce('delivered')
+
+    await ensureAgentStartupInTerminal({
+      worktreeId: 'wt-1',
+      primaryTabId: 'tab-1',
+      startup: {
+        agent: 'aider',
+        launchCommand: 'aider',
+        expectedProcess: 'aider',
+        followupPrompt: 'fix the spinner',
+        launchConfig: { agentArgs: '', agentEnv: {} },
+        draftPrompt: 'linked draft',
+        launchToken: 'launch-token-1'
+      }
+    })
+    await Promise.resolve()
+    await Promise.resolve()
+
+    expect(mockSendRuntimePtyInputVerified).toHaveBeenCalledTimes(1)
+    expect(mockPasteDraftToAgentPtyWhenReadyWithOutcome).toHaveBeenCalledTimes(2)
   })
 
   it('keeps one delayed subscription and tears it down after delivery drains', async () => {
@@ -724,7 +775,7 @@ describe('ensureAgentStartupInTerminal prompt delivery', () => {
       listener(store, store)
     }
 
-    expect(mockPasteDraftToAgentPtyWhenReady).toHaveBeenCalledTimes(1)
+    expect(mockPasteDraftToAgentPtyWhenReadyWithOutcome).toHaveBeenCalledTimes(1)
     expect(storeListeners.size).toBe(0)
   })
 
@@ -778,7 +829,7 @@ describe('ensureAgentStartupInTerminal prompt delivery', () => {
       listener(store, store)
     }
 
-    expect(mockPasteDraftToAgentPtyWhenReady).not.toHaveBeenCalled()
+    expect(mockPasteDraftToAgentPtyWhenReadyWithOutcome).not.toHaveBeenCalled()
   })
 
   it('does not write a delayed follow-up prompt on readiness timeout', async () => {

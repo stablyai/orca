@@ -20,6 +20,7 @@ const AGENT_DRAFT_PASTE_INERT_ESCAPE_CODE_POINT = 0x241b
 const AGENT_DRAFT_PASTE_INERT_ESCAPE = '\u241b'
 
 export type AgentDraftPtyInputWriter = (data: string) => boolean | Promise<boolean>
+export type AgentDraftPasteContentOutcome = 'delivered' | 'not-written' | 'delivery-uncertain'
 
 export async function sendAgentDraftPasteContent(
   settings: Pick<GlobalSettings, 'activeRuntimeEnvironmentId'> | null | undefined,
@@ -27,6 +28,18 @@ export async function sendAgentDraftPasteContent(
   content: string,
   writePty?: AgentDraftPtyInputWriter
 ): Promise<boolean> {
+  return (
+    (await sendAgentDraftPasteContentWithOutcome(settings, ptyId, content, writePty)) ===
+    'delivered'
+  )
+}
+
+export async function sendAgentDraftPasteContentWithOutcome(
+  settings: Pick<GlobalSettings, 'activeRuntimeEnvironmentId'> | null | undefined,
+  ptyId: string,
+  content: string,
+  writePty?: AgentDraftPtyInputWriter
+): Promise<AgentDraftPasteContentOutcome> {
   return await runTerminalPtyInputTransaction(ptyId, () =>
     sendAgentDraftPasteContentNow(settings, ptyId, content, writePty)
   )
@@ -39,9 +52,9 @@ export async function sendAgentDraftPasteContentNow(
   ptyId: string,
   content: string,
   writePty?: AgentDraftPtyInputWriter
-): Promise<boolean> {
+): Promise<AgentDraftPasteContentOutcome> {
   if (content.length > AGENT_DRAFT_PASTE_MAX_BYTES) {
-    return false
+    return 'not-written'
   }
 
   const terminalContent = normalizeTerminalPasteLineEndings(content)
@@ -49,21 +62,30 @@ export async function sendAgentDraftPasteContentNow(
     stopAfterBytes: AGENT_DRAFT_PASTE_DIRECT_MAX_BYTES
   })
   if (!directMeasurement.exceededLimit) {
-    return await writeAgentDraftPtyInput(
-      settings,
-      ptyId,
-      wrapTerminalBracketedPasteText(terminalContent),
-      writePty
-    )
+    try {
+      return (await writeAgentDraftPtyInput(
+        settings,
+        ptyId,
+        wrapTerminalBracketedPasteText(terminalContent),
+        writePty
+      ))
+        ? 'delivered'
+        : 'not-written'
+    } catch {
+      // Why: a remote timeout can lose only the acknowledgement; replaying the
+      // same prompt could duplicate bytes that already reached the terminal.
+      return 'delivery-uncertain'
+    }
   }
 
   // Why: generated prompts can be paste-sized; yield during accepted-size
   // preflight before starting any PTY writes so the renderer is not pinned.
   if (await isSanitizedDraftPasteOverLimit(terminalContent, AGENT_DRAFT_PASTE_MAX_BYTES)) {
-    return false
+    return 'not-written'
   }
 
   let bracketedPasteOpen = false
+  let deliveryStarted = false
   for (const chunk of iterateAgentDraftPasteContentChunks(terminalContent)) {
     let accepted = false
     try {
@@ -72,21 +94,22 @@ export async function sendAgentDraftPasteContentNow(
       if (bracketedPasteOpen && chunk !== BRACKETED_PASTE_END) {
         await closeAgentDraftBracketedPaste(settings, ptyId, writePty)
       }
-      return false
+      return 'delivery-uncertain'
     }
     if (!accepted) {
       if (bracketedPasteOpen && chunk !== BRACKETED_PASTE_END) {
         await closeAgentDraftBracketedPaste(settings, ptyId, writePty)
       }
-      return false
+      return deliveryStarted ? 'delivery-uncertain' : 'not-written'
     }
+    deliveryStarted = true
     if (chunk === BRACKETED_PASTE_START) {
       bracketedPasteOpen = true
     } else if (chunk === BRACKETED_PASTE_END) {
       bracketedPasteOpen = false
     }
   }
-  return true
+  return 'delivered'
 }
 
 export function chunkAgentDraftPasteContent(

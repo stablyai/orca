@@ -37,7 +37,10 @@ export type TuiAgentConfig = {
   draftPromptEnvVar?: string
   /** Pre-write a trust artifact so the agent's first-launch "trust this folder?" menu doesn't consume the bracketed paste (see agent-trust-presets.ts). */
   preflightTrust?: 'cursor' | 'copilot' | 'codex'
-  /** Renderer-specific signal that the composer is ready for paste, stronger than the default quiet-render window. */
+  /** Why: most TUIs need both bracketed-paste enablement and a quiet render
+   * window before pasted bytes reliably land in the composer. Codex waits for
+   * both the `›` glyph and idle "Ask Codex" placeholder because hooks review
+   * can render a bare glyph before the composer owns input. */
   draftPasteReadySignal?: DraftPasteReadySignal
   /** Windows Shift+Enter encoding override; omitted agents keep the legacy Esc+CR path. */
   windowsShiftEnterEncoding?: 'csi-u'

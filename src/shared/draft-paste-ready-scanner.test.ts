@@ -4,7 +4,9 @@ import { createDraftPasteReadyScanner } from './draft-paste-ready-scanner'
 const DECSET_BRACKETED_PASTE = '\x1b[?2004h'
 const SHOW_CURSOR = '\x1b[?25h'
 const HIDE_CURSOR = '\x1b[?25l'
-const CODEX_PROMPT = '\x1b[1m›\x1b[0m Ask Codex to do anything'
+const CODEX_GLYPH = '›'
+const CODEX_PLACEHOLDER = 'Ask Codex to do anything'
+const CODEX_PROMPT = `\x1b[1m${CODEX_GLYPH}\x1b[0m ${CODEX_PLACEHOLDER}`
 
 describe('createDraftPasteReadyScanner', () => {
   describe('render-cursor-after-bracketed-paste (opencode / mimo-code)', () => {
@@ -92,21 +94,37 @@ describe('createDraftPasteReadyScanner', () => {
     })
   })
 
-  describe('codex-composer-prompt (unchanged behavior)', () => {
-    it('is ready on the composer glyph after bracketed paste and never arms the quiet timer', () => {
+  describe('codex-composer-prompt (multi-signal gate)', () => {
+    it('is ready only when glyph and idle placeholder both render after bracketed paste', () => {
       const scanner = createDraftPasteReadyScanner('codex-composer-prompt')
       expect(scanner.observe(DECSET_BRACKETED_PASTE)).toEqual({
         ready: false,
         armQuietTimer: false
       })
-      expect(scanner.observe(CODEX_PROMPT)).toEqual({ ready: true, armQuietTimer: false })
+      // Why: Codex can render a bare glyph during hooks review before its idle
+      // composer owns input, so that glyph must not unlock a linked draft.
+      expect(scanner.observe(CODEX_GLYPH)).toEqual({ ready: false, armQuietTimer: false })
+      expect(scanner.observe(CODEX_PLACEHOLDER)).toEqual({ ready: true, armQuietTimer: false })
     })
 
-    it('detects the composer glyph inside a large first render chunk', () => {
+    it('detects the full idle composer prompt inside a large first render chunk', () => {
       const scanner = createDraftPasteReadyScanner('codex-composer-prompt')
       expect(scanner.observe(`${DECSET_BRACKETED_PASTE}${CODEX_PROMPT}${'x'.repeat(900)}`)).toEqual(
         { ready: true, armQuietTimer: false }
       )
+    })
+
+    it('does not fire on glyph alone or placeholder alone', () => {
+      const glyphOnly = createDraftPasteReadyScanner('codex-composer-prompt')
+      glyphOnly.observe(DECSET_BRACKETED_PASTE)
+      expect(glyphOnly.observe(CODEX_GLYPH)).toEqual({ ready: false, armQuietTimer: false })
+
+      const placeholderOnly = createDraftPasteReadyScanner('codex-composer-prompt')
+      placeholderOnly.observe(DECSET_BRACKETED_PASTE)
+      expect(placeholderOnly.observe(CODEX_PLACEHOLDER)).toEqual({
+        ready: false,
+        armQuietTimer: false
+      })
     })
 
     it('never arms the quiet-window fallback', () => {

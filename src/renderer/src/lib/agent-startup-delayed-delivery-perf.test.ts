@@ -108,7 +108,7 @@ describe('delayed agent startup subscription', () => {
 
   it('delivers when launch registration, PTY ownership, and layout binding arrive', () => {
     seedPendingState()
-    const deliver = vi.fn().mockResolvedValue(undefined)
+    const deliver = vi.fn().mockResolvedValue({ kind: 'delivered' })
     const startup = {} as never
     queuePendingAgentStartupDelivery({
       worktreeId: 'wt-background',
@@ -123,9 +123,65 @@ describe('delayed agent startup subscription', () => {
     expect(deliver).toHaveBeenCalledWith('tab-background', 'pty-background', startup)
   })
 
+  it('requeues a failed delivery for the next relevant startup-state change', async () => {
+    seedPendingState()
+    const startup = {} as never
+    const deliver = vi
+      .fn()
+      .mockResolvedValueOnce({ kind: 'retryable', startup })
+      .mockResolvedValueOnce({ kind: 'delivered' })
+    queuePendingAgentStartupDelivery({
+      worktreeId: 'wt-background',
+      tabId: 'tab-background',
+      launchToken: 'target-launch',
+      startup,
+      deliver
+    })
+
+    bindPendingPty()
+    await Promise.resolve()
+    await Promise.resolve()
+    expect(deliver).toHaveBeenCalledTimes(1)
+
+    useAppStore.setState({ ptyIdsByTabId: { 'tab-background': ['pty-background'] } } as never)
+    await Promise.resolve()
+
+    expect(deliver).toHaveBeenCalledTimes(2)
+  })
+
+  it('does not requeue a failed delivery after its startup tab is removed', async () => {
+    seedPendingState()
+    let resolveDelivery!: (outcome: { kind: 'retryable'; startup: never }) => void
+    const startup = {} as never
+    const deliver = vi.fn(
+      () =>
+        new Promise<{ kind: 'retryable'; startup: never }>((resolve) => {
+          resolveDelivery = resolve
+        })
+    )
+    queuePendingAgentStartupDelivery({
+      worktreeId: 'wt-background',
+      tabId: 'tab-background',
+      launchToken: 'target-launch',
+      startup,
+      deliver
+    })
+
+    bindPendingPty()
+    expect(deliver).toHaveBeenCalledTimes(1)
+    useAppStore.setState({ tabsByWorktree: {} })
+    resolveDelivery({ kind: 'retryable', startup })
+    await Promise.resolve()
+    await Promise.resolve()
+
+    seedPendingState()
+    bindPendingPty()
+    expect(deliver).toHaveBeenCalledTimes(1)
+  })
+
   it('drops a delivery when its tab is removed before PTY binding', () => {
     seedPendingState()
-    const deliver = vi.fn().mockResolvedValue(undefined)
+    const deliver = vi.fn().mockResolvedValue({ kind: 'delivered' })
     queuePendingAgentStartupDelivery({
       worktreeId: 'wt-background',
       tabId: 'tab-background',
@@ -143,7 +199,7 @@ describe('delayed agent startup subscription', () => {
 
   it('drops a delivery when a newer pending launch token replaces it', () => {
     seedPendingState()
-    const deliver = vi.fn().mockResolvedValue(undefined)
+    const deliver = vi.fn().mockResolvedValue({ kind: 'delivered' })
     queuePendingAgentStartupDelivery({
       worktreeId: 'wt-background',
       tabId: 'tab-background',

@@ -11,20 +11,34 @@ import type { GlobalSettings } from '../../../shared/types'
 
 type RuntimeOwnerSettings = Pick<GlobalSettings, 'activeRuntimeEnvironmentId'> | null | undefined
 
+export type AgentFollowupDeliveryOutcome = 'delivered' | 'not-written' | 'delivery-uncertain'
+
 export async function sendFollowupPromptWhenAgentReady(args: {
   ptyId: string
   expectedProcess: string
   prompt: string
   settings: RuntimeOwnerSettings
 }): Promise<boolean> {
+  return (await sendFollowupPromptWhenAgentReadyWithOutcome(args)) === 'delivered'
+}
+
+export async function sendFollowupPromptWhenAgentReadyWithOutcome(args: {
+  ptyId: string
+  expectedProcess: string
+  prompt: string
+  settings: RuntimeOwnerSettings
+}): Promise<AgentFollowupDeliveryOutcome> {
   const { ptyId, expectedProcess, prompt, settings } = args
   if (!(await waitForAgentForeground(ptyId, expectedProcess, settings))) {
-    return false
+    return 'not-written'
   }
   try {
-    return await sendRuntimePtyInputVerified(settings, ptyId, `${prompt}\r`)
+    return (await sendRuntimePtyInputVerified(settings, ptyId, `${prompt}\r`))
+      ? 'delivered'
+      : 'not-written'
   } catch {
-    return false
+    // A timed-out acknowledgement cannot prove that the PTY did not receive it.
+    return 'delivery-uncertain'
   }
 }
 
