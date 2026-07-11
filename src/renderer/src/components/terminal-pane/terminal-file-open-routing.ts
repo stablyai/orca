@@ -10,7 +10,9 @@ import {
 import { settingsForRuntimeOwner } from '@/runtime/runtime-rpc-client'
 import { useAppStore } from '@/store'
 import { activateAndRevealWorktree } from '@/lib/worktree-activation'
+import { isWslUncPath } from '../../../../shared/wsl-paths'
 import { resolveKnownWorktreeRootPathLink } from './terminal-worktree-path-link'
+import { wslLinkPathExists } from './terminal-wsl-link-resolution'
 
 type TerminalFileOpenDeps = {
   worktreeId: string
@@ -119,7 +121,16 @@ export function openDetectedFilePath(
       if (canOpenWithSystemDefault) {
         await window.api.fs.authorizeExternalPath({ targetPath: filePath })
       }
-      statResult = await statRuntimePath(fileContext, filePath)
+      if (canOpenWithSystemDefault && isWslUncPath(filePath)) {
+        // Why: Win32 fs.stat over the WSL 9P share can falsely ENOENT; confirm a
+        // mapped WSL UNC path via the distro (test -e) instead of statting it (#8156).
+        if (!(await wslLinkPathExists(filePath))) {
+          return
+        }
+        statResult = { size: 0, isDirectory: false, mtime: 0 }
+      } else {
+        statResult = await statRuntimePath(fileContext, filePath)
+      }
     } catch {
       return
     }

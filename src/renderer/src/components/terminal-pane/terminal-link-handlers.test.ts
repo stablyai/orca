@@ -2224,5 +2224,130 @@ describe('createFilePathLinkProvider range bounds', () => {
       expect(wslPathExistsMock).not.toHaveBeenCalled()
       expect(links.map((link) => link.text)).toEqual(['/home/j/app/src/x.ts'])
     })
+
+    it('opens a WSL POSIX path at its UNC mapping from a direct modifier-click fallback', async () => {
+      // Why: the real gap — a single-row WSL link underlines (provider) but the
+      // mouseup fallback pre-empts and opened the raw POSIX path. Drive the
+      // registered mouseup handler, not activate(), so the whole open runs.
+      setPlatform('Windows')
+      const { terminal, element } = makeFallbackTerminal([
+        makeBufferLine('/home/j/app/src/x.ts:12')
+      ])
+      const disposable = installFilePathLinkClickFallback(1, terminal, {
+        startupCwd: '/home/j/app',
+        worktreeId: 'wt-1',
+        worktreePath: wslWorktreePath,
+        runtimeEnvironmentId: null,
+        managerRef: { current: null },
+        linkProviderDisposablesRef: { current: new Map<number, IDisposable>() },
+        pathExistsCache: new Map<string, boolean>()
+      })
+      const mouseUp = getRegisteredMouseUpHandler(element)
+      const preventDefault = vi.fn()
+      const stopPropagation = vi.fn()
+
+      mouseUp({
+        button: 0,
+        metaKey: false,
+        ctrlKey: true,
+        clientX: 20,
+        clientY: 25,
+        preventDefault,
+        stopPropagation
+      } as unknown as MouseEvent)
+      await flushAsyncWork()
+      await flushDoubleRaf()
+
+      expect(openFileMock).toHaveBeenCalledWith(
+        expect.objectContaining({
+          filePath: '\\\\wsl.localhost\\Ubuntu\\home\\j\\app\\src\\x.ts'
+        }),
+        { forceContentReload: true }
+      )
+      expect(setPendingEditorRevealMock).toHaveBeenCalledWith({
+        filePath: '\\\\wsl.localhost\\Ubuntu\\home\\j\\app\\src\\x.ts',
+        line: 12,
+        column: 1,
+        matchLength: 0
+      })
+      expect(preventDefault).toHaveBeenCalled()
+      expect(stopPropagation).toHaveBeenCalled()
+      expect(terminal.clearSelection).toHaveBeenCalled()
+
+      disposable.dispose()
+    })
+
+    it('does not open a WSL POSIX path the distro reports missing from a click fallback', async () => {
+      setPlatform('Windows')
+      wslPathExistsMock.mockResolvedValue(false)
+      const { terminal, element } = makeFallbackTerminal([
+        makeBufferLine('/home/j/app/src/missing.ts')
+      ])
+      const disposable = installFilePathLinkClickFallback(1, terminal, {
+        startupCwd: '/home/j/app',
+        worktreeId: 'wt-1',
+        worktreePath: wslWorktreePath,
+        runtimeEnvironmentId: null,
+        managerRef: { current: null },
+        linkProviderDisposablesRef: { current: new Map<number, IDisposable>() },
+        pathExistsCache: new Map<string, boolean>()
+      })
+      const mouseUp = getRegisteredMouseUpHandler(element)
+
+      mouseUp({
+        button: 0,
+        metaKey: false,
+        ctrlKey: true,
+        clientX: 20,
+        clientY: 25,
+        preventDefault: vi.fn(),
+        stopPropagation: vi.fn()
+      } as unknown as MouseEvent)
+      await flushAsyncWork()
+      await flushDoubleRaf()
+
+      // Why: the 9P-safe distro probe, not Win32 fs.stat, must gate the open.
+      expect(statMock).not.toHaveBeenCalled()
+      expect(openFileMock).not.toHaveBeenCalled()
+
+      disposable.dispose()
+    })
+
+    it('opens a plain path for a non-WSL Windows pane click without UNC mapping', async () => {
+      setPlatform('Windows')
+      storeState.repos = []
+      storeState.worktreesByRepo = {}
+      const { terminal, element } = makeFallbackTerminal([makeBufferLine('/home/j/app/src/x.ts')])
+      const disposable = installFilePathLinkClickFallback(1, terminal, {
+        startupCwd: '/home/j/app',
+        worktreeId: 'wt-1',
+        worktreePath: '/repo',
+        runtimeEnvironmentId: null,
+        managerRef: { current: null },
+        linkProviderDisposablesRef: { current: new Map<number, IDisposable>() },
+        pathExistsCache: new Map<string, boolean>([['active\0/home/j/app/src/x.ts', true]])
+      })
+      const mouseUp = getRegisteredMouseUpHandler(element)
+
+      mouseUp({
+        button: 0,
+        metaKey: false,
+        ctrlKey: true,
+        clientX: 20,
+        clientY: 25,
+        preventDefault: vi.fn(),
+        stopPropagation: vi.fn()
+      } as unknown as MouseEvent)
+      await flushAsyncWork()
+      await flushDoubleRaf()
+
+      expect(wslPathExistsMock).not.toHaveBeenCalled()
+      expect(openFileMock).toHaveBeenCalledWith(
+        expect.objectContaining({ filePath: '/home/j/app/src/x.ts' }),
+        { forceContentReload: true }
+      )
+
+      disposable.dispose()
+    })
   })
 })

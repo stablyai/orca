@@ -78,10 +78,11 @@ findings and the resulting decisions.
   path or a `wslDistroOverride` is present, rewrites to
   `wsl.exe -d <distro> -- bash -c "cd '<linux>' && git …"` with all path args translated
   (`translateArgsForWsl`, and `translateWslOutputPaths` for the reverse).
-- **Path layer** — `src/shared/wsl-paths.ts` (`parseWslUncPath`) + `src/main/wsl.ts`
-  (`parseWslPath`, `toLinuxPath`, `toWindowsWslPath`, `listWslDistrosAsync`, `getDefaultWslDistro`,
-  `getWslHome`, `isWslAvailable`, `wslUncDirectoryExists`). Handles both `\\wsl.localhost\` and
-  legacy `\\wsl$\`.
+- **Path layer** — `src/shared/wsl-paths.ts` (`parseWslUncPath`, `toWindowsWslPath` — the latter
+  re-exported from `src/main/wsl.ts`) + `src/main/wsl.ts`
+  (`parseWslPath`, `toLinuxPath`, `listWslDistrosAsync`, `getDefaultWslDistro`,
+  `getWslHome`, `isWslAvailable`, `wslUncDirectoryExists`, `wslUncPathExists`). Handles both
+  `\\wsl.localhost\` and legacy `\\wsl$\`.
 - **File watching** — `src/main/ipc/filesystem-watcher.ts` branches
   `isWslPath ? createWslWatcher : createWatcher`. WSL watching runs *inside* the distro
   (`filesystem-watcher-wsl.ts`; being upgraded by PR #7968). **Worktree-base watching is disabled
