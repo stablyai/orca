@@ -1,3 +1,4 @@
+import { existsSync, lstatSync, readdirSync } from 'node:fs'
 import { test, expect } from './helpers/orca-app'
 
 test.describe('Missions', () => {
@@ -31,6 +32,31 @@ test.describe('Missions', () => {
     })
     expect(memberWorktreeId).toBeTruthy()
 
+    // Open the mission session: creates the symlinked mission root and a
+    // mission-owned folder workspace, then activates it.
+    await orcaPage.getByText('Open mission session').click()
+    await expect
+      .poll(
+        () =>
+          orcaPage.evaluate(() => {
+            const store = window.__store
+            if (!store) {
+              throw new Error('Expected e2e store to be exposed')
+            }
+            const workspace = store.getState().folderWorkspaces.find((fw) => fw.missionId)
+            return workspace?.folderPath ?? ''
+          }),
+        { timeout: 30_000 }
+      )
+      .toContain('missions')
+    const missionRoot = await orcaPage.evaluate(
+      () => window.__store!.getState().folderWorkspaces.find((fw) => fw.missionId)!.folderPath
+    )
+    // The root physically contains a symlink to the member worktree.
+    const rootEntries = readdirSync(missionRoot)
+    expect(rootEntries.length).toBeGreaterThan(0)
+    expect(lstatSync(`${missionRoot}/${rootEntries[0]}`).isSymbolicLink()).toBe(true)
+
     // Delete the mission including its worktree via the header menu.
     await missionHeader.hover()
     await missionHeader.getByRole('button', { name: 'Mission options' }).click()
@@ -38,6 +64,8 @@ test.describe('Missions', () => {
     await orcaPage.getByRole('button', { name: 'Delete', exact: true }).click()
 
     await expect(orcaPage.getByText('No missions yet')).toBeVisible({ timeout: 60_000 })
+    // Mission delete removes the symlinked root as well.
+    expect(existsSync(missionRoot)).toBe(false)
     const missionCount = await orcaPage.evaluate(() => {
       const store = window.__store
       if (!store) {
