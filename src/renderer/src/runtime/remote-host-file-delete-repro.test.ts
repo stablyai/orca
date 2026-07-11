@@ -135,6 +135,7 @@ beforeEach(() => {
   })
   toastError.mockReset()
   vi.stubGlobal('window', {
+    ...window,
     api: {
       fs: { readFile: fsReadFile, deletePath: fsDeletePath },
       runtime: { call: vi.fn() },

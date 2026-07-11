@@ -65,6 +65,9 @@ export function useFileDeletion({
 
       const operationOwner = node.operationOwner ?? { kind: 'unresolved' as const }
       const operationRoute = getFileExplorerOperationRoute(operationOwner)
+      // Why: treat every non-local owner (ssh, runtime, unresolved) as remote
+      // for confirm/error copy, then fail closed below when the route is null
+      // so an unresolved owner never reaches local filesystem authorization.
       const isRemote = operationOwner.kind !== 'local'
 
       try {
