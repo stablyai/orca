@@ -531,6 +531,39 @@ function standaloneActivityWorktree(worktreeId: string): Worktree {
   }
 }
 
+function runtimeAttributedActivityContext(
+  entry: AgentStatusEntry,
+  parsed: { tabId: string },
+  worktreeMap: Map<string, Worktree>
+): { worktree: Worktree; tab: TerminalTab } | null {
+  if (!entry.worktreeId) {
+    return null
+  }
+  const worktree = worktreeMap.get(entry.worktreeId)
+  if (!worktree) {
+    return null
+  }
+  const tabId = entry.tabId ?? parsed.tabId
+  return {
+    worktree,
+    // Why: remote hook status can arrive with authoritative worktree/tab
+    // attribution before the paired client's tabsByWorktree has hydrated that
+    // terminal. Activity only needs stable identity and labels to show the
+    // unread completion; the real tab record replaces this projection once the
+    // user opens the worktree.
+    tab: {
+      id: tabId,
+      ptyId: null,
+      worktreeId: worktree.id,
+      title: (entry.terminalTitle ?? entry.prompt) || 'Agent',
+      customTitle: null,
+      color: null,
+      sortOrder: 0,
+      createdAt: entry.stateStartedAt
+    }
+  }
+}
+
 // Why: per-pane cap guarantees each agent appears in the left list even when one pane has a long history.
 const EVENTS_PER_PANE_CAP = 5
 
@@ -671,7 +704,9 @@ export function buildActivityEvents(args: {
     if (!parsed) {
       continue
     }
-    const context = tabContext.get(parsed.tabId)
+    const context =
+      tabContext.get(parsed.tabId) ??
+      runtimeAttributedActivityContext(entry, parsed, args.worktreeMap)
     if (!context) {
       continue
     }

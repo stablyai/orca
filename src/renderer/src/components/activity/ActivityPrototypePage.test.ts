@@ -271,6 +271,45 @@ function makeThreads(result: ReturnType<typeof buildActivityEvents>) {
 }
 
 describe('buildActivityEvents', () => {
+  it('shows a runtime-attributed completion before its remote tab hydrates', () => {
+    const repo = makeRepo()
+    const worktree = makeWorktree()
+    const entry: AgentStatusEntry = {
+      state: 'done',
+      prompt: 'Remote turn finished',
+      updatedAt: 2_000,
+      stateStartedAt: 2_000,
+      paneKey: PANE_KEY,
+      worktreeId: worktree.id,
+      tabId: 'tab-1',
+      terminalTitle: 'Codex',
+      stateHistory: [],
+      agentType: 'codex',
+      lastAssistantMessage: 'Ready for your review.'
+    }
+
+    const result = buildActivityEvents({
+      agentStatusByPaneKey: { [PANE_KEY]: entry },
+      retainedAgentsByPaneKey: {},
+      tabsByWorktree: { [worktree.id]: [] },
+      worktreeMap: new Map([[worktree.id, worktree]]),
+      repoMap: new Map([[repo.id, repo]]),
+      acknowledgedAgentsByPaneKey: {},
+      now: 3_000
+    })
+    const threads = makeThreads(result)
+
+    expect(result.events).toHaveLength(1)
+    expect(threads).toHaveLength(1)
+    expect(threads[0]).toMatchObject({
+      paneKey: PANE_KEY,
+      currentAgentState: null,
+      unread: true,
+      latestEvent: { state: 'done' },
+      tab: { id: 'tab-1', worktreeId: worktree.id, ptyId: null }
+    })
+  })
+
   it('keeps every pane visible before applying the global activity cap', () => {
     const repo = makeRepo()
     const worktree = makeWorktree()
