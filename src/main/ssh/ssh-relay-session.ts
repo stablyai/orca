@@ -45,6 +45,11 @@ import {
   answerStartupTerminalColorQueriesForPty
 } from '../ipc/pty'
 import {
+  recordHiddenRendererPtyDataDrop,
+  shouldDropHiddenRendererPtyData
+} from '../ipc/pty-hidden-delivery-gate'
+import type { PtyModelRestoreNeededEvent } from '../../shared/pty-model-restore-marker'
+import {
   registerSshFilesystemProvider,
   unregisterSshFilesystemProvider,
   getSshFilesystemProvider
@@ -70,6 +75,7 @@ import { runRemoteOrcaCli } from './ssh-remote-orca-cli'
 import { toSshExecutionHostId, type ExecutionHostId } from '../../shared/execution-host'
 import { isTerminalLeafId, makePaneKey } from '../../shared/stable-pane-id'
 import { isValidTerminalTabId } from '../../shared/terminal-tab-id'
+import { shellEscape } from './ssh-connection-utils'
 
 export type RelaySessionState = 'idle' | 'deploying' | 'ready' | 'reconnecting' | 'disposed'
 
@@ -84,6 +90,69 @@ type RemoteCliBridgeEnv = {
 }
 
 type ExpectedPtyIdentity = { paneKey?: string; tabId?: string }
+
+const REMOTE_GROK_HOME_MAX_LENGTH = 4096
+const REMOTE_GROK_HOME_PROBE_TIMEOUT_MS = 8_000
+
+function defaultRemoteGrokHome(remoteHome: string): string {
+  const home = remoteHome.replace(/\/+$/, '') || remoteHome
+  return `${home}/.grok`
+}
+
+function normalizeRemoteGrokHome(candidate: string): string | null {
+  if (
+    candidate.length === 0 ||
+    candidate.length > REMOTE_GROK_HOME_MAX_LENGTH ||
+    candidate !== candidate.trim() ||
+    !candidate.startsWith('/') ||
+    candidate.includes('\\') ||
+    hasControlCharacter(candidate)
+  ) {
+    return null
+  }
+  return candidate.replace(/\/+$/, '') || '/'
+}
+
+function hasControlCharacter(value: string): boolean {
+  return Array.from(value).some((character) => {
+    const code = character.charCodeAt(0)
+    return code <= 0x1f || code === 0x7f
+  })
+}
+
+function loginShellCommand(shell: string, command: string): string {
+  const shellName = shell.split('/').at(-1)
+  const mode = shellName === 'sh' || shellName === 'dash' ? '-c' : '-lc'
+  return `${shellEscape(shell)} ${mode} ${shellEscape(command)}`
+}
+
+async function resolveRemoteGrokHome(
+  connection: SshConnection,
+  remoteHome: string
+): Promise<string> {
+  const fallback = defaultRemoteGrokHome(remoteHome)
+  try {
+    // Why: remote PTYs start login shells, so probe the same profile-derived
+    // environment instead of the relay service or local Electron environment.
+    const shellOutput = await execCommand(connection, "printenv SHELL || printf '/bin/sh\\n'", {
+      timeoutMs: REMOTE_GROK_HOME_PROBE_TIMEOUT_MS
+    })
+    const shell = shellOutput.trim().split(/\r?\n/, 1)[0]
+    if (!shell?.startsWith('/') || hasControlCharacter(shell)) {
+      return fallback
+    }
+    // Why: this runs inside the user's actual login shell, which may be fish or
+    // tcsh. External commands avoid shell-specific variable/conditional syntax.
+    const probe = `printenv GROK_HOME | head -c ${REMOTE_GROK_HOME_MAX_LENGTH + 1}`
+    const output = await execCommand(connection, loginShellCommand(shell, probe), {
+      wrapCommand: false,
+      timeoutMs: REMOTE_GROK_HOME_PROBE_TIMEOUT_MS
+    })
+    return normalizeRemoteGrokHome(output.split(/\r?\n/, 1)[0] ?? '') ?? fallback
+  } catch {
+    return fallback
+  }
+}
 
 function expectedIdentityForLease(lease: {
   tabId?: string
@@ -673,8 +742,10 @@ export class SshRelaySession {
 
     let sftp: Awaited<ReturnType<SshConnection['sftp']>> | null = null
     try {
-      sftp = await this.requireReadyConnection().sftp()
-      await installRemoteManagedAgentHooks(sftp, remoteHome)
+      const connection = this.requireReadyConnection()
+      const remoteGrokHome = await resolveRemoteGrokHome(connection, remoteHome)
+      sftp = await connection.sftp()
+      await installRemoteManagedAgentHooks(sftp, remoteHome, { grokHomeDir: remoteGrokHome })
     } catch (error) {
       console.warn(
         `[ssh-relay-session] remote managed hook install failed for ${this.targetId}: ${
@@ -1014,7 +1085,30 @@ export class SshRelaySession {
       const seq = this.runtime?.onPtyData(payload.id, payload.data, Date.now())
       const rendererData = answerStartupTerminalColorQueriesForPty(payload.id, payload.data)
       const win = this.getMainWindow()
-      if (win && !win.isDestroyed() && rendererData.length > 0) {
+      if (!win || win.isDestroyed()) {
+        return
+      }
+      // Why: hidden-delivery gate parity with ipc/pty.ts — runtime ingestion
+      // above already consumed the chunk; gated renderer delivery is dropped
+      // and one out-of-band pty:modelRestoreNeeded signal latches
+      // model-restore-needed for reveal. Never an in-band pty:data sentinel:
+      // OSC-9999-only chunks legitimately strip to empty in the renderer.
+      const store = this.store as { getSettings?: Store['getSettings'] }
+      if (shouldDropHiddenRendererPtyData(payload.id, store.getSettings?.())) {
+        const drop = recordHiddenRendererPtyDataDrop(payload.id, payload.data.length)
+        if (drop.shouldEmitRestoreMarker) {
+          win.webContents.send('pty:modelRestoreNeeded', {
+            id: payload.id,
+            reason: 'hidden-drop',
+            ...(typeof seq === 'number' ? { markerSeq: seq } : {})
+          } satisfies PtyModelRestoreNeededEvent)
+        }
+        return
+      }
+      // Why: startup color-query answering can strip query-only chunks to
+      // empty; skip empty sends and only attach seq metadata when the chunk
+      // reaches the renderer unmodified (seq tracks raw stream offsets).
+      if (rendererData.length > 0) {
         win.webContents.send('pty:data', {
           ...payload,
           data: rendererData,

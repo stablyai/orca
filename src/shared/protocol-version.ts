@@ -27,6 +27,13 @@ export const WORKSPACE_RUN_CONTEXT_RUNTIME_CAPABILITY = 'workspace-run-context.v
 export const REMOTE_RUNTIME_SHARED_CONTROL_CAPABILITY = 'remote-runtime.shared-control.v1' as const
 export const FOLDER_WORKSPACE_PATH_STATUS_RUNTIME_CAPABILITY =
   'folder-workspace.path-status.v1' as const
+export const LINEAR_ISSUE_ATTRIBUTE_FILTER_RUNTIME_CAPABILITY =
+  'linear.issue-attribute-filter.v1' as const
+// Why: signals the host exposes the Agent Session History scanner over RPC
+// (aiVault.listSessions). Registered unconditionally for every build, so it is a
+// STATIC capability advertised by getStatus() automatically — NOT a runtime
+// conditional like browser.headless.v1.
+export const AI_VAULT_RUNTIME_CAPABILITY = 'aiVault.v1' as const
 // Why: signals a host owns browser pages with no renderer (headless serve via the
 // offscreen backend). Advertised only when that backend is actually available, so
 // clients never fall back to a local desktop browser tab for a remote-owned page.
@@ -44,7 +51,9 @@ export const RUNTIME_CAPABILITIES = [
   PROJECT_HOST_SETUP_RUNTIME_CAPABILITY,
   TASK_SOURCE_CONTEXT_RUNTIME_CAPABILITY,
   WORKSPACE_RUN_CONTEXT_RUNTIME_CAPABILITY,
-  FOLDER_WORKSPACE_PATH_STATUS_RUNTIME_CAPABILITY
+  FOLDER_WORKSPACE_PATH_STATUS_RUNTIME_CAPABILITY,
+  LINEAR_ISSUE_ATTRIBUTE_FILTER_RUNTIME_CAPABILITY,
+  AI_VAULT_RUNTIME_CAPABILITY
 ] as const
 
 export type RuntimeCapability = (typeof RUNTIME_CAPABILITIES)[number] | (string & {})

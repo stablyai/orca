@@ -98,7 +98,7 @@ describe('cross-version isolation', () => {
     // $HOME, isRelayAlreadyInstalled probe, lock acquire, upload (no exec),
     // npm install, finalize, socket probe, socket poll, then GC scan.
     const responses: string[] = [
-      'Linux x86_64', // uname -sm
+      '__ORCA_REMOTE_PLATFORM__ Linux x86_64', // tagged POSIX platform probe
       '/home/u', // echo $HOME
       'MISSING', // isRelayAlreadyInstalled (v2 dir doesn't exist)
       '', // mkdir -p remoteRelayDir (v2)

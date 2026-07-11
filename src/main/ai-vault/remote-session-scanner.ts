@@ -209,10 +209,11 @@ async function parseRemoteSessionCandidate(
       return null
     }
     const session = await candidate.source.parse(candidate.file, read.content, context)
-    // Mirror the local zero-turn-only rule: sibling subagent transcripts are
-    // recoverable signal only when the parent conversation persisted no turns.
+    // Mirror the local rule: every session carries its sibling subagent
+    // transcript count (row badge; recoverable signal at zero turns). The
+    // walk listing supplies it — the parser can't readdir a remote disk.
     const subagentTranscriptCount = candidate.subagentTranscriptCount ?? 0
-    if (session && session.messageCount === 0 && subagentTranscriptCount > 0) {
+    if (session && subagentTranscriptCount > 0) {
       return { ...session, subagentTranscriptCount }
     }
     return session

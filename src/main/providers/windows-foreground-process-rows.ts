@@ -48,12 +48,21 @@ const windowsProcessRowsReader = createProcessTableSnapshotReader<WindowsProcess
 })
 
 export async function queryWindowsProcessDescendants(
-  rootPid: number
+  rootPid: number,
+  options: { fresh?: boolean } = {}
 ): Promise<WindowsProcessCandidate[] | null> {
   let rows: WindowsProcessRow[]
   try {
-    rows = await windowsProcessRowsReader.getSnapshot()
+    rows =
+      options.fresh === true
+        ? await windowsProcessRowsReader.getFreshSnapshot()
+        : await windowsProcessRowsReader.getSnapshot()
   } catch {
+    return null
+  }
+  // Why: a snapshot that omitted the PTY root may be stale or permission-
+  // filtered; only an observed root can authoritatively have no descendants.
+  if (!rows.some((row) => row.pid === rootPid)) {
     return null
   }
   return collectDescendants(rows, rootPid).sort((a, b) => b.depth - a.depth)
@@ -234,7 +243,8 @@ async function queryWindowsProcessesWithWmic(): Promise<WindowsProcessRow[] | nu
         maxBuffer: 8 * 1024 * 1024
       }
     )
-    return parseWindowsProcessValueRows(stdout)
+    const rows = parseWindowsProcessValueRows(stdout)
+    return rows.length > 0 ? rows : null
   } catch {
     // Best-effort: Windows process enumeration may be disabled, so callers
     // still fall back to node-pty's process name when both probes fail.

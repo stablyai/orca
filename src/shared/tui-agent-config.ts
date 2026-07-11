@@ -28,6 +28,8 @@ export type TuiAgentConfig = {
   launchCmdByPlatform?: Partial<Record<NodeJS.Platform, string>>
   expectedProcess: string
   promptInjectionMode: AgentPromptInjectionMode
+  /** Option terminator required before positional prompts that may look like CLI syntax. */
+  argvPromptSeparator?: '--'
   /** Why: flag that launches the TUI with the given text already in the
    * input box but NOT submitted, so the user still gets a reviewable draft.
    * Only set when the CLI documents native support — e.g. Claude's
@@ -61,6 +63,9 @@ export type TuiAgentConfig = {
    * `›` prompt only when the composer row exists, so Orca can paste as soon
    * as that prompt appears after bracketed paste is enabled. */
   draftPasteReadySignal?: DraftPasteReadySignal
+  /** Windows Shift+Enter override. Omitted agents keep the legacy Esc+CR path
+   * because the renderer cannot infer every local or remote TUI's decoder. */
+  windowsShiftEnterEncoding?: 'csi-u'
 }
 
 export const TUI_AGENT_CONFIG: Record<TuiAgent, TuiAgentConfig> = {
@@ -279,7 +284,10 @@ export const TUI_AGENT_CONFIG: Record<TuiAgent, TuiAgentConfig> = {
     detectCmd: 'droid',
     launchCmd: 'droid',
     expectedProcess: 'droid',
-    promptInjectionMode: 'argv'
+    promptInjectionMode: 'argv',
+    // Why: Droid decodes CSI-u on Windows and treats Orca's legacy Esc+CR
+    // fallback as plain Enter, which submits instead of inserting a newline.
+    windowsShiftEnterEncoding: 'csi-u'
   },
   kimi: {
     detectCmd: 'kimi',
@@ -345,7 +353,14 @@ export const TUI_AGENT_CONFIG: Record<TuiAgent, TuiAgentConfig> = {
     detectCmd: 'grok',
     launchCmd: 'grok',
     expectedProcess: 'grok',
-    promptInjectionMode: 'stdin-after-start'
+    // Why: Grok CLI accepts an initial prompt as a positional argv
+    // (`grok "fix the bug"`). Prefer argv over stdin-after-start so multi-line
+    // / special-character prompts are not typed as raw PTY keystrokes, and so
+    // clipboard-derived launch text is not mangled by line-edit shortcuts.
+    promptInjectionMode: 'argv',
+    // Why: prompts such as `help` or `--version` otherwise select Grok CLI
+    // syntax instead of starting an interactive turn with that literal text.
+    argvPromptSeparator: '--'
   },
   devin: {
     detectCmd: 'devin',

@@ -46,8 +46,9 @@ describe('InlineUsageBars', () => {
       <InlineUsageBars limits={claudeLimits()} isFetching={false} />
     )
 
-    expect(markup).toContain('68% 5h')
-    expect(markup).toContain('84% wk')
-    expect(markup).toContain('58% Fable')
+    // Why: bars show % used with explicit "used" so compact labels are not ambiguous.
+    expect(markup).toContain('32% used 5h')
+    expect(markup).toContain('16% used wk')
+    expect(markup).toContain('42% used Fable')
   })
 })

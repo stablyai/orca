@@ -15,6 +15,10 @@ import {
   clampLinearIssueListLimit
 } from '../../shared/linear-issue-read-limits'
 import {
+  isEmptyLinearIssueAttributeFilter,
+  type LinearIssueAttributeFilter
+} from '../../shared/linear-issue-attribute-filter'
+import {
   acquire,
   release,
   getClients,
@@ -22,7 +26,13 @@ import {
   clearToken,
   type LinearClientForWorkspace
 } from './client'
+import { buildLinearListIssueFilter } from './issue-list-filter'
 import { mapLinearIssue } from './mappers'
+
+export type LinearIssueListOptions = {
+  teamId?: string
+  attributeFilter?: LinearIssueAttributeFilter | null
+}
 
 type LinearIssueNode = {
   id: string
@@ -457,11 +467,17 @@ function getOldestIssueTime(issues: LinearIssue[]): number {
 function getListIssueConnectionLoader(
   entry: LinearClientForWorkspace,
   filter: LinearListFilter,
-  teamId?: string
+  options?: LinearIssueListOptions
 ): LinearIssueConnectionLoader {
   const orderBy = 'updatedAt'
   const variables = { orderBy }
-  const filterInput = listIssueFilter(filter, teamId)
+  // Why: apply attribute + team filters in GraphQL variables before the first-N
+  // cursor walk so pagination hasMore matches the filtered set.
+  const filterInput = buildLinearListIssueFilter({
+    filter,
+    teamId: options?.teamId,
+    attributeFilter: options?.attributeFilter
+  })
 
   if (filter === 'assigned') {
     return async (page) => {
@@ -833,31 +849,6 @@ export async function searchIssues(
 
 export type LinearListFilter = 'assigned' | 'created' | 'all' | 'completed' | 'open'
 
-const ACTIVE_STATE_FILTER = { state: { type: { nin: ['completed', 'canceled'] } } }
-const COMPLETED_STATE_FILTER = { state: { type: { in: ['completed', 'canceled'] } } }
-
-function listFilterForState(filter: LinearListFilter): Record<string, unknown> | undefined {
-  if (filter === 'assigned' || filter === 'created' || filter === 'open') {
-    return ACTIVE_STATE_FILTER
-  }
-  if (filter === 'completed') {
-    return COMPLETED_STATE_FILTER
-  }
-  return undefined
-}
-
-function listIssueFilter(
-  filter: LinearListFilter,
-  teamId?: string
-): Record<string, unknown> | undefined {
-  const stateFilter = listFilterForState(filter)
-  const teamFilter = teamId ? { team: { id: { eq: teamId } } } : undefined
-  if (stateFilter && teamFilter) {
-    return { ...stateFilter, ...teamFilter }
-  }
-  return stateFilter ?? teamFilter
-}
-
 type LinearIssuePageResult = {
   items: LinearIssue[]
   hasMore: boolean
@@ -904,14 +895,14 @@ async function readListIssuesForWorkspace(
   filter: LinearListFilter,
   limit: number,
   workspaceId: LinearWorkspaceSelection | null | undefined,
-  teamId?: string
+  options?: LinearIssueListOptions
 ): Promise<LinearCollectionResult<LinearIssue>> {
   await acquire()
   try {
     return await readIssueConnectionPages(
       entry,
       limit,
-      getListIssueConnectionLoader(entry, filter, teamId)
+      getListIssueConnectionLoader(entry, filter, options)
     )
   } catch (error) {
     if (isAuthError(error)) {
@@ -1016,11 +1007,11 @@ async function readListIssuesAcrossWorkspaces(
   filter: LinearListFilter,
   limit: number,
   workspaceId: LinearWorkspaceSelection | null | undefined,
-  teamId?: string
+  options?: LinearIssueListOptions
 ): Promise<LinearCollectionResult<LinearIssue>> {
   const states: LinearIssueWorkspacePageState[] = entries.map((entry) => ({
     entry,
-    loadConnection: getListIssueConnectionLoader(entry, filter, teamId),
+    loadConnection: getListIssueConnectionLoader(entry, filter, options),
     items: [],
     hasMore: false,
     canPage: false
@@ -1063,19 +1054,32 @@ export async function listIssues(
   filter: LinearListFilter = 'assigned',
   limit = 20,
   workspaceId?: LinearWorkspaceSelection | null,
-  teamId?: string
+  options?: LinearIssueListOptions
 ): Promise<LinearCollectionResult<LinearIssue>> {
   const effectiveLimit = clampLinearIssueListLimit(limit)
+  const attributeFilter = options?.attributeFilter
+  // Why: workspace-specific state/member/label ids cannot fan out safely across
+  // "all" workspaces; reject before creating clients so non-UI callers cannot
+  // get a misleading partial subset.
+  if (
+    attributeFilter &&
+    !isEmptyLinearIssueAttributeFilter(attributeFilter) &&
+    workspaceId === 'all'
+  ) {
+    throw new Error(
+      'Linear attribute filters require a concrete workspace; "all" workspaces is not supported.'
+    )
+  }
   const entries = getClients(workspaceId)
   if (entries.length === 0) {
     return { items: [] }
   }
 
   if (entries.length === 1) {
-    return readListIssuesForWorkspace(entries[0], filter, effectiveLimit, workspaceId, teamId)
+    return readListIssuesForWorkspace(entries[0], filter, effectiveLimit, workspaceId, options)
   }
 
-  return readListIssuesAcrossWorkspaces(entries, filter, effectiveLimit, workspaceId, teamId)
+  return readListIssuesAcrossWorkspaces(entries, filter, effectiveLimit, workspaceId, options)
 }
 
 export async function createIssue(

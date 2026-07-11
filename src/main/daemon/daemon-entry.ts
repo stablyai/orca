@@ -131,7 +131,9 @@ async function main(): Promise<void> {
 
   // Signal readiness to parent via IPC (if available)
   if (process.send) {
-    process.send({ type: 'ready' })
+    // Why: Windows has no cheap OS query for a child's start time, so the
+    // daemon self-reports it here for the pid file's pid-recycling guard.
+    process.send({ type: 'ready', startedAtMs: Date.now() - process.uptime() * 1000 })
   }
   daemonLog.log('ready')
 

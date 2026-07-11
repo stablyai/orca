@@ -51,6 +51,7 @@ import {
   rebuildAppMenu
 } from './menu/register-app-menu'
 import { checkForUpdatesFromMenu, isQuittingForUpdate } from './updater'
+import { recordUpdaterLifecycle } from './updater-lifecycle-diagnostics'
 import {
   configureElectronNetworkCompatibility,
   configureDevUserDataPath,
@@ -122,6 +123,7 @@ import {
 } from './codex-accounts/runtime-selection'
 import { normalizeClaudeRuntimeSelection } from './claude-accounts/runtime-selection'
 import { codexHookService } from './codex/hook-service'
+import { getDefaultWslDistro } from './wsl'
 import { ClaudeAccountService } from './claude-accounts/service'
 import { ClaudeRuntimeAuthService } from './claude-accounts/runtime-auth-service'
 import {
@@ -130,6 +132,7 @@ import {
 } from './claude-accounts/live-pty-gate'
 import { StarNagService } from './star-nag/service'
 import { agentHookServer } from './agent-hooks/server'
+import { wslHookRelayManager } from './agent-hooks/wsl-hook-relay-manager'
 import { maybeAutoRenameBranchOnFirstWork } from './agent-hooks/first-work-branch-rename'
 import { renameWorktreeFolderOnFirstWork } from './agent-hooks/first-work-folder-rename'
 import { moveWorktree } from './git/worktree'
@@ -176,6 +179,7 @@ import {
   type SyntheticTitleSpinnerEntry
 } from './synthetic-title-spinner'
 import { shouldSendSyntheticTitleFrame } from './synthetic-title-visibility'
+import { shouldCopySyntheticTitleFrameToPtyData } from './synthetic-title-frame-routing'
 import { isCrashReportReason } from '../shared/crash-reporting'
 import {
   getSyntheticAgentTitleProfile,
@@ -184,6 +188,7 @@ import {
 } from '../shared/synthetic-agent-title'
 import type { AgentStatusState } from '../shared/agent-status-types'
 import { resolveTuiAgentPermissionMode } from '../shared/tui-agent-permissions'
+import type { TerminalSideEffectBatch } from '../shared/terminal-side-effect-facts'
 import { KeybindingService } from './keybindings/keybinding-service'
 import { applyElectronProxySettings } from './network/proxy-settings'
 import { preserveAgentAuthBeforeRestart } from './agent-auth-restart-preservation'
@@ -694,13 +699,22 @@ async function startServeAgentHookServer(): Promise<void> {
 
 function prepareCodexRuntimeHomeForLaunch(target?: CodexAccountSelectionTarget): string | null {
   const runtimeHomePath = codexRuntimeHome!.prepareForCodexLaunch(target)
+  const hookTarget =
+    target?.runtime === 'wsl'
+      ? {
+          runtime: 'wsl' as const,
+          wslDistro: target.wslDistro?.trim() || getDefaultWslDistro()
+        }
+      : target
   const hooksEnabled = isAgentStatusHooksEnabled(store?.getSettings())
   try {
     // Why: launch prep is reachable after startup via PTY/runtime paths; honor
     // the persisted off switch so those launches cannot reinstall removed hooks.
     const status = hooksEnabled
-      ? codexHookService.install()
-      : codexHookService.refreshRuntimeUserHooks()
+      ? (codexHookService.installForRuntimeHome(runtimeHomePath, hookTarget) ??
+        codexHookService.install())
+      : (codexHookService.refreshRuntimeUserHooksForRuntimeHome(runtimeHomePath, hookTarget) ??
+        codexHookService.refreshRuntimeUserHooks())
     if (status.state === 'error') {
       console.warn(
         `[codex-hook-service] failed to ${
@@ -1492,7 +1506,17 @@ function sendSyntheticTitle(ptyId: string, data: string, options: { force?: bool
   ) {
     return
   }
-  mainWindow.webContents.send('pty:data', { id: ptyId, data })
+  // Why: feed the per-PTY tracker directly (never onPtyData — emulator state,
+  // tails, transcripts, and stats must not see fabricated bytes) so synthetic
+  // titles/BELs reach pty:sideEffect consumers when main holds side-effect
+  // authority.
+  runtime?.ingestSyntheticTitleFrame(ptyId, data)
+  // Why: only the kill-switch-off renderer still byte-parses synthetic frames;
+  // under main authority the copy would just mint phantom ACKs for unmetered
+  // bytes (see synthetic-title-frame-routing.ts).
+  if (shouldCopySyntheticTitleFrameToPtyData(store?.getSettings())) {
+    mainWindow.webContents.send('pty:data', { id: ptyId, data })
+  }
 }
 
 function isSyntheticTitleWindowVisible(): boolean {
@@ -1793,9 +1817,28 @@ app.whenReady().then(async () => {
     onTerminalAgentStatus: (event) => {
       agentHookServer.ingestTerminalStatus(event)
     },
+    // Why: derived title/bell/agent facts ride one batched main→renderer
+    // channel (terminal-side-effect-authority.md). The renderer's authority
+    // kill switch decides whether to consume. Headless serve never creates a
+    // window, so the dep is omitted entirely — the runtime then skips fact
+    // batch construction and the per-chunk bell walk.
+    ...(isServeMode
+      ? {}
+      : {
+          onTerminalSideEffects: (batch: TerminalSideEffectBatch) => {
+            if (mainWindow && !mainWindow.isDestroyed()) {
+              mainWindow.webContents.send('pty:sideEffect', batch)
+            }
+          }
+        }),
     // Why: hook-reported agent status is the same source the desktop sidebar
     // reads. worktree.ps pulls it at query time so mobile shows the same agents.
     getAgentStatusSnapshot: () => agentHookServer.getStatusSnapshot(),
+    // Why: source codex-home here (runs in BOTH window and serve modes) so the
+    // aiVault.listSessions RPC includes managed-Codex sessions on remote/SSH
+    // hosts; the window-only registerCoreHandlers path never runs under serve.
+    getAdditionalAiVaultCodexHomePaths: () =>
+      codexRuntimeHome ? [codexRuntimeHome.getHostRuntimeHomePath()] : [],
     buildAgentHookPtyEnv: () =>
       isAgentStatusHooksEnabled(store?.getSettings()) ? agentHookServer.buildPtyEnv() : {}
   })
@@ -2047,7 +2090,9 @@ app.whenReady().then(async () => {
   // a random OS-assigned port — breaking deterministic mobile pairing/repro
   // scripts against the dev instance. Pin the first dev instance to 6769 so
   // ws://127.0.0.1:6769 is stable; a second dev instance still falls back via
-  // ws-transport's EADDRINUSE handler.
+  // ws-transport's EADDRINUSE handler. Note: once an instance has ever fallen
+  // back, the persisted fallback port is re-bound in preference to 6769
+  // (STA-1511) until mobile-ws-fallback-port.json is removed from userData.
   const devWsPort = is.dev && !isE2E ? 6769 : undefined
   let serveOptions: ServeOptions | null = null
   try {
@@ -2198,6 +2243,11 @@ app.whenReady().then(async () => {
 })
 
 app.on('before-quit', () => {
+  if (isQuittingForUpdate()) {
+    recordUpdaterLifecycle('before_quit_allowed', undefined, {
+      message: 'before-quit allowed for update install'
+    })
+  }
   isQuitting = true
   unsubscribeSystemResumeBroadcast?.()
   unsubscribeSystemResumeBroadcast = null
@@ -2219,6 +2269,14 @@ app.on('before-quit', () => {
 // async work and let Electron exit.
 let daemonDisconnectDone = false
 app.on('will-quit', (e) => {
+  const updateQuitInProgress = isQuittingForUpdate()
+  if (updateQuitInProgress) {
+    recordUpdaterLifecycle(
+      'will_quit_cleanup_started',
+      { daemonTeardown: 'disconnect' },
+      { message: 'will-quit cleanup for update install; daemonTeardown=disconnect' }
+    )
+  }
   // Why: before-quit can still be aborted by renderer beforeunload; wait until
   // the committed quit path before removing the Windows notification icon.
   destroySystemTray()
@@ -2231,6 +2289,9 @@ app.on('will-quit', (e) => {
   automations?.stop()
   setUnreadDockBadgeCount(0)
   agentHookServer.stop()
+  // Why: cancels relay restart/reinstall timers and kills wsl.exe children
+  // deterministically instead of relying on stdio-pipe teardown.
+  wslHookRelayManager.disposeAll()
   stats?.flush()
   // Why: agent-browser daemon processes would otherwise linger after Orca quits,
   // holding ports and leaving stale session state on disk.

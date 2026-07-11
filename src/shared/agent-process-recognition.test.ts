@@ -25,6 +25,13 @@ describe('agent process recognition', () => {
     expect(isExpectedAgentProcess('/usr/local/bin/openclaude', 'claude')).toBe(false)
   })
 
+  it('recognizes the Droid foreground process on Windows', () => {
+    expect(recognizeAgentProcess(String.raw`C:\Users\dev\AppData\Roaming\npm\droid.cmd`)).toEqual({
+      agent: 'droid',
+      processName: 'droid'
+    })
+  })
+
   it('matches expected agents from platform-specific foreground process paths', () => {
     expect(recognizeAgentProcess('claude')).toEqual({
       agent: 'claude',

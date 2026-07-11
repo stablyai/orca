@@ -2,7 +2,10 @@ const { chmodSync, existsSync, readdirSync } = require('node:fs')
 const { execFileSync } = require('node:child_process')
 const { join, resolve } = require('node:path')
 const electronBuilderNativeRebuild = require('./scripts/electron-builder-native-rebuild.cjs')
-const { verifyPackagedDaemonEntryBoots } = require('./scripts/verify-packaged-daemon-entry.cjs')
+const {
+  assertPackagedDaemonEntryExists,
+  verifyPackagedDaemonEntryBoots
+} = require('./scripts/verify-packaged-daemon-entry.cjs')
 const {
   createPackagedRuntimeNodeModuleResources,
   prunePackagedRuntimeNodeModules,
@@ -141,8 +144,12 @@ module.exports = {
     if (context.arch === hostArchEnum || context.arch === 4) {
       verifyPackagedDaemonEntryBoots(resourcesDir)
     } else {
+      // Why: a cross-arch slice can't be booted by the host Node, but the
+      // unpacked entry must still exist — its absence is a layout regression
+      // regardless of arch, so only the boot is skipped, not the check.
+      assertPackagedDaemonEntryExists(resourcesDir)
       console.log(
-        `[verify-packaged-daemon-entry] skipped cross-arch slice (target ${context.arch}, host ${process.arch})`
+        `[verify-packaged-daemon-entry] skipped boot on cross-arch slice (target ${context.arch}, host ${process.arch})`
       )
     }
     chmodUnixCliLaunchers(resourcesDir, context.electronPlatformName)

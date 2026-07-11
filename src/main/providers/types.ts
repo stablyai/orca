@@ -12,6 +12,7 @@ import type {
   GitStagingArea,
   GitUpstreamStatus,
   GitWorktreeInfo,
+  TuiAgent,
   RemoveWorktreeResult,
   SearchOptions,
   SearchResult
@@ -21,8 +22,37 @@ import type { CommitMessageDraftContext } from '../../shared/commit-message-gene
 import type { WorkspaceSpaceDirectoryScanResult } from '../../shared/workspace-space-types'
 import type { StartupCommandDelivery } from '../../shared/codex-startup-delivery'
 import type { TerminalOscLinkRange } from '../../shared/terminal-osc-link-ranges'
+import type { TerminalGitHubPRLink } from '../../shared/terminal-github-pr-link-detector'
 
 // ─── PTY Provider ───────────────────────────────────────────────────
+
+/** Notification-bearing fact a thinning transport detected while it held
+ *  scan authority for a backgrounded PTY (see onBackgroundStreamEvent). */
+export type PtyTransientFact =
+  | { kind: 'bell' }
+  | { kind: 'command-finished'; exitCode: number | null }
+  | { kind: 'pr-link'; link: TerminalGitHubPRLink }
+  | { kind: '2031-subscribe' }
+
+export type PtyBackgroundStreamEvent =
+  | { id: string; kind: 'backgroundMarker'; background: boolean; scanSeedAnsi?: string }
+  | { id: string; kind: 'dataGap'; droppedChars: number; sequenceChars?: number }
+  | { id: string; kind: 'transientFact'; fact: PtyTransientFact }
+
+export type PtyProviderBufferSnapshot = {
+  data: string
+  /** Authoritative normal buffer captured beside an alternate-screen frame. */
+  scrollbackAnsi?: string
+  cols: number
+  rows: number
+  cwd?: string | null
+  lastTitle?: string
+  seq: number
+  source: 'headless'
+  oscLinks?: TerminalOscLinkRange[]
+  alternateScreen?: boolean
+  pendingEscapeTailAnsi?: string
+}
 
 export type PtySpawnOptions = {
   cols: number
@@ -33,6 +63,8 @@ export type PtySpawnOptions = {
   command?: string
   commandDelivery?: 'renderer' | 'provider'
   startupCommandDelivery?: StartupCommandDelivery
+  /** Minimal allowlisted launch ownership preserved by daemon reattach. */
+  launchAgent?: TuiAgent
   /** Orca worktree identity. When present, the local provider scopes shell
    *  history to this worktree so ArrowUp only surfaces local commands. */
   worktreeId?: string
@@ -76,6 +108,8 @@ export type PtySpawnResult = {
    *  local providers read it from node-pty. Null when the underlying
    *  provider could not publish a pid (e.g., race during spawn). */
   pid?: number | null
+  /** Minimal allowlisted launch ownership returned by daemon reattach. */
+  launchAgent?: TuiAgent
   /** ANSI snapshot of the terminal screen, present when reattaching to an
    *  existing daemon session. Write this to xterm.js to restore visual state. */
   snapshot?: string
@@ -83,6 +117,11 @@ export type PtySpawnResult = {
    *  writing the snapshot so ANSI cursor positions land correctly. */
   snapshotCols?: number
   snapshotRows?: number
+  /** Kitty keyboard flags persisted in the daemon snapshot, threaded so the
+   *  re-seeded runtime emulator answers hidden `CSI ? u` with the real flags
+   *  (terminal-query-authority.md §kitty). Never replayed into a renderer
+   *  xterm — POST_REPLAY_REATTACH_RESET's kitty reset stays authoritative. */
+  snapshotKittyKeyboardFlags?: number
   /** True when the spawn reattached to an existing daemon session. */
   isReattach?: boolean
   /** True when the reattached session uses the alternate screen buffer
@@ -120,6 +159,36 @@ export type IPtyProvider = {
   write(id: string, data: string): void
   resize(id: string, cols: number, rows: number): void
   /**
+   * Producer-side flow control: stop/restart reading the underlying PTY so a
+   * flooding child blocks on write (kernel backpressure) instead of growing
+   * main-process buffers. Best-effort and optional — providers that cannot
+   * pause (SSH relay, legacy daemon protocols) omit these or no-op silently,
+   * and callers must keep functioning without them (the pending-output cap
+   * still bounds memory when pause is unavailable).
+   */
+  pauseProducer?: (id: string) => void
+  resumeProducer?: (id: string) => void
+  /**
+   * Hidden-delivery hint: the renderer has no visible view for this PTY, so
+   * the provider's transport may keep-tail thin this PTY's monitoring stream
+   * under backlog (bytes nobody is watching must not bury a visible pane's
+   * echo). Best-effort and optional, like pauseProducer.
+   */
+  setPtyBackgrounded?: (id: string, background: boolean) => void
+  /**
+   * Facts a thinning transport interleaves with onData, in byte order:
+   * scan-authority handoff markers, keep-tail gaps, and the transient facts
+   * (bell/command-finished/pr-link/2031) it detected in bytes it was allowed
+   * to drop. Only transports that thin implement it.
+   */
+  onBackgroundStreamEvent?: (callback: (payload: PtyBackgroundStreamEvent) => void) => () => void
+  /** Authoritative provider-owned model snapshot. Daemon providers expose this
+   * after their monitoring stream gaps; other providers may omit it. */
+  getBufferSnapshot?: (
+    id: string,
+    opts?: { scrollbackRows?: number }
+  ) => Promise<PtyProviderBufferSnapshot | null>
+  /**
    * The size the PTY has ACTUALLY applied, not the last size requested.
    * resize() is fire-and-forget for remote providers (daemon/SSH `notify`),
    * so a resize can be silently dropped (session not yet alive, dead handle,
@@ -140,12 +209,16 @@ export type IPtyProvider = {
   acknowledgeDataEvent(id: string, charCount: number): void
   hasChildProcesses(id: string): Promise<boolean>
   getForegroundProcess(id: string): Promise<string | null>
+  /** Strong process evidence captured after the caller's command boundary. */
+  confirmForegroundProcess?: (id: string) => Promise<string | null>
   serialize(ids: string[]): Promise<string>
   revive(state: string): Promise<void>
   listProcesses(): Promise<PtyProcessInfo[]>
   getDefaultShell(): Promise<string>
   getProfiles(): Promise<{ name: string; path: string }[]>
-  onData(callback: (payload: { id: string; data: string }) => void): () => void
+  onData(
+    callback: (payload: { id: string; data: string; sequenceChars?: number }) => void
+  ): () => void
   onReplay(callback: (payload: { id: string; data: string }) => void): () => void
   onExit(callback: (payload: { id: string; code: number }) => void): () => void
 }

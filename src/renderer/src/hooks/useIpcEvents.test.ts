@@ -1683,6 +1683,10 @@ describe('useIpcEvents updater integration', () => {
       updateTabPtyId,
       setTabLayout,
       tabsByWorktree: {} as Record<string, { id: string; ptyId?: string | null; title?: string }[]>,
+      folderWorkspaces: [],
+      projectGroups: [],
+      repos: [{ id: 'repo-1', connectionId: null }],
+      worktreesByRepo: { 'repo-1': [{ id: 'wt-2', repoId: 'repo-1' }] },
       openFiles: [],
       browserTabsByWorktree: {},
       tabBarOrderByWorktree: {},
@@ -2125,7 +2129,7 @@ describe('useIpcEvents updater integration', () => {
     expect(dispatchEvent).toHaveBeenCalledWith(
       expect.objectContaining({
         type: 'orca-background-mount-terminal-worktree',
-        detail: { worktreeId: 'wt-3' }
+        detail: { worktreeId: 'wt-3', tabIds: ['tab-new'] }
       })
     )
     expect(setTabCustomTitle).toHaveBeenCalledWith('tab-new', 'Shell', {
@@ -2188,7 +2192,7 @@ describe('useIpcEvents updater integration', () => {
     expect(dispatchEvent).toHaveBeenCalledWith(
       expect.objectContaining({
         type: 'orca-background-mount-terminal-worktree',
-        detail: { worktreeId: 'wt-2' }
+        detail: { worktreeId: 'wt-2', tabIds: ['tab-new'] }
       })
     )
     expect(setTabCustomTitle).toHaveBeenCalledWith('tab-new', 'Codex', {
@@ -4299,7 +4303,7 @@ describe('useIpcEvents agent status snapshot integration', () => {
     stateStartedAt: number
   }
   type StoreLike = Record<string, unknown>
-  type StoreSubscribeListener = (state: StoreLike) => void
+  type StoreSubscribeListener = (state: StoreLike, previousState: StoreLike) => void
   type MobileFitEvent = {
     ptyId: string
     mode: 'mobile-fit' | 'desktop-fit'
@@ -4799,6 +4803,7 @@ describe('useIpcEvents agent status snapshot integration', () => {
     expect(setAgentStatus).not.toHaveBeenCalled()
     expect(getSnapshot).not.toHaveBeenCalled()
 
+    const previousStoreState = { ...storeState }
     storeState.workspaceSessionReady = true
     storeState.tabsByWorktree = {
       'wt-1': [{ id: 'tab-future', ptyId: 'pty-1', worktreeId: 'wt-1', title: 'Future Tab' }]
@@ -4813,7 +4818,7 @@ describe('useIpcEvents agent status snapshot integration', () => {
     if (typeof subscribeListenerRef.current !== 'function') {
       throw new Error('Expected useAppStore.subscribe listener to be registered')
     }
-    subscribeListenerRef.current(storeState)
+    subscribeListenerRef.current(storeState, previousStoreState)
     await Promise.resolve()
 
     expect(setAgentStatus).toHaveBeenCalledTimes(1)
@@ -4937,7 +4942,7 @@ describe('useIpcEvents agent status snapshot integration', () => {
     vi.doMock('./agent-hook-completion-notifications', () => ({
       observeAgentHookCompletionForNotification,
       resetAgentHookCompletionNotificationCoordinators: vi.fn(),
-      syncAgentHookCompletionNotificationSettings: vi.fn()
+      syncAgentHookCompletionNotificationsForStoreUpdate: vi.fn()
     }))
     stubAuxiliaryModules()
     vi.stubGlobal(
@@ -5014,7 +5019,7 @@ describe('useIpcEvents agent status snapshot integration', () => {
     vi.doMock('./agent-hook-completion-notifications', () => ({
       observeAgentHookCompletionForNotification,
       resetAgentHookCompletionNotificationCoordinators: vi.fn(),
-      syncAgentHookCompletionNotificationSettings: vi.fn()
+      syncAgentHookCompletionNotificationsForStoreUpdate: vi.fn()
     }))
     stubAuxiliaryModules()
     vi.stubGlobal(
@@ -5064,6 +5069,78 @@ describe('useIpcEvents agent status snapshot integration', () => {
     expect(observeAgentHookCompletionForNotification).toHaveBeenCalledTimes(1)
   })
 
+  it('does not send an out-of-order hook event to completion lifecycle tracking', async () => {
+    const setAgentStatus = vi.fn()
+    const updateTabTitle = vi.fn()
+    const observeAgentHookCompletionForNotification = vi.fn()
+    const onSetListenerRef: { current: ((data: AgentStatusSetData) => void) | null } = {
+      current: null
+    }
+    const storeState: StoreLike = buildStoreState({
+      setAgentStatus,
+      updateTabTitle,
+      workspaceSessionReady: true,
+      settings: { terminalFontSize: 13, notifications: { enabled: true, agentTaskComplete: true } },
+      tabsByWorktree: {
+        'wt-1': [{ id: 'tab-future', ptyId: 'pty-1', worktreeId: 'wt-1', title: 'Claude' }]
+      },
+      agentStatusByPaneKey: {
+        [FUTURE_PANE_KEY]: {
+          state: 'working',
+          prompt: 'newer turn',
+          agentType: 'claude',
+          updatedAt: 1_700_000_000_500,
+          stateStartedAt: 1_700_000_000_400
+        }
+      }
+    })
+
+    stubReactSyncEffect()
+    vi.doMock('../store', () => ({
+      useAppStore: {
+        subscribe: vi.fn(() => () => {}),
+        getState: () => storeState
+      }
+    }))
+    vi.doMock('./agent-hook-completion-notifications', () => ({
+      observeAgentHookCompletionForNotification,
+      resetAgentHookCompletionNotificationCoordinators: vi.fn(),
+      syncAgentHookCompletionNotificationSettings: vi.fn()
+    }))
+    stubAuxiliaryModules()
+    vi.stubGlobal(
+      'window',
+      buildWindowApi({
+        onSet: (cb) => {
+          onSetListenerRef.current = cb
+          return () => {}
+        }
+      })
+    )
+
+    const { useIpcEvents } = await import('./useIpcEvents')
+    useIpcEvents()
+    await Promise.resolve()
+
+    if (typeof onSetListenerRef.current !== 'function') {
+      throw new Error('Expected agentStatus.onSet listener to be registered')
+    }
+    onSetListenerRef.current({
+      paneKey: FUTURE_PANE_KEY,
+      tabId: 'tab-future',
+      worktreeId: 'wt-1',
+      state: 'done',
+      prompt: 'older turn',
+      agentType: 'claude',
+      receivedAt: 1_700_000_000_300,
+      stateStartedAt: 1_700_000_000_200
+    })
+
+    expect(setAgentStatus).not.toHaveBeenCalled()
+    expect(updateTabTitle).not.toHaveBeenCalled()
+    expect(observeAgentHookCompletionForNotification).not.toHaveBeenCalled()
+  })
+
   it('keeps auto-approved Codex done statuses on the completion path', async () => {
     const setAgentStatus = vi.fn()
     const observeAgentHookCompletionForNotification = vi.fn()
@@ -5097,7 +5174,7 @@ describe('useIpcEvents agent status snapshot integration', () => {
     vi.doMock('./agent-hook-completion-notifications', () => ({
       observeAgentHookCompletionForNotification,
       resetAgentHookCompletionNotificationCoordinators: vi.fn(),
-      syncAgentHookCompletionNotificationSettings: vi.fn()
+      syncAgentHookCompletionNotificationsForStoreUpdate: vi.fn()
     }))
     stubAuxiliaryModules()
     vi.stubGlobal(
@@ -5906,6 +5983,7 @@ describe('useIpcEvents agent status snapshot integration', () => {
       reason: 'unknown_tab_id'
     })
 
+    const previousStoreState = { ...storeState }
     storeState.terminalLayoutsByTabId = {
       'tab-future': {
         root: { type: 'leaf', leafId: FUTURE_LEAF_ID },
@@ -5916,7 +5994,7 @@ describe('useIpcEvents agent status snapshot integration', () => {
     if (typeof subscribeListenerRef.current !== 'function') {
       throw new Error('Expected useAppStore.subscribe listener to be registered')
     }
-    subscribeListenerRef.current(storeState)
+    subscribeListenerRef.current(storeState, previousStoreState)
 
     expect(setAgentStatus).toHaveBeenCalledTimes(2)
     expect(setAgentStatus).toHaveBeenNthCalledWith(
@@ -6008,6 +6086,138 @@ describe('useIpcEvents agent status snapshot integration', () => {
       expectWorktreeRouting('wt-1'),
       undefined
     )
+  })
+
+  it('accepts WSL-relayed status events for a local repo (wsl:* is transport provenance, not ownership)', async () => {
+    const setAgentStatus = vi.fn()
+    const onSetListenerRef: { current: ((data: AgentStatusSetData) => void) | null } = {
+      current: null
+    }
+    const storeState: StoreLike = buildStoreState({
+      setAgentStatus,
+      workspaceSessionReady: true,
+      tabsByWorktree: {
+        'wt-1': [{ id: 'tab-future', ptyId: 'pty-1', worktreeId: 'wt-1', title: 'WSL Tab' }]
+      },
+      terminalLayoutsByTabId: {
+        'tab-future': {
+          root: { type: 'leaf', leafId: FUTURE_LEAF_ID },
+          activeLeafId: FUTURE_LEAF_ID,
+          expandedLeafId: null
+        }
+      },
+      repos: [{ id: 'repo-1', connectionId: null }],
+      worktreesByRepo: { 'repo-1': [{ id: 'wt-1', repoId: 'repo-1' }] }
+    })
+
+    stubReactSyncEffect()
+    vi.doMock('../store', () => ({
+      useAppStore: {
+        subscribe: vi.fn(() => () => {}),
+        getState: () => storeState
+      }
+    }))
+    stubAuxiliaryModules()
+    vi.stubGlobal(
+      'window',
+      buildWindowApi({
+        onSet: (cb) => {
+          onSetListenerRef.current = cb
+          return () => {}
+        }
+      })
+    )
+
+    const { useIpcEvents } = await import('./useIpcEvents')
+
+    useIpcEvents()
+    await Promise.resolve()
+    if (typeof onSetListenerRef.current !== 'function') {
+      throw new Error('Expected agentStatus.onSet listener to be registered')
+    }
+
+    onSetListenerRef.current({
+      paneKey: FUTURE_PANE_KEY,
+      state: 'working',
+      prompt: 'wsl p',
+      agentType: 'claude',
+      worktreeId: 'wt-1',
+      connectionId: 'wsl:Ubuntu',
+      receivedAt: 1_700_000_000_000,
+      stateStartedAt: 1_699_999_999_000
+    })
+
+    expect(setAgentStatus).toHaveBeenCalledTimes(1)
+    expect(setAgentStatus).toHaveBeenCalledWith(
+      FUTURE_PANE_KEY,
+      expect.objectContaining({ state: 'working', prompt: 'wsl p', agentType: 'claude' }),
+      'WSL Tab',
+      { updatedAt: 1_700_000_000_000, stateStartedAt: 1_699_999_999_000 },
+      expectWorktreeRouting('wt-1'),
+      undefined
+    )
+  })
+
+  it('still rejects WSL-relayed status events against an SSH-owned repo', async () => {
+    const setAgentStatus = vi.fn()
+    const onSetListenerRef: { current: ((data: AgentStatusSetData) => void) | null } = {
+      current: null
+    }
+    const storeState: StoreLike = buildStoreState({
+      setAgentStatus,
+      workspaceSessionReady: true,
+      tabsByWorktree: {
+        'wt-1': [{ id: 'tab-future', ptyId: 'pty-1', worktreeId: 'wt-1', title: 'SSH Tab' }]
+      },
+      terminalLayoutsByTabId: {
+        'tab-future': {
+          root: { type: 'leaf', leafId: FUTURE_LEAF_ID },
+          activeLeafId: FUTURE_LEAF_ID,
+          expandedLeafId: null
+        }
+      },
+      repos: [{ id: 'repo-1', connectionId: 'ssh-1' }],
+      worktreesByRepo: { 'repo-1': [{ id: 'wt-1', repoId: 'repo-1' }] }
+    })
+
+    stubReactSyncEffect()
+    vi.doMock('../store', () => ({
+      useAppStore: {
+        subscribe: vi.fn(() => () => {}),
+        getState: () => storeState
+      }
+    }))
+    stubAuxiliaryModules()
+    vi.stubGlobal(
+      'window',
+      buildWindowApi({
+        onSet: (cb) => {
+          onSetListenerRef.current = cb
+          return () => {}
+        }
+      })
+    )
+
+    const { useIpcEvents } = await import('./useIpcEvents')
+
+    useIpcEvents()
+    await Promise.resolve()
+    if (typeof onSetListenerRef.current !== 'function') {
+      throw new Error('Expected agentStatus.onSet listener to be registered')
+    }
+
+    onSetListenerRef.current({
+      paneKey: FUTURE_PANE_KEY,
+      state: 'working',
+      prompt: 'wsl p',
+      agentType: 'claude',
+      worktreeId: 'wt-1',
+      connectionId: 'wsl:Ubuntu',
+      receivedAt: 1_700_000_000_000,
+      stateStartedAt: 1_699_999_999_000
+    })
+
+    expect(setAgentStatus).not.toHaveBeenCalled()
   })
 
   it('still rejects remote status events once the pane resolves to a local repo', async () => {

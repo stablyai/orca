@@ -13,8 +13,16 @@ import type {
   LocalBaseRefUpdateSuggestion,
   RemoveWorktreeResult
 } from '../../shared/types'
+import { assertWorktreeUnlockedForRemoval } from '../../shared/worktree-removal'
+import { decodeGitCQuotedPath } from '../../shared/git-cquoted-path'
 import { parseGitRevListAheadBehindCounts } from '../../shared/git-rev-list-output'
 import { parseWslUncPath } from '../../shared/wsl-paths'
+import {
+  hasUnsupportedRevParsePathFormatEcho,
+  isUnsupportedRevParsePathFormatError,
+  isUnsupportedWorktreeListZError
+} from '../../shared/git-worktree-command-capabilities'
+import { getLocalGitCapabilityCache } from './git-capability-state'
 import { gitExecFileAsync, translateWslOutputPaths } from './runner'
 import { resolveGitDir } from './status'
 import { hasWorktreeBaseCommitRef } from './worktree-base-ref-probe'
@@ -46,7 +54,7 @@ export type AddWorktreeOptions = GitWorktreeExecOptions & {
 export type RemoveWorktreeOptions = GitWorktreeExecOptions & {
   deleteBranch?: boolean
   forceBranchDelete?: boolean
-  knownRemovedWorktree?: Pick<GitWorktreeInfo, 'branch' | 'head'>
+  knownRemovedWorktree?: Pick<GitWorktreeInfo, 'branch' | 'head' | 'locked' | 'lockReason'>
 }
 
 type LocalBaseRefRefreshability =
@@ -107,22 +115,6 @@ function getErrorText(error: unknown): string {
 
 function isNotGitRepositoryError(error: unknown): boolean {
   return /not a git repository/i.test(getErrorText(error))
-}
-
-function isUnsupportedWorktreeListZError(error: unknown): boolean {
-  // `-z` is this command's only flag older Git (<2.36) lacks, so its usage
-  // exit 129 signals the rejection in any locale; stderr match is a fallback.
-  if (getErrorCode(error) === '129') {
-    return true
-  }
-
-  return /(?:unknown|invalid|unrecognized) (?:switch|option).*`?-?z'?/i.test(getErrorText(error))
-}
-
-function isUnsupportedRevParsePathFormatError(error: unknown): boolean {
-  return /(?:unknown|invalid|unrecognized).*(?:--path-format|path-format)/i.test(
-    getErrorText(error)
-  )
 }
 
 function isBranchCheckedOutInWorktreeError(error: unknown): boolean {
@@ -408,24 +400,34 @@ async function readRepoLocation(
   resolveBasePath: string,
   options: GitWorktreeExecOptions = {}
 ): Promise<RepoLocation | undefined> {
+  const capabilities = getLocalGitCapabilityCache({
+    cwd: repoPath,
+    wslDistro: options.wslDistro
+  })
   try {
-    const { stdout } = await gitExecFileAsync(
-      ['rev-parse', '--path-format=absolute', '--show-toplevel', '--git-common-dir'],
-      gitExecOptions(repoPath, options)
+    return await capabilities.runWithFallback(
+      'rev-parse-path-format',
+      async () => {
+        const { stdout } = await gitExecFileAsync(
+          ['rev-parse', '--path-format=absolute', '--show-toplevel', '--git-common-dir'],
+          gitExecOptions(repoPath, options)
+        )
+        if (hasUnsupportedRevParsePathFormatEcho(stdout)) {
+          // Why: some old Git versions echo the unknown option and exit zero;
+          // remember that compatibility signal even though parsing can recover.
+          capabilities.rememberUnsupported('rev-parse-path-format')
+        }
+        return parseRepoLocation(resolveBasePath, stdout)
+      },
+      async () => {
+        const { stdout } = await gitExecFileAsync(
+          ['rev-parse', '--show-toplevel', '--git-common-dir'],
+          gitExecOptions(repoPath, options)
+        )
+        return parseRepoLocation(resolveBasePath, stdout)
+      },
+      isUnsupportedRevParsePathFormatError
     )
-    return parseRepoLocation(resolveBasePath, stdout)
-  } catch (error) {
-    if (!isUnsupportedRevParsePathFormatError(error)) {
-      return undefined
-    }
-  }
-
-  try {
-    const { stdout } = await gitExecFileAsync(
-      ['rev-parse', '--show-toplevel', '--git-common-dir'],
-      gitExecOptions(repoPath, options)
-    )
-    return parseRepoLocation(resolveBasePath, stdout)
   } catch {
     return undefined
   }
@@ -487,6 +489,8 @@ export function parseWorktreeList(
     let branch = ''
     let isBare = false
     let isSparse = false
+    let locked = false
+    let lockReason = ''
 
     for (const line of lines) {
       if (line.startsWith('worktree ')) {
@@ -499,6 +503,10 @@ export function parseWorktreeList(
         isBare = true
       } else if (line === 'sparse') {
         isSparse = true
+      } else if (line === 'locked' || line.startsWith('locked ')) {
+        locked = true
+        const rawReason = line.slice('locked'.length).trim()
+        lockReason = options.nulDelimited ? rawReason : decodeGitCQuotedPath(rawReason)
       }
     }
 
@@ -510,6 +518,8 @@ export function parseWorktreeList(
         branch,
         isBare,
         ...(isSparse ? { isSparse } : {}),
+        ...(locked ? { locked: true } : {}),
+        ...(lockReason ? { lockReason } : {}),
         isMainWorktree: worktrees.length === 0
       })
     }
@@ -555,29 +565,34 @@ async function readWorktreeList(
   repoPath: string,
   options: GitWorktreeExecOptions = {}
 ): Promise<GitWorktreeInfo[]> {
-  try {
-    const { stdout } = await gitExecFileAsync(['worktree', 'list', '--porcelain', '-z'], {
-      cwd: repoPath,
-      ...options
-    })
-    return normalizeMainWorktreePath(
-      repoPath,
-      parseWorktreeList(stdout, { nulDelimited: true }),
-      options
-    )
-  } catch (error) {
-    if (!isUnsupportedWorktreeListZError(error)) {
-      throw error
-    }
-  }
-
-  // Why: `-z` is required to preserve worktree paths containing newlines, but
-  // Git <2.36 rejects it. Keep the old parser as a compatibility fallback.
-  const { stdout } = await gitExecFileAsync(['worktree', 'list', '--porcelain'], {
+  const capabilities = getLocalGitCapabilityCache({
     cwd: repoPath,
-    ...options
+    wslDistro: options.wslDistro
   })
-  return normalizeMainWorktreePath(repoPath, parseWorktreeList(stdout), options)
+  return capabilities.runWithFallback(
+    'worktree-list-z',
+    async () => {
+      const { stdout } = await gitExecFileAsync(['worktree', 'list', '--porcelain', '-z'], {
+        cwd: repoPath,
+        ...options
+      })
+      return normalizeMainWorktreePath(
+        repoPath,
+        parseWorktreeList(stdout, { nulDelimited: true }),
+        options
+      )
+    },
+    async () => {
+      // Why: `-z` is required to preserve worktree paths containing newlines,
+      // but Git <2.36 rejects it. Keep the line parser as the fallback.
+      const { stdout } = await gitExecFileAsync(['worktree', 'list', '--porcelain'], {
+        cwd: repoPath,
+        ...options
+      })
+      return normalizeMainWorktreePath(repoPath, parseWorktreeList(stdout), options)
+    },
+    isUnsupportedWorktreeListZError
+  )
 }
 
 async function readTranslatedWorktreeGraph(
@@ -1074,6 +1089,10 @@ async function performRemoveWorktree(
   const branchName = normalizeLocalBranchRef(removedWorktree?.branch ?? '')
   const branchHead = removedWorktree?.head ?? ''
 
+  // Why: callers outside the IPC/runtime preflight must not bypass Git's lock
+  // contract or depend on localized stderr to discover it after side effects.
+  assertWorktreeUnlockedForRemoval(removedWorktree)
+
   const args = ['worktree', 'remove']
   if (force) {
     args.push('--force')
@@ -1196,7 +1215,14 @@ async function deleteAlreadyMergedBranchAfterSafeDeleteFailure(
   // Why: squash merges rewrite commit IDs, so `branch -d` can reject a branch
   // whose changes are already on the base ref. Delete only when Git can prove
   // the branch contributes no tree changes to that base.
-  if (!(await branchHasNoUnmergedChangesOnAnyTarget(runGit, branchName, targetRefs))) {
+  if (
+    !(await branchHasNoUnmergedChangesOnAnyTarget(
+      runGit,
+      branchName,
+      targetRefs,
+      getLocalGitCapabilityCache({ cwd: repoPath, wslDistro: options.wslDistro })
+    ))
+  ) {
     return false
   }
   await forceDeleteLocalBranch(repoPath, branchName, branchHead, (args, cwd) =>

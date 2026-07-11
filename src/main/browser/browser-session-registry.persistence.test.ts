@@ -157,6 +157,31 @@ describe('BrowserSessionRegistry persistence', () => {
     expect(fsState.present.has('/user-data/Partitions/orca-browser/Cookies')).toBe(true)
   })
 
+  it('replays pending cookies into an existing Network database', async () => {
+    const stagedPath = '/staged/network-import'
+    const networkPath = '/user-data/Partitions/orca-browser/Network/Cookies'
+    const legacyPath = '/user-data/Partitions/orca-browser/Cookies'
+    const fsState = createFsState()
+    seedMeta(fsState, {
+      defaultSource: null,
+      userAgent: null,
+      pendingCookieDbPath: stagedPath,
+      profiles: []
+    })
+    fsState.files.set(stagedPath, 'imported cookies')
+    fsState.files.set(networkPath, 'old cookies')
+    fsState.present.add(stagedPath)
+    fsState.present.add(networkPath)
+
+    installModuleMocks(fsState)
+    const { browserSessionRegistry } = await import('./browser-session-registry')
+
+    browserSessionRegistry.applyPendingCookieImport()
+
+    expect(fsState.files.get(networkPath)).toBe('imported cookies')
+    expect(fsState.present.has(legacyPath)).toBe(false)
+  })
+
   it('persists new browser session profiles under the active Orca profile directory', async () => {
     const fsState = createFsState()
     const profileMetaPath = '/user-data/profiles/local-work/browser-session-meta.json'

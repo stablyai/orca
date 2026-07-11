@@ -47,4 +47,25 @@ describe('addOrcaWslInteropEnv', () => {
     expect(env.WSLENV).toContain('ORCA_AGENT_HOOK_ENV/u')
     expect(env.WSLENV).toContain('ORCA_AGENT_HOOK_VERSION/u')
   })
+
+  it('path-translates a Windows hook endpoint but passes a guest-side one untouched', () => {
+    const windowsEnv: Record<string, string> = {
+      ORCA_AGENT_HOOK_ENDPOINT: 'C:\\Users\\jin\\AppData\\Roaming\\Orca\\agent-hooks\\endpoint.cmd'
+    }
+    addOrcaWslInteropEnv(windowsEnv)
+    expect(windowsEnv.WSLENV).toContain('ORCA_AGENT_HOOK_ENDPOINT/p')
+
+    const guestEnv: Record<string, string> = {
+      ORCA_AGENT_HOOK_ENDPOINT: '/home/jin/.orca-wsl/agent-hooks/port-4567/endpoint.env'
+    }
+    addOrcaWslInteropEnv(guestEnv)
+    expect(guestEnv.WSLENV).toContain('ORCA_AGENT_HOOK_ENDPOINT/u')
+    expect(guestEnv.WSLENV).not.toContain('ORCA_AGENT_HOOK_ENDPOINT/p')
+  })
+
+  it('marks the WSL hook relay version for import on relay spawn envs', () => {
+    const env: Record<string, string> = { ORCA_WSL_HOOK_RELAY_VERSION: '0.1.0+abc' }
+    addOrcaWslInteropEnv(env)
+    expect(env.WSLENV).toBe('ORCA_WSL_HOOK_RELAY_VERSION/u')
+  })
 })

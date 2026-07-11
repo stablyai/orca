@@ -9,7 +9,8 @@ import {
   nonInteractiveGitEnv,
   parseRetryAfterMs,
   promptGuardGitEnv,
-  redirectPortedHostnameToEnv
+  redirectPortedHostnameToEnv,
+  untranslatedGitOutputEnv
 } from './runner'
 
 // Reads git config injected via the GIT_CONFIG_COUNT/KEY/VALUE env protocol
@@ -216,5 +217,27 @@ describe('nonInteractiveGitEnv credential-interactivity disable (STA-1292)', () 
     expect(config['credential.helper']).toBeUndefined()
     // Its own BatchMode SSH guard is still applied and unaffected.
     expect(env.GIT_SSH_COMMAND).toBe('ssh -o BatchMode=yes')
+  })
+})
+
+describe('git env forces untranslated diagnostics (issue #7808)', () => {
+  it('overrides an inherited non-English locale so stderr parsers keep working', () => {
+    // A gettext-enabled git under de_DE translates even the `fatal:` prefix,
+    // breaking isNoUpstreamError and every other stderr phrase match.
+    const env = promptGuardGitEnv({ PATH: '/usr/bin', LC_ALL: 'de_DE.UTF-8' })
+    expect(env.LC_ALL).toBe('en_US.UTF-8')
+    expect(env.LANG).toBe('en_US.UTF-8')
+  })
+
+  it('pins LANGUAGE, which outranks LC_ALL in gettext lookups', () => {
+    const env = untranslatedGitOutputEnv({ PATH: '/usr/bin', LANGUAGE: 'de:en' })
+    expect(env.LANGUAGE).toBe('en')
+    expect(env.LC_ALL).toBe('en_US.UTF-8')
+  })
+
+  it('applies to nonInteractiveGitEnv as well', () => {
+    const env = nonInteractiveGitEnv({ PATH: '/usr/bin', LANG: 'fr_FR.UTF-8' })
+    expect(env.LC_ALL).toBe('en_US.UTF-8')
+    expect(env.LANGUAGE).toBe('en')
   })
 })

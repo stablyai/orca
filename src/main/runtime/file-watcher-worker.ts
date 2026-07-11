@@ -10,13 +10,14 @@ import { stat } from 'node:fs/promises'
 import { parentPort, workerData } from 'node:worker_threads'
 import type * as ParcelWatcher from '@parcel/watcher'
 import type { FsChangeEvent } from '../../shared/types'
+import type { ParcelWatcherIgnoreOptions } from '../ipc/filesystem-watcher-ignore'
 
 const RUNTIME_FILE_WATCH_EVENT_STAT_LIMIT = 200
 const RUNTIME_FILE_WATCH_STAT_CONCURRENCY = 8
 
 type FileWatcherWorkerData = {
   rootPath: string
-  ignore: string[]
+  ignoreOptions: ParcelWatcherIgnoreOptions
 }
 
 // Messages the worker sends back to the host.
@@ -117,7 +118,7 @@ async function main(): Promise<void> {
         // rejection that crashes the worker silently. Surface it instead.
         .catch((err: unknown) => reportWatchError(err))
     },
-    { ignore: data.ignore }
+    data.ignoreOptions as ParcelWatcher.Options
   )
 
   // The crawl finished and the subscription is live.

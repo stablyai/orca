@@ -282,6 +282,14 @@ export type OpenFile = {
    *  tabs may be culled when they vanish from a later host snapshot; locally
    *  opened tabs have no host counterpart and must survive snapshot syncs. */
   mirroredFromRuntimeSession?: boolean
+  /** Why: orthogonal to `mode` — a `mode: 'edit'` tab that must never accept
+   *  edits, dirty state, autosave, format, or rename. Used by AI Vault View Log
+   *  so an agent-owned transcript cannot be mutated through editor write paths.
+   *  Persisted only when true; absence is the writable default. */
+  readOnly?: boolean
+  /** Why: live tail is explicit and only meaningful for a read-only local log;
+   *  ordinary editor tabs and read-only snapshots keep their existing behavior. */
+  liveTail?: boolean
   mode: 'edit' | 'diff' | 'conflict-review' | 'markdown-preview' | 'check-details'
 }
 
@@ -1337,9 +1345,16 @@ function getWorktreeConnectionId(state: AppState, worktreeId: string): string | 
 export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (set, get) => ({
   editorDrafts: {},
   setEditorDraft: (fileId, content) =>
-    set((s) => ({
-      editorDrafts: { ...s.editorDrafts, [fileId]: content }
-    })),
+    set((s) => {
+      // Why: read-only tabs (e.g. AI Vault View Log) must never accumulate an
+      // editor draft — a draft is the seed of dirty state, autosave, and a
+      // hot-exit restore that could write over an agent-owned transcript.
+      const file = s.openFiles.find((f) => f.id === fileId)
+      if (file?.readOnly === true) {
+        return s
+      }
+      return { editorDrafts: { ...s.editorDrafts, [fileId]: content } }
+    }),
   clearEditorDraft: (fileId) =>
     set((s) => {
       if (!(fileId in s.editorDrafts)) {
@@ -1681,6 +1696,10 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
         if (!needsExistingUpdate) {
           return activeResult
         }
+        // Why: `readOnly` is intentionally NOT in this override map. It is
+        // sticky: an existing tab keeps its own authority (`...f`). View Log
+        // never flips a writable tab to read-only, and an ordinary open never
+        // silently upgrades a read-only View Log tab to writable.
         return {
           openFiles: s.openFiles.map((f) =>
             f.id === id
@@ -2440,6 +2459,11 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
       // side effect is a no-op.
       const file = s.openFiles.find((f) => f.id === fileId)
       if (!file) {
+        return s
+      }
+      // Why: read-only tabs can never become dirty; a mutation path that reached
+      // here (stray change/save callback) must hard no-op the integrity invariant.
+      if (file.readOnly === true) {
         return s
       }
       const needsPreviewClear = dirty && file.isPreview
@@ -4337,7 +4361,11 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
             worktreeId,
             runtimeEnvironmentId: pf.runtimeEnvironmentId
           })
-          if (pf.dirtyDraftContent !== undefined) {
+          // Why: read-only tabs (AI Vault View Log) must restore clean. Ignore
+          // any persisted dirty draft / baseline so a restored agent log can
+          // never come back writable or as a hot-exit draft to be saved.
+          const isReadOnly = pf.readOnly === true
+          if (!isReadOnly && pf.dirtyDraftContent !== undefined) {
             editorDrafts[id] = pf.dirtyDraftContent
           }
           openFiles.push({
@@ -4349,16 +4377,20 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
             // Re-detect on hydrate so newly-supported extensions like .ipynb
             // stop reopening as raw JSON/plain text after the upgrade.
             language: detectLanguage(pf.relativePath || pf.filePath),
-            isDirty: pf.dirtyDraftContent !== undefined,
+            isDirty: !isReadOnly && pf.dirtyDraftContent !== undefined,
             isPreview: pf.isPreview,
             runtimeEnvironmentId: pf.runtimeEnvironmentId,
-            lastKnownDiskSignature: pf.lastKnownDiskSignature,
+            ...(isReadOnly ? { readOnly: true } : {}),
+            ...(isReadOnly && pf.liveTail === true ? { liveTail: true } : {}),
+            lastKnownDiskSignature: isReadOnly ? undefined : pf.lastKnownDiskSignature,
             // Why: hard-suspends autosave until the restored-tab conflict scan
             // verifies disk against the baseline — an async race would let a
             // slow remote read lose to the autosave timer and clobber an
             // offline agent write.
             pendingDiskBaselineVerification:
-              pf.dirtyDraftContent !== undefined && pf.lastKnownDiskSignature !== undefined
+              !isReadOnly &&
+              pf.dirtyDraftContent !== undefined &&
+              pf.lastKnownDiskSignature !== undefined
                 ? true
                 : undefined,
             mode: 'edit'

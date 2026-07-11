@@ -15,7 +15,7 @@ describe('right sidebar file/git runtime ownership boundaries', () => {
     'src/renderer/src/components/right-sidebar/useFileExplorerInlineInput.ts',
     'src/renderer/src/components/right-sidebar/useFileExplorerDragDrop.ts',
     'src/renderer/src/components/right-sidebar/useFileDuplicate.ts',
-    'src/renderer/src/components/right-sidebar/useFileExplorerVisibleRowProjection.ts',
+    'src/renderer/src/components/right-sidebar/use-file-explorer-ignored-paths.ts',
     'src/renderer/src/components/right-sidebar/useGitStatusPolling.ts',
     'src/renderer/src/components/right-sidebar/useFileSearchRunner.ts',
     'src/renderer/src/components/quick-open-file-list.ts'

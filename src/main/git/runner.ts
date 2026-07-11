@@ -35,8 +35,17 @@ import {
   escapeWslShCommandForWindows,
   quotePosixShell
 } from '../../shared/wsl-login-shell-command'
+import { UNTRANSLATED_GIT_OUTPUT_ENV } from '../../shared/git-output-locale'
+import { endSubprocessStdin } from '../../shared/subprocess-stdin-write'
 
 // ─── Core resolution ────────────────────────────────────────────────
+
+// `LANGUAGE=en LC_ALL=en_US.UTF-8 LANG=en_US.UTF-8` — env-assignment prefix for
+// WSL-routed git, where spawn env cannot cross the wsl.exe boundary. Values are
+// shell-safe unquoted (alnum, dot, dash, underscore only).
+const GIT_OUTPUT_LOCALE_SHELL_PREFIX = Object.entries(UNTRANSLATED_GIT_OUTPUT_ENV)
+  .map(([key, value]) => `${key}=${value}`)
+  .join(' ')
 
 type ResolvedCommand = {
   binary: string
@@ -202,6 +211,10 @@ function resolveCommand(
   }
 
   const translatedArgs = translateArgsForWsl(args)
+  // Why: env set on wsl.exe stays on the Windows side (WSLENV forwards only
+  // named vars), so the untranslated-output locale must ride the command
+  // string for git stderr parsers to work inside the distro (issue #7808).
+  const localePrefix = command === 'git' ? `${GIT_OUTPUT_LOCALE_SHELL_PREFIX} ` : ''
   const escapedCommand = quotePosixShell(command)
   // Why: shell-escape each argument to prevent word splitting / glob expansion
   // inside the bash -c string. Single quotes are safe for all chars except
@@ -214,8 +227,8 @@ function resolveCommand(
   // doesn't need a particular cwd for global calls like `api rate_limit`.
   const linuxCwd = cwdWsl?.linuxPath ?? (cwd && wslDistroOverride ? translateArgForWsl(cwd) : null)
   const shellCmd = linuxCwd
-    ? `cd ${quotePosixShell(linuxCwd)} && ${escapedCommand} ${escapedArgs.join(' ')}`
-    : `${escapedCommand} ${escapedArgs.join(' ')}`
+    ? `cd ${quotePosixShell(linuxCwd)} && ${localePrefix}${escapedCommand} ${escapedArgs.join(' ')}`
+    : `${localePrefix}${escapedCommand} ${escapedArgs.join(' ')}`
 
   if (options.useWslLoginShell) {
     return {
@@ -418,7 +431,7 @@ function execFileCapture(
     child.once('error', (error) => finish(error))
 
     if (options.stdin !== undefined) {
-      child.stdin?.end(options.stdin)
+      endSubprocessStdin(child.stdin, options.stdin)
     }
 
     // Why: Node's native execFile timeout waits for the child to exit after
@@ -560,10 +573,21 @@ export function appendGitConfigEnv(
   return next
 }
 
+/**
+ * Pin Orca-spawned git to untranslated English output so stderr/progress
+ * parsers keep working under any user locale (issue #7808; see
+ * UNTRANSLATED_GIT_OUTPUT_ENV for the full rationale). Terminal git is
+ * untouched. Injected by every git runner in this module; WSL-routed spawns
+ * get the same values via GIT_OUTPUT_LOCALE_SHELL_PREFIX instead.
+ */
+export function untranslatedGitOutputEnv(env: NodeJS.ProcessEnv = process.env): NodeJS.ProcessEnv {
+  return { ...env, ...UNTRANSLATED_GIT_OUTPUT_ENV }
+}
+
 export function promptGuardGitEnv(env: NodeJS.ProcessEnv = process.env): NodeJS.ProcessEnv {
   return appendGitConfigEnv(
     {
-      ...env,
+      ...untranslatedGitOutputEnv(env),
       GIT_TERMINAL_PROMPT: '0',
       GIT_ASKPASS: env.GIT_ASKPASS ?? '',
       SSH_ASKPASS: env.SSH_ASKPASS ?? '',
@@ -870,7 +894,8 @@ export async function gitExecFileAsyncBuffer(
   const { stdout } = (await execFileCapture(resolved.binary, resolved.args, {
     cwd: resolved.cwd,
     encoding: 'buffer',
-    maxBuffer: options.maxBuffer
+    maxBuffer: options.maxBuffer,
+    env: untranslatedGitOutputEnv()
   })) as { stdout: Buffer }
   return { stdout }
 }
@@ -1051,6 +1076,7 @@ export function gitExecFileSync(
     return execFileSync(resolved.binary, resolved.args, {
       cwd: resolved.cwd,
       encoding: options.encoding ?? 'utf-8',
+      env: untranslatedGitOutputEnv(),
       stdio: options.stdio ?? ['pipe', 'pipe', 'pipe'],
       timeout: options.timeout ?? GIT_EXEC_SYNC_TIMEOUT_MS
     }) as string
@@ -1076,6 +1102,7 @@ export function gitSpawn(
   const spawnStartedAt = performance.now()
   const child = spawn(resolved.binary, resolved.args, {
     ...spawnOptions,
+    env: untranslatedGitOutputEnv(spawnOptions.env ?? process.env),
     cwd: resolved.cwd
   })
   recordSubprocessSpawn(resolved.binary, resolved.args, performance.now() - spawnStartedAt)

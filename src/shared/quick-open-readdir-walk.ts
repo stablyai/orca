@@ -1,6 +1,8 @@
 import { lstat, readdir } from 'node:fs/promises'
 import { join, relative } from 'node:path'
 import { throwIfFileListingCancelled } from './file-listing-cancellation'
+import { isQuickOpenReadableDirectory } from './quick-open-directory-validation'
+import { collapseQuickOpenExpansionPaths } from './quick-open-expansion-paths'
 import {
   HIDDEN_DIR_BLOCKLIST,
   shouldExcludeQuickOpenRelPath,
@@ -9,6 +11,7 @@ import {
 
 export const QUICK_OPEN_READDIR_MAX_FILES = 10_000
 export const QUICK_OPEN_READDIR_TIMEOUT_MS = 10_000
+const QUICK_OPEN_READDIR_CONCURRENCY = 32
 
 export type QuickOpenReaddirBudget = {
   remainingFiles: number
@@ -96,13 +99,13 @@ function normalizeGitEntry(entry: string): string {
 }
 
 // Translate workspace-root-relative exclude prefixes into prefixes relative to
-// a nested repo at `nestedRelPath`, so the nested walk can prune them during
-// traversal. Prefixes outside the nested repo are dropped (they cannot match).
-function rebaseExcludePrefixesForNestedRepo(
+// one expanded subtree, so its walk prunes them during traversal. Prefixes
+// outside that subtree are dropped because they cannot match.
+function rebaseExcludePrefixesForSubtree(
   excludePathPrefixes: readonly string[],
-  nestedRelPath: string
+  subtreeRelPath: string
 ): string[] {
-  const base = `${nestedRelPath}/`
+  const base = `${subtreeRelPath}/`
   const rebased: string[] = []
   for (const prefix of excludePathPrefixes) {
     if (prefix.startsWith(base)) {
@@ -157,59 +160,132 @@ export async function listQuickOpenFilesWithReaddir(
   rootPath: string,
   opts: {
     excludePathPrefixes?: readonly string[]
+    workspaceRelPathPrefix?: string
     budget?: QuickOpenReaddirBudget
     signal?: AbortSignal
   } = {}
 ): Promise<string[]> {
+  return listQuickOpenFilesFromRoots(
+    [
+      {
+        rootPath,
+        excludePathPrefixes: opts.excludePathPrefixes ?? [],
+        workspaceRelPathPrefix: opts.workspaceRelPathPrefix,
+        allowRootSymlink: true
+      }
+    ],
+    opts.budget ?? createQuickOpenReaddirBudget(),
+    opts.signal
+  )
+}
+
+type QuickOpenReaddirRoot = {
+  rootPath: string
+  excludePathPrefixes: readonly string[]
+  workspaceRelPathPrefix?: string
+  outputPathPrefix?: string
+  includeSymlinks?: boolean
+  allowRootSymlink?: boolean
+}
+
+async function listQuickOpenFilesFromRoots(
+  roots: readonly QuickOpenReaddirRoot[],
+  budget: QuickOpenReaddirBudget,
+  signal?: AbortSignal
+): Promise<string[]> {
   const files: string[] = []
-  const budget = opts.budget ?? createQuickOpenReaddirBudget()
-  const excludePathPrefixes = opts.excludePathPrefixes ?? []
+  let pendingDirectories = roots.map((root) => ({
+    root,
+    absPath: root.rootPath,
+    isRoot: true
+  }))
 
-  async function walk(dir: string): Promise<void> {
-    // Why: an abandoned scan (workspace switch) must stop consuming IO and
-    // event-loop time on the single-threaded relay, not just run to budget.
-    throwIfFileListingCancelled(opts.signal)
-    assertWithinDeadline(budget)
-
-    let entries
-    try {
-      entries = await readdir(dir, { withFileTypes: true })
-    } catch {
-      // Why: permission denied on an individual subtree is common for broad
-      // roots. Skipping that subtree preserves the existing relay fallback.
-      return
-    }
-
-    for (const entry of entries) {
-      throwIfFileListingCancelled(opts.signal)
+  while (pendingDirectories.length > 0) {
+    const nextDirectories: typeof pendingDirectories = []
+    for (
+      let offset = 0;
+      offset < pendingDirectories.length;
+      offset += QUICK_OPEN_READDIR_CONCURRENCY
+    ) {
+      // Why: batch only the filesystem calls. Result processing stays serial,
+      // so the shared cap remains exact while shallow placeholder-heavy repos
+      // do not pay one relay event-loop turn per directory.
+      throwIfFileListingCancelled(signal)
+      assertWithinDeadline(budget)
+      const batch = pendingDirectories.slice(offset, offset + QUICK_OPEN_READDIR_CONCURRENCY)
+      const entryGroups = await Promise.all(
+        batch.map(async (pending) => {
+          try {
+            // Why: Git's placeholder may have been replaced with a symlink
+            // before expansion. Never let readdir follow it outside the root.
+            const stat = await lstat(pending.absPath)
+            const allowSymlinkedRoot = pending.isRoot && pending.root.allowRootSymlink
+            if (!isQuickOpenReadableDirectory(stat, allowSymlinkedRoot)) {
+              return { pending, entries: [] }
+            }
+            const entries = await readdir(pending.absPath, { withFileTypes: true })
+            // Why: close the ordinary check/use race. If the directory became
+            // a symlink while readdir was pending, discard everything read.
+            const statAfterRead = await lstat(pending.absPath)
+            if (!isQuickOpenReadableDirectory(statAfterRead, allowSymlinkedRoot)) {
+              return { pending, entries: [] }
+            }
+            return { pending, entries }
+          } catch {
+            // Why: permission denied on one subtree is common for broad roots.
+            return { pending, entries: [] }
+          }
+        })
+      )
+      // Why: an empty directory has no per-entry checkpoint below. Cancellation
+      // or timeout that lands during readdir must still reject, never resolve [].
+      throwIfFileListingCancelled(signal)
       assertWithinDeadline(budget)
 
-      const name = entry.name
-      const absPath = join(dir, name)
-      const relPath = toRelPath(rootPath, absPath)
-      if (shouldExcludeQuickOpenRelPath(relPath, excludePathPrefixes)) {
-        continue
-      }
-      if (entry.isDirectory()) {
-        if (shouldDescend(name)) {
-          await walk(absPath)
+      for (const { pending, entries } of entryGroups) {
+        for (const entry of entries) {
+          throwIfFileListingCancelled(signal)
+          assertWithinDeadline(budget)
+
+          const name = entry.name
+          const absPath = join(pending.absPath, name)
+          const relPath = toRelPath(pending.root.rootPath, absPath)
+          const workspaceRelPath = pending.root.workspaceRelPathPrefix
+            ? `${pending.root.workspaceRelPathPrefix}/${relPath}`
+            : relPath
+          if (shouldExcludeQuickOpenRelPath(relPath, pending.root.excludePathPrefixes)) {
+            continue
+          }
+          if (entry.isDirectory()) {
+            if (shouldDescend(name) && shouldIncludeQuickOpenPath(workspaceRelPath)) {
+              nextDirectories.push({ root: pending.root, absPath, isRoot: false })
+            }
+            continue
+          }
+          if (
+            (entry.isFile() || (pending.root.includeSymlinks && entry.isSymbolicLink())) &&
+            shouldIncludeQuickOpenPath(workspaceRelPath)
+          ) {
+            consumeFileBudget(budget)
+            files.push(
+              pending.root.outputPathPrefix
+                ? `${pending.root.outputPathPrefix}/${relPath}`
+                : relPath
+            )
+          }
         }
-        continue
-      }
-      if (entry.isFile()) {
-        consumeFileBudget(budget)
-        files.push(relPath)
       }
     }
+    pendingDirectories = nextDirectories
   }
 
-  await walk(rootPath)
   return files
 }
 
-export async function expandQuickOpenGitFilesWithNestedRepos(opts: {
+export async function expandQuickOpenGitFileListing(opts: {
   rootPath: string
   gitPaths: Iterable<string>
+  directoryPaths?: Iterable<string>
   excludePathPrefixes?: readonly string[]
   budget?: QuickOpenReaddirBudget
   signal?: AbortSignal
@@ -217,6 +293,7 @@ export async function expandQuickOpenGitFilesWithNestedRepos(opts: {
   const files = new Set<string>()
   const excludePathPrefixes = opts.excludePathPrefixes ?? []
   const budget = opts.budget ?? createQuickOpenReaddirBudget()
+  const expansionPaths = new Map<string, boolean>()
 
   const addFinalPath = (relPath: string): void => {
     if (!relPath) {
@@ -243,17 +320,46 @@ export async function expandQuickOpenGitFilesWithNestedRepos(opts: {
       continue
     }
 
-    const nestedFiles = await listQuickOpenFilesWithReaddir(joinRootRel(opts.rootPath, relPath), {
-      // Why: exclude prefixes are workspace-root-relative; rebase them onto the
-      // nested repo so the walk prunes excluded subtrees during traversal
-      // instead of burning the shared budget and filtering them at the end.
-      excludePathPrefixes: rebaseExcludePrefixesForNestedRepo(excludePathPrefixes, relPath),
-      budget,
-      signal: opts.signal
-    })
-    for (const nestedFile of nestedFiles) {
-      addFinalPath(`${relPath}/${nestedFile}`)
+    expansionPaths.set(relPath, expansionPaths.get(relPath) ?? false)
+  }
+
+  for (const rawPath of opts.directoryPaths ?? []) {
+    throwIfFileListingCancelled(opts.signal)
+    assertWithinDeadline(budget)
+
+    const relPath = normalizeGitEntry(rawPath)
+    // Why: Git intentionally leaves collapsed directories unexpanded; reject
+    // blocked and nested-worktree placeholders before any filesystem IO.
+    if (
+      !relPath ||
+      shouldExcludeQuickOpenRelPath(relPath, excludePathPrefixes) ||
+      !shouldIncludeQuickOpenPath(relPath)
+    ) {
+      continue
     }
+
+    // Why: before directory collapse, Git returned untracked symlink entries
+    // without following them. Preserve those paths when expanding placeholders.
+    expansionPaths.set(relPath, true)
+  }
+
+  const expandedFiles = await listQuickOpenFilesFromRoots(
+    collapseQuickOpenExpansionPaths(expansionPaths).map(([relPath, includeSymlinks]) => ({
+      rootPath: joinRootRel(opts.rootPath, relPath),
+      // Why: exclude prefixes are workspace-root-relative; rebase them onto
+      // each expanded subtree so blocked work is pruned before consuming cap.
+      excludePathPrefixes: rebaseExcludePrefixesForSubtree(excludePathPrefixes, relPath),
+      // Why: Git can collapse `.local/share/` to `.local/`; keep workspace
+      // context so the walker still prunes the multi-segment blocklist.
+      workspaceRelPathPrefix: relPath,
+      outputPathPrefix: relPath,
+      includeSymlinks
+    })),
+    budget,
+    opts.signal
+  )
+  for (const expandedFile of expandedFiles) {
+    addFinalPath(expandedFile)
   }
 
   return Array.from(files)

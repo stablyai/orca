@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { MarkdownDocument } from '../../../../shared/types'
 import { useAppStore } from '@/store'
-import { findWorktreeById } from '@/store/slices/worktree-helpers'
 import { getConnectionId } from '@/lib/connection-context'
 import { listRuntimeMarkdownDocuments, statRuntimePath } from '@/runtime/runtime-file-client'
 import { settingsForRuntimeOwner } from '@/runtime/runtime-rpc-client'
@@ -11,6 +10,7 @@ import {
   getMarkdownDocLinkAnchor,
   resolveMarkdownDocLink
 } from './markdown-doc-links'
+import { selectMarkdownDocumentWorktreePath } from './markdown-document-worktree-path-selector'
 
 type OpenMarkdownDocumentOptions = {
   anchor?: string | null
@@ -40,20 +40,15 @@ export function useMarkdownDocuments(
   onSave: (content: string) => Promise<void>
 ): UseMarkdownDocumentsResult {
   const worktreeId = activeFile.worktreeId
-  const worktreesByRepo = useAppStore((s) => s.worktreesByRepo)
+  // Why: PTY activity replaces worktree metadata; only a routing-path change
+  // should wake every mounted editor's document-link controller.
+  const worktreePath = useAppStore((s) => selectMarkdownDocumentWorktreePath(s, worktreeId))
   const openFile = useAppStore((s) => s.openFile)
   const openMarkdownPreview = useAppStore((s) => s.openMarkdownPreview)
   const [markdownDocumentsByWorktree, setMarkdownDocumentsByWorktree] = useState<
     Record<string, MarkdownDocument[]>
   >({})
   const requestRef = useRef(0)
-
-  const worktreePath = useMemo(() => {
-    if (!worktreeId) {
-      return null
-    }
-    return findWorktreeById(worktreesByRepo, worktreeId)?.path ?? null
-  }, [worktreeId, worktreesByRepo])
 
   const connectionId = getConnectionId(worktreeId)
 

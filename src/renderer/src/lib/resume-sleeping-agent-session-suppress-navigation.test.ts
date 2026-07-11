@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { SleepingAgentSessionRecord } from '../../../shared/agent-session-resume'
 import { useAppStore } from '@/store'
 import { resumeSleepingAgentSessionsForWorktree } from './resume-sleeping-agent-session'
+import { getProviderSessionClaimKey } from './sleeping-agent-pane-ownership'
 
 const initialAppStoreState = useAppStore.getState()
 
@@ -65,6 +66,58 @@ describe('resumeSleepingAgentSessionsForWorktree navigation suppression', () => 
     expect(state.activeWorktreeId).toBe('wt-other')
     expect(state.activeTabId).toBe('other-tab')
     expect(state.activeTabType).toBe('browser')
+  })
+
+  it('skips and preserves a record whose claim an in-place wake already consumed', () => {
+    // Regression (#7906): a mounted hibernated pane that consumed the mobile
+    // wake starts its own in-place --resume; the generic resume must neither
+    // launch a second tab for that provider session nor clear the record (the
+    // in-place spawn clears it on success).
+    const record = makeRecord({ origin: 'quit' })
+    useAppStore.setState({
+      activeWorktreeId: 'wt-other',
+      activeTabId: 'other-tab',
+      activeTabType: 'browser',
+      activeTabIdByWorktree: { 'wt-other': 'other-tab' },
+      tabsByWorktree: { 'wt-1': [makeTerminalTab('tab-1', 'wt-1')] },
+      sleepingAgentSessionsByPaneKey: { [record.paneKey]: record }
+    } as never)
+
+    const launched = resumeSleepingAgentSessionsForWorktree('wt-1', {
+      suppressNavigation: true,
+      skipClaimKeys: new Set([getProviderSessionClaimKey(record)])
+    })
+
+    expect(launched).toBe(0)
+    const state = useAppStore.getState()
+    expect(state.tabsByWorktree['wt-1']).toHaveLength(1)
+    expect(state.sleepingAgentSessionsByPaneKey[record.paneKey]).toBe(record)
+  })
+
+  it('reports each launched resume tab through onSessionLaunched', () => {
+    const record = makeRecord({ origin: 'quit' })
+    useAppStore.setState({
+      activeWorktreeId: 'wt-other',
+      activeTabId: 'other-tab',
+      activeTabType: 'browser',
+      activeTabIdByWorktree: { 'wt-other': 'other-tab' },
+      tabsByWorktree: { 'wt-1': [makeTerminalTab('tab-1', 'wt-1')] },
+      sleepingAgentSessionsByPaneKey: { [record.paneKey]: record }
+    } as never)
+
+    const launchedTabIds: string[] = []
+    resumeSleepingAgentSessionsForWorktree('wt-1', {
+      suppressNavigation: true,
+      onSessionLaunched: (tabId) => launchedTabIds.push(tabId)
+    })
+
+    const resumedTab = useAppStore
+      .getState()
+      .tabsByWorktree['wt-1']?.find((tab) => tab.id !== 'tab-1')
+    // Why: the dispatcher background-mounts exactly these tabs — an
+    // activate:false tab otherwise never mounts and its startup never runs.
+    expect(resumedTab).toBeDefined()
+    expect(launchedTabIds).toEqual([resumedTab?.id])
   })
 
   it('still navigates to the resumed tab for default (desktop) callers', () => {

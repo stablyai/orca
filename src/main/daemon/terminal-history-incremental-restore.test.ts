@@ -183,7 +183,7 @@ describe('incremental terminal history restore', () => {
     expect(restore!.scrollbackAnsi).not.toContain('cleared away')
   })
 
-  it('skips restorable content for sessions crashed inside the alt screen', async () => {
+  it('preserves normal history without treating active alt content as scrollback', async () => {
     await manager.appendIncrements(SESSION_ID, 1, [
       { kind: 'output', data: 'normal output\r\n\x1b[?1049halt screen content' }
     ])
@@ -191,9 +191,8 @@ describe('incremental terminal history restore', () => {
     const restore = reader.detectColdRestore(SESSION_ID)
     expect(restore).not.toBeNull()
     expect(restore!.modes.alternateScreen).toBe(true)
-    // Why: the adapter skips cold restore when scrollbackAnsi is empty — alt
-    // buffer contents must not replay into a fresh shell.
-    expect(restore!.scrollbackAnsi).toBe('')
+    expect(restore!.scrollbackAnsi).toContain('normal output')
+    expect(restore!.scrollbackAnsi).not.toContain('alt screen content')
   })
 
   it('resets the log on checkpoint so old records are not replayed twice', async () => {

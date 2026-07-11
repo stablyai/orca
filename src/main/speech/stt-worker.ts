@@ -1,8 +1,8 @@
 /* oxlint-disable typescript-eslint/no-explicit-any -- sherpa-onnx native addon has no type definitions */
 import { parentPort, workerData } from 'node:worker_threads'
-import { readdirSync } from 'node:fs'
 import { resampleToRate } from './stt-audio-resample'
 import { OfflineAudioChunker } from './stt-offline-audio-chunker'
+import { buildHotwordsConfig, resolveFile, resolveTokens } from './stt-worker-model-config'
 
 type WorkerMessage =
   | {
@@ -37,73 +37,6 @@ function loadSherpa(): any {
     throw new Error('workerData.sherpaModulePath is required')
   }
   return require(modulePath)
-}
-
-// Why: different models name their ONNX files differently (e.g.
-// encoder.int8.onnx vs tiny-encoder.onnx vs encoder-epoch-99-avg-1.onnx).
-// We resolve the actual path from the manifest's files list by searching
-// for the role name anywhere in the filename.
-function resolveFile(files: string[], role: string, modelDir: string, ext = '.onnx'): string {
-  const match = files.find((f) => f.includes(role) && f.endsWith(ext))
-  if (!match) {
-    throw new Error(`No *${role}*${ext} found in model files: ${files.join(', ')}`)
-  }
-  return `${modelDir}/${match}`
-}
-
-function resolveTokens(files: string[], modelDir: string): string {
-  const match = files.find((f) => f.endsWith('tokens.txt'))
-  if (!match) {
-    throw new Error(`No *tokens.txt found in model files: ${files.join(', ')}`)
-  }
-  return `${modelDir}/${match}`
-}
-
-// Why: BPE models need a vocab file for hotwords token matching. The file
-// ships in the model archive but isn't listed in the manifest. We discover
-// it at runtime to avoid breaking existing downloads.
-function discoverBpeVocab(modelDir: string): string | undefined {
-  try {
-    const entries = readdirSync(modelDir)
-    const vocabFile = entries.find((f) => f.endsWith('.vocab'))
-    return vocabFile ? `${modelDir}/${vocabFile}` : undefined
-  } catch {
-    return undefined
-  }
-}
-
-function buildHotwordsConfig(msg: Extract<WorkerMessage, { type: 'init' }>): {
-  decodingMethod: string
-  hotwordsFile?: string
-  hotwordsScore?: number
-  modelingUnit?: string
-  bpeVocab?: string
-} {
-  if (msg.modelType !== 'transducer' || !msg.hotwordsFilePath) {
-    return { decodingMethod: 'greedy_search' }
-  }
-
-  const unit = msg.modelingUnit
-  if (unit?.includes('bpe')) {
-    const bpeVocab = discoverBpeVocab(msg.modelDir)
-    if (!bpeVocab) {
-      return { decodingMethod: 'greedy_search' }
-    }
-    return {
-      decodingMethod: 'modified_beam_search',
-      hotwordsFile: msg.hotwordsFilePath,
-      hotwordsScore: 1.5,
-      modelingUnit: unit,
-      bpeVocab
-    }
-  }
-
-  return {
-    decodingMethod: 'modified_beam_search',
-    hotwordsFile: msg.hotwordsFilePath,
-    hotwordsScore: 1.5,
-    modelingUnit: unit
-  }
 }
 
 function handleInit(msg: Extract<WorkerMessage, { type: 'init' }>): void {
@@ -204,15 +137,33 @@ function handleInit(msg: Extract<WorkerMessage, { type: 'init' }>): void {
   }
 }
 
-// Why: an offline stream is single-use — decode one bounded chunk, then
-// recreate the stream so the recognizer is ready for the next chunk.
+// Why: an offline stream is single-use — always mint a fresh stream after an
+// attempt so a failed decode cannot leave a spent stream on a warm worker.
 function decodeOfflineChunk(samples: Float32Array): string {
-  sherpa.acceptWaveformOffline(stream, { sampleRate: offlineSampleRate, samples })
-  sherpa.decodeOfflineStream(recognizer, stream)
-  const resultJson = sherpa.getOfflineStreamResultAsJson(stream)
-  stream = sherpa.createOfflineStream(recognizer)
-  const result = JSON.parse(resultJson)
-  return result?.text?.trim() ?? ''
+  try {
+    sherpa.acceptWaveformOffline(stream, { sampleRate: offlineSampleRate, samples })
+    sherpa.decodeOfflineStream(recognizer, stream)
+    const resultJson = sherpa.getOfflineStreamResultAsJson(stream)
+    const result = JSON.parse(resultJson)
+    return result?.text?.trim() ?? ''
+  } finally {
+    if (sherpa && recognizer) {
+      stream = sherpa.createOfflineStream(recognizer)
+    }
+  }
+}
+
+// Why: warm-worker reuse must not see residual audio or a spent offline stream.
+// Recovery failures are swallowed so they cannot skip the stopped lifecycle signal.
+function resetOfflineSessionState(): void {
+  try {
+    offlineChunker = new OfflineAudioChunker(offlineSampleRate)
+    if (sherpa && recognizer) {
+      stream = sherpa.createOfflineStream(recognizer)
+    }
+  } catch {
+    // Non-fatal: prefer posting stopped over stranding stopDictation for 60s.
+  }
 }
 
 function handleFeed(msg: Extract<WorkerMessage, { type: 'feed' }>): void {
@@ -253,11 +204,22 @@ function handleFeed(msg: Extract<WorkerMessage, { type: 'feed' }>): void {
       // the whole app (#7925). Decode bounded chunks as they fill instead;
       // each consumer already appends multiple 'final' segments per session.
       const readyChunks = offlineChunker?.push(new Float32Array(samples)) ?? []
+      // Why: keep decoding later ready windows after one failure — push() has
+      // already removed them from the chunker, and decodeOfflineChunk refreshes
+      // the stream in finally so a spent stream cannot poison the next attempt.
+      let firstError: unknown = null
       for (const chunk of readyChunks) {
-        const text = decodeOfflineChunk(chunk)
-        if (text) {
-          parentPort?.postMessage({ type: 'final', text })
+        try {
+          const text = decodeOfflineChunk(chunk)
+          if (text) {
+            parentPort?.postMessage({ type: 'final', text })
+          }
+        } catch (err) {
+          firstError ??= err
         }
+      }
+      if (firstError) {
+        throw firstError
       }
     }
   } catch (err) {
@@ -294,12 +256,17 @@ function handleStop(): void {
           parentPort?.postMessage({ type: 'final', text })
         }
       }
+      resetOfflineSessionState()
     }
   } catch (err) {
+    if (!isStreaming) {
+      resetOfflineSessionState()
+    }
     parentPort?.postMessage({ type: 'error', error: String(err) })
+  } finally {
+    // Why: stopDictation waits on this signal; recovery must never prevent it.
+    parentPort?.postMessage({ type: 'stopped' })
   }
-
-  parentPort?.postMessage({ type: 'stopped' })
 }
 
 function handleTeardown(): void {

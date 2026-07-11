@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { buildPosixCommandPathLookupScript } from '../shared/posix-command-path-lookup'
 
 const { execFileAsyncMock } = vi.hoisted(() => ({
   execFileAsyncMock: vi.fn()
@@ -38,7 +39,8 @@ function lookupArgs(command: string, mode: '-lc' | '-ilc' = '-lc'): string[] {
   return [
     mode,
     [
-      `if resolved=$(command -v ${command} 2>/dev/null); then`,
+      buildPosixCommandPathLookupScript({ kind: 'literal', value: command }),
+      'if [ -n "$resolved" ]; then',
       'printf \'__ORCA_AGENT_PATH__%s\\n\' "$resolved"',
       'fi'
     ].join('\n')
@@ -77,14 +79,14 @@ describe('buildCommandLookupSpec', () => {
   it('falls back to sh for POSIX probes without a configured shell', () => {
     expect(buildCommandLookupSpec('codex', 'linux', {}, null)).toEqual({
       file: '/bin/sh',
-      args: lookupArgs("'codex'")
+      args: lookupArgs('codex')
     })
   })
 
   it('uses the configured remote shell for POSIX probes', () => {
     expect(buildCommandLookupSpec('codex', 'linux', { SHELL: '/bin/zsh' }, '/bin/zsh')).toEqual({
       file: '/bin/zsh',
-      args: lookupArgs("'codex'", '-ilc')
+      args: lookupArgs('codex', '-ilc')
     })
   })
 
@@ -93,7 +95,7 @@ describe('buildCommandLookupSpec', () => {
       buildCommandLookupSpec("agent'cli", 'linux', { SHELL: '/bin/bash' }, '/bin/bash')
     ).toEqual({
       file: '/bin/bash',
-      args: lookupArgs("'agent'\\''cli'", '-ilc')
+      args: lookupArgs("agent'cli", '-ilc')
     })
   })
 })
@@ -101,8 +103,8 @@ describe('buildCommandLookupSpec', () => {
 describe('buildCommandLookupSpecs', () => {
   it('falls back to inherited PATH after a trusted configured POSIX shell', () => {
     expect(buildCommandLookupSpecs('codex', 'linux', { SHELL: '/bin/zsh' }, '/bin/zsh')).toEqual([
-      { file: '/bin/zsh', args: lookupArgs("'codex'", '-ilc') },
-      { file: '/bin/sh', args: lookupArgs("'codex'") }
+      { file: '/bin/zsh', args: lookupArgs('codex', '-ilc') },
+      { file: '/bin/sh', args: lookupArgs('codex') }
     ])
   })
 
@@ -115,15 +117,15 @@ describe('buildCommandLookupSpecs', () => {
         '/opt/homebrew/bin/zsh'
       )
     ).toEqual([
-      { file: '/opt/homebrew/bin/zsh', args: lookupArgs("'codex'", '-ilc') },
-      { file: '/bin/sh', args: lookupArgs("'codex'") }
+      { file: '/opt/homebrew/bin/zsh', args: lookupArgs('codex', '-ilc') },
+      { file: '/bin/sh', args: lookupArgs('codex') }
     ])
   })
 
   it('allows conservative system shell paths when account lookup is unavailable', () => {
     expect(buildCommandLookupSpecs('codex', 'linux', { SHELL: '/usr/bin/bash' }, null)[0]).toEqual({
       file: '/usr/bin/bash',
-      args: lookupArgs("'codex'", '-ilc')
+      args: lookupArgs('codex', '-ilc')
     })
   })
 
@@ -136,14 +138,14 @@ describe('buildCommandLookupSpecs', () => {
 
   it('ignores untrusted temp shell paths even when the basename is supported', () => {
     expect(buildCommandLookupSpecs('codex', 'linux', { SHELL: '/tmp/zsh' }, '/bin/bash')).toEqual([
-      { file: '/bin/sh', args: lookupArgs("'codex'") }
+      { file: '/bin/sh', args: lookupArgs('codex') }
     ])
   })
 
   it('ignores untrusted home-bin shell paths even when the basename is supported', () => {
     expect(
       buildCommandLookupSpecs('codex', 'linux', { SHELL: '/home/test/bin/bash' }, '/bin/bash')
-    ).toEqual([{ file: '/bin/sh', args: lookupArgs("'codex'") }])
+    ).toEqual([{ file: '/bin/sh', args: lookupArgs('codex') }])
   })
 })
 
@@ -160,17 +162,12 @@ describe('isCommandOnPathForRelay', () => {
         accountLoginShell: '/bin/zsh'
       })
     ).resolves.toBe(true)
-    expect(execFileAsyncMock).toHaveBeenNthCalledWith(
-      1,
-      '/bin/zsh',
-      lookupArgs("'codex'", '-ilc'),
-      {
-        encoding: 'utf-8',
-        env: expect.objectContaining({ SHELL: '/bin/zsh' }),
-        timeout: 5000
-      }
-    )
-    expect(execFileAsyncMock).toHaveBeenNthCalledWith(2, '/bin/sh', lookupArgs("'codex'"), {
+    expect(execFileAsyncMock).toHaveBeenNthCalledWith(1, '/bin/zsh', lookupArgs('codex', '-ilc'), {
+      encoding: 'utf-8',
+      env: expect.objectContaining({ SHELL: '/bin/zsh' }),
+      timeout: 5000
+    })
+    expect(execFileAsyncMock).toHaveBeenNthCalledWith(2, '/bin/sh', lookupArgs('codex'), {
       encoding: 'utf-8',
       env: expect.objectContaining({ SHELL: '/bin/zsh' }),
       timeout: 5000
@@ -203,7 +200,7 @@ describe('isCommandOnPathForRelay', () => {
       })
     ).resolves.toBe(true)
     expect(execFileAsyncMock).toHaveBeenCalledTimes(1)
-    expect(execFileAsyncMock).toHaveBeenCalledWith('/bin/sh', lookupArgs("'codex'"), {
+    expect(execFileAsyncMock).toHaveBeenCalledWith('/bin/sh', lookupArgs('codex'), {
       encoding: 'utf-8',
       env: expect.objectContaining({ SHELL: '/tmp/zsh' }),
       timeout: 5000

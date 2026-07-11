@@ -44,7 +44,9 @@ export function remoteSessionSources(
       ),
       // The remote host owns the transcript disk, so the local readdir in the
       // Claude parser is skipped; the walked listing supplies the sibling
-      // subagent counts instead.
+      // subagent counts instead. Partitioning also prunes the subagent
+      // transcripts themselves, which would otherwise list as phantom
+      // top-level sessions carrying the parent's sessionId.
       collectSubagentSiblingCounts: true
     },
     source(

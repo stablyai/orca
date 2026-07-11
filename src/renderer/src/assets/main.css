@@ -529,27 +529,32 @@
 
 /* ── Editor-style scrollbar (matches Monaco) ────────── */
 
-.scrollbar-editor {
+.scrollbar-editor,
+.xterm .xterm-viewport {
   scrollbar-width: thin;
   scrollbar-color: rgba(121, 121, 121, 0.4) transparent;
 }
 
-.scrollbar-editor::-webkit-scrollbar {
+.scrollbar-editor::-webkit-scrollbar,
+.xterm .xterm-viewport::-webkit-scrollbar {
   width: 14px;
 }
 
-.scrollbar-editor::-webkit-scrollbar-track {
+.scrollbar-editor::-webkit-scrollbar-track,
+.xterm .xterm-viewport::-webkit-scrollbar-track {
   background: transparent;
 }
 
-.scrollbar-editor::-webkit-scrollbar-thumb {
+.scrollbar-editor::-webkit-scrollbar-thumb,
+.xterm .xterm-viewport::-webkit-scrollbar-thumb {
   background: rgba(121, 121, 121, 0.4);
   border: 3px solid transparent;
   border-radius: 7px;
   background-clip: padding-box;
 }
 
-.scrollbar-editor::-webkit-scrollbar-thumb:hover {
+.scrollbar-editor::-webkit-scrollbar-thumb:hover,
+.xterm .xterm-viewport::-webkit-scrollbar-thumb:hover {
   background: rgba(121, 121, 121, 0.7);
   border: 3px solid transparent;
   background-clip: padding-box;
@@ -2428,7 +2433,7 @@
 }
 
 /* Brief one-shot pulse when the Codex limits popover swaps accounts and the
-   "100% left" label flashes from red to green. */
+   "0% used" label flashes from red to green. */
 @keyframes feature-wall-meta-pulse {
   0% {
     color: rgb(220 38 38);

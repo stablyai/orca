@@ -574,9 +574,13 @@ describe('mobile presence lock — issue #7588 held-modal restore convergence', 
     expect(listenerEvents.some((e) => e.mode === 'desktop-fit')).toBe(true)
   })
 
-  // Scenario 4: a failing resize during a HELD (no-subscriber) restore returns
-  // false and keeps the override — no lying, no phantom desktop-fit event.
-  it('held restore with a failing resize returns false and keeps the override', async () => {
+  // Scenario 4: an explicit take-back on a HELD (no-subscriber) override must
+  // ALWAYS release, even when the desktop resize fails. The override is cleared
+  // optimistically with a paired desktop-fit 0×0 so the banner can't linger; the
+  // desktop renderer refits the PTY on its next settled frame. (The gesture
+  // deliberately overrides #7588's keep-lock-on-failed-resize rule, which still
+  // governs the auto-restore and phone-initiated paths.)
+  it('held restore with a failing resize still releases and clears the override', async () => {
     const { runtime, fitOverrideEvents, setResizeSucceeds } = createRuntime(null)
     const listenerEvents: { mode: string; cols: number; rows: number }[] = []
     runtime.subscribeToFitOverrideChanges('pty-1', (e) => listenerEvents.push(e))
@@ -594,18 +598,17 @@ describe('mobile presence lock — issue #7588 held-modal restore convergence', 
 
     const restored = await runtime.reclaimTerminalForDesktop('pty-1')
 
-    expect(restored).toBe(false)
-    expect(runtime.getTerminalFitOverride('pty-1')).not.toBeNull()
-    expect(fitOverrideEvents.slice(notifierBefore).some((e) => e.mode === 'desktop-fit')).toBe(
-      false
-    )
-    expect(listenerEvents.slice(listenerBefore).some((e) => e.mode === 'desktop-fit')).toBe(false)
+    expect(restored).toBe(true)
+    expect(runtime.getTerminalFitOverride('pty-1')).toBeNull()
+    expect(fitOverrideEvents.slice(notifierBefore).some((e) => e.mode === 'desktop-fit')).toBe(true)
+    expect(listenerEvents.slice(listenerBefore).some((e) => e.mode === 'desktop-fit')).toBe(true)
   })
 
-  // Scenario 5: a failing resize during an ACTIVE-SUBSCRIBER take-back returns
-  // false, keeps the override, leaves the driver on its mobile lock, and
-  // restores the prior display mode ('auto') — the fix #3 P1 correction.
-  it('active-subscriber take-back with a failing resize returns false and preserves the mobile lock', async () => {
+  // Scenario 5: an explicit ACTIVE-SUBSCRIBER take-back with a failing resize
+  // must still release — driver → desktop, override cleared, banner dismissed,
+  // mode reset to 'auto'. This is the "take back all terminals" guarantee: a
+  // background PTY that can't converge must not strand its banner.
+  it('active-subscriber take-back with a failing resize still releases the lock', async () => {
     const { runtime, fitOverrideEvents, setResizeSucceeds } = createRuntime()
     const listenerEvents: { mode: string; cols: number; rows: number }[] = []
     runtime.subscribeToFitOverrideChanges('pty-1', (e) => listenerEvents.push(e))
@@ -619,43 +622,30 @@ describe('mobile presence lock — issue #7588 held-modal restore convergence', 
 
     const restored = await runtime.reclaimTerminalForDesktop('pty-1')
 
-    expect(restored).toBe(false)
-    expect(runtime.getTerminalFitOverride('pty-1')).not.toBeNull()
-    // Driver stays mobile (lock retained) and mode is not left lying at 'desktop'.
-    expect(runtime.getDriver('pty-1')).toEqual({ kind: 'mobile', clientId: 'phone-A' })
+    expect(restored).toBe(true)
+    // Lock released and banner dismissed despite the failed resize.
+    expect(runtime.getDriver('pty-1')).toEqual({ kind: 'desktop' })
+    expect(runtime.getTerminalFitOverride('pty-1')).toBeNull()
     expect(runtime.getMobileDisplayMode('pty-1')).toBe('auto')
-    expect(fitOverrideEvents.slice(notifierBefore).some((e) => e.mode === 'desktop-fit')).toBe(
-      false
-    )
-    expect(listenerEvents.slice(listenerBefore).some((e) => e.mode === 'desktop-fit')).toBe(false)
+    expect(fitOverrideEvents.slice(notifierBefore).some((e) => e.mode === 'desktop-fit')).toBe(true)
+    expect(listenerEvents.slice(listenerBefore).some((e) => e.mode === 'desktop-fit')).toBe(true)
   })
 
-  // Scenario 5b: after a FAILED active-subscriber take-back, wasResizedToPhone
-  // must be re-armed so a later unsubscribe under a finite auto-restore setting
-  // still schedules its timer and eventually clears the override. Without the
-  // re-arm the flag would be stuck false and the phone-fit would strand.
-  it('failed take-back re-arms wasResizedToPhone so a later unsubscribe still auto-restores', async () => {
-    // Finite auto-restore (5s default from the rig store).
-    const { runtime, ptySizes, setResizeSucceeds } = createRuntime()
+  // Scenario 5b: the failed-resize take-back leaves NO stranded phone-fit —
+  // driver released to desktop, override cleared, mode reset to 'auto'. (The
+  // pre-revision behavior kept the lock and relied on a later auto-restore; the
+  // explicit gesture now releases unconditionally.)
+  it('failed take-back leaves no stranded override or lock', async () => {
+    const { runtime, setResizeSucceeds } = createRuntime()
 
     await runtime.handleMobileSubscribe('pty-1', 'phone-A', { cols: 45, rows: 20 })
-    expect(ptySizes.get('pty-1')).toEqual({ cols: 45, rows: 20 })
 
-    // Take-back fails → false, flag re-armed, mode rolled back to 'auto'.
     setResizeSucceeds(false)
-    expect(await runtime.reclaimTerminalForDesktop('pty-1')).toBe(false)
-    expect(runtime.getTerminalFitOverride('pty-1')).not.toBeNull()
+    expect(await runtime.reclaimTerminalForDesktop('pty-1')).toBe(true)
 
-    // Phone then leaves the terminal. Resize works again for the auto-restore.
-    setResizeSucceeds(true)
-    runtime.handleMobileUnsubscribe('pty-1', 'phone-A')
-    // Soft-leave grace, then the finite auto-restore timer.
-    await vi.advanceTimersByTimeAsync(300)
-    await vi.advanceTimersByTimeAsync(5_000)
-
-    // The scheduled auto-restore fired: override cleared, PTY back to desktop.
+    expect(runtime.getDriver('pty-1')).toEqual({ kind: 'desktop' })
     expect(runtime.getTerminalFitOverride('pty-1')).toBeNull()
-    expect(ptySizes.get('pty-1')).toEqual({ cols: 150, rows: 40 })
+    expect(runtime.getMobileDisplayMode('pty-1')).toBe('auto')
   })
 
   // Scenario 6: a phone-initiated setDisplayMode('desktop') against a stale

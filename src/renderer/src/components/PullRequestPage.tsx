@@ -1621,9 +1621,9 @@ function patchCachedWorkItemBody(cacheKey: string, body: string): void {
 }
 
 // Why: install once at module load — every dialog instance shares the cache,
-// so a single subscription is enough. The preload bridge re-emits the
-// main-process broadcast for every window, so each renderer invalidates its
-// own cache when any window's mutation lands. We track the unsubscribe so
+// so a single subscription is enough. Main targets the registered app renderer
+// for non-origin mutations, and this listener invalidates the matching entry.
+// We track the unsubscribe so
 // Vite HMR doesn't accumulate listeners across module reloads in dev.
 let workItemMutatedUnsub: (() => void) | undefined
 let workItemDetailsCacheEventUnsub: (() => void) | undefined

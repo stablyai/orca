@@ -1,7 +1,9 @@
 import type React from 'react'
 import { Badge } from '@/components/ui/badge'
 import RepoBadgeLabel from '@/components/repo/RepoBadgeLabel'
+import { AgentStateDot } from '@/components/AgentStateDot'
 import { AgentIcon } from '@/lib/agent-catalog'
+import type { AgentStatusState } from '../../../../shared/agent-status-types'
 import { useRepoById } from '@/store/selectors'
 import { resolveRepoBadgeColor } from '../../../../shared/repo-badge-color'
 import { splitWorktreeIdForFilesystem } from '../../../../shared/worktree-id'
@@ -12,6 +14,7 @@ import {
 } from '../../../../shared/ai-vault-types'
 import { translate } from '@/i18n/i18n'
 import { SessionTime } from './AiVaultSessionDetails'
+import { sessionModelLabel } from './ai-vault-session-display'
 import { agentLabel } from './ai-vault-session-filters'
 import {
   aiVaultWorktreeStatusLabel,
@@ -26,22 +29,28 @@ export function getSessionDetailsId(sessionId: string): string {
 
 export function SessionMetadata({
   session,
+  liveState,
   updatedAt,
   worktreeInfo,
   vaultScope
 }: {
   session: AiVaultSession
+  liveState: AgentStatusState | null
   updatedAt: string
   worktreeInfo: AiVaultSessionWorktreeInfo | null
   vaultScope: AiVaultScope
 }) {
+  const modelLabel = sessionModelLabel(session)
   return (
     <div className="mt-1 grid min-w-0 grid-cols-[auto_minmax(0,1fr)] gap-x-1.5 gap-y-0.5 text-[11px] leading-4 text-muted-foreground">
       <span className="flex size-4 shrink-0 items-center justify-center text-muted-foreground">
         <AgentIcon agent={session.agent} size={14} />
       </span>
       <div className="flex min-w-0 items-center gap-1.5">
-        <span className="min-w-0 truncate">{agentLabel(session.agent)}</span>
+        {/* Why: 'done' is the resting state of every finished pane — badging it
+            would mark most rows; only live attention states earn a dot. */}
+        {liveState && liveState !== 'done' ? <AgentStateDot state={liveState} /> : null}
+        <span className="min-w-0 shrink-[2] truncate">{agentLabel(session.agent)}</span>
         <span className="shrink-0 tabular-nums">
           {translate(
             'auto.components.right.sidebar.AiVaultSessionRow.messageCount',
@@ -49,6 +58,23 @@ export function SessionMetadata({
             { value0: session.messageCount }
           )}
         </span>
+        {session.subagentTranscriptCount > 0 ? (
+          <>
+            <span className="shrink-0 text-muted-foreground/55">·</span>
+            <span className="shrink-0 tabular-nums">
+              {session.subagentTranscriptCount === 1
+                ? translate(
+                    'auto.components.right.sidebar.AiVaultSessionRow.subagentCountSingular',
+                    '1 subagent'
+                  )
+                : translate(
+                    'auto.components.right.sidebar.AiVaultSessionRow.subagentCountPlural',
+                    '{{value0}} subagents',
+                    { value0: session.subagentTranscriptCount }
+                  )}
+            </span>
+          </>
+        ) : null}
         {isAiVaultSessionRecoverableEmpty(session) ? (
           <>
             <span className="shrink-0 text-muted-foreground/55">·</span>
@@ -62,6 +88,14 @@ export function SessionMetadata({
         ) : null}
         <span className="shrink-0 text-muted-foreground/55">·</span>
         <SessionTime value={updatedAt} />
+        {modelLabel ? (
+          <>
+            <span className="shrink-0 text-muted-foreground/55">·</span>
+            <span className="min-w-0 truncate" title={modelLabel}>
+              {modelLabel}
+            </span>
+          </>
+        ) : null}
       </div>
       {shouldShowAiVaultSessionWorktreeLine(worktreeInfo, { vaultScope }) ? (
         <div className="col-span-2 min-w-0">

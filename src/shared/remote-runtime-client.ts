@@ -29,6 +29,7 @@ import {
   type RemoteRuntimeSocketLivenessMonitor,
   type RemoteRuntimeSocketLivenessOptions
 } from './remote-runtime-socket-liveness'
+import { createWsOutboundBackpressureQueue } from './ws-outbound-backpressure-queue'
 
 export { RemoteRuntimeClientError } from './remote-runtime-client-error'
 
@@ -375,6 +376,8 @@ export async function subscribeRemoteRuntimeRequest<TResult>(
     const cleanupSocketListeners = (): WebSocket | null => {
       liveness?.stop()
       liveness = null
+      sendQueue?.dispose()
+      sendQueue = null
       const socket = ws
       if (!socket) {
         return null
@@ -420,11 +423,37 @@ export async function subscribeRemoteRuntimeRequest<TResult>(
       }
     }
 
+    // Why: client input (keystrokes) must never be dropped under backpressure.
+    // Hold encrypted frames in order while bufferedAmount is over the cap and
+    // drain as it clears; a wedged link (hard cap) fails the socket so the
+    // renderer resubscribes and replays a fresh snapshot.
+    let sendQueue: ReturnType<typeof createWsOutboundBackpressureQueue<Buffer>> | null = null
+    const ensureSendQueue = (
+      socket: WebSocket
+    ): ReturnType<typeof createWsOutboundBackpressureQueue<Buffer>> => {
+      if (!sendQueue) {
+        sendQueue = createWsOutboundBackpressureQueue<Buffer>({
+          send: (frame) => socket.send(frame, { binary: true }),
+          byteLengthOf: (frame) => frame.byteLength,
+          getBufferedAmount: () => socket.bufferedAmount,
+          isWritable: () => socket.readyState === WebSocket.OPEN,
+          onOverflow: () =>
+            fail(
+              new RemoteRuntimeClientError(
+                'remote_runtime_unavailable',
+                'Remote Orca runtime send buffer overflow; reconnecting.'
+              )
+            )
+        })
+      }
+      return sendQueue
+    }
+
     const sendBinary = (bytes: Uint8Array<ArrayBufferLike>): boolean => {
       if (state !== 'ready' || !ws || ws.readyState !== WebSocket.OPEN) {
         return false
       }
-      ws.send(Buffer.from(encryptBytes(bytes, sharedKey)), { binary: true })
+      ensureSendQueue(ws).enqueue(Buffer.from(encryptBytes(bytes, sharedKey)))
       return true
     }
 

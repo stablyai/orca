@@ -1,5 +1,6 @@
 import { useVirtualizer } from '@tanstack/react-virtual'
 import { useCallback, useMemo, useRef, useState } from 'react'
+import type { AgentStatusState } from '../../../../shared/agent-status-types'
 import type { AiVaultScope, AiVaultSession } from '../../../../shared/ai-vault-types'
 import type { AiVaultResumeStartup } from '@/lib/ai-vault-resume-command'
 import { cn } from '@/lib/utils'
@@ -20,7 +21,10 @@ import {
   isAiVaultSessionInCurrentWorktree,
   type AiVaultSessionWorktreeInfo
 } from './ai-vault-session-worktree'
-import { canUseLocalAiVaultSessionPathActions } from './ai-vault-session-path-actions'
+import {
+  canOpenAiVaultSessionLogInOrca,
+  canUseLocalAiVaultSessionPathActions
+} from './ai-vault-session-path-actions'
 import {
   extractVaultVirtualRowIndexes,
   getVaultStickyHeaderIndexes,
@@ -45,6 +49,7 @@ export function AiVaultSessionVirtualList({
   vaultScope,
   buildResumeStartup,
   getOriginalPaneTarget,
+  getSessionLiveState,
   getWorktreeInfo,
   getSessionResumeState,
   getSessionResumeActions,
@@ -68,6 +73,7 @@ export function AiVaultSessionVirtualList({
   vaultScope: AiVaultScope
   buildResumeStartup: (session: AiVaultSession, worktreeId?: string | null) => AiVaultResumeStartup
   getOriginalPaneTarget: (session: AiVaultSession) => AiVaultOriginalPaneTarget | null
+  getSessionLiveState: (session: AiVaultSession) => AgentStatusState | null
   getWorktreeInfo: (session: AiVaultSession) => AiVaultSessionWorktreeInfo | null
   getSessionResumeState: (session: AiVaultSession) => AiVaultSessionResumeState
   getSessionResumeActions: (session: AiVaultSession) => AiVaultSessionResumeActions
@@ -194,6 +200,7 @@ export function AiVaultSessionVirtualList({
               vaultScope={vaultScope}
               buildResumeStartup={buildResumeStartup}
               getOriginalPaneTarget={getOriginalPaneTarget}
+              getSessionLiveState={getSessionLiveState}
               getWorktreeInfo={getWorktreeInfo}
               getSessionResumeState={getSessionResumeState}
               getSessionResumeActions={getSessionResumeActions}
@@ -227,6 +234,7 @@ function AiVaultVirtualRow({
   vaultScope,
   buildResumeStartup,
   getOriginalPaneTarget,
+  getSessionLiveState,
   getWorktreeInfo,
   getSessionResumeState,
   getSessionResumeActions,
@@ -252,6 +260,7 @@ function AiVaultVirtualRow({
   vaultScope: AiVaultScope
   buildResumeStartup: (session: AiVaultSession, worktreeId?: string | null) => AiVaultResumeStartup
   getOriginalPaneTarget: (session: AiVaultSession) => AiVaultOriginalPaneTarget | null
+  getSessionLiveState: (session: AiVaultSession) => AgentStatusState | null
   getWorktreeInfo: (session: AiVaultSession) => AiVaultSessionWorktreeInfo | null
   getSessionResumeState: (session: AiVaultSession) => AiVaultSessionResumeState
   getSessionResumeActions: (session: AiVaultSession) => AiVaultSessionResumeActions
@@ -292,6 +301,10 @@ function AiVaultVirtualRow({
   const resumeLabel = resumeState ? aiVaultSessionResumeLabel(resumeState) : ''
   const canOpenLocalSessionPaths =
     row.type === 'session' && canUseLocalAiVaultSessionPathActions(row.session.executionHostId)
+  // Why: in-Orca View Log additionally withholds synthetic (SQLite/OpenCode)
+  // identities that have no single file to open, while Reveal/CWD stay on the
+  // existing local-path gate.
+  const canOpenLogInOrca = row.type === 'session' && canOpenAiVaultSessionLogInOrca(row.session)
 
   return (
     <div
@@ -312,6 +325,7 @@ function AiVaultVirtualRow({
       ) : (
         <VaultSessionRow
           session={row.session}
+          liveState={getSessionLiveState(row.session)}
           resumeStartup={buildResumeStartup(row.session, resumeState?.worktreeId)}
           worktreeInfo={worktreeInfo}
           vaultScope={vaultScope}
@@ -352,7 +366,7 @@ function AiVaultVirtualRow({
           }
           onCopyId={() => onCopyId(row.session)}
           onCopyPath={() => onCopyPath(row.session)}
-          onOpenLog={canOpenLocalSessionPaths ? () => onOpenLog(row.session) : undefined}
+          onOpenLog={canOpenLogInOrca ? () => onOpenLog(row.session) : undefined}
           onRevealLog={canOpenLocalSessionPaths ? () => onRevealLog(row.session) : undefined}
           onOpenCwd={
             canOpenLocalSessionPaths && row.session.cwd ? () => onOpenCwd(row.session) : undefined

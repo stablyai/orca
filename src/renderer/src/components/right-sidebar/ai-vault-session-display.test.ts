@@ -4,6 +4,7 @@ import {
   latestSessionConversationTurn,
   recentSessionConversationTurns,
   sessionDetailConversationTurns,
+  sessionModelLabel,
   sessionPreviewSearchText
 } from './ai-vault-session-display'
 
@@ -31,7 +32,8 @@ const baseSession: AiVaultSession = {
   ],
   queuedMessageCount: 0,
   subagentTranscriptCount: 0,
-  resumeCommand: "cd '/Users/ada/repo/app' && codex resume 'session-1'"
+  resumeCommand: "cd '/Users/ada/repo/app' && codex resume 'session-1'",
+  subagent: null
 }
 
 describe('ai vault session display', () => {
@@ -91,5 +93,10 @@ describe('ai vault session display', () => {
       'I updated the fixture ordering',
       'Added a regression test'
     ])
+  })
+
+  it('labels the session model only when the transcript recorded one', () => {
+    expect(sessionModelLabel(baseSession)).toBe('gpt-5.5')
+    expect(sessionModelLabel({ ...baseSession, model: null })).toBeNull()
   })
 })

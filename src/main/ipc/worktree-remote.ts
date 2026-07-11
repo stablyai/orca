@@ -477,7 +477,11 @@ async function refreshRemoteTrackingBaseForWorktreeCreate(
   return getOrStartSshWorktreeCreateFetch(
     getSshWorktreeCreateBaseFetchKey(repo, base),
     getSshWorktreeCreateRemoteQueueKey(repo, base.remote),
-    () => provider.fetchRemoteTrackingRef(repo.path, base.remote, base.branch, base.ref)
+    () =>
+      // Why: the exact-base refresh gates create; unrelated repo housekeeping must not extend it.
+      provider.fetchRemoteTrackingRef(repo.path, base.remote, base.branch, base.ref, {
+        skipAutoMaintenance: true
+      })
   )
 }
 

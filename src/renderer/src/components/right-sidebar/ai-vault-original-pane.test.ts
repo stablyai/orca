@@ -3,7 +3,10 @@ import type { AiVaultSession } from '../../../../shared/ai-vault-types'
 import type { AgentStatusEntry } from '../../../../shared/agent-status-types'
 import type { SleepingAgentSessionRecord } from '../../../../shared/agent-session-resume'
 import { makePaneKey } from '../../../../shared/stable-pane-id'
-import { findOriginalAiVaultSessionPane } from './ai-vault-original-pane'
+import {
+  findAiVaultSessionLiveState,
+  findOriginalAiVaultSessionPane
+} from './ai-vault-original-pane'
 
 const LEAF_ID = '11111111-1111-4111-8111-111111111111'
 const OTHER_LEAF_ID = '22222222-2222-4222-8222-222222222222'
@@ -27,7 +30,8 @@ const baseSession: AiVaultSession = {
   previewMessages: [],
   queuedMessageCount: 0,
   subagentTranscriptCount: 0,
-  resumeCommand: "codex resume 'session-1'"
+  resumeCommand: "codex resume 'session-1'",
+  subagent: null
 }
 
 function makeTab(id = 'tab-1', worktreeId = 'wt-1') {
@@ -212,5 +216,55 @@ describe('findOriginalAiVaultSessionPane', () => {
     )
 
     expect(target?.leafId).toBe(LEAF_ID)
+  })
+})
+
+describe('findAiVaultSessionLiveState', () => {
+  it('returns the live entry state when the provider session id matches', () => {
+    const state = makeState({
+      agentStatusByPaneKey: { [makeEntry().paneKey]: makeEntry({ state: 'blocked' }) }
+    })
+
+    expect(findAiVaultSessionLiveState(state, baseSession)).toBe('blocked')
+  })
+
+  it('falls back to a prompt match only when it is unambiguous', () => {
+    const matching = makeEntry({
+      providerSession: undefined,
+      prompt: baseSession.title,
+      state: 'working'
+    })
+    expect(
+      findAiVaultSessionLiveState(
+        makeState({ agentStatusByPaneKey: { [matching.paneKey]: matching } }),
+        baseSession
+      )
+    ).toBe('working')
+
+    const otherPaneKey = makePaneKey('tab-1', OTHER_LEAF_ID)
+    const ambiguous = makeState({
+      agentStatusByPaneKey: {
+        [matching.paneKey]: matching,
+        [otherPaneKey]: makeEntry({
+          providerSession: undefined,
+          prompt: baseSession.title,
+          paneKey: otherPaneKey,
+          state: 'waiting'
+        })
+      }
+    })
+    expect(findAiVaultSessionLiveState(ambiguous, baseSession)).toBeNull()
+  })
+
+  it('returns null when no live pane matches the session', () => {
+    const state = makeState({
+      agentStatusByPaneKey: {
+        [makeEntry().paneKey]: makeEntry({
+          providerSession: { key: 'session_id', id: 'other-session' }
+        })
+      }
+    })
+
+    expect(findAiVaultSessionLiveState(state, baseSession)).toBeNull()
   })
 })

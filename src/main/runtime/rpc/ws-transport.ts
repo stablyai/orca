@@ -48,10 +48,11 @@ export type WebSocketTransportOptions = {
   // Why: the pairing server can also serve the browser client, so users do
   // not need a second dev/static server once the web bundle is built.
   staticRoot?: string
-  // Why: when the preferred port is taken, an unstable OS-assigned port would
-  // change on every restart and permanently orphan existing mobile pairings
-  // (their stored ws://ip:port endpoint goes dead — STA-1511). Callers pass
-  // the previously assigned fallback port so it is retried first.
+  // Why: paired mobile devices store the full ws://ip:port endpoint. Once a
+  // fallback port has been assigned and persisted, devices paired while it was
+  // active point at it, so it must be bound FIRST on later launches — binding
+  // the (now free) preferred port instead would strand those pairings
+  // (STA-1511). Callers pass the previously assigned fallback port here.
   fallbackPort?: number
 }
 
@@ -149,39 +150,40 @@ export class WebSocketTransport implements RpcTransport {
       return
     }
 
-    // Why: when the preferred port is occupied (e.g. another Orca instance is
-    // already running), fall back to an OS-assigned port so mobile pairing
-    // still works. The QR code reads resolvedPort after start, so it will
-    // advertise the correct port regardless. A persisted fallback port is
-    // retried before port 0 so paired devices keep a stable endpoint across
-    // restarts (STA-1511).
-    let port = this.port
-    try {
-      await this.tryListen(port)
-      return
-    } catch (error: unknown) {
-      if (!isEAddressInUse(error) || port === 0) {
-        throw error
-      }
-    }
-    if (
-      this.fallbackPort !== undefined &&
-      this.fallbackPort !== 0 &&
-      this.fallbackPort !== this.port
-    ) {
+    // Why: a persisted fallback port is bound FIRST — devices paired while it
+    // was active store ws://ip:<fallback> and would be permanently stranded if
+    // a later launch grabbed the (now free) preferred port instead (STA-1511).
+    // Without a persisted fallback the preferred port is tried first. On
+    // EADDRINUSE each candidate falls through to the next, ending at port 0
+    // (OS-assigned) so mobile pairing still works when everything is taken.
+    // The QR code reads resolvedPort after start, so it always advertises the
+    // port that actually bound.
+    const persistedFallbackPort =
+      this.fallbackPort !== undefined && this.fallbackPort !== 0 && this.fallbackPort !== this.port
+        ? this.fallbackPort
+        : undefined
+    const candidatePorts =
+      persistedFallbackPort !== undefined ? [persistedFallbackPort, this.port] : [this.port]
+    for (const port of candidatePorts) {
       try {
-        console.warn(
-          `[ws-transport] Port ${port} is in use, retrying previous fallback port ${this.fallbackPort}`
-        )
-        await this.tryListen(this.fallbackPort)
+        await this.tryListen(port)
         return
       } catch (error: unknown) {
-        if (!isEAddressInUse(error)) {
+        // Why: a persisted fallback can become unbindable for reasons beyond
+        // EADDRINUSE (e.g. Windows reserves dynamic-range ports for Hyper-V
+        // after a reboot → EACCES). Any fallback failure must degrade to the
+        // next candidate — aborting would disable the transport every launch
+        // while the store still names that port. Only preferred-port failures
+        // other than EADDRINUSE are fatal.
+        if (port !== persistedFallbackPort && (!isEAddressInUse(error) || port === 0)) {
           throw error
         }
+        console.warn(
+          `[ws-transport] Failed to bind port ${port} (${error instanceof Error ? error.message : String(error)}), trying next candidate`
+        )
       }
     }
-    console.warn(`[ws-transport] Port ${port} is in use, falling back to OS-assigned port`)
+    console.warn('[ws-transport] All configured ports failed to bind, using an OS-assigned port')
     await this.tryListen(0)
   }
 

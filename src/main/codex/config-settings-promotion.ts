@@ -1,6 +1,16 @@
-import { existsSync, readFileSync, writeFileSync } from 'node:fs'
-import { join, resolve } from 'node:path'
+import {
+  existsSync,
+  lstatSync,
+  mkdirSync,
+  readFileSync,
+  readlinkSync,
+  realpathSync,
+  statSync,
+  writeFileSync
+} from 'node:fs'
+import { dirname, join, resolve } from 'node:path'
 import { writeFileAtomically } from '../codex-accounts/fs-utils'
+import { parseWslUncPath } from '../../shared/wsl-paths'
 import { getOrcaManagedCodexHomePath, getSystemCodexHomePath } from './codex-home-paths'
 import {
   createTomlLineScanState,
@@ -103,9 +113,10 @@ function readTopLevelSettingValues(configPath: string): Map<string, TopLevelSett
  * from "value Codex wrote for the user". Call after a successful mirror only —
  * advancing the baseline past an unpromoted change would strand it forever.
  */
-export function snapshotCodexRuntimeSettingsBaseline(): void {
+export function snapshotCodexRuntimeSettingsBaseline(
+  runtimeHomePath = getOrcaManagedCodexHomePath()
+): void {
   try {
-    const runtimeHomePath = getOrcaManagedCodexHomePath()
     const runtimeTomlPath = join(runtimeHomePath, 'config.toml')
     // Why: a missing runtime config still records an empty baseline — when
     // Codex later creates the file for a user with no ~/.codex/config.toml,
@@ -117,7 +128,14 @@ export function snapshotCodexRuntimeSettingsBaseline(): void {
       }
     }
     const file: SettingsBaselineFile = { version: 1, settings }
-    writeFileSync(getSettingsBaselinePath(runtimeHomePath), `${JSON.stringify(file, null, 2)}\n`, {
+    const baselinePath = getSettingsBaselinePath(runtimeHomePath)
+    const serialized = `${JSON.stringify(file, null, 2)}\n`
+    // Why: launch preparation can run repeatedly; skip byte-identical rewrites
+    // so an unchanged pass does no disk writes.
+    if (existsSync(baselinePath) && readFileSync(baselinePath, 'utf-8') === serialized) {
+      return
+    }
+    writeFileSync(baselinePath, serialized, {
       encoding: 'utf-8',
       mode: 0o600
     })
@@ -126,25 +144,39 @@ export function snapshotCodexRuntimeSettingsBaseline(): void {
   }
 }
 
+export type CodexSettingsPromotionHomes = {
+  runtimeHomePath: string
+  systemHomePath: string
+}
+
+function getHostPromotionHomes(): CodexSettingsPromotionHomes {
+  return {
+    runtimeHomePath: getOrcaManagedCodexHomePath(),
+    systemHomePath: getSystemCodexHomePath()
+  }
+}
+
 /**
  * Promotes setting changes the user made inside Orca-launched Codex (written
  * by Codex into the runtime config.toml) into ~/.codex/config.toml. Runs
  * before the config mirror so the promoted values survive the same mirror
- * pass instead of reverting.
+ * pass instead of reverting. WSL callers pass explicit per-distro homes; the
+ * default is the host runtime home and host ~/.codex.
  */
-export function promoteCodexRuntimeSettingsToSystem(): void {
+export function promoteCodexRuntimeSettingsToSystem(homes?: CodexSettingsPromotionHomes): boolean {
   try {
-    promoteCodexRuntimeSettingsToSystemUnsafe()
+    promoteCodexRuntimeSettingsToSystemUnsafe(homes ?? getHostPromotionHomes())
+    return true
   } catch (error) {
-    // Why: promotion is best-effort launch prep; a malformed runtime file
-    // must not block the config mirror or the Codex launch itself.
+    // Why: promotion is best-effort launch prep; callers preserve the runtime
+    // for retry, while a malformed file must not block Codex launch itself.
     console.warn('[codex-settings-promotion] failed to promote runtime settings', error)
+    return false
   }
 }
 
-function promoteCodexRuntimeSettingsToSystemUnsafe(): void {
-  const runtimeHomePath = getOrcaManagedCodexHomePath()
-  const systemHomePath = getSystemCodexHomePath()
+function promoteCodexRuntimeSettingsToSystemUnsafe(homes: CodexSettingsPromotionHomes): void {
+  const { runtimeHomePath, systemHomePath } = homes
   const runtimeTomlPath = join(runtimeHomePath, 'config.toml')
   const systemTomlPath = join(systemHomePath, 'config.toml')
   if (resolve(runtimeTomlPath) === resolve(systemTomlPath)) {
@@ -188,8 +220,71 @@ function promoteCodexRuntimeSettingsToSystemUnsafe(): void {
   if (updates.size === 0) {
     return
   }
-  const systemContent = existsSync(systemTomlPath) ? readFileSync(systemTomlPath, 'utf-8') : ''
-  writeFileAtomically(systemTomlPath, upsertTopLevelSettingsInContent(systemContent, updates))
+  // Why: a genuinely fresh host has no ~/.codex yet; without the directory
+  // the atomic write ENOENTs and the following mirror wipes the setting.
+  // Owner-only: the directory holds auth.json and the full user config.
+  mkdirSync(systemHomePath, { recursive: true, mode: 0o700 })
+  const writeTarget = resolvePromotionWriteTarget(systemTomlPath)
+  // Why: a dangling dotfile-manager symlink can point into a directory tree
+  // that has not been materialized yet; preserve the link and create its real
+  // parent so the atomic temp file can be written beside the target.
+  mkdirSync(dirname(writeTarget.path), { recursive: true, mode: 0o700 })
+  const targetExists = existsSync(writeTarget.path)
+  const systemContent = targetExists ? readFileSync(writeTarget.path, 'utf-8') : ''
+  const nextContent = upsertTopLevelSettingsInContent(systemContent, updates)
+  if (targetExists && parseWslUncPath(writeTarget.path)) {
+    // Why: symlink metadata through the \\wsl$ 9P provider is not reliable
+    // enough for realpath/lstat detection, and an atomic rename would replace
+    // a WSL-side dotfile symlink with a plain file. Writing through the
+    // existing file preserves the Linux-side inode (and its mode).
+    writeFileSync(writeTarget.path, nextContent, 'utf-8')
+    return
+  }
+  writeFileAtomically(writeTarget.path, nextContent, {
+    mode: writeTarget.mode
+  })
+}
+
+// Why: promotion rewrites the user's real config.toml. Follow an existing
+// symlink (dotfile managers) instead of replacing the link with a plain file,
+// and carry the real file's mode forward — an atomic write without a mode
+// would widen a user-restricted 0600 config to the process umask default.
+// A new or unreadable target is created owner-only.
+function resolvePromotionWriteTarget(systemTomlPath: string): { path: string; mode: number } {
+  try {
+    const realPath = realpathSync(systemTomlPath)
+    return { path: realPath, mode: statSync(realPath).mode & 0o777 }
+  } catch {
+    // Continue below: realpath also fails for a valid dangling dotfile link.
+  }
+  try {
+    if (lstatSync(systemTomlPath).isSymbolicLink()) {
+      const targetPath = resolveDanglingSymlinkTarget(systemTomlPath)
+      return { path: targetPath, mode: 0o600 }
+    }
+  } catch {
+    // Missing non-link targets are created owner-only at the requested path.
+  }
+  return { path: systemTomlPath, mode: 0o600 }
+}
+
+function resolveDanglingSymlinkTarget(linkPath: string): string {
+  let currentPath = linkPath
+  const visited = new Set<string>()
+  while (!visited.has(currentPath)) {
+    visited.add(currentPath)
+    try {
+      if (!lstatSync(currentPath).isSymbolicLink()) {
+        return currentPath
+      }
+      currentPath = resolve(dirname(currentPath), readlinkSync(currentPath))
+    } catch {
+      return currentPath
+    }
+  }
+  // Why: replacing any link in a cycle would destroy dotfile-manager state;
+  // abort promotion and leave the runtime/baseline intact for manual repair.
+  throw new Error(`Codex config symlink cycle at ${linkPath}`)
 }
 
 export function upsertTopLevelSettingsInContent(
@@ -215,16 +310,17 @@ export function upsertTopLevelSettingsInContent(
     state = updateTomlLineScanState(state, line)
   }
 
+  // Why: CRLF configs keep a trailing \r after the split; new lines must use
+  // the file's existing endings or a Windows-owned config becomes mixed-EOL.
+  const usesCrlf = content.includes('\r\n')
   const insertions: string[] = []
   for (const [key, raw] of updates) {
     const existingIndex = keyLineIndexes.get(key)
     const rendered = `${key} = ${raw}`
     if (existingIndex !== undefined) {
-      // Why: CRLF configs keep a trailing \r after the split; preserve it so
-      // the rewritten line matches the file's existing endings.
       lines[existingIndex] = lines[existingIndex]?.endsWith('\r') ? `${rendered}\r` : rendered
     } else {
-      insertions.push(rendered)
+      insertions.push(usesCrlf ? `${rendered}\r` : rendered)
     }
   }
   if (insertions.length > 0) {
@@ -233,10 +329,13 @@ export function upsertTopLevelSettingsInContent(
       insertAt -= 1
     }
     if (insertAt === preambleEnd && preambleEnd < lines.length) {
-      insertions.push('')
+      insertions.push(usesCrlf ? '\r' : '')
     }
     lines.splice(insertAt, 0, ...insertions)
   }
   const result = lines.join('\n')
-  return result.endsWith('\n') || result.length === 0 ? result : `${result}\n`
+  if (result.endsWith('\n') || result.length === 0) {
+    return result
+  }
+  return result.endsWith('\r') ? `${result}\n` : `${result}${usesCrlf ? '\r\n' : '\n'}`
 }

@@ -9,9 +9,12 @@ import { writeMainThreadDiagnosticMarker } from './diagnostics/main-thread-churn
 import {
   beginMacUpdateDownload,
   deferMacQuitUntilInstallerReady,
-  markMacQuitAndInstallInFlight
+  isMacInstallerReady,
+  markMacQuitAndInstallInFlight,
+  resetMacInstallState
 } from './updater-mac-install'
 import { registerAutoUpdaterHandlers } from './updater-events'
+import { recordUpdaterLifecycle } from './updater-lifecycle-diagnostics'
 import {
   compareVersions,
   isBenignCheckFailure,
@@ -64,6 +67,14 @@ let autoUpdateCheckTimer: ReturnType<typeof setTimeout> | null = null
 let nudgeCheckTimer: ReturnType<typeof setTimeout> | null = null
 let pendingQuitAndInstallTimer: ReturnType<typeof setTimeout> | null = null
 let quitAndInstallInProgress = false
+// Why: once quitAndInstall has committed (Win/Linux install, or macOS with
+// Squirrel ready), late autoUpdater 'error' events must not clear
+// quittingForUpdate — that would re-enable dock activate mid-installer.
+let updateInstallCommitted = false
+// Why: quit-and-install recovery must only run after the native
+// quitAndInstall call. Pre-native cleanup-time autoUpdater errors must not
+// clear quittingForUpdate or look like install recovery.
+let quitAndInstallNativeInvoked = false
 let persistLastUpdateCheckAt: ((timestamp: number) => void) | null = null
 let _getLastUpdateCheckAt: (() => number | null) | null = null
 let backgroundCheckLaunchPending = false
@@ -547,6 +558,7 @@ function clearPrereleaseFallbackContextIfSettled(): void {
 
 async function performQuitAndInstall(): Promise<void> {
   if (quitAndInstallInProgress) {
+    recordUpdaterLifecycle('quit_and_install_ignored', { reason: 'already-in-progress' })
     return
   }
   quitAndInstallInProgress = true
@@ -566,14 +578,112 @@ async function performQuitAndInstall(): Promise<void> {
   // either can't replace it or the user ends up on the old version.
   quittingForUpdate = true
 
-  await runBeforeUpdateQuitCleanup()
-  killAllPty()
+  const pendingVersion = getPendingInstallVersion()
+  try {
+    await withUpdaterSpan({ stage: 'install' }, async (span) => {
+      span.setAttribute('updater.version', pendingVersion || 'unknown')
+      span.setAttribute('updater.platform', process.platform)
+      span.setAttribute(
+        'updater.macosInstallerReady',
+        process.platform === 'darwin' ? isMacInstallerReady() : true
+      )
+      recordUpdaterLifecycle('quit_and_install_started', {
+        version: pendingVersion || null,
+        macInstallerReady: process.platform === 'darwin' ? isMacInstallerReady() : true
+      })
+      span.addEvent('pre_quit_cleanup_start')
+      await runBeforeUpdateQuitCleanup()
+      span.addEvent('pre_quit_cleanup_done')
 
-  for (const win of BrowserWindow.getAllWindows()) {
-    win.removeAllListeners('close')
+      recordUpdaterLifecycle('quit_and_install_invoking_native', {
+        version: pendingVersion || null
+      })
+      // Why: defensive — state should stay in-progress until native invoke, but
+      // never call quitAndInstall if recovery/reset already cleared the handoff.
+      if (!quitAndInstallInProgress) {
+        return
+      }
+      // Why: mark before the call so a sync 'error' during quitAndInstall can
+      // recover; pre-native errors must not look like install failure.
+      quitAndInstallNativeInvoked = true
+      // Why: invoke quitAndInstall before killAllPty/remove close listeners so a
+      // sync 'error' (common "no filepath" path) recovers while windows and
+      // local PTYs are still intact.
+      getAutoUpdater().quitAndInstall(false, true)
+      span.addEvent('native_quit_and_install_invoked')
+
+      // Why: handleQuitAndInstallFailure may clear quitAndInstallInProgress
+      // synchronously during quitAndInstall (Win/Linux dispatchError). Skip
+      // destructive prep if recovery already ran.
+      if (!quitAndInstallInProgress) {
+        return
+      }
+
+      killAllPty()
+      span.addEvent('local_pty_kill_all')
+
+      for (const win of BrowserWindow.getAllWindows()) {
+        win.removeAllListeners('close')
+      }
+      span.addEvent('window_close_listeners_removed', {
+        windowCount: BrowserWindow.getAllWindows().length
+      })
+
+      // Why: committed installs must keep quittingForUpdate true so dock
+      // activate cannot reopen the old process mid-ShipIt/installer. macOS
+      // without Squirrel ready stays uncommitted so late native errors can
+      // still recover flags (PTYs may already be dead — residual OK).
+      if (process.platform !== 'darwin' || isMacInstallerReady()) {
+        updateInstallCommitted = true
+      }
+    })
+  } catch (error) {
+    resetQuitForUpdateState()
+    recordUpdaterLifecycle(
+      'quit_and_install_failed',
+      { errorType: error instanceof Error ? error.name : typeof error },
+      {
+        level: 'warn',
+        message: 'Could not start update install'
+      }
+    )
+    sendErrorStatus(
+      'Could not restart to install the update. Quit and reopen Orca, then try again.'
+    )
   }
+}
 
-  getAutoUpdater().quitAndInstall(false, true)
+function resetQuitForUpdateState(): void {
+  quitAndInstallInProgress = false
+  quittingForUpdate = false
+  updateInstallCommitted = false
+  quitAndInstallNativeInvoked = false
+  resetMacInstallState()
+}
+
+// Why: electron-updater often reports quitAndInstall failures via the 'error'
+// event. On Win/Linux this is frequently synchronous (dispatchError inside
+// install()); on macOS/spawn it can be async. Recover only after native invoke
+// and only when install has not been committed — after commit, clearing
+// quittingForUpdate would allow dock activate to reopen the old process
+// mid-installer.
+function handleQuitAndInstallFailure(): boolean {
+  if (!quitAndInstallInProgress || !quitAndInstallNativeInvoked || updateInstallCommitted) {
+    return false
+  }
+  resetQuitForUpdateState()
+  recordUpdaterLifecycle('quit_and_install_failed_via_event', undefined, {
+    level: 'warn',
+    message: 'Update install could not start; recovered app state'
+  })
+  sendErrorStatus('Could not restart to install the update. Quit and reopen Orca, then try again.')
+  return true
+}
+
+// Why: while quit-and-install owns the process (pre-native cleanup through
+// post-commit handoff), general check/download error UI must not run.
+function isQuitAndInstallHandoffActive(): boolean {
+  return quitAndInstallInProgress
 }
 
 async function runBeforeUpdateQuitCleanup(): Promise<void> {
@@ -585,9 +695,13 @@ async function runBeforeUpdateQuitCleanup(): Promise<void> {
   const cleanup = Promise.resolve()
     .then(() => onBeforeQuitCleanup?.())
     .catch((error) => {
-      console.warn(
-        '[updater] Pre-quit cleanup failed; continuing update install:',
-        error instanceof Error ? error.name : typeof error
+      recordUpdaterLifecycle(
+        'pre_quit_cleanup_failed',
+        { errorType: error instanceof Error ? error.name : typeof error },
+        {
+          level: 'warn',
+          message: 'Pre-quit cleanup failed; continuing update install'
+        }
       )
     })
   const timeoutResult = new Promise<'timeout'>((resolve) => {
@@ -596,8 +710,13 @@ async function runBeforeUpdateQuitCleanup(): Promise<void> {
 
   const result = await Promise.race([cleanup.then(() => 'done' as const), timeoutResult])
   if (result === 'timeout') {
-    console.warn(
-      `[updater] Pre-quit cleanup exceeded ${PRE_QUIT_CLEANUP_TIMEOUT_MS}ms; continuing update install`
+    recordUpdaterLifecycle(
+      'pre_quit_cleanup_timeout',
+      { timeoutMs: PRE_QUIT_CLEANUP_TIMEOUT_MS },
+      {
+        level: 'warn',
+        message: `Pre-quit cleanup exceeded ${PRE_QUIT_CLEANUP_TIMEOUT_MS}ms; continuing update install`
+      }
     )
     return
   }
@@ -1304,6 +1423,8 @@ export function setupAutoUpdater(
     getKnownReleaseUrl,
     getPendingInstallVersion,
     getUserInitiatedCheck: () => userInitiatedCheck,
+    handleQuitAndInstallFailure,
+    isQuitAndInstallHandoffActive,
     hasNewerDownloadedVersion,
     shouldHandleUpdaterErrorEvent,
     performQuitAndInstall,

@@ -2,11 +2,13 @@ import { homedir } from 'node:os'
 import { basename, join } from 'node:path'
 import type { AiVaultScanIssue } from '../../shared/ai-vault-types'
 import { uniqueCodexSessionsDirs } from './session-scanner-codex-paths'
+import { SUBAGENT_DIR_NAME } from './session-scanner-subagent-transcripts'
 import { discoverFiles, discoverOpenClawFiles } from './session-scanner-discovery'
 import { droidDiscoveries, kimiDiscoveries } from './session-scanner-droid-kimi-sources'
 import { opencodeDiscoveries } from './session-scanner-opencode-sources'
 import type { AiVaultScanOptions, SessionFileDiscovery } from './session-scanner-types'
 import { normalizeAgentSessionsDir } from './session-scanner-values'
+import { resolveGrokSessionsDir } from '../../shared/grok-session-paths'
 
 const CLAUDE_PROJECTS_DIR = join(homedir(), '.claude', 'projects')
 export const DEFAULT_CODEX_HOME_DIR = join(homedir(), '.codex')
@@ -18,10 +20,7 @@ const COPILOT_SESSIONS_DIR = join(
   'session-state'
 )
 const CURSOR_PROJECTS_DIR = join(homedir(), '.cursor', 'projects')
-const GROK_SESSIONS_DIR = join(
-  process.env.GROK_HOME?.trim() || join(homedir(), '.grok'),
-  'sessions'
-)
+const GROK_SESSIONS_DIR = resolveGrokSessionsDir()
 const HERMES_SESSIONS_DIR = join(homedir(), '.hermes', 'sessions')
 const ROVO_SESSIONS_DIR = join(homedir(), '.rovodev', 'sessions')
 const OPENCLAW_STATE_DIR = process.env.OPENCLAW_STATE_DIR?.trim() || join(homedir(), '.openclaw')
@@ -38,6 +37,18 @@ const DEVIN_TRANSCRIPTS_DIR = join(
   process.env.DEVIN_HOME?.trim() || join(homedir(), '.local', 'share', 'devin', 'cli'),
   'transcripts'
 )
+
+// The local host and each WSL distro's `~/.claude/projects`. Callers reading
+// Claude session files by path use these roots to reject arbitrary paths.
+export function claudeProjectsRootDirs(args: {
+  claudeProjectsDir?: string
+  wslHomeDirs?: readonly string[]
+}): string[] {
+  return [
+    args.claudeProjectsDir ?? CLAUDE_PROJECTS_DIR,
+    ...(args.wslHomeDirs ?? []).map((homeDir) => join(homeDir, '.claude', 'projects'))
+  ]
+}
 
 export async function discoverAiVaultSessionSources(args: {
   options: AiVaultScanOptions
@@ -77,10 +88,10 @@ function claudeDiscoveries(
   limit: number,
   issues: AiVaultScanIssue[]
 ): Promise<SessionFileDiscovery>[] {
-  return [
-    options.claudeProjectsDir ?? CLAUDE_PROJECTS_DIR,
-    ...wslHomeDirs.map((homeDir) => join(homeDir, '.claude', 'projects'))
-  ].map((rootDir) =>
+  return claudeProjectsRootDirs({
+    claudeProjectsDir: options.claudeProjectsDir,
+    wslHomeDirs
+  }).map((rootDir) =>
     discoverFiles({
       rootDir,
       limit,
@@ -89,8 +100,9 @@ function claudeDiscoveries(
       extensions: ['.jsonl'],
       // Why: Task subagent transcripts under `<session>/subagents/` share the parent
       // sessionId and aren't independently resumable, so they'd just duplicate the
-      // parent as untitled rows; prune the subtree instead of indexing it.
-      directoryPredicate: (name) => name !== 'subagents'
+      // parent as untitled rows; prune the subtree and read them on demand under
+      // their parent instead.
+      directoryPredicate: (name) => name !== SUBAGENT_DIR_NAME
     })
   )
 }

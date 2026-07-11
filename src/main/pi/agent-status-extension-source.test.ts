@@ -1,5 +1,6 @@
 import { runInNewContext } from 'node:vm'
-import ts from 'typescript'
+// TypeScript 7 is a native CLI; transpile tests still need the legacy JavaScript API.
+import ts from 'typescript-api'
 import { describe, expect, it, vi } from 'vitest'
 
 import { getPiAgentStatusExtensionSource } from './agent-status-extension-source'

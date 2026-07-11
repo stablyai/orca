@@ -23,7 +23,7 @@
     "@xterm/addon-webgl": "0.20.0-beta.284",
     "@xterm/xterm": "6.1.0-beta.285",
     "buffer": "^6.0.3",
-    "expo": "^55.0.23",
+    "expo": "^55.0.27",
     "expo-build-properties": "^55.0.13",
     "expo-camera": "^55.0.18",
     "expo-clipboard": "^55.0.13",
@@ -73,8 +73,13 @@
     "oxlint": "^1.71.0",
     "react-test-renderer": "19.2.6",
     "tsx": "^4.22.4",
-    "typescript": "^5.9.3",
+    "typescript": "^7.0.2",
     "vite": "^8.0.16",
     "vitest": "^4.1.9"
+  },
+  "pnpm": {
+    "overrides": {
+      "xcode>uuid": "11.1.1"
+    }
   }
 }

@@ -9,6 +9,8 @@ const {
   menuPopupMock,
   notificationMock,
   notificationShowMock,
+  powerMonitorOnMock,
+  powerMonitorRemoveListenerMock,
   isMock
 } = vi.hoisted(() => {
   const menuPopupMock = vi.fn()
@@ -23,6 +25,8 @@ const {
       return { show: notificationShowMock }
     }),
     notificationShowMock,
+    powerMonitorOnMock: vi.fn(),
+    powerMonitorRemoveListenerMock: vi.fn(),
     isMock: { dev: false }
   }
 })
@@ -34,6 +38,7 @@ vi.mock('electron', () => ({
   Menu: { buildFromTemplate: buildFromTemplateMock },
   Notification: notificationMock,
   nativeTheme: { shouldUseDarkColors: false },
+  powerMonitor: { on: powerMonitorOnMock, removeListener: powerMonitorRemoveListenerMock },
   screen: {
     getPrimaryDisplay: () => ({ workAreaSize: { width: 1440, height: 900 } })
   },
@@ -77,6 +82,8 @@ describe('createMainWindow', () => {
     menuPopupMock.mockClear()
     notificationMock.mockClear()
     notificationShowMock.mockClear()
+    powerMonitorOnMock.mockReset()
+    powerMonitorRemoveListenerMock.mockReset()
     isMock.dev = false
     vi.mocked(ipcMain.on).mockReset()
     vi.mocked(ipcMain.removeListener).mockReset()
@@ -2850,6 +2857,103 @@ describe('createMainWindow', () => {
 
       expect(browserWindowInstance.show).not.toHaveBeenCalled()
       expect(browserWindowInstance.maximize).not.toHaveBeenCalled()
+    })
+  })
+
+  describe('system resume relay', () => {
+    function setupResumeWindow() {
+      const windowHandlers: Record<string, (...args: any[]) => void> = {}
+      const webContents = {
+        on: vi.fn(),
+        setZoomLevel: vi.fn(),
+        setBackgroundThrottling: vi.fn(),
+        invalidate: vi.fn(),
+        setWindowOpenHandler: vi.fn(),
+        send: vi.fn(),
+        isDestroyed: vi.fn(() => false),
+        id: 1
+      }
+      const instance = {
+        webContents,
+        on: vi.fn((event: string, handler: (...args: any[]) => void) => {
+          windowHandlers[event] = handler
+        }),
+        isDestroyed: vi.fn(() => false),
+        // Why: maximized keeps forceRepaint from scheduling its size-nudge timer.
+        isMaximized: vi.fn(() => true),
+        isFullScreen: vi.fn(() => false),
+        getSize: vi.fn(() => [1200, 800]),
+        setSize: vi.fn(),
+        maximize: vi.fn(),
+        show: vi.fn(),
+        loadFile: vi.fn(),
+        loadURL: vi.fn()
+      }
+      browserWindowMock.mockImplementation(function () {
+        return instance
+      })
+      return { windowHandlers, webContents, instance }
+    }
+
+    function getPowerResumeListener(): () => void {
+      const resumeCall = powerMonitorOnMock.mock.calls.find(
+        (call: unknown[]) => call[0] === 'resume'
+      )
+      if (!resumeCall) {
+        throw new Error('missing powerMonitor resume listener')
+      }
+      return resumeCall[1] as () => void
+    }
+
+    it('relays powerMonitor resume to the live window and forces a repaint', () => {
+      const { webContents } = setupResumeWindow()
+      createMainWindow(null)
+      const onResume = getPowerResumeListener()
+      webContents.send.mockClear()
+      webContents.invalidate.mockClear()
+
+      onResume()
+
+      expect(webContents.send).toHaveBeenCalledWith('system:resumed')
+      expect(webContents.invalidate).toHaveBeenCalledTimes(1)
+    })
+
+    it('does not send the resume event once the window is destroyed', () => {
+      const { webContents, instance } = setupResumeWindow()
+      createMainWindow(null)
+      const onResume = getPowerResumeListener()
+      instance.isDestroyed.mockReturnValue(true)
+      webContents.send.mockClear()
+      webContents.invalidate.mockClear()
+
+      onResume()
+
+      expect(webContents.send).not.toHaveBeenCalled()
+      expect(webContents.invalidate).not.toHaveBeenCalled()
+    })
+
+    it('does not send the resume event once webContents is destroyed', () => {
+      const { webContents } = setupResumeWindow()
+      createMainWindow(null)
+      const onResume = getPowerResumeListener()
+      webContents.isDestroyed.mockReturnValue(true)
+      webContents.send.mockClear()
+      webContents.invalidate.mockClear()
+
+      onResume()
+
+      expect(webContents.send).not.toHaveBeenCalled()
+      expect(webContents.invalidate).not.toHaveBeenCalled()
+    })
+
+    it('removes the powerMonitor resume listener when the window closes', () => {
+      const { windowHandlers } = setupResumeWindow()
+      createMainWindow(null)
+      const onResume = getPowerResumeListener()
+
+      windowHandlers.closed()
+
+      expect(powerMonitorRemoveListenerMock).toHaveBeenCalledWith('resume', onResume)
     })
   })
 

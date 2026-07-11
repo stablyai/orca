@@ -33,7 +33,7 @@ import {
   type MarkdownDocLinkDecorationController
 } from './monaco-markdown-doc-link-decorations'
 import { buildGitConflictDecorations, hasGitConflictMarkers } from './monaco-conflict-decorations'
-import { findWorktreeById } from '@/store/slices/worktree-helpers'
+import { selectWorktreeDiffComments } from '@/store/worktree-diff-comments-selector'
 import type { DiffComment } from '../../../../shared/types'
 import { isMarkdownComment } from '@/lib/diff-comment-compat'
 import { formatMarkdownReviewNotes, type MarkdownReviewNote } from '@/lib/markdown-review-notes'
@@ -44,7 +44,7 @@ import {
   getDiffCommentPopoverTop
 } from '../diff-comments/diff-comment-popover-position'
 import { isLinuxUserAgent } from '../terminal-pane/pane-helpers'
-import { installEditorSaveShortcut } from './editor-shortcuts'
+import { installEditorSaveShortcut, installMonacoEditorFindShortcut } from './editor-shortcuts'
 import { Plus } from 'lucide-react'
 import {
   getMonacoMarkdownSelectionAnnotationTarget,
@@ -140,7 +140,7 @@ export default function MonacoEditor({
   const scrollToDiffCommentId = useAppStore((s) => s.scrollToDiffCommentId)
   const setScrollToDiffCommentId = useAppStore((s) => s.setScrollToDiffCommentId)
   const allDiffComments = useAppStore((s): DiffComment[] | undefined =>
-    worktreeId ? findWorktreeById(s.worktreesByRepo, worktreeId)?.diffComments : undefined
+    selectWorktreeDiffComments(s, worktreeId)
   )
   const editorFontSize = computeEditorFontSize(
     settings?.terminalFontSize ?? 13,
@@ -390,13 +390,12 @@ export default function MonacoEditor({
         return model.getValueInRange(selection)
       })
 
-      const cleanupSaveShortcut = installEditorSaveShortcut(
-        editorInstance.getContainerDomNode(),
-        () => {
-          const value = editorInstance.getValue()
-          propsRef.current.onSave(value)
-        }
-      )
+      const editorDomNode = editorInstance.getContainerDomNode()
+      const cleanupSaveShortcut = installEditorSaveShortcut(editorDomNode, () => {
+        const value = editorInstance.getValue()
+        propsRef.current.onSave(value)
+      })
+      const cleanupFindShortcut = installMonacoEditorFindShortcut(editorInstance)
       const searchInFilesAction = editorInstance.addAction({
         id: 'orca.searchInFiles',
         label: translate('auto.components.editor.MonacoEditor.fd68ae03b3', 'Search in Files'),
@@ -442,7 +441,6 @@ export default function MonacoEditor({
           }
         })
       }
-      const editorDomNode = editorInstance.getContainerDomNode()
       editorDomNode.addEventListener('paste', onLargeTextPaste, { capture: true })
 
       // Track cursor line for "copy path to line" feature
@@ -496,6 +494,7 @@ export default function MonacoEditor({
         scrollStateSub.dispose()
         gutterMouseDownSub.dispose()
         cleanupSaveShortcut()
+        cleanupFindShortcut()
         editorDomNode.removeEventListener('paste', onLargeTextPaste, { capture: true })
         searchInFilesAction.dispose()
         autoHeightSub?.dispose()

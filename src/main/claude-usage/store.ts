@@ -19,7 +19,10 @@ import { loadKnownUsageWorktreesByRepo, type UsageWorktreeRef } from '../usage-w
 import type { ClaudeUsagePersistedState } from './types'
 import { createWorktreeRefs, getSessionProjectLabel, scanClaudeUsageFiles } from './scanner'
 
-const SCHEMA_VERSION = 3
+// Why: v5 widens Claude ownership keys (message-id / uuid fallbacks). Older
+// caches either lack ownership or used narrower keys and can under/over-count
+// after fork reclaim (#8006).
+const SCHEMA_VERSION = 5
 const STALE_MS = 5 * 60_000
 const AUTOMATION_ATTRIBUTION_WINDOW_MS = 5 * 60_000
 

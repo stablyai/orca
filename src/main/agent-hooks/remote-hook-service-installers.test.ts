@@ -253,6 +253,48 @@ describe('remote hook service installers', () => {
     expect(toml).toContain('trusted_hash = "sha256:')
   })
 
+  it('installs Codex hooks into an explicit redirected CODEX_HOME (WSL managed runtime home)', async () => {
+    const runtimeHome = '/home/dev/.local/share/orca/codex-runtime-home/home'
+    const { sftp, fs } = createFakeSftp({
+      [`${runtimeHome}/config.toml`]: 'model = "gpt-5.2-codex"\n'
+    })
+
+    const status = await new CodexHookService().installRemote(sftp, '/home/dev', {
+      codexHomeDir: runtimeHome,
+      deferTrustUntilConfigToml: true
+    })
+
+    expect(status.state).toBe('installed')
+    expect(status.configPath).toBe(`${runtimeHome}/hooks.json`)
+    expect(fs.files.has('/home/dev/.codex/hooks.json')).toBe(false)
+    const hooks = JSON.parse(fs.files.get(`${runtimeHome}/hooks.json`)!) as {
+      hooks: Record<string, { hooks: { command: string }[] }[]>
+    }
+    expect(hooks.hooks.Stop?.[0]?.hooks?.[0]?.command).toContain(
+      '/home/dev/.orca/agent-hooks/codex-hook.sh'
+    )
+    const toml = fs.files.get(`${runtimeHome}/config.toml`)
+    expect(toml).toContain('model = "gpt-5.2-codex"')
+    expect(toml).toContain(`${runtimeHome}/hooks.json:stop:0:0`)
+  })
+
+  it('defers Codex trust writes until the redirected config.toml exists (launch-path seed race)', async () => {
+    const runtimeHome = '/home/dev/.local/share/orca/codex-runtime-home/home'
+    const { sftp, fs } = createFakeSftp()
+
+    const status = await new CodexHookService().installRemote(sftp, '/home/dev', {
+      codexHomeDir: runtimeHome,
+      deferTrustUntilConfigToml: true
+    })
+
+    expect(status.state).toBe('installed')
+    expect(status.detail).toContain('deferred')
+    expect(fs.files.get(`${runtimeHome}/hooks.json`)).toContain('codex-hook.sh')
+    // Why: creating config.toml here would make the launch path's
+    // only-if-absent seed skip the user's real config.
+    expect(fs.files.has(`${runtimeHome}/config.toml`)).toBe(false)
+  })
+
   it('reports Codex trust-write failures without rolling back installed hooks', async () => {
     const { sftp, fs } = createFakeSftp()
     fs.failRenameTo.add('/home/dev/.codex/config.toml')
@@ -369,6 +411,7 @@ describe('remote hook service installers', () => {
       'SessionStart',
       'UserPromptSubmit',
       'Stop',
+      'StopFailure',
       'SessionEnd',
       'PreToolUse',
       'PostToolUse',
@@ -380,7 +423,10 @@ describe('remote hook service installers', () => {
       expect(command).toContain('/home/dev/.orca/agent-hooks/grok-hook.sh')
       expect(command).toMatch(/^if \[ -x /)
     }
-    expect(grokConfig.hooks.PreToolUse?.[0]?.matcher).toBe('*')
+    // Why: Grok tool matchers are real regexes; bare `*` is invalid match-all.
+    expect(grokConfig.hooks.PreToolUse?.[0]?.matcher).toBe('.*')
+    expect(grokConfig.hooks.PostToolUse?.[0]?.matcher).toBe('.*')
+    expect(grokConfig.hooks.StopFailure?.[0]?.matcher).toBeUndefined()
 
     const devinConfig = JSON.parse(devin.fs.files.get('/home/dev/.config/devin/config.json')!) as {
       permissions: { mode: string }
@@ -408,6 +454,35 @@ describe('remote hook service installers', () => {
     }
     expect(devin.fs.files.get('/home/dev/.orca/agent-hooks/devin-hook.sh')).toContain('/hook/devin')
   })
+
+  it('installs remote Grok config in the explicit guest GROK_HOME', async () => {
+    const { sftp, fs } = createFakeSftp()
+
+    const status = await new GrokHookService().installRemote(
+      sftp,
+      '/home/dev',
+      '/srv/grok profile/'
+    )
+
+    expect(status.configPath).toBe('/srv/grok profile/hooks/orca-status.json')
+    expect(fs.files.has('/srv/grok profile/hooks/orca-status.json')).toBe(true)
+    expect(fs.files.has('/home/dev/.grok/hooks/orca-status.json')).toBe(false)
+    const script = fs.files.get('/home/dev/.orca/agent-hooks/grok-hook.sh')!
+    expect(script).toContain('${#GROK_HOME}" -le 4096')
+    expect(script).toContain('--data-urlencode "grokHome=${grok_home}"')
+  })
+
+  it.each(['relative/grok', '/bad\\grok', `/${'x'.repeat(4096)}`])(
+    'falls back to login-home Grok config for invalid remote home %s',
+    async (remoteGrokHome) => {
+      const { sftp, fs } = createFakeSftp()
+
+      const status = await new GrokHookService().installRemote(sftp, '/home/dev', remoteGrokHome)
+
+      expect(status.configPath).toBe('/home/dev/.grok/hooks/orca-status.json')
+      expect(fs.files.has('/home/dev/.grok/hooks/orca-status.json')).toBe(true)
+    }
+  )
 
   it('installs remote Kimi hooks as a managed config.toml block preserving user config', async () => {
     const userConfig = 'default_model = "kimi-k2.6"\n\n[providers."mine"]\napi_key = "sk-secret"\n'

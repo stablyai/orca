@@ -10,6 +10,7 @@ import {
 } from '../../../../shared/ai-vault-types'
 import { translate } from '@/i18n/i18n'
 import { sessionDetailConversationTurns } from './ai-vault-session-display'
+import { SessionSubagentsSection } from './AiVaultSessionSubagents'
 import { SessionUnsavedConversationNotice } from './AiVaultSessionUnsavedNotice'
 import {
   aiVaultWorktreeCompactPath,
@@ -96,6 +97,8 @@ export function SessionInlineDetails({
           // preview section instead of stacking a second empty state under it.
           <SessionUnsavedConversationNotice session={session} logAvailable={Boolean(onOpenLog)} />
         )}
+
+        <SessionSubagentsSection session={session} />
 
         {shouldShowAiVaultSessionWorktreeLine(worktreeDisplay, {
           vaultScope

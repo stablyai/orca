@@ -1,4 +1,4 @@
-import { mkdtemp, rm, writeFile } from 'node:fs/promises'
+import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
@@ -99,7 +99,7 @@ describe('recoverable-but-empty Claude sessions', () => {
     expect(isAiVaultSessionRecoverableEmpty(session!)).toBe(false)
   })
 
-  it('does not count subagent transcripts for a session that has real turns', async () => {
+  it('counts subagent transcripts for a session that has real turns without flagging it recoverable', async () => {
     const root = await mkdtemp(join(tmpdir(), 'orca-ai-vault-nonempty-'))
     tempRoots.push(root)
     const roots = isolatedScanRoots(root)
@@ -127,8 +127,10 @@ describe('recoverable-but-empty Claude sessions', () => {
     const session = result.sessions.find((entry) => entry.sessionId === sessionId)
 
     expect(session?.messageCount).toBe(1)
-    // Skipped for sessions with content: the directory read only runs at zero turns.
-    expect(session?.subagentTranscriptCount).toBe(0)
+    // Counted for every local session (the row's "N subagents" affordance),
+    // but a session with real turns is never surfaced as recoverable-empty.
+    expect(session?.subagentTranscriptCount).toBe(1)
+    expect(isAiVaultSessionRecoverableEmpty(session!)).toBe(false)
   })
 
   it('counts queued messages net of remove and dequeue operations', async () => {
@@ -241,5 +243,19 @@ describe('countSubagentTranscripts', () => {
     await writeFile(join(subagentsDir, 'agent-a.meta.json'), '{}')
 
     expect(await countSubagentTranscripts(transcriptPath)).toBe(2)
+  })
+
+  it('excludes non-agent .jsonl files and directories named like transcripts', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'orca-ai-vault-sub-predicate-'))
+    tempRoots.push(root)
+    const transcriptPath = join(root, 'session.jsonl')
+    const subagentsDir = join(root, 'session', 'subagents')
+    await writeJsonlFile(join(subagentsDir, 'agent-a.jsonl'), [{ type: 'user' }])
+    // A stray sibling artifact and a directory would inflate the row badge past
+    // what the on-demand lister shows; both must fail the shared predicate.
+    await writeFile(join(subagentsDir, 'notes.jsonl'), '{}')
+    await mkdir(join(subagentsDir, 'agent-x.jsonl'))
+
+    expect(await countSubagentTranscripts(transcriptPath)).toBe(1)
   })
 })

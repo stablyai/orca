@@ -25,6 +25,11 @@ export const AI_VAULT_AGENTS = [
   'kimi'
 ] as const satisfies readonly TuiAgent[]
 
+// Why: the aiVault.listSessions RPC schema CLAMPS scopePaths to this bound
+// (safe: scope paths only widen discovery). Producer-side caps against the same
+// value are optional belt-and-braces, not required for the request to succeed.
+export const AI_VAULT_SCOPE_PATHS_MAX_COUNT = 64
+
 export type AiVaultAgent = (typeof AI_VAULT_AGENTS)[number]
 export type AiVaultScope = 'workspace' | 'project' | 'all'
 export type AiVaultSort = 'updated' | 'created'
@@ -54,6 +59,18 @@ export type AiVaultSessionPreviewMessage = {
   timestamp: string | null
 }
 
+// Terminal statuses come from <task-notification> records in the parent
+// transcript; 'running' is inferred from recent transcript activity.
+export type AiVaultSubagentRunStatus = 'running' | 'completed' | 'failed' | 'stopped'
+
+// Set only on Task subagent transcript rows (listed on demand under their
+// parent session); null for every top-level scanned session.
+export type AiVaultSessionSubagentInfo = {
+  parentSessionId: string
+  agentType: string | null
+  status: AiVaultSubagentRunStatus | null
+}
+
 export type AiVaultSession = {
   id: string
   executionHostId: ExecutionHostId
@@ -73,11 +90,28 @@ export type AiVaultSession = {
   totalTokens: number
   previewMessages: AiVaultSessionPreviewMessage[]
   // Recoverable signal for sessions whose conversation transcript persisted zero
-  // user/assistant turns: queued (never-flushed) prompts and sibling subagent
-  // transcripts survive even when the main conversation was lost.
+  // user/assistant turns: queued (never-flushed) prompts survive even when the
+  // main conversation was lost.
   queuedMessageCount: number
+  // Number of Task subagent transcripts stored beside this session; always 0
+  // for agents that don't materialize subagent transcripts. Doubles as the
+  // recoverable signal for zero-turn sessions.
   subagentTranscriptCount: number
   resumeCommand: string
+  subagent: AiVaultSessionSubagentInfo | null
+}
+
+export type AiVaultSubagentListArgs = {
+  agent: AiVaultAgent
+  parentFilePath: string
+  // The session's host. Subagent transcripts are read from the local
+  // filesystem, so non-local hosts resolve to an empty list.
+  executionHostId?: ExecutionHostId
+}
+
+export type AiVaultSubagentListResult = {
+  sessions: AiVaultSession[]
+  issues: AiVaultScanIssue[]
 }
 
 // A session is only offered for normal resume when its transcript actually holds

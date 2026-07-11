@@ -2,6 +2,7 @@ import { createReadStream } from 'node:fs'
 import { createInterface } from 'node:readline'
 import type { AiVaultSession } from '../../shared/ai-vault-types'
 import { LOCAL_EXECUTION_HOST_ID, type ExecutionHostId } from '../../shared/execution-host'
+import { isHarnessInjectedUserTurnText } from '../../shared/harness-injected-user-turns'
 import type {
   FileWithMtime,
   ResumableSessionParseState,
@@ -119,8 +120,10 @@ export function consumeClaudeSessionLine(state: ClaudeSessionParseState, line: s
     const title = extractMessageText(record.message)
     addPreviewContent(accumulator, 'user', asRecord(record.message)?.content, record.timestamp)
     if (title) {
-      // Meta prompts (injected context) only seed the last-resort title.
-      if (record.isMeta === true) {
+      // Meta prompts (injected context) only seed the last-resort title. Some
+      // injected turns (task notifications) carry no isMeta, so also gate on
+      // the shared machinery-text classifier.
+      if (record.isMeta === true || isHarnessInjectedUserTurnText(title)) {
         state.metaTitle ??= title
       } else {
         state.firstUserTitle ??= title
@@ -153,13 +156,16 @@ export async function finalizeClaudeSessionParseState(
   // session name (ai-title) should outrank the raw first prompt when present.
   snapshot.accumulator.fallbackTitle =
     snapshot.generatedTitle ?? snapshot.firstUserTitle ?? snapshot.metaTitle
-  // Only a zero-turn transcript needs its sibling subagent transcripts counted;
-  // for normal sessions the extra directory read is skipped. The sibling dir
+  // Every session's sibling subagent transcripts are counted (one readdir):
+  // the row UI shows the count without expanding details, and for zero-turn
+  // transcripts it doubles as the recoverable-content signal. The sibling dir
   // lives on the host that owns the transcript, so content fetched from a
-  // remote (SSH) host must not readdir this machine's disk.
+  // remote (SSH) host must not readdir this machine's disk. Runtime hosts scan
+  // their own local disk (their host id is stamped after parse), so they are
+  // already covered by the undefined-executionHostId branch.
   const ownsTranscriptDisk =
     !options.executionHostId || options.executionHostId === LOCAL_EXECUTION_HOST_ID
-  if (snapshot.accumulator.messageCount === 0 && ownsTranscriptDisk) {
+  if (ownsTranscriptDisk) {
     snapshot.accumulator.subagentTranscriptCount = await countSubagentTranscripts(
       snapshot.accumulator.filePath
     )

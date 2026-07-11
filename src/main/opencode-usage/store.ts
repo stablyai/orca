@@ -18,7 +18,9 @@ import { loadKnownUsageWorktreesByRepo, type UsageWorktreeRef } from '../usage-w
 import type { OpenCodeUsageDailyAggregate, OpenCodeUsagePersistedState } from './types'
 import { createWorktreeRefs, scanOpenCodeUsageDatabases } from './scanner'
 
-const SCHEMA_VERSION = 1
+// Why: v2 adds per-database session ownership (stale sibling-copy dedupe).
+// Older caches were built without it and can carry doubled sessions (#8006).
+const SCHEMA_VERSION = 2
 const STALE_MS = 5 * 60_000
 
 let _openCodeUsageFile: string | null = null
