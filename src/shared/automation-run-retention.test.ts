@@ -76,6 +76,25 @@ describe('pruneAutomationRuns', () => {
     expect(pruneAutomationRuns(makeRuns('a', 3), -1)).toEqual([])
   })
 
+  // Why: a dispatched run's completion can land hours later; evicting the row
+  // would make updateAutomationRun throw 'Automation run not found.'
+  it('never evicts in-flight runs, even far past the cap', () => {
+    const inFlight = [
+      run({ id: 'old-pending', automationId: 'a', status: 'pending', createdAt: -3 }),
+      run({ id: 'old-dispatching', automationId: 'a', status: 'dispatching', createdAt: -2 }),
+      run({ id: 'old-dispatched', automationId: 'a', status: 'dispatched', createdAt: -1 })
+    ]
+    const kept = pruneAutomationRuns([...inFlight, ...makeRuns('a', 10)], 3)
+    expect(kept.map((r) => r.id)).toEqual([
+      'old-pending',
+      'old-dispatching',
+      'old-dispatched',
+      'a-7',
+      'a-8',
+      'a-9'
+    ])
+  })
+
   it('shrinks a realistic runaway history to the cap', () => {
     const runaway = [
       ...makeRuns('a', 2796),

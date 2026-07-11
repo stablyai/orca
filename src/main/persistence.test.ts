@@ -1730,6 +1730,8 @@ describe('Store', () => {
     persisted.automationRuns = Array.from({ length: 250 }, (_, i) => ({
       ...template,
       id: `legacy-run-${i}`,
+      // Only final runs are evictable; the real-world blowup was skipped_precheck rows.
+      status: 'skipped_precheck',
       createdAt: 1_000 + i,
       scheduledFor: 1_000 + i
     }))
@@ -1750,6 +1752,64 @@ describe('Store', () => {
     const healed = readDataFile() as { automationRuns: Record<string, unknown>[] }
     expect(healed.automationRuns).toHaveLength(100)
     expect(healed.automationRuns.at(-1)?.id).toBe('legacy-run-249')
+  })
+
+  it('does not strand an in-flight run whose completion lands after the retention cap', async () => {
+    const store = await createStore()
+    store.addRepo(
+      makeRepo({
+        upstream: { owner: 'stablyai', repo: 'orca' },
+        connectionId: 'builder'
+      })
+    )
+    const automation = store.createAutomation({
+      name: 'Every minute',
+      prompt: 'Run checks',
+      agentId: 'claude',
+      projectId: 'r1',
+      workspaceMode: 'new_per_run',
+      timezone: 'UTC',
+      rrule: 'FREQ=DAILY;BYHOUR=9;BYMINUTE=0',
+      dtstart: new Date('2026-05-13T00:00:00Z').getTime()
+    })
+    const base = new Date('2026-05-13T09:00:00Z').getTime()
+    const inFlight = store.createAutomationRun(automation, base)
+    store.updateAutomationRun({
+      runId: inFlight.id,
+      status: 'dispatched',
+      workspaceId: null,
+      error: null
+    })
+
+    // 120 later runs reach a final status while the first one is still dispatched.
+    let firstCompletedId = ''
+    for (let i = 1; i <= 120; i++) {
+      const later = store.createAutomationRun(automation, base + i * 60_000)
+      firstCompletedId ||= later.id
+      store.updateAutomationRun({
+        runId: later.id,
+        status: 'completed',
+        workspaceId: null,
+        error: null
+      })
+    }
+
+    // The late completion must still find its row.
+    const completed = store.updateAutomationRun({
+      runId: inFlight.id,
+      status: 'completed',
+      workspaceId: null,
+      error: null
+    })
+    expect(completed.id).toBe(inFlight.id)
+
+    const runs = store.listAutomationRuns(automation.id)
+    expect(runs.some((run) => run.id === inFlight.id)).toBe(true)
+    // Final runs beyond the cap were still evicted. The store can briefly hold
+    // cap + 2: the last-created run finalizes after the prune at its creation,
+    // and the late completion lands without a prune of its own.
+    expect(runs.some((run) => run.id === firstCompletedId)).toBe(false)
+    expect(runs.length).toBeLessThanOrEqual(102)
   })
 
   it('persists automation precheck config and run results', async () => {

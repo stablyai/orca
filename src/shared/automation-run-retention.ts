@@ -1,4 +1,4 @@
-import type { AutomationRun } from './automations-types'
+import { isFinalAutomationRunStatus, type AutomationRun } from './automations-types'
 
 export const MAX_AUTOMATION_RUNS_PER_AUTOMATION = 100
 
@@ -9,7 +9,10 @@ export function pruneAutomationRuns(
   maxPerAutomation: number = MAX_AUTOMATION_RUNS_PER_AUTOMATION
 ): AutomationRun[] {
   const kept = new Set<string>()
-  for (const automationRuns of Map.groupBy(runs, (run) => run.automationId).values()) {
+  // Why: a dispatched run's completion can land hours later, and
+  // updateAutomationRun throws if its row is gone — only final runs are evictable.
+  const finalRuns = runs.filter((run) => isFinalAutomationRunStatus(run.status))
+  for (const automationRuns of Map.groupBy(finalRuns, (run) => run.automationId).values()) {
     // Why: `createdAt` is the append time; `scheduledFor` breaks ties so runs
     // minted in the same millisecond drop in a stable, reproducible order.
     automationRuns.sort((a, b) => b.createdAt - a.createdAt || b.scheduledFor - a.scheduledFor)
@@ -20,7 +23,7 @@ export function pruneAutomationRuns(
   }
 
   // Survivors keep their original append order — callers index by position.
-  return runs.filter((run) => kept.has(run.id))
+  return runs.filter((run) => kept.has(run.id) || !isFinalAutomationRunStatus(run.status))
 }
 
 /**
