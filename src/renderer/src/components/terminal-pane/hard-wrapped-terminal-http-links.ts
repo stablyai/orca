@@ -1,73 +1,14 @@
 import type { IBufferLine } from '@xterm/xterm'
-import type { WrappedLogicalLine } from './wrapped-terminal-link-ranges'
-
-type TerminalBufferLineWithColumns = IBufferLine & {
-  translateToString(
-    trimRight?: boolean,
-    startColumn?: number,
-    endColumn?: number,
-    outColumns?: number[]
-  ): string
-}
+import { translateLineWithColumns, type WrappedLogicalLine } from './wrapped-terminal-link-ranges'
 
 const HTTP_SCHEME_PATTERN = /https?:\/\//i
+const HTTP_FRAGMENT_PATTERN = /^[^\s"'!*(){}|\\^<>`]*/
+const VERTICAL_LAYOUT_FRAME_PATTERN = /[│┃║╎╏┆┇┊┋|]/
+const NON_LAYOUT_SUFFIX_PATTERN = /[^\s│┃║╎╏┆┇┊┋|]/
+const HARD_WRAP_CONTINUATION_SUFFIX_PATTERN = /[/?&=#%+:-]$/
 const MAX_HARD_WRAPPED_HTTP_ROWS = 20
-
-function translateLineWithColumns(line: IBufferLine): { text: string; columns: number[] } {
-  const columns: number[] = []
-  const text = (line as TerminalBufferLineWithColumns).translateToString(
-    false,
-    0,
-    undefined,
-    columns
-  )
-  return {
-    text,
-    columns:
-      columns.length === text.length + 1
-        ? columns
-        : Array.from({ length: text.length + 1 }, (_value, index) => index)
-  }
-}
-
-function isVerticalLayoutFrameCharacter(character: string): boolean {
-  return '│┃║╎╏┆┇┊┋|'.includes(character)
-}
-
-function hasOnlyHardWrappedLayoutSuffix(text: string, startIndex: number): boolean {
-  for (const character of text.slice(startIndex)) {
-    if (!/\s/.test(character) && !isVerticalLayoutFrameCharacter(character)) {
-      return false
-    }
-  }
-  return true
-}
-
-function hardWrappedHttpFragmentEnd(text: string, startIndex: number): number {
-  for (let index = startIndex; index < text.length; index++) {
-    const code = text.charCodeAt(index)
-    if (
-      /\s/.test(text[index]) ||
-      code === 0x22 ||
-      code === 0x27 ||
-      code === 0x21 ||
-      code === 0x2a ||
-      code === 0x28 ||
-      code === 0x29 ||
-      code === 0x7b ||
-      code === 0x7d ||
-      code === 0x7c ||
-      code === 0x5c ||
-      code === 0x5e ||
-      code === 0x3c ||
-      code === 0x3e ||
-      code === 0x60
-    ) {
-      return index
-    }
-  }
-  return text.length
-}
+const MIN_HARD_WRAPPED_HTTP_ROWS = 3
+const MIN_HARD_WRAP_FILL_RATIO = 0.8
 
 function buildCandidateFromStart(
   buffer: { getLine(y: number): IBufferLine | undefined },
@@ -80,47 +21,73 @@ function buildCandidateFromStart(
   }
   const translatedStart = translateLineWithColumns(startLine)
   const schemeIndex = translatedStart.text.search(HTTP_SCHEME_PATTERN)
-  if (schemeIndex === -1) {
+  if (
+    schemeIndex === -1 ||
+    !VERTICAL_LAYOUT_FRAME_PATTERN.test(translatedStart.text.slice(0, schemeIndex))
+  ) {
     return null
   }
 
-  const continuationColumn = schemeIndex
-  const continuationPrefix = translatedStart.text.slice(0, continuationColumn)
+  const continuationPrefix = translatedStart.text.slice(0, schemeIndex)
   let text = ''
+  let rightFrameIndex: number | null = null
+  let previousRowCanContinue = true
+  let sawFilledRow = false
   const rows: WrappedLogicalLine['rows'] = []
+
   for (let rowY = startY; rowY < startY + MAX_HARD_WRAPPED_HTTP_ROWS; rowY++) {
+    if (rowY > startY && !previousRowCanContinue) {
+      break
+    }
     const line = buffer.getLine(rowY)
     if (!line) {
       break
     }
     const translated = rowY === startY ? translatedStart : translateLineWithColumns(line)
-    if (rowY > startY && translated.text.slice(0, continuationColumn) !== continuationPrefix) {
+    if (rowY > startY && translated.text.slice(0, schemeIndex) !== continuationPrefix) {
       break
     }
-    const fragmentStart = continuationColumn
-    const fragmentEnd = hardWrappedHttpFragmentEnd(translated.text, fragmentStart)
-    if (fragmentEnd <= fragmentStart) {
+
+    const fragment = translated.text.slice(schemeIndex).match(HTTP_FRAGMENT_PATTERN)?.[0] ?? ''
+    if (!fragment || (rowY > startY && HTTP_SCHEME_PATTERN.test(fragment))) {
       break
     }
-    const fragment = translated.text.slice(fragmentStart, fragmentEnd)
-    if (rowY > startY && HTTP_SCHEME_PATTERN.test(fragment)) {
+    const fragmentEnd = schemeIndex + fragment.length
+    const layoutSuffix = translated.text.slice(fragmentEnd)
+    const rightFrameOffset = layoutSuffix.search(VERTICAL_LAYOUT_FRAME_PATTERN)
+    const currentRightFrameIndex = rightFrameOffset === -1 ? -1 : fragmentEnd + rightFrameOffset
+    if (
+      currentRightFrameIndex === -1 ||
+      (rightFrameIndex !== null && currentRightFrameIndex !== rightFrameIndex) ||
+      NON_LAYOUT_SUFFIX_PATTERN.test(layoutSuffix)
+    ) {
       break
     }
+    rightFrameIndex ??= currentRightFrameIndex
+
     rows.push({
       y: rowY,
       text: fragment,
       sourceText: translated.text,
-      columns: translated.columns.slice(fragmentStart, fragmentEnd + 1),
+      columns: translated.columns.slice(schemeIndex, fragmentEnd + 1),
       startIndex: text.length,
       isWrapped: line.isWrapped,
       lineLength: line.length
     })
     text += fragment
-    if (!hasOnlyHardWrappedLayoutSuffix(translated.text, fragmentEnd)) {
-      break
-    }
+
+    const contentWidth = currentRightFrameIndex - schemeIndex
+    const fillsRow = contentWidth > 0 && fragment.length / contentWidth >= MIN_HARD_WRAP_FILL_RATIO
+    sawFilledRow ||= fillsRow
+    previousRowCanContinue = HARD_WRAP_CONTINUATION_SUFFIX_PATTERN.test(fragment) || fillsRow
   }
 
+  if (rows.length > 1 && (rows.length < MIN_HARD_WRAPPED_HTTP_ROWS || !sawFilledRow)) {
+    // Why: a short complete URL can legitimately end in `/`; one adjacent
+    // framed token is not enough evidence that the URL continued onto it.
+    rows.splice(1)
+    text = rows[0]?.text ?? ''
+  }
   if (rows.at(-1)?.y === undefined || rows.at(-1)!.y < currentY) {
     return null
   }

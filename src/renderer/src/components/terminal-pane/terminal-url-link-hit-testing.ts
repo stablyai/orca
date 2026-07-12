@@ -8,7 +8,7 @@ import { buildHardWrappedHttpLogicalLineCandidates } from './hard-wrapped-termin
 import { isTerminalLinkActivation } from './terminal-link-activation'
 import { installTerminalLinkPtyMouseSuppression } from './terminal-link-pty-mouse-suppression'
 import { getTerminalBufferPositionForMouseEvent } from './terminal-mouse-buffer-position'
-import { rangeForParsedFileLink } from './wrapped-terminal-link-ranges'
+import { buildWrappedLogicalLine, rangeForParsedFileLink } from './wrapped-terminal-link-ranges'
 
 type UrlLinkHitTestDeps = {
   worktreeId: string
@@ -33,7 +33,6 @@ type ParsedTerminalHttpLink = {
 
 const HTTP_SCHEME_PREFIXES = ['https://', 'http://'] as const
 export const TERMINAL_HTTP_URL_MAX_LENGTH = 2048
-const handledHttpLinkMouseEvents = new WeakSet<MouseEvent>()
 
 export function extractTerminalHttpLinks(lineText: string): ParsedTerminalHttpLink[] {
   const links: ParsedTerminalHttpLink[] = []
@@ -57,7 +56,7 @@ export function extractTerminalHttpLinks(lineText: string): ParsedTerminalHttpLi
 }
 
 function isDesktopHttpLinkFallbackActivation(event: MouseEvent): boolean {
-  if (event.defaultPrevented || handledHttpLinkMouseEvents.has(event) || event.button !== 0) {
+  if (event.defaultPrevented || event.button !== 0) {
     return false
   }
   // Why: desktop terminal links require an intentional Cmd/Ctrl gesture so
@@ -204,18 +203,19 @@ export function openHttpLinkAtTerminalMouseEvent(
   if (!position) {
     return false
   }
-  const opened = openHttpLinkAtBufferPosition(terminal.buffer.active, position, terminal.cols, deps)
-  if (opened) {
-    handledHttpLinkMouseEvents.add(event)
-  }
-  return opened
+  return openHttpLinkAtBufferPosition(terminal.buffer.active, position, terminal.cols, deps)
 }
 
 export function installHttpLinkClickFallback(
   terminal: Terminal,
   deps: UrlLinkClickFallbackDeps
 ): IDisposable {
-  const ptyMouseSuppression = installTerminalLinkPtyMouseSuppression(terminal)
+  const ptyMouseSuppression = installTerminalLinkPtyMouseSuppression(terminal, (event) => {
+    const position = getTerminalBufferPositionForMouseEvent(terminal, event)
+    return Boolean(
+      position && findHttpLinkAtBufferPosition(terminal.buffer.active, position, terminal.cols)
+    )
+  })
   const handleMouseUp = (event: MouseEvent): void => {
     if (!isDesktopHttpLinkFallbackActivation(event)) {
       return
@@ -251,12 +251,29 @@ export function openHttpLinkAtBufferPosition(
   terminalColumns: number,
   deps: UrlLinkHitTestDeps
 ): boolean {
+  const url = findHttpLinkAtBufferPosition(buffer, position, terminalColumns)
+  if (!url) {
+    return false
+  }
+  openTerminalHttpLink(url, deps)
+  return true
+}
+
+function findHttpLinkAtBufferPosition(
+  buffer: { getLine(y: number): IBufferLine | undefined },
+  position: { x: number; y: number },
+  terminalColumns: number
+): string | null {
+  const nativeWrappedLogicalLine = buildWrappedLogicalLine(buffer, position.y)
   const logicalLines = dedupeLogicalLines([
+    ...(nativeWrappedLogicalLine && nativeWrappedLogicalLine.rows.length > 1
+      ? [nativeWrappedLogicalLine]
+      : []),
     ...buildHardWrappedHttpLogicalLineCandidates(buffer, position.y),
     ...buildCandidateLogicalLinesForBufferPosition(buffer, position.y)
   ])
   if (logicalLines.length === 0) {
-    return false
+    return null
   }
 
   for (const logicalLine of logicalLines) {
@@ -265,12 +282,11 @@ export function openHttpLinkAtBufferPosition(
       if (!range || !rangeContainsBufferPosition(range, position, terminalColumns)) {
         continue
       }
-      openTerminalHttpLink(parsed.url, deps)
-      return true
+      return parsed.url
     }
   }
 
-  return false
+  return null
 }
 
 export function openTerminalHttpLink(url: string, deps: UrlLinkHitTestDeps): void {

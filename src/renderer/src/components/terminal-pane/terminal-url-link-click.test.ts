@@ -4,9 +4,9 @@ import { registerHttpLinkStoreAccessor } from '@/lib/http-link-routing'
 import { handleTerminalWebLinkClick } from './terminal-web-link-click'
 import { installHttpLinkClickFallback } from './terminal-url-link-hit-testing'
 
-const COLS = 179
+const COLS = 157
 const ROWS = 59
-const INDENT = '     '
+const INDENT = ''
 const FULL_URL = [
   'http://127.0.0.1:8765/orca-double-open-repro-wrapped/',
   Array.from({ length: 79 }, (_value, index) => `seg${String(index + 1).padStart(4, '0')}`).join(
@@ -15,14 +15,9 @@ const FULL_URL = [
   '?marker=wrap-test&n=001&pad=',
   'x'.repeat(120)
 ].join('')
-const URL_ROWS = [
-  `${FULL_URL.slice(0, 157)}`,
-  `${FULL_URL.slice(157, 317)}`,
-  `${FULL_URL.slice(317, 477)}`,
-  `${FULL_URL.slice(477, 637)}`,
-  `${FULL_URL.slice(637, 698)}`,
-  `${FULL_URL.slice(698)}`
-]
+const URL_ROWS = Array.from({ length: Math.ceil(FULL_URL.length / COLS) }, (_value, index) =>
+  FULL_URL.slice(index * COLS, (index + 1) * COLS)
+)
 const FRAMED_ROW_STARTS = [
   0,
   FULL_URL.indexOf('seg0008/'),
@@ -44,14 +39,14 @@ type ListenerRegistration = [string, EventListener, AddEventListenerOptions | bo
 
 function makeBufferLine(
   fragment: string,
-  options: { cols?: number; prefix?: string; suffix?: string } = {}
+  options: { cols?: number; prefix?: string; suffix?: string; isWrapped?: boolean } = {}
 ): IBufferLine {
   const cols = options.cols ?? COLS
   const prefix = options.prefix ?? INDENT
   const suffix = options.suffix ?? ''
   const text = `${prefix}${fragment}`.padEnd(cols - suffix.length) + suffix
   return {
-    isWrapped: false,
+    isWrapped: options.isWrapped ?? false,
     length: cols,
     translateToString: (
       _trimRight?: boolean,
@@ -80,6 +75,7 @@ function makeTerminal(options?: {
   urlRows?: string[]
   linePrefix?: string
   lineSuffix?: string
+  softWrapped?: boolean
 }): {
   terminal: Terminal
   registrations: ListenerRegistration[]
@@ -126,7 +122,8 @@ function makeTerminal(options?: {
             makeBufferLine(urlRows[y], {
               cols,
               prefix: options?.linePrefix,
-              suffix: options?.lineSuffix
+              suffix: options?.lineSuffix,
+              isWrapped: (options?.softWrapped ?? true) && y > 0
             })
         }
       },
@@ -138,15 +135,20 @@ function makeTerminal(options?: {
 }
 
 function mouseEventForRow(row: number): MouseEvent {
+  let defaultPrevented = false
   return {
     button: 0,
     metaKey: true,
     ctrlKey: false,
     shiftKey: true,
-    defaultPrevented: false,
+    get defaultPrevented() {
+      return defaultPrevented
+    },
     clientX: 150,
     clientY: row * 10 + 5,
-    preventDefault: vi.fn()
+    preventDefault: vi.fn(() => {
+      defaultPrevented = true
+    })
   } as unknown as MouseEvent
 }
 
@@ -215,7 +217,8 @@ describe('hard-wrapped terminal HTTP clicks', () => {
       cols: 135,
       urlRows: FRAMED_URL_ROWS,
       linePrefix: ' │   ',
-      lineSuffix: '│ '
+      lineSuffix: '│ ',
+      softWrapped: false
     })
     const event = mouseEventForRow(0)
 
@@ -231,5 +234,63 @@ describe('hard-wrapped terminal HTTP clicks', () => {
     expect(openUrlMock).toHaveBeenCalledTimes(1)
     expect(openUrlMock).toHaveBeenCalledWith(FULL_URL)
     expect(new URL(FRAMED_URL_ROWS[0]).pathname).toHaveLength(88)
+  })
+
+  it('does not append an unrelated aligned TUI row to a complete URL', () => {
+    const { terminal, registrations } = makeTerminal({
+      cols: 135,
+      urlRows: ['http://example.com/', 'next-token'],
+      linePrefix: ' │   ',
+      lineSuffix: '│ ',
+      softWrapped: false
+    })
+    const disposable = installHttpLinkClickFallback(terminal, { worktreeId: 'wt-1' })
+
+    expect(
+      handleTerminalWebLinkClick('http://example.com/', mouseEventForRow(0), {
+        terminal,
+        worktreeId: 'wt-1',
+        worktreePath: '/tmp',
+        startupCwd: '/tmp'
+      })
+    ).toBe(true)
+    expect(openUrlMock).toHaveBeenCalledOnce()
+    expect(openUrlMock).toHaveBeenCalledWith('http://example.com/')
+
+    openUrlMock.mockReset()
+    const fallback = registrations.find(
+      ([name, _listener, options]) => name === 'mouseup' && options === undefined
+    )?.[1]
+    fallback!(mouseEventForRow(1))
+    expect(openUrlMock).not.toHaveBeenCalled()
+    disposable.dispose()
+  })
+
+  it('does not suppress a modifier-click when the buffer position is not an HTTP link', () => {
+    const { terminal, registrations } = makeTerminal({ urlRows: ['not-a-link'] })
+    const disposable = installHttpLinkClickFallback(terminal, { worktreeId: 'wt-1' })
+    const mouseDown = registrations.find(([name]) => name === 'mousedown')?.[1]
+
+    mouseDown!(mouseEventForRow(0))
+
+    expect(terminal.options.mouseEventsRequireAlt).toBe(false)
+    disposable.dispose()
+  })
+
+  it('temporarily suppresses PTY mouse reporting at an HTTP link position', async () => {
+    const { terminal, registrations } = makeTerminal()
+    const disposable = installHttpLinkClickFallback(terminal, { worktreeId: 'wt-1' })
+    const mouseDown = registrations.find(([name]) => name === 'mousedown')?.[1]
+    const mouseUp = registrations.find(
+      ([name, _listener, options]) => name === 'mouseup' && options !== undefined
+    )?.[1]
+
+    mouseDown!(mouseEventForRow(0))
+    expect(terminal.options.mouseEventsRequireAlt).toBe(true)
+
+    mouseUp!(mouseEventForRow(0))
+    await Promise.resolve()
+    expect(terminal.options.mouseEventsRequireAlt).toBe(false)
+    disposable.dispose()
   })
 })

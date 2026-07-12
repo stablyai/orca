@@ -3,7 +3,10 @@ import { isTerminalLinkActivation } from './terminal-link-activation'
 
 const CAPTURE_LISTENER_OPTIONS = { capture: true } as const
 
-export function installTerminalLinkPtyMouseSuppression(terminal: Terminal): IDisposable {
+export function installTerminalLinkPtyMouseSuppression(
+  terminal: Terminal,
+  shouldSuppressMouseEvent: (event: MouseEvent) => boolean
+): IDisposable {
   const terminalElement = terminal.element
   const ownerDocument = terminalElement?.ownerDocument
   const ownerWindow = ownerDocument?.defaultView
@@ -28,7 +31,11 @@ export function installTerminalLinkPtyMouseSuppression(terminal: Terminal): IDis
     queueMicrotask(restore)
   }
   const handleMouseDown = (event: MouseEvent): void => {
-    if (event.button !== 0 || !isTerminalLinkActivation(event)) {
+    if (
+      event.button !== 0 ||
+      !isTerminalLinkActivation(event) ||
+      !shouldSuppressMouseEvent(event)
+    ) {
       return
     }
     restore()
