@@ -1017,6 +1017,8 @@ function openMainWindow(): BrowserWindow {
       stateStartedAt,
       launchToken,
       providerSession,
+      hookEventName,
+      hasExplicitPrompt,
       isReplay
     }) => {
       if (mainWindow?.isDestroyed()) {
@@ -1036,7 +1038,12 @@ function openMainWindow(): BrowserWindow {
         receivedAt,
         stateStartedAt,
         ...(providerSession ? { providerSession } : {}),
-        ...(orchestration ? { orchestration } : {})
+        ...(orchestration ? { orchestration } : {}),
+        // Why: prompt-delivery receipts need the exact hook boundary; the
+        // coarse state cannot prove a prompt was accepted (codex SessionStart
+        // is also 'working').
+        ...(hookEventName ? { hookEventName } : {}),
+        ...(hasExplicitPrompt === true ? { hasExplicitPrompt: true } : {})
       })
       recordAgentStateCrashBreadcrumb(payload.agentType ?? 'unknown', payload.state)
       // Why: some native OSC titles miss terminal idle/permission frames.

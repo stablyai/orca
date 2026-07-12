@@ -251,6 +251,8 @@ function toAgentStatusIpcPayload(entry: EnrichedAgentHookEventPayload): AgentSta
     receivedAt: entry.receivedAt,
     stateStartedAt: entry.stateStartedAt,
     ...(entry.providerSession ? { providerSession: entry.providerSession } : {}),
+    ...(entry.hookEventName ? { hookEventName: entry.hookEventName } : {}),
+    ...(entry.hasExplicitPrompt === true ? { hasExplicitPrompt: true } : {}),
     ...entry.payload
   }
 }

@@ -94,6 +94,14 @@ vi.mock('@/components/tab-bar/reconcile-order', () => ({
   )
 }))
 
+const mockIsPromptReceiptEligible = vi.fn()
+const mockWatchForPromptSubmitReceipt = vi.fn()
+
+vi.mock('@/lib/agent-prompt-submit-receipt', () => ({
+  isPromptReceiptEligible: mockIsPromptReceiptEligible,
+  watchForPromptSubmitReceipt: mockWatchForPromptSubmitReceipt
+}))
+
 vi.mock('@/lib/agent-paste-draft', () => ({
   pasteDraftWhenAgentReady: mockPasteDraftWhenAgentReady
 }))
@@ -150,6 +158,12 @@ describe('launchAgentInNewTab', () => {
     store.terminalLayoutsByTabId = {}
     mockCreateTab.mockReturnValue({ id: 'tab-1' })
     mockPasteDraftWhenAgentReady.mockResolvedValue(true)
+    mockIsPromptReceiptEligible.mockResolvedValue(false)
+    mockWatchForPromptSubmitReceipt.mockReturnValue({
+      result: Promise.resolve(true),
+      cancel: vi.fn(),
+      startTimer: vi.fn()
+    })
   })
 
   it('stamps the launched agent on the new tab for immediate provider icon bootstrap', async () => {
@@ -705,6 +719,37 @@ describe('launchAgentInNewTab', () => {
     })
     expect(mockToastMessage).toHaveBeenCalledWith(
       "Your prompt wasn't sent — paste it once the agent is ready."
+    )
+    expect(mockTrack).toHaveBeenCalledWith(
+      'agent_error',
+      expect.objectContaining({ error_class: 'paste_readiness_timeout' })
+    )
+  })
+
+  it('classifies a missing prompt-submit receipt separately in telemetry', async () => {
+    mockIsPromptReceiptEligible.mockResolvedValue(true)
+    mockWatchForPromptSubmitReceipt.mockReturnValue({
+      result: Promise.resolve(false),
+      cancel: vi.fn(),
+      startTimer: vi.fn()
+    })
+    store.tabsByWorktree = { 'wt-1': [{ id: 'tab-1', ptyId: 'pty-1' } as never] }
+    const { launchAgentInNewTab } = await import('./launch-agent-in-new-tab')
+
+    const result = launchAgentInNewTab({
+      agent: 'codex',
+      worktreeId: 'wt-1',
+      prompt: 'large generated prompt',
+      promptDelivery: 'submit-after-ready'
+    })
+
+    await expect(result?.promptDeliveryResult).resolves.toEqual({
+      delivered: false,
+      failureNotified: true
+    })
+    expect(mockTrack).toHaveBeenCalledWith(
+      'agent_error',
+      expect.objectContaining({ error_class: 'prompt_receipt_timeout' })
     )
   })
 

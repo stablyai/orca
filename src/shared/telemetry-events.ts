@@ -117,6 +117,10 @@ export type AgentKind = z.infer<typeof agentKindSchema>
 //   - `paste_readiness_timeout` — bracketed-paste readiness wait timed out.
 //     The agent process spawned but its TUI input box didn't reach a ready
 //     state before the watchdog deadline, so the queued draft was dropped.
+//   - `prompt_receipt_timeout` — the paste and Enter went in after readiness,
+//     but the agent's managed hook never acknowledged a submitted prompt
+//     (UserPromptSubmit), so a trust/update/login screen likely swallowed it
+//     and the launch reported failure instead of a false success.
 //   - `unknown` — every other thrown error (env-build failures,
 //     unclassifiable shell-spawn errors).
 // Provider-side errors (`auth_expired`, `rate_limited`, `network_timeout`,
@@ -124,7 +128,12 @@ export type AgentKind = z.infer<typeof agentKindSchema>
 // to Orca — see telemetry-plan.md §Decision: Defer per-incident error fields.
 // Adding a new value is additive-safe; do it when the call site lands, not in
 // anticipation.
-export const errorClassSchema = z.enum(['binary_not_found', 'paste_readiness_timeout', 'unknown'])
+export const errorClassSchema = z.enum([
+  'binary_not_found',
+  'paste_readiness_timeout',
+  'prompt_receipt_timeout',
+  'unknown'
+])
 export type ErrorClass = z.infer<typeof errorClassSchema>
 
 export const repoMethodSchema = z.enum(['folder_picker', 'clone_url', 'drag_drop'])

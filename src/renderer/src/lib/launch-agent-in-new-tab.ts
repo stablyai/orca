@@ -272,7 +272,8 @@ export function launchAgentInNewTab(args: LaunchAgentInNewTabArgs): LaunchAgentI
       agent,
       submit: submitPastedPrompt,
       forcePaste: forcePasteAfterLaunch,
-      onTimeout: () => {
+      remoteLaunch: isRemote || runtimeEnvironmentId != null,
+      onTimeout: (reason) => {
         const state = useAppStore.getState()
         const tabsForWorktree = state.tabsByWorktree[worktreeId] ?? []
         const currentTab = tabsForWorktree.find((t) => t.id === tab.id)
@@ -298,7 +299,8 @@ export function launchAgentInNewTab(args: LaunchAgentInNewTabArgs): LaunchAgentI
         )
         failureNotified = true
         track('agent_error', {
-          error_class: 'paste_readiness_timeout',
+          error_class:
+            reason === 'receipt-timeout' ? 'prompt_receipt_timeout' : 'paste_readiness_timeout',
           agent_kind: tuiAgentToAgentKind(agent)
         })
       }

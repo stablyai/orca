@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { AppState } from '@/store'
 import type * as TuiAgentSelectionModule from '../../../shared/tui-agent-selection'
 import type * as TuiAgentStartupModule from '@/lib/tui-agent-startup'
+import type * as LaunchWorkItemDirectAgentModule from '@/lib/launch-work-item-direct-agent'
 
 const mocks = vi.hoisted(() => ({
   toastError: vi.fn(),
@@ -56,6 +57,19 @@ vi.mock('@/lib/ensure-hooks-confirmed', () => ({
 vi.mock('@/lib/connection-context', () => ({
   getConnectionId: mocks.getConnectionId
 }))
+
+// Why: wrap the real paste helper in a spy so existing paste assertions keep
+// exercising the real delivery path while we can still inspect the threaded
+// `remoteLaunch` value the direct flow computes.
+vi.mock('@/lib/launch-work-item-direct-agent', async () => {
+  const actual = await vi.importActual<typeof LaunchWorkItemDirectAgentModule>(
+    '@/lib/launch-work-item-direct-agent'
+  )
+  return {
+    ...actual,
+    pasteDirectWorkItemDraftWhenAgentReady: vi.fn(actual.pasteDirectWorkItemDraftWhenAgentReady)
+  }
+})
 
 vi.mock('@/runtime/runtime-hooks-client', () => ({
   checkRuntimeHooks: vi
@@ -115,6 +129,7 @@ vi.mock('../../../shared/tui-agent-selection', async () => {
 })
 
 import { launchWorkItemDirect } from './launch-work-item-direct'
+import { pasteDirectWorkItemDraftWhenAgentReady } from '@/lib/launch-work-item-direct-agent'
 import { pasteDraftWhenAgentReady } from '@/lib/agent-paste-draft'
 import { buildAgentDraftLaunchPlan, buildAgentStartupPlan } from '@/lib/tui-agent-startup'
 import { pickTuiAgent } from '../../../shared/tui-agent-selection'
@@ -709,6 +724,84 @@ describe('launchWorkItemDirect', () => {
         agent: 'codex',
         platform: 'linux'
       })
+    )
+  })
+
+  it('threads remoteLaunch=true for a runtime-hosted launch on a local-backed repo', async () => {
+    // Why: a focused runtime environment runs the agent off the local host, so
+    // its prompt-submit hook may never surface a local receipt. The direct flow
+    // must keep those optimistic (like launch-agent-in-new-tab) even though
+    // getConnectionId is null for the local-backed repo (finding F1).
+    mocks.getConnectionId.mockReturnValue(null)
+    mocks.store.settings = {
+      defaultTuiAgent: 'codex',
+      disabledTuiAgents: [],
+      agentCmdOverrides: {},
+      activeRuntimeEnvironmentId: 'runtime-web-1'
+    }
+    vi.mocked(buildAgentStartupPlan).mockReturnValueOnce({
+      agent: 'codex',
+      launchCommand: 'codex',
+      expectedProcess: 'codex',
+      followupPrompt: null,
+      launchConfig: { agentArgs: '', agentEnv: {} }
+    })
+    const { launchWorkItemDirect } = await import('./launch-work-item-direct')
+
+    await expect(
+      launchWorkItemDirect({
+        item: {
+          title: 'Fix failing checks',
+          url: 'https://github.com/acme/repo/pull/1',
+          type: 'issue',
+          number: 1,
+          pasteContent: 'Fix the failing checks.'
+        },
+        repoId: 'repo-1',
+        openModalFallback: mocks.openModalFallback,
+        launchSource: 'task_page',
+        agentOverride: 'codex',
+        promptDelivery: 'submit-after-ready'
+      })
+    ).resolves.toBe(true)
+
+    expect(vi.mocked(pasteDirectWorkItemDraftWhenAgentReady)).toHaveBeenCalledWith(
+      expect.objectContaining({ submit: true, remoteLaunch: true })
+    )
+  })
+
+  it('threads remoteLaunch=false for a purely local launch (receipt gate applies)', async () => {
+    // Why: no SSH connection and no focused runtime — the agent runs locally, so
+    // the receipt gate must stay active and remoteLaunch must be false.
+    mocks.getConnectionId.mockReturnValue(null)
+    vi.mocked(buildAgentStartupPlan).mockReturnValueOnce({
+      agent: 'codex',
+      launchCommand: 'codex',
+      expectedProcess: 'codex',
+      followupPrompt: null,
+      launchConfig: { agentArgs: '', agentEnv: {} }
+    })
+    const { launchWorkItemDirect } = await import('./launch-work-item-direct')
+
+    await expect(
+      launchWorkItemDirect({
+        item: {
+          title: 'Fix failing checks',
+          url: 'https://github.com/acme/repo/pull/1',
+          type: 'issue',
+          number: 1,
+          pasteContent: 'Fix the failing checks.'
+        },
+        repoId: 'repo-1',
+        openModalFallback: mocks.openModalFallback,
+        launchSource: 'task_page',
+        agentOverride: 'codex',
+        promptDelivery: 'submit-after-ready'
+      })
+    ).resolves.toBe(true)
+
+    expect(vi.mocked(pasteDirectWorkItemDraftWhenAgentReady)).toHaveBeenCalledWith(
+      expect.objectContaining({ submit: true, remoteLaunch: false })
     )
   })
 })

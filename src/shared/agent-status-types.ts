@@ -222,6 +222,13 @@ export type AgentStatusIpcPayload = ParsedAgentStatusPayload & {
   stateStartedAt: number
   orchestration?: AgentStatusOrchestrationContext
   providerSession?: AgentProviderSessionMetadata
+  /** Why: prompt-delivery receipts need the precise hook boundary — codex maps
+   *  SessionStart to 'working' too, so the coarse state cannot prove a prompt
+   *  was accepted. Absent for non-hook (title-derived/synthetic) statuses. */
+  hookEventName?: string
+  /** True when the event carries a genuine new user prompt (harness-injected
+   *  turns and cached-prompt tool pings are folded to false/absent). */
+  hasExplicitPrompt?: boolean
 }
 
 /** Maximum character length for the toolName field. */

@@ -14,6 +14,7 @@ import {
 } from '@/lib/launch-work-item-direct-messages'
 import { ensureHooksConfirmed } from '@/lib/ensure-hooks-confirmed'
 import { getConnectionId } from '@/lib/connection-context'
+import { getRuntimeEnvironmentIdForWorktree } from '@/lib/worktree-runtime-owner'
 import type { GitPushTarget, SetupDecision, TuiAgent } from '../../../shared/types'
 import { getLinearIssueWorkspaceName } from '../../../shared/workspace-name'
 import { resolveGitHubWorkItemIdentity } from '@/lib/github-work-item-identity'
@@ -326,7 +327,13 @@ export async function launchWorkItemDirect(args: LaunchWorkItemDirectArgs): Prom
     startupPlan,
     content: draftContent,
     submit: promptDelivery === 'submit-after-ready',
-    forcePaste: promptDelivery === 'submit-after-ready'
+    forcePaste: promptDelivery === 'submit-after-ready',
+    // Why: SSH or a focused runtime environment runs the agent off the local
+    // host, where its prompt-submit hook may not surface a local receipt; keep
+    // those on the optimistic verdict like launch-agent-in-new-tab (F1).
+    remoteLaunch:
+      typeof getConnectionId(worktreeId) === 'string' ||
+      getRuntimeEnvironmentIdForWorktree(useAppStore.getState(), worktreeId) != null
   })
   return true
 }

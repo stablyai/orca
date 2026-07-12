@@ -89,6 +89,37 @@ afterEach(() => {
 })
 
 describe('AgentHookServer listener replay', () => {
+  it('forwards the hook boundary fields to the listener and snapshot', () => {
+    // Why: prompt-delivery receipts key on hookEventName/hasExplicitPrompt —
+    // codex SessionStart also maps to 'working', so the coarse state cannot
+    // prove a prompt was accepted (#7466).
+    const server = new AgentHookServer()
+    const listener = vi.fn()
+    server.setListener(listener)
+    try {
+      server.ingestRemote(
+        {
+          paneKey: PANE,
+          tabId: 'tab-1',
+          worktreeId: 'wt-1',
+          hookEventName: 'UserPromptSubmit',
+          hasExplicitPrompt: true,
+          payload: { state: 'working', prompt: 'fix the bug', agentType: 'codex' }
+        },
+        'conn-1'
+      )
+
+      expect(listener).toHaveBeenCalledWith(
+        expect.objectContaining({ hookEventName: 'UserPromptSubmit', hasExplicitPrompt: true })
+      )
+      expect(server.getStatusSnapshot()).toEqual([
+        expect.objectContaining({ hookEventName: 'UserPromptSubmit', hasExplicitPrompt: true })
+      ])
+    } finally {
+      server.stop()
+    }
+  })
+
   it('applies inferred interrupts through the cached status lifecycle', () => {
     vi.useFakeTimers()
     vi.setSystemTime(1_000)
