@@ -2,7 +2,7 @@
 import { z } from 'zod'
 import { defineMethod, type RpcMethod } from '../core'
 import { OptionalFiniteNumber, OptionalString, OptionalBoolean, requiredString } from '../schemas'
-import type { MessageType, MessagePriority, TaskStatus } from '../../orchestration/db'
+import type { MessageType, MessagePriority, TaskRow, TaskStatus } from '../../orchestration/db'
 import { buildDispatchPreamble } from '../../orchestration/preamble'
 import { formatMessageBanner } from '../../orchestration/formatter'
 import { isGroupAddress, resolveGroupAddress } from '../../orchestration/groups'
@@ -28,6 +28,25 @@ const TASK_STATUSES: TaskStatus[] = [
   'failed',
   'blocked'
 ]
+
+// Why: task-create and task-update both accept --deps as a JSON array of task
+// id strings; parse it once so both surfaces throw the identical message.
+// Only an absent value means "not provided"; an explicit empty string is
+// malformed JSON and should error, not silently clear deps.
+function parseDepsParam(deps: string | undefined): string[] | undefined {
+  if (deps === undefined) {
+    return undefined
+  }
+  try {
+    const parsed = JSON.parse(deps)
+    if (!Array.isArray(parsed) || !parsed.every((d) => typeof d === 'string')) {
+      throw new Error('not an array of strings')
+    }
+    return parsed
+  } catch {
+    throw new Error('Invalid --deps: must be a JSON array of task IDs')
+  }
+}
 
 function getLifecycleGroupRecipientError(type: 'worker_done' | 'heartbeat'): string {
   return `${type} messages must be sent to a concrete coordinator terminal handle, not a group address.`
@@ -115,6 +134,8 @@ const TaskListParams = z.object({
 
 const TaskUpdateParams = z.object({
   id: requiredString('Missing --id'),
+  // Why: --status and --deps are independently optional so a caller can edit
+  // either one; the handler requires at least one to avoid a no-op.
   status: z
     .unknown()
     .transform((v) => {
@@ -125,9 +146,11 @@ const TaskUpdateParams = z.object({
     })
     .pipe(
       z.enum(['pending', 'ready', 'dispatched', 'completed', 'failed', 'blocked'], {
-        message: 'Missing --status'
+        message: 'Invalid --status'
       })
-    ),
+    )
+    .optional(),
+  deps: OptionalString,
   result: OptionalString
 })
 
@@ -362,23 +385,11 @@ export const ORCHESTRATION_METHODS: RpcMethod[] = [
     params: TaskCreateParams,
     handler: (params, { runtime }) => {
       const db = runtime.getOrchestrationDb()
-      let deps: string[] | undefined
-      if (params.deps) {
-        try {
-          const parsed = JSON.parse(params.deps)
-          if (!Array.isArray(parsed) || !parsed.every((d) => typeof d === 'string')) {
-            throw new Error('not an array of strings')
-          }
-          deps = parsed
-        } catch {
-          throw new Error('Invalid --deps: must be a JSON array of task IDs')
-        }
-      }
       const task = db.createTask({
         spec: params.spec,
         taskTitle: params.taskTitle,
         displayName: params.displayName,
-        deps,
+        deps: parseDepsParam(params.deps),
         parentId: params.parent,
         createdByTerminalHandle: params.callerTerminalHandle
       })
@@ -415,7 +426,19 @@ export const ORCHESTRATION_METHODS: RpcMethod[] = [
     params: TaskUpdateParams,
     handler: (params, { runtime }) => {
       const db = runtime.getOrchestrationDb()
-      const task = db.updateTaskStatus(params.id, params.status, params.result)
+      if (params.status === undefined && params.deps === undefined) {
+        throw new Error('task-update requires at least one of --status or --deps')
+      }
+      let task: TaskRow | undefined
+      // Why: apply deps first so an explicit --status is the final word. A deps
+      // edit can flip readiness, but the requested status overrides it; doing
+      // status first would let the deps recompute clobber it.
+      if (params.deps !== undefined) {
+        task = db.updateTaskDeps(params.id, parseDepsParam(params.deps) ?? [])
+      }
+      if (params.status !== undefined) {
+        task = db.updateTaskStatus(params.id, params.status, params.result)
+      }
       if (!task) {
         throw new Error(`Task not found: ${params.id}`)
       }

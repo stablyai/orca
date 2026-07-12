@@ -476,6 +476,7 @@ export function formatFlagHelp(flag: string): string {
     direction:
       '--direction <dir>      Direction: up|down|left|right for scroll, horizontal|vertical for split',
     'display-name': '--display-name <name>  Override the Orca display name',
+    deps: '--deps <json_array>   JSON array of task IDs this task depends on',
     'element-index': '--element-index <n>   Element index from get-app-state',
     title: '--title <text>         Custom title for the terminal tab (omit to reset)',
     enter: '--enter                Append Enter after sending text',
