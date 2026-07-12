@@ -490,7 +490,6 @@ describe('orca cli worktree awareness', () => {
   const originalPairingCode = process.env.ORCA_PAIRING_CODE
   const originalRemotePairing = process.env.ORCA_REMOTE_PAIRING
   const originalEnvironment = process.env.ORCA_ENVIRONMENT
-  const originalCliCwd = process.env.ORCA_CLI_CWD
   const originalWorkspaceId = process.env.ORCA_WORKSPACE_ID
   const originalWorktreeId = process.env.ORCA_WORKTREE_ID
 
@@ -498,7 +497,6 @@ describe('orca cli worktree awareness', () => {
     callMock.mockReset()
     delete process.env.ORCA_TERMINAL_HANDLE
     delete process.env.ORCA_USER_DATA_PATH
-    delete process.env.ORCA_CLI_CWD
     delete process.env.ORCA_WORKSPACE_ID
     delete process.env.ORCA_WORKTREE_ID
     // Isolate the pane key so claude-teams tests that set it don't leak a
@@ -558,11 +556,6 @@ describe('orca cli worktree awareness', () => {
     } else {
       process.env.ORCA_ENVIRONMENT = originalEnvironment
     }
-    if (originalCliCwd === undefined) {
-      delete process.env.ORCA_CLI_CWD
-    } else {
-      process.env.ORCA_CLI_CWD = originalCliCwd
-    }
     if (originalWorkspaceId === undefined) {
       delete process.env.ORCA_WORKSPACE_ID
     } else {
@@ -619,96 +612,36 @@ describe('orca cli worktree awareness', () => {
     expect(logSpy).toHaveBeenCalledTimes(1)
   })
 
-  it('defaults `main()` cwd from ORCA_CLI_CWD for worktree selectors', async () => {
+  it('resolves the invocation cwd from ORCA_CLI_CWD when no cwd is passed', async () => {
+    // Why: the SSH relay bridge runs the CLI on the Orca host with the remote
+    // shell's cwd carried in ORCA_CLI_CWD (#7716); cwd-based selectors must
+    // resolve against it, not the host process cwd.
     process.env.ORCA_CLI_CWD = '/tmp/repo/feature/src'
-    vi.spyOn(process, 'cwd').mockReturnValue('/tmp/elsewhere')
-    queueFixtures(
-      callMock,
-      worktreeListFixture([
-        buildWorktree('/tmp/repo', 'main'),
-        buildWorktree('/tmp/repo/feature', 'feature/foo'),
-        buildWorktree('/tmp/repo/feature', 'feature/foo', 'abc', 'duplicate-repo')
-      ]),
-      okFixture('req_1', {
-        worktree: {
-          id: 'repo::/tmp/repo/feature',
-          branch: 'feature/foo',
-          path: '/tmp/repo/feature'
-        }
+    try {
+      queueFixtures(
+        callMock,
+        worktreeListFixture([
+          buildWorktree('/tmp/repo', 'main'),
+          buildWorktree('/tmp/repo/feature', 'feature/foo')
+        ]),
+        okFixture('req_1', {
+          worktree: {
+            id: 'repo::/tmp/repo/feature',
+            branch: 'feature/foo',
+            path: '/tmp/repo/feature'
+          }
+        })
+      )
+      vi.spyOn(console, 'log').mockImplementation(() => {})
+
+      await main(['worktree', 'current', '--json'])
+
+      expect(callMock).toHaveBeenNthCalledWith(2, 'worktree.show', {
+        worktree: 'id:repo::/tmp/repo/feature'
       })
-    )
-    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
-
-    await main(['worktree', 'current', '--json'])
-
-    expect(callMock).toHaveBeenNthCalledWith(1, 'worktree.list', {
-      limit: 10_000
-    })
-    expect(callMock).toHaveBeenNthCalledWith(2, 'worktree.show', {
-      worktree: 'id:repo::/tmp/repo/feature'
-    })
-    expect(logSpy).toHaveBeenCalledTimes(1)
-  })
-
-  it('keeps an explicit cwd authoritative over ORCA_CLI_CWD', async () => {
-    process.env.ORCA_CLI_CWD = '/tmp/repo/elsewhere'
-    queueFixtures(
-      callMock,
-      worktreeListFixture([
-        buildWorktree('/tmp/repo', 'main'),
-        buildWorktree('/tmp/repo/feature', 'feature/foo'),
-        buildWorktree('/tmp/repo/feature', 'feature/foo', 'abc', 'duplicate-repo')
-      ]),
-      okFixture('req_1', {
-        worktree: {
-          id: 'repo::/tmp/repo/feature',
-          branch: 'feature/foo',
-          path: '/tmp/repo/feature'
-        }
-      })
-    )
-    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
-
-    await main(['worktree', 'current', '--json'], '/tmp/repo/feature/src')
-
-    expect(callMock).toHaveBeenNthCalledWith(1, 'worktree.list', {
-      limit: 10_000
-    })
-    expect(callMock).toHaveBeenNthCalledWith(2, 'worktree.show', {
-      worktree: 'id:repo::/tmp/repo/feature'
-    })
-    expect(logSpy).toHaveBeenCalledTimes(1)
-  })
-
-  it('falls back to process.cwd when ORCA_CLI_CWD is empty', async () => {
-    process.env.ORCA_CLI_CWD = ''
-    vi.spyOn(process, 'cwd').mockReturnValue('/tmp/repo/feature/src')
-    queueFixtures(
-      callMock,
-      worktreeListFixture([
-        buildWorktree('/tmp/repo', 'main'),
-        buildWorktree('/tmp/repo/feature', 'feature/foo'),
-        buildWorktree('/tmp/repo/feature', 'feature/foo', 'abc', 'duplicate-repo')
-      ]),
-      okFixture('req_1', {
-        worktree: {
-          id: 'repo::/tmp/repo/feature',
-          branch: 'feature/foo',
-          path: '/tmp/repo/feature'
-        }
-      })
-    )
-    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
-
-    await main(['worktree', 'current', '--json'])
-
-    expect(callMock).toHaveBeenNthCalledWith(1, 'worktree.list', {
-      limit: 10_000
-    })
-    expect(callMock).toHaveBeenNthCalledWith(2, 'worktree.show', {
-      worktree: 'id:repo::/tmp/repo/feature'
-    })
-    expect(logSpy).toHaveBeenCalledTimes(1)
+    } finally {
+      delete process.env.ORCA_CLI_CWD
+    }
   })
 
   it.skipIf(process.platform === 'win32')(
