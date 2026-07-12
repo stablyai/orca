@@ -71,9 +71,10 @@ async function readTranscript(
   limits?: TranscriptDecodeLimits
 ): Promise<NativeChatMessage[]> {
   // Why: Codex cold-compresses older rollouts; other agents remain plain JSONL.
+  // Keep plain reads as bytes so malformed UTF-8 cannot distort safety limits.
   const stream = isCodexCompressedRolloutPath(filePath)
     ? openCodexRolloutStream(filePath)
-    : createReadStream(filePath, { encoding: 'utf-8' })
+    : createReadStream(filePath)
   const { messages } = await decodeTranscriptStream(stream, filePath, 0, decode, true, limits)
   return messages
 }

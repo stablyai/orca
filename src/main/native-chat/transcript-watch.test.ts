@@ -16,7 +16,7 @@ afterEach(async () => {
   tempRoots = []
 })
 
-async function tempFile(initial: string): Promise<string> {
+async function tempFile(initial: string | Uint8Array): Promise<string> {
   const root = await mkdtemp(join(tmpdir(), 'orca-native-chat-watch-'))
   tempRoots.push(root)
   const filePath = join(root, 'rollout.jsonl')
@@ -232,6 +232,36 @@ describe('subscribeNativeChatTranscript', () => {
 
     sub.unsubscribe()
     expect(seen.filter((m) => m.id === 'a-partial')).toHaveLength(1)
+  })
+
+  it('keeps malformed UTF-8 from advancing into the next partial record', async () => {
+    const seed = claudeLine('u-seed', 'user', 'before malformed offset check')
+    const filePath = await tempFile(
+      Buffer.concat([Buffer.from([0xff, 0x0a]), Buffer.from(seed, 'utf8')])
+    )
+    const seen: NativeChatMessage[] = []
+
+    const sub = await subscribeNativeChatTranscript({
+      agent: 'claude',
+      sessionId: 'ignored',
+      filePath,
+      onAppend: (messages) => seen.push(...messages),
+      debounceMs: 5
+    })
+
+    await waitFor(() => seen.some((message) => message.id === 'u-seed'))
+
+    const line = claudeLine('a-after-malformed', 'assistant', 'offset stayed aligned')
+    const splitAt = Math.floor(line.length / 2)
+    await appendFile(filePath, line.slice(0, splitAt))
+    await new Promise((resolve) => setTimeout(resolve, 40))
+    expect(seen.some((message) => message.id === 'a-after-malformed')).toBe(false)
+
+    await appendFile(filePath, line.slice(splitAt))
+    await waitFor(() => seen.some((message) => message.id === 'a-after-malformed'))
+
+    sub.unsubscribe()
+    expect(seen.filter((message) => message.id === 'a-after-malformed')).toHaveLength(1)
   })
 
   it('survives file replacement / rotation (offset reset on shrink)', async () => {

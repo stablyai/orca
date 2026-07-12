@@ -105,8 +105,9 @@ async function readAppendedMessages(
 
   const handle = await open(filePath, 'r')
   try {
+    // Why: decoding here would turn malformed bytes into larger replacement
+    // sequences and advance the persisted file offset past unread records.
     const stream = handle.createReadStream({
-      encoding: 'utf-8',
       start,
       end: end - 1,
       autoClose: false

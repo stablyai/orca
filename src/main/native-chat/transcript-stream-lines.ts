@@ -1,4 +1,5 @@
 import type { Readable } from 'node:stream'
+import { StringDecoder } from 'node:string_decoder'
 import type { NativeChatMessage } from '../../shared/native-chat-types'
 import { transcriptFallbackId } from './transcript-fallback-id'
 
@@ -34,37 +35,40 @@ export async function decodeTranscriptStream(
   let decodedBytes = 0
   let consumedBytes = 0
   let oldestMessageIndex = 0
+  let pendingHighSurrogate = ''
+  const utf8Decoder = new StringDecoder('utf8')
 
   assertPositiveLimit(limits.maxDecodedBytes, 'decoded byte')
   assertPositiveLimit(limits.maxLineBytes, 'line byte')
   assertPositiveLimit(limits.maxMessages, 'message')
 
   for await (const chunk of stream) {
-    const text = typeof chunk === 'string' ? chunk : Buffer.from(chunk).toString('utf8')
-    const chunkBytes = typeof chunk === 'string' ? Buffer.byteLength(chunk, 'utf8') : chunk.length
-    decodedBytes += chunkBytes
-    if (limits.maxDecodedBytes !== undefined && decodedBytes > limits.maxDecodedBytes) {
-      throw new TranscriptDecodeLimitError('decoded byte', limits.maxDecodedBytes)
+    if (typeof chunk === 'string') {
+      let text = pendingHighSurrogate + chunk
+      pendingHighSurrogate = ''
+      const lastCodeUnit = text.charCodeAt(text.length - 1)
+      if (lastCodeUnit >= 0xd800 && lastCodeUnit <= 0xdbff) {
+        pendingHighSurrogate = text.slice(-1)
+        text = text.slice(0, -1)
+      }
+      consumeTranscriptBytes(Buffer.from(text, 'utf8'))
+      continue
     }
-    pending += text
-    pendingBytes += Buffer.byteLength(text, 'utf8')
-    let newlineIndex = pending.indexOf('\n')
-    while (newlineIndex !== -1) {
-      const segment = pending.slice(0, newlineIndex + 1)
-      decodeLine(segment.slice(0, -1), consumedBytes)
-      const segmentBytes = Buffer.byteLength(segment, 'utf8')
-      consumedBytes += segmentBytes
-      pending = pending.slice(newlineIndex + 1)
-      pendingBytes -= segmentBytes
-      newlineIndex = pending.indexOf('\n')
+    if (pendingHighSurrogate) {
+      consumeTranscriptBytes(Buffer.from(pendingHighSurrogate, 'utf8'))
+      pendingHighSurrogate = ''
     }
-    enforceLineLimit(pendingBytes)
+    consumeTranscriptBytes(Buffer.from(chunk))
+  }
+  if (pendingHighSurrogate) {
+    consumeTranscriptBytes(Buffer.from(pendingHighSurrogate, 'utf8'))
   }
 
+  pending += utf8Decoder.end()
   if (includeTrailingLine && pending.length > 0) {
     enforceLineLimit(pendingBytes)
-    decodeLine(pending, consumedBytes)
-    consumedBytes += Buffer.byteLength(pending, 'utf8')
+    decodeLine(pending, consumedBytes, pendingBytes)
+    consumedBytes += pendingBytes
   }
 
   const orderedMessages =
@@ -73,12 +77,37 @@ export async function decodeTranscriptStream(
       : messages.slice(oldestMessageIndex).concat(messages.slice(0, oldestMessageIndex))
   return { messages: orderedMessages, consumedBytes }
 
-  function decodeLine(rawLine: string, relativeOffset: number): void {
-    const line = rawLine.endsWith('\r') ? rawLine.slice(0, -1) : rawLine
+  function consumeTranscriptBytes(bytes: Buffer): void {
+    decodedBytes += bytes.length
+    if (limits.maxDecodedBytes !== undefined && decodedBytes > limits.maxDecodedBytes) {
+      throw new TranscriptDecodeLimitError('decoded byte', limits.maxDecodedBytes)
+    }
+    let chunkOffset = 0
+    let newlineIndex = bytes.indexOf(0x0a)
+    while (newlineIndex !== -1) {
+      const segment = bytes.subarray(chunkOffset, newlineIndex + 1)
+      pending += utf8Decoder.write(segment)
+      pendingBytes += segment.length
+      decodeLine(pending.slice(0, -1), consumedBytes, pendingBytes - 1)
+      consumedBytes += pendingBytes
+      pending = ''
+      pendingBytes = 0
+      chunkOffset = newlineIndex + 1
+      newlineIndex = bytes.indexOf(0x0a, chunkOffset)
+    }
+    const trailing = bytes.subarray(chunkOffset)
+    pending += utf8Decoder.write(trailing)
+    pendingBytes += trailing.length
+    enforceLineLimit(pendingBytes)
+  }
+
+  function decodeLine(rawLine: string, relativeOffset: number, rawLineBytes: number): void {
+    const hasCarriageReturn = rawLine.endsWith('\r')
+    const line = hasCarriageReturn ? rawLine.slice(0, -1) : rawLine
     if (!line) {
       return
     }
-    enforceLineLimit(Buffer.byteLength(line, 'utf8'))
+    enforceLineLimit(rawLineBytes - (hasCarriageReturn ? 1 : 0))
     const message = decode(line, transcriptFallbackId(filePath, start + relativeOffset))
     if (message) {
       if (limits.maxMessages === undefined || messages.length < limits.maxMessages) {
