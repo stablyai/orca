@@ -87,64 +87,80 @@ type ResolvedBrowserCommandTarget = {
 
 export type BrowserMouseModifier = 'cmd' | 'ctrl' | 'alt' | 'shift'
 
-// Why: controlled rich editors can revert direct DOM assignment, so edits must
-// flow through the browser input pipeline when it is available.
-function focusedTextEditExpression(
+function focusedValueSetExpression(
+  valueExpression: string,
+  options?: { append?: boolean; dispatchEvents?: boolean }
+): string {
+  const nextValue = options?.append
+    ? ["String(target.value ?? '') + ", valueExpression].join('')
+    : valueExpression
+  const dispatchEvents = options?.dispatchEvents
+    ? " target.dispatchEvent(new Event('input', { bubbles: true })); target.dispatchEvent(new Event('change', { bubbles: true }));"
+    : ''
+  return [
+    '(() => { const el = document.activeElement; if (el) {',
+    // Why: ARIA spinbutton wrappers can hold focus while a contained or controlled input owns the value.
+    " const editableSelector = \"input:not([type='hidden']):not([type='button']):not([type='checkbox']):not([type='radio']):not([type='file']):not([type='image']):not([type='reset']):not([type='submit']), textarea\";",
+    " const isEditable = (node) => !!node && (node.matches?.(editableSelector) ?? (node.tagName === 'TEXTAREA' || (node.tagName === 'INPUT' && !/^(hidden|button|checkbox|radio|file|image|reset|submit)$/i.test(node.getAttribute?.('type') ?? ''))));",
+    ' const findEditable = (root) => root?.querySelector?.(editableSelector) ?? null;',
+    ' let target = el;',
+    " if (!isEditable(target) && target.getAttribute?.('role') === 'spinbutton') {",
+    "   const controls = target.getAttribute('aria-controls');",
+    '   if (controls) { for (const id of controls.split(/\\s+/)) { if (!id) continue; const controlled = document.getElementById(id); if (isEditable(controlled)) { target = controlled; break; } const descendant = findEditable(controlled); if (descendant) { target = descendant; break; } } }',
+    '   if (target === el) { const descendant = findEditable(target); if (descendant) target = descendant; }',
+    ' }',
+    " const nativeSetter = Object.getOwnPropertyDescriptor(Object.getPrototypeOf(target), 'value')?.set;",
+    ' const nextValue = ',
+    nextValue,
+    '; if (nativeSetter) { nativeSetter.call(target, nextValue); } else { target.value = nextValue; }',
+    dispatchEvents,
+    ' } })()'
+  ].join('')
+}
+
+// Why: rich editors reconcile only browser editing transactions; direct DOM
+// fallback can look correct while leaving their model stale.
+function focusedRichTextEditExpression(
   valueExpression: string,
   options?: { selectAll?: boolean }
 ): string {
   const selectAll = options?.selectAll ? 'true' : 'false'
   return [
     '(() => {',
-    ' const el = document.activeElement;',
-    ' if (!el || el === document.body) { return; }',
-    // Why: ARIA spinbutton wrappers can hold focus while a contained or controlled input owns the value.
-    " const editableSelector = \"input:not([type='hidden']):not([type='button']):not([type='checkbox']):not([type='radio']):not([type='file']):not([type='image']):not([type='reset']):not([type='submit']), textarea\";",
-    " const isField = (node) => !!node && (node.matches?.(editableSelector) ?? (node.tagName === 'TEXTAREA' || (node.tagName === 'INPUT' && !/^(hidden|button|checkbox|radio|file|image|reset|submit)$/i.test(node.getAttribute?.('type') ?? ''))));",
-    ' const findField = (root) => root?.querySelector?.(editableSelector) ?? null;',
-    ' let target = el;',
-    " if (!isField(target) && target.getAttribute?.('role') === 'spinbutton') {",
-    "   const controls = target.getAttribute('aria-controls');",
-    '   if (controls) { for (const id of controls.split(/\\s+/)) { if (!id) continue; const controlled = document.getElementById(id); if (isField(controlled)) { target = controlled; break; } const descendant = findField(controlled); if (descendant) { target = descendant; break; } } }',
-    '   if (target === el) { const descendant = findField(target); if (descendant) target = descendant; }',
-    ' }',
+    ' const target = document.activeElement;',
     ' const value = ',
     valueExpression,
     ';',
     ` const selectAll = ${selectAll};`,
-    ' const targetIsField = isField(target);',
-    " const isEditable = target.isContentEditable === true || target.getAttribute?.('contenteditable') === 'true';",
-    ' if (!targetIsField && !isEditable) { return; }',
-    " if (target !== el && typeof target.focus === 'function') { target.focus(); }",
+    " const isEditable = target?.isContentEditable === true || /^(|true|plaintext-only)$/i.test(target?.getAttribute?.('contenteditable') ?? 'false');",
+    " if (!target || target === document.body || !isEditable) { throw new Error('Focused rich-text target is unavailable'); }",
     ' if (selectAll) {',
-    "   if (targetIsField && typeof target.select === 'function') { target.select(); }",
-    "   else if (isEditable && typeof window.getSelection === 'function') {",
-    '     const selection = window.getSelection();',
-    '     if (selection) { selection.selectAllChildren(target); }',
-    '   }',
+    "   if (typeof window.getSelection !== 'function') { throw new Error('Rich-text selection is unavailable'); }",
+    '   const selection = window.getSelection();',
+    "   if (!selection) { throw new Error('Rich-text selection is unavailable'); }",
+    '   selection.selectAllChildren(target);',
     ' }',
     " const editCommand = selectAll && value.length === 0 ? 'delete' : 'insertText';",
-    ' let usedExecCommand = false;',
+    ' let edited = false;',
     ' try {',
-    '   usedExecCommand = document.execCommand(editCommand, false, value) === true;',
-    ' } catch { usedExecCommand = false; }',
-    ' if (usedExecCommand) { return; }',
-    " const previous = selectAll ? '' : (targetIsField ? String(target.value ?? '') : String(target.textContent ?? ''));",
-    ' const nextValue = previous + value;',
-    ' if (targetIsField) {',
-    "   const nativeSetter = Object.getOwnPropertyDescriptor(Object.getPrototypeOf(target), 'value')?.set;",
-    '   if (nativeSetter) { nativeSetter.call(target, nextValue); } else { target.value = nextValue; }',
-    ' } else { target.textContent = nextValue; }',
-    " target.dispatchEvent(new Event('input', { bubbles: true }));",
-    " target.dispatchEvent(new Event('change', { bubbles: true }));",
+    '   edited = document.execCommand(editCommand, false, value) === true;',
+    ' } catch { edited = false; }',
+    " if (!edited) { throw new Error('Browser rich-text editing command failed'); }",
     ' })()'
   ].join('')
+}
+
+function isExplicitContentEditableResult(result: unknown): boolean {
+  const value =
+    result && typeof result === 'object' ? (result as { value?: unknown }).value : undefined
+  return typeof value === 'string' && /^(|true|plaintext-only)$/i.test(value)
 }
 
 type AgentBrowserExecOptions = {
   envOverrides?: NodeJS.ProcessEnv
   timeoutMs?: number
   timeoutError?: BrowserError
+  stdinText?: string
 }
 
 type EnqueueTargetedCommandOptions = {
@@ -801,24 +817,29 @@ export class AgentBrowserBridge {
       worktreeId,
       browserPageId,
       async (sessionName) => {
-        await this.execAgentBrowser(sessionName, ['focus', element])
-        let isFirstChunk = true
-        for (const chunk of iterateBrowserTextInsertionChunks(
-          value,
-          AGENT_BROWSER_TEXT_ARGUMENT_MAX_BYTES
-        )) {
+        if (!(await this.isExplicitContentEditableTarget(sessionName, element))) {
+          await this.execAgentBrowser(sessionName, ['focus', element])
           await this.execAgentBrowser(sessionName, [
             'eval',
-            focusedTextEditExpression(JSON.stringify(chunk), { selectAll: isFirstChunk })
+            focusedValueSetExpression(JSON.stringify(''))
           ])
-          isFirstChunk = false
-        }
-        if (isFirstChunk) {
+          for (const chunk of iterateBrowserTextInsertionChunks(
+            value,
+            AGENT_BROWSER_TEXT_ARGUMENT_MAX_BYTES
+          )) {
+            await this.execAgentBrowser(sessionName, [
+              'eval',
+              focusedValueSetExpression(JSON.stringify(chunk), { append: true })
+            ])
+          }
           await this.execAgentBrowser(sessionName, [
             'eval',
-            focusedTextEditExpression(JSON.stringify(''), { selectAll: true })
+            focusedValueSetExpression(JSON.stringify(''), { append: true, dispatchEvents: true })
           ])
+          return { filled: element } as BrowserFillResult
         }
+
+        await this.fillExplicitContentEditable(sessionName, element, value)
         return { filled: element } as BrowserFillResult
       },
       { requireScopedTarget: true }
@@ -1557,10 +1578,22 @@ export class AgentBrowserBridge {
     worktreeId?: string,
     browserPageId?: string
   ): Promise<BrowserClearResult> {
-    // Why: clear must use the same Electron-safe input path as fill; agent-browser's
-    // native fill loses its target when the guest webContents takes focus.
-    await this.fill(element, '', worktreeId, browserPageId)
-    return { cleared: element }
+    return this.enqueueTargetedCommand(
+      worktreeId,
+      browserPageId,
+      async (sessionName) => {
+        if (!(await this.isExplicitContentEditableTarget(sessionName, element))) {
+          // Why: agent-browser resolves this ref directly, preserving iframe,
+          // shadow-root, and unfocusable-target semantics for ordinary fields.
+          await this.execAgentBrowser(sessionName, ['fill', element, ''])
+          return { cleared: element }
+        }
+
+        await this.fillExplicitContentEditable(sessionName, element, '')
+        return { cleared: element }
+      },
+      { requireScopedTarget: true }
+    )
   }
 
   async selectAll(
@@ -2407,6 +2440,32 @@ export class AgentBrowserBridge {
     return translated.result
   }
 
+  private async isExplicitContentEditableTarget(
+    sessionName: string,
+    element: string
+  ): Promise<boolean> {
+    const result = await this.execAgentBrowser(sessionName, [
+      'get',
+      'attr',
+      element,
+      'contenteditable'
+    ])
+    return isExplicitContentEditableResult(result)
+  }
+
+  private async fillExplicitContentEditable(
+    sessionName: string,
+    element: string,
+    value: string
+  ): Promise<void> {
+    await this.execAgentBrowser(sessionName, ['focus', element])
+    // Why: stdin avoids argv limits while keeping replacement atomic; chunked
+    // editor transactions can move focus and split one fill across controls.
+    await this.execAgentBrowser(sessionName, ['eval', '--stdin'], {
+      stdinText: focusedRichTextEditExpression(JSON.stringify(value), { selectAll: true })
+    })
+  }
+
   private createPageUnavailableError(sessionName: string): BrowserError {
     return new BrowserError('browser_tab_not_found', pageUnavailableMessageForSession(sessionName))
   }
@@ -2555,6 +2614,11 @@ export class AgentBrowserBridge {
       )
       if (session) {
         session.activeProcess = child
+      }
+      if (execOptions?.stdinText !== undefined && child?.stdin) {
+        // Why: eval --stdin keeps paste-sized scripts out of argv on every platform.
+        child.stdin.on('error', () => {})
+        child.stdin.end(execOptions.stdinText)
       }
     })
   }

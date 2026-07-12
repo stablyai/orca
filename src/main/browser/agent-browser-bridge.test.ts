@@ -1,14 +1,14 @@
 /* eslint-disable max-lines */
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 
-const { execFileMock, webContentsFromIdMock, existsSyncMock, readFileSyncMock } = vi.hoisted(
-  () => ({
+const { execFileMock, webContentsFromIdMock, existsSyncMock, readFileSyncMock, stdinWrites } =
+  vi.hoisted(() => ({
     execFileMock: vi.fn(),
     webContentsFromIdMock: vi.fn(),
     existsSyncMock: vi.fn(() => false),
-    readFileSyncMock: vi.fn(() => Buffer.from(''))
-  })
-)
+    readFileSyncMock: vi.fn(() => Buffer.from('')),
+    stdinWrites: [] as string[]
+  }))
 
 vi.mock('child_process', () => ({ execFile: execFileMock }))
 vi.mock('fs', () => ({
@@ -108,6 +108,22 @@ function mockWebContents(id: number, url = 'https://example.com', title = 'Examp
 function succeedWith(data: unknown): void {
   execFileMock.mockImplementation((_bin: string, _args: string[], _opts: unknown, cb: Function) => {
     cb(null, JSON.stringify({ success: true, data }), '')
+    return {
+      stdin: { on: vi.fn(), end: (text: string) => stdinWrites.push(text) }
+    }
+  })
+}
+
+function succeedForContentEditable(data: unknown = { ok: true }): void {
+  execFileMock.mockImplementation((_bin: string, args: string[], _opts: unknown, cb: Function) => {
+    const result =
+      args.includes('get') && args.includes('attr') && args.includes('contenteditable')
+        ? { value: 'true' }
+        : data
+    cb(null, JSON.stringify({ success: true, data: result }), '')
+    return {
+      stdin: { on: vi.fn(), end: (text: string) => stdinWrites.push(text) }
+    }
   })
 }
 
@@ -235,15 +251,15 @@ function createContentEditableEvalEnvironment(initialText: string) {
     })
   }
   const execCommand = vi.fn((command: string, _showUi: boolean, value: string) => {
-    if (!selected) {
-      return false
-    }
     // Chromium treats an empty insertText as a successful no-op; deletion is
     // required to clear a selected contenteditable through the input pipeline.
     if (command === 'delete') {
+      if (!selected) {
+        return false
+      }
       editor.textContent = ''
     } else if (value.length > 0) {
-      editor.textContent = value
+      editor.textContent = selected ? value : editor.textContent + value
     }
     selected = false
     return true
@@ -269,6 +285,7 @@ describe('AgentBrowserBridge', () => {
 
   beforeEach(() => {
     vi.clearAllMocks()
+    stdinWrites.length = 0
     CdpWsProxyMock.instances.length = 0
     existsSyncMock.mockReturnValue(false)
     readFileSyncMock.mockReturnValue(Buffer.from(''))
@@ -1577,18 +1594,12 @@ describe('AgentBrowserBridge', () => {
   })
 
   it('replaces contenteditable text through the browser editing pipeline', async () => {
-    succeedWith({ ok: true })
+    succeedForContentEditable()
     const environment = createContentEditableEvalEnvironment('existing text')
 
     await bridge.fill('@editor', 'replacement text')
 
-    const expressions = execFileMock.mock.calls
-      .filter((call: unknown[]) => (call[1] as string[]).includes('eval'))
-      .map((call: unknown[]) => {
-        const args = call[1] as string[]
-        return args[args.indexOf('eval') + 1]
-      })
-    runFillEvalExpressions(expressions, environment.document, environment.windowObject)
+    runFillEvalExpressions(stdinWrites, environment.document, environment.windowObject)
 
     expect(environment.editor.textContent).toBe('replacement text')
     expect(environment.execCommand).toHaveBeenCalledWith('insertText', false, 'replacement text')
@@ -1596,23 +1607,62 @@ describe('AgentBrowserBridge', () => {
   })
 
   it('clears selected contenteditable text with a browser delete command', async () => {
-    succeedWith({ ok: true })
+    succeedForContentEditable()
     const environment = createContentEditableEvalEnvironment('existing text')
 
     const result = await bridge.clear('@editor')
 
-    const expressions = execFileMock.mock.calls
-      .filter((call: unknown[]) => (call[1] as string[]).includes('eval'))
-      .map((call: unknown[]) => {
-        const args = call[1] as string[]
-        return args[args.indexOf('eval') + 1]
-      })
-    runFillEvalExpressions(expressions, environment.document, environment.windowObject)
+    runFillEvalExpressions(stdinWrites, environment.document, environment.windowObject)
 
     expect(environment.editor.textContent).toBe('')
     expect(environment.execCommand).toHaveBeenCalledWith('delete', false, '')
     expect(environment.editor.dispatchEvent).not.toHaveBeenCalled()
     expect(result).toEqual({ cleared: '@editor' })
+  })
+
+  it('fails contenteditable fill when the browser editing command is unavailable', async () => {
+    succeedForContentEditable()
+    const environment = createContentEditableEvalEnvironment('existing text')
+    environment.execCommand.mockReturnValue(false)
+
+    await bridge.fill('@editor', 'replacement text')
+
+    expect(() =>
+      runFillEvalExpressions(stdinWrites, environment.document, environment.windowObject)
+    ).toThrow('Browser rich-text editing command failed')
+    expect(environment.editor.textContent).toBe('existing text')
+    expect(environment.editor.dispatchEvent).not.toHaveBeenCalled()
+  })
+
+  it('inserts paste-sized contenteditable text as one stdin editing transaction', async () => {
+    const firstChunk = 'x'.repeat(AGENT_BROWSER_TEXT_ARGUMENT_MAX_BYTES)
+    succeedForContentEditable()
+    const environment = createContentEditableEvalEnvironment('existing text')
+
+    await bridge.fill('@editor', `${firstChunk}tail`)
+
+    const evalCalls = execFileMock.mock.calls.filter((call: unknown[]) =>
+      (call[1] as string[]).includes('eval')
+    )
+    runFillEvalExpressions(stdinWrites, environment.document, environment.windowObject)
+
+    expect(evalCalls).toHaveLength(1)
+    expect(evalCalls[0][1]).toContain('--stdin')
+    expect(stdinWrites).toHaveLength(1)
+    expect(environment.editor.textContent).toBe(`${firstChunk}tail`)
+  })
+
+  it('uses target-aware agent-browser fill when clearing a non-rich target', async () => {
+    succeedWith({ filled: '@disabled' })
+
+    const result = await bridge.clear('@disabled')
+
+    const commandArgs = execFileMock.mock.calls.map((call: unknown[]) => call[1] as string[])
+    expect(commandArgs.some((args) => args.includes('eval'))).toBe(false)
+    expect(commandArgs.some((args) => args.includes('fill') && args.includes('@disabled'))).toBe(
+      true
+    )
+    expect(result).toEqual({ cleared: '@disabled' })
   })
 
   it('routes focused spinbutton wrappers to editable descendants before filling', async () => {
@@ -1770,21 +1820,18 @@ describe('AgentBrowserBridge', () => {
 
     await bridge.fill('@textarea', text)
 
-    const chunkExpressions = execFileMock.mock.calls
-      .filter((call: unknown[]) => (call[1] as string[]).includes('eval'))
-      .map((call: unknown[]) => {
-        const args = call[1] as string[]
-        return args[args.indexOf('eval') + 1]
-      })
+    const evalCalls = execFileMock.mock.calls.filter((call: unknown[]) =>
+      (call[1] as string[]).includes('eval')
+    )
+    const appendExpressions = evalCalls.slice(1, -1).map((call: unknown[]) => {
+      const args = call[1] as string[]
+      return args[args.indexOf('eval') + 1]
+    })
 
-    // Why: each chunk is inserted as its own bounded eval; no chunk carries the
-    // full payload, and only the first chunk replaces existing content.
-    expect(chunkExpressions).toHaveLength(2)
-    expect(chunkExpressions.some((expression) => expression.includes(text))).toBe(false)
-    expect(chunkExpressions[0]).toContain('x'.repeat(AGENT_BROWSER_TEXT_ARGUMENT_MAX_BYTES))
-    expect(chunkExpressions[0]).toContain('const selectAll = true')
-    expect(chunkExpressions[1]).toContain('tail')
-    expect(chunkExpressions[1]).toContain('const selectAll = false')
+    expect(appendExpressions).toHaveLength(2)
+    expect(appendExpressions.some((expression) => expression.includes(text))).toBe(false)
+    expect(appendExpressions[0]).toContain('x'.repeat(AGENT_BROWSER_TEXT_ARGUMENT_MAX_BYTES))
+    expect(appendExpressions[1]).toContain('tail')
   })
 
   it.each([
