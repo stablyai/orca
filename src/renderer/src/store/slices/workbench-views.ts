@@ -2,6 +2,7 @@ import type { StateCreator } from 'zustand'
 import type { AppState } from '../types'
 import type { WorkbenchView, WorktreeSplitDirection } from '../../../../shared/types'
 import type { WorktreeLayoutPath, WorktreeSplitPlacement } from '../../lib/worktree-layout-tree'
+import { collectLeafWorktreeIds } from '../../lib/worktree-layout-tree'
 import * as viewModel from '../../lib/workbench-view-model'
 
 // Thin Zustand glue over the pure workbench-view model. Owns id generation and
@@ -122,20 +123,17 @@ export const createWorkbenchViewsSlice: StateCreator<AppState, [], [], Workbench
         get().setActiveWorktree(worktreeId)
         return
       }
-      // If already viewing a parallel set (>= 2 panes), add to it in place.
-      // Otherwise start a NEW set from the current worktree — appended, not
-      // replacing any other sets — so multiple parallel arrangements coexist and
-      // parallel always pairs whatever is actually on screen.
-      const alreadyParallel = viewModel.getVisibleWorktreeIds(state).length >= 2
-      if (!alreadyParallel) {
+      // Target the parallel set that CONTAINS the current worktree — not whatever
+      // view is flagged active. If current isn't already in a >= 2-pane set, start
+      // a NEW set from it (appended, keeping other sets). Either way the clicked
+      // worktree is split in beside `current`, so parallel pairs what's focused.
+      const currentSet = viewModel.findViewContaining(state, current)
+      if (currentSet && collectLeafWorktreeIds(currentSet.layout).length >= 2) {
+        set({ activeWorkbenchViewId: currentSet.id })
+      } else {
         set((s) => viewModel.createSingleLeafView(s, crypto.randomUUID(), current))
       }
-      set((s) => {
-        const view = viewModel.getActiveWorkbenchView(s)
-        return view
-          ? viewModel.splitActivePane(s, view.focusedWorktreeId, direction, worktreeId)
-          : s
-      })
+      set((s) => viewModel.splitActivePane(s, current, direction, worktreeId))
       // splitActivePane no-ops when the worktree is already visible; focus it then.
       set((s) => viewModel.focusActivePane(s, worktreeId))
       syncActiveWorktree()
