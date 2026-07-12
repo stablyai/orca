@@ -52,6 +52,8 @@ describe('BrowserRpcCapabilityRegistry', () => {
       ['browser.storageLocalGet', { page: 'page-1', key: 'auth-token' }],
       ['browser.goto', { page: 'page-1', url: 'data:text/html,<script>alert(1)</script>' }],
       ['browser.goto', { page: 'page-1', url: 'https://example.com' }],
+      ['browser.back', { page: 'page-1' }],
+      ['browser.forward', { page: 'page-1' }],
       ['browser.upload', { page: 'page-1', element: '@e1', files: ['/etc/passwd'] }],
       ['browser.download', { page: 'page-1', selector: 'a', path: '/tmp/file' }],
       ['terminal.list', {}],
