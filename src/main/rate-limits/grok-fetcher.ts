@@ -67,7 +67,13 @@ function parseResetDescription(isoString: string | undefined): string | null {
 }
 
 function mapWeeklyCredits(config: GrokBillingConfig): RateLimitWindow | null {
-  const usedPercent = config.creditUsagePercent
+  // Why: proto3 JSON omits a zero-valued percentage; a weekly period still
+  // identifies a valid credit window whose usage is exactly zero.
+  const usedPercent =
+    config.creditUsagePercent === undefined &&
+    config.currentPeriod?.type === 'USAGE_PERIOD_TYPE_WEEKLY'
+      ? 0
+      : config.creditUsagePercent
   if (typeof usedPercent !== 'number' || !Number.isFinite(usedPercent)) {
     return null
   }

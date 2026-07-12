@@ -100,6 +100,26 @@ describe('fetchGrokRateLimits', () => {
     )
   })
 
+  it('maps omitted proto3 credit usage to zero for a weekly period', async () => {
+    authState.file = freshAuthJson()
+    netFetchMock.mockResolvedValueOnce(
+      jsonResponse({
+        config: {
+          currentPeriod: {
+            type: 'USAGE_PERIOD_TYPE_WEEKLY',
+            start: '2026-07-07T18:36:14.268512+00:00',
+            end: '2026-07-14T18:36:14.268512+00:00'
+          },
+          subscriptionTier: 'SuperGrok'
+        }
+      })
+    )
+
+    const result = await fetchGrokRateLimits()
+    expect(result.status).toBe('ok')
+    expect(result.weekly?.usedPercent).toBe(0)
+  })
+
   it('returns unavailable when not signed in even if a token-less auth file exists', async () => {
     authState.file = JSON.stringify({})
     const result = await fetchGrokRateLimits()
