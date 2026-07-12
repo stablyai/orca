@@ -5,6 +5,8 @@
 // Pure state/selectors live here (no React Native imports) so they can be
 // unit-tested directly; AccountUsage.tsx re-exports them alongside the
 // UsageBar component.
+import { formatResetCountdown } from '../../../src/shared/rate-limit-reset-format'
+
 export type RateLimitWindow = {
   usedPercent: number
   windowMinutes: number
@@ -118,36 +120,13 @@ export function getUsageBarState(
 }
 
 /**
- * Why: mirrors desktop status-bar tooltip.tsx duration formatting so the
- * countdown copy matches across surfaces ("3h 54m", "6d 7h"). Duplicated
- * because the mobile bundle must not import renderer code.
- */
-function formatResetPhrase(ms: number): string {
-  if (ms <= 0) {
-    return 'now'
-  }
-  const totalMins = Math.floor(ms / 60_000)
-  if (totalMins < 60) {
-    return `in ${totalMins}m`
-  }
-  const hours = Math.floor(totalMins / 60)
-  const mins = totalMins % 60
-  if (hours >= 24) {
-    const days = Math.floor(hours / 24)
-    const remHours = hours % 24
-    return remHours > 0 ? `in ${days}d ${remHours}h` : `in ${days}d`
-  }
-  return mins > 0 ? `in ${hours}h ${mins}m` : `in ${hours}h`
-}
-
-/**
  * Reset countdown for one window, e.g. "Resets in 3h 54m" / "Resets now",
  * or null when the window has no reset timestamp (so the UI degrades to
  * today's bars-only layout).
  *
- * Why: rendered under each bar, so no window label is needed — the copy
- * matches desktop's status-bar tooltip exactly. `now` is a parameter so
- * the function stays pure and unit-testable.
+ * Why: shares formatResetCountdown with the desktop status-bar tooltip so the
+ * copy stays identical across surfaces. `now` is a parameter so the function
+ * stays pure and unit-testable.
  */
 export function getWindowResetLabel(
   limits: ProviderRateLimits | null,
@@ -158,8 +137,7 @@ export function getWindowResetLabel(
   if (resetsAt == null) {
     return null
   }
-  const phrase = formatResetPhrase(resetsAt - now)
-  return phrase === 'now' ? 'Resets now' : `Resets ${phrase}`
+  return formatResetCountdown(resetsAt - now)
 }
 
 // Why: the usage UI must render for the system-default login, not only for
