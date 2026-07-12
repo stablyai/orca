@@ -298,6 +298,88 @@ describe('readNativeChatTranscript (codex)', () => {
     expect(result.messages[0]?.blocks[0]).toEqual({ type: 'text', text: 'From zst' })
   })
 
+  it('stops compressed transcript decoding at the decompressed byte limit', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'orca-native-chat-codex-zst-byte-limit-'))
+    tempRoots.push(root)
+    const filePath = join(root, 'rollout-session.jsonl.zst')
+    const plain = jsonLines(
+      Array.from({ length: 20 }, (_unused, index) => ({
+        type: 'event_msg',
+        payload: {
+          type: 'item_completed',
+          item: {
+            type: 'user_message',
+            id: `u${index}`,
+            content: [{ type: 'text', text: 'x'.repeat(100) }]
+          }
+        }
+      }))
+    )
+    await writeFile(filePath, zstdCompressSync(Buffer.from(plain, 'utf-8')))
+
+    const result = await readNativeChatTranscript('codex', 'session', {
+      filePath,
+      limits: { maxDecodedBytes: 512 }
+    })
+
+    expect(result).toEqual({ error: expect.stringContaining('decoded byte limit') })
+  })
+
+  it('rejects a decompressed transcript line over the per-line byte limit', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'orca-native-chat-codex-zst-line-limit-'))
+    tempRoots.push(root)
+    const filePath = join(root, 'rollout-session.jsonl.zst')
+    const plain = jsonLines([
+      {
+        type: 'event_msg',
+        payload: {
+          type: 'item_completed',
+          item: {
+            type: 'user_message',
+            id: 'u1',
+            content: [{ type: 'text', text: 'x'.repeat(1024) }]
+          }
+        }
+      }
+    ])
+    await writeFile(filePath, zstdCompressSync(Buffer.from(plain, 'utf-8')))
+
+    const result = await readNativeChatTranscript('codex', 'session', {
+      filePath,
+      limits: { maxDecodedBytes: 4096, maxLineBytes: 256 }
+    })
+
+    expect(result).toEqual({ error: expect.stringContaining('line byte limit') })
+  })
+
+  it('keeps only the newest messages while decoding a bounded transcript window', async () => {
+    const filePath = await writeFixture(
+      'orca-native-chat-codex-bounded-',
+      [1, 2, 3, 4].map((index) => ({
+        type: 'event_msg',
+        timestamp: `2026-06-01T10:00:0${index}.000Z`,
+        payload: {
+          type: 'item_completed',
+          item: {
+            type: 'user_message',
+            id: `u${index}`,
+            content: [{ type: 'text', text: `message-${index}` }]
+          }
+        }
+      }))
+    )
+
+    const result = await readNativeChatTranscript('codex', 'session', {
+      filePath,
+      limits: { maxMessages: 2 }
+    })
+
+    if (!('messages' in result)) {
+      throw new Error(`expected messages, got ${result.error}`)
+    }
+    expect(result.messages.map((message) => message.id)).toEqual(['u3', 'u4'])
+  })
+
   it('maps tool calls and results to tool-call/tool-result blocks', async () => {
     const filePath = await writeFixture('orca-native-chat-codex-', [
       {

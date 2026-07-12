@@ -55,6 +55,10 @@ const NativeChatUnsubscribe = z.object({
 // older history as the user scrolls back.
 const MOBILE_NATIVE_CHAT_DEFAULT_WINDOW = 40
 const MOBILE_NATIVE_CHAT_MAX_WINDOW = 2000
+// Why: paired clients must never make the host retain or decode an unbounded
+// transcript. The desktop IPC path remains uncapped for full-history access.
+const REMOTE_TRANSCRIPT_MAX_DECODED_BYTES = 64 * 1024 * 1024
+const REMOTE_TRANSCRIPT_MAX_LINE_BYTES = 8 * 1024 * 1024
 // Why: a single tool result (a big file read, a long diff) can be hundreds of KB.
 // The mobile view only previews block bodies, so truncate them on the wire to
 // keep the payload small; the marker tells the user content was clipped.
@@ -116,7 +120,17 @@ export const NATIVE_CHAT_METHODS: readonly RpcAnyMethod[] = [
       const result = await readNativeChatTranscriptCached(
         params.agent,
         params.sessionId,
-        params.transcriptPath
+        params.transcriptPath,
+        {
+          requireTranscriptPathInAgentRoots: true,
+          // Parse once into the largest supported tail so every smaller page
+          // reuses the same bounded cache entry.
+          limits: {
+            maxDecodedBytes: REMOTE_TRANSCRIPT_MAX_DECODED_BYTES,
+            maxLineBytes: REMOTE_TRANSCRIPT_MAX_LINE_BYTES,
+            maxMessages: MOBILE_NATIVE_CHAT_MAX_WINDOW
+          }
+        }
       )
       // Window to the conversation tail (all clients); clip blocks for mobile only.
       return 'messages' in result
@@ -157,6 +171,12 @@ export const NATIVE_CHAT_METHODS: readonly RpcAnyMethod[] = [
         agent: params.agent,
         sessionId: params.sessionId,
         transcriptPath: params.transcriptPath,
+        requireTranscriptPathInAgentRoots: true,
+        limits: {
+          maxDecodedBytes: REMOTE_TRANSCRIPT_MAX_DECODED_BYTES,
+          maxLineBytes: REMOTE_TRANSCRIPT_MAX_LINE_BYTES,
+          maxMessages: MOBILE_NATIVE_CHAT_MAX_WINDOW
+        },
         onAppend: (messages) => {
           if (closed) {
             return

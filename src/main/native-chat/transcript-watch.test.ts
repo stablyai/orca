@@ -130,6 +130,36 @@ describe('subscribeNativeChatTranscript', () => {
     expect(seen.some((m) => m.id === 'a-2')).toBe(true)
   })
 
+  it('skips oversized initial history once and continues tailing later appends', async () => {
+    const filePath = await tempFile(claudeLine('u-large', 'user', 'x'.repeat(1024)))
+    const seen: NativeChatMessage[] = []
+    let appendedDuringRead = false
+
+    const sub = await subscribeNativeChatTranscript({
+      agent: 'claude',
+      sessionId: 'ignored',
+      filePath,
+      onAppend: (messages) => seen.push(...messages),
+      debounceMs: 5,
+      limits: { maxDecodedBytes: 256, maxLineBytes: 2048, maxMessages: 40 },
+      afterReadSnapshotForTests: async () => {
+        if (appendedDuringRead) {
+          return
+        }
+        appendedDuringRead = true
+        await appendFile(filePath, claudeLine('a-after-limit', 'assistant', 'still live'))
+        // Let the watcher turn this append into pendingReadRequested while the
+        // oversized seed read still owns the drain.
+        await new Promise((resolve) => setTimeout(resolve, 20))
+      }
+    })
+
+    await waitFor(() => seen.some((message) => message.id === 'a-after-limit'), 500)
+
+    sub.unsubscribe()
+    expect(seen.some((message) => message.id === 'u-large')).toBe(false)
+  })
+
   it('releases the watcher on unsubscribe (no leak)', async () => {
     const filePath = await tempFile(claudeLine('u-1', 'user', 'hi'))
     const before = getActiveNativeChatWatcherCount()

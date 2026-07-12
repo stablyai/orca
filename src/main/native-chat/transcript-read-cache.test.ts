@@ -1,6 +1,7 @@
 import { mkdir, mkdtemp, rm, utimes, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import { zstdCompressSync } from 'node:zlib'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as TranscriptReader from './transcript-reader'
 
@@ -210,13 +211,36 @@ describe('readNativeChatTranscriptCached', () => {
     expect(readSpy).toHaveBeenCalledTimes(5)
   })
 
-  it('keeps a single active transcript larger than the whole budget cached', async () => {
-    // A lone entry over budget must NOT be dropped, else every read re-parses.
+  it('does not retain a single transcript larger than the whole cache budget', async () => {
     setNativeChatTranscriptCacheMaxBytesForTests(1024)
     const big = await seedBigFile('huge', 8 * 1024)
     await readNativeChatTranscriptCached('claude', 'huge', big)
     await readNativeChatTranscriptCached('claude', 'huge', big)
-    expect(readSpy).toHaveBeenCalledTimes(1)
+    expect(readSpy).toHaveBeenCalledTimes(2)
+  })
+
+  it('does not use compressed file bytes as the cache weight for an unbounded parse', async () => {
+    setNativeChatTranscriptCacheMaxBytesForTests(1024)
+    const root = await mkdtemp(join(tmpdir(), 'orca-native-chat-cache-zst-'))
+    tempRoots.push(root)
+    const filePath = join(root, 'rollout-session.jsonl.zst')
+    const record = {
+      type: 'event_msg',
+      payload: {
+        type: 'item_completed',
+        item: {
+          type: 'user_message',
+          id: 'u-zst',
+          content: [{ type: 'text', text: 'x'.repeat(8 * 1024) }]
+        }
+      }
+    }
+    await writeFile(filePath, zstdCompressSync(Buffer.from(JSON.stringify(record), 'utf-8')))
+
+    await readNativeChatTranscriptCached('codex', 'zst', filePath)
+    await readNativeChatTranscriptCached('codex', 'zst', filePath)
+
+    expect(readSpy).toHaveBeenCalledTimes(2)
   })
 
   it('does not evict small entries under the default budget (no regression for typical use)', async () => {

@@ -5,9 +5,19 @@ import type { RpcContext } from '../core'
 // Stub the shared cache so the handler returns a deterministic transcript with
 // one oversized tool-result block; the test then asserts clip behavior per client.
 const OVERSIZED = 'x'.repeat(5000)
-const cachedResult = vi.hoisted(() => ({ value: { messages: [] as NativeChatMessage[] } }))
+const { cachedResult, cachedReadSpy, subscribeSpy } = vi.hoisted(() => ({
+  cachedResult: { value: { messages: [] as NativeChatMessage[] } },
+  cachedReadSpy: vi.fn(),
+  subscribeSpy: vi.fn((_args: unknown) => Promise.resolve({ unsubscribe: vi.fn() }))
+}))
 vi.mock('../../../native-chat/transcript-read-cache', () => ({
-  readNativeChatTranscriptCached: () => Promise.resolve(cachedResult.value)
+  readNativeChatTranscriptCached: (...args: unknown[]) => {
+    cachedReadSpy(...args)
+    return Promise.resolve(cachedResult.value)
+  }
+}))
+vi.mock('../../../native-chat/transcript-watch', () => ({
+  subscribeNativeChatTranscript: (args: unknown) => subscribeSpy(args)
 }))
 
 import { NATIVE_CHAT_METHODS } from './native-chat'
@@ -30,6 +40,22 @@ function readSessionHandler(): (params: unknown, ctx: RpcContext) => Promise<unk
   return method.handler as (params: unknown, ctx: RpcContext) => Promise<unknown>
 }
 
+function subscribeHandler(): (
+  params: unknown,
+  ctx: RpcContext,
+  emit: (event: unknown) => void
+) => Promise<void> {
+  const method = NATIVE_CHAT_METHODS.find((m) => m.name === 'nativeChat.subscribe')
+  if (!method) {
+    throw new Error('subscribe method not registered')
+  }
+  return method.handler as (
+    params: unknown,
+    ctx: RpcContext,
+    emit: (event: unknown) => void
+  ) => Promise<void>
+}
+
 function ctxWith(clientKind: RpcContext['clientKind']): RpcContext {
   return { runtime: {} as RpcContext['runtime'], clientKind }
 }
@@ -41,6 +67,55 @@ function firstOutput(result: unknown): string {
 }
 
 describe('nativeChat.readSession clientKind truncation gating', () => {
+  it('requests a root-contained, bounded parse before applying the client window', async () => {
+    cachedResult.value = { messages: [] }
+    cachedReadSpy.mockClear()
+
+    await readSessionHandler()(
+      {
+        agent: 'codex',
+        sessionId: 's',
+        limit: 40,
+        transcriptPath: '/outside/rollout.jsonl.zst'
+      },
+      ctxWith('runtime')
+    )
+
+    expect(cachedReadSpy).toHaveBeenCalledWith(
+      'codex',
+      's',
+      '/outside/rollout.jsonl.zst',
+      expect.objectContaining({
+        requireTranscriptPathInAgentRoots: true,
+        limits: expect.objectContaining({ maxMessages: 2000 })
+      })
+    )
+  })
+
+  it('applies the same path and stream limits to paired-client subscriptions', async () => {
+    subscribeSpy.mockClear()
+    const runtime = {
+      registerSubscriptionCleanup: vi.fn()
+    } as unknown as RpcContext['runtime']
+
+    await subscribeHandler()(
+      {
+        agent: 'codex',
+        sessionId: 's',
+        transcriptPath: '/outside/rollout.jsonl.zst'
+      },
+      { runtime, connectionId: 'connection-1', clientKind: 'runtime' },
+      vi.fn()
+    )
+
+    expect(subscribeSpy).toHaveBeenCalledWith(
+      expect.objectContaining({
+        requireTranscriptPathInAgentRoots: true,
+        limits: expect.objectContaining({ maxMessages: 2000 })
+      })
+    )
+  })
+
   it('clips oversized tool output for mobile clients', async () => {
     cachedResult.value = { messages: [makeMessage(OVERSIZED)] }
     const result = await readSessionHandler()(

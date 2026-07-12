@@ -1,6 +1,7 @@
 import { existsSync } from 'node:fs'
+import { realpath } from 'node:fs/promises'
 import { homedir } from 'node:os'
-import { basename, extname, join } from 'node:path'
+import { basename, extname, isAbsolute, join, relative, sep } from 'node:path'
 import type { AgentType } from '../../shared/native-chat-types'
 import {
   CODEX_SESSION_ROLLOUT_EXTENSIONS,
@@ -54,6 +55,51 @@ export type ResolveSessionFileOptions = {
    *  directly — recent Claude Code names the transcript with a UUID that differs
    *  from the hook session_id, so the id-based glob below would miss it. */
   transcriptPath?: string
+  /** Require a client-provided transcript path to resolve inside this agent's
+   *  transcript roots. Runtime RPC enables this for untrusted paired clients. */
+  requireTranscriptPathInAgentRoots?: boolean
+}
+
+function agentTranscriptRoots(agent: AgentType, options: ResolveSessionFileOptions): string[] {
+  if (agent === 'claude') {
+    return [options.claudeProjectsDir ?? claudeProjectsDir()]
+  }
+  if (agent === 'codex') {
+    return options.codexSessionsDirs ?? codexSessionsDirs()
+  }
+  if (agent === 'grok') {
+    return [options.grokSessionsDir ?? grokSessionsDir()]
+  }
+  return []
+}
+
+async function resolveContainedPath(
+  filePath: string,
+  roots: readonly string[]
+): Promise<string | null> {
+  let resolvedFile: string
+  try {
+    resolvedFile = await realpath(filePath)
+  } catch {
+    return null
+  }
+
+  for (const root of roots) {
+    try {
+      const resolvedRoot = await realpath(root)
+      const relativePath = relative(resolvedRoot, resolvedFile)
+      if (
+        relativePath === '' ||
+        (!isAbsolute(relativePath) && relativePath !== '..' && !relativePath.startsWith(`..${sep}`))
+      ) {
+        // Return the canonical path so a symlink cannot be swapped after validation.
+        return resolvedFile
+      }
+    } catch {
+      // Missing roots cannot contain an existing transcript; try the next root.
+    }
+  }
+  return null
 }
 
 /**
@@ -79,8 +125,18 @@ export async function resolveSessionFilePath(
   const hookPathIsTranscript =
     extname(hookPath ?? '') === '.jsonl' ||
     (agent === 'codex' && Boolean(hookPath && isCodexSessionRolloutPath(hookPath)))
-  if (hookPath && hookPathIsTranscript && existsSync(hookPath)) {
-    return hookPath
+  if (hookPath && hookPathIsTranscript) {
+    if (options.requireTranscriptPathInAgentRoots) {
+      const containedPath = await resolveContainedPath(
+        hookPath,
+        agentTranscriptRoots(agent, options)
+      )
+      if (containedPath) {
+        return containedPath
+      }
+    } else if (existsSync(hookPath)) {
+      return hookPath
+    }
   }
 
   const trimmedId = sessionId.trim()

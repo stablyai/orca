@@ -17,7 +17,8 @@ import {
   decodeCodexTranscriptLine,
   decodeGrokTranscriptLine
 } from './transcript-line-decoders'
-import { decodeTranscriptStream } from './transcript-stream-lines'
+import { decodeTranscriptStream, TranscriptDecodeLimitError } from './transcript-stream-lines'
+import type { TranscriptDecodeLimits } from './transcript-stream-lines'
 
 export type SubscribeNativeChatTranscriptArgs = ResolveSessionFileOptions & {
   agent: AgentType
@@ -33,6 +34,10 @@ export type SubscribeNativeChatTranscriptArgs = ResolveSessionFileOptions & {
    *  don't wait out the production backoff. Production ignores this and backs
    *  off from 500ms to a 5s cap. */
   resolvePollIntervalMs?: number
+  /** Optional streaming limits for paired-client subscriptions. */
+  limits?: TranscriptDecodeLimits
+  /** Test-only synchronization point after a read's EOF snapshot is fixed. */
+  afterReadSnapshotForTests?: (end: number) => Promise<void>
 }
 
 export type NativeChatTranscriptSubscription = {
@@ -89,9 +94,10 @@ async function fileSize(filePath: string): Promise<number> {
 async function readAppendedMessages(
   filePath: string,
   start: number,
-  decode: (line: string, fallbackId: string) => NativeChatMessage | null
+  end: number,
+  decode: (line: string, fallbackId: string) => NativeChatMessage | null,
+  limits?: TranscriptDecodeLimits
 ): Promise<{ messages: NativeChatMessage[]; consumedTo: number }> {
-  const end = await fileSize(filePath)
   if (end <= start) {
     // File shrank (rotation/replacement) or unchanged — caller resets offset.
     return { messages: [], consumedTo: end }
@@ -110,7 +116,8 @@ async function readAppendedMessages(
       filePath,
       start,
       decode,
-      false
+      false,
+      limits
     )
     return { messages, consumedTo: start + consumedBytes }
   } finally {
@@ -128,7 +135,9 @@ function installTranscriptWatcher(
   filePath: string,
   decode: (line: string, fallbackId: string) => NativeChatMessage | null,
   onAppend: (messages: NativeChatMessage[]) => void,
-  debounceMs?: number
+  debounceMs?: number,
+  limits?: TranscriptDecodeLimits,
+  afterReadSnapshotForTests?: (end: number) => Promise<void>
 ): NativeChatTranscriptSubscription | null {
   // Why: seed the offset at 0 so the FIRST drain re-reads the whole file. This
   // closes the read/subscribe race — a turn appended between the caller's
@@ -155,18 +164,34 @@ function installTranscriptWatcher(
     try {
       do {
         pendingReadRequested = false
+        let attemptedEnd = offset
         try {
           const currentSize = await fileSize(filePath)
           if (currentSize < offset) {
             // Rotation/replacement/truncation: re-read from the top.
             offset = 0
           }
-          const { messages, consumedTo } = await readAppendedMessages(filePath, offset, decode)
+          attemptedEnd = currentSize
+          await afterReadSnapshotForTests?.(currentSize)
+          const { messages, consumedTo } = await readAppendedMessages(
+            filePath,
+            offset,
+            currentSize,
+            decode,
+            limits
+          )
           offset = consumedTo
           if (!closed && messages.length > 0) {
             onAppend(messages)
           }
-        } catch {
+        } catch (error) {
+          if (error instanceof TranscriptDecodeLimitError) {
+            // Why: retrying an oversized seed from byte zero on every append
+            // creates a permanent decode loop. Skip that history once, then
+            // continue tailing records appended after this read snapshot.
+            offset = attemptedEnd
+            continue
+          }
           // Why: a transient read failure (EACCES/EIO/ENOENT during rotation)
           // must not leave the subscription permanently deaf. Stop this drain;
           // the finally resets `reading` so a later fs event re-arms the read.
@@ -232,7 +257,14 @@ async function attemptInstall(
   if (!filePath) {
     return null
   }
-  return installTranscriptWatcher(filePath, decode, args.onAppend, args.debounceMs)
+  return installTranscriptWatcher(
+    filePath,
+    decode,
+    args.onAppend,
+    args.debounceMs,
+    args.limits,
+    args.afterReadSnapshotForTests
+  )
 }
 
 // Why: Claude Code (and other agents) can take from ~3s to minutes to flush a

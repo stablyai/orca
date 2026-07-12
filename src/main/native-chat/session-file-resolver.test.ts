@@ -1,4 +1,4 @@
-import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
+import { mkdir, mkdtemp, realpath, rm, symlink, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
@@ -216,9 +216,48 @@ describe('resolveSessionFilePath', () => {
 
     const resolved = await resolveSessionFilePath('claude', 'hook-session-id', {
       claudeProjectsDir,
-      transcriptPath: realFile
+      transcriptPath: realFile,
+      requireTranscriptPathInAgentRoots: true
     })
-    expect(resolved).toBe(realFile)
+    expect(resolved).toBe(await realpath(realFile))
+  })
+
+  it('rejects a client transcriptPath outside the agent transcript roots', async () => {
+    const root = await makeRoot('orca-native-chat-resolve-contained-')
+    const claudeProjectsDir = join(root, 'claude-projects')
+    const projectDir = join(claudeProjectsDir, '-Users-ada-repo')
+    await mkdir(projectDir, { recursive: true })
+    const fallback = join(projectDir, 'hook-session-id.jsonl')
+    const outside = join(root, 'outside.jsonl')
+    await writeFile(fallback, '{}\n')
+    await writeFile(outside, '{"secret":true}\n')
+
+    await expect(
+      resolveSessionFilePath('claude', 'hook-session-id', {
+        claudeProjectsDir,
+        transcriptPath: outside,
+        requireTranscriptPathInAgentRoots: true
+      })
+    ).resolves.toBe(fallback)
+  })
+
+  it('rejects a client transcriptPath that escapes through a directory symlink', async () => {
+    const root = await makeRoot('orca-native-chat-resolve-symlink-')
+    const claudeProjectsDir = join(root, 'claude-projects')
+    const outsideDir = join(root, 'outside')
+    await mkdir(claudeProjectsDir, { recursive: true })
+    await mkdir(outsideDir, { recursive: true })
+    await writeFile(join(outsideDir, 'secret.jsonl'), '{"secret":true}\n')
+    const linkedDir = join(claudeProjectsDir, 'linked-project')
+    await symlink(outsideDir, linkedDir, process.platform === 'win32' ? 'junction' : 'dir')
+
+    await expect(
+      resolveSessionFilePath('claude', 'missing', {
+        claudeProjectsDir,
+        transcriptPath: join(linkedDir, 'secret.jsonl'),
+        requireTranscriptPathInAgentRoots: true
+      })
+    ).resolves.toBeNull()
   })
 
   it('accepts a hook-reported .jsonl.zst path only for Codex', async () => {
@@ -228,10 +267,11 @@ describe('resolveSessionFilePath', () => {
 
     await expect(
       resolveSessionFilePath('codex', 'hook-session', {
-        codexSessionsDirs: [],
-        transcriptPath: compressed
+        codexSessionsDirs: [root],
+        transcriptPath: compressed,
+        requireTranscriptPathInAgentRoots: true
       })
-    ).resolves.toBe(compressed)
+    ).resolves.toBe(await realpath(compressed))
     await expect(
       resolveSessionFilePath('claude', 'hook-session', {
         claudeProjectsDir: join(root, 'empty'),
