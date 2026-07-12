@@ -705,7 +705,9 @@ export function createRemoteRuntimePtyTransport(
         storedCallbacks.onError?.('Remote runtime terminal id is invalid.')
         return
       }
-      remotePtyId = options.existingPtyId
+      // Why: legacy restored ids omitted their runtime owner. Canonicalize at
+      // attach so renderer stores and lifecycle guards never share raw aliases.
+      remotePtyId = toRemoteRuntimePtyId(handle, currentRuntimeEnvironmentId)
       connected = true
       desiredViewport = {
         cols: options.cols ?? 80,

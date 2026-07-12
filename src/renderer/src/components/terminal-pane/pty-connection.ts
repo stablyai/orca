@@ -7152,12 +7152,13 @@ export function connectPanePty(
             onError: reportError
           }
         })
-        bindActivePanePty(attachPtyId, {
+        const attachedPtyId = transport.getPtyId() ?? attachPtyId
+        bindActivePanePty(attachedPtyId, {
           updateTabPtyId: 'if-missing',
           sampleVisibleForegroundAgent: true
         })
         if (attachPtyId === eagerLivePtyId) {
-          registerPaneSerializerFor(attachPtyId)
+          registerPaneSerializerFor(attachedPtyId)
         }
       } catch (err) {
         reportError(err instanceof Error ? err.message : String(err))
@@ -7207,9 +7208,10 @@ export function connectPanePty(
                 onError: reportError
               }
             })
+            const attachedPtyId = transport.getPtyId() ?? spawnedPtyId
             // Why: this path reuses a PTY spawned by an earlier mount, so no
             // later spawn event will bind this remounted pane's DOM/container.
-            bindActivePanePty(spawnedPtyId, {
+            bindActivePanePty(attachedPtyId, {
               updateTabPtyId: 'if-missing',
               sampleVisibleForegroundAgent: true
             })
