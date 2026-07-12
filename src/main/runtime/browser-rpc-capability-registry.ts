@@ -31,7 +31,6 @@ const ALLOWED_BROWSER_CAPABILITY_METHODS = new Set([
   'browser.get',
   'browser.is',
   'browser.console',
-  'browser.network',
   'browser.highlight',
   'browser.setDevice',
   'browser.setOffline',
