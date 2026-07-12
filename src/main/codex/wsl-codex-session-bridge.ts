@@ -105,6 +105,8 @@ export function buildWslCodexSessionBridgeShellCommand(
     '  [ "${#hash}" -eq 64 ] || return 1',
     '  printf \'%s\' "$hash"',
     '}',
+    // Why: sourceSize records the verified copied prefix, not the source's
+    // current full size, because an active rollout may still be growing.
     'write_copy_marker() {',
     '  local marker_file="$1" source_file="$2" target_file="$3"',
     '  mkdir -p -- "$(dirname -- "$marker_file")" 2>/dev/null || return 1',
@@ -146,6 +148,8 @@ export function buildWslCodexSessionBridgeShellCommand(
     '  preserved_fingerprint=$(file_sha256 "$preserved_file") || return 1',
     `  ( set -o noclobber; printf '{"version":1,"sourcePath":"%s","originalTargetPath":"%s","preservedPath":"%s","displacedTargetPath":"%s","preservedFingerprintSha256":"%s"}\\n' "$source_json" "$target_json" "$preserved_json" "$displaced_json" "$preserved_fingerprint" >"$record_file" ) 2>/dev/null`,
     '}',
+    // Why: preserve the pre-refresh inode so open file descriptors stay observable;
+    // once that evidence exists, halt automatic refresh until human review.
     'refresh_copy() {',
     '  local marker_file="$1" source_file="$2" target_file="$3" relative_path="$4"',
     '  local target_size source_size target_size_after target_fingerprint_before target_fingerprint_after',
