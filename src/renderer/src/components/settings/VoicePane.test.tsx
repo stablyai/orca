@@ -6,6 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { DeveloperPermissionRequestResult } from '../../../../shared/developer-permissions-types'
 import type { GlobalSettings } from '../../../../shared/types'
 import { getDefaultVoiceSettings } from '../../../../shared/constants'
+import { TooltipProvider } from '@/components/ui/tooltip'
 import { handleVoiceDictationToggle, VoicePane } from './VoicePane'
 
 const { useAppStoreMock, useShortcutLabelMock } = vi.hoisted(() => ({
@@ -33,17 +34,22 @@ const deniedMicrophoneResult: DeveloperPermissionRequestResult = {
   openedSystemSettings: false
 }
 
-function makeSettings(voiceEnabled: boolean): GlobalSettings {
+function makeSettings(
+  voiceEnabled: boolean,
+  voiceOverrides: Partial<ReturnType<typeof getDefaultVoiceSettings>> = {}
+): GlobalSettings {
   return {
     voice: {
       ...getDefaultVoiceSettings(),
-      enabled: voiceEnabled
+      enabled: voiceEnabled,
+      ...voiceOverrides
     }
   } as GlobalSettings
 }
 
 function installWindowApi(
-  requestMicrophonePermission: () => Promise<DeveloperPermissionRequestResult>
+  requestMicrophonePermission: () => Promise<DeveloperPermissionRequestResult>,
+  options: { sonioxConfigured?: boolean } = {}
 ) {
   Object.assign(window, {
     api: {
@@ -55,7 +61,9 @@ function installWindowApi(
         getOpenAiApiKeyStatus: vi.fn(async () => ({ configured: false })),
         saveOpenAiApiKey: vi.fn(async () => ({ configured: true })),
         clearOpenAiApiKey: vi.fn(async () => ({ configured: false })),
-        getSonioxApiKeyStatus: vi.fn(async () => ({ configured: false })),
+        getSonioxApiKeyStatus: vi.fn(async () => ({
+          configured: options.sonioxConfigured ?? false
+        })),
         saveSonioxApiKey: vi.fn(async () => ({ configured: true })),
         clearSonioxApiKey: vi.fn(async () => ({ configured: false })),
         onDownloadProgress: vi.fn(() => () => {}),
@@ -71,6 +79,7 @@ async function renderVoicePane(args: {
   updateSettings: (updates: Partial<GlobalSettings>) => void
   requestMicrophonePermission?: () => Promise<DeveloperPermissionRequestResult>
   recordFeatureInteraction?: (id: string) => void
+  sonioxConfigured?: boolean
 }): Promise<{ button: HTMLButtonElement; root: Root; container: HTMLDivElement }> {
   const refreshModelStates = vi.fn()
   useAppStoreMock.mockImplementation((selector: (state: Record<string, unknown>) => unknown) =>
@@ -78,19 +87,33 @@ async function renderVoicePane(args: {
       modelStates: [],
       refreshModelStates,
       markFeatureTipsSeen: args.markFeatureTipsSeen,
-      recordFeatureInteraction: args.recordFeatureInteraction ?? vi.fn()
+      recordFeatureInteraction: args.recordFeatureInteraction ?? vi.fn(),
+      settingsSearchQuery: ''
     })
   )
   useShortcutLabelMock.mockReturnValue('Ctrl+Shift+Y')
-  installWindowApi(args.requestMicrophonePermission ?? vi.fn(async () => deniedMicrophoneResult))
+  installWindowApi(args.requestMicrophonePermission ?? vi.fn(async () => deniedMicrophoneResult), {
+    sonioxConfigured: args.sonioxConfigured
+  })
 
   const container = document.createElement('div')
   document.body.appendChild(container)
   const root = createRoot(container)
   await act(async () => {
     root.render(
-      <VoicePane settings={makeSettings(args.voiceEnabled)} updateSettings={args.updateSettings} />
+      <TooltipProvider>
+        <VoicePane
+          settings={makeSettings(args.voiceEnabled, {
+            sonioxApiKeyConfigured: args.sonioxConfigured ?? false
+          })}
+          updateSettings={args.updateSettings}
+        />
+      </TooltipProvider>
     )
+  })
+  // Why: allow getSonioxApiKeyStatus / getCatalog effects to settle before assertions.
+  await act(async () => {
+    await Promise.resolve()
   })
 
   const button = container.querySelector<HTMLButtonElement>('button[role="switch"]')
@@ -227,5 +250,109 @@ describe('VoicePane dictation switch', () => {
     root.unmount()
 
     expect(recordFeatureInteraction).not.toHaveBeenCalled()
+  })
+})
+
+describe('VoicePane Soniox settings', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals()
+    document.body.innerHTML = ''
+  })
+
+  beforeEach(() => {
+    useAppStoreMock.mockReset()
+    useShortcutLabelMock.mockReset()
+  })
+
+  it('renders the Soniox settings row when an API key is configured', async () => {
+    const { container, root } = await renderVoicePane({
+      voiceEnabled: true,
+      markFeatureTipsSeen: vi.fn(),
+      updateSettings: vi.fn(),
+      sonioxConfigured: true
+    })
+
+    expect(container.textContent).toContain('Soniox Transcription')
+    expect(
+      Array.from(container.querySelectorAll('button')).some(
+        (button) => button.textContent === 'Replace key'
+      )
+    ).toBe(true)
+    expect(container.querySelector('button[aria-label="Disconnect Soniox API key"]')).not.toBeNull()
+    root.unmount()
+  })
+
+  it('saves a Soniox API key from the settings dialog', async () => {
+    const updateSettings = vi.fn()
+    const { container, root } = await renderVoicePane({
+      voiceEnabled: true,
+      markFeatureTipsSeen: vi.fn(),
+      updateSettings,
+      sonioxConfigured: true
+    })
+
+    const replaceButton = Array.from(container.querySelectorAll('button')).find(
+      (button) => button.textContent === 'Replace key'
+    )
+    expect(replaceButton).toBeDefined()
+    await act(async () => {
+      replaceButton!.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+    })
+
+    // Why: Radix Dialog portals outside the pane container.
+    const input = document.querySelector<HTMLInputElement>('#soniox-speech-api-key')
+    expect(input).not.toBeNull()
+    await act(async () => {
+      const nativeInputValueSetter = Object.getOwnPropertyDescriptor(
+        HTMLInputElement.prototype,
+        'value'
+      )?.set
+      nativeInputValueSetter?.call(input, 'soniox-test-key')
+      input!.dispatchEvent(new Event('input', { bubbles: true }))
+    })
+
+    const saveButton = Array.from(document.querySelectorAll('button')).find(
+      (button) => button.textContent === 'Save Key'
+    )
+    expect(saveButton).toBeDefined()
+    await act(async () => {
+      saveButton!.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+      await Promise.resolve()
+    })
+
+    expect(window.api.speech.saveSonioxApiKey).toHaveBeenCalledWith('soniox-test-key')
+    expect(updateSettings).toHaveBeenCalledWith(
+      expect.objectContaining({
+        voice: expect.objectContaining({ sonioxApiKeyConfigured: true })
+      })
+    )
+    root.unmount()
+  })
+
+  it('clears a configured Soniox API key from the settings row', async () => {
+    const updateSettings = vi.fn()
+    const { container, root } = await renderVoicePane({
+      voiceEnabled: true,
+      markFeatureTipsSeen: vi.fn(),
+      updateSettings,
+      sonioxConfigured: true
+    })
+
+    const disconnect = container.querySelector<HTMLButtonElement>(
+      'button[aria-label="Disconnect Soniox API key"]'
+    )
+    expect(disconnect).not.toBeNull()
+    await act(async () => {
+      disconnect!.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+      await Promise.resolve()
+    })
+
+    expect(window.api.speech.clearSonioxApiKey).toHaveBeenCalledOnce()
+    expect(updateSettings).toHaveBeenCalledWith(
+      expect.objectContaining({
+        voice: expect.objectContaining({ sonioxApiKeyConfigured: false })
+      })
+    )
+    root.unmount()
   })
 })

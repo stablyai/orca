@@ -31,18 +31,18 @@ export const getOpenaiTranscriptionSearchEntry = createLocalizedCatalog(
 export const getSonioxTranscriptionSearchEntry = createLocalizedCatalog(
   (): SettingsSearchEntry => ({
     title: translate(
-      'auto.components.settings.voice.pane.search.sonioxTitle',
+      'auto.components.settings.voice.pane.search.2ee97d00c6',
       'Soniox Transcription'
     ),
     description: translate(
-      'auto.components.settings.voice.pane.search.sonioxDescription',
+      'auto.components.settings.voice.pane.search.72e73cdce3',
       'Configure the Soniox API key used for real-time speech-to-text.'
     ),
     keywords: [
       ...translateSearchKeyword('auto.components.settings.voice.pane.search.7640ed9848', 'voice'),
       ...translateSearchKeyword('auto.components.settings.voice.pane.search.3d8b853963', 'speech'),
       ...translateSearchKeyword('auto.components.settings.voice.pane.search.10d45a9fce', 'stt'),
-      ...translateSearchKeyword('auto.components.settings.voice.pane.search.soniox', 'soniox'),
+      ...translateSearchKeyword('auto.components.settings.voice.pane.search.fad8e96c38', 'soniox'),
       ...translateSearchKeyword('auto.components.settings.voice.pane.search.2d206de105', 'api key'),
       ...translateSearchKeyword('auto.components.settings.voice.pane.search.f6e0dfa61c', 'cloud'),
       ...translateSearchKeyword(
@@ -116,7 +116,7 @@ export const getVoicePaneSearchEntries = createLocalizedCatalog(() => [
         'download'
       ),
       ...translateSearchKeyword('auto.components.settings.voice.pane.search.04c25a6fb0', 'openai'),
-      ...translateSearchKeyword('auto.components.settings.voice.pane.search.soniox', 'soniox'),
+      ...translateSearchKeyword('auto.components.settings.voice.pane.search.fad8e96c38', 'soniox'),
       ...translateSearchKeyword('auto.components.settings.voice.pane.search.2d206de105', 'api key'),
       ...translateSearchKeyword('auto.components.settings.voice.pane.search.f6e0dfa61c', 'cloud')
     ]

@@ -6886,10 +6886,10 @@
           "1eac933202": "macOS 개인 정보 보호 및 보안을 열었습니다. 액세스 권한을 부여한 후 받아쓰기를 다시 활성화하세요.",
           "cd9fe37556": "마이크 권한이 부여되었습니다.",
           "6fa734ed95": "{{value0}} 삭제",
-          "sonioxKeySaved": "Soniox API key saved",
-          "sonioxKeySaveFailed": "Failed to save Soniox API key",
-          "sonioxKeyCleared": "Soniox API key cleared",
-          "sonioxKeyClearFailed": "Failed to clear Soniox API key"
+          "5b719fb45d": "Soniox API key saved",
+          "c41bdf8a4d": "Failed to save Soniox API key",
+          "9a6f01c227": "Soniox API key cleared",
+          "a4121e3bfd": "Failed to clear Soniox API key"
         },
         "WorktreeSymlinksSection": {
           "1c1e35b219": "{{value0}} 제거",
@@ -8517,8 +8517,9 @@
               "322d457a0d": "전사",
               "dcc7846641": "클라우드 음성-텍스트 모델에 사용되는 OpenAI API 키를 구성합니다.",
               "ebfd0b32e5": "OpenAI 전사",
-              "sonioxTitle": "Soniox Transcription",
-              "sonioxDescription": "Configure the Soniox API key used for real-time speech-to-text."
+              "2ee97d00c6": "Soniox Transcription",
+              "72e73cdce3": "Configure the Soniox API key used for real-time speech-to-text.",
+              "fad8e96c38": "soniox"
             }
           }
         },
@@ -9024,28 +9025,28 @@
           "usagePercentageDisplayUsed": "사용",
           "usagePercentageDisplayRemaining": "남음"
         },
-        "TerminalInteractionSection": {
+"TerminalInteractionSection": {
           "567633ff50": "Right-click pastes the clipboard into the terminal. Control-click to open the context menu.",
           "c64497148a": "Right-click pastes the clipboard. Control-click opens the context menu."
         },
-        "SonioxTranscriptionKeyDialog": {
-          "title": "Soniox Transcription",
-          "description": "Audio is streamed to Soniox only when a Soniox speech model is selected.",
-          "apiKey": "API Key",
-          "configured": "API key configured",
-          "placeholder": "Enter Soniox API key",
-          "storage": "Local runtime keys are stored in ~/.orca using Electron encrypted storage when available.",
-          "clear": "Clear Key",
-          "save": "Save Key"
+        "CloudTranscriptionKeyDialog": {
+          "04b7890fa1": "Soniox Transcription",
+          "0badd7b30b": "Audio is streamed to Soniox only when a Soniox speech model is selected.",
+          "18607352b8": "API Key",
+          "2cc7a7df08": "API key configured",
+          "41707543bd": "Enter Soniox API key",
+          "c622175794": "Local runtime keys are stored in ~/.orca using Electron encrypted storage when available.",
+          "7025764a6f": "Clear Key",
+          "7710bd07a1": "Save Key"
         },
-        "SonioxTranscriptionSettingsRow": {
-          "title": "Soniox Transcription",
-          "connected": "Connected",
-          "keyReady": "API key configured for Soniox speech-to-text models.",
-          "keyRequired": "Add a Soniox API key before selecting Soniox speech-to-text models.",
-          "replace": "Replace key",
-          "disconnect": "Disconnect Soniox API key",
-          "add": "Add API key"
+        "CloudTranscriptionSettingsRow": {
+          "9204b6af01": "Soniox Transcription",
+          "a0ee84fe16": "Connected",
+          "51e2076cc0": "API key configured for Soniox speech-to-text models.",
+          "ec74cedecf": "Add a Soniox API key before selecting Soniox speech-to-text models.",
+          "6e1c455419": "Replace key",
+          "aca467793b": "Disconnect Soniox API key",
+          "16c340cfdb": "Add API key"
         }
       },
       "right": {

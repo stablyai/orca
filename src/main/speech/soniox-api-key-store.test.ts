@@ -1,4 +1,12 @@
-import { chmodSync, existsSync, mkdirSync, mkdtempSync, statSync, writeFileSync } from 'node:fs'
+import {
+  chmodSync,
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  statSync,
+  writeFileSync
+} from 'node:fs'
 import { tmpdir } from 'node:os'
 import type * as Os from 'node:os'
 import { join } from 'node:path'
@@ -22,10 +30,20 @@ async function loadStoreModule() {
   return import('./soniox-api-key-store')
 }
 
-function writeStoredKey(value: string): void {
+function keyPath(): string {
+  return join(tempHome, '.orca', 'soniox-speech-token.enc')
+}
+
+function writeLegacyKey(value: string): void {
   const orcaDir = join(tempHome, '.orca')
   mkdirSync(orcaDir, { recursive: true })
-  writeFileSync(join(orcaDir, 'soniox-speech-token.enc'), value)
+  writeFileSync(keyPath(), value)
+}
+
+function writePrefixedKey(encoding: number, value: string): void {
+  const orcaDir = join(tempHome, '.orca')
+  mkdirSync(orcaDir, { recursive: true })
+  writeFileSync(keyPath(), Buffer.concat([Buffer.from([encoding]), Buffer.from(value, 'utf8')]))
 }
 
 describe('Soniox speech API key store', () => {
@@ -38,7 +56,7 @@ describe('Soniox speech API key store', () => {
   })
 
   it('checks status without decrypting or touching safeStorage', async () => {
-    writeStoredKey('encrypted-key')
+    writeLegacyKey('encrypted-key')
     const store = await loadStoreModule()
 
     expect(store.hasSonioxSpeechApiKey()).toBe(true)
@@ -54,11 +72,12 @@ describe('Soniox speech API key store', () => {
     expect(store.readSonioxSpeechApiKey()).toBe('saved-key')
     expect(safeStorageMock.encryptString).toHaveBeenCalledWith('saved-key')
     expect(safeStorageMock.decryptString).not.toHaveBeenCalled()
-    expect(statSync(join(tempHome, '.orca', 'soniox-speech-token.enc')).mode & 0o777).toBe(0o600)
+    expect(statSync(keyPath()).mode & 0o777).toBe(0o600)
+    expect(readFileSync(keyPath())[0]).toBe(0x01)
   })
 
   it('decrypts a stored key only once across repeated reads', async () => {
-    writeStoredKey('encrypted-key')
+    writePrefixedKey(0x01, 'encrypted-key')
     const store = await loadStoreModule()
 
     expect(store.readSonioxSpeechApiKey()).toBe('encrypted-key')
@@ -74,7 +93,7 @@ describe('Soniox speech API key store', () => {
 
     expect(store.hasSonioxSpeechApiKey()).toBe(false)
     expect(() => store.readSonioxSpeechApiKey()).toThrow('Soniox API key is not configured')
-    expect(existsSync(join(tempHome, '.orca', 'soniox-speech-token.enc'))).toBe(false)
+    expect(existsSync(keyPath())).toBe(false)
   })
 
   it('uses a mode-0600 plaintext fallback when encryption is unavailable', async () => {
@@ -85,25 +104,44 @@ describe('Soniox speech API key store', () => {
 
     expect(store.readSonioxSpeechApiKey()).toBe('fallback-key')
     expect(safeStorageMock.encryptString).not.toHaveBeenCalled()
-    expect(statSync(join(tempHome, '.orca', 'soniox-speech-token.enc')).mode & 0o777).toBe(0o600)
+    expect(statSync(keyPath()).mode & 0o777).toBe(0o600)
+    expect(readFileSync(keyPath())[0]).toBe(0x00)
+  })
+
+  it('refuses encrypted keys when safeStorage becomes unavailable', async () => {
+    writePrefixedKey(0x01, 'encrypted-key')
+    safeStorageMock.isEncryptionAvailable.mockReturnValue(false)
+    const store = await loadStoreModule()
+
+    expect(() => store.readSonioxSpeechApiKey()).toThrow(
+      'Encrypted key cannot be decrypted — safeStorage unavailable'
+    )
+    expect(safeStorageMock.decryptString).not.toHaveBeenCalled()
+  })
+
+  it('still reads legacy unprefixed ciphertext when encryption is available', async () => {
+    writeLegacyKey('legacy-encrypted-key')
+    const store = await loadStoreModule()
+
+    expect(store.readSonioxSpeechApiKey()).toBe('legacy-encrypted-key')
+    expect(safeStorageMock.decryptString).toHaveBeenCalledOnce()
   })
 
   it.runIf(process.platform !== 'win32')(
     'repairs permissions when overwriting an existing key',
     async () => {
-      writeStoredKey('old-key')
-      const path = join(tempHome, '.orca', 'soniox-speech-token.enc')
-      chmodSync(path, 0o644)
+      writeLegacyKey('old-key')
+      chmodSync(keyPath(), 0o644)
       const store = await loadStoreModule()
 
       store.saveSonioxSpeechApiKey('replacement-key')
 
-      expect(statSync(path).mode & 0o777).toBe(0o600)
+      expect(statSync(keyPath()).mode & 0o777).toBe(0o600)
     }
   )
 
   it('reports corrupt ciphertext without exposing stored bytes', async () => {
-    writeStoredKey('secret-corrupt-bytes')
+    writePrefixedKey(0x01, 'secret-corrupt-bytes')
     safeStorageMock.decryptString.mockImplementationOnce(() => {
       throw new Error('decrypt included secret-corrupt-bytes')
     })
