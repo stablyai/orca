@@ -38,7 +38,14 @@ function shouldInsertSpaceBetweenFinalSegments(previousText: string, nextText: s
   )
 }
 
-export function formatFinalTranscriptSegment(text: string, previousInsertedText: string): string {
+export function formatFinalTranscriptSegment(
+  text: string,
+  previousInsertedText: string,
+  preserveExactText = false
+): string {
+  if (preserveExactText) {
+    return text
+  }
   if (shouldInsertSpaceBetweenFinalSegments(previousInsertedText, text)) {
     return ` ${text}`
   }

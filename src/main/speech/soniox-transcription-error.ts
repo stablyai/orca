@@ -26,7 +26,6 @@ export function formatSonioxServerError(response: SonioxResponse, apiKey: string
   return `${stableMessage}${requestId}`
 }
 
-export function formatSonioxConnectionError(prefix: string, error: Error, apiKey: string): string {
-  const detail = sanitizeSonioxError(error.message, apiKey)
-  return detail ? `${prefix}: ${detail}` : prefix
+export function sanitizeSonioxConnectionDiagnostic(error: Error, apiKey: string): string {
+  return sanitizeSonioxError(error.message, apiKey)
 }

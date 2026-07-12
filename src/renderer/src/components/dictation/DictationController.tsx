@@ -324,7 +324,8 @@ export function DictationController() {
       if (target) {
         const textToInsert = formatFinalTranscriptSegment(
           data.text,
-          insertedFinalTranscriptRef.current
+          insertedFinalTranscriptRef.current,
+          data.preserveExactText
         )
         insertText(textToInsert, target)
         insertedFinalTranscriptRef.current += textToInsert

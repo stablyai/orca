@@ -138,12 +138,12 @@ vi.mock('worker_threads', () => ({
 
 vi.mock('./model-catalog', () => ({
   getCatalogModel: (id: string) =>
-    id === 'openai-model'
+    id === 'openai-model' || id === 'soniox-model'
       ? {
           id,
-          type: 'openai',
-          provider: 'openai',
-          streaming: false,
+          type: id === 'openai-model' ? 'openai' : 'soniox',
+          provider: id === 'openai-model' ? 'openai' : 'soniox',
+          streaming: id === 'soniox-model',
           sampleRate: 16000
         }
       : {
@@ -166,6 +166,7 @@ describe('SttService', () => {
   beforeEach(() => {
     resetCloudSessions()
     resetWorkers()
+    createCloudSessionMock.mockClear()
     readOpenAiSpeechApiKeyMock.mockClear()
   })
 
@@ -368,6 +369,32 @@ describe('SttService', () => {
     await service.stopDictation('desktop')
 
     expect(readOpenAiSpeechApiKeyMock).toHaveBeenCalledOnce()
+  })
+
+  it('switches between cloud providers without creating a local worker', async () => {
+    const service = new SttService({
+      getModelState: vi.fn().mockResolvedValue({ id: 'cloud-model', status: 'ready' }),
+      getModelDir: vi.fn().mockReturnValue('/tmp/model-a')
+    } as never)
+
+    await service.startDictation('openai-model', vi.fn(), undefined, 'desktop')
+    await service.stopDictation('desktop')
+    await service.startDictation('soniox-model', vi.fn(), undefined, 'desktop')
+    await service.stopDictation('desktop')
+
+    expect(getCreatedWorkerCount()).toBe(0)
+    expect(createCloudSessionMock).toHaveBeenNthCalledWith(
+      1,
+      'openai-model',
+      'openai',
+      expect.any(Function)
+    )
+    expect(createCloudSessionMock).toHaveBeenNthCalledWith(
+      2,
+      'soniox-model',
+      'soniox',
+      expect.any(Function)
+    )
   })
 
   it('keeps startup cancellation tombstoned after the worker has been created', async () => {

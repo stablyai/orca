@@ -1,7 +1,7 @@
 export type SttEvent =
   | { type: 'ready' }
   | { type: 'partial'; text?: string }
-  | { type: 'final'; text?: string }
+  | { type: 'final'; text?: string; preserveExactText?: boolean }
   | { type: 'stopped' }
   | { type: 'error'; error?: string }
 

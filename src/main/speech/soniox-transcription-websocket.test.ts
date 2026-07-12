@@ -64,6 +64,39 @@ describe('Soniox WebSocket protocol integration', () => {
     })
     expect(received[1].data).toHaveLength(4)
     expect(received[2].data).toHaveLength(0)
-    expect(sink).toHaveBeenCalledWith({ type: 'final', text: 'hello' })
+    expect(sink).toHaveBeenCalledWith({
+      type: 'final',
+      text: 'hello',
+      preserveExactText: true
+    })
+  })
+
+  it('surfaces an abrupt real WebSocket disconnect as a stable session error', async () => {
+    const server = new WebSocketServer({ port: 0 })
+    servers.push(server)
+    const port = await listen(server)
+    const serverSocket = { terminate: undefined as (() => void) | undefined }
+    server.once('connection', (socket) => {
+      serverSocket.terminate = () => socket.terminate()
+    })
+    let resolveError: (message: string) => void = () => {}
+    const errorReceived = new Promise<string>((resolve) => {
+      resolveError = resolve
+    })
+    const session = new SonioxTranscriptionSession(
+      'soniox-stt-rt-v5',
+      () => 'integration-key',
+      (event) => {
+        if (event.type === 'error') {
+          resolveError(event.error ?? '')
+        }
+      },
+      () => new WebSocket(`ws://127.0.0.1:${port}`)
+    )
+
+    await session.start()
+    serverSocket.terminate?.()
+
+    await expect(errorReceived).resolves.toBe('Soniox connection closed unexpectedly')
   })
 })

@@ -33,6 +33,7 @@ export type SpeechModelState = {
 export type SpeechTranscriptEvent = {
   text: string
   sessionId: string
+  preserveExactText?: boolean
 }
 
 export type SpeechLifecycleEvent = {

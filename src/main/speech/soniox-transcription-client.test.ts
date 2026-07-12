@@ -1,14 +1,12 @@
 import { EventEmitter } from 'node:events'
 import { describe, expect, it, vi } from 'vitest'
-import {
-  SONIOX_WEBSOCKET_URL,
-  SonioxTranscriptionSession,
-  type SonioxSocket
-} from './soniox-transcription-client'
+import { SONIOX_WEBSOCKET_URL, SonioxTranscriptionSession } from './soniox-transcription-client'
+import type { SonioxSocket } from './soniox-transcription-socket'
 
 class FakeSocket extends EventEmitter implements SonioxSocket {
   readonly sent: (string | Buffer)[] = []
   readyState = 0
+  bufferedAmount = 0
 
   send(data: string | Buffer): void {
     this.sent.push(data)
@@ -26,6 +24,10 @@ class FakeSocket extends EventEmitter implements SonioxSocket {
 
   message(value: unknown): void {
     this.emit('message', Buffer.from(JSON.stringify(value)), false)
+  }
+
+  rawMessage(value: string): void {
+    this.emit('message', Buffer.from(value), false)
   }
 
   fail(error: Error): void {
@@ -114,11 +116,33 @@ describe('SonioxTranscriptionSession', () => {
     })
 
     expect(sink.mock.calls).toEqual([
-      [{ type: 'final', text: 'How' }],
+      [{ type: 'final', text: 'How', preserveExactText: true }],
       [{ type: 'partial', text: ' are' }],
-      [{ type: 'final', text: ' are' }],
+      [{ type: 'final', text: ' are', preserveExactText: true }],
       [{ type: 'partial', text: ' you?' }]
     ])
+  })
+
+  it('preserves punctuation, whitespace, and CJK token text exactly', async () => {
+    const { session, sink, socket } = makeSession()
+    const started = session.start()
+    socket.open()
+    await started
+
+    socket.message({
+      tokens: [
+        { text: 'Hello', is_final: true },
+        { text: ',', is_final: true },
+        { text: ' ', is_final: true },
+        { text: '世界', is_final: true }
+      ]
+    })
+
+    expect(sink).toHaveBeenCalledWith({
+      type: 'final',
+      text: 'Hello, 世界',
+      preserveExactText: true
+    })
   })
 
   it('sends an empty binary frame and waits for the finished response', async () => {
@@ -135,7 +159,11 @@ describe('SonioxTranscriptionSession', () => {
     })
 
     await expect(finishing).resolves.toBe('')
-    expect(sink).toHaveBeenCalledWith({ type: 'final', text: 'Done.' })
+    expect(sink).toHaveBeenCalledWith({
+      type: 'final',
+      text: 'Done.',
+      preserveExactText: true
+    })
   })
 
   it('makes repeated finish calls share one end-of-stream frame', async () => {
@@ -194,8 +222,12 @@ describe('SonioxTranscriptionSession', () => {
       ]
     })
 
-    expect(sink).toHaveBeenCalledWith({ type: 'final', text: 'Hello' })
-    expect(sink).not.toHaveBeenCalledWith({ type: 'final', text: expect.stringContaining('<') })
+    expect(sink).toHaveBeenCalledWith({
+      type: 'final',
+      text: 'Hello',
+      preserveExactText: true
+    })
+    expect(sink.mock.calls.flat().some((event) => String(event.text).includes('<'))).toBe(false)
   })
 
   it('sends keepalive during a silent open session and stops it while finishing', async () => {
@@ -215,6 +247,49 @@ describe('SonioxTranscriptionSession', () => {
       expect(socket.sent).toHaveLength(countAfterFinish)
       socket.message({ tokens: [], finished: true })
       await finishing
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('waits for WebSocket backpressure before sending queued audio', async () => {
+    vi.useFakeTimers()
+    try {
+      const { session, socket } = makeSession()
+      const started = session.start()
+      socket.open()
+      await started
+      socket.bufferedAmount = 2 * 1024 * 1024
+
+      session.feedAudio(new Float32Array([0.25]), 16000)
+      expect(socket.sent).toHaveLength(1)
+      await vi.advanceTimersByTimeAsync(99)
+      expect(socket.sent).toHaveLength(1)
+
+      socket.bufferedAmount = 0
+      await vi.advanceTimersByTimeAsync(1)
+      expect(Buffer.isBuffer(socket.sent[1])).toBe(true)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('times out finish when the server never sends its finished marker', async () => {
+    vi.useFakeTimers()
+    try {
+      const { session, socket } = makeSession()
+      const started = session.start()
+      socket.open()
+      await started
+      const finishing = session.finish()
+      const outcome = expect(finishing).rejects.toThrow(
+        'Soniox transcription timed out while finishing'
+      )
+
+      await vi.advanceTimersByTimeAsync(60_000)
+
+      await outcome
+      expect(socket.readyState).toBe(3)
     } finally {
       vi.useRealTimers()
     }
@@ -241,6 +316,7 @@ describe('SonioxTranscriptionSession', () => {
   })
 
   it('sanitizes WebSocket library errors before reporting them', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
     const { session, sink, socket } = makeSession()
     const started = session.start()
     socket.open()
@@ -250,8 +326,42 @@ describe('SonioxTranscriptionSession', () => {
 
     expect(sink).toHaveBeenCalledWith({
       type: 'error',
-      error: 'Soniox connection failed: socket rejected Bearer [redacted]'
+      error: 'Soniox connection failed.'
     })
     expect(JSON.stringify(sink.mock.calls)).not.toContain('soniox-secret')
+    expect(warn).toHaveBeenCalledWith('[speech] Soniox WebSocket error', {
+      detail: 'socket rejected Bearer [redacted]'
+    })
+    warn.mockRestore()
+  })
+
+  it('reports malformed JSON and removes socket listeners on close', async () => {
+    const { session, sink, socket } = makeSession()
+    const started = session.start()
+    socket.open()
+    await started
+
+    socket.rawMessage('{not json')
+
+    expect(sink).toHaveBeenCalledWith({
+      type: 'error',
+      error: 'Soniox transcription returned an invalid response'
+    })
+    expect(socket.eventNames()).toEqual([])
+  })
+
+  it('reports an unexpected server close as a stable error', async () => {
+    const { session, sink, socket } = makeSession()
+    const started = session.start()
+    socket.open()
+    await started
+
+    socket.close()
+
+    expect(sink).toHaveBeenCalledWith({
+      type: 'error',
+      error: 'Soniox connection closed unexpectedly'
+    })
+    expect(socket.eventNames()).toEqual([])
   })
 })

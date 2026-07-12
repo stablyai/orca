@@ -181,7 +181,11 @@ export function registerSpeechHandlers(store: Store): void {
                 window.webContents.send('speech:partial', { text: msg.text ?? '', sessionId })
                 break
               case 'final':
-                window.webContents.send('speech:final', { text: msg.text ?? '', sessionId })
+                window.webContents.send('speech:final', {
+                  text: msg.text ?? '',
+                  sessionId,
+                  preserveExactText: msg.preserveExactText
+                })
                 break
               case 'stopped':
                 cleanupSessionListener()

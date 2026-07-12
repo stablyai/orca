@@ -18,4 +18,9 @@ describe('formatFinalTranscriptSegment', () => {
   it('does not add a boundary around CJK final segments', () => {
     expect(formatFinalTranscriptSegment('世界', '你好')).toBe('世界')
   })
+
+  it('preserves exact streaming-provider deltas without adding a boundary', () => {
+    expect(formatFinalTranscriptSegment('world', 'hello', true)).toBe('world')
+    expect(formatFinalTranscriptSegment(' ', 'hello', true)).toBe(' ')
+  })
 })

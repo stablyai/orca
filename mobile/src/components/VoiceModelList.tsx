@@ -6,6 +6,7 @@ import {
   type MobileSpeechModel,
   type MobileSpeechSetup
 } from '../dictation/mobile-dictation-setup'
+import { formatMobileSpeechModelMetadata } from '../dictation/mobile-speech-model-metadata'
 
 type Props = {
   setup: MobileSpeechSetup
@@ -15,30 +16,6 @@ type Props = {
   onUseModel: (model: MobileSpeechModel) => void
   onDownload: (model: MobileSpeechModel) => void
   onDelete: (model: MobileSpeechModel) => void
-}
-
-function formatSize(bytes: number | null): string {
-  if (!bytes) {
-    return ''
-  }
-  return `${Math.round(bytes / 1_000_000)} MB`
-}
-
-function modelMeta(model: MobileSpeechModel): string {
-  if (model.provider === 'openai') {
-    return 'OpenAI API'
-  }
-  if (model.provider === 'soniox') {
-    return 'Soniox API'
-  }
-  const inFlight = isModelInFlight(model)
-  if (inFlight && model.progress != null) {
-    return `${formatSize(model.sizeBytes)} · ${Math.round(model.progress * 100)}%`
-  }
-  if (model.status === 'extracting') {
-    return `${formatSize(model.sizeBytes)} · extracting…`
-  }
-  return formatSize(model.sizeBytes)
 }
 
 // Renders the speech-model rows shared between the setup sheet and the Voice
@@ -72,7 +49,7 @@ export function VoiceModelList({
                   </Text>
                   {model.recommended ? <Text style={styles.recommended}>Recommended</Text> : null}
                 </View>
-                <Text style={styles.modelMeta}>{modelMeta(model)}</Text>
+                <Text style={styles.modelMeta}>{formatMobileSpeechModelMetadata(model)}</Text>
               </View>
               {model.provider !== 'local' ? (
                 <Text style={styles.modelStateText}>

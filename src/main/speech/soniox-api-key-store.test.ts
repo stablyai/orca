@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync, mkdtempSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, mkdtempSync, statSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import type * as Os from 'node:os'
 import { join } from 'node:path'
@@ -54,6 +54,7 @@ describe('Soniox speech API key store', () => {
     expect(store.readSonioxSpeechApiKey()).toBe('saved-key')
     expect(safeStorageMock.encryptString).toHaveBeenCalledWith('saved-key')
     expect(safeStorageMock.decryptString).not.toHaveBeenCalled()
+    expect(statSync(join(tempHome, '.orca', 'soniox-speech-token.enc')).mode & 0o777).toBe(0o600)
   })
 
   it('decrypts a stored key only once across repeated reads', async () => {
@@ -84,5 +85,16 @@ describe('Soniox speech API key store', () => {
 
     expect(store.readSonioxSpeechApiKey()).toBe('fallback-key')
     expect(safeStorageMock.encryptString).not.toHaveBeenCalled()
+    expect(statSync(join(tempHome, '.orca', 'soniox-speech-token.enc')).mode & 0o777).toBe(0o600)
+  })
+
+  it('reports corrupt ciphertext without exposing stored bytes', async () => {
+    writeStoredKey('secret-corrupt-bytes')
+    safeStorageMock.decryptString.mockImplementationOnce(() => {
+      throw new Error('decrypt included secret-corrupt-bytes')
+    })
+    const store = await loadStoreModule()
+
+    expect(() => store.readSonioxSpeechApiKey()).toThrow('Soniox API key could not be decrypted')
   })
 })

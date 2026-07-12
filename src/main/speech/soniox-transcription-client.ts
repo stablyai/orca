@@ -2,7 +2,10 @@ import WebSocket from 'ws'
 import { resampleToRate } from './stt-audio-resample'
 import type { SttEventSink } from './stt-service-types'
 import { encodePcm16Le } from './pcm16-audio-encoding'
-import { formatSonioxConnectionError, formatSonioxServerError } from './soniox-transcription-error'
+import {
+  formatSonioxServerError,
+  sanitizeSonioxConnectionDiagnostic
+} from './soniox-transcription-error'
 import {
   isSonioxControlToken,
   parseSonioxResponse,
@@ -10,6 +13,7 @@ import {
   type SonioxToken
 } from './soniox-transcription-response'
 import { createSonioxStartRequest } from './soniox-transcription-config'
+import type { SonioxSocket } from './soniox-transcription-socket'
 
 export const SONIOX_WEBSOCKET_URL = 'wss://stt-rt.soniox.com/transcribe-websocket'
 const SONIOX_SAMPLE_RATE = 16000
@@ -18,17 +22,6 @@ const SONIOX_START_TIMEOUT_MS = 60_000
 const SONIOX_KEEPALIVE_MS = 10_000
 const MAX_QUEUED_AUDIO_SECONDS = 30
 const MAX_SOCKET_BUFFER_BYTES = 1024 * 1024
-
-export type SonioxSocket = {
-  readyState: number
-  bufferedAmount?: number
-  send(data: string | Buffer): void
-  close(): void
-  on(event: 'open', listener: () => void): unknown
-  on(event: 'message', listener: (data: unknown, isBinary: boolean) => void): unknown
-  on(event: 'error', listener: (error: Error) => void): unknown
-  on(event: 'close', listener: (code: number, reason: Buffer) => void): unknown
-}
 
 type SocketFactory = (url: string) => SonioxSocket
 type QueuedAudio = { buffer: Buffer; durationMs: number }
@@ -90,15 +83,12 @@ export class SonioxTranscriptionSession {
       })
       socket.on('message', (data) => this.handleMessage(data))
       socket.on('error', (error) => {
+        this.logConnectionDiagnostic(error)
         if (!startSettled) {
-          rejectStart(
-            new Error(formatSonioxConnectionError('Soniox connection failed', error, this.apiKey))
-          )
+          rejectStart(new Error('Soniox connection failed.'))
           return
         }
-        this.reportError(
-          formatSonioxConnectionError('Soniox connection failed', error, this.apiKey)
-        )
+        this.reportError('Soniox connection failed.')
       })
       socket.on('close', () => {
         if (!startSettled) {
@@ -111,6 +101,10 @@ export class SonioxTranscriptionSession {
           this.reportError('Soniox connection closed unexpectedly')
         }
         this.clearTimers()
+        socket.removeAllListeners()
+        if (this.socket === socket) {
+          this.socket = null
+        }
       })
       this.startTimeout = setTimeout(() => {
         rejectStart(new Error('Soniox connection timed out while starting'))
@@ -203,7 +197,7 @@ export class SonioxTranscriptionSession {
       .map((token) => token.text)
       .join('')
     if (finalText) {
-      this.sink({ type: 'final', text: finalText })
+      this.sink({ type: 'final', text: finalText, preserveExactText: true })
     }
     if (tokens.length > 0) {
       this.sink({ type: 'partial', text: partialText })
@@ -224,6 +218,11 @@ export class SonioxTranscriptionSession {
     this.sink({ type: 'error', error: message })
     this.resolveFinish()
     this.socket?.close()
+  }
+
+  private logConnectionDiagnostic(error: Error): void {
+    const detail = sanitizeSonioxConnectionDiagnostic(error, this.apiKey)
+    console.warn('[speech] Soniox WebSocket error', { detail })
   }
 
   private resolveFinish(): void {
