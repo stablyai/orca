@@ -1,8 +1,10 @@
 import { useCallback } from 'react'
 import type { AddRepoDialogStep } from './add-repo-dialog-types'
 
-// Why: extracted from AddRepoDialog so the dialog's own body stays under the
-// max-lines ratchet — this is generic reset plumbing, not flow-specific logic.
+/**
+ * Why: extracted from AddRepoDialog so the dialog's own body stays under the
+ * max-lines ratchet — this is generic reset plumbing, not flow-specific logic.
+ */
 export function useAddRepoDialogReset({
   setStep,
   setIsAdding,

@@ -1,9 +1,12 @@
 import { parseWslUncPath } from './wsl-paths'
 import type { ProjectExecutionRuntimeResolution } from './project-execution-runtime'
 
+/** Display path for a repo: the POSIX form for WSL UNC paths, otherwise the path unchanged. */
 export function getRepoDisplayPath(path: string): string {
   return parseWslUncPath(path)?.linuxPath ?? path
 }
+
+/** True when the runtime resolved to a WSL distro (as opposed to windows-host or repair-required). */
 export function isWslRuntimeResolution(
   resolution: ProjectExecutionRuntimeResolution | undefined
 ): boolean {

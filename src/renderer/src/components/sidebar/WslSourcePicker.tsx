@@ -29,6 +29,11 @@ type WslSourcePickerProps = {
   onAddWsl: (kind: 'git' | 'folder') => void
 }
 
+/**
+ * Add-project dialog panel for opening a repo/folder from inside a WSL distro:
+ * distro dropdown plus a Linux path input, with a native browse dialog that
+ * round-trips through the picked UNC path back to distro + POSIX path.
+ */
 export function WslSourcePicker({
   hostSelector,
   wslDistro,

@@ -26,6 +26,11 @@ type ProjectDefaultShellSettingProps = {
   ) => void | Promise<unknown>
 }
 
+/**
+ * Project settings row for the terminal default-shell override (T2). Hidden for
+ * non-Windows-host projects, and locked to "WSL" (disabled) when the project's
+ * runtime resolves to WSL or repair-required, since that axis has no other choice then.
+ */
 export function ProjectDefaultShellSetting({
   project,
   settings,

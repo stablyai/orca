@@ -29,6 +29,10 @@ function findProjectForRepo(store: Store, repo: Repo): Project | undefined {
   return store.getProjects().find((entry) => entry.sourceRepoIds.includes(repo.id))
 }
 
+/**
+ * Resolve a local repo's project execution runtime (windows-host vs. WSL distro),
+ * using cached WSL probes rather than re-invoking wsl.exe on this hot path.
+ */
 export function resolveLocalProjectRuntimeForRepo(
   store: Store,
   repo: Repo
@@ -57,6 +61,7 @@ export function resolveLocalProjectRuntimeForRepo(
   })
 }
 
+/** {@link resolveLocalProjectRuntimeForRepo}, looked up from a worktree id via its owning repo. */
 export function resolveLocalProjectRuntimeForWorktreeId(
   store: Store | undefined,
   worktreeId: string | undefined

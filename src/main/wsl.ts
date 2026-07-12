@@ -25,6 +25,7 @@ export function parseWslPath(windowsPath: string): WslPathInfo | null {
   return parseWslUncPath(windowsPath)
 }
 
+/** True when `path` is a WSL UNC path (see {@link parseWslPath}). */
 export function isWslPath(path: string): boolean {
   return parseWslPath(path) !== null
 }
@@ -201,6 +202,7 @@ function isUserWslDistro(distro: string): boolean {
   return !distro.toLowerCase().startsWith('docker-desktop')
 }
 
+/** List installed WSL distros (excluding Docker Desktop's internal ones), sync + process-lifetime cached. */
 export function listWslDistros(): string[] {
   if (wslDistroCache) {
     return wslDistroCache
@@ -225,6 +227,7 @@ export function listWslDistros(): string[] {
   }
 }
 
+/** Async counterpart to {@link listWslDistros}; pass `{ refresh: true }` to force a re-probe for the WSL picker's retry flow. */
 export async function listWslDistrosAsync(options?: { refresh?: boolean }): Promise<string[]> {
   // Why: the distro cache is process-lifetime and failure-sticky; a picker whose
   // repair story is "add a distro, then retry" must force a fresh probe.
@@ -250,14 +253,17 @@ export async function listWslDistrosAsync(options?: { refresh?: boolean }): Prom
   }
 }
 
+/** True once the distro list has been probed this process, regardless of the result. */
 export function hasCachedWslDistros(): boolean {
   return wslDistroCache !== null
 }
 
+/** Cached distro list without triggering a wsl.exe probe; null if not yet probed. */
 export function getCachedWslDistros(): string[] | null {
   return wslDistroCache
 }
 
+/** First available distro, used as the implicit default when a project doesn't pin one. */
 export function getDefaultWslDistro(): string | null {
   return listWslDistros()[0] ?? null
 }
@@ -294,6 +300,7 @@ export function getWslHome(distro: string): string | null {
   }
 }
 
+/** Async counterpart to {@link getWslHome}, for callers that must not block the main thread. */
 export async function getWslHomeAsync(distro: string): Promise<string | null> {
   if (wslHomeCache.has(distro)) {
     return wslHomeCache.get(distro)!
@@ -374,20 +381,24 @@ export async function isWslAvailableAsync(options?: { refresh?: boolean }): Prom
   return wslAvailableCache
 }
 
+/** True once wsl.exe availability has been probed this process, regardless of the result. */
 export function hasCachedWslAvailability(): boolean {
   return wslAvailableCache !== null
 }
 
+/** Cached availability without triggering a wsl.exe probe; null if not yet probed. */
 export function getCachedWslAvailability(): boolean | null {
   return wslAvailableCache
 }
 
+/** Clears all process-lifetime WSL caches (home/distro/availability) so tests start from a known state. */
 export function _resetWslCachesForTests(): void {
   wslHomeCache.clear()
   wslDistroCache = null
   wslAvailableCache = null
 }
 
+/** Seeds the distro/availability caches directly, bypassing wsl.exe, for test setup. */
 export function _setWslCachesForTests(args: {
   available?: boolean | null
   distros?: string[] | null

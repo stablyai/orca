@@ -8,9 +8,11 @@ export type WslDistroOptions = {
 
 const EMPTY_OPTIONS: WslDistroOptions = { available: false, distros: [], default: null }
 
-// Why: `wsl:getDistroOptions`'s availability/distro probes are process-lifetime
-// and failure-sticky (see Task 7), so a manual refresh must pass `refresh: true`
-// to bypass the cache instead of relying on remount.
+/**
+ * Why: `wsl:getDistroOptions`'s availability/distro probes are process-lifetime
+ * and failure-sticky (see Task 7), so a manual refresh must pass `refresh: true`
+ * to bypass the cache instead of relying on remount.
+ */
 export function useWslDistroOptions(): {
   options: WslDistroOptions
   loading: boolean

@@ -11,11 +11,16 @@ export type LocalWindowsTerminalRuntimeOptions = {
   terminalWindowsWslDistro: string | null
 }
 
+/** True when the shell's basename is `wsl.exe`/`wsl`, regardless of path or slash style. */
 export function isWslShellName(shellPath: string | undefined): boolean {
   const shellName = shellPath?.replaceAll('\\', '/').split('/').pop()?.toLowerCase()
   return shellName === 'wsl.exe' || shellName === 'wsl'
 }
 
+/**
+ * Pick the shell for a windows-host spawn, falling back to `fallbackHostShell`
+ * when the requested/settings candidate names a WSL shell (a host spawn must not use `wsl.exe`).
+ */
 export function getHostShellForProjectRuntime(
   requestedShell: string | undefined,
   settingsShell: string | undefined,
@@ -28,6 +33,11 @@ export function getHostShellForProjectRuntime(
   return fallbackHostShell
 }
 
+/**
+ * Resolve the shell and WSL distro to spawn a local Windows terminal with, given
+ * the project's runtime resolution. WSL projects always spawn `wsl.exe` into their
+ * bound distro; windows-host projects fall through to resolveDefaultShell's precedence.
+ */
 export function resolveLocalWindowsTerminalRuntimeOptions(args: {
   requestedShellOverride: string | undefined
   settings: LocalWindowsTerminalRuntimeSettings
@@ -78,6 +88,10 @@ export function resolveLocalWindowsTerminalRuntimeOptions(args: {
   }
 }
 
+/**
+ * Renderer-side mirror of resolveLocalWindowsTerminalRuntimeOptions, used to label a
+ * terminal tab with the shell main will actually spawn, without duplicating its full settings shape.
+ */
 export function resolveLocalWindowsTerminalShellOverrideForTab(args: {
   explicitShellOverride: string | undefined
   defaultWindowsShell: string | undefined

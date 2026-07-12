@@ -18,12 +18,17 @@ const SHELL: Record<'powershell' | 'cmd' | 'git-bash', string> = {
   'git-bash': 'git-bash'
 }
 
+/** Coerce an arbitrary value (e.g. from persisted settings or IPC) to a valid shell, defaulting to `'inherit'` when unrecognized. */
 export function normalizeProjectDefaultShell(v: unknown): ProjectDefaultShell {
   return typeof v === 'string' && (PROJECT_DEFAULT_SHELL_VALUES as readonly string[]).includes(v)
     ? (v as ProjectDefaultShell)
     : 'inherit'
 }
 
+/**
+ * Resolve the effective shell for a new terminal, honoring precedence:
+ * WSL/repair-required runtime > per-terminal creation override > project default > global default.
+ */
 export function resolveDefaultShell(args: {
   creationOverride?: string
   projectDefaultShell: ProjectDefaultShell

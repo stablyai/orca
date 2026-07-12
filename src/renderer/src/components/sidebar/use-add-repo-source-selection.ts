@@ -8,6 +8,11 @@ export type AddProjectSource =
   | { kind: 'ssh'; targetId: string }
   | { kind: 'wsl' }
 
+/**
+ * Tracks which add-project source (local/SSH host vs. WSL) is selected in the
+ * add-repo dialog. WSL isn't an `ExecutionHostId`, so it's tracked as separate
+ * boolean state layered on top of {@link useAddRepoHostSelection}.
+ */
 export function useAddRepoSourceSelection({
   isOpen,
   setStep,

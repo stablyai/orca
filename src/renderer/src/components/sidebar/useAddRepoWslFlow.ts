@@ -3,6 +3,11 @@ import { markOnboardingProjectAdded } from '@/lib/onboarding-project-checklist'
 import { isGitRepoKind } from '../../../../shared/repo-kind'
 import type { AddRepoExistingWorkspaceSource } from '../../../../shared/telemetry-events'
 
+/**
+ * Drives the "add a WSL project" flow: form state for distro/path, submission via
+ * repos.add({wsl}), and a generation counter so a stale reset/unmount can't clobber
+ * a later add attempt's result.
+ */
 export function useAddRepoWslFlow({
   closeModal,
   fetchWorktrees,

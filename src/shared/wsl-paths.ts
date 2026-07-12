@@ -3,6 +3,7 @@ export type WslUncPathInfo = {
   linuxPath: string
 }
 
+/** Parse a `\\wsl.localhost\Distro\...` or `\\wsl$\Distro\...` UNC path into its distro and Linux path; null if not a WSL UNC path. */
 export function parseWslUncPath(path: string): WslUncPathInfo | null {
   const normalized = path.replace(/\\/g, '/')
   const match = normalized.match(/^\/\/(wsl\.localhost|wsl\$)\/([^/]+)(\/.*)?$/i)
@@ -16,6 +17,7 @@ export function parseWslUncPath(path: string): WslUncPathInfo | null {
   }
 }
 
+/** True when `path` is a WSL UNC path (either the modern or legacy share prefix). */
 export function isWslUncPath(path: string): boolean {
   return parseWslUncPath(path) !== null
 }
