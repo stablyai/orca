@@ -14,6 +14,15 @@ describe('resolveWindowsShiftEnterEncoding', () => {
     expect(resolveWindowsShiftEnterEncoding({ launchAgentType: 'droid' })).toBe('alt-enter')
   })
 
+  it('uses CSI-u for trusted Grok process evidence (Kitty Shift+Enter newline)', () => {
+    expect(
+      resolveWindowsShiftEnterEncoding({
+        foreground: { agent: 'grok', routingTrusted: true, shellForeground: false }
+      })
+    ).toBe('csi-u')
+    expect(resolveWindowsShiftEnterEncoding({ launchAgentType: 'grok' })).toBe('alt-enter')
+  })
+
   it('does not let hook or OSC-derived status forge Droid input routing', () => {
     const state = {
       paneForegroundAgentByPaneKey: {},

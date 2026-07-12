@@ -153,11 +153,19 @@ export function resolveTerminalShortcutAction(
     // Why: Droid needs CSI-u but Codex needs Esc+CR; preserve legacy bytes for
     // SSH/WSL/remote peers that cannot be safely classified from this client.
     const useLocalWindowsCapability = isWindows && isLocalWindowsConptyPane?.() !== false
-    const encoding = useLocalWindowsCapability
+    let encoding: WindowsShiftEnterEncoding = useLocalWindowsCapability
       ? (getWindowsShiftEnterEncoding?.() ?? 'alt-enter')
       : isWindows
         ? 'alt-enter'
         : 'csi-u'
+    // Why: unconditional CSI-u on macOS/Linux lands as the literal characters
+    // `[13;2u` when the app has not enabled Kitty keyboard (CSI > u). Grok and
+    // other CSI-u-blind states show that garbage in the composer / redraw.
+    // Windows agent-declared `csi-u` (Droid) still opts in without the tracker.
+    const kittyActive = isKittyKeyboardActivePane?.() === true
+    if (encoding === 'csi-u' && !useLocalWindowsCapability && !kittyActive) {
+      encoding = 'alt-enter'
+    }
     return { type: 'sendInput', data: encoding === 'csi-u' ? '\x1b[13;2u' : '\x1b\r' }
   }
 
@@ -172,9 +180,11 @@ export function resolveTerminalShortcutAction(
     // modified Enter chords never receive the distinct input and treat it as
     // plain Enter. Forward the kitty CSI-u sequence directly (modifier code
     // 5 = Ctrl; cf. 2 = Shift above) so cue/queue behavior reaches the TUI.
-    // Sibling of the Shift+Enter case; a Windows fallback is not added yet
-    // because, unlike #2418's Codex-on-PowerShell inertness, no Windows TUI is
-    // known to drop the CSI-u form for Ctrl+Enter.
+    // Why: only when KKP is active — otherwise `\x1b[13;5u` is the same class
+    // of literal leak as Shift+Enter's `[13;2u`.
+    if (isKittyKeyboardActivePane?.() !== true) {
+      return null
+    }
     return { type: 'sendInput', data: '\x1b[13;5u' }
   }
 

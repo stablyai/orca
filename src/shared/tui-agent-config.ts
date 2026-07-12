@@ -363,7 +363,10 @@ export const TUI_AGENT_CONFIG: Record<TuiAgent, TuiAgentConfig> = {
     promptInjectionMode: 'argv',
     // Why: prompts such as `help` or `--version` otherwise select Grok CLI
     // syntax instead of starting an interactive turn with that literal text.
-    argvPromptSeparator: '--'
+    argvPromptSeparator: '--',
+    // Why: Grok decodes Kitty CSI-u for Shift+Enter newlines (and keeps KKP
+    // advertised on Windows ConPTY). Esc+CR is treated as submit, same as Droid.
+    windowsShiftEnterEncoding: 'csi-u'
   },
   devin: {
     detectCmd: 'devin',

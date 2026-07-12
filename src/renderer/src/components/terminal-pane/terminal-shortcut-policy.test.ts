@@ -67,11 +67,37 @@ describe('resolveTerminalShortcutAction', () => {
   })
 
   it('keeps shift-enter and delete helpers explicit', () => {
+    // Why: macOS CSI-u Shift+Enter only when the pane has enabled KKP; otherwise
+    // Esc+CR avoids the literal `[13;2u` leak in CSI-u-blind sessions.
     expect(
-      resolveTerminalShortcutAction(event({ key: 'Enter', code: 'Enter', shiftKey: true }), true)
+      resolveTerminalShortcutAction(
+        event({ key: 'Enter', code: 'Enter', shiftKey: true }),
+        true,
+        'false',
+        0,
+        false,
+        undefined,
+        undefined,
+        () => true
+      )
     ).toEqual({
       type: 'sendInput',
       data: '\x1b[13;2u'
+    })
+    expect(
+      resolveTerminalShortcutAction(
+        event({ key: 'Enter', code: 'Enter', shiftKey: true }),
+        true,
+        'false',
+        0,
+        false,
+        undefined,
+        undefined,
+        () => false
+      )
+    ).toEqual({
+      type: 'sendInput',
+      data: '\x1b\r'
     })
     expect(resolveTerminalShortcutAction(event({ key: 'Backspace', ctrlKey: true }), true)).toEqual(
       { type: 'sendInput', data: '\x17' }
@@ -164,7 +190,7 @@ describe('resolveTerminalShortcutAction', () => {
     expect(getWindowsShiftEnterEncoding).not.toHaveBeenCalled()
   })
 
-  it('always uses CSI-u Shift+Enter off Windows regardless of Windows encoding', () => {
+  it('uses CSI-u Shift+Enter off Windows only when Kitty keyboard is active', () => {
     for (const encoding of [() => 'csi-u' as const, () => 'alt-enter' as const, undefined]) {
       expect(
         resolveTerminalShortcutAction(
@@ -175,12 +201,53 @@ describe('resolveTerminalShortcutAction', () => {
           false,
           undefined,
           undefined,
-          undefined,
+          () => true,
           undefined,
           encoding
         )
       ).toEqual({ type: 'sendInput', data: '\x1b[13;2u' })
+      expect(
+        resolveTerminalShortcutAction(
+          event({ key: 'Enter', code: 'Enter', shiftKey: true }),
+          false,
+          'false',
+          0,
+          false,
+          undefined,
+          undefined,
+          () => false,
+          undefined,
+          encoding
+        )
+      ).toEqual({ type: 'sendInput', data: '\x1b\r' })
     }
+  })
+
+  it('does not inject Ctrl+Enter CSI-u when Kitty keyboard is inactive', () => {
+    expect(
+      resolveTerminalShortcutAction(
+        event({ key: 'Enter', code: 'Enter', ctrlKey: true }),
+        true,
+        'false',
+        0,
+        false,
+        undefined,
+        undefined,
+        () => false
+      )
+    ).toBeNull()
+    expect(
+      resolveTerminalShortcutAction(
+        event({ key: 'Enter', code: 'Enter', ctrlKey: true }),
+        true,
+        'false',
+        0,
+        false,
+        undefined,
+        undefined,
+        () => true
+      )
+    ).toEqual({ type: 'sendInput', data: '\x1b[13;5u' })
   })
 
   it('keeps ConPTY and agent lookups off unrelated keystrokes', () => {
@@ -243,12 +310,31 @@ describe('resolveTerminalShortcutAction', () => {
   it('forwards Ctrl+Enter as the kitty CSI-u chord so TUIs can cue instead of send', () => {
     // Why: xterm.js collapses Ctrl+Enter to a bare CR; intercept upstream and
     // emit the kitty sequence (modifier code 5 = Ctrl) so probing TUIs receive
-    // the distinct chord on every platform.
+    // the distinct chord when KKP is active.
+    const kittyActive = (): boolean => true
     expect(
-      resolveTerminalShortcutAction(event({ key: 'Enter', code: 'Enter', ctrlKey: true }), true)
+      resolveTerminalShortcutAction(
+        event({ key: 'Enter', code: 'Enter', ctrlKey: true }),
+        true,
+        'false',
+        0,
+        false,
+        undefined,
+        undefined,
+        kittyActive
+      )
     ).toEqual({ type: 'sendInput', data: '\x1b[13;5u' })
     expect(
-      resolveTerminalShortcutAction(event({ key: 'Enter', code: 'Enter', ctrlKey: true }), false)
+      resolveTerminalShortcutAction(
+        event({ key: 'Enter', code: 'Enter', ctrlKey: true }),
+        false,
+        'false',
+        0,
+        false,
+        undefined,
+        undefined,
+        kittyActive
+      )
     ).toEqual({ type: 'sendInput', data: '\x1b[13;5u' })
     // Windows uses the same kitty sequence for now: no TUI is known to treat the
     // CSI-u Ctrl+Enter form as inert (cf. the Shift+Enter Codex-on-PowerShell case).
@@ -258,7 +344,10 @@ describe('resolveTerminalShortcutAction', () => {
         false,
         'false',
         0,
-        true
+        true,
+        undefined,
+        undefined,
+        kittyActive
       )
     ).toEqual({ type: 'sendInput', data: '\x1b[13;5u' })
 
