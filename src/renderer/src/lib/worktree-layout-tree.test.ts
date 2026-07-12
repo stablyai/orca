@@ -8,6 +8,7 @@ import {
   hasLeaf,
   leafCount,
   makeWorktreeLeaf,
+  pickSplitDirection,
   pruneLeaves,
   removeLeaf,
   replaceLeaf,
@@ -194,5 +195,19 @@ describe('pruneLeaves', () => {
 describe('makeWorktreeLeaf', () => {
   it('builds a leaf node', () => {
     expect(makeWorktreeLeaf('A')).toEqual({ type: 'leaf', worktreeId: 'A' })
+  })
+})
+
+describe('pickSplitDirection', () => {
+  it('splits a wide pane left/right (horizontal → new pane to the right)', () => {
+    expect(pickSplitDirection({ width: 1600, height: 900 })).toBe('horizontal')
+  })
+
+  it('splits a tall pane top/bottom (vertical → new pane below)', () => {
+    expect(pickSplitDirection({ width: 800, height: 1200 })).toBe('vertical')
+  })
+
+  it('treats a square pane as wide (>=) → horizontal', () => {
+    expect(pickSplitDirection({ width: 1000, height: 1000 })).toBe('horizontal')
   })
 })

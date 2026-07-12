@@ -28,6 +28,18 @@ export function makeWorktreeLeaf(worktreeId: string): WorktreeLayoutNode {
   return { type: 'leaf', worktreeId }
 }
 
+/** Choose the split direction that divides a pane's longer axis so both halves
+ *  stay as usable as possible: a wide (or square) pane splits left/right
+ *  ('horizontal' → new pane to the right); a tall pane splits top/bottom
+ *  ('vertical' → new pane below). Drives the modifier-click "open in parallel"
+ *  trigger and the drag-drop default. */
+export function pickSplitDirection(size: {
+  width: number
+  height: number
+}): WorktreeSplitDirection {
+  return size.width >= size.height ? 'horizontal' : 'vertical'
+}
+
 export function collectLeafWorktreeIds(node: WorktreeLayoutNode): string[] {
   if (node.type === 'leaf') {
     return [node.worktreeId]

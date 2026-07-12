@@ -218,6 +218,19 @@ On drop: `splitWorktreeLeaf(paneLeafPath, direction, draggedWorktreeId)` → new
 
 ---
 
+### 6.5 Trigger & parent-representation refinements (decided)
+
+**Opening a worktree in parallel — two triggers from the left Sidebar:**
+
+- **Modifier-click a worktree row → instant parallel split**, direction chosen automatically from the *split-target pane's aspect ratio* (this generalizes "the window's aspect ratio" — for the first split the focused pane fills the workbench, so they coincide): a **wide** target splits to the **right** (`direction: 'horizontal'`), a **tall** target splits **below** (`direction: 'vertical'`). Always dividing the longer axis keeps each resulting pane as usable as possible. **Cross-platform (AGENTS.md):** the modifier is **⌘-click on macOS, Ctrl-click on Windows/Linux** — macOS reserves *Ctrl-click* for the context menu, so meta is the correct Mac modifier (the plain phrasing "Ctrl-click" maps to Ctrl only off-Mac). Plain click is unchanged (N=1: switch the single pane, identical to today).
+- **Right-click a worktree row → context menu → "Open in Parallel"**, whose primary action mirrors the same aspect-ratio choice, with a submenu offering explicit **Split Right / Split Below**. The label shows the direction it will use (⤷ Right / ⤵ Below).
+
+Both route to `splitActiveWorkbenchPane(focusedWorktreeId, direction, pickedWorktreeId)`. The decision is a pure, unit-tested helper `pickSplitDirection(rect) = rect.width >= rect.height ? 'horizontal' : 'vertical'`, reused by the drag-drop edge/centre logic.
+
+**Parent representation — the super-tab is the *parent* of the tab tree, not a second tab strip.** To avoid "two stacked tab bars" noise, each worktree pane's chrome reads as the **parent container** of that worktree's content `TabBar`, visually distinguished from it: a slim parent band shows `project › branch` (the worktree identity) and *owns* the content tabs nested beneath it, using container/muted treatment (STYLEGUIDE tokens) rather than a duplicate tab-strip style. The `ProjectTabStrip` super-tabs likewise present the **project as the parent identity** of each view. Hierarchy is conveyed by distinct parent chrome, reinforcing progressive disclosure (§0): at N=1 the parent band collapses to nothing (today's look) and appears only when parallel is active — and even then reads as a grouping header, not another row of tabs.
+
+---
+
 ## 7. Architecture / Code Design
 
 ### 7.1 New shared types (`src/shared/types.ts`)
