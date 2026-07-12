@@ -249,7 +249,10 @@ describe('mergeSnapshotAndSessions', () => {
     expect(remote.worktrees[0].isRemote).toBe(true)
   })
 
-  it('excludes runtime-scoped rows while preserving SSH and unattributed sessions', () => {
+  it('includes runtime-scoped snapshot samples while still filtering local-daemon runtime rows', () => {
+    // Why: Resource Manager must show runtime-host PTYs when diagnostics.memory
+    // is collected on that host. Local daemon sessions that only *look* like
+    // runtime ids stay excluded (kill safety).
     const runtimeWt: WorktreeMemory = {
       worktreeId: 'runtime-repo::/runtime/Wt',
       worktreeName: 'Wt',
@@ -278,8 +281,18 @@ describe('mergeSnapshotAndSessions', () => {
 
     const out = mergeSnapshotAndSessions(makeSnapshot([runtimeWt]), sessions, ctx)
 
-    expect(out.map((repo) => repo.repoId)).toEqual(['ssh-repo', UNATTRIBUTED_REPO_ID])
-    expect(out.find((repo) => repo.repoId === 'runtime-repo')).toBeUndefined()
+    expect(out.map((repo) => repo.repoId).sort()).toEqual(
+      ['runtime-repo', 'ssh-repo', UNATTRIBUTED_REPO_ID].sort()
+    )
+    const runtime = out.find((repo) => repo.repoId === 'runtime-repo')!
+    expect(runtime.worktrees[0]).toMatchObject({
+      worktreeId: 'runtime-repo::/runtime/Wt',
+      cpu: 5,
+      memory: 500_000_000,
+      hasLocalSamples: true
+    })
+    // Local daemon must not add a second session under the runtime repo.
+    expect(runtime.worktrees[0].sessions.map((s) => s.sessionId)).toEqual(['runtime-pty'])
 
     const ssh = out.find((repo) => repo.repoId === 'ssh-repo')!
     expect(ssh.hasRemoteChildren).toBe(true)
