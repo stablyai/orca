@@ -13412,6 +13412,9 @@ describe('connectPanePty', () => {
   it('attaches remote runtime PTY handles instead of creating a replacement terminal', async () => {
     const { connectPanePty } = await import('./pty-connection')
     const transport = createMockTransport()
+    transport.attach.mockImplementation(() => {
+      transport.getPtyId.mockReturnValue('remote:env-1@@terminal-1')
+    })
     transportFactoryQueue.push(transport)
 
     mockStoreState = {
@@ -13435,7 +13438,8 @@ describe('connectPanePty', () => {
     expect(transport.attach).toHaveBeenCalledWith(
       expect.objectContaining({ existingPtyId: 'remote:terminal-1' })
     )
-    expect(deps.syncPanePtyLayoutBinding).toHaveBeenCalledWith(2, 'remote:terminal-1')
+    expect(deps.updateTabPtyId).toHaveBeenCalledWith('tab-1', 'remote:env-1@@terminal-1')
+    expect(deps.syncPanePtyLayoutBinding).toHaveBeenCalledWith(2, 'remote:env-1@@terminal-1')
   })
 
   it('cold-spawns slept remote runtime PTYs instead of reattaching the preserved handle', async () => {

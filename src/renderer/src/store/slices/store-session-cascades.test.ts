@@ -220,6 +220,14 @@ describe('removeProject cascade', () => {
     expect(s.suppressedPtyExitIds['pty2']).toBeUndefined()
     expect(s.pendingCodexPaneRestartIds['pty1']).toBeUndefined()
     expect(s.pendingCodexPaneRestartIds['pty2']).toBeUndefined()
+
+    store.getState().clearTabPtyId('tab1', 'pty1')
+    store.getState().clearTabPtyId('tab2', 'pty2')
+
+    // Why: exit IPC can arrive after repo purge but before the mounted pane
+    // unmounts. A late exit must not recreate an index for a tab with no owner.
+    expect(store.getState().ptyIdsByTabId['tab1']).toBeUndefined()
+    expect(store.getState().ptyIdsByTabId['tab2']).toBeUndefined()
   })
 })
 

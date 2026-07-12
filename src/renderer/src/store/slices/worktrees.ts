@@ -35,7 +35,6 @@ import {
   isRuntimeScopeForbiddenError,
   RuntimeRpcCallError
 } from '../../runtime/runtime-rpc-client'
-import { parseRemoteRuntimePtyId } from '../../runtime/runtime-terminal-stream'
 import { toRuntimeWorktreeSelector } from '../../runtime/runtime-worktree-selector'
 import { getHostedReviewCacheKey, refreshHostedReviewCard } from './hosted-review'
 import { isPositiveHostedReviewNumber } from '../../../../shared/hosted-review'
@@ -1908,17 +1907,11 @@ function buildWorktreePurgeState(s: AppState, worktreeIds: string[]): Partial<Ap
   // Why: some terminal/agent maps are keyed by ptyId, not tabId. Collect every
   // durable wake hint too, because slept panes have already left the live index.
   const doomedPtyIds = new Set<string>()
-  const doomedRemoteHandleAliases = new Set<string>()
   const addDoomedPtyId = (ptyId: string | null | undefined): void => {
     if (!ptyId) {
       return
     }
     doomedPtyIds.add(ptyId)
-    const remoteHandle = parseRemoteRuntimePtyId(ptyId)?.handle
-    if (remoteHandle) {
-      doomedPtyIds.add(remoteHandle)
-      doomedRemoteHandleAliases.add(remoteHandle)
-    }
   }
   const addDoomedTabPtyIds = (tabId: string, tabPtyId: string | null | undefined): void => {
     for (const ptyId of s.ptyIdsByTabId?.[tabId] ?? []) {
@@ -1950,47 +1943,6 @@ function buildWorktreePurgeState(s: AppState, worktreeIds: string[]): Partial<Ap
     // Why: drop this worktree's auto-derived detached-HEAD display name so the
     // module-level map doesn't retain removed worktrees for the whole session.
     detachedHeadAutoDerivedDisplayNames.delete(id)
-  }
-  // Why: remote runtime handles are environment-scoped before wrapping. If a
-  // surviving tab owns the same raw alias, its in-flight exit guard must stay.
-  const survivingRemoteHandleAliases = new Set<string>()
-  if (doomedRemoteHandleAliases.size > 0) {
-    const recordSurvivingAlias = (ptyId: string | null | undefined): boolean => {
-      if (ptyId) {
-        const matchingAlias = doomedRemoteHandleAliases.has(ptyId)
-          ? ptyId
-          : parseRemoteRuntimePtyId(ptyId)?.handle
-        if (matchingAlias && doomedRemoteHandleAliases.has(matchingAlias)) {
-          survivingRemoteHandleAliases.add(matchingAlias)
-        }
-      }
-      return survivingRemoteHandleAliases.size === doomedRemoteHandleAliases.size
-    }
-    scanSurvivingTabs: for (const worktreeId in s.tabsByWorktree) {
-      if (worktreeIdSet.has(worktreeId)) {
-        continue
-      }
-      for (const tab of s.tabsByWorktree[worktreeId]) {
-        for (const ptyId of s.ptyIdsByTabId?.[tab.id] ?? []) {
-          if (recordSurvivingAlias(ptyId)) {
-            break scanSurvivingTabs
-          }
-        }
-        if (
-          recordSurvivingAlias(tab.ptyId) ||
-          recordSurvivingAlias(s.lastKnownRelayPtyIdByTabId?.[tab.id])
-        ) {
-          break scanSurvivingTabs
-        }
-        for (const ptyId of Object.values(
-          s.terminalLayoutsByTabId?.[tab.id]?.ptyIdsByLeafId ?? {}
-        )) {
-          if (recordSurvivingAlias(ptyId)) {
-            break scanSurvivingTabs
-          }
-        }
-      }
-    }
   }
   // Why: same rationale for the doomed tabs' foreground last-seen timestamps and
   // consumed agent-startup delivery guards — retired tab ids never recur.
@@ -2074,7 +2026,7 @@ function buildWorktreePurgeState(s: AppState, worktreeIds: string[]): Partial<Ap
     let changed = false
     const out = { ...obj }
     for (const ptyId of doomedPtyIds) {
-      if (!survivingRemoteHandleAliases.has(ptyId) && ptyId in out) {
+      if (ptyId in out) {
         delete out[ptyId]
         changed = true
       }
