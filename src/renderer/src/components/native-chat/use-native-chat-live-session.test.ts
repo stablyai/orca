@@ -372,6 +372,30 @@ describe('useNativeChatLiveSession — notFound retry (#8401)', () => {
     expect(latest?.error).toBe('No transcript found')
   })
 
+  it('renders live-appended content instead of loading while the read is still retrying', async () => {
+    vi.useFakeTimers()
+    const transport = getMockTransport('env-1')
+    transport.readSession.mockResolvedValue({ error: 'No transcript found', notFound: true })
+    let onAppended: ((messages: NativeChatMessage[]) => void) | null = null
+    transport.subscribe.mockImplementationOnce(
+      (_args: unknown, cb: (m: NativeChatMessage[]) => void) => {
+        onAppended = cb
+        return transport.unsubscribe
+      }
+    )
+
+    await render({ paneKey: PANE, agent: AGENT, sessionId: SESSION, runtimeEnvironmentId: 'env-1' })
+    expect(latest?.status).toBe('loading')
+
+    // The watcher's first drain lands mid-retry — content must win over the spinner.
+    await act(async () => {
+      onAppended?.([assistant('a-early', 'landed during retry')])
+    })
+
+    expect(latest?.status).not.toBe('loading')
+    expect(latest?.messages.map((m) => m.id)).toContain('a-early')
+  })
+
   it('renders live-appended content even when the initial read settled into a permanent error', async () => {
     const transport = getMockTransport('env-1')
     transport.readSession.mockResolvedValueOnce({ error: 'unreadable transcript' })

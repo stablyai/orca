@@ -48,6 +48,11 @@ export async function readNativeChatTranscript(
     }
     return { error: `Unsupported agent for native chat transcript: ${agent}` }
   } catch (err) {
+    // Why: ENOENT after a successful resolve is the same first-flush/rotation
+    // race as an unresolved path — keep it retry-worthy (#8401).
+    if ((err as NodeJS.ErrnoException | null)?.code === 'ENOENT') {
+      return { error: errorMessage(err), notFound: true }
+    }
     return { error: errorMessage(err) }
   }
 }

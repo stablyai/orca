@@ -279,6 +279,24 @@ describe('subscribeNativeChatTranscript (resolve-poll for a not-yet-created file
     expect(getActiveNativeChatWatcherCount()).toBe(0)
   })
 
+  it('returns a no-op (no resolve poll) for a blank session id with no explicit file', async () => {
+    const before = getActiveNativeChatWatcherCount()
+    const sub = await subscribeNativeChatTranscript({
+      agent: 'claude',
+      sessionId: '   ',
+      onAppend: () => {},
+      debounceMs: 5,
+      resolvePollIntervalMs: 10
+    })
+
+    // An unresolvable target must not spin the resolve poll forever.
+    await new Promise((resolve) => setTimeout(resolve, 60))
+    expect(getActiveNativeChatWatcherCount()).toBe(before)
+    sub.unsubscribe()
+    sub.unsubscribe()
+    expect(getActiveNativeChatWatcherCount()).toBe(before)
+  })
+
   it('unsubscribing during the poll phase leaves no watcher or timer alive', async () => {
     const filePath = await pendingFilePath()
     const before = getActiveNativeChatWatcherCount()

@@ -338,11 +338,11 @@ export function useNativeChatLiveSession(
       sessionId,
       agent,
       hookState,
-      loading: read.phase === 'loading',
-      // Why: a watcher append (fix for #8401) can land content after the initial
-      // read settled into 'error' (e.g. the retry window above exhausted while a
-      // late subscribe drain still fires) — only surface the error when there is
-      // no live content to show instead.
+      // Why: a watcher append (fix for #8401) can land content while the read is
+      // still retrying ('loading') or after it settled into 'error' — in both
+      // cases showing the live content beats a spinner or a stale error, so each
+      // override only applies while there is nothing appended to render.
+      loading: read.phase === 'loading' && appended.length === 0,
       ...(read.phase === 'error' && appended.length === 0 ? { error: read.error } : {})
     })
     return { ...session, hasMore, loadingEarlier, loadEarlier }

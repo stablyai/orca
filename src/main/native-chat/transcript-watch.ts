@@ -266,6 +266,9 @@ function subscribeViaResolvePoll(
       pollTimer = null
       void runAttempt()
     }, delay)
+    // Why: never hold the event loop open (headless `orca serve` shutdown) for
+    // a session that may genuinely never resolve.
+    pollTimer.unref?.()
     // Only back off in production; a test-supplied interval stays fixed so
     // tests resolve in bounded, predictable time.
     if (args.resolvePollIntervalMs === undefined) {
@@ -335,6 +338,11 @@ export async function subscribeNativeChatTranscript(
   if (!decode) {
     // Nothing watchable — return a no-op teardown so callers can unconditionally
     // unsubscribe without null-checks.
+    return { unsubscribe: () => {} }
+  }
+  // Why: a blank session id (and no explicit file) can never resolve — bail out
+  // instead of resolve-polling an unresolvable target forever.
+  if (!args.filePath && !args.sessionId.trim()) {
     return { unsubscribe: () => {} }
   }
 
