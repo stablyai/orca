@@ -117,6 +117,26 @@ describe('subscribeViaWatcherProcess', () => {
     await expect(unsubPromise).resolves.toBeUndefined()
   })
 
+  it('shares one pending child unsubscribe across duplicate cleanup calls', async () => {
+    const promise = subscribeViaWatcherProcess('/repo', vi.fn(), {})
+    const child = currentChild()
+    const id = ackSubscribe(child, 0)
+    const subscription = await promise
+    const keepAlivePromise = subscribeViaWatcherProcess('/other', vi.fn(), {})
+    ackSubscribe(child)
+    await keepAlivePromise
+
+    const firstUnsubscribe = subscription.unsubscribe()
+    const secondUnsubscribe = subscription.unsubscribe()
+
+    expect(secondUnsubscribe).toBe(firstUnsubscribe)
+    expect(child.sent.filter((message) => message.op === 'unsubscribe')).toEqual([
+      { op: 'unsubscribe', id }
+    ])
+    child.emit('message', { op: 'unsubscribed', id })
+    await expect(firstUnsubscribe).resolves.toBeUndefined()
+  })
+
   it('resolves a pending unsubscribe when the child dies', async () => {
     const promise = subscribeViaWatcherProcess('/repo', vi.fn(), {})
     const child = currentChild()
@@ -282,5 +302,27 @@ describe('subscribeViaWatcherProcess', () => {
     expect(parcelSubscribeMock).toHaveBeenCalledWith('/repo', callback, { ignore: ['**/.git'] })
     await subscription.unsubscribe()
     expect(unsubscribe).toHaveBeenCalled()
+  })
+
+  it('shares one native teardown across duplicate in-process cleanup calls', async () => {
+    vi.stubEnv('VITEST', 'true')
+    let resolveUnsubscribe: () => void = () => {}
+    const unsubscribe = vi.fn(
+      () =>
+        new Promise<void>((resolve) => {
+          resolveUnsubscribe = resolve
+        })
+    )
+    parcelSubscribeMock.mockResolvedValue({ unsubscribe })
+    const subscription = await subscribeViaWatcherProcess('/repo', vi.fn(), {})
+
+    const firstUnsubscribe = subscription.unsubscribe()
+    const secondUnsubscribe = subscription.unsubscribe()
+    await Promise.resolve()
+
+    expect(secondUnsubscribe).toBe(firstUnsubscribe)
+    expect(unsubscribe).toHaveBeenCalledTimes(1)
+    resolveUnsubscribe()
+    await expect(firstUnsubscribe).resolves.toBeUndefined()
   })
 })

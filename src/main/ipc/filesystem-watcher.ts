@@ -69,6 +69,9 @@ const pendingTeardowns = new Map<string, ReturnType<typeof setTimeout>>()
 // Why: @parcel/watcher unsubscribe completes native async work. Sender-destroy
 // cleanup can start it before app shutdown, so will-quit must still await it.
 const pendingLocalUnsubscribes = new Set<Promise<void>>()
+// Why: watcher errors, renderer teardown, worktree deletion, and shutdown can
+// race for the same root. Native watcher handles must be released exactly once.
+const localUnsubscribeByRoot = new WeakMap<WatchedRoot, Promise<void>>()
 type LocalWatcherInstallToken = {
   cancelled: boolean
   listeners: Map<number, WebContents>
@@ -387,6 +390,10 @@ function cleanupLocalWatchersForSender(senderId: number): void {
 }
 
 function trackLocalUnsubscribe(rootKey: string, root: WatchedRoot): Promise<void> {
+  const existing = localUnsubscribeByRoot.get(root)
+  if (existing) {
+    return existing
+  }
   const unsubscribePromise = Promise.resolve()
     .then(() => root.subscription.unsubscribe())
     .catch((err: unknown) => {
@@ -395,6 +402,7 @@ function trackLocalUnsubscribe(rootKey: string, root: WatchedRoot): Promise<void
     .finally(() => {
       pendingLocalUnsubscribes.delete(unsubscribePromise)
     })
+  localUnsubscribeByRoot.set(root, unsubscribePromise)
   pendingLocalUnsubscribes.add(unsubscribePromise)
   return unsubscribePromise
 }

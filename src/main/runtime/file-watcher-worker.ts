@@ -124,8 +124,12 @@ async function main(): Promise<void> {
   // The crawl finished and the subscription is live.
   port.postMessage({ type: 'ready' } satisfies FileWatcherWorkerMessage)
 
+  let unsubscribeStarted = false
   port.on('message', (message: FileWatcherHostMessage) => {
-    if (message.type === 'unsubscribe') {
+    if (message.type === 'unsubscribe' && !unsubscribeStarted) {
+      // Why: duplicate host cleanup messages must never release the native
+      // FSEventStream twice; the first teardown owns closing the worker port.
+      unsubscribeStarted = true
       void subscription.unsubscribe().finally(() => {
         port.close()
       })

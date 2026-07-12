@@ -72,7 +72,16 @@ async function subscribeInProcess(
     callback as ParcelWatcher.SubscribeCallback,
     opts as ParcelWatcher.Options
   )
-  return { unsubscribe: () => subscription.unsubscribe() }
+  let unsubscribePromise: Promise<void> | null = null
+  const unsubscribeOnce = async (): Promise<void> => subscription.unsubscribe()
+  return {
+    unsubscribe: () => {
+      // Why: the fallback still owns a native watcher handle, so overlapping
+      // cleanup paths must share one teardown instead of releasing it twice.
+      unsubscribePromise ??= unsubscribeOnce()
+      return unsubscribePromise
+    }
+  }
 }
 
 function inCrashCooldown(): boolean {
@@ -249,23 +258,29 @@ function killWatcherChildIfIdle(): void {
 }
 
 function makeSubscription(record: SubscriptionRecord): WatcherProcessSubscription {
+  let unsubscribePromise: Promise<void> | null = null
   return {
     unsubscribe: (): Promise<void> => {
-      if (!records.delete(record.id)) {
-        return Promise.resolve()
-      }
-      const proc = child
-      if (!proc?.connected) {
-        return Promise.resolve()
-      }
-      if (records.size === 0) {
-        killWatcherChildIfIdle()
-        return Promise.resolve()
-      }
-      return new Promise((resolve) => {
-        pendingUnsubscribes.set(record.id, resolve)
-        sendToChild(proc, { op: 'unsubscribe', id: record.id })
-      })
+      // Why: every caller must observe the same child teardown completion;
+      // resolving a duplicate call early can race worktree removal or shutdown.
+      unsubscribePromise ??= (() => {
+        if (!records.delete(record.id)) {
+          return Promise.resolve()
+        }
+        const proc = child
+        if (!proc?.connected) {
+          return Promise.resolve()
+        }
+        if (records.size === 0) {
+          killWatcherChildIfIdle()
+          return Promise.resolve()
+        }
+        return new Promise<void>((resolve) => {
+          pendingUnsubscribes.set(record.id, resolve)
+          sendToChild(proc, { op: 'unsubscribe', id: record.id })
+        })
+      })()
+      return unsubscribePromise
     }
   }
 }
