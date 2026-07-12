@@ -23,6 +23,13 @@ describe('sanitizeDeviceDisplayName', () => {
     expect(sanitizeDeviceDisplayName('x'.repeat(80))).toHaveLength(64)
   })
 
+  it('caps by Unicode code point without splitting an emoji', () => {
+    const sanitized = sanitizeDeviceDisplayName(`${'x'.repeat(63)}😀z`)
+
+    expect(sanitized).toBe(`${'x'.repeat(63)}😀`)
+    expect(Array.from(sanitized ?? '')).toHaveLength(64)
+  })
+
   it('rejects empty / control-only strings', () => {
     expect(sanitizeDeviceDisplayName('   ')).toBeNull()
     expect(sanitizeDeviceDisplayName('\u0000\u0001')).toBeNull()

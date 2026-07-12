@@ -24,7 +24,6 @@ export function resolveMobileDeviceDisplayName(): string {
     const constants = Platform.constants as {
       Brand?: string
       Model?: string
-      Manufacturer?: string
     }
     const brand = typeof constants.Brand === 'string' ? constants.Brand.trim() : ''
     const model = typeof constants.Model === 'string' ? constants.Model.trim() : ''
@@ -45,16 +44,17 @@ export function resolveMobileDeviceDisplayName(): string {
 export function sanitizeDeviceDisplayName(raw: string): string | null {
   // Why: device metadata is untrusted display text; remove terminal/control
   // bytes without a control-character regex that cross-platform lint rejects.
-  const cleaned = raw
-    .split('')
+  const normalized = Array.from(raw)
     .filter((character) => {
-      const code = character.charCodeAt(0)
-      return code > 0x1f && code !== 0x7f
+      const codePoint = character.codePointAt(0)
+      return codePoint !== undefined && codePoint > 0x1f && codePoint !== 0x7f
     })
     .join('')
     .replace(/\s+/g, ' ')
     .trim()
-    .slice(0, MAX_DEVICE_NAME_LENGTH)
+  // Why: String.slice counts UTF-16 code units and can leave a lone surrogate
+  // at the boundary; the protocol limit is shared with the server by code point.
+  const cleaned = Array.from(normalized).slice(0, MAX_DEVICE_NAME_LENGTH).join('')
   return cleaned.length > 0 ? cleaned : null
 }
 
