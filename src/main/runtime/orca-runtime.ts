@@ -18912,7 +18912,7 @@ export class OrcaRuntimeService {
   async stopTerminalsForWorktree(
     worktreeSelector: string,
     opts: { worktreeTeardown?: boolean } = {}
-  ): Promise<{ stopped: number }> {
+  ): Promise<{ stopped: number; failedPtyIds?: string[] }> {
     // Why: generic terminal.stop must not act on a stale renderer graph, while
     // deletion runs under admission and owns main's authoritative PTY records.
     const graphEpoch = opts.worktreeTeardown ? null : this.captureReadyGraphEpoch()
@@ -18941,6 +18941,7 @@ export class OrcaRuntimeService {
     }
 
     let stopped = 0
+    const failedPtyIds: string[] = []
     for (const ptyId of ptyIds) {
       // Why: worktree removal immediately follows this with provider/registry
       // sweeps. Await the verified stop so those sweeps cannot overlap a
@@ -18950,12 +18951,14 @@ export class OrcaRuntimeService {
       if (opts.worktreeTeardown && this.ptyController?.stopAndWait) {
         if (await this.ptyController.stopAndWait(ptyId)) {
           stopped += 1
+        } else {
+          failedPtyIds.push(ptyId)
         }
       } else if (this.ptyController?.kill(ptyId)) {
         stopped += 1
       }
     }
-    return { stopped }
+    return failedPtyIds.length > 0 ? { stopped, failedPtyIds } : { stopped }
   }
 
   async stopExactTerminalsForWorktree(

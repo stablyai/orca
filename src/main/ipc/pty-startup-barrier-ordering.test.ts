@@ -11,7 +11,7 @@ describe('PTY startup barrier ordering', () => {
     const runtimeSpawnStart = source.indexOf('spawn: async (args) => {')
     const runtimeSpawnEnd = source.indexOf('      write:', runtimeSpawnStart)
     const runtimeSpawn = source.slice(runtimeSpawnStart, runtimeSpawnEnd)
-    const rendererSpawnStart = source.indexOf("ipcMain.handle(\n    'pty:spawn'")
+    const rendererSpawnStart = source.indexOf("registerWorktreePtySpawnHandler(\n    'pty:spawn'")
     const rendererSpawnEnd = source.indexOf("ipcMain.handle(\n    'pty:kill'", rendererSpawnStart)
     const rendererSpawn = source.slice(rendererSpawnStart, rendererSpawnEnd)
 

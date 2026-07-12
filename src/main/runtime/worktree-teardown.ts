@@ -1,6 +1,7 @@
 import type { IPtyProvider } from '../providers/types'
 import type { OrcaRuntimeService } from './orca-runtime'
 import { listRegisteredPtys } from '../memory/pty-registry'
+import { parseAppSshPtyId } from '../../shared/ssh-pty-id'
 
 export type WorktreeTeardownDeps = {
   runtime?: OrcaRuntimeService
@@ -45,12 +46,17 @@ export async function killAllProcessesForWorktree(
     providerStopped: 0,
     registryStopped: 0
   }
+  let failedRemotePtyIds: string[] = []
 
   if (deps.runtime) {
     const r = await deps.runtime
       .stopTerminalsForWorktree(worktreeId, { worktreeTeardown: true })
       .catch(() => ({ stopped: 0 }))
     result.runtimeStopped = r.stopped
+    failedRemotePtyIds =
+      'failedPtyIds' in r
+        ? (r.failedPtyIds ?? []).filter((ptyId) => parseAppSshPtyId(ptyId) !== null)
+        : []
   }
 
   result.providerStopped = await sweepProviderByPrefix(
@@ -63,6 +69,12 @@ export async function killAllProcessesForWorktree(
     deps.localProvider,
     deps.onPtyStopped
   )
+
+  if (failedRemotePtyIds.length > 0) {
+    // Why: local prefix/registry sweeps cannot prove an SSH-owned PTY dead;
+    // remote Git removal must not proceed after an unverified exact stop.
+    throw new Error(`Failed to stop remote worktree terminals: ${failedRemotePtyIds.join(', ')}`)
+  }
 
   return result
 }

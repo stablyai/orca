@@ -22357,6 +22357,22 @@ describe('OrcaRuntimeService', () => {
     await expect(stopping).resolves.toEqual({ stopped: 1 })
   })
 
+  it('reports exact teardown PTYs whose verified stop failed', async () => {
+    const runtime = new OrcaRuntimeService(store)
+    const stopAndWait = vi.fn(async () => false)
+    runtime.setPtyController({
+      write: () => true,
+      kill: () => false,
+      stopAndWait,
+      getForegroundProcess: async () => null
+    })
+    runtime.registerPty('ssh:ssh-1@@failed', TEST_WORKTREE_ID, 'ssh-1')
+
+    await expect(
+      runtime.stopTerminalsForWorktree(TEST_WORKTREE_ID, { worktreeTeardown: true })
+    ).resolves.toEqual({ stopped: 0, failedPtyIds: ['ssh:ssh-1@@failed'] })
+  })
+
   it('keeps generic worktree terminal stops graceful', async () => {
     const runtime = new OrcaRuntimeService(store)
     const kill = vi.fn(() => true)
@@ -29656,6 +29672,63 @@ describe('OrcaRuntimeService', () => {
           'stop:ssh:ssh-1@@late',
           'git-remove'
         ])
+      } finally {
+        unregisterSshGitProvider('ssh-1')
+      }
+    })
+
+    it('does not remove a remote worktree when its SSH PTY stop is unverified', async () => {
+      const remoteRepo = {
+        ...store.getRepo(TEST_REPO_ID)!,
+        path: '/remote/repo',
+        connectionId: 'ssh-1'
+      }
+      const remoteWorktree = {
+        path: '/remote/feature-wt',
+        head: 'def456',
+        branch: 'feature/test',
+        isBare: false,
+        isMainWorktree: false
+      }
+      const remoteWorktreeId = `${remoteRepo.id}::${remoteWorktree.path}`
+      const runtimeStore = {
+        ...store,
+        getRepos: () => [remoteRepo],
+        getRepo: (id: string) => (id === remoteRepo.id ? remoteRepo : undefined),
+        getAllWorktreeMeta: () => ({ [remoteWorktreeId]: makeWorktreeMeta() }),
+        getWorktreeMeta: (id: string) => (id === remoteWorktreeId ? makeWorktreeMeta() : undefined)
+      }
+      const gitProvider = {
+        listWorktrees: vi.fn().mockResolvedValue([
+          {
+            path: remoteRepo.path,
+            head: 'main',
+            branch: 'main',
+            isBare: false,
+            isMainWorktree: true
+          },
+          remoteWorktree
+        ]),
+        removeWorktree: vi.fn()
+      }
+      const localProvider = createProviderStub(async () => [])
+      registerSshGitProvider('ssh-1', gitProvider as never)
+      const runtime = new OrcaRuntimeService(runtimeStore as never, undefined, {
+        getLocalProvider: () => localProvider as never
+      })
+      runtime.setPtyController({
+        write: () => true,
+        kill: () => false,
+        stopAndWait: vi.fn(async () => false),
+        getForegroundProcess: async () => null
+      })
+      runtime.registerPty('ssh:ssh-1@@survivor', remoteWorktreeId, 'ssh-1')
+
+      try {
+        await expect(runtime.removeManagedWorktree(remoteWorktreeId)).rejects.toThrow(
+          'Failed to stop remote worktree terminals: ssh:ssh-1@@survivor'
+        )
+        expect(gitProvider.removeWorktree).not.toHaveBeenCalled()
       } finally {
         unregisterSshGitProvider('ssh-1')
       }

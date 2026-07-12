@@ -1404,6 +1404,14 @@ export function registerWorktreeHandlers(
     typeof runtime.beginWorktreePtyTeardown === 'function'
       ? runtime.beginWorktreePtyTeardown(worktreeId)
       : Promise.resolve(() => {})
+  const runWithWorktreeRemovalDedup = <T>(
+    worktreeId: string,
+    opts: { force: boolean; runHooks: boolean; hostId?: string; mode?: 'remove' | 'forget' },
+    operation: () => Promise<T>
+  ): Promise<T> =>
+    typeof runtime.runWithWorktreeRemovalDedup === 'function'
+      ? runtime.runWithWorktreeRemovalDedup(worktreeId, opts, operation)
+      : operation()
   const runWithSuccessfulCleanupTeardown = <T>(
     worktreeId: string,
     operation: () => Promise<T>
@@ -1426,7 +1434,7 @@ export function registerWorktreeHandlers(
     ipcMain.handle(channel, (event, args: RemoveWorktreeArgs) => {
       const { repoId } = parseWorktreeId(args.worktreeId)
       const repo = getRepoForWorktreeRemoval(store, repoId, args.hostId)
-      return runtime.runWithWorktreeRemovalDedup(
+      return runWithWorktreeRemovalDedup(
         args.worktreeId,
         {
           force: args.force === true,
@@ -1966,7 +1974,7 @@ export function registerWorktreeHandlers(
     ipcMain.handle(channel, (event, args: Pick<RemoveWorktreeArgs, 'worktreeId' | 'hostId'>) => {
       const { repoId } = parseWorktreeId(args.worktreeId)
       const repo = getRepoForWorktreeRemoval(store, repoId, args.hostId)
-      return runtime.runWithWorktreeRemovalDedup(
+      return runWithWorktreeRemovalDedup(
         args.worktreeId,
         {
           force: false,

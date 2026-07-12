@@ -163,6 +163,23 @@ describe('killAllProcessesForWorktree', () => {
     expect(result.runtimeStopped).toBe(3)
   })
 
+  it('fails closed when an SSH-owned runtime PTY cannot be verified stopped', async () => {
+    const stopTerminalsForWorktree = vi.fn().mockResolvedValue({
+      stopped: 0,
+      failedPtyIds: ['ssh:ssh-1@@relay-pty']
+    })
+    const runtime = {
+      stopTerminalsForWorktree
+    } as unknown as Parameters<typeof killAllProcessesForWorktree>[1]['runtime']
+    const localProvider = createProviderStub(async () => [])
+    listRegisteredPtysMock.mockReturnValue([])
+
+    await expect(killAllProcessesForWorktree('w1', { runtime, localProvider })).rejects.toThrow(
+      'Failed to stop remote worktree terminals: ssh:ssh-1@@relay-pty'
+    )
+    expect(localProvider.listProcesses).toHaveBeenCalledTimes(1)
+  })
+
   it('awaits each runtime stop before fallback sweeps and preserves unrelated sessions', async () => {
     const releases = new Map<string, () => void>()
     const liveSessions = new Set(['w1@@target', 'w2@@target', 'witness@@unrelated'])
