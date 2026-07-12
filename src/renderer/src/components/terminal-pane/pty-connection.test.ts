@@ -6164,12 +6164,15 @@ describe('connectPanePty', () => {
     expect(transport.sendInput).toHaveBeenCalledWith('\x1b[A')
     expect(transport.sendInputImmediate).not.toHaveBeenCalled()
 
-    // terminal-query-reply.test proves real xterm emits this as one fully framed
-    // onData reply; this pins that production-shaped reply to the immediate path.
+    // XTVERSION reply is dropped, never forwarded: Orca brands via TERM_PROGRAM,
+    // and a forwarded `xterm.js(...)` reply only leaks onto the shell prompt when
+    // the querying startup program is gone by reply time (#7839).
+    transport.sendInput.mockClear()
     transport.sendInputImmediate.mockClear()
     const xtversionReply = '\x1bP>|xterm.js(6.1.0-beta.287)\x1b\\'
     sendTerminalInputThroughPane(pane, xtversionReply)
-    expect(transport.sendInputImmediate).toHaveBeenCalledWith(xtversionReply)
+    expect(transport.sendInputImmediate).not.toHaveBeenCalled()
+    expect(transport.sendInput).not.toHaveBeenCalled()
 
     // Printable input is user-owned. Remote cooked echo comes back through PTY
     // output, not onData, so xterm/OSC-looking text must stay on normal input.

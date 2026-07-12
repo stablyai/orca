@@ -8,6 +8,7 @@ import {
   serializeWithAbsoluteCursor
 } from '../../shared/terminal-serialize-absolute-cursor'
 import { advancePartialEscapeTail } from '../../shared/terminal-partial-escape-tail'
+import { isXtversionReply } from '../../shared/terminal-query-reply'
 import type { TerminalViewAttributes } from '../../shared/terminal-view-attributes'
 import { collectHeadlessOscLinkRanges } from './headless-osc-link-ranges'
 import { buildRehydrateSequences } from './terminal-mode-rehydrate-sequences'
@@ -208,7 +209,11 @@ export class HeadlessEmulator {
   }
 
   private emitQueryReply(reply: string): void {
-    if (this.queryReplyForwardingDepth > 0 && this.onQueryReply) {
+    // Why suppress XTVERSION: it never unblocks a hidden program (non-blocking
+    // identity probe) and Orca already advertises identity via TERM_PROGRAM. A
+    // forwarded reply is gated behind the daemon shell-ready write queue, so at
+    // fresh spawn it lands on the shell prompt as `>|xterm.js(...)` (#7839).
+    if (this.queryReplyForwardingDepth > 0 && this.onQueryReply && !isXtversionReply(reply)) {
       this.onQueryReply(reply)
     }
   }
