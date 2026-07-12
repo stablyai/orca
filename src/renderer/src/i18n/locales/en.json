@@ -4118,8 +4118,7 @@
           "automationCreated": "Created by automation",
           "branchIdentity": "Branch",
           "branchFolderPathIdentity": "Branch or folder path",
-          "ef18787206": "Queued for deletion",
-          "0c5bd538d7": "Mission: {{value0}}"
+          "ef18787206": "Queued for deletion"
         },
         "WorktreeCardAgents": {
           "1b0a156717": "Agents"

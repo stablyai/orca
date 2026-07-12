@@ -4095,8 +4095,7 @@
           "automationCreated": "Creado por automatización",
           "branchIdentity": "Rama",
           "branchFolderPathIdentity": "Rama o ruta de carpeta",
-          "ef18787206": "En cola para eliminación",
-          "0c5bd538d7": "Misión: {{value0}}"
+          "ef18787206": "En cola para eliminación"
         },
         "WorktreeCardAgents": {
           "1b0a156717": "Agents"

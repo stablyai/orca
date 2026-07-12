@@ -11,7 +11,6 @@ import {
   AlertCircle,
   AlertTriangle,
   ChevronDown,
-  Flag,
   GitMerge,
   LoaderCircle,
   Server,
@@ -1173,14 +1172,6 @@ const WorktreeCard = React.memo(function WorktreeCard({
   const cacheTtlMs = useAppStore((s) =>
     showAggregateCacheTimer ? (s.settings?.promptCacheTtlMs ?? 0) : 0
   )
-  // Why: mission worktrees also appear under their repo in the Projects view;
-  // the badge keeps the two sidebar views mutually legible.
-  const missionName = useAppStore(
-    (s) =>
-      s.missions.find((mission) =>
-        mission.members.some((member) => member.worktreeId === worktree.id)
-      )?.name ?? null
-  )
   // Why: pinned trees mix repos in one section; a leading repo icon keeps the
   // list scannable, so it shows regardless of groupBy's hideRepoBadge.
   const showPinnedRepoIcon = inPinnedSection && !!repo
@@ -1215,7 +1206,6 @@ const WorktreeCard = React.memo(function WorktreeCard({
   // metadata lane unless branch or detached-head identity has content.
   const hasDetailedMetaRowContent = Boolean(
     (showRepoBadgeInMetaRow && repo) ||
-    missionName ||
     showHostContextBadge ||
     folderMetaRowContent ||
     showBranch ||
@@ -1672,21 +1662,6 @@ const WorktreeCard = React.memo(function WorktreeCard({
                   className="h-[16px] max-w-[7rem] shrink-0 rounded border border-border bg-accent px-1.5 text-[10px] font-medium leading-none text-muted-foreground dark:bg-accent/80 dark:border-border/50"
                 >
                   <span className="truncate">{hostContextLabel}</span>
-                </Badge>
-              )}
-
-              {missionName && (
-                <Badge
-                  variant="secondary"
-                  className="h-[16px] max-w-[7rem] shrink-0 rounded border border-border bg-accent px-1.5 text-[10px] font-medium leading-none text-muted-foreground dark:bg-accent/80 dark:border-border/50"
-                  title={translate(
-                    'auto.components.sidebar.WorktreeCard.0c5bd538d7',
-                    'Mission: {{value0}}',
-                    { value0: missionName }
-                  )}
-                >
-                  <Flag className="size-2.5 shrink-0" />
-                  <span className="truncate">{missionName}</span>
                 </Badge>
               )}
 
