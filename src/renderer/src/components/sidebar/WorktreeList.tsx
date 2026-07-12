@@ -69,7 +69,11 @@ import type {
   WorkspaceStatusDefinition
 } from '../../../../shared/types'
 import { DEFAULT_SHOW_SLEEPING_WORKSPACES } from '../../../../shared/constants'
-import { getMissionMemberWorktreeIds, isMissionEligibleRepo } from '../../../../shared/missions'
+import {
+  getMissionMemberWorktreeIds,
+  isMissionEligibleRepo,
+  isMissionOwnedFolderWorkspace
+} from '../../../../shared/missions'
 import { buildWorktreeComparator, compareWorktreeSortLabel } from './smart-sort'
 import {
   buildAttentionByWorktree,
@@ -1840,6 +1844,11 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
       }
     }
     for (const workspace of folderWorkspaces) {
+      // Why: mission session workspaces render in the Missions tab, so no row
+      // here ever reads their path status — skip the wasted IPC round-trips.
+      if (isMissionOwnedFolderWorkspace(workspace)) {
+        continue
+      }
       const request = { scope: 'folder-workspace' as const, folderWorkspaceId: workspace.id }
       const options = getFolderPathStatusRouteOptions(request)
       requests.set(getFolderWorkspacePathStatusCacheKey(request, options), { request, options })

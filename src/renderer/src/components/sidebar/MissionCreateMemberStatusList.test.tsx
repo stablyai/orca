@@ -5,7 +5,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import {
   MissionCreateMemberStatusList,
   type MissionCreateMemberStatus
-} from './MissionCreateDialog'
+} from './MissionCreateMemberStatusList'
 
 let root: Root | null = null
 

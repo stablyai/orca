@@ -1,4 +1,4 @@
-import React, { useState } from 'react'
+import React, { useEffect, useState } from 'react'
 import {
   Dialog,
   DialogContent,
@@ -26,6 +26,16 @@ export function MissionDeleteDialog({
   const [deleteWorktrees, setDeleteWorktrees] = useState(true)
   const [submitting, setSubmitting] = useState(false)
   const [failed, setFailed] = useState(false)
+  const missionId = mission?.id ?? null
+
+  // Why: the dialog stays mounted between opens, so a prior attempt's failure
+  // banner and checkbox choice must not leak into the next mission's delete.
+  useEffect(() => {
+    if (missionId !== null) {
+      setDeleteWorktrees(true)
+      setFailed(false)
+    }
+  }, [missionId])
 
   async function handleDelete(): Promise<void> {
     if (!mission || submitting) {

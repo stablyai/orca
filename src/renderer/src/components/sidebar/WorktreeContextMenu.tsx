@@ -36,6 +36,7 @@ import type { AppState } from '@/store/types'
 import { useAllWorktrees, useRepoById, useRepoMap, useWorktreeMap } from '@/store/selectors'
 import { cn } from '@/lib/utils'
 import type { Repo, Worktree } from '../../../../shared/types'
+import { isMissionOwnedFolderWorkspace } from '../../../../shared/missions'
 import { runWorktreeBatchDelete, runWorktreeDelete } from './delete-worktree-flow'
 import { runSleepWorktrees } from './sleep-worktree-flow'
 import { activateAndRevealWorktree } from '@/lib/worktree-activation'
@@ -338,6 +339,17 @@ const WorktreeContextMenu = React.memo(function WorktreeContextMenu({
   const workspaceScope = parseWorkspaceKey(worktree.id)
   const folderWorkspaceId =
     workspaceScope?.type === 'folder' ? workspaceScope.folderWorkspaceId : null
+  // Why: a mission session workspace is owned by its mission — deleting it here
+  // would leave the mission record behind and the sidebar would immediately
+  // respawn an empty session. Deletion routes through the mission row menu.
+  const isMissionSessionWorkspace = useAppStore(
+    (s) =>
+      folderWorkspaceId != null &&
+      s.folderWorkspaces.some(
+        (workspace) =>
+          workspace.id === folderWorkspaceId && isMissionOwnedFolderWorkspace(workspace)
+      )
+  )
   const sleepableWorktrees = useMemo(
     () =>
       activeContextWorktrees.filter((item) =>
@@ -907,16 +919,22 @@ const WorktreeContextMenu = React.memo(function WorktreeContextMenu({
             onSelect={handleDelete}
             disabled={
               deletingContext ||
+              (!isMultiContext && isMissionSessionWorkspace) ||
               (!isMultiContext && worktree.isMainWorktree && !removesProject) ||
               (isMultiContext && batchDeleteWorktrees.length === 0)
             }
             title={
-              !isMultiContext && worktree.isMainWorktree && !removesProject
+              !isMultiContext && isMissionSessionWorkspace
                 ? translate(
-                    'auto.components.sidebar.WorktreeContextMenu.e091caab15',
-                    'The project could not be found'
+                    'auto.components.sidebar.WorktreeContextMenu.80a3c0efc8',
+                    'Mission session — delete the mission instead.'
                   )
-                : undefined
+                : !isMultiContext && worktree.isMainWorktree && !removesProject
+                  ? translate(
+                      'auto.components.sidebar.WorktreeContextMenu.e091caab15',
+                      'The project could not be found'
+                    )
+                  : undefined
             }
           >
             <Trash2 className="size-3.5" />

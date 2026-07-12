@@ -39,6 +39,7 @@ import type {
   IssueInfo,
   LinearIssue
 } from '../../../../shared/types'
+import { isMissionOwnedFolderWorkspace } from '../../../../shared/missions'
 import { CONFLICT_OPERATION_LABELS } from './WorktreeCardHelpers'
 import {
   WorktreeCardDetailsHover,
@@ -385,6 +386,16 @@ const WorktreeCard = React.memo(function WorktreeCard({
   const workspaceScope = parseWorkspaceKey(worktree.id)
   const folderWorkspaceId =
     workspaceScope?.type === 'folder' ? workspaceScope.folderWorkspaceId : null
+  // Why: mission sessions are deleted with their mission (row menu), so the
+  // generic Option/Alt quick-delete must not offer them.
+  const isMissionSessionWorkspace = useAppStore(
+    (s) =>
+      folderWorkspaceId != null &&
+      s.folderWorkspaces.some(
+        (workspace) =>
+          workspace.id === folderWorkspaceId && isMissionOwnedFolderWorkspace(workspace)
+      )
+  )
   const isFolder = repo ? isFolderRepo(repo) : folderWorkspaceId !== null
   // Why: project groups are the product gate for folder workspaces, so folder
   // paths stay hidden from identity surfaces until that capability exists.
@@ -942,7 +953,8 @@ const WorktreeCard = React.memo(function WorktreeCard({
     canShowWorkspaceDeleteQuickAction({
       deleteModifierPressed,
       isDeleting,
-      isMainWorktree: worktree.isMainWorktree
+      isMainWorktree: worktree.isMainWorktree,
+      isMissionSessionWorkspace
     })
   const handleWorkspaceQuickAction = useCallback(
     (event: React.MouseEvent<HTMLButtonElement>) => {

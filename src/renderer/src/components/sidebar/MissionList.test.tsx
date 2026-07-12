@@ -2,6 +2,7 @@
 import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import path from 'node:path'
 import type { Mission } from '../../../../shared/types'
 
 vi.mock('@/store', async () => {
@@ -13,6 +14,8 @@ import { useAppStore } from '@/store'
 import { TEST_REPO } from '@/store/slices/store-test-helpers'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import MissionList from './MissionList'
+
+const missionRootPath = path.join(path.sep, 'tmp', 'orca', 'missions', 'referral')
 
 let root: Root | null = null
 
@@ -92,7 +95,7 @@ describe('MissionList', () => {
       branchName: 'mission/referral',
       members: [],
       tabOrder: 0,
-      rootPath: '/tmp/orca/missions/referral',
+      rootPath: missionRootPath,
       createdAt: 1,
       updatedAt: 1
     }
@@ -104,7 +107,7 @@ describe('MissionList', () => {
           projectGroupId: 'mission:m1',
           missionId: 'm1',
           name: 'Referral',
-          folderPath: '/tmp/orca/missions/referral',
+          folderPath: missionRootPath,
           connectionId: null,
           linkedTask: null,
           comment: '',

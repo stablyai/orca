@@ -136,9 +136,11 @@ export function computeVisibleWorktreeIds(
   // every other valid ancestor can bypass filters so children never orphan.
   // Mission members are a terminal exclusion — they belong to the Missions
   // tab and must not resurface here even as lineage parents.
-  const lineageAncestorById = new Map(
-    all.filter((w) => !opts.missionMemberWorktreeIds.has(w.id)).map((w) => [w.id, w])
-  )
+  const lineageAncestorCandidates =
+    opts.missionMemberWorktreeIds.size > 0
+      ? all.filter((w) => !opts.missionMemberWorktreeIds.has(w.id))
+      : all
+  const lineageAncestorById = new Map(lineageAncestorCandidates.map((w) => [w.id, w]))
 
   if (opts.hideDefaultBranchWorkspace) {
     all = all.filter((w) => !isDefaultBranchWorkspace(w))

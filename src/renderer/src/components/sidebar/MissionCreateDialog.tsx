@@ -1,5 +1,5 @@
 import React, { useId, useMemo, useRef, useState } from 'react'
-import { ChevronDown, CircleAlert, CircleCheck, LoaderCircle } from 'lucide-react'
+import { ChevronDown } from 'lucide-react'
 import AgentCombobox from '@/components/agent/AgentCombobox'
 import { getAgentCatalog } from '@/lib/agent-catalog'
 import {
@@ -26,42 +26,11 @@ import { translate } from '@/i18n/i18n'
 import { isMissionEligibleRepo, slugifyMissionBranch } from '../../../../shared/missions'
 import { formatMissionMemberError } from './mission-member-error-copy'
 import { MissionGroupQuickAdd } from './MissionGroupQuickAdd'
+import {
+  MissionCreateMemberStatusList,
+  type MissionCreateMemberStatus
+} from './MissionCreateMemberStatusList'
 import type { MissionMemberResult } from '../../../../shared/types'
-
-export type MissionCreateMemberStatus = {
-  repoId: string
-  repoName: string
-  state: 'pending' | 'created' | 'failed'
-  error?: string
-}
-
-export function MissionCreateMemberStatusList({
-  entries
-}: {
-  entries: MissionCreateMemberStatus[]
-}): React.JSX.Element {
-  return (
-    <ul className="max-h-48 space-y-1.5 overflow-y-auto scrollbar-sleek">
-      {entries.map((entry) => (
-        <li key={entry.repoId} className="flex items-start gap-2 text-xs">
-          {entry.state === 'pending' ? (
-            <LoaderCircle className="mt-0.5 size-3.5 shrink-0 animate-spin text-muted-foreground" />
-          ) : entry.state === 'created' ? (
-            <CircleCheck className="mt-0.5 size-3.5 shrink-0 text-muted-foreground" />
-          ) : (
-            <CircleAlert className="mt-0.5 size-3.5 shrink-0 text-destructive" />
-          )}
-          <span className="flex min-w-0 flex-col">
-            <span className="truncate text-foreground">{entry.repoName}</span>
-            {entry.error ? (
-              <span className="break-words text-[11px] text-destructive">{entry.error}</span>
-            ) : null}
-          </span>
-        </li>
-      ))}
-    </ul>
-  )
-}
 
 export default function MissionCreateDialog(): React.JSX.Element {
   const open = useAppStore((s) => s.activeModal === 'mission-create')
@@ -105,6 +74,7 @@ export default function MissionCreateDialog(): React.JSX.Element {
   const [baseBranch, setBaseBranch] = useState('')
   const [setupDecision, setSetupDecision] = useState<'run' | 'skip' | 'inherit'>('inherit')
   const [submitting, setSubmitting] = useState(false)
+  const [createFailed, setCreateFailed] = useState(false)
   const [memberResults, setMemberResults] = useState<MissionMemberResult[] | null>(null)
 
   const visibleAgents = useMemo(() => {
@@ -150,6 +120,7 @@ export default function MissionCreateDialog(): React.JSX.Element {
     branchDirtyRef.current = false
     setSelected(new Set())
     setSubmitting(false)
+    setCreateFailed(false)
     setMemberResults(null)
     closeModal()
   }
@@ -167,6 +138,7 @@ export default function MissionCreateDialog(): React.JSX.Element {
       return
     }
     setSubmitting(true)
+    setCreateFailed(false)
     const trimmedBaseBranch = baseBranch.trim()
     const result = await createMission({
       name: name.trim(),
@@ -177,6 +149,9 @@ export default function MissionCreateDialog(): React.JSX.Element {
       ...(sessionAgent ? { sessionAgent } : {})
     })
     if (!result) {
+      // Why: a rejected IPC (invalid args, no valid repos) resolves to null in
+      // the slice — surface it instead of leaving the dialog silently idle.
+      setCreateFailed(true)
       setSubmitting(false)
       return
     }
@@ -294,6 +269,7 @@ export default function MissionCreateDialog(): React.JSX.Element {
                   type="button"
                   variant="ghost"
                   size="sm"
+                  aria-expanded={advancedOpen}
                   onClick={() => setAdvancedOpen((open) => !open)}
                   className="-ml-2 h-6 text-[11px] text-muted-foreground"
                 >
@@ -375,6 +351,14 @@ export default function MissionCreateDialog(): React.JSX.Element {
               </div>
             </>
           )}
+          {createFailed ? (
+            <p className="text-xs text-destructive">
+              {translate(
+                'auto.components.sidebar.MissionCreateDialog.e85049f72a',
+                'Could not create the mission. Try again.'
+              )}
+            </p>
+          ) : null}
           <DialogFooter>
             {memberResults === null ? (
               <>

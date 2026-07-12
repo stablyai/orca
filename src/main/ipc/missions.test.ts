@@ -1,5 +1,13 @@
+import path from 'node:path'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Mission } from '../../shared/types'
+
+const missionsBaseDir = path.join(path.sep, 'home', 'u', 'orca', 'missions')
+const referralRootPath = path.join(missionsBaseDir, 'referral')
+const workspacesDir = path.join(path.sep, 'home', 'u', 'orca', 'workspaces')
+const wtPath = path.join(path.sep, 'wt')
+const wtLocalPath = path.join(path.sep, 'wt', 'local')
+const wtRemotePath = path.join(path.sep, 'wt', 'remote')
 
 const handlers = new Map<string, (event: unknown, args?: unknown) => unknown>()
 
@@ -18,10 +26,10 @@ vi.mock('electron', () => ({
 const missionRootMocks = vi.hoisted(() => ({
   ensureMissionRoot: vi.fn(),
   removeMissionRoot: vi.fn(),
-  resolveMissionRootPath: vi.fn(
-    (baseDir: string, name: string) => `${baseDir}/${name.toLowerCase()}`
+  resolveMissionRootPath: vi.fn((baseDir: string, name: string) =>
+    path.join(baseDir, name.toLowerCase())
   ),
-  resolveMissionsBaseDir: vi.fn(() => '/home/u/orca/missions')
+  resolveMissionsBaseDir: vi.fn(() => missionsBaseDir)
 }))
 
 vi.mock('../missions/mission-root', () => missionRootMocks)
@@ -38,7 +46,7 @@ function makeFakeStore() {
         : id === 'r2'
           ? { id, displayName: 'Repo Two', connectionId: 'ssh-1' }
           : null,
-    getSettings: () => ({ workspaceDir: '/home/u/orca/workspaces' }),
+    getSettings: () => ({ workspaceDir: workspacesDir }),
     setMissionRootPath: vi.fn((_id: string, rootPath: string) => {
       if (mission) {
         mission.rootPath = rootPath
@@ -123,7 +131,7 @@ describe('missions IPC', () => {
     const runtime = {
       createManagedWorktree: vi
         .fn()
-        .mockResolvedValueOnce({ worktree: { id: 'r1::/wt' } })
+        .mockResolvedValueOnce({ worktree: { id: `r1::${wtPath}` } })
         .mockRejectedValueOnce(new Error('Branch "mission/referral" already exists locally.')),
       removeManagedWorktree: vi.fn()
     }
@@ -137,17 +145,17 @@ describe('missions IPC', () => {
       expect.objectContaining({ repoSelector: 'id:r1', branchNameOverride: 'mission/referral' })
     )
     expect(result.memberResults).toEqual([
-      { repoId: 'r1', worktreeId: 'r1::/wt' },
+      { repoId: 'r1', worktreeId: `r1::${wtPath}` },
       { repoId: 'r2', worktreeId: null, error: expect.stringContaining('already exists') }
     ])
-    expect(store.setMissionMemberWorktree).toHaveBeenCalledWith('m1', 'r1', 'r1::/wt')
+    expect(store.setMissionMemberWorktree).toHaveBeenCalledWith('m1', 'r1', `r1::${wtPath}`)
   })
 
   it('delete keeps the mission when a worktree removal fails', async () => {
     const store = makeFakeStore()
     store.createMission({ name: 'Referral', repoIds: ['r1', 'r2'] })
-    store.setMissionMemberWorktree('m1', 'r1', 'r1::/wt')
-    store.setMissionMemberWorktree('m1', 'r2', 'r2::/wt')
+    store.setMissionMemberWorktree('m1', 'r1', `r1::${wtPath}`)
+    store.setMissionMemberWorktree('m1', 'r2', `r2::${wtPath}`)
     const runtime = {
       createManagedWorktree: vi.fn(),
       removeManagedWorktree: vi
@@ -168,7 +176,7 @@ describe('missions IPC', () => {
   it('applies base branch, setup decision, and session agent from create args', async () => {
     const store = makeFakeStore()
     const runtime = {
-      createManagedWorktree: vi.fn().mockResolvedValue({ worktree: { id: 'r1::/wt' } }),
+      createManagedWorktree: vi.fn().mockResolvedValue({ worktree: { id: `r1::${wtPath}` } }),
       removeManagedWorktree: vi.fn()
     }
     registerMissionHandlers(makeFakeWindow() as never, store as never, runtime as never)
@@ -192,8 +200,8 @@ describe('missions IPC', () => {
   it('ensureSession resolves the root once, links only local members, and is idempotent', async () => {
     const store = makeFakeStore()
     store.createMission({ name: 'Referral', repoIds: ['r1', 'r2'] })
-    store.setMissionMemberWorktree('m1', 'r1', 'r1::/wt/local')
-    store.setMissionMemberWorktree('m1', 'r2', 'r2::/wt/remote')
+    store.setMissionMemberWorktree('m1', 'r1', `r1::${wtLocalPath}`)
+    store.setMissionMemberWorktree('m1', 'r2', `r2::${wtRemotePath}`)
     const runtime = { createManagedWorktree: vi.fn(), removeManagedWorktree: vi.fn() }
     registerMissionHandlers(makeFakeWindow() as never, store as never, runtime as never)
 
@@ -202,11 +210,11 @@ describe('missions IPC', () => {
       missionId: string
     }
     expect(workspace).toEqual({ id: 'fw-1', missionId: 'm1' })
-    expect(store.setMissionRootPath).toHaveBeenCalledWith('m1', '/home/u/orca/missions/referral')
+    expect(store.setMissionRootPath).toHaveBeenCalledWith('m1', referralRootPath)
     expect(missionRootMocks.ensureMissionRoot).toHaveBeenCalledWith({
-      rootPath: '/home/u/orca/missions/referral',
+      rootPath: referralRootPath,
       // Why: the ssh-connection member (r2) must not be linked into the root.
-      links: [{ name: 'repo-one', targetPath: '/wt/local' }]
+      links: [{ name: 'repo-one', targetPath: wtLocalPath }]
     })
 
     await handlers.get('missions:ensureSession')!({}, { missionId: 'm1' })
@@ -217,13 +225,11 @@ describe('missions IPC', () => {
   it('delete removes the mission root when the record is deleted', async () => {
     const store = makeFakeStore()
     store.createMission({ name: 'Referral', repoIds: ['r1'] })
-    store.setMissionRootPath('m1', '/home/u/orca/missions/referral')
+    store.setMissionRootPath('m1', referralRootPath)
     const runtime = { createManagedWorktree: vi.fn(), removeManagedWorktree: vi.fn() }
     registerMissionHandlers(makeFakeWindow() as never, store as never, runtime as never)
     await handlers.get('missions:delete')!({}, { missionId: 'm1', deleteWorktrees: false })
-    expect(missionRootMocks.removeMissionRoot).toHaveBeenCalledWith(
-      '/home/u/orca/missions/referral'
-    )
+    expect(missionRootMocks.removeMissionRoot).toHaveBeenCalledWith(referralRootPath)
   })
 
   it('delete without worktrees just removes the record', async () => {

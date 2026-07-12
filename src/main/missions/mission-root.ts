@@ -45,6 +45,13 @@ function isSymlink(entryPath: string): boolean {
   }
 }
 
+// Why: Windows junction targets read back with a \\?\ prefix and a trailing
+// separator; a raw string compare would recreate every link on every sync.
+function isSameLinkTarget(currentTarget: string, wantedTarget: string): boolean {
+  const normalize = (target: string): string => path.resolve(target.replace(/^\\\\\?\\/, ''))
+  return normalize(currentTarget) === normalize(wantedTarget)
+}
+
 /** Idempotently sync the mission root: one symlink per local member worktree.
  *  Only symlinks are ever created, repointed, or removed — regular entries a
  *  user placed in the root are left alone. */
@@ -66,7 +73,12 @@ export function ensureMissionRoot(args: { rootPath: string; links: MissionRootLi
       }
     })()
     const targetAlive = currentTarget !== null && existsSync(entryPath)
-    if (wantedTarget && currentTarget === wantedTarget && targetAlive) {
+    if (
+      wantedTarget &&
+      currentTarget !== null &&
+      isSameLinkTarget(currentTarget, wantedTarget) &&
+      targetAlive
+    ) {
       wantedByName.delete(entry)
       continue
     }

@@ -1,11 +1,15 @@
+import path from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { normalizeFolderWorkspaces } from './folder-workspaces'
 import type { FolderWorkspace, ProjectGroup } from './types'
 
+const platformPath = path.join(path.sep, 'workspace', 'platform')
+const missionRootPath = path.join(path.sep, 'home', 'orca', 'missions', 'referral')
+
 const folderGroup: ProjectGroup = {
   id: 'g1',
   name: 'Platform',
-  parentPath: '/workspace/platform',
+  parentPath: platformPath,
   connectionId: null,
   parentGroupId: null,
   createdFrom: 'folder-scan',
@@ -20,7 +24,7 @@ function makeWorkspace(overrides: Partial<FolderWorkspace> & { id: string }): Fo
   return {
     projectGroupId: 'g1',
     name: 'WS',
-    folderPath: '/workspace/platform',
+    folderPath: platformPath,
     connectionId: null,
     linkedTask: null,
     comment: '',
@@ -40,7 +44,7 @@ describe('normalizeFolderWorkspaces (mission-owned)', () => {
     const result = normalizeFolderWorkspaces(
       [makeWorkspace({ id: 'fw1', projectGroupId: 'mission:m1', missionId: 'm1' })],
       [],
-      [{ id: 'm1', rootPath: '/home/orca/missions/referral' }]
+      [{ id: 'm1', rootPath: missionRootPath }]
     )
     expect(result).toHaveLength(1)
     expect(result[0].missionId).toBe('m1')
@@ -67,9 +71,9 @@ describe('normalizeFolderWorkspaces (mission-owned)', () => {
         })
       ],
       [],
-      [{ id: 'm1', rootPath: '/home/orca/missions/referral' }]
+      [{ id: 'm1', rootPath: missionRootPath }]
     )
-    expect(result[0].folderPath).toBe('/home/orca/missions/referral')
+    expect(result[0].folderPath).toBe(missionRootPath)
   })
 
   it('keeps group-owned behavior unchanged (orphans still drop)', () => {

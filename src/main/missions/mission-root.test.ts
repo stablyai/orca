@@ -68,6 +68,22 @@ describe('ensureMissionRoot', () => {
     expect(existsSync(path.join(rootPath, 'NOTES.md'))).toBe(true)
   })
 
+  it('keeps a live link whose readlink form differs only by a trailing separator', () => {
+    // Mirrors Windows junctions, whose targets read back decorated
+    // (\\?\ prefix, trailing separator) without pointing anywhere new.
+    const rootPath = path.join(tmp, 'missions', 'sync')
+    const wtA = path.join(tmp, 'wt-a')
+    mkdirSync(wtA, { recursive: true })
+    mkdirSync(rootPath, { recursive: true })
+    const decoratedTarget = `${wtA}${path.sep}`
+    symlinkSync(decoratedTarget, path.join(rootPath, 'repo-a'))
+
+    ensureMissionRoot({ rootPath, links: [{ name: 'repo-a', targetPath: wtA }] })
+
+    // An unlink+recreate would have rewritten the link to the undecorated form.
+    expect(readlinkSync(path.join(rootPath, 'repo-a'))).toBe(decoratedTarget)
+  })
+
   it('prunes broken links and skips links whose target is missing', () => {
     const rootPath = path.join(tmp, 'missions', 'qa')
     mkdirSync(rootPath, { recursive: true })

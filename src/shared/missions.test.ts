@@ -36,6 +36,20 @@ describe('slugifyMissionBranch', () => {
   it('falls back when nothing survives sanitization', () => {
     expect(slugifyMissionBranch('###')).toBe('mission/task')
   })
+
+  it('collapses consecutive dots so the branch stays a valid git ref', () => {
+    expect(slugifyMissionBranch('v1..2')).toBe('mission/v1.2')
+    expect(slugifyMissionBranch('a...b')).toBe('mission/a.b')
+    expect(slugifyMissionBranch('...')).toBe('mission/task')
+  })
+
+  it('strips a trailing .lock suffix git refuses in ref components', () => {
+    expect(slugifyMissionBranch('deploy.lock')).toBe('mission/deploy')
+    expect(slugifyMissionBranch('deploy.lock.lock')).toBe('mission/deploy')
+    // Leading-dot trim runs first, and a bare `lock` component is a valid ref.
+    expect(slugifyMissionBranch('.lock')).toBe('mission/lock')
+    expect(slugifyMissionBranch('lockfile')).toBe('mission/lockfile')
+  })
 })
 
 describe('getMissionWorktreeName', () => {
@@ -129,6 +143,11 @@ describe('getMissionRootDirName', () => {
   it('produces a directory-safe slug with fallback', () => {
     expect(getMissionRootDirName('Referral Flow!')).toBe('referral-flow')
     expect(getMissionRootDirName('###')).toBe('mission')
+  })
+
+  it('applies the same dot collapsing as the branch slug', () => {
+    expect(getMissionRootDirName('v1..2')).toBe('v1.2')
+    expect(getMissionRootDirName('deploy.lock')).toBe('deploy')
   })
 })
 

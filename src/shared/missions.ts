@@ -14,15 +14,23 @@ export function normalizeMissionName(name: string, fallback = 'Untitled mission'
   return trimmed.length > 0 ? trimmed : fallback
 }
 
-/** Branch shared by every member worktree. Restricted to a conservative
- *  charset so the result is a valid git ref on every host. */
-export function slugifyMissionBranch(name: string): string {
-  const slug = name
+/** Shared slug chain for the mission branch and root directory. Restricted to
+ *  a conservative charset; `..` runs and trailing `.lock` are stripped because
+ *  git check-ref-format rejects both anywhere in a ref component. */
+function slugifyMissionText(name: string): string {
+  return name
     .toLowerCase()
     .replace(/[^a-z0-9._-]+/g, '-')
     .replace(/-+/g, '-')
+    .replace(/\.{2,}/g, '.')
     .replace(/^[-._]+|[-._]+$/g, '')
-  return `mission/${slug || 'task'}`
+    .replace(/(?:\.lock)+$/, '')
+    .replace(/[-._]+$/g, '')
+}
+
+/** Branch shared by every member worktree. */
+export function slugifyMissionBranch(name: string): string {
+  return `mission/${slugifyMissionText(name) || 'task'}`
 }
 
 export function getMissionWorktreeName(branchName: string): string {
@@ -31,12 +39,7 @@ export function getMissionWorktreeName(branchName: string): string {
 
 /** Directory-safe name for the mission root (and its member links). */
 export function getMissionRootDirName(name: string): string {
-  const slug = name
-    .toLowerCase()
-    .replace(/[^a-z0-9._-]+/g, '-')
-    .replace(/-+/g, '-')
-    .replace(/^[-._]+|[-._]+$/g, '')
-  return slug || 'mission'
+  return slugifyMissionText(name) || 'mission'
 }
 
 /** Sentinel projectGroupId carried by mission session folder workspaces.

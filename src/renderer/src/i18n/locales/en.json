@@ -4204,6 +4204,7 @@
           "3baa7d6507": "Pin",
           "697d0f6e1b": "Unpin",
           "250de158fd": "Remove Workspace",
+          "80a3c0efc8": "Mission session — delete the mission instead.",
           "changeParentWorkspace": "Change Parent Worktree...",
           "setParentWorkspace": "Set Parent Worktree...",
           "workspaceSection": "Workspace",
@@ -4678,6 +4679,7 @@
           "131ac9a3ca": "Creating...",
           "470b9ba02f": "Create Mission",
           "507155ae18": "Some workspaces could not be created. You can retry from the mission list.",
+          "e85049f72a": "Could not create the mission. Try again.",
           "009decc6e5": "Done",
           "ba57f70473": "Agent",
           "c43b33e4ef": "Advanced",
@@ -4711,8 +4713,7 @@
           "d56fdff6c8": "Rename Mission",
           "8d3abfb48a": "Mission Name",
           "7f94e6c670": "Save",
-          "955a21f262": "Mission options",
-          "63a40a4f99": "Open mission session"
+          "955a21f262": "Mission options"
         },
         "MissionMemberErrorCopy": {
           "c8affe1f4b": "This repository has no commits or default branch yet. Make an initial commit (or set a default branch in Project Settings), then retry."

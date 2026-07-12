@@ -4181,6 +4181,7 @@
           "3baa7d6507": "Fijar",
           "697d0f6e1b": "Desanclar",
           "250de158fd": "Eliminar espacio de trabajo",
+          "80a3c0efc8": "Sesión de misión: elimina la misión en su lugar.",
           "changeParentWorkspace": "Cambiar worktree padre...",
           "setParentWorkspace": "Establecer worktree padre...",
           "workspaceSection": "Espacio de trabajo",
@@ -4678,6 +4679,7 @@
           "131ac9a3ca": "Creando...",
           "470b9ba02f": "Crear misión",
           "507155ae18": "No se pudieron crear algunos espacios de trabajo. Puedes reintentarlo desde la lista de la misión.",
+          "e85049f72a": "No se pudo crear la misión. Inténtalo de nuevo.",
           "009decc6e5": "Hecho",
           "ba57f70473": "Agente",
           "c43b33e4ef": "Avanzado",
@@ -4711,8 +4713,7 @@
           "d56fdff6c8": "Renombrar misión",
           "8d3abfb48a": "Nombre de la misión",
           "7f94e6c670": "Guardar",
-          "955a21f262": "Opciones de la misión",
-          "63a40a4f99": "Abrir sesión de la misión"
+          "955a21f262": "Opciones de la misión"
         },
         "MissionMemberErrorCopy": {
           "c8affe1f4b": "Este repositorio aún no tiene commits ni rama predeterminada. Crea un commit inicial (o define una rama predeterminada en la configuración del proyecto) y vuelve a intentarlo."
