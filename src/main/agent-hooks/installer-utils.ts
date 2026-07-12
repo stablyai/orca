@@ -143,13 +143,26 @@ export function wrapPosixHookCommand(scriptPath: string, env: Record<string, str
   return `if [ -x ${quoted} ]; then ${invocation}; fi`
 }
 
-// Why: Codex (and any future direct-exec hook runner) splits hooks.json
-// `command` into argv without a shell. The if/then/fi guard above becomes
-// argv0=`if` → ENOENT/exit 127 + Broken pipe (#8110). Emit only `/bin/sh
-// '<path>'` so argv0 is the shell and the script path is one argument.
+// Why: #8110 surfaces exit 127 + Broken pipe when Codex runs Orca-managed
+// hooks. Current Codex (codex-rs hooks command_runner) launches via
+// `$SHELL -lc <command>` with the whole string as one arg — so if/then/fi
+// and single-quoted paths both parse. Reports of pure whitespace argv-exec
+// still match the observed 127 when argv0 becomes `if` or the path keeps
+// literal quote characters. Emit `/bin/sh <path>` without shell control-flow:
+// unquoted when the path is argv-safe (no IFS/metacharacters), otherwise
+// POSIX single-quoted so shell -lc still works for spaced home dirs.
 export function wrapPosixDirectHookCommand(scriptPath: string): string {
+  if (isPosixArgvSafePath(scriptPath)) {
+    return `/bin/sh ${scriptPath}`
+  }
   const quoted = `'${scriptPath.replaceAll("'", "'\\''")}'`
   return `/bin/sh ${quoted}`
+}
+
+// Absolute POSIX path free of whitespace and shell metacharacters so both
+// `$SHELL -lc` and naive whitespace argv-split yield the same two-arg form.
+function isPosixArgvSafePath(scriptPath: string): boolean {
+  return /^\/[A-Za-z0-9._/@%+=:,-]+$/.test(scriptPath)
 }
 
 function quotePowerShellString(value: string): string {

@@ -135,19 +135,23 @@ export { createCodexWslRuntimeHookInstallPlan }
 export type { CodexWslRuntimeHookInstallPlan }
 
 // Why: WSL runtime hooks are written from Windows through UNC; /bin/sh only
-// needs the script readable. Same argv-safe shape as local POSIX (#8110) —
-// Codex direct-execs hooks.json, so if/then/fi must not appear in the command.
+// needs the script readable. Same dual-model shape as local POSIX (#8110) —
+// no if/then/fi tokens in the command string.
 function wrapReadablePosixHookCommand(scriptPath: string): string {
   return wrapPosixDirectHookCommand(scriptPath)
 }
 
 // Why: remove/status trust matching must still recognize pre-#8110 guarded
-// commands so upgrade reinstall/remove can clear their hashes.
+// commands and the intermediate quoted `/bin/sh '…'` form so upgrade
+// reinstall/remove can clear their hashes.
 function codexPosixTrustCommandVariants(scriptPath: string): string[] {
   const direct = wrapPosixDirectHookCommand(scriptPath)
   const quoted = `'${scriptPath.replaceAll("'", "'\\''")}'`
+  const quotedDirect = `/bin/sh ${quoted}`
   return [
     direct,
+    // Intermediate #8390 form before dual-model unquoted paths.
+    ...(quotedDirect === direct ? [] : [quotedDirect]),
     wrapPosixHookCommand(scriptPath),
     `if [ -r ${quoted} ]; then /bin/sh ${quoted}; fi`
   ]

@@ -343,12 +343,17 @@ describe('wrapPosixHookCommand', () => {
 })
 
 describe('wrapPosixDirectHookCommand', () => {
-  // Why: Codex direct-execs hooks.json commands (#8110). argv0 must be /bin/sh,
-  // never shell control-flow tokens from the guarded wrapper.
-  it('emits an argv-safe /bin/sh launcher without if/then/fi', () => {
+  // Why: #8110 — never emit if/then/fi; prefer unquoted path when argv-safe.
+  it('emits unquoted /bin/sh <path> for argv-safe paths', () => {
     const cmd = wrapPosixDirectHookCommand('/Users/a/.orca/agent-hooks/codex-hook.sh')
-    expect(cmd).toBe("/bin/sh '/Users/a/.orca/agent-hooks/codex-hook.sh'")
+    expect(cmd).toBe('/bin/sh /Users/a/.orca/agent-hooks/codex-hook.sh')
     expect(cmd).not.toMatch(/\bif\b|\bthen\b|\bfi\b/)
+    expect(cmd).not.toContain("'")
+  })
+
+  it('single-quotes paths with spaces so shell -lc still works', () => {
+    const cmd = wrapPosixDirectHookCommand('/Users/Jorge Silva/.orca/agent-hooks/codex-hook.sh')
+    expect(cmd).toBe("/bin/sh '/Users/Jorge Silva/.orca/agent-hooks/codex-hook.sh'")
   })
 
   it('escapes embedded single quotes the same way as the guarded wrapper', () => {
@@ -357,23 +362,31 @@ describe('wrapPosixDirectHookCommand', () => {
   })
 
   it.skipIf(process.platform === 'win32')(
-    'runs under argv split the way Codex does (not shell -c)',
+    'runs under pure whitespace argv-split without stripping quotes',
     () => {
+      // Why: naive argv-exec keeps quote characters inside argv tokens. The
+      // dual-model form must not rely on a shell (or a test helper) to strip them.
       const scriptPath = join(tmpDir, 'ok.sh')
       writeFileSync(scriptPath, '#!/bin/sh\nexit 0\n', 'utf-8')
       chmodSync(scriptPath, 0o755)
       const cmd = wrapPosixDirectHookCommand(scriptPath)
-      // Why: Codex splits the command string on whitespace and execs argv; this
-      // approximates that without a shell so a regression to if/then/fi fails.
-      const argv = cmd.match(/(?:[^\s']+|'[^']*')+/g) ?? []
-      const unquoted = argv.map((part) =>
-        part.startsWith("'") && part.endsWith("'")
-          ? part.slice(1, -1).replaceAll("'\\''", "'")
-          : part
-      )
-      const result = spawnSync(unquoted[0]!, unquoted.slice(1))
+      const argv = cmd.split(/\s+/)
+      expect(argv[0]).toBe('/bin/sh')
+      expect(argv[1]).toBe(scriptPath)
+      const result = spawnSync(argv[0]!, argv.slice(1))
       expect(result.status).toBe(0)
-      expect(unquoted[0]).toBe('/bin/sh')
+    }
+  )
+
+  it.skipIf(process.platform === 'win32')(
+    'runs under shell -lc the way current Codex command_runner does',
+    () => {
+      const scriptPath = join(tmpDir, 'ok-lc.sh')
+      writeFileSync(scriptPath, '#!/bin/sh\nexit 0\n', 'utf-8')
+      chmodSync(scriptPath, 0o755)
+      const cmd = wrapPosixDirectHookCommand(scriptPath)
+      const result = spawnSync('/bin/sh', ['-lc', cmd])
+      expect(result.status).toBe(0)
     }
   )
 })

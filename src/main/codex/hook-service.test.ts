@@ -158,10 +158,10 @@ describe('CodexHookService', () => {
     expect(trustConfig).toContain(':permission_request:0:0')
   })
 
-  // Why: Codex direct-execs hooks.json commands (#8110). The shared
-  // wrapPosixHookCommand if/then/fi guard becomes argv0=`if` → exit 127.
+  // Why: #8110 — managed Codex commands must not use if/then/fi; dual-model
+  // wrapper emits `/bin/sh <path>` (quoted only when the path needs it).
   it.skipIf(process.platform === 'win32')(
-    'writes argv-safe POSIX managed commands without shell control-flow',
+    'writes dual-model POSIX managed commands without shell control-flow',
     () => {
       expect(new CodexHookService().install().state).toBe('installed')
 
@@ -172,7 +172,7 @@ describe('CodexHookService', () => {
 
       for (const eventName of localManagedCodexEvents()) {
         const command = hooksConfig.hooks[eventName]?.[0]?.hooks?.[0]?.command ?? ''
-        expect(command).toMatch(/^\/bin\/sh '/)
+        expect(command).toMatch(/^\/bin\/sh /)
         expect(command).toContain('agent-hooks/codex-hook.sh')
         expect(command).not.toMatch(/\bif\b|\bthen\b|\bfi\b/)
       }

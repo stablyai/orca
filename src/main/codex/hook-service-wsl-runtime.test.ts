@@ -351,8 +351,8 @@ describe('Codex WSL runtime hook install', () => {
     const installed = JSON.parse(readFileSync(plan.configPath, 'utf-8')) as HooksConfig
     expect(Object.keys(installed.hooks).sort()).toEqual([...managedEvents].sort())
     const managedCommand = installed.hooks.UserPromptSubmit[0]?.hooks?.[0]?.command
-    // Why: Codex argv-execs hooks.json; guarded if/then/fi becomes argv0=`if` (#8110).
-    expect(managedCommand).toBe(`/bin/sh '${plan.commandScriptPath}'`)
+    // Why: dual-model Codex launcher — no if/then/fi; unquoted when path is safe (#8110).
+    expect(managedCommand).toBe(`/bin/sh ${plan.commandScriptPath}`)
     expect(managedCommand).not.toMatch(/\bif\b|\bthen\b|\bfi\b/)
     expect(installed.hooks.UserPromptSubmit[1]?.hooks?.[0]?.command).toBe(userCommand)
     expect(readFileSync(plan.scriptPath, 'utf-8')).toContain('command -v curl.exe')
