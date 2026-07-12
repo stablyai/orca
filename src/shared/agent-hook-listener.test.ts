@@ -388,6 +388,75 @@ describe('shared agent-hook-listener', () => {
     expect(prompted?.providerSession).toEqual({ key: 'session_id', id: 'codex-session-start' })
   })
 
+  it('clears only the same-pane cached Codex status on SessionStart', () => {
+    const otherPane = makePaneKey('tab-2', '22222222-2222-4222-8222-222222222222')
+    const current = normalizeHookPayload(
+      state,
+      'codex',
+      {
+        paneKey: PANE_KEY,
+        payload: { hook_event_name: 'UserPromptSubmit', prompt: 'old session' }
+      },
+      'production'
+    )
+    const other = normalizeHookPayload(
+      state,
+      'codex',
+      {
+        paneKey: otherPane,
+        payload: { hook_event_name: 'UserPromptSubmit', prompt: 'other pane' }
+      },
+      'production'
+    )
+    if (!current || !other) {
+      throw new Error('expected working status fixtures')
+    }
+    state.lastStatusByPaneKey.set(PANE_KEY, current)
+    state.lastStatusByPaneKey.set(otherPane, other)
+
+    const started = normalizeHookPayload(
+      state,
+      'codex',
+      {
+        paneKey: PANE_KEY,
+        payload: { hook_event_name: 'SessionStart', session_id: 'new-session' }
+      },
+      'production'
+    )
+
+    expect(started).toBeNull()
+    expect(state.lastStatusByPaneKey.has(PANE_KEY)).toBe(false)
+    expect(state.lastStatusByPaneKey.get(otherPane)).toBe(other)
+  })
+
+  it('does not clear a different agent status on Codex SessionStart', () => {
+    const claude = normalizeHookPayload(
+      state,
+      'claude',
+      {
+        paneKey: PANE_KEY,
+        payload: { hook_event_name: 'UserPromptSubmit', prompt: 'parent session' }
+      },
+      'production'
+    )
+    if (!claude) {
+      throw new Error('expected Claude working status fixture')
+    }
+    state.lastStatusByPaneKey.set(PANE_KEY, claude)
+
+    normalizeHookPayload(
+      state,
+      'codex',
+      {
+        paneKey: PANE_KEY,
+        payload: { hook_event_name: 'SessionStart', session_id: 'nested-codex' }
+      },
+      'production'
+    )
+
+    expect(state.lastStatusByPaneKey.get(PANE_KEY)).toBe(claude)
+  })
+
   it('keeps Codex subagent events working and only root Stop done', () => {
     normalizeHookPayload(
       state,

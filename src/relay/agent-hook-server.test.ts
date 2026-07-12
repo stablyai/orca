@@ -145,6 +145,52 @@ describe('RelayAgentHookServer', () => {
     }
   })
 
+  it('replays a Codex SessionStart tombstone after clearing the stale status', async () => {
+    const forward = vi.fn<(envelope: AgentHookRelayEnvelope) => void>()
+    const server = new RelayAgentHookServer({ endpointDir: dir, forward })
+    await server.start()
+    try {
+      const { port, token } = server.getCoordinates()
+      const post = (payload: Record<string, unknown>): Promise<Response> =>
+        fetch(`http://127.0.0.1:${port}/hook/codex`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-Orca-Agent-Hook-Token': token
+          },
+          body: JSON.stringify({ paneKey: PANE_KEY, tabId: 'tab-1', payload })
+        })
+
+      await post({ hook_event_name: 'UserPromptSubmit', prompt: 'remote old session' })
+      forward.mockClear()
+      await post({ hook_event_name: 'SessionStart', session_id: 'relay-new-session' })
+
+      expect(forward).toHaveBeenCalledTimes(1)
+      expect(forward.mock.calls[0][0]).toMatchObject({
+        source: 'codex',
+        paneKey: PANE_KEY,
+        hookEventName: 'SessionStart',
+        providerSession: { key: 'session_id', id: 'relay-new-session' },
+        payload: { state: 'done', prompt: '', agentType: 'codex' }
+      })
+
+      // Simulate the live notification being lost while the SSH mux is down:
+      // reconnect replay must still carry the clear control event.
+      forward.mockClear()
+      expect(server.replayCachedPayloadsForPanes()).toBe(1)
+      expect(forward).toHaveBeenCalledTimes(1)
+      expect(forward.mock.calls[0][0]).toMatchObject({
+        source: 'codex',
+        paneKey: PANE_KEY,
+        hookEventName: 'SessionStart',
+        isReplay: true,
+        payload: { state: 'done', prompt: '', agentType: 'codex' }
+      })
+    } finally {
+      server.stop()
+    }
+  })
+
   it('rejects requests with the wrong bearer token (403)', async () => {
     const forward = vi.fn()
     const server = new RelayAgentHookServer({ endpointDir: dir, forward })

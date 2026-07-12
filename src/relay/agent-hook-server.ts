@@ -277,6 +277,8 @@ export class RelayAgentHookServer {
         res.end()
         return
       }
+      const paneKey = this.bodyPaneKey(body)
+      const previousStatus = paneKey ? this.state.lastStatusByPaneKey.get(paneKey) : undefined
       const event = normalizeHookPayload(this.state, source, body, this.env, {
         allowUnanchoredPreCompact: true,
         allowUnanchoredPostCompact: true
@@ -288,6 +290,13 @@ export class RelayAgentHookServer {
         this.applyEvent(event, source, env, version)
         this.scheduleAssistantMessageRetry(source, body, event, env, version)
         this.scheduleCodexSubagentPoll(source, body, event, env, version)
+      } else if (
+        source === 'codex' &&
+        previousStatus &&
+        paneKey &&
+        !this.state.lastStatusByPaneKey.has(paneKey)
+      ) {
+        this.forwardSessionStartClear(previousStatus, this.bodyEnv(body), this.bodyVersion(body))
       }
       res.writeHead(204)
       res.end()
@@ -358,6 +367,29 @@ export class RelayAgentHookServer {
       this.clearPaneState(oldest)
     }
     this.forwardEvent(event, source, env, version)
+  }
+
+  private forwardSessionStartClear(
+    previous: AgentHookEventPayload,
+    env?: string,
+    version?: string
+  ): void {
+    this.clearAssistantMessageRetry(previous.paneKey)
+    const providerSession = this.state.lastProviderSessionByPaneKey.get(previous.paneKey)
+    // Why: old Orca builds treat this as an idle done row; new builds recognize
+    // SessionStart and clear it. Cache the tombstone so reconnect replay cannot
+    // lose the clear while the SSH notification channel is unavailable.
+    this.applyEvent(
+      {
+        ...previous,
+        hookEventName: 'SessionStart',
+        ...(providerSession ? { providerSession } : {}),
+        payload: { state: 'done', prompt: '', agentType: 'codex' }
+      },
+      'codex',
+      env,
+      version
+    )
   }
 
   private clearAssistantMessageRetry(paneKey: string): void {
@@ -519,6 +551,14 @@ export class RelayAgentHookServer {
       return undefined
     }
     return v
+  }
+
+  private bodyPaneKey(body: unknown): string | null {
+    if (typeof body !== 'object' || body === null) {
+      return null
+    }
+    const value = (body as Record<string, unknown>).paneKey
+    return typeof value === 'string' && value.trim().length > 0 ? value.trim() : null
   }
 
   private bodyVersion(body: unknown): string | undefined {
