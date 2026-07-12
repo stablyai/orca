@@ -1,6 +1,7 @@
 import type { WorkbenchView } from '../../../shared/types'
 import {
   collectLeafWorktreeIds,
+  flipAllSplitDirections,
   hasLeaf,
   leafCount,
   makeWorktreeLeaf,
@@ -8,6 +9,7 @@ import {
   replaceLeaf,
   setRatioAtPath,
   splitLeafByWorktreeId,
+  toggleParentSplitDirection,
   type WorktreeLayoutPath,
   type WorktreeSplitPlacement
 } from './worktree-layout-tree'
@@ -264,5 +266,23 @@ export function focusActivePane(state: WorkbenchViewState, worktreeId: string): 
       return view
     }
     return { ...view, focusedWorktreeId: worktreeId }
+  })
+}
+
+/** Flip the active view's split orientation (side-by-side <-> stacked). */
+export function flipActiveViewOrientation(state: WorkbenchViewState): WorkbenchViewState {
+  return mapActiveView(state, (view) =>
+    view.layout.type === 'split' ? { ...view, layout: flipAllSplitDirections(view.layout) } : view
+  )
+}
+
+/** Flip the orientation of just the split containing `worktreeId`'s pane. */
+export function togglePaneSplitDirection(
+  state: WorkbenchViewState,
+  worktreeId: string
+): WorkbenchViewState {
+  return mapActiveView(state, (view) => {
+    const layout = toggleParentSplitDirection(view.layout, worktreeId)
+    return layout === view.layout ? view : { ...view, layout }
   })
 }

@@ -36,6 +36,10 @@ export type WorkbenchViewsSlice = {
   retargetFocusedWorkbenchPane: (newWorktreeId: string) => void
   setActiveWorkbenchPaneRatio: (path: WorktreeLayoutPath, ratio: number) => void
   focusActiveWorkbenchPane: (worktreeId: string) => void
+  /** Flip the parallel layout orientation (side-by-side <-> stacked). */
+  flipWorkbenchOrientation: () => void
+  /** Flip only the split that contains this worktree's pane (per-pane control). */
+  togglePaneSplitDirection: (worktreeId: string) => void
   setWorkbenchTabsPinned: (pinned: boolean) => void
 }
 
@@ -95,19 +99,31 @@ export const createWorkbenchViewsSlice: StateCreator<AppState, [], [], Workbench
 
     closeActiveWorkbenchPane: (worktreeId) => {
       set((s) => viewModel.closeActivePane(s, worktreeId))
+      // Move the active worktree to the surviving focused pane first...
       syncActiveWorktree()
+      // ...then, once the layout has collapsed below 2 panes, drop the workbench
+      // view entirely so the workbench reverts cleanly to the normal
+      // single-worktree behavior — no lingering view can hijack navigation.
+      if (viewModel.getVisibleWorktreeIds(get()).length < 2) {
+        set(() => viewModel.EMPTY_WORKBENCH_VIEW_STATE)
+      }
     },
 
     openWorktreeInParallel: (worktreeId, direction) => {
-      const active = viewModel.getActiveWorkbenchView(get())
-      if (!active) {
-        const current = get().activeWorktreeId
-        if (!current || current === worktreeId) {
-          // Nothing to pair with yet — just activate the clicked worktree.
-          get().setActiveWorktree(worktreeId)
-          return
-        }
-        set((s) => viewModel.createSingleLeafView(s, crypto.randomUUID(), current))
+      const state = get()
+      const current = state.activeWorktreeId
+      if (!current || current === worktreeId) {
+        // Nothing to pair with yet — just activate the clicked worktree.
+        get().setActiveWorktree(worktreeId)
+        return
+      }
+      // Preserve only an already-parallel (>= 2 leaf) view. Otherwise — no view,
+      // or a stale single-leaf view left over after normal navigation — reseed a
+      // fresh view from the CURRENT worktree so parallel always pairs whatever is
+      // actually on screen, not a worktree the user has since navigated away from.
+      const alreadyParallel = viewModel.getVisibleWorktreeIds(state).length >= 2
+      if (!alreadyParallel) {
+        set(() => viewModel.singleLeafViewState(crypto.randomUUID(), current))
       }
       set((s) => {
         const view = viewModel.getActiveWorkbenchView(s)
@@ -132,6 +148,14 @@ export const createWorkbenchViewsSlice: StateCreator<AppState, [], [], Workbench
     focusActiveWorkbenchPane: (worktreeId) => {
       set((s) => viewModel.focusActivePane(s, worktreeId))
       syncActiveWorktree()
+    },
+
+    flipWorkbenchOrientation: () => {
+      set((s) => viewModel.flipActiveViewOrientation(s))
+    },
+
+    togglePaneSplitDirection: (worktreeId) => {
+      set((s) => viewModel.togglePaneSplitDirection(s, worktreeId))
     },
 
     setWorkbenchTabsPinned: (pinned) => {

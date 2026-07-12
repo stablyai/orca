@@ -263,17 +263,24 @@ function Terminal(): React.JSX.Element | null {
   const [workbenchPaneRects, setWorkbenchPaneRects] = useState<Map<string, WorktreePaneRect>>(
     () => new Map()
   )
-  // Why: the active workbench view's leaves are the worktrees shown in parallel.
-  // Until a parallel layout exists (the common single-project case) this falls
-  // back to just the active worktree, so the visible set — and thus the render
-  // gate below — stays byte-identical to the pre-parallel behavior.
+  // Why: the active workbench view's leaves drive the parallel layout ONLY when
+  // there are >= 2 of them. A single-leaf (or absent) view falls back to the
+  // active worktree, so normal sidebar navigation keeps working and the render
+  // gate stays byte-identical to the pre-parallel behavior. This also makes
+  // "revert to single" automatic: closing a pane down to one leaf drops straight
+  // back to the legacy single-worktree path.
   const activeWorkbenchView = useMemo(
     () => getActiveWorkbenchView({ workbenchViews, activeWorkbenchViewId }),
     [workbenchViews, activeWorkbenchViewId]
   )
   const workbenchVisibleWorktreeIds = useMemo(() => {
     const ids = activeWorkbenchView ? collectLeafWorktreeIds(activeWorkbenchView.layout) : []
-    return ids.length > 0 ? ids : renderedActiveWorktreeId ? [renderedActiveWorktreeId] : []
+    // Why: parallel only shows while the active worktree is actually one of its
+    // panes. Navigating to any other worktree (sidebar click) drops back to the
+    // single view — a guaranteed escape so a parallel view can never get stuck.
+    const parallelActive =
+      ids.length >= 2 && renderedActiveWorktreeId != null && ids.includes(renderedActiveWorktreeId)
+    return parallelActive ? ids : renderedActiveWorktreeId ? [renderedActiveWorktreeId] : []
   }, [activeWorkbenchView, renderedActiveWorktreeId])
   const workbenchVisibleSet = useMemo(
     () => new Set(workbenchVisibleWorktreeIds),
@@ -2447,6 +2454,9 @@ const WorktreeSplitSurface = React.memo(function WorktreeSplitSurface({
       )
     )
   )
+  const closeActiveWorkbenchPane = useAppStore((s) => s.closeActiveWorkbenchPane)
+  const togglePaneSplitDirection = useAppStore((s) => s.togglePaneSplitDirection)
+  const focusActiveWorkbenchPane = useAppStore((s) => s.focusActiveWorkbenchPane)
   const hasAutomationVisibleBrowser = useBrowserAutomationVisibilityForAny(browserPageIds)
   const hasMobileDrivenBrowser = useBrowserMobileDriverForAny(browserPageIds)
   const shouldKeepPaintable =
@@ -2457,6 +2467,11 @@ const WorktreeSplitSurface = React.memo(function WorktreeSplitSurface({
   // awaitingRect keeps it invisible for the one frame before first measurement.
   const usesRect = isVisible && paneRect != null
   const awaitingRect = isMultiPane && isVisible && paneRect == null
+  // Why: in a multi-pane view a left-edge strip labels each pane with its
+  // worktree folder so the user can tell a separate worktree apart from a
+  // same-worktree tab-group split, and its ✕ closes the pane (revert).
+  const paneLabelSegments = worktreePath.split(/[\\/]/).filter(Boolean)
+  const paneLabel = paneLabelSegments.at(-1) ?? worktreeId
   return (
     <div
       className={
@@ -2484,7 +2499,46 @@ const WorktreeSplitSurface = React.memo(function WorktreeSplitSurface({
       // worktree controls cannot remain reachable by Tab or assistive tech.
       inert={!isVisible}
       aria-hidden={!isVisible}
+      onPointerDownCapture={() => {
+        // Why: clicking into a parallel pane makes it the focused pane so the
+        // right sidebar / file list / shortcuts follow, mirroring a sidebar click.
+        if (isMultiPane && !isFocused) {
+          focusActiveWorkbenchPane(worktreeId)
+        }
+      }}
     >
+      {isMultiPane && isVisible ? (
+        <div
+          style={{ zIndex: 60 }}
+          className={`pointer-events-auto absolute right-1 top-1 flex items-center gap-1.5 rounded border bg-background/95 px-1.5 py-0.5 text-[11px] text-muted-foreground shadow-sm ${
+            isFocused ? 'border-ring' : 'border-border'
+          }`}
+        >
+          <span className="max-w-[140px] select-none truncate" title={worktreePath}>
+            {paneLabel}
+          </span>
+          <button
+            type="button"
+            onPointerDown={(event) => event.stopPropagation()}
+            onClick={() => togglePaneSplitDirection(worktreeId)}
+            title="Toggle this pane's split direction (side-by-side / stacked)"
+            aria-label="Toggle this pane's split direction"
+            className="leading-none hover:text-foreground"
+          >
+            ⇅
+          </button>
+          <button
+            type="button"
+            onPointerDown={(event) => event.stopPropagation()}
+            onClick={() => closeActiveWorkbenchPane(worktreeId)}
+            title="Close parallel pane"
+            aria-label="Close parallel pane"
+            className="leading-none hover:text-foreground"
+          >
+            ✕
+          </button>
+        </div>
+      ) : null}
       <CodexRestartChip isVisible={isVisible} worktreeId={worktreeId} />
       <TabGroupSplitLayout
         layout={layout}

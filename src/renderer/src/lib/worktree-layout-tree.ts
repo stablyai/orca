@@ -208,6 +208,42 @@ export function setRatioAtPath(
   return replaceNodeAtPath(node, path, { ...target, ratio: clampWorktreeSplitRatio(ratio) })
 }
 
+/** Flip every split's direction (horizontal <-> vertical) so a side-by-side
+ *  parallel layout becomes stacked and vice-versa. Leaves are untouched. */
+export function flipAllSplitDirections(node: WorktreeLayoutNode): WorktreeLayoutNode {
+  if (node.type === 'leaf') {
+    return node
+  }
+  return {
+    ...node,
+    direction: node.direction === 'horizontal' ? 'vertical' : 'horizontal',
+    first: flipAllSplitDirections(node.first),
+    second: flipAllSplitDirections(node.second)
+  }
+}
+
+/** Flip the direction of only the split that directly contains `worktreeId`'s
+ *  pane, leaving sibling splits alone — so a 3+ pane layout can mix orientations
+ *  (e.g. two panes stacked beside a third). No-op if the pane is the root leaf. */
+export function toggleParentSplitDirection(
+  node: WorktreeLayoutNode,
+  worktreeId: string
+): WorktreeLayoutNode {
+  const path = findLeafPath(node, worktreeId)
+  if (!path || path.length === 0) {
+    return node
+  }
+  const parentPath = path.slice(0, -1)
+  const parent = getNodeAtPath(node, parentPath)
+  if (!parent || parent.type !== 'split') {
+    return node
+  }
+  return replaceNodeAtPath(node, parentPath, {
+    ...parent,
+    direction: parent.direction === 'horizontal' ? 'vertical' : 'horizontal'
+  })
+}
+
 /** Drop any leaf whose worktree is not in `validWorktreeIds`, collapsing splits.
  *  Returns null when nothing survives (used by session hydration to prune
  *  worktrees that no longer exist). */

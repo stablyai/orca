@@ -231,6 +231,33 @@ Both route to `splitActiveWorkbenchPane(focusedWorktreeId, direction, pickedWork
 
 ---
 
+### 6.6 Drag-to-split & drag-to-rearrange (VSCode/Cursor-style magnet split) — next phase
+
+Two drag interactions layer on top of the click/menu entry points, giving the spatial "magnet" control users expect from VSCode/Cursor tab drag-split. This is the interaction users find most comfortable, so it is the headline of the next implementation phase.
+
+**A. Sidebar → workbench (enter parallel by dragging a worktree in).**
+
+- Drag a worktree row from `WorktreeList` — one **not currently visible** — over the workbench.
+- Each hovered pane surfaces **five drop zones** (VSCode model): **center** (replace this pane's worktree), **left / right** (split `horizontal`, new pane on that side), **top / bottom** (split `vertical`, new pane on that side). A snap/magnet preview overlay highlights the resulting region as the cursor nears an edge, so the split is auto-oriented by where you drop.
+- Drop → `splitWorktreePane(targetLeafPath, direction, draggedWorktreeId, placement)` (left/top = `before`, right/bottom = `after`), or `retargetWorktreePane` for center. A first drag from a single view auto-seeds the parallel view (same reseed as `openWorktreeInParallel`).
+
+**B. In parallel view — drag a pane by its label to rearrange.**
+
+- The pane's control-cluster label (§6.5) doubles as a **drag handle**: press-drag the label and drop it onto another pane's edge zone to **move** that pane to a new position/orientation — the "most comfortable" UX the user calls out.
+- Drop → `moveWorktreePane(fromWorktreeId, targetLeafPath, direction, placement)`, implemented as a single transaction (`removeLeaf(from)` then `splitLeafAtPath(target, direction, from)`) so the tree never passes through an invalid intermediate; the vacated sibling collapses to fill the space.
+- This makes the ⇅ toggle and ✕ close (§6.5) the *quick* controls and drag the *spatial/precise* one — 종/횡 mixes like 종종횡 · 종횡횡 are reachable either way.
+
+**Integration with everything decided so far:**
+
+- **Four entry points, one model.** (1) ⌘/Ctrl-click a sidebar row; (2) right-click → "Open in Parallel"; (3) **drag a sidebar row into a pane zone** (A); (4) **drag a pane label onto a zone** to rearrange (B). (1)(2) are quick/keyboard-friendly; (3)(4) are spatial. All four funnel through the same pure `worktree-layout-tree` ops and the `workbench-views` slice, so behavior, persistence, and the focus/`activeWorktreeId` mirror are identical regardless of route.
+- **Sidebar reflects parallel membership (§6.2 / bug B).** Every worktree in the active view shows a muted "in parallel" selection; the focused pane keeps the real highlight. Drag sources/targets and the selection styling read from the same `workbenchVisibleWorktreeIds`.
+- **Reuse, don't reinvent.** A worktree-level `useWorktreeDragSplit` mirrors the existing tab-level `useTabDragSplit`, and the drop-zone overlay mirrors `TabPaneColumnSplitDragOverlay`; a distinct dnd-kit drag type (`'worktree-pane'`) keeps it from colliding with in-worktree tab drags.
+- **No reparenting (NFR-1).** Drag mutates only the layout tree + slot rects; the flat surface pool re-positions — never remounts — so xterm/webview state survives every rearrange.
+
+**New code this phase needs:** a pure `moveLeaf(tree, fromWorktreeId, targetPath, direction, placement)` op in `worktree-layout-tree.ts` (remove+split as one atomic step); `useWorktreeDragSplit` + a worktree drop-overlay component; making `WorktreeList` rows dnd-kit drag sources and the pane label a drag handle; and the `workbench-views` slice actions `splitWorktreePaneAtPath` / `moveWorktreePane`.
+
+---
+
 ## 7. Architecture / Code Design
 
 ### 7.1 New shared types (`src/shared/types.ts`)

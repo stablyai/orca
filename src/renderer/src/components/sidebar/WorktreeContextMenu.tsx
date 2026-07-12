@@ -29,7 +29,8 @@ import {
   Workflow,
   FolderInput,
   FolderPlus,
-  FolderTree
+  FolderTree,
+  Columns2
 } from 'lucide-react'
 import { useAppStore } from '@/store'
 import type { AppState } from '@/store/types'
@@ -39,6 +40,7 @@ import type { Repo, Worktree } from '../../../../shared/types'
 import { runWorktreeBatchDelete, runWorktreeDelete } from './delete-worktree-flow'
 import { runSleepWorktrees } from './sleep-worktree-flow'
 import { activateAndRevealWorktree } from '@/lib/worktree-activation'
+import { pickSplitDirection } from '@/lib/worktree-layout-tree'
 import { tabHasLivePty } from '@/lib/tab-has-live-pty'
 import { VIRTUALIZED_SCROLL_ANCHOR_RECORD_EVENT } from '@/hooks/useVirtualizedScrollAnchor'
 import { getLineageRenderInfo } from './worktree-list-groups'
@@ -281,6 +283,7 @@ const WorktreeContextMenu = React.memo(function WorktreeContextMenu({
   const moveProjectToGroup = useAppStore((s) => s.moveProjectToGroup)
   const deleteFolderWorkspace = useAppStore((s) => s.deleteFolderWorkspace)
   const setActiveWorktree = useAppStore((s) => s.setActiveWorktree)
+  const openWorktreeInParallel = useAppStore((s) => s.openWorktreeInParallel)
   const repo = useRepoById(worktree.repoId)
   const deleteState = useAppStore((s) => s.deleteStateByWorktreeId[worktree.id])
   const [menuOpen, setMenuOpen] = useState(false)
@@ -427,6 +430,13 @@ const WorktreeContextMenu = React.memo(function WorktreeContextMenu({
   const handleCopyPath = useCallback(() => {
     window.api.ui.writeClipboardText(worktree.path)
   }, [worktree.path])
+
+  const handleOpenInParallel = useCallback(() => {
+    openWorktreeInParallel(
+      worktree.id,
+      pickSplitDirection({ width: window.innerWidth, height: window.innerHeight })
+    )
+  }, [openWorktreeInParallel, worktree.id])
 
   const handleToggleRead = useCallback(() => {
     updateWorktreeMeta(worktree.id, { isUnread: !worktree.isUnread })
@@ -739,6 +749,13 @@ const WorktreeContextMenu = React.memo(function WorktreeContextMenu({
                 connectionId={repo?.connectionId ?? null}
                 disabled={isDeleting}
               />
+              <DropdownMenuItem onSelect={handleOpenInParallel} disabled={isDeleting}>
+                <Columns2 className="size-3.5" />
+                {translate(
+                  'auto.components.sidebar.WorktreeContextMenu.openInParallel',
+                  'Open in Parallel'
+                )}
+              </DropdownMenuItem>
               <DropdownMenuItem onSelect={handleCopyPath} disabled={isDeleting}>
                 <Copy className="size-3.5" />
                 {translate('auto.components.sidebar.WorktreeContextMenu.3350101edb', 'Copy Path')}
