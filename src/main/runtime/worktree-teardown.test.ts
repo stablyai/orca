@@ -161,6 +161,55 @@ describe('killAllProcessesForWorktree', () => {
     expect(result.runtimeStopped).toBe(3)
   })
 
+  it('awaits each runtime stop before fallback sweeps and preserves unrelated sessions', async () => {
+    const releases = new Map<string, () => void>()
+    const liveSessions = new Set(['w1@@target', 'w2@@target', 'witness@@unrelated'])
+    const stopTerminalsForWorktree = vi.fn(
+      (worktreeId: string) =>
+        new Promise<{ stopped: number }>((resolve) => {
+          releases.set(worktreeId, () => {
+            liveSessions.delete(`${worktreeId}@@target`)
+            // Why: a spawn that finishes after the runtime snapshot still has
+            // to be caught by the later provider sweep before deletion.
+            liveSessions.add(`${worktreeId}@@late`)
+            resolve({ stopped: 1 })
+          })
+        })
+    )
+    const runtime = {
+      stopTerminalsForWorktree
+    } as unknown as Parameters<typeof killAllProcessesForWorktree>[1]['runtime']
+    const localProvider = createProviderStub(async () =>
+      [...liveSessions].map((id) => ({ id, cwd: '/tmp', title: 'shell' }))
+    )
+    listRegisteredPtysMock.mockReturnValue([])
+
+    for (const worktreeId of ['w1', 'w2']) {
+      const listCountBeforeStop = vi.mocked(localProvider.listProcesses).mock.calls.length
+      const shutdownCountBeforeStop = vi.mocked(localProvider.shutdown).mock.calls.length
+      const removal = killAllProcessesForWorktree(worktreeId, { runtime, localProvider })
+      await vi.waitFor(() => expect(releases.has(worktreeId)).toBe(true))
+
+      expect(localProvider.listProcesses).toHaveBeenCalledTimes(listCountBeforeStop)
+      expect(localProvider.shutdown).toHaveBeenCalledTimes(shutdownCountBeforeStop)
+      releases.get(worktreeId)?.()
+
+      await expect(removal).resolves.toEqual({
+        runtimeStopped: 1,
+        providerStopped: 1,
+        registryStopped: 0
+      })
+      expect(localProvider.shutdown).toHaveBeenCalledWith(`${worktreeId}@@late`, {
+        immediate: true
+      })
+    }
+
+    expect(localProvider.shutdown).not.toHaveBeenCalledWith('witness@@unrelated', {
+      immediate: true
+    })
+    expect(liveSessions.has('witness@@unrelated')).toBe(true)
+  })
+
   it('tolerates runtime.stopTerminalsForWorktree throwing (headless assertGraphReady reject)', async () => {
     const stopTerminalsForWorktree = vi.fn().mockRejectedValue(new Error('graph not ready'))
     const runtime = {

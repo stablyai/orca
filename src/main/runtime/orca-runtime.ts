@@ -18768,7 +18768,7 @@ export class OrcaRuntimeService {
     for (const ptyId of ptyIds) {
       // Why: worktree removal immediately follows this with provider/registry
       // sweeps. Await the verified stop so those sweeps cannot overlap a
-      // graceful kill with a second ConPTY teardown on Windows (#8275).
+      // provider shutdown with a second ConPTY teardown on Windows (#8275).
       if (this.ptyController?.stopAndWait) {
         if (await this.ptyController.stopAndWait(ptyId)) {
           stopped += 1
