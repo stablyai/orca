@@ -2,7 +2,6 @@ type WorktreePtyAdmissionState = {
   activeSpawns: number
   teardownOwners: number
   drainWaiters: Set<() => void>
-  teardownTail: Promise<void>
 }
 
 export class WorktreePtyAdmission {
@@ -44,16 +43,12 @@ export class WorktreePtyAdmission {
 
   async closeForTeardown(worktreeId: string): Promise<() => void> {
     const state = this.getOrCreate(worktreeId)
+    if (state.teardownOwners > 0) {
+      // Why: teardown-only callers and mismatched remove/forget operations do
+      // not join the shared removal promise; never queue their stale state.
+      throw new Error(`Worktree teardown is already in progress: ${worktreeId}`)
+    }
     state.teardownOwners += 1
-    const previousTeardown = state.teardownTail
-    let finishTeardown = () => {}
-    const thisTeardown = new Promise<void>((resolve) => {
-      finishTeardown = resolve
-    })
-    // Why: runtime RPC and renderer IPC have distinct dedupe maps; serialize
-    // them here so two removal owners cannot overlap provider or Git teardown.
-    state.teardownTail = previousTeardown.then(() => thisTeardown)
-    await previousTeardown
     if (state.activeSpawns > 0) {
       await new Promise<void>((resolve) => state.drainWaiters.add(resolve))
     }
@@ -64,7 +59,6 @@ export class WorktreePtyAdmission {
       }
       released = true
       state.teardownOwners -= 1
-      finishTeardown()
       this.deleteIfIdle(worktreeId, state)
     }
   }
@@ -77,8 +71,7 @@ export class WorktreePtyAdmission {
     const state: WorktreePtyAdmissionState = {
       activeSpawns: 0,
       teardownOwners: 0,
-      drainWaiters: new Set(),
-      teardownTail: Promise.resolve()
+      drainWaiters: new Set()
     }
     this.states.set(worktreeId, state)
     return state

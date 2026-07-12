@@ -2499,6 +2499,7 @@ export class OrcaRuntimeService {
   private canonicalFetchKeyCache = new Map<string, string>()
   private optimisticReconcileTokens = new Map<string, string>()
   private removeManagedWorktreeInFlight = new Map<string, RuntimeWorktreeRemovalInFlight>()
+  private crossSurfaceWorktreeRemovalInFlight = new Map<string, RuntimeWorktreeRemovalInFlight>()
   private readonly worktreePtyAdmission = new WorktreePtyAdmission()
   private preservedBranchCleanupByWorktreeId = new Map<string, PreservedBranchCleanupTarget>()
   private readonly getLocalProviderFn: (() => IPtyProvider) | null
@@ -16888,8 +16889,45 @@ export class OrcaRuntimeService {
     if (!this.store) {
       throw new Error('runtime_unavailable')
     }
-    const store = this.store
+    const exactTarget = parseExactWorktreeIdSelector(worktreeSelector)
+    if (exactTarget) {
+      const repo = this.store.getRepo(exactTarget.repoId)
+      return this.runWithWorktreeRemovalDedup(
+        exactTarget.id,
+        {
+          force,
+          runHooks,
+          ...(repo ? { hostId: getRepoExecutionHostId(repo) } : {})
+        },
+        async () => {
+          const resolvedTarget = await this.resolveWorktreeRemovalTarget(worktreeSelector)
+          return this.removeManagedWorktreeCore(force, runHooks, resolvedTarget)
+        }
+      )
+    }
     const removalTarget = await this.resolveWorktreeRemovalTarget(worktreeSelector)
+    const repo = this.store.getRepo(removalTarget.repoId)
+    return this.runWithWorktreeRemovalDedup(
+      removalTarget.id,
+      {
+        force,
+        runHooks,
+        ...(repo ? { hostId: getRepoExecutionHostId(repo) } : {})
+      },
+      () => this.removeManagedWorktreeCore(force, runHooks, removalTarget)
+    )
+  }
+
+  private async removeManagedWorktreeCore(
+    force: boolean,
+    runHooks: boolean,
+    resolvedRemovalTarget: RuntimeWorktreeRemovalTarget
+  ): Promise<RemoveWorktreeResult & { warning?: string }> {
+    if (!this.store) {
+      throw new Error('runtime_unavailable')
+    }
+    const store = this.store
+    const removalTarget = resolvedRemovalTarget
     const optionsKey = getRuntimeWorktreeRemovalOptionsKey(force, runHooks)
     const inFlightRemoval = this.removeManagedWorktreeInFlight.get(removalTarget.id)
     if (inFlightRemoval) {
@@ -18814,6 +18852,37 @@ export class OrcaRuntimeService {
     // Why: closing admission before snapshots makes deletion own every spawn
     // already in flight and keeps new desktop/mobile/SSH spawns out until Git settles.
     return this.worktreePtyAdmission.runTeardown(worktreeId, operation)
+  }
+
+  async runWithWorktreeRemovalDedup<T>(
+    worktreeId: string,
+    opts: { force: boolean; runHooks: boolean; hostId?: string; mode?: 'remove' | 'forget' },
+    operation: () => Promise<T>
+  ): Promise<T> {
+    const optionsKey = `${opts.mode ?? 'remove'}:${getRuntimeWorktreeRemovalOptionsKey(
+      opts.force,
+      opts.runHooks
+    )}`
+    const removalKey = `${opts.hostId ?? ''}\0${worktreeId}`
+    const existing = this.crossSurfaceWorktreeRemovalInFlight.get(removalKey)
+    if (existing) {
+      if (existing.optionsKey === optionsKey) {
+        return existing.promise as Promise<T>
+      }
+      throw new Error(`Worktree deletion already in progress: ${worktreeId}`)
+    }
+    const promise = operation()
+    this.crossSurfaceWorktreeRemovalInFlight.set(removalKey, {
+      optionsKey,
+      promise: promise as Promise<RemoveWorktreeResult & { warning?: string }>
+    })
+    try {
+      return await promise
+    } finally {
+      if (this.crossSurfaceWorktreeRemovalInFlight.get(removalKey)?.promise === promise) {
+        this.crossSurfaceWorktreeRemovalInFlight.delete(removalKey)
+      }
+    }
   }
 
   async stopTerminalsForWorktree(

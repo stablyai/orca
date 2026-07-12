@@ -8,6 +8,9 @@ import type {
   PtySpawnOptions,
   PtySpawnResult
 } from '../providers/types'
+import { ShutdownVerificationOwnerCache } from './shutdown-verification-owner-cache'
+import { reconcileDegradedDaemonSessions } from './degraded-daemon-session-reconciliation'
+import { subscribeToProviderReplay } from './provider-replay-subscription'
 
 type ManagedPtyProvider = IPtyProvider & {
   disconnectOnly?: () => Promise<void>
@@ -25,6 +28,7 @@ export class DegradedDaemonPtyProvider implements IPtyProvider {
   private legacy: DaemonPtyAdapter[]
   private fallback: ManagedPtyProvider
   private sessionProviders = new Map<string, ManagedPtyProvider>()
+  private shutdownVerificationProviders = new ShutdownVerificationOwnerCache<ManagedPtyProvider>()
   private unsubscribers: (() => void)[] = []
   private dataListeners: ((payload: {
     id: string
@@ -65,6 +69,7 @@ export class DegradedDaemonPtyProvider implements IPtyProvider {
         const sessions = await adapter.listProcesses()
         for (const session of sessions) {
           this.sessionProviders.set(session.id, adapter)
+          this.shutdownVerificationProviders.delete(session.id)
         }
       } catch (error) {
         console.warn('[daemon] Failed to discover degraded daemon sessions', error)
@@ -77,14 +82,20 @@ export class DegradedDaemonPtyProvider implements IPtyProvider {
     const target = mapped ?? this.fallback
     const result = await target.spawn(opts)
     this.sessionProviders.set(result.id, target)
+    this.shutdownVerificationProviders.delete(result.id)
     return result
   }
 
   async attach(id: string): Promise<void> {
     await this.providerFor(id).attach(id)
+    this.shutdownVerificationProviders.delete(id)
   }
 
   hasPty(id: string): boolean {
+    const shutdownOwner = this.shutdownVerificationProviders.take(id)
+    if (shutdownOwner) {
+      return shutdownOwner.hasPty?.(id) ?? true
+    }
     const mapped = this.sessionProviders.get(id)
     if (mapped) {
       return mapped.hasPty?.(id) ?? true
@@ -113,9 +124,11 @@ export class DegradedDaemonPtyProvider implements IPtyProvider {
   }
 
   async shutdown(id: string, opts: { immediate?: boolean; keepHistory?: boolean }): Promise<void> {
-    await this.providerFor(id).shutdown(id, opts)
+    const owner = this.providerFor(id)
+    await owner.shutdown(id, opts)
     if (!opts.keepHistory) {
       this.sessionProviders.delete(id)
+      this.shutdownVerificationProviders.remember(id, owner)
     }
   }
 
@@ -170,6 +183,7 @@ export class DegradedDaemonPtyProvider implements IPtyProvider {
 
   async revive(state: string): Promise<void> {
     await this.fallback.revive(state)
+    this.shutdownVerificationProviders.clear()
   }
 
   async listProcesses(): Promise<PtyProcessInfo[]> {
@@ -211,23 +225,7 @@ export class DegradedDaemonPtyProvider implements IPtyProvider {
   }
 
   onReplay(callback: (payload: { id: string; data: string }) => void): () => void {
-    const unsubscribes = this.allProviders().map((provider) => provider.onReplay(callback))
-    let active = true
-    const trackedUnsubscribe = (): void => {
-      if (!active) {
-        return
-      }
-      active = false
-      const idx = this.unsubscribers.indexOf(trackedUnsubscribe)
-      if (idx !== -1) {
-        this.unsubscribers.splice(idx, 1)
-      }
-      for (const unsubscribe of unsubscribes) {
-        unsubscribe()
-      }
-    }
-    this.unsubscribers.push(trackedUnsubscribe)
-    return trackedUnsubscribe
+    return subscribeToProviderReplay(this.allProviders(), callback, this.unsubscribers)
   }
 
   onExit(callback: (payload: { id: string; code: number }) => void): () => void {
@@ -252,23 +250,22 @@ export class DegradedDaemonPtyProvider implements IPtyProvider {
     alive: string[]
     killed: string[]
   }> {
-    const alive: string[] = []
-    const killed: string[] = []
-    for (const adapter of this.allDaemonAdapters()) {
-      const result = await adapter.reconcileOnStartup(validWorktreeIds)
-      for (const id of result.alive) {
-        alive.push(id)
+    return reconcileDegradedDaemonSessions(
+      this.allDaemonAdapters(),
+      validWorktreeIds,
+      (id, adapter) => {
         this.sessionProviders.set(id, adapter)
-      }
-      for (const id of result.killed) {
-        killed.push(id)
+        this.shutdownVerificationProviders.delete(id)
+      },
+      (id) => {
         this.sessionProviders.delete(id)
+        this.shutdownVerificationProviders.delete(id)
       }
-    }
-    return { alive, killed }
+    )
   }
 
   dispose(): void {
+    this.shutdownVerificationProviders.clear()
     this.disposeProviderOnly()
     for (const adapter of this.allDaemonAdapters()) {
       adapter.dispose()
@@ -292,6 +289,7 @@ export class DegradedDaemonPtyProvider implements IPtyProvider {
   fanoutCurrentDaemonSyntheticExits(code: number): void {
     for (const id of this.getCurrentDaemonSessionIds()) {
       this.sessionProviders.delete(id)
+      this.shutdownVerificationProviders.delete(id)
       // Why: sessions discovered from listProcesses may not exist in the
       // adapter's active-session set, but restart still kills that daemon.
       // oxlint-disable-next-line unicorn/no-useless-spread -- copy-safe: listeners may unsubscribe during iteration

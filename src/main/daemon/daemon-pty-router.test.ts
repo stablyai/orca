@@ -239,6 +239,43 @@ describe('DaemonPtyRouter', () => {
     expect(current.hasPty).not.toHaveBeenCalledWith('legacy-session')
   })
 
+  it('keeps multi-PTY post-shutdown verification O(T) across retained adapters', async () => {
+    const adapters = Array.from({ length: 21 }, (_, index) => createAdapter(`adapter-${index}`))
+    const sessionIds = Array.from({ length: 50 }, (_, index) => `session-${index}`)
+    for (const [index, sessionId] of sessionIds.entries()) {
+      const adapter = adapters[index % adapters.length]!
+      await adapter.spawn({ sessionId, cols: 80, rows: 24 })
+    }
+    const router = new DaemonPtyRouter({ current: adapters[0]!, legacy: adapters.slice(1) })
+    await router.discoverLegacySessions()
+    for (const adapter of adapters) {
+      vi.mocked(adapter.hasPty).mockClear()
+    }
+
+    for (const sessionId of sessionIds) {
+      await router.shutdown(sessionId, { immediate: true })
+      expect(router.hasPty(sessionId)).toBe(false)
+    }
+
+    expect(
+      adapters.reduce((count, adapter) => count + vi.mocked(adapter.shutdown).mock.calls.length, 0)
+    ).toBe(50)
+    expect(
+      adapters.reduce((count, adapter) => count + vi.mocked(adapter.hasPty).mock.calls.length, 0)
+    ).toBe(50)
+  })
+
+  it('invalidates stopped evidence when the same session id spawns again', async () => {
+    const current = createAdapter('current', ['reused-session'])
+    const router = new DaemonPtyRouter({ current, legacy: [] })
+
+    await router.shutdown('reused-session', { immediate: true })
+    expect(router.hasPty('reused-session')).toBe(false)
+    await router.spawn({ sessionId: 'reused-session', cols: 80, rows: 24 })
+
+    expect(router.hasPty('reused-session')).toBe(true)
+  })
+
   it('fails listProcesses closed when any routed adapter cannot list sessions', async () => {
     const current = createAdapter('current', ['current-session'])
     const legacy = createAdapter('legacy', ['legacy-session'])

@@ -22377,6 +22377,50 @@ describe('OrcaRuntimeService', () => {
     expect(stopAndWait).not.toHaveBeenCalled()
   })
 
+  it('joins identical cross-surface worktree removals in the runtime owner', async () => {
+    const runtime = new OrcaRuntimeService(store)
+    const removal = deferred<{ warning: string }>()
+    const operation = vi.fn(() => removal.promise)
+    const opts = { force: true, runHooks: false, hostId: 'local' }
+
+    const first = runtime.runWithWorktreeRemovalDedup(TEST_WORKTREE_ID, opts, operation)
+    const second = runtime.runWithWorktreeRemovalDedup(TEST_WORKTREE_ID, opts, vi.fn())
+    removal.resolve({ warning: 'joined' })
+
+    await expect(Promise.all([first, second])).resolves.toEqual([
+      { warning: 'joined' },
+      { warning: 'joined' }
+    ])
+    expect(operation).toHaveBeenCalledTimes(1)
+  })
+
+  it('rejects cross-surface worktree removals with different options', async () => {
+    const runtime = new OrcaRuntimeService(store)
+    const removal = deferred<Record<string, never>>()
+    const first = runtime.runWithWorktreeRemovalDedup(
+      TEST_WORKTREE_ID,
+      { force: false, runHooks: true, hostId: 'local' },
+      () => removal.promise
+    )
+
+    await expect(
+      runtime.runWithWorktreeRemovalDedup(
+        TEST_WORKTREE_ID,
+        { force: true, runHooks: true, hostId: 'local' },
+        vi.fn()
+      )
+    ).rejects.toThrow('Worktree deletion already in progress')
+    await expect(
+      runtime.runWithWorktreeRemovalDedup(
+        TEST_WORKTREE_ID,
+        { force: false, runHooks: false, hostId: 'local', mode: 'forget' },
+        vi.fn()
+      )
+    ).rejects.toThrow('Worktree deletion already in progress')
+    removal.resolve({})
+    await first
+  })
+
   it('stops exactly the expected live PTYs for a worktree', async () => {
     const runtime = new OrcaRuntimeService(store)
     const stopped: string[] = []

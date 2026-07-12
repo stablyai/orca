@@ -290,6 +290,7 @@ describe('registerWorktreeHandlers', () => {
     createTerminal: ReturnType<typeof vi.fn>
     splitTerminal: ReturnType<typeof vi.fn>
     notifyWorktreesChangedForRemoteClients: ReturnType<typeof vi.fn>
+    runWithWorktreeRemovalDedup: ReturnType<typeof vi.fn>
     runWithWorktreePtyTeardown: ReturnType<typeof vi.fn>
     beginWorktreePtyTeardown: ReturnType<typeof vi.fn>
   }
@@ -504,6 +505,18 @@ describe('registerWorktreeHandlers', () => {
         paneRuntimeId: -1
       }),
       notifyWorktreesChangedForRemoteClients: vi.fn(),
+      runWithWorktreeRemovalDedup: vi.fn(
+        async (
+          _worktreeId: string,
+          _opts: {
+            force: boolean
+            runHooks: boolean
+            hostId?: string
+            mode?: 'remove' | 'forget'
+          },
+          operation: () => Promise<unknown>
+        ) => await operation()
+      ),
       runWithWorktreePtyTeardown: vi.fn(
         async (_worktreeId: string, operation: () => Promise<unknown>) => await operation()
       ),
@@ -8020,6 +8033,75 @@ describe('registerWorktreeHandlers', () => {
     expect(mainWindow.webContents.send).toHaveBeenCalledTimes(1)
   })
 
+  it('joins concurrent renderer and runtime removals before either repeats preflight', async () => {
+    mockKnownFeatureWorktree()
+    const shared = new Map<string, { optionsKey: string; promise: Promise<unknown> }>()
+    runtimeStub.runWithWorktreeRemovalDedup.mockImplementation(
+      async (
+        worktreeId: string,
+        opts: {
+          force: boolean
+          runHooks: boolean
+          hostId?: string
+          mode?: 'remove' | 'forget'
+        },
+        operation: () => Promise<unknown>
+      ) => {
+        const key = `${opts.hostId ?? ''}\0${worktreeId}`
+        const optionsKey = `${opts.mode ?? 'remove'}:${opts.force}:${opts.runHooks}`
+        const existing = shared.get(key)
+        if (existing) {
+          if (existing.optionsKey !== optionsKey) {
+            throw new Error('Worktree deletion already in progress')
+          }
+          return await existing.promise
+        }
+        const promise = operation()
+        shared.set(key, { optionsKey, promise })
+        try {
+          return await promise
+        } finally {
+          shared.delete(key)
+        }
+      }
+    )
+    let finishRemoval = () => {}
+    removeWorktreeMock.mockImplementation(
+      () =>
+        new Promise<void>((resolve) => {
+          finishRemoval = resolve
+        })
+    )
+    const worktreeId = 'repo-1::/workspace/feature-wt'
+    const rendererRemoval = handlers['worktrees:remove'](null, {
+      worktreeId,
+      force: true
+    }) as Promise<unknown>
+    await vi.waitFor(() => expect(removeWorktreeMock).toHaveBeenCalledTimes(1))
+    const runtimeBackend = vi.fn(async () => ({ source: 'runtime' }))
+    const runRuntimeRemoval = runtimeStub.runWithWorktreeRemovalDedup as unknown as (
+      worktreeId: string,
+      opts: {
+        force: boolean
+        runHooks: boolean
+        hostId?: string
+        mode?: 'remove' | 'forget'
+      },
+      operation: () => Promise<unknown>
+    ) => Promise<unknown>
+    const runtimeRemoval = runRuntimeRemoval(
+      worktreeId,
+      { force: true, runHooks: true, hostId: 'local' },
+      runtimeBackend
+    )
+
+    finishRemoval()
+    await expect(Promise.all([rendererRemoval, runtimeRemoval])).resolves.toEqual([{}, {}])
+    expect(runtimeBackend).not.toHaveBeenCalled()
+    expect(killAllProcessesForWorktreeMock).toHaveBeenCalledTimes(1)
+    expect(removeWorktreeMock).toHaveBeenCalledTimes(1)
+  })
+
   it('rejects concurrent deletes for the same worktree id with different options', async () => {
     mockKnownFeatureWorktree()
     let removalStarted!: () => void
@@ -8511,6 +8593,20 @@ describe('registerWorktreeHandlers', () => {
   })
 
   describe('worktrees:forgetLocal', () => {
+    it('rejects a forget race while another removal owns PTY admission', async () => {
+      const worktreeId = 'repo-1::/workspace/feature-wt'
+      runtimeStub.runWithWorktreePtyTeardown.mockRejectedValueOnce(
+        new Error(`Worktree teardown is already in progress: ${worktreeId}`)
+      )
+
+      await expect(handlers['worktrees:forgetLocal'](null, { worktreeId })).rejects.toThrow(
+        'Worktree teardown is already in progress'
+      )
+
+      expect(killAllProcessesForWorktreeMock).not.toHaveBeenCalled()
+      expect(store.removeWorktreeMeta).not.toHaveBeenCalled()
+    })
+
     it('forgets a workspace pinned to a removed SSH target without touching the provider', async () => {
       const repo = {
         id: 'repo-1',

@@ -1,5 +1,5 @@
 /* oxlint-disable max-lines */
-import type { BrowserWindow } from 'electron'
+import type { BrowserWindow, IpcMainInvokeEvent } from 'electron'
 import { ipcMain } from 'electron'
 import { readFile, stat } from 'node:fs/promises'
 import { randomUUID } from 'node:crypto'
@@ -1405,7 +1405,26 @@ export function registerWorktreeHandlers(
       ? runtime.beginWorktreePtyTeardown(worktreeId)
       : Promise.resolve(() => {})
 
-  ipcMain.handle(
+  const registerCrossSurfaceWorktreeRemovalHandler = (
+    channel: string,
+    handler: (event: IpcMainInvokeEvent, args: RemoveWorktreeArgs) => Promise<RemoveWorktreeResult>
+  ): void => {
+    ipcMain.handle(channel, (event, args: RemoveWorktreeArgs) => {
+      const { repoId } = parseWorktreeId(args.worktreeId)
+      const repo = getRepoForWorktreeRemoval(store, repoId, args.hostId)
+      return runtime.runWithWorktreeRemovalDedup(
+        args.worktreeId,
+        {
+          force: args.force === true,
+          runHooks: args.skipArchive !== true,
+          ...(repo ? { hostId: getRepoExecutionHostId(repo) } : {})
+        },
+        () => handler(event, args)
+      )
+    })
+  }
+
+  registerCrossSurfaceWorktreeRemovalHandler(
     'worktrees:remove',
     async (_event, args: RemoveWorktreeArgs): Promise<RemoveWorktreeResult> => {
       const { repoId, worktreePath } = parseWorktreeId(args.worktreeId)
@@ -1922,13 +1941,36 @@ export function registerWorktreeHandlers(
     }
   )
 
+  const registerCrossSurfaceWorktreeForgetHandler = (
+    channel: string,
+    handler: (
+      event: IpcMainInvokeEvent,
+      args: Pick<RemoveWorktreeArgs, 'worktreeId' | 'hostId'>
+    ) => Promise<RemoveWorktreeResult>
+  ): void => {
+    ipcMain.handle(channel, (event, args: Pick<RemoveWorktreeArgs, 'worktreeId' | 'hostId'>) => {
+      const { repoId } = parseWorktreeId(args.worktreeId)
+      const repo = getRepoForWorktreeRemoval(store, repoId, args.hostId)
+      return runtime.runWithWorktreeRemovalDedup(
+        args.worktreeId,
+        {
+          force: false,
+          runHooks: false,
+          mode: 'forget',
+          ...(repo ? { hostId: getRepoExecutionHostId(repo) } : {})
+        },
+        () => handler(event, args)
+      )
+    })
+  }
+
   // Why: forget-locally drops a workspace from Orca without any remote Git or
   // filesystem work. It exists so a workspace pinned to a removed/disconnected
   // SSH target — whose provider is gone and whose `worktrees:remove` therefore
   // throws at requireSshGitProvider before any cleanup runs — can still be
   // cleared from the app. It never touches the remote: no worktree registration,
   // no branches, no files are deleted there.
-  ipcMain.handle(
+  registerCrossSurfaceWorktreeForgetHandler(
     'worktrees:forgetLocal',
     async (
       _event,

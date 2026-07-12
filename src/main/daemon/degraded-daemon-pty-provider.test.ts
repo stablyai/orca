@@ -168,6 +168,65 @@ describe('DegradedDaemonPtyProvider', () => {
     expect(fallback.write).not.toHaveBeenCalled()
   })
 
+  it('keeps multi-PTY post-shutdown verification O(T) across retained providers', async () => {
+    const adapters = Array.from({ length: 21 }, (_, index) =>
+      createDaemonAdapter(`adapter-${index}`)
+    )
+    const fallback = createProvider('fallback')
+    const sessionIds = Array.from({ length: 50 }, (_, index) => `session-${index}`)
+    for (const [index, sessionId] of sessionIds.entries()) {
+      const adapter = adapters[index % adapters.length]!
+      await adapter.spawn({ sessionId, cols: 80, rows: 24 })
+    }
+    const provider = new DegradedDaemonPtyProvider({
+      current: adapters[0]!,
+      legacy: adapters.slice(1),
+      fallback
+    })
+    await provider.discoverDaemonSessions()
+    for (const adapter of adapters) {
+      vi.mocked(adapter.hasPty).mockClear()
+    }
+    vi.mocked(fallback.hasPty!).mockClear()
+
+    for (const sessionId of sessionIds) {
+      await provider.shutdown(sessionId, { immediate: true })
+      expect(provider.hasPty(sessionId)).toBe(false)
+    }
+
+    expect(
+      adapters.reduce((count, adapter) => count + vi.mocked(adapter.shutdown).mock.calls.length, 0)
+    ).toBe(50)
+    expect(
+      adapters.reduce((count, adapter) => count + vi.mocked(adapter.hasPty).mock.calls.length, 0)
+    ).toBe(50)
+    expect(fallback.hasPty).not.toHaveBeenCalled()
+  })
+
+  it('invalidates stopped evidence when the same session id spawns again', async () => {
+    const current = createDaemonAdapter('daemon')
+    const fallback = createProvider('fallback', ['reused-session'])
+    const provider = new DegradedDaemonPtyProvider({ current, legacy: [], fallback })
+
+    await provider.shutdown('reused-session', { immediate: true })
+    expect(provider.hasPty('reused-session')).toBe(false)
+    await provider.spawn({ sessionId: 'reused-session', cols: 80, rows: 24 })
+
+    expect(provider.hasPty('reused-session')).toBe(true)
+  })
+
+  it('keeps shutdown verification conservative when the cached owner lacks hasPty', async () => {
+    const current = createDaemonAdapter('daemon')
+    const fallback = createProvider('fallback')
+    const provider = new DegradedDaemonPtyProvider({ current, legacy: [], fallback })
+    const session = await provider.spawn({ cols: 80, rows: 24 })
+    delete (fallback as { hasPty?: (id: string) => boolean }).hasPty
+
+    await provider.shutdown(session.id, { immediate: true })
+
+    expect(provider.hasPty(session.id)).toBe(true)
+  })
+
   it('routes authoritative recovery snapshots to the owning daemon', async () => {
     const current = createDaemonAdapter('daemon', ['daemon-session'])
     const fallback = createProvider('fallback')

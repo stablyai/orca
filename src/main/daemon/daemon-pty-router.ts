@@ -7,11 +7,13 @@ import type {
   PtySpawnOptions,
   PtySpawnResult
 } from '../providers/types'
+import { ShutdownVerificationOwnerCache } from './shutdown-verification-owner-cache'
 
 export class DaemonPtyRouter implements IPtyProvider {
   private current: DaemonPtyAdapter
   private legacy: DaemonPtyAdapter[]
   private sessionAdapters = new Map<string, DaemonPtyAdapter>()
+  private shutdownVerificationAdapters = new ShutdownVerificationOwnerCache<DaemonPtyAdapter>()
   private unsubscribers: (() => void)[] = []
   private dataListeners: ((payload: {
     id: string
@@ -47,6 +49,7 @@ export class DaemonPtyRouter implements IPtyProvider {
         const sessions = await adapter.listProcesses()
         for (const session of sessions) {
           this.sessionAdapters.set(session.id, adapter)
+          this.shutdownVerificationAdapters.delete(session.id)
         }
       } catch (error) {
         console.warn('[daemon] Failed to discover legacy daemon sessions', error)
@@ -59,14 +62,20 @@ export class DaemonPtyRouter implements IPtyProvider {
     const target = adapter ?? this.current
     const result = await target.spawn(opts)
     this.sessionAdapters.set(result.id, target)
+    this.shutdownVerificationAdapters.delete(result.id)
     return result
   }
 
   async attach(id: string): Promise<void> {
     await this.adapterFor(id).attach(id)
+    this.shutdownVerificationAdapters.delete(id)
   }
 
   hasPty(id: string): boolean {
+    const shutdownOwner = this.shutdownVerificationAdapters.take(id)
+    if (shutdownOwner) {
+      return shutdownOwner.hasPty(id)
+    }
     const routed = this.sessionAdapters.get(id)
     if (routed) {
       return routed.hasPty(id)
@@ -95,7 +104,8 @@ export class DaemonPtyRouter implements IPtyProvider {
   }
 
   async shutdown(id: string, opts: { immediate?: boolean; keepHistory?: boolean }): Promise<void> {
-    await this.adapterFor(id).shutdown(id, opts)
+    const owner = this.adapterFor(id)
+    await owner.shutdown(id, opts)
     // Why: sleep passes keepHistory=true and re-spawns against the same
     // sessionId on wake. If we delete the routing entry here, adapterFor()
     // falls back to `this.current` on wake — for a session that originally
@@ -104,6 +114,7 @@ export class DaemonPtyRouter implements IPtyProvider {
     // losing the cold-restore from the legacy adapter's history dir.
     if (!opts.keepHistory) {
       this.sessionAdapters.delete(id)
+      this.shutdownVerificationAdapters.remember(id, owner)
     }
   }
 
@@ -156,6 +167,9 @@ export class DaemonPtyRouter implements IPtyProvider {
 
   async revive(state: string): Promise<void> {
     await this.current.revive(state)
+    // Why: serialized revive state is opaque here; discard negative evidence
+    // so a restored id is discovered from its owning adapter instead.
+    this.shutdownVerificationAdapters.clear()
   }
 
   async listProcesses(): Promise<PtyProcessInfo[]> {
@@ -236,15 +250,18 @@ export class DaemonPtyRouter implements IPtyProvider {
       }
       for (const id of result.alive) {
         this.sessionAdapters.set(id, adapter)
+        this.shutdownVerificationAdapters.delete(id)
       }
       for (const id of result.killed) {
         this.sessionAdapters.delete(id)
+        this.shutdownVerificationAdapters.delete(id)
       }
     }
     return { alive, killed }
   }
 
   dispose(): void {
+    this.shutdownVerificationAdapters.clear()
     for (const unsubscribe of this.unsubscribers.splice(0)) {
       unsubscribe()
     }

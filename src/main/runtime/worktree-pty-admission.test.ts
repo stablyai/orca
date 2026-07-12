@@ -39,7 +39,7 @@ describe('WorktreePtyAdmission', () => {
     await expect(teardown).resolves.toBeUndefined()
   })
 
-  it('serializes teardown owners from different removal entry points', async () => {
+  it('rejects a duplicate teardown owner from another removal entry point', async () => {
     const admission = new WorktreePtyAdmission()
     let releaseFirst = () => {}
     const order: string[] = []
@@ -51,14 +51,16 @@ describe('WorktreePtyAdmission', () => {
           releaseFirst = resolve
         })
     )
-    const second = admission.runTeardown('w1', async () => {
-      order.push('second')
-    })
+    const second = admission.runTeardown('w1', async () => order.push('second'))
+    const secondRejection = expect(second).rejects.toThrow(
+      'Worktree teardown is already in progress'
+    )
 
     await vi.waitFor(() => expect(order).toEqual(['first']))
+    await secondRejection
     releaseFirst()
 
-    await Promise.all([first, second])
-    expect(order).toEqual(['first', 'second'])
+    await first
+    expect(order).toEqual(['first'])
   })
 })
