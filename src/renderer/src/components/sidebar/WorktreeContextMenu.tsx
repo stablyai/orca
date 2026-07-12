@@ -444,13 +444,28 @@ const WorktreeContextMenu = React.memo(function WorktreeContextMenu({
   const parallelSets = useMemo(
     () =>
       workbenchViews
-        .map((view) => ({
-          id: view.id,
-          focusedWorktreeId: view.focusedWorktreeId,
-          leafIds: collectLeafWorktreeIds(view.layout)
-        }))
+        .map((view) => {
+          const leafIds = collectLeafWorktreeIds(view.layout)
+          return {
+            id: view.id,
+            focusedWorktreeId: view.focusedWorktreeId,
+            leafIds,
+            // Why: "main + main" across projects is ambiguous — compose
+            // project:branch so distinct projects on the same branch are told apart.
+            label: leafIds
+              .map((id) => {
+                const leaf = worktreeMap.get(id)
+                if (!leaf) {
+                  return id
+                }
+                const project = repoMap.get(leaf.repoId)?.displayName ?? leaf.repoId
+                return `${project}:${leaf.displayName}`
+              })
+              .join(' + ')
+          }
+        })
         .filter((set) => set.leafIds.length >= 2),
-    [workbenchViews]
+    [workbenchViews, worktreeMap, repoMap]
   )
   const handleInsertIntoParallelSet = useCallback(
     (targetWorktreeId: string) => {
@@ -791,11 +806,7 @@ const WorktreeContextMenu = React.memo(function WorktreeContextMenu({
                         disabled={isDeleting}
                       >
                         <Columns2 className="size-3.5" />
-                        <span className="truncate">
-                          {set.leafIds
-                            .map((id) => worktreeMap.get(id)?.displayName ?? id)
-                            .join(' + ')}
-                        </span>
+                        <span className="truncate">{set.label}</span>
                       </DropdownMenuItem>
                     ))}
                     <DropdownMenuSeparator />
