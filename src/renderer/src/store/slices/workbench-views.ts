@@ -98,14 +98,16 @@ export const createWorkbenchViewsSlice: StateCreator<AppState, [], [], Workbench
     },
 
     closeActiveWorkbenchPane: (worktreeId) => {
+      const collapsedViewId = get().activeWorkbenchViewId
       set((s) => viewModel.closeActivePane(s, worktreeId))
       // Move the active worktree to the surviving focused pane first...
       syncActiveWorktree()
-      // ...then, once the layout has collapsed below 2 panes, drop the workbench
-      // view entirely so the workbench reverts cleanly to the normal
-      // single-worktree behavior — no lingering view can hijack navigation.
-      if (viewModel.getVisibleWorktreeIds(get()).length < 2) {
-        set(() => viewModel.EMPTY_WORKBENCH_VIEW_STATE)
+      // ...then, if THIS set collapsed below 2 panes, drop only that one view —
+      // other parallel sets stay. activeWorktreeId already points at the
+      // survivor, so the membership gate shows it as a normal single view (no
+      // surprising jump into another set).
+      if (collapsedViewId && viewModel.getVisibleWorktreeIds(get()).length < 2) {
+        set((s) => viewModel.closeWorkbenchView(s, collapsedViewId))
       }
     },
 
@@ -117,13 +119,13 @@ export const createWorkbenchViewsSlice: StateCreator<AppState, [], [], Workbench
         get().setActiveWorktree(worktreeId)
         return
       }
-      // Preserve only an already-parallel (>= 2 leaf) view. Otherwise — no view,
-      // or a stale single-leaf view left over after normal navigation — reseed a
-      // fresh view from the CURRENT worktree so parallel always pairs whatever is
-      // actually on screen, not a worktree the user has since navigated away from.
+      // If already viewing a parallel set (>= 2 panes), add to it in place.
+      // Otherwise start a NEW set from the current worktree — appended, not
+      // replacing any other sets — so multiple parallel arrangements coexist and
+      // parallel always pairs whatever is actually on screen.
       const alreadyParallel = viewModel.getVisibleWorktreeIds(state).length >= 2
       if (!alreadyParallel) {
-        set(() => viewModel.singleLeafViewState(crypto.randomUUID(), current))
+        set((s) => viewModel.createSingleLeafView(s, crypto.randomUUID(), current))
       }
       set((s) => {
         const view = viewModel.getActiveWorkbenchView(s)
