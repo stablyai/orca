@@ -1060,6 +1060,74 @@ describe('orchestration RPC methods', () => {
       expect(() => method.params!.parse({ status: 'done-ish' })).toThrow()
     })
 
+    it('returns a bounded inventory projection without task content', async () => {
+      setup()
+      const first = db.createTask({ spec: 'private task specification' })
+      const second = db.createTask({ spec: 'another private specification' })
+      db.updateTaskStatus(second.id, 'completed', '{"private":"result"}')
+
+      const result = (await call('orchestration.taskList', { limit: 1 })) as {
+        tasks: { id: string; title: string; status: string }[]
+        totalCount: number
+        nextCursor: string | null
+        truncated: boolean
+      }
+
+      expect(result).toMatchObject({
+        tasks: [{ id: first.id, title: `Task ${first.id}`, status: 'ready' }],
+        totalCount: 2,
+        truncated: true
+      })
+      expect(typeof result.nextCursor).toBe('string')
+      expect(Object.keys(result)).toEqual(['tasks', 'totalCount', 'nextCursor', 'truncated'])
+      expect(JSON.stringify(result)).not.toContain('private task specification')
+      expect(JSON.stringify(result)).not.toContain('another private specification')
+      expect(JSON.stringify(result)).not.toContain('"result"')
+    })
+
+    it('continues a bounded inventory cursor', async () => {
+      setup()
+      const first = db.createTask({ spec: 'first private task' })
+      const second = db.createTask({ spec: 'second private task' })
+
+      const initial = (await call('orchestration.taskList', { limit: 1 })) as {
+        tasks: { id: string }[]
+        nextCursor: string | null
+      }
+      const continued = (await call('orchestration.taskList', {
+        limit: 1,
+        cursor: initial.nextCursor
+      })) as { tasks: { id: string }[]; totalCount: number; nextCursor: string | null }
+
+      expect([...initial.tasks, ...continued.tasks].map((task) => task.id)).toEqual([
+        first.id,
+        second.id
+      ])
+      expect(continued.totalCount).toBe(2)
+      expect(continued.nextCursor).toBeNull()
+    })
+
+    it.each([
+      { limit: 0 },
+      { limit: 1001 },
+      { cursor: 'cursor-without-limit' },
+      { limit: 1, status: 'ready' },
+      { limit: 1, ready: true },
+      { limit: 1, brief: true }
+    ])('rejects invalid bounded inventory parameters %j', (params) => {
+      const method = findMethod('orchestration.taskList')
+      expect(() => method.params!.parse(params)).toThrow()
+    })
+
+    it('fails closed for a malformed bounded inventory cursor', async () => {
+      setup()
+      db.createTask({ spec: 'private task' })
+
+      await expect(
+        call('orchestration.taskList', { limit: 1, cursor: 'not-a-cursor!' })
+      ).rejects.toThrow('Invalid bounded task inventory cursor')
+    })
+
     it('includes assignee_handle and dispatch_id for dispatched tasks', async () => {
       setup()
       const t1 = db.createTask({ spec: 'ready work' })

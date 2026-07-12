@@ -16,6 +16,12 @@ import type {
 } from './types'
 import { buildOrchestrationTaskDisplayMetadata } from '../../../shared/orchestration-task-display'
 import { parsePaneKey } from '../../../shared/stable-pane-id'
+import {
+  createBoundedTaskInventoryCursor,
+  parseBoundedTaskInventoryCursor,
+  type BoundedTaskInventoryCursor,
+  type BoundedTaskInventoryPage
+} from './bounded-task-inventory'
 
 // Why: leaf UUID is the remint-stable pane identity; the tab half changes on
 // break-out. Exact string match covers legacy/unparseable keys.
@@ -60,6 +66,7 @@ const SCHEMA_VERSION = 6
 
 export class OrchestrationDb {
   private db: Database.Database
+  private readonly boundedTaskInventoryCursorSecret = randomBytes(32)
 
   constructor(dbPath: string | ':memory:') {
     this.db = new Database(dbPath)
@@ -518,6 +525,117 @@ export class OrchestrationDb {
         .all(filter.status) as TaskRow[]
     }
     return this.db.prepare('SELECT * FROM tasks ORDER BY created_at').all() as TaskRow[]
+  }
+
+  listBoundedTaskInventory(input: { limit: number; cursor?: string }): BoundedTaskInventoryPage {
+    if (!Number.isInteger(input.limit) || input.limit < 1 || input.limit > 1000) {
+      throw new Error('Invalid bounded task inventory limit')
+    }
+    const cursor =
+      input.cursor === undefined
+        ? undefined
+        : parseBoundedTaskInventoryCursor(input.cursor, this.boundedTaskInventoryCursorSecret)
+    const savepoint = `bounded_task_inventory_${randomBytes(6).toString('hex')}`
+    let savepointOpen = false
+    // Why: this keeps the page reads on one snapshot while composing with a
+    // caller-owned transaction; BEGIN would reject that nested use.
+    this.db.exec(`SAVEPOINT ${savepoint}`)
+    savepointOpen = true
+    try {
+      const snapshot = cursor ?? this.createBoundedTaskInventorySnapshot()
+      if (cursor) {
+        this.verifyBoundedTaskInventorySnapshot(cursor)
+      }
+
+      let page: BoundedTaskInventoryPage
+      if (!snapshot) {
+        page = { tasks: [], totalCount: 0, nextCursor: null, truncated: false }
+      } else {
+        // Why: this projection deliberately bypasses task display metadata because
+        // legacy metadata can be derived from a task's private specification.
+        const rows = this.db
+          .prepare(
+            `SELECT rowid AS row_id, id, status
+             FROM tasks
+             WHERE rowid <= ? AND rowid > ?
+             ORDER BY rowid ASC
+             LIMIT ?`
+          )
+          .all(snapshot.ceilingRowId, snapshot.lastRowId, input.limit + 1) as {
+          row_id: number
+          id: string
+          status: TaskStatus
+        }[]
+        const hasNextPage = rows.length > input.limit
+        const taskRows = hasNextPage ? rows.slice(0, input.limit) : rows
+        const lastRow = taskRows.at(-1)
+        const nextCursor =
+          hasNextPage && lastRow
+            ? createBoundedTaskInventoryCursor(
+                {
+                  ...snapshot,
+                  lastRowId: lastRow.row_id
+                },
+                this.boundedTaskInventoryCursorSecret
+              )
+            : null
+        page = {
+          tasks: taskRows.map((row) => ({
+            id: row.id,
+            title: `Task ${row.id}`,
+            status: row.status
+          })),
+          totalCount: snapshot.totalCount,
+          nextCursor,
+          truncated: nextCursor !== null
+        }
+      }
+      this.db.exec(`RELEASE SAVEPOINT ${savepoint}`)
+      savepointOpen = false
+      return page
+    } catch (err) {
+      if (savepointOpen) {
+        try {
+          this.db.exec(`ROLLBACK TO SAVEPOINT ${savepoint}`)
+        } finally {
+          this.db.exec(`RELEASE SAVEPOINT ${savepoint}`)
+        }
+      }
+      throw err
+    }
+  }
+
+  private createBoundedTaskInventorySnapshot(): BoundedTaskInventoryCursor | undefined {
+    const anchor = this.db
+      .prepare('SELECT rowid AS row_id, id FROM tasks ORDER BY rowid DESC LIMIT 1')
+      .get() as { row_id: number; id: string } | undefined
+    if (!anchor) {
+      return undefined
+    }
+    const count = this.db
+      .prepare('SELECT COUNT(*) AS total_count FROM tasks WHERE rowid <= ?')
+      .get(anchor.row_id) as { total_count: number }
+    return {
+      version: 1,
+      ceilingRowId: anchor.row_id,
+      anchorId: anchor.id,
+      totalCount: count.total_count,
+      lastRowId: 0
+    }
+  }
+
+  private verifyBoundedTaskInventorySnapshot(cursor: BoundedTaskInventoryCursor): void {
+    // Why: anchor + count turn task resets, deletions, and rowid rewrites into
+    // an explicit invalid cursor instead of silently changing page membership.
+    const anchor = this.db
+      .prepare('SELECT id FROM tasks WHERE rowid = ?')
+      .get(cursor.ceilingRowId) as { id: string } | undefined
+    const count = this.db
+      .prepare('SELECT COUNT(*) AS total_count FROM tasks WHERE rowid <= ?')
+      .get(cursor.ceilingRowId) as { total_count: number }
+    if (anchor?.id !== cursor.anchorId || count.total_count !== cursor.totalCount) {
+      throw new Error('Invalid bounded task inventory cursor')
+    }
   }
 
   // Why: surfaces the active dispatch (assignee handle + dispatch context id)

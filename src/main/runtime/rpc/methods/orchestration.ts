@@ -130,13 +130,34 @@ const TaskCreateParams = z.object({
   callerTerminalHandle: OptionalString
 })
 
-const TaskListParams = z.object({
-  status: z.enum(['pending', 'ready', 'dispatched', 'completed', 'failed', 'blocked']).optional(),
-  ready: OptionalBoolean,
-  // Why: truncating specs server-side keeps `--brief` cheap over SSH/relay
-  // transports instead of shipping full specs the CLI then throws away.
-  brief: OptionalBoolean
-})
+const TaskListParams = z
+  .object({
+    status: z.enum(['pending', 'ready', 'dispatched', 'completed', 'failed', 'blocked']).optional(),
+    ready: OptionalBoolean,
+    // Why: truncating specs server-side keeps `--brief` cheap over SSH/relay
+    // transports instead of shipping full specs the CLI then throws away.
+    brief: OptionalBoolean,
+    limit: z.number().int().min(1).max(1000).optional(),
+    cursor: z.string().min(1).max(512).optional()
+  })
+  .superRefine((params, ctx) => {
+    if (params.cursor !== undefined && params.limit === undefined) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: '--cursor requires --limit',
+        path: ['cursor']
+      })
+    }
+    if (
+      params.limit !== undefined &&
+      (params.status !== undefined || params.ready !== undefined || params.brief !== undefined)
+    ) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: '--limit cannot be combined with --status, --ready, or --brief'
+      })
+    }
+  })
 
 const TaskUpdateParams = z.object({
   id: requiredString('Missing --id'),
@@ -423,6 +444,9 @@ export const ORCHESTRATION_METHODS: RpcMethod[] = [
     params: TaskListParams,
     handler: (params, { runtime }) => {
       const db = runtime.getOrchestrationDb()
+      if (params.limit !== undefined) {
+        return db.listBoundedTaskInventory({ limit: params.limit, cursor: params.cursor })
+      }
       // Why: listTasksWithDispatch returns the same rows as listTasks plus
       // assignee_handle + dispatch_id joined in for tasks that currently have an
       // active dispatch. Non-dispatched tasks get NULL for those fields, so

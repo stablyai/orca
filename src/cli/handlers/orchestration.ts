@@ -80,6 +80,67 @@ type MessageSummary = {
   read?: number
 }
 
+type BoundedTaskInventoryResult = {
+  tasks: { id: string; title: string; status: string }[]
+  totalCount: number
+  nextCursor: string | null
+  truncated: boolean
+}
+
+function getBoundedTaskInventoryResult(value: unknown): BoundedTaskInventoryResult {
+  if (!isBoundedTaskInventoryResult(value)) {
+    throw new RuntimeClientError(
+      'invalid_response',
+      'Runtime did not return a valid bounded inventory response.'
+    )
+  }
+  return value
+}
+
+function isBoundedTaskInventoryResult(value: unknown): value is BoundedTaskInventoryResult {
+  if (!hasExactKeys(value, ['tasks', 'totalCount', 'nextCursor', 'truncated'])) {
+    return false
+  }
+  const { tasks, totalCount, nextCursor, truncated } = value
+  return (
+    Array.isArray(tasks) &&
+    tasks.length <= 1000 &&
+    tasks.every(isBoundedTaskInventoryTask) &&
+    typeof totalCount === 'number' &&
+    Number.isSafeInteger(totalCount) &&
+    totalCount >= tasks.length &&
+    (nextCursor === null || (typeof nextCursor === 'string' && nextCursor.length <= 512)) &&
+    typeof truncated === 'boolean' &&
+    truncated === (nextCursor !== null)
+  )
+}
+
+function isBoundedTaskInventoryTask(
+  value: unknown
+): value is BoundedTaskInventoryResult['tasks'][number] {
+  if (!hasExactKeys(value, ['id', 'title', 'status'])) {
+    return false
+  }
+  return (
+    typeof value.id === 'string' &&
+    value.id.length > 0 &&
+    value.id.length <= 256 &&
+    typeof value.title === 'string' &&
+    value.title.length > 0 &&
+    value.title.length <= 512 &&
+    typeof value.status === 'string' &&
+    TASK_STATUS_VALUES.includes(value.status as (typeof TASK_STATUS_VALUES)[number])
+  )
+}
+
+function hasExactKeys(value: unknown, expectedKeys: string[]): value is Record<string, unknown> {
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) {
+    return false
+  }
+  const keys = Object.keys(value)
+  return keys.length === expectedKeys.length && keys.every((key) => expectedKeys.includes(key))
+}
+
 function getOptionalStructuredMessagePayload(
   flags: Map<string, string | boolean>
 ): string | undefined {
@@ -335,6 +396,31 @@ function getOptionalPositiveIntegerValueFlag(
   return value
 }
 
+function getBoundedTaskInventoryLimit(flags: Map<string, string | boolean>): number | undefined {
+  if (!flags.has('limit')) {
+    return undefined
+  }
+  const raw = flags.get('limit')
+  if (typeof raw !== 'string' || !/^(?:[1-9]\d{0,2}|1000)$/.test(raw)) {
+    throw new RuntimeClientError(
+      'invalid_argument',
+      '--limit must be a canonical integer from 1 to 1000.'
+    )
+  }
+  return Number(raw)
+}
+
+function getBoundedTaskInventoryCursor(flags: Map<string, string | boolean>): string | undefined {
+  if (!flags.has('cursor')) {
+    return undefined
+  }
+  const raw = flags.get('cursor')
+  if (typeof raw !== 'string' || raw.length === 0 || raw.length > 512) {
+    throw new RuntimeClientError('invalid_argument', 'Invalid --cursor.')
+  }
+  return raw
+}
+
 function rejectLifecycleGroupRecipient(type: string | undefined, to: string): void {
   if ((type === 'worker_done' || type === 'heartbeat') && to.startsWith('@')) {
     throw new RuntimeClientError('invalid_argument', getLifecycleGroupRecipientError(type))
@@ -533,6 +619,32 @@ export const ORCHESTRATION_HANDLERS: Record<string, CommandHandler> = {
   },
 
   'orchestration task-list': async ({ flags, client, json }) => {
+    const limit = getBoundedTaskInventoryLimit(flags)
+    const cursor = getBoundedTaskInventoryCursor(flags)
+    if (cursor !== undefined && limit === undefined) {
+      throw new RuntimeClientError('invalid_argument', '--cursor requires --limit.')
+    }
+    // Why: retain this guard alongside RPC validation so older runtimes cannot silently ignore conflicts.
+    if (limit !== undefined && (flags.has('status') || flags.has('ready') || flags.has('brief'))) {
+      throw new RuntimeClientError(
+        'invalid_argument',
+        '--limit cannot be combined with --status, --ready, or --brief.'
+      )
+    }
+    if (limit !== undefined) {
+      const response = await client.call<unknown>('orchestration.taskList', { limit, cursor })
+      // Why: older runtimes strip unknown params and return full task rows; bounded
+      // mode must reject that shape rather than printing a private legacy projection.
+      const result = { ...response, result: getBoundedTaskInventoryResult(response.result) }
+      printResult(result, json, (r) => {
+        if (r.tasks.length === 0) {
+          return 'No tasks.'
+        }
+        const tasks = r.tasks.map((task) => `${task.id} [${task.status}] ${task.title}`).join('\n')
+        return r.truncated ? `${tasks}\n${r.totalCount} total; more available.` : tasks
+      })
+      return
+    }
     const brief = flags.has('brief')
     const result = await client.call<{
       tasks: {

@@ -305,6 +305,9 @@ exit 1
     const repo = join(root, 'repo')
     mkdirSync(repo)
     runGit(repo, ['init'])
+    // Why: a user-level core.hooksPath would otherwise bypass this fixture's
+    // repository-local commit-msg hook and make the test host-dependent.
+    runGit(repo, ['config', 'core.hooksPath', join(repo, '.git', 'hooks')])
     runGit(repo, ['config', 'user.name', 'Orca Test'])
     runGit(repo, ['config', 'user.email', 'orca-test@example.com'])
     const hookPath = join(repo, '.git', 'hooks', 'commit-msg')

@@ -454,6 +454,9 @@ function formatCommandFlagHelp(flag: string, commandPath: string[]): string {
   if (command === 'orchestration task-create' && flag === 'display-name') {
     return '--display-name <text> UI label shown for dispatched worker rows'
   }
+  if (command === 'orchestration task-list' && flag === 'cursor') {
+    return '--cursor <opaque>      Opaque pagination cursor from a previous bounded task-list page'
+  }
   if (flag === 'key' && command === 'computer hotkey') {
     return '--key <key-combo>      Modifier chord with one key, e.g. CmdOrCtrl+A'
   }

@@ -80,9 +80,14 @@ export const ORCHESTRATION_COMMAND_SPECS: CommandSpec[] = [
   {
     path: ['orchestration', 'task-list'],
     summary: 'List orchestration tasks',
-    usage: 'orca orchestration task-list [--status <status>] [--ready] [--brief] [--json]',
-    allowedFlags: [...GLOBAL_FLAGS, 'status', 'ready', 'brief'],
-    notes: ['--brief collapses whitespace and caps each spec at 160 characters.']
+    usage:
+      'orca orchestration task-list [--status <status>] [--ready] [--brief] [--json]\n' +
+      '  orca orchestration task-list --limit <1..1000> [--cursor <opaque>] [--json]',
+    allowedFlags: [...GLOBAL_FLAGS, 'status', 'ready', 'brief', 'limit', 'cursor'],
+    notes: [
+      '--limit cannot be combined with --status, --ready, or --brief.',
+      '--brief collapses whitespace and caps each spec at 160 characters.'
+    ]
   },
   {
     path: ['orchestration', 'task-update'],
