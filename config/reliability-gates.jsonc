@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "updatedAt": "2026-07-10",
+  "updatedAt": "2026-07-11",
   "policy": {
     "maturityLevels": [
       "experimental",
@@ -389,6 +389,109 @@
         "WSL UNC paths bypass the probe by design and have no live existence-recovery run; Linux, Windows, and mobile/API strictness are not directly exercised."
       ],
       "demotionRule": "Demote or quarantine if the gate flakes without a product bug, if an existing directory is ever remapped away from the requested cwd, or if a reattach/remote/API caller can engage the fallback."
+    },
+    {
+      "id": "agent-status.pi-hook-liveness",
+      "title": "Pi status hooks cannot stall a turn or complete a live runtime",
+      "maturity": "experimental",
+      "protection": "partial",
+      "owner": "agent-session",
+      "layer": "main-provider-contract",
+      "surfaces": [
+        "Pi and OMP managed extensions",
+        "agent status hooks",
+        "runtime reload and session replacement",
+        "loopback restart and stall recovery"
+      ],
+      "platforms": [
+        "macos",
+        "linux",
+        "windows"
+      ],
+      "providers": [
+        "local",
+        "daemon",
+        "ssh",
+        "wsl",
+        "remote-runtime"
+      ],
+      "coveredPlatforms": [
+        "macos"
+      ],
+      "coveredProviders": [],
+      "coverageNotes": "Local macOS execution of the generated Pi/OMP extension plus the shared hook normalizer. WSL fallback behavior is covered with mocked native-fetch failure and Windows curl handoff. Daemon PTYs use the same generated extension without a distinct delivery path. SSH/relay ingest uses the shared normalizer, but no live remote Pi process is exercised.",
+      "motivatingLinks": [
+        "https://github.com/stablyai/orca/issues/7791",
+        "https://github.com/stablyai/orca/pull/7802",
+        "https://github.com/stablyai/orca/pull/7838"
+      ],
+      "invariant": "Orca status reporting must return synchronously from every Pi/OMP extension handler, retain at most one active request and one latest pending snapshot, and abandon stalled loopback delivery within one second. A Pi session_shutdown event cannot mark a turn done because Pi also emits it for reload, new, resume, and fork while the PTY remains alive; only agent_end proves turn completion, while real process exit is cleared by PTY teardown.",
+      "oracle": "Execute the generated extension with a fetch that remains pending and assert the Pi handler returns before delivery; emit three statuses during the stall and assert exactly one request is active and only the latest pending status is sent next; advance fake time by one second and assert the active signal aborts and the latest status proceeds. Through the shared normalizer, assert session_shutdown yields no status while agent_end still yields done.",
+      "commands": [
+        "pnpm exec vitest run --config config/vitest.config.ts src/main/pi/agent-status-extension-source.test.ts src/main/agent-hooks/server.test.ts --maxWorkers=1"
+      ],
+      "testFiles": [
+        "src/main/pi/agent-status-extension-source.test.ts",
+        "src/main/agent-hooks/server.test.ts"
+      ],
+      "assertionRefs": [
+        {
+          "file": "src/main/pi/agent-status-extension-source.test.ts",
+          "assertions": [
+            "a pending loopback fetch does not keep the Pi event handler unresolved",
+            "three events during a stall produce one active request and one request for only the latest pending status",
+            "the one-second delivery deadline aborts the active request and advances the latest pending status",
+            "the managed status extension does not register session_shutdown as a completion event",
+            "WSL native-fetch failures still hand off to a detached Windows curl process"
+          ]
+        },
+        {
+          "file": "src/main/agent-hooks/server.test.ts",
+          "assertions": [
+            "session_shutdown normalizes to no status instead of done",
+            "agent_end remains the authoritative Pi/OMP done event"
+          ]
+        }
+      ],
+      "evidenceRuns": [
+        {
+          "date": "2026-07-11",
+          "runner": "local",
+          "platform": "macos",
+          "command": "pnpm exec vitest run --config config/vitest.config.ts src/main/pi/agent-status-extension-source.test.ts src/main/agent-hooks/server.test.ts --maxWorkers=1",
+          "result": "passed",
+          "durationSeconds": 1.3,
+          "summary": "2 files and 238 tests passed, including executed generated-extension liveness, latest-only queue bounds, timeout abort, WSL fallback, and Pi shutdown normalization."
+        }
+      ],
+      "runtimeBudget": {
+        "p95Seconds": 10,
+        "scope": "generated-extension and shared-normalizer unit gate"
+      },
+      "flakeHistory": {
+        "status": "unknown",
+        "evidence": "New deterministic gate with local fake-receiver and fake-timer evidence; needs CI soak before promotion."
+      },
+      "redGreenEvidence": {
+        "status": "partial",
+        "evidence": "Before the fix, the pending-fetch handler assertion remained false and session_shutdown normalized to done (2 focused failures, 233 passes). With the fix, both pass; the bounded count and deadline assertions additionally fail if latest-only coalescing or the timeout is removed. Needs saved CI evidence before blocking promotion."
+      },
+      "performanceBudget": {
+        "required": true,
+        "evidence": "Every Pi event does O(1) work and returns without awaiting I/O. Delivery retains at most one active request plus one latest pending object, uses one unref'd timer per active request, and creates no polling, provider scans, subprocesses outside the existing WSL failure fallback, or renderer work. The deterministic burst test proves three stalled events retain two delivery slots rather than an event-count-sized queue."
+      },
+      "promotionCriteria": [
+        "Run in soak for at least 100 consecutive passes or 14 days across required CI platforms.",
+        "Attach saved red/green evidence for both the unresolved-handler and false-done regressions.",
+        "Add a live Pi Electron test that stalls or restarts the hook listener during a running turn and proves terminal output continues."
+      ],
+      "knownGaps": [
+        "No live model-backed Pi turn or Electron Running-view assertion is automated; the gate executes the exact generated extension and shared normalizer below those surfaces.",
+        "An already-running Pi process keeps its previously loaded extension until Pi reloads or restarts.",
+        "During receiver unavailability, intermediate status details may be coalesced to the latest snapshot; this is intentional and bounded, but no UI test measures the temporary detail loss.",
+        "SSH/remote and Windows are not exercised with live providers; relay ingest shares normalization and WSL fallback has mocked contract coverage."
+      ],
+      "demotionRule": "Demote or quarantine if the gate flakes without a product or harness bug, if a Pi handler can again await receiver I/O, or if coalescing allows an older status to overwrite a newer one."
     },
     {
       "id": "agent-session.provider-ownership",

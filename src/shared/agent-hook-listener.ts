@@ -3313,7 +3313,7 @@ function normalizePiCompatibleEvent(
     eventName === 'tool_execution_end' ||
     eventName === 'message_end'
       ? 'working'
-      : eventName === 'agent_end' || eventName === 'session_shutdown'
+      : eventName === 'agent_end'
         ? 'done'
         : null
 
