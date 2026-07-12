@@ -43,45 +43,19 @@ describe('iOS UIKit scene lifecycle transform', () => {
   it('moves the React Native bootstrap to SceneDelegate and is idempotent', () => {
     const rewritten = rewriteAppDelegate(APP_DELEGATE_TEMPLATE)
 
-    expect(rewritten).toContain('var launchOptions: [UIApplication.LaunchOptionsKey: Any]?')
-    expect(rewritten).toContain('self.launchOptions = launchOptions')
-    expect(rewritten).toContain('configurationForConnecting')
-    expect(rewritten).toContain('configuration.delegateClass = SceneDelegate.self')
-    expect(rewritten).not.toContain('window = UIWindow(frame: UIScreen.main.bounds)')
-    expect(rewriteAppDelegate(rewritten)).toBe(rewritten)
-  })
-
-  it('rejects scene hooks added before the AppDelegate window bootstrap was removed', () => {
-    const partial = APP_DELEGATE_TEMPLATE.replace(
-      'return super.application(application, didFinishLaunchingWithOptions: launchOptions)',
-      `public func application(
-    _ application: UIApplication,
-    configurationForConnecting connectingSceneSession: UISceneSession,
-    options: UIScene.ConnectionOptions
-  ) -> UISceneConfiguration {
-    UISceneConfiguration(name: "Default Configuration", sessionRole: connectingSceneSession.role)
-  }
-
-    return super.application(application, didFinishLaunchingWithOptions: launchOptions)`
+    expect(rewritten).toContain(
+      'SceneDelegate creates the window and starts React Native under the scene lifecycle.'
     )
-
-    expect(() => rewriteAppDelegate(partial)).toThrow('partial scene lifecycle migration')
+    expect(rewritten).not.toContain('window = UIWindow(frame: UIScreen.main.bounds)')
+    expect(rewritten).not.toContain('factory.startReactNative(')
+    expect(rewriteAppDelegate(rewritten)).toBe(rewritten)
   })
 
   it('rejects a migrated marker when the AppDelegate window bootstrap is still present', () => {
     const partial = APP_DELEGATE_TEMPLATE.replace(
       'window = UIWindow(frame: UIScreen.main.bounds)',
-      `self.launchOptions = launchOptions
+      `// Why: SceneDelegate creates the window and starts React Native under the scene lifecycle.
     window = UIWindow(frame: UIScreen.main.bounds)`
-    )
-
-    expect(() => rewriteAppDelegate(partial)).toThrow('partial scene lifecycle migration')
-  })
-
-  it('rejects a migrated marker without the SceneDelegate launchOptions property', () => {
-    const partial = rewriteAppDelegate(APP_DELEGATE_TEMPLATE).replace(
-      '  var launchOptions: [UIApplication.LaunchOptionsKey: Any]?\n',
-      ''
     )
 
     expect(() => rewriteAppDelegate(partial)).toThrow('partial scene lifecycle migration')
@@ -89,7 +63,7 @@ describe('iOS UIKit scene lifecycle transform', () => {
 
   it('refuses an unknown AppDelegate template instead of silently producing a partial migration', () => {
     expect(() => rewriteAppDelegate('class AppDelegate {}')).toThrow(
-      'could not find reactNativeFactory field'
+      'AppDelegate bootstrap pattern not found'
     )
   })
 
@@ -110,9 +84,47 @@ describe('iOS UIKit scene lifecycle transform', () => {
     })
   })
 
-  it('forwards cold-start and warm-open URLs to React Native Linking', () => {
-    expect(SCENE_DELEGATE_SOURCE).toContain('connectionOptions.urlContexts.first?.url')
+  it('forwards scene lifecycle events to Expo app delegate subscribers', () => {
+    expect(SCENE_DELEGATE_SOURCE).toContain('internal import ExpoModulesCore')
+    expect(SCENE_DELEGATE_SOURCE).toContain(
+      'ExpoAppDelegateSubscriberManager.applicationDidBecomeActive'
+    )
+    expect(SCENE_DELEGATE_SOURCE).toContain(
+      'ExpoAppDelegateSubscriberManager.applicationWillResignActive'
+    )
+    expect(SCENE_DELEGATE_SOURCE).toContain(
+      'ExpoAppDelegateSubscriberManager.applicationWillEnterForeground'
+    )
+    expect(SCENE_DELEGATE_SOURCE).toContain(
+      'ExpoAppDelegateSubscriberManager.applicationDidEnterBackground'
+    )
+    expect(SCENE_DELEGATE_SOURCE).toContain('ExpoAppDelegateSubscriberManager.application(')
+  })
+
+  it('forwards cold and warm URL and universal-link events', () => {
+    expect(SCENE_DELEGATE_SOURCE).toContain(
+      'Self.route(urlContexts: connectionOptions.urlContexts)'
+    )
+    expect(SCENE_DELEGATE_SOURCE).toContain('connectionOptions.userActivities.forEach')
+    expect(SCENE_DELEGATE_SOURCE).toContain(
+      'func scene(_ scene: UIScene, openURLContexts URLContexts: Set<UIOpenURLContext>)'
+    )
+    expect(SCENE_DELEGATE_SOURCE).toContain(
+      'func scene(_ scene: UIScene, continue userActivity: NSUserActivity)'
+    )
     expect(SCENE_DELEGATE_SOURCE).toContain('RCTLinkingManager.application')
+    expect(SCENE_DELEGATE_SOURCE).toContain('options[.sourceApplication]')
+    expect(SCENE_DELEGATE_SOURCE).toContain('options[.annotation]')
+    expect(SCENE_DELEGATE_SOURCE).toContain('options[.openInPlace]')
+  })
+
+  it('uses scene-owned startup and fails loudly when AppDelegate is incomplete', () => {
+    expect(SCENE_DELEGATE_SOURCE).toContain('@objc(SceneDelegate)')
+    expect(SCENE_DELEGATE_SOURCE).toContain('UIWindow(windowScene: windowScene)')
+    expect(SCENE_DELEGATE_SOURCE).toContain('launchOptions: nil')
+    expect(SCENE_DELEGATE_SOURCE).toContain('fatalError(')
+    expect(SCENE_DELEGATE_SOURCE).toContain('func sceneDidDisconnect')
+    expect(SCENE_DELEGATE_SOURCE).toContain('window = nil')
   })
 
   it('propagates Xcode source-link errors instead of swallowing them', () => {

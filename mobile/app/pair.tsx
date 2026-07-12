@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useState } from 'react'
-import { ActivityIndicator, Linking, Pressable, StyleSheet, Text, View } from 'react-native'
+import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native'
+import * as Linking from 'expo-linking'
 import { useLocalSearchParams, useRouter } from 'expo-router'
 import { colors, radii, spacing, typography } from '../src/theme/mobile-theme'
-import { extractPairingCodeFromUrl } from '../src/transport/pairing'
+import { getInitialPairingCode } from '../src/transport/pairing'
 
 export default function PairRedirectScreen() {
   const router = useRouter()
@@ -23,8 +24,7 @@ export default function PairRedirectScreen() {
         return
       }
 
-      const initialUrl = await Linking.getInitialURL().catch(() => null)
-      const code = initialUrl ? extractPairingCodeFromUrl(initialUrl) : null
+      const code = await getInitialPairingCode(Linking)
       if (disposed) {
         return
       }

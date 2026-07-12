@@ -1,11 +1,10 @@
-const SCENE_DELEGATE_SOURCE = `import UIKit
+const SCENE_DELEGATE_SOURCE = `internal import ExpoModulesCore
 import React
+import UIKit
 
-// Why: iOS 27 / Xcode 27 UIKit requires the scene-based lifecycle. Apps that
-// only create UIWindow in AppDelegate hit EXC_BREAKPOINT in
-// UIApplicationEvaluateRuntimeIssueForNoSceneLifecycleAdoption. Move the RN
-// root window onto UIWindowScene here (Apple TN3187).
-
+// Why: Expo SDK 55 predates the scene-based lifecycle required by the iOS 27 SDK.
+// Keep this compatibility delegate aligned with Expo's scene lifecycle behavior.
+@objc(SceneDelegate)
 class SceneDelegate: UIResponder, UIWindowSceneDelegate {
   var window: UIWindow?
 
@@ -17,49 +16,104 @@ class SceneDelegate: UIResponder, UIWindowSceneDelegate {
     guard let windowScene = scene as? UIWindowScene else {
       return
     }
-    guard let appDelegate = UIApplication.shared.delegate as? AppDelegate else {
-      return
-    }
-    guard let factory = appDelegate.reactNativeFactory else {
-      return
+    guard let appDelegate = UIApplication.shared.delegate as? AppDelegate,
+      let factory = appDelegate.reactNativeFactory else {
+      fatalError(
+        "SceneDelegate could not start React Native because AppDelegate did not provide its factory."
+      )
     }
 
     let window = UIWindow(windowScene: windowScene)
     self.window = window
     appDelegate.window = window
 
-    // Why: under UIScene, cold-start orca://pair URLs land in
-    // connectionOptions.urlContexts, not UIApplication launchOptions.
-    var launchOptions = appDelegate.launchOptions ?? [:]
-    if let url = connectionOptions.urlContexts.first?.url {
-      launchOptions[UIApplication.LaunchOptionsKey.url] = url
-    }
-
+    // Scene connection options replace application launch options for links.
     factory.startReactNative(
       withModuleName: "main",
       in: window,
-      launchOptions: launchOptions
+      launchOptions: nil
     )
+
+    Self.route(urlContexts: connectionOptions.urlContexts)
+    connectionOptions.userActivities.forEach { Self.route(userActivity: $0) }
   }
 
-  // Why: warm opens arrive through the scene callback, not AppDelegate.
+  func sceneDidDisconnect(_ scene: UIScene) {
+    window = nil
+  }
+
+  // UIKit no longer sends these callbacks to AppDelegate after scene adoption.
+  func sceneDidBecomeActive(_ scene: UIScene) {
+    ExpoAppDelegateSubscriberManager.applicationDidBecomeActive(UIApplication.shared)
+  }
+
+  func sceneWillResignActive(_ scene: UIScene) {
+    ExpoAppDelegateSubscriberManager.applicationWillResignActive(UIApplication.shared)
+  }
+
+  func sceneWillEnterForeground(_ scene: UIScene) {
+    ExpoAppDelegateSubscriberManager.applicationWillEnterForeground(UIApplication.shared)
+  }
+
+  func sceneDidEnterBackground(_ scene: UIScene) {
+    ExpoAppDelegateSubscriberManager.applicationDidEnterBackground(UIApplication.shared)
+  }
+
   func scene(_ scene: UIScene, openURLContexts URLContexts: Set<UIOpenURLContext>) {
-    for context in URLContexts {
-      RCTLinkingManager.application(
+    Self.route(urlContexts: URLContexts)
+  }
+
+  func scene(_ scene: UIScene, continue userActivity: NSUserActivity) {
+    Self.route(userActivity: userActivity)
+  }
+
+  private static func route(urlContexts: Set<UIOpenURLContext>) {
+    for context in urlContexts {
+      let options = openURLOptions(from: context.options)
+      _ = ExpoAppDelegateSubscriberManager.application(
         UIApplication.shared,
         open: context.url,
-        options: [:]
+        options: options
+      )
+      _ = RCTLinkingManager.application(
+        UIApplication.shared,
+        open: context.url,
+        options: options
       )
     }
+  }
+
+  private static func openURLOptions(
+    from sceneOptions: UIScene.OpenURLOptions
+  ) -> [UIApplication.OpenURLOptionsKey: Any] {
+    var options: [UIApplication.OpenURLOptionsKey: Any] = [:]
+    if let sourceApplication = sceneOptions.sourceApplication {
+      options[.sourceApplication] = sourceApplication
+    }
+    if let annotation = sceneOptions.annotation {
+      options[.annotation] = annotation
+    }
+    options[.openInPlace] = sceneOptions.openInPlace
+    return options
+  }
+
+  private static func route(userActivity: NSUserActivity) {
+    _ = ExpoAppDelegateSubscriberManager.application(
+      UIApplication.shared,
+      continue: userActivity,
+      restorationHandler: { _ in }
+    )
+    _ = RCTLinkingManager.application(
+      UIApplication.shared,
+      continue: userActivity,
+      restorationHandler: { _ in }
+    )
   }
 }
 `
 
-const BOOTSTRAP_MIGRATED_MARKER = 'self.launchOptions = launchOptions'
-
-function hasMigratedBootstrap(contents) {
-  return contents.includes(BOOTSTRAP_MIGRATED_MARKER)
-}
+const MIGRATED_BOOTSTRAP_MARKER =
+  'SceneDelegate creates the window and starts React Native under the scene lifecycle.'
 
 function hasAppDelegateOwnedBootstrap(contents) {
   return (
@@ -68,81 +122,14 @@ function hasAppDelegateOwnedBootstrap(contents) {
   )
 }
 
-function hasSceneLaunchOptionsProperty(contents) {
-  return /\bvar\s+launchOptions\s*:\s*\[UIApplication\.LaunchOptionsKey:\s*Any\]\?/.test(contents)
-}
-
-function hasSceneLifecycleArtifacts(contents) {
-  return (
-    contents.includes('configurationForConnecting') ||
-    contents.includes('class SceneDelegate') ||
-    contents.includes('SceneDelegate owns the window under the UIScene lifecycle')
-  )
-}
-
-function throwPartialSceneLifecycleMigration() {
-  throw new Error(
-    'ios-uikit-scene-lifecycle: partial scene lifecycle migration detected; refuse ambiguous AppDelegate rewrite'
-  )
-}
-
-function insertSceneConfigurationHook(contents) {
-  if (contents.includes('configurationForConnecting')) {
-    return contents
-  }
-  const insertAfter = `return super.application(application, didFinishLaunchingWithOptions: launchOptions)
-  }`
-  const sceneHook = `return super.application(application, didFinishLaunchingWithOptions: launchOptions)
-  }
-
-  // Why: explicitly bind SceneDelegate even if module naming differs.
-  public func application(
-    _ application: UIApplication,
-    configurationForConnecting connectingSceneSession: UISceneSession,
-    options: UIScene.ConnectionOptions
-  ) -> UISceneConfiguration {
-    let configuration = UISceneConfiguration(
-      name: "Default Configuration",
-      sessionRole: connectingSceneSession.role
-    )
-    configuration.delegateClass = SceneDelegate.self
-    return configuration
-  }`
-  if (!contents.includes(insertAfter)) {
-    throw new Error(
-      'ios-uikit-scene-lifecycle: could not insert configurationForConnecting; refuse partial rewrite'
-    )
-  }
-  return contents.replace(insertAfter, sceneHook)
-}
-
 function rewriteAppDelegate(contents) {
-  if (hasMigratedBootstrap(contents)) {
-    // Why: the marker is only safe when AppDelegate no longer starts RN or
-    // owns a UIWindow; otherwise a previous partial rewrite must fail closed.
-    if (!hasSceneLaunchOptionsProperty(contents) || hasAppDelegateOwnedBootstrap(contents)) {
-      throwPartialSceneLifecycleMigration()
-    }
-    return insertSceneConfigurationHook(contents)
-  }
-  if (hasSceneLifecycleArtifacts(contents)) {
-    throwPartialSceneLifecycleMigration()
-  }
-
-  let next = contents
-  if (!/\bvar\s+launchOptions\s*:/.test(next)) {
-    const withLaunchOptions = next.replace(
-      /var reactNativeFactory: RCTReactNativeFactory\?/,
-      `var reactNativeFactory: RCTReactNativeFactory?
-  // Why: SceneDelegate starts RN after UIWindowScene connects.
-  var launchOptions: [UIApplication.LaunchOptionsKey: Any]?`
-    )
-    if (withLaunchOptions === next) {
+  if (contents.includes(MIGRATED_BOOTSTRAP_MARKER)) {
+    if (hasAppDelegateOwnedBootstrap(contents)) {
       throw new Error(
-        'ios-uikit-scene-lifecycle: could not find reactNativeFactory field to attach launchOptions'
+        'ios-uikit-scene-lifecycle: partial scene lifecycle migration detected; refuse ambiguous AppDelegate rewrite'
       )
     }
-    next = withLaunchOptions
+    return contents
   }
 
   const oldBootstrap = `#if os(iOS) || os(tvOS)
@@ -152,24 +139,14 @@ function rewriteAppDelegate(contents) {
       in: window,
       launchOptions: launchOptions)
 #endif`
-  const newBootstrap = `${BOOTSTRAP_MIGRATED_MARKER}
-
-    // Why: SceneDelegate owns the window under the iOS 27 lifecycle.`
-  const beforeBootstrap = next
-  if (!next.includes(oldBootstrap)) {
-    next = next.replace(
-      /window = UIWindow\(frame: UIScreen\.main\.bounds\)\s*\n\s*factory\.startReactNative\(\s*\n\s*withModuleName: "main",\s*\n\s*in: window,\s*\n\s*launchOptions: launchOptions\)/,
-      `${BOOTSTRAP_MIGRATED_MARKER}\n    // SceneDelegate owns the window under the iOS 27 lifecycle.`
-    )
-  } else {
-    next = next.replace(oldBootstrap, newBootstrap)
-  }
-  if (next === beforeBootstrap) {
+  const newBootstrap = `    // Why: ${MIGRATED_BOOTSTRAP_MARKER}`
+  const rewritten = contents.replace(oldBootstrap, newBootstrap)
+  if (rewritten === contents) {
     throw new Error(
       'ios-uikit-scene-lifecycle: AppDelegate bootstrap pattern not found; refuse silent no-op rewrite'
     )
   }
-  return insertSceneConfigurationHook(next)
+  return rewritten
 }
 
 function applySceneInfoPlist(infoPlist) {

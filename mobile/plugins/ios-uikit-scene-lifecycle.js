@@ -12,8 +12,8 @@ const {
   rewriteAppDelegate
 } = require('./ios-uikit-scene-lifecycle-transform')
 
-// Why: Expo still emits an AppDelegate-owned UIWindow, which iOS 27 aborts.
-// Apply a deterministic SceneDelegate migration during every prebuild.
+// Why: Expo SDK 55 emits an AppDelegate-owned UIWindow, which the iOS 27 SDK aborts.
+// Remove this compatibility plugin once the app upgrades to Expo's scene-based template.
 
 function withSceneInfoPlist(config) {
   return withInfoPlist(config, (cfg) => {

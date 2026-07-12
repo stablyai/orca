@@ -11,8 +11,9 @@ import { RpcClientProvider } from '../src/transport/client-context'
 import { getNotificationNavigationTarget } from '../src/notifications/notification-routing'
 import { useOpenNotificationRoute } from '../src/notifications/use-open-notification-route'
 import { loadHosts } from '../src/transport/host-store'
-import { extractPairingCodeFromUrl } from '../src/transport/pairing'
+import { extractPairingCodeFromUrl, getInitialPairingCode } from '../src/transport/pairing'
 import { recoverMobileRelayPairing } from '../src/transport/mobile-relay-pairing-recovery'
+
 
 // Why: keeps the native splash screen visible until the React tree is mounted
 // and ready to render. Without this the user sees a blank white/black frame
@@ -46,23 +47,27 @@ export default function RootLayout() {
 
   // Why: route `orca://pair?...` deep links to the confirm screen so
   // the same pairing flow runs whether the link arrived via QR scan,
-  // paste, AirDrop, Messages, or `xcrun simctl openurl`. getInitialURL
-  // covers cold-start (link tapped while app was closed); the listener
-  // covers warm-start (link tapped while app is in memory).
+  // paste, AirDrop, Messages, or `xcrun simctl openurl`. The native URL
+  // registry and legacy fallback cover cold-start; the listener covers
+  // warm-start (link tapped while app is in memory).
   useEffect(() => {
+    function handleCode(code: string) {
+      // Why: Android camera launches can leave Expo Router's unmatched
+      // `orca://pair` route underneath this screen; replacing keeps cancel
+      // and edge-back from revealing the router error page.
+      router.replace({ pathname: '/pair-confirm', params: { code } })
+    }
+
     function handleUrl(url: string) {
       const code = extractPairingCodeFromUrl(url)
       if (code) {
-        // Why: Android camera launches can leave Expo Router's unmatched
-        // `orca://pair` route underneath this screen; replacing keeps cancel
-        // and edge-back from revealing the router error page.
-        router.replace({ pathname: '/pair-confirm', params: { code } })
+        handleCode(code)
       }
     }
 
-    void Linking.getInitialURL().then((url) => {
-      if (url) {
-        handleUrl(url)
+    void getInitialPairingCode(Linking).then((code) => {
+      if (code) {
+        handleCode(code)
       }
     })
 
