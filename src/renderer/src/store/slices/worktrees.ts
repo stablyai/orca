@@ -35,6 +35,7 @@ import {
   isRuntimeScopeForbiddenError,
   RuntimeRpcCallError
 } from '../../runtime/runtime-rpc-client'
+import { parseRemoteRuntimePtyId } from '../../runtime/runtime-terminal-stream'
 import { toRuntimeWorktreeSelector } from '../../runtime/runtime-worktree-selector'
 import { getHostedReviewCacheKey, refreshHostedReviewCard } from './hosted-review'
 import { isPositiveHostedReviewNumber } from '../../../../shared/hosted-review'
@@ -1904,11 +1905,33 @@ function buildWorktreePurgeState(s: AppState, worktreeIds: string[]): Partial<Ap
 
   // Collect every tab id (and removed file id) we are about to orphan.
   const doomedTabIds = new Set<string>()
-  // Why: some terminal/agent maps are keyed by ptyId, not tabId. Collect the
-  // doomed panes' ptyIds now (while ptyIdsByTabId is still populated) so this
-  // bulk path can evict them the same way shutdownWorktreeTerminals does on the
-  // single-removeWorktree path.
+  // Why: some terminal/agent maps are keyed by ptyId, not tabId. Collect every
+  // durable wake hint too, because slept panes have already left the live index.
   const doomedPtyIds = new Set<string>()
+  const addPtyIdAliases = (target: Set<string>, ptyId: string | null | undefined): void => {
+    if (!ptyId) {
+      return
+    }
+    target.add(ptyId)
+    const remoteHandle = parseRemoteRuntimePtyId(ptyId)?.handle
+    if (remoteHandle) {
+      target.add(remoteHandle)
+    }
+  }
+  const addTabPtyIds = (
+    target: Set<string>,
+    tabId: string,
+    tabPtyId: string | null | undefined
+  ): void => {
+    for (const ptyId of s.ptyIdsByTabId?.[tabId] ?? []) {
+      addPtyIdAliases(target, ptyId)
+    }
+    addPtyIdAliases(target, tabPtyId)
+    addPtyIdAliases(target, s.lastKnownRelayPtyIdByTabId?.[tabId])
+    for (const ptyId of Object.values(s.terminalLayoutsByTabId?.[tabId]?.ptyIdsByLeafId ?? {})) {
+      addPtyIdAliases(target, ptyId)
+    }
+  }
   const doomedBrowserWorkspaceIds = new Set<string>()
   const doomedPageIds = new Set<string>()
   const removedFileIds = new Set<string>()
@@ -1917,9 +1940,7 @@ function buildWorktreePurgeState(s: AppState, worktreeIds: string[]): Partial<Ap
       doomedTabIds.add(tab.id)
       // Null-tolerant like the omit* helpers below: some callers pass partial
       // state that omits this slice; the production store always inits it to {}.
-      for (const ptyId of s.ptyIdsByTabId?.[tab.id] ?? []) {
-        doomedPtyIds.add(ptyId)
-      }
+      addTabPtyIds(doomedPtyIds, tab.id, tab.ptyId)
       // Why: a removed worktree's panes are gone for good, so drop their
       // hibernation output epochs from that module-level map (mirrors the
       // hosted-review prune above). A future pane mints a fresh leafId at epoch 0.
@@ -1931,6 +1952,17 @@ function buildWorktreePurgeState(s: AppState, worktreeIds: string[]): Partial<Ap
     // Why: drop this worktree's auto-derived detached-HEAD display name so the
     // module-level map doesn't retain removed worktrees for the whole session.
     detachedHeadAutoDerivedDisplayNames.delete(id)
+  }
+  // Why: remote runtime handles are environment-scoped before wrapping. If a
+  // surviving tab owns the same raw alias, its in-flight exit guard must stay.
+  const survivingPtyIds = new Set<string>()
+  for (const [worktreeId, tabs] of Object.entries(s.tabsByWorktree)) {
+    if (worktreeIdSet.has(worktreeId)) {
+      continue
+    }
+    for (const tab of tabs) {
+      addTabPtyIds(survivingPtyIds, tab.id, tab.ptyId)
+    }
   }
   // Why: same rationale for the doomed tabs' foreground last-seen timestamps and
   // consumed agent-startup delivery guards — retired tab ids never recur.
@@ -2014,7 +2046,7 @@ function buildWorktreePurgeState(s: AppState, worktreeIds: string[]): Partial<Ap
     let changed = false
     const out = { ...obj }
     for (const ptyId of doomedPtyIds) {
-      if (ptyId in out) {
+      if (!survivingPtyIds.has(ptyId) && ptyId in out) {
         delete out[ptyId]
         changed = true
       }
@@ -2130,10 +2162,6 @@ function buildWorktreePurgeState(s: AppState, worktreeIds: string[]): Partial<Ap
     pendingStartupByTabId: omitByTabId(s.pendingStartupByTabId),
     codexRestartNoticeByPtyId: omitByPtyId(s.codexRestartNoticeByPtyId),
     migrationUnsupportedByPtyId: omitByPtyId(s.migrationUnsupportedByPtyId),
-    // Siblings of the two maps above: both are keyed by ptyId and cleared with
-    // codexRestartNoticeByPtyId on the normal pty-exit path, but that teardown
-    // never runs here, so a suppression / pending-restart flag planted just
-    // before a doomed pty's exit strands one entry per removed pty otherwise.
     suppressedPtyExitIds: omitByPtyId(s.suppressedPtyExitIds),
     pendingCodexPaneRestartIds: omitByPtyId(s.pendingCodexPaneRestartIds),
     // Why: these tab/pane-scoped agent-status, unread, and input maps are only
