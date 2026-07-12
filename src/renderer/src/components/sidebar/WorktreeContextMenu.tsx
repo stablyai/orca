@@ -40,7 +40,7 @@ import type { Repo, Worktree } from '../../../../shared/types'
 import { runWorktreeBatchDelete, runWorktreeDelete } from './delete-worktree-flow'
 import { runSleepWorktrees } from './sleep-worktree-flow'
 import { activateAndRevealWorktree } from '@/lib/worktree-activation'
-import { pickSplitDirection } from '@/lib/worktree-layout-tree'
+import { collectLeafWorktreeIds, pickSplitDirection } from '@/lib/worktree-layout-tree'
 import { tabHasLivePty } from '@/lib/tab-has-live-pty'
 import { VIRTUALIZED_SCROLL_ANCHOR_RECORD_EVENT } from '@/hooks/useVirtualizedScrollAnchor'
 import { getLineageRenderInfo } from './worktree-list-groups'
@@ -284,6 +284,8 @@ const WorktreeContextMenu = React.memo(function WorktreeContextMenu({
   const deleteFolderWorkspace = useAppStore((s) => s.deleteFolderWorkspace)
   const setActiveWorktree = useAppStore((s) => s.setActiveWorktree)
   const openWorktreeInParallel = useAppStore((s) => s.openWorktreeInParallel)
+  const splitWorktreePaneBeside = useAppStore((s) => s.splitWorktreePaneBeside)
+  const workbenchViews = useAppStore((s) => s.workbenchViews)
   const repo = useRepoById(worktree.repoId)
   const deleteState = useAppStore((s) => s.deleteStateByWorktreeId[worktree.id])
   const [menuOpen, setMenuOpen] = useState(false)
@@ -437,6 +439,29 @@ const WorktreeContextMenu = React.memo(function WorktreeContextMenu({
       pickSplitDirection({ width: window.innerWidth, height: window.innerHeight })
     )
   }, [openWorktreeInParallel, worktree.id])
+
+  // Existing parallel sets (views with >= 2 panes) — the picker targets.
+  const parallelSets = useMemo(
+    () =>
+      workbenchViews
+        .map((view) => ({
+          id: view.id,
+          focusedWorktreeId: view.focusedWorktreeId,
+          leafIds: collectLeafWorktreeIds(view.layout)
+        }))
+        .filter((set) => set.leafIds.length >= 2),
+    [workbenchViews]
+  )
+  const handleInsertIntoParallelSet = useCallback(
+    (targetWorktreeId: string) => {
+      splitWorktreePaneBeside(
+        targetWorktreeId,
+        pickSplitDirection({ width: window.innerWidth, height: window.innerHeight }),
+        worktree.id
+      )
+    },
+    [splitWorktreePaneBeside, worktree.id]
+  )
 
   const handleToggleRead = useCallback(() => {
     updateWorktreeMeta(worktree.id, { isUnread: !worktree.isUnread })
@@ -749,13 +774,48 @@ const WorktreeContextMenu = React.memo(function WorktreeContextMenu({
                 connectionId={repo?.connectionId ?? null}
                 disabled={isDeleting}
               />
-              <DropdownMenuItem onSelect={handleOpenInParallel} disabled={isDeleting}>
-                <Columns2 className="size-3.5" />
-                {translate(
-                  'auto.components.sidebar.WorktreeContextMenu.openInParallel',
-                  'Open in Parallel'
-                )}
-              </DropdownMenuItem>
+              {parallelSets.length > 0 ? (
+                <DropdownMenuSub>
+                  <DropdownMenuSubTrigger disabled={isDeleting}>
+                    <Columns2 className="size-3.5" />
+                    {translate(
+                      'auto.components.sidebar.WorktreeContextMenu.openInParallel',
+                      'Open in Parallel'
+                    )}
+                  </DropdownMenuSubTrigger>
+                  <DropdownMenuSubContent className="w-52">
+                    {parallelSets.map((set) => (
+                      <DropdownMenuItem
+                        key={set.id}
+                        onSelect={() => handleInsertIntoParallelSet(set.focusedWorktreeId)}
+                        disabled={isDeleting}
+                      >
+                        <Columns2 className="size-3.5" />
+                        <span className="truncate">
+                          {set.leafIds
+                            .map((id) => worktreeMap.get(id)?.displayName ?? id)
+                            .join(' + ')}
+                        </span>
+                      </DropdownMenuItem>
+                    ))}
+                    <DropdownMenuSeparator />
+                    <DropdownMenuItem onSelect={handleOpenInParallel} disabled={isDeleting}>
+                      {translate(
+                        'auto.components.sidebar.WorktreeContextMenu.newParallelView',
+                        'New parallel view'
+                      )}
+                    </DropdownMenuItem>
+                  </DropdownMenuSubContent>
+                </DropdownMenuSub>
+              ) : (
+                <DropdownMenuItem onSelect={handleOpenInParallel} disabled={isDeleting}>
+                  <Columns2 className="size-3.5" />
+                  {translate(
+                    'auto.components.sidebar.WorktreeContextMenu.openInParallel',
+                    'Open in Parallel'
+                  )}
+                </DropdownMenuItem>
+              )}
               <DropdownMenuItem onSelect={handleCopyPath} disabled={isDeleting}>
                 <Copy className="size-3.5" />
                 {translate('auto.components.sidebar.WorktreeContextMenu.3350101edb', 'Copy Path')}
