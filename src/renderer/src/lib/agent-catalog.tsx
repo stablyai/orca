@@ -283,6 +283,13 @@ export const getAgentCatalog = createLocalizedCatalog((): AgentCatalogEntry[] =>
     homepageUrl: 'https://devin.ai/cli'
   },
   {
+    id: 'deepseek',
+    label: translate('auto.lib.agent.catalog.deepseek_label', 'DeepSeek'),
+    cmd: 'deepseek',
+    faviconDomain: 'deepseek.com',
+    homepageUrl: 'https://docs.deepseek.com/cli'
+  },
+  {
     id: 'openclaw',
     label: translate('auto.lib.agent.catalog.5dff448636', 'OpenClaw'),
     cmd: 'openclaw',

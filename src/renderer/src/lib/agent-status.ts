@@ -125,7 +125,8 @@ const WELL_KNOWN_LABELS: Record<string, string> = {
   hermes: 'Hermes',
   devin: 'Devin',
   ante: 'Ante',
-  kimi: 'Kimi'
+  kimi: 'Kimi',
+  deepseek: 'DeepSeek'
 }
 
 export function formatAgentTypeLabel(agentType: AgentType | null | undefined): string {
@@ -183,7 +184,8 @@ const ICONABLE_AGENT_TYPES: Record<TuiAgent, true> = {
   copilot: true,
   grok: true,
   devin: true,
-  ante: true
+  ante: true,
+  deepseek: true
 }
 
 export function agentTypeToIconAgent(agentType: AgentType | null | undefined): TuiAgent | null {
