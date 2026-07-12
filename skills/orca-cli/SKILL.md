@@ -59,9 +59,11 @@ Custom Codex model/effort handoff:
 
 **Extra first terminal:** when no repo default-terminal configuration supplies a primary terminal, bare `worktree create` (no `--agent`) opens a fallback shell before the later `terminal create --command ...` adds the agent. Configured default tabs are materialized instead and may run real commands. Prefer `--agent` whenever the built-in launcher is enough. When custom argv forces the two-step path, target the agent handle only; close a prior terminal only after `terminal list` or `terminal show` confirms it is an unused shell.
 
+The create result's `worktree.id` already contains both pieces Orca needs: `<repoId>::<worktreePath>`. Copy that whole value into the next command; do not shorten it to the repo id.
+
 ```bash
 orca worktree create --name <task-name> --no-parent --json
-orca terminal create --worktree id:<newWorktreeId> --title <task-name> --command 'codex --model gpt-5.5 -c model_reasoning_effort="xhigh"' --json
+orca terminal create --worktree id:<repoId>::<newWorktreePath> --title <task-name> --command 'codex --model gpt-5.5 -c model_reasoning_effort="xhigh"' --json
 orca terminal wait --terminal <handle> --for tui-idle --timeout-ms 60000 --json
 orca terminal send --terminal <handle> --text "<task brief>" --enter --json
 ```
@@ -75,6 +77,8 @@ orca terminal send --terminal <handle> --text "<task brief>" --enter --json
 ## Worktrees
 
 An Orca worktree is Orca's tracked view of a repo checkout, its metadata, terminals, browser tabs, and UI state.
+
+Think of its id as a two-part address: `<repoId>::<worktreePath>`. For example, `repo-123::/Users/me/orca/fix-login` means “the `fix-login` checkout inside repo `repo-123`.” Always copy the complete `id` field from `orca worktree create --json` or `orca worktree list --json`; `repo-123` alone identifies only the repo.
 
 Common commands:
 
@@ -93,23 +97,24 @@ orca worktree create --repo id:<repoId> --name related-task --parent-worktree ac
 orca worktree create --repo id:<repoId> --name folder-child --parent-worktree folder:<folderId> --json
 orca worktree create --name child-task --agent codex --prompt "hi" --json
 orca worktree create --name independent-task --no-parent --json
-orca worktree set --worktree id:<worktreeId> --display-name "My Task" --json
+orca worktree set --worktree id:<repoId>::<worktreePath> --display-name "My Task" --json
 orca worktree set --worktree active --comment "reproduced bug; testing fix" --json
 orca worktree set --worktree active --workspace-status in-review --json
-orca worktree rm --worktree id:<worktreeId> --force --json
+orca worktree rm --worktree id:<repoId>::<worktreePath> --force --json
 ```
 
 Selectors:
 
-- `id:<worktreeId>`, `name:<displayName>`, `path:<absolutePath>`, `branch:<branchName>`, `issue:<number>`
+- `id:<repoId>::<worktreePath>`, `name:<displayName>`, `path:<absolutePath>`, `branch:<branchName>`, `issue:<number>`
+- The full id is the exact `<repo-id>::<path>` value returned by `orca worktree create --json` or `orca worktree list --json`; a bare repo id is not a worktree id.
 - `active` / `current` for the enclosing Orca-managed worktree from the shell cwd
-- For `worktree create --parent-worktree` only, folder/worktree parent context keys are also valid: `folder:<folderId>`, `worktree:<worktreeId>`, `id:folder:<folderId>`, `id:worktree:<worktreeId>`
+- For `worktree create --parent-worktree` only, folder/worktree parent context keys are also valid: `folder:<folderId>`, `worktree:<repoId>::<worktreePath>`, `id:folder:<folderId>`, `id:worktree:<repoId>::<worktreePath>`
 
 Lineage rules:
 
 - When creating from inside an Orca-managed worktree or folder context, Orca infers the current parent context when it can.
 - Use `--parent-worktree active` when the child worktree relationship should be explicit.
-- Use `--parent-worktree folder:<folderId>` or `--parent-worktree worktree:<worktreeId>` when a folder or worktree parent context should be explicit.
+- Use `--parent-worktree folder:<folderId>` or `--parent-worktree worktree:<repoId>::<worktreePath>` when a folder or worktree parent context should be explicit.
 - Use `--no-parent` only when the new work is independent.
 - `--no-parent` only controls Orca lineage; it does not choose the Git base. For independent top-level work, omit `--base-branch` so Orca uses the repo default base, or explicitly pass the repo default base. Never base it on the current feature branch unless the user asks for stacked work or "branch from current".
 - If `--repo` is omitted, Orca infers the repo from the current Orca worktree when possible.
@@ -125,7 +130,7 @@ orca worktree create --name task --run-hooks --json
 
 - `--agent <id>` launches that agent **in the first terminal** (Orca docs: *"`--agent` launches the selected agent in the first terminal"*); `--prompt <text>` sends initial work to it. Known ids include `claude`, `codex`, `omp`, `pi`, `grok`, and other installed TUI agents.
 - **Prefer agent-first create for agent workers.** `orca worktree create --agent <id> --prompt "..."` puts the agent in the worktree's first terminal without adding a separate fallback shell for that worker. Repo setup or default-terminal settings may still add tabs or splits. Without configured default tabs, the bare-create fallback shell plus a later `terminal create --command <agent>` is an anti-pattern for ordinary agent worktrees — use `--agent` instead of “create worktree, then open agent.” Configured default tabs are intentional surfaces; never treat one as disposable without verifying that it is an unused shell.
-- After create, use exactly one agent handle: `startupTerminal.handle` from the create response when present, or the matching result from `orca terminal list --worktree id:<newWorktreeId> --json` (or `name:<displayName>`) when the response omits it. If a handle later returns `terminal_handle_stale`, re-list it; never dual-send to old and replacement handles.
+- After create, use exactly one agent handle: `startupTerminal.handle` from the create response when present, or the matching result from `orca terminal list --worktree id:<repoId>::<newWorktreePath> --json` (or `name:<displayName>`) when the response omits it. If a handle later returns `terminal_handle_stale`, re-list it; never dual-send to old and replacement handles.
 - `--setup run|skip|inherit` controls repo setup hooks. Default is `inherit`, which follows the repo's setup policy.
 - `--run-hooks` is a legacy alias for `--setup run`; it also reveals/activates the new worktree.
 - `--agent`, `--activate`, and `--run-hooks` reveal the new worktree. Plain create stays in the background.
@@ -152,7 +157,7 @@ Card status uses `--workspace-status <id>`; defaults are `todo`, `in-progress`, 
 Common commands:
 
 ```bash
-orca terminal list --worktree id:<worktreeId> --json
+orca terminal list --worktree id:<repoId>::<worktreePath> --json
 orca terminal show --terminal <handle> --json
 orca terminal read --terminal <handle> --json
 orca terminal read --terminal <handle> --cursor <cursor> --limit 1000 --json
@@ -161,7 +166,7 @@ orca terminal send --terminal <handle> --text "continue" --enter --json
 orca terminal send --text "echo hello" --enter --json
 orca terminal wait --terminal <handle> --for exit --timeout-ms 5000 --json
 orca terminal wait --terminal <handle> --for tui-idle --timeout-ms 300000 --json
-orca terminal stop --worktree id:<worktreeId> --json
+orca terminal stop --worktree id:<repoId>::<worktreePath> --json
 orca terminal create --json
 orca terminal create --title "Worker" --json
 orca terminal create --worktree active --command "codex" --json

@@ -2021,7 +2021,7 @@ class WorktreeIdRequiresFullPathError extends Error {
 
   constructor() {
     super(
-      'worktree_id_requires_full_path: Worktree id selectors must use the full <repo-id>::<path> value. Use the id from `orca worktree list --json`, or target by path:<path>, branch:<branch>, or issue:<number>.'
+      'Worktree id selectors must use the full <repo-id>::<path> value. Use the id from `orca worktree list --json`, or target by path:<path>, branch:<branch>, or issue:<number>.'
     )
   }
 }
@@ -3207,7 +3207,7 @@ export class OrcaRuntimeService {
   }
 
   async listMobileSessionTabs(worktreeSelector: string): Promise<RuntimeMobileSessionTabsResult> {
-    const explicitWorktreeId = getExplicitWorktreeIdSelector(worktreeSelector)
+    const explicitWorktreeId = this.getValidatedExplicitWorktreeIdSelector(worktreeSelector)
     if (explicitWorktreeId) {
       this.hydrateHeadlessMobileSessionTabsFromWorkspaceSession(explicitWorktreeId)
       await this.refreshMobileSessionPtyRecords()
@@ -4191,7 +4191,7 @@ export class OrcaRuntimeService {
     leafId?: string,
     opts: { notifyClients?: boolean } = {}
   ): Promise<RuntimeMobileSessionTabsResult> {
-    const explicitWorktreeId = getExplicitWorktreeIdSelector(worktreeSelector)
+    const explicitWorktreeId = this.getValidatedExplicitWorktreeIdSelector(worktreeSelector)
     const worktreeId =
       explicitWorktreeId ?? (await this.resolveWorktreeSelector(worktreeSelector)).id
     this.hydrateHeadlessMobileSessionTabsFromWorkspaceSession(worktreeId)
@@ -4467,7 +4467,7 @@ export class OrcaRuntimeService {
   }
 
   async closeMobileSessionTab(worktreeSelector: string, tabId: string): Promise<{ closed: true }> {
-    const explicitWorktreeId = getExplicitWorktreeIdSelector(worktreeSelector)
+    const explicitWorktreeId = this.getValidatedExplicitWorktreeIdSelector(worktreeSelector)
     const worktreeId =
       explicitWorktreeId ?? (await this.resolveWorktreeSelector(worktreeSelector)).id
     this.hydrateHeadlessMobileSessionTabsFromWorkspaceSession(worktreeId)
@@ -4662,7 +4662,7 @@ export class OrcaRuntimeService {
     worktreeSelector: string,
     move: RuntimeMobileSessionTabMove
   ): Promise<RuntimeMobileSessionTabMoveResult> {
-    const explicitWorktreeId = getExplicitWorktreeIdSelector(worktreeSelector)
+    const explicitWorktreeId = this.getValidatedExplicitWorktreeIdSelector(worktreeSelector)
     const worktreeId =
       explicitWorktreeId ?? (await this.resolveWorktreeSelector(worktreeSelector)).id
     this.hydrateHeadlessMobileSessionTabsFromWorkspaceSession(worktreeId)
@@ -4718,7 +4718,7 @@ export class OrcaRuntimeService {
       titlesByLeafId?: Record<string, string>
     }
   ): Promise<{ updated: true }> {
-    const explicitWorktreeId = getExplicitWorktreeIdSelector(worktreeSelector)
+    const explicitWorktreeId = this.getValidatedExplicitWorktreeIdSelector(worktreeSelector)
     const worktreeId =
       explicitWorktreeId ?? (await this.resolveWorktreeSelector(worktreeSelector)).id
     // Why: when a renderer is authoritative (desktop host reached via shared
@@ -4751,7 +4751,7 @@ export class OrcaRuntimeService {
       viewMode?: 'terminal' | 'chat'
     }
   ): Promise<{ updated: true }> {
-    const explicitWorktreeId = getExplicitWorktreeIdSelector(worktreeSelector)
+    const explicitWorktreeId = this.getValidatedExplicitWorktreeIdSelector(worktreeSelector)
     const worktreeId =
       explicitWorktreeId ?? (await this.resolveWorktreeSelector(worktreeSelector)).id
     // Why: a renderer-authoritative host owns + republishes tab props, so a
@@ -9703,7 +9703,7 @@ export class OrcaRuntimeService {
     }
     const graphEpoch = this.graphStatus === 'ready' ? this.rendererGraphEpoch : null
     const explicitTargetWorktreeId = worktreeSelector
-      ? getExplicitWorktreeIdSelector(worktreeSelector)
+      ? this.getValidatedExplicitWorktreeIdSelector(worktreeSelector)
       : null
     const initialResolvedWorktreeCache = this.resolvedWorktreeCache
     const cachedResolvedWorktrees =
@@ -19075,7 +19075,22 @@ export class OrcaRuntimeService {
     }
   }
 
+  private getValidatedExplicitWorktreeIdSelector(selector: string | undefined): string | null {
+    const worktreeId = getExplicitWorktreeIdSelector(selector)
+    if (
+      worktreeId &&
+      !worktreeId.includes(WORKTREE_ID_SEPARATOR) &&
+      this.store?.getRepo(worktreeId)
+    ) {
+      // Why: registered repo ids are known-invalid worktree ids, so reject them
+      // before exact-id fast paths or Git/SSH worktree scans can hide the mistake.
+      throw new WorktreeIdRequiresFullPathError()
+    }
+    return worktreeId
+  }
+
   private async resolveWorktreeSelector(selector: string): Promise<ResolvedWorktree> {
+    const explicitWorktreeId = this.getValidatedExplicitWorktreeIdSelector(selector)
     const worktrees = await this.listResolvedWorktrees()
     let candidates: ResolvedWorktree[]
 
@@ -19084,7 +19099,7 @@ export class OrcaRuntimeService {
     }
 
     if (selector.startsWith('id:')) {
-      const worktreeId = selector.slice(3)
+      const worktreeId = explicitWorktreeId ?? selector.slice(3)
       candidates = worktrees.filter((worktree) => worktree.id === worktreeId)
       if (candidates.length === 0) {
         const parsed = splitWorktreeIdForFilesystem(worktreeId)
@@ -19095,11 +19110,6 @@ export class OrcaRuntimeService {
             : null
         if (fallback !== null) {
           candidates = [fallback]
-        } else if (
-          !worktreeId.includes(WORKTREE_ID_SEPARATOR) &&
-          worktrees.some((worktree) => worktree.id.startsWith(`${worktreeId}${WORKTREE_ID_SEPARATOR}`))
-        ) {
-          throw new WorktreeIdRequiresFullPathError()
         }
       }
     } else if (selector.startsWith('path:')) {
@@ -20469,7 +20479,7 @@ export class OrcaRuntimeService {
     tabId: string
   ): Promise<string> {
     const worktreeId =
-      getExplicitWorktreeIdSelector(worktreeSelector) ??
+      this.getValidatedExplicitWorktreeIdSelector(worktreeSelector) ??
       (await this.resolveWorktreeSelector(worktreeSelector)).id
     const snapshot = this.mobileSessionTabsByWorktree.get(worktreeId)
     const tab = snapshot?.tabs.find(
