@@ -18,6 +18,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const { fsFault } = vi.hoisted(() => ({
   fsFault: {
+    activePublishFinalLinkError: null as { code: string; targetPath: string } | null,
+    activePublishHardlinkError: null as { code: string } | null,
     activeTargetRace: null as { contents: string; targetPath: string } | null,
     quarantineTargetRace: null as { contents: string; targetPath: string } | null,
     readdirPath: null as string | null,
@@ -37,6 +39,26 @@ vi.mock('node:fs', async () => {
       existingPath: Parameters<typeof actual.linkSync>[0],
       newPath: Parameters<typeof actual.linkSync>[1]
     ) => {
+      const isActivePublishLink =
+        typeof existingPath === 'string' && existingPath.includes('.orca-profile-overlay-stage-')
+      const hardlinkError = fsFault.activePublishHardlinkError
+      if (isActivePublishLink && hardlinkError) {
+        throw Object.assign(new Error('injected active publish hard-link failure'), {
+          code: hardlinkError.code
+        })
+      }
+      const finalLinkError = fsFault.activePublishFinalLinkError
+      if (
+        isActivePublishLink &&
+        finalLinkError &&
+        typeof newPath === 'string' &&
+        newPath === finalLinkError.targetPath
+      ) {
+        fsFault.activePublishFinalLinkError = null
+        throw Object.assign(new Error('injected final active publish link failure'), {
+          code: finalLinkError.code
+        })
+      }
       const activeRace = fsFault.activeTargetRace
       if (
         activeRace &&
@@ -114,6 +136,8 @@ let runtimeHomePath: string
 let systemHomePath: string
 
 beforeEach(() => {
+  fsFault.activePublishFinalLinkError = null
+  fsFault.activePublishHardlinkError = null
   fsFault.activeTargetRace = null
   fsFault.quarantineTargetRace = null
   fsFault.readdirPath = null
@@ -126,6 +150,8 @@ beforeEach(() => {
 })
 
 afterEach(() => {
+  fsFault.activePublishFinalLinkError = null
+  fsFault.activePublishHardlinkError = null
   fsFault.activeTargetRace = null
   fsFault.quarantineTargetRace = null
   fsFault.readdirPath = null
@@ -269,6 +295,50 @@ describe('syncCodexProfileConfigOverlaysIntoManagedHome', () => {
     const managed = readManagedOverlay()
     expect(managed.body).toContain('model = "managed"')
     expect(managed.body).not.toContain('old-runtime-copy')
+  })
+
+  it('keeps the active target when hard links are unavailable before quarantine', () => {
+    writeFileSync(sourceOverlayPath(), 'model = "managed"\n', 'utf-8')
+    mkdirSync(runtimeHomePath, { recursive: true })
+    const oldContents = 'model = "old-runtime-copy"\n'
+    writeFileSync(runtimeOverlayPath(), oldContents, 'utf-8')
+    fsFault.activePublishHardlinkError = { code: 'EPERM' }
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
+
+    syncOverlays()
+
+    expect(readFileSync(runtimeOverlayPath(), 'utf-8')).toBe(oldContents)
+    expect(listOverlayQuarantines()).toEqual([])
+    expect(
+      readdirSync(runtimeHomePath).filter(
+        (name) => name.includes('overlay-stage') || name.includes('overlay-probe')
+      )
+    ).toEqual([])
+    expect(warn).toHaveBeenCalled()
+  })
+
+  it('restores the active target after a one-shot final publish failure', () => {
+    writeFileSync(sourceOverlayPath(), 'model = "managed"\n', 'utf-8')
+    mkdirSync(runtimeHomePath, { recursive: true })
+    const oldContents = 'model = "old-runtime-copy"\n'
+    writeFileSync(runtimeOverlayPath(), oldContents, 'utf-8')
+    fsFault.activePublishFinalLinkError = {
+      code: 'EIO',
+      targetPath: runtimeOverlayPath()
+    }
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
+
+    syncOverlays()
+
+    expect(fsFault.activePublishFinalLinkError).toBeNull()
+    expect(readFileSync(runtimeOverlayPath(), 'utf-8')).toBe(oldContents)
+    expect(listOverlayQuarantines()).toEqual([])
+    expect(
+      readdirSync(runtimeHomePath).filter(
+        (name) => name.includes('overlay-stage') || name.includes('overlay-probe')
+      )
+    ).toEqual([])
+    expect(warn).toHaveBeenCalled()
   })
 
   it('does not overwrite a regular target created immediately before active publish', () => {

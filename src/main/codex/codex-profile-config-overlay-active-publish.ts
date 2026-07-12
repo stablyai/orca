@@ -19,6 +19,11 @@ export function publishActiveManagedOverlay({
     // The existing writer prepares a complete same-directory file; a hard
     // link then publishes it without replacing a concurrent target.
     writeFileAtomically(stagePath, managedContents)
+    // Verify hard-link support before moving the old target; otherwise a
+    // persistent filesystem/ACL failure would strand it in quarantine.
+    if (replaceExisting && !canPublishProfileOverlayByHardLink(stagePath, targetPath, fileName)) {
+      return
+    }
     const quarantinePath = replaceExisting
       ? quarantineProfileOverlayTarget(targetPath, fileName)
       : null
@@ -28,11 +33,13 @@ export function publishActiveManagedOverlay({
     try {
       linkSync(stagePath, targetPath)
     } catch (error) {
-      console.warn(
-        '[codex-config] Skipped profile config overlay publish to preserve a concurrent target:',
-        fileName,
-        error
-      )
+      if (quarantinePath && !isAlreadyExistsError(error)) {
+        restoreRegularProfileOverlayQuarantine(quarantinePath, targetPath, fileName)
+      }
+      const reason = isAlreadyExistsError(error)
+        ? 'Skipped profile config overlay publish to preserve a concurrent target:'
+        : 'Failed to publish profile config overlay:'
+      console.warn('[codex-config]', reason, fileName, error)
       return
     }
     if (quarantinePath) {
@@ -41,6 +48,36 @@ export function publishActiveManagedOverlay({
   } finally {
     removeActiveOverlayStage(stagePath, fileName)
   }
+}
+
+function canPublishProfileOverlayByHardLink(
+  stagePath: string,
+  targetPath: string,
+  fileName: string
+): boolean {
+  const probePath = uniqueOverlaySiblingPath(targetPath, 'probe', 'tmp')
+  try {
+    linkSync(stagePath, probePath)
+  } catch (error) {
+    console.warn(
+      '[codex-config] Profile config overlay hard-link preflight failed:',
+      fileName,
+      error
+    )
+    return false
+  }
+  try {
+    unlinkSync(probePath)
+  } catch (error) {
+    console.warn(
+      '[codex-config] Failed to remove profile config overlay hard-link probe:',
+      fileName,
+      probePath,
+      error
+    )
+    return false
+  }
+  return true
 }
 
 export function quarantineProfileOverlayTarget(
@@ -144,12 +181,20 @@ function warnRetainedQuarantine(fileName: string, quarantinePath: string, reason
 
 function uniqueOverlaySiblingPath(
   targetPath: string,
-  role: 'quarantine' | 'stage',
+  role: 'probe' | 'quarantine' | 'stage',
   extension: string
 ): string {
   return join(
     dirname(targetPath),
     `.orca-profile-overlay-${role}-${process.pid}-${randomUUID()}.${extension}`
+  )
+}
+
+function isAlreadyExistsError(error: unknown): boolean {
+  return (
+    typeof error === 'object' &&
+    error !== null &&
+    (error as NodeJS.ErrnoException).code === 'EEXIST'
   )
 }
 

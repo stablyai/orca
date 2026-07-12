@@ -34,7 +34,7 @@ export function normalizeCodexBackendBaseUrl(raw: string | null | undefined): st
     if (isOfficialChatGptHost(url.hostname) && !hasBackendApiSuffix(url.pathname)) {
       return `${url.origin}${path === '' || path === '/' ? '' : path}/backend-api`
     }
-    return `${url.origin}${path === '/' ? '' : path}` || url.origin
+    return `${url.origin}${path === '/' ? '' : path}`
   } catch {
     return trimmed
   }
