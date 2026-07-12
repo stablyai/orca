@@ -52,6 +52,19 @@ export function isMissionOwnedFolderWorkspace(workspace: { missionId?: string | 
   return typeof workspace.missionId === 'string' && workspace.missionId.length > 0
 }
 
+/** Terminal env identity for a folder workspace's owner. Mission sessions
+ *  expose ORCA_MISSION_ID — never the sentinel projectGroupId, which no real
+ *  group owns and would confuse scripts keying on ORCA_PROJECT_GROUP_ID. */
+export function getFolderWorkspaceOwnerEnv(workspace: {
+  projectGroupId: string
+  missionId?: string | null
+}): Record<string, string> {
+  if (isMissionOwnedFolderWorkspace(workspace)) {
+    return { ORCA_MISSION_ID: workspace.missionId! }
+  }
+  return { ORCA_PROJECT_GROUP_ID: workspace.projectGroupId }
+}
+
 function normalizeMissionBranchName(branchName: string | null | undefined, name: string): string {
   const trimmed = branchName?.trim()
   return trimmed && trimmed.length > 0 ? trimmed : slugifyMissionBranch(name)

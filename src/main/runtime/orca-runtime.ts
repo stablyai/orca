@@ -9,6 +9,7 @@ import {
   normalizeTerminalTitle
 } from '../../shared/agent-detection'
 import { extractOscTitleScanTail } from '../../shared/osc-title-scan-tail'
+import { getFolderWorkspaceOwnerEnv } from '../../shared/missions'
 import { extractLastOsc7Uri, extractOscScanTail } from '../daemon/osc7-uri-extraction'
 import { parseFileUriPathParts } from '../daemon/osc7-file-uri'
 import type { AgentStatus } from '../../shared/agent-detection'
@@ -18606,17 +18607,12 @@ export class OrcaRuntimeService {
     if (!scope.folderWorkspace) {
       return env
     }
-    const workspaceEnv = {
+    return {
       ...env,
       ORCA_WORKSPACE_ID: scope.id,
+      ...getFolderWorkspaceOwnerEnv(scope.folderWorkspace),
       ORCA_WORKSPACE_ROOT: scope.folderWorkspace.folderPath
     }
-    // Why: mission sessions carry a sentinel projectGroupId no real group
-    // owns; scripts keying on ORCA_PROJECT_GROUP_ID must not receive it.
-    if (scope.folderWorkspace.missionId) {
-      return { ...workspaceEnv, ORCA_MISSION_ID: scope.folderWorkspace.missionId }
-    }
-    return { ...workspaceEnv, ORCA_PROJECT_GROUP_ID: scope.folderWorkspace.projectGroupId }
   }
 
   private async resolveWorktreeSelector(selector: string): Promise<ResolvedWorktree> {

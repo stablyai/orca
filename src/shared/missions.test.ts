@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   clearMissingMissionMembers,
   createMission,
+  getFolderWorkspaceOwnerEnv,
   getMissionMemberWorktreeIds,
   getMissionRootDirName,
   getMissionWorktreeName,
@@ -157,6 +158,18 @@ describe('mission-owned folder workspace helpers', () => {
     expect(isMissionOwnedFolderWorkspace({ missionId: 'm1' })).toBe(true)
     expect(isMissionOwnedFolderWorkspace({ missionId: null })).toBe(false)
     expect(isMissionOwnedFolderWorkspace({})).toBe(false)
+  })
+
+  it('maps terminal owner env to the mission id, never the sentinel group id', () => {
+    expect(getFolderWorkspaceOwnerEnv({ projectGroupId: 'mission:m1', missionId: 'm1' })).toEqual({
+      ORCA_MISSION_ID: 'm1'
+    })
+    expect(getFolderWorkspaceOwnerEnv({ projectGroupId: 'g1', missionId: null })).toEqual({
+      ORCA_PROJECT_GROUP_ID: 'g1'
+    })
+    expect(getFolderWorkspaceOwnerEnv({ projectGroupId: 'g1' })).toEqual({
+      ORCA_PROJECT_GROUP_ID: 'g1'
+    })
   })
 })
 
