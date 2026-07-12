@@ -2430,33 +2430,6 @@ function Terminal(): React.JSX.Element | null {
 // BrowserPaneOverlayLayer and its BrowserPane subtrees. Memoizing here means
 // the surface only re-renders when its own props (worktreeId / layout /
 // focusedGroupId / isVisible) actually change.
-// Drag-to-rearrange (§6.6 B): a pane's label is a drag source carrying this
-// mime; each pane is a drop target whose nearest edge picks the split direction.
-const WORKTREE_PANE_DND_MIME = 'application/x-orca-worktree-pane'
-
-function computeWorktreePaneDropZone(
-  event: React.DragEvent<HTMLDivElement>
-): 'left' | 'right' | 'top' | 'bottom' {
-  const rect = event.currentTarget.getBoundingClientRect()
-  const fx = (event.clientX - rect.left) / rect.width
-  const fy = (event.clientY - rect.top) / rect.height
-  const left = fx
-  const right = 1 - fx
-  const top = fy
-  const bottom = 1 - fy
-  const min = Math.min(left, right, top, bottom)
-  if (min === left) {
-    return 'left'
-  }
-  if (min === right) {
-    return 'right'
-  }
-  if (min === top) {
-    return 'top'
-  }
-  return 'bottom'
-}
-
 const WorktreeSplitSurface = React.memo(function WorktreeSplitSurface({
   worktreeId,
   worktreePath,
@@ -2494,8 +2467,6 @@ const WorktreeSplitSurface = React.memo(function WorktreeSplitSurface({
   const closeActiveWorkbenchPane = useAppStore((s) => s.closeActiveWorkbenchPane)
   const togglePaneSplitDirection = useAppStore((s) => s.togglePaneSplitDirection)
   const focusActiveWorkbenchPane = useAppStore((s) => s.focusActiveWorkbenchPane)
-  const moveWorktreePaneBeside = useAppStore((s) => s.moveWorktreePaneBeside)
-  const [paneDropZone, setPaneDropZone] = useState<'left' | 'right' | 'top' | 'bottom' | null>(null)
   const hasAutomationVisibleBrowser = useBrowserAutomationVisibilityForAny(browserPageIds)
   const hasMobileDrivenBrowser = useBrowserMobileDriverForAny(browserPageIds)
   const shouldKeepPaintable =
@@ -2545,38 +2516,6 @@ const WorktreeSplitSurface = React.memo(function WorktreeSplitSurface({
           focusActiveWorkbenchPane(worktreeId)
         }
       }}
-      onDragOver={(event) => {
-        if (
-          !isMultiPane ||
-          !isVisible ||
-          !event.dataTransfer.types.includes(WORKTREE_PANE_DND_MIME)
-        ) {
-          return
-        }
-        event.preventDefault()
-        event.dataTransfer.dropEffect = 'move'
-        setPaneDropZone(computeWorktreePaneDropZone(event))
-      }}
-      onDragLeave={(event) => {
-        if (!event.currentTarget.contains(event.relatedTarget as Node | null)) {
-          setPaneDropZone(null)
-        }
-      }}
-      onDrop={(event) => {
-        if (!event.dataTransfer.types.includes(WORKTREE_PANE_DND_MIME)) {
-          return
-        }
-        event.preventDefault()
-        const zone = computeWorktreePaneDropZone(event)
-        setPaneDropZone(null)
-        const fromWorktreeId = event.dataTransfer.getData(WORKTREE_PANE_DND_MIME)
-        if (!fromWorktreeId || fromWorktreeId === worktreeId) {
-          return
-        }
-        const direction = zone === 'left' || zone === 'right' ? 'horizontal' : 'vertical'
-        const placement = zone === 'left' || zone === 'top' ? 'before' : 'after'
-        moveWorktreePaneBeside(fromWorktreeId, worktreeId, direction, placement)
-      }}
     >
       {isMultiPane && isVisible ? (
         <div
@@ -2585,15 +2524,7 @@ const WorktreeSplitSurface = React.memo(function WorktreeSplitSurface({
             isFocused ? 'border-ring' : 'border-border'
           }`}
         >
-          <span
-            className="max-w-[140px] cursor-grab select-none truncate"
-            draggable
-            onDragStart={(event) => {
-              event.dataTransfer.setData(WORKTREE_PANE_DND_MIME, worktreeId)
-              event.dataTransfer.effectAllowed = 'move'
-            }}
-            title={`${worktreePath}\nDrag onto another pane's edge to rearrange`}
-          >
+          <span className="max-w-[140px] select-none truncate" title={worktreePath}>
             {paneLabel}
           </span>
           <button
@@ -2617,20 +2548,6 @@ const WorktreeSplitSurface = React.memo(function WorktreeSplitSurface({
             ✕
           </button>
         </div>
-      ) : null}
-      {paneDropZone ? (
-        <div
-          className="pointer-events-none absolute z-40 border-2 border-ring bg-ring/20"
-          style={
-            paneDropZone === 'left'
-              ? { top: 0, bottom: 0, left: 0, width: '50%' }
-              : paneDropZone === 'right'
-                ? { top: 0, bottom: 0, right: 0, width: '50%' }
-                : paneDropZone === 'top'
-                  ? { top: 0, left: 0, right: 0, height: '50%' }
-                  : { bottom: 0, left: 0, right: 0, height: '50%' }
-          }
-        />
       ) : null}
       <CodexRestartChip isVisible={isVisible} worktreeId={worktreeId} />
       <TabGroupSplitLayout
