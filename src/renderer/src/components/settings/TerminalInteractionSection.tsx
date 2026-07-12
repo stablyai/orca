@@ -8,6 +8,7 @@ import { SearchableSetting } from './SearchableSetting'
 import { matchesSettingsSearch } from './settings-search'
 import { getTerminalRightClickToPasteSearchEntry } from './terminal-windows-search'
 import { OSC52_CLIPBOARD_SETTING_ID } from '../terminal-pane/osc52-clipboard-setting-anchor'
+import { isMacPlatform } from '../terminal-pane/terminal-link-open-hints'
 import { translate } from '@/i18n/i18n'
 import {
   DEFAULT_TERMINAL_FAST_SCROLL_SENSITIVITY,
@@ -90,6 +91,28 @@ export function TerminalInteractionSection({
   updateSettings,
   searchQuery
 }: TerminalInteractionSectionProps): React.JSX.Element {
+  // Why: the context-menu escape hatch is gated on the Control key on every
+  // platform (see use-terminal-pane-context-menu), so macOS wording is
+  // "Control-click" while Windows/Linux keep "Ctrl+right-click".
+  const isMac = isMacPlatform()
+  const rightClickPasteDescription = isMac
+    ? translate(
+        'auto.components.settings.TerminalInteractionSection.567633ff50',
+        'Right-click pastes the clipboard into the terminal. Control-click to open the context menu.'
+      )
+    : translate(
+        'auto.components.settings.TerminalPane.af0c3b6e39',
+        'Right-click pastes the clipboard into the terminal. Use Ctrl+right-click to open the context menu.'
+      )
+  const rightClickPasteSwitchDescription = isMac
+    ? translate(
+        'auto.components.settings.TerminalInteractionSection.c64497148a',
+        'Right-click pastes the clipboard. Control-click opens the context menu.'
+      )
+    : translate(
+        'auto.components.settings.TerminalPane.16753eea48',
+        'Right-click pastes the clipboard. Ctrl+right-click opens the context menu.'
+      )
   return (
     <section key="pane-interaction" className="space-y-3">
       <SettingsSubsectionHeader
@@ -227,10 +250,7 @@ export function TerminalInteractionSection({
               'auto.components.settings.TerminalPane.9c178cf8aa',
               'Right-click to paste'
             )}
-            description={translate(
-              'auto.components.settings.TerminalPane.af0c3b6e39',
-              'Right-click pastes the clipboard into the terminal. Use Ctrl+right-click to open the context menu.'
-            )}
+            description={rightClickPasteDescription}
             keywords={['terminal', 'right click', 'paste', 'context menu']}
           >
             <SettingsSwitchRow
@@ -238,10 +258,7 @@ export function TerminalInteractionSection({
                 'auto.components.settings.TerminalPane.9c178cf8aa',
                 'Right-click to paste'
               )}
-              description={translate(
-                'auto.components.settings.TerminalPane.16753eea48',
-                'Right-click pastes the clipboard. Ctrl+right-click opens the context menu.'
-              )}
+              description={rightClickPasteSwitchDescription}
               checked={settings.terminalRightClickToPaste}
               onChange={() =>
                 updateSettings({

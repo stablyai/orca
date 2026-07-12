@@ -169,6 +169,13 @@ vi.mock('../telemetry/classify-error', () => ({
   classifyError: classifyErrorMock
 }))
 
+// Why: the real ensure writes to disk from process.resourcesPath, which does
+// not exist under vitest; env assembly only needs the returned dir path.
+vi.mock('../cli/linux-terminal-orca-cli-shim', () => ({
+  ensureLinuxTerminalOrcaCliShimDir: (options: { userDataPath: string }) =>
+    join(options.userDataPath, 'linux-orca-cli-shim')
+}))
+
 vi.mock('../memory/pty-registry', () => ({
   registerPty: registerPtyMock,
   unregisterPty: unregisterPtyMock
@@ -1673,6 +1680,28 @@ describe('registerPtyHandlers', () => {
           expect(spawnOptions.envToDelete).toEqual(
             expect.arrayContaining(['CODEX_HOME', 'ORCA_CODEX_HOME'])
           )
+        } finally {
+          Object.defineProperty(process, 'platform', {
+            configurable: true,
+            value: originalPlatform
+          })
+        }
+      })
+
+      it('prepends the bare-orca CLI shim dir to PATH for packaged Linux spawns', async () => {
+        const originalPlatform = process.platform
+        Object.defineProperty(process, 'platform', {
+          configurable: true,
+          value: 'linux'
+        })
+        try {
+          const env = await daemonSpawnAndGetEnv({ PATH: '/usr/local/bin:/usr/bin' })
+          const entries = env.PATH.split(delimiter)
+          const shimDir = join('/tmp/orca-user-data', 'linux-orca-cli-shim')
+          // Why: bare `orca` must resolve to the Orca CLI before /usr/bin/orca
+          // (the GNOME screen reader) inside Orca-managed terminals (#7904).
+          expect(entries.indexOf(shimDir)).toBeGreaterThanOrEqual(0)
+          expect(entries.indexOf(shimDir)).toBeLessThan(entries.indexOf('/usr/bin'))
         } finally {
           Object.defineProperty(process, 'platform', {
             configurable: true,

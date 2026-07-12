@@ -48,6 +48,12 @@ function needsRemoteDeleteConfirmation(node: TreeNode): boolean {
   return operationOwner.kind !== 'local' && getFileExplorerOperationRoute(operationOwner) !== null
 }
 
+// Why: local deletes go to the OS Trash/Recycle Bin and stay recoverable, so a
+// mixed batch must not describe every item as a permanent remote delete.
+function isLocalDeleteNode(node: TreeNode): boolean {
+  return (node.operationOwner ?? { kind: 'unresolved' as const }).kind === 'local'
+}
+
 export function useFileDeletion({
   activeWorktreeId,
   openFiles,
@@ -259,6 +265,11 @@ export function useFileDeletion({
         return
       }
       const roots = selectDeletionRoots(nodes)
+      // Why: the batch confirms whenever any root is a permanent remote delete,
+      // but the selection can also include local roots that only go to the
+      // Trash — so a mixed batch needs copy that keeps that distinction.
+      const hasLocalDelete = roots.some(isLocalDeleteNode)
+      const trashName = isWindows ? 'Recycle Bin' : 'Trash'
       // Why: selection is cleared once after the entire batch settles rather
       // than per-node, so no concurrent completion can restore a partial
       // stale set.
@@ -273,15 +284,27 @@ export function useFileDeletion({
               // Why: count the full selection, not the filtered roots —
               // deleting a folder still deletes the selected children inside
               // it, and the prompt should match what the user sees selected.
-              title: translate(
-                'auto.components.right.sidebar.useFileDeletion.af1270b90d',
-                'Permanently delete {{count}} items?',
-                { count: nodes.length }
-              ),
-              description: translate(
-                'auto.components.right.sidebar.useFileDeletion.dd029aa5cd',
-                'This permanently deletes the selected items and any directory contents on the remote host. This cannot be undone.'
-              ),
+              title: hasLocalDelete
+                ? translate(
+                    'auto.components.right.sidebar.useFileDeletion.77fdc36183',
+                    'Delete {{count}} items?',
+                    { count: nodes.length }
+                  )
+                : translate(
+                    'auto.components.right.sidebar.useFileDeletion.af1270b90d',
+                    'Permanently delete {{count}} items?',
+                    { count: nodes.length }
+                  ),
+              description: hasLocalDelete
+                ? translate(
+                    'auto.components.right.sidebar.useFileDeletion.fca915a67a',
+                    'Remote items are permanently deleted and cannot be undone. Local items move to the {{value0}}.',
+                    { value0: trashName }
+                  )
+                : translate(
+                    'auto.components.right.sidebar.useFileDeletion.dd029aa5cd',
+                    'This permanently deletes the selected items and any directory contents on the remote host. This cannot be undone.'
+                  ),
               confirmLabel: translate(
                 'auto.components.right.sidebar.useFileDeletion.92276aceb7',
                 'Delete'
@@ -305,7 +328,7 @@ export function useFileDeletion({
         )
       })()
     },
-    [confirm, runDelete, requestDelete, setSelectedPaths]
+    [confirm, isWindows, runDelete, requestDelete, setSelectedPaths]
   )
 
   return useMemo(

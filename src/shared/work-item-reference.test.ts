@@ -9,10 +9,35 @@ describe('extractWorkIdentifier', () => {
     })
   })
 
-  it('reads a Bitbucket pull-requests URL', () => {
+  it('reads a Bitbucket Cloud pull-requests URL', () => {
     expect(
       extractWorkIdentifier('Look at https://bitbucket.org/team/repo/pull-requests/77')?.label
     ).toBe('PR 77')
+  })
+
+  it('reads a Bitbucket Server pull-requests URL', () => {
+    expect(
+      extractWorkIdentifier(
+        'Review https://bitbucket.example.com/projects/ENG/repos/orca/pull-requests/1288'
+      )
+    ).toEqual({ label: 'PR 1288', tokens: ['pr', '1288'] })
+    // Personal (fork) repos live under /users instead of /projects.
+    expect(
+      extractWorkIdentifier(
+        'see https://bitbucket.example.com/users/jane/repos/orca/pull-requests/9/overview'
+      )?.label
+    ).toBe('PR 9')
+  })
+
+  it('reads Azure DevOps pull request URLs (dev.azure.com and visualstudio.com)', () => {
+    expect(
+      extractWorkIdentifier('Look at https://dev.azure.com/contoso/Orca/_git/orca/pullrequest/4521')
+    ).toEqual({ label: 'PR 4521', tokens: ['pr', '4521'] })
+    expect(
+      extractWorkIdentifier(
+        'https://contoso.visualstudio.com/Orca/_git/orca/pullrequest/4521?_a=files'
+      )?.label
+    ).toBe('PR 4521')
   })
 
   it('reads a GitLab merge request URL as MR, and a work_items URL as an issue', () => {

@@ -53,7 +53,15 @@ const URL_IN_TEXT = /https?:\/\/[^\s<>()[\]"']+/gi
 // also would not match the GitHub pattern, so ordering GitLab first is safe.
 const GITLAB_ITEM_PATH = /\/-\/(issues|work_items|merge_requests)\/(\d+)(?:[/?#]|$)/i
 const GITHUB_ITEM_PATH = /^\/[^/]+\/[^/]+\/(issues|pull)\/(\d+)(?:[/?#]|$)/i
-const BITBUCKET_ITEM_PATH = /^\/[^/]+\/[^/]+\/pull-requests\/(\d+)(?:[/?#]|$)/i
+// Bitbucket Cloud: /workspace/repo/pull-requests/N
+const BITBUCKET_CLOUD_ITEM_PATH = /^\/[^/]+\/[^/]+\/pull-requests\/(\d+)(?:[/?#]|$)/i
+// Bitbucket Server / Data Center nests the repo under a project or user, so the
+// PR path carries more segments than Cloud: /projects/KEY/repos/REPO/pull-requests/N.
+const BITBUCKET_SERVER_ITEM_PATH =
+  /\/(?:projects|users)\/[^/]+\/repos\/[^/]+\/pull-requests\/(\d+)(?:[/?#]|$)/i
+// Azure DevOps (dev.azure.com, *.visualstudio.com, on-prem collections) always
+// routes a PR through /_git/REPO/pullrequest/N, regardless of org/project prefix.
+const AZURE_DEVOPS_ITEM_PATH = /\/_git\/[^/]+\/pullrequests?\/(\d+)(?:[/?#]|$)/i
 
 function taggedIdentifier(type: 'PR' | 'MR' | 'Issue', num: string): WorkIdentifier {
   return { label: `${type} ${num}`, tokens: [type.toLowerCase(), num] }
@@ -82,9 +90,17 @@ function urlToIdentifier(raw: string): WorkIdentifier | null {
       ? taggedIdentifier('PR', github[2])
       : taggedIdentifier('Issue', github[2])
   }
-  const bitbucket = BITBUCKET_ITEM_PATH.exec(path)
-  if (bitbucket) {
-    return taggedIdentifier('PR', bitbucket[1])
+  const bitbucketCloud = BITBUCKET_CLOUD_ITEM_PATH.exec(path)
+  if (bitbucketCloud) {
+    return taggedIdentifier('PR', bitbucketCloud[1])
+  }
+  const bitbucketServer = BITBUCKET_SERVER_ITEM_PATH.exec(path)
+  if (bitbucketServer) {
+    return taggedIdentifier('PR', bitbucketServer[1])
+  }
+  const azureDevops = AZURE_DEVOPS_ITEM_PATH.exec(path)
+  if (azureDevops) {
+    return taggedIdentifier('PR', azureDevops[1])
   }
   return null
 }

@@ -495,6 +495,9 @@ describe('CodexRuntimeHomeService', () => {
       getDefaultWslDistro: () => 'Ubuntu',
       getWslHome: () => wslHome
     }))
+    const wslSystemHomePath = join(wslHome, '.codex')
+    mkdirSync(wslSystemHomePath, { recursive: true })
+    writeFileSync(join(wslSystemHomePath, 'AGENTS.md'), '# WSL instructions\n', 'utf-8')
     const store = createStore(
       createSettings({
         activeCodexManagedAccountId: null,
@@ -520,9 +523,12 @@ describe('CodexRuntimeHomeService', () => {
       expect(startWslCodexSessionBridgeInBackground).toHaveBeenCalledTimes(1)
       expect(startWslCodexSessionBridgeInBackground).toHaveBeenCalledWith({
         distro: 'Ubuntu',
-        systemCodexHomePath: join(wslHome, '.codex'),
+        systemCodexHomePath: wslSystemHomePath,
         managedCodexHomePath: wslRuntimeHomePath
       })
+      const runtimeAgentsPath = join(wslRuntimeHomePath, 'AGENTS.md')
+      expect(readFileSync(runtimeAgentsPath, 'utf-8')).toBe('# WSL instructions\n')
+      expect(lstatSync(runtimeAgentsPath).isSymbolicLink()).toBe(false)
     } finally {
       vi.doUnmock('../codex/wsl-codex-session-bridge')
       vi.doUnmock('../wsl')

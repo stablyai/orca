@@ -7,8 +7,14 @@ import {
   getProviderUsageErrorMessage,
   getProviderUsageStatusLabel
 } from './usage-error-copy'
-import type { UsagePercentageDisplay } from '../../../../shared/usage-percentage-display'
+import {
+  clampUsedPercent,
+  type UsagePercentageDisplay
+} from '../../../../shared/usage-percentage-display'
 import { formatUsagePercentageLabel } from './usage-percentage-label'
+
+// Re-exported from its shared home so status-bar callers keep a single import.
+export { clampUsedPercent }
 
 export {
   getProviderDisplayName,
@@ -192,11 +198,6 @@ export function getWindowSections(
 // inverts the color scheme (light bg in dark mode). These rich tooltips use
 // `text-background` for primary text and `text-background/50` for secondary
 // to stay readable inside the inverted tooltip container.
-
-// Why: single clamp for bar width + label so status bar and tooltip never diverge.
-export function clampUsedPercent(usedPercent: number): number {
-  return Math.max(0, Math.min(100, Math.round(usedPercent)))
-}
 
 // Why: color-coded by consumption so users can quickly gauge urgency.
 // Matches common harness usage meters (Claude/Codex): bars fill with % used.

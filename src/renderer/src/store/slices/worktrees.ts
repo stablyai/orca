@@ -3745,8 +3745,8 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
       ? clearOlderHostedReviewLinksForReplacement(updates, existingWorktree)
       : updates
     // Why: manual PR linking only supplies the PR number. Resolve the PR head
-    // branch here so Push targets the review branch, but don't repeat that
-    // network lookup for no-op linkedPR metadata saves.
+    // branch here so Push targets the review branch; re-saving the same PR can
+    // also heal older metadata that lost pushTarget.
     const linkedPrForPushTarget = isPositiveHostedReviewNumber(normalizedUpdates.linkedPR)
       ? normalizedUpdates.linkedPR
       : null
@@ -3754,7 +3754,6 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
       linkedPrForPushTarget !== null &&
       normalizedUpdates.pushTarget === undefined &&
       existingWorktree &&
-      existingWorktree.linkedPR !== linkedPrForPushTarget &&
       !existingWorktree.pushTarget
         ? await resolveGitHubReviewPushTarget(
             settingsForWorktreeOwner(get(), worktreeId),

@@ -1387,7 +1387,9 @@
         "1ff5d979df": "未分配任何人",
         "checkActionRequiredHint": "此检查需要在 GitHub 上执行手动操作（例如，批准工作流运行），然后才能解除合并阻止。",
         "dd5d9a4f17": "{{value0}}更新",
-        "71a3c0f9d2": "启动工作区"
+        "71a3c0f9d2": "启动工作区",
+        "filesUnavailable": "Couldn't load changed files.",
+        "filesRetry": "Retry"
       },
       "QuickOpen": {
         "1dbd3f59ff": "移动",
@@ -3213,6 +3215,13 @@
           "usagePercentageLabel": {
             "used": "已用 {{value0}}%",
             "remaining": "剩余 {{value0}}%"
+          },
+          "UsagePercentageDisplayChangeNotice": {
+            "title": "Usage now shows % used",
+            "body": "Prefer remaining? Change it in Settings.",
+            "dismiss": "Dismiss",
+            "openSettings": "Open Settings",
+            "gotIt": "Got it"
           }
         }
       },
@@ -9008,6 +9017,10 @@
         "AppearanceWindowSidebarSection": {
           "usagePercentageDisplayUsed": "已用",
           "usagePercentageDisplayRemaining": "剩余"
+        },
+        "TerminalInteractionSection": {
+          "567633ff50": "Right-click pastes the clipboard into the terminal. Control-click to open the context menu.",
+          "c64497148a": "Right-click pastes the clipboard. Control-click opens the context menu."
         }
       },
       "right": {
@@ -9877,7 +9890,9 @@
             "23e98f192f": "这会永久删除远程主机上的文件。此操作无法撤销。",
             "8b8ee9d22f": "无法确定哪个主机拥有此文件。请检查工作区连接后重试。",
             "af1270b90d": "永久删除 {{count}} 项？",
-            "dd029aa5cd": "这会永久删除远程主机上所选的各项及任何目录内容。此操作无法撤销。"
+            "dd029aa5cd": "这会永久删除远程主机上所选的各项及任何目录内容。此操作无法撤销。",
+            "77fdc36183": "Delete {{count}} items?",
+            "fca915a67a": "Remote items are permanently deleted and cannot be undone. Local items move to the {{value0}}."
           },
           "useFileExplorerHandlers": {
             "32cd9fd991": "无法打开符号链接目标"

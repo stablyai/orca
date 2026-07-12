@@ -1387,7 +1387,9 @@
         "1ff5d979df": "担当者なし",
         "checkActionRequiredHint": "マージを解除するには、このチェックにGitHub上で手動アクション（例：ワークフロー実行の承認）が必要です。",
         "dd5d9a4f17": "{{value0}}に更新",
-        "71a3c0f9d2": "ワークスペースを開始"
+        "71a3c0f9d2": "ワークスペースを開始",
+        "filesUnavailable": "Couldn't load changed files.",
+        "filesRetry": "Retry"
       },
       "QuickOpen": {
         "1dbd3f59ff": "移動",
@@ -3213,6 +3215,13 @@
           "usagePercentageLabel": {
             "used": "{{value0}}% 使用済み",
             "remaining": "残り {{value0}}%"
+          },
+          "UsagePercentageDisplayChangeNotice": {
+            "title": "Usage now shows % used",
+            "body": "Prefer remaining? Change it in Settings.",
+            "dismiss": "Dismiss",
+            "openSettings": "Open Settings",
+            "gotIt": "Got it"
           }
         }
       },
@@ -9008,6 +9017,10 @@
         "AppearanceWindowSidebarSection": {
           "usagePercentageDisplayUsed": "使用済み",
           "usagePercentageDisplayRemaining": "残り"
+        },
+        "TerminalInteractionSection": {
+          "567633ff50": "Right-click pastes the clipboard into the terminal. Control-click to open the context menu.",
+          "c64497148a": "Right-click pastes the clipboard. Control-click opens the context menu."
         }
       },
       "right": {
@@ -9877,7 +9890,9 @@
             "23e98f192f": "This permanently deletes the file on the remote host. This cannot be undone.",
             "8b8ee9d22f": "このファイルを所有しているホストを特定できませんでした。ワークスペースの接続を確認して、もう一度お試しください。",
             "af1270b90d": "{{count}}個の項目を完全に削除しますか?",
-            "dd029aa5cd": "選択した項目とディレクトリの内容がリモートホスト上で完全に削除されます。この操作は元に戻せません。"
+            "dd029aa5cd": "選択した項目とディレクトリの内容がリモートホスト上で完全に削除されます。この操作は元に戻せません。",
+            "77fdc36183": "Delete {{count}} items?",
+            "fca915a67a": "Remote items are permanently deleted and cannot be undone. Local items move to the {{value0}}."
           },
           "useFileExplorerHandlers": {
             "32cd9fd991": "シンボリックリンクターゲットを開けません"

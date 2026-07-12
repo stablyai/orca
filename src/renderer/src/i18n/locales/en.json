@@ -3215,6 +3215,13 @@
           "usagePercentageLabel": {
             "used": "{{value0}}% used",
             "remaining": "{{value0}}% left"
+          },
+          "UsagePercentageDisplayChangeNotice": {
+            "title": "Usage now shows % used",
+            "body": "Prefer remaining? Change it in Settings.",
+            "dismiss": "Dismiss",
+            "openSettings": "Open Settings",
+            "gotIt": "Got it"
           }
         }
       },
@@ -9010,6 +9017,10 @@
         "AppearanceWindowSidebarSection": {
           "usagePercentageDisplayUsed": "Used",
           "usagePercentageDisplayRemaining": "Remaining"
+        },
+        "TerminalInteractionSection": {
+          "567633ff50": "Right-click pastes the clipboard into the terminal. Control-click to open the context menu.",
+          "c64497148a": "Right-click pastes the clipboard. Control-click opens the context menu."
         }
       },
       "right": {
@@ -9879,7 +9890,9 @@
             "23e98f192f": "This permanently deletes the file on the remote host. This cannot be undone.",
             "8b8ee9d22f": "Couldn't determine which host owns this file. Check the workspace connection and try again.",
             "af1270b90d": "Permanently delete {{count}} items?",
-            "dd029aa5cd": "This permanently deletes the selected items and any directory contents on the remote host. This cannot be undone."
+            "dd029aa5cd": "This permanently deletes the selected items and any directory contents on the remote host. This cannot be undone.",
+            "77fdc36183": "Delete {{count}} items?",
+            "fca915a67a": "Remote items are permanently deleted and cannot be undone. Local items move to the {{value0}}."
           },
           "useFileExplorerHandlers": {
             "32cd9fd991": "Cannot open symlink target"
