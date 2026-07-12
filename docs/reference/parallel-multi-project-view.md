@@ -258,6 +258,20 @@ Two drag interactions layer on top of the click/menu entry points, giving the sp
 
 ---
 
+### 6.7 Multiple parallel sets + explicit target picker (decided)
+
+Parallel arrangements are **not** limited to one at a time: several **parallel sets** can coexist — e.g. a 2-pane `A|B` and a 3-pane `C|D|E` among 10 worktrees. Both an explicit (menu) and a spatial (drag) way to target them are required — the two UX modes are complementary, not either/or.
+
+- **Model.** The `workbench-views` slice already holds `workbenchViews: WorkbenchView[]`; **each view is one parallel set**. Views persist — they are not eagerly cleared. Closing a pane removes only that leaf; a set disappears only when it drops below 2 panes (then that one view is removed, **not** the others).
+- **Switching sets — no always-on strip.** Clicking any worktree that is a member of a set (a sidebar row, or a pane) **activates that set** (the membership gate already does this). So the sidebar's "in parallel" muted selection (bug B) doubles as the set indicator, and clicking a member is the switcher — no super-tab strip needed.
+- **Explicit target (button / menu).** When ≥ 2 sets exist, "Open in Parallel" opens a small **picker** listing them by composition — e.g. "orca + shop · 2 panes", "A + B + C · 3 panes" — plus **"New parallel view"**. The user picks which set the worktree joins (splitting that set's focused pane) or starts a new one. With 0–1 existing sets the picker is skipped (today's direct behavior).
+- **Spatial target (drag-drop, §6.6).** Dropping a worktree onto a specific pane/zone targets that set implicitly — no picker needed; the drop location *is* the choice.
+- **One model, two routes.** Both funnel through the same `workbench-views` actions (`activateWorkbenchView` + `splitActiveWorkbenchPane`, or `createWorkbenchView`), so a set built by drag behaves identically to one built by the picker.
+
+Reconciliation with the "revert / no-stuck" fixes (§6.5): keep the close-to-single collapse and the membership-gate escape — but scope the collapse to the **one** view that emptied, leaving other sets intact.
+
+---
+
 ## 7. Architecture / Code Design
 
 ### 7.1 New shared types (`src/shared/types.ts`)
