@@ -2700,6 +2700,8 @@ describe('registerPtyHandlers', () => {
       it('controller stopAndWait skips the synthetic exit when the provider emitted one', async () => {
         vi.useFakeTimers()
         const exitListeners = new Set<(payload: { id: string; code: number }) => void>()
+        const hasPty = vi.fn(() => false)
+        const listProcesses = vi.fn(async () => [])
         const shutdown = vi.fn(async (id: string) => {
           for (const listener of exitListeners) {
             listener({ id, code: 0 })
@@ -2711,6 +2713,7 @@ describe('registerPtyHandlers', () => {
         }
         setLocalPtyProvider({
           spawn: vi.fn(),
+          hasPty,
           write: vi.fn(),
           resize: vi.fn(),
           shutdown,
@@ -2729,7 +2732,7 @@ describe('registerPtyHandlers', () => {
             exitListeners.add(listener)
             return () => exitListeners.delete(listener)
           }),
-          listProcesses: vi.fn(async () => []),
+          listProcesses,
           attach: vi.fn(),
           getDefaultShell: vi.fn(),
           getProfiles: vi.fn()
@@ -2744,6 +2747,8 @@ describe('registerPtyHandlers', () => {
         await vi.advanceTimersByTimeAsync(1_200)
         await expect(stopPromise).resolves.toBe(true)
 
+        expect(hasPty).toHaveBeenCalledWith('local-pty')
+        expect(listProcesses).not.toHaveBeenCalled()
         expect(runtime.onPtyExit).toHaveBeenCalledTimes(1)
         expect(runtime.onPtyExit).toHaveBeenCalledWith('local-pty', 0)
         expect(

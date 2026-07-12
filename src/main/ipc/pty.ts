@@ -490,6 +490,11 @@ function delay(ms: number): Promise<void> {
 }
 
 async function isProviderPtyLive(provider: IPtyProvider, ptyId: string): Promise<boolean> {
+  // Why: worktree teardown verifies each stopped PTY. Local/daemon providers
+  // can answer by ID, avoiding one full session inventory per split pane.
+  if (provider.hasPty) {
+    return provider.hasPty(ptyId)
+  }
   return (await provider.listProcesses()).some((session) => session.id === ptyId)
 }
 
