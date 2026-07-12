@@ -444,27 +444,18 @@ const WorktreeContextMenu = React.memo(function WorktreeContextMenu({
   const parallelSets = useMemo(
     () =>
       workbenchViews
-        .map((view) => {
-          const leafIds = collectLeafWorktreeIds(view.layout)
-          return {
-            id: view.id,
-            focusedWorktreeId: view.focusedWorktreeId,
-            leafIds,
-            // Why: "main + main" across projects is ambiguous — compose
-            // project:branch so distinct projects on the same branch are told apart.
-            label: leafIds
-              .map((id) => {
-                const leaf = worktreeMap.get(id)
-                if (!leaf) {
-                  return id
-                }
-                const project = repoMap.get(leaf.repoId)?.displayName ?? leaf.repoId
-                return `${project}:${leaf.displayName}`
-              })
-              .join(' + ')
-          }
-        })
-        .filter((set) => set.leafIds.length >= 2),
+        .map((view) => ({
+          id: view.id,
+          focusedWorktreeId: view.focusedWorktreeId,
+          // Why: a bare branch like "main" is ambiguous across projects — compose
+          // project:branch per pane and show one pane per line in the picker.
+          leaves: collectLeafWorktreeIds(view.layout).map((id) => {
+            const leaf = worktreeMap.get(id)
+            const project = leaf ? (repoMap.get(leaf.repoId)?.displayName ?? leaf.repoId) : ''
+            return { id, label: leaf ? `${project}:${leaf.displayName}` : id }
+          })
+        }))
+        .filter((set) => set.leaves.length >= 2),
     [workbenchViews, worktreeMap, repoMap]
   )
   const handleInsertIntoParallelSet = useCallback(
@@ -798,15 +789,22 @@ const WorktreeContextMenu = React.memo(function WorktreeContextMenu({
                       'Open in Parallel'
                     )}
                   </DropdownMenuSubTrigger>
-                  <DropdownMenuSubContent className="w-52">
+                  <DropdownMenuSubContent className="w-72 max-w-[24rem]">
                     {parallelSets.map((set) => (
                       <DropdownMenuItem
                         key={set.id}
                         onSelect={() => handleInsertIntoParallelSet(set.focusedWorktreeId)}
                         disabled={isDeleting}
+                        className="items-start"
                       >
-                        <Columns2 className="size-3.5" />
-                        <span className="truncate">{set.label}</span>
+                        <Columns2 className="mt-0.5 size-3.5 shrink-0" />
+                        <span className="flex min-w-0 flex-col gap-0.5">
+                          {set.leaves.map((leaf) => (
+                            <span key={leaf.id} className="truncate leading-tight">
+                              {leaf.label}
+                            </span>
+                          ))}
+                        </span>
                       </DropdownMenuItem>
                     ))}
                     <DropdownMenuSeparator />
