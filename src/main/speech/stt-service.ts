@@ -6,21 +6,14 @@ import { join } from 'node:path'
 import { app } from 'electron'
 import { getCatalogModel } from './model-catalog'
 import type { ModelManager } from './model-manager'
-import { OpenAiTranscriptionSession } from './openai-transcription-client'
-import { readOpenAiSpeechApiKey } from './openai-api-key-store'
+import { createCloudTranscriptionSession } from './cloud-transcription-session'
+import type { CloudTranscriptionSession, SttEvent, SttEventSink } from './stt-service-types'
+
+export type { SttEvent, SttEventSink } from './stt-service-types'
 
 export const START_DICTATION_TIMEOUT_MS = 60_000
 const STOP_DICTATION_TIMEOUT_MS = 60_000
 export const IDLE_WORKER_TEARDOWN_MS = 60 * 60 * 1000
-
-export type SttEvent =
-  | { type: 'ready' }
-  | { type: 'partial'; text?: string }
-  | { type: 'final'; text?: string }
-  | { type: 'stopped' }
-  | { type: 'error'; error?: string }
-
-export type SttEventSink = (event: SttEvent) => void
 
 type StopInFlight = {
   worker: Worker
@@ -32,7 +25,7 @@ type StopOutcome = 'stopped' | 'error' | 'exit' | 'timeout'
 
 export class SttService {
   private worker: Worker | null = null
-  private cloudSession: OpenAiTranscriptionSession | null = null
+  private cloudSession: CloudTranscriptionSession | null = null
   private modelManager: ModelManager
   private activeModelId: string | null = null
   private activeHotwordsFilePath: string | undefined
@@ -102,7 +95,7 @@ export class SttService {
       throw new Error(`Unknown model: ${modelId}`)
     }
 
-    if (manifest.provider === 'openai') {
+    if (manifest.provider !== 'local') {
       if (this.worker) {
         const existingWorker = this.worker
         await this.stopDictation(owner, { cancelStarting: false })
@@ -114,11 +107,22 @@ export class SttService {
         throw new Error(`Model not ready: ${modelState.status}`)
       }
 
-      this.cloudSession = new OpenAiTranscriptionSession(modelId, readOpenAiSpeechApiKey)
+      const cloudSession = createCloudTranscriptionSession(modelId, manifest.provider, sink)
+      this.cloudSession = cloudSession
       this.activeModelId = modelId
       this.activeHotwordsFilePath = undefined
       this.eventSink = sink
-      sink({ type: 'ready' })
+      try {
+        await cloudSession.start()
+        sink({ type: 'ready' })
+      } catch (error) {
+        if (this.cloudSession === cloudSession) {
+          this.cloudSession = null
+          this.activeModelId = null
+          this.eventSink = null
+        }
+        throw error
+      }
       return
     }
 

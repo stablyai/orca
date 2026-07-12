@@ -333,6 +333,10 @@ import type {
   BrowserTabInfo,
   BrowserScreencastResult
 } from '../../shared/runtime-types'
+import {
+  appendMobileDictationFinal,
+  finishMobileDictationText
+} from './mobile-dictation-transcript'
 import type { AutomationService } from '../automations/service'
 import { RuntimeBrowserCommands } from './orca-runtime-browser'
 import { buildHeadlessTerminalSplitLayout } from './headless-terminal-split-layout'
@@ -2512,6 +2516,7 @@ export class OrcaRuntimeService {
     state: 'starting' | 'active' | 'closing'
     partialText: string
     finalTexts: string[]
+    preserveExactText: boolean
     errors: string[]
   } | null = null
 
@@ -7361,7 +7366,7 @@ export class OrcaRuntimeService {
       return {
         id: manifest.id,
         label: manifest.label,
-        provider: manifest.provider === 'openai' ? 'openai' : 'local',
+        provider: manifest.provider,
         sizeBytes: manifest.sizeBytes ?? null,
         recommended: manifest.recommended === true,
         status: state?.status ?? 'not-downloaded',
@@ -7490,6 +7495,7 @@ export class OrcaRuntimeService {
       state: 'starting',
       partialText: '',
       finalTexts: [],
+      preserveExactText: getCatalogModel(modelId)?.provider === 'soniox',
       errors: []
     }
 
@@ -7504,9 +7510,9 @@ export class OrcaRuntimeService {
           if (event.type === 'partial') {
             session.partialText = event.text ?? ''
           } else if (event.type === 'final') {
-            const text = event.text?.trim()
-            if (text) {
-              session.finalTexts.push(text)
+            const text = event.text
+            if (text !== undefined && text !== '') {
+              appendMobileDictationFinal(session.finalTexts, text, session.preserveExactText)
               session.partialText = ''
             }
           } else if (event.type === 'error') {
@@ -7589,7 +7595,11 @@ export class OrcaRuntimeService {
       if (session.errors.length > 0) {
         throw new Error(session.errors[0])
       }
-      const text = [...session.finalTexts, session.partialText].join(' ').trim()
+      const text = finishMobileDictationText(
+        session.finalTexts,
+        session.partialText,
+        session.preserveExactText
+      )
       return { dictationId: params.dictationId, text }
     } finally {
       if (this.mobileDictation?.id === session.id) {

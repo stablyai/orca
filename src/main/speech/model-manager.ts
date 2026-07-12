@@ -13,6 +13,7 @@ import type {
 } from '../../shared/speech-types'
 import { SPEECH_MODEL_CATALOG, getCatalogModel, isLocalSpeechModel } from './model-catalog'
 import { hasOpenAiSpeechApiKey } from './openai-api-key-store'
+import { hasSonioxSpeechApiKey } from './soniox-api-key-store'
 import { resolveTarExecutable } from './tar-executable'
 import {
   getSpeechModelCacheDirCandidates,
@@ -110,6 +111,13 @@ export class ModelManager {
       return {
         id: modelId,
         status: hasOpenAiSpeechApiKey() ? 'ready' : 'not-downloaded'
+      }
+    }
+
+    if (manifest.provider === 'soniox') {
+      return {
+        id: modelId,
+        status: hasSonioxSpeechApiKey() ? 'ready' : 'not-downloaded'
       }
     }
 

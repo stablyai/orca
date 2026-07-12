@@ -28,6 +28,9 @@ function modelMeta(model: MobileSpeechModel): string {
   if (model.provider === 'openai') {
     return 'OpenAI API'
   }
+  if (model.provider === 'soniox') {
+    return 'Soniox API'
+  }
   const inFlight = isModelInFlight(model)
   if (inFlight && model.progress != null) {
     return `${formatSize(model.sizeBytes)} · ${Math.round(model.progress * 100)}%`
@@ -71,7 +74,7 @@ export function VoiceModelList({
                 </View>
                 <Text style={styles.modelMeta}>{modelMeta(model)}</Text>
               </View>
-              {model.provider === 'openai' ? (
+              {model.provider !== 'local' ? (
                 <Text style={styles.modelStateText}>
                   {model.status === 'ready' ? 'API key set' : 'Set up on desktop'}
                 </Text>

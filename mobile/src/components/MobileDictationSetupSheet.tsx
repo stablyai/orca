@@ -164,7 +164,11 @@ export function MobileDictationSetupSheet({ visible, client, onClose, onReady }:
                       ) : null}
                     </View>
                     <Text style={styles.modelMeta}>
-                      {model.provider === 'openai' ? 'OpenAI API' : formatSize(model.sizeBytes)}
+                      {model.provider === 'openai'
+                        ? 'OpenAI API'
+                        : model.provider === 'soniox'
+                          ? 'Soniox API'
+                          : formatSize(model.sizeBytes)}
                       {inFlight && model.progress != null
                         ? ` · ${Math.round(model.progress * 100)}%`
                         : model.status === 'extracting'
@@ -172,7 +176,7 @@ export function MobileDictationSetupSheet({ visible, client, onClose, onReady }:
                           : ''}
                     </Text>
                   </View>
-                  {model.provider === 'openai' ? (
+                  {model.provider !== 'local' ? (
                     <Text style={styles.modelStateText}>
                       {model.status === 'ready' ? 'API key set' : 'Set up on desktop'}
                     </Text>

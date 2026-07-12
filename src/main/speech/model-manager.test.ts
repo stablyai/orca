@@ -6,11 +6,13 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { SPEECH_MODEL_CATALOG } from './model-catalog'
 import { ModelManager } from './model-manager'
 
-const { hasOpenAiSpeechApiKeyMock, netRequestMock, spawnMock } = vi.hoisted(() => ({
-  hasOpenAiSpeechApiKeyMock: vi.fn(),
-  netRequestMock: vi.fn(),
-  spawnMock: vi.fn()
-}))
+const { hasOpenAiSpeechApiKeyMock, hasSonioxSpeechApiKeyMock, netRequestMock, spawnMock } =
+  vi.hoisted(() => ({
+    hasOpenAiSpeechApiKeyMock: vi.fn(),
+    hasSonioxSpeechApiKeyMock: vi.fn(),
+    netRequestMock: vi.fn(),
+    spawnMock: vi.fn()
+  }))
 
 vi.mock('electron', () => ({
   app: {
@@ -28,6 +30,10 @@ vi.mock('child_process', async () => {
 
 vi.mock('./openai-api-key-store', () => ({
   hasOpenAiSpeechApiKey: hasOpenAiSpeechApiKeyMock
+}))
+
+vi.mock('./soniox-api-key-store', () => ({
+  hasSonioxSpeechApiKey: hasSonioxSpeechApiKeyMock
 }))
 
 type ModelManagerInternals = {
@@ -53,6 +59,8 @@ describe('ModelManager', () => {
     netRequestMock.mockReset()
     hasOpenAiSpeechApiKeyMock.mockReset()
     hasOpenAiSpeechApiKeyMock.mockReturnValue(false)
+    hasSonioxSpeechApiKeyMock.mockReset()
+    hasSonioxSpeechApiKeyMock.mockReturnValue(false)
     spawnMock.mockReset()
   })
 
@@ -115,6 +123,25 @@ describe('ModelManager', () => {
 
       await expect(manager.getModelState('openai-gpt-4o-mini-transcribe')).resolves.toEqual({
         id: 'openai-gpt-4o-mini-transcribe',
+        status: 'ready'
+      })
+    } finally {
+      rmSync(dir, { recursive: true, force: true })
+    }
+  })
+
+  it('marks Soniox transcription ready only when a Soniox API key is configured', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'orca-model-manager-'))
+    try {
+      const manager = new ModelManager(dir)
+
+      await expect(manager.getModelState('soniox-stt-rt-v5')).resolves.toEqual({
+        id: 'soniox-stt-rt-v5',
+        status: 'not-downloaded'
+      })
+      hasSonioxSpeechApiKeyMock.mockReturnValue(true)
+      await expect(manager.getModelState('soniox-stt-rt-v5')).resolves.toEqual({
+        id: 'soniox-stt-rt-v5',
         status: 'ready'
       })
     } finally {

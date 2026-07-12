@@ -10,6 +10,11 @@ import {
   hasOpenAiSpeechApiKey,
   saveOpenAiSpeechApiKey
 } from '../speech/openai-api-key-store'
+import {
+  clearSonioxSpeechApiKey,
+  hasSonioxSpeechApiKey,
+  saveSonioxSpeechApiKey
+} from '../speech/soniox-api-key-store'
 import type { Store } from '../persistence'
 
 export function registerSpeechHandlers(store: Store): void {
@@ -32,6 +37,20 @@ export function registerSpeechHandlers(store: Store): void {
 
   ipcMain.handle('speech:clearOpenAiApiKey', async () => {
     clearOpenAiSpeechApiKey()
+    return { configured: false }
+  })
+
+  ipcMain.handle('speech:getSonioxApiKeyStatus', async () => {
+    return { configured: hasSonioxSpeechApiKey() }
+  })
+
+  ipcMain.handle('speech:saveSonioxApiKey', async (_event, apiKey: string) => {
+    saveSonioxSpeechApiKey(apiKey)
+    return { configured: true }
+  })
+
+  ipcMain.handle('speech:clearSonioxApiKey', async () => {
+    clearSonioxSpeechApiKey()
     return { configured: false }
   })
 

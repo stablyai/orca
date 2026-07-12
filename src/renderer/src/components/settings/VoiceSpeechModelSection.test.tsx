@@ -76,12 +76,23 @@ const secondLocalModel: SpeechModelManifest = {
   label: 'Second Local Model'
 }
 
+const sonioxModel: SpeechModelManifest = {
+  ...localModel,
+  id: 'soniox-stt-rt-v5',
+  label: 'Soniox STT-RT v5',
+  provider: 'soniox',
+  type: 'soniox',
+  sizeBytes: undefined,
+  files: undefined
+}
+
 function renderSection(args: {
   deleteModel: (modelId: string) => Promise<void>
   downloadModel?: (modelId: string) => Promise<void>
   catalog?: SpeechModelManifest[]
   modelStates?: SpeechModelState[]
   refreshModelStates?: () => void
+  onOpenCloudDialog?: (provider: 'openai' | 'soniox', modelId: string) => void
 }): { container: HTMLDivElement; root: Root } {
   Object.assign(window, {
     api: {
@@ -105,7 +116,7 @@ function renderSection(args: {
         catalog={catalog}
         modelStates={modelStates}
         onUpdateVoiceSettings={vi.fn()}
-        onOpenOpenAiDialog={vi.fn()}
+        onOpenCloudDialog={args.onOpenCloudDialog ?? vi.fn()}
         onRefreshModelStates={args.refreshModelStates ?? vi.fn()}
       />
     )
@@ -240,6 +251,26 @@ describe('VoiceSpeechModelSection', () => {
 
     expect(window.api.speech.downloadModel).toHaveBeenCalledWith(localModel.id)
     expect(menuDismissMock).not.toHaveBeenCalled()
+    root.unmount()
+  })
+
+  it('opens Soniox key configuration when its model is not ready', async () => {
+    const onOpenCloudDialog = vi.fn()
+    const { container, root } = renderSection({
+      deleteModel: () => Promise.resolve(),
+      catalog: [sonioxModel],
+      modelStates: [{ id: sonioxModel.id, status: 'not-downloaded' }],
+      onOpenCloudDialog
+    })
+
+    await act(async () => {
+      container
+        .querySelector<HTMLElement>('[role="option"]')!
+        .dispatchEvent(new MouseEvent('click', { bubbles: true }))
+    })
+
+    expect(onOpenCloudDialog).toHaveBeenCalledWith('soniox', sonioxModel.id)
+    expect(window.api.speech.downloadModel).not.toHaveBeenCalled()
     root.unmount()
   })
 })

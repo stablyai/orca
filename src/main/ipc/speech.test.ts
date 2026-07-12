@@ -5,13 +5,15 @@ const {
   fromWebContentsMock,
   getSpeechModelManagerMock,
   getSpeechSttServiceMock,
-  deleteLocalSpeechModelMock
+  deleteLocalSpeechModelMock,
+  saveSonioxSpeechApiKeyMock
 } = vi.hoisted(() => ({
   handleMock: vi.fn(),
   fromWebContentsMock: vi.fn(),
   getSpeechModelManagerMock: vi.fn(),
   getSpeechSttServiceMock: vi.fn(),
-  deleteLocalSpeechModelMock: vi.fn()
+  deleteLocalSpeechModelMock: vi.fn(),
+  saveSonioxSpeechApiKeyMock: vi.fn()
 }))
 
 vi.mock('electron', () => ({
@@ -43,6 +45,12 @@ vi.mock('../speech/speech-model-deletion', () => ({
   deleteLocalSpeechModel: deleteLocalSpeechModelMock
 }))
 
+vi.mock('../speech/soniox-api-key-store', () => ({
+  clearSonioxSpeechApiKey: vi.fn(),
+  hasSonioxSpeechApiKey: vi.fn(() => false),
+  saveSonioxSpeechApiKey: saveSonioxSpeechApiKeyMock
+}))
+
 import { registerSpeechHandlers } from './speech'
 
 type SpeechDownloadHandler = (event: { sender: { id: number } }, modelId: string) => Promise<void>
@@ -62,6 +70,7 @@ describe('registerSpeechHandlers', () => {
     getSpeechModelManagerMock.mockReset()
     getSpeechSttServiceMock.mockReset()
     deleteLocalSpeechModelMock.mockReset()
+    saveSonioxSpeechApiKeyMock.mockReset()
   })
 
   it('clears the model download progress callback after completion', async () => {
@@ -155,5 +164,13 @@ describe('registerSpeechHandlers', () => {
       sttService,
       modelId: 'model-1'
     })
+  })
+
+  it('keeps Soniox credentials in the main-process key store', async () => {
+    registerSpeechHandlers({} as never)
+
+    await getHandler('speech:saveSonioxApiKey')({ sender: { id: 7 } }, 'secret-key')
+
+    expect(saveSonioxSpeechApiKeyMock).toHaveBeenCalledWith('secret-key')
   })
 })

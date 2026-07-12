@@ -55,6 +55,9 @@ function installWindowApi(
         getOpenAiApiKeyStatus: vi.fn(async () => ({ configured: false })),
         saveOpenAiApiKey: vi.fn(async () => ({ configured: true })),
         clearOpenAiApiKey: vi.fn(async () => ({ configured: false })),
+        getSonioxApiKeyStatus: vi.fn(async () => ({ configured: false })),
+        saveSonioxApiKey: vi.fn(async () => ({ configured: true })),
+        clearSonioxApiKey: vi.fn(async () => ({ configured: false })),
         onDownloadProgress: vi.fn(() => () => {}),
         downloadModel: vi.fn()
       }

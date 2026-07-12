@@ -4326,6 +4326,12 @@ const api = {
       ipcRenderer.invoke('speech:saveOpenAiApiKey', apiKey),
     clearOpenAiApiKey: (): Promise<{ configured: boolean }> =>
       ipcRenderer.invoke('speech:clearOpenAiApiKey'),
+    getSonioxApiKeyStatus: (): Promise<{ configured: boolean }> =>
+      ipcRenderer.invoke('speech:getSonioxApiKeyStatus'),
+    saveSonioxApiKey: (apiKey: string): Promise<{ configured: boolean }> =>
+      ipcRenderer.invoke('speech:saveSonioxApiKey', apiKey),
+    clearSonioxApiKey: (): Promise<{ configured: boolean }> =>
+      ipcRenderer.invoke('speech:clearSonioxApiKey'),
     downloadModel: (modelId: string): Promise<void> =>
       ipcRenderer.invoke('speech:downloadModel', modelId),
     cancelDownload: (modelId: string): Promise<void> =>

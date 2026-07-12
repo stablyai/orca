@@ -157,6 +157,17 @@ export const SPEECH_MODEL_CATALOG: SpeechModelManifest[] = [
     language: 'multilingual',
     sampleRate: 16000,
     streaming: false
+  },
+  {
+    id: 'soniox-stt-rt-v5',
+    label: 'Soniox STT-RT v5',
+    description:
+      'Low-latency streaming transcription for 60+ languages. Requires a Soniox API key.',
+    type: 'soniox',
+    provider: 'soniox',
+    language: 'multilingual',
+    sampleRate: 16000,
+    streaming: true
   }
 ]
 

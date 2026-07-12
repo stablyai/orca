@@ -6885,7 +6885,11 @@
           "f9a9cf6928": "음성 받아쓰기를 활성화하려면 마이크 권한이 필요합니다.",
           "1eac933202": "macOS 개인 정보 보호 및 보안을 열었습니다. 액세스 권한을 부여한 후 받아쓰기를 다시 활성화하세요.",
           "cd9fe37556": "마이크 권한이 부여되었습니다.",
-          "6fa734ed95": "{{value0}} 삭제"
+          "6fa734ed95": "{{value0}} 삭제",
+          "sonioxKeySaved": "Soniox API key saved",
+          "sonioxKeySaveFailed": "Failed to save Soniox API key",
+          "sonioxKeyCleared": "Soniox API key cleared",
+          "sonioxKeyClearFailed": "Failed to clear Soniox API key"
         },
         "WorktreeSymlinksSection": {
           "1c1e35b219": "{{value0}} 제거",
@@ -8512,7 +8516,9 @@
               "20574cbc72": "음성 받아쓰기 활성화",
               "322d457a0d": "전사",
               "dcc7846641": "클라우드 음성-텍스트 모델에 사용되는 OpenAI API 키를 구성합니다.",
-              "ebfd0b32e5": "OpenAI 전사"
+              "ebfd0b32e5": "OpenAI 전사",
+              "sonioxTitle": "Soniox Transcription",
+              "sonioxDescription": "Configure the Soniox API key used for real-time speech-to-text."
             }
           }
         },
@@ -9021,6 +9027,25 @@
         "TerminalInteractionSection": {
           "567633ff50": "Right-click pastes the clipboard into the terminal. Control-click to open the context menu.",
           "c64497148a": "Right-click pastes the clipboard. Control-click opens the context menu."
+        },
+        "SonioxTranscriptionKeyDialog": {
+          "title": "Soniox Transcription",
+          "description": "Audio is streamed to Soniox only when a Soniox speech model is selected.",
+          "apiKey": "API Key",
+          "configured": "API key configured",
+          "placeholder": "Enter Soniox API key",
+          "storage": "Local runtime keys are stored in ~/.orca using Electron encrypted storage when available.",
+          "clear": "Clear Key",
+          "save": "Save Key"
+        },
+        "SonioxTranscriptionSettingsRow": {
+          "title": "Soniox Transcription",
+          "connected": "Connected",
+          "keyReady": "API key configured for Soniox speech-to-text models.",
+          "keyRequired": "Add a Soniox API key before selecting Soniox speech-to-text models.",
+          "replace": "Replace key",
+          "disconnect": "Disconnect Soniox API key",
+          "add": "Add API key"
         }
       },
       "right": {

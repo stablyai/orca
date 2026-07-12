@@ -1,7 +1,11 @@
 import { useState } from 'react'
 import { toast } from 'sonner'
 import type { VoiceSettings } from '../../../../shared/speech-types'
-import type { SpeechModelManifest, SpeechModelState } from '../../../../shared/speech-types'
+import type {
+  SpeechModelManifest,
+  SpeechModelProvider,
+  SpeechModelState
+} from '../../../../shared/speech-types'
 import { Button } from '../ui/button'
 import { Label } from '../ui/label'
 import {
@@ -18,7 +22,7 @@ type VoiceSpeechModelSectionProps = {
   catalog: SpeechModelManifest[]
   modelStates: SpeechModelState[]
   onUpdateVoiceSettings: (updates: Partial<VoiceSettings>) => void
-  onOpenOpenAiDialog: (modelId: string) => void
+  onOpenCloudDialog: (provider: Exclude<SpeechModelProvider, 'local'>, modelId: string) => void
   onRefreshModelStates: () => void
 }
 
@@ -27,7 +31,7 @@ export function VoiceSpeechModelSection({
   catalog,
   modelStates,
   onUpdateVoiceSettings,
-  onOpenOpenAiDialog,
+  onOpenCloudDialog,
   onRefreshModelStates
 }: VoiceSpeechModelSectionProps): React.JSX.Element {
   const [pendingDeleteModelIds, setPendingDeleteModelIds] = useState<Set<string>>(() => new Set())
@@ -74,7 +78,7 @@ export function VoiceSpeechModelSection({
             const isDownloading =
               mState?.status === 'downloading' || mState?.status === 'extracting'
             const isActive = voiceSettings.sttModel === manifest.id
-            const isCloud = manifest.provider === 'openai'
+            const isCloud = manifest.provider !== 'local'
             const deletePending = pendingDeleteModelIds.has(manifest.id)
             const sizeMb = manifest.sizeBytes ? Math.round(manifest.sizeBytes / 1_000_000) : null
 
@@ -85,8 +89,8 @@ export function VoiceSpeechModelSection({
                 onSelect={(event) => {
                   if (isReady) {
                     onUpdateVoiceSettings({ sttModel: manifest.id })
-                  } else if (isCloud) {
-                    onOpenOpenAiDialog(manifest.id)
+                  } else if (manifest.provider !== 'local') {
+                    onOpenCloudDialog(manifest.provider, manifest.id)
                   } else if (!isDownloading) {
                     // Why: download progress appears in this menu, so starting one should not dismiss it.
                     event.preventDefault()

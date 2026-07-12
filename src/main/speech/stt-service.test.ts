@@ -1,11 +1,11 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const {
-  MockOpenAiTranscriptionSession,
   MockWorker,
   getCloudSessions,
   getCreatedWorkerCount,
   getLastWorker,
+  createCloudSessionMock,
   readOpenAiSpeechApiKeyMock,
   resetCloudSessions,
   resetWorkers
@@ -92,18 +92,27 @@ const {
       this.feedCalls.push({ samples, sampleRate })
     }
 
+    start(): Promise<void> {
+      return Promise.resolve()
+    }
+
     finish(): Promise<string> {
       return Promise.resolve(`${this.modelId}:${this.readApiKey()}`)
     }
   }
 
+  const readOpenAiSpeechApiKeyMock = vi.fn(() => 'test-openai-key')
+
   return {
-    MockOpenAiTranscriptionSession: HoistedMockOpenAiTranscriptionSession,
     MockWorker: HoistedMockWorker,
     getCloudSessions: () => HoistedMockOpenAiTranscriptionSession.instances,
     getCreatedWorkerCount: () => HoistedMockWorker.created,
     getLastWorker: () => HoistedMockWorker.instances.at(-1),
-    readOpenAiSpeechApiKeyMock: vi.fn(() => 'test-openai-key'),
+    createCloudSessionMock: vi.fn(
+      (modelId: string) =>
+        new HoistedMockOpenAiTranscriptionSession(modelId, readOpenAiSpeechApiKeyMock)
+    ),
+    readOpenAiSpeechApiKeyMock,
     resetCloudSessions: () => {
       HoistedMockOpenAiTranscriptionSession.instances = []
     },
@@ -147,12 +156,8 @@ vi.mock('./model-catalog', () => ({
         }
 }))
 
-vi.mock('./openai-api-key-store', () => ({
-  readOpenAiSpeechApiKey: readOpenAiSpeechApiKeyMock
-}))
-
-vi.mock('./openai-transcription-client', () => ({
-  OpenAiTranscriptionSession: MockOpenAiTranscriptionSession
+vi.mock('./cloud-transcription-session', () => ({
+  createCloudTranscriptionSession: createCloudSessionMock
 }))
 
 import { IDLE_WORKER_TEARDOWN_MS, START_DICTATION_TIMEOUT_MS, SttService } from './stt-service'

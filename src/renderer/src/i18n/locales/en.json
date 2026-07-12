@@ -6937,7 +6937,11 @@
           "ad5d036ecc": "Could not request microphone permission. Voice dictation was not enabled.",
           "f9a9cf6928": "Microphone permission is required before enabling voice dictation.",
           "1eac933202": "Opened macOS Privacy & Security. Enable dictation again after granting access.",
-          "cd9fe37556": "Microphone permission granted"
+          "cd9fe37556": "Microphone permission granted",
+          "sonioxKeySaved": "Soniox API key saved",
+          "sonioxKeySaveFailed": "Failed to save Soniox API key",
+          "sonioxKeyCleared": "Soniox API key cleared",
+          "sonioxKeyClearFailed": "Failed to clear Soniox API key"
         },
         "WorktreeSymlinksSection": {
           "1c1e35b219": "Remove {{value0}}",
@@ -8564,7 +8568,9 @@
               "20574cbc72": "Enable Voice Dictation",
               "322d457a0d": "transcription",
               "dcc7846641": "Configure the OpenAI API key used for cloud speech-to-text models.",
-              "ebfd0b32e5": "OpenAI Transcription"
+              "ebfd0b32e5": "OpenAI Transcription",
+              "sonioxTitle": "Soniox Transcription",
+              "sonioxDescription": "Configure the Soniox API key used for real-time speech-to-text."
             }
           }
         },
@@ -9021,6 +9027,25 @@
         "TerminalInteractionSection": {
           "567633ff50": "Right-click pastes the clipboard into the terminal. Control-click to open the context menu.",
           "c64497148a": "Right-click pastes the clipboard. Control-click opens the context menu."
+        },
+        "SonioxTranscriptionKeyDialog": {
+          "title": "Soniox Transcription",
+          "description": "Audio is streamed to Soniox only when a Soniox speech model is selected.",
+          "apiKey": "API Key",
+          "configured": "API key configured",
+          "placeholder": "Enter Soniox API key",
+          "storage": "Local runtime keys are stored in ~/.orca using Electron encrypted storage when available.",
+          "clear": "Clear Key",
+          "save": "Save Key"
+        },
+        "SonioxTranscriptionSettingsRow": {
+          "title": "Soniox Transcription",
+          "connected": "Connected",
+          "keyReady": "API key configured for Soniox speech-to-text models.",
+          "keyRequired": "Add a Soniox API key before selecting Soniox speech-to-text models.",
+          "replace": "Replace key",
+          "disconnect": "Disconnect Soniox API key",
+          "add": "Add API key"
         }
       },
       "right": {

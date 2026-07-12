@@ -5,14 +5,18 @@ import type { SpeechModelManifest, VoiceSettings } from '../../../../shared/spee
 import { Separator } from '../ui/separator'
 import { toast } from 'sonner'
 import { useAppStore } from '@/store'
-import { OpenAiTranscriptionKeyDialog } from './OpenAiTranscriptionKeyDialog'
-import { OpenAiTranscriptionSettingsRow } from './OpenAiTranscriptionSettingsRow'
+import { CloudTranscriptionKeyDialog } from './CloudTranscriptionKeyDialog'
+import { CloudTranscriptionSettingsRow } from './CloudTranscriptionSettingsRow'
 import { handleVoiceDictationToggle } from './voice-dictation-toggle'
 import { VoiceDictationSettingsSection } from './VoiceDictationSettingsSection'
 import { VoiceSpeechModelSection } from './VoiceSpeechModelSection'
 import { matchesSettingsSearch } from './settings-search'
-import { getOpenaiTranscriptionSearchEntry } from './voice-pane-search'
+import {
+  getOpenaiTranscriptionSearchEntry,
+  getSonioxTranscriptionSearchEntry
+} from './voice-pane-search'
 import { translate } from '@/i18n/i18n'
+import { useSpeechApiKeySettings } from './use-speech-api-key-settings'
 
 export { handleVoiceDictationToggle }
 
@@ -29,10 +33,6 @@ export function VoicePane({ settings, updateSettings }: VoicePaneProps): React.J
   const settingsSearchQuery = useAppStore((s) => s.settingsSearchQuery ?? '')
   const [catalog, setCatalog] = useState<SpeechModelManifest[]>([])
   const [permissionPending, setPermissionPending] = useState(false)
-  const [openAiDialogOpen, setOpenAiDialogOpen] = useState(false)
-  const [openAiApiKeyDraft, setOpenAiApiKeyDraft] = useState('')
-  const [openAiKeyPending, setOpenAiKeyPending] = useState(false)
-  const [pendingCloudModelId, setPendingCloudModelId] = useState<string | null>(null)
   const mountedRef = useRef(true)
 
   const handlePaneRef = useCallback((node: HTMLDivElement | null): void => {
@@ -63,6 +63,15 @@ export function VoicePane({ settings, updateSettings }: VoicePaneProps): React.J
       })
       .catch(() => {})
     void window.api.speech
+      .getSonioxApiKeyStatus()
+      .then((status) => {
+        if (!cancelled && status.configured !== voiceSettings.sonioxApiKeyConfigured) {
+          updateVoiceSettings({ sonioxApiKeyConfigured: status.configured })
+          refreshModelStates()
+        }
+      })
+      .catch(() => {})
+    void window.api.speech
       .getOpenAiApiKeyStatus()
       .then((status) => {
         if (!cancelled && status.configured !== voiceSettings.openAiApiKeyConfigured) {
@@ -74,7 +83,12 @@ export function VoicePane({ settings, updateSettings }: VoicePaneProps): React.J
     return () => {
       cancelled = true
     }
-  }, [refreshModelStates, updateVoiceSettings, voiceSettings.openAiApiKeyConfigured])
+  }, [
+    refreshModelStates,
+    updateVoiceSettings,
+    voiceSettings.openAiApiKeyConfigured,
+    voiceSettings.sonioxApiKeyConfigured
+  ])
 
   useEffect(() => {
     const cleanup = window.api.speech.onDownloadProgress(() => {
@@ -124,78 +138,36 @@ export function VoicePane({ settings, updateSettings }: VoicePaneProps): React.J
   }
 
   const selectedModel = catalog.find((m) => m.id === voiceSettings.sttModel)
+  const openAiKey = useSpeechApiKeySettings({
+    provider: 'openai',
+    currentModelId: voiceSettings.sttModel,
+    selectedProvider: selectedModel?.provider,
+    updateVoiceSettings,
+    refreshModelStates,
+    isMounted: () => mountedRef.current
+  })
+  const sonioxKey = useSpeechApiKeySettings({
+    provider: 'soniox',
+    currentModelId: voiceSettings.sttModel,
+    selectedProvider: selectedModel?.provider,
+    updateVoiceSettings,
+    refreshModelStates,
+    isMounted: () => mountedRef.current
+  })
   const showOpenAiSettingsRow =
     voiceSettings.openAiApiKeyConfigured ||
     selectedModel?.provider === 'openai' ||
     (settingsSearchQuery.trim() !== '' &&
       matchesSettingsSearch(settingsSearchQuery, getOpenaiTranscriptionSearchEntry()))
+  const showSonioxSettingsRow =
+    voiceSettings.sonioxApiKeyConfigured ||
+    selectedModel?.provider === 'soniox' ||
+    (settingsSearchQuery.trim() !== '' &&
+      matchesSettingsSearch(settingsSearchQuery, getSonioxTranscriptionSearchEntry()))
 
-  const openOpenAiDialog = (modelId: string | null = null): void => {
-    setPendingCloudModelId(modelId)
-    setOpenAiApiKeyDraft('')
-    setOpenAiDialogOpen(true)
-  }
-
-  const saveOpenAiApiKey = async (): Promise<void> => {
-    setOpenAiKeyPending(true)
-    try {
-      await window.api.speech.saveOpenAiApiKey(openAiApiKeyDraft)
-      updateVoiceSettings({
-        openAiApiKeyConfigured: true,
-        sttModel: pendingCloudModelId ?? voiceSettings.sttModel
-      })
-      await refreshModelStates()
-      setOpenAiDialogOpen(false)
-      setOpenAiApiKeyDraft('')
-      setPendingCloudModelId(null)
-      toast.success(
-        translate('auto.components.settings.VoicePane.506df81ba6', 'OpenAI API key saved')
-      )
-    } catch (err) {
-      toast.error(
-        err instanceof Error
-          ? err.message
-          : translate(
-              'auto.components.settings.VoicePane.8572bbb537',
-              'Failed to save OpenAI API key'
-            )
-      )
-    } finally {
-      if (mountedRef.current) {
-        setOpenAiKeyPending(false)
-      }
-    }
-  }
-
-  const clearOpenAiApiKey = async (): Promise<void> => {
-    setOpenAiKeyPending(true)
-    try {
-      await window.api.speech.clearOpenAiApiKey()
-      updateVoiceSettings({
-        openAiApiKeyConfigured: false,
-        sttModel: selectedModel?.provider === 'openai' ? '' : voiceSettings.sttModel
-      })
-      await refreshModelStates()
-      setOpenAiDialogOpen(false)
-      setOpenAiApiKeyDraft('')
-      setPendingCloudModelId(null)
-      toast.success(
-        translate('auto.components.settings.VoicePane.37aba8bb63', 'OpenAI API key cleared')
-      )
-    } catch (err) {
-      toast.error(
-        err instanceof Error
-          ? err.message
-          : translate(
-              'auto.components.settings.VoicePane.62d2a84d31',
-              'Failed to clear OpenAI API key'
-            )
-      )
-    } finally {
-      if (mountedRef.current) {
-        setOpenAiKeyPending(false)
-      }
-    }
+  const openCloudDialog = (provider: 'openai' | 'soniox', modelId: string): void => {
+    const keySettings = provider === 'openai' ? openAiKey : sonioxKey
+    keySettings.openDialog(modelId)
   }
 
   return (
@@ -212,31 +184,57 @@ export function VoicePane({ settings, updateSettings }: VoicePaneProps): React.J
         catalog={catalog}
         modelStates={modelStates}
         onUpdateVoiceSettings={updateVoiceSettings}
-        onOpenOpenAiDialog={openOpenAiDialog}
+        onOpenCloudDialog={openCloudDialog}
         onRefreshModelStates={refreshModelStates}
       />
 
       {showOpenAiSettingsRow && (
         <>
           <Separator />
-          <OpenAiTranscriptionSettingsRow
+          <CloudTranscriptionSettingsRow
+            provider="openai"
             configured={voiceSettings.openAiApiKeyConfigured}
-            disabled={openAiKeyPending}
-            onConfigure={() => openOpenAiDialog(null)}
-            onClear={() => void clearOpenAiApiKey()}
+            disabled={openAiKey.pending}
+            onConfigure={() => openAiKey.openDialog()}
+            onClear={() => void openAiKey.clear()}
           />
         </>
       )}
 
-      <OpenAiTranscriptionKeyDialog
-        open={openAiDialogOpen}
+      {showSonioxSettingsRow && (
+        <>
+          <Separator />
+          <CloudTranscriptionSettingsRow
+            provider="soniox"
+            configured={voiceSettings.sonioxApiKeyConfigured}
+            disabled={sonioxKey.pending}
+            onConfigure={() => sonioxKey.openDialog()}
+            onClear={() => void sonioxKey.clear()}
+          />
+        </>
+      )}
+
+      <CloudTranscriptionKeyDialog
+        provider="openai"
+        open={openAiKey.open}
         configured={voiceSettings.openAiApiKeyConfigured}
-        apiKeyDraft={openAiApiKeyDraft}
-        pending={openAiKeyPending}
-        onOpenChange={setOpenAiDialogOpen}
-        onApiKeyDraftChange={setOpenAiApiKeyDraft}
-        onSave={() => void saveOpenAiApiKey()}
-        onClear={() => void clearOpenAiApiKey()}
+        apiKeyDraft={openAiKey.draft}
+        pending={openAiKey.pending}
+        onOpenChange={openAiKey.setOpen}
+        onApiKeyDraftChange={openAiKey.setDraft}
+        onSave={() => void openAiKey.save()}
+        onClear={() => void openAiKey.clear()}
+      />
+      <CloudTranscriptionKeyDialog
+        provider="soniox"
+        open={sonioxKey.open}
+        configured={voiceSettings.sonioxApiKeyConfigured}
+        apiKeyDraft={sonioxKey.draft}
+        pending={sonioxKey.pending}
+        onOpenChange={sonioxKey.setOpen}
+        onApiKeyDraftChange={sonioxKey.setDraft}
+        onSave={() => void sonioxKey.save()}
+        onClear={() => void sonioxKey.clear()}
       />
     </div>
   )
