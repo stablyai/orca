@@ -1903,8 +1903,8 @@ export async function createRemoteWorktree(
   })
   const workspaceLineage = recordWorkspaceLineageForCreatedWorktree(store, args, worktree, now)
 
-  // Why: `experimentalWorktreeSymlinks` is intentionally not wired up for
-  // remote (SSH) worktrees. Creating symlinks on the remote host would
+  // Why: shared paths are intentionally not wired up for remote (SSH)
+  // worktrees. Creating symlinks on the remote host would
   // require a new relay method and authorization surface; the feature is
   // local-only until that protocol work is in scope. Remote repos with
   // `symlinkPaths` configured have them silently ignored here.
@@ -2536,10 +2536,8 @@ export async function createLocalWorktree(
   // Why: materialize user-configured paths from the primary checkout into the
   // new worktree before any setup script runs, so scripts that reuse shared
   // state (e.g. `node_modules`, `.env`) see those paths already in place.
-  // Gated on the experimental flag so disabling the feature globally skips
-  // the work even when a repo still has paths configured.
   const symlinkPaths = repo.symlinkPaths ?? []
-  if (settings.experimentalWorktreeSymlinks && symlinkPaths.length > 0) {
+  if (symlinkPaths.length > 0) {
     await timing.time('create_symlinks', async () => {
       await createWorktreeLinkedPaths(repo.path, created.path, symlinkPaths)
     })

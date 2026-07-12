@@ -1188,13 +1188,18 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
   },
 
   closeTab: (tabId, opts) => {
+    let closingWorktreeId: string | null = null
     set((s) => {
       const next = { ...s.tabsByWorktree }
       let closingPtyId: string | null = null
       for (const wId of Object.keys(next)) {
         const before = next[wId]
-        if (!closingPtyId) {
-          closingPtyId = before.find((t) => t.id === tabId)?.ptyId ?? null
+        const closingTab = before.find((t) => t.id === tabId)
+        if (closingTab) {
+          closingWorktreeId = wId
+          if (!closingPtyId) {
+            closingPtyId = closingTab.ptyId ?? null
+          }
         }
         const after = before.filter((t) => t.id !== tabId)
         if (after.length !== before.length) {
@@ -1345,7 +1350,13 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
     // too. Use dropAgentStatusByTabPrefix (not removeAgentStatusByTabPrefix)
     // so retention suppressors are planted: a live→gone transition inside the
     // same frame as the tab close cannot re-snapshot a row we just dropped.
-    get().dropAgentStatusByTabPrefix(tabId)
+    // Why: Pi can leave a completed row attributed to the worktree but keyed
+    // under an already-missing tab id; pass the worktree to sweep only that
+    // completed orphan while preserving active pre-render child rows.
+    get().dropAgentStatusByTabPrefix(
+      tabId,
+      closingWorktreeId ? { worktreeId: closingWorktreeId } : undefined
+    )
     // Why: retired pane keys never recur, so stranded foreground entries would
     // accumulate for the renderer's whole lifetime.
     get().clearPaneForegroundAgentByTabPrefix(tabId)

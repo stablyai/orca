@@ -130,6 +130,8 @@ import {
 } from '../shared/rich-markdown-context-menu'
 import type {
   SshConnectionState,
+  SshConfigImportResult,
+  SshTargetAddResult,
   SshTarget,
   PortForwardEntry,
   EnrichedDetectedPort
@@ -846,6 +848,9 @@ const api = {
 
     resize: (id: string, cols: number, rows: number): void => {
       ipcRenderer.send('pty:resize', { id, cols, rows })
+    },
+    claimViewport: (id: string, cols: number, rows: number): void => {
+      ipcRenderer.send('pty:claimViewport', { id, cols, rows })
     },
 
     /** Why: measurement-only sibling of resize. Fires when a desktop pane
@@ -3879,7 +3884,7 @@ const api = {
     call: (args: { method: string; params?: unknown }): Promise<RuntimeRpcResponse<unknown>> =>
       ipcRenderer.invoke('runtime:call', args),
     getTerminalFitOverrides: (): Promise<
-      { ptyId: string; mode: 'mobile-fit'; cols: number; rows: number }[]
+      { ptyId: string; mode: 'mobile-fit' | 'remote-desktop-fit'; cols: number; rows: number }[]
     > => ipcRenderer.invoke('runtime:getTerminalFitOverrides'),
     getTerminalDrivers: (): Promise<
       {
@@ -3900,14 +3905,19 @@ const api = {
     onTerminalFitOverrideChanged: (
       callback: (event: {
         ptyId: string
-        mode: 'mobile-fit' | 'desktop-fit'
+        mode: 'mobile-fit' | 'remote-desktop-fit' | 'desktop-fit'
         cols: number
         rows: number
       }) => void
     ): (() => void) => {
       const listener = (
         _event: Electron.IpcRendererEvent,
-        data: { ptyId: string; mode: 'mobile-fit' | 'desktop-fit'; cols: number; rows: number }
+        data: {
+          ptyId: string
+          mode: 'mobile-fit' | 'remote-desktop-fit' | 'desktop-fit'
+          cols: number
+          rows: number
+        }
       ) => callback(data)
       ipcRenderer.on('runtime:terminalFitOverrideChanged', listener)
       return () => ipcRenderer.removeListener('runtime:terminalFitOverrideChanged', listener)
@@ -4028,7 +4038,7 @@ const api = {
     listRemovedTargetLabels: (): Promise<Record<string, string>> =>
       ipcRenderer.invoke('ssh:listRemovedTargetLabels'),
 
-    addTarget: (args: { target: Omit<SshTarget, 'id'> }): Promise<SshTarget> =>
+    addTarget: (args: { target: Omit<SshTarget, 'id'> }): Promise<SshTargetAddResult> =>
       ipcRenderer.invoke('ssh:addTarget', args),
 
     updateTarget: (args: {
@@ -4039,7 +4049,7 @@ const api = {
     removeTarget: (args: { id: string }): Promise<void> =>
       ipcRenderer.invoke('ssh:removeTarget', args),
 
-    importConfig: (args?: { reAdopt?: boolean }): Promise<SshTarget[]> =>
+    importConfig: (args?: { reAdopt?: boolean }): Promise<SshConfigImportResult> =>
       ipcRenderer.invoke('ssh:importConfig', args),
 
     connect: (args: { targetId: string }): Promise<SshConnectionState | null> =>

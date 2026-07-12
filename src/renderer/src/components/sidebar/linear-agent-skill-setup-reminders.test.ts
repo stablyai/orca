@@ -24,9 +24,9 @@ describe('linear agent skill setup reminders', () => {
       MAX_LINEAR_AGENT_SKILL_SETUP_REMINDER_RUNTIME_KEYS
     )
     expect(hasLinearAgentSkillSetupReminderStateForTests('runtime-0')).toBe(false)
-    expect(hasLinearAgentSkillSetupReminderStateForTests(`runtime-${churnedRuntimeCount - 1}`)).toBe(
-      true
-    )
+    expect(
+      hasLinearAgentSkillSetupReminderStateForTests(`runtime-${churnedRuntimeCount - 1}`)
+    ).toBe(true)
   })
 
   it('retains recently reused keys while trimming', () => {

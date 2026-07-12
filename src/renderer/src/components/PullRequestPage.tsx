@@ -6807,6 +6807,7 @@ export default function PullRequestPage({
   const body = details?.body ?? ''
   const comments = details?.comments ?? []
   const files = details?.files ?? []
+  const filesUnavailable = details?.filesUnavailable ?? false
   const checks = details?.checks ?? []
   const [pendingViewedPaths, setPendingViewedPaths] = useState<Set<string>>(() => new Set())
   // Why: clipboard IPC can resolve after the page unmounts; skip copied-state
@@ -7318,6 +7319,21 @@ export default function PullRequestPage({
                 {loading && files.length === 0 ? (
                   <div className="flex items-center justify-center py-10">
                     <LoaderCircle className="size-5 animate-spin text-muted-foreground" />
+                  </div>
+                ) : filesUnavailable && files.length === 0 ? (
+                  // Why: the file fetch failed (rate limit, auth, unresolved
+                  // remote); offer a retry instead of implying the PR is empty.
+                  <div className="flex flex-col items-center gap-3 px-4 py-10 text-center">
+                    <div className="text-[12px] text-muted-foreground">
+                      {translate(
+                        'auto.components.PullRequestPage.filesUnavailable',
+                        "Couldn't load changed files."
+                      )}
+                    </div>
+                    <Button variant="outline" size="sm" onClick={invalidateCurrentDetailsCache}>
+                      <RefreshCw className="size-3.5" />
+                      {translate('auto.components.PullRequestPage.filesRetry', 'Retry')}
+                    </Button>
                   </div>
                 ) : files.length === 0 ? (
                   <div className="px-4 py-10 text-center text-[12px] text-muted-foreground">

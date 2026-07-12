@@ -246,7 +246,11 @@ import {
   notifyWorktreesChanged
 } from './worktree-remote'
 import { invalidateAuthorizedRootsCache, resolveRegisteredWorktreePath } from './filesystem-auth'
-import { __resetDetectedWorktreeScanCacheForTests, registerWorktreeHandlers } from './worktrees'
+import {
+  __getDetectedWorktreeScanCacheStatsForTests,
+  __resetDetectedWorktreeScanCacheForTests,
+  registerWorktreeHandlers
+} from './worktrees'
 
 type HandlerMap = Record<string, (_event: unknown, args: unknown) => unknown>
 
@@ -2631,6 +2635,199 @@ describe('registerWorktreeHandlers', () => {
 
     expect(store.removeWorktreeLineage).not.toHaveBeenCalled()
     expect(listWorktreesMock).toHaveBeenCalledTimes(1)
+  })
+
+  it('does not retain invalidated detected scans after they settle', async () => {
+    let resolveScan: (worktrees: GitWorktreeInfo[]) => void = () => {}
+    listWorktreesMock.mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          resolveScan = resolve as (worktrees: GitWorktreeInfo[]) => void
+        })
+    )
+
+    const pendingList = handlers['worktrees:listDetected'](null, { repoId: 'repo-1' })
+    await Promise.resolve()
+
+    expect(__getDetectedWorktreeScanCacheStatsForTests()).toMatchObject({
+      cacheSize: 0,
+      inFlightSize: 1
+    })
+
+    notifyWorktreesChanged(mainWindow as never, 'repo-1')
+
+    expect(__getDetectedWorktreeScanCacheStatsForTests()).toMatchObject({
+      cacheSize: 0,
+      inFlightSize: 0
+    })
+
+    resolveScan([
+      {
+        path: '/workspace/repo',
+        head: 'main-head',
+        branch: 'refs/heads/main',
+        isBare: false,
+        isMainWorktree: true
+      }
+    ])
+    await pendingList
+
+    expect(__getDetectedWorktreeScanCacheStatsForTests()).toMatchObject({
+      cacheSize: 0,
+      inFlightSize: 0
+    })
+  })
+
+  it('does not accumulate scan bookkeeping across prolonged repository churn', async () => {
+    store.getRepo.mockImplementation((repoId: string) => ({
+      id: repoId,
+      path: `/workspace/${repoId}`,
+      displayName: repoId,
+      badgeColor: '#000',
+      addedAt: 0,
+      worktreeBaseRef: null
+    }))
+    listWorktreesMock.mockImplementation(async (repoPath: string) => [
+      {
+        path: repoPath,
+        head: 'main-head',
+        branch: 'refs/heads/main',
+        isBare: false,
+        isMainWorktree: true
+      }
+    ])
+
+    for (let index = 0; index < 128; index += 1) {
+      const repoId = `repo-${index}`
+      await handlers['worktrees:listDetected'](null, { repoId })
+      notifyWorktreesChanged(mainWindow as never, repoId)
+    }
+
+    expect(__getDetectedWorktreeScanCacheStatsForTests()).toEqual({
+      cacheSize: 0,
+      inFlightSize: 0
+    })
+    expect(listWorktreesMock).toHaveBeenCalledTimes(128)
+  })
+
+  it('keeps a replacement scan current after an older scan settles first', async () => {
+    const resolvers: ((worktrees: GitWorktreeInfo[]) => void)[] = []
+    listWorktreesMock.mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          resolvers.push(resolve as (worktrees: GitWorktreeInfo[]) => void)
+        })
+    )
+    const result = [
+      {
+        path: '/workspace/repo',
+        head: 'main-head',
+        branch: 'refs/heads/main',
+        isBare: false,
+        isMainWorktree: true
+      }
+    ]
+
+    const staleList = handlers['worktrees:listDetected'](null, { repoId: 'repo-1' })
+    await Promise.resolve()
+    notifyWorktreesChanged(mainWindow as never, 'repo-1')
+    const replacementList = handlers['worktrees:listDetected'](null, { repoId: 'repo-1' })
+    await Promise.resolve()
+
+    resolvers[0](result)
+    await staleList
+    expect(__getDetectedWorktreeScanCacheStatsForTests()).toEqual({
+      cacheSize: 0,
+      inFlightSize: 1
+    })
+
+    resolvers[1](result)
+    await replacementList
+    expect(__getDetectedWorktreeScanCacheStatsForTests()).toEqual({
+      cacheSize: 1,
+      inFlightSize: 0
+    })
+  })
+
+  it('does not let an older scan overwrite a replacement that settles first', async () => {
+    const resolvers: ((worktrees: GitWorktreeInfo[]) => void)[] = []
+    listWorktreesMock.mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          resolvers.push(resolve as (worktrees: GitWorktreeInfo[]) => void)
+        })
+    )
+    store.getAllWorktreeLineage.mockReturnValue({
+      'repo-1::/workspace/fresh-worktree': {
+        worktreeId: 'repo-1::/workspace/fresh-worktree',
+        worktreeInstanceId: 'child-instance',
+        parentWorktreeId: 'repo-1::/workspace/repo',
+        parentWorktreeInstanceId: 'parent-instance',
+        origin: 'manual',
+        capture: {
+          source: 'manual-action',
+          confidence: 'explicit'
+        },
+        createdAt: 0
+      }
+    })
+    const mainWorktree: GitWorktreeInfo = {
+      path: '/workspace/repo',
+      head: 'main-head',
+      branch: 'refs/heads/main',
+      isBare: false,
+      isMainWorktree: true
+    }
+
+    const staleList = handlers['worktrees:listDetected'](null, { repoId: 'repo-1' })
+    await Promise.resolve()
+    notifyWorktreesChanged(mainWindow as never, 'repo-1')
+    const replacementList = handlers['worktrees:listDetected'](null, { repoId: 'repo-1' })
+    await Promise.resolve()
+
+    resolvers[1]([
+      mainWorktree,
+      {
+        path: '/workspace/fresh-worktree',
+        head: 'fresh-head',
+        branch: 'refs/heads/fresh-worktree',
+        isBare: false,
+        isMainWorktree: false
+      }
+    ])
+    await replacementList
+
+    resolvers[0]([
+      mainWorktree,
+      {
+        path: '/workspace/stale-worktree',
+        head: 'stale-head',
+        branch: 'refs/heads/stale-worktree',
+        isBare: false,
+        isMainWorktree: false
+      }
+    ])
+    await staleList
+
+    const cached = (await handlers['worktrees:listDetected'](null, {
+      repoId: 'repo-1'
+    })) as { worktrees: Worktree[] }
+    expect(cached.worktrees.map((worktree) => worktree.path)).toEqual([
+      '/workspace/repo',
+      '/workspace/fresh-worktree'
+    ])
+    expect(store.removeWorktreeLineage).not.toHaveBeenCalled()
+    await expect(
+      resolveRegisteredWorktreePath('/workspace/fresh-worktree', store as never)
+    ).resolves.toBe(resolve('/workspace/fresh-worktree'))
+    await expect(
+      resolveRegisteredWorktreePath('/workspace/stale-worktree', store as never)
+    ).rejects.toThrow('Access denied: unknown repository or worktree path')
+    expect(listWorktreesMock).toHaveBeenCalledTimes(2)
+    expect(__getDetectedWorktreeScanCacheStatsForTests()).toEqual({
+      cacheSize: 1,
+      inFlightSize: 0
+    })
   })
 
   it('fetches the same-repo PR head via the SSH tracking-ref RPC, not git.exec', async () => {

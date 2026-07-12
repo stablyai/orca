@@ -314,6 +314,7 @@ function shouldKeepClaudePermissionVisible(
   if (
     previous?.payload.agentType !== 'claude' ||
     previous.payload.state !== 'waiting' ||
+    previous.hookEventName !== 'PermissionRequest' ||
     next.payload.agentType !== 'claude' ||
     next.payload.state !== 'working'
   ) {
@@ -325,9 +326,8 @@ function shouldKeepClaudePermissionVisible(
   if (isClaudePermissionResumingApprovedTool(previous, next)) {
     return false
   }
-  // Why: Claude can run subagents concurrently in one pane. Keep permission
-  // sticky unless the next hook has a source-level execution id that the
-  // PermissionRequest event itself does not expose.
+  // Why: only real permission requests stay sticky across concurrent subagent
+  // activity; interactive questions clear on the next working hook.
   return true
 }
 

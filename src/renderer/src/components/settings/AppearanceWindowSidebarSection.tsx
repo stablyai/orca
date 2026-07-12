@@ -12,7 +12,13 @@ import {
   SettingsSwitchRow
 } from './SettingsFormControls'
 import { useAvailableStatusBarToggles } from '../status-bar/use-available-status-bar-toggles'
-import { getLayoutEntries, getSidebarEntries, getStatusBarToggles } from './appearance-search'
+import {
+  getLayoutEntries,
+  getSidebarEntries,
+  getStatusBarToggles,
+  getUsagePercentageDisplayEntry
+} from './appearance-search'
+import { USAGE_PERCENTAGE_DISPLAY_SETTING_ID } from './appearance-usage-percentage-search'
 import { LeftSidebarAppearanceSetting } from './LeftSidebarAppearanceSetting'
 import {
   getLeftSidebarAppearanceEntry,
@@ -60,9 +66,12 @@ export function AppearanceWindowSidebarSection({
   const isSearching = normalizeSettingsSearchQuery(searchQuery).length > 0
   const statusBarItems = useAppStore((state) => state.statusBarItems)
   const toggleStatusBarItem = useAppStore((state) => state.toggleStatusBarItem)
+  const usagePercentageDisplay = useAppStore((state) => state.usagePercentageDisplay)
+  const setUsagePercentageDisplay = useAppStore((state) => state.setUsagePercentageDisplay)
   const recordFeatureInteraction = useAppStore((state) => state.recordFeatureInteraction)
   const setWorktreeCardMode = useAppStore((state) => state.setWorktreeCardMode)
   const visibleStatusBarToggles = useAvailableStatusBarToggles(getStatusBarToggles())
+  const usagePercentageDisplayEntry = getUsagePercentageDisplayEntry()
   const leftSidebarAppearanceEntry = getLeftSidebarAppearanceEntry()
   const sidebarEntries = getSidebarEntries()
   const workspaceCardLayoutEntry = getWorkspaceCardLayoutEntry()
@@ -81,13 +90,15 @@ export function AppearanceWindowSidebarSection({
     description: statusBarDescription,
     keywords: statusBarKeywords
   })
-  const statusBarControlMatches = visibleStatusBarToggles.some((toggle) =>
-    matchesSettingsSearch(searchQuery, {
-      title: toggle.title,
-      description: toggle.description,
-      keywords: toggle.keywords
-    })
-  )
+  const statusBarControlMatches =
+    matchesSettingsSearch(searchQuery, usagePercentageDisplayEntry) ||
+    visibleStatusBarToggles.some((toggle) =>
+      matchesSettingsSearch(searchQuery, {
+        title: toggle.title,
+        description: toggle.description,
+        keywords: toggle.keywords
+      })
+    )
   const sidebarAdvancedMatches = matchesSettingsSearch(searchQuery, [
     workspaceCardLayoutEntry,
     ...sidebarEntries
@@ -119,6 +130,41 @@ export function AppearanceWindowSidebarSection({
           <SettingsRow label={statusBarTitle} description={statusBarDescription} control={null} />
           {showStatusBarControls ? (
             <div className="ml-4 divide-y divide-border/40 border-t border-border/40">
+              <SearchableSetting
+                id={USAGE_PERCENTAGE_DISPLAY_SETTING_ID}
+                title={usagePercentageDisplayEntry.title}
+                description={usagePercentageDisplayEntry.description}
+                keywords={usagePercentageDisplayEntry.keywords}
+              >
+                <SettingsRow
+                  label={usagePercentageDisplayEntry.title}
+                  description={usagePercentageDisplayEntry.description}
+                  control={
+                    <SettingsSegmentedControl
+                      ariaLabel={usagePercentageDisplayEntry.title}
+                      value={usagePercentageDisplay}
+                      onChange={setUsagePercentageDisplay}
+                      options={[
+                        {
+                          value: 'used',
+                          label: translate(
+                            'auto.components.settings.AppearanceWindowSidebarSection.usagePercentageDisplayUsed',
+                            'Used'
+                          )
+                        },
+                        {
+                          value: 'remaining',
+                          label: translate(
+                            'auto.components.settings.AppearanceWindowSidebarSection.usagePercentageDisplayRemaining',
+                            'Remaining'
+                          )
+                        }
+                      ]}
+                    />
+                  }
+                />
+              </SearchableSetting>
+
               {visibleStatusBarToggles.map((toggle) => {
                 const enabled = statusBarItems.includes(toggle.id)
                 return (

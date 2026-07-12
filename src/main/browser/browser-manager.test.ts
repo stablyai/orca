@@ -3,6 +3,7 @@ import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const {
+  openPopupWithOriginBarMock,
   appGetPathMock,
   shellOpenExternalMock,
   browserWindowFromWebContentsMock,
@@ -25,7 +26,8 @@ const {
   guestSetWindowOpenHandlerMock: vi.fn(),
   guestOpenDevToolsMock: vi.fn(),
   webContentsFromIdMock: vi.fn(),
-  screenGetCursorScreenPointMock: vi.fn(() => ({ x: 0, y: 0 }))
+  screenGetCursorScreenPointMock: vi.fn(() => ({ x: 0, y: 0 })),
+  openPopupWithOriginBarMock: vi.fn()
 }))
 
 vi.mock('electron', () => ({
@@ -46,6 +48,10 @@ vi.mock('electron', () => ({
   webContents: {
     fromId: webContentsFromIdMock
   }
+}))
+
+vi.mock('./popup-origin-bar-window', () => ({
+  openPopupWithOriginBar: openPopupWithOriginBarMock
 }))
 
 import { browserManager } from './browser-manager'
@@ -96,6 +102,7 @@ describe('browserManager', () => {
     guestSetWindowOpenHandlerMock.mockReset()
     guestOpenDevToolsMock.mockReset()
     webContentsFromIdMock.mockReset()
+    openPopupWithOriginBarMock.mockReset()
     browserManager.unregisterAll()
     browserManager.setDictationShortcutForwardingPredicate(null)
     browserManager.setSettingsResolver(() => ({}))
@@ -162,35 +169,183 @@ describe('browserManager', () => {
     const handler = guestSetWindowOpenHandlerMock.mock.calls[0][0] as (details: {
       url: string
       features?: string
-    }) => { action: 'allow' | 'deny' }
+    }) => {
+      action: 'allow' | 'deny'
+      overrideBrowserWindowOptions?: unknown
+      createWindow?: unknown
+    }
     expect(handler({ url: 'about:blank' })).toMatchObject({ action: 'allow' })
-    expect(
-      handler({
-        url: 'https://example.com/login',
-        features: 'alwaysOnTop=yes,frame=no,fullscreen=yes,kiosk=yes,modal=yes,transparent=yes'
-      })
-    ).toEqual({
-      action: 'allow',
-      overrideBrowserWindowOptions: {
-        alwaysOnTop: false,
-        closable: true,
-        focusable: true,
-        frame: true,
-        fullscreen: false,
-        kiosk: false,
-        modal: false,
-        movable: true,
-        opacity: 1,
-        show: true,
-        simpleFullscreen: false,
-        skipTaskbar: false,
-        titleBarStyle: 'default',
-        transparent: false
+    const response = handler({
+      url: 'https://example.com/login',
+      features: 'alwaysOnTop=yes,frame=no,fullscreen=yes,kiosk=yes,modal=yes,transparent=yes'
+    })
+    expect(response.action).toBe('allow')
+    expect(response.overrideBrowserWindowOptions).toEqual({
+      alwaysOnTop: false,
+      closable: true,
+      focusable: true,
+      frame: true,
+      fullscreen: false,
+      kiosk: false,
+      modal: false,
+      movable: true,
+      opacity: 1,
+      show: true,
+      simpleFullscreen: false,
+      skipTaskbar: false,
+      titleBarStyle: 'default',
+      transparent: false,
+      webPreferences: {
+        allowRunningInsecureContent: false,
+        contextIsolation: true,
+        nodeIntegration: false,
+        nodeIntegrationInSubFrames: false,
+        sandbox: true,
+        webviewTag: false
       }
     })
+    // Why: the custom createWindow is what swaps the chrome-less native child
+    // for Orca's origin-bar window without losing the popup contents.
+    expect(typeof response.createWindow).toBe('function')
 
     expect(shellOpenExternalMock).not.toHaveBeenCalled()
     expect(rendererSendMock).not.toHaveBeenCalled()
+  })
+
+  it('keeps featureless window.open popups in-app for every disposition', () => {
+    // Regression guard for the reverted #8332: gating the allow on
+    // disposition === 'new-window' silently broke featureless window.open()
+    // OAuth flows (disposition 'foreground-tab'), whose returned handle must
+    // stay live. Disposition is a UX hint, not a trust signal.
+    const guest = {
+      id: 140,
+      isDestroyed: vi.fn(() => false),
+      getType: vi.fn(() => 'webview'),
+      setBackgroundThrottling: guestSetBackgroundThrottlingMock,
+      setWindowOpenHandler: guestSetWindowOpenHandlerMock,
+      on: guestOnMock,
+      off: guestOffMock,
+      openDevTools: guestOpenDevToolsMock
+    }
+    webContentsFromIdMock.mockReturnValue(guest)
+
+    browserManager.attachGuestPolicies(guest as never)
+    browserManager.registerGuest({
+      browserPageId: 'browser-1',
+      webContentsId: guest.id,
+      rendererWebContentsId
+    })
+
+    const handler = guestSetWindowOpenHandlerMock.mock.calls[0][0] as (details: {
+      url: string
+      frameName: string
+      features: string
+      disposition: string
+    }) => { action: 'allow' | 'deny' }
+    for (const disposition of ['foreground-tab', 'background-tab', 'new-window']) {
+      expect(
+        handler({ url: 'https://sso.example.com/auth', frameName: '', features: '', disposition })
+      ).toMatchObject({ action: 'allow' })
+    }
+    expect(shellOpenExternalMock).not.toHaveBeenCalled()
+  })
+
+  it('hosts allowed popups in an origin-bar window with inherited guest policies', () => {
+    const rendererSendMock = vi.fn()
+    const guestOnceMock = vi.fn()
+    const guest = {
+      id: 150,
+      isDestroyed: vi.fn(() => false),
+      getType: vi.fn(() => 'webview'),
+      setBackgroundThrottling: guestSetBackgroundThrottlingMock,
+      setWindowOpenHandler: guestSetWindowOpenHandlerMock,
+      on: guestOnMock,
+      once: guestOnceMock,
+      off: guestOffMock,
+      openDevTools: guestOpenDevToolsMock
+    }
+    webContentsFromIdMock.mockImplementation((id: number) => {
+      if (id === guest.id) {
+        return guest
+      }
+      if (id === rendererWebContentsId) {
+        return { isDestroyed: vi.fn(() => false), send: rendererSendMock }
+      }
+      return null
+    })
+
+    browserManager.attachGuestPolicies(guest as never)
+    browserManager.registerGuest({
+      browserPageId: 'browser-1',
+      webContentsId: guest.id,
+      rendererWebContentsId
+    })
+
+    const popupContents = {
+      id: 151,
+      isDestroyed: vi.fn(() => false),
+      getType: vi.fn(() => 'window'),
+      setBackgroundThrottling: vi.fn(),
+      setWindowOpenHandler: vi.fn(),
+      on: vi.fn(),
+      once: vi.fn(),
+      off: vi.fn()
+    }
+    const popupCloseMock = vi.fn()
+    const popupOnClosedMock = vi.fn()
+    openPopupWithOriginBarMock.mockReturnValue({
+      contentWebContents: popupContents,
+      close: popupCloseMock,
+      onClosed: popupOnClosedMock
+    })
+
+    const handler = guestSetWindowOpenHandlerMock.mock.calls[0][0] as (details: {
+      url: string
+    }) => {
+      action: string
+      createWindow: (options: Record<string, unknown>) => unknown
+    }
+    const response = handler({ url: 'https://sso.example.com/auth?code=SECRET' })
+    const preCreatedContents = { id: 152 }
+    const options = { webContents: preCreatedContents, width: 500, height: 600 }
+    const returned = response.createWindow(options)
+
+    expect(openPopupWithOriginBarMock).toHaveBeenCalledWith(
+      options,
+      'https://sso.example.com/auth?code=SECRET'
+    )
+    expect(returned).toBe(popupContents)
+    // did-create-window does not fire for createWindow-created children, so
+    // the popup must get guest policies (nav guards, recursive popup handling)
+    // attached directly here.
+    expect(popupContents.setWindowOpenHandler).toHaveBeenCalledTimes(1)
+    expect(popupContents.setBackgroundThrottling).toHaveBeenCalledWith(false)
+    // The renderer notice carries only the sanitized origin, never the URL.
+    expect(rendererSendMock).toHaveBeenCalledWith('browser:popup', {
+      browserPageId: 'browser-1',
+      origin: 'https://sso.example.com',
+      action: 'opened-in-orca'
+    })
+
+    // Opener-lifecycle parity: destroying the owning guest closes the popup.
+    const destroyedCall = guestOnceMock.mock.calls.find(([event]) => event === 'destroyed')
+    expect(destroyedCall).toBeDefined()
+    ;(destroyedCall as [string, () => void])[1]()
+    expect(popupCloseMock).toHaveBeenCalledTimes(1)
+
+    // Popup windows opened by the popup itself keep the owner context, so the
+    // recursive handler still routes to the owning browser tab.
+    const popupHandler = popupContents.setWindowOpenHandler.mock.calls[0][0] as (details: {
+      url: string
+    }) => { action: string }
+    openPopupWithOriginBarMock.mockReturnValue({
+      contentWebContents: { ...popupContents, id: 153 },
+      close: vi.fn(),
+      onClosed: vi.fn()
+    })
+    expect(popupHandler({ url: 'https://sso.example.com/step2' })).toMatchObject({
+      action: 'allow'
+    })
   })
 
   it('blocks unsafe popup URLs for registered guests', () => {

@@ -976,11 +976,24 @@ export function createIpcPtyTransport(opts: IpcPtyTransportOptions = {}): PtyTra
           }
         }),
 
-    resize(cols: number, rows: number): boolean {
+    claimViewport(cols: number, rows: number): boolean {
       if (!connected || !ptyId) {
         return false
       }
-      window.api.pty.resize(ptyId, cols, rows)
+      window.api.pty.claimViewport(ptyId, cols, rows)
+      return true
+    },
+
+    resize(cols: number, rows: number, meta): boolean {
+      if (!connected || !ptyId) {
+        return false
+      }
+      if (meta?.claim) {
+        window.api.pty.resize(ptyId, cols, rows)
+        window.api.pty.claimViewport(ptyId, cols, rows)
+      } else {
+        window.api.pty.resize(ptyId, cols, rows)
+      }
       return true
     },
 

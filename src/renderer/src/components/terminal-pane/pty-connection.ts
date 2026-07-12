@@ -46,6 +46,7 @@ import { requestStablePaneFit } from '@/lib/pane-manager/pane-fit-resize-observe
 import { getFitOverrideForPty, bindPanePtyId } from '@/lib/pane-manager/mobile-fit-overrides'
 import { isPtyLocked } from '@/lib/pane-manager/mobile-driver-state'
 import { reconcilePtySizeAcrossFrames, type PtySizeReconcileHandle } from './pty-size-reconcile'
+import { shouldClaimRemoteDesktopViewport } from './remote-desktop-viewport-claim'
 import { createPtySizeReassertion } from './pty-size-reassertion'
 import { isPaneReplaying, replayIntoTerminal, replayIntoTerminalAsync } from './replay-guard'
 import {
@@ -981,6 +982,7 @@ export function connectPanePty(
   // flips, exit, dispose) run before/after it exists, so start with no-ops.
   let syncHiddenRendererPtyDelivery: () => void = () => {}
   let releaseHiddenRendererPtyDelivery: () => void = () => {}
+  let suppressViewportClaimTerminalResize = false
   // Why: idle callbacks are registered before the deferred PTY output plumbing
   // exists. Start with the shared scheduler, then switch to the PTY writer
   // below so hidden-tab resets keep backlog-recovery callbacks and byte order.
@@ -3302,6 +3304,26 @@ export function connectPanePty(
     sendDesktopQueryReplyImmediate
   )
 
+  const claimViewportForUserActivity = (): void => {
+    const currentPtyId = transport.getPtyId()
+    if (!currentPtyId || getFitOverrideForPty(currentPtyId)?.mode !== 'remote-desktop-fit') {
+      return
+    }
+    let proposed: { cols: number; rows: number } | undefined
+    try {
+      proposed = pane.fitAddon.proposeDimensions()
+    } catch {
+      proposed = undefined
+    }
+    const cols = proposed?.cols ?? pane.terminal.cols
+    const rows = proposed?.rows ?? pane.terminal.rows
+    if (cols > 0 && rows > 0) {
+      // Why: queuing a claim is not convergence. Keep the pane parked until the
+      // runtime confirms desktop-fit so a transient resize failure retries.
+      transport.claimViewport?.(cols, rows)
+    }
+  }
+
   const onDataDisposable = pane.terminal.onData((data) => {
     // Why: xterm auto-replies to embedded query sequences (DA1, DECRQM,
     // OSC 10/11, focus, CPR) via onData. When we replay recorded PTY bytes
@@ -3357,6 +3379,7 @@ export function connectPanePty(
     // excluded because those transports do not expose sendInputAccepted.
     const acknowledgedIntent = intent ?? inferIntentFromExactTerminalInput(data)
     if (acknowledgedIntent && transport.sendInputAccepted) {
+      claimViewportForUserActivity()
       if (acknowledgedIntent === 'ctrl-c') {
         // Why: the accepted-write callback is async; let the next command be
         // inferred if the user cancelled an oversized line and immediately typed.
@@ -3382,6 +3405,7 @@ export function connectPanePty(
       return
     }
     if (intent) {
+      claimViewportForUserActivity()
       if (transport.sendInput(data)) {
         markAcceptedTerminalInputSent()
         observeAcceptedShellCommandInput(data)
@@ -3390,6 +3414,7 @@ export function connectPanePty(
       clearPendingTerminalInputIntent()
       return
     }
+    claimViewportForUserActivity()
     if (transport.sendInput(data)) {
       markAcceptedTerminalInputSent()
       observeAcceptedShellCommandInput(data)
@@ -3435,7 +3460,7 @@ export function connectPanePty(
     if (queuePanePtyResizeIfHeld(pane.container, cols, rows)) {
       return
     }
-    transport.resize(cols, rows)
+    transport.resize(cols, rows, { claim: true })
   }
 
   const onHeldPtyResizeFlush = (event: Event): void => {
@@ -3448,7 +3473,7 @@ export function connectPanePty(
   pane.container.addEventListener(PANE_PTY_RESIZE_HOLD_FLUSH_EVENT, onHeldPtyResizeFlush)
 
   const onResizeDisposable = pane.terminal.onResize(({ cols, rows }) => {
-    if (suppressSnapshotReplayPtyResize) {
+    if (suppressSnapshotReplayPtyResize || suppressViewportClaimTerminalResize) {
       return
     }
     forwardPtyResize(cols, rows)
@@ -3534,14 +3559,41 @@ export function connectPanePty(
   // the PTY's applied size; mobile-fit panes only report desktop geometry so
   // the parked phone-sized PTY is not resized. See docs/mobile-fit-hold.md.
   let pendingGeometryReportRaf: number | null = null
+  let lastObservedDesktopGrid: { cols: number; rows: number } | null = null
+  const readPaneSize = (): { width: number; height: number } | null => {
+    if (typeof pane.container.getBoundingClientRect !== 'function') {
+      return null
+    }
+    const rect = pane.container.getBoundingClientRect()
+    return { width: rect.width, height: rect.height }
+  }
+  let lastObservedPaneSize = readPaneSize()
+  let pendingPaneGeometryChanged = false
   const handleObservedPaneGeometry = (): void => {
     pendingGeometryReportRaf = null
+    const paneGeometryChanged = pendingPaneGeometryChanged
+    pendingPaneGeometryChanged = false
     const currentPtyId = transport.getPtyId()
     if (!currentPtyId) {
+      // Why: ResizeObserver may deliver its initial measurement before the
+      // remote binding completes; retain that passive baseline for the first
+      // real focused resize instead of swallowing the user's first claim.
+      const proposed = readProposedTerminalGrid()
+      if (proposed) {
+        lastObservedDesktopGrid = proposed
+      }
       return
     }
     const fitOverride = getFitOverrideForPty(currentPtyId)
     if (!fitOverride) {
+      if (pane.terminal.cols > 0 && pane.terminal.rows > 0) {
+        // Why: record the local grid before a later remote hold parks xterm;
+        // the first real window/split resize can then claim immediately.
+        lastObservedDesktopGrid = {
+          cols: pane.terminal.cols,
+          rows: pane.terminal.rows
+        }
+      }
       if (shouldSuppressDesktopPtyResize()) {
         return
       }
@@ -3559,6 +3611,33 @@ export function connectPanePty(
     if (!proposed || proposed.cols <= 0 || proposed.rows <= 0) {
       return
     }
+    const priorProposed = lastObservedDesktopGrid
+    lastObservedDesktopGrid = proposed
+    if (fitOverride.mode === 'remote-desktop-fit') {
+      if (
+        shouldClaimRemoteDesktopViewport({
+          holdMode: fitOverride.mode,
+          prior: priorProposed,
+          current: proposed,
+          paneGeometryChanged,
+          paneVisible: deps.isVisibleRef.current,
+          documentVisible: document.visibilityState !== 'hidden',
+          documentFocused: document.hasFocus()
+        })
+      ) {
+        // Why: a focused, visible layout change is genuine activity; release
+        // the park and update xterm before claiming so the owner does not keep
+        // rendering the prior owner's stale grid.
+        suppressViewportClaimTerminalResize = true
+        try {
+          pane.terminal.resize(proposed.cols, proposed.rows)
+        } finally {
+          suppressViewportClaimTerminalResize = false
+        }
+        transport.resize(proposed.cols, proposed.rows, { claim: true })
+      }
+      return
+    }
     if (isRemoteRuntimePtyId(currentPtyId)) {
       transport.resize(proposed.cols, proposed.rows)
     } else {
@@ -3569,6 +3648,16 @@ export function connectPanePty(
     typeof ResizeObserver === 'undefined'
       ? null
       : new ResizeObserver(() => {
+          const paneSize = readPaneSize()
+          if (
+            paneSize &&
+            lastObservedPaneSize &&
+            (paneSize.width !== lastObservedPaneSize.width ||
+              paneSize.height !== lastObservedPaneSize.height)
+          ) {
+            pendingPaneGeometryChanged = true
+          }
+          lastObservedPaneSize = paneSize
           if (pendingGeometryReportRaf !== null) {
             return
           }

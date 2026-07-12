@@ -422,6 +422,80 @@ describe('syncSystemConfigIntoManagedCodexHome', () => {
     expect(runtimeConfig).not.toContain('trust_level = "trusted"')
   })
 
+  it('applies a case-drifted WSL system revocation to the runtime trusted block', () => {
+    // Why: configs written before WSL tails compared case-sensitively can hold
+    // the revocation under drifted casing; err toward revoked, not trusted.
+    mkdirSync(join(userDataDir, 'codex-runtime-home', 'home'), { recursive: true })
+    writeFileSync(
+      getRuntimeConfigPath(),
+      ["[projects.'\\\\wsl$\\Ubuntu\\home\\u\\Repo']", 'trust_level = "trusted"', ''].join('\n'),
+      'utf-8'
+    )
+    writeFileSync(
+      getSystemConfigPath(),
+      ["[projects.'\\\\wsl$\\Ubuntu\\home\\u\\repo']", 'trust_level = "untrusted"', ''].join('\n'),
+      'utf-8'
+    )
+
+    syncSystemConfigIntoManagedCodexHome()
+
+    const runtimeConfig = readFileSync(getRuntimeConfigPath(), 'utf-8')
+    expect(runtimeConfig).toContain('trust_level = "untrusted"')
+    expect(runtimeConfig).not.toContain('trust_level = "trusted"')
+  })
+
+  it('keeps runtime trust when the system config re-trusts the exact-cased WSL project', () => {
+    // Why: after a user re-grants trust, markCodexProjectTrusted appends an
+    // exact-cased trusted block beside a legacy drifted-case revocation; the
+    // loose revocation match must not revert that grant on every mirror pass.
+    mkdirSync(join(userDataDir, 'codex-runtime-home', 'home'), { recursive: true })
+    writeFileSync(
+      getRuntimeConfigPath(),
+      ["[projects.'\\\\wsl$\\Ubuntu\\home\\u\\Repo']", 'trust_level = "trusted"', ''].join('\n'),
+      'utf-8'
+    )
+    writeFileSync(
+      getSystemConfigPath(),
+      [
+        "[projects.'\\\\wsl$\\Ubuntu\\home\\u\\repo']",
+        'trust_level = "untrusted"',
+        '',
+        "[projects.'\\\\wsl$\\Ubuntu\\home\\u\\Repo']",
+        'trust_level = "trusted"',
+        ''
+      ].join('\n'),
+      'utf-8'
+    )
+
+    syncSystemConfigIntoManagedCodexHome()
+
+    const runtimeConfig = readFileSync(getRuntimeConfigPath(), 'utf-8')
+    expect(runtimeConfig).toContain("[projects.'\\\\wsl$\\Ubuntu\\home\\u\\Repo']")
+    expect(runtimeConfig).toContain('trust_level = "trusted"')
+    expect(runtimeConfig).toContain('trust_level = "untrusted"')
+  })
+
+  it('does not let a case-distinct POSIX system revocation clobber runtime trust', () => {
+    mkdirSync(join(userDataDir, 'codex-runtime-home', 'home'), { recursive: true })
+    writeFileSync(
+      getRuntimeConfigPath(),
+      ['[projects."/home/u/Repo"]', 'trust_level = "trusted"', ''].join('\n'),
+      'utf-8'
+    )
+    writeFileSync(
+      getSystemConfigPath(),
+      ['[projects."/home/u/repo"]', 'trust_level = "untrusted"', ''].join('\n'),
+      'utf-8'
+    )
+
+    syncSystemConfigIntoManagedCodexHome()
+
+    const runtimeConfig = readFileSync(getRuntimeConfigPath(), 'utf-8')
+    expect(runtimeConfig.match(/\[projects\./g)).toHaveLength(2)
+    expect(runtimeConfig).toContain('trust_level = "untrusted"')
+    expect(runtimeConfig).toContain('trust_level = "trusted"')
+  })
+
   it.each([
     {
       name: 'drive-letter casing and separators',

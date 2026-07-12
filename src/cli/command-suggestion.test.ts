@@ -6,7 +6,11 @@ import { levenshtein, suggestCommands, unknownCommandData } from './command-sugg
 const specs: CommandSpec[] = [
   {
     path: ['worktree', 'rm'],
-    aliases: [['worktree', 'remove']],
+    aliases: [
+      ['worktree', 'remove'],
+      ['worktree', 'delete']
+    ],
+    destructive: true,
     summary: 'Remove a worktree',
     usage: 'orca worktree rm',
     allowedFlags: []
@@ -21,6 +25,15 @@ const specs: CommandSpec[] = [
     path: ['terminal', 'send'],
     summary: 'Send input',
     usage: 'orca terminal send',
+    allowedFlags: []
+  },
+  {
+    // A destructive command outside the delete-family, to prove the guard keys
+    // off the spec flag rather than a hardcoded verb list.
+    path: ['emulator', 'kill'],
+    destructive: true,
+    summary: 'Kill the emulator',
+    usage: 'orca emulator kill',
     allowedFlags: []
   }
 ]
@@ -67,6 +80,37 @@ describe('suggestCommands', () => {
     const result = suggestCommands(specs, ['terminal', 'sen'])
     expect(result[0]).toBe('terminal send')
   })
+
+  it('never suggests a destructive command for a benign non-destructive typo', () => {
+    // `worktree move` sits distance 2 from `worktree remove`; without the
+    // guard it would sole-suggest an irreversible delete on blind retry. #6303
+    const result = suggestCommands(specs, ['worktree', 'move'])
+    expect(result).not.toContain('worktree remove')
+    expect(result).not.toContain('worktree rm')
+    expect(result).not.toContain('worktree delete')
+  })
+
+  it('still suggests remove for a near-miss of a destructive verb', () => {
+    const result = suggestCommands(specs, ['worktree', 'remov'])
+    expect(result).toContain('worktree rm')
+    expect(result).toContain('worktree remove')
+  })
+
+  it('still suggests delete for a near-miss of the delete alias', () => {
+    expect(suggestCommands(specs, ['worktree', 'delet'])).toContain('worktree delete')
+  })
+
+  it('guards destructive commands outside the delete-family via the spec flag', () => {
+    // `emulator ball` is a benign token, distance 2 from the flagged `emulator
+    // kill` — close enough to otherwise rank, so the guard must exclude it.
+    expect(suggestCommands(specs, ['emulator', 'ball'])).not.toContain('emulator kill')
+    // A genuine near-miss of the destructive verb still recovers.
+    expect(suggestCommands(specs, ['emulator', 'kil'])).toContain('emulator kill')
+  })
+
+  it('still recovers non-destructive near-misses', () => {
+    expect(suggestCommands(specs, ['worktree', 'lst'])).toContain('worktree list')
+  })
 })
 
 describe('unknownCommandData', () => {
@@ -81,5 +125,11 @@ describe('unknownCommandData', () => {
     const data = unknownCommandData(specs, ['worktree', 'zzzzz'])
     expect(data.suggestions).toEqual([])
     expect(data.nextSteps).toEqual([])
+  })
+
+  it('does not route a benign typo into a destructive nextStep', () => {
+    const data = unknownCommandData(specs, ['worktree', 'move'])
+    expect(data.suggestions).not.toContain('worktree remove')
+    expect(data.nextSteps.join(' ')).not.toContain('remove')
   })
 })

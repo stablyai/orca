@@ -21,9 +21,12 @@ function stubRuntime(overrides: Partial<OrcaRuntimeService> = {}): OrcaRuntimeSe
   } as OrcaRuntimeService
 }
 
-function makeRequest(method: string, params?: unknown): RpcRequest {
-  return { id: 'req-1', authToken: 'tok', method, params }
-}
+const makeRequest = (method: string, params?: unknown): RpcRequest => ({
+  id: 'req-1',
+  authToken: 'tok',
+  method,
+  params
+})
 
 describe('terminal subscribe buffering', () => {
   it('settles mobile subscribe waits when the stream signal aborts before PTY spawn', async () => {
@@ -43,10 +46,7 @@ describe('terminal subscribe buffering', () => {
         ),
         readTerminal: vi.fn().mockResolvedValue({ tail: [], truncated: false })
       })
-      const dispatcher = new RpcDispatcher({
-        runtime,
-        methods: TERMINAL_METHODS
-      })
+      const dispatcher = new RpcDispatcher({ runtime, methods: TERMINAL_METHODS })
 
       const dispatchPromise = dispatcher.dispatchStreaming(
         makeRequest('terminal.subscribe', {
@@ -178,10 +178,7 @@ describe('terminal subscribe buffering', () => {
         limited: true
       })
     })
-    const dispatcher = new RpcDispatcher({
-      runtime,
-      methods: TERMINAL_METHODS
-    })
+    const dispatcher = new RpcDispatcher({ runtime, methods: TERMINAL_METHODS })
 
     await dispatcher.dispatchStreaming(
       makeRequest('terminal.subscribe', { terminal: 'terminal-1' }),
@@ -303,7 +300,14 @@ describe('terminal subscribe buffering', () => {
       expect(await outcomePromise).toBe('settled')
       expect(runtime.subscribeToTerminalData).not.toHaveBeenCalled()
       expect(runtime.subscribeToFitOverrideChanges).not.toHaveBeenCalled()
-      expect(runtime.registerSubscriptionCleanup).not.toHaveBeenCalled()
+      // Cleanup must exist before snapshot work so an abort cannot orphan a
+      // desktop width floor, but the abort must consume it before listeners start.
+      expect(runtime.registerSubscriptionCleanup).toHaveBeenCalledWith(
+        'terminal-1:desktop-1',
+        expect.any(Function),
+        'conn-legacy-json'
+      )
+      expect(runtime.cleanupSubscription).toHaveBeenCalledWith('terminal-1:desktop-1')
       expect(runtime.waitForTerminal).not.toHaveBeenCalled()
       expect(messages).toEqual([])
     } finally {

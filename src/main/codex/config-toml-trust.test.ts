@@ -17,6 +17,8 @@ import {
   computeTrustedHash,
   escapeTomlString,
   getCodexCanonicalTrustPath,
+  normalizeCodexProjectPathForLookup,
+  normalizeCodexProjectPathForRevocationLookup,
   parseTrustKey,
   readHookTrustEntries,
   removeHookTrustEntries,
@@ -961,39 +963,36 @@ describe('upsertHookTrustEntries', () => {
     expect(written).not.toContain(`[hooks.state.'C:\\Users\\O'Connor`)
   })
 
-  it.skipIf(process.platform !== 'win32')(
-    'finds a Codex-written block with lowercased username when Orca key has mixed-case username',
-    () => {
-      // Why: realpathSync.native casing can differ between what Codex wrote
-      // (C:\Users\rod\...) and what Orca resolves (C:\Users\Rod\...).
-      // normalizeHookTrustKeyForLookup case-folds on Windows so the existing block is
-      // replaced rather than a duplicate appended.
-      const lowercasePath = 'C:\\Users\\rod\\AppData\\Roaming\\orca\\hooks.json'
-      const mixedCasePath = 'C:\\Users\\Rod\\AppData\\Roaming\\orca\\hooks.json'
-      const literalKey = `${lowercasePath}:session_start:0:0`
-      const original = [
-        `[hooks.state.'${literalKey}']`,
-        'enabled = true',
-        'trusted_hash = "sha256:LOWERCASE"',
-        ''
-      ].join('\n')
-      writeFileSync(configPath, original, 'utf-8')
+  it('finds a Codex-written block with lowercased username when Orca key has mixed-case username', () => {
+    // Why: realpathSync.native casing can differ between what Codex wrote
+    // (C:\Users\rod\...) and what Orca resolves (C:\Users\Rod\...).
+    // normalizeHookTrustKeyForLookup case-folds Windows-shaped paths so the
+    // existing block is replaced rather than a duplicate appended.
+    const lowercasePath = 'C:\\Users\\rod\\AppData\\Roaming\\orca\\hooks.json'
+    const mixedCasePath = 'C:\\Users\\Rod\\AppData\\Roaming\\orca\\hooks.json'
+    const literalKey = `${lowercasePath}:session_start:0:0`
+    const original = [
+      `[hooks.state.'${literalKey}']`,
+      'enabled = true',
+      'trusted_hash = "sha256:LOWERCASE"',
+      ''
+    ].join('\n')
+    writeFileSync(configPath, original, 'utf-8')
 
-      const entry: CodexTrustEntry = {
-        sourcePath: mixedCasePath,
-        eventLabel: 'session_start',
-        groupIndex: 0,
-        handlerIndex: 0,
-        command: 'echo session'
-      }
-      upsertHookTrustEntries(configPath, [entry])
-
-      const written = readFileSync(configPath, 'utf-8')
-      expect((written.match(/\[hooks\.state\./g) ?? []).length).toBe(2)
-      expect(written).not.toContain('sha256:LOWERCASE')
-      expect(written).toContain(`trusted_hash = "${computeTrustedHash(entry)}"`)
+    const entry: CodexTrustEntry = {
+      sourcePath: mixedCasePath,
+      eventLabel: 'session_start',
+      groupIndex: 0,
+      handlerIndex: 0,
+      command: 'echo session'
     }
-  )
+    upsertHookTrustEntries(configPath, [entry])
+
+    const written = readFileSync(configPath, 'utf-8')
+    expect((written.match(/\[hooks\.state\./g) ?? []).length).toBe(2)
+    expect(written).not.toContain('sha256:LOWERCASE')
+    expect(written).toContain(`trusted_hash = "${computeTrustedHash(entry)}"`)
+  })
 })
 
 describe('upsertProjectTrustLevel', () => {
@@ -1149,6 +1148,52 @@ describe('upsertProjectTrustLevel', () => {
     expect(updated).toContain('trust_level = "trusted"')
   })
 
+  it('keeps case-distinct WSL Linux project paths as separate trust blocks', () => {
+    // Why: the \\wsl$\<distro> share is case-insensitive on Windows, but the
+    // Linux path underneath is not — .../Repo and .../repo are two projects.
+    const existingPath = '\\\\wsl$\\Ubuntu\\home\\u\\Repo'
+    const incomingPath = '\\\\wsl$\\Ubuntu\\home\\u\\repo'
+    const original = [
+      `[projects.'${existingPath}']`,
+      'trust_level = "untrusted"',
+      ''
+    ].join('\n')
+
+    const updated = upsertProjectTrustLevelInContent(original, incomingPath, 'trusted', {
+      alreadyCanonical: true
+    })
+
+    expect(updated.match(/\[projects\./g)).toHaveLength(2)
+    expect(updated).toContain(`[projects.'${existingPath}']`)
+    // Why: serializer writes basic-string headers via escapeTomlString; assert
+    // that form so the fixture can't drift from real header matching.
+    expect(updated).toContain(`[projects."${escapeTomlString(incomingPath)}"]`)
+    expect(updated).toContain('trust_level = "untrusted"')
+    expect(updated).toContain('trust_level = "trusted"')
+  })
+
+  it('updates the same WSL project block across wsl$ and wsl.localhost spellings', () => {
+    // Why: the two share spellings alias the same distro filesystem, so a
+    // revoked project must not be re-trusted under the other spelling.
+    const original = [
+      "[projects.'\\\\wsl$\\Ubuntu\\home\\u\\proj']",
+      'trust_level = "untrusted"',
+      ''
+    ].join('\n')
+
+    const updated = upsertProjectTrustLevelInContent(
+      original,
+      '\\\\wsl.localhost\\Ubuntu\\home\\u\\proj',
+      'trusted',
+      { alreadyCanonical: true }
+    )
+
+    expect(updated.match(/\[projects\./g)).toHaveLength(1)
+    expect(updated).toContain("[projects.'\\\\wsl$\\Ubuntu\\home\\u\\proj']")
+    expect(updated).toContain('trust_level = "trusted"')
+    expect(updated).not.toContain('trust_level = "untrusted"')
+  })
+
   it('matches a literal-string POSIX project path containing a quote and backslash', () => {
     const projectPath = '/tmp/with"quote\\and-backslash'
     const original = [`[projects.'${projectPath}']`, 'trust_level = "untrusted"', ''].join('\n')
@@ -1183,6 +1228,78 @@ describe('upsertProjectTrustLevel', () => {
 
     expect(readFileSync(configPath, 'utf-8')).toBe(firstWrite)
     expect(existsSync(`${configPath}.bak`)).toBe(false)
+  })
+})
+
+describe('normalizeCodexProjectPathForLookup', () => {
+  it('dedupes drive-letter casing and separators for true Windows paths', () => {
+    expect(normalizeCodexProjectPathForLookup('C:\\repo')).toBe(
+      normalizeCodexProjectPathForLookup('c:/repo')
+    )
+  })
+
+  it('keeps case-distinct WSL Linux paths distinct', () => {
+    expect(normalizeCodexProjectPathForLookup('\\\\wsl$\\Ubuntu\\home\\u\\Repo')).not.toBe(
+      normalizeCodexProjectPathForLookup('\\\\wsl$\\Ubuntu\\home\\u\\repo')
+    )
+  })
+
+  it('merges separator and distro-casing variants of the same WSL path', () => {
+    // Why: separators and the case-insensitive \\wsl$\<distro> share may drift,
+    // but the same Linux path must still resolve to one trust key.
+    expect(normalizeCodexProjectPathForLookup('\\\\wsl$\\Ubuntu\\home\\u\\proj')).toBe(
+      normalizeCodexProjectPathForLookup('//WSL$/ubuntu/home/u/proj')
+    )
+  })
+
+  it('treats wsl.localhost like the wsl$ share for the case-sensitive tail', () => {
+    expect(
+      normalizeCodexProjectPathForLookup('\\\\wsl.localhost\\Ubuntu\\home\\u\\Repo')
+    ).not.toBe(normalizeCodexProjectPathForLookup('\\\\wsl.localhost\\Ubuntu\\home\\u\\repo'))
+    expect(normalizeCodexProjectPathForLookup('\\\\WSL.LOCALHOST\\Ubuntu\\home\\u\\proj')).toBe(
+      normalizeCodexProjectPathForLookup('//wsl.localhost/ubuntu/home/u/proj')
+    )
+  })
+
+  it('folds the wsl$ and wsl.localhost spellings of the same path to one key', () => {
+    expect(normalizeCodexProjectPathForLookup('\\\\wsl$\\Ubuntu\\home\\u\\Proj')).toBe(
+      normalizeCodexProjectPathForLookup('\\\\wsl.localhost\\Ubuntu\\home\\u\\Proj')
+    )
+  })
+
+  it('folds drvfs automount tails case-insensitively like the native drive path', () => {
+    // Why: /mnt/<drive> is NTFS through drvfs, case-insensitive like C:\ itself.
+    expect(normalizeCodexProjectPathForLookup('\\\\wsl$\\Ubuntu\\mnt\\c\\Users\\Bob\\Repo')).toBe(
+      normalizeCodexProjectPathForLookup('//wsl.localhost/ubuntu/mnt/c/users/bob/repo')
+    )
+    // /mnt/wsl is tmpfs, not a drvfs drive mount — its tail stays case-sensitive.
+    expect(normalizeCodexProjectPathForLookup('\\\\wsl$\\Ubuntu\\mnt\\wsl\\Repo')).not.toBe(
+      normalizeCodexProjectPathForLookup('\\\\wsl$\\Ubuntu\\mnt\\wsl\\repo')
+    )
+  })
+
+  it('still case-folds normal UNC shares', () => {
+    expect(normalizeCodexProjectPathForLookup('\\\\server\\share\\Proj')).toBe(
+      normalizeCodexProjectPathForLookup('//SERVER/share/proj')
+    )
+  })
+
+  it('leaves POSIX paths untouched', () => {
+    expect(normalizeCodexProjectPathForLookup('/home/u/Repo')).toBe('/home/u/Repo')
+  })
+})
+
+describe('normalizeCodexProjectPathForRevocationLookup', () => {
+  it('folds WSL tails fully so drifted-case legacy revocations still match', () => {
+    expect(
+      normalizeCodexProjectPathForRevocationLookup('\\\\wsl$\\Ubuntu\\home\\u\\Repo')
+    ).toBe(normalizeCodexProjectPathForRevocationLookup('//wsl.localhost/ubuntu/home/u/repo'))
+  })
+
+  it('keeps POSIX paths case-sensitive', () => {
+    expect(normalizeCodexProjectPathForRevocationLookup('/home/u/Repo')).not.toBe(
+      normalizeCodexProjectPathForRevocationLookup('/home/u/repo')
+    )
   })
 })
 
@@ -1494,54 +1611,78 @@ describe('readHookTrustEntries', () => {
     })
   })
 
-  it.skipIf(process.platform !== 'win32')(
-    'supports case-insensitive lookups for Windows hook trust keys read from config',
-    () => {
-      // Why: Codex and realpathSync.native can disagree on user-path casing;
-      // status checks still need Map.get(computeTrustKey(...)) to find the row.
-      const rawKey = 'C:\\Users\\rod\\AppData\\Roaming\\orca\\hooks.json:session_start:0:0'
-      const lookupKey = 'C:/Users/Rod/AppData/Roaming/orca/hooks.json:session_start:0:0'
-      const original = [
-        `[hooks.state.'${rawKey}']`,
+  it('supports case-insensitive lookups for Windows hook trust keys read from config', () => {
+    // Why: Codex and realpathSync.native can disagree on user-path casing;
+    // status checks still need Map.get(computeTrustKey(...)) to find the row.
+    const rawKey = 'C:\\Users\\rod\\AppData\\Roaming\\orca\\hooks.json:session_start:0:0'
+    const lookupKey = 'C:/Users/Rod/AppData/Roaming/orca/hooks.json:session_start:0:0'
+    const original = [
+      `[hooks.state.'${rawKey}']`,
+      'enabled = true',
+      'trusted_hash = "sha256:CASE"',
+      ''
+    ].join('\n')
+    writeFileSync(configPath, original, 'utf-8')
+
+    const result = readHookTrustEntries(configPath)
+
+    expect(result.get(lookupKey)).toEqual({ trustedHash: 'sha256:CASE', enabled: true })
+  })
+
+  it('keeps POSIX-shaped hook trust paths case-sensitive', () => {
+    const upperKey = '/windows/d/Repo/hooks.json:session_start:0:0'
+    const lowerKey = '/windows/d/repo/hooks.json:session_start:0:0'
+    writeFileSync(
+      configPath,
+      [
+        `[hooks.state."${upperKey}"]`,
         'enabled = true',
-        'trusted_hash = "sha256:CASE"',
+        'trusted_hash = "sha256:UPPER"',
+        '',
+        `[hooks.state."${lowerKey}"]`,
+        'enabled = true',
+        'trusted_hash = "sha256:LOWER"',
         ''
-      ].join('\n')
-      writeFileSync(configPath, original, 'utf-8')
+      ].join('\n'),
+      'utf-8'
+    )
 
-      const result = readHookTrustEntries(configPath)
+    const result = readHookTrustEntries(configPath)
 
-      expect(result.get(lookupKey)).toEqual({ trustedHash: 'sha256:CASE', enabled: true })
-    }
-  )
+    expect(result.get(upperKey)?.trustedHash).toBe('sha256:UPPER')
+    expect(result.get(lowerKey)?.trustedHash).toBe('sha256:LOWER')
+    expect(result.size).toBe(2)
+  })
 
-  it.skipIf(process.platform !== 'win32')(
-    'keeps WSL hook trust paths case-sensitive on a Windows host',
-    () => {
-      const upperKey = '/windows/d/Repo/hooks.json:session_start:0:0'
-      const lowerKey = '/windows/d/repo/hooks.json:session_start:0:0'
-      writeFileSync(
-        configPath,
-        [
-          `[hooks.state."${upperKey}"]`,
-          'enabled = true',
-          'trusted_hash = "sha256:UPPER"',
-          '',
-          `[hooks.state."${lowerKey}"]`,
-          'enabled = true',
-          'trusted_hash = "sha256:LOWER"',
-          ''
-        ].join('\n'),
-        'utf-8'
-      )
+  it('keeps case-distinct WSL UNC hook paths distinct', () => {
+    // Why: the \\wsl$\<distro> share is case-insensitive, but the Linux tail
+    // is not — folding the whole path would merge two distinct hook sources.
+    const upperKey = '\\\\wsl$\\Ubuntu\\home\\u\\Repo\\hooks.json:session_start:0:0'
+    const lowerKey = '\\\\wsl$\\Ubuntu\\home\\u\\repo\\hooks.json:session_start:0:0'
+    writeFileSync(
+      configPath,
+      [
+        `[hooks.state.'${upperKey}']`,
+        'enabled = true',
+        'trusted_hash = "sha256:UPPER"',
+        '',
+        `[hooks.state.'${lowerKey}']`,
+        'enabled = true',
+        'trusted_hash = "sha256:LOWER"',
+        ''
+      ].join('\n'),
+      'utf-8'
+    )
 
-      const result = readHookTrustEntries(configPath)
+    const result = readHookTrustEntries(configPath)
 
-      expect(result.get(upperKey)?.trustedHash).toBe('sha256:UPPER')
-      expect(result.get(lowerKey)?.trustedHash).toBe('sha256:LOWER')
-      expect(result.size).toBe(2)
-    }
-  )
+    // Same share, different-cased distro/separators still fold to one key.
+    expect(result.get('//WSL$/ubuntu/home/u/Repo/hooks.json:session_start:0:0')?.trustedHash).toBe(
+      'sha256:UPPER'
+    )
+    expect(result.get(lowerKey)?.trustedHash).toBe('sha256:LOWER')
+    expect(result.size).toBe(2)
+  })
 
   it('reads entries from a CRLF-terminated config', () => {
     const key = '/x/hooks.json:pre_tool_use:0:0'

@@ -722,6 +722,8 @@
       "GitHubItemDialog": {
         "3ab6ac0fc8": "選択した GitHub Issue または PR をプレビュー・編集します。",
         "3cd5ae5b7b": "ファイルは変更されませんでした。",
+        "filesUnavailable": "変更されたファイルを読み込めませんでした。",
+        "filesRetry": "再試行",
         "999b5ad7d9": "ファイル",
         "4bd1f5b055": "チェック",
         "e30a5470c9": "会話",
@@ -1385,7 +1387,9 @@
         "1ff5d979df": "担当者なし",
         "checkActionRequiredHint": "マージを解除するには、このチェックにGitHub上で手動アクション（例：ワークフロー実行の承認）が必要です。",
         "dd5d9a4f17": "{{value0}}に更新",
-        "71a3c0f9d2": "ワークスペースを開始"
+        "71a3c0f9d2": "ワークスペースを開始",
+        "filesUnavailable": "Couldn't load changed files.",
+        "filesRetry": "Retry"
       },
       "QuickOpen": {
         "1dbd3f59ff": "移動",
@@ -2366,7 +2370,9 @@
             "failed": "削除できなかったワークスペース: {{value0}}",
             "error": "ワークスペースのクリーンアップに失敗しました",
             "skippedAncestor": "ネストされたワークスペースを削除できなかったためスキップしました。",
-            "timedOut": "{{value0}} の削除に予想より時間がかかっています。バックグラウンドで継続されます。"
+            "timedOut": "{{value0}} の削除に予想より時間がかかっています。バックグラウンドで継続されます。",
+            "stillRemoving": "Still removing workspaces: {{value0}}",
+            "skippedPendingAncestor": "Skipped because a nested workspace has not finished removing."
           },
           "candidateRow": {
             "gitLabel": "Git",
@@ -3205,6 +3211,17 @@
           },
           "SshTargetStatusRow": {
             "sshHost": "SSH ホスト"
+          },
+          "usagePercentageLabel": {
+            "used": "{{value0}}% 使用済み",
+            "remaining": "残り {{value0}}%"
+          },
+          "UsagePercentageDisplayChangeNotice": {
+            "title": "Usage now shows % used",
+            "body": "Prefer remaining? Change it in Settings.",
+            "dismiss": "Dismiss",
+            "openSettings": "Open Settings",
+            "gotIt": "Got it"
           }
         }
       },
@@ -6749,9 +6766,9 @@
           "348246b06f": "false",
           "5936387ddd": "自動",
           "adbafefe56": "カスタム",
-          "16753eea48": "Windows では、右クリックしてクリップボードを貼り付けます。 Ctrl キーを押しながら右クリックすると、コンテキスト メニューが開きます。",
+          "16753eea48": "右クリックしてクリップボードを貼り付けます。 Ctrl キーを押しながら右クリックすると、コンテキスト メニューが開きます。",
           "9c178cf8aa": "右クリックして貼り付けます",
-          "af0c3b6e39": "Windows では、右クリックしてクリップボードを terminal に貼り付けます。 Ctrl キーを押しながら右クリックしてコンテキスト メニューを開きます。",
+          "af0c3b6e39": "右クリックしてクリップボードを terminal に貼り付けます。 Ctrl キーを押しながら右クリックしてコンテキスト メニューを開きます。",
           "29154326bb": "の上",
           "ab20575a8a": "オフ",
           "ab3a1f9068": "wsl.exe",
@@ -7223,7 +7240,9 @@
             "f8e2a1c4b6": "Grok の使用状況",
             "e7d1b0f3a5": "Grok CLI OAuth から Grok の週次クレジット使用量を表示します。",
             "d6c0a9e2f4": "grok",
-            "c5b9f8d1e3": "xai"
+            "c5b9f8d1e3": "xai",
+            "usagePercentageDisplayTitle": "使用率",
+            "usagePercentageDisplayDescription": "プロバイダーの制限を使用済みまたは残りの割合で表示するかを選択します。"
           }
         },
         "auto": {
@@ -8475,7 +8494,7 @@
               "e55186fe2b": "右クリック",
               "28ff08ed35": "窓",
               "e7d2793b03": "ターミナル",
-              "8ba875c132": "Windows では、右クリックしてクリップボードを terminal に貼り付けます。 Ctrl キーを押しながら右クリックしてコンテキスト メニューを開きます。",
+              "8ba875c132": "右クリックしてクリップボードを terminal に貼り付けます。 Ctrl キーを押しながら右クリックしてコンテキスト メニューを開きます。",
               "f0b8448570": "右クリックして貼り付けます",
               "04994f6929": "デフォルト",
               "fc564eadaf": "デビアン",
@@ -8994,6 +9013,14 @@
           "a8f3e2c1b4": "週次クレジット",
           "b7e2d9f0a3": "ターミナルの grok /usage 画面と同じ週次クレジット率です。",
           "c6d1a8f4e2": "{{when}} にリセット"
+        },
+        "AppearanceWindowSidebarSection": {
+          "usagePercentageDisplayUsed": "使用済み",
+          "usagePercentageDisplayRemaining": "残り"
+        },
+        "TerminalInteractionSection": {
+          "567633ff50": "Right-click pastes the clipboard into the terminal. Control-click to open the context menu.",
+          "c64497148a": "Right-click pastes the clipboard. Control-click opens the context menu."
         }
       },
       "right": {
@@ -9861,7 +9888,11 @@
             "92276aceb7": "削除",
             "7fb9435c86": "This permanently deletes the directory and its contents on the remote host. This cannot be undone.",
             "23e98f192f": "This permanently deletes the file on the remote host. This cannot be undone.",
-            "8b8ee9d22f": "このファイルを所有しているホストを特定できませんでした。ワークスペースの接続を確認して、もう一度お試しください。"
+            "8b8ee9d22f": "このファイルを所有しているホストを特定できませんでした。ワークスペースの接続を確認して、もう一度お試しください。",
+            "af1270b90d": "{{count}}個の項目を完全に削除しますか?",
+            "dd029aa5cd": "選択した項目とディレクトリの内容がリモートホスト上で完全に削除されます。この操作は元に戻せません。",
+            "77fdc36183": "Delete {{count}} items?",
+            "fca915a67a": "Remote items are permanently deleted and cannot be undone. Local items move to the {{value0}}."
           },
           "useFileExplorerHandlers": {
             "32cd9fd991": "シンボリックリンクターゲットを開けません"
@@ -11595,7 +11626,8 @@
           "1c99b726e0": "リンクを削除する",
           "cdfe166f6f": "リンクを編集",
           "bfc813e909": "リンクを開く",
-          "7b0b945fdc": "リンクを貼り付けるか入力してください…"
+          "7b0b945fdc": "リンクを貼り付けるか入力してください…",
+          "copyLink": "リンクをコピー"
         },
         "RichMarkdownReviewNoteLayer": {
           "f3ef92952b": "このメモ",
@@ -11622,7 +11654,8 @@
           "68d090241d": "単語全体に一致",
           "fd97c7e585": "置換",
           "44682b4159": "リッチ markdown エディタで置換",
-          "c2884f5e95": "すべて置換"
+          "c2884f5e95": "すべて置換",
+          "preservedRichContentReadOnly": "保持されたリッチコンテンツはリッチモードでは読み取り専用です。"
         },
         "RichMarkdownSlashMenu": {
           "82c6816ff8": "ブロックが見つかりませんでした",
@@ -11839,6 +11872,24 @@
           "3fa2b8d417": "ディスクから再読み込み",
           "a95d02c644": "編集内容を保持",
           "2c8f1e07b9": "比較を読み込み中..."
+        },
+        "RichMarkdownEditor": {
+          "citationLinkAvailable": "{{value0}}、{{value1}}へのリンク。Enterキーで開くか、Tabキーでリンク操作に移動します。",
+          "citationFallbackLabel": "引用",
+          "citationLinkUnavailable": "{{value0}}、引用リンクは利用できません。{{value1}}",
+          "tabForCitationActions": "Tabキーで利用可能な操作に移動します。",
+          "noCitationActions": "利用できるリンク操作はありません。"
+        },
+        "richMarkdownHtmlSuperscriptLink": {
+          "availableAriaLabel": "{{value0}}、{{value1}}へのリンク",
+          "unavailableAriaLabel": "{{value0}}、引用リンクは利用できません"
+        },
+        "richMarkdownLinkClipboard": {
+          "copiedLink": "リンクをコピーしました",
+          "copyLinkFailed": "リンクをコピーできませんでした"
+        },
+        "richMarkdownSourceOwningCutFeedback": {
+          "selectLessContent": "保持されたHTML引用を切り取るには、選択範囲を小さくするかコードモードを使用してください。"
         }
       },
       "diff": {

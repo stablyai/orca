@@ -68,6 +68,23 @@ export type RemovedSshTargetTombstone = {
   removedAt: number
 }
 
+/** Exact repo ownership changes made while re-adopting a removed SSH host. */
+export type SshRepoReadoption = {
+  oldTargetId: string
+  newTargetId: string
+  repoIds: string[]
+}
+
+export type SshTargetAddResult = {
+  target: SshTarget
+  repoReadoptions: SshRepoReadoption[]
+}
+
+export type SshConfigImportResult = {
+  targets: SshTarget[]
+  repoReadoptions: SshRepoReadoption[]
+}
+
 export type SavedPortForward = {
   localPort: number
   remoteHost: string

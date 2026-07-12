@@ -3228,7 +3228,7 @@ export function useIpcEvents(): void {
           kind: 'fit'
           event: {
             ptyId: string
-            mode: 'mobile-fit' | 'desktop-fit'
+            mode: 'mobile-fit' | 'remote-desktop-fit' | 'desktop-fit'
             cols: number
             rows: number
           }

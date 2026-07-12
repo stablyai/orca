@@ -71,6 +71,7 @@ import { normalizeAutoRenameBranchFromWorkDefaultOn } from '../../../shared/auto
 import { normalizeTerminalCursorStyleDefault } from '../../../shared/terminal-cursor-style-settings'
 import { normalizeTerminalCustomThemes } from '../../../shared/terminal-custom-themes'
 import { normalizeUiLanguage } from '../../../shared/ui-language'
+import { normalizeUsagePercentageDisplay } from '../../../shared/usage-percentage-display'
 import type { RateLimitState } from '../../../shared/rate-limit-types'
 import type { RuntimeStatus, RuntimeSyncWindowGraph } from '../../../shared/runtime-types'
 import {
@@ -2713,6 +2714,7 @@ function createPtyApi(): NonNullable<Partial<PreloadApi>['pty']> {
     write: () => {},
     writeAccepted: () => Promise.resolve(false),
     resize: () => {},
+    claimViewport: () => {},
     reportGeometry: () => {},
     signal: () => {},
     // Web panes clear the host buffer via the terminal.clearBuffer runtime RPC.
@@ -2822,7 +2824,7 @@ function createSshApi(): NonNullable<Partial<PreloadApi>['ssh']> {
     updateTarget: () =>
       Promise.reject(new Error('SSH target management is unavailable in the web client.')),
     removeTarget: () => Promise.resolve(),
-    importConfig: () => Promise.resolve([]),
+    importConfig: () => Promise.resolve({ targets: [], repoReadoptions: [] }),
     connect: async (args) => {
       const { state } = await callRuntimeResult<{ state: SshConnectionState | null }>(
         'ssh.connect',
@@ -3250,6 +3252,9 @@ function mergeWebUIState(
       safeUpdates._worktreeCardModeDefaulted ?? base._worktreeCardModeDefaulted,
     agentActivityDisplayMode: normalizeAgentActivityDisplayMode(
       safeUpdates.agentActivityDisplayMode ?? base.agentActivityDisplayMode
+    ),
+    usagePercentageDisplay: normalizeUsagePercentageDisplay(
+      safeUpdates.usagePercentageDisplay ?? base.usagePercentageDisplay
     )
   }
 }

@@ -17,6 +17,7 @@ import {
 } from './config-toml-line-scan'
 import {
   normalizeCodexProjectPathForLookup,
+  normalizeCodexProjectPathForRevocationLookup,
   parseCodexProjectHeaderPath
 } from './config-toml-trust'
 
@@ -170,10 +171,20 @@ function mergeSystemCodexConfigIntoRuntime(runtimeConfig: string, systemConfig: 
       .filter((section) => isRuntimeProjectTomlSection(section.header))
       .map((section) => getTomlSectionHeaderKey(section.header))
   )
+  const systemProjectSections = deduplicateProjectTomlSections(getTomlSections(systemConfig)).filter(
+    (section) => isRuntimeProjectTomlSection(section.header)
+  )
   const systemUntrustedProjectHeaders = new Set(
-    deduplicateProjectTomlSections(getTomlSections(systemConfig))
-      .filter((section) => isRuntimeProjectTomlSection(section.header))
+    systemProjectSections
       .filter((section) => getProjectTrustLevel(section.block) === 'untrusted')
+      .map((section) => getRevocationTomlSectionHeaderKey(section.header))
+  )
+  // Why: an exact-cased trusted entry in ~/.codex is the user's latest explicit
+  // decision for that exact project; a loosely-matched (case-drifted) revocation
+  // must not override it, or re-granting trust would be reverted every mirror.
+  const systemTrustedProjectHeaders = new Set(
+    systemProjectSections
+      .filter((section) => getProjectTrustLevel(section.block) === 'trusted')
       .map((section) => getTomlSectionHeaderKey(section.header))
   )
   // Why: ordinary Codex settings should mirror ~/.codex exactly; runtime hook
@@ -187,7 +198,8 @@ function mergeSystemCodexConfigIntoRuntime(runtimeConfig: string, systemConfig: 
       .filter(
         (section) =>
           !isRuntimeProjectTomlSection(section.header) ||
-          !systemUntrustedProjectHeaders.has(getTomlSectionHeaderKey(section.header))
+          !systemUntrustedProjectHeaders.has(getRevocationTomlSectionHeaderKey(section.header)) ||
+          systemTrustedProjectHeaders.has(getTomlSectionHeaderKey(section.header))
       )
       .map((section) => section.block)
   ])
@@ -275,6 +287,15 @@ function getTomlSectionHeaderKey(header: string): string {
   return projectPath === null
     ? header.trim()
     : `project:${normalizeCodexProjectPathForLookup(projectPath)}`
+}
+
+// Why: configs written before WSL tails compared case-sensitively can hold a
+// revocation under drifted casing; match it loosely so trust is not resurrected.
+function getRevocationTomlSectionHeaderKey(header: string): string {
+  const projectPath = parseCodexProjectHeaderPath(header)
+  return projectPath === null
+    ? header.trim()
+    : `project:${normalizeCodexProjectPathForRevocationLookup(projectPath)}`
 }
 
 // Why: hook upsert already removes both quote representations, while its paired

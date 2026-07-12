@@ -22,6 +22,7 @@ import {
 import { connect, type RpcClient } from './rpc-client'
 import { connectionLogStore } from './connection-log-buffer'
 import { subscribeConnectionRevivalTriggers } from './connection-revival-triggers'
+import { HostClientOpenRegistry } from './host-client-open-registry'
 import { loadHosts } from './host-store'
 import type { ConnectionState, HostProfile } from './types'
 
@@ -66,7 +67,7 @@ export function RpcClientProvider({ children }: { children: ReactNode }) {
   // Pending opens (avoid two acquire() callers in the same render racing the
   // host lookup). Keyed by hostId, value is a sentinel resolved when the
   // entry materialises.
-  const pendingOpensRef = useRef<Map<string, Promise<void>>>(new Map())
+  const pendingOpensRef = useRef(new HostClientOpenRegistry())
 
   // Why: a fast-path cache of already-loaded HostProfiles. Screens that
   // have run loadHosts() can call primeHosts() to populate this and skip
@@ -91,19 +92,18 @@ export function RpcClientProvider({ children }: { children: ReactNode }) {
   }
 
   const closeEntry = useCallback((hostId: string) => {
+    pendingOpensRef.current.cancel(hostId)
+    primedHostsRef.current.delete(hostId)
     const entry = storeRef.current.get(hostId)
-    if (!entry) {
-      return
-    }
-    entry.unsubState()
-    entry.client.close()
+    entry?.unsubState()
     storeRef.current.delete(hostId)
+    entry?.client.close()
     notifyHostState(hostId, 'disconnected')
     notifyAllHosts()
   }, [])
 
   const openEntry = useCallback(async (hostId: string): Promise<StoreEntry | null> => {
-    const existing = pendingOpensRef.current.get(hostId)
+    const existing = pendingOpensRef.current.getActivePromise(hostId)
     if (existing) {
       await existing
       return storeRef.current.get(hostId) ?? null
@@ -112,7 +112,7 @@ export function RpcClientProvider({ children }: { children: ReactNode }) {
     const promise = new Promise<void>((res) => {
       resolve = res
     })
-    pendingOpensRef.current.set(hostId, promise)
+    const pendingOpen = pendingOpensRef.current.register(hostId, promise)
 
     try {
       // Why: prefer the primed cache (populated by primeHosts when the
@@ -141,6 +141,10 @@ export function RpcClientProvider({ children }: { children: ReactNode }) {
           notifyAllHosts()
           return null
         }
+      }
+
+      if (pendingOpen.cancelled) {
+        return null
       }
 
       // Re-check after any await — another acquire() may have completed.
@@ -184,7 +188,7 @@ export function RpcClientProvider({ children }: { children: ReactNode }) {
       notifyAllHosts()
       return entry
     } finally {
-      pendingOpensRef.current.delete(hostId)
+      pendingOpensRef.current.deleteIfCurrent(hostId, pendingOpen)
       resolve()
     }
   }, [])
@@ -326,6 +330,7 @@ export function RpcClientProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     const store = storeRef.current
     return () => {
+      pendingOpensRef.current.cancelAll()
       for (const [hostId] of store) {
         closeEntry(hostId)
       }

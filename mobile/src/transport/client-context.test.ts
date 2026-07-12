@@ -119,6 +119,7 @@ async function renderHarness(hostId: string): Promise<Harness> {
 }
 
 beforeEach(() => {
+  globalThis.IS_REACT_ACT_ENVIRONMENT = true
   connectMock.mockReset()
   loadHostsMock.mockReset()
 })
@@ -155,5 +156,77 @@ describe('useHostClient', () => {
     expect(harness.hook.state).toBe('disconnected')
 
     harness.unmount()
+  })
+
+  it('does not open a client after the host is closed during an in-flight lookup', async () => {
+    let resolveHosts: ((hosts: (typeof HOST)[]) => void) | null = null
+    const hostLookup = new Promise<(typeof HOST)[]>((resolve) => {
+      resolveHosts = resolve
+    })
+    const fake = makeFakeClient('connected')
+    connectMock.mockReturnValue(fake)
+    loadHostsMock.mockReturnValue(hostLookup)
+
+    let closeHost: ((hostId: string) => void) | null = null
+    let renderer: ReactTestRenderer | null = null
+    function Probe(): null {
+      closeHost = useCloseHost()
+      useHostClient(HOST.id)
+      return null
+    }
+
+    const restore = suppressReactTestRendererDeprecationWarning()
+    try {
+      act(() => {
+        renderer = create(createElement(RpcClientProvider, null, createElement(Probe)))
+      })
+    } finally {
+      restore()
+    }
+    expect(loadHostsMock).toHaveBeenCalledOnce()
+    if (!closeHost || !resolveHosts || !renderer) {
+      throw new Error('pending-open harness did not initialize')
+    }
+
+    act(() => closeHost?.(HOST.id))
+    await act(async () => {
+      resolveHosts?.([HOST])
+      await hostLookup
+    })
+
+    expect(connectMock).not.toHaveBeenCalled()
+    expect(fake.closeMock).not.toHaveBeenCalled()
+    act(() => renderer.unmount())
+  })
+
+  it('does not open a client after provider unmount during an in-flight lookup', async () => {
+    let resolveHosts: ((hosts: (typeof HOST)[]) => void) | null = null
+    const hostLookup = new Promise<(typeof HOST)[]>((resolve) => {
+      resolveHosts = resolve
+    })
+    connectMock.mockReturnValue(makeFakeClient('connected'))
+    loadHostsMock.mockReturnValue(hostLookup)
+
+    let renderer: ReactTestRenderer | null = null
+    function Probe(): null {
+      useHostClient(HOST.id)
+      return null
+    }
+    const restore = suppressReactTestRendererDeprecationWarning()
+    try {
+      act(() => {
+        renderer = create(createElement(RpcClientProvider, null, createElement(Probe)))
+      })
+    } finally {
+      restore()
+    }
+    expect(loadHostsMock).toHaveBeenCalledOnce()
+    act(() => renderer?.unmount())
+    await act(async () => {
+      resolveHosts?.([HOST])
+      await hostLookup
+    })
+
+    expect(connectMock).not.toHaveBeenCalled()
   })
 })

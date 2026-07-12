@@ -103,7 +103,7 @@ async function connectDockerRemote(
         void window.api.ssh.submitCredential({ requestId: request.requestId, value: null })
       })
       try {
-        const createdTarget = await window.api.ssh.addTarget({
+        const { target: createdTarget, repoReadoptions } = await window.api.ssh.addTarget({
           target: {
             label: `Docker SSH Relay Perf ${Date.now()}`,
             host: '127.0.0.1',
@@ -114,6 +114,7 @@ async function connectDockerRemote(
             relayGracePeriodSeconds: 1
           }
         })
+        store.getState().recordSshRepoReadoptions(repoReadoptions)
         const state = await window.api.ssh.connect({ targetId: createdTarget.id })
         if (!state || state.status !== 'connected') {
           throw new Error(`SSH target did not connect: ${JSON.stringify(state)}`)

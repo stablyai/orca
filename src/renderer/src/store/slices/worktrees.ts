@@ -37,6 +37,7 @@ import {
 } from '../../runtime/runtime-rpc-client'
 import { toRuntimeWorktreeSelector } from '../../runtime/runtime-worktree-selector'
 import { getHostedReviewCacheKey, refreshHostedReviewCard } from './hosted-review'
+import { isPositiveHostedReviewNumber } from '../../../../shared/hosted-review'
 import { getGitHubPRCacheKey, getLegacyGitHubPRCacheKey } from './github-cache-key'
 import { moveFocusToRendererBeforeFocusedWebviewHidden } from './browser-webview-cleanup'
 import { toast } from 'sonner'
@@ -350,6 +351,21 @@ function repoHostId(
 ): ExecutionHostId {
   const repo = findRepoForHost(state.repos, repoId, { hostId, settings: state.settings })
   return repo ? getRepoExecutionHostId(repo) : LOCAL_EXECUTION_HOST_ID
+}
+
+function repoHasExecutionHost(
+  state: Pick<AppState, 'repos'>,
+  repoId: string,
+  hostId: ExecutionHostId,
+  ownerWasMissingAtStart: boolean
+): boolean {
+  const repoOwners = state.repos.filter((repo) => repo.id === repoId)
+  // Why: worktrees can load before the repo catalog during startup; only reject
+  // a missing owner when this request previously observed an owned repo.
+  return (
+    (repoOwners.length === 0 && ownerWasMissingAtStart) ||
+    repoOwners.some((repo) => getRepoExecutionHostId(repo) === hostId)
+  )
 }
 
 function toVisibleWorktrees(
@@ -1369,10 +1385,6 @@ function getHostedReviewPushTargetLookup(worktree: Worktree): {
   return null
 }
 
-function isPositiveHostedReviewNumber(value: unknown): value is number {
-  return typeof value === 'number' && Number.isInteger(value) && value > 0
-}
-
 type HostedReviewLinkKey =
   | 'linkedPR'
   | 'linkedGitLabMR'
@@ -2087,6 +2099,7 @@ function buildWorktreePurgeState(s: AppState, worktreeIds: string[]): Partial<Ap
     }
     return next
   })()
+  const nextAgentStatusByPaneKey = omitByPaneKeyTabPrefix(s.agentStatusByPaneKey)
 
   return {
     // Worktree-scoped terminal/tab state
@@ -2127,7 +2140,10 @@ function buildWorktreePurgeState(s: AppState, worktreeIds: string[]): Partial<Ap
     // badge). retainedAgentsByPaneKey and runtimeAgentOrchestrationByPaneKey are
     // intentionally omitted here — both self-heal (pruneRetainedAgents on a
     // worktreesByRepo change; the runtime map is replaced wholesale each sync).
-    agentStatusByPaneKey: omitByPaneKeyTabPrefix(s.agentStatusByPaneKey),
+    agentStatusByPaneKey: nextAgentStatusByPaneKey,
+    ...(nextAgentStatusByPaneKey !== s.agentStatusByPaneKey
+      ? { agentStatusEpoch: s.agentStatusEpoch + 1 }
+      : {}),
     agentLaunchConfigByPaneKey: omitByPaneKeyTabPrefix(s.agentLaunchConfigByPaneKey),
     acknowledgedAgentsByPaneKey: omitByPaneKeyTabPrefix(s.acknowledgedAgentsByPaneKey),
     paneForegroundAgentByPaneKey: omitByPaneKeyTabPrefix(s.paneForegroundAgentByPaneKey),
@@ -2253,6 +2269,7 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
     try {
       const ownerState = get()
       const hostId = repoHostId(ownerState, repoId)
+      const ownerWasMissingAtStart = !ownerState.repos.some((repo) => repo.id === repoId)
       const setup = getProjectHostSetupForRepoHost(ownerState, repoId, hostId)
       const result = await listDetectedWorktreesForRepoCoalesced(
         settingsForRepoOwner(ownerState, repoId, hostId),
@@ -2260,6 +2277,9 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
         { executionHostId: hostId }
       )
       set((s) => {
+        if (!repoHasExecutionHost(s, repoId, hostId, ownerWasMissingAtStart)) {
+          return s
+        }
         // Why: detected-only refreshes can overlap host-scoped visible refreshes;
         // keep detected state stamped/merged so SSH/runtime rows are not clobbered.
         const mergedDetected = mergeDetectedWorktreesForHost(
@@ -2287,6 +2307,7 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
     try {
       const ownerState = get()
       const hostId = repoHostId(ownerState, repoId)
+      const ownerWasMissingAtStart = !ownerState.repos.some((repo) => repo.id === repoId)
       const setup = getProjectHostSetupForRepoHost(ownerState, repoId, hostId)
       const settings = settingsForRepoOwner(ownerState, repoId, hostId)
       const detected = await listDetectedWorktreesForRepoCoalesced(settings, repoId, {
@@ -2307,6 +2328,9 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
       )
       if (areWorktreesEqual(currentForHost, worktrees)) {
         set((s) => {
+          if (!repoHasExecutionHost(s, repoId, hostId, ownerWasMissingAtStart)) {
+            return s
+          }
           const matchOptions = worktreeHostMatchOptions(s, repoId, hostId)
           const removedIds = getRemovedWorktreeIdsAfterAuthoritativeScan(
             s,
@@ -2360,22 +2384,30 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
       // to-navigate silently fails because findWorktreeById returns undefined.
       // Keep the stale-but-correct data until the next successful refresh.
       if (!detected.authoritative && worktrees.length === 0 && currentForHost.length > 0) {
-        set((s) => ({
-          detectedWorktreesByRepo: {
-            ...s.detectedWorktreesByRepo,
-            [repoId]: mergeDetectedWorktreesForHost(
-              s.detectedWorktreesByRepo[repoId],
-              detected,
-              hostId,
-              setup,
-              worktreeHostMatchOptions(s, repoId, hostId)
-            )
+        set((s) => {
+          if (!repoHasExecutionHost(s, repoId, hostId, ownerWasMissingAtStart)) {
+            return s
           }
-        }))
+          return {
+            detectedWorktreesByRepo: {
+              ...s.detectedWorktreesByRepo,
+              [repoId]: mergeDetectedWorktreesForHost(
+                s.detectedWorktreesByRepo[repoId],
+                detected,
+                hostId,
+                setup,
+                worktreeHostMatchOptions(s, repoId, hostId)
+              )
+            }
+          }
+        })
         return false
       }
 
       set((s) => {
+        if (!repoHasExecutionHost(s, repoId, hostId, ownerWasMissingAtStart)) {
+          return s
+        }
         // Why: hidden worktrees are not in worktreesByRepo. Purge decisions
         // must diff against the previous authoritative detected list so hiding
         // does not delete state, and deleting a hidden worktree still does.
@@ -2437,6 +2469,9 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
             get().worktreesByRepo[r.id]
           )
           set((s) => {
+            if (!repoHasExecutionHost(s, r.id, hostId, false)) {
+              return s
+            }
             const matchOptions = worktreeHostMatchOptions(s, r.id, hostId)
             const removedIds = getRemovedWorktreeIdsAfterAuthoritativeScan(
               s,
@@ -2522,6 +2557,9 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
             !(list.length === 0 && currentForHost.length > 0 && !detected.authoritative)
           ) {
             set((s) => {
+              if (!repoHasExecutionHost(s, r.id, hostId, false)) {
+                return s
+              }
               const matchOptions = worktreeHostMatchOptions(s, r.id, hostId)
               return {
                 worktreesByRepo: {
@@ -2542,18 +2580,23 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
               }
             })
           } else {
-            set((s) => ({
-              detectedWorktreesByRepo: {
-                ...s.detectedWorktreesByRepo,
-                [r.id]: mergeDetectedWorktreesForHost(
-                  s.detectedWorktreesByRepo[r.id],
-                  detected,
-                  hostId,
-                  setup,
-                  worktreeHostMatchOptions(s, r.id, hostId)
-                )
+            set((s) => {
+              if (!repoHasExecutionHost(s, r.id, hostId, false)) {
+                return s
               }
-            }))
+              return {
+                detectedWorktreesByRepo: {
+                  ...s.detectedWorktreesByRepo,
+                  [r.id]: mergeDetectedWorktreesForHost(
+                    s.detectedWorktreesByRepo[r.id],
+                    detected,
+                    hostId,
+                    setup,
+                    worktreeHostMatchOptions(s, r.id, hostId)
+                  )
+                }
+              }
+            })
           }
           return { repoId: r.id, ok: detected.authoritative, detected }
         } catch (err) {

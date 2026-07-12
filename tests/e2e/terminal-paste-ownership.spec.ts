@@ -362,13 +362,11 @@ test.describe('terminal paste ownership', () => {
     }
   })
 
-  test('Windows right-click paste sends clipboard text to the focused terminal exactly once', async ({
+  test('right-click paste sends clipboard text to the focused terminal exactly once', async ({
     electronApp,
     orcaPage,
     testRepoPath
   }) => {
-    test.skip(process.platform !== 'win32', 'Windows right-click paste is Windows-only')
-
     await waitForSessionReady(orcaPage)
     await waitForActiveWorktree(orcaPage)
     await ensureTerminalVisible(orcaPage)

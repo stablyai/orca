@@ -88,10 +88,11 @@ import { connectPanePty } from './pty-connection'
 import { resolveTerminalLayoutActiveLeafId } from './terminal-layout-leaf-ids'
 import { shouldPreserveTerminalScrollbackBuffers } from '../../../../shared/workspace-session-terminal-buffers'
 import {
-  getAllOverrides,
+  getMobileFitOverridePtyIds,
   getFitOverrideForPty,
   onOverrideChange
 } from '@/lib/pane-manager/mobile-fit-overrides'
+import { shouldShowMobileDriverOverlay } from './mobile-driver-overlay-visibility'
 import {
   getAllDrivers,
   getDriverForPty,
@@ -441,7 +442,7 @@ export default function TerminalPane({
           (paneId) => paneTransportsRef.current.get(paneId)?.getPtyId(),
           event.ptyId
         )
-      if (event.mode === 'mobile-fit') {
+      if (event.mode === 'mobile-fit' || event.mode === 'remote-desktop-fit') {
         // Why: when mobile starts driving, the agent re-renders its output at
         // phone width and that phone-wrapped byte stream flows live into this
         // passive watcher's xterm. xterm must shrink to the phone dims now or
@@ -784,11 +785,7 @@ export default function TerminalPane({
   const updateSettings = useAppStore((store) => store.updateSettings)
   const requestLinkRoutingPreference = useLinkRoutingPreferenceDialog()
   const keybindings = useAppStore((store) => store.keybindings)
-  // Why: Windows is the only platform where bare right-click is repurposed as
-  // a paste gesture; on macOS/Linux the terminal still owns right-click for the
-  // context menu. The settings default keeps the Windows shortcut feeling native
-  // without changing the other platforms' interaction model.
-  const rightClickToPaste = isWindowsUserAgent() && (settings?.terminalRightClickToPaste ?? true)
+  const rightClickToPaste = settings?.terminalRightClickToPaste ?? isWindowsUserAgent()
   // Why: Windows ConPTY does not forward DECSET 2004 from foreground TUIs, so
   // xterm may not know multi-line text needs bracketed-paste protection.
   const forceBracketedMultilineTextPaste = isWindowsUserAgent()
@@ -2659,7 +2656,7 @@ export default function TerminalPane({
   }, [getContextMenuLeafId, toggleNativeChatForLeaf])
 
   const getMobileOwnedTerminalPtyIds = useCallback((): string[] => {
-    const ptyIds = new Set(getAllOverrides().keys())
+    const ptyIds = new Set(getMobileFitOverridePtyIds())
     for (const [ptyId, driver] of getAllDrivers()) {
       if (driver.kind === 'mobile') {
         ptyIds.add(ptyId)
@@ -3183,9 +3180,9 @@ export default function TerminalPane({
         // treatment and collapse-to-chip state; both branches share the
         // same local/remote desktop-restore route.
         const driver = getDriverForPty(ptyId)
-        const isMobileDriving = driver.kind === 'mobile'
-        const hasFitOverride = getFitOverrideForPty(ptyId) !== null
-        if (!isMobileDriving && !hasFitOverride) {
+        const fitMode = getFitOverrideForPty(ptyId)?.mode ?? null
+        const hasFitOverride = fitMode === 'mobile-fit'
+        if (!shouldShowMobileDriverOverlay(driver.kind, fitMode)) {
           return null
         }
         // Why: only the pane replaced by native chat should hide terminal-owned
