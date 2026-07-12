@@ -107,6 +107,15 @@ export class SttService {
         throw new Error(`Model not ready: ${modelState.status}`)
       }
 
+      // Why: same-owner restarts are allowed, but replacing a live cloud session
+      // without finishing it leaks the provider connection.
+      if (this.cloudSession) {
+        await this.stopDictation(owner, { cancelStarting: false })
+      }
+      if (this.canceledOwners.has(owner)) {
+        return
+      }
+
       const cloudSession = createCloudTranscriptionSession(modelId, manifest.provider, sink)
       this.cloudSession = cloudSession
       this.activeModelId = modelId
@@ -114,12 +123,20 @@ export class SttService {
       this.eventSink = sink
       try {
         await cloudSession.start()
+        // Why: stop can finish and clear a cloud session while its pending start resolves.
+        if (this.cloudSession !== cloudSession || this.canceledOwners.has(owner)) {
+          return
+        }
         sink({ type: 'ready' })
       } catch (error) {
+        const canceled = this.canceledOwners.has(owner)
         if (this.cloudSession === cloudSession) {
           this.cloudSession = null
           this.activeModelId = null
           this.eventSink = null
+        }
+        if (canceled) {
+          return
         }
         throw error
       }

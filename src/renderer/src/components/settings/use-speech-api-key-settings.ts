@@ -50,9 +50,11 @@ export function useSpeechApiKeySettings({
         })
       }
       await refreshModelStates()
-      setOpen(false)
-      setDraft('')
-      setPendingModelId(null)
+      if (isMounted()) {
+        setOpen(false)
+        setDraft('')
+        setPendingModelId(null)
+      }
       toast.success(
         provider === 'openai'
           ? translate('auto.components.settings.VoicePane.506df81ba6', 'OpenAI API key saved')
@@ -96,9 +98,11 @@ export function useSpeechApiKeySettings({
         })
       }
       await refreshModelStates()
-      setOpen(false)
-      setDraft('')
-      setPendingModelId(null)
+      if (isMounted()) {
+        setOpen(false)
+        setDraft('')
+        setPendingModelId(null)
+      }
       toast.success(
         provider === 'openai'
           ? translate('auto.components.settings.VoicePane.37aba8bb63', 'OpenAI API key cleared')

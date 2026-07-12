@@ -12,11 +12,10 @@ import {
   type SonioxResponse,
   type SonioxToken
 } from './soniox-transcription-response'
-import { createSonioxStartRequest } from './soniox-transcription-config'
+import { createSonioxStartRequest, SONIOX_SAMPLE_RATE } from './soniox-transcription-config'
 import type { SonioxSocket } from './soniox-transcription-socket'
 
 export const SONIOX_WEBSOCKET_URL = 'wss://stt-rt.soniox.com/transcribe-websocket'
-const SONIOX_SAMPLE_RATE = 16000
 const SONIOX_FINISH_TIMEOUT_MS = 60_000
 const SONIOX_START_TIMEOUT_MS = 60_000
 const SONIOX_KEEPALIVE_MS = 10_000
@@ -25,6 +24,13 @@ const MAX_SOCKET_BUFFER_BYTES = 1024 * 1024
 
 type SocketFactory = (url: string) => SonioxSocket
 type QueuedAudio = { buffer: Buffer; durationMs: number }
+
+function clearTimer(timer: ReturnType<typeof setTimeout> | null): null {
+  if (timer) {
+    clearTimeout(timer)
+  }
+  return null
+}
 
 export class SonioxTranscriptionSession {
   private socket: SonioxSocket | null = null
@@ -52,40 +58,54 @@ export class SonioxTranscriptionSession {
   ) {}
 
   start(): Promise<void> {
-    this.apiKey = this.readApiKey()
     let startRequest: ReturnType<typeof createSonioxStartRequest>
+    let socket: SonioxSocket
     try {
+      this.apiKey = this.readApiKey()
       startRequest = createSonioxStartRequest(this.modelId, this.apiKey)
+      socket = this.socketFactory(SONIOX_WEBSOCKET_URL)
     } catch (error) {
       return Promise.reject(error)
     }
-    const socket = this.socketFactory(SONIOX_WEBSOCKET_URL)
     this.socket = socket
 
     return new Promise<void>((resolve, reject) => {
       let startSettled = false
-      const rejectStart = (error: Error): void => {
+      // Why: closing a failed startup can emit later socket events that must not
+      // become runtime errors or revive the rejected session.
+      let startupFailed = false
+      const rejectStart = (error: Error): boolean => {
         if (startSettled) {
-          return
+          return false
         }
         startSettled = true
-        this.clearStartTimeout()
+        startupFailed = true
+        this.startTimeout = clearTimer(this.startTimeout)
         reject(error)
+        return true
       }
       socket.on('open', () => {
+        if (startupFailed) {
+          return
+        }
         socket.send(JSON.stringify(startRequest))
         this.started = true
         this.pumpAudioQueue()
         startSettled = true
-        this.clearStartTimeout()
+        this.startTimeout = clearTimer(this.startTimeout)
         this.scheduleKeepalive()
         resolve()
       })
       socket.on('message', (data) => this.handleMessage(data))
       socket.on('error', (error) => {
+        if (startupFailed) {
+          return
+        }
         this.logConnectionDiagnostic(error)
         if (!startSettled) {
-          rejectStart(new Error('Soniox connection failed.'))
+          if (rejectStart(new Error('Soniox connection failed.'))) {
+            socket.close()
+          }
           return
         }
         this.reportError('Soniox connection failed.')
@@ -93,12 +113,13 @@ export class SonioxTranscriptionSession {
       socket.on('close', () => {
         if (!startSettled) {
           rejectStart(new Error('Soniox connection closed before transcription started'))
-          return
         }
-        if (this.finishing && !this.finished && !this.reportedError) {
-          this.rejectFinish(new Error('Soniox connection closed before the final response'))
-        } else if (!this.finishing && !this.reportedError) {
-          this.reportError('Soniox connection closed unexpectedly')
+        if (!startupFailed) {
+          if (this.finishing && !this.finished && !this.reportedError) {
+            this.rejectFinish(new Error('Soniox connection closed before the final response'))
+          } else if (!this.finishing && !this.reportedError) {
+            this.reportError('Soniox connection closed unexpectedly')
+          }
         }
         this.clearTimers()
         socket.removeAllListeners()
@@ -107,8 +128,9 @@ export class SonioxTranscriptionSession {
         }
       })
       this.startTimeout = setTimeout(() => {
-        rejectStart(new Error('Soniox connection timed out while starting'))
-        socket.close()
+        if (rejectStart(new Error('Soniox connection timed out while starting'))) {
+          socket.close()
+        }
       }, SONIOX_START_TIMEOUT_MS)
       this.startTimeout.unref?.()
     })
@@ -157,7 +179,7 @@ export class SonioxTranscriptionSession {
     }
 
     this.finishing = true
-    this.clearKeepaliveTimer()
+    this.keepaliveTimer = clearTimer(this.keepaliveTimer)
     this.finishPromise = new Promise<string>((resolve, reject) => {
       this.finishResolve = () => resolve('')
       this.finishReject = reject
@@ -230,24 +252,17 @@ export class SonioxTranscriptionSession {
   }
 
   private resolveFinish(): void {
-    this.clearFinishTimeout()
+    this.finishTimeout = clearTimer(this.finishTimeout)
     this.finishResolve?.()
     this.finishResolve = null
     this.finishReject = null
   }
 
   private rejectFinish(error: Error): void {
-    this.clearFinishTimeout()
+    this.finishTimeout = clearTimer(this.finishTimeout)
     this.finishReject?.(error)
     this.finishResolve = null
     this.finishReject = null
-  }
-
-  private clearFinishTimeout(): void {
-    if (this.finishTimeout) {
-      clearTimeout(this.finishTimeout)
-      this.finishTimeout = null
-    }
   }
 
   private pumpAudioQueue(): void {
@@ -292,7 +307,7 @@ export class SonioxTranscriptionSession {
   }
 
   private scheduleKeepalive(): void {
-    this.clearKeepaliveTimer()
+    this.keepaliveTimer = clearTimer(this.keepaliveTimer)
     if (this.finishing || this.finished || this.reportedError) {
       return
     }
@@ -304,27 +319,10 @@ export class SonioxTranscriptionSession {
     this.keepaliveTimer.unref?.()
   }
 
-  private clearKeepaliveTimer(): void {
-    if (this.keepaliveTimer) {
-      clearTimeout(this.keepaliveTimer)
-      this.keepaliveTimer = null
-    }
-  }
-
-  private clearStartTimeout(): void {
-    if (this.startTimeout) {
-      clearTimeout(this.startTimeout)
-      this.startTimeout = null
-    }
-  }
-
   private clearTimers(): void {
-    this.clearStartTimeout()
-    this.clearKeepaliveTimer()
-    if (this.audioPaceTimer) {
-      clearTimeout(this.audioPaceTimer)
-      this.audioPaceTimer = null
-    }
-    this.clearFinishTimeout()
+    this.startTimeout = clearTimer(this.startTimeout)
+    this.keepaliveTimer = clearTimer(this.keepaliveTimer)
+    this.audioPaceTimer = clearTimer(this.audioPaceTimer)
+    this.finishTimeout = clearTimer(this.finishTimeout)
   }
 }

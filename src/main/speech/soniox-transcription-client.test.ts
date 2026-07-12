@@ -49,6 +49,26 @@ function makeSession() {
 }
 
 describe('SonioxTranscriptionSession', () => {
+  it('returns a rejected promise when reading the API key fails synchronously', async () => {
+    const socketFactory = vi.fn(() => new FakeSocket())
+    const session = new SonioxTranscriptionSession(
+      'soniox-stt-rt-v5',
+      () => {
+        throw new Error('stored key is corrupt')
+      },
+      vi.fn(),
+      socketFactory
+    )
+    let started: Promise<void> | undefined
+
+    expect(() => {
+      started = session.start()
+    }).not.toThrow()
+
+    await expect(started).rejects.toThrow('stored key is corrupt')
+    expect(socketFactory).not.toHaveBeenCalled()
+  })
+
   it('opens the official endpoint and sends raw PCM configuration first', async () => {
     const { session, socket, socketFactory } = makeSession()
     const started = session.start()
@@ -222,12 +242,17 @@ describe('SonioxTranscriptionSession', () => {
   it('times out a connection that never opens', async () => {
     vi.useFakeTimers()
     try {
-      const { session } = makeSession()
+      const { session, sink, socket } = makeSession()
       const started = session.start()
       const outcome = expect(started).rejects.toThrow('Soniox connection timed out while starting')
 
       await vi.advanceTimersByTimeAsync(60_000)
       await outcome
+
+      expect(sink).not.toHaveBeenCalled()
+      expect(socket.eventNames()).toEqual([])
+      socket.open()
+      expect(socket.sent).toHaveLength(0)
     } finally {
       vi.useRealTimers()
     }
@@ -245,6 +270,7 @@ describe('SonioxTranscriptionSession', () => {
     expect(socket.readyState).toBe(3)
     expect(socket.sent).toHaveLength(0)
     await startOutcome
+    expect(socket.eventNames()).toEqual([])
   })
 
   it('filters endpoint and finalize control tokens from user-visible text', async () => {

@@ -8,8 +8,11 @@ const {
   createCloudSessionMock,
   readOpenAiSpeechApiKeyMock,
   resetCloudSessions,
-  resetWorkers
+  resetWorkers,
+  setNextCloudStartPromise
 } = vi.hoisted(() => {
+  let nextCloudStartPromise: Promise<void> | null = null
+
   class HoistedMockWorker extends EventTarget {
     static created = 0
     static instances: HoistedMockWorker[] = []
@@ -80,11 +83,15 @@ const {
   class HoistedMockOpenAiTranscriptionSession {
     static instances: HoistedMockOpenAiTranscriptionSession[] = []
     feedCalls: { samples: Float32Array; sampleRate: number }[] = []
+    finishCallCount = 0
+    private readonly startPromise: Promise<void>
 
     constructor(
       readonly modelId: string,
       readonly readApiKey: () => string
     ) {
+      this.startPromise = nextCloudStartPromise ?? Promise.resolve()
+      nextCloudStartPromise = null
       HoistedMockOpenAiTranscriptionSession.instances.push(this)
     }
 
@@ -93,10 +100,11 @@ const {
     }
 
     start(): Promise<void> {
-      return Promise.resolve()
+      return this.startPromise
     }
 
     finish(): Promise<string> {
+      this.finishCallCount += 1
       return Promise.resolve(`${this.modelId}:${this.readApiKey()}`)
     }
   }
@@ -115,11 +123,15 @@ const {
     readOpenAiSpeechApiKeyMock,
     resetCloudSessions: () => {
       HoistedMockOpenAiTranscriptionSession.instances = []
+      nextCloudStartPromise = null
     },
     resetWorkers: () => {
       HoistedMockWorker.created = 0
       HoistedMockWorker.instances = []
       HoistedMockWorker.emitReadyOnInit = true
+    },
+    setNextCloudStartPromise: (promise: Promise<void>) => {
+      nextCloudStartPromise = promise
     }
   }
 })
@@ -395,6 +407,67 @@ describe('SttService', () => {
       'soniox',
       expect.any(Function)
     )
+  })
+
+  it('does not emit ready after a pending cloud startup is canceled', async () => {
+    let resolveStart: () => void = () => {}
+    setNextCloudStartPromise(
+      new Promise<void>((resolve) => {
+        resolveStart = resolve
+      })
+    )
+    const sink = vi.fn()
+    const service = new SttService({
+      getModelState: vi.fn().mockResolvedValue({ id: 'soniox-model', status: 'ready' }),
+      getModelDir: vi.fn().mockReturnValue('/tmp/model-a')
+    } as never)
+
+    const startPromise = service.startDictation('soniox-model', sink, undefined, 'desktop')
+    await vi.waitFor(() => expect(getCloudSessions()).toHaveLength(1))
+    await service.stopDictation('desktop')
+    resolveStart()
+
+    await expect(startPromise).rejects.toThrow('dictation_canceled')
+    expect(sink).not.toHaveBeenCalledWith({ type: 'ready' })
+    expect(sink).toHaveBeenLastCalledWith({ type: 'stopped' })
+  })
+
+  it('reports cancellation when a stopped cloud startup rejects', async () => {
+    let rejectStart: (error: Error) => void = () => {}
+    setNextCloudStartPromise(
+      new Promise<void>((_resolve, reject) => {
+        rejectStart = reject
+      })
+    )
+    const service = new SttService({
+      getModelState: vi.fn().mockResolvedValue({ id: 'soniox-model', status: 'ready' }),
+      getModelDir: vi.fn().mockReturnValue('/tmp/model-a')
+    } as never)
+
+    const startPromise = service.startDictation('soniox-model', vi.fn(), undefined, 'desktop')
+    const outcome = expect(startPromise).rejects.toThrow('dictation_canceled')
+    await vi.waitFor(() => expect(getCloudSessions()).toHaveLength(1))
+    await service.stopDictation('desktop')
+    rejectStart(new Error('Soniox connection closed before transcription started'))
+
+    await outcome
+  })
+
+  it('finishes an active cloud session before replacing it for the same owner', async () => {
+    const firstSink = vi.fn()
+    const service = new SttService({
+      getModelState: vi.fn().mockResolvedValue({ id: 'cloud-model', status: 'ready' }),
+      getModelDir: vi.fn().mockReturnValue('/tmp/model-a')
+    } as never)
+
+    await service.startDictation('openai-model', firstSink, undefined, 'desktop')
+    const firstSession = getCloudSessions()[0]
+    await service.startDictation('soniox-model', vi.fn(), undefined, 'desktop')
+
+    expect(firstSession.finishCallCount).toBe(1)
+    expect(firstSink).toHaveBeenCalledWith({ type: 'stopped' })
+    expect(getCloudSessions()).toHaveLength(2)
+    await service.stopDictation('desktop')
   })
 
   it('keeps startup cancellation tombstoned after the worker has been created', async () => {
