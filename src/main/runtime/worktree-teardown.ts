@@ -33,9 +33,9 @@ export type WorktreeTeardownResult = {
  *    canonical source for memory attribution; it also redundantly backstops
  *    daemon spawns.
  *
- * Best-effort throughout: each sweep catches its own errors. The caller
- * (removeManagedWorktree, worktrees:remove IPC) must run the git-level
- * removal regardless of what this returns.
+ * Local provider and registry sweeps remain best-effort because they overlap
+ * local ownership sources. An unverified SSH-owned stop fails closed because
+ * those local fallbacks cannot prove the remote PTY is gone before removal.
  */
 export async function killAllProcessesForWorktree(
   worktreeId: string,
