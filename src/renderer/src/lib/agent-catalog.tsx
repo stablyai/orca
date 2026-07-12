@@ -7,6 +7,7 @@ import {
   AgentLetterIcon,
   AiderIcon,
   CopilotIcon,
+  GrokIcon,
   KiloIcon,
   OmpIcon,
   OpenCodeIcon,
@@ -74,7 +75,6 @@ export const getAgentCatalog = createLocalizedCatalog((): AgentCatalogEntry[] =>
     id: 'grok',
     label: translate('auto.lib.agent.catalog.0baad2d5d2', 'Grok'),
     cmd: 'grok',
-    faviconDomain: 'x.ai',
     homepageUrl: 'https://x.ai/cli'
   },
   {
@@ -338,6 +338,9 @@ export function AgentIcon({
   }
   if (agent === 'opencode') {
     return <OpenCodeIcon size={size} />
+  }
+  if (agent === 'grok') {
+    return <GrokIcon size={size} />
   }
   const catalogEntry = getAgentCatalog().find((a) => a.id === agent)
   if (catalogEntry?.iconUrl) {

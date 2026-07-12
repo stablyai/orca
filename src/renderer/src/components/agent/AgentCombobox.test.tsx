@@ -37,4 +37,13 @@ describe('AgentCombobox', () => {
     expect(markup).not.toContain('https://www.google.com/s2/favicons')
     expect(markup).not.toContain('<img')
   })
+
+  it('uses the local xAI SVG mark for Grok instead of a remote favicon', () => {
+    const markup = renderToStaticMarkup(<AgentIcon agent="grok" />)
+
+    expect(markup).toContain('<svg')
+    expect(markup).toContain('viewBox="0 0 256 256"')
+    expect(markup).not.toContain('https://www.google.com/s2/favicons')
+    expect(markup).not.toContain('<img')
+  })
 })
