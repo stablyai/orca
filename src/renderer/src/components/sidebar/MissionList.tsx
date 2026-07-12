@@ -200,15 +200,15 @@ function MissionSection({
           event.stopPropagation()
           toggleCollapsedGroup(missionCollapseKey(mission.id))
         }}
-        lineageChildren={
-          !collapsed && mission.members.length > 0 ? (
-            <div className="pl-3 pt-0.5">
-              <MissionMemberRows mission={mission} />
-            </div>
-          ) : undefined
-        }
       />
       <div className="absolute right-1 top-1 z-10">{missionMenu}</div>
+      {/* Why: members render OUTSIDE the session card so the card's click
+          surface is exactly the mission row, not the whole nested block. */}
+      {!collapsed && mission.members.length > 0 ? (
+        <div className="pl-3 pt-0.5">
+          <MissionMemberRows mission={mission} />
+        </div>
+      ) : null}
     </div>
   )
 }
