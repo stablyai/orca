@@ -76,11 +76,8 @@ export const AgentStateDot = React.memo(function AgentStateDot({
           className={cn(
             // Why: match the sidebar worktree spinner's stepped cadence so
             // long-running visible agents do not keep a full-frame-rate loop.
-            // Sized like the check icon (not the filled dots): both are
-            // outline glyphs, so a smaller ring reads visibly undersized
-            // next to a 'done' check in the same list.
             'block rounded-full border-2 border-yellow-500 border-t-transparent [animation:spin_1s_steps(12,end)_infinite]',
-            icon
+            inner
           )}
         />
       </span>

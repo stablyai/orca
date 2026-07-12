@@ -6,8 +6,8 @@
 // they can refresh state that changed during the gap.
 import { fork, type ChildProcess } from 'node:child_process'
 import { existsSync } from 'node:fs'
-import { join } from 'node:path'
 import type * as ParcelWatcher from '@parcel/watcher'
+import { getWatcherProcessEntryPath } from './parcel-watcher-entry-path'
 import type {
   HostToWatcherMessage,
   WatcherProcessEvent,
@@ -41,23 +41,6 @@ let shutdownRequested = false
 let loggedInProcessFallback = false
 const records = new Map<number, SubscriptionRecord>()
 const pendingUnsubscribes = new Map<number, () => void>()
-
-function loadElectronApp(): { getAppPath(): string; isPackaged: boolean } | null {
-  try {
-    return require('electron').app ?? null
-  } catch {
-    return null
-  }
-}
-
-function getWatcherProcessEntryPath(): string {
-  const app = loadElectronApp()
-  const appPath = app?.getAppPath() ?? process.cwd()
-  // Why: ELECTRON_RUN_AS_NODE bypasses Electron's asar integration, so the
-  // packaged entry must be forked from app.asar.unpacked.
-  const basePath = app?.isPackaged ? appPath.replace('app.asar', 'app.asar.unpacked') : appPath
-  return join(basePath, 'out', 'main', 'parcel-watcher-process-entry.js')
-}
 
 function shouldRunInProcess(entryPath: string): boolean {
   // Why: vitest suites mock '@parcel/watcher' at the module level; a forked

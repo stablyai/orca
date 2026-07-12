@@ -10,9 +10,15 @@ import { Table } from '@tiptap/extension-table'
 import { TableCell } from '@tiptap/extension-table-cell'
 import { TableHeader } from '@tiptap/extension-table-header'
 import { TableRow } from '@tiptap/extension-table-row'
-import { Markdown } from '@tiptap/markdown'
+import { createIsolatedMarkdownExtensionForTests } from './isolated-markdown-extension-for-tests'
 import { handleRichMarkdownCut } from './rich-markdown-cut-handler'
 import { normalizeEmptyListItems, normalizeSoftBreaks } from './rich-markdown-normalize'
+
+const showCutLimitErrorMock = vi.hoisted(() => vi.fn())
+
+vi.mock('./rich-markdown-source-owning-cut-feedback', () => ({
+  showRichMarkdownSourceOwningCutLimitError: showCutLimitErrorMock
+}))
 
 /**
  * Minimal extensions matching the rich editor schema without UI dependencies.
@@ -25,7 +31,7 @@ const testExtensions = [
   TableRow,
   TableHeader,
   TableCell,
-  Markdown.configure({ markedOptions: { gfm: true } })
+  createIsolatedMarkdownExtensionForTests()
 ]
 
 function createEditor(markdown: string): Editor {
@@ -38,6 +44,7 @@ function createEditor(markdown: string): Editor {
 }
 
 afterEach(() => {
+  showCutLimitErrorMock.mockReset()
   vi.restoreAllMocks()
 })
 
@@ -109,7 +116,7 @@ function countParagraphs(editor: Editor): number {
   return count
 }
 
-function createClipboardEventMock(): {
+function createClipboardEventMock(options?: { failReadback?: boolean }): {
   data: Map<string, string>
   event: ClipboardEvent
   preventDefault: ReturnType<typeof vi.fn>
@@ -120,7 +127,10 @@ function createClipboardEventMock(): {
     clipboardData: {
       setData: vi.fn((type: string, value: string) => {
         data.set(type, value)
-      })
+      }),
+      getData: options?.failReadback
+        ? vi.fn(() => '')
+        : vi.fn((type: string) => data.get(type) ?? '')
     },
     preventDefault
   } as unknown as ClipboardEvent
@@ -238,6 +248,38 @@ describe('rich markdown cut handler behavior', () => {
         }
       })
       expect(paragraphCount).toBe(1)
+    } finally {
+      editor.destroy()
+    }
+  })
+
+  it('surfaces cut-limit feedback when clipboard readback fails', () => {
+    const editor = createEditor('Body text to cut.\n')
+    try {
+      const pos = 1
+      let viewState = editor.state.apply(
+        editor.state.tr.setSelection(TextSelection.create(editor.state.doc, pos))
+      )
+      const view = {
+        get state() {
+          return viewState
+        },
+        dispatch: vi.fn((tr) => {
+          viewState = viewState.apply(tr)
+        }),
+        domAtPos: vi.fn(() => ({ node: document.createElement('p'), offset: 0 })),
+        coordsAtPos: vi.fn(() => ({ top: 0, bottom: 20, left: 0, right: 20 })),
+        posAtCoords: vi.fn(() => null)
+      } as unknown as EditorView
+
+      const clipboard = createClipboardEventMock({ failReadback: true })
+      const handled = handleRichMarkdownCut(view, clipboard.event)
+
+      expect(handled).toBe(true)
+      expect(clipboard.preventDefault).toHaveBeenCalled()
+      expect(showCutLimitErrorMock).toHaveBeenCalledTimes(1)
+      expect(view.dispatch).not.toHaveBeenCalled()
+      expect(view.state.doc.textContent).toBe('Body text to cut.')
     } finally {
       editor.destroy()
     }

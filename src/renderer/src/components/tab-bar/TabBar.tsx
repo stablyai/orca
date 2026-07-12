@@ -52,6 +52,7 @@ import {
 import { getActiveRuntimeTarget } from '@/runtime/runtime-rpc-client'
 import { getRuntimeEnvironmentIdForWorktree } from '@/lib/worktree-runtime-owner'
 import { getLocalProjectExecutionRuntimeContext } from '@/lib/local-preflight-context'
+import { getConnectionIdFromState } from '@/lib/connection-context'
 import { useOptionalShortcutLabel, useShortcutLabel } from '@/hooks/useShortcutLabel'
 import {
   type BuiltInWindowsTerminalShell,
@@ -79,6 +80,7 @@ import { useTabStripOverflowNavigation } from './tab-strip-overflow-navigation'
 import { useTabStripDragScrollHandlers } from './tab-strip-drag-scroll'
 import { shouldShowWindowsShellMenu } from './windows-shell-menu-visibility'
 import { canToggleNativeChat } from '../native-chat/native-chat-availability'
+import { isNativeChatTranscriptLocalReadable } from '@/lib/native-chat-transcript-readability'
 import { selectTabAgentTypesByTabId } from './tab-agent-types-by-tab-id'
 import { resolveCommittedTitleAgentType } from '@/lib/pane-agent-evidence'
 
@@ -311,13 +313,11 @@ function TabBarInner({
   const activeRuntimeEnvironmentId = useAppStore(
     (s) => getRuntimeEnvironmentIdForWorktree(s, worktreeId)?.trim() || null
   )
-  const worktreeConnectionId = useAppStore((s) => {
-    const worktree = Object.values(s.worktreesByRepo ?? {})
-      .flat()
-      .find((entry) => entry.id === worktreeId)
-    const repo = worktree ? s.repos?.find((entry) => entry.id === worktree.repoId) : null
-    return repo?.connectionId?.trim() || null
-  })
+  // Why: retained tab strips rerun selectors on every store write; reuse the
+  // canonical worktree/repo indexes instead of flattening both slices here.
+  const worktreeConnectionId = useAppStore(
+    (s) => getConnectionIdFromState(s, worktreeId)?.trim() || null
+  )
   const worktreeRemotePlatform = useAppStore((s) => {
     if (!worktreeConnectionId) {
       return null
@@ -329,15 +329,13 @@ function TabBarInner({
     (s) => s.settings?.agentCmdOverrides ?? EMPTY_AGENT_CMD_OVERRIDES
   )
   const agentDetectionTargetKey = useAppStore((s): string | undefined => {
-    const allWorktrees = Object.values(s.worktreesByRepo ?? {}).flat()
-    const worktree = allWorktrees.find((w) => w.id === worktreeId)
-    if (!worktree) {
+    const connectionId = getConnectionIdFromState(s, worktreeId)
+    if (connectionId === undefined) {
       return undefined
     }
-    const repo = s.repos?.find((r) => r.id === worktree.repoId)
-    const repoConnectionId = repo?.connectionId?.trim()
-    if (repoConnectionId) {
-      return `ssh:${repoConnectionId}`
+    const normalizedConnectionId = connectionId?.trim()
+    if (normalizedConnectionId) {
+      return `ssh:${normalizedConnectionId}`
     }
     const runtimeEnvironmentId = getRuntimeEnvironmentIdForWorktree(s, worktreeId)?.trim()
     if (runtimeEnvironmentId) {
@@ -463,6 +461,9 @@ function TabBarInner({
     useShallow((s) => selectTabAgentTypesByTabId(s.agentStatusByPaneKey ?? {}))
   )
   const nativeChatEnabled = useAppStore((s) => s.settings?.experimentalNativeChat === true)
+  const nativeChatTranscriptIsLocalReadable = useAppStore((s) =>
+    isNativeChatTranscriptLocalReadable(getConnectionIdFromState(s, worktreeId))
+  )
 
   // Why: Electron <webview> elements run in a separate process, so clicking
   // inside one never dispatches a pointerdown on the renderer document.
@@ -1124,6 +1125,7 @@ function TabBarInner({
                     launchAgent: terminalTab.launchAgent,
                     detectedAgent,
                     resolvedAgent,
+                    nativeChatTranscriptIsLocalReadable,
                     isChatViewMode: unifiedTabForItem.viewMode === 'chat'
                   })
                 return (

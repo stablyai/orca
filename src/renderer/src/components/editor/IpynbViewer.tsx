@@ -51,7 +51,11 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip
 import { ShortcutKeyCombo } from '@/components/ShortcutKeyCombo'
 import { useShortcutKeyDetails, type ShortcutKeyComboDetails } from '@/hooks/useShortcutLabel'
 import { registerPendingEditorFlush } from './editor-pending-flush'
-import { editorShortcutMatches, installEditorSaveShortcut } from './editor-shortcuts'
+import {
+  editorShortcutMatches,
+  installEditorSaveShortcut,
+  installMonacoEditorFindShortcut
+} from './editor-shortcuts'
 import { getIpynbCodeCellEditorHeight, getIpynbCodeCellPreviewLines } from './ipynb-code-cell-lines'
 import MonacoCodeExcerpt from './MonacoCodeExcerpt'
 import {
@@ -349,13 +353,15 @@ function CodeCell({
         void onSaveRequestRef.current()
       }
     )
+    const cleanupFindShortcut = installMonacoEditorFindShortcut(editorInstance)
     const blurSub = editorInstance.onDidBlurEditorWidget(() => {
       onDeactivateRef.current()
     })
     editorInstance.onDidDispose(() => {
-      // Why: the inline source editor owns both the save shortcut and blur
-      // subscription for this Monaco editor instance.
+      // Why: the inline source editor owns its shortcut bridges and blur
+      // subscription for the lifetime of this Monaco editor instance.
       cleanupSaveShortcut()
+      cleanupFindShortcut()
       blurSub.dispose()
     })
     editorInstance.addCommand(monacoInstance.KeyCode.Escape, () => {

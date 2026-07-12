@@ -216,6 +216,7 @@ export async function launchWorkItemDirect(args: LaunchWorkItemDirectArgs): Prom
         !isTuiAgentEnabled(agentOverride, latestStore.settings?.disabledTuiAgents)
       ) {
         activateAndRevealWorktree(worktreeId, {
+          sidebarRevealBehavior: 'auto',
           setup: result.setup
         })
         toast.error(unavailableAgentErrorMessage())
@@ -281,6 +282,7 @@ export async function launchWorkItemDirect(args: LaunchWorkItemDirectArgs): Prom
       }))
 
     const activation = activateAndRevealWorktree(worktreeId, {
+      sidebarRevealBehavior: 'auto',
       setup: result.setup,
       defaultTabs: result.defaultTabs,
       ...buildDirectWorkItemStartupOpts(effectiveAgent, startupPlan, launchSource)

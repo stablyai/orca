@@ -13,6 +13,7 @@ import type {
 import { getPRForBranchOutcome, type GitHubPRBranchLookupOptions } from './client'
 import { getRateLimit, noteRateLimitSpend, rateLimitGuard } from './rate-limit'
 import { recordCoalescedCrashBreadcrumb } from '../crash-reporting/crash-breadcrumb-store'
+import { sendToTrustedUIRenderer } from '../ipc/ui'
 
 type QueueEntry = {
   key: string
@@ -211,11 +212,7 @@ function nextQueueOrder(): number {
 
 function broadcast(event: Omit<GitHubPRRefreshEvent, 'sequence'>, sequenceOverride?: number): void {
   const payload = { ...event, sequence: sequenceOverride ?? nextSequence() } as GitHubPRRefreshEvent
-  for (const wc of webContents.getAllWebContents()) {
-    if (!wc.isDestroyed()) {
-      wc.send('gh:prRefreshEvent', payload)
-    }
-  }
+  sendToTrustedUIRenderer('gh:prRefreshEvent', payload)
 }
 
 function refreshKey(candidate: GitHubPRRefreshCandidate): string {

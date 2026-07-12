@@ -6,7 +6,10 @@ import { activateTabAndFocusPane } from '@/lib/activate-tab-and-focus-pane'
 import DashboardAgentRow from '@/components/dashboard/DashboardAgentRow'
 import { useNow } from '@/components/dashboard/useNow'
 import { deriveRunningAgentSendTargets } from '@/lib/running-agent-targets'
-import { selectSendTargetInputs } from './worktree-card-send-target-inputs'
+import {
+  selectSendTargetControlInputs,
+  selectSendTargetInputs
+} from './worktree-card-send-target-inputs'
 import { useWorktreeAgentRows } from './useWorktreeAgentRows'
 import { cn } from '@/lib/utils'
 import type { DashboardAgentRow as DashboardAgentRowData } from '@/components/dashboard/useDashboardData'
@@ -36,7 +39,7 @@ function revealCompactAgentCard(agentListRoot: HTMLElement | null): void {
   if (!(sidebarElement instanceof HTMLElement) || !worktreeOptionElement) {
     return
   }
-  revealElementInScrollContainer(sidebarElement, worktreeOptionElement)
+  revealElementInScrollContainer(sidebarElement, worktreeOptionElement, 'auto')
 }
 
 type Props = {
@@ -87,8 +90,9 @@ const WorktreeCardAgentsBody = React.memo(function WorktreeCardAgentsBody({
     useAppStore((s) => s.agentActivityDisplayMode) ?? DEFAULT_AGENT_ACTIVITY_DISPLAY_MODE
   const dropAgentStatus = useAppStore((s) => s.dropAgentStatus)
   const dismissRetainedAgent = useAppStore((s) => s.dismissRetainedAgent)
-  const agentSendPopoverTargetMode = useAppStore((s) => s.agentSendPopoverTargetMode)
-  const agentStatusEpoch = useAppStore((s) => s.agentStatusEpoch)
+  const { targetMode: agentSendPopoverTargetMode, agentStatusEpoch } = useAppStore(
+    useShallow((s) => selectSendTargetControlInputs(s, worktreeId))
+  )
   // Why: these five maps are read only to derive send-target eligibility, which
   // matters only while the send-target popover targets THIS card. Two of them
   // (runtimePaneTitlesByTabId, agentStatusByPaneKey) churn on every pane-title
@@ -125,7 +129,7 @@ const WorktreeCardAgentsBody = React.memo(function WorktreeCardAgentsBody({
     [dropAgentStatus, dismissRetainedAgent]
   )
 
-  const isAgentSendTargetModeActive = agentSendPopoverTargetMode?.worktreeId === worktreeId
+  const isAgentSendTargetModeActive = agentSendPopoverTargetMode !== null
   const sendTargetsByPaneKey = useMemo(() => {
     void agentStatusEpoch
     if (!isAgentSendTargetModeActive) {
@@ -238,7 +242,7 @@ const WorktreeCardAgentsBody = React.memo(function WorktreeCardAgentsBody({
       // Why: defer the reveal scroll out of the expand commit. Running it inline
       // forces a synchronous sidebar layout that blocks the animation's opening
       // frames (a visible jump); next-frame keeps the open smooth and the
-      // instant reveal still lands before the height transition finishes.
+      // ScrollBehavior 'auto' still lands before the height transition finishes.
       const handle = requestAnimationFrame(() => {
         revealCompactAgentCard(compactAgentListRootRef.current)
       })

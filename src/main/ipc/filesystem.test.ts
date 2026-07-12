@@ -907,6 +907,35 @@ describe('registerFilesystemHandlers', () => {
     })
   })
 
+  it('returns stable byte metadata only for opted-in local log snapshots', async () => {
+    const content = Buffer.from('first\npartial')
+    const close = vi.fn()
+    openMock.mockResolvedValue({
+      stat: vi.fn().mockResolvedValue({
+        size: content.byteLength,
+        dev: 1,
+        ino: 2,
+        birthtimeMs: 3
+      }),
+      readFile: vi.fn().mockResolvedValue(content),
+      close
+    })
+    registerFilesystemHandlers(store as never)
+
+    await expect(
+      handlers.get('fs:readFile')!(null, {
+        filePath: path.resolve('/workspace/repo/session.jsonl'),
+        includeLocalLogMetadata: true
+      })
+    ).resolves.toEqual({
+      content: 'first\npartial',
+      isBinary: false,
+      fileIdentity: '1:2:3'
+    })
+    expect(close).toHaveBeenCalledTimes(1)
+    expect(readFileMock).not.toHaveBeenCalled()
+  })
+
   it('rejects text files beyond the editor read budget', async () => {
     statMock.mockResolvedValue({ size: 51 * 1024 * 1024, isDirectory: () => false, mtimeMs: 123 })
 

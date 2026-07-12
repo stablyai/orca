@@ -1,5 +1,5 @@
 import type { MobileBrowserTab } from '../../../../src/browser/MobileBrowserPane'
-import type { MobileTerminalTheme } from '../../../../src/terminal/TerminalWebView'
+import type { MobileTerminalTheme } from '../../../../src/terminal/terminal-webview-contract'
 import type { MobileDiffLine } from '../../../../src/session/mobile-diff-lines'
 import type {
   MobileHighlightedDiffLine,

@@ -10,6 +10,7 @@ import type { DiffContent, FileContent } from './editor-panel-content-types'
 const mocks = vi.hoisted(() => ({
   readRuntimeFileContent: vi.fn(),
   getRuntimeGitDiff: vi.fn(),
+  getRuntimeGitBranchDiff: vi.fn(),
   getConnectionId: vi.fn(),
   getConnectionIdForFile: vi.fn(),
   isWorktreeConnectionResolved: vi.fn(() => true),
@@ -28,7 +29,7 @@ vi.mock('@/runtime/runtime-file-client', () => ({
 }))
 
 vi.mock('@/runtime/runtime-git-client', () => ({
-  getRuntimeGitBranchDiff: vi.fn(),
+  getRuntimeGitBranchDiff: mocks.getRuntimeGitBranchDiff,
   getRuntimeGitCommitDiff: vi.fn(),
   getRuntimeGitDiff: mocks.getRuntimeGitDiff,
   getRuntimeGitScope: vi.fn(() => null)
@@ -100,7 +101,7 @@ function HookProbe({
     activeFile,
     isChangesMode: false,
     openFiles,
-    gitStatusByWorktree,
+    gitStatusEntries: activeFile ? gitStatusByWorktree[activeFile.worktreeId] : undefined,
     editorViewMode: {}
   })
   latestFileContents = state.fileContents
@@ -131,6 +132,7 @@ describe('useEditorPanelContentState', () => {
     latestDiffContents = {}
     mocks.readRuntimeFileContent.mockReset()
     mocks.getRuntimeGitDiff.mockReset()
+    mocks.getRuntimeGitBranchDiff.mockReset()
     mocks.getConnectionId.mockReset()
     mocks.getConnectionId.mockReturnValue(undefined)
     mocks.getConnectionIdForFile.mockReset()
@@ -184,6 +186,60 @@ describe('useEditorPanelContentState', () => {
         relativePath: 'api/src/file.ts',
         worktreeId: 'folder:folder-workspace-1',
         connectionId: 'ssh-1'
+      })
+    )
+  })
+
+  it('loads folder workspace branch diffs through the path-specific SSH connection', async () => {
+    const activeFile = createOpenFile({
+      id: 'branch-diff',
+      filePath: '/home/neil/platform/api/src/file.ts',
+      relativePath: 'api/src/file.ts',
+      worktreeId: 'folder:folder-workspace-1',
+      mode: 'diff',
+      diffSource: 'branch',
+      branchCompare: {
+        baseRef: 'main',
+        compareRef: 'feature',
+        compareVersion: 'feature',
+        baseOid: 'base',
+        headOid: 'head',
+        mergeBase: 'merge-base'
+      }
+    })
+    mocks.getConnectionIdForFile.mockReturnValue('ssh-1')
+    mocks.getRuntimeGitBranchDiff.mockResolvedValue({
+      kind: 'text',
+      originalContent: 'old',
+      modifiedContent: 'remote branch diff',
+      originalIsBinary: false,
+      modifiedIsBinary: false
+    })
+
+    container = document.createElement('div')
+    document.body.appendChild(container)
+    root = createRoot(container)
+
+    await act(async () => {
+      root?.render(<HookProbe activeFile={activeFile} openFiles={[activeFile]} />)
+    })
+
+    await vi.waitFor(() =>
+      expect(latestDiffContents[activeFile.id]?.modifiedContent).toBe('remote branch diff')
+    )
+    expect(mocks.getConnectionIdForFile).toHaveBeenCalledWith(
+      'folder:folder-workspace-1',
+      '/home/neil/platform/api/src/file.ts'
+    )
+    expect(mocks.getRuntimeGitBranchDiff).toHaveBeenCalledWith(
+      expect.objectContaining({
+        worktreeId: 'folder:folder-workspace-1',
+        worktreePath: '/home/neil/platform',
+        connectionId: 'ssh-1'
+      }),
+      expect.objectContaining({
+        compare: expect.objectContaining({ mergeBase: 'merge-base' }),
+        filePath: 'api/src/file.ts'
       })
     )
   })

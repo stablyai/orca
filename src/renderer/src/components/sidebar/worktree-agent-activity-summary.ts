@@ -139,6 +139,18 @@ function getWorktreeAgentActivitySummaries(
     addParentPaneId(summary, orchestration, retained.worktreeId, tabIdToWorktreeId)
   }
 
+  // Why: epoch changes rebuild every summary, so reuse structurally equal results
+  // to keep unrelated worktree subscriptions from scheduling card renders.
+  const previousSummaries = agentActivityCache?.summaries
+  if (previousSummaries) {
+    for (const [worktreeId, summary] of summaries) {
+      const previous = previousSummaries.get(worktreeId)
+      if (previous && summariesEqual(previous, summary)) {
+        summaries.set(worktreeId, previous)
+      }
+    }
+  }
+
   agentActivityCache = {
     tabsByWorktree: state.tabsByWorktree,
     agentStatusEpoch: state.agentStatusEpoch,
@@ -148,6 +160,48 @@ function getWorktreeAgentActivitySummaries(
     summaries
   }
   return summaries
+}
+
+function summariesEqual(
+  previous: WorktreeAgentActivitySummary,
+  next: WorktreeAgentActivitySummary
+): boolean {
+  return (
+    previous.hasPermission === next.hasPermission &&
+    previous.hasLiveWorking === next.hasLiveWorking &&
+    previous.hasLiveDone === next.hasLiveDone &&
+    previous.hasRetainedDone === next.hasRetainedDone &&
+    agentStatusPaneIdsByTabIdEqual(
+      previous.agentStatusPaneIdsByTabId,
+      next.agentStatusPaneIdsByTabId
+    )
+  )
+}
+
+function agentStatusPaneIdsByTabIdEqual(
+  previous: Record<string, ReadonlySet<string>>,
+  next: Record<string, ReadonlySet<string>>
+): boolean {
+  if (previous === next) {
+    return true
+  }
+  const previousKeys = Object.keys(previous)
+  if (previousKeys.length !== Object.keys(next).length) {
+    return false
+  }
+  for (const tabId of previousKeys) {
+    const previousPaneIds = previous[tabId]
+    const nextPaneIds = next[tabId]
+    if (!nextPaneIds || previousPaneIds.size !== nextPaneIds.size) {
+      return false
+    }
+    for (const paneId of previousPaneIds) {
+      if (!nextPaneIds.has(paneId)) {
+        return false
+      }
+    }
+  }
+  return true
 }
 
 function resolveEntryOrchestration(

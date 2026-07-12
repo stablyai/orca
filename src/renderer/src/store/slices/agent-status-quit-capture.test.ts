@@ -214,6 +214,52 @@ describe('captureAllSleepingAgentSessions', () => {
     })
   })
 
+  it('skips rewriting an unchanged resume record on repeated capture', () => {
+    const store = createTestStore()
+    store.setState({
+      tabsByWorktree: {
+        'wt-1': [makeTab({ id: 'tab-1', worktreeId: 'wt-1' })]
+      }
+    } as Partial<AppState>)
+    const providerSession = { key: 'session_id' as const, id: 'codex-session-1' }
+    store
+      .getState()
+      .setAgentStatus(
+        'tab-1:leaf-1',
+        { state: 'working', prompt: 'first task', agentType: 'codex' },
+        'Codex',
+        { updatedAt: 10, stateStartedAt: 10 },
+        { tabId: 'tab-1', worktreeId: 'wt-1' },
+        { providerSession }
+      )
+
+    store.getState().captureAllSleepingAgentSessions()
+    const first = store.getState().sleepingAgentSessionsByPaneKey['tab-1:leaf-1']
+    expect(first).toMatchObject({ origin: 'quit' })
+
+    // Why: the periodic resume-record capture re-runs this action every
+    // minute; an unchanged agent must not dirty the store (and the debounced
+    // session write) with a record differing only by capturedAt.
+    store.getState().captureAllSleepingAgentSessions()
+    expect(store.getState().sleepingAgentSessionsByPaneKey['tab-1:leaf-1']).toBe(first)
+
+    // A real status change must still refresh the record.
+    store
+      .getState()
+      .setAgentStatus(
+        'tab-1:leaf-1',
+        { state: 'waiting', prompt: 'first task', agentType: 'codex' },
+        'Codex',
+        { updatedAt: 20, stateStartedAt: 20 },
+        { tabId: 'tab-1', worktreeId: 'wt-1' },
+        { providerSession }
+      )
+    store.getState().captureAllSleepingAgentSessions()
+    const refreshed = store.getState().sleepingAgentSessionsByPaneKey['tab-1:leaf-1']
+    expect(refreshed).not.toBe(first)
+    expect(refreshed).toMatchObject({ state: 'waiting', origin: 'quit' })
+  })
+
   it('preserves hydrated launch config during live recapture without a registry entry', () => {
     const store = createTestStore()
     store.setState({

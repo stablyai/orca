@@ -51,6 +51,7 @@ import {
   DEFAULT_LOCAL_ORCA_PROFILE_ID
 } from '../../../shared/orca-profiles'
 import { legacyBaseRefSearchResult } from '../../../shared/base-ref-search-result'
+import { EMPTY_PTY_MAIN_DELIVERY_DIAGNOSTICS } from '../../../shared/pty-delivery-diagnostics'
 import { createE2EConfig } from '../../../shared/e2e-config'
 import { relativePathInsideRoot } from '../../../shared/cross-platform-path'
 import {
@@ -70,6 +71,7 @@ import { normalizeAutoRenameBranchFromWorkDefaultOn } from '../../../shared/auto
 import { normalizeTerminalCursorStyleDefault } from '../../../shared/terminal-cursor-style-settings'
 import { normalizeTerminalCustomThemes } from '../../../shared/terminal-custom-themes'
 import { normalizeUiLanguage } from '../../../shared/ui-language'
+import { normalizeUsagePercentageDisplay } from '../../../shared/usage-percentage-display'
 import type { RateLimitState } from '../../../shared/rate-limit-types'
 import type { RuntimeStatus, RuntimeSyncWindowGraph } from '../../../shared/runtime-types'
 import {
@@ -571,6 +573,9 @@ function createWebPreloadApi(): Partial<PreloadApi> {
     },
     settings: {
       get: async () => getRuntimeBackedStoredSettings(),
+      // Why: localStorage-backed settings are synchronous in the web client,
+      // so the pre-hydration kill-switch read works the same as desktop.
+      getSync: () => getStoredSettings(),
       set: async (updates) => {
         if (updates.activeRuntimeEnvironmentId === null) {
           disconnectActiveRuntimeEnvironment()
@@ -1401,11 +1406,12 @@ function createWorktreesApi(): NonNullable<Partial<PreloadApi>['worktrees']> {
         targetBranch,
         isCrossRepository
       }),
-    remove: async ({ worktreeId, force }) => {
+    remove: async ({ worktreeId, force, skipArchive }) => {
       invalidateRuntimeWorktreeCaches()
       return callRuntimeResult<RemoveWorktreeResult>('worktree.rm', {
         worktree: toRuntimeWorktreeSelector(worktreeId),
-        force
+        force,
+        runHooks: skipArchive !== true
       })
     },
     // Why: forget-locally clears a workspace pinned to a disconnected/removed
@@ -1473,6 +1479,14 @@ function createFileApi(): NonNullable<Partial<PreloadApi>['fs']> {
         relativePath: file.relativePath
       })
     },
+    readLocalLogTail: async () => {
+      throw new Error('Local log tailing is unavailable in paired web clients.')
+    },
+    startLocalLogTail: async () => {
+      throw new Error('Local log tailing is unavailable in paired web clients.')
+    },
+    stopLocalLogTail: async () => {},
+    onLocalLogTailChanged: () => noopUnsubscribe,
     downloadFile: async () => {
       throw new Error('Remote file download is unavailable in paired web clients.')
     },
@@ -2587,6 +2601,7 @@ function createRateLimitsApi(): NonNullable<Partial<PreloadApi>['rateLimits']> {
     gemini: null,
     opencodeGo: null,
     kimi: null,
+    antigravity: null,
     minimax: null,
     grok: null,
     minimaxCookieConfigured: false,
@@ -2699,6 +2714,7 @@ function createPtyApi(): NonNullable<Partial<PreloadApi>['pty']> {
     write: () => {},
     writeAccepted: () => Promise.resolve(false),
     resize: () => {},
+    claimViewport: () => {},
     reportGeometry: () => {},
     signal: () => {},
     // Web panes clear the host buffer via the terminal.clearBuffer runtime RPC.
@@ -2706,15 +2722,34 @@ function createPtyApi(): NonNullable<Partial<PreloadApi>['pty']> {
     kill: () => Promise.resolve(),
     ackColdRestore: () => {},
     ackData: () => {},
+    onDeliveryResyncRequest: () => noopUnsubscribe,
+    respondDeliveryResync: () => {},
+    // Why healthy stub: web terminals ride the remote-runtime transport, not
+    // main's delivery gate — a zero-in-flight reply keeps the watchdog idle.
+    reportRendererDeliveryState: () =>
+      Promise.resolve({ inFlightTotalChars: 0, inFlightPtyCount: 0, msSinceLastAck: null }),
+    getPtyDataListenerCount: () => 0,
+    rendererDispatcherReady: () => {},
     setActiveRendererPty: () => {},
     setRendererPtyVisible: () => {},
+    setHiddenRendererPty: () => {},
+    setPtyDeliveryInterest: () => {},
+    // Why no-op: remote-runtime PTYs are never hidden-gate markable, so the
+    // web client has no main-side responder to feed.
+    publishTerminalViewAttributes: () => {},
     hasChildProcesses: () => Promise.resolve(false),
     getForegroundProcess: () => Promise.resolve(null),
+    // Why: paired web panes cannot provide a local post-boundary process scan.
+    confirmForegroundProcess: () => Promise.resolve(null),
     getCwd: () => Promise.resolve('~'),
     getSize: () => Promise.resolve(null),
     listSessions: () => Promise.resolve([]),
     hasPty: () => Promise.resolve(null),
     getMainBufferSnapshot: () => Promise.resolve(null),
+    // Why: remote-runtime PTYs never transit local main, so the web client has
+    // no side-effect facts source; renderer byte parsing stays authoritative.
+    onSideEffect: () => noopUnsubscribe,
+    getSideEffectSnapshot: () => Promise.resolve(null),
     getRendererDeliveryDebugSnapshot: () =>
       Promise.resolve({
         pendingPtyCount: 0,
@@ -2729,11 +2764,24 @@ function createPtyApi(): NonNullable<Partial<PreloadApi>['pty']> {
         peakMaxPendingCharsByPty: 0,
         peakRendererInFlightChars: 0,
         peakMaxRendererInFlightCharsByPty: 0,
-        ackGatedFlushSkipCount: 0
+        ackGatedFlushSkipCount: 0,
+        hiddenDeliveryGatedPtyCount: 0,
+        hiddenDeliveryGatedVisiblePtyCount: 0,
+        hiddenDeliveryGatedActivePtyCount: 0,
+        deliveryInterestPtyCount: 0,
+        hiddenDeliveryDroppedChars: 0,
+        hiddenDeliveryDroppedChunks: 0,
+        pendingDroppedChars: 0,
+        diagnostics: EMPTY_PTY_MAIN_DELIVERY_DIAGNOSTICS,
+        rendererLifecycleResetCount: 0,
+        lastLifecycleResetClearedChars: 0,
+        rendererPtyDispatcherReady: false,
+        rendererDispatcherReadyForcedCount: 0
       }),
     resetRendererDeliveryDebug: () => Promise.resolve(),
     onData: () => noopUnsubscribe,
     onReplay: () => noopUnsubscribe,
+    onModelRestoreNeeded: () => noopUnsubscribe,
     onExit: () => noopUnsubscribe,
     onSerializeBufferRequest: () => noopUnsubscribe,
     onClearBufferRequest: () => noopUnsubscribe,
@@ -2776,7 +2824,7 @@ function createSshApi(): NonNullable<Partial<PreloadApi>['ssh']> {
     updateTarget: () =>
       Promise.reject(new Error('SSH target management is unavailable in the web client.')),
     removeTarget: () => Promise.resolve(),
-    importConfig: () => Promise.resolve([]),
+    importConfig: () => Promise.resolve({ targets: [], repoReadoptions: [] }),
     connect: async (args) => {
       const { state } = await callRuntimeResult<{ state: SshConnectionState | null }>(
         'ssh.connect',
@@ -3204,6 +3252,9 @@ function mergeWebUIState(
       safeUpdates._worktreeCardModeDefaulted ?? base._worktreeCardModeDefaulted,
     agentActivityDisplayMode: normalizeAgentActivityDisplayMode(
       safeUpdates.agentActivityDisplayMode ?? base.agentActivityDisplayMode
+    ),
+    usagePercentageDisplay: normalizeUsagePercentageDisplay(
+      safeUpdates.usagePercentageDisplay ?? base.usagePercentageDisplay
     )
   }
 }

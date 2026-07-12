@@ -21,6 +21,8 @@ export type RemoteManagedHookInstallOptions = {
    *  defers the config.toml trust write until that file exists, so the
    *  launch path's only-if-absent seed is never pre-empted. */
   codexHomeDir?: string
+  /** Explicit GROK_HOME for remote runtimes that redirect Grok's config. */
+  grokHomeDir?: string
 }
 
 type RemoteManagedHookInstaller = readonly [
@@ -52,7 +54,11 @@ const REMOTE_MANAGED_HOOK_INSTALLERS: readonly RemoteManagedHookInstaller[] = [
   ['cursor', (sftp, remoteHome) => cursorHookService.installRemote(sftp, remoteHome)],
   ['command-code', (sftp, remoteHome) => commandCodeHookService.installRemote(sftp, remoteHome)],
   ['copilot', (sftp, remoteHome) => copilotHookService.installRemote(sftp, remoteHome)],
-  ['grok', (sftp, remoteHome) => grokHookService.installRemote(sftp, remoteHome)],
+  [
+    'grok',
+    (sftp, remoteHome, options) =>
+      grokHookService.installRemote(sftp, remoteHome, options?.grokHomeDir)
+  ],
   ['droid', (sftp, remoteHome) => droidHookService.installRemote(sftp, remoteHome)],
   ['hermes', (sftp, remoteHome) => hermesHookService.installRemote(sftp, remoteHome)],
   ['devin', (sftp, remoteHome) => devinHookService.installRemote(sftp, remoteHome)],

@@ -17,6 +17,9 @@ export function requestSharedControl<TResult>(args: {
   ensureReady: () => Promise<void>
   send: (requestId: string, method: string, params: unknown) => void
   onTimeout?: (error: RemoteRuntimeClientError) => void
+  // Why: default off — ordinary short RPCs keep an absolute deadline. Only
+  // long-polls routed through this path opt in so keepalives extend them.
+  refreshTimeoutOnKeepalive?: boolean
 }): Promise<RuntimeRpcResponse<TResult>> {
   const requestId = randomUUID()
   return new Promise<RuntimeRpcResponse<TResult>>((resolve, reject) => {
@@ -41,7 +44,8 @@ export function requestSharedControl<TResult>(args: {
       method: args.method,
       resolve: resolve as (response: RuntimeRpcResponse<unknown>) => void,
       reject,
-      timeout
+      timeout,
+      refreshTimeoutOnKeepalive: args.refreshTimeoutOnKeepalive ?? false
     })
     void args.ensureReady().then(
       () => args.send(requestId, args.method, args.params),

@@ -22,6 +22,7 @@ export const createRateLimitSlice: StateCreator<AppState, [], [], RateLimitSlice
     gemini: null,
     opencodeGo: null,
     kimi: null,
+    antigravity: null,
     minimax: null,
     grok: null,
     minimaxCookieConfigured: false,

@@ -14,9 +14,13 @@ vi.mock('node:os', () => ({
   homedir: homedirMock
 }))
 
-import { codexAuthExists } from './codex-auth-presence'
+import { probeCodexAuthPresence } from './codex-auth-presence'
 
-describe('codexAuthExists', () => {
+function fsError(code: string): NodeJS.ErrnoException {
+  return Object.assign(new Error(code), { code })
+}
+
+describe('probeCodexAuthPresence', () => {
   const originalCodexHome = process.env.CODEX_HOME
 
   beforeEach(() => {
@@ -36,7 +40,7 @@ describe('codexAuthExists', () => {
   it('checks an explicit managed-account home first', async () => {
     accessMock.mockResolvedValue(undefined)
 
-    await expect(codexAuthExists('/managed/home')).resolves.toBe(true)
+    await expect(probeCodexAuthPresence('/managed/home')).resolves.toBe('present')
     expect(accessMock).toHaveBeenCalledWith(join('/managed/home', 'auth.json'))
   })
 
@@ -44,21 +48,39 @@ describe('codexAuthExists', () => {
     process.env.CODEX_HOME = '/custom/codex'
     accessMock.mockResolvedValue(undefined)
 
-    await expect(codexAuthExists()).resolves.toBe(true)
+    await expect(probeCodexAuthPresence()).resolves.toBe('present')
     expect(accessMock).toHaveBeenCalledWith(join('/custom/codex', 'auth.json'))
   })
 
   it('falls back to ~/.codex when neither home nor CODEX_HOME is set', async () => {
-    accessMock.mockRejectedValue(new Error('ENOENT'))
+    accessMock.mockRejectedValue(fsError('ENOENT'))
 
-    await expect(codexAuthExists()).resolves.toBe(false)
+    await expect(probeCodexAuthPresence()).resolves.toBe('absent')
     expect(accessMock).toHaveBeenCalledWith(join('/home/alice', '.codex', 'auth.json'))
   })
 
-  it('returns false instead of throwing when the fs check fails', async () => {
-    accessMock.mockRejectedValue(new Error('EACCES'))
+  it('keeps an inaccessible auth path distinct from confirmed absence', async () => {
+    accessMock.mockRejectedValue(fsError('EACCES'))
 
-    await expect(codexAuthExists('/managed/home')).resolves.toBe(false)
+    await expect(probeCodexAuthPresence('/managed/home')).resolves.toBe('unavailable')
+  })
+
+  it('confirms WSL auth absence only when the Codex home is reachable', async () => {
+    accessMock.mockRejectedValueOnce(fsError('ENOENT')).mockResolvedValueOnce(undefined)
+
+    await expect(
+      probeCodexAuthPresence('\\\\wsl.localhost\\Ubuntu\\home\\alice\\.codex')
+    ).resolves.toBe('absent')
+    expect(accessMock).toHaveBeenCalledTimes(2)
+  })
+
+  it('reports unavailable when WSL cannot resolve either the auth file or its home', async () => {
+    accessMock.mockRejectedValue(fsError('ENOENT'))
+
+    await expect(
+      probeCodexAuthPresence('\\\\wsl.localhost\\Missing\\home\\alice\\.codex')
+    ).resolves.toBe('unavailable')
+    expect(accessMock).toHaveBeenCalledTimes(2)
   })
 
   it('stops waiting for a stalled filesystem check when the caller aborts', async () => {
@@ -70,12 +92,12 @@ describe('codexAuthExists', () => {
     )
     const controller = new AbortController()
 
-    const result = codexAuthExists('/managed/home', { signal: controller.signal })
+    const result = probeCodexAuthPresence('/managed/home', { signal: controller.signal })
     await Promise.resolve()
     await Promise.resolve()
     controller.abort()
 
-    await expect(result).resolves.toBe(false)
+    await expect(result).resolves.toBe('unavailable')
     resolveAccess()
     await Promise.resolve()
   })
@@ -90,13 +112,13 @@ describe('codexAuthExists', () => {
     const timeoutController = new AbortController()
     const timeout = vi.spyOn(AbortSignal, 'timeout').mockReturnValue(timeoutController.signal)
 
-    const result = codexAuthExists('/managed/home')
+    const result = probeCodexAuthPresence('/managed/home')
     expect(timeout).toHaveBeenCalledWith(5_000)
     await Promise.resolve()
     await Promise.resolve()
     timeoutController.abort()
 
-    await expect(result).resolves.toBe(false)
+    await expect(result).resolves.toBe('timeout')
     resolveAccess()
     await Promise.resolve()
     timeout.mockRestore()
@@ -112,10 +134,10 @@ describe('codexAuthExists', () => {
     const firstController = new AbortController()
     const secondController = new AbortController()
 
-    const first = codexAuthExists('\\\\wsl.localhost\\Ubuntu\\home\\alice\\.codex', {
+    const first = probeCodexAuthPresence('\\\\wsl.localhost\\Ubuntu\\home\\alice\\.codex', {
       signal: firstController.signal
     })
-    const second = codexAuthExists('\\\\wsl.localhost\\Ubuntu\\home\\alice\\.codex', {
+    const second = probeCodexAuthPresence('\\\\wsl.localhost\\Ubuntu\\home\\alice\\.codex', {
       signal: secondController.signal
     })
 
@@ -124,8 +146,8 @@ describe('codexAuthExists', () => {
     expect(accessMock).toHaveBeenCalledTimes(1)
     firstController.abort()
     secondController.abort()
-    await expect(first).resolves.toBe(false)
-    await expect(second).resolves.toBe(false)
+    await expect(first).resolves.toBe('unavailable')
+    await expect(second).resolves.toBe('unavailable')
 
     resolveAccess()
     await Promise.resolve()

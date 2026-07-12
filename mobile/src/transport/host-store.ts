@@ -8,6 +8,10 @@ import {
   type StoredHostProfile
 } from './types'
 import { getNextHostNameFromHosts } from './host-names'
+import {
+  retryPendingHostCredentialCleanups,
+  scheduleHostCredentialCleanup
+} from './host-credential-cleanup'
 
 const STORAGE_KEY = 'orca:hosts'
 // Why: SecureStore keys must match [A-Za-z0-9._-]; colons are rejected.
@@ -66,8 +70,39 @@ async function deleteDeviceToken(hostId: string): Promise<void> {
 // (cleared on app uninstall, persisted across foreground/background).
 const tokenCache = new Map<string, string>()
 let inflightLoad: Promise<HostProfile[]> | null = null
+// Why: rename / lastConnected / remove / save all RMW the same hosts JSON.
+// Without a queue, concurrent writers re-read a stale snapshot and the last
+// setItem wins — resurrecting a removed host or dropping a rename.
+let hostListMutation: Promise<void> = Promise.resolve()
+
+function parseStoredHosts(raw: string | null): StoredHostProfile[] | null {
+  if (!raw) {
+    return []
+  }
+  try {
+    const parsed = JSON.parse(raw) as unknown
+    if (!Array.isArray(parsed)) {
+      return null
+    }
+    return parsed.flatMap((item) => {
+      // Why: pre-v0.0.3 records carry the deviceToken in AsyncStorage.
+      // Drop them silently — the three pre-launch users will re-pair on
+      // first run rather than carry a migration shim through the auth path.
+      if (item && typeof item === 'object' && 'deviceToken' in item) {
+        return []
+      }
+      const result = StoredHostProfileSchema.safeParse(item)
+      return result.success ? [result.data] : []
+    })
+  } catch {
+    return null
+  }
+}
 
 export async function loadHosts(): Promise<HostProfile[]> {
+  // Why: writers hold the mutation chain across their full RMW; wait so a
+  // load right after rename/remove does not race a half-written list.
+  await hostListMutation
   // Why: deduplicate concurrent loadHosts() calls so multiple screens
   // mounting simultaneously share one Keychain read pass.
   if (inflightLoad) {
@@ -81,38 +116,18 @@ export async function loadHosts(): Promise<HostProfile[]> {
 
 async function doLoadHosts(): Promise<HostProfile[]> {
   const raw = await AsyncStorage.getItem(STORAGE_KEY)
-  if (!raw) {
-    return []
-  }
-  let parsed: unknown
-  try {
-    parsed = JSON.parse(raw)
-  } catch {
-    return []
-  }
-  if (!Array.isArray(parsed)) {
+  const storedHosts = parseStoredHosts(raw)
+  if (!storedHosts) {
     return []
   }
 
   const out: HostProfile[] = []
-  for (const item of parsed) {
-    // Why: pre-v0.0.3 records carry the deviceToken in AsyncStorage.
-    // Drop them silently — the three pre-launch users will re-pair on
-    // first run rather than carry a migration shim through the auth
-    // path.
-    if (item && typeof item === 'object' && 'deviceToken' in item) {
-      continue
-    }
-    const stored = StoredHostProfileSchema.safeParse(item)
-    if (!stored.success) {
-      continue
-    }
-
-    let token = tokenCache.get(stored.data.id)
+  for (const stored of storedHosts) {
+    let token = tokenCache.get(stored.id)
     if (!token) {
       let fetched: string | null
       try {
-        fetched = await readDeviceToken(stored.data.id)
+        fetched = await readDeviceToken(stored.id)
       } catch {
         // Why: a transient Keychain failure for one entry (e.g.
         // errSecInteractionNotAllowed while the device is briefly locked,
@@ -127,35 +142,48 @@ async function doLoadHosts(): Promise<HostProfile[]> {
         continue
       }
       token = fetched
-      tokenCache.set(stored.data.id, token)
+      tokenCache.set(stored.id, token)
     }
-    out.push({ ...stored.data, deviceToken: token })
+    out.push({ ...stored, deviceToken: token })
   }
   return out
 }
 
 async function loadStoredHosts(): Promise<StoredHostProfile[]> {
-  const raw = await AsyncStorage.getItem(STORAGE_KEY)
-  if (!raw) {
-    return []
-  }
   try {
-    const parsed = JSON.parse(raw) as unknown
-    if (!Array.isArray(parsed)) {
-      return []
-    }
-    return parsed.flatMap((item) => {
-      // Why: same drop-old-records rule as loadHosts; keeps internal
-      // mutators from re-persisting pre-v0.0.3 entries.
-      if (item && typeof item === 'object' && 'deviceToken' in item) {
-        return []
-      }
-      const result = StoredHostProfileSchema.safeParse(item)
-      return result.success ? [result.data] : []
-    })
+    return parseStoredHosts(await AsyncStorage.getItem(STORAGE_KEY)) ?? []
   } catch {
     return []
   }
+}
+
+async function readStoredHostsForMutation(): Promise<StoredHostProfile[]> {
+  try {
+    const parsed = parseStoredHosts(await AsyncStorage.getItem(STORAGE_KEY))
+    if (!parsed) {
+      // Why: refuse to RMW over unreadable payload — treating it as [] would
+      // wipe the durable host list on the next rename/remove/save.
+      throw new Error('host list storage unreadable')
+    }
+    return parsed
+  } catch (error) {
+    if (error instanceof Error && error.message === 'host list storage unreadable') {
+      throw error
+    }
+    throw new Error('host list storage unreadable')
+  }
+}
+
+async function mutateStoredHosts(
+  update: (hosts: StoredHostProfile[]) => StoredHostProfile[]
+): Promise<void> {
+  const mutation = hostListMutation.then(async () => {
+    const current = await readStoredHostsForMutation()
+    const next = update(current)
+    await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(next))
+  })
+  hostListMutation = mutation.catch(() => {})
+  return mutation
 }
 
 function toStored(host: HostProfile): StoredHostProfile {
@@ -170,51 +198,77 @@ function toStored(host: HostProfile): StoredHostProfile {
 
 export async function saveHost(host: HostProfile): Promise<void> {
   const validated = HostProfileSchema.parse(host)
-  const hosts = await loadStoredHosts()
   const stored = toStored(validated)
-  const index = hosts.findIndex((h) => h.id === stored.id)
-  if (index >= 0) {
-    hosts[index] = stored
-  } else {
-    hosts.push(stored)
-  }
+  await mutateStoredHosts((hosts) => {
+    const index = hosts.findIndex((h) => h.id === stored.id)
+    if (index >= 0) {
+      const next = hosts.slice()
+      next[index] = stored
+      return next
+    }
+    return [...hosts, stored]
+  })
   // Why: write metadata BEFORE the keychain token so a crash between the two
   // leaves orphaned metadata (which loadHosts skips and removeHost can clean
   // up) rather than an orphaned keychain token with no metadata pointer —
   // the latter would persist forever since removeHost only deletes by hostId
   // from current metadata.
-  await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(hosts))
   await writeDeviceToken(stored.id, validated.deviceToken)
   tokenCache.set(stored.id, validated.deviceToken)
 }
 
 export async function removeHost(hostId: string): Promise<void> {
-  const hosts = await loadStoredHosts()
-  const filtered = hosts.filter((h) => h.id !== hostId)
-  await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(filtered))
-  await deleteDeviceToken(hostId)
+  await mutateStoredHosts((hosts) => hosts.filter((h) => h.id !== hostId))
   tokenCache.delete(hostId)
-}
-
-export async function renameHost(hostId: string, newName: string): Promise<void> {
-  const hosts = await loadStoredHosts()
-  const host = hosts.find((h) => h.id === hostId)
-  if (host) {
-    host.name = newName
-    await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(hosts))
+  // Why: await only the durable cleanup intent (AsyncStorage). Native keychain
+  // delete can reject or stall and must not freeze removeHost / the UI.
+  try {
+    await scheduleHostCredentialCleanup(hostId, deleteDeviceToken)
+  } catch {
+    // Metadata is already committed; orphan-token recovery is best-effort.
   }
 }
 
+export async function retryPendingHostCredentialCleanup(): Promise<{
+  clearedCount: number
+  remainingIds: string[]
+}> {
+  return retryPendingHostCredentialCleanups(deleteDeviceToken)
+}
+
+export async function renameHost(hostId: string, newName: string): Promise<void> {
+  await mutateStoredHosts((hosts) => {
+    const index = hosts.findIndex((h) => h.id === hostId)
+    if (index < 0) {
+      return hosts
+    }
+    const next = hosts.slice()
+    next[index] = { ...next[index]!, name: newName }
+    return next
+  })
+}
+
 export async function getNextHostName(): Promise<string> {
+  await hostListMutation
   const hosts = await loadStoredHosts()
   return getNextHostNameFromHosts(hosts)
 }
 
 export async function updateLastConnected(hostId: string): Promise<void> {
-  const hosts = await loadStoredHosts()
-  const host = hosts.find((h) => h.id === hostId)
-  if (host) {
-    host.lastConnected = Date.now()
-    await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(hosts))
-  }
+  await mutateStoredHosts((hosts) => {
+    const index = hosts.findIndex((h) => h.id === hostId)
+    if (index < 0) {
+      return hosts
+    }
+    const next = hosts.slice()
+    next[index] = { ...next[index]!, lastConnected: Date.now() }
+    return next
+  })
+}
+
+/** Test-only: drain module mutation chain between cases. */
+export function resetHostStoreForTests(): void {
+  hostListMutation = Promise.resolve()
+  tokenCache.clear()
+  inflightLoad = null
 }

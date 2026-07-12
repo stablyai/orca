@@ -4,6 +4,11 @@ import { resolveHookCommandSourcePolicy } from '../../../shared/hook-command-sou
 import { hashOrcaHookScript, type OrcaHookScriptKind } from './orca-hook-trust'
 import { checkRuntimeHooks, readRuntimeIssueCommand } from '@/runtime/runtime-hooks-client'
 import { getRuntimeEnvironmentIdForRepo } from './repo-runtime-owner'
+import {
+  getRepoExecutionHostId,
+  parseExecutionHostId,
+  type ExecutionHostId
+} from '../../../shared/execution-host'
 
 export type HookScriptKind = OrcaHookScriptKind
 
@@ -56,8 +61,23 @@ function getVmRecipeTrustContent(yamlHooks: OrcaHooks | null): string {
     .join('\n\n')
 }
 
-function settingsForHookRepoOwner(state: AppState, repoId: string): AppState['settings'] {
-  const runtimeEnvironmentId = getRuntimeEnvironmentIdForRepo(state, repoId)
+function findHookRepo(state: AppState, repoId: string, hostId?: ExecutionHostId) {
+  return hostId
+    ? state.repos.find((repo) => repo.id === repoId && getRepoExecutionHostId(repo) === hostId)
+    : state.repos.find((repo) => repo.id === repoId)
+}
+
+function settingsForHookRepoOwner(
+  state: AppState,
+  repoId: string,
+  hostId?: ExecutionHostId
+): AppState['settings'] {
+  const parsedHost = hostId ? parseExecutionHostId(hostId) : null
+  const runtimeEnvironmentId = hostId
+    ? parsedHost?.kind === 'runtime'
+      ? parsedHost.environmentId
+      : null
+    : getRuntimeEnvironmentIdForRepo(state, repoId)
   // Why: hook inspection must follow the repo owner. SSH/local repos execute
   // through desktop IPC, while runtime repos may differ from the focused host.
   return state.settings
@@ -68,10 +88,12 @@ function settingsForHookRepoOwner(state: AppState, repoId: string): AppState['se
 export async function ensureHooksConfirmed(
   state: AppState,
   repoId: string,
-  scriptKind: HookScriptKind
+  scriptKind: HookScriptKind,
+  hostId?: ExecutionHostId
 ): Promise<'run' | 'skip'> {
   return enqueueTrustPrompt(async () => {
-    if (state.trustedOrcaHooks[repoId]?.all) {
+    const hasDuplicateRepoId = state.repos.filter((repo) => repo.id === repoId).length > 1
+    if (state.trustedOrcaHooks[repoId]?.all && !(hostId && hasDuplicateRepoId)) {
       return 'run'
     }
 
@@ -80,7 +102,7 @@ export async function ensureHooksConfirmed(
       if (scriptKind === 'issueCommand') {
         // Local overrides are user-owned; only shared orca.yaml commands need repo trust.
         const result = await readRuntimeIssueCommand(
-          settingsForHookRepoOwner(state, repoId),
+          settingsForHookRepoOwner(state, repoId, hostId),
           repoId
         )
         if (result.source === 'local') {
@@ -94,7 +116,7 @@ export async function ensureHooksConfirmed(
         }
         scriptContent = (result.sharedContent ?? '').trim()
       } else {
-        const repo = state.repos.find((r) => r.id === repoId)
+        const repo = findHookRepo(state, repoId, hostId)
         const localScript = repo?.hookSettings?.scripts?.[scriptKind]?.trim()
         const sourcePolicy = resolveHookCommandSourcePolicy(
           repo?.hookSettings?.commandSourcePolicy,
@@ -105,7 +127,11 @@ export async function ensureHooksConfirmed(
         if (sourcePolicy === 'local-only') {
           return 'run'
         }
-        const result = await checkRuntimeHooks(settingsForHookRepoOwner(state, repoId), repoId)
+        const result = await checkRuntimeHooks(
+          settingsForHookRepoOwner(state, repoId, hostId),
+          repoId,
+          hostId
+        )
         if (result.status === 'error') {
           return 'skip'
         }
@@ -132,7 +158,7 @@ export async function ensureHooksConfirmed(
       return 'run'
     }
 
-    const repo = state.repos.find((r) => r.id === repoId)
+    const repo = findHookRepo(state, repoId, hostId)
     const repoName = repo?.displayName ?? 'this repository'
     // A non-empty existingHash that didn't match means the user approved a previous
     // version of this script; the prompt is reappearing because orca.yaml changed.

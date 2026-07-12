@@ -18,7 +18,7 @@ import { disposeWatcherProcess, subscribeViaWatcherProcess } from './parcel-watc
 // events never leave the OS/daemon. This list is separate from the File
 // Explorer display filter (which only hides rows). Directories like `dist`
 // and `build` remain visible in the tree but will not auto-refresh.
-import { WATCHER_IGNORE_DIRS, buildParcelWatcherIgnoreOption } from './filesystem-watcher-ignore'
+import { WATCHER_IGNORE_DIRS, buildParcelWatcherIgnoreOptions } from './filesystem-watcher-ignore'
 
 // ── Debounce helpers ─────────────────────────────────────────────────
 
@@ -293,7 +293,7 @@ async function createWatcher(rootKey: string, rootPath: string): Promise<Watched
     let errorCleanedUp = false
 
     const watcherOptions = {
-      ignore: buildParcelWatcherIgnoreOption(WATCHER_IGNORE_DIRS),
+      ...buildParcelWatcherIgnoreOptions(WATCHER_IGNORE_DIRS),
       // Why: Parcel checks Watchman before the native Windows backend by
       // default, and Windows prints a shell-level "watchman not recognized"
       // error for that probe. Pinning the backend keeps local watches quiet.

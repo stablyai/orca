@@ -130,6 +130,8 @@ import {
 } from './startup/startup-diagnostics'
 import { shouldRenderPetOverlay } from './components/pet/pet-overlay-visibility'
 import { applyDocumentTheme } from './lib/document-theme'
+import { getSystemPrefersDark } from './lib/terminal-theme'
+import { publishTerminalViewAttributesAtAppStart } from './components/terminal-pane/terminal-appearance'
 import { isEditableTarget } from './lib/editable-target'
 import { getSelectedTextForFileSearch } from './lib/file-search-selection'
 import { useShortcutLabel } from './hooks/useShortcutLabel'
@@ -175,6 +177,11 @@ import {
   hasRequestedBackgroundTerminalWorktreeMount,
   subscribeBackgroundTerminalWorktreeMountRequests
 } from './components/terminal/background-terminal-worktree-mount'
+
+// Why: agents alive during a hard kill (crash, forced update install) need a
+// reasonably fresh resume record on disk; one minute bounds the lost window
+// without measurable per-tick cost (the capture skips unchanged records).
+const SLEEPING_AGENT_RESUME_CAPTURE_INTERVAL_MS = 60_000
 
 const isMac = navigator.userAgent.includes('Mac')
 const isWindows = !isMac && navigator.userAgent.includes('Windows')
@@ -886,6 +893,14 @@ function App(): React.JSX.Element {
         // Load settings first so a persisted remote runtime does not boot against
         // the local filesystem and then hydrate stale local workspace state.
         await timeRendererStartupStep('fetch-settings', () => actions.fetchSettings())
+        // Why here: hidden-at-launch PTYs (background terminal reconnects,
+        // agent sessions) can query OSC 10/11 before any terminal pane mounts
+        // and main's responder is silent-until-first-push. Publish composed
+        // view attributes as soon as settings exist, before any spawn below.
+        publishTerminalViewAttributesAtAppStart(
+          useAppStore.getState().settings,
+          getSystemPrefersDark()
+        )
         // Why: keybindings + onboarding are main-side reads with no dependency
         // on the catalog/session steps below, so start them now and await them
         // at their original positions — the round-trips overlap the local
@@ -1363,6 +1378,22 @@ function App(): React.JSX.Element {
     }
     window.addEventListener('beforeunload', captureAndFlush)
     return () => window.removeEventListener('beforeunload', captureAndFlush)
+  }, [])
+
+  // Why: beforeunload never fires on a hard kill (crash, forced update
+  // install, TerminateProcess), so agents alive at that moment would leave no
+  // resume record. This periodic capture stores only agent session ids — not
+  // scrollback, see the no-periodic-scrollback note below — and the store
+  // action skips unchanged records, so idle ticks write nothing; real changes
+  // flow through the debounced session-write subscriber.
+  useEffect(() => {
+    const timer = window.setInterval(() => {
+      if (!shouldPersistWorkspaceSession(useAppStore.getState())) {
+        return
+      }
+      useAppStore.getState().captureAllSleepingAgentSessions()
+    }, SLEEPING_AGENT_RESUME_CAPTURE_INTERVAL_MS)
+    return () => window.clearInterval(timer)
   }, [])
 
   // Own the single window-close-request subscription at the always-mounted App

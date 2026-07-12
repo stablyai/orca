@@ -322,45 +322,217 @@ describe('startWorkspaceCleanupBackgroundRemoval', () => {
     )
   })
 
-  it('times out a stalled row removal and continues reporting progress', async () => {
+  it('uses a success confirmed after the initial timeout and proceeds with its parent', async () => {
     vi.useFakeTimers()
-    const candidate = makeCandidate()
-    const onProgress = vi.fn()
+    const parent = makeCandidate({
+      worktreeId: 'repo-1::/repo/parent',
+      displayName: 'parent',
+      branch: 'parent',
+      path: '/repo/parent'
+    })
+    const child = makeCandidate({
+      worktreeId: 'repo-1::/repo/parent/child',
+      displayName: 'child',
+      branch: 'child',
+      path: '/repo/parent/child'
+    })
+    let resolveChild: (result: { removedIds: string[]; failures: [] }) => void = () => {}
+    const removeCandidates = vi
+      .fn()
+      .mockImplementationOnce(
+        () =>
+          new Promise<{ removedIds: string[]; failures: [] }>((resolve) => {
+            resolveChild = resolve
+          })
+      )
+      .mockResolvedValueOnce({ removedIds: [parent.worktreeId], failures: [] })
     const onResult = vi.fn()
 
     startWorkspaceCleanupBackgroundRemoval({
-      candidates: [candidate],
-      removeCandidates: vi.fn(
-        () =>
-          new Promise<
-            Awaited<ReturnType<WorkspaceCleanupBackgroundRemovalArgs['removeCandidates']>>
-          >(() => undefined)
-      ),
-      onProgress,
+      candidates: [parent, child],
+      removeCandidates,
+      onProgress: vi.fn(),
       onResult,
-      removalTimeoutMs: 5
+      removalTimeoutMs: 5,
+      removalSettlementGraceMs: 5
     })
 
     await vi.advanceTimersByTimeAsync(5)
+    resolveChild({ removedIds: [child.worktreeId], failures: [] })
     await settleBackgroundRemoval()
 
+    expect(removeCandidates).toHaveBeenNthCalledWith(2, [parent.worktreeId], {
+      approvedCandidates: [parent]
+    })
+    expect(onResult).toHaveBeenCalledWith({
+      removedIds: [child.worktreeId, parent.worktreeId],
+      failures: []
+    })
+    expect(toast.error).not.toHaveBeenCalled()
+  })
+
+  it('reports a definitive late failure and skips its parent', async () => {
+    vi.useFakeTimers()
+    const parent = makeCandidate({
+      worktreeId: 'repo-1::C:\\repo\\parent',
+      displayName: 'parent',
+      branch: 'parent',
+      path: 'C:\\repo\\parent'
+    })
+    const child = makeCandidate({
+      worktreeId: 'repo-1::C:\\repo\\parent\\child',
+      displayName: 'child',
+      branch: 'child',
+      path: 'C:\\repo\\parent\\child'
+    })
+    let rejectChild: (error: Error) => void = () => {}
+    const removeCandidates = vi.fn(
+      () =>
+        new Promise<{ removedIds: string[]; failures: [] }>((_resolve, reject) => {
+          rejectChild = reject
+        })
+    )
+    const onResult = vi.fn()
+
+    startWorkspaceCleanupBackgroundRemoval({
+      candidates: [parent, child],
+      removeCandidates,
+      onProgress: vi.fn(),
+      onResult,
+      removalTimeoutMs: 5,
+      removalSettlementGraceMs: 5
+    })
+
+    await vi.advanceTimersByTimeAsync(5)
+    rejectChild(new Error('remote removal failed'))
+    await settleBackgroundRemoval()
+
+    expect(removeCandidates).toHaveBeenCalledTimes(1)
+    expect(onResult).toHaveBeenCalledWith({
+      removedIds: [],
+      failures: [
+        {
+          worktreeId: child.worktreeId,
+          displayName: child.displayName,
+          message: 'remote removal failed'
+        },
+        {
+          worktreeId: parent.worktreeId,
+          displayName: parent.displayName,
+          message: 'Skipped because a nested workspace could not be removed.'
+        }
+      ]
+    })
+  })
+
+  it('reports a timeout, skips its parent, then reports the authoritative result', async () => {
+    vi.useFakeTimers()
+    const parent = makeCandidate({
+      worktreeId: 'repo-1::/repo/parent',
+      displayName: 'parent',
+      branch: 'parent',
+      path: '/repo/parent'
+    })
+    const child = makeCandidate({
+      worktreeId: 'repo-1::/repo/parent/child',
+      displayName: 'child',
+      branch: 'child',
+      path: '/repo/parent/child'
+    })
+    let resolveChild: (result: { removedIds: string[]; failures: [] }) => void = () => {}
+    const removeCandidates = vi.fn(
+      () =>
+        new Promise<{ removedIds: string[]; failures: [] }>((resolve) => {
+          resolveChild = resolve
+        })
+    )
+    const onProgress = vi.fn()
+    const onResult = vi.fn()
+    const onLateResult = vi.fn()
+
+    startWorkspaceCleanupBackgroundRemoval({
+      candidates: [parent, child],
+      removeCandidates,
+      onProgress,
+      onResult,
+      onLateResult,
+      removalTimeoutMs: 5,
+      removalSettlementGraceMs: 5
+    })
+
+    await vi.advanceTimersByTimeAsync(5)
+    expect(onResult).not.toHaveBeenCalled()
+    await vi.advanceTimersByTimeAsync(5)
+    await settleBackgroundRemoval()
+
+    expect(removeCandidates).toHaveBeenCalledTimes(1)
     expect(onProgress).toHaveBeenLastCalledWith({
-      totalCount: 1,
-      processedCount: 1,
+      totalCount: 2,
+      processedCount: 2,
       removedCount: 0,
-      failedCount: 1
+      failedCount: 2
     })
     expect(onResult).toHaveBeenCalledWith({
       removedIds: [],
       failures: [
         {
-          worktreeId: candidate.worktreeId,
-          displayName: candidate.displayName,
+          worktreeId: child.worktreeId,
+          displayName: child.displayName,
           message:
-            'Removing alpha is taking longer than expected. It will keep running in the background.'
+            'Removing child is taking longer than expected. It will keep running in the background.'
+        },
+        {
+          worktreeId: parent.worktreeId,
+          displayName: parent.displayName,
+          message: 'Skipped because a nested workspace could not be removed.'
         }
       ]
     })
+
+    resolveChild({ removedIds: [child.worktreeId], failures: [] })
+    await settleBackgroundRemoval()
+
+    expect(removeCandidates).toHaveBeenCalledTimes(1)
+    expect(onResult).toHaveBeenCalledTimes(1)
+    expect(onLateResult).toHaveBeenCalledWith({
+      removedIds: [child.worktreeId],
+      failures: []
+    })
+    expect(toast.success).toHaveBeenLastCalledWith('Removed workspaces: 1')
+  })
+
+  it('reports an authoritative rejection after the timeout result', async () => {
+    vi.useFakeTimers()
+    const candidate = makeCandidate()
+    let rejectRemoval: (error: Error) => void = () => {}
+    const onLateResult = vi.fn()
+
+    startWorkspaceCleanupBackgroundRemoval({
+      candidates: [candidate],
+      removeCandidates: vi.fn(
+        () =>
+          new Promise<{ removedIds: string[]; failures: [] }>((_resolve, reject) => {
+            rejectRemoval = reject
+          })
+      ),
+      onProgress: vi.fn(),
+      onLateResult,
+      removalTimeoutMs: 5,
+      removalSettlementGraceMs: 5
+    })
+
+    await vi.advanceTimersByTimeAsync(10)
+    rejectRemoval(new Error('remote removal failed'))
+    await settleBackgroundRemoval()
+
+    expect(onLateResult).toHaveBeenCalledWith({
+      removedIds: [],
+      failures: [expect.objectContaining({ message: 'remote removal failed' })]
+    })
+    expect(toast.error).toHaveBeenLastCalledWith(
+      'Workspaces not removed: 1',
+      expect.objectContaining({ description: 'remote removal failed' })
+    )
   })
 
   it('keeps removal outcome toasts when the result callback throws', async () => {

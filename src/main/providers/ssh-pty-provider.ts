@@ -149,6 +149,7 @@ export class SshPtyProvider implements IPtyProvider {
       rows: opts.rows,
       cwd: opts.cwd,
       env: this.withRemoteCliBridgeEnv(opts.env, opts.envToDelete),
+      ...(opts.envToDelete?.length ? { envToDelete: opts.envToDelete } : {}),
       // Why: the relay's plugin-overlay env augmenter needs to know which
       // Pi-compatible agent is being launched, while commandDelivery tells it
       // whether to submit the command itself for runtime-owned background PTYs.
@@ -179,27 +180,28 @@ export class SshPtyProvider implements IPtyProvider {
     envToDelete?: readonly string[]
   ): Record<string, string> {
     const merged = { ...env }
+    if (this.remoteCliBridgeEnv) {
+      const pathDelimiter = this.remoteCliBridgeEnv.pathDelimiter ?? ':'
+      const pathKey = merged.PATH !== undefined ? 'PATH' : merged.Path !== undefined ? 'Path' : null
+      if (pathKey) {
+        const pathValue = merged[pathKey] ?? ''
+        merged[pathKey] = pathValue.split(pathDelimiter).includes(this.remoteCliBridgeEnv.binDir)
+          ? pathValue
+          : pathValue
+            ? `${this.remoteCliBridgeEnv.binDir}${pathDelimiter}${pathValue}`
+            : this.remoteCliBridgeEnv.binDir
+      }
+      merged.ORCA_REMOTE_CLI_BIN_DIR = this.remoteCliBridgeEnv.binDir
+      merged.ORCA_RELAY_DIR = this.remoteCliBridgeEnv.relayDir
+      merged.ORCA_RELAY_NODE_PATH = this.remoteCliBridgeEnv.nodePath
+      merged.ORCA_RELAY_SOCKET_PATH = this.remoteCliBridgeEnv.sockPath
+    }
+    // Why: match local/daemon precedence—managed defaults and augmentations
+    // cannot resurrect values the caller explicitly removed.
     for (const key of envToDelete ?? []) {
       delete merged[key]
     }
     seedPowerlevel10kWizardEnv(merged, { envToDelete })
-    if (!this.remoteCliBridgeEnv) {
-      return merged
-    }
-    const pathDelimiter = this.remoteCliBridgeEnv.pathDelimiter ?? ':'
-    const pathKey = merged.PATH !== undefined ? 'PATH' : merged.Path !== undefined ? 'Path' : null
-    if (pathKey) {
-      const pathValue = merged[pathKey] ?? ''
-      merged[pathKey] = pathValue.split(pathDelimiter).includes(this.remoteCliBridgeEnv.binDir)
-        ? pathValue
-        : pathValue
-          ? `${this.remoteCliBridgeEnv.binDir}${pathDelimiter}${pathValue}`
-          : this.remoteCliBridgeEnv.binDir
-    }
-    merged.ORCA_REMOTE_CLI_BIN_DIR = this.remoteCliBridgeEnv.binDir
-    merged.ORCA_RELAY_DIR = this.remoteCliBridgeEnv.relayDir
-    merged.ORCA_RELAY_NODE_PATH = this.remoteCliBridgeEnv.nodePath
-    merged.ORCA_RELAY_SOCKET_PATH = this.remoteCliBridgeEnv.sockPath
     return merged
   }
 

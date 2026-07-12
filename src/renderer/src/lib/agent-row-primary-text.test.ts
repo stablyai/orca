@@ -104,6 +104,123 @@ Fix the checkout race condition in payments`
       })
     ).toBe('Fix checkout race')
   })
+
+  // Why: full preambles bury === TASK === after multi-KB CLI instructions. The
+  // status normalizer must compact the field so a missing/delayed label still
+  // yields a meaningful task preview from the single-line 200-char prompt.
+  it('derives a task preview from a normalized 200-char dispatch prompt without labels', () => {
+    const longCliNoise = Array.from(
+      { length: 40 },
+      (_, i) => `orca orchestration send --to term_parent --type heartbeat --phase step-${i}`
+    ).join('\n')
+    const taskBody =
+      'Release-fix task: orchestration fallback task preview for single-line normalization'
+    const normalized = normalizeAgentStatusPayload({
+      state: 'working',
+      prompt: `You are working inside Orca, a multi-agent IDE. You are a dispatched worker.
+Your coordinator's terminal handle is: term_c376f37c-5d28-404b-869f-d0544edf12ff
+Your task ID is: task_bcfc6b64abe3
+
+You talk to the coordinator only through the CLI commands below.
+
+=== CLI COMMANDS ===
+${longCliNoise}
+
+=== TASK ===
+${taskBody}`
+    })
+    expect(normalized).not.toBeNull()
+    expect(normalized!.prompt.length).toBeLessThanOrEqual(200)
+    expect(normalized!.prompt.includes('\n')).toBe(false)
+    expect(normalized!.prompt).not.toContain('CLI COMMANDS')
+    expect(normalized!.prompt).toContain('=== TASK ===')
+
+    const preview = getAgentRowPrimaryText({ prompt: normalized!.prompt })
+    expect(preview).toContain('orchestration fallback task preview')
+    expect(preview).not.toContain('You are working inside Orca')
+    expect(preview).not.toContain('CLI COMMANDS')
+  })
+
+  it('uses a short single-line task body as the fallback preview', () => {
+    const normalized = normalizeAgentStatusPayload({
+      state: 'working',
+      prompt: `You are working inside Orca, a multi-agent IDE.
+Your task ID is: task_short
+
+=== TASK ===
+Fix login form`
+    })
+    expect(getAgentRowPrimaryText({ prompt: normalized!.prompt })).toBe('Fix login form')
+  })
+
+  it('prefers later orchestration labels over the extracted task preview', () => {
+    const normalized = normalizeAgentStatusPayload({
+      state: 'working',
+      prompt: `You are working inside Orca, a multi-agent IDE. You are a dispatched worker.
+Your task ID is: task_label_later
+
+=== CLI COMMANDS ===
+${'orca orchestration check\n'.repeat(30)}
+=== TASK ===
+Implement the detailed worker instructions that should not stay as the final label`
+    })
+    expect(normalized).not.toBeNull()
+
+    expect(getAgentRowPrimaryText({ prompt: normalized!.prompt })).toContain(
+      'Implement the detailed worker instructions'
+    )
+
+    expect(
+      getAgentRowPrimaryText({
+        prompt: normalized!.prompt,
+        orchestration: {
+          taskId: 'task_label_later',
+          dispatchId: 'ctx-later',
+          taskTitle: 'Worker instructions',
+          displayName: 'Better worker label'
+        }
+      })
+    ).toBe('Better worker label')
+  })
+
+  it('does not surface preamble boilerplate when the TASK marker is absent', () => {
+    expect(
+      getAgentRowPrimaryText({
+        prompt:
+          'You are working inside Orca, a multi-agent IDE. You are a dispatched worker. Your task ID is: task_no_body CLI noise only'
+      })
+    ).toBe('')
+  })
+
+  // Why: UI helpers still accept raw multi-line preambles (tests, defensive
+  // paths). Without the standalone-line marker rule, a base-drift subject that
+  // mentions `=== TASK ===` wins over Orca's real separator.
+  it('ignores adversarial === TASK === text in raw multi-line base-drift subjects', () => {
+    expect(
+      getAgentRowPrimaryText({
+        prompt: [
+          'You are working inside Orca, a multi-agent IDE. You are a dispatched worker.',
+          'Your task ID is: task_raw_drift',
+          '',
+          '--- BASE DRIFT ---',
+          '  - docs: explain === TASK === marker parsing',
+          '---',
+          '',
+          '=== TASK ===',
+          'Fix the actual dispatch fallback preview'
+        ].join('\n')
+      })
+    ).toBe('Fix the actual dispatch fallback preview')
+  })
+
+  it('still reads the task body from a normalized single-line compact prompt', () => {
+    expect(
+      getAgentRowPrimaryText({
+        prompt:
+          'You are working inside Orca, a multi-agent IDE. Your task ID is: task_inline === TASK === Compact body preview'
+      })
+    ).toBe('Compact body preview')
+  })
 })
 
 describe('getOrcaDispatchTaskId', () => {

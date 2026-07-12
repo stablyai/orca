@@ -14,6 +14,67 @@ export const SOURCE_CONTROL_FILE_ROW_HEIGHT_PX = 24
 export const SOURCE_CONTROL_FILE_ROW_OVERSCAN = 10
 
 /**
+ * Offset of `container` from the start of `scrollElement`'s scrollable content.
+ * Independent of current scrollTop (relative tops + scrollTop cancel out).
+ */
+export function measureSourceControlScrollMargin(
+  container: HTMLElement,
+  scrollElement: HTMLElement
+): number {
+  return Math.round(
+    container.getBoundingClientRect().top -
+      scrollElement.getBoundingClientRect().top +
+      scrollElement.scrollTop
+  )
+}
+
+/**
+ * Re-measure when the list or anything that can shift its offset inside the
+ * shared scroller changes size or structure (commit area, headers, siblings).
+ * Does not observe subtree mutations — virtualized row mount/unmount would
+ * thrash and never change scroll margin.
+ */
+export function observeSourceControlScrollMargin(
+  container: HTMLElement,
+  scrollElement: HTMLElement,
+  onLayout: () => void
+): () => void {
+  const resizeObserver = new ResizeObserver(onLayout)
+  resizeObserver.observe(container)
+  resizeObserver.observe(scrollElement)
+  let observedChildren = new Set<Element>()
+
+  const observeScrollerChildren = (): void => {
+    const currentChildren = new Set(scrollElement.children)
+    // Why: child-list churn can detach previously observed sections; pruning
+    // targets prevents the long-lived virtual list from retaining stale DOM.
+    for (const child of observedChildren) {
+      if (!currentChildren.has(child) && child !== container) {
+        resizeObserver.unobserve(child)
+      }
+    }
+    for (const child of currentChildren) {
+      resizeObserver.observe(child)
+    }
+    observedChildren = currentChildren
+  }
+  observeScrollerChildren()
+
+  // Why: sections mount/unmount as direct scroller children; re-observe so a
+  // newly inserted sibling can still shift this list's margin when it resizes.
+  const mutationObserver = new MutationObserver(() => {
+    observeScrollerChildren()
+    onLayout()
+  })
+  mutationObserver.observe(scrollElement, { childList: true })
+
+  return () => {
+    resizeObserver.disconnect()
+    mutationObserver.disconnect()
+  }
+}
+
+/**
  * Windows one source-control section's rows inside the panel's shared
  * scroller. Sections below SOURCE_CONTROL_VIRTUALIZE_MIN_ROWS render plainly;
  * larger ones mount only viewport + overscan rows.
@@ -38,23 +99,26 @@ export function SourceControlVirtualFileList<TRow>({
 
   // Why: the section shares the panel scroller with the commit area and
   // sibling sections, so the virtualizer needs this list's offset inside that
-  // scroller. Everything above changes height only through React renders
-  // (commit drafts, banners, section collapse), so a per-render layout read
-  // keeps the margin current without observers. The guarded setState makes the
-  // measure/render loop converge in one extra pass.
-  // eslint-disable-next-line react-hooks/exhaustive-deps -- no dependency list on purpose: any sibling render can move this list inside the shared scroller.
+  // scroller. Measure on mount / scrollElement attach and when observers
+  // report layout shifts — never during ordinary React renders (git-status
+  // polls re-render often and must not force synchronous layout).
   useLayoutEffect(() => {
+    if (!virtualize) {
+      return
+    }
     const container = containerRef.current
     if (!container || !scrollElement) {
       return
     }
-    const nextMargin = Math.round(
-      container.getBoundingClientRect().top -
-        scrollElement.getBoundingClientRect().top +
-        scrollElement.scrollTop
-    )
-    setScrollMargin((current) => (current === nextMargin ? current : nextMargin))
-  })
+
+    const updateMargin = (): void => {
+      const nextMargin = measureSourceControlScrollMargin(container, scrollElement)
+      setScrollMargin((current) => (current === nextMargin ? current : nextMargin))
+    }
+
+    updateMargin()
+    return observeSourceControlScrollMargin(container, scrollElement, updateMargin)
+  }, [scrollElement, virtualize])
 
   const virtualizer = useVirtualizer({
     count: rows.length,

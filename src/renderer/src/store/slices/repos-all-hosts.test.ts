@@ -286,7 +286,87 @@ function expectSharedProjectMetadata(projects: readonly Project[], sharedProject
   expect(sharedProject?.localWindowsRuntimePreference).toEqual({ kind: 'windows-host' })
 }
 
+function directSshRepo(targetId: string): Repo {
+  return {
+    ...localRepo,
+    id: 're-adopted-repo',
+    connectionId: targetId,
+    executionHostId: `ssh:${targetId}`
+  }
+}
+
+const repoReadoption = {
+  oldTargetId: 'ssh-old',
+  newTargetId: 'ssh-new',
+  repoIds: ['re-adopted-repo']
+}
+
 describe('fetchReposForAllHosts', () => {
+  it('prunes a superseded direct SSH row during a local catalog transaction', async () => {
+    const staleRepo = directSshRepo('ssh-old')
+    const liveRepo = directSshRepo('ssh-new')
+    reposList.mockResolvedValue([liveRepo])
+    const store = createTestStore()
+    store.setState({
+      repos: [staleRepo],
+      pendingSshRepoReadoptions: [repoReadoption]
+    })
+
+    await store.getState().fetchReposForAllHosts({ remoteHosts: 'skip' })
+
+    expect(store.getState().repos).toEqual([liveRepo])
+  })
+
+  it('preserves an old direct SSH row when no re-adoption evidence exists', async () => {
+    const staleRepo = directSshRepo('ssh-old')
+    const liveRepo = directSshRepo('ssh-new')
+    reposList.mockResolvedValue([liveRepo])
+    const store = createTestStore()
+    store.setState({ repos: [staleRepo] })
+
+    await store.getState().fetchReposForAllHosts({ remoteHosts: 'skip' })
+
+    expect(store.getState().repos).toEqual([staleRepo, liveRepo])
+  })
+
+  it('reconciles a targeted runtime response against the latest repo state', async () => {
+    const staleRepo = directSshRepo('ssh-old')
+    const liveRepo = directSshRepo('ssh-new')
+    let resolveRepoList!: (response: unknown) => void
+    const repoListResponse = new Promise((resolve) => (resolveRepoList = resolve))
+    runtimeEnvironmentCall.mockImplementation((args: RuntimeEnvironmentCallRequest) => {
+      if (args.method === 'repo.list') {
+        return repoListResponse
+      }
+      return {
+        id: 'rpc-other',
+        ok: true,
+        result: { projects: [], setups: [] },
+        _meta: { runtimeId: 'runtime-remote' }
+      }
+    })
+    const store = createTestStore()
+    store.setState({
+      repos: [staleRepo],
+      pendingSshRepoReadoptions: [repoReadoption]
+    })
+
+    const load = store.getState().fetchRuntimeEnvironmentRepos('env-1')
+    store.setState({ repos: [staleRepo, liveRepo] })
+    resolveRepoList({
+      id: 'rpc-repo-list',
+      ok: true,
+      result: { repos: [remoteRepo] },
+      _meta: { runtimeId: 'runtime-remote' }
+    })
+    await load
+
+    expect(store.getState().repos).toEqual([
+      liveRepo,
+      { ...remoteRepo, executionHostId: 'runtime:env-1' }
+    ])
+  })
+
   it('loads local + all configured runtime environments even when a remote env is active', async () => {
     // Why: a cold start that restored a remote workspace leaves the remote
     // environment active. The active-host-only fetchRepos would drop local

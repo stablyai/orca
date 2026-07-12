@@ -40,8 +40,9 @@
   ],
   "compilerOptions": {
     "composite": true,
-    "module": "CommonJS",
-    "moduleResolution": "Node",
+    // TypeScript 7 removed node10 resolution; Node16 preserves CommonJS emit for this package.
+    "module": "Node16",
+    "moduleResolution": "Node16",
     "rootDir": "../src",
     "outDir": "../out"
   }

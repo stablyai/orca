@@ -8,17 +8,15 @@ describe('getScrollTopToRevealBounds', () => {
       clientHeight
     }) as HTMLElement
 
-  it('centers a mounted current workspace card that starts above the viewport', () => {
-    // Raw result may be negative; revealElementInScrollContainer clamps it to
-    // the list edge so boundary reveals never pad the list.
-    expect(getScrollTopToRevealBounds(makeContainer(100, 200), { start: 60, end: 120 })).toBe(-10)
+  it('scrolls upward to reveal a mounted current workspace card above the viewport', () => {
+    expect(getScrollTopToRevealBounds(makeContainer(100, 200), { start: 60, end: 120 })).toBe(60)
   })
 
-  it('centers a mounted current workspace card that starts below the viewport', () => {
-    expect(getScrollTopToRevealBounds(makeContainer(100, 200), { start: 250, end: 340 })).toBe(195)
+  it('scrolls downward to reveal a mounted current workspace card below the viewport', () => {
+    expect(getScrollTopToRevealBounds(makeContainer(100, 200), { start: 250, end: 340 })).toBe(140)
   })
 
-  it('recenters a card that is already fully visible', () => {
-    expect(getScrollTopToRevealBounds(makeContainer(100, 200), { start: 125, end: 260 })).toBe(92.5)
+  it('does not scroll when the current workspace card is already fully visible', () => {
+    expect(getScrollTopToRevealBounds(makeContainer(100, 200), { start: 125, end: 260 })).toBeNull()
   })
 })

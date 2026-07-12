@@ -8,7 +8,7 @@ module-level spawner/adapter singletons must stay co-located so a future
 change cannot leave them drifting out of sync. */
 import { join } from 'node:path'
 import { app } from 'electron'
-import { mkdirSync, existsSync, unlinkSync, writeFileSync } from 'node:fs'
+import { mkdirSync, existsSync, readFileSync, unlinkSync, writeFileSync } from 'node:fs'
 import { fork } from 'node:child_process'
 import { connect } from 'node:net'
 import {
@@ -34,7 +34,8 @@ import {
   getProcessStartedAtMs,
   checkDaemonHealth,
   isDaemonStaleForCurrentBundle,
-  killStaleDaemon
+  killStaleDaemon,
+  parseDaemonPidFile
 } from './daemon-health'
 import {
   collectPinnedDaemonVersions,
@@ -255,9 +256,7 @@ function createOutOfProcessLauncher(runtimeDir: string): DaemonLauncher {
       // Why: a busy machine (e.g. right after an update) can time out the
       // health check while the daemon is alive and owning terminals. Killing
       // it would destroy every live session, so re-verify with a session list
-      // first. Only a verified non-empty list preserves: a daemon that cannot
-      // even list sessions cannot serve terminals, and replacing it is the
-      // only recovery.
+      // first.
       const liveSessionCount = await getAliveDaemonSessionCount(socketPath, tokenPath)
       if (liveSessionCount !== null && liveSessionCount > 0) {
         if (health === 'pty-spawn-unhealthy') {
@@ -272,6 +271,20 @@ function createOutOfProcessLauncher(runtimeDir: string): DaemonLauncher {
         }
         console.warn(
           `[daemon] Preserving daemon that failed the health check because it owns ${liveSessionCount} live session${liveSessionCount === 1 ? '' : 's'}`
+        )
+        return createPreservedDaemonHandle(runtimeDir)
+      }
+      // Why: on a Windows update relaunch the daemon can be wedged past every
+      // RPC budget (final checkpoint flush + installer/AV disk pressure), so
+      // both the health check AND the session list time out while sessions
+      // are still alive — failing closed here is what killed those sessions.
+      // A pipe that still accepts connections proves a live daemon: adopt it
+      // and let the adapter reconnect once the daemon drains. 'rejected'
+      // means the daemon answered and refused the handshake — it can never be
+      // adopted, so replacement stays the only recovery.
+      if (liveSessionCount === null && health !== 'rejected' && (await probeSocket(socketPath))) {
+        console.warn(
+          '[daemon] Preserving unresponsive daemon because its socket still accepts connections'
         )
         return createPreservedDaemonHandle(runtimeDir)
       }
@@ -398,11 +411,19 @@ function createOutOfProcessLauncher(runtimeDir: string): DaemonLauncher {
             // killStaleDaemon() can verify the pid still belongs to the daemon
             // we forked before SIGTERMing it. Prevents pid-recycling hazard
             // where the OS hands the daemon's old pid to an unrelated process.
+            // Why the ready-message fallback: Windows has no cheap OS query
+            // for start time, so the daemon self-reports it — without this the
+            // recycling guard was permanently inert on win32.
+            const selfReported = (msg as { startedAtMs?: unknown }).startedAtMs
             writeFileSync(
               getDaemonPidPath(runtimeDir),
               serializeDaemonPidFile({
                 pid: child.pid,
-                startedAtMs: getProcessStartedAtMs(child.pid),
+                startedAtMs:
+                  getProcessStartedAtMs(child.pid) ??
+                  (typeof selfReported === 'number' && Number.isFinite(selfReported)
+                    ? selfReported
+                    : null),
                 entryPath,
                 appVersion: app.getVersion()
               }),
@@ -821,6 +842,21 @@ export async function cleanupDaemonForProtocol(
   return { cleaned: didRequestShutdown || didKillStaleDaemon, killedCount }
 }
 
+function legacyDaemonProcessMayBeAlive(runtimeDir: string, protocolVersion: number): boolean {
+  try {
+    const parsed = parseDaemonPidFile(
+      readFileSync(getDaemonPidPath(runtimeDir, protocolVersion), 'utf8')
+    )
+    if (!parsed) {
+      return false
+    }
+    process.kill(parsed.pid, 0)
+    return true
+  } catch {
+    return false
+  }
+}
+
 async function createLegacyDaemonAdapters(runtimeDir: string): Promise<DaemonPtyAdapter[]> {
   const adapters: DaemonPtyAdapter[] = []
   for (const protocolVersion of PREVIOUS_DAEMON_PROTOCOL_VERSIONS) {
@@ -830,23 +866,27 @@ async function createLegacyDaemonAdapters(runtimeDir: string): Promise<DaemonPty
       // Why: dead legacy daemons leave pid/token files behind forever (one per
       // protocol bump). A stale pid eventually gets recycled by an unrelated
       // process, turning any future identity check into a PowerShell spawn.
-      // The socket is provably dead, so remove the leftovers — mirrors what
-      // cleanupDaemonForProtocol already does for the current version.
-      for (const stalePath of [
-        getDaemonPidPath(runtimeDir, protocolVersion),
-        getDaemonTokenPath(runtimeDir, protocolVersion)
-      ]) {
-        try {
-          unlinkSync(stalePath)
-        } catch {
-          // Best-effort
+      // Only clean up when the pid-file process is provably gone: a live
+      // legacy daemon can transiently fail the 1s probe right after an update
+      // (wedged event loop, exhausted pipe backlog), and deleting its token
+      // file would make its sessions permanently unadoptable.
+      if (!legacyDaemonProcessMayBeAlive(runtimeDir, protocolVersion)) {
+        for (const stalePath of [
+          getDaemonPidPath(runtimeDir, protocolVersion),
+          getDaemonTokenPath(runtimeDir, protocolVersion)
+        ]) {
+          try {
+            unlinkSync(stalePath)
+          } catch {
+            // Best-effort
+          }
         }
-      }
-      if (process.platform !== 'win32' && existsSync(socketPath)) {
-        try {
-          unlinkSync(socketPath)
-        } catch {
-          // Best-effort
+        if (process.platform !== 'win32' && existsSync(socketPath)) {
+          try {
+            unlinkSync(socketPath)
+          } catch {
+            // Best-effort
+          }
         }
       }
       continue

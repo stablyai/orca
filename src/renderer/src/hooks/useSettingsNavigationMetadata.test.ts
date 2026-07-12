@@ -142,7 +142,7 @@ describe('settings navigation metadata', () => {
     expect(repoSection?.searchEntries.some((entry) => entry.title === 'Project Runtime')).toBe(true)
   })
 
-  it('keeps Windows client-only terminal settings out of Windows-host metadata', () => {
+  it('surfaces Windows-host and universal terminal settings in Windows-host metadata', () => {
     const sections = buildSettingsNavigationMetadata({
       isMac: false,
       isWindows: false,
@@ -155,8 +155,10 @@ describe('settings navigation metadata', () => {
 
     expect(terminal?.searchEntries.some((entry) => entry.title === 'Default Shell')).toBe(true)
     expect(terminal?.searchEntries.some((entry) => entry.title === 'PowerShell Version')).toBe(true)
+    // Right-click to paste is now exposed on every platform (#8322), so it is
+    // indexed even when only the terminal host — not the client — is Windows.
     expect(terminal?.searchEntries.some((entry) => entry.title === 'Right-click to paste')).toBe(
-      false
+      true
     )
   })
 

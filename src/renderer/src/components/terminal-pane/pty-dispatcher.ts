@@ -6,7 +6,12 @@
  * and the eager-buffer reconnection logic share.
  */
 import { TERMINAL_SCROLLBACK_SESSION_BUFFER_BYTE_LIMIT } from '../../../../shared/terminal-scrollback-limits'
-import { ackPtyData, exposeE2eTerminalPtyAckGate } from './terminal-pty-ack-gate'
+import {
+  clearProcessedPtyCharTotal,
+  deliverPtyDataWithDeferredAck,
+  exposeE2eTerminalPtyAckGate,
+  getProcessedPtyCharTotals
+} from './terminal-pty-ack-gate'
 import { clampUtf8Tail, type EagerBufferChunk } from './pty-eager-buffer-clamp'
 import {
   bufferPreHandlerPtyData,
@@ -15,6 +20,14 @@ import {
   drainPreHandlerPtyData,
   drainPreHandlerPtyExit
 } from './pty-pre-handler-buffer'
+import {
+  clearReceivedPtyCharTotal,
+  isPtyPushDeliveryBlackholed,
+  recordPtyDataReceived,
+  startTerminalDeliveryWatchdog
+} from './terminal-delivery-watchdog'
+import { recordTerminalFreezeBreadcrumb } from './terminal-freeze-breadcrumbs'
+import { installTerminalFreezeReport } from './terminal-freeze-report'
 
 // ── Singleton PTY event dispatcher ───────────────────────────────────
 // One global IPC listener per channel, routes events to transports by
@@ -25,9 +38,9 @@ export type PtyDataMeta = {
   seq?: number
   rawLength?: number
   background?: boolean
-  /** Main trimmed this pty's unsent backlog past its cap; the handler should
-   *  rebuild the dropped span from the main headless snapshot. */
-  droppedBacklog?: boolean
+  /** Main dropped this PTY's buffered output at the pending cap; the pane
+   *  must repaint from the main-owned snapshot instead of the live stream. */
+  droppedOutput?: boolean
 }
 
 export const ptyDataHandlers = new Map<string, (data: string, meta?: PtyDataMeta) => void>()
@@ -102,78 +115,156 @@ export function restorePtyDataHandlersAfterFailedShutdown(
   }
 }
 
+let pushListenerUnsubscribes: (() => void)[] = []
+
+/** Detach and freshly re-subscribe every push-channel listener. Called by the
+ *  delivery watchdog on a confirmed wedge: if the listener was somehow
+ *  detached this restores delivery outright; if the channel itself is dead
+ *  it is a safe no-op (removeListener on a gone listener does nothing). */
+export function reattachPtyDispatcherPushListeners(): void {
+  recordTerminalFreezeBreadcrumb('push-listeners-reattach', {
+    staleListenerCount: pushListenerUnsubscribes.length
+  })
+  const stale = pushListenerUnsubscribes
+  pushListenerUnsubscribes = []
+  for (const unsubscribe of stale) {
+    unsubscribe()
+  }
+  attachPtyPushListeners()
+}
+
 export function ensurePtyDispatcher(): void {
   if (ptyDispatcherAttached) {
     return
   }
   ptyDispatcherAttached = true
   exposeE2eTerminalPtyAckGate()
-  window.api.pty.onData((payload) => {
-    try {
-      let meta: PtyDataMeta | undefined
-      if (typeof payload.seq === 'number') {
-        meta ??= {}
-        meta.seq = payload.seq
+  installTerminalFreezeReport()
+  attachPtyPushListeners()
+  startTerminalDeliveryWatchdog({
+    reattachPushListeners: reattachPtyDispatcherPushListeners,
+    hasAttachedPtys: () => ptyDataHandlers.size > 0 || eagerPtyHandles.size > 0
+  })
+}
+
+function attachPtyPushListeners(): void {
+  const unsubscribes = pushListenerUnsubscribes
+  unsubscribes.push(
+    window.api.pty.onData((payload) => {
+      // Why: e2e-only wedge simulation — the chunk vanishes exactly as in the
+      // field failure: no receive count, no ACK credit, no handler dispatch.
+      if (isPtyPushDeliveryBlackholed()) {
+        return
       }
-      if (typeof payload.rawLength === 'number') {
-        meta ??= {}
-        meta.rawLength = payload.rawLength
+      handleDispatchedPtyData(payload)
+    })
+  )
+  attachPtySecondaryPushListeners(unsubscribes)
+}
+
+function handleDispatchedPtyData(payload: {
+  id: string
+  data: string
+  seq?: number
+  rawLength?: number
+  background?: boolean
+  droppedOutput?: boolean
+}): void {
+  let meta: PtyDataMeta | undefined
+  if (typeof payload.seq === 'number') {
+    meta ??= {}
+    meta.seq = payload.seq
+  }
+  if (typeof payload.rawLength === 'number') {
+    meta ??= {}
+    meta.rawLength = payload.rawLength
+  }
+  if (payload.background === true) {
+    meta ??= {}
+    meta.background = true
+  }
+  if (payload.droppedOutput === true) {
+    meta ??= {}
+    meta.droppedOutput = true
+  }
+  const chars = payload.rawLength ?? payload.data.length
+  const dispatch = (): void => {
+    const handler = ptyDataHandlers.get(payload.id)
+    if (handler) {
+      handler(payload.data, meta)
+    } else {
+      bufferPreHandlerPtyData(payload.id, payload.data, meta)
+    }
+    const sidecars = ptyDataSidecars.get(payload.id)
+    if (sidecars && sidecars.size > 0) {
+      // Why: snapshot the Set before iterating because watchers commonly
+      // unsubscribe themselves on the very chunk that satisfies them
+      // (e.g. agent-paste-draft resolves on DECSET 2004 and immediately
+      // tears down). Iterating the live Set in that case can skip a
+      // watcher or — if a watcher synchronously subscribes a sibling —
+      // double-fire. The Set is never large (one watcher per active
+      // ready-wait), so the array allocation is cheap.
+      const snapshot = Array.from(sidecars)
+      for (const watcher of snapshot) {
+        watcher(payload.data)
       }
-      if (payload.background === true) {
-        meta ??= {}
-        meta.background = true
-      }
-      if (payload.droppedBacklog === true) {
-        meta ??= {}
-        meta.droppedBacklog = true
-      }
-      const handler = ptyDataHandlers.get(payload.id)
+    }
+  }
+  recordPtyDataReceived(payload.id, chars)
+  // Why deferred: main budgets renderer-bound output by bytes PARSED, not
+  // bytes received. The handler's scheduler write claims this delivery's
+  // credit and fires it when xterm consumes the bytes; deliveries that never
+  // reach the scheduler (dropped, pre-mount eager buffer) settle at return —
+  // a bad sidecar still cannot leave a PTY permanently backpressured.
+  deliverPtyDataWithDeferredAck(payload.id, chars, dispatch)
+}
+
+function attachPtySecondaryPushListeners(unsubscribes: (() => void)[]): void {
+  unsubscribes.push(
+    window.api.pty.onReplay((payload) => {
+      ptyReplayHandlers.get(payload.id)?.(payload.data)
+    })
+  )
+  unsubscribes.push(
+    window.api.pty.onExit((payload) => {
+      // Why: main drops its delivery accounting for this pty on exit; drop the
+      // cumulative totals too so a reused id restarts at zero on both sides.
+      clearProcessedPtyCharTotal(payload.id)
+      clearReceivedPtyCharTotal(payload.id)
+      const handler = ptyExitHandlers.get(payload.id)
       if (handler) {
-        handler(payload.data, meta)
+        clearPreHandlerPtyState(payload.id)
+        handler(payload.code)
       } else {
-        bufferPreHandlerPtyData(payload.id, payload.data, meta)
+        bufferPreHandlerPtyExit(payload.id, payload.code)
       }
-      const sidecars = ptyDataSidecars.get(payload.id)
+      const sidecars = ptyExitSidecars.get(payload.id)
       if (sidecars && sidecars.size > 0) {
-        // Why: snapshot the Set before iterating because watchers commonly
-        // unsubscribe themselves on the very chunk that satisfies them
-        // (e.g. agent-paste-draft resolves on DECSET 2004 and immediately
-        // tears down). Iterating the live Set in that case can skip a
-        // watcher or — if a watcher synchronously subscribes a sibling —
-        // double-fire. The Set is never large (one watcher per active
-        // ready-wait), so the array allocation is cheap.
         const snapshot = Array.from(sidecars)
-        for (const watcher of snapshot) {
-          watcher(payload.data)
+        ptyExitSidecars.delete(payload.id)
+        for (const sidecar of snapshot) {
+          sidecar(payload.code)
         }
       }
-    } finally {
-      // Why: main budgets renderer-bound terminal output by bytes accepted
-      // into this dispatcher. ACK in finally so a bad sidecar cannot leave
-      // a PTY permanently backpressured.
-      ackPtyData(payload.id, payload.rawLength ?? payload.data.length)
-    }
+    })
+  )
+  // Why: main probes when delivery looks stuck on lost ACKs (data arriving
+  // for a fully gated PTY). Replying with the cumulative processed totals
+  // lets main reconcile verified state instead of resetting blindly.
+  const unsubscribeResync = window.api.pty.onDeliveryResyncRequest?.((payload) => {
+    window.api.pty.respondDeliveryResync?.({
+      requestId: payload.requestId,
+      processedCharsByPty: getProcessedPtyCharTotals()
+    })
   })
-  window.api.pty.onReplay((payload) => {
-    ptyReplayHandlers.get(payload.id)?.(payload.data)
-  })
-  window.api.pty.onExit((payload) => {
-    const handler = ptyExitHandlers.get(payload.id)
-    if (handler) {
-      clearPreHandlerPtyState(payload.id)
-      handler(payload.code)
-    } else {
-      bufferPreHandlerPtyExit(payload.id, payload.code)
-    }
-    const sidecars = ptyExitSidecars.get(payload.id)
-    if (sidecars && sidecars.size > 0) {
-      const snapshot = Array.from(sidecars)
-      ptyExitSidecars.delete(payload.id)
-      for (const sidecar of snapshot) {
-        sidecar(payload.code)
-      }
-    }
-  })
+  if (unsubscribeResync) {
+    unsubscribes.push(unsubscribeResync)
+  }
+  // Why: tell main the pty:data listener is live now. Before this fires (fresh
+  // load or post-reload boot window) main holds all sends — bytes sent into a
+  // listener-less page are silently dropped yet counted in-flight, which
+  // permanently pins the delivery gate. Fires once per page load.
+  window.api.pty.rendererDispatcherReady?.()
 }
 
 export function subscribeToPtyExit(ptyId: string, watcher: (code: number) => void): () => void {
@@ -218,7 +309,6 @@ export function registerEagerPtyBuffer(
   onExit: (ptyId: string, code: number) => void
 ): EagerPtyHandle {
   ensurePtyDispatcher()
-
   // Why: a head index instead of Array.shift() — shift() is O(n), making
   // pre-attach buffering quadratic under many small chunks. Compaction is deferred.
   const chunks: EagerBufferChunk[] = []
@@ -247,7 +337,7 @@ export function registerEagerPtyBuffer(
     // Shell died before TerminalPane attached — clean up and notify the store
     // so the tab's ptyId is cleared and connectPanePty falls through to connect().
     // Identity-guarded like dispose(): never delete a handler a transport has
-    // since registered for this id.
+    // since registered for this id (#7894 detach/attach remount race).
     if (ptyDataHandlers.get(ptyId) === dataHandler) {
       ptyDataHandlers.delete(ptyId)
       ptyReplayHandlers.delete(ptyId)
@@ -272,6 +362,8 @@ export function registerEagerPtyBuffer(
       return data
     },
     dispose() {
+      // Why: dispose runs at pane attach (mount completed) — the pane's own
+      // visibility sync now owns the hidden-delivery decision for this PTY.
       // Only remove if the current handler is still the temp one (compare by
       // reference). After attach() replaces the handler this becomes a no-op.
       if (ptyDataHandlers.get(ptyId) === dataHandler) {

@@ -617,6 +617,28 @@ export default function WorkspaceCleanupDialog(): React.JSX.Element {
         }
         removalInFlightRef.current = false
       },
+      onLateResult: (result) => {
+        if (!mountedRef.current) {
+          return
+        }
+        setRowFailures((current) => {
+          const next = { ...current }
+          for (const id of result.removedIds) {
+            delete next[id]
+          }
+          for (const failure of result.failures) {
+            next[failure.worktreeId] = failure.message
+          }
+          return next
+        })
+        setSelectedIds((current) => {
+          const next = new Set(current)
+          for (const id of result.removedIds) {
+            next.delete(id)
+          }
+          return next
+        })
+      },
       onError: () => {
         for (const candidate of removableCandidates) {
           clearWorktreeDeleteState(candidate.worktreeId)

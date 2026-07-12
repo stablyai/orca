@@ -28,11 +28,11 @@ vi.mock('node-pty', () => ({
 // Default to signed-in so the spawn paths under test still run; the auth gate
 // itself is covered by codex-auth-presence.test.ts and the no-auth case below.
 vi.mock('./codex-auth-presence', () => ({
-  codexAuthExists: vi.fn(() => true)
+  probeCodexAuthPresence: vi.fn(() => 'present')
 }))
 
 import { fetchCodexRateLimits } from './codex-fetcher'
-import { codexAuthExists } from './codex-auth-presence'
+import { probeCodexAuthPresence } from './codex-auth-presence'
 import { getActiveHiddenRateLimitPtyCount } from './hidden-pty-cleanup'
 
 function makeDisposable() {
@@ -77,7 +77,7 @@ describe('fetchCodexRateLimits', () => {
     vi.useFakeTimers()
     vi.clearAllMocks()
     resolveCodexCommandMock.mockReturnValue('codex')
-    vi.mocked(codexAuthExists).mockResolvedValue(true)
+    vi.mocked(probeCodexAuthPresence).mockResolvedValue('present')
     readFileMock.mockRejectedValue(new Error('no auth fixture'))
     vi.stubGlobal('fetch', vi.fn())
   })
@@ -87,7 +87,7 @@ describe('fetchCodexRateLimits', () => {
   })
 
   it('does not spawn Codex when the user is not signed in', async () => {
-    vi.mocked(codexAuthExists).mockResolvedValue(false)
+    vi.mocked(probeCodexAuthPresence).mockResolvedValue('absent')
 
     await expect(fetchCodexRateLimits()).resolves.toMatchObject({
       provider: 'codex',
@@ -102,9 +102,9 @@ describe('fetchCodexRateLimits', () => {
   })
 
   it('preserves the aborted result when cancellation lands during the auth check', async () => {
-    let resolveAuth!: (exists: boolean) => void
-    vi.mocked(codexAuthExists).mockReturnValueOnce(
-      new Promise<boolean>((resolve) => {
+    let resolveAuth!: (presence: 'absent') => void
+    vi.mocked(probeCodexAuthPresence).mockReturnValueOnce(
+      new Promise<'absent'>((resolve) => {
         resolveAuth = resolve
       })
     )
@@ -112,7 +112,7 @@ describe('fetchCodexRateLimits', () => {
 
     const result = fetchCodexRateLimits({ signal: controller.signal })
     controller.abort()
-    resolveAuth(false)
+    resolveAuth('absent')
 
     await expect(result).resolves.toMatchObject({
       provider: 'codex',
@@ -122,6 +122,24 @@ describe('fetchCodexRateLimits', () => {
     expect(childSpawnMock).not.toHaveBeenCalled()
     expect(ptySpawnMock).not.toHaveBeenCalled()
   })
+
+  it.each([
+    ['timeout', 'Timed out while checking Codex sign-in status'],
+    ['unavailable', 'Codex sign-in status is unavailable']
+  ] as const)(
+    'does not report an indeterminate %s probe as signed out',
+    async (presence, error) => {
+      vi.mocked(probeCodexAuthPresence).mockResolvedValue(presence)
+
+      await expect(fetchCodexRateLimits()).resolves.toMatchObject({
+        provider: 'codex',
+        status: 'error',
+        error
+      })
+      expect(childSpawnMock).not.toHaveBeenCalled()
+      expect(ptySpawnMock).not.toHaveBeenCalled()
+    }
+  )
 
   it('disposes node-pty listeners before killing the PTY fallback on timeout', async () => {
     const onDataDisposable = makeDisposable()

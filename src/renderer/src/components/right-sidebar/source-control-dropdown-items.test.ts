@@ -1,5 +1,13 @@
 import { describe, expect, it } from 'vitest'
-import { resolveDropdownItems, type DropdownActionInputs } from './source-control-dropdown-items'
+import {
+  resolveDropdownItems,
+  type DropdownActionInputs,
+  type DropdownItem
+} from './source-control-dropdown-items'
+import {
+  hasUsableHostedReviewPushTarget,
+  resolveHostedReviewActionUpstreamStatus
+} from './source-control-hosted-review-push-target'
 
 // Why: a shared defaults object keeps each case row terse while making the
 // "this is the one knob that differs from the baseline" intent obvious.
@@ -766,5 +774,75 @@ describe('resolveDropdownItems', () => {
       items.filter((e) => e.kind !== 'separator').map((e) => [e.kind, e])
     )
     expect(byKind.create_pr.hint).toBe('Run glab auth login in this environment')
+  })
+})
+
+// Why: PR #8196 — drive the real push-target resolution the component uses so
+// the whole chain stays regression-proof.
+describe('resolveDropdownItems with an unhydrated linked-review push target', () => {
+  function pipeline(args: {
+    branchName: string
+    upstreamStatus: DropdownActionInputs['upstreamStatus']
+  }): Record<string, DropdownItem> {
+    const canUseHostedReviewPushTarget = hasUsableHostedReviewPushTarget({
+      // pushTarget intentionally omitted: the resolver has not hydrated it yet.
+      hasResolvableHostedReviewPushTargetLink: true,
+      branchName: args.branchName,
+      upstreamStatus: args.upstreamStatus
+    })
+    const upstreamStatus = resolveHostedReviewActionUpstreamStatus({
+      hasHostedReviewLink: true,
+      hasResolvableHostedReviewPushTargetLink: true,
+      hostedReviewState: 'open',
+      isHostedReviewStateLoading: false,
+      canUseHostedReviewPushTarget,
+      upstreamStatus: args.upstreamStatus
+    })
+    const items = resolveDropdownItems(
+      inputs({
+        stagedCount: 1,
+        hasMessage: true,
+        branchCommitsAhead: 7,
+        prState: 'open',
+        upstreamStatus,
+        canPushLinkedReviewWithoutUpstream: canUseHostedReviewPushTarget
+      })
+    )
+    return Object.fromEntries(
+      items.filter((e): e is DropdownItem => e.kind !== 'separator').map((e) => [e.kind, e])
+    )
+  }
+
+  it('enables Push and Force Push when the real upstream is the same-repo review head', () => {
+    const byKind = pipeline({
+      branchName: 'mobile-resume-suspected-fixes',
+      upstreamStatus: {
+        hasUpstream: true,
+        upstreamName: 'origin/mobile-resume-suspected-fixes',
+        ahead: 7,
+        behind: 2
+      }
+    })
+    expect(byKind.push.disabled).toBe(false)
+    expect(byKind.push.title).not.toBe('Linked review branch target is unavailable')
+    expect(byKind.force_push.disabled).toBe(false)
+    expect(byKind.pull.disabled).toBe(false)
+    expect(byKind.sync.disabled).toBe(false)
+    expect(byKind.publish.disabled).toBe(true)
+  })
+
+  it('still blocks Push when the real upstream is an unrelated fork/helper head', () => {
+    const byKind = pipeline({
+      branchName: 'mobile-resume-suspected-fixes',
+      upstreamStatus: {
+        hasUpstream: true,
+        upstreamName: 'origin/helper-branch',
+        ahead: 1,
+        behind: 0
+      }
+    })
+    expect(byKind.push.disabled).toBe(true)
+    expect(byKind.push.title).toBe('Linked review branch target is unavailable')
+    expect(byKind.force_push.disabled).toBe(true)
   })
 })

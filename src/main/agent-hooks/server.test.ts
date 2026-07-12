@@ -143,6 +143,89 @@ describe('AgentHookServer listener replay', () => {
     }
   })
 
+  it('does not infer an interrupt while a subagent child is still working', () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(1_000)
+    try {
+      const server = new AgentHookServer()
+      server.ingestRemote(
+        {
+          paneKey: PANE,
+          tabId: 'tab-1',
+          worktreeId: 'wt-1',
+          payload: {
+            state: 'working',
+            prompt: 'review loop',
+            agentType: 'claude',
+            // Why: a working pane can be child-driven (lead already idle).
+            // Ctrl+C does not stop background children, so no terminal done
+            // may be inferred while one is still running.
+            subagents: [{ id: 'a1', state: 'working', startedAt: 900 }]
+          }
+        },
+        'conn-1'
+      )
+      const baseline = server.getStatusSnapshot()[0]
+
+      vi.setSystemTime(1_500)
+      const applied = server.inferInterrupt({
+        paneKey: PANE,
+        baselineUpdatedAt: baseline.receivedAt,
+        baselineStateStartedAt: baseline.stateStartedAt,
+        baselinePrompt: 'review loop',
+        baselineAgentType: 'claude',
+        intent: 'ctrl-c'
+      })
+
+      expect(applied).toBe(false)
+      expect(server.getStatusSnapshot()[0]).toMatchObject({ state: 'working' })
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('carries idle subagent rows through an inferred interrupt', () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(1_000)
+    try {
+      const server = new AgentHookServer()
+      server.ingestRemote(
+        {
+          paneKey: PANE,
+          tabId: 'tab-1',
+          worktreeId: 'wt-1',
+          payload: {
+            state: 'working',
+            prompt: 'wrap up',
+            agentType: 'claude',
+            subagents: [{ id: 'a1', state: 'idle', startedAt: 900, agentType: 'probe1' }]
+          }
+        },
+        'conn-1'
+      )
+      const baseline = server.getStatusSnapshot()[0]
+
+      vi.setSystemTime(1_500)
+      const applied = server.inferInterrupt({
+        paneKey: PANE,
+        baselineUpdatedAt: baseline.receivedAt,
+        baselineStateStartedAt: baseline.stateStartedAt,
+        baselinePrompt: 'wrap up',
+        baselineAgentType: 'claude',
+        intent: 'ctrl-c'
+      })
+
+      expect(applied).toBe(true)
+      expect(server.getStatusSnapshot()[0]).toMatchObject({
+        state: 'done',
+        interrupted: true,
+        subagents: [expect.objectContaining({ id: 'a1', state: 'idle' })]
+      })
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
   it('preserves an inferred interrupted row when OpenCode immediately reports SessionIdle', () => {
     vi.useFakeTimers()
     vi.setSystemTime(1_000)
@@ -5305,6 +5388,8 @@ describe('Copilot hook normalization', () => {
         })
       )
 
+      // Let the first 50ms retry miss so continuation across SessionEnd is proven.
+      await new Promise((resolve) => setTimeout(resolve, 70))
       writeFileSync(
         transcriptPath,
         `${JSON.stringify({

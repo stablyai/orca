@@ -1,5 +1,5 @@
 import type { Store } from '../persistence'
-import type { SshTarget } from '../../shared/ssh-types'
+import type { SshRepoReadoption, SshTarget } from '../../shared/ssh-types'
 import { RUNTIME_OWNED_SSH_TARGET_ID_PREFIX } from '../../shared/execution-host'
 import { loadUserSshConfig, sshConfigHostsToTargets } from './ssh-config-parser'
 import {
@@ -44,14 +44,13 @@ export class SshConnectionStore {
     this.store.addSshTarget(full)
     // Why: re-adopt workspaces that were orphaned when the same host was removed
     // (repos/worktrees still point at the old, now-dead target id). Track the
-    // count so the IPC layer knows whether to refresh the repo list.
-    this.lastReadoptedRepoCount = readoptOrphanedWorkspacesForTarget(this.store, full)
+    // exact migrations so IPC can refresh and renderer can prune only proven stale rows.
+    this.lastRepoReadoptions = readoptOrphanedWorkspacesForTarget(this.store, full)
     return full
   }
 
-  /** Repos re-adopted by the most recent addTarget/importFromSshConfig call.
-   *  Lets the IPC layer broadcast repos:changed only when workspaces reattached. */
-  lastReadoptedRepoCount = 0
+  /** Exact migrations from the most recent add/import operation. */
+  lastRepoReadoptions: SshRepoReadoption[] = []
 
   upsertRuntimeOwnedTarget(
     runtimeId: string,
@@ -120,7 +119,7 @@ export class SshConnectionStore {
    * manual targets. Returns the inserted and updated targets.
    */
   importFromSshConfig(options?: { reAdopt?: boolean }): SshTarget[] {
-    let readoptedThisImport = 0
+    const readoptions: SshRepoReadoption[] = []
     // Why: the explicit Import action re-adopts every config host, so it clears
     // all tombstones first. The passive on-open sync passes no flag and keeps
     // deleted hosts suppressed.
@@ -212,12 +211,12 @@ export class SshConnectionStore {
         // Why: a freshly-inserted config host may be one the user removed and is
         // now re-importing — re-adopt its orphaned workspaces. Updated-in-place
         // targets keep their id, so their repos were never orphaned.
-        readoptedThisImport += readoptOrphanedWorkspacesForTarget(this.store, inserted)
+        readoptions.push(...readoptOrphanedWorkspacesForTarget(this.store, inserted))
         changed.push(inserted)
       }
     }
 
-    this.lastReadoptedRepoCount = readoptedThisImport
+    this.lastRepoReadoptions = readoptions
     return changed
   }
 }
