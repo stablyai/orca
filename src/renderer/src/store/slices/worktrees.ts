@@ -37,6 +37,7 @@ import {
 } from '../../runtime/runtime-rpc-client'
 import { toRuntimeWorktreeSelector } from '../../runtime/runtime-worktree-selector'
 import { getHostedReviewCacheKey, refreshHostedReviewCard } from './hosted-review'
+import { isPositiveHostedReviewNumber } from '../../../../shared/hosted-review'
 import { getGitHubPRCacheKey, getLegacyGitHubPRCacheKey } from './github-cache-key'
 import { moveFocusToRendererBeforeFocusedWebviewHidden } from './browser-webview-cleanup'
 import { toast } from 'sonner'
@@ -1384,10 +1385,6 @@ function getHostedReviewPushTargetLookup(worktree: Worktree): {
   return null
 }
 
-function isPositiveHostedReviewNumber(value: unknown): value is number {
-  return typeof value === 'number' && Number.isInteger(value) && value > 0
-}
-
 type HostedReviewLinkKey =
   | 'linkedPR'
   | 'linkedGitLabMR'
@@ -2102,6 +2099,7 @@ function buildWorktreePurgeState(s: AppState, worktreeIds: string[]): Partial<Ap
     }
     return next
   })()
+  const nextAgentStatusByPaneKey = omitByPaneKeyTabPrefix(s.agentStatusByPaneKey)
 
   return {
     // Worktree-scoped terminal/tab state
@@ -2142,7 +2140,10 @@ function buildWorktreePurgeState(s: AppState, worktreeIds: string[]): Partial<Ap
     // badge). retainedAgentsByPaneKey and runtimeAgentOrchestrationByPaneKey are
     // intentionally omitted here — both self-heal (pruneRetainedAgents on a
     // worktreesByRepo change; the runtime map is replaced wholesale each sync).
-    agentStatusByPaneKey: omitByPaneKeyTabPrefix(s.agentStatusByPaneKey),
+    agentStatusByPaneKey: nextAgentStatusByPaneKey,
+    ...(nextAgentStatusByPaneKey !== s.agentStatusByPaneKey
+      ? { agentStatusEpoch: s.agentStatusEpoch + 1 }
+      : {}),
     agentLaunchConfigByPaneKey: omitByPaneKeyTabPrefix(s.agentLaunchConfigByPaneKey),
     acknowledgedAgentsByPaneKey: omitByPaneKeyTabPrefix(s.acknowledgedAgentsByPaneKey),
     paneForegroundAgentByPaneKey: omitByPaneKeyTabPrefix(s.paneForegroundAgentByPaneKey),
@@ -3744,8 +3745,8 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
       ? clearOlderHostedReviewLinksForReplacement(updates, existingWorktree)
       : updates
     // Why: manual PR linking only supplies the PR number. Resolve the PR head
-    // branch here so Push targets the review branch, but don't repeat that
-    // network lookup for no-op linkedPR metadata saves.
+    // branch here so Push targets the review branch; re-saving the same PR can
+    // also heal older metadata that lost pushTarget.
     const linkedPrForPushTarget = isPositiveHostedReviewNumber(normalizedUpdates.linkedPR)
       ? normalizedUpdates.linkedPR
       : null
@@ -3753,7 +3754,6 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
       linkedPrForPushTarget !== null &&
       normalizedUpdates.pushTarget === undefined &&
       existingWorktree &&
-      existingWorktree.linkedPR !== linkedPrForPushTarget &&
       !existingWorktree.pushTarget
         ? await resolveGitHubReviewPushTarget(
             settingsForWorktreeOwner(get(), worktreeId),

@@ -78,6 +78,7 @@ import {
   applyTerminalAttributionEnv,
   resolveAttributionShellFamily
 } from '../attribution/terminal-attribution'
+import { ensureLinuxTerminalOrcaCliShimDir } from '../cli/linux-terminal-orca-cli-shim'
 import { registerPty, unregisterPty } from '../memory/pty-registry'
 import { advertisedUrlWatcher } from '../ports/advertised-url-watcher'
 import { track } from '../telemetry/client'
@@ -991,6 +992,18 @@ export function buildPtyHostEnv(
     // the current working directory (a foot-gun we don't want to create
     // for dev terminals).
     baseEnv.PATH = inheritedPath ? `${devCliBin}${delimiter}${inheritedPath}` : devCliBin
+  } else if (process.platform === 'linux') {
+    // Why: the Linux CLI installs as `orca-ide` (never shadowing GNOME's
+    // /usr/bin/orca screen reader), but agent-facing guidance invokes bare
+    // `orca`. Scope a bare-`orca` shim to Orca-managed PTYs so agents reach
+    // the Orca CLI instead of the screen reader (stablyai/orca#7904).
+    const shimDir = ensureLinuxTerminalOrcaCliShimDir({ userDataPath: opts.userDataPath })
+    if (shimDir) {
+      const inheritedEntries = readInheritedPath(baseEnv)
+        .split(delimiter)
+        .filter((entry) => entry.length > 0 && entry !== shimDir)
+      baseEnv.PATH = [shimDir, ...inheritedEntries].join(delimiter)
+    }
   }
 
   // Why: GitHub attribution should only affect commands launched from
@@ -3393,6 +3406,15 @@ export function registerPtyHandlers(
     getForegroundProcess: async (ptyId) => {
       try {
         return await getProviderForPty(ptyId).getForegroundProcess(ptyId)
+      } catch {
+        return null
+      }
+    },
+    confirmForegroundProcess: async (ptyId) => {
+      try {
+        const provider = getProviderForPty(ptyId)
+        // Why: cached foreground evidence cannot resolve a fresh shell conflict.
+        return (await provider.confirmForegroundProcess?.(ptyId)) ?? null
       } catch {
         return null
       }

@@ -1151,7 +1151,7 @@ function App(): React.JSX.Element {
           // UI writer and clobber ui.json (sidebar width, sort, filters, etc.).
           const fallbackUI = getStartupErrorFallbackUI(uiHydrated)
           if (fallbackUI) {
-            actions.hydratePersistedUI(fallbackUI)
+            actions.hydratePersistedUI(fallbackUI, 'startup')
           }
           // Why (issue #1158): surface a sticky, dismissible toast so the
           // user knows they're in degraded "no-save" mode. Without this, every
@@ -1441,6 +1441,10 @@ function App(): React.JSX.Element {
         hideAutomationGeneratedWorkspaces,
         showDotfilesByWorktree,
         filterRepoIds,
+        // Why: persist the active view so a reload restores it. openTaskPage etc.
+        // mutate activeView directly (not via setActiveView), so the value-keyed
+        // writer is what catches every transition.
+        activeView,
         // Why: rides the same debounced save so dashboard auto-acks (which fire
         // on focus/visibility) and the in-memory ack cleanup paths in
         // agent-status.ts (close/dismiss) both flow to disk through map
@@ -1467,6 +1471,7 @@ function App(): React.JSX.Element {
     hideAutomationGeneratedWorkspaces,
     showDotfilesByWorktree,
     filterRepoIds,
+    activeView,
     acknowledgedAgentsByPaneKey
   ])
 

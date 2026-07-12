@@ -9,10 +9,12 @@ const {
   spawnMock,
   isPwshAvailableMock,
   validateWorkingDirectoryMock,
+  resolveUnixShellPathMock,
   resolveAgentForegroundProcessMock
 } = vi.hoisted(() => ({
   spawnMock: vi.fn(),
   isPwshAvailableMock: vi.fn(),
+  resolveUnixShellPathMock: vi.fn((shellPath: string) => shellPath),
   resolveAgentForegroundProcessMock: vi.fn(),
   validateWorkingDirectoryMock: vi.fn((cwd: string) => {
     if (cwd.includes('definitely-missing')) {
@@ -51,6 +53,7 @@ vi.mock('../providers/local-pty-utils', async (importOriginal) => {
   const actual = await importOriginal<typeof LocalPtyUtils>()
   return {
     ...actual,
+    resolveUnixShellPath: resolveUnixShellPathMock,
     validateWorkingDirectory: validateWorkingDirectoryMock
   }
 })
@@ -116,6 +119,8 @@ describe('createPtySubprocess', () => {
       async (_pid: number, fallbackProcess: string | null) => fallbackProcess
     )
     validateWorkingDirectoryMock.mockClear()
+    resolveUnixShellPathMock.mockReset()
+    resolveUnixShellPathMock.mockImplementation((shellPath: string) => shellPath)
     isPwshAvailableMock.mockReturnValue(false)
     previousUserDataPath = process.env.ORCA_USER_DATA_PATH
     previousPowerlevelWizardDisable = process.env[POWERLEVEL10K_WIZARD_DISABLE_ENV]
@@ -179,6 +184,117 @@ describe('createPtySubprocess', () => {
         name: 'xterm-256color'
       })
     )
+  })
+
+  it('resolves a missing Unix default before spawning node-pty', () => {
+    const proc = mockPtyProcess()
+    spawnMock.mockReturnValue(proc)
+    resolveUnixShellPathMock.mockReturnValue('/bin/sh')
+    const platform = Object.getOwnPropertyDescriptor(process, 'platform')
+    const previousShell = process.env.SHELL
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    Object.defineProperty(process, 'platform', { configurable: true, value: 'linux' })
+    delete process.env.SHELL
+
+    try {
+      createPtySubprocess({ sessionId: 'test', cols: 80, rows: 24, env: {} })
+
+      expect(resolveUnixShellPathMock).toHaveBeenCalledWith('/bin/zsh')
+      expect(spawnMock).toHaveBeenCalledWith(
+        '/bin/sh',
+        ['-l'],
+        expect.objectContaining({ env: expect.objectContaining({ SHELL: '/bin/sh' }) })
+      )
+      expect(warn).toHaveBeenCalledWith(
+        '[daemon/pty] Preferred shell "/bin/zsh" is unavailable, fell back to "/bin/sh"'
+      )
+    } finally {
+      warn.mockRestore()
+      if (platform) {
+        Object.defineProperty(process, 'platform', platform)
+      }
+      if (previousShell === undefined) {
+        delete process.env.SHELL
+      } else {
+        process.env.SHELL = previousShell
+      }
+    }
+  })
+
+  it('derives shell-ready launch config from the resolved fallback shell', () => {
+    const proc = mockPtyProcess()
+    spawnMock.mockReturnValue(proc)
+    resolveUnixShellPathMock.mockReturnValue('/bin/sh')
+    const platform = Object.getOwnPropertyDescriptor(process, 'platform')
+    const previousShell = process.env.SHELL
+    const previousMarker = process.env.ORCA_SHELL_READY_MARKER
+    const previousZdotdir = process.env.ZDOTDIR
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    Object.defineProperty(process, 'platform', { configurable: true, value: 'linux' })
+    delete process.env.SHELL
+    // Why: the test runner itself can execute inside an Orca-wrapped shell
+    // whose exported wrapper vars would leak through the process.env spread.
+    delete process.env.ORCA_SHELL_READY_MARKER
+    delete process.env.ZDOTDIR
+
+    try {
+      const handle = createPtySubprocess({
+        sessionId: 'test',
+        cols: 80,
+        rows: 24,
+        env: {},
+        command: 'echo hi'
+      })
+
+      expect(handle.shellPath).toBe('/bin/sh')
+      const [shellPath, shellArgs, spawnOptions] = spawnMock.mock.calls[0]
+      expect(shellPath).toBe('/bin/sh')
+      expect(shellArgs).toEqual(['-l'])
+      // A launch config derived from the missing preferred zsh would inject
+      // ZDOTDIR and ORCA_SHELL_READY_MARKER; /bin/sh must spawn without them.
+      expect(spawnOptions.env.ZDOTDIR).toBeUndefined()
+      expect(spawnOptions.env.ORCA_SHELL_READY_MARKER).toBeUndefined()
+      expect(spawnOptions.env.SHELL).toBe('/bin/sh')
+    } finally {
+      warn.mockRestore()
+      if (platform) {
+        Object.defineProperty(process, 'platform', platform)
+      }
+      if (previousShell === undefined) {
+        delete process.env.SHELL
+      } else {
+        process.env.SHELL = previousShell
+      }
+      if (previousMarker === undefined) {
+        delete process.env.ORCA_SHELL_READY_MARKER
+      } else {
+        process.env.ORCA_SHELL_READY_MARKER = previousMarker
+      }
+      if (previousZdotdir === undefined) {
+        delete process.env.ZDOTDIR
+      } else {
+        process.env.ZDOTDIR = previousZdotdir
+      }
+    }
+  })
+
+  it('surfaces the no-executable-shell error before node-pty forks', () => {
+    resolveUnixShellPathMock.mockImplementation(() => {
+      throw new Error('No executable Unix shell found (tried: /bin/zsh, /bin/bash, /bin/sh)')
+    })
+    const platform = Object.getOwnPropertyDescriptor(process, 'platform')
+    Object.defineProperty(process, 'platform', { configurable: true, value: 'linux' })
+
+    try {
+      expect(() => createPtySubprocess({ sessionId: 'test', cols: 80, rows: 24, env: {} })).toThrow(
+        'No executable Unix shell found'
+      )
+      expect(spawnMock).not.toHaveBeenCalled()
+    } finally {
+      if (platform) {
+        Object.defineProperty(process, 'platform', platform)
+      }
+    }
   })
 
   it('uses bundled ConPTY for native Windows daemon terminals', () => {

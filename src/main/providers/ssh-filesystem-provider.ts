@@ -3,6 +3,11 @@ import { isMethodNotFoundError, readFileViaStream } from '../ssh/ssh-filesystem-
 import { uploadBuffer } from '../ssh/sftp-upload'
 import { fastGetViaSftp, lstatViaSftp } from './ssh-filesystem-provider-sftp'
 import {
+  openSshFileUploadSession,
+  type SftpFactory,
+  type SshRawTransferOptions
+} from './ssh-filesystem-file-upload'
+import {
   notifySshFilesystemUnwatch,
   registerSshFilesystemWatch,
   type WatchRegistration
@@ -11,14 +16,12 @@ import type {
   IFilesystemProvider,
   FileStat,
   FileReadResult,
+  FileUploadSession,
   TerminalArtifactAccessOptions
 } from './types'
 import type { DirEntry, FsChangeEvent, SearchOptions, SearchResult } from '../../shared/types'
 import { isPathInsideOrEqual } from '../../shared/cross-platform-path'
 import type { WorkspaceSpaceDirectoryScanResult } from '../../shared/workspace-space-types'
-import type { SFTPWrapper } from 'ssh2'
-
-type SftpFactory = () => Promise<SFTPWrapper>
 const WORKSPACE_SPACE_SCAN_TIMEOUT_MS = 130_000
 
 export class SshFilesystemProvider implements IFilesystemProvider {
@@ -33,7 +36,8 @@ export class SshFilesystemProvider implements IFilesystemProvider {
   constructor(
     connectionId: string,
     mux: SshChannelMultiplexer,
-    private readonly createSftp?: SftpFactory
+    private readonly createSftp?: SftpFactory,
+    private readonly rawTransfer?: SshRawTransferOptions
   ) {
     this.connectionId = connectionId
     this.mux = mux
@@ -120,6 +124,10 @@ export class SshFilesystemProvider implements IFilesystemProvider {
   }
 
   async downloadFile(sourcePath: string, destinationPath: string): Promise<void> {
+    if (this.rawTransfer?.downloadFile) {
+      await this.rawTransfer.downloadFile(sourcePath, destinationPath)
+      return
+    }
     if (!this.createSftp) {
       throw new Error('Remote file download is unavailable. Reconnect the SSH target and retry.')
     }
@@ -129,6 +137,10 @@ export class SshFilesystemProvider implements IFilesystemProvider {
     } finally {
       sftp.end()
     }
+  }
+
+  async openFileUploadSession(): Promise<FileUploadSession> {
+    return openSshFileUploadSession(this.createSftp, this.rawTransfer)
   }
 
   async getTempDir(): Promise<string> {
@@ -186,6 +198,11 @@ export class SshFilesystemProvider implements IFilesystemProvider {
     contentBase64: string,
     append: boolean
   ): Promise<void> {
+    const contents = Buffer.from(contentBase64, 'base64')
+    if (this.rawTransfer?.writeBuffer) {
+      await this.rawTransfer.writeBuffer(filePath, contents, { append, exclusive: !append })
+      return
+    }
     if (!this.createSftp) {
       throw new Error('remote_binary_upload_unavailable')
     }
@@ -193,7 +210,7 @@ export class SshFilesystemProvider implements IFilesystemProvider {
     try {
       // Why: relay fs.writeFile is text-only. SFTP writes the decoded bytes
       // directly so runtime uploads do not corrupt images, PDFs, or archives.
-      await uploadBuffer(sftp, Buffer.from(contentBase64, 'base64'), filePath, {
+      await uploadBuffer(sftp, contents, filePath, {
         append,
         exclusive: !append
       })

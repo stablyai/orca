@@ -9,10 +9,6 @@ export type WorkspaceCleanupRemovalSettlement =
   | { status: 'fulfilled'; result: WorkspaceCleanupRemoveResult }
   | { status: 'rejected'; error: unknown }
 
-type WorkspaceCleanupRemovalPollResult =
-  | WorkspaceCleanupRemovalSettlement
-  | { status: 'unresolved' }
-
 export type WorkspaceCleanupRemovalWaitResult =
   | WorkspaceCleanupRemovalSettlement
   | { status: 'unresolved'; settlement: Promise<WorkspaceCleanupRemovalSettlement> }
@@ -22,31 +18,17 @@ export async function waitForWorkspaceCleanupRemovalWithTimeout(
   timeoutMs: number,
   settlementGraceMs: number
 ): Promise<WorkspaceCleanupRemovalWaitResult> {
+  const settlement = toWorkspaceCleanupRemovalSettlement(promise)
   if (timeoutMs <= 0 || !Number.isFinite(timeoutMs)) {
-    return promise.then<WorkspaceCleanupRemovalSettlement, WorkspaceCleanupRemovalSettlement>(
-      (result) => ({ status: 'fulfilled', result }),
-      (error: unknown) => ({ status: 'rejected', error })
-    )
+    return settlement
   }
 
-  // Why: a timeout does not cancel renderer IPC. Preserve the eventual outcome
-  // so a confirmation racing the deadline remains authoritative.
-  const settlement = promise.then<
-    WorkspaceCleanupRemovalSettlement,
-    WorkspaceCleanupRemovalSettlement
-  >(
-    (result) => ({ status: 'fulfilled', result }),
-    (error: unknown) => ({ status: 'rejected', error })
-  )
-  const initialOutcome = await pollWorkspaceCleanupRemoval(settlement, timeoutMs)
-  const outcome =
-    initialOutcome.status === 'unresolved' &&
-    settlementGraceMs > 0 &&
-    Number.isFinite(settlementGraceMs)
-      ? await pollWorkspaceCleanupRemoval(settlement, settlementGraceMs)
-      : initialOutcome
-
-  return outcome.status === 'unresolved' ? { ...outcome, settlement } : outcome
+  // Why: a timeout does not cancel renderer IPC, so the deadline is provisional;
+  // the grace stretches it so a settlement racing the deadline stays authoritative.
+  const graceMs =
+    settlementGraceMs > 0 && Number.isFinite(settlementGraceMs) ? settlementGraceMs : 0
+  const outcome = await pollWorkspaceCleanupRemoval(settlement, timeoutMs + graceMs)
+  return outcome.status === 'unresolved' ? { status: 'unresolved', settlement } : outcome
 }
 
 export function getWorkspaceCleanupTimeoutFailure(
@@ -69,30 +51,34 @@ export function trackWorkspaceCleanupLateSettlement(
   reconcileBeforeBatchResult: (result: WorkspaceCleanupRemoveResult) => void,
   reportAfterBatchResult: (result: WorkspaceCleanupRemoveResult) => void
 ): () => void {
-  const state: { reconcile: ((result: WorkspaceCleanupRemoveResult) => void) | null } = {
-    reconcile: reconcileBeforeBatchResult
-  }
-  void settlement.then(createLateSettlementReporter(state, candidate, reportAfterBatchResult))
-  // Why: a truly hung IPC promise can live for the renderer's lifetime. Drop
-  // the batch-array closure once its initial result has been reported.
+  // Why: a truly hung IPC promise can live for the renderer's lifetime; detach
+  // drops the reconcile closure (and the batch arrays it captures) at batch end.
+  let reconcile: ((result: WorkspaceCleanupRemoveResult) => void) | null =
+    reconcileBeforeBatchResult
+  settlement
+    .then((outcome) => {
+      const result = toWorkspaceCleanupRemoveResult(candidate, outcome)
+      if (reconcile) {
+        reconcile(result)
+        return
+      }
+      reportAfterBatchResult(result)
+    })
+    .catch((error: unknown) => {
+      console.error('Workspace cleanup late settlement reporting failed', error)
+    })
   return () => {
-    state.reconcile = null
+    reconcile = null
   }
 }
 
-function createLateSettlementReporter(
-  state: { reconcile: ((result: WorkspaceCleanupRemoveResult) => void) | null },
-  candidate: WorkspaceCleanupCandidate,
-  reportAfterBatchResult: (result: WorkspaceCleanupRemoveResult) => void
-): (settlement: WorkspaceCleanupRemovalSettlement) => void {
-  return (settlement) => {
-    const result = toWorkspaceCleanupRemoveResult(candidate, settlement)
-    if (state.reconcile) {
-      state.reconcile(result)
-      return
-    }
-    reportAfterBatchResult(result)
-  }
+function toWorkspaceCleanupRemovalSettlement(
+  promise: Promise<WorkspaceCleanupRemoveResult>
+): Promise<WorkspaceCleanupRemovalSettlement> {
+  return promise.then<WorkspaceCleanupRemovalSettlement, WorkspaceCleanupRemovalSettlement>(
+    (result) => ({ status: 'fulfilled', result }),
+    (error: unknown) => ({ status: 'rejected', error })
+  )
 }
 
 function toWorkspaceCleanupRemoveResult(
@@ -118,7 +104,7 @@ function toWorkspaceCleanupRemoveResult(
 async function pollWorkspaceCleanupRemoval(
   settlement: Promise<WorkspaceCleanupRemovalSettlement>,
   timeoutMs: number
-): Promise<WorkspaceCleanupRemovalPollResult> {
+): Promise<WorkspaceCleanupRemovalSettlement | { status: 'unresolved' }> {
   let timeout: ReturnType<typeof setTimeout> | null = null
   try {
     return await Promise.race([

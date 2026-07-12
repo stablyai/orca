@@ -10,6 +10,7 @@ import {
 } from './connection-context'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../shared/constants'
 import { folderWorkspaceKey } from '../../../shared/workspace-scope'
+import { createConnectionIdForFileSelector } from './connection-owner-resolution'
 
 const initialState = useAppStore.getInitialState()
 
@@ -580,5 +581,25 @@ describe('getConnectionIdFromState', () => {
     }
 
     expect(getConnectionIdFromState(state, null)).toBeNull()
+  })
+
+  it('recomputes a retained file-owner selector when ownership slices hydrate', () => {
+    const selector = createConnectionIdForFileSelector(
+      'repo-ssh::/home/neil/repo-feature',
+      '/home/neil/repo-feature/README.md'
+    )
+    const unresolved: ConnectionContextState = {
+      folderWorkspaces: [],
+      projectGroups: [],
+      repos: [],
+      worktreesByRepo: {}
+    }
+    expect(selector(unresolved)).toBeUndefined()
+
+    const hydrated: ConnectionContextState = {
+      ...unresolved,
+      repos: [makeRepo({ id: 'repo-ssh', connectionId: 'ssh-hydrated' })]
+    }
+    expect(selector(hydrated)).toBe('ssh-hydrated')
   })
 })

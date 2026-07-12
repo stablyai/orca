@@ -84,6 +84,11 @@ export function useRichMarkdownSearch({
     })
   }, [editor, isSearchOpen, matchCase, searchQuery, wholeWord])
 
+  // Why: mirror the guard used by replaceCurrentMatch/replaceAllMatches so the
+  // disabled state never disagrees with what a click will actually do during the
+  // debounce window when live matches diverge from the highlight set.
+  const replaceDisabled = getLiveMatches().some((match) => match.touchesReadOnlyAtom)
+
   // Clamp the user-controlled index to the valid range on every render.
   // No state update needed — this is a pure derivation.
   const activeMatchIndex =
@@ -160,7 +165,7 @@ export function useRichMarkdownSearch({
     const liveActiveMatchIndex =
       activeMatchIndex >= 0 && activeMatchIndex < liveMatches.length ? activeMatchIndex : 0
     const match = liveMatches[liveActiveMatchIndex]
-    if (!match) {
+    if (!match || liveMatches.some((candidate) => candidate.touchesReadOnlyAtom)) {
       return
     }
     // Why: removing the active match shifts the next match into the same index,
@@ -173,7 +178,10 @@ export function useRichMarkdownSearch({
       return
     }
     const liveMatches = getLiveMatches()
-    if (liveMatches.length === 0) {
+    if (
+      liveMatches.length === 0 ||
+      liveMatches.some((candidate) => candidate.touchesReadOnlyAtom)
+    ) {
       return
     }
     const tr = editor.state.tr
@@ -344,6 +352,7 @@ export function useRichMarkdownSearch({
       matchCase,
       matchCount,
       replaceQuery,
+      replaceDisabled,
       searchQuery,
       searchInputRef,
       wholeWord

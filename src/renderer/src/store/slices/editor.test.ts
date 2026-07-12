@@ -49,6 +49,10 @@ function createEditorStore(): StoreApi<AppState> {
     browserTabsByWorktree: {},
     activeBrowserTabId: null,
     activeBrowserTabIdByWorktree: {},
+    repos: [{ id: 'repo-1', path: '/repo' }],
+    worktreesByRepo: { 'repo-1': [{ id: 'wt-1', repoId: 'repo-1', path: '/repo' }] },
+    folderWorkspaces: [],
+    projectGroups: [],
     recordFeatureInteraction: vi.fn(),
     ...createEditorSlice(...(args as Parameters<typeof createEditorSlice>))
   })) as unknown as StoreApi<AppState>
@@ -62,6 +66,10 @@ function createEditorTabsStore(): StoreApi<AppState> {
     browserTabsByWorktree: {},
     activeBrowserTabId: null,
     activeBrowserTabIdByWorktree: {},
+    repos: [{ id: 'repo-1', path: '/repo' }],
+    worktreesByRepo: { 'repo-1': [{ id: 'wt-1', repoId: 'repo-1', path: '/repo' }] },
+    folderWorkspaces: [],
+    projectGroups: [],
     recordFeatureInteraction: vi.fn(),
     ...createTabsSlice(...(args as Parameters<typeof createTabsSlice>)),
     ...createEditorSlice(...(args as Parameters<typeof createEditorSlice>))
@@ -4003,6 +4011,47 @@ describe('createEditorSlice activateMarkdownLink', () => {
     ])
   })
 
+  it('rejects ambiguous same-path owner fallback and honors an explicit source owner', async () => {
+    const store = createEditorStore()
+    store.getState().openFile({
+      filePath: '/repo/docs/note.md',
+      relativePath: 'docs/note.md',
+      worktreeId: 'wt-1',
+      runtimeEnvironmentId: 'env-source',
+      language: 'markdown',
+      mode: 'edit'
+    })
+    store.getState().openFile(
+      {
+        filePath: '/repo/docs/note.md',
+        relativePath: 'docs/note.md',
+        worktreeId: 'wt-1',
+        runtimeEnvironmentId: null,
+        language: 'markdown',
+        mode: 'edit'
+      },
+      { suppressActiveRuntimeFallback: true }
+    )
+
+    await store.getState().activateMarkdownLink('https://example.com', {
+      sourceFilePath: '/repo/docs/note.md',
+      worktreeId: 'wt-1',
+      worktreeRoot: '/repo'
+    })
+    expect(openHttpLinkMock).not.toHaveBeenCalled()
+
+    await store.getState().activateMarkdownLink('https://example.com', {
+      sourceFilePath: '/repo/docs/note.md',
+      worktreeId: 'wt-1',
+      worktreeRoot: '/repo',
+      sourceOwner: { kind: 'local' }
+    })
+    expect(openHttpLinkMock).toHaveBeenCalledWith('https://example.com/', {
+      worktreeId: 'wt-1',
+      sourceOwner: { kind: 'local' }
+    })
+  })
+
   it('stats SSH markdown links through the source worktree connection before opening', async () => {
     const store = createEditorStore()
     pathExistsMock.mockResolvedValue(true)
@@ -4268,9 +4317,36 @@ describe('createEditorSlice activateMarkdownLink', () => {
       worktreeId: 'wt-1',
       worktreeRoot: '/repo'
     })
-    expect(openHttpLinkMock).toHaveBeenCalledWith('https://example.com/', { worktreeId: 'wt-1' })
+    expect(openHttpLinkMock).toHaveBeenCalledWith('https://example.com/', {
+      worktreeId: 'wt-1',
+      sourceOwner: { kind: 'local' }
+    })
     expect(openUrlMock).not.toHaveBeenCalled()
     expect(store.getState().openFiles).toEqual([])
+  })
+
+  it('does not rescan legacy owner state when the source owner is explicit', async () => {
+    const store = createEditorStore()
+    for (const key of ['openFiles', 'repos', 'worktreesByRepo', 'folderWorkspaces'] as const) {
+      Object.defineProperty(store.getState(), key, {
+        configurable: true,
+        get: () => {
+          throw new Error(`explicit owner must not read ${key}`)
+        }
+      })
+    }
+
+    await store.getState().activateMarkdownLink('https://example.com', {
+      sourceFilePath: '/repo/docs/note.md',
+      worktreeId: 'wt-1',
+      worktreeRoot: '/repo',
+      sourceOwner: { kind: 'local' }
+    })
+
+    expect(openHttpLinkMock).toHaveBeenCalledWith('https://example.com/', {
+      worktreeId: 'wt-1',
+      sourceOwner: { kind: 'local' }
+    })
   })
 
   it('opens in-worktree file links in Orca', async () => {

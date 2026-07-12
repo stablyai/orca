@@ -65,6 +65,7 @@ import { SettingsSidebar } from './SettingsSidebar'
 import { SettingsSetupGuidePane } from './SettingsSetupGuidePane'
 import { ActiveSettingsSectionProvider, SettingsSection } from './SettingsSection'
 import { getSettingsSectionSearchEntries, rankSettingsSearchItems } from './settings-search'
+import { resolveAppearanceAccordionDeepLink } from './appearance-usage-percentage-search'
 import { cn } from '@/lib/utils'
 import { isIntentionalAppRestartInProgress } from '@/lib/updater-beforeunload'
 import { registerWindowCloseGuard } from '../window-close-request-coordinator'
@@ -618,6 +619,14 @@ function Settings(): React.JSX.Element {
     )
     pendingNavSectionRef.current = paneSectionId
     pendingScrollTargetRef.current = settingsNavigationTarget.sectionId ?? paneSectionId
+    // Why: Appearance nests status-bar controls under a collapsed accordion;
+    // force that accordion open before scrolling so the row is actually visible.
+    if (settingsNavigationTarget.pane === 'appearance') {
+      const accordion = resolveAppearanceAccordionDeepLink(settingsNavigationTarget.sectionId)
+      if (accordion) {
+        useAppStore.getState().setAppearanceAccordionDeepLink(accordion)
+      }
+    }
     if (settingsNavigationTarget.intent === 'add-quick-command') {
       setQuickCommandAddIntentSignal((signal) => signal + 1)
     }
@@ -892,7 +901,16 @@ function Settings(): React.JSX.Element {
     const scrollTargetId = pendingScrollTargetRef.current
     const pendingNavSectionId = pendingNavSectionRef.current
 
-    if (scrollTargetId && pendingNavSectionId && settingsSearchQuery.trim() !== '') {
+    // Why: subsection deep links (scrollTarget ≠ pane id) must not keep a
+    // leftover search filter that can hide the target row. Pane-level deep
+    // links may intentionally pair with a filter (e.g. Appearance + "Usage
+    // percentages") so accordion sections force-open to the matching control.
+    if (
+      scrollTargetId &&
+      pendingNavSectionId &&
+      scrollTargetId !== pendingNavSectionId &&
+      settingsSearchQuery.trim() !== ''
+    ) {
       setSettingsSearchQuery('')
       return
     }

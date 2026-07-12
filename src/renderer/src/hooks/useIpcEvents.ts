@@ -1226,7 +1226,7 @@ export function useIpcEvents(): void {
     // the desktop re-hydrates and the sidebar reflects it live — bi-directional.
     unsubs.push(
       window.api.ui.onStateChanged((ui) => {
-        useAppStore.getState().hydratePersistedUI(ui)
+        useAppStore.getState().hydratePersistedUI(ui, 'sync')
       })
     )
 

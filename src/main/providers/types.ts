@@ -250,6 +250,7 @@ export type IFilesystemProvider = {
     options: TerminalArtifactAccessOptions
   ): Promise<FileReadResult>
   downloadFile?(sourcePath: string, destinationPath: string): Promise<void>
+  openFileUploadSession?(): Promise<FileUploadSession>
   getTempDir?(): Promise<string>
   writeFile(filePath: string, content: string): Promise<void>
   writeTerminalArtifact?(
@@ -279,6 +280,15 @@ export type IFilesystemProvider = {
     options?: { signal?: AbortSignal }
   ): Promise<WorkspaceSpaceDirectoryScanResult>
   watch(rootPath: string, callback: (events: FsChangeEvent[]) => void): Promise<() => void>
+}
+
+export type FileUploadSession = {
+  uploadFile(
+    sourcePath: string,
+    destinationPath: string,
+    options?: { exclusive?: boolean }
+  ): Promise<void>
+  close(): void
 }
 
 export type TerminalArtifactAccessOptions = {

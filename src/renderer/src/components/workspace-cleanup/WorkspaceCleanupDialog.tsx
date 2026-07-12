@@ -230,6 +230,9 @@ export default function WorkspaceCleanupDialog(): React.JSX.Element {
   const latestReadyToastScanAtRef = useRef<number | null>(null)
   const wasOpenRef = useRef(false)
   const removalInFlightRef = useRef(false)
+  // Why: the dialog stays mounted across cleanup runs, so late settlements from
+  // an earlier batch must not mutate a newer batch's row/selection state.
+  const removalBatchIdRef = useRef(0)
   const mountedRef = useMountedRef()
   const eligibleRepos = useMemo(() => repos.filter((repo) => isGitRepoKind(repo)), [repos])
   const eligibleRepoIds = useMemo(() => eligibleRepos.map((repo) => repo.id), [eligibleRepos])
@@ -567,6 +570,19 @@ export default function WorkspaceCleanupDialog(): React.JSX.Element {
     [clearWorktreeDeleteState]
   )
 
+  const deselectRemovedIds = useCallback((removedIds: readonly string[]) => {
+    if (removedIds.length === 0) {
+      return
+    }
+    setSelectedIds((current) => {
+      const next = new Set(current)
+      for (const id of removedIds) {
+        next.delete(id)
+      }
+      return next
+    })
+  }, [])
+
   const confirmRemove = useCallback(() => {
     if (confirmCandidates.length === 0 || removalInFlightRef.current) {
       return
@@ -581,8 +597,13 @@ export default function WorkspaceCleanupDialog(): React.JSX.Element {
       return
     }
     removalInFlightRef.current = true
+    removalBatchIdRef.current += 1
+    const removalBatchId = removalBatchIdRef.current
+    // Why: a hung late settlement retains these callbacks for the renderer's
+    // lifetime; capture only ids so it cannot pin the candidate objects.
+    const removableWorktreeIds = removableCandidates.map((candidate) => candidate.worktreeId)
     setRowFailures({})
-    markWorktreesQueuedForDeletion(removableCandidates.map((candidate) => candidate.worktreeId))
+    markWorktreesQueuedForDeletion(removableWorktreeIds)
     startWorkspaceCleanupBackgroundRemoval({
       candidates: removableCandidates,
       removeCandidates,
@@ -602,15 +623,7 @@ export default function WorkspaceCleanupDialog(): React.JSX.Element {
         }
         if (mountedRef.current) {
           setRowFailures(nextFailures)
-          setSelectedIds((current) => {
-            const next = new Set(current)
-            for (const id of result.removedIds) {
-              next.delete(id)
-            }
-            return next
-          })
-        }
-        if (mountedRef.current) {
+          deselectRemovedIds(result.removedIds)
           setRemovalProgress(null)
           setConfirming(false)
           setConfirmCandidates([])
@@ -618,7 +631,12 @@ export default function WorkspaceCleanupDialog(): React.JSX.Element {
         removalInFlightRef.current = false
       },
       onLateResult: (result) => {
-        if (!mountedRef.current) {
+        for (const failure of result.failures) {
+          // Why: a late failure can come from a hung preflight whose row never
+          // reached 'deleting'; clear its queued overlay like every other path.
+          clearQueuedDeleteState(failure.worktreeId)
+        }
+        if (!mountedRef.current || removalBatchIdRef.current !== removalBatchId) {
           return
         }
         setRowFailures((current) => {
@@ -631,17 +649,11 @@ export default function WorkspaceCleanupDialog(): React.JSX.Element {
           }
           return next
         })
-        setSelectedIds((current) => {
-          const next = new Set(current)
-          for (const id of result.removedIds) {
-            next.delete(id)
-          }
-          return next
-        })
+        deselectRemovedIds(result.removedIds)
       },
       onError: () => {
-        for (const candidate of removableCandidates) {
-          clearWorktreeDeleteState(candidate.worktreeId)
+        for (const worktreeId of removableWorktreeIds) {
+          clearWorktreeDeleteState(worktreeId)
         }
         if (mountedRef.current) {
           setRemovalProgress(null)
@@ -655,6 +667,7 @@ export default function WorkspaceCleanupDialog(): React.JSX.Element {
     clearQueuedDeleteState,
     clearWorktreeDeleteState,
     confirmCandidates,
+    deselectRemovedIds,
     markWorktreesQueuedForDeletion,
     mountedRef,
     removeCandidates

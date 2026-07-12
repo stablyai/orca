@@ -9,6 +9,7 @@ import {
   AlertTriangle,
   ChevronDown,
   ChevronRight,
+  Globe,
   LoaderCircle,
   MemoryStick,
   RotateCw,
@@ -35,7 +36,7 @@ import { useAppStore } from '../../store'
 import { useWorktreeMap } from '../../store/selectors'
 import { runWorktreeDelete } from '../sidebar/delete-worktree-flow'
 import { useDaemonActions, DaemonActionDialog } from '../shared/useDaemonActions'
-import type { AppMemory, UsageValues, Worktree } from '../../../../shared/types'
+import type { AppMemory, BrowserWorkspace, UsageValues, Worktree } from '../../../../shared/types'
 import { ORPHAN_WORKTREE_ID } from '../../../../shared/constants'
 import { getRepoExecutionHostId, parseExecutionHostId } from '../../../../shared/execution-host'
 import { isFolderRepo } from '../../../../shared/repo-kind'
@@ -56,6 +57,7 @@ import {
 } from './resource-session-navigation'
 import {
   getResourceUsageAllWorktrees,
+  getResourceUsageBrowserTabsByWorktree,
   getResourceUsagePtyIdsByTabId,
   getResourceUsageRepos,
   getResourceUsageRuntimePaneTitlesByTabId,
@@ -438,6 +440,18 @@ export function SessionRow({
   )
 }
 
+function BrowserRow({ browser }: { browser: BrowserWorkspace }): React.JSX.Element {
+  const label = browser.title?.trim() || browser.label?.trim() || browser.url
+  return (
+    <div className="flex items-center gap-2 pl-10 pr-3 py-1.5">
+      <Globe className="size-3 shrink-0 text-muted-foreground" aria-hidden />
+      <span className="min-w-0 flex-1 truncate text-[11px] text-muted-foreground">{label}</span>
+      <MetricPair cpu={null} memory={null} size="small" />
+      <span className={ROW_TRAILING_GUTTER_CLS} aria-hidden />
+    </div>
+  )
+}
+
 // ─── Worktree row ───────────────────────────────────────────────────
 
 export function WorktreeRow({
@@ -461,7 +475,7 @@ export function WorktreeRow({
   onKillSession: (session: UnifiedSessionRow) => void
   navigateToTab: (tabId: string, paneKey: string | null) => void
 }): React.JSX.Element {
-  const hasSessions = worktree.sessions.length > 0
+  const hasResources = worktree.sessions.length > 0 || worktree.browsers.length > 0
   // Why: synthetic buckets (orphan/unattributed) have no sidebar target to
   // reveal. Real and SSH-resolved worktrees both qualify for navigation —
   // navigateToWorktree handles the no-store-record case internally by
@@ -481,7 +495,7 @@ export function WorktreeRow({
   return (
     <div className="border-b border-border/20 last:border-b-0">
       <div className="group/wtrow flex items-center ml-2 transition-colors hover:bg-muted/60">
-        {hasSessions ? (
+        {hasResources ? (
           <button
             type="button"
             onClick={onToggle}
@@ -606,6 +620,8 @@ export function WorktreeRow({
             onKill={onKillSession}
           />
         ))}
+      {!isCollapsed &&
+        worktree.browsers.map((browser) => <BrowserRow key={browser.id} browser={browser} />)}
     </div>
   )
 }
@@ -776,6 +792,7 @@ export function ResourceUsageStatusSegment({
   const repos = useAppStore((s) => getResourceUsageRepos(s, open))
   const allWorktrees = useAppStore((s) => getResourceUsageAllWorktrees(s, open))
   const tabsByWorktree = useAppStore((s) => getResourceUsageTabsByWorktree(s, open))
+  const browserTabsByWorktree = useAppStore((s) => getResourceUsageBrowserTabsByWorktree(s, open))
   // Why: the closed trigger owns a scalar selector. Full binding maps stay
   // behind open sentinels so unchanged counts do not rerender the segment.
   const ptyIdsByTabId = useAppStore((s) => getResourceUsagePtyIdsByTabId(s, open))
@@ -922,6 +939,10 @@ export function ResourceUsageStatusSegment({
   }, [repos])
 
   const repoById = useMemo(() => new Map(repos.map((repo) => [repo.id, repo])), [repos])
+  const worktreeById = useMemo(
+    () => new Map(allWorktrees.map((worktree) => [worktree.id, worktree])),
+    [allWorktrees]
+  )
 
   const oldWorkspaceCount = useMemo(() => {
     const now = Date.now()
@@ -954,7 +975,9 @@ export function ResourceUsageStatusSegment({
             workspaceSessionReady,
             repoDisplayNameById,
             repoConnectionIdById,
-            repoRuntimeScopedById
+            repoRuntimeScopedById,
+            browserTabsByWorktree,
+            worktreeById
           })
         : [],
     [
@@ -968,7 +991,9 @@ export function ResourceUsageStatusSegment({
       workspaceSessionReady,
       repoDisplayNameById,
       repoConnectionIdById,
-      repoRuntimeScopedById
+      repoRuntimeScopedById,
+      browserTabsByWorktree,
+      worktreeById
     ]
   )
 
@@ -1252,10 +1277,7 @@ export function ResourceUsageStatusSegment({
           <div className="flex min-w-0 items-center gap-1.5 text-[11px] font-medium text-foreground">
             <MemoryStick className="size-3 shrink-0 text-muted-foreground" />
             <span className="truncate">
-              {translate(
-                'auto.components.status.bar.ResourceUsageStatusSegment.6d9793d4bc',
-                'Resource Manager - Terminals'
-              )}
+              {translate('auto.components.status.bar.StatusBar.d1e1a7a6bf', 'Resource Manager')}
             </span>
           </div>
 

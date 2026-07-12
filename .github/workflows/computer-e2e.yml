@@ -72,6 +72,7 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: >-
           pnpm vitest run
+          config/scripts/build-windows-cli-launcher.test.mjs
           config/scripts/computer-e2e-workflow.test.mjs
           config/scripts/computer-use-skill-guidance.test.mjs
           config/scripts/computer-use-smoke.test.mjs

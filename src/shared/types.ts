@@ -40,6 +40,7 @@ import type {
   GlobalWindowsRuntimeDefault,
   LocalWindowsRuntimePreference
 } from './project-execution-runtime'
+import type { UsagePercentageDisplay } from './usage-percentage-display'
 
 // Re-exported for backward compat with renderer call sites that import
 // `WorkspaceCreateTelemetrySource` from '../../../shared/types'.
@@ -271,11 +272,9 @@ export type Repo = {
   importedExternalWorktreePaths?: string[]
   /** User permanently opted out of the new-external-worktree inbox for this repo. */
   externalWorktreeDiscoverySuppressedAt?: number
-  /** Paths (relative to the primary checkout) that should be symlinked into
-   *  newly created worktrees of this repo. Consumed only when the global
-   *  `experimentalWorktreeSymlinks` flag is on — the per-repo list is the
-   *  "what to link", the global flag is the "whether to link at all" switch.
-   *  Undefined/empty means no symlinks are created for this repo. */
+  /** Paths (relative to the primary checkout) that should be APFS clone-copied
+   *  on macOS when possible, otherwise symlinked, into newly created worktrees.
+   *  Undefined/empty means no shared paths are created for this repo. */
   symlinkPaths?: string[]
   /** Durable sidebar-only repo organization. Execution remains repo-scoped. */
   projectGroupId?: string | null
@@ -1530,6 +1529,9 @@ export type GitHubWorkItemDetails = {
   pullRequestId?: string
   checks?: PRCheckDetail[]
   files?: GitHubPRFile[]
+  /** Only set for PRs. True when the file fetch failed (rate limit, auth,
+   *  unresolved remote) rather than the PR genuinely having no changed files. */
+  filesUnavailable?: boolean
   participants?: GitHubAssignableUser[]
   /** Logins of current assignees. Only set for issues. */
   assignees?: string[]
@@ -2574,10 +2576,12 @@ export type GlobalSettings = {
    *  system tray instead of quitting Orca; off keeps the default quit-on-close.
    *  The tray icon itself is always present on Windows regardless of this flag. */
   minimizeToTrayOnClose?: boolean
-  /** Why: Windows terminals conventionally use right-click as a paste gesture.
-   *  The setting stays Windows-only so macOS/Linux keep their existing context
-   *  menu behavior and users can still reach the menu with Ctrl+right-click. */
+  /** Why: Windows terminals conventionally use right-click as a paste gesture,
+   *  while macOS/Linux default to their existing context menu behavior. */
   terminalRightClickToPaste: boolean
+  /** One-shot guard that distinguishes the old global true default from a
+   *  choice made after the setting became available on every platform. */
+  terminalRightClickToPasteDefaultedForPlatform?: boolean
   /** Why: COMSPEC always points to cmd.exe on stock Windows, so without an
    *  explicit setting the terminal would always open CMD instead of the
    *  user's preferred shell. Defaults to 'powershell.exe' which is the
@@ -2707,6 +2711,11 @@ export type GlobalSettings = {
   diffDefaultView: 'inline' | 'side-by-side'
   diffWordWrap: boolean
   combinedDiffFileTreeVisibleByDefault: boolean
+  /** Comment author logins the user manually marked as bots (stored lowercased).
+   *  Why: some review bots use regular user accounts that defeat both provider
+   *  metadata and login heuristics, so the Humans/Bots comment filter needs a
+   *  user-supplied escape hatch. */
+  prBotAuthorOverrides: string[]
   notifications: NotificationSettings
   /** When true, a countdown timer is shown after a Claude agent becomes idle,
    *  indicating time remaining before the prompt cache expires. Disabled by default. */
@@ -2921,13 +2930,6 @@ export type GlobalSettings = {
   /** Legacy persisted key from the Experimental rollout. New writes use
    *  compactWorktreeCards. */
   experimentalCompactWorktreeCards?: boolean
-  /** Experimental: when creating a worktree, automatically symlink a
-   *  user-configured set of files/folders from the primary checkout (e.g.
-   *  `.env`, `node_modules`) into the new worktree. Opt-in while the
-   *  configuration surface and edge cases (conflicts with existing paths,
-   *  cleanup on worktree delete) are still being worked out. */
-  experimentalWorktreeSymlinks: boolean
-
   /** Active non-local runtime environment for client-routed RPC. `null`
    *  preserves the current local desktop behavior. */
   activeRuntimeEnvironmentId?: string | null
@@ -3230,9 +3232,25 @@ export type WorkspaceHostScope = 'all' | 'local' | `ssh:${string}` | `runtime:${
 export type VisibleWorkspaceHostIds = Exclude<WorkspaceHostScope, 'all'>[] | null
 export type WorkspaceHostOrder = Exclude<WorkspaceHostScope, 'all'>[]
 
+/** The active top-level section shown in the main content area. */
+export type TopLevelView =
+  | 'terminal'
+  | 'settings'
+  | 'tasks'
+  | 'activity'
+  | 'automations'
+  | 'space'
+  | 'skills'
+  | 'mobile'
+
 export type PersistedUIState = {
   lastActiveRepoId: string | null
   lastActiveWorktreeId: string | null
+  /** Active top-level view at save time, restored on reload/relaunch so the app
+   *  reopens where the user left off instead of snapping back to the terminal.
+   *  Sanitized on hydration (unknown value or a now-gated view falls back to
+   *  'terminal'). */
+  activeView: TopLevelView
   sidebarWidth: number
   rightSidebarOpen: boolean
   rightSidebarTab: RightSidebarTab
@@ -3311,6 +3329,8 @@ export type PersistedUIState = {
   _grokStatusBarDefaultAdded?: boolean
   statusBarItems: StatusBarItem[]
   statusBarVisible: boolean
+  /** Why: this is client-side presentation, not a provider/account or execution-host setting. */
+  usagePercentageDisplay?: UsagePercentageDisplay
   dismissedUpdateVersion: string | null
   lastUpdateCheckAt: number | null
   pendingUpdateNudgeId?: string | null
@@ -3354,6 +3374,10 @@ export type PersistedUIState = {
   /** One-shot rollout notice for manual project ordering becoming the default.
    *  Absent or true means the sidebar callout stays hidden. */
   projectOrderManualDefaultNoticeDismissed?: boolean
+  /** One-shot notice that status-bar usage meters now show percent used (not
+   *  remaining). Absent is resolved on load: brand-new profiles default to
+   *  dismissed; upgraded profiles see the notice once. */
+  usagePercentageDisplayChangeNoticeDismissed?: boolean
   /** User-hidden empty-state usage CTA in the status bar. Permanently hides the
    *  "Connect AI accounts to see usage" prompt even if all providers are later
    *  disconnected — a dismissed teaching nudge stays dismissed. */

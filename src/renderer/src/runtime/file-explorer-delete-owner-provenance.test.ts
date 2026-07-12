@@ -211,6 +211,43 @@ describe('file explorer deletion owner provenance', () => {
     expect(runtimeEnvironmentCall).not.toHaveBeenCalled()
   })
 
+  it('does not pop the batch confirm for an unresolved-owner multi-select', async () => {
+    useAppStore.setState({
+      repos: duplicateHostRepos(),
+      worktreesByRepo: {
+        [LOCAL_REPO_ID]: [makeWorktree('local'), makeWorktree(`ssh:${SSH_ID}`)]
+      }
+    })
+    const owner = getFileExplorerOperationOwner(LOCAL_WORKTREE_ID)
+    expect(owner).toEqual({ kind: 'unresolved' })
+
+    const { result } = renderDelete(LOCAL_WORKTREE_ID)
+    const nodeA: TreeNode = {
+      ...localNode,
+      name: 'a.ts',
+      path: '/tmp/project/src/a.ts',
+      relativePath: 'src/a.ts',
+      operationOwner: owner
+    }
+    const nodeB: TreeNode = {
+      ...localNode,
+      name: 'b.ts',
+      path: '/tmp/project/src/b.ts',
+      relativePath: 'src/b.ts',
+      operationOwner: owner
+    }
+    await act(async () => {
+      result.current.requestDeleteAll([nodeA, nodeB])
+    })
+
+    await vi.waitFor(() => expect(toastError).toHaveBeenCalled())
+    // Why: unresolved deletes throw before any confirm, so the batch must not
+    // pop a destructive prompt for operations that provably cannot succeed.
+    expect(confirm).not.toHaveBeenCalled()
+    expect(fsDeletePath).not.toHaveBeenCalled()
+    expect(runtimeEnvironmentCall).not.toHaveBeenCalled()
+  })
+
   it('keeps an explicit local worktree local when duplicate repo IDs include SSH', async () => {
     useAppStore.setState({
       settings: { activeRuntimeEnvironmentId: 'focused-env' } as never,

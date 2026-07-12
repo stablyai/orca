@@ -1175,6 +1175,9 @@ export type PreloadApi = {
       noParent?: boolean
     }) => Promise<WorktreeLineage | null>
     persistSortOrder: (args: { orderedIds: string[] }) => Promise<void>
+    /** Full CLI output of the last branch auto-rename generation failure, held
+     *  in main memory only — null after a restart or once the failure clears. */
+    getBranchRenameFailureOutput: (args: { worktreeId: string }) => Promise<string | null>
     onChanged: (callback: (data: { repoId: string }) => void) => () => void
     onBaseStatus: (callback: (data: WorktreeBaseStatusEvent) => void) => () => void
     onRemoteBranchConflict: (
@@ -2070,6 +2073,10 @@ export type PreloadApi = {
      *  IPC — call sparingly. */
     getSync: () => GlobalSettings | null
     set: (args: Partial<GlobalSettings>) => Promise<GlobalSettings>
+    updatePRBotAuthorOverride: (args: {
+      author: string
+      isBot: boolean
+    }) => Promise<GlobalSettings>
     listFonts: () => Promise<string[]>
     previewGhosttyImport: () => Promise<GhosttyImportPreview>
     previewWarpThemeImport: (source: WarpThemeImportSource) => Promise<WarpThemeImportPreview>

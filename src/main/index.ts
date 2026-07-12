@@ -133,6 +133,7 @@ import { StarNagService } from './star-nag/service'
 import { agentHookServer } from './agent-hooks/server'
 import { wslHookRelayManager } from './agent-hooks/wsl-hook-relay-manager'
 import { maybeAutoRenameBranchOnFirstWork } from './agent-hooks/first-work-branch-rename'
+import { rememberBranchRenameFailureOutput } from './agent-hooks/branch-rename-failure-output'
 import { renameWorktreeFolderOnFirstWork } from './agent-hooks/first-work-folder-rename'
 import { moveWorktree } from './git/worktree'
 import { getRepoIdFromWorktreeId } from '../shared/worktree-id'
@@ -320,6 +321,7 @@ function maybeAutoRenameBranchOnFirstWorkFromHook(event: {
         return !!meta?.orcaCreationSource && meta.preserveBranchOnDelete !== true
       },
       setDisplayName: (worktreeId, displayName) => {
+        rememberBranchRenameFailureOutput(worktreeId, null)
         const scope = parseWorkspaceKey(worktreeId)
         if (scope?.type === 'folder') {
           currentStore.updateFolderWorkspace(scope.folderWorkspaceId, {
@@ -351,7 +353,10 @@ function maybeAutoRenameBranchOnFirstWorkFromHook(event: {
               moveWorktree
             })
         : undefined,
-      setRenameError: (worktreeId, error) => {
+      setRenameError: (worktreeId, error, failureOutput) => {
+        // Refresh the local-only full-output capture before the dedupe below:
+        // a repeat of the same error string still comes from a fresh run.
+        rememberBranchRenameFailureOutput(worktreeId, error === null ? null : failureOutput)
         // Skip the write + renderer push when nothing changes — benign skips
         // clear the error on every settled worktree, most of which never had one.
         const scope = parseWorkspaceKey(worktreeId)

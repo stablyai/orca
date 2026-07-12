@@ -228,9 +228,9 @@ describe('openMobileEmulatorTab', () => {
     )
 
     expect(ensureSimulatorTab).toHaveBeenCalledTimes(2)
-    const attachCalls = vi.mocked(callRuntimeRpc).mock.calls.filter(([, method]) =>
-      method === 'emulator.attach'
-    )
+    const attachCalls = vi
+      .mocked(callRuntimeRpc)
+      .mock.calls.filter(([, method]) => method === 'emulator.attach')
     expect(attachCalls).toHaveLength(1)
     expect(isManualSimulatorLaunchPending('wt-1')).toBe(false)
   })
@@ -245,10 +245,12 @@ describe('openMobileEmulatorTab', () => {
     )
     vi.mocked(ensureSimulatorTab)
       .mockImplementationOnce(() => {
-        mockStoreState.unifiedTabsByWorktree['wt-1'] = [{
-          id: 'sim-1',
-          contentType: 'simulator'
-        }]
+        mockStoreState.unifiedTabsByWorktree['wt-1'] = [
+          {
+            id: 'sim-1',
+            contentType: 'simulator'
+          }
+        ]
         return 'sim-1'
       })
       .mockImplementationOnce(() => {

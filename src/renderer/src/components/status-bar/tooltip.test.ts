@@ -45,6 +45,17 @@ function provider(overrides: Partial<ProviderRateLimits> = {}): ProviderRateLimi
   }
 }
 
+const PROVIDER_IDS: ProviderRateLimits['provider'][] = [
+  'claude',
+  'codex',
+  'gemini',
+  'antigravity',
+  'opencode-go',
+  'kimi',
+  'minimax',
+  'grok'
+]
+
 afterEach(() => {
   vi.useRealTimers()
 })
@@ -473,6 +484,27 @@ describe('ProviderPanel reset rendering', () => {
     expect(markup).toContain('width:100%')
     expect(markup).not.toContain('140%')
   })
+
+  it.each(PROVIDER_IDS)(
+    'applies remaining copy to %s while retaining consumption bar direction',
+    (providerId) => {
+      const p = provider({
+        provider: providerId,
+        status: 'ok',
+        session: {
+          usedPercent: 25,
+          windowMinutes: 300,
+          resetsAt: null,
+          resetDescription: null
+        }
+      })
+
+      const markup = renderToStaticMarkup(ProviderPanel({ p, usagePercentageDisplay: 'remaining' }))
+
+      expect(markup).toContain('75% left')
+      expect(markup).toContain('width:25%')
+    }
+  )
 })
 
 describe('clampUsedPercent', () => {

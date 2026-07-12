@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import { shallow } from 'zustand/shallow'
 import type { AgentStatusEntry } from '../../../../shared/agent-status-types'
 import { makePaneKey } from '../../../../shared/stable-pane-id'
 import type { TerminalTab } from '../../../../shared/types'
@@ -162,6 +163,119 @@ describe('selectWorktreeAgentActivitySummary', () => {
       hasLiveDone: true
     })
     expect(nowSpy).toHaveBeenCalledTimes(2)
+  })
+
+  it('limits summary-reference churn to the transitioning worktree at scale', () => {
+    vi.spyOn(Date, 'now').mockReturnValue(2_000)
+    const worktreeIds = Array.from({ length: 12 }, (_, index) => `repo::/wt-${index}`)
+    const tabsByWorktree = Object.fromEntries(
+      worktreeIds.map((worktreeId, index) => [worktreeId, [makeTab(`tab-${index}`, worktreeId)]])
+    )
+    const initialStatuses = Object.fromEntries(
+      worktreeIds.map((_, index) => {
+        const paneKey = makePaneKey(`tab-${index}`, LEAF_ID)
+        return [paneKey, makeAgentStatusEntry({ paneKey, state: 'working' })]
+      })
+    )
+    const changedPaneKey = makePaneKey('tab-11', LEAF_ID)
+    const baseInputs = {
+      tabsByWorktree,
+      migrationUnsupportedByPtyId: {},
+      runtimeAgentOrchestrationByPaneKey: {},
+      retainedAgentsByPaneKey: {}
+    }
+    const state: AgentActivityInput = {
+      ...baseInputs,
+      agentStatusEpoch: 0,
+      agentStatusByPaneKey: initialStatuses
+    }
+    const changedState: AgentActivityInput = {
+      ...baseInputs,
+      agentStatusEpoch: 1,
+      agentStatusByPaneKey: {
+        ...initialStatuses,
+        [changedPaneKey]: makeAgentStatusEntry({ paneKey: changedPaneKey, state: 'done' })
+      }
+    }
+
+    const before = worktreeIds.map((worktreeId) =>
+      selectWorktreeAgentActivitySummary(state, worktreeId)
+    )
+    const after = worktreeIds.map((worktreeId) =>
+      selectWorktreeAgentActivitySummary(changedState, worktreeId)
+    )
+    const changedReferenceCount = after.filter((summary, index) => summary !== before[index]).length
+    const shallowNotificationCount = after.filter(
+      (summary, index) => !shallow(summary, before[index])
+    ).length
+
+    // Why: shallow store subscriptions wake on the nested pane-id map reference.
+    // One transition must not schedule downstream work for every other card.
+    expect(changedReferenceCount).toBe(1)
+    expect(shallowNotificationCount).toBe(1)
+    expect(after[11]).toMatchObject({ hasLiveWorking: false, hasLiveDone: true })
+  })
+
+  it('reuses only summaries whose pane membership is still current', () => {
+    vi.spyOn(Date, 'now').mockReturnValue(2_000)
+    const worktreeId = 'repo::/wt-1'
+    const firstPaneKey = makePaneKey('tab-1', LEAF_ID)
+    const secondPaneKey = makePaneKey('tab-2', LEAF_ID)
+    const replacementPaneKey = makePaneKey('tab-3', LEAF_ID)
+    const sharedInputs = {
+      migrationUnsupportedByPtyId: {},
+      runtimeAgentOrchestrationByPaneKey: {},
+      retainedAgentsByPaneKey: {}
+    }
+    const initial: AgentActivityInput = {
+      ...sharedInputs,
+      tabsByWorktree: {
+        [worktreeId]: [makeTab('tab-1', worktreeId), makeTab('tab-2', worktreeId)]
+      },
+      agentStatusEpoch: 0,
+      agentStatusByPaneKey: {
+        [firstPaneKey]: makeAgentStatusEntry({ paneKey: firstPaneKey, state: 'working' }),
+        [secondPaneKey]: makeAgentStatusEntry({ paneKey: secondPaneKey, state: 'working' })
+      }
+    }
+    const reordered: AgentActivityInput = {
+      ...initial,
+      agentStatusEpoch: 1,
+      agentStatusByPaneKey: {
+        [secondPaneKey]: initial.agentStatusByPaneKey[secondPaneKey],
+        [firstPaneKey]: initial.agentStatusByPaneKey[firstPaneKey]
+      }
+    }
+    const replacement: AgentActivityInput = {
+      ...sharedInputs,
+      tabsByWorktree: { [worktreeId]: [makeTab('tab-3', worktreeId)] },
+      agentStatusEpoch: 2,
+      agentStatusByPaneKey: {
+        [replacementPaneKey]: makeAgentStatusEntry({
+          paneKey: replacementPaneKey,
+          state: 'working'
+        })
+      }
+    }
+    const removed: AgentActivityInput = {
+      ...replacement,
+      agentStatusEpoch: 3,
+      agentStatusByPaneKey: {}
+    }
+
+    const first = selectWorktreeAgentActivitySummary(initial, worktreeId)
+    const afterReorder = selectWorktreeAgentActivitySummary(reordered, worktreeId)
+    const afterReplacement = selectWorktreeAgentActivitySummary(replacement, worktreeId)
+    const afterRemoval = selectWorktreeAgentActivitySummary(removed, worktreeId)
+
+    expect(afterReorder).toBe(first)
+    expect(afterReplacement).not.toBe(first)
+    expect(afterReplacement.agentStatusPaneIdsByTabId).toEqual({
+      'tab-3': new Set([LEAF_ID])
+    })
+    expect(afterRemoval).not.toBe(afterReplacement)
+    expect(afterRemoval).toMatchObject({ hasLiveWorking: false })
+    expect(afterRemoval.agentStatusPaneIdsByTabId).toEqual({})
   })
 
   it('summarizes worktree-attributed rows missing from the tab list', () => {

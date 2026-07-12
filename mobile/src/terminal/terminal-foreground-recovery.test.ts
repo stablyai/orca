@@ -69,7 +69,7 @@ describe('terminal foreground recovery', () => {
 
     const recovered = recoverActiveTerminalAfterForeground(harness)
 
-    expect(recovered).toBe(true)
+    expect(recovered).toBe('recovered')
     expect(harness.unsubscribeTerminal).toHaveBeenCalledWith('term-1')
     expect(harness.initializedHandlesRef.current.has('term-1')).toBe(false)
     expect(harness.schedule).toHaveBeenCalledWith(
@@ -90,7 +90,7 @@ describe('terminal foreground recovery', () => {
 
     const recovered = recoverActiveTerminalAfterForeground(harness)
 
-    expect(recovered).toBe(true)
+    expect(recovered).toBe('recovered')
     expect(harness.initializedHandlesRef.current.has('term-1')).toBe(false)
     expect(harness.initializedHandlesRef.current.has('term-2')).toBe(false)
     expect(harness.unsubscribeTerminal).toHaveBeenCalledWith('term-1')
@@ -102,9 +102,35 @@ describe('terminal foreground recovery', () => {
 
     const recovered = recoverActiveTerminalAfterForeground(harness)
 
-    expect(recovered).toBe(false)
+    expect(recovered).toBe('skipped')
     expect(harness.unsubscribeTerminal).not.toHaveBeenCalled()
     expect(harness.schedule).not.toHaveBeenCalled()
+  })
+
+  it('defers without touching state when the socket is not connected yet', () => {
+    const harness = createHarness()
+    harness.connStateRef.current = 'reconnecting'
+
+    const recovered = recoverActiveTerminalAfterForeground(harness)
+
+    expect(recovered).toBe('deferred')
+    // Why this matters: the deferred retry needs the initialized flags intact
+    // so the post-reconnect recovery can still force a scrollback replay.
+    expect(harness.initializedHandlesRef.current.has('term-1')).toBe(true)
+    expect(harness.unsubscribeTerminal).not.toHaveBeenCalled()
+    expect(harness.schedule).not.toHaveBeenCalled()
+  })
+
+  it('replays scrollback when re-run after the deferred reconnect completes', () => {
+    const harness = createHarness()
+    harness.connStateRef.current = 'reconnecting'
+
+    expect(recoverActiveTerminalAfterForeground(harness)).toBe('deferred')
+
+    harness.connStateRef.current = 'connected'
+    expect(recoverActiveTerminalAfterForeground(harness)).toBe('recovered')
+    harness.runScheduled()
+    expect(harness.subscribeToTerminal).toHaveBeenCalledWith('term-1')
   })
 
   it('does not replay a stale terminal if focus changes before the delayed subscribe', () => {
@@ -133,5 +159,18 @@ describe('terminal foreground recovery', () => {
     const replay = sessionSource.indexOf('recoverActiveTerminalAfterForeground({')
     expect(readinessInvalidation).toBeGreaterThanOrEqual(0)
     expect(replay).toBeGreaterThan(readinessInvalidation)
+  })
+
+  it('re-runs a deferred recovery once the session screen reconnects', () => {
+    // Why: resume usually lands mid-reconnect; the session screen must retry
+    // recovery on the connState→connected transition or blanked panes stay
+    // stale until a manual tab switch.
+    expect(sessionSource).toContain("pendingForegroundRecoveryRef.current = outcome === 'deferred'")
+    const reconnectRetry = sliceSessionSource(
+      "if (connState !== 'connected' || !pendingForegroundRecoveryRef.current)",
+      'recoverActiveTerminalAfterForeground({'
+    )
+    expect(reconnectRetry).toContain('pendingForegroundRecoveryRef.current = false')
+    expect(reconnectRetry).toContain("AppState.currentState !== 'active'")
   })
 })

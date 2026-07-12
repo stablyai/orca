@@ -10,6 +10,7 @@ import {
 import { dirname, join } from 'node:path'
 import { createHash, randomUUID } from 'node:crypto'
 import { copyFileWithWindowsRetry, renameFileWithWindowsRetry } from '../codex-accounts/fs-utils'
+import { foldWslUncPathCaseInsensitiveParts } from '../../shared/wsl-paths'
 import {
   createTomlLineScanState,
   isTomlStructuralLine,
@@ -211,9 +212,20 @@ function usesWindowsPathSeparators(sourcePath: string): boolean {
 // Why: Codex and Orca can disagree on quote style, separators, and casing for
 // the same Windows project, including when the caller targets a remote host.
 export function normalizeCodexProjectPathForLookup(projectPath: string): string {
-  return usesWindowsPathSeparators(projectPath)
-    ? normalizeWindowsPathSeparators(projectPath).toLowerCase()
-    : projectPath
+  if (!usesWindowsPathSeparators(projectPath)) {
+    return projectPath
+  }
+  // Why: the Linux path under a WSL share is case-sensitive, so folding it would
+  // conflate distinct dirs (e.g. .../Repo vs .../repo) onto one trust key.
+  const slashedPath = normalizeWindowsPathSeparators(projectPath)
+  return foldWslUncPathCaseInsensitiveParts(slashedPath) ?? slashedPath.toLowerCase()
+}
+
+// Why: trust revocations recorded before WSL tails compared case-sensitively
+// can carry drifted casing; fold fully so matching errs toward revoked.
+export function normalizeCodexProjectPathForRevocationLookup(projectPath: string): string {
+  const normalized = normalizeCodexProjectPathForLookup(projectPath)
+  return usesWindowsPathSeparators(projectPath) ? normalized.toLowerCase() : normalized
 }
 
 export function parseTrustKey(key: string): {
@@ -526,18 +538,17 @@ type TrustBlockRange = {
 // casing) must not prevent findTrustBlockRanges from matching an existing block.
 export function normalizeHookTrustKeyForLookup(key: string): string {
   const parsed = parseTrustKey(key)
-  const separated = parsed
-    ? `${normalizeWindowsPathSeparators(parsed.sourcePath)}:${parsed.eventLabel}:${parsed.groupIndex}:${parsed.handlerIndex}`
-    : normalizeWindowsPathSeparators(key)
-  // Why: Windows-native paths are case-insensitive, but WSL and SSH trust
-  // sources remain case-sensitive even when Orca's host process is Windows.
-  const caseInsensitiveWindowsPath =
-    process.platform === 'win32' && usesWindowsPathSeparators(parsed?.sourcePath ?? key)
-  return caseInsensitiveWindowsPath ? separated.toLowerCase() : separated
+  // Why: fold by path shape, not host platform — hook sources on WSL and SSH
+  // Windows remotes need the same folding when Orca runs on macOS or Linux.
+  const foldedPath = normalizeCodexProjectPathForLookup(parsed ? parsed.sourcePath : key)
+  return parsed
+    ? `${foldedPath}:${parsed.eventLabel}:${parsed.groupIndex}:${parsed.handlerIndex}`
+    : foldedPath
 }
 
 function findTrustBlockRanges(content: string, key: string): TrustBlockRange[] {
   const ranges: TrustBlockRange[] = []
+  const normalizedKey = normalizeHookTrustKeyForLookup(key)
   let cursor = 0
   let scanState = createTomlLineScanState()
   while (cursor < content.length) {
@@ -547,10 +558,7 @@ function findTrustBlockRanges(content: string, key: string): TrustBlockRange[] {
     const line = rawLine.replace(/\r$/, '')
     const nextCursor = newlineIdx === -1 ? content.length : newlineIdx + 1
     const headerKey = isTomlStructuralLine(scanState) ? parseHookStateHeaderKey(line) : null
-    if (
-      headerKey !== null &&
-      normalizeHookTrustKeyForLookup(headerKey) === normalizeHookTrustKeyForLookup(key)
-    ) {
+    if (headerKey !== null && normalizeHookTrustKeyForLookup(headerKey) === normalizedKey) {
       const headerLineEnd = rawLine.endsWith('\r') ? lineEnd - 1 : lineEnd
       const after = content.slice(headerLineEnd)
       const nextHeaderRel = findNextTableHeader(after)

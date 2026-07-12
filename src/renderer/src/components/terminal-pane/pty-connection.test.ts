@@ -17599,7 +17599,9 @@ describe('connectPanePty', () => {
         binding.sampleForegroundAgentOnFocus()
         await vi.advanceTimersByTimeAsync(10_000)
 
-        expect(window.api.pty.confirmForegroundProcess).not.toHaveBeenCalled()
+        // Scope to this pane's pty id: a delayed confirm for another test's
+        // default `tab-pty` pane can fire during this advance and is not our subject.
+        expect(window.api.pty.confirmForegroundProcess).not.toHaveBeenCalledWith(ptyId)
       } finally {
         restoreUserAgent()
       }
