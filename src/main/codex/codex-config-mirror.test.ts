@@ -232,9 +232,10 @@ describe('syncSystemConfigIntoManagedCodexHome', () => {
     const runtimeOverlayPath = join(userDataDir, 'codex-runtime-home', 'home', 'work.config.toml')
     expect(existsSync(runtimeOverlayPath)).toBe(true)
     expect(lstatSync(runtimeOverlayPath).isSymbolicLink()).toBe(false)
-    expect(readFileSync(runtimeOverlayPath, 'utf-8')).toBe(
-      'cli_auth_credentials_store = "file"\nmodel = "work-profile"\n'
-    )
+    const runtimeOverlay = readFileSync(runtimeOverlayPath, 'utf-8')
+    expect(runtimeOverlay).toMatch(/^# orca-managed-profile-overlay:v1 sha256=[a-f0-9]{64}\n/)
+    expect(runtimeOverlay).toContain('cli_auth_credentials_store = "file"')
+    expect(runtimeOverlay).toContain('model = "work-profile"')
   })
 
   it('rewrites relative overlay paths against the system Codex home', () => {
@@ -248,9 +249,9 @@ describe('syncSystemConfigIntoManagedCodexHome', () => {
     syncSystemConfigIntoManagedCodexHome()
 
     const runtimeOverlayPath = join(userDataDir, 'codex-runtime-home', 'home', 'work.config.toml')
-    expect(readFileSync(runtimeOverlayPath, 'utf-8')).toContain(
-      `log_dir = '${join(getSystemCodexHomePath(), 'logs')}'`
-    )
+    const runtimeOverlay = readFileSync(runtimeOverlayPath, 'utf-8')
+    expect(runtimeOverlay).toContain('cli_auth_credentials_store = "file"')
+    expect(runtimeOverlay).toContain(`log_dir = '${join(getSystemCodexHomePath(), 'logs')}'`)
   })
 
   it('forces file-backed auth in BOM-prefixed profile config overlays', () => {
@@ -264,9 +265,11 @@ describe('syncSystemConfigIntoManagedCodexHome', () => {
     syncSystemConfigIntoManagedCodexHome()
 
     const runtimeOverlayPath = join(userDataDir, 'codex-runtime-home', 'home', 'work.config.toml')
-    expect(readFileSync(runtimeOverlayPath, 'utf-8')).toBe(
-      '\uFEFFcli_auth_credentials_store = "file"\nmodel = "work-profile"\n'
-    )
+    const contents = readFileSync(runtimeOverlayPath, 'utf-8')
+    expect(contents[0]).toBe('\uFEFF')
+    expect(contents.slice(1)).toMatch(/^# orca-managed-profile-overlay:v1 sha256=/)
+    expect(contents).toContain('cli_auth_credentials_store = "file"')
+    expect(contents).toContain('model = "work-profile"')
   })
 
   it('does not treat lines inside multiline arrays as headers or path keys', () => {

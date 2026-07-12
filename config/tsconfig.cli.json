@@ -42,6 +42,7 @@
     "../src/main/codex/codex-trust-grant-ledger.ts",
     "../src/main/codex/codex-user-hook-trust-rebase-client.ts",
     "../src/main/codex/codex-user-hook-trust-rebase.ts",
+    "../src/main/codex/codex-profile-config-overlay-active-publish.ts",
     "../src/main/codex/codex-profile-config-overlay-mirror.ts",
     "../src/main/codex/codex-wsl-hook-install-plan.ts",
     "../src/main/codex/config-settings-baseline.ts",
