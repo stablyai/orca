@@ -5,6 +5,7 @@ export type DataEvent = {
   type: 'event'
   event: 'data'
   sessionId: string
+  streamGeneration?: number
   payload: { data: string; sequenceChars?: number }
 }
 
@@ -12,6 +13,7 @@ export type ExitEvent = {
   type: 'event'
   event: 'exit'
   sessionId: string
+  streamGeneration?: number
   payload: { code: number }
 }
 
@@ -19,6 +21,7 @@ export type TerminalErrorEvent = {
   type: 'event'
   event: 'terminalError'
   sessionId: string
+  streamGeneration?: number
   payload: { message: string }
 }
 
@@ -38,6 +41,7 @@ export type SessionBackgroundMarkerEvent = {
   type: 'event'
   event: 'sessionBackgroundMarker'
   sessionId: string
+  streamGeneration?: number
   payload: { background: boolean; scanSeedAnsi?: string }
 }
 
@@ -48,6 +52,7 @@ export type DataGapEvent = {
   type: 'event'
   event: 'dataGap'
   sessionId: string
+  streamGeneration?: number
   payload: { droppedChars: number; sequenceChars?: number }
 }
 
@@ -66,6 +71,7 @@ export type TransientFactEvent = {
   type: 'event'
   event: 'transientFact'
   sessionId: string
+  streamGeneration?: number
   payload: DaemonTransientFact
 }
 

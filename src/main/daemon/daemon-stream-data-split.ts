@@ -9,18 +9,28 @@ import type { Socket } from 'node:net'
 export function encodeStreamDataEvent(
   sessionId: string,
   data: string,
-  sequenceChars?: number
+  sequenceChars?: number,
+  streamGeneration?: number
 ): string {
   return encodeNdjson({
     type: 'event',
     event: 'data',
     sessionId,
+    ...(streamGeneration === undefined ? {} : { streamGeneration }),
     payload: { data, ...(sequenceChars === undefined ? {} : { sequenceChars }) }
   })
 }
 
-function streamDataEventLineBytes(sessionId: string, data: string, sequenceChars?: number): number {
-  return Buffer.byteLength(encodeStreamDataEvent(sessionId, data, sequenceChars), 'utf8')
+function streamDataEventLineBytes(
+  sessionId: string,
+  data: string,
+  sequenceChars?: number,
+  streamGeneration?: number
+): number {
+  return Buffer.byteLength(
+    encodeStreamDataEvent(sessionId, data, sequenceChars, streamGeneration),
+    'utf8'
+  )
 }
 
 function isHighSurrogate(value: number): boolean {
@@ -56,9 +66,10 @@ export function splitStreamDataForNdjson(
   sessionId: string,
   data: string,
   maxLineBytes: number,
-  sequenceChars?: number
+  sequenceChars?: number,
+  streamGeneration?: number
 ): string[] {
-  if (streamDataEventLineBytes(sessionId, data, sequenceChars) <= maxLineBytes) {
+  if (streamDataEventLineBytes(sessionId, data, sequenceChars, streamGeneration) <= maxLineBytes) {
     return [data]
   }
 
@@ -78,7 +89,12 @@ export function splitStreamDataForNdjson(
       }
 
       if (
-        streamDataEventLineBytes(sessionId, data.slice(start, mid), sequenceChars) <= maxLineBytes
+        streamDataEventLineBytes(
+          sessionId,
+          data.slice(start, mid),
+          sequenceChars,
+          streamGeneration
+        ) <= maxLineBytes
       ) {
         best = mid
         low = rawMid + 1
@@ -97,18 +113,26 @@ export function splitStreamDataForNdjson(
 
 export function writeStreamDataEvents(
   streamSocket: Pick<Socket, 'write'>,
-  sessionId: string,
-  data: string,
-  maxLineBytes: number,
-  sequenceChars = data.length
+  event: {
+    sessionId: string
+    data: string
+    sequenceChars?: number
+    streamGeneration?: number
+  },
+  maxLineBytes: number
 ): void {
+  const { sessionId, data, streamGeneration } = event
+  const sequenceChars = event.sequenceChars ?? data.length
   const explicitSequenceChars = sequenceChars === data.length ? undefined : sequenceChars
   for (const chunk of splitStreamDataForNdjson(
     sessionId,
     data,
     maxLineBytes,
-    explicitSequenceChars
+    explicitSequenceChars,
+    streamGeneration
   )) {
-    streamSocket.write(encodeStreamDataEvent(sessionId, chunk, explicitSequenceChars))
+    streamSocket.write(
+      encodeStreamDataEvent(sessionId, chunk, explicitSequenceChars, streamGeneration)
+    )
   }
 }

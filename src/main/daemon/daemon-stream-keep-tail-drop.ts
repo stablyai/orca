@@ -18,6 +18,7 @@ import type { DaemonEvent, DataGapEvent } from './types'
 export type StreamQueueEntry = {
   sessionId: string
   data: string
+  streamGeneration?: number
   /** Original PTY characters represented by data. Salvaged query copies are
    * delivered bytes but represent zero new positions in the source stream. */
   sequenceChars?: number
@@ -83,46 +84,73 @@ export function dropOldestQueuedForSession(
   keepTailChars: number,
   salvageDroppedData: (dropped: string) => string
 ): void {
-  let toDrop = (batch.queuedCharsBySession.get(sessionId) ?? 0) - keepTailChars
-  if (toDrop <= 0) {
+  let remainingToDrop = (batch.queuedCharsBySession.get(sessionId) ?? 0) - keepTailChars
+  if (remainingToDrop <= 0) {
     return
   }
-  const totalDropped = toDrop
-  let droppedSequenceChars = 0
-  let salvaged = ''
-  const salvageIntoCap = (dropped: string): void => {
-    if (salvaged.length >= DROPPED_QUERY_SALVAGE_MAX_CHARS) {
-      return
-    }
-    salvaged = (salvaged + salvageDroppedData(dropped)).slice(0, DROPPED_QUERY_SALVAGE_MAX_CHARS)
-  }
-  let existingGap: DataGapEvent | null = null
-  let insertGapAt = -1
-  for (let i = 0; i < batch.queue.length && toDrop > 0; i++) {
-    const entry = batch.queue[i]
-    if (entry.sessionId !== sessionId) {
-      continue
-    }
-    if (entry.control) {
-      if (entry.control.event === 'dataGap') {
-        existingGap = entry.control
+  const generatedSalvageEntries = new Set<StreamQueueEntry>()
+  let totalDropped = 0
+
+  while (remainingToDrop > 0) {
+    let generation: number | undefined
+    let foundGeneration = false
+    let dropped = 0
+    let droppedSequenceChars = 0
+    let salvaged = ''
+    let existingGap: DataGapEvent | null = null
+    let insertGapAt = -1
+
+    const salvageIntoCap = (value: string): void => {
+      if (salvaged.length >= DROPPED_QUERY_SALVAGE_MAX_CHARS) {
+        return
       }
-      continue
+      salvaged = (salvaged + salvageDroppedData(value)).slice(0, DROPPED_QUERY_SALVAGE_MAX_CHARS)
     }
-    if (entry.data.length <= toDrop) {
-      toDrop -= entry.data.length
-      droppedSequenceChars += entry.sequenceChars ?? entry.data.length
-      salvageIntoCap(entry.data)
-      if (insertGapAt === -1) {
-        insertGapAt = i
+
+    for (let i = 0; i < batch.queue.length && dropped < remainingToDrop; i++) {
+      const entry = batch.queue[i]
+      if (entry.sessionId !== sessionId || generatedSalvageEntries.has(entry)) {
+        continue
       }
-      batch.queue.splice(i, 1)
-      i--
-    } else {
-      const cut = clampToSafeSplitIndex(entry.data, 0, toDrop)
+      if (entry.control) {
+        if (
+          entry.control.event === 'dataGap' &&
+          (!foundGeneration || entry.streamGeneration === generation)
+        ) {
+          existingGap = entry.control
+        }
+        continue
+      }
+      if (!foundGeneration) {
+        generation = entry.streamGeneration
+        foundGeneration = true
+        if (existingGap?.streamGeneration !== generation) {
+          existingGap = null
+        }
+      } else if (entry.streamGeneration !== generation) {
+        // Why: one gap/salvage pair must never claim bytes from two stream
+        // owners. The outer loop handles the next generation independently.
+        break
+      }
+
+      const available = remainingToDrop - dropped
+      if (entry.data.length <= available) {
+        dropped += entry.data.length
+        droppedSequenceChars += entry.sequenceChars ?? entry.data.length
+        salvageIntoCap(entry.data)
+        if (insertGapAt === -1) {
+          insertGapAt = i
+        }
+        batch.queue.splice(i, 1)
+        i--
+        continue
+      }
+
+      const cut = clampToSafeSplitIndex(entry.data, 0, available)
       if (cut > 0) {
         const entrySequenceChars = entry.sequenceChars ?? entry.data.length
         const cutSequenceChars = entrySequenceChars === 0 ? 0 : cut
+        dropped += cut
         droppedSequenceChars += cutSequenceChars
         salvageIntoCap(entry.data.slice(0, cut))
         entry.data = entry.data.slice(cut)
@@ -133,50 +161,68 @@ export function dropOldestQueuedForSession(
           insertGapAt = i
         }
       }
-      toDrop = 0
+      break
     }
-  }
-  const dropped = totalDropped - toDrop
-  if (dropped <= 0) {
-    return
-  }
-  batch.queuedChars -= dropped
-  batch.queuedCharsBySession.set(
-    sessionId,
-    Math.max(0, (batch.queuedCharsBySession.get(sessionId) ?? 0) - dropped)
-  )
-  if (existingGap) {
-    const priorSequenceChars = existingGap.payload.sequenceChars ?? existingGap.payload.droppedChars
-    existingGap.payload.droppedChars += dropped
-    existingGap.payload.sequenceChars = priorSequenceChars + droppedSequenceChars
-  } else {
-    recordDaemonStreamBacklogEvent('backgroundKeepTailDrop', {
-      sessionIdSuffix: sessionId.slice(-10),
-      droppedChars: dropped
-    })
-    batch.queue.splice(Math.max(0, insertGapAt), 0, {
+
+    if (!foundGeneration || dropped <= 0) {
+      break
+    }
+
+    totalDropped += dropped
+    remainingToDrop -= dropped
+    batch.queuedChars -= dropped
+    batch.queuedCharsBySession.set(
       sessionId,
-      data: '',
-      control: {
+      Math.max(0, (batch.queuedCharsBySession.get(sessionId) ?? 0) - dropped)
+    )
+
+    if (existingGap) {
+      const priorSequenceChars =
+        existingGap.payload.sequenceChars ?? existingGap.payload.droppedChars
+      existingGap.payload.droppedChars += dropped
+      existingGap.payload.sequenceChars = priorSequenceChars + droppedSequenceChars
+    } else {
+      const gap: DataGapEvent = {
         type: 'event',
         event: 'dataGap',
         sessionId,
+        ...(generation === undefined ? {} : { streamGeneration: generation }),
         payload: { droppedChars: dropped, sequenceChars: droppedSequenceChars }
       }
-    })
-    insertGapAt = Math.max(0, insertGapAt) + 1
+      batch.queue.splice(Math.max(0, insertGapAt), 0, {
+        sessionId,
+        data: '',
+        streamGeneration: generation,
+        control: gap
+      })
+      existingGap = gap
+    }
+
+    if (salvaged.length > 0) {
+      // Salvaged query bytes ride as a tiny data entry at the gap position —
+      // the writing program is blocked on their replies. Keep the originating
+      // token so a later attach cannot mistake them for the replacement stream.
+      const salvageEntry: StreamQueueEntry = {
+        sessionId,
+        data: salvaged,
+        streamGeneration: generation,
+        sequenceChars: 0
+      }
+      const at = batch.queue.findIndex((entry) => entry.control === existingGap) + 1
+      batch.queue.splice(at, 0, salvageEntry)
+      generatedSalvageEntries.add(salvageEntry)
+      batch.queuedChars += salvaged.length
+      batch.queuedCharsBySession.set(
+        sessionId,
+        (batch.queuedCharsBySession.get(sessionId) ?? 0) + salvaged.length
+      )
+    }
   }
-  if (salvaged.length > 0) {
-    // Salvaged query bytes ride as a tiny data entry at the gap position —
-    // the writing program is blocked on their replies.
-    const at = existingGap
-      ? batch.queue.findIndex((e) => e.control === existingGap) + 1
-      : insertGapAt
-    batch.queue.splice(at, 0, { sessionId, data: salvaged, sequenceChars: 0 })
-    batch.queuedChars += salvaged.length
-    batch.queuedCharsBySession.set(
-      sessionId,
-      (batch.queuedCharsBySession.get(sessionId) ?? 0) + salvaged.length
-    )
+
+  if (totalDropped > 0) {
+    recordDaemonStreamBacklogEvent('backgroundKeepTailDrop', {
+      sessionIdSuffix: sessionId.slice(-10),
+      droppedChars: totalDropped
+    })
   }
 }

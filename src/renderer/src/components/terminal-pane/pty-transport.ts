@@ -22,7 +22,11 @@ import {
   ensurePtyDispatcher,
   getEagerPtyBufferHandle
 } from './pty-dispatcher'
-import { drainPreHandlerPtyData, drainPreHandlerPtyExit } from './pty-pre-handler-buffer'
+import {
+  capturePreHandlerPtyEventCursor,
+  drainPreHandlerPtyData,
+  drainPreHandlerPtyExit
+} from './pty-pre-handler-buffer'
 import { createPtyInputWriteQueue } from './pty-input-write-queue'
 import type { PtyDataMeta } from './pty-dispatcher'
 import type { IpcPtyTransportOptions, PtyConnectResult, PtyTransport } from './pty-transport-types'
@@ -581,7 +585,7 @@ export function createIpcPtyTransport(opts: IpcPtyTransportOptions = {}): PtyTra
 
   // Why: shared by connect() and attach() to avoid duplicating title/bell/exit
   // logic across the two code paths that register a PTY.
-  function registerPtyDataHandler(id: string): void {
+  function registerPtyDataHandler(id: string, afterCursor?: number): void {
     // Why: relay pty.attach sends replay data via a dedicated pty:replay IPC
     // channel. Route it through onReplayData so the renderer engages the
     // replay guard and xterm auto-replies do not leak into the shell.
@@ -611,7 +615,7 @@ export function createIpcPtyTransport(opts: IpcPtyTransportOptions = {}): PtyTra
     }
     ptyDataHandlers.set(id, dataHandler)
     ownedDataAndReplayHandlers.set(id, { data: dataHandler, replay: replayHandler })
-    drainPreHandlerPtyData(id, dataHandler)
+    drainPreHandlerPtyData(id, dataHandler, afterCursor)
   }
 
   function clearAccumulatedState(): void {
@@ -649,7 +653,7 @@ export function createIpcPtyTransport(opts: IpcPtyTransportOptions = {}): PtyTra
     }
   }
 
-  function registerPtyExitHandler(id: string): void {
+  function registerPtyExitHandler(id: string, afterCursor?: number): void {
     const exitHandler = (code: number): void => {
       if (ptyId !== null && ptyId !== id) {
         // Why: a preserved sleep/reconnect session can report its old exit
@@ -674,7 +678,7 @@ export function createIpcPtyTransport(opts: IpcPtyTransportOptions = {}): PtyTra
     // would otherwise fire stale notifications after the data handler
     // is removed but before the exit event arrives.
     ptyTeardownHandlers.set(id, clearAccumulatedState)
-    drainPreHandlerPtyExit(id, exitHandler)
+    drainPreHandlerPtyExit(id, exitHandler, afterCursor)
   }
 
   return {
@@ -687,6 +691,9 @@ export function createIpcPtyTransport(opts: IpcPtyTransportOptions = {}): PtyTra
       }
 
       try {
+        // Why: a requested reattach can fall back to a fresh PTY with the same
+        // id. Keep the cursor unless the provider confirms an actual restore.
+        const freshSpawnCursor = capturePreHandlerPtyEventCursor()
         // Why: missing-cwd recovery is only valid for fresh local spawns —
         // reattach must keep the session's exact cwd and SSH-tagged transports
         // resolve cwd on the remote host.
@@ -746,8 +753,11 @@ export function createIpcPtyTransport(opts: IpcPtyTransportOptions = {}): PtyTra
           onPtySpawn?.(spawnResult.id)
         }
 
-        registerPtyDataHandler(spawnResult.id)
-        registerPtyExitHandler(spawnResult.id)
+        // Why: cold restore may start a new daemon generation with a reused id.
+        // Only explicit live reattach has authority to consume pre-spawn backlog.
+        const afterCursor = spawnResult.isReattach ? undefined : freshSpawnCursor
+        registerPtyDataHandler(spawnResult.id, afterCursor)
+        registerPtyExitHandler(spawnResult.id, afterCursor)
         if (!connected || ptyId !== spawnResult.id) {
           return undefined
         }

@@ -16,9 +16,9 @@ import type { TuiAgent } from '../../shared/types'
 // when daemon-baked behavior cannot be delivered by on-disk wrapper refresh.
 // Why: bump when adding daemon wire behavior so same-version old daemons do
 // not silently accept the handshake and then reject new RPCs.
-export const PROTOCOL_VERSION = 21
+export const PROTOCOL_VERSION = 22
 export const PREVIOUS_DAEMON_PROTOCOL_VERSIONS = [
-  1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20
+  1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21
 ] as const
 
 // ─── Session State Machine ──────────────────────────────────────────
@@ -365,6 +365,8 @@ export type CreateOrAttachResult = {
   shellState: ShellReadyState
   historySeeded?: boolean
   launchAgent?: TuiAgent
+  /** Identifies the exact stream client installed by this create/attach. */
+  streamGeneration?: number
 }
 export type GetSnapshotResult = {
   snapshot: TerminalSnapshot | null

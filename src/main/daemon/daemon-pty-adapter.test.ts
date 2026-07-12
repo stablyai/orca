@@ -133,6 +133,195 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
       expect(typeof result.id).toBe('string')
     })
 
+    it('recovers queued old-generation data from the reattach snapshot and accepts new live events', async () => {
+      const sessionId = 'generation-race'
+      await adapter.spawn({ cols: 80, rows: 24, sessionId })
+      const oldSubprocess = lastSubprocess
+      const data = vi.fn()
+      const exit = vi.fn()
+      adapter.onData(data)
+      adapter.onExit(exit)
+      const client = (
+        adapter as unknown as {
+          client: { request: (type: string, payload?: unknown) => Promise<unknown> }
+        }
+      ).client
+      const originalRequest = client.request.bind(client)
+      let raced = false
+      vi.spyOn(client, 'request').mockImplementation(async (type: string, payload?: unknown) => {
+        if (type !== 'createOrAttach' || raced) {
+          return originalRequest(type, payload)
+        }
+        raced = true
+        // This byte is already modelled by the daemon snapshot but still sits
+        // in the old stream generation's 2ms batch queue.
+        oldSubprocess._simulateData('old-queued-before-reattach')
+        const response = await originalRequest(type, payload)
+        // Same real PTY, newly attached stream callback: these events can beat
+        // the control-socket response back to the adapter.
+        oldSubprocess._simulateData('new-fast-data')
+        lastSubprocess._simulateExit(7)
+        await new Promise((resolve) => setTimeout(resolve, 0))
+        return response
+      })
+
+      const reattach = await adapter.spawn({ cols: 80, rows: 24, sessionId })
+
+      expect(reattach.isReattach).toBe(true)
+      expect(reattach.snapshot).toContain('old-queued-before-reattach')
+      expect(data).toHaveBeenCalledOnce()
+      expect(data).toHaveBeenCalledWith(expect.objectContaining({ data: 'new-fast-data' }))
+      expect(exit).toHaveBeenCalledOnce()
+      expect(exit).toHaveBeenCalledWith({ id: sessionId, code: 7 })
+    })
+
+    it('bounds pending response data, preserves exit, and emits a generation-correct gap', async () => {
+      const data = vi.fn()
+      const exit = vi.fn()
+      const background = vi.fn()
+      adapter.onData(data)
+      adapter.onExit(exit)
+      adapter.onBackgroundStreamEvent(background)
+      const internals = adapter as unknown as {
+        withPendingStreamGeneration: <T>(id: string, action: () => Promise<T>) => Promise<T>
+        recordPendingStreamGenerationResponse: (
+          id: string,
+          result: { streamGeneration?: number }
+        ) => void
+        routeDaemonEvent: (event: unknown) => void
+        pendingStreamGenerations: Map<string, { events: unknown[]; queuedDataChars: number }>
+      }
+      const sessionId = 'bounded-pending'
+      const tail = `${'x'.repeat(512 * 1024 - 1)}😀`
+
+      await internals.withPendingStreamGeneration(sessionId, async () => {
+        internals.routeDaemonEvent({
+          type: 'event',
+          event: 'data',
+          sessionId,
+          streamGeneration: 5,
+          payload: { data: `old-prefix${tail}` }
+        })
+        internals.routeDaemonEvent({
+          type: 'event',
+          event: 'transientFact',
+          sessionId,
+          streamGeneration: 5,
+          payload: { kind: 'bell' }
+        })
+        internals.routeDaemonEvent({
+          type: 'event',
+          event: 'data',
+          sessionId,
+          streamGeneration: 5,
+          payload: { data: `second-prefix${tail}` }
+        })
+        internals.routeDaemonEvent({
+          type: 'event',
+          event: 'exit',
+          sessionId,
+          streamGeneration: 5,
+          payload: { code: 23 }
+        })
+        const pending = internals.pendingStreamGenerations.get(sessionId)
+        expect(pending?.queuedDataChars).toBeLessThanOrEqual(512 * 1024)
+        expect(pending?.events).toHaveLength(5)
+        internals.recordPendingStreamGenerationResponse(sessionId, { streamGeneration: 5 })
+      })
+
+      expect(background.mock.calls.filter(([payload]) => payload.kind === 'dataGap')).toHaveLength(
+        2
+      )
+      expect(background).toHaveBeenCalledWith({
+        id: sessionId,
+        kind: 'transientFact',
+        fact: { kind: 'bell' }
+      })
+      const delivered = data.mock.calls.map(([payload]) => payload.data).join('')
+      expect(delivered.endsWith('😀')).toBe(true)
+      expect(delivered).not.toContain('�')
+      expect(exit).toHaveBeenCalledWith({ id: sessionId, code: 23 })
+    })
+
+    it('uses the tokenless v21 selection barrier and releases it after a rejected call', async () => {
+      const legacyAdapter = new DaemonPtyAdapter({ socketPath, tokenPath, protocolVersion: 21 })
+      const data = vi.fn()
+      const exit = vi.fn()
+      legacyAdapter.onData(data)
+      legacyAdapter.onExit(exit)
+      const internals = legacyAdapter as unknown as {
+        withPendingStreamGeneration: <T>(id: string, action: () => Promise<T>) => Promise<T>
+        recordPendingStreamGenerationResponse: (id: string, result: object) => void
+        routeDaemonEvent: (event: unknown) => void
+        pendingStreamGenerations: Map<string, unknown>
+      }
+
+      await internals.withPendingStreamGeneration('legacy-v21', async () => {
+        internals.routeDaemonEvent({
+          type: 'event',
+          event: 'data',
+          sessionId: 'legacy-v21',
+          payload: { data: 'legacy-live' }
+        })
+        internals.routeDaemonEvent({
+          type: 'event',
+          event: 'exit',
+          sessionId: 'legacy-v21',
+          payload: { code: 4 }
+        })
+        internals.recordPendingStreamGenerationResponse('legacy-v21', {})
+      })
+
+      await expect(
+        internals.withPendingStreamGeneration('rejected-v21', async () => {
+          throw new Error('create rejected')
+        })
+      ).rejects.toThrow('create rejected')
+      expect(internals.pendingStreamGenerations.has('rejected-v21')).toBe(false)
+      expect(data).toHaveBeenCalledWith({ id: 'legacy-v21', data: 'legacy-live' })
+      expect(exit).toHaveBeenCalledWith({ id: 'legacy-v21', code: 4 })
+      data.mockClear()
+      await internals.withPendingStreamGeneration('disposed-v21', async () => {
+        internals.routeDaemonEvent({
+          type: 'event',
+          event: 'data',
+          sessionId: 'disposed-v21',
+          payload: { data: 'must-not-escape-dispose' }
+        })
+        internals.recordPendingStreamGenerationResponse('disposed-v21', {})
+        legacyAdapter.dispose()
+      })
+      expect(data).not.toHaveBeenCalled()
+    })
+
+    it('accepts tokenless legacy daemon events as the documented cursor fallback', () => {
+      const data = vi.fn()
+      const exit = vi.fn()
+      adapter.onData(data)
+      adapter.onExit(exit)
+      const internals = adapter as unknown as {
+        activeStreamGenerations: Map<string, number>
+        routeDaemonEvent: (event: unknown) => void
+      }
+      internals.activeStreamGenerations.set('legacy-session', 42)
+
+      internals.routeDaemonEvent({
+        type: 'event',
+        event: 'data',
+        sessionId: 'legacy-session',
+        payload: { data: 'legacy-data' }
+      })
+      internals.routeDaemonEvent({
+        type: 'event',
+        event: 'exit',
+        sessionId: 'legacy-session',
+        payload: { code: 3 }
+      })
+
+      expect(data).toHaveBeenCalledWith({ id: 'legacy-session', data: 'legacy-data' })
+      expect(exit).toHaveBeenCalledWith({ id: 'legacy-session', code: 3 })
+    })
+
     it('uses worktreeId as session prefix when provided', async () => {
       const result = await adapter.spawn({ cols: 80, rows: 24, worktreeId: 'wt-1' })
       expect(result.id).toContain('wt-1')

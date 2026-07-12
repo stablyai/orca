@@ -23,6 +23,7 @@ const mockPasteDraftWhenAgentReady = vi.fn()
 const mockMarkTrusted = vi.fn()
 const mockDispatchEvent = vi.fn()
 const mockGetAgentLaunchPlatformForRepo = vi.fn<() => NodeJS.Platform>()
+let capturedPreSubscriptionDataObserver: ((data: string) => void) | undefined
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/
 
 function expectStablePaneSpawn(): string {
@@ -99,8 +100,14 @@ vi.mock('@/lib/agent-launch-platform', () => ({
   getAgentLaunchPlatformForRepo: mockGetAgentLaunchPlatformForRepo
 }))
 
+vi.mock('@/components/terminal-pane/pty-eager-buffer-registration', () => ({
+  captureEagerPtyBufferRegistration: (observer?: (data: string) => void) => {
+    capturedPreSubscriptionDataObserver = observer
+    return mockRegisterEagerPtyBuffer
+  }
+}))
+
 vi.mock('@/components/terminal-pane/pty-dispatcher', () => ({
-  registerEagerPtyBuffer: mockRegisterEagerPtyBuffer,
   subscribeToPtyExit: mockSubscribeToPtyExit
 }))
 
@@ -113,6 +120,7 @@ describe('launchAgentBackgroundSession', () => {
     resetRemoteRuntimeTerminalMultiplexersForTests()
     clearRuntimeCompatibilityCacheForTests()
     vi.clearAllMocks()
+    capturedPreSubscriptionDataObserver = undefined
     mockGetAgentLaunchPlatformForRepo.mockReturnValue('linux')
     mockRuntimeEnvironmentTransportCall.mockImplementation(
       (args) =>
@@ -155,6 +163,13 @@ describe('launchAgentBackgroundSession', () => {
     })
     mockSubscribeToPtyData.mockReturnValue(vi.fn())
     mockSubscribeToPtyExit.mockReturnValue(vi.fn())
+    mockRegisterEagerPtyBuffer.mockReturnValue({
+      flush: () => '',
+      dispose: vi.fn(),
+      stopObservingData: () => {
+        capturedPreSubscriptionDataObserver = undefined
+      }
+    })
     vi.stubGlobal('window', {
       dispatchEvent: mockDispatchEvent,
       api: {
@@ -271,6 +286,34 @@ describe('launchAgentBackgroundSession', () => {
     expect(mockDispatchEvent).toHaveBeenCalledWith(
       expect.objectContaining({ detail: { worktreeId: 'wt-1', tabIds: ['tab-1'] } })
     )
+  })
+
+  it('delivers pre-subscription background bytes to observers exactly once', async () => {
+    const onData = vi.fn()
+    mockRegisterEagerPtyBuffer.mockImplementationOnce(() => {
+      capturedPreSubscriptionDataObserver?.('early output')
+      return {
+        flush: () => '',
+        dispose: vi.fn(),
+        stopObservingData: () => {
+          capturedPreSubscriptionDataObserver = undefined
+        }
+      }
+    })
+    const { launchAgentBackgroundSession } = await import('./launch-agent-background-session')
+
+    await launchAgentBackgroundSession({
+      agent: 'claude',
+      worktreeId: 'wt-1',
+      prompt: 'run the automation',
+      onData
+    })
+
+    expect(onData).toHaveBeenCalledWith('early output')
+    const dataSidecar = mockSubscribeToPtyData.mock.calls[0]?.[1] as (data: string) => void
+    capturedPreSubscriptionDataObserver?.('live output')
+    dataSidecar('live output')
+    expect(onData.mock.calls).toEqual([['early output'], ['live output']])
   })
 
   it('records effective launch config returned by local PTY spawn', async () => {

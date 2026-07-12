@@ -8,6 +8,7 @@ const mockSetTabLayout = vi.fn()
 const mockUpdateTabPtyId = vi.fn()
 const mockClearTabPtyId = vi.fn()
 const mockCloseTab = vi.fn()
+const mockEnsurePtyDispatcher = vi.fn()
 const mockRegisterEagerPtyBuffer = vi.fn()
 const mockGetActiveRuntimeTarget = vi.fn()
 
@@ -52,6 +53,7 @@ vi.mock('@/lib/browser-uuid', () => ({
 }))
 
 vi.mock('@/components/terminal-pane/pty-dispatcher', () => ({
+  ensurePtyDispatcher: mockEnsurePtyDispatcher,
   registerEagerPtyBuffer: mockRegisterEagerPtyBuffer
 }))
 
@@ -140,6 +142,9 @@ describe('launchWorktreeBackgroundTerminals', () => {
     expect(mockUpdateTabPtyId).toHaveBeenCalledWith('tab-1', 'pty-1')
     expect(mockUpdateTabPtyId).toHaveBeenCalledWith('tab-2', 'pty-2')
     expect(mockRegisterEagerPtyBuffer).toHaveBeenCalledTimes(2)
+    expect(mockEnsurePtyDispatcher.mock.invocationCallOrder[0]).toBeLessThan(
+      mockSpawn.mock.invocationCallOrder[0] ?? 0
+    )
   })
 
   it('spawns setup in a split when setup launch mode requests a split', async () => {

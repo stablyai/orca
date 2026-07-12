@@ -25,6 +25,7 @@ function writtenData(streamSocket: { write: ReturnType<typeof vi.fn> }): string 
 type ParsedWrite = {
   event: string
   sessionId?: string
+  streamGeneration?: number
   payload?: { data?: string }
 }
 
@@ -407,6 +408,86 @@ describe('DaemonStreamDataBatcher', () => {
         0
       )
       expect(originalSequenceChars).toBe(`flood${dsr}${'x'.repeat(900 * 1024)}`.length + 300 * 1024)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('keeps mixed-generation gaps and salvaged queries on their originating streams', () => {
+    vi.useFakeTimers()
+    try {
+      const dsr = '\x1b[6n'
+      const { batcher, streamSocket } = createBatcher({
+        isSessionDroppable: () => true,
+        salvageDroppedData: (dropped) => (dropped.includes(dsr) ? dsr : '')
+      })
+      batcher.enqueue('client-1', 'session-bg', `${dsr}${'a'.repeat(300 * 1024)}`, {
+        streamGeneration: 10
+      })
+      // Crossing the cap drops all of generation 10 and a prefix of 11. Each
+      // discarded range needs its own token; otherwise reattach filtering can
+      // mis-authorize an old query or reject the new stream's gap.
+      batcher.enqueue('client-1', 'session-bg', 'b'.repeat(900 * 1024), {
+        streamGeneration: 11
+      })
+      vi.advanceTimersByTime(2)
+
+      const messages = nonSentinelWrites(streamSocket)
+      const gaps = messages.filter((message) => message.event === 'dataGap')
+      expect(gaps.map((message) => message.streamGeneration)).toEqual([10, 11])
+      const salvaged = messages.find((message) => message.payload?.data === dsr)
+      expect(salvaged?.streamGeneration).toBe(10)
+      const keptNewData = messages
+        .filter((message) => message.event === 'data' && message.streamGeneration === 11)
+        .map((message) => message.payload?.data ?? '')
+        .join('')
+      expect(keptNewData.length).toBeGreaterThan(0)
+      expect(
+        messages.some(
+          (message) => message.event === 'data' && message.streamGeneration === undefined
+        )
+      ).toBe(false)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('does not coalesce generations and preserves split data before matching exit', () => {
+    vi.useFakeTimers()
+    try {
+      const { batcher, streamSocket } = createBatcher({ maxLineBytes: 180 })
+      batcher.enqueue('client-1', 'session-1', 'old-a', { streamGeneration: 1 })
+      batcher.enqueue('client-1', 'session-1', 'old-b', { streamGeneration: 1 })
+      batcher.enqueue('client-1', 'session-1', `${'new'.repeat(100)}😀`, {
+        streamGeneration: 2
+      })
+      batcher.enqueueControlEvent('client-1', 'session-1', {
+        type: 'event',
+        event: 'exit',
+        sessionId: 'session-1',
+        streamGeneration: 2,
+        payload: { code: 9 }
+      })
+      vi.advanceTimersByTime(2)
+
+      const messages = nonSentinelWrites(streamSocket)
+      expect(messages[0]).toMatchObject({
+        event: 'data',
+        streamGeneration: 1,
+        payload: { data: 'old-aold-b' }
+      })
+      const newWrites = messages.filter(
+        (message) => message.event === 'data' && message.streamGeneration === 2
+      )
+      expect(newWrites.length).toBeGreaterThan(1)
+      expect(newWrites.map((message) => message.payload?.data ?? '').join('')).toBe(
+        `${'new'.repeat(100)}😀`
+      )
+      expect(messages.at(-1)).toMatchObject({
+        event: 'exit',
+        streamGeneration: 2,
+        payload: { code: 9 }
+      })
     } finally {
       vi.useRealTimers()
     }

@@ -6,9 +6,10 @@ import { mkdtempSync, rmSync, readFileSync } from 'node:fs'
 import { DaemonServer } from './daemon-server'
 import { DaemonClient } from './client'
 import { encodeNdjson } from './ndjson'
-import { PROTOCOL_VERSION, type DaemonRequest } from './types'
+import { PREVIOUS_DAEMON_PROTOCOL_VERSIONS, PROTOCOL_VERSION, type DaemonRequest } from './types'
 import type { SubprocessHandle } from './session'
 import { getDaemonSocketPath } from './daemon-spawner'
+import type { TerminalHost } from './terminal-host'
 
 const confirmForegroundProcessMock = vi.fn(async () => 'droid')
 
@@ -49,6 +50,8 @@ function createMockSubprocess(): SubprocessHandle & {
 
 type DaemonServerPrivate = {
   server: Server | null
+  host: TerminalHost
+  streamGenerationBySessionId: Map<string, number>
   clients: Map<
     string,
     {
@@ -140,6 +143,11 @@ describe('DaemonServer', () => {
   }
 
   describe('startup', () => {
+    it('reserves v22 for stream generations while retaining v21 legacy discovery', () => {
+      expect(PROTOCOL_VERSION).toBe(22)
+      expect(PREVIOUS_DAEMON_PROTOCOL_VERSIONS).toContain(21)
+    })
+
     it('creates token file and starts listening', async () => {
       await startServer()
 
@@ -377,11 +385,11 @@ describe('DaemonServer', () => {
           streamSocket
         })
 
-        await daemon.routeRequest('client-1', {
+        const firstSpawn = (await daemon.routeRequest('client-1', {
           id: 'req-1',
           type: 'createOrAttach',
           payload: { sessionId: 'test-session', cols: 80, rows: 24 }
-        })
+        })) as { streamGeneration: number }
 
         subprocess!._simulateData('background')
         expect(streamSocket.write).not.toHaveBeenCalled()
@@ -402,6 +410,19 @@ describe('DaemonServer', () => {
         expect(String(streamSocket.write.mock.calls[0]?.[0])).toContain('"data":"echo"')
         vi.advanceTimersByTime(8)
         expect(streamSocket.write).toHaveBeenCalledTimes(1)
+
+        streamSocket.write.mockClear()
+        const reattach = (await daemon.routeRequest('client-1', {
+          id: 'req-3',
+          type: 'createOrAttach',
+          payload: { sessionId: 'test-session', cols: 80, rows: 24 }
+        })) as { streamGeneration: number }
+        subprocess!._simulateData('after-reattach')
+        vi.advanceTimersByTime(8)
+        expect(reattach.streamGeneration).toBeGreaterThan(firstSpawn.streamGeneration)
+        expect(String(streamSocket.write.mock.calls[0]?.[0])).toContain(
+          `"streamGeneration":${reattach.streamGeneration}`
+        )
       } finally {
         vi.useRealTimers()
       }
@@ -433,11 +454,11 @@ describe('DaemonServer', () => {
           streamSocket
         })
 
-        await daemon.routeRequest('client-1', {
+        const spawnResult = (await daemon.routeRequest('client-1', {
           id: 'req-1',
           type: 'createOrAttach',
           payload: { sessionId: 'test-session', cols: 80, rows: 24 }
-        })
+        })) as { streamGeneration: number }
 
         subprocess!._simulateData('final-output')
         subprocess!._simulateExit(42)
@@ -447,8 +468,146 @@ describe('DaemonServer', () => {
         expect(String(streamSocket.write.mock.calls[0]?.[0])).toContain('"data":"final-output"')
         expect(String(streamSocket.write.mock.calls[1]?.[0])).toContain('"event":"exit"')
         expect(String(streamSocket.write.mock.calls[1]?.[0])).toContain('"code":42')
+        expect(String(streamSocket.write.mock.calls[0]?.[0])).toContain(
+          `"streamGeneration":${spawnResult.streamGeneration}`
+        )
+        expect(String(streamSocket.write.mock.calls[1]?.[0])).toContain(
+          `"streamGeneration":${spawnResult.streamGeneration}`
+        )
         vi.advanceTimersByTime(8)
         expect(streamSocket.write).toHaveBeenCalledTimes(2)
+      } finally {
+        vi.useRealTimers()
+      }
+    })
+
+    it('keeps queued pre-reattach bytes old-tokened while new live data and exit use the new token', async () => {
+      vi.useFakeTimers()
+      try {
+        let subprocess: ReturnType<typeof createMockSubprocess>
+        server = new DaemonServer({
+          socketPath,
+          tokenPath,
+          spawnSubprocess: () => {
+            subprocess = createMockSubprocess()
+            return subprocess
+          }
+        })
+        const daemon = server as unknown as DaemonServerPrivate
+        const streamSocket = {
+          destroyed: false,
+          writableLength: 0,
+          destroy: vi.fn(),
+          write: vi.fn()
+        } as unknown as Socket & { write: ReturnType<typeof vi.fn> }
+        daemon.clients.set('client-1', {
+          clientId: 'client-1',
+          controlSocket: { destroy: vi.fn() } as unknown as Socket,
+          streamSocket
+        })
+
+        const first = (await daemon.routeRequest('client-1', {
+          id: 'req-1',
+          type: 'createOrAttach',
+          payload: { sessionId: 'reattach-order', cols: 80, rows: 24 }
+        })) as { streamGeneration: number }
+        subprocess!._simulateData('queued-before-reattach')
+
+        const second = (await daemon.routeRequest('client-1', {
+          id: 'req-2',
+          type: 'createOrAttach',
+          payload: { sessionId: 'reattach-order', cols: 80, rows: 24 }
+        })) as { snapshot: { snapshotAnsi: string }; streamGeneration: number }
+        expect(second.snapshot.snapshotAnsi).toContain('queued-before-reattach')
+        expect(second.streamGeneration).toBeGreaterThan(first.streamGeneration)
+
+        subprocess!._simulateData('new-live-after-attach')
+        subprocess!._simulateExit(31)
+
+        const messages = streamSocket.write.mock.calls.map(
+          ([line]) =>
+            JSON.parse(String(line)) as {
+              event: string
+              streamGeneration?: number
+              payload: { data?: string; code?: number }
+            }
+        )
+        expect(messages).toEqual([
+          expect.objectContaining({
+            event: 'data',
+            streamGeneration: first.streamGeneration,
+            payload: expect.objectContaining({ data: 'queued-before-reattach' })
+          }),
+          expect.objectContaining({
+            event: 'data',
+            streamGeneration: second.streamGeneration,
+            payload: expect.objectContaining({ data: 'new-live-after-attach' })
+          }),
+          expect.objectContaining({
+            event: 'exit',
+            streamGeneration: second.streamGeneration,
+            payload: expect.objectContaining({ code: 31 })
+          })
+        ])
+      } finally {
+        vi.useRealTimers()
+      }
+    })
+
+    it('does not let an older rejected attach roll back a newer concurrent stream owner', async () => {
+      vi.useFakeTimers()
+      try {
+        let subprocess: ReturnType<typeof createMockSubprocess>
+        server = new DaemonServer({
+          socketPath,
+          tokenPath,
+          spawnSubprocess: () => {
+            subprocess = createMockSubprocess()
+            return subprocess
+          }
+        })
+        const daemon = server as unknown as DaemonServerPrivate
+        const streamSocket = {
+          destroyed: false,
+          writableLength: 0,
+          destroy: vi.fn(),
+          write: vi.fn()
+        } as unknown as Socket & { write: ReturnType<typeof vi.fn> }
+        daemon.clients.set('client-1', {
+          clientId: 'client-1',
+          controlSocket: { destroy: vi.fn() } as unknown as Socket,
+          streamSocket
+        })
+        const originalCreate = daemon.host.createOrAttach.bind(daemon.host)
+        let rejectOlder!: (error: Error) => void
+        const older = new Promise<never>((_resolve, reject) => {
+          rejectOlder = reject
+        })
+        vi.spyOn(daemon.host, 'createOrAttach')
+          .mockImplementationOnce(() => older)
+          .mockImplementationOnce((options) => originalCreate(options))
+
+        const olderRequest = daemon.routeRequest('client-1', {
+          id: 'req-older',
+          type: 'createOrAttach',
+          payload: { sessionId: 'concurrent-owner', cols: 80, rows: 24 }
+        })
+        const newer = (await daemon.routeRequest('client-1', {
+          id: 'req-newer',
+          type: 'createOrAttach',
+          payload: { sessionId: 'concurrent-owner', cols: 80, rows: 24 }
+        })) as { streamGeneration: number }
+        rejectOlder(new Error('older attach rejected'))
+        await expect(olderRequest).rejects.toThrow('older attach rejected')
+
+        expect(daemon.streamGenerationBySessionId.get('concurrent-owner')).toBe(
+          newer.streamGeneration
+        )
+        subprocess!._simulateData('newer-owner-data')
+        vi.advanceTimersByTime(2)
+        expect(String(streamSocket.write.mock.calls.at(-1)?.[0])).toContain(
+          `"streamGeneration":${newer.streamGeneration}`
+        )
       } finally {
         vi.useRealTimers()
       }

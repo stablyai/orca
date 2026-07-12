@@ -1,7 +1,9 @@
 import {
+  ensurePtyDispatcher,
   registerEagerPtyBuffer,
   type EagerPtyHandle
 } from '@/components/terminal-pane/pty-dispatcher'
+import { capturePreHandlerPtyEventCursor } from '@/components/terminal-pane/pty-pre-handler-buffer'
 import { createBrowserUuid } from '@/lib/browser-uuid'
 import { getSettingsForWorktreeRuntimeOwner } from '@/lib/worktree-runtime-owner'
 import { getActiveRuntimeTarget } from '@/runtime/runtime-rpc-client'
@@ -110,12 +112,21 @@ function persistExitedPaneOutput(tabId: string, leafId: string, output: string):
   })
 }
 
-function registerBackgroundPaneBuffer(tabId: string, leafId: string, ptyId: string): void {
+function registerBackgroundPaneBuffer(
+  tabId: string,
+  leafId: string,
+  ptyId: string,
+  afterCursor: number
+): void {
   let eagerBuffer: EagerPtyHandle | null = null
-  eagerBuffer = registerEagerPtyBuffer(ptyId, (exitPtyId) => {
-    persistExitedPaneOutput(tabId, leafId, eagerBuffer?.flush() ?? '')
-    useAppStore.getState().clearTabPtyId(tabId, exitPtyId)
-  })
+  eagerBuffer = registerEagerPtyBuffer(
+    ptyId,
+    (exitPtyId) => {
+      persistExitedPaneOutput(tabId, leafId, eagerBuffer?.flush() ?? '')
+      useAppStore.getState().clearTabPtyId(tabId, exitPtyId)
+    },
+    afterCursor
+  )
 }
 
 function buildSetupCommand(setup: WorktreeSetupLaunch): string {
@@ -167,6 +178,9 @@ async function createBackgroundTab(args: {
   const leafId = createBrowserUuid()
   store.setTabLayout(tab.id, singlePaneLayoutSnapshot(leafId))
   let ptyId: string
+  // Why: pty:exit is not held by main's renderer-ready data gate.
+  ensurePtyDispatcher()
+  const preHandlerCursor = capturePreHandlerPtyEventCursor()
   try {
     ptyId = await spawnPane({
       worktree: args.worktree,
@@ -182,7 +196,7 @@ async function createBackgroundTab(args: {
   }
   store.updateTabPtyId(tab.id, ptyId)
   store.setTabLayout(tab.id, singlePaneLayoutSnapshot(leafId, ptyId))
-  registerBackgroundPaneBuffer(tab.id, leafId, ptyId)
+  registerBackgroundPaneBuffer(tab.id, leafId, ptyId, preHandlerCursor)
   return { tabId: tab.id, primary: { leafId, ptyId } }
 }
 
@@ -195,6 +209,9 @@ async function addSetupSplit(args: {
 }): Promise<void> {
   const store = useAppStore.getState()
   const setupLeafId = createBrowserUuid()
+  // Why: a setup shell may exit before spawn resolves on a first-use renderer.
+  ensurePtyDispatcher()
+  const preHandlerCursor = capturePreHandlerPtyEventCursor()
   const setupPtyId = await spawnPane({
     worktree: args.worktree,
     connectionId: args.connectionId,
@@ -213,7 +230,7 @@ async function addSetupSplit(args: {
       getSetupTabTitle()
     )
   )
-  registerBackgroundPaneBuffer(args.tab.tabId, setupLeafId, setupPtyId)
+  registerBackgroundPaneBuffer(args.tab.tabId, setupLeafId, setupPtyId, preHandlerCursor)
 }
 
 function getDefaultTabLaunches(

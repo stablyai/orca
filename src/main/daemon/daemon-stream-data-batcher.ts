@@ -10,7 +10,8 @@ import {
   backgroundSessionDropCapChars,
   backgroundSessionKeepTailChars,
   dropOldestQueuedForSession,
-  type PendingStreamDataBatch
+  type PendingStreamDataBatch,
+  type StreamQueueEntry
 } from './daemon-stream-keep-tail-drop'
 import type { DaemonEvent } from './types'
 
@@ -62,6 +63,7 @@ const SMALL_SESSION_HOLD_BYPASS_CHARS = 4 * 1024
 type EnqueueOptions = {
   flushImmediately?: boolean
   flushMaxChars?: number
+  streamGeneration?: number
 }
 
 type DaemonStreamDataBatcherOptions = {
@@ -107,10 +109,14 @@ export class DaemonStreamDataBatcher {
     const last = batch.queue.at(-1)
     // Never coalesce across a control entry — it marks a position in the
     // session's byte order.
-    if (last?.sessionId === sessionId && !last.control) {
+    const canCoalesce =
+      last?.sessionId === sessionId &&
+      !last.control &&
+      last.streamGeneration === options.streamGeneration
+    if (canCoalesce) {
       last.data += data
     } else {
-      batch.queue.push({ sessionId, data })
+      batch.queue.push({ sessionId, data, streamGeneration: options.streamGeneration })
     }
     batch.queuedChars += data.length
     batch.queuedCharsBySession.set(
@@ -164,7 +170,7 @@ export class DaemonStreamDataBatcher {
       return
     }
     const batch = this.getOrCreateBatch(clientId)
-    batch.queue.push({ sessionId, data: '', control })
+    batch.queue.push({ sessionId, data: '', streamGeneration: control.streamGeneration, control })
     if (!batch.timer) {
       batch.timer = setTimeout(() => this.flush(clientId), STREAM_DATA_BATCH_INTERVAL_MS)
     }
@@ -278,7 +284,11 @@ export class DaemonStreamDataBatcher {
       } else {
         batch.queuedCharsBySession.set(entry.sessionId, sessionHeldAfter)
       }
-      writeStreamDataEvents(socket, entry.sessionId, slice, this.maxLineBytes, sliceSequenceChars)
+      writeStreamDataEvents(
+        socket,
+        { ...entry, data: slice, sequenceChars: sliceSequenceChars },
+        this.maxLineBytes
+      )
       this.onAfterSocketWrite?.()
     }
     if (retained.length > 0) {
@@ -293,7 +303,7 @@ export class DaemonStreamDataBatcher {
       // immediately — verified — so the sentinel must be a real protocol
       // no-op line.) Event-driven, no timers; the per-client latch stops
       // sentinel stacking; 'drain' remains the backstop.
-      this.armHeldQueueRefill(socket, clientId, retained[0].sessionId)
+      this.armHeldQueueRefill(socket, clientId, retained[0])
       return
     }
     this.pendingByClient.delete(clientId)
@@ -301,15 +311,18 @@ export class DaemonStreamDataBatcher {
 
   private refillArmedClients = new Set<string>()
 
-  private armHeldQueueRefill(socket: Socket, clientId: string, sessionId: string): void {
+  private armHeldQueueRefill(socket: Socket, clientId: string, entry: StreamQueueEntry): void {
     if (this.refillArmedClients.has(clientId) || socket.destroyed) {
       return
     }
     this.refillArmedClients.add(clientId)
-    socket.write(encodeStreamDataEvent(sessionId, ''), () => {
-      this.refillArmedClients.delete(clientId)
-      this.flush(clientId)
-    })
+    socket.write(
+      encodeStreamDataEvent(entry.sessionId, '', undefined, entry.streamGeneration),
+      () => {
+        this.refillArmedClients.delete(clientId)
+        this.flush(clientId)
+      }
+    )
   }
 
   private queuedCharsForSession(batch: PendingStreamDataBatch, sessionId: string): number {
@@ -364,13 +377,7 @@ export class DaemonStreamDataBatcher {
         client.streamSocket.write(encodeNdjson(entry.control))
         this.onAfterSocketWrite?.()
       } else {
-        writeStreamDataEvents(
-          client.streamSocket,
-          entry.sessionId,
-          entry.data,
-          this.maxLineBytes,
-          entry.sequenceChars ?? entry.data.length
-        )
+        writeStreamDataEvents(client.streamSocket, entry, this.maxLineBytes)
         this.onAfterSocketWrite?.()
       }
     }

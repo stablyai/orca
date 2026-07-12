@@ -1444,17 +1444,31 @@ describe('createIpcPtyTransport', () => {
     } = await import('./pty-transport')
     const onDataCallback = vi.fn()
     const transport = createIpcPtyTransport()
+    const replacementDataHandler = vi.fn()
+    const replacementReplayHandler = vi.fn()
+    const replacementTeardownHandler = vi.fn()
+    const { ptyDataHandlers, ptyReplayHandlers, ptyTeardownHandlers } =
+      await import('./pty-dispatcher')
 
     await transport.connect({ url: '', callbacks: { onData: onDataCallback } })
 
     const snapshots = unregisterPtyDataHandlers(['pty-1'])
     onData?.({ id: 'pty-1', data: 'final burst while detached' })
     expect(onDataCallback).not.toHaveBeenCalled()
+    ptyDataHandlers.set('pty-1', replacementDataHandler)
+    ptyReplayHandlers.set('pty-1', replacementReplayHandler)
+    ptyTeardownHandlers.set('pty-1', replacementTeardownHandler)
 
     restorePtyDataHandlersAfterFailedShutdown(snapshots)
     onData?.({ id: 'pty-1', data: 'live again' })
 
-    expect(onDataCallback).toHaveBeenCalledWith('live again')
+    expect(onDataCallback).not.toHaveBeenCalled()
+    expect(replacementDataHandler.mock.calls).toEqual([
+      ['final burst while detached', undefined],
+      ['live again', undefined]
+    ])
+    expect(ptyReplayHandlers.get('pty-1')).toBe(replacementReplayHandler)
+    expect(ptyTeardownHandlers.get('pty-1')).toBe(replacementTeardownHandler)
   })
 
   it('unregisterPtyDataHandlers cancels staleTitleTimer so it cannot fire stale idle transition', async () => {

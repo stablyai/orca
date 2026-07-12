@@ -31,11 +31,21 @@ import { isShellProcess } from '../../shared/agent-detection'
 import { recognizeAgentProcessFromCommandLine } from '../../shared/agent-process-recognition'
 import { shouldUseShellReadyStartupDelivery } from '../../shared/codex-startup-delivery'
 import type { TerminalOscLinkRange } from '../../shared/terminal-osc-link-ranges'
+import { clampToSafeSplitIndex } from './daemon-stream-data-split'
 
 type ColdRestorePayload = {
   scrollback: string
   cwd: string
   oscLinks?: TerminalOscLinkRange[]
+}
+
+type PendingStreamGeneration = {
+  callers: number
+  candidates: number[]
+  sawTokenlessResponse: boolean
+  events: DaemonEvent[]
+  queuedDataChars: number
+  cancelled: boolean
 }
 
 function getRecoveredHistorySeed(restoreInfo: ColdRestoreInfo): string | null {
@@ -60,6 +70,11 @@ export type DaemonPtyAdapterOptions = {
 
 const MAX_TOMBSTONES = 1000
 const MAX_CONCURRENT_CHECKPOINTS = 4
+// Why: create/attach responses share the control socket with other RPCs. A
+// wedged response must not let a flooding PTY retain unbounded stream data;
+// the gap asks the main-owned snapshot path to heal the deliberately dropped
+// prefix while exits and other control facts remain ordered.
+const MAX_PENDING_STREAM_DATA_CHARS = 512 * 1024
 
 export class TerminalKilledError extends Error {
   constructor(sessionId: string) {
@@ -102,6 +117,8 @@ export class DaemonPtyAdapter implements IPtyProvider {
   private coldRestoreCache = new Map<string, ColdRestorePayload>()
   private sleepRestoreSessionIds = new Set<string>()
   private activeSessionIds = new Set<string>()
+  private activeStreamGenerations = new Map<string, number>()
+  private pendingStreamGenerations = new Map<string, PendingStreamGeneration>()
   private dirtySessionVersions = new Map<string, number>()
   // Why: a cold-restored session is a fresh shell whose on-disk checkpoint and
   // log belong to the pre-crash session. Incremental appends would land on
@@ -161,6 +178,13 @@ export class DaemonPtyAdapter implements IPtyProvider {
         this.producerResumesOwedOnReconnect.add(id)
       }
       this.pausedProducerSessionIds.clear()
+      this.activeStreamGenerations.clear()
+      for (const pending of this.pendingStreamGenerations.values()) {
+        pending.candidates.length = 0
+        pending.sawTokenlessResponse = false
+        pending.events.length = 0
+        pending.queuedDataChars = 0
+      }
     })
   }
 
@@ -169,12 +193,13 @@ export class DaemonPtyAdapter implements IPtyProvider {
   }
 
   async spawn(opts: PtySpawnOptions): Promise<PtySpawnResult> {
-    return this.withDaemonRetry(() => this.doSpawn(opts))
+    const sessionId = opts.sessionId ?? mintPtySessionId(opts.worktreeId)
+    return this.withPendingStreamGeneration(sessionId, () =>
+      this.withDaemonRetry(() => this.doSpawn(opts, sessionId))
+    )
   }
 
-  private async doSpawn(opts: PtySpawnOptions): Promise<PtySpawnResult> {
-    const sessionId = opts.sessionId ?? mintPtySessionId(opts.worktreeId)
-
+  private async doSpawn(opts: PtySpawnOptions, sessionId: string): Promise<PtySpawnResult> {
     if (this.killedSessionTombstones.has(sessionId)) {
       throw new TerminalKilledError(sessionId)
     }
@@ -227,8 +252,8 @@ export class DaemonPtyAdapter implements IPtyProvider {
         ? CODEX_SHELL_READY_TIMEOUT_MS
         : undefined
 
-    const createOrAttach = (historySeed: string | null) =>
-      this.client.request<CreateOrAttachResult>('createOrAttach', {
+    const createOrAttach = async (historySeed: string | null): Promise<CreateOrAttachResult> => {
+      const createResult = await this.client.request<CreateOrAttachResult>('createOrAttach', {
         sessionId,
         cols: effectiveCols,
         rows: effectiveRows,
@@ -250,6 +275,9 @@ export class DaemonPtyAdapter implements IPtyProvider {
         ...(shellReadyTimeoutMs !== undefined ? { shellReadyTimeoutMs } : {}),
         ...(historySeed ? { historySeed } : {})
       })
+      this.recordPendingStreamGenerationResponse(sessionId, createResult)
+      return createResult
+    }
 
     let scrollback = restoreInfo ? getRecoveredHistorySeed(restoreInfo) : null
     let result = await createOrAttach(scrollback)
@@ -425,15 +453,18 @@ export class DaemonPtyAdapter implements IPtyProvider {
   }
 
   async attach(id: string): Promise<void> {
-    await this.ensureConnected()
-    if (!this.supportsAuthoritativeBufferSnapshots) {
-      this.setPtyBackgrounded(id, false)
-    }
+    await this.withPendingStreamGeneration(id, async () => {
+      await this.ensureConnected()
+      if (!this.supportsAuthoritativeBufferSnapshots) {
+        this.setPtyBackgrounded(id, false)
+      }
 
-    await this.client.request<CreateOrAttachResult>('createOrAttach', {
-      sessionId: id,
-      cols: 80,
-      rows: 24
+      const result = await this.client.request<CreateOrAttachResult>('createOrAttach', {
+        sessionId: id,
+        cols: 80,
+        rows: 24
+      })
+      this.recordPendingStreamGenerationResponse(id, result)
     })
   }
 
@@ -785,6 +816,7 @@ export class DaemonPtyAdapter implements IPtyProvider {
     this.sessionsNeedingFullCheckpoint.clear()
     this.pausedProducerSessionIds.clear()
     this.producerResumesOwedOnReconnect.clear()
+    this.cancelPendingStreamGenerations()
     this.stopCheckpointTimer()
     for (const id of ids) {
       this.coldRestoreCache.delete(id)
@@ -860,6 +892,7 @@ export class DaemonPtyAdapter implements IPtyProvider {
     this.coldRestoreCache.clear()
     this.pausedProducerSessionIds.clear()
     this.producerResumesOwedOnReconnect.clear()
+    this.cancelPendingStreamGenerations()
     this.removeEventListener?.()
     this.removeEventListener = null
     // Why: final checkpoints are written daemon-side in TerminalHost.dispose()
@@ -905,6 +938,7 @@ export class DaemonPtyAdapter implements IPtyProvider {
     this.producerResumesOwedOnReconnect.clear()
     this.removeEventListener?.()
     this.removeEventListener = null
+    this.cancelPendingStreamGenerations()
     this.client.disconnect()
   }
 
@@ -1268,6 +1302,200 @@ export class DaemonPtyAdapter implements IPtyProvider {
     await this.respawnFn!()
   }
 
+  private async withPendingStreamGeneration<T>(
+    sessionId: string,
+    action: () => Promise<T>
+  ): Promise<T> {
+    let pending = this.pendingStreamGenerations.get(sessionId)
+    if (!pending) {
+      pending = {
+        callers: 0,
+        candidates: [],
+        sawTokenlessResponse: false,
+        events: [],
+        queuedDataChars: 0,
+        cancelled: false
+      }
+      this.pendingStreamGenerations.set(sessionId, pending)
+    }
+    pending.callers += 1
+    try {
+      return await action()
+    } finally {
+      pending.callers -= 1
+      if (pending.callers === 0) {
+        this.pendingStreamGenerations.delete(sessionId)
+        if (!pending.cancelled) {
+          this.finalizePendingStreamGeneration(sessionId, pending)
+        }
+      }
+    }
+  }
+
+  private finalizePendingStreamGeneration(
+    sessionId: string,
+    pending: PendingStreamGeneration
+  ): void {
+    const selectedGeneration =
+      pending.candidates.length > 0 ? Math.max(...pending.candidates) : undefined
+    const activeGeneration = this.activeStreamGenerations.get(sessionId)
+    const generation = selectedGeneration ?? activeGeneration
+    const useTokenlessFallback = selectedGeneration === undefined && pending.sawTokenlessResponse
+    if (selectedGeneration !== undefined) {
+      this.activeStreamGenerations.set(sessionId, selectedGeneration)
+    } else if (useTokenlessFallback) {
+      // Why: v21 and older have no token. Clear any newer-protocol token and
+      // retain the legacy daemon's cursor-only compatibility path.
+      this.activeStreamGenerations.delete(sessionId)
+    }
+    if (
+      selectedGeneration === undefined &&
+      !useTokenlessFallback &&
+      activeGeneration === undefined
+    ) {
+      return
+    }
+    for (const event of pending.events) {
+      if (
+        useTokenlessFallback ||
+        generation === undefined ||
+        event.streamGeneration === undefined ||
+        event.streamGeneration === generation
+      ) {
+        this.handleDaemonEvent(event)
+      }
+    }
+  }
+
+  private recordPendingStreamGenerationResponse(
+    sessionId: string,
+    result: CreateOrAttachResult
+  ): void {
+    const pending = this.pendingStreamGenerations.get(sessionId)
+    if (!pending) {
+      return
+    }
+    if (typeof result.streamGeneration === 'number') {
+      pending.candidates.push(result.streamGeneration)
+    } else {
+      pending.sawTokenlessResponse = true
+    }
+  }
+
+  private cancelPendingStreamGenerations(): void {
+    this.activeStreamGenerations.clear()
+    for (const pending of this.pendingStreamGenerations.values()) {
+      pending.cancelled = true
+      pending.candidates.length = 0
+      pending.events.length = 0
+      pending.queuedDataChars = 0
+    }
+    this.pendingStreamGenerations.clear()
+  }
+
+  private queuePendingStreamEvent(pending: PendingStreamGeneration, event: DaemonEvent): void {
+    if (event.event === 'data') {
+      const last = pending.events.at(-1)
+      if (
+        last?.event === 'data' &&
+        last.sessionId === event.sessionId &&
+        last.streamGeneration === event.streamGeneration &&
+        last.payload.sequenceChars === undefined &&
+        event.payload.sequenceChars === undefined
+      ) {
+        const priorSequenceChars = last.payload.sequenceChars ?? last.payload.data.length
+        const nextSequenceChars = event.payload.sequenceChars ?? event.payload.data.length
+        last.payload.data += event.payload.data
+        const combinedSequenceChars = priorSequenceChars + nextSequenceChars
+        last.payload.sequenceChars =
+          combinedSequenceChars === last.payload.data.length ? undefined : combinedSequenceChars
+      } else {
+        pending.events.push(event)
+      }
+      pending.queuedDataChars += event.payload.data.length
+      this.trimPendingStreamData(pending)
+      return
+    }
+    pending.events.push(event)
+  }
+
+  private trimPendingStreamData(pending: PendingStreamGeneration): void {
+    while (pending.queuedDataChars > MAX_PENDING_STREAM_DATA_CHARS) {
+      const index = pending.events.findIndex((event) => event.event === 'data')
+      if (index === -1) {
+        pending.queuedDataChars = 0
+        return
+      }
+      const event = pending.events[index]
+      if (event.event !== 'data') {
+        return
+      }
+      const excess = pending.queuedDataChars - MAX_PENDING_STREAM_DATA_CHARS
+      let cut = Math.min(excess, event.payload.data.length)
+      if (
+        cut < event.payload.data.length &&
+        event.payload.sequenceChars !== undefined &&
+        event.payload.sequenceChars !== 0
+      ) {
+        // Why: a non-1:1 event has no safe partial mapping from delivered
+        // bytes to source positions. Drop the whole event and preserve its
+        // exact sequence count on the generated gap.
+        cut = event.payload.data.length
+      }
+      if (cut < event.payload.data.length) {
+        const safeCut = clampToSafeSplitIndex(event.payload.data, 0, cut)
+        // Why: clamping backward would leave the hard cap one UTF-16 code
+        // unit over budget. Drop the complete surrogate pair instead.
+        cut = safeCut < cut ? Math.min(event.payload.data.length, cut + 1) : safeCut
+      }
+      const originalDataLength = event.payload.data.length
+      const originalSequenceChars = event.payload.sequenceChars ?? originalDataLength
+      const droppedSequenceChars =
+        cut >= originalDataLength ? originalSequenceChars : originalSequenceChars === 0 ? 0 : cut
+      const gap: DaemonEvent = {
+        type: 'event',
+        event: 'dataGap',
+        sessionId: event.sessionId,
+        ...(event.streamGeneration === undefined
+          ? {}
+          : { streamGeneration: event.streamGeneration }),
+        payload: { droppedChars: cut, sequenceChars: droppedSequenceChars }
+      }
+
+      if (cut >= originalDataLength) {
+        pending.events.splice(index, 1)
+      } else {
+        event.payload.data = event.payload.data.slice(cut)
+        const remainingSequenceChars = originalSequenceChars - droppedSequenceChars
+        event.payload.sequenceChars =
+          remainingSequenceChars === event.payload.data.length ? undefined : remainingSequenceChars
+      }
+      pending.queuedDataChars -= cut
+
+      const prior = pending.events[index - 1]
+      if (
+        prior?.event === 'dataGap' &&
+        prior.sessionId === gap.sessionId &&
+        prior.streamGeneration === gap.streamGeneration
+      ) {
+        const priorSequenceChars = prior.payload.sequenceChars ?? prior.payload.droppedChars
+        prior.payload.droppedChars += cut
+        prior.payload.sequenceChars = priorSequenceChars + droppedSequenceChars
+      } else {
+        pending.events.splice(index, 0, gap)
+      }
+    }
+  }
+
+  private isCurrentStreamEvent(event: DaemonEvent): boolean {
+    const activeGeneration = this.activeStreamGenerations.get(event.sessionId)
+    return (
+      activeGeneration === undefined ||
+      event.streamGeneration === undefined ||
+      event.streamGeneration === activeGeneration
+    )
+  }
+
   private setupEventRouting(): void {
     if (this.removeEventListener) {
       return
@@ -1279,74 +1507,91 @@ export class DaemonPtyAdapter implements IPtyProvider {
         return
       }
 
-      if (event.event === 'data') {
-        this.markSessionDirty(event.sessionId)
-        // oxlint-disable-next-line unicorn/no-useless-spread -- copy-safe: listeners may unsubscribe during iteration
-        for (const listener of [...this.dataListeners]) {
-          listener({
-            id: event.sessionId,
-            data: event.payload.data,
-            ...(event.payload.sequenceChars === undefined
-              ? {}
-              : { sequenceChars: event.payload.sequenceChars })
-          })
-        }
-      } else if (event.event === 'sessionBackgroundMarker') {
-        this.emitBackgroundStreamEvent({
+      this.routeDaemonEvent(event)
+    })
+  }
+
+  private routeDaemonEvent(event: DaemonEvent): void {
+    const pending = this.pendingStreamGenerations.get(event.sessionId)
+    if (pending) {
+      this.queuePendingStreamEvent(pending, event)
+      return
+    }
+    if (!this.isCurrentStreamEvent(event)) {
+      return
+    }
+    this.handleDaemonEvent(event)
+  }
+
+  private handleDaemonEvent(event: DaemonEvent): void {
+    if (event.event === 'data') {
+      this.markSessionDirty(event.sessionId)
+      // oxlint-disable-next-line unicorn/no-useless-spread -- copy-safe: listeners may unsubscribe during iteration
+      for (const listener of [...this.dataListeners]) {
+        listener({
           id: event.sessionId,
-          kind: 'backgroundMarker',
-          background: event.payload.background,
-          ...(event.payload.scanSeedAnsi !== undefined
-            ? { scanSeedAnsi: event.payload.scanSeedAnsi }
-            : {})
-        })
-      } else if (event.event === 'dataGap') {
-        this.emitBackgroundStreamEvent({
-          id: event.sessionId,
-          kind: 'dataGap',
-          droppedChars: event.payload.droppedChars,
+          data: event.payload.data,
           ...(event.payload.sequenceChars === undefined
             ? {}
             : { sequenceChars: event.payload.sequenceChars })
         })
-      } else if (event.event === 'transientFact') {
-        this.emitBackgroundStreamEvent({
-          id: event.sessionId,
-          kind: 'transientFact',
-          fact: event.payload
-        })
-      } else if (event.event === 'exit') {
-        this.activeSessionIds.delete(event.sessionId)
-        this.dirtySessionVersions.delete(event.sessionId)
-        // Why: an exited session must not be owed a resume on reconnect — a
-        // reused sessionId would receive a stray resumePty. Same for the
-        // background set: a reused id must start un-thinned.
-        this.pausedProducerSessionIds.delete(event.sessionId)
-        this.producerResumesOwedOnReconnect.delete(event.sessionId)
-        this.backgroundedSessionIds.delete(event.sessionId)
-        if (!this.sleepRestoreSessionIds.has(event.sessionId)) {
-          this.coldRestoreCache.delete(event.sessionId)
-        }
-        // Why: an exited session can never be checkpointed again, so its pending
-        // full-checkpoint flag is dead state. Without this, a cold-restored
-        // session that exits before its first checkpoint leaks a permanent entry.
-        this.sessionsNeedingFullCheckpoint.delete(event.sessionId)
-        // Why: a reused sessionId (renderer respawns a persisted ptyId) must
-        // not inherit the dead session's snapshot cooldown.
-        this.lastFullCheckpointAt.delete(event.sessionId)
-        this.stopCheckpointTimerIfIdle()
-        if (this.historyManager) {
-          void this.historyManager
-            .closeSession(event.sessionId, event.payload.code)
-            .catch((err) => console.warn('[history] closeSession failed:', event.sessionId, err))
-        }
-        this.initialCwds.delete(event.sessionId)
-        // oxlint-disable-next-line unicorn/no-useless-spread -- copy-safe: listeners may unsubscribe during iteration
-        for (const listener of [...this.exitListeners]) {
-          listener({ id: event.sessionId, code: event.payload.code })
-        }
       }
-    })
+    } else if (event.event === 'sessionBackgroundMarker') {
+      this.emitBackgroundStreamEvent({
+        id: event.sessionId,
+        kind: 'backgroundMarker',
+        background: event.payload.background,
+        ...(event.payload.scanSeedAnsi !== undefined
+          ? { scanSeedAnsi: event.payload.scanSeedAnsi }
+          : {})
+      })
+    } else if (event.event === 'dataGap') {
+      this.emitBackgroundStreamEvent({
+        id: event.sessionId,
+        kind: 'dataGap',
+        droppedChars: event.payload.droppedChars,
+        ...(event.payload.sequenceChars === undefined
+          ? {}
+          : { sequenceChars: event.payload.sequenceChars })
+      })
+    } else if (event.event === 'transientFact') {
+      this.emitBackgroundStreamEvent({
+        id: event.sessionId,
+        kind: 'transientFact',
+        fact: event.payload
+      })
+    } else if (event.event === 'exit') {
+      this.activeStreamGenerations.delete(event.sessionId)
+      this.activeSessionIds.delete(event.sessionId)
+      this.dirtySessionVersions.delete(event.sessionId)
+      // Why: an exited session must not be owed a resume on reconnect — a
+      // reused sessionId would receive a stray resumePty. Same for the
+      // background set: a reused id must start un-thinned.
+      this.pausedProducerSessionIds.delete(event.sessionId)
+      this.producerResumesOwedOnReconnect.delete(event.sessionId)
+      this.backgroundedSessionIds.delete(event.sessionId)
+      if (!this.sleepRestoreSessionIds.has(event.sessionId)) {
+        this.coldRestoreCache.delete(event.sessionId)
+      }
+      // Why: an exited session can never be checkpointed again, so its pending
+      // full-checkpoint flag is dead state. Without this, a cold-restored
+      // session that exits before its first checkpoint leaks a permanent entry.
+      this.sessionsNeedingFullCheckpoint.delete(event.sessionId)
+      // Why: a reused sessionId (renderer respawns a persisted ptyId) must
+      // not inherit the dead session's snapshot cooldown.
+      this.lastFullCheckpointAt.delete(event.sessionId)
+      this.stopCheckpointTimerIfIdle()
+      if (this.historyManager) {
+        void this.historyManager
+          .closeSession(event.sessionId, event.payload.code)
+          .catch((err) => console.warn('[history] closeSession failed:', event.sessionId, err))
+      }
+      this.initialCwds.delete(event.sessionId)
+      // oxlint-disable-next-line unicorn/no-useless-spread -- copy-safe: listeners may unsubscribe during iteration
+      for (const listener of [...this.exitListeners]) {
+        listener({ id: event.sessionId, code: event.payload.code })
+      }
+    }
   }
 }
 

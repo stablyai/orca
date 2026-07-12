@@ -3520,6 +3520,148 @@
       "demotionRule": "Drop from the golden suite back to nightly diagnostic if diff thresholds cannot be kept stable across CI runners."
     },
     {
+      "id": "terminal-session.pre-handler-pty-ordering",
+      "title": "Pre-handler PTY data and exits stay bounded, ordered, and generation-safe",
+      "maturity": "experimental",
+      "protection": "partial",
+      "owner": "terminal-runtime",
+      "layer": "renderer-unit",
+      "surfaces": [
+        "PTY startup",
+        "background terminal launch",
+        "handler registration",
+        "failed shutdown recovery",
+        "daemon cold restore"
+      ],
+      "platforms": [
+        "macos",
+        "linux",
+        "windows"
+      ],
+      "providers": [
+        "local",
+        "daemon",
+        "ssh",
+        "wsl"
+      ],
+      "coveredPlatforms": [
+        "macos"
+      ],
+      "coveredProviders": [
+        "local",
+        "daemon"
+      ],
+      "coverageNotes": "Deterministic macOS renderer and protocol-v22 daemon tests cover local/shared IPC behavior, daemon stream-generation filtering, bounded create/attach buffering, cold restore, and explicit reattach. Protocol-v21 and older daemons omit the additive stream token and retain the cursor-only accepted race gap. SSH and WSL have path-equivalent renderer coverage but no live provider run. Remote-runtime/mobile use a different host-owned stream and are unaffected.",
+      "motivatingLinks": [
+        "https://github.com/stablyai/orca/pull/7695"
+      ],
+      "invariant": "Before a PTY handler mounts, the singleton dispatcher is already listening and retained data, exit, and warning identities remain capped; pre-spawn bytes reach background side-effect observers exactly once before live-sidecar handoff; data drains before exit; protocol-v22 daemon data/exits must match the create/attach stream generation so a fresh provider-reused PTY id or new-generation cold restore cannot consume an older lifecycle's events; explicit live reattach keeps its current backlog; and failed shutdown restore drains detached data before later live output without overwriting a newer remount handler.",
+      "oracle": "Drive first-use background data/exit before spawn resolution, real observer-to-sidecar handoff and handler replacement, more than 64 exit-before-handler identities, warning-producing data churn, duplicate/reused ids, fresh spawn, failed-reattach fallback, old-generation queued data recovered through the real reattach snapshot, fast new-generation data/exit before its response, mixed-generation coalescing/splitting/keep-tail salvage, repeated pending-buffer overflow with surrogate pairs, cold restore, explicit live reattach/reconnect, tokenless legacy events, handler registration at cap, and failed-shutdown restoration after a newer remount; assert listener-first capture, exactly-once observer handoff, bounded eviction, matching stream-generation delivery, a 512 KiB pending-data cap with generation-correct gap facts, fresh-generation filtering with restore payload preservation, data-before-exit order, and detached-before-live output routed to current authority.",
+      "commands": [
+        "pnpm exec vitest run --config config/vitest.config.ts src/main/daemon/daemon-stream-data-batcher.test.ts src/main/daemon/daemon-pty-adapter.test.ts src/main/daemon/daemon-server.test.ts src/renderer/src/components/terminal-pane/pty-pre-handler-buffer.test.ts src/renderer/src/components/terminal-pane/pty-transport.test.ts src/renderer/src/components/terminal-pane/pty-dispatcher-pi-routing.test.ts src/renderer/src/lib/launch-agent-background-session.test.ts src/renderer/src/lib/launch-worktree-background-terminals.test.ts"
+      ],
+      "testFiles": [
+        "src/main/daemon/daemon-stream-data-batcher.test.ts",
+        "src/main/daemon/daemon-pty-adapter.test.ts",
+        "src/main/daemon/daemon-server.test.ts",
+        "src/renderer/src/components/terminal-pane/pty-pre-handler-buffer.test.ts",
+        "src/renderer/src/components/terminal-pane/pty-transport.test.ts",
+        "src/renderer/src/components/terminal-pane/pty-dispatcher-pi-routing.test.ts",
+        "src/renderer/src/lib/launch-agent-background-session.test.ts",
+        "src/renderer/src/lib/launch-worktree-background-terminals.test.ts"
+      ],
+      "assertionRefs": [
+        {
+          "file": "src/main/daemon/daemon-stream-data-batcher.test.ts",
+          "assertions": [
+            "mixed-generation keep-tail drops emit separately tokened gaps and preserve salvaged query ownership",
+            "coalesced old-generation and split new-generation data remain token-separated and ordered before matching exit"
+          ]
+        },
+        {
+          "file": "src/main/daemon/daemon-pty-adapter.test.ts",
+          "assertions": [
+            "queued old-generation data is recovered through the real warm-reattach snapshot while matching fast new-generation data and exit are accepted live",
+            "pending create/attach data stays within 512 KiB across repeated surrogate-bearing overflow and emits matching-token gaps without dropping exit/control facts",
+            "tokenless protocol-v21 events remain accepted, rejected provider calls release the shared selection barrier, and dispose cancels buffered delivery"
+          ]
+        },
+        {
+          "file": "src/main/daemon/daemon-server.test.ts",
+          "assertions": [
+            "create/attach returns an additive stream generation and batched data plus ordered exit carry the same token",
+            "queued pre-reattach data retains the old token and is present in the response snapshot while new live data and exit carry the replacement token",
+            "an older concurrently rejected attach cannot roll back the newer stream owner",
+            "protocol v22 remains version-isolated while v21 stays discoverable through its tokenless adapter"
+          ]
+        },
+        {
+          "file": "src/renderer/src/components/terminal-pane/pty-pre-handler-buffer.test.ts",
+          "assertions": [
+            "65 exit-before-handler identities evict the oldest and retain the newest",
+            "a reused PTY id refreshes both data and exit recency, delivers only its latest exit once, and filters older-lifecycle data and exits by cursor",
+            "UTF-8 byte clamping preserves UTF-16 rawLength sequence units for non-ASCII terminal output",
+            "warning identities are released with exact data-map eviction so warning state cannot grow independently"
+          ]
+        },
+        {
+          "file": "src/renderer/src/components/terminal-pane/pty-dispatcher-pi-routing.test.ts",
+          "assertions": [
+            "pre-handler data drains before its exit",
+            "fresh PTY-id reuse, failed-reattach fallback, and new-generation cold restore filter old lifecycle events while explicit daemon reattach preserves pre-connect backlog",
+            "first-use eager registration attaches the singleton dispatcher before a fast background PTY emits data or exit, routes retained bytes through its side-effect observer exactly once, and preserves a replacement handler",
+            "a registered exit handler remains authoritative while 65 orphan exits churn through the bounded buffer"
+          ]
+        },
+        {
+          "file": "src/renderer/src/components/terminal-pane/pty-transport.test.ts",
+          "assertions": [
+            "failed intentional shutdown restoration drains detached data before later live data to a newer remount handler without overwriting its data, replay, or teardown authority"
+          ]
+        }
+      ],
+      "evidenceRuns": [
+        {
+          "date": "2026-07-11",
+          "runner": "local",
+          "platform": "macos",
+          "command": "pnpm exec vitest run --config config/vitest.config.ts src/main/daemon/daemon-stream-data-batcher.test.ts src/main/daemon/daemon-pty-adapter.test.ts src/main/daemon/daemon-server.test.ts src/renderer/src/components/terminal-pane/pty-pre-handler-buffer.test.ts src/renderer/src/components/terminal-pane/pty-transport.test.ts src/renderer/src/components/terminal-pane/pty-dispatcher-pi-routing.test.ts src/renderer/src/lib/launch-agent-background-session.test.ts src/renderer/src/lib/launch-worktree-background-terminals.test.ts",
+          "result": "passed",
+          "durationSeconds": 1,
+          "summary": "8 test files and 271 tests passed on main@a4583eb765 plus the #7695 candidate. The red repro on main@20ebe858af retained the 65th oldest exit (received code 0 instead of eviction); the candidate evicts it and preserves listener-first, exactly-once side-effect handoff, UTF-8-byte/UTF-16-sequence accounting, ordering/reuse, bounded protocol-v22 daemon generation filtering, and cold-restore cases."
+        }
+      ],
+      "runtimeBudget": {
+        "p95Seconds": 10,
+        "scope": "renderer unit and contract tests"
+      },
+      "flakeHistory": {
+        "status": "unknown",
+        "evidence": "New deterministic gate; needs soak history before promotion."
+      },
+      "redGreenEvidence": {
+        "status": "partial",
+        "evidence": "On current main the 65-identity repro fails because the oldest exit remains retained. The candidate passes the same oracle plus ordering, reuse, warning, and failed-restore cases. Needs saved CI history before blocking promotion."
+      },
+      "performanceBudget": {
+        "required": true,
+        "evidence": "Only the rare no-handler path adds one monotonic-number increment and constant-size Map operations. Data and exits each retain at most 64 PTY identities; warning identities are a subset of retained data identities. Protocol v22 adds one small generation field per daemon create/attach and queued stream entry; unresolved create/attach buffering coalesces matching data and caps retained payload at 512 KiB per session, with deterministic repeated-overflow and surrogate-pair accounting. No polling, timers, provider listing, extra RPC, subprocesses, renderer fanout, or scans were added."
+      },
+      "promotionCriteria": [
+        "Soak for at least 100 consecutive passes or 14 days on required CI platforms.",
+        "Add live SSH and WSL fast-exit coverage or provider-contract equivalents.",
+        "Capture a saved intentional-break artifact for cursor filtering and failed-shutdown ordering."
+      ],
+      "knownGaps": [
+        "Under extreme churn beyond 64 undrained exits, the oldest exit is deliberately dropped; this matches the established pre-handler data budget and can leave only the newest 64 diagnostics.",
+        "An extreme output burst while create/attach is unresolved keeps only the newest 512 KiB of payload and emits a dataGap for snapshot recovery; exit and control facts remain ordered, but the intermediate live feed is intentionally not lossless.",
+        "Protocol-v21 and older daemons omit streamGeneration; new clients accept their tokenless events and retain the cursor-only probe-to-cold-restore race until the daemon upgrades.",
+        "SSH and WSL share the tested IPC path but lack live provider evidence.",
+        "Remote-runtime/mobile streams are host-owned and do not use this renderer pre-handler buffer."
+      ],
+      "demotionRule": "Demote or quarantine if ordering flakes, protocol-v22 accepts a mismatched stream generation or drops a matching fast-exit event, a live provider consumes an older lifecycle event, or the added cursor/generation bookkeeping appears in normal throughput profiles."
+    },
+    {
       "id": "pty-delivery.renderer-lifecycle-accounting-reset",
       "title": "Renderer lifecycle reset clears leaked PTY delivery accounting so surviving PTYs cannot freeze",
       "maturity": "experimental",

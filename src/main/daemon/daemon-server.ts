@@ -63,6 +63,7 @@ export class DaemonServer {
   private log: DaemonFileLog
 
   private clients = new Map<string, ConnectedClient>()
+  private nextStreamGeneration = 0
   private streamDataBatcher = new DaemonStreamDataBatcher(
     (clientId) => this.clients.get(clientId),
     {
@@ -86,15 +87,18 @@ export class DaemonServer {
   private transientFactRelay = new BackgroundTransientFactRelay((sessionId, fact) => {
     const clientId = this.streamClientIdBySessionId.get(sessionId)
     if (clientId) {
+      const streamGeneration = this.streamGenerationBySessionId.get(sessionId)
       this.streamDataBatcher.enqueueControlEvent(clientId, sessionId, {
         type: 'event',
         event: 'transientFact',
         sessionId,
+        ...(streamGeneration === undefined ? {} : { streamGeneration }),
         payload: fact
       })
     }
   })
   private streamClientIdBySessionId = new Map<string, string>()
+  private streamGenerationBySessionId = new Map<string, number>()
   private lastInputAtBySessionId = new Map<string, number>()
   private stopStreamBacklogProbe: () => void = () => {}
 
@@ -333,71 +337,101 @@ export class DaemonServer {
     switch (request.type) {
       case 'createOrAttach': {
         const p = request.payload
-        const result = await this.host.createOrAttach({
-          sessionId: p.sessionId,
-          cols: p.cols,
-          rows: p.rows,
-          cwd: p.cwd,
-          env: p.env,
-          envToDelete: p.envToDelete,
-          command: p.command,
-          startupCommandDelivery: p.startupCommandDelivery,
-          // Why: daemon RPC payloads are untrusted JSON. Persist only the
-          // allowlisted enum used for byte routing, never arbitrary identity.
-          ...(isTuiAgent(p.launchAgent) ? { launchAgent: p.launchAgent } : {}),
-          shellOverride: p.shellOverride,
-          terminalWindowsWslDistro: p.terminalWindowsWslDistro,
-          terminalWindowsPowerShellImplementation: p.terminalWindowsPowerShellImplementation,
-          shellReadySupported: p.shellReadySupported,
-          historySeed: p.historySeed,
-          ...(p.shellReadyTimeoutMs !== undefined
-            ? { shellReadyTimeoutMs: p.shellReadyTimeoutMs }
-            : {}),
-          streamClient: {
-            onData: (data) => {
-              // Scan BEFORE enqueue: the batcher may keep-tail drop this
-              // chunk, but its facts must be captured regardless.
-              this.transientFactRelay.onSessionData(p.sessionId, data)
-              const lastInputAt = this.lastInputAtBySessionId.get(p.sessionId)
-              const isInteractiveOutput =
-                data.length <= DaemonServer.INTERACTIVE_OUTPUT_MAX_CHARS &&
-                lastInputAt !== undefined &&
-                performance.now() - lastInputAt <= DaemonServer.INTERACTIVE_OUTPUT_WINDOW_MS
-              this.streamDataBatcher.enqueue(clientId, p.sessionId, data, {
-                flushImmediately: isInteractiveOutput,
-                flushMaxChars: DaemonServer.INTERACTIVE_OUTPUT_MAX_CHARS
-              })
-            },
-            onExit: (code) => {
-              // Why: exit tears down renderer handlers, so it must ride the
-              // ordered queue behind final output even when the shallow socket
-              // gate holds that output for a later drain pass.
-              this.log.log('session-exited', { sessionId: p.sessionId, code })
-              this.streamDataBatcher.enqueueControlEvent(clientId, p.sessionId, {
-                type: 'event',
-                event: 'exit',
-                sessionId: p.sessionId,
-                payload: { code }
-              })
-              this.streamDataBatcher.flush(clientId)
-              recordDaemonStreamBacklogEvent('sessionExit', {
-                sessionIdSuffix: p.sessionId.slice(-10)
-              })
-              this.transientFactRelay.onSessionExit(p.sessionId)
-              this.streamClientIdBySessionId.delete(p.sessionId)
-              this.lastInputAtBySessionId.delete(p.sessionId)
+        const streamGeneration = ++this.nextStreamGeneration
+        const previousStreamGeneration = this.streamGenerationBySessionId.get(p.sessionId)
+        this.streamGenerationBySessionId.set(p.sessionId, streamGeneration)
+        let result: Awaited<ReturnType<TerminalHost['createOrAttach']>>
+        try {
+          result = await this.host.createOrAttach({
+            sessionId: p.sessionId,
+            cols: p.cols,
+            rows: p.rows,
+            cwd: p.cwd,
+            env: p.env,
+            envToDelete: p.envToDelete,
+            command: p.command,
+            startupCommandDelivery: p.startupCommandDelivery,
+            // Why: daemon RPC payloads are untrusted JSON. Persist only the
+            // allowlisted enum used for byte routing, never arbitrary identity.
+            ...(isTuiAgent(p.launchAgent) ? { launchAgent: p.launchAgent } : {}),
+            shellOverride: p.shellOverride,
+            terminalWindowsWslDistro: p.terminalWindowsWslDistro,
+            terminalWindowsPowerShellImplementation: p.terminalWindowsPowerShellImplementation,
+            shellReadySupported: p.shellReadySupported,
+            historySeed: p.historySeed,
+            ...(p.shellReadyTimeoutMs !== undefined
+              ? { shellReadyTimeoutMs: p.shellReadyTimeoutMs }
+              : {}),
+            streamClient: {
+              onData: (data) => {
+                // Scan BEFORE enqueue: the batcher may keep-tail drop this
+                // chunk, but its facts must be captured regardless.
+                this.transientFactRelay.onSessionData(p.sessionId, data)
+                const lastInputAt = this.lastInputAtBySessionId.get(p.sessionId)
+                const isInteractiveOutput =
+                  data.length <= DaemonServer.INTERACTIVE_OUTPUT_MAX_CHARS &&
+                  lastInputAt !== undefined &&
+                  performance.now() - lastInputAt <= DaemonServer.INTERACTIVE_OUTPUT_WINDOW_MS
+                this.streamDataBatcher.enqueue(clientId, p.sessionId, data, {
+                  flushImmediately: isInteractiveOutput,
+                  flushMaxChars: DaemonServer.INTERACTIVE_OUTPUT_MAX_CHARS,
+                  streamGeneration
+                })
+              },
+              onExit: (code) => {
+                // Why: exit tears down renderer handlers, so it must ride the
+                // ordered queue behind final output even when the shallow socket
+                // gate holds that output for a later drain pass.
+                this.log.log('session-exited', { sessionId: p.sessionId, code })
+                this.streamDataBatcher.enqueueControlEvent(clientId, p.sessionId, {
+                  type: 'event',
+                  event: 'exit',
+                  sessionId: p.sessionId,
+                  streamGeneration,
+                  payload: { code }
+                })
+                this.streamDataBatcher.flush(clientId)
+                recordDaemonStreamBacklogEvent('sessionExit', {
+                  sessionIdSuffix: p.sessionId.slice(-10)
+                })
+                this.transientFactRelay.onSessionExit(p.sessionId)
+                // Why: a late callback from the replaced stream must not tear
+                // down ownership already installed by a newer attach.
+                if (this.streamGenerationBySessionId.get(p.sessionId) === streamGeneration) {
+                  this.streamClientIdBySessionId.delete(p.sessionId)
+                  this.streamGenerationBySessionId.delete(p.sessionId)
+                  this.lastInputAtBySessionId.delete(p.sessionId)
+                }
+              }
+            }
+          })
+        } catch (error) {
+          // Why: concurrent create/attach RPCs can settle out of order. A
+          // failed older request must not roll back a newer stream's owner.
+          if (this.streamGenerationBySessionId.get(p.sessionId) === streamGeneration) {
+            if (previousStreamGeneration === undefined) {
+              this.streamGenerationBySessionId.delete(p.sessionId)
+            } else {
+              this.streamGenerationBySessionId.set(p.sessionId, previousStreamGeneration)
             }
           }
-        })
-        this.streamClientIdBySessionId.set(p.sessionId, clientId)
+          throw error
+        }
+        if (this.streamGenerationBySessionId.get(p.sessionId) === streamGeneration) {
+          this.streamClientIdBySessionId.set(p.sessionId, clientId)
+        }
         // Why an attach-time marker: the adapter resyncs the background set on
         // a fresh connection, which can precede this attach — main's scan
         // suppression must still start at the head of the new stream.
-        if (this.transientFactRelay.isBackgrounded(p.sessionId)) {
+        if (
+          this.streamGenerationBySessionId.get(p.sessionId) === streamGeneration &&
+          this.transientFactRelay.isBackgrounded(p.sessionId)
+        ) {
           this.streamDataBatcher.enqueueControlEvent(clientId, p.sessionId, {
             type: 'event',
             event: 'sessionBackgroundMarker',
             sessionId: p.sessionId,
+            streamGeneration,
             payload: { background: true }
           })
         }
@@ -411,7 +445,8 @@ export class DaemonServer {
           pid: result.pid,
           shellState: result.shellState,
           ...(result.launchAgent ? { launchAgent: result.launchAgent } : {}),
-          ...(result.historySeeded !== undefined ? { historySeeded: result.historySeeded } : {})
+          ...(result.historySeeded !== undefined ? { historySeeded: result.historySeeded } : {}),
+          streamGeneration
         }
       }
 
@@ -480,10 +515,12 @@ export class DaemonServer {
         // and the normal flush/drain loop delivers them within milliseconds
         // (bounded ≤ the keep-tail drop cap), in order, ahead of the marker.
         const scanSeedAnsi = background ? '' : this.host.getPartialEscapeTailAnsi(sessionId)
+        const streamGeneration = this.streamGenerationBySessionId.get(sessionId)
         this.streamDataBatcher.enqueueControlEvent(streamClientId, sessionId, {
           type: 'event',
           event: 'sessionBackgroundMarker',
           sessionId,
+          ...(streamGeneration === undefined ? {} : { streamGeneration }),
           payload: {
             background,
             ...(scanSeedAnsi.length > 0 ? { scanSeedAnsi } : {})
@@ -596,6 +633,7 @@ export class DaemonServer {
     if (!client?.streamSocket) {
       return
     }
+    const streamGeneration = this.streamGenerationBySessionId.get(sessionId)
     // Why: write/resize are notification-heavy and intentionally do not wait
     // for replies. If their target session is gone, this synthetic exit is the
     // only signal the renderer gets to clear stale terminal pane bindings.
@@ -603,6 +641,7 @@ export class DaemonServer {
       type: 'event',
       event: 'exit',
       sessionId,
+      ...(streamGeneration === undefined ? {} : { streamGeneration }),
       payload: { code }
     })
     this.streamDataBatcher.flush(client.clientId)
