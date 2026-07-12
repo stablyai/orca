@@ -14,13 +14,13 @@ export type PaletteStatusInputs = PaletteStatusInputsState
 // Why: shared frozen bundle returned whenever the Cmd+J jump palette isn't
 // active. The two hottest maps here — agentStatusByPaneKey and
 // runtimePaneTitlesByTabId — get a new top-level identity on every agent-status
-// transition and every terminal pane-title write app-wide. The palette is always
-// mounted (App.tsx renders <CommandDialog open={visible}>) and stays mounted for
-// the whole session once opened, so subscribing to them while it's closed
-// re-rendered the whole palette — and recomputed its per-worktree live/working-dot
-// sort over every worktree — on unrelated terminal chatter. A useShallow
-// subscription keeps this same reference across that churn, so the closed palette
-// stops reacting. Frozen so the shared singleton can't be mutated.
+// transition and every terminal pane-title write app-wide; subscribing to them
+// while the palette was closed re-rendered the whole palette — and recomputed its
+// per-worktree live/working-dot sort over every worktree — on unrelated terminal
+// chatter. The palette content now unmounts entirely while inactive (its shell
+// mounts it on visible-or-lingering), so this constant is the defense-in-depth
+// path for any render outside that gate. A useShallow subscription keeps this
+// same reference across the churn. Frozen so the shared singleton can't be mutated.
 export const EMPTY_PALETTE_STATUS_INPUTS: PaletteStatusInputs = Object.freeze({
   agentStatusByPaneKey: {},
   runtimePaneTitlesByTabId: {},

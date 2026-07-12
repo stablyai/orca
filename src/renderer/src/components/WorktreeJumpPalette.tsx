@@ -50,7 +50,8 @@ import {
   createWorktreePaletteRequestGuard,
   getNextWorktreePaletteSelection,
   getWorktreePaletteSelectionItemIds,
-  getWorktreePaletteCreateActionState
+  getWorktreePaletteCreateActionState,
+  type WorktreePaletteRequestGuard
 } from '@/lib/worktree-palette-create-action'
 import { getWorkspacePortsByWorktreeId } from '@/lib/workspace-port-groups'
 import {
@@ -196,8 +197,9 @@ type PaletteListEntry = PaletteItem | CreateWorktreePaletteItem | SectionHeader 
 const CREATE_WORKSPACE_QUICK_ACTION_ITEM_ID = `quick-action:${CREATE_WORKSPACE_QUICK_ACTION_ID}`
 
 // Why: comfortably outlast the CommandDialog close animation (~150–200ms) so the
-// gated status maps stay live until the fading rows are gone from the DOM.
-const PALETTE_STATUS_INPUTS_LINGER_MS = 300
+// content — and its live status maps — stays mounted until the fading rows are
+// gone from the DOM.
+const PALETTE_CLOSE_LINGER_MS = 300
 
 function getComposerPrefetchRepoId(
   state: ReturnType<typeof useAppStore.getState>,
@@ -324,11 +326,58 @@ function getSettingsTargetFromSectionId(sectionId: string): {
   return { pane: sectionId as SettingsNavTarget, repoId: null }
 }
 
+// Why: `#7558` gated the two hottest status-map subscriptions while closed, but
+// the content component below still holds ~30 other store subscriptions
+// (prCache, unifiedTabsByWorktree, retainedAgentsByPaneKey, ...) that re-rendered
+// the closed palette on ordinary agent/terminal churn. This always-mounted shell
+// subscribes to a single boolean and mounts the content only while the dialog is
+// open or lingering through its close animation, so the closed cost collapses to
+// that one selector. Cmd+J lives above this component (menu accelerator → IPC →
+// openModal), so opening while unmounted still works.
 export default function WorktreeJumpPalette(): React.JSX.Element | null {
+  const visible = useAppStore((s) => s.activeModal === 'worktree-palette')
+  // Why: keep the content (and the hot status maps it subscribes to) mounted
+  // through the dialog's close animation. `visible` flips false synchronously on
+  // close, but the CommandDialog content stays in the DOM while it fades/zooms
+  // out — unmounting there would cut the animation short and flash the switcher
+  // rows empty. Linger a beat past close, then unmount.
+  const [lingering, setLingering] = useState(false)
+  useEffect(() => {
+    if (visible) {
+      setLingering(true)
+      return
+    }
+    const timer = window.setTimeout(() => setLingering(false), PALETTE_CLOSE_LINGER_MS)
+    return () => window.clearTimeout(timer)
+  }, [visible])
+  // Why: the guard must outlive content unmounts — a reopen invalidates the
+  // pending GH work-item lookup a previous create action left in flight.
+  const createLookupGuard = useMemo(() => createWorktreePaletteRequestGuard(), [])
+
+  if (!visible && !lingering) {
+    return null
+  }
+  return (
+    <WorktreeJumpPaletteContent
+      visible={visible}
+      lingering={lingering}
+      createLookupGuard={createLookupGuard}
+    />
+  )
+}
+
+export function WorktreeJumpPaletteContent({
+  visible,
+  lingering,
+  createLookupGuard
+}: {
+  visible: boolean
+  lingering: boolean
+  createLookupGuard: WorktreePaletteRequestGuard
+}): React.JSX.Element | null {
   // Why: subscribe this palette to language changes; translated memo contents
   // recompute on the rerender without using i18n.language as a fake dependency.
   useTranslation()
-  const visible = useAppStore((s) => s.activeModal === 'worktree-palette')
   const closeModal = useAppStore((s) => s.closeModal)
   const openModal = useAppStore((s) => s.openModal)
   const openSettingsPage = useAppStore((s) => s.openSettingsPage)
@@ -343,31 +392,10 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
   const projectHostSetups = useAppStore((s) => s.projectHostSetups)
   const detectedWorktreesByRepo = useAppStore((s) => s.detectedWorktreesByRepo)
   const pendingWorktreeCreations = useAppStore((s) => s.pendingWorktreeCreations)
-  // Why: keep the (very hot) status maps subscribed through the dialog's close
-  // animation. `visible` flips false synchronously on close, but the CommandDialog
-  // content stays mounted while it fades/zooms out — dropping the maps to empty
-  // there would flash the switcher rows empty/reordered mid-animation. Linger a
-  // beat past close, then let the gate drop the subscription.
-  const [statusInputsLingering, setStatusInputsLingering] = useState(false)
-  useEffect(() => {
-    if (visible) {
-      setStatusInputsLingering(true)
-      return
-    }
-    const timer = window.setTimeout(
-      () => setStatusInputsLingering(false),
-      PALETTE_STATUS_INPUTS_LINGER_MS
-    )
-    return () => window.clearTimeout(timer)
-  }, [visible])
-  // Why: these five status maps drive per-worktree live/working dots and the
-  // switcher sort, but only matter while the palette is active. Two of them
-  // (agentStatusByPaneKey, runtimePaneTitlesByTabId) get a new identity on every
-  // agent-status / pane-title write app-wide, so subscribing to them while the
-  // always-mounted palette is closed re-rendered it on unrelated terminals. Gate
-  // the subscription on active-or-still-closing: a shared frozen constant while
-  // inactive keeps useShallow referentially equal across the churn, and the live
-  // maps flow through the instant the palette opens.
+  // Why: `#7558`'s selector gate — the shell's mount gate keeps this component
+  // active-only, but routing the same visible-or-lingering signal through the
+  // selector preserves the frozen-constant fallback should this ever render
+  // outside the shell (tests, future mounts).
   // - runtimePaneTitlesByTabId: split-pane tabs with a working agent in a
   //   non-focused pane still surface as 'working' (matches the sidebar spinner).
   // - ptyIdsByTabId: the live-pty source of truth — slept tabs keep a wake-hint
@@ -378,7 +406,7 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
     ptyIdsByTabId,
     terminalLayoutsByTabId,
     tabsByWorktree
-  } = useAppStore(useShallow((s) => selectPaletteStatusInputs(s, visible || statusInputsLingering)))
+  } = useAppStore(useShallow((s) => selectPaletteStatusInputs(s, visible || lingering)))
   const prCache = useAppStore((s) => s.prCache)
   const issueCache = useAppStore((s) => s.issueCache)
   const migrationUnsupportedByPtyId = useAppStore((s) => s.migrationUnsupportedByPtyId)
@@ -432,7 +460,6 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
   const listRef = useRef<HTMLDivElement>(null)
   const fallbackFocusOuterFrameRef = useRef<number | null>(null)
   const fallbackFocusInnerFrameRef = useRef<number | null>(null)
-  const createLookupGuard = useMemo(() => createWorktreePaletteRequestGuard(), [])
   const preserveCreateLookupOnCloseRef = useRef(false)
 
   const repoMap = useMemo(() => new Map(repos.map((r) => [r.id, r])), [repos])
