@@ -528,7 +528,7 @@ describe('CodexRuntimeHomeService', () => {
       })
       const runtimeAgentsPath = join(wslRuntimeHomePath, 'AGENTS.md')
       expect(readFileSync(runtimeAgentsPath, 'utf-8')).toBe('# WSL instructions\n')
-      expectResourceLinkedOrCopied(runtimeAgentsPath, join(wslSystemHomePath, 'AGENTS.md'))
+      expect(lstatSync(runtimeAgentsPath).isSymbolicLink()).toBe(false)
     } finally {
       vi.doUnmock('../codex/wsl-codex-session-bridge')
       vi.doUnmock('../wsl')

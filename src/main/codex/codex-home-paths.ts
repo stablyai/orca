@@ -7,6 +7,7 @@ import {
   readlinkSync,
   rmdirSync,
   rmSync,
+  statSync,
   symlinkSync,
   unlinkSync,
   writeFileSync
@@ -89,10 +90,20 @@ function linkSystemCodexResource(
     removeCopiedResourceIfOwned(targetPath, managedHomePath, entryName, sourcePath)
     return
   }
+  if (
+    entryName === CODEX_GLOBAL_INSTRUCTIONS_ENTRY &&
+    !systemResourceIsRegularFile(sourcePath)
+  ) {
+    removeCopiedResourceIfOwned(targetPath, managedHomePath, entryName, sourcePath)
+    console.warn('[codex-home] Ignoring non-file system Codex resource:', entryName)
+    return
+  }
 
   if (targetAlreadyPointsToSource(targetPath, sourcePath)) {
     clearCopiedResourceMarker(managedHomePath, entryName)
-    return
+    if (!preferCopy || !removeSymlinkEntry(targetPath)) {
+      return
+    }
   }
   const shouldRefreshFallbackCopy = targetIsOwnedFallbackCopy(
     targetPath,
@@ -100,10 +111,18 @@ function linkSystemCodexResource(
     entryName,
     sourcePath
   )
-  if (existsSync(targetPath) && !shouldRefreshFallbackCopy) {
+  if (pathEntryExists(targetPath) && !shouldRefreshFallbackCopy) {
     return
   }
   if (shouldRefreshFallbackCopy) {
+    // Why: WSL launch preparation runs before every Codex start. Avoid
+    // rewriting an unchanged file across the UNC boundary on every launch.
+    if (
+      entryName === CODEX_GLOBAL_INSTRUCTIONS_ENTRY &&
+      copiedFileContentsMatch(sourcePath, targetPath)
+    ) {
+      return
+    }
     rmSync(targetPath, { recursive: true, force: true })
   }
 
@@ -143,14 +162,62 @@ function copySystemCodexResourceAsOwnedFallback(
 ): void {
   try {
     rmSync(targetPath, { recursive: true, force: true })
-    cpSync(sourcePath, targetPath, { recursive: true, force: false, errorOnExist: true })
+    cpSync(sourcePath, targetPath, {
+      recursive: true,
+      force: false,
+      errorOnExist: true,
+      // Why: dotfile managers commonly symlink AGENTS.md. WSL needs the file
+      // contents because a copied host-side link is not usable in the distro.
+      dereference: entryName === CODEX_GLOBAL_INSTRUCTIONS_ENTRY
+    })
     markCopiedResource(managedHomePath, entryName, sourcePath)
   } catch (copyError) {
+    // Why: an unmarked copy cannot be refreshed or safely removed later.
+    // Roll it back instead of stranding stale instructions in the runtime home.
+    try {
+      rmSync(targetPath, { recursive: true, force: true })
+    } catch (cleanupError) {
+      console.warn(
+        '[codex-home] Failed to remove incomplete resource copy:',
+        entryName,
+        cleanupError
+      )
+    }
     console.warn(
-      '[codex-home] Failed to link system Codex resource:',
+      '[codex-home] Failed to mirror system Codex resource:',
       entryName,
       symlinkError ?? copyError
     )
+  }
+}
+
+function systemResourceIsRegularFile(sourcePath: string): boolean {
+  try {
+    return statSync(sourcePath).isFile()
+  } catch {
+    return false
+  }
+}
+
+function pathEntryExists(entryPath: string): boolean {
+  try {
+    lstatSync(entryPath)
+    return true
+  } catch {
+    return false
+  }
+}
+
+function copiedFileContentsMatch(sourcePath: string, targetPath: string): boolean {
+  try {
+    // Why: reading a FIFO or device synchronously can block Codex launch.
+    // Follow source symlinks, but only compare two regular files.
+    if (!statSync(sourcePath).isFile() || !lstatSync(targetPath).isFile()) {
+      return false
+    }
+    return readFileSync(sourcePath).equals(readFileSync(targetPath))
+  } catch {
+    return false
   }
 }
 
@@ -205,7 +272,12 @@ function readCopiedResourceSourcePath(managedHomePath: string, entryName: string
 }
 
 function clearCopiedResourceMarker(managedHomePath: string, entryName: string): void {
-  rmSync(getResourceCopyMarkerPath(managedHomePath, entryName), { force: true })
+  // Why: a malformed marker directory must not block Codex launch or prevent
+  // an owned resource from being repaired.
+  rmSync(getResourceCopyMarkerPath(managedHomePath, entryName), {
+    recursive: true,
+    force: true
+  })
 }
 
 function targetIsOwnedFallbackCopy(
