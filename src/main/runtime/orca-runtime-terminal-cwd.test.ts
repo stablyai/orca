@@ -109,6 +109,7 @@ describe('OrcaRuntimeService terminal startup cwd', () => {
 
   it('materializes restored headless mobile tabs in the persisted startup cwd', async () => {
     const store = {
+      getRepo: () => undefined,
       getWorkspaceSession: () => ({
         activeRepoId: null,
         activeWorktreeId: 'wt-1',
