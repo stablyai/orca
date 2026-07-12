@@ -1197,6 +1197,9 @@ const WorktreeCard = React.memo(function WorktreeCard({
     const spotlight = s.spotlightByRepo?.[repo.id]
     return Boolean(spotlight) && spotlight?.lastError?.code !== 'root-diverged'
   })
+  // The active root wears an amber left bar — a channel separate from the grey
+  // selection fill — so "Spotlight running here" reads at a glance.
+  const spotlightActive = useAppStore((s) => (repo ? Boolean(s.spotlightByRepo?.[repo.id]) : false))
   const showDetachedHeadInMetaRow =
     !compactCards &&
     !isFolder &&
@@ -1385,7 +1388,7 @@ const WorktreeCard = React.memo(function WorktreeCard({
   const parentCardContent = (
     <div
       className={cn(
-        'flex w-full min-w-0 gap-0.5 pl-0',
+        'relative flex w-full min-w-0 gap-0.5 pl-0',
         titleOnlyCard ? 'items-center' : 'items-start'
       )}
       style={
@@ -1393,6 +1396,12 @@ const WorktreeCard = React.memo(function WorktreeCard({
       }
       data-worktree-card-parent-content=""
     >
+      {worktree.isMainWorktree && spotlightActive && (
+        <span
+          aria-hidden
+          className="pointer-events-none absolute inset-y-1 left-0 w-[3px] rounded-full bg-amber-500"
+        />
+      )}
       {showCombinedStatusSlot ? (
         <div
           className={cn(

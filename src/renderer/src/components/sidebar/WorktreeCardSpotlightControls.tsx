@@ -182,7 +182,7 @@ export function SpotlightPrimaryBadge({ repo }: { repo: Repo }): React.JSX.Eleme
           >
             <Badge
               variant="outline"
-              className="h-[16px] gap-0.5 px-1.5 text-[10px] font-medium rounded shrink-0 leading-none text-amber-700 dark:text-amber-300 border-amber-500/30 bg-amber-500/5 hover:bg-amber-500/15"
+              className="h-[16px] gap-0.5 px-1.5 text-[10px] font-medium uppercase tracking-wider rounded shrink-0 leading-none text-amber-700 dark:text-amber-300 border-amber-500/30 bg-amber-500/5 hover:bg-amber-500/15"
             >
               {syncing ? (
                 <Loader2 className="size-2.5 animate-spin" />
