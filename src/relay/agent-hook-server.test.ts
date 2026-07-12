@@ -145,7 +145,7 @@ describe('RelayAgentHookServer', () => {
     }
   })
 
-  it('replays a Codex SessionStart tombstone after clearing the stale status', async () => {
+  it('deduplicates Codex SessionStart while retaining replay until working resumes', async () => {
     const forward = vi.fn<(envelope: AgentHookRelayEnvelope) => void>()
     const server = new RelayAgentHookServer({ endpointDir: dir, forward })
     await server.start()
@@ -163,6 +163,7 @@ describe('RelayAgentHookServer', () => {
 
       await post({ hook_event_name: 'UserPromptSubmit', prompt: 'remote old session' })
       forward.mockClear()
+      await post({ hook_event_name: 'SessionStart', session_id: 'relay-new-session' })
       await post({ hook_event_name: 'SessionStart', session_id: 'relay-new-session' })
 
       expect(forward).toHaveBeenCalledTimes(1)
@@ -185,6 +186,26 @@ describe('RelayAgentHookServer', () => {
         hookEventName: 'SessionStart',
         isReplay: true,
         payload: { state: 'done', prompt: '', agentType: 'codex' }
+      })
+
+      forward.mockClear()
+      await post({ hook_event_name: 'UserPromptSubmit', prompt: 'new session working' })
+      expect(forward).toHaveBeenCalledTimes(1)
+      expect(forward.mock.calls[0][0]).toMatchObject({
+        source: 'codex',
+        paneKey: PANE_KEY,
+        hookEventName: 'UserPromptSubmit',
+        providerSession: { key: 'session_id', id: 'relay-new-session' },
+        payload: { state: 'working', prompt: 'new session working', agentType: 'codex' }
+      })
+
+      forward.mockClear()
+      expect(server.replayCachedPayloadsForPanes()).toBe(1)
+      expect(forward).toHaveBeenCalledTimes(1)
+      expect(forward.mock.calls[0][0]).toMatchObject({
+        hookEventName: 'UserPromptSubmit',
+        isReplay: true,
+        payload: { state: 'working', prompt: 'new session working', agentType: 'codex' }
       })
     } finally {
       server.stop()

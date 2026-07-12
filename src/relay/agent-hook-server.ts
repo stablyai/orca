@@ -374,6 +374,12 @@ export class RelayAgentHookServer {
     env?: string,
     version?: string
   ): void {
+    if (previous.hookEventName === 'SessionStart') {
+      // Why: normalization removes the prior Codex status before returning null;
+      // restore its tombstone so duplicate hooks neither rebroadcast nor erase replay.
+      this.state.lastStatusByPaneKey.set(previous.paneKey, previous)
+      return
+    }
     this.clearAssistantMessageRetry(previous.paneKey)
     const providerSession = this.state.lastProviderSessionByPaneKey.get(previous.paneKey)
     // Why: old Orca builds treat this as an idle done row; new builds recognize
