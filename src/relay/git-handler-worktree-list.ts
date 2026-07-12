@@ -1,3 +1,4 @@
+import { stat } from 'node:fs/promises'
 import type { GitCapabilityCache } from '../shared/git-capability-cache'
 import type { GitExec } from './git-handler-ops'
 import { isUnsupportedWorktreeListZError, parseWorktreeList } from './git-handler-utils'
@@ -28,6 +29,51 @@ export async function readRelayWorktreeList(
     },
     isUnsupportedWorktreeListZError
   )
+}
+
+const PRUNABLE_EXISTENCE_PROBE_CONCURRENCY = 8
+
+/** Why: Git <2.36 does not emit the `prunable` porcelain field, so probe each
+ *  linked worktree path directly instead of treating a stale registration as
+ *  a live workspace (issue #8389). The relay runs on the host that owns the
+ *  filesystem, so a plain stat is authoritative. */
+export async function annotatePrunableWorktreesByExistence(
+  worktrees: Record<string, unknown>[]
+): Promise<Record<string, unknown>[]> {
+  const annotated = [...worktrees]
+  let nextIndex = 0
+
+  async function probeNext(): Promise<void> {
+    while (nextIndex < worktrees.length) {
+      const index = nextIndex
+      nextIndex += 1
+      const worktree = worktrees[index]
+      const worktreePath = typeof worktree?.path === 'string' ? worktree.path : ''
+      // Git only marks linked worktrees prunable, and never locked ones (a
+      // lock shields the registration even when the directory is missing). A
+      // missing main worktree is surfaced by the repo-level failure paths.
+      if (
+        !worktreePath ||
+        worktree.isMainWorktree === true ||
+        worktree.isBare === true ||
+        worktree.locked === true ||
+        worktree.prunable === true
+      ) {
+        continue
+      }
+      try {
+        await stat(worktreePath)
+      } catch (err) {
+        if ((err as NodeJS.ErrnoException | undefined)?.code === 'ENOENT') {
+          annotated[index] = { ...worktree, prunable: true }
+        }
+      }
+    }
+  }
+
+  const workerCount = Math.min(PRUNABLE_EXISTENCE_PROBE_CONCURRENCY, worktrees.length)
+  await Promise.all(Array.from({ length: workerCount }, () => probeNext()))
+  return annotated
 }
 
 function normalizeRelayWorktrees(worktrees: Record<string, unknown>[]): RelayWorktreeInfo[] {

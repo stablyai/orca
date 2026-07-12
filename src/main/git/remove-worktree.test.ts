@@ -1026,6 +1026,14 @@ describe('listWorktrees', () => {
           'worktree /repo-feature\nHEAD def456\nbranch refs/heads/feature/test\n'
       }
     })
+    // Why: the fallback probes each linked worktree path for existence; keep
+    // the paths "present" so this test stays about parser selection.
+    statMock.mockImplementation(async (targetPath: string) => {
+      if (String(targetPath).endsWith('sparse-checkout')) {
+        throw Object.assign(new Error('ENOENT'), { code: 'ENOENT' })
+      }
+      return {}
+    })
 
     await expect(listWorktrees('/repo')).resolves.toEqual([
       {
@@ -1047,6 +1055,36 @@ describe('listWorktrees', () => {
       'git worktree list --porcelain -z',
       'git worktree list --porcelain'
     ])
+  })
+
+  it('annotates missing linked worktrees as prunable via the line-block fallback', async () => {
+    // Why: Git <2.36 lacks the `prunable` porcelain field (issue #8389), so
+    // the fallback must probe each linked worktree path instead of treating a
+    // stale registration as a live workspace.
+    mockGitCommands({
+      'git worktree list --porcelain -z': {
+        error: Object.assign(new Error("unknown switch `z'"), {
+          stderr: "error: unknown switch `z'"
+        })
+      },
+      'git worktree list --porcelain': {
+        stdout:
+          'worktree /repo\nHEAD abc123\nbranch refs/heads/main\n\n' +
+          'worktree /repo-feature\nHEAD def456\nbranch refs/heads/feature/test\n\n' +
+          'worktree /repo-locked\nHEAD aaa789\nbranch refs/heads/agent\nlocked agent session\n'
+      }
+    })
+    // statMock default (beforeEach): every path is missing (ENOENT).
+
+    const worktrees = await listWorktrees('/repo')
+
+    expect(worktrees.find((worktree) => worktree.path === '/repo-feature')).toMatchObject({
+      prunable: true
+    })
+    // Locked registrations are shielded, mirroring git's own prunable rules;
+    // the main worktree is covered by the repo-level missing-path handling.
+    expect(worktrees.find((worktree) => worktree.path === '/repo-locked')?.prunable).toBeUndefined()
+    expect(worktrees.find((worktree) => worktree.path === '/repo')?.prunable).toBeUndefined()
   })
 })
 

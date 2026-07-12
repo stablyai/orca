@@ -732,7 +732,10 @@ function buildDetectedGitWorktrees(
   const settings = store.getSettings()
   const knownOrcaLayouts = buildKnownOrcaWorkspaceLayouts(settings, repo)
   const isLegacyRepoForVisibility = isLegacyRepoForExternalWorktreeVisibility(repo)
-  return dedupeWorktreesByPath(gitWorktrees).map((gitWorktree) => {
+  // Why: a prunable registration has no working directory (issue #8389); only
+  // this listing omits it — removal/cleanup flows list worktrees separately.
+  const liveWorktrees = gitWorktrees.filter((gitWorktree) => !gitWorktree.prunable)
+  return dedupeWorktreesByPath(liveWorktrees).map((gitWorktree) => {
     const worktreeId = `${repo.id}::${gitWorktree.path}`
     let meta = store.getWorktreeMeta(worktreeId)
     const worktree = mergeWorktree(repo.id, gitWorktree, meta, repo.displayName)

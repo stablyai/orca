@@ -5987,6 +5987,45 @@ describe('registerWorktreeHandlers', () => {
     })
   })
 
+  it('omits prunable worktrees from worktrees:listAll', async () => {
+    // Why: a prunable registration has no working directory (issue #8389), so
+    // surfacing it as a workspace yields repeated pty:spawn/fs:readDir
+    // failures and a blank pane.
+    listWorktreesMock.mockResolvedValue([
+      {
+        path: '/workspace/repo',
+        head: 'abc123',
+        branch: 'refs/heads/main',
+        isBare: false,
+        isMainWorktree: true
+      },
+      {
+        path: '/workspace/stale-wt',
+        head: 'def456',
+        branch: 'refs/heads/stale',
+        isBare: false,
+        prunable: true,
+        prunableReason: 'gitdir file points to non-existent location',
+        isMainWorktree: false
+      },
+      {
+        path: '/workspace/live-wt',
+        head: 'fed789',
+        branch: 'refs/heads/live',
+        isBare: false,
+        isMainWorktree: false
+      }
+    ])
+    store.getWorktreeMeta.mockReturnValue(undefined)
+    store.setWorktreeMeta.mockReturnValue({ lastActivityAt: 1_700_000_000_000 })
+
+    const listed = (await handlers['worktrees:listAll'](null, undefined)) as { id: string }[]
+    const listedIds = listed.map((worktree) => worktree.id)
+
+    expect(listedIds).toContain('repo-1::/workspace/live-wt')
+    expect(listedIds).not.toContain('repo-1::/workspace/stale-wt')
+  })
+
   it('limits concurrent repo scans in worktrees:listAll while preserving order', async () => {
     const repos = Array.from({ length: 10 }, (_, index) => ({
       id: `repo-${index}`,

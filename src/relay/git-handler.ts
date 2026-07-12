@@ -38,6 +38,7 @@ import {
   removeWorktreeOp,
   worktreeIsCleanOp
 } from './git-handler-worktree-ops'
+import { annotatePrunableWorktreesByExistence } from './git-handler-worktree-list'
 import { forceDeletePreservedRelayBranch } from './git-handler-branch-cleanup'
 import { refreshLocalBaseRefForWorktreeCreateOp } from './git-handler-local-base-ref-refresh'
 import { gitExecMutatesRepository } from '../shared/git-exec-mutation'
@@ -1361,7 +1362,14 @@ export class GitHandler {
             const { stdout } = await this.git(['worktree', 'list', '--porcelain'], repoPath, {
               signal: context?.signal
             })
-            return this.normalizeMainWorktreePath(repoPath, parseWorktreeList(stdout))
+            const normalized = await this.normalizeMainWorktreePath(
+              repoPath,
+              parseWorktreeList(stdout)
+            )
+            // Why: Git <2.36 also lacks the `prunable` porcelain field; probe
+            // each linked worktree path instead of treating stale
+            // registrations as live workspaces (issue #8389).
+            return annotatePrunableWorktreesByExistence(normalized)
           } catch {
             return []
           }

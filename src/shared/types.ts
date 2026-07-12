@@ -428,6 +428,11 @@ export type GitWorktreeInfo = {
   isSparse?: boolean
   locked?: boolean
   lockReason?: string
+  /** True when Git reports the worktree as prunable (its directory is gone but
+   *  the registration remains). Detected via the `prunable` porcelain field
+   *  (Git ≥ 2.36) or a path-existence probe on older Git. */
+  prunable?: boolean
+  prunableReason?: string
   /** True for the repo's main working tree (the first entry from `git worktree list`).
    *  Linked worktrees created via `git worktree add` have this set to false. */
   isMainWorktree: boolean

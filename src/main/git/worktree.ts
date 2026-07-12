@@ -76,6 +76,8 @@ type LocalBaseRefRefreshability =
 
 const SPARSE_CHECKOUT_DETECTION_CONCURRENCY = 8
 
+const PRUNABLE_EXISTENCE_PROBE_CONCURRENCY = 8
+
 // Why: bound `git worktree add` so a OneDrive cloud-placeholder base path can't
 // stall its checkout writes for minutes (STA-1292) — a stuck create then fails
 // fast instead of spinning forever. Generous enough not to kill a legit large
@@ -498,6 +500,8 @@ export function parseWorktreeList(
     let isSparse = false
     let locked = false
     let lockReason = ''
+    let prunable = false
+    let prunableReason = ''
 
     for (const line of lines) {
       if (line.startsWith('worktree ')) {
@@ -514,6 +518,12 @@ export function parseWorktreeList(
         locked = true
         const rawReason = line.slice('locked'.length).trim()
         lockReason = options.nulDelimited ? rawReason : decodeGitCQuotedPath(rawReason)
+      } else if (line === 'prunable' || line.startsWith('prunable ')) {
+        // Why: Git ≥ 2.36 flags registrations whose directory is gone; ignoring
+        // it surfaces the stale worktree as a live workspace (issue #8389).
+        prunable = true
+        const rawReason = line.slice('prunable'.length).trim()
+        prunableReason = options.nulDelimited ? rawReason : decodeGitCQuotedPath(rawReason)
       }
     }
 
@@ -527,6 +537,8 @@ export function parseWorktreeList(
         ...(isSparse ? { isSparse } : {}),
         ...(locked ? { locked: true } : {}),
         ...(lockReason ? { lockReason } : {}),
+        ...(prunable ? { prunable: true } : {}),
+        ...(prunableReason ? { prunableReason } : {}),
         isMainWorktree: worktrees.length === 0
       })
     }
@@ -596,10 +608,58 @@ async function readWorktreeList(
         cwd: repoPath,
         ...options
       })
-      return normalizeMainWorktreePath(repoPath, parseWorktreeList(stdout), options)
+      const normalized = await normalizeMainWorktreePath(
+        repoPath,
+        parseWorktreeList(stdout),
+        options
+      )
+      // Why: Git <2.36 also lacks the `prunable` porcelain field, so probe
+      // each linked worktree path instead of treating stale registrations as
+      // live workspaces (issue #8389).
+      return annotatePrunableByExistence(normalized, repoPath, options)
     },
     isUnsupportedWorktreeListZError
   )
+}
+
+async function annotatePrunableByExistence(
+  worktrees: GitWorktreeInfo[],
+  repoPath: string,
+  options: GitWorktreeExecOptions = {}
+): Promise<GitWorktreeInfo[]> {
+  const annotated = [...worktrees]
+  let nextIndex = 0
+
+  async function probeNext(): Promise<void> {
+    while (nextIndex < worktrees.length) {
+      const index = nextIndex
+      nextIndex += 1
+      const worktree = worktrees[index]
+      // Git only marks linked worktrees prunable, and never locked ones (a
+      // lock shields the registration even when the directory is missing). A
+      // missing main worktree is handled by the repo-level ENOENT paths.
+      if (
+        !worktree ||
+        worktree.isMainWorktree ||
+        worktree.isBare ||
+        worktree.locked ||
+        worktree.prunable
+      ) {
+        continue
+      }
+      try {
+        await stat(translateWorktreePath(worktree.path, repoPath, options))
+      } catch (err) {
+        if (getErrorCode(err) === 'ENOENT') {
+          annotated[index] = { ...worktree, prunable: true }
+        }
+      }
+    }
+  }
+
+  const workerCount = Math.min(PRUNABLE_EXISTENCE_PROBE_CONCURRENCY, worktrees.length)
+  await Promise.all(Array.from({ length: workerCount }, () => probeNext()))
+  return annotated
 }
 
 async function readTranslatedWorktreeGraph(
