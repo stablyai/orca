@@ -114,8 +114,8 @@ function parseWslDetectedCommands(stdout: string): Set<string> {
     }
     const command = payload.slice(0, separatorIndex)
     const resolvedPath = payload.slice(separatorIndex + 1)
-    // Why: WSL commands run in a POSIX guest; accepting C:\ paths lets host
-    // startup chatter masquerade as an installed guest executable.
+    // Why: a real guest executable always resolves to a POSIX-absolute path, so
+    // a Windows-style C:\ path here is spoofed/non-guest output, not an install.
     if (path.posix.isAbsolute(resolvedPath)) {
       found.add(command)
     }
