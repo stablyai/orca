@@ -1,5 +1,11 @@
 import React, { useId, useMemo, useRef, useState } from 'react'
-import { CircleAlert, CircleCheck, LoaderCircle } from 'lucide-react'
+import { ChevronDown, CircleAlert, CircleCheck, LoaderCircle } from 'lucide-react'
+import AgentCombobox from '@/components/agent/AgentCombobox'
+import { getAgentCatalog } from '@/lib/agent-catalog'
+import { cn } from '@/lib/utils'
+import { filterEnabledTuiAgents } from '../../../../shared/tui-agent-selection'
+import { isTuiAgent } from '../../../../shared/tui-agent-config'
+import type { TuiAgent } from '../../../../shared/types'
 import {
   Dialog,
   DialogContent,
@@ -61,14 +67,38 @@ export default function MissionCreateDialog(): React.JSX.Element {
   const createMission = useAppStore((s) => s.createMission)
   const setSidebarListMode = useAppStore((s) => s.setSidebarListMode)
 
+  const defaultTuiAgent = useAppStore((s) => s.settings?.defaultTuiAgent ?? null)
+  const disabledTuiAgents = useAppStore((s) => s.settings?.disabledTuiAgents ?? [])
+  const detectedAgentIds = useAppStore((s) => s.detectedAgentIds)
+
   const nameId = useId()
   const branchId = useId()
+  const baseBranchId = useId()
   const [name, setName] = useState('')
   const [branch, setBranch] = useState('')
   const branchDirtyRef = useRef(false)
   const [selected, setSelected] = useState<ReadonlySet<string>>(new Set())
+  const [sessionAgent, setSessionAgent] = useState<TuiAgent | null>(() =>
+    isTuiAgent(defaultTuiAgent) ? defaultTuiAgent : null
+  )
+  const [advancedOpen, setAdvancedOpen] = useState(false)
+  const [baseBranch, setBaseBranch] = useState('')
+  const [setupDecision, setSetupDecision] = useState<'run' | 'skip' | 'inherit'>('inherit')
   const [submitting, setSubmitting] = useState(false)
   const [memberResults, setMemberResults] = useState<MissionMemberResult[] | null>(null)
+
+  const visibleAgents = useMemo(() => {
+    const enabledIds = new Set(
+      filterEnabledTuiAgents(
+        getAgentCatalog().map((agent) => agent.id),
+        disabledTuiAgents
+      )
+    )
+    const detected = detectedAgentIds === null ? null : new Set(detectedAgentIds)
+    return getAgentCatalog().filter(
+      (agent) => enabledIds.has(agent.id) && (detected === null || detected.has(agent.id))
+    )
+  }, [detectedAgentIds, disabledTuiAgents])
 
   const eligibleRepos = useMemo(() => repos.filter(isMissionEligibleRepo), [repos])
   const repoNameById = useMemo(
@@ -117,10 +147,14 @@ export default function MissionCreateDialog(): React.JSX.Element {
       return
     }
     setSubmitting(true)
+    const trimmedBaseBranch = baseBranch.trim()
     const result = await createMission({
       name: name.trim(),
       branchName: effectiveBranch,
-      repoIds: selectedIds
+      repoIds: selectedIds,
+      ...(trimmedBaseBranch ? { baseBranch: trimmedBaseBranch } : {}),
+      ...(setupDecision !== 'inherit' ? { setupDecision } : {}),
+      ...(sessionAgent ? { sessionAgent } : {})
     })
     if (!result) {
       setSubmitting(false)
@@ -223,6 +257,101 @@ export default function MissionCreateDialog(): React.JSX.Element {
                   onChange={setSelected}
                   onSelectAll={() => setSelected(new Set(eligibleRepos.map((repo) => repo.id)))}
                 />
+              </div>
+              <div className="space-y-1">
+                <Label className="text-[11px] text-muted-foreground">
+                  {translate('auto.components.sidebar.MissionCreateDialog.ba57f70473', 'Agent')}
+                </Label>
+                <AgentCombobox
+                  agents={visibleAgents}
+                  value={sessionAgent}
+                  onValueChange={setSessionAgent}
+                  triggerClassName="h-8 w-full border-input text-xs"
+                />
+              </div>
+              <div>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setAdvancedOpen((open) => !open)}
+                  className="-ml-2 h-6 text-[11px] text-muted-foreground"
+                >
+                  {translate('auto.components.sidebar.MissionCreateDialog.c43b33e4ef', 'Advanced')}
+                  <ChevronDown
+                    className={cn('size-3.5 transition-transform', advancedOpen && 'rotate-180')}
+                  />
+                </Button>
+                {advancedOpen ? (
+                  <div className="mt-2 space-y-4">
+                    <div className="space-y-1">
+                      <Label htmlFor={baseBranchId} className="text-[11px] text-muted-foreground">
+                        {translate(
+                          'auto.components.sidebar.MissionCreateDialog.603415390c',
+                          'Base branch'
+                        )}
+                      </Label>
+                      <Input
+                        id={baseBranchId}
+                        value={baseBranch}
+                        onChange={(event) => setBaseBranch(event.target.value)}
+                        className="h-8 font-mono text-xs"
+                      />
+                      <p className="text-[11px] text-muted-foreground/70">
+                        {translate(
+                          'auto.components.sidebar.MissionCreateDialog.9b2b02c9ee',
+                          "Leave empty to branch from each project's default branch."
+                        )}
+                      </p>
+                    </div>
+                    <div className="space-y-1">
+                      <Label className="text-[11px] text-muted-foreground">
+                        {translate(
+                          'auto.components.sidebar.MissionCreateDialog.c9ffbca654',
+                          'Setup scripts'
+                        )}
+                      </Label>
+                      <div className="flex items-center gap-2">
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant={setupDecision === 'inherit' ? 'secondary' : 'outline'}
+                          className="h-6 px-2 text-[11px]"
+                          onClick={() => setSetupDecision('inherit')}
+                        >
+                          {translate(
+                            'auto.components.sidebar.MissionCreateDialog.f3cd8cdbd7',
+                            'Inherit'
+                          )}
+                        </Button>
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant={setupDecision === 'run' ? 'secondary' : 'outline'}
+                          className="h-6 px-2 text-[11px]"
+                          onClick={() => setSetupDecision('run')}
+                        >
+                          {translate(
+                            'auto.components.sidebar.MissionCreateDialog.f89f5bad98',
+                            'Run'
+                          )}
+                        </Button>
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant={setupDecision === 'skip' ? 'secondary' : 'outline'}
+                          className="h-6 px-2 text-[11px]"
+                          onClick={() => setSetupDecision('skip')}
+                        >
+                          {translate(
+                            'auto.components.sidebar.MissionCreateDialog.41f764a7c2',
+                            'Skip'
+                          )}
+                        </Button>
+                      </div>
+                    </div>
+                  </div>
+                ) : null}
               </div>
             </>
           )}

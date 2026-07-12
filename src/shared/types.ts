@@ -372,6 +372,11 @@ export type Mission = {
   /** Physical mission root holding symlinks to local member worktrees.
    *  Resolved lazily on first session ensure; stable afterwards. */
   rootPath?: string | null
+  /** Base ref every member worktree branches from. null/absent = each
+   *  repo's default branch. Applies to add/recreate so members stay uniform. */
+  baseRef?: string | null
+  /** Per-repo setup-script decision applied to member worktree creation. */
+  setupDecision?: 'run' | 'skip' | 'inherit'
   createdAt: number
   updatedAt: number
 }

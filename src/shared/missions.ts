@@ -58,6 +58,8 @@ export function createMission(input: {
   branchName?: string | null
   repoIds: readonly string[]
   tabOrder: number
+  baseRef?: string | null
+  setupDecision?: Mission['setupDecision']
   now?: number
 }): Mission {
   const now = input.now ?? Date.now()
@@ -77,6 +79,8 @@ export function createMission(input: {
     branchName: normalizeMissionBranchName(input.branchName, name),
     members,
     tabOrder: input.tabOrder,
+    baseRef: input.baseRef?.trim() ? input.baseRef.trim() : null,
+    ...(input.setupDecision ? { setupDecision: input.setupDecision } : {}),
     createdAt: now,
     updatedAt: now
   }
@@ -134,6 +138,12 @@ export function normalizeMissions(value: unknown): Mission[] {
       tabOrder:
         typeof raw.tabOrder === 'number' && Number.isFinite(raw.tabOrder) ? raw.tabOrder : 0,
       rootPath: typeof raw.rootPath === 'string' && raw.rootPath.length > 0 ? raw.rootPath : null,
+      baseRef: typeof raw.baseRef === 'string' && raw.baseRef.length > 0 ? raw.baseRef : null,
+      ...(raw.setupDecision === 'run' ||
+      raw.setupDecision === 'skip' ||
+      raw.setupDecision === 'inherit'
+        ? { setupDecision: raw.setupDecision }
+        : {}),
       createdAt:
         typeof raw.createdAt === 'number' && Number.isFinite(raw.createdAt) ? raw.createdAt : now,
       updatedAt:

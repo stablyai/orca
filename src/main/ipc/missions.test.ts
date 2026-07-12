@@ -53,13 +53,21 @@ function makeFakeStore() {
     }),
     getMissions: () => (mission ? [mission] : []),
     getMission: (id: string) => (mission?.id === id ? mission : null),
-    createMission: (input: { name: string; branchName?: string | null; repoIds: string[] }) => {
+    createMission: (input: {
+      name: string
+      branchName?: string | null
+      repoIds: string[]
+      baseRef?: string | null
+      setupDecision?: Mission['setupDecision']
+    }) => {
       mission = {
         id: 'm1',
         name: input.name,
         branchName: input.branchName ?? 'mission/referral',
         members: input.repoIds.map((repoId) => ({ repoId, worktreeId: null, addedAt: 1 })),
         tabOrder: 0,
+        baseRef: input.baseRef ?? null,
+        ...(input.setupDecision ? { setupDecision: input.setupDecision } : {}),
         createdAt: 1,
         updatedAt: 1
       }
@@ -153,6 +161,31 @@ describe('missions IPC', () => {
     expect(result.deleted).toBe(false)
     expect(result.memberResults.some((entry) => entry.error)).toBe(true)
     expect(store.deleteMission).not.toHaveBeenCalled()
+  })
+
+  it('applies base branch, setup decision, and session agent from create args', async () => {
+    const store = makeFakeStore()
+    const runtime = {
+      createManagedWorktree: vi.fn().mockResolvedValue({ worktree: { id: 'r1::/wt' } }),
+      removeManagedWorktree: vi.fn()
+    }
+    registerMissionHandlers(makeFakeWindow() as never, store as never, runtime as never)
+    await handlers.get('missions:create')!(
+      {},
+      {
+        name: 'Referral',
+        repoIds: ['r1'],
+        baseBranch: 'develop',
+        setupDecision: 'skip',
+        sessionAgent: 'claude'
+      }
+    )
+    expect(runtime.createManagedWorktree).toHaveBeenCalledWith(
+      expect.objectContaining({ baseBranch: 'develop', setupDecision: 'skip' })
+    )
+    expect(store.ensureMissionSessionWorkspace).toHaveBeenCalledWith('m1', {
+      createdWithAgent: 'claude'
+    })
   })
 
   it('ensureSession resolves the root once, links only local members, and is idempotent', async () => {

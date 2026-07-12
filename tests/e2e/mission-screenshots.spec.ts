@@ -25,7 +25,7 @@ test.describe('Mission screenshots', () => {
     const createMission = async (missionName: string, screenshotName?: string) => {
       await orcaPage.getByRole('button', { name: 'New Mission' }).first().click()
       await orcaPage.getByLabel('Mission Name').fill(missionName)
-      await orcaPage.getByRole('combobox').click()
+      await orcaPage.locator('[role="combobox"]:not([data-agent-combobox-root])').click()
       await orcaPage.getByText('All projects', { exact: true }).click()
       await orcaPage.keyboard.press('Escape')
       if (screenshotName) {
@@ -60,7 +60,7 @@ test.describe('Mission screenshots', () => {
       await orcaPage.getByRole('button', { name: 'New Mission' }).first().click()
       await orcaPage.getByLabel('Mission Name').fill(`${missionName} Failing`)
       await orcaPage.getByLabel('Branch').fill('mission/bad..ref')
-      await orcaPage.getByRole('combobox').click()
+      await orcaPage.locator('[role="combobox"]:not([data-agent-combobox-root])').click()
       await orcaPage.getByText('All projects', { exact: true }).click()
       await orcaPage.keyboard.press('Escape')
       await orcaPage.getByRole('button', { name: 'Create Mission' }).click()

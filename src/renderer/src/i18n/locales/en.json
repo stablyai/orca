@@ -4678,7 +4678,15 @@
           "131ac9a3ca": "Creating...",
           "470b9ba02f": "Create Mission",
           "507155ae18": "Some workspaces could not be created. You can retry from the mission list.",
-          "009decc6e5": "Done"
+          "009decc6e5": "Done",
+          "ba57f70473": "Agent",
+          "c43b33e4ef": "Advanced",
+          "603415390c": "Base branch",
+          "9b2b02c9ee": "Leave empty to branch from each project's default branch.",
+          "c9ffbca654": "Setup scripts",
+          "f3cd8cdbd7": "Inherit",
+          "f89f5bad98": "Run",
+          "41f764a7c2": "Skip"
         },
         "MissionDeleteDialog": {
           "7c84ee0d7d": "Delete Mission",

@@ -4678,7 +4678,15 @@
           "131ac9a3ca": "Creando...",
           "470b9ba02f": "Crear misión",
           "507155ae18": "No se pudieron crear algunos espacios de trabajo. Puedes reintentarlo desde la lista de la misión.",
-          "009decc6e5": "Hecho"
+          "009decc6e5": "Hecho",
+          "ba57f70473": "Agente",
+          "c43b33e4ef": "Avanzado",
+          "603415390c": "Rama base",
+          "9b2b02c9ee": "Déjalo vacío para ramificar desde la rama predeterminada de cada proyecto.",
+          "c9ffbca654": "Scripts de configuración",
+          "f3cd8cdbd7": "Heredar",
+          "f89f5bad98": "Ejecutar",
+          "41f764a7c2": "Omitir"
         },
         "MissionDeleteDialog": {
           "7c84ee0d7d": "Eliminar misión",

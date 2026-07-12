@@ -1075,6 +1075,9 @@ export type PreloadApi = {
       name: string
       branchName?: string
       repoIds: string[]
+      baseBranch?: string
+      setupDecision?: 'run' | 'skip' | 'inherit'
+      sessionAgent?: TuiAgent
     }) => Promise<MissionCreateResult>
     update: (args: {
       missionId: string

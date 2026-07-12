@@ -66,7 +66,9 @@ export function registerMissionHandlers(
         // Why: inside a mission the repo is the member's identity; the mission
         // name already labels the session card and the shared branch.
         displayName: store.getRepo(repoId)?.displayName ?? mission.name,
-        branchNameOverride: mission.branchName
+        branchNameOverride: mission.branchName,
+        ...(mission.baseRef ? { baseBranch: mission.baseRef } : {}),
+        ...(mission.setupDecision ? { setupDecision: mission.setupDecision } : {})
       })
       store.setMissionMemberWorktree(mission.id, repoId, created.worktree.id)
       return { repoId, worktreeId: created.worktree.id }
@@ -120,7 +122,9 @@ export function registerMissionHandlers(
       const mission = store.createMission({
         name: args.name,
         branchName: args.branchName ?? null,
-        repoIds
+        repoIds,
+        baseRef: args.baseBranch ?? null,
+        setupDecision: args.setupDecision
       })
       notifyReposChanged(mainWindow)
       const memberResults = await createMemberWorktrees(mission, repoIds)
@@ -129,7 +133,7 @@ export function registerMissionHandlers(
       // the sidebar retries via missions:ensureSession.
       try {
         const ensured = ensureMissionRootStrict(store, store.getMission(mission.id) ?? mission)
-        store.ensureMissionSessionWorkspace(ensured.id)
+        store.ensureMissionSessionWorkspace(ensured.id, { createdWithAgent: args.sessionAgent })
       } catch (error) {
         console.warn('[missions] eager session ensure failed:', error)
       }

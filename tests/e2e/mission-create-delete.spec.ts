@@ -11,7 +11,7 @@ test.describe('Missions', () => {
     await orcaPage.getByRole('button', { name: 'New Mission' }).first().click()
     await orcaPage.getByLabel('Mission Name').fill('Referral')
     // Select the seeded repo via the sticky "All projects" row.
-    await orcaPage.getByRole('combobox').click()
+    await orcaPage.locator('[role="combobox"]:not([data-agent-combobox-root])').click()
     await orcaPage.getByText('All projects', { exact: true }).click()
     await orcaPage.keyboard.press('Escape')
     // Why: mission worktree creation runs real git worktree add under the hood.
