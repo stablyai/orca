@@ -29,6 +29,10 @@ export type WorkbenchViewsSlice = {
     placement?: WorktreeSplitPlacement
   ) => void
   closeActiveWorkbenchPane: (worktreeId: string) => void
+  /** Sidebar "open in parallel": seed a view from the current worktree if none
+   *  exists, then split the focused pane with `worktreeId` (or focus it if it is
+   *  already visible). */
+  openWorktreeInParallel: (worktreeId: string, direction: WorktreeSplitDirection) => void
   retargetFocusedWorkbenchPane: (newWorktreeId: string) => void
   setActiveWorkbenchPaneRatio: (path: WorktreeLayoutPath, ratio: number) => void
   focusActiveWorkbenchPane: (worktreeId: string) => void
@@ -91,6 +95,28 @@ export const createWorkbenchViewsSlice: StateCreator<AppState, [], [], Workbench
 
     closeActiveWorkbenchPane: (worktreeId) => {
       set((s) => viewModel.closeActivePane(s, worktreeId))
+      syncActiveWorktree()
+    },
+
+    openWorktreeInParallel: (worktreeId, direction) => {
+      const active = viewModel.getActiveWorkbenchView(get())
+      if (!active) {
+        const current = get().activeWorktreeId
+        if (!current || current === worktreeId) {
+          // Nothing to pair with yet — just activate the clicked worktree.
+          get().setActiveWorktree(worktreeId)
+          return
+        }
+        set((s) => viewModel.createSingleLeafView(s, crypto.randomUUID(), current))
+      }
+      set((s) => {
+        const view = viewModel.getActiveWorkbenchView(s)
+        return view
+          ? viewModel.splitActivePane(s, view.focusedWorktreeId, direction, worktreeId)
+          : s
+      })
+      // splitActivePane no-ops when the worktree is already visible; focus it then.
+      set((s) => viewModel.focusActivePane(s, worktreeId))
       syncActiveWorktree()
     },
 

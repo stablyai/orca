@@ -129,6 +129,7 @@ import {
   type VirtualizedScrollAnchor
 } from '@/hooks/useVirtualizedScrollAnchor'
 import { activateAndRevealWorktree } from '@/lib/worktree-activation'
+import { pickSplitDirection } from '@/lib/worktree-layout-tree'
 import { useFolderWorkspacePathStatusCacheExpiryTick } from '@/lib/folder-workspace-path-status-cache-expiry'
 import {
   getFolderWorkspacePathStatusDescription,
@@ -3058,6 +3059,21 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
   const handleWorktreeRowPointerDown = useCallback(
     (event: React.PointerEvent<HTMLDivElement>, worktreeId: string, rowKey: string) => {
       if (event.button !== 0 || event.pointerType === 'touch') {
+        return
+      }
+      // Why: Cmd (macOS) / Ctrl (Win/Linux) + click opens the worktree beside the
+      // focused pane in parallel, splitting along the window's longer axis. Meta
+      // is the Mac modifier because Ctrl-click is the context menu there.
+      const parallelModifier = navigator.userAgent.includes('Mac') ? event.metaKey : event.ctrlKey
+      if (parallelModifier) {
+        event.preventDefault()
+        event.stopPropagation()
+        useAppStore
+          .getState()
+          .openWorktreeInParallel(
+            worktreeId,
+            pickSplitDirection({ width: window.innerWidth, height: window.innerHeight })
+          )
         return
       }
       const sourceRow = event.currentTarget
