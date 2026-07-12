@@ -2,7 +2,6 @@
 // deactivate / inspect). Low-level git primitives and guards live in
 // ./spotlight-sync-primitives.
 import { SPOTLIGHT_REFS } from './spotlight'
-import { stripHeadsPrefix } from './spotlight-git-exec'
 import {
   applySnapshotToRoot,
   assertNoConflictOperation,
@@ -69,10 +68,9 @@ export async function activateSpotlightCore(
   opts: {
     force?: boolean
     reuseIndexForHead?: string | null
-    /** Short branch name the root MUST be on for a fresh activation (its primary
-     *  branch), so there's a clean branch to restore to. Skipped on takeover
-     *  (the root is legitimately detached-by-Spotlight then). Null = no check. */
-    requiredBranch?: string | null
+    /** When true, a FRESH activation requires the root on a real branch (not
+     *  detached) so deactivate can re-attach cleanly. Skipped on takeover. */
+    requireOnBranch?: boolean
   } = {}
 ): Promise<SpotlightActivateOutcome> {
   await assertNoConflictOperation(ctx, rootPath)
@@ -90,18 +88,17 @@ export async function activateSpotlightCore(
   // re-establish clean refs (the root was already restored before those deletes).
   const alreadyActive = Boolean(refs.originalHeadSha && refs.backupSha && refs.snapshotSha)
 
-  // Fresh activation must start from the root on its primary branch so there's a
-  // clean, predictable branch to restore to on deactivate. (Takeover finds the
-  // root detached-by-Spotlight, so this only applies when not already active.)
-  if (!alreadyActive && opts.requiredBranch) {
+  // Fresh activation must start from the root on a real branch (not detached) so
+  // deactivate has a clean branch to re-attach to. We don't pin a SPECIFIC
+  // branch: a repo's "primary" per origin/HEAD is unreliable (the remote default
+  // may be "master" while the team works on "develop"). Takeover is exempt — the
+  // root is legitimately detached-by-Spotlight then.
+  if (!alreadyActive && opts.requireOnBranch) {
     const head = await gitTry(ctx, rootPath, ['symbolic-ref', '-q', 'HEAD'])
-    const current = head ? stripHeadsPrefix(head) : null
-    if (current !== opts.requiredBranch) {
+    if (!head) {
       throw new SpotlightCoreError(
         'not-on-primary-branch',
-        `Spotlight needs the project root on its primary branch "${opts.requiredBranch}" (it's currently ${
-          current ? `on "${current}"` : 'detached'
-        }). Check out "${opts.requiredBranch}" in the project root, then try again.`
+        "Spotlight needs the project root checked out on a branch — it's currently detached. Check out your project's main branch in the root, then try again."
       )
     }
   }

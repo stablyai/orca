@@ -353,31 +353,32 @@ describe('spotlight-sync-core', () => {
     expect(run(rootPath, 'show', `${refs.backupSha}:a.txt`)).toBe('root-dirty')
   })
 
-  it('blocks a fresh activation when the root is not on the required primary branch', async () => {
+  it('blocks a fresh activation when the root is detached', async () => {
     write(worktreePath, 'a.txt', 'a-changed\n')
+    run(rootPath, 'checkout', '--detach')
     await expect(
-      activateSpotlightCore(ctx, rootPath, worktreePath, { requiredBranch: 'develop' })
+      activateSpotlightCore(ctx, rootPath, worktreePath, { requireOnBranch: true })
     ).rejects.toMatchObject({ code: 'not-on-primary-branch' })
-    // Root untouched — still on main, no spotlight refs written.
-    expect(run(rootPath, 'symbolic-ref', '--short', 'HEAD')).toBe('main')
+    // Root untouched — no spotlight refs written.
     expect((await inspectSpotlightRefsCore(ctx, rootPath)).snapshotSha).toBeNull()
   })
 
-  it('allows a fresh activation when the root is on the required primary branch', async () => {
+  it('allows a fresh activation when the root is on any branch (e.g. develop, not master)', async () => {
+    run(rootPath, 'checkout', '-b', 'develop')
     write(worktreePath, 'a.txt', 'a-changed\n')
     const outcome = await activateSpotlightCore(ctx, rootPath, worktreePath, {
-      requiredBranch: 'main'
+      requireOnBranch: true
     })
     expect(outcome.alreadyActive).toBe(false)
   })
 
-  it('does not re-check the primary branch on takeover', async () => {
-    await activateSpotlightCore(ctx, rootPath, worktreePath, { requiredBranch: 'main' })
+  it('does not require a branch on takeover (root is detached-by-Spotlight)', async () => {
+    await activateSpotlightCore(ctx, rootPath, worktreePath, { requireOnBranch: true })
     write(worktreePath, 'a.txt', 'again\n')
-    // Second activation is a takeover (refs exist) — the mismatched requiredBranch
-    // must be ignored since the root is legitimately detached-by-Spotlight.
+    // Second activation is a takeover (refs exist); the root is legitimately
+    // detached-by-Spotlight, so requireOnBranch must not block it.
     const outcome = await activateSpotlightCore(ctx, rootPath, worktreePath, {
-      requiredBranch: 'develop'
+      requireOnBranch: true
     })
     expect(outcome.alreadyActive).toBe(true)
   })

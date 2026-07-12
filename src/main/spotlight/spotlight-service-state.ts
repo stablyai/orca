@@ -7,7 +7,6 @@ import type {
 } from '../../shared/spotlight-sync-core'
 import { splitWorktreeId } from '../../shared/worktree-id'
 import { normalizeRuntimePathForComparison } from '../../shared/cross-platform-path'
-import { resolveDefaultBaseRefViaExec } from '../git/repo'
 import { SpotlightCoreError } from '../../shared/spotlight-sync-core'
 import { isFolderRepo } from '../../shared/repo-kind'
 import { createLocalSpotlightGitContext } from '../git/spotlight-sync'
@@ -74,31 +73,6 @@ export function isRootHolderPath(worktreePath: string, rootPath: string): boolea
   return (
     normalizeRuntimePathForComparison(worktreePath) === normalizeRuntimePathForComparison(rootPath)
   )
-}
-
-/** Reduce any ref form (refs/heads/x, refs/remotes/origin/x, origin/x) to the
- *  bare local branch name so a configured base ref and the checked-out branch
- *  compare on equal terms. */
-function toShortBranchName(ref: string): string {
-  return ref
-    .trim()
-    .replace(/^refs\/heads\//, '')
-    .replace(/^refs\/remotes\/[^/]+\//, '')
-    .replace(/^origin\//, '')
-}
-
-/** The repo's primary branch (short name): the base Orca forks worktrees from
- *  (chosen at project creation via worktreeBaseRef), else the detected default
- *  branch (origin/HEAD, then the main/master/develop probes). Null when it can't
- *  be determined, in which case the caller must not gate on it. */
-export async function resolvePrimaryBranch(
-  ctx: SpotlightGitContext,
-  repo: Repo,
-  rootPath: string
-): Promise<string | null> {
-  const configured = repo.worktreeBaseRef?.trim()
-  const raw = configured || (await resolveDefaultBaseRefViaExec((argv) => ctx.git(argv, rootPath)))
-  return raw ? toShortBranchName(raw) : null
 }
 
 /** Persisted state for a just-completed activation; carries the original

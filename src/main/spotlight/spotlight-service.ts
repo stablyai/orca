@@ -18,7 +18,6 @@ import {
   activeStateFromActivation,
   isRootHolderPath,
   pendingSpotlightState,
-  resolvePrimaryBranch,
   resolveRepoContext,
   syncedSpotlightState,
   toSpotlightError,
@@ -86,11 +85,10 @@ export class SpotlightService {
       }
 
       const previous = this.store.getSpotlightState(repoId)
-      // Only gate a FRESH activation on the primary branch; a takeover finds the
-      // root detached-by-Spotlight. The engine enforces requiredBranch.
-      const requiredBranch = previous
-        ? null
-        : await resolvePrimaryBranch(resolved.ctx, resolved.repo, resolved.repo.path)
+      // Only gate a FRESH activation: it must start on a real branch (not
+      // detached) so deactivate can re-attach cleanly. Takeover is exempt (the
+      // root is legitimately detached-by-Spotlight then).
+      const requireOnBranch = !previous
       this.emitSyncing(repoId, {
         ...(previous ?? pendingSpotlightState(repoId, worktreeId, Date.now())),
         holderWorktreeId: worktreeId
@@ -102,7 +100,7 @@ export class SpotlightService {
           worktreePath,
           {
             reuseIndexForHead: this.reuseIndexHeadFor(repoId, worktreeId),
-            requiredBranch
+            requireOnBranch
           }
         )
         this.lastCheckpointByRepo.set(repoId, {
