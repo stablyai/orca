@@ -93,6 +93,46 @@ describe('detectWslCommandsOnPath', () => {
     const found = await detectWslCommandsOnPath({ distro: 'Ubuntu' }, ['claude'])
 
     expect(found).toEqual(new Set())
+    expect(execFileAsyncMock).toHaveBeenCalledTimes(1)
+  })
+
+  it('retries once on ETIMEDOUT cold-start and returns the second probe result', async () => {
+    const timeoutError = Object.assign(new Error('Timed out running wsl.exe'), {
+      code: 'ETIMEDOUT'
+    })
+    execFileAsyncMock.mockRejectedValueOnce(timeoutError).mockResolvedValueOnce({
+      stdout: '__ORCA_AGENT_PATH__grok\t/home/user/.local/bin/grok\n',
+      stderr: ''
+    })
+
+    const found = await detectWslCommandsOnPath({ distro: 'Ubuntu' }, ['grok'])
+
+    expect(found).toEqual(new Set(['grok']))
+    expect(execFileAsyncMock).toHaveBeenCalledTimes(2)
+  })
+
+  it('retries once when the child is killed by the timeout path', async () => {
+    const killedError = Object.assign(new Error('spawn wsl.exe ETIMEDOUT'), {
+      killed: true
+    })
+    execFileAsyncMock.mockRejectedValueOnce(killedError).mockResolvedValueOnce({
+      stdout: '__ORCA_AGENT_PATH__claude\t/usr/bin/claude\n',
+      stderr: ''
+    })
+
+    const found = await detectWslCommandsOnPath({ distro: 'Ubuntu' }, ['claude'])
+
+    expect(found).toEqual(new Set(['claude']))
+    expect(execFileAsyncMock).toHaveBeenCalledTimes(2)
+  })
+
+  it('does not retry non-timeout probe failures', async () => {
+    execFileAsyncMock.mockRejectedValue(new Error("zsh:1: parse error near `done'"))
+
+    const found = await detectWslCommandsOnPath({ distro: 'Ubuntu' }, ['claude'])
+
+    expect(found).toEqual(new Set())
+    expect(execFileAsyncMock).toHaveBeenCalledTimes(1)
   })
 
   it('skips the probe entirely when no commands are requested', async () => {
