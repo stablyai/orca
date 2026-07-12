@@ -71,7 +71,6 @@ import {
   anyMountedWorktreeHasLayout as computeAnyMountedWorktreeHasLayout
 } from './terminal/split-group-mount'
 import { WorktreeSplitLayout, type WorktreePaneRect } from './workbench/WorktreeSplitLayout'
-import { getActiveWorkbenchView } from '../lib/workbench-view-model'
 import { collectLeafWorktreeIds } from '../lib/worktree-layout-tree'
 import { buildDuplicatedBrowserTabOptions } from '@/lib/duplicate-browser-tab-options'
 import { focusTerminalTabSurface } from '@/lib/focus-terminal-tab-surface'
@@ -259,29 +258,40 @@ function Terminal(): React.JSX.Element | null {
   const renderedActiveWorktreeId = activeWorktreeId
   const activeView = useAppStore((s) => s.activeView)
   const workbenchViews = useAppStore((s) => s.workbenchViews)
-  const activeWorkbenchViewId = useAppStore((s) => s.activeWorkbenchViewId)
+  const syncWorkbenchToActiveWorktree = useAppStore((s) => s.syncWorkbenchToActiveWorktree)
   const [workbenchPaneRects, setWorkbenchPaneRects] = useState<Map<string, WorktreePaneRect>>(
     () => new Map()
   )
-  // Why: the active workbench view's leaves drive the parallel layout ONLY when
-  // there are >= 2 of them. A single-leaf (or absent) view falls back to the
-  // active worktree, so normal sidebar navigation keeps working and the render
-  // gate stays byte-identical to the pre-parallel behavior. This also makes
-  // "revert to single" automatic: closing a pane down to one leaf drops straight
-  // back to the legacy single-worktree path.
-  const activeWorkbenchView = useMemo(
-    () => getActiveWorkbenchView({ workbenchViews, activeWorkbenchViewId }),
-    [workbenchViews, activeWorkbenchViewId]
+  // Why: the shown parallel arrangement is the SET (a view with >= 2 panes) that
+  // contains the active worktree — searched across ALL views, not just the
+  // flagged-active one — so clicking any member switches to that set. A worktree
+  // in no such set falls back to the single view, so normal navigation and
+  // "revert to single" stay byte-identical to the pre-parallel behavior.
+  const activeParallelSet = useMemo(() => {
+    if (renderedActiveWorktreeId == null) {
+      return null
+    }
+    return (
+      workbenchViews.find((v) => {
+        const leaves = collectLeafWorktreeIds(v.layout)
+        return leaves.length >= 2 && leaves.includes(renderedActiveWorktreeId)
+      }) ?? null
+    )
+  }, [workbenchViews, renderedActiveWorktreeId])
+  // Keep the slice's active view pointing at the shown set so pane actions
+  // (resize / split / close / toggle) target it, not a stale view.
+  useEffect(() => {
+    syncWorkbenchToActiveWorktree()
+  }, [renderedActiveWorktreeId, workbenchViews, syncWorkbenchToActiveWorktree])
+  const workbenchVisibleWorktreeIds = useMemo(
+    () =>
+      activeParallelSet
+        ? collectLeafWorktreeIds(activeParallelSet.layout)
+        : renderedActiveWorktreeId
+          ? [renderedActiveWorktreeId]
+          : [],
+    [activeParallelSet, renderedActiveWorktreeId]
   )
-  const workbenchVisibleWorktreeIds = useMemo(() => {
-    const ids = activeWorkbenchView ? collectLeafWorktreeIds(activeWorkbenchView.layout) : []
-    // Why: parallel only shows while the active worktree is actually one of its
-    // panes. Navigating to any other worktree (sidebar click) drops back to the
-    // single view — a guaranteed escape so a parallel view can never get stuck.
-    const parallelActive =
-      ids.length >= 2 && renderedActiveWorktreeId != null && ids.includes(renderedActiveWorktreeId)
-    return parallelActive ? ids : renderedActiveWorktreeId ? [renderedActiveWorktreeId] : []
-  }, [activeWorkbenchView, renderedActiveWorktreeId])
   const workbenchVisibleSet = useMemo(
     () => new Set(workbenchVisibleWorktreeIds),
     [workbenchVisibleWorktreeIds]
@@ -2088,9 +2098,9 @@ function Terminal(): React.JSX.Element | null {
           {/* Why: in a multi-pane workbench the split layout renders only empty
               measured slots + resize handles; the surfaces below are positioned
               over each slot's rect. Single-pane keeps the legacy inset-0 path. */}
-          {isMultiPaneWorkbench && activeWorkbenchView && activeView === 'terminal' ? (
+          {isMultiPaneWorkbench && activeParallelSet && activeView === 'terminal' ? (
             <WorktreeSplitLayout
-              layout={activeWorkbenchView.layout}
+              layout={activeParallelSet.layout}
               onSlotRectsChange={setWorkbenchPaneRects}
             />
           ) : null}

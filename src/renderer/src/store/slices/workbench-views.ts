@@ -40,6 +40,9 @@ export type WorkbenchViewsSlice = {
   flipWorkbenchOrientation: () => void
   /** Flip only the split that contains this worktree's pane (per-pane control). */
   togglePaneSplitDirection: (worktreeId: string) => void
+  /** Point the active view at the parallel set containing the active worktree and
+   *  focus it there — switches sets when the active worktree changes. */
+  syncWorkbenchToActiveWorktree: () => void
   setWorkbenchTabsPinned: (pinned: boolean) => void
 }
 
@@ -158,6 +161,23 @@ export const createWorkbenchViewsSlice: StateCreator<AppState, [], [], Workbench
 
     togglePaneSplitDirection: (worktreeId) => {
       set((s) => viewModel.togglePaneSplitDirection(s, worktreeId))
+    },
+
+    syncWorkbenchToActiveWorktree: () => {
+      const wt = get().activeWorktreeId
+      if (wt == null) {
+        return
+      }
+      const view = viewModel.findViewContaining(get(), wt)
+      if (!view) {
+        return
+      }
+      // Activate the containing set WITHOUT going through setActiveWorktree (no
+      // focus jump), then mark that worktree as the set's focused pane.
+      if (get().activeWorkbenchViewId !== view.id) {
+        set({ activeWorkbenchViewId: view.id })
+      }
+      set((s) => viewModel.focusActivePane(s, wt))
     },
 
     setWorkbenchTabsPinned: (pinned) => {

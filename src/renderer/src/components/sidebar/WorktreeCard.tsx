@@ -237,15 +237,21 @@ const WorktreeCard = React.memo(function WorktreeCard({
   // "in parallel" selection; the focused pane still gets the real active
   // highlight (isActiveSurface takes priority below).
   const isInParallelView = useAppStore((s) => {
-    if (!s.activeWorkbenchViewId || s.activeWorktreeId == null) {
+    const active = s.activeWorktreeId
+    if (active == null) {
       return false
     }
-    const view = s.workbenchViews.find((v) => v.id === s.activeWorkbenchViewId)
+    // Match Terminal's shown set: the parallel set that CONTAINS the active
+    // worktree (searched across all views), so the sidebar's muted selection
+    // always agrees with what's actually on screen.
+    const view = s.workbenchViews.find((v) => collectLeafWorktreeIds(v.layout).includes(active))
     if (!view) {
       return false
     }
-    const leaves = collectLeafWorktreeIds(view.layout)
-    return leaves.length >= 2 && leaves.includes(s.activeWorktreeId) && leaves.includes(worktree.id)
+    return (
+      collectLeafWorktreeIds(view.layout).length >= 2 &&
+      collectLeafWorktreeIds(view.layout).includes(worktree.id)
+    )
   })
   const renamingWorktreeId = useAppStore((s) => s.renamingWorktreeId)
   const setRenamingWorktreeId = useAppStore((s) => s.setRenamingWorktreeId)

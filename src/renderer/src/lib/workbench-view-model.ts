@@ -59,6 +59,19 @@ export function getVisibleWorktreeIds(state: WorkbenchViewState): string[] {
   return view ? collectLeafWorktreeIds(view.layout) : []
 }
 
+/** The view (parallel set) that contains `worktreeId`, or null. Lets the
+ *  workbench render and act on "the set the active worktree belongs to"
+ *  regardless of which view is flagged active — so clicking any member switches
+ *  to that set. */
+export function findViewContaining(
+  state: WorkbenchViewState,
+  worktreeId: string
+): WorkbenchView | null {
+  return (
+    state.workbenchViews.find((v) => collectLeafWorktreeIds(v.layout).includes(worktreeId)) ?? null
+  )
+}
+
 /** Progressive disclosure: no always-on second tab layer. The strip appears only
  *  when parallel is actually in use — more than one view, or a multi-pane active
  *  view — unless the user pinned it on. A lone single-leaf view shows zero extra
