@@ -91,4 +91,42 @@ describe('workspace session live PTY persistence', () => {
     expect(payload.activeWorktreeIdsOnShutdown).toEqual([])
     expect(payload.remoteSessionIdsByTabId).toBeUndefined()
   })
+
+  it('reconnects a persisted SSH PTY when shutdown observes the target as disconnected', () => {
+    const payload = buildWorkspaceSessionPayload(
+      createSnapshot({
+        tabsByWorktree: {
+          'wt-ssh': [
+            {
+              id: 'tab-ssh',
+              title: 'remote',
+              ptyId: null,
+              worktreeId: 'wt-ssh'
+            } as never
+          ]
+        },
+        ptyIdsByTabId: { 'tab-ssh': [] },
+        lastKnownRelayPtyIdByTabId: { 'tab-ssh': 'ssh:conn-1@@pty-42' },
+        sshConnectionStates: new Map([['conn-1', { status: 'disconnected' } as never]]),
+        repos: [
+          {
+            id: 'repo-ssh',
+            path: '/repo-ssh',
+            displayName: 'SSH',
+            badgeColor: '#fff',
+            addedAt: 1,
+            connectionId: 'conn-1'
+          }
+        ],
+        worktreesByRepo: {
+          'repo-ssh': [{ id: 'wt-ssh', repoId: 'repo-ssh' } as never]
+        }
+      })
+    )
+
+    expect(payload.remoteSessionIdsByTabId).toEqual({
+      'tab-ssh': 'ssh:conn-1@@pty-42'
+    })
+    expect(payload.activeConnectionIdsAtShutdown).toEqual(['conn-1'])
+  })
 })
