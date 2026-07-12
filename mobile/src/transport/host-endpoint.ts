@@ -12,7 +12,14 @@ type WebsocketUrlPortResolution =
   | { kind: 'valid'; port: string }
   | { kind: 'invalid' }
 
+type RawSchemeAuthority = {
+  hostname: string | null
+  hasUserInfo: boolean
+  hasPathOrQuery: boolean
+}
+
 const DEFAULT_PORT = '6768'
+const NUMERIC_IPV4_CANDIDATE = /^(?:0[xX][0-9a-fA-F]+|\d+)(?:\.(?:0[xX][0-9a-fA-F]+|\d+))*$/
 
 export function displayHostEndpoint(endpoint: string): string {
   try {
@@ -129,6 +136,24 @@ function normalizeSchemeUrl(input: string, fallbackPort: string): NormalizeHostE
   if (explicitPort.kind === 'invalid') {
     return { ok: false, error: 'Port must be 1–65535.' }
   }
+  const scheme = /^([a-zA-Z][a-zA-Z0-9+.-]*):\/\//.exec(input)?.[1]?.toLowerCase()
+  if (scheme !== 'ws' && scheme !== 'wss') {
+    return { ok: false, error: 'Use ws:// or wss:// (or host:port).' }
+  }
+
+  const rawAuthority = parseRawSchemeAuthority(input)
+  if (rawAuthority.hasUserInfo) {
+    return { ok: false, error: 'Not a valid address.' }
+  }
+  if (rawAuthority.hasPathOrQuery) {
+    return { ok: false, error: 'Host must not include a path or query.' }
+  }
+  if (
+    rawAuthority.hostname &&
+    validateNumericIpv4Candidate(normalizeRawNumericIpv4Candidate(rawAuthority.hostname))
+  ) {
+    return { ok: false, error: 'Not a valid hostname.' }
+  }
 
   let url: URL
   try {
@@ -155,6 +180,11 @@ function normalizeSchemeUrl(input: string, fallbackPort: string): NormalizeHostE
   }
 
   const hostname = unwrapHostname(url.hostname)
+  // Why: WHATWG URL accepts legacy aliases and rewrites them to a different
+  // IPv4 address. Only an already-canonical raw dotted quad may become IPv4.
+  if (rawAuthority.hostname && isCanonicalIpv4(hostname) && rawAuthority.hostname !== hostname) {
+    return { ok: false, error: 'Not a valid hostname.' }
+  }
   const hostError = validateHostname(hostname)
   if (hostError) {
     return { ok: false, error: hostError }
@@ -170,6 +200,33 @@ function normalizeSchemeUrl(input: string, fallbackPort: string): NormalizeHostE
 
   // Why: rebuild so accidental whitespace never reaches the WebSocket constructor.
   return { ok: true, endpoint: `${url.protocol}//${formatHostForUrl(hostname)}:${port}` }
+}
+
+function parseRawSchemeAuthority(input: string): RawSchemeAuthority {
+  const schemeEnd = input.indexOf('://')
+  const remainder = input.slice(schemeEnd + 3)
+  const authorityEnd = remainder.search(/[/?#]/)
+  const authority = authorityEnd === -1 ? remainder : remainder.slice(0, authorityEnd)
+  const suffix = authorityEnd === -1 ? '' : remainder.slice(authorityEnd)
+  const hasUserInfo = authority.includes('@')
+  const hostPort = hasUserInfo ? authority.slice(authority.lastIndexOf('@') + 1) : authority
+  if (!hostPort) {
+    return { hostname: null, hasUserInfo, hasPathOrQuery: suffix !== '' && suffix !== '/' }
+  }
+  if (hostPort.startsWith('[')) {
+    const close = hostPort.indexOf(']')
+    return {
+      hostname: close > 1 ? hostPort.slice(1, close) : null,
+      hasUserInfo,
+      hasPathOrQuery: suffix !== '' && suffix !== '/'
+    }
+  }
+  const lastColon = hostPort.lastIndexOf(':')
+  return {
+    hostname: lastColon === -1 ? hostPort : hostPort.slice(0, lastColon),
+    hasUserInfo,
+    hasPathOrQuery: suffix !== '' && suffix !== '/'
+  }
 }
 
 function normalizeHostPort(
@@ -243,6 +300,10 @@ function validateHostname(host: string): string | null {
   if (/[\s/?#@[\]]/.test(host)) {
     return 'Not a valid hostname.'
   }
+  const numericIpv4Error = validateNumericIpv4Candidate(host)
+  if (numericIpv4Error) {
+    return numericIpv4Error
+  }
   if (host.includes(':')) {
     // Why: a hex/colon regex accepts malformed forms such as two `::` runs.
     // Reuse the URL parser that WebSocket will ultimately use.
@@ -265,6 +326,34 @@ function validateHostname(host: string): string | null {
     return 'Not a valid hostname.'
   }
   return null
+}
+
+function validateNumericIpv4Candidate(host: string): string | null {
+  if (!NUMERIC_IPV4_CANDIDATE.test(host)) {
+    return null
+  }
+  if (!isCanonicalIpv4(host)) {
+    return 'Not a valid hostname.'
+  }
+  return null
+}
+
+function normalizeRawNumericIpv4Candidate(host: string): string {
+  let decoded = host
+  try {
+    decoded = decodeURIComponent(host)
+  } catch {
+    // The URL parser will reject malformed escapes; keep them untouched here.
+  }
+  return decoded.endsWith('.') ? decoded.slice(0, -1) : decoded
+}
+
+function isCanonicalIpv4(host: string): boolean {
+  const octets = host.split('.')
+  return (
+    octets.length === 4 &&
+    octets.every((octet) => /^(?:0|[1-9]\d{0,2})$/.test(octet) && Number(octet) <= 255)
+  )
 }
 
 function isValidPort(port: string): boolean {

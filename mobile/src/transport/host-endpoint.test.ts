@@ -163,6 +163,60 @@ describe('normalizeHostEndpoint', () => {
     })
   })
 
+  it('rejects non-canonical numeric IPv4 forms in bare addresses', () => {
+    for (const host of ['999.999.999.999', '010.0.0.1', '127.1', '0x7f000001']) {
+      expect(normalizeHostEndpoint(`${host}:6768`)).toEqual({
+        ok: false,
+        error: 'Not a valid hostname.'
+      })
+    }
+  })
+
+  it('rejects non-canonical numeric IPv4 forms before URL normalization', () => {
+    for (const host of ['999.999.999.999', '010.0.0.1', '127.1', '0x7f000001']) {
+      expect(normalizeHostEndpoint(`ws://${host}:6768`)).toEqual({
+        ok: false,
+        error: 'Not a valid hostname.'
+      })
+    }
+  })
+
+  it('rejects encoded and trailing-dot numeric IPv4 aliases', () => {
+    for (const input of ['ws://127.1.:6768', 'wss://127.1.:6768', 'ws://%31%32%37.1:6768']) {
+      expect(normalizeHostEndpoint(input)).toEqual({
+        ok: false,
+        error: 'Not a valid hostname.'
+      })
+    }
+  })
+
+  it('rejects empty userinfo before URL normalization', () => {
+    expect(normalizeHostEndpoint('ws://@127.1:6768')).toEqual({
+      ok: false,
+      error: 'Not a valid address.'
+    })
+  })
+
+  it('reports a path or query before validating a numeric hostname alias', () => {
+    for (const input of ['ws://127.1/path', 'ws://127.1?route=1']) {
+      expect(normalizeHostEndpoint(input)).toEqual({
+        ok: false,
+        error: 'Host must not include a path or query.'
+      })
+    }
+  })
+
+  it('keeps ordinary DNS names that contain numeric labels', () => {
+    expect(normalizeHostEndpoint('desk123.local:6768')).toEqual({
+      ok: true,
+      endpoint: 'ws://desk123.local:6768'
+    })
+    expect(normalizeHostEndpoint('ws://123.example:6768')).toEqual({
+      ok: true,
+      endpoint: 'ws://123.example:6768'
+    })
+  })
+
   it('preserves wss when re-normalizing bare host:port via fallbackScheme', () => {
     expect(
       normalizeHostEndpoint('desk.example:8443', { fallbackScheme: 'wss', fallbackPort: '8443' })
