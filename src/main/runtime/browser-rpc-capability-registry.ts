@@ -32,18 +32,10 @@ const ALLOWED_BROWSER_CAPABILITY_METHODS = new Set([
   'browser.is',
   'browser.console',
   'browser.network',
-  'browser.capture.start',
-  'browser.capture.stop',
   'browser.highlight',
   'browser.setDevice',
   'browser.setOffline',
-  'browser.setMedia',
-  'browser.storageLocalGet',
-  'browser.storageLocalSet',
-  'browser.storageLocalClear',
-  'browser.storageSessionGet',
-  'browser.storageSessionSet',
-  'browser.storageSessionClear'
+  'browser.setMedia'
 ])
 
 type BrowserRpcCapability = {

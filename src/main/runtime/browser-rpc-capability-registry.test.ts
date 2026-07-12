@@ -45,6 +45,8 @@ describe('BrowserRpcCapabilityRegistry', () => {
       ['browser.wait', { page: 'page-1', fn: '() => true' }],
       ['browser.find', { page: 'page-1', locator: 'role', value: 'button', action: 'click' }],
       ['browser.get', { page: 'page-1', what: 'cdp-url' }],
+      ['browser.capture.start', { page: 'page-1' }],
+      ['browser.storageLocalGet', { page: 'page-1', key: 'auth-token' }],
       ['browser.goto', { page: 'page-1', url: 'data:text/html,<script>alert(1)</script>' }],
       ['browser.goto', { page: 'page-1', url: 'https://example.com' }],
       ['browser.upload', { page: 'page-1', element: '@e1', files: ['/etc/passwd'] }],
