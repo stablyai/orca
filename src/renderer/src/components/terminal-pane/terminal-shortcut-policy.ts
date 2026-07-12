@@ -158,7 +158,11 @@ export function resolveTerminalShortcutAction(
       : isWindows
         ? 'alt-enter'
         : 'csi-u'
-    return { type: 'sendInput', data: encoding === 'csi-u' ? '\x1b[13;2u' : '\x1b\r' }
+    // Why: CSI-u is application input, not a universal terminal sequence. Off
+    // Windows, only send it while the pane's application has KKP active.
+    const canSendCsiU =
+      encoding === 'csi-u' && (useLocalWindowsCapability || isKittyKeyboardActivePane?.() === true)
+    return { type: 'sendInput', data: canSendCsiU ? '\x1b[13;2u' : '\x1b\r' }
   }
 
   if (
