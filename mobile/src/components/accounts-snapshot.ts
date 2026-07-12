@@ -103,6 +103,19 @@ const HostRateLimitRuntimeTarget = {
   wslDistro: null
 }
 
+const DisplayOnlyProviderRateLimitsSchema = ProviderRateLimitsSchema.nullable().optional()
+
+const RateLimitProviderFields = [
+  ['claude', 'claude'],
+  ['codex', 'codex'],
+  ['gemini', 'gemini'],
+  ['opencodeGo', 'opencode-go'],
+  ['kimi', 'kimi'],
+  ['minimax', 'minimax'],
+  ['grok', 'grok'],
+  ['antigravity', 'antigravity']
+] as const
+
 const ClaudeAccountSummarySchema = z
   .object({
     id: AccountIdSchema,
@@ -174,6 +187,12 @@ export const AccountsSnapshotSchema = z
       .object({
         claude: ProviderRateLimitsSchema.nullable(),
         codex: ProviderRateLimitsSchema.nullable(),
+        gemini: DisplayOnlyProviderRateLimitsSchema,
+        opencodeGo: DisplayOnlyProviderRateLimitsSchema,
+        kimi: DisplayOnlyProviderRateLimitsSchema,
+        minimax: DisplayOnlyProviderRateLimitsSchema,
+        grok: DisplayOnlyProviderRateLimitsSchema,
+        antigravity: DisplayOnlyProviderRateLimitsSchema,
         // Why: protocol-compatible hosts from before runtime targeting omit
         // these fields; their account selection semantics were host-only.
         claudeTarget: RateLimitRuntimeTargetSchema.default(HostRateLimitRuntimeTarget),
@@ -185,19 +204,15 @@ export const AccountsSnapshotSchema = z
   })
   .passthrough()
   .superRefine((snapshot, context) => {
-    if (snapshot.rateLimits.claude && snapshot.rateLimits.claude.provider !== 'claude') {
-      context.addIssue({
-        code: 'custom',
-        message: 'Claude limits use the wrong provider identity',
-        path: ['rateLimits', 'claude', 'provider']
-      })
-    }
-    if (snapshot.rateLimits.codex && snapshot.rateLimits.codex.provider !== 'codex') {
-      context.addIssue({
-        code: 'custom',
-        message: 'Codex limits use the wrong provider identity',
-        path: ['rateLimits', 'codex', 'provider']
-      })
+    for (const [field, provider] of RateLimitProviderFields) {
+      const limits = snapshot.rateLimits[field]
+      if (limits && limits.provider !== provider) {
+        context.addIssue({
+          code: 'custom',
+          message: `${provider} limits use the wrong provider identity`,
+          path: ['rateLimits', field, 'provider']
+        })
+      }
     }
     for (const [index, entry] of snapshot.rateLimits.inactiveClaudeAccounts.entries()) {
       if (entry.rateLimits && entry.rateLimits.provider !== 'claude') {

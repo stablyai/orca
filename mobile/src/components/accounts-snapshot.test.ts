@@ -103,6 +103,22 @@ describe('decodeAccountsSnapshot', () => {
     expect(snapshot.rateLimits.codexTarget).toEqual({ runtime: 'host', wslDistro: null })
   })
 
+  it('validates display-only provider identities', () => {
+    const snapshot = makeSnapshot()
+    setPath(snapshot, ['rateLimits', 'gemini'], {
+      provider: 'gemini',
+      session: null,
+      weekly: null,
+      updatedAt: 100,
+      error: null,
+      status: 'ok'
+    })
+    expect(decodeAccountsSnapshot(snapshot).rateLimits.gemini?.provider).toBe('gemini')
+
+    setPath(snapshot, ['rateLimits', 'gemini', 'provider'], 'codex')
+    expect(() => decodeAccountsSnapshot(snapshot)).toThrow('Invalid accounts snapshot from host')
+  })
+
   it.each([
     ['account arrays', ['codex', 'accounts'], {}],
     ['active account IDs', ['codex', 'activeAccountId'], 42],

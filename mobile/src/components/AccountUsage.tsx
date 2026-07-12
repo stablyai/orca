@@ -1,5 +1,6 @@
 import { View, Text, StyleSheet, ActivityIndicator } from 'react-native'
 import { colors, spacing, typography } from '../theme/mobile-theme'
+import type { UsageWindowRow } from './account-usage-state'
 
 // Pure types and selectors live in account-usage-state.ts (no RN imports) so
 // they are unit-testable; re-exported here so existing import sites are stable.
@@ -11,12 +12,21 @@ export type {
   CodexAccountSummary,
   AccountsSnapshot,
   ProviderKey,
+  ManagedAccountProviderKey,
+  UsageProviderKey,
+  UsageProviderDescriptor,
+  UsageWindowRow,
   UsageBarState
 } from './account-usage-state'
 export {
   decodeAccountsSnapshot,
+  USAGE_PROVIDERS,
+  USAGE_PROVIDER_IDS,
+  DEFAULT_VISIBLE_USAGE_PROVIDERS,
+  getUsageProviderDescriptor,
   getActiveProviderRateLimits,
   getInactiveProviderUsage,
+  getProviderUsageWindows,
   getUsageBarState,
   getWindowResetLabel,
   hasActiveProviderUsage,
@@ -31,12 +41,14 @@ export function UsageBar({
   usedPercent,
   unavailable,
   loading,
+  labelWidth,
   resetText
 }: {
   label: string
   usedPercent: number | null
   unavailable: boolean
   loading?: boolean
+  labelWidth?: number
   resetText?: string | null
 }) {
   // Why: round then clamp so bar width, color, and label share one value (desktop parity).
@@ -53,7 +65,12 @@ export function UsageBar({
   return (
     <View style={styles.usageBarColumn}>
       <View style={styles.usageBar}>
-        <Text style={styles.usageLabel}>{label}</Text>
+        <Text
+          style={[styles.usageLabel, labelWidth != null ? { width: labelWidth } : null]}
+          numberOfLines={1}
+        >
+          {label}
+        </Text>
         <View style={styles.usageTrack}>
           <View
             style={[
@@ -84,7 +101,44 @@ export function UsageBar({
   )
 }
 
+// Why: display-only providers can report a variable set of windows (Gemini
+// named buckets, OpenCode Go monthly, others session/weekly). Render one bar
+// per window stacked full-width, or a single loading/unavailable bar when a
+// provider is mid-fetch with nothing yet.
+export function UsageWindowBars({
+  windows,
+  fetching
+}: {
+  windows: UsageWindowRow[]
+  fetching?: boolean
+}) {
+  if (windows.length === 0) {
+    return <UsageBar label="—" usedPercent={null} unavailable={!fetching} loading={fetching} />
+  }
+  // Widen the label column for named buckets (e.g. "3.1 Flash Lite") so they
+  // don't wrap in the 22px slot sized for "5h"/"7d".
+  const labelWidth = windows.some((w) => w.label.length > 4) ? 76 : undefined
+  return (
+    <>
+      {windows.map((w) => (
+        <View style={styles.windowRow} key={w.key}>
+          <UsageBar
+            label={w.label}
+            usedPercent={w.usedPercent}
+            unavailable={false}
+            labelWidth={labelWidth}
+          />
+        </View>
+      ))}
+    </>
+  )
+}
+
 const styles = StyleSheet.create({
+  windowRow: {
+    flexDirection: 'row',
+    alignItems: 'center'
+  },
   usageBarColumn: {
     flex: 1,
     gap: 2
