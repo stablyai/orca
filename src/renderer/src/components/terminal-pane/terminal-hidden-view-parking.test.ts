@@ -214,7 +214,12 @@ describe('selectColdParkedTerminalWorktrees', () => {
 
   it('cold-parks aged local worktrees even when under the retain limit', () => {
     const selected = selectColdParkedTerminalWorktrees({
-      worktrees: [localCandidate('wt-1', nowMs - TERMINAL_WORKTREE_HOT_RETAIN_MS)],
+      worktrees: [
+        // Why: wt-recent is the last-active exempt one; wt-1 proves the TTL
+        // sweep still parks an aged worktree that is under the cap.
+        localCandidate('wt-recent', nowMs - TERMINAL_WORKTREE_PARK_DELAY_MS),
+        localCandidate('wt-1', nowMs - TERMINAL_WORKTREE_HOT_RETAIN_MS)
+      ],
       pendingStartupByTabId: {},
       parkingEnabled: true,
       nowMs,
@@ -222,6 +227,36 @@ describe('selectColdParkedTerminalWorktrees', () => {
     })
 
     expect(selected).toEqual(new Set(['wt-1']))
+  })
+
+  it('never cold-parks the single most-recently-hidden (last-active) worktree', () => {
+    const selected = selectColdParkedTerminalWorktrees({
+      worktrees: [localCandidate('wt-1', nowMs - TERMINAL_WORKTREE_HOT_RETAIN_MS)],
+      pendingStartupByTabId: {},
+      parkingEnabled: true,
+      nowMs,
+      hotRetainLimit: 0
+    })
+
+    expect(selected).toEqual(new Set())
+  })
+
+  it('exempts only the last-active worktree from the cap, counting it against the limit', () => {
+    const selected = selectColdParkedTerminalWorktrees({
+      worktrees: [
+        localCandidate('wt-1', nowMs - TERMINAL_WORKTREE_PARK_DELAY_MS),
+        localCandidate('wt-2', nowMs - TERMINAL_WORKTREE_PARK_DELAY_MS - 1),
+        localCandidate('wt-3', nowMs - TERMINAL_WORKTREE_PARK_DELAY_MS - 2)
+      ],
+      pendingStartupByTabId: {},
+      parkingEnabled: true,
+      nowMs,
+      // Why: wt-1 (last-active) takes one of the two warm slots, so only wt-2
+      // fits the remaining slot and wt-3 parks.
+      hotRetainLimit: 2
+    })
+
+    expect(selected).toEqual(new Set(['wt-3']))
   })
 
   it('selects nothing when the settings kill switch disables parking', () => {
@@ -242,6 +277,10 @@ describe('selectColdParkedTerminalWorktrees', () => {
   it('does not cold-park terminals without local snapshot recovery', () => {
     const selected = selectColdParkedTerminalWorktrees({
       worktrees: [
+        // Why: wt-recent is last-active (exempt); wt-local proves the aged
+        // local worktree still parks while ssh/remote never enter the candidate
+        // set at all.
+        localCandidate('wt-recent', nowMs - TERMINAL_WORKTREE_PARK_DELAY_MS),
         localCandidate('wt-local', nowMs - TERMINAL_WORKTREE_HOT_RETAIN_MS),
         {
           ...localCandidate('wt-ssh', nowMs - TERMINAL_WORKTREE_HOT_RETAIN_MS),
@@ -349,7 +388,12 @@ describe('selectColdParkedTerminalTabs', () => {
   it('cold-parks aged inactive local tabs even when under the retain limit', () => {
     const selected = selectColdParkedTerminalTabs({
       worktreeId: 'wt-1',
-      terminalTabs: [localTab('tab-1', nowMs - TERMINAL_TAB_HOT_RETAIN_MS)],
+      terminalTabs: [
+        // Why: tab-recent is last-active exempt; tab-1 proves the TTL sweep
+        // still parks an aged tab under the cap.
+        localTab('tab-recent', nowMs - TERMINAL_WORKTREE_PARK_DELAY_MS),
+        localTab('tab-1', nowMs - TERMINAL_TAB_HOT_RETAIN_MS)
+      ],
       pendingStartupByTabId: {},
       parkingEnabled: true,
       nowMs,
@@ -357,6 +401,19 @@ describe('selectColdParkedTerminalTabs', () => {
     })
 
     expect(selected).toEqual(new Set(['tab-1']))
+  })
+
+  it('never cold-parks the single most-recently-hidden (last-active) tab', () => {
+    const selected = selectColdParkedTerminalTabs({
+      worktreeId: 'wt-1',
+      terminalTabs: [localTab('tab-1', nowMs - TERMINAL_TAB_HOT_RETAIN_MS)],
+      pendingStartupByTabId: {},
+      parkingEnabled: true,
+      nowMs,
+      hotRetainLimit: 0
+    })
+
+    expect(selected).toEqual(new Set())
   })
 
   it('selects nothing when the settings kill switch disables parking', () => {
@@ -379,6 +436,9 @@ describe('selectColdParkedTerminalTabs', () => {
     const selected = selectColdParkedTerminalTabs({
       worktreeId: 'wt-1',
       terminalTabs: [
+        // Why: tab-recent is last-active exempt; tab-local proves the aged
+        // local tab still parks while ssh/remote never enter the candidate set.
+        localTab('tab-recent', nowMs - TERMINAL_WORKTREE_PARK_DELAY_MS),
         localTab('tab-local', nowMs - TERMINAL_TAB_HOT_RETAIN_MS),
         {
           ...localTab('tab-ssh', nowMs - TERMINAL_TAB_HOT_RETAIN_MS),
