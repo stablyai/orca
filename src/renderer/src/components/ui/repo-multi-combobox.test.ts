@@ -25,4 +25,10 @@ describe('getRepoMultiComboboxDetail', () => {
     expect(getRepoMultiComboboxDetail(repo(), null)).toBe('/Users/jinwoo/orca')
     expect(getRepoMultiComboboxDetail(repo(), '   ')).toBe('/Users/jinwoo/orca')
   })
+
+  it('shows the POSIX path for a WSL repo instead of the UNC share', () => {
+    const wslRepo = repo({ path: '\\\\wsl.localhost\\Ubuntu\\home\\u\\app' })
+    expect(getRepoMultiComboboxDetail(wslRepo, null)).toBe('/home/u/app')
+    expect(getRepoMultiComboboxDetail(wslRepo, 'WSL')).toBe('WSL · /home/u/app')
+  })
 })

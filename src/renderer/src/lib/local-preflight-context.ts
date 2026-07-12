@@ -1,5 +1,6 @@
 import type { AppState } from '@/store/types'
 import { parseWslUncPath } from '../../../shared/wsl-paths'
+import type { ProjectDefaultShell } from '../../../shared/project-default-shell'
 import {
   deriveGlobalWindowsRuntimeDefaultFromLegacySettings,
   resolveProjectExecutionRuntime,
@@ -76,6 +77,29 @@ export function getLocalProjectExecutionRuntimeContext(
     wslAvailable: wslContext.wslAvailable,
     availableWslDistros: wslContext.availableWslDistros
   })
+}
+
+/**
+ * Terminal default-shell axis (T2's Project.defaultShell) for a worktree's
+ * project — mirrors main's resolveLocalProjectDefaultShellForWorktreeId so a
+ * renderer-computed tab label agrees with main's authoritative spawn decision.
+ */
+export function getLocalProjectDefaultShellForWorktreeId(
+  state: LocalProjectRuntimeState,
+  worktreeId: string | undefined,
+  appPlatform: NodeJS.Platform = getRendererAppPlatform()
+): ProjectDefaultShell | undefined {
+  if (appPlatform !== 'win32') {
+    return undefined
+  }
+
+  const worktree = getLocalWorktree(state, worktreeId)
+  const repo = getLocalRuntimeRepoForWorktree(state, worktree)
+  if (!isLocalRuntimeRepo(repo) || !isLocalRuntimeWorktree(worktree)) {
+    return undefined
+  }
+  const projectId = getLocalPreflightProjectId(state, worktreeId)
+  return getLocalRuntimeProject(state, projectId, repo.id)?.defaultShell
 }
 
 export function getLocalRepoProjectExecutionRuntimeContext(

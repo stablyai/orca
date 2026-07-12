@@ -1,3 +1,7 @@
+// @vitest-environment happy-dom
+
+import { act } from 'react'
+import { createRoot } from 'react-dom/client'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it, vi } from 'vitest'
 import { AddRepoHostSelector } from './AddRepoHostSelector'
@@ -133,5 +137,67 @@ describe('AddRepoHostSelector', () => {
     expect(html).toContain('The selected Orca server is too old for this client.')
     expect(html).toContain('Update Orca on the server.')
     expect(html).toContain('aria-disabled="true"')
+  })
+
+  it('lists WSL as a non-host entry and labels the trigger WSL once selected', () => {
+    const html = renderToStaticMarkup(
+      <AddRepoHostSelector
+        hosts={[
+          {
+            id: 'local',
+            label: 'Local Mac',
+            detail: 'This computer',
+            kind: 'local',
+            health: 'local',
+            presence: 'local'
+          }
+        ]}
+        selectedHostId="local"
+        selectedSource={{ kind: 'wsl' }}
+        open
+        onOpenChange={vi.fn()}
+        onSelectHost={vi.fn()}
+        onSelectWsl={vi.fn()}
+      />
+    )
+
+    expect(html).toContain('Open a project from a WSL distro')
+
+    const container = document.createElement('div')
+    document.body.appendChild(container)
+    const root = createRoot(container)
+    try {
+      act(() => {
+        root.render(
+          <AddRepoHostSelector
+            hosts={[
+              {
+                id: 'local',
+                label: 'Local Mac',
+                detail: 'This computer',
+                kind: 'local',
+                health: 'local',
+                presence: 'local'
+              }
+            ]}
+            selectedHostId="local"
+            selectedSource={{ kind: 'wsl' }}
+            open={false}
+            onOpenChange={vi.fn()}
+            onSelectHost={vi.fn()}
+            onSelectWsl={vi.fn()}
+          />
+        )
+      })
+      // The trigger shows "WSL", not the underlying local host's label.
+      const trigger = container.querySelector('[role="combobox"]')
+      expect(trigger?.textContent).toContain('WSL')
+      expect(trigger?.textContent).not.toContain('Local Mac')
+    } finally {
+      act(() => {
+        root.unmount()
+      })
+      container.remove()
+    }
   })
 })

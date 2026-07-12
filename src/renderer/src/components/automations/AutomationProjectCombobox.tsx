@@ -12,6 +12,7 @@ import { cn } from '@/lib/utils'
 import { useMountedRef } from '@/hooks/useMountedRef'
 import { translate } from '@/i18n/i18n'
 import type { Repo } from '../../../../shared/types'
+import { getRepoDisplayPath } from '../../../../shared/wsl-repo-identity'
 import {
   getAutomationProjectGroupForRepo,
   getAutomationProjectGroups,
@@ -27,9 +28,10 @@ type AutomationProjectComboboxProps = {
   getRepoHostLabel?: (repo: Repo) => string | null | undefined
 }
 
-function getRepoDetail(repo: Repo, hostLabel?: string | null): string {
+export function getRepoDetail(repo: Repo, hostLabel?: string | null): string {
   const label = hostLabel?.trim()
-  return label ? `${label} · ${repo.path}` : repo.path
+  const displayPath = getRepoDisplayPath(repo.path)
+  return label ? `${label} · ${displayPath}` : displayPath
 }
 
 function hasMultipleHosts(repos: readonly Repo[]): boolean {

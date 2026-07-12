@@ -1,0 +1,51 @@
+import type { ProjectExecutionRuntimeResolution } from './project-execution-runtime'
+import { isWslRuntimeResolution } from './wsl-repo-identity'
+
+// Why: single source of truth for the shell enum. The IPC (repos.ts) and RPC
+// (project-runtime-rpc-methods.ts) boundaries derive their `z.enum` from this
+// tuple, so adding a shell here can never be silently stripped at a boundary.
+export const PROJECT_DEFAULT_SHELL_VALUES = [
+  'inherit',
+  'powershell',
+  'wsl',
+  'cmd',
+  'git-bash'
+] as const
+export type ProjectDefaultShell = (typeof PROJECT_DEFAULT_SHELL_VALUES)[number]
+const SHELL: Record<'powershell' | 'cmd' | 'git-bash', string> = {
+  powershell: 'powershell.exe',
+  cmd: 'cmd.exe',
+  'git-bash': 'git-bash'
+}
+
+/** Coerce an arbitrary value (e.g. from persisted settings or IPC) to a valid shell, defaulting to `'inherit'` when unrecognized. */
+export function normalizeProjectDefaultShell(v: unknown): ProjectDefaultShell {
+  return typeof v === 'string' && (PROJECT_DEFAULT_SHELL_VALUES as readonly string[]).includes(v)
+    ? (v as ProjectDefaultShell)
+    : 'inherit'
+}
+
+/**
+ * Resolve the effective shell for a new terminal, honoring precedence:
+ * WSL/repair-required runtime > per-terminal creation override > project default > global default.
+ */
+export function resolveDefaultShell(args: {
+  creationOverride?: string
+  projectDefaultShell: ProjectDefaultShell
+  runtime: ProjectExecutionRuntimeResolution | undefined
+  globalDefaultShell?: string
+}): string | undefined {
+  // Policy: WSL projects (and repair-required) stay on WSL regardless of overrides.
+  if (isWslRuntimeResolution(args.runtime) || args.runtime?.status === 'repair-required') {
+    return 'wsl.exe'
+  }
+  // Windows-host branch only below. 'wsl' is not a valid host shell here (T6 omits it, and
+  // getHostShellForProjectRuntime strips WSL names for windows-host) — treat it as inherit.
+  if (args.creationOverride && args.creationOverride !== 'wsl.exe') {
+    return args.creationOverride
+  }
+  if (args.projectDefaultShell !== 'inherit' && args.projectDefaultShell !== 'wsl') {
+    return SHELL[args.projectDefaultShell]
+  }
+  return args.globalDefaultShell
+}

@@ -2,10 +2,11 @@ import { randomUUID } from 'node:crypto'
 import { getRepoExecutionHostId, type ExecutionHostId } from '../../shared/execution-host'
 import { projectHostSetupProjectionFromRepos } from '../../shared/project-host-setup-projection'
 import type { SshTarget } from '../../shared/ssh-types'
-import type { PersistedState, Repo, SparsePreset, WorkspaceKey } from '../../shared/types'
+import type { PersistedState, Project, Repo, SparsePreset, WorkspaceKey } from '../../shared/types'
 import { parseWorkspaceKey } from '../../shared/workspace-scope'
 import type { TransferProfileState } from './profile-project-state-file'
 import { rebuildRepoBackedProjectState } from './profile-project-state-file'
+import { applyTransferredProjectSettings } from './profile-project-transfer-settings'
 import { mergeHostWorkspaceSessions, mergeWorkspaceSessions } from './profile-project-session-state'
 import {
   extractHostSessionsForTransfer,
@@ -27,6 +28,12 @@ export type TransferPayload = {
   workspaceSessionsByHostId?: Partial<Record<ExecutionHostId, PersistedState['workspaceSession']>>
   sshTargets: SshTarget[]
   targetProjectId: string | null
+  // Why: the payload rebuilds a projection-fresh project on the target, which
+  // drops project-scoped settings that live only on the source Project record. A
+  // transferred WSL repo must keep routing through wsl.exe (runtime preference)
+  // and its terminal shell axis, so carry both across the transfer.
+  localWindowsRuntimePreference?: Project['localWindowsRuntimePreference']
+  defaultShell?: Project['defaultShell']
 }
 
 export function createTargetRepo(
@@ -204,6 +211,9 @@ export function createTransferPayload(args: {
   const targetProjection = projectHostSetupProjectionFromRepos([targetRepo])
   const targetProjectId =
     targetProjection.setups[0]?.projectId ?? targetProjection.projects[0]?.id ?? null
+  const sourceProject = sourceState.projects.find((project) =>
+    project.sourceRepoIds.includes(oldRepoId)
+  )
   return {
     repo: targetRepo,
     sparsePresets: (sourceState.sparsePresetsByRepo[oldRepoId] ?? []).map((preset) => ({
@@ -250,7 +260,11 @@ export function createTransferPayload(args: {
     sshTargets: sourceRepo.connectionId
       ? sourceState.sshTargets.filter((target) => target.id === sourceRepo.connectionId)
       : [],
-    targetProjectId
+    targetProjectId,
+    ...(sourceProject?.localWindowsRuntimePreference
+      ? { localWindowsRuntimePreference: sourceProject.localWindowsRuntimePreference }
+      : {}),
+    ...(sourceProject?.defaultShell ? { defaultShell: sourceProject.defaultShell } : {})
   }
 }
 
@@ -285,7 +299,10 @@ export function applyPayloadToTarget(
       payload.workspaceSessionsByHostId
     )
   }
-  return rebuildRepoBackedProjectState(next)
+  // Why: rebuild projects the transferred repo fresh from its identity, so stamp
+  // the carried project-scoped settings onto that projection afterwards. rebuild
+  // preserves them on any later rebuild via existingProjectsById.
+  return applyTransferredProjectSettings(rebuildRepoBackedProjectState(next), payload)
 }
 
 function mergeSshTargets(existing: SshTarget[], incoming: SshTarget[]): SshTarget[] {

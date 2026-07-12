@@ -1,5 +1,9 @@
 import type { Store } from './persistence'
-import type { Repo } from '../shared/types'
+import type { Project, Repo } from '../shared/types'
+import {
+  normalizeProjectDefaultShell,
+  type ProjectDefaultShell
+} from '../shared/project-default-shell'
 import {
   resolveProjectExecutionRuntime,
   type ProjectExecutionRuntimeResolution
@@ -21,6 +25,14 @@ function canResolveProjectRuntimeForWorktreeId(store: Store): boolean {
   return canResolveProjectRuntimeForRepo(store) && typeof store.getRepo === 'function'
 }
 
+function findProjectForRepo(store: Store, repo: Repo): Project | undefined {
+  return store.getProjects().find((entry) => entry.sourceRepoIds.includes(repo.id))
+}
+
+/**
+ * Resolve a local repo's project execution runtime (windows-host vs. WSL distro),
+ * using cached WSL probes rather than re-invoking wsl.exe on this hot path.
+ */
 export function resolveLocalProjectRuntimeForRepo(
   store: Store,
   repo: Repo
@@ -31,7 +43,7 @@ export function resolveLocalProjectRuntimeForRepo(
   ) {
     return undefined
   }
-  const project = store.getProjects().find((entry) => entry.sourceRepoIds.includes(repo.id))
+  const project = findProjectForRepo(store, repo)
   if (!project) {
     return undefined
   }
@@ -49,6 +61,7 @@ export function resolveLocalProjectRuntimeForRepo(
   })
 }
 
+/** {@link resolveLocalProjectRuntimeForRepo}, looked up from a worktree id via its owning repo. */
 export function resolveLocalProjectRuntimeForWorktreeId(
   store: Store | undefined,
   worktreeId: string | undefined
@@ -61,4 +74,23 @@ export function resolveLocalProjectRuntimeForWorktreeId(
   }
   const repo = store.getRepo(getRepoIdFromWorktreeId(worktreeId))
   return repo ? resolveLocalProjectRuntimeForRepo(store, repo) : undefined
+}
+
+/** Terminal default-shell axis (T2's Project.defaultShell) for a worktree's project. */
+export function resolveLocalProjectDefaultShellForWorktreeId(
+  store: Store | undefined,
+  worktreeId: string | undefined
+): ProjectDefaultShell | undefined {
+  if (!store || !worktreeId || !canResolveProjectRuntimeForWorktreeId(store)) {
+    return undefined
+  }
+  const repo = store.getRepo(getRepoIdFromWorktreeId(worktreeId))
+  if (!repo || getRepoExecutionHostId(repo) !== LOCAL_EXECUTION_HOST_ID) {
+    return undefined
+  }
+  const defaultShell = findProjectForRepo(store, repo)?.defaultShell
+  // Why: persist load is a JSON cast, so a legacy/hand-edited bad value can reach
+  // here unnormalized (the write path normalizes). Preserve "no override" as
+  // undefined, but coerce any present-but-invalid value the same way writes do.
+  return defaultShell === undefined ? undefined : normalizeProjectDefaultShell(defaultShell)
 }

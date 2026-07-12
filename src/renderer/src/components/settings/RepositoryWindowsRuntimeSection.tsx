@@ -2,11 +2,14 @@ import type { GlobalSettings, Project, ProjectUpdateArgs } from '../../../../sha
 import { SearchableSetting } from './SearchableSetting'
 import type { SettingsSearchEntry } from './settings-search'
 import { matchesSettingsSearch } from './settings-search'
+import { getRepositoryRuntimeSectionId } from './repository-settings-targets'
 import { ProjectWindowsRuntimeSetting } from './ProjectWindowsRuntimeSetting'
+import { ProjectDefaultShellSetting } from './ProjectDefaultShellSetting'
 import type { ProjectRuntimeSessionSummary } from './repository-runtime-session-summary'
 import { translate } from '@/i18n/i18n'
 
 type RepositoryWindowsRuntimeSectionProps = {
+  repoId: string
   repoDisplayName: string
   project: Project | null
   settings: Pick<GlobalSettings, 'localWindowsRuntimeDefault'> | null
@@ -25,6 +28,7 @@ type RepositoryWindowsRuntimeSectionProps = {
 }
 
 export function RepositoryWindowsRuntimeSection({
+  repoId,
   repoDisplayName,
   project,
   settings,
@@ -57,9 +61,15 @@ export function RepositoryWindowsRuntimeSection({
         'wsl',
         'distro',
         'agent runtime',
-        'skill runtime'
+        'skill runtime',
+        'default shell',
+        'terminal shell',
+        'powershell',
+        'cmd',
+        'git bash'
       ]}
       className="space-y-3"
+      id={getRepositoryRuntimeSectionId(repoId)}
       forceVisible={forceVisible || matchesSettingsSearch(searchQuery, searchEntries)}
     >
       <ProjectWindowsRuntimeSetting
@@ -70,6 +80,15 @@ export function RepositoryWindowsRuntimeSection({
         wslDistros={wslDistros}
         wslCapabilitiesLoading={wslCapabilitiesLoading}
         runtimeSessionSummary={runtimeSessionSummary}
+        updateProject={updateProject}
+      />
+      <ProjectDefaultShellSetting
+        project={project}
+        settings={settings}
+        isLocalWindowsProject={isLocalWindowsProject}
+        wslAvailable={wslAvailable}
+        wslDistros={wslDistros}
+        wslCapabilitiesLoading={wslCapabilitiesLoading}
         updateProject={updateProject}
       />
     </SearchableSetting>

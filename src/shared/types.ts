@@ -40,6 +40,7 @@ import type {
   GlobalWindowsRuntimeDefault,
   LocalWindowsRuntimePreference
 } from './project-execution-runtime'
+import type { ProjectDefaultShell } from './project-default-shell'
 import type { UsagePercentageDisplay } from './usage-percentage-display'
 
 // Re-exported for backward compat with renderer call sites that import
@@ -114,6 +115,8 @@ export type Project = {
   gitRemoteIdentity?: GitRemoteIdentity
   /** Local Windows projects inherit the global runtime default unless this override is set. */
   localWindowsRuntimePreference?: LocalWindowsRuntimePreference
+  /** Terminal default-shell axis (windows-host projects); independent of the runtime axis. */
+  defaultShell?: ProjectDefaultShell
   sourceRepoIds: string[]
   createdAt: number
   updatedAt: number
@@ -121,7 +124,7 @@ export type Project = {
 
 export type ProjectUpdateArgs = {
   projectId: string
-  updates: Partial<Pick<Project, 'localWindowsRuntimePreference'>>
+  updates: Partial<Pick<Project, 'localWindowsRuntimePreference' | 'defaultShell'>>
 }
 
 export type ProjectHostSetupState = 'ready' | 'not-set-up' | 'setting-up' | 'error' | 'unsupported'

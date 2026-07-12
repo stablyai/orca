@@ -12,6 +12,7 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { searchRepos } from '@/lib/repo-search'
 import { cn } from '@/lib/utils'
 import type { Repo } from '../../../../shared/types'
+import { getRepoDisplayPath } from '../../../../shared/wsl-repo-identity'
 import RepoBadgeLabel from '@/components/repo/RepoBadgeLabel'
 import { translate } from '@/i18n/i18n'
 
@@ -66,7 +67,8 @@ function renderTriggerLabel(repos: Repo[], selected: ReadonlySet<string>): React
 
 export function getRepoMultiComboboxDetail(repo: Repo, hostLabel?: string | null): string {
   const trimmedHostLabel = hostLabel?.trim()
-  return trimmedHostLabel ? `${trimmedHostLabel} · ${repo.path}` : repo.path
+  const displayPath = getRepoDisplayPath(repo.path)
+  return trimmedHostLabel ? `${trimmedHostLabel} · ${displayPath}` : displayPath
 }
 
 export default function RepoMultiCombobox({

@@ -55,6 +55,10 @@ function renderStepContent(overrides: Partial<StepContentProps>): string {
     createParent: '',
     createError: null,
     isCreating: false,
+    wslDistro: '',
+    wslPath: '',
+    wslError: null,
+    isAddingWsl: false,
     createDefaultParent: '',
     createGitAvailability: 'unknown',
     createRuntimeParentStatus: 'idle',
@@ -84,6 +88,9 @@ function renderStepContent(overrides: Partial<StepContentProps>): string {
     onCreateParentChange: vi.fn(),
     onPickCreateParent: vi.fn(),
     onCreate: vi.fn(),
+    onWslDistroChange: vi.fn(),
+    onWslPathChange: vi.fn(),
+    onAddWsl: vi.fn(),
     ...overrides
   }
 

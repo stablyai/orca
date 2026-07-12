@@ -37,6 +37,7 @@ import { isValidHostTerminalTabId, isValidTerminalTabId } from '../../../../shar
 import { getRepoIdFromWorktreeId, splitWorktreeId } from '../../../../shared/worktree-id'
 import { isWslUncPath } from '../../../../shared/wsl-paths'
 import type { ProjectExecutionRuntimeResolution } from '../../../../shared/project-execution-runtime'
+import type { ProjectDefaultShell } from '../../../../shared/project-default-shell'
 import type { StartupCommandDelivery } from '../../../../shared/codex-startup-delivery'
 import { resolveLocalWindowsTerminalShellOverrideForTab } from '../../../../shared/local-windows-terminal-runtime'
 import { WINDOWS_GIT_BASH_SHELL } from '../../../../shared/windows-terminal-shell'
@@ -79,7 +80,10 @@ import { hasWorktreeSleepIntent } from '@/lib/worktree-sleep-intent'
 import { sanitizeTerminalLayoutPaneTitles } from '@/lib/terminal-pane-title-sanitization'
 import { focusTerminalTabSurface } from '@/lib/focus-terminal-tab-surface'
 import { getRuntimeEnvironmentIdForWorktree } from '@/lib/worktree-runtime-owner'
-import { getLocalProjectExecutionRuntimeContext } from '@/lib/local-preflight-context'
+import {
+  getLocalProjectDefaultShellForWorktreeId,
+  getLocalProjectExecutionRuntimeContext
+} from '@/lib/local-preflight-context'
 import type { NativeChatLaunchPrompt } from '@/lib/native-chat-launch-prompt'
 import {
   addAdditionalValidWorkspaceKeys,
@@ -297,7 +301,8 @@ function resolveCreatedTabShellOverride(
   isRemoteWorktree: boolean,
   remotePlatform: NodeJS.Platform | null,
   isWslWorktree: boolean,
-  projectRuntime: ProjectExecutionRuntimeResolution | undefined
+  projectRuntime: ProjectExecutionRuntimeResolution | undefined,
+  projectDefaultShell: ProjectDefaultShell | undefined
 ): string | undefined {
   if (isRemoteWorktree) {
     if (remotePlatform === 'win32' && isAllowedRemoteWindowsTerminalShell(explicitShellOverride)) {
@@ -310,7 +315,8 @@ function resolveCreatedTabShellOverride(
       explicitShellOverride,
       defaultWindowsShell,
       isWslWorktree,
-      projectRuntime
+      projectRuntime,
+      projectDefaultShell
     })
   }
   if (explicitShellOverride !== undefined) {
@@ -978,7 +984,10 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
         // terminals should enter that distro even when the global Windows shell
         // preference is PowerShell or cmd.exe.
         isWslWorktree,
-        isRemoteWorktree ? undefined : getLocalProjectExecutionRuntimeContext(s, worktreeId)
+        isRemoteWorktree ? undefined : getLocalProjectExecutionRuntimeContext(s, worktreeId),
+        // Why: keeps the tab label consistent with main's authoritative
+        // shell decision for the same project (see resolveDefaultShell).
+        isRemoteWorktree ? undefined : getLocalProjectDefaultShellForWorktreeId(s, worktreeId)
       )
       tab = {
         id,

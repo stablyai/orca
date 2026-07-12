@@ -4521,7 +4521,9 @@
           "addRemoteHostTooltip": "可选择能通过 SSH 登录的机器，也可选择运行 Orca 的远程服务器。",
           "addSshHostDetail": "通过 SSH 使用现有机器。",
           "addRemoteServerDetail": "与另一台电脑上运行的 Orca 配对。",
-          "addRemoteHostDetail": "SSH 主机或 Orca 服务器"
+          "addRemoteHostDetail": "SSH 主机或 Orca 服务器",
+          "wsl": "WSL",
+          "wslDetail": "Open a project from a WSL distro"
         },
         "sidebarHostOptions": {
           "3e102f111c": "所有主机",
@@ -4671,6 +4673,31 @@
           "cancel": "取消",
           "forget": "从 Orca 中移除",
           "reconnectAndDelete": "重新连接并删除"
+        },
+        "WslSourcePicker": {
+          "browseOutsideDistro": "Choose a folder inside the selected WSL distro.",
+          "title": "Add a WSL project",
+          "description": "Open a Git repository or folder from a WSL distro.",
+          "distro": "Distro",
+          "selectDistro": "Select distro",
+          "wslNotAvailable": "WSL not available",
+          "refreshDistros": "Refresh distros",
+          "noDistros": "No WSL distros found. Install one, then refresh.",
+          "unavailable": "WSL is not available on this computer.",
+          "linuxPath": "Linux path",
+          "linuxPathPlaceholder": "/home/user/project",
+          "browseWsl": "Browse WSL filesystem",
+          "addGitProject": "Add Git Project",
+          "openAsFolder": "Open as Folder"
+        },
+        "WslProjectBadge": {
+          "wslRepairLabel": "WSL",
+          "wslHealthyLabel": "WSL: {{value0}}",
+          "wslRepairAriaLabel": "WSL runtime needs attention. Open runtime settings.",
+          "wslHealthyAriaLabel": "Runs in WSL ({{value0}}). Open runtime settings.",
+          "wslUnavailable": "WSL is not available. Open runtime settings to repair.",
+          "wslDistroMissing": "The configured distro is missing. Open runtime settings to choose another.",
+          "wslDistroRequired": "Choose a WSL distro in runtime settings."
         }
       },
       "shared": {
@@ -9013,6 +9040,15 @@
           "a8f3e2c1b4": "每周额度",
           "b7e2d9f0a3": "与终端中 grok /usage 屏幕显示的每周额度百分比相同。",
           "c6d1a8f4e2": "{{when}} 重置"
+        },
+        "ProjectDefaultShellSetting": {
+          "defaultShell": "Default shell",
+          "wslLocked": "This project runs in WSL, which always uses the WSL shell.",
+          "description": "Shell used when opening new terminals for this project.",
+          "inherit": "Use global default",
+          "powershell": "PowerShell",
+          "cmd": "CMD",
+          "gitBash": "Git Bash"
         },
         "AppearanceWindowSidebarSection": {
           "usagePercentageDisplayUsed": "已用",

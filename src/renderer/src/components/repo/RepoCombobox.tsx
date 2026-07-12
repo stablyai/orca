@@ -15,6 +15,7 @@ import { searchRepos } from '@/lib/repo-search'
 import { cn } from '@/lib/utils'
 import { useMountedRef } from '@/hooks/useMountedRef'
 import type { Repo } from '../../../../shared/types'
+import { getRepoDisplayPath } from '../../../../shared/wsl-repo-identity'
 import RepoBadgeLabel from './RepoBadgeLabel'
 import { translate } from '@/i18n/i18n'
 
@@ -272,7 +273,9 @@ export default function RepoCombobox({
                         </span>
                       )}
                     </span>
-                    <p className="mt-0.5 truncate text-[11px] text-muted-foreground">{repo.path}</p>
+                    <p className="mt-0.5 truncate text-[11px] text-muted-foreground">
+                      {getRepoDisplayPath(repo.path)}
+                    </p>
                   </div>
                 </CommandItem>
               ))}

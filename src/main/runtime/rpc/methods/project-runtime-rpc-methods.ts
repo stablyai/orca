@@ -1,5 +1,6 @@
 import { z } from 'zod'
 import { normalizeExecutionHostId } from '../../../../shared/execution-host'
+import { PROJECT_DEFAULT_SHELL_VALUES } from '../../../../shared/project-default-shell'
 import { defineMethod, type RpcMethod } from '../core'
 import { OptionalString, requiredString } from '../schemas'
 
@@ -43,7 +44,8 @@ const LocalWindowsRuntimePreference = z.discriminatedUnion('kind', [
 const ProjectUpdate = z.object({
   projectId: requiredString('Missing project ID'),
   updates: z.object({
-    localWindowsRuntimePreference: LocalWindowsRuntimePreference.optional()
+    localWindowsRuntimePreference: LocalWindowsRuntimePreference.optional(),
+    defaultShell: z.enum(PROJECT_DEFAULT_SHELL_VALUES).optional()
   })
 })
 

@@ -100,9 +100,35 @@ function isRepoBackedProjectHostSetup(
   return Boolean(setup.repoId && currentRepoIds.has(setup.repoId))
 }
 
+// Why: mirrors persistence.ts mergeProjectHostSetupCompatibilityState — a repo's
+// owning project id shifts once gitRemoteIdentity enrichment rekeys it
+// (repo:<uuid> → git:<key>), so the id-keyed lookup misses the project that still
+// holds project-scoped settings. Recover it via a shared source repo so those
+// settings migrate to the new owning project instead of resetting.
+function findProjectScopedSettingsPredecessor(
+  project: Project,
+  existingProjectByRepoId: ReadonlyMap<string, Project>
+): Project | undefined {
+  for (const repoId of project.sourceRepoIds) {
+    const predecessor = existingProjectByRepoId.get(repoId)
+    if (predecessor && predecessor.id !== project.id) {
+      return predecessor
+    }
+  }
+  return undefined
+}
+
 export function rebuildRepoBackedProjectState(state: TransferProfileState): TransferProfileState {
   const projection = projectHostSetupProjectionFromRepos(state.repos)
   const existingProjectsById = new Map(state.projects.map((project) => [project.id, project]))
+  const existingProjectByRepoId = new Map<string, Project>()
+  for (const project of state.projects) {
+    for (const repoId of project.sourceRepoIds) {
+      if (!existingProjectByRepoId.has(repoId)) {
+        existingProjectByRepoId.set(repoId, project)
+      }
+    }
+  }
   const currentRepoIds = new Set(state.repos.map((repo) => repo.id))
   const projectedProjectIds = new Set(projection.projects.map((project) => project.id))
   const projectedSetupIds = new Set(projection.setups.map((setup) => setup.id))
@@ -122,14 +148,23 @@ export function rebuildRepoBackedProjectState(state: TransferProfileState): Tran
       sourceRepoIds: project.sourceRepoIds.filter((repoId) => currentRepoIds.has(repoId))
     }))
   const projectedProjects = projection.projects.map((project) => {
-    const existingProject = existingProjectsById.get(project.id)
-    return existingProject?.localWindowsRuntimePreference
+    const existingProject =
+      existingProjectsById.get(project.id) ??
+      findProjectScopedSettingsPredecessor(project, existingProjectByRepoId)
+    const withRuntimePreference = existingProject?.localWindowsRuntimePreference
       ? {
           ...project,
           localWindowsRuntimePreference: existingProject.localWindowsRuntimePreference,
           updatedAt: Math.max(project.updatedAt, existingProject.updatedAt)
         }
       : project
+    return existingProject?.defaultShell
+      ? {
+          ...withRuntimePreference,
+          defaultShell: existingProject.defaultShell,
+          updatedAt: Math.max(withRuntimePreference.updatedAt, existingProject.updatedAt)
+        }
+      : withRuntimePreference
   })
   return {
     ...state,

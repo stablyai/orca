@@ -29,6 +29,35 @@ describe('cross-platform path containment', () => {
     expect(isPathInsideOrEqual('\\\\Server\\Share\\Repo', '\\\\server\\share\\repo2')).toBe(false)
   })
 
+  it('dedups legacy \\\\wsl$\\ and modern \\\\wsl.localhost\\ prefixes both ways', () => {
+    // Why: watchers may compare a legacy-prefixed root against a modern-prefixed
+    // candidate (or vice versa); both must canonicalize so refreshes still fire.
+    expect(
+      relativePathInsideRoot(
+        '\\\\wsl$\\Ubuntu\\home\\repo',
+        '\\\\wsl.localhost\\Ubuntu\\home\\repo\\src\\a.ts'
+      )
+    ).toBe('src/a.ts')
+    expect(
+      relativePathInsideRoot(
+        '\\\\wsl.localhost\\Ubuntu\\home\\repo',
+        '\\\\wsl$\\Ubuntu\\home\\repo\\src\\a.ts'
+      )
+    ).toBe('src/a.ts')
+    expect(
+      isPathInsideOrEqual(
+        '\\\\wsl$\\Ubuntu\\home\\repo',
+        '\\\\wsl.localhost\\Ubuntu\\home\\repo\\src'
+      )
+    ).toBe(true)
+    expect(
+      relativePathInsideRoot(
+        '\\\\wsl$\\Ubuntu\\home\\repo',
+        '\\\\wsl.localhost\\Ubuntu\\home\\repo'
+      )
+    ).toBe('')
+  })
+
   it('resolves POSIX relative paths without using the process cwd', () => {
     expect(resolveRuntimePath('/repos/app/repo', '../worktrees/feature')).toBe(
       '/repos/app/worktrees/feature'

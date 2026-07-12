@@ -1508,6 +1508,123 @@ describe('setActiveWorktree', () => {
     }
   })
 
+  it("stamps the tab label with the project's defaultShell, agreeing with main's spawn decision", () => {
+    const originalNavigator = globalThis.navigator
+    Object.defineProperty(globalThis, 'navigator', {
+      value: { userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)' },
+      configurable: true
+    })
+    try {
+      const store = createTestStore()
+      const wt = 'repo1::C:\\repo'
+
+      seedStore(store, {
+        // Why: the global setting deliberately differs from the project's
+        // defaultShell so the assertion can't pass by coincidental fallback.
+        settings: { ...getDefaultSettings('/tmp'), terminalWindowsShell: 'cmd.exe' },
+        projects: [
+          {
+            id: 'project-1',
+            displayName: 'Project',
+            badgeColor: '#000',
+            sourceRepoIds: ['repo1'],
+            localWindowsRuntimePreference: { kind: 'windows-host' },
+            defaultShell: 'powershell',
+            createdAt: 0,
+            updatedAt: 0
+          }
+        ],
+        worktreesByRepo: {
+          repo1: [
+            makeWorktree({
+              id: wt,
+              repoId: 'repo1',
+              projectId: 'project-1',
+              path: 'C:\\repo'
+            })
+          ]
+        }
+      })
+
+      const terminal = store.getState().createTab(wt)
+      expect(terminal.shellOverride).toBe('powershell.exe')
+    } finally {
+      Object.defineProperty(globalThis, 'navigator', {
+        value: originalNavigator,
+        configurable: true
+      })
+    }
+  })
+
+  it("keeps the project's defaultShell override inert for SSH terminal tabs", () => {
+    const originalNavigator = globalThis.navigator
+    Object.defineProperty(globalThis, 'navigator', {
+      value: { userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)' },
+      configurable: true
+    })
+    try {
+      const store = createTestStore()
+      const wt = 'remote-repo::/path/wt1'
+
+      seedStore(store, {
+        repos: [
+          {
+            id: 'remote-repo',
+            path: '/remote/repo',
+            displayName: 'Remote Repo',
+            badgeColor: '#000',
+            addedAt: 0,
+            connectionId: 'ssh-1'
+          }
+        ],
+        sshConnectionStates: new Map([
+          [
+            'ssh-1',
+            {
+              targetId: 'ssh-1',
+              status: 'connected',
+              error: null,
+              reconnectAttempt: 0,
+              remotePlatform: 'win32'
+            }
+          ]
+        ]),
+        settings: { ...getDefaultSettings('/tmp'), terminalWindowsShell: 'wsl.exe' },
+        projects: [
+          {
+            id: 'project-1',
+            displayName: 'Project',
+            badgeColor: '#000',
+            sourceRepoIds: ['remote-repo'],
+            defaultShell: 'git-bash',
+            createdAt: 0,
+            updatedAt: 0
+          }
+        ],
+        worktreesByRepo: {
+          'remote-repo': [
+            makeWorktree({
+              id: wt,
+              repoId: 'remote-repo',
+              projectId: 'project-1',
+              path: '/path/wt1'
+            })
+          ]
+        }
+      })
+
+      // Why: SSH PTYs ignore the local project's defaultShell axis entirely —
+      // only an explicit, allow-listed remote Windows shell override applies.
+      const terminal = store.getState().createTab(wt, undefined, 'cmd.exe')
+      expect(terminal.shellOverride).toBe('cmd.exe')
+    } finally {
+      Object.defineProperty(globalThis, 'navigator', {
+        value: originalNavigator,
+        configurable: true
+      })
+    }
+  })
+
   it('does not stamp local Windows shell icons onto SSH terminal tabs', () => {
     const originalNavigator = globalThis.navigator
     Object.defineProperty(globalThis, 'navigator', {

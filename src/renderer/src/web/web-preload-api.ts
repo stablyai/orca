@@ -723,7 +723,21 @@ function createWebPreloadApi(): Partial<PreloadApi> {
     ssh: createSshApi(),
     wsl: {
       isAvailable: () => callRuntimeResult<boolean>('host.wsl.isAvailable').catch(() => false),
-      listDistros: () => callRuntimeResult<string[]>('host.wsl.listDistros').catch(() => [])
+      listDistros: () => callRuntimeResult<string[]>('host.wsl.listDistros').catch(() => []),
+      // Why: the Add Project WSL picker's refresh-past-cache contract is
+      // native-only (Task 7); a paired web client composes the existing
+      // RPCs instead of a second host-side handler with no `refresh` effect.
+      getDistroOptions: async () => {
+        const [available, distros] = await Promise.all([
+          callRuntimeResult<boolean>('host.wsl.isAvailable').catch(() => false),
+          callRuntimeResult<string[]>('host.wsl.listDistros').catch(() => [])
+        ])
+        return { available, distros, default: distros[0] ?? null }
+      },
+      // Why: there is no host.wsl.pathExists RPC — a paired web client can't probe
+      // the host's 9P filesystem, so report inconclusive (null). Terminal POSIX
+      // links then stay clickable, matching the native inconclusive default (#8156).
+      pathExists: async () => null
     },
     pwsh: {
       isAvailable: () => callRuntimeResult<boolean>('host.pwsh.isAvailable').catch(() => false)
@@ -1236,9 +1250,14 @@ function webAiVaultUnavailableResult(executionHostId: ExecutionHostId): AiVaultL
 function createReposApi(): NonNullable<Partial<PreloadApi>['repos']> {
   return {
     list: async () => (await callRuntimeResult<{ repos: Repo[] }>('repo.list')).repos,
-    add: async ({ path, kind }) => {
+    add: async (args) => {
+      // Why: WSL is local-only (Task 7) — a paired web client talks to a
+      // remote Orca runtime over RPC, which has no local WSL path to add.
+      if ('wsl' in args) {
+        throw new Error('Adding a WSL project is unavailable in paired web clients.')
+      }
       invalidateRuntimeWorktreeCaches()
-      return callRuntimeResult('repo.add', { path, kind })
+      return callRuntimeResult('repo.add', { path: args.path, kind: args.kind })
     },
     remove: async ({ repoId }) => {
       await callRuntimeResult('repo.rm', { repo: repoId })

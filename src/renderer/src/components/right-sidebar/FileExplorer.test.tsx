@@ -230,7 +230,7 @@ function findFileExplorerRow(node: unknown): ReactElementLike {
 function findRepoNameLabel(node: unknown, repoName: string): ReactElementLike {
   let found: ReactElementLike | null = null
   visit(node, (entry) => {
-    if (entry.type === 'span' && entry.props.title === repoName) {
+    if (entry.type === 'span' && entry.props.children === repoName) {
       found = entry
     }
   })
@@ -278,6 +278,7 @@ function makeRefreshState(
 function makeToolbar(overrides: Partial<Parameters<typeof FileExplorerToolbar>[0]> = {}) {
   return FileExplorerToolbar({
     repoName: 'orca',
+    rootPath: '/tmp/orca',
     worktreePath: '/tmp/orca',
     connectionId: null,
     refresh: makeRefreshState(),

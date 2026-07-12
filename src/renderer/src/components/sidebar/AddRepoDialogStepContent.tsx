@@ -5,6 +5,7 @@ import { CreateStep } from './AddRepoCreateStep'
 import { AddRepoLocalStartStep } from './AddRepoStartSteps'
 import { AddRepoServerPathStartStep } from './AddRepoServerStartStep'
 import { AddRepoNestedImportStep } from './AddRepoNestedImportStep'
+import { WslSourcePicker } from './WslSourcePicker'
 import type { AddRepoDialogStep } from './add-repo-dialog-types'
 import type { NestedRepoScanResult } from '../../../../shared/types'
 import type { SshConnectionState, SshTarget } from '../../../../shared/ssh-types'
@@ -43,6 +44,10 @@ type AddRepoDialogStepContentProps = {
   createParent: string
   createError: string | null
   isCreating: boolean
+  wslDistro: string
+  wslPath: string
+  wslError: string | null
+  isAddingWsl: boolean
   hostSelector?: ReactNode
   showRemoteAction?: boolean
   canCreateProject?: boolean
@@ -77,6 +82,9 @@ type AddRepoDialogStepContentProps = {
   onCreateParentChange: (parent: string) => void
   onPickCreateParent: () => void
   onCreate: () => void
+  onWslDistroChange: (distro: string) => void
+  onWslPathChange: (path: string) => void
+  onAddWsl: (kind: 'git' | 'folder') => void
 }
 
 export function AddRepoDialogStepContent({
@@ -112,6 +120,10 @@ export function AddRepoDialogStepContent({
   createParent,
   createError,
   isCreating,
+  wslDistro,
+  wslPath,
+  wslError,
+  isAddingWsl,
   hostSelector,
   showRemoteAction = true,
   canCreateProject = true,
@@ -145,7 +157,10 @@ export function AddRepoDialogStepContent({
   onCreateNameChange,
   onCreateParentChange,
   onPickCreateParent,
-  onCreate
+  onCreate,
+  onWslDistroChange,
+  onWslPathChange,
+  onAddWsl
 }: AddRepoDialogStepContentProps): React.JSX.Element | null {
   if (step === 'add') {
     return (
@@ -182,6 +197,22 @@ export function AddRepoDialogStepContent({
         onAddServerPath={onAddServerPath}
         onOpenCloneStep={onOpenCloneStep}
         onOpenCreateStep={onOpenCreateStep}
+      />
+    )
+  }
+
+  if (step === 'wsl') {
+    return (
+      <WslSourcePicker
+        hostSelector={hostSelector}
+        wslDistro={wslDistro}
+        wslPath={wslPath}
+        wslError={wslError}
+        isAddingWsl={isAddingWsl}
+        addProjectBusyLabel={addProjectBusyLabel}
+        onDistroChange={onWslDistroChange}
+        onPathChange={onWslPathChange}
+        onAddWsl={onAddWsl}
       />
     )
   }

@@ -3,6 +3,7 @@ import { extractTerminalFileLinkCandidates, resolveTerminalFileLink } from '@/li
 import { isRemoteRuntimeFileOperation } from '@/runtime/runtime-file-client'
 import { getTerminalFileContext, openDetectedFilePath } from './terminal-file-open-routing'
 import { getTerminalPathExistsCacheKey } from './terminal-path-exists-cache'
+import { getPaneWslRuntimeDistro, resolveWslLinkAbsolutePath } from './terminal-wsl-link-resolution'
 import { resolveKnownWorktreeRootPathLink } from './terminal-worktree-path-link'
 import {
   buildHardWrappedPathLogicalLineCandidates,
@@ -32,6 +33,11 @@ export function openFilePathLinkAtBufferPosition(
     return false
   }
 
+  // Why: WSL panes report POSIX paths. Resolve the distro once so this fallback
+  // maps them onto the same UNC share the provider caches and opens under, or
+  // its cache key misses and it opens an unreachable POSIX path (#8156).
+  const wslDistro = getPaneWslRuntimeDistro(deps.worktreeId)
+
   for (const logicalLine of logicalLines) {
     const matches: {
       absolutePath: string
@@ -52,23 +58,25 @@ export function openFilePathLinkAtBufferPosition(
       if (!range || !rangeContainsBufferPosition(range, position, terminalColumns)) {
         continue
       }
+      const absolutePath =
+        resolveWslLinkAbsolutePath(resolved.absolutePath, wslDistro) ?? resolved.absolutePath
       const fileContext = getTerminalFileContext(
         deps.worktreeId,
         deps.worktreePath,
         deps.runtimeEnvironmentId
       )
       const cacheKey = getTerminalPathExistsCacheKey({
-        absolutePath: resolved.absolutePath,
+        absolutePath,
         connectionId: fileContext.connectionId,
-        isRemoteRuntimePath: isRemoteRuntimeFileOperation(fileContext, resolved.absolutePath),
+        isRemoteRuntimePath: isRemoteRuntimeFileOperation(fileContext, absolutePath),
         runtimeEnvironmentId: deps.runtimeEnvironmentId
       })
-      const isKnownWorktreeRoot = Boolean(resolveKnownWorktreeRootPathLink(resolved.absolutePath))
+      const isKnownWorktreeRoot = Boolean(resolveKnownWorktreeRootPathLink(absolutePath))
       if (/[\\/]$/.test(parsed.pathText) && !isKnownWorktreeRoot) {
         continue
       }
       matches.push({
-        absolutePath: resolved.absolutePath,
+        absolutePath,
         line: resolved.line,
         column: resolved.column,
         pathText: parsed.pathText,

@@ -3644,7 +3644,9 @@
           "addRemoteHostTooltip": "Choose SSH for a machine you can log into, or remote server for an Orca server.",
           "addSshHostDetail": "Use an existing machine over SSH.",
           "addRemoteServerDetail": "Pair with Orca running on another computer.",
-          "addRemoteHostDetail": "SSH host or Orca server"
+          "addRemoteHostDetail": "SSH host or Orca server",
+          "wsl": "WSL",
+          "wslDetail": "Open a project from a WSL distro"
         },
         "AddRepoNestedImportStep": {
           "496f68cf8c": "Scanning repositories. Click to stop.",
@@ -4671,6 +4673,31 @@
           "cancel": "Cancel",
           "forget": "Remove from Orca",
           "reconnectAndDelete": "Reconnect & Delete"
+        },
+        "WslSourcePicker": {
+          "browseOutsideDistro": "Choose a folder inside the selected WSL distro.",
+          "title": "Add a WSL project",
+          "description": "Open a Git repository or folder from a WSL distro.",
+          "distro": "Distro",
+          "selectDistro": "Select distro",
+          "wslNotAvailable": "WSL not available",
+          "refreshDistros": "Refresh distros",
+          "noDistros": "No WSL distros found. Install one, then refresh.",
+          "unavailable": "WSL is not available on this computer.",
+          "linuxPath": "Linux path",
+          "linuxPathPlaceholder": "/home/user/project",
+          "browseWsl": "Browse WSL filesystem",
+          "addGitProject": "Add Git Project",
+          "openAsFolder": "Open as Folder"
+        },
+        "WslProjectBadge": {
+          "wslRepairLabel": "WSL",
+          "wslHealthyLabel": "WSL: {{value0}}",
+          "wslRepairAriaLabel": "WSL runtime needs attention. Open runtime settings.",
+          "wslHealthyAriaLabel": "Runs in WSL ({{value0}}). Open runtime settings.",
+          "wslUnavailable": "WSL is not available. Open runtime settings to repair.",
+          "wslDistroMissing": "The configured distro is missing. Open runtime settings to choose another.",
+          "wslDistroRequired": "Choose a WSL distro in runtime settings."
         }
       },
       "shared": {
@@ -9013,6 +9040,15 @@
           "a8f3e2c1b4": "Weekly credits",
           "b7e2d9f0a3": "Same weekly credit % as the grok /usage screen in the terminal.",
           "c6d1a8f4e2": "Resets {{when}}"
+        },
+        "ProjectDefaultShellSetting": {
+          "defaultShell": "Default shell",
+          "wslLocked": "This project runs in WSL, which always uses the WSL shell.",
+          "description": "Shell used when opening new terminals for this project.",
+          "inherit": "Use global default",
+          "powershell": "PowerShell",
+          "cmd": "CMD",
+          "gitBash": "Git Bash"
         },
         "AppearanceWindowSidebarSection": {
           "usagePercentageDisplayUsed": "Used",

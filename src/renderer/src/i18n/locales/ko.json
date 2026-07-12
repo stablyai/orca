@@ -4521,7 +4521,9 @@
           "addRemoteHostTooltip": "로그인할 수 있는 시스템의 경우 SSH를 선택하고 Orca 서버의 경우 원격 서버를 선택합니다.",
           "addSshHostDetail": "SSH를 통해 기존 머신을 사용합니다.",
           "addRemoteServerDetail": "다른 컴퓨터에서 실행 중인 Orca와 페어링합니다.",
-          "addRemoteHostDetail": "SSH 호스트 또는 Orca 서버"
+          "addRemoteHostDetail": "SSH 호스트 또는 Orca 서버",
+          "wsl": "WSL",
+          "wslDetail": "Open a project from a WSL distro"
         },
         "sidebarHostOptions": {
           "3e102f111c": "모든 호스트",
@@ -4671,6 +4673,31 @@
           "cancel": "취소",
           "forget": "Orca에서 제거",
           "reconnectAndDelete": "재연결 후 삭제"
+        },
+        "WslSourcePicker": {
+          "browseOutsideDistro": "Choose a folder inside the selected WSL distro.",
+          "title": "Add a WSL project",
+          "description": "Open a Git repository or folder from a WSL distro.",
+          "distro": "Distro",
+          "selectDistro": "Select distro",
+          "wslNotAvailable": "WSL not available",
+          "refreshDistros": "Refresh distros",
+          "noDistros": "No WSL distros found. Install one, then refresh.",
+          "unavailable": "WSL is not available on this computer.",
+          "linuxPath": "Linux path",
+          "linuxPathPlaceholder": "/home/user/project",
+          "browseWsl": "Browse WSL filesystem",
+          "addGitProject": "Add Git Project",
+          "openAsFolder": "Open as Folder"
+        },
+        "WslProjectBadge": {
+          "wslRepairLabel": "WSL",
+          "wslHealthyLabel": "WSL: {{value0}}",
+          "wslRepairAriaLabel": "WSL runtime needs attention. Open runtime settings.",
+          "wslHealthyAriaLabel": "Runs in WSL ({{value0}}). Open runtime settings.",
+          "wslUnavailable": "WSL is not available. Open runtime settings to repair.",
+          "wslDistroMissing": "The configured distro is missing. Open runtime settings to choose another.",
+          "wslDistroRequired": "Choose a WSL distro in runtime settings."
         }
       },
       "shared": {
@@ -9013,6 +9040,15 @@
           "a8f3e2c1b4": "주간 크레딧",
           "b7e2d9f0a3": "터미널의 grok /usage 화면과 같은 주간 크레딧 비율입니다.",
           "c6d1a8f4e2": "{{when}}에 재설정"
+        },
+        "ProjectDefaultShellSetting": {
+          "defaultShell": "Default shell",
+          "wslLocked": "This project runs in WSL, which always uses the WSL shell.",
+          "description": "Shell used when opening new terminals for this project.",
+          "inherit": "Use global default",
+          "powershell": "PowerShell",
+          "cmd": "CMD",
+          "gitBash": "Git Bash"
         },
         "AppearanceWindowSidebarSection": {
           "usagePercentageDisplayUsed": "사용",

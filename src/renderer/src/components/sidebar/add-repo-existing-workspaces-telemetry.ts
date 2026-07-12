@@ -87,6 +87,7 @@ export function shouldTrackAddRepoExistingWorkspacesDetected(
   return (
     payload.source === 'local_folder_picker' ||
     payload.source === 'runtime_server_path' ||
-    payload.source === 'ssh_remote_path'
+    payload.source === 'ssh_remote_path' ||
+    payload.source === 'wsl_path'
   )
 }

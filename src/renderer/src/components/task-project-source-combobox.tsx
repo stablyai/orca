@@ -8,6 +8,7 @@ import { isRepoSearchQueryTooLarge, searchRepos } from '@/lib/repo-search'
 import { cn } from '@/lib/utils'
 import { translate } from '@/i18n/i18n'
 import type { Repo } from '../../../shared/types'
+import { getRepoDisplayPath } from '../../../shared/wsl-repo-identity'
 import type { TaskProjectPickerGroup } from './task-page-default-repo-selection'
 import {
   getSelectedTaskProjectSource,
@@ -68,7 +69,7 @@ function renderTriggerLabel(
   )
 }
 
-function getProjectDetail(
+export function getProjectDetail(
   group: TaskProjectPickerGroup,
   selected: ReadonlySet<string>,
   showHostLabels: boolean,
@@ -86,11 +87,13 @@ function getProjectDetail(
     )
     return hostLabel ? `${hostLabel} · ${hostCount}` : hostCount
   }
-  return hostLabel ? `${hostLabel} · ${selectedSource.path}` : selectedSource.path
+  const displayPath = getRepoDisplayPath(selectedSource.path)
+  return hostLabel ? `${hostLabel} · ${displayPath}` : displayPath
 }
 
-function getSourceDetail(repo: Repo, status?: TaskProjectSourceStatus | null): string {
-  return status?.label ? `${repo.path} · ${status.label}` : repo.path
+export function getSourceDetail(repo: Repo, status?: TaskProjectSourceStatus | null): string {
+  const displayPath = getRepoDisplayPath(repo.path)
+  return status?.label ? `${displayPath} · ${status.label}` : displayPath
 }
 
 export default function TaskProjectSourceCombobox({

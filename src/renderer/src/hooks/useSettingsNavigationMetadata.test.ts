@@ -142,6 +142,20 @@ describe('settings navigation metadata', () => {
     expect(repoSection?.searchEntries.some((entry) => entry.title === 'Project Runtime')).toBe(true)
   })
 
+  it('shows the POSIX path in a WSL repo section description, not the UNC share', () => {
+    const wslRepo: Repo = { ...repo, id: 'repo-2', path: '\\\\wsl.localhost\\Ubuntu\\home\\u\\app' }
+    const sections = buildSettingsNavigationMetadata({
+      isMac: false,
+      isWindows: true,
+      isWebClient: false,
+      repos: [wslRepo]
+    })
+
+    const repoSection = sections.find((section) => section.id === 'repo-repo-2')
+    expect(repoSection?.description).toContain('/home/u/app')
+    expect(repoSection?.description).not.toContain('wsl.localhost')
+  })
+
   it('surfaces Windows-host and universal terminal settings in Windows-host metadata', () => {
     const sections = buildSettingsNavigationMetadata({
       isMac: false,
