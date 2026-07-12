@@ -78,11 +78,11 @@ describe('detectWslCommandsOnPath', () => {
 
   it('ignores commands whose resolved path is not absolute', async () => {
     execFileAsyncMock.mockResolvedValue({
-      stdout: '__ORCA_AGENT_PATH__claude\tclaude\n',
+      stdout: '__ORCA_AGENT_PATH__claude\tclaude\n' + '__ORCA_AGENT_PATH__codex\tC:\\spoof\n',
       stderr: ''
     })
 
-    const found = await detectWslCommandsOnPath({ distro: 'Ubuntu' }, ['claude'])
+    const found = await detectWslCommandsOnPath({ distro: 'Ubuntu' }, ['claude', 'codex'])
 
     expect(found).toEqual(new Set())
   })

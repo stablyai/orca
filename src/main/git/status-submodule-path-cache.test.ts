@@ -114,7 +114,7 @@ describe('submodule path cache', () => {
     expect(gitExecFileAsyncMock).toHaveBeenCalledTimes(2)
   })
 
-  it('does not reuse another branch\'s submodule paths after local or WSL checkout', async () => {
+  it("does not reuse another branch's submodule paths after local or WSL checkout", async () => {
     let modulePath = 'main-lib'
     gitExecFileAsyncMock.mockImplementation((args: string[]) => {
       if (args[0] === 'checkout') {
@@ -219,9 +219,7 @@ describe('submodule path cache', () => {
       ...runtime,
       checkoutExistingBranch: true
     })
-    await expect(listSubmodulePaths('/repo-feature', runtime)).resolves.toEqual([
-      'recreated-lib'
-    ])
+    await expect(listSubmodulePaths('/repo-feature', runtime)).resolves.toEqual(['recreated-lib'])
 
     const configReads = gitExecFileAsyncMock.mock.calls.filter(
       ([args]) => args[0] === 'config' && args.includes('.gitmodules')

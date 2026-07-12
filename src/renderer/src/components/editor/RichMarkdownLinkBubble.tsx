@@ -1,13 +1,19 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import type { Editor } from '@tiptap/react'
-import { ExternalLink, Pencil, Unlink } from 'lucide-react'
+import { Copy, ExternalLink, Pencil, Unlink } from 'lucide-react'
 import { translate } from '@/i18n/i18n'
+import { Button } from '@/components/ui/button'
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 
 export type LinkBubbleState = {
+  kind: 'markdown' | 'html-superscript'
   href: string
   left: number
   top: number
+  openEnabled: boolean
+  copyEnabled: boolean
+  label?: string
 }
 
 const LINK_BUBBLE_VIEWPORT_MARGIN = 8
@@ -160,6 +166,8 @@ type RichMarkdownLinkBubbleProps = {
   onEditStart: () => void
   onEditCancel: () => void
   onOpen: () => void
+  onCopy: () => void
+  ownerId?: string
   portalToDocument?: boolean
 }
 
@@ -173,6 +181,8 @@ export function RichMarkdownLinkBubble({
   onEditStart,
   onEditCancel,
   onOpen,
+  onCopy,
+  ownerId,
   portalToDocument = false
 }: RichMarkdownLinkBubbleProps): React.JSX.Element {
   const bubbleRef = useRef<HTMLDivElement | null>(null)
@@ -270,6 +280,8 @@ export function RichMarkdownLinkBubble({
     <div
       ref={bubbleRef}
       className="rich-markdown-link-bubble"
+      data-rich-markdown-link-bubble=""
+      data-rich-markdown-link-bubble-owner={ownerId}
       style={positionStyle}
       onMouseDown={(e) => {
         // Prevent editor blur when clicking bubble buttons, but let inputs
@@ -278,7 +290,28 @@ export function RichMarkdownLinkBubble({
           e.preventDefault()
         }
       }}
-      onKeyDown={(e) => e.stopPropagation()}
+      onKeyDown={(event) => {
+        event.stopPropagation()
+        if (event.key === 'Escape') {
+          event.preventDefault()
+          onDismiss()
+          anchorElement?.querySelector<HTMLElement>('[contenteditable="true"]')?.focus()
+          return
+        }
+        if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') {
+          return
+        }
+        const buttons = Array.from(
+          bubbleRef.current?.querySelectorAll<HTMLButtonElement>('button:not([disabled])') ?? []
+        )
+        const currentIndex = buttons.indexOf(document.activeElement as HTMLButtonElement)
+        if (currentIndex === -1 || buttons.length === 0) {
+          return
+        }
+        event.preventDefault()
+        const direction = event.key === 'ArrowRight' ? 1 : -1
+        buttons[(currentIndex + direction + buttons.length) % buttons.length]?.focus()
+      }}
     >
       {isEditing ? (
         <LinkEditInput initialHref={linkBubble.href} onSave={onSave} onCancel={onEditCancel} />
@@ -287,39 +320,45 @@ export function RichMarkdownLinkBubble({
           <span className="rich-markdown-link-url" title={linkBubble.href}>
             {linkBubble.href.length > 40 ? `${linkBubble.href.slice(0, 40)}…` : linkBubble.href}
           </span>
-          <button
-            type="button"
-            className="rich-markdown-link-button"
-            onClick={onOpen}
-            title={translate(
+          <LinkBubbleAction
+            label={translate(
               'auto.components.editor.RichMarkdownLinkBubble.bfc813e909',
               'Open link'
             )}
+            disabled={!linkBubble.openEnabled}
+            onClick={onOpen}
           >
             <ExternalLink size={14} />
-          </button>
-          <button
-            type="button"
-            className="rich-markdown-link-button"
-            onClick={onEditStart}
-            title={translate(
-              'auto.components.editor.RichMarkdownLinkBubble.cdfe166f6f',
-              'Edit link'
-            )}
+          </LinkBubbleAction>
+          <LinkBubbleAction
+            label={translate('auto.components.editor.RichMarkdownLinkBubble.copyLink', 'Copy link')}
+            disabled={!linkBubble.copyEnabled}
+            onClick={onCopy}
           >
-            <Pencil size={14} />
-          </button>
-          <button
-            type="button"
-            className="rich-markdown-link-button"
-            onClick={onRemove}
-            title={translate(
-              'auto.components.editor.RichMarkdownLinkBubble.1c99b726e0',
-              'Remove link'
-            )}
-          >
-            <Unlink size={14} />
-          </button>
+            <Copy size={14} />
+          </LinkBubbleAction>
+          {linkBubble.kind === 'markdown' ? (
+            <>
+              <LinkBubbleAction
+                label={translate(
+                  'auto.components.editor.RichMarkdownLinkBubble.cdfe166f6f',
+                  'Edit link'
+                )}
+                onClick={onEditStart}
+              >
+                <Pencil size={14} />
+              </LinkBubbleAction>
+              <LinkBubbleAction
+                label={translate(
+                  'auto.components.editor.RichMarkdownLinkBubble.1c99b726e0',
+                  'Remove link'
+                )}
+                onClick={onRemove}
+              >
+                <Unlink size={14} />
+              </LinkBubbleAction>
+            </>
+          ) : null}
         </>
       )}
     </div>
@@ -328,4 +367,37 @@ export function RichMarkdownLinkBubble({
   // Why: editor panes clip overflow at the workbench boundary, so the URL
   // actions must portal to the app layer to remain above the right sidebar.
   return portalToDocument ? createPortal(bubble, document.body) : bubble
+}
+
+function LinkBubbleAction({
+  children,
+  disabled = false,
+  label,
+  onClick
+}: {
+  children: React.ReactNode
+  disabled?: boolean
+  label: string
+  onClick: () => void
+}): React.JSX.Element {
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon-xs"
+          className="rich-markdown-link-button"
+          aria-label={label}
+          disabled={disabled}
+          onClick={onClick}
+        >
+          {children}
+        </Button>
+      </TooltipTrigger>
+      <TooltipContent side="top" sideOffset={4}>
+        {label}
+      </TooltipContent>
+    </Tooltip>
+  )
 }

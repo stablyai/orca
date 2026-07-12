@@ -77,11 +77,11 @@ vi.mock('@/lib/new-workspace', () => ({
       ? {
           displayName:
             args.workItem.type === 'pr'
-              ? `Review PR ${args.workItem.number}`
+              ? `PR ${args.workItem.number} - Review`
               : `Issue ${args.workItem.number}`,
           seedName:
             args.workItem.type === 'pr'
-              ? `review-pr-${args.workItem.number}`
+              ? `pr-${args.workItem.number}-review`
               : `issue-${args.workItem.number}`
         }
       : null,
@@ -253,12 +253,12 @@ describe('launchWorkItemDirect', () => {
     })
     expect(mocks.createWorktree).toHaveBeenCalledWith(
       'repo-1',
-      'review-pr-6934',
+      'pr-6934-review',
       'abc123',
       'inherit',
       undefined,
       'sidebar',
-      'Review PR 6934',
+      'PR 6934 - Review',
       undefined,
       6934,
       { remoteName: 'origin', branchName: 'feature/fix' },

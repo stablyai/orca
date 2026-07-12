@@ -17,6 +17,7 @@ function makeMessage(overrides: Partial<MessageRow> = {}): MessageRow {
     sequence: 1,
     created_at: '2026-01-01T00:00:00Z',
     delivered_at: null,
+    sender_pane_key: null,
     ...overrides
   }
 }

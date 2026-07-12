@@ -30,10 +30,7 @@ import {
   removeWorktree
 } from '../git/worktree'
 import * as gitRunner from '../git/runner'
-import {
-  clearSubmodulePathsCacheForTests,
-  listSubmodulePaths
-} from '../git/status'
+import { clearSubmodulePathsCacheForTests, listSubmodulePaths } from '../git/status'
 import {
   createSetupRunnerScript,
   getEffectiveHooks,
@@ -946,7 +943,8 @@ class InMemoryOrchestrationMessages {
       read: 0,
       sequence: this.sequence,
       created_at: '1970-01-01 00:00:00',
-      delivered_at: null
+      delivered_at: null,
+      sender_pane_key: null
     }
     this.messages.push(row)
     return row
@@ -1177,6 +1175,67 @@ const store = {
     branchPrefixCustom: ''
   }),
   getProjects: () => []
+}
+
+async function createExplicitAgentStatusHarness(options: {
+  getForegroundProcess: (ptyId: string) => Promise<string | null>
+  confirmForegroundProcess?: (ptyId: string) => Promise<string | null>
+  title?: string
+}): Promise<{
+  runtime: OrcaRuntimeService
+  handle: string
+  syncPty: (ptyId: string | null) => void
+}> {
+  const leafId = '11111111-1111-4111-8111-111111111111'
+  const paneKey = makePaneKey('tab-1', leafId)
+  const runtime = new OrcaRuntimeService(store, undefined, {
+    getAgentStatusSnapshot: () => [
+      {
+        paneKey,
+        state: 'working',
+        prompt: '',
+        agentType: 'codex',
+        connectionId: null,
+        receivedAt: Date.now(),
+        stateStartedAt: Date.now(),
+        tabId: 'tab-1',
+        worktreeId: TEST_WORKTREE_ID
+      }
+    ]
+  })
+  runtime.setPtyController({
+    spawn: vi.fn().mockResolvedValue({ id: 'pty-1' }),
+    write: () => true,
+    kill: () => true,
+    getForegroundProcess: options.getForegroundProcess,
+    confirmForegroundProcess: options.confirmForegroundProcess
+  })
+  runtime.attachWindow(1)
+  const syncPty = (ptyId: string | null): void => {
+    runtime.syncWindowGraph(1, {
+      tabs: [
+        {
+          tabId: 'tab-1',
+          worktreeId: TEST_WORKTREE_ID,
+          title: options.title ?? 'repo terminal',
+          activeLeafId: leafId,
+          layout: null
+        }
+      ],
+      leaves: [
+        {
+          tabId: 'tab-1',
+          worktreeId: TEST_WORKTREE_ID,
+          leafId,
+          paneRuntimeId: 1,
+          ptyId
+        }
+      ]
+    })
+  }
+  syncPty('pty-1')
+  const [terminal] = (await runtime.listTerminals()).terminals
+  return { runtime, handle: terminal.handle, syncPty }
 }
 
 function makeHeadlessTerminalLayout(
@@ -2199,6 +2258,20 @@ describe('OrcaRuntimeService', () => {
     expect(internals.ptysById.has('cwd-only-pty')).toBe(false)
   })
 
+  it('keeps unknown bare terminal-list ids on the no-scan exact-id path', async () => {
+    vi.mocked(listWorktrees).mockClear()
+    vi.mocked(listWorktrees).mockRejectedValue(
+      new Error('unknown explicit ids should not rescan worktrees')
+    )
+    const runtime = createRuntime()
+
+    await expect(runtime.listTerminals('id:not-a-repo')).resolves.toMatchObject({
+      terminals: [],
+      totalCount: 0
+    })
+    expect(listWorktrees).not.toHaveBeenCalled()
+  })
+
   it('matches explicit-id cwd PTYs for folder workspace instance IDs', async () => {
     const folderWorktreeId = `${TEST_REPO_ID}::${TEST_FOLDER_WORKSPACE_PATH}${FOLDER_WORKSPACE_INSTANCE_SEPARATOR}11111111-1111-4111-8111-111111111111`
     vi.mocked(listWorktrees).mockClear()
@@ -2521,11 +2594,98 @@ describe('OrcaRuntimeService', () => {
     ).rejects.toThrow('selector_not_found')
   })
 
+  it('guides bare repo-id worktree selectors to the full id shape', async () => {
+    vi.mocked(listWorktrees).mockClear()
+    vi.mocked(listWorktrees).mockRejectedValue(new Error('bare repo ids should not scan worktrees'))
+    const runtime = new OrcaRuntimeService(store)
+
+    await expect(runtime.showManagedWorktree(`id:${TEST_REPO_ID}`)).rejects.toThrow(
+      'Worktree id selectors must use the full <repo-id>::<path> value.'
+    )
+    expect(listWorktrees).not.toHaveBeenCalled()
+  })
+
+  it('guides registered SSH repo ids without probing the provider', async () => {
+    const remoteRepo = { ...store.getRepos()[0], connectionId: 'ssh-1' }
+    const remoteStore = {
+      ...store,
+      getRepos: () => [remoteRepo],
+      getRepo: (id: string) => (id === remoteRepo.id ? remoteRepo : undefined)
+    }
+    vi.mocked(listWorktrees).mockClear()
+    getSshGitProviderMock.mockClear()
+    const runtime = new OrcaRuntimeService(remoteStore)
+
+    await expect(runtime.showManagedWorktree(`id:${TEST_REPO_ID}`)).rejects.toMatchObject({
+      code: 'worktree_id_requires_full_path'
+    })
+    expect(listWorktrees).not.toHaveBeenCalled()
+    expect(getSshGitProviderMock).not.toHaveBeenCalled()
+  })
+
+  it('rejects bare repo ids through terminal list RPC with the structured code', async () => {
+    vi.mocked(listWorktrees).mockClear()
+    const runtime = new OrcaRuntimeService(store)
+    const dispatcher = new RpcDispatcher({ runtime, methods: TERMINAL_METHODS })
+
+    const response = await dispatcher.dispatch(
+      makeRpcRequest('terminal.list', { worktree: `id:${TEST_REPO_ID}` })
+    )
+
+    expect(response).toMatchObject({
+      ok: false,
+      error: {
+        code: 'worktree_id_requires_full_path',
+        message: expect.stringContaining('full <repo-id>::<path> value')
+      }
+    })
+    expect(listWorktrees).not.toHaveBeenCalled()
+  })
+
+  it('rejects bare repo ids through the mobile session exact-id fast path', async () => {
+    vi.mocked(listWorktrees).mockClear()
+    const runtime = new OrcaRuntimeService(store)
+
+    await expect(runtime.listMobileSessionTabs(`id:${TEST_REPO_ID}`)).rejects.toMatchObject({
+      code: 'worktree_id_requires_full_path'
+    })
+    expect(listWorktrees).not.toHaveBeenCalled()
+  })
+
+  it('still resolves the full worktree id selector', async () => {
+    const runtime = new OrcaRuntimeService(store)
+
+    await expect(runtime.showManagedWorktree(`id:${TEST_WORKTREE_ID}`)).resolves.toMatchObject({
+      id: TEST_WORKTREE_ID
+    })
+  })
+
   it('still throws selector_not_found for an unknown id selector', async () => {
     const runtime = new OrcaRuntimeService(store)
 
     await expect(runtime.showManagedWorktree('id:does-not-exist')).rejects.toThrow(
       'selector_not_found'
+    )
+  })
+
+  it('still throws selector_not_found for unknown bare ids', async () => {
+    const runtime = new OrcaRuntimeService(store)
+
+    await expect(runtime.showManagedWorktree('id:not-a-repo')).rejects.toThrow('selector_not_found')
+  })
+
+  it('does not treat partial repo ids as full worktree ids', async () => {
+    const runtime = new OrcaRuntimeService(store)
+
+    await expect(runtime.showManagedWorktree('id:repo')).rejects.toThrow('selector_not_found')
+  })
+
+  it('preserves full-id guidance for explicit parent-worktree lineage selectors', async () => {
+    const runtime = new OrcaRuntimeService(store)
+    const resolveLineage = runtime['resolveLineageForWorktreeCreate'].bind(runtime)
+
+    await expect(resolveLineage({ parentWorktree: `id:${TEST_REPO_ID}` })).rejects.toThrow(
+      'Worktree id selectors must use the full <repo-id>::<path> value.'
     )
   })
 
@@ -8484,6 +8644,203 @@ describe('OrcaRuntimeService', () => {
       isRunningAgent: false,
       status: null
     })
+  })
+
+  it('uses strong provider confirmation to authorize fresh hook state over a shell foreground', async () => {
+    const getForegroundProcess = vi.fn(async () => 'powershell.exe')
+    const confirmForegroundProcess = vi.fn(async () => 'claude')
+    const { runtime, handle } = await createExplicitAgentStatusHarness({
+      getForegroundProcess,
+      confirmForegroundProcess
+    })
+
+    await expect(runtime.getTerminalAgentStatus(handle)).resolves.toEqual({
+      handle,
+      isRunningAgent: true,
+      status: 'working'
+    })
+    expect(getForegroundProcess).toHaveBeenCalledOnce()
+    expect(getForegroundProcess).toHaveBeenCalledWith('pty-1')
+    expect(confirmForegroundProcess).toHaveBeenCalledOnce()
+    expect(confirmForegroundProcess).toHaveBeenCalledWith('pty-1')
+  })
+
+  it('calls foreground confirmation with its controller receiver', async () => {
+    const getForegroundProcess = vi.fn(async () => 'powershell.exe')
+    const confirmForegroundProcess = vi.fn(
+      async function (this: { getForegroundProcess: typeof getForegroundProcess }) {
+        return this.getForegroundProcess === getForegroundProcess ? 'codex' : null
+      }
+    )
+    const { runtime, handle } = await createExplicitAgentStatusHarness({
+      getForegroundProcess,
+      confirmForegroundProcess
+    })
+
+    await expect(runtime.getTerminalAgentStatus(handle)).resolves.toMatchObject({
+      isRunningAgent: true,
+      status: 'working'
+    })
+    expect(confirmForegroundProcess).toHaveBeenCalledOnce()
+  })
+
+  it.each([
+    ['shell', async () => 'pwsh.exe'],
+    ['non-agent', async () => 'vim'],
+    ['unavailable', async () => null],
+    [
+      'failure',
+      async () => {
+        throw new Error('provider unavailable')
+      }
+    ]
+  ])('fails closed when shell-conflict confirmation returns %s', async (_case, confirm) => {
+    const confirmForegroundProcess = vi.fn(confirm)
+    const { runtime, handle } = await createExplicitAgentStatusHarness({
+      getForegroundProcess: async () => 'zsh',
+      confirmForegroundProcess
+    })
+
+    await expect(runtime.getTerminalAgentStatus(handle)).resolves.toEqual({
+      handle,
+      isRunningAgent: false,
+      status: null
+    })
+    expect(confirmForegroundProcess).toHaveBeenCalledOnce()
+  })
+
+  it('fails closed on a shell conflict when the controller cannot confirm it', async () => {
+    const { runtime, handle } = await createExplicitAgentStatusHarness({
+      getForegroundProcess: async () => 'zsh'
+    })
+
+    await expect(runtime.getTerminalAgentStatus(handle)).resolves.toEqual({
+      handle,
+      isRunningAgent: false,
+      status: null
+    })
+  })
+
+  it('skips strong confirmation when ordinary foreground evidence recognizes an agent', async () => {
+    const getForegroundProcess = vi.fn(async () => 'codex')
+    const confirmForegroundProcess = vi.fn(async () => 'codex')
+    const { runtime, handle } = await createExplicitAgentStatusHarness({
+      getForegroundProcess,
+      confirmForegroundProcess
+    })
+
+    await expect(runtime.getTerminalAgentStatus(handle)).resolves.toMatchObject({
+      isRunningAgent: true,
+      status: 'working'
+    })
+    expect(getForegroundProcess).toHaveBeenCalledOnce()
+    expect(confirmForegroundProcess).not.toHaveBeenCalled()
+  })
+
+  it('skips both foreground reads when current title evidence blocks explicit hook state', async () => {
+    const getForegroundProcess = vi.fn(async () => 'zsh')
+    const confirmForegroundProcess = vi.fn(async () => 'codex')
+    const { runtime, handle } = await createExplicitAgentStatusHarness({
+      getForegroundProcess,
+      confirmForegroundProcess,
+      title: 'zsh'
+    })
+
+    await expect(runtime.getTerminalAgentStatus(handle)).resolves.toMatchObject({
+      isRunningAgent: false,
+      status: null
+    })
+    expect(getForegroundProcess).not.toHaveBeenCalled()
+    expect(confirmForegroundProcess).not.toHaveBeenCalled()
+  })
+
+  it('skips foreground reads for permission title and blocked wait evidence', async () => {
+    for (const blocked of ['title', 'wait'] as const) {
+      const getForegroundProcess = vi.fn(async () => 'zsh')
+      const confirmForegroundProcess = vi.fn(async () => 'codex')
+      const { runtime, handle } = await createExplicitAgentStatusHarness({
+        getForegroundProcess,
+        confirmForegroundProcess
+      })
+      runtime.onPtyData(
+        'pty-1',
+        blocked === 'title'
+          ? '\x1b]0;Codex waiting for permission\x07'
+          : 'Hooks need review. Press enter to confirm\n',
+        Date.now() + 1000
+      )
+      getForegroundProcess.mockClear()
+      confirmForegroundProcess.mockClear()
+
+      await expect(runtime.getTerminalAgentStatus(handle)).resolves.toMatchObject({
+        isRunningAgent: true,
+        status: 'permission'
+      })
+      expect(getForegroundProcess).not.toHaveBeenCalled()
+      expect(confirmForegroundProcess).not.toHaveBeenCalled()
+    }
+  })
+
+  it('rejects foreground evidence when the handle rebinds during the ordinary read', async () => {
+    const foreground = deferred<string | null>()
+    const getForegroundProcess = vi.fn(() => foreground.promise)
+    const confirmForegroundProcess = vi.fn(async () => 'codex')
+    const { runtime, handle, syncPty } = await createExplicitAgentStatusHarness({
+      getForegroundProcess,
+      confirmForegroundProcess
+    })
+
+    const status = runtime.getTerminalAgentStatus(handle)
+    await vi.waitFor(() => expect(getForegroundProcess).toHaveBeenCalledWith('pty-1'))
+    syncPty('pty-2')
+    foreground.resolve('zsh')
+
+    await expect(status).rejects.toThrow('terminal_handle_stale')
+    expect(confirmForegroundProcess).not.toHaveBeenCalled()
+  })
+
+  it('rejects a handle rebind while a controller-less status check yields', async () => {
+    const { runtime, handle, syncPty } = await createExplicitAgentStatusHarness({
+      getForegroundProcess: async () => 'zsh'
+    })
+    runtime.setPtyController(null)
+
+    const status = runtime.getTerminalAgentStatus(handle)
+    syncPty('pty-2')
+
+    await expect(status).rejects.toThrow('terminal_handle_stale')
+  })
+
+  it('rejects confirmation evidence when the handle rebinds during the fresh read', async () => {
+    const confirmation = deferred<string | null>()
+    const confirmForegroundProcess = vi.fn(() => confirmation.promise)
+    const { runtime, handle, syncPty } = await createExplicitAgentStatusHarness({
+      getForegroundProcess: async () => 'powershell.exe',
+      confirmForegroundProcess
+    })
+
+    const status = runtime.getTerminalAgentStatus(handle)
+    await vi.waitFor(() => expect(confirmForegroundProcess).toHaveBeenCalledWith('pty-1'))
+    syncPty('pty-2')
+    confirmation.resolve('codex')
+
+    await expect(status).rejects.toThrow('terminal_handle_stale')
+  })
+
+  it('rejects confirmation evidence when the owning PTY exits', async () => {
+    const confirmation = deferred<string | null>()
+    const confirmForegroundProcess = vi.fn(() => confirmation.promise)
+    const { runtime, handle } = await createExplicitAgentStatusHarness({
+      getForegroundProcess: async () => 'powershell.exe',
+      confirmForegroundProcess
+    })
+
+    const status = runtime.getTerminalAgentStatus(handle)
+    await vi.waitFor(() => expect(confirmForegroundProcess).toHaveBeenCalledWith('pty-1'))
+    runtime.onPtyExit('pty-1', 0)
+    confirmation.resolve('codex')
+
+    await expect(status).rejects.toThrow('terminal_exited')
   })
 
   it('reports permission from a title-derived action-required agent state', async () => {

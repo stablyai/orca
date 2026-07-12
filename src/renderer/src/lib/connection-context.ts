@@ -1,17 +1,11 @@
 import { useAppStore } from '@/store'
-import { getIndexedRepoMap, getIndexedWorktreeMap } from '@/store/worktree-repo-index'
-import type { AppState } from '@/store/types'
-import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../shared/constants'
-import { getRepoIdFromWorktreeId } from '../../../shared/worktree-id'
 import { parseWorkspaceKey } from '../../../shared/workspace-scope'
 import {
-  isPathInsideOrEqual,
-  normalizeRuntimePathForComparison
-} from '../../../shared/cross-platform-path'
-import {
-  getFolderWorkspaceCandidateRepos,
-  getFolderWorkspaceConnectionId
-} from './folder-workspace-connection'
+  getConnectionIdForFileFromState,
+  getConnectionIdFromState
+} from './connection-owner-resolution'
+
+export { getConnectionIdFromState } from './connection-owner-resolution'
 
 /**
  * Resolve the SSH connectionId for a worktree. Returns null for local repos,
@@ -20,33 +14,6 @@ import {
  */
 export function getConnectionId(worktreeId: string | null): string | null | undefined {
   return getConnectionIdFromState(useAppStore.getState(), worktreeId)
-}
-
-export function getConnectionIdFromState(
-  state: Pick<AppState, 'folderWorkspaces' | 'projectGroups' | 'repos' | 'worktreesByRepo'>,
-  worktreeId: string | null
-): string | null | undefined {
-  if (!worktreeId) {
-    return null
-  }
-  if (worktreeId === FLOATING_TERMINAL_WORKTREE_ID) {
-    return null
-  }
-  const parsedWorkspaceKey = parseWorkspaceKey(worktreeId)
-  if (parsedWorkspaceKey?.type === 'folder') {
-    return getFolderWorkspaceConnectionId(state, parsedWorkspaceKey.folderWorkspaceId)
-  }
-  // Why: retained Zustand selectors call this on unrelated writes; reuse the
-  // immutable-slice indexes instead of flattening every worktree each time.
-  const worktree = getIndexedWorktreeMap(state.worktreesByRepo).get(worktreeId)
-  // Why: SSH worktrees can be restored from session IDs before relay discovery
-  // repopulates worktreesByRepo. The composite ID still carries the repo ID.
-  const repoId = worktree?.repoId ?? getRepoIdFromWorktreeId(worktreeId)
-  const repo = getIndexedRepoMap(state.repos).get(repoId)
-  if (!repo) {
-    return undefined
-  }
-  return repo.connectionId ?? null
 }
 
 /**
@@ -75,41 +42,5 @@ export function getConnectionIdForFile(
   worktreeId: string | null,
   filePath: string
 ): string | null | undefined {
-  const connectionId = getConnectionId(worktreeId)
-  if (connectionId !== undefined || !worktreeId) {
-    return connectionId
-  }
-  const parsedWorkspaceKey = parseWorkspaceKey(worktreeId)
-  if (parsedWorkspaceKey?.type !== 'folder') {
-    return undefined
-  }
-  // Why: mixed local/SSH folder workspaces cannot pick one owner globally, but
-  // a concrete file path can still belong unambiguously to a child repo.
-  const state = useAppStore.getState()
-  const candidateRepos = getFolderWorkspaceCandidateRepos(
-    state,
-    parsedWorkspaceKey.folderWorkspaceId
-  )
-  return resolveConnectionIdForRepoPath(candidateRepos, filePath)
-}
-
-function resolveConnectionIdForRepoPath(
-  repos: readonly { path: string; connectionId?: string | null }[],
-  filePath: string
-): string | null | undefined {
-  const matchingRepos = repos
-    .filter((repo) => isPathInsideOrEqual(repo.path, filePath))
-    .map((repo) => ({ repo, normalizedPath: normalizeRuntimePathForComparison(repo.path) }))
-    .sort((a, b) => b.normalizedPath.length - a.normalizedPath.length)
-  const longestPathLength = matchingRepos[0]?.normalizedPath.length
-  if (!longestPathLength) {
-    return undefined
-  }
-  // Why: containment normalizes separators/trailing slashes; ambiguity checks
-  // need the same representation or equal repo roots can be hidden.
-  const bestMatches = matchingRepos.filter(
-    (candidate) => candidate.normalizedPath.length === longestPathLength
-  )
-  const connectionIds = new Set(bestMatches.map(({ repo }) => repo.connectionId ?? null))
-  return connectionIds.size === 1 ? ([...connectionIds][0] ?? null) : undefined
+  return getConnectionIdForFileFromState(useAppStore.getState(), worktreeId, filePath)
 }

@@ -1,4 +1,8 @@
 import { describe, expect, it, vi, beforeEach } from 'vitest'
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import { PassThrough } from 'node:stream'
 import { SshFilesystemProvider } from './ssh-filesystem-provider'
 import { JsonRpcErrorCode } from '../ssh/relay-protocol'
 
@@ -201,6 +205,23 @@ describe('SshFilesystemProvider', () => {
       expect(mux.request).not.toHaveBeenCalledWith('fs.writeFile', expect.anything())
     })
 
+    it('writes decoded bytes through raw transfer when provided', async () => {
+      const writeBuffer = vi.fn().mockResolvedValue(undefined)
+      provider = new SshFilesystemProvider('conn-1', mux as never, undefined, { writeBuffer })
+
+      await provider.writeFileBase64('/home/user/logo.png', 'cG5n')
+      await provider.writeFileBase64Chunk('/home/user/logo.png', 'bW9yZQ==', true)
+
+      expect(writeBuffer).toHaveBeenNthCalledWith(1, '/home/user/logo.png', Buffer.from('png'), {
+        append: false,
+        exclusive: true
+      })
+      expect(writeBuffer).toHaveBeenNthCalledWith(2, '/home/user/logo.png', Buffer.from('more'), {
+        append: true,
+        exclusive: false
+      })
+    })
+
     it('can append decoded chunks through SFTP', async () => {
       const writeStream = {
         on: vi.fn((_event: string, _handler: (...args: unknown[]) => void) => writeStream),
@@ -225,6 +246,15 @@ describe('SshFilesystemProvider', () => {
   })
 
   describe('downloadFile', () => {
+    it('downloads raw bytes through raw transfer when provided', async () => {
+      const downloadFile = vi.fn().mockResolvedValue(undefined)
+      provider = new SshFilesystemProvider('conn-1', mux as never, undefined, { downloadFile })
+
+      await provider.downloadFile('/home/user/archive.zip', '/tmp/archive.zip')
+
+      expect(downloadFile).toHaveBeenCalledWith('/home/user/archive.zip', '/tmp/archive.zip')
+    })
+
     it('downloads raw bytes through SFTP and closes the session', async () => {
       const sftp = {
         fastGet: vi.fn(
@@ -260,6 +290,48 @@ describe('SshFilesystemProvider', () => {
       ).rejects.toThrow('download failed')
 
       expect(sftp.end).toHaveBeenCalled()
+    })
+  })
+
+  describe('openFileUploadSession', () => {
+    it('uses one SFTP session for multiple files and closes it once', async () => {
+      const createWriteStream = vi.fn(() => {
+        const stream = new PassThrough()
+        stream.resume()
+        return stream
+      })
+      const sftp = { createWriteStream, end: vi.fn() }
+      const createSftp = vi.fn().mockResolvedValue(sftp)
+      provider = new SshFilesystemProvider('conn-1', mux as never, createSftp as never)
+      const dir = mkdtempSync(join(tmpdir(), 'orca-sftp-upload-session-'))
+      const first = join(dir, 'first.txt')
+      const second = join(dir, 'second.txt')
+      writeFileSync(first, 'first')
+      writeFileSync(second, 'second')
+
+      try {
+        const session = await provider.openFileUploadSession()
+        await session.uploadFile(first, '/remote/first.txt', { exclusive: true })
+        await session.uploadFile(second, '/remote/second.txt', { exclusive: true })
+        session.close()
+
+        expect(createSftp).toHaveBeenCalledOnce()
+        expect(createWriteStream).toHaveBeenCalledTimes(2)
+        expect(sftp.end).toHaveBeenCalledOnce()
+      } finally {
+        rmSync(dir, { recursive: true, force: true })
+      }
+    })
+
+    it('uses the transport-owned upload session when provided', async () => {
+      const uploadSession = { uploadFile: vi.fn(), close: vi.fn() }
+      const openFileUploadSession = vi.fn().mockResolvedValue(uploadSession)
+      provider = new SshFilesystemProvider('conn-1', mux as never, undefined, {
+        openFileUploadSession
+      })
+
+      await expect(provider.openFileUploadSession()).resolves.toBe(uploadSession)
+      expect(openFileUploadSession).toHaveBeenCalledOnce()
     })
   })
 

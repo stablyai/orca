@@ -29,7 +29,11 @@ A pure policy module decides which hidden terminal tabs may park:
 
 - Cold-park hysteresis: a tab must be hidden for 30s before parking.
 - Hot-retain working set: recently visible worktrees/tabs are retained
-  (5 minutes, bounded count) so quick tab switches never pay a re-hydrate.
+  (15 minutes; up to 8 worktrees / 12 tabs) so quick tab switches never pay a
+  re-hydrate. The single most-recently-hidden (last-active) worktree/tab is
+  exempt from both the retain TTL and the count cap, so switching back to the
+  view you just left is always instant regardless of how long you were away.
+  See `terminal-cold-park-reveal-cost.md` for the data behind these caps.
 - Eligibility excludes: visible panes, hidden-measuring startup probes,
   activity-portal panes, tabs with pending startup commands or pending
   activation spawns, floating-panel tabs, and any tab whose PTY is not

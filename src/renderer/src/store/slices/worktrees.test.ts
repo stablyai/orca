@@ -4571,11 +4571,13 @@ describe('worktree remote runtime mutations', () => {
 
   it('does not resolve a push target when re-saving the same linked GitHub PR', async () => {
     const store = createTestStore()
+    const pushTarget = { remoteName: 'origin', branchName: 'bot/pr-bug-scan-2504' }
     const wt = makeWorktree({
       id: 'repo1::/path/wt1',
       repoId: 'repo1',
       path: '/path/wt1',
-      linkedPR: 2548
+      linkedPR: 2548,
+      pushTarget
     })
     store.setState({
       repos: [
@@ -4591,6 +4593,39 @@ describe('worktree remote runtime mutations', () => {
       worktreeId: wt.id,
       updates: { linkedPR: 2548 }
     })
+  })
+
+  it('recovers a missing push target when re-saving the same linked GitHub PR', async () => {
+    const store = createTestStore()
+    const pushTarget = { remoteName: 'fork', branchName: 'contributor/fix' }
+    const wt = makeWorktree({
+      id: 'repo1::/path/wt1',
+      repoId: 'repo1',
+      path: '/path/wt1',
+      linkedPR: 2548
+    })
+    mockApi.worktrees.resolvePrBase.mockResolvedValueOnce({
+      baseBranch: 'origin/contributor/fix',
+      pushTarget
+    })
+    store.setState({
+      repos: [
+        { id: 'repo1', path: '/repo1', displayName: 'Repo 1', badgeColor: '#000', addedAt: 0 }
+      ],
+      worktreesByRepo: { repo1: [wt] }
+    } as Partial<AppState>)
+
+    await store.getState().updateWorktreeMeta(wt.id, { linkedPR: 2548 })
+
+    expect(mockApi.worktrees.resolvePrBase).toHaveBeenCalledWith({
+      repoId: 'repo1',
+      prNumber: 2548
+    })
+    expect(mockApi.worktrees.updateMeta).toHaveBeenCalledWith({
+      worktreeId: wt.id,
+      updates: { linkedPR: 2548, pushTarget }
+    })
+    expect(store.getState().worktreesByRepo.repo1[0]?.pushTarget).toEqual(pushTarget)
   })
 
   it('hydrates a missing push target for an existing linked GitHub PR', async () => {

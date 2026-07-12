@@ -6,6 +6,7 @@ import { makeCandidate } from './workspace-cleanup-presentation-fixtures'
 vi.mock('sonner', () => ({
   toast: {
     error: vi.fn(),
+    info: vi.fn(),
     success: vi.fn()
   }
 }))

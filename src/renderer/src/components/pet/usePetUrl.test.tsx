@@ -26,8 +26,7 @@ const { appState, cacheMocks } = vi.hoisted(() => ({
 }))
 
 vi.mock('../../store', () => ({
-  useAppStore: (selector: (state: typeof appState.current) => unknown) =>
-    selector(appState.current)
+  useAppStore: (selector: (state: typeof appState.current) => unknown) => selector(appState.current)
 }))
 
 vi.mock('./pet-blob-cache', () => ({

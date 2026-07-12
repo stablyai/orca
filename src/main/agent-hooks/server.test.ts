@@ -5042,13 +5042,15 @@ describe('Pi hook normalization', () => {
     expect(result?.payload.agentType).toBe('pi')
   })
 
-  it('session_shutdown maps to done', () => {
+  it('session_shutdown leaves a running Pi status intact', () => {
     const result = _internals.normalizeHookPayload(
       'pi',
       buildBody({ hook_event_name: 'session_shutdown' }),
       'production'
     )
-    expect(result?.payload.state).toBe('done')
+    // Why: Pi also emits shutdown when reloading or replacing its in-process
+    // session while the PTY stays alive; only agent_end proves turn completion.
+    expect(result).toBeNull()
   })
 
   it('done preserves the cached lastAssistantMessage from a prior message_end', () => {

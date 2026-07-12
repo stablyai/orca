@@ -446,7 +446,7 @@ describe('orca root help', () => {
     expect(createHelp).not.toContain('folderWorkspaceId')
     expect(createHelp).toContain('folder:<id>')
     expect(createHelp).toContain('folder:<folderId>')
-    expect(createHelp).toContain('worktree:<id>')
+    expect(createHelp).toContain('worktree:<worktreeId>')
     expect(createHelp).toContain(
       '--no-parent only affects Orca lineage; omit --base-branch to use the repo default base'
     )
@@ -499,6 +499,9 @@ describe('orca cli worktree awareness', () => {
     delete process.env.ORCA_USER_DATA_PATH
     delete process.env.ORCA_WORKSPACE_ID
     delete process.env.ORCA_WORKTREE_ID
+    // Isolate the pane key so claude-teams tests that set it don't leak a
+    // senderPaneKey into later orchestration.send assertions.
+    delete process.env.ORCA_PANE_KEY
     serveOrcaAppMock.mockReset()
     getDefaultUserDataPathMock.mockClear()
     addEnvironmentFromPairingCodeMock.mockReset()
@@ -755,6 +758,9 @@ describe('orca cli worktree awareness', () => {
     expect(callMock).not.toHaveBeenCalled()
     expect([...logSpy.mock.calls, ...errSpy.mock.calls].flat().join('\n')).toContain(
       'current is a local cwd shortcut and cannot be resolved against a remote runtime.'
+    )
+    expect([...logSpy.mock.calls, ...errSpy.mock.calls].flat().join('\n')).toContain(
+      'id:<repo-id>::<path>'
     )
     expect(process.exitCode).toBe(1)
 
@@ -1886,7 +1892,7 @@ describe('orca cli worktree awareness', () => {
           message: 'Parent selector was not found.',
           data: {
             nextSteps: [
-              'Pass a valid --parent-worktree selector such as folder:<id>, worktree:<id>, id:<worktreeId>, branch:<branch>, issue:<number>, path:<absolute-path>, or active/current.',
+              'Pass a valid --parent-worktree selector such as folder:<id>, worktree:<worktreeId>, id:<repo-id>::<path>, branch:<branch>, issue:<number>, path:<absolute-path>, or active/current.',
               'Retry with --no-parent to create without lineage.'
             ]
           }

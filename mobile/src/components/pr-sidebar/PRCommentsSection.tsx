@@ -39,6 +39,9 @@ type Props = {
   // Interactive comment actions (reply/resolve/add/edit/delete). Absent (e.g.
   // non-PR) leaves the timeline read-only.
   actions?: MobilePrCommentActions
+  // Author logins manually marked as bots on desktop; keeps the Humans/Bots
+  // tabs classifying the same comments as the desktop panel.
+  botAuthorOverrides?: ReadonlySet<string>
 }
 
 // Render comments in bounded pages — the whole sidebar is one ScrollView (can't
@@ -49,7 +52,13 @@ const COMMENT_PAGE = 12
 // PR body + full comment timeline, mirroring the desktop PR page: a Description
 // card, then a Comments section with an audience filter (PRs only), threaded
 // review comments, reactions, and collapsible resolved threads.
-export function PRCommentsSection({ details, prState, prRepo, actions }: Props) {
+export function PRCommentsSection({
+  details,
+  prState,
+  prRepo,
+  actions,
+  botAuthorOverrides
+}: Props) {
   // details is null while phase 2 (the heavy comments/body payload) is still loading.
   // A synthetic placeholder means phase 2 failed — do not paint that as empty success.
   const loadingDetails = details === null
@@ -83,8 +92,14 @@ export function PRCommentsSection({ details, prState, prRepo, actions }: Props) 
   const canComment = isPr && actions !== undefined && canAddRootComment(prState)
 
   const [filter, setFilter] = useState<PRCommentAudienceFilter>('all')
-  const counts = useMemo(() => getPRCommentAudienceCounts(comments), [comments])
-  const visible = useMemo(() => filterPRCommentsByAudience(comments, filter), [comments, filter])
+  const counts = useMemo(
+    () => getPRCommentAudienceCounts(comments, botAuthorOverrides),
+    [botAuthorOverrides, comments]
+  )
+  const visible = useMemo(
+    () => filterPRCommentsByAudience(comments, filter, botAuthorOverrides),
+    [botAuthorOverrides, comments, filter]
+  )
   const groups = useMemo(() => groupPRComments(visible), [visible])
 
   // Bounded render window; reset to the first page whenever the filtered set changes.

@@ -53,9 +53,9 @@ describe('project-picker-browse-cache', () => {
       0
     )
     for (let wave = 0; wave < 4; wave += 1) {
-      expect(
-        getProjectPickerBrowseCacheEntry('runtime:retained', inserted)
-      ).toMatchObject({ projects: [expect.objectContaining({ owner: 'retained' })] })
+      expect(getProjectPickerBrowseCacheEntry('runtime:retained', inserted)).toMatchObject({
+        projects: [expect.objectContaining({ owner: 'retained' })]
+      })
       for (let index = 1; index < PROJECT_PICKER_BROWSE_CACHE_MAX_ENTRIES; index += 1) {
         const scope = `scope-${inserted}`
         rememberProjectPickerBrowseCacheEntry(

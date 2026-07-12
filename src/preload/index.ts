@@ -708,6 +708,9 @@ const api = {
 
     persistSortOrder: (args) => ipcRenderer.invoke('worktrees:persistSortOrder', args),
 
+    getBranchRenameFailureOutput: (args) =>
+      ipcRenderer.invoke('worktrees:getBranchRenameFailureOutput', args),
+
     onChanged: (
       callback: (data: {
         repoId: string
@@ -1854,6 +1857,9 @@ const api = {
 
     set: (args: Record<string, unknown>): Promise<unknown> =>
       ipcRenderer.invoke('settings:set', args),
+
+    updatePRBotAuthorOverride: (args: { author: string; isBot: boolean }): Promise<unknown> =>
+      ipcRenderer.invoke('settings:update-pr-bot-author-override', args),
 
     listFonts: (): Promise<string[]> => ipcRenderer.invoke('settings:listFonts'),
 

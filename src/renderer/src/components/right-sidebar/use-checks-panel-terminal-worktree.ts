@@ -98,12 +98,28 @@ export function useChecksPanelTerminalWorktree(args: {
           : { ptyId: activeTerminalPtyId, cwd }
       )
     }
+    // Retain the last good cwd through transient empty/error polls; clearing
+    // here re-keys the Checks panel and wipes mid-edit state.
+    const retainResolvedOrClear = (): void => {
+      if (disposed) {
+        return
+      }
+      setPolledCwd((prev) =>
+        prev?.ptyId === activeTerminalPtyId && prev.cwd !== null
+          ? prev
+          : { ptyId: activeTerminalPtyId, cwd: null }
+      )
+    }
     const refresh = async (): Promise<void> => {
       try {
         const cwd = (await window.api.pty.getCwd(activeTerminalPtyId)).trim()
-        commit(cwd || null)
+        if (cwd) {
+          commit(cwd)
+        } else {
+          retainResolvedOrClear()
+        }
       } catch {
-        commit(null)
+        retainResolvedOrClear()
       }
     }
 

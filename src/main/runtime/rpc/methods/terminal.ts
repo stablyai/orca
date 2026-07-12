@@ -348,6 +348,31 @@ function isTerminalSendGuardNotWritable(error: unknown): boolean {
   return message.includes('terminal_guard_not_writable')
 }
 
+function isTerminalAgentStatusNotWritable(error: unknown): boolean {
+  const message = error instanceof Error ? error.message : String(error)
+  return [
+    'terminal_not_writable',
+    'terminal_handle_stale',
+    'terminal_gone',
+    'terminal_exited'
+  ].some((code) => message.includes(code))
+}
+
+function assertTerminalSendExactPtyBinding(
+  runtime: OrcaRuntimeService,
+  handle: string,
+  expectedPtyId: string | undefined
+): void {
+  try {
+    if (expectedPtyId && runtime.resolveLiveLeafForHandle(handle)?.ptyId === expectedPtyId) {
+      return
+    }
+  } catch {
+    // Fall through to the stable guarded-send result below.
+  }
+  throw new Error('terminal_guard_not_writable')
+}
+
 function appendPendingMultiplexOutput(
   stream: TerminalMultiplexStream,
   data: string,
@@ -1148,10 +1173,22 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
       const assertSendPreconditions =
         params.requireAgentStatus === 'sendable'
           ? async (ptyId?: string): Promise<void> => {
+              assertTerminalSendExactPtyBinding(runtime, params.terminal, ptyId)
               if (ptyId && isTerminalInputLockedForClient(runtime, ptyId, params.client)) {
                 throw new Error('terminal_guard_not_writable')
               }
-              const agentStatus = await runtime.getTerminalAgentStatus(params.terminal)
+              let agentStatus
+              try {
+                agentStatus = await runtime.getTerminalAgentStatus(params.terminal)
+              } catch (error) {
+                if (isTerminalAgentStatusNotWritable(error)) {
+                  throw new Error('terminal_guard_not_writable')
+                }
+                throw error
+              }
+              // Why: a send callback can race a pane reconnect; status evidence
+              // must never authorize the callback's replacement PTY.
+              assertTerminalSendExactPtyBinding(runtime, params.terminal, ptyId)
               if (!agentStatus.isRunningAgent) {
                 throw new Error('terminal_guard_no_agent')
               }

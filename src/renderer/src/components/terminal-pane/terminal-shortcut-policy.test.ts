@@ -66,12 +66,12 @@ describe('resolveTerminalShortcutAction', () => {
     ).toEqual({ type: 'focusPane', direction: 'next' })
   })
 
-  it('keeps shift-enter and delete helpers explicit', () => {
+  it('keeps inactive shift-enter and delete helpers explicit', () => {
     expect(
       resolveTerminalShortcutAction(event({ key: 'Enter', code: 'Enter', shiftKey: true }), true)
     ).toEqual({
       type: 'sendInput',
-      data: '\x1b[13;2u'
+      data: '\x1b\r'
     })
     expect(resolveTerminalShortcutAction(event({ key: 'Backspace', ctrlKey: true }), true)).toEqual(
       { type: 'sendInput', data: '\x17' }
@@ -164,9 +164,9 @@ describe('resolveTerminalShortcutAction', () => {
     expect(getWindowsShiftEnterEncoding).not.toHaveBeenCalled()
   })
 
-  it('always uses CSI-u Shift+Enter off Windows regardless of Windows encoding', () => {
+  it('uses CSI-u Shift+Enter off Windows only while Kitty keyboard is active', () => {
     for (const encoding of [() => 'csi-u' as const, () => 'alt-enter' as const, undefined]) {
-      expect(
+      const resolve = (kittyActive: boolean) =>
         resolveTerminalShortcutAction(
           event({ key: 'Enter', code: 'Enter', shiftKey: true }),
           false,
@@ -175,11 +175,12 @@ describe('resolveTerminalShortcutAction', () => {
           false,
           undefined,
           undefined,
-          undefined,
+          () => kittyActive,
           undefined,
           encoding
         )
-      ).toEqual({ type: 'sendInput', data: '\x1b[13;2u' })
+      expect(resolve(true)).toEqual({ type: 'sendInput', data: '\x1b[13;2u' })
+      expect(resolve(false)).toEqual({ type: 'sendInput', data: '\x1b\r' })
     }
   })
 

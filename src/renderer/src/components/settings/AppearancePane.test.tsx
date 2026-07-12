@@ -20,8 +20,12 @@ const mocks = vi.hoisted(() => ({
     settingsSearchQuery: 'automations',
     statusBarItems: [],
     toggleStatusBarItem: vi.fn(),
+    usagePercentageDisplay: 'used' as 'used' | 'remaining',
+    setUsagePercentageDisplay: vi.fn(),
     recordFeatureInteraction: vi.fn(),
-    setWorktreeCardMode: vi.fn()
+    setWorktreeCardMode: vi.fn(),
+    appearanceAccordionDeepLink: null as 'interface' | 'terminal' | 'window' | null,
+    clearAppearanceAccordionDeepLink: vi.fn()
   }
 }))
 
@@ -176,6 +180,7 @@ describe('AppearancePane', () => {
     vi.clearAllMocks()
     mocks.state.availableStatusBarToggles = []
     mocks.state.settingsSearchQuery = 'automations'
+    mocks.state.usagePercentageDisplay = 'used'
     // UIZoomControl reads window.api.ui on mount; the inline-expansion pane can
     // render the full Interface section, so provide a minimal renderer bridge
     // without clobbering happy-dom's window.location.
@@ -385,6 +390,23 @@ describe('AppearancePane', () => {
     const container = await renderAppearancePane(getDefaultSettings('/tmp'))
 
     expect(container.querySelector('button[role="switch"][aria-label="Ports"]')).not.toBeNull()
+  })
+
+  it('updates the usage percentage display from the latest status bar settings section', async () => {
+    mocks.state.settingsSearchQuery = 'remaining'
+    const container = await renderAppearancePane(getDefaultSettings('/tmp'))
+    const remainingButton = Array.from(
+      container.querySelectorAll<HTMLButtonElement>('button[role="radio"]')
+    ).find((button) => button.textContent === 'Remaining')
+
+    expect(container.textContent).toContain('Usage percentages')
+    expect(remainingButton).toBeDefined()
+
+    await act(async () => {
+      remainingButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+    })
+
+    expect(mocks.state.setUsagePercentageDisplay).toHaveBeenCalledWith('remaining')
   })
 
   it('records MiniMax status bar toggles as usage tracking interactions', async () => {

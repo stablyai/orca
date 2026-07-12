@@ -348,13 +348,16 @@ export function resolvePtyShellPath(env: Record<string, string>): string {
   return env.SHELL || process.env.SHELL || '/bin/zsh'
 }
 
+export function shellPathSupportsPtyStartupBarrier(shellPath: string): boolean {
+  const shellName = pathWin32.basename(basename(shellPath)).toLowerCase()
+  return shellName === 'zsh' || shellName === 'bash'
+}
+
 export function supportsPtyStartupBarrier(env: Record<string, string>): boolean {
   if (process.platform === 'win32') {
     return false
   }
-  const resolvedShell = resolvePtyShellPath(env)
-  const shellName = pathWin32.basename(basename(resolvedShell)).toLowerCase()
-  return shellName === 'zsh' || shellName === 'bash'
+  return shellPathSupportsPtyStartupBarrier(resolvePtyShellPath(env))
 }
 
 type ShellLaunchConfig = {

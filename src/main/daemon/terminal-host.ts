@@ -1,5 +1,6 @@
 import { Session, type SubprocessHandle } from './session'
 import { normalizePtySize } from './daemon-pty-size'
+import { shellPathSupportsPtyStartupBarrier } from './shell-ready'
 import { resolveProcessCwd } from '../providers/process-cwd'
 import type { StartupCommandDelivery } from '../../shared/codex-startup-delivery'
 import { buildStartupCommandSubmission } from '../../shared/startup-command-submission'
@@ -104,6 +105,16 @@ export class TerminalHost {
       terminalWindowsPowerShellImplementation: opts.terminalWindowsPowerShellImplementation
     })
 
+    // Why: the caller computed shellReadySupported from the preferred shell,
+    // before spawn. A Unix fallback (e.g. /bin/sh) never emits the ready
+    // marker, so keeping the stale flag would queue startup commands until the
+    // shell-ready timeout and bracketed-paste-wrap them for a line editor
+    // without paste mode.
+    const shellReadySupported =
+      (opts.shellReadySupported ?? false) &&
+      (subprocess.shellPath === undefined ||
+        shellPathSupportsPtyStartupBarrier(subprocess.shellPath))
+
     const session = new Session({
       sessionId: opts.sessionId,
       cols: size.cols,
@@ -111,7 +122,7 @@ export class TerminalHost {
       terminalHandle: opts.env?.ORCA_TERMINAL_HANDLE,
       launchAgent: opts.launchAgent,
       subprocess,
-      shellReadySupported: opts.shellReadySupported ?? false,
+      shellReadySupported,
       historySeed: opts.historySeed,
       // Why: reap the dead session (dispose emulator + drop from the map) the
       // moment its subprocess exits, instead of retaining it for the daemon's
@@ -143,7 +154,7 @@ export class TerminalHost {
       session.write(
         buildStartupCommandSubmission(opts.command, {
           submit,
-          bracketedPasteSafe: opts.shellReadySupported ?? false
+          bracketedPasteSafe: shellReadySupported
         })
       )
     }

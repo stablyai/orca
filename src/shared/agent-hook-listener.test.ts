@@ -923,6 +923,52 @@ describe('shared agent-hook-listener', () => {
     expect(event!.hasExplicitPrompt).toBe(false)
   })
 
+  it('treats a custom-element paste as an explicit user turn, not machinery', () => {
+    normalizeHookPayload(
+      state,
+      'claude',
+      { paneKey: PANE_KEY, payload: { hook_event_name: 'UserPromptSubmit', prompt: 'fix login' } },
+      'production'
+    )
+    // Why: a real prompt starting with an unknown kebab tag (<my-custom-element>)
+    // is the user's turn — it must reset the cached prompt and count as explicit,
+    // so interrupt recovery does not leave the pane visibly done.
+    const event = normalizeHookPayload(
+      state,
+      'claude',
+      {
+        paneKey: PANE_KEY,
+        payload: {
+          hook_event_name: 'UserPromptSubmit',
+          prompt: '<my-custom-element> render this component'
+        }
+      },
+      'production'
+    )
+    expect(event).not.toBeNull()
+    expect(event!.payload.prompt).toBe('<my-custom-element> render this component')
+    expect(event!.hasExplicitPrompt).toBe(true)
+  })
+
+  it('treats a Grok user_query prompt as an explicit user turn', () => {
+    const event = normalizeHookPayload(
+      state,
+      'grok',
+      {
+        paneKey: PANE_KEY,
+        payload: {
+          hookEventName: 'user_prompt_submit',
+          prompt: '<user_query>fix the bug</user_query>'
+        }
+      },
+      'production'
+    )
+    expect(event).not.toBeNull()
+    // Grok wraps the real typed prompt; the envelope is stripped but it stays explicit.
+    expect(event!.payload.prompt).toBe('fix the bug')
+    expect(event!.hasExplicitPrompt).toBe(true)
+  })
+
   it('isolates caches between listener instances', () => {
     const a = createHookListenerState()
     const b = createHookListenerState()

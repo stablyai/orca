@@ -1,12 +1,13 @@
 import { describe, expect, it } from 'vitest'
 import { Editor } from '@tiptap/core'
 import { createRichMarkdownExtensions } from './rich-markdown-extensions'
+import { createRichMarkdownEditorCodec } from './rich-markdown-source-transport'
 import { runSlashCommand, slashCommands, type SlashCommandId } from './rich-markdown-slash-commands'
 
 function createEditor(content = '/'): Editor {
   return new Editor({
     element: null,
-    extensions: createRichMarkdownExtensions(),
+    extensions: createRichMarkdownExtensions({ codec: createRichMarkdownEditorCodec() }),
     content,
     contentType: 'markdown'
   })

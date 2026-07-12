@@ -11,6 +11,7 @@ import {
 import { isTuiAgent } from '../../../../shared/tui-agent-config'
 import { isTaskProvider } from '../../../../shared/task-providers'
 import { normalizeDisabledTuiAgents } from '../../../../shared/tui-agent-selection'
+import { normalizePRBotAuthorOverrides } from '../../../../shared/pr-bot-author-overrides'
 import { normalizeWorktreeCardProperties } from '../../../../shared/worktree-card-properties'
 import type { PersistedUIState, TaskProvider } from '../../../../shared/types'
 import { defineMethod, type RpcMethod } from '../core'
@@ -104,6 +105,7 @@ const FeatureInteractions = z
 const FeatureInteractionIdParam = z.custom<FeatureInteractionId>(isFeatureInteractionId, {
   message: 'Unknown feature interaction id'
 })
+const PRBotAuthorOverrideUpdate = z.object({ author: z.string(), isBot: z.boolean() }).strict()
 const GitHubProjectRef = z
   .object({
     owner: z.string(),
@@ -156,7 +158,11 @@ const SettingsUpdate = z
     compactWorktreeCards: z.boolean().optional(),
     minimaxGroupId: z.string().optional(),
     minimaxUsageModels: z.string().optional(),
-    githubProjects: GitHubProjectSettings.optional()
+    githubProjects: GitHubProjectSettings.optional(),
+    prBotAuthorOverrides: z
+      .unknown()
+      .transform((value) => normalizePRBotAuthorOverrides(value))
+      .optional()
   })
   .strict()
   .default({})
@@ -208,6 +214,7 @@ const UiUpdate = z
     _antigravityStatusBarDefaultAdded: z.boolean().optional(),
     _grokStatusBarDefaultAdded: z.boolean().optional(),
     statusBarVisible: z.boolean().optional(),
+    usagePercentageDisplay: z.enum(['used', 'remaining']).optional(),
     dismissedUpdateVersion: NullableString.optional(),
     lastUpdateCheckAt: z.number().finite().nullable().optional(),
     pendingUpdateNudgeId: NullableString.optional(),
@@ -238,6 +245,7 @@ const UiUpdate = z
     trustedOrcaHooks: z.record(z.string(), z.unknown()).optional(),
     setupScriptPromptDismissedRepoIds: StringArray.optional(),
     projectOrderManualDefaultNoticeDismissed: z.boolean().optional(),
+    usagePercentageDisplayChangeNoticeDismissed: z.boolean().optional(),
     usageEmptyStateDismissed: z.boolean().optional(),
     petVisible: z.boolean().optional(),
     petId: z.string().optional(),
@@ -267,6 +275,11 @@ export const CLIENT_UI_METHODS: RpcMethod[] = [
     name: 'settings.update',
     params: SettingsUpdate,
     handler: (params, { runtime }) => ({ settings: runtime.updateClientSettings(params) })
+  }),
+  defineMethod({
+    name: 'settings.updatePRBotAuthorOverride',
+    params: PRBotAuthorOverrideUpdate,
+    handler: (params, { runtime }) => ({ settings: runtime.updateClientPRBotAuthorOverride(params) })
   }),
   defineMethod({
     name: 'ui.get',

@@ -12,9 +12,7 @@ Keep comments short — one or two lines. Capture only the non-obvious reason (s
 
 ## Lint Rules: Do Not Disable Max Lines
 
-Never add a `max-lines` disable (`eslint-disable max-lines`, `oxlint-disable max-lines`, or line-specific variants), and never add a per-file `max-lines` bump in `mobile/.oxlintrc.json`. Split the file, extract focused modules, move fixtures/builders into named files, or otherwise reduce the counted lines instead.
-
-This is enforced in CI by `pnpm check:max-lines-ratchet` (`config/scripts/check-max-lines-ratchet.mjs`). Files already over the limit are grandfathered in `config/max-lines-baseline.txt`; that list may only **shrink**. Adding a new suppression fails the build. If you remove a suppression (great — split it!), run `pnpm check:max-lines-ratchet --prune` to drop its baseline line.
+Never add a `max-lines` disable (`eslint-disable max-lines`, `oxlint-disable max-lines`, or line-specific variants), and never add a per-file `max-lines` bump in `mobile/.oxlintrc.json`.
 
 ## File and Module Naming
 
@@ -55,6 +53,5 @@ Source-control and review changes must consider GitLab and other supported git p
 ## GitHub CLI Usage
 
 Be mindful of the user's `gh` CLI API rate limit — batch requests where possible and avoid unnecessary calls. All code, commands, and scripts must be compatible with macOS, Linux, and Windows.
-Never commit PR evidence images; attach them to the PR conversation instead (but never use gh-attach).
 
 ## Type Declarations: Prefer `.ts` Over `.d.ts`

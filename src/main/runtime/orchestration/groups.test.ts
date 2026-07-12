@@ -30,6 +30,7 @@ describe('isGroupAddress', () => {
     expect(isGroupAddress('@idle')).toBe(true)
     expect(isGroupAddress('@claude')).toBe(true)
     expect(isGroupAddress('@droid')).toBe(true)
+    expect(isGroupAddress('@grok')).toBe(true)
     expect(isGroupAddress('@worktree:wt_1')).toBe(true)
   })
 
@@ -168,6 +169,54 @@ describe('resolveGroupAddress', () => {
       const terminals = [makeSummary('term_a'), makeSummary('term_b', { title: 'Claude Code' })]
       const result = resolveGroupAddress('@Claude', 'term_a', terminals, noStatus)
       expect(result).toEqual(['term_b'])
+    })
+
+    it('matches @grok as a standalone title token and excludes sender', () => {
+      const terminals = [
+        makeSummary('term_a', { title: 'Grok' }),
+        makeSummary('term_b', { title: 'GROK CLI' }),
+        makeSummary('term_c', { title: '⠋ Grok' }),
+        makeSummary('term_d', { title: 'ngrok' }),
+        makeSummary('term_e', { title: '/tmp/grok' }),
+        makeSummary('term_f', { title: 'my-grok-worker' }),
+        makeSummary('term_g', { title: 'Codex CLI' })
+      ]
+
+      const result = resolveGroupAddress('@GrOk', 'term_a', terminals, noStatus)
+
+      expect(result).toEqual(['term_b', 'term_c'])
+    })
+
+    // Why: the resolver sees the raw OSC title, and Grok CLI's real working/session
+    // titles carry a trailing " - grok" identity or a spinner-collapsed "⠋ grok"
+    // (see terminal-title-agent-type.ts). Prove those production shapes resolve.
+    it('matches real Grok OSC working and session titles', () => {
+      const terminals = [
+        makeSummary('coordinator', { title: 'Coordinator' }),
+        makeSummary('term_rotating', { title: '⠋ - fix the flaky suite - grok' }),
+        makeSummary('term_collapsed', { title: '⠋ grok' }),
+        makeSummary('term_session', { title: 'Fix the auth bug - grok' })
+      ]
+
+      const result = resolveGroupAddress('@grok', 'coordinator', terminals, noStatus)
+
+      expect(result).toEqual(['term_rotating', 'term_collapsed', 'term_session'])
+    })
+
+    // Why: Windows agent titles can surface the launcher process name (`grok.exe`);
+    // the shared matcher accepts .exe/.cmd/.bat/.ps1 suffixes but still rejects
+    // arbitrary dotted fragments like `grok.py`.
+    it('matches Windows launcher-suffix titles but not arbitrary dotted tokens', () => {
+      const terminals = [
+        makeSummary('coordinator', { title: 'Coordinator' }),
+        makeSummary('term_exe', { title: 'grok.exe' }),
+        makeSummary('term_cmd', { title: 'grok.cmd running' }),
+        makeSummary('term_dotted', { title: 'grok.py' })
+      ]
+
+      const result = resolveGroupAddress('@grok', 'coordinator', terminals, noStatus)
+
+      expect(result).toEqual(['term_exe', 'term_cmd'])
     })
   })
 

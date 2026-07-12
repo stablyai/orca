@@ -30,6 +30,7 @@ import {
   computeTrustedHash,
   escapeTomlString,
   getCodexCanonicalTrustPath,
+  normalizeCodexProjectPathForLookup,
   normalizeHookTrustKeyForLookup,
   parseTrustKey,
   readHookTrustEntries,
@@ -1010,6 +1011,12 @@ function getWslHookReconciliationAction(args: {
   return 'reinstall'
 }
 
+// Why: fold only the Windows-case-insensitive portion — a full lowercase would
+// let case-distinct WSL runtime homes share one reconciliation generation slot.
+function getWslReconciliationKey(runtimeHomePath: string): string {
+  return normalizeCodexProjectPathForLookup(runtimeHomePath)
+}
+
 export class CodexHookService {
   private readonly wslReconciliationGeneration = new Map<string, number>()
 
@@ -1017,7 +1024,7 @@ export class CodexHookService {
     if (!runtimeHomePath) {
       return 0
     }
-    const key = process.platform === 'win32' ? runtimeHomePath.toLowerCase() : runtimeHomePath
+    const key = getWslReconciliationKey(runtimeHomePath)
     const generation = (this.wslReconciliationGeneration.get(key) ?? 0) + 1
     this.wslReconciliationGeneration.set(key, generation)
     return generation
@@ -1033,7 +1040,7 @@ export class CodexHookService {
       if (!runtimeHomePath) {
         return
       }
-      const key = process.platform === 'win32' ? runtimeHomePath.toLowerCase() : runtimeHomePath
+      const key = getWslReconciliationKey(runtimeHomePath)
       const resolvedPlan =
         settlement.status === 'resolved'
           ? createCodexWslRuntimeHookInstallPlan(
