@@ -1,3 +1,4 @@
+import { buildAgentNameRe } from '../../../shared/agent-name-token-match'
 import type { RuntimeTerminalSummary } from '../../../shared/runtime-types'
 
 // Why: group addresses enable broadcast messaging to logical groups of agents.
@@ -25,13 +26,11 @@ export function isGroupAddress(to: string): boolean {
   return to.startsWith('@')
 }
 
-function escapeRegExp(value: string): string {
-  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
-}
-
 function titleMatchesAgentNameGroup(title: string, agentName: string): boolean {
-  const tokenRe = new RegExp(`(?<![\\w./\\\\-])${escapeRegExp(agentName)}(?![\\w./\\\\-])`, 'i')
-  return tokenRe.test(title)
+  // Why: reuse the shared whole-token matcher so orchestration groups honor the
+  // same Windows launcher-suffix rule (e.g. `grok.exe`) as the rest of Orca's
+  // agent-title detection, instead of maintaining a divergent regex here.
+  return buildAgentNameRe(agentName).test(title)
 }
 
 export function resolveGroupAddress(
