@@ -238,6 +238,9 @@ describe('WslCliInstaller', () => {
     expect(launcher).toContain('ORCA_WSL_CWD=/')
     expect(launcher).toContain('cd /')
     expect(launcher).toContain('ORCA_WSL_CWD_WIN=$(wslpath -w "$ORCA_WSL_CWD")')
+    expect(launcher.indexOf('ORCA_WSL_CWD=$(pwd -P')).toBeLessThan(
+      launcher.indexOf('ORCA_BRIDGE_PS1_WIN=$(wslpath')
+    )
     expect(launcher).toContain('"$ORCA_WIN_LAUNCHER" -WslCwd "$ORCA_WSL_CWD_WIN" "$@"')
     expect(launcher).not.toContain('-Command')
     expect(bridge).toContain('[CmdletBinding(PositionalBinding=$false)]')

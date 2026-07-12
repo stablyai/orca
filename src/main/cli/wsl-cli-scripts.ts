@@ -20,13 +20,13 @@ else
   echo "Orca WSL CLI requires Windows interop and could not find powershell.exe." >&2
   exit 1
 fi
-ORCA_BRIDGE_PS1_WIN=$(wslpath -w "$ORCA_BRIDGE_PS1")
 # Why: a shell can outlive a deleted worktree; keep explicit CLI selectors and
-# help usable even when there is no longer a physical cwd to preserve.
+# help usable, and repair cwd before any WSL interop tool tries to resolve it.
 ORCA_WSL_CWD=$(pwd -P 2>/dev/null) || {
   ORCA_WSL_CWD=/
   cd /
 }
+ORCA_BRIDGE_PS1_WIN=$(wslpath -w "$ORCA_BRIDGE_PS1")
 ORCA_WSL_CWD_WIN=$(wslpath -w "$ORCA_WSL_CWD")
 exec "$ORCA_POWERSHELL" -NoProfile -ExecutionPolicy Bypass -File "$ORCA_BRIDGE_PS1_WIN" "$ORCA_WIN_LAUNCHER" -WslCwd "$ORCA_WSL_CWD_WIN" "$@"
 `
