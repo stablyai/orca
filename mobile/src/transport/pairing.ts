@@ -57,7 +57,15 @@ export function extractPairingCodeFromUrl(url: string): string | null {
 // Scene launches populate Expo's native registry instead of React Native's
 // legacy launch options; Android still relies on the asynchronous fallback.
 export async function getInitialPairingCode(source: PairingLinkSource): Promise<string | null> {
-  const url = source.getLinkingURL() ?? (await source.getInitialURL().catch(() => null))
+  // Why: scene-based Linking can throw on some iOS cold starts; match getInitialURL
+  // and treat any failure as "no launch URL" so pair deep-links never reject the shell.
+  let linkingUrl: string | null = null
+  try {
+    linkingUrl = source.getLinkingURL()
+  } catch {
+    linkingUrl = null
+  }
+  const url = linkingUrl ?? (await source.getInitialURL().catch(() => null))
   return url ? extractPairingCodeFromUrl(url) : null
 }
 
