@@ -64,7 +64,7 @@ describe('MissionList', () => {
     expect(container.textContent).toContain('New Mission')
   })
 
-  it('offers to open the mission session when none exists yet', () => {
+  it('renders a retry fallback row while the mission session materializes', () => {
     const mission: Mission = {
       id: 'm1',
       name: 'Referral',
@@ -79,7 +79,10 @@ describe('MissionList', () => {
       folderWorkspaces: []
     })
     const container = renderMissionList()
-    expect(container.textContent).toContain('Open mission session')
+    // The row itself is the (re)ensure affordance; no separate open action.
+    expect(container.textContent).toContain('Referral')
+    expect(container.textContent).toContain('0 projects')
+    expect(container.textContent).not.toContain('Open mission session')
   })
 
   it('renders the session card when the mission session workspace exists', () => {
@@ -116,10 +119,12 @@ describe('MissionList', () => {
       ]
     })
     const container = renderMissionList()
-    expect(container.textContent).not.toContain('Open mission session')
+    // The mission row IS the session card.
+    expect(container.querySelector('[data-mission-id]')).toBeTruthy()
     expect(
       container.querySelector('[data-worktree-card-meta-row], [class*="rounded"]')
     ).toBeTruthy()
+    expect(container.textContent).toContain('Referral')
   })
 
   it('renders a mission header with member count and a recreate row for missing worktrees', () => {

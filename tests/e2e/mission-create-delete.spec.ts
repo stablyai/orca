@@ -32,9 +32,8 @@ test.describe('Missions', () => {
     })
     expect(memberWorktreeId).toBeTruthy()
 
-    // Open the mission session: creates the symlinked mission root and a
-    // mission-owned folder workspace, then activates it.
-    await orcaPage.getByText('Open mission session').click()
+    // The mission session is created eagerly with the mission: the symlinked
+    // root and the mission-owned folder workspace exist without extra clicks.
     await expect
       .poll(
         () =>

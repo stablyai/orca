@@ -1,13 +1,5 @@
-import React, { useMemo, useState } from 'react'
-import {
-  ChevronRight,
-  Flag,
-  MoreHorizontal,
-  Plus,
-  RefreshCw,
-  SquareTerminal,
-  X
-} from 'lucide-react'
+import React, { useEffect, useMemo, useRef, useState } from 'react'
+import { MoreHorizontal, Plus, RefreshCw, SquareTerminal, X } from 'lucide-react'
 import { useAppStore } from '@/store'
 import { useAllWorktrees } from '@/store/selectors'
 import { missionMemberErrorKey } from '@/store/slices/missions'
@@ -20,64 +12,15 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu'
-import { cn } from '@/lib/utils'
 import { translate } from '@/i18n/i18n'
 import WorktreeCard from './WorktreeCard'
 import { ProjectGroupNameDialog } from './ProjectGroupNameDialog'
 import { MissionDeleteDialog } from './MissionDeleteDialog'
 import { MissionAddProjectsDialog } from './MissionAddProjectsDialog'
 import { folderWorkspaceToWorktree } from '../../../../shared/folder-workspace-worktree'
-import { folderWorkspaceKey } from '../../../../shared/workspace-scope'
 import type { Mission } from '../../../../shared/types'
 
 const missionCollapseKey = (missionId: string): string => `mission:${missionId}`
-
-function MissionSessionRow({ mission }: { mission: Mission }): React.JSX.Element {
-  const sessionWorkspace = useAppStore(
-    (s) => s.folderWorkspaces.find((fw) => fw.missionId === mission.id) ?? null
-  )
-  const activeWorktreeId = useAppStore((s) => s.activeWorktreeId)
-  const setActiveWorktree = useAppStore((s) => s.setActiveWorktree)
-  const ensureMissionSession = useAppStore((s) => s.ensureMissionSession)
-  const [opening, setOpening] = useState(false)
-
-  if (sessionWorkspace) {
-    const worktree = folderWorkspaceToWorktree(sessionWorkspace)
-    return (
-      <WorktreeCard
-        worktree={worktree}
-        repo={undefined}
-        isActive={activeWorktreeId === worktree.id}
-        onActivate={() => setActiveWorktree(worktree.id)}
-        nativeDragEnabled={false}
-        flushSurface
-      />
-    )
-  }
-
-  return (
-    <button
-      type="button"
-      className="flex items-center gap-2 rounded-md px-2 py-1.5 text-left text-[13px] text-muted-foreground hover:bg-worktree-sidebar-accent disabled:opacity-60"
-      disabled={opening}
-      onClick={() => {
-        setOpening(true)
-        void (async () => {
-          const workspace = await ensureMissionSession(mission.id)
-          if (workspace) {
-            setActiveWorktree(folderWorkspaceKey(workspace.id))
-          }
-          setOpening(false)
-        })()
-      }}
-    >
-      <SquareTerminal className="size-3.5 shrink-0 text-muted-foreground" />
-      <span className="truncate">
-        {translate('auto.components.sidebar.MissionList.63a40a4f99', 'Open mission session')}
-      </span>
-    </button>
-  )
-}
 
 function MissionMemberRows({ mission }: { mission: Mission }): React.JSX.Element {
   const repos = useAppStore((s) => s.repos)
@@ -165,84 +108,107 @@ function MissionSection({
 }): React.JSX.Element {
   const collapsedGroups = useAppStore((s) => s.collapsedGroups)
   const toggleCollapsedGroup = useAppStore((s) => s.toggleCollapsedGroup)
-  const ensureMissionSession = useAppStore((s) => s.ensureMissionSession)
+  const sessionWorkspace = useAppStore(
+    (s) => s.folderWorkspaces.find((fw) => fw.missionId === mission.id) ?? null
+  )
+  const activeWorktreeId = useAppStore((s) => s.activeWorktreeId)
   const setActiveWorktree = useAppStore((s) => s.setActiveWorktree)
+  const ensureMissionSession = useAppStore((s) => s.ensureMissionSession)
   const collapsed = collapsedGroups.has(missionCollapseKey(mission.id))
+  const ensureRequestedRef = useRef(false)
 
-  const openSession = (): void => {
-    void (async () => {
-      const workspace = await ensureMissionSession(mission.id)
-      if (workspace) {
-        setActiveWorktree(folderWorkspaceKey(workspace.id))
-      }
-    })()
+  // Why: missions created before the sessionized row (or whose eager ensure
+  // failed) get their session materialized on first render of the tab.
+  useEffect(() => {
+    if (sessionWorkspace || ensureRequestedRef.current) {
+      return
+    }
+    ensureRequestedRef.current = true
+    void ensureMissionSession(mission.id)
+  }, [sessionWorkspace, ensureMissionSession, mission.id])
+
+  const missionMenu = (
+    <DropdownMenu modal={false}>
+      <DropdownMenuTrigger asChild>
+        <Button
+          variant="ghost"
+          size="icon-xs"
+          className="shrink-0 text-muted-foreground opacity-0 group-hover/mission:opacity-100 data-[state=open]:opacity-100"
+          aria-label={translate(
+            'auto.components.sidebar.MissionList.955a21f262',
+            'Mission options'
+          )}
+        >
+          <MoreHorizontal className="size-3.5" />
+        </Button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end">
+        <DropdownMenuItem onSelect={() => onAddProjects(mission)}>
+          {translate('auto.components.sidebar.MissionList.28833b5212', 'Add projects')}
+        </DropdownMenuItem>
+        <DropdownMenuItem onSelect={() => onRename(mission)}>
+          {translate('auto.components.sidebar.MissionList.d12c29d655', 'Rename')}
+        </DropdownMenuItem>
+        <DropdownMenuSeparator />
+        <DropdownMenuItem variant="destructive" onSelect={() => onDelete(mission)}>
+          {translate('auto.components.sidebar.MissionList.b32972019a', 'Delete mission')}
+        </DropdownMenuItem>
+      </DropdownMenuContent>
+    </DropdownMenu>
+  )
+
+  if (!sessionWorkspace) {
+    // Fallback while the session materializes (or after an ensure failure):
+    // clicking retries the ensure; members stay reachable underneath.
+    return (
+      <div data-mission-id={mission.id} className="group/mission flex flex-col">
+        <div className="flex h-7 items-center gap-1 rounded-md px-1.5 hover:bg-worktree-sidebar-accent">
+          <button
+            type="button"
+            className="flex min-w-0 flex-1 items-center gap-1.5 text-left text-[13px] text-muted-foreground"
+            onClick={() => void ensureMissionSession(mission.id)}
+          >
+            <SquareTerminal className="size-3.5 shrink-0" />
+            <span className="truncate">{mission.name}</span>
+            <span className="shrink-0 text-[11px] text-muted-foreground/60">
+              {translate('auto.components.sidebar.MissionList.745def31cd', '{{value0}} projects', {
+                value0: mission.members.length
+              })}
+            </span>
+          </button>
+          {missionMenu}
+        </div>
+        <MissionMemberRows mission={mission} />
+      </div>
+    )
   }
 
+  const sessionWorktree = folderWorkspaceToWorktree(sessionWorkspace)
   return (
-    <div className="flex flex-col">
-      <div
-        data-mission-id={mission.id}
-        className="group/mission-header flex h-7 items-center gap-1 rounded-md px-1 hover:bg-worktree-sidebar-accent"
-      >
-        <button
-          type="button"
-          className="flex min-w-0 flex-1 items-center gap-1.5 text-left"
-          aria-expanded={!collapsed}
-          onClick={() => toggleCollapsedGroup(missionCollapseKey(mission.id))}
-        >
-          <ChevronRight
-            className={cn(
-              'size-3.5 shrink-0 text-muted-foreground transition-transform',
-              !collapsed && 'rotate-90'
-            )}
-          />
-          <Flag className="size-3.5 shrink-0 text-muted-foreground" />
-          <span className="truncate text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
-            {mission.name}
-          </span>
-          <span className="shrink-0 text-[11px] text-muted-foreground/60">
-            {translate('auto.components.sidebar.MissionList.745def31cd', '{{value0}} projects', {
-              value0: mission.members.length
-            })}
-          </span>
-        </button>
-        <DropdownMenu modal={false}>
-          <DropdownMenuTrigger asChild>
-            <Button
-              variant="ghost"
-              size="icon-xs"
-              className="shrink-0 text-muted-foreground opacity-0 group-hover/mission-header:opacity-100 data-[state=open]:opacity-100"
-              aria-label={translate(
-                'auto.components.sidebar.MissionList.955a21f262',
-                'Mission options'
-              )}
-            >
-              <MoreHorizontal className="size-3.5" />
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end">
-            <DropdownMenuItem onSelect={openSession}>
-              {translate('auto.components.sidebar.MissionList.63a40a4f99', 'Open mission session')}
-            </DropdownMenuItem>
-            <DropdownMenuItem onSelect={() => onAddProjects(mission)}>
-              {translate('auto.components.sidebar.MissionList.28833b5212', 'Add projects')}
-            </DropdownMenuItem>
-            <DropdownMenuItem onSelect={() => onRename(mission)}>
-              {translate('auto.components.sidebar.MissionList.d12c29d655', 'Rename')}
-            </DropdownMenuItem>
-            <DropdownMenuSeparator />
-            <DropdownMenuItem variant="destructive" onSelect={() => onDelete(mission)}>
-              {translate('auto.components.sidebar.MissionList.b32972019a', 'Delete mission')}
-            </DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
-      </div>
-      {!collapsed ? (
-        <div className="flex flex-col gap-0.5">
-          <MissionSessionRow mission={mission} />
-          <MissionMemberRows mission={mission} />
-        </div>
-      ) : null}
+    <div data-mission-id={mission.id} className="group/mission relative">
+      <WorktreeCard
+        worktree={sessionWorktree}
+        repo={undefined}
+        isActive={activeWorktreeId === sessionWorktree.id}
+        onActivate={() => setActiveWorktree(sessionWorktree.id)}
+        nativeDragEnabled={false}
+        flushSurface
+        lineageChildCount={mission.members.length}
+        lineageCollapsed={collapsed}
+        onLineageToggle={(event) => {
+          event.preventDefault()
+          event.stopPropagation()
+          toggleCollapsedGroup(missionCollapseKey(mission.id))
+        }}
+        lineageChildren={
+          !collapsed && mission.members.length > 0 ? (
+            <div className="pl-3 pt-0.5">
+              <MissionMemberRows mission={mission} />
+            </div>
+          ) : undefined
+        }
+      />
+      <div className="absolute right-1 top-1 z-10">{missionMenu}</div>
     </div>
   )
 }

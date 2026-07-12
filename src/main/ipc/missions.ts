@@ -122,7 +122,15 @@ export function registerMissionHandlers(
       })
       notifyReposChanged(mainWindow)
       const memberResults = await createMemberWorktrees(mission, repoIds)
-      syncMissionRootIfPresent(store, mission.id)
+      // Why: the mission row IS the session card, so root and session are
+      // created eagerly. Best-effort — a root failure must not fail creation;
+      // the sidebar retries via missions:ensureSession.
+      try {
+        const ensured = ensureMissionRootStrict(store, store.getMission(mission.id) ?? mission)
+        store.ensureMissionSessionWorkspace(ensured.id)
+      } catch (error) {
+        console.warn('[missions] eager session ensure failed:', error)
+      }
       notifyReposChanged(mainWindow)
       return { mission: store.getMission(mission.id) ?? mission, memberResults }
     }
