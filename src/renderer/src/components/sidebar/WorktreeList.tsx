@@ -122,6 +122,7 @@ import {
   getVisibleWorktreeBrowserActivityTabs,
   getVisibleWorktreeTerminalActivityTabs
 } from './visible-worktree-activity-inputs'
+import { selectWorktreeListReviewCacheInputs } from './worktree-list-review-cache-inputs'
 import {
   VIRTUALIZED_SCROLL_ANCHOR_RECORD_EVENT,
   useVirtualizedScrollAnchor,
@@ -202,14 +203,12 @@ import {
   pruneWorktreeSelection,
   updateWorktreeSelection
 } from './worktree-multi-selection'
-import { callRuntimeRpc } from '@/runtime/runtime-rpc-client'
-import { splitWorktreeSortOrderByHost } from '@/lib/worktree-sort-order-host-split'
+import { persistWorktreeSortOrderByHost } from '@/lib/worktree-sort-order-persistence'
 import {
   ALL_EXECUTION_HOSTS_SCOPE,
   getRepoExecutionHostId,
   getSettingsFocusedExecutionHostId,
-  type ExecutionHostId,
-  parseExecutionHostId
+  type ExecutionHostId
 } from '../../../../shared/execution-host'
 import { getRepoHeaderCreateState } from './repo-header-create-state'
 import type { PendingSidebarRowReveal, PendingSidebarWorktreeReveal } from '@/store/slices/ui'
@@ -2005,6 +2004,9 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
   // TanStack's default correction writes scrollTop in that path, which feels
   // like rubber-banding. Structural mutations still use our explicit anchor
   // restore after direct scroll input has settled.
+  // TODO(scroll-origin-migration): this wall-clock suppression misclassifies
+  // under main-thread jank; migrate to programmaticScrollMarks + restoreSignal
+  // (see CombinedDiffViewer) once that wiring is validated for the sidebar.
   virtualizer.shouldAdjustScrollPositionOnItemSizeChange = (_item, _delta, instance) =>
     shouldAdjustWorktreeSidebarMeasuredRowScroll({
       isScrolling: instance.isScrolling,
@@ -3988,7 +3990,7 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
         onWheel={markDirectScrollInput}
         onDragOver={handleWorktreeDragOver}
         onDrop={handleWorktreeDrop}
-        className="worktree-sidebar-scrollbar h-full overflow-y-scroll overflow-x-hidden pl-1 scrollbar-sleek outline-none focus-visible:ring-1 focus-visible:ring-ring focus-visible:ring-inset pt-px"
+        className="worktree-sidebar-scrollbar h-full overflow-y-auto overflow-x-hidden pl-1 scrollbar-sleek outline-none focus-visible:ring-1 focus-visible:ring-ring focus-visible:ring-inset pt-px"
         style={WORKTREE_SIDEBAR_SCROLL_STYLE}
       >
         <div
@@ -5265,20 +5267,8 @@ const WorktreeList = React.memo(function WorktreeList({
 
   const cardProps = useAppStore((s) => s.worktreeCardProperties)
 
-  // PR cache is needed for PR-status grouping and when the status lane can
-  // show PR state on quiet/done workspace cards.
-  const prCache = useAppStore((s) =>
-    groupBy === 'pr-status' ||
-    (s.settings?.experimentalNewWorktreeCardStyle === true
-      ? cardProps.includes('status')
-      : cardProps.includes('pr'))
-      ? s.prCache
-      : null
-  )
-  const hostedReviewCache = useAppStore((s) =>
-    s.settings?.experimentalNewWorktreeCardStyle === true && cardProps.includes('status')
-      ? s.hostedReviewCache
-      : null
+  const { prCache, hostedReviewCache } = useAppStore(
+    useShallow((s) => selectWorktreeListReviewCacheInputs(s, groupBy, cardProps))
   )
   const settings = useAppStore((s) => s.settings)
   const sshTargetLabels = useAppStore((s) => s.sshTargetLabels)
@@ -5517,21 +5507,7 @@ const WorktreeList = React.memo(function WorktreeList({
     // Why: sortOrder is persisted in each host's worktreeMeta and enriched from
     // the owner host, so persist each host's ids on that host.
     const state = useAppStore.getState()
-    for (const group of splitWorktreeSortOrderByHost(state, sortedIds)) {
-      const parsed = parseExecutionHostId(group.hostId)
-      const target =
-        parsed?.kind === 'runtime'
-          ? ({ kind: 'environment', environmentId: parsed.environmentId } as const)
-          : ({ kind: 'local' } as const)
-      void (target.kind === 'environment'
-        ? callRuntimeRpc(
-            target,
-            'worktree.persistSortOrder',
-            { orderedIds: group.orderedIds },
-            { timeoutMs: 15_000 }
-          )
-        : window.api.worktrees.persistSortOrder({ orderedIds: group.orderedIds }))
-    }
+    persistWorktreeSortOrderByHost(state, sortedIds)
   }, [sortedIds, sortBy])
 
   // Flatten, filter, and apply stable sort order via the shared utility so
@@ -6722,7 +6698,7 @@ const WorktreeList = React.memo(function WorktreeList({
         data-contextual-tour-target="workspace-list"
         className="relative min-h-0 flex-1"
       >
-        <div className="worktree-sidebar-scrollbar flex h-full flex-col overflow-y-scroll overflow-x-hidden pl-1 scrollbar-sleek pt-px">
+        <div className="worktree-sidebar-scrollbar flex h-full flex-col overflow-y-auto overflow-x-hidden pl-1 scrollbar-sleek pt-px">
           <div className="flex flex-col items-center gap-2 px-4 py-6 text-center text-[11px] text-muted-foreground">
             <span>
               {translate('auto.components.sidebar.WorktreeList.b7acbf038b', 'No workspaces found')}

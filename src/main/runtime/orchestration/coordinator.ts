@@ -5,7 +5,7 @@ import { buildDispatchPreamble } from './preamble'
 import { reconcileLifecycleMessage } from './lifecycle-reconciliation'
 
 export type CoordinatorRuntime = {
-  sendTerminal(handle: string, action: { text?: string; enter?: boolean }): Promise<unknown>
+  sendTerminalAgentPrompt(handle: string, prompt: string): Promise<unknown>
   listTerminals(
     worktreeSelector?: string,
     limit?: number
@@ -29,6 +29,9 @@ export type CoordinatorRuntime = {
     behind: number
     recentSubjects: string[]
   } | null>
+  // Why: optional so lightweight runtime fakes keep compiling; when present,
+  // dispatch records the remint-stable pane identity of the assignee.
+  getTerminalPaneKey?(handle: string): string | null
 }
 
 // Why (§3.1): single threshold, no warn/refuse split. Coordinator picked 20
@@ -461,7 +464,11 @@ export class Coordinator {
       }
     }
 
-    const dispatch = this.db.createDispatchContext(task.id, targetHandle)
+    const dispatch = this.db.createDispatchContext(
+      task.id,
+      targetHandle,
+      this.runtime.getTerminalPaneKey?.(targetHandle) ?? undefined
+    )
 
     // Why: agents dispatched by the coordinator must use orca-dev in dev mode
     // so they talk to the dev runtime's socket, not production (Section 6.4).
@@ -495,10 +502,7 @@ export class Coordinator {
     }
 
     try {
-      await this.runtime.sendTerminal(targetHandle, {
-        text: preamble + gateContext,
-        enter: true
-      })
+      await this.runtime.sendTerminalAgentPrompt(targetHandle, preamble + gateContext)
     } catch (err) {
       const updated = this.db.failDispatch(
         dispatch.id,

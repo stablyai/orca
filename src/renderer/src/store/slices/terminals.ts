@@ -2,6 +2,7 @@
 import type { StateCreator } from 'zustand'
 import type { AppState } from '../types'
 import type {
+  Repo,
   SetupSplitDirection,
   Tab,
   TerminalLayoutSnapshot,
@@ -15,7 +16,11 @@ import type {
   AgentProviderSessionMetadata,
   SleepingAgentLaunchConfig
 } from '../../../../shared/agent-session-resume'
-import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
+import {
+  DEFAULT_REPO_BADGE_COLOR,
+  FLOATING_TERMINAL_WORKTREE_ID
+} from '../../../../shared/constants'
+import { parseExecutionHostId, type ExecutionHostId } from '../../../../shared/execution-host'
 import {
   folderWorkspaceKey,
   parseWorkspaceKey,
@@ -23,7 +28,11 @@ import {
 } from '../../../../shared/workspace-scope'
 import { deriveGeneratedTabTitle } from '../../../../shared/agent-tab-title'
 import { isDecorativeAgentTitleFrameChange } from '../../../../shared/agent-decorative-title-signature'
-import { parseLegacyNumericPaneKey, parsePaneKey } from '../../../../shared/stable-pane-id'
+import {
+  makePaneKey,
+  parseLegacyNumericPaneKey,
+  parsePaneKey
+} from '../../../../shared/stable-pane-id'
 import { isValidHostTerminalTabId, isValidTerminalTabId } from '../../../../shared/terminal-tab-id'
 import { getRepoIdFromWorktreeId, splitWorktreeId } from '../../../../shared/worktree-id'
 import { isWslUncPath } from '../../../../shared/wsl-paths'
@@ -34,8 +43,11 @@ import { WINDOWS_GIT_BASH_SHELL } from '../../../../shared/windows-terminal-shel
 import type { AgentStartedTelemetry } from '../../lib/worktree-activation'
 import { scheduleRuntimeGraphSync } from '@/runtime/sync-runtime-graph'
 import { forgetAgentHibernationTabOutput } from '@/lib/agent-hibernation-output-activity'
+import { forgetForegroundTerminalTabs } from '@/lib/foreground-terminal-tabs'
+import { forgetAgentStartupDeliveriesForTabs } from '@/lib/agent-startup-delivery-guards'
 import { clearTransientTerminalState, emptyLayoutSnapshot } from './terminal-helpers'
-import { isClaudeAgent, detectAgentStatusFromTitle } from '@/lib/agent-status'
+import { isClaudeAgent } from '@/lib/agent-status'
+import { classifyTitleActivity } from '@/lib/pane-agent-evidence'
 import { buildOrphanTerminalCleanupPatch, getOrphanTerminalIds } from './terminal-orphan-helpers'
 import {
   dedupeTabOrder,
@@ -49,6 +61,10 @@ import {
   restorePtyDataHandlersAfterFailedShutdown,
   unregisterPtyDataHandlers
 } from '@/components/terminal-pane/pty-transport'
+// Why: import the store-free registry, not terminal-parked-tab-watchers —
+// that module imports @/store, and a slice importing it would re-enter store
+// creation before this slice finishes evaluating.
+import { disposeParkedTerminalWatchersForPtyIds } from '@/components/terminal-pane/terminal-parked-watcher-registry'
 import {
   normalizeTerminalLayoutSnapshot,
   resolvePtyBoundActiveLeafId
@@ -65,6 +81,10 @@ import { focusTerminalTabSurface } from '@/lib/focus-terminal-tab-surface'
 import { getRuntimeEnvironmentIdForWorktree } from '@/lib/worktree-runtime-owner'
 import { getLocalProjectExecutionRuntimeContext } from '@/lib/local-preflight-context'
 import type { NativeChatLaunchPrompt } from '@/lib/native-chat-launch-prompt'
+import {
+  addAdditionalValidWorkspaceKeys,
+  type WorkspaceSessionHydrationOptions
+} from '@/lib/workspace-session-hydration-keys'
 import {
   collectHibernatedCompletionEvidenceForWorktree,
   collectSleepingAgentSessionRecordsForWorktree,
@@ -118,6 +138,89 @@ function getFallbackTabTitle(tab: TerminalTab, index?: number): string {
     tab.title ||
     `Terminal ${(index ?? 0) + 1}`
   )
+}
+
+function getPathDisplayName(path: string, fallback: string): string {
+  const normalized = path.trim().replace(/[\\/]+$/g, '')
+  const basename = normalized.split(/[\\/]/).findLast(Boolean)?.trim()
+  return basename || fallback
+}
+
+function buildRuntimeSessionPlaceholders({
+  repos,
+  runtimeHostIdByWorkspaceSessionKey,
+  worktreesByRepo
+}: {
+  repos: readonly Repo[]
+  runtimeHostIdByWorkspaceSessionKey: Record<string, ExecutionHostId>
+  worktreesByRepo: Record<string, Worktree[]>
+}): { repos: Repo[]; worktreesByRepo: Record<string, Worktree[]> } {
+  let nextRepos = repos.slice()
+  let nextWorktreesByRepo = worktreesByRepo
+  for (const workspaceSessionKey of Object.keys(runtimeHostIdByWorkspaceSessionKey)) {
+    const hostId = runtimeHostIdByWorkspaceSessionKey[workspaceSessionKey]
+    if (parseExecutionHostId(hostId)?.kind !== 'runtime') {
+      continue
+    }
+    const workspaceScope = parseWorkspaceKey(workspaceSessionKey)
+    if (workspaceScope?.type === 'folder') {
+      continue
+    }
+    const worktreeId =
+      workspaceScope?.type === 'worktree' ? workspaceScope.worktreeId : workspaceSessionKey
+    const parsed = splitWorktreeId(worktreeId)
+    if (!parsed) {
+      continue
+    }
+    const existingRepo = nextRepos.some((repo) => repo.id === parsed.repoId)
+    if (!existingRepo) {
+      // Why: remote catalogs load after hydration, but host-split session
+      // writes need owner metadata. If any repo with this id already exists,
+      // avoid duplicate ids; the worktree placeholder below carries hostId.
+      nextRepos = [
+        ...nextRepos,
+        {
+          id: parsed.repoId,
+          path: parsed.worktreePath,
+          displayName: getPathDisplayName(parsed.worktreePath, parsed.repoId),
+          badgeColor: DEFAULT_REPO_BADGE_COLOR,
+          addedAt: 0,
+          connectionId: null,
+          executionHostId: hostId
+        }
+      ]
+    }
+    const current = nextWorktreesByRepo[parsed.repoId] ?? []
+    if (current.some((worktree) => worktree.id === worktreeId)) {
+      continue
+    }
+    const placeholder: Worktree = {
+      id: worktreeId,
+      repoId: parsed.repoId,
+      hostId,
+      displayName: getPathDisplayName(parsed.worktreePath, parsed.repoId),
+      comment: '',
+      linkedIssue: null,
+      linkedPR: null,
+      linkedLinearIssue: null,
+      linkedGitLabMR: null,
+      linkedGitLabIssue: null,
+      isArchived: false,
+      isUnread: false,
+      isPinned: false,
+      sortOrder: 0,
+      lastActivityAt: 0,
+      path: parsed.worktreePath,
+      head: '',
+      branch: '',
+      isBare: false,
+      isMainWorktree: false
+    }
+    nextWorktreesByRepo =
+      nextWorktreesByRepo === worktreesByRepo ? { ...worktreesByRepo } : nextWorktreesByRepo
+    nextWorktreesByRepo[parsed.repoId] = [...current, placeholder]
+  }
+  return { repos: nextRepos, worktreesByRepo: nextWorktreesByRepo }
 }
 
 let terminalTabOwnerCacheSource: Record<string, TerminalTab[]> | null = null
@@ -415,6 +518,7 @@ export type TerminalSlice = {
   pendingIssueCommandSplitByTabId: Record<string, { command: string; env?: Record<string, string> }>
   tabBarOrderByWorktree: Record<string, string[]>
   workspaceSessionReady: boolean
+  restoredRuntimeHostIdByWorkspaceSessionKey: Record<string, ExecutionHostId>
   defaultTerminalTabsAppliedByWorktreeId: Record<string, true>
   markDefaultTerminalTabsApplied: (worktreeId: string) => void
   /** True only after hydrateWorkspaceSession ran from a real load of
@@ -486,7 +590,11 @@ export type TerminalSlice = {
   setActiveTab: (tabId: string) => void
   setActiveTabForWorktree: (worktreeId: string, tabId: string) => void
   updateTabTitle: (tabId: string, title: string) => void
-  setGeneratedTabTitleFromAgentPrompt: (paneKey: string, prompt: string) => void
+  setGeneratedTabTitleFromAgentPrompt: (
+    paneKey: string,
+    prompt: string,
+    options?: { replaceExistingGeneratedTitle?: boolean }
+  ) => void
   clearTabLaunchAgent: (tabId: string) => void
   setRuntimePaneTitle: (tabId: string, paneId: number, title: string) => void
   clearRuntimePaneTitle: (tabId: string, paneId: number) => void
@@ -543,6 +651,7 @@ export type TerminalSlice = {
   setTabCanExpandPane: (tabId: string, canExpand: boolean) => void
   setTabLayout: (tabId: string, layout: TerminalLayoutSnapshot | null) => void
   syncPaneDetachPtyOwnership: (args: {
+    detachedLeafId: string
     detachedPtyId: string | null
     sourceLayout: TerminalLayoutSnapshot
     sourceTabId: string
@@ -618,9 +727,16 @@ export type TerminalSlice = {
   setDeferredSshReconnectTargets: (targetIds: string[]) => void
   removeDeferredSshReconnectTarget: (targetId: string) => void
   removeDeferredSshSessionId: (tabId: string) => void
-  hydrateWorkspaceSession: (session: WorkspaceSessionState) => void
+  hydrateWorkspaceSession: (
+    session: WorkspaceSessionState,
+    options?: HydrateWorkspaceSessionOptions
+  ) => void
   reconnectPersistedTerminals: (signal?: AbortSignal) => Promise<void>
 }
+
+export type HydrateWorkspaceSessionOptions = {
+  runtimeHostIdByWorkspaceSessionKey?: Record<string, ExecutionHostId>
+} & WorkspaceSessionHydrationOptions
 
 export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> = (set, get) => ({
   tabsByWorktree: {},
@@ -645,6 +761,7 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
   nativeChatLaunchPromptByTabId: {},
   tabBarOrderByWorktree: {},
   workspaceSessionReady: false,
+  restoredRuntimeHostIdByWorkspaceSessionKey: {},
   defaultTerminalTabsAppliedByWorktreeId: {},
   markDefaultTerminalTabsApplied: (worktreeId) =>
     set((s) => {
@@ -771,7 +888,7 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
         if (!tab.title || !isClaudeAgent(tab.title)) {
           continue
         }
-        const status = detectAgentStatusFromTitle(tab.title)
+        const status = classifyTitleActivity(tab.title)
         if (status === null || status === 'working') {
           continue
         }
@@ -1071,13 +1188,18 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
   },
 
   closeTab: (tabId, opts) => {
+    let closingWorktreeId: string | null = null
     set((s) => {
       const next = { ...s.tabsByWorktree }
       let closingPtyId: string | null = null
       for (const wId of Object.keys(next)) {
         const before = next[wId]
-        if (!closingPtyId) {
-          closingPtyId = before.find((t) => t.id === tabId)?.ptyId ?? null
+        const closingTab = before.find((t) => t.id === tabId)
+        if (closingTab) {
+          closingWorktreeId = wId
+          if (!closingPtyId) {
+            closingPtyId = closingTab.ptyId ?? null
+          }
         }
         const after = before.filter((t) => t.id !== tabId)
         if (after.length !== before.length) {
@@ -1228,7 +1350,13 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
     // too. Use dropAgentStatusByTabPrefix (not removeAgentStatusByTabPrefix)
     // so retention suppressors are planted: a live→gone transition inside the
     // same frame as the tab close cannot re-snapshot a row we just dropped.
-    get().dropAgentStatusByTabPrefix(tabId)
+    // Why: Pi can leave a completed row attributed to the worktree but keyed
+    // under an already-missing tab id; pass the worktree to sweep only that
+    // completed orphan while preserving active pre-render child rows.
+    get().dropAgentStatusByTabPrefix(
+      tabId,
+      closingWorktreeId ? { worktreeId: closingWorktreeId } : undefined
+    )
     // Why: retired pane keys never recur, so stranded foreground entries would
     // accumulate for the renderer's whole lifetime.
     get().clearPaneForegroundAgentByTabPrefix(tabId)
@@ -1236,6 +1364,10 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
     // a fresh leafId at epoch 0), so drop the panes' hibernation output epochs to
     // keep that module-level map from growing for the renderer's whole lifetime.
     forgetAgentHibernationTabOutput(tabId)
+    // Why: same rationale for the tab's foreground last-seen timestamp and any
+    // consumed agent-startup delivery guards — retired tab ids never recur.
+    forgetForegroundTerminalTabs([tabId])
+    forgetAgentStartupDeliveriesForTabs([tabId])
     for (const tabs of Object.values(get().unifiedTabsByWorktree)) {
       const workspaceItem = tabs.find(
         (entry) => entry.contentType === 'terminal' && entry.entityId === tabId
@@ -1439,35 +1571,59 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
     })
   },
 
-  setGeneratedTabTitleFromAgentPrompt: (paneKey, prompt) => {
+  setGeneratedTabTitleFromAgentPrompt: (paneKey, prompt, options) => {
+    // Why: setAgentStatus is high-frequency; skip derive/set unless the feature
+    // is on and this tab still needs a (re)generated title.
+    if (get().settings?.tabAutoGenerateTitle !== true) {
+      return
+    }
     const tabId = getTabIdFromPaneKey(paneKey)
     if (!tabId || prompt.length === 0) {
       return
     }
+    const ownerWorktreeId = getTerminalTabOwnerWorktreeId(get().tabsByWorktree, tabId)
+    if (!ownerWorktreeId) {
+      return
+    }
+    const tabs = get().tabsByWorktree[ownerWorktreeId] ?? []
+    const currentTab = tabs.find((tab) => tab.id === tabId)
+    if (!currentTab || currentTab.customTitle?.trim() || currentTab.quickCommandLabel?.trim()) {
+      return
+    }
+    const existingGeneratedTitle = currentTab.generatedTitle?.trim()
+    if (existingGeneratedTitle && options?.replaceExistingGeneratedTitle !== true) {
+      return
+    }
+    const generatedTitle = deriveGeneratedTabTitle(prompt)
+    if (!generatedTitle || existingGeneratedTitle === generatedTitle) {
+      return
+    }
     set((s) => {
-      if (s.settings?.tabAutoGenerateTitle !== true) {
+      const ownerTabsForWrite = s.tabsByWorktree[ownerWorktreeId]
+      if (!ownerTabsForWrite) {
         return s
       }
-      const ownerWorktreeId = getTerminalTabOwnerWorktreeId(s.tabsByWorktree, tabId)
-      if (!ownerWorktreeId) {
-        return s
-      }
-      const tabs = s.tabsByWorktree[ownerWorktreeId] ?? []
-      const tabIndex = tabs.findIndex((tab) => tab.id === tabId)
-      const currentTab = tabs[tabIndex]
+      const tabIndex = ownerTabsForWrite.findIndex((tab) => tab.id === tabId)
+      const tabForWrite = ownerTabsForWrite[tabIndex]
+      // Why: re-check inside set so concurrent renames / setting flips win.
       if (
-        !currentTab ||
-        currentTab.customTitle?.trim() ||
-        currentTab.quickCommandLabel?.trim() ||
-        currentTab.generatedTitle?.trim()
+        !tabForWrite ||
+        s.settings?.tabAutoGenerateTitle !== true ||
+        tabForWrite.customTitle?.trim() ||
+        tabForWrite.quickCommandLabel?.trim()
       ) {
         return s
       }
-      const generatedTitle = deriveGeneratedTabTitle(prompt)
-      if (!generatedTitle) {
+      const latestGeneratedTitle = tabForWrite.generatedTitle?.trim()
+      if (
+        latestGeneratedTitle &&
+        (latestGeneratedTitle === generatedTitle || options?.replaceExistingGeneratedTitle !== true)
+      ) {
         return s
       }
-      const ownerTabs = tabs.map((tab) => (tab.id === tabId ? { ...tab, generatedTitle } : tab))
+      const ownerTabs = ownerTabsForWrite.map((tab) =>
+        tab.id === tabId ? { ...tab, generatedTitle } : tab
+      )
       const currentUnifiedTabs = s.unifiedTabsByWorktree[ownerWorktreeId] ?? []
       const unifiedTabsWithGeneratedLabel = updateUnifiedTerminalGeneratedLabel(
         currentUnifiedTabs,
@@ -1530,7 +1686,7 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
       // event fires. Bumping only on classification change keeps incidental
       // title noise (spinner frame, prompt suffix) from churning the sidebar.
       const classificationChanged =
-        detectAgentStatusFromTitle(prevTitle ?? '') !== detectAgentStatusFromTitle(title)
+        classifyTitleActivity(prevTitle ?? '') !== classifyTitleActivity(title)
       // Why: locate the owning worktree so we can suppress the sortEpoch
       // bump when the changing pane lives in the active worktree. Title
       // changes there are side-effects of the user's click (PTY remount on
@@ -1573,7 +1729,7 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
       // Why: clearing a 'working'/'permission'-classified title back to none
       // changes the title-heuristic verdict for that pane, so the smart sort
       // needs a re-sort. See setRuntimePaneTitle for the rationale.
-      const hadClassification = detectAgentStatusFromTitle(prevTitle ?? '') !== null
+      const hadClassification = classifyTitleActivity(prevTitle ?? '') !== null
       // Why: same active-worktree gate as setRuntimePaneTitle — clears that
       // fire as a side-effect of a click-driven PTY teardown in the active
       // worktree must not re-rank the sidebar. Skip bumping when no owner is
@@ -2145,6 +2301,11 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
     // Removing the data handlers first ensures the final flush is a no-op.
     if (expectedRuntimePtyIds.length === 0) {
       unregisterPtyDataHandlers(shutdownPtyIds)
+      // Why: parked-tab byte watchers observe the same flush through dispatcher
+      // sidecars, which the call above does not touch — dispose them now or a
+      // just-slept/deleted worktree still gets unread marks and delayed
+      // bell/completion OS notifications from its teardown bytes.
+      disposeParkedTerminalWatchersForPtyIds(shutdownPtyIds)
     }
 
     // Why (ordering invariant — DESIGN_DOC §3.3.c): on sleep, capture every
@@ -2565,7 +2726,13 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
     })
   },
 
-  syncPaneDetachPtyOwnership: ({ detachedPtyId, sourceLayout, sourceTabId, targetTabId }) => {
+  syncPaneDetachPtyOwnership: ({
+    detachedLeafId,
+    detachedPtyId,
+    sourceLayout,
+    sourceTabId,
+    targetTabId
+  }) => {
     set((s) => {
       const layoutSourcePtyIds = uniquePtyIds(Object.values(sourceLayout.ptyIdsByLeafId ?? {}))
       const existingSourcePtyIds = (s.ptyIdsByTabId[sourceTabId] ?? []).filter(
@@ -2594,8 +2761,8 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
         nextLastKnownRelayPtyIdByTabId[targetTabId] = detachedPtyId
       }
 
-      // Why: pane-to-tab detach moves live PTY ownership without spawning or
-      // exiting processes, so sync identity maps directly without activity bumps.
+      // Why: pane-to-tab detach moves a live PTY without spawning or exiting,
+      // so transfer its safe pane-owned identity without activity bumps.
       const sourceTabsByWorktree = withTerminalTabPtyId(
         s.tabsByWorktree,
         sourceTabId,
@@ -2605,10 +2772,60 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
         ? withTerminalTabPtyId(sourceTabsByWorktree, targetTabId, detachedPtyId)
         : sourceTabsByWorktree
 
+      const sourcePaneKey = makePaneKey(sourceTabId, detachedLeafId)
+      const targetPaneKey = makePaneKey(targetTabId, detachedLeafId)
+      const sourceForeground = s.paneForegroundAgentByPaneKey[sourcePaneKey]
+      const sourceLaunchConfig = s.agentLaunchConfigByPaneKey[sourcePaneKey]
+      const hadSourceHookStatus = sourcePaneKey in s.agentStatusByPaneKey
+      let nextPaneForegroundAgentByPaneKey = s.paneForegroundAgentByPaneKey
+      let nextAgentLaunchConfigByPaneKey = s.agentLaunchConfigByPaneKey
+      let nextAgentStatusByPaneKey = s.agentStatusByPaneKey
+      let nextRetentionSuppressedPaneKeys = s.retentionSuppressedPaneKeys
+      if (sourceForeground) {
+        nextPaneForegroundAgentByPaneKey = { ...s.paneForegroundAgentByPaneKey }
+        delete nextPaneForegroundAgentByPaneKey[sourcePaneKey]
+        nextPaneForegroundAgentByPaneKey[targetPaneKey] = sourceForeground
+      }
+      if (sourceLaunchConfig) {
+        nextAgentLaunchConfigByPaneKey = { ...s.agentLaunchConfigByPaneKey }
+        delete nextAgentLaunchConfigByPaneKey[sourcePaneKey]
+        nextAgentLaunchConfigByPaneKey[targetPaneKey] = {
+          ...sourceLaunchConfig,
+          identity: {
+            ...sourceLaunchConfig.identity,
+            tabId: targetTabId,
+            leafId: detachedLeafId
+          }
+        }
+      }
+      if (hadSourceHookStatus) {
+        nextAgentStatusByPaneKey = { ...s.agentStatusByPaneKey }
+        delete nextAgentStatusByPaneKey[sourcePaneKey]
+        nextRetentionSuppressedPaneKeys = {
+          ...s.retentionSuppressedPaneKeys,
+          [sourcePaneKey]: true
+        }
+      }
+
       return {
         ptyIdsByTabId: nextPtyIdsByTabId,
         lastKnownRelayPtyIdByTabId: nextLastKnownRelayPtyIdByTabId,
-        ...(nextTabsByWorktree !== s.tabsByWorktree ? { tabsByWorktree: nextTabsByWorktree } : {})
+        ...(nextTabsByWorktree !== s.tabsByWorktree ? { tabsByWorktree: nextTabsByWorktree } : {}),
+        ...(nextPaneForegroundAgentByPaneKey !== s.paneForegroundAgentByPaneKey
+          ? { paneForegroundAgentByPaneKey: nextPaneForegroundAgentByPaneKey }
+          : {}),
+        ...(nextAgentLaunchConfigByPaneKey !== s.agentLaunchConfigByPaneKey
+          ? { agentLaunchConfigByPaneKey: nextAgentLaunchConfigByPaneKey }
+          : {}),
+        ...(nextAgentStatusByPaneKey !== s.agentStatusByPaneKey
+          ? {
+              // Why: the PTY keeps its immutable source ORCA_PANE_KEY; retire
+              // rather than re-key a hook row that future events cannot update.
+              agentStatusByPaneKey: nextAgentStatusByPaneKey,
+              agentStatusEpoch: s.agentStatusEpoch + 1,
+              retentionSuppressedPaneKeys: nextRetentionSuppressedPaneKeys
+            }
+          : {})
       }
     })
   },
@@ -2741,16 +2958,21 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
     return data
   },
 
-  hydrateWorkspaceSession: (session) => {
+  hydrateWorkspaceSession: (session, options) => {
     set((s) => {
+      const runtimeSessionPlaceholders = buildRuntimeSessionPlaceholders({
+        repos: s.repos,
+        runtimeHostIdByWorkspaceSessionKey: options?.runtimeHostIdByWorkspaceSessionKey ?? {},
+        worktreesByRepo: s.worktreesByRepo
+      })
       const validWorktreeIds = new Set(
-        Object.values(s.worktreesByRepo)
+        Object.values(runtimeSessionPlaceholders.worktreesByRepo)
           .flat()
           .map((worktree) => worktree.id)
       )
-      const knownRepoIds = new Set(s.repos.map((r) => r.id))
+      const knownRepoIds = new Set(runtimeSessionPlaceholders.repos.map((r) => r.id))
       const repoIdsWithLoadedWorktrees = new Set(
-        Object.entries(s.worktreesByRepo)
+        Object.entries(runtimeSessionPlaceholders.worktreesByRepo)
           .filter(([, worktrees]) => worktrees.length > 0)
           .map(([repoId]) => repoId)
       )
@@ -2766,6 +2988,7 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
       for (const workspace of s.folderWorkspaces) {
         validWorktreeIds.add(folderWorkspaceKey(workspace.id))
       }
+      addAdditionalValidWorkspaceKeys(validWorktreeIds, options)
       for (const worktreeId of Object.keys(session.tabsByWorktree)) {
         const parsedWorkspaceKey = parseWorkspaceKey(worktreeId)
         if (parsedWorkspaceKey?.type === 'folder') {
@@ -2841,9 +3064,10 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
       )
       const fallbackActiveWorktreeId =
         !session.activeWorktreeId && session.activeRepoId && knownRepoIds.has(session.activeRepoId)
-          ? (s.worktreesByRepo[session.activeRepoId]?.find((worktree) => worktree.isMainWorktree)
-              ?.id ??
-            s.worktreesByRepo[session.activeRepoId]?.[0]?.id ??
+          ? (runtimeSessionPlaceholders.worktreesByRepo[session.activeRepoId]?.find(
+              (worktree) => worktree.isMainWorktree
+            )?.id ??
+            runtimeSessionPlaceholders.worktreesByRepo[session.activeRepoId]?.[0]?.id ??
             null)
           : null
       const activeWorktreeId = (() => {
@@ -2866,7 +3090,8 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
       const activeTabId =
         session.activeTabId && validTabIds.has(session.activeTabId) ? session.activeTabId : null
       const activeRepoId =
-        session.activeRepoId && s.repos.some((repo) => repo.id === session.activeRepoId)
+        session.activeRepoId &&
+        runtimeSessionPlaceholders.repos.some((repo) => repo.id === session.activeRepoId)
           ? session.activeRepoId
           : null
 
@@ -2908,10 +3133,12 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
       // createOrAttach RPC, triggering reattach instead of a fresh spawn.
       const pendingReconnectPtyIdByTabId: Record<string, string> = {}
       for (const worktreeId of pendingReconnectWorktreeIds) {
-        const worktree = Object.values(s.worktreesByRepo)
+        const worktree = Object.values(runtimeSessionPlaceholders.worktreesByRepo)
           .flat()
           .find((entry) => entry.id === worktreeId)
-        const repo = worktree ? s.repos.find((entry) => entry.id === worktree.repoId) : null
+        const repo = worktree
+          ? runtimeSessionPlaceholders.repos.find((entry) => entry.id === worktree.repoId)
+          : null
         if (repo?.connectionId) {
           continue
         }
@@ -2963,8 +3190,10 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
       // data once SSH reconnects and fetchWorktrees runs.
       // Why: only SSH needs placeholders; local metadata should come from the
       // next successful fetch so the sidebar does not render synthetic entries.
-      const sshRepoIds = new Set(s.repos.filter((r) => r.connectionId).map((r) => r.id))
-      const worktreesByRepo = { ...s.worktreesByRepo }
+      const sshRepoIds = new Set(
+        runtimeSessionPlaceholders.repos.filter((r) => r.connectionId).map((r) => r.id)
+      )
+      const worktreesByRepo = { ...runtimeSessionPlaceholders.worktreesByRepo }
       for (const worktreeId of Object.keys(tabsByWorktree)) {
         const repoId = getRepoIdFromWorktreeId(worktreeId)
         if (!sshRepoIds.has(repoId)) {
@@ -3017,6 +3246,9 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
         activeWorkspaceKey,
         activeTabId,
         activeTabIdByWorktree,
+        restoredRuntimeHostIdByWorkspaceSessionKey:
+          options?.runtimeHostIdByWorkspaceSessionKey ?? {},
+        repos: runtimeSessionPlaceholders.repos,
         tabsByWorktree,
         worktreesByRepo,
         // Why: restore the per-worktree focus-recency map. Pruning of stale
@@ -3192,7 +3424,12 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
       const worktree = Object.values(get().worktreesByRepo)
         .flat()
         .find((entry) => entry.id === worktreeId)
-      const repo = worktree ? get().repos.find((entry) => entry.id === worktree.repoId) : null
+      // Why: SSH worktrees aren't in worktreesByRepo at cold start (relay
+      // discovery needs the connection). Fall back to the repo id embedded in
+      // the composite worktree id so their sessions still reach the deferred
+      // map — otherwise panes fresh-spawn into a missing PTY provider.
+      const repoId = worktree?.repoId ?? getRepoIdFromWorktreeId(worktreeId)
+      const repo = repoId ? get().repos.find((entry) => entry.id === repoId) : null
       if (!repo?.connectionId) {
         continue
       }

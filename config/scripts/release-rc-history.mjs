@@ -25,7 +25,11 @@ export function rcNumberFromTag(base, tag) {
   }
 
   const suffix = tag.slice(prefix.length)
-  return /^\d+$/.test(suffix) ? Number(suffix) : null
+  // Why the optional .identifier: suffixed side-branch RCs (v1.2.3-rc.4.perf)
+  // must advance the shared rc counter, or the next suffixed cut recomputes
+  // an existing tag and the workflow refuses to re-cut over it.
+  const match = /^(\d+)(?:\.[0-9A-Za-z]+)?$/.exec(suffix)
+  return match ? Number(match[1]) : null
 }
 
 export function rcNumberFromReleaseSubject(base, subject) {

@@ -21,9 +21,9 @@ export {
   hasRenderableUsage
 } from './account-usage-state'
 
-// Why: matches desktop StatusBar convention — bars show percent remaining
-// (so a fresh account renders full, a depleted one renders empty), not
-// percent used. Color thresholds invert accordingly.
+// Why: matches desktop StatusBar — bars show percent used (consumption), same
+// as Claude/Codex harness meters. Fresh account is empty/green; depleted is
+// full/red.
 export function UsageBar({
   label,
   usedPercent,
@@ -35,13 +35,15 @@ export function UsageBar({
   unavailable: boolean
   loading?: boolean
 }) {
-  const remaining = usedPercent == null ? null : Math.max(0, Math.min(100, 100 - usedPercent))
+  // Why: round then clamp so bar width, color, and label share one value (desktop parity).
+  const used = usedPercent == null ? null : Math.max(0, Math.min(100, Math.round(usedPercent)))
+  // Why: same consumption bands as desktop barColor (green <60, amber <80, red ≥80).
   const barColor =
-    remaining == null
+    used == null
       ? colors.textMuted
-      : remaining <= 10
+      : used >= 80
         ? colors.statusRed
-        : remaining <= 30
+        : used >= 60
           ? colors.statusAmber
           : colors.statusGreen
   return (
@@ -52,7 +54,7 @@ export function UsageBar({
           style={[
             styles.usageFill,
             {
-              width: `${remaining ?? 0}%`,
+              width: `${used ?? 0}%`,
               backgroundColor: unavailable ? colors.textMuted : barColor
             }
           ]}
@@ -61,9 +63,7 @@ export function UsageBar({
       {loading ? (
         <ActivityIndicator size="small" color={colors.textSecondary} style={styles.usageSpinner} />
       ) : (
-        <Text style={styles.usageValue}>
-          {unavailable || remaining == null ? '—' : `${Math.round(remaining)}%`}
-        </Text>
+        <Text style={styles.usageValue}>{unavailable || used == null ? '—' : `${used}%`}</Text>
       )}
     </View>
   )

@@ -12,12 +12,14 @@ import { SshTargetDestructiveActions } from './SshTargetDestructiveActions'
 import { SshTargetForm, EMPTY_FORM, type EditingTarget } from './SshTargetForm'
 import { getEditingTargetForSshTarget } from './ssh-target-draft'
 import { buildSshTargetSavePayload } from './ssh-target-save-payload'
+import { HostRemoveDialog } from '../sidebar/HostRemoveDialog'
+import { resolveSshHostRemoval } from '../sidebar/ssh-host-remove-resolution'
+import { getAllWorktreesFromState } from '@/store/selectors'
+import { toSshExecutionHostId } from '../../../../shared/execution-host'
 import { translate } from '@/i18n/i18n'
 export { getSshPaneSearchEntries } from './ssh-search'
 
-type SshPaneProps = Record<string, never>
-
-export function SshPane(_props: SshPaneProps): React.JSX.Element {
+export function SshPane(): React.JSX.Element {
   const [targets, setTargets] = useState<SshTarget[]>([])
   // Why: connection states are already hydrated and kept up-to-date by the
   // global store (via useIpcEvents.ts). Reading from the store avoids
@@ -28,6 +30,14 @@ export function SshPane(_props: SshPaneProps): React.JSX.Element {
   const [editingId, setEditingId] = useState<string | null>(null)
   const [form, setForm] = useState<EditingTarget>(EMPTY_FORM)
   const [testingIds, setTestingIds] = useState<Set<string>>(new Set())
+  // Why: when a target still has workspaces, route removal through the shared
+  // workspace-aware HostRemoveDialog (same as the sidebar) instead of the plain
+  // confirm, so the user chooses to delete or keep them rather than silently
+  // orphaning them.
+  const [hostRemoveTarget, setHostRemoveTarget] = useState<{
+    targetId: string
+    label: string
+  } | null>(null)
   const mountedRef = useMountedRef()
 
   const setSshTargetsMetadata = useAppStore((s) => s.setSshTargetsMetadata)
@@ -60,7 +70,8 @@ export function SshPane(_props: SshPaneProps): React.JSX.Element {
     // a sync failure must not block listing the already-known targets.
     void (async () => {
       try {
-        await window.api.ssh.importConfig()
+        const result = await window.api.ssh.importConfig()
+        useAppStore.getState().recordSshRepoReadoptions(result.repoReadoptions)
       } catch {
         // Surfaced on demand via the explicit Import button; ignore here.
       }
@@ -80,9 +91,12 @@ export function SshPane(_props: SshPaneProps): React.JSX.Element {
     }
 
     try {
-      await (editingId
-        ? window.api.ssh.updateTarget({ id: editingId, updates: savePayload.payload.updates })
-        : window.api.ssh.addTarget({ target: savePayload.payload.target }))
+      if (editingId) {
+        await window.api.ssh.updateTarget({ id: editingId, updates: savePayload.payload.updates })
+      } else {
+        const result = await window.api.ssh.addTarget({ target: savePayload.payload.target })
+        useAppStore.getState().recordSshRepoReadoptions(result.repoReadoptions)
+      }
       recordFeatureInteraction('ssh')
       if (!mountedRef.current) {
         return
@@ -120,6 +134,25 @@ export function SshPane(_props: SshPaneProps): React.JSX.Element {
       await window.api.ssh.connect({ targetId })
       await window.api.ssh.terminateSessions({ targetId })
     }
+  }
+
+  // Route removal through the workspace-aware dialog when the target still owns
+  // workspaces; otherwise use the plain confirm (which also ends remote PTYs).
+  const requestRemoveTarget = (
+    target: { id: string; label: string },
+    requestPlainRemove: (target: { id: string; label: string }) => void
+  ): void => {
+    const resolution = resolveSshHostRemoval({
+      targetId: target.id,
+      repos: useAppStore.getState().repos,
+      worktrees: getAllWorktreesFromState(useAppStore.getState()),
+      sshConnectionStates: useAppStore.getState().sshConnectionStates
+    })
+    if (resolution.workspaceCount > 0) {
+      setHostRemoveTarget({ targetId: target.id, label: target.label })
+      return
+    }
+    requestPlainRemove(target)
   }
 
   const handleRemove = async (id: string): Promise<void> => {
@@ -254,17 +287,21 @@ export function SshPane(_props: SshPaneProps): React.JSX.Element {
 
   const handleImport = async (): Promise<void> => {
     try {
-      const synced = (await window.api.ssh.importConfig()) as SshTarget[]
+      // Why: the explicit Import action re-adopts every ~/.ssh/config host,
+      // including ones the user previously deleted — clear tombstones so a
+      // deliberate re-import can bring them back.
+      const result = await window.api.ssh.importConfig({ reAdopt: true })
+      useAppStore.getState().recordSshRepoReadoptions(result.repoReadoptions)
       recordFeatureInteraction('ssh')
       if (mountedRef.current) {
-        if (synced.length === 0) {
+        if (result.targets.length === 0) {
           toast('~/.ssh/config already in sync')
         } else {
           toast.success(
             translate(
               'auto.components.settings.SshPane.f8050f6307',
               'Synced {{value0}} server{{value1}}',
-              { value0: synced.length, value1: synced.length > 1 ? 's' : '' }
+              { value0: result.targets.length, value1: result.targets.length > 1 ? 's' : '' }
             )
           )
         }
@@ -363,7 +400,9 @@ export function SshPane(_props: SshPaneProps): React.JSX.Element {
                     onResetRelay={(id) => requestResetRelay({ id, label: target.label })}
                     onTest={handleTest}
                     onEdit={handleEdit}
-                    onRemove={(id) => requestRemove({ id, label: target.label })}
+                    onRemove={(id) =>
+                      requestRemoveTarget({ id, label: target.label }, requestRemove)
+                    }
                   />
                 ))}
               </div>
@@ -382,6 +421,21 @@ export function SshPane(_props: SshPaneProps): React.JSX.Element {
           </>
         )}
       </SshTargetDestructiveActions>
+
+      {hostRemoveTarget ? (
+        <HostRemoveDialog
+          open
+          onOpenChange={(open) => {
+            if (!open) {
+              setHostRemoveTarget(null)
+              void loadTargets()
+            }
+          }}
+          hostId={toSshExecutionHostId(hostRemoveTarget.targetId)}
+          label={hostRemoveTarget.label}
+          target={{ kind: 'ssh', targetId: hostRemoveTarget.targetId }}
+        />
+      ) : null}
     </div>
   )
 }

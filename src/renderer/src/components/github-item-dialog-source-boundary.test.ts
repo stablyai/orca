@@ -67,6 +67,9 @@ describe('GitHubItemDialog source host boundaries', () => {
     expect(helperSection).toContain("'github.project.updatePullRequestBySlug'")
     expect(helperSection).toContain("args.sourceContext?.provider === 'github'")
     expect(helperSection).toContain('getTaskSourceRuntimeSettings(args.sourceContext)')
+    expect(helperSection).toContain(
+      'getGitHubMutationRoutingSettings(useAppStore.getState(), args.repoId, args.sourceContext)'
+    )
     expect(helperSection).toContain('notifyWorkItemDetailsMutation(')
     expect(helperSection).toContain(
       "repo: getGitHubRuntimeRepoId(args.sourceContext, args.repoId ?? '')"
@@ -182,7 +185,7 @@ describe('GitHubItemDialog source host boundaries', () => {
     expect(source).toContain('notifyWorkItemMutated({')
   })
 
-  it('routes merge actions through the task source context', () => {
+  it('routes merge actions through the repo owner host (#6957)', () => {
     const source = componentSource('GitHubItemDialog.tsx')
     const actionsSection = sourceBetween(
       source,
@@ -190,7 +193,9 @@ describe('GitHubItemDialog source host boundaries', () => {
       'function CommentReactions'
     )
 
-    expect(actionsSection).toContain('getTaskSourceRuntimeSettings(sourceContext)')
+    expect(actionsSection).toContain(
+      'getGitHubMutationRoutingSettings(s, item.repoId ?? repoId ?? null, sourceContext)'
+    )
     expect(actionsSection).toContain('getActiveRuntimeTarget(sourceSettings)')
     expect(actionsSection).toContain(
       'const canMergeWithRepoContext = !!repoPath || mergeTarget.kind ==='

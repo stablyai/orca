@@ -6,6 +6,14 @@
 // terminal titles anywhere in the data flow.
 
 import type { AgentProviderSessionMetadata } from './agent-session-resume'
+import {
+  normalizeInteractivePromptField,
+  normalizeOptionalField,
+  normalizeOptionalMultilineField,
+  normalizePromptField
+} from './agent-status-field-normalization'
+
+export { AGENT_STATUS_MAX_FIELD_LENGTH } from './agent-status-field-normalization'
 
 export const AGENT_STATUS_STATES = ['working', 'blocked', 'waiting', 'done'] as const
 export type AgentStatusState = (typeof AGENT_STATUS_STATES)[number]
@@ -72,6 +80,22 @@ export type AgentStatusOrchestrationContext = {
   orchestrationRunId?: string
 }
 
+export type AgentSubagentState = 'working' | 'idle'
+
+/** A live in-process subagent/teammate spawned by the pane's agent session
+ *  (reported by Claude's SubagentStart/SubagentStop hooks and the
+ *  `background_tasks` field on Stop). Rendered as an indented child row under
+ *  the owning pane's sidebar row — these children have no PTY of their own. */
+export type AgentSubagentSnapshot = {
+  /** Provider-assigned id (Claude hook `agent_id`). */
+  id: string
+  agentType?: string
+  description?: string
+  state: AgentSubagentState
+  /** Timestamp (ms) when this subagent was first observed. */
+  startedAt: number
+}
+
 export type AgentStatusEntry = {
   state: AgentStatusState
   /** The user's most recent prompt, when the hook payload carried one.
@@ -126,6 +150,9 @@ export type AgentStatusEntry = {
    *  Why: parent/child agent hierarchy is pane-level state, not worktree
    *  lineage; workers often run in the same worktree as their coordinator. */
   orchestration?: AgentStatusOrchestrationContext
+  /** Live in-process subagents/teammates of this pane's session. Absent when
+   *  none are tracked; the sidebar derives indented child rows from it. */
+  subagents?: AgentSubagentSnapshot[]
   /** Provider-owned conversation/session id captured from hook payloads.
    *  Used only for exact CLI resume; Orca terminal ids are not agent-session ids. */
   providerSession?: AgentProviderSessionMetadata
@@ -159,6 +186,8 @@ export type AgentStatusPayload = {
   interactivePrompt?: string
   lastAssistantMessage?: string
   interrupted?: boolean
+  /** Live subagents/teammates of the reporting session. See AgentStatusEntry. */
+  subagents?: AgentSubagentSnapshot[]
 }
 
 /**
@@ -195,8 +224,6 @@ export type AgentStatusIpcPayload = ParsedAgentStatusPayload & {
   providerSession?: AgentProviderSessionMetadata
 }
 
-/** Maximum character length for the prompt field. Truncated on parse. */
-export const AGENT_STATUS_MAX_FIELD_LENGTH = 200
 /** Maximum character length for the toolName field. */
 export const AGENT_STATUS_TOOL_NAME_MAX_LENGTH = 60
 /** Maximum character length for the toolInput preview. */
@@ -223,8 +250,14 @@ export const AGENT_STATUS_INTERACTIVE_PROMPT_MAX_LENGTH = 16000
  * dashboard + hover only display hook-reported data as-is.
  */
 export const AGENT_STATUS_STALE_AFTER_MS = 30 * 60 * 1000
-const SINGLE_LINE_FIELD_SCAN_OVERHEAD = 64
-const SINGLE_LINE_FIELD_SCAN_MULTIPLIER = 8
+
+export function isFreshNonDoneAgentStatus(
+  entry: Pick<AgentStatusEntry, 'state' | 'updatedAt'> | undefined,
+  now = Date.now(),
+  staleAfterMs = AGENT_STATUS_STALE_AFTER_MS
+): boolean {
+  return Boolean(entry && entry.state !== 'done' && now - entry.updatedAt <= staleAfterMs)
+}
 
 // Why: typed as ReadonlySet<string> so .has() accepts any string without
 // requiring `state as AgentStatusState` at the check site. The narrowing
@@ -233,180 +266,79 @@ const VALID_STATES: ReadonlySet<string> = new Set<string>(AGENT_STATUS_STATES)
 /** Maximum character length for the agentType label. Truncated on parse. */
 export const AGENT_TYPE_MAX_LENGTH = 40
 
-// Why: when truncation lands mid surrogate-pair (emoji / astral chars), the
-// high surrogate would be left dangling and render as the Unicode replacement
-// glyph. Drop the lone high surrogate so the result is always a valid UTF-16
-// sequence. Shared by the single-line and multiline normalizers so the
-// protection can't drift between them.
-function truncatePreservingSurrogates(value: string, maxLength: number): string {
-  if (value.length < maxLength) {
-    return value
+/** Maximum subagent child rows carried per status entry. Bounds per-pane cache
+ *  and IPC fanout against a runaway spawner. */
+export const AGENT_STATUS_MAX_SUBAGENTS = 32
+const AGENT_SUBAGENT_ID_MAX_LENGTH = 64
+
+function normalizeSubagentSnapshot(value: unknown): AgentSubagentSnapshot | null {
+  if (typeof value !== 'object' || value === null) {
+    return null
   }
-  let truncated = value.length === maxLength ? value : value.slice(0, maxLength)
-  const lastCode = truncated.charCodeAt(truncated.length - 1)
-  if (lastCode >= 0xd800 && lastCode <= 0xdbff) {
-    truncated = truncated.slice(0, -1)
+  const obj = value as Record<string, unknown>
+  if (typeof obj.id !== 'string') {
+    return null
   }
-  return truncated
+  const id = obj.id.trim()
+  if (id.length === 0 || id.length > AGENT_SUBAGENT_ID_MAX_LENGTH) {
+    return null
+  }
+  if (obj.state !== 'working' && obj.state !== 'idle') {
+    return null
+  }
+  return {
+    id,
+    state: obj.state,
+    startedAt:
+      typeof obj.startedAt === 'number' && Number.isFinite(obj.startedAt) ? obj.startedAt : 0,
+    agentType: normalizeOptionalField(obj.agentType, AGENT_TYPE_MAX_LENGTH),
+    description: normalizeOptionalField(obj.description, AGENT_STATUS_TOOL_INPUT_MAX_LENGTH)
+  }
 }
 
-/** Normalize a status field: trim, collapse to single line, truncate. */
-function normalizeField(value: unknown, maxLength: number = AGENT_STATUS_MAX_FIELD_LENGTH): string {
-  if (typeof value !== 'string') {
-    return ''
-  }
-  return normalizeSingleLinePreview(value, maxLength)
-}
-
-function normalizeSingleLinePreview(value: string, maxLength: number): string {
-  // Why: hook prompt/tool fields are previews. Bound the source scan before
-  // folding line breaks so paste-sized status text cannot run a full regex
-  // replacement just to keep a small dashboard label.
-  const scanEnd = Math.min(
-    value.length,
-    maxLength * SINGLE_LINE_FIELD_SCAN_MULTIPLIER + SINGLE_LINE_FIELD_SCAN_OVERHEAD
-  )
-  let index = 0
-  while (index < scanEnd && isEcmaTrimWhitespace(value.charCodeAt(index))) {
-    index++
-  }
-
-  let normalized = ''
-  let lineSeparatorRun = false
-  while (index < scanEnd && normalized.length < maxLength) {
-    const code = value.charCodeAt(index)
-    if (isSingleLineSeparator(code)) {
-      if (code === 13 && value.charCodeAt(index + 1) === 10) {
-        index++
-      }
-      if (!lineSeparatorRun) {
-        normalized += ' '
-      }
-      lineSeparatorRun = true
-      index++
-      continue
-    }
-
-    normalized += value[index]
-    lineSeparatorRun = false
-    index++
-  }
-
-  if (normalized.length < maxLength) {
-    normalized = trimTrailingWhitespace(normalized)
-  }
-  return truncatePreservingSurrogates(normalized, maxLength)
-}
-
-// Why: assistant messages are a multi-paragraph "what did the agent say"
-// body that the dashboard renders with `whitespace-pre-wrap`. Collapsing
-// newlines here would erase structure the UI is designed to show. Still
-// normalize `\r\n` → `\n` and cap paragraph gaps at one blank line to keep
-// the bound meaningful, but otherwise preserve line breaks.
-function normalizeMultilineField(value: unknown, maxLength: number): string {
-  if (typeof value !== 'string') {
-    return ''
-  }
-  // Why: fold Unicode line/paragraph separators (U+2028, U+2029) into ordinary
-  // `\n` before the blank-line-run cap. These code points render as real line
-  // breaks under `whitespace-pre-wrap`, so leaving them untouched would let a
-  // buggy/malicious agent bypass the `\n{3,}` → `\n\n` safeguard by spamming
-  // arbitrarily many U+2029 paragraph breaks. Matches the single-line
-  // normalizer's treatment of the same code points, keeping the two paths in
-  // sync. Step order preserved: `\r\n` → `\n`, bare `\r` → `\n`,
-  // U+2028/U+2029 → `\n`, then collapse blank-line runs.
-  const { start, end } = getTrimmedStringBounds(value)
-  let normalized = ''
-  let newlineRun = 0
-  for (let index = start; index < end && normalized.length < maxLength; index++) {
-    const code = value.charCodeAt(index)
-    if (code === 13 || code === 10 || code === 0x2028 || code === 0x2029) {
-      if (code === 13 && value.charCodeAt(index + 1) === 10) {
-        index++
-      }
-      if (newlineRun < 2) {
-        normalized += '\n'
-      }
-      newlineRun++
-      continue
-    }
-
-    normalized += value[index]
-    newlineRun = 0
-  }
-  return truncatePreservingSurrogates(normalized, maxLength)
-}
-
-function getTrimmedStringBounds(value: string): { start: number; end: number } {
-  let start = 0
-  let end = value.length
-  while (start < end && isEcmaTrimWhitespace(value.charCodeAt(start))) {
-    start++
-  }
-  while (end > start && isEcmaTrimWhitespace(value.charCodeAt(end - 1))) {
-    end--
-  }
-  return { start, end }
-}
-
-function trimTrailingWhitespace(value: string): string {
-  let end = value.length
-  while (end > 0 && isEcmaTrimWhitespace(value.charCodeAt(end - 1))) {
-    end--
-  }
-  return end === value.length ? value : value.slice(0, end)
-}
-
-function isSingleLineSeparator(code: number): boolean {
-  return code === 13 || code === 10 || code === 0x2028 || code === 0x2029
-}
-
-function isEcmaTrimWhitespace(code: number): boolean {
-  return (
-    code === 0x20 ||
-    (code >= 0x09 && code <= 0x0d) ||
-    code === 0xa0 ||
-    code === 0x1680 ||
-    (code >= 0x2000 && code <= 0x200a) ||
-    code === 0x2028 ||
-    code === 0x2029 ||
-    code === 0x202f ||
-    code === 0x205f ||
-    code === 0x3000 ||
-    code === 0xfeff
-  )
-}
-
-// Why: tool/assistant fields are optional on the entry (absence = "no update
-// for this field"). We only surface them when the caller actually provided a
-// string value so a missing field doesn't overwrite the prior cached state.
-// Why: interactivePrompt carries raw JSON (`{ questions: [...] }`) that clients
-// JSON.parse to render a structured card. Unlike the other normalizers we must
-// NOT trim, collapse newlines, or fold blank-line runs — any of those would
-// corrupt the JSON or alter option text inside it. Only guard the length cap
-// (preserving surrogate pairs) and drop empty strings to undefined.
-function normalizeInteractivePromptField(value: unknown, maxLength: number): string | undefined {
-  if (typeof value !== 'string' || value.length === 0) {
+function normalizeSubagentsField(value: unknown): AgentSubagentSnapshot[] | undefined {
+  if (!Array.isArray(value) || value.length === 0) {
     return undefined
   }
-  const truncated = truncatePreservingSurrogates(value, maxLength)
-  return truncated.length > 0 ? truncated : undefined
-}
-
-function normalizeOptionalField(value: unknown, maxLength: number): string | undefined {
-  if (typeof value !== 'string') {
-    return undefined
+  const normalized: AgentSubagentSnapshot[] = []
+  for (const item of value) {
+    const snapshot = normalizeSubagentSnapshot(item)
+    if (snapshot) {
+      normalized.push(snapshot)
+      if (normalized.length >= AGENT_STATUS_MAX_SUBAGENTS) {
+        break
+      }
+    }
   }
-  const normalized = normalizeField(value, maxLength)
   return normalized.length > 0 ? normalized : undefined
 }
 
-function normalizeOptionalMultilineField(value: unknown, maxLength: number): string | undefined {
-  if (typeof value !== 'string') {
-    return undefined
+/** Structural equality for subagent lists so stores can reuse the previous
+ *  array reference (and skip fanout) when nothing actually changed. */
+export function agentSubagentsEqual(
+  a: AgentSubagentSnapshot[] | undefined,
+  b: AgentSubagentSnapshot[] | undefined
+): boolean {
+  if (a === b) {
+    return true
   }
-  const normalized = normalizeMultilineField(value, maxLength)
-  return normalized.length > 0 ? normalized : undefined
+  if (!a || !b || a.length !== b.length) {
+    return !a && !b
+  }
+  for (let i = 0; i < a.length; i++) {
+    const x = a[i]
+    const y = b[i]
+    if (
+      x.id !== y.id ||
+      x.state !== y.state ||
+      x.startedAt !== y.startedAt ||
+      x.agentType !== y.agentType ||
+      x.description !== y.description
+    ) {
+      return false
+    }
+  }
+  return true
 }
 
 /**
@@ -432,7 +364,7 @@ function normalizeAgentStatusObject(parsed: unknown): ParsedAgentStatusPayload |
   }
   return {
     state: state as AgentStatusState,
-    prompt: normalizeField(obj.prompt),
+    prompt: normalizePromptField(obj.prompt),
     // Why: route through normalizeOptionalField so agentType gets the same
     // trim / collapse-newlines / truncate / empty→undefined treatment as the
     // other single-line string fields (toolName, toolInput, prompt). Inline
@@ -452,7 +384,8 @@ function normalizeAgentStatusObject(parsed: unknown): ParsedAgentStatusPayload |
     ),
     // Why: only meaningful on `done`. Coerce to undefined on other states so
     // the field doesn't leak stale truth through state transitions.
-    interrupted: obj.interrupted === true && state === 'done' ? true : undefined
+    interrupted: obj.interrupted === true && state === 'done' ? true : undefined,
+    subagents: normalizeSubagentsField(obj.subagents)
   }
 }
 

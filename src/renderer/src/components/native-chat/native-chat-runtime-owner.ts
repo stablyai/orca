@@ -5,7 +5,8 @@ import {
 import type { AppState } from '@/store/types'
 import { findTerminalTabWorktreeId } from './native-chat-file-link'
 
-export type NativeChatRuntimeOwnerState = Pick<AppState, 'tabsByWorktree'> & WorktreeRuntimeOwnerState
+export type NativeChatRuntimeOwnerState = Pick<AppState, 'tabsByWorktree'> &
+  WorktreeRuntimeOwnerState
 
 /**
  * The runtime owner id for a Native Chat pane, as a primitive — non-null only for

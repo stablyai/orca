@@ -265,10 +265,14 @@ describe('resolveTabAgentFromSignals', () => {
         isRemote: false,
         title: '✳ Claude Code',
         hookAgent: null,
+
         launchAgent: 'codex'
       })
     ).toBe('codex')
   })
+
+  // Pi/OMP identity (shared title-identity group, launchAgent-loss flicker)
+  // lives in use-tab-agent-pi-identity.test.ts.
 
   it('prefers explicit hook identity over a conflicting title mention', () => {
     expect(

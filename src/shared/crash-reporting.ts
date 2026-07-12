@@ -108,6 +108,19 @@ export type CrashReportSubmitResult =
       diagnosticBundle?: CrashReportDiagnosticBundle
     }
 
+export type CrashReportCopySubmissionFailure = {
+  error: string
+  diagnosticContext?:
+    | { status: 'uploaded'; ticketId: string }
+    | { status: 'not_uploaded'; reason: string }
+}
+
+export type CrashReportCopyDiagnosticsArgs = {
+  reportId?: string
+  notes?: string
+  submissionFailure?: CrashReportCopySubmissionFailure
+}
+
 const MAX_STRING_DETAIL_LENGTH = 240
 const MAX_STACK_DETAIL_LENGTH = 4_000
 const MAX_BREADCRUMB_NAME_LENGTH = 80

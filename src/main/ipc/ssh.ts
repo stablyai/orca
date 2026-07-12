@@ -11,6 +11,7 @@ import type {
   DetectedPort,
   EnrichedDetectedPort,
   SavedPortForward,
+  SshRepoReadoption,
   SshTarget,
   SshConnectionStatus,
   SshConnectionState
@@ -51,6 +52,7 @@ let currentRuntime: OrcaRuntimeService | undefined
 
 const SSH_IPC_CHANNELS = [
   'ssh:listTargets',
+  'ssh:listRemovedTargetLabels',
   'ssh:addTarget',
   'ssh:updateTarget',
   'ssh:removeTarget',
@@ -87,6 +89,16 @@ export async function connectRegisteredSshTarget(targetId: string): Promise<SshC
 
 export function getRegisteredSshState(targetId: string): SshConnectionState | undefined {
   return registeredGetSshState?.(targetId)
+}
+
+/** Public targets for runtime RPC clients — same list the desktop renderer gets. */
+export function listRegisteredSshTargets(): SshTarget[] {
+  return sshStore?.listTargets() ?? []
+}
+
+/** Removed-target id → last known label, for ghost-host display on paired clients. */
+export function listRegisteredRemovedSshTargetLabels(): Record<string, string> {
+  return sshStore?.listRemovedTargetLabels() ?? {}
 }
 
 export async function disconnectRegisteredSshTarget(targetId: string): Promise<void> {
@@ -234,13 +246,14 @@ function broadcastSshState(
   if (isRuntimeOwnedSshTargetId(targetId)) {
     return
   }
+  const enrichedState = withSshRemotePlatform(targetId, state)
   const win = getMainWindow()
   if (win && !win.isDestroyed()) {
-    win.webContents.send('ssh:state-changed', {
-      targetId,
-      state: withSshRemotePlatform(targetId, state)
-    })
+    win.webContents.send('ssh:state-changed', { targetId, state: enrichedState })
   }
+  // Why: paired remote clients have no ssh:state-changed IPC; without this
+  // their terminals keep a stale reconnect overlay after the host connects.
+  currentRuntime?.notifySshStateChanged?.(targetId, enrichedState)
 }
 
 function withSshRemotePlatform(targetId: string, state: SshConnectionState): SshConnectionState {
@@ -430,6 +443,24 @@ function registerAdvertisedUrlRefresh(getMainWindow: () => BrowserWindow | null)
   })
 }
 
+// Why: macOS can resume the process before the network stack is back up, so
+// a failed first probe gets one retry before the link is declared dead (#7773).
+const RESUME_PROBE_TIMEOUT_MS = 5_000
+const RESUME_PROBE_ATTEMPTS = 2
+
+async function isRelayLinkAliveAfterResume(session: SshRelaySession): Promise<boolean> {
+  const mux = session.getMux()
+  if (!mux || mux.isDisposed()) {
+    return false
+  }
+  for (let attempt = 0; attempt < RESUME_PROBE_ATTEMPTS; attempt++) {
+    if (await mux.probeLiveness(RESUME_PROBE_TIMEOUT_MS)) {
+      return true
+    }
+  }
+  return false
+}
+
 function registerPowerMonitorReconnect(): void {
   powerMonitorUnsubscribe?.()
   const onSuspend = (): void => {
@@ -438,19 +469,35 @@ function registerPowerMonitorReconnect(): void {
     }
   }
   const onResume = (): void => {
-    for (const targetId of activeSessions.keys()) {
-      const conn = connectionManager?.getConnection(targetId)
+    for (const [targetId, session] of activeSessions) {
+      const manager = connectionManager
+      const conn = manager?.getConnection(targetId)
       if (!conn) {
         continue
       }
-      const reconnect = connectionManager?.reconnect(targetId)
-      void reconnect?.catch((err) => {
-        console.warn(
-          `[ssh] Failed to reconnect ${targetId} after system resume: ${
-            err instanceof Error ? err.message : String(err)
-          }`
-        )
-      })
+      void (async () => {
+        // Why: unconditional reconnect on every wake tore down live sessions
+        // and flashed the reconnect overlay (#7773). Only reconnect targets
+        // whose relay link actually died during sleep.
+        if (await isRelayLinkAliveAfterResume(session)) {
+          return
+        }
+        // Why: the probe can take ~10s. If the user disconnected or the
+        // session/connection was replaced meanwhile, reconnecting would
+        // resurrect a connection that was intentionally torn down.
+        if (activeSessions.get(targetId) !== session || manager?.getConnection(targetId) !== conn) {
+          return
+        }
+        try {
+          await manager?.reconnect(targetId)
+        } catch (err) {
+          console.warn(
+            `[ssh] Failed to reconnect ${targetId} after system resume: ${
+              err instanceof Error ? err.message : String(err)
+            }`
+          )
+        }
+      })()
     }
   }
   powerMonitor.on('suspend', onSuspend)
@@ -695,12 +742,37 @@ export function registerSshHandlers(
 
   // ── Target CRUD ────────────────────────────────────────────────────
 
+  // Why: SSH target add/import can re-adopt workspaces orphaned on a removed
+  // target id (see ssh-target-readoption). When that re-points repos, the
+  // renderer must refresh its repo list to surface the reattached workspaces.
+  function takeRepoReadoptions(): SshRepoReadoption[] {
+    if (!sshStore || sshStore.lastRepoReadoptions.length === 0) {
+      return []
+    }
+    const repoReadoptions = sshStore.lastRepoReadoptions
+    sshStore.lastRepoReadoptions = []
+    const win = getCurrentMainWindow()
+    if (win && !win.isDestroyed()) {
+      win.webContents.send('repos:changed')
+    }
+    return repoReadoptions
+  }
+
   ipcMain.handle('ssh:listTargets', () => {
     return sshStore!.listTargets()
   })
 
+  ipcMain.handle('ssh:listRemovedTargetLabels', () => {
+    return sshStore!.listRemovedTargetLabels()
+  })
+
   ipcMain.handle('ssh:addTarget', (_event, args: { target: Omit<SshTarget, 'id'> }) => {
-    return sshStore!.addTarget(args.target)
+    const target = sshStore!.addTarget(args.target)
+    // Why: re-adding a removed host can re-adopt orphaned workspaces (re-point
+    // repos/worktrees off the dead id). Refresh the renderer's repo list so the
+    // reattached workspaces move from grey ghosts back onto the live host.
+    const repoReadoptions = takeRepoReadoptions()
+    return { target, repoReadoptions }
   })
 
   ipcMain.handle(
@@ -714,8 +786,10 @@ export function registerSshHandlers(
     await removeRegisteredSshTarget(args.id)
   })
 
-  ipcMain.handle('ssh:importConfig', () => {
-    return sshStore!.importFromSshConfig()
+  ipcMain.handle('ssh:importConfig', (_event, args?: { reAdopt?: boolean }) => {
+    const targets = sshStore!.importFromSshConfig(args)
+    const repoReadoptions = takeRepoReadoptions()
+    return { targets, repoReadoptions }
   })
 
   // ── Connection lifecycle ───────────────────────────────────────────

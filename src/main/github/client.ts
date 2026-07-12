@@ -73,6 +73,12 @@ import {
   type HostedReviewExecutionOptions
 } from '../source-control/hosted-review-git-options'
 import { readLocalGitConfigSignature } from './local-git-config-signature'
+import {
+  getRememberedGhCwdResolutionFailure,
+  isGhCwdRepoResolutionFailure,
+  rememberGhCwdResolutionFailure
+} from './gh-cwd-repo-negative-cache'
+import type { GitHubRepoContext } from './github-repository-identity'
 export { _resetOwnerRepoCache } from './gh-utils'
 export {
   getIssue,
@@ -842,6 +848,43 @@ async function fetchIssueWorkItem(
   return mapIssueWorkItem(JSON.parse(stdout) as Record<string, unknown>)
 }
 
+// REST /pulls/{n} has requested_reviewers but not latestReviews. When the JSON
+// `gh pr view` path fails, still pull review fields from gh so mobile/desktop
+// reviewer lists (CodeRabbit COMMENTED, etc.) are not silently empty.
+const WORK_ITEM_PR_REVIEW_JSON_FIELDS = 'reviewRequests,latestReviews'
+
+async function fetchPullRequestReviewFields(
+  number: number,
+  ownerRepo: OwnerRepo | null,
+  ghOptions: GhExecOptions
+): Promise<Pick<MainWorkItem, 'reviewRequests' | 'latestReviews'>> {
+  try {
+    const args = ownerRepo
+      ? [
+          'pr',
+          'view',
+          String(number),
+          '--repo',
+          `${ownerRepo.owner}/${ownerRepo.repo}`,
+          '--json',
+          WORK_ITEM_PR_REVIEW_JSON_FIELDS
+        ]
+      : ['pr', 'view', String(number), '--json', WORK_ITEM_PR_REVIEW_JSON_FIELDS]
+    const { stdout } = await ghExecFileAsync(args, ghOptions)
+    const item = JSON.parse(stdout) as Record<string, unknown>
+    return {
+      ...(item.reviewRequests !== undefined
+        ? { reviewRequests: usersFromUnknown(item.reviewRequests) }
+        : {}),
+      ...(item.latestReviews !== undefined
+        ? { latestReviews: latestReviewsFromUnknown(item.latestReviews) }
+        : {})
+    }
+  } catch {
+    return {}
+  }
+}
+
 async function fetchPullRequestWorkItem(
   repoPath: string,
   ownerRepo: OwnerRepo | null,
@@ -866,24 +909,36 @@ async function fetchPullRequestWorkItem(
       )
       const item = JSON.parse(stdout) as Record<string, unknown>
       const mapped = mapPullRequestWorkItem(item, ownerRepo)
+      // Why: merge-metadata GraphQL is best-effort. A failure here must not fall
+      // through to the REST path below — that path drops latestReviews and blanks
+      // the mobile/desktop reviewer list for bots that only left a review.
       const baseRefName = typeof item.baseRefName === 'string' ? item.baseRefName : undefined
-      const mergeMetadata = await detectRepositoryMergeMetadata(ownerRepo, baseRefName, ghOptions)
-      return {
-        ...mapped,
-        mergeQueueRequired: mergeMetadata.mergeQueueRequired,
-        ...(mergeMetadata.autoMergeAllowed !== null
-          ? { autoMergeAllowed: mergeMetadata.autoMergeAllowed }
-          : {}),
-        ...(mergeMetadata.mergeMethodSettings
-          ? { mergeMethodSettings: mergeMetadata.mergeMethodSettings }
-          : {})
+      try {
+        const mergeMetadata = await detectRepositoryMergeMetadata(ownerRepo, baseRefName, ghOptions)
+        return {
+          ...mapped,
+          mergeQueueRequired: mergeMetadata.mergeQueueRequired,
+          ...(mergeMetadata.autoMergeAllowed !== null
+            ? { autoMergeAllowed: mergeMetadata.autoMergeAllowed }
+            : {}),
+          ...(mergeMetadata.mergeMethodSettings
+            ? { mergeMethodSettings: mergeMetadata.mergeMethodSettings }
+            : {})
+        }
+      } catch {
+        return mapped
       }
     } catch {
       const { stdout } = await ghExecFileAsync(
         ['api', `repos/${ownerRepo.owner}/${ownerRepo.repo}/pulls/${number}`],
         ghOptions
       )
-      return mapPullRequestWorkItem(JSON.parse(stdout) as Record<string, unknown>, ownerRepo)
+      const mapped = mapPullRequestWorkItem(
+        JSON.parse(stdout) as Record<string, unknown>,
+        ownerRepo
+      )
+      const reviewFields = await fetchPullRequestReviewFields(number, ownerRepo, ghOptions)
+      return { ...mapped, ...reviewFields }
     }
   }
 
@@ -1005,6 +1060,32 @@ async function resolvePrWorkItemSource(
   return { source, originCandidate, upstreamCandidate }
 }
 
+/**
+ * gh exec for calls that rely on gh's own cwd→repo resolution (no explicit
+ * owner/repo). Serves a remembered deterministic resolution failure without
+ * spawning, so a remote-less repo costs one gh spawn per config change/TTL
+ * instead of two per Tasks refresh.
+ */
+async function ghCwdResolvedExec(
+  context: GitHubRepoContext,
+  args: string[],
+  ghOptions: GhExecOptions
+): Promise<{ stdout: string; stderr: string }> {
+  const remembered = await getRememberedGhCwdResolutionFailure(context)
+  if (remembered !== null) {
+    throw new Error(remembered)
+  }
+  try {
+    return await ghExecFileAsync(args, ghOptions)
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err)
+    if (isGhCwdRepoResolutionFailure(message)) {
+      await rememberGhCwdResolutionFailure(context, message)
+    }
+    throw err
+  }
+}
+
 async function listRecentWorkItems(
   repoPath: string,
   issueOwnerRepo: OwnerRepo | null,
@@ -1014,7 +1095,8 @@ async function listRecentWorkItems(
   noCache?: boolean,
   localGitOptions: LocalGitExecOptions = {}
 ): Promise<PartialWorkItemsResult> {
-  const ghOptions = ghRepoExecOptions(githubRepoContext(repoPath, connectionId, localGitOptions))
+  const repoContext = githubRepoContext(repoPath, connectionId, localGitOptions)
+  const ghOptions = ghRepoExecOptions(repoContext)
   const requiresExplicitRepo = Boolean(connectionId)
   const restCacheArgs = noCache ? [] : ['--cache', '120s']
   assertSshRepoHasResolvedGitHubSource({ connectionId, issueOwnerRepo, prOwnerRepo })
@@ -1034,7 +1116,8 @@ async function listRecentWorkItems(
           )
         : requiresExplicitRepo
           ? Promise.resolve({ stdout: '[]' })
-          : ghExecFileAsync(
+          : ghCwdResolvedExec(
+              repoContext,
               [
                 'issue',
                 'list',
@@ -1058,7 +1141,8 @@ async function listRecentWorkItems(
           )
         : requiresExplicitRepo
           ? Promise.resolve({ stdout: '[]' })
-          : ghExecFileAsync(
+          : ghCwdResolvedExec(
+              repoContext,
               [
                 'pr',
                 'list',
@@ -1130,7 +1214,8 @@ async function listRecentWorkItems(
   // effectively unusable for the feature — reject-all matches reality. If
   // non-GitHub remotes ever grow source metadata, revisit this symmetry.
   const [issuesResult, prsResult] = await Promise.all([
-    ghExecFileAsync(
+    ghCwdResolvedExec(
+      repoContext,
       [
         'issue',
         'list',
@@ -1143,7 +1228,8 @@ async function listRecentWorkItems(
       ],
       ghOptions
     ),
-    ghExecFileAsync(
+    ghCwdResolvedExec(
+      repoContext,
       [
         'pr',
         'list',
@@ -1180,7 +1266,8 @@ async function listQueriedWorkItems(
   connectionId?: string | null,
   localGitOptions: LocalGitExecOptions = {}
 ): Promise<PartialWorkItemsResult> {
-  const ghOptions = ghRepoExecOptions(githubRepoContext(repoPath, connectionId, localGitOptions))
+  const repoContext = githubRepoContext(repoPath, connectionId, localGitOptions)
+  const ghOptions = ghRepoExecOptions(repoContext)
   const requiresExplicitRepo = Boolean(connectionId)
   assertSshRepoHasResolvedGitHubSource({ connectionId, issueOwnerRepo, prOwnerRepo })
   const hasPrOnlyFilter =
@@ -1209,7 +1296,9 @@ async function listQueriedWorkItems(
       before
     })
     try {
-      const { stdout } = await ghExecFileAsync(args, ghOptions)
+      const { stdout } = issueOwnerRepo
+        ? await ghExecFileAsync(args, ghOptions)
+        : await ghCwdResolvedExec(repoContext, args, ghOptions)
       return {
         items: (JSON.parse(stdout) as Record<string, unknown>[]).map(mapIssueWorkItem)
       }
@@ -1234,7 +1323,9 @@ async function listQueriedWorkItems(
       before
     })
     try {
-      const { stdout } = await ghExecFileAsync(args, ghOptions)
+      const { stdout } = prOwnerRepo
+        ? await ghExecFileAsync(args, ghOptions)
+        : await ghCwdResolvedExec(repoContext, args, ghOptions)
       const mapped = (JSON.parse(stdout) as Record<string, unknown>[]).map((item) =>
         mapPullRequestWorkItem(item, prOwnerRepo)
       )
@@ -1398,6 +1489,9 @@ async function countWorkItemsForQuery(
     ],
     ghOptions
   )
+  // Why: over-counts gh cache hits, which is the safe direction — the search
+  // bucket is only 30/min and the next probe corrects the estimate.
+  noteRateLimitSpend('search')
   return Number.parseInt(stdout.trim(), 10) || 0
 }
 
@@ -1452,6 +1546,15 @@ export async function countWorkItems(
 
   const parsedQuery = trimmedQuery ? parseTaskQuery(trimmedQuery) : null
   const effectiveQuery = parsedQuery ?? defaultOpenWorkItemQuery()
+
+  // Why: counts are decorative (pagination totals). The search bucket is only
+  // 30/min, so a multi-repo Tasks page must stop counting when the budget is
+  // gone instead of converting the remaining repos into 403 spawns. getRateLimit
+  // is 30s-cached and single-flight, so priming here is one spawn per window.
+  await getRateLimit()
+  if (rateLimitGuard('search').blocked) {
+    return 0
+  }
 
   await acquire()
   try {
@@ -2289,6 +2392,7 @@ type TrackedUpstreamBranch = {
 }
 
 const TRACKED_UPSTREAM_SNAPSHOT_CACHE_TTL_MS = 30_000
+const TRACKED_UPSTREAM_SNAPSHOT_CACHE_MAX_ENTRIES = 512
 
 type TrackedUpstreamSnapshotCacheEntry = {
   expiresAt: number
@@ -2308,12 +2412,49 @@ const trackedUpstreamSnapshotInFlight = new Map<
   string,
   Promise<TrackedUpstreamSnapshotProbeResult>
 >()
-const trackedUpstreamSnapshotGenerations = new Map<string, number>()
+const trackedUpstreamSnapshotGenerations = new Map<string, symbol>()
 
-function beginTrackedUpstreamSnapshotProbe(cacheKey: string): number {
-  const nextGeneration = (trackedUpstreamSnapshotGenerations.get(cacheKey) ?? 0) + 1
-  trackedUpstreamSnapshotGenerations.set(cacheKey, nextGeneration)
-  return nextGeneration
+function beginTrackedUpstreamSnapshotProbe(cacheKey: string): symbol {
+  const generation = Symbol()
+  trackedUpstreamSnapshotGenerations.set(cacheKey, generation)
+  return generation
+}
+
+function finishTrackedUpstreamSnapshotProbe(cacheKey: string, generation: symbol): void {
+  // Why: generations only guard an active probe; retaining completed repo keys
+  // leaks worktree/runtime identities after the short-lived snapshot TTL expires.
+  if (trackedUpstreamSnapshotGenerations.get(cacheKey) === generation) {
+    trackedUpstreamSnapshotGenerations.delete(cacheKey)
+  }
+}
+
+function pruneTrackedUpstreamSnapshotCache(now: number): void {
+  for (const [cacheKey, cached] of trackedUpstreamSnapshotCache) {
+    if (cached.expiresAt <= now) {
+      trackedUpstreamSnapshotCache.delete(cacheKey)
+    }
+  }
+  // Why: workspace/runtime churn can create unbounded unique keys within one
+  // TTL window, so expiry sweeping alone is not a memory bound.
+  while (trackedUpstreamSnapshotCache.size > TRACKED_UPSTREAM_SNAPSHOT_CACHE_MAX_ENTRIES) {
+    const oldestKey = trackedUpstreamSnapshotCache.keys().next().value
+    if (oldestKey === undefined) {
+      break
+    }
+    trackedUpstreamSnapshotCache.delete(oldestKey)
+  }
+}
+
+export function _getTrackedUpstreamBranchCacheSizesForTests(): {
+  snapshots: number
+  inFlight: number
+  generations: number
+} {
+  return {
+    snapshots: trackedUpstreamSnapshotCache.size,
+    inFlight: trackedUpstreamSnapshotInFlight.size,
+    generations: trackedUpstreamSnapshotGenerations.size
+  }
 }
 
 export function __resetTrackedUpstreamBranchCacheForTests(): void {
@@ -2407,6 +2548,7 @@ async function getTrackedUpstreamBranch(
         upstreamsByBranchName: getCacheableTrackedUpstreamSnapshot(result.upstreamsByBranchName),
         expiresAt: Date.now() + TRACKED_UPSTREAM_SNAPSHOT_CACHE_TTL_MS
       })
+      pruneTrackedUpstreamSnapshotCache(Date.now())
     }
     if (trackedUpstreamSnapshotGenerations.get(cacheKey) !== probeGeneration) {
       const fresherCached = trackedUpstreamSnapshotCache.get(cacheKey)
@@ -2419,6 +2561,7 @@ async function getTrackedUpstreamBranch(
     if (trackedUpstreamSnapshotInFlight.get(cacheKey) === probe) {
       trackedUpstreamSnapshotInFlight.delete(cacheKey)
     }
+    finishTrackedUpstreamSnapshotProbe(cacheKey, probeGeneration)
   }
 }
 

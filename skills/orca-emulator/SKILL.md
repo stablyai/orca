@@ -107,7 +107,7 @@ Most support `--worktree <selector>` and explicit `--device <udid|name>` or `--e
 ## Targeting devices & worktrees
 
 - Default: current worktree's active emulator (resolved from shell cwd or Orca context).
-- Explicit worktree: `--worktree id:abc123` or `--worktree active`.
+- Explicit worktree: `--worktree id:<fullWorktreeId>` or `--worktree active`. The full id is the exact `<repo-id>::<path>` value returned by `orca worktree list --json`; a bare repo id is not valid here.
 - Explicit device: `--device "iPhone 16 Pro"` or `--device <udid>` (after `list`).
 - Orca-generated emulator id (for stability, like browserPageId): use `--emulator <id>` returned by list (recommended for scripts that persist ids).
 

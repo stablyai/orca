@@ -26,11 +26,14 @@ import {
   getEndpointFileName,
   hasPendingAgentResultText,
   HOOK_REQUEST_SLOWLORIS_MS,
+  markClaudeLeadTurnInterrupted,
   MAX_PANE_KEY_LEN,
   normalizeHookPayload,
   parseFormEncodedBody,
   readRequestBody,
   resolveHookSource,
+  preparePendingGrokResultDiscovery,
+  seedClaudeSubagentRosterFromSnapshots,
   warnOnHookEnvOrVersionMismatch,
   writeEndpointFile,
   type AgentHookEventPayload,
@@ -118,6 +121,12 @@ const AGENT_PROMPT_SENT_AGENT_KINDS = new Set<AgentKind>(AGENT_KIND_VALUES)
 // older entries have almost certainly been resolved or abandoned and should
 // not resurrect on hydrate.
 const HYDRATE_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000
+
+// Why: closed-tab suppression only needs to cover recently closed tabs — a
+// status event for a long-closed tab cannot arrive once its process/hooks are
+// gone. Bound the set so it can't grow one entry per tab close for the whole
+// session (it is otherwise only cleared at app quit).
+export const CLOSED_AGENT_STATUS_TAB_IDS_MAX = 1024
 
 type LastStatusFile = {
   version: number
@@ -246,6 +255,10 @@ function toAgentStatusIpcPayload(entry: EnrichedAgentHookEventPayload): AgentSta
   }
 }
 
+// Why: OSC-only dedupe (ingestTerminalStatus). Deliberately omits `subagents`:
+// OSC payloads never carry them, and including the field would make every
+// hook-cached entry with child rows non-equivalent — the OSC ping would then
+// apply and wipe the roster. Do not reuse this for hook-path comparisons.
 function equivalentParsedAgentStatusPayload(
   a: ParsedAgentStatusPayload,
   b: ParsedAgentStatusPayload
@@ -301,6 +314,7 @@ function shouldKeepClaudePermissionVisible(
   if (
     previous?.payload.agentType !== 'claude' ||
     previous.payload.state !== 'waiting' ||
+    previous.hookEventName !== 'PermissionRequest' ||
     next.payload.agentType !== 'claude' ||
     next.payload.state !== 'working'
   ) {
@@ -312,9 +326,8 @@ function shouldKeepClaudePermissionVisible(
   if (isClaudePermissionResumingApprovedTool(previous, next)) {
     return false
   }
-  // Why: Claude can run subagents concurrently in one pane. Keep permission
-  // sticky unless the next hook has a source-level execution id that the
-  // PermissionRequest event itself does not expose.
+  // Why: only real permission requests stay sticky across concurrent subagent
+  // activity; interactive questions clear on the next working hook.
   return true
 }
 
@@ -548,7 +561,20 @@ export class AgentHookServer {
     ) {
       return false
     }
+    // Why: a 'working' pane can be child-driven (lead already idle, background
+    // subagent running). Ctrl+C at the TUI does not stop background children,
+    // so inferring a terminal done here would wrongly retire live child rows;
+    // their own hook events keep the row truthful instead.
+    if (payload.subagents?.some((subagent) => subagent.state === 'working')) {
+      return false
+    }
 
+    // Why: keep the listener's Claude lead-turn record in sync — a later
+    // child lifecycle event would otherwise re-emit the stale pre-interrupt
+    // 'working' lead state and resurrect the cancelled pane.
+    if (agentType === 'claude') {
+      markClaudeLeadTurnInterrupted(this.state, existing.paneKey)
+    }
     const inferred = this.applyNormalizedStatus({
       paneKey: existing.paneKey,
       tabId: existing.tabId,
@@ -559,7 +585,10 @@ export class AgentHookServer {
         state: 'done',
         prompt: payload.prompt,
         agentType,
-        interrupted: true
+        interrupted: true,
+        // Why: idle children are display state; dropping them on an inferred
+        // interrupt would blank the child rows a later hook would restore.
+        ...(payload.subagents ? { subagents: payload.subagents } : {})
       }
     })
     console.debug('[agent-hooks] inferred interrupted agent status', {
@@ -596,7 +625,17 @@ export class AgentHookServer {
   }
 
   private markTabClosedForAgentStatus(tabId: string): void {
+    // Delete-then-add keeps recently closed tabs most-recent so eviction only
+    // sheds the oldest ids, which can no longer receive status events.
+    this.closedAgentStatusTabIds.delete(tabId)
     this.closedAgentStatusTabIds.add(tabId)
+    while (this.closedAgentStatusTabIds.size > CLOSED_AGENT_STATUS_TAB_IDS_MAX) {
+      const oldest = this.closedAgentStatusTabIds.keys().next().value
+      if (oldest === undefined) {
+        break
+      }
+      this.closedAgentStatusTabIds.delete(oldest)
+    }
   }
 
   private shouldSuppressClosedTabStatus(paneKey: string): boolean {
@@ -788,7 +827,8 @@ export class AgentHookServer {
     source: AgentHookSource,
     body: unknown,
     original: EnrichedAgentHookEventPayload,
-    attempt = 1
+    attempt = 1,
+    discoveryReady = false
   ): void {
     if (
       original.payload.lastAssistantMessage ||
@@ -798,28 +838,27 @@ export class AgentHookServer {
       return
     }
     this.clearAssistantMessageRetry(original.paneKey)
+    if (!discoveryReady) {
+      const discovery = preparePendingGrokResultDiscovery(source, body)
+      if (discovery) {
+        // Why: slug-group discovery can outlive the bounded transcript-flush
+        // timers. Its completion must drive the first retry deterministically.
+        void discovery
+          .then(() => {
+            if (this.server) {
+              this.applyAssistantMessageRetry(source, body, original, 1, true)
+            }
+          })
+          .catch((err) => {
+            console.error('[agent-hooks] Grok result discovery failed:', err)
+          })
+        return
+      }
+    }
     const timer = setTimeout(() => {
       try {
         this.assistantMessageRetryTimers.delete(original.paneKey)
-        const current = this.state.lastStatusByPaneKey.get(original.paneKey) as
-          | EnrichedAgentHookEventPayload
-          | undefined
-        if (
-          !current ||
-          current.payload.agentType !== original.payload.agentType ||
-          current.payload.prompt !== original.payload.prompt ||
-          current.payload.lastAssistantMessage
-        ) {
-          return
-        }
-        const normalized = normalizeHookPayload(this.state, source, body, this.env)
-        if (!normalized?.payload.lastAssistantMessage) {
-          this.scheduleAssistantMessageRetry(source, body, original, attempt + 1)
-          return
-        }
-        // Why: some agents POST Stop before their transcript/chat-history line
-        // is flushed. Retry from a timer so the hook request returns immediately.
-        this.applyNormalizedStatus(normalized)
+        this.applyAssistantMessageRetry(source, body, original, attempt + 1, discoveryReady)
       } catch (err) {
         console.error('[agent-hooks] assistant message retry failed:', err)
       }
@@ -828,6 +867,35 @@ export class AgentHookServer {
     if (typeof timer.unref === 'function') {
       timer.unref()
     }
+  }
+
+  private applyAssistantMessageRetry(
+    source: AgentHookSource,
+    body: unknown,
+    original: EnrichedAgentHookEventPayload,
+    nextAttempt: number,
+    requireExactOriginal: boolean
+  ): void {
+    const current = this.state.lastStatusByPaneKey.get(original.paneKey) as
+      | EnrichedAgentHookEventPayload
+      | undefined
+    if (
+      !current ||
+      (requireExactOriginal && current !== original) ||
+      current.payload.agentType !== original.payload.agentType ||
+      current.payload.prompt !== original.payload.prompt ||
+      current.payload.lastAssistantMessage
+    ) {
+      return
+    }
+    const normalized = normalizeHookPayload(this.state, source, body, this.env)
+    if (!normalized?.payload.lastAssistantMessage) {
+      this.scheduleAssistantMessageRetry(source, body, original, nextAttempt, requireExactOriginal)
+      return
+    }
+    // Why: some agents POST Stop before their transcript/chat-history line is
+    // flushed. Discovery is event-driven; subsequent content retries stay timed.
+    this.applyNormalizedStatus(normalized)
   }
 
   setPaneKeyAliasPersistenceListener(listener: PaneKeyAliasPersistenceListener | null): void {
@@ -1512,6 +1580,17 @@ export class AgentHookServer {
       const entry = sanitizeHydratedEntry(resolvedPaneKey, rawResolvedEntry)
       if (entry && entry.receivedAt >= ttlCutoff) {
         this.state.lastStatusByPaneKey.set(resolvedPaneKey, entry)
+        // Why: the in-memory subagent roster died with the previous process.
+        // Reseed it from the persisted snapshot so the next teammate-bearing
+        // Stop (whose task ids never match lifecycle ids) doesn't silently
+        // drop the replayed child rows.
+        if (entry.payload.subagents) {
+          seedClaudeSubagentRosterFromSnapshots(
+            this.state,
+            resolvedPaneKey,
+            entry.payload.subagents
+          )
+        }
         hydrated += 1
       } else {
         dropped += 1

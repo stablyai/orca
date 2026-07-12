@@ -525,12 +525,15 @@ async function getPRHeadBaseSha(
   }
 }
 
+// Why: null signals a failed/blocked fetch (rate limit, auth, unresolved
+// remote) so the Files tab can show a retryable error instead of the
+// misleading "No files changed." empty state; [] means a genuinely empty PR.
 async function getPRFiles(
   repoPath: string,
   prNumber: number,
   connectionId?: string | null,
   localGitOptions: LocalGitExecOptions = {}
-): Promise<GitHubPRFile[]> {
+): Promise<GitHubPRFile[] | null> {
   const ghOptions = ghRepoExecOptions(githubRepoContext(repoPath, connectionId, localGitOptions))
   const ownerRepo = await getOwnerRepo(
     repoPath,
@@ -538,7 +541,7 @@ async function getPRFiles(
     ...localGitOptionArgs(localGitOptions)
   )
   if (!ownerRepo) {
-    return []
+    return null
   }
   try {
     const { stdout } = await ghExecFileAsync(
@@ -561,7 +564,7 @@ async function getPRFiles(
       reviewCommentLineNumbers: getPRReviewCommentLineNumbersFromPatch(file.patch)
     }))
   } catch {
-    return []
+    return null
   }
 }
 
@@ -1068,7 +1071,10 @@ export async function getWorkItemDetails(
       baseSha: shas?.baseSha,
       pullRequestId: viewedStates?.pullRequestId,
       checks,
-      files: mergePRFileViewedStates(files, viewedStates),
+      // Why: distinguish a failed file fetch (null) from an empty PR so the
+      // Files tab surfaces a retry instead of "No files changed."
+      files: files === null ? undefined : mergePRFileViewedStates(files, viewedStates),
+      filesUnavailable: files === null,
       participants: mentionParticipants
     }
   } finally {

@@ -29,7 +29,6 @@ import {
   Pencil,
   Plus,
   RefreshCw,
-  Search,
   Send,
   X
 } from 'lucide-react-native'
@@ -48,6 +47,7 @@ import { ConfirmModal } from '../../../src/components/ConfirmModal'
 import { MobileMarkdown } from '../../../src/components/MobileMarkdown'
 import { MobileAgentIcon } from '../../../src/components/MobileAgentIcon'
 import { MobileWorkspaceNameInput } from '../../../src/components/MobileWorkspaceNameInput'
+import { MobileSearchField } from '../../../src/components/MobileSearchField'
 import { MobileSyntaxSegments } from '../../../src/components/MobileSyntaxSegments'
 import { PickerModal, type PickerOption } from '../../../src/components/PickerModal'
 import { TaskProviderLogo } from '../../../src/components/TaskProviderLogo'
@@ -8668,6 +8668,7 @@ export default function MobileTasksScreen() {
           : provider === 'gitlab'
             ? 'No GitLab tasks'
             : 'No Linear tasks'
+  const isGithubProjectSearch = provider === 'github' && githubMode === 'project'
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
@@ -9048,31 +9049,33 @@ export default function MobileTasksScreen() {
         {provider === 'gitlab' && gitlabView === 'todos' ? null : provider === 'linear' &&
           !linearConnected ? null : (
           <View style={styles.searchBar}>
-            <Search size={14} color={colors.textMuted} />
-            <TextInput
-              style={styles.searchInput}
-              value={
-                provider === 'github' && githubMode === 'project' ? githubProjectSearch : query
-              }
-              onChangeText={
-                provider === 'github' && githubMode === 'project'
-                  ? setGithubProjectSearch
-                  : setQuery
-              }
+            <MobileSearchField
+              value={isGithubProjectSearch ? githubProjectSearch : query}
+              onChangeText={isGithubProjectSearch ? setGithubProjectSearch : setQuery}
               placeholder={
-                provider === 'github' && githubMode === 'project'
+                isGithubProjectSearch
                   ? 'Search project view...'
                   : `Search ${providerLabel} tasks...`
               }
-              placeholderTextColor={colors.textMuted}
-              autoCapitalize="none"
-              autoCorrect={false}
-              returnKeyType="search"
+              // Why: GitHub items seed the field with a preset query, so a bare
+              // value.length check would always show clear. Project mode shows clear
+              // for draft text or a non-empty applied override — not for applied ''
+              // (explicit unfiltered after clear), or the button sticks forever.
+              showClear={
+                isGithubProjectSearch
+                  ? githubProjectSearch.length > 0 ||
+                    (appliedGithubProjectSearch !== undefined &&
+                      appliedGithubProjectSearch.length > 0)
+                  : provider === 'github'
+                    ? query.trim() !== getTaskPresetQuery(githubPreset).trim()
+                    : undefined
+              }
+              editable={taskUiReady}
               onSubmitEditing={() => {
                 if (!taskUiReady) {
                   return
                 }
-                if (provider === 'github' && githubMode === 'project') {
+                if (isGithubProjectSearch) {
                   applyGitHubProjectSearch()
                   return
                 }
@@ -9091,42 +9094,38 @@ export default function MobileTasksScreen() {
                 }
               }}
               onBlur={() => {
-                if (provider === 'github' && githubMode === 'project') {
+                if (isGithubProjectSearch) {
                   applyGitHubProjectSearch()
                 }
               }}
+              // Why: Project clear means unfiltered results ('' override when the view
+              // has a default filter), not restore view default. GitHub items clear
+              // restores the preset query. Linear clears and persists empty resume.
+              onClear={() => {
+                if (isGithubProjectSearch) {
+                  const viewFilter = githubProjectTable?.selectedView.filter ?? ''
+                  setGithubProjectSearch('')
+                  // Why: undefined = use view default; '' = explicit unfiltered override.
+                  setAppliedGithubProjectSearch(viewFilter ? '' : undefined)
+                  return
+                }
+                if (provider === 'github') {
+                  const nextQuery = getTaskPresetQuery(githubPreset)
+                  setQuery(nextQuery)
+                  setAppliedQuery(nextQuery)
+                  persistTaskResumeState({
+                    githubItemsPreset: githubPreset,
+                    githubItemsQuery: nextQuery
+                  })
+                  return
+                }
+                setQuery('')
+                setAppliedQuery('')
+                if (provider === 'linear') {
+                  persistTaskResumeState({ linearQuery: '' })
+                }
+              }}
             />
-            {(provider === 'github' && githubMode === 'project'
-              ? githubProjectSearch.length > 0 || appliedGithubProjectSearch !== undefined
-              : query.length > 0) && (
-              <Pressable
-                onPress={() => {
-                  if (provider === 'github' && githubMode === 'project') {
-                    const viewFilter = githubProjectTable?.selectedView.filter ?? ''
-                    setGithubProjectSearch('')
-                    setAppliedGithubProjectSearch(viewFilter ? '' : undefined)
-                    return
-                  }
-                  if (provider === 'github') {
-                    const nextQuery = getTaskPresetQuery(githubPreset)
-                    setQuery(nextQuery)
-                    setAppliedQuery(nextQuery)
-                    persistTaskResumeState({
-                      githubItemsPreset: githubPreset,
-                      githubItemsQuery: nextQuery
-                    })
-                    return
-                  }
-                  setQuery('')
-                  setAppliedQuery('')
-                  if (provider === 'linear') {
-                    persistTaskResumeState({ linearQuery: '' })
-                  }
-                }}
-              >
-                <X size={14} color={colors.textSecondary} />
-              </Pressable>
-            )}
           </View>
         )}
       </View>
@@ -13818,19 +13817,10 @@ const styles = StyleSheet.create({
     color: colors.textSecondary
   },
   searchBar: {
-    flexDirection: 'row',
-    alignItems: 'center',
     paddingHorizontal: spacing.md,
-    paddingVertical: spacing.xs + 2,
-    gap: spacing.sm,
-    borderTopWidth: 1,
+    paddingVertical: spacing.sm,
+    borderTopWidth: StyleSheet.hairlineWidth,
     borderTopColor: colors.borderSubtle
-  },
-  searchInput: {
-    flex: 1,
-    color: colors.textPrimary,
-    fontSize: 13,
-    paddingVertical: 2
   },
   errorBanner: {
     paddingHorizontal: spacing.lg,

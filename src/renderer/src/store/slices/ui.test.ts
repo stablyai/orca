@@ -21,6 +21,7 @@ import { makePaneKey } from '../../../../shared/stable-pane-id'
 import { buildAgentNotificationId } from '../../../../shared/agent-notification-id'
 import type { AgentStatusEntry } from '../../../../shared/agent-status-types'
 import type { TaskSourceContext } from '../../../../shared/task-source-context'
+import { getSetupScriptPromptDismissalKey } from '../../lib/setup-script-prompt'
 
 const mocks = vi.hoisted(() => ({
   sendNotesToActiveAgentSession: vi.fn(),
@@ -726,6 +727,96 @@ describe('createUISlice hydratePersistedUI', () => {
     expect(createUIStore().getState().workspaceHostOrder).toEqual([])
   })
 
+  it('defaults the persisted active view to terminal', () => {
+    expect(getDefaultUIState().activeView).toBe('terminal')
+    expect(createUIStore().getState().activeView).toBe('terminal')
+  })
+
+  it('restores the persisted active top-level view on hydration', () => {
+    const store = createUIStore()
+
+    store.getState().hydratePersistedUI(makePersistedUI({ activeView: 'tasks' }), 'startup')
+
+    expect(store.getState().activeView).toBe('tasks')
+  })
+
+  it('falls back to terminal when persisted active view is missing (older data)', () => {
+    const store = createUIStore()
+    store.setState({ activeView: 'tasks' })
+
+    store.getState().hydratePersistedUI(
+      {
+        ...makePersistedUI(),
+        activeView: undefined as unknown as PersistedUIState['activeView']
+      },
+      'startup'
+    )
+
+    expect(store.getState().activeView).toBe('terminal')
+  })
+
+  it('falls back to terminal when the persisted active view is not a known view', () => {
+    const store = createUIStore()
+
+    store.getState().hydratePersistedUI(
+      makePersistedUI({
+        activeView: 'not-a-real-view' as unknown as PersistedUIState['activeView']
+      }),
+      'startup'
+    )
+
+    expect(store.getState().activeView).toBe('terminal')
+  })
+
+  it('drops a persisted activity view when experimental activity is disabled', () => {
+    const store = createUIStore()
+    store.setState({
+      settings: { experimentalActivity: false } as AppState['settings']
+    })
+
+    store.getState().hydratePersistedUI(makePersistedUI({ activeView: 'activity' }), 'startup')
+
+    expect(store.getState().activeView).toBe('terminal')
+  })
+
+  it('restores a persisted activity view when experimental activity is enabled', () => {
+    const store = createUIStore()
+    store.setState({
+      settings: { experimentalActivity: true } as AppState['settings']
+    })
+
+    store.getState().hydratePersistedUI(makePersistedUI({ activeView: 'activity' }), 'startup')
+
+    expect(store.getState().activeView).toBe('activity')
+  })
+
+  it('restores a default-on view (mobile) even when its nav button is hidden', () => {
+    const store = createUIStore()
+    store.setState({
+      settings: { showMobileButton: false } as AppState['settings']
+    })
+
+    store.getState().hydratePersistedUI(makePersistedUI({ activeView: 'mobile' }), 'startup')
+
+    expect(store.getState().activeView).toBe('mobile')
+  })
+
+  it('does not overwrite the current view on a later cross-window sync hydration', () => {
+    const store = createUIStore()
+    store.getState().hydratePersistedUI(makePersistedUI({ activeView: 'tasks' }), 'startup')
+    expect(store.getState().activeView).toBe('tasks')
+
+    store
+      .getState()
+      .hydratePersistedUI(
+        makePersistedUI({ activeView: 'terminal', rightSidebarOpen: false }),
+        'sync'
+      )
+
+    expect(store.getState().activeView).toBe('tasks')
+    expect(store.getState().rightSidebarOpen).toBe(false)
+  })
+
   it('preserves the current right sidebar width when older persisted UI omits it', () => {
     const store = createUIStore()
 
@@ -761,6 +852,56 @@ describe('createUISlice hydratePersistedUI', () => {
 
     expect(store.getState().rightSidebarTab).toBe('checks')
     expect(store.getState().rightSidebarExplorerView).toBe('files')
+  })
+
+  it('preserves persisted repo filters until repos are loaded', () => {
+    const store = createUIStore()
+    const remoteDismissalKey = getSetupScriptPromptDismissalKey('remote-repo')
+
+    store.getState().hydratePersistedUI(
+      makePersistedUI({
+        filterRepoIds: ['remote-repo', 12 as never, 'stale-repo'],
+        trustedOrcaHooks: {
+          'remote-repo': { all: { approvedAt: 1 } },
+          'bad-shape': 'yes' as never
+        },
+        setupScriptPromptDismissedRepoIds: [remoteDismissalKey, 'remote-repo', remoteDismissalKey]
+      })
+    )
+
+    expect(store.getState().filterRepoIds).toEqual(['remote-repo', 'stale-repo'])
+    expect(store.getState().trustedOrcaHooks).toEqual({
+      'remote-repo': { all: { approvedAt: 1 } }
+    })
+    expect(store.getState().setupScriptPromptDismissedRepoIds).toEqual([remoteDismissalKey])
+  })
+
+  it('validates persisted repo filters when repos are already loaded', () => {
+    const store = createUIStore()
+    const localDismissalKey = getSetupScriptPromptDismissalKey('local-repo')
+    const staleDismissalKey = getSetupScriptPromptDismissalKey('stale-repo')
+    store.setState({
+      repos: [
+        { id: 'local-repo', path: '/local', displayName: 'Local', badgeColor: '#000', addedAt: 1 }
+      ]
+    } as Partial<AppState>)
+
+    store.getState().hydratePersistedUI(
+      makePersistedUI({
+        filterRepoIds: ['local-repo', 'stale-repo'],
+        trustedOrcaHooks: {
+          'local-repo': { all: { approvedAt: 1 } },
+          'stale-repo': { all: { approvedAt: 2 } }
+        },
+        setupScriptPromptDismissedRepoIds: [localDismissalKey, staleDismissalKey]
+      })
+    )
+
+    expect(store.getState().filterRepoIds).toEqual(['local-repo'])
+    expect(store.getState().trustedOrcaHooks).toEqual({
+      'local-repo': { all: { approvedAt: 1 } }
+    })
+    expect(store.getState().setupScriptPromptDismissedRepoIds).toEqual([localDismissalKey])
   })
 
   it('hydrates legacy persisted search tab as Explorer search', () => {
@@ -1167,13 +1308,25 @@ describe('createUISlice hydratePersistedUI', () => {
       'resource-usage',
       'ports',
       'kimi',
-      'minimax'
+      'minimax',
+      'antigravity',
+      'grok'
     ])
     expect(setUI).toHaveBeenCalledWith({
-      statusBarItems: ['claude', 'resource-usage', 'ports', 'kimi', 'minimax'],
+      statusBarItems: [
+        'claude',
+        'resource-usage',
+        'ports',
+        'kimi',
+        'minimax',
+        'antigravity',
+        'grok'
+      ],
       _portsStatusBarDefaultAdded: true,
       _kimiStatusBarDefaultAdded: true,
-      _minimaxStatusBarDefaultAdded: true
+      _minimaxStatusBarDefaultAdded: true,
+      _antigravityStatusBarDefaultAdded: true,
+      _grokStatusBarDefaultAdded: true
     })
   })
 
@@ -1187,12 +1340,64 @@ describe('createUISlice hydratePersistedUI', () => {
         statusBarItems: ['claude', 'resource-usage'],
         _portsStatusBarDefaultAdded: true,
         _kimiStatusBarDefaultAdded: true,
-        _minimaxStatusBarDefaultAdded: true
+        _minimaxStatusBarDefaultAdded: true,
+        _antigravityStatusBarDefaultAdded: true,
+        _grokStatusBarDefaultAdded: true
       })
     )
 
     expect(store.getState().statusBarItems).toEqual(['claude', 'resource-usage'])
     expect(setUI).not.toHaveBeenCalled()
+  })
+
+  it('persists and hydrates the usage percentage display preference', () => {
+    const setUI = vi.fn().mockResolvedValue(undefined)
+    vi.stubGlobal('window', { api: { ui: { set: setUI } } })
+    const store = createUIStore()
+
+    store.getState().setUsagePercentageDisplay('used')
+
+    expect(store.getState().usagePercentageDisplay).toBe('used')
+    // Why: adapting the control also permanently dismisses the one-time change notice.
+    expect(setUI).toHaveBeenCalledWith({
+      usagePercentageDisplay: 'used',
+      usagePercentageDisplayChangeNoticeDismissed: true
+    })
+    expect(store.getState().usagePercentageDisplayChangeNoticeDismissed).toBe(true)
+
+    store.getState().hydratePersistedUI(makePersistedUI({ usagePercentageDisplay: 'remaining' }))
+    expect(store.getState().usagePercentageDisplay).toBe('remaining')
+  })
+
+  it('hydrates and dismisses the usage percentage display change notice', () => {
+    const setUI = vi.fn().mockResolvedValue(undefined)
+    vi.stubGlobal('window', { api: { ui: { set: setUI } } })
+    const store = createUIStore()
+
+    store
+      .getState()
+      .hydratePersistedUI(makePersistedUI({ usagePercentageDisplayChangeNoticeDismissed: false }))
+    expect(store.getState().usagePercentageDisplayChangeNoticeDismissed).toBe(false)
+
+    store.getState().dismissUsagePercentageDisplayChangeNotice()
+    expect(store.getState().usagePercentageDisplayChangeNoticeDismissed).toBe(true)
+    expect(setUI).toHaveBeenCalledWith({ usagePercentageDisplayChangeNoticeDismissed: true })
+
+    setUI.mockClear()
+    store.getState().dismissUsagePercentageDisplayChangeNotice()
+    expect(setUI).not.toHaveBeenCalled()
+  })
+
+  it('defaults invalid usage percentage display values to used', () => {
+    const store = createUIStore()
+
+    store.getState().hydratePersistedUI(
+      makePersistedUI({
+        usagePercentageDisplay: 'left' as PersistedUIState['usagePercentageDisplay']
+      })
+    )
+
+    expect(store.getState().usagePercentageDisplay).toBe('used')
   })
 
   it('clamps persisted workspace board column width', () => {

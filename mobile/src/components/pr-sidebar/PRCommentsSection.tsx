@@ -5,6 +5,7 @@ import type { GitHubWorkItemDetails, PRState } from '../../../../src/shared/type
 import type { GitHubPrRepoSlug } from '../../session/github-pr-rpc'
 import { colors } from '../../theme/mobile-theme'
 import { canAddRootComment } from '../../session/pr-comment-actions'
+import { isPrSidebarDetailsPlaceholder } from '../../session/mobile-pr-sidebar-state'
 import type { MobilePrCommentActions } from '../../session/use-mobile-pr-comment-actions'
 import { PRSection } from './PRSection'
 import { CommentMarkdown } from './CommentMarkdown'
@@ -59,10 +60,15 @@ export function PRCommentsSection({
   botAuthorOverrides
 }: Props) {
   // details is null while phase 2 (the heavy comments/body payload) is still loading.
+  // A synthetic placeholder means phase 2 failed — do not paint that as empty success.
   const loadingDetails = details === null
+  const detailsFailed = details != null && isPrSidebarDetailsPlaceholder(details)
   const body = details?.body ?? ''
-  const comments = useMemo(() => details?.comments ?? [], [details])
-  const isPr = details?.item.type === 'pr'
+  const comments = useMemo(
+    () => (details && !isPrSidebarDetailsPlaceholder(details) ? details.comments : []),
+    [details]
+  )
+  const isPr = details != null && !detailsFailed && details.item.type === 'pr'
 
   // Per-card action bundle (stable callbacks from the hook) — built once so the
   // memo'd cards don't re-render on unrelated timeline changes.
@@ -109,6 +115,10 @@ export function PRCommentsSection({
       <PRSection title="Description">
         {loadingDetails ? (
           <ActivityIndicator color={colors.textSecondary} />
+        ) : detailsFailed ? (
+          <Text style={styles.noDescription}>
+            Could not load description. Tap refresh to try again.
+          </Text>
         ) : body.trim() ? (
           <CommentMarkdown content={body} variant="document" />
         ) : (
@@ -128,6 +138,8 @@ export function PRCommentsSection({
       >
         {loadingDetails ? (
           <ActivityIndicator color={colors.textSecondary} />
+        ) : detailsFailed ? (
+          <Text style={styles.empty}>Could not load comments. Tap refresh to try again.</Text>
         ) : (
           <View style={styles.list}>
             {comments.length === 0 ? (

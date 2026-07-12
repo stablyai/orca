@@ -1,8 +1,8 @@
 import * as path from 'node:path'
 import { resolveWorktreeAddBaseRef } from '../shared/worktree-base-ref'
 import type { GitExec } from './git-handler-ops'
-import { isUnsupportedWorktreeListZError, parseWorktreeList } from './git-handler-utils'
 export { removeWorktreeOp } from './git-handler-worktree-remove'
+export { readRelayWorktreeList } from './git-handler-worktree-list'
 
 async function persistRelayWorktreeCreationBase(
   git: GitExec,
@@ -109,40 +109,6 @@ export async function addWorktreeOp(git: GitExec, params: Record<string, unknown
   } catch (error) {
     console.warn(`relay addWorktree: failed to set push.autoSetupRemote for ${targetDir}`, error)
   }
-}
-
-type RelayWorktreeInfo = {
-  path: string
-  branch?: string
-  head?: string
-}
-
-export async function readRelayWorktreeList(
-  git: GitExec,
-  repoPath: string
-): Promise<RelayWorktreeInfo[]> {
-  try {
-    const { stdout } = await git(['worktree', 'list', '--porcelain', '-z'], repoPath)
-    return normalizeRelayWorktrees(parseWorktreeList(stdout, { nulDelimited: true }))
-  } catch (error) {
-    if (!isUnsupportedWorktreeListZError(error)) {
-      throw error
-    }
-  }
-
-  // Why: `-z` preserves newlines; fallback keeps Git <2.36 compatible.
-  const { stdout } = await git(['worktree', 'list', '--porcelain'], repoPath)
-  return normalizeRelayWorktrees(parseWorktreeList(stdout))
-}
-
-function normalizeRelayWorktrees(worktrees: Record<string, unknown>[]): RelayWorktreeInfo[] {
-  return worktrees
-    .map((worktree) => ({
-      path: typeof worktree.path === 'string' ? worktree.path : '',
-      head: typeof worktree.head === 'string' ? worktree.head : undefined,
-      branch: typeof worktree.branch === 'string' ? worktree.branch : undefined
-    }))
-    .filter((worktree) => worktree.path.length > 0)
 }
 
 function isPosixAbsolutePath(value: string): boolean {

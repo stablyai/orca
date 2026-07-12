@@ -9,7 +9,10 @@ vi.mock('child_process', () => ({
 }))
 
 import { resetProcessTableSnapshotForTests } from '../../shared/process-table-snapshot'
-import { resolveAgentForegroundProcess } from './agent-foreground-process'
+import {
+  resolveAgentForegroundProcess,
+  resolveAgentForegroundProcessWithAvailability
+} from './agent-foreground-process'
 import { resetWindowsProcessRowsSnapshotForTests } from './windows-foreground-process-rows'
 
 // Why: the module wraps execFile with promisify, so the mock must honor the
@@ -104,6 +107,28 @@ describe('resolveAgentForegroundProcess', () => {
     mockPs(['101 100 S+   node /Users/dev/.nvm/versions/node/bin/codex'].join('\n'))
 
     await expect(resolveAgentForegroundProcess(100, 'node')).resolves.toBe('codex')
+  })
+
+  it('treats a fresh POSIX snapshot missing the PTY root as unavailable', async () => {
+    mockPs('101 999 S+ node /Users/dev/.nvm/versions/node/bin/codex')
+
+    await expect(
+      resolveAgentForegroundProcessWithAvailability(100, 'zsh', { fresh: true })
+    ).resolves.toEqual({ available: false, processName: 'zsh' })
+  })
+
+  it('treats a failed fresh POSIX scan as unavailable', async () => {
+    execFileMock.mockImplementation(
+      (_cmd: string, _args: string[], _opts: unknown, cb: unknown) => {
+        const callback = cb as (err: unknown, result: { stdout: string; stderr: string }) => void
+        callback(new Error('ps unavailable'), { stdout: '', stderr: '' })
+      }
+    )
+
+    await expect(
+      resolveAgentForegroundProcessWithAvailability(100, 'zsh', { fresh: true })
+    ).resolves.toEqual({ available: false, processName: 'zsh' })
+    await expect(resolveAgentForegroundProcess(100, 'zsh')).resolves.toBe('zsh')
   })
 
   it('does not report Claude print-mode hook descendants as foreground agents', async () => {
@@ -270,6 +295,117 @@ describe('resolveAgentForegroundProcess', () => {
     )
   })
 
+  it('distinguishes unavailable Windows enumeration from a confirmed shell', async () => {
+    Object.defineProperty(process, 'platform', { value: 'win32' })
+    execFileMock.mockImplementation(
+      (_cmd: string, _args: string[], _opts: unknown, cb: unknown) => {
+        const callback = cb as (err: unknown, result: { stdout: string; stderr: string }) => void
+        callback(new Error('enumeration unavailable'), { stdout: '', stderr: '' })
+      }
+    )
+
+    await expect(
+      resolveAgentForegroundProcessWithAvailability(100, 'powershell.exe')
+    ).resolves.toEqual({ available: false, processName: 'powershell.exe' })
+    await expect(resolveAgentForegroundProcess(100, 'powershell.exe')).resolves.toBe(
+      'powershell.exe'
+    )
+  })
+
+  it.each([
+    ['blank', '   \r\n'],
+    ['unparseable', 'wmic returned no structured process values']
+  ])('treats successful but %s WMIC output as unavailable', async (_label, wmicOutput) => {
+    Object.defineProperty(process, 'platform', { value: 'win32' })
+    execFileMock.mockImplementation((cmd: string, _args: string[], _opts: unknown, cb: unknown) => {
+      const callback = cb as (err: unknown, result: { stdout: string; stderr: string }) => void
+      if (cmd === 'powershell.exe') {
+        callback(new Error('powershell unavailable'), { stdout: '', stderr: '' })
+        return
+      }
+      callback(null, { stdout: wmicOutput, stderr: '' })
+    })
+
+    await expect(
+      resolveAgentForegroundProcessWithAvailability(100, 'powershell.exe')
+    ).resolves.toEqual({ available: false, processName: 'powershell.exe' })
+    await expect(resolveAgentForegroundProcess(100, 'powershell.exe')).resolves.toBe(
+      'powershell.exe'
+    )
+  })
+
+  it('treats an observed Windows shell with no children as authoritative', async () => {
+    Object.defineProperty(process, 'platform', { value: 'win32' })
+    execFileMock.mockImplementation(
+      (_cmd: string, _args: string[], _opts: unknown, cb: unknown) => {
+        const callback = cb as (err: unknown, result: { stdout: string; stderr: string }) => void
+        callback(null, {
+          stdout: windowsProcessJsonRows([
+            {
+              CommandLine: 'powershell.exe',
+              Name: 'powershell.exe',
+              ParentProcessId: 99,
+              ProcessId: 100
+            }
+          ]),
+          stderr: ''
+        })
+      }
+    )
+
+    await expect(
+      resolveAgentForegroundProcessWithAvailability(100, 'powershell.exe')
+    ).resolves.toEqual({ available: true, processName: 'powershell.exe' })
+  })
+
+  it('does not restore a recognized fallback that disappeared before confirmation', async () => {
+    Object.defineProperty(process, 'platform', { value: 'win32' })
+    mockPs(
+      windowsProcessJsonRows([
+        {
+          CommandLine: 'powershell.exe',
+          Name: 'powershell.exe',
+          ParentProcessId: 99,
+          ProcessId: 100
+        }
+      ])
+    )
+
+    await expect(
+      resolveAgentForegroundProcessWithAvailability(100, 'droid', {
+        fresh: true,
+        forceProcessScan: true
+      })
+    ).resolves.toEqual({ available: true, processName: null })
+  })
+
+  it('treats a Windows snapshot missing the requested shell as unavailable', async () => {
+    Object.defineProperty(process, 'platform', { value: 'win32' })
+    execFileMock.mockImplementation(
+      (_cmd: string, _args: string[], _opts: unknown, cb: unknown) => {
+        const callback = cb as (err: unknown, result: { stdout: string; stderr: string }) => void
+        callback(null, {
+          stdout: windowsProcessJsonRows([
+            {
+              CommandLine: 'unrelated.exe',
+              Name: 'unrelated.exe',
+              ParentProcessId: 99,
+              ProcessId: 200
+            }
+          ]),
+          stderr: ''
+        })
+      }
+    )
+
+    await expect(
+      resolveAgentForegroundProcessWithAvailability(100, 'powershell.exe')
+    ).resolves.toEqual({ available: false, processName: 'powershell.exe' })
+    await expect(resolveAgentForegroundProcess(100, 'powershell.exe')).resolves.toBe(
+      'powershell.exe'
+    )
+  })
+
   it('does not use unrelated Windows agent descendants for wrapper fallbacks', async () => {
     Object.defineProperty(process, 'platform', { value: 'win32' })
     execFileMock.mockImplementation(
@@ -332,6 +468,39 @@ describe('resolveAgentForegroundProcess', () => {
     await expect(resolveAgentForegroundProcess(100, 'powershell.exe')).resolves.toBe(
       'powershell.exe'
     )
+  })
+
+  it('filters detached agents before resolving an otherwise ambiguous ConPTY tree', async () => {
+    Object.defineProperty(process, 'platform', { value: 'win32' })
+    mockPs(
+      windowsProcessJsonRows([
+        {
+          CommandLine: 'powershell.exe',
+          Name: 'powershell.exe',
+          ParentProcessId: 99,
+          ProcessId: 100
+        },
+        {
+          CommandLine: 'droid',
+          Name: 'droid.exe',
+          ParentProcessId: 100,
+          ProcessId: 101
+        },
+        {
+          CommandLine: 'agy',
+          Name: 'agy.exe',
+          ParentProcessId: 100,
+          ProcessId: 102
+        }
+      ])
+    )
+
+    await expect(
+      resolveAgentForegroundProcessWithAvailability(100, 'powershell.exe', {
+        fresh: true,
+        readWindowsConptyProcessIds: async () => new Set([100, 101])
+      })
+    ).resolves.toEqual({ available: true, processName: 'droid' })
   })
 
   it('recognizes a Windows shell-rooted agent when only one candidate matches the worktree path', async () => {
@@ -493,5 +662,84 @@ describe('resolveAgentForegroundProcess', () => {
 
     await expect(resolveAgentForegroundProcess(100, 'vim.exe')).resolves.toBe('vim.exe')
     expect(execFileMock).not.toHaveBeenCalled()
+  })
+
+  it('authorizes a fresh Windows agent only when it still belongs to the ConPTY', async () => {
+    Object.defineProperty(process, 'platform', { value: 'win32' })
+    mockPs(
+      windowsProcessJsonRows([
+        {
+          CommandLine: 'powershell.exe',
+          Name: 'powershell.exe',
+          ParentProcessId: 99,
+          ProcessId: 100
+        },
+        {
+          CommandLine: 'droid',
+          Name: 'droid.exe',
+          ParentProcessId: 100,
+          ProcessId: 101
+        }
+      ])
+    )
+    const readWindowsConptyProcessIds = vi.fn(async () => new Set([100, 101, 999]))
+
+    await expect(
+      resolveAgentForegroundProcessWithAvailability(100, 'powershell.exe', {
+        fresh: true,
+        readWindowsConptyProcessIds
+      })
+    ).resolves.toEqual({ available: true, processName: 'droid' })
+    expect(readWindowsConptyProcessIds).toHaveBeenCalledTimes(1)
+  })
+
+  it('excludes a detached Windows Droid descendant from byte authority', async () => {
+    Object.defineProperty(process, 'platform', { value: 'win32' })
+    mockPs(
+      windowsProcessJsonRows([
+        {
+          CommandLine: 'powershell.exe',
+          Name: 'powershell.exe',
+          ParentProcessId: 99,
+          ProcessId: 100
+        },
+        {
+          CommandLine: 'droid',
+          Name: 'droid.exe',
+          ParentProcessId: 100,
+          ProcessId: 101
+        }
+      ])
+    )
+
+    await expect(
+      resolveAgentForegroundProcessWithAvailability(100, 'powershell.exe', {
+        fresh: true,
+        readWindowsConptyProcessIds: async () => new Set([100, 999])
+      })
+    ).resolves.toEqual({ available: true, processName: 'powershell.exe' })
+  })
+
+  it('does not fork the ConPTY membership helper when no Windows agent is inferred', async () => {
+    Object.defineProperty(process, 'platform', { value: 'win32' })
+    mockPs(
+      windowsProcessJsonRows([
+        {
+          CommandLine: 'powershell.exe',
+          Name: 'powershell.exe',
+          ParentProcessId: 99,
+          ProcessId: 100
+        }
+      ])
+    )
+    const readWindowsConptyProcessIds = vi.fn(async () => new Set([100, 999]))
+
+    await expect(
+      resolveAgentForegroundProcessWithAvailability(100, 'powershell.exe', {
+        fresh: true,
+        readWindowsConptyProcessIds
+      })
+    ).resolves.toEqual({ available: true, processName: 'powershell.exe' })
+    expect(readWindowsConptyProcessIds).not.toHaveBeenCalled()
   })
 })

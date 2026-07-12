@@ -26,7 +26,7 @@ export function NativeChatExperimentalSetting({
       title={translate('auto.components.settings.ExperimentalPane.nativeChat.title', 'Native chat')}
       description={translate(
         'auto.components.settings.ExperimentalPane.nativeChat.description',
-        'Preview the desktop chat surface for Claude and Codex terminal sessions.'
+        'Preview the desktop chat surface for supported agent terminal sessions.'
       )}
       keywords={getExperimentalSearchEntry().nativeChat.keywords}
       className="space-y-3 py-2"
@@ -40,7 +40,7 @@ export function NativeChatExperimentalSetting({
           <p className="text-xs text-muted-foreground">
             {translate(
               'auto.components.settings.ExperimentalPane.nativeChat.copy',
-              'Adds a native chat view you can switch to from supported Claude and Codex terminal panes. Experimental while we tune transcript fidelity, streaming, and terminal parity.'
+              'Adds a native chat view you can switch to from supported agent terminal panes. Experimental while we tune transcript fidelity, streaming, and terminal parity.'
             )}
           </p>
         </div>
@@ -70,7 +70,7 @@ export function NativeChatExperimentalSetting({
               <p className="text-xs text-muted-foreground">
                 {translate(
                   'auto.components.settings.ExperimentalPane.nativeChat.defaultCopy',
-                  'Choose how new Claude and Codex terminal tabs open.'
+                  'Choose how new supported agent terminal tabs open.'
                 )}
               </p>
             </div>

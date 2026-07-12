@@ -90,6 +90,59 @@ describe('orchestration RPC methods', () => {
       expect(runtime.deliverPendingMessagesForHandle).toHaveBeenCalledWith('term_b')
     })
 
+    it('stores the sender pane key on the message row', async () => {
+      setup()
+      vi.spyOn(runtime, 'deliverPendingMessagesForHandle').mockImplementation(() => {})
+      vi.spyOn(runtime, 'notifyMessageArrived').mockImplementation(() => {})
+
+      const result = (await call('orchestration.send', {
+        from: 'term_a',
+        to: 'term_b',
+        subject: 'hello',
+        senderPaneKey: 'tab_a:leaf_a'
+      })) as { message: { id: string } }
+
+      expect(db.getMessageById(result.message.id)?.sender_pane_key).toBe('tab_a:leaf_a')
+    })
+
+    it('does not wake waiters for a heartbeat suppressed at send time', async () => {
+      setup()
+      const task = db.createTask({ spec: 'work' })
+      const dispatch = db.createDispatchContext(task.id, 'term_worker')
+      db.updateTaskStatus(task.id, 'completed')
+      vi.spyOn(runtime, 'deliverPendingMessagesForHandle').mockImplementation(() => {})
+      const notify = vi.spyOn(runtime, 'notifyMessageArrived').mockImplementation(() => {})
+
+      const result = (await call('orchestration.send', {
+        from: 'term_worker',
+        to: 'term_coord',
+        subject: 'alive',
+        type: 'heartbeat',
+        payload: JSON.stringify({ dispatchId: dispatch.id })
+      })) as { message: { id: string } }
+
+      expect(notify).not.toHaveBeenCalled()
+      expect(db.getMessageById(result.message.id)).toMatchObject({ read: 1 })
+    })
+
+    it('still wakes waiters for a heartbeat on an active dispatch', async () => {
+      setup()
+      const task = db.createTask({ spec: 'work' })
+      const dispatch = db.createDispatchContext(task.id, 'term_worker')
+      vi.spyOn(runtime, 'deliverPendingMessagesForHandle').mockImplementation(() => {})
+      const notify = vi.spyOn(runtime, 'notifyMessageArrived').mockImplementation(() => {})
+
+      await call('orchestration.send', {
+        from: 'term_worker',
+        to: 'term_coord',
+        subject: 'alive',
+        type: 'heartbeat',
+        payload: JSON.stringify({ dispatchId: dispatch.id })
+      })
+
+      expect(notify).toHaveBeenCalledWith('term_coord', 'heartbeat')
+    })
+
     it('rejects missing --to', () => {
       const method = findMethod('orchestration.send')
       expect(() => method.params!.parse({ subject: 'hi' })).toThrow()
@@ -598,11 +651,11 @@ describe('orchestration RPC methods', () => {
       expect(db.getDispatchContextById(dispatch.id)?.status).toBe('dispatched')
     })
 
-    it('does not complete worker_done from a terminal that does not own the dispatch', async () => {
+    it('completes worker_done by payload IDs when the sender handle changed', async () => {
       setup()
       const { task, dispatch } = createDispatchedTask('term_owner')
       insertWorkerDone({
-        from: 'term_intruder',
+        from: 'term_reminted',
         taskId: task.id,
         dispatchId: dispatch.id
       })
@@ -613,8 +666,8 @@ describe('orchestration RPC methods', () => {
       })) as { count: number }
 
       expect(result.count).toBe(1)
-      expect(db.getTask(task.id)?.status).toBe('dispatched')
-      expect(db.getDispatchContextById(dispatch.id)?.status).toBe('dispatched')
+      expect(db.getTask(task.id)?.status).toBe('completed')
+      expect(db.getDispatchContextById(dispatch.id)?.status).toBe('completed')
     })
 
     it('does not complete worker_done for a stale inactive dispatch', async () => {
@@ -670,6 +723,11 @@ describe('orchestration RPC methods', () => {
       ).rejects.toThrow('Invalid --types')
     })
 
+    it('rejects conflicting message read modes', () => {
+      const method = findMethod('orchestration.check')
+      expect(() => method.params!.parse({ unread: true, peek: true })).toThrow(/read mode/)
+    })
+
     it('default (unread only) marks returned rows as read', async () => {
       setup()
       db.insertMessage({ from: 'a', to: 'b', subject: 'one' })
@@ -684,6 +742,36 @@ describe('orchestration RPC methods', () => {
         count: number
       }
       expect(second.count).toBe(0)
+    })
+
+    it('--peek returns unread messages without marking them read', async () => {
+      setup()
+      db.insertMessage({ from: 'a', to: 'b', subject: 'one' })
+
+      const result = (await call('orchestration.check', {
+        terminal: 'b',
+        peek: true
+      })) as { count: number }
+
+      expect(result.count).toBe(1)
+      expect(db.getUnreadMessages('b')).toHaveLength(1)
+    })
+
+    it("treats the CLI's {peek, unread:false} compat pair as peek, not all", async () => {
+      setup()
+      const seen = db.insertMessage({ from: 'a', to: 'b', subject: 'seen' })
+      db.markAsRead([seen.id])
+      db.insertMessage({ from: 'a', to: 'b', subject: 'fresh' })
+
+      const result = (await call('orchestration.check', {
+        terminal: 'b',
+        peek: true,
+        unread: false
+      })) as { messages: { subject: string }[]; count: number }
+
+      expect(result.count).toBe(1)
+      expect(result.messages[0]?.subject).toBe('fresh')
+      expect(db.getUnreadMessages('b')).toHaveLength(1)
     })
 
     it('--all returns every message for the handle without marking read', async () => {
@@ -1000,6 +1088,24 @@ describe('orchestration RPC methods', () => {
     })
   })
 
+  describe('orchestration.taskList --brief', () => {
+    it('abbreviates specs server-side so full text never crosses the wire', async () => {
+      setup()
+      db.createTask({ spec: `First line\n${'detail '.repeat(40)}` })
+      db.createTask({ spec: 'Short task' })
+
+      const result = (await call('orchestration.taskList', { brief: true })) as {
+        tasks: { spec: string; spec_truncated: boolean }[]
+      }
+
+      const [long, short] = result.tasks
+      expect(long.spec).toHaveLength(160)
+      expect(long.spec_truncated).toBe(true)
+      expect(short.spec).toBe('Short task')
+      expect(short.spec_truncated).toBe(false)
+    })
+  })
+
   describe('orchestration.taskUpdate', () => {
     it('updates task status', async () => {
       setup()
@@ -1050,6 +1156,20 @@ describe('orchestration RPC methods', () => {
       expect(result.dispatch.status).toBe('dispatched')
     })
 
+    it('records the assignee pane key on the dispatch context', async () => {
+      setup()
+      vi.spyOn(runtime, 'getTerminalPaneKey').mockReturnValue('tab_w:leaf_w')
+      const task = db.createTask({ spec: 'work' })
+
+      const result = (await call('orchestration.dispatch', {
+        task: task.id,
+        to: 'term_a'
+      })) as { dispatch: { id: string } }
+
+      expect(runtime.getTerminalPaneKey).toHaveBeenCalledWith('term_a')
+      expect(db.getDispatchContextById(result.dispatch.id)?.assignee_pane_key).toBe('tab_w:leaf_w')
+    })
+
     it('rejects dispatch for a pending task', async () => {
       setup()
       const parent = db.createTask({ spec: 'parent' })
@@ -1067,7 +1187,9 @@ describe('orchestration RPC methods', () => {
       setup()
       const task = db.createTask({ spec: 'work' })
       vi.spyOn(runtime, 'isTerminalRunningAgent').mockResolvedValue(true)
-      vi.spyOn(runtime, 'sendTerminal').mockRejectedValue(new Error('terminal_not_writable'))
+      vi.spyOn(runtime, 'sendTerminalAgentPrompt').mockRejectedValue(
+        new Error('terminal_not_writable')
+      )
 
       await expect(
         call('orchestration.dispatch', {
@@ -1085,7 +1207,7 @@ describe('orchestration RPC methods', () => {
       setup()
       const task = db.createTask({ spec: 'work' })
       vi.spyOn(runtime, 'isTerminalRunningAgent').mockResolvedValue(true)
-      const send = vi.spyOn(runtime, 'sendTerminal').mockResolvedValue({
+      const send = vi.spyOn(runtime, 'sendTerminalAgentPrompt').mockResolvedValue({
         handle: 'term_a',
         accepted: true,
         bytesWritten: 1
@@ -1098,7 +1220,35 @@ describe('orchestration RPC methods', () => {
         devMode: true
       })
 
-      expect(send.mock.calls[0]?.[1].text).toContain('orca-dev orchestration send')
+      expect(send).toHaveBeenCalledWith(
+        'term_a',
+        expect.stringContaining('orca-dev orchestration send')
+      )
+    })
+
+    it('injects preamble through the agent prompt path instead of raw terminal send', async () => {
+      setup()
+      const task = db.createTask({ spec: 'line one\nline two' })
+      vi.spyOn(runtime, 'isTerminalRunningAgent').mockResolvedValue(true)
+      const agentPrompt = vi.spyOn(runtime, 'sendTerminalAgentPrompt').mockResolvedValue({
+        handle: 'term_a',
+        accepted: true,
+        bytesWritten: 1
+      })
+      const rawSend = vi.spyOn(runtime, 'sendTerminal')
+
+      await call('orchestration.dispatch', {
+        task: task.id,
+        to: 'term_a',
+        inject: true,
+        from: 'term_coord'
+      })
+
+      expect(agentPrompt).toHaveBeenCalledWith(
+        'term_a',
+        expect.stringContaining('line one\nline two')
+      )
+      expect(rawSend).not.toHaveBeenCalled()
     })
 
     it('rejects inject to terminal without recognized agent', async () => {

@@ -93,6 +93,39 @@ describe('getWorktreeStatus', () => {
 
     expect(status).toBe('active')
   })
+
+  // Why: an exited agent can leave a frozen braille-spinner frame in the
+  // title forever (reproduced live: '⠐ Review branch for regressions' over a
+  // plain shell prompt). The row builder rejects that title as a Claude row
+  // (no explicit "claude" token), so the sidebar shows 0 agents — the worktree
+  // dot must agree instead of spinning on the unattributable title alone.
+  it('does not spin on a bare braille-spinner tab title that yields no agent row', () => {
+    const status = getWorktreeStatus(
+      [{ id: 'tab-1', title: '⠐ Review branch for regressions' }],
+      [],
+      livePtyMap('tab-1')
+    )
+
+    expect(status).toBe('active')
+  })
+
+  it('does not spin on a bare braille-spinner pane title that yields no agent row', () => {
+    const status = getWorktreeStatus([{ id: 'tab-1', title: 'bash' }], [], livePtyMap('tab-1'), {
+      'tab-1': { 0: '⠐ Review branch for regressions', 1: 'bash' }
+    })
+
+    expect(status).toBe('active')
+  })
+
+  it('still spins on an agent-attributable braille-spinner title', () => {
+    const status = getWorktreeStatus(
+      [{ id: 'tab-1', title: '⠹ codex fix flaky test' }],
+      [],
+      livePtyMap('tab-1')
+    )
+
+    expect(status).toBe('working')
+  })
 })
 
 describe('resolveWorktreeStatus', () => {
@@ -328,6 +361,36 @@ describe('resolveWorktreeStatus', () => {
     })
 
     expect(status).toBe('done')
+  })
+
+  it('keeps a hook-backed working agent spinning despite an unattributable stale title', () => {
+    // Why: hook-managed agents drive the dot via hasLiveWorking, not the title
+    // heuristic — the attribution gate must not regress them.
+    const status = resolveWorktreeStatus({
+      tabs: [{ id: 'tab-1', title: '⠐ Review branch for regressions' }],
+      browserTabs: [],
+      ptyIdsByTabId: livePtyMap('tab-1'),
+      hasPermission: false,
+      hasLiveWorking: true,
+      hasLiveDone: false,
+      hasRetainedDone: false
+    })
+
+    expect(status).toBe('working')
+  })
+
+  it('resolves a stale unattributable spinner title with no hook entry to active, not working', () => {
+    const status = resolveWorktreeStatus({
+      tabs: [{ id: 'tab-1', title: '⠐ Review branch for regressions' }],
+      browserTabs: [],
+      ptyIdsByTabId: livePtyMap('tab-1'),
+      hasPermission: false,
+      hasLiveWorking: false,
+      hasLiveDone: false,
+      hasRetainedDone: false
+    })
+
+    expect(status).toBe('active')
   })
 
   it('falls through to active heuristic when nothing else applies', () => {

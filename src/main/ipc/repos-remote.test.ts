@@ -12,6 +12,7 @@ import { join } from 'node:path'
 import type * as RepoModule from '../git/repo'
 import { DEFAULT_REPO_BADGE_COLOR } from '../../shared/constants'
 import { getGitRepoRoot, isGitRepo } from '../git/repo'
+import { clearGitCapabilityStateForTests } from '../git/git-capability-state'
 
 const {
   handleMock,
@@ -19,6 +20,7 @@ const {
   mockGitProvider,
   mockFilesystemProvider,
   mockMultiplexer,
+  gitExecFileAsyncMock,
   gitSpawnMock,
   listWorktreeGraphMock,
   invalidateAuthorizedRootsCacheMock,
@@ -70,6 +72,7 @@ const {
     notify: vi.fn()
   },
   gitSpawnMock: vi.fn(),
+  gitExecFileAsyncMock: vi.fn(),
   listWorktreeGraphMock: vi.fn(),
   invalidateAuthorizedRootsCacheMock: vi.fn(),
   prepareLocalWorktreeRootForRepoMock: vi.fn()
@@ -102,8 +105,14 @@ vi.mock('../git/repo', async () => {
 })
 
 vi.mock('../git/runner', () => ({
-  gitExecFileAsync: vi.fn(),
-  gitSpawn: gitSpawnMock
+  gitExecFileAsync: gitExecFileAsyncMock,
+  gitExecFileAsyncBuffer: vi.fn(),
+  gitStreamStdout: vi.fn(),
+  gitSpawn: gitSpawnMock,
+  gitOptionalLocksDisabledEnv: (env: NodeJS.ProcessEnv = process.env) => ({
+    ...env,
+    GIT_OPTIONAL_LOCKS: '0'
+  })
 }))
 
 vi.mock('../git/worktree', () => ({
@@ -146,6 +155,11 @@ vi.mock('./ssh', () => ({
 }))
 
 import { registerRepoHandlers } from './repos'
+import { clearSubmodulePathsCacheForTests, listSubmodulePaths } from '../git/status'
+
+beforeEach(() => {
+  clearGitCapabilityStateForTests()
+})
 
 describe('projectGroups IPC validation', () => {
   const handlers = new Map<string, (_event: unknown, args: unknown) => unknown>()
@@ -1006,6 +1020,8 @@ describe('repos:addRemote', () => {
     mockMultiplexer.request.mockReset()
     mockMultiplexer.notify.mockReset()
     gitSpawnMock.mockReset()
+    gitExecFileAsyncMock.mockReset().mockResolvedValue({ stdout: '', stderr: '' })
+    clearSubmodulePathsCacheForTests()
     prepareLocalWorktreeRootForRepoMock.mockReset().mockResolvedValue(undefined)
     gitSpawnMock.mockImplementation(() => {
       const proc = new EventEmitter() as EventEmitter & { stderr: EventEmitter }
@@ -1964,6 +1980,41 @@ describe('repos:add + repos:clone', () => {
     expect(result).toHaveProperty('externalWorktreeVisibility', 'hide')
   })
 
+  it('drops a same-path negative submodule cache before a local clone', async () => {
+    const destination = await createTempRoot()
+    const clonePath = join(destination, 'orca')
+    let cloned = false
+    gitExecFileAsyncMock.mockImplementation((args: string[]) =>
+      Promise.resolve({
+        stdout:
+          args[0] === 'config' && args.includes('.gitmodules') && cloned
+            ? 'submodule.lib.path vendor/lib\n'
+            : '',
+        stderr: ''
+      })
+    )
+    gitSpawnMock.mockImplementationOnce(() => {
+      const proc = createMockCloneProcess()
+      queueMicrotask(() => {
+        cloned = true
+        proc.emit('close', 0, null)
+      })
+      return proc
+    })
+
+    await expect(listSubmodulePaths(clonePath)).resolves.toEqual([])
+    await handlers.get('repos:clone')!(null, {
+      url: 'https://example.com/orca.git',
+      destination
+    })
+    await expect(listSubmodulePaths(clonePath)).resolves.toEqual(['vendor/lib'])
+
+    const configReads = gitExecFileAsyncMock.mock.calls.filter(
+      ([args]) => args[0] === 'config' && args.includes('.gitmodules')
+    )
+    expect(configReads).toHaveLength(2)
+  })
+
   it('preserves existing badgeColor when repos:clone upgrades folder->git after dedupe', async () => {
     const destination = await createTempRoot()
     const clonePath = join(destination, 'orca')
@@ -2698,15 +2749,22 @@ describe('repos:searchBaseRefs SSH relay', () => {
       query: '',
       limit: 1
     })
+    const repeatedResult = await handlers.get('repos:searchBaseRefs')!(null, {
+      repoId: 'r1',
+      query: '',
+      limit: 1
+    })
 
     expect(result).toEqual(['origin/main'])
+    expect(repeatedResult).toEqual(['origin/main'])
     const forEachRefCalls = mockGitProvider.exec.mock.calls.filter(
       (call) => (call[0] as string[])[0] === 'for-each-ref'
     )
-    expect(forEachRefCalls).toHaveLength(2)
+    expect(forEachRefCalls).toHaveLength(3)
     expect(forEachRefCalls[0][0]).toContain('--exclude=refs/remotes/**/HEAD')
     expect(forEachRefCalls[1][0]).not.toContain('--exclude=refs/remotes/**/HEAD')
     expect(forEachRefCalls[1][0]).toContain('--count=104')
+    expect(forEachRefCalls[2][0]).not.toContain('--exclude=refs/remotes/**/HEAD')
   })
 
   it('sends the widened `**` argv so all remotes and slash-named branches are discoverable', async () => {

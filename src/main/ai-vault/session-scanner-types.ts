@@ -25,6 +25,7 @@ export type AiVaultScanOptions = {
   openclawStateDir?: string
   openclawLegacyStateDir?: string
   piSessionsDir?: string
+  ompSessionsDir?: string
   droidSessionsDir?: string
   droidProjectsDir?: string
   kimiSessionsDir?: string
@@ -64,6 +65,26 @@ export type SessionParseResult = {
   issue: AiVaultScanIssue | null
 }
 
+export type ResumableParseFinalizeOptions = {
+  executionHostId?: ExecutionHostId
+  executionHostPlatform?: NodeJS.Platform | null
+}
+
+// One in-progress parse of an append-only transcript, resumable across scans.
+// The parse cache stores a state per file and feeds it only newly appended
+// lines; `clone` must deep-copy anything `consumeLine` mutates so a failed
+// read or a display-only trailing line can never corrupt the cached fold.
+export type ResumableSessionParseState = {
+  consumeLine(line: string): void
+  clone(): ResumableSessionParseState
+  // Refresh per-scan file metadata (mtime display string) without re-parsing.
+  touchFile(file: FileWithMtime): void
+  finalize(
+    platform: NodeJS.Platform,
+    options?: ResumableParseFinalizeOptions
+  ): Promise<AiVaultSession | null> | AiVaultSession | null
+}
+
 export type SessionAccumulator = {
   agent: AiVaultAgent
   sessionId: string
@@ -79,6 +100,9 @@ export type SessionAccumulator = {
   messageCount: number
   totalTokens: number
   previewMessages: AiVaultSessionPreviewMessage[]
+  // Recoverable signal for a zero-turn transcript (see AiVaultSession).
+  queuedMessageCount: number
+  subagentTranscriptCount: number
   latestTimestampMs: number
 }
 

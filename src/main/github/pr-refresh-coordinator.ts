@@ -13,6 +13,7 @@ import type {
 import { getPRForBranchOutcome, type GitHubPRBranchLookupOptions } from './client'
 import { getRateLimit, noteRateLimitSpend, rateLimitGuard } from './rate-limit'
 import { recordCoalescedCrashBreadcrumb } from '../crash-reporting/crash-breadcrumb-store'
+import { sendToTrustedUIRenderer } from '../ipc/ui'
 
 type QueueEntry = {
   key: string
@@ -211,11 +212,7 @@ function nextQueueOrder(): number {
 
 function broadcast(event: Omit<GitHubPRRefreshEvent, 'sequence'>, sequenceOverride?: number): void {
   const payload = { ...event, sequence: sequenceOverride ?? nextSequence() } as GitHubPRRefreshEvent
-  for (const wc of webContents.getAllWebContents()) {
-    if (!wc.isDestroyed()) {
-      wc.send('gh:prRefreshEvent', payload)
-    }
-  }
+  sendToTrustedUIRenderer('gh:prRefreshEvent', payload)
 }
 
 function refreshKey(candidate: GitHubPRRefreshCandidate): string {
@@ -708,20 +705,11 @@ async function drainQueue(): Promise<void> {
       )
 
       if (isBackground(next.reason)) {
-        const rateLimit = await getRateLimit()
-        if (!rateLimit.ok) {
-          const retryAt = Date.now() + 30_000
-          queue.set(next.key, { ...next, dueAt: retryAt })
-          broadcast({
-            aliases,
-            reason: next.reason,
-            status: 'paused',
-            pausedUntil: retryAt,
-            skippedReason: 'rate-limit'
-          })
-          scheduleDrain(30_000)
-          continue
-        }
+        // Why: the probe only warms rateLimitGuard's cached snapshot, so a
+        // failed probe must fail open — GHES with rate limiting disabled 404s
+        // every probe (#7553). A genuinely broken gh surfaces per-key as typed
+        // fetch outcomes instead (visible keys additionally back off).
+        await getRateLimit()
         const buckets = backgroundRefreshBuckets()
         const blockedGuard = buckets
           .map((bucket) => rateLimitGuard(bucket))

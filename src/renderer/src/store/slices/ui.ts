@@ -27,8 +27,14 @@ import type {
   WorktreeCardMode,
   WorkspaceHostOrder,
   WorkspaceHostScope,
-  VisibleWorkspaceHostIds
+  VisibleWorkspaceHostIds,
+  TopLevelView
 } from '../../../../shared/types'
+import type { UsagePercentageDisplay } from '../../../../shared/usage-percentage-display'
+import {
+  DEFAULT_USAGE_PERCENTAGE_DISPLAY,
+  normalizeUsagePercentageDisplay
+} from '../../../../shared/usage-percentage-display'
 import type { GitLabWorkItem } from '../../../../shared/gitlab-types'
 import type { LaunchSource } from '../../../../shared/telemetry-events'
 import type { TaskSourceContext } from '../../../../shared/task-source-context'
@@ -89,7 +95,8 @@ import type { OrcaHookScriptKind } from '../../lib/orca-hook-trust'
 import type { SettingsNavTarget } from '@/lib/settings-navigation-types'
 import {
   filterSetupScriptPromptDismissalsToValidRepos,
-  getSetupScriptPromptDismissalKey
+  getSetupScriptPromptDismissalKey,
+  sanitizeSetupScriptPromptDismissals
 } from '../../lib/setup-script-prompt'
 import { DEFAULT_PET_ID, isBundledPetId } from '../../components/pet/pet-models'
 import { revokeCustomPetBlobUrl } from '../../components/pet/pet-blob-cache'
@@ -264,6 +271,8 @@ function migrateStatusBarItems(items: readonly string[] | undefined): StatusBarI
 const DEFAULT_ON_PORTS_STATUS_BAR_ITEM: StatusBarItem = 'ports'
 const DEFAULT_ON_KIMI_STATUS_BAR_ITEM: StatusBarItem = 'kimi'
 const DEFAULT_ON_MINIMAX_STATUS_BAR_ITEM: StatusBarItem = 'minimax'
+const DEFAULT_ON_ANTIGRAVITY_STATUS_BAR_ITEM: StatusBarItem = 'antigravity'
+const DEFAULT_ON_GROK_STATUS_BAR_ITEM: StatusBarItem = 'grok'
 
 function normalizeHydratedVisibleWorkspaceHostIds(ui: PersistedUIState): VisibleWorkspaceHostIds {
   const visibleHostIds = normalizeVisibleExecutionHostIds(ui.visibleWorkspaceHostIds)
@@ -349,17 +358,54 @@ function collectAcknowledgedAgentNotificationId({
   }
 }
 
-function filterTrustedOrcaHooksToValidRepos(
-  trust: PersistedTrustedOrcaHooks,
-  validRepoIds: Set<string>
-): PersistedTrustedOrcaHooks {
+function isPlainPersistedRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === 'object' && !Array.isArray(value)
+}
+
+function sanitizePersistedRepoIds(value: unknown): string[] {
+  if (!Array.isArray(value)) {
+    return []
+  }
+  return value.filter((repoId): repoId is string => typeof repoId === 'string')
+}
+
+function sanitizeTrustedOrcaHooks(trust: unknown): PersistedTrustedOrcaHooks {
+  if (!isPlainPersistedRecord(trust)) {
+    return {}
+  }
   const next: PersistedTrustedOrcaHooks = {}
   for (const [repoId, entry] of Object.entries(trust)) {
+    if (!isSafePersistedRecordKey(repoId) || !isPlainPersistedRecord(entry)) {
+      continue
+    }
+    next[repoId] = entry as PersistedTrustedOrcaHooks[string]
+  }
+  return next
+}
+
+function filterTrustedOrcaHooksToValidRepos(
+  trust: unknown,
+  validRepoIds: Set<string>
+): PersistedTrustedOrcaHooks {
+  const sanitized = sanitizeTrustedOrcaHooks(trust)
+  const next: PersistedTrustedOrcaHooks = {}
+  for (const [repoId, entry] of Object.entries(sanitized)) {
     if (validRepoIds.has(repoId)) {
       next[repoId] = entry
     }
   }
   return next
+}
+
+function hydrateTrustedOrcaHooks(
+  trust: unknown,
+  validRepoIds: Set<string>
+): PersistedTrustedOrcaHooks {
+  const sanitized = sanitizeTrustedOrcaHooks(trust)
+  if (validRepoIds.size === 0) {
+    return sanitized
+  }
+  return filterTrustedOrcaHooksToValidRepos(sanitized, validRepoIds)
 }
 
 function isSafePersistedRecordKey(key: string): boolean {
@@ -450,6 +496,37 @@ function hydratedUIPartialMatchesState(state: AppState, hydrated: Partial<UISlic
   return Object.entries(hydrated).every(([key, value]) =>
     persistedUIValuesEqual(state[key as keyof AppState], value)
   )
+}
+
+// Record keys are exhaustive over TopLevelView, so a new view can't be silently missed.
+const TOP_LEVEL_VIEW_LOOKUP: Record<TopLevelView, true> = {
+  terminal: true,
+  settings: true,
+  tasks: true,
+  activity: true,
+  automations: true,
+  space: true,
+  skills: true,
+  mobile: true
+}
+const KNOWN_TOP_LEVEL_VIEWS = new Set<string>(Object.keys(TOP_LEVEL_VIEW_LOOKUP))
+
+function sanitizeHydratedActiveView(
+  value: PersistedUIState['activeView'],
+  experimentalActivityEnabled: boolean
+): TopLevelView {
+  // Why: older data (pre-activeView) or a view a different build doesn't have
+  // falls back to terminal rather than rendering nothing.
+  if (typeof value !== 'string' || !KNOWN_TOP_LEVEL_VIEWS.has(value)) {
+    return 'terminal'
+  }
+  // Why: activity is hidden when its setting is off, so restoring it lands on a
+  // hidden page (same guard as closeSettingsPage). mobile/automations stay
+  // functional when hidden, so only activity is gated here.
+  if (value === 'activity' && !experimentalActivityEnabled) {
+    return 'terminal'
+  }
+  return value as TopLevelView
 }
 
 let agentSendTargetModeInstanceCounter = 0
@@ -545,15 +622,7 @@ export type UISlice = {
   acknowledgedAgentsByPaneKey: Record<string, number>
   acknowledgeAgents: (paneKeys: string[]) => void
   unacknowledgeAgents: (paneKeys: string[]) => void
-  activeView:
-    | 'terminal'
-    | 'settings'
-    | 'tasks'
-    | 'activity'
-    | 'automations'
-    | 'space'
-    | 'skills'
-    | 'mobile'
+  activeView: TopLevelView
   previousViewBeforeTasks:
     | 'terminal'
     | 'settings'
@@ -702,11 +771,22 @@ export type UISlice = {
   } | null
   openSettingsTarget: (target: NonNullable<UISlice['settingsNavigationTarget']>) => void
   clearSettingsTarget: () => void
+  /**
+   * One-shot Appearance accordion to expand for nested Settings deep links
+   * (e.g. Usage percentages lives under Window & Sidebar). Cleared when
+   * Appearance consumes it.
+   */
+  appearanceAccordionDeepLink: 'interface' | 'terminal' | 'window' | null
+  setAppearanceAccordionDeepLink: (
+    section: NonNullable<UISlice['appearanceAccordionDeepLink']>
+  ) => void
+  clearAppearanceAccordionDeepLink: () => void
   activeModal:
     | 'none'
     | 'create-worktree'
     | 'edit-meta'
     | 'delete-worktree'
+    | 'forget-ssh-workspace'
     | 'confirm-add-project-from-folder'
     | 'confirm-non-git-folder'
     | 'confirm-remove-folder'
@@ -781,6 +861,8 @@ export type UISlice = {
   dismissMobileEmulatorAgentSetup: () => void
   projectOrderManualDefaultNoticeDismissed: boolean
   dismissProjectOrderManualDefaultNotice: () => void
+  usagePercentageDisplayChangeNoticeDismissed: boolean
+  dismissUsagePercentageDisplayChangeNotice: () => void
   usageEmptyStateDismissed: boolean
   dismissUsageEmptyState: () => void
   groupBy: 'none' | 'workspace-status' | 'repo' | 'pr-status'
@@ -828,10 +910,19 @@ export type UISlice = {
   toggleStatusBarItem: (item: StatusBarItem) => void
   statusBarVisible: boolean
   setStatusBarVisible: (v: boolean) => void
+  usagePercentageDisplay: UsagePercentageDisplay
+  setUsagePercentageDisplay: (display: UsagePercentageDisplay) => void
   workspacePortScan: { key: string; result: WorkspacePortScanResult } | null
   workspacePortScansByKey: Record<string, WorkspacePortScanResult>
   workspacePortScanRefreshing: boolean
   setWorkspacePortScan: (scan: { key: string; result: WorkspacePortScanResult } | null) => void
+  setWorkspacePortScanProjection: (
+    scan: { key: string; result: WorkspacePortScanResult } | null
+  ) => void
+  replaceWorkspacePortScans: (
+    scansByKey: Record<string, WorkspacePortScanResult>,
+    projection: { key: string; result: WorkspacePortScanResult } | null
+  ) => void
   setWorkspacePortScanForKey: (key: string, result: WorkspacePortScanResult | null) => void
   setWorkspacePortScanRefreshing: (refreshing: boolean) => void
   /** Whether the experimental pet overlay is currently visible. Persisted
@@ -883,7 +974,7 @@ export type UISlice = {
   setUIZoomLevel: (level: number) => void
   editorFontZoomLevel: number
   setEditorFontZoomLevel: (level: number) => void
-  hydratePersistedUI: (ui: PersistedUIState) => void
+  hydratePersistedUI: (ui: PersistedUIState, source?: 'startup' | 'sync') => void
   updateStatus: UpdateStatus
   setUpdateStatus: (status: UpdateStatus) => void
   // Why: cached changelog from the last 'available' status so the card still has
@@ -1442,6 +1533,9 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
   settingsNavigationTarget: null,
   openSettingsTarget: (target) => set({ settingsNavigationTarget: target }),
   clearSettingsTarget: () => set({ settingsNavigationTarget: null }),
+  appearanceAccordionDeepLink: null,
+  setAppearanceAccordionDeepLink: (section) => set({ appearanceAccordionDeepLink: section }),
+  clearAppearanceAccordionDeepLink: () => set({ appearanceAccordionDeepLink: null }),
 
   activeModal: 'none',
   modalData: {},
@@ -1867,6 +1961,17 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
       window.api.ui.set({ projectOrderManualDefaultNoticeDismissed: true }).catch(console.error)
       return { projectOrderManualDefaultNoticeDismissed: true }
     }),
+  // Why: defaults true so pre-hydration / brand-new sessions never flash the
+  // change notice before persistence resolves eligibility.
+  usagePercentageDisplayChangeNoticeDismissed: true,
+  dismissUsagePercentageDisplayChangeNotice: () =>
+    set((s) => {
+      if (s.usagePercentageDisplayChangeNoticeDismissed) {
+        return s
+      }
+      window.api.ui.set({ usagePercentageDisplayChangeNoticeDismissed: true }).catch(console.error)
+      return { usagePercentageDisplayChangeNoticeDismissed: true }
+    }),
   usageEmptyStateDismissed: false,
   dismissUsageEmptyState: () =>
     set((s) => {
@@ -2064,21 +2169,75 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
     window.api.ui.set({ statusBarVisible: v }).catch(console.error)
     set({ statusBarVisible: v })
   },
+  usagePercentageDisplay: DEFAULT_USAGE_PERCENTAGE_DISPLAY,
+  setUsagePercentageDisplay: (display) => {
+    const normalized = normalizeUsagePercentageDisplay(display)
+    // Why: changing the control is the discovery path; permanently dismiss the
+    // one-time change notice so it does not reappear after the user adapted.
+    window.api.ui
+      .set({
+        usagePercentageDisplay: normalized,
+        usagePercentageDisplayChangeNoticeDismissed: true
+      })
+      .catch(console.error)
+    set({
+      usagePercentageDisplay: normalized,
+      usagePercentageDisplayChangeNoticeDismissed: true
+    })
+  },
   workspacePortScan: null,
   workspacePortScansByKey: {},
   workspacePortScanRefreshing: false,
   setWorkspacePortScan: (scan) =>
     set((state) => {
       if (!scan) {
+        if (!state.workspacePortScan && Object.keys(state.workspacePortScansByKey).length === 0) {
+          return state
+        }
         return { workspacePortScan: null, workspacePortScansByKey: {} }
+      }
+      if (
+        state.workspacePortScan?.key === scan.key &&
+        state.workspacePortScan.result === scan.result &&
+        state.workspacePortScansByKey[scan.key] === scan.result
+      ) {
+        return state
       }
       return {
         workspacePortScan: scan,
         workspacePortScansByKey: { ...state.workspacePortScansByKey, [scan.key]: scan.result }
       }
     }),
+  // Why: target changes rebuild the aggregate without republishing or clearing per-host scans.
+  setWorkspacePortScanProjection: (scan) =>
+    set((state) => {
+      if (
+        state.workspacePortScan?.key === scan?.key &&
+        state.workspacePortScan?.result === scan?.result
+      ) {
+        return state
+      }
+      return { workspacePortScan: scan }
+    }),
+  // Why: host-set changes must remove stale per-host scans in one store update so a
+  // large disconnected host set cannot fan out map notifications to every subscriber.
+  replaceWorkspacePortScans: (scansByKey, projection) =>
+    set((state) => {
+      if (
+        state.workspacePortScansByKey === scansByKey &&
+        state.workspacePortScan?.key === projection?.key &&
+        state.workspacePortScan?.result === projection?.result
+      ) {
+        return state
+      }
+      return { workspacePortScansByKey: scansByKey, workspacePortScan: projection }
+    }),
   setWorkspacePortScanForKey: (key, result) =>
     set((state) => {
+      const currentResult = state.workspacePortScansByKey[key]
+      if (currentResult === result || (!result && !currentResult)) {
+        return state
+      }
       const nextScansByKey = { ...state.workspacePortScansByKey }
       if (result) {
         nextScansByKey[key] = result
@@ -2189,9 +2348,10 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
   editorFontZoomLevel: 0,
   setEditorFontZoomLevel: (level) => set({ editorFontZoomLevel: level }),
 
-  hydratePersistedUI: (ui) =>
+  hydratePersistedUI: (ui, source = 'sync') =>
     set((s) => {
       const validRepoIds = new Set(s.repos.map((repo) => repo.id))
+      const persistedFilterRepoIds = sanitizePersistedRepoIds(ui.filterRepoIds)
       // Why: persisted UI from pre-rename builds used sidekick* keys. Read
       // those only as fallbacks so new pet* writes win immediately after upgrade.
       const customPets = Array.isArray(ui.customPets)
@@ -2223,18 +2383,30 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
         ui._minimaxStatusBarDefaultAdded || statusBarItems.includes('minimax')
           ? statusBarItems
           : [...statusBarItems, DEFAULT_ON_MINIMAX_STATUS_BAR_ITEM]
+      const statusBarItemsWithAntigravity =
+        ui._antigravityStatusBarDefaultAdded || statusBarItemsWithMiniMax.includes('antigravity')
+          ? statusBarItemsWithMiniMax
+          : [...statusBarItemsWithMiniMax, DEFAULT_ON_ANTIGRAVITY_STATUS_BAR_ITEM]
+      const statusBarItemsWithGrok =
+        ui._grokStatusBarDefaultAdded || statusBarItemsWithAntigravity.includes('grok')
+          ? statusBarItemsWithAntigravity
+          : [...statusBarItemsWithAntigravity, DEFAULT_ON_GROK_STATUS_BAR_ITEM]
       if (
         (!ui._portsStatusBarDefaultAdded ||
           !ui._kimiStatusBarDefaultAdded ||
-          !ui._minimaxStatusBarDefaultAdded) &&
+          !ui._minimaxStatusBarDefaultAdded ||
+          !ui._antigravityStatusBarDefaultAdded ||
+          !ui._grokStatusBarDefaultAdded) &&
         typeof window !== 'undefined'
       ) {
         window.api.ui
           .set({
-            statusBarItems: statusBarItemsWithMiniMax,
+            statusBarItems: statusBarItemsWithGrok,
             _portsStatusBarDefaultAdded: true,
             _kimiStatusBarDefaultAdded: true,
-            _minimaxStatusBarDefaultAdded: true
+            _minimaxStatusBarDefaultAdded: true,
+            _antigravityStatusBarDefaultAdded: true,
+            _grokStatusBarDefaultAdded: true
           })
           .catch(console.error)
       }
@@ -2283,7 +2455,12 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
         hideDefaultBranchWorkspace: ui.hideDefaultBranchWorkspace ?? false,
         hideAutomationGeneratedWorkspaces: ui.hideAutomationGeneratedWorkspaces === true,
         showDotfilesByWorktree: sanitizeShowDotfilesByWorktree(ui.showDotfilesByWorktree),
-        filterRepoIds: (ui.filterRepoIds ?? []).filter((repoId) => validRepoIds.has(repoId)),
+        // Why: startup hydrates UI before repo catalogs now. With no catalog
+        // loaded yet, defer repo-filter validation to the all-host repo refresh.
+        filterRepoIds:
+          validRepoIds.size === 0
+            ? persistedFilterRepoIds
+            : persistedFilterRepoIds.filter((repoId) => validRepoIds.has(repoId)),
         collapsedGroups: new Set(ui.collapsedGroups ?? []),
         uiZoomLevel: ui.uiZoomLevel ?? 0,
         editorFontZoomLevel: ui.editorFontZoomLevel ?? 0,
@@ -2294,8 +2471,9 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
         workspaceBoardOpacity: clampWorkspaceBoardOpacity(ui.workspaceBoardOpacity),
         workspaceBoardColumnWidth: clampWorkspaceBoardColumnWidth(ui.workspaceBoardColumnWidth),
         syncTaskStatusFromWorkspaceBoard: ui.syncTaskStatusFromWorkspaceBoard === true,
-        statusBarItems: statusBarItemsWithMiniMax,
+        statusBarItems: statusBarItemsWithGrok,
         statusBarVisible: ui.statusBarVisible ?? true,
+        usagePercentageDisplay: normalizeUsagePercentageDisplay(ui.usagePercentageDisplay),
         // Why: absent → true so existing users see the pet the first time
         // they enable the experimental flag. Only an explicit Hide pet
         // dismissal persists a `false` value.
@@ -2332,14 +2510,14 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
           typeof ui.contextualToursAutoEligible === 'boolean'
             ? ui.contextualToursAutoEligible
             : null,
-        trustedOrcaHooks: filterTrustedOrcaHooksToValidRepos(
-          ui.trustedOrcaHooks ?? {},
-          validRepoIds
-        ),
-        setupScriptPromptDismissedRepoIds: filterSetupScriptPromptDismissalsToValidRepos(
-          ui.setupScriptPromptDismissedRepoIds,
-          validRepoIds
-        ),
+        trustedOrcaHooks: hydrateTrustedOrcaHooks(ui.trustedOrcaHooks, validRepoIds),
+        setupScriptPromptDismissedRepoIds:
+          validRepoIds.size === 0
+            ? sanitizeSetupScriptPromptDismissals(ui.setupScriptPromptDismissedRepoIds)
+            : filterSetupScriptPromptDismissalsToValidRepos(
+                ui.setupScriptPromptDismissedRepoIds,
+                validRepoIds
+              ),
         setupGuideSidebarDismissed: ui.setupGuideSidebarDismissed === true,
         setupGuideBrowserMilestoneMigrated: ui.setupGuideBrowserMilestoneMigrated === true,
         setupGuideBrowserMilestoneLegacyComplete:
@@ -2349,6 +2527,10 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
         mobileEmulatorAgentSetupDismissed: ui.mobileEmulatorAgentSetupDismissed === true,
         projectOrderManualDefaultNoticeDismissed:
           ui.projectOrderManualDefaultNoticeDismissed === true,
+        // Why: load() resolves this for existing vs new profiles; treat only
+        // explicit true as dismissed so a false from migration still surfaces.
+        usagePercentageDisplayChangeNoticeDismissed:
+          ui.usagePercentageDisplayChangeNoticeDismissed === true,
         // Why: default false when undefined so existing users still see the CTA;
         // only an explicit dismissal persists true.
         usageEmptyStateDismissed: ui.usageEmptyStateDismissed === true,
@@ -2365,6 +2547,14 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
         workspaceCleanupDismissals: sanitizeWorkspaceCleanupDismissals(
           ui.workspaceCleanup?.dismissals
         ),
+        // Why: restore the view only from the startup hydration. The same action also
+        // runs on every cross-window ui:stateChanged broadcast (source 'sync', the
+        // default); re-applying activeView there would yank the user's current
+        // per-window view (navigation state, not a synced preference).
+        activeView:
+          source === 'startup'
+            ? sanitizeHydratedActiveView(ui.activeView, s.settings?.experimentalActivity === true)
+            : s.activeView,
         persistedUIReady: true
       }
       // Why: main rebroadcasts UI written by any client. Identical hydration must

@@ -13,6 +13,7 @@ import { MAX_THEME_RESULTS } from './SettingsConstants'
 import {
   filterFontSuggestions,
   filterTerminalThemeOptions,
+  getRenderedFontSuggestions,
   isSettingsFormOptionQueryTooLarge
 } from './settings-form-option-filter'
 import { cn } from '@/lib/utils'
@@ -286,6 +287,7 @@ type FontAutocompleteProps = {
   suggestions: string[]
   onChange: (value: string) => void
   placeholder?: string
+  onRequestSuggestions?: () => void
   /** Fires with whichever option the user is currently highlighting in the
    *  dropdown (via mouse hover or keyboard arrow), or null when nothing is
    *  highlighted / the dropdown is closed. Lets a consumer show a live
@@ -588,6 +590,7 @@ export function FontAutocomplete({
   suggestions,
   onChange,
   placeholder = 'SF Mono',
+  onRequestSuggestions,
   onPreviewFontFamily
 }: FontAutocompleteProps): React.JSX.Element {
   const [query, setQuery] = useState(value)
@@ -619,8 +622,15 @@ export function FontAutocomplete({
     }
   }
 
+  const requestSuggestions = useCallback((): void => {
+    onRequestSuggestions?.()
+  }, [onRequestSuggestions])
+
   const handleOpenChange = (nextOpen: boolean): void => {
     setOpen(nextOpen)
+    if (nextOpen) {
+      requestSuggestions()
+    }
     if (!nextOpen) {
       setIsFilteringQuery(false)
     }
@@ -636,6 +646,10 @@ export function FontAutocomplete({
   // still reveal every installed font instead of only fonts sharing that name.
   const visibleSuggestions =
     !isFilteringQuery && normalizedQuery === normalizedValue ? suggestions : filteredSuggestions
+  const renderedSuggestions = useMemo(
+    () => getRenderedFontSuggestions(visibleSuggestions, highlightedIndex),
+    [visibleSuggestions, highlightedIndex]
+  )
 
   // Why: sync the highlighted index during render rather than via useEffect so
   // the correct item is highlighted on the very first paint after open/filter
@@ -699,12 +713,14 @@ export function FontAutocomplete({
               value={query}
               onChange={(e) => {
                 const next = e.target.value
+                requestSuggestions()
                 setQuery(next)
                 setIsFilteringQuery(true)
                 onChange(next)
                 setOpen(true)
               }}
               onFocus={() => {
+                requestSuggestions()
                 setIsFilteringQuery(false)
                 setOpen(true)
               }}
@@ -795,6 +811,7 @@ export function FontAutocomplete({
                     setIsFilteringQuery(false)
                   }
                   if (nextOpen) {
+                    requestSuggestions()
                     focusInput()
                   }
                 }}
@@ -831,29 +848,29 @@ export function FontAutocomplete({
           }}
         >
           <ScrollArea
-            className={visibleSuggestions.length > 8 ? 'h-64' : undefined}
+            className={renderedSuggestions.length > 8 ? 'h-64' : undefined}
             style={popoverAvailableHeightStyle}
             viewportProps={{ style: popoverAvailableHeightStyle }}
           >
             <div id={listboxId} role="listbox" className="p-1">
               {visibleSuggestions.length > 0 ? (
-                visibleSuggestions.map((font, index) => (
+                renderedSuggestions.map(({ font, sourceIndex }) => (
                   <button
                     key={font}
                     type="button"
-                    id={`${listboxId}-option-${index}`}
+                    id={`${listboxId}-option-${sourceIndex}`}
                     role="option"
-                    aria-selected={index === highlightedIndex}
+                    aria-selected={sourceIndex === highlightedIndex}
                     ref={(element) => {
-                      if (element && index === highlightedIndex) {
+                      if (element && sourceIndex === highlightedIndex) {
                         element.scrollIntoView({ block: 'nearest' })
                       }
                     }}
                     onMouseDown={(e) => e.preventDefault()}
-                    onMouseEnter={() => setHighlightedIndex(index)}
+                    onMouseEnter={() => setHighlightedIndex(sourceIndex)}
                     onClick={() => commitValue(font)}
                     className={`flex w-full items-center justify-between rounded-sm px-3 py-2 text-left text-sm transition-colors ${
-                      index === highlightedIndex
+                      sourceIndex === highlightedIndex
                         ? 'bg-accent text-accent-foreground'
                         : 'hover:bg-muted/60'
                     }`}

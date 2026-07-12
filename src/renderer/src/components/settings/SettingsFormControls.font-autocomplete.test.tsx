@@ -4,6 +4,7 @@ import { act, useState, type ReactNode } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { FontAutocomplete } from './SettingsFormControls'
+import { FONT_SUGGESTION_RENDER_LIMIT } from './settings-form-option-filter'
 
 vi.mock('@/i18n/i18n', () => ({
   translate: (_key: string, defaultValue: string) => defaultValue
@@ -185,5 +186,86 @@ describe('FontAutocomplete', () => {
     await typeIntoInput(input, 'Jet')
 
     expect(getOptionLabels()).toEqual(['JetBrains Mono'])
+  })
+
+  it('requests installed suggestions only after the picker is used', async () => {
+    const requestSuggestions = vi.fn()
+
+    function Harness(): ReactNode {
+      const [value, setValue] = useState('Geist')
+      return (
+        <FontAutocomplete
+          value={value}
+          suggestions={['Geist', 'JetBrains Mono']}
+          onChange={setValue}
+          onRequestSuggestions={requestSuggestions}
+        />
+      )
+    }
+
+    await act(async () => {
+      root.render(<Harness />)
+    })
+
+    expect(requestSuggestions).not.toHaveBeenCalled()
+
+    await act(async () => {
+      getInput().focus()
+    })
+
+    expect(requestSuggestions).toHaveBeenCalledOnce()
+  })
+
+  it('searches suggestions past the previous 320 font cutoff', async () => {
+    const suggestions = [
+      ...Array.from({ length: 350 }, (_value, index) => `System Font ${index}`),
+      'Zed Mono'
+    ]
+
+    function Harness(): ReactNode {
+      const [value, setValue] = useState('System Font 0')
+      return <FontAutocomplete value={value} suggestions={suggestions} onChange={setValue} />
+    }
+
+    await act(async () => {
+      root.render(<Harness />)
+    })
+
+    const input = getInput()
+
+    await act(async () => {
+      input.focus()
+    })
+    expect(getOptionLabels()).toHaveLength(FONT_SUGGESTION_RENDER_LIMIT)
+    expect(getOptionLabels()).not.toContain('Zed Mono')
+
+    await typeIntoInput(input, 'Zed')
+
+    expect(getOptionLabels()).toEqual(['Zed Mono'])
+  })
+
+  it('renders the selected late-list font even when the full list is capped', async () => {
+    const suggestions = [
+      ...Array.from({ length: FONT_SUGGESTION_RENDER_LIMIT + 30 }, (_value, index) => {
+        return `System Font ${index}`
+      }),
+      'Zed Mono'
+    ]
+
+    function Harness(): ReactNode {
+      const [value, setValue] = useState('Zed Mono')
+      return <FontAutocomplete value={value} suggestions={suggestions} onChange={setValue} />
+    }
+
+    await act(async () => {
+      root.render(<Harness />)
+    })
+
+    await act(async () => {
+      getInput().focus()
+    })
+
+    expect(getOptionLabels()).toHaveLength(FONT_SUGGESTION_RENDER_LIMIT)
+    expect(getOptionLabels().at(-1)).toBe('Zed Mono')
   })
 })

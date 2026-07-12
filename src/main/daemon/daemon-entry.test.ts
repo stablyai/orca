@@ -29,4 +29,29 @@ describe('daemon-entry parseArgs', () => {
   it('throws with no args', () => {
     expect(() => parseArgs([])).toThrow('Usage:')
   })
+
+  it('omits logFilePath when --log-file is absent (adopted old daemons)', () => {
+    const result = parseArgs(['--socket', '/tmp/t.sock', '--token', '/tmp/t.token'])
+    expect(result).not.toHaveProperty('logFilePath')
+  })
+
+  it('parses --log-file when present', () => {
+    const result = parseArgs([
+      '--socket',
+      '/tmp/t.sock',
+      '--token',
+      '/tmp/t.token',
+      '--log-file',
+      '/tmp/daemon.log'
+    ])
+    expect(result).toEqual({
+      socketPath: '/tmp/t.sock',
+      tokenPath: '/tmp/t.token',
+      logFilePath: '/tmp/daemon.log'
+    })
+  })
+
+  it('still requires --socket and --token when --log-file is given', () => {
+    expect(() => parseArgs(['--log-file', '/tmp/daemon.log'])).toThrow('Usage:')
+  })
 })

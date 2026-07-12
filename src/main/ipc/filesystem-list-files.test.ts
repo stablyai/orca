@@ -365,6 +365,9 @@ describe('filesystem-list-files', () => {
       expect(gitCalls.length).toBe(2)
       expect(gitCalls[0][1]).toContain('ls-files')
       expect(gitCalls[0][1]).toContain('-s')
+      expect(gitCalls[0][1]).toContain('--directory')
+      expect(gitCalls[1][1]).toContain('--directory')
+      expect(gitCalls[1][1]).toContain('--no-empty-directory')
 
       // Should include valid files and filter node_modules
       expect(result).toContain('src/index.ts')
@@ -469,6 +472,60 @@ describe('filesystem-list-files', () => {
         expect(gitP1.listenerCount('close')).toBe(0)
       } finally {
         vi.useRealTimers()
+      }
+    })
+
+    it('keeps primary results when only the ignored pass times out', async () => {
+      checkRgAvailableMock.mockResolvedValue(false)
+      const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
+      vi.useFakeTimers()
+
+      try {
+        const revParseProc = createMockProcess()
+        const gitP1 = createMockProcess()
+        const gitP2 = createMockProcess()
+        let callIndex = 0
+
+        spawnMock.mockImplementation((cmd: string, args: string[]) => {
+          if (cmd === 'git' && args.includes('rev-parse')) {
+            return revParseProc
+          }
+          if (cmd === 'git' && args.includes('ls-files')) {
+            callIndex++
+            return callIndex === 1 ? gitP1 : gitP2
+          }
+          return createMockProcess()
+        })
+
+        const storeMock = {} as unknown as Store
+        const promise = listQuickOpenFiles('/mock/root', storeMock)
+
+        await Promise.resolve()
+        await Promise.resolve()
+        await Promise.resolve()
+        revParseProc.emit('close', 0, null)
+        await Promise.resolve()
+        await Promise.resolve()
+        await Promise.resolve()
+
+        ;(gitP1.stdout as unknown as EventEmitter).emit(
+          'data',
+          `${staged('100644', 'src/index.ts')}\0`
+        )
+        gitP1.emit('close', 0, null)
+        // Ignored entries streamed before the timeout are kept.
+        ;(gitP2.stdout as unknown as EventEmitter).emit('data', 'dist/generated.js\0')
+
+        await vi.advanceTimersByTimeAsync(10000)
+
+        await expect(promise).resolves.toEqual(
+          expect.arrayContaining(['src/index.ts', 'dist/generated.js'])
+        )
+        expect(gitP2.kill).toHaveBeenCalled()
+        expect(warnSpy).toHaveBeenCalled()
+      } finally {
+        vi.useRealTimers()
+        warnSpy.mockRestore()
       }
     })
 

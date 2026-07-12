@@ -49,7 +49,13 @@ import {
 } from './use-native-chat-live-session'
 
 function assistant(id: string, text: string): NativeChatMessage {
-  return { id, role: 'assistant', blocks: [{ type: 'text', text }], timestamp: 2, source: 'transcript' }
+  return {
+    id,
+    role: 'assistant',
+    blocks: [{ type: 'text', text }],
+    timestamp: 2,
+    source: 'transcript'
+  }
 }
 
 function user(id: string, text: string): NativeChatMessage {
@@ -176,7 +182,12 @@ describe('useNativeChatLiveSession — transport routing', () => {
 
     expect(transportFactory).toHaveBeenCalledWith('env-1')
     const transport = getMockTransport('env-1')
-    expect(transport.readSession).toHaveBeenCalledWith(AGENT, SESSION, expect.any(Number), undefined)
+    expect(transport.readSession).toHaveBeenCalledWith(
+      AGENT,
+      SESSION,
+      expect.any(Number),
+      undefined
+    )
     expect(transport.subscribe).toHaveBeenCalledOnce()
   })
 

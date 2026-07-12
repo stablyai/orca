@@ -51,6 +51,40 @@ export type SshTarget = {
   systemSshConnectionReuse?: boolean
 }
 
+/** Identity of a removed SSH target, recorded so that re-adding the same host
+ *  can re-point orphaned repos/worktrees from the old (deleted) target id to
+ *  the new one. Repos store only the target id, so without this record the old
+ *  workspaces are stranded on a dead id when the target is removed. */
+export type RemovedSshTargetTombstone = {
+  /** The id the removed target had — what orphaned repos/worktrees still point at. */
+  oldTargetId: string
+  /** ssh-config alias, if any — the most stable re-adoption key. */
+  configHost?: string
+  host: string
+  port: number
+  username: string
+  label: string
+  /** ms epoch when the target was removed, for pruning old tombstones. */
+  removedAt: number
+}
+
+/** Exact repo ownership changes made while re-adopting a removed SSH host. */
+export type SshRepoReadoption = {
+  oldTargetId: string
+  newTargetId: string
+  repoIds: string[]
+}
+
+export type SshTargetAddResult = {
+  target: SshTarget
+  repoReadoptions: SshRepoReadoption[]
+}
+
+export type SshConfigImportResult = {
+  targets: SshTarget[]
+  repoReadoptions: SshRepoReadoption[]
+}
+
 export type SavedPortForward = {
   localPort: number
   remoteHost: string

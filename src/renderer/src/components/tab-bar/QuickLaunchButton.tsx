@@ -4,6 +4,7 @@ import { toast } from 'sonner'
 import { DropdownMenuItem, DropdownMenuShortcut } from '@/components/ui/dropdown-menu'
 import { getAgentCatalog, AgentIcon } from '@/lib/agent-catalog'
 import { useAppStore } from '@/store'
+import { getConnectionIdFromState } from '@/lib/connection-context'
 import { useDetectedAgents } from '@/hooks/useDetectedAgents'
 import { useOptionalShortcutLabel } from '@/hooks/useShortcutLabel'
 import { launchAgentInNewTab } from '@/lib/launch-agent-in-new-tab'
@@ -103,15 +104,7 @@ function QuickLaunchAgentMenuItemsInner({
   // snapshot via getState()). This ensures the component re-renders when the
   // SSH connection state changes. Returns undefined when the worktree isn't
   // found (store not hydrated), null for local repos, string for remote.
-  const connectionId = useAppStore((s) => {
-    const allWorktrees = Object.values(s.worktreesByRepo ?? {}).flat()
-    const worktree = allWorktrees.find((w) => w.id === worktreeId)
-    if (!worktree) {
-      return undefined
-    }
-    const repo = s.repos?.find((r) => r.id === worktree.repoId)
-    return repo?.connectionId ?? null
-  })
+  const connectionId = useAppStore((s) => getConnectionIdFromState(s, worktreeId))
   const { detectedIds } = useDetectedAgents(connectionId)
   const defaultAgent = useAppStore((s) => s.settings?.defaultTuiAgent)
   const disabledAgents = useAppStore((s) => s.settings?.disabledTuiAgents ?? [])

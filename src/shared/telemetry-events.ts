@@ -298,7 +298,6 @@ export const SETTINGS_CHANGED_WHITELIST = [
   'experimentalTerminalAttention',
   'experimentalAgentHibernation',
   'experimentalEphemeralVms',
-  'experimentalWorktreeSymlinks',
   'geminiCliOAuthEnabled',
   'openAgentTabsInChatByDefault'
 ] as const satisfies readonly BooleanGlobalSettingsKey[]
@@ -435,6 +434,13 @@ const agentErrorSchema = z
     nth_repo_added: nthRepoAddedSchema
   })
   .strict()
+
+// Why: emitted when the terminal daemon cannot start and terminals fall back to
+// the (non-persistent) local provider. Enum-only `error_class` — the raw daemon
+// stderr tail stays in local logs and never reaches the wire (paths/usernames).
+// A spike in this event is the fleet-wide signal for a daemon outage like
+// v1.4.129-rc.1, which was otherwise invisible until users filed bug reports.
+const daemonStartFailedSchema = z.object({ error_class: errorClassSchema }).strict()
 
 const settingsChangedSchema = z
   .object({
@@ -1364,6 +1370,25 @@ const terminalPaneSplitSchema = z
   })
   .strict()
 
+// Why: measures the changed-on-disk conflict flow (issue #7265) — how often
+// conflicts surface per transport (false-banner detection on ssh/runtime
+// echoes) and which resolution users pick. Deliberately path-free.
+const editorExternalChangeConflictShownSchema = z
+  .object({
+    surface: z.enum(['edit', 'unstaged-diff']),
+    transport: z.enum(['local', 'ssh', 'runtime']),
+    origin: z.enum(['live', 'restore'])
+  })
+  .strict()
+
+const editorExternalChangeConflictActionSchema = z
+  .object({
+    action: z.enum(['reload', 'keep', 'compare', 'undo_reload', 'save_overwrite']),
+    surface: z.enum(['edit', 'unstaged-diff']),
+    transport: z.enum(['local', 'ssh', 'runtime'])
+  })
+  .strict()
+
 // ── Event registry: the one record the validator consumes ───────────────
 //
 // The validator does `eventSchemas[name].safeParse(props)`. `EventMap` is
@@ -1400,6 +1425,8 @@ export const eventSchemas = {
   agent_error: agentErrorSchema,
   agent_hook_install_failed: agentHookInstallFailedSchema,
   agent_hook_unattributed: agentHookUnattributedSchema,
+
+  daemon_start_failed: daemonStartFailedSchema,
 
   settings_changed: settingsChangedSchema,
 
@@ -1450,6 +1477,9 @@ export const eventSchemas = {
   setup_guide_closed: setupGuideClosedSchema,
   setup_guide_step_completed: setupGuideStepCompletedSchema,
   terminal_pane_split: terminalPaneSplitSchema,
+
+  editor_external_change_conflict_shown: editorExternalChangeConflictShownSchema,
+  editor_external_change_conflict_action: editorExternalChangeConflictActionSchema,
 
   smart_sort_class_distribution: smartSortClassDistributionSchema,
   smart_sort_class_1_promotion: smartSortClass1PromotionSchema,

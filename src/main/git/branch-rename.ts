@@ -1,4 +1,4 @@
-import { isNoUpstreamError } from '../../shared/git-remote-error'
+import { isNoUpstreamError, stripCredentialsFromMessage } from '../../shared/git-remote-error'
 import {
   resolveEffectiveGitUpstream,
   type GitCommandRunner
@@ -11,22 +11,31 @@ import {
  */
 export type GitExec = GitCommandRunner
 
+export type BranchUpstreamProbe =
+  | { outcome: 'has-upstream' }
+  | { outcome: 'no-upstream' }
+  | { outcome: 'probe-failed'; message: string }
+
 /**
- * True when the branch has a configured upstream — i.e. it has been pushed or
- * is tracking a remote. Auto-rename refuses to touch such a branch because
- * `git branch -m` would orphan the remote branch and break any open PR.
+ * Whether the branch has an upstream — i.e. it has been pushed or is tracking
+ * a remote. Auto-rename refuses to touch such a branch because `git branch -m`
+ * would orphan the remote branch and break any open PR.
  */
-export async function branchHasUpstream(exec: GitExec): Promise<boolean> {
+export async function probeBranchUpstream(exec: GitExec): Promise<BranchUpstreamProbe> {
   try {
-    return (await resolveEffectiveGitUpstream(exec)) !== null
+    const upstream = await resolveEffectiveGitUpstream(exec)
+    return { outcome: upstream !== null ? 'has-upstream' : 'no-upstream' }
   } catch (error) {
     if (isNoUpstreamError(error)) {
-      return false
+      return { outcome: 'no-upstream' }
     }
-    // Why: an unexpected failure (detached HEAD, corruption, transport error)
-    // is not proof there's no upstream. Stay conservative and report "has
-    // upstream" so the caller skips the rename rather than risk a published branch.
-    return true
+    // Why: an unexpected failure is not proof either way — report it as its own
+    // outcome so callers skip the rename but stay retryable (issue #7808).
+    // The message surfaces in the UI, so scrub credential-bearing remote URLs.
+    return {
+      outcome: 'probe-failed',
+      message: stripCredentialsFromMessage(error instanceof Error ? error.message : String(error))
+    }
   }
 }
 

@@ -42,6 +42,31 @@ describe('electron-builder native rebuild hook', () => {
     ])
   })
 
+  it('builds the native CLI launcher before packaging Windows resources', () => {
+    const calls = []
+    const result = runElectronBuilderNativeRebuild(
+      {
+        platform: { nodeName: 'win32' },
+        arch: 'x64'
+      },
+      (...args) => calls.push(args)
+    )
+
+    expect(result).toBe(false)
+    expect(calls).toEqual([
+      [
+        process.execPath,
+        ['config/scripts/build-windows-cli-launcher.mjs'],
+        expect.objectContaining({ stdio: 'inherit' })
+      ],
+      [
+        process.execPath,
+        ['config/scripts/rebuild-native-deps.mjs', '--platform=win32', '--arch=x64', '--force'],
+        expect.objectContaining({ stdio: 'inherit' })
+      ]
+    ])
+  })
+
   it('rejects incomplete electron-builder contexts', () => {
     expect(() => buildNativeRebuildArgs({ arch: 'x64' })).toThrow(/platform/)
     expect(() => buildNativeRebuildArgs({ platform: { nodeName: 'linux' } })).toThrow(/arch/)

@@ -15,6 +15,18 @@ import type {
   CoordinatorRun
 } from './types'
 import { buildOrchestrationTaskDisplayMetadata } from '../../../shared/orchestration-task-display'
+import { parsePaneKey } from '../../../shared/stable-pane-id'
+
+// Why: leaf UUID is the remint-stable pane identity; the tab half changes on
+// break-out. Exact string match covers legacy/unparseable keys.
+function isEquivalentPaneKey(a: string, b: string): boolean {
+  if (a === b) {
+    return true
+  }
+  const aLeaf = parsePaneKey(a)?.leafId
+  const bLeaf = parsePaneKey(b)?.leafId
+  return Boolean(aLeaf && bLeaf && aLeaf === bLeaf)
+}
 
 export type {
   MessageType,
@@ -41,7 +53,10 @@ function generateId(prefix: string): string {
 // the terminal that created a task so task-record worktree creation can infer
 // the parent workspace even when no dispatch context exists. v4 → v5 adds
 // explicit task_title/display_name fields for orchestration worker UI labels.
-const SCHEMA_VERSION = 5
+// v5 → v6 adds pane-identity columns (dispatch_contexts.assignee_pane_key,
+// messages.sender_pane_key) so worker_done ownership survives terminal handle
+// remints without accepting completions from unrelated panes.
+const SCHEMA_VERSION = 6
 
 export class OrchestrationDb {
   private db: Database.Database
@@ -75,7 +90,8 @@ export class OrchestrationDb {
         read          INTEGER NOT NULL DEFAULT 0,
         sequence      INTEGER PRIMARY KEY AUTOINCREMENT,
         created_at    TEXT NOT NULL DEFAULT (datetime('now')),
-        delivered_at  TEXT
+        delivered_at  TEXT,
+        sender_pane_key TEXT
       );
 
       CREATE UNIQUE INDEX IF NOT EXISTS idx_messages_id ON messages(id);
@@ -107,6 +123,7 @@ export class OrchestrationDb {
         id                  TEXT PRIMARY KEY,
         task_id             TEXT NOT NULL,
         assignee_handle     TEXT,
+        assignee_pane_key   TEXT,
         status              TEXT NOT NULL DEFAULT 'pending'
           CHECK(status IN ('pending', 'dispatched', 'completed', 'failed', 'circuit_broken')),
         failure_count       INTEGER NOT NULL DEFAULT 0,
@@ -246,6 +263,14 @@ export class OrchestrationDb {
           this.db.exec(`ALTER TABLE tasks ADD COLUMN display_name TEXT`)
         }
       }
+      if (current < 6) {
+        if (!this.hasColumn('dispatch_contexts', 'assignee_pane_key')) {
+          this.db.exec(`ALTER TABLE dispatch_contexts ADD COLUMN assignee_pane_key TEXT`)
+        }
+        if (!this.hasColumn('messages', 'sender_pane_key')) {
+          this.db.exec(`ALTER TABLE messages ADD COLUMN sender_pane_key TEXT`)
+        }
+      }
       this.createUndeliveredInboxIndexIfPossible()
 
       this.db.pragma(`user_version = ${SCHEMA_VERSION}`)
@@ -293,11 +318,12 @@ export class OrchestrationDb {
     priority?: MessagePriority
     threadId?: string
     payload?: string
+    senderPaneKey?: string
   }): MessageRow {
     const id = generateId('msg')
     const stmt = this.db.prepare(`
-      INSERT INTO messages (id, from_handle, to_handle, subject, body, type, priority, thread_id, payload)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO messages (id, from_handle, to_handle, subject, body, type, priority, thread_id, payload, sender_pane_key)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `)
     stmt.run(
       id,
@@ -308,7 +334,8 @@ export class OrchestrationDb {
       msg.type ?? 'status',
       msg.priority ?? 'normal',
       msg.threadId ?? null,
-      msg.payload ?? null
+      msg.payload ?? null,
+      msg.senderPaneKey ?? null
     )
     return this.db.prepare('SELECT * FROM messages WHERE id = ?').get(id) as MessageRow
   }
@@ -379,6 +406,20 @@ export class OrchestrationDb {
     const placeholders = ids.map(() => '?').join(',')
     this.db
       .prepare(`UPDATE messages SET delivered_at = datetime('now') WHERE id IN (${placeholders})`)
+      .run(...ids)
+  }
+
+  markAsReadAndDelivered(ids: string[]): void {
+    if (ids.length === 0) {
+      return
+    }
+    const placeholders = ids.map(() => '?').join(',')
+    // Why: superseded lifecycle messages stay queryable through history but
+    // must not be consumed or injected after their dispatch has finished.
+    this.db
+      .prepare(
+        `UPDATE messages SET read = 1, delivered_at = COALESCE(delivered_at, datetime('now')) WHERE id IN (${placeholders})`
+      )
       .run(...ids)
   }
 
@@ -568,7 +609,14 @@ export class OrchestrationDb {
 
   // ── Dispatch Contexts ──
 
-  createDispatchContext(taskId: string, assigneeHandle: string): DispatchContextRow {
+  createDispatchContext(
+    taskId: string,
+    assigneeHandle: string,
+    // Why: the pane key is the remint-stable identity behind the handle;
+    // recording it at dispatch time lets worker_done ownership survive
+    // restarts that reissue the handle.
+    assigneePaneKey?: string
+  ): DispatchContextRow {
     const task = this.getTask(taskId)
     if (!task) {
       throw new Error(`Task not found: ${taskId}`)
@@ -577,11 +625,11 @@ export class OrchestrationDb {
       throw new Error(`Task ${taskId} is ${task.status}; only ready tasks can be dispatched`)
     }
 
-    const existing = this.db
-      .prepare(
-        "SELECT * FROM dispatch_contexts WHERE assignee_handle = ? AND status IN ('pending', 'dispatched')"
-      )
-      .get(assigneeHandle) as DispatchContextRow | undefined
+    // Why: handle match covers legacy rows without pane keys; when both the
+    // new assignee and an active row have usable pane keys, also lock on
+    // equivalent pane identity so a reminted handle cannot open a second
+    // concurrent dispatch on the same pane.
+    const existing = this.findActiveDispatchForAssignee(assigneeHandle, assigneePaneKey)
 
     if (existing) {
       throw new Error(
@@ -599,10 +647,10 @@ export class OrchestrationDb {
     const id = generateId('ctx')
     this.db
       .prepare(
-        `INSERT INTO dispatch_contexts (id, task_id, assignee_handle, status, failure_count, dispatched_at)
-         VALUES (?, ?, ?, 'dispatched', ?, datetime('now'))`
+        `INSERT INTO dispatch_contexts (id, task_id, assignee_handle, assignee_pane_key, status, failure_count, dispatched_at)
+         VALUES (?, ?, ?, ?, 'dispatched', ?, datetime('now'))`
       )
-      .run(id, taskId, assigneeHandle, priorFailures)
+      .run(id, taskId, assigneeHandle, assigneePaneKey ?? null, priorFailures)
 
     this.db.prepare("UPDATE tasks SET status = 'dispatched' WHERE id = ?").run(taskId)
 
@@ -624,11 +672,38 @@ export class OrchestrationDb {
   }
 
   getActiveDispatchForTerminal(handle: string): DispatchContextRow | undefined {
-    return this.db
+    return this.findActiveDispatchForAssignee(handle)
+  }
+
+  private findActiveDispatchForAssignee(
+    assigneeHandle: string,
+    assigneePaneKey?: string
+  ): DispatchContextRow | undefined {
+    const byHandle = this.db
       .prepare(
         "SELECT * FROM dispatch_contexts WHERE assignee_handle = ? AND status IN ('pending', 'dispatched') LIMIT 1"
       )
-      .get(handle) as DispatchContextRow | undefined
+      .get(assigneeHandle) as DispatchContextRow | undefined
+    if (byHandle) {
+      return byHandle
+    }
+
+    if (!assigneePaneKey) {
+      return undefined
+    }
+
+    const actives = this.db
+      .prepare(
+        "SELECT * FROM dispatch_contexts WHERE assignee_pane_key IS NOT NULL AND status IN ('pending', 'dispatched')"
+      )
+      .all() as DispatchContextRow[]
+
+    for (const row of actives) {
+      if (row.assignee_pane_key && isEquivalentPaneKey(row.assignee_pane_key, assigneePaneKey)) {
+        return row
+      }
+    }
+    return undefined
   }
 
   getLatestDispatchForTerminal(handle: string): DispatchContextRow | undefined {

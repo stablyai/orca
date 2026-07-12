@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import type { GlobalSettings } from '../../../shared/types'
 import {
+  getExplicitRuntimeOwnerEnvironmentId,
   getRepoOwnerRoutedSettings,
   getRuntimeEnvironmentIdForRepo,
   getSettingsForRepoRuntimeOwner
@@ -95,6 +96,100 @@ describe('getRuntimeEnvironmentIdForRepo', () => {
         'repo-1'
       )
     ).toEqual({ activeRuntimeEnvironmentId: null })
+  })
+})
+
+describe('getExplicitRuntimeOwnerEnvironmentId', () => {
+  it('returns the runtime env id for a repo with an explicit runtime owner', () => {
+    expect(
+      getExplicitRuntimeOwnerEnvironmentId(
+        {
+          settings: { activeRuntimeEnvironmentId: 'focused-runtime' },
+          repos: [{ id: 'repo-1', connectionId: null, executionHostId: 'runtime:owner-runtime' }]
+        },
+        'repo-1'
+      )
+    ).toBe('owner-runtime')
+  })
+
+  it('returns null for an explicit local owner even while a runtime is focused', () => {
+    expect(
+      getExplicitRuntimeOwnerEnvironmentId(
+        {
+          settings: { activeRuntimeEnvironmentId: 'focused-runtime' },
+          repos: [{ id: 'repo-1', connectionId: null, executionHostId: 'local' }]
+        },
+        'repo-1'
+      )
+    ).toBeNull()
+  })
+
+  it('returns null for an SSH-owned repo (connectionId only)', () => {
+    expect(
+      getExplicitRuntimeOwnerEnvironmentId(
+        {
+          settings: { activeRuntimeEnvironmentId: 'focused-runtime' },
+          repos: [{ id: 'repo-1', connectionId: 'ssh-1', executionHostId: null }]
+        },
+        'repo-1'
+      )
+    ).toBeNull()
+  })
+
+  // Why: unlike getRuntimeEnvironmentIdForRepo, a no-owner repo must NOT fall
+  // back to the focused runtime — an owner-less repo is a local repo (#6957).
+  it('returns null for a legacy repo without an owner instead of the focused runtime', () => {
+    expect(
+      getExplicitRuntimeOwnerEnvironmentId(
+        {
+          settings: { activeRuntimeEnvironmentId: 'focused-runtime' },
+          repos: [{ id: 'repo-1', connectionId: null, executionHostId: null }]
+        },
+        'repo-1'
+      )
+    ).toBeNull()
+  })
+
+  it('routes duplicate repo ids to the runtime row that focus selects unambiguously', () => {
+    expect(
+      getExplicitRuntimeOwnerEnvironmentId(
+        {
+          settings: { activeRuntimeEnvironmentId: 'owner-runtime' },
+          repos: [
+            { id: 'repo-1', connectionId: null, executionHostId: 'local' },
+            { id: 'repo-1', connectionId: null, executionHostId: 'runtime:owner-runtime' }
+          ]
+        },
+        'repo-1'
+      )
+    ).toBe('owner-runtime')
+  })
+
+  it('returns null for ambiguous duplicate repo ids when focus matches no row', () => {
+    expect(
+      getExplicitRuntimeOwnerEnvironmentId(
+        {
+          settings: { activeRuntimeEnvironmentId: 'other-runtime' },
+          repos: [
+            { id: 'repo-1', connectionId: null, executionHostId: 'local' },
+            { id: 'repo-1', connectionId: null, executionHostId: 'runtime:owner-runtime' }
+          ]
+        },
+        'repo-1'
+      )
+    ).toBeNull()
+  })
+
+  it('returns null when the repo id is missing', () => {
+    expect(
+      getExplicitRuntimeOwnerEnvironmentId(
+        {
+          settings: { activeRuntimeEnvironmentId: 'focused-runtime' },
+          repos: [{ id: 'repo-1', connectionId: null, executionHostId: 'runtime:owner-runtime' }]
+        },
+        null
+      )
+    ).toBeNull()
   })
 })
 

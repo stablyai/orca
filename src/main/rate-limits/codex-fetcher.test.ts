@@ -28,11 +28,11 @@ vi.mock('node-pty', () => ({
 // Default to signed-in so the spawn paths under test still run; the auth gate
 // itself is covered by codex-auth-presence.test.ts and the no-auth case below.
 vi.mock('./codex-auth-presence', () => ({
-  codexAuthExists: vi.fn(() => true)
+  probeCodexAuthPresence: vi.fn(() => 'present')
 }))
 
 import { fetchCodexRateLimits } from './codex-fetcher'
-import { codexAuthExists } from './codex-auth-presence'
+import { probeCodexAuthPresence } from './codex-auth-presence'
 import { getActiveHiddenRateLimitPtyCount } from './hidden-pty-cleanup'
 
 function makeDisposable() {
@@ -77,7 +77,7 @@ describe('fetchCodexRateLimits', () => {
     vi.useFakeTimers()
     vi.clearAllMocks()
     resolveCodexCommandMock.mockReturnValue('codex')
-    vi.mocked(codexAuthExists).mockReturnValue(true)
+    vi.mocked(probeCodexAuthPresence).mockResolvedValue('present')
     readFileMock.mockRejectedValue(new Error('no auth fixture'))
     vi.stubGlobal('fetch', vi.fn())
   })
@@ -87,7 +87,7 @@ describe('fetchCodexRateLimits', () => {
   })
 
   it('does not spawn Codex when the user is not signed in', async () => {
-    vi.mocked(codexAuthExists).mockReturnValue(false)
+    vi.mocked(probeCodexAuthPresence).mockResolvedValue('absent')
 
     await expect(fetchCodexRateLimits()).resolves.toMatchObject({
       provider: 'codex',
@@ -100,6 +100,46 @@ describe('fetchCodexRateLimits', () => {
     expect(childSpawnMock).not.toHaveBeenCalled()
     expect(ptySpawnMock).not.toHaveBeenCalled()
   })
+
+  it('preserves the aborted result when cancellation lands during the auth check', async () => {
+    let resolveAuth!: (presence: 'absent') => void
+    vi.mocked(probeCodexAuthPresence).mockReturnValueOnce(
+      new Promise<'absent'>((resolve) => {
+        resolveAuth = resolve
+      })
+    )
+    const controller = new AbortController()
+
+    const result = fetchCodexRateLimits({ signal: controller.signal })
+    controller.abort()
+    resolveAuth('absent')
+
+    await expect(result).resolves.toMatchObject({
+      provider: 'codex',
+      status: 'error',
+      error: 'Rate-limit fetch aborted'
+    })
+    expect(childSpawnMock).not.toHaveBeenCalled()
+    expect(ptySpawnMock).not.toHaveBeenCalled()
+  })
+
+  it.each([
+    ['timeout', 'Timed out while checking Codex sign-in status'],
+    ['unavailable', 'Codex sign-in status is unavailable']
+  ] as const)(
+    'does not report an indeterminate %s probe as signed out',
+    async (presence, error) => {
+      vi.mocked(probeCodexAuthPresence).mockResolvedValue(presence)
+
+      await expect(fetchCodexRateLimits()).resolves.toMatchObject({
+        provider: 'codex',
+        status: 'error',
+        error
+      })
+      expect(childSpawnMock).not.toHaveBeenCalled()
+      expect(ptySpawnMock).not.toHaveBeenCalled()
+    }
+  )
 
   it('disposes node-pty listeners before killing the PTY fallback on timeout', async () => {
     const onDataDisposable = makeDisposable()
@@ -133,6 +173,7 @@ describe('fetchCodexRateLimits', () => {
     childSpawnMock.mockReturnValue(rpcChild)
 
     const resultPromise = fetchCodexRateLimits({ allowPtyFallback: false })
+    await vi.advanceTimersByTimeAsync(0)
 
     const spawnCwd = childSpawnMock.mock.calls[0]?.[2]?.cwd as string
     expect(spawnCwd).toContain('rate-limit-pty-cwd')
@@ -168,6 +209,7 @@ describe('fetchCodexRateLimits', () => {
     const controller = new AbortController()
 
     const resultPromise = fetchCodexRateLimits({ signal: controller.signal })
+    await vi.advanceTimersByTimeAsync(0)
 
     controller.abort()
 
@@ -221,6 +263,7 @@ describe('fetchCodexRateLimits', () => {
     })
 
     const resultPromise = fetchCodexRateLimits()
+    await vi.advanceTimersByTimeAsync(0)
     rpcChild.emit('close')
     await vi.advanceTimersByTimeAsync(0)
 
@@ -247,6 +290,7 @@ describe('fetchCodexRateLimits', () => {
     childSpawnMock.mockReturnValue(rpcChild)
 
     const resultPromise = fetchCodexRateLimits({ allowPtyFallback: false })
+    await vi.advanceTimersByTimeAsync(0)
     rpcChild.emit('close')
     await vi.advanceTimersByTimeAsync(0)
 
@@ -421,6 +465,7 @@ describe('fetchCodexRateLimits', () => {
     expect(fetch).toHaveBeenCalledWith(
       'https://chatgpt.com/backend-api/wham/rate-limit-reset-credits',
       expect.objectContaining({
+        signal: expect.any(AbortSignal),
         headers: expect.objectContaining({
           Authorization: 'Bearer access-token',
           'ChatGPT-Account-Id': 'account-id',
@@ -536,17 +581,85 @@ describe('fetchCodexRateLimits', () => {
 
       const [spawnFile, spawnArgs, spawnOptions] = childSpawnMock.mock.calls[0]
       expect(spawnFile).toBe('wsl.exe')
-      const bashCommand = spawnArgs.at(-1) as string
-      expect(bashCommand).toContain('mkdir -p "$orca_rate_limit_cwd"')
-      expect(bashCommand).toContain('cd "$orca_rate_limit_cwd"')
-      expect(bashCommand).toContain(
-        "export CODEX_HOME='/home/alice/.local/share/orca/account/home'"
+      expect(spawnArgs.slice(0, 5)).toEqual(['-d', 'Ubuntu', '--', 'sh', '-c'])
+      const shellCommand = spawnArgs.at(-1) as string
+      expect(shellCommand).toContain('_orca_wsl_shell=\\$(getent passwd')
+      expect(shellCommand).toContain('bash|zsh|ksh|mksh|ash) exec "\\$_orca_wsl_shell" -ilc')
+      expect(shellCommand).toContain(
+        'exec 3<&0\nexec 4>&1\nexec </dev/null\nexec >/dev/null\n_orca_wsl_shell='
       )
-      expect(bashCommand).toContain("exec codex '-s' 'read-only' '-a' 'untrusted' 'app-server'")
+      expect(shellCommand).toContain('mkdir -p "\\$orca_rate_limit_cwd"')
+      expect(shellCommand).toContain('cd "\\$orca_rate_limit_cwd"')
+      expect(shellCommand).toContain(
+        "export CODEX_HOME='\\''/home/alice/.local/share/orca/account/home'\\''"
+      )
+      expect(shellCommand).toContain(
+        "exec codex '\\''-s'\\'' '\\''read-only'\\'' '\\''-a'\\'' '\\''untrusted'\\'' '\\''app-server'\\'' <&3 >&4 3<&- 4>&-"
+      )
+      expect(shellCommand.match(/<&3 >&4 3<&- 4>&-/g)).toHaveLength(3)
+      expect(shellCommand.match(/exec codex [^\n]+<&3 >&4 3<&- 4>&-/g)).toHaveLength(3)
+      expect(shellCommand).not.toContain('_orca_codex')
+      expect(shellCommand).not.toContain('wsl-codex-path')
       expect(spawnOptions).toEqual(
         expect.objectContaining({
           cwd: expect.stringContaining('rate-limit-pty-cwd'),
           env: expect.not.objectContaining({ CODEX_HOME: expect.anything() })
+        })
+      )
+    } finally {
+      Object.defineProperty(process, 'platform', {
+        configurable: true,
+        value: originalPlatform
+      })
+    }
+  })
+
+  it('routes Windows host Codex homes through the host RPC path', async () => {
+    const originalPlatform = process.platform
+    Object.defineProperty(process, 'platform', {
+      configurable: true,
+      value: 'win32'
+    })
+    const rpcChild = makeRpcChild()
+    childSpawnMock.mockReturnValue(rpcChild)
+    rpcChild.stdin.write.mockImplementation((line: string) => {
+      const msg = JSON.parse(line) as { id?: number; method?: string }
+      if (msg.method === 'initialize') {
+        setTimeout(() => {
+          rpcChild.stdout.emit(
+            'data',
+            Buffer.from(`${JSON.stringify({ jsonrpc: '2.0', id: msg.id, result: {} })}\n`)
+          )
+        }, 0)
+      }
+      if (msg.method === 'account/rateLimits/read') {
+        setTimeout(() => {
+          rpcChild.stdout.emit(
+            'data',
+            Buffer.from(
+              `${JSON.stringify({
+                jsonrpc: '2.0',
+                id: msg.id,
+                result: { rateLimits: { primary: { usedPercent: 13 } } }
+              })}\n`
+            )
+          )
+        }, 0)
+      }
+    })
+
+    try {
+      const resultPromise = fetchCodexRateLimits({ codexHomePath: 'C:\\Users\\alice\\.codex' })
+      await vi.advanceTimersByTimeAsync(1)
+      await vi.advanceTimersByTimeAsync(1)
+      await resultPromise
+
+      const [spawnFile, spawnArgs, spawnOptions] = childSpawnMock.mock.calls[0]
+      expect(spawnFile).toBe('codex')
+      expect(spawnArgs).toEqual(['-s', 'read-only', '-a', 'untrusted', 'app-server'])
+      expect(spawnOptions).toEqual(
+        expect.objectContaining({
+          env: expect.objectContaining({ CODEX_HOME: 'C:\\Users\\alice\\.codex' })
         })
       )
     } finally {
@@ -583,18 +696,28 @@ describe('fetchCodexRateLimits', () => {
       const resultPromise = fetchCodexRateLimits({
         codexHomePath: '\\\\wsl.localhost\\Ubuntu\\home\\alice\\.local\\share\\orca\\account\\home'
       })
+      await vi.advanceTimersByTimeAsync(0)
       rpcChild.emit('close')
       await vi.advanceTimersByTimeAsync(0)
 
       const [spawnFile, spawnArgs, spawnOptions] = ptySpawnMock.mock.calls[0]
       expect(spawnFile).toBe('wsl.exe')
-      const bashCommand = spawnArgs.at(-1) as string
-      expect(bashCommand).toContain('mkdir -p "$orca_rate_limit_cwd"')
-      expect(bashCommand).toContain('cd "$orca_rate_limit_cwd"')
-      expect(bashCommand).toContain(
-        "export CODEX_HOME='/home/alice/.local/share/orca/account/home'"
+      expect(spawnArgs.slice(0, 5)).toEqual(['-d', 'Ubuntu', '--', 'sh', '-c'])
+      const shellCommand = spawnArgs.at(-1) as string
+      expect(shellCommand).toContain('_orca_wsl_shell=\\$(getent passwd')
+      expect(shellCommand).toContain('bash|zsh|ksh|mksh|ash) exec "\\$_orca_wsl_shell" -ilc')
+      expect(shellCommand).not.toContain('exec 3<&0')
+      expect(shellCommand).not.toContain('exec </dev/null')
+      expect(shellCommand).not.toContain('exec >/dev/null')
+      expect(shellCommand).not.toContain('<&3 >&4 3<&- 4>&-')
+      expect(shellCommand).toContain('mkdir -p "\\$orca_rate_limit_cwd"')
+      expect(shellCommand).toContain('cd "\\$orca_rate_limit_cwd"')
+      expect(shellCommand).toContain(
+        "export CODEX_HOME='\\''/home/alice/.local/share/orca/account/home'\\''"
       )
-      expect(bashCommand).toContain('exec codex ')
+      expect(shellCommand).toContain('exec codex ')
+      expect(shellCommand).not.toContain('_orca_codex')
+      expect(shellCommand).not.toContain('wsl-codex-path')
       expect(spawnOptions).toEqual(
         expect.objectContaining({
           cwd: expect.stringContaining('rate-limit-pty-cwd'),

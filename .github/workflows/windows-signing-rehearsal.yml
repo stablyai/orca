@@ -1,0 +1,360 @@
+﻿# Windows inner-binary signing rehearsal.
+#
+# Why: SignPath cannot deep-sign inside NSIS installers, so shipping signed
+# inner binaries (Orca.exe, node-pty *.node, DLLs — see issue #7785) requires
+# a two-request flow: sign the unpacked PE files first, then build the NSIS
+# installer from the signed tree, then sign the installer. This workflow
+# rehearses that entire flow from a branch, end to end, without publishing
+# anything — so the release pipeline on main is never at risk while we verify.
+#
+# Runs only via manual dispatch. Use the test-signing policy for iteration
+# (auto-approved test certificate) and release-signing to rehearse the
+# production flow (requires manual SignPath approvals). Rehearsed successfully
+# with test-signing (run 28987534795) and release-signing (run 28988432001).
+name: Windows signing rehearsal
+
+on:
+  workflow_dispatch:
+    inputs:
+      signing-policy-slug:
+        description: SignPath signing policy
+        type: choice
+        default: test-signing
+        options:
+          - test-signing
+          - release-signing
+      inner-artifact-configuration-slug:
+        description: SignPath artifact configuration for the inner-binaries zip
+        type: string
+        default: windows-inner-binaries-zip
+
+jobs:
+  rehearse:
+    # Why: SignPath origin verification requires GitHub-hosted runners, and
+    # windows-2022 matches the real release job's build environment.
+    runs-on: windows-2022
+    timeout-minutes: 360
+    permissions:
+      actions: read
+      contents: read
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          # Why: nothing here pushes; keep the token out of .git/config.
+          persist-credentials: false
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v6
+        with:
+          run_install: false
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version-file: package.json
+          cache: pnpm
+
+      - name: Cache electron-builder downloads
+        uses: actions/cache@v5
+        with:
+          path: |
+            ~\AppData\Local\electron\Cache
+            ~\AppData\Local\electron-builder\Cache
+          key: electron-builder-win-${{ hashFiles('pnpm-lock.yaml') }}
+          restore-keys: |
+            electron-builder-win-
+
+      - name: Install dependencies
+        uses: nick-fields/retry@v4
+        with:
+          timeout_minutes: 10
+          max_attempts: 3
+          retry_wait_seconds: 30
+          command: pnpm install --frozen-lockfile
+
+      # Why: rehearsal builds are never published, so the official-build
+      # secrets (telemetry key, diagnostics URL) are intentionally omitted.
+      - name: Build app
+        run: pnpm build:release
+        env:
+          NODE_OPTIONS: --max-old-space-size=4096
+
+      - name: Package unpacked Windows app
+        shell: pwsh
+        run: |
+          node config/scripts/ensure-native-runtime.mjs --runtime=electron
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          pnpm exec electron-builder --config config/electron-builder.config.cjs --win --dir --publish never
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          if (-not (Test-Path 'dist/win-unpacked/Orca.exe')) {
+            throw 'electron-builder --dir did not produce dist/win-unpacked/Orca.exe'
+          }
+
+      # Why: only unsigned PE files go to SignPath. Files that already carry a
+      # valid signature (Microsoft's OpenConsole.exe, signed vendor DLLs) must
+      # keep their original signer, so they are excluded from the request.
+      - name: Stage unsigned PE files for inner signing
+        id: stage-inner
+        shell: pwsh
+        run: |
+          $root = Resolve-Path 'dist/win-unpacked'
+          $stage = New-Item -ItemType Directory -Force -Path 'signing-stage'
+          $list = New-Object System.Collections.Generic.List[string]
+          $skipped = New-Object System.Collections.Generic.List[string]
+
+          Get-ChildItem -Path $root -Recurse -File |
+            Where-Object { $_.Extension -in '.exe', '.dll', '.node' } |
+            ForEach-Object {
+              $relative = [System.IO.Path]::GetRelativePath($root, $_.FullName)
+              $signature = Get-AuthenticodeSignature -FilePath $_.FullName
+              if ($signature.Status -eq 'Valid') {
+                $skipped.Add("$relative  <already signed: $($signature.SignerCertificate.Subject)>")
+                return
+              }
+              $destination = Join-Path $stage.FullName $relative
+              New-Item -ItemType Directory -Force -Path (Split-Path $destination) | Out-Null
+              Copy-Item -Path $_.FullName -Destination $destination -Force
+              $list.Add($relative)
+            }
+
+          if (-not ($list -contains 'Orca.exe')) {
+            throw 'Orca.exe was not staged for signing; unpacked layout changed?'
+          }
+          if (-not ($list | Where-Object { $_ -like '*conpty_console_list.node' })) {
+            throw 'node-pty conpty_console_list.node was not staged; this is the file from issue #7785.'
+          }
+
+          Set-Content -Path 'inner-signing-list.txt' -Value ($list -join "`n")
+          Write-Host "Staged $($list.Count) unsigned PE files for signing:"
+          $list | ForEach-Object { Write-Host "  $_" }
+          Write-Host "Skipped $($skipped.Count) already-signed files:"
+          $skipped | ForEach-Object { Write-Host "  $_" }
+
+      - name: Upload unsigned inner binaries for SignPath
+        id: upload-unsigned-inner
+        uses: actions/upload-artifact@v7
+        with:
+          name: orca-windows-inner-unsigned-${{ github.run_id }}
+          path: signing-stage/**
+          if-no-files-found: error
+
+      - name: Install SignPath PowerShell module
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          [Net.ServicePointManager]::SecurityProtocol = [Net.ServicePointManager]::SecurityProtocol -bor [Net.SecurityProtocolType]::Tls12
+          $useResourceGet = $null -ne (Get-Command -Name Install-PSResource -ErrorAction SilentlyContinue)
+          if ($useResourceGet) {
+            if ($null -eq (Get-PSResourceRepository -Name PSGallery -ErrorAction SilentlyContinue)) {
+              Register-PSResourceRepository -PSGallery -Trusted
+            } else {
+              Set-PSResourceRepository -Name PSGallery -Trusted
+            }
+            Install-PSResource -Name SignPath -Version '[4.0.0,5.0.0)' -Repository PSGallery -Scope CurrentUser -TrustRepository -Reinstall -ErrorAction Stop
+          } else {
+            Install-Module -Name SignPath -Repository PSGallery -MinimumVersion 4.0.0 -MaximumVersion 4.999.999 -Scope CurrentUser -Force -AllowClobber -ErrorAction Stop
+          }
+          Import-Module SignPath -ErrorAction Stop
+          Get-Command -Name Get-SignedArtifact -Module SignPath -ErrorAction Stop
+
+      - name: Submit inner binaries signing request
+        id: submit-inner-signing
+        uses: signpath/github-action-submit-signing-request@v2
+        with:
+          api-token: ${{ secrets.SIGNPATH_API_TOKEN }}
+          organization-id: c37aa192-a27a-4377-9c90-5d6c95912dc0
+          project-slug: orca
+          signing-policy-slug: ${{ inputs.signing-policy-slug || 'test-signing' }}
+          artifact-configuration-slug: ${{ inputs.inner-artifact-configuration-slug || 'windows-inner-binaries-zip' }}
+          github-artifact-id: ${{ steps.upload-unsigned-inner.outputs.artifact-id }}
+          wait-for-completion: false
+
+      - name: Download signed inner binaries from SignPath
+        shell: pwsh
+        env:
+          SIGNPATH_API_TOKEN: ${{ secrets.SIGNPATH_API_TOKEN }}
+          SIGNPATH_REQUEST_ID: ${{ steps.submit-inner-signing.outputs.signing-request-id }}
+        run: |
+          Get-SignedArtifact `
+            -ApiToken $env:SIGNPATH_API_TOKEN `
+            -OrganizationId 'c37aa192-a27a-4377-9c90-5d6c95912dc0' `
+            -SigningRequestId $env:SIGNPATH_REQUEST_ID `
+            -OutputArtifactPath signed-inner.zip `
+            -Force `
+            -WaitForCompletionTimeoutInSeconds 3600
+          New-Item -ItemType Directory -Path signed-inner -Force
+          Expand-Archive -Path signed-inner.zip -DestinationPath signed-inner -Force
+
+      # Why: copy back strictly by the staged list so a layout mismatch in the
+      # returned artifact fails loudly instead of silently shipping a mix of
+      # signed and unsigned binaries.
+      - name: Restore signed inner binaries into unpacked app
+        shell: pwsh
+        run: |
+          $root = Resolve-Path 'dist/win-unpacked'
+          $failures = New-Object System.Collections.Generic.List[string]
+          foreach ($relative in Get-Content 'inner-signing-list.txt') {
+            $signed = Get-ChildItem -Path signed-inner -Recurse -File |
+              Where-Object { [System.IO.Path]::GetRelativePath((Resolve-Path 'signed-inner'), $_.FullName).TrimStart('\', '/') -like "*$relative" } |
+              Select-Object -First 1
+            if ($null -eq $signed) {
+              $failures.Add("missing from signed artifact: $relative")
+              continue
+            }
+            $signature = Get-AuthenticodeSignature -FilePath $signed.FullName
+            if ($null -eq $signature.SignerCertificate) {
+              $failures.Add("returned without a signature: $relative")
+              continue
+            }
+            Copy-Item -Path $signed.FullName -Destination (Join-Path $root $relative) -Force
+            Write-Host ("{0,-14} {1}  <{2}>" -f $signature.Status, $relative, $signature.SignerCertificate.Subject)
+          }
+          if ($failures.Count -gt 0) {
+            $failures | ForEach-Object { Write-Host "::error::$_" }
+            throw "Signed inner artifact did not round-trip cleanly ($($failures.Count) failures)."
+          }
+
+      - name: Build NSIS installer from signed unpacked app
+        shell: pwsh
+        run: |
+          pnpm exec electron-builder --config config/electron-builder.config.cjs --win --publish never --prepackaged "$env:GITHUB_WORKSPACE\dist\win-unpacked"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          if (-not (Test-Path 'dist/orca-windows-setup.exe')) {
+            throw 'electron-builder --prepackaged did not produce dist/orca-windows-setup.exe'
+          }
+
+      - name: Upload unsigned Windows installer for SignPath
+        id: upload-unsigned-installer
+        uses: actions/upload-artifact@v7
+        with:
+          name: orca-windows-installer-unsigned-${{ github.run_id }}
+          path: dist/orca-windows-setup.exe
+          if-no-files-found: error
+
+      - name: Submit Windows installer signing request
+        id: submit-installer-signing
+        uses: signpath/github-action-submit-signing-request@v2
+        with:
+          api-token: ${{ secrets.SIGNPATH_API_TOKEN }}
+          organization-id: c37aa192-a27a-4377-9c90-5d6c95912dc0
+          project-slug: orca
+          signing-policy-slug: ${{ inputs.signing-policy-slug || 'test-signing' }}
+          artifact-configuration-slug: github-actions-windows-installer
+          github-artifact-id: ${{ steps.upload-unsigned-installer.outputs.artifact-id }}
+          wait-for-completion: false
+
+      - name: Download signed Windows installer from SignPath
+        shell: pwsh
+        env:
+          SIGNPATH_API_TOKEN: ${{ secrets.SIGNPATH_API_TOKEN }}
+          SIGNPATH_REQUEST_ID: ${{ steps.submit-installer-signing.outputs.signing-request-id }}
+        run: |
+          Get-SignedArtifact `
+            -ApiToken $env:SIGNPATH_API_TOKEN `
+            -OrganizationId 'c37aa192-a27a-4377-9c90-5d6c95912dc0' `
+            -SigningRequestId $env:SIGNPATH_REQUEST_ID `
+            -OutputArtifactPath signed-windows.zip `
+            -Force `
+            -WaitForCompletionTimeoutInSeconds 14400
+          New-Item -ItemType Directory -Path signed-windows -Force
+          Expand-Archive -Path signed-windows.zip -DestinationPath signed-windows -Force
+
+      # Why: signing changes installer bytes, so the updater metadata must be
+      # regenerated exactly like the release job's staging step does.
+      - name: Stage signed Windows installer and regenerate updater metadata
+        shell: pwsh
+        run: |
+          $signedInstaller = Get-ChildItem -Path signed-windows -Recurse -File -Filter 'orca-windows-setup.exe' | Select-Object -First 1
+          if ($null -eq $signedInstaller) {
+            throw 'Signed Windows installer was not returned by SignPath.'
+          }
+          Copy-Item -Path $signedInstaller.FullName -Destination 'dist/orca-windows-setup.exe' -Force
+          & 'node_modules/app-builder-bin/win/x64/app-builder.exe' blockmap --input 'dist/orca-windows-setup.exe' --output 'dist/orca-windows-setup.exe.blockmap'
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+          $installer = Get-Item 'dist/orca-windows-setup.exe'
+          $blockmap = Get-Item 'dist/orca-windows-setup.exe.blockmap'
+          $stream = [System.IO.File]::OpenRead($installer.FullName)
+          try {
+            $sha512 = [System.Security.Cryptography.SHA512]::Create()
+            $hash = [Convert]::ToBase64String($sha512.ComputeHash($stream))
+          } finally {
+            if ($null -ne $sha512) { $sha512.Dispose() }
+            $stream.Dispose()
+          }
+          $latestYml = Get-Content -Path 'dist/latest.yml' -Raw
+          $latestYml = [regex]::Replace($latestYml, '(?m)^(\s*)sha512: .+$', {
+            param($match)
+            "$($match.Groups[1].Value)sha512: $hash"
+          })
+          $latestYml = $latestYml -replace '(?m)^    size: \d+$', "    size: $($installer.Length)"
+          $latestYml = $latestYml -replace '(?m)^    blockMapSize: \d+$', "    blockMapSize: $($blockmap.Length)"
+          Set-Content -Path 'dist/latest.yml' -Value $latestYml -NoNewline
+
+      # Why: this is the pass/fail heart of the rehearsal — the same evidence
+      # check that will later gate releases (see PR #7170). Test certificates
+      # do not chain to a trusted root, so Status=Valid is only required for
+      # release-signing runs; test-signing runs require a present signature.
+      - name: Verify signatures end to end
+        shell: pwsh
+        env:
+          SIGNING_POLICY: ${{ inputs.signing-policy-slug || 'test-signing' }}
+        run: |
+          $report = New-Object System.Collections.Generic.List[string]
+          $failures = New-Object System.Collections.Generic.List[string]
+          $requireValid = $env:SIGNING_POLICY -eq 'release-signing'
+
+          function Test-Signature([string]$label, [string]$path) {
+            $signature = Get-AuthenticodeSignature -FilePath $path
+            $subject = if ($null -eq $signature.SignerCertificate) { '<none>' } else { $signature.SignerCertificate.Subject }
+            $line = "{0,-14} {1}  <{2}>" -f $signature.Status, $label, $subject
+            $script:report.Add($line)
+            Write-Host $line
+            if ($null -eq $signature.SignerCertificate -or $signature.Status -eq 'NotSigned') {
+              $script:failures.Add("unsigned: $label")
+            } elseif ($script:requireValid -and $signature.Status -ne 'Valid') {
+              $script:failures.Add("not Valid under release-signing: $label ($($signature.Status))")
+            } elseif ($script:requireValid -and $subject -notlike '*CN=SignPath Foundation*') {
+              $script:failures.Add("unexpected signer: $label ($subject)")
+            }
+          }
+
+          Test-Signature 'installer: orca-windows-setup.exe' 'dist/orca-windows-setup.exe'
+
+          # Extract the signed installer and verify the files a user actually
+          # gets on disk — including the exact file from issue #7785.
+          $7za = 'node_modules/7zip-bin/win/x64/7za.exe'
+          New-Item -ItemType Directory -Path extracted-app -Force | Out-Null
+          & $7za x 'dist/orca-windows-setup.exe' '-oextracted-app' -y | Out-Null
+
+          $root = Resolve-Path 'extracted-app'
+          foreach ($relative in Get-Content 'inner-signing-list.txt') {
+            $path = Join-Path $root $relative
+            if (-not (Test-Path $path)) {
+              $failures.Add("missing from installer payload: $relative")
+              continue
+            }
+            Test-Signature "installed: $relative" $path
+          }
+
+          Set-Content -Path 'signing-evidence.txt' -Value ($report -join "`n")
+          if ($failures.Count -gt 0) {
+            $failures | ForEach-Object { Write-Host "::error::$_" }
+            throw "Signing rehearsal failed with $($failures.Count) problems."
+          }
+          Write-Host "All $((Get-Content 'inner-signing-list.txt').Count) inner binaries plus the installer are signed."
+
+      - name: Upload rehearsal evidence and installer
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: windows-signing-rehearsal-${{ inputs.signing-policy-slug || 'test-signing' }}-${{ github.run_id }}
+          path: |
+            signing-evidence.txt
+            inner-signing-list.txt
+            dist/orca-windows-setup.exe
+            dist/orca-windows-setup.exe.blockmap
+            dist/latest.yml
+          retention-days: 7

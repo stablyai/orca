@@ -44,7 +44,15 @@ export type UsageRateLimitMetadata = {
 }
 
 export type ProviderRateLimits = {
-  provider: 'claude' | 'codex' | 'gemini' | 'opencode-go' | 'kimi' | 'minimax'
+  provider:
+    | 'claude'
+    | 'codex'
+    | 'gemini'
+    | 'opencode-go'
+    | 'kimi'
+    | 'minimax'
+    | 'grok'
+    | 'antigravity'
   /** 5-hour session window, null if not available. */
   session: RateLimitWindow | null
   /** 7-day weekly window, null if not available. */
@@ -95,13 +103,23 @@ export type InactiveAccountUsage = {
   isFetching: boolean
 }
 
+export type GrokAccountStatus = {
+  signedIn: boolean
+  email: string | null
+  teamId: string | null
+  tokenFresh: boolean
+  error: string | null
+}
+
 export type RateLimitState = {
   claude: ProviderRateLimits | null
   codex: ProviderRateLimits | null
   gemini: ProviderRateLimits | null
   opencodeGo: ProviderRateLimits | null
   kimi: ProviderRateLimits | null
+  antigravity: ProviderRateLimits | null
   minimax: ProviderRateLimits | null
+  grok: ProviderRateLimits | null
   /**
    * True when a MiniMax session cookie is persisted on disk. The cookie lives
    * outside GlobalSettings, so this flag is the durable signal that the
@@ -109,6 +127,8 @@ export type RateLimitState = {
    * between snapshot refreshes.
    */
   minimaxCookieConfigured: boolean
+  /** True when main finds a Grok CLI session file (~/.grok/auth.json or GROK_HOME). */
+  grokAuthConfigured: boolean
   claudeTarget: RateLimitRuntimeTarget
   codexTarget: RateLimitRuntimeTarget
   inactiveClaudeAccounts: InactiveAccountUsage[]

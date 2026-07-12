@@ -2,14 +2,17 @@ import { createReadStream } from 'node:fs'
 import { open } from 'node:fs/promises'
 import type { AiVaultSession } from '../../shared/ai-vault-types'
 import { parseAgentSessionFile } from './session-scanner-agent-parser'
+import { createCodexSessionResumeState } from './session-scanner-codex-parser'
+import { createDroidSessionResumeState } from './session-scanner-droid-parser'
+import { createMessageGraphSessionResumeState } from './session-scanner-graph-parsers'
+import { createClaudeSessionResumeState } from './session-scanner-primary-parsers'
+import { createGeminiJsonlSessionResumeState } from './session-scanner-gemini-parsers'
 import {
-  cloneClaudeSessionParseState,
-  consumeClaudeSessionLine,
-  createClaudeSessionParseState,
-  finalizeClaudeSessionParseState,
-  type ClaudeSessionParseState
-} from './session-scanner-primary-parsers'
-import type { SessionFileCandidate } from './session-scanner-types'
+  createCopilotSessionResumeState,
+  createCursorSessionResumeState
+} from './session-scanner-secondary-parsers'
+import { countSubagentTranscripts } from './session-scanner-subagent-transcripts'
+import type { ResumableSessionParseState, SessionFileCandidate } from './session-scanner-types'
 
 // Sized past the default recency cap (1000) plus the in-scope cap (2000) so a
 // full steady-state result set stays resident between forced rescans.
@@ -18,8 +21,8 @@ const MAX_CACHE_ENTRIES = 4096
 const NEWLINE_BYTE = 0x0a
 const CARRIAGE_RETURN_BYTE = 0x0d
 
-type ClaudeResumePoint = {
-  state: ClaudeSessionParseState
+type ResumePoint = {
+  state: ResumableSessionParseState
   // Byte offset just past the last complete ('\n'-terminated) line consumed;
   // a trailing unterminated line is deliberately left before this point.
   byteOffset: number
@@ -30,7 +33,48 @@ type SessionParseCacheEntry = {
   sizeBytes: number | null
   platform: NodeJS.Platform
   session: AiVaultSession | null
-  claudeResume: ClaudeResumePoint | null
+  resume: ResumePoint | null
+}
+
+// Incremental append-parsing applies only to transcripts that are append-only
+// JSONL line-folds. Whole-JSON documents (grok/rovo/devin/hermes/gemini-json)
+// are rewritten in place, Kimi reads a state doc plus a sibling wire file, and
+// OpenCode reads SQLite rows or a doc plus a message dir — those formats keep
+// unchanged-file reuse only and re-parse whole when they change.
+// Returns a factory (not a state) so steady-state resumes, which clone the
+// cached state instead, never pay for a throwaway accumulator.
+function resumableStateFactoryFor(
+  candidate: SessionFileCandidate
+): (() => ResumableSessionParseState) | null {
+  switch (candidate.agent) {
+    case 'claude':
+      return () => createClaudeSessionResumeState(candidate.file)
+    case 'codex':
+      return () => createCodexSessionResumeState(candidate.file, candidate.codexHome)
+    case 'cursor':
+      return () => createCursorSessionResumeState(candidate.file)
+    case 'copilot':
+      return () => createCopilotSessionResumeState(candidate.file)
+    case 'droid':
+      return () => createDroidSessionResumeState(candidate.file)
+    case 'openclaw':
+    case 'pi':
+    case 'omp': {
+      const agent = candidate.agent
+      return () => createMessageGraphSessionResumeState(agent, candidate.file)
+    }
+    case 'gemini':
+      return candidate.file.path.endsWith('.jsonl')
+        ? () => createGeminiJsonlSessionResumeState(candidate.file)
+        : null
+    case 'devin':
+    case 'grok':
+    case 'hermes':
+    case 'kimi':
+    case 'opencode':
+    case 'rovo':
+      return null
+  }
 }
 
 export type SessionParseStats = {
@@ -63,10 +107,12 @@ function storeEntry(path: string, entry: SessionParseCacheEntry): void {
 
 /**
  * Parse a session file, reusing prior work where the file is provably
- * unchanged (mtime+size) and, for Claude transcripts, resuming the parse from
- * the last consumed byte when the file only grew. This is what keeps the
- * renderer's ~5s forced rescans from re-reading gigabytes of transcripts
- * (STA-1278: main process pegging one core during multi-agent workloads).
+ * unchanged (mtime+size) and, for append-only JSONL transcripts (Claude,
+ * Codex, Cursor, Copilot, Droid, OpenClaw/Pi/OMP, Gemini-JSONL), resuming the
+ * parse from the last consumed byte when the file only grew. This is what
+ * keeps the renderer's ~5s forced rescans from re-reading gigabytes of
+ * transcripts (STA-1278/STA-1417: main process pegging one core during
+ * multi-agent workloads).
  */
 export async function parseAgentSessionFileCached(
   candidate: SessionFileCandidate,
@@ -85,12 +131,29 @@ export async function parseAgentSessionFileCached(
     if (stats) {
       stats.reused++
     }
+    // A zero-turn transcript usually never changes again, but its sibling
+    // subagents/ dir can gain files after the parent's last write (a
+    // still-running subagent finishing). The mtime+size key can't see that,
+    // so refresh the cheap directory count on reuse.
+    if (entry.session && candidate.agent === 'claude' && entry.session.messageCount === 0) {
+      const subagentTranscriptCount = await countSubagentTranscripts(file.path)
+      if (subagentTranscriptCount !== entry.session.subagentTranscriptCount) {
+        entry.session = { ...entry.session, subagentTranscriptCount }
+      }
+    }
     storeEntry(file.path, entry)
     return entry.session
   }
 
-  if (candidate.agent === 'claude') {
-    const parsed = await parseClaudeCandidateWithResume({ candidate, platform, entry, stats })
+  const stateFactory = resumableStateFactoryFor(candidate)
+  if (stateFactory) {
+    const parsed = await parseResumableCandidate({
+      candidate,
+      platform,
+      entry,
+      stats,
+      stateFactory
+    })
     storeEntry(file.path, parsed)
     return parsed.session
   }
@@ -105,19 +168,20 @@ export async function parseAgentSessionFileCached(
     sizeBytes: file.sizeBytes ?? null,
     platform,
     session,
-    claudeResume: null
+    resume: null
   })
   return session
 }
 
-async function parseClaudeCandidateWithResume(args: {
+async function parseResumableCandidate(args: {
   candidate: SessionFileCandidate
   platform: NodeJS.Platform
   entry: SessionParseCacheEntry | undefined
   stats?: SessionParseStats
+  stateFactory: () => ResumableSessionParseState
 }): Promise<SessionParseCacheEntry> {
   const { file } = args.candidate
-  const resume = args.entry?.platform === args.platform ? args.entry.claudeResume : null
+  const resume = args.entry?.platform === args.platform ? args.entry.resume : null
   const canResume =
     resume !== null &&
     resume !== undefined &&
@@ -127,9 +191,7 @@ async function parseClaudeCandidateWithResume(args: {
 
   // Clone before consuming: a failed read must not corrupt the cached state,
   // or the next resume would double-count the lines applied before the error.
-  const state = canResume
-    ? cloneClaudeSessionParseState(resume.state)
-    : createClaudeSessionParseState(file)
+  const state = canResume ? resume.state.clone() : args.stateFactory()
   const startOffset = canResume ? resume.byteOffset : 0
   if (args.stats) {
     if (canResume) {
@@ -142,30 +204,30 @@ async function parseClaudeCandidateWithResume(args: {
   const readResult = await consumeCompleteJsonlLines({
     path: file.path,
     start: startOffset,
-    onLine: (line) => consumeClaudeSessionLine(state, line)
+    onLine: (line) => state.consumeLine(line)
   })
   if (args.stats) {
     args.stats.bytesRead += readResult.bytesRead
   }
 
   // The stat this scan displays is current even when nothing new was consumed.
-  state.accumulator.modifiedAt = file.modifiedAt
+  state.touchFile(file)
 
   // Keep parity with the one-shot parser: a final unterminated line is shown,
   // but stays out of the resumable state so the (possibly still-growing) line
   // is re-read once complete instead of being half-counted.
   let displayState = state
   if (readResult.trailingPartialLine !== null) {
-    displayState = cloneClaudeSessionParseState(state)
-    consumeClaudeSessionLine(displayState, readResult.trailingPartialLine)
+    displayState = state.clone()
+    displayState.consumeLine(readResult.trailingPartialLine)
   }
 
   return {
     mtimeMs: file.mtimeMs,
     sizeBytes: file.sizeBytes ?? null,
     platform: args.platform,
-    session: finalizeClaudeSessionParseState(displayState, args.platform),
-    claudeResume: { state, byteOffset: readResult.consumedThrough }
+    session: await displayState.finalize(args.platform),
+    resume: { state, byteOffset: readResult.consumedThrough }
   }
 }
 

@@ -13,6 +13,14 @@ import type { FolderWorkspace, ProjectGroup, Repo } from '../../shared/types'
 
 export const PATH_ACCESS_DENIED_MESSAGE =
   'Access denied: path resolves outside allowed directories. If this blocks a legitimate workflow, please file a GitHub issue.'
+// Why: authorized external paths accumulate for the whole session (file drops,
+// terminal link opens, editor/composer/notebook opens). Bound the set with LRU
+// eviction — mirrors rememberUnwatchableRoot in filesystem-watcher.ts — so a long
+// session touching many distinct external files cannot grow it (or the O(n) auth
+// scan in isPathAllowed) without limit. Every caller re-authorizes a path right
+// before operating on it, so evicting a stale entry is self-healing and does not
+// weaken the security boundary.
+export const AUTHORIZED_EXTERNAL_PATHS_MAX = 4096
 const authorizedExternalPaths = new Set<string>()
 const registeredWorktreeRoots = new Set<string>()
 const registeredWorktreeRootsByRepo = new Map<string, Set<string>>()
@@ -23,12 +31,26 @@ const AUTHORIZED_ROOTS_REBUILD_CONCURRENCY = 8
 type FolderScopeStore = Pick<Store, 'getRepos'> &
   Partial<Pick<Store, 'getProjectGroups' | 'getFolderWorkspaces'>>
 
+function rememberAuthorizedExternalPath(path: string): void {
+  // Delete-then-add keeps re-authorized (actively used) paths most-recent so
+  // eviction only sheds the oldest never-re-touched entries.
+  authorizedExternalPaths.delete(path)
+  authorizedExternalPaths.add(path)
+  while (authorizedExternalPaths.size > AUTHORIZED_EXTERNAL_PATHS_MAX) {
+    const oldest = authorizedExternalPaths.keys().next().value
+    if (oldest === undefined) {
+      break
+    }
+    authorizedExternalPaths.delete(oldest)
+  }
+}
+
 export function authorizeExternalPath(targetPath: string): void {
   const resolvedTarget = resolve(targetPath)
-  authorizedExternalPaths.add(resolvedTarget)
+  rememberAuthorizedExternalPath(resolvedTarget)
   try {
     // Why: macOS canonicalizes /tmp to /private/tmp during read authorization.
-    authorizedExternalPaths.add(realpathSync(resolvedTarget))
+    rememberAuthorizedExternalPath(realpathSync(resolvedTarget))
   } catch {}
 }
 

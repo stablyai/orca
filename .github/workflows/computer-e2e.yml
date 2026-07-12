@@ -10,7 +10,15 @@ on:
       - 'config/scripts/computer-use-skill-guidance.test.mjs'
       - 'config/scripts/computer-use-smoke.mjs'
       - 'config/scripts/computer-use-smoke.test.mjs'
+      - 'config/scripts/daemon-boot-smoke.mjs'
+      - 'config/scripts/windows-daemon-workspace-close-repro.mjs'
       - 'config/scripts/verify-computer-native.mjs'
+      # Why: the native-smoke job boots the built terminal daemon under plain
+      # Node, so any change to the daemon bundle graph or the main build must
+      # re-run it (the v1.4.129-rc.1 daemon outage shipped with green CI).
+      - 'electron.vite.config.ts'
+      - 'build-plugins/**'
+      - 'src/main/daemon/**'
       - 'native/computer-use-macos/**'
       - 'native/computer-use-linux/**'
       - 'native/computer-use-windows/**'
@@ -64,6 +72,7 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: >-
           pnpm vitest run
+          config/scripts/build-windows-cli-launcher.test.mjs
           config/scripts/computer-e2e-workflow.test.mjs
           config/scripts/computer-use-skill-guidance.test.mjs
           config/scripts/computer-use-smoke.test.mjs
@@ -98,6 +107,17 @@ jobs:
       - run: pnpm verify:computer-native
       - run: pnpm build:cli
       - run: pnpm build:electron-vite
+      # Why: boot the BUILT daemon-entry under plain Node the way production
+      # forks it. v1.4.129-rc.1 shipped a daemon that exited at module load
+      # (leaked electron require) while every other check passed; this fails
+      # the PR when the built daemon cannot start on ubuntu-22.04 / windows.
+      - name: Daemon boot smoke
+        run: node config/scripts/daemon-boot-smoke.mjs
+      # Why: workspace removal overlaps graceful renderer teardown with the
+      # forced main-process sweep; exercise that exact pair against real ConPTY.
+      - name: Windows daemon workspace-close repro
+        if: runner.os == 'Windows'
+        run: node config/scripts/windows-daemon-workspace-close-repro.mjs
       - if: runner.os == 'Linux'
         env:
           ORCA_COMPUTER_E2E: '1'

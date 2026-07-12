@@ -24,4 +24,5 @@ export function registerRateLimitHandlers(rateLimits: RateLimitService): void {
     rateLimits.fetchInactiveCodexAccountsOnOpen()
   )
   ipcMain.handle('rateLimits:refreshMiniMax', () => rateLimits.refresh())
+  ipcMain.handle('rateLimits:refreshGrok', () => rateLimits.refreshGrok())
 }

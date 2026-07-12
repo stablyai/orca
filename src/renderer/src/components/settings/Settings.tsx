@@ -23,7 +23,11 @@ import { useSystemPrefersDark } from '@/components/terminal-pane/use-system-pref
 import { isMacUserAgent, isWindowsUserAgent } from '@/components/terminal-pane/pane-helpers'
 import { applyDocumentTheme } from '@/lib/document-theme'
 import { useConfirmationDialog } from '@/components/confirmation-dialog'
-import { SCROLLBACK_PRESETS_ROWS, getFallbackTerminalFonts } from './SettingsConstants'
+import {
+  SCROLLBACK_PRESETS_ROWS,
+  getFallbackTerminalFonts,
+  mergeFontSuggestions
+} from './SettingsConstants'
 import { DEFAULT_APP_FONT_FAMILY, getDefaultVoiceSettings } from '../../../../shared/constants'
 import { getRepoExecutionHostId, LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host'
 import { GeneralPane } from './GeneralPane'
@@ -61,6 +65,7 @@ import { SettingsSidebar } from './SettingsSidebar'
 import { SettingsSetupGuidePane } from './SettingsSetupGuidePane'
 import { ActiveSettingsSectionProvider, SettingsSection } from './SettingsSection'
 import { getSettingsSectionSearchEntries, rankSettingsSearchItems } from './settings-search'
+import { resolveAppearanceAccordionDeepLink } from './appearance-usage-percentage-search'
 import { cn } from '@/lib/utils'
 import { isIntentionalAppRestartInProgress } from '@/lib/updater-beforeunload'
 import { registerWindowCloseGuard } from '../window-close-request-coordinator'
@@ -313,7 +318,7 @@ function Settings(): React.JSX.Element {
   const ghostty = useGhosttyImport(updateSettings, settings)
   const warpThemes = useWarpThemeImport(updateSettings, settings)
   const [fontSuggestions, setFontSuggestions] = useState<string[]>(
-    Array.from(new Set([DEFAULT_APP_FONT_FAMILY, ...getFallbackTerminalFonts()]))
+    mergeFontSuggestions([], getFallbackTerminalFonts())
   )
   const terminalFontSuggestions = useMemo(
     () => fontSuggestions.filter((font) => font !== DEFAULT_APP_FONT_FAMILY),
@@ -336,7 +341,9 @@ function Settings(): React.JSX.Element {
   const [hiddenExperimentalUnlocked, setHiddenExperimentalUnlocked] = useState(false)
   const contentScrollRef = useRef<HTMLDivElement | null>(null)
   const searchInputRef = useRef<HTMLInputElement | null>(null)
-  const terminalFontsLoadedRef = useRef(false)
+  const installedFontsLoadedRef = useRef(false)
+  const installedFontsLoadPromiseRef = useRef<Promise<void> | null>(null)
+  const settingsMountedRef = useRef(true)
   const pendingNavSectionRef = useRef<string | null>(null)
   const pendingScrollTargetRef = useRef<string | null>(null)
   const pendingSubsectionScrollFrameRef = useRef<number | null>(null)
@@ -392,6 +399,42 @@ function Settings(): React.JSX.Element {
     // Why: pending subsection jumps are scoped to the scroll container; cancel
     // them with the container so a stale deep-link frame cannot run after close.
     cancelPendingSettingsSubsectionScrollFrame(pendingSubsectionScrollFrameRef)
+  }, [])
+
+  useEffect(() => {
+    // Why: React dev StrictMode replays mount effects; async font requests
+    // should still commit while the Settings view is actually mounted.
+    settingsMountedRef.current = true
+    return () => {
+      settingsMountedRef.current = false
+    }
+  }, [])
+
+  const requestFontSuggestions = useCallback((): void => {
+    if (installedFontsLoadedRef.current || installedFontsLoadPromiseRef.current) {
+      return
+    }
+
+    installedFontsLoadPromiseRef.current = window.api.settings
+      .listFonts()
+      .then((fonts) => {
+        if (!settingsMountedRef.current) {
+          return
+        }
+        // Latch after the first successful attempt even when empty, so a font-less
+        // system doesn't reissue listFonts() on every picker interaction.
+        installedFontsLoadedRef.current = true
+        if (fonts.length === 0) {
+          return
+        }
+        setFontSuggestions((prev) => mergeFontSuggestions(fonts, prev))
+      })
+      .catch(() => {
+        // Fall back to curated cross-platform suggestions.
+      })
+      .finally(() => {
+        installedFontsLoadPromiseRef.current = null
+      })
   }, [])
 
   // Pure "discard and leave?" prompt — no side effects. Why separate from the
@@ -576,6 +619,14 @@ function Settings(): React.JSX.Element {
     )
     pendingNavSectionRef.current = paneSectionId
     pendingScrollTargetRef.current = settingsNavigationTarget.sectionId ?? paneSectionId
+    // Why: Appearance nests status-bar controls under a collapsed accordion;
+    // force that accordion open before scrolling so the row is actually visible.
+    if (settingsNavigationTarget.pane === 'appearance') {
+      const accordion = resolveAppearanceAccordionDeepLink(settingsNavigationTarget.sectionId)
+      if (accordion) {
+        useAppStore.getState().setAppearanceAccordionDeepLink(accordion)
+      }
+    }
     if (settingsNavigationTarget.intent === 'add-quick-command') {
       setQuickCommandAddIntentSignal((signal) => signal + 1)
     }
@@ -754,35 +805,6 @@ function Settings(): React.JSX.Element {
     setMountedSectionIds(neededSectionIds)
   }
 
-  useEffect(() => {
-    if (!neededSectionIds.has('appearance') && !neededSectionIds.has('terminal')) {
-      return
-    }
-    if (terminalFontsLoadedRef.current) {
-      return
-    }
-
-    let stale = false
-    const loadFontSuggestions = async (): Promise<void> => {
-      try {
-        const fonts = await window.api.settings.listFonts()
-        if (stale || fonts.length === 0) {
-          return
-        }
-        terminalFontsLoadedRef.current = true
-        setFontSuggestions((prev) =>
-          Array.from(new Set([DEFAULT_APP_FONT_FAMILY, ...fonts, ...prev])).slice(0, 320)
-        )
-      } catch {
-        // Fall back to curated cross-platform suggestions.
-      }
-    }
-    void loadFontSuggestions()
-    return () => {
-      stale = true
-    }
-  }, [neededSectionIds])
-
   const neededRepoIds = useMemo(
     () => deriveNeededRepoIds(repos, neededSectionIds),
     [neededSectionIds, repos]
@@ -879,7 +901,16 @@ function Settings(): React.JSX.Element {
     const scrollTargetId = pendingScrollTargetRef.current
     const pendingNavSectionId = pendingNavSectionRef.current
 
-    if (scrollTargetId && pendingNavSectionId && settingsSearchQuery.trim() !== '') {
+    // Why: subsection deep links (scrollTarget ≠ pane id) must not keep a
+    // leftover search filter that can hide the target row. Pane-level deep
+    // links may intentionally pair with a filter (e.g. Appearance + "Usage
+    // percentages") so accordion sections force-open to the matching control.
+    if (
+      scrollTargetId &&
+      pendingNavSectionId &&
+      scrollTargetId !== pendingNavSectionId &&
+      settingsSearchQuery.trim() !== ''
+    ) {
       setSettingsSearchQuery('')
       return
     }
@@ -1123,6 +1154,7 @@ function Settings(): React.JSX.Element {
                       wslAvailable={windowsTerminalCapabilities.wslAvailable}
                       wslDistros={windowsTerminalCapabilities.wslDistros}
                       wslCapabilitiesLoading={windowsTerminalCapabilities.isLoading}
+                      accountOwnerPlatform={windowsTerminalCapabilities.hostPlatform}
                     />
                   ) : null}
                 </SettingsSection>
@@ -1410,6 +1442,7 @@ function Settings(): React.JSX.Element {
                       applyTheme={applyTheme}
                       fontSuggestions={fontSuggestions}
                       terminalFontSuggestions={terminalFontSuggestions}
+                      onRequestFontSuggestions={requestFontSuggestions}
                       systemPrefersDark={systemPrefersDark}
                       ghostty={ghostty}
                       warpThemes={warpThemes}
@@ -1476,7 +1509,7 @@ function Settings(): React.JSX.Element {
                   title={translate('auto.components.settings.Settings.954a8f5aef', 'Stats & Usage')}
                   description={translate(
                     'auto.components.settings.Settings.8acf3f22e0',
-                    'Orca stats plus Claude, Codex, and OpenCode usage analytics.'
+                    'Orca stats plus Claude, Codex, OpenCode token analytics and Grok subscription usage.'
                   )}
                   searchEntries={getSectionSearchEntries('stats')}
                 >

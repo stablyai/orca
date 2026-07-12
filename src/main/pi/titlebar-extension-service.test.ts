@@ -1,6 +1,10 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { execFileSync } from 'node:child_process'
+import { createHash } from 'node:crypto'
 import {
+  chmodSync,
   existsSync,
+  lstatSync,
   mkdirSync,
   mkdtempSync,
   readFileSync,
@@ -11,6 +15,7 @@ import {
 } from 'node:fs'
 import { tmpdir } from 'node:os'
 import type * as osModule from 'node:os'
+import type * as fsModule from 'node:fs'
 import { join } from 'node:path'
 
 // The service calls app.getPath('userData') for its overlay root. Point that
@@ -48,6 +53,12 @@ import { PiTitlebarExtensionService, isSafeDescendCandidate } from './titlebar-e
 function legacyOverlayPath(kind: 'pi' | 'omp', ptyId: string): string {
   const rootDir = kind === 'pi' ? 'pi-agent-overlays' : 'omp-agent-overlays'
   return join(userDataDir, rootDir, ptyId)
+}
+
+function legacySourceOverlayPath(kind: 'pi' | 'omp', sourceAgentDir: string): string {
+  const rootDir = kind === 'pi' ? 'pi-agent-overlays' : 'omp-agent-overlays'
+  const hashed = createHash('sha256').update(`source:${sourceAgentDir}`).digest('hex').slice(0, 32)
+  return join(userDataDir, rootDir, hashed)
 }
 
 describe('PiTitlebarExtensionService', () => {
@@ -184,6 +195,242 @@ describe('PiTitlebarExtensionService', () => {
 
     expect(readFileSync(sourcePath, 'utf-8')).toBe(content)
   })
+
+  it('migrates missing OMP state from the old source overlay without overwriting source files', () => {
+    rmSync(join(piHome, 'sessions'), { recursive: true, force: true })
+    const overlayDir = legacySourceOverlayPath('omp', piHome)
+    mkdirSync(join(overlayDir, 'sessions'), { recursive: true })
+    mkdirSync(join(overlayDir, 'extensions'), { recursive: true })
+    writeFileSync(join(overlayDir, 'agent.db'), 'legacy sqlite credentials')
+    writeFileSync(join(overlayDir, 'agent.db-wal'), 'legacy sqlite wal')
+    writeFileSync(join(overlayDir, 'sessions', 'legacy-session.jsonl'), 'legacy transcript')
+    writeFileSync(join(overlayDir, 'auth.json'), 'legacy token should not overwrite')
+    writeFileSync(join(overlayDir, 'settings.json'), '{"overlayOnly":true}')
+    writeFileSync(join(overlayDir, '.orca-pi-overlay-manifest.json'), '{}')
+    writeFileSync(join(overlayDir, 'extensions', 'orca-agent-status.ts'), 'stale managed extension')
+    writeFileSync(join(overlayDir, 'extensions', 'legacy-user-ext.ts'), 'legacy user extension')
+    mkdirSync(join(overlayDir, 'extensions', 'legacy-package'), { recursive: true })
+    writeFileSync(
+      join(overlayDir, 'extensions', 'legacy-package', 'orca-prefill.ts'),
+      'user package file'
+    )
+
+    const svc = new PiTitlebarExtensionService()
+    const env = svc.buildPtyEnv('pty-omp-migrate', piHome, 'omp')
+
+    expect(env.PI_CODING_AGENT_DIR).toBeUndefined()
+    expect(readFileSync(join(piHome, 'agent.db'), 'utf-8')).toBe('legacy sqlite credentials')
+    expect(readFileSync(join(piHome, 'agent.db-wal'), 'utf-8')).toBe('legacy sqlite wal')
+    expect(readFileSync(join(piHome, 'sessions', 'legacy-session.jsonl'), 'utf-8')).toBe(
+      'legacy transcript'
+    )
+    expect(readFileSync(join(piHome, 'auth.json'), 'utf-8')).toBe('secret token')
+    expect(JSON.parse(readFileSync(join(piHome, 'settings.json'), 'utf-8'))).toEqual({
+      defaultProvider: 'amazon-bedrock',
+      hideThinkingBlock: false,
+      packages: ['npm:pi-web-access'],
+      terminal: {
+        showImages: false,
+        clearOnShrink: false
+      }
+    })
+    expect(readFileSync(join(piHome, 'extensions', 'legacy-user-ext.ts'), 'utf-8')).toBe(
+      'legacy user extension'
+    )
+    expect(
+      readFileSync(join(piHome, 'extensions', 'legacy-package', 'orca-prefill.ts'), 'utf-8')
+    ).toBe('user package file')
+    expect(readFileSync(join(piHome, 'extensions', 'orca-agent-status.ts'), 'utf-8')).toContain(
+      '/hook/omp'
+    )
+    expect(readFileSync(join(overlayDir, '.orca-omp-overlay-migration-complete'), 'utf-8')).toBe(
+      'complete\n'
+    )
+  })
+
+  it('does not copy stale SQLite sidecars when the target database already exists', () => {
+    const overlayDir = legacySourceOverlayPath('omp', piHome)
+    mkdirSync(overlayDir, { recursive: true })
+    writeFileSync(join(overlayDir, 'agent.db'), 'legacy sqlite credentials')
+    writeFileSync(join(overlayDir, 'agent.db-wal'), 'legacy sqlite wal')
+    writeFileSync(join(overlayDir, 'agent.db-shm'), 'legacy sqlite shm')
+    writeFileSync(join(piHome, 'agent.db'), 'fresh sqlite credentials')
+
+    const svc = new PiTitlebarExtensionService()
+    svc.buildPtyEnv('pty-omp-stale-sidecars', piHome, 'omp')
+
+    expect(readFileSync(join(piHome, 'agent.db'), 'utf-8')).toBe('fresh sqlite credentials')
+    expect(existsSync(join(piHome, 'agent.db-wal'))).toBe(false)
+    expect(existsSync(join(piHome, 'agent.db-shm'))).toBe(false)
+    expect(readFileSync(join(overlayDir, '.orca-omp-overlay-migration-complete'), 'utf-8')).toBe(
+      'complete\n'
+    )
+  })
+
+  it.skipIf(process.platform === 'win32')(
+    'retries a legacy SQLite migration as a whole set after sidecar copy failure',
+    () => {
+      const overlayDir = legacySourceOverlayPath('omp', piHome)
+      mkdirSync(overlayDir, { recursive: true })
+      const walPath = join(overlayDir, 'agent.db-wal')
+      writeFileSync(join(overlayDir, 'agent.db'), 'legacy sqlite credentials')
+      writeFileSync(walPath, 'legacy sqlite wal')
+      chmodSync(walPath, 0o000)
+
+      try {
+        const svc = new PiTitlebarExtensionService()
+        svc.buildPtyEnv('pty-omp-sidecar-fail-1', piHome, 'omp')
+
+        expect(existsSync(join(piHome, 'agent.db'))).toBe(false)
+        expect(existsSync(join(piHome, 'agent.db-wal'))).toBe(false)
+        expect(existsSync(join(overlayDir, '.orca-omp-overlay-migration-complete'))).toBe(false)
+
+        chmodSync(walPath, 0o600)
+        svc.buildPtyEnv('pty-omp-sidecar-fail-2', piHome, 'omp')
+
+        expect(readFileSync(join(piHome, 'agent.db'), 'utf-8')).toBe('legacy sqlite credentials')
+        expect(readFileSync(join(piHome, 'agent.db-wal'), 'utf-8')).toBe('legacy sqlite wal')
+        expect(
+          readFileSync(join(overlayDir, '.orca-omp-overlay-migration-complete'), 'utf-8')
+        ).toBe('complete\n')
+      } finally {
+        chmodSync(walPath, 0o600)
+      }
+    }
+  )
+
+  it('retries a legacy SQLite migration as a whole set after sidecar stat failure', async () => {
+    const overlayDir = legacySourceOverlayPath('omp', piHome)
+    mkdirSync(overlayDir, { recursive: true })
+    const walPath = join(overlayDir, 'agent.db-wal')
+    writeFileSync(join(overlayDir, 'agent.db'), 'legacy sqlite credentials')
+    writeFileSync(walPath, 'legacy sqlite wal')
+
+    let failNextWalStat = true
+    vi.resetModules()
+    vi.doMock('node:fs', async (importOriginal) => {
+      const actual = await importOriginal<typeof fsModule>()
+      return {
+        ...actual,
+        lstatSync: (path: Parameters<typeof actual.lstatSync>[0]) => {
+          if (String(path) === walPath && failNextWalStat) {
+            failNextWalStat = false
+            throw new Error('transient lstat failure')
+          }
+          return actual.lstatSync(path)
+        }
+      }
+    })
+
+    try {
+      const { migrateLegacyOmpOverlayState } = await import('./legacy-omp-overlay-migration')
+      migrateLegacyOmpOverlayState(piHome, overlayDir)
+
+      expect(existsSync(join(piHome, 'agent.db'))).toBe(false)
+      expect(existsSync(join(piHome, 'agent.db-wal'))).toBe(false)
+      expect(existsSync(join(overlayDir, '.orca-omp-overlay-migration-complete'))).toBe(false)
+
+      migrateLegacyOmpOverlayState(piHome, overlayDir)
+
+      expect(readFileSync(join(piHome, 'agent.db'), 'utf-8')).toBe('legacy sqlite credentials')
+      expect(readFileSync(join(piHome, 'agent.db-wal'), 'utf-8')).toBe('legacy sqlite wal')
+      expect(readFileSync(join(overlayDir, '.orca-omp-overlay-migration-complete'), 'utf-8')).toBe(
+        'complete\n'
+      )
+    } finally {
+      vi.doUnmock('node:fs')
+      vi.resetModules()
+    }
+  })
+
+  it('marks successful legacy OMP migrations so old overlays are not re-scanned', () => {
+    const overlayDir = legacySourceOverlayPath('omp', piHome)
+    mkdirSync(overlayDir, { recursive: true })
+    writeFileSync(join(overlayDir, 'agent.db'), 'legacy sqlite credentials')
+
+    const svc = new PiTitlebarExtensionService()
+    svc.buildPtyEnv('pty-omp-migrate-once-1', piHome, 'omp')
+
+    expect(readFileSync(join(piHome, 'agent.db'), 'utf-8')).toBe('legacy sqlite credentials')
+    expect(readFileSync(join(overlayDir, '.orca-omp-overlay-migration-complete'), 'utf-8')).toBe(
+      'complete\n'
+    )
+
+    writeFileSync(join(overlayDir, 'later-overlay-only-file'), 'should not migrate')
+    svc.buildPtyEnv('pty-omp-migrate-once-2', piHome, 'omp')
+
+    expect(existsSync(join(piHome, 'later-overlay-only-file'))).toBe(false)
+  })
+
+  it.skipIf(process.platform === 'win32')(
+    'skips special legacy overlay entries while continuing the OMP migration',
+    () => {
+      rmSync(join(piHome, 'sessions'), { recursive: true, force: true })
+      const overlayDir = legacySourceOverlayPath('omp', piHome)
+      mkdirSync(join(overlayDir, 'sessions'), { recursive: true })
+      execFileSync('mkfifo', [join(overlayDir, 'stray-fifo')])
+      writeFileSync(join(overlayDir, 'sessions', 'legacy-session.jsonl'), 'legacy transcript')
+
+      const svc = new PiTitlebarExtensionService()
+      svc.buildPtyEnv('pty-omp-special-entry', piHome, 'omp')
+
+      expect(existsSync(join(piHome, 'stray-fifo'))).toBe(false)
+      expect(readFileSync(join(piHome, 'sessions', 'legacy-session.jsonl'), 'utf-8')).toBe(
+        'legacy transcript'
+      )
+    }
+  )
+
+  it.skipIf(process.platform === 'win32')(
+    'does not descend through existing target directory symlinks while migrating OMP state',
+    () => {
+      rmSync(join(piHome, 'sessions'), { recursive: true, force: true })
+      const overlayDir = legacySourceOverlayPath('omp', piHome)
+      mkdirSync(join(overlayDir, 'sessions'), { recursive: true })
+      writeFileSync(join(overlayDir, 'sessions', 'legacy-session.jsonl'), 'legacy transcript')
+      const outsideDir = mkdtempSync(join(tmpdir(), 'orca-omp-target-junction-'))
+      const sessionsPath = join(piHome, 'sessions')
+
+      try {
+        symlinkSync(outsideDir, sessionsPath, 'dir')
+        const svc = new PiTitlebarExtensionService()
+        svc.buildPtyEnv('pty-omp-target-dir-symlink', piHome, 'omp')
+
+        expect(lstatSync(sessionsPath).isSymbolicLink()).toBe(true)
+        expect(existsSync(join(outsideDir, 'legacy-session.jsonl'))).toBe(false)
+      } finally {
+        rmSync(outsideDir, { recursive: true, force: true })
+      }
+    }
+  )
+
+  it.skipIf(process.platform === 'win32')(
+    'does not follow existing target symlinks while migrating OMP state',
+    () => {
+      rmSync(join(piHome, 'sessions'), { recursive: true, force: true })
+      const overlayDir = legacySourceOverlayPath('omp', piHome)
+      mkdirSync(join(overlayDir, 'sessions'), { recursive: true })
+      writeFileSync(join(overlayDir, 'agent.db'), 'legacy sqlite credentials')
+      writeFileSync(join(overlayDir, 'sessions', 'legacy-session.jsonl'), 'legacy transcript')
+      const outsideDir = mkdtempSync(join(tmpdir(), 'orca-omp-dangling-target-'))
+
+      try {
+        const outsideTarget = join(outsideDir, 'agent.db')
+        symlinkSync(outsideTarget, join(piHome, 'agent.db'), 'file')
+
+        const svc = new PiTitlebarExtensionService()
+        svc.buildPtyEnv('pty-omp-target-symlink', piHome, 'omp')
+
+        expect(existsSync(outsideTarget)).toBe(false)
+        expect(lstatSync(join(piHome, 'agent.db')).isSymbolicLink()).toBe(true)
+        expect(readFileSync(join(piHome, 'sessions', 'legacy-session.jsonl'), 'utf-8')).toBe(
+          'legacy transcript'
+        )
+      } finally {
+        rmSync(outsideDir, { recursive: true, force: true })
+      }
+    }
+  )
 
   it('rebuilding managed extensions for the same ptyId does not corrupt the user Pi dir', () => {
     const svc = new PiTitlebarExtensionService()

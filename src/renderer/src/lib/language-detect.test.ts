@@ -37,4 +37,15 @@ describe('detectLanguage', () => {
     expect(detectLanguage('rtl/defs.vh')).toBe('verilog')
     expect(detectLanguage('C:\\rtl\\TOP.SV')).toBe('systemverilog')
   })
+
+  it('maps .jsonl files to the dedicated jsonl language id (case-insensitive)', () => {
+    expect(detectLanguage('/home/user/.claude/sessions/transcript.jsonl')).toBe('jsonl')
+    expect(detectLanguage('C:\\Users\\alice\\.codex\\LOG.JSONL')).toBe('jsonl')
+  })
+
+  it('keeps .json/.jsonc on the built-in json language and unknown on plaintext', () => {
+    expect(detectLanguage('config/settings.json')).toBe('json')
+    expect(detectLanguage('config/tsconfig.jsonc')).toBe('json')
+    expect(detectLanguage('notes/scratch.unknownext')).toBe('plaintext')
+  })
 })

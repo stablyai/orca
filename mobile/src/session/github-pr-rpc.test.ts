@@ -172,6 +172,23 @@ describe('readWorkItemDetails', () => {
     expect(parsed?.item.latestReviews).toEqual([{ login: 'ok', state: null, avatarUrl: null }])
   })
 
+  it('accepts raw gh latestReviews author.login nesting', () => {
+    const parsed = readWorkItemDetails({
+      item: {
+        id: 'n',
+        type: 'pr',
+        number: 1,
+        state: 'open',
+        latestReviews: [
+          { author: { login: 'coderabbitai', avatarUrl: 'https://a' }, state: 'COMMENTED' }
+        ]
+      }
+    })
+    expect(parsed?.item.latestReviews).toEqual([
+      { login: 'coderabbitai', state: 'COMMENTED', avatarUrl: 'https://a' }
+    ])
+  })
+
   it('returns null when item is unparseable', () => {
     expect(readWorkItemDetails({ item: { number: 1 } })).toBeNull()
     expect(readWorkItemDetails(null)).toBeNull()

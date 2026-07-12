@@ -1,5 +1,6 @@
 import { homedir } from 'node:os'
 import { join } from 'node:path'
+import type { SFTPWrapper } from 'ssh2'
 import type { AgentHookInstallState, AgentHookInstallStatus } from '../../shared/agent-hook-types'
 import {
   buildManagedCommandHook,
@@ -12,8 +13,14 @@ import {
   wrapWindowsHookCommand,
   writeHooksJson,
   writeManagedScript,
-  type HookDefinition
+  type HookDefinition,
+  type HooksConfig
 } from '../agent-hooks/installer-utils'
+import {
+  readHooksJsonRemote,
+  writeHooksJsonRemote,
+  writeManagedScriptRemote
+} from '../agent-hooks/installer-utils-remote'
 
 // Why: SessionStart is installed (not just listened for) so that resuming a
 // droid session via `droid --resume` resets the per-pane prompt/tool caches
@@ -64,8 +71,8 @@ function getManagedCommand(scriptPath: string): string {
     : wrapPosixHookCommand(scriptPath)
 }
 
-function getManagedScript(): string {
-  if (process.platform === 'win32') {
+function getManagedScript(target: 'local' | 'posix' = 'local'): string {
+  if (target === 'local' && process.platform === 'win32') {
     return [
       '@echo off',
       'setlocal',
@@ -109,6 +116,45 @@ function getManagedScript(): string {
     'exit 0',
     ''
   ].join('\n')
+}
+
+// Why: local install() and installRemote() must produce byte-identical Factory
+// settings.json hook trees; sharing this mutation is what keeps the SSH install
+// from drifting off the local one (the exact class of bug that left Droid with
+// no remote installer at all — issue #7253).
+function buildInstalledDroidConfig(
+  config: HooksConfig,
+  command: string,
+  scriptFileName: string
+): void {
+  const nextHooks = { ...config.hooks }
+  const isManagedCommand = createManagedCommandMatcher(scriptFileName)
+  const managedEvents = new Set<string>(DROID_EVENTS.map((event) => event.eventName))
+
+  // Why: sweep managed entries out of events we no longer subscribe to.
+  for (const [eventName, definitions] of Object.entries(nextHooks)) {
+    if (managedEvents.has(eventName) || !Array.isArray(definitions)) {
+      continue
+    }
+    const cleaned = removeManagedCommands(definitions, isManagedCommand)
+    if (cleaned.length === 0) {
+      delete nextHooks[eventName]
+    } else {
+      nextHooks[eventName] = cleaned
+    }
+  }
+
+  for (const event of DROID_EVENTS) {
+    const current = Array.isArray(nextHooks[event.eventName]) ? nextHooks[event.eventName] : []
+    const cleaned = removeManagedCommands(current, isManagedCommand)
+    const definition: HookDefinition = {
+      ...event.definition,
+      hooks: [buildManagedCommandHook(command)]
+    }
+    nextHooks[event.eventName] = [...cleaned, definition]
+  }
+
+  config.hooks = nextHooks
 }
 
 export class DroidHookService {
@@ -189,41 +235,55 @@ export class DroidHookService {
       }
     }
 
-    const command = getManagedCommand(scriptPath)
-    const nextHooks = { ...config.hooks }
-    const isManagedCommand = createManagedCommandMatcher(getManagedScriptFileName())
-    const managedEvents = new Set<string>(DROID_EVENTS.map((event) => event.eventName))
-
-    // Why: sweep managed entries out of events we no longer subscribe to.
-    for (const [eventName, definitions] of Object.entries(nextHooks)) {
-      if (managedEvents.has(eventName)) {
-        continue
-      }
-      if (!Array.isArray(definitions)) {
-        continue
-      }
-      const cleaned = removeManagedCommands(definitions, isManagedCommand)
-      if (cleaned.length === 0) {
-        delete nextHooks[eventName]
-      } else {
-        nextHooks[eventName] = cleaned
-      }
-    }
-
-    for (const event of DROID_EVENTS) {
-      const current = Array.isArray(nextHooks[event.eventName]) ? nextHooks[event.eventName] : []
-      const cleaned = removeManagedCommands(current, isManagedCommand)
-      const definition: HookDefinition = {
-        ...event.definition,
-        hooks: [buildManagedCommandHook(command)]
-      }
-      nextHooks[event.eventName] = [...cleaned, definition]
-    }
-
-    config.hooks = nextHooks
+    buildInstalledDroidConfig(config, getManagedCommand(scriptPath), getManagedScriptFileName())
     writeManagedScript(scriptPath, getManagedScript())
     writeHooksJson(configPath, config)
     return this.getStatus()
+  }
+
+  // Why: SSH remotes run the Droid CLI on the remote host, so its hook config
+  // and managed script must be written into the remote ~/.factory + ~/.orca via
+  // SFTP. Without this, Droid never fires the managed hook over SSH and its
+  // status row is absent from the task tree (issue #7253). Mirrors the local
+  // install() but always emits POSIX script/paths — even from a Windows host.
+  async installRemote(sftp: SFTPWrapper, remoteHome: string): Promise<AgentHookInstallStatus> {
+    const home = remoteHome.replace(/\/$/, '')
+    const remoteConfigPath = `${home}/.factory/settings.json`
+    const remoteScriptPath = `${home}/.orca/agent-hooks/droid-hook.sh`
+    try {
+      const config = await readHooksJsonRemote(sftp, remoteConfigPath)
+      if (!config) {
+        return {
+          agent: 'droid',
+          state: 'error',
+          configPath: remoteConfigPath,
+          managedHooksPresent: false,
+          detail: 'Could not parse remote Factory settings.json'
+        }
+      }
+
+      buildInstalledDroidConfig(config, wrapPosixHookCommand(remoteScriptPath), 'droid-hook.sh')
+      // Why: script first, config last — a partial config write must never
+      // point Droid at a script that isn't on disk yet.
+      await writeManagedScriptRemote(sftp, remoteScriptPath, getManagedScript('posix'))
+      await writeHooksJsonRemote(sftp, remoteConfigPath, config)
+
+      return {
+        agent: 'droid',
+        state: 'installed',
+        configPath: remoteConfigPath,
+        managedHooksPresent: true,
+        detail: null
+      }
+    } catch (err) {
+      return {
+        agent: 'droid',
+        state: 'error',
+        configPath: remoteConfigPath,
+        managedHooksPresent: false,
+        detail: err instanceof Error ? err.message : String(err)
+      }
+    }
   }
 
   remove(): AgentHookInstallStatus {

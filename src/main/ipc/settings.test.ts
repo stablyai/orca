@@ -5,6 +5,7 @@ const {
   applyElectronProxySettingsMock,
   browserWindowGetAllWindowsMock,
   handleMock,
+  onMock,
   previewGhosttyImportMock,
   previewWarpThemeImportMock,
   prepareLocalWorktreeRootsForReposMock,
@@ -14,6 +15,7 @@ const {
   applyElectronProxySettingsMock: vi.fn(),
   browserWindowGetAllWindowsMock: vi.fn(),
   handleMock: vi.fn(),
+  onMock: vi.fn(),
   previewGhosttyImportMock: vi.fn(),
   previewWarpThemeImportMock: vi.fn(),
   prepareLocalWorktreeRootsForReposMock: vi.fn(),
@@ -22,7 +24,7 @@ const {
 
 vi.mock('electron', () => ({
   BrowserWindow: { getAllWindows: browserWindowGetAllWindowsMock },
-  ipcMain: { handle: handleMock },
+  ipcMain: { handle: handleMock, on: onMock },
   nativeTheme: { themeSource: 'system' }
 }))
 
@@ -70,6 +72,7 @@ const store = {
 describe('registerSettingsHandlers', () => {
   beforeEach(() => {
     handleMock.mockClear()
+    onMock.mockClear()
     applyAppIconMock.mockClear()
     applyElectronProxySettingsMock.mockClear()
     applyElectronProxySettingsMock.mockResolvedValue({ source: 'settings' })
@@ -87,6 +90,22 @@ describe('registerSettingsHandlers', () => {
     registerSettingsHandlers(store as never)
     const channels = handleMock.mock.calls.map((call) => call[0])
     expect(channels).toContain('settings:previewGhosttyImport')
+  })
+
+  it('answers the synchronous settings read with the persisted settings', () => {
+    // Why: panes can bind PTYs before async hydration; the side-effect
+    // authority kill switch needs the persisted value synchronously.
+    store.getSettings.mockReturnValue({ terminalMainSideEffectAuthority: false })
+    registerSettingsHandlers(store as never)
+
+    const listener = onMock.mock.calls.find(
+      (call) => call[0] === 'settings:get-sync'
+    )?.[1] as (event: { returnValue: unknown }) => void
+    expect(listener).toBeTypeOf('function')
+
+    const event = { returnValue: undefined as unknown }
+    listener(event)
+    expect(event.returnValue).toEqual({ terminalMainSideEffectAuthority: false })
   })
 
   it('registers settings:previewWarpThemeImport handler', () => {
@@ -302,6 +321,24 @@ describe('registerSettingsHandlers', () => {
 
     expect(store.updateSettings).toHaveBeenCalledWith(
       { terminalScrollbackRows: 50_000 },
+      { notifyListeners: true, originWebContentsId: 1 }
+    )
+  })
+
+  it('normalizes terminal line height updates before persistence', async () => {
+    store.getSettings.mockReturnValue({ terminalLineHeight: 1 })
+    store.updateSettings.mockReturnValue({ terminalLineHeight: 1 })
+    registerSettingsHandlers(store as never)
+
+    const handler = handleMock.mock.calls.find((call) => call[0] === 'settings:set')?.[1] as (
+      _event: unknown,
+      args: unknown
+    ) => Promise<unknown>
+
+    await handler(settingsInvokeEvent, { terminalLineHeight: 0.85 })
+
+    expect(store.updateSettings).toHaveBeenCalledWith(
+      { terminalLineHeight: 1 },
       { notifyListeners: true, originWebContentsId: 1 }
     )
   })

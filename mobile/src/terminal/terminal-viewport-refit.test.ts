@@ -52,6 +52,36 @@ describe('terminal viewport refit', () => {
     expect(sessionSource).toContain('useTerminalViewportRefit({')
     expect(sessionSource).toContain('tabStripVisible: terminals.length > 1')
     expect(sessionSource).toContain('textScale: terminalTextScale')
+    expect(sessionSource).toContain('connState,')
+  })
+
+  it('forces a refit on iOS foreground and connection recovery', () => {
+    const foregroundEffect = hookSource.slice(
+      hookSource.indexOf("if (Platform.OS !== 'ios')"),
+      hookSource.indexOf('const previousConnStateRef')
+    )
+    const reconnectEffect = hookSource.slice(
+      hookSource.indexOf('const previousConnStateRef'),
+      hookSource.indexOf('disposedRef.current = false')
+    )
+
+    expect(foregroundEffect).toContain("AppState.addEventListener('change'")
+    expect(foregroundEffect).toContain('viewportMeasuredRef.current = false')
+    expect(foregroundEffect).toContain('scheduleForcedViewportRefit()')
+    expect(reconnectEffect).toContain("connState !== 'connected'")
+    expect(reconnectEffect).toContain('viewportMeasuredRef.current = false')
+    expect(reconnectEffect).toContain('scheduleForcedViewportRefit()')
+  })
+
+  it('bypasses the equal-dimensions guard for resume and reconnect refits', () => {
+    expect(hookSource).toContain('const forceRefit = forceNextRefitRef.current')
+    expect(hookSource).toContain(
+      'if (!forceRefit && prev && prev.cols === dims.cols && prev.rows === dims.rows)'
+    )
+    const forceRead = hookSource.indexOf('const forceRefit = forceNextRefitRef.current')
+    const updateViewport = hookSource.indexOf("sendRequest('terminal.updateViewport'")
+    expect(forceRead).toBeGreaterThanOrEqual(0)
+    expect(updateViewport).toBeGreaterThan(forceRead)
   })
 
   it('prefers the in-place updateViewport RPC over resubscribe', () => {

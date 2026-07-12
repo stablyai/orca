@@ -37,6 +37,7 @@ import { RelayDispatcher } from './dispatcher'
 import { RelayContext } from './context'
 import { PtyHandler } from './pty-handler'
 import { FsHandler } from './fs-handler'
+import { installRelayLogRotation } from './rotating-log-writer'
 import { GitHandler } from './git-handler'
 import { PreflightHandler } from './preflight-handler'
 import { ExternalAutomationsHandler } from './external-automations-handler'
@@ -59,6 +60,7 @@ import { resolveOpenCodeSourceConfigDir, resolvePiSourceAgentDir } from './plugi
 import { detectPiAgentKindFromCommand } from '../shared/pi-agent-kind'
 import { resolveSetupAgentSequenceLaunchCommand } from '../shared/setup-agent-sequencing'
 import { pickRemoteCliEnv } from './remote-cli-env'
+import { relayLogLine } from './relay-diagnostic-log'
 import { remoteCliRequestTimeoutMs } from './remote-cli-timeout'
 import { shouldReadRemoteCliStdin } from './remote-cli-stdin'
 
@@ -113,6 +115,7 @@ function parseArgs(argv: string[]): {
   cliMode: boolean
   sockPath: string
   endpointDir?: string
+  logFile?: string
 } {
   let graceTimeMs = DEFAULT_GRACE_MS
   let connectMode = false
@@ -120,6 +123,7 @@ function parseArgs(argv: string[]): {
   let cliMode = false
   let sockPath = ''
   let endpointDir: string | undefined
+  let logFile: string | undefined
   for (let i = 2; i < argv.length; i++) {
     if (argv[i] === '--grace-time' && argv[i + 1]) {
       const parsed = Number.parseInt(argv[i + 1], 10)
@@ -142,12 +146,15 @@ function parseArgs(argv: string[]): {
     } else if (argv[i] === '--endpoint-dir' && argv[i + 1]) {
       endpointDir = argv[i + 1]
       i++
+    } else if (argv[i] === '--log-file' && argv[i + 1]) {
+      logFile = argv[i + 1]
+      i++
     }
   }
   if (!sockPath) {
     sockPath = join(process.cwd(), SOCK_NAME)
   }
-  return { graceTimeMs, connectMode, detached, cliMode, sockPath, endpointDir }
+  return { graceTimeMs, connectMode, detached, cliMode, sockPath, endpointDir, logFile }
 }
 
 // ── Connect mode ─────────────────────────────────────────────────────
@@ -317,7 +324,7 @@ async function readOrcaCliStdin(): Promise<string | undefined> {
 // ── Normal mode ──────────────────────────────────────────────────────
 
 async function main(): Promise<void> {
-  const { graceTimeMs, connectMode, detached, cliMode, sockPath, endpointDir } = parseArgs(
+  const { graceTimeMs, connectMode, detached, cliMode, sockPath, endpointDir, logFile } = parseArgs(
     process.argv
   )
 
@@ -329,6 +336,13 @@ async function main(): Promise<void> {
     const marker = process.argv.indexOf('--orca-cli')
     await runOrcaCliMode(sockPath, marker >= 0 ? process.argv.slice(marker + 1) : [])
     return
+  }
+
+  // Why: only the long-lived detached daemon accumulates relay.log; --connect
+  // bridges and --orca-cli are short-lived and already returned above. Route all
+  // relay logging through a size-capped rotator so relay.log can't grow forever.
+  if (detached && logFile) {
+    installRelayLogRotation(logFile)
   }
 
   let ownsSocketPath = false
@@ -358,13 +372,13 @@ async function main(): Promise<void> {
   // would risk silent data corruption or zombie PTYs. We log for diagnostics
   // and then exit so the client can detect the disconnect and reconnect cleanly.
   process.on('uncaughtException', (err) => {
-    process.stderr.write(`[relay] Uncaught exception: ${err.message}\n${err.stack}\n`)
+    relayLogLine(`[relay] Uncaught exception: ${err.message}\n${err.stack}`)
     cleanupOwnedSocket()
     process.exit(1)
   })
 
   process.on('unhandledRejection', (reason) => {
-    process.stderr.write(`[relay] Unhandled rejection: ${reason}\n`)
+    relayLogLine(`[relay] Unhandled rejection: ${reason}`)
   })
 
   // Why: stdoutAlive tracks whether process.stdout is still writable.
@@ -373,15 +387,44 @@ async function main(): Promise<void> {
   // write to a dead pipe, silently failing or throwing EPIPE.  When a
   // socket client reconnects, setWrite swaps the callback to the socket.
   let stdoutAlive = true
-  const dispatcher = new RelayDispatcher((data) => {
-    if (stdoutAlive) {
+  // Why: one-shot waiters parked by the dispatcher's bulk lane when stdout
+  // reports saturation (write() === false). Flushed on 'drain' and on every
+  // stdout-death path so a stalled file-stream pump never outlives the pipe
+  // it was waiting on.
+  const stdoutDrainWaiters = new Set<() => void>()
+  const flushStdoutDrainWaiters = (): void => {
+    for (const cb of Array.from(stdoutDrainWaiters)) {
+      stdoutDrainWaiters.delete(cb)
+      cb()
+    }
+  }
+  process.stdout.on('drain', flushStdoutDrainWaiters)
+  const dispatcher = new RelayDispatcher(
+    (data) => {
+      if (!stdoutAlive) {
+        return
+      }
       try {
-        process.stdout.write(data)
+        // Why: surface Node's backpressure signal to the dispatcher so bulk
+        // frames (fs.streamChunk) wait for drain instead of queueing megabytes
+        // ahead of interactive pty.data frames on the SSH channel.
+        return process.stdout.write(data)
       } catch {
         stdoutAlive = false
+        flushStdoutDrainWaiters()
+        return undefined
+      }
+    },
+    {
+      waitWriteDrain: (cb) => {
+        if (!stdoutAlive) {
+          cb()
+          return
+        }
+        stdoutDrainWaiters.add(cb)
       }
     }
-  })
+  )
 
   const context = new RelayContext()
 
@@ -424,10 +467,7 @@ async function main(): Promise<void> {
 
   const ptyHandler = new PtyHandler(dispatcher, graceTimeMs)
   const fsHandler = new FsHandler(dispatcher, context)
-  // Why: GitHandler registers its own request handlers on construction,
-  // so we hold the reference only for potential future disposal.
-  const _gitHandler = new GitHandler(dispatcher, context)
-  void _gitHandler
+  const gitHandler = new GitHandler(dispatcher, context)
 
   const _preflightHandler = new PreflightHandler(dispatcher)
   const _externalAutomationsHandler = new ExternalAutomationsHandler(dispatcher)
@@ -500,8 +540,8 @@ async function main(): Promise<void> {
   try {
     await hookServer.start({ publishEndpoint: false })
   } catch (err) {
-    process.stderr.write(
-      `[relay] agent-hook server failed to start: ${err instanceof Error ? err.message : String(err)}\n`
+    relayLogLine(
+      `[relay] agent-hook server failed to start: ${err instanceof Error ? err.message : String(err)}`
     )
   }
 
@@ -659,7 +699,7 @@ async function main(): Promise<void> {
 
   function cancelGrace(reason: string): void {
     if (ptyHandler.graceTimerActive) {
-      process.stderr.write(`[relay] Grace canceled: ${reason}\n`)
+      relayLogLine(`[relay] Grace canceled: ${reason}`)
     }
     graceDeadlineAt = null
     graceReason = null
@@ -675,16 +715,40 @@ async function main(): Promise<void> {
 
     hasAcceptedSocketClient = true
     acceptedSocketConnections++
-    process.stderr.write(
-      `[relay] Socket client accepted (clients=${socketClients.size + 1}, accepted=${acceptedSocketConnections})\n`
+    relayLogLine(
+      `[relay] Socket client accepted (clients=${socketClients.size + 1}, accepted=${acceptedSocketConnections})`
     )
     cancelGrace('socket client accepted')
 
-    const clientId = dispatcher.attachClient((data) => {
-      if (!sock.destroyed) {
-        sock.write(data)
+    // Why: same backpressure surface as the stdout sink — bulk frames wait
+    // for the socket to drain so they cannot bury interactive PTY frames.
+    const sockDrainWaiters = new Set<() => void>()
+    const flushSockDrainWaiters = (): void => {
+      for (const cb of Array.from(sockDrainWaiters)) {
+        sockDrainWaiters.delete(cb)
+        cb()
       }
-    })
+    }
+    sock.on('drain', flushSockDrainWaiters)
+    sock.on('close', flushSockDrainWaiters)
+    sock.on('error', flushSockDrainWaiters)
+    const clientId = dispatcher.attachClient(
+      (data) => {
+        if (!sock.destroyed) {
+          return sock.write(data)
+        }
+        return undefined
+      },
+      {
+        waitWriteDrain: (cb) => {
+          if (sock.destroyed) {
+            cb()
+            return
+          }
+          sockDrainWaiters.add(cb)
+        }
+      }
+    )
     socketClients.set(sock, clientId)
 
     // Why: bytes that arrived in the same TCP send as the handshake frame
@@ -726,7 +790,7 @@ async function main(): Promise<void> {
         if (clientId !== undefined) {
           dispatcher.detachClient(clientId)
         }
-        process.stderr.write(`[relay] Socket client closed (clients=${socketClients.size})\n`)
+        relayLogLine(`[relay] Socket client closed (clients=${socketClients.size})`)
         if (!stdoutAlive && socketClients.size === 0) {
           startGrace('socket client closed')
         }
@@ -768,9 +832,9 @@ async function main(): Promise<void> {
         ownsSocketPath = true
         ownedSocketIdentity = readSocketIdentity(sockPath)
         server.on('error', (err) => {
-          process.stderr.write(`[relay] Socket server error: ${err.message}\n`)
+          relayLogLine(`[relay] Socket server error: ${err.message}`)
         })
-        process.stderr.write(`[relay] Socket server listening: ${sockPath}\n`)
+        relayLogLine(`[relay] Socket server listening: ${sockPath}`)
         resolve()
       }
 
@@ -778,11 +842,11 @@ async function main(): Promise<void> {
         removeStartupListeners()
         restoreUmask()
         if (err.code === 'EADDRINUSE') {
-          process.stderr.write(
-            `[relay] Socket path already in use: ${sockPath}; another relay is likely active. Use --connect instead of starting a new daemon.\n`
+          relayLogLine(
+            `[relay] Socket path already in use: ${sockPath}; another relay is likely active. Use --connect instead of starting a new daemon.`
           )
         } else {
-          process.stderr.write(`[relay] Socket server error before listen: ${err.message}\n`)
+          relayLogLine(`[relay] Socket server error before listen: ${err.message}`)
         }
         reject(err)
       }
@@ -850,9 +914,7 @@ async function main(): Promise<void> {
               failInitial(err)
               return
             }
-            process.stderr.write(
-              `[relay] Removed stale socket at ${sockPath} and retrying listen\n`
-            )
+            relayLogLine(`[relay] Removed stale socket at ${sockPath} and retrying listen`)
             removeStartupListeners()
             listenForStartupError(failInitial)
           })
@@ -889,6 +951,7 @@ async function main(): Promise<void> {
   // before the grace period starts.
   process.stdout.on('error', () => {
     stdoutAlive = false
+    flushStdoutDrainWaiters()
     dispatcher.invalidateClient()
   })
 
@@ -904,11 +967,11 @@ async function main(): Promise<void> {
       : graceTimeMs
     graceDeadlineAt = timeoutMs === 0 ? null : Date.now() + timeoutMs
     graceReason = reason
-    process.stderr.write(
-      `[relay] Grace started (${reason}): timeoutMs=${timeoutMs}, startupEmptyDetached=${startupEmptyDetached}, ptys=${ptyHandler.activePtyCount}, clients=${socketClients.size}\n`
+    relayLogLine(
+      `[relay] Grace started (${reason}): timeoutMs=${timeoutMs}, startupEmptyDetached=${startupEmptyDetached}, ptys=${ptyHandler.activePtyCount}, clients=${socketClients.size}`
     )
     ptyHandler.startGraceTimer(() => {
-      process.stderr.write(`[relay] Grace expired (${reason}); shutting down\n`)
+      relayLogLine(`[relay] Grace expired (${reason}); shutting down`)
       shutdown()
     }, timeoutMs)
   }
@@ -934,6 +997,7 @@ async function main(): Promise<void> {
       // dead so the primary client write callback becomes a no-op while
       // socket clients, if any, keep their own live transports.
       stdoutAlive = false
+      flushStdoutDrainWaiters()
       dispatcher.invalidateClient()
       if (socketClients.size === 0) {
         startGrace('stdin ended')
@@ -942,6 +1006,7 @@ async function main(): Promise<void> {
 
     process.stdin.on('error', () => {
       stdoutAlive = false
+      flushStdoutDrainWaiters()
       dispatcher.invalidateClient()
       if (socketClients.size === 0) {
         startGrace('stdin error')
@@ -950,14 +1015,15 @@ async function main(): Promise<void> {
   }
 
   function shutdown(): void {
-    process.stderr.write(
-      `[relay] Shutdown: ptys=${ptyHandler.activePtyCount}, clients=${socketClients.size}, ownsSocket=${ownsSocketPath}\n`
+    relayLogLine(
+      `[relay] Shutdown: ptys=${ptyHandler.activePtyCount}, clients=${socketClients.size}, ownsSocket=${ownsSocketPath}`
     )
     graceDeadlineAt = null
     graceReason = null
     dispatcher.dispose()
     ptyHandler.dispose()
     fsHandler.dispose()
+    gitHandler.dispose()
     hookServer.stop()
     // Why: Node's Unix server.close() can unlink the listen path. If the path
     // was externally removed and rebound by a newer relay, closing this older
@@ -978,10 +1044,10 @@ async function main(): Promise<void> {
   // window — a reconnecting client can then bridge to the live relay via
   // --connect and reattach to the still-running PTY sessions.
   process.on('SIGHUP', () => {
-    process.stderr.write('[relay] Received SIGHUP (SSH session dropped), ignoring\n')
+    relayLogLine('[relay] Received SIGHUP (SSH session dropped), ignoring')
   })
   process.on('exit', (code) => {
-    process.stderr.write(`[relay] Process exiting with code ${code}\n`)
+    relayLogLine(`[relay] Process exiting with code ${code}`)
   })
 
   // Signal readiness to the client — the client watches for this exact
@@ -1003,8 +1069,8 @@ function cleanupSocket(sockPath: string): void {
 }
 
 void main().catch((err) => {
-  process.stderr.write(
-    `[relay] Fatal startup error: ${err instanceof Error ? (err.stack ?? err.message) : String(err)}\n`
+  relayLogLine(
+    `[relay] Fatal startup error: ${err instanceof Error ? (err.stack ?? err.message) : String(err)}`
   )
   process.exit(1)
 })

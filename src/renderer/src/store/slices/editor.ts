@@ -10,7 +10,8 @@ import {
   getCheckRunDetailsTabLabel,
   type OpenCheckRunDetailsState
 } from '@/components/editor/check-run-details-tab'
-import { openHttpLink } from '@/lib/http-link-routing'
+import { openHttpLink, type HttpLinkSourceOwner } from '@/lib/http-link-routing'
+import { getConnectionIdForFileFromState } from '@/lib/connection-owner-resolution'
 import { isLocalPathOpenBlocked, showLocalPathOpenBlockedToast } from '@/lib/local-path-open-guard'
 import { detectLanguage } from '@/lib/language-detect'
 import type {
@@ -42,6 +43,7 @@ import type { RemoteOpKind } from '@/components/right-sidebar/source-control-pri
 import { invalidateAutomaticPushTargetUpstreamStatusCache } from '@/components/right-sidebar/push-target-upstream-refresh-cache'
 import {
   isNonFastForwardRemoteError,
+  markSyncPushStageError,
   resolveRemoteOperationErrorMessage
 } from '@/lib/source-control-remote-error'
 import { shouldForcePushWithLeaseForUpstream } from '../../../../shared/git-upstream-status'
@@ -62,6 +64,10 @@ import { settingsForRuntimeOwner } from '@/runtime/runtime-rpc-client'
 import { notifyHostOfMirroredEditorClose } from '@/runtime/close-mirrored-editor-tab'
 import { findWorktreeById, getRepoIdFromWorktreeId } from './worktree-helpers'
 import { getRuntimeEnvironmentIdForWorktree } from '@/lib/worktree-runtime-owner'
+import {
+  addAdditionalValidWorkspaceKeys,
+  type WorkspaceSessionHydrationOptions
+} from '@/lib/workspace-session-hydration-keys'
 import { createUntitledMarkdownFileWithTemplateSelection } from '@/lib/create-untitled-markdown'
 import { extractIpcErrorMessage } from '@/lib/ipc-error'
 import { translate } from '@/i18n/i18n'
@@ -247,8 +253,21 @@ export type OpenFile = {
   // disk while it's open, we keep the tab around so the user can still see
   // (and potentially save) their in-memory content. The tab surfaces this as
   // a strikethrough label plus a "deleted"/"renamed" suffix. Cleared if the
-  // file reappears on disk at its original path.
-  externalMutation?: 'deleted' | 'renamed'
+  // file reappears on disk at its original path. 'changed' means the file was
+  // rewritten on disk while this tab held unsaved edits (issue #7265): the
+  // buffer is preserved and the editor shows a changed-on-disk banner instead
+  // of tab strikethrough.
+  externalMutation?: 'deleted' | 'renamed' | 'changed'
+  /** Why: signature of the disk content this tab's edits are based on (last
+   * load or save). Persisted with dirty drafts so a restore can re-derive a
+   * changed-on-disk conflict from ground truth — an agent write that landed
+   * while the app was closed must not be clobbered by a resumed autosave. */
+  lastKnownDiskSignature?: string
+  /** Why: set at hydration for restored dirty tabs; suspends autosave until
+   * the restored-tab conflict scan has compared disk against the baseline.
+   * Without this hard gate the scan's async read merely races the autosave
+   * timer, and a slow (SSH/runtime) read loses the race. Not persisted. */
+  pendingDiskBaselineVerification?: boolean
   /** Why: diff bodies are cached in EditorPanel. Re-selecting an existing diff
    * tab from the tree bumps this so the panel refetches instead of reusing a
    * stale snapshot. */
@@ -264,6 +283,14 @@ export type OpenFile = {
    *  tabs may be culled when they vanish from a later host snapshot; locally
    *  opened tabs have no host counterpart and must survive snapshot syncs. */
   mirroredFromRuntimeSession?: boolean
+  /** Why: orthogonal to `mode` — a `mode: 'edit'` tab that must never accept
+   *  edits, dirty state, autosave, format, or rename. Used by AI Vault View Log
+   *  so an agent-owned transcript cannot be mutated through editor write paths.
+   *  Persisted only when true; absence is the writable default. */
+  readOnly?: boolean
+  /** Why: live tail is explicit and only meaningful for a read-only local log;
+   *  ordinary editor tabs and read-only snapshots keep their existing behavior. */
+  liveTail?: boolean
   mode: 'edit' | 'diff' | 'conflict-review' | 'markdown-preview' | 'check-details'
 }
 
@@ -474,6 +501,7 @@ export type EditorSlice = {
       worktreeId: string
       worktreeRoot: string | null
       runtimeEnvironmentId?: string | null
+      sourceOwner?: HttpLinkSourceOwner
     }
   ) => Promise<void>
   openMarkdownPreview: (
@@ -493,7 +521,9 @@ export type EditorSlice = {
   setActiveFile: (fileId: string) => void
   reorderFiles: (fileIds: string[]) => void
   markFileDirty: (fileId: string, dirty: boolean) => void
-  setExternalMutation: (fileId: string, mutation: 'deleted' | 'renamed' | null) => void
+  setExternalMutation: (fileId: string, mutation: 'deleted' | 'renamed' | 'changed' | null) => void
+  setLastKnownDiskSignature: (fileId: string, signature: string) => void
+  clearPendingDiskBaselineVerification: (fileId: string) => void
   clearUntitled: (fileId: string) => void
   openDiff: (
     worktreeId: string,
@@ -711,7 +741,10 @@ export type EditorSlice = {
   setPendingEditorReveal: (reveal: PendingEditorReveal | null) => void
 
   // Session hydration — restore editor files from persisted workspace session
-  hydrateEditorSession: (session: WorkspaceSessionState) => void
+  hydrateEditorSession: (
+    session: WorkspaceSessionState,
+    options?: WorkspaceSessionHydrationOptions
+  ) => void
 }
 
 function openWorkspaceEditorItem(
@@ -1304,19 +1337,19 @@ function shouldDeleteUntouchedUntitledFile(file: OpenFile | undefined, hasDraft:
   )
 }
 
-function getWorktreeConnectionId(state: AppState, worktreeId: string): string | undefined {
-  const worktree = findWorktreeById(state.worktreesByRepo ?? {}, worktreeId)
-  const repoId = worktree?.repoId ?? getRepoIdFromWorktreeId(worktreeId)
-  const repo = (state.repos ?? []).find((candidate) => candidate.id === repoId)
-  return repo?.connectionId ?? undefined
-}
-
 export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (set, get) => ({
   editorDrafts: {},
   setEditorDraft: (fileId, content) =>
-    set((s) => ({
-      editorDrafts: { ...s.editorDrafts, [fileId]: content }
-    })),
+    set((s) => {
+      // Why: read-only tabs (e.g. AI Vault View Log) must never accumulate an
+      // editor draft — a draft is the seed of dirty state, autosave, and a
+      // hot-exit restore that could write over an agent-owned transcript.
+      const file = s.openFiles.find((f) => f.id === fileId)
+      if (file?.readOnly === true) {
+        return s
+      }
+      return { editorDrafts: { ...s.editorDrafts, [fileId]: content } }
+    }),
   clearEditorDraft: (fileId) =>
     set((s) => {
       if (!(fileId in s.editorDrafts)) {
@@ -1658,6 +1691,10 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
         if (!needsExistingUpdate) {
           return activeResult
         }
+        // Why: `readOnly` is intentionally NOT in this override map. It is
+        // sticky: an existing tab keeps its own authority (`...f`). View Log
+        // never flips a writable tab to read-only, and an ordinary open never
+        // silently upgrades a read-only View Log tab to writable.
         return {
           openFiles: s.openFiles.map((f) =>
             f.id === id
@@ -2419,6 +2456,11 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
       if (!file) {
         return s
       }
+      // Why: read-only tabs can never become dirty; a mutation path that reached
+      // here (stray change/save callback) must hard no-op the integrity invariant.
+      if (file.readOnly === true) {
+        return s
+      }
       const needsPreviewClear = dirty && file.isPreview
       if (file.isDirty === dirty && !needsPreviewClear) {
         return s
@@ -2459,6 +2501,32 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
       }
       return {
         openFiles: s.openFiles.map((f) => (f.id === fileId ? { ...f, externalMutation: next } : f))
+      }
+    }),
+
+  setLastKnownDiskSignature: (fileId, signature) =>
+    set((s) => {
+      const file = s.openFiles.find((f) => f.id === fileId)
+      if (!file || file.lastKnownDiskSignature === signature) {
+        return s
+      }
+      return {
+        openFiles: s.openFiles.map((f) =>
+          f.id === fileId ? { ...f, lastKnownDiskSignature: signature } : f
+        )
+      }
+    }),
+
+  clearPendingDiskBaselineVerification: (fileId) =>
+    set((s) => {
+      const file = s.openFiles.find((f) => f.id === fileId)
+      if (!file?.pendingDiskBaselineVerification) {
+        return s
+      }
+      return {
+        openFiles: s.openFiles.map((f) =>
+          f.id === fileId ? { ...f, pendingDiskBaselineVerification: undefined } : f
+        )
       }
     }),
 
@@ -3791,9 +3859,14 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
           await pushRuntimeGit(context, { pushTarget, forceWithLease: true })
           pushed = true
         } catch (error) {
-          toast.error(resolveRemoteOperationErrorMessage(error, { isSync: true }))
+          toast.error(
+            resolveRemoteOperationErrorMessage(error, {
+              isSync: true,
+              isSyncPushStage: true
+            })
+          )
           pushStageToastShown = true
-          throw error
+          throw markSyncPushStageError(error)
         }
       } else {
         await pullRuntimeGit(context, pushTarget)
@@ -3810,9 +3883,14 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
             // Why: format under the user-facing operation (sync) rather than
             // the inner step (push) — the user clicked Sync and shouldn't see
             // a "Push failed" toast for a step they didn't directly invoke.
-            toast.error(resolveRemoteOperationErrorMessage(error, { isSync: true }))
+            toast.error(
+              resolveRemoteOperationErrorMessage(error, {
+                isSync: true,
+                isSyncPushStage: true
+              })
+            )
             pushStageToastShown = true
-            throw error
+            throw markSyncPushStageError(error)
           }
         }
       }
@@ -4087,16 +4165,48 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
 
   activateMarkdownLink: async (rawHref, ctx) => {
     const initialState = get()
+    let inferredRuntimeEnvironmentId: string | null | undefined
+    if (!ctx.sourceOwner && ctx.runtimeEnvironmentId === undefined) {
+      const inferredRuntimeOwners = new Set(
+        initialState.openFiles
+          .filter(
+            (file) => file.filePath === ctx.sourceFilePath && file.worktreeId === ctx.worktreeId
+          )
+          .map((file) => file.runtimeEnvironmentId?.trim() || null)
+      )
+      if (inferredRuntimeOwners.size > 1) {
+        return
+      }
+      inferredRuntimeEnvironmentId =
+        inferredRuntimeOwners.size === 1 ? [...inferredRuntimeOwners][0] : undefined
+    }
     const sourceRuntimeEnvironmentId =
-      ctx.runtimeEnvironmentId !== undefined
-        ? ctx.runtimeEnvironmentId
-        : initialState.openFiles.find((file) => file.filePath === ctx.sourceFilePath)
-            ?.runtimeEnvironmentId
-    const sourceSettings = settingsForRuntimeOwner(
-      initialState.settings,
-      sourceRuntimeEnvironmentId
-    )
-    const sourceConnectionId = getWorktreeConnectionId(initialState, ctx.worktreeId)
+      ctx.sourceOwner?.kind === 'runtime'
+        ? ctx.sourceOwner.runtimeEnvironmentId
+        : ctx.sourceOwner
+          ? null
+          : ctx.runtimeEnvironmentId !== undefined
+            ? ctx.runtimeEnvironmentId
+            : inferredRuntimeEnvironmentId
+    const runtimeOwnerId = sourceRuntimeEnvironmentId?.trim() || null
+    const sourceSettings = settingsForRuntimeOwner(initialState.settings, runtimeOwnerId)
+    const resolvedConnectionId =
+      ctx.sourceOwner || runtimeOwnerId
+        ? undefined
+        : getConnectionIdForFileFromState(initialState, ctx.worktreeId, ctx.sourceFilePath)
+    const sourceOwner: HttpLinkSourceOwner =
+      ctx.sourceOwner ??
+      (runtimeOwnerId
+        ? { kind: 'runtime', runtimeEnvironmentId: runtimeOwnerId }
+        : resolvedConnectionId === undefined
+          ? { kind: 'unknown' }
+          : resolvedConnectionId === null
+            ? { kind: 'local' }
+            : { kind: 'ssh', connectionId: resolvedConnectionId })
+    if (sourceOwner.kind === 'unknown') {
+      return
+    }
+    const sourceConnectionId = sourceOwner.kind === 'ssh' ? sourceOwner.connectionId : undefined
     const fileContext = {
       settings: sourceSettings,
       worktreeId: ctx.worktreeId,
@@ -4111,7 +4221,7 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
       return
     }
     if (target.kind === 'external') {
-      openHttpLink(target.url, { worktreeId: ctx.worktreeId })
+      openHttpLink(target.url, { worktreeId: ctx.worktreeId, sourceOwner })
       return
     }
     if (target.kind === 'file') {
@@ -4222,7 +4332,7 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
   // Why: only edit-mode files are restored — diffs and conflict views depend on
   // transient git state that may have changed between sessions. Restoring them
   // would show stale data or fail to load entirely.
-  hydrateEditorSession: (session) => {
+  hydrateEditorSession: (session, options) => {
     set((s) => {
       const openFilesByWorktree = session.openFilesByWorktree ?? {}
       const persistedActiveFileIdByWorktree = session.activeFileIdByWorktree ?? {}
@@ -4241,6 +4351,7 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
       for (const workspace of s.folderWorkspaces) {
         validWorktreeIds.add(folderWorkspaceKey(workspace.id))
       }
+      addAdditionalValidWorkspaceKeys(validWorktreeIds, options)
 
       const openFiles: OpenFile[] = []
       const editorDrafts: Record<string, string> = {}
@@ -4277,7 +4388,11 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
             worktreeId,
             runtimeEnvironmentId: pf.runtimeEnvironmentId
           })
-          if (pf.dirtyDraftContent !== undefined) {
+          // Why: read-only tabs (AI Vault View Log) must restore clean. Ignore
+          // any persisted dirty draft / baseline so a restored agent log can
+          // never come back writable or as a hot-exit draft to be saved.
+          const isReadOnly = pf.readOnly === true
+          if (!isReadOnly && pf.dirtyDraftContent !== undefined) {
             editorDrafts[id] = pf.dirtyDraftContent
           }
           openFiles.push({
@@ -4289,9 +4404,22 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
             // Re-detect on hydrate so newly-supported extensions like .ipynb
             // stop reopening as raw JSON/plain text after the upgrade.
             language: detectLanguage(pf.relativePath || pf.filePath),
-            isDirty: pf.dirtyDraftContent !== undefined,
+            isDirty: !isReadOnly && pf.dirtyDraftContent !== undefined,
             isPreview: pf.isPreview,
             runtimeEnvironmentId: pf.runtimeEnvironmentId,
+            ...(isReadOnly ? { readOnly: true } : {}),
+            ...(isReadOnly && pf.liveTail === true ? { liveTail: true } : {}),
+            lastKnownDiskSignature: isReadOnly ? undefined : pf.lastKnownDiskSignature,
+            // Why: hard-suspends autosave until the restored-tab conflict scan
+            // verifies disk against the baseline — an async race would let a
+            // slow remote read lose to the autosave timer and clobber an
+            // offline agent write.
+            pendingDiskBaselineVerification:
+              !isReadOnly &&
+              pf.dirtyDraftContent !== undefined &&
+              pf.lastKnownDiskSignature !== undefined
+                ? true
+                : undefined,
             mode: 'edit'
           })
         }

@@ -4,6 +4,7 @@ const {
   mockInspectRuntimeTerminalProcess,
   mockSendRuntimePtyInputVerified,
   mockPasteDraftToAgentPtyWhenReady,
+  mockShowAutomationPromptNotSentToast,
   mockTrack,
   store,
   storeListeners,
@@ -12,6 +13,7 @@ const {
   mockInspectRuntimeTerminalProcess: vi.fn(),
   mockSendRuntimePtyInputVerified: vi.fn(),
   mockPasteDraftToAgentPtyWhenReady: vi.fn(),
+  mockShowAutomationPromptNotSentToast: vi.fn(),
   mockTrack: vi.fn(),
   storeListeners: new Set<(state: unknown, previousState: unknown) => void>(),
   startupLeafId: '11111111-1111-4111-8111-111111111111',
@@ -86,6 +88,10 @@ vi.mock('@/lib/browser-uuid', () => ({
 
 vi.mock('@/lib/telemetry', () => ({
   track: mockTrack
+}))
+
+vi.mock('@/lib/agent-background-session-timeout-toast', () => ({
+  showAutomationPromptNotSentToast: mockShowAutomationPromptNotSentToast
 }))
 
 import {
@@ -298,6 +304,65 @@ describe('ensureAgentStartupInTerminal prompt delivery', () => {
     expect(mockTrack).not.toHaveBeenCalledWith('agent_prompt_sent', expect.anything())
   })
 
+  it('surfaces the not-sent toast when a follow-up prompt is dropped', async () => {
+    // Foreground never becomes a recognized agent and there is no live child,
+    // so the readiness wait times out and the prompt is not delivered.
+    mockInspectRuntimeTerminalProcess.mockResolvedValue({
+      foregroundProcess: 'zsh',
+      hasChildProcesses: false
+    })
+
+    await ensureAgentStartupInTerminal({
+      worktreeId: 'wt-1',
+      startup: {
+        agent: 'aider',
+        launchCommand: 'aider',
+        expectedProcess: 'aider',
+        followupPrompt: 'fix the spinner',
+        launchConfig: { agentArgs: '', agentEnv: {} }
+      }
+    })
+
+    expect(mockSendRuntimePtyInputVerified).not.toHaveBeenCalled()
+    expect(mockShowAutomationPromptNotSentToast).toHaveBeenCalledWith('aider')
+  })
+
+  it('does not toast when a follow-up prompt is delivered', async () => {
+    await ensureAgentStartupInTerminal({
+      worktreeId: 'wt-1',
+      startup: {
+        agent: 'aider',
+        launchCommand: 'aider',
+        expectedProcess: 'aider',
+        followupPrompt: 'fix the spinner',
+        launchConfig: { agentArgs: '', agentEnv: {} }
+      }
+    })
+
+    expect(mockShowAutomationPromptNotSentToast).not.toHaveBeenCalled()
+  })
+
+  it('passes an onTimeout that surfaces the not-sent toast to the draft paste path', async () => {
+    await ensureAgentStartupInTerminal({
+      worktreeId: 'wt-1',
+      startup: {
+        agent: 'claude',
+        launchCommand: 'claude',
+        expectedProcess: 'claude',
+        followupPrompt: null,
+        launchConfig: { agentArgs: '', agentEnv: {} },
+        draftPrompt: 'review this before sending'
+      }
+    })
+
+    const call = mockPasteDraftToAgentPtyWhenReady.mock.calls.at(-1)?.[0] as
+      | { onTimeout?: () => void }
+      | undefined
+    expect(call?.onTimeout).toBeTypeOf('function')
+    call?.onTimeout?.()
+    expect(mockShowAutomationPromptNotSentToast).toHaveBeenCalledWith('claude')
+  })
+
   it('does not track when follow-up prompt delivery rejects', async () => {
     mockSendRuntimePtyInputVerified.mockRejectedValue(new Error('runtime timeout'))
 
@@ -335,7 +400,8 @@ describe('ensureAgentStartupInTerminal prompt delivery', () => {
       ptyId: 'pty-1',
       content: 'review this before sending',
       agent: 'claude',
-      forcePaste: true
+      forcePaste: true,
+      onTimeout: expect.any(Function)
     })
     expect(mockTrack).not.toHaveBeenCalledWith('agent_prompt_sent', expect.anything())
   })
@@ -378,7 +444,8 @@ describe('ensureAgentStartupInTerminal prompt delivery', () => {
       ptyId: 'agent-pty',
       content: 'Linear context draft',
       agent: 'codex',
-      forcePaste: true
+      forcePaste: true,
+      onTimeout: expect.any(Function)
     })
   })
 
@@ -434,7 +501,8 @@ describe('ensureAgentStartupInTerminal prompt delivery', () => {
       ptyId: 'pty-delayed',
       content: 'https://github.com/stablyai/orca/pull/2051',
       agent: 'codex',
-      forcePaste: true
+      forcePaste: true,
+      onTimeout: expect.any(Function)
     })
   })
 
@@ -515,7 +583,8 @@ describe('ensureAgentStartupInTerminal prompt delivery', () => {
       ptyId: 'startup-pty',
       content: 'linked draft',
       agent: 'codex',
-      forcePaste: true
+      forcePaste: true,
+      onTimeout: expect.any(Function)
     })
   })
 

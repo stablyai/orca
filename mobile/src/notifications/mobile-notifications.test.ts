@@ -1,6 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import * as Notifications from 'expo-notifications'
-import { subscribeToDesktopNotifications } from './mobile-notifications'
+import {
+  setScheduledNotificationsMaxForTests,
+  subscribeToDesktopNotifications
+} from './mobile-notifications'
 import type { RpcClient } from '../transport/rpc-client'
 import { loadPushNotificationsEnabled } from '../storage/preferences'
 
@@ -267,5 +270,49 @@ describe('subscribeToDesktopNotifications', () => {
     await flushAsync()
 
     expect(Notifications.dismissNotificationAsync).not.toHaveBeenCalled()
+  })
+
+  // Why: notificationId is unique per completion, so the map grew unbounded when
+  // the desktop never sent a dismiss (the remote-mobile case). It is now capped.
+  it('evicts the oldest scheduled entry once the cap is exceeded', async () => {
+    setScheduledNotificationsMaxForTests(1)
+    try {
+      vi.mocked(loadPushNotificationsEnabled).mockResolvedValue(true)
+      vi.mocked(Notifications.getPermissionsAsync).mockResolvedValue({
+        status: 'granted',
+        canAskAgain: true
+      } as never)
+      vi.mocked(Notifications.scheduleNotificationAsync)
+        .mockResolvedValueOnce('scheduled-old')
+        .mockResolvedValueOnce('scheduled-new')
+      vi.mocked(Notifications.dismissNotificationAsync).mockResolvedValue(undefined)
+      let onEvent: ((data: unknown) => void) | null = null
+      const client = {
+        subscribe: vi.fn((_method, _params, callback: (data: unknown) => void) => {
+          onEvent = callback
+          return vi.fn()
+        }),
+        getState: vi.fn(() => 'connected'),
+        sendRequest: vi.fn()
+      } as unknown as RpcClient
+
+      subscribeToDesktopNotifications(client, 'host-1')
+      onEvent?.({ type: 'notification', title: 't', body: 'b', notificationId: 'agent:old' })
+      await flushAsync()
+      onEvent?.({ type: 'notification', title: 't', body: 'b', notificationId: 'agent:new' })
+      await flushAsync()
+
+      // The older entry was evicted by the cap: dismissing it is a no-op...
+      onEvent?.({ type: 'dismiss', notificationId: 'agent:old' })
+      await flushAsync()
+      expect(Notifications.dismissNotificationAsync).not.toHaveBeenCalledWith('scheduled-old')
+
+      // ...while the most-recent entry is retained and still dismissable.
+      onEvent?.({ type: 'dismiss', notificationId: 'agent:new' })
+      await flushAsync()
+      expect(Notifications.dismissNotificationAsync).toHaveBeenCalledWith('scheduled-new')
+    } finally {
+      setScheduledNotificationsMaxForTests()
+    }
   })
 })

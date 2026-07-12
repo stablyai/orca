@@ -6,6 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const {
   callMock,
+  runtimeClientConstructorMock,
   serveOrcaAppMock,
   getDefaultUserDataPathMock,
   addEnvironmentFromPairingCodeMock,
@@ -13,6 +14,7 @@ const {
   spawnMock
 } = vi.hoisted(() => ({
   callMock: vi.fn(),
+  runtimeClientConstructorMock: vi.fn(),
   serveOrcaAppMock: vi.fn(),
   getDefaultUserDataPathMock: vi.fn(() => '/tmp/orca-user-data'),
   addEnvironmentFromPairingCodeMock: vi.fn(),
@@ -33,6 +35,7 @@ vi.mock('./runtime-client', () => {
       remotePairingCode?: string | null,
       environmentSelector?: string | null
     ) {
+      runtimeClientConstructorMock()
       const effectivePairingCode =
         remotePairingCode === undefined
           ? (process.env.ORCA_PAIRING_CODE ?? process.env.ORCA_REMOTE_PAIRING)
@@ -51,10 +54,12 @@ vi.mock('./runtime-client', () => {
 
   class RuntimeClientError extends Error {
     readonly code: string
+    readonly data?: unknown
 
-    constructor(code: string, message: string) {
+    constructor(code: string, message: string, data?: unknown) {
       super(message)
       this.code = code
+      this.data = data
     }
   }
 
@@ -111,18 +116,21 @@ import {
   main,
   normalizeWorktreeSelector
 } from './index'
-import { GLOBAL_FLAGS } from './args'
+import { GLOBAL_FLAGS, specPaths } from './args'
 import { RuntimeRpcFailureError } from './runtime-client'
 import { buildWorktree, okFixture, queueFixtures, worktreeListFixture } from './test-fixtures'
 import { encodePairingOffer, PAIRING_OFFER_VERSION } from '../shared/pairing'
 
 describe('COMMAND_SPECS collision check', () => {
-  it('has no duplicate command paths', () => {
+  it('has no duplicate command or alias paths', () => {
+    // Why: first-match resolution would silently shadow duplicate aliases.
     const seen = new Set<string>()
     for (const spec of COMMAND_SPECS) {
-      const key = spec.path.join(' ')
-      expect(seen.has(key), `Duplicate COMMAND_SPECS path: "${key}"`).toBe(false)
-      seen.add(key)
+      for (const path of specPaths(spec)) {
+        const key = path.join(' ')
+        expect(seen.has(key), `Duplicate command/alias path: "${key}"`).toBe(false)
+        seen.add(key)
+      }
     }
   })
 
@@ -141,7 +149,174 @@ describe('COMMAND_SPECS collision check', () => {
   })
 })
 
+describe('command aliases dispatch to the canonical handler', () => {
+  let logSpy: ReturnType<typeof vi.spyOn>
+
+  beforeEach(() => {
+    callMock.mockReset()
+    logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
+  })
+
+  afterEach(() => {
+    callMock.mockReset()
+    // Why: restore console.log so a downstream describe's vi.spyOn starts from a
+    // clean spy — otherwise this block's --json output leaks into its calls[0].
+    logSpy.mockRestore()
+  })
+
+  it('runs `worktree remove` as the canonical `worktree rm` (the incident)', async () => {
+    queueFixtures(callMock, okFixture('req', { removed: true }))
+
+    await main(['worktree', 'remove', '--worktree', 'id:wt-1', '--force', '--json'], '/tmp/repo')
+
+    expect(callMock).toHaveBeenCalledWith(
+      'worktree.rm',
+      expect.objectContaining({ worktree: 'id:wt-1', force: true })
+    )
+  })
+
+  it('runs `worktree delete` as the canonical `worktree rm`', async () => {
+    queueFixtures(callMock, okFixture('req', { removed: true }))
+
+    await main(['worktree', 'delete', '--worktree', 'id:wt-1', '--json'], '/tmp/repo')
+
+    expect(callMock).toHaveBeenCalledWith(
+      'worktree.rm',
+      expect.objectContaining({ worktree: 'id:wt-1' })
+    )
+  })
+
+  it('still runs `terminal focus` after the handler de-duplication', async () => {
+    queueFixtures(callMock, okFixture('req', { focus: { ok: true } }))
+
+    await main(['terminal', 'focus', '--terminal', 'term_abc', '--json'], '/tmp/repo')
+
+    expect(callMock).toHaveBeenCalledWith('terminal.focus', expect.objectContaining({}))
+  })
+
+  it('serves `agent-context --json` without contacting the runtime', async () => {
+    runtimeClientConstructorMock.mockClear()
+    await main(['agent-context', '--json'], '/tmp/repo')
+
+    // Why: pure local read — proves the SSH/offline property (no RPC).
+    expect(runtimeClientConstructorMock).not.toHaveBeenCalled()
+    expect(callMock).not.toHaveBeenCalled()
+    const schema = JSON.parse(String(logSpy.mock.calls.at(-1)?.[0]))
+    expect(schema.schemaVersion).toBe(1)
+    const rm = schema.commands.find(
+      (command: { command: string }) => command.command === 'worktree rm'
+    )
+    expect(rm.aliases).toContainEqual(['worktree', 'remove'])
+  })
+
+  it('keeps `agent-context` local when remote environment variables are set', async () => {
+    vi.stubEnv('ORCA_PAIRING_CODE', 'pairing-code')
+    vi.stubEnv('ORCA_ENVIRONMENT', 'stale-environment')
+    try {
+      await main(['agent-context', '--json'], '/tmp/repo')
+
+      expect(process.exitCode).not.toBe(1)
+      expect(callMock).not.toHaveBeenCalled()
+    } finally {
+      vi.unstubAllEnvs()
+    }
+  })
+})
+
+describe('unknown command surfaces a suggestion', () => {
+  let errorSpy: ReturnType<typeof vi.spyOn>
+
+  beforeEach(() => {
+    callMock.mockReset()
+    errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+  })
+
+  afterEach(() => {
+    errorSpy.mockRestore()
+    process.exitCode = 0
+  })
+
+  it('prints did-you-mean for a near-miss command and exits non-zero', async () => {
+    await main(['worktree', 'remov'], '/tmp/repo')
+
+    expect(process.exitCode).toBe(1)
+    const stderr = errorSpy.mock.calls.map((call) => String(call[0])).join('\n')
+    expect(stderr).toContain('Unknown command: worktree remov')
+    expect(stderr).toContain('orca worktree')
+  })
+
+  it('reports a mistyped pre-command flag without swallowing the command', async () => {
+    await main(['--jso', 'worktree', 'list'], '/tmp/repo')
+
+    expect(process.exitCode).toBe(1)
+    const stderr = errorSpy.mock.calls.map((call) => String(call[0])).join('\n')
+    expect(stderr).toContain('Unknown flag --jso for command: worktree list')
+    expect(stderr).toContain('--json')
+  })
+
+  it('reports a pre-command flag that belongs to another command', async () => {
+    await main(['--workspace', 'worktree', 'list'], '/tmp/repo')
+
+    expect(process.exitCode).toBe(1)
+    const stderr = errorSpy.mock.calls.map((call) => String(call[0])).join('\n')
+    expect(stderr).toContain('Unknown flag --workspace for command: worktree list')
+  })
+
+  it('reports a pre-command typo when a global flag splits the command path', async () => {
+    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
+
+    await main(['--jso', 'worktree', '--json', 'list'], '/tmp/repo')
+
+    expect(process.exitCode).toBe(1)
+    expect(logSpy.mock.calls.flat().join('\n')).toContain(
+      'Unknown flag --jso for command: worktree list'
+    )
+    expect(callMock).not.toHaveBeenCalled()
+    logSpy.mockRestore()
+  })
+
+  it.each(['environment', 'pairing-code'])(
+    'rejects --%s without a selector before runtime construction',
+    async (flag) => {
+      runtimeClientConstructorMock.mockClear()
+
+      await main([`--${flag}`, 'worktree', 'list'], '/tmp/repo')
+
+      expect(process.exitCode).toBe(1)
+      const stderr = errorSpy.mock.calls.map((call) => String(call[0])).join('\n')
+      expect(stderr).toContain(`Flag --${flag} requires a value.`)
+      expect(runtimeClientConstructorMock).not.toHaveBeenCalled()
+      expect(callMock).not.toHaveBeenCalled()
+    }
+  )
+})
+
+describe('unknown help command surfaces a suggestion', () => {
+  it.each([
+    ['help prefix', ['help', 'worktree', 'remov']],
+    ['help flag', ['worktree', 'remov', '--help']]
+  ])('prints did-you-mean for the %s form', async (_label, argv) => {
+    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
+
+    await main(argv, '/tmp/repo')
+
+    expect(process.exitCode).toBe(1)
+    expect(logSpy.mock.calls.flat().join('\n')).toContain('Did you mean: orca worktree')
+    logSpy.mockRestore()
+    process.exitCode = 0
+  })
+})
+
 describe('orca root help', () => {
+  it('advertises machine-readable agent discovery', async () => {
+    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
+
+    await main([], '/tmp/repo')
+
+    expect(logSpy.mock.calls.flat().join('\n')).toContain('agent-context')
+    logSpy.mockRestore()
+  })
+
   it('advertises computer-use capabilities discovery', async () => {
     const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
 
@@ -271,7 +446,7 @@ describe('orca root help', () => {
     expect(createHelp).not.toContain('folderWorkspaceId')
     expect(createHelp).toContain('folder:<id>')
     expect(createHelp).toContain('folder:<folderId>')
-    expect(createHelp).toContain('worktree:<id>')
+    expect(createHelp).toContain('worktree:<worktreeId>')
     expect(createHelp).toContain(
       '--no-parent only affects Orca lineage; omit --base-branch to use the repo default base'
     )
@@ -324,6 +499,9 @@ describe('orca cli worktree awareness', () => {
     delete process.env.ORCA_USER_DATA_PATH
     delete process.env.ORCA_WORKSPACE_ID
     delete process.env.ORCA_WORKTREE_ID
+    // Isolate the pane key so claude-teams tests that set it don't leak a
+    // senderPaneKey into later orchestration.send assertions.
+    delete process.env.ORCA_PANE_KEY
     serveOrcaAppMock.mockReset()
     getDefaultUserDataPathMock.mockClear()
     addEnvironmentFromPairingCodeMock.mockReset()
@@ -432,6 +610,38 @@ describe('orca cli worktree awareness', () => {
       worktree: 'id:repo::/tmp/repo/feature'
     })
     expect(logSpy).toHaveBeenCalledTimes(1)
+  })
+
+  it('resolves the invocation cwd from ORCA_CLI_CWD when no cwd is passed', async () => {
+    // Why: the SSH relay bridge runs the CLI on the Orca host with the remote
+    // shell's cwd carried in ORCA_CLI_CWD (#7716); cwd-based selectors must
+    // resolve against it, not the host process cwd.
+    process.env.ORCA_CLI_CWD = '/tmp/repo/feature/src'
+    try {
+      queueFixtures(
+        callMock,
+        worktreeListFixture([
+          buildWorktree('/tmp/repo', 'main'),
+          buildWorktree('/tmp/repo/feature', 'feature/foo')
+        ]),
+        okFixture('req_1', {
+          worktree: {
+            id: 'repo::/tmp/repo/feature',
+            branch: 'feature/foo',
+            path: '/tmp/repo/feature'
+          }
+        })
+      )
+      vi.spyOn(console, 'log').mockImplementation(() => {})
+
+      await main(['worktree', 'current', '--json'])
+
+      expect(callMock).toHaveBeenNthCalledWith(2, 'worktree.show', {
+        worktree: 'id:repo::/tmp/repo/feature'
+      })
+    } finally {
+      delete process.env.ORCA_CLI_CWD
+    }
   })
 
   it.skipIf(process.platform === 'win32')(
@@ -548,6 +758,9 @@ describe('orca cli worktree awareness', () => {
     expect(callMock).not.toHaveBeenCalled()
     expect([...logSpy.mock.calls, ...errSpy.mock.calls].flat().join('\n')).toContain(
       'current is a local cwd shortcut and cannot be resolved against a remote runtime.'
+    )
+    expect([...logSpy.mock.calls, ...errSpy.mock.calls].flat().join('\n')).toContain(
+      'id:<repo-id>::<path>'
     )
     expect(process.exitCode).toBe(1)
 
@@ -1679,7 +1892,7 @@ describe('orca cli worktree awareness', () => {
           message: 'Parent selector was not found.',
           data: {
             nextSteps: [
-              'Pass a valid --parent-worktree selector such as folder:<id>, worktree:<id>, id:<worktreeId>, branch:<branch>, issue:<number>, path:<absolute-path>, or active/current.',
+              'Pass a valid --parent-worktree selector such as folder:<id>, worktree:<worktreeId>, id:<repo-id>::<path>, branch:<branch>, issue:<number>, path:<absolute-path>, or active/current.',
               'Retry with --no-parent to create without lineage.'
             ]
           }

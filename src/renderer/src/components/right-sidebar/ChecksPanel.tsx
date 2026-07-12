@@ -87,6 +87,7 @@ import { getHostedReviewCacheKey, refreshHostedReviewCard } from '@/store/slices
 import { toast } from 'sonner'
 import { useConfirmationDialog } from '@/components/confirmation-dialog'
 import { type ChecksPanelReview, selectChecksPanelReview } from './checks-panel-review'
+import { selectReviewCacheEntry } from './review-cache-entry-selection'
 import {
   checksPanelAsyncResultKey,
   checksPanelHostedReviewAsyncResultKey,
@@ -123,6 +124,7 @@ import {
   shouldPollChecksPanelRuntimeSshStatus,
   type ChecksPanelGitStatusSnapshot
 } from './checks-panel-git-status-snapshot'
+import { resolveChecksPanelPRRefreshRequest } from './checks-panel-pr-refresh-request'
 import { installWindowVisibilityInterval } from '@/lib/window-visibility-interval'
 import { useMountedRef } from '@/hooks/useMountedRef'
 import { callRuntimeRpc, getActiveRuntimeTarget } from '@/runtime/runtime-rpc-client'
@@ -394,7 +396,6 @@ export default function ChecksPanel(): React.JSX.Element {
   const settings = useAppStore((s) => s.settings)
   const updateSettings = useAppStore((s) => s.updateSettings)
   const updateRepo = useAppStore((s) => s.updateRepo)
-  const prCache = useAppStore((s) => s.prCache)
   const fetchPRForBranch = useAppStore((s) => s.fetchPRForBranch)
   const fetchHostedReviewForBranch = useAppStore((s) => s.fetchHostedReviewForBranch)
   const expireGitHubPRRefreshState = useAppStore((s) => s.expireGitHubPRRefreshState)
@@ -471,6 +472,7 @@ export default function ChecksPanel(): React.JSX.Element {
   const confirm = useConfirmationDialog()
   const prevChecksRef = useRef<string>('')
   const conflictSummaryRefreshKeyRef = useRef<string | null>(null)
+  const panelVisibleSinceRef = useRef<number | null>(null)
   commentsRef.current = comments
   const prGenerationRecords = useAppStore((s) => s.pullRequestGenerationRecords)
   const allocatePullRequestGenerationRequestId = useAppStore(
@@ -648,8 +650,11 @@ export default function ChecksPanel(): React.JSX.Element {
     refreshContextKeyRef.current = refreshContextKey
     refreshRequestKeyRef.current = null
   }
-  const prCacheEntry = prCacheKey ? prCache[prCacheKey] : undefined
+  // Why: background PR refreshes replace the cache map; Checks only renders
+  // the entry for the active repo and branch.
+  const prCacheEntry = useAppStore((s) => selectReviewCacheEntry(s.prCache, prCacheKey || null))
   const pr: PRInfo | null = prCacheEntry?.data ?? null
+  const prCachedHasPR = prCacheEntry ? prCacheEntry.data !== null : null
   const hostedReview = useAppStore((s) =>
     hostedReviewCacheKey ? (s.hostedReviewCache[hostedReviewCacheKey]?.data ?? null) : null
   )
@@ -733,6 +738,14 @@ export default function ChecksPanel(): React.JSX.Element {
     rawPRRefreshState,
     repo?.id
   ])
+
+  useEffect(() => {
+    if (!isPanelVisible) {
+      panelVisibleSinceRef.current = null
+      return
+    }
+    panelVisibleSinceRef.current = Date.now()
+  }, [isPanelVisible, panelContextKey])
 
   // Why: select only timestamps (not whole cache records) so the entry-refresh
   // effect doesn't re-run on every cache mutation. See
@@ -1219,7 +1232,12 @@ export default function ChecksPanel(): React.JSX.Element {
         staleWhileRevalidate: true
       })
       if (activeWorktreeId && !isGitLabReviewContext) {
-        enqueueGitHubPRRefresh(activeWorktreeId, 'swr', 30)
+        const refreshRequest = resolveChecksPanelPRRefreshRequest({
+          cachedHasPR: prCachedHasPR,
+          cachedFetchedAt: prFetchedAt ?? null,
+          panelVisibleSince: panelVisibleSinceRef.current
+        })
+        enqueueGitHubPRRefresh(activeWorktreeId, refreshRequest.reason, refreshRequest.priority)
       }
     }
   }, [
@@ -1237,6 +1255,8 @@ export default function ChecksPanel(): React.JSX.Element {
     linkedGiteaPR,
     linkedGitLabMR,
     linkedPR,
+    prCachedHasPR,
+    prFetchedAt,
     repo
   ])
 

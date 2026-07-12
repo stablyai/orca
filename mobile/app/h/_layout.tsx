@@ -46,6 +46,10 @@ function HostStack({ animation }: { animation: 'none' | 'default' }) {
         name="[hostId]/source-control/[worktreeId]"
         options={{ title: 'Source Control' }}
       />
+      <Stack.Screen
+        name="[hostId]/agent-history/[worktreeId]"
+        options={{ title: 'Agent Session History' }}
+      />
       <Stack.Screen name="[hostId]/review/[worktreeId]" options={{ title: 'Changes' }} />
       <Stack.Screen name="[hostId]/pr/[worktreeId]" options={{ title: 'Pull Request' }} />
     </Stack>

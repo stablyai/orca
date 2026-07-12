@@ -250,6 +250,32 @@ describe('isMutablePRConversationComment', () => {
 })
 
 describe('PRCommentsList', () => {
+  it('pins the comments header while scrolling the sidebar', () => {
+    const comments: PRComment[] = [
+      {
+        id: 1,
+        author: 'AmethystLiang',
+        authorAvatarUrl: '',
+        body: 'Existing review context',
+        createdAt: '2026-05-14T00:00:00Z',
+        url: 'https://github.com/acme/widgets/pull/42#issuecomment-1'
+      }
+    ]
+
+    const markup = renderWithTooltips(
+      React.createElement(PRCommentsList, {
+        comments,
+        commentsLoading: false,
+        onAddComment: () => Promise.resolve({ ok: true as const })
+      })
+    )
+
+    const commentsHeaderIndex = markup.indexOf('Comments')
+    const stickyIndex = markup.indexOf('sticky top-0 z-10 bg-sidebar/95 backdrop-blur-sm')
+    expect(stickyIndex).toBeGreaterThan(-1)
+    expect(stickyIndex).toBeLessThan(commentsHeaderIndex)
+  })
+
   it('places the collapsed add-comment action in the comments header', () => {
     const comments: PRComment[] = [
       {
