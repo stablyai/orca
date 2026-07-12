@@ -17,6 +17,7 @@
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import type * as AgentStatusModule from '@/lib/agent-status'
+import type * as RuntimeTerminalStreamModule from '@/runtime/runtime-terminal-stream'
 
 vi.mock('sonner', () => ({
   toast: { info: vi.fn(), success: vi.fn(), error: vi.fn(), warning: vi.fn() }
@@ -32,6 +33,11 @@ vi.mock('@/lib/agent-status', async (importOriginal) => {
   return { ...actual, detectAgentStatusFromTitle: vi.fn().mockReturnValue(null) }
 })
 
+vi.mock('@/runtime/runtime-terminal-stream', async (importOriginal) => {
+  const actual = await importOriginal<typeof RuntimeTerminalStreamModule>()
+  return { ...actual, parseRemoteRuntimePtyId: vi.fn(actual.parseRemoteRuntimePtyId) }
+})
+
 const mockApi = {
   worktrees: { list: vi.fn().mockResolvedValue([]), remove: vi.fn().mockResolvedValue(undefined) },
   pty: { kill: vi.fn().mockResolvedValue(undefined) }
@@ -41,6 +47,7 @@ const mockApi = {
 globalThis.window = { api: mockApi }
 
 import { createTestStore, seedStore, makeWorktree, makeTab } from './store-test-helpers'
+import { parseRemoteRuntimePtyId } from '@/runtime/runtime-terminal-stream'
 
 const WT1 = 'repo1::/path/wt1'
 const WT2 = 'repo1::/path/wt2'
@@ -194,5 +201,51 @@ describe('bulk worktree purge evicts the per-tab/per-pty terminal maps it previo
     expect(s.pendingCodexPaneRestartIds[REMOTE_HANDLE1]).toBe(true)
     expect(s.suppressedPtyExitIds[REMOTE_PTY2_SAME_HANDLE]).toBe(true)
     expect(s.pendingCodexPaneRestartIds[REMOTE_PTY2_SAME_HANDLE]).toBe(true)
+  })
+
+  it('retains a raw remote handle that is also a surviving local PTY id', () => {
+    const store = createTestStore()
+    seedMaps(store)
+    store.setState((s) => ({
+      ptyIdsByTabId: {
+        ...s.ptyIdsByTabId,
+        [TAB2]: [...s.ptyIdsByTabId[TAB2], REMOTE_HANDLE1]
+      },
+      pendingCodexPaneRestartIds: {
+        ...s.pendingCodexPaneRestartIds,
+        [REMOTE_HANDLE1]: true
+      }
+    }))
+
+    store.getState().purgeWorktreeTerminalState([WT1])
+    const s = store.getState()
+
+    expect(s.suppressedPtyExitIds[REMOTE_PTY1]).toBeUndefined()
+    expect(s.pendingCodexPaneRestartIds[REMOTE_PTY1]).toBeUndefined()
+    expect(s.suppressedPtyExitIds[REMOTE_HANDLE1]).toBe(true)
+    expect(s.pendingCodexPaneRestartIds[REMOTE_HANDLE1]).toBe(true)
+  })
+
+  it('skips surviving terminal bindings when the doomed worktree has no remote alias', () => {
+    const store = createTestStore()
+    seedMaps(store)
+    store.setState((s) => ({
+      terminalLayoutsByTabId: {
+        ...s.terminalLayoutsByTabId,
+        [TAB1]: {
+          ...s.terminalLayoutsByTabId[TAB1],
+          ptyIdsByLeafId: { 'leaf-1': PTY1_SPLIT }
+        }
+      }
+    }))
+    const parseRemotePtyId = vi.mocked(parseRemoteRuntimePtyId)
+    parseRemotePtyId.mockClear()
+
+    store.getState().purgeWorktreeTerminalState([WT1])
+
+    // Why: local-only purges must stay proportional to the removed worktree,
+    // rather than synchronously parsing every surviving terminal in the renderer.
+    expect(parseRemotePtyId).toHaveBeenCalledTimes(3)
+    expect(parseRemotePtyId).not.toHaveBeenCalledWith(PTY2)
   })
 })

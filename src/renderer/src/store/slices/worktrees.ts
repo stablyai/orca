@@ -1908,28 +1908,26 @@ function buildWorktreePurgeState(s: AppState, worktreeIds: string[]): Partial<Ap
   // Why: some terminal/agent maps are keyed by ptyId, not tabId. Collect every
   // durable wake hint too, because slept panes have already left the live index.
   const doomedPtyIds = new Set<string>()
-  const addPtyIdAliases = (target: Set<string>, ptyId: string | null | undefined): void => {
+  const doomedRemoteHandleAliases = new Set<string>()
+  const addDoomedPtyId = (ptyId: string | null | undefined): void => {
     if (!ptyId) {
       return
     }
-    target.add(ptyId)
+    doomedPtyIds.add(ptyId)
     const remoteHandle = parseRemoteRuntimePtyId(ptyId)?.handle
     if (remoteHandle) {
-      target.add(remoteHandle)
+      doomedPtyIds.add(remoteHandle)
+      doomedRemoteHandleAliases.add(remoteHandle)
     }
   }
-  const addTabPtyIds = (
-    target: Set<string>,
-    tabId: string,
-    tabPtyId: string | null | undefined
-  ): void => {
+  const addDoomedTabPtyIds = (tabId: string, tabPtyId: string | null | undefined): void => {
     for (const ptyId of s.ptyIdsByTabId?.[tabId] ?? []) {
-      addPtyIdAliases(target, ptyId)
+      addDoomedPtyId(ptyId)
     }
-    addPtyIdAliases(target, tabPtyId)
-    addPtyIdAliases(target, s.lastKnownRelayPtyIdByTabId?.[tabId])
+    addDoomedPtyId(tabPtyId)
+    addDoomedPtyId(s.lastKnownRelayPtyIdByTabId?.[tabId])
     for (const ptyId of Object.values(s.terminalLayoutsByTabId?.[tabId]?.ptyIdsByLeafId ?? {})) {
-      addPtyIdAliases(target, ptyId)
+      addDoomedPtyId(ptyId)
     }
   }
   const doomedBrowserWorkspaceIds = new Set<string>()
@@ -1940,7 +1938,7 @@ function buildWorktreePurgeState(s: AppState, worktreeIds: string[]): Partial<Ap
       doomedTabIds.add(tab.id)
       // Null-tolerant like the omit* helpers below: some callers pass partial
       // state that omits this slice; the production store always inits it to {}.
-      addTabPtyIds(doomedPtyIds, tab.id, tab.ptyId)
+      addDoomedTabPtyIds(tab.id, tab.ptyId)
       // Why: a removed worktree's panes are gone for good, so drop their
       // hibernation output epochs from that module-level map (mirrors the
       // hosted-review prune above). A future pane mints a fresh leafId at epoch 0.
@@ -1955,13 +1953,43 @@ function buildWorktreePurgeState(s: AppState, worktreeIds: string[]): Partial<Ap
   }
   // Why: remote runtime handles are environment-scoped before wrapping. If a
   // surviving tab owns the same raw alias, its in-flight exit guard must stay.
-  const survivingPtyIds = new Set<string>()
-  for (const [worktreeId, tabs] of Object.entries(s.tabsByWorktree)) {
-    if (worktreeIdSet.has(worktreeId)) {
-      continue
+  const survivingRemoteHandleAliases = new Set<string>()
+  if (doomedRemoteHandleAliases.size > 0) {
+    const recordSurvivingAlias = (ptyId: string | null | undefined): boolean => {
+      if (ptyId) {
+        const matchingAlias = doomedRemoteHandleAliases.has(ptyId)
+          ? ptyId
+          : parseRemoteRuntimePtyId(ptyId)?.handle
+        if (matchingAlias && doomedRemoteHandleAliases.has(matchingAlias)) {
+          survivingRemoteHandleAliases.add(matchingAlias)
+        }
+      }
+      return survivingRemoteHandleAliases.size === doomedRemoteHandleAliases.size
     }
-    for (const tab of tabs) {
-      addTabPtyIds(survivingPtyIds, tab.id, tab.ptyId)
+    scanSurvivingTabs: for (const worktreeId in s.tabsByWorktree) {
+      if (worktreeIdSet.has(worktreeId)) {
+        continue
+      }
+      for (const tab of s.tabsByWorktree[worktreeId]) {
+        for (const ptyId of s.ptyIdsByTabId?.[tab.id] ?? []) {
+          if (recordSurvivingAlias(ptyId)) {
+            break scanSurvivingTabs
+          }
+        }
+        if (
+          recordSurvivingAlias(tab.ptyId) ||
+          recordSurvivingAlias(s.lastKnownRelayPtyIdByTabId?.[tab.id])
+        ) {
+          break scanSurvivingTabs
+        }
+        for (const ptyId of Object.values(
+          s.terminalLayoutsByTabId?.[tab.id]?.ptyIdsByLeafId ?? {}
+        )) {
+          if (recordSurvivingAlias(ptyId)) {
+            break scanSurvivingTabs
+          }
+        }
+      }
     }
   }
   // Why: same rationale for the doomed tabs' foreground last-seen timestamps and
@@ -2046,7 +2074,7 @@ function buildWorktreePurgeState(s: AppState, worktreeIds: string[]): Partial<Ap
     let changed = false
     const out = { ...obj }
     for (const ptyId of doomedPtyIds) {
-      if (!survivingPtyIds.has(ptyId) && ptyId in out) {
+      if (!survivingRemoteHandleAliases.has(ptyId) && ptyId in out) {
         delete out[ptyId]
         changed = true
       }
