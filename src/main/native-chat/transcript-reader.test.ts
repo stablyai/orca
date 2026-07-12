@@ -242,19 +242,28 @@ describe('readNativeChatTranscript (codex)', () => {
 })
 
 describe('readNativeChatTranscript (errors)', () => {
-  it('returns an error for an unreadable/missing file without throwing', async () => {
+  it('returns a real read error (no notFound) for an unreadable/missing file passed directly', async () => {
     const result = await readNativeChatTranscript('claude', 'sess', {
       filePath: join(tmpdir(), 'orca-native-chat-does-not-exist.jsonl')
     })
     expect('error' in result).toBe(true)
+    if ('error' in result) {
+      expect(result.notFound).toBeUndefined()
+    }
   })
 
-  it('returns an error when no transcript can be resolved', async () => {
+  // Why: a just-created Claude Code session's transcript can take up to minutes
+  // to exist on disk (#8401) — the miss must be marked retry-worthy so callers
+  // above (cache, watch, renderer) don't settle into a permanent error.
+  it('marks an unresolved session as notFound so callers know to retry', async () => {
     const root = await mkdtemp(join(tmpdir(), 'orca-native-chat-noresolve-'))
     tempRoots.push(root)
     const result = await readNativeChatTranscript('claude', 'missing', {
       claudeProjectsDir: join(root, 'empty')
     })
     expect('error' in result).toBe(true)
+    if ('error' in result) {
+      expect(result.notFound).toBe(true)
+    }
   })
 })
