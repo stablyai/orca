@@ -133,7 +133,7 @@ describe('Codex WSL runtime hook install', () => {
       trustConfigPath: '/old/home/hooks.json'
     }
     expect(_internals.installManagedHooksIntoWslRuntime(oldPlan).state).toBe('installed')
-    const oldCommand = `if [ -r '${oldPlan.commandScriptPath}' ]; then /bin/sh '${oldPlan.commandScriptPath}'; fi`
+    const oldCommand = `/bin/sh '${oldPlan.commandScriptPath}'`
     const oldKey = computeTrustKey(getManagedTrustEntry(oldPlan, oldCommand))
 
     const newPlan = {
@@ -142,7 +142,7 @@ describe('Codex WSL runtime hook install', () => {
       trustConfigPath: '/new/home/hooks.json'
     }
     expect(_internals.installManagedHooksIntoWslRuntime(newPlan).state).toBe('installed')
-    const newCommand = `if [ -r '${newPlan.commandScriptPath}' ]; then /bin/sh '${newPlan.commandScriptPath}'; fi`
+    const newCommand = `/bin/sh '${newPlan.commandScriptPath}'`
     const newKey = computeTrustKey(getManagedTrustEntry(newPlan, newCommand))
     const trustEntries = readHookTrustEntries(plan.tomlPath)
 
@@ -351,9 +351,9 @@ describe('Codex WSL runtime hook install', () => {
     const installed = JSON.parse(readFileSync(plan.configPath, 'utf-8')) as HooksConfig
     expect(Object.keys(installed.hooks).sort()).toEqual([...managedEvents].sort())
     const managedCommand = installed.hooks.UserPromptSubmit[0]?.hooks?.[0]?.command
-    expect(managedCommand).toBe(
-      `if [ -r '${plan.commandScriptPath}' ]; then /bin/sh '${plan.commandScriptPath}'; fi`
-    )
+    // Why: Codex argv-execs hooks.json; guarded if/then/fi becomes argv0=`if` (#8110).
+    expect(managedCommand).toBe(`/bin/sh '${plan.commandScriptPath}'`)
+    expect(managedCommand).not.toMatch(/\bif\b|\bthen\b|\bfi\b/)
     expect(installed.hooks.UserPromptSubmit[1]?.hooks?.[0]?.command).toBe(userCommand)
     expect(readFileSync(plan.scriptPath, 'utf-8')).toContain('command -v curl.exe')
 

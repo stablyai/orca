@@ -143,6 +143,15 @@ export function wrapPosixHookCommand(scriptPath: string, env: Record<string, str
   return `if [ -x ${quoted} ]; then ${invocation}; fi`
 }
 
+// Why: Codex (and any future direct-exec hook runner) splits hooks.json
+// `command` into argv without a shell. The if/then/fi guard above becomes
+// argv0=`if` → ENOENT/exit 127 + Broken pipe (#8110). Emit only `/bin/sh
+// '<path>'` so argv0 is the shell and the script path is one argument.
+export function wrapPosixDirectHookCommand(scriptPath: string): string {
+  const quoted = `'${scriptPath.replaceAll("'", "'\\''")}'`
+  return `/bin/sh ${quoted}`
+}
+
 function quotePowerShellString(value: string): string {
   return `'${value.replaceAll("'", "''")}'`
 }

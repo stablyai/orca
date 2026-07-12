@@ -12,6 +12,7 @@ import {
   MANAGED_HOOK_TIMEOUT_SECONDS,
   readHooksJson,
   removeManagedCommands,
+  wrapPosixDirectHookCommand,
   wrapPosixHookCommand,
   wrapWindowsCmdHookCommand,
   writeHooksJson,
@@ -127,17 +128,29 @@ function getManagedScriptPath(): string {
 function getManagedCommand(scriptPath: string): string {
   return process.platform === 'win32'
     ? wrapWindowsCmdHookCommand(scriptPath)
-    : wrapPosixHookCommand(scriptPath)
+    : wrapPosixDirectHookCommand(scriptPath)
 }
 
 export { createCodexWslRuntimeHookInstallPlan }
 export type { CodexWslRuntimeHookInstallPlan }
 
+// Why: WSL runtime hooks are written from Windows through UNC; /bin/sh only
+// needs the script readable. Same argv-safe shape as local POSIX (#8110) —
+// Codex direct-execs hooks.json, so if/then/fi must not appear in the command.
 function wrapReadablePosixHookCommand(scriptPath: string): string {
+  return wrapPosixDirectHookCommand(scriptPath)
+}
+
+// Why: remove/status trust matching must still recognize pre-#8110 guarded
+// commands so upgrade reinstall/remove can clear their hashes.
+function codexPosixTrustCommandVariants(scriptPath: string): string[] {
+  const direct = wrapPosixDirectHookCommand(scriptPath)
   const quoted = `'${scriptPath.replaceAll("'", "'\\''")}'`
-  // Why: WSL runtime hooks are written from Windows through UNC, where the
-  // executable bit is not reliable. /bin/sh only needs the script to be readable.
-  return `if [ -r ${quoted} ]; then /bin/sh ${quoted}; fi`
+  return [
+    direct,
+    wrapPosixHookCommand(scriptPath),
+    `if [ -r ${quoted} ]; then /bin/sh ${quoted}; fi`
+  ]
 }
 
 function getSystemConfigPath(): string {
@@ -629,7 +642,6 @@ function removeRuntimeManagedHookTrustEntries(configPath: string): void {
     const tomlPath = getCodexConfigTomlPath()
     const existingEntries = readHookTrustEntries(tomlPath)
     const scriptPath = getManagedScriptPath()
-    const command = getManagedCommand(scriptPath)
     const managedEventLabels = new Set<CodexEventLabel>(
       CODEX_EVENTS.map((event) => CODEX_EVENT_LABEL[event])
     )
@@ -639,6 +651,10 @@ function removeRuntimeManagedHookTrustEntries(configPath: string): void {
     // wipe the user's manually-approved entries.
     const ourKeys: string[] = []
     const canonicalConfigPath = getCodexCanonicalTrustPath(configPath)
+    const commandVariants =
+      process.platform === 'win32'
+        ? [getManagedCommand(scriptPath)]
+        : codexPosixTrustCommandVariants(scriptPath)
     for (const [key, state] of existingEntries) {
       const parts = parseTrustKey(key)
       if (parts === null) {
@@ -650,20 +666,21 @@ function removeRuntimeManagedHookTrustEntries(configPath: string): void {
       if (!managedEventLabels.has(parts.eventLabel)) {
         continue
       }
-      const expectedEntry: CodexTrustEntry = {
-        sourcePath: configPath,
-        eventLabel: parts.eventLabel,
-        groupIndex: parts.groupIndex,
-        handlerIndex: parts.handlerIndex,
-        command,
-        // Why: match the timeout install() wrote, or remove() would fail to
-        // recognize (and clean up) its own managed trust entries.
-        timeoutSec: MANAGED_HOOK_TIMEOUT_SECONDS
+      const recognizedHashes = new Set<string>()
+      for (const command of commandVariants) {
+        const expectedEntry: CodexTrustEntry = {
+          sourcePath: configPath,
+          eventLabel: parts.eventLabel,
+          groupIndex: parts.groupIndex,
+          handlerIndex: parts.handlerIndex,
+          command,
+          // Why: match the timeout install() wrote, or remove() would fail to
+          // recognize (and clean up) its own managed trust entries.
+          timeoutSec: MANAGED_HOOK_TIMEOUT_SECONDS
+        }
+        recognizedHashes.add(computeTrustedHash(expectedEntry))
+        recognizedHashes.add(computeTrustedHash({ ...expectedEntry, timeoutSec: undefined }))
       }
-      const recognizedHashes = new Set([
-        computeTrustedHash(expectedEntry),
-        computeTrustedHash({ ...expectedEntry, timeoutSec: undefined })
-      ])
       if (!state.trustedHash || !recognizedHashes.has(state.trustedHash)) {
         continue
       }
@@ -749,19 +766,22 @@ function removeStaleWslRuntimeManagedHookTrustEntries(
       continue
     }
     const runtimeHome = sourcePath.slice(0, -'/hooks.json'.length)
-    const command = wrapReadablePosixHookCommand(`${runtimeHome}/.orca/agent-hooks/codex-hook.sh`)
-    const expectedEntry: CodexTrustEntry = {
-      sourcePath: parts.sourcePath,
-      eventLabel: parts.eventLabel,
-      groupIndex: parts.groupIndex,
-      handlerIndex: parts.handlerIndex,
-      command,
-      timeoutSec: MANAGED_HOOK_TIMEOUT_SECONDS
+    const commandVariants = codexPosixTrustCommandVariants(
+      `${runtimeHome}/.orca/agent-hooks/codex-hook.sh`
+    )
+    const recognizedHashes = new Set<string>()
+    for (const command of commandVariants) {
+      const expectedEntry: CodexTrustEntry = {
+        sourcePath: parts.sourcePath,
+        eventLabel: parts.eventLabel,
+        groupIndex: parts.groupIndex,
+        handlerIndex: parts.handlerIndex,
+        command,
+        timeoutSec: MANAGED_HOOK_TIMEOUT_SECONDS
+      }
+      recognizedHashes.add(computeTrustedHash(expectedEntry))
+      recognizedHashes.add(computeTrustedHash({ ...expectedEntry, timeoutSec: undefined }))
     }
-    const recognizedHashes = new Set([
-      computeTrustedHash(expectedEntry),
-      computeTrustedHash({ ...expectedEntry, timeoutSec: undefined })
-    ])
     if (state.trustedHash && recognizedHashes.has(state.trustedHash)) {
       ourKeys.push(key)
     }
@@ -1366,7 +1386,7 @@ export class CodexHookService {
         }
       }
 
-      const command = wrapPosixHookCommand(remoteScriptPath)
+      const command = wrapPosixDirectHookCommand(remoteScriptPath)
       const nextHooks = { ...config.hooks }
       const managedEvents = new Set<string>(CODEX_EVENTS)
       const isManagedCommand = createManagedCommandMatcher('codex-hook.sh')

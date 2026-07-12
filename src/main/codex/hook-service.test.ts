@@ -158,6 +158,27 @@ describe('CodexHookService', () => {
     expect(trustConfig).toContain(':permission_request:0:0')
   })
 
+  // Why: Codex direct-execs hooks.json commands (#8110). The shared
+  // wrapPosixHookCommand if/then/fi guard becomes argv0=`if` → exit 127.
+  it.skipIf(process.platform === 'win32')(
+    'writes argv-safe POSIX managed commands without shell control-flow',
+    () => {
+      expect(new CodexHookService().install().state).toBe('installed')
+
+      const managedCodexHome = join(userDataDir, 'codex-runtime-home', 'home')
+      const hooksConfig = JSON.parse(
+        readFileSync(join(managedCodexHome, 'hooks.json'), 'utf-8')
+      ) as { hooks: Record<string, { hooks?: { command?: string }[] }[]> }
+
+      for (const eventName of localManagedCodexEvents()) {
+        const command = hooksConfig.hooks[eventName]?.[0]?.hooks?.[0]?.command ?? ''
+        expect(command).toMatch(/^\/bin\/sh '/)
+        expect(command).toContain('agent-hooks/codex-hook.sh')
+        expect(command).not.toMatch(/\bif\b|\bthen\b|\bfi\b/)
+      }
+    }
+  )
+
   it('drops plugin manager metadata from runtime hooks.json during install', () => {
     const managedCodexHome = join(userDataDir, 'codex-runtime-home', 'home')
     mkdirSync(managedCodexHome, { recursive: true })

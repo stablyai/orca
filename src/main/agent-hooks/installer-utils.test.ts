@@ -20,6 +20,7 @@ import {
   getSharedManagedScriptPath,
   hookDefinitionHasManagedCommand,
   removeManagedCommands,
+  wrapPosixDirectHookCommand,
   wrapPosixHookCommand,
   wrapWindowsCmdHookCommand,
   wrapWindowsGitBashHookCommand,
@@ -337,6 +338,42 @@ describe('wrapPosixHookCommand', () => {
       const cmd = wrapPosixHookCommand(scriptPath)
       const result = spawnSync('/bin/sh', ['-c', cmd])
       expect(result.status).toBe(7)
+    }
+  )
+})
+
+describe('wrapPosixDirectHookCommand', () => {
+  // Why: Codex direct-execs hooks.json commands (#8110). argv0 must be /bin/sh,
+  // never shell control-flow tokens from the guarded wrapper.
+  it('emits an argv-safe /bin/sh launcher without if/then/fi', () => {
+    const cmd = wrapPosixDirectHookCommand('/Users/a/.orca/agent-hooks/codex-hook.sh')
+    expect(cmd).toBe("/bin/sh '/Users/a/.orca/agent-hooks/codex-hook.sh'")
+    expect(cmd).not.toMatch(/\bif\b|\bthen\b|\bfi\b/)
+  })
+
+  it('escapes embedded single quotes the same way as the guarded wrapper', () => {
+    const cmd = wrapPosixDirectHookCommand("/path/with'quote/x.sh")
+    expect(cmd).toBe("/bin/sh '/path/with'\\''quote/x.sh'")
+  })
+
+  it.skipIf(process.platform === 'win32')(
+    'runs under argv split the way Codex does (not shell -c)',
+    () => {
+      const scriptPath = join(tmpDir, 'ok.sh')
+      writeFileSync(scriptPath, '#!/bin/sh\nexit 0\n', 'utf-8')
+      chmodSync(scriptPath, 0o755)
+      const cmd = wrapPosixDirectHookCommand(scriptPath)
+      // Why: Codex splits the command string on whitespace and execs argv; this
+      // approximates that without a shell so a regression to if/then/fi fails.
+      const argv = cmd.match(/(?:[^\s']+|'[^']*')+/g) ?? []
+      const unquoted = argv.map((part) =>
+        part.startsWith("'") && part.endsWith("'")
+          ? part.slice(1, -1).replaceAll("'\\''", "'")
+          : part
+      )
+      const result = spawnSync(unquoted[0]!, unquoted.slice(1))
+      expect(result.status).toBe(0)
+      expect(unquoted[0]).toBe('/bin/sh')
     }
   )
 })
