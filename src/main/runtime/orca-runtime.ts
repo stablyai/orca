@@ -17025,32 +17025,34 @@ export class OrcaRuntimeService {
           if (!force) {
             throw new Error(ORPHANED_WORKTREE_DIRECTORY_MESSAGE)
           }
-          if (repo.connectionId) {
-            await fsProvider!.deletePath(removalTarget.path, true)
-            await cleanupUnusedWorktreePushTargetRemoteSsh(
-              provider!,
-              repo.path,
-              removalTarget.id,
-              removedPushTarget,
-              store
-            )
-          } else {
-            await removeLocalWorktreePath(removalTarget.path, localWorktreeGitOptions)
-            await cleanupUnusedWorktreePushTargetRemote(
-              repo.path,
-              removalTarget.id,
-              removedPushTarget,
-              store,
-              localWorktreeGitOptions
-            )
-          }
-          this.clearOptimisticReconcileToken(removalTarget.id)
-          this.removeWorktreeMetadataAndHistory(store, removalTarget.id)
-          this.preservedBranchCleanupByWorktreeId.delete(removalTarget.id)
-          this.invalidateResolvedWorktreeCache()
-          invalidateAuthorizedRootsCache()
-          this.notifyWorktreesChanged(repo.id)
-          return {}
+          return this.runWithSuccessfulCleanupTeardown(removalTarget.id, async () => {
+            if (repo.connectionId) {
+              await fsProvider!.deletePath(removalTarget.path, true)
+              await cleanupUnusedWorktreePushTargetRemoteSsh(
+                provider!,
+                repo.path,
+                removalTarget.id,
+                removedPushTarget,
+                store
+              )
+            } else {
+              await removeLocalWorktreePath(removalTarget.path, localWorktreeGitOptions)
+              await cleanupUnusedWorktreePushTargetRemote(
+                repo.path,
+                removalTarget.id,
+                removedPushTarget,
+                store,
+                localWorktreeGitOptions
+              )
+            }
+            this.clearOptimisticReconcileToken(removalTarget.id)
+            this.removeWorktreeMetadataAndHistory(store, removalTarget.id)
+            this.preservedBranchCleanupByWorktreeId.delete(removalTarget.id)
+            this.invalidateResolvedWorktreeCache()
+            invalidateAuthorizedRootsCache()
+            this.notifyWorktreesChanged(repo.id)
+            return {}
+          })
         }
         if (!repo.connectionId) {
           const access = getLocalWorktreePathAccess(localWorktreeGitOptions)
@@ -17073,24 +17075,26 @@ export class OrcaRuntimeService {
             if (!force) {
               throw new Error(ORPHANED_WORKTREE_DIRECTORY_MESSAGE)
             }
-            await closeLocalWatcherForWorktreePath(removalTarget.path).catch((err) => {
-              console.warn(`[filesystem-watcher] failed to close ${removalTarget.path}:`, err)
+            return this.runWithSuccessfulCleanupTeardown(removalTarget.id, async () => {
+              await closeLocalWatcherForWorktreePath(removalTarget.path).catch((err) => {
+                console.warn(`[filesystem-watcher] failed to close ${removalTarget.path}:`, err)
+              })
+              await removeLocalWorktreePath(removalTarget.path, localWorktreeGitOptions)
+              await cleanupUnusedWorktreePushTargetRemote(
+                repo.path,
+                removalTarget.id,
+                removedPushTarget,
+                store,
+                localWorktreeGitOptions
+              )
+              this.clearOptimisticReconcileToken(removalTarget.id)
+              this.removeWorktreeMetadataAndHistory(store, removalTarget.id)
+              this.preservedBranchCleanupByWorktreeId.delete(removalTarget.id)
+              this.invalidateResolvedWorktreeCache()
+              invalidateAuthorizedRootsCache()
+              this.notifyWorktreesChanged(repo.id)
+              return {}
             })
-            await removeLocalWorktreePath(removalTarget.path, localWorktreeGitOptions)
-            await cleanupUnusedWorktreePushTargetRemote(
-              repo.path,
-              removalTarget.id,
-              removedPushTarget,
-              store,
-              localWorktreeGitOptions
-            )
-            this.clearOptimisticReconcileToken(removalTarget.id)
-            this.removeWorktreeMetadataAndHistory(store, removalTarget.id)
-            this.preservedBranchCleanupByWorktreeId.delete(removalTarget.id)
-            this.invalidateResolvedWorktreeCache()
-            invalidateAuthorizedRootsCache()
-            this.notifyWorktreesChanged(repo.id)
-            return {}
           }
         }
         if (await isRuntimeWorktreePathMissing(repo, removalTarget.path, localWorktreeGitOptions)) {
@@ -17102,28 +17106,30 @@ export class OrcaRuntimeService {
           // Why: a manually deleted worktree is already gone from Git and disk.
           // Finish runtime metadata cleanup without requiring force or touching
           // any unregistered path that still exists.
-          await (repo.connectionId
-            ? cleanupUnusedWorktreePushTargetRemoteSsh(
-                provider!,
-                repo.path,
-                removalTarget.id,
-                removedPushTarget,
-                store
-              )
-            : cleanupUnusedWorktreePushTargetRemote(
-                repo.path,
-                removalTarget.id,
-                removedPushTarget,
-                store,
-                localWorktreeGitOptions
-              ))
-          this.clearOptimisticReconcileToken(removalTarget.id)
-          this.removeWorktreeMetadataAndHistory(store, removalTarget.id)
-          this.preservedBranchCleanupByWorktreeId.delete(removalTarget.id)
-          this.invalidateResolvedWorktreeCache()
-          invalidateAuthorizedRootsCache()
-          this.notifyWorktreesChanged(repo.id)
-          return {}
+          return this.runWithSuccessfulCleanupTeardown(removalTarget.id, async () => {
+            await (repo.connectionId
+              ? cleanupUnusedWorktreePushTargetRemoteSsh(
+                  provider!,
+                  repo.path,
+                  removalTarget.id,
+                  removedPushTarget,
+                  store
+                )
+              : cleanupUnusedWorktreePushTargetRemote(
+                  repo.path,
+                  removalTarget.id,
+                  removedPushTarget,
+                  store,
+                  localWorktreeGitOptions
+                ))
+            this.clearOptimisticReconcileToken(removalTarget.id)
+            this.removeWorktreeMetadataAndHistory(store, removalTarget.id)
+            this.preservedBranchCleanupByWorktreeId.delete(removalTarget.id)
+            this.invalidateResolvedWorktreeCache()
+            invalidateAuthorizedRootsCache()
+            this.notifyWorktreesChanged(repo.id)
+            return {}
+          })
         }
         throw new Error(`Refusing to delete unregistered worktree path: ${removalTarget.path}`)
       }
@@ -17148,32 +17154,34 @@ export class OrcaRuntimeService {
         removedMeta &&
         (await isRuntimeWorktreePathMissing(repo, canonicalWorktreePath, localWorktreeGitOptions))
       ) {
-        const removalResult = await removeStaleLocalWorktreeRegistrationAfterFilesystemRemoval({
-          canonicalWorktreePath,
-          repoPath: repo.path,
-          localWorktreeGitOptions,
-          registeredWorktree,
-          deleteBranch
+        return this.runWithSuccessfulCleanupTeardown(removalTarget.id, async () => {
+          const removalResult = await removeStaleLocalWorktreeRegistrationAfterFilesystemRemoval({
+            canonicalWorktreePath,
+            repoPath: repo.path,
+            localWorktreeGitOptions,
+            registeredWorktree,
+            deleteBranch
+          })
+          await cleanupUnusedWorktreePushTargetRemote(
+            repo.path,
+            removalTarget.id,
+            removedPushTarget,
+            store,
+            localWorktreeGitOptions
+          )
+          this.rememberPreservedBranchCleanupTarget(
+            removalTarget.id,
+            removalResult,
+            registeredWorktree.head,
+            removedPushTarget
+          )
+          this.clearOptimisticReconcileToken(removalTarget.id)
+          this.removeWorktreeMetadataAndHistory(store, removalTarget.id)
+          this.invalidateResolvedWorktreeCache()
+          invalidateAuthorizedRootsCache()
+          this.notifyWorktreesChanged(repo.id)
+          return removalResult ?? {}
         })
-        await cleanupUnusedWorktreePushTargetRemote(
-          repo.path,
-          removalTarget.id,
-          removedPushTarget,
-          store,
-          localWorktreeGitOptions
-        )
-        this.rememberPreservedBranchCleanupTarget(
-          removalTarget.id,
-          removalResult,
-          registeredWorktree.head,
-          removedPushTarget
-        )
-        this.clearOptimisticReconcileToken(removalTarget.id)
-        this.removeWorktreeMetadataAndHistory(store, removalTarget.id)
-        this.invalidateResolvedWorktreeCache()
-        invalidateAuthorizedRootsCache()
-        this.notifyWorktreesChanged(repo.id)
-        return removalResult ?? {}
       }
       if (repo.connectionId) {
         const remoteRemoveOptions = !deleteBranch ? { deleteBranch } : {}
@@ -17258,7 +17266,6 @@ export class OrcaRuntimeService {
         throw new Error(formatWorktreeRemovalError(error, canonicalWorktreePath, force))
       }
 
-      let shouldTearDownPtys = true
       if (repo.symlinkPaths && repo.symlinkPaths.length > 0) {
         await removeWorktreeLinkedPaths(canonicalWorktreePath, repo.symlinkPaths)
       }
@@ -17270,9 +17277,8 @@ export class OrcaRuntimeService {
         if (!isOrphanCompatiblePreflightError(error)) {
           throw new Error(formatWorktreeRemovalError(error, canonicalWorktreePath, force))
         }
-        // Why: orphan cleanup does not need live shells to be killed first,
-        // and preflight did not prove the worktree is cleanly removable.
-        shouldTearDownPtys = false
+        // Why: missing/non-repo paths may still have a live deleted-cwd PTY;
+        // continue to the fenced teardown before orphan recovery mutates state.
       }
 
       const releaseWorktreePtyTeardown = await this.beginWorktreePtyTeardown(removalTarget.id)
@@ -17282,10 +17288,9 @@ export class OrcaRuntimeService {
         await closeLocalWatcherForWorktreePath(canonicalWorktreePath).catch((err) => {
           console.warn(`[filesystem-watcher] failed to close ${canonicalWorktreePath}:`, err)
         })
-        if (localProvider && shouldTearDownPtys) {
-          // Why: once preflight proves normal deletion is clean, kill PTYs before
-          // git-level removal so Windows handles cannot keep the directory busy. This also
-          // closes the headless-CLI leak for confirmed-removable worktrees.
+        if (localProvider) {
+          // Why: kill PTYs before git-level removal so Windows handles cannot
+          // keep the directory busy and deleted-cwd shells cannot survive recovery.
           await killAllProcessesForWorktree(removalTarget.id, {
             runtime: this,
             localProvider,
@@ -18854,6 +18859,25 @@ export class OrcaRuntimeService {
     return this.worktreePtyAdmission.runTeardown(worktreeId, operation)
   }
 
+  private runWithSuccessfulCleanupTeardown<T>(
+    worktreeId: string,
+    operation: () => Promise<T>
+  ): Promise<T> {
+    return this.runWithWorktreePtyTeardown(worktreeId, async () => {
+      // Why: orphan and stale-registration cleanup still retires an Orca
+      // workspace; its terminals must not outlive the last addressable owner.
+      const localProvider = this.getLocalProvider()
+      if (localProvider) {
+        await killAllProcessesForWorktree(worktreeId, {
+          runtime: this,
+          localProvider,
+          onPtyStopped: this.onPtyStopped ?? undefined
+        })
+      }
+      return operation()
+    })
+  }
+
   async runWithWorktreeRemovalDedup<T>(
     worktreeId: string,
     opts: { force: boolean; runHooks: boolean; hostId?: string; mode?: 'remove' | 'forget' },
@@ -18892,20 +18916,26 @@ export class OrcaRuntimeService {
     // Why: generic terminal.stop must not act on a stale renderer graph, while
     // deletion runs under admission and owns main's authoritative PTY records.
     const graphEpoch = opts.worktreeTeardown ? null : this.captureReadyGraphEpoch()
-    const worktree = await this.resolveWorktreeSelector(worktreeSelector)
+    const exactTeardownTarget = opts.worktreeTeardown
+      ? parseExactWorktreeIdSelector(worktreeSelector)
+      : null
+    // Why: successful orphan/missing-path cleanup has authoritative metadata
+    // but no live Git row for selector resolution; deletion owns the exact ID.
+    const worktreeId =
+      exactTeardownTarget?.id ?? (await this.resolveWorktreeSelector(worktreeSelector)).id
     if (graphEpoch !== null) {
       this.assertStableReadyGraph(graphEpoch)
     }
     const ptyIds = new Set<string>()
     if (!opts.worktreeTeardown) {
       for (const leaf of this.leaves.values()) {
-        if (leaf.worktreeId === worktree.id && leaf.ptyId) {
+        if (leaf.worktreeId === worktreeId && leaf.ptyId) {
           ptyIds.add(leaf.ptyId)
         }
       }
     }
     for (const pty of this.ptysById.values()) {
-      if (pty.worktreeId === worktree.id && pty.connected) {
+      if (pty.worktreeId === worktreeId && pty.connected) {
         ptyIds.add(pty.ptyId)
       }
     }

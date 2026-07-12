@@ -6669,7 +6669,7 @@ describe('registerWorktreeHandlers', () => {
       preservedBranch: { branchName: 'feature', head: 'feature' }
     })
     expect(runHookMock).not.toHaveBeenCalled()
-    expect(killAllProcessesForWorktreeMock).not.toHaveBeenCalled()
+    expect(killAllProcessesForWorktreeMock).toHaveBeenCalledWith(worktreeId, expect.any(Object))
     expect(removeWorktreeMock).not.toHaveBeenCalled()
     expect(gitExecFileAsyncMock).toHaveBeenCalledWith(['worktree', 'prune'], {
       cwd: '/workspace/repo'
@@ -7675,7 +7675,10 @@ describe('registerWorktreeHandlers', () => {
       force: true
     })
 
-    expect(killAllProcessesForWorktreeMock).not.toHaveBeenCalled()
+    expect(killAllProcessesForWorktreeMock).toHaveBeenCalledWith(
+      'repo-1::/workspace/already-deleted-wt',
+      expect.any(Object)
+    )
     expect(runHookMock).not.toHaveBeenCalled()
     expect(removeWorktreeMock).not.toHaveBeenCalled()
     expect(runtimeStub.clearOptimisticReconcileToken).toHaveBeenCalledWith(
@@ -7700,7 +7703,7 @@ describe('registerWorktreeHandlers', () => {
 
     await handlers['worktrees:remove'](null, { worktreeId, force: true })
 
-    expect(killAllProcessesForWorktreeMock).not.toHaveBeenCalled()
+    expect(killAllProcessesForWorktreeMock).toHaveBeenCalledWith(worktreeId, expect.any(Object))
     expect(runHookMock).not.toHaveBeenCalled()
     expect(removeWorktreeMock).not.toHaveBeenCalled()
     expect(runtimeStub.clearOptimisticReconcileToken).toHaveBeenCalledWith(worktreeId)
@@ -7714,12 +7717,20 @@ describe('registerWorktreeHandlers', () => {
   it('treats normal deletion of an already-missing unregistered worktree as cleanup', async () => {
     mockKnownFeatureWorktree('/workspace/real-feature')
     store.getWorktreeMeta.mockReturnValue(makeWorktreeMeta())
+    const callOrder: string[] = []
+    killAllProcessesForWorktreeMock.mockImplementation(async () => {
+      callOrder.push('pty-teardown')
+      return { runtimeStopped: 1, providerStopped: 0, registryStopped: 0 }
+    })
+    store.removeWorktreeMeta.mockImplementation(() => {
+      callOrder.push('metadata-removal')
+    })
 
     await handlers['worktrees:remove'](null, {
       worktreeId: 'repo-1::/workspace/already-deleted-wt'
     })
 
-    expect(killAllProcessesForWorktreeMock).not.toHaveBeenCalled()
+    expect(callOrder).toEqual(['pty-teardown', 'metadata-removal'])
     expect(runHookMock).not.toHaveBeenCalled()
     expect(removeWorktreeMock).not.toHaveBeenCalled()
     expect(runtimeStub.clearOptimisticReconcileToken).toHaveBeenCalledWith(
@@ -7764,7 +7775,7 @@ describe('registerWorktreeHandlers', () => {
       })
 
       await expect(lstat(orphanPath)).rejects.toMatchObject({ code: 'ENOENT' })
-      expect(killAllProcessesForWorktreeMock).not.toHaveBeenCalled()
+      expect(killAllProcessesForWorktreeMock).toHaveBeenCalledWith(worktreeId, expect.any(Object))
       expect(runHookMock).not.toHaveBeenCalled()
       expect(removeWorktreeMock).not.toHaveBeenCalled()
       expect(runtimeStub.clearOptimisticReconcileToken).toHaveBeenCalledWith(worktreeId)
@@ -7856,7 +7867,7 @@ describe('registerWorktreeHandlers', () => {
       ).resolves.toEqual({})
 
       await expect(lstat(leftoverPath)).rejects.toMatchObject({ code: 'ENOENT' })
-      expect(killAllProcessesForWorktreeMock).not.toHaveBeenCalled()
+      expect(killAllProcessesForWorktreeMock).toHaveBeenCalledWith(worktreeId, expect.any(Object))
       expect(runHookMock).not.toHaveBeenCalled()
       expect(removeWorktreeMock).not.toHaveBeenCalled()
       expect(runtimeStub.clearOptimisticReconcileToken).toHaveBeenCalledWith(worktreeId)
@@ -8418,17 +8429,19 @@ describe('registerWorktreeHandlers', () => {
       worktreeId: 'repo-1::/workspace/feature-wt'
     })
 
-    expect(killAllProcessesForWorktreeMock).not.toHaveBeenCalled()
+    expect(killAllProcessesForWorktreeMock).toHaveBeenCalledWith(
+      'repo-1::/workspace/feature-wt',
+      expect.any(Object)
+    )
     expect(removeWorktreeMock).toHaveBeenCalled()
     expect(gitExecFileAsyncMock).toHaveBeenCalledWith(['worktree', 'prune'], {
       cwd: '/workspace/repo'
     })
   })
 
-  it('skips the PTY teardown for SSH-backed repos (design §6 out-of-scope)', async () => {
-    // Why: SSH-backed PTYs live on the remote host and are handled by the
-    // remote provider's own teardown. The local-host helper must not run for
-    // SSH repos, because it would sweep registry entries for other worktrees.
+  it('does not start teardown before resolving the SSH removal provider', async () => {
+    // Why: an unresolved SSH target is a rejected removal, not a successful
+    // cleanup path, so admission and PTY state must remain untouched.
     const repo = {
       id: 'repo-ssh',
       path: '/remote/repo',
@@ -8441,9 +8454,7 @@ describe('registerWorktreeHandlers', () => {
     store.getRepos.mockReturnValue([repo])
     store.getRepo.mockReturnValue(repo)
 
-    // The test can't easily mock the SSH provider without more plumbing — the
-    // call will throw about 'no git provider for connection'. What matters
-    // here is that the kill helper was NOT called for the SSH branch.
+    // The call rejects before it has an authoritative remote removal target.
     await (
       handlers['worktrees:remove'](null, {
         worktreeId: 'repo-ssh::/remote/feature-wt'

@@ -1404,6 +1404,20 @@ export function registerWorktreeHandlers(
     typeof runtime.beginWorktreePtyTeardown === 'function'
       ? runtime.beginWorktreePtyTeardown(worktreeId)
       : Promise.resolve(() => {})
+  const runWithSuccessfulCleanupTeardown = <T>(
+    worktreeId: string,
+    operation: () => Promise<T>
+  ): Promise<T> =>
+    runWithWorktreePtyTeardown(worktreeId, async () => {
+      // Why: orphan and stale-registration cleanup still retires an Orca
+      // workspace; its terminals must not outlive the last addressable owner.
+      await killAllProcessesForWorktree(worktreeId, {
+        runtime,
+        localProvider: getLocalPtyProvider(),
+        onPtyStopped: clearProviderPtyState
+      })
+      return operation()
+    })
 
   const registerCrossSurfaceWorktreeRemovalHandler = (
     channel: string,
@@ -1529,32 +1543,34 @@ export function registerWorktreeHandlers(
             if (!args.force) {
               throw new Error(ORPHANED_WORKTREE_DIRECTORY_MESSAGE)
             }
-            if (repo.connectionId) {
-              await fsProvider!.deletePath(worktreePath, true)
-              await cleanupUnusedWorktreePushTargetRemoteSsh(
-                provider!,
-                repo.path,
-                args.worktreeId,
-                removedPushTarget,
-                store
-              )
-            } else {
-              await closeLocalWatcherForRemoval(worktreePath)
-              await removeLocalWorktreePath(worktreePath, localWorktreeGitOptions)
-              await cleanupUnusedWorktreePushTargetRemote(
-                repo.path,
-                args.worktreeId,
-                removedPushTarget,
-                store,
-                localWorktreeGitOptions
-              )
-              invalidateAuthorizedRootsCache()
-            }
-            runtime.clearOptimisticReconcileToken(args.worktreeId)
-            removeWorktreeMetadataAndTransientState(store, args.worktreeId)
-            preservedBranchCleanupByWorktreeId.delete(args.worktreeId)
-            notifyWorktreesChanged(mainWindow, repoId)
-            return {}
+            return runWithSuccessfulCleanupTeardown(args.worktreeId, async () => {
+              if (repo.connectionId) {
+                await fsProvider!.deletePath(worktreePath, true)
+                await cleanupUnusedWorktreePushTargetRemoteSsh(
+                  provider!,
+                  repo.path,
+                  args.worktreeId,
+                  removedPushTarget,
+                  store
+                )
+              } else {
+                await closeLocalWatcherForRemoval(worktreePath)
+                await removeLocalWorktreePath(worktreePath, localWorktreeGitOptions)
+                await cleanupUnusedWorktreePushTargetRemote(
+                  repo.path,
+                  args.worktreeId,
+                  removedPushTarget,
+                  store,
+                  localWorktreeGitOptions
+                )
+                invalidateAuthorizedRootsCache()
+              }
+              runtime.clearOptimisticReconcileToken(args.worktreeId)
+              removeWorktreeMetadataAndTransientState(store, args.worktreeId)
+              preservedBranchCleanupByWorktreeId.delete(args.worktreeId)
+              notifyWorktreesChanged(mainWindow, repoId)
+              return {}
+            })
           }
           if (!repo.connectionId) {
             const access = getLocalWorktreePathAccess(localWorktreeGitOptions)
@@ -1577,21 +1593,23 @@ export function registerWorktreeHandlers(
               if (!args.force) {
                 throw new Error(ORPHANED_WORKTREE_DIRECTORY_MESSAGE)
               }
-              await closeLocalWatcherForRemoval(worktreePath)
-              await removeLocalWorktreePath(worktreePath, localWorktreeGitOptions)
-              await cleanupUnusedWorktreePushTargetRemote(
-                repo.path,
-                args.worktreeId,
-                removedPushTarget,
-                store,
-                localWorktreeGitOptions
-              )
-              runtime.clearOptimisticReconcileToken(args.worktreeId)
-              removeWorktreeMetadataAndTransientState(store, args.worktreeId)
-              preservedBranchCleanupByWorktreeId.delete(args.worktreeId)
-              invalidateAuthorizedRootsCache()
-              notifyWorktreesChanged(mainWindow, repoId)
-              return {}
+              return runWithSuccessfulCleanupTeardown(args.worktreeId, async () => {
+                await closeLocalWatcherForRemoval(worktreePath)
+                await removeLocalWorktreePath(worktreePath, localWorktreeGitOptions)
+                await cleanupUnusedWorktreePushTargetRemote(
+                  repo.path,
+                  args.worktreeId,
+                  removedPushTarget,
+                  store,
+                  localWorktreeGitOptions
+                )
+                runtime.clearOptimisticReconcileToken(args.worktreeId)
+                removeWorktreeMetadataAndTransientState(store, args.worktreeId)
+                preservedBranchCleanupByWorktreeId.delete(args.worktreeId)
+                invalidateAuthorizedRootsCache()
+                notifyWorktreesChanged(mainWindow, repoId)
+                return {}
+              })
             }
           }
           if (await isAlreadyRemovedWorktreePath(repo, worktreePath, localWorktreeGitOptions)) {
@@ -1603,29 +1621,31 @@ export function registerWorktreeHandlers(
             // Why: a manually deleted worktree is already gone from Git and disk.
             // The sidebar delete action has persisted metadata proving this was
             // an Orca-known row, so no force confirmation is needed.
-            if (repo.connectionId) {
-              await cleanupUnusedWorktreePushTargetRemoteSsh(
-                provider!,
-                repo.path,
-                args.worktreeId,
-                removedPushTarget,
-                store
-              )
-            } else {
-              await cleanupUnusedWorktreePushTargetRemote(
-                repo.path,
-                args.worktreeId,
-                removedPushTarget,
-                store,
-                localWorktreeGitOptions
-              )
-              invalidateAuthorizedRootsCache()
-            }
-            runtime.clearOptimisticReconcileToken(args.worktreeId)
-            removeWorktreeMetadataAndTransientState(store, args.worktreeId)
-            preservedBranchCleanupByWorktreeId.delete(args.worktreeId)
-            notifyWorktreesChanged(mainWindow, repoId)
-            return {}
+            return runWithSuccessfulCleanupTeardown(args.worktreeId, async () => {
+              if (repo.connectionId) {
+                await cleanupUnusedWorktreePushTargetRemoteSsh(
+                  provider!,
+                  repo.path,
+                  args.worktreeId,
+                  removedPushTarget,
+                  store
+                )
+              } else {
+                await cleanupUnusedWorktreePushTargetRemote(
+                  repo.path,
+                  args.worktreeId,
+                  removedPushTarget,
+                  store,
+                  localWorktreeGitOptions
+                )
+                invalidateAuthorizedRootsCache()
+              }
+              runtime.clearOptimisticReconcileToken(args.worktreeId)
+              removeWorktreeMetadataAndTransientState(store, args.worktreeId)
+              preservedBranchCleanupByWorktreeId.delete(args.worktreeId)
+              notifyWorktreesChanged(mainWindow, repoId)
+              return {}
+            })
           }
           throw new Error(`Refusing to delete unregistered worktree path: ${worktreePath}`)
         }
@@ -1653,34 +1673,34 @@ export function registerWorktreeHandlers(
           removedMeta &&
           (await isAlreadyRemovedWorktreePath(repo, canonicalWorktreePath, localWorktreeGitOptions))
         ) {
-          const removalResult = await removeStaleLocalWorktreeRegistrationAfterFilesystemRemoval({
-            canonicalWorktreePath,
-            repoPath: repo.path,
-            localWorktreeGitOptions,
-            registeredWorktree,
-            deleteBranch
+          return runWithSuccessfulCleanupTeardown(args.worktreeId, async () => {
+            const removalResult = await removeStaleLocalWorktreeRegistrationAfterFilesystemRemoval({
+              canonicalWorktreePath,
+              repoPath: repo.path,
+              localWorktreeGitOptions,
+              registeredWorktree,
+              deleteBranch
+            })
+            await cleanupUnusedWorktreePushTargetRemote(
+              repo.path,
+              args.worktreeId,
+              removedPushTarget,
+              store,
+              localWorktreeGitOptions
+            )
+            rememberPreservedBranchCleanupTarget(
+              args.worktreeId,
+              removalResult,
+              registeredWorktree.head,
+              removedPushTarget
+            )
+            runtime.clearOptimisticReconcileToken(args.worktreeId)
+            removeWorktreeMetadataAndTransientState(store, args.worktreeId)
+            invalidateAuthorizedRootsCache()
+            notifyWorktreesChanged(mainWindow, repoId)
+            return removalResult ?? {}
           })
-          await cleanupUnusedWorktreePushTargetRemote(
-            repo.path,
-            args.worktreeId,
-            removedPushTarget,
-            store,
-            localWorktreeGitOptions
-          )
-          rememberPreservedBranchCleanupTarget(
-            args.worktreeId,
-            removalResult,
-            registeredWorktree.head,
-            removedPushTarget
-          )
-          runtime.clearOptimisticReconcileToken(args.worktreeId)
-          removeWorktreeMetadataAndTransientState(store, args.worktreeId)
-          invalidateAuthorizedRootsCache()
-          notifyWorktreesChanged(mainWindow, repoId)
-          return removalResult ?? {}
         }
-
-        let shouldTearDownPtys = true
 
         // Run archive hook before removal so teardown scripts still see the worktree directory.
         const hooks = await getArchiveHooksForRemoval(repo)
@@ -1793,9 +1813,8 @@ export function registerWorktreeHandlers(
               formatWorktreeRemovalError(error, canonicalWorktreePath, args.force ?? false)
             )
           }
-          // Why: orphan cleanup does not need live shells to be killed first,
-          // and preflight did not prove the worktree is cleanly removable.
-          shouldTearDownPtys = false
+          // Why: missing/non-repo paths may still have a live deleted-cwd PTY;
+          // continue to the fenced teardown before orphan recovery mutates state.
         }
 
         const releaseWorktreePtyTeardown = await beginWorktreePtyTeardown(args.worktreeId)
@@ -1803,26 +1822,22 @@ export function registerWorktreeHandlers(
         try {
           await closeLocalWatcherForRemoval(canonicalWorktreePath)
 
-          if (shouldTearDownPtys) {
-            // Why: once preflight proves normal deletion is clean, kill PTYs before
-            // git-level removal so Windows handles cannot keep the directory busy.
-            await killAllProcessesForWorktree(args.worktreeId, {
-              runtime,
-              localProvider: getLocalPtyProvider(),
-              onPtyStopped: clearProviderPtyState
+          await killAllProcessesForWorktree(args.worktreeId, {
+            runtime,
+            localProvider: getLocalPtyProvider(),
+            onPtyStopped: clearProviderPtyState
+          })
+            .then((r) => {
+              const total = r.runtimeStopped + r.providerStopped + r.registryStopped
+              if (total > 0) {
+                console.info(
+                  `[worktree-teardown] ${args.worktreeId} killed runtime=${r.runtimeStopped} provider=${r.providerStopped} registry=${r.registryStopped}`
+                )
+              }
             })
-              .then((r) => {
-                const total = r.runtimeStopped + r.providerStopped + r.registryStopped
-                if (total > 0) {
-                  console.info(
-                    `[worktree-teardown] ${args.worktreeId} killed runtime=${r.runtimeStopped} provider=${r.providerStopped} registry=${r.registryStopped}`
-                  )
-                }
-              })
-              .catch((err) => {
-                console.warn(`[worktree-teardown] failed for ${args.worktreeId}:`, err)
-              })
-          }
+            .catch((err) => {
+              console.warn(`[worktree-teardown] failed for ${args.worktreeId}:`, err)
+            })
 
           try {
             const removeOptions = {

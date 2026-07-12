@@ -27896,7 +27896,24 @@ describe('OrcaRuntimeService', () => {
     const missingWorktreePath = 'C:\\workspace\\already-removed'
     const worktreeId = `${TEST_REPO_ID}::${missingWorktreePath}`
     const { runtimeStore, removeWorktreeMeta } = createStaleRuntimeWorktreeStore(worktreeId)
-    const runtime = new OrcaRuntimeService(runtimeStore as never)
+    const callOrder: string[] = []
+    const localProvider = { listProcesses: vi.fn().mockResolvedValue([]) }
+    const runtime = new OrcaRuntimeService(runtimeStore as never, undefined, {
+      getLocalProvider: () => localProvider as never
+    })
+    runtime.setPtyController({
+      write: () => true,
+      kill: () => false,
+      stopAndWait: vi.fn(async (ptyId: string) => {
+        callOrder.push(`stop:${ptyId}`)
+        return true
+      }),
+      getForegroundProcess: async () => null
+    })
+    runtime.registerPty('stale-registration-pty', worktreeId)
+    removeWorktreeMeta.mockImplementation(() => {
+      callOrder.push('metadata-removal')
+    })
     const registeredWorktrees = [
       {
         path: TEST_REPO_PATH,
@@ -27931,6 +27948,8 @@ describe('OrcaRuntimeService', () => {
       expect(result).toEqual({
         preservedBranch: { branchName: 'feature/foo', head: 'abc' }
       })
+      expect(callOrder).toEqual(['stop:stale-registration-pty', 'metadata-removal'])
+      expect(localProvider.listProcesses).toHaveBeenCalledTimes(1)
       expect(runHook).not.toHaveBeenCalled()
       expect(removeWorktree).not.toHaveBeenCalled()
       expect(gitSpy).toHaveBeenCalledWith(['worktree', 'prune'], {
@@ -28337,7 +28356,24 @@ describe('OrcaRuntimeService', () => {
     const missingWorktreePath = join(parentDir, 'already-deleted')
     const worktreeId = `${TEST_REPO_ID}::${missingWorktreePath}`
     const { runtimeStore, removeWorktreeMeta } = createStaleRuntimeWorktreeStore(worktreeId)
-    const runtime = new OrcaRuntimeService(runtimeStore as never)
+    const callOrder: string[] = []
+    const localProvider = { listProcesses: vi.fn().mockResolvedValue([]) }
+    const runtime = new OrcaRuntimeService(runtimeStore as never, undefined, {
+      getLocalProvider: () => localProvider as never
+    })
+    runtime.setPtyController({
+      write: () => true,
+      kill: () => false,
+      stopAndWait: vi.fn(async (ptyId: string) => {
+        callOrder.push(`stop:${ptyId}`)
+        return true
+      }),
+      getForegroundProcess: async () => null
+    })
+    runtime.registerPty('missing-worktree-pty', worktreeId)
+    removeWorktreeMeta.mockImplementation(() => {
+      callOrder.push('metadata-removal')
+    })
     const notifier = { worktreesChanged: vi.fn() }
     runtime.setNotifier(notifier as never)
 
@@ -28346,6 +28382,8 @@ describe('OrcaRuntimeService', () => {
 
       await expect(runtime.removeManagedWorktree(worktreeId)).resolves.toEqual({})
 
+      expect(callOrder).toEqual(['stop:missing-worktree-pty', 'metadata-removal'])
+      expect(localProvider.listProcesses).toHaveBeenCalledTimes(1)
       expect(removeWorktree).not.toHaveBeenCalled()
       expect(removeWorktreeMeta).toHaveBeenCalledWith(worktreeId)
       expect(deleteWorktreeHistoryDirMock).toHaveBeenCalledWith(worktreeId)
@@ -28800,21 +28838,36 @@ describe('OrcaRuntimeService', () => {
   })
 
   it('falls through to orphan cleanup when preflight reports missing/non-repo worktree', async () => {
-    const runtime = new OrcaRuntimeService(store)
+    const callOrder: string[] = []
+    const provider = {
+      listProcesses: vi
+        .fn()
+        .mockResolvedValue([
+          { id: `${TEST_WORKTREE_ID}@@orphan`, cwd: TEST_WORKTREE_PATH, title: 'shell' }
+        ]),
+      shutdown: vi.fn(async () => {
+        callOrder.push('pty-shutdown')
+      })
+    }
+    const runtime = new OrcaRuntimeService(store, undefined, {
+      getLocalProvider: () => provider as never
+    })
     vi.mocked(getEffectiveHooks).mockReturnValue(null)
     vi.mocked(assertWorktreeCleanForRemoval).mockRejectedValue(
       Object.assign(new Error('status failed'), {
         stderr: 'fatal: not a git repository (or any of the parent directories): .git\n'
       })
     )
-    vi.mocked(removeWorktree).mockRejectedValue(
-      Object.assign(new Error('git worktree remove failed'), {
+    vi.mocked(removeWorktree).mockImplementation(async () => {
+      callOrder.push('git-remove')
+      throw Object.assign(new Error('git worktree remove failed'), {
         stderr: `fatal: '${TEST_WORKTREE_PATH}' is not a working tree`
       })
-    )
+    })
     vi.spyOn(gitRunner, 'gitExecFileAsync').mockResolvedValue({ stdout: '', stderr: '' })
 
     await expect(runtime.removeManagedWorktree(TEST_WORKTREE_ID)).resolves.toEqual({})
+    expect(callOrder).toEqual(['pty-shutdown', 'git-remove'])
     expect(removeWorktree).toHaveBeenCalledWith(
       TEST_REPO_PATH,
       TEST_WORKTREE_PATH,
