@@ -45,6 +45,28 @@ describe('orca CLI skill guidance', () => {
     expect(skill).toContain('send the prompt, and stop')
   })
 
+  it('prefers agent-first workers without duplicating terminal delivery', () => {
+    const skill = readSkill()
+
+    expect(skill).toContain('Prefer agent-first create for agent workers')
+    expect(skill).toContain('fallback shell plus a later `terminal create')
+    expect(skill).toContain('Repo setup or default-terminal settings may still add tabs or splits')
+    expect(skill).toContain(
+      'when no repo default-terminal configuration supplies a primary terminal'
+    )
+    expect(skill).toContain('Configured default tabs are materialized instead')
+    expect(skill).toContain(
+      'only after `terminal list` or `terminal show` confirms it is an unused shell'
+    )
+    expect(skill).not.toContain('bare `worktree create` (no `--agent`) still opens')
+    expect(skill).not.toContain('ends with **one** tab')
+    expect(skill).toContain('Use `startupTerminal.handle` as the sole agent handle')
+    expect(skill).toContain('never dual-send to old and replacement handles')
+    expect(skill).toContain(
+      "this checks the caller's inbox and does not remotely deliver input to another terminal"
+    )
+  })
+
   it('keeps browser injection guidance narrow and avoids literal secret examples', () => {
     const skill = readSkill()
 
