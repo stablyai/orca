@@ -5,6 +5,7 @@ import {
   hasLeaf,
   leafCount,
   makeWorktreeLeaf,
+  moveLeaf,
   removeLeaf,
   replaceLeaf,
   setRatioAtPath,
@@ -287,6 +288,21 @@ export function flipActiveViewOrientation(state: WorkbenchViewState): WorkbenchV
   return mapActiveView(state, (view) =>
     view.layout.type === 'split' ? { ...view, layout: flipAllSplitDirections(view.layout) } : view
   )
+}
+
+/** Drag-rearrange: move `fromWorktreeId`'s pane beside `targetWorktreeId` in the
+ *  active view. */
+export function moveActivePane(
+  state: WorkbenchViewState,
+  fromWorktreeId: string,
+  targetWorktreeId: string,
+  direction: WorktreeSplitDirection,
+  placement: WorktreeSplitPlacement = 'after'
+): WorkbenchViewState {
+  return mapActiveView(state, (view) => {
+    const layout = moveLeaf(view.layout, fromWorktreeId, targetWorktreeId, direction, placement)
+    return layout === view.layout ? view : { ...view, layout }
+  })
 }
 
 /** Flip the orientation of just the split containing `worktreeId`'s pane. */

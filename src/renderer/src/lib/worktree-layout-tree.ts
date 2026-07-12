@@ -244,6 +244,31 @@ export function toggleParentSplitDirection(
   })
 }
 
+/** Move the pane for `fromWorktreeId` to sit beside `targetWorktreeId`, splitting
+ *  in `direction`. Atomic remove-then-split, so the tree never holds a duplicate
+ *  or an invalid intermediate. No-op if from === target, either is absent, or the
+ *  removal would empty the tree. Drives drag-to-rearrange (§6.6 B). */
+export function moveLeaf(
+  node: WorktreeLayoutNode,
+  fromWorktreeId: string,
+  targetWorktreeId: string,
+  direction: WorktreeSplitDirection,
+  placement: WorktreeSplitPlacement = 'after'
+): WorktreeLayoutNode {
+  if (
+    fromWorktreeId === targetWorktreeId ||
+    !hasLeaf(node, fromWorktreeId) ||
+    !hasLeaf(node, targetWorktreeId)
+  ) {
+    return node
+  }
+  const removed = removeLeaf(node, fromWorktreeId)
+  if (removed === null) {
+    return node
+  }
+  return splitLeafByWorktreeId(removed, targetWorktreeId, direction, fromWorktreeId, placement)
+}
+
 /** Drop any leaf whose worktree is not in `validWorktreeIds`, collapsing splits.
  *  Returns null when nothing survives (used by session hydration to prune
  *  worktrees that no longer exist). */

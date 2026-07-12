@@ -44,6 +44,20 @@ export type WorkbenchViewsSlice = {
   /** Point the active view at the parallel set containing the active worktree and
    *  focus it there — switches sets when the active worktree changes. */
   syncWorkbenchToActiveWorktree: () => void
+  /** Drag-rearrange (§6.6 B): move fromWorktreeId's pane beside targetWorktreeId. */
+  moveWorktreePaneBeside: (
+    fromWorktreeId: string,
+    targetWorktreeId: string,
+    direction: WorktreeSplitDirection,
+    placement?: WorktreeSplitPlacement
+  ) => void
+  /** Drag-split (§6.6 A): add newWorktreeId beside targetWorktreeId's pane. */
+  splitWorktreePaneBeside: (
+    targetWorktreeId: string,
+    direction: WorktreeSplitDirection,
+    newWorktreeId: string,
+    placement?: WorktreeSplitPlacement
+  ) => void
   setWorkbenchTabsPinned: (pinned: boolean) => void
 }
 
@@ -176,6 +190,35 @@ export const createWorkbenchViewsSlice: StateCreator<AppState, [], [], Workbench
         set({ activeWorkbenchViewId: view.id })
       }
       set((s) => viewModel.focusActivePane(s, wt))
+    },
+
+    moveWorktreePaneBeside: (fromWorktreeId, targetWorktreeId, direction, placement) => {
+      const containingSet = viewModel.findViewContaining(get(), targetWorktreeId)
+      if (containingSet && get().activeWorkbenchViewId !== containingSet.id) {
+        set({ activeWorkbenchViewId: containingSet.id })
+      }
+      set((s) =>
+        viewModel.moveActivePane(s, fromWorktreeId, targetWorktreeId, direction, placement)
+      )
+      set((s) => viewModel.focusActivePane(s, fromWorktreeId))
+      syncActiveWorktree()
+    },
+
+    splitWorktreePaneBeside: (targetWorktreeId, direction, newWorktreeId, placement) => {
+      const containingSet = viewModel.findViewContaining(get(), targetWorktreeId)
+      if (containingSet) {
+        if (get().activeWorkbenchViewId !== containingSet.id) {
+          set({ activeWorkbenchViewId: containingSet.id })
+        }
+      } else {
+        // Target is a lone worktree — seed a set from it, then split beside it.
+        set((s) => viewModel.createSingleLeafView(s, crypto.randomUUID(), targetWorktreeId))
+      }
+      set((s) =>
+        viewModel.splitActivePane(s, targetWorktreeId, direction, newWorktreeId, placement)
+      )
+      set((s) => viewModel.focusActivePane(s, newWorktreeId))
+      syncActiveWorktree()
     },
 
     setWorkbenchTabsPinned: (pinned) => {

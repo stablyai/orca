@@ -8,6 +8,7 @@ import {
   hasLeaf,
   leafCount,
   makeWorktreeLeaf,
+  moveLeaf,
   pickSplitDirection,
   pruneLeaves,
   removeLeaf,
@@ -209,5 +210,24 @@ describe('pickSplitDirection', () => {
 
   it('treats a square pane as wide (>=) → horizontal', () => {
     expect(pickSplitDirection({ width: 1000, height: 1000 })).toBe('horizontal')
+  })
+})
+
+describe('moveLeaf', () => {
+  it('moves a pane beside a target, splitting in the given direction', () => {
+    // (A , (B , C)) : move A beside C -> (B , (C , A))
+    const result = moveLeaf(nested, 'A', 'C', 'vertical')
+    expect(collectLeafWorktreeIds(result)).toEqual(['B', 'C', 'A'])
+  })
+
+  it('honors placement=before', () => {
+    const result = moveLeaf(nested, 'A', 'C', 'vertical', 'before')
+    expect(collectLeafWorktreeIds(result)).toEqual(['B', 'A', 'C'])
+  })
+
+  it('is a no-op for from === target or an absent worktree', () => {
+    expect(moveLeaf(nested, 'A', 'A', 'horizontal')).toBe(nested)
+    expect(moveLeaf(nested, 'Z', 'A', 'horizontal')).toBe(nested)
+    expect(moveLeaf(nested, 'A', 'Z', 'horizontal')).toBe(nested)
   })
 })
