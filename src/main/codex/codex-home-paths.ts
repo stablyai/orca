@@ -68,13 +68,20 @@ export function syncCodexGlobalInstructionsIntoManagedHome({
   managedHomePath: string
 }): void {
   mkdirSync(managedHomePath, { recursive: true })
-  linkSystemCodexResource(systemHomePath, managedHomePath, CODEX_GLOBAL_INSTRUCTIONS_ENTRY)
+  // Why: this only runs for WSL runtime homes, whose system + managed homes are
+  // both \\wsl.localhost UNC paths. A host-side symlink there stores a Windows
+  // UNC target the distro cannot resolve, so copy the file like the config
+  // mirror does across the same boundary.
+  linkSystemCodexResource(systemHomePath, managedHomePath, CODEX_GLOBAL_INSTRUCTIONS_ENTRY, {
+    preferCopy: true
+  })
 }
 
 function linkSystemCodexResource(
   systemHomePath: string,
   managedHomePath: string,
-  entryName: string
+  entryName: string,
+  { preferCopy = false }: { preferCopy?: boolean } = {}
 ): void {
   const sourcePath = join(systemHomePath, entryName)
   const targetPath = join(managedHomePath, entryName)
@@ -100,6 +107,11 @@ function linkSystemCodexResource(
     rmSync(targetPath, { recursive: true, force: true })
   }
 
+  if (preferCopy) {
+    copySystemCodexResourceAsOwnedFallback(sourcePath, targetPath, managedHomePath, entryName)
+    return
+  }
+
   try {
     const sourceStat = lstatSync(sourcePath)
     symlinkSync(
@@ -109,16 +121,36 @@ function linkSystemCodexResource(
     )
     clearCopiedResourceMarker(managedHomePath, entryName)
   } catch (error) {
-    try {
-      rmSync(targetPath, { recursive: true, force: true })
-      // Why: Windows can reject file symlinks outside developer mode. Copy is
-      // a fallback for launch-time resources; mark ownership so later syncs can
-      // refresh the copy without touching user-created runtime resources.
-      cpSync(sourcePath, targetPath, { recursive: true, force: false, errorOnExist: true })
-      markCopiedResource(managedHomePath, entryName, sourcePath)
-    } catch {
-      console.warn('[codex-home] Failed to link system Codex resource:', entryName, error)
-    }
+    // Why: Windows can reject file symlinks outside developer mode. Copy is
+    // a fallback for launch-time resources; mark ownership so later syncs can
+    // refresh the copy without touching user-created runtime resources.
+    copySystemCodexResourceAsOwnedFallback(
+      sourcePath,
+      targetPath,
+      managedHomePath,
+      entryName,
+      error
+    )
+  }
+}
+
+function copySystemCodexResourceAsOwnedFallback(
+  sourcePath: string,
+  targetPath: string,
+  managedHomePath: string,
+  entryName: string,
+  symlinkError?: unknown
+): void {
+  try {
+    rmSync(targetPath, { recursive: true, force: true })
+    cpSync(sourcePath, targetPath, { recursive: true, force: false, errorOnExist: true })
+    markCopiedResource(managedHomePath, entryName, sourcePath)
+  } catch (copyError) {
+    console.warn(
+      '[codex-home] Failed to link system Codex resource:',
+      entryName,
+      symlinkError ?? copyError
+    )
   }
 }
 

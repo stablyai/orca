@@ -255,7 +255,10 @@ describe('syncSystemCodexResourcesIntoManagedHome', () => {
 
     const runtimeAgentsPath = join(managedHomePath, 'AGENTS.md')
     expect(readFileSync(runtimeAgentsPath, 'utf-8')).toBe('# WSL instructions\n')
-    expectSymbolicLinkTargetIfLinked(runtimeAgentsPath, join(systemHomePath, 'AGENTS.md'))
+    // Why: WSL homes are \\wsl.localhost UNC paths, so a host-side symlink would
+    // store a target the distro cannot resolve; global instructions must be a
+    // real copy even when symlinks are available.
+    expect(lstatSync(runtimeAgentsPath).isSymbolicLink()).toBe(false)
     expect(existsSync(join(managedHomePath, 'skills'))).toBe(false)
   })
 
