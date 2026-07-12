@@ -3241,7 +3241,8 @@
             "9c58d562da": "Time Trends",
             "038ca39d74": "Day Trends",
             "6bf9f80378": "Switch trends range",
-            "c6fe2aabea": "Couldn’t load usage trends."
+            "c6fe2aabea": "Couldn’t load usage trends.",
+            "53ce9bcf71": "Chart mode"
           },
           "claude": {
             "usage": {

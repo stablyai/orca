@@ -1,5 +1,5 @@
 import React, { useState } from 'react'
-import { translate } from '@/i18n/i18n'
+import { i18n, translate } from '@/i18n/i18n'
 import {
   buildMonotoneLinePath,
   getHourTooltipStats,
@@ -47,6 +47,8 @@ function roundedTopBarPath(x: number, y: number, width: number, height: number):
   ].join('')
 }
 
+// Why: dates follow the active UI locale (i18n.language), not the OS locale,
+// so axis/tooltip labels match the rest of the localized interface.
 function formatBucketLabel(
   kind: 'day' | 'month',
   key: string,
@@ -55,16 +57,16 @@ function formatBucketLabel(
   const date = new Date(kind === 'month' ? `${key}-15T12:00:00` : `${key}T12:00:00`)
   if (kind === 'month') {
     return style === 'tooltip'
-      ? date.toLocaleDateString(undefined, { month: 'short', year: 'numeric' })
-      : date.toLocaleDateString(undefined, { month: 'short' })
+      ? date.toLocaleDateString(i18n.language, { month: 'short', year: 'numeric' })
+      : date.toLocaleDateString(i18n.language, { month: 'short' })
   }
   if (style === 'axis7d') {
-    return date.toLocaleDateString(undefined, { weekday: 'narrow' })
+    return date.toLocaleDateString(i18n.language, { weekday: 'narrow' })
   }
   if (style === 'axis') {
-    return date.toLocaleDateString(undefined, { month: 'numeric', day: 'numeric' })
+    return date.toLocaleDateString(i18n.language, { month: 'numeric', day: 'numeric' })
   }
-  return date.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })
+  return date.toLocaleDateString(i18n.language, { month: 'short', day: 'numeric' })
 }
 
 export function TimeTrendsChart({

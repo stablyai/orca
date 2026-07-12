@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react'
 import { Button } from '@/components/ui/button'
+import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
 import { translate } from '@/i18n/i18n'
 import { formatUsageTokens } from '@/components/stats/usage-overview-model'
 import type {
@@ -50,27 +51,29 @@ function SegmentedControl<T extends string>({
   ariaLabel: string
 }): React.JSX.Element {
   return (
-    <div
-      className="flex items-center gap-0.5 rounded-md bg-muted p-0.5"
-      role="group"
+    <ToggleGroup
+      type="single"
+      value={value}
+      onValueChange={(next) => {
+        // Why: Radix single toggle groups emit '' when the active item is
+        // re-clicked; a trends mode/range must always keep one selection.
+        if (next) {
+          onChange(next as T)
+        }
+      }}
       aria-label={ariaLabel}
+      className="gap-0.5 rounded-md bg-muted p-0.5"
     >
       {options.map((option) => (
-        <button
+        <ToggleGroupItem
           key={option.value}
-          type="button"
-          aria-pressed={option.value === value}
-          onClick={() => onChange(option.value)}
-          className={`rounded-[5px] px-1.5 py-0.5 text-[10px] font-medium transition-colors ${
-            option.value === value
-              ? 'bg-background text-foreground shadow-xs'
-              : 'text-muted-foreground hover:text-foreground'
-          }`}
+          value={option.value}
+          className="h-auto min-w-0 rounded-[5px] px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground hover:bg-transparent hover:text-foreground data-[state=on]:bg-background data-[state=on]:text-foreground data-[state=on]:shadow-xs"
         >
           {option.label}
-        </button>
+        </ToggleGroupItem>
       ))}
-    </div>
+    </ToggleGroup>
   )
 }
 
@@ -241,6 +244,7 @@ export function ClaudeUsageTrendsPanel(): React.JSX.Element {
           size="sm"
           variant="secondary"
           className="h-6 px-2 text-[11px]"
+          disabled={isLoading}
           onClick={() => void handleEnable()}
         >
           {translate(
@@ -298,8 +302,8 @@ export function ClaudeUsageTrendsPanel(): React.JSX.Element {
           value={mode}
           onChange={handleModeChange}
           ariaLabel={translate(
-            'auto.components.status.bar.ClaudeUsageTrendsPanel.068bb8df88',
-            'Claude usage trend charts'
+            'auto.components.status.bar.ClaudeUsageTrendsPanel.53ce9bcf71',
+            'Chart mode'
           )}
         />
         {isEnabled && hasAnyPoints ? (
