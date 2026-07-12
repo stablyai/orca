@@ -822,6 +822,40 @@ describe('registerPtyHandlers', () => {
   }
 
   describe('spawn environment', () => {
+    it('holds renderer spawns in worktree admission even when IPC input claims a lease', async () => {
+      const releaseWorktreeSpawn = vi.fn()
+      const runtime = {
+        setPtyController: vi.fn(),
+        beginWorktreePtySpawn: vi.fn(() => releaseWorktreeSpawn),
+        preAllocateHandleForPty: vi.fn(() => undefined),
+        registerPty: vi.fn(),
+        noteTerminalSpawnCommand: vi.fn(),
+        onPtySpawned: vi.fn(),
+        onPtyExit: vi.fn(),
+        onPtyData: vi.fn()
+      }
+      registerPtyHandlers(mainWindow as never, runtime as never)
+
+      const result = await handlers.get('pty:spawn')!(null, {
+        cols: 80,
+        rows: 24,
+        worktreeId: 'wt-renderer',
+        // Renderer payloads are structurally open at runtime; an injected field
+        // must never reach the controller-internal admission bypass.
+        worktreePtyAdmissionHeld: true
+      })
+
+      expect(result).toMatchObject({ id: expect.any(String) })
+      expect(runtime.beginWorktreePtySpawn).toHaveBeenCalledWith('wt-renderer')
+      expect(runtime.registerPty).toHaveBeenCalledWith(
+        expect.any(String),
+        'wt-renderer',
+        null,
+        undefined
+      )
+      expect(releaseWorktreeSpawn).toHaveBeenCalledTimes(1)
+    })
+
     it('marks local Claude launches live until the PTY is killed', async () => {
       const prepareClaudeAuth = vi.fn(async () => ({
         configDir: '/tmp/claude',
@@ -1741,8 +1775,10 @@ describe('registerPtyHandlers', () => {
           }): Promise<{ id: string }>
         }
         const daemonSpawn = setupDaemonAdapter()
+        const releaseWorktreeSpawn = vi.fn()
         const runtime = {
           setPtyController: vi.fn(),
+          beginWorktreePtySpawn: vi.fn(() => releaseWorktreeSpawn),
           registerPty: vi.fn(),
           noteTerminalSpawnCommand: vi.fn(),
           onPtySpawned: vi.fn(),
@@ -1764,6 +1800,8 @@ describe('registerPtyHandlers', () => {
         )
         expect(spawnOptions.env.ORCA_AGENT_HOOK_PORT).toBe('5678')
         expect(spawnOptions.env.ORCA_AGENT_HOOK_TOKEN).toBe('agent-token')
+        expect(runtime.beginWorktreePtySpawn).toHaveBeenCalledWith('wt-runtime')
+        expect(releaseWorktreeSpawn).toHaveBeenCalledTimes(1)
       })
 
       it('threads the validated pane identity into registerPty for a runtime-created daemon PTY (#7587)', async () => {

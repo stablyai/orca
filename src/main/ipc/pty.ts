@@ -16,7 +16,11 @@ import {
   powerMonitor
 } from 'electron'
 export { getBashShellReadyRcfileContent } from '../providers/local-pty-shell-ready'
-import type { OrcaRuntimeService } from '../runtime/orca-runtime'
+import type {
+  OrcaRuntimeService,
+  RuntimePtyController,
+  RuntimePtySpawnOptions
+} from '../runtime/orca-runtime'
 import type { Store } from '../persistence'
 import type { GlobalSettings, TuiAgent } from '../../shared/types'
 import { terminalOutputBacklogCapChars } from '../../shared/terminal-scrollback-policy'
@@ -2924,7 +2928,8 @@ export function registerPtyHandlers(
   // Why: the runtime controller must route through getProviderForPty() so that
   // CLI commands (terminal.send, terminal.stop) work for both local and remote PTYs.
   // Hardcoding localProvider.getPtyProcess() would silently fail for remote PTYs.
-  runtime?.setPtyController({
+  const admissionHeldRuntimeSpawnArgs = new WeakSet<RuntimePtySpawnOptions>()
+  const runtimePtyController: RuntimePtyController = {
     spawn: async (args) => {
       const startupPromise = getLocalPtyStartupPromise(args.connectionId)
       if (startupPromise) {
@@ -3118,6 +3123,12 @@ export function registerPtyHandlers(
       if (existingPaneSpawn) {
         return await existingPaneSpawn.promise
       }
+      const releaseWorktreeSpawn =
+        !admissionHeldRuntimeSpawnArgs.has(args) &&
+        args.worktreeId &&
+        runtime?.beginWorktreePtySpawn
+          ? runtime.beginWorktreePtySpawn(args.worktreeId)
+          : null
       const paneSpawnReservation = materializedPaneKey
         ? reservePaneSpawn(materializedPaneKey)
         : null
@@ -3292,6 +3303,18 @@ export function registerPtyHandlers(
         // no-op once the reservation has already resolved.
         rejectPaneSpawnReservation(materializedPaneKey, paneSpawnReservation, err)
         throw err
+      } finally {
+        releaseWorktreeSpawn?.()
+      }
+    },
+    // Why: runtime create/split already hold admission across launch preparation;
+    // this controller-only entry point avoids a nested lease without trusting IPC input.
+    spawnWithWorktreePtyAdmissionHeld: async (args) => {
+      admissionHeldRuntimeSpawnArgs.add(args)
+      try {
+        return await runtimePtyController.spawn!(args)
+      } finally {
+        admissionHeldRuntimeSpawnArgs.delete(args)
       }
     },
     write: (ptyId, data) => {
@@ -3483,7 +3506,8 @@ export function registerPtyHandlers(
         return false
       }
     }
-  })
+  }
+  runtime?.setPtyController(runtimePtyController)
 
   // ─── IPC Handlers (thin dispatch layer) ─────────────────────────
 
@@ -4003,6 +4027,10 @@ export function registerPtyHandlers(
       if (existingPaneSpawn) {
         return await existingPaneSpawn.promise
       }
+      const releaseWorktreeSpawn =
+        typeof args.worktreeId === 'string' && runtime?.beginWorktreePtySpawn
+          ? runtime.beginWorktreePtySpawn(args.worktreeId)
+          : null
       const paneSpawnReservation = reservationPaneKey ? reservePaneSpawn(reservationPaneKey) : null
       const initiallyHidden = args.initiallyHidden === true
       // Why pre-spawn for daemon-host sessions (id minted up front): daemon
@@ -4405,6 +4433,8 @@ export function registerPtyHandlers(
         // no-op once the reservation has already resolved.
         rejectPaneSpawnReservation(reservationPaneKey, paneSpawnReservation, err)
         throw err
+      } finally {
+        releaseWorktreeSpawn?.()
       }
     }
   )

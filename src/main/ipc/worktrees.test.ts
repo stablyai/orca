@@ -290,6 +290,8 @@ describe('registerWorktreeHandlers', () => {
     createTerminal: ReturnType<typeof vi.fn>
     splitTerminal: ReturnType<typeof vi.fn>
     notifyWorktreesChangedForRemoteClients: ReturnType<typeof vi.fn>
+    runWithWorktreePtyTeardown: ReturnType<typeof vi.fn>
+    beginWorktreePtyTeardown: ReturnType<typeof vi.fn>
   }
 
   beforeEach(() => {
@@ -501,7 +503,11 @@ describe('registerWorktreeHandlers', () => {
         tabId: 'tab-startup',
         paneRuntimeId: -1
       }),
-      notifyWorktreesChangedForRemoteClients: vi.fn()
+      notifyWorktreesChangedForRemoteClients: vi.fn(),
+      runWithWorktreePtyTeardown: vi.fn(
+        async (_worktreeId: string, operation: () => Promise<unknown>) => await operation()
+      ),
+      beginWorktreePtyTeardown: vi.fn(async () => () => {})
     }
     registerWorktreeHandlers(mainWindow as never, store as never, runtimeStub as never)
   })
@@ -8526,6 +8532,10 @@ describe('registerWorktreeHandlers', () => {
       const result = await handlers['worktrees:forgetLocal'](null, { worktreeId })
 
       expect(result).toEqual({})
+      expect(runtimeStub.runWithWorktreePtyTeardown).toHaveBeenCalledWith(
+        worktreeId,
+        expect.any(Function)
+      )
       expect(killAllProcessesForWorktreeMock).toHaveBeenCalledWith(worktreeId, {
         runtime: runtimeStub,
         localProvider: ptyProvider,

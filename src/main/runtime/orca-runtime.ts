@@ -714,6 +714,7 @@ import {
   registerTerminalViewAttributesApplier
 } from './terminal-view-attribute-store'
 import { killAllProcessesForWorktree } from './worktree-teardown'
+import { WorktreePtyAdmission } from './worktree-pty-admission'
 import { MOBILE_SUBSCRIBE_SCROLLBACK_ROWS } from './scrollback-limits'
 import {
   createMobileSessionTabsNotifyCoalescer,
@@ -1184,25 +1185,28 @@ type HeadlessSeedMetadata = {
   kittyKeyboardFlags?: number
 }
 
-type RuntimePtyController = {
-  spawn?(opts: {
-    cols: number
-    rows: number
-    cwd?: string
-    command?: string
-    commandDelivery?: 'renderer' | 'provider'
-    startupCommandDelivery?: WorktreeStartupLaunch['startupCommandDelivery']
-    env?: Record<string, string>
-    envToDelete?: string[]
-    telemetry?: WorktreeStartupLaunch['telemetry']
-    connectionId?: string | null
-    worktreeId?: string
-    preAllocatedHandle?: string
-    tabId?: string
-    leafId?: string
-    sessionId?: string
-    persistHostSessionBinding?: boolean
-  }): Promise<{ id: string }>
+export type RuntimePtySpawnOptions = {
+  cols: number
+  rows: number
+  cwd?: string
+  command?: string
+  commandDelivery?: 'renderer' | 'provider'
+  startupCommandDelivery?: WorktreeStartupLaunch['startupCommandDelivery']
+  env?: Record<string, string>
+  envToDelete?: string[]
+  telemetry?: WorktreeStartupLaunch['telemetry']
+  connectionId?: string | null
+  worktreeId?: string
+  preAllocatedHandle?: string
+  tabId?: string
+  leafId?: string
+  sessionId?: string
+  persistHostSessionBinding?: boolean
+}
+
+export type RuntimePtyController = {
+  spawn?(opts: RuntimePtySpawnOptions): Promise<{ id: string }>
+  spawnWithWorktreePtyAdmissionHeld?(opts: RuntimePtySpawnOptions): Promise<{ id: string }>
   write(ptyId: string, data: string): boolean
   kill(ptyId: string): boolean
   stopAndWait?(ptyId: string, opts?: { keepHistory?: boolean }): Promise<boolean>
@@ -2495,6 +2499,7 @@ export class OrcaRuntimeService {
   private canonicalFetchKeyCache = new Map<string, string>()
   private optimisticReconcileTokens = new Map<string, string>()
   private removeManagedWorktreeInFlight = new Map<string, RuntimeWorktreeRemovalInFlight>()
+  private readonly worktreePtyAdmission = new WorktreePtyAdmission()
   private preservedBranchCleanupByWorktreeId = new Map<string, PreservedBranchCleanupTarget>()
   private readonly getLocalProviderFn: (() => IPtyProvider) | null
   private readonly onPtyStopped: ((ptyId: string) => void) | null
@@ -16907,23 +16912,25 @@ export class OrcaRuntimeService {
             'Cannot delete the project root workspace. Remove the folder project instead.'
           )
         }
-        const localProvider = this.getLocalProvider()
-        if (localProvider) {
-          // Why: folder workspace deletion has no Git removal phase where PTYs
-          // would otherwise be swept; tear them down before hiding the workspace.
-          await killAllProcessesForWorktree(removalTarget.id, {
-            runtime: this,
-            localProvider,
-            onPtyStopped: this.onPtyStopped ?? undefined
-          }).catch((err) => {
-            console.warn(`[worktree-teardown] failed for ${removalTarget.id}:`, err)
-          })
-        }
-        this.removeWorktreeMetadataAndHistory(store, removalTarget.id)
-        this.preservedBranchCleanupByWorktreeId.delete(removalTarget.id)
-        this.invalidateResolvedWorktreeCache()
-        this.notifyWorktreesChanged(repo.id)
-        return {}
+        return this.runWithWorktreePtyTeardown(removalTarget.id, async () => {
+          const localProvider = this.getLocalProvider()
+          if (localProvider) {
+            // Why: folder workspace deletion has no Git removal phase where PTYs
+            // would otherwise be swept; tear them down before hiding the workspace.
+            await killAllProcessesForWorktree(removalTarget.id, {
+              runtime: this,
+              localProvider,
+              onPtyStopped: this.onPtyStopped ?? undefined
+            }).catch((err) => {
+              console.warn(`[worktree-teardown] failed for ${removalTarget.id}:`, err)
+            })
+          }
+          this.removeWorktreeMetadataAndHistory(store, removalTarget.id)
+          this.preservedBranchCleanupByWorktreeId.delete(removalTarget.id)
+          this.invalidateResolvedWorktreeCache()
+          this.notifyWorktreesChanged(repo.id)
+          return {}
+        })
       }
       const provider = repo.connectionId ? requireSshGitProvider(repo.connectionId) : null
       const fsProvider = repo.connectionId ? getSshFilesystemProvider(repo.connectionId) : null
@@ -17132,9 +17139,22 @@ export class OrcaRuntimeService {
       }
       if (repo.connectionId) {
         const remoteRemoveOptions = !deleteBranch ? { deleteBranch } : {}
-        const rawRemovalResult = await (Object.keys(remoteRemoveOptions).length > 0
-          ? provider!.removeWorktree(canonicalWorktreePath, force, remoteRemoveOptions)
-          : provider!.removeWorktree(canonicalWorktreePath, force))
+        const rawRemovalResult = await this.runWithWorktreePtyTeardown(
+          removalTarget.id,
+          async () => {
+            const localProvider = this.getLocalProvider()
+            if (localProvider) {
+              await killAllProcessesForWorktree(removalTarget.id, {
+                runtime: this,
+                localProvider,
+                onPtyStopped: this.onPtyStopped ?? undefined
+              })
+            }
+            return Object.keys(remoteRemoveOptions).length > 0
+              ? provider!.removeWorktree(canonicalWorktreePath, force, remoteRemoveOptions)
+              : provider!.removeWorktree(canonicalWorktreePath, force)
+          }
+        )
         const removalResult = this.preserveBranchHeadFallback(
           rawRemovalResult,
           registeredWorktree.head
@@ -17217,116 +17237,121 @@ export class OrcaRuntimeService {
         shouldTearDownPtys = false
       }
 
-      const localProvider = this.getLocalProvider()
-      await closeLocalWatcherForWorktreePath(canonicalWorktreePath).catch((err) => {
-        console.warn(`[filesystem-watcher] failed to close ${canonicalWorktreePath}:`, err)
-      })
-      if (localProvider && shouldTearDownPtys) {
-        // Why: once preflight proves normal deletion is clean, kill PTYs before
-        // git-level removal so Windows handles cannot keep the directory busy. This also
-        // closes the headless-CLI leak for confirmed-removable worktrees.
-        await killAllProcessesForWorktree(removalTarget.id, {
-          runtime: this,
-          localProvider,
-          onPtyStopped: this.onPtyStopped ?? undefined
-        })
-          .then((r) => {
-            const total = r.runtimeStopped + r.providerStopped + r.registryStopped
-            if (total > 0) {
-              // Why (design §4.4 observability): breadcrumb lets ops
-              // distinguish a renderer-state-induced leak (diff-path purge
-              // non-empty) from a backend-induced one (nothing to kill but
-              // memory still pinned). Emit only when the sweep actually did
-              // work so steady-state logs stay quiet.
-              console.info(
-                `[worktree-teardown] ${removalTarget.id} killed runtime=${r.runtimeStopped} provider=${r.providerStopped} registry=${r.registryStopped}`
-              )
-            }
-          })
-          .catch((err) => {
-            console.warn(`[worktree-teardown] failed for ${removalTarget.id}:`, err)
-          })
-      }
-
+      const releaseWorktreePtyTeardown = await this.beginWorktreePtyTeardown(removalTarget.id)
       let removalResult: RemoveWorktreeResult | undefined
       try {
-        const removeOptions = {
-          ...(!deleteBranch ? { deleteBranch } : {}),
-          // Why: removal already validated the Git row under the selected
-          // project runtime; keep branch cleanup on that same canonical row.
-          knownRemovedWorktree: refreshedRegisteredWorktree,
-          ...localWorktreeGitOptions
-        }
-        removalResult = this.preserveBranchHeadFallback(
-          await removeWorktree(repo.path, canonicalWorktreePath, force, removeOptions),
-          refreshedRegisteredWorktree.head
-        )
-      } catch (error) {
-        // Why: Git for Windows can deregister a clean worktree before its
-        // recursive filesystem deletion fails transiently.
-        const recoveredRemovalResult = await recoverLocalWindowsWorktreeRemoval({
-          error,
-          force,
-          canonicalWorktreePath,
-          repoPath: repo.path,
-          localWorktreeGitOptions,
-          registeredWorktree: refreshedRegisteredWorktree,
-          deleteBranch,
-          closeWatcher: (worktreePath) =>
-            closeLocalWatcherForWorktreePath(worktreePath).catch((err) => {
-              console.warn(`[filesystem-watcher] failed to close ${worktreePath}:`, err)
-            })
+        const localProvider = this.getLocalProvider()
+        await closeLocalWatcherForWorktreePath(canonicalWorktreePath).catch((err) => {
+          console.warn(`[filesystem-watcher] failed to close ${canonicalWorktreePath}:`, err)
         })
-        if (recoveredRemovalResult) {
-          removalResult = recoveredRemovalResult
-        } else if (isOrphanedWorktreeError(error)) {
-          const access = getLocalWorktreePathAccess(localWorktreeGitOptions)
-          if (
-            await canSafelyRemoveOrphanedWorktreeDirectory(
-              toLocalWorktreeRuntimePath(canonicalWorktreePath, localWorktreeGitOptions),
-              toLocalWorktreeRuntimePath(repo.path, localWorktreeGitOptions),
-              access.statPath,
-              access.readPath
-            )
-          ) {
-            await closeLocalWatcherForWorktreePath(canonicalWorktreePath).catch((err) => {
-              console.warn(`[filesystem-watcher] failed to close ${canonicalWorktreePath}:`, err)
+        if (localProvider && shouldTearDownPtys) {
+          // Why: once preflight proves normal deletion is clean, kill PTYs before
+          // git-level removal so Windows handles cannot keep the directory busy. This also
+          // closes the headless-CLI leak for confirmed-removable worktrees.
+          await killAllProcessesForWorktree(removalTarget.id, {
+            runtime: this,
+            localProvider,
+            onPtyStopped: this.onPtyStopped ?? undefined
+          })
+            .then((r) => {
+              const total = r.runtimeStopped + r.providerStopped + r.registryStopped
+              if (total > 0) {
+                // Why (design §4.4 observability): breadcrumb lets ops
+                // distinguish a renderer-state-induced leak (diff-path purge
+                // non-empty) from a backend-induced one (nothing to kill but
+                // memory still pinned). Emit only when the sweep actually did
+                // work so steady-state logs stay quiet.
+                console.info(
+                  `[worktree-teardown] ${removalTarget.id} killed runtime=${r.runtimeStopped} provider=${r.providerStopped} registry=${r.registryStopped}`
+                )
+              }
             })
-            await removeLocalWorktreePath(canonicalWorktreePath, localWorktreeGitOptions).catch(
-              () => {}
-            )
-          } else {
-            console.warn(
-              `[worktrees] Refusing recursive cleanup for unproven worktree directory: ${canonicalWorktreePath}`
-            )
-          }
-          // Why: `git worktree remove` failed, so git's internal worktree tracking
-          // (`.git/worktrees/<name>`) is still intact. Without pruning, `git worktree
-          // list` continues to show the stale entry and the branch it had checked out
-          // remains locked — other worktrees cannot check it out.
-          await gitExecFileAsync(['worktree', 'prune'], {
-            cwd: repo.path,
-            ...localWorktreeGitOptions
-          }).catch(() => {})
-          await cleanupUnusedWorktreePushTargetRemote(
-            repo.path,
-            removalTarget.id,
-            removedPushTarget,
-            store,
-            localWorktreeGitOptions
-          )
-          this.clearOptimisticReconcileToken(removalTarget.id)
-          this.removeWorktreeMetadataAndHistory(store, removalTarget.id)
-          this.preservedBranchCleanupByWorktreeId.delete(removalTarget.id)
-          this.invalidateResolvedWorktreeCache()
-          invalidateAuthorizedRootsCache()
-          this.notifyWorktreesChanged(repo.id)
-          return {
-            ...(warning ? { warning } : {})
-          }
-        } else {
-          throw new Error(formatWorktreeRemovalError(error, canonicalWorktreePath, force))
+            .catch((err) => {
+              console.warn(`[worktree-teardown] failed for ${removalTarget.id}:`, err)
+            })
         }
+
+        try {
+          const removeOptions = {
+            ...(!deleteBranch ? { deleteBranch } : {}),
+            // Why: removal already validated the Git row under the selected
+            // project runtime; keep branch cleanup on that same canonical row.
+            knownRemovedWorktree: refreshedRegisteredWorktree,
+            ...localWorktreeGitOptions
+          }
+          removalResult = this.preserveBranchHeadFallback(
+            await removeWorktree(repo.path, canonicalWorktreePath, force, removeOptions),
+            refreshedRegisteredWorktree.head
+          )
+        } catch (error) {
+          // Why: Git for Windows can deregister a clean worktree before its
+          // recursive filesystem deletion fails transiently.
+          const recoveredRemovalResult = await recoverLocalWindowsWorktreeRemoval({
+            error,
+            force,
+            canonicalWorktreePath,
+            repoPath: repo.path,
+            localWorktreeGitOptions,
+            registeredWorktree: refreshedRegisteredWorktree,
+            deleteBranch,
+            closeWatcher: (worktreePath) =>
+              closeLocalWatcherForWorktreePath(worktreePath).catch((err) => {
+                console.warn(`[filesystem-watcher] failed to close ${worktreePath}:`, err)
+              })
+          })
+          if (recoveredRemovalResult) {
+            removalResult = recoveredRemovalResult
+          } else if (isOrphanedWorktreeError(error)) {
+            const access = getLocalWorktreePathAccess(localWorktreeGitOptions)
+            if (
+              await canSafelyRemoveOrphanedWorktreeDirectory(
+                toLocalWorktreeRuntimePath(canonicalWorktreePath, localWorktreeGitOptions),
+                toLocalWorktreeRuntimePath(repo.path, localWorktreeGitOptions),
+                access.statPath,
+                access.readPath
+              )
+            ) {
+              await closeLocalWatcherForWorktreePath(canonicalWorktreePath).catch((err) => {
+                console.warn(`[filesystem-watcher] failed to close ${canonicalWorktreePath}:`, err)
+              })
+              await removeLocalWorktreePath(canonicalWorktreePath, localWorktreeGitOptions).catch(
+                () => {}
+              )
+            } else {
+              console.warn(
+                `[worktrees] Refusing recursive cleanup for unproven worktree directory: ${canonicalWorktreePath}`
+              )
+            }
+            // Why: `git worktree remove` failed, so git's internal worktree tracking
+            // (`.git/worktrees/<name>`) is still intact. Without pruning, `git worktree
+            // list` continues to show the stale entry and the branch it had checked out
+            // remains locked — other worktrees cannot check it out.
+            await gitExecFileAsync(['worktree', 'prune'], {
+              cwd: repo.path,
+              ...localWorktreeGitOptions
+            }).catch(() => {})
+            await cleanupUnusedWorktreePushTargetRemote(
+              repo.path,
+              removalTarget.id,
+              removedPushTarget,
+              store,
+              localWorktreeGitOptions
+            )
+            this.clearOptimisticReconcileToken(removalTarget.id)
+            this.removeWorktreeMetadataAndHistory(store, removalTarget.id)
+            this.preservedBranchCleanupByWorktreeId.delete(removalTarget.id)
+            this.invalidateResolvedWorktreeCache()
+            invalidateAuthorizedRootsCache()
+            this.notifyWorktreesChanged(repo.id)
+            return {
+              ...(warning ? { warning } : {})
+            }
+          } else {
+            throw new Error(formatWorktreeRemovalError(error, canonicalWorktreePath, force))
+          }
+        }
+      } finally {
+        releaseWorktreePtyTeardown()
       }
 
       await cleanupUnusedWorktreePushTargetRemote(
@@ -17482,187 +17507,191 @@ export class OrcaRuntimeService {
         throw new Error('runtime_unavailable')
       }
       const workspace = await this.resolveTerminalWorkspaceLaunchScope(worktreeSelector)
-      const launchOpts = await this.resolveAgentTerminalCreateOptions(workspace, opts)
-      const cwd =
-        this.resolveWorkspaceTerminalStartupCwd(workspace, launchOpts.cwd) ?? workspace.path
-      const preAllocatedHandle = this.createPreAllocatedTerminalHandle()
-      // Why: mint tabId in main before spawn so paneKey is known at PTY env
-      // build time. Hook-based agent status (Claude/Codex/Cursor/Gemini) keys
-      // off `${tabId}:${leafId}` — without these vars set on the PTY, the
-      // hook payload arrives with an empty paneKey and the renderer cannot
-      // attribute the event. Use a stable UUID leaf because hooks reject the
-      // legacy numeric pane keys after the pane-id migration.
-      const hintedTabId = launchOpts.tabId?.trim()
-      const canAdoptPaneIdentity =
-        hintedTabId !== undefined &&
-        isValidHostTerminalTabId(hintedTabId) &&
-        launchOpts.leafId !== undefined &&
-        isTerminalLeafId(launchOpts.leafId)
-      const tabId = canAdoptPaneIdentity ? (hintedTabId as string) : randomUUID()
-      const leafId = canAdoptPaneIdentity ? (launchOpts.leafId as string) : randomUUID()
-      const paneKey = makePaneKey(tabId, leafId)
-      const launchToken = launchOpts.launchConfig
-        ? (launchOpts.launchToken ?? randomUUID())
-        : undefined
-      const baseEnv = {
-        ...launchOpts.env,
-        ...(launchToken ? { ORCA_AGENT_LAUNCH_TOKEN: launchToken } : {})
-      }
-      const claudeAgentTeamsSourceCommand =
-        launchOpts.claudeAgentTeamsSourceCommand?.trim() || launchOpts.command?.trim() || undefined
-      const claudeAgentTeamsMode = this.store?.getSettings?.().claudeAgentTeamsMode
-      const effectiveClaudeAgentTeamsMode = inferCapturedClaudeAgentTeamsMode(
-        launchOpts.launchConfig,
-        claudeAgentTeamsSourceCommand,
-        claudeAgentTeamsMode
-      )
-      const agentTeamsPlan = await buildClaudeAgentTeamsLaunchPlan({
-        command: claudeAgentTeamsSourceCommand,
-        mode: effectiveClaudeAgentTeamsMode,
-        baseEnv: {
-          ...process.env,
-          ...baseEnv
-        },
-        createTeamEnv: (shimDir, shimBin) =>
-          this.claudeAgentTeams.createLaunchEnv({
-            leaderHandle: preAllocatedHandle,
-            baseEnv: {
-              ...process.env,
-              ...baseEnv
-            },
-            shimDir,
-            shimBin
-          }).env
-      })
-      const sequencedStartupCommand =
-        agentTeamsPlan &&
-        claudeAgentTeamsSourceCommand &&
-        launchOpts.command &&
-        claudeAgentTeamsSourceCommand !== launchOpts.command
-          ? agentTeamsPlan.command
+      return await this.runWithWorktreePtySpawn(workspace.id, async () => {
+        const launchOpts = await this.resolveAgentTerminalCreateOptions(workspace, opts)
+        const cwd =
+          this.resolveWorkspaceTerminalStartupCwd(workspace, launchOpts.cwd) ?? workspace.path
+        const preAllocatedHandle = this.createPreAllocatedTerminalHandle()
+        // Why: mint tabId in main before spawn so paneKey is known at PTY env
+        // build time. Hook-based agent status (Claude/Codex/Cursor/Gemini) keys
+        // off `${tabId}:${leafId}` — without these vars set on the PTY, the
+        // hook payload arrives with an empty paneKey and the renderer cannot
+        // attribute the event. Use a stable UUID leaf because hooks reject the
+        // legacy numeric pane keys after the pane-id migration.
+        const hintedTabId = launchOpts.tabId?.trim()
+        const canAdoptPaneIdentity =
+          hintedTabId !== undefined &&
+          isValidHostTerminalTabId(hintedTabId) &&
+          launchOpts.leafId !== undefined &&
+          isTerminalLeafId(launchOpts.leafId)
+        const tabId = canAdoptPaneIdentity ? (hintedTabId as string) : randomUUID()
+        const leafId = canAdoptPaneIdentity ? (launchOpts.leafId as string) : randomUUID()
+        const paneKey = makePaneKey(tabId, leafId)
+        const launchToken = launchOpts.launchConfig
+          ? (launchOpts.launchToken ?? randomUUID())
           : undefined
-      const effectiveLaunchConfig =
-        launchOpts.launchConfig && agentTeamsPlan
-          ? {
-              ...launchOpts.launchConfig,
-              agentCommand: launchOpts.launchConfig.agentCommand
-                ? effectiveClaudeAgentTeamsMode === 'in-process' || process.platform === 'win32'
-                  ? addClaudeTeammateModeInProcess(launchOpts.launchConfig.agentCommand)
-                  : addClaudeTeammateModeAuto(launchOpts.launchConfig.agentCommand)
-                : agentTeamsPlan.command,
-              agentEnv: {
-                ...launchOpts.launchConfig.agentEnv,
-                ...agentTeamsPlan.env
-              }
-            }
-          : launchOpts.launchConfig
-      // Why: setup/agent sequencing wraps the PTY launch in a wait shell before
-      // Claude Agent Teams runs. Preserve the direct Claude command separately
-      // so the wrapper can exec the teammate-mode variant after setup completes.
-      const env = this.buildTerminalWorkspaceEnv(
-        workspace,
-        {
-          ...baseEnv,
-          ...(sequencedStartupCommand
-            ? { [SETUP_AGENT_SEQUENCE_STARTUP_COMMAND_ENV]: sequencedStartupCommand }
-            : {})
-        },
-        paneKey,
-        tabId,
-        agentTeamsPlan?.env
-      )
-      const result = await this.ptyController.spawn({
-        cols: 120,
-        rows: 40,
-        cwd,
-        command: sequencedStartupCommand
-          ? launchOpts.command
-          : (agentTeamsPlan?.command ?? launchOpts.command),
-        commandDelivery: 'provider',
-        startupCommandDelivery: launchOpts.startupCommandDelivery,
-        env,
-        envToDelete: agentTeamsPlan?.envToDelete,
-        telemetry: launchOpts.telemetry,
-        connectionId: workspace.connectionId,
-        worktreeId: workspace.id,
-        preAllocatedHandle,
-        tabId,
-        leafId,
-        ...(launchOpts.sessionId ? { sessionId: launchOpts.sessionId } : {}),
-        ...(launchOpts.persistHostSessionBinding ? { persistHostSessionBinding: true } : {})
-      })
-      this.registerPreAllocatedHandleForPty(result.id, preAllocatedHandle)
-      this.registerPty(result.id, workspace.id, workspace.connectionId)
-      const pty = this.getOrCreatePtyWorktreeRecord(result.id)
-      if (pty) {
-        if (launchOpts.title) {
-          const observedAt = this.nextTitleObservationSequence()
-          pty.title = launchOpts.title
-          pty.titleUpdatedAt = observedAt
-          this.setPtyManagementTitleFromObservedTitle(pty, launchOpts.title, observedAt)
-        } else {
-          pty.title = null
-          pty.titleUpdatedAt = null
+        const baseEnv = {
+          ...launchOpts.env,
+          ...(launchToken ? { ORCA_AGENT_LAUNCH_TOKEN: launchToken } : {})
         }
-        pty.tabId = tabId
-        pty.paneKey = paneKey
-        pty.launchConfig = effectiveLaunchConfig
-          ? copySleepingAgentLaunchConfig(effectiveLaunchConfig)
-          : null
-        pty.launchToken = launchToken ?? null
-        pty.launchAgent = launchOpts.launchAgent ?? null
-      }
-      const handle = pty ? this.issuePtyHandle(pty) : preAllocatedHandle
-      if (pty && launchOpts.deferMobileSessionPublish !== true) {
-        this.publishPtyBackedMobileSessionTerminal(workspace.id, pty, {
+        const claudeAgentTeamsSourceCommand =
+          launchOpts.claudeAgentTeamsSourceCommand?.trim() ||
+          launchOpts.command?.trim() ||
+          undefined
+        const claudeAgentTeamsMode = this.store?.getSettings?.().claudeAgentTeamsMode
+        const effectiveClaudeAgentTeamsMode = inferCapturedClaudeAgentTeamsMode(
+          launchOpts.launchConfig,
+          claudeAgentTeamsSourceCommand,
+          claudeAgentTeamsMode
+        )
+        const agentTeamsPlan = await buildClaudeAgentTeamsLaunchPlan({
+          command: claudeAgentTeamsSourceCommand,
+          mode: effectiveClaudeAgentTeamsMode,
+          baseEnv: {
+            ...process.env,
+            ...baseEnv
+          },
+          createTeamEnv: (shimDir, shimBin) =>
+            this.claudeAgentTeams.createLaunchEnv({
+              leaderHandle: preAllocatedHandle,
+              baseEnv: {
+                ...process.env,
+                ...baseEnv
+              },
+              shimDir,
+              shimBin
+            }).env
+        })
+        const sequencedStartupCommand =
+          agentTeamsPlan &&
+          claudeAgentTeamsSourceCommand &&
+          launchOpts.command &&
+          claudeAgentTeamsSourceCommand !== launchOpts.command
+            ? agentTeamsPlan.command
+            : undefined
+        const effectiveLaunchConfig =
+          launchOpts.launchConfig && agentTeamsPlan
+            ? {
+                ...launchOpts.launchConfig,
+                agentCommand: launchOpts.launchConfig.agentCommand
+                  ? effectiveClaudeAgentTeamsMode === 'in-process' || process.platform === 'win32'
+                    ? addClaudeTeammateModeInProcess(launchOpts.launchConfig.agentCommand)
+                    : addClaudeTeammateModeAuto(launchOpts.launchConfig.agentCommand)
+                  : agentTeamsPlan.command,
+                agentEnv: {
+                  ...launchOpts.launchConfig.agentEnv,
+                  ...agentTeamsPlan.env
+                }
+              }
+            : launchOpts.launchConfig
+        // Why: setup/agent sequencing wraps the PTY launch in a wait shell before
+        // Claude Agent Teams runs. Preserve the direct Claude command separately
+        // so the wrapper can exec the teammate-mode variant after setup completes.
+        const env = this.buildTerminalWorkspaceEnv(
+          workspace,
+          {
+            ...baseEnv,
+            ...(sequencedStartupCommand
+              ? { [SETUP_AGENT_SEQUENCE_STARTUP_COMMAND_ENV]: sequencedStartupCommand }
+              : {})
+          },
+          paneKey,
+          tabId,
+          agentTeamsPlan?.env
+        )
+        const result = await this.spawnPtyWithAdmissionHeld({
+          cols: 120,
+          rows: 40,
+          cwd,
+          command: sequencedStartupCommand
+            ? launchOpts.command
+            : (agentTeamsPlan?.command ?? launchOpts.command),
+          commandDelivery: 'provider',
+          startupCommandDelivery: launchOpts.startupCommandDelivery,
+          env,
+          envToDelete: agentTeamsPlan?.envToDelete,
+          telemetry: launchOpts.telemetry,
+          connectionId: workspace.connectionId,
+          worktreeId: workspace.id,
+          preAllocatedHandle,
           tabId,
           leafId,
-          title: launchOpts.title ?? null,
-          activate: presentation === 'focused',
-          // Why: explicit background presentation may carry legacy activate
-          // metadata from an already-owned renderer pane; don't select it on mobile.
-          selectIfNoActiveTab: presentation !== 'background',
-          ...(cwd !== workspace.path ? { startupCwd: cwd } : {})
+          ...(launchOpts.sessionId ? { sessionId: launchOpts.sessionId } : {}),
+          ...(launchOpts.persistHostSessionBinding ? { persistHostSessionBinding: true } : {})
         })
-      }
-      let surface: RuntimeTerminalCreate['surface'] = 'background'
-      let warning: string | undefined
-      if (presentation !== 'background' && this.notifier?.revealTerminalSession) {
-        try {
-          // Why: after the PTY is spawned, renderer tab adoption is best-effort;
-          // failing here must not strand a live process without returning a handle.
-          // Pass the pre-minted tabId so the renderer adopts under the same id
-          // already baked into the PTY env — keeps paneKey hook attribution intact.
-          await this.notifier.revealTerminalSession(workspace.id, {
-            ptyId: result.id,
-            title: launchOpts.title ?? null,
-            ...(cwd !== workspace.path ? { cwd } : {}),
-            ...(effectiveLaunchConfig ? { launchConfig: effectiveLaunchConfig } : {}),
-            ...(launchToken ? { launchToken } : {}),
-            ...(launchOpts.launchAgent ? { launchAgent: launchOpts.launchAgent } : {}),
-            activate: presentation === 'focused',
-            ...(presentation ? { presentation } : {}),
-            tabId,
-            leafId
-          })
-          surface = 'visible'
-        } catch (err) {
-          console.warn(`[terminal-create] failed to create inactive tab for ${result.id}:`, err)
-          warning = createTerminalRevealWarning(handle, err)
+        this.registerPreAllocatedHandleForPty(result.id, preAllocatedHandle)
+        this.registerPty(result.id, workspace.id, workspace.connectionId)
+        const pty = this.getOrCreatePtyWorktreeRecord(result.id)
+        if (pty) {
+          if (launchOpts.title) {
+            const observedAt = this.nextTitleObservationSequence()
+            pty.title = launchOpts.title
+            pty.titleUpdatedAt = observedAt
+            this.setPtyManagementTitleFromObservedTitle(pty, launchOpts.title, observedAt)
+          } else {
+            pty.title = null
+            pty.titleUpdatedAt = null
+          }
+          pty.tabId = tabId
+          pty.paneKey = paneKey
+          pty.launchConfig = effectiveLaunchConfig
+            ? copySleepingAgentLaunchConfig(effectiveLaunchConfig)
+            : null
+          pty.launchToken = launchToken ?? null
+          pty.launchAgent = launchOpts.launchAgent ?? null
         }
-      } else if (presentation !== 'background') {
-        warning = createTerminalRevealWarning(handle)
-      }
-      return {
-        handle,
-        tabId,
-        paneKey,
-        ptyId: result.id,
-        worktreeId: workspace.id,
-        title: launchOpts.title ?? null,
-        surface,
-        ...(warning ? { warning } : {})
-      }
+        const handle = pty ? this.issuePtyHandle(pty) : preAllocatedHandle
+        if (pty && launchOpts.deferMobileSessionPublish !== true) {
+          this.publishPtyBackedMobileSessionTerminal(workspace.id, pty, {
+            tabId,
+            leafId,
+            title: launchOpts.title ?? null,
+            activate: presentation === 'focused',
+            // Why: explicit background presentation may carry legacy activate
+            // metadata from an already-owned renderer pane; don't select it on mobile.
+            selectIfNoActiveTab: presentation !== 'background',
+            ...(cwd !== workspace.path ? { startupCwd: cwd } : {})
+          })
+        }
+        let surface: RuntimeTerminalCreate['surface'] = 'background'
+        let warning: string | undefined
+        if (presentation !== 'background' && this.notifier?.revealTerminalSession) {
+          try {
+            // Why: after the PTY is spawned, renderer tab adoption is best-effort;
+            // failing here must not strand a live process without returning a handle.
+            // Pass the pre-minted tabId so the renderer adopts under the same id
+            // already baked into the PTY env — keeps paneKey hook attribution intact.
+            await this.notifier.revealTerminalSession(workspace.id, {
+              ptyId: result.id,
+              title: launchOpts.title ?? null,
+              ...(cwd !== workspace.path ? { cwd } : {}),
+              ...(effectiveLaunchConfig ? { launchConfig: effectiveLaunchConfig } : {}),
+              ...(launchToken ? { launchToken } : {}),
+              ...(launchOpts.launchAgent ? { launchAgent: launchOpts.launchAgent } : {}),
+              activate: presentation === 'focused',
+              ...(presentation ? { presentation } : {}),
+              tabId,
+              leafId
+            })
+            surface = 'visible'
+          } catch (err) {
+            console.warn(`[terminal-create] failed to create inactive tab for ${result.id}:`, err)
+            warning = createTerminalRevealWarning(handle, err)
+          }
+        } else if (presentation !== 'background') {
+          warning = createTerminalRevealWarning(handle)
+        }
+        return {
+          handle,
+          tabId,
+          paneKey,
+          ptyId: result.id,
+          worktreeId: workspace.id,
+          title: launchOpts.title ?? null,
+          surface,
+          ...(warning ? { warning } : {})
+        }
+      })
     }
 
     this.assertGraphReady()
@@ -18597,64 +18626,70 @@ export class OrcaRuntimeService {
     }
     const direction = opts.direction ?? 'horizontal'
     const workspace = await this.resolveTerminalWorkspaceLaunchScope(`id:${pty.worktreeId}`)
-    const leafId = randomUUID()
-    const preAllocatedHandle = this.createPreAllocatedTerminalHandle()
-    const paneKey = makePaneKey(parentTabId, leafId)
-    const result = await this.ptyController.spawn({
-      cols: 120,
-      rows: 40,
-      cwd: workspace.path,
-      command: opts.command,
-      commandDelivery: 'provider',
-      env: this.buildTerminalWorkspaceEnv(workspace, opts.env ?? {}, paneKey, parentTabId),
-      envToDelete: opts.envToDelete,
-      connectionId: workspace.connectionId,
-      worktreeId: workspace.id,
-      preAllocatedHandle
+    return await this.runWithWorktreePtySpawn(workspace.id, async () => {
+      const leafId = randomUUID()
+      const preAllocatedHandle = this.createPreAllocatedTerminalHandle()
+      const paneKey = makePaneKey(parentTabId, leafId)
+      const result = await this.spawnPtyWithAdmissionHeld({
+        cols: 120,
+        rows: 40,
+        cwd: workspace.path,
+        command: opts.command,
+        commandDelivery: 'provider',
+        env: this.buildTerminalWorkspaceEnv(workspace, opts.env ?? {}, paneKey, parentTabId),
+        envToDelete: opts.envToDelete,
+        connectionId: workspace.connectionId,
+        worktreeId: workspace.id,
+        preAllocatedHandle
+      })
+      this.registerPreAllocatedHandleForPty(result.id, preAllocatedHandle)
+      this.registerPty(result.id, workspace.id, workspace.connectionId)
+      const createdPty = this.getOrCreatePtyWorktreeRecord(result.id)
+      if (createdPty) {
+        createdPty.tabId = parentTabId
+        createdPty.paneKey = paneKey
+      }
+
+      try {
+        await this.notifier?.revealTerminalSession?.(workspace.id, {
+          ptyId: result.id,
+          title: null,
+          activate: opts.activate !== false,
+          tabId: parentTabId,
+          leafId,
+          splitFromLeafId: parsedPaneKey.leafId,
+          splitDirection: direction,
+          splitTelemetrySource: opts.telemetrySource
+        })
+      } catch (error) {
+        this.ptyController?.kill(result.id)
+        throw error
+      }
+      if (createdPty) {
+        this.publishPtyBackedMobileSessionTerminal(workspace.id, createdPty, {
+          tabId: parentTabId,
+          leafId,
+          title: null,
+          activate: opts.activate !== false,
+          split: { splitFromLeafId: parsedPaneKey.leafId, direction }
+        })
+        // Why: persist the split into the workspace session so a later snapshot
+        // rebuild keeps it instead of collapsing back to a single pane.
+        this.persistHeadlessTerminalSplit({
+          tabId: parentTabId,
+          leafId,
+          ptyId: createdPty.ptyId,
+          splitFromLeafId: parsedPaneKey.leafId,
+          direction
+        })
+      }
+
+      return {
+        handle: this.issuePtyHandle(createdPty ?? pty),
+        tabId: parentTabId,
+        paneRuntimeId: -1
+      }
     })
-    this.registerPreAllocatedHandleForPty(result.id, preAllocatedHandle)
-    this.registerPty(result.id, workspace.id, workspace.connectionId)
-    const createdPty = this.getOrCreatePtyWorktreeRecord(result.id)
-    if (createdPty) {
-      createdPty.tabId = parentTabId
-      createdPty.paneKey = paneKey
-    }
-
-    try {
-      await this.notifier?.revealTerminalSession?.(workspace.id, {
-        ptyId: result.id,
-        title: null,
-        activate: opts.activate !== false,
-        tabId: parentTabId,
-        leafId,
-        splitFromLeafId: parsedPaneKey.leafId,
-        splitDirection: direction,
-        splitTelemetrySource: opts.telemetrySource
-      })
-    } catch (error) {
-      this.ptyController.kill?.(result.id)
-      throw error
-    }
-    if (createdPty) {
-      this.publishPtyBackedMobileSessionTerminal(workspace.id, createdPty, {
-        tabId: parentTabId,
-        leafId,
-        title: null,
-        activate: opts.activate !== false,
-        split: { splitFromLeafId: parsedPaneKey.leafId, direction }
-      })
-      // Why: persist the split into the workspace session so a later snapshot
-      // rebuild keeps it instead of collapsing back to a single pane.
-      this.persistHeadlessTerminalSplit({
-        tabId: parentTabId,
-        leafId,
-        ptyId: createdPty.ptyId,
-        splitFromLeafId: parsedPaneKey.leafId,
-        direction
-      })
-    }
-
-    return { handle: this.issuePtyHandle(createdPty ?? pty), tabId: parentTabId, paneRuntimeId: -1 }
   }
 
   async handleAgentTeamsTmuxCompat(
@@ -18746,7 +18781,45 @@ export class OrcaRuntimeService {
     })
   }
 
-  async stopTerminalsForWorktree(worktreeSelector: string): Promise<{ stopped: number }> {
+  beginWorktreePtySpawn(worktreeId: string): () => void {
+    return this.worktreePtyAdmission.beginSpawn(worktreeId)
+  }
+
+  private async runWithWorktreePtySpawn<T>(
+    worktreeId: string,
+    operation: () => Promise<T>
+  ): Promise<T> {
+    const release = this.beginWorktreePtySpawn(worktreeId)
+    try {
+      return await operation()
+    } finally {
+      release()
+    }
+  }
+
+  private async spawnPtyWithAdmissionHeld(opts: RuntimePtySpawnOptions): Promise<{ id: string }> {
+    const controller = this.ptyController
+    const spawn = controller?.spawnWithWorktreePtyAdmissionHeld ?? controller?.spawn
+    if (!controller || !spawn) {
+      throw new Error('runtime_unavailable')
+    }
+    return await spawn.call(controller, opts)
+  }
+
+  async beginWorktreePtyTeardown(worktreeId: string): Promise<() => void> {
+    return this.worktreePtyAdmission.closeForTeardown(worktreeId)
+  }
+
+  async runWithWorktreePtyTeardown<T>(worktreeId: string, operation: () => Promise<T>): Promise<T> {
+    // Why: closing admission before snapshots makes deletion own every spawn
+    // already in flight and keeps new desktop/mobile/SSH spawns out until Git settles.
+    return this.worktreePtyAdmission.runTeardown(worktreeId, operation)
+  }
+
+  async stopTerminalsForWorktree(
+    worktreeSelector: string,
+    opts: { waitForProviderShutdown?: boolean } = {}
+  ): Promise<{ stopped: number }> {
     // Why: this mutates live PTYs, so the runtime must reject it while the
     // renderer graph is reloading instead of acting on cached leaf ownership.
     const graphEpoch = this.captureReadyGraphEpoch()
@@ -18769,7 +18842,9 @@ export class OrcaRuntimeService {
       // Why: worktree removal immediately follows this with provider/registry
       // sweeps. Await the verified stop so those sweeps cannot overlap a
       // provider shutdown with a second ConPTY teardown on Windows (#8275).
-      if (this.ptyController?.stopAndWait) {
+      // Why: deletion needs provider acknowledgement before its fallback sweeps,
+      // while the shared terminal.stop RPC must preserve graceful shell teardown.
+      if (opts.waitForProviderShutdown && this.ptyController?.stopAndWait) {
         if (await this.ptyController.stopAndWait(ptyId)) {
           stopped += 1
         }

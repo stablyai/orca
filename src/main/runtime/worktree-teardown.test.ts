@@ -157,7 +157,9 @@ describe('killAllProcessesForWorktree', () => {
 
     const result = await killAllProcessesForWorktree('w1', { runtime, localProvider })
 
-    expect(stopTerminalsForWorktree).toHaveBeenCalledWith('w1')
+    expect(stopTerminalsForWorktree).toHaveBeenCalledWith('w1', {
+      waitForProviderShutdown: true
+    })
     expect(result.runtimeStopped).toBe(3)
   })
 

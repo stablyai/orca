@@ -17306,6 +17306,50 @@ describe('OrcaRuntimeService', () => {
     })
   })
 
+  it('holds runtime terminal admission from resolved workspace through launch preparation', async () => {
+    const launchPreparation = deferred<Record<string, never>>()
+    const spawn = vi.fn().mockResolvedValue({ id: 'runtime-prepared-pty' })
+    const spawnWithWorktreePtyAdmissionHeld = vi
+      .fn()
+      .mockResolvedValue({ id: 'runtime-prepared-pty' })
+    const runtime = new OrcaRuntimeService(store)
+    runtime.setPtyController({
+      spawn,
+      spawnWithWorktreePtyAdmissionHeld,
+      write: () => true,
+      kill: () => true,
+      getForegroundProcess: async () => null
+    })
+    const resolveLaunchOptions = vi
+      .spyOn(
+        runtime as unknown as {
+          resolveAgentTerminalCreateOptions: () => Promise<Record<string, never>>
+        },
+        'resolveAgentTerminalCreateOptions'
+      )
+      .mockReturnValue(launchPreparation.promise)
+
+    const creating = runtime.createTerminal(`id:${TEST_WORKTREE_ID}`)
+    await vi.waitFor(() => expect(resolveLaunchOptions).toHaveBeenCalled())
+
+    let teardownEntered = false
+    const teardown = runtime.runWithWorktreePtyTeardown(TEST_WORKTREE_ID, async () => {
+      teardownEntered = true
+    })
+    await new Promise<void>((resolve) => setImmediate(resolve))
+
+    expect(teardownEntered).toBe(false)
+    expect(spawnWithWorktreePtyAdmissionHeld).not.toHaveBeenCalled()
+
+    launchPreparation.resolve({})
+    await creating
+    await teardown
+
+    expect(spawn).not.toHaveBeenCalled()
+    expect(spawnWithWorktreePtyAdmissionHeld).toHaveBeenCalledTimes(1)
+    expect(teardownEntered).toBe(true)
+  })
+
   it('keeps background-presentation PTY-backed mobile session tabs inactive', async () => {
     const spawn = vi.fn().mockResolvedValue({ id: 'laptop-created-pty' })
     const runtime = new OrcaRuntimeService(store)
@@ -17427,6 +17471,64 @@ describe('OrcaRuntimeService', () => {
         })
       ])
     )
+  })
+
+  it('holds runtime split admission through registration and reveal', async () => {
+    const splitSpawn = deferred<{ id: string }>()
+    const splitReveal = deferred<{ tabId: string }>()
+    const spawnWithWorktreePtyAdmissionHeld = vi
+      .fn()
+      .mockResolvedValueOnce({ id: 'runtime-parent-pty' })
+      .mockReturnValueOnce(splitSpawn.promise)
+    const revealTerminalSession = vi
+      .fn()
+      .mockResolvedValueOnce({ tabId: 'runtime-parent-tab' })
+      .mockReturnValueOnce(splitReveal.promise)
+    const runtime = new OrcaRuntimeService(store)
+    runtime.setPtyController({
+      spawn: vi.fn(),
+      spawnWithWorktreePtyAdmissionHeld,
+      write: () => true,
+      kill: () => true,
+      getForegroundProcess: async () => null
+    })
+    runtime.setNotifier({
+      worktreesChanged: vi.fn(),
+      reposChanged: vi.fn(),
+      activateWorktree: vi.fn(),
+      createTerminal: vi.fn(),
+      revealTerminalSession,
+      splitTerminal: vi.fn(),
+      renameTerminal: vi.fn(),
+      focusTerminal: vi.fn(),
+      closeTerminal: vi.fn(),
+      sleepWorktree: vi.fn(),
+      terminalFitOverrideChanged: vi.fn(),
+      terminalDriverChanged: vi.fn()
+    })
+    const parent = await runtime.createTerminal(`id:${TEST_WORKTREE_ID}`, {
+      tabId: 'runtime-parent-tab',
+      leafId: HEADLESS_LEAF_ID,
+      activate: true
+    })
+
+    const splitting = runtime.splitTerminal(parent.handle)
+    await vi.waitFor(() => expect(spawnWithWorktreePtyAdmissionHeld).toHaveBeenCalledTimes(2))
+    let teardownEntered = false
+    const teardown = runtime.runWithWorktreePtyTeardown(TEST_WORKTREE_ID, async () => {
+      teardownEntered = true
+    })
+
+    splitSpawn.resolve({ id: 'runtime-split-pty' })
+    await vi.waitFor(() => expect(revealTerminalSession).toHaveBeenCalledTimes(2))
+    await new Promise<void>((resolve) => setImmediate(resolve))
+    expect(teardownEntered).toBe(false)
+
+    splitReveal.resolve({ tabId: 'runtime-parent-tab' })
+    await splitting
+    await teardown
+
+    expect(teardownEntered).toBe(true)
   })
 
   it('pushes PTY-backed mobile session tab title and agent status changes to subscribers', async () => {
@@ -22221,10 +22323,12 @@ describe('OrcaRuntimeService', () => {
     syncSinglePty(runtime, 'pty-1')
 
     let completed = false
-    const stopping = runtime.stopTerminalsForWorktree(TEST_WORKTREE_ID).then((result) => {
-      completed = true
-      return result
-    })
+    const stopping = runtime
+      .stopTerminalsForWorktree(TEST_WORKTREE_ID, { waitForProviderShutdown: true })
+      .then((result) => {
+        completed = true
+        return result
+      })
     await vi.waitFor(() => expect(stopAndWait).toHaveBeenCalledWith('pty-1'))
 
     expect(completed).toBe(false)
@@ -22232,6 +22336,26 @@ describe('OrcaRuntimeService', () => {
     releaseStop()
 
     await expect(stopping).resolves.toEqual({ stopped: 1 })
+  })
+
+  it('keeps generic worktree terminal stops graceful', async () => {
+    const runtime = new OrcaRuntimeService(store)
+    const kill = vi.fn(() => true)
+    const stopAndWait = vi.fn(async () => true)
+    runtime.setPtyController({
+      write: () => true,
+      kill,
+      stopAndWait,
+      getForegroundProcess: async () => null
+    })
+    syncSinglePty(runtime, 'pty-1')
+
+    await expect(runtime.stopTerminalsForWorktree(TEST_WORKTREE_ID)).resolves.toEqual({
+      stopped: 1
+    })
+
+    expect(kill).toHaveBeenCalledWith('pty-1')
+    expect(stopAndWait).not.toHaveBeenCalled()
   })
 
   it('stops exactly the expected live PTYs for a worktree', async () => {
@@ -29332,6 +29456,114 @@ describe('OrcaRuntimeService', () => {
       expect(onPtyStopped).toHaveBeenCalledWith(`${TEST_WORKTREE_ID}@@aaaaaaaa`)
       // The pre-daemon provider must not have been consulted for the kill.
       expect(preDaemonProvider.shutdown).not.toHaveBeenCalled()
+    })
+
+    it('drains a late SSH spawn and stops it before remote worktree removal', async () => {
+      const remoteRepo = {
+        ...store.getRepo(TEST_REPO_ID)!,
+        path: '/remote/repo',
+        connectionId: 'ssh-1'
+      }
+      const remoteWorktree = {
+        path: '/remote/feature-wt',
+        head: 'def456',
+        branch: 'feature/test',
+        isBare: false,
+        isMainWorktree: false
+      }
+      const remoteWorktreeId = `${remoteRepo.id}::${remoteWorktree.path}`
+      const runtimeStore = {
+        ...store,
+        getRepos: () => [remoteRepo],
+        getRepo: (id: string) => (id === remoteRepo.id ? remoteRepo : undefined),
+        getAllWorktreeMeta: () => ({ [remoteWorktreeId]: makeWorktreeMeta() }),
+        getWorktreeMeta: (id: string) => (id === remoteWorktreeId ? makeWorktreeMeta() : undefined)
+      }
+      const callOrder: string[] = []
+      const gitProvider = {
+        listWorktrees: vi.fn().mockResolvedValue([
+          {
+            path: remoteRepo.path,
+            head: 'main',
+            branch: 'main',
+            isBare: false,
+            isMainWorktree: true
+          },
+          remoteWorktree
+        ]),
+        removeWorktree: vi.fn(async () => {
+          callOrder.push('git-remove')
+          return {}
+        })
+      }
+      const localProvider = createProviderStub(async () => [])
+      registerSshGitProvider('ssh-1', gitProvider as never)
+      const runtime = new OrcaRuntimeService(runtimeStore as never, undefined, {
+        getLocalProvider: () => localProvider as never
+      })
+      let releaseFirstStop = () => {}
+      runtime.setPtyController({
+        write: () => true,
+        kill: () => false,
+        stopAndWait: vi.fn(
+          (ptyId: string) =>
+            new Promise<boolean>((resolve) => {
+              callOrder.push(`stop:${ptyId}`)
+              if (ptyId === 'ssh:ssh-1@@existing') {
+                releaseFirstStop = () => resolve(true)
+              } else {
+                resolve(true)
+              }
+            })
+        ),
+        getForegroundProcess: async () => null
+      })
+      runtime.attachWindow(1)
+      runtime.syncWindowGraph(1, {
+        tabs: [
+          {
+            tabId: 'tab-remote',
+            worktreeId: remoteWorktreeId,
+            title: 'Terminal',
+            activeLeafId: 'pane:remote',
+            layout: null
+          }
+        ],
+        leaves: [
+          {
+            tabId: 'tab-remote',
+            worktreeId: remoteWorktreeId,
+            leafId: 'pane:remote',
+            paneRuntimeId: 1,
+            ptyId: 'ssh:ssh-1@@existing'
+          }
+        ]
+      })
+      runtime.registerPty('ssh:ssh-1@@existing', remoteWorktreeId, 'ssh-1')
+      const releaseLateSpawn = runtime.beginWorktreePtySpawn(remoteWorktreeId)
+
+      try {
+        const removal = runtime.removeManagedWorktree(remoteWorktreeId)
+        await vi.waitFor(() => expect(gitProvider.listWorktrees).toHaveBeenCalled())
+        expect(callOrder).toEqual([])
+
+        runtime.registerPty('ssh:ssh-1@@late', remoteWorktreeId, 'ssh-1')
+        releaseLateSpawn()
+        await vi.waitFor(() => expect(callOrder).toContain('stop:ssh:ssh-1@@existing'))
+        expect(callOrder).not.toContain('stop:ssh:ssh-1@@late')
+        expect(callOrder).not.toContain('git-remove')
+
+        releaseFirstStop()
+        await removal
+
+        expect(callOrder).toEqual([
+          'stop:ssh:ssh-1@@existing',
+          'stop:ssh:ssh-1@@late',
+          'git-remove'
+        ])
+      } finally {
+        unregisterSshGitProvider('ssh-1')
+      }
     })
   })
   describe('stale terminal handle resolution (#7718)', () => {
