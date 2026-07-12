@@ -2756,6 +2756,57 @@ describe('registerPtyHandlers', () => {
         ).toEqual([['pty:exit', { id: 'local-pty', code: 0 }]])
       })
 
+      it('controller stopAndWait uses targeted SSH liveness for multiple PTYs', async () => {
+        const hasPtyAsync = vi.fn(async (_ptyId: string) => false)
+        const listProcesses = vi.fn(async () => [])
+        const shutdown = vi.fn(async () => undefined)
+        const runtime = {
+          setPtyController: vi.fn(),
+          onPtyExit: vi.fn()
+        }
+        registerSshPtyProvider('ssh-1', {
+          spawn: vi.fn(),
+          write: vi.fn(),
+          resize: vi.fn(),
+          shutdown,
+          sendSignal: vi.fn(),
+          getCwd: vi.fn(),
+          getInitialCwd: vi.fn(),
+          clearBuffer: vi.fn(),
+          acknowledgeDataEvent: vi.fn(),
+          hasChildProcesses: vi.fn(),
+          hasPtyAsync,
+          getForegroundProcess: vi.fn(),
+          serialize: vi.fn(),
+          revive: vi.fn(),
+          onData: vi.fn(() => () => {}),
+          onReplay: vi.fn(() => () => {}),
+          onExit: vi.fn(() => () => {}),
+          listProcesses,
+          attach: vi.fn(),
+          getDefaultShell: vi.fn(),
+          getProfiles: vi.fn()
+        } as never)
+        const ptyIds = ['ssh:ssh-1@@relay-1', 'ssh:ssh-1@@relay-2', 'ssh:ssh-1@@relay-3']
+        for (const ptyId of ptyIds) {
+          setPtyOwnership(ptyId, 'ssh-1')
+        }
+        handlers.clear()
+        registerPtyHandlers(mainWindow as never, runtime as never)
+        const controller = runtime.setPtyController.mock.calls[0]?.[0] as {
+          stopAndWait: (ptyId: string) => Promise<boolean>
+        }
+
+        await expect(
+          Promise.all(ptyIds.map((ptyId) => controller.stopAndWait(ptyId)))
+        ).resolves.toEqual([true, true, true])
+
+        expect(shutdown).toHaveBeenCalledTimes(ptyIds.length)
+        expect(hasPtyAsync).toHaveBeenCalledTimes(ptyIds.length)
+        expect(hasPtyAsync.mock.calls.map(([ptyId]) => ptyId)).toEqual(ptyIds)
+        expect(listProcesses).not.toHaveBeenCalled()
+      })
+
       it('passes keepHistory through runtime controller stopAndWait', async () => {
         vi.useFakeTimers()
         const shutdown = vi.fn(async () => undefined)

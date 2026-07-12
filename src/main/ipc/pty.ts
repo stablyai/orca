@@ -495,6 +495,9 @@ async function isProviderPtyLive(provider: IPtyProvider, ptyId: string): Promise
   if (provider.hasPty) {
     return provider.hasPty(ptyId)
   }
+  if (provider.hasPtyAsync) {
+    return provider.hasPtyAsync(ptyId)
+  }
   return (await provider.listProcesses()).some((session) => session.id === ptyId)
 }
 

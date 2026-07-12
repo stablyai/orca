@@ -1,6 +1,7 @@
 import type { SshChannelMultiplexer } from '../ssh/ssh-channel-multiplexer'
 import type { IPtyProvider, PtyProcessInfo, PtySpawnOptions, PtySpawnResult } from './types'
 import { toAppSshPtyId, toRelaySshPtyId } from './ssh-pty-id'
+import { SshPtyLiveness } from './ssh-pty-liveness'
 import { seedPowerlevel10kWizardEnv } from '../pty/powerlevel10k-wizard-env'
 
 type DataCallback = (payload: { id: string; data: string }) => void
@@ -38,6 +39,7 @@ export class SshPtyProvider implements IPtyProvider {
   private dataListeners = new Set<DataCallback>()
   private replayListeners = new Set<ReplayCallback>()
   private exitListeners = new Set<ExitCallback>()
+  private ptyLiveness: SshPtyLiveness
   // Why: store the unsubscribe handle so dispose() can detach from the
   // multiplexer. Without this, notification callbacks keep firing after
   // the provider is torn down on disconnect, routing events to stale state.
@@ -50,6 +52,11 @@ export class SshPtyProvider implements IPtyProvider {
   ) {
     this.connectionId = connectionId
     this.mux = mux
+    this.ptyLiveness = new SshPtyLiveness({
+      probe: async (id) =>
+        (await this.mux.request('pty.hasPty', { id: this.toRelayPtyId(id) })) === true,
+      listIds: async () => (await this.listProcesses()).map((session) => session.id)
+    })
 
     // Subscribe to relay notifications for PTY events
     this.unsubscribeNotifications = mux.onNotification((method, params) => {
@@ -67,6 +74,7 @@ export class SshPtyProvider implements IPtyProvider {
           break
 
         case 'pty.exit':
+          this.ptyLiveness.markStopped(this.toAppPtyId(params.id as string))
           for (const cb of this.exitListeners) {
             cb({ id: this.toAppPtyId(params.id as string), code: params.code as number })
           }
@@ -83,6 +91,7 @@ export class SshPtyProvider implements IPtyProvider {
     this.dataListeners.clear()
     this.replayListeners.clear()
     this.exitListeners.clear()
+    this.ptyLiveness.dispose()
   }
 
   getConnectionId(): string {
@@ -124,8 +133,10 @@ export class SshPtyProvider implements IPtyProvider {
         console.warn(
           `[ssh-pty] pty.attach succeeded for ${opts.sessionId}, replay=${!!attachResult.replay}`
         )
+        const appPtyId = this.toAppPtyId(relaySessionId)
+        this.ptyLiveness.markLive(appPtyId)
         return {
-          id: this.toAppPtyId(relaySessionId),
+          id: appPtyId,
           isReattach: true,
           ...(attachResult.replay ? { replay: attachResult.replay } : {})
         }
@@ -168,9 +179,11 @@ export class SshPtyProvider implements IPtyProvider {
       ...(opts.paneKey ? { paneKey: opts.paneKey } : {}),
       ...(opts.tabId ? { tabId: opts.tabId } : {})
     })
+    const appPtyId = this.toAppPtyId((result as PtySpawnResult).id)
+    this.ptyLiveness.markLive(appPtyId)
     return {
       ...(result as PtySpawnResult),
-      id: this.toAppPtyId((result as PtySpawnResult).id),
+      id: appPtyId,
       ...(opts.sessionId ? { sessionExpired: true } : {})
     }
   }
@@ -207,6 +220,7 @@ export class SshPtyProvider implements IPtyProvider {
 
   async attach(id: string): Promise<void> {
     await this.mux.request('pty.attach', { id: this.toRelayPtyId(id) })
+    this.ptyLiveness.markLive(id)
   }
 
   async attachForReconnect(
@@ -223,6 +237,7 @@ export class SshPtyProvider implements IPtyProvider {
       ...(expected?.paneKey ? { expectedPaneKey: expected.paneKey } : {}),
       ...(expected?.tabId ? { expectedTabId: expected.tabId } : {})
     })) as { replay?: string } | undefined
+    this.ptyLiveness.markLive(id)
     return result ?? {}
   }
 
@@ -240,6 +255,7 @@ export class SshPtyProvider implements IPtyProvider {
       immediate: opts.immediate ?? false,
       keepHistory: opts.keepHistory ?? false
     })
+    this.ptyLiveness.markStopped(id)
   }
 
   async sendSignal(id: string, signal: string): Promise<void> {
@@ -287,10 +303,15 @@ export class SshPtyProvider implements IPtyProvider {
 
   async listProcesses(): Promise<PtyProcessInfo[]> {
     const result = await this.mux.request('pty.listProcesses')
-    return (result as PtyProcessInfo[]).map((session) => ({
+    const sessions = (result as PtyProcessInfo[]).map((session) => ({
       ...session,
       id: this.toAppPtyId(session.id)
     }))
+    return sessions
+  }
+
+  async hasPtyAsync(id: string): Promise<boolean> {
+    return this.ptyLiveness.hasPty(id)
   }
 
   async getDefaultShell(): Promise<string> {

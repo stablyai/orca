@@ -123,6 +123,7 @@ describe('PtyHandler', () => {
     expect(methods).toContain('pty.clearBuffer')
     expect(methods).toContain('pty.hasChildProcesses')
     expect(methods).toContain('pty.getForegroundProcess')
+    expect(methods).toContain('pty.hasPty')
     expect(methods).toContain('pty.listProcesses')
     expect(methods).toContain('pty.getDefaultShell')
 
@@ -172,6 +173,13 @@ describe('PtyHandler', () => {
     expect(result).toEqual({ id: 'pty-1' })
     expect(mockPtySpawn).toHaveBeenCalled()
     expect(handler.activePtyCount).toBe(1)
+  })
+
+  it('answers targeted PTY liveness without building a process inventory', async () => {
+    await dispatcher.callRequest('pty.spawn', { cols: 80, rows: 24 })
+
+    await expect(dispatcher.callRequest('pty.hasPty', { id: 'pty-1' })).resolves.toBe(true)
+    await expect(dispatcher.callRequest('pty.hasPty', { id: 'missing' })).resolves.toBe(false)
   })
 
   it('uses an explicit shell override and falls back to the default shell otherwise', async () => {

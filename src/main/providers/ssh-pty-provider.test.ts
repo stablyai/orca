@@ -1,6 +1,7 @@
 import { describe, expect, it, vi, beforeEach } from 'vitest'
 import { SshPtyProvider } from './ssh-pty-provider'
 import { POWERLEVEL10K_WIZARD_DISABLE_ENV } from '../pty/powerlevel10k-wizard-env'
+import { JsonRpcErrorCode } from '../ssh/relay-protocol'
 
 type MockMultiplexer = {
   request: ReturnType<typeof vi.fn>
@@ -490,6 +491,109 @@ describe('SshPtyProvider', () => {
     mux.request.mockResolvedValue(processes)
     const result = await provider.listProcesses()
     expect(result).toEqual([{ id: scopedPty1, cwd: '/home', title: 'zsh' }])
+  })
+
+  it('uses targeted relay liveness without listing sessions', async () => {
+    mux.request.mockImplementation(async (method: string, params?: { id?: string }) => {
+      if (method === 'pty.hasPty') {
+        return params?.id === 'pty-1'
+      }
+      throw new Error(`Unexpected request: ${method}`)
+    })
+
+    await expect(provider.hasPtyAsync(scopedPty1)).resolves.toBe(true)
+    await expect(provider.hasPtyAsync('ssh:conn-1@@pty-2')).resolves.toBe(false)
+
+    expect(mux.request.mock.calls.filter(([method]) => method === 'pty.hasPty')).toHaveLength(2)
+    expect(
+      mux.request.mock.calls.filter(([method]) => method === 'pty.listProcesses')
+    ).toHaveLength(0)
+  })
+
+  it('caches an older relay method miss and falls back to inventories', async () => {
+    mux.request.mockImplementation(async (method: string) => {
+      if (method === 'pty.hasPty') {
+        throw Object.assign(new Error('Method not found'), {
+          code: JsonRpcErrorCode.MethodNotFound
+        })
+      }
+      if (method === 'pty.listProcesses') {
+        return [
+          { id: 'pty-1', cwd: '/home', title: 'zsh' },
+          { id: 'pty-2', cwd: '/home', title: 'zsh' }
+        ]
+      }
+      if (method === 'pty.spawn') {
+        return { id: 'pty-3' }
+      }
+      if (method === 'pty.shutdown' || method === 'pty.attach') {
+        return undefined
+      }
+      throw new Error(`Unexpected request: ${method}`)
+    })
+
+    await expect(
+      Promise.all([provider.hasPtyAsync(scopedPty1), provider.hasPtyAsync('ssh:conn-1@@pty-2')])
+    ).resolves.toEqual([true, true])
+
+    expect(mux.request.mock.calls.filter(([method]) => method === 'pty.hasPty')).toHaveLength(1)
+    expect(
+      mux.request.mock.calls.filter(([method]) => method === 'pty.listProcesses')
+    ).toHaveLength(1)
+
+    await provider.shutdown(scopedPty1, { immediate: true })
+    await expect(provider.hasPtyAsync(scopedPty1)).resolves.toBe(false)
+
+    const spawned = await provider.spawn({ cols: 80, rows: 24 })
+    await expect(provider.hasPtyAsync(spawned.id)).resolves.toBe(true)
+
+    const attached = 'ssh:conn-1@@pty-4'
+    await provider.attach(attached)
+    await expect(provider.hasPtyAsync(attached)).resolves.toBe(true)
+    const notificationHandler = mux.onNotification.mock.calls[0]?.[0]
+    notificationHandler?.('pty.exit', { id: 'pty-4', code: 0 })
+    await expect(provider.hasPtyAsync(attached)).resolves.toBe(false)
+
+    expect(mux.request.mock.calls.filter(([method]) => method === 'pty.hasPty')).toHaveLength(1)
+    expect(
+      mux.request.mock.calls.filter(([method]) => method === 'pty.listProcesses')
+    ).toHaveLength(1)
+  })
+
+  it('applies shutdowns that complete while the legacy inventory is in flight', async () => {
+    let resolveInventory = (_sessions: { id: string; cwd: string; title: string }[]): void => {
+      throw new Error('inventory resolver not initialized')
+    }
+    const inventory = new Promise<{ id: string; cwd: string; title: string }[]>((resolve) => {
+      resolveInventory = resolve
+    })
+    mux.request.mockImplementation(async (method: string) => {
+      if (method === 'pty.hasPty') {
+        throw Object.assign(new Error('Method not found'), {
+          code: JsonRpcErrorCode.MethodNotFound
+        })
+      }
+      if (method === 'pty.listProcesses') {
+        return inventory
+      }
+      if (method === 'pty.shutdown') {
+        return undefined
+      }
+      throw new Error(`Unexpected request: ${method}`)
+    })
+
+    const liveness = provider.hasPtyAsync(scopedPty1)
+    await vi.waitFor(() => {
+      expect(mux.request.mock.calls.some(([method]) => method === 'pty.listProcesses')).toBe(true)
+    })
+    await provider.shutdown(scopedPty1, { immediate: true })
+    resolveInventory([{ id: 'pty-1', cwd: '/home', title: 'zsh' }])
+
+    await expect(liveness).resolves.toBe(false)
+    expect(mux.request.mock.calls.filter(([method]) => method === 'pty.hasPty')).toHaveLength(1)
+    expect(
+      mux.request.mock.calls.filter(([method]) => method === 'pty.listProcesses')
+    ).toHaveLength(1)
   })
 
   it('getDefaultShell returns shell path', async () => {

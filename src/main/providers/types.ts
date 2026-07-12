@@ -156,6 +156,8 @@ export type IPtyProvider = {
   spawn(opts: PtySpawnOptions): Promise<PtySpawnResult>
   attach(id: string): Promise<void>
   hasPty?: (id: string) => boolean
+  /** Why: remote providers need an ID-only probe without building a full session inventory. */
+  hasPtyAsync?: (id: string) => Promise<boolean>
   write(id: string, data: string): void
   resize(id: string, cols: number, rows: number): void
   /**

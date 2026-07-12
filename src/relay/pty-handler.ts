@@ -476,6 +476,7 @@ export class PtyHandler {
     this.dispatcher.onRequest('pty.clearBuffer', (p) => this.clearBuffer(p))
     this.dispatcher.onRequest('pty.hasChildProcesses', (p) => this.hasChildProcesses(p))
     this.dispatcher.onRequest('pty.getForegroundProcess', (p) => this.getForegroundProcess(p))
+    this.dispatcher.onRequest('pty.hasPty', (p) => this.hasPty(p))
     this.dispatcher.onRequest('pty.listProcesses', () => this.listProcesses())
     this.dispatcher.onRequest('pty.getDefaultShell', async () => resolveDefaultShell())
     this.dispatcher.onRequest('pty.serialize', (p) => this.serialize(p))
@@ -952,6 +953,11 @@ export class PtyHandler {
       return null
     }
     return await getForegroundProcessName(managed.pty.pid, managed.pty.process || null)
+  }
+
+  private async hasPty(params: Record<string, unknown>): Promise<boolean> {
+    const managed = this.ptys.get(params.id as string)
+    return managed !== undefined && !managed.disposed
   }
 
   private async listProcesses(): Promise<PtyProcessSummary[]> {
