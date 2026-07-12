@@ -22214,6 +22214,25 @@ describe('OrcaRuntimeService', () => {
     expect(killed).toBe(false)
   })
 
+  it('uses authoritative runtime PTYs for teardown while the renderer graph is reloading', async () => {
+    const stopAndWait = vi.fn(async () => true)
+    const runtime = new OrcaRuntimeService(store)
+    runtime.setPtyController({
+      write: () => true,
+      kill: () => false,
+      stopAndWait,
+      getForegroundProcess: async () => null
+    })
+    runtime.registerPty('ssh:ssh-1@@reloading', TEST_WORKTREE_ID, 'ssh-1')
+    runtime.attachWindow(1)
+    runtime.markRendererReloading(1)
+
+    await expect(
+      runtime.stopTerminalsForWorktree(TEST_WORKTREE_ID, { worktreeTeardown: true })
+    ).resolves.toEqual({ stopped: 1 })
+    expect(stopAndWait).toHaveBeenCalledWith('ssh:ssh-1@@reloading')
+  })
+
   it('fails terminal listing closed if the graph reloads during selector resolution', async () => {
     const runtime = new OrcaRuntimeService(store)
 
@@ -22324,7 +22343,7 @@ describe('OrcaRuntimeService', () => {
 
     let completed = false
     const stopping = runtime
-      .stopTerminalsForWorktree(TEST_WORKTREE_ID, { waitForProviderShutdown: true })
+      .stopTerminalsForWorktree(TEST_WORKTREE_ID, { worktreeTeardown: true })
       .then((result) => {
         completed = true
         return result
@@ -29458,7 +29477,7 @@ describe('OrcaRuntimeService', () => {
       expect(preDaemonProvider.shutdown).not.toHaveBeenCalled()
     })
 
-    it('drains a late SSH spawn and stops it before remote worktree removal', async () => {
+    it('drains headless and late SSH spawns before remote worktree removal', async () => {
       const remoteRepo = {
         ...store.getRepo(TEST_REPO_ID)!,
         path: '/remote/repo',
@@ -29517,27 +29536,6 @@ describe('OrcaRuntimeService', () => {
             })
         ),
         getForegroundProcess: async () => null
-      })
-      runtime.attachWindow(1)
-      runtime.syncWindowGraph(1, {
-        tabs: [
-          {
-            tabId: 'tab-remote',
-            worktreeId: remoteWorktreeId,
-            title: 'Terminal',
-            activeLeafId: 'pane:remote',
-            layout: null
-          }
-        ],
-        leaves: [
-          {
-            tabId: 'tab-remote',
-            worktreeId: remoteWorktreeId,
-            leafId: 'pane:remote',
-            paneRuntimeId: 1,
-            ptyId: 'ssh:ssh-1@@existing'
-          }
-        ]
       })
       runtime.registerPty('ssh:ssh-1@@existing', remoteWorktreeId, 'ssh-1')
       const releaseLateSpawn = runtime.beginWorktreePtySpawn(remoteWorktreeId)

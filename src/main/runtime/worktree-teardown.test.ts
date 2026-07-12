@@ -158,7 +158,7 @@ describe('killAllProcessesForWorktree', () => {
     const result = await killAllProcessesForWorktree('w1', { runtime, localProvider })
 
     expect(stopTerminalsForWorktree).toHaveBeenCalledWith('w1', {
-      waitForProviderShutdown: true
+      worktreeTeardown: true
     })
     expect(result.runtimeStopped).toBe(3)
   })
@@ -212,7 +212,7 @@ describe('killAllProcessesForWorktree', () => {
     expect(liveSessions.has('witness@@unrelated')).toBe(true)
   })
 
-  it('tolerates runtime.stopTerminalsForWorktree throwing (headless assertGraphReady reject)', async () => {
+  it('tolerates an unexpected runtime worktree-stop failure', async () => {
     const stopTerminalsForWorktree = vi.fn().mockRejectedValue(new Error('graph not ready'))
     const runtime = {
       stopTerminalsForWorktree

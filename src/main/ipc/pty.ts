@@ -3603,7 +3603,26 @@ export function registerPtyHandlers(
     resetPtyRendererDeliveryDebug()
   })
 
-  ipcMain.handle(
+  const registerWorktreePtySpawnHandler = <T extends { worktreeId?: string }, R>(
+    channel: string,
+    handler: (event: IpcMainInvokeEvent, args: T) => Promise<R>
+  ): void => {
+    ipcMain.handle(channel, async (event, args: T) => {
+      const releaseWorktreeSpawn =
+        typeof args.worktreeId === 'string' && runtime?.beginWorktreePtySpawn
+          ? runtime.beginWorktreePtySpawn(args.worktreeId)
+          : null
+      try {
+        return await handler(event, args)
+      } finally {
+        // Why: deletion must own renderer launch preparation as well as provider
+        // spawn and registration, including failures before a PTY id exists.
+        releaseWorktreeSpawn?.()
+      }
+    })
+  }
+
+  registerWorktreePtySpawnHandler(
     'pty:spawn',
     async (
       _event,
@@ -4027,10 +4046,6 @@ export function registerPtyHandlers(
       if (existingPaneSpawn) {
         return await existingPaneSpawn.promise
       }
-      const releaseWorktreeSpawn =
-        typeof args.worktreeId === 'string' && runtime?.beginWorktreePtySpawn
-          ? runtime.beginWorktreePtySpawn(args.worktreeId)
-          : null
       const paneSpawnReservation = reservationPaneKey ? reservePaneSpawn(reservationPaneKey) : null
       const initiallyHidden = args.initiallyHidden === true
       // Why pre-spawn for daemon-host sessions (id minted up front): daemon
@@ -4433,8 +4448,6 @@ export function registerPtyHandlers(
         // no-op once the reservation has already resolved.
         rejectPaneSpawnReservation(reservationPaneKey, paneSpawnReservation, err)
         throw err
-      } finally {
-        releaseWorktreeSpawn?.()
       }
     }
   )

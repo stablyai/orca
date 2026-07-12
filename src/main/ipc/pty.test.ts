@@ -209,6 +209,7 @@ import {
   isHiddenRendererPty
 } from './pty-hidden-delivery-gate'
 import { OrcaRuntimeService } from '../runtime/orca-runtime'
+import { WorktreePtyAdmission } from '../runtime/worktree-pty-admission'
 import { hasLiveClaudePtys, markClaudePtySpawned } from '../claude-accounts/live-pty-gate'
 import * as livePtyGate from '../claude-accounts/live-pty-gate'
 import {
@@ -217,8 +218,10 @@ import {
 } from '../powershell-osc133-bootstrap'
 import {
   SSH_PTY_IDENTITY_MISMATCH_ERROR,
-  SSH_SESSION_EXPIRED_ERROR
+  SSH_SESSION_EXPIRED_ERROR,
+  SshPtyProvider
 } from '../providers/ssh-pty-provider'
+import { JsonRpcErrorCode } from '../ssh/relay-protocol'
 import { _resetWslCachesForTests, _setWslCachesForTests } from '../wsl'
 
 const POWERSHELL_OSC133_ARGS = [
@@ -854,6 +857,49 @@ describe('registerPtyHandlers', () => {
         undefined
       )
       expect(releaseWorktreeSpawn).toHaveBeenCalledTimes(1)
+    })
+
+    it('blocks deletion while renderer launch preparation is still in flight', async () => {
+      const startup = makeDeferred()
+      const admission = new WorktreePtyAdmission()
+      const order: string[] = []
+      const runtime = {
+        setPtyController: vi.fn(),
+        beginWorktreePtySpawn: (worktreeId: string) => admission.beginSpawn(worktreeId),
+        preAllocateHandleForPty: vi.fn(() => undefined),
+        registerPty: vi.fn(() => order.push('registered')),
+        noteTerminalSpawnCommand: vi.fn(),
+        onPtySpawned: vi.fn(),
+        onPtyExit: vi.fn(),
+        onPtyData: vi.fn()
+      }
+      registerPtyHandlers(
+        mainWindow as never,
+        runtime as never,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        { awaitLocalPtyStartup: () => startup.promise }
+      )
+
+      const spawning = handlers.get('pty:spawn')!(null, {
+        cols: 80,
+        rows: 24,
+        cwd: '/outside/worktree',
+        worktreeId: 'wt-renderer-prep'
+      }) as Promise<{ id: string }>
+      const deletion = admission.runTeardown('wt-renderer-prep', async () => {
+        order.push('deleted')
+      })
+      await Promise.resolve()
+
+      expect(order).toEqual([])
+      startup.resolve()
+
+      await spawning
+      await deletion
+      expect(order).toEqual(['registered', 'deleted'])
     })
 
     it('marks local Claude launches live until the PTY is killed', async () => {
@@ -2843,6 +2889,113 @@ describe('registerPtyHandlers', () => {
         expect(hasPtyAsync).toHaveBeenCalledTimes(ptyIds.length)
         expect(hasPtyAsync.mock.calls.map(([ptyId]) => ptyId)).toEqual(ptyIds)
         expect(listProcesses).not.toHaveBeenCalled()
+      })
+
+      it('finishes headless current-relay SSH shutdown before remote removal without inventory', async () => {
+        const order: string[] = []
+        const request = vi.fn(async (method: string) => {
+          if (method === 'pty.shutdown') {
+            order.push('shutdown')
+            return undefined
+          }
+          if (method === 'pty.hasPty') {
+            order.push('hasPty')
+            return false
+          }
+          throw new Error(`Unexpected request: ${method}`)
+        })
+        const provider = new SshPtyProvider('ssh-1', {
+          request,
+          notify: vi.fn(),
+          onNotification: vi.fn(() => () => {}),
+          dispose: vi.fn(),
+          isDisposed: vi.fn(() => false)
+        } as never)
+        const runtime = new OrcaRuntimeService()
+        Object.assign(runtime, {
+          resolveWorktreeSelector: vi.fn(async () => ({ id: 'wt-headless-current' }))
+        })
+        registerSshPtyProvider('ssh-1', provider)
+        setPtyOwnership('ssh:ssh-1@@headless-current', 'ssh-1')
+        handlers.clear()
+        registerPtyHandlers(mainWindow as never, runtime as never)
+        runtime.registerPty('ssh:ssh-1@@headless-current', 'wt-headless-current', 'ssh-1')
+
+        await runtime.runWithWorktreePtyTeardown('wt-headless-current', async () => {
+          await expect(
+            runtime.stopTerminalsForWorktree('id:wt-headless-current', {
+              worktreeTeardown: true
+            })
+          ).resolves.toEqual({ stopped: 1 })
+          order.push('git-remove')
+        })
+
+        expect(order).toEqual(['shutdown', 'hasPty', 'git-remove'])
+        expect(
+          request.mock.calls.filter(([method]) => method === 'pty.listProcesses')
+        ).toHaveLength(0)
+        deletePtyOwnership('ssh:ssh-1@@headless-current')
+      })
+
+      it('bounds headless legacy-relay SSH verification to one inventory before removal', async () => {
+        const order: string[] = []
+        const request = vi.fn(async (method: string) => {
+          if (method === 'pty.shutdown') {
+            order.push('shutdown')
+            return undefined
+          }
+          if (method === 'pty.hasPty') {
+            order.push('hasPty-miss')
+            throw Object.assign(new Error('Method not found'), {
+              code: JsonRpcErrorCode.MethodNotFound
+            })
+          }
+          if (method === 'pty.listProcesses') {
+            order.push('inventory')
+            return []
+          }
+          throw new Error(`Unexpected request: ${method}`)
+        })
+        const provider = new SshPtyProvider('ssh-1', {
+          request,
+          notify: vi.fn(),
+          onNotification: vi.fn(() => () => {}),
+          dispose: vi.fn(),
+          isDisposed: vi.fn(() => false)
+        } as never)
+        const runtime = new OrcaRuntimeService()
+        Object.assign(runtime, {
+          resolveWorktreeSelector: vi.fn(async () => ({ id: 'wt-headless-legacy' }))
+        })
+        registerSshPtyProvider('ssh-1', provider)
+        const ptyIds = ['ssh:ssh-1@@headless-legacy-1', 'ssh:ssh-1@@headless-legacy-2']
+        for (const ptyId of ptyIds) {
+          setPtyOwnership(ptyId, 'ssh-1')
+        }
+        handlers.clear()
+        registerPtyHandlers(mainWindow as never, runtime as never)
+        for (const ptyId of ptyIds) {
+          runtime.registerPty(ptyId, 'wt-headless-legacy', 'ssh-1')
+        }
+
+        await runtime.runWithWorktreePtyTeardown('wt-headless-legacy', async () => {
+          await expect(
+            runtime.stopTerminalsForWorktree('id:wt-headless-legacy', {
+              worktreeTeardown: true
+            })
+          ).resolves.toEqual({ stopped: 2 })
+          order.push('git-remove')
+        })
+
+        expect(order.at(-1)).toBe('git-remove')
+        expect(order.filter((step) => step === 'shutdown')).toHaveLength(2)
+        expect(request.mock.calls.filter(([method]) => method === 'pty.hasPty')).toHaveLength(1)
+        expect(
+          request.mock.calls.filter(([method]) => method === 'pty.listProcesses')
+        ).toHaveLength(1)
+        for (const ptyId of ptyIds) {
+          deletePtyOwnership(ptyId)
+        }
       })
 
       it('passes keepHistory through runtime controller stopAndWait', async () => {

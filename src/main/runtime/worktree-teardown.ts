@@ -48,7 +48,7 @@ export async function killAllProcessesForWorktree(
 
   if (deps.runtime) {
     const r = await deps.runtime
-      .stopTerminalsForWorktree(worktreeId, { waitForProviderShutdown: true })
+      .stopTerminalsForWorktree(worktreeId, { worktreeTeardown: true })
       .catch(() => ({ stopped: 0 }))
     result.runtimeStopped = r.stopped
   }

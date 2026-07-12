@@ -18818,17 +18818,21 @@ export class OrcaRuntimeService {
 
   async stopTerminalsForWorktree(
     worktreeSelector: string,
-    opts: { waitForProviderShutdown?: boolean } = {}
+    opts: { worktreeTeardown?: boolean } = {}
   ): Promise<{ stopped: number }> {
-    // Why: this mutates live PTYs, so the runtime must reject it while the
-    // renderer graph is reloading instead of acting on cached leaf ownership.
-    const graphEpoch = this.captureReadyGraphEpoch()
+    // Why: generic terminal.stop must not act on a stale renderer graph, while
+    // deletion runs under admission and owns main's authoritative PTY records.
+    const graphEpoch = opts.worktreeTeardown ? null : this.captureReadyGraphEpoch()
     const worktree = await this.resolveWorktreeSelector(worktreeSelector)
-    this.assertStableReadyGraph(graphEpoch)
+    if (graphEpoch !== null) {
+      this.assertStableReadyGraph(graphEpoch)
+    }
     const ptyIds = new Set<string>()
-    for (const leaf of this.leaves.values()) {
-      if (leaf.worktreeId === worktree.id && leaf.ptyId) {
-        ptyIds.add(leaf.ptyId)
+    if (!opts.worktreeTeardown) {
+      for (const leaf of this.leaves.values()) {
+        if (leaf.worktreeId === worktree.id && leaf.ptyId) {
+          ptyIds.add(leaf.ptyId)
+        }
       }
     }
     for (const pty of this.ptysById.values()) {
@@ -18844,7 +18848,7 @@ export class OrcaRuntimeService {
       // provider shutdown with a second ConPTY teardown on Windows (#8275).
       // Why: deletion needs provider acknowledgement before its fallback sweeps,
       // while the shared terminal.stop RPC must preserve graceful shell teardown.
-      if (opts.waitForProviderShutdown && this.ptyController?.stopAndWait) {
+      if (opts.worktreeTeardown && this.ptyController?.stopAndWait) {
         if (await this.ptyController.stopAndWait(ptyId)) {
           stopped += 1
         }
