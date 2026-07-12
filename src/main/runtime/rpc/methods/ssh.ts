@@ -1,5 +1,10 @@
 import { z } from 'zod'
-import { connectRegisteredSshTarget, getRegisteredSshState } from '../../../ipc/ssh'
+import {
+  connectRegisteredSshTarget,
+  getRegisteredSshState,
+  listRegisteredRemovedSshTargetLabels,
+  listRegisteredSshTargets
+} from '../../../ipc/ssh'
 import { defineMethod, type RpcMethod } from '../core'
 
 const SshTarget = z.object({
@@ -16,5 +21,15 @@ export const SSH_METHODS: RpcMethod[] = [
     name: 'ssh.connect',
     params: SshTarget,
     handler: async (params) => ({ state: await connectRegisteredSshTarget(params.targetId) })
+  }),
+  defineMethod({
+    name: 'ssh.listTargets',
+    params: null,
+    handler: () => ({ targets: listRegisteredSshTargets() })
+  }),
+  defineMethod({
+    name: 'ssh.listRemovedTargetLabels',
+    params: null,
+    handler: () => ({ labels: listRegisteredRemovedSshTargetLabels() })
   })
 ]

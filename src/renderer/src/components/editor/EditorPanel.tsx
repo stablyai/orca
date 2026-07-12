@@ -1,4 +1,4 @@
-import React, { useCallback, useRef, useState } from 'react'
+import React, { useCallback, useMemo, useRef, useState } from 'react'
 import { useAppStore } from '@/store'
 import { getConnectionId } from '@/lib/connection-context'
 import { detectLanguage } from '@/lib/language-detect'
@@ -18,6 +18,11 @@ import { useEditorPanelContentState } from './useEditorPanelContentState'
 import { useMarkdownPreviewShortcut } from './useMarkdownPreviewShortcut'
 import { useUntitledFileRename } from './useUntitledFileRename'
 import { extractFrontMatter } from './markdown-frontmatter'
+import {
+  selectEditorPanelGitBranchEntries,
+  selectEditorPanelGitStatusEntries
+} from './editor-panel-git-entry-selector'
+import { createEditorPanelDraftSelector } from './editor-panel-draft-selector'
 
 function EditorPanelInner({
   activeFileId: activeFileIdProp,
@@ -33,10 +38,17 @@ function EditorPanelInner({
   const activeFileId = activeFileIdProp ?? globalActiveFileId
   const activeViewStateId = activeViewStateIdProp ?? activeFileId
   const activeFile = openFiles.find((f) => f.id === activeFileId) ?? null
+  const activeWorktreeId = activeFile?.worktreeId
   const markFileDirty = useAppStore((s) => s.markFileDirty)
   const pendingEditorReveal = useAppStore((s) => s.pendingEditorReveal)
-  const gitStatusByWorktree = useAppStore((s) => s.gitStatusByWorktree)
-  const gitBranchChangesByWorktree = useAppStore((s) => s.gitBranchChangesByWorktree)
+  // Why: background Git refreshes for other worktrees must not wake every
+  // mounted Monaco/rich editor pane.
+  const gitStatusEntries = useAppStore((s) =>
+    selectEditorPanelGitStatusEntries(s, activeWorktreeId)
+  )
+  const gitBranchEntries = useAppStore((s) =>
+    selectEditorPanelGitBranchEntries(s, activeWorktreeId)
+  )
   const markdownViewMode = useAppStore((s) => s.markdownViewMode)
   const setMarkdownViewMode = useAppStore((s) => s.setMarkdownViewMode)
   const editorViewMode = useAppStore((s) => s.editorViewMode)
@@ -49,7 +61,11 @@ function EditorPanelInner({
   const setMarkdownTableOfContentsVisible = useAppStore((s) => s.setMarkdownTableOfContentsVisible)
   const closeFile = useAppStore((s) => s.closeFile)
   const clearUntitled = useAppStore((s) => s.clearUntitled)
-  const editorDrafts = useAppStore((s) => s.editorDrafts)
+  const editorDraftSelector = useMemo(
+    () => createEditorPanelDraftSelector(activeFile),
+    [activeFile]
+  )
+  const editorDrafts = useAppStore(editorDraftSelector)
   const setEditorDraft = useAppStore((s) => s.setEditorDraft)
   const settings = useAppStore((s) => s.settings)
   const panelRef = useRef<HTMLDivElement>(null)
@@ -96,7 +112,7 @@ function EditorPanelInner({
     activeFile,
     isChangesMode: requestedChangesMode,
     openFiles,
-    gitStatusByWorktree,
+    gitStatusEntries,
     editorViewMode
   })
   const isChangesMode =
@@ -225,8 +241,8 @@ function EditorPanelInner({
     activeFile,
     fileContents,
     editorDrafts,
-    gitStatusByWorktree,
-    gitBranchChangesByWorktree,
+    gitStatusEntries,
+    gitBranchEntries,
     markdownViewMode,
     isChangesMode
   })

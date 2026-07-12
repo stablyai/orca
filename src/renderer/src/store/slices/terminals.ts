@@ -28,7 +28,11 @@ import {
 } from '../../../../shared/workspace-scope'
 import { deriveGeneratedTabTitle } from '../../../../shared/agent-tab-title'
 import { isDecorativeAgentTitleFrameChange } from '../../../../shared/agent-decorative-title-signature'
-import { parseLegacyNumericPaneKey, parsePaneKey } from '../../../../shared/stable-pane-id'
+import {
+  makePaneKey,
+  parseLegacyNumericPaneKey,
+  parsePaneKey
+} from '../../../../shared/stable-pane-id'
 import { isValidHostTerminalTabId, isValidTerminalTabId } from '../../../../shared/terminal-tab-id'
 import { getRepoIdFromWorktreeId, splitWorktreeId } from '../../../../shared/worktree-id'
 import { isWslUncPath } from '../../../../shared/wsl-paths'
@@ -57,6 +61,10 @@ import {
   restorePtyDataHandlersAfterFailedShutdown,
   unregisterPtyDataHandlers
 } from '@/components/terminal-pane/pty-transport'
+// Why: import the store-free registry, not terminal-parked-tab-watchers —
+// that module imports @/store, and a slice importing it would re-enter store
+// creation before this slice finishes evaluating.
+import { disposeParkedTerminalWatchersForPtyIds } from '@/components/terminal-pane/terminal-parked-watcher-registry'
 import {
   normalizeTerminalLayoutSnapshot,
   resolvePtyBoundActiveLeafId
@@ -582,7 +590,11 @@ export type TerminalSlice = {
   setActiveTab: (tabId: string) => void
   setActiveTabForWorktree: (worktreeId: string, tabId: string) => void
   updateTabTitle: (tabId: string, title: string) => void
-  setGeneratedTabTitleFromAgentPrompt: (paneKey: string, prompt: string) => void
+  setGeneratedTabTitleFromAgentPrompt: (
+    paneKey: string,
+    prompt: string,
+    options?: { replaceExistingGeneratedTitle?: boolean }
+  ) => void
   clearTabLaunchAgent: (tabId: string) => void
   setRuntimePaneTitle: (tabId: string, paneId: number, title: string) => void
   clearRuntimePaneTitle: (tabId: string, paneId: number) => void
@@ -639,6 +651,7 @@ export type TerminalSlice = {
   setTabCanExpandPane: (tabId: string, canExpand: boolean) => void
   setTabLayout: (tabId: string, layout: TerminalLayoutSnapshot | null) => void
   syncPaneDetachPtyOwnership: (args: {
+    detachedLeafId: string
     detachedPtyId: string | null
     sourceLayout: TerminalLayoutSnapshot
     sourceTabId: string
@@ -1175,13 +1188,18 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
   },
 
   closeTab: (tabId, opts) => {
+    let closingWorktreeId: string | null = null
     set((s) => {
       const next = { ...s.tabsByWorktree }
       let closingPtyId: string | null = null
       for (const wId of Object.keys(next)) {
         const before = next[wId]
-        if (!closingPtyId) {
-          closingPtyId = before.find((t) => t.id === tabId)?.ptyId ?? null
+        const closingTab = before.find((t) => t.id === tabId)
+        if (closingTab) {
+          closingWorktreeId = wId
+          if (!closingPtyId) {
+            closingPtyId = closingTab.ptyId ?? null
+          }
         }
         const after = before.filter((t) => t.id !== tabId)
         if (after.length !== before.length) {
@@ -1332,7 +1350,13 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
     // too. Use dropAgentStatusByTabPrefix (not removeAgentStatusByTabPrefix)
     // so retention suppressors are planted: a live→gone transition inside the
     // same frame as the tab close cannot re-snapshot a row we just dropped.
-    get().dropAgentStatusByTabPrefix(tabId)
+    // Why: Pi can leave a completed row attributed to the worktree but keyed
+    // under an already-missing tab id; pass the worktree to sweep only that
+    // completed orphan while preserving active pre-render child rows.
+    get().dropAgentStatusByTabPrefix(
+      tabId,
+      closingWorktreeId ? { worktreeId: closingWorktreeId } : undefined
+    )
     // Why: retired pane keys never recur, so stranded foreground entries would
     // accumulate for the renderer's whole lifetime.
     get().clearPaneForegroundAgentByTabPrefix(tabId)
@@ -1547,35 +1571,59 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
     })
   },
 
-  setGeneratedTabTitleFromAgentPrompt: (paneKey, prompt) => {
+  setGeneratedTabTitleFromAgentPrompt: (paneKey, prompt, options) => {
+    // Why: setAgentStatus is high-frequency; skip derive/set unless the feature
+    // is on and this tab still needs a (re)generated title.
+    if (get().settings?.tabAutoGenerateTitle !== true) {
+      return
+    }
     const tabId = getTabIdFromPaneKey(paneKey)
     if (!tabId || prompt.length === 0) {
       return
     }
+    const ownerWorktreeId = getTerminalTabOwnerWorktreeId(get().tabsByWorktree, tabId)
+    if (!ownerWorktreeId) {
+      return
+    }
+    const tabs = get().tabsByWorktree[ownerWorktreeId] ?? []
+    const currentTab = tabs.find((tab) => tab.id === tabId)
+    if (!currentTab || currentTab.customTitle?.trim() || currentTab.quickCommandLabel?.trim()) {
+      return
+    }
+    const existingGeneratedTitle = currentTab.generatedTitle?.trim()
+    if (existingGeneratedTitle && options?.replaceExistingGeneratedTitle !== true) {
+      return
+    }
+    const generatedTitle = deriveGeneratedTabTitle(prompt)
+    if (!generatedTitle || existingGeneratedTitle === generatedTitle) {
+      return
+    }
     set((s) => {
-      if (s.settings?.tabAutoGenerateTitle !== true) {
+      const ownerTabsForWrite = s.tabsByWorktree[ownerWorktreeId]
+      if (!ownerTabsForWrite) {
         return s
       }
-      const ownerWorktreeId = getTerminalTabOwnerWorktreeId(s.tabsByWorktree, tabId)
-      if (!ownerWorktreeId) {
-        return s
-      }
-      const tabs = s.tabsByWorktree[ownerWorktreeId] ?? []
-      const tabIndex = tabs.findIndex((tab) => tab.id === tabId)
-      const currentTab = tabs[tabIndex]
+      const tabIndex = ownerTabsForWrite.findIndex((tab) => tab.id === tabId)
+      const tabForWrite = ownerTabsForWrite[tabIndex]
+      // Why: re-check inside set so concurrent renames / setting flips win.
       if (
-        !currentTab ||
-        currentTab.customTitle?.trim() ||
-        currentTab.quickCommandLabel?.trim() ||
-        currentTab.generatedTitle?.trim()
+        !tabForWrite ||
+        s.settings?.tabAutoGenerateTitle !== true ||
+        tabForWrite.customTitle?.trim() ||
+        tabForWrite.quickCommandLabel?.trim()
       ) {
         return s
       }
-      const generatedTitle = deriveGeneratedTabTitle(prompt)
-      if (!generatedTitle) {
+      const latestGeneratedTitle = tabForWrite.generatedTitle?.trim()
+      if (
+        latestGeneratedTitle &&
+        (latestGeneratedTitle === generatedTitle || options?.replaceExistingGeneratedTitle !== true)
+      ) {
         return s
       }
-      const ownerTabs = tabs.map((tab) => (tab.id === tabId ? { ...tab, generatedTitle } : tab))
+      const ownerTabs = ownerTabsForWrite.map((tab) =>
+        tab.id === tabId ? { ...tab, generatedTitle } : tab
+      )
       const currentUnifiedTabs = s.unifiedTabsByWorktree[ownerWorktreeId] ?? []
       const unifiedTabsWithGeneratedLabel = updateUnifiedTerminalGeneratedLabel(
         currentUnifiedTabs,
@@ -2253,6 +2301,11 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
     // Removing the data handlers first ensures the final flush is a no-op.
     if (expectedRuntimePtyIds.length === 0) {
       unregisterPtyDataHandlers(shutdownPtyIds)
+      // Why: parked-tab byte watchers observe the same flush through dispatcher
+      // sidecars, which the call above does not touch — dispose them now or a
+      // just-slept/deleted worktree still gets unread marks and delayed
+      // bell/completion OS notifications from its teardown bytes.
+      disposeParkedTerminalWatchersForPtyIds(shutdownPtyIds)
     }
 
     // Why (ordering invariant — DESIGN_DOC §3.3.c): on sleep, capture every
@@ -2673,7 +2726,13 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
     })
   },
 
-  syncPaneDetachPtyOwnership: ({ detachedPtyId, sourceLayout, sourceTabId, targetTabId }) => {
+  syncPaneDetachPtyOwnership: ({
+    detachedLeafId,
+    detachedPtyId,
+    sourceLayout,
+    sourceTabId,
+    targetTabId
+  }) => {
     set((s) => {
       const layoutSourcePtyIds = uniquePtyIds(Object.values(sourceLayout.ptyIdsByLeafId ?? {}))
       const existingSourcePtyIds = (s.ptyIdsByTabId[sourceTabId] ?? []).filter(
@@ -2702,8 +2761,8 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
         nextLastKnownRelayPtyIdByTabId[targetTabId] = detachedPtyId
       }
 
-      // Why: pane-to-tab detach moves live PTY ownership without spawning or
-      // exiting processes, so sync identity maps directly without activity bumps.
+      // Why: pane-to-tab detach moves a live PTY without spawning or exiting,
+      // so transfer its safe pane-owned identity without activity bumps.
       const sourceTabsByWorktree = withTerminalTabPtyId(
         s.tabsByWorktree,
         sourceTabId,
@@ -2713,10 +2772,60 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
         ? withTerminalTabPtyId(sourceTabsByWorktree, targetTabId, detachedPtyId)
         : sourceTabsByWorktree
 
+      const sourcePaneKey = makePaneKey(sourceTabId, detachedLeafId)
+      const targetPaneKey = makePaneKey(targetTabId, detachedLeafId)
+      const sourceForeground = s.paneForegroundAgentByPaneKey[sourcePaneKey]
+      const sourceLaunchConfig = s.agentLaunchConfigByPaneKey[sourcePaneKey]
+      const hadSourceHookStatus = sourcePaneKey in s.agentStatusByPaneKey
+      let nextPaneForegroundAgentByPaneKey = s.paneForegroundAgentByPaneKey
+      let nextAgentLaunchConfigByPaneKey = s.agentLaunchConfigByPaneKey
+      let nextAgentStatusByPaneKey = s.agentStatusByPaneKey
+      let nextRetentionSuppressedPaneKeys = s.retentionSuppressedPaneKeys
+      if (sourceForeground) {
+        nextPaneForegroundAgentByPaneKey = { ...s.paneForegroundAgentByPaneKey }
+        delete nextPaneForegroundAgentByPaneKey[sourcePaneKey]
+        nextPaneForegroundAgentByPaneKey[targetPaneKey] = sourceForeground
+      }
+      if (sourceLaunchConfig) {
+        nextAgentLaunchConfigByPaneKey = { ...s.agentLaunchConfigByPaneKey }
+        delete nextAgentLaunchConfigByPaneKey[sourcePaneKey]
+        nextAgentLaunchConfigByPaneKey[targetPaneKey] = {
+          ...sourceLaunchConfig,
+          identity: {
+            ...sourceLaunchConfig.identity,
+            tabId: targetTabId,
+            leafId: detachedLeafId
+          }
+        }
+      }
+      if (hadSourceHookStatus) {
+        nextAgentStatusByPaneKey = { ...s.agentStatusByPaneKey }
+        delete nextAgentStatusByPaneKey[sourcePaneKey]
+        nextRetentionSuppressedPaneKeys = {
+          ...s.retentionSuppressedPaneKeys,
+          [sourcePaneKey]: true
+        }
+      }
+
       return {
         ptyIdsByTabId: nextPtyIdsByTabId,
         lastKnownRelayPtyIdByTabId: nextLastKnownRelayPtyIdByTabId,
-        ...(nextTabsByWorktree !== s.tabsByWorktree ? { tabsByWorktree: nextTabsByWorktree } : {})
+        ...(nextTabsByWorktree !== s.tabsByWorktree ? { tabsByWorktree: nextTabsByWorktree } : {}),
+        ...(nextPaneForegroundAgentByPaneKey !== s.paneForegroundAgentByPaneKey
+          ? { paneForegroundAgentByPaneKey: nextPaneForegroundAgentByPaneKey }
+          : {}),
+        ...(nextAgentLaunchConfigByPaneKey !== s.agentLaunchConfigByPaneKey
+          ? { agentLaunchConfigByPaneKey: nextAgentLaunchConfigByPaneKey }
+          : {}),
+        ...(nextAgentStatusByPaneKey !== s.agentStatusByPaneKey
+          ? {
+              // Why: the PTY keeps its immutable source ORCA_PANE_KEY; retire
+              // rather than re-key a hook row that future events cannot update.
+              agentStatusByPaneKey: nextAgentStatusByPaneKey,
+              agentStatusEpoch: s.agentStatusEpoch + 1,
+              retentionSuppressedPaneKeys: nextRetentionSuppressedPaneKeys
+            }
+          : {})
       }
     })
   },

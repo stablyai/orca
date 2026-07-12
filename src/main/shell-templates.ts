@@ -10,6 +10,13 @@ export function getZshEnvTemplate(zshDir: string, headerPrefix = ''): string {
     ? `Orca ${headerPrefix} zsh shell-ready wrapper`
     : 'Orca zsh shell-ready wrapper'
   return `# ${header}
+# Why: capture the runtime wrapper dir before it is unset below. On WSL this
+# file is generated with a Windows path but sourced via /mnt/c, so the baked
+# literal is unusable there and ZDOTDIR must be restored from this value.
+_orca_wrapper_zdotdir_self="\${ZDOTDIR:-}"
+while [[ "\${_orca_wrapper_zdotdir_self:-}" == */ ]]; do
+  _orca_wrapper_zdotdir_self="\${_orca_wrapper_zdotdir_self%/}"
+done
 _orca_spawn_orig_zdotdir="\${ORCA_ORIG_ZDOTDIR:-}"
 _orca_user_zdotdir="\${_orca_spawn_orig_zdotdir:-$HOME}"
 _orca_zshenv_source_dir="\${ORCA_ZSHENV_SOURCE_DIR:-$HOME}"
@@ -67,8 +74,14 @@ case "\${ORCA_ORIG_ZDOTDIR}" in
   ""|*/shell-ready/zsh) export ORCA_ORIG_ZDOTDIR="$HOME" ;;
 esac
 
-export ZDOTDIR=${quotePosixSingle(zshDir)}
-unset _orca_spawn_orig_zdotdir _orca_user_zdotdir _orca_zshenv_source_dir _orca_zshenv_path _orca_discovered_zdotdir
+# Why: use :- after user .zshenv — a pathological unset under set -u must not
+# abort the wrapper; empty falls through to the baked-literal branch.
+if [[ -n "\${_orca_wrapper_zdotdir_self:-}" && -f "\${_orca_wrapper_zdotdir_self:-}/.zshenv" ]]; then
+  export ZDOTDIR="\${_orca_wrapper_zdotdir_self:-}"
+else
+  export ZDOTDIR=${quotePosixSingle(zshDir)}
+fi
+unset _orca_spawn_orig_zdotdir _orca_user_zdotdir _orca_zshenv_source_dir _orca_zshenv_path _orca_discovered_zdotdir _orca_wrapper_zdotdir_self
 `
 }
 

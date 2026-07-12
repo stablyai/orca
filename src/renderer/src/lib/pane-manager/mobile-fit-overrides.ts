@@ -1,10 +1,10 @@
-// Why: mobile-fit overrides are runtime-owned state that the renderer must
-// respect. When a mobile client resizes a PTY to phone dimensions, the desktop
-// renderer must not auto-fit that PTY back to desktop size. This module stores
-// the override state and provides lookup for safeFit() and transport.resize().
+// Why: a phone or another desktop may own the shared PTY grid. Non-owners park
+// xterm at that authoritative size so passive fitting cannot start a resize war.
+
+export type FitHoldMode = 'mobile-fit' | 'remote-desktop-fit' | 'desktop-fit'
 
 type FitOverride = {
-  mode: 'mobile-fit'
+  mode: 'mobile-fit' | 'remote-desktop-fit'
   cols: number
   rows: number
 }
@@ -24,7 +24,7 @@ function fitBindingKey(tabId: string, paneId: number): string {
 // and trigger safeFit on affected panes.
 type OverrideChangeEvent = {
   ptyId: string
-  mode: 'mobile-fit' | 'desktop-fit'
+  mode: FitHoldMode
   cols: number
   rows: number
   // Why: the dimensions the PTY was at *before* this event fired. For a
@@ -49,14 +49,9 @@ function notifyChange(event: OverrideChangeEvent): void {
   }
 }
 
-export function setFitOverride(
-  ptyId: string,
-  mode: 'mobile-fit' | 'desktop-fit',
-  cols: number,
-  rows: number
-): void {
+export function setFitOverride(ptyId: string, mode: FitHoldMode, cols: number, rows: number): void {
   const prior = overridesByPtyId.get(ptyId) ?? null
-  if (mode === 'mobile-fit') {
+  if (mode === 'mobile-fit' || mode === 'remote-desktop-fit') {
     overridesByPtyId.set(ptyId, { mode, cols, rows })
   } else {
     overridesByPtyId.delete(ptyId)
@@ -117,7 +112,12 @@ export function unbindPane(paneId: number, tabId?: string): void {
 }
 
 export function hydrateOverrides(
-  overrides: { ptyId: string; mode: 'mobile-fit'; cols: number; rows: number }[]
+  overrides: {
+    ptyId: string
+    mode: 'mobile-fit' | 'remote-desktop-fit'
+    cols: number
+    rows: number
+  }[]
 ): void {
   const previous = new Map(overridesByPtyId)
   overridesByPtyId.clear()
@@ -131,7 +131,7 @@ export function hydrateOverrides(
     const prior = previous.get(ptyId) ?? null
     notifyChange({
       ptyId,
-      mode: 'mobile-fit',
+      mode: override.mode,
       cols: override.cols,
       rows: override.rows,
       priorCols: prior?.cols ?? null,
@@ -154,4 +154,10 @@ export function hydrateOverrides(
 
 export function getAllOverrides(): Map<string, FitOverride> {
   return new Map(overridesByPtyId)
+}
+
+export function getMobileFitOverridePtyIds(): string[] {
+  return [...overridesByPtyId].flatMap(([ptyId, override]) =>
+    override.mode === 'mobile-fit' ? [ptyId] : []
+  )
 }

@@ -8,8 +8,9 @@ import { translate } from '@/i18n/i18n'
 import { translateSearchKeyword } from './settings-search-keywords'
 import { SHOW_UI_LANGUAGE_SETTING } from '@/i18n/supported-languages'
 import { getStatusBarToggles } from './appearance-status-bar-search'
+import { getUsagePercentageDisplayEntry } from './appearance-usage-percentage-search'
 
-export { getStatusBarToggles }
+export { getStatusBarToggles, getUsagePercentageDisplayEntry }
 
 export const getThemeEntries = createLocalizedCatalog((): SettingsSearchEntry[] => [
   {
@@ -148,13 +149,14 @@ export const getTitlebarEntries = createLocalizedCatalog((): SettingsSearchEntry
   }
 ])
 
-export const getStatusBarEntries = createLocalizedCatalog((): SettingsSearchEntry[] =>
-  getStatusBarToggles().map(({ title, description, keywords }) => ({
+export const getStatusBarEntries = createLocalizedCatalog((): SettingsSearchEntry[] => [
+  getUsagePercentageDisplayEntry(),
+  ...getStatusBarToggles().map(({ title, description, keywords }) => ({
     title,
     description,
     keywords
   }))
-)
+])
 
 export { getLeftSidebarAppearanceEntry, getSidebarEntries }
 

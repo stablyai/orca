@@ -29,7 +29,12 @@ const {
     addTarget: vi.fn(),
     updateTarget: vi.fn(),
     removeTarget: vi.fn(),
-    importFromSshConfig: vi.fn().mockReturnValue([])
+    importFromSshConfig: vi.fn().mockReturnValue([]),
+    lastRepoReadoptions: [] as {
+      oldTargetId: string
+      newTargetId: string
+      repoIds: string[]
+    }[]
   },
   mockConnectionManager: {
     connect: vi.fn(),
@@ -50,7 +55,8 @@ const {
     onRequest: vi.fn().mockReturnValue(() => {}),
     onDispose: vi.fn().mockReturnValue(() => {}),
     request: vi.fn().mockResolvedValue({}),
-    notify: vi.fn()
+    notify: vi.fn(),
+    probeLiveness: vi.fn().mockResolvedValue(false)
   },
   mockPtyProvider: {
     onData: vi.fn(),
@@ -292,6 +298,7 @@ describe('SSH IPC handlers', () => {
     mockSshStore.updateTarget.mockReset()
     mockSshStore.removeTarget.mockReset()
     mockSshStore.importFromSshConfig.mockReset().mockReturnValue([])
+    mockSshStore.lastRepoReadoptions = []
     mockWindow.webContents.send.mockReset()
     mockStore.getSshRemotePtyLeases.mockReset().mockReturnValue([])
     mockStore.markSshRemotePtyLease.mockReset()
@@ -316,6 +323,7 @@ describe('SSH IPC handlers', () => {
     mockMux.isDisposed.mockReset().mockReturnValue(false)
     mockMux.onNotification.mockReset()
     mockMux.onDispose.mockReset().mockReturnValue(() => {})
+    mockMux.probeLiveness.mockReset().mockResolvedValue(false)
     mockPtyProvider.onData.mockReset()
     mockPtyProvider.onExit.mockReset()
     mockPtyProvider.onReplay.mockReset()
@@ -377,7 +385,28 @@ describe('SSH IPC handlers', () => {
 
     const result = await handlers.get('ssh:addTarget')!(null, { target: newTarget })
     expect(mockSshStore.addTarget).toHaveBeenCalledWith(newTarget)
-    expect(result).toEqual(withId)
+    expect(result).toEqual({ target: withId, repoReadoptions: [] })
+  })
+
+  it('ssh:addTarget returns exact re-adoption evidence and refreshes repos', async () => {
+    const target = {
+      id: 'ssh-new',
+      label: 'Server',
+      host: 'server.example.com',
+      port: 22,
+      username: 'deploy'
+    }
+    const repoReadoptions = [
+      { oldTargetId: 'ssh-old', newTargetId: 'ssh-new', repoIds: ['repo-1'] }
+    ]
+    mockSshStore.addTarget.mockReturnValue(target)
+    mockSshStore.lastRepoReadoptions = repoReadoptions
+
+    const result = await handlers.get('ssh:addTarget')!(null, { target })
+
+    expect(result).toEqual({ target, repoReadoptions })
+    expect(mockWindow.webContents.send).toHaveBeenCalledWith('repos:changed')
+    expect(mockSshStore.lastRepoReadoptions).toEqual([])
   })
 
   it('ssh:removeTarget calls store.removeTarget', async () => {
@@ -436,7 +465,7 @@ describe('SSH IPC handlers', () => {
     mockSshStore.importFromSshConfig.mockReturnValue(imported)
 
     const result = await handlers.get('ssh:importConfig')!(null, {})
-    expect(result).toEqual(imported)
+    expect(result).toEqual({ targets: imported, repoReadoptions: [] })
   })
 
   it('ssh:connect throws for unknown targetId', async () => {
@@ -776,6 +805,39 @@ describe('SSH IPC handlers', () => {
 
     expect(runtime.onPtyData).toHaveBeenCalledWith('remote-pty', 'hello', expect.any(Number))
     expect(runtime.onPtyExit).toHaveBeenCalledWith('remote-pty', 7)
+  })
+
+  it('mirrors SSH state broadcasts onto the runtime client-event stream', async () => {
+    const runtime = {
+      onPtyData: vi.fn(),
+      onPtyExit: vi.fn(),
+      notifySshStateChanged: vi.fn()
+    }
+    registerSshHandlers(mockStore as never, () => mockWindow as never, runtime as never)
+    const target: SshTarget = {
+      id: 'ssh-1',
+      label: 'Server',
+      host: 'example.com',
+      port: 22,
+      username: 'deploy'
+    }
+    mockSshStore.getTarget.mockReturnValue(target)
+    mockConnectionManager.connect.mockResolvedValue({})
+    mockConnectionManager.getState.mockReturnValue({
+      targetId: 'ssh-1',
+      status: 'connected',
+      error: null,
+      reconnectAttempt: 0
+    })
+
+    await handlers.get('ssh:connect')!(null, { targetId: 'ssh-1' })
+
+    // Why: paired remote clients only learn SSH state through this hook —
+    // without it their reconnect overlays never clear (STA-1468).
+    expect(runtime.notifySshStateChanged).toHaveBeenCalledWith(
+      'ssh-1',
+      expect.objectContaining({ targetId: 'ssh-1', status: 'connected' })
+    )
   })
 
   it('preserves active port forwards and live connections across handler re-registration', async () => {
@@ -1368,7 +1430,7 @@ describe('SSH IPC handlers', () => {
     expect(mockConnectionManager.disconnect).toHaveBeenCalledWith('ssh-1')
   })
 
-  it('forces active SSH sessions to reconnect when the system resumes from sleep', async () => {
+  it('reconnects on system resume when the relay liveness probe fails', async () => {
     const target: SshTarget = {
       id: 'ssh-1',
       label: 'Server',
@@ -1386,6 +1448,7 @@ describe('SSH IPC handlers', () => {
       error: null,
       reconnectAttempt: 0
     })
+    mockMux.probeLiveness.mockResolvedValue(false)
 
     await handlers.get('ssh:connect')!(null, { targetId: 'ssh-1' })
 
@@ -1394,7 +1457,77 @@ describe('SSH IPC handlers', () => {
 
     resumeListener()
 
-    expect(mockConnectionManager.reconnect).toHaveBeenCalledWith('ssh-1')
+    await vi.waitFor(() => expect(mockConnectionManager.reconnect).toHaveBeenCalledWith('ssh-1'))
+    // Why: a failed first probe gets one retry before teardown (slow post-wake network).
+    expect(mockMux.probeLiveness).toHaveBeenCalledTimes(2)
+  })
+
+  it('skips reconnect on system resume when the relay link is still alive', async () => {
+    const target: SshTarget = {
+      id: 'ssh-1',
+      label: 'Server',
+      host: 'example.com',
+      port: 22,
+      username: 'deploy'
+    }
+    const conn = {}
+    mockSshStore.getTarget.mockReturnValue(target)
+    mockConnectionManager.connect.mockResolvedValue(conn)
+    mockConnectionManager.getConnection.mockReturnValue(conn)
+    mockConnectionManager.getState.mockReturnValue({
+      targetId: 'ssh-1',
+      status: 'connected',
+      error: null,
+      reconnectAttempt: 0
+    })
+    mockMux.probeLiveness.mockResolvedValue(true)
+
+    await handlers.get('ssh:connect')!(null, { targetId: 'ssh-1' })
+
+    const resumeListener = powerMonitorOnMock.mock.calls.find(([event]) => event === 'resume')?.[1]
+    expect(resumeListener).toBeTypeOf('function')
+
+    resumeListener()
+
+    await vi.waitFor(() => expect(mockMux.probeLiveness).toHaveBeenCalledTimes(1))
+    // Let the async resume handler settle before asserting no teardown happened.
+    await new Promise((resolve) => setTimeout(resolve, 0))
+    expect(mockConnectionManager.reconnect).not.toHaveBeenCalled()
+  })
+
+  it('does not reconnect after resume when the target was disconnected during the probe', async () => {
+    const target: SshTarget = {
+      id: 'ssh-1',
+      label: 'Server',
+      host: 'example.com',
+      port: 22,
+      username: 'deploy'
+    }
+    const conn = {}
+    mockSshStore.getTarget.mockReturnValue(target)
+    mockConnectionManager.connect.mockResolvedValue(conn)
+    mockConnectionManager.getConnection.mockReturnValue(conn)
+    mockConnectionManager.getState.mockReturnValue({
+      targetId: 'ssh-1',
+      status: 'connected',
+      error: null,
+      reconnectAttempt: 0
+    })
+    mockMux.probeLiveness.mockResolvedValue(false)
+
+    await handlers.get('ssh:connect')!(null, { targetId: 'ssh-1' })
+
+    const resumeListener = powerMonitorOnMock.mock.calls.find(([event]) => event === 'resume')?.[1]
+    expect(resumeListener).toBeTypeOf('function')
+
+    resumeListener()
+    // Why: the probe window is seconds long; a user disconnect during it must
+    // win — reconnecting afterwards would resurrect the torn-down target.
+    mockConnectionManager.getConnection.mockReturnValue(undefined)
+
+    await vi.waitFor(() => expect(mockMux.probeLiveness).toHaveBeenCalledTimes(2))
+    await new Promise((resolve) => setTimeout(resolve, 0))
+    expect(mockConnectionManager.reconnect).not.toHaveBeenCalled()
   })
 
   it('extends active relay grace while the system is suspending', async () => {

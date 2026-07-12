@@ -81,7 +81,6 @@ export function RepositoryPane({
   const runtimeSessionSummary = useAppStore(
     useShallow((state) => getProjectRuntimeSessionSummary(state, repo.id))
   )
-  const symlinksEnabled = settings?.experimentalWorktreeSymlinks
   const [confirmingRemove, setConfirmingRemove] = useState<string | null>(null)
   const [copiedTemplate, setCopiedTemplate] = useState(false)
   const copiedTemplateResetTimerRef = useRef<number | null>(null)
@@ -353,7 +352,6 @@ export function RepositoryPane({
     ) : null,
     !isFolder &&
     !repo.connectionId &&
-    symlinksEnabled &&
     (forceFullPaneForRepoMatch || matchesSettingsSearch(searchQuery, symlinkEntries)) ? (
       <WorktreeSymlinksSection key="symlinks" repo={repo} updateRepo={updateRepo} />
     ) : null,

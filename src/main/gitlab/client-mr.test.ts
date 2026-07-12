@@ -245,6 +245,9 @@ describe('gitlab client — MR operations', () => {
         hosts: ['gitlab.com'],
         activeHost: 'gitlab.com'
       })
+      expect(glabExecFileAsyncMock).toHaveBeenCalledWith(['auth', 'status'], {
+        allowDefaultWslFallback: false
+      })
     })
   })
 

@@ -127,7 +127,10 @@ export function buildEditorSessionData(
   const editFileIdsByWorktree: Record<string, Set<string>> = {}
   for (const f of editFiles) {
     const arr = byWorktree[f.worktreeId] ?? (byWorktree[f.worktreeId] = [])
-    const dirtyDraftContent = f.isDirty ? editorDrafts[f.id] : undefined
+    // Why: read-only tabs never persist a dirty draft even if isDirty is
+    // somehow set — restoring a draft would reintroduce writable/hot-exit state
+    // for an agent-owned transcript.
+    const dirtyDraftContent = f.isDirty && f.readOnly !== true ? editorDrafts[f.id] : undefined
     arr.push({
       filePath: f.filePath,
       relativePath: f.relativePath,
@@ -135,6 +138,10 @@ export function buildEditorSessionData(
       language: f.language,
       isPreview: f.isPreview || undefined,
       runtimeEnvironmentId: f.runtimeEnvironmentId,
+      // Why: persist read-only only when true so pre-existing writable sessions
+      // stay writable on restore (absence is the writable default).
+      ...(f.readOnly === true ? { readOnly: true } : {}),
+      ...(f.readOnly === true && f.liveTail === true ? { liveTail: true } : {}),
       ...(dirtyDraftContent !== undefined ? { dirtyDraftContent } : {}),
       // Why: the edit baseline travels with the dirty draft so a restore can
       // re-derive a changed-on-disk conflict before autosave may overwrite an

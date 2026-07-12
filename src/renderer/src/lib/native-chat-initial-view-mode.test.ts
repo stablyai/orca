@@ -3,6 +3,7 @@ import {
   decideInitialAgentTabViewMode,
   initialAgentTabViewModeProps
 } from './native-chat-initial-view-mode'
+import { isNativeChatTranscriptLocalReadable } from './native-chat-transcript-readability'
 
 describe('decideInitialAgentTabViewMode', () => {
   it("returns 'chat' when native chat and the opt-in default setting are on", () => {
@@ -50,9 +51,43 @@ describe('decideInitialAgentTabViewMode', () => {
       decideInitialAgentTabViewMode({
         experimentalNativeChat: true,
         openAgentTabsInChatByDefault: true,
-        agent: 'grok'
+        agent: 'gemini'
       })
     ).toBeUndefined()
+  })
+
+  it.each([
+    ['local', null],
+    ['runtime-owned', 'runtime-ssh-env-1']
+  ] as const)('opens %s Grok in chat when configured', (_host, connectionId) => {
+    expect(
+      decideInitialAgentTabViewMode({
+        experimentalNativeChat: true,
+        openAgentTabsInChatByDefault: true,
+        agent: 'grok',
+        nativeChatTranscriptIsLocalReadable: isNativeChatTranscriptLocalReadable(connectionId)
+      })
+    ).toBe('chat')
+  })
+
+  it('keeps Model-A SSH Grok in the terminal view', () => {
+    expect(
+      decideInitialAgentTabViewMode({
+        experimentalNativeChat: true,
+        openAgentTabsInChatByDefault: true,
+        agent: 'grok',
+        nativeChatTranscriptIsLocalReadable: isNativeChatTranscriptLocalReadable('ssh-target-1')
+      })
+    ).toBeUndefined()
+    expect(
+      initialAgentTabViewModeProps(
+        {
+          experimentalNativeChat: true,
+          openAgentTabsInChatByDefault: true
+        },
+        { agent: 'grok', nativeChatTranscriptIsLocalReadable: false }
+      )
+    ).toEqual({})
   })
 
   it('returns undefined for draft delivery', () => {

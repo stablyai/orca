@@ -1,12 +1,12 @@
 import { isTextBlock, type NativeChatMessage } from '../../../../shared/native-chat-types'
-import { isHarnessInjectedUserTurnText } from '../../../../shared/harness-injected-user-turns'
+import { isKnownHarnessInjectedUserTurnText } from '../../../../shared/harness-injected-user-turns'
 
 // Why: harness machinery turns land in the transcript but are not real user
 // messages, so the chat filters them out (they were confusingly rendered as
-// the user's own bubbles). The prefix list lives in
+// the user's own bubbles). The classifier lives in
 // src/shared/harness-injected-user-turns.ts, shared with the agent-status
-// prompt pipeline. Mirrors the mobile predicate in
-// mobile/src/session/mobile-native-chat-noise.ts.
+// prompt pipeline; structurally marked turns (isMeta etc.) are already
+// dropped by the Claude transcript decoder.
 
 function messageText(message: NativeChatMessage): string {
   return message.blocks
@@ -27,7 +27,7 @@ export function isNoiseMessage(message: NativeChatMessage): boolean {
   if (message.blocks.some((b) => b.type === 'tool-call' || b.type === 'tool-result')) {
     return false
   }
-  return isHarnessInjectedUserTurnText(messageText(message))
+  return isKnownHarnessInjectedUserTurnText(messageText(message))
 }
 
 /** Drop harness-noise messages from a transcript. */

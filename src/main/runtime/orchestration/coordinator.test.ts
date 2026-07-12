@@ -144,6 +144,31 @@ describe('Coordinator', () => {
     expect(runtime.sentMessages.length).toBeGreaterThan(0)
   })
 
+  it('records the assignee pane key when the runtime can resolve one', async () => {
+    db = new OrchestrationDb(':memory:')
+    const runtime = createMockRuntime()
+    runtime.terminals = [{ handle: 'term_a', worktreeId: 'wt1', connected: true, writable: true }]
+    const withPaneLookup = Object.assign(runtime, {
+      getTerminalPaneKey: (handle: string) => (handle === 'term_a' ? 'tab_a:leaf_a' : null)
+    })
+
+    const task = db.createTask({ spec: 'implement feature' })
+    const coordinator = new Coordinator(db, withPaneLookup, {
+      spec: 'build it',
+      coordinatorHandle: 'coord',
+      pollIntervalMs: 50
+    })
+    const runPromise = coordinator.run()
+    await new Promise((r) => {
+      setTimeout(r, 100)
+    })
+
+    expect(db.getDispatchContext(task.id)?.assignee_pane_key).toBe('tab_a:leaf_a')
+
+    insertWorkerDone(db, { taskId: task.id })
+    await runPromise
+  })
+
   it('records completedTasks when send reconciled worker_done before coordinator read', async () => {
     db = new OrchestrationDb(':memory:')
     const runtime = createMockRuntime()
@@ -570,7 +595,7 @@ describe('Coordinator', () => {
     expect(db.getDispatchContextById(activeCtx.id)?.status).toBe('completed')
   })
 
-  it('ignores worker_done sent by a terminal that does not own the dispatch', async () => {
+  it('accepts worker_done payload provenance after an assignee handle changes', async () => {
     db = new OrchestrationDb(':memory:')
     const runtime = createMockRuntime()
     const logs: string[] = []
@@ -579,9 +604,9 @@ describe('Coordinator', () => {
     const ctx = db.createDispatchContext(task.id, 'term_owner')
 
     db.insertMessage({
-      from: 'term_intruder',
+      from: 'term_reminted',
       to: 'coord',
-      subject: 'Spoofed done',
+      subject: 'Done after restart',
       type: 'worker_done',
       payload: JSON.stringify({ taskId: task.id, dispatchId: ctx.id })
     })
@@ -592,16 +617,12 @@ describe('Coordinator', () => {
       pollIntervalMs: 20,
       onLog: (m) => logs.push(m)
     })
-    const runPromise = coordinator.run()
-    await new Promise((r) => {
-      setTimeout(r, 80)
-    })
-    coordinator.stop()
-    await runPromise
+    const result = await coordinator.run()
 
-    expect(db.getTask(task.id)?.status).toBe('dispatched')
-    expect(db.getDispatchContextById(ctx.id)?.status).toBe('dispatched')
-    expect(logs.some((m) => m.includes('expected term_owner'))).toBe(true)
+    expect(result.status).toBe('completed')
+    expect(db.getTask(task.id)?.status).toBe('completed')
+    expect(db.getDispatchContextById(ctx.id)?.status).toBe('completed')
+    expect(logs.some((m) => m.includes('accepting payload provenance'))).toBe(true)
   })
 
   it('can be stopped', async () => {

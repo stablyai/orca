@@ -113,16 +113,12 @@ export const getTerminalRightClickToPasteSearchEntry = createLocalizedCatalog(()
     ),
     description: translate(
       'auto.components.settings.terminal.windows.search.8ba875c132',
-      'On Windows, right-click pastes the clipboard into the terminal. Use Ctrl+right-click to open the context menu.'
+      'Right-click pastes the clipboard into the terminal. Use Ctrl+right-click to open the context menu.'
     ),
     keywords: [
       ...translateSearchKeyword(
         'auto.components.settings.terminal.windows.search.e7d2793b03',
         'terminal'
-      ),
-      ...translateSearchKeyword(
-        'auto.components.settings.terminal.windows.search.28ff08ed35',
-        'windows'
       ),
       ...translateSearchKeyword(
         'auto.components.settings.terminal.windows.search.e55186fe2b',

@@ -17,6 +17,8 @@ type RichMarkdownLargeTextPasteOptions = {
   measureYieldAfterCodeUnits?: number
   yieldToEventLoop?: () => Promise<void>
   canContinue?: (editor: Editor) => boolean
+  plainTextOverride?: string
+  htmlTextOverride?: string
 }
 
 export type RichMarkdownLargeTextPasteResult =
@@ -188,8 +190,8 @@ export function handleRichMarkdownLargeTextPaste(
     return false
   }
 
-  const text = readPlainText(event)
-  const html = readHtmlText(event)
+  const text = options.plainTextOverride ?? readPlainText(event)
+  const html = options.htmlTextOverride ?? readHtmlText(event)
   const directMaxBytes = options.directMaxBytes ?? RICH_MARKDOWN_PASTE_DIRECT_MAX_BYTES
   const maxBytes = options.maxBytes ?? RICH_MARKDOWN_PASTE_MAX_BYTES
   const ownershipMeasurement = measureTextControlPasteByteLength(text, {

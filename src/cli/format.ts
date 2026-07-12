@@ -80,15 +80,18 @@ export function formatCliError(error: unknown, context: CliErrorContext = {}): s
   if (error instanceof RuntimeClientError && error.code === 'runtime_unavailable') {
     return `${message}\nOrca is not running. Run 'orca open' first.`
   }
-  if (
-    error instanceof RuntimeClientError &&
-    error.code === 'invalid_argument' &&
-    context.commandPath?.[0] === 'computer'
-  ) {
-    return formatMessageWithNextSteps(
-      message,
-      computerUseErrorRecoveryData('invalid_argument')?.nextSteps ?? []
-    )
+  // Why: error-specific recovery must win over the generic computer fallback.
+  if (error instanceof RuntimeClientError) {
+    const nextSteps = nextStepsFromData(error.data)
+    if (nextSteps.length > 0) {
+      return formatMessageWithNextSteps(message, nextSteps)
+    }
+    if (error.code === 'invalid_argument' && context.commandPath?.[0] === 'computer') {
+      return formatMessageWithNextSteps(
+        message,
+        computerUseErrorRecoveryData('invalid_argument')?.nextSteps ?? []
+      )
+    }
   }
   if (
     error instanceof RuntimeRpcFailureError &&
@@ -97,14 +100,7 @@ export function formatCliError(error: unknown, context: CliErrorContext = {}): s
     return `${message}\nOrca is not running. Run 'orca open' first.`
   }
   if (error instanceof RuntimeRpcFailureError) {
-    const data = error.response.error.data
-    const nextSteps =
-      data && typeof data === 'object' && Array.isArray((data as { nextSteps?: unknown }).nextSteps)
-        ? (data as { nextSteps: unknown[] }).nextSteps.filter(
-            (step): step is string => typeof step === 'string'
-          )
-        : []
-    return formatMessageWithNextSteps(message, nextSteps)
+    return formatMessageWithNextSteps(message, nextStepsFromData(error.response.error.data))
   }
   return message
 }
@@ -140,7 +136,24 @@ function formatMessageWithNextSteps(message: string, nextSteps: readonly string[
   return `${message}\n${nextSteps.map((step) => `Next step: ${step}`).join('\n')}`
 }
 
+function nextStepsFromData(data: unknown): string[] {
+  if (
+    data &&
+    typeof data === 'object' &&
+    Array.isArray((data as { nextSteps?: unknown }).nextSteps)
+  ) {
+    return (data as { nextSteps: unknown[] }).nextSteps.filter(
+      (step): step is string => typeof step === 'string'
+    )
+  }
+  return []
+}
+
 function localCliErrorData(error: unknown, context: CliErrorContext): unknown {
+  // Why: error-specific recovery must win over the generic computer fallback.
+  if (error instanceof RuntimeClientError && error.data !== undefined) {
+    return error.data
+  }
   if (
     error instanceof RuntimeClientError &&
     error.code === 'invalid_argument' &&

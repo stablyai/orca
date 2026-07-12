@@ -27,7 +27,11 @@ import type {
 import { getPRForBranch } from '../github/client'
 import { listWorktrees, addWorktree, addSparseWorktree } from '../git/worktree'
 import type { AddWorktreeOptions, AddWorktreeResult } from '../git/worktree'
-import { getBranchConflictKind, resolveDefaultBaseRefViaExec } from '../git/repo'
+import {
+  getBranchConflictKind,
+  resolveDefaultBaseRefViaExec,
+  resolveDefaultBaseRefWithLocalGit
+} from '../git/repo'
 import { resolveLocalGitUsername } from '../git/git-username'
 import { hasCommitObjectViaGitExec } from '../git/commit-object-ref'
 import { resolveWorktreeCreateBase } from '../worktree-create-base'
@@ -477,7 +481,11 @@ async function refreshRemoteTrackingBaseForWorktreeCreate(
   return getOrStartSshWorktreeCreateFetch(
     getSshWorktreeCreateBaseFetchKey(repo, base),
     getSshWorktreeCreateRemoteQueueKey(repo, base.remote),
-    () => provider.fetchRemoteTrackingRef(repo.path, base.remote, base.branch, base.ref)
+    () =>
+      // Why: the exact-base refresh gates create; unrelated repo housekeeping must not extend it.
+      provider.fetchRemoteTrackingRef(repo.path, base.remote, base.branch, base.ref, {
+        skipAutoMaintenance: true
+      })
   )
 }
 
@@ -1391,7 +1399,8 @@ async function refreshLocalBaseRefForRemoteWorktreeCreate(
 async function evaluateRemoteLocalBaseRefRefreshability(
   provider: SshGitProvider,
   repoPath: string,
-  remoteTrackingBase: RemoteTrackingBase
+  remoteTrackingBase: RemoteTrackingBase,
+  shouldInspectOwner: (behind: number) => boolean = () => true
 ): Promise<RemoteLocalBaseRefRefreshability> {
   const resultBase = {
     baseRef: remoteTrackingBase.base,
@@ -1409,6 +1418,17 @@ async function evaluateRemoteLocalBaseRefRefreshability(
       repoPath
     )
     behind = countNonEmptyGitOutputLines(stdout)
+    if (!shouldInspectOwner(behind)) {
+      // Why: no behind commits means the advisory cannot offer an update;
+      // avoid remote worktree/status round trips that cannot change that.
+      return {
+        refreshable: true,
+        ...resultBase,
+        fullRef,
+        remoteTrackingRef: remoteTrackingBase.ref,
+        behind
+      }
+    }
   } catch {
     return { refreshable: false, result: { ...resultBase, status: 'skipped_not_fast_forward' } }
   }
@@ -1463,7 +1483,8 @@ async function getRemoteLocalBaseRefUpdateSuggestionForWorktreeCreate(
   const evaluation = await evaluateRemoteLocalBaseRefRefreshability(
     provider,
     repoPath,
-    remoteTrackingBase
+    remoteTrackingBase,
+    (behind) => behind > 0
   )
   if (!evaluation.refreshable || evaluation.behind <= 0) {
     return undefined
@@ -1532,9 +1553,12 @@ export async function createRemoteWorktree(
   // Register the repo root first so relays do not report a valid base as stale.
   await registerRequiredSshWorktreeCreateRoots(repo.connectionId!, [repo.path])
 
-  // Why: SSH targets cannot use the local `gh` account, and git email/name are
-  // commit author identity rather than hosted-account usernames.
-  const username = await getSshGitUsername(provider, repo.path)
+  // Why: explicit branches and non-username prefix modes never consume this
+  // value; skipping the remote config probes preserves the exact branch name.
+  const username =
+    !args.branchNameOverride && settings.branchPrefix === 'git-username'
+      ? await getSshGitUsername(provider, repo.path)
+      : ''
 
   const branchConflictSubject = args.branchNameOverride ? 'branch name' : 'worktree name'
   // Determine base branch
@@ -1879,8 +1903,8 @@ export async function createRemoteWorktree(
   })
   const workspaceLineage = recordWorkspaceLineageForCreatedWorktree(store, args, worktree, now)
 
-  // Why: `experimentalWorktreeSymlinks` is intentionally not wired up for
-  // remote (SSH) worktrees. Creating symlinks on the remote host would
+  // Why: shared paths are intentionally not wired up for remote (SSH)
+  // worktrees. Creating symlinks on the remote host would
   // require a new relay method and authorization surface; the feature is
   // local-only until that protocol work is in scope. Remote repos with
   // `symlinkPaths` configured have them silently ignored here.
@@ -1964,18 +1988,22 @@ export async function createLocalWorktree(
     return { ...options, ...localWorktreeGitOptions }
   }
 
-  const username = await resolveLocalGitUsername(repo.path)
   const requestedName = args.name
   const sanitizedName = sanitizeWorktreeName(args.name)
   const requestedDisplayName = args.displayName
     ? sanitizeWorktreeDisplayName(args.displayName)
     : undefined
+  // Why: explicit branches and non-username prefix modes never consume this
+  // value; skipping the probes preserves the exact generated branch name.
+  const username =
+    !args.branchNameOverride && settings.branchPrefix === 'git-username'
+      ? await resolveLocalGitUsername(repo.path)
+      : ''
 
   const baseBranch = await resolveWorktreeCreateBase({
     requestedBaseBranch: args.baseBranch,
     repoWorktreeBaseRef: repo.worktreeBaseRef,
-    resolveDefaultBaseRef: () =>
-      resolveDefaultBaseRefViaExec((argv) => gitExecFileAsync(argv, localGitExecOptions)),
+    resolveDefaultBaseRef: () => resolveDefaultBaseRefWithLocalGit(localGitExecOptions),
     isBaseUsable: async (baseBranchCandidate) => {
       if (runtime) {
         const remoteTrackingBase = await runtime.resolveRemoteTrackingBase(
@@ -2508,10 +2536,8 @@ export async function createLocalWorktree(
   // Why: materialize user-configured paths from the primary checkout into the
   // new worktree before any setup script runs, so scripts that reuse shared
   // state (e.g. `node_modules`, `.env`) see those paths already in place.
-  // Gated on the experimental flag so disabling the feature globally skips
-  // the work even when a repo still has paths configured.
   const symlinkPaths = repo.symlinkPaths ?? []
-  if (settings.experimentalWorktreeSymlinks && symlinkPaths.length > 0) {
+  if (symlinkPaths.length > 0) {
     await timing.time('create_symlinks', async () => {
       await createWorktreeLinkedPaths(repo.path, created.path, symlinkPaths)
     })

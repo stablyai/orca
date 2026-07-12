@@ -143,6 +143,7 @@ describe('RepositorySourceControlAiActionRows', () => {
     )
 
     expect(markup).toContain('Commit failure fixes')
+    expect(markup).toContain('Push failure fixes')
     expect(markup).toContain('Unsaved changes')
     expect(markup).toContain('Discard')
     expect(markup).toContain('Save')

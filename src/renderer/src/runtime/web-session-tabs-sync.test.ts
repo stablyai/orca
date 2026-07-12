@@ -22,6 +22,7 @@ import type { BrowserPage, BrowserWorkspace, Tab, TerminalTab } from '../../../s
 import type { OpenFile } from '../store/slices/editor'
 import {
   _getWebSessionTabsTrackingCountsForTest,
+  acceptReplayedWebSessionTabsSnapshot,
   applyFreshWebSessionTabsSnapshot,
   applyWebSessionTabsSnapshot,
   applyWebSessionTabsSnapshots,
@@ -143,6 +144,46 @@ describe('applyWebSessionTabsSnapshot', () => {
       activeTabType: null
     })
     expect(shouldApplyWebSessionTabsSnapshot(sameEpochOlder, ENV)).toBe(false)
+  })
+
+  it('accepts a replayed same-epoch same-version snapshot after a transport reconnect', () => {
+    // Why: after a shared-control reconnect the server re-emits the current
+    // snapshot with an UNCHANGED epoch/version (the host did not restart).
+    // Without the replay reset the monotonic gate rejects it and the mirror
+    // stays frozen (#7718).
+    const snapshot = makeSnapshot([], { snapshotVersion: 5, activeTabType: null })
+
+    expect(shouldApplyWebSessionTabsSnapshot(snapshot, ENV)).toBe(true)
+    // Same frame again during normal operation: still rejected as stale.
+    expect(shouldApplyWebSessionTabsSnapshot(snapshot, ENV)).toBe(false)
+
+    acceptReplayedWebSessionTabsSnapshot(ENV, snapshot.worktree)
+    expect(shouldApplyWebSessionTabsSnapshot(snapshot, ENV)).toBe(true)
+
+    // The replay reset re-primes tracking: ordering protection resumes for
+    // subsequent frames (an older same-epoch frame is still rejected).
+    const older = makeSnapshot([], { snapshotVersion: 4, activeTabType: null })
+    expect(shouldApplyWebSessionTabsSnapshot(older, ENV)).toBe(false)
+    const newer = makeSnapshot([], { snapshotVersion: 6, activeTabType: null })
+    expect(shouldApplyWebSessionTabsSnapshot(newer, ENV)).toBe(true)
+  })
+
+  it('scopes the replay reset to the replayed environment and worktree', () => {
+    const snapshot = makeSnapshot([], { snapshotVersion: 5, activeTabType: null })
+    const otherWorktree = makeSnapshot([], {
+      worktree: 'repo::/other-worktree',
+      snapshotVersion: 5,
+      activeTabType: null
+    })
+
+    expect(shouldApplyWebSessionTabsSnapshot(snapshot, ENV)).toBe(true)
+    expect(shouldApplyWebSessionTabsSnapshot(otherWorktree, ENV)).toBe(true)
+
+    acceptReplayedWebSessionTabsSnapshot(ENV, snapshot.worktree)
+
+    // Only the replayed worktree re-applies; the other stays gated.
+    expect(shouldApplyWebSessionTabsSnapshot(otherWorktree, ENV)).toBe(false)
+    expect(shouldApplyWebSessionTabsSnapshot(snapshot, ENV)).toBe(true)
   })
 
   it('ignores remote snapshots for the local floating workspace', () => {

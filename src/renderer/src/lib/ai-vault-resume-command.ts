@@ -36,7 +36,7 @@ export type AiVaultResumeStartup = {
   launchConfig?: SleepingAgentLaunchConfig
 }
 
-export function buildAiVaultResumeCommandForWorktree(args: {
+type AiVaultResumeWorktreeArgs = {
   state: Pick<
     AppState,
     | 'activeRepoId'
@@ -51,26 +51,19 @@ export function buildAiVaultResumeCommandForWorktree(args: {
   worktreeId?: string | null
   session: AiVaultResumeCommandSession
   commandOverride?: string | null
-}): string {
-  return buildAiVaultResumeStartupForWorktree(args).command
 }
 
-export function buildAiVaultResumeStartupForWorktree(args: {
-  state: Pick<
-    AppState,
-    | 'activeRepoId'
-    | 'activeWorktreeId'
-    | 'folderWorkspaces'
-    | 'projectGroups'
-    | 'projects'
-    | 'repos'
-    | 'settings'
-    | 'worktreesByRepo'
-  >
-  worktreeId?: string | null
-  session: AiVaultResumeCommandSession
-  commandOverride?: string | null
-}): AiVaultResumeStartup {
+export function buildAiVaultResumeCopyCommandForWorktree(args: AiVaultResumeWorktreeArgs): string {
+  return buildAiVaultResumeForWorktree(args).command
+}
+
+export function buildAiVaultResumeStartupForWorktree(
+  args: AiVaultResumeWorktreeArgs
+): AiVaultResumeStartup {
+  return buildAiVaultResumeForWorktree(args)
+}
+
+function buildAiVaultResumeForWorktree(args: AiVaultResumeWorktreeArgs): AiVaultResumeStartup {
   if (
     args.session.executionHostId &&
     args.session.executionHostId !== LOCAL_EXECUTION_HOST_ID &&
@@ -86,13 +79,15 @@ export function buildAiVaultResumeStartupForWorktree(args: {
       ? args.session.executionHostPlatform
       : getAiVaultResumePlatform(args.state, args.worktreeId)
   const codexHome = getAiVaultResumeCodexHome(args.session.codexHome, platform)
-  // Why: the queued command is typed verbatim into the freshly spawned tab whose
-  // live shell is the configured Windows shell (default PowerShell). Hardcoding
-  // cmd quoting made PowerShell mis-parse the `""`-doubled wrapper (#6152), so
-  // resolve the actual shell to quote per-shell instead.
-  const queuedShell: AgentStartupShell | undefined =
+  const isLocalSession =
+    !args.session.executionHostId || args.session.executionHostId === LOCAL_EXECUTION_HOST_ID
+  // Why: local shell settings do not describe a remote Windows host, whose
+  // queued resume command uses the remote default PowerShell syntax.
+  const liveShell: AgentStartupShell | undefined =
     platform === 'win32'
-      ? resolveWindowsShellStartupFamily(args.state.settings?.terminalWindowsShell)
+      ? isLocalSession
+        ? resolveWindowsShellStartupFamily(args.state.settings?.terminalWindowsShell)
+        : 'powershell'
       : undefined
   if (isResumableTuiAgent(args.session.agent)) {
     const startupPlan = buildAgentResumeStartupPlan({
@@ -103,7 +98,7 @@ export function buildAiVaultResumeStartupForWorktree(args: {
         ...(args.commandOverride?.trim() ? { [args.session.agent]: args.commandOverride } : {})
       },
       platform,
-      shell: queuedShell,
+      shell: liveShell,
       agentArgs: resolveTuiAgentLaunchArgs(
         args.session.agent,
         args.state.settings?.agentDefaultArgs
@@ -117,7 +112,7 @@ export function buildAiVaultResumeStartupForWorktree(args: {
           cwd: args.session.cwd,
           platform,
           codexHome,
-          shell: queuedShell
+          shell: liveShell
         }),
         ...(startupPlan.env ? { env: startupPlan.env } : {}),
         launchConfig: startupPlan.launchConfig
@@ -137,7 +132,9 @@ export function buildAiVaultResumeStartupForWorktree(args: {
       platform,
       commandOverride: args.commandOverride,
       codexHome,
-      shell: queuedShell
+      // Why: non-resumable agents queue through this fallback too, so it must
+      // quote for the live Windows shell like the startup-plan branch above.
+      shell: liveShell
     })
   }
 }

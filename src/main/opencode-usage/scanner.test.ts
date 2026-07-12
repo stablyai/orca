@@ -1,12 +1,13 @@
-import { mkdtempSync, rmSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, rmSync, unlinkSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import Database from '../sqlite/sync-database'
 import {
   attributeOpenCodeUsageEvent,
   parseOpenCodeUsageDatabase,
-  parseOpenCodeUsageRow
+  parseOpenCodeUsageRow,
+  scanOpenCodeUsageDatabases
 } from './scanner'
 
 const WORKTREE = '/workspace/repo'
@@ -30,6 +31,50 @@ function worktrees() {
       canonicalPath: WORKTREE
     }
   ]
+}
+
+function createSessionTotalsSchema(db: Database.Database): void {
+  db.exec(`
+    CREATE TABLE session (
+      id TEXT PRIMARY KEY,
+      directory TEXT,
+      title TEXT,
+      model TEXT,
+      cost REAL,
+      tokens_input INTEGER,
+      tokens_output INTEGER,
+      tokens_reasoning INTEGER,
+      tokens_cache_read INTEGER,
+      time_created INTEGER,
+      time_updated INTEGER
+    );
+  `)
+}
+
+function insertSessionTotalsRow(
+  db: Database.Database,
+  sessionId: string,
+  inputTokens: number
+): void {
+  db.prepare(
+    `INSERT INTO session (
+      id, directory, title, model, cost,
+      tokens_input, tokens_output, tokens_reasoning, tokens_cache_read,
+      time_created, time_updated
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+  ).run(
+    sessionId,
+    `${WORKTREE}/packages/app`,
+    'Session',
+    JSON.stringify({ providerID: 'anthropic', id: 'claude-sonnet-4-5' }),
+    0.01,
+    inputTokens,
+    100,
+    0,
+    0,
+    1_777_777_700_000,
+    1_777_777_800_000
+  )
 }
 
 function usageEvent(cwd: string) {
@@ -259,6 +304,17 @@ describe('parseOpenCodeUsageDatabase', () => {
     })
   })
 
+  it('reports the session ids the database counted', async () => {
+    const { db, path } = createTempDb()
+    createSessionTotalsSchema(db)
+    insertSessionTotalsRow(db, 'session-1', 1000)
+    db.close()
+
+    const parsed = await parseOpenCodeUsageDatabase(path, worktrees())
+
+    expect(parsed.ownedSessionIds).toEqual(['session-1'])
+  })
+
   it('prefers session_message rows over legacy message rows to avoid double counting', async () => {
     const { db, path } = createTempDb()
     db.exec(`
@@ -322,5 +378,184 @@ describe('parseOpenCodeUsageDatabase', () => {
 
     expect(parsed.sessions[0]?.totalTokens).toBe(120)
     expect(parsed.sessions[0]?.eventCount).toBe(1)
+  })
+})
+
+describe('scanOpenCodeUsageDatabases', () => {
+  let dataRoot: string
+  let openCodeDir: string
+  let previousXdgDataHome: string | undefined
+  let previousOpenCodeDb: string | undefined
+
+  beforeEach(() => {
+    dataRoot = mkdtempSync(join(tmpdir(), 'orca-opencode-usage-scan-'))
+    openCodeDir = join(dataRoot, 'opencode')
+    mkdirSync(openCodeDir, { recursive: true })
+    previousXdgDataHome = process.env.XDG_DATA_HOME
+    previousOpenCodeDb = process.env.OPENCODE_DB
+    process.env.XDG_DATA_HOME = dataRoot
+    delete process.env.OPENCODE_DB
+  })
+
+  afterEach(() => {
+    if (previousXdgDataHome === undefined) {
+      delete process.env.XDG_DATA_HOME
+    } else {
+      process.env.XDG_DATA_HOME = previousXdgDataHome
+    }
+    if (previousOpenCodeDb === undefined) {
+      delete process.env.OPENCODE_DB
+    } else {
+      process.env.OPENCODE_DB = previousOpenCodeDb
+    }
+    rmSync(dataRoot, { recursive: true, force: true })
+  })
+
+  function writeSessionTotalsDb(fileName: string, rows: [string, number][]): string {
+    const path = join(openCodeDir, fileName)
+    const db = new Database(path)
+    createSessionTotalsSchema(db)
+    for (const [sessionId, inputTokens] of rows) {
+      insertSessionTotalsRow(db, sessionId, inputTokens)
+    }
+    db.close()
+    return path
+  }
+
+  it('counts a session duplicated into a stale backup database exactly once', async () => {
+    // The backup holds a stale snapshot of session-1; the canonical db has
+    // grown since. The canonical totals must win and be counted once.
+    writeSessionTotalsDb('opencode.db', [
+      ['session-1', 1000],
+      ['session-2', 300]
+    ])
+    writeSessionTotalsDb('opencode-backup.db', [['session-1', 400]])
+
+    const result = await scanOpenCodeUsageDatabases([], [])
+
+    expect(result.sessions).toHaveLength(2)
+    const sessionOne = result.sessions.find((session) => session.sessionId === 'session-1')
+    expect(sessionOne?.totalInputTokens).toBe(1000)
+    expect(sessionOne?.eventCount).toBe(1)
+    expect(
+      result.dailyAggregates.reduce((total, aggregate) => total + aggregate.inputTokens, 0)
+    ).toBe(1300)
+  })
+
+  it('still counts backup-only sessions and stays stable across cached rescans', async () => {
+    const canonicalPath = writeSessionTotalsDb('opencode.db', [['session-1', 1000]])
+    // The backup duplicates session-1 (stale) and preserves session-9, which
+    // no longer exists in the canonical database.
+    writeSessionTotalsDb('opencode-backup.db', [
+      ['session-1', 400],
+      ['session-9', 50]
+    ])
+
+    const first = await scanOpenCodeUsageDatabases([], [])
+    expect(
+      first.dailyAggregates.reduce((total, aggregate) => total + aggregate.inputTokens, 0)
+    ).toBe(1050)
+
+    const second = await scanOpenCodeUsageDatabases([], first.processedDatabases)
+    expect(
+      second.dailyAggregates.reduce((total, aggregate) => total + aggregate.inputTokens, 0)
+    ).toBe(1050)
+
+    // The canonical db keeps growing while the backup stays cached; session-1
+    // must stay owned by the canonical db.
+    const db = new Database(canonicalPath)
+    insertSessionTotalsRow(db, 'session-2', 200)
+    db.close()
+
+    const third = await scanOpenCodeUsageDatabases([], second.processedDatabases)
+    expect(
+      third.dailyAggregates.reduce((total, aggregate) => total + aggregate.inputTokens, 0)
+    ).toBe(1250)
+    const sessionOne = third.sessions.find((session) => session.sessionId === 'session-1')
+    expect(sessionOne?.totalInputTokens).toBe(1000)
+    expect(sessionOne?.eventCount).toBe(1)
+  })
+
+  it('reuses a fully-duplicate backup instead of reparsing it when the live db changes', async () => {
+    // The backup only holds stale copies of sessions the canonical db already
+    // owns, so it owns nothing. When the live db changes it must not be
+    // demoted back into the parse set — there is no claim to reclaim.
+    const canonicalPath = writeSessionTotalsDb('opencode.db', [['session-1', 1000]])
+    writeSessionTotalsDb('opencode-backup.db', [['session-1', 400]])
+
+    const first = await scanOpenCodeUsageDatabases([], [])
+    const firstBackup = first.processedDatabases.find((database) =>
+      database.path.endsWith('opencode-backup.db')
+    )
+    expect(firstBackup?.ownedSessionIds).toEqual([])
+
+    const db = new Database(canonicalPath)
+    insertSessionTotalsRow(db, 'session-2', 200)
+    db.close()
+
+    const second = await scanOpenCodeUsageDatabases([], first.processedDatabases)
+    const secondBackup = second.processedDatabases.find((database) =>
+      database.path.endsWith('opencode-backup.db')
+    )
+    // A reused cache entry is the same object; a reparse would produce a new one.
+    expect(secondBackup).toBe(firstBackup)
+    expect(
+      second.dailyAggregates.reduce((total, aggregate) => total + aggregate.inputTokens, 0)
+    ).toBe(1200)
+  })
+
+  it('lets the live database reclaim sessions after a sticky backup-only claim', async () => {
+    // First scan only has the backup (e.g. live db temporarily missing), so it
+    // owns session-1 at the stale snapshot. When opencode.db reappears with
+    // higher totals it must reclaim the session instead of staying frozen.
+    writeSessionTotalsDb('opencode-backup.db', [['session-1', 400]])
+
+    const first = await scanOpenCodeUsageDatabases([], [])
+    expect(
+      first.dailyAggregates.reduce((total, aggregate) => total + aggregate.inputTokens, 0)
+    ).toBe(400)
+    expect(first.processedDatabases[0]?.ownedSessionIds).toEqual(['session-1'])
+
+    writeSessionTotalsDb('opencode.db', [
+      ['session-1', 1000],
+      ['session-2', 200]
+    ])
+
+    const second = await scanOpenCodeUsageDatabases([], first.processedDatabases)
+    expect(
+      second.dailyAggregates.reduce((total, aggregate) => total + aggregate.inputTokens, 0)
+    ).toBe(1200)
+    const sessionOne = second.sessions.find((session) => session.sessionId === 'session-1')
+    expect(sessionOne?.totalInputTokens).toBe(1000)
+    expect(sessionOne?.eventCount).toBe(1)
+  })
+
+  it('reclaims sessions when the owning live database is deleted', async () => {
+    const canonicalPath = writeSessionTotalsDb('opencode.db', [
+      ['session-1', 1000],
+      ['session-2', 200]
+    ])
+    writeSessionTotalsDb('opencode-backup.db', [
+      ['session-1', 400],
+      ['session-9', 50]
+    ])
+
+    const first = await scanOpenCodeUsageDatabases([], [])
+    expect(
+      first.dailyAggregates.reduce((total, aggregate) => total + aggregate.inputTokens, 0)
+    ).toBe(1250)
+
+    unlinkSync(canonicalPath)
+
+    const second = await scanOpenCodeUsageDatabases([], first.processedDatabases)
+    expect(
+      second.dailyAggregates.reduce((total, aggregate) => total + aggregate.inputTokens, 0)
+    ).toBe(450)
+    expect(second.sessions.map((session) => session.sessionId).sort()).toEqual([
+      'session-1',
+      'session-9'
+    ])
+    const sessionOne = second.sessions.find((session) => session.sessionId === 'session-1')
+    expect(sessionOne?.totalInputTokens).toBe(400)
   })
 })

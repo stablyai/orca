@@ -69,6 +69,12 @@ beforeEach(() => {
   container = document.createElement('div')
   document.body.appendChild(container)
   root = createRoot(container)
+  // WorktreeSymlinksSection reads window.api.fs on mount to suggest directory
+  // paths; provide a minimal renderer bridge so mounting the full pane doesn't
+  // throw in the test environment.
+  ;(window as unknown as { api: unknown }).api = {
+    fs: { readDir: () => Promise.resolve([]) }
+  }
 })
 
 afterEach(() => {
@@ -76,6 +82,7 @@ afterEach(() => {
     root.unmount()
   })
   container.remove()
+  delete (window as unknown as { api?: unknown }).api
   useAppStore.setState(useAppStore.getInitialState(), true)
 })
 

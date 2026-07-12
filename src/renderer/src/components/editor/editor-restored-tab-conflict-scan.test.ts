@@ -250,6 +250,43 @@ describe('attachRestoredTabConflictScan', () => {
     }
   })
 
+  it('caps concurrent verification reads and drains the queue without dropping tabs', async () => {
+    // Why: a restored session with many dirty tabs must not fire one disk
+    // read per tab at once — on SSH/remote runtimes that competes with
+    // connection recovery. The cap is 3; the rest queue and all complete.
+    const pendingReads: ((value: { content: string; isBinary: boolean }) => void)[] = []
+    mocks.readRuntimeFileContent.mockImplementation(
+      () =>
+        new Promise<{ content: string; isBinary: boolean }>((resolve) => {
+          pendingReads.push(resolve)
+        })
+    )
+    const store = createEditorStore()
+    for (let i = 0; i < 6; i++) {
+      openRestoredDirtyTab(store, `/repo/file-${i}.ts`, 'original baseline')
+    }
+
+    const detach = attachRestoredTabConflictScan(store)
+    try {
+      expect(mocks.readRuntimeFileContent).toHaveBeenCalledTimes(3)
+
+      pendingReads.shift()!({ content: 'original baseline', isBinary: false })
+      await vi.advanceTimersByTimeAsync(10)
+      expect(mocks.readRuntimeFileContent).toHaveBeenCalledTimes(4)
+
+      while (pendingReads.length > 0) {
+        pendingReads.shift()!({ content: 'original baseline', isBinary: false })
+        await vi.advanceTimersByTimeAsync(10)
+      }
+      expect(mocks.readRuntimeFileContent).toHaveBeenCalledTimes(6)
+      for (const file of store.getState().openFiles) {
+        expect(file.pendingDiskBaselineVerification).toBeUndefined()
+      }
+    } finally {
+      detach()
+    }
+  })
+
   it('does not mark a tab that was saved while the read was in flight', async () => {
     let resolveRead: (value: { content: string; isBinary: boolean }) => void = () => {}
     mocks.readRuntimeFileContent.mockReturnValue(
@@ -266,6 +303,57 @@ describe('attachRestoredTabConflictScan', () => {
       resolveRead({ content: 'agent rewrote this offline', isBinary: false })
       await vi.advanceTimersByTimeAsync(10)
       expect(store.getState().openFiles[0]?.externalMutation).toBeUndefined()
+    } finally {
+      detach()
+    }
+  })
+
+  it('verifies a queued tab against its live baseline, not the stale queued snapshot', async () => {
+    // Why: ids are paths, so a tab re-baselined (saved / reopened) while it
+    // waits behind the concurrency cap must be compared against its current
+    // baseline. Queuing the OpenFile snapshot would mark the live tab using the
+    // old lastKnownDiskSignature.
+    const pending: {
+      filePath: string
+      resolve: (value: { content: string; isBinary: boolean }) => void
+    }[] = []
+    mocks.readRuntimeFileContent.mockImplementation(
+      ({ filePath }: { filePath: string }) =>
+        new Promise<{ content: string; isBinary: boolean }>((resolve) => {
+          pending.push({ filePath, resolve })
+        })
+    )
+    const store = createEditorStore()
+    // Three reads fill the concurrency cap; the fourth waits in the queue.
+    for (let i = 0; i < 4; i++) {
+      openRestoredDirtyTab(store, `/repo/file-${i}.ts`, 'stale baseline')
+    }
+
+    const detach = attachRestoredTabConflictScan(store)
+    try {
+      expect(mocks.readRuntimeFileContent).toHaveBeenCalledTimes(3)
+
+      // The queued tab is re-baselined to match current disk while it waits.
+      store
+        .getState()
+        .setLastKnownDiskSignature('/repo/file-3.ts', getDiskBaselineSignature('current disk'))
+
+      // Drain the in-flight reads; each frees a slot so the queued tab dispatches.
+      for (const filePath of ['/repo/file-0.ts', '/repo/file-1.ts', '/repo/file-2.ts']) {
+        pending
+          .find((p) => p.filePath === filePath)!
+          .resolve({ content: 'stale baseline', isBinary: false })
+        await vi.advanceTimersByTimeAsync(10)
+      }
+
+      pending
+        .find((p) => p.filePath === '/repo/file-3.ts')!
+        .resolve({ content: 'current disk', isBinary: false })
+      await vi.advanceTimersByTimeAsync(10)
+
+      const tab = store.getState().openFiles.find((f) => f.id === '/repo/file-3.ts')
+      expect(tab?.externalMutation).toBeUndefined()
+      expect(tab?.pendingDiskBaselineVerification).toBeUndefined()
     } finally {
       detach()
     }

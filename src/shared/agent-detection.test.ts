@@ -5,7 +5,8 @@ import {
   extractAllOscTitles,
   extractLastOscTitle,
   getAgentLabel,
-  MAX_OSC_TITLE_CHARS
+  MAX_OSC_TITLE_CHARS,
+  normalizeTerminalTitle
 } from './agent-detection'
 import {
   hasCompatibleAgentTitleIdentity,
@@ -88,13 +89,25 @@ describe('Pi-compatible title detection', () => {
   it.each([
     ['\u280b OMP', 'OMP', 'working'],
     ['OMP ready', 'OMP', 'idle'],
+    ['OMP', 'OMP', 'idle'],
     ['OMP - action required', 'OMP', 'permission'],
     ['\u280b Pi', 'Pi', 'working'],
     ['Pi ready', 'Pi', 'idle'],
+    // Why: normalizeTerminalTitle collapses idle π frames to bare "Pi"; re-detection
+    // from stored lastOscTitle must still classify idle, not neutral.
+    ['Pi', 'Pi', 'idle'],
     ['Pi - action required', 'Pi', 'permission']
   ] as const)('classifies synthesized %s', (title, expectedLabel, expectedStatus) => {
     expect(getAgentLabel(title)).toBe(expectedLabel)
     expect(detectAgentStatusFromTitle(title)).toBe(expectedStatus)
+  })
+
+  it('re-detects status after display-title normalization for Pi idle frames', () => {
+    expect(normalizeTerminalTitle('π - my-project')).toBe('Pi')
+    expect(detectAgentStatusFromTitle(normalizeTerminalTitle('π - my-project'))).toBe('idle')
+    expect(detectAgentStatusFromTitle(normalizeTerminalTitle('\u280b π - my-project'))).toBe(
+      'working'
+    )
   })
 
   it.each([
@@ -105,13 +118,26 @@ describe('Pi-compatible title detection', () => {
     ['π: tmp', 'omp', 'OMP ready'],
     ['\u280b π: tmp', 'omp', '\u280b OMP'],
     ['\u280b π - tmp', 'omp', '\u280b OMP'],
-    ['\u280b OMP', 'pi', '\u280b Pi']
+    ['\u280b OMP', 'pi', '\u280b Pi'],
+    ['lucky-echidna | \u283c π - Diagnose Orca terminal title flicker - test', 'omp', '\u280b OMP'],
+    ['lucky-echidna | Pi ready', 'omp', 'OMP ready'],
+    ['Codex | Pi ready', 'omp', 'OMP ready'],
+    // Why: the wrapped whole reads as a braille Claude title, but the re-ownable
+    // synthetic pane suffix must still win.
+    ['lucky-echidna | ⠋ OMP', 'omp', '⠋ OMP'],
+    ['lucky-echidna | \u283c π - Diagnose | test', 'omp', '\u280b OMP']
   ] as const)('normalizes %s to the authoritative %s owner', (title, owner, expectedTitle) => {
     expect(normalizeCompatibleAgentTitleForOwner(title, owner)).toBe(expectedTitle)
   })
 
   it('preserves Pi-compatible custom titles and unrelated owners', () => {
     expect(normalizeCompatibleAgentTitleForOwner('Fix pi bugs', 'omp')).toBe('Fix pi bugs')
+    // Why: a wrapped title with no re-ownable identity in any " | " segment
+    // passes through untouched instead of collapsing to the owner label.
+    expect(normalizeCompatibleAgentTitleForOwner('lucky-echidna | Fix pi bugs', 'omp')).toBe(
+      'lucky-echidna | Fix pi bugs'
+    )
+    expect(normalizeCompatibleAgentTitleForOwner('xxPi ready', 'omp')).toBe('xxPi ready')
     expect(normalizeCompatibleAgentTitleForOwner('\u280b Pi', 'codex')).toBe('\u280b Pi')
   })
 

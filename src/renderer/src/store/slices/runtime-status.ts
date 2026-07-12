@@ -66,6 +66,8 @@ export const createRuntimeStatusSlice: StateCreator<AppState, [], [], RuntimeSta
     // Optional-chained: minimal store assemblies (some unit tests) omit the
     // detected-agents slice.
     get().retainRuntimeDetectedAgents?.(environments.map((environment) => environment.id))
+    // A detached environment's mirrored SSH state must not outlive it.
+    get().retainEnvironmentSshState?.(environments.map((environment) => environment.id))
   },
 
   setRuntimeEnvironmentStatus: (environmentId, status) => {

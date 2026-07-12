@@ -42,7 +42,7 @@ vi.mock('./ssh-relay-deploy-helpers', () => ({
     onData: vi.fn(),
     onClose: vi.fn()
   }),
-  execCommand: vi.fn().mockResolvedValue('Linux x86_64')
+  execCommand: vi.fn().mockResolvedValue('__ORCA_REMOTE_PLATFORM__ Linux x86_64')
 }))
 
 vi.mock('./ssh-remote-node-resolution', () => ({
@@ -123,7 +123,7 @@ describe('deployAndLaunchRelay', () => {
   it('calls exec to detect remote platform', async () => {
     const conn = makeMockConnection()
     const mockExecCommand = vi.mocked(execCommand)
-    mockExecCommand.mockResolvedValueOnce('Linux x86_64') // uname -sm
+    mockExecCommand.mockResolvedValueOnce('__ORCA_REMOTE_PLATFORM__ Linux x86_64') // tagged POSIX platform probe
     mockExecCommand.mockResolvedValueOnce('/home/user') // echo $HOME
     mockExecCommand.mockResolvedValueOnce('ORCA-NATIVE-DEPS-OK') // native deps probe
     mockExecCommand.mockResolvedValueOnce('DEAD') // socket probe
@@ -131,13 +131,16 @@ describe('deployAndLaunchRelay', () => {
 
     await deployAndLaunchRelay(conn)
 
-    expect(mockExecCommand).toHaveBeenCalledWith(conn, 'uname -sm')
+    expect(mockExecCommand).toHaveBeenCalledWith(
+      conn,
+      "printf '\\n%s ' '__ORCA_REMOTE_PLATFORM__'; uname -sm"
+    )
   })
 
   it('reports progress via callback', async () => {
     const conn = makeMockConnection()
     const mockExecCommand = vi.mocked(execCommand)
-    mockExecCommand.mockResolvedValueOnce('Linux x86_64')
+    mockExecCommand.mockResolvedValueOnce('__ORCA_REMOTE_PLATFORM__ Linux x86_64')
     mockExecCommand.mockResolvedValueOnce('/home/user')
     mockExecCommand.mockResolvedValueOnce('ORCA-NATIVE-DEPS-OK') // native deps probe
     mockExecCommand.mockResolvedValueOnce('DEAD') // socket probe
@@ -153,7 +156,7 @@ describe('deployAndLaunchRelay', () => {
   it('resolves the remote node path once per deploy', async () => {
     const conn = makeMockConnection()
     const mockExecCommand = vi.mocked(execCommand)
-    mockExecCommand.mockResolvedValueOnce('Linux x86_64')
+    mockExecCommand.mockResolvedValueOnce('__ORCA_REMOTE_PLATFORM__ Linux x86_64')
     mockExecCommand.mockResolvedValueOnce('/home/user')
     mockExecCommand.mockResolvedValueOnce('ORCA-NATIVE-DEPS-OK')
     mockExecCommand.mockResolvedValueOnce('DEAD')
@@ -167,7 +170,7 @@ describe('deployAndLaunchRelay', () => {
   it('resolves node concurrently with remote home, not after the install-state chain', async () => {
     const conn = makeMockConnection()
     const mockExecCommand = vi.mocked(execCommand)
-    mockExecCommand.mockResolvedValueOnce('Linux x86_64') // uname -sm
+    mockExecCommand.mockResolvedValueOnce('__ORCA_REMOTE_PLATFORM__ Linux x86_64') // tagged POSIX platform probe
 
     let markNodeResolutionStarted: () => void = () => {}
     const nodeResolutionStarted = new Promise<void>((resolve) => {
@@ -221,7 +224,7 @@ describe('deployAndLaunchRelay', () => {
     const conn = makeMockConnection()
     vi.mocked(conn.canRunConcurrentExecCommands).mockReturnValue(false)
     const mockExecCommand = vi.mocked(execCommand)
-    mockExecCommand.mockResolvedValueOnce('Linux x86_64') // uname -sm
+    mockExecCommand.mockResolvedValueOnce('__ORCA_REMOTE_PLATFORM__ Linux x86_64') // tagged POSIX platform probe
     let releaseRemoteHome: (home: string) => void = () => {}
     let remoteHomeProbeStarted: () => void = () => {}
     const remoteHomeProbeStartedPromise = new Promise<void>((resolve) => {
@@ -274,7 +277,7 @@ describe('deployAndLaunchRelay', () => {
         fallbackInstallStateCompleted = true
         return true
       })
-    mockExecCommand.mockResolvedValueOnce('Linux x86_64') // uname -sm
+    mockExecCommand.mockResolvedValueOnce('__ORCA_REMOTE_PLATFORM__ Linux x86_64') // tagged POSIX platform probe
     mockExecCommand.mockResolvedValueOnce('/home/user') // concurrent install-state $HOME
     mockExecCommand.mockRejectedValueOnce(sessionLimitError) // concurrent node path probe
     mockExecCommand.mockResolvedValueOnce('/home/user') // sequential fallback $HOME
@@ -302,7 +305,7 @@ describe('deployAndLaunchRelay', () => {
         throw sessionLimitError
       })
       .mockResolvedValueOnce(true)
-    mockExecCommand.mockResolvedValueOnce('Linux x86_64') // uname -sm
+    mockExecCommand.mockResolvedValueOnce('__ORCA_REMOTE_PLATFORM__ Linux x86_64') // tagged POSIX platform probe
     mockExecCommand.mockResolvedValueOnce('/home/user') // concurrent install-state $HOME
     mockExecCommand.mockResolvedValueOnce('/home/user') // sequential fallback $HOME
     mockExecCommand.mockResolvedValueOnce('ORCA-NATIVE-DEPS-OK') // native deps probe
@@ -324,7 +327,7 @@ describe('deployAndLaunchRelay', () => {
     const mockExecCommand = vi.mocked(execCommand)
     const nodeError = new Error('Node.js not found on remote host')
     vi.mocked(resolveRemoteNodePath).mockRejectedValueOnce(nodeError)
-    mockExecCommand.mockResolvedValueOnce('Linux x86_64') // uname -sm
+    mockExecCommand.mockResolvedValueOnce('__ORCA_REMOTE_PLATFORM__ Linux x86_64') // tagged POSIX platform probe
     mockExecCommand.mockResolvedValueOnce('/home/user') // concurrent install-state $HOME
 
     await expect(deployAndLaunchRelay(conn)).rejects.toBe(nodeError)
@@ -346,7 +349,7 @@ describe('deployAndLaunchRelay', () => {
         })
       })
     })
-    mockExecCommand.mockResolvedValueOnce('Linux x86_64') // uname -sm
+    mockExecCommand.mockResolvedValueOnce('__ORCA_REMOTE_PLATFORM__ Linux x86_64') // tagged POSIX platform probe
     mockExecCommand.mockResolvedValueOnce('relative-home') // invalid install-state $HOME
 
     const timedDeploy = Promise.race([
@@ -370,7 +373,7 @@ describe('deployAndLaunchRelay', () => {
     const installError = new Error('permission denied while checking relay install')
     vi.mocked(resolveRemoteNodePath).mockRejectedValueOnce(sessionLimitError)
     vi.mocked(isRelayAlreadyInstalled).mockRejectedValueOnce(installError)
-    mockExecCommand.mockResolvedValueOnce('Linux x86_64') // uname -sm
+    mockExecCommand.mockResolvedValueOnce('__ORCA_REMOTE_PLATFORM__ Linux x86_64') // tagged POSIX platform probe
     mockExecCommand.mockResolvedValueOnce('/home/user') // concurrent install-state $HOME
 
     await expect(deployAndLaunchRelay(conn)).rejects.toBe(installError)
@@ -384,7 +387,7 @@ describe('deployAndLaunchRelay', () => {
     const sessionLimitError = Object.assign(new Error('(SSH) Channel open failure: open failed'), {
       reason: 4
     })
-    mockExecCommand.mockResolvedValueOnce('Linux x86_64') // uname -sm
+    mockExecCommand.mockResolvedValueOnce('__ORCA_REMOTE_PLATFORM__ Linux x86_64') // tagged POSIX platform probe
     let releaseRemoteHome: (home: string) => void = () => {}
     let remoteHomeSettled = false
     mockExecCommand.mockReturnValueOnce(
@@ -420,7 +423,7 @@ describe('deployAndLaunchRelay', () => {
   it('defaults fresh relays to keep-alive-until-reset', async () => {
     const conn = makeMockConnection()
     const mockExecCommand = vi.mocked(execCommand)
-    mockExecCommand.mockResolvedValueOnce('Linux x86_64')
+    mockExecCommand.mockResolvedValueOnce('__ORCA_REMOTE_PLATFORM__ Linux x86_64')
     mockExecCommand.mockResolvedValueOnce('/home/user')
     mockExecCommand.mockResolvedValueOnce('ORCA-NATIVE-DEPS-OK')
     mockExecCommand.mockResolvedValueOnce('DEAD')
@@ -439,7 +442,7 @@ describe('deployAndLaunchRelay', () => {
   it('allows an unlimited SSH disconnect grace window', async () => {
     const conn = makeMockConnection()
     const mockExecCommand = vi.mocked(execCommand)
-    mockExecCommand.mockResolvedValueOnce('Linux x86_64')
+    mockExecCommand.mockResolvedValueOnce('__ORCA_REMOTE_PLATFORM__ Linux x86_64')
     mockExecCommand.mockResolvedValueOnce('/home/user')
     mockExecCommand.mockResolvedValueOnce('ORCA-NATIVE-DEPS-OK')
     mockExecCommand.mockResolvedValueOnce('DEAD')
@@ -458,7 +461,7 @@ describe('deployAndLaunchRelay', () => {
   it('clamps configured SSH disconnect grace to the seven-day maximum', async () => {
     const conn = makeMockConnection()
     const mockExecCommand = vi.mocked(execCommand)
-    mockExecCommand.mockResolvedValueOnce('Linux x86_64')
+    mockExecCommand.mockResolvedValueOnce('__ORCA_REMOTE_PLATFORM__ Linux x86_64')
     mockExecCommand.mockResolvedValueOnce('/home/user')
     mockExecCommand.mockResolvedValueOnce('ORCA-NATIVE-DEPS-OK')
     mockExecCommand.mockResolvedValueOnce('DEAD')
@@ -477,7 +480,7 @@ describe('deployAndLaunchRelay', () => {
   it('uses a content-hashed versioned remote install directory', async () => {
     const conn = makeMockConnection()
     const mockExecCommand = vi.mocked(execCommand)
-    mockExecCommand.mockResolvedValueOnce('Linux x86_64')
+    mockExecCommand.mockResolvedValueOnce('__ORCA_REMOTE_PLATFORM__ Linux x86_64')
     mockExecCommand.mockResolvedValueOnce('/home/user')
     mockExecCommand.mockResolvedValueOnce('ORCA-NATIVE-DEPS-OK')
     mockExecCommand.mockResolvedValueOnce('DEAD')
@@ -522,12 +525,12 @@ describe('deployAndLaunchRelay', () => {
     const connB = makeMockConnection()
     const mockExecCommand = vi.mocked(execCommand)
     mockExecCommand
-      .mockResolvedValueOnce('Linux x86_64') // uname A
+      .mockResolvedValueOnce('__ORCA_REMOTE_PLATFORM__ Linux x86_64') // tagged POSIX platform probe A
       .mockResolvedValueOnce('/home/user') // $HOME A
       .mockResolvedValueOnce('ORCA-NATIVE-DEPS-OK') // native deps probe A
       .mockResolvedValueOnce('DEAD') // probe A
       .mockResolvedValueOnce('READY') // poll A
-      .mockResolvedValueOnce('Linux x86_64') // uname B
+      .mockResolvedValueOnce('__ORCA_REMOTE_PLATFORM__ Linux x86_64') // tagged POSIX platform probe B
       .mockResolvedValueOnce('/home/user') // $HOME B
       .mockResolvedValueOnce('ORCA-NATIVE-DEPS-OK') // native deps probe B
       .mockResolvedValueOnce('DEAD') // probe B
@@ -561,8 +564,8 @@ describe('deployAndLaunchRelay', () => {
     const mockExecCommand = vi.mocked(execCommand)
     vi.mocked(resolveRemoteNodePath).mockResolvedValue('C:/Program Files/nodejs/node.exe')
     mockExecCommand
-      .mockRejectedValueOnce(new Error('uname not found')) // uname -sm
-      .mockResolvedValueOnce('Windows X64') // PowerShell platform probe
+      .mockRejectedValueOnce(new Error('uname not found')) // tagged POSIX platform probe
+      .mockResolvedValueOnce('__ORCA_REMOTE_PLATFORM__ Windows X64') // tagged PowerShell platform probe
       .mockResolvedValueOnce('C:\\Users\\me user') // remote home
       .mockResolvedValueOnce('ORCA-NATIVE-DEPS-OK') // native deps probe
       .mockResolvedValueOnce('') // no persisted active pipe
@@ -607,8 +610,8 @@ describe('deployAndLaunchRelay', () => {
         onClose: vi.fn()
       })
     mockExecCommand
-      .mockRejectedValueOnce(new Error('uname not found')) // uname -sm
-      .mockResolvedValueOnce('Windows X64') // PowerShell platform probe
+      .mockRejectedValueOnce(new Error('uname not found')) // tagged POSIX platform probe
+      .mockResolvedValueOnce('__ORCA_REMOTE_PLATFORM__ Windows X64') // tagged PowerShell platform probe
       .mockResolvedValueOnce('C:\\Users\\me user') // remote home
       .mockResolvedValueOnce('ORCA-NATIVE-DEPS-OK') // native deps probe
       .mockResolvedValueOnce('') // no persisted active pipe yet
@@ -654,8 +657,8 @@ describe('deployAndLaunchRelay', () => {
     const persistedPipe = '\\\\.\\pipe\\orca-relay-1234567890abcdef1234'
     vi.mocked(resolveRemoteNodePath).mockResolvedValue('C:/Program Files/nodejs/node.exe')
     mockExecCommand
-      .mockRejectedValueOnce(new Error('uname not found')) // uname -sm
-      .mockResolvedValueOnce('Windows X64') // PowerShell platform probe
+      .mockRejectedValueOnce(new Error('uname not found')) // tagged POSIX platform probe
+      .mockResolvedValueOnce('__ORCA_REMOTE_PLATFORM__ Windows X64') // tagged PowerShell platform probe
       .mockResolvedValueOnce('C:\\Users\\me user') // remote home
       .mockResolvedValueOnce('ORCA-NATIVE-DEPS-OK') // native deps probe
       .mockResolvedValueOnce(`${persistedPipe}\n`) // persisted active pipe marker
@@ -682,8 +685,8 @@ describe('deployAndLaunchRelay', () => {
     const mockExecCommand = vi.mocked(execCommand)
     vi.mocked(resolveRemoteNodePath).mockResolvedValue('C:/Program Files/nodejs/node.exe')
     mockExecCommand
-      .mockRejectedValueOnce(new Error('uname not found')) // uname A
-      .mockResolvedValueOnce('Windows X64')
+      .mockRejectedValueOnce(new Error('uname not found')) // tagged POSIX platform probe A
+      .mockResolvedValueOnce('__ORCA_REMOTE_PLATFORM__ Windows X64')
       .mockResolvedValueOnce('C:\\Users\\me user')
       .mockResolvedValueOnce('ORCA-NATIVE-DEPS-OK')
       .mockResolvedValueOnce('') // no persisted active pipe A
@@ -691,8 +694,8 @@ describe('deployAndLaunchRelay', () => {
       .mockResolvedValueOnce('')
       .mockResolvedValueOnce('READY')
       .mockResolvedValueOnce('') // persist active pipe A
-      .mockRejectedValueOnce(new Error('uname not found')) // uname B
-      .mockResolvedValueOnce('Windows X64')
+      .mockRejectedValueOnce(new Error('uname not found')) // tagged POSIX platform probe B
+      .mockResolvedValueOnce('__ORCA_REMOTE_PLATFORM__ Windows X64')
       .mockResolvedValueOnce('C:\\Users\\me user')
       .mockResolvedValueOnce('ORCA-NATIVE-DEPS-OK')
       .mockResolvedValueOnce('') // no persisted active pipe B

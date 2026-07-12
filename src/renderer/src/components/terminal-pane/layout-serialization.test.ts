@@ -34,7 +34,12 @@ beforeAll(() => {
 
 import {
   buildFontFamily,
+  buildPostReplayLiveAgentReattachReset,
+  POST_REPLAY_LIVE_AGENT_REATTACH_RESET,
   POST_REPLAY_MODE_RESET,
+  replayPayloadEndsWithCursorHidden,
+  RESET_KITTY_KEYBOARD_PROTOCOL,
+  RESET_TERMINAL_CURSOR_STYLE,
   restoreScrollbackBuffers,
   serializePaneTree,
   serializeTerminalLayout,
@@ -435,7 +440,8 @@ describe('restoreScrollbackBuffers', () => {
       }
     }
     const manager = {
-      getPanes: vi.fn(() => [pane])
+      getPanes: vi.fn(() => [pane]),
+      hasWebglRenderer: vi.fn(() => true)
     }
     const replayingPanesRef = { current: new Map<number, number>() }
     const restoredViewportBlankingPanesRef = { current: new Set<number>() }
@@ -449,6 +455,7 @@ describe('restoreScrollbackBuffers', () => {
     )
 
     expect(writes).toEqual(['restored output', '\r\n', POST_REPLAY_MODE_RESET])
+    expect(manager.hasWebglRenderer).toHaveBeenCalledWith(1)
     expect(restoredViewportBlankingPanesRef.current.has(1)).toBe(true)
     expect(replayingPanesRef.current.size).toBe(0)
   })
@@ -489,5 +496,35 @@ describe('collectLeafIdsInReplayCreationOrder', () => {
     }
 
     expect(collectLeafIdsInReplayCreationOrder(layout)).toEqual(['A', 'B', 'C'])
+  })
+})
+
+describe('replayPayloadEndsWithCursorHidden', () => {
+  it('is true when the last DECTCEM sequence hides the cursor', () => {
+    expect(replayPayloadEndsWithCursorHidden('\x1b[?25h frame \x1b[?25l')).toBe(true)
+    expect(replayPayloadEndsWithCursorHidden('\x1b[?1004h\x1b[?25lparked screen')).toBe(true)
+  })
+
+  it('is false when the cursor was re-shown or never touched', () => {
+    expect(replayPayloadEndsWithCursorHidden('\x1b[?25l frame \x1b[?25h')).toBe(false)
+    expect(replayPayloadEndsWithCursorHidden('plain shell output')).toBe(false)
+    expect(replayPayloadEndsWithCursorHidden('')).toBe(false)
+  })
+})
+
+describe('buildPostReplayLiveAgentReattachReset', () => {
+  it('preserves an intentionally hidden cursor', () => {
+    expect(buildPostReplayLiveAgentReattachReset('agent frame\x1b[?25l')).toBe(
+      `${RESET_TERMINAL_CURSOR_STYLE}${RESET_KITTY_KEYBOARD_PROTOCOL}`
+    )
+  })
+
+  it('re-shows the cursor when the payload left it visible', () => {
+    expect(buildPostReplayLiveAgentReattachReset('agent frame\x1b[?25l\x1b[?25h')).toBe(
+      POST_REPLAY_LIVE_AGENT_REATTACH_RESET
+    )
+    expect(buildPostReplayLiveAgentReattachReset('no dectcem at all')).toBe(
+      POST_REPLAY_LIVE_AGENT_REATTACH_RESET
+    )
   })
 })

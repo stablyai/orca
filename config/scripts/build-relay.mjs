@@ -59,4 +59,31 @@ for (const platform of PLATFORMS) {
   console.log(`Built relay for ${platform} → ${outDir}/relay.js`)
 }
 
+// WSL agent-hook relay: a hooks-only guest receiver launched inside WSL
+// distros via wsl.exe. Pure Node built-ins (no node-pty/@parcel/watcher),
+// so a single platform-independent bundle suffices; it ships inside the
+// Windows app via the same out/relay extraResources mapping.
+{
+  const wslEntry = join(ROOT, 'src', 'relay', 'wsl-agent-hook-relay.ts')
+  const outDir = join(ROOT, 'out', 'relay', 'wsl')
+  mkdirSync(outDir, { recursive: true })
+  await build({
+    entryPoints: [wslEntry],
+    bundle: true,
+    platform: 'node',
+    target: 'node18',
+    format: 'cjs',
+    outfile: join(outDir, 'wsl-agent-hook-relay.js'),
+    sourcemap: false,
+    minify: true,
+    define: {
+      'process.env.NODE_ENV': '"production"'
+    }
+  })
+  const content = readFileSync(join(outDir, 'wsl-agent-hook-relay.js'))
+  const hash = createHash('sha256').update(content).digest('hex').slice(0, 12)
+  writeFileSync(join(outDir, '.version'), `${RELAY_VERSION}+${hash}`)
+  console.log(`Built WSL hook relay → ${outDir}/wsl-agent-hook-relay.js`)
+}
+
 console.log('Relay build complete.')

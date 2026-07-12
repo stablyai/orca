@@ -25,7 +25,9 @@ export function SessionActionMenuItems({
   onJumpToOriginalPane?: () => void
   showJumpToWorktree: boolean
   onJumpToWorktree?: () => void
-  onCopyResume: () => void
+  // Absent for zero-turn sessions: copying a resume command that lands in an
+  // empty conversation would contradict the "not saved" state.
+  onCopyResume?: () => void
   onCopyId: () => void
   onCopyPath: () => void
   onOpenLog?: () => void
@@ -60,13 +62,15 @@ export function SessionActionMenuItems({
         <Play className="size-3.5" />
         {resumeLabel}
       </Item>
-      <Item onSelect={onCopyResume}>
-        <Copy className="size-3.5" />
-        {translate(
-          'auto.components.right.sidebar.AiVaultSessionRow.copyResumeCommand',
-          'Copy Resume Command'
-        )}
-      </Item>
+      {onCopyResume ? (
+        <Item onSelect={onCopyResume}>
+          <Copy className="size-3.5" />
+          {translate(
+            'auto.components.right.sidebar.AiVaultSessionRow.copyResumeCommand',
+            'Copy Resume Command'
+          )}
+        </Item>
+      ) : null}
       {hasLocalPathActions ? (
         <>
           <Separator />

@@ -22,6 +22,8 @@ export type NativeChatAvailabilityInput = {
    *  terminal title resolver) when it identifies the foreground as an agent
    *  before hooks arrive. */
   resolvedAgent?: TuiAgent | null
+  /** Whether this renderer's native-chat reader can access the agent transcript. */
+  nativeChatTranscriptIsLocalReadable?: boolean
   /** Already-chat tabs must always be allowed to toggle back to terminal, even
    *  if live hook state was lost during a dev/app restart. */
   isChatViewMode?: boolean
@@ -30,9 +32,9 @@ export type NativeChatAvailabilityInput = {
 /** Native chat is a rendering of a coding-agent conversation, so the toggle is
  *  only meaningful on terminals that actually run an agent we can parse. Plain
  *  shells, non-terminal surfaces (editor, browser, …), and unsupported agents
- *  (Grok, Gemini, …) never qualify. Live identity is authoritative when present;
+ *  (Gemini, …) never qualify. Live identity is authoritative when present;
  *  launch metadata is next, and title resolution only fills the pre-hook gap for
- *  manually-started Claude/Codex sessions. */
+ *  manually-started Claude/Codex/Grok sessions. */
 export function canToggleNativeChat(input: NativeChatAvailabilityInput): boolean {
   if (input.experimentalNativeChatEnabled !== true) {
     return false
@@ -44,5 +46,8 @@ export function canToggleNativeChat(input: NativeChatAvailabilityInput): boolean
     return true
   }
   const agent = input.detectedAgent ?? input.launchAgent ?? input.resolvedAgent
+  if (agent === 'grok' && input.nativeChatTranscriptIsLocalReadable !== true) {
+    return false
+  }
   return isNativeChatSupportedAgent(agent)
 }

@@ -70,6 +70,11 @@ export function isWorkingTreeCombinedDiffTab(file: OpenFile): boolean {
 }
 
 export function canAutoSaveOpenFile(file: OpenFile): boolean {
+  // Why: read-only tabs (AI Vault View Log) must never autosave — writing an
+  // agent-owned transcript can corrupt the provider's resume history.
+  if (file.readOnly === true) {
+    return false
+  }
   // Why: single-file editors and one-file unstaged diffs have an unambiguous
   // write target. Combined diff and conflict-review tabs can represent multiple
   // paths, so autosave must stay out of those surfaces until they have their

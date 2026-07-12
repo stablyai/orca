@@ -46,6 +46,13 @@ export function parseArgs(argv: string[]): ParsedDaemonArgs {
 }
 
 async function main(): Promise<void> {
+  // Why: the parent captures daemon startup stderr then destroys its end of the
+  // pipe once the daemon is ready. A later write here (e.g. the uncaughtException
+  // console.error below) would then hit a broken pipe and emit 'error' on
+  // process.stderr — with no listener that becomes an unhandled error that kills
+  // an otherwise healthy detached daemon. Swallow it: stderr is diagnostic only.
+  process.stderr.on('error', () => {})
+
   const { socketPath, tokenPath, logFilePath } = parseArgs(process.argv.slice(2))
   // Fail-open: a broken log path must never block daemon startup.
   const daemonLog = logFilePath ? createDaemonFileLog(logFilePath) : createNoopDaemonFileLog()
@@ -124,7 +131,9 @@ async function main(): Promise<void> {
 
   // Signal readiness to parent via IPC (if available)
   if (process.send) {
-    process.send({ type: 'ready' })
+    // Why: Windows has no cheap OS query for a child's start time, so the
+    // daemon self-reports it here for the pid file's pid-recycling guard.
+    process.send({ type: 'ready', startedAtMs: Date.now() - process.uptime() * 1000 })
   }
   daemonLog.log('ready')
 

@@ -15,6 +15,7 @@ import {
   canOpenMobileBranchCompareDiff,
   formatMobileBranchCompareSummary
 } from './mobile-branch-compare'
+
 import {
   buildMobileSourceControlSections,
   countStagedEntries,
@@ -42,6 +43,9 @@ export type MobileSourceControlStateParams = {
   onRequestClose?: () => void
   onFileOpenStart?: () => void
   onOpenedFileDiff?: (relativePath: string) => void
+  // When the panel runs inside the hub, "History" switches the segment instead of
+  // pushing the standalone route. Absent for the standalone/dock usage.
+  onOpenHistory?: () => void
 }
 
 export function useMobileSourceControlState(params: MobileSourceControlStateParams) {
@@ -53,7 +57,8 @@ export function useMobileSourceControlState(params: MobileSourceControlStatePara
     embedded,
     onRequestClose,
     onFileOpenStart,
-    onOpenedFileDiff
+    onOpenedFileDiff,
+    onOpenHistory
   } = params
   const insets = useSafeAreaInsets()
   const { client, state: connState } = useHostClient(hostId)
@@ -136,6 +141,7 @@ export function useMobileSourceControlState(params: MobileSourceControlStatePara
       })),
     [branchCompareCanOpen, branchCompareSection]
   )
+  // Local changes only: dirty files + committed file diffs vs base (not PR/push).
   const shouldShowBranchCompareSection =
     branchEntries.length > 0 ||
     branchCompareState.kind === 'loading' ||
@@ -197,7 +203,8 @@ export function useMobileSourceControlState(params: MobileSourceControlStatePara
     setShowBranchPicker,
     setCreatedPrUrl,
     setCreatedPrWarning,
-    recordCommitFailure
+    recordCommitFailure,
+    onOpenHistory
   })
   const createPrAction = useMobileSourceControlCreatePrAction({
     client,

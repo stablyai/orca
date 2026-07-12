@@ -21,6 +21,7 @@ import type {
 import type { GitHistoryOptions, GitHistoryResult } from '../../shared/git-history'
 import { buildHostedRemoteCommitUrl, buildHostedRemoteFileUrl } from '../git/hosted-remote-url'
 import { JsonRpcErrorCode } from '../ssh/relay-protocol'
+import { requestGitStreamable } from '../ssh/ssh-git-response-stream-reader'
 import type { CommitMessageDraftContext } from '../../shared/commit-message-generation'
 import type { CommitMessagePlan } from '../../shared/commit-message-plan'
 import type { RemoteCommitMessageExecResult } from '../text-generation/commit-message-text-generation'
@@ -30,6 +31,7 @@ import {
   isMaxBufferOverflowError
 } from '../git/max-buffer-overflow'
 import { InFlightPromiseDedupe, stableInFlightKey } from '../../shared/in-flight-promise-dedupe'
+import { gitExecMutatesRepository } from '../../shared/git-exec-mutation'
 
 type NonInteractiveExecQueueEntry = {
   started: boolean
@@ -373,7 +375,7 @@ export class SshGitProvider implements IGitProvider {
     return this.gitDiffReadDedupe.run(
       stableInFlightKey(['diff', worktreePath, filePath, staged, compareAgainstHead]),
       async () =>
-        (await this.mux.request('git.diff', {
+        (await requestGitStreamable(this.mux, 'git.diff', {
           worktreePath,
           filePath,
           staged,
@@ -553,14 +555,16 @@ export class SshGitProvider implements IGitProvider {
     worktreePath: string,
     remote: string,
     branch: string,
-    ref: string
+    ref: string,
+    options?: { skipAutoMaintenance?: boolean }
   ): Promise<void> {
     await this.runWithDiffDedupeClear(async () => {
       await this.mux.request('git.fetchRemoteTrackingRef', {
         worktreePath,
         remote,
         branch,
-        ref
+        ref,
+        ...(options?.skipAutoMaintenance ? { skipAutoMaintenance: true } : {})
       })
     })
   }
@@ -595,7 +599,7 @@ export class SshGitProvider implements IGitProvider {
         keyOptions.oldPath ?? null
       ]),
       async () =>
-        (await this.mux.request('git.branchDiff', {
+        (await requestGitStreamable(this.mux, 'git.branchDiff', {
           worktreePath,
           baseRef,
           ...options
@@ -617,7 +621,7 @@ export class SshGitProvider implements IGitProvider {
         args.oldPath ?? null
       ]),
       async () =>
-        (await this.mux.request('git.commitDiff', {
+        (await requestGitStreamable(this.mux, 'git.commitDiff', {
           worktreePath,
           ...args
         })) as GitDiffResult
@@ -758,9 +762,13 @@ export class SshGitProvider implements IGitProvider {
     cwd: string,
     options?: { signal?: AbortSignal; timeoutMs?: number }
   ): Promise<{ stdout: string; stderr: string }> {
-    const result = options
-      ? await this.mux.request('git.exec', { args, cwd }, options)
-      : await this.mux.request('git.exec', { args, cwd })
+    const run = () =>
+      options
+        ? requestGitStreamable(this.mux, 'git.exec', { args, cwd }, options)
+        : requestGitStreamable(this.mux, 'git.exec', { args, cwd })
+    const result = gitExecMutatesRepository(args)
+      ? await this.runWithDiffDedupeClear(run)
+      : await run()
     return result as {
       stdout: string
       stderr: string
@@ -776,6 +784,7 @@ export class SshGitProvider implements IGitProvider {
       onProgress?: (progress: { phase: string; percent: number }) => void
     }
   ): Promise<{ stdout: string; stderr: string }> {
+    this.gitDiffReadDedupe.clear()
     const progressId = `clone-${Date.now()}-${Math.random().toString(36).slice(2)}`
     const unsubscribe = options?.onProgress
       ? this.mux.onNotificationByMethod('git.cloneProgress', (params) => {
@@ -808,6 +817,7 @@ export class SshGitProvider implements IGitProvider {
       throw error
     } finally {
       unsubscribe?.()
+      this.gitDiffReadDedupe.clear()
     }
   }
 

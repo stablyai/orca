@@ -6,6 +6,7 @@ import {
   createIssue,
   getIssue,
   getIssueComments,
+  getProjectStatusOrder,
   listAssignableUsers,
   listCreateFields,
   listIssueTypes,
@@ -259,4 +260,14 @@ export function registerJiraHandlers(): void {
     }
     return listTransitions(args.key.trim(), normalizeSiteId(args.siteId))
   })
+
+  ipcMain.handle(
+    'jira:getProjectStatusOrder',
+    async (_event, args: { projectKey: string; siteId?: string }) => {
+      if (typeof args?.projectKey !== 'string' || !args.projectKey.trim()) {
+        return { statusIdsByColumn: [] }
+      }
+      return getProjectStatusOrder(args.projectKey.trim(), normalizeSiteId(args.siteId))
+    }
+  )
 }

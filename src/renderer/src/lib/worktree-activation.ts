@@ -63,6 +63,8 @@ import {
 } from './folder-workspace-path-status'
 import { toast } from 'sonner'
 import { initialAgentTabViewModeProps } from './native-chat-initial-view-mode'
+import { getConnectionId } from '@/lib/connection-context'
+import { isNativeChatTranscriptLocalReadable } from '@/lib/native-chat-transcript-readability'
 
 /** Telemetry payload threaded from the launch site to `pty:spawn`. Main
  *  fires `agent_started` only after the spawn succeeds — see
@@ -582,7 +584,10 @@ export function ensureWorktreeHasInitialTerminal(
           launchAgent,
           ...initialAgentTabViewModeProps(store.settings ?? null, {
             agent: launchAgent,
-            promptDelivery: sequencedStartup?.draftPrompt != null ? 'draft' : undefined
+            promptDelivery: sequencedStartup?.draftPrompt != null ? 'draft' : undefined,
+            nativeChatTranscriptIsLocalReadable: isNativeChatTranscriptLocalReadable(
+              getConnectionId(worktreeId)
+            )
           })
         }
       : {}),
@@ -647,7 +652,10 @@ function applyDefaultTerminalTabs(
             launchAgent,
             ...initialAgentTabViewModeProps(store.settings ?? null, {
               agent: launchAgent,
-              promptDelivery: isStartupTab && startup?.draftPrompt != null ? 'draft' : undefined
+              promptDelivery: isStartupTab && startup?.draftPrompt != null ? 'draft' : undefined,
+              nativeChatTranscriptIsLocalReadable: isNativeChatTranscriptLocalReadable(
+                getConnectionId(worktreeId)
+              )
             })
           }
         : {}),

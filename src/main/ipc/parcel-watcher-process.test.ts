@@ -103,8 +103,13 @@ describe('subscribeViaWatcherProcess', () => {
   it('resolves unsubscribe on the child ack', async () => {
     const promise = subscribeViaWatcherProcess('/repo', vi.fn(), {})
     const child = currentChild()
-    const id = ackSubscribe(child)
+    const id = ackSubscribe(child, 0)
     const subscription = await promise
+    // Why: hold a second subscription so this unsubscribe exercises the ack
+    // path instead of the last-subscriber idle kill.
+    const keepAlivePromise = subscribeViaWatcherProcess('/other', vi.fn(), {})
+    ackSubscribe(child)
+    await keepAlivePromise
 
     const unsubPromise = subscription.unsubscribe()
     expect(child.sent.at(-1)).toEqual({ op: 'unsubscribe', id })
@@ -115,8 +120,11 @@ describe('subscribeViaWatcherProcess', () => {
   it('resolves a pending unsubscribe when the child dies', async () => {
     const promise = subscribeViaWatcherProcess('/repo', vi.fn(), {})
     const child = currentChild()
-    ackSubscribe(child)
+    ackSubscribe(child, 0)
     const subscription = await promise
+    const keepAlivePromise = subscribeViaWatcherProcess('/other', vi.fn(), {})
+    ackSubscribe(child)
+    await keepAlivePromise
 
     const unsubPromise = subscription.unsubscribe()
     child.connected = false
@@ -185,6 +193,80 @@ describe('subscribeViaWatcherProcess', () => {
       expect.objectContaining({ message: expect.stringContaining('crashed repeatedly') }),
       []
     )
+  })
+
+  it('kills the idle child after the last unsubscribe and respawns on the next subscribe', async () => {
+    const promise = subscribeViaWatcherProcess('/repo', vi.fn(), {})
+    const first = currentChild()
+    ackSubscribe(first)
+    const subscription = await promise
+
+    await expect(subscription.unsubscribe()).resolves.toBeUndefined()
+    expect(first.kill).toHaveBeenCalledTimes(1)
+
+    // Why: the deliberate idle kill must not count as a crash — no respawn
+    // and no crash-fuse advance when the killed child's exit event lands.
+    first.connected = false
+    first.emit('exit', null, 'SIGTERM')
+    expect(forkMock).toHaveBeenCalledTimes(1)
+
+    const respawnPromise = subscribeViaWatcherProcess('/repo2', vi.fn(), {})
+    expect(forkMock).toHaveBeenCalledTimes(2)
+    const second = currentChild()
+    expect(second).not.toBe(first)
+    expect(second.sent[0]).toMatchObject({ op: 'subscribe', dir: '/repo2' })
+    ackSubscribe(second)
+    await expect(respawnPromise).resolves.toMatchObject({ unsubscribe: expect.any(Function) })
+  })
+
+  it('kills the idle child when the last pending subscribe fails', async () => {
+    const promise = subscribeViaWatcherProcess('/gone', vi.fn(), {})
+    const first = currentChild()
+    first.emit('message', {
+      op: 'subscribe-failed',
+      id: first.sent[0].id,
+      message: 'Error opening directory'
+    })
+    await expect(promise).rejects.toThrow('Error opening directory')
+    expect(first.kill).toHaveBeenCalledTimes(1)
+
+    const respawnPromise = subscribeViaWatcherProcess('/repo', vi.fn(), {})
+    expect(forkMock).toHaveBeenCalledTimes(2)
+    ackSubscribe(currentChild())
+    await expect(respawnPromise).resolves.toMatchObject({ unsubscribe: expect.any(Function) })
+  })
+
+  it('keeps the child alive when a subscribe fails while other subscriptions remain', async () => {
+    const firstPromise = subscribeViaWatcherProcess('/a', vi.fn(), {})
+    const child = currentChild()
+    ackSubscribe(child)
+    await firstPromise
+
+    const failingPromise = subscribeViaWatcherProcess('/gone', vi.fn(), {})
+    child.emit('message', { op: 'subscribe-failed', id: child.sent.at(-1)!.id, message: 'boom' })
+    await expect(failingPromise).rejects.toThrow('boom')
+    expect(child.kill).not.toHaveBeenCalled()
+  })
+
+  it('keeps the child alive while other subscriptions remain', async () => {
+    const firstPromise = subscribeViaWatcherProcess('/a', vi.fn(), {})
+    const child = currentChild()
+    ackSubscribe(child)
+    const first = await firstPromise
+    const secondPromise = subscribeViaWatcherProcess('/b', vi.fn(), {})
+    ackSubscribe(child)
+    const second = await secondPromise
+
+    const firstUnsub = first.unsubscribe()
+    expect(child.kill).not.toHaveBeenCalled()
+    expect(child.sent.at(-1)).toMatchObject({ op: 'unsubscribe' })
+
+    // The last unsubscribe kills the idle child, which also completes the
+    // still-pending unsubscribe ack from the first record.
+    const secondUnsub = second.unsubscribe()
+    expect(child.kill).toHaveBeenCalledTimes(1)
+    await expect(firstUnsub).resolves.toBeUndefined()
+    await expect(secondUnsub).resolves.toBeUndefined()
   })
 
   it('uses the in-process watcher under vitest', async () => {

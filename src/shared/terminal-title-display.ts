@@ -10,6 +10,7 @@ import {
   GEMINI_SILENT_WORKING,
   GEMINI_WORKING,
   isGeminiTerminalTitle,
+  isGrokRotatingWorkingTitle,
   isPiAgentTitle
 } from './terminal-title-agent-type'
 import {
@@ -93,6 +94,14 @@ export function normalizeTerminalTitle(title: string): string {
     if (status === 'idle') {
       return 'Pi'
     }
+  }
+
+  // Why: Grok Build interpolates a rotating status/tool phrase between the
+  // spinner and its name, so its working frames change the title many times per
+  // turn. Collapse them to one stable label; idle/session titles carry no
+  // spinner and pass through, so the meaningful final title still shows.
+  if (isGrokRotatingWorkingTitle(title)) {
+    return '\u280b Grok'
   }
 
   return title
