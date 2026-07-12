@@ -37,6 +37,8 @@ const TITLE_AGENT_LABEL_TO_TYPE: Record<string, AgentType> = {
   Cursor: 'cursor',
   Droid: 'droid',
   Hermes: 'hermes',
+  Kimi: 'kimi',
+  Qwen: 'qwen-code',
   Pi: 'pi',
   OMP: 'omp'
 }
