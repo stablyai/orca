@@ -120,7 +120,7 @@ export class SonioxTranscriptionSession {
     }
     const normalized = resampleToRate(samples, sampleRate, SONIOX_SAMPLE_RATE)
     if (normalized.length === 0) {
-      // Why: Soniox interprets an empty binary frame as end-of-stream.
+      // Why: Soniox interprets an empty WebSocket frame as end-of-stream.
       return
     }
     const durationSeconds = normalized.length / SONIOX_SAMPLE_RATE
@@ -284,9 +284,11 @@ export class SonioxTranscriptionSession {
       return
     }
     // Why: Soniox may send final tokens before its finished marker; closing
-    // locally here would truncate the transcript.
+    // locally here would truncate the transcript. Prefer an empty *text* frame:
+    // live Soniox accepts empty text as end-of-stream, but empty binary from
+    // the `ws` client is not acknowledged and hangs until request_timeout.
     this.endFrameSent = true
-    this.socket?.send(Buffer.alloc(0))
+    this.socket?.send('')
   }
 
   private scheduleKeepalive(): void {

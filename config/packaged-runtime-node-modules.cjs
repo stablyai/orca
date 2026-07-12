@@ -48,7 +48,11 @@ const VERSIONED_ONNXRUNTIME_DYLIB_RE = /^libonnxruntime\.\d[\d.]*\.dylib$/
 
 const NODE_BUILTINS = new Set([
   ...builtinModules,
-  ...builtinModules.map((moduleName) => `node:${moduleName}`)
+  ...builtinModules.map((moduleName) => `node:${moduleName}`),
+  // Why: node:sqlite may be absent from older host Node builtinModules lists
+  // while Electron 43+ still exposes it at runtime for the packaged main process.
+  'sqlite',
+  'node:sqlite'
 ])
 
 function packageNameFromSpecifier(specifier) {

@@ -182,14 +182,16 @@ describe('SonioxTranscriptionSession', () => {
     })
   })
 
-  it('sends an empty binary frame and waits for the finished response', async () => {
+  it('sends an empty text frame and waits for the finished response', async () => {
     const { session, sink, socket } = makeSession()
     const started = session.start()
     socket.open()
     await started
 
     const finishing = session.finish()
-    expect(socket.sent.at(-1)).toEqual(Buffer.alloc(0))
+    // Why: empty text (not empty binary) is the end-of-stream signal Soniox
+    // acknowledges from the Node `ws` client in live sessions.
+    expect(socket.sent.at(-1)).toBe('')
     socket.message({
       tokens: [{ text: 'Done.', is_final: true }],
       finished: true
@@ -211,7 +213,7 @@ describe('SonioxTranscriptionSession', () => {
 
     const first = session.finish()
     const second = session.finish()
-    expect(socket.sent.filter((item) => Buffer.isBuffer(item) && item.length === 0)).toHaveLength(1)
+    expect(socket.sent.filter((item) => item === '')).toHaveLength(1)
     socket.message({ tokens: [], finished: true })
 
     await expect(Promise.all([first, second])).resolves.toEqual(['', ''])

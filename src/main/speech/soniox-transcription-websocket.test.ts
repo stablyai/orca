@@ -38,7 +38,8 @@ describe('Soniox WebSocket protocol integration', () => {
       socket.on('message', (data, isBinary) => {
         const buffer = Buffer.from(data as ArrayBuffer)
         received.push({ data: buffer, isBinary })
-        if (isBinary && buffer.length === 0) {
+        // Empty text frame is the live-compatible end-of-stream signal.
+        if (!isBinary && buffer.length === 0) {
           socket.send(JSON.stringify({ tokens: [{ text: 'hello', is_final: true }] }))
           socket.send(JSON.stringify({ tokens: [], finished: true }), () => socket.close())
         }
@@ -56,13 +57,14 @@ describe('Soniox WebSocket protocol integration', () => {
     session.feedAudio(new Float32Array([0.25, -0.25]), 16000)
     await session.finish()
 
-    expect(received.map((frame) => frame.isBinary)).toEqual([false, true, true])
+    expect(received.map((frame) => frame.isBinary)).toEqual([false, true, false])
     expect(JSON.parse(received[0].data.toString('utf8'))).toMatchObject({
       api_key: 'integration-key',
       model: 'stt-rt-v5',
       audio_format: 'pcm_s16le'
     })
     expect(received[1].data).toHaveLength(4)
+    expect(received[2].isBinary).toBe(false)
     expect(received[2].data).toHaveLength(0)
     expect(sink).toHaveBeenCalledWith({
       type: 'final',
