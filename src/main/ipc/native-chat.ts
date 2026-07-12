@@ -1,5 +1,9 @@
 import { ipcMain, type IpcMainEvent, type WebContents } from 'electron'
-import type { AgentType, NativeChatMessage } from '../../shared/native-chat-types'
+import type {
+  AgentType,
+  NativeChatMessage,
+  NativeChatSessionMetadata
+} from '../../shared/native-chat-types'
 import {
   clearNativeChatTranscriptCache,
   readNativeChatTranscriptCached
@@ -61,6 +65,7 @@ export type NativeChatSubscribeArgs = {
 export type NativeChatAppendedPayload = {
   subscriptionId: string
   messages: NativeChatMessage[]
+  metadata?: NativeChatSessionMetadata
 }
 
 type LiveSubscription = {
@@ -154,11 +159,15 @@ async function handleSubscribe(event: IpcMainEvent, args: NativeChatSubscribeArg
       agent,
       sessionId,
       transcriptPath,
-      onAppend: (messages) => {
+      onAppend: (messages, metadata) => {
         if (sender.isDestroyed()) {
           return
         }
-        const payload: NativeChatAppendedPayload = { subscriptionId, messages }
+        const payload: NativeChatAppendedPayload = {
+          subscriptionId,
+          messages,
+          ...(metadata ? { metadata } : {})
+        }
         sender.send('nativeChat:appended', payload)
       }
     })

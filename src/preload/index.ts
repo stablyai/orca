@@ -171,7 +171,7 @@ import type {
 } from '../shared/automations-types'
 import type { KeybindingActionId, KeybindingFileSnapshot } from '../shared/keybindings'
 import type { AiVaultListArgs, AiVaultSubagentListArgs } from '../shared/ai-vault-types'
-import type { AgentType } from '../shared/native-chat-types'
+import type { AgentType, NativeChatSessionMetadata } from '../shared/native-chat-types'
 import type {
   NativeChatAppendedMessages,
   NativeChatAppendedPayload,
@@ -3861,11 +3861,14 @@ const api = {
         sessionId: string
         transcriptPath?: string
       },
-      onAppended: (messages: NativeChatAppendedMessages) => void
+      onAppended: (
+        messages: NativeChatAppendedMessages,
+        metadata?: NativeChatSessionMetadata
+      ) => void
     ): (() => void) => {
       const listener = (_event: Electron.IpcRendererEvent, payload: NativeChatAppendedPayload) => {
         if (payload.subscriptionId === args.subscriptionId) {
-          onAppended(payload.messages)
+          onAppended(payload.messages, payload.metadata)
         }
       }
       ipcRenderer.on('nativeChat:appended', listener)

@@ -173,6 +173,48 @@ describe('readNativeChatTranscript (claude)', () => {
 })
 
 describe('readNativeChatTranscript (codex)', () => {
+  it('returns the latest model, effort, context usage, and rate-limit metadata', async () => {
+    const filePath = await writeFixture('orca-native-chat-codex-metadata-', [
+      {
+        type: 'turn_context',
+        timestamp: '2026-06-01T10:00:00.000Z',
+        payload: {
+          model: 'gpt-5.6-sol',
+          effort: 'xhigh'
+        }
+      },
+      {
+        type: 'event_msg',
+        timestamp: '2026-06-01T10:00:01.000Z',
+        payload: {
+          type: 'token_count',
+          info: {
+            last_token_usage: { total_tokens: 77_000 },
+            model_context_window: 1_000_000
+          },
+          rate_limits: {
+            primary: { used_percent: 14 },
+            secondary: { used_percent: 5 }
+          }
+        }
+      }
+    ])
+
+    const result = await readNativeChatTranscript('codex', 'codex-sess', { filePath })
+    if (!('messages' in result)) {
+      throw new Error('expected transcript result')
+    }
+
+    expect(result.metadata).toEqual({
+      model: 'gpt-5.6-sol',
+      reasoningEffort: 'xhigh',
+      contextTokens: 77_000,
+      contextWindowTokens: 1_000_000,
+      sessionLimitUsedPercent: 14,
+      weeklyLimitUsedPercent: 5
+    })
+  })
+
   it('maps tool calls and results to tool-call/tool-result blocks', async () => {
     const filePath = await writeFixture('orca-native-chat-codex-', [
       {

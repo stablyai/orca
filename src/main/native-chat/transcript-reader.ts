@@ -1,15 +1,22 @@
 import { createReadStream } from 'node:fs'
-import type { AgentType, NativeChatMessage } from '../../shared/native-chat-types'
+import type {
+  AgentType,
+  NativeChatMessage,
+  NativeChatSessionMetadata
+} from '../../shared/native-chat-types'
 import { errorMessage } from '../ai-vault/session-scanner-values'
 import { resolveSessionFilePath, type ResolveSessionFileOptions } from './session-file-resolver'
 import {
   decodeClaudeTranscriptLine,
+  decodeCodexTranscriptMetadataLine,
   decodeCodexTranscriptLine,
   decodeGrokTranscriptLine
 } from './transcript-line-decoders'
 import { decodeTranscriptStream } from './transcript-stream-lines'
 
-export type ReadTranscriptResult = { messages: NativeChatMessage[] } | { error: string }
+export type ReadTranscriptResult =
+  | { messages: NativeChatMessage[]; metadata?: NativeChatSessionMetadata }
+  | { error: string }
 
 export type ReadTranscriptOptions = ResolveSessionFileOptions & {
   /** Resolve directly to this file, skipping path discovery (used by tests). */
@@ -34,13 +41,17 @@ export async function readNativeChatTranscript(
   }
   try {
     if (agent === 'claude') {
-      return { messages: await readTranscript(filePath, decodeClaudeTranscriptLine) }
+      return await readTranscript(filePath, decodeClaudeTranscriptLine)
     }
     if (agent === 'codex') {
-      return { messages: await readTranscript(filePath, decodeCodexTranscriptLine) }
+      return await readTranscript(
+        filePath,
+        decodeCodexTranscriptLine,
+        decodeCodexTranscriptMetadataLine
+      )
     }
     if (agent === 'grok') {
-      return { messages: await readTranscript(filePath, decodeGrokTranscriptLine) }
+      return await readTranscript(filePath, decodeGrokTranscriptLine)
     }
     return { error: `Unsupported agent for native chat transcript: ${agent}` }
   } catch (err) {
@@ -50,9 +61,17 @@ export async function readNativeChatTranscript(
 
 async function readTranscript(
   filePath: string,
-  decode: (line: string, fallbackId: string) => NativeChatMessage | null
-): Promise<NativeChatMessage[]> {
+  decode: (line: string, fallbackId: string) => NativeChatMessage | null,
+  decodeMetadata?: (line: string) => NativeChatSessionMetadata | null
+): Promise<{ messages: NativeChatMessage[]; metadata?: NativeChatSessionMetadata }> {
   const stream = createReadStream(filePath, { encoding: 'utf-8' })
-  const { messages } = await decodeTranscriptStream(stream, filePath, 0, decode, true)
-  return messages
+  const { messages, metadata } = await decodeTranscriptStream(
+    stream,
+    filePath,
+    0,
+    decode,
+    true,
+    decodeMetadata
+  )
+  return { messages, ...(metadata ? { metadata } : {}) }
 }

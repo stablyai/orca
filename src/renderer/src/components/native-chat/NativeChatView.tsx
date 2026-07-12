@@ -52,6 +52,7 @@ import { selectNativeChatRuntimeEnvironmentId } from './native-chat-runtime-owne
 import { useNativeChatPasteBridge } from './use-native-chat-paste-bridge'
 import type { CommentMarkdownLinkClickHandler } from '@/components/sidebar/CommentMarkdown'
 import { openDetectedFilePath } from '@/components/terminal-pane/terminal-file-open-routing'
+import { NativeChatCodexStatusFooter } from './NativeChatStatusFooter'
 
 const emptyNativeChatContextMenuActions: Omit<NativeChatContextMenuActions, 'onPaste'> = {
   onSplitRight: () => {},
@@ -438,6 +439,13 @@ function NativeChatResolvedView({
         onOptimisticSend={onOptimisticSend}
         onSlashCommand={onSlashCommand}
       />
+      {agent === 'codex' ? (
+        <NativeChatCodexStatusFooter
+          paneKey={paneKey}
+          terminalTabId={terminalTabId}
+          session={sessionWithPending}
+        />
+      ) : null}
       {contextMenu.menu}
     </div>
   )

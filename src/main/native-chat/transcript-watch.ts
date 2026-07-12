@@ -10,10 +10,15 @@
 
 import { watch, type FSWatcher } from 'node:fs'
 import { open, stat } from 'node:fs/promises'
-import type { AgentType, NativeChatMessage } from '../../shared/native-chat-types'
+import type {
+  AgentType,
+  NativeChatMessage,
+  NativeChatSessionMetadata
+} from '../../shared/native-chat-types'
 import { resolveSessionFilePath, type ResolveSessionFileOptions } from './session-file-resolver'
 import {
   decodeClaudeTranscriptLine,
+  decodeCodexTranscriptMetadataLine,
   decodeCodexTranscriptLine,
   decodeGrokTranscriptLine
 } from './transcript-line-decoders'
@@ -24,7 +29,7 @@ export type SubscribeNativeChatTranscriptArgs = ResolveSessionFileOptions & {
   sessionId: string
   /** Called with the newly-appended messages whenever the file grows. Never
    *  called with an empty array. */
-  onAppend: (messages: NativeChatMessage[]) => void
+  onAppend: (messages: NativeChatMessage[], metadata?: NativeChatSessionMetadata) => void
   /** Resolve directly to this file, skipping path discovery (used by tests). */
   filePath?: string
   /** Coalesce window for rapid fs.watch events (ms). Defaults to 40ms. */
@@ -67,6 +72,12 @@ function lineDecoderForAgent(
   return null
 }
 
+function metadataDecoderForAgent(
+  agent: AgentType
+): ((line: string) => NativeChatSessionMetadata | null) | undefined {
+  return agent === 'codex' ? decodeCodexTranscriptMetadataLine : undefined
+}
+
 async function fileSize(filePath: string): Promise<number> {
   try {
     return (await stat(filePath)).size
@@ -85,8 +96,13 @@ async function fileSize(filePath: string): Promise<number> {
 async function readAppendedMessages(
   filePath: string,
   start: number,
-  decode: (line: string, fallbackId: string) => NativeChatMessage | null
-): Promise<{ messages: NativeChatMessage[]; consumedTo: number }> {
+  decode: (line: string, fallbackId: string) => NativeChatMessage | null,
+  decodeMetadata?: (line: string) => NativeChatSessionMetadata | null
+): Promise<{
+  messages: NativeChatMessage[]
+  consumedTo: number
+  metadata?: NativeChatSessionMetadata
+}> {
   const end = await fileSize(filePath)
   if (end <= start) {
     // File shrank (rotation/replacement) or unchanged — caller resets offset.
@@ -101,14 +117,15 @@ async function readAppendedMessages(
       end: end - 1,
       autoClose: false
     })
-    const { messages, consumedBytes } = await decodeTranscriptStream(
+    const { messages, consumedBytes, metadata } = await decodeTranscriptStream(
       stream,
       filePath,
       start,
       decode,
-      false
+      false,
+      decodeMetadata
     )
-    return { messages, consumedTo: start + consumedBytes }
+    return { messages, consumedTo: start + consumedBytes, ...(metadata ? { metadata } : {}) }
   } finally {
     await handle.close()
   }
@@ -127,6 +144,7 @@ export async function subscribeNativeChatTranscript(
 ): Promise<NativeChatTranscriptSubscription> {
   const { agent, sessionId, onAppend, debounceMs } = args
   const decode = lineDecoderForAgent(agent)
+  const decodeMetadata = metadataDecoderForAgent(agent)
   const filePath = args.filePath ?? (await resolveSessionFilePath(agent, sessionId, args))
 
   if (!filePath || !decode) {
@@ -166,10 +184,15 @@ export async function subscribeNativeChatTranscript(
             // Rotation/replacement/truncation: re-read from the top.
             offset = 0
           }
-          const { messages, consumedTo } = await readAppendedMessages(filePath!, offset, decode!)
+          const { messages, consumedTo, metadata } = await readAppendedMessages(
+            filePath!,
+            offset,
+            decode!,
+            decodeMetadata
+          )
           offset = consumedTo
-          if (!closed && messages.length > 0) {
-            onAppend(messages)
+          if (!closed && (messages.length > 0 || metadata)) {
+            onAppend(messages, metadata)
           }
         } catch {
           // Why: a transient read failure (EACCES/EIO/ENOENT during rotation)

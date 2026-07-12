@@ -4,7 +4,8 @@ import {
   NATIVE_CHAT_SOURCE_PRIORITY,
   type AgentType,
   type NativeChatMessage,
-  type NativeChatSession
+  type NativeChatSession,
+  type NativeChatSessionMetadata
 } from '../../../../shared/native-chat-types'
 import {
   applyAppend,
@@ -78,7 +79,7 @@ function nextSubscriptionId(): string {
 
 type ReadState =
   | { phase: 'loading' }
-  | { phase: 'ready'; messages: NativeChatMessage[] }
+  | { phase: 'ready'; messages: NativeChatMessage[]; metadata?: NativeChatSessionMetadata }
   | { phase: 'error'; error: string }
 
 /**
@@ -125,6 +126,7 @@ export function useNativeChatLiveSession(
   // (re-emitted ids replace in place, no unbounded concat) and the bucket is
   // capped to the read window so a long run can't grow it without limit (#6).
   const [appended, setAppended] = useState<NativeChatMessage[]>([])
+  const [appendedMetadata, setAppendedMetadata] = useState<NativeChatSessionMetadata>({})
   // Stateful id-dedup merger backing `appended`; caches the id→index map so each
   // live frame costs O(incoming), not O(existing) (#18 parity for desktop).
   const appendMergerRef = useRef(createNativeChatMerger(NATIVE_CHAT_SOURCE_PRIORITY))
@@ -156,6 +158,7 @@ export function useNativeChatLiveSession(
       setRead({ phase: 'ready', messages: [] })
       replaceList(appendMergerRef.current, [])
       setAppended([])
+      setAppendedMetadata({})
       setHasMore(false)
       return
     }
@@ -165,6 +168,7 @@ export function useNativeChatLiveSession(
     setRead({ phase: 'loading' })
     replaceList(appendMergerRef.current, [])
     setAppended([])
+    setAppendedMetadata({})
     setHasMore(false)
 
     void transport
@@ -178,7 +182,11 @@ export function useNativeChatLiveSession(
           return
         }
         const messages = result?.messages ?? []
-        setRead({ phase: 'ready', messages })
+        setRead({
+          phase: 'ready',
+          messages,
+          ...(result?.metadata ? { metadata: result.metadata } : {})
+        })
         setHasMore(hasMoreNativeChatHistory(messages.length, limitRef.current))
       })
       .catch((err: unknown) => {
@@ -190,8 +198,11 @@ export function useNativeChatLiveSession(
     const subscriptionId = nextSubscriptionId()
     const unsubscribe = transport.subscribe(
       { subscriptionId, agent, sessionId, transcriptPath: transcriptPath ?? undefined },
-      (messages) => {
+      (messages, metadata) => {
         if (!cancelled) {
+          if (metadata) {
+            setAppendedMetadata((current) => ({ ...current, ...metadata }))
+          }
           // Merge by id (re-emits replace in place) then bound to the window so
           // the bucket can't grow without limit. The base read still holds older
           // turns, and the assembler re-dedups the concat, so trimming the recent
@@ -247,7 +258,11 @@ export function useNativeChatLiveSession(
         limitRef.current = nextLimit
         // Read results are an ordered tail — replace the base list so the older
         // page prepends in order; live appends stay in their separate bucket.
-        setRead({ phase: 'ready', messages: result.messages })
+        setRead({
+          phase: 'ready',
+          messages: result.messages,
+          ...(result.metadata ? { metadata: result.metadata } : {})
+        })
         setHasMore(hasMoreNativeChatHistory(result.messages.length, nextLimit))
       })
       .catch(() => {
@@ -307,6 +322,26 @@ export function useNativeChatLiveSession(
       loading: read.phase === 'loading',
       ...(read.phase === 'error' ? { error: read.error } : {})
     })
-    return { ...session, hasMore, loadingEarlier, loadEarlier }
-  }, [assembledMessages, read, sessionId, agent, hookState, hasMore, loadingEarlier, loadEarlier])
+    const metadata = {
+      ...(read.phase === 'ready' ? read.metadata : undefined),
+      ...appendedMetadata
+    }
+    return {
+      ...session,
+      ...(Object.keys(metadata).length > 0 ? { metadata } : {}),
+      hasMore,
+      loadingEarlier,
+      loadEarlier
+    }
+  }, [
+    assembledMessages,
+    read,
+    appendedMetadata,
+    sessionId,
+    agent,
+    hookState,
+    hasMore,
+    loadingEarlier,
+    loadEarlier
+  ])
 }

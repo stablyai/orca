@@ -12754,6 +12754,9 @@
       "nativeChat": {
         "contextMenu": {
           "copy": "복사"
+        },
+        "statusFooter": {
+          "summary": "단계: {{stage}} → {{next}} · Q:{{questions}} B:{{blocked}} Ag:{{agents}}"
         }
       },
       "orca": {

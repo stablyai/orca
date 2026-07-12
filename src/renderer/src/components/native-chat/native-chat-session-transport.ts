@@ -3,6 +3,7 @@ import type {
   NativeChatAppendedMessages,
   NativeChatReadSessionResult
 } from '../../../../preload/api-types'
+import type { NativeChatSessionMetadata } from '../../../../shared/native-chat-types'
 import { isWebClientLocation } from '@/lib/web-client-location'
 import {
   callRuntimeRpc,
@@ -108,9 +109,10 @@ function createRuntimeNativeChatTransport(environmentId: string): NativeChatSess
                 const frame = response.result as {
                   type?: string
                   messages?: NativeChatAppendedMessages
+                  metadata?: NativeChatSessionMetadata
                 }
                 if (frame?.type === 'appended' && Array.isArray(frame.messages)) {
-                  onAppended(frame.messages)
+                  onAppended(frame.messages, frame.metadata)
                 }
               },
               // Established-then-dropped: resume the tail. onClose also fires on our

@@ -10,5 +10,8 @@
 // under the max-lines limit while callers keep a single import path.
 
 export { decodeClaudeTranscriptLine } from './transcript-line-decoders-claude'
-export { decodeCodexTranscriptLine } from './transcript-line-decoders-codex'
+export {
+  decodeCodexTranscriptLine,
+  decodeCodexTranscriptMetadataLine
+} from './transcript-line-decoders-codex'
 export { decodeGrokTranscriptLine } from './transcript-line-decoders-grok'

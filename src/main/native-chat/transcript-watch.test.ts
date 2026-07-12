@@ -44,6 +44,45 @@ async function waitFor(predicate: () => boolean, timeoutMs = 2000): Promise<void
 }
 
 describe('subscribeNativeChatTranscript', () => {
+  it('emits Codex metadata changes even when no chat message was appended', async () => {
+    const filePath = await tempFile('')
+    const metadataBatches: unknown[] = []
+
+    const sub = await subscribeNativeChatTranscript({
+      agent: 'codex',
+      sessionId: 'ignored',
+      filePath,
+      onAppend: (_messages, metadata) => {
+        if (metadata) {
+          metadataBatches.push(metadata)
+        }
+      },
+      debounceMs: 5
+    })
+
+    await appendFile(
+      filePath,
+      `${JSON.stringify({
+        type: 'event_msg',
+        timestamp: '2026-06-01T10:00:00.000Z',
+        payload: {
+          type: 'token_count',
+          info: {
+            last_token_usage: { total_tokens: 88_000 },
+            model_context_window: 200_000
+          }
+        }
+      })}\n`
+    )
+    await waitFor(() => metadataBatches.length > 0)
+    sub.unsubscribe()
+
+    expect(metadataBatches.at(-1)).toMatchObject({
+      contextTokens: 88_000,
+      contextWindowTokens: 200_000
+    })
+  })
+
   it('re-emits from the top on first drain so appended turns are never dropped', async () => {
     const filePath = await tempFile(claudeLine('u-1', 'user', 'first'))
     const batches: NativeChatMessage[][] = []

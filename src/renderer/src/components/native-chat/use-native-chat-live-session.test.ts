@@ -191,6 +191,46 @@ describe('useNativeChatLiveSession — transport routing', () => {
     expect(transport.subscribe).toHaveBeenCalledOnce()
   })
 
+  it('keeps initial Codex metadata and applies live metadata patches', async () => {
+    const transport = getMockTransport('env-1')
+    transport.readSession.mockResolvedValueOnce({
+      messages: [],
+      metadata: {
+        model: 'gpt-5.6-sol',
+        reasoningEffort: 'xhigh',
+        contextTokens: 77_000,
+        contextWindowTokens: 1_000_000
+      }
+    })
+
+    await render({
+      paneKey: PANE,
+      agent: 'codex',
+      sessionId: SESSION,
+      runtimeEnvironmentId: 'env-1'
+    })
+
+    expect(latest?.metadata).toMatchObject({
+      model: 'gpt-5.6-sol',
+      reasoningEffort: 'xhigh',
+      contextTokens: 77_000
+    })
+
+    const onAppended = transport.subscribe.mock.calls[0]?.[1] as
+      | ((messages: NativeChatMessage[], metadata?: { contextTokens?: number }) => void)
+      | undefined
+    await act(async () => {
+      onAppended?.([], { contextTokens: 88_000 })
+    })
+
+    expect(latest?.metadata).toMatchObject({
+      model: 'gpt-5.6-sol',
+      reasoningEffort: 'xhigh',
+      contextTokens: 88_000,
+      contextWindowTokens: 1_000_000
+    })
+  })
+
   it('re-subscribes against the new owner on an owner flip (R5)', async () => {
     const root = await render({
       paneKey: PANE,

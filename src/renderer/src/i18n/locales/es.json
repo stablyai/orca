@@ -12754,6 +12754,9 @@
       "nativeChat": {
         "contextMenu": {
           "copy": "Copiar"
+        },
+        "statusFooter": {
+          "summary": "etapa: {{stage}} → {{next}} · P:{{questions}} B:{{blocked}} Ag:{{agents}}"
         }
       },
       "orca": {

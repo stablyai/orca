@@ -120,7 +120,10 @@ export const NATIVE_CHAT_METHODS: readonly RpcAnyMethod[] = [
       )
       // Window to the conversation tail (all clients); clip blocks for mobile only.
       return 'messages' in result
-        ? { messages: windowForClient(result.messages, clientKind, params.limit) }
+        ? {
+            messages: windowForClient(result.messages, clientKind, params.limit),
+            ...(result.metadata ? { metadata: result.metadata } : {})
+          }
         : result
     }
   }),
@@ -157,11 +160,15 @@ export const NATIVE_CHAT_METHODS: readonly RpcAnyMethod[] = [
         agent: params.agent,
         sessionId: params.sessionId,
         transcriptPath: params.transcriptPath,
-        onAppend: (messages) => {
+        onAppend: (messages, metadata) => {
           if (closed) {
             return
           }
-          emit({ type: 'appended', messages: windowForClient(messages, clientKind) })
+          emit({
+            type: 'appended',
+            messages: windowForClient(messages, clientKind),
+            ...(metadata ? { metadata } : {})
+          })
         }
       })
       // The connection may have closed while the file was being resolved.

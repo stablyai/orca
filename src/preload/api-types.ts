@@ -417,7 +417,11 @@ import type {
   AiVaultSubagentListArgs,
   AiVaultSubagentListResult
 } from '../shared/ai-vault-types'
-import type { AgentType, NativeChatMessage } from '../shared/native-chat-types'
+import type {
+  AgentType,
+  NativeChatMessage,
+  NativeChatSessionMetadata
+} from '../shared/native-chat-types'
 import type { TelemetryConsentState } from '../shared/telemetry-consent-types'
 import type { AgentKind, LaunchSource, RequestKind } from '../shared/telemetry-events'
 import type { AppStarSource } from '../shared/gh-star-source'
@@ -812,7 +816,9 @@ export type AiVaultApi = {
   onWindowFocused: (callback: () => void) => () => void
 }
 
-export type NativeChatReadSessionResult = { messages: NativeChatMessage[] } | { error: string }
+export type NativeChatReadSessionResult =
+  | { messages: NativeChatMessage[]; metadata?: NativeChatSessionMetadata }
+  | { error: string }
 
 /** Messages appended to a live-tailed transcript since the previous emit. */
 export type NativeChatAppendedMessages = NativeChatMessage[]
@@ -821,6 +827,7 @@ export type NativeChatAppendedMessages = NativeChatMessage[]
 export type NativeChatAppendedPayload = {
   subscriptionId: string
   messages: NativeChatAppendedMessages
+  metadata?: NativeChatSessionMetadata
 }
 
 export type NativeChatSubscribeArgs = {
@@ -848,7 +855,7 @@ export type NativeChatApi = {
    *  messages. Returns an unsubscribe fn that closes the main-process watcher. */
   subscribe: (
     args: NativeChatSubscribeArgs,
-    onAppended: (messages: NativeChatAppendedMessages) => void
+    onAppended: (messages: NativeChatAppendedMessages, metadata?: NativeChatSessionMetadata) => void
   ) => () => void
 }
 
