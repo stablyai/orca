@@ -81,6 +81,18 @@ describe('orca cli browser page targeting', () => {
     expect(callMock).toHaveBeenCalledWith('browser.snapshot', { page: 'page-1' })
   })
 
+  it('closes an explicit page id without relying on a mutable tab index', async () => {
+    queueFixtures(callMock, okFixture('req_tab_close', { closed: true }))
+    vi.spyOn(console, 'log').mockImplementation(() => {})
+
+    await main(['tab', 'close', '--page', 'page-1', '--json'], '/tmp/not-an-orca-worktree')
+
+    expect(callMock).toHaveBeenCalledWith('browser.tabClose', {
+      index: undefined,
+      page: 'page-1'
+    })
+  })
+
   it('resolves current worktree only when --page is combined with --worktree current', async () => {
     queueFixtures(
       callMock,
