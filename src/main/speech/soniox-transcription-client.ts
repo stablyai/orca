@@ -119,6 +119,10 @@ export class SonioxTranscriptionSession {
       return
     }
     const normalized = resampleToRate(samples, sampleRate, SONIOX_SAMPLE_RATE)
+    if (normalized.length === 0) {
+      // Why: Soniox interprets an empty binary frame as end-of-stream.
+      return
+    }
     const durationSeconds = normalized.length / SONIOX_SAMPLE_RATE
     if (this.queuedAudioSeconds + durationSeconds > MAX_QUEUED_AUDIO_SECONDS) {
       const error = new Error('Soniox audio queue exceeded 30 seconds')

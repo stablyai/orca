@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync, mkdtempSync, statSync, writeFileSync } from 'node:fs'
+import { chmodSync, existsSync, mkdirSync, mkdtempSync, statSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import type * as Os from 'node:os'
 import { join } from 'node:path'
@@ -87,6 +87,20 @@ describe('Soniox speech API key store', () => {
     expect(safeStorageMock.encryptString).not.toHaveBeenCalled()
     expect(statSync(join(tempHome, '.orca', 'soniox-speech-token.enc')).mode & 0o777).toBe(0o600)
   })
+
+  it.runIf(process.platform !== 'win32')(
+    'repairs permissions when overwriting an existing key',
+    async () => {
+      writeStoredKey('old-key')
+      const path = join(tempHome, '.orca', 'soniox-speech-token.enc')
+      chmodSync(path, 0o644)
+      const store = await loadStoreModule()
+
+      store.saveSonioxSpeechApiKey('replacement-key')
+
+      expect(statSync(path).mode & 0o777).toBe(0o600)
+    }
+  )
 
   it('reports corrupt ciphertext without exposing stored bytes', async () => {
     writeStoredKey('secret-corrupt-bytes')

@@ -82,6 +82,43 @@ describe('SonioxTranscriptionSession', () => {
     expect((audio as Buffer).readInt16LE(4)).toBe(32767)
   })
 
+  it('resamples a 48 kHz chunk to 16 kHz before sending it', async () => {
+    const { session, socket } = makeSession()
+    const started = session.start()
+    socket.open()
+    await started
+
+    session.feedAudio(new Float32Array(480), 48000)
+
+    expect(socket.sent[1]).toHaveLength(320)
+  })
+
+  it('does not send empty audio because Soniox treats it as end-of-stream', async () => {
+    const { session, socket } = makeSession()
+    const started = session.start()
+    socket.open()
+    await started
+
+    session.feedAudio(new Float32Array(), 16000)
+
+    expect(socket.sent).toHaveLength(1)
+  })
+
+  it('fails with a bounded error when queued audio exceeds 30 seconds', async () => {
+    const { session, sink, socket } = makeSession()
+    const started = session.start()
+    socket.open()
+    await started
+
+    expect(() => session.feedAudio(new Float32Array(31 * 16000), 16000)).toThrow(
+      'Soniox audio queue exceeded 30 seconds'
+    )
+    expect(sink).toHaveBeenCalledWith({
+      type: 'error',
+      error: 'Soniox audio queue exceeded 30 seconds'
+    })
+  })
+
   it('queues pre-open audio and sends it only after the configuration frame', async () => {
     const { session, socket } = makeSession()
     const started = session.start()
@@ -248,6 +285,30 @@ describe('SonioxTranscriptionSession', () => {
       socket.message({ tokens: [], finished: true })
       await finishing
     } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('resets keepalive after audio and clears it after an error', async () => {
+    vi.useFakeTimers()
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    try {
+      const { session, socket } = makeSession()
+      const started = session.start()
+      socket.open()
+      await started
+
+      await vi.advanceTimersByTimeAsync(9_000)
+      session.feedAudio(new Float32Array([0.25]), 16000)
+      await vi.advanceTimersByTimeAsync(9_999)
+      expect(socket.sent).not.toContain(JSON.stringify({ type: 'keepalive' }))
+
+      socket.fail(new Error('network down'))
+      const sendsAfterError = socket.sent.length
+      await vi.advanceTimersByTimeAsync(20_000)
+      expect(socket.sent).toHaveLength(sendsAfterError)
+    } finally {
+      warn.mockRestore()
       vi.useRealTimers()
     }
   })

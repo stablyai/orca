@@ -1,5 +1,5 @@
 import { safeStorage } from 'electron'
-import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { chmodSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
 
@@ -8,6 +8,13 @@ let cachedSonioxSpeechApiKey: string | null = null
 
 function getKeyPath(): string {
   return join(homedir(), '.orca', SONIOX_SPEECH_TOKEN_FILE)
+}
+
+function enforceOwnerOnlyPermissions(): void {
+  if (process.platform !== 'win32') {
+    // Why: writeFile's mode does not repair a permissive existing key file.
+    chmodSync(getKeyPath(), 0o600)
+  }
 }
 
 export function hasSonioxSpeechApiKey(): boolean {
@@ -24,11 +31,13 @@ export function saveSonioxSpeechApiKey(apiKey: string): void {
   mkdirSync(join(homedir(), '.orca'), { recursive: true })
   if (safeStorage.isEncryptionAvailable()) {
     writeFileSync(getKeyPath(), safeStorage.encryptString(trimmed), { mode: 0o600 })
+    enforceOwnerOnlyPermissions()
   } else {
     console.warn(
       '[speech] safeStorage encryption unavailable — storing Soniox speech key in plaintext'
     )
     writeFileSync(getKeyPath(), trimmed, { encoding: 'utf8', mode: 0o600 })
+    enforceOwnerOnlyPermissions()
   }
   cachedSonioxSpeechApiKey = trimmed
 }
