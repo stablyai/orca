@@ -3789,6 +3789,8 @@ const api = {
       ipcRenderer.invoke('claudeUsage:getSummary', args),
     getDaily: (args: { scope: string; range: string }): Promise<unknown> =>
       ipcRenderer.invoke('claudeUsage:getDaily', args),
+    getHourly: (args: { days: number }): Promise<unknown> =>
+      ipcRenderer.invoke('claudeUsage:getHourly', args),
     getBreakdown: (args: { scope: string; range: string; kind: string }): Promise<unknown> =>
       ipcRenderer.invoke('claudeUsage:getBreakdown', args),
     getRecentSessions: (args: { scope: string; range: string; limit?: number }): Promise<unknown> =>

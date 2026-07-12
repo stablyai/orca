@@ -21,6 +21,7 @@ function createStoreWithState(state: Partial<ClaudeUsagePersistedState>): Claude
     processedFiles: [],
     sessions: [],
     dailyAggregates: [],
+    hourlyAggregates: [],
     scanState: {
       enabled: false,
       lastScanStartedAt: null,
@@ -429,5 +430,51 @@ describe('ClaudeUsageStore', () => {
     await store.getAutomationRunUsage(request)
 
     expect(refreshMock).toHaveBeenCalledWith(false)
+  })
+
+  it('serves hourly points within the requested day window', async () => {
+    const makeHourly = (day: string, hour: number, inputTokens: number) => ({
+      day,
+      hour,
+      turnCount: 1,
+      inputTokens,
+      outputTokens: 10,
+      cacheReadTokens: 0,
+      cacheWriteTokens: 0
+    })
+    const store = createStoreWithState({
+      hourlyAggregates: [
+        makeHourly('2026-01-01', 9, 500),
+        makeHourly('2026-04-08', 10, 100),
+        makeHourly('2026-04-08', 22, 50)
+      ]
+    })
+
+    const result = await store.getHourly(7)
+
+    expect(result.scanState.enabled).toBe(false)
+    expect(result.points).toEqual([
+      makeHourly('2026-04-08', 10, 100),
+      makeHourly('2026-04-08', 22, 50)
+    ])
+  })
+
+  it('clamps hourly windows to the 185-day retention ceiling', async () => {
+    const makeHourly = (day: string, hour: number) => ({
+      day,
+      hour,
+      turnCount: 1,
+      inputTokens: 10,
+      outputTokens: 10,
+      cacheReadTokens: 0,
+      cacheWriteTokens: 0
+    })
+    const store = createStoreWithState({
+      hourlyAggregates: [makeHourly('2025-09-01', 9), makeHourly('2025-12-01', 9)]
+    })
+
+    const result = await store.getHourly(10_000)
+
+    expect(result.points).toEqual([makeHourly('2025-12-01', 9)])
   })
 })

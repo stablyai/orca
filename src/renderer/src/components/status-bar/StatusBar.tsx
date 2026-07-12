@@ -63,6 +63,7 @@ import { UpdateStatusSegment } from './UpdateStatusSegment'
 import { isStatusBarItemAvailable } from './status-bar-agent-gating'
 import { getVisibleUsageProvider, isUsageEmptyState } from './status-bar-provider-visibility'
 import { StatusBarUsageEmptyCta } from './StatusBarUsageEmptyCta'
+import { ClaudeUsageTrendsPanel } from './ClaudeUsageTrendsPanel'
 import { UsagePercentageDisplayChangeNotice } from './UsagePercentageDisplayChangeNotice'
 import { shouldOpenStatusBarContextMenu } from './status-bar-context-menu-policy'
 import { TOGGLE_FLOATING_TERMINAL_EVENT } from '@/lib/floating-terminal'
@@ -846,6 +847,12 @@ function ClaudeSwitcherMenu({
             'Claude usage runtime'
           )}
         />
+      }
+      sideContent={
+        // Why: the trends panel charts this desktop's local transcripts; with a
+        // remote runtime active the popover shows the remote account (#7973),
+        // so pairing it with local-disk charts would misattribute the data.
+        hasActiveRuntimeEnvironment ? undefined : <ClaudeUsageTrendsPanel />
       }
       open={open}
       onOpenChange={handleOpenChange}
@@ -1743,6 +1750,7 @@ export function ProviderDetailsMenu({
   iconOnly,
   ariaLabel,
   topContent,
+  sideContent,
   hidePanelResetCredits = false,
   open,
   onOpenChange,
@@ -1753,6 +1761,8 @@ export function ProviderDetailsMenu({
   iconOnly: boolean
   ariaLabel: string
   topContent?: React.ReactNode
+  /** Optional panel rendered as a second column to the right of the usage bars. */
+  sideContent?: React.ReactNode
   hidePanelResetCredits?: boolean
   open?: boolean
   onOpenChange?: (open: boolean) => void
@@ -1812,7 +1822,7 @@ export function ProviderDetailsMenu({
         side="top"
         align="start"
         sideOffset={8}
-        className="w-[260px]"
+        className={sideContent ? 'w-[588px]' : 'w-[260px]'}
         onPointerDownOutside={() => {
           skipCloseAutoFocusRef.current = true
         }}
@@ -1826,21 +1836,31 @@ export function ProviderDetailsMenu({
           event.preventDefault()
         }}
       >
-        {topContent}
-        <div className="p-2">
-          {/* Why: provider-specific action sections may render richer reset-credit UI. */}
-          <ProviderPanel
-            p={provider}
-            showResetCredits={!hidePanelResetCredits}
-            usagePercentageDisplay={usagePercentageDisplay}
-          />
+        <div className={sideContent ? 'flex items-stretch' : undefined}>
+          <div className={sideContent ? 'w-[250px] shrink-0' : undefined}>
+            {topContent}
+            <div className="p-2">
+              {/* Why: provider-specific action sections may render richer reset-credit UI. */}
+              <ProviderPanel
+                p={provider}
+                showResetCredits={!hidePanelResetCredits}
+                usagePercentageDisplay={usagePercentageDisplay}
+              />
+            </div>
+            {children ? (
+              <>
+                <DropdownMenuSeparator />
+                {children}
+              </>
+            ) : null}
+          </div>
+          {sideContent ? (
+            <>
+              <div className="my-1 w-px shrink-0 bg-border/70" />
+              <div className="min-w-0 flex-1">{sideContent}</div>
+            </>
+          ) : null}
         </div>
-        {children ? (
-          <>
-            <DropdownMenuSeparator />
-            {children}
-          </>
-        ) : null}
       </DropdownMenuContent>
     </DropdownMenu>
   )

@@ -29,6 +29,9 @@ export function registerClaudeUsageHandlers(claudeUsage: ClaudeUsageStore): void
     (_event, args: { scope: ClaudeUsageScope; range: ClaudeUsageRange }) =>
       claudeUsage.getDaily(args.scope, args.range)
   )
+  ipcMain.handle('claudeUsage:getHourly', (_event, args: { days: number }) =>
+    claudeUsage.getHourly(args.days)
+  )
   ipcMain.handle(
     'claudeUsage:getBreakdown',
     (

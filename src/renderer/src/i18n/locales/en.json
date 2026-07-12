@@ -3222,6 +3222,44 @@
             "dismiss": "Dismiss",
             "openSettings": "Open Settings",
             "gotIt": "Got it"
+          },
+          "ClaudeUsageTrendsPanel": {
+            "a943a7552f": "Today",
+            "9ee129dafa": "Past 7 days",
+            "185fa97be8": "Past 30 days",
+            "ee44e741c5": "Past 6 months",
+            "3556677a27": "1D",
+            "7e4594b3fb": "7D",
+            "9f7ff81364": "30D",
+            "613129b7a5": "6M",
+            "2c03693c93": "Scanning local transcripts…",
+            "a3e9ef9aa3": "Track local Claude usage",
+            "ee16f3d219": "Chart hourly and daily token trends from your local Claude Code transcripts. Data never leaves this device.",
+            "df2104b90b": "Enable usage tracking",
+            "4fef262630": "No local Claude usage found yet.",
+            "068bb8df88": "Claude usage trend charts",
+            "9c58d562da": "Time Trends",
+            "038ca39d74": "Day Trends",
+            "6bf9f80378": "Switch trends range",
+            "c6fe2aabea": "Couldn’t load usage trends."
+          },
+          "claude": {
+            "usage": {
+              "trend": {
+                "charts": {
+                  "e439b699d2": "Hourly usage rhythm, one line per day",
+                  "bdc3231af0": "Today",
+                  "51b34e464e": "Avg (active days)",
+                  "c38468a96a": "Peak",
+                  "ca43656c36": "Daily Claude token totals",
+                  "c3c18e7ce7": "Total",
+                  "339ca0bf28": "Input",
+                  "e415aa4570": "Output",
+                  "30770186a7": "Cache read",
+                  "9f3938265f": "Cache write"
+                }
+              }
+            }
           }
         }
       },

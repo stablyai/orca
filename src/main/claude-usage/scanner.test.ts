@@ -173,6 +173,63 @@ describe('Claude usage aggregation', () => {
     ])
   })
 
+  it('aggregates hour-of-day buckets across projects and sorts by day then hour', async () => {
+    // Why: offset-less ISO timestamps parse as local time, so the expected
+    // day/hour buckets stay deterministic across CI timezones.
+    const makeTurn = (timestamp: string, cwd: string, inputTokens: number) => ({
+      sessionId: 'session-1',
+      timestamp,
+      model: 'claude-sonnet-4-6',
+      cwd,
+      gitBranch: 'feature/a',
+      inputTokens,
+      outputTokens: 10,
+      cacheReadTokens: 4,
+      cacheWriteTokens: 2
+    })
+    const attributed = await attributeClaudeUsageTurns(
+      [
+        makeTurn('2026-04-09T10:05:00', '/workspace/repo-a', 100),
+        makeTurn('2026-04-09T10:45:00', '/outside/repo-b', 50),
+        makeTurn('2026-04-09T22:15:00', '/workspace/repo-a', 30),
+        makeTurn('2026-04-08T23:59:00', '/workspace/repo-a', 20)
+      ],
+      new Map()
+    )
+
+    const aggregated = aggregateClaudeUsage(attributed)
+
+    expect(aggregated.hourlyAggregates).toEqual([
+      {
+        day: '2026-04-08',
+        hour: 23,
+        turnCount: 1,
+        inputTokens: 20,
+        outputTokens: 10,
+        cacheReadTokens: 4,
+        cacheWriteTokens: 2
+      },
+      {
+        day: '2026-04-09',
+        hour: 10,
+        turnCount: 2,
+        inputTokens: 150,
+        outputTokens: 20,
+        cacheReadTokens: 8,
+        cacheWriteTokens: 4
+      },
+      {
+        day: '2026-04-09',
+        hour: 22,
+        turnCount: 1,
+        inputTokens: 30,
+        outputTokens: 10,
+        cacheReadTokens: 4,
+        cacheWriteTokens: 2
+      }
+    ])
+  })
+
   it('attributes nested cwd paths to the containing worktree', async () => {
     const attributed = await attributeClaudeUsageTurns(
       [

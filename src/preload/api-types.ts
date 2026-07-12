@@ -349,6 +349,7 @@ import type {
   ClaudeUsageBreakdownKind,
   ClaudeUsageBreakdownRow,
   ClaudeUsageDailyPoint,
+  ClaudeUsageHourlyResult,
   ClaudeUsageRange,
   ClaudeUsageScanState,
   ClaudeUsageScope,
@@ -734,6 +735,7 @@ export type ClaudeUsageApi = {
     scope: ClaudeUsageScope
     range: ClaudeUsageRange
   }) => Promise<ClaudeUsageDailyPoint[]>
+  getHourly: (args: { days: number }) => Promise<ClaudeUsageHourlyResult>
   getBreakdown: (args: {
     scope: ClaudeUsageScope
     range: ClaudeUsageRange
