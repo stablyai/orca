@@ -66,6 +66,20 @@ describe('pairing deep links', () => {
     ).toBe('legacy-code')
   })
 
+  it('falls back when getLinkingURL throws', async () => {
+    const getInitialURL = vi.fn(async () => 'orca://pair?code=legacy-after-throw')
+
+    expect(
+      await getInitialPairingCode({
+        getLinkingURL: () => {
+          throw new Error('linking registry unavailable')
+        },
+        getInitialURL
+      })
+    ).toBe('legacy-after-throw')
+    expect(getInitialURL).toHaveBeenCalledTimes(1)
+  })
+
   it('ignores empty and unrelated URLs', () => {
     expect(extractPairingCodeFromUrl('orca://pair')).toBeNull()
     expect(extractPairingCodeFromUrl('https://example.com/pair#abc123')).toBeNull()
