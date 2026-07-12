@@ -6,7 +6,12 @@ export function writeBrowserCapabilityMetadata(
   outputDirectory: string,
   sourceDirectory: string,
   source: RuntimeMetadata,
-  authToken: string
+  capability: {
+    id: string
+    token: string
+    browserPageId: string
+    expiresAt: number
+  }
 ): string {
   const directory = resolve(outputDirectory)
   mkdirSync(directory, { recursive: true, mode: 0o700 })
@@ -17,7 +22,18 @@ export function writeBrowserCapabilityMetadata(
   const temporary = `${destination}.${process.pid}.tmp`
   writeFileSync(
     temporary,
-    `${JSON.stringify({ ...source, authToken, authScope: 'browser-capability' }, null, 2)}\n`,
+    `${JSON.stringify(
+      {
+        ...source,
+        authToken: capability.token,
+        authScope: 'browser-capability',
+        browserCapabilityId: capability.id,
+        browserCapabilityPageId: capability.browserPageId,
+        browserCapabilityExpiresAt: capability.expiresAt
+      },
+      null,
+      2
+    )}\n`,
     {
       encoding: 'utf8',
       mode: 0o600

@@ -21,6 +21,9 @@ export type RuntimeMetadata = {
   authToken: string | null
   startedAt: number
   authScope?: 'browser-capability'
+  browserCapabilityId?: string
+  browserCapabilityPageId?: string
+  browserCapabilityExpiresAt?: number
 }
 
 // Why: the CLI must handle metadata files written by older Orca versions that

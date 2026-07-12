@@ -17,7 +17,12 @@ describe('writeBrowserCapabilityMetadata', () => {
         authToken: 'global-token',
         startedAt: 1
       },
-      'scoped-token'
+      {
+        id: 'capability-1',
+        token: 'scoped-token',
+        browserPageId: 'page-1',
+        expiresAt: 60_000
+      }
     )
 
     expect(JSON.parse(readFileSync(destination, 'utf8'))).toEqual({
@@ -26,7 +31,10 @@ describe('writeBrowserCapabilityMetadata', () => {
       transports: [{ kind: 'unix', endpoint: '/tmp/orca.sock' }],
       authToken: 'scoped-token',
       startedAt: 1,
-      authScope: 'browser-capability'
+      authScope: 'browser-capability',
+      browserCapabilityId: 'capability-1',
+      browserCapabilityPageId: 'page-1',
+      browserCapabilityExpiresAt: 60_000
     })
     if (process.platform !== 'win32') {
       expect(statSync(destination).mode & 0o777).toBe(0o600)
@@ -47,7 +55,12 @@ describe('writeBrowserCapabilityMetadata', () => {
           authToken: 'global-token',
           startedAt: 1
         },
-        'scoped-token'
+        {
+          id: 'capability-1',
+          token: 'scoped-token',
+          browserPageId: 'page-1',
+          expiresAt: 60_000
+        }
       )
     ).toThrow(/must not overwrite/)
   })

@@ -31,7 +31,7 @@ export const BROWSER_CAPABILITY_HANDLERS: Record<string, CommandHandler> = {
         output,
         client.getLocalUserDataPath(),
         sourceMetadata,
-        result.result.token
+        result.result
       )
     } catch (error) {
       await client.call('browser.capabilityRevoke', { id: result.result.id }).catch(() => undefined)

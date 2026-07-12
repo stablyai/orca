@@ -565,7 +565,12 @@ describe('orca cli browser tab profiles', () => {
       '/tmp/qa',
       '/tmp/orca-global',
       expect.objectContaining({ authToken: 'global-token' }),
-      'secret-capability-token'
+      expect.objectContaining({
+        id: 'cap-1',
+        token: 'secret-capability-token',
+        browserPageId: 'page-1',
+        expiresAt: 60_000
+      })
     )
     expect(logSpy).toHaveBeenCalledWith(expect.not.stringContaining('secret-capability-token'))
   })
