@@ -134,7 +134,11 @@ export function computeVisibleWorktreeIds(
 
   // Why: sidebar lineage is structural. Archived workspaces stay hidden, but
   // every other valid ancestor can bypass filters so children never orphan.
-  const lineageAncestorById = new Map(all.map((w) => [w.id, w]))
+  // Mission members are a terminal exclusion — they belong to the Missions
+  // tab and must not resurface here even as lineage parents.
+  const lineageAncestorById = new Map(
+    all.filter((w) => !opts.missionMemberWorktreeIds.has(w.id)).map((w) => [w.id, w])
+  )
 
   if (opts.hideDefaultBranchWorkspace) {
     all = all.filter((w) => !isDefaultBranchWorkspace(w))

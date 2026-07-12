@@ -663,3 +663,22 @@ describe('mission member visibility', () => {
     expect(result).toEqual([plainWt.id])
   })
 })
+
+describe('mission member lineage exclusion', () => {
+  it('keeps mission member parents hidden even when a visible child restores lineage', () => {
+    const missionParent = makeWorktree('mission-parent')
+    const child = makeWorktree('child')
+    const lineage = makeWorktreeLineage(child, missionParent)
+
+    const result = computeVisibleWorktreeIds(
+      { repo1: [missionParent, child] },
+      [child.id, missionParent.id],
+      visibleOptions({
+        missionMemberWorktreeIds: new Set([missionParent.id]),
+        worktreeLineageById: { [child.id]: lineage }
+      })
+    )
+
+    expect(result).toEqual([child.id])
+  })
+})
