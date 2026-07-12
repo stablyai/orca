@@ -14,6 +14,7 @@ import { isValidPtySize, normalizePtySize } from './daemon-pty-size'
 import {
   ensureNodePtySpawnHelperExecutable,
   getNodePtySpawnHelperCandidates,
+  resolveUnixShellPath,
   validateWorkingDirectory
 } from '../providers/local-pty-utils'
 import { wrapShellSpawnForMacosTccAttribution } from '../providers/macos-tcc-login-shell'
@@ -742,6 +743,17 @@ export function createPtySubprocess(opts: PtySubprocessOptions): SubprocessHandl
     if (opts.env?.TERM) {
       env.TERM = opts.env.TERM
     }
+    // Why after the scrub: SHELL must reflect the shell that actually spawns,
+    // matching LocalPtyProvider; and before the launch-config derivation below
+    // so shell-ready wrappers target the resolved shell, not a missing one.
+    const preferredShellPath = shellPath
+    shellPath = resolveUnixShellPath(shellPath)
+    if (shellPath !== preferredShellPath) {
+      env.SHELL = shellPath
+      console.warn(
+        `[daemon/pty] Preferred shell "${preferredShellPath}" is unavailable, fell back to "${shellPath}"`
+      )
+    }
     // Why: OpenCode/Codex path restoration and OMP's typed-command status
     // wrapper need shell-ready code after user startup files run.
     let shellLaunch: ReturnType<typeof getShellReadyLaunchConfig> | null = null
@@ -1007,6 +1019,7 @@ export function createPtySubprocess(opts: PtySubprocessOptions): SubprocessHandl
 
   return {
     pid: proc.pid,
+    shellPath,
     ...(startupCommandDeliveredInShellArgs ? { startupCommandDeliveredInShellArgs: true } : {}),
     getForegroundProcess: () => {
       // Why: node-pty's `.process` getter reports the PTY's live foreground

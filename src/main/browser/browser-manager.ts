@@ -38,6 +38,7 @@ import {
   setupGuestShortcutForwarding
 } from './browser-guest-ui'
 import { ANTI_DETECTION_SCRIPT } from './anti-detection'
+import { openPopupWithOriginBar, type PopupChildWindowOptions } from './popup-origin-bar-window'
 import { cleanElectronUserAgent } from './browser-session-ua'
 import type { BrowserViewportOverride } from '../../shared/types'
 import {
@@ -160,7 +161,18 @@ const SAFE_POPUP_WINDOW_OPTIONS = {
   simpleFullscreen: false,
   skipTaskbar: false,
   titleBarStyle: 'default',
-  transparent: false
+  transparent: false,
+  // Why: applied by Electron when it creates the popup's WebContents, before
+  // createWindow runs. Feature strings and opener inheritance must not be able
+  // to relax the child's process isolation.
+  webPreferences: {
+    allowRunningInsecureContent: false,
+    contextIsolation: true,
+    nodeIntegration: false,
+    nodeIntegrationInSubFrames: false,
+    sandbox: true,
+    webviewTag: false
+  }
 } satisfies Electron.BrowserWindowConstructorOptions
 
 type ActiveDownload = {
@@ -637,7 +649,15 @@ export class BrowserManager {
       if (browserTabId && canOpenAsChild) {
         // Why: OAuth may request ordinary size/position features, but browser
         // content must not create deceptive or inescapable native chrome.
-        return { action: 'allow', overrideBrowserWindowOptions: SAFE_POPUP_WINDOW_OPTIONS }
+        return {
+          action: 'allow',
+          overrideBrowserWindowOptions: SAFE_POPUP_WINDOW_OPTIONS,
+          // Why: a default child window has no address bar, so users cannot
+          // verify a popup's destination. Host it in an Orca window with an
+          // origin bar while keeping the shared session + window.opener.
+          createWindow: (options: PopupChildWindowOptions) =>
+            this.createPopupChildWindowWithOriginBar(guest, url, options)
+        }
       } else if (externalUrl) {
         // Why: a target=_blank click on a Kagi search result page produces a
         // popup URL that still contains the bearer token; redact before
@@ -728,6 +748,34 @@ export class BrowserManager {
         guest.off('did-fail-load', didFailLoadHandler)
       }
     })
+  }
+
+  private createPopupChildWindowWithOriginBar(
+    openerGuest: Electron.WebContents,
+    targetUrl: string,
+    options: PopupChildWindowOptions
+  ): Electron.WebContents {
+    const popup = openPopupWithOriginBar(options, targetUrl)
+    // Why: Electron does not emit did-create-window for createWindow-created
+    // children, so the opener's policies and routing context attach here.
+    this.attachGuestPolicies(
+      popup.contentWebContents,
+      this.resolvePopupOwnerContext(openerGuest.id)
+    )
+    this.forwardOrQueuePopupEvent(openerGuest.id, {
+      origin: safeOrigin(targetUrl),
+      action: 'opened-in-orca'
+    })
+    // Why: parity with Electron's default child-window lifecycle — closing the
+    // owning browser tab must not leave orphaned session-bearing popups.
+    const closePopupWithOpener = (): void => popup.close()
+    openerGuest.once('destroyed', closePopupWithOpener)
+    popup.onClosed(() => {
+      if (!openerGuest.isDestroyed()) {
+        openerGuest.off('destroyed', closePopupWithOpener)
+      }
+    })
+    return popup.contentWebContents
   }
 
   private retireStaleGuestWebContents(previousWebContentsId: number): void {

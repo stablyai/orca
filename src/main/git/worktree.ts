@@ -650,8 +650,46 @@ const inFlightWorktreeScans = new Map<string, Promise<GitWorktreeInfo[]>>()
 // settle for their original callers).
 const worktreeScanGenerations = new Map<string, number>()
 
+function hasInFlightWorktreeScanForRepo(repoPath: string): boolean {
+  const keyPrefix = `${repoPath}\0`
+  for (const key of inFlightWorktreeScans.keys()) {
+    if (key.startsWith(keyPrefix)) {
+      return true
+    }
+  }
+  return false
+}
+
 function bumpWorktreeScanGeneration(repoPath: string): void {
+  // Why: generations only prevent joining a pre-mutation scan. Without an
+  // active scan, retaining the repo path just leaks completed mutation keys.
+  if (!hasInFlightWorktreeScanForRepo(repoPath)) {
+    return
+  }
   worktreeScanGenerations.set(repoPath, (worktreeScanGenerations.get(repoPath) ?? 0) + 1)
+}
+
+function pruneWorktreeScanGeneration(repoPath: string): void {
+  // Why: ordinary scan settlement should stay O(1); only repos invalidated
+  // during an active scan need the cross-generation in-flight check.
+  if (!worktreeScanGenerations.has(repoPath)) {
+    return
+  }
+  if (!hasInFlightWorktreeScanForRepo(repoPath)) {
+    worktreeScanGenerations.delete(repoPath)
+  }
+}
+
+export function _getWorktreeScanCacheSizesForTests(): { inFlight: number; generations: number } {
+  return {
+    inFlight: inFlightWorktreeScans.size,
+    generations: worktreeScanGenerations.size
+  }
+}
+
+export function _resetWorktreeScanCacheForTests(): void {
+  inFlightWorktreeScans.clear()
+  worktreeScanGenerations.clear()
 }
 
 /**
@@ -676,6 +714,7 @@ export function listWorktrees(
     if (inFlightWorktreeScans.get(key) === scan) {
       inFlightWorktreeScans.delete(key)
     }
+    pruneWorktreeScanGeneration(repoPath)
   })
   inFlightWorktreeScans.set(key, scan)
   return scan

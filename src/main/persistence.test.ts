@@ -562,6 +562,50 @@ describe('Store', () => {
     expect(ui.setupGuideSidebarDismissed).toBe(false)
     expect(ui.setupGuideBrowserMilestoneMigrated).toBe(true)
     expect(ui.setupGuideBrowserMilestoneLegacyComplete).toBe(false)
+    // Why: brand-new profiles never saw remaining-as-default.
+    expect(ui.usagePercentageDisplayChangeNoticeDismissed).toBe(true)
+  })
+
+  it('surfaces the usage percentage display change notice for upgraded profiles', async () => {
+    const persisted = getDefaultPersistedState(testState.dir)
+    writeDataFile({
+      ...persisted,
+      onboarding: {
+        ...persisted.onboarding,
+        closedAt: 1,
+        outcome: 'completed'
+      },
+      ui: {
+        ...persisted.ui,
+        // Why: omit the notice key so load resolves eligibility for existing profiles.
+        usagePercentageDisplayChangeNoticeDismissed: undefined
+      }
+    })
+
+    const store = await createStore()
+
+    expect(store.getUI().usagePercentageDisplayChangeNoticeDismissed).toBe(false)
+  })
+
+  it('keeps the usage percentage display change notice dismissed when remaining was chosen', async () => {
+    const persisted = getDefaultPersistedState(testState.dir)
+    writeDataFile({
+      ...persisted,
+      onboarding: {
+        ...persisted.onboarding,
+        closedAt: 1,
+        outcome: 'completed'
+      },
+      ui: {
+        ...persisted.ui,
+        usagePercentageDisplay: 'remaining',
+        usagePercentageDisplayChangeNoticeDismissed: undefined
+      }
+    })
+
+    const store = await createStore()
+
+    expect(store.getUI().usagePercentageDisplayChangeNoticeDismissed).toBe(true)
   })
 
   it('defaults minimizeToTrayOnClose to false when unset', async () => {
@@ -6015,6 +6059,65 @@ describe('Store', () => {
     const store = await createStore()
     expect(store.getSettings().terminalMacOptionAsAlt).toBe('auto')
     expect(store.getSettings().terminalMacOptionAsAltMigrated).toBe(true)
+  })
+
+  it('migrates inherited right-click paste to each platform default once', async () => {
+    for (const [platform, expected] of [
+      ['win32', true],
+      ['darwin', false],
+      ['linux', false]
+    ] as const) {
+      await withPlatform(platform, async () => {
+        writeDataFile({
+          schemaVersion: 1,
+          repos: [],
+          worktreeMeta: {},
+          settings: { terminalRightClickToPaste: true },
+          ui: {},
+          githubCache: { pr: {}, issue: {} },
+          workspaceSession: {}
+        })
+        const store = await createStore()
+        expect(store.getSettings().terminalRightClickToPaste).toBe(expected)
+        expect(store.getSettings().terminalRightClickToPasteDefaultedForPlatform).toBe(true)
+      })
+    }
+  })
+
+  it('preserves an explicit Windows right-click paste opt-out during migration', async () => {
+    await withPlatform('win32', async () => {
+      writeDataFile({
+        schemaVersion: 1,
+        repos: [],
+        worktreeMeta: {},
+        settings: { terminalRightClickToPaste: false },
+        ui: {},
+        githubCache: { pr: {}, issue: {} },
+        workspaceSession: {}
+      })
+      const store = await createStore()
+      expect(store.getSettings().terminalRightClickToPaste).toBe(false)
+      expect(store.getSettings().terminalRightClickToPasteDefaultedForPlatform).toBe(true)
+    })
+  })
+
+  it('preserves right-click paste choices after the platform migration', async () => {
+    await withPlatform('darwin', async () => {
+      writeDataFile({
+        schemaVersion: 1,
+        repos: [],
+        worktreeMeta: {},
+        settings: {
+          terminalRightClickToPaste: true,
+          terminalRightClickToPasteDefaultedForPlatform: true
+        },
+        ui: {},
+        githubCache: { pr: {}, issue: {} },
+        workspaceSession: {}
+      })
+      const store = await createStore()
+      expect(store.getSettings().terminalRightClickToPaste).toBe(true)
+    })
   })
 
   it('migrates inherited terminal bar cursor defaults to block on first load', async () => {

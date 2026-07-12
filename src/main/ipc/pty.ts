@@ -3404,6 +3404,15 @@ export function registerPtyHandlers(
         return null
       }
     },
+    confirmForegroundProcess: async (ptyId) => {
+      try {
+        const provider = getProviderForPty(ptyId)
+        // Why: cached foreground evidence cannot resolve a fresh shell conflict.
+        return (await provider.confirmForegroundProcess?.(ptyId)) ?? null
+      } catch {
+        return null
+      }
+    },
     getCwd: async (ptyId) => {
       try {
         const cwd = await getProviderForPty(ptyId).getCwd(ptyId)

@@ -31,6 +31,7 @@ import {
 import { DEFAULT_SOURCE_CONTROL_GROUP_ORDER } from './source-control-group-order'
 import { DEFAULT_SETUP_AGENT_STARTUP_POLICY } from './setup-agent-startup-policy'
 import { DESKTOP_TERMINAL_SCROLLBACK_ROWS_DEFAULT } from './terminal-scrollback-policy'
+import { DEFAULT_USAGE_PERCENTAGE_DISPLAY } from './usage-percentage-display'
 
 export { DEFAULT_STATUS_BAR_ITEMS } from './status-bar-defaults'
 export {
@@ -99,6 +100,10 @@ function defaultTerminalFontFamily(): string {
 export const getDefaultPrimarySelectionMiddleClickPaste = (
   platform = typeof process !== 'undefined' ? process.platform : ''
 ): boolean => platform === 'linux' || platform === 'darwin'
+
+export const getDefaultTerminalRightClickToPaste = (
+  platform = typeof process !== 'undefined' ? process.platform : ''
+): boolean => platform === 'win32'
 
 /**
  * Why: ProseMirror builds an in-memory tree for the entire document, so large
@@ -239,10 +244,10 @@ export function getDefaultSettings(homedir: string): GlobalSettings {
     terminalActivePaneOpacity: 1,
     terminalPaneOpacityTransitionMs: 140,
     terminalDividerThicknessPx: 3,
-    // Default true so Windows users get native right-click paste out of the
-    // box. Other platforms ignore this field because the UI never exposes it,
-    // and Ctrl+right-click still opens the context menu when paste is enabled.
-    terminalRightClickToPaste: true,
+    // Why: Windows follows its native terminal paste convention, while macOS
+    // and Linux keep right-click available for the context menu by default.
+    terminalRightClickToPaste: getDefaultTerminalRightClickToPaste(),
+    terminalRightClickToPasteDefaultedForPlatform: true,
     terminalWindowsShell: 'powershell.exe',
     terminalWindowsWslDistro: null,
     localAccountRuntime: 'host',
@@ -367,7 +372,6 @@ export function getDefaultSettings(homedir: string): GlobalSettings {
     experimentalNewWorktreeCardStyle: false,
     experimentalEphemeralVms: false,
     compactWorktreeCards: false,
-    experimentalWorktreeSymlinks: false,
     // Why: local desktop remains the default server until the user explicitly
     // selects a saved runtime environment.
     activeRuntimeEnvironmentId: null,
@@ -495,6 +499,7 @@ export function getDefaultUIState(): PersistedUIState {
     _workspaceStatusesDefaultVisualsMigrated: true,
     statusBarItems: [...DEFAULT_STATUS_BAR_ITEMS],
     statusBarVisible: true,
+    usagePercentageDisplay: DEFAULT_USAGE_PERCENTAGE_DISPLAY,
     dismissedUpdateVersion: null,
     lastUpdateCheckAt: null,
     trustedOrcaHooks: {},
@@ -510,6 +515,9 @@ export function getDefaultUIState(): PersistedUIState {
     // Why: brand-new profiles never saw recent project ordering; only upgraded
     // profiles get the one-time sidebar notice on first launch.
     projectOrderManualDefaultNoticeDismissed: true,
+    // Why: brand-new profiles never saw percent-remaining as the default; only
+    // upgraded profiles get the one-time usage-display change notice.
+    usagePercentageDisplayChangeNoticeDismissed: true,
     workspaceCleanup: { dismissals: {} },
     featureTipsSeenIds: [],
     featureInteractions: {},

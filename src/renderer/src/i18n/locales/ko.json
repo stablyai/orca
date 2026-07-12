@@ -722,6 +722,8 @@
       "GitHubItemDialog": {
         "3ab6ac0fc8": "선택한 GitHub 이슈 또는 PR을 미리보기하고 편집합니다.",
         "3cd5ae5b7b": "변경된 파일이 없습니다.",
+        "filesUnavailable": "변경된 파일을 불러올 수 없습니다.",
+        "filesRetry": "재시도",
         "999b5ad7d9": "파일",
         "4bd1f5b055": "체크",
         "e30a5470c9": "대화",
@@ -1385,7 +1387,9 @@
         "1ff5d979df": "할당된 사람이 없음",
         "checkActionRequiredHint": "머지가 해제되려면 이 검사에 대해 GitHub에서 수동 작업(예: 워크플로우 실행 승인)이 필요합니다.",
         "dd5d9a4f17": "{{value0}}에 업데이트됨",
-        "71a3c0f9d2": "워크스페이스 시작"
+        "71a3c0f9d2": "워크스페이스 시작",
+        "filesUnavailable": "Couldn't load changed files.",
+        "filesRetry": "Retry"
       },
       "QuickOpen": {
         "1dbd3f59ff": "이동",
@@ -2366,7 +2370,9 @@
             "failed": "삭제되지 않은 워크스페이스: {{value0}}",
             "error": "워크스페이스 정리 실패",
             "skippedAncestor": "중첩된 워크스페이스를 제거할 수 없어 건너뛰었습니다.",
-            "timedOut": "{{value0}} 제거가 예상보다 오래 걸리고 있습니다. 백그라운드에서 계속 실행됩니다."
+            "timedOut": "{{value0}} 제거가 예상보다 오래 걸리고 있습니다. 백그라운드에서 계속 실행됩니다.",
+            "stillRemoving": "Still removing workspaces: {{value0}}",
+            "skippedPendingAncestor": "Skipped because a nested workspace has not finished removing."
           },
           "candidateRow": {
             "gitLabel": "Git",
@@ -3205,6 +3211,17 @@
           },
           "SshTargetStatusRow": {
             "sshHost": "SSH 호스트"
+          },
+          "usagePercentageLabel": {
+            "used": "{{value0}}% 사용",
+            "remaining": "{{value0}}% 남음"
+          },
+          "UsagePercentageDisplayChangeNotice": {
+            "title": "Usage now shows % used",
+            "body": "Prefer remaining? Change it in Settings.",
+            "dismiss": "Dismiss",
+            "openSettings": "Open Settings",
+            "gotIt": "Got it"
           }
         }
       },
@@ -6739,9 +6756,9 @@
           "348246b06f": "false",
           "5936387ddd": "자동",
           "adbafefe56": "custom",
-          "16753eea48": "Windows에서는 마우스 오른쪽 버튼을 클릭하여 클립보드를 붙여넣습니다. Ctrl+마우스 오른쪽 버튼을 클릭하면 컨텍스트 메뉴가 열립니다.",
+          "16753eea48": "마우스 오른쪽 버튼을 클릭하여 클립보드를 붙여넣습니다. Ctrl+마우스 오른쪽 버튼을 클릭하면 컨텍스트 메뉴가 열립니다.",
           "9c178cf8aa": "붙여넣으려면 마우스 오른쪽 버튼을 클릭하세요.",
-          "af0c3b6e39": "Windows에서는 마우스 오른쪽 버튼을 클릭하여 클립보드를 terminal에 붙여넣습니다. 컨텍스트 메뉴를 열려면 Ctrl+오른쪽 클릭을 사용하세요.",
+          "af0c3b6e39": "마우스 오른쪽 버튼을 클릭하여 클립보드를 terminal에 붙여넣습니다. 컨텍스트 메뉴를 열려면 Ctrl+오른쪽 클릭을 사용하세요.",
           "29154326bb": "켜기",
           "ab20575a8a": "끄기",
           "ab3a1f9068": "wsl.exe",
@@ -7213,7 +7230,9 @@
             "f8e2a1c4b6": "Grok 사용량",
             "e7d1b0f3a5": "Grok CLI OAuth에서 Grok 주간 크레딧 사용량을 표시합니다.",
             "d6c0a9e2f4": "grok",
-            "c5b9f8d1e3": "xai"
+            "c5b9f8d1e3": "xai",
+            "usagePercentageDisplayTitle": "사용량 백분율",
+            "usagePercentageDisplayDescription": "공급자 한도를 사용한 비율 또는 남은 비율로 표시할지 선택합니다."
           }
         },
         "auto": {
@@ -8465,7 +8484,7 @@
               "e55186fe2b": "오른쪽 클릭",
               "28ff08ed35": "창",
               "e7d2793b03": "터미널",
-              "8ba875c132": "Windows에서는 마우스 오른쪽 버튼을 클릭하여 클립보드를 terminal에 붙여넣습니다. 컨텍스트 메뉴를 열려면 Ctrl+오른쪽 클릭을 사용하세요.",
+              "8ba875c132": "마우스 오른쪽 버튼을 클릭하여 클립보드를 terminal에 붙여넣습니다. 컨텍스트 메뉴를 열려면 Ctrl+오른쪽 클릭을 사용하세요.",
               "f0b8448570": "붙여넣으려면 마우스 오른쪽 버튼을 클릭하세요.",
               "04994f6929": "기본값",
               "fc564eadaf": "데비안",
@@ -9030,6 +9049,10 @@
           "powershell": "PowerShell",
           "cmd": "CMD",
           "gitBash": "Git Bash"
+        },
+        "AppearanceWindowSidebarSection": {
+          "usagePercentageDisplayUsed": "사용",
+          "usagePercentageDisplayRemaining": "남음"
         }
       },
       "right": {
@@ -9897,7 +9920,9 @@
             "92276aceb7": "삭제",
             "7fb9435c86": "원격 호스트의 디렉터리와 그 안의 내용을 영구적으로 삭제합니다. 이 작업은 되돌릴 수 없습니다.",
             "23e98f192f": "원격 호스트의 파일을 영구적으로 삭제합니다. 이 작업은 되돌릴 수 없습니다.",
-            "8b8ee9d22f": "이 파일을 소유한 호스트를 확인할 수 없습니다. 워크스페이스 연결을 확인한 후 다시 시도하세요."
+            "8b8ee9d22f": "이 파일을 소유한 호스트를 확인할 수 없습니다. 워크스페이스 연결을 확인한 후 다시 시도하세요.",
+            "af1270b90d": "{{count}}개 항목을 영구적으로 삭제하시겠습니까?",
+            "dd029aa5cd": "원격 호스트의 선택한 항목과 디렉터리 내용을 영구적으로 삭제합니다. 이 작업은 되돌릴 수 없습니다."
           },
           "useFileExplorerHandlers": {
             "32cd9fd991": "심볼릭 링크 대상을 열 수 없습니다"
@@ -11631,7 +11656,8 @@
           "1c99b726e0": "링크 삭제",
           "cdfe166f6f": "링크 수정",
           "bfc813e909": "링크 열기",
-          "7b0b945fdc": "링크를 붙여넣거나 입력하세요…"
+          "7b0b945fdc": "링크를 붙여넣거나 입력하세요…",
+          "copyLink": "링크 복사"
         },
         "RichMarkdownReviewNoteLayer": {
           "f3ef92952b": "이 메모",
@@ -11658,7 +11684,8 @@
           "68d090241d": "전체 단어 일치",
           "fd97c7e585": "바꾸기",
           "44682b4159": "리치 markdown 편집기에서 바꾸기",
-          "c2884f5e95": "모두 바꾸기"
+          "c2884f5e95": "모두 바꾸기",
+          "preservedRichContentReadOnly": "보존된 리치 콘텐츠는 리치 모드에서 읽기 전용입니다."
         },
         "RichMarkdownSlashMenu": {
           "82c6816ff8": "블록을 찾을 수 없습니다.",
@@ -11875,6 +11902,24 @@
           "3fa2b8d417": "디스크에서 다시 로드",
           "a95d02c644": "편집 내용 유지",
           "2c8f1e07b9": "비교 로딩 중..."
+        },
+        "RichMarkdownEditor": {
+          "citationLinkAvailable": "{{value0}}, {{value1}} 링크. Enter 키로 열거나 Tab 키로 링크 작업으로 이동하세요.",
+          "citationFallbackLabel": "인용",
+          "citationLinkUnavailable": "{{value0}}, 인용 링크를 사용할 수 없습니다. {{value1}}",
+          "tabForCitationActions": "Tab 키로 사용 가능한 작업으로 이동하세요.",
+          "noCitationActions": "사용 가능한 링크 작업이 없습니다."
+        },
+        "richMarkdownHtmlSuperscriptLink": {
+          "availableAriaLabel": "{{value0}}, {{value1}} 링크",
+          "unavailableAriaLabel": "{{value0}}, 인용 링크를 사용할 수 없음"
+        },
+        "richMarkdownLinkClipboard": {
+          "copiedLink": "링크를 복사했습니다",
+          "copyLinkFailed": "링크를 복사하지 못했습니다"
+        },
+        "richMarkdownSourceOwningCutFeedback": {
+          "selectLessContent": "보존된 HTML 인용을 잘라내려면 더 적은 콘텐츠를 선택하거나 코드 모드를 사용하세요."
         }
       },
       "diff": {

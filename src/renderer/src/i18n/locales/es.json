@@ -722,6 +722,8 @@
       "GitHubItemDialog": {
         "3ab6ac0fc8": "Previsualiza y edita el issue o pull request de GitHub seleccionado.",
         "3cd5ae5b7b": "No se cambiaron archivos.",
+        "filesUnavailable": "No se pudieron cargar los archivos modificados.",
+        "filesRetry": "Reintentar",
         "999b5ad7d9": "Archivos",
         "4bd1f5b055": "Checks",
         "e30a5470c9": "Conversación",
@@ -1385,7 +1387,9 @@
         "1ff5d979df": "Nadie asignado",
         "checkActionRequiredHint": "Esta verificación necesita una acción manual en GitHub (por ejemplo, aprobar la ejecución del workflow) antes de que se desbloquee la fusión.",
         "dd5d9a4f17": "actualizado {{value0}}",
-        "71a3c0f9d2": "Iniciar espacio de trabajo"
+        "71a3c0f9d2": "Iniciar espacio de trabajo",
+        "filesUnavailable": "Couldn't load changed files.",
+        "filesRetry": "Retry"
       },
       "QuickOpen": {
         "1dbd3f59ff": "Mover",
@@ -2366,7 +2370,9 @@
             "failed": "Espacios de trabajo no eliminados: {{value0}}",
             "error": "Error en la limpieza del espacio de trabajo",
             "skippedAncestor": "Se omitió porque no se pudo eliminar un espacio de trabajo anidado.",
-            "timedOut": "La eliminación de {{value0}} está tardando más de lo esperado. Continuará ejecutándose en segundo plano."
+            "timedOut": "La eliminación de {{value0}} está tardando más de lo esperado. Continuará ejecutándose en segundo plano.",
+            "stillRemoving": "Still removing workspaces: {{value0}}",
+            "skippedPendingAncestor": "Skipped because a nested workspace has not finished removing."
           },
           "candidateRow": {
             "gitLabel": "Git",
@@ -3205,6 +3211,17 @@
           },
           "SshTargetStatusRow": {
             "sshHost": "Host SSH"
+          },
+          "usagePercentageLabel": {
+            "used": "{{value0}}% usado",
+            "remaining": "{{value0}}% restante"
+          },
+          "UsagePercentageDisplayChangeNotice": {
+            "title": "Usage now shows % used",
+            "body": "Prefer remaining? Change it in Settings.",
+            "dismiss": "Dismiss",
+            "openSettings": "Open Settings",
+            "gotIt": "Got it"
           }
         }
       },
@@ -6754,9 +6771,9 @@
           "348246b06f": "FALSO",
           "5936387ddd": "auto",
           "adbafefe56": "personalizado",
-          "16753eea48": "En Windows, hacer clic derecho pega el portapapeles. Ctrl+clic derecho abre el menú contextual.",
+          "16753eea48": "Hacer clic derecho pega el portapapeles. Ctrl+clic derecho abre el menú contextual.",
           "9c178cf8aa": "Clic derecho para pegar",
-          "af0c3b6e39": "En Windows, hacer clic derecho pega el portapapeles en el terminal. Usa Ctrl+clic derecho para abrir el menú contextual.",
+          "af0c3b6e39": "Hacer clic derecho pega el portapapeles en el terminal. Usa Ctrl+clic derecho para abrir el menú contextual.",
           "29154326bb": "activado",
           "ab20575a8a": "apagado",
           "ab3a1f9068": "wsl.exe",
@@ -7228,7 +7245,9 @@
             "f8e2a1c4b6": "Uso de Grok",
             "e7d1b0f3a5": "Muestra el uso semanal de créditos de Grok desde OAuth de Grok CLI.",
             "d6c0a9e2f4": "grok",
-            "c5b9f8d1e3": "xai"
+            "c5b9f8d1e3": "xai",
+            "usagePercentageDisplayTitle": "Porcentajes de uso",
+            "usagePercentageDisplayDescription": "Elige si los límites del proveedor muestran el porcentaje usado o restante."
           }
         },
         "auto": {
@@ -8480,7 +8499,7 @@
               "e55186fe2b": "clic derecho",
               "28ff08ed35": "Windows",
               "e7d2793b03": "terminal",
-              "8ba875c132": "En Windows, hacer clic derecho pega el portapapeles en el terminal. Usa Ctrl+clic derecho para abrir el menú contextual.",
+              "8ba875c132": "Hacer clic derecho pega el portapapeles en el terminal. Usa Ctrl+clic derecho para abrir el menú contextual.",
               "f0b8448570": "Clic derecho para pegar",
               "04994f6929": "predeterminado",
               "fc564eadaf": "debian",
@@ -9030,6 +9049,10 @@
           "powershell": "PowerShell",
           "cmd": "CMD",
           "gitBash": "Git Bash"
+        },
+        "AppearanceWindowSidebarSection": {
+          "usagePercentageDisplayUsed": "Usado",
+          "usagePercentageDisplayRemaining": "Restante"
         }
       },
       "right": {
@@ -9897,7 +9920,9 @@
             "92276aceb7": "Eliminar",
             "7fb9435c86": "Esto elimina permanentemente el directorio y su contenido en el host remoto. Esto no se puede deshacer.",
             "23e98f192f": "Esto elimina permanentemente el archivo en el host remoto. Esto no se puede deshacer.",
-            "8b8ee9d22f": "No se pudo determinar qué host posee este archivo. Comprueba la conexión del espacio de trabajo e inténtalo de nuevo."
+            "8b8ee9d22f": "No se pudo determinar qué host posee este archivo. Comprueba la conexión del espacio de trabajo e inténtalo de nuevo.",
+            "af1270b90d": "¿Eliminar {{count}} elementos permanentemente?",
+            "dd029aa5cd": "Esto elimina permanentemente los elementos seleccionados y el contenido de cualquier directorio en el host remoto. Esto no se puede deshacer."
           },
           "useFileExplorerHandlers": {
             "32cd9fd991": "No se puede abrir el destino del enlace simbólico"
@@ -11631,7 +11656,8 @@
           "1c99b726e0": "Quitar enlace",
           "cdfe166f6f": "Editar enlace",
           "bfc813e909": "Abrir enlace",
-          "7b0b945fdc": "Pega o escribe un enlace…"
+          "7b0b945fdc": "Pega o escribe un enlace…",
+          "copyLink": "Copiar enlace"
         },
         "RichMarkdownReviewNoteLayer": {
           "f3ef92952b": "Esta nota",
@@ -11658,7 +11684,8 @@
           "68d090241d": "Coincidir con toda la palabra",
           "fd97c7e585": "Reemplazar",
           "44682b4159": "Reemplazar en el editor de markdown enriquecido",
-          "c2884f5e95": "Reemplazar todo"
+          "c2884f5e95": "Reemplazar todo",
+          "preservedRichContentReadOnly": "El contenido enriquecido conservado es de solo lectura en el modo enriquecido."
         },
         "RichMarkdownSlashMenu": {
           "82c6816ff8": "No se encontraron bloques",
@@ -11875,6 +11902,24 @@
           "3fa2b8d417": "Recargar desde disco",
           "a95d02c644": "Mantener mis ediciones",
           "2c8f1e07b9": "Cargando comparación..."
+        },
+        "RichMarkdownEditor": {
+          "citationLinkAvailable": "{{value0}}, enlace a {{value1}}. Pulsa Intro para abrirlo o Tab para las acciones del enlace.",
+          "citationFallbackLabel": "Cita",
+          "citationLinkUnavailable": "{{value0}}, enlace de cita no disponible. {{value1}}",
+          "tabForCitationActions": "Pulsa Tab para ver las acciones disponibles.",
+          "noCitationActions": "No hay acciones de enlace disponibles."
+        },
+        "richMarkdownHtmlSuperscriptLink": {
+          "availableAriaLabel": "{{value0}}, enlace a {{value1}}",
+          "unavailableAriaLabel": "{{value0}}, enlace de cita no disponible"
+        },
+        "richMarkdownLinkClipboard": {
+          "copiedLink": "Enlace copiado",
+          "copyLinkFailed": "No se pudo copiar el enlace"
+        },
+        "richMarkdownSourceOwningCutFeedback": {
+          "selectLessContent": "Selecciona menos contenido o usa el modo de código para cortar citas HTML conservadas."
         }
       },
       "diff": {

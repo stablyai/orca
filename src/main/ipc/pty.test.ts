@@ -3221,6 +3221,40 @@ describe('registerPtyHandlers', () => {
     })
   })
 
+  it('routes runtime foreground confirmation to the provider owning the captured PTY', async () => {
+    const confirmForegroundProcess = vi.fn(async () => 'codex')
+    registerSshPtyProvider('ssh-1', { confirmForegroundProcess } as never)
+    setPtyOwnership('remote-pty', 'ssh-1')
+    const runtime = { setPtyController: vi.fn() }
+    handlers.clear()
+    registerPtyHandlers(mainWindow as never, runtime as never)
+    const controller = runtime.setPtyController.mock.calls[0]?.[0] as {
+      confirmForegroundProcess: (ptyId: string) => Promise<string | null>
+    }
+
+    await expect(controller.confirmForegroundProcess('remote-pty')).resolves.toBe('codex')
+    expect(confirmForegroundProcess).toHaveBeenCalledOnce()
+    expect(confirmForegroundProcess).toHaveBeenCalledWith('remote-pty')
+    deletePtyOwnership('remote-pty')
+  })
+
+  it('returns unavailable runtime confirmation for unsupported or missing providers', async () => {
+    registerSshPtyProvider('ssh-1', {} as never)
+    setPtyOwnership('unsupported-pty', 'ssh-1')
+    setPtyOwnership('missing-pty', 'missing-connection')
+    const runtime = { setPtyController: vi.fn() }
+    handlers.clear()
+    registerPtyHandlers(mainWindow as never, runtime as never)
+    const controller = runtime.setPtyController.mock.calls[0]?.[0] as {
+      confirmForegroundProcess: (ptyId: string) => Promise<string | null>
+    }
+
+    await expect(controller.confirmForegroundProcess('unsupported-pty')).resolves.toBeNull()
+    await expect(controller.confirmForegroundProcess('missing-pty')).resolves.toBeNull()
+    deletePtyOwnership('unsupported-pty')
+    deletePtyOwnership('missing-pty')
+  })
+
   it('rethrows non-not-found local provider shutdown failures', async () => {
     setLocalPtyProvider({
       spawn: vi.fn(),

@@ -71,6 +71,7 @@ import { normalizeAutoRenameBranchFromWorkDefaultOn } from '../../../shared/auto
 import { normalizeTerminalCursorStyleDefault } from '../../../shared/terminal-cursor-style-settings'
 import { normalizeTerminalCustomThemes } from '../../../shared/terminal-custom-themes'
 import { normalizeUiLanguage } from '../../../shared/ui-language'
+import { normalizeUsagePercentageDisplay } from '../../../shared/usage-percentage-display'
 import type { RateLimitState } from '../../../shared/rate-limit-types'
 import type { RuntimeStatus, RuntimeSyncWindowGraph } from '../../../shared/runtime-types'
 import {
@@ -732,7 +733,11 @@ function createWebPreloadApi(): Partial<PreloadApi> {
           callRuntimeResult<string[]>('host.wsl.listDistros').catch(() => [])
         ])
         return { available, distros, default: distros[0] ?? null }
-      }
+      },
+      // Why: there is no host.wsl.pathExists RPC — a paired web client can't probe
+      // the host's 9P filesystem, so report inconclusive (null). Terminal POSIX
+      // links then stay clickable, matching the native inconclusive default (#8156).
+      pathExists: async () => null
     },
     pwsh: {
       isAvailable: () => callRuntimeResult<boolean>('host.pwsh.isAvailable').catch(() => false)
@@ -3266,6 +3271,9 @@ function mergeWebUIState(
       safeUpdates._worktreeCardModeDefaulted ?? base._worktreeCardModeDefaulted,
     agentActivityDisplayMode: normalizeAgentActivityDisplayMode(
       safeUpdates.agentActivityDisplayMode ?? base.agentActivityDisplayMode
+    ),
+    usagePercentageDisplay: normalizeUsagePercentageDisplay(
+      safeUpdates.usagePercentageDisplay ?? base.usagePercentageDisplay
     )
   }
 }

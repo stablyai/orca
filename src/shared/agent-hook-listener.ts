@@ -52,7 +52,7 @@ import {
   type AgentProviderSessionMetadata
 } from './agent-session-resume'
 import { parsePaneKey } from './stable-pane-id'
-import { isHarnessInjectedUserTurnText } from './harness-injected-user-turns'
+import { isKnownHarnessInjectedUserTurnText } from './harness-injected-user-turns'
 import {
   buildGrokChatHistoryPathCandidates,
   findGrokChatHistoryBySessionId,
@@ -451,8 +451,10 @@ function resolvePrompt(
 ): string {
   // Why: harness-injected turns (task notifications, system reminders) fire
   // UserPromptSubmit but are not the user's ask — keep the cached real prompt
-  // instead of surfacing raw machinery tags in status labels.
-  if (isHarnessInjectedUserTurnText(promptText)) {
+  // instead of surfacing raw machinery tags in status labels. Match only known
+  // harness tags: a real prompt pasting a custom `<my-element>` must reset the
+  // turn, not be mistaken for machinery and leave the pane on a stale prompt.
+  if (isKnownHarnessInjectedUserTurnText(promptText)) {
     return state.lastPromptByPaneKey.get(paneKey) ?? ''
   }
   if (options?.resetOnNewTurn) {
@@ -2266,7 +2268,10 @@ function hasExplicitUserPrompt(
   }
   // Why: harness-injected machinery turns are not proof of a user submit —
   // they must not count for prompt-sent telemetry or permission stickiness.
-  if (isHarnessInjectedUserTurnText(extractedPrompt.text)) {
+  // Match only known harness tags: a real prompt starting with a custom
+  // `<my-element>` is an explicit user turn and must survive interrupt recovery
+  // (a false "not explicit" leaves the agent visibly done after Ctrl+C).
+  if (isKnownHarnessInjectedUserTurnText(extractedPrompt.text)) {
     return false
   }
   // Why: bare `message` fields often contain permission or status copy. They

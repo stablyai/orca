@@ -1209,6 +1209,31 @@
   background: color-mix(in srgb, var(--worktree-sidebar-foreground) 14%, var(--worktree-sidebar));
 }
 
+/* Why: one-shot status-bar callout is portaled fixed above the meters.
+   Opaque popover surface (not glass) so titlebar/terminal chrome cannot
+   bleed through; use design tokens + the documented floating elevation. */
+.status-bar-change-notice-card {
+  border: 1px solid var(--border);
+  background: var(--popover);
+  color: var(--popover-foreground);
+  /* STYLEGUIDE: floating elevation for popovers that escape the editor surface. */
+  box-shadow: 0 10px 24px rgb(0 0 0 / 0.18);
+}
+
+/* Why: caret points down at the usage meters this notice explains. */
+.status-bar-change-notice-card::after {
+  content: '';
+  position: absolute;
+  left: 1.25rem;
+  bottom: -6px;
+  width: 12px;
+  height: 12px;
+  transform: rotate(45deg);
+  border-right: 1px solid var(--border);
+  border-bottom: 1px solid var(--border);
+  background: var(--popover);
+}
+
 /* Why: the first-run Mobile Emulator intro sits directly under that menu row;
    an upward caret aligned to the phone icon reads as a callout, not a footer. */
 .mobile-emulator-tab-intro-callout--menu {

@@ -5,6 +5,7 @@ import { useConfirmationDialog } from '@/components/confirmation-dialog'
 import { dirname } from '@/lib/path'
 import { useShortcutLabel } from '@/hooks/useShortcutLabel'
 import { isPathEqualOrDescendant } from './file-explorer-paths'
+import { runBatchDeletion, selectDeletionRoots } from './file-explorer-batch-deletion'
 import type { TreeNode } from './file-explorer-types'
 import { getFileExplorerOperationRoute } from './file-explorer-operation-owner'
 import {
@@ -38,6 +39,15 @@ type UseFileDeletionResult = {
   requestDeleteAll: (nodes: TreeNode[]) => void
 }
 
+// Why: gate the batch prompt on the same condition runDelete uses to actually
+// show its per-node confirm — a non-local owner with a resolvable route.
+// Unresolved owners throw before prompting, so a batch of them must not pop a
+// destructive dialog for deletes that provably cannot proceed.
+function needsRemoteDeleteConfirmation(node: TreeNode): boolean {
+  const operationOwner = node.operationOwner ?? { kind: 'unresolved' as const }
+  return operationOwner.kind !== 'local' && getFileExplorerOperationRoute(operationOwner) !== null
+}
+
 export function useFileDeletion({
   activeWorktreeId,
   openFiles,
@@ -57,7 +67,7 @@ export function useFileDeletion({
   const inFlightRef = useRef<Set<string>>(new Set())
 
   const runDelete = useCallback(
-    async (node: TreeNode): Promise<boolean> => {
+    async (node: TreeNode, options?: { skipConfirmation?: boolean }): Promise<boolean> => {
       if (inFlightRef.current.has(node.path)) {
         return false
       }
@@ -86,8 +96,9 @@ export function useFileDeletion({
           connectionId
         }
         // Why: remote deletes bypass OS Trash, and undo cannot recover
-        // directories or unreadable files.
-        if (isRemote) {
+        // directories or unreadable files. Batch deletes confirm once up
+        // front instead, so they skip the per-node prompt.
+        if (isRemote && !options?.skipConfirmation) {
           const confirmed = await confirm({
             title: translate(
               'auto.components.right.sidebar.useFileDeletion.d979a4fbb5',
@@ -247,29 +258,39 @@ export function useFileDeletion({
         requestDelete(nodes[0])
         return
       }
-      // Why: skip descendants of other selected directories — deleting a parent
-      // already removes the child, and issuing both requests races on the
-      // now-missing path and produces spurious errors.
-      const roots = nodes.filter(
-        (n) =>
-          !nodes.some(
-            (other) =>
-              other !== n && other.isDirectory && isPathEqualOrDescendant(n.path, other.path)
-          )
-      )
-      // Why: process sequentially in the caller's tree order so each delete
-      // fully settles before the next begins — this avoids concurrent writes
-      // to the same parent directory and makes failure toasts deterministic.
-      // Selection is cleared once after the entire batch settles rather than
-      // per-node, so no concurrent completion can restore a partial stale set.
+      const roots = selectDeletionRoots(nodes)
+      // Why: selection is cleared once after the entire batch settles rather
+      // than per-node, so no concurrent completion can restore a partial
+      // stale set.
       void (async () => {
-        const deletedRoots: TreeNode[] = []
-        for (const node of roots) {
-          if (await runDelete(node)) {
-            deletedRoots.push(node)
-          }
-        }
-        if (deletedRoots.length === 0) {
+        const deletedRoots = await runBatchDeletion({
+          roots,
+          // Why: only remote deletes confirm at all — local deletes go to the
+          // OS Trash and stay prompt-free in batches too.
+          needsConfirmation: roots.some(needsRemoteDeleteConfirmation),
+          confirmBatch: () =>
+            confirm({
+              // Why: count the full selection, not the filtered roots —
+              // deleting a folder still deletes the selected children inside
+              // it, and the prompt should match what the user sees selected.
+              title: translate(
+                'auto.components.right.sidebar.useFileDeletion.af1270b90d',
+                'Permanently delete {{count}} items?',
+                { count: nodes.length }
+              ),
+              description: translate(
+                'auto.components.right.sidebar.useFileDeletion.dd029aa5cd',
+                'This permanently deletes the selected items and any directory contents on the remote host. This cannot be undone.'
+              ),
+              confirmLabel: translate(
+                'auto.components.right.sidebar.useFileDeletion.92276aceb7',
+                'Delete'
+              ),
+              confirmVariant: 'destructive'
+            }),
+          deleteNode: (node) => runDelete(node, { skipConfirmation: true })
+        })
+        if (deletedRoots === null || deletedRoots.length === 0) {
           return
         }
         setSelectedPaths(
@@ -284,7 +305,7 @@ export function useFileDeletion({
         )
       })()
     },
-    [runDelete, requestDelete, setSelectedPaths]
+    [confirm, runDelete, requestDelete, setSelectedPaths]
   )
 
   return useMemo(

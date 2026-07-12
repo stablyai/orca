@@ -105,6 +105,9 @@ import {
   ONBOARDING_FINAL_STEP
 } from '../shared/constants'
 import { parseWorkspaceSession } from '../shared/workspace-session-schema'
+import { normalizeUsagePercentageDisplay } from '../shared/usage-percentage-display'
+import { isExistingPersistedProfile } from '../shared/project-order-manual-default-notice'
+import { resolveUsagePercentageDisplayChangeNoticeDismissed } from '../shared/usage-percentage-display-change-notice'
 import {
   LOCAL_EXECUTION_HOST_ID,
   normalizeExecutionHostOrder,
@@ -3031,6 +3034,11 @@ export class Store {
         const migratedTerminalLineHeight = normalizeTerminalLineHeight(
           parsed.settings?.terminalLineHeight
         )
+        const terminalRightClickToPasteDefaultedForPlatform =
+          parsed.settings?.terminalRightClickToPasteDefaultedForPlatform === true
+        if (!terminalRightClickToPasteDefaultedForPlatform) {
+          this.loadNeedsSave = true
+        }
         if (
           parsed.settings?.terminalLineHeight !== undefined &&
           parsed.settings.terminalLineHeight !== migratedTerminalLineHeight
@@ -3170,6 +3178,15 @@ export class Store {
             ...migratedAutoRenameBranchFromWork,
             ...migratedTerminalCursorStyle,
             terminalLineHeight: migratedTerminalLineHeight,
+            // Why: the old global true default was inherited, while false was
+            // always an explicit opt-out and must survive this one-shot reset.
+            terminalRightClickToPaste: terminalRightClickToPasteDefaultedForPlatform
+              ? (parsed.settings?.terminalRightClickToPaste ??
+                defaults.settings.terminalRightClickToPaste)
+              : parsed.settings?.terminalRightClickToPaste === false
+                ? false
+                : defaults.settings.terminalRightClickToPaste,
+            terminalRightClickToPasteDefaultedForPlatform: true,
             ...migratedTerminalTuiScrollSensitivity.settings,
             experimentalActivity: migratedExperimentalActivity,
             experimentalActivityDefaultedOffForAllUsers: true,
@@ -3340,6 +3357,25 @@ export class Store {
             ) {
               this.loadNeedsSave = true
             }
+            // Why: only upgraded profiles that still use the new default get
+            // the one-time usage-display change notice; brand-new profiles and
+            // users who already chose remaining stay quiet.
+            const usagePercentageDisplayChangeNoticeDismissed =
+              resolveUsagePercentageDisplayChangeNoticeDismissed({
+                rawDismissed: parsed.ui?.usagePercentageDisplayChangeNoticeDismissed,
+                rawUsagePercentageDisplay: parsed.ui?.usagePercentageDisplay,
+                isExistingProfile: isExistingPersistedProfile({
+                  repoCount: parsed.repos?.length ?? 0,
+                  onboardingClosedAt: normalizedOnboarding.closedAt,
+                  ui: parsed.ui
+                })
+              })
+            if (
+              parsed.ui?.usagePercentageDisplayChangeNoticeDismissed !==
+              usagePercentageDisplayChangeNoticeDismissed
+            ) {
+              this.loadNeedsSave = true
+            }
             return {
               ...defaults.ui,
               // Why: missing card properties should follow the persisted card
@@ -3353,6 +3389,7 @@ export class Store {
               rightSidebarOpen,
               rightSidebarTab: normalizeRightSidebarTab(parsed.ui?.rightSidebarTab),
               setupGuideSidebarDismissed,
+              usagePercentageDisplayChangeNoticeDismissed,
               setupGuideBrowserMilestoneMigrated:
                 typeof parsed.ui?.setupGuideBrowserMilestoneMigrated === 'boolean'
                   ? parsed.ui.setupGuideBrowserMilestoneMigrated
@@ -5375,6 +5412,9 @@ export class Store {
         this.state.ui?.workspaceBoardColumnWidth
       ),
       syncTaskStatusFromWorkspaceBoard: this.state.ui?.syncTaskStatusFromWorkspaceBoard === true,
+      usagePercentageDisplay: normalizeUsagePercentageDisplay(
+        this.state.ui?.usagePercentageDisplay
+      ),
       // Why: strict boolean coercion so a missing/legacy value reads as false
       // (first-run notice still fires) rather than leaking a non-bool through.
       trayMinimizeNoticeShown: this.state.ui?.trayMinimizeNoticeShown === true,
@@ -5454,6 +5494,9 @@ export class Store {
         sanitizedUpdates.syncTaskStatusFromWorkspaceBoard !== undefined
           ? sanitizedUpdates.syncTaskStatusFromWorkspaceBoard === true
           : this.state.ui?.syncTaskStatusFromWorkspaceBoard === true,
+      usagePercentageDisplay: normalizeUsagePercentageDisplay(
+        sanitizedUpdates.usagePercentageDisplay ?? this.state.ui?.usagePercentageDisplay
+      ),
       markdownTocPanelWidth: clampMarkdownTocPanelWidth(
         sanitizedUpdates.markdownTocPanelWidth ?? this.state.ui?.markdownTocPanelWidth
       ),

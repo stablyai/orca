@@ -29,6 +29,11 @@ import type {
   WorkspaceHostScope,
   VisibleWorkspaceHostIds
 } from '../../../../shared/types'
+import type { UsagePercentageDisplay } from '../../../../shared/usage-percentage-display'
+import {
+  DEFAULT_USAGE_PERCENTAGE_DISPLAY,
+  normalizeUsagePercentageDisplay
+} from '../../../../shared/usage-percentage-display'
 import type { GitLabWorkItem } from '../../../../shared/gitlab-types'
 import type { LaunchSource } from '../../../../shared/telemetry-events'
 import type { TaskSourceContext } from '../../../../shared/task-source-context'
@@ -742,6 +747,16 @@ export type UISlice = {
   } | null
   openSettingsTarget: (target: NonNullable<UISlice['settingsNavigationTarget']>) => void
   clearSettingsTarget: () => void
+  /**
+   * One-shot Appearance accordion to expand for nested Settings deep links
+   * (e.g. Usage percentages lives under Window & Sidebar). Cleared when
+   * Appearance consumes it.
+   */
+  appearanceAccordionDeepLink: 'interface' | 'terminal' | 'window' | null
+  setAppearanceAccordionDeepLink: (
+    section: NonNullable<UISlice['appearanceAccordionDeepLink']>
+  ) => void
+  clearAppearanceAccordionDeepLink: () => void
   activeModal:
     | 'none'
     | 'create-worktree'
@@ -822,6 +837,8 @@ export type UISlice = {
   dismissMobileEmulatorAgentSetup: () => void
   projectOrderManualDefaultNoticeDismissed: boolean
   dismissProjectOrderManualDefaultNotice: () => void
+  usagePercentageDisplayChangeNoticeDismissed: boolean
+  dismissUsagePercentageDisplayChangeNotice: () => void
   usageEmptyStateDismissed: boolean
   dismissUsageEmptyState: () => void
   groupBy: 'none' | 'workspace-status' | 'repo' | 'pr-status'
@@ -869,6 +886,8 @@ export type UISlice = {
   toggleStatusBarItem: (item: StatusBarItem) => void
   statusBarVisible: boolean
   setStatusBarVisible: (v: boolean) => void
+  usagePercentageDisplay: UsagePercentageDisplay
+  setUsagePercentageDisplay: (display: UsagePercentageDisplay) => void
   workspacePortScan: { key: string; result: WorkspacePortScanResult } | null
   workspacePortScansByKey: Record<string, WorkspacePortScanResult>
   workspacePortScanRefreshing: boolean
@@ -1490,6 +1509,9 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
   settingsNavigationTarget: null,
   openSettingsTarget: (target) => set({ settingsNavigationTarget: target }),
   clearSettingsTarget: () => set({ settingsNavigationTarget: null }),
+  appearanceAccordionDeepLink: null,
+  setAppearanceAccordionDeepLink: (section) => set({ appearanceAccordionDeepLink: section }),
+  clearAppearanceAccordionDeepLink: () => set({ appearanceAccordionDeepLink: null }),
 
   activeModal: 'none',
   modalData: {},
@@ -1915,6 +1937,17 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
       window.api.ui.set({ projectOrderManualDefaultNoticeDismissed: true }).catch(console.error)
       return { projectOrderManualDefaultNoticeDismissed: true }
     }),
+  // Why: defaults true so pre-hydration / brand-new sessions never flash the
+  // change notice before persistence resolves eligibility.
+  usagePercentageDisplayChangeNoticeDismissed: true,
+  dismissUsagePercentageDisplayChangeNotice: () =>
+    set((s) => {
+      if (s.usagePercentageDisplayChangeNoticeDismissed) {
+        return s
+      }
+      window.api.ui.set({ usagePercentageDisplayChangeNoticeDismissed: true }).catch(console.error)
+      return { usagePercentageDisplayChangeNoticeDismissed: true }
+    }),
   usageEmptyStateDismissed: false,
   dismissUsageEmptyState: () =>
     set((s) => {
@@ -2111,6 +2144,22 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
   setStatusBarVisible: (v) => {
     window.api.ui.set({ statusBarVisible: v }).catch(console.error)
     set({ statusBarVisible: v })
+  },
+  usagePercentageDisplay: DEFAULT_USAGE_PERCENTAGE_DISPLAY,
+  setUsagePercentageDisplay: (display) => {
+    const normalized = normalizeUsagePercentageDisplay(display)
+    // Why: changing the control is the discovery path; permanently dismiss the
+    // one-time change notice so it does not reappear after the user adapted.
+    window.api.ui
+      .set({
+        usagePercentageDisplay: normalized,
+        usagePercentageDisplayChangeNoticeDismissed: true
+      })
+      .catch(console.error)
+    set({
+      usagePercentageDisplay: normalized,
+      usagePercentageDisplayChangeNoticeDismissed: true
+    })
   },
   workspacePortScan: null,
   workspacePortScansByKey: {},
@@ -2400,6 +2449,7 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
         syncTaskStatusFromWorkspaceBoard: ui.syncTaskStatusFromWorkspaceBoard === true,
         statusBarItems: statusBarItemsWithGrok,
         statusBarVisible: ui.statusBarVisible ?? true,
+        usagePercentageDisplay: normalizeUsagePercentageDisplay(ui.usagePercentageDisplay),
         // Why: absent → true so existing users see the pet the first time
         // they enable the experimental flag. Only an explicit Hide pet
         // dismissal persists a `false` value.
@@ -2453,6 +2503,10 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
         mobileEmulatorAgentSetupDismissed: ui.mobileEmulatorAgentSetupDismissed === true,
         projectOrderManualDefaultNoticeDismissed:
           ui.projectOrderManualDefaultNoticeDismissed === true,
+        // Why: load() resolves this for existing vs new profiles; treat only
+        // explicit true as dismissed so a false from migration still surfaces.
+        usagePercentageDisplayChangeNoticeDismissed:
+          ui.usagePercentageDisplayChangeNoticeDismissed === true,
         // Why: default false when undefined so existing users still see the CTA;
         // only an explicit dismissal persists true.
         usageEmptyStateDismissed: ui.usageEmptyStateDismissed === true,

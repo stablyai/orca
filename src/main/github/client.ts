@@ -2392,6 +2392,7 @@ type TrackedUpstreamBranch = {
 }
 
 const TRACKED_UPSTREAM_SNAPSHOT_CACHE_TTL_MS = 30_000
+const TRACKED_UPSTREAM_SNAPSHOT_CACHE_MAX_ENTRIES = 512
 
 type TrackedUpstreamSnapshotCacheEntry = {
   expiresAt: number
@@ -2411,12 +2412,49 @@ const trackedUpstreamSnapshotInFlight = new Map<
   string,
   Promise<TrackedUpstreamSnapshotProbeResult>
 >()
-const trackedUpstreamSnapshotGenerations = new Map<string, number>()
+const trackedUpstreamSnapshotGenerations = new Map<string, symbol>()
 
-function beginTrackedUpstreamSnapshotProbe(cacheKey: string): number {
-  const nextGeneration = (trackedUpstreamSnapshotGenerations.get(cacheKey) ?? 0) + 1
-  trackedUpstreamSnapshotGenerations.set(cacheKey, nextGeneration)
-  return nextGeneration
+function beginTrackedUpstreamSnapshotProbe(cacheKey: string): symbol {
+  const generation = Symbol()
+  trackedUpstreamSnapshotGenerations.set(cacheKey, generation)
+  return generation
+}
+
+function finishTrackedUpstreamSnapshotProbe(cacheKey: string, generation: symbol): void {
+  // Why: generations only guard an active probe; retaining completed repo keys
+  // leaks worktree/runtime identities after the short-lived snapshot TTL expires.
+  if (trackedUpstreamSnapshotGenerations.get(cacheKey) === generation) {
+    trackedUpstreamSnapshotGenerations.delete(cacheKey)
+  }
+}
+
+function pruneTrackedUpstreamSnapshotCache(now: number): void {
+  for (const [cacheKey, cached] of trackedUpstreamSnapshotCache) {
+    if (cached.expiresAt <= now) {
+      trackedUpstreamSnapshotCache.delete(cacheKey)
+    }
+  }
+  // Why: workspace/runtime churn can create unbounded unique keys within one
+  // TTL window, so expiry sweeping alone is not a memory bound.
+  while (trackedUpstreamSnapshotCache.size > TRACKED_UPSTREAM_SNAPSHOT_CACHE_MAX_ENTRIES) {
+    const oldestKey = trackedUpstreamSnapshotCache.keys().next().value
+    if (oldestKey === undefined) {
+      break
+    }
+    trackedUpstreamSnapshotCache.delete(oldestKey)
+  }
+}
+
+export function _getTrackedUpstreamBranchCacheSizesForTests(): {
+  snapshots: number
+  inFlight: number
+  generations: number
+} {
+  return {
+    snapshots: trackedUpstreamSnapshotCache.size,
+    inFlight: trackedUpstreamSnapshotInFlight.size,
+    generations: trackedUpstreamSnapshotGenerations.size
+  }
 }
 
 export function __resetTrackedUpstreamBranchCacheForTests(): void {
@@ -2510,6 +2548,7 @@ async function getTrackedUpstreamBranch(
         upstreamsByBranchName: getCacheableTrackedUpstreamSnapshot(result.upstreamsByBranchName),
         expiresAt: Date.now() + TRACKED_UPSTREAM_SNAPSHOT_CACHE_TTL_MS
       })
+      pruneTrackedUpstreamSnapshotCache(Date.now())
     }
     if (trackedUpstreamSnapshotGenerations.get(cacheKey) !== probeGeneration) {
       const fresherCached = trackedUpstreamSnapshotCache.get(cacheKey)
@@ -2522,6 +2561,7 @@ async function getTrackedUpstreamBranch(
     if (trackedUpstreamSnapshotInFlight.get(cacheKey) === probe) {
       trackedUpstreamSnapshotInFlight.delete(cacheKey)
     }
+    finishTrackedUpstreamSnapshotProbe(cacheKey, probeGeneration)
   }
 }
 

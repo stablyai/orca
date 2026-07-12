@@ -785,11 +785,7 @@ export default function TerminalPane({
   const updateSettings = useAppStore((store) => store.updateSettings)
   const requestLinkRoutingPreference = useLinkRoutingPreferenceDialog()
   const keybindings = useAppStore((store) => store.keybindings)
-  // Why: Windows is the only platform where bare right-click is repurposed as
-  // a paste gesture; on macOS/Linux the terminal still owns right-click for the
-  // context menu. The settings default keeps the Windows shortcut feeling native
-  // without changing the other platforms' interaction model.
-  const rightClickToPaste = isWindowsUserAgent() && (settings?.terminalRightClickToPaste ?? true)
+  const rightClickToPaste = settings?.terminalRightClickToPaste ?? isWindowsUserAgent()
   // Why: Windows ConPTY does not forward DECSET 2004 from foreground TUIs, so
   // xterm may not know multi-line text needs bracketed-paste protection.
   const forceBracketedMultilineTextPaste = isWindowsUserAgent()

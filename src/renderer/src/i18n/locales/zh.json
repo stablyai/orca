@@ -722,6 +722,8 @@
       "GitHubItemDialog": {
         "3ab6ac0fc8": "预览并编辑选定的 GitHub 议题或拉取请求。",
         "3cd5ae5b7b": "没有更改任何文件。",
+        "filesUnavailable": "无法加载更改的文件。",
+        "filesRetry": "重试",
         "999b5ad7d9": "文件",
         "4bd1f5b055": "检查项",
         "e30a5470c9": "对话",
@@ -1385,7 +1387,9 @@
         "1ff5d979df": "未分配任何人",
         "checkActionRequiredHint": "此检查需要在 GitHub 上执行手动操作（例如，批准工作流运行），然后才能解除合并阻止。",
         "dd5d9a4f17": "{{value0}}更新",
-        "71a3c0f9d2": "启动工作区"
+        "71a3c0f9d2": "启动工作区",
+        "filesUnavailable": "Couldn't load changed files.",
+        "filesRetry": "Retry"
       },
       "QuickOpen": {
         "1dbd3f59ff": "移动",
@@ -2366,7 +2370,9 @@
             "failed": "未删除工作区：{{value0}}",
             "error": "工作区清理失败",
             "skippedAncestor": "由于无法删除嵌套工作区，已跳过。",
-            "timedOut": "删除 {{value0}} 的时间比预期长。它将在后台继续运行。"
+            "timedOut": "删除 {{value0}} 的时间比预期长。它将在后台继续运行。",
+            "stillRemoving": "Still removing workspaces: {{value0}}",
+            "skippedPendingAncestor": "Skipped because a nested workspace has not finished removing."
           },
           "candidateRow": {
             "gitLabel": "Git",
@@ -3205,6 +3211,17 @@
           },
           "SshTargetStatusRow": {
             "sshHost": "SSH 主机"
+          },
+          "usagePercentageLabel": {
+            "used": "已用 {{value0}}%",
+            "remaining": "剩余 {{value0}}%"
+          },
+          "UsagePercentageDisplayChangeNotice": {
+            "title": "Usage now shows % used",
+            "body": "Prefer remaining? Change it in Settings.",
+            "dismiss": "Dismiss",
+            "openSettings": "Open Settings",
+            "gotIt": "Got it"
           }
         }
       },
@@ -6739,9 +6756,9 @@
           "348246b06f": "false",
           "5936387ddd": "自动",
           "adbafefe56": "风俗",
-          "16753eea48": "在 Windows 上，右键单击粘贴剪贴板。 Ctrl+右键单击打开上下文菜单。",
+          "16753eea48": "右键单击粘贴剪贴板。 Ctrl+右键单击打开上下文菜单。",
           "9c178cf8aa": "右键单击粘贴",
-          "af0c3b6e39": "在 Windows 上，右键单击将剪贴板粘贴到终端中。使用 Ctrl+右键单击打开上下文菜单。",
+          "af0c3b6e39": "右键单击将剪贴板粘贴到终端中。使用 Ctrl+右键单击打开上下文菜单。",
           "29154326bb": "开",
           "ab20575a8a": "关",
           "ab3a1f9068": "执行程序",
@@ -7213,7 +7230,9 @@
             "f8e2a1c4b6": "Grok 使用量",
             "e7d1b0f3a5": "显示来自 Grok CLI OAuth 的 Grok 每周额度使用量。",
             "d6c0a9e2f4": "grok",
-            "c5b9f8d1e3": "xai"
+            "c5b9f8d1e3": "xai",
+            "usagePercentageDisplayTitle": "用量百分比",
+            "usagePercentageDisplayDescription": "选择以已用或剩余百分比显示提供商限额。"
           }
         },
         "auto": {
@@ -8465,7 +8484,7 @@
               "e55186fe2b": "右键单击",
               "28ff08ed35": "视窗",
               "e7d2793b03": "终端",
-              "8ba875c132": "在 Windows 上，右键单击将剪贴板粘贴到终端中。使用 Ctrl+右键单击打开上下文菜单。",
+              "8ba875c132": "右键单击将剪贴板粘贴到终端中。使用 Ctrl+右键单击打开上下文菜单。",
               "f0b8448570": "右键单击粘贴",
               "04994f6929": "默认",
               "fc564eadaf": "德比安",
@@ -9030,6 +9049,10 @@
           "powershell": "PowerShell",
           "cmd": "CMD",
           "gitBash": "Git Bash"
+        },
+        "AppearanceWindowSidebarSection": {
+          "usagePercentageDisplayUsed": "已用",
+          "usagePercentageDisplayRemaining": "剩余"
         }
       },
       "right": {
@@ -9897,7 +9920,9 @@
             "92276aceb7": "删除",
             "7fb9435c86": "这会永久删除远程主机上的目录及其内容。此操作无法撤销。",
             "23e98f192f": "这会永久删除远程主机上的文件。此操作无法撤销。",
-            "8b8ee9d22f": "无法确定哪个主机拥有此文件。请检查工作区连接后重试。"
+            "8b8ee9d22f": "无法确定哪个主机拥有此文件。请检查工作区连接后重试。",
+            "af1270b90d": "永久删除 {{count}} 项？",
+            "dd029aa5cd": "这会永久删除远程主机上所选的各项及任何目录内容。此操作无法撤销。"
           },
           "useFileExplorerHandlers": {
             "32cd9fd991": "无法打开符号链接目标"
@@ -11631,7 +11656,8 @@
           "1c99b726e0": "删除链接",
           "cdfe166f6f": "编辑链接",
           "bfc813e909": "打开链接",
-          "7b0b945fdc": "粘贴或输入链接..."
+          "7b0b945fdc": "粘贴或输入链接...",
+          "copyLink": "复制链接"
         },
         "RichMarkdownReviewNoteLayer": {
           "f3ef92952b": "此注",
@@ -11658,7 +11684,8 @@
           "68d090241d": "匹配整个单词",
           "fd97c7e585": "替换",
           "44682b4159": "在 Markdown 编辑器中替换",
-          "c2884f5e95": "全部替换"
+          "c2884f5e95": "全部替换",
+          "preservedRichContentReadOnly": "保留的富文本内容在富文本模式下为只读。"
         },
         "RichMarkdownSlashMenu": {
           "82c6816ff8": "没有找到块",
@@ -11875,6 +11902,24 @@
           "3fa2b8d417": "从磁盘重新加载",
           "a95d02c644": "保留我的编辑",
           "2c8f1e07b9": "正在加载比较..."
+        },
+        "RichMarkdownEditor": {
+          "citationLinkAvailable": "{{value0}}，链接到 {{value1}}。按 Enter 打开，或按 Tab 移至链接操作。",
+          "citationFallbackLabel": "引用",
+          "citationLinkUnavailable": "{{value0}}，引用链接不可用。{{value1}}",
+          "tabForCitationActions": "按 Tab 移至可用操作。",
+          "noCitationActions": "没有可用的链接操作。"
+        },
+        "richMarkdownHtmlSuperscriptLink": {
+          "availableAriaLabel": "{{value0}}，链接到 {{value1}}",
+          "unavailableAriaLabel": "{{value0}}，引用链接不可用"
+        },
+        "richMarkdownLinkClipboard": {
+          "copiedLink": "已复制链接",
+          "copyLinkFailed": "复制链接失败"
+        },
+        "richMarkdownSourceOwningCutFeedback": {
+          "selectLessContent": "请选择较少的内容，或使用代码模式剪切保留的 HTML 引用。"
         }
       },
       "diff": {

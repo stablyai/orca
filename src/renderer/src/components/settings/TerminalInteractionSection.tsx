@@ -24,7 +24,6 @@ type TerminalInteractionSectionProps = {
   settings: GlobalSettings
   updateSettings: (updates: Partial<GlobalSettings>) => void
   searchQuery: string
-  isWindows: boolean
 }
 
 type ScrollSpeedSliderProps = {
@@ -89,8 +88,7 @@ function ScrollSpeedSlider({
 export function TerminalInteractionSection({
   settings,
   updateSettings,
-  searchQuery,
-  isWindows
+  searchQuery
 }: TerminalInteractionSectionProps): React.JSX.Element {
   return (
     <section key="pane-interaction" className="space-y-3">
@@ -223,11 +221,7 @@ export function TerminalInteractionSection({
           </div>
         </SearchableSetting>
 
-        {/* Why: the Windows-only right-click toggle lives in this section, so the
-            section must also match that search term or settings search would hide
-            the control even though it is present. */}
-        {isWindows &&
-        matchesSettingsSearch(searchQuery, getTerminalRightClickToPasteSearchEntry()) ? (
+        {matchesSettingsSearch(searchQuery, getTerminalRightClickToPasteSearchEntry()) ? (
           <SearchableSetting
             title={translate(
               'auto.components.settings.TerminalPane.9c178cf8aa',
@@ -235,9 +229,9 @@ export function TerminalInteractionSection({
             )}
             description={translate(
               'auto.components.settings.TerminalPane.af0c3b6e39',
-              'On Windows, right-click pastes the clipboard into the terminal. Use Ctrl+right-click to open the context menu.'
+              'Right-click pastes the clipboard into the terminal. Use Ctrl+right-click to open the context menu.'
             )}
-            keywords={['terminal', 'windows', 'right click', 'paste', 'context menu']}
+            keywords={['terminal', 'right click', 'paste', 'context menu']}
           >
             <SettingsSwitchRow
               label={translate(
@@ -246,7 +240,7 @@ export function TerminalInteractionSection({
               )}
               description={translate(
                 'auto.components.settings.TerminalPane.16753eea48',
-                'On Windows, right-click pastes the clipboard. Ctrl+right-click opens the context menu.'
+                'Right-click pastes the clipboard. Ctrl+right-click opens the context menu.'
               )}
               checked={settings.terminalRightClickToPaste}
               onChange={() =>

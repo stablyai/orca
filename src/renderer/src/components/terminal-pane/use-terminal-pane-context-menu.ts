@@ -480,10 +480,8 @@ export function useTerminalPaneContextMenu({
         : null
     contextPaneIdRef.current = clickedPane?.id ?? null
 
-    // Why: Windows terminals treat right-click as copy-or-paste depending on
-    // whether text is selected. With a selection, right-click copies it and
-    // clears the selection; without one, it pastes. Ctrl+right-click still
-    // reaches the app menu so the menu remains discoverable.
+    // Why: when users opt into terminal-style right-click, a selection copies
+    // and no selection pastes. Ctrl+right-click keeps the app menu reachable.
     if (rightClickToPaste && !event.ctrlKey) {
       event.stopPropagation()
       if (!clickedPane) {

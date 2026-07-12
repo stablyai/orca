@@ -2115,6 +2115,171 @@
       "demotionRule": "Keep non-blocking or demote to protection none if the Windows byte test silently skips, flakes without an actionable artifact, routes bytes using tab/title/terminal-output heuristics, or adds any ordinary-key lookup, IPC, polling, scan, or lifecycle leak."
     },
     {
+      "id": "terminal-input.guarded-agent-send-authorization",
+      "title": "Guarded agent sends authorize only the confirmed exact PTY",
+      "maturity": "experimental",
+      "protection": "partial",
+      "owner": "terminal-input",
+      "layer": "runtime-provider-contract",
+      "surfaces": [
+        "terminal input",
+        "guarded note sends",
+        "agent status",
+        "PTY identity",
+        "foreground process confirmation"
+      ],
+      "platforms": [
+        "macos",
+        "linux",
+        "windows"
+      ],
+      "providers": [
+        "local",
+        "daemon",
+        "ssh",
+        "wsl",
+        "remote-runtime"
+      ],
+      "coveredPlatforms": [
+        "macos"
+      ],
+      "coveredProviders": [
+        "local",
+        "daemon"
+      ],
+      "coverageNotes": "Runtime and provider-contract tests on macOS cover exact-PTY authorization, local/daemon fresh confirmation, exact ConPTY membership, and unsupported-provider fail-closed behavior. Physical Windows, live Linux, SSH, WSL, and remote-runtime validation remain explicit gaps; providers without confirmation preserve conservative refusal on a shell conflict.",
+      "motivatingLinks": [
+        "https://github.com/stablyai/orca/issues/8303"
+      ],
+      "invariant": "A guarded note send writes only to the exact PTY binding checked by the guard and only while permission/wait evidence allows input; fresh hook state conflicting with an ordinary shell foreground requires fresh provider confirmation of a recognized agent in that PTY.",
+      "oracle": "Fresh explicit state plus ordinary PowerShell plus confirmed recognized agent is sendable on the same PTY. Confirmed shell/non-agent, unavailable confirmation, PTY exit, handle rebind, or a callback PTY mismatch returns a refusal or not-writable result and writes zero bytes.",
+      "commands": [
+        "pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/orca-runtime.test.ts src/main/runtime/rpc/terminal-send.test.ts src/main/ipc/pty.test.ts src/main/providers/agent-foreground-process.test.ts src/main/providers/local-pty-provider.test.ts src/main/providers/windows-conpty-process-membership.test.ts src/main/daemon/daemon-foreground-confirmation-protocol.test.ts src/main/daemon/pty-subprocess.test.ts src/renderer/src/lib/active-agent-note-send.test.ts src/renderer/src/components/browser-pane/BrowserAnnotationSendMenuContent.test.tsx"
+      ],
+      "testFiles": [
+        "src/main/runtime/orca-runtime.test.ts",
+        "src/main/runtime/rpc/terminal-send.test.ts",
+        "src/main/ipc/pty.test.ts",
+        "src/main/providers/agent-foreground-process.test.ts",
+        "src/main/providers/local-pty-provider.test.ts",
+        "src/main/providers/windows-conpty-process-membership.test.ts",
+        "src/main/daemon/daemon-foreground-confirmation-protocol.test.ts",
+        "src/main/daemon/pty-subprocess.test.ts",
+        "src/renderer/src/lib/active-agent-note-send.test.ts",
+        "src/renderer/src/components/browser-pane/BrowserAnnotationSendMenuContent.test.tsx"
+      ],
+      "assertionRefs": [
+        {
+          "file": "src/main/runtime/orca-runtime.test.ts",
+          "assertions": [
+            "a recognized fresh provider confirmation authorizes explicit hook state over an ordinary shell result",
+            "shell, non-agent, null, thrown, and missing confirmation remain fail-closed",
+            "title blockers and ordinary recognized agent evidence add no confirmation call",
+            "PTY exit or handle rebind during either foreground read rejects evidence bound to the original PTY",
+            "controller-less yields preserve stale-handle errors and confirmation methods retain their controller receiver"
+          ]
+        },
+        {
+          "file": "src/main/runtime/rpc/terminal-send.test.ts",
+          "assertions": [
+            "a handle rebind during guarded status evaluation returns not writable and writes zero bytes",
+            "the callback's actual PTY must equal the handle binding before status can authorize a write"
+          ]
+        },
+        {
+          "file": "src/main/ipc/pty.test.ts",
+          "assertions": [
+            "runtime confirmation reaches the provider owning the captured PTY",
+            "unsupported or missing providers return unavailable confirmation"
+          ]
+        },
+        {
+          "file": "src/main/providers/agent-foreground-process.test.ts",
+          "assertions": [
+            "recognized Windows candidates require exact ConPTY membership and detached descendants are rejected",
+            "unavailable process inspection is distinct from authoritative shell evidence"
+          ]
+        },
+        {
+          "file": "src/main/providers/local-pty-provider.test.ts",
+          "assertions": [
+            "fresh confirmation is discarded when its owning local PTY exits"
+          ]
+        },
+        {
+          "file": "src/main/providers/windows-conpty-process-membership.test.ts",
+          "assertions": [
+            "exact ConPTY console membership comes from the fixed node-pty helper",
+            "malformed, incomplete, timed-out, and spawn-error membership reads fail closed"
+          ]
+        },
+        {
+          "file": "src/main/daemon/daemon-foreground-confirmation-protocol.test.ts",
+          "assertions": [
+            "daemons from before the fresh-confirmation RPC are rejected by protocol version"
+          ]
+        },
+        {
+          "file": "src/main/daemon/pty-subprocess.test.ts",
+          "assertions": [
+            "fresh confirmation bypasses cached PowerShell and waits for a post-request process scan"
+          ]
+        },
+        {
+          "file": "src/renderer/src/lib/active-agent-note-send.test.ts",
+          "assertions": [
+            "selected active-agent note sends retain guarded paste and submit routing"
+          ]
+        },
+        {
+          "file": "src/renderer/src/components/browser-pane/BrowserAnnotationSendMenuContent.test.tsx",
+          "assertions": [
+            "browser annotation send content routes through review-notes send so existing agent sessions remain selectable",
+            "both browser annotation send surfaces wire the shared menu content"
+          ]
+        }
+      ],
+      "evidenceRuns": [
+        {
+          "date": "2026-07-11",
+          "runner": "local",
+          "platform": "macos",
+          "command": "pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/orca-runtime.test.ts src/main/runtime/rpc/terminal-send.test.ts src/main/ipc/pty.test.ts src/main/providers/agent-foreground-process.test.ts src/main/providers/local-pty-provider.test.ts src/main/providers/windows-conpty-process-membership.test.ts src/main/daemon/daemon-foreground-confirmation-protocol.test.ts src/main/daemon/pty-subprocess.test.ts src/renderer/src/lib/active-agent-note-send.test.ts src/renderer/src/components/browser-pane/BrowserAnnotationSendMenuContent.test.tsx",
+          "result": "passed",
+          "durationSeconds": 9.58,
+          "summary": "Ten focused test files passed (1183 tests), covering runtime confirmation and PTY revalidation, guarded RPC zero-write behavior, PTY controller routing, local/daemon fresh scans, exact ConPTY membership, and unchanged renderer note routing."
+        }
+      ],
+      "runtimeBudget": {
+        "p95Seconds": 45,
+        "scope": "focused runtime, RPC, PTY provider, and renderer routing units"
+      },
+      "flakeHistory": {
+        "status": "unknown",
+        "evidence": "Deterministic units have local coverage only; promotion requires repeated CI and platform history."
+      },
+      "redGreenEvidence": {
+        "status": "partial",
+        "evidence": "Removing strong confirmation fails the shell-conflict success oracle, while removing either exact-binding comparison fails zero-write rebind coverage; saved intentional-break and physical Windows evidence remain missing."
+      },
+      "performanceBudget": {
+        "required": true,
+        "evidence": "Confirmation is invoked at most once per status evaluation and only for fresh explicit hook state whose ordinary foreground result is a shell. Count tests prove permission/title blockers and ordinary recognized-agent evidence add zero confirmations; no polling, retry, session listing, provider fanout, or runtime-global cache is added, and existing provider snapshot dedup remains authoritative."
+      },
+      "promotionCriteria": [
+        "Run the browser annotation existing-agent and repeat-send path in Electron on Windows ConPTY without a recognition refusal.",
+        "Collect stable CI and flake history across local and daemon providers on Windows plus representative macOS/Linux coverage.",
+        "Attach saved intentional-break evidence for confirmation removal and exact-PTY revalidation removal."
+      ],
+      "knownGaps": [
+        "Physical Windows validation is unavailable on the current macOS host; exact ConPTY membership is covered deterministically.",
+        "Electron annotation golden-path, repeat-send, adjacent-menu evidence, and screenshots are left to coordinator validation.",
+        "SSH, WSL, legacy daemon, and remote-runtime providers without confirmation remain intentionally fail-closed on an ordinary-shell conflict; no live artifacts cover those degraded paths.",
+        "No live Linux PTY, paired-web, mobile/relay, restore/replay, or multi-window artifact is attached; those surfaces receive no renderer, persistence, or protocol change."
+      ],
+      "demotionRule": "Keep non-blocking or demote to protection none if provider confirmation becomes unconditional, exact-PTY mismatch can write bytes, unsupported providers fail open, or the focused gate flakes without an actionable product or harness defect."
+    },
+    {
       "id": "terminal-input.agent-prompt-injection",
       "title": "Orchestration agent prompts arrive as bracketed paste before submit",
       "maturity": "experimental",

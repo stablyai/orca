@@ -525,6 +525,84 @@ describe('terminal send RPC', () => {
     )
   })
 
+  it('writes zero bytes when a guarded callback observes a handle rebind during status', async () => {
+    let boundPtyId = 'pty-1'
+    let statusCalls = 0
+    const write = vi.fn()
+    const runtime = stubRuntime({
+      resolveLiveLeafForHandle: vi.fn(() => ({ ptyId: boundPtyId })),
+      getDriver: vi.fn().mockReturnValue({ kind: 'desktop' }),
+      getTerminalAgentStatus: vi.fn().mockImplementation(async () => {
+        statusCalls += 1
+        if (statusCalls === 2) {
+          boundPtyId = 'pty-2'
+        }
+        return {
+          handle: 'terminal-1',
+          isRunningAgent: true,
+          status: 'working'
+        }
+      }),
+      sendTerminal: vi.fn().mockImplementation(async (_handle, _action, options) => {
+        await options.beforeWrite('pty-1')
+        write('pty-1', '\r')
+        return { handle: 'terminal-1', accepted: true, bytesWritten: 1 }
+      })
+    })
+    const dispatcher = new RpcDispatcher({ runtime, methods: TERMINAL_METHODS })
+
+    const response = await dispatcher.dispatch(
+      makeRequest('terminal.send', {
+        terminal: 'terminal-1',
+        enter: true,
+        requireAgentStatus: 'sendable',
+        client: { id: 'desktop-1', type: 'desktop' }
+      })
+    )
+
+    expect(response).toMatchObject({
+      ok: true,
+      result: { send: { accepted: false, bytesWritten: 0 } }
+    })
+    expect(runtime.getTerminalAgentStatus).toHaveBeenCalledTimes(2)
+    expect(write).not.toHaveBeenCalled()
+  })
+
+  it('rejects a guarded callback whose actual write PTY differs from the handle binding', async () => {
+    const write = vi.fn()
+    const runtime = stubRuntime({
+      resolveLiveLeafForHandle: vi.fn(() => ({ ptyId: 'pty-1' })),
+      getDriver: vi.fn().mockReturnValue({ kind: 'desktop' }),
+      getTerminalAgentStatus: vi.fn().mockResolvedValue({
+        handle: 'terminal-1',
+        isRunningAgent: true,
+        status: 'working'
+      }),
+      sendTerminal: vi.fn().mockImplementation(async (_handle, _action, options) => {
+        await options.beforeWrite('pty-2')
+        write('pty-2', '\r')
+        return { handle: 'terminal-1', accepted: true, bytesWritten: 1 }
+      })
+    })
+    const dispatcher = new RpcDispatcher({ runtime, methods: TERMINAL_METHODS })
+
+    const response = await dispatcher.dispatch(
+      makeRequest('terminal.send', {
+        terminal: 'terminal-1',
+        enter: true,
+        requireAgentStatus: 'sendable',
+        client: { id: 'desktop-1', type: 'desktop' }
+      })
+    )
+
+    expect(response).toMatchObject({
+      ok: true,
+      result: { send: { accepted: false, bytesWritten: 0 } }
+    })
+    expect(runtime.getTerminalAgentStatus).toHaveBeenCalledTimes(1)
+    expect(write).not.toHaveBeenCalled()
+  })
+
   it('refuses guarded combined text and submit sends before any PTY write', async () => {
     const runtime = stubRuntime({
       resolveLiveLeafForHandle: vi.fn().mockReturnValue({ ptyId: 'pty-1' }),
