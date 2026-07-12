@@ -31,6 +31,7 @@ import {
 import { createTerminalHandleLinkProvider } from './terminal-handle-links'
 import type { LinkHandlerDeps } from './terminal-link-handlers'
 import { handleOscLink } from './terminal-osc-link-routing'
+import { handleTerminalWebLinkClick } from './terminal-web-link-click'
 import {
   installHttpLinkClickFallback,
   type TerminalLinkRoutingPreferenceRequester
@@ -1453,28 +1454,16 @@ export function useTerminalPaneLifecycle({
       terminalTuiScrollSensitivity: () =>
         normalizeTerminalTuiMouseWheelMultiplier(settingsRef.current?.terminalTuiScrollSensitivity),
       onLinkClick: (event, url) => {
-        if (!event) {
-          return
-        }
         const activePane = managerRef.current?.getActivePane()
-        const handled = handleOscLink(url, event, {
+        handleTerminalWebLinkClick(url, event, {
           ...linkDeps,
+          terminal: activePane?.terminal ?? null,
           startupCwd: activePane ? getPaneLinkCwd(activePane.id) : startupCwd,
           runtimeEnvironmentId: activePane
             ? (linkDeps.getRuntimeEnvironmentIdForPane?.(activePane.id) ?? null)
             : null,
           requestOpenLinksInAppPreference
         })
-        // Why: Cmd/Ctrl+click on a plain-text URL (WebLinksAddon) takes focus
-        // away from the terminal before the click's mouseup reaches
-        // ownerDocument. That leaves xterm's SelectionService drag-select
-        // mousemove listener attached, so subsequent mouse motion extends a
-        // phantom selection until the next click/Esc. Explicitly clearing the
-        // selection also detaches those listeners (see
-        // SelectionService._removeMouseDownListeners).
-        if (handled) {
-          managerRef.current?.getActivePane()?.terminal.clearSelection()
-        }
       },
       formatLinkTooltip: (url, openLinkHint) => formatTerminalUrlTooltip(url, openLinkHint),
       // Why: TerminalPane instances stay mounted for hidden visited worktrees

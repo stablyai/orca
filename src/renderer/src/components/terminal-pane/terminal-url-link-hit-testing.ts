@@ -1,7 +1,13 @@
 import type { IBufferLine, IBufferRange, IDisposable, Terminal } from '@xterm/xterm'
 import { openHttpLink } from '@/lib/http-link-routing'
-import { buildCandidateLogicalLinesForBufferPosition } from './terminal-file-link-hit-testing'
+import {
+  buildCandidateLogicalLinesForBufferPosition,
+  dedupeLogicalLines
+} from './terminal-file-link-hit-testing'
+import { buildHardWrappedHttpLogicalLineCandidates } from './hard-wrapped-terminal-http-links'
 import { isTerminalLinkActivation } from './terminal-link-activation'
+import { installTerminalLinkPtyMouseSuppression } from './terminal-link-pty-mouse-suppression'
+import { getTerminalBufferPositionForMouseEvent } from './terminal-mouse-buffer-position'
 import { rangeForParsedFileLink } from './wrapped-terminal-link-ranges'
 
 type UrlLinkHitTestDeps = {
@@ -27,6 +33,7 @@ type ParsedTerminalHttpLink = {
 
 const HTTP_SCHEME_PREFIXES = ['https://', 'http://'] as const
 export const TERMINAL_HTTP_URL_MAX_LENGTH = 2048
+const handledHttpLinkMouseEvents = new WeakSet<MouseEvent>()
 
 export function extractTerminalHttpLinks(lineText: string): ParsedTerminalHttpLink[] {
   const links: ParsedTerminalHttpLink[] = []
@@ -50,7 +57,7 @@ export function extractTerminalHttpLinks(lineText: string): ParsedTerminalHttpLi
 }
 
 function isDesktopHttpLinkFallbackActivation(event: MouseEvent): boolean {
-  if (event.defaultPrevented || event.button !== 0) {
+  if (event.defaultPrevented || handledHttpLinkMouseEvents.has(event) || event.button !== 0) {
     return false
   }
   // Why: desktop terminal links require an intentional Cmd/Ctrl gesture so
@@ -185,56 +192,39 @@ function isAsciiWordCode(code: number): boolean {
   )
 }
 
-function getTerminalScreenElement(terminal: Terminal): HTMLElement | null {
-  return terminal.element?.querySelector('.xterm-screen') ?? null
-}
-
-function getBufferPositionForTerminalMouseEvent(
+export function openHttpLinkAtTerminalMouseEvent(
   terminal: Terminal,
-  event: MouseEvent
-): { x: number; y: number } | null {
-  const screenElement = getTerminalScreenElement(terminal)
-  if (!screenElement || terminal.cols <= 0 || terminal.rows <= 0) {
-    return null
+  event: MouseEvent,
+  deps: UrlLinkHitTestDeps
+): boolean {
+  if (event.button !== 0 || !isTerminalLinkActivation(event)) {
+    return false
   }
-
-  const rect = screenElement.getBoundingClientRect()
-  const relativeX = event.clientX - rect.left
-  const relativeY = event.clientY - rect.top
-  if (relativeX < 0 || relativeY < 0 || relativeX >= rect.width || relativeY >= rect.height) {
-    return null
+  const position = getTerminalBufferPositionForMouseEvent(terminal, event)
+  if (!position) {
+    return false
   }
-
-  const cellWidth = rect.width / terminal.cols
-  const cellHeight = rect.height / terminal.rows
-  if (cellWidth <= 0 || cellHeight <= 0) {
-    return null
+  const opened = openHttpLinkAtBufferPosition(terminal.buffer.active, position, terminal.cols, deps)
+  if (opened) {
+    handledHttpLinkMouseEvents.add(event)
   }
-
-  return {
-    x: Math.floor(relativeX / cellWidth) + 1,
-    y: Math.floor(relativeY / cellHeight) + terminal.buffer.active.viewportY + 1
-  }
+  return opened
 }
 
 export function installHttpLinkClickFallback(
   terminal: Terminal,
   deps: UrlLinkClickFallbackDeps
 ): IDisposable {
+  const ptyMouseSuppression = installTerminalLinkPtyMouseSuppression(terminal)
   const handleMouseUp = (event: MouseEvent): void => {
     if (!isDesktopHttpLinkFallbackActivation(event)) {
-      return
-    }
-
-    const position = getBufferPositionForTerminalMouseEvent(terminal, event)
-    if (!position) {
       return
     }
 
     // Why: xterm's WebLinksAddon only activates after hover state exists. This
     // direct mouseup fallback preserves modifier-clicks when the hover link was
     // never established, while defaultPrevented avoids duplicate opens.
-    const opened = openHttpLinkAtBufferPosition(terminal.buffer.active, position, terminal.cols, {
+    const opened = openHttpLinkAtTerminalMouseEvent(terminal, event, {
       worktreeId: deps.worktreeId,
       forceSystemBrowser: event.shiftKey,
       requestOpenLinksInAppPreference: deps.requestOpenLinksInAppPreference
@@ -249,6 +239,7 @@ export function installHttpLinkClickFallback(
   terminalElement?.addEventListener('mouseup', handleMouseUp)
   return {
     dispose: () => {
+      ptyMouseSuppression.dispose()
       terminalElement?.removeEventListener('mouseup', handleMouseUp)
     }
   }
@@ -260,7 +251,10 @@ export function openHttpLinkAtBufferPosition(
   terminalColumns: number,
   deps: UrlLinkHitTestDeps
 ): boolean {
-  const logicalLines = buildCandidateLogicalLinesForBufferPosition(buffer, position.y)
+  const logicalLines = dedupeLogicalLines([
+    ...buildHardWrappedHttpLogicalLineCandidates(buffer, position.y),
+    ...buildCandidateLogicalLinesForBufferPosition(buffer, position.y)
+  ])
   if (logicalLines.length === 0) {
     return false
   }
