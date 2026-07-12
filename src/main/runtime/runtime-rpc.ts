@@ -9,6 +9,7 @@ import { readdirSync, rmSync } from 'node:fs'
 import { join } from 'node:path'
 import type { RuntimeMetadata, RuntimeTransportMetadata } from '../../shared/runtime-bootstrap'
 import type { OrcaRuntimeService } from './orca-runtime'
+import { BrowserRpcCapabilityError } from './browser-rpc-capability-registry'
 import { writeRuntimeMetadata } from './runtime-metadata'
 import { RpcDispatcher } from './rpc/dispatcher'
 import type { RpcRequest, RpcResponse } from './rpc/core'
@@ -915,7 +916,20 @@ export class OrcaRuntimeRpcServer {
       return { error: this.buildError(request.id, 'unauthorized', 'Missing auth token') }
     }
     if (request.authToken !== this.authToken) {
-      return { error: this.buildError(request.id, 'unauthorized', 'Invalid auth token') }
+      try {
+        return { request: this.runtime.authorizeBrowserCapability(request.authToken, request) }
+      } catch (error) {
+        if (error instanceof BrowserRpcCapabilityError) {
+          return {
+            error: this.buildError(
+              request.id,
+              error.code === 'forbidden' ? 'forbidden' : 'unauthorized',
+              error.message
+            )
+          }
+        }
+        return { error: this.buildError(request.id, 'unauthorized', 'Invalid auth token') }
+      }
     }
 
     return { request }

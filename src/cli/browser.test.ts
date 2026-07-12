@@ -1,12 +1,26 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-const callMock = vi.fn()
+const { callMock, writeCapabilityMetadataMock } = vi.hoisted(() => ({
+  callMock: vi.fn(),
+  writeCapabilityMetadataMock: vi.fn(() => '/tmp/qa/orca-runtime.json')
+}))
+
+vi.mock('./runtime/browser-capability-metadata', () => ({
+  writeBrowserCapabilityMetadata: writeCapabilityMetadataMock
+}))
 
 vi.mock('./runtime-client', () => {
   class RuntimeClient {
     call = callMock
     getCliStatus = vi.fn()
     openOrca = vi.fn()
+    getLocalMetadata = vi.fn(() => ({
+      runtimeId: 'runtime-1',
+      pid: 123,
+      transports: [{ kind: 'unix', endpoint: '/tmp/orca.sock' }],
+      authToken: 'global-token',
+      startedAt: 1
+    }))
   }
 
   class RuntimeClientError extends Error {
@@ -41,6 +55,7 @@ import { buildWorktree, okFixture, queueFixtures, worktreeListFixture } from './
 describe('orca cli browser page targeting', () => {
   beforeEach(() => {
     callMock.mockReset()
+    writeCapabilityMetadataMock.mockClear()
   })
 
   afterEach(() => {
@@ -463,6 +478,94 @@ describe('orca cli browser tab profiles', () => {
       label: 'From Chrome',
       scope: 'imported'
     })
+  })
+
+  it('forwards a normalized domain policy for an isolated profile', async () => {
+    queueFixtures(
+      callMock,
+      okFixture('req_profile_create', {
+        profile: {
+          id: 'qa',
+          scope: 'isolated',
+          label: 'QA',
+          partition: 'persist:orca-browser-session-qa',
+          allowedDomains: ['localhost', 'app-dev.storika.ai']
+        }
+      })
+    )
+    vi.spyOn(console, 'log').mockImplementation(() => {})
+
+    await main(
+      [
+        'tab',
+        'profile',
+        'create',
+        '--label',
+        'QA',
+        '--allowed-domains',
+        'localhost,app-dev.storika.ai',
+        '--json'
+      ],
+      '/tmp/not-an-orca-worktree'
+    )
+
+    expect(callMock).toHaveBeenCalledWith('browser.profileCreate', {
+      label: 'QA',
+      scope: 'isolated',
+      allowedDomains: ['localhost', 'app-dev.storika.ai']
+    })
+  })
+
+  it('creates redacted page-scoped capability metadata', async () => {
+    queueFixtures(
+      callMock,
+      okFixture('req_capability_create', {
+        id: 'cap-1',
+        token: 'secret-capability-token',
+        expiresAt: 60_000,
+        browserPageId: 'page-1'
+      })
+    )
+    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
+
+    await main(
+      [
+        'tab',
+        'capability',
+        'create',
+        '--page',
+        'page-1',
+        '--output',
+        '/tmp/qa',
+        '--ttl-ms',
+        '60000',
+        '--json'
+      ],
+      '/tmp/not-an-orca-worktree'
+    )
+
+    expect(callMock).toHaveBeenCalledWith('browser.capabilityCreate', {
+      page: 'page-1',
+      ttlMs: 60_000
+    })
+    expect(writeCapabilityMetadataMock).toHaveBeenCalledWith(
+      '/tmp/qa',
+      expect.objectContaining({ authToken: 'global-token' }),
+      'secret-capability-token'
+    )
+    expect(logSpy).toHaveBeenCalledWith(expect.not.stringContaining('secret-capability-token'))
+  })
+
+  it('revokes a browser capability by id', async () => {
+    queueFixtures(callMock, okFixture('req_capability_revoke', { revoked: true, id: 'cap-1' }))
+    vi.spyOn(console, 'log').mockImplementation(() => {})
+
+    await main(
+      ['tab', 'capability', 'revoke', '--capability', 'cap-1'],
+      '/tmp/not-an-orca-worktree'
+    )
+
+    expect(callMock).toHaveBeenCalledWith('browser.capabilityRevoke', { id: 'cap-1' })
   })
 
   it('rejects unknown --scope values instead of silently defaulting to isolated', async () => {

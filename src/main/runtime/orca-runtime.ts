@@ -335,6 +335,11 @@ import type {
 } from '../../shared/runtime-types'
 import type { AutomationService } from '../automations/service'
 import { RuntimeBrowserCommands } from './orca-runtime-browser'
+import {
+  BrowserRpcCapabilityError,
+  BrowserRpcCapabilityRegistry
+} from './browser-rpc-capability-registry'
+import type { RpcRequest } from './rpc/core'
 import { buildHeadlessTerminalSplitLayout } from './headless-terminal-split-layout'
 import {
   buildHeadlessTabGroupMove,
@@ -24148,6 +24153,36 @@ export class OrcaRuntimeService {
     // new browser opened in the right split group landed in the left.
     markHeadlessBrowserSessionTabActive: this.markHeadlessBrowserSessionTabActive.bind(this)
   })
+  private readonly browserRpcCapabilities = new BrowserRpcCapabilityRegistry()
+
+  async browserCapabilityCreate(params: {
+    page: string
+    worktree?: string
+    ttlMs: number
+  }): Promise<{ id: string; token: string; expiresAt: number; browserPageId: string }> {
+    const target = await this.browserCommands.resolveBrowserCapabilityTarget(params)
+    return this.browserRpcCapabilities.create({
+      browserPageId: target.browserPageId,
+      worktreeId: target.worktree,
+      ttlMs: params.ttlMs
+    })
+  }
+
+  browserCapabilityRevoke(params: { id: string }): { revoked: boolean; id: string } {
+    return { revoked: this.browserRpcCapabilities.revoke(params.id), id: params.id }
+  }
+
+  authorizeBrowserCapability(token: string, request: RpcRequest): RpcRequest {
+    const page = this.browserRpcCapabilities.getPageId(token)
+    if (!this.browserCommands.isBrowserPageAvailable(page)) {
+      this.browserRpcCapabilities.revokePage(page)
+      throw new BrowserRpcCapabilityError(
+        'invalid',
+        'Browser capability page is no longer available'
+      )
+    }
+    return this.browserRpcCapabilities.authorize(token, request)
+  }
 
   private readonly emulatorCommands = new RuntimeEmulatorCommands({
     getEmulatorBridge: () => this.emulatorBridge,

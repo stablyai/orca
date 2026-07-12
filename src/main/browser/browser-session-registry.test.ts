@@ -42,6 +42,10 @@ describe('BrowserSessionRegistry', () => {
     askForMediaAccessMock.mockResolvedValue(true)
     getMediaAccessStatusMock.mockReturnValue('granted')
     sessionFromPartitionMock.mockReturnValue({
+      webRequest: {
+        onBeforeRequest: vi.fn(),
+        onBeforeSendHeaders: vi.fn()
+      },
       setPermissionRequestHandler: vi.fn(),
       setPermissionCheckHandler: vi.fn(),
       setDevicePermissionHandler: vi.fn(),
@@ -76,6 +80,25 @@ describe('BrowserSessionRegistry', () => {
     expect(profile!.partition).not.toBe(ORCA_BROWSER_PARTITION)
     expect(profile!.label).toBe('Test Isolated')
     expect(profile!.source).toBeNull()
+  })
+
+  it('cancels every disallowed request for a restricted isolated profile', () => {
+    const profile = browserSessionRegistry.createProfile('isolated', 'Restricted', [
+      'localhost',
+      '*.storika.ai'
+    ])
+    expect(profile?.allowedDomains).toEqual(['localhost', '*.storika.ai'])
+
+    const mockSession = sessionFromPartitionMock.mock.results[0]?.value
+    const requestHandler = mockSession.webRequest.onBeforeRequest.mock.calls[0][0]
+
+    const allowedCallback = vi.fn()
+    requestHandler({ url: 'https://app-dev.storika.ai/path' }, allowedCallback)
+    expect(allowedCallback).toHaveBeenCalledWith({ cancel: false })
+
+    const blockedCallback = vi.fn()
+    requestHandler({ url: 'https://example.com/path' }, blockedCallback)
+    expect(blockedCallback).toHaveBeenCalledWith({ cancel: true })
   })
 
   it('rejects creating a profile with scope default', () => {
@@ -176,6 +199,7 @@ describe('BrowserSessionRegistry', () => {
     expect(mockSession.setPermissionCheckHandler).toHaveBeenLastCalledWith(null)
     expect(mockSession.setDevicePermissionHandler).toHaveBeenLastCalledWith(null)
     expect(mockSession.setDisplayMediaRequestHandler).toHaveBeenLastCalledWith(null)
+    expect(mockSession.webRequest.onBeforeRequest).toHaveBeenLastCalledWith(null)
   })
 
   it('refuses to delete the default profile', async () => {

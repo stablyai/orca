@@ -190,8 +190,9 @@ export const BROWSER_BASIC_COMMAND_SPECS: CommandSpec[] = [
   {
     path: ['tab', 'profile', 'create'],
     summary: 'Create a browser session profile for browser tabs',
-    usage: 'orca tab profile create --label <name> [--scope <isolated|imported>] [--json]',
-    allowedFlags: [...GLOBAL_FLAGS, 'label', 'scope']
+    usage:
+      'orca tab profile create --label <name> [--scope <isolated|imported>] [--allowed-domains <host,...>] [--json]',
+    allowedFlags: [...GLOBAL_FLAGS, 'label', 'scope', 'allowed-domains']
   },
   {
     path: ['tab', 'profile', 'delete'],
@@ -223,6 +224,19 @@ export const BROWSER_BASIC_COMMAND_SPECS: CommandSpec[] = [
     summary: 'Clone a browser tab into a different browser profile',
     usage: 'orca tab profile clone --profile <id> [--page <id>] [--worktree <selector>] [--json]',
     allowedFlags: [...GLOBAL_FLAGS, 'profile', 'page', 'worktree']
+  },
+  {
+    path: ['tab', 'capability', 'create'],
+    summary: 'Create page-scoped runtime credentials for browser QA',
+    usage:
+      'orca tab capability create --page <id> --output <directory> [--worktree <selector>] [--ttl-ms <ms>] [--json]',
+    allowedFlags: [...GLOBAL_FLAGS, 'page', 'output', 'worktree', 'ttl-ms']
+  },
+  {
+    path: ['tab', 'capability', 'revoke'],
+    summary: 'Revoke page-scoped runtime credentials',
+    usage: 'orca tab capability revoke --capability <id> [--json]',
+    allowedFlags: [...GLOBAL_FLAGS, 'capability']
   },
   {
     path: ['tab', 'close'],

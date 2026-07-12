@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { AgentBrowserBridge } from '../browser/agent-browser-bridge'
+import { browserManager } from '../browser/browser-manager'
 import type { RuntimeBrowserCommandHost } from './orca-runtime-browser'
 
 const {
@@ -128,6 +129,36 @@ describe('RuntimeBrowserCommands browser screencast', () => {
         }
         return browserSessionRegistryMock.profiles.get(profileId)?.partition ?? null
       }
+    )
+  })
+
+  it('creates capabilities only for live tabs with an allowed-domain profile', async () => {
+    const { RuntimeBrowserCommands } = await import('./orca-runtime-browser')
+    const commands = new RuntimeBrowserCommands(createHost())
+    webContentsFromIdMock.mockReturnValue({ isDestroyed: () => false })
+    vi.spyOn(browserManager, 'getSessionProfileIdForTab').mockReturnValue('profile-restricted')
+    browserSessionRegistryMock.getProfile.mockReturnValue({
+      id: 'profile-restricted',
+      scope: 'isolated',
+      partition: 'persist:profile-restricted',
+      label: 'Restricted',
+      source: null,
+      allowedDomains: ['localhost']
+    })
+
+    await expect(commands.resolveBrowserCapabilityTarget({ page: 'page-1' })).resolves.toEqual({
+      browserPageId: 'page-1'
+    })
+  })
+
+  it('rejects capabilities for unrestricted browser profiles', async () => {
+    const { RuntimeBrowserCommands } = await import('./orca-runtime-browser')
+    const commands = new RuntimeBrowserCommands(createHost())
+    webContentsFromIdMock.mockReturnValue({ isDestroyed: () => false })
+    vi.spyOn(browserManager, 'getSessionProfileIdForTab').mockReturnValue('default')
+
+    await expect(commands.resolveBrowserCapabilityTarget({ page: 'page-1' })).rejects.toThrow(
+      /allowed-domain policy/
     )
   })
 

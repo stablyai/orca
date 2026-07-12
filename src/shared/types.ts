@@ -966,6 +966,7 @@ export type BrowserSessionProfile = {
   partition: string
   label: string
   source: BrowserSessionProfileSource | null
+  allowedDomains?: string[]
 }
 
 export type BrowserCookieImportSummary = {

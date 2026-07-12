@@ -166,6 +166,31 @@ export class RuntimeBrowserCommands {
 
   constructor(private readonly host: RuntimeBrowserCommandHost) {}
 
+  async resolveBrowserCapabilityTarget(params: {
+    page: string
+    worktree?: string
+  }): Promise<{ browserPageId: string; worktree?: string }> {
+    const target = await this.resolveBrowserCommandTarget(params)
+    const resolved = this.resolveBrowserPageWebContents(target.worktreeId, target.browserPageId)
+    const profileId = browserManager.getSessionProfileIdForTab(resolved.browserPageId)
+    const profile = profileId ? browserSessionRegistry.getProfile(profileId) : null
+    if (!profile?.allowedDomains?.length) {
+      throw new BrowserError(
+        'browser_policy_required',
+        'Browser capabilities require a profile with an allowed-domain policy'
+      )
+    }
+    return {
+      browserPageId: resolved.browserPageId,
+      ...(params.worktree ? { worktree: params.worktree } : {})
+    }
+  }
+
+  isBrowserPageAvailable(browserPageId: string): boolean {
+    const bridge = this.host.getAgentBrowserBridge()
+    return Boolean(bridge && this.hasLiveRegisteredBrowserPage(bridge, undefined, browserPageId))
+  }
+
   private requireAgentBrowserBridge(): AgentBrowserBridge {
     const bridge = this.host.getAgentBrowserBridge()
     if (!bridge) {
@@ -1554,9 +1579,14 @@ export class RuntimeBrowserCommands {
   async browserProfileCreate(params: {
     label: string
     scope: 'isolated' | 'imported'
+    allowedDomains?: string[]
   }): Promise<BrowserProfileCreateResult> {
     return {
-      profile: browserSessionRegistry.createProfile(params.scope, params.label)
+      profile: browserSessionRegistry.createProfile(
+        params.scope,
+        params.label,
+        params.allowedDomains
+      )
     }
   }
 

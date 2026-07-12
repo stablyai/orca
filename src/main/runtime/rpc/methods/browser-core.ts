@@ -1,5 +1,6 @@
 import { defineMethod, type RpcMethod } from '../core'
 import { BrowserTarget } from '../schemas'
+import { CapabilityCreate, CapabilityRevoke } from './browser-capability-schemas'
 import {
   Check,
   Drag,
@@ -35,6 +36,16 @@ import {
 import { BROWSER_TEXT_METHODS } from './browser-text-rpc-methods'
 
 export const BROWSER_CORE_METHODS: RpcMethod[] = [
+  defineMethod({
+    name: 'browser.capabilityCreate',
+    params: CapabilityCreate,
+    handler: async (params, { runtime }) => runtime.browserCapabilityCreate(params)
+  }),
+  defineMethod({
+    name: 'browser.capabilityRevoke',
+    params: CapabilityRevoke,
+    handler: async (params, { runtime }) => runtime.browserCapabilityRevoke(params)
+  }),
   defineMethod({
     name: 'browser.snapshot',
     params: BrowserTarget,

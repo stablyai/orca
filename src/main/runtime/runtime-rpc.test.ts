@@ -2124,6 +2124,40 @@ describe('OrcaRuntimeRpcServer', () => {
     await server.stop()
   })
 
+  it('accepts page-scoped capability tokens but rejects non-browser RPC methods', async () => {
+    const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-rpc-'))
+    const runtime = new OrcaRuntimeService()
+    const server = new OrcaRuntimeRpcServer({ runtime, userDataPath })
+    vi.spyOn(runtime['browserCommands'], 'isBrowserPageAvailable').mockReturnValue(true)
+    const capability = runtime['browserRpcCapabilities'].create({
+      browserPageId: 'page-1',
+      ttlMs: 60_000
+    })
+
+    await server.start()
+    const metadata = readRuntimeMetadata(userDataPath)
+    const endpoint = metadata!.transports[0]!.endpoint
+    const status = await sendRequest(endpoint, {
+      id: 'req_cap_status',
+      authToken: capability.token,
+      method: 'status.get'
+    })
+    const forbidden = await sendRequest(endpoint, {
+      id: 'req_cap_terminal',
+      authToken: capability.token,
+      method: 'terminal.list'
+    })
+
+    expect(status).toMatchObject({ id: 'req_cap_status', ok: true })
+    expect(forbidden).toMatchObject({
+      id: 'req_cap_terminal',
+      ok: false,
+      error: { code: 'forbidden' }
+    })
+
+    await server.stop()
+  })
+
   it('rejects malformed requests before dispatch', async () => {
     const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-rpc-'))
     const runtime = new OrcaRuntimeService()

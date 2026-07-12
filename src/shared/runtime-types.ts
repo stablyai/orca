@@ -862,6 +862,18 @@ export type BrowserProfileDeleteResult = {
   profileId: string
 }
 
+export type BrowserCapabilityCreateResult = {
+  id: string
+  token: string
+  expiresAt: number
+  browserPageId: string
+}
+
+export type BrowserCapabilityRevokeResult = {
+  revoked: boolean
+  id: string
+}
+
 export type BrowserDetectedProfileInfo = {
   name: string
   directory: string

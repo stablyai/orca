@@ -36,9 +36,15 @@ export const BROWSER_PROFILE_HANDLERS: Record<string, CommandHandler> = {
   'tab profile create': async ({ flags, client, json }) => {
     const label = getRequiredStringFlag(flags, 'label')
     const scope = parseScopeFlag(flags)
+    const allowedDomainsValue = getOptionalStringFlag(flags, 'allowed-domains')
+    const allowedDomains = allowedDomainsValue
+      ?.split(',')
+      .map((value) => value.trim())
+      .filter(Boolean)
     const result = await client.call<BrowserProfileCreateResult>('browser.profileCreate', {
       label,
-      scope
+      scope,
+      ...(allowedDomains ? { allowedDomains } : {})
     })
     if (result.result.profile === null) {
       // Why: registry refuses non-isolated/imported scopes; we already validated

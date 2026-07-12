@@ -17,6 +17,10 @@ import {
 import { dirname, join } from 'node:path'
 import { ORCA_BROWSER_PARTITION } from '../../shared/constants'
 import {
+  isBrowserNetworkUrlAllowed,
+  normalizeBrowserAllowedDomains
+} from '../../shared/browser-domain-policy'
+import {
   DEFAULT_LOCAL_ORCA_PROFILE_ID,
   getOrcaProfileBrowserDefaultPartition,
   getOrcaProfileBrowserPartitionSegment,
@@ -373,7 +377,11 @@ class BrowserSessionRegistry {
     return this.profiles.get(profileId)?.partition ?? null
   }
 
-  createProfile(scope: BrowserSessionProfileScope, label: string): BrowserSessionProfile | null {
+  createProfile(
+    scope: BrowserSessionProfileScope,
+    label: string,
+    allowedDomains?: readonly string[]
+  ): BrowserSessionProfile | null {
     // Why: only the constructor may create the default profile. Allowing the
     // renderer to pass scope:'default' would create a second profile sharing
     // the active default partition, causing confusion on delete (clearing storage
@@ -391,7 +399,8 @@ class BrowserSessionRegistry {
       scope,
       partition,
       label,
-      source: null
+      source: null,
+      ...(allowedDomains ? { allowedDomains: normalizeBrowserAllowedDomains(allowedDomains) } : {})
     }
     this.profiles.set(id, profile)
     this.setupSessionPolicies(partition)
@@ -494,13 +503,31 @@ class BrowserSessionRegistry {
       return false
     }
     const candidate = profile as Partial<BrowserSessionProfile>
+    const validDomains = (() => {
+      if (candidate.allowedDomains === undefined) {
+        return true
+      }
+      if (
+        !Array.isArray(candidate.allowedDomains) ||
+        !candidate.allowedDomains.every((domain) => typeof domain === 'string')
+      ) {
+        return false
+      }
+      try {
+        normalizeBrowserAllowedDomains(candidate.allowedDomains)
+        return true
+      } catch {
+        return false
+      }
+    })()
     return (
       candidate.id !== 'default' &&
       candidate.scope !== 'default' &&
       typeof candidate.id === 'string' &&
       typeof candidate.partition === 'string' &&
       typeof candidate.label === 'string' &&
-      this.isProfileOwnedSessionPartition(candidate.partition)
+      this.isProfileOwnedSessionPartition(candidate.partition) &&
+      validDomains
     )
   }
 
@@ -526,7 +553,10 @@ class BrowserSessionRegistry {
       if (!this.isValidPersistedProfile(profile)) {
         continue
       }
-      this.profiles.set(profile.id, profile)
+      const hydrated = profile.allowedDomains
+        ? { ...profile, allowedDomains: normalizeBrowserAllowedDomains(profile.allowedDomains) }
+        : profile
+      this.profiles.set(profile.id, hydrated)
       if (profile.partition !== this.defaultPartition) {
         this.setupSessionPolicies(profile.partition)
       }
@@ -551,6 +581,16 @@ class BrowserSessionRegistry {
     }
 
     const sess = session.fromPartition(partition)
+    const allowedDomains = [...this.profiles.values()].find(
+      (profile) => profile.partition === partition
+    )?.allowedDomains
+    if (allowedDomains) {
+      // Why: the restriction lives in Electron's partition, below CDP and page
+      // JavaScript, so redirects and subresource requests cannot bypass it.
+      sess.webRequest.onBeforeRequest((details, callback) => {
+        callback({ cancel: !isBrowserNetworkUrlAllowed(details.url, allowedDomains) })
+      })
+    }
     if (typeof sess.getUserAgent === 'function') {
       const cleanUA = cleanElectronUserAgent(sess.getUserAgent())
       sess.setUserAgent(cleanUA)
@@ -627,6 +667,7 @@ class BrowserSessionRegistry {
     sess.setPermissionRequestHandler(null)
     sess.setPermissionCheckHandler(null)
     sess.setDisplayMediaRequestHandler(null)
+    sess.webRequest.onBeforeRequest(null)
   }
 }
 

@@ -2,6 +2,7 @@ import type { CliStatusResult, RuntimeStatus } from '../../shared/runtime-types'
 import { parsePairingCode, type PairingOffer } from '../../shared/pairing'
 import { launchOrcaApp } from './launch'
 import { getDefaultUserDataPath, readMetadata } from './metadata'
+import type { RuntimeMetadata } from '../../shared/runtime-bootstrap'
 import { getCliStatus } from './status'
 import { sendRequest } from './transport'
 import { RuntimeClientError, RuntimeRpcFailureError, type RuntimeRpcSuccess } from './types'
@@ -45,6 +46,16 @@ export class RuntimeClient {
 
   get isRemote(): boolean {
     return this.remotePairing !== null
+  }
+
+  getLocalMetadata(): RuntimeMetadata {
+    if (this.remotePairing) {
+      throw new RuntimeClientError(
+        'invalid_argument',
+        'Browser capability metadata can only target a local Orca runtime'
+      )
+    }
+    return readMetadata(this.userDataPath)
   }
 
   async call<TResult>(
