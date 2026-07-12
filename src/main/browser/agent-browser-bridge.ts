@@ -87,14 +87,9 @@ type ResolvedBrowserCommandTarget = {
 
 export type BrowserMouseModifier = 'cmd' | 'ctrl' | 'alt' | 'shift'
 
-// Why: a bulk `el.value`/`textContent` assignment is silently reverted by rich
-// editors (ProseMirror, Draft.js) whose MutationObservers only accept changes
-// that flow through the native beforeinput/input pipeline. execCommand
-// ('insertText') drives that pipeline, so it updates contenteditable editors
-// and controlled inputs alike. The value setter remains a fallback for plain
-// fields where execCommand is unavailable. Runs against document.activeElement,
-// which agent-browser's `focus` command reliably sets before this eval.
-function focusedTextInsertExpression(
+// Why: controlled rich editors can revert direct DOM assignment, so edits must
+// flow through the browser input pipeline when it is available.
+function focusedTextEditExpression(
   valueExpression: string,
   options?: { selectAll?: boolean }
 ): string {
@@ -117,26 +112,26 @@ function focusedTextInsertExpression(
     valueExpression,
     ';',
     ` const selectAll = ${selectAll};`,
+    ' const targetIsField = isField(target);',
     " const isEditable = target.isContentEditable === true || target.getAttribute?.('contenteditable') === 'true';",
-    ' if (!isField(target) && !isEditable) { return; }',
+    ' if (!targetIsField && !isEditable) { return; }',
     " if (target !== el && typeof target.focus === 'function') { target.focus(); }",
     ' if (selectAll) {',
-    "   if (isField(target) && typeof target.select === 'function') { target.select(); }",
+    "   if (targetIsField && typeof target.select === 'function') { target.select(); }",
     "   else if (isEditable && typeof window.getSelection === 'function') {",
     '     const selection = window.getSelection();',
     '     if (selection) { selection.selectAllChildren(target); }',
     '   }',
     ' }',
+    " const editCommand = selectAll && value.length === 0 ? 'delete' : 'insertText';",
     ' let usedExecCommand = false;',
     ' try {',
-    "   if ((isField(target) || isEditable) && document.queryCommandSupported?.('insertText')) {",
-    "     usedExecCommand = document.execCommand('insertText', false, value) === true;",
-    '   }',
+    '   usedExecCommand = document.execCommand(editCommand, false, value) === true;',
     ' } catch { usedExecCommand = false; }',
     ' if (usedExecCommand) { return; }',
-    " const previous = selectAll ? '' : (isField(target) ? String(target.value ?? '') : String(target.textContent ?? ''));",
+    " const previous = selectAll ? '' : (targetIsField ? String(target.value ?? '') : String(target.textContent ?? ''));",
     ' const nextValue = previous + value;',
-    ' if (isField(target)) {',
+    ' if (targetIsField) {',
     "   const nativeSetter = Object.getOwnPropertyDescriptor(Object.getPrototypeOf(target), 'value')?.set;",
     '   if (nativeSetter) { nativeSetter.call(target, nextValue); } else { target.value = nextValue; }',
     ' } else { target.textContent = nextValue; }',
@@ -800,13 +795,8 @@ export class AgentBrowserBridge {
     browserPageId?: string
   ): Promise<BrowserFillResult> {
     await assertClipboardTextWriteWithinLimitWithYield(value)
-    // Why: Input.insertText via Electron's debugger API does not deliver text to
-    // focused inputs in webviews — this is a fundamental Electron limitation.
-    // Workaround: focus the ref via agent-browser, then drive text through
-    // execCommand('insertText') so rich editors (ProseMirror, Draft.js) and
-    // controlled inputs reconcile it. The first chunk selects existing content
-    // so it is replaced; later chunks append. An empty value still runs one
-    // select-all pass to clear the field.
+    // Why: agent-browser's CDP text insertion loses focus in Electron guests.
+    // Resolve the ref first, then edit through the browser's input pipeline.
     return this.enqueueTargetedCommand(
       worktreeId,
       browserPageId,
@@ -819,14 +809,14 @@ export class AgentBrowserBridge {
         )) {
           await this.execAgentBrowser(sessionName, [
             'eval',
-            focusedTextInsertExpression(JSON.stringify(chunk), { selectAll: isFirstChunk })
+            focusedTextEditExpression(JSON.stringify(chunk), { selectAll: isFirstChunk })
           ])
           isFirstChunk = false
         }
         if (isFirstChunk) {
           await this.execAgentBrowser(sessionName, [
             'eval',
-            focusedTextInsertExpression(JSON.stringify(''), { selectAll: true })
+            focusedTextEditExpression(JSON.stringify(''), { selectAll: true })
           ])
         }
         return { filled: element } as BrowserFillResult
@@ -1567,10 +1557,10 @@ export class AgentBrowserBridge {
     worktreeId?: string,
     browserPageId?: string
   ): Promise<BrowserClearResult> {
-    return this.enqueueTargetedCommand(worktreeId, browserPageId, async (sessionName) => {
-      // Why: agent-browser has no clear command — use fill with empty string
-      return (await this.execAgentBrowser(sessionName, ['fill', element, ''])) as BrowserClearResult
-    })
+    // Why: clear must use the same Electron-safe input path as fill; agent-browser's
+    // native fill loses its target when the guest webContents takes focus.
+    await this.fill(element, '', worktreeId, browserPageId)
+    return { cleared: element }
   }
 
   async selectAll(

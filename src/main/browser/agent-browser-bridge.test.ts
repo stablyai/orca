@@ -207,10 +207,57 @@ function createFillEvalNode(options: {
 
 function runFillEvalExpressions(
   expressions: string[],
-  document: { activeElement: unknown; getElementById: (id: string) => unknown }
+  document: { activeElement: unknown; getElementById: (id: string) => unknown },
+  windowObject: Record<string, unknown> = {}
 ): void {
   for (const expression of expressions) {
-    new Function('document', 'Event', `return (${expression})`)(document, TestEvent)
+    new Function('document', 'Event', 'window', `return (${expression})`)(
+      document,
+      TestEvent,
+      windowObject
+    )
+  }
+}
+
+function createContentEditableEvalEnvironment(initialText: string) {
+  const editor = {
+    tagName: 'DIV',
+    isContentEditable: true,
+    textContent: initialText,
+    matches: vi.fn(() => false),
+    getAttribute: vi.fn((name: string) => (name === 'contenteditable' ? 'true' : null)),
+    dispatchEvent: vi.fn()
+  }
+  let selected = false
+  const selection = {
+    selectAllChildren: vi.fn(() => {
+      selected = true
+    })
+  }
+  const execCommand = vi.fn((command: string, _showUi: boolean, value: string) => {
+    if (!selected) {
+      return false
+    }
+    // Chromium treats an empty insertText as a successful no-op; deletion is
+    // required to clear a selected contenteditable through the input pipeline.
+    if (command === 'delete') {
+      editor.textContent = ''
+    } else if (value.length > 0) {
+      editor.textContent = value
+    }
+    selected = false
+    return true
+  })
+  return {
+    editor,
+    execCommand,
+    document: {
+      activeElement: editor,
+      body: {},
+      getElementById: () => null,
+      execCommand
+    },
+    windowObject: { getSelection: () => selection }
   }
 }
 
@@ -1527,6 +1574,45 @@ describe('AgentBrowserBridge', () => {
     const args = evalCall![1] as string[]
     const expression = args[args.indexOf('eval') + 1]
     expect(() => new Function(expression)).not.toThrow()
+  })
+
+  it('replaces contenteditable text through the browser editing pipeline', async () => {
+    succeedWith({ ok: true })
+    const environment = createContentEditableEvalEnvironment('existing text')
+
+    await bridge.fill('@editor', 'replacement text')
+
+    const expressions = execFileMock.mock.calls
+      .filter((call: unknown[]) => (call[1] as string[]).includes('eval'))
+      .map((call: unknown[]) => {
+        const args = call[1] as string[]
+        return args[args.indexOf('eval') + 1]
+      })
+    runFillEvalExpressions(expressions, environment.document, environment.windowObject)
+
+    expect(environment.editor.textContent).toBe('replacement text')
+    expect(environment.execCommand).toHaveBeenCalledWith('insertText', false, 'replacement text')
+    expect(environment.editor.dispatchEvent).not.toHaveBeenCalled()
+  })
+
+  it('clears selected contenteditable text with a browser delete command', async () => {
+    succeedWith({ ok: true })
+    const environment = createContentEditableEvalEnvironment('existing text')
+
+    const result = await bridge.clear('@editor')
+
+    const expressions = execFileMock.mock.calls
+      .filter((call: unknown[]) => (call[1] as string[]).includes('eval'))
+      .map((call: unknown[]) => {
+        const args = call[1] as string[]
+        return args[args.indexOf('eval') + 1]
+      })
+    runFillEvalExpressions(expressions, environment.document, environment.windowObject)
+
+    expect(environment.editor.textContent).toBe('')
+    expect(environment.execCommand).toHaveBeenCalledWith('delete', false, '')
+    expect(environment.editor.dispatchEvent).not.toHaveBeenCalled()
+    expect(result).toEqual({ cleared: '@editor' })
   })
 
   it('routes focused spinbutton wrappers to editable descendants before filling', async () => {
