@@ -3,6 +3,7 @@ import { isBrowserNetworkUrlAllowed } from '../../shared/browser-domain-policy'
 import type { RpcRequest } from './rpc/core'
 
 const MAX_CAPABILITY_TTL_MS = 2 * 60 * 60 * 1_000
+const SAFE_BROWSER_GET_PROPERTIES = new Set(['text', 'url', 'title', 'count', 'box', 'styles'])
 const ALLOWED_BROWSER_CAPABILITY_METHODS = new Set([
   'status.get',
   'browser.snapshot',
@@ -142,10 +143,13 @@ export class BrowserRpcCapabilityRegistry {
         'Function waits are not available to browser capabilities'
       )
     }
-    if (request.method === 'browser.get' && params.what === 'cdp-url') {
+    if (
+      request.method === 'browser.get' &&
+      (typeof params.what !== 'string' || !SAFE_BROWSER_GET_PROPERTIES.has(params.what))
+    ) {
       throw new BrowserRpcCapabilityError(
         'forbidden',
-        'CDP endpoint discovery is not available to browser capabilities'
+        'This browser property is not available to browser capabilities'
       )
     }
     return {

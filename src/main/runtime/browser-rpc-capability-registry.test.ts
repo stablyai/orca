@@ -45,6 +45,8 @@ describe('BrowserRpcCapabilityRegistry', () => {
       ['browser.wait', { page: 'page-1', fn: '() => true' }],
       ['browser.find', { page: 'page-1', locator: 'role', value: 'button', action: 'click' }],
       ['browser.get', { page: 'page-1', what: 'cdp-url' }],
+      ['browser.get', { page: 'page-1', what: 'value', selector: 'input' }],
+      ['browser.get', { page: 'page-1', what: 'html', selector: 'body' }],
       ['browser.capture.start', { page: 'page-1' }],
       ['browser.network', { page: 'page-1' }],
       ['browser.storageLocalGet', { page: 'page-1', key: 'auth-token' }],
@@ -84,6 +86,25 @@ describe('BrowserRpcCapabilityRegistry', () => {
         params: { url: 'https://app-dev.storika.ai/login' }
       }).params
     ).toEqual({ url: 'https://app-dev.storika.ai/login', page: 'page-1' })
+  })
+
+  it('allows safe browser properties without exposing form values or markup', () => {
+    const registry = new BrowserRpcCapabilityRegistry()
+    const capability = registry.create({
+      browserPageId: 'page-1',
+      browserProfileId: 'profile-1',
+      allowedDomains: ['localhost'],
+      ttlMs: 60_000
+    })
+
+    expect(
+      registry.authorize(capability.token, {
+        id: 'req-1',
+        authToken: capability.token,
+        method: 'browser.get',
+        params: { what: 'text', selector: 'main' }
+      }).params
+    ).toEqual({ what: 'text', selector: 'main', page: 'page-1' })
   })
 
   it('expires, revokes, and removes all capabilities for a closed page', () => {
