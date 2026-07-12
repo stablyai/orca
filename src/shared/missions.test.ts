@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   clearMissingMissionMembers,
   createMission,
+  getMissionMemberWorktreeIds,
   getMissionRootDirName,
   getMissionWorktreeName,
   getNextMissionTabOrder,
@@ -156,6 +157,22 @@ describe('isMissionEligibleRepo', () => {
     expect(isMissionEligibleRepo({ executionHostId: 'local' })).toBe(true)
     expect(isMissionEligibleRepo({ executionHostId: 'ssh:target-1' })).toBe(true)
     expect(isMissionEligibleRepo({ executionHostId: 'runtime:env-1' })).toBe(false)
+  })
+})
+
+describe('getMissionMemberWorktreeIds', () => {
+  it('collects only assigned worktree ids across missions', () => {
+    const ids = getMissionMemberWorktreeIds([
+      makeMission({
+        id: 'a',
+        members: [
+          { repoId: 'r1', worktreeId: 'r1::/wt/a', addedAt: 1 },
+          { repoId: 'r2', worktreeId: null, addedAt: 1 }
+        ]
+      }),
+      makeMission({ id: 'b', members: [{ repoId: 'r3', worktreeId: 'r3::/wt/b', addedAt: 1 }] })
+    ])
+    expect([...ids].sort()).toEqual(['r1::/wt/a', 'r3::/wt/b'])
   })
 })
 

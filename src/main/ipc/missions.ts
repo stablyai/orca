@@ -63,7 +63,9 @@ export function registerMissionHandlers(
       const created = await runtime.createManagedWorktree({
         repoSelector: `id:${repoId}`,
         name: getMissionWorktreeName(mission.branchName),
-        displayName: mission.name,
+        // Why: inside a mission the repo is the member's identity; the mission
+        // name already labels the session card and the shared branch.
+        displayName: store.getRepo(repoId)?.displayName ?? mission.name,
         branchNameOverride: mission.branchName
       })
       store.setMissionMemberWorktree(mission.id, repoId, created.worktree.id)

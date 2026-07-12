@@ -104,6 +104,9 @@ type WorktreeCardProps = {
   revealHighlightTone?: 'default' | 'ai'
   selectedWorktrees?: readonly Worktree[]
   hideRepoBadge?: boolean
+  /** Mission session cards suppress the folder-name meta label (it repeats
+   *  the card title, since the mission root is named after the mission). */
+  hideFolderPathLabel?: boolean
   hostContextLabel?: string
   inPinnedSection?: boolean
   activationRowKey?: string
@@ -211,6 +214,7 @@ const WorktreeCard = React.memo(function WorktreeCard({
   onCardDragEnd,
   nativeDragEnabled = true,
   hideRepoBadge,
+  hideFolderPathLabel,
   hostContextLabel,
   inPinnedSection = false,
   activationRowKey,
@@ -388,13 +392,15 @@ const WorktreeCard = React.memo(function WorktreeCard({
   const hasProjectGroups = projectGroups.length > 0
   const branchIdentityDisplay = !isFolder && branch.length > 0 ? branch : undefined
   const folderPathIdentityDisplay =
-    isFolder && hasProjectGroups && worktree.path.trim().length > 0 ? worktree.path : undefined
+    isFolder && !hideFolderPathLabel && hasProjectGroups && worktree.path.trim().length > 0
+      ? worktree.path
+      : undefined
   const identityDisplay = branchIdentityDisplay ?? folderPathIdentityDisplay
   const hasPathIdentityEnabled = cardProps.includes('branch')
   const showIdentityInNewCard = newCardStyle && hasPathIdentityEnabled && Boolean(identityDisplay)
   const folderMetaRowContent = newCardStyle
     ? hasPathIdentityEnabled && Boolean(folderPathIdentityDisplay)
-    : isFolder
+    : isFolder && !hideFolderPathLabel
   const hostedReviewCacheKey =
     repo && branch
       ? getHostedReviewCacheKey(
@@ -1690,7 +1696,7 @@ const WorktreeCard = React.memo(function WorktreeCard({
                   className="text-[11px] text-muted-foreground leading-none"
                   tooltipEnabled={!hasHoverDetails}
                 />
-              ) : isFolder && !newCardStyle ? (
+              ) : isFolder && !newCardStyle && !hideFolderPathLabel ? (
                 <span
                   className="min-w-0 truncate font-mono text-[11px] leading-none text-muted-foreground"
                   title={worktree.path}

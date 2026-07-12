@@ -4709,6 +4709,10 @@
         },
         "MissionMemberErrorCopy": {
           "c8affe1f4b": "This repository has no commits or default branch yet. Make an initial commit (or set a default branch in Project Settings), then retry."
+        },
+        "MissionGroupQuickAdd": {
+          "38cb504307": "Add group",
+          "fa306c69f4": "{{value0}} projects"
         }
       },
       "shared": {

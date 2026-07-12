@@ -4709,6 +4709,10 @@
         },
         "MissionMemberErrorCopy": {
           "c8affe1f4b": "该仓库还没有提交或默认分支。请先创建初始提交（或在项目设置中指定默认分支），然后重试。"
+        },
+        "MissionGroupQuickAdd": {
+          "38cb504307": "添加分组",
+          "fa306c69f4": "{{value0}} 个项目"
         }
       },
       "shared": {

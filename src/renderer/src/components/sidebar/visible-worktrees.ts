@@ -4,6 +4,7 @@ import { isInactiveWorkspace } from '@/lib/worktree-activity-state'
 import { useAppStore } from '@/store'
 import { getAllWorktreesFromState, getRepoMapFromState } from '@/store/selectors'
 import { DEFAULT_SHOW_SLEEPING_WORKSPACES } from '../../../../shared/constants'
+import { getMissionMemberWorktreeIds } from '../../../../shared/missions'
 import {
   ALL_EXECUTION_HOSTS_SCOPE,
   getRepoExecutionHostId,
@@ -116,6 +117,9 @@ export function computeVisibleWorktreeIds(
     // forgetting to pass it.
     hideDefaultBranchWorkspace: boolean
     hideAutomationGeneratedWorkspaces: boolean
+    // Why required: mission member worktrees belong to the Missions tab; a
+    // caller that forgets this set would silently resurface them here.
+    missionMemberWorktreeIds: ReadonlySet<string>
     repoMap: Map<string, Repo>
     workspaceHostScope: ExecutionHostScope
     visibleWorkspaceHostIds?: readonly ExecutionHostId[] | null
@@ -138,6 +142,10 @@ export function computeVisibleWorktreeIds(
 
   if (opts.hideAutomationGeneratedWorkspaces) {
     all = all.filter((w) => !isAutomationGeneratedWorkspace(w))
+  }
+
+  if (opts.missionMemberWorktreeIds.size > 0) {
+    all = all.filter((w) => !opts.missionMemberWorktreeIds.has(w.id))
   }
 
   const visibleHostIds =
@@ -307,6 +315,7 @@ export function getVisibleWorktreeIds(): string[] {
     browserTabsByWorktree: state.browserTabsByWorktree,
     hideDefaultBranchWorkspace: state.hideDefaultBranchWorkspace,
     hideAutomationGeneratedWorkspaces: state.hideAutomationGeneratedWorkspaces,
+    missionMemberWorktreeIds: getMissionMemberWorktreeIds(state.missions),
     repoMap,
     workspaceHostScope: state.workspaceHostScope,
     visibleWorkspaceHostIds: state.visibleWorkspaceHostIds,

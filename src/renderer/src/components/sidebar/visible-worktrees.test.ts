@@ -81,6 +81,7 @@ function visibleOptions(overrides: Partial<VisibleOptions> = {}): VisibleOptions
     browserTabsByWorktree: {},
     hideDefaultBranchWorkspace: false,
     hideAutomationGeneratedWorkspaces: false,
+    missionMemberWorktreeIds: new Set<string>(),
     repoMap,
     workspaceHostScope: 'all',
     defaultHostId: LOCAL_EXECUTION_HOST_ID,
@@ -645,5 +646,20 @@ describe('computeClearFilterActions', () => {
       resetHideAutomationGeneratedWorkspaces: true,
       resetVisibleWorkspaceHostIds: true
     })
+  })
+})
+
+describe('mission member visibility', () => {
+  it('hides mission member worktrees from the projects pipeline', () => {
+    const missionWt = makeWorktree('repo1::/wt/mission')
+    const plainWt = makeWorktree('repo1::/wt/plain')
+    const result = computeVisibleWorktreeIds(
+      { repo1: [missionWt, plainWt] },
+      [missionWt.id, plainWt.id],
+      visibleOptions({
+        missionMemberWorktreeIds: new Set([missionWt.id])
+      })
+    )
+    expect(result).toEqual([plainWt.id])
   })
 })

@@ -56,6 +56,11 @@ test.describe('Missions', () => {
     expect(rootEntries.length).toBeGreaterThan(0)
     expect(lstatSync(`${missionRoot}/${rootEntries[0]}`).isSymbolicLink()).toBe(true)
 
+    // Mission member worktrees are hidden from the Projects tab.
+    await orcaPage.getByRole('button', { name: 'Projects', exact: true }).first().click()
+    await expect(orcaPage.getByText('mission/referral', { exact: false })).not.toBeVisible()
+    await orcaPage.getByRole('button', { name: 'Missions', exact: true }).click()
+
     // Delete the mission including its worktree via the header menu.
     await missionHeader.hover()
     await missionHeader.getByRole('button', { name: 'Mission options' }).click()

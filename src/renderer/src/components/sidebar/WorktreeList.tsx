@@ -69,7 +69,7 @@ import type {
   WorkspaceStatusDefinition
 } from '../../../../shared/types'
 import { DEFAULT_SHOW_SLEEPING_WORKSPACES } from '../../../../shared/constants'
-import { isMissionEligibleRepo } from '../../../../shared/missions'
+import { getMissionMemberWorktreeIds, isMissionEligibleRepo } from '../../../../shared/missions'
 import { buildWorktreeComparator, compareWorktreeSortLabel } from './smart-sort'
 import {
   buildAttentionByWorktree,
@@ -5221,6 +5221,11 @@ const WorktreeList = React.memo(function WorktreeList({
   const showSleepingWorkspaces = useAppStore((s) => s.showSleepingWorkspaces)
   const hideDefaultBranchWorkspace = useAppStore((s) => s.hideDefaultBranchWorkspace)
   const hideAutomationGeneratedWorkspaces = useAppStore((s) => s.hideAutomationGeneratedWorkspaces)
+  const missionsForVisibility = useAppStore((s) => s.missions)
+  const missionMemberWorktreeIds = useMemo(
+    () => getMissionMemberWorktreeIds(missionsForVisibility),
+    [missionsForVisibility]
+  )
   const filterRepoIds = useAppStore((s) => s.filterRepoIds)
   const openModal = useAppStore((s) => s.openModal)
   const openSettingsPage = useAppStore((s) => s.openSettingsPage)
@@ -5569,6 +5574,7 @@ const WorktreeList = React.memo(function WorktreeList({
       browserTabsByWorktree,
       hideDefaultBranchWorkspace,
       hideAutomationGeneratedWorkspaces,
+      missionMemberWorktreeIds,
       repoMap,
       workspaceHostScope,
       visibleWorkspaceHostIds,
@@ -5592,6 +5598,7 @@ const WorktreeList = React.memo(function WorktreeList({
     showSleepingWorkspaces,
     hideDefaultBranchWorkspace,
     hideAutomationGeneratedWorkspaces,
+    missionMemberWorktreeIds,
     workspaceHostScope,
     visibleWorkspaceHostIds,
     settings,

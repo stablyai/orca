@@ -16,6 +16,7 @@ import { useAppStore } from '@/store'
 import { translate } from '@/i18n/i18n'
 import { isMissionEligibleRepo, slugifyMissionBranch } from '../../../../shared/missions'
 import { formatMissionMemberError } from './mission-member-error-copy'
+import { MissionGroupQuickAdd } from './MissionGroupQuickAdd'
 import type { MissionMemberResult } from '../../../../shared/types'
 
 export type MissionCreateMemberStatus = {
@@ -205,9 +206,17 @@ export default function MissionCreateDialog(): React.JSX.Element {
                 />
               </div>
               <div className="space-y-1">
-                <Label className="text-[11px] text-muted-foreground">
-                  {translate('auto.components.sidebar.MissionCreateDialog.bcea32d392', 'Projects')}
-                </Label>
+                <div className="flex items-center justify-between">
+                  <Label className="text-[11px] text-muted-foreground">
+                    {translate(
+                      'auto.components.sidebar.MissionCreateDialog.bcea32d392',
+                      'Projects'
+                    )}
+                  </Label>
+                  <MissionGroupQuickAdd
+                    onAdd={(repoIds) => setSelected(new Set([...selected, ...repoIds]))}
+                  />
+                </div>
                 <RepoMultiCombobox
                   repos={eligibleRepos}
                   selected={selected}

@@ -3,6 +3,7 @@ import { useAppStore } from '@/store'
 import type { Repo, Worktree } from '../../../../shared/types'
 import { computeVisibleWorktreeIds } from './visible-worktrees'
 import { getSettingsFocusedExecutionHostId } from '../../../../shared/execution-host'
+import { getMissionMemberWorktreeIds } from '../../../../shared/missions'
 
 type UseVisibleWorkspaceKanbanWorktreeIdsParams = {
   allWorktrees: readonly Worktree[]
@@ -26,6 +27,8 @@ export function useVisibleWorkspaceKanbanWorktreeIds({
   const browserTabsByWorktree = useAppStore((s) =>
     !showSleepingWorkspaces ? s.browserTabsByWorktree : null
   )
+  const missions = useAppStore((s) => s.missions)
+  const missionMemberWorktreeIds = useMemo(() => getMissionMemberWorktreeIds(missions), [missions])
 
   return useMemo(() => {
     // Why: the board has its own status ordering, but visibility must match
@@ -40,6 +43,7 @@ export function useVisibleWorkspaceKanbanWorktreeIds({
         browserTabsByWorktree,
         hideDefaultBranchWorkspace,
         hideAutomationGeneratedWorkspaces,
+        missionMemberWorktreeIds,
         repoMap,
         workspaceHostScope,
         visibleWorkspaceHostIds,
@@ -55,6 +59,7 @@ export function useVisibleWorkspaceKanbanWorktreeIds({
     filterRepoIds,
     hideDefaultBranchWorkspace,
     hideAutomationGeneratedWorkspaces,
+    missionMemberWorktreeIds,
     workspaceHostScope,
     visibleWorkspaceHostIds,
     settings,

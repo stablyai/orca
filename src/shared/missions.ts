@@ -172,6 +172,21 @@ export function isMissionEligibleRepo(repo: { executionHostId?: string | null })
   return !repo.executionHostId?.startsWith('runtime:')
 }
 
+/** Worktree ids owned by mission members. The Projects view hides these —
+ *  mission work belongs to the Missions tab; only the mission views (and the
+ *  workspace itself) surface them. */
+export function getMissionMemberWorktreeIds(missions: readonly Mission[]): Set<string> {
+  const ids = new Set<string>()
+  for (const mission of missions) {
+    for (const member of mission.members) {
+      if (member.worktreeId) {
+        ids.add(member.worktreeId)
+      }
+    }
+  }
+  return ids
+}
+
 export function getNextMissionTabOrder(missions: readonly Mission[]): number {
   let max = -1
   for (const mission of missions) {

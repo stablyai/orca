@@ -4709,6 +4709,10 @@
         },
         "MissionMemberErrorCopy": {
           "c8affe1f4b": "Este repositorio aún no tiene commits ni rama predeterminada. Crea un commit inicial (o define una rama predeterminada en la configuración del proyecto) y vuelve a intentarlo."
+        },
+        "MissionGroupQuickAdd": {
+          "38cb504307": "Añadir grupo",
+          "fa306c69f4": "{{value0}} proyectos"
         }
       },
       "shared": {

@@ -46,12 +46,16 @@ function MissionMemberRows({ mission }: { mission: Mission }): React.JSX.Element
           return (
             <WorktreeCard
               key={member.repoId}
-              worktree={worktree}
+              // Why: inside a mission the repo is the member's identity, so the
+              // card title shows the repo name (legacy members were created
+              // with the mission name) and the repo badge would repeat it.
+              worktree={{ ...worktree, displayName: repo?.displayName ?? worktree.displayName }}
               repo={repo}
               isActive={activeWorktreeId === worktree.id}
               onActivate={() => setActiveWorktree(worktree.id)}
               nativeDragEnabled={false}
               flushSurface
+              hideRepoBadge
             />
           )
         }
@@ -193,6 +197,7 @@ function MissionSection({
         onActivate={() => setActiveWorktree(sessionWorktree.id)}
         nativeDragEnabled={false}
         flushSurface
+        hideFolderPathLabel
         lineageChildCount={mission.members.length}
         lineageCollapsed={collapsed}
         onLineageToggle={(event) => {

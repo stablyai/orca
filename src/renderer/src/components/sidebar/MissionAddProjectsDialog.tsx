@@ -12,6 +12,7 @@ import RepoMultiCombobox from '@/components/ui/repo-multi-combobox'
 import { useAppStore } from '@/store'
 import { translate } from '@/i18n/i18n'
 import { isMissionEligibleRepo } from '../../../../shared/missions'
+import { MissionGroupQuickAdd } from './MissionGroupQuickAdd'
 import type { Mission } from '../../../../shared/types'
 
 export function MissionAddProjectsDialog({
@@ -76,12 +77,20 @@ export function MissionAddProjectsDialog({
             )}
           </p>
         ) : (
-          <RepoMultiCombobox
-            repos={candidates}
-            selected={selected}
-            onChange={setSelected}
-            onSelectAll={() => setSelected(new Set(candidates.map((repo) => repo.id)))}
-          />
+          <div className="space-y-1">
+            <div className="flex justify-end">
+              <MissionGroupQuickAdd
+                excludeRepoIds={memberIds}
+                onAdd={(repoIds) => setSelected(new Set([...selected, ...repoIds]))}
+              />
+            </div>
+            <RepoMultiCombobox
+              repos={candidates}
+              selected={selected}
+              onChange={setSelected}
+              onSelectAll={() => setSelected(new Set(candidates.map((repo) => repo.id)))}
+            />
+          </div>
         )}
         <DialogFooter>
           <Button type="button" variant="outline" size="sm" className="text-xs" onClick={close}>
