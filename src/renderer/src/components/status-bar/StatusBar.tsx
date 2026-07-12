@@ -58,7 +58,10 @@ import {
 import { ClaudeIcon, GeminiIcon, MiniMaxIcon, OpenAIIcon, OpenCodeGoIcon } from './icons'
 import { AgentIcon } from '@/lib/agent-catalog'
 import { formatWindowLabel } from '@/lib/window-label-formatter'
-import { markLiveCodexSessionsForRestart } from '@/lib/codex-session-restart'
+import {
+  executeCodexSessionRestarts,
+  markLiveCodexSessionsForRestart
+} from '@/lib/codex-session-restart'
 import { UpdateStatusSegment } from './UpdateStatusSegment'
 import { isStatusBarItemAvailable } from './status-bar-agent-gating'
 import { getVisibleUsageProvider, isUsageEmptyState } from './status-bar-provider-visibility'
@@ -547,8 +550,6 @@ function CodexRestartStatusPrompt(): React.JSX.Element | null {
   const tabsByWorktree = useAppStore((s) => s.tabsByWorktree)
   const ptyIdsByTabId = useAppStore((s) => s.ptyIdsByTabId)
   const codexRestartNoticeByPtyId = useAppStore((s) => s.codexRestartNoticeByPtyId)
-  const queueCodexPaneRestarts = useAppStore((s) => s.queueCodexPaneRestarts)
-
   const staleCodexStatus = useMemo(
     () =>
       summarizeCodexRestartStatus({
@@ -584,15 +585,17 @@ function CodexRestartStatusPrompt(): React.JSX.Element | null {
           {staleCodexStatus.staleWorktreeCount > 1 ? (
             <span className="mt-0.5 block">
               {translate(
-                'auto.components.status.bar.StatusBar.59c6e7b4e0',
-                'Visible sessions restart now. Others restart when their worktree becomes active.'
+                'auto.components.status.bar.StatusBar.restartAllWorktreesHint',
+                'Restarts every listed worktree (activates each card so remote sessions actually respawn).'
               )}
             </span>
           ) : null}
         </div>
         <button
           type="button"
-          onClick={() => queueCodexPaneRestarts(staleCodexStatus.stalePtyIds)}
+          onClick={() => {
+            void executeCodexSessionRestarts(staleCodexStatus.stalePtyIds)
+          }}
           className="mt-2 inline-flex w-full items-center justify-center rounded-md border border-border/70 px-2.5 py-1.5 text-xs font-medium text-foreground transition-colors hover:bg-accent/60"
         >
           {staleCodexStatus.staleSessionCount === 1
@@ -1298,6 +1301,11 @@ function CodexSwitcherMenu({
     if (mountedRef.current) {
       setAccounts(snapshot.codex)
     }
+    // Why: remote subscribe snapshots include server Session/Weekly; apply so
+    // bars match the Active account on LXC1 without waiting for a local poll.
+    if (snapshot.rateLimits) {
+      useAppStore.getState().setRateLimitsFromPush(snapshot.rateLimits)
+    }
   }, [activeRuntimeEnvironmentId])
 
   useEffect(() => {
@@ -1331,6 +1339,19 @@ function CodexSwitcherMenu({
     const previousActiveAccountId = getCodexStatusActiveId(accountState, target)
     setIsSwitching(true)
     try {
+      // Why: drop previous account bars immediately (esp. remote LXC1) so the
+      // Active email never sits next to another account's 100% session bar.
+      useAppStore.getState().setRateLimitsFromPush({
+        ...useAppStore.getState().rateLimits,
+        codex: {
+          provider: 'codex',
+          session: null,
+          weekly: null,
+          updatedAt: 0,
+          error: null,
+          status: 'fetching'
+        }
+      })
       const next = await selectCodexProviderAccount(settings, {
         accountId,
         runtime: target.runtime,
@@ -1342,8 +1363,13 @@ function CodexSwitcherMenu({
       }
       // Why: remote selections live on the server; local GlobalSettings
       // account fields are untouched, so refetching them is pure churn.
+      // Remote select pulls server Session/Weekly inside selectCodexProviderAccount.
       if (!hasActiveRuntimeEnvironment) {
         await fetchSettings()
+        await refreshCodexRateLimitsForTarget({
+          runtime: target.runtime,
+          wslDistro: target.wslDistro ?? null
+        })
       }
       const nextActiveAccountId = getCodexStatusActiveId(next, target)
       if (previousActiveAccountId !== nextActiveAccountId) {

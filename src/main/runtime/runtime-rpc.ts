@@ -149,6 +149,7 @@ const MOBILE_RPC_METHOD_ALLOWLIST = new Set([
   'clipboard.startImageUpload',
   'diagnostics.memory',
   'workspaceSpace.analyze',
+  'workspaceCleanup.scan',
   'files.browseServerDir',
   'files.createFile',
   'files.list',

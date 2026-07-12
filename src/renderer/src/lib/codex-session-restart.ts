@@ -21,6 +21,35 @@ function isCodexForegroundProcess(processName: string | null): boolean {
   return normalized === 'codex' || normalized.startsWith('codex-')
 }
 
+function tabTitleLooksLikeCodex(state: AppState, ptyId: string): boolean {
+  for (const [tabId, ptyIds] of Object.entries(state.ptyIdsByTabId)) {
+    if (!ptyIds.includes(ptyId)) {
+      continue
+    }
+    for (const tabs of Object.values(state.tabsByWorktree)) {
+      const tab = tabs.find((entry) => entry.id === tabId)
+      if (tab && /codex/i.test(tab.title ?? '')) {
+        return true
+      }
+    }
+  }
+  return false
+}
+
+function worktreeIdsForPtyIds(state: AppState, ptyIds: readonly string[]): string[] {
+  const wanted = new Set(ptyIds)
+  const worktreeIds: string[] = []
+  for (const [worktreeId, tabs] of Object.entries(state.tabsByWorktree)) {
+    const hasMatch = tabs.some((tab) =>
+      (state.ptyIdsByTabId[tab.id] ?? []).some((ptyId) => wanted.has(ptyId))
+    )
+    if (hasMatch) {
+      worktreeIds.push(worktreeId)
+    }
+  }
+  return worktreeIds
+}
+
 async function getLiveCodexSessionPtyIds(state: AppState): Promise<string[]> {
   // Why: remote session snapshots can populate PTY mappings before their tab
   // mirrors appear in tabsByWorktree. The PTY map is the liveness source used
@@ -38,7 +67,23 @@ async function getLiveCodexSessionPtyIds(state: AppState): Promise<string[]> {
         // failed inspection must not suppress notices for every other session.
         () => null
       )
-      return isCodexForegroundProcess(foregroundProcess) ? ptyId : null
+      if (isCodexForegroundProcess(foregroundProcess)) {
+        return ptyId
+      }
+      // Why: on remote Linux, the FG process is often `node` while the tab
+      // title still carries "codex". Without this fallback, Restart Session
+      // never marks (or only partially marks) LXC1 sessions.
+      if (
+        foregroundProcess &&
+        normalizeProcessName(foregroundProcess) === 'node' &&
+        tabTitleLooksLikeCodex(state, ptyId)
+      ) {
+        return ptyId
+      }
+      if (!foregroundProcess && tabTitleLooksLikeCodex(state, ptyId)) {
+        return ptyId
+      }
+      return null
     })
   )
 
@@ -62,4 +107,39 @@ export async function markLiveCodexSessionsForRestart(args: {
       nextAccountLabel: args.nextAccountLabel
     }))
   )
+}
+
+/**
+ * Queue pane restarts and activate each worktree so mounted TerminalPanes
+ * actually consume `pendingCodexPaneRestartIds`. Without activation, only the
+ * currently visible worktree restarts — remote LXC1 multi-card sessions look
+ * "broken" when Restart Session is clicked.
+ */
+export async function executeCodexSessionRestarts(ptyIds: readonly string[]): Promise<void> {
+  if (ptyIds.length === 0) {
+    return
+  }
+  const store = useAppStore.getState()
+  store.queueCodexPaneRestarts([...ptyIds])
+
+  const worktreeIds = worktreeIdsForPtyIds(store, ptyIds)
+  if (worktreeIds.length === 0) {
+    return
+  }
+
+  const previousWorktreeId = store.activeWorktreeId
+  store.setActiveView('terminal')
+
+  for (const worktreeId of worktreeIds) {
+    store.setActiveWorktree(worktreeId)
+    // Why: TerminalPane only mounts for the active worktree; give React a
+    // tick so the pending-restart effect can run before we move on.
+    await new Promise((resolve) => {
+      window.setTimeout(resolve, 150)
+    })
+  }
+
+  if (previousWorktreeId && worktreeIds.includes(previousWorktreeId)) {
+    store.setActiveWorktree(previousWorktreeId)
+  }
 }

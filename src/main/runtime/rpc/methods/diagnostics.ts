@@ -1,4 +1,14 @@
+import { z } from 'zod'
 import { defineMethod, type RpcMethod } from '../core'
+
+const WorkspaceCleanupScanParams = z
+  .object({
+    worktreeId: z.string().optional(),
+    skipGitWorktreeIds: z.array(z.string()).optional(),
+    scanId: z.string().optional()
+  })
+  .nullable()
+  .optional()
 
 export const DIAGNOSTICS_METHODS: RpcMethod[] = [
   defineMethod({
@@ -15,6 +25,15 @@ export const DIAGNOSTICS_METHODS: RpcMethod[] = [
     params: null,
     handler: async (_params, { runtime }) => {
       return await runtime.analyzeWorkspaceSpace()
+    }
+  }),
+  defineMethod({
+    // Why: Delete Inactive Workspaces must inspect the focused runtime's repos
+    // (LXC1 /root/orca/workspaces), not the empty local Mac store.
+    name: 'workspaceCleanup.scan',
+    params: WorkspaceCleanupScanParams,
+    handler: async (params, { runtime }) => {
+      return await runtime.scanWorkspaceCleanup(params ?? {})
     }
   })
 ]

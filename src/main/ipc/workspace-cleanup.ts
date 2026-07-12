@@ -1,4 +1,4 @@
-import { ipcMain } from 'electron'
+import { app, ipcMain } from 'electron'
 import type { Store } from '../persistence'
 import type { IPtyProvider } from '../providers/types'
 import type { OrcaRuntimeService } from '../runtime/orca-runtime'
@@ -13,12 +13,53 @@ import {
   type WorkspaceCleanupScanResult
 } from '../../shared/workspace-cleanup'
 import { scanWorkspaceCleanup } from './workspace-cleanup-scan'
+import { callRuntimeEnvironment } from './runtime-environment-transport-routing'
 
 export { scanWorkspaceCleanup }
+
+/** Cleanup git checks on large remote fleets can exceed the default RPC budget. */
+const REMOTE_WORKSPACE_CLEANUP_TIMEOUT_MS = 5 * 60_000
 
 type WorkspaceCleanupHandlerDeps = {
   runtime?: OrcaRuntimeService
   getLocalPtyProvider?: () => IPtyProvider
+}
+
+function isWorkspaceCleanupScanResult(value: unknown): value is WorkspaceCleanupScanResult {
+  if (!value || typeof value !== 'object') {
+    return false
+  }
+  const record = value as Record<string, unknown>
+  return typeof record.scannedAt === 'number' && Array.isArray(record.candidates)
+}
+
+async function scanActiveRuntimeCleanup(
+  store: Store,
+  args: WorkspaceCleanupScanArgs
+): Promise<WorkspaceCleanupScanResult | null> {
+  const environmentId = store.getSettings()?.activeRuntimeEnvironmentId?.trim()
+  if (!environmentId) {
+    return null
+  }
+  try {
+    const response = await callRuntimeEnvironment(
+      app.getPath('userData'),
+      environmentId,
+      'workspaceCleanup.scan',
+      {
+        worktreeId: args.worktreeId,
+        skipGitWorktreeIds: args.skipGitWorktreeIds,
+        scanId: args.scanId
+      },
+      REMOTE_WORKSPACE_CLEANUP_TIMEOUT_MS
+    )
+    if (response.ok === true && isWorkspaceCleanupScanResult(response.result)) {
+      return response.result
+    }
+  } catch {
+    // Fall through to local scan.
+  }
+  return null
 }
 
 export function registerWorkspaceCleanupHandlers(
@@ -32,12 +73,27 @@ export function registerWorkspaceCleanupHandlers(
 
   ipcMain.handle(
     'workspaceCleanup:scan',
-    (event, args?: WorkspaceCleanupScanArgs): Promise<WorkspaceCleanupScanResult> =>
-      scanWorkspaceCleanup(store, args ?? {}, {
-        onProgress: args?.scanId
+    async (event, args?: WorkspaceCleanupScanArgs): Promise<WorkspaceCleanupScanResult> => {
+      const scanArgs = args ?? {}
+      const remote = await scanActiveRuntimeCleanup(store, scanArgs)
+      if (remote) {
+        if (scanArgs.scanId) {
+          event.sender.send('workspaceCleanup:scanProgress', {
+            ...remote,
+            scanId: scanArgs.scanId,
+            scannedWorktreeCount: remote.candidates.length,
+            totalWorktreeCount: remote.candidates.length,
+            candidateMode: 'snapshot' as const
+          })
+        }
+        return remote
+      }
+      return scanWorkspaceCleanup(store, scanArgs, {
+        onProgress: scanArgs.scanId
           ? (progress) => event.sender.send('workspaceCleanup:scanProgress', progress)
           : undefined
       })
+    }
   )
 
   ipcMain.handle('workspaceCleanup:dismiss', (_event, args: WorkspaceCleanupDismissArgs) => {

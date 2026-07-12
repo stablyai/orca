@@ -1,5 +1,4 @@
 import { basename } from 'node:path'
-import type { Store } from '../persistence'
 import type { Repo, WorktreeMeta } from '../../shared/types'
 import {
   applyWorkspaceCleanupPolicy,
@@ -12,9 +11,10 @@ import {
   getWorkspaceCleanupInactivityReasonsForWorkspace,
   isWorkspaceInactiveForCleanup
 } from './workspace-cleanup-candidate'
+import type { WorkspaceCleanupStore } from './workspace-cleanup-scan'
 
 export function synthesizeDisconnectedSshCleanupCandidates(
-  store: Store,
+  store: WorkspaceCleanupStore,
   repo: Repo,
   scannedAt: number,
   targetWorktreeId?: string

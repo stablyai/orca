@@ -51,8 +51,14 @@ type WorkspaceCleanupProgressEmitter = {
   addErrors: (errors: WorkspaceCleanupScanError[]) => void
 }
 
+/** Minimal store surface for cleanup scan (local Store or RuntimeStore). */
+export type WorkspaceCleanupStore = Pick<
+  Store,
+  'getRepos' | 'getWorktreeMeta' | 'getAllWorktreeMeta'
+>
+
 export async function scanWorkspaceCleanup(
-  store: Store,
+  store: WorkspaceCleanupStore,
   args: WorkspaceCleanupScanArgs = {},
   options: WorkspaceCleanupScanOptions = {}
 ): Promise<WorkspaceCleanupScanResult> {
@@ -88,7 +94,7 @@ export async function scanWorkspaceCleanup(
 
 async function scanRepoWorkspaces(
   args: {
-    store: Store
+    store: WorkspaceCleanupStore
     repo: Repo
     scannedAt: number
     targetWorktreeId?: string

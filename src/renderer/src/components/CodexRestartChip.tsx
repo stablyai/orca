@@ -11,6 +11,7 @@ import {
   createCodexRestartOverlayCollapseState,
   getCodexRestartOverlayCollapseState
 } from './codex-restart-overlay-collapse'
+import { executeCodexSessionRestarts } from '@/lib/codex-session-restart'
 
 const EMPTY_TABS: { id: string }[] = []
 
@@ -95,7 +96,6 @@ export default function CodexRestartChip({
   const restartNotice = staleWorktreePtyIds[0]
     ? codexRestartNoticeByPtyId[staleWorktreePtyIds[0]]
     : undefined
-  const queueCodexPaneRestarts = useAppStore((s) => s.queueCodexPaneRestarts)
   const clearCodexRestartNotice = useAppStore((s) => s.clearCodexRestartNotice)
 
   const noticeKey = restartNotice ? buildCodexRestartNoticeKey(restartNotice) : null
@@ -115,7 +115,7 @@ export default function CodexRestartChip({
   }
 
   const handleRestart = (): void => {
-    queueCodexPaneRestarts(staleWorktreePtyIds)
+    void executeCodexSessionRestarts(staleWorktreePtyIds)
   }
 
   const handleDismiss = (): void => {

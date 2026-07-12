@@ -347,11 +347,16 @@ describe('provider account mutations', () => {
   })
 
   it('routes select and remove through the active runtime accounts RPC when remote', async () => {
-    runtimeEnvironmentCall.mockImplementation((args: { method: string }) => ({
-      id: 'call',
-      ok: true,
-      result: args.method.startsWith('accounts.select') ? emptyCodexState() : emptyClaudeState()
-    }))
+    runtimeEnvironmentCall.mockImplementation((args: { method: string }) => {
+      if (args.method === 'accounts.list') {
+        return { id: 'call', ok: true, result: snapshotFixture('after-select') }
+      }
+      return {
+        id: 'call',
+        ok: true,
+        result: args.method.startsWith('accounts.select') ? emptyCodexState() : emptyClaudeState()
+      }
+    })
 
     await selectCodexProviderAccount(REMOTE, {
       accountId: 'server-codex-2',
@@ -369,9 +374,13 @@ describe('provider account mutations', () => {
     const methods = runtimeEnvironmentCall.mock.calls.map(
       (call) => (call[0] as { method: string; params: unknown }).method
     )
+    // Why: after each remote select we pull accounts.list so Session/Weekly
+    // bars on the Mac client mirror the server's active account usage.
     expect(methods).toEqual([
       'accounts.selectCodex',
+      'accounts.list',
       'accounts.selectClaude',
+      'accounts.list',
       'accounts.removeCodex',
       'accounts.removeClaude'
     ])

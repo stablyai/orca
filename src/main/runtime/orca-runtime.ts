@@ -375,6 +375,11 @@ import {
 import { joinWorktreeRelativePath } from './runtime-relative-paths'
 import { collectMemorySnapshot } from '../memory/collector'
 import { analyzeWorkspaceSpace } from '../workspace-space-analysis'
+import { scanWorkspaceCleanup } from '../ipc/workspace-cleanup-scan'
+import type {
+  WorkspaceCleanupScanArgs,
+  WorkspaceCleanupScanResult
+} from '../../shared/workspace-cleanup'
 import type { WorkspaceSpaceAnalysis } from '../../shared/workspace-space-types'
 import { BrowserWindow, ipcMain } from 'electron'
 import type { AgentBrowserBridge } from '../browser/agent-browser-bridge'
@@ -2603,6 +2608,13 @@ export class OrcaRuntimeService {
       throw new Error('runtime_unavailable')
     }
     return analyzeWorkspaceSpace(this.store)
+  }
+
+  scanWorkspaceCleanup(args: WorkspaceCleanupScanArgs = {}): Promise<WorkspaceCleanupScanResult> {
+    if (!this.store) {
+      throw new Error('runtime_unavailable')
+    }
+    return scanWorkspaceCleanup(this.store, args)
   }
 
   getUIState(): PersistedUIState {

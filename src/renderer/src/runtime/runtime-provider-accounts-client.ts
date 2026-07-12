@@ -156,6 +156,9 @@ export function watchProviderAccounts(
           const message = typed.result
           if ((message.type === 'ready' || message.type === 'snapshot') && message.snapshot) {
             receivedSnapshot = true
+            // Why: remote usage lives on the serve host; mirror into the desktop
+            // rate-limit store so status-bar Session/Weekly bars track LXC1.
+            applyProviderAccountsRateLimits(message.snapshot)
             handlers.onSnapshot(message.snapshot)
           }
         },
@@ -211,18 +214,57 @@ export async function fetchProviderAccountsSnapshot(
   })
 }
 
+/**
+ * Remote account selection updates usage on the server, but the desktop status
+ * bar reads `rateLimits` from the Mac process store. Pull the server snapshot
+ * (which already re-fetched after select) and mirror Codex/Claude bars here.
+ */
+async function pullAndApplyRemoteRateLimits(environmentId: string): Promise<void> {
+  try {
+    const snapshot = await callRuntimeRpc<ProviderAccountsSnapshot>(
+      { kind: 'environment', environmentId },
+      'accounts.list',
+      null,
+      { timeoutMs: REMOTE_ACCOUNT_MUTATION_TIMEOUT_MS }
+    )
+    applyProviderAccountsRateLimits(snapshot)
+  } catch (error) {
+    console.error('Failed to refresh remote rate limits after account switch:', error)
+  }
+}
+
+export function applyProviderAccountsRateLimits(
+  snapshot: Pick<ProviderAccountsSnapshot, 'rateLimits'> | null | undefined
+): void {
+  const rateLimits = snapshot?.rateLimits
+  if (!rateLimits) {
+    return
+  }
+  // Lazy import avoids a store ↔ runtime-client cycle at module load.
+  // Apply on the next microtask so callers don't block RPC handlers.
+  void import('../store')
+    .then(({ useAppStore }) => {
+      useAppStore.getState().setRateLimitsFromPush(rateLimits)
+    })
+    .catch((error) => {
+      console.error('Failed to apply remote rate limits to store:', error)
+    })
+}
+
 export async function selectClaudeProviderAccount(
   settings: Pick<GlobalSettings, 'activeRuntimeEnvironmentId'> | null | undefined,
   selection: ProviderAccountSelection
 ): Promise<ClaudeRateLimitAccountsState> {
   const target = getActiveRuntimeTarget(settings)
   if (target.kind === 'environment') {
-    return callRuntimeRpc<ClaudeRateLimitAccountsState>(
+    const next = await callRuntimeRpc<ClaudeRateLimitAccountsState>(
       target,
       'accounts.selectClaude',
       { accountId: selection.accountId },
       { timeoutMs: REMOTE_ACCOUNT_MUTATION_TIMEOUT_MS }
     )
+    await pullAndApplyRemoteRateLimits(target.environmentId)
+    return next
   }
   return window.api.claudeAccounts.select(selection)
 }
@@ -233,12 +275,16 @@ export async function selectCodexProviderAccount(
 ): Promise<CodexRateLimitAccountsState> {
   const target = getActiveRuntimeTarget(settings)
   if (target.kind === 'environment') {
-    return callRuntimeRpc<CodexRateLimitAccountsState>(
+    const next = await callRuntimeRpc<CodexRateLimitAccountsState>(
       target,
       'accounts.selectCodex',
       { accountId: selection.accountId },
       { timeoutMs: REMOTE_ACCOUNT_MUTATION_TIMEOUT_MS }
     )
+    // Why: without this, the status bar keeps the previous account's session/
+    // weekly bars while the Active badge already shows the new email (LXC1).
+    await pullAndApplyRemoteRateLimits(target.environmentId)
+    return next
   }
   return window.api.codexAccounts.select(selection)
 }

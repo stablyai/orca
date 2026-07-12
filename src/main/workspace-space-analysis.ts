@@ -796,7 +796,11 @@ async function listWorktreesForSpaceScan(
   }
 }
 
-function mergeForSpaceScan(repo: Repo, gitWorktree: GitWorktreeInfo, store: Store): Worktree {
+function mergeForSpaceScan(
+  repo: Repo,
+  gitWorktree: GitWorktreeInfo,
+  store: WorkspaceSpaceStore
+): Worktree {
   const worktreeId = `${repo.id}::${gitWorktree.path}`
   return mergeWorktree(repo.id, gitWorktree, store.getWorktreeMeta(worktreeId), repo.displayName)
 }
@@ -813,7 +817,7 @@ function reportProgress(
 async function scanRepo(
   repo: Repo,
   scannedAt: number,
-  store: Store,
+  store: WorkspaceSpaceStore,
   progress: WorkspaceSpaceProgressState,
   options: WorkspaceSpaceAnalyzeOptions
 ): Promise<RepoScanResult> {
@@ -914,8 +918,11 @@ async function scanRepo(
   }
 }
 
+/** Minimal store surface for Space analysis (local Store or RuntimeStore). */
+export type WorkspaceSpaceStore = Pick<Store, 'getRepos' | 'getWorktreeMeta'>
+
 export async function analyzeWorkspaceSpace(
-  store: Store,
+  store: WorkspaceSpaceStore,
   options: WorkspaceSpaceAnalyzeOptions = {}
 ): Promise<WorkspaceSpaceAnalysis> {
   throwIfAborted(options.signal)
