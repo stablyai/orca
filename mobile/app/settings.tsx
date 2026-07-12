@@ -21,7 +21,8 @@ import {
   Mic,
   Globe,
   Terminal as TerminalIcon,
-  KeyRound
+  KeyRound,
+  Gauge
 } from 'lucide-react-native'
 import { colors, radii, spacing, typography } from '../src/theme/mobile-theme'
 import {
@@ -129,6 +130,15 @@ export default function SettingsScreen() {
           >
             <Mic size={16} color={colors.textSecondary} />
             <Text style={styles.rowLabel}>Voice</Text>
+            <ChevronRight size={16} color={colors.textMuted} />
+          </Pressable>
+          <View style={styles.separator} />
+          <Pressable
+            style={({ pressed }) => [styles.row, pressed && styles.rowPressed]}
+            onPress={() => router.push('/account-usage-settings')}
+          >
+            <Gauge size={16} color={colors.textSecondary} />
+            <Text style={styles.rowLabel}>Account usage</Text>
             <ChevronRight size={16} color={colors.textMuted} />
           </Pressable>
           <View style={styles.separator} />

@@ -9,22 +9,29 @@ import {
   Alert
 } from 'react-native'
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
-import { useLocalSearchParams, useRouter } from 'expo-router'
-import { ChevronLeft, Check, RefreshCw, User } from 'lucide-react-native'
+import { useLocalSearchParams, useRouter, useFocusEffect } from 'expo-router'
+import { ChevronLeft, Check, RefreshCw, User, Gauge } from 'lucide-react-native'
 import { loadHosts } from '../../../src/transport/host-store'
 import { useHostClient } from '../../../src/transport/client-context'
 import type { RpcSuccess } from '../../../src/transport/types'
 import { colors, spacing } from '../../../src/theme/mobile-theme'
 import { styles } from './accounts-screen-styles'
 import { ClaudeIcon, OpenAIIcon } from '../../../src/components/AgentIcons'
+import { loadVisibleUsageProviders } from '../../../src/storage/preferences'
 import {
   type AccountsSnapshot,
   type ProviderKey,
+  type UsageProviderKey,
+  type UsageProviderDescriptor,
+  USAGE_PROVIDERS,
+  DEFAULT_VISIBLE_USAGE_PROVIDERS,
   getActiveProviderRateLimits,
   getInactiveProviderUsage,
+  getProviderUsageWindows,
   getUsageBarState,
   hasActiveProviderUsage,
-  UsageBar
+  UsageBar,
+  UsageWindowBars
 } from '../../../src/components/AccountUsage'
 
 export default function AccountsScreen() {
@@ -39,6 +46,26 @@ export default function AccountsScreen() {
   const [error, setError] = useState<string | null>(null)
   const [refreshing, setRefreshing] = useState(false)
   const [busyAccountId, setBusyAccountId] = useState<string | null>(null)
+  const [visibleProviders, setVisibleProviders] = useState<Set<UsageProviderKey>>(
+    () => new Set(DEFAULT_VISIBLE_USAGE_PROVIDERS)
+  )
+
+  // Why: reload on focus so a change made in Settings → Account usage is
+  // reflected when the user navigates back — the screen stays mounted and
+  // updates in place (mirrors how the terminal picks up Settings → Terminal).
+  useFocusEffect(
+    useCallback(() => {
+      let active = true
+      void loadVisibleUsageProviders().then((set) => {
+        if (active) {
+          setVisibleProviders(set)
+        }
+      })
+      return () => {
+        active = false
+      }
+    }, [])
+  )
 
   useEffect(() => {
     if (!hostId) {
@@ -138,7 +165,7 @@ export default function AccountsScreen() {
     const activeWeeklyBar = getUsageBarState(activeUsage, 'weekly')
     const Icon = provider === 'claude' ? ClaudeIcon : OpenAIIcon
     return (
-      <View style={styles.section}>
+      <View style={styles.section} key={provider}>
         <View style={styles.sectionHeader}>
           <Icon size={14} />
           <Text style={styles.sectionHeading}>{title}</Text>
@@ -241,6 +268,49 @@ export default function AccountsScreen() {
     )
   }
 
+  // Why: display-only providers (Gemini/OpenCode Go/Kimi/MiniMax/Grok) have no
+  // Orca-managed accounts and no interactive switching, so the section is a
+  // non-pressable card that just surfaces the system-default target's usage.
+  // Rendered windows come from getProviderUsageWindows so Gemini buckets and
+  // OpenCode Go monthly show instead of two hardcoded 5h/7d bars.
+  const renderDisplayProviderSection = (descriptor: UsageProviderDescriptor) => {
+    if (!snapshot) {
+      return null
+    }
+    const usage = getActiveProviderRateLimits(snapshot, descriptor.id)
+    // Why: show a configured provider that is still loading or transiently
+    // failing (spinner / error copy below); only hide a genuinely
+    // unconfigured provider (no data and not fetching/error).
+    const renderable =
+      hasActiveProviderUsage(usage) || usage?.status === 'fetching' || usage?.status === 'error'
+    if (!renderable) {
+      return null
+    }
+    const windows = getProviderUsageWindows(usage)
+    const fetching = usage?.status === 'fetching'
+    return (
+      <View style={styles.section} key={descriptor.id}>
+        <View style={styles.sectionHeader}>
+          <Gauge size={14} color={colors.textMuted} />
+          <Text style={styles.sectionHeading}>{descriptor.label}</Text>
+        </View>
+        <View style={styles.card}>
+          <View style={styles.row}>
+            <View style={styles.rowMain}>
+              <Text style={styles.rowTitle}>System default</Text>
+              <UsageWindowBars windows={windows} fetching={fetching} />
+              {usage?.error ? (
+                <Text style={styles.errorText} numberOfLines={1}>
+                  {usage.error}
+                </Text>
+              ) : null}
+            </View>
+          </View>
+        </View>
+      </View>
+    )
+  }
+
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
       <View style={styles.topRow}>
@@ -294,8 +364,11 @@ export default function AccountsScreen() {
           </View>
         ) : (
           <>
-            {renderProviderSection('claude', 'Claude')}
-            {renderProviderSection('codex', 'Codex')}
+            {USAGE_PROVIDERS.filter((p) => visibleProviders.has(p.id)).map((p) =>
+              p.id === 'claude' || p.id === 'codex'
+                ? renderProviderSection(p.id, p.label)
+                : renderDisplayProviderSection(p)
+            )}
             <View style={styles.footerHint}>
               <User size={14} color={colors.textMuted} />
               <Text style={styles.footerHintText}>

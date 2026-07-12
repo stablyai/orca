@@ -1,4 +1,9 @@
 import AsyncStorage from '@react-native-async-storage/async-storage'
+import {
+  DEFAULT_VISIBLE_USAGE_PROVIDERS,
+  USAGE_PROVIDER_IDS,
+  type UsageProviderKey
+} from '../components/account-usage-state'
 
 const PINS_PREFIX = 'orca:pins:'
 const NOTIF_KEY = 'orca:pushNotificationsEnabled'
@@ -224,4 +229,39 @@ export async function loadPinnedIds(hostId: string): Promise<Set<string>> {
 
 export async function savePinnedIds(hostId: string, ids: Set<string>): Promise<void> {
   await AsyncStorage.setItem(PINS_PREFIX + hostId, JSON.stringify([...ids]))
+}
+
+const VISIBLE_USAGE_PROVIDERS_KEY = 'orca:visibleUsageProviders'
+
+// Why: intersect stored ids with the known descriptor ids so a removed,
+// misspelled, or future id can't linger in the set or silently re-enable a
+// provider after an id is reused. An explicit empty set is a valid "show none".
+function knownVisibleUsageProviders(ids: string[]): UsageProviderKey[] {
+  return USAGE_PROVIDER_IDS.filter((id) => ids.includes(id))
+}
+
+export async function loadVisibleUsageProviders(): Promise<Set<UsageProviderKey>> {
+  try {
+    const raw = await AsyncStorage.getItem(VISIBLE_USAGE_PROVIDERS_KEY)
+    if (raw === null) {
+      return new Set(DEFAULT_VISIBLE_USAGE_PROVIDERS)
+    }
+    const parsed: unknown = JSON.parse(raw)
+    // Only a real array carries the "explicit empty set = show none" semantics;
+    // corrupted non-array JSON (e.g. `{}`) falls back to the default instead.
+    if (!Array.isArray(parsed)) {
+      return new Set(DEFAULT_VISIBLE_USAGE_PROVIDERS)
+    }
+    return new Set(knownVisibleUsageProviders(stringArray(parsed)))
+  } catch {
+    return new Set(DEFAULT_VISIBLE_USAGE_PROVIDERS)
+  }
+}
+
+export async function saveVisibleUsageProviders(ids: ReadonlySet<UsageProviderKey>): Promise<void> {
+  // Persist in canonical descriptor order so the stored value is stable.
+  await AsyncStorage.setItem(
+    VISIBLE_USAGE_PROVIDERS_KEY,
+    JSON.stringify(USAGE_PROVIDER_IDS.filter((id) => ids.has(id)))
+  )
 }

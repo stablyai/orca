@@ -12,11 +12,13 @@ import {
   loadHostSidebarWidth,
   loadTerminalAutocompleteEnabled,
   loadTerminalLinkOpenMode,
+  loadVisibleUsageProviders,
   readDisabledTerminalLiveInputHandlesPreference,
   saveDisabledTerminalLiveInputHandles,
   saveHostSidebarWidth,
   saveTerminalAutocompleteEnabled,
-  saveTerminalLinkOpenMode
+  saveTerminalLinkOpenMode,
+  saveVisibleUsageProviders
 } from './preferences'
 
 vi.mock('@react-native-async-storage/async-storage', () => ({
@@ -201,5 +203,55 @@ describe('terminal link open mode preference', () => {
     await saveTerminalLinkOpenMode('phone-browser')
 
     expect(AsyncStorage.setItem).toHaveBeenCalledWith('orca:terminalLinkOpenMode', 'phone-browser')
+  })
+})
+
+describe('visible usage providers preference', () => {
+  beforeEach(() => {
+    vi.mocked(AsyncStorage.getItem).mockReset()
+    vi.mocked(AsyncStorage.setItem).mockReset()
+  })
+
+  it('defaults to Claude + Codex when never set', async () => {
+    vi.mocked(AsyncStorage.getItem).mockResolvedValue(null)
+
+    await expect(loadVisibleUsageProviders()).resolves.toEqual(new Set(['claude', 'codex']))
+    expect(AsyncStorage.getItem).toHaveBeenCalledWith('orca:visibleUsageProviders')
+  })
+
+  it('round-trips a saved set in canonical order', async () => {
+    await saveVisibleUsageProviders(new Set(['grok', 'claude', 'gemini']))
+
+    expect(AsyncStorage.setItem).toHaveBeenCalledWith(
+      'orca:visibleUsageProviders',
+      JSON.stringify(['claude', 'gemini', 'grok'])
+    )
+  })
+
+  it('drops unknown or stale ids on load', async () => {
+    vi.mocked(AsyncStorage.getItem).mockResolvedValue(
+      JSON.stringify(['claude', 'opencodeGo', 'bogus', 'grok'])
+    )
+
+    // 'opencodeGo' (field name, not the wire id) and 'bogus' are dropped.
+    await expect(loadVisibleUsageProviders()).resolves.toEqual(new Set(['claude', 'grok']))
+  })
+
+  it('preserves an explicit empty set as "show none"', async () => {
+    vi.mocked(AsyncStorage.getItem).mockResolvedValue(JSON.stringify([]))
+
+    await expect(loadVisibleUsageProviders()).resolves.toEqual(new Set())
+  })
+
+  it('falls back to the default set for non-array corrupted JSON', async () => {
+    vi.mocked(AsyncStorage.getItem).mockResolvedValue(JSON.stringify({}))
+
+    await expect(loadVisibleUsageProviders()).resolves.toEqual(new Set(['claude', 'codex']))
+  })
+
+  it('falls back to the default set when storage cannot be read', async () => {
+    vi.mocked(AsyncStorage.getItem).mockRejectedValue(new Error('storage unavailable'))
+
+    await expect(loadVisibleUsageProviders()).resolves.toEqual(new Set(['claude', 'codex']))
   })
 })

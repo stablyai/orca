@@ -14,16 +14,15 @@ import {
   Edit3,
   ListTodo
 } from 'lucide-react-native'
-import { ClaudeIcon, OpenAIIcon } from '../src/components/AgentIcons'
 import {
   type AccountsSnapshot,
-  type ProviderKey,
-  getActiveProviderRateLimits,
-  getUsageBarState,
-  hasActiveProviderUsage,
-  hasRenderableUsage,
-  UsageBar
+  type UsageProviderKey,
+  USAGE_PROVIDERS,
+  DEFAULT_VISIBLE_USAGE_PROVIDERS,
+  hasRenderableUsage
 } from '../src/components/AccountUsage'
+import { HomeAccountUsageCard } from '../src/components/HomeAccountUsageCard'
+import { loadVisibleUsageProviders } from '../src/storage/preferences'
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import { loadHosts, renameHost } from '../src/transport/host-store'
 import { removeHostAndCloseClient } from '../src/transport/host-removal-lifecycle'
@@ -314,6 +313,9 @@ export default function HomeScreen() {
   const [stats, setStats] = useState<StatsSummary | null>(null)
   const [worktreeInfo, setWorktreeInfo] = useState<Record<string, HostWorktreeInfo>>({})
   const [accountsByHost, setAccountsByHost] = useState<Record<string, AccountsSnapshot>>({})
+  const [visibleUsageProviders, setVisibleUsageProviders] = useState<Set<UsageProviderKey>>(
+    () => new Set(DEFAULT_VISIBLE_USAGE_PROVIDERS)
+  )
   const [taskProvidersByHost, setTaskProvidersByHost] = useState<Record<string, TaskProvider[]>>({})
   const [lastVisited, setLastVisited] = useState<{ hostId: string; worktreeId: string } | null>(
     null
@@ -395,6 +397,11 @@ export default function HomeScreen() {
       void loadHosts().then((h) => {
         if (!stale) {
           setHosts(h)
+        }
+      })
+      void loadVisibleUsageProviders().then((set) => {
+        if (!stale) {
+          setVisibleUsageProviders(set)
         }
       })
       void AsyncStorage.getItem('orca:last-visited-worktree').then((raw) => {
@@ -616,12 +623,17 @@ export default function HomeScreen() {
       // Why: also show hosts whose only usage is the system-default login
       // (no Orca-managed accounts but live rate-limit data for the active
       // target), otherwise system-default users see no usage section at all.
-      if (hasRenderableUsage(snap, 'claude') || hasRenderableUsage(snap, 'codex')) {
+      // Gated by the per-device visibility filter so hidden providers don't
+      // keep the section alive.
+      const anyVisible = USAGE_PROVIDERS.some(
+        (p) => visibleUsageProviders.has(p.id) && hasRenderableUsage(snap, p.id)
+      )
+      if (anyVisible) {
         items.push({ host, snapshot: snap })
       }
     }
     return items
-  }, [sortedHosts, hostStates, accountsByHost])
+  }, [sortedHosts, hostStates, accountsByHost, visibleUsageProviders])
 
   const primaryConnectedHost = useMemo(
     () => sortedHosts.find((host) => hostStates[host.id] === 'connected') ?? null,
@@ -958,78 +970,16 @@ export default function HomeScreen() {
                   <Text style={[styles.sectionHeading, { marginTop: spacing.xl }]}>
                     Account usage
                   </Text>
-                  {accountsHosts.map(({ host, snapshot }) => {
-                    const claudeActiveId = snapshot.claude.activeAccountId
-                    const claudeActive =
-                      snapshot.claude.accounts.find((a) => a.id === claudeActiveId) ?? null
-                    const codexActiveId = snapshot.codex.activeAccountId
-                    const codexActive =
-                      snapshot.codex.accounts.find((a) => a.id === codexActiveId) ?? null
-                    const showHostName = accountsHosts.length > 1
-                    return (
-                      <Pressable
-                        key={host.id}
-                        style={({ pressed }) => [
-                          styles.accountsCard,
-                          pressed && styles.hostCardPressed
-                        ]}
-                        onPress={() => router.push(`/h/${host.id}/accounts`)}
-                      >
-                        {showHostName ? (
-                          <Text style={styles.accountsHostLabel} numberOfLines={1}>
-                            {host.name}
-                          </Text>
-                        ) : null}
-                        {(['claude', 'codex'] as ProviderKey[]).map((provider) => {
-                          const active = provider === 'claude' ? claudeActive : codexActive
-                          const accounts =
-                            provider === 'claude'
-                              ? snapshot.claude.accounts
-                              : snapshot.codex.accounts
-                          const limits = getActiveProviderRateLimits(snapshot, provider)
-                          // Why: with no managed accounts, still render a
-                          // "System default" row when the active target has
-                          // live usage data; the row label already falls back
-                          // to "System default" below.
-                          if (accounts.length === 0 && !hasActiveProviderUsage(limits)) {
-                            return null
-                          }
-                          const sessionBar = getUsageBarState(limits, 'session')
-                          const weeklyBar = getUsageBarState(limits, 'weekly')
-                          return (
-                            <View key={provider} style={styles.accountsRow}>
-                              <View style={styles.accountsIcon}>
-                                {provider === 'claude' ? (
-                                  <ClaudeIcon size={18} />
-                                ) : (
-                                  <OpenAIIcon size={18} color={colors.textPrimary} />
-                                )}
-                              </View>
-                              <View style={styles.accountsInfo}>
-                                <Text style={styles.accountsEmail} numberOfLines={1}>
-                                  {active?.email ?? 'System default'}
-                                </Text>
-                                <View style={styles.accountsBars}>
-                                  <UsageBar
-                                    label="5h"
-                                    usedPercent={sessionBar.usedPercent}
-                                    unavailable={sessionBar.unavailable}
-                                    loading={sessionBar.loading}
-                                  />
-                                  <UsageBar
-                                    label="7d"
-                                    usedPercent={weeklyBar.usedPercent}
-                                    unavailable={weeklyBar.unavailable}
-                                    loading={weeklyBar.loading}
-                                  />
-                                </View>
-                              </View>
-                            </View>
-                          )
-                        })}
-                      </Pressable>
-                    )
-                  })}
+                  {accountsHosts.map(({ host, snapshot }) => (
+                    <HomeAccountUsageCard
+                      key={host.id}
+                      snapshot={snapshot}
+                      visibleProviders={visibleUsageProviders}
+                      showHostName={accountsHosts.length > 1}
+                      hostName={host.name}
+                      onPress={() => router.push(`/h/${host.id}/accounts`)}
+                    />
+                  ))}
                 </>
               ) : null}
             </View>
@@ -1409,52 +1359,6 @@ const styles = StyleSheet.create({
   },
 
   /* ─── Account usage ─── */
-  accountsCard: {
-    backgroundColor: colors.bgPanel,
-    borderWidth: 1,
-    borderColor: colors.borderSubtle,
-    borderRadius: radii.card,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm + 2,
-    gap: spacing.sm,
-    marginBottom: spacing.sm
-  },
-  accountsHostLabel: {
-    fontSize: 11,
-    color: colors.textMuted,
-    fontWeight: '500',
-    textTransform: 'uppercase',
-    letterSpacing: 0.4
-  },
-  accountsRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm + 2
-  },
-  accountsIcon: {
-    width: 32,
-    height: 32,
-    borderRadius: 9,
-    backgroundColor: colors.bgRaised,
-    alignItems: 'center',
-    justifyContent: 'center'
-  },
-  accountsInfo: {
-    flex: 1,
-    minWidth: 0,
-    gap: 2
-  },
-  accountsEmail: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: colors.textPrimary
-  },
-  accountsBars: {
-    flexDirection: 'row',
-    gap: spacing.md,
-    marginTop: 4
-  },
-
   /* ─── Quick actions ─── */
   quickActions: {
     flexDirection: 'row',
