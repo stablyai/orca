@@ -136,7 +136,9 @@ class BrowserSessionRegistry {
   // Why: non-default profiles are in-memory only unless explicitly persisted.
   // Without this, created profiles vanish on app restart.
   private persistProfiles(): void {
-    const nonDefault = [...this.profiles.values()].filter((p) => p.id !== 'default')
+    const nonDefault = [...this.profiles.values()].filter(
+      (profile) => profile.id !== 'default' && !profile.allowedDomains
+    )
     this.persistMeta({ profiles: nonDefault })
   }
 
@@ -393,7 +395,12 @@ class BrowserSessionRegistry {
     // Why: partition names are deterministic from the profile id so main can
     // reconstruct the allowlist on restart from persisted profile metadata
     // without needing a separate partition→profile mapping.
-    const partition = getOrcaProfileBrowserSessionPartition(this.activeOrcaProfileId, id)
+    // Restricted profiles hold QA authentication and must disappear if Orca
+    // exits before orchestrator cleanup. A partition without `persist:` is an
+    // in-memory Electron session and is intentionally omitted from metadata.
+    const partition = allowedDomains
+      ? `orca-profile-${getOrcaProfileBrowserPartitionSegment(this.activeOrcaProfileId)}-browser-qa-${id}`
+      : getOrcaProfileBrowserSessionPartition(this.activeOrcaProfileId, id)
     const profile: BrowserSessionProfile = {
       id,
       scope,

@@ -7,6 +7,7 @@ describe('BrowserRpcCapabilityRegistry', () => {
     const capability = registry.create({
       browserPageId: 'page-1',
       browserProfileId: 'profile-1',
+      allowedDomains: ['localhost'],
       worktreeId: 'repo::/worktree',
       ttlMs: 60_000
     })
@@ -31,6 +32,7 @@ describe('BrowserRpcCapabilityRegistry', () => {
     const capability = registry.create({
       browserPageId: 'page-1',
       browserProfileId: 'profile-1',
+      allowedDomains: ['localhost'],
       ttlMs: 60_000
     })
 
@@ -39,6 +41,12 @@ describe('BrowserRpcCapabilityRegistry', () => {
       ['browser.tabCurrent', {}],
       ['browser.tabSwitch', { page: 'page-1' }],
       ['browser.exec', { page: 'page-1', command: 'get url' }],
+      ['browser.eval', { page: 'page-1', expression: 'globalThis.location.href' }],
+      ['browser.wait', { page: 'page-1', fn: '() => true' }],
+      ['browser.find', { page: 'page-1', locator: 'role', value: 'button', action: 'click' }],
+      ['browser.get', { page: 'page-1', what: 'cdp-url' }],
+      ['browser.goto', { page: 'page-1', url: 'data:text/html,<script>alert(1)</script>' }],
+      ['browser.goto', { page: 'page-1', url: 'https://example.com' }],
       ['browser.upload', { page: 'page-1', element: '@e1', files: ['/etc/passwd'] }],
       ['browser.download', { page: 'page-1', selector: 'a', path: '/tmp/file' }],
       ['terminal.list', {}],
@@ -56,17 +64,38 @@ describe('BrowserRpcCapabilityRegistry', () => {
     }
   })
 
+  it('allows only http navigation inside the capability domain policy', () => {
+    const registry = new BrowserRpcCapabilityRegistry()
+    const capability = registry.create({
+      browserPageId: 'page-1',
+      browserProfileId: 'profile-1',
+      allowedDomains: ['localhost', '*.storika.ai'],
+      ttlMs: 60_000
+    })
+
+    expect(
+      registry.authorize(capability.token, {
+        id: 'req-1',
+        authToken: capability.token,
+        method: 'browser.goto',
+        params: { url: 'https://app-dev.storika.ai/login' }
+      }).params
+    ).toEqual({ url: 'https://app-dev.storika.ai/login', page: 'page-1' })
+  })
+
   it('expires, revokes, and removes all capabilities for a closed page', () => {
     const now = vi.fn(() => 1_000)
     const registry = new BrowserRpcCapabilityRegistry({ now })
     const first = registry.create({
       browserPageId: 'page-1',
       browserProfileId: 'profile-1',
+      allowedDomains: ['localhost'],
       ttlMs: 100
     })
     const second = registry.create({
       browserPageId: 'page-1',
       browserProfileId: 'profile-1',
+      allowedDomains: ['localhost'],
       ttlMs: 1_000
     })
 
@@ -79,11 +108,13 @@ describe('BrowserRpcCapabilityRegistry', () => {
     const third = registry.create({
       browserPageId: 'page-1',
       browserProfileId: 'profile-1',
+      allowedDomains: ['localhost'],
       ttlMs: 1_000
     })
     const other = registry.create({
       browserPageId: 'page-2',
       browserProfileId: 'profile-2',
+      allowedDomains: ['localhost'],
       ttlMs: 1_000
     })
     expect(registry.revokePage('page-1')).toBe(1)
@@ -96,6 +127,7 @@ describe('BrowserRpcCapabilityRegistry', () => {
     const capability = registry.create({
       browserPageId: 'page-1',
       browserProfileId: 'profile-1',
+      allowedDomains: ['localhost'],
       ttlMs: 1_000
     })
 

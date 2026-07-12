@@ -148,7 +148,8 @@ describe('RuntimeBrowserCommands browser screencast', () => {
 
     await expect(commands.resolveBrowserCapabilityTarget({ page: 'page-1' })).resolves.toEqual({
       browserPageId: 'page-1',
-      browserProfileId: 'profile-restricted'
+      browserProfileId: 'profile-restricted',
+      allowedDomains: ['localhost']
     })
   })
 

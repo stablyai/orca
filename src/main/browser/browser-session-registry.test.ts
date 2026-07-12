@@ -88,6 +88,7 @@ describe('BrowserSessionRegistry', () => {
       '*.storika.ai'
     ])
     expect(profile?.allowedDomains).toEqual(['localhost', '*.storika.ai'])
+    expect(profile?.partition).not.toMatch(/^persist:/)
 
     const mockSession = sessionFromPartitionMock.mock.results[0]?.value
     const requestHandler = mockSession.webRequest.onBeforeRequest.mock.calls[0][0]

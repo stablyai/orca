@@ -2132,6 +2132,7 @@ describe('OrcaRuntimeRpcServer', () => {
     const capability = runtime['browserRpcCapabilities'].create({
       browserPageId: 'page-1',
       browserProfileId: 'profile-1',
+      allowedDomains: ['localhost'],
       ttlMs: 60_000
     })
 

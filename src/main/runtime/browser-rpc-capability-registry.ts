@@ -1,4 +1,5 @@
 import { randomBytes, randomUUID } from 'node:crypto'
+import { isBrowserNetworkUrlAllowed } from '../../shared/browser-domain-policy'
 import type { RpcRequest } from './rpc/core'
 
 const MAX_CAPABILITY_TTL_MS = 2 * 60 * 60 * 1_000
@@ -14,7 +15,6 @@ const ALLOWED_BROWSER_CAPABILITY_METHODS = new Set([
   'browser.back',
   'browser.reload',
   'browser.screenshot',
-  'browser.eval',
   'browser.hover',
   'browser.drag',
   'browser.wait',
@@ -30,7 +30,6 @@ const ALLOWED_BROWSER_CAPABILITY_METHODS = new Set([
   'browser.scrollIntoView',
   'browser.get',
   'browser.is',
-  'browser.find',
   'browser.console',
   'browser.network',
   'browser.capture.start',
@@ -52,6 +51,7 @@ type BrowserRpcCapability = {
   token: string
   browserPageId: string
   browserProfileId: string
+  allowedDomains: string[]
   worktreeId?: string
   expiresAt: number
 }
@@ -78,12 +78,14 @@ export class BrowserRpcCapabilityRegistry {
   create(input: {
     browserPageId: string
     browserProfileId: string
+    allowedDomains: string[]
     worktreeId?: string
     ttlMs: number
   }): BrowserRpcCapability {
     if (
       !input.browserPageId ||
       !input.browserProfileId ||
+      input.allowedDomains.length === 0 ||
       input.ttlMs <= 0 ||
       input.ttlMs > MAX_CAPABILITY_TTL_MS
     ) {
@@ -94,6 +96,7 @@ export class BrowserRpcCapabilityRegistry {
       token: randomBytes(32).toString('hex'),
       browserPageId: input.browserPageId,
       browserProfileId: input.browserProfileId,
+      allowedDomains: [...input.allowedDomains],
       ...(input.worktreeId ? { worktreeId: input.worktreeId } : {}),
       expiresAt: this.now() + input.ttlMs
     }
@@ -115,7 +118,10 @@ export class BrowserRpcCapabilityRegistry {
     }
 
     const rawParams = request.params
-    const params = rawParams && typeof rawParams === 'object' ? { ...rawParams } : {}
+    const params: Record<string, unknown> =
+      rawParams && typeof rawParams === 'object'
+        ? { ...(rawParams as Record<string, unknown>) }
+        : {}
     if ('page' in params && params.page !== capability.browserPageId) {
       throw new BrowserRpcCapabilityError('forbidden', 'Browser capability page mismatch')
     }
@@ -125,6 +131,31 @@ export class BrowserRpcCapabilityRegistry {
       params.worktree !== capability.worktreeId
     ) {
       throw new BrowserRpcCapabilityError('forbidden', 'Browser capability worktree mismatch')
+    }
+    if (request.method === 'browser.goto') {
+      const url = typeof params.url === 'string' ? params.url : ''
+      const protocol = safeUrlProtocol(url)
+      if (
+        (protocol !== 'http:' && protocol !== 'https:') ||
+        !isBrowserNetworkUrlAllowed(url, capability.allowedDomains)
+      ) {
+        throw new BrowserRpcCapabilityError(
+          'forbidden',
+          'Browser capability navigation is outside its domain policy'
+        )
+      }
+    }
+    if (request.method === 'browser.wait' && typeof params.fn === 'string') {
+      throw new BrowserRpcCapabilityError(
+        'forbidden',
+        'Function waits are not available to browser capabilities'
+      )
+    }
+    if (request.method === 'browser.get' && params.what === 'cdp-url') {
+      throw new BrowserRpcCapabilityError(
+        'forbidden',
+        'CDP endpoint discovery is not available to browser capabilities'
+      )
     }
     return {
       ...request,
@@ -180,5 +211,13 @@ export class BrowserRpcCapabilityRegistry {
       throw new BrowserRpcCapabilityError('expired', 'Browser capability expired')
     }
     return capability
+  }
+}
+
+function safeUrlProtocol(rawUrl: string): string {
+  try {
+    return new URL(rawUrl).protocol
+  } catch {
+    return ''
   }
 }

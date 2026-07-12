@@ -166,10 +166,12 @@ export class RuntimeBrowserCommands {
 
   constructor(private readonly host: RuntimeBrowserCommandHost) {}
 
-  async resolveBrowserCapabilityTarget(params: {
-    page: string
+  async resolveBrowserCapabilityTarget(params: { page: string; worktree?: string }): Promise<{
+    browserPageId: string
+    browserProfileId: string
+    allowedDomains: string[]
     worktree?: string
-  }): Promise<{ browserPageId: string; browserProfileId: string; worktree?: string }> {
+  }> {
     const target = await this.resolveBrowserCommandTarget(params)
     const resolved = this.resolveBrowserPageWebContents(target.worktreeId, target.browserPageId)
     const profileId = browserManager.getSessionProfileIdForTab(resolved.browserPageId)
@@ -183,6 +185,7 @@ export class RuntimeBrowserCommands {
     return {
       browserPageId: resolved.browserPageId,
       browserProfileId: profile.id,
+      allowedDomains: [...profile.allowedDomains],
       ...(params.worktree ? { worktree: params.worktree } : {})
     }
   }

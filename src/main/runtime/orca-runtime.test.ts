@@ -148,6 +148,35 @@ const electronMocks = vi.hoisted(() => {
   }
 })
 
+describe('OrcaRuntimeService browser capability lifecycle', () => {
+  it('cleans the restricted page and profile at TTL even after explicit revocation', async () => {
+    vi.useFakeTimers()
+    try {
+      const runtime = new OrcaRuntimeService()
+      vi.spyOn(runtime['browserCommands'], 'resolveBrowserCapabilityTarget').mockResolvedValue({
+        browserPageId: 'page-1',
+        browserProfileId: 'profile-1',
+        allowedDomains: ['localhost']
+      })
+      const close = vi
+        .spyOn(runtime['browserCommands'], 'browserTabClose')
+        .mockResolvedValue({ closed: true })
+      const removeProfile = vi
+        .spyOn(runtime['browserCommands'], 'browserProfileDelete')
+        .mockResolvedValue({ deleted: true, profileId: 'profile-1' })
+
+      const capability = await runtime.browserCapabilityCreate({ page: 'page-1', ttlMs: 1_000 })
+      expect(runtime.browserCapabilityRevoke({ id: capability.id }).revoked).toBe(true)
+      await vi.advanceTimersByTimeAsync(1_000)
+
+      expect(close).toHaveBeenCalledWith({ page: 'page-1' })
+      expect(removeProfile).toHaveBeenCalledWith({ profileId: 'profile-1' })
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+})
+
 vi.mock('electron', () => electronMocks)
 
 const {

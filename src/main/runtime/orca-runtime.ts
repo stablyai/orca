@@ -24161,16 +24161,47 @@ export class OrcaRuntimeService {
     ttlMs: number
   }): Promise<{ id: string; token: string; expiresAt: number; browserPageId: string }> {
     const target = await this.browserCommands.resolveBrowserCapabilityTarget(params)
-    return this.browserRpcCapabilities.create({
+    const capability = this.browserRpcCapabilities.create({
       browserPageId: target.browserPageId,
       browserProfileId: target.browserProfileId,
+      allowedDomains: target.allowedDomains,
       worktreeId: target.worktree,
       ttlMs: params.ttlMs
     })
+    const timer = setTimeout(() => {
+      this.browserRpcCapabilities.revoke(capability.id)
+      void this.cleanupExpiredBrowserCapability(
+        capability.browserPageId,
+        capability.browserProfileId
+      )
+    }, params.ttlMs)
+    timer.unref()
+    return {
+      id: capability.id,
+      token: capability.token,
+      expiresAt: capability.expiresAt,
+      browserPageId: capability.browserPageId
+    }
   }
 
   browserCapabilityRevoke(params: { id: string }): { revoked: boolean; id: string } {
     return { revoked: this.browserRpcCapabilities.revoke(params.id), id: params.id }
+  }
+
+  private async cleanupExpiredBrowserCapability(
+    browserPageId: string,
+    browserProfileId: string
+  ): Promise<void> {
+    try {
+      await this.browserCommands.browserTabClose({ page: browserPageId })
+    } catch {
+      // The user or orchestrator may already have closed the page.
+    }
+    try {
+      await this.browserCommands.browserProfileDelete({ profileId: browserProfileId })
+    } catch {
+      // Expiry cleanup is best-effort because the profile may already be gone.
+    }
   }
 
   authorizeBrowserCapability(token: string, request: RpcRequest): RpcRequest {
