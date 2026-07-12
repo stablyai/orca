@@ -2036,16 +2036,17 @@
         "macos"
       ],
       "coveredProviders": [],
-      "coverageNotes": "Deterministic main/renderer tests run on macOS and exercise simulated Windows plus POSIX/Linux process-confirmation behavior. They cover exact local-ConPTY membership, detached-child rejection, unchanged SSH/WSL/remote fallback, process-confirmed Droid routing and launch-triggered confirmation, typed-alias and forged-OSC isolation, shells without OSC 133, split/detach ownership with preserved shell classification, stale PTY exit/rebind rejection, command-generation revocation, daemon v21 warm-reattach identity, unavailable inspection, and lazy subprocess/RPC callback counts. The Electron byte test runs only on Windows; live Windows and Linux PTY evidence remains uncollected. Test failures report exact expected bytes; no product telemetry or raw terminal logging is added.",
+      "coverageNotes": "Deterministic main/renderer tests run on macOS and exercise simulated Windows plus POSIX/Linux process-confirmation behavior. They cover exact local-ConPTY membership, detached-child rejection, SSH and paired-runtime host-platform routing including legacy runtime PTY IDs, active-PTY ownership after worktree host changes, Windows-to-WSL routing, unknown-metadata fallback, production handler composition, KKP authorization on every host, process-confirmed Droid routing and launch-triggered confirmation, typed-alias and forged-OSC isolation, shells without OSC 133, split/detach ownership with preserved shell classification, stale PTY exit/rebind rejection, command-generation revocation, daemon v21 warm-reattach identity, unavailable inspection, and lazy subprocess/RPC callback counts. A live linux-arm64 Docker target additionally proved real relay deployment, SSH PTY host detection, and exact inactive/active KKP bytes. The Electron byte test runs only on Windows; live Windows evidence remains uncollected. Test failures report exact expected bytes; no product telemetry or raw terminal logging is added.",
       "motivatingLinks": [
         "https://github.com/stablyai/orca/issues/7620",
         "https://github.com/stablyai/orca/pull/7668"
       ],
-      "invariant": "Shift+Enter sends CSI-u only when the active pane is a genuine local Windows ConPTY with allowlisted Droid ownership or fresh routing-trusted Droid process evidence. Every new command and PTY replacement revokes stale routing until current evidence settles. All other Windows panes preserve Esc+CR; non-Windows panes remain CSI-u; SSH/WSL/remote behavior is unchanged; split or reused panes cannot inherit sibling or prior-PTY authority; unrelated keys perform no agent or ConPTY lookup.",
-      "oracle": "Main/renderer tests assert exact bytes for local and non-local Windows plus non-Windows policy cells. Fresh Windows process evidence authorizes bytes only after a recognized global candidate is intersected with the exact ConPTY console process list; detached descendants, helper failure/timeout/root-only fallback, stale PTY exit/rebind results, typed text, and hook/OSC output fail closed. A new OSC 133;C immediately publishes a routing-neutral generation, including during D-to-C races. In cmd.exe/Git Bash/custom shells without OSC 133, accepted inferred commands start the same fresh generation; accepted submit/interrupt, title exit, focus, and visibility revoke trusted Droid bytes while one bounded confirmation runs. Detach preserves the live PTY's source shell override so WSL/native classification cannot change with the current default. Ordinary fast shell commands use cached/no-scan paths; routing-relevant confirmation bypasses cached process snapshots and keeps the bounded three-read ladder. Daemon protocol v21 persists only an allowlisted launchAgent; warm reattach uses it as a display/confirmation hint and restores routing only after current process proof. The Windows Electron test focuses the real xterm textarea and records exact renderer-to-main PTY writes.",
+      "invariant": "Shift+Enter key recognition follows the client OS, while emitted bytes follow the active application and PTY host: active Kitty keyboard protocol authorizes CSI-u on every host; otherwise Windows hosts use Esc+CR except when allowlisted Droid ownership or fresh routing-trusted Droid process evidence authorizes CSI-u, and non-Windows hosts use Esc+CR. The active SSH connection, remote-runtime PTY owner, or live local session outranks later worktree ownership changes, and missing host-platform metadata falls back to the client. Every new command and PTY replacement revokes stale agent routing until current evidence settles; split or reused panes cannot inherit sibling or prior-PTY authority; unrelated keys perform no host, agent, protocol, or ConPTY lookup.",
+      "oracle": "Renderer tests assert exact bytes across client/PTY-host combinations, including Kitty keyboard protocol active and inactive on Windows and non-Windows hosts, and prove SSH identity, the environment encoded in an active remote-runtime PTY id, and live local-session identity outrank current worktree ownership, while unavailable platform metadata falls back to the client. A live linux-arm64 SSH PTY independently captured Esc+CR with KKP inactive and CSI-u with KKP active. Fresh Windows process evidence authorizes Droid bytes only after a recognized global candidate is intersected with the exact ConPTY console process list; detached descendants, helper failure/timeout/root-only fallback, stale PTY exit/rebind results, typed text, and hook/OSC output fail closed. A new OSC 133;C immediately publishes a routing-neutral generation, including during D-to-C races. In cmd.exe/Git Bash/custom shells without OSC 133, accepted inferred commands start the same fresh generation; accepted submit/interrupt, title exit, focus, and visibility revoke trusted Droid bytes while one bounded confirmation runs. Detach preserves the live PTY's source shell override so WSL/native classification cannot change with the current default. Ordinary fast shell commands use cached/no-scan paths; routing-relevant confirmation bypasses cached process snapshots and keeps the bounded three-read ladder. Daemon protocol v21 persists only an allowlisted launchAgent; warm reattach uses it as a display/confirmation hint and restores routing only after current process proof. The Windows Electron test focuses the real xterm textarea and records exact renderer-to-main PTY writes.",
       "commands": [
         "pnpm exec vitest run --config config/vitest.config.ts src/main/daemon/daemon-foreground-confirmation-protocol.test.ts src/main/daemon/daemon-pty-adapter.test.ts src/main/daemon/daemon-pty-router.test.ts src/main/daemon/daemon-server.test.ts src/main/daemon/degraded-daemon-pty-provider.test.ts src/main/daemon/pty-subprocess-foreground-scan-cadence.test.ts src/main/daemon/pty-subprocess.test.ts src/main/ipc/pty.test.ts src/main/providers/agent-foreground-process.test.ts src/main/providers/local-pty-provider.test.ts src/main/providers/windows-conpty-process-membership.test.ts src/renderer/src/components/terminal-pane/pane-foreground-agent-tracker.test.ts src/renderer/src/components/terminal-pane/pty-connection.test.ts src/renderer/src/components/terminal-pane/pty-transport.test.ts src/renderer/src/components/terminal-pane/terminal-pane-tab-detach.test.ts src/renderer/src/components/terminal-pane/terminal-shortcut-policy.test.ts src/renderer/src/components/terminal-pane/terminal-windows-shift-enter.test.ts src/renderer/src/store/slices/store-cascades.test.ts src/renderer/src/store/slices/terminal-pane-detach-agent-identity.test.ts src/shared/agent-process-recognition.test.ts src/shared/process-table-snapshot.test.ts tests/e2e/terminal-foreground-confirmation.unit.test.ts",
-        "pnpm run test:e2e -- tests/e2e/terminal-shortcuts.spec.ts"
+        "pnpm run test:e2e -- tests/e2e/terminal-shortcuts.spec.ts",
+        "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/terminal-pane/keyboard-handlers.test.ts src/renderer/src/components/terminal-pane/remote-runtime-pty-transport.test.ts src/renderer/src/components/terminal-pane/terminal-input-host-platform.test.ts"
       ],
       "testFiles": [
         "src/main/daemon/daemon-foreground-confirmation-protocol.test.ts",
@@ -2060,9 +2061,12 @@
         "src/main/providers/local-pty-provider.test.ts",
         "src/main/providers/windows-conpty-process-membership.test.ts",
         "src/renderer/src/components/terminal-pane/pane-foreground-agent-tracker.test.ts",
+        "src/renderer/src/components/terminal-pane/keyboard-handlers.test.ts",
         "src/renderer/src/components/terminal-pane/pty-connection.test.ts",
         "src/renderer/src/components/terminal-pane/pty-transport.test.ts",
+        "src/renderer/src/components/terminal-pane/remote-runtime-pty-transport.test.ts",
         "src/renderer/src/components/terminal-pane/terminal-pane-tab-detach.test.ts",
+        "src/renderer/src/components/terminal-pane/terminal-input-host-platform.test.ts",
         "src/renderer/src/components/terminal-pane/terminal-shortcut-policy.test.ts",
         "src/renderer/src/components/terminal-pane/terminal-windows-shift-enter.test.ts",
         "src/renderer/src/store/slices/store-cascades.test.ts",
@@ -2133,11 +2137,32 @@
           ]
         },
         {
+          "file": "src/renderer/src/components/terminal-pane/keyboard-handlers.test.ts",
+          "assertions": [
+            "the production keyboard-policy boundary requires active-host routing and composes macOS Shift+Enter with Windows PTY bytes"
+          ]
+        },
+        {
+          "file": "src/renderer/src/components/terminal-pane/remote-runtime-pty-transport.test.ts",
+          "assertions": [
+            "a legacy remote PTY id retains the transport's captured runtime environment identity"
+          ]
+        },
+        {
+          "file": "src/renderer/src/components/terminal-pane/terminal-input-host-platform.test.ts",
+          "assertions": [
+            "SSH terminals use remote-platform metadata and execution-host identity when the active transport has not captured a connection id",
+            "encoded and legacy active remote-runtime PTY identities plus a live local PTY session outrank later worktree host changes",
+            "a live WSL session normalizes to a Linux terminal host",
+            "missing SSH/runtime platform metadata and local terminals fall back to the client platform"
+          ]
+        },
+        {
           "file": "src/renderer/src/components/terminal-pane/terminal-shortcut-policy.test.ts",
           "assertions": [
             "Windows defaults and non-Droid agents preserve Esc+CR while explicit Droid capability selects CSI-u",
-            "SSH, WSL, and remote Windows-client panes preserve Esc+CR without consulting the Droid capability",
-            "non-Windows Shift+Enter remains CSI-u and unrelated keys invoke neither agent nor ConPTY callbacks"
+            "Windows and non-Windows PTYs reached cross-OS use CSI-u only with active Kitty keyboard protocol unless trusted Windows Droid evidence independently authorizes it",
+            "unrelated keys invoke neither host, agent, nor protocol callbacks"
           ]
         },
         {
@@ -2238,20 +2263,20 @@
       },
       "performanceBudget": {
         "required": true,
-        "evidence": "Callback-count tests prove unrelated ordinary keys invoke neither ConPTY nor agent resolution. Windows Shift+Enter performs two store reads: one local-ConPTY classification with an O(tabs-in-worktree) tab lookup, then two pane-keyed O(1) ownership lookups. Typed text performs no routing write. Ordinary fast OSC 133;C-to-D shell commands perform no fresh confirmation RPC or process scan. An accepted submit/interrupt while trusted Droid is current, a typed allowlisted agent command, title exit, focus, visibility transition, or an idle burst after trusted Droid Shift+Enter can schedule the bounded confirmation ladder; each event cancels/deduplicates prior work and no timer recurs after settling. Windows confirmation performs one fresh process-table scan and forks exact ConPTY membership only after a recognized agent candidate appears; no recognized candidate makes zero helper calls. Same-turn fresh requests share one scan and later arrivals queue at most one successor. Recovery remains three bounded one-shot reads (350 ms, 1.2 s, 6 s). No polling loop, provider fanout, persistent listener, hidden-pane wake loop, or per-printable-key work is added."
+        "evidence": "Callback-count tests prove unrelated ordinary keys invoke neither host, agent, nor Kitty-protocol resolution. Host and agent callbacks are created once per keyboard effect, so printable input adds no per-key allocations or store reads. Shift+Enter performs bounded synchronous active-transport and indexed store lookups, plus at most one pane-keyed protocol-mode lookup when trusted Windows Droid evidence does not already authorize CSI-u, with no IPC, RPC, subprocess, polling, listener, or timer. Typed text performs no routing write. Ordinary fast OSC 133;C-to-D shell commands perform no fresh confirmation RPC or process scan. An accepted submit/interrupt while trusted Droid is current, a typed allowlisted agent command, title exit, focus, visibility transition, or an idle burst after trusted Droid Shift+Enter can schedule the bounded confirmation ladder; each event cancels/deduplicates prior work and no timer recurs after settling. Windows confirmation performs one fresh process-table scan and forks exact ConPTY membership only after a recognized agent candidate appears; no recognized candidate makes zero helper calls. Same-turn fresh requests share one scan and later arrivals queue at most one successor. Recovery remains three bounded one-shot reads (350 ms, 1.2 s, 6 s). No polling loop, provider fanout, persistent listener, hidden-pane wake loop, or per-printable-key work is added."
       },
       "promotionCriteria": [
         "Run the exact PTY-byte Electron oracle on Windows without silent platform skips.",
-        "Collect stable runtime and flake history for local and daemon Windows ConPTY while retaining deterministic unchanged-provider assertions for SSH, WSL, and remote runtime.",
+        "Collect stable runtime and flake history for local and daemon Windows ConPTY while retaining deterministic host-routing assertions for SSH, WSL, and remote runtime.",
         "Attach saved intentional-break evidence for Droid capability removal and split-sibling identity leakage."
       ],
       "knownGaps": [
-        "No Windows runner or live Linux PTY evidence is attached; the Electron byte test skips on macOS and Linux, while Linux behavior is covered only by deterministic POSIX unit paths.",
-        "Droid inside SSH, WSL, or remote-runtime intentionally keeps the pre-existing Windows-client Esc+CR behavior because local foreground confirmation is unavailable; this PR narrows the exception to issue #7620's local ConPTY surface.",
+        "No Windows runner or live Windows PTY evidence is attached; the Electron byte test skips on macOS and Linux, while a live Linux SSH PTY covers only the remote Linux host path.",
+        "Droid agent-specific CSI-u authorization is available only from trusted pane evidence; without it, Windows and non-Windows PTY hosts depend on the application's Kitty keyboard protocol state.",
         "The Electron test injects allowlisted pane identity rather than launching the real Droid and Antigravity binaries.",
         "If both Windows process-enumeration backends remain unavailable through the bounded ladder, routing fails closed to the legacy Esc+CR path; no live Droid artifact covers that degraded host configuration.",
         "Protocol v21 restarts older daemons because the minimal persisted launchAgent is a new contract; sessions preserved by pre-v21 daemons cannot supply warm-reattach launch ownership and fail closed until current process confirmation or restart.",
-        "No live daemon, SSH, WSL, remote-runtime, paired-web, or restore/replay byte artifact has been collected.",
+        "No live daemon, WSL, remote-runtime, paired-web, or restore/replay byte artifact has been collected; SSH is covered only by a macOS-client-to-Linux-host relay run.",
         "A running PTY keeps its spawn-time ORCA_PANE_KEY after pane-to-tab detach. This change transfers launch/process routing evidence and retires the stale hook snapshot, but does not redesign future hook reattribution across tab IDs."
       ],
       "demotionRule": "Keep non-blocking or demote to protection none if the Windows byte test silently skips, flakes without an actionable artifact, routes bytes using tab/title/terminal-output heuristics, or adds any ordinary-key lookup, IPC, polling, scan, or lifecycle leak."

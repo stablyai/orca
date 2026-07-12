@@ -38,6 +38,36 @@ import {
   syncTerminalScrollIntentFromViewport
 } from '@/lib/pane-manager/terminal-scroll-intent'
 
+export function resolveTerminalKeyboardShortcutAction(
+  event: Parameters<typeof resolveTerminalShortcutAction>[0],
+  isMac: Parameters<typeof resolveTerminalShortcutAction>[1],
+  macOptionAsAlt: Parameters<typeof resolveTerminalShortcutAction>[2],
+  optionKeyLocation: Parameters<typeof resolveTerminalShortcutAction>[3],
+  isWindows: Parameters<typeof resolveTerminalShortcutAction>[4],
+  keybindings: Parameters<typeof resolveTerminalShortcutAction>[5],
+  isLocalWindowsConptyPane: Parameters<typeof resolveTerminalShortcutAction>[6],
+  isKittyKeyboardActivePane: Parameters<typeof resolveTerminalShortcutAction>[7],
+  layoutBaseCharacterForCode: Parameters<typeof resolveTerminalShortcutAction>[8],
+  getWindowsShiftEnterEncoding: Parameters<typeof resolveTerminalShortcutAction>[9],
+  isWindowsTerminalHost: NonNullable<Parameters<typeof resolveTerminalShortcutAction>[10]>
+): ReturnType<typeof resolveTerminalShortcutAction> {
+  // Why: keep the host callback required at the production boundary so a
+  // caller cannot silently fall back to client-OS byte routing.
+  return resolveTerminalShortcutAction(
+    event,
+    isMac,
+    macOptionAsAlt,
+    optionKeyLocation,
+    isWindows,
+    keybindings,
+    isLocalWindowsConptyPane,
+    isKittyKeyboardActivePane,
+    layoutBaseCharacterForCode,
+    getWindowsShiftEnterEncoding,
+    isWindowsTerminalHost
+  )
+}
+
 export function recordKeyboardCreatedTerminalPaneSplit(
   createdPane: unknown,
   args: {
@@ -254,6 +284,21 @@ export function useTerminalKeyboardShortcuts({
       return resolveWindowsShiftEnterEncodingForPane(state, paneKey)
     }
 
+    // Why: host metadata is live and can hydrate after the terminal mounts;
+    // resolve it only when Shift+Enter needs to choose a byte protocol.
+    const isActivePaneWindowsTerminalHost = (): boolean => {
+      const manager = managerRef.current
+      const activePane = manager?.getActivePane() ?? manager?.getPanes()[0]
+      return (
+        resolveTerminalInputHostPlatform({
+          clientPlatform: shortcutPlatform,
+          state: useAppStore.getState(),
+          worktreeId,
+          transport: activePane ? (paneTransportsRef.current.get(activePane.id) ?? null) : null
+        }) === 'win32'
+      )
+    }
+
     const onKeyDown = (e: KeyboardEvent): void => {
       const manager = managerRef.current
       if (!manager) {
@@ -336,7 +381,7 @@ export function useTerminalKeyboardShortcuts({
         return (paneKittyKeyboardModesRef?.current.get(activePane.id)?.flags ?? 0) > 0
       }
 
-      const action = resolveTerminalShortcutAction(
+      const action = resolveTerminalKeyboardShortcutAction(
         e,
         isMac,
         macOptionAsAltRef.current,
@@ -347,16 +392,7 @@ export function useTerminalKeyboardShortcuts({
         isKittyKeyboardActivePane,
         getLayoutBaseCharacterForCode,
         getActivePaneWindowsShiftEnterEncoding,
-        () =>
-          resolveTerminalInputHostPlatform({
-            clientPlatform: shortcutPlatform,
-            state: useAppStore.getState(),
-            worktreeId,
-            transport:
-              paneTransportsRef.current.get(
-                (manager.getActivePane() ?? manager.getPanes()[0])?.id ?? -1
-              ) ?? null
-          }) === 'win32'
+        isActivePaneWindowsTerminalHost
       )
       if (!action) {
         return

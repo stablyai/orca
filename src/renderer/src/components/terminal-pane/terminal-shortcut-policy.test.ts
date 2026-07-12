@@ -139,28 +139,24 @@ describe('resolveTerminalShortcutAction', () => {
     ).toEqual({ type: 'sendInput', data: '\x1b[13;2u' })
   })
 
-  it('preserves the Windows fallback for SSH, WSL, and remote panes', () => {
-    // Why: a Windows client cannot safely infer a remote peer's decoder, so the
-    // local Droid exception must not broaden main's existing remote behavior.
-    const isLocalWindowsConptyPane = vi.fn(() => false)
+  it('uses CSI-u for a non-Windows PTY reached from Windows only while Kitty is active', () => {
     const getWindowsShiftEnterEncoding = vi.fn(() => 'csi-u' as const)
-    for (let index = 0; index < 2; index += 1) {
-      expect(
-        resolveTerminalShortcutAction(
-          event({ key: 'Enter', code: 'Enter', shiftKey: true }),
-          false,
-          'false',
-          0,
-          true,
-          undefined,
-          isLocalWindowsConptyPane,
-          undefined,
-          undefined,
-          getWindowsShiftEnterEncoding
-        )
-      ).toEqual({ type: 'sendInput', data: '\x1b\r' })
-    }
-    expect(isLocalWindowsConptyPane).toHaveBeenCalledTimes(2)
+    const resolve = (kittyActive: boolean) =>
+      resolveTerminalShortcutAction(
+        event({ key: 'Enter', code: 'Enter', shiftKey: true }),
+        false,
+        'false',
+        0,
+        true,
+        undefined,
+        undefined,
+        () => kittyActive,
+        undefined,
+        getWindowsShiftEnterEncoding,
+        () => false
+      )
+    expect(resolve(true)).toEqual({ type: 'sendInput', data: '\x1b[13;2u' })
+    expect(resolve(false)).toEqual({ type: 'sendInput', data: '\x1b\r' })
     expect(getWindowsShiftEnterEncoding).not.toHaveBeenCalled()
   })
 
@@ -184,9 +180,11 @@ describe('resolveTerminalShortcutAction', () => {
     }
   })
 
-  it('keeps ConPTY and agent lookups off unrelated keystrokes', () => {
+  it('keeps host and agent lookups off unrelated keystrokes', () => {
     const isLocalWindowsConptyPane = vi.fn(() => true)
+    const isKittyKeyboardActivePane = vi.fn(() => true)
     const getWindowsShiftEnterEncoding = vi.fn(() => 'csi-u' as const)
+    const isWindowsTerminalHost = vi.fn(() => true)
 
     expect(
       resolveTerminalShortcutAction(
@@ -197,13 +195,16 @@ describe('resolveTerminalShortcutAction', () => {
         true,
         undefined,
         isLocalWindowsConptyPane,
+        isKittyKeyboardActivePane,
         undefined,
-        undefined,
-        getWindowsShiftEnterEncoding
+        getWindowsShiftEnterEncoding,
+        isWindowsTerminalHost
       )
     ).toBeNull()
     expect(isLocalWindowsConptyPane).not.toHaveBeenCalled()
     expect(getWindowsShiftEnterEncoding).not.toHaveBeenCalled()
+    expect(isWindowsTerminalHost).not.toHaveBeenCalled()
+    expect(isKittyKeyboardActivePane).not.toHaveBeenCalled()
 
     expect(
       resolveTerminalShortcutAction(
@@ -214,15 +215,18 @@ describe('resolveTerminalShortcutAction', () => {
         true,
         undefined,
         isLocalWindowsConptyPane,
+        isKittyKeyboardActivePane,
         undefined,
-        undefined,
-        getWindowsShiftEnterEncoding
+        getWindowsShiftEnterEncoding,
+        isWindowsTerminalHost
       )
     ).toEqual({ type: 'sendInput', data: '\x1b[13;2u' })
-    expect(isLocalWindowsConptyPane).toHaveBeenCalledTimes(1)
+    expect(isLocalWindowsConptyPane).not.toHaveBeenCalled()
     expect(getWindowsShiftEnterEncoding).toHaveBeenCalledTimes(1)
+    expect(isWindowsTerminalHost).toHaveBeenCalledTimes(1)
+    expect(isKittyKeyboardActivePane).not.toHaveBeenCalled()
 
-    isLocalWindowsConptyPane.mockReturnValue(false)
+    isWindowsTerminalHost.mockReturnValue(false)
     expect(
       resolveTerminalShortcutAction(
         event({ key: 'Enter', code: 'Enter', shiftKey: true }),
@@ -232,13 +236,37 @@ describe('resolveTerminalShortcutAction', () => {
         true,
         undefined,
         isLocalWindowsConptyPane,
+        isKittyKeyboardActivePane,
         undefined,
-        undefined,
-        getWindowsShiftEnterEncoding
+        getWindowsShiftEnterEncoding,
+        isWindowsTerminalHost
       )
-    ).toEqual({ type: 'sendInput', data: '\x1b\r' })
-    expect(isLocalWindowsConptyPane).toHaveBeenCalledTimes(2)
+    ).toEqual({ type: 'sendInput', data: '\x1b[13;2u' })
+    expect(isLocalWindowsConptyPane).not.toHaveBeenCalled()
     expect(getWindowsShiftEnterEncoding).toHaveBeenCalledTimes(1)
+    expect(isWindowsTerminalHost).toHaveBeenCalledTimes(2)
+    expect(isKittyKeyboardActivePane).toHaveBeenCalledTimes(1)
+  })
+
+  it('honors Kitty negotiation for a Windows PTY reached from macOS', () => {
+    const getWindowsShiftEnterEncoding = vi.fn(() => 'alt-enter' as const)
+    const resolve = (kittyActive: boolean) =>
+      resolveTerminalShortcutAction(
+        event({ key: 'Enter', code: 'Enter', shiftKey: true }),
+        true,
+        'false',
+        0,
+        false,
+        undefined,
+        undefined,
+        () => kittyActive,
+        undefined,
+        getWindowsShiftEnterEncoding,
+        () => true
+      )
+    expect(resolve(true)).toEqual({ type: 'sendInput', data: '\x1b[13;2u' })
+    expect(resolve(false)).toEqual({ type: 'sendInput', data: '\x1b\r' })
+    expect(getWindowsShiftEnterEncoding).toHaveBeenCalledTimes(2)
   })
 
   it('uses the Windows fallback for a Windows PTY reached from macOS', () => {

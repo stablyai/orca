@@ -1013,8 +1013,8 @@ export function createIpcPtyTransport(opts: IpcPtyTransportOptions = {}): PtyTra
       if (connectionId) {
         return null
       }
-      // Why: paste/runtime diagnostics must follow the launched PTY session,
-      // not later project setting changes.
+      // Why: input routing and diagnostics must follow the launched PTY
+      // session, not later project setting changes.
       return {
         ...(cwd ? { cwd } : {}),
         ...(shellOverride ? { shellOverride } : {})

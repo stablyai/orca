@@ -168,6 +168,7 @@ describe('createRemoteRuntimePtyTransport', () => {
 
     expect(onError).not.toHaveBeenCalled()
     expect(transport.getPtyId()).toBe('remote:env-1@@terminal-1')
+    expect(transport.getRuntimeEnvironmentId?.()).toBe('env-1')
     await vi.waitFor(() =>
       expect(latestSubscribePayload().capabilities).toEqual({
         ackOutput: 1,
