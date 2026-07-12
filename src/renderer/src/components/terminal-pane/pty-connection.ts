@@ -2218,7 +2218,7 @@ export function connectPanePty(
       })
     return claimKey
   }
-  const onExit = (ptyId: string): void => {
+  const onExit = (ptyId: string, exitCode?: number): void => {
     if (handledExitPtyId === ptyId) {
       return
     }
@@ -2317,7 +2317,51 @@ export function connectPanePty(
       if (spawnedFreshPtyId === ptyId && !Number.isFinite(lastTerminalInputAt)) {
         return
       }
-      deps.onPtyExitRef.current(ptyId)
+
+      if (
+        exitCode != null &&
+        exitCode !== 0 &&
+        !isSuppressedExit &&
+        deps.onCommandFailedRef?.current
+      ) {
+        // Collect last 50 lines for AI context
+        const lines: string[] = []
+        const activeBuffer = pane.terminal.buffer.active
+        const length = activeBuffer.length
+        const start = Math.max(0, length - 50)
+        for (let i = start; i < length; i++) {
+          const lineStr = activeBuffer.getLine(i)?.translateToString(true) ?? ''
+          if (lineStr.trim() !== '' || lines.length > 0) {
+            // skip leading empty lines
+            lines.push(lineStr)
+          }
+        }
+        deps.onCommandFailedRef.current(exitCode, lines.join('\n'))
+        // If the command failed, we want to keep the pane mounted so the user can see the error and Ask AI overlay.
+        return
+      }
+
+      deps.onPtyExitRef.current(ptyId, exitCode)
+      return
+    }
+
+    if (
+      exitCode != null &&
+      exitCode !== 0 &&
+      !isSuppressedExit &&
+      deps.onCommandFailedRef?.current
+    ) {
+      const lines: string[] = []
+      const activeBuffer = pane.terminal.buffer.active
+      const length = activeBuffer.length
+      const start = Math.max(0, length - 50)
+      for (let i = start; i < length; i++) {
+        const lineStr = activeBuffer.getLine(i)?.translateToString(true) ?? ''
+        if (lineStr.trim() !== '' || lines.length > 0) {
+          lines.push(lineStr)
+        }
+      }
+      deps.onCommandFailedRef.current(exitCode, lines.join('\n'))
       return
     }
     if (
@@ -4071,7 +4115,8 @@ export function connectPanePty(
         callbacks: {
           onData: dataCallback,
           onReplayData: replayDataCallback,
-          onError: reportError
+          onError: reportError,
+          onExit: (code) => onExit(transport.getPtyId() ?? '', code)
         }
       })
 
@@ -6633,7 +6678,8 @@ export function connectPanePty(
                     return
                   }
                   reportError(message)
-                }
+                },
+                onExit: (code) => onExit(transport.getPtyId() ?? '', code)
               }
             })
             void Promise.resolve(reattachPromise)
@@ -6817,7 +6863,8 @@ export function connectPanePty(
               return
             }
             reportError(message)
-          }
+          },
+          onExit: (code) => onExit(transport.getPtyId() ?? '', code)
         }
       })
 
@@ -6902,7 +6949,8 @@ export function connectPanePty(
           callbacks: {
             onData: dataCallback,
             onReplayData: replayDataCallback,
-            onError: reportError
+            onError: reportError,
+            onExit: (code) => onExit(transport.getPtyId() ?? '', code)
           }
         })
         bindActivePanePty(attachPtyId, {

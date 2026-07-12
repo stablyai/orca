@@ -1,0 +1,3 @@
+{
+  "commands": ["echo \"Startup successful\"", "node -v"]
+}

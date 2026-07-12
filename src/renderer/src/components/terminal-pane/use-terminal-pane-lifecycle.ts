@@ -252,7 +252,8 @@ type UseTerminalPaneLifecycleDeps = {
   replayingPanesRef: ReplayingPanesRef
   isActiveRef: React.RefObject<boolean>
   isVisibleRef: React.RefObject<boolean>
-  onPtyExitRef: React.RefObject<(ptyId: string) => void>
+  onPtyExitRef: React.RefObject<(ptyId: string, exitCode?: number) => void>
+  onCommandFailedRef?: React.RefObject<(exitCode: number, logs: string) => void>
   onPtyErrorRef?: React.RefObject<(paneId: number, message: string) => void>
   clearTabPtyId: (tabId: string, ptyId: string) => void
   consumeSuppressedPtyExit: (ptyId: string) => boolean
@@ -528,6 +529,7 @@ export function useTerminalPaneLifecycle({
   isActiveRef,
   isVisibleRef,
   onPtyExitRef,
+  onCommandFailedRef,
   onPtyErrorRef,
   clearTabPtyId,
   consumeSuppressedPtyExit,
@@ -557,7 +559,8 @@ export function useTerminalPaneLifecycle({
   setPaneCount,
   setPaneLayoutRevision,
   resolveExternalPaneDropTarget,
-  onExternalPaneDrop
+  onExternalPaneDrop,
+  expandedPaneIdRef
 }: UseTerminalPaneLifecycleDeps): void {
   const terminalScrollbackRows = normalizeDesktopTerminalScrollbackRows(
     settings?.terminalScrollbackRows
@@ -753,6 +756,7 @@ export function useTerminalPaneLifecycle({
       isActiveRef,
       isVisibleRef,
       onPtyExitRef,
+      onCommandFailedRef,
       onPtyErrorRef,
       clearTabPtyId,
       consumeSuppressedPtyExit,
@@ -800,6 +804,24 @@ export function useTerminalPaneLifecycle({
       // Split actions so the new PTY inherits the source pane's live cwd.
       // Split-pane CWD inheritance — see docs/ssh-split-pane-inherit-cwd.md.
       onPaneCreated: (pane, spawnHints) => {
+        registerTerminalPane(pane.id, {
+          paneId: pane.id,
+          worktreeId,
+          tabId,
+          getTitle: () => paneTitlesRef.current.get(pane.id) || 'Terminal',
+          getBufferLines: () => {
+            const lines: string[] = []
+            const activeBuffer = pane.terminal.buffer.active
+            const length = activeBuffer.length
+            for (let i = 0; i < length; i++) {
+              lines.push(activeBuffer.getLine(i)?.translateToString(true) ?? '')
+            }
+            return lines
+          },
+          focus: () => {
+            managerRef.current?.setActivePane(pane.id, { focus: true })
+          }
+        })
         // Install mode 2031 parser handlers before PTY attach so the child's
         // initial CSI ?2031h (sent at startup) is captured.
         const mode2031Disposables = installMode2031Handlers({
@@ -1186,6 +1208,10 @@ export function useTerminalPaneLifecycle({
         queueResizeAll(true)
       },
       onPaneClosed: (paneId, closedPane) => {
+        unregisterTerminalPane(paneId)
+        if (paneId === expandedPaneIdRef.current) {
+          setExpandedPane(null)
+        }
         const isDetachedToTab = closedPane?.reason === 'detach'
         const linkProviderDisposable = linkProviderDisposablesRef.current.get(paneId)
         if (linkProviderDisposable) {

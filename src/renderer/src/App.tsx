@@ -11,6 +11,7 @@ import {
   type SetStateAction
 } from 'react'
 import { lazyWithRetry as lazy } from '@/lib/lazy-with-retry'
+import { useWorkspaceStartup } from './hooks/useWorkspaceStartup'
 
 import {
   ArrowLeft,
@@ -83,6 +84,7 @@ import { WorkspacePortScanner } from './components/ports/WorkspacePortScanner'
 import { CrashReportDialog } from './components/crash-report/CrashReportDialog'
 import NewWorkspaceComposerModal from './components/NewWorkspaceComposerModal'
 import { RecoverableRenderErrorBoundary } from './components/error-boundaries/RecoverableRenderErrorBoundary'
+import { GlobalTerminalSearchModal } from './components/GlobalTerminalSearchModal'
 import { ConfirmationDialogProvider } from './components/confirmation-dialog'
 import { LinkRoutingPreferenceDialogProvider } from './components/link-routing-preference-dialog'
 import RecentTabSwitcher from './components/tab-bar/RecentTabSwitcher'
@@ -409,6 +411,7 @@ function App(): React.JSX.Element {
   const clearUnreadDockBadge = useUnreadDockBadge()
   useRadixBodyPointerEventsRecovery()
   useWebSessionTabsSync()
+  useWorkspaceStartup()
   const [floatingTerminalOpen, setFloatingTerminalOpen] = useState(false)
   const floatingWorkspaceTourInteractionSnapshotRef = useRef<{
     wasPreviouslyInteracted?: boolean
@@ -683,6 +686,7 @@ function App(): React.JSX.Element {
   const [shouldMountAddRepoDialog, setShouldMountAddRepoDialog] = useState(false)
   const [onboarding, setOnboarding] = useState<OnboardingState | null>(null)
   const [onboardingLoaded, setOnboardingLoaded] = useState(false)
+  const [showGlobalTerminalSearch, setShowGlobalTerminalSearch] = useState(false)
   const featureTipsPromptedThisSessionRef = useRef(false)
   const featureTipsSuppressedByOnboardingThisSessionRef = useRef(false)
   const unmountAddRepoDialogTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -1904,6 +1908,14 @@ function App(): React.JSX.Element {
     }
 
     const onKeyDown = (e: KeyboardEvent): void => {
+      // Mac uses Cmd (metaKey), others use Ctrl (ctrlKey)
+      const modifier = navigator.userAgent.includes('Mac') ? e.metaKey : e.ctrlKey
+      if (e.key.toLowerCase() === 'f' && e.shiftKey && modifier) {
+        e.preventDefault()
+        setShowGlobalTerminalSearch(true)
+        return
+      }
+
       const detected = doubleTapDetector.process(
         toModifierDoubleTapEvent({
           type: 'keyDown',
@@ -2654,6 +2666,10 @@ function App(): React.JSX.Element {
                   <FeatureTipsModal />
                 </RecoverableRenderErrorBoundary>
               ) : null}
+              <GlobalTerminalSearchModal
+                isOpen={showGlobalTerminalSearch}
+                onClose={() => setShowGlobalTerminalSearch(false)}
+              />
             </Suspense>
             {shouldMountSetupGuideTelemetryObserver ? (
               <Suspense fallback={null}>

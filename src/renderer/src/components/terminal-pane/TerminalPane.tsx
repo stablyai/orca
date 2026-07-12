@@ -57,6 +57,7 @@ import { useTerminalFontZoom } from './useTerminalFontZoom'
 import CloseTerminalDialog, { type CloseTerminalDialogCopyKind } from './CloseTerminalDialog'
 import { MobileDriverOverlay } from './MobileDriverOverlay'
 import { TerminalErrorToast } from './TerminalErrorToast'
+import { TerminalCommandFailedToast } from './TerminalCommandFailedToast'
 import { TerminalSessionStateSaveFailureDialog } from './TerminalSessionStateSaveFailureDialog'
 import TerminalContextMenu from './TerminalContextMenu'
 import TerminalPaneHeaderOverlay from './TerminalPaneHeaderOverlay'
@@ -971,6 +972,19 @@ export default function TerminalPane({
   const onPtyExitRef = useRef(onPtyExit)
   onPtyExitRef.current = onPtyExit
 
+  const [failedCommandContext, setFailedCommandContext] = useState<{
+    exitCode: number
+    logs: string
+  } | null>(null)
+  const onCommandFailedRef = useRef((exitCode: number, logs: string) => {
+    setFailedCommandContext({ exitCode, logs })
+  })
+  useEffect(() => {
+    onCommandFailedRef.current = (exitCode, logs) => {
+      setFailedCommandContext({ exitCode, logs })
+    }
+  }, [])
+
   const systemPrefersDark = useSystemPrefersDark()
   const dispatchNotification = useNotificationDispatch(worktreeId)
   const setCacheTimerStartedAt = useAppStore((store) => store.setCacheTimerStartedAt)
@@ -1484,6 +1498,7 @@ export default function TerminalPane({
     isActiveRef,
     isVisibleRef,
     onPtyExitRef,
+    onCommandFailedRef,
     onPtyErrorRef,
     clearTabPtyId,
     consumeSuppressedPtyExit: useAppStore((store) => store.consumeSuppressedPtyExit),
@@ -3144,6 +3159,20 @@ export default function TerminalPane({
           }
         }}
       />
+      <CloseTerminalDialog
+        open={pendingCloseConfirmation !== null}
+        copyKind={pendingCloseConfirmation?.copyKind}
+        onCancel={handleCancelClose}
+        onConfirm={handleConfirmClose}
+      />
+      {failedCommandContext && (
+        <TerminalCommandFailedToast
+          worktreeId={worktreeId}
+          exitCode={failedCommandContext.exitCode}
+          logs={failedCommandContext.logs}
+          onDismiss={() => setFailedCommandContext(null)}
+        />
+      )}
       <TerminalPaneHeaderOverlay
         tabId={tabId}
         worktreeId={worktreeId}

@@ -1,6 +1,5 @@
 import type { PtyTransport } from './pty-transport'
 import type { ReplayingPanesRef } from './replay-guard'
-import type { RestoredViewportBlankingPanesRef } from './terminal-restored-viewport'
 import type { AgentCompletionStatusSnapshot } from './agent-completion-coordinator-types'
 import type { EventProps } from '../../../../shared/telemetry-events'
 import type { TerminalColorSchemeMode } from '../../../../shared/terminal-color-scheme-protocol'
@@ -44,10 +43,11 @@ export type PtyConnectionDeps = {
 
   paneLastThemeModeRef: React.RefObject<Map<number, TerminalColorSchemeMode>>
   replayingPanesRef: ReplayingPanesRef
-  restoredViewportBlankingPanesRef?: RestoredViewportBlankingPanesRef
+  restoredViewportBlankingPanesRef: React.RefObject<Set<number>>
   isActiveRef: React.RefObject<boolean>
   isVisibleRef: React.RefObject<boolean>
-  onPtyExitRef: React.RefObject<(ptyId: string) => void>
+  onPtyExitRef: React.RefObject<(ptyId: string, exitCode?: number) => void>
+  onCommandFailedRef?: React.RefObject<(exitCode: number, logs: string) => void>
   onPtyErrorRef?: React.RefObject<(paneId: number, message: string) => void>
   clearTabPtyId: (tabId: string, ptyId: string) => void
   consumeSuppressedPtyExit: (ptyId: string) => boolean
