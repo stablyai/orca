@@ -374,6 +374,8 @@ import {
 } from '../../shared/claude-agent-teams-tmux-compat'
 import { joinWorktreeRelativePath } from './runtime-relative-paths'
 import { collectMemorySnapshot } from '../memory/collector'
+import { analyzeWorkspaceSpace } from '../workspace-space-analysis'
+import type { WorkspaceSpaceAnalysis } from '../../shared/workspace-space-types'
 import { BrowserWindow, ipcMain } from 'electron'
 import type { AgentBrowserBridge } from '../browser/agent-browser-bridge'
 import type { BrowserBackend } from '../browser/browser-backend'
@@ -2594,6 +2596,13 @@ export class OrcaRuntimeService {
       throw new Error('runtime_unavailable')
     }
     return collectMemorySnapshot(this.store)
+  }
+
+  analyzeWorkspaceSpace(): Promise<WorkspaceSpaceAnalysis> {
+    if (!this.store) {
+      throw new Error('runtime_unavailable')
+    }
+    return analyzeWorkspaceSpace(this.store)
   }
 
   getUIState(): PersistedUIState {
