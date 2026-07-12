@@ -627,6 +627,10 @@ function mergePreviousProjectMetadata(
     // Why: remote runtimes can have their own local Windows preference; they must
     // not overwrite the client-local project runtime setting.
     project.localWindowsRuntimePreference = previous.localWindowsRuntimePreference
+  } else {
+    // Why: with no client-local preference, a remote refresh must not inject the
+    // remote host's own value (from mergeProjectCompatibilityProject) into it.
+    delete project.localWindowsRuntimePreference
   }
   if (hostId === LOCAL_EXECUTION_HOST_ID) {
     // Why: `defaultShell` belongs to the local host; a local refresh that
@@ -644,6 +648,10 @@ function mergePreviousProjectMetadata(
     // Why: remote runtimes can have their own default shell; they must not
     // overwrite the client-local project shell setting.
     project.defaultShell = previous.defaultShell
+  } else {
+    // Why: with no client-local override, a remote refresh must not inject the
+    // remote host's own defaultShell (from mergeProjectCompatibilityProject) into it.
+    delete project.defaultShell
   }
   return {
     ...project,

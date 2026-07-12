@@ -127,6 +127,9 @@ export function openDetectedFilePath(
         if (!(await wslLinkPathExists(filePath))) {
           return
         }
+        // Why: the distro probe reports existence, not type, so we can only assume
+        // a file here (keeps #8156 file links opening in-editor). Correctly routing
+        // a WSL *directory* link needs a 9P-safe main-side isDirectory probe.
         statResult = { size: 0, isDirectory: false, mtime: 0 }
       } else {
         statResult = await statRuntimePath(fileContext, filePath)

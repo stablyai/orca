@@ -52,6 +52,8 @@ vi.mock('./use-add-repo-host-selection', () => ({
   useAddRepoHostSelection: () => mocks.hostSelection
 }))
 
+const resetWslFlowMock = vi.fn()
+
 describe('useAddRepoSourceSelection', () => {
   beforeEach(() => {
     vi.clearAllMocks()
@@ -70,7 +72,11 @@ describe('useAddRepoSourceSelection', () => {
     mocks.refValues = [false]
     const { useAddRepoSourceSelection } = await import('./use-add-repo-source-selection')
 
-    const result = useAddRepoSourceSelection({ isOpen: true, setStep: vi.fn() })
+    const result = useAddRepoSourceSelection({
+      isOpen: true,
+      setStep: vi.fn(),
+      resetWslFlow: resetWslFlowMock
+    })
 
     expect(result.selectedSource).toEqual({ kind: 'local' })
   })
@@ -81,7 +87,11 @@ describe('useAddRepoSourceSelection', () => {
     mocks.hostSelection.selectedParsedHost = { kind: 'ssh', targetId: 'ssh-1' }
     const { useAddRepoSourceSelection } = await import('./use-add-repo-source-selection')
 
-    const result = useAddRepoSourceSelection({ isOpen: true, setStep: vi.fn() })
+    const result = useAddRepoSourceSelection({
+      isOpen: true,
+      setStep: vi.fn(),
+      resetWslFlow: resetWslFlowMock
+    })
 
     expect(result.selectedSource).toEqual({ kind: 'ssh', targetId: 'ssh-1' })
   })
@@ -92,7 +102,11 @@ describe('useAddRepoSourceSelection', () => {
     const setStep = vi.fn()
     const { useAddRepoSourceSelection } = await import('./use-add-repo-source-selection')
 
-    const result = useAddRepoSourceSelection({ isOpen: true, setStep })
+    const result = useAddRepoSourceSelection({
+      isOpen: true,
+      setStep,
+      resetWslFlow: resetWslFlowMock
+    })
     result.selectWslSource()
 
     expect(mocks.stateSetters[0]).toHaveBeenCalledWith(true)
@@ -104,7 +118,7 @@ describe('useAddRepoSourceSelection', () => {
     mocks.refValues = [false]
     const { useAddRepoSourceSelection } = await import('./use-add-repo-source-selection')
 
-    useAddRepoSourceSelection({ isOpen: true, setStep: vi.fn() })
+    useAddRepoSourceSelection({ isOpen: true, setStep: vi.fn(), resetWslFlow: resetWslFlowMock })
 
     expect(mocks.stateSetters[0]).toHaveBeenCalledWith(false)
   })
@@ -114,7 +128,7 @@ describe('useAddRepoSourceSelection', () => {
     mocks.refValues = [true]
     const { useAddRepoSourceSelection } = await import('./use-add-repo-source-selection')
 
-    useAddRepoSourceSelection({ isOpen: true, setStep: vi.fn() })
+    useAddRepoSourceSelection({ isOpen: true, setStep: vi.fn(), resetWslFlow: resetWslFlowMock })
 
     expect(mocks.stateSetters[0]).not.toHaveBeenCalled()
   })
@@ -124,11 +138,18 @@ describe('useAddRepoSourceSelection', () => {
     mocks.refValues = [true]
     const { useAddRepoSourceSelection } = await import('./use-add-repo-source-selection')
 
-    const result = useAddRepoSourceSelection({ isOpen: true, setStep: vi.fn() })
+    const result = useAddRepoSourceSelection({
+      isOpen: true,
+      setStep: vi.fn(),
+      resetWslFlow: resetWslFlowMock
+    })
     await result.handleSelectAddProjectHost('local' as never)
 
     expect(mocks.hostSelection.handleSelectAddProjectHost).toHaveBeenCalledWith('local')
     expect(mocks.stateSetters[0]).toHaveBeenCalledWith(false)
+    // Why: host-scoped resets skip a same-host re-selection, so the WSL fields
+    // (distro/path/error) must be cleared here or a later WSL visit is stale.
+    expect(resetWslFlowMock).toHaveBeenCalled()
   })
 
   it('clears wsl selection after connecting a host', async () => {
@@ -136,10 +157,32 @@ describe('useAddRepoSourceSelection', () => {
     mocks.refValues = [true]
     const { useAddRepoSourceSelection } = await import('./use-add-repo-source-selection')
 
-    const result = useAddRepoSourceSelection({ isOpen: true, setStep: vi.fn() })
+    const result = useAddRepoSourceSelection({
+      isOpen: true,
+      setStep: vi.fn(),
+      resetWslFlow: resetWslFlowMock
+    })
     await result.handleConnectAddProjectHost('ssh:ssh-1' as never)
 
     expect(mocks.hostSelection.handleConnectAddProjectHost).toHaveBeenCalledWith('ssh:ssh-1')
     expect(mocks.stateSetters[0]).toHaveBeenCalledWith(false)
+    expect(resetWslFlowMock).toHaveBeenCalled()
+  })
+
+  it('clears the WSL flow when re-selecting the same host', async () => {
+    // Why: selectedHostId does not change on a same-host re-selection, so the
+    // host-change reset never fires; the source hook must clear the WSL fields.
+    mocks.stateValues = [false]
+    mocks.refValues = [true]
+    const { useAddRepoSourceSelection } = await import('./use-add-repo-source-selection')
+
+    const result = useAddRepoSourceSelection({
+      isOpen: true,
+      setStep: vi.fn(),
+      resetWslFlow: resetWslFlowMock
+    })
+    await result.handleSelectAddProjectHost('local' as never)
+
+    expect(resetWslFlowMock).toHaveBeenCalledTimes(1)
   })
 })

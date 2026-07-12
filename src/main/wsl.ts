@@ -71,17 +71,15 @@ export function wslUncDirectoryExists(uncPath: string): boolean | null {
   return testWslUncPath(uncPath, '-d')
 }
 
-/** Any-kind (file or directory) existence check — used for terminal link resolution (#8156). */
-export function wslUncPathExists(uncPath: string): boolean | null {
-  return testWslUncPath(uncPath, '-e')
-}
-
 /**
- * Async counterpart to {@link wslUncPathExists} — the terminal-link resolver
- * probes one unique path per link candidate, and the sync `execFileSync`
- * version blocked the main process event loop up to 5s per path.
+ * Async counterpart to {@link testWslUncPath}. Used off the main-process critical
+ * path where blocking the event loop up to 5s per probe on `execFileSync` is
+ * unacceptable (terminal-link resolution, add-project validation).
  */
-export async function wslUncPathExistsAsync(uncPath: string): Promise<boolean | null> {
+async function testWslUncPathAsync(
+  uncPath: string,
+  testFlag: '-d' | '-e'
+): Promise<boolean | null> {
   if (process.platform !== 'win32') {
     return null
   }
@@ -90,7 +88,7 @@ export async function wslUncPathExistsAsync(uncPath: string): Promise<boolean | 
     return null
   }
   try {
-    await execFileUtf8('wsl.exe', ['-d', info.distro, '--', 'test', '-e', info.linuxPath])
+    await execFileUtf8('wsl.exe', ['-d', info.distro, '--', 'test', testFlag, info.linuxPath])
     return true
   } catch (error) {
     // Async execFile surfaces a non-zero exit as an Error with a numeric
@@ -100,6 +98,61 @@ export async function wslUncPathExistsAsync(uncPath: string): Promise<boolean | 
     if (typeof (error as { code?: unknown })?.code === 'number') {
       return false
     }
+    return null
+  }
+}
+
+/**
+ * Async directory-only existence check — the add-project WSL validation must not
+ * block the main process on a slow/unavailable distro. Mirrors the sync
+ * {@link wslUncDirectoryExists} semantics: only a definitive `false` rejects,
+ * an inconclusive `null` lets the caller proceed.
+ */
+export async function wslUncDirectoryExistsAsync(uncPath: string): Promise<boolean | null> {
+  return testWslUncPathAsync(uncPath, '-d')
+}
+
+/**
+ * Async any-kind (file or directory) existence check — the terminal-link resolver
+ * probes one unique path per link candidate, and the sync `execFileSync` version
+ * blocked the main process event loop up to 5s per path (#8156).
+ */
+export async function wslUncPathExistsAsync(uncPath: string): Promise<boolean | null> {
+  return testWslUncPathAsync(uncPath, '-e')
+}
+
+/**
+ * Resolve the git top-level directory for a Linux path inside a WSL distro,
+ * returning the Linux-native root, or null when the answer is inconclusive
+ * (not a git repo, wsl.exe/git unavailable, spawn failure).
+ *
+ * Why: mirrors addLocalRepoFromPath's getGitRepoRoot resolution for WSL adds so a
+ * nested or sub-directory pick persists as the repo root instead of failing later
+ * git/worktree ops. Stays async (never blocks the main process) and uses an arg
+ * array with `--` (no shell). Null is inconclusive-safe so callers fall back to
+ * the picked path and the picker's retry story stays open.
+ */
+export async function resolveWslGitRepoRootAsync(
+  distro: string,
+  linuxPath: string
+): Promise<string | null> {
+  if (process.platform !== 'win32') {
+    return null
+  }
+  try {
+    const stdout = await execFileUtf8('wsl.exe', [
+      '-d',
+      distro,
+      '--',
+      'git',
+      '-C',
+      linuxPath,
+      'rev-parse',
+      '--show-toplevel'
+    ])
+    const root = stdout.trim()
+    return root.startsWith('/') ? root : null
+  } catch {
     return null
   }
 }

@@ -1,6 +1,9 @@
 import type { Store } from './persistence'
 import type { Project, Repo } from '../shared/types'
-import type { ProjectDefaultShell } from '../shared/project-default-shell'
+import {
+  normalizeProjectDefaultShell,
+  type ProjectDefaultShell
+} from '../shared/project-default-shell'
 import {
   resolveProjectExecutionRuntime,
   type ProjectExecutionRuntimeResolution
@@ -80,5 +83,9 @@ export function resolveLocalProjectDefaultShellForWorktreeId(
   if (!repo || getRepoExecutionHostId(repo) !== LOCAL_EXECUTION_HOST_ID) {
     return undefined
   }
-  return findProjectForRepo(store, repo)?.defaultShell
+  const defaultShell = findProjectForRepo(store, repo)?.defaultShell
+  // Why: persist load is a JSON cast, so a legacy/hand-edited bad value can reach
+  // here unnormalized (the write path normalizes). Preserve "no override" as
+  // undefined, but coerce any present-but-invalid value the same way writes do.
+  return defaultShell === undefined ? undefined : normalizeProjectDefaultShell(defaultShell)
 }

@@ -51,6 +51,15 @@ describe('resolveLocalProjectDefaultShellForWorktreeId', () => {
     ).toBeUndefined()
   })
 
+  it('normalizes a legacy/invalid persisted defaultShell to inherit on read', () => {
+    const repo = makeRepo()
+    // A hand-edited or legacy persisted value bypasses the write-path normalizer.
+    const project = makeProject({ defaultShell: 'bogus-shell' as never })
+    expect(resolveLocalProjectDefaultShellForWorktreeId(makeStore(repo, project), 'repo-1')).toBe(
+      'inherit'
+    )
+  })
+
   it('does not apply project defaultShell to SSH-owned repos', () => {
     const repo = makeRepo({ connectionId: null, executionHostId: 'ssh:target-1' })
     const project = makeProject({ defaultShell: 'git-bash' })

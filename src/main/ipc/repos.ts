@@ -92,9 +92,11 @@ import { normalizeWslUncPrefix } from '../../shared/wsl-paths'
 import {
   isWslAvailableAsync,
   listWslDistrosAsync,
+  resolveWslGitRepoRootAsync,
   toWindowsWslPath,
-  wslUncDirectoryExists
+  wslUncDirectoryExistsAsync
 } from '../wsl'
+import { PROJECT_DEFAULT_SHELL_VALUES } from '../../shared/project-default-shell'
 import { joinRemotePath } from '../ssh/ssh-remote-platform'
 import {
   assertFolderWorkspacePathUsable,
@@ -261,22 +263,42 @@ async function addLocalWslRepo(
     return { error: 'A WSL distro and an absolute Linux path are required.' }
   }
   const repoKind = kind === 'folder' ? 'folder' : 'git'
+
+  // Why: mirror addLocalRepoFromPath — resolve to the git top-level so a nested
+  // or sub-directory pick persists as the repo root, not the picked folder
+  // (which would fail later git/worktree ops). Inconclusive results (git/wsl.exe
+  // unavailable) fall back to the raw path so the picker's retry story stays open.
+  let resolvedLinuxPath = linuxPath
+  if (repoKind === 'git') {
+    const root = await resolveWslGitRepoRootAsync(distro, linuxPath)
+    if (root) {
+      resolvedLinuxPath = root
+    }
+  }
+
   // Arg order is (linuxPath, distro). Store the modern \\wsl.localhost\ form the
   // WSL watcher emits so legacy \\wsl$\ imports dedup against the same repo.
-  const uncPath = normalizeWslUncPrefix(toWindowsWslPath(linuxPath, distro))
+  const uncPath = normalizeWslUncPrefix(toWindowsWslPath(resolvedLinuxPath, distro))
 
   const pathKey = normalizeRuntimePathForComparison(uncPath)
   const existing = store
     .getRepos()
     .find((repo) => !repo.connectionId && normalizeRuntimePathForComparison(repo.path) === pathKey)
   if (existing) {
+    // Why: a legacy \\wsl$\ re-add dedups here but must still gain WSL routing —
+    // stamp the owning project's preference before returning (mirrors the add path).
+    const existingSetup = getProjectHostSetupForRepo(store.getProjectHostSetups(), existing)
+    store.updateProject(existingSetup.projectId, {
+      localWindowsRuntimePreference: { kind: 'wsl', distro }
+    })
     return { repo: existing, alreadyExisted: true }
   }
 
   // Why: native fs.stat is unreliable on the WSL 9P filesystem, so ask the distro
-  // directly. Only a definitive "missing" blocks the add; an inconclusive null
+  // directly — and asynchronously so a slow/unavailable distro never blocks the
+  // main process. Only a definitive "missing" blocks the add; an inconclusive null
   // (wsl.exe unavailable) still proceeds so the picker's retry story stays open.
-  if (wslUncDirectoryExists(uncPath) === false) {
+  if ((await wslUncDirectoryExistsAsync(uncPath)) === false) {
     return { error: `Directory does not exist in WSL: ${linuxPath}` }
   }
 
@@ -783,7 +805,7 @@ const ProjectUpdateIpcArgs = z.object({
   projectId: z.string().min(1),
   updates: z.object({
     localWindowsRuntimePreference: LocalWindowsRuntimePreferenceIpcArgs.optional(),
-    defaultShell: z.enum(['inherit', 'powershell', 'wsl', 'cmd', 'git-bash']).optional()
+    defaultShell: z.enum(PROJECT_DEFAULT_SHELL_VALUES).optional()
   })
 })
 

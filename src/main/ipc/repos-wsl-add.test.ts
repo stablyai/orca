@@ -23,7 +23,8 @@ const {
   prepareLocalWorktreeRootForRepoMock,
   listWslDistrosAsyncMock,
   isWslAvailableAsyncMock,
-  wslUncDirectoryExistsMock
+  wslUncDirectoryExistsAsyncMock,
+  resolveWslGitRepoRootAsyncMock
 } = vi.hoisted(() => ({
   handleMock: vi.fn(),
   removeHandlerMock: vi.fn(),
@@ -39,7 +40,8 @@ const {
   prepareLocalWorktreeRootForRepoMock: vi.fn(),
   listWslDistrosAsyncMock: vi.fn(),
   isWslAvailableAsyncMock: vi.fn(),
-  wslUncDirectoryExistsMock: vi.fn()
+  wslUncDirectoryExistsAsyncMock: vi.fn(),
+  resolveWslGitRepoRootAsyncMock: vi.fn()
 }))
 
 vi.mock('electron', () => ({
@@ -97,7 +99,8 @@ vi.mock('../wsl', async (importOriginal) => {
     ...actual,
     listWslDistrosAsync: listWslDistrosAsyncMock,
     isWslAvailableAsync: isWslAvailableAsyncMock,
-    wslUncDirectoryExists: wslUncDirectoryExistsMock
+    wslUncDirectoryExistsAsync: wslUncDirectoryExistsAsyncMock,
+    resolveWslGitRepoRootAsync: resolveWslGitRepoRootAsyncMock
   }
 })
 
@@ -187,7 +190,9 @@ describe('WSL add-project IPC', () => {
 
     listWslDistrosAsyncMock.mockReset()
     isWslAvailableAsyncMock.mockReset()
-    wslUncDirectoryExistsMock.mockReset().mockReturnValue(true)
+    wslUncDirectoryExistsAsyncMock.mockReset().mockResolvedValue(true)
+    // Default: git-root resolution is inconclusive, so the raw picked path is kept.
+    resolveWslGitRepoRootAsyncMock.mockReset().mockResolvedValue(null)
 
     registerRepoHandlers(mockWindow as never, mockStore as never)
   })
@@ -247,7 +252,7 @@ describe('WSL add-project IPC', () => {
     // Local repo: no SSH connection identity.
     expect(added.connectionId ?? null).toBeNull()
 
-    expect(wslUncDirectoryExistsMock).toHaveBeenCalledWith(
+    expect(wslUncDirectoryExistsAsyncMock).toHaveBeenCalledWith(
       '\\\\wsl.localhost\\Ubuntu\\home\\j\\app'
     )
     expect(mockStore.updateProject).toHaveBeenCalledWith(`project::${added.id}`, {
@@ -257,7 +262,7 @@ describe('WSL add-project IPC', () => {
   })
 
   it('rejects the add when the distro reports the directory is missing', async () => {
-    wslUncDirectoryExistsMock.mockReturnValue(false)
+    wslUncDirectoryExistsAsyncMock.mockResolvedValue(false)
     const result = await withWin32(() =>
       callAdd({ wsl: { distro: 'Ubuntu', linuxPath: '/home/j/missing' }, kind: 'git' })
     )
@@ -266,7 +271,7 @@ describe('WSL add-project IPC', () => {
     expect(mockStore.updateProject).not.toHaveBeenCalled()
   })
 
-  it('dedups a WSL add against an existing repo that differs only by legacy prefix', async () => {
+  it('dedups a WSL add against an existing repo that differs only by legacy prefix, stamping the runtime pref', async () => {
     repos.push({
       id: 'existing',
       path: '\\\\wsl$\\Ubuntu\\home\\j\\app',
@@ -282,6 +287,35 @@ describe('WSL add-project IPC', () => {
 
     expect(result).toEqual({ repo: repos[0] })
     expect(mockStore.addRepo).not.toHaveBeenCalled()
+    // A legacy \\wsl$\ re-add must still gain WSL routing on the reuse path.
+    expect(mockStore.updateProject).toHaveBeenCalledWith('project::existing', {
+      localWindowsRuntimePreference: { kind: 'wsl', distro: 'Ubuntu' }
+    })
+  })
+
+  it('resolves and stores the git top-level root for a nested WSL git path', async () => {
+    resolveWslGitRepoRootAsyncMock.mockResolvedValue('/home/j/app')
+
+    const result = await withWin32(() =>
+      callAdd({ wsl: { distro: 'Ubuntu', linuxPath: '/home/j/app/packages/api' }, kind: 'git' })
+    )
+
+    expect(result).toHaveProperty('repo')
+    expect(resolveWslGitRepoRootAsyncMock).toHaveBeenCalledWith(
+      'Ubuntu',
+      '/home/j/app/packages/api'
+    )
+    const added = mockStore.addRepo.mock.calls[0][0] as Repo
+    expect(added.path).toBe('\\\\wsl.localhost\\Ubuntu\\home\\j\\app')
+  })
+
+  it('skips git-root resolution for folder-kind WSL adds', async () => {
+    await withWin32(() =>
+      callAdd({ wsl: { distro: 'Ubuntu', linuxPath: '/home/j/docs' }, kind: 'folder' })
+    )
+    expect(resolveWslGitRepoRootAsyncMock).not.toHaveBeenCalled()
+    const added = mockStore.addRepo.mock.calls[0][0] as Repo
+    expect(added.path).toBe('\\\\wsl.localhost\\Ubuntu\\home\\j\\docs')
   })
 
   it('refuses WSL adds off Windows', async () => {

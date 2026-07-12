@@ -10,10 +10,12 @@ export type AddProjectSource =
 
 export function useAddRepoSourceSelection({
   isOpen,
-  setStep
+  setStep,
+  resetWslFlow
 }: {
   isOpen: boolean
   setStep: (step: AddRepoDialogStep) => void
+  resetWslFlow: () => void
 }): ReturnType<typeof useAddRepoHostSelection> & {
   selectedSource: AddProjectSource
   selectWslSource: () => void
@@ -36,20 +38,25 @@ export function useAddRepoSourceSelection({
     setStep('wsl')
   }, [setStep])
 
+  // Why: host-scoped resets only fire when selectedHostId changes, so re-selecting
+  // the same host (or leaving WSL for a host) must clear the WSL distro/path/error
+  // here too — otherwise a later WSL visit starts with stale field state.
   const handleSelectAddProjectHost = useCallback(
     async (hostId: ExecutionHostId): Promise<void> => {
       await hostSelection.handleSelectAddProjectHost(hostId)
       setWslSelected(false)
+      resetWslFlow()
     },
-    [hostSelection]
+    [hostSelection, resetWslFlow]
   )
 
   const handleConnectAddProjectHost = useCallback(
     async (hostId: ExecutionHostId): Promise<void> => {
       await hostSelection.handleConnectAddProjectHost(hostId)
       setWslSelected(false)
+      resetWslFlow()
     },
-    [hostSelection]
+    [hostSelection, resetWslFlow]
   )
 
   const selectedSource: AddProjectSource = wslSelected

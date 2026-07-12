@@ -63,9 +63,14 @@ export function isPathInsideOrEqual(rootPath: string, candidatePath: string): bo
 }
 
 export function relativePathInsideRoot(rootPath: string, candidatePath: string): string | null {
-  const normalizedRoot = trimRuntimePathTrailingSlash(normalizeRuntimePathSeparators(rootPath))
+  // Why: canonicalize the legacy \\wsl$\ share to \\wsl.localhost\ on both sides
+  // (matching normalizeRuntimePathForComparison) so a legacy-prefixed root still
+  // matches a modern-prefixed candidate, and vice versa.
+  const normalizedRoot = trimRuntimePathTrailingSlash(
+    normalizeWslUncPrefix(normalizeRuntimePathSeparators(rootPath))
+  )
   const normalizedCandidate = trimRuntimePathTrailingSlash(
-    normalizeRuntimePathSeparators(candidatePath)
+    normalizeWslUncPrefix(normalizeRuntimePathSeparators(candidatePath))
   )
   const comparisonRoot = isWindowsAbsolutePathLike(rootPath)
     ? normalizedRoot.toLowerCase()

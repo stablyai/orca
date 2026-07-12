@@ -20,8 +20,9 @@ import {
   toWindowsWslPath,
   parseWslPath,
   wslUncDirectoryExists,
-  wslUncPathExists,
+  wslUncDirectoryExistsAsync,
   wslUncPathExistsAsync,
+  resolveWslGitRepoRootAsync,
   listWslDistrosAsync,
   isWslAvailableAsync,
   _resetWslCachesForTests,
@@ -123,49 +124,6 @@ describe('wslUncDirectoryExists', () => {
   })
 })
 
-describe('wslUncPathExists', () => {
-  afterEach(() => {
-    execFileSyncMock.mockReset()
-  })
-
-  it('tests any path kind (`test -e`), not just directories', () => {
-    execFileSyncMock.mockReturnValue('')
-    const result = withPlatform('win32', () =>
-      wslUncPathExists('\\\\wsl.localhost\\Ubuntu\\home\\j\\app\\src\\x.ts')
-    )
-    expect(result).toBe(true)
-    expect(execFileSyncMock).toHaveBeenCalledWith(
-      'wsl.exe',
-      ['-d', 'Ubuntu', '--', 'test', '-e', '/home/j/app/src/x.ts'],
-      expect.objectContaining({ timeout: 5000 })
-    )
-  })
-
-  it('returns false when the path is missing', () => {
-    execFileSyncMock.mockImplementation(() => {
-      const error = new Error('Command failed') as Error & { status: number }
-      error.status = 1
-      throw error
-    })
-    const result = withPlatform('win32', () =>
-      wslUncPathExists('\\\\wsl.localhost\\Ubuntu\\home\\j\\missing.ts')
-    )
-    expect(result).toBe(false)
-  })
-
-  it('returns null when wsl.exe is unavailable (inconclusive)', () => {
-    execFileSyncMock.mockImplementation(() => {
-      const error = new Error('spawn wsl.exe ENOENT') as Error & { code: string }
-      error.code = 'ENOENT'
-      throw error
-    })
-    const result = withPlatform('win32', () =>
-      wslUncPathExists('\\\\wsl.localhost\\Ubuntu\\home\\j\\app\\src\\x.ts')
-    )
-    expect(result).toBeNull()
-  })
-})
-
 async function withPlatformAsync<T>(value: NodeJS.Platform, fn: () => Promise<T>): Promise<T> {
   const original = process.platform
   Object.defineProperty(process, 'platform', { configurable: true, value })
@@ -245,6 +203,123 @@ describe('wslUncPathExistsAsync', () => {
     ).toBeNull()
     expect(execFileMock).not.toHaveBeenCalled()
     expect(execFileSyncMock).not.toHaveBeenCalled()
+  })
+})
+
+describe('wslUncDirectoryExistsAsync', () => {
+  afterEach(() => {
+    execFileMock.mockReset()
+    execFileSyncMock.mockReset()
+  })
+
+  it('probes with `test -d` and resolves true without blocking via execFileSync', async () => {
+    execFileMock.mockImplementation(
+      (_cmd: string, _args: string[], _opts: unknown, cb: (e: unknown, out: string) => void) => {
+        cb(null, '')
+      }
+    )
+    const result = await withPlatformAsync('win32', () =>
+      wslUncDirectoryExistsAsync('\\\\wsl.localhost\\Ubuntu\\home\\j\\app')
+    )
+    expect(result).toBe(true)
+    expect(execFileMock).toHaveBeenCalledWith(
+      'wsl.exe',
+      ['-d', 'Ubuntu', '--', 'test', '-d', '/home/j/app'],
+      expect.objectContaining({ timeout: 5000 }),
+      expect.any(Function)
+    )
+    expect(execFileSyncMock).not.toHaveBeenCalled()
+  })
+
+  it('resolves false when the directory is missing (numeric exit code)', async () => {
+    execFileMock.mockImplementation(
+      (_cmd: string, _args: string[], _opts: unknown, cb: (e: unknown, out: string) => void) => {
+        const error = new Error('Command failed') as Error & { code: number }
+        error.code = 1
+        cb(error, '')
+      }
+    )
+    const result = await withPlatformAsync('win32', () =>
+      wslUncDirectoryExistsAsync('\\\\wsl.localhost\\Ubuntu\\home\\j\\missing')
+    )
+    expect(result).toBe(false)
+  })
+
+  it('resolves null when wsl.exe is unavailable (inconclusive)', async () => {
+    execFileMock.mockImplementation(
+      (_cmd: string, _args: string[], _opts: unknown, cb: (e: unknown, out: string) => void) => {
+        const error = new Error('spawn wsl.exe ENOENT') as Error & { code: string }
+        error.code = 'ENOENT'
+        cb(error, '')
+      }
+    )
+    const result = await withPlatformAsync('win32', () =>
+      wslUncDirectoryExistsAsync('\\\\wsl.localhost\\Ubuntu\\home\\j\\app')
+    )
+    expect(result).toBeNull()
+  })
+
+  it('resolves null off Windows without spawning', async () => {
+    const result = await withPlatformAsync('linux', () =>
+      wslUncDirectoryExistsAsync('\\\\wsl.localhost\\Ubuntu\\home\\j\\app')
+    )
+    expect(result).toBeNull()
+    expect(execFileMock).not.toHaveBeenCalled()
+  })
+})
+
+describe('resolveWslGitRepoRootAsync', () => {
+  afterEach(() => {
+    execFileMock.mockReset()
+  })
+
+  it('resolves the git top-level via `git -C <path> rev-parse --show-toplevel`', async () => {
+    execFileMock.mockImplementation(
+      (_cmd: string, _args: string[], _opts: unknown, cb: (e: unknown, out: string) => void) => {
+        cb(null, '/home/j/app\n')
+      }
+    )
+    const result = await withPlatformAsync('win32', () =>
+      resolveWslGitRepoRootAsync('Ubuntu', '/home/j/app/packages/api')
+    )
+    expect(result).toBe('/home/j/app')
+    expect(execFileMock).toHaveBeenCalledWith(
+      'wsl.exe',
+      [
+        '-d',
+        'Ubuntu',
+        '--',
+        'git',
+        '-C',
+        '/home/j/app/packages/api',
+        'rev-parse',
+        '--show-toplevel'
+      ],
+      expect.objectContaining({ timeout: 5000 }),
+      expect.any(Function)
+    )
+  })
+
+  it('resolves null when the path is not a git repo (inconclusive-safe)', async () => {
+    execFileMock.mockImplementation(
+      (_cmd: string, _args: string[], _opts: unknown, cb: (e: unknown, out: string) => void) => {
+        const error = new Error('fatal: not a git repository') as Error & { code: number }
+        error.code = 128
+        cb(error, '')
+      }
+    )
+    const result = await withPlatformAsync('win32', () =>
+      resolveWslGitRepoRootAsync('Ubuntu', '/home/j/plain-folder')
+    )
+    expect(result).toBeNull()
+  })
+
+  it('resolves null off Windows without spawning', async () => {
+    const result = await withPlatformAsync('linux', () =>
+      resolveWslGitRepoRootAsync('Ubuntu', '/home/j/app')
+    )
+    expect(result).toBeNull()
+    expect(execFileMock).not.toHaveBeenCalled()
   })
 })
 

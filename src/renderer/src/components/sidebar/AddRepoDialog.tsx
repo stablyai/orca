@@ -65,7 +65,28 @@ const AddRepoDialog = React.memo(function AddRepoDialog() {
     setStep
   })
 
-  const hostSelection = useAddRepoSourceSelection({ isOpen: activeModal === 'add-repo', setStep })
+  // Why: declared before useAddRepoSourceSelection so its resetWslFlow can clear
+  // stale WSL fields when a host is re-selected (see the hook for the reason).
+  const {
+    wslDistro,
+    wslPath,
+    wslError,
+    isAddingWsl,
+    setWslDistro,
+    setWslPath,
+    resetWslFlow,
+    handleAddWsl
+  } = useAddRepoWslFlow({
+    closeModal,
+    fetchWorktrees,
+    onGitRepoReady: completeGitRepoAdd,
+    setAddProjectBusyLabel
+  })
+  const hostSelection = useAddRepoSourceSelection({
+    isOpen: activeModal === 'add-repo',
+    setStep,
+    resetWslFlow
+  })
   const selectedRuntimeEnvironmentId =
     hostSelection.selectedParsedHost?.kind === 'runtime'
       ? hostSelection.selectedParsedHost.environmentId
@@ -192,21 +213,6 @@ const AddRepoDialog = React.memo(function AddRepoDialog() {
     setActiveNestedScanId,
     setNestedScanInProgress,
     showNestedRepoReview,
-    onGitRepoReady: completeGitRepoAdd,
-    setAddProjectBusyLabel
-  })
-  const {
-    wslDistro,
-    wslPath,
-    wslError,
-    isAddingWsl,
-    setWslDistro,
-    setWslPath,
-    resetWslFlow,
-    handleAddWsl
-  } = useAddRepoWslFlow({
-    closeModal,
-    fetchWorktrees,
     onGitRepoReady: completeGitRepoAdd,
     setAddProjectBusyLabel
   })

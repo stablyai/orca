@@ -1,8 +1,17 @@
 import type { ProjectExecutionRuntimeResolution } from './project-execution-runtime'
 import { isWslRuntimeResolution } from './wsl-repo-identity'
 
-export type ProjectDefaultShell = 'inherit' | 'powershell' | 'wsl' | 'cmd' | 'git-bash'
-const VALUES: ProjectDefaultShell[] = ['inherit', 'powershell', 'wsl', 'cmd', 'git-bash']
+// Why: single source of truth for the shell enum. The IPC (repos.ts) and RPC
+// (project-runtime-rpc-methods.ts) boundaries derive their `z.enum` from this
+// tuple, so adding a shell here can never be silently stripped at a boundary.
+export const PROJECT_DEFAULT_SHELL_VALUES = [
+  'inherit',
+  'powershell',
+  'wsl',
+  'cmd',
+  'git-bash'
+] as const
+export type ProjectDefaultShell = (typeof PROJECT_DEFAULT_SHELL_VALUES)[number]
 const SHELL: Record<'powershell' | 'cmd' | 'git-bash', string> = {
   powershell: 'powershell.exe',
   cmd: 'cmd.exe',
@@ -10,7 +19,7 @@ const SHELL: Record<'powershell' | 'cmd' | 'git-bash', string> = {
 }
 
 export function normalizeProjectDefaultShell(v: unknown): ProjectDefaultShell {
-  return typeof v === 'string' && (VALUES as string[]).includes(v)
+  return typeof v === 'string' && (PROJECT_DEFAULT_SHELL_VALUES as readonly string[]).includes(v)
     ? (v as ProjectDefaultShell)
     : 'inherit'
 }
