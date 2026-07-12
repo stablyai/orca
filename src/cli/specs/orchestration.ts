@@ -83,9 +83,12 @@ export const ORCHESTRATION_COMMAND_SPECS: CommandSpec[] = [
     path: ['orchestration', 'task-update'],
     summary: 'Update a task status',
     usage:
-      'orca orchestration task-update --id <task_id> --status <status> [--result <json>] [--json]',
-    allowedFlags: [...GLOBAL_FLAGS, 'id', 'status', 'result'],
-    notes: ['Valid --status values: pending, ready, dispatched, completed, failed, blocked.']
+      'orca orchestration task-update --id <task_id> --status <status> [--result <json> | --result-file <path>] [--json]',
+    allowedFlags: [...GLOBAL_FLAGS, 'id', 'status', 'result', 'result-file'],
+    notes: [
+      'Valid --status values: pending, ready, dispatched, completed, failed, blocked.',
+      'On Windows PowerShell, prefer --result-file because inline JSON quotes may be stripped.'
+    ]
   },
   {
     path: ['orchestration', 'dispatch'],

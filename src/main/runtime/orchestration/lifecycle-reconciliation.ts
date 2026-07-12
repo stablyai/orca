@@ -1,5 +1,9 @@
 import type { OrchestrationDb } from './db'
 import type { MessageRow } from './types'
+import {
+  isLifecycleMessageType,
+  validateLifecyclePayload
+} from '../../../shared/orchestration-lifecycle-payload'
 
 export type LifecycleReconciliationResult =
   | { action: 'ignored' }
@@ -9,6 +13,55 @@ export type LifecycleReconciliationResult =
 type LogFn = (msg: string) => void
 
 const noopLog: LogFn = () => {}
+
+export function getLifecycleMessageAuthorityError(
+  db: OrchestrationDb,
+  msg: Pick<MessageRow, 'type' | 'from_handle' | 'payload'>
+): string | undefined {
+  if (!isLifecycleMessageType(msg.type)) {
+    return undefined
+  }
+
+  const validation = validateLifecyclePayload(msg.type, msg.payload ?? undefined)
+  if (!validation.ok) {
+    return validation.message
+  }
+
+  const { taskId, dispatchId } = validation.payload
+  const task = db.getTask(taskId)
+  if (!task) {
+    return `${msg.type} references unknown task ${taskId}`
+  }
+
+  const dispatch = db.getDispatchContextById(dispatchId)
+  if (!dispatch) {
+    return `${msg.type} references unknown dispatch ${dispatchId}`
+  }
+  if (dispatch.task_id !== taskId) {
+    return `${msg.type} dispatch ${dispatchId} belongs to ${dispatch.task_id}, not ${taskId}`
+  }
+  if (dispatch.assignee_handle !== msg.from_handle) {
+    return `${msg.type} for dispatch ${dispatchId} came from ${msg.from_handle}, expected ${dispatch.assignee_handle ?? '<unknown>'}`
+  }
+
+  if (db.getDispatchContext(taskId)?.id !== dispatchId) {
+    return `${msg.type} references stale dispatch ${dispatchId}`
+  }
+  if (
+    msg.type === 'worker_done' &&
+    dispatch.status === 'completed' &&
+    task.status === 'completed'
+  ) {
+    return undefined
+  }
+  if (dispatch.status !== 'dispatched') {
+    return `${msg.type} references inactive dispatch ${dispatchId}`
+  }
+  if (task.status !== 'dispatched') {
+    return `${msg.type} references stale dispatch ${dispatchId}`
+  }
+  return undefined
+}
 
 function parseObjectPayload(msg: MessageRow, onInvalidJson: () => void): Record<string, unknown> {
   if (!msg.payload) {

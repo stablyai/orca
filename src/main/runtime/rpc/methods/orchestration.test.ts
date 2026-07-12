@@ -253,20 +253,117 @@ describe('orchestration RPC methods', () => {
       expect(db.getInbox(100)).toHaveLength(0)
     })
 
-    it('continues to send worker_done to a concrete terminal handle', async () => {
+    it('sends an authorized worker_done to a concrete terminal handle', async () => {
       setup()
+      const task = db.createTask({ spec: 'concrete completion' })
+      const dispatch = db.createDispatchContext(task.id, 'term_worker')
 
       const result = (await call('orchestration.send', {
         from: 'term_worker',
         to: 'term_coord',
         subject: 'done',
         type: 'worker_done',
-        payload: JSON.stringify({ taskId: 'task_1', dispatchId: 'ctx_1' })
+        payload: JSON.stringify({ taskId: task.id, dispatchId: dispatch.id })
       })) as { message: { to_handle: string; type: string; payload: string | null } }
 
       expect(result.message.to_handle).toBe('term_coord')
       expect(result.message.type).toBe('worker_done')
-      expect(result.message.payload).toBe(JSON.stringify({ taskId: 'task_1', dispatchId: 'ctx_1' }))
+      expect(result.message.payload).toBe(
+        JSON.stringify({ taskId: task.id, dispatchId: dispatch.id })
+      )
+    })
+
+    it('rejects malformed lifecycle JSON without inserting a message', async () => {
+      setup()
+
+      await expect(
+        call('orchestration.send', {
+          from: 'term_worker',
+          to: 'term_coord',
+          subject: 'done',
+          type: 'worker_done',
+          payload: '{taskId:task_1,dispatchId:ctx_1}'
+        })
+      ).rejects.toThrow(/Use --task-id and --dispatch-id/)
+
+      expect(db.getInbox(100)).toHaveLength(0)
+    })
+
+    it('rejects lifecycle payloads missing either authority identifier', async () => {
+      setup()
+
+      await expect(
+        call('orchestration.send', {
+          from: 'term_worker',
+          to: 'term_coord',
+          subject: 'alive',
+          type: 'heartbeat',
+          payload: JSON.stringify({ taskId: 'task_1' })
+        })
+      ).rejects.toThrow(/dispatchId must be a non-empty string/)
+
+      expect(db.getInbox(100)).toHaveLength(0)
+    })
+
+    it('rejects lifecycle messages from the wrong assignee without inserting a message', async () => {
+      setup()
+      const task = db.createTask({ spec: 'authority check' })
+      const dispatch = db.createDispatchContext(task.id, 'term_owner')
+
+      await expect(
+        call('orchestration.send', {
+          from: 'term_intruder',
+          to: 'term_coord',
+          subject: 'done',
+          type: 'worker_done',
+          payload: JSON.stringify({ taskId: task.id, dispatchId: dispatch.id })
+        })
+      ).rejects.toThrow(/came from term_intruder, expected term_owner/)
+
+      expect(db.getTask(task.id)?.status).toBe('dispatched')
+      expect(db.getInbox(100)).toHaveLength(0)
+    })
+
+    it('rejects mismatched task and dispatch authority without inserting a message', async () => {
+      setup()
+      const claimedTask = db.createTask({ spec: 'claimed task' })
+      const actualTask = db.createTask({ spec: 'actual task' })
+      const dispatch = db.createDispatchContext(actualTask.id, 'term_worker')
+
+      await expect(
+        call('orchestration.send', {
+          from: 'term_worker',
+          to: 'term_coord',
+          subject: 'done',
+          type: 'worker_done',
+          payload: JSON.stringify({ taskId: claimedTask.id, dispatchId: dispatch.id })
+        })
+      ).rejects.toThrow(/belongs to .* not/)
+
+      expect(db.getTask(claimedTask.id)?.status).toBe('ready')
+      expect(db.getTask(actualTask.id)?.status).toBe('dispatched')
+      expect(db.getInbox(100)).toHaveLength(0)
+    })
+
+    it('rejects stale lifecycle authority without inserting a message', async () => {
+      setup()
+      const task = db.createTask({ spec: 'retried task' })
+      const staleDispatch = db.createDispatchContext(task.id, 'term_old')
+      db.failDispatch(staleDispatch.id, 'retry')
+      db.createDispatchContext(task.id, 'term_current')
+
+      await expect(
+        call('orchestration.send', {
+          from: 'term_old',
+          to: 'term_coord',
+          subject: 'late completion',
+          type: 'worker_done',
+          payload: JSON.stringify({ taskId: task.id, dispatchId: staleDispatch.id })
+        })
+      ).rejects.toThrow(/stale dispatch/)
+
+      expect(db.getTask(task.id)?.status).toBe('dispatched')
+      expect(db.getInbox(100)).toHaveLength(0)
     })
 
     it('fans out @idle to only idle agents', async () => {
@@ -400,6 +497,66 @@ describe('orchestration RPC methods', () => {
       // Lock released — a new dispatch to the same terminal must succeed.
       const t2 = db.createTask({ spec: 'follow-up work' })
       expect(() => db.createDispatchContext(t2.id, 'term_worker')).not.toThrow()
+    })
+
+    it('keeps repeated authorized worker_done sends idempotent', async () => {
+      setup()
+      const task = db.createTask({ spec: 'idempotent completion' })
+      const dispatch = db.createDispatchContext(task.id, 'term_worker')
+      const deliver = vi
+        .spyOn(runtime, 'deliverPendingMessagesForHandle')
+        .mockImplementation(() => {})
+      const notify = vi.spyOn(runtime, 'notifyMessageArrived').mockImplementation(() => {})
+      const payload = JSON.stringify({ taskId: task.id, dispatchId: dispatch.id })
+
+      await call('orchestration.send', {
+        from: 'term_worker',
+        to: 'term_coord',
+        subject: 'done',
+        type: 'worker_done',
+        payload
+      })
+      const completedAt = db.getTask(task.id)?.completed_at
+      const result = db.getTask(task.id)?.result
+
+      await call('orchestration.send', {
+        from: 'term_worker',
+        to: 'term_coord',
+        subject: 'done again',
+        type: 'worker_done',
+        payload
+      })
+
+      expect(db.getTask(task.id)?.completed_at).toBe(completedAt)
+      expect(db.getTask(task.id)?.result).toBe(result)
+      expect(db.getDispatchContextById(dispatch.id)?.status).toBe('completed')
+      expect(db.getInbox().filter((message) => message.type === 'worker_done')).toHaveLength(1)
+      expect(deliver).toHaveBeenCalledTimes(1)
+      expect(notify).toHaveBeenCalledTimes(1)
+    })
+
+    it('rejects a completed worker_done after a newer dispatch exists', async () => {
+      setup()
+      const task = db.createTask({ spec: 'reopened task' })
+      const oldDispatch = db.createDispatchContext(task.id, 'term_old')
+      db.updateTaskStatus(task.id, 'completed', '{}')
+      db.updateTaskStatus(task.id, 'ready')
+      db.createDispatchContext(task.id, 'term_current')
+
+      await expect(
+        call('orchestration.send', {
+          from: 'term_old',
+          to: 'term_coord',
+          subject: 'late duplicate',
+          type: 'worker_done',
+          payload: JSON.stringify({ taskId: task.id, dispatchId: oldDispatch.id })
+        })
+      ).rejects.toThrow(/stale dispatch/)
+
+      expect(db.getTask(task.id)?.status).toBe('dispatched')
+      expect(db.getInbox().filter((message) => message.subject === 'late duplicate')).toHaveLength(
+        0
+      )
     })
 
     it('records heartbeat when heartbeat is sent via send', async () => {
@@ -781,6 +938,9 @@ describe('orchestration RPC methods', () => {
 
     it('keeps waiting for requested types when an unrelated heartbeat arrives', async () => {
       setup()
+      const task = db.createTask({ spec: 'filtered lifecycle wait' })
+      const dispatch = db.createDispatchContext(task.id, 'worker')
+      const payload = JSON.stringify({ taskId: task.id, dispatchId: dispatch.id })
 
       const waitPromise = call('orchestration.check', {
         terminal: 'coord',
@@ -794,7 +954,8 @@ describe('orchestration RPC methods', () => {
         from: 'worker',
         to: 'coord',
         subject: 'alive',
-        type: 'heartbeat'
+        type: 'heartbeat',
+        payload
       })
 
       const early = await Promise.race([
@@ -807,7 +968,8 @@ describe('orchestration RPC methods', () => {
         from: 'worker',
         to: 'coord',
         subject: 'done',
-        type: 'worker_done'
+        type: 'worker_done',
+        payload
       })
 
       const result = await waitPromise
@@ -1012,7 +1174,23 @@ describe('orchestration RPC methods', () => {
       })) as { task: { status: string; result: string } }
 
       expect(result.task.status).toBe('completed')
-      expect(result.task.result).toBe('{"ok": true}')
+      expect(result.task.result).toBe('{"ok":true}')
+    })
+
+    it('rejects malformed task result JSON without updating the task', async () => {
+      setup()
+      const task = db.createTask({ spec: 'work' })
+
+      await expect(
+        call('orchestration.taskUpdate', {
+          id: task.id,
+          status: 'completed',
+          result: '{completedBy:term_worker}'
+        })
+      ).rejects.toThrow(/Task result must be valid JSON/)
+
+      expect(db.getTask(task.id)?.status).toBe('ready')
+      expect(db.getTask(task.id)?.result).toBeNull()
     })
 
     it('completion frees the active dispatch context', async () => {

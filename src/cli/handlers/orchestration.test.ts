@@ -1,4 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 
 const callMock = vi.fn()
 const getTerminalHandleMock = vi.hoisted(() => vi.fn())
@@ -150,6 +153,36 @@ describe('orchestration send structured payload flags', () => {
     expect(callMock).not.toHaveBeenCalled()
   })
 
+  it('rejects malformed raw lifecycle JSON before calling the runtime', async () => {
+    await expect(
+      invokeSend(
+        new Map<string, string | boolean>([
+          ['from', 'term_worker'],
+          ['to', 'term_coord'],
+          ['subject', 'done'],
+          ['type', 'worker_done'],
+          ['payload', '{taskId:task_1,dispatchId:ctx_1}']
+        ])
+      )
+    ).rejects.toThrow(/Use --task-id and --dispatch-id/)
+    expect(callMock).not.toHaveBeenCalled()
+  })
+
+  it('requires both lifecycle identifiers', async () => {
+    await expect(
+      invokeSend(
+        new Map<string, string | boolean>([
+          ['from', 'term_worker'],
+          ['to', 'term_coord'],
+          ['subject', 'alive'],
+          ['type', 'heartbeat'],
+          ['task-id', 'task_1']
+        ])
+      )
+    ).rejects.toThrow(/dispatchId must be a non-empty string/)
+    expect(callMock).not.toHaveBeenCalled()
+  })
+
   it('rejects worker_done group sends before resolving a sender handle', async () => {
     getTerminalHandleMock.mockRejectedValue(new Error('sender resolution should not run'))
 
@@ -190,13 +223,15 @@ describe('orchestration send structured payload flags', () => {
     expect(callMock).not.toHaveBeenCalled()
   })
 
-  it('continues to allow worker_done to a concrete terminal handle', async () => {
+  it('allows worker_done with valid authority fields to a concrete terminal handle', async () => {
     await invokeSend(
       new Map<string, string | boolean>([
         ['from', 'term_worker'],
         ['to', 'term_coord'],
         ['subject', 'done'],
-        ['type', 'worker_done']
+        ['type', 'worker_done'],
+        ['task-id', 'task_1'],
+        ['dispatch-id', 'ctx_1']
       ])
     )
 
@@ -208,7 +243,7 @@ describe('orchestration send structured payload flags', () => {
       type: 'worker_done',
       priority: undefined,
       threadId: undefined,
-      payload: undefined,
+      payload: JSON.stringify({ taskId: 'task_1', dispatchId: 'ctx_1' }),
       devMode: false
     })
   })
@@ -220,7 +255,9 @@ describe('orchestration send structured payload flags', () => {
       new Map<string, string | boolean>([
         ['to', 'term_coord'],
         ['subject', 'done'],
-        ['type', 'worker_done']
+        ['type', 'worker_done'],
+        ['task-id', 'task_1'],
+        ['dispatch-id', 'ctx_1']
       ])
     )
 
@@ -233,7 +270,7 @@ describe('orchestration send structured payload flags', () => {
       type: 'worker_done',
       priority: undefined,
       threadId: undefined,
-      payload: undefined,
+      payload: JSON.stringify({ taskId: 'task_1', dispatchId: 'ctx_1' }),
       devMode: false
     })
   })
@@ -255,6 +292,71 @@ describe('orchestration send structured payload flags', () => {
       code: 'no_active_sender_terminal',
       message: expect.stringContaining('Pass --from')
     })
+    expect(callMock).not.toHaveBeenCalled()
+  })
+})
+
+describe('orchestration task-update result JSON', () => {
+  beforeEach(() => {
+    callMock
+      .mockReset()
+      .mockResolvedValue({ result: { task: { id: 'task_1', status: 'completed' } } })
+  })
+
+  const invokeUpdate = (flags: Map<string, string | boolean>) =>
+    ORCHESTRATION_HANDLERS['orchestration task-update']({
+      flags,
+      client: { call: callMock },
+      json: true
+    } as never)
+
+  it('normalizes a valid result file before sending it to the runtime', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'orca-task-result-'))
+    const resultFile = join(dir, 'result.json')
+    writeFileSync(resultFile, '{\n  "filesModified": []\n}', 'utf8')
+    try {
+      await invokeUpdate(
+        new Map([
+          ['id', 'task_1'],
+          ['status', 'completed'],
+          ['result-file', resultFile]
+        ])
+      )
+    } finally {
+      rmSync(dir, { recursive: true, force: true })
+    }
+
+    expect(callMock).toHaveBeenCalledWith('orchestration.taskUpdate', {
+      id: 'task_1',
+      status: 'completed',
+      result: '{"filesModified":[]}'
+    })
+  })
+
+  it('rejects malformed inline result JSON', async () => {
+    await expect(
+      invokeUpdate(
+        new Map([
+          ['id', 'task_1'],
+          ['status', 'completed'],
+          ['result', '{completedBy:term_worker}']
+        ])
+      )
+    ).rejects.toThrow(/Task result must be valid JSON/)
+    expect(callMock).not.toHaveBeenCalled()
+  })
+
+  it('rejects mixing inline and file result sources', async () => {
+    await expect(
+      invokeUpdate(
+        new Map([
+          ['id', 'task_1'],
+          ['status', 'completed'],
+          ['result', '{}'],
+          ['result-file', 'result.json']
+        ])
+      )
+    ).rejects.toThrow(/either --result or --result-file/)
     expect(callMock).not.toHaveBeenCalled()
   })
 })

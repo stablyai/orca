@@ -1,4 +1,5 @@
 /* eslint-disable max-lines -- Why: orchestration CLI handlers share flag-parsing helpers and dispatch/preamble logic; splitting by verb would fragment the RuntimeClient call shape without reducing complexity. */
+import { readFileSync } from 'node:fs'
 import type { CommandHandler } from '../dispatch'
 import { printResult } from '../format'
 import {
@@ -8,6 +9,10 @@ import {
 } from '../flags'
 import { RuntimeClientError } from '../runtime-client'
 import { getTerminalHandle } from '../selectors'
+import {
+  isLifecycleMessageType,
+  validateLifecyclePayload
+} from '../../shared/orchestration-lifecycle-payload'
 
 // Why: 15 s is well under Claude Code's empirical ~2 min Bash-tool silence
 // budget and generates only ~40 lines per 10 min wait — enough to assure the
@@ -76,7 +81,8 @@ type MessageSummary = {
 }
 
 function getOptionalStructuredMessagePayload(
-  flags: Map<string, string | boolean>
+  flags: Map<string, string | boolean>,
+  type: string | undefined
 ): string | undefined {
   const rawPayload = getOptionalStringFlag(flags, 'payload')
   const taskId = getOptionalStringFlag(flags, 'task-id')
@@ -90,10 +96,7 @@ function getOptionalStructuredMessagePayload(
     filesModified !== undefined ||
     reportPath !== undefined ||
     phase !== undefined
-  if (!hasStructuredPayload) {
-    return rawPayload
-  }
-  if (rawPayload !== undefined) {
+  if (hasStructuredPayload && rawPayload !== undefined) {
     throw new RuntimeClientError(
       'invalid_argument',
       'Use either --payload or structured payload flags, not both.'
@@ -101,26 +104,72 @@ function getOptionalStructuredMessagePayload(
   }
   // Why: raw JSON arguments are fragile in Windows PowerShell; these flags let
   // workers send parseable orchestration payloads without shell-specific quoting.
-  const payload: Record<string, string | string[]> = {}
-  if (taskId) {
-    payload.taskId = taskId
+  let resolvedPayload = rawPayload
+  if (hasStructuredPayload) {
+    const payload: Record<string, string | string[]> = {}
+    if (taskId) {
+      payload.taskId = taskId
+    }
+    if (dispatchId) {
+      payload.dispatchId = dispatchId
+    }
+    if (filesModified) {
+      payload.filesModified = filesModified
+        .split(',')
+        .map((file) => file.trim())
+        .filter(Boolean)
+    }
+    if (reportPath) {
+      payload.reportPath = reportPath
+    }
+    if (phase) {
+      payload.phase = phase
+    }
+    resolvedPayload = JSON.stringify(payload)
   }
-  if (dispatchId) {
-    payload.dispatchId = dispatchId
+
+  if (isLifecycleMessageType(type)) {
+    const validation = validateLifecyclePayload(type, resolvedPayload)
+    if (!validation.ok) {
+      throw new RuntimeClientError('invalid_argument', validation.message)
+    }
   }
-  if (filesModified) {
-    payload.filesModified = filesModified
-      .split(',')
-      .map((file) => file.trim())
-      .filter(Boolean)
+  return resolvedPayload
+}
+
+function getOptionalTaskResult(flags: Map<string, string | boolean>): string | undefined {
+  const inlineResult = getOptionalStringFlag(flags, 'result')
+  const resultFile = getOptionalStringFlag(flags, 'result-file')
+  if (inlineResult !== undefined && resultFile !== undefined) {
+    throw new RuntimeClientError(
+      'invalid_argument',
+      'Use either --result or --result-file, not both.'
+    )
   }
-  if (reportPath) {
-    payload.reportPath = reportPath
+
+  let rawResult = inlineResult
+  if (resultFile !== undefined) {
+    try {
+      rawResult = readFileSync(resultFile, 'utf8')
+    } catch (error) {
+      throw new RuntimeClientError(
+        'invalid_argument',
+        `Unable to read --result-file ${resultFile}: ${error instanceof Error ? error.message : String(error)}`
+      )
+    }
   }
-  if (phase) {
-    payload.phase = phase
+  if (rawResult === undefined) {
+    return undefined
   }
-  return JSON.stringify(payload)
+
+  try {
+    return JSON.stringify(JSON.parse(rawResult))
+  } catch {
+    throw new RuntimeClientError(
+      'invalid_argument',
+      'Task result must be valid JSON. On Windows PowerShell, prefer --result-file.'
+    )
+  }
 }
 
 async function resolveOrchestrationTerminalHandle(
@@ -359,7 +408,7 @@ export const ORCHESTRATION_HANDLERS: Record<string, CommandHandler> = {
       type,
       priority: getOptionalStringFlag(flags, 'priority'),
       threadId: getOptionalStringFlag(flags, 'thread-id'),
-      payload: getOptionalStructuredMessagePayload(flags),
+      payload: getOptionalStructuredMessagePayload(flags, type),
       devMode: isDevCliInvocation()
     })
     printResult(result, json, (r) => {
@@ -521,7 +570,7 @@ export const ORCHESTRATION_HANDLERS: Record<string, CommandHandler> = {
       {
         id: getRequiredStringFlag(flags, 'id'),
         status,
-        result: getOptionalStringFlag(flags, 'result')
+        result: getOptionalTaskResult(flags)
       }
     )
     printResult(result, json, (r) => `Updated ${r.task.id} -> ${r.task.status}`)

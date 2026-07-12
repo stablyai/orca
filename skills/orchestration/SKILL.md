@@ -108,12 +108,14 @@ A task is the work item, a dispatch assigns it to a terminal, and a gate blocks 
 ```bash
 orca orchestration task-create --spec <text> [--deps <json_array>] [--parent <task_id>] [--json]
 orca orchestration task-list [--status <status>] [--ready] [--json]
-orca orchestration task-update --id <task_id> --status <status> [--result <json>] [--json]
+orca orchestration task-update --id <task_id> --status <status> [--result <json> | --result-file <path>] [--json]
 orca orchestration dispatch --task <task_id> --to <handle> [--from <handle>] [--inject] [--json]
 orca orchestration dispatch-show --task <task_id> [--json]
 ```
 
 Task statuses: `pending`, `ready`, `dispatched`, `completed`, `failed`, `blocked`.
+
+On Windows PowerShell, prefer `--result-file` for task results; inline JSON quotes can be stripped.
 
 Dispatch rules:
 
@@ -222,10 +224,11 @@ Wait for `tui-idle` before dispatching. Always pass `--timeout-ms`; real coding 
 ## Agent Guidance
 
 - Workers with a valid live preamble must send `worker_done` exactly once, even on failure:
-  `orca orchestration send --to <coordinator_handle> --type worker_done --subject "<short status>" --body "<3-sentence summary: what you did, what you found, what's left>" --payload '{"taskId":"<task_id>","dispatchId":"<dispatch_id>","filesModified":["path/a"],"reportPath":"<optional>"}' --json`
+  `orca orchestration send --to <coordinator_handle> --type worker_done --subject "<short status>" --body "<3-sentence summary: what you did, what you found, what's left>" --task-id <task_id> --dispatch-id <dispatch_id> --files-modified "path/a" --report-path "<optional>" --json`
+- Treat the live injected preamble as authoritative over generic skill examples. Do not use raw `--payload` JSON for lifecycle messages; PowerShell can strip its quotes.
 - After sending `worker_done`, end your turn and idle at the agent prompt. Do not poll or keep calling `orca orchestration check`; the coordinator re-engages you with a fresh preamble + TASK block delivered as new terminal input.
 - For long tasks, send heartbeat/status only when the preamble asks for it, including both IDs:
-  `orca orchestration send --to <coordinator_handle> --type heartbeat --subject "alive" --payload '{"taskId":"<task_id>","dispatchId":"<dispatch_id>","phase":"implementing"}' --json`
+  `orca orchestration send --to <coordinator_handle> --type heartbeat --subject "alive" --task-id <task_id> --dispatch-id <dispatch_id> --phase "implementing" --json`
 - If blocked before completion, use `ask`; use `escalation` only when ownership is valid and the coordinator must intervene.
 - Treat preambles inherited through terminal history or full handoffs as stale unless the current prompt explicitly keeps that coordinator in the loop.
 - Coordinators should use `task-list --ready` as external memory, dispatch parallel waves, and avoid dependency chains deeper than 3-4 steps.

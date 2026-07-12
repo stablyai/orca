@@ -11,7 +11,9 @@ function readSkill() {
 
 function getSection(markdown, heading) {
   const escapedHeading = heading.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
-  const match = markdown.match(new RegExp(`## ${escapedHeading}\\n([\\s\\S]*?)(?=\\n## |$)`))
+  const match = markdown.match(
+    new RegExp(`## ${escapedHeading}\\r?\\n([\\s\\S]*?)(?=\\r?\\n## |$)`)
+  )
 
   expect(match).not.toBeNull()
 
@@ -181,6 +183,12 @@ describe('orchestration skill guidance', () => {
     const skill = readSkill()
     const agentGuidance = getSection(skill, 'Agent Guidance')
 
+    expect(agentGuidance).toContain('--task-id <task_id> --dispatch-id <dispatch_id>')
+    expect(agentGuidance).toContain('--files-modified "path/a"')
+    expect(agentGuidance).toContain('--phase "implementing"')
+    expect(agentGuidance).toContain('live injected preamble as authoritative')
+    expect(agentGuidance).toContain('Do not use raw `--payload` JSON for lifecycle messages')
+    expect(agentGuidance).not.toContain(`--payload '{"taskId"`)
     expect(agentGuidance).toContain('After sending `worker_done`, end your turn')
     expect(agentGuidance).toContain('idle at the agent prompt')
     expect(agentGuidance).toContain('Do not poll or keep calling `orca orchestration check`')
@@ -189,12 +197,21 @@ describe('orchestration skill guidance', () => {
     expect(skill).not.toContain('every 2 minutes')
   })
 
+  it('uses Windows-safe task result guidance', () => {
+    const skill = readSkill()
+    const tasks = getSection(skill, 'Tasks And Dispatch')
+
+    expect(tasks).toContain('--result <json> | --result-file <path>')
+    expect(tasks).toContain('prefer `--result-file` for task results')
+    expect(tasks).toContain('inline JSON quotes can be stripped')
+  })
+
   it('keeps agent-first launch, handle recovery, and inbox injection distinct', () => {
     const skill = readSkill()
     const messaging = getSection(skill, 'Messaging')
     const workerTerminals = getSection(skill, 'Worker Terminals')
     const agentFirstExample = workerTerminals.match(
-      /```bash\norca worktree create --name <task-name> --agent codex --json\n[\s\S]*?```/
+      /```bash\r?\norca worktree create --name <task-name> --agent codex --json\r?\n[\s\S]*?```/
     )?.[0]
 
     expect(workerTerminals).toContain('Agent-first (required for ordinary agent workers)')

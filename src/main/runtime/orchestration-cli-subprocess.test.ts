@@ -16,7 +16,7 @@
 // `pnpm run build:cli`. The verification gate explicitly builds the CLI
 // before running this file.
 import { spawn } from 'node:child_process'
-import { existsSync, mkdtempSync, rmSync } from 'node:fs'
+import { existsSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
@@ -63,6 +63,34 @@ async function runBuiltCli(
     stdout: stdoutChunks.join(''),
     stderr: stderrChunks.join('')
   }
+}
+
+async function runBuiltCliViaPowerShell(
+  userDataPath: string,
+  args: string[]
+): Promise<{ exitCode: number; stdout: string; stderr: string }> {
+  const quote = (value: string) => `'${value.replaceAll("'", "''")}'`
+  const command = ['&', quote(process.execPath), quote(CLI_PATH), ...args.map(quote)].join(' ')
+  const child = spawn('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', command], {
+    env: {
+      ...process.env,
+      ORCA_USER_DATA_PATH: userDataPath,
+      ORCA_TERMINAL_HANDLE: 'term_cli'
+    },
+    stdio: ['ignore', 'pipe', 'pipe']
+  })
+
+  const stdoutChunks: string[] = []
+  const stderrChunks: string[] = []
+  child.stdout.setEncoding('utf8')
+  child.stderr.setEncoding('utf8')
+  child.stdout.on('data', (data) => stdoutChunks.push(data))
+  child.stderr.on('data', (data) => stderrChunks.push(data))
+  const exitCode = await new Promise<number>((resolveExit, rejectExit) => {
+    child.once('exit', (code) => resolveExit(code ?? 1))
+    child.once('error', rejectExit)
+  })
+  return { exitCode, stdout: stdoutChunks.join(''), stderr: stderrChunks.join('') }
 }
 
 describeIfBuilt('orca orchestration check --wait subprocess (§3.4)', () => {
@@ -187,6 +215,142 @@ describeIfBuilt('orca orchestration check --wait subprocess (§3.4)', () => {
     } finally {
       db.close()
       await server.stop()
+    }
+  }, 30_000)
+})
+
+const describeWindowsIfBuilt =
+  existsSync(CLI_PATH) && process.platform === 'win32' ? describe : describe.skip
+
+describeWindowsIfBuilt('orca orchestration lifecycle payloads through PowerShell', () => {
+  it('completes with structured flags and rejects quote-stripped raw JSON', async () => {
+    const userDataPath = mkdtempSync(join(tmpdir(), 'orca-cli-lifecycle-'))
+    const runtime = new OrcaRuntimeService()
+    const db = new OrchestrationDb(':memory:')
+    runtime.setOrchestrationDb(db)
+    const server = new OrcaRuntimeRpcServer({ runtime, userDataPath })
+    await server.start()
+
+    try {
+      const task = db.createTask({ spec: 'PowerShell lifecycle completion' })
+      const dispatch = db.createDispatchContext(task.id, 'term_cli')
+      const valid = await runBuiltCliViaPowerShell(userDataPath, [
+        'orchestration',
+        'send',
+        '--to',
+        'term_coord',
+        '--subject',
+        'done',
+        '--type',
+        'worker_done',
+        '--task-id',
+        task.id,
+        '--dispatch-id',
+        dispatch.id,
+        '--files-modified',
+        'src/a.ts,src/b.ts',
+        '--json'
+      ])
+
+      expect(valid.exitCode, valid.stderr).toBe(0)
+      expect(db.getTask(task.id)?.status).toBe('completed')
+      expect(JSON.parse(db.getTask(task.id)?.result ?? '{}')).toMatchObject({
+        completedBy: 'term_cli',
+        filesModified: ['src/a.ts', 'src/b.ts']
+      })
+
+      const rejectedTask = db.createTask({ spec: 'Reject malformed lifecycle payload' })
+      const rejectedDispatch = db.createDispatchContext(rejectedTask.id, 'term_cli')
+      const malformed = await runBuiltCliViaPowerShell(userDataPath, [
+        'orchestration',
+        'send',
+        '--to',
+        'term_coord',
+        '--subject',
+        'bad completion',
+        '--type',
+        'worker_done',
+        '--payload',
+        `{taskId:${rejectedTask.id},dispatchId:${rejectedDispatch.id}}`,
+        '--json'
+      ])
+
+      expect(malformed.exitCode).toBe(1)
+      expect(malformed.stdout).toContain('Use --task-id and --dispatch-id')
+      expect(db.getTask(rejectedTask.id)?.status).toBe('dispatched')
+      expect(db.getInbox().filter((message) => message.subject === 'bad completion')).toHaveLength(
+        0
+      )
+
+      const resultTask = db.createTask({ spec: 'PowerShell result file' })
+      const resultFile = join(userDataPath, 'task-result.json')
+      writeFileSync(resultFile, '{\n  "filesModified": []\n}', 'utf8')
+      const resultUpdate = await runBuiltCliViaPowerShell(userDataPath, [
+        'orchestration',
+        'task-update',
+        '--id',
+        resultTask.id,
+        '--status',
+        'completed',
+        '--result-file',
+        resultFile,
+        '--json'
+      ])
+      expect(resultUpdate.exitCode, resultUpdate.stderr).toBe(0)
+      expect(db.getTask(resultTask.id)?.result).toBe('{"filesModified":[]}')
+
+      const unreadableTask = db.createTask({ spec: 'Unreadable result file' })
+      const unreadable = await runBuiltCliViaPowerShell(userDataPath, [
+        'orchestration',
+        'task-update',
+        '--id',
+        unreadableTask.id,
+        '--status',
+        'completed',
+        '--result-file',
+        join(userDataPath, 'missing.json'),
+        '--json'
+      ])
+      expect(unreadable.exitCode).toBe(1)
+      expect(db.getTask(unreadableTask.id)?.status).toBe('ready')
+
+      const malformedFile = join(userDataPath, 'malformed.json')
+      writeFileSync(malformedFile, '{completedBy:term_cli}', 'utf8')
+      const malformedTask = db.createTask({ spec: 'Malformed result file' })
+      const malformedResult = await runBuiltCliViaPowerShell(userDataPath, [
+        'orchestration',
+        'task-update',
+        '--id',
+        malformedTask.id,
+        '--status',
+        'completed',
+        '--result-file',
+        malformedFile,
+        '--json'
+      ])
+      expect(malformedResult.exitCode).toBe(1)
+      expect(db.getTask(malformedTask.id)?.status).toBe('ready')
+
+      const conflictTask = db.createTask({ spec: 'Conflicting result inputs' })
+      const conflict = await runBuiltCliViaPowerShell(userDataPath, [
+        'orchestration',
+        'task-update',
+        '--id',
+        conflictTask.id,
+        '--status',
+        'completed',
+        '--result',
+        '{}',
+        '--result-file',
+        resultFile,
+        '--json'
+      ])
+      expect(conflict.exitCode).toBe(1)
+      expect(db.getTask(conflictTask.id)?.status).toBe('ready')
+    } finally {
+      db.close()
+      await server.stop()
+      rmSync(userDataPath, { recursive: true, force: true })
     }
   }, 30_000)
 })

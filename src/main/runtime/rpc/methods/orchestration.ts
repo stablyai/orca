@@ -1,13 +1,20 @@
 /* eslint-disable max-lines -- Why: RPC method definitions co-locate param schemas with handlers; splitting by method would scatter the shared enums and Zod transforms without reducing complexity. */
 import { z } from 'zod'
-import { defineMethod, type RpcMethod } from '../core'
+import { defineMethod, InvalidArgumentError, type RpcMethod } from '../core'
 import { OptionalFiniteNumber, OptionalString, OptionalBoolean, requiredString } from '../schemas'
 import type { MessageType, MessagePriority, TaskStatus } from '../../orchestration/db'
 import { buildDispatchPreamble } from '../../orchestration/preamble'
 import { formatMessageBanner } from '../../orchestration/formatter'
 import { isGroupAddress, resolveGroupAddress } from '../../orchestration/groups'
-import { reconcileLifecycleMessage } from '../../orchestration/lifecycle-reconciliation'
+import {
+  getLifecycleMessageAuthorityError,
+  reconcileLifecycleMessage
+} from '../../orchestration/lifecycle-reconciliation'
 import { ORCHESTRATION_GATE_METHODS } from './orchestration-gates'
+import {
+  isLifecycleMessageType,
+  validateLifecyclePayload
+} from '../../../../shared/orchestration-lifecycle-payload'
 
 const MESSAGE_TYPES: MessageType[] = [
   'status',
@@ -57,19 +64,29 @@ const SendParams = z
     devMode: OptionalBoolean
   })
   .superRefine((params, ctx) => {
-    if (
-      (params.type !== 'worker_done' && params.type !== 'heartbeat') ||
-      !isGroupAddress(params.to)
-    ) {
+    if (!isLifecycleMessageType(params.type)) {
       return
     }
-    // Why: dispatch lifecycle messages are authority/liveness signals for one
-    // coordinator. Fanout creates lifecycle mail in unrelated terminals.
-    ctx.addIssue({
-      code: z.ZodIssueCode.custom,
-      message: getLifecycleGroupRecipientError(params.type),
-      path: ['to']
-    })
+
+    if (isGroupAddress(params.to)) {
+      // Why: dispatch lifecycle messages are authority/liveness signals for one
+      // coordinator. Fanout creates lifecycle mail in unrelated terminals.
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: getLifecycleGroupRecipientError(params.type),
+        path: ['to']
+      })
+      return
+    }
+
+    const validation = validateLifecyclePayload(params.type, params.payload)
+    if (!validation.ok) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: validation.message,
+        path: ['payload']
+      })
+    }
   })
 
 const CheckParams = z.object({
@@ -113,6 +130,24 @@ const TaskListParams = z.object({
   ready: OptionalBoolean
 })
 
+const OptionalTaskResult = z
+  .string()
+  .optional()
+  .transform((value, ctx) => {
+    if (value === undefined) {
+      return undefined
+    }
+    try {
+      return JSON.stringify(JSON.parse(value))
+    } catch {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'Task result must be valid JSON.'
+      })
+      return z.NEVER
+    }
+  })
+
 const TaskUpdateParams = z.object({
   id: requiredString('Missing --id'),
   status: z
@@ -128,7 +163,7 @@ const TaskUpdateParams = z.object({
         message: 'Missing --status'
       })
     ),
-  result: OptionalString
+  result: OptionalTaskResult
 })
 
 const DispatchParams = z.object({
@@ -186,6 +221,26 @@ export const ORCHESTRATION_METHODS: RpcMethod[] = [
       const from = params.from ?? 'unknown'
 
       if (!isGroupAddress(params.to)) {
+        if (isLifecycleMessageType(params.type)) {
+          const authorityError = getLifecycleMessageAuthorityError(db, {
+            type: params.type,
+            from_handle: from,
+            payload: params.payload ?? null
+          })
+          if (authorityError) {
+            throw new InvalidArgumentError(authorityError)
+          }
+          if (params.type === 'worker_done') {
+            const payload = validateLifecyclePayload(params.type, params.payload)
+            if (payload.ok) {
+              const existing = db.getWorkerDoneMessageForDispatch(payload.payload.dispatchId)
+              if (existing) {
+                return { message: existing, duplicate: true }
+              }
+            }
+          }
+        }
+
         // Point-to-point — existing single-recipient behavior
         const msg = db.insertMessage({
           from,

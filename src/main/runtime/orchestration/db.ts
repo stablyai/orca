@@ -359,6 +359,20 @@ export class OrchestrationDb {
     return this.db.prepare('SELECT * FROM messages WHERE id = ?').get(id) as MessageRow | undefined
   }
 
+  getWorkerDoneMessageForDispatch(dispatchId: string): MessageRow | undefined {
+    const messages = this.db
+      .prepare("SELECT * FROM messages WHERE type = 'worker_done' ORDER BY sequence ASC")
+      .all() as MessageRow[]
+    return messages.find((message) => {
+      try {
+        const payload = JSON.parse(message.payload ?? '') as Record<string, unknown>
+        return payload.dispatchId === dispatchId
+      } catch {
+        return false
+      }
+    })
+  }
+
   markAsRead(ids: string[]): void {
     if (ids.length === 0) {
       return
