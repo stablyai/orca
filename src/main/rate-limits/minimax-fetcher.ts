@@ -7,6 +7,7 @@ import {
   logMiniMaxFetchFailure,
   makeMiniMaxRequestHeaders,
   MINIMAX_USAGE_ENDPOINT,
+  MINIMAX_USAGE_ENDPOINT_COM,
   normalizeMiniMaxCookieHeader,
   redactMiniMaxSecret,
   type MiniMaxFetchResponse
@@ -19,6 +20,22 @@ export {
 } from './minimax-request-context'
 
 const API_TIMEOUT_MS = 15_000
+
+// Why: China (.com) MiniMax accounts use platform.minimax.com; .io accounts
+// use platform.minimax.io. Both share the same API path. Try the .io endpoint
+// first; retry with .com on non-auth server errors so .com users get quota
+// without manual configuration.
+// Why: China (.com) MiniMax accounts use the same API path on a different origin;
+// hold the secondary endpoint so the retry logic can reference it without importing
+// MINIMAX_USAGE_ENDPOINT_COM at the call site in fetchMiniMaxRateLimits.
+const SECONDARY_ENDPOINT = MINIMAX_USAGE_ENDPOINT_COM
+
+// Why: distinguish auth failures (stale token) from transient server errors so the
+// endpoint-retry logic does not retry with a different origin when the credential
+// itself is invalid — that would waste a request and return the same auth error.
+function hasAuthError(error: ProviderRateLimits): boolean {
+  return error.usageMetadata?.failureKind === 'stale-token'
+}
 
 type MiniMaxUsageItem = {
   model_name?: unknown
@@ -215,26 +232,22 @@ function handleMiniMaxPayloadError(
   return makeError(redactMiniMaxSecret(message), 'usage-unavailable')
 }
 
-export async function fetchMiniMaxRateLimits(
-  options: FetchMiniMaxRateLimitsOptions
+// Why: extracted so fetchMiniMaxRateLimits can call this with different endpoints
+// (primary .io, fallback .com) without duplicating the fetch-and-parse pipeline.
+async function tryFetchMiniMaxRateLimits(
+  options: FetchMiniMaxRateLimitsOptions,
+  endpoint: string
 ): Promise<ProviderRateLimits> {
-  const rawCookie = options.cookie.trim()
-  if (!rawCookie) {
-    return makeUnavailable('MiniMax session cookie not configured')
-  }
-  const cookie = normalizeMiniMaxCookieHeader(rawCookie)
-  if (!extractMiniMaxCookieValue(cookie, '_token')) {
-    return makeError(
-      'MiniMax auth cookie not found — paste a Cookie header with _token',
-      'missing-credentials'
-    )
-  }
   const groupId =
-    options.groupId?.trim() || extractMiniMaxCookieValue(cookie, 'minimax_group_id_v2')
+    options.groupId?.trim() ||
+    extractMiniMaxCookieValue(
+      normalizeMiniMaxCookieHeader(options.cookie.trim()),
+      'minimax_group_id_v2'
+    )
   try {
     const fetchResult = await fetchMiniMaxResponse({
-      cookie,
-      endpoint: options.endpoint ?? MINIMAX_USAGE_ENDPOINT,
+      cookie: normalizeMiniMaxCookieHeader(options.cookie.trim()),
+      endpoint,
       groupId,
       signal: AbortSignal.timeout(API_TIMEOUT_MS)
     })
@@ -276,4 +289,37 @@ export async function fetchMiniMaxRateLimits(
     const message = error instanceof Error ? error.message : 'Unknown MiniMax usage error'
     return makeError(redactMiniMaxSecret(message), 'network')
   }
+}
+
+export async function fetchMiniMaxRateLimits(
+  options: FetchMiniMaxRateLimitsOptions
+): Promise<ProviderRateLimits> {
+  const rawCookie = options.cookie.trim()
+  if (!rawCookie) {
+    return makeUnavailable('MiniMax session cookie not configured')
+  }
+  const cookie = normalizeMiniMaxCookieHeader(rawCookie)
+  if (!extractMiniMaxCookieValue(cookie, '_token')) {
+    return makeError(
+      'MiniMax auth cookie not found — paste a Cookie header with _token',
+      'missing-credentials'
+    )
+  }
+  const primaryEndpoint = options.endpoint ?? MINIMAX_USAGE_ENDPOINT
+  const primaryResult = await tryFetchMiniMaxRateLimits(options, primaryEndpoint)
+  // Why: retry with the .com endpoint when the .io endpoint fails with a
+  // non-auth server error. This covers China (.com) MiniMax accounts whose
+  // API origin differs from .io accounts.
+  if (
+    primaryResult.status !== 'ok' &&
+    !hasAuthError(primaryResult) &&
+    primaryEndpoint !== SECONDARY_ENDPOINT
+  ) {
+    console.warn('[minimax] primary endpoint failed; retrying with secondary', {
+      primaryError: primaryResult.error,
+      secondaryEndpoint: SECONDARY_ENDPOINT
+    })
+    return await tryFetchMiniMaxRateLimits(options, SECONDARY_ENDPOINT)
+  }
+  return primaryResult
 }

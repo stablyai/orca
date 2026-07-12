@@ -3,6 +3,12 @@ import { session, type Session } from 'electron'
 export const MINIMAX_USAGE_ENDPOINT =
   'https://platform.minimax.io/v1/api/openplatform/coding_plan/remains'
 
+// Why: China (.com) MiniMax accounts use a different API origin than .io
+// accounts. Try .io first; fall back to .com when the .io endpoint returns a
+// server-side error (not auth), since the API path and contract are identical.
+export const MINIMAX_USAGE_ENDPOINT_COM =
+  'https://platform.minimax.com/v1/api/openplatform/coding_plan/remains'
+
 const MINIMAX_ORIGIN = 'https://platform.minimax.io'
 const MINIMAX_REFERER = 'https://platform.minimax.io/console/usage'
 const MINIMAX_SESSION_PARTITION = 'orca-minimax-rate-limit-fetch'
