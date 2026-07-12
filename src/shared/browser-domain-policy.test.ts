@@ -22,6 +22,15 @@ describe('browser domain policy', () => {
     }
   })
 
+  it('enforces the maximum allowed domain count', () => {
+    expect(
+      normalizeBrowserAllowedDomains(Array.from({ length: 64 }, (_, index) => `d${index}.com`))
+    ).toHaveLength(64)
+    expect(() =>
+      normalizeBrowserAllowedDomains(Array.from({ length: 65 }, (_, index) => `d${index}.com`))
+    ).toThrow()
+  })
+
   it('allows only matching network hosts and safe document bootstrap schemes', () => {
     const policy = normalizeBrowserAllowedDomains(['localhost', '127.0.0.1', '*.storika.ai'])
 

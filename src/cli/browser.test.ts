@@ -21,6 +21,7 @@ vi.mock('./runtime-client', () => {
       authToken: 'global-token',
       startedAt: 1
     }))
+    getLocalUserDataPath = vi.fn(() => '/tmp/orca-global')
   }
 
   class RuntimeClientError extends Error {
@@ -562,10 +563,69 @@ describe('orca cli browser tab profiles', () => {
     })
     expect(writeCapabilityMetadataMock).toHaveBeenCalledWith(
       '/tmp/qa',
+      '/tmp/orca-global',
       expect.objectContaining({ authToken: 'global-token' }),
       'secret-capability-token'
     )
     expect(logSpy).toHaveBeenCalledWith(expect.not.stringContaining('secret-capability-token'))
+  })
+
+  it('revokes a browser capability when metadata writing fails', async () => {
+    queueFixtures(
+      callMock,
+      okFixture('req_capability_create', {
+        id: 'cap-1',
+        token: 'secret-capability-token',
+        expiresAt: 60_000,
+        browserPageId: 'page-1'
+      }),
+      okFixture('req_capability_revoke', { revoked: true, id: 'cap-1' })
+    )
+    writeCapabilityMetadataMock.mockImplementationOnce(() => {
+      throw new Error('disk full')
+    })
+    vi.spyOn(console, 'log').mockImplementation(() => {})
+
+    await main(
+      ['tab', 'capability', 'create', '--page', 'page-1', '--output', '/tmp/qa', '--json'],
+      '/tmp/not-an-orca-worktree'
+    )
+
+    expect(callMock).toHaveBeenCalledWith('browser.capabilityRevoke', { id: 'cap-1' })
+  })
+
+  it('forwards an optional worktree binding when creating a capability', async () => {
+    queueFixtures(
+      callMock,
+      okFixture('req_capability_create', {
+        id: 'cap-1',
+        token: 'secret-capability-token',
+        expiresAt: 60_000,
+        browserPageId: 'page-1'
+      })
+    )
+
+    await main(
+      [
+        'tab',
+        'capability',
+        'create',
+        '--page',
+        'page-1',
+        '--output',
+        '/tmp/qa',
+        '--worktree',
+        'worktree-1',
+        '--json'
+      ],
+      '/tmp/not-an-orca-worktree'
+    )
+
+    expect(callMock).toHaveBeenCalledWith('browser.capabilityCreate', {
+      page: 'page-1',
+      ttlMs: 30 * 60 * 1_000,
+      worktree: 'worktree-1'
+    })
   })
 
   it('revokes a browser capability by id', async () => {

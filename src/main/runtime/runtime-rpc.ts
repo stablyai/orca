@@ -928,6 +928,7 @@ export class OrcaRuntimeRpcServer {
             )
           }
         }
+        console.error('[runtime-rpc] unexpected browser capability authorization failure')
         return { error: this.buildError(request.id, 'unauthorized', 'Invalid auth token') }
       }
     }

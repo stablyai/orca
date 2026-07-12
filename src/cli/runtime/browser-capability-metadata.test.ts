@@ -9,6 +9,7 @@ describe('writeBrowserCapabilityMetadata', () => {
     const directory = mkdtempSync(join(tmpdir(), 'orca-browser-capability-'))
     const destination = writeBrowserCapabilityMetadata(
       directory,
+      mkdtempSync(join(tmpdir(), 'orca-runtime-source-')),
       {
         runtimeId: 'runtime-1',
         pid: 123,
@@ -29,5 +30,24 @@ describe('writeBrowserCapabilityMetadata', () => {
     if (process.platform !== 'win32') {
       expect(statSync(destination).mode & 0o777).toBe(0o600)
     }
+  })
+
+  it('refuses to overwrite the active runtime metadata directory', () => {
+    const sourceDirectory = mkdtempSync(join(tmpdir(), 'orca-runtime-source-'))
+
+    expect(() =>
+      writeBrowserCapabilityMetadata(
+        sourceDirectory,
+        sourceDirectory,
+        {
+          runtimeId: 'runtime-1',
+          pid: 123,
+          transports: [{ kind: 'unix', endpoint: '/tmp/orca.sock' }],
+          authToken: 'global-token',
+          startedAt: 1
+        },
+        'scoped-token'
+      )
+    ).toThrow(/must not overwrite/)
   })
 })

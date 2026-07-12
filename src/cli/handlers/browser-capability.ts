@@ -27,7 +27,12 @@ export const BROWSER_CAPABILITY_HANDLERS: Record<string, CommandHandler> = {
     })
     let metadataPath: string
     try {
-      metadataPath = writeBrowserCapabilityMetadata(output, sourceMetadata, result.result.token)
+      metadataPath = writeBrowserCapabilityMetadata(
+        output,
+        client.getLocalUserDataPath(),
+        sourceMetadata,
+        result.result.token
+      )
     } catch (error) {
       await client.call('browser.capabilityRevoke', { id: result.result.id }).catch(() => undefined)
       throw error

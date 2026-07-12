@@ -58,6 +58,16 @@ export class RuntimeClient {
     return readMetadata(this.userDataPath)
   }
 
+  getLocalUserDataPath(): string {
+    if (this.remotePairing) {
+      throw new RuntimeClientError(
+        'invalid_argument',
+        'Browser capability metadata can only target a local Orca runtime'
+      )
+    }
+    return this.userDataPath
+  }
+
   async call<TResult>(
     method: string,
     params?: unknown,
