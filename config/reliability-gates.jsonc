@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "updatedAt": "2026-07-09",
+  "updatedAt": "2026-07-11",
   "policy": {
     "maturityLevels": [
       "experimental",
@@ -389,6 +389,109 @@
         "WSL UNC paths bypass the probe by design and have no live existence-recovery run; Linux, Windows, and mobile/API strictness are not directly exercised."
       ],
       "demotionRule": "Demote or quarantine if the gate flakes without a product bug, if an existing directory is ever remapped away from the requested cwd, or if a reattach/remote/API caller can engage the fallback."
+    },
+    {
+      "id": "agent-status.pi-hook-liveness",
+      "title": "Pi status hooks cannot stall a turn or complete a live runtime",
+      "maturity": "experimental",
+      "protection": "partial",
+      "owner": "agent-session",
+      "layer": "main-provider-contract",
+      "surfaces": [
+        "Pi and OMP managed extensions",
+        "agent status hooks",
+        "runtime reload and session replacement",
+        "loopback restart and stall recovery"
+      ],
+      "platforms": [
+        "macos",
+        "linux",
+        "windows"
+      ],
+      "providers": [
+        "local",
+        "daemon",
+        "ssh",
+        "wsl",
+        "remote-runtime"
+      ],
+      "coveredPlatforms": [
+        "macos"
+      ],
+      "coveredProviders": [],
+      "coverageNotes": "Local macOS execution of the generated Pi/OMP extension plus the shared hook normalizer. WSL fallback behavior is covered with mocked native-fetch failure and Windows curl handoff. Daemon PTYs use the same generated extension without a distinct delivery path. SSH/relay ingest uses the shared normalizer, but no live remote Pi process is exercised.",
+      "motivatingLinks": [
+        "https://github.com/stablyai/orca/issues/7791",
+        "https://github.com/stablyai/orca/pull/7802",
+        "https://github.com/stablyai/orca/pull/7838"
+      ],
+      "invariant": "Orca status reporting must return synchronously from every Pi/OMP extension handler, retain at most one active request and one latest pending snapshot, and abandon stalled loopback delivery within one second. A Pi session_shutdown event cannot mark a turn done because Pi also emits it for reload, new, resume, and fork while the PTY remains alive; only agent_end proves turn completion, while real process exit is cleared by PTY teardown.",
+      "oracle": "Execute the generated extension with a fetch that remains pending and assert the Pi handler returns before delivery; emit three statuses during the stall and assert exactly one request is active and only the latest pending status is sent next; advance fake time by one second and assert the active signal aborts and the latest status proceeds. Through the shared normalizer, assert session_shutdown yields no status while agent_end still yields done.",
+      "commands": [
+        "pnpm exec vitest run --config config/vitest.config.ts src/main/pi/agent-status-extension-source.test.ts src/main/agent-hooks/server.test.ts --maxWorkers=1"
+      ],
+      "testFiles": [
+        "src/main/pi/agent-status-extension-source.test.ts",
+        "src/main/agent-hooks/server.test.ts"
+      ],
+      "assertionRefs": [
+        {
+          "file": "src/main/pi/agent-status-extension-source.test.ts",
+          "assertions": [
+            "a pending loopback fetch does not keep the Pi event handler unresolved",
+            "three events during a stall produce one active request and one request for only the latest pending status",
+            "the one-second delivery deadline aborts the active request and advances the latest pending status",
+            "the managed status extension does not register session_shutdown as a completion event",
+            "WSL native-fetch failures still hand off to a detached Windows curl process"
+          ]
+        },
+        {
+          "file": "src/main/agent-hooks/server.test.ts",
+          "assertions": [
+            "session_shutdown normalizes to no status instead of done",
+            "agent_end remains the authoritative Pi/OMP done event"
+          ]
+        }
+      ],
+      "evidenceRuns": [
+        {
+          "date": "2026-07-11",
+          "runner": "local",
+          "platform": "macos",
+          "command": "pnpm exec vitest run --config config/vitest.config.ts src/main/pi/agent-status-extension-source.test.ts src/main/agent-hooks/server.test.ts --maxWorkers=1",
+          "result": "passed",
+          "durationSeconds": 1.3,
+          "summary": "2 files and 238 tests passed, including executed generated-extension liveness, latest-only queue bounds, timeout abort, WSL fallback, and Pi shutdown normalization."
+        }
+      ],
+      "runtimeBudget": {
+        "p95Seconds": 10,
+        "scope": "generated-extension and shared-normalizer unit gate"
+      },
+      "flakeHistory": {
+        "status": "unknown",
+        "evidence": "New deterministic gate with local fake-receiver and fake-timer evidence; needs CI soak before promotion."
+      },
+      "redGreenEvidence": {
+        "status": "partial",
+        "evidence": "Before the fix, the pending-fetch handler assertion remained false and session_shutdown normalized to done (2 focused failures, 233 passes). With the fix, both pass; the bounded count and deadline assertions additionally fail if latest-only coalescing or the timeout is removed. Needs saved CI evidence before blocking promotion."
+      },
+      "performanceBudget": {
+        "required": true,
+        "evidence": "Every Pi event does O(1) work and returns without awaiting I/O. Delivery retains at most one active request plus one latest pending object, uses one unref'd timer per active request, and creates no polling, provider scans, subprocesses outside the existing WSL failure fallback, or renderer work. The deterministic burst test proves three stalled events retain two delivery slots rather than an event-count-sized queue."
+      },
+      "promotionCriteria": [
+        "Run in soak for at least 100 consecutive passes or 14 days across required CI platforms.",
+        "Attach saved red/green evidence for both the unresolved-handler and false-done regressions.",
+        "Add a live Pi Electron test that stalls or restarts the hook listener during a running turn and proves terminal output continues."
+      ],
+      "knownGaps": [
+        "No live model-backed Pi turn or Electron Running-view assertion is automated; the gate executes the exact generated extension and shared normalizer below those surfaces.",
+        "An already-running Pi process keeps its previously loaded extension until Pi reloads or restarts.",
+        "During receiver unavailability, intermediate status details may be coalesced to the latest snapshot; this is intentional and bounded, but no UI test measures the temporary detail loss.",
+        "SSH/remote and Windows are not exercised with live providers; relay ingest shares normalization and WSL fallback has mocked contract coverage."
+      ],
+      "demotionRule": "Demote or quarantine if the gate flakes without a product or harness bug, if a Pi handler can again await receiver I/O, or if coalescing allows an older status to overwrite a newer one."
     },
     {
       "id": "agent-session.provider-ownership",
@@ -1221,6 +1324,9 @@
       "surfaces": [
         "daemon stream",
         "main PTY batching",
+        "runtime path provenance",
+        "runtime serve-sim detection",
+        "runtime terminal wait detection",
         "renderer ACK",
         "xterm scheduler",
         "hidden output"
@@ -1240,20 +1346,27 @@
         "macos"
       ],
       "coveredProviders": [],
-      "coverageNotes": "Local macOS evidence over the main-process pending-output caps that exist on main@1282f5c2d. Daemon stream write(false)/drain contracts, cross-session drain priority, and bounded queued tails arrive with the pending perf slice; live flood/latency artifacts remain gaps.",
+      "coverageNotes": "Local macOS evidence covers the existing main-process pending-output caps plus deterministic runtime path-provenance history reuse, idle-path serve-sim detection, and saturated-tail wait detection. Daemon stream write(false)/drain contracts, cross-session drain priority, and bounded queued tails arrive with the pending perf slice; live flood/latency artifacts remain gaps.",
       "motivatingLinks": [
         "https://github.com/stablyai/orca/pull/6836",
         "https://github.com/stablyai/orca/pull/6858",
         "https://github.com/stablyai/orca/pull/7002",
         "https://github.com/stablyai/orca/pull/7054"
       ],
-      "invariant": "High-volume terminal output must stay bounded across daemon socket writes, main-to-renderer in-flight bytes, renderer scheduler queues, and hidden-output restore without starving focused input.",
-      "oracle": "The current executable slice injects daemon socket backpressure and main-process renderer backlog pressure, then asserts write(false)/drain ordering, bounded queued daemon bytes, per-PTY and total pending-output caps, preserved sequenced-tail metadata, active-pending protection ahead of background trimming, and ACK-gated in-flight bounds. The live Electron perf oracle adds hidden-output floods, renderer scheduler queue depth, dropped-output-zero normal scenarios, and active key latency budgets before promotion.",
+      "invariant": "High-volume terminal output must stay bounded across daemon socket writes, main runtime metadata, detectors, and tail checks, main-to-renderer in-flight bytes, renderer scheduler queues, and hidden-output restore without starving focused input.",
+      "oracle": "The current executable slice injects daemon socket backpressure and main-process renderer backlog pressure, then asserts write(false)/drain ordering, bounded queued daemon bytes, unchanged path-provenance history reuse for pathless output, idle serve-sim detection with split-JSON continuity, ordinary terminal-wait detection without a joined-tail allocation and with full prompt-family continuity, per-PTY and total pending-output caps, preserved sequenced-tail metadata, active-pending protection ahead of background trimming, and ACK-gated in-flight bounds. The live Electron perf oracle adds hidden-output floods, renderer scheduler queue depth, dropped-output-zero normal scenarios, and active key latency budgets before promotion.",
       "commands": [
-        "pnpm exec vitest run --config config/vitest.config.ts src/main/ipc/pty.test.ts"
+        "pnpm exec vitest run --config config/vitest.config.ts src/main/ipc/pty.test.ts",
+        "pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/orca-runtime-path-candidate-history.test.ts",
+        "pnpm exec vitest run --config config/vitest.config.ts src/main/emulator/serve-sim-state-watcher.test.ts",
+        "pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/orca-runtime.test.ts src/main/runtime/orca-runtime-tail-wait-memo.test.ts"
       ],
       "testFiles": [
-        "src/main/ipc/pty.test.ts"
+        "src/main/ipc/pty.test.ts",
+        "src/main/runtime/orca-runtime-path-candidate-history.test.ts",
+        "src/main/emulator/serve-sim-state-watcher.test.ts",
+        "src/main/runtime/orca-runtime.test.ts",
+        "src/main/runtime/orca-runtime-tail-wait-memo.test.ts"
       ],
       "assertionRefs": [
         {
@@ -1262,6 +1375,37 @@
             "total renderer in-flight output is capped across many PTYs",
             "active PTY pending output is prioritized during renderer backpressure",
             "combined pending output exceeding the interactive size limit is batched"
+          ]
+        },
+        {
+          "file": "src/main/runtime/orca-runtime-path-candidate-history.test.ts",
+          "assertions": [
+            "reuses path-candidate history across repeated pathless PTY output",
+            "copies history when new output adds a path candidate"
+          ]
+        },
+        {
+          "file": "src/main/emulator/serve-sim-state-watcher.test.ts",
+          "assertions": [
+            "does not buffer repeated brace-free PTY output while waiting for metadata",
+            "detects serve-sim metadata split across PTY chunks and releases the partial object"
+          ]
+        },
+        {
+          "file": "src/main/runtime/orca-runtime-tail-wait-memo.test.ts",
+          "assertions": [
+            "does not rebuild or repeatedly scan an ordinary saturated tail",
+            "memoized stamping matches recompute reference: blocked prompt split across chunks",
+            "stays equivalent across tail eviction beyond the retained cap"
+          ]
+        },
+        {
+          "file": "src/main/runtime/orca-runtime.test.ts",
+          "assertions": [
+            "returns a blocked wait result for Codex update prompts",
+            "returns a blocked wait result for Codex workspace trust prompts",
+            "returns a blocked wait result for generic Codex interactive prompts",
+            "resolves tui-idle when a stale Codex prompt is followed by the ready header"
           ]
         }
       ],
@@ -1274,6 +1418,33 @@
           "result": "passed",
           "durationSeconds": 1.5,
           "summary": "1 test file(s) passed, 209 tests passed on main@1282f5c2d in a clean checkout."
+        },
+        {
+          "date": "2026-07-10",
+          "runner": "local",
+          "platform": "macos",
+          "command": "pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/orca-runtime-path-candidate-history.test.ts",
+          "result": "passed",
+          "durationSeconds": 3.49,
+          "summary": "1 test file passed, 2 tests passed on the exact rebased tree based on main@dc468f0ded."
+        },
+        {
+          "date": "2026-07-10",
+          "runner": "local",
+          "platform": "macos",
+          "command": "pnpm exec vitest run --config config/vitest.config.ts src/main/emulator/serve-sim-state-watcher.test.ts",
+          "result": "passed",
+          "durationSeconds": 0.37,
+          "summary": "1 test file passed, 6 tests passed on pushed commit f0e3a185593b."
+        },
+        {
+          "date": "2026-07-10",
+          "runner": "local",
+          "platform": "macos",
+          "command": "pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/orca-runtime.test.ts src/main/runtime/orca-runtime-tail-wait-memo.test.ts",
+          "result": "passed",
+          "durationSeconds": 21.33,
+          "summary": "2 test files passed, 609 tests passed on pushed commit 4fb14eac3897."
         }
       ],
       "runtimeBudget": {
@@ -1286,11 +1457,11 @@
       },
       "redGreenEvidence": {
         "status": "partial",
-        "evidence": "Tests assert daemon stream writes pause after socket write(false), later stream data queues behind the pressured socket, flush-immediate output from another session is prioritized ahead of unrelated queued background backlog on drain while preserving per-session order, queued lines resume on drain, global cleanup clears clients that only have backpressured writes, queued daemon stream bytes are bounded by keeping priority output and the newest tail under sustained pressure, main pending renderer output is capped per PTY and in total, total-pressure trimming prefers background pending output before active pending output, trimmed pending tails preserve seq/rawLength metadata, and ACK-gated in-flight output remains bounded. Existing renderer tests cover replay/backlog slices. Needs intentional-break proof and broader hidden-output/input-latency perf artifacts before promotion."
+        "evidence": "Tests assert daemon stream writes pause after socket write(false), later stream data queues behind the pressured socket, flush-immediate output from another session is prioritized ahead of unrelated queued background backlog on drain while preserving per-session order, queued lines resume on drain, global cleanup clears clients that only have backpressured writes, queued daemon stream bytes are bounded by keeping priority output and the newest tail under sustained pressure, pathless runtime output reuses unchanged path-provenance history with zero old-candidate byte scans, ordinary output leaves the niche serve-sim detector idle while split JSON still emits and releases its partial buffer, ordinary saturated terminal tails retain no rebuilt wait text or repeated phrase scans while every blocked/ready prompt family remains live, main pending renderer output is capped per PTY and in total, total-pressure trimming prefers background pending output before active pending output, trimmed pending tails preserve seq/rawLength metadata, and ACK-gated in-flight output remains bounded. Intentionally restoring the old path-history shape failed the focused scale test after 774ms and 4,096 replacements; restoring the old serve-sim buffer failed its scale test after 180ms with 4,096 buffer writes; disabling the ordinary-tail branch failed with a retained 253,999-character waitText. The fixed shapes passed their focused suites. Existing renderer tests cover replay/backlog slices. Needs broader hidden-output/input-latency perf artifacts before promotion."
       },
       "performanceBudget": {
         "required": true,
-        "evidence": "Suggested ceilings: renderer in-flight <=8MB total, <=512KB per PTY plus active reserve, renderer queued chars <=2MB, dropped backlogs 0, hidden restore <=1000ms, active key median/worst <=75ms/300ms in perf scenarios."
+        "evidence": "Suggested ceilings: renderer in-flight <=8MB total, <=512KB per PTY plus active reserve, renderer queued chars <=2MB, dropped backlogs 0, hidden restore <=1000ms, active key median/worst <=75ms/300ms in perf scenarios. With 1,024 retained provenance candidates, 4,096 pathless chunks dropped from 78.84ms and 4,096 array replacements to 1.74ms and zero replacements. Brace-free 1 KiB output dropped from 20.32/79.12/318.23ms to 0.31/0.64/2.35ms across 4,096/16,384/65,536 chunks. Repeated ordinary 252,000-character tail checks dropped from 96.34/464.20/941.79/3,796.70ms to 3.21/15.68/31.34/129.72ms across 100/500/1,000/4,096 updates."
       },
       "promotionCriteria": [
         "Split daemon stream backpressure into a deterministic provider/IPC contract if full E2E is flaky.",
@@ -1299,6 +1470,9 @@
       ],
       "knownGaps": [
         "Current command asserts daemon stream write(false)/drain/cleanup at the batcher contract layer and main pending renderer caps at the IPC contract layer.",
+        "Runtime provenance coverage is deterministic and does not include a live high-throughput provider artifact.",
+        "Serve-sim detector coverage is deterministic and does not include a live external simulator helper.",
+        "Terminal-wait scale evidence is deterministic and does not yet include a live saturated-tail event-loop artifact.",
         "Current command does not prove renderer parse pressure, scheduler queue depth, event-loop delay, or active key latency.",
         "Live hidden-output pressure, active input latency, and full Electron perf artifacts remain unproved."
       ],
@@ -1790,6 +1964,423 @@
         "Real Windows ConPTY execution is not covered by macOS/Linux CI."
       ],
       "demotionRule": "Cannot promote if standard-key behavior is inferred without PTY byte evidence."
+    },
+    {
+      "id": "terminal-input.windows-modified-enter-routing",
+      "title": "Windows modified Enter routes agent-compatible bytes to the active pane",
+      "maturity": "experimental",
+      "protection": "partial",
+      "owner": "terminal-input",
+      "layer": "main-provider-renderer-unit-and-windows-electron",
+      "surfaces": [
+        "terminal input",
+        "Windows modified Enter",
+        "agent identity",
+        "split panes",
+        "SSH",
+        "WSL",
+        "remote runtime"
+      ],
+      "platforms": [
+        "macos",
+        "linux",
+        "windows"
+      ],
+      "providers": [
+        "local",
+        "daemon",
+        "ssh",
+        "wsl",
+        "remote-runtime"
+      ],
+      "coveredPlatforms": [
+        "macos"
+      ],
+      "coveredProviders": [],
+      "coverageNotes": "Deterministic main/renderer tests run on macOS and exercise simulated Windows plus POSIX/Linux process-confirmation behavior. They cover exact local-ConPTY membership, detached-child rejection, unchanged SSH/WSL/remote fallback, process-confirmed Droid routing and launch-triggered confirmation, typed-alias and forged-OSC isolation, shells without OSC 133, split/detach ownership with preserved shell classification, stale PTY exit/rebind rejection, command-generation revocation, daemon v21 warm-reattach identity, unavailable inspection, and lazy subprocess/RPC callback counts. The Electron byte test runs only on Windows; live Windows and Linux PTY evidence remains uncollected. Test failures report exact expected bytes; no product telemetry or raw terminal logging is added.",
+      "motivatingLinks": [
+        "https://github.com/stablyai/orca/issues/7620",
+        "https://github.com/stablyai/orca/pull/7668"
+      ],
+      "invariant": "Shift+Enter sends CSI-u only when the active pane is a genuine local Windows ConPTY with allowlisted Droid ownership or fresh routing-trusted Droid process evidence. Every new command and PTY replacement revokes stale routing until current evidence settles. All other Windows panes preserve Esc+CR; non-Windows panes remain CSI-u; SSH/WSL/remote behavior is unchanged; split or reused panes cannot inherit sibling or prior-PTY authority; unrelated keys perform no agent or ConPTY lookup.",
+      "oracle": "Main/renderer tests assert exact bytes for local and non-local Windows plus non-Windows policy cells. Fresh Windows process evidence authorizes bytes only after a recognized global candidate is intersected with the exact ConPTY console process list; detached descendants, helper failure/timeout/root-only fallback, stale PTY exit/rebind results, typed text, and hook/OSC output fail closed. A new OSC 133;C immediately publishes a routing-neutral generation, including during D-to-C races. In cmd.exe/Git Bash/custom shells without OSC 133, accepted inferred commands start the same fresh generation; accepted submit/interrupt, title exit, focus, and visibility revoke trusted Droid bytes while one bounded confirmation runs. Detach preserves the live PTY's source shell override so WSL/native classification cannot change with the current default. Ordinary fast shell commands use cached/no-scan paths; routing-relevant confirmation bypasses cached process snapshots and keeps the bounded three-read ladder. Daemon protocol v21 persists only an allowlisted launchAgent; warm reattach uses it as a display/confirmation hint and restores routing only after current process proof. The Windows Electron test focuses the real xterm textarea and records exact renderer-to-main PTY writes.",
+      "commands": [
+        "pnpm exec vitest run --config config/vitest.config.ts src/main/daemon/daemon-foreground-confirmation-protocol.test.ts src/main/daemon/daemon-pty-adapter.test.ts src/main/daemon/daemon-pty-router.test.ts src/main/daemon/daemon-server.test.ts src/main/daemon/degraded-daemon-pty-provider.test.ts src/main/daemon/pty-subprocess-foreground-scan-cadence.test.ts src/main/daemon/pty-subprocess.test.ts src/main/ipc/pty.test.ts src/main/providers/agent-foreground-process.test.ts src/main/providers/local-pty-provider.test.ts src/main/providers/windows-conpty-process-membership.test.ts src/renderer/src/components/terminal-pane/pane-foreground-agent-tracker.test.ts src/renderer/src/components/terminal-pane/pty-connection.test.ts src/renderer/src/components/terminal-pane/pty-transport.test.ts src/renderer/src/components/terminal-pane/terminal-pane-tab-detach.test.ts src/renderer/src/components/terminal-pane/terminal-shortcut-policy.test.ts src/renderer/src/components/terminal-pane/terminal-windows-shift-enter.test.ts src/renderer/src/store/slices/store-cascades.test.ts src/renderer/src/store/slices/terminal-pane-detach-agent-identity.test.ts src/shared/agent-process-recognition.test.ts src/shared/process-table-snapshot.test.ts tests/e2e/terminal-foreground-confirmation.unit.test.ts",
+        "pnpm run test:e2e -- tests/e2e/terminal-shortcuts.spec.ts"
+      ],
+      "testFiles": [
+        "src/main/daemon/daemon-foreground-confirmation-protocol.test.ts",
+        "src/main/daemon/daemon-pty-adapter.test.ts",
+        "src/main/daemon/daemon-pty-router.test.ts",
+        "src/main/daemon/daemon-server.test.ts",
+        "src/main/daemon/degraded-daemon-pty-provider.test.ts",
+        "src/main/daemon/pty-subprocess-foreground-scan-cadence.test.ts",
+        "src/main/daemon/pty-subprocess.test.ts",
+        "src/main/ipc/pty.test.ts",
+        "src/main/providers/agent-foreground-process.test.ts",
+        "src/main/providers/local-pty-provider.test.ts",
+        "src/main/providers/windows-conpty-process-membership.test.ts",
+        "src/renderer/src/components/terminal-pane/pane-foreground-agent-tracker.test.ts",
+        "src/renderer/src/components/terminal-pane/pty-connection.test.ts",
+        "src/renderer/src/components/terminal-pane/pty-transport.test.ts",
+        "src/renderer/src/components/terminal-pane/terminal-pane-tab-detach.test.ts",
+        "src/renderer/src/components/terminal-pane/terminal-shortcut-policy.test.ts",
+        "src/renderer/src/components/terminal-pane/terminal-windows-shift-enter.test.ts",
+        "src/renderer/src/store/slices/store-cascades.test.ts",
+        "src/renderer/src/store/slices/terminal-pane-detach-agent-identity.test.ts",
+        "src/shared/agent-process-recognition.test.ts",
+        "src/shared/process-table-snapshot.test.ts",
+        "tests/e2e/terminal-foreground-confirmation.unit.test.ts",
+        "tests/e2e/terminal-shortcuts.spec.ts"
+      ],
+      "assertionRefs": [
+        {
+          "file": "src/shared/process-table-snapshot.test.ts",
+          "assertions": [
+            "a fresh request bypasses a same-tick TTL cache and any scan already in flight before the request",
+            "same-turn fresh requests and ordinary cache misses share one later scan while requests arriving after it starts queue behind it"
+          ]
+        },
+        {
+          "file": "src/main/providers/agent-foreground-process.test.ts",
+          "assertions": [
+            "successful root-present Windows enumeration and failed, blank, malformed, or root-missing enumeration remain distinct evidence states",
+            "an observed shell root with no children is authoritative while a snapshot omitting that root is unavailable",
+            "an attached Droid candidate is authorized only when exact ConPTY membership contains it, while a detached Start-Process descendant is rejected",
+            "a Windows process-table scan with no recognized agent performs zero ConPTY membership helper forks",
+            "fresh POSIX scan failure or a snapshot missing the PTY root is unavailable rather than shell proof",
+            "the compatibility process-name API still preserves its existing fallback contract for other consumers"
+          ]
+        },
+        {
+          "file": "src/main/providers/windows-conpty-process-membership.test.ts",
+          "assertions": [
+            "the fixed node-pty helper returns validated integer console membership containing the PTY root",
+            "root-only fallback, malformed/missing-root messages, spawn errors, and a silent helper timeout all fail closed",
+            "the bounded timeout kills the child helper exactly once"
+          ]
+        },
+        {
+          "file": "src/main/providers/local-pty-provider.test.ts",
+          "assertions": [
+            "a delayed foreground confirmation is discarded after the owning PTY exits"
+          ]
+        },
+        {
+          "file": "src/main/daemon/daemon-pty-adapter.test.ts",
+          "assertions": [
+            "new daemon sessions and warm reattach results carry the same minimal allowlisted launchAgent"
+          ]
+        },
+        {
+          "file": "src/main/daemon/daemon-server.test.ts",
+          "assertions": [
+            "daemon protocol v21 persists allowlisted launchAgent across reattach and drops unknown identity strings"
+          ]
+        },
+        {
+          "file": "src/main/daemon/pty-subprocess.test.ts",
+          "assertions": [
+            "Windows daemon foreground lookup can return PowerShell synchronously before async process-tree enrichment resolves the agent",
+            "the enriched agent result is served by a later foreground read",
+            "fresh confirmation awaits a post-request scan instead of serving cached PowerShell and returns null when inspection is unavailable"
+          ]
+        },
+        {
+          "file": "tests/e2e/terminal-foreground-confirmation.unit.test.ts",
+          "assertions": [
+            "the real daemon handle and pane tracker keep restored Droid identity when confirmation resolves after the old cache window",
+            "one fresh command-finish scan confirms real shell exit, while unavailable inspection performs exactly three bounded reads and never claims shell"
+          ]
+        },
+        {
+          "file": "src/renderer/src/components/terminal-pane/terminal-shortcut-policy.test.ts",
+          "assertions": [
+            "Windows defaults and non-Droid agents preserve Esc+CR while explicit Droid capability selects CSI-u",
+            "SSH, WSL, and remote Windows-client panes preserve Esc+CR without consulting the Droid capability",
+            "non-Windows Shift+Enter remains CSI-u and unrelated keys invoke neither agent nor ConPTY callbacks"
+          ]
+        },
+        {
+          "file": "src/renderer/src/components/terminal-pane/terminal-windows-shift-enter.test.ts",
+          "assertions": [
+            "only routing-trusted current process identity overrides launch evidence and confirmed shell foreground clears stale identity",
+            "a newer untrusted or neutral command generation blocks stale launch ownership until confirmation",
+            "only allowlisted fresh process or pane-scoped launch ownership selects Droid's CSI-u capability",
+            "forged hook or OSC-derived Droid status cannot change the Windows byte encoding",
+            "after split and original-pane close, a sole surviving sibling cannot inherit the original pane's Droid launch identity"
+          ]
+        },
+        {
+          "file": "src/renderer/src/components/terminal-pane/pane-foreground-agent-tracker.test.ts",
+          "assertions": [
+            "manual and restored local agent identity is published from bounded foreground-process reads",
+            "a delayed read cannot publish after the pane rebinds to a replacement PTY id",
+            "every new command publishes a routing-neutral generation before confirmation",
+            "typed agent text only widens the confirmation window and never becomes published or routable identity",
+            "unavailable typed-command confirmation stays on legacy routing through the three-read ladder and then fails closed",
+            "ordinary fast OSC 133;C-to-D command pairs publish shell without a fresh confirmation scan",
+            "command-start and visible launch recovery use at most three reads across the bounded 350 ms, 1.2 s, and 6 s ladder",
+            "null and rejected reads participate in the same bounded known-identity ladder",
+            "command-finished accepts one fresh recognized shell scan when agent evidence exists, while unavailable final evidence retires routing without claiming shell"
+          ]
+        },
+        {
+          "file": "src/renderer/src/components/terminal-pane/pty-connection.test.ts",
+          "assertions": [
+            "after detach remount, pane-key launch/process identity forces a leaked nested OSC 133;D through foreground confirmation",
+            "a still-running Droid process republishes Droid instead of being overwritten with shell-foreground evidence",
+            "typing droid does not route CSI-u until fresh process evidence confirms Droid",
+            "null and rejected command-start reads never promote typed Droid text to process evidence",
+            "typed Droid input cannot replace live Antigravity process or pane-scoped launch identity inside another TUI",
+            "typed Droid input on SSH or remote-runtime panes never writes local process evidence",
+            "Droid routing survives a fresh command-finish scan that still sees Droid and retires after one fresh shell result",
+            "a D-to-C transition immediately routes legacy bytes while the new command generation is pending",
+            "an identityless visible-read versus OSC 133;D race cancels stale sampling and fails closed to shell",
+            "a manually typed Droid in a shell without OSC 133 gains routing only after accepted-input fresh confirmation",
+            "accepted no-OSC exit or interrupt input immediately revokes trusted Droid bytes and confirms the returned shell",
+            "unavailable command-finish evidence resolves deferred cleanup, returns legacy routing, and does not assert shell foreground",
+            "daemon-returned allowlisted launchAgent requests warm-reattach confirmation without restoring stale byte authority or the original args/env payload, while missing identity fails closed",
+            "an unknown persisted wrapper cannot spoof launch identity and confirmed shell state prevents repeat focus scans"
+          ]
+        },
+        {
+          "file": "src/renderer/src/components/terminal-pane/pty-transport.test.ts",
+          "assertions": [
+            "allowlisted daemon launchAgent reaches PtyConnectResult on reattach",
+            "unknown launch identity is dropped at the renderer transport boundary"
+          ]
+        },
+        {
+          "file": "src/renderer/src/store/slices/terminal-pane-detach-agent-identity.test.ts",
+          "assertions": [
+            "pane-to-tab detach moves only the detached leaf's launch and process identity to its new pane key",
+            "pane-to-tab detach preserves the source PTY shell override across native PowerShell and WSL classifications",
+            "the source hook snapshot is retired rather than copied to a key the running PTY cannot emit",
+            "the detached Droid keeps CSI-u while the source sibling keeps its own legacy encoding"
+          ]
+        },
+        {
+          "file": "src/shared/agent-process-recognition.test.ts",
+          "assertions": [
+            "Droid's process name resolves to the allowlisted Droid agent identity without substring matching"
+          ]
+        },
+        {
+          "file": "tests/e2e/terminal-shortcuts.spec.ts",
+          "assertions": [
+            "on Windows the focused terminal sends CSI-u bytes for a Droid pane and Esc+CR bytes after switching that same pane to Antigravity identity",
+            "the byte oracle observes the real renderer-to-main PTY write path rather than terminal DOM state"
+          ]
+        }
+      ],
+      "evidenceRuns": [
+        {
+          "date": "2026-07-10",
+          "runner": "local",
+          "platform": "macos",
+          "command": "pnpm exec vitest run --config config/vitest.config.ts src/main/daemon/daemon-foreground-confirmation-protocol.test.ts src/main/daemon/daemon-pty-adapter.test.ts src/main/daemon/daemon-pty-router.test.ts src/main/daemon/daemon-server.test.ts src/main/daemon/degraded-daemon-pty-provider.test.ts src/main/daemon/pty-subprocess-foreground-scan-cadence.test.ts src/main/daemon/pty-subprocess.test.ts src/main/ipc/pty.test.ts src/main/providers/agent-foreground-process.test.ts src/main/providers/local-pty-provider.test.ts src/main/providers/windows-conpty-process-membership.test.ts src/renderer/src/components/terminal-pane/pane-foreground-agent-tracker.test.ts src/renderer/src/components/terminal-pane/pty-connection.test.ts src/renderer/src/components/terminal-pane/pty-transport.test.ts src/renderer/src/components/terminal-pane/terminal-pane-tab-detach.test.ts src/renderer/src/components/terminal-pane/terminal-shortcut-policy.test.ts src/renderer/src/components/terminal-pane/terminal-windows-shift-enter.test.ts src/renderer/src/store/slices/store-cascades.test.ts src/renderer/src/store/slices/terminal-pane-detach-agent-identity.test.ts src/shared/agent-process-recognition.test.ts src/shared/process-table-snapshot.test.ts tests/e2e/terminal-foreground-confirmation.unit.test.ts",
+          "result": "passed",
+          "durationSeconds": 8.71,
+          "summary": "Twenty-two focused test files passed (1206 tests) on current main, covering fresh-scan ordering/deduplication, exact ConPTY membership and detached-child rejection, stale PTY guards, daemon v21 launch ownership with current-process confirmation, no-OSC command/exit recovery, preserved detach shell classification, unavailable evidence, routing-neutral command generations, exact shortcut bytes, and the composed daemon-plus-tracker contract; the Windows Electron byte test remains platform-gated and is not counted as local macOS evidence."
+        }
+      ],
+      "runtimeBudget": {
+        "p95Seconds": 90,
+        "scope": "focused renderer units plus the Windows Electron terminal-shortcut spec"
+      },
+      "flakeHistory": {
+        "status": "unknown",
+        "evidence": "The deterministic units are stable locally; the Windows-only Electron byte path needs CI or nightly soak history before promotion."
+      },
+      "redGreenEvidence": {
+        "status": "partial",
+        "evidence": "Reverting to the previous unconditional Windows Esc+CR branch fails the Droid byte assertion, while resolving launch metadata from any key other than the active pane fails the split-survivor isolation assertion. Saved intentional-break artifacts and live Windows history are still missing."
+      },
+      "performanceBudget": {
+        "required": true,
+        "evidence": "Callback-count tests prove unrelated ordinary keys invoke neither ConPTY nor agent resolution. Windows Shift+Enter performs two store reads: one local-ConPTY classification with an O(tabs-in-worktree) tab lookup, then two pane-keyed O(1) ownership lookups. Typed text performs no routing write. Ordinary fast OSC 133;C-to-D shell commands perform no fresh confirmation RPC or process scan. An accepted submit/interrupt while trusted Droid is current, a typed allowlisted agent command, title exit, focus, visibility transition, or an idle burst after trusted Droid Shift+Enter can schedule the bounded confirmation ladder; each event cancels/deduplicates prior work and no timer recurs after settling. Windows confirmation performs one fresh process-table scan and forks exact ConPTY membership only after a recognized agent candidate appears; no recognized candidate makes zero helper calls. Same-turn fresh requests share one scan and later arrivals queue at most one successor. Recovery remains three bounded one-shot reads (350 ms, 1.2 s, 6 s). No polling loop, provider fanout, persistent listener, hidden-pane wake loop, or per-printable-key work is added."
+      },
+      "promotionCriteria": [
+        "Run the exact PTY-byte Electron oracle on Windows without silent platform skips.",
+        "Collect stable runtime and flake history for local and daemon Windows ConPTY while retaining deterministic unchanged-provider assertions for SSH, WSL, and remote runtime.",
+        "Attach saved intentional-break evidence for Droid capability removal and split-sibling identity leakage."
+      ],
+      "knownGaps": [
+        "No Windows runner or live Linux PTY evidence is attached; the Electron byte test skips on macOS and Linux, while Linux behavior is covered only by deterministic POSIX unit paths.",
+        "Droid inside SSH, WSL, or remote-runtime intentionally keeps the pre-existing Windows-client Esc+CR behavior because local foreground confirmation is unavailable; this PR narrows the exception to issue #7620's local ConPTY surface.",
+        "The Electron test injects allowlisted pane identity rather than launching the real Droid and Antigravity binaries.",
+        "If both Windows process-enumeration backends remain unavailable through the bounded ladder, routing fails closed to the legacy Esc+CR path; no live Droid artifact covers that degraded host configuration.",
+        "Protocol v21 restarts older daemons because the minimal persisted launchAgent is a new contract; sessions preserved by pre-v21 daemons cannot supply warm-reattach launch ownership and fail closed until current process confirmation or restart.",
+        "No live daemon, SSH, WSL, remote-runtime, paired-web, or restore/replay byte artifact has been collected.",
+        "A running PTY keeps its spawn-time ORCA_PANE_KEY after pane-to-tab detach. This change transfers launch/process routing evidence and retires the stale hook snapshot, but does not redesign future hook reattribution across tab IDs."
+      ],
+      "demotionRule": "Keep non-blocking or demote to protection none if the Windows byte test silently skips, flakes without an actionable artifact, routes bytes using tab/title/terminal-output heuristics, or adds any ordinary-key lookup, IPC, polling, scan, or lifecycle leak."
+    },
+    {
+      "id": "terminal-input.guarded-agent-send-authorization",
+      "title": "Guarded agent sends authorize only the confirmed exact PTY",
+      "maturity": "experimental",
+      "protection": "partial",
+      "owner": "terminal-input",
+      "layer": "runtime-provider-contract",
+      "surfaces": [
+        "terminal input",
+        "guarded note sends",
+        "agent status",
+        "PTY identity",
+        "foreground process confirmation"
+      ],
+      "platforms": [
+        "macos",
+        "linux",
+        "windows"
+      ],
+      "providers": [
+        "local",
+        "daemon",
+        "ssh",
+        "wsl",
+        "remote-runtime"
+      ],
+      "coveredPlatforms": [
+        "macos"
+      ],
+      "coveredProviders": [
+        "local",
+        "daemon"
+      ],
+      "coverageNotes": "Runtime and provider-contract tests on macOS cover exact-PTY authorization, local/daemon fresh confirmation, exact ConPTY membership, and unsupported-provider fail-closed behavior. Physical Windows, live Linux, SSH, WSL, and remote-runtime validation remain explicit gaps; providers without confirmation preserve conservative refusal on a shell conflict.",
+      "motivatingLinks": [
+        "https://github.com/stablyai/orca/issues/8303"
+      ],
+      "invariant": "A guarded note send writes only to the exact PTY binding checked by the guard and only while permission/wait evidence allows input; fresh hook state conflicting with an ordinary shell foreground requires fresh provider confirmation of a recognized agent in that PTY.",
+      "oracle": "Fresh explicit state plus ordinary PowerShell plus confirmed recognized agent is sendable on the same PTY. Confirmed shell/non-agent, unavailable confirmation, PTY exit, handle rebind, or a callback PTY mismatch returns a refusal or not-writable result and writes zero bytes.",
+      "commands": [
+        "pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/orca-runtime.test.ts src/main/runtime/rpc/terminal-send.test.ts src/main/ipc/pty.test.ts src/main/providers/agent-foreground-process.test.ts src/main/providers/local-pty-provider.test.ts src/main/providers/windows-conpty-process-membership.test.ts src/main/daemon/daemon-foreground-confirmation-protocol.test.ts src/main/daemon/pty-subprocess.test.ts src/renderer/src/lib/active-agent-note-send.test.ts src/renderer/src/components/browser-pane/BrowserAnnotationSendMenuContent.test.tsx"
+      ],
+      "testFiles": [
+        "src/main/runtime/orca-runtime.test.ts",
+        "src/main/runtime/rpc/terminal-send.test.ts",
+        "src/main/ipc/pty.test.ts",
+        "src/main/providers/agent-foreground-process.test.ts",
+        "src/main/providers/local-pty-provider.test.ts",
+        "src/main/providers/windows-conpty-process-membership.test.ts",
+        "src/main/daemon/daemon-foreground-confirmation-protocol.test.ts",
+        "src/main/daemon/pty-subprocess.test.ts",
+        "src/renderer/src/lib/active-agent-note-send.test.ts",
+        "src/renderer/src/components/browser-pane/BrowserAnnotationSendMenuContent.test.tsx"
+      ],
+      "assertionRefs": [
+        {
+          "file": "src/main/runtime/orca-runtime.test.ts",
+          "assertions": [
+            "a recognized fresh provider confirmation authorizes explicit hook state over an ordinary shell result",
+            "shell, non-agent, null, thrown, and missing confirmation remain fail-closed",
+            "title blockers and ordinary recognized agent evidence add no confirmation call",
+            "PTY exit or handle rebind during either foreground read rejects evidence bound to the original PTY",
+            "controller-less yields preserve stale-handle errors and confirmation methods retain their controller receiver"
+          ]
+        },
+        {
+          "file": "src/main/runtime/rpc/terminal-send.test.ts",
+          "assertions": [
+            "a handle rebind during guarded status evaluation returns not writable and writes zero bytes",
+            "the callback's actual PTY must equal the handle binding before status can authorize a write"
+          ]
+        },
+        {
+          "file": "src/main/ipc/pty.test.ts",
+          "assertions": [
+            "runtime confirmation reaches the provider owning the captured PTY",
+            "unsupported or missing providers return unavailable confirmation"
+          ]
+        },
+        {
+          "file": "src/main/providers/agent-foreground-process.test.ts",
+          "assertions": [
+            "recognized Windows candidates require exact ConPTY membership and detached descendants are rejected",
+            "unavailable process inspection is distinct from authoritative shell evidence"
+          ]
+        },
+        {
+          "file": "src/main/providers/local-pty-provider.test.ts",
+          "assertions": [
+            "fresh confirmation is discarded when its owning local PTY exits"
+          ]
+        },
+        {
+          "file": "src/main/providers/windows-conpty-process-membership.test.ts",
+          "assertions": [
+            "exact ConPTY console membership comes from the fixed node-pty helper",
+            "malformed, incomplete, timed-out, and spawn-error membership reads fail closed"
+          ]
+        },
+        {
+          "file": "src/main/daemon/daemon-foreground-confirmation-protocol.test.ts",
+          "assertions": [
+            "daemons from before the fresh-confirmation RPC are rejected by protocol version"
+          ]
+        },
+        {
+          "file": "src/main/daemon/pty-subprocess.test.ts",
+          "assertions": [
+            "fresh confirmation bypasses cached PowerShell and waits for a post-request process scan"
+          ]
+        },
+        {
+          "file": "src/renderer/src/lib/active-agent-note-send.test.ts",
+          "assertions": [
+            "selected active-agent note sends retain guarded paste and submit routing"
+          ]
+        },
+        {
+          "file": "src/renderer/src/components/browser-pane/BrowserAnnotationSendMenuContent.test.tsx",
+          "assertions": [
+            "browser annotation send content routes through review-notes send so existing agent sessions remain selectable",
+            "both browser annotation send surfaces wire the shared menu content"
+          ]
+        }
+      ],
+      "evidenceRuns": [
+        {
+          "date": "2026-07-11",
+          "runner": "local",
+          "platform": "macos",
+          "command": "pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/orca-runtime.test.ts src/main/runtime/rpc/terminal-send.test.ts src/main/ipc/pty.test.ts src/main/providers/agent-foreground-process.test.ts src/main/providers/local-pty-provider.test.ts src/main/providers/windows-conpty-process-membership.test.ts src/main/daemon/daemon-foreground-confirmation-protocol.test.ts src/main/daemon/pty-subprocess.test.ts src/renderer/src/lib/active-agent-note-send.test.ts src/renderer/src/components/browser-pane/BrowserAnnotationSendMenuContent.test.tsx",
+          "result": "passed",
+          "durationSeconds": 9.58,
+          "summary": "Ten focused test files passed (1183 tests), covering runtime confirmation and PTY revalidation, guarded RPC zero-write behavior, PTY controller routing, local/daemon fresh scans, exact ConPTY membership, and unchanged renderer note routing."
+        }
+      ],
+      "runtimeBudget": {
+        "p95Seconds": 45,
+        "scope": "focused runtime, RPC, PTY provider, and renderer routing units"
+      },
+      "flakeHistory": {
+        "status": "unknown",
+        "evidence": "Deterministic units have local coverage only; promotion requires repeated CI and platform history."
+      },
+      "redGreenEvidence": {
+        "status": "partial",
+        "evidence": "Removing strong confirmation fails the shell-conflict success oracle, while removing either exact-binding comparison fails zero-write rebind coverage; saved intentional-break and physical Windows evidence remain missing."
+      },
+      "performanceBudget": {
+        "required": true,
+        "evidence": "Confirmation is invoked at most once per status evaluation and only for fresh explicit hook state whose ordinary foreground result is a shell. Count tests prove permission/title blockers and ordinary recognized-agent evidence add zero confirmations; no polling, retry, session listing, provider fanout, or runtime-global cache is added, and existing provider snapshot dedup remains authoritative."
+      },
+      "promotionCriteria": [
+        "Run the browser annotation existing-agent and repeat-send path in Electron on Windows ConPTY without a recognition refusal.",
+        "Collect stable CI and flake history across local and daemon providers on Windows plus representative macOS/Linux coverage.",
+        "Attach saved intentional-break evidence for confirmation removal and exact-PTY revalidation removal."
+      ],
+      "knownGaps": [
+        "Physical Windows validation is unavailable on the current macOS host; exact ConPTY membership is covered deterministically.",
+        "Electron annotation golden-path, repeat-send, adjacent-menu evidence, and screenshots are left to coordinator validation.",
+        "SSH, WSL, legacy daemon, and remote-runtime providers without confirmation remain intentionally fail-closed on an ordinary-shell conflict; no live artifacts cover those degraded paths.",
+        "No live Linux PTY, paired-web, mobile/relay, restore/replay, or multi-window artifact is attached; those surfaces receive no renderer, persistence, or protocol change."
+      ],
+      "demotionRule": "Keep non-blocking or demote to protection none if provider confirmation becomes unconditional, exact-PTY mismatch can write bytes, unsupported providers fail open, or the focused gate flakes without an actionable product or harness defect."
     },
     {
       "id": "terminal-input.agent-prompt-injection",
@@ -2412,6 +3003,151 @@
         "No startup color-query contract is wired."
       ],
       "demotionRule": "Cannot promote if success is based only on absence of visible artifacts."
+    },
+    {
+      "id": "terminal-query.mobile-view-authority",
+      "title": "Mobile xterm answers live terminal queries exactly once without replay or floor side effects",
+      "maturity": "experimental",
+      "protection": "partial",
+      "owner": "terminal-runtime",
+      "layer": "mobile-runtime-rpc-contract",
+      "surfaces": [
+        "mobile terminal WebView",
+        "terminal query authority",
+        "runtime RPC",
+        "mobile subscription replay",
+        "multi-mobile input floor"
+      ],
+      "platforms": [
+        "macos",
+        "linux",
+        "windows",
+        "mobile"
+      ],
+      "providers": [
+        "local",
+        "daemon",
+        "ssh",
+        "remote-runtime"
+      ],
+      "coveredPlatforms": [
+        "macos"
+      ],
+      "coveredProviders": [],
+      "coverageNotes": "Deterministic local tests execute the exact injected mobile replay/generation gate, the React Native query classifier, stale-subscription sender, server-side single-responder election, query-reply RPC semantics, and live-output capture during async mobile fit. The provider write path is shared, but no live iOS/Android, SSH, WSL, or multi-device run is registered yet.",
+      "motivatingLinks": [
+        "https://github.com/stablyai/orca/issues/8128",
+        "https://github.com/stablyai/orca/pull/8206"
+      ],
+      "invariant": "Snapshot and replacement-terminal replay answer no terminal queries; every live query delivered to subscribed mobile views has at most one current responder; a live query queued behind replay is answered after the replay boundary; terminal-generated replies never transfer the user-input floor.",
+      "oracle": "The injected gate emits zero replies during replay, exactly one after its live boundary, and ignores a superseded generation; native routing rejects ordinary input; the sender rejects disconnected or unsubscribed handles; runtime election accepts only the earliest active mobile subscriber and promotes its survivor; terminal.send writes only validated query grammar without mobileTookFloor; legacy binary subscribe captures a query while phone-fit is still pending and emits it after the snapshot.",
+      "commands": [
+        "pnpm --dir mobile exec vitest run --root .. mobile/src/terminal/terminal-webview-query-reply.test.ts mobile/src/terminal/terminal-webview-query-reply-routing.test.ts mobile/src/terminal/mobile-terminal-query-reply.test.ts",
+        "pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/rpc/terminal-send.test.ts src/main/runtime/rpc/terminal-subscribe-buffer.test.ts src/main/runtime/mobile-presence-lock.test.ts src/shared/terminal-query-reply.test.ts src/shared/terminal-reply-query-scan.test.ts",
+        "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/terminal-pane/pty-connection.test.ts"
+      ],
+      "testFiles": [
+        "mobile/src/terminal/terminal-webview-query-reply.test.ts",
+        "mobile/src/terminal/terminal-webview-query-reply-routing.test.ts",
+        "mobile/src/terminal/mobile-terminal-query-reply.test.ts",
+        "src/main/runtime/rpc/terminal-send.test.ts",
+        "src/main/runtime/rpc/terminal-subscribe-buffer.test.ts",
+        "src/main/runtime/mobile-presence-lock.test.ts",
+        "src/shared/terminal-query-reply.test.ts",
+        "src/shared/terminal-reply-query-scan.test.ts",
+        "src/renderer/src/components/terminal-pane/pty-connection.test.ts"
+      ],
+      "assertionRefs": [
+        {
+          "file": "mobile/src/terminal/terminal-webview-query-reply.test.ts",
+          "assertions": [
+            "snapshot replay emits no terminal-data message before the replay boundary",
+            "a live query after the boundary emits exactly one terminal-data message",
+            "a superseded terminal generation cannot regain reply authority",
+            "xterm parser replies remain enabled while its DOM textarea and hardware-key path stay inert"
+          ]
+        },
+        {
+          "file": "src/main/runtime/rpc/terminal-send.test.ts",
+          "assertions": [
+            "only the elected mobile subscriber can write a claimed query reply",
+            "valid replies skip mobileTookFloor",
+            "ordinary bytes and reply payloads combined with enter, interrupt, or guarded-send semantics are rejected"
+          ]
+        },
+        {
+          "file": "src/main/runtime/rpc/terminal-subscribe-buffer.test.ts",
+          "assertions": [
+            "live terminal data and view authority register before asynchronous mobile fit",
+            "a query received during that await is retained and emitted after the snapshot"
+          ]
+        },
+        {
+          "file": "src/renderer/src/components/terminal-pane/pty-connection.test.ts",
+          "assertions": [
+            "desktop xterm onData replies are dropped while mobile owns the terminal driver",
+            "desktop capability-handler replies outside onData honor the same mobile authority lock"
+          ]
+        }
+      ],
+      "evidenceRuns": [
+        {
+          "date": "2026-07-10",
+          "runner": "local",
+          "platform": "macos",
+          "command": "pnpm --dir mobile exec vitest run --root .. mobile/src/terminal/terminal-webview-query-reply.test.ts mobile/src/terminal/terminal-webview-query-reply-routing.test.ts mobile/src/terminal/mobile-terminal-query-reply.test.ts",
+          "result": "passed",
+          "durationSeconds": 1,
+          "summary": "10 mobile bridge, routing, replay/generation, and stale-subscription tests passed. Before implementation, the WebView listener, native route, and sender tests failed."
+        },
+        {
+          "date": "2026-07-10",
+          "runner": "local",
+          "platform": "macos",
+          "command": "pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/rpc/terminal-send.test.ts src/main/runtime/rpc/terminal-subscribe-buffer.test.ts src/main/runtime/mobile-presence-lock.test.ts src/shared/terminal-query-reply.test.ts src/shared/terminal-reply-query-scan.test.ts",
+          "result": "passed",
+          "durationSeconds": 4,
+          "summary": "69 shared/runtime tests passed. Before implementation, terminal.send took the floor for claimed replies and accepted ordinary claimed bytes."
+        },
+        {
+          "date": "2026-07-10",
+          "runner": "local",
+          "platform": "macos",
+          "command": "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/terminal-pane/pty-connection.test.ts",
+          "result": "passed",
+          "durationSeconds": 11,
+          "summary": "421 renderer terminal connection tests passed, including desktop onData and capability-handler suppression while mobile owns query authority."
+        }
+      ],
+      "runtimeBudget": {
+        "p95Seconds": 20,
+        "scope": "mobile and runtime deterministic unit gate"
+      },
+      "flakeHistory": {
+        "status": "unknown",
+        "evidence": "New deterministic gate; no soak history yet. Tests use no timing sleeps or external services."
+      },
+      "redGreenEvidence": {
+        "status": "partial",
+        "evidence": "Observed red before implementation for the missing WebView listener/native route/sender and for RPC floor-taking plus unvalidated claims; all are green after the fix. The later multi-mobile and pre-fit race assertions have green deterministic coverage but no saved intentional-break artifact yet."
+      },
+      "performanceBudget": {
+        "required": true,
+        "evidence": "No polling, scans, timers, or output fanout were added. The WebView adds one disposable onData listener; native/RPC work occurs only for xterm data and is grammar-filtered; responder election is O(1) from Map insertion order; pre-fit output uses the existing capped pending-output queue."
+      },
+      "promotionCriteria": [
+        "Attach an intentional-break artifact for the pre-fit capture and multi-mobile election assertions.",
+        "Run live iOS and Android WebViews against a real querying TUI and verify no software-keyboard regression.",
+        "Exercise two physical/virtual mobile clients on one PTY and observe one reply per query.",
+        "Accumulate the normal soak window with zero unexplained flakes."
+      ],
+      "knownGaps": [
+        "No live iOS or Android WebView run is registered.",
+        "No real SSH, WSL, daemon, or two-device provider-contract run is registered.",
+        "Mixed-version pairing is gated by the terminal.query-reply-input.v1 capability (mobile drops replies unless the host advertises it), but no live old-binary pairing run is registered.",
+        "A desktop-to-mobile driver handoff has a bounded double-reply window: the server elects the mobile responder synchronously while the desktop renderer's cached driver map updates via an async event, so an in-flight query can be answered by both until the driver-change event lands."
+      ],
+      "demotionRule": "Keep experimental or disable mobile forwarding if the gate flakes without a product bug, live WebView input isolation regresses, or duplicate replies appear under multi-mobile use."
     },
     {
       "id": "terminal-runtime.mobile-stream-budget",

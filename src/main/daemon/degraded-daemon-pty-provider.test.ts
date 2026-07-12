@@ -37,6 +37,7 @@ function createProvider(label: string, sessions: string[] = []): ProviderMock {
     acknowledgeDataEvent: vi.fn(),
     hasChildProcesses: vi.fn(async () => false),
     getForegroundProcess: vi.fn(async () => null),
+    confirmForegroundProcess: vi.fn(async () => `${label}-confirmed`),
     serialize: vi.fn(async () => '{}'),
     revive: vi.fn(async () => {}),
     listProcesses: vi.fn(async () => sessions.map((id) => ({ id, cwd: '', title: label }))),
@@ -108,6 +109,19 @@ function createDaemonAdapter(
 }
 
 describe('DegradedDaemonPtyProvider', () => {
+  it('routes fresh foreground confirmation to the session owner', async () => {
+    const current = createDaemonAdapter('daemon', ['daemon-session'])
+    const fallback = createProvider('fallback')
+    const provider = new DegradedDaemonPtyProvider({ current, legacy: [], fallback })
+    await provider.discoverDaemonSessions()
+    const fresh = await provider.spawn({ cols: 80, rows: 24 })
+
+    await expect(provider.confirmForegroundProcess('daemon-session')).resolves.toBe(
+      'daemon-confirmed'
+    )
+    await expect(provider.confirmForegroundProcess(fresh.id)).resolves.toBe('fallback-confirmed')
+  })
+
   it('routes discovered daemon sessions to the daemon and fresh PTYs to the fallback', async () => {
     const current = createDaemonAdapter('daemon', ['daemon-session'])
     const fallback = createProvider('fallback')

@@ -1026,6 +1026,27 @@
   color: #58a6ff;
 }
 
+.rich-markdown-editor sup[data-rich-markdown-html-superscript-link] {
+  line-height: 0;
+}
+
+.rich-markdown-editor .rich-markdown-html-superscript-link {
+  color: #0969da;
+  text-decoration: underline;
+  text-decoration-color: color-mix(in srgb, currentColor 40%, transparent);
+  text-underline-offset: 2px;
+}
+
+.dark .rich-markdown-editor .rich-markdown-html-superscript-link {
+  color: #58a6ff;
+}
+
+.rich-markdown-mod-held
+  .rich-markdown-editor
+  .rich-markdown-html-superscript-link[data-actionable] {
+  cursor: pointer;
+}
+
 .rich-markdown-editor img {
   max-width: 100%;
   border-radius: 8px;

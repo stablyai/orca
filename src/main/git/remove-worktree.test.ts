@@ -24,7 +24,8 @@ vi.mock('./runner', () => ({
 }))
 
 vi.mock('./status', () => ({
-  resolveGitDir: resolveGitDirMock
+  resolveGitDir: resolveGitDirMock,
+  runWithGitReadCacheInvalidation: <T>(run: () => Promise<T>) => run()
 }))
 
 vi.mock('fs/promises', async () => {

@@ -12,6 +12,7 @@ import type {
   GitStagingArea,
   GitUpstreamStatus,
   GitWorktreeInfo,
+  TuiAgent,
   RemoveWorktreeResult,
   SearchOptions,
   SearchResult
@@ -62,6 +63,8 @@ export type PtySpawnOptions = {
   command?: string
   commandDelivery?: 'renderer' | 'provider'
   startupCommandDelivery?: StartupCommandDelivery
+  /** Minimal allowlisted launch ownership preserved by daemon reattach. */
+  launchAgent?: TuiAgent
   /** Orca worktree identity. When present, the local provider scopes shell
    *  history to this worktree so ArrowUp only surfaces local commands. */
   worktreeId?: string
@@ -105,6 +108,8 @@ export type PtySpawnResult = {
    *  local providers read it from node-pty. Null when the underlying
    *  provider could not publish a pid (e.g., race during spawn). */
   pid?: number | null
+  /** Minimal allowlisted launch ownership returned by daemon reattach. */
+  launchAgent?: TuiAgent
   /** ANSI snapshot of the terminal screen, present when reattaching to an
    *  existing daemon session. Write this to xterm.js to restore visual state. */
   snapshot?: string
@@ -204,6 +209,8 @@ export type IPtyProvider = {
   acknowledgeDataEvent(id: string, charCount: number): void
   hasChildProcesses(id: string): Promise<boolean>
   getForegroundProcess(id: string): Promise<string | null>
+  /** Strong process evidence captured after the caller's command boundary. */
+  confirmForegroundProcess?: (id: string) => Promise<string | null>
   serialize(ids: string[]): Promise<string>
   revive(state: string): Promise<void>
   listProcesses(): Promise<PtyProcessInfo[]>
@@ -243,6 +250,7 @@ export type IFilesystemProvider = {
     options: TerminalArtifactAccessOptions
   ): Promise<FileReadResult>
   downloadFile?(sourcePath: string, destinationPath: string): Promise<void>
+  openFileUploadSession?(): Promise<FileUploadSession>
   getTempDir?(): Promise<string>
   writeFile(filePath: string, content: string): Promise<void>
   writeTerminalArtifact?(
@@ -272,6 +280,15 @@ export type IFilesystemProvider = {
     options?: { signal?: AbortSignal }
   ): Promise<WorkspaceSpaceDirectoryScanResult>
   watch(rootPath: string, callback: (events: FsChangeEvent[]) => void): Promise<() => void>
+}
+
+export type FileUploadSession = {
+  uploadFile(
+    sourcePath: string,
+    destinationPath: string,
+    options?: { exclusive?: boolean }
+  ): Promise<void>
+  close(): void
 }
 
 export type TerminalArtifactAccessOptions = {

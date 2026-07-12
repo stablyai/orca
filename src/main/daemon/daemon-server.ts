@@ -22,6 +22,7 @@ import { readCurrentProcessMacSystemResolverHealth } from '../network/macos-syst
 import type { SubprocessHandle } from './session'
 import { checkPtySpawnHealth } from './pty-subprocess'
 import { createNoopDaemonFileLog, type DaemonFileLog } from './daemon-file-log'
+import { isTuiAgent } from '../../shared/tui-agent-config'
 import {
   PROTOCOL_VERSION,
   NOTIFY_PREFIX,
@@ -341,6 +342,9 @@ export class DaemonServer {
           envToDelete: p.envToDelete,
           command: p.command,
           startupCommandDelivery: p.startupCommandDelivery,
+          // Why: daemon RPC payloads are untrusted JSON. Persist only the
+          // allowlisted enum used for byte routing, never arbitrary identity.
+          ...(isTuiAgent(p.launchAgent) ? { launchAgent: p.launchAgent } : {}),
           shellOverride: p.shellOverride,
           terminalWindowsWslDistro: p.terminalWindowsWslDistro,
           terminalWindowsPowerShellImplementation: p.terminalWindowsPowerShellImplementation,
@@ -406,6 +410,7 @@ export class DaemonServer {
           snapshot: result.snapshot,
           pid: result.pid,
           shellState: result.shellState,
+          ...(result.launchAgent ? { launchAgent: result.launchAgent } : {}),
           ...(result.historySeeded !== undefined ? { historySeeded: result.historySeeded } : {})
         }
       }
@@ -511,6 +516,11 @@ export class DaemonServer {
 
       case 'getForegroundProcess':
         return { foregroundProcess: this.host.getForegroundProcess(request.payload.sessionId) }
+
+      case 'confirmForegroundProcess':
+        return {
+          foregroundProcess: await this.host.confirmForegroundProcess(request.payload.sessionId)
+        }
 
       case 'clearScrollback':
         this.host.clearScrollback(request.payload.sessionId)

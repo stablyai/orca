@@ -30,6 +30,7 @@ import {
   removeWorktree
 } from '../git/worktree'
 import * as gitRunner from '../git/runner'
+import { clearSubmodulePathsCacheForTests, listSubmodulePaths } from '../git/status'
 import {
   createSetupRunnerScript,
   getEffectiveHooks,
@@ -41,7 +42,7 @@ import {
   runHook,
   shouldRunSetupForCreate
 } from '../hooks'
-import { getBranchConflictKind, getDefaultBaseRef } from '../git/repo'
+import { getBaseRefDefault, getBranchConflictKind } from '../git/repo'
 import type { OrchestrationDb } from './orchestration/db'
 import type { MessagePriority, MessageRow, MessageType } from './orchestration/types'
 import {
@@ -91,6 +92,7 @@ import { TERMINAL_METHODS } from './rpc/methods/terminal'
 const ORIGINAL_PLATFORM = process.platform
 const ORIGINAL_PLATFORM_DESCRIPTOR = Object.getOwnPropertyDescriptor(process, 'platform')
 const removeWorktreeLinkedPathsMock = vi.hoisted(() => vi.fn())
+const resolveLocalGitUsernameMock = vi.hoisted(() => vi.fn(async () => ''))
 
 vi.mock('../ipc/worktree-symlinks', () => ({
   createWorktreeLinkedPaths: vi.fn(),
@@ -516,23 +518,30 @@ vi.mock('../github/issues', async (importOriginal) => {
   }
 })
 
-// Why: the CLI create-worktree path calls getDefaultBaseRef to resolve a
-// fallback base branch. Real resolution shells out to `git` against the
-// test's fabricated repo path, which has no refs, so we stub it to a
-// predictable 'origin/main'. The runtime no longer silently fabricates this
-// default, so tests that want the legacy behavior must express it via the mock.
+// Why: CLI worktree creation resolves a default against fabricated repo paths
+// in these tests, so keep the async resolver deterministic.
 vi.mock('../git/repo', async (importOriginal) => {
   const actual = (await importOriginal()) as Record<string, unknown>
+  const actualGetBaseRefDefault = actual.getBaseRefDefault as (
+    path: string,
+    options?: { wslDistro?: string }
+  ) => Promise<string | null>
   return {
     ...actual,
-    getDefaultBaseRef: vi.fn().mockReturnValue('origin/main'),
+    // Why: fabricated local test repos need a deterministic default, while
+    // WSL coverage must still exercise the real async Git-options path.
+    getBaseRefDefault: vi
+      .fn()
+      .mockImplementation((path: string, options?: { wslDistro?: string }) =>
+        options?.wslDistro ? actualGetBaseRefDefault(path, options) : Promise.resolve('origin/main')
+      ),
     getBranchConflictKind: vi.fn().mockResolvedValue(null)
   }
 })
 
 vi.mock('../git/git-username', async () => {
   const actual = await vi.importActual<typeof GitUsernameModule>('../git/git-username')
-  return { ...actual, resolveLocalGitUsername: vi.fn(async () => '') }
+  return { ...actual, resolveLocalGitUsername: resolveLocalGitUsernameMock }
 })
 
 function resetRuntimeTestMocks(): void {
@@ -552,6 +561,7 @@ function resetRuntimeTestMocks(): void {
   vi.mocked(assertWorktreeCleanForRemoval).mockResolvedValue(undefined)
   vi.mocked(removeWorktree).mockReset()
   removeWorktreeLinkedPathsMock.mockReset()
+  resolveLocalGitUsernameMock.mockReset().mockResolvedValue('')
   vi.mocked(forceDeleteLocalBranchMock).mockReset()
   vi.mocked(forceDeleteLocalBranchMock).mockResolvedValue(undefined)
   sshGitProviders.clear()
@@ -874,6 +884,32 @@ function antigravityPromptBeforeModelReadyScreen(model = 'Gemini 3.5 Flash (High
   ].join('\n')
 }
 
+// Why: verbatim shape of a real cursor-agent 2026.07 idle screen. The fresh
+// input prompt is "→ Plan, search, build anything" (not "→ Add a follow-up",
+// which only appears after the first turn), so the matcher keys on the "→"
+// glyph, not a specific placeholder.
+function cursorReadyScreen(): string {
+  return [
+    'Cursor Agent',
+    'v2026.07.09-a3815c0',
+    'Tip: Use /plan to plan execution and reach the right outcome faster.',
+    '→ Plan, search, build anything',
+    'Composer 2.5 Fast                                          Run Everything',
+    '~/Documents/projects/AutoGenie · main'
+  ].join('\n')
+}
+
+function cursorBusyScreen(): string {
+  return [
+    'Cursor Agent',
+    'v2026.07.09-a3815c0',
+    '⠰⠳ Thinking  28.61k tokens',
+    '→ Plan, search, build anything',
+    'Composer 2.5 Fast                                          Run Everything',
+    '~/Documents/projects/AutoGenie · main'
+  ].join('\n')
+}
+
 // Why: these runtime feature tests only need message-queue semantics; using
 // SQLite here makes them fail on unrelated native runtime ABI drift.
 class InMemoryOrchestrationMessages {
@@ -907,7 +943,8 @@ class InMemoryOrchestrationMessages {
       read: 0,
       sequence: this.sequence,
       created_at: '1970-01-01 00:00:00',
-      delivered_at: null
+      delivered_at: null,
+      sender_pane_key: null
     }
     this.messages.push(row)
     return row
@@ -1138,6 +1175,67 @@ const store = {
     branchPrefixCustom: ''
   }),
   getProjects: () => []
+}
+
+async function createExplicitAgentStatusHarness(options: {
+  getForegroundProcess: (ptyId: string) => Promise<string | null>
+  confirmForegroundProcess?: (ptyId: string) => Promise<string | null>
+  title?: string
+}): Promise<{
+  runtime: OrcaRuntimeService
+  handle: string
+  syncPty: (ptyId: string | null) => void
+}> {
+  const leafId = '11111111-1111-4111-8111-111111111111'
+  const paneKey = makePaneKey('tab-1', leafId)
+  const runtime = new OrcaRuntimeService(store, undefined, {
+    getAgentStatusSnapshot: () => [
+      {
+        paneKey,
+        state: 'working',
+        prompt: '',
+        agentType: 'codex',
+        connectionId: null,
+        receivedAt: Date.now(),
+        stateStartedAt: Date.now(),
+        tabId: 'tab-1',
+        worktreeId: TEST_WORKTREE_ID
+      }
+    ]
+  })
+  runtime.setPtyController({
+    spawn: vi.fn().mockResolvedValue({ id: 'pty-1' }),
+    write: () => true,
+    kill: () => true,
+    getForegroundProcess: options.getForegroundProcess,
+    confirmForegroundProcess: options.confirmForegroundProcess
+  })
+  runtime.attachWindow(1)
+  const syncPty = (ptyId: string | null): void => {
+    runtime.syncWindowGraph(1, {
+      tabs: [
+        {
+          tabId: 'tab-1',
+          worktreeId: TEST_WORKTREE_ID,
+          title: options.title ?? 'repo terminal',
+          activeLeafId: leafId,
+          layout: null
+        }
+      ],
+      leaves: [
+        {
+          tabId: 'tab-1',
+          worktreeId: TEST_WORKTREE_ID,
+          leafId,
+          paneRuntimeId: 1,
+          ptyId
+        }
+      ]
+    })
+  }
+  syncPty('pty-1')
+  const [terminal] = (await runtime.listTerminals()).terminals
+  return { runtime, handle: terminal.handle, syncPty }
 }
 
 function makeHeadlessTerminalLayout(
@@ -1372,6 +1470,7 @@ describe('OrcaRuntimeService', () => {
     expect(status.capabilities).toContain('workspace-ports.v1')
     expect(status.capabilities).toContain('mobile.tasks.v1')
     expect(status.capabilities).toContain('project-host-setup.v1')
+    expect(status.capabilities).toContain('linear.issue-attribute-filter.v1')
     expect(status.capabilities).not.toContain('browser.screencast.v1')
     expect(typeof status.protocolVersion).toBe('number')
     expect(typeof status.minCompatibleMobileVersion).toBe('number')
@@ -2159,6 +2258,20 @@ describe('OrcaRuntimeService', () => {
     expect(internals.ptysById.has('cwd-only-pty')).toBe(false)
   })
 
+  it('keeps unknown bare terminal-list ids on the no-scan exact-id path', async () => {
+    vi.mocked(listWorktrees).mockClear()
+    vi.mocked(listWorktrees).mockRejectedValue(
+      new Error('unknown explicit ids should not rescan worktrees')
+    )
+    const runtime = createRuntime()
+
+    await expect(runtime.listTerminals('id:not-a-repo')).resolves.toMatchObject({
+      terminals: [],
+      totalCount: 0
+    })
+    expect(listWorktrees).not.toHaveBeenCalled()
+  })
+
   it('matches explicit-id cwd PTYs for folder workspace instance IDs', async () => {
     const folderWorktreeId = `${TEST_REPO_ID}::${TEST_FOLDER_WORKSPACE_PATH}${FOLDER_WORKSPACE_INSTANCE_SEPARATOR}11111111-1111-4111-8111-111111111111`
     vi.mocked(listWorktrees).mockClear()
@@ -2481,11 +2594,98 @@ describe('OrcaRuntimeService', () => {
     ).rejects.toThrow('selector_not_found')
   })
 
+  it('guides bare repo-id worktree selectors to the full id shape', async () => {
+    vi.mocked(listWorktrees).mockClear()
+    vi.mocked(listWorktrees).mockRejectedValue(new Error('bare repo ids should not scan worktrees'))
+    const runtime = new OrcaRuntimeService(store)
+
+    await expect(runtime.showManagedWorktree(`id:${TEST_REPO_ID}`)).rejects.toThrow(
+      'Worktree id selectors must use the full <repo-id>::<path> value.'
+    )
+    expect(listWorktrees).not.toHaveBeenCalled()
+  })
+
+  it('guides registered SSH repo ids without probing the provider', async () => {
+    const remoteRepo = { ...store.getRepos()[0], connectionId: 'ssh-1' }
+    const remoteStore = {
+      ...store,
+      getRepos: () => [remoteRepo],
+      getRepo: (id: string) => (id === remoteRepo.id ? remoteRepo : undefined)
+    }
+    vi.mocked(listWorktrees).mockClear()
+    getSshGitProviderMock.mockClear()
+    const runtime = new OrcaRuntimeService(remoteStore)
+
+    await expect(runtime.showManagedWorktree(`id:${TEST_REPO_ID}`)).rejects.toMatchObject({
+      code: 'worktree_id_requires_full_path'
+    })
+    expect(listWorktrees).not.toHaveBeenCalled()
+    expect(getSshGitProviderMock).not.toHaveBeenCalled()
+  })
+
+  it('rejects bare repo ids through terminal list RPC with the structured code', async () => {
+    vi.mocked(listWorktrees).mockClear()
+    const runtime = new OrcaRuntimeService(store)
+    const dispatcher = new RpcDispatcher({ runtime, methods: TERMINAL_METHODS })
+
+    const response = await dispatcher.dispatch(
+      makeRpcRequest('terminal.list', { worktree: `id:${TEST_REPO_ID}` })
+    )
+
+    expect(response).toMatchObject({
+      ok: false,
+      error: {
+        code: 'worktree_id_requires_full_path',
+        message: expect.stringContaining('full <repo-id>::<path> value')
+      }
+    })
+    expect(listWorktrees).not.toHaveBeenCalled()
+  })
+
+  it('rejects bare repo ids through the mobile session exact-id fast path', async () => {
+    vi.mocked(listWorktrees).mockClear()
+    const runtime = new OrcaRuntimeService(store)
+
+    await expect(runtime.listMobileSessionTabs(`id:${TEST_REPO_ID}`)).rejects.toMatchObject({
+      code: 'worktree_id_requires_full_path'
+    })
+    expect(listWorktrees).not.toHaveBeenCalled()
+  })
+
+  it('still resolves the full worktree id selector', async () => {
+    const runtime = new OrcaRuntimeService(store)
+
+    await expect(runtime.showManagedWorktree(`id:${TEST_WORKTREE_ID}`)).resolves.toMatchObject({
+      id: TEST_WORKTREE_ID
+    })
+  })
+
   it('still throws selector_not_found for an unknown id selector', async () => {
     const runtime = new OrcaRuntimeService(store)
 
     await expect(runtime.showManagedWorktree('id:does-not-exist')).rejects.toThrow(
       'selector_not_found'
+    )
+  })
+
+  it('still throws selector_not_found for unknown bare ids', async () => {
+    const runtime = new OrcaRuntimeService(store)
+
+    await expect(runtime.showManagedWorktree('id:not-a-repo')).rejects.toThrow('selector_not_found')
+  })
+
+  it('does not treat partial repo ids as full worktree ids', async () => {
+    const runtime = new OrcaRuntimeService(store)
+
+    await expect(runtime.showManagedWorktree('id:repo')).rejects.toThrow('selector_not_found')
+  })
+
+  it('preserves full-id guidance for explicit parent-worktree lineage selectors', async () => {
+    const runtime = new OrcaRuntimeService(store)
+    const resolveLineage = runtime['resolveLineageForWorktreeCreate'].bind(runtime)
+
+    await expect(resolveLineage({ parentWorktree: `id:${TEST_REPO_ID}` })).rejects.toThrow(
+      'Worktree id selectors must use the full <repo-id>::<path> value.'
     )
   })
 
@@ -2824,7 +3024,7 @@ describe('OrcaRuntimeService', () => {
           suggestLocalBaseRefUpdate: true
         }
       )
-      expect(getDefaultBaseRef).toHaveBeenCalled()
+      expect(getBaseRefDefault).toHaveBeenCalled()
     } finally {
       getReposSpy.mockRestore()
       gitSpy.mockRestore()
@@ -3021,6 +3221,7 @@ describe('OrcaRuntimeService', () => {
       'origin/feature/something',
       false
     )
+    expect(resolveLocalGitUsernameMock).not.toHaveBeenCalled()
     expect(result.worktree).toMatchObject({
       path: '/tmp/workspaces/feature-something',
       branch: 'feature/something'
@@ -5329,7 +5530,7 @@ describe('OrcaRuntimeService', () => {
 
   it('treats SSH worktree drift as unknown without local git probes', async () => {
     vi.mocked(listWorktrees).mockClear()
-    vi.mocked(getDefaultBaseRef).mockClear()
+    vi.mocked(getBaseRefDefault).mockClear()
     const remoteStore = {
       ...store,
       getRepos: () => [
@@ -5365,7 +5566,7 @@ describe('OrcaRuntimeService', () => {
     }
 
     expect(gitProvider.listWorktrees).toHaveBeenCalledWith('/remote/repo')
-    expect(getDefaultBaseRef).not.toHaveBeenCalled()
+    expect(getBaseRefDefault).not.toHaveBeenCalled()
     expect(listWorktrees).not.toHaveBeenCalled()
   })
 
@@ -5431,7 +5632,7 @@ describe('OrcaRuntimeService', () => {
       })
       expect(asyncGitSpy).toHaveBeenCalledWith(
         ['symbolic-ref', '--quiet', 'refs/remotes/origin/HEAD'],
-        wslGitOptions
+        { ...wslGitOptions, timeout: 15_000 }
       )
       expect(asyncGitSpy).toHaveBeenCalledWith(['remote'], wslGitOptions)
       expect(asyncGitSpy).toHaveBeenCalledWith(
@@ -6149,6 +6350,43 @@ describe('OrcaRuntimeService', () => {
       expect(prepareLocalWorktreeRootForRepoMock).toHaveBeenCalledWith(colorStore, repo)
     } finally {
       spawnSpy.mockRestore()
+    }
+  })
+
+  it('drops a same-path negative submodule cache before runtime cloneRepo', async () => {
+    const spawnSpy = vi.spyOn(gitRunner, 'gitSpawn')
+    const destination = await mkdtemp(join(tmpdir(), 'orca-runtime-reclone-'))
+    const clonePath = join(destination, 'reclone')
+    const added: Record<string, unknown>[] = []
+    const cloneStore = {
+      ...store,
+      getRepos: () => [...added] as never,
+      addRepo: (repo: Record<string, unknown>) => added.push(repo),
+      getRepo: (id: string) => added.find((repo) => repo.id === id) as never
+    }
+    spawnSpy.mockImplementation(() => {
+      const proc = new EventEmitter() as EventEmitter & { stderr: EventEmitter }
+      proc.stderr = new EventEmitter()
+      queueMicrotask(() => {
+        void mkdir(clonePath, { recursive: true })
+          .then(() =>
+            writeFile(join(clonePath, '.gitmodules'), '[submodule "lib"]\n\tpath = vendor/lib\n')
+          )
+          .then(() => proc.emit('close', 0, null))
+      })
+      return proc as never
+    })
+    const runtime = new OrcaRuntimeService(cloneStore as never)
+
+    try {
+      clearSubmodulePathsCacheForTests()
+      await expect(listSubmodulePaths(clonePath)).resolves.toEqual([])
+      await runtime.cloneRepo('https://example.com/reclone.git', destination)
+      await expect(listSubmodulePaths(clonePath)).resolves.toEqual(['vendor/lib'])
+    } finally {
+      clearSubmodulePathsCacheForTests()
+      spawnSpy.mockRestore()
+      await rm(destination, { recursive: true, force: true })
     }
   })
 
@@ -8408,6 +8646,203 @@ describe('OrcaRuntimeService', () => {
     })
   })
 
+  it('uses strong provider confirmation to authorize fresh hook state over a shell foreground', async () => {
+    const getForegroundProcess = vi.fn(async () => 'powershell.exe')
+    const confirmForegroundProcess = vi.fn(async () => 'claude')
+    const { runtime, handle } = await createExplicitAgentStatusHarness({
+      getForegroundProcess,
+      confirmForegroundProcess
+    })
+
+    await expect(runtime.getTerminalAgentStatus(handle)).resolves.toEqual({
+      handle,
+      isRunningAgent: true,
+      status: 'working'
+    })
+    expect(getForegroundProcess).toHaveBeenCalledOnce()
+    expect(getForegroundProcess).toHaveBeenCalledWith('pty-1')
+    expect(confirmForegroundProcess).toHaveBeenCalledOnce()
+    expect(confirmForegroundProcess).toHaveBeenCalledWith('pty-1')
+  })
+
+  it('calls foreground confirmation with its controller receiver', async () => {
+    const getForegroundProcess = vi.fn(async () => 'powershell.exe')
+    const confirmForegroundProcess = vi.fn(
+      async function (this: { getForegroundProcess: typeof getForegroundProcess }) {
+        return this.getForegroundProcess === getForegroundProcess ? 'codex' : null
+      }
+    )
+    const { runtime, handle } = await createExplicitAgentStatusHarness({
+      getForegroundProcess,
+      confirmForegroundProcess
+    })
+
+    await expect(runtime.getTerminalAgentStatus(handle)).resolves.toMatchObject({
+      isRunningAgent: true,
+      status: 'working'
+    })
+    expect(confirmForegroundProcess).toHaveBeenCalledOnce()
+  })
+
+  it.each([
+    ['shell', async () => 'pwsh.exe'],
+    ['non-agent', async () => 'vim'],
+    ['unavailable', async () => null],
+    [
+      'failure',
+      async () => {
+        throw new Error('provider unavailable')
+      }
+    ]
+  ])('fails closed when shell-conflict confirmation returns %s', async (_case, confirm) => {
+    const confirmForegroundProcess = vi.fn(confirm)
+    const { runtime, handle } = await createExplicitAgentStatusHarness({
+      getForegroundProcess: async () => 'zsh',
+      confirmForegroundProcess
+    })
+
+    await expect(runtime.getTerminalAgentStatus(handle)).resolves.toEqual({
+      handle,
+      isRunningAgent: false,
+      status: null
+    })
+    expect(confirmForegroundProcess).toHaveBeenCalledOnce()
+  })
+
+  it('fails closed on a shell conflict when the controller cannot confirm it', async () => {
+    const { runtime, handle } = await createExplicitAgentStatusHarness({
+      getForegroundProcess: async () => 'zsh'
+    })
+
+    await expect(runtime.getTerminalAgentStatus(handle)).resolves.toEqual({
+      handle,
+      isRunningAgent: false,
+      status: null
+    })
+  })
+
+  it('skips strong confirmation when ordinary foreground evidence recognizes an agent', async () => {
+    const getForegroundProcess = vi.fn(async () => 'codex')
+    const confirmForegroundProcess = vi.fn(async () => 'codex')
+    const { runtime, handle } = await createExplicitAgentStatusHarness({
+      getForegroundProcess,
+      confirmForegroundProcess
+    })
+
+    await expect(runtime.getTerminalAgentStatus(handle)).resolves.toMatchObject({
+      isRunningAgent: true,
+      status: 'working'
+    })
+    expect(getForegroundProcess).toHaveBeenCalledOnce()
+    expect(confirmForegroundProcess).not.toHaveBeenCalled()
+  })
+
+  it('skips both foreground reads when current title evidence blocks explicit hook state', async () => {
+    const getForegroundProcess = vi.fn(async () => 'zsh')
+    const confirmForegroundProcess = vi.fn(async () => 'codex')
+    const { runtime, handle } = await createExplicitAgentStatusHarness({
+      getForegroundProcess,
+      confirmForegroundProcess,
+      title: 'zsh'
+    })
+
+    await expect(runtime.getTerminalAgentStatus(handle)).resolves.toMatchObject({
+      isRunningAgent: false,
+      status: null
+    })
+    expect(getForegroundProcess).not.toHaveBeenCalled()
+    expect(confirmForegroundProcess).not.toHaveBeenCalled()
+  })
+
+  it('skips foreground reads for permission title and blocked wait evidence', async () => {
+    for (const blocked of ['title', 'wait'] as const) {
+      const getForegroundProcess = vi.fn(async () => 'zsh')
+      const confirmForegroundProcess = vi.fn(async () => 'codex')
+      const { runtime, handle } = await createExplicitAgentStatusHarness({
+        getForegroundProcess,
+        confirmForegroundProcess
+      })
+      runtime.onPtyData(
+        'pty-1',
+        blocked === 'title'
+          ? '\x1b]0;Codex waiting for permission\x07'
+          : 'Hooks need review. Press enter to confirm\n',
+        Date.now() + 1000
+      )
+      getForegroundProcess.mockClear()
+      confirmForegroundProcess.mockClear()
+
+      await expect(runtime.getTerminalAgentStatus(handle)).resolves.toMatchObject({
+        isRunningAgent: true,
+        status: 'permission'
+      })
+      expect(getForegroundProcess).not.toHaveBeenCalled()
+      expect(confirmForegroundProcess).not.toHaveBeenCalled()
+    }
+  })
+
+  it('rejects foreground evidence when the handle rebinds during the ordinary read', async () => {
+    const foreground = deferred<string | null>()
+    const getForegroundProcess = vi.fn(() => foreground.promise)
+    const confirmForegroundProcess = vi.fn(async () => 'codex')
+    const { runtime, handle, syncPty } = await createExplicitAgentStatusHarness({
+      getForegroundProcess,
+      confirmForegroundProcess
+    })
+
+    const status = runtime.getTerminalAgentStatus(handle)
+    await vi.waitFor(() => expect(getForegroundProcess).toHaveBeenCalledWith('pty-1'))
+    syncPty('pty-2')
+    foreground.resolve('zsh')
+
+    await expect(status).rejects.toThrow('terminal_handle_stale')
+    expect(confirmForegroundProcess).not.toHaveBeenCalled()
+  })
+
+  it('rejects a handle rebind while a controller-less status check yields', async () => {
+    const { runtime, handle, syncPty } = await createExplicitAgentStatusHarness({
+      getForegroundProcess: async () => 'zsh'
+    })
+    runtime.setPtyController(null)
+
+    const status = runtime.getTerminalAgentStatus(handle)
+    syncPty('pty-2')
+
+    await expect(status).rejects.toThrow('terminal_handle_stale')
+  })
+
+  it('rejects confirmation evidence when the handle rebinds during the fresh read', async () => {
+    const confirmation = deferred<string | null>()
+    const confirmForegroundProcess = vi.fn(() => confirmation.promise)
+    const { runtime, handle, syncPty } = await createExplicitAgentStatusHarness({
+      getForegroundProcess: async () => 'powershell.exe',
+      confirmForegroundProcess
+    })
+
+    const status = runtime.getTerminalAgentStatus(handle)
+    await vi.waitFor(() => expect(confirmForegroundProcess).toHaveBeenCalledWith('pty-1'))
+    syncPty('pty-2')
+    confirmation.resolve('codex')
+
+    await expect(status).rejects.toThrow('terminal_handle_stale')
+  })
+
+  it('rejects confirmation evidence when the owning PTY exits', async () => {
+    const confirmation = deferred<string | null>()
+    const confirmForegroundProcess = vi.fn(() => confirmation.promise)
+    const { runtime, handle } = await createExplicitAgentStatusHarness({
+      getForegroundProcess: async () => 'powershell.exe',
+      confirmForegroundProcess
+    })
+
+    const status = runtime.getTerminalAgentStatus(handle)
+    await vi.waitFor(() => expect(confirmForegroundProcess).toHaveBeenCalledWith('pty-1'))
+    runtime.onPtyExit('pty-1', 0)
+    confirmation.resolve('codex')
+
+    await expect(status).rejects.toThrow('terminal_exited')
+  })
+
   it('reports permission from a title-derived action-required agent state', async () => {
     const runtime = new OrcaRuntimeService(store)
     runtime.setPtyController({
@@ -10522,6 +10957,72 @@ describe('OrcaRuntimeService', () => {
       status: 'running',
       blockedReason: 'codex-trust-workspace'
     })
+  })
+
+  it('resolves tui-idle for an idle Cursor lane past its dismissed trust dialog (#8210)', async () => {
+    const runtime = new OrcaRuntimeService(store)
+    runtime.setPtyController({
+      spawn: vi.fn().mockResolvedValue({ id: 'pty-bg' }),
+      write: () => true,
+      kill: () => true,
+      getForegroundProcess: async () => 'cursor-agent'
+    })
+    const { handle } = await runtime.createTerminal(`path:${TEST_WORKTREE_PATH}`)
+    // Cursor's dismissed trust dialog stays in the scrollback tail; the idle
+    // ready prompt after it must both clear the stale trust hit and satisfy idle.
+    runtime.onPtyData(
+      'pty-bg',
+      [
+        // Trust dialog body can mention "Cursor Agent" before the ready banner;
+        // lastIndexOf must pick the later banner, not this earlier hit.
+        'Cursor Agent\n',
+        '⚠ Workspace Trust Required\n',
+        'Do you trust the contents of this directory?\n',
+        '  ▶ [a] Trust this workspace\n',
+        '    [q] Quit\n',
+        cursorReadyScreen()
+      ].join(''),
+      Date.now()
+    )
+
+    await expect(
+      runtime.waitForTerminal(handle, { condition: 'tui-idle', timeoutMs: 1_000 })
+    ).resolves.toMatchObject({
+      handle,
+      condition: 'tui-idle',
+      satisfied: true,
+      status: 'running'
+    })
+  })
+
+  it('does not block a mid-run Cursor lane on its dismissed trust dialog (#8210)', async () => {
+    const runtime = new OrcaRuntimeService(store)
+    runtime.setPtyController({
+      spawn: vi.fn().mockResolvedValue({ id: 'pty-bg' }),
+      write: () => true,
+      kill: () => true,
+      getForegroundProcess: async () => 'cursor-agent'
+    })
+    const { handle } = await runtime.createTerminal(`path:${TEST_WORKTREE_PATH}`)
+    runtime.onPtyData(
+      'pty-bg',
+      [
+        // Same earlier "Cursor Agent" hit as the idle case — banner must win.
+        'Cursor Agent\n',
+        '⚠ Workspace Trust Required\n',
+        'Do you trust the contents of this directory?\n',
+        '  ▶ [a] Trust this workspace\n',
+        '    [q] Quit\n',
+        cursorBusyScreen()
+      ].join(''),
+      Date.now()
+    )
+
+    // Busy Cursor is neither blocked nor idle: the wait must keep polling, then
+    // time out honestly rather than return a stale trust block.
+    await expect(
+      runtime.waitForTerminal(handle, { condition: 'tui-idle', timeoutMs: 200 })
+    ).rejects.toThrow('timeout')
   })
 
   it('returns a blocked wait result for Codex cwd selection prompts', async () => {
@@ -26336,6 +26837,7 @@ describe('OrcaRuntimeService', () => {
       })
       expect(gitSpy).toHaveBeenCalledWith(['symbolic-ref', '--quiet', 'refs/remotes/origin/HEAD'], {
         cwd: TEST_REPO_PATH,
+        timeout: 15_000,
         wslDistro: 'Ubuntu'
       })
       expect(gitSpy).toHaveBeenCalledWith(
@@ -27003,6 +27505,7 @@ describe('OrcaRuntimeService', () => {
       })
       expect(gitSpy).toHaveBeenCalledWith(['symbolic-ref', '--quiet', 'refs/remotes/origin/HEAD'], {
         cwd: TEST_REPO_PATH,
+        timeout: 15_000,
         wslDistro: 'Ubuntu'
       })
       expect(getBranchConflictKind).toHaveBeenCalledWith(

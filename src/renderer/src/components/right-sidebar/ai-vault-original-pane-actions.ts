@@ -1,4 +1,4 @@
-import { useCallback } from 'react'
+import { useCallback, useMemo } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 import { toast } from 'sonner'
 import { activateTabAndFocusPane } from '@/lib/activate-tab-and-focus-pane'
@@ -7,10 +7,12 @@ import { useAppStore } from '@/store'
 import type { AgentStatusState } from '../../../../shared/agent-status-types'
 import type { AiVaultSession } from '../../../../shared/ai-vault-types'
 import { translate } from '@/i18n/i18n'
+import { findOriginalAiVaultSessionPane } from './ai-vault-original-pane'
 import {
-  findAiVaultSessionLiveState,
-  findOriginalAiVaultSessionPane
-} from './ai-vault-original-pane'
+  createLazyAiVaultOriginalPaneIndex,
+  findAiVaultSessionLiveStateInIndex,
+  findOriginalAiVaultSessionPaneInIndex
+} from './ai-vault-original-pane-index'
 
 export function useAiVaultOriginalPaneActions(): {
   getOriginalPaneTarget: (
@@ -29,15 +31,23 @@ export function useAiVaultOriginalPaneActions(): {
       terminalLayoutsByTabId: s.terminalLayoutsByTabId
     }))
   )
-
-  const getOriginalPaneTarget = useCallback(
-    (session: AiVaultSession) => findOriginalAiVaultSessionPane(originalPaneLookupState, session),
+  // Why: loading, filtered, or collapsed views may render no session rows.
+  // Build once on the first actual lookup, then share it across visible rows.
+  const getOriginalPaneIndex = useMemo(
+    () => createLazyAiVaultOriginalPaneIndex(originalPaneLookupState),
     [originalPaneLookupState]
   )
 
+  const getOriginalPaneTarget = useCallback(
+    (session: AiVaultSession) =>
+      findOriginalAiVaultSessionPaneInIndex(getOriginalPaneIndex(), session),
+    [getOriginalPaneIndex]
+  )
+
   const getSessionLiveState = useCallback(
-    (session: AiVaultSession) => findAiVaultSessionLiveState(originalPaneLookupState, session),
-    [originalPaneLookupState]
+    (session: AiVaultSession) =>
+      findAiVaultSessionLiveStateInIndex(getOriginalPaneIndex(), session),
+    [getOriginalPaneIndex]
   )
 
   const jumpToOriginalPane = useCallback((session: AiVaultSession): void => {

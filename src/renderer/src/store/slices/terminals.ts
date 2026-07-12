@@ -28,7 +28,11 @@ import {
 } from '../../../../shared/workspace-scope'
 import { deriveGeneratedTabTitle } from '../../../../shared/agent-tab-title'
 import { isDecorativeAgentTitleFrameChange } from '../../../../shared/agent-decorative-title-signature'
-import { parseLegacyNumericPaneKey, parsePaneKey } from '../../../../shared/stable-pane-id'
+import {
+  makePaneKey,
+  parseLegacyNumericPaneKey,
+  parsePaneKey
+} from '../../../../shared/stable-pane-id'
 import { isValidHostTerminalTabId, isValidTerminalTabId } from '../../../../shared/terminal-tab-id'
 import { getRepoIdFromWorktreeId, splitWorktreeId } from '../../../../shared/worktree-id'
 import { isWslUncPath } from '../../../../shared/wsl-paths'
@@ -647,6 +651,7 @@ export type TerminalSlice = {
   setTabCanExpandPane: (tabId: string, canExpand: boolean) => void
   setTabLayout: (tabId: string, layout: TerminalLayoutSnapshot | null) => void
   syncPaneDetachPtyOwnership: (args: {
+    detachedLeafId: string
     detachedPtyId: string | null
     sourceLayout: TerminalLayoutSnapshot
     sourceTabId: string
@@ -1183,13 +1188,18 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
   },
 
   closeTab: (tabId, opts) => {
+    let closingWorktreeId: string | null = null
     set((s) => {
       const next = { ...s.tabsByWorktree }
       let closingPtyId: string | null = null
       for (const wId of Object.keys(next)) {
         const before = next[wId]
-        if (!closingPtyId) {
-          closingPtyId = before.find((t) => t.id === tabId)?.ptyId ?? null
+        const closingTab = before.find((t) => t.id === tabId)
+        if (closingTab) {
+          closingWorktreeId = wId
+          if (!closingPtyId) {
+            closingPtyId = closingTab.ptyId ?? null
+          }
         }
         const after = before.filter((t) => t.id !== tabId)
         if (after.length !== before.length) {
@@ -1340,7 +1350,13 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
     // too. Use dropAgentStatusByTabPrefix (not removeAgentStatusByTabPrefix)
     // so retention suppressors are planted: a live→gone transition inside the
     // same frame as the tab close cannot re-snapshot a row we just dropped.
-    get().dropAgentStatusByTabPrefix(tabId)
+    // Why: Pi can leave a completed row attributed to the worktree but keyed
+    // under an already-missing tab id; pass the worktree to sweep only that
+    // completed orphan while preserving active pre-render child rows.
+    get().dropAgentStatusByTabPrefix(
+      tabId,
+      closingWorktreeId ? { worktreeId: closingWorktreeId } : undefined
+    )
     // Why: retired pane keys never recur, so stranded foreground entries would
     // accumulate for the renderer's whole lifetime.
     get().clearPaneForegroundAgentByTabPrefix(tabId)
@@ -2710,7 +2726,13 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
     })
   },
 
-  syncPaneDetachPtyOwnership: ({ detachedPtyId, sourceLayout, sourceTabId, targetTabId }) => {
+  syncPaneDetachPtyOwnership: ({
+    detachedLeafId,
+    detachedPtyId,
+    sourceLayout,
+    sourceTabId,
+    targetTabId
+  }) => {
     set((s) => {
       const layoutSourcePtyIds = uniquePtyIds(Object.values(sourceLayout.ptyIdsByLeafId ?? {}))
       const existingSourcePtyIds = (s.ptyIdsByTabId[sourceTabId] ?? []).filter(
@@ -2739,8 +2761,8 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
         nextLastKnownRelayPtyIdByTabId[targetTabId] = detachedPtyId
       }
 
-      // Why: pane-to-tab detach moves live PTY ownership without spawning or
-      // exiting processes, so sync identity maps directly without activity bumps.
+      // Why: pane-to-tab detach moves a live PTY without spawning or exiting,
+      // so transfer its safe pane-owned identity without activity bumps.
       const sourceTabsByWorktree = withTerminalTabPtyId(
         s.tabsByWorktree,
         sourceTabId,
@@ -2750,10 +2772,60 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
         ? withTerminalTabPtyId(sourceTabsByWorktree, targetTabId, detachedPtyId)
         : sourceTabsByWorktree
 
+      const sourcePaneKey = makePaneKey(sourceTabId, detachedLeafId)
+      const targetPaneKey = makePaneKey(targetTabId, detachedLeafId)
+      const sourceForeground = s.paneForegroundAgentByPaneKey[sourcePaneKey]
+      const sourceLaunchConfig = s.agentLaunchConfigByPaneKey[sourcePaneKey]
+      const hadSourceHookStatus = sourcePaneKey in s.agentStatusByPaneKey
+      let nextPaneForegroundAgentByPaneKey = s.paneForegroundAgentByPaneKey
+      let nextAgentLaunchConfigByPaneKey = s.agentLaunchConfigByPaneKey
+      let nextAgentStatusByPaneKey = s.agentStatusByPaneKey
+      let nextRetentionSuppressedPaneKeys = s.retentionSuppressedPaneKeys
+      if (sourceForeground) {
+        nextPaneForegroundAgentByPaneKey = { ...s.paneForegroundAgentByPaneKey }
+        delete nextPaneForegroundAgentByPaneKey[sourcePaneKey]
+        nextPaneForegroundAgentByPaneKey[targetPaneKey] = sourceForeground
+      }
+      if (sourceLaunchConfig) {
+        nextAgentLaunchConfigByPaneKey = { ...s.agentLaunchConfigByPaneKey }
+        delete nextAgentLaunchConfigByPaneKey[sourcePaneKey]
+        nextAgentLaunchConfigByPaneKey[targetPaneKey] = {
+          ...sourceLaunchConfig,
+          identity: {
+            ...sourceLaunchConfig.identity,
+            tabId: targetTabId,
+            leafId: detachedLeafId
+          }
+        }
+      }
+      if (hadSourceHookStatus) {
+        nextAgentStatusByPaneKey = { ...s.agentStatusByPaneKey }
+        delete nextAgentStatusByPaneKey[sourcePaneKey]
+        nextRetentionSuppressedPaneKeys = {
+          ...s.retentionSuppressedPaneKeys,
+          [sourcePaneKey]: true
+        }
+      }
+
       return {
         ptyIdsByTabId: nextPtyIdsByTabId,
         lastKnownRelayPtyIdByTabId: nextLastKnownRelayPtyIdByTabId,
-        ...(nextTabsByWorktree !== s.tabsByWorktree ? { tabsByWorktree: nextTabsByWorktree } : {})
+        ...(nextTabsByWorktree !== s.tabsByWorktree ? { tabsByWorktree: nextTabsByWorktree } : {}),
+        ...(nextPaneForegroundAgentByPaneKey !== s.paneForegroundAgentByPaneKey
+          ? { paneForegroundAgentByPaneKey: nextPaneForegroundAgentByPaneKey }
+          : {}),
+        ...(nextAgentLaunchConfigByPaneKey !== s.agentLaunchConfigByPaneKey
+          ? { agentLaunchConfigByPaneKey: nextAgentLaunchConfigByPaneKey }
+          : {}),
+        ...(nextAgentStatusByPaneKey !== s.agentStatusByPaneKey
+          ? {
+              // Why: the PTY keeps its immutable source ORCA_PANE_KEY; retire
+              // rather than re-key a hook row that future events cannot update.
+              agentStatusByPaneKey: nextAgentStatusByPaneKey,
+              agentStatusEpoch: s.agentStatusEpoch + 1,
+              retentionSuppressedPaneKeys: nextRetentionSuppressedPaneKeys
+            }
+          : {})
       }
     })
   },

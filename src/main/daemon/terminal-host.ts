@@ -1,48 +1,16 @@
 import { Session, type SubprocessHandle } from './session'
 import { normalizePtySize } from './daemon-pty-size'
+import { shellPathSupportsPtyStartupBarrier } from './shell-ready'
 import { resolveProcessCwd } from '../providers/process-cwd'
 import type { StartupCommandDelivery } from '../../shared/codex-startup-delivery'
 import { buildStartupCommandSubmission } from '../../shared/startup-command-submission'
-import type {
-  SessionInfo,
-  TakePendingOutputResult,
-  TerminalSnapshot,
-  ShellReadyState
-} from './types'
+import type { SessionInfo, TakePendingOutputResult, TerminalSnapshot } from './types'
 import { SessionNotFoundError } from './types'
+import type { CreateOrAttachOptions, CreateOrAttachResult } from './terminal-host-create-contract'
+
+export type { CreateOrAttachOptions, CreateOrAttachResult } from './terminal-host-create-contract'
 
 const DEFAULT_MAX_TOMBSTONES = 1000
-
-export type CreateOrAttachOptions = {
-  sessionId: string
-  cols: number
-  rows: number
-  cwd?: string
-  env?: Record<string, string>
-  envToDelete?: string[]
-  command?: string
-  startupCommandDelivery?: StartupCommandDelivery
-  /** Explicit shell the renderer asked for (e.g. 'wsl.exe' for "New WSL
-   *  terminal" from the "+" menu). Forwarded to the subprocess spawner so the
-   *  daemon path honors per-tab shell selection the same way LocalPtyProvider
-   *  does. */
-  shellOverride?: string
-  terminalWindowsWslDistro?: string | null
-  terminalWindowsPowerShellImplementation?: 'auto' | 'powershell.exe' | 'pwsh.exe'
-  shellReadySupported?: boolean
-  shellReadyTimeoutMs?: number
-  historySeed?: string
-  streamClient: { onData: (data: string) => void; onExit: (code: number) => void }
-}
-
-export type CreateOrAttachResult = {
-  isNew: boolean
-  snapshot: TerminalSnapshot | null
-  pid: number | null
-  shellState: ShellReadyState
-  historySeeded?: boolean
-  attachToken: symbol
-}
 
 export type TerminalHostOptions = {
   spawnSubprocess: (opts: {
@@ -107,6 +75,7 @@ export class TerminalHost {
         snapshot,
         pid: existing.pid,
         shellState: existing.shellState,
+        ...(existing.launchAgent ? { launchAgent: existing.launchAgent } : {}),
         ...(existing.historySeeded !== undefined ? { historySeeded: existing.historySeeded } : {}),
         attachToken: token
       }
@@ -136,13 +105,24 @@ export class TerminalHost {
       terminalWindowsPowerShellImplementation: opts.terminalWindowsPowerShellImplementation
     })
 
+    // Why: the caller computed shellReadySupported from the preferred shell,
+    // before spawn. A Unix fallback (e.g. /bin/sh) never emits the ready
+    // marker, so keeping the stale flag would queue startup commands until the
+    // shell-ready timeout and bracketed-paste-wrap them for a line editor
+    // without paste mode.
+    const shellReadySupported =
+      (opts.shellReadySupported ?? false) &&
+      (subprocess.shellPath === undefined ||
+        shellPathSupportsPtyStartupBarrier(subprocess.shellPath))
+
     const session = new Session({
       sessionId: opts.sessionId,
       cols: size.cols,
       rows: size.rows,
       terminalHandle: opts.env?.ORCA_TERMINAL_HANDLE,
+      launchAgent: opts.launchAgent,
       subprocess,
-      shellReadySupported: opts.shellReadySupported ?? false,
+      shellReadySupported,
       historySeed: opts.historySeed,
       // Why: reap the dead session (dispose emulator + drop from the map) the
       // moment its subprocess exits, instead of retaining it for the daemon's
@@ -174,7 +154,7 @@ export class TerminalHost {
       session.write(
         buildStartupCommandSubmission(opts.command, {
           submit,
-          bracketedPasteSafe: opts.shellReadySupported ?? false
+          bracketedPasteSafe: shellReadySupported
         })
       )
     }
@@ -184,6 +164,7 @@ export class TerminalHost {
       snapshot: null,
       pid: subprocess.pid,
       shellState: session.shellState,
+      ...(session.launchAgent ? { launchAgent: session.launchAgent } : {}),
       ...(session.historySeeded !== undefined ? { historySeeded: session.historySeeded } : {}),
       attachToken: token
     }
@@ -272,6 +253,14 @@ export class TerminalHost {
       return null
     }
     return session.getForegroundProcess()
+  }
+
+  async confirmForegroundProcess(sessionId: string): Promise<string | null> {
+    const session = this.sessions.get(sessionId)
+    if (!session || !session.isAlive) {
+      return null
+    }
+    return session.confirmForegroundProcess()
   }
 
   clearScrollback(sessionId: string): void {

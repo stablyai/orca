@@ -824,6 +824,37 @@ describe('agent hook completion notifications', () => {
     expect(_getAgentHookCompletionNotificationCoordinatorCountForTest()).toBe(3)
   })
 
+  it('gates cosmetic store updates but still prunes after a pane closes', async () => {
+    const {
+      _getAgentHookCompletionNotificationCoordinatorCountForTest,
+      observeAgentHookCompletionForNotification,
+      syncAgentHookCompletionNotificationsForStoreUpdate
+    } = await import('./agent-hook-completion-notifications')
+
+    observeAgentHookCompletionForNotification({
+      paneKey,
+      worktreeId: 'wt-1',
+      payload: hookStatus('working')
+    })
+
+    const beforeCosmeticUpdate = { ...mockStoreState }
+    mockStoreState.tabsByWorktree = {
+      'wt-1': [{ id: 'tab-1', ptyId: 'pty-1' }]
+    }
+    expect(
+      syncAgentHookCompletionNotificationsForStoreUpdate(mockStoreState, beforeCosmeticUpdate)
+    ).toBe(false)
+    expect(_getAgentHookCompletionNotificationCoordinatorCountForTest()).toBe(1)
+
+    const beforeClose = { ...mockStoreState }
+    mockStoreState.tabsByWorktree = { 'wt-1': [] }
+    mockStoreState.ptyIdsByTabId = {}
+    expect(syncAgentHookCompletionNotificationsForStoreUpdate(mockStoreState, beforeClose)).toBe(
+      true
+    )
+    expect(_getAgentHookCompletionNotificationCoordinatorCountForTest()).toBe(0)
+  })
+
   it('skips tab scans until a pane-liveness slice changes', async () => {
     seedManyLivePanes()
     const {

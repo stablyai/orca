@@ -96,6 +96,7 @@ import {
 } from '../project-groups/folder-workspace-path-status'
 import { getGitCloneFailureMessage } from '../../shared/git-clone-failure-message'
 import { prepareLocalWorktreeRootForRepo } from '../worktree-root-preparation'
+import { runWithGitReadCacheInvalidation } from '../git/status'
 
 // Why: `method` answers "which entry point did the user take?", not "what did
 // they add?" — so the IPC the renderer invoked IS the method. We never send
@@ -982,7 +983,7 @@ async function runWithClonePathLock<T>(clonePathKey: string, task: () => Promise
 
   try {
     await previous
-    return await task()
+    return await runWithGitReadCacheInvalidation(task)
   } finally {
     release()
     if (cloneInFlightByPath.get(clonePathKey) === tail) {

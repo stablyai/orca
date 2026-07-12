@@ -66,6 +66,11 @@ function helperInstanceKey(info: ServeSimHelperInfo): string {
   return `${info.deviceUdid}::${info.helperPid ?? 'pidless'}::${info.wsUrl}::${info.streamUrl}`
 }
 
+function trailingIncompletePtyJsonObject(data: string): string {
+  const lastObjectStart = data.lastIndexOf('{')
+  return lastObjectStart > data.lastIndexOf('}') ? data.slice(lastObjectStart) : ''
+}
+
 export class ServeSimStateWatcher {
   private readonly stateDir: string
   private readonly ptyToWorktree = new Map<string, string>()
@@ -132,9 +137,19 @@ export class ServeSimStateWatcher {
       return
     }
 
-    const prev = this.ptyBuffers.get(ptyId) ?? ''
-    const combined = (prev + data).slice(-16_384)
-    this.ptyBuffers.set(ptyId, combined)
+    const previous = this.ptyBuffers.get(ptyId)
+    if (!previous && !data.includes('{')) {
+      // Why: serve-sim metadata is a JSON object, while ordinary PTY output is
+      // the hot path. Stay idle instead of rebuilding and regex-scanning 16 KiB.
+      return
+    }
+    const combined = `${previous ?? ''}${data}`.slice(-16_384)
+    const trailingObject = trailingIncompletePtyJsonObject(combined)
+    if (trailingObject) {
+      this.ptyBuffers.set(ptyId, trailingObject)
+    } else {
+      this.ptyBuffers.delete(ptyId)
+    }
 
     const matches = combined.match(PTY_JSON_RE)
     if (!matches) {

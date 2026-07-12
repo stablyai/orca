@@ -458,6 +458,13 @@
               "all": "No comments yet."
             }
           }
+        },
+        "bot": {
+          "author": {
+            "overrides": {
+              "6d5d52b53f": "Bot author override limit reached"
+            }
+          }
         }
       },
       "resume": {
@@ -722,6 +729,8 @@
       "GitHubItemDialog": {
         "3ab6ac0fc8": "Preview and edit the selected GitHub issue or pull request.",
         "3cd5ae5b7b": "No files changed.",
+        "filesUnavailable": "Couldn't load changed files.",
+        "filesRetry": "Retry",
         "999b5ad7d9": "Files",
         "4bd1f5b055": "Checks",
         "e30a5470c9": "Conversation",
@@ -1217,6 +1226,8 @@
         "2560588245": "Failed to request reviewer",
         "3450247584": "Comment",
         "6ad2c1ab9c": "No files changed.",
+        "filesUnavailable": "Couldn't load changed files.",
+        "filesRetry": "Retry",
         "4d18310d55": "Files changed",
         "94d95cf1f7": "Checks",
         "9e8d45700e": "Conversation",
@@ -1736,7 +1747,11 @@
         "editReviewersWithCurrent": "Edit reviewers: {{value0}}",
         "linearEmptyAttributeFilter": "No issues match the selected filters. Clear a filter or try different criteria.",
         "linearEmptyUnfilteredScope": "No issues in this workspace scope. Try searching or adjusting teams.",
-        "linearFetchMore": "Fetch more"
+        "linearFetchMore": "Fetch more",
+        "jiraSortAscending": "ascending",
+        "jiraSortDescending": "descending",
+        "jiraSortBy": "Sort by",
+        "jiraToggleSortDirection": "Sort {{value0}}"
       },
       "Terminal": {
         "73768427cf": "Close",
@@ -2362,7 +2377,9 @@
             "failed": "Workspaces not removed: {{value0}}",
             "error": "Workspace cleanup failed",
             "skippedAncestor": "Skipped because a nested workspace could not be removed.",
-            "timedOut": "Removing {{value0}} is taking longer than expected. It will keep running in the background."
+            "timedOut": "Removing {{value0}} is taking longer than expected. It will keep running in the background.",
+            "stillRemoving": "Still removing workspaces: {{value0}}",
+            "skippedPendingAncestor": "Skipped because a nested workspace has not finished removing."
           },
           "candidateRow": {
             "gitLabel": "Git",
@@ -3201,6 +3218,17 @@
           },
           "SshTargetStatusRow": {
             "sshHost": "SSH Host"
+          },
+          "usagePercentageLabel": {
+            "used": "{{value0}}% used",
+            "remaining": "{{value0}}% left"
+          },
+          "UsagePercentageDisplayChangeNotice": {
+            "title": "Usage now shows % used",
+            "body": "Prefer remaining? Change it in Settings.",
+            "dismiss": "Dismiss",
+            "openSettings": "Open Settings",
+            "gotIt": "Got it"
           }
         }
       },
@@ -6760,9 +6788,9 @@
           "348246b06f": "false",
           "5936387ddd": "auto",
           "adbafefe56": "custom",
-          "16753eea48": "On Windows, right-click pastes the clipboard. Ctrl+right-click opens the context menu.",
+          "16753eea48": "Right-click pastes the clipboard. Ctrl+right-click opens the context menu.",
           "9c178cf8aa": "Right-click to paste",
-          "af0c3b6e39": "On Windows, right-click pastes the clipboard into the terminal. Use Ctrl+right-click to open the context menu.",
+          "af0c3b6e39": "Right-click pastes the clipboard into the terminal. Use Ctrl+right-click to open the context menu.",
           "29154326bb": "on",
           "ab20575a8a": "off",
           "ab3a1f9068": "wsl.exe",
@@ -7234,7 +7262,9 @@
             "f8e2a1c4b6": "Grok Usage",
             "e7d1b0f3a5": "Show Grok weekly credit usage from Grok CLI OAuth.",
             "d6c0a9e2f4": "grok",
-            "c5b9f8d1e3": "xai"
+            "c5b9f8d1e3": "xai",
+            "usagePercentageDisplayTitle": "Usage percentages",
+            "usagePercentageDisplayDescription": "Choose whether provider limits show the percentage used or remaining."
           }
         },
         "auto": {
@@ -8486,7 +8516,7 @@
               "e55186fe2b": "right click",
               "28ff08ed35": "windows",
               "e7d2793b03": "terminal",
-              "8ba875c132": "On Windows, right-click pastes the clipboard into the terminal. Use Ctrl+right-click to open the context menu.",
+              "8ba875c132": "Right-click pastes the clipboard into the terminal. Use Ctrl+right-click to open the context menu.",
               "f0b8448570": "Right-click to paste",
               "04994f6929": "default",
               "fc564eadaf": "debian",
@@ -8990,6 +9020,14 @@
           "a8f3e2c1b4": "Weekly credits",
           "b7e2d9f0a3": "Same weekly credit % as the grok /usage screen in the terminal.",
           "c6d1a8f4e2": "Resets {{when}}"
+        },
+        "AppearanceWindowSidebarSection": {
+          "usagePercentageDisplayUsed": "Used",
+          "usagePercentageDisplayRemaining": "Remaining"
+        },
+        "TerminalInteractionSection": {
+          "567633ff50": "Right-click pastes the clipboard into the terminal. Control-click to open the context menu.",
+          "c64497148a": "Right-click pastes the clipboard. Control-click opens the context menu."
         }
       },
       "right": {
@@ -9624,7 +9662,9 @@
                 "b13f85d75c": "Timeline",
                 "f5cf324efa": "Comment display options",
                 "5e6e5a13fa": "View",
-                "actionRequiredHint": "This check needs a manual action on GitHub (for example, approving the workflow run) before merging is unblocked."
+                "actionRequiredHint": "This check needs a manual action on GitHub (for example, approving the workflow run) before merging is unblocked.",
+                "b3195cba33": "Unmark author as bot",
+                "f588b46a6c": "Mark author as bot"
               },
               "empty": {
                 "state": {
@@ -9845,6 +9885,9 @@
               }
             }
           },
+          "fileExplorerOperationOwner": {
+            "unresolved": "Couldn't determine which host owns this workspace. Check the connection and try again."
+          },
           "useFileDeletion": {
             "72691dfebc": "Failed to {{value0}} '{{value1}}'.",
             "96affe1302": "'{{value0}}' moved to {{value1}}",
@@ -9853,7 +9896,12 @@
             "a76c74f105": "destructive",
             "92276aceb7": "Delete",
             "7fb9435c86": "This permanently deletes the directory and its contents on the remote host. This cannot be undone.",
-            "23e98f192f": "This permanently deletes the file on the remote host. This cannot be undone."
+            "23e98f192f": "This permanently deletes the file on the remote host. This cannot be undone.",
+            "8b8ee9d22f": "Couldn't determine which host owns this file. Check the workspace connection and try again.",
+            "af1270b90d": "Permanently delete {{count}} items?",
+            "dd029aa5cd": "This permanently deletes the selected items and any directory contents on the remote host. This cannot be undone.",
+            "77fdc36183": "Delete {{count}} items?",
+            "fca915a67a": "Remote items are permanently deleted and cannot be undone. Local items move to the {{value0}}."
           },
           "useFileExplorerHandlers": {
             "32cd9fd991": "Cannot open symlink target"
@@ -10082,6 +10130,11 @@
             "subagentsCount": "Subagents ({{value0}})",
             "messageCount": "{{value0}} msgs",
             "viewLog": "View Log"
+          },
+          "aiVaultSessionLogOpen": {
+            "workspaceGone": "Couldn't open log — workspace is no longer available.",
+            "notAuthorized": "Couldn't open log — path not authorized.",
+            "alreadyEditable": "Log is already open for editing."
           }
         }
       },
@@ -11582,7 +11635,8 @@
           "1c99b726e0": "Remove link",
           "cdfe166f6f": "Edit link",
           "bfc813e909": "Open link",
-          "7b0b945fdc": "Paste or type a link…"
+          "7b0b945fdc": "Paste or type a link…",
+          "copyLink": "Copy link"
         },
         "RichMarkdownReviewNoteLayer": {
           "f3ef92952b": "This note",
@@ -11609,7 +11663,8 @@
           "68d090241d": "Match whole word",
           "fd97c7e585": "Replace",
           "44682b4159": "Replace in rich markdown editor",
-          "c2884f5e95": "Replace all"
+          "c2884f5e95": "Replace all",
+          "preservedRichContentReadOnly": "Preserved rich content is read-only in rich mode."
         },
         "RichMarkdownSlashMenu": {
           "82c6816ff8": "No blocks found",
@@ -11826,6 +11881,24 @@
           "3fa2b8d417": "Reload from Disk",
           "a95d02c644": "Keep My Edits",
           "2c8f1e07b9": "Loading comparison..."
+        },
+        "RichMarkdownEditor": {
+          "citationLinkAvailable": "{{value0}}, link to {{value1}}. Press Enter to open or Tab for link actions.",
+          "citationFallbackLabel": "Citation",
+          "citationLinkUnavailable": "{{value0}}, citation link unavailable. {{value1}}",
+          "tabForCitationActions": "Tab for available actions.",
+          "noCitationActions": "No link actions are available."
+        },
+        "richMarkdownHtmlSuperscriptLink": {
+          "availableAriaLabel": "{{value0}}, link to {{value1}}",
+          "unavailableAriaLabel": "{{value0}}, citation link unavailable"
+        },
+        "richMarkdownLinkClipboard": {
+          "copiedLink": "Copied link",
+          "copyLinkFailed": "Failed to copy link"
+        },
+        "richMarkdownSourceOwningCutFeedback": {
+          "selectLessContent": "Select less content or use code mode to cut preserved HTML citations."
         }
       },
       "diff": {
@@ -11896,6 +11969,21 @@
             "ead6fc0510": "No automatic crash report was captured. You can still send details and include recent diagnostic logs when available.",
             "b082f27490": "Attach recent diagnostic logs",
             "e59f0b9427": "Sends a capped redacted log bundle with the report."
+          },
+          "submit": {
+            "notice": {
+              "unknownError": "The crash report request failed before it returned a reason.",
+              "ticketUploaded": "Diagnostic ticket {{value0}} was uploaded but not linked.",
+              "uncheckDiagnostics": "Uncheck \"Attach recent diagnostic logs\" and try again, or copy the details.",
+              "checkConnection": "Check your connection and try again, or copy the details.",
+              "notSent": "Crash report wasn't sent",
+              "copyDetails": "Copy Details",
+              "sentWithoutDiagnostics": "Crash report sent without diagnostic logs",
+              "diagnosticsReason": "Diagnostic logs were not attached: {{value0}}"
+            }
+          },
+          "copy": {
+            "copyFailed": "Crash report details could not be copied."
           }
         }
       },

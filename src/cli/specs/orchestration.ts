@@ -26,6 +26,7 @@ export const ORCHESTRATION_COMMAND_SPECS: CommandSpec[] = [
     notes: [
       'On Windows PowerShell, quote group addresses such as --to "@all" or --to "@worktree:<id>".',
       'worker_done and heartbeat must target a concrete coordinator terminal handle; use status for broadcast updates.',
+      'A worker_done with the active task/dispatch IDs completes that task when sent from the dispatched pane (or when pane identity is unavailable); on older runtimes the sender must match the dispatch assignee handle, so avoid overriding --from.',
       'Prefer --task-id/--dispatch-id/etc. over raw --payload JSON in worker commands; PowerShell strips JSON quotes easily.'
     ]
   },
@@ -33,17 +34,20 @@ export const ORCHESTRATION_COMMAND_SPECS: CommandSpec[] = [
     path: ['orchestration', 'check'],
     summary: 'Check messages for a terminal',
     usage:
-      'orca orchestration check [--terminal <handle>] [--unread | --all] [--types <type,...>] [--inject] [--wait] [--timeout-ms <n>] [--json]\n' +
+      'orca orchestration check [--terminal <handle>] [--unread | --peek | --all] [--types <type,...>] [--inject] [--wait] [--timeout-ms <n>] [--json]\n' +
       '  --unread (default): return only unread messages and mark them read.\n' +
+      '  --peek: return only unread messages without marking them read.\n' +
       '  --all: return every message for the handle; does not mark read.\n' +
       '  --wait: block until a matching message arrives or --timeout-ms expires.\n' +
-      '          Emits JSON heartbeat lines to stderr every 15s so the caller can\n' +
-      '          tell the process is alive. Filter with `grep -v _heartbeat` or\n' +
-      '          `jq "select(._heartbeat|not)"` when merging streams with 2>&1.',
+      '          Emits JSON keepalive lines to stderr every 15s so the caller can\n' +
+      '          tell the process is alive. `_keepalive` is unrelated to heartbeat\n' +
+      '          messages; `_heartbeat` remains as a deprecated compatibility alias.\n' +
+      '          Filter with `jq "select(._keepalive|not)"` when merging streams.',
     allowedFlags: [
       ...GLOBAL_FLAGS,
       'terminal',
       'unread',
+      'peek',
       'all',
       'types',
       'inject',
@@ -76,8 +80,9 @@ export const ORCHESTRATION_COMMAND_SPECS: CommandSpec[] = [
   {
     path: ['orchestration', 'task-list'],
     summary: 'List orchestration tasks',
-    usage: 'orca orchestration task-list [--status <status>] [--ready] [--json]',
-    allowedFlags: [...GLOBAL_FLAGS, 'status', 'ready']
+    usage: 'orca orchestration task-list [--status <status>] [--ready] [--brief] [--json]',
+    allowedFlags: [...GLOBAL_FLAGS, 'status', 'ready', 'brief'],
+    notes: ['--brief collapses whitespace and caps each spec at 160 characters.']
   },
   {
     path: ['orchestration', 'task-update'],

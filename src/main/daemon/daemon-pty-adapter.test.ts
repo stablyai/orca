@@ -489,9 +489,10 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
   describe('spawn with sessionId (reattach)', () => {
     it('returns full snapshot and isReattach when reattaching', async () => {
       const sessionId = 'reattach-test-session'
-      const first = await adapter.spawn({ cols: 80, rows: 24, sessionId })
+      const first = await adapter.spawn({ cols: 80, rows: 24, sessionId, launchAgent: 'droid' })
       expect(first.id).toBe(sessionId)
       expect(first.isReattach).toBeUndefined()
+      expect(first.launchAgent).toBe('droid')
 
       // Write data so the headless emulator captures it
       lastSubprocess._simulateData('hello from shell\r\n')
@@ -501,6 +502,7 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
       const second = await adapter.spawn({ cols: 80, rows: 24, sessionId })
       expect(second.id).toBe(sessionId)
       expect(second.isReattach).toBe(true)
+      expect(second.launchAgent).toBe('droid')
       expect(second.snapshot).toBeDefined()
       expect(second.snapshot).toContain('hello from shell')
     })

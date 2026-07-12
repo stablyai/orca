@@ -46,6 +46,12 @@ const MermaidViewer = lazy(() => import('./MermaidViewer'))
 const CsvViewer = lazy(() => import('./CsvViewer'))
 const IpynbViewer = lazy(() => import('./IpynbViewer'))
 
+// Why: stable no-op callbacks for read-only tabs so Monaco never routes a
+// content-change or save through the writable pipeline (and so we don't create
+// a new function identity each render).
+const noopEditorContentChange = (_content: string): void => {}
+const noopEditorSave = (_content: string): void => {}
+
 export function getMarkdownSourceLineOffset(frontMatterRaw: string): number {
   let offset = 0
 
@@ -317,8 +323,12 @@ export function EditorContent({
       relativePath={activeFile.relativePath}
       content={editBuffers[activeFile.id] ?? fc.content}
       language={monacoLanguage}
-      onContentChange={handleContentChange}
-      onSave={isMarkdown ? md.mdSave : handleSave}
+      // Why: read-only tabs (AI Vault View Log) block edits in Monaco and no-op
+      // the change/save callbacks so no draft, dirty state, or write can occur —
+      // mirrors the conflict-review read-only rendering pattern.
+      readOnly={activeFile.readOnly === true}
+      onContentChange={activeFile.readOnly === true ? noopEditorContentChange : handleContentChange}
+      onSave={activeFile.readOnly === true ? noopEditorSave : isMarkdown ? md.mdSave : handleSave}
       worktreeId={activeFile.worktreeId}
       markdownAnnotationsEnabled={markdownAnnotationsEnabled && isMarkdown}
       conflictDecorationsEnabled={activeFile.conflict?.conflictStatus === 'unresolved'}

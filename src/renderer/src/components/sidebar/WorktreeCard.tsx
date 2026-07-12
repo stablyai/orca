@@ -1941,6 +1941,7 @@ const WorktreeCard = React.memo(function WorktreeCard({
           <AutoRenameFailedDialog
             open={showRenameErrorDialog}
             onOpenChange={setShowRenameErrorDialog}
+            worktreeId={worktree.id}
             worktreeName={worktree.displayName}
             error={worktree.firstAgentMessageRenameError}
           />

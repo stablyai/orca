@@ -33,7 +33,7 @@ import {
   type MarkdownDocLinkDecorationController
 } from './monaco-markdown-doc-link-decorations'
 import { buildGitConflictDecorations, hasGitConflictMarkers } from './monaco-conflict-decorations'
-import { findWorktreeById } from '@/store/slices/worktree-helpers'
+import { selectWorktreeDiffComments } from '@/store/worktree-diff-comments-selector'
 import type { DiffComment } from '../../../../shared/types'
 import { isMarkdownComment } from '@/lib/diff-comment-compat'
 import { formatMarkdownReviewNotes, type MarkdownReviewNote } from '@/lib/markdown-review-notes'
@@ -140,7 +140,7 @@ export default function MonacoEditor({
   const scrollToDiffCommentId = useAppStore((s) => s.scrollToDiffCommentId)
   const setScrollToDiffCommentId = useAppStore((s) => s.setScrollToDiffCommentId)
   const allDiffComments = useAppStore((s): DiffComment[] | undefined =>
-    worktreeId ? findWorktreeById(s.worktreesByRepo, worktreeId)?.diffComments : undefined
+    selectWorktreeDiffComments(s, worktreeId)
   )
   const editorFontSize = computeEditorFontSize(
     settings?.terminalFontSize ?? 13,

@@ -380,6 +380,80 @@ describe('createIpcPtyTransport', () => {
     }
   })
 
+  it('compacts ignored Cursor native titles into one deferred drain', async () => {
+    vi.useFakeTimers()
+    try {
+      const { createPtyOutputProcessor } = await import('./pty-transport')
+      const onTitleChange = vi.fn()
+      const processor = createPtyOutputProcessor({ onTitleChange })
+      const callbacks = { onData: vi.fn() }
+      const ignoredTitles = Array.from({ length: 4_096 }, () => '\x1b]0;Cursor Agent\x07').join('')
+
+      processor.processData(ignoredTitles, callbacks)
+
+      expect(vi.getTimerCount()).toBe(1)
+      await vi.runOnlyPendingTimersAsync()
+
+      expect(vi.getTimerCount()).toBe(0)
+      expect(onTitleChange).not.toHaveBeenCalled()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('lets an ignored Cursor native title clear a pending stale-title fallback', async () => {
+    vi.useFakeTimers()
+    try {
+      const { createPtyOutputProcessor } = await import('./pty-transport')
+      const onAgentBecameIdle = vi.fn()
+      const processor = createPtyOutputProcessor({
+        onTitleChange: vi.fn(),
+        onAgentBecameIdle,
+        onAgentBecameWorking: vi.fn()
+      })
+      const callbacks = { onData: vi.fn() }
+
+      processor.processData('\x1b]0;⠋ Cursor Agent\x07', callbacks)
+      await vi.advanceTimersByTimeAsync(0)
+      processor.processData('plain output\r\n', callbacks)
+      await vi.advanceTimersByTimeAsync(0)
+
+      processor.processData('\x1b]0;Cursor Agent\x07', callbacks)
+      await vi.advanceTimersByTimeAsync(0)
+      await vi.advanceTimersByTimeAsync(3_000)
+
+      expect(onAgentBecameIdle).not.toHaveBeenCalled()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('re-arms stale-title fallback after a later title-free output scan', async () => {
+    vi.useFakeTimers()
+    try {
+      const { createPtyOutputProcessor } = await import('./pty-transport')
+      const onTitleChange = vi.fn()
+      const processor = createPtyOutputProcessor({
+        onTitleChange,
+        onAgentBecameIdle: vi.fn(),
+        onAgentBecameWorking: vi.fn()
+      })
+      const callbacks = { onData: vi.fn() }
+
+      processor.processData('\x1b]0;⠋ Cursor Agent\x07', callbacks)
+      await vi.advanceTimersByTimeAsync(0)
+      onTitleChange.mockClear()
+      processor.processData('\x1b]0;Cursor Agent\x07', callbacks)
+      processor.processData('plain output\r\n', callbacks)
+      await vi.advanceTimersByTimeAsync(0)
+      await vi.advanceTimersByTimeAsync(3_000)
+
+      expect(onTitleChange).toHaveBeenCalledWith('Cursor Agent', 'Cursor Agent')
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
   it('preserves stale-title detection after compacting deferred side effects', async () => {
     vi.useFakeTimers()
     try {
@@ -1155,6 +1229,7 @@ describe('createIpcPtyTransport', () => {
     const spawnMock = vi.fn().mockResolvedValue({
       id: 'pty-reattach',
       isReattach: true,
+      launchAgent: 'droid',
       snapshot: 'snapshot data',
       snapshotCols: 132,
       snapshotRows: 43
@@ -1192,6 +1267,7 @@ describe('createIpcPtyTransport', () => {
 
     expect(result).toEqual({
       id: 'pty-reattach',
+      launchAgent: 'droid',
       snapshot: 'snapshot data',
       snapshotCols: 132,
       snapshotRows: 43,
@@ -1199,6 +1275,30 @@ describe('createIpcPtyTransport', () => {
       coldRestore: undefined,
       replay: undefined,
       sessionExpired: undefined
+    })
+  })
+
+  it('drops an unknown daemon launch identity from the connection result', async () => {
+    const { createIpcPtyTransport } = await import('./pty-transport')
+    const spawn = window.api.pty.spawn as unknown as ReturnType<typeof vi.fn>
+    spawn.mockResolvedValueOnce({
+      id: 'pty-unknown-launch-agent',
+      isReattach: true,
+      launchAgent: 'not-an-agent'
+    })
+
+    const result = await createIpcPtyTransport({}).connect({ url: '', callbacks: {} })
+
+    expect(result).toEqual({
+      id: 'pty-unknown-launch-agent',
+      snapshot: undefined,
+      snapshotCols: undefined,
+      snapshotRows: undefined,
+      isAlternateScreen: undefined,
+      sessionExpired: undefined,
+      coldRestore: undefined,
+      replay: undefined,
+      pendingEscapeTailAnsi: undefined
     })
   })
 

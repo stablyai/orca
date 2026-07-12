@@ -116,7 +116,7 @@ import {
 import {
   observeAgentHookCompletionForNotification,
   resetAgentHookCompletionNotificationCoordinators,
-  syncAgentHookCompletionNotificationSettings
+  syncAgentHookCompletionNotificationsForStoreUpdate
 } from './agent-hook-completion-notifications'
 import { shouldSuppressCodexAutoApprovalStatus } from '@/components/terminal-pane/codex-auto-approval-notification-suppression'
 import { showTerminalShortcutCaptureNotification } from '@/lib/terminal-shortcut-capture-notification'
@@ -1226,7 +1226,7 @@ export function useIpcEvents(): void {
     // the desktop re-hydrates and the sidebar reflects it live — bi-directional.
     unsubs.push(
       window.api.ui.onStateChanged((ui) => {
-        useAppStore.getState().hydratePersistedUI(ui)
+        useAppStore.getState().hydratePersistedUI(ui, 'sync')
       })
     )
 
@@ -2935,7 +2935,10 @@ export function useIpcEvents(): void {
         // here silently dropped the native question card on web/mobile clients.
         interactivePrompt: data.interactivePrompt,
         lastAssistantMessage: data.lastAssistantMessage,
-        interrupted: data.interrupted
+        interrupted: data.interrupted,
+        // Why: same trap as interactivePrompt — this rebuild is a field
+        // whitelist, so the subagent child rows vanish if omitted here.
+        subagents: data.subagents
       })
       if (!payload) {
         return 'dropped'
@@ -3212,10 +3215,10 @@ export function useIpcEvents(): void {
     // renderer state.
     requestAgentStatusSnapshotIfReady()
     unsubs.push(
-      useAppStore.subscribe(() => {
+      useAppStore.subscribe((state, previousState) => {
         requestAgentStatusSnapshotIfReady()
         flushPendingAgentStatuses()
-        syncAgentHookCompletionNotificationSettings()
+        syncAgentHookCompletionNotificationsForStoreUpdate(state, previousState)
       })
     )
 
@@ -3225,7 +3228,7 @@ export function useIpcEvents(): void {
           kind: 'fit'
           event: {
             ptyId: string
-            mode: 'mobile-fit' | 'desktop-fit'
+            mode: 'mobile-fit' | 'remote-desktop-fit' | 'desktop-fit'
             cols: number
             rows: number
           }

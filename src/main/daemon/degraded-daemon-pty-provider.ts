@@ -160,6 +160,10 @@ export class DegradedDaemonPtyProvider implements IPtyProvider {
     return this.providerFor(id).getForegroundProcess(id)
   }
 
+  async confirmForegroundProcess(id: string): Promise<string | null> {
+    return this.providerFor(id).confirmForegroundProcess?.(id) ?? null
+  }
+
   async serialize(ids: string[]): Promise<string> {
     return this.fallback.serialize(ids)
   }

@@ -15,6 +15,13 @@ type LocalGitExecOptions = {
   wslDistro?: string
 }
 
+type LocalDefaultBaseRefGitOptions = {
+  cwd: string
+  wslDistro?: string
+}
+
+const DEFAULT_BASE_REF_PROBE_TIMEOUT_MS = 15_000
+
 type GitRepoProbeResult = 'repo' | 'not-repo' | 'indeterminate'
 type GitMarkerScanResult = { status: 'valid'; rootPath: string } | { status: 'absent' | 'invalid' }
 
@@ -651,13 +658,23 @@ export async function resolveDefaultBaseRefViaExec(exec: GitExec): Promise<strin
   return resolveDefaultBaseRefFromProbes((ref) => hasGitRefViaExec(exec, ref))
 }
 
+export function resolveDefaultBaseRefWithLocalGit(
+  options: LocalDefaultBaseRefGitOptions
+): Promise<string | null> {
+  return resolveDefaultBaseRefViaExec((argv) =>
+    gitExecFileAsync(argv, {
+      ...options,
+      // Why: async avoids main-thread stalls, but dead local/WSL filesystems still need a bound.
+      timeout: DEFAULT_BASE_REF_PROBE_TIMEOUT_MS
+    })
+  )
+}
+
 async function getDefaultBaseRefAsync(
   path: string,
   options: LocalGitExecOptions = {}
 ): Promise<string | null> {
-  return resolveDefaultBaseRefViaExec((argv) =>
-    gitExecFileAsync(argv, gitExecOptions(path, options))
-  )
+  return resolveDefaultBaseRefWithLocalGit(gitExecOptions(path, options))
 }
 
 /**

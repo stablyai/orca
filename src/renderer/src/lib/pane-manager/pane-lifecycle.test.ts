@@ -7,6 +7,7 @@ import {
   resetTerminalWebglSuggestion
 } from './pane-webgl-renderer'
 import { attachLigatures, disposePane, openTerminal } from './pane-lifecycle'
+import { ensureArabicShapingJoinerForText } from './terminal-arabic-shaping-joiner'
 import {
   buildDefaultTerminalOptions,
   DEFAULT_TERMINAL_FAST_SCROLL_SENSITIVITY,
@@ -585,17 +586,17 @@ describe('openTerminal — addon and provider wiring', () => {
     expect(events.indexOf('open')).toBeLessThan(loadUnicodeIdx)
   })
 
-  // Why: terminal.dispose() does not deregister character joiners, so the
-  // pane lifecycle must — this locks the register/deregister pairing that
-  // makes Arabic/RTL shaping (#5262) actually reach a real terminal.
-  it('registers the Arabic shaping joiner on open and deregisters it on dispose', () => {
+  // Why: ordinary panes must avoid xterm's full-grid character-joiner scan,
+  // while the first RTL write still registers before xterm parses the text.
+  it('registers Arabic shaping lazily and deregisters it on dispose', () => {
     const { pane, events } = createOpenTerminalHarness()
 
     openTerminal(pane)
 
-    expect(events).toContain('registerCharacterJoiner')
-    expect(events.indexOf('open')).toBeLessThan(events.indexOf('registerCharacterJoiner'))
+    expect(events).not.toContain('registerCharacterJoiner')
     expect(pane.arabicShapingJoinerCleanup).toBeTypeOf('function')
+    ensureArabicShapingJoinerForText(pane.terminal, 'مرحبا')
+    expect(events).toContain('registerCharacterJoiner')
 
     disposePane(pane, new Map([[pane.id, pane]]))
 
@@ -610,6 +611,7 @@ describe('openTerminal — addon and provider wiring', () => {
     const { pane, getRegisteredJoinHandler } = createOpenTerminalHarness()
 
     openTerminal(pane)
+    ensureArabicShapingJoinerForText(pane.terminal, 'مرحبا')
     const handler = getRegisteredJoinHandler()!
 
     expect(pane.webglAddon).toBeNull()

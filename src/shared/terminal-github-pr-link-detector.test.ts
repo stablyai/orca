@@ -1,6 +1,8 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { createTerminalGitHubPRLinkDetector } from './terminal-github-pr-link-detector'
 
+const issue8126Url = 'https://github.com/owner/repo/pull/10'
+
 afterEach(() => {
   vi.restoreAllMocks()
 })
@@ -14,6 +16,65 @@ describe('createTerminalGitHubPRLinkDetector', () => {
         url: 'https://github.com/acme/orca/pull/42',
         slug: { owner: 'acme', repo: 'orca' },
         number: 42
+      }
+    ])
+  })
+
+  it('detects issue 8126 Claude Code PR links with attached ANSI reset', () => {
+    const observe = createTerminalGitHubPRLinkDetector()
+
+    expect(observe(`${issue8126Url}\x1b[22m\n`)).toEqual([
+      {
+        url: issue8126Url,
+        slug: { owner: 'owner', repo: 'repo' },
+        number: 10
+      }
+    ])
+  })
+
+  it('strips an ANSI reset split across PTY chunks', () => {
+    const observe = createTerminalGitHubPRLinkDetector()
+
+    expect(observe(`${issue8126Url}\x1b`)).toEqual([])
+    expect(observe('[22m\n')).toEqual([
+      {
+        url: issue8126Url,
+        slug: { owner: 'owner', repo: 'repo' },
+        number: 10
+      }
+    ])
+  })
+
+  it('rejects PR URLs corrupted by cursor movement', () => {
+    const observe = createTerminalGitHubPRLinkDetector()
+
+    expect(observe('https://github.com/owne\x1b[1Cr/repo/pull/10\n')).toEqual([])
+  })
+
+  it('rejects PR URLs fused across terminal rows', () => {
+    for (const cursorMove of ['\x1b[1A', '\x1b[1B']) {
+      const observe = createTerminalGitHubPRLinkDetector()
+
+      expect(observe(`https://github.com/owner/repo/pull/${cursorMove}10\n`)).toEqual([])
+    }
+  })
+
+  it('does not fuse screen-editing controls into PR URLs', () => {
+    for (const screenEdit of ['\x08', '\x0b', '\x0c', '\x1bD', '\x1b[2J', '\x1b[2K', '\x1b[1S']) {
+      const observe = createTerminalGitHubPRLinkDetector()
+
+      expect(observe(`https://github.com/owner/repo/pull/1${screenEdit}0\n`)).toEqual([])
+    }
+  })
+
+  it('deduplicates styled and plain instances', () => {
+    const observe = createTerminalGitHubPRLinkDetector()
+
+    expect(observe(`${issue8126Url}\x1b[22m\n${issue8126Url}\n`)).toEqual([
+      {
+        url: issue8126Url,
+        slug: { owner: 'owner', repo: 'repo' },
+        number: 10
       }
     ])
   })

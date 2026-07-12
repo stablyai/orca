@@ -14,6 +14,12 @@ import type {
 import { folderWorkspaceKey, parseWorkspaceKey } from '../../../shared/workspace-scope'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../shared/constants'
 import { getRepoIdFromWorktreeId } from '@/store/slices/worktree-helpers'
+import {
+  findIndexedFolderWorkspaceOwner,
+  findIndexedProjectGroupOwner,
+  findIndexedRepoOwner as findRepoRecord,
+  findIndexedWorktreeOwner as findWorktreeRecord
+} from './worktree-runtime-owner-index'
 
 type RuntimeExecutionHost = Extract<ParsedExecutionHost, { kind: 'runtime' }>
 
@@ -26,19 +32,6 @@ export type WorktreeRuntimeOwnerState = {
   restoredRuntimeHostIdByWorkspaceSessionKey?: Record<string, ExecutionHostId>
 }
 
-function findWorktreeRecord(
-  worktreesByRepo: WorktreeRuntimeOwnerState['worktreesByRepo'],
-  worktreeId: string
-): Pick<Worktree, 'id' | 'repoId' | 'hostId'> | null {
-  for (const worktrees of Object.values(worktreesByRepo ?? {})) {
-    const match = worktrees.find((worktree) => worktree.id === worktreeId)
-    if (match) {
-      return match
-    }
-  }
-  return null
-}
-
 function findFolderProjectGroup(
   state: WorktreeRuntimeOwnerState,
   folderWorkspaceId: string
@@ -47,14 +40,14 @@ function findFolderProjectGroup(
   if (!folderWorkspace) {
     return null
   }
-  return state.projectGroups?.find((group) => group.id === folderWorkspace.projectGroupId) ?? null
+  return findIndexedProjectGroupOwner(state.projectGroups, folderWorkspace.projectGroupId)
 }
 
 function findFolderWorkspace(
   state: WorktreeRuntimeOwnerState,
   folderWorkspaceId: string
 ): Pick<FolderWorkspace, 'id' | 'projectGroupId' | 'connectionId'> | null {
-  return state.folderWorkspaces?.find((workspace) => workspace.id === folderWorkspaceId) ?? null
+  return findIndexedFolderWorkspaceOwner(state.folderWorkspaces, folderWorkspaceId)
 }
 
 function getRuntimeEnvironmentIdForFolderWorkspace(
@@ -177,7 +170,7 @@ export function getRuntimeEnvironmentIdForWorktree(
     return worktreeRuntimeEnvironmentId
   }
   const repoId = worktree?.repoId ?? getRepoIdFromWorktreeId(worktreeId)
-  const repo = state.repos?.find((entry) => entry.id === repoId)
+  const repo = findRepoRecord(state.repos, repoId)
   const hasExplicitOwner = Boolean(repo?.executionHostId?.trim() || repo?.connectionId?.trim())
   if (repo && hasExplicitOwner) {
     const parsed = parseExecutionHostId(getRepoExecutionHostId(repo))
@@ -205,7 +198,7 @@ export function getExplicitRuntimeEnvironmentIdForWorktree(
     return getExplicitRuntimeEnvironmentIdFromHost(worktree.hostId)
   }
   const repoId = worktree?.repoId ?? getRepoIdFromWorktreeId(worktreeId)
-  const repo = state.repos?.find((entry) => entry.id === repoId)
+  const repo = findRepoRecord(state.repos, repoId)
   if (!repo) {
     return null
   }
@@ -271,7 +264,7 @@ export function getExecutionHostIdForWorktree(
     return worktreeHostId
   }
   const repoId = worktree?.repoId ?? getRepoIdFromWorktreeId(worktreeId)
-  const repo = state.repos?.find((entry) => entry.id === repoId)
+  const repo = findRepoRecord(state.repos, repoId)
   const hasExplicitOwner = Boolean(repo?.executionHostId?.trim() || repo?.connectionId?.trim())
   if (repo && hasExplicitOwner) {
     return getRepoExecutionHostId(repo)

@@ -298,7 +298,6 @@ export const SETTINGS_CHANGED_WHITELIST = [
   'experimentalTerminalAttention',
   'experimentalAgentHibernation',
   'experimentalEphemeralVms',
-  'experimentalWorktreeSymlinks',
   'geminiCliOAuthEnabled',
   'openAgentTabsInChatByDefault'
 ] as const satisfies readonly BooleanGlobalSettingsKey[]

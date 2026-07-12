@@ -27,8 +27,14 @@ import type {
   WorktreeCardMode,
   WorkspaceHostOrder,
   WorkspaceHostScope,
-  VisibleWorkspaceHostIds
+  VisibleWorkspaceHostIds,
+  TopLevelView
 } from '../../../../shared/types'
+import type { UsagePercentageDisplay } from '../../../../shared/usage-percentage-display'
+import {
+  DEFAULT_USAGE_PERCENTAGE_DISPLAY,
+  normalizeUsagePercentageDisplay
+} from '../../../../shared/usage-percentage-display'
 import type { GitLabWorkItem } from '../../../../shared/gitlab-types'
 import type { LaunchSource } from '../../../../shared/telemetry-events'
 import type { TaskSourceContext } from '../../../../shared/task-source-context'
@@ -492,6 +498,37 @@ function hydratedUIPartialMatchesState(state: AppState, hydrated: Partial<UISlic
   )
 }
 
+// Record keys are exhaustive over TopLevelView, so a new view can't be silently missed.
+const TOP_LEVEL_VIEW_LOOKUP: Record<TopLevelView, true> = {
+  terminal: true,
+  settings: true,
+  tasks: true,
+  activity: true,
+  automations: true,
+  space: true,
+  skills: true,
+  mobile: true
+}
+const KNOWN_TOP_LEVEL_VIEWS = new Set<string>(Object.keys(TOP_LEVEL_VIEW_LOOKUP))
+
+function sanitizeHydratedActiveView(
+  value: PersistedUIState['activeView'],
+  experimentalActivityEnabled: boolean
+): TopLevelView {
+  // Why: older data (pre-activeView) or a view a different build doesn't have
+  // falls back to terminal rather than rendering nothing.
+  if (typeof value !== 'string' || !KNOWN_TOP_LEVEL_VIEWS.has(value)) {
+    return 'terminal'
+  }
+  // Why: activity is hidden when its setting is off, so restoring it lands on a
+  // hidden page (same guard as closeSettingsPage). mobile/automations stay
+  // functional when hidden, so only activity is gated here.
+  if (value === 'activity' && !experimentalActivityEnabled) {
+    return 'terminal'
+  }
+  return value as TopLevelView
+}
+
 let agentSendTargetModeInstanceCounter = 0
 
 function createAgentSendTargetModeInstanceId(): string {
@@ -585,15 +622,7 @@ export type UISlice = {
   acknowledgedAgentsByPaneKey: Record<string, number>
   acknowledgeAgents: (paneKeys: string[]) => void
   unacknowledgeAgents: (paneKeys: string[]) => void
-  activeView:
-    | 'terminal'
-    | 'settings'
-    | 'tasks'
-    | 'activity'
-    | 'automations'
-    | 'space'
-    | 'skills'
-    | 'mobile'
+  activeView: TopLevelView
   previousViewBeforeTasks:
     | 'terminal'
     | 'settings'
@@ -742,6 +771,16 @@ export type UISlice = {
   } | null
   openSettingsTarget: (target: NonNullable<UISlice['settingsNavigationTarget']>) => void
   clearSettingsTarget: () => void
+  /**
+   * One-shot Appearance accordion to expand for nested Settings deep links
+   * (e.g. Usage percentages lives under Window & Sidebar). Cleared when
+   * Appearance consumes it.
+   */
+  appearanceAccordionDeepLink: 'interface' | 'terminal' | 'window' | null
+  setAppearanceAccordionDeepLink: (
+    section: NonNullable<UISlice['appearanceAccordionDeepLink']>
+  ) => void
+  clearAppearanceAccordionDeepLink: () => void
   activeModal:
     | 'none'
     | 'create-worktree'
@@ -822,6 +861,8 @@ export type UISlice = {
   dismissMobileEmulatorAgentSetup: () => void
   projectOrderManualDefaultNoticeDismissed: boolean
   dismissProjectOrderManualDefaultNotice: () => void
+  usagePercentageDisplayChangeNoticeDismissed: boolean
+  dismissUsagePercentageDisplayChangeNotice: () => void
   usageEmptyStateDismissed: boolean
   dismissUsageEmptyState: () => void
   groupBy: 'none' | 'workspace-status' | 'repo' | 'pr-status'
@@ -869,6 +910,8 @@ export type UISlice = {
   toggleStatusBarItem: (item: StatusBarItem) => void
   statusBarVisible: boolean
   setStatusBarVisible: (v: boolean) => void
+  usagePercentageDisplay: UsagePercentageDisplay
+  setUsagePercentageDisplay: (display: UsagePercentageDisplay) => void
   workspacePortScan: { key: string; result: WorkspacePortScanResult } | null
   workspacePortScansByKey: Record<string, WorkspacePortScanResult>
   workspacePortScanRefreshing: boolean
@@ -931,7 +974,7 @@ export type UISlice = {
   setUIZoomLevel: (level: number) => void
   editorFontZoomLevel: number
   setEditorFontZoomLevel: (level: number) => void
-  hydratePersistedUI: (ui: PersistedUIState) => void
+  hydratePersistedUI: (ui: PersistedUIState, source?: 'startup' | 'sync') => void
   updateStatus: UpdateStatus
   setUpdateStatus: (status: UpdateStatus) => void
   // Why: cached changelog from the last 'available' status so the card still has
@@ -1490,6 +1533,9 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
   settingsNavigationTarget: null,
   openSettingsTarget: (target) => set({ settingsNavigationTarget: target }),
   clearSettingsTarget: () => set({ settingsNavigationTarget: null }),
+  appearanceAccordionDeepLink: null,
+  setAppearanceAccordionDeepLink: (section) => set({ appearanceAccordionDeepLink: section }),
+  clearAppearanceAccordionDeepLink: () => set({ appearanceAccordionDeepLink: null }),
 
   activeModal: 'none',
   modalData: {},
@@ -1915,6 +1961,17 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
       window.api.ui.set({ projectOrderManualDefaultNoticeDismissed: true }).catch(console.error)
       return { projectOrderManualDefaultNoticeDismissed: true }
     }),
+  // Why: defaults true so pre-hydration / brand-new sessions never flash the
+  // change notice before persistence resolves eligibility.
+  usagePercentageDisplayChangeNoticeDismissed: true,
+  dismissUsagePercentageDisplayChangeNotice: () =>
+    set((s) => {
+      if (s.usagePercentageDisplayChangeNoticeDismissed) {
+        return s
+      }
+      window.api.ui.set({ usagePercentageDisplayChangeNoticeDismissed: true }).catch(console.error)
+      return { usagePercentageDisplayChangeNoticeDismissed: true }
+    }),
   usageEmptyStateDismissed: false,
   dismissUsageEmptyState: () =>
     set((s) => {
@@ -2112,6 +2169,22 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
     window.api.ui.set({ statusBarVisible: v }).catch(console.error)
     set({ statusBarVisible: v })
   },
+  usagePercentageDisplay: DEFAULT_USAGE_PERCENTAGE_DISPLAY,
+  setUsagePercentageDisplay: (display) => {
+    const normalized = normalizeUsagePercentageDisplay(display)
+    // Why: changing the control is the discovery path; permanently dismiss the
+    // one-time change notice so it does not reappear after the user adapted.
+    window.api.ui
+      .set({
+        usagePercentageDisplay: normalized,
+        usagePercentageDisplayChangeNoticeDismissed: true
+      })
+      .catch(console.error)
+    set({
+      usagePercentageDisplay: normalized,
+      usagePercentageDisplayChangeNoticeDismissed: true
+    })
+  },
   workspacePortScan: null,
   workspacePortScansByKey: {},
   workspacePortScanRefreshing: false,
@@ -2275,7 +2348,7 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
   editorFontZoomLevel: 0,
   setEditorFontZoomLevel: (level) => set({ editorFontZoomLevel: level }),
 
-  hydratePersistedUI: (ui) =>
+  hydratePersistedUI: (ui, source = 'sync') =>
     set((s) => {
       const validRepoIds = new Set(s.repos.map((repo) => repo.id))
       const persistedFilterRepoIds = sanitizePersistedRepoIds(ui.filterRepoIds)
@@ -2400,6 +2473,7 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
         syncTaskStatusFromWorkspaceBoard: ui.syncTaskStatusFromWorkspaceBoard === true,
         statusBarItems: statusBarItemsWithGrok,
         statusBarVisible: ui.statusBarVisible ?? true,
+        usagePercentageDisplay: normalizeUsagePercentageDisplay(ui.usagePercentageDisplay),
         // Why: absent → true so existing users see the pet the first time
         // they enable the experimental flag. Only an explicit Hide pet
         // dismissal persists a `false` value.
@@ -2453,6 +2527,10 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
         mobileEmulatorAgentSetupDismissed: ui.mobileEmulatorAgentSetupDismissed === true,
         projectOrderManualDefaultNoticeDismissed:
           ui.projectOrderManualDefaultNoticeDismissed === true,
+        // Why: load() resolves this for existing vs new profiles; treat only
+        // explicit true as dismissed so a false from migration still surfaces.
+        usagePercentageDisplayChangeNoticeDismissed:
+          ui.usagePercentageDisplayChangeNoticeDismissed === true,
         // Why: default false when undefined so existing users still see the CTA;
         // only an explicit dismissal persists true.
         usageEmptyStateDismissed: ui.usageEmptyStateDismissed === true,
@@ -2469,6 +2547,14 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
         workspaceCleanupDismissals: sanitizeWorkspaceCleanupDismissals(
           ui.workspaceCleanup?.dismissals
         ),
+        // Why: restore the view only from the startup hydration. The same action also
+        // runs on every cross-window ui:stateChanged broadcast (source 'sync', the
+        // default); re-applying activeView there would yank the user's current
+        // per-window view (navigation state, not a synced preference).
+        activeView:
+          source === 'startup'
+            ? sanitizeHydratedActiveView(ui.activeView, s.settings?.experimentalActivity === true)
+            : s.activeView,
         persistedUIReady: true
       }
       // Why: main rebroadcasts UI written by any client. Identical hydration must

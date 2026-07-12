@@ -49,6 +49,10 @@ function createEditorStore(): StoreApi<AppState> {
     browserTabsByWorktree: {},
     activeBrowserTabId: null,
     activeBrowserTabIdByWorktree: {},
+    repos: [{ id: 'repo-1', path: '/repo' }],
+    worktreesByRepo: { 'repo-1': [{ id: 'wt-1', repoId: 'repo-1', path: '/repo' }] },
+    folderWorkspaces: [],
+    projectGroups: [],
     recordFeatureInteraction: vi.fn(),
     ...createEditorSlice(...(args as Parameters<typeof createEditorSlice>))
   })) as unknown as StoreApi<AppState>
@@ -62,6 +66,10 @@ function createEditorTabsStore(): StoreApi<AppState> {
     browserTabsByWorktree: {},
     activeBrowserTabId: null,
     activeBrowserTabIdByWorktree: {},
+    repos: [{ id: 'repo-1', path: '/repo' }],
+    worktreesByRepo: { 'repo-1': [{ id: 'wt-1', repoId: 'repo-1', path: '/repo' }] },
+    folderWorkspaces: [],
+    projectGroups: [],
     recordFeatureInteraction: vi.fn(),
     ...createTabsSlice(...(args as Parameters<typeof createTabsSlice>)),
     ...createEditorSlice(...(args as Parameters<typeof createEditorSlice>))
@@ -4003,6 +4011,47 @@ describe('createEditorSlice activateMarkdownLink', () => {
     ])
   })
 
+  it('rejects ambiguous same-path owner fallback and honors an explicit source owner', async () => {
+    const store = createEditorStore()
+    store.getState().openFile({
+      filePath: '/repo/docs/note.md',
+      relativePath: 'docs/note.md',
+      worktreeId: 'wt-1',
+      runtimeEnvironmentId: 'env-source',
+      language: 'markdown',
+      mode: 'edit'
+    })
+    store.getState().openFile(
+      {
+        filePath: '/repo/docs/note.md',
+        relativePath: 'docs/note.md',
+        worktreeId: 'wt-1',
+        runtimeEnvironmentId: null,
+        language: 'markdown',
+        mode: 'edit'
+      },
+      { suppressActiveRuntimeFallback: true }
+    )
+
+    await store.getState().activateMarkdownLink('https://example.com', {
+      sourceFilePath: '/repo/docs/note.md',
+      worktreeId: 'wt-1',
+      worktreeRoot: '/repo'
+    })
+    expect(openHttpLinkMock).not.toHaveBeenCalled()
+
+    await store.getState().activateMarkdownLink('https://example.com', {
+      sourceFilePath: '/repo/docs/note.md',
+      worktreeId: 'wt-1',
+      worktreeRoot: '/repo',
+      sourceOwner: { kind: 'local' }
+    })
+    expect(openHttpLinkMock).toHaveBeenCalledWith('https://example.com/', {
+      worktreeId: 'wt-1',
+      sourceOwner: { kind: 'local' }
+    })
+  })
+
   it('stats SSH markdown links through the source worktree connection before opening', async () => {
     const store = createEditorStore()
     pathExistsMock.mockResolvedValue(true)
@@ -4268,9 +4317,36 @@ describe('createEditorSlice activateMarkdownLink', () => {
       worktreeId: 'wt-1',
       worktreeRoot: '/repo'
     })
-    expect(openHttpLinkMock).toHaveBeenCalledWith('https://example.com/', { worktreeId: 'wt-1' })
+    expect(openHttpLinkMock).toHaveBeenCalledWith('https://example.com/', {
+      worktreeId: 'wt-1',
+      sourceOwner: { kind: 'local' }
+    })
     expect(openUrlMock).not.toHaveBeenCalled()
     expect(store.getState().openFiles).toEqual([])
+  })
+
+  it('does not rescan legacy owner state when the source owner is explicit', async () => {
+    const store = createEditorStore()
+    for (const key of ['openFiles', 'repos', 'worktreesByRepo', 'folderWorkspaces'] as const) {
+      Object.defineProperty(store.getState(), key, {
+        configurable: true,
+        get: () => {
+          throw new Error(`explicit owner must not read ${key}`)
+        }
+      })
+    }
+
+    await store.getState().activateMarkdownLink('https://example.com', {
+      sourceFilePath: '/repo/docs/note.md',
+      worktreeId: 'wt-1',
+      worktreeRoot: '/repo',
+      sourceOwner: { kind: 'local' }
+    })
+
+    expect(openHttpLinkMock).toHaveBeenCalledWith('https://example.com/', {
+      worktreeId: 'wt-1',
+      sourceOwner: { kind: 'local' }
+    })
   })
 
   it('opens in-worktree file links in Orca', async () => {
@@ -4546,5 +4622,128 @@ describe('closeFile host mirroring', () => {
       '/other/b.ts'
     )
     expect(store.getState().openFiles).toHaveLength(0)
+  })
+})
+
+describe('read-only editor tabs (AI Vault View Log)', () => {
+  const LOG_PATH = '/home/user/.claude/sessions/log.jsonl'
+
+  const openReadOnlyLog = (store: StoreApi<AppState>): void =>
+    store.getState().openFile(
+      {
+        filePath: LOG_PATH,
+        relativePath: LOG_PATH,
+        worktreeId: 'wt-1',
+        language: 'jsonl',
+        mode: 'edit',
+        readOnly: true,
+        liveTail: true,
+        runtimeEnvironmentId: null
+      },
+      { preview: false, forceContentReload: true, suppressActiveRuntimeFallback: true }
+    )
+
+  it('creates a permanent read-only edit tab', () => {
+    const store = createEditorStore()
+    openReadOnlyLog(store)
+
+    expect(store.getState().openFiles[0]).toEqual(
+      expect.objectContaining({
+        filePath: LOG_PATH,
+        mode: 'edit',
+        readOnly: true,
+        liveTail: true,
+        isPreview: undefined,
+        runtimeEnvironmentId: null
+      })
+    )
+  })
+
+  it('bumps the reload nonce on repeated View Log of a clean read-only tab', () => {
+    const store = createEditorStore()
+    openReadOnlyLog(store)
+    expect(store.getState().openFiles[0]?.fileContentReloadNonce).toBeUndefined()
+
+    openReadOnlyLog(store)
+    expect(store.getState().openFiles[0]?.fileContentReloadNonce).toBe(1)
+  })
+
+  it('keeps read-only sticky when the same path is opened writable (no silent upgrade)', () => {
+    const store = createEditorStore()
+    openReadOnlyLog(store)
+
+    store.getState().openFile({
+      filePath: LOG_PATH,
+      relativePath: LOG_PATH,
+      worktreeId: 'wt-1',
+      language: 'jsonl',
+      mode: 'edit',
+      runtimeEnvironmentId: null
+    })
+
+    expect(store.getState().openFiles).toHaveLength(1)
+    expect(store.getState().openFiles[0]?.readOnly).toBe(true)
+  })
+
+  it('never flips an existing writable tab to read-only on View Log', () => {
+    const store = createEditorStore()
+    store.getState().openFile({
+      filePath: LOG_PATH,
+      relativePath: LOG_PATH,
+      worktreeId: 'wt-1',
+      language: 'jsonl',
+      mode: 'edit',
+      runtimeEnvironmentId: null
+    })
+
+    openReadOnlyLog(store)
+
+    expect(store.getState().openFiles).toHaveLength(1)
+    expect(store.getState().openFiles[0]?.readOnly).toBeUndefined()
+  })
+
+  it('markFileDirty and setEditorDraft hard no-op for read-only tabs', () => {
+    const store = createEditorStore()
+    openReadOnlyLog(store)
+
+    store.getState().markFileDirty(LOG_PATH, true)
+    store.getState().setEditorDraft(LOG_PATH, 'stray edit')
+
+    expect(store.getState().openFiles[0]?.isDirty).toBe(false)
+    expect(store.getState().editorDrafts[LOG_PATH]).toBeUndefined()
+  })
+
+  it('hydrates a persisted read-only tab clean and ignores any persisted dirty draft', () => {
+    const store = createEditorStore()
+    store.setState({
+      worktreesByRepo: { 'repo-1': [{ id: 'wt-1' }] },
+      folderWorkspaces: []
+    } as never)
+
+    store.getState().hydrateEditorSession({
+      openFilesByWorktree: {
+        'wt-1': [
+          {
+            filePath: LOG_PATH,
+            relativePath: LOG_PATH,
+            worktreeId: 'wt-1',
+            language: 'jsonl',
+            readOnly: true,
+            liveTail: true,
+            // Why: a corrupt/legacy session could carry a draft; hydrate must
+            // hard-strip it so the restored log can never come back writable.
+            dirtyDraftContent: 'should be ignored',
+            lastKnownDiskSignature: 'sig'
+          }
+        ]
+      }
+    } as never)
+
+    const restored = store.getState().openFiles.find((f) => f.filePath === LOG_PATH)
+    expect(restored).toEqual(
+      expect.objectContaining({ readOnly: true, liveTail: true, isDirty: false, mode: 'edit' })
+    )
+    expect(restored?.pendingDiskBaselineVerification).toBeUndefined()
+    expect(store.getState().editorDrafts[LOG_PATH]).toBeUndefined()
   })
 })

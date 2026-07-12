@@ -62,6 +62,7 @@ vi.mock('../browser/browser-manager', () => ({
 
 import { createMainWindow, loadMainWindow } from './createMainWindow'
 import { ipcMain } from 'electron'
+import { shouldRecoverRendererAfterProcessGone } from '../crash-reporting/process-gone-classification'
 
 function withPlatform<T>(platform: NodeJS.Platform, run: () => T): T {
   const original = process.platform
@@ -2389,7 +2390,7 @@ describe('createMainWindow', () => {
     expect(onRendererProcessGone).toHaveBeenCalledWith(details, 142)
   })
 
-  it('passes the renderer webContents id through crash classification callbacks', () => {
+  it('passes the renderer webContents id through crash recording and recovery callbacks', () => {
     vi.useFakeTimers()
 
     const windowHandlers: Record<string, (...args: any[]) => void> = {}
@@ -2422,13 +2423,11 @@ describe('createMainWindow', () => {
       return browserWindowInstance
     })
     const onRendererProcessGone = vi.fn()
-    const shouldRecordRendererCrash = vi.fn(() => true)
     const shouldRecoverRenderer = vi.fn(() => true)
 
     try {
       createMainWindow(null, {
         onRendererProcessGone,
-        shouldRecordRendererCrash,
         shouldRecoverRenderer
       })
 
@@ -2436,7 +2435,6 @@ describe('createMainWindow', () => {
       windowHandlers['render-process-gone']?.({} as never, details)
       vi.advanceTimersByTime(250)
 
-      expect(shouldRecordRendererCrash).toHaveBeenCalledWith(details, 424)
       expect(onRendererProcessGone).toHaveBeenCalledWith(details, 424)
       expect(shouldRecoverRenderer).toHaveBeenCalledWith(details, 424)
     } finally {
@@ -2444,9 +2442,10 @@ describe('createMainWindow', () => {
     }
   })
 
-  it('does not notify the crash recorder for an expected renderer teardown', () => {
+  it('forwards expected renderer teardowns so the recorder can diagnose suppression', () => {
     const windowHandlers: Record<string, (...args: any[]) => void> = {}
     const webContents = {
+      id: 142,
       on: vi.fn((event, handler) => {
         windowHandlers[event] = handler
       }),
@@ -2475,10 +2474,7 @@ describe('createMainWindow', () => {
     })
     const onRendererProcessGone = vi.fn()
 
-    createMainWindow(null, {
-      onRendererProcessGone,
-      shouldRecordRendererCrash: () => false
-    })
+    createMainWindow(null, { onRendererProcessGone })
 
     windowHandlers['render-process-gone']?.(
       {} as never,
@@ -2488,7 +2484,10 @@ describe('createMainWindow', () => {
       } as Electron.RenderProcessGoneDetails
     )
 
-    expect(onRendererProcessGone).not.toHaveBeenCalled()
+    expect(onRendererProcessGone).toHaveBeenCalledWith(
+      expect.objectContaining({ reason: 'killed', exitCode: 15 }),
+      expect.any(Number)
+    )
 
     consoleError.mockRestore()
   })
@@ -2701,6 +2700,48 @@ describe('createMainWindow', () => {
     )
 
     consoleError.mockRestore()
+  })
+
+  it('bounds renderer launch-failed recovery with the crash-loop breaker', () => {
+    vi.useFakeTimers()
+
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {})
+    const onRendererRecoveryExhausted = vi.fn()
+    const { browserWindowInstance, windowHandlers } = createRendererRecoveryWindowHarness()
+
+    try {
+      createMainWindow(null, {
+        onRendererRecoveryExhausted,
+        shouldRecoverRenderer: (details) =>
+          shouldRecoverRendererAfterProcessGone({
+            reason: details.reason,
+            expectedTeardown: 'none'
+          })
+      })
+
+      const details = {
+        reason: 'launch-failed',
+        exitCode: 18
+      } as Electron.RenderProcessGoneDetails
+      const driveLaunchFailure = (): void => {
+        windowHandlers['render-process-gone']?.({} as never, details)
+        vi.advanceTimersByTime(250)
+      }
+
+      driveLaunchFailure()
+      driveLaunchFailure()
+      driveLaunchFailure()
+      expect(browserWindowInstance.loadFile).toHaveBeenCalledTimes(4)
+
+      driveLaunchFailure()
+      expect(browserWindowInstance.loadFile).toHaveBeenCalledTimes(4)
+      expect(onRendererRecoveryExhausted).toHaveBeenCalledOnce()
+      expect(onRendererRecoveryExhausted).toHaveBeenCalledWith(
+        expect.objectContaining({ details, recentRecoveryCount: 3 })
+      )
+    } finally {
+      consoleError.mockRestore()
+    }
   })
 
   function createStartupRevealWindowFixture() {

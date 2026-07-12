@@ -6,10 +6,10 @@ import {
   applyTerminalAppearance,
   hexToRgba,
   installMode2031Handlers,
-  maybePushMode2031Flip,
-  mode2031SequenceFor,
   publishTerminalViewAttributesAtAppStart
 } from './terminal-appearance'
+import { maybePushMode2031Flip } from './terminal-mode-2031-replies'
+import { mode2031SequenceFor } from '../../../../shared/terminal-color-scheme-protocol'
 import { replayIntoTerminal, type ReplayingPanesRef } from './replay-guard'
 import { _resetTerminalViewAttributesPublisherForTest } from './terminal-view-attributes-publisher'
 import type { TerminalViewAttributes } from '../../../../shared/terminal-view-attributes'
@@ -17,12 +17,14 @@ import type { TerminalViewAttributes } from '../../../../shared/terminal-view-at
 function fakeTransport(overrides?: { connected?: boolean; sendOk?: boolean }): {
   isConnected: () => boolean
   sendInput: ReturnType<typeof vi.fn<(data: string) => boolean>>
+  sendInputImmediate: ReturnType<typeof vi.fn<(data: string) => boolean>>
 } {
   const connected = overrides?.connected ?? true
   const sendOk = overrides?.sendOk ?? true
   return {
     isConnected: () => connected,
-    sendInput: vi.fn<(data: string) => boolean>(() => sendOk)
+    sendInput: vi.fn<(data: string) => boolean>(() => sendOk),
+    sendInputImmediate: vi.fn<(data: string) => boolean>(() => sendOk)
   }
 }
 
@@ -42,7 +44,7 @@ describe('maybePushMode2031Flip', () => {
     const pushed = maybePushMode2031Flip(1, 'dark', transport, subs, last)
 
     expect(pushed).toBe(false)
-    expect(transport.sendInput).not.toHaveBeenCalled()
+    expect(transport.sendInputImmediate).not.toHaveBeenCalled()
     expect(last.has(1)).toBe(false)
   })
 
@@ -54,8 +56,9 @@ describe('maybePushMode2031Flip', () => {
     const pushed = maybePushMode2031Flip(1, 'dark', transport, subs, last)
 
     expect(pushed).toBe(true)
-    expect(transport.sendInput).toHaveBeenCalledTimes(1)
-    expect(transport.sendInput).toHaveBeenCalledWith('\x1b[?997;1n')
+    expect(transport.sendInputImmediate).toHaveBeenCalledTimes(1)
+    expect(transport.sendInputImmediate).toHaveBeenCalledWith('\x1b[?997;1n')
+    expect(transport.sendInput).not.toHaveBeenCalled()
     expect(last.get(1)).toBe('dark')
   })
 
@@ -70,7 +73,7 @@ describe('maybePushMode2031Flip', () => {
     maybePushMode2031Flip(1, 'dark', transport, subs, last)
     maybePushMode2031Flip(1, 'dark', transport, subs, last)
 
-    expect(transport.sendInput).toHaveBeenCalledTimes(1)
+    expect(transport.sendInputImmediate).toHaveBeenCalledTimes(1)
     expect(last.get(1)).toBe('dark')
   })
 
@@ -83,7 +86,7 @@ describe('maybePushMode2031Flip', () => {
     maybePushMode2031Flip(1, 'light', transport, subs, last)
     maybePushMode2031Flip(1, 'dark', transport, subs, last)
 
-    expect(transport.sendInput.mock.calls.map((c) => c[0])).toEqual([
+    expect(transport.sendInputImmediate.mock.calls.map((c) => c[0])).toEqual([
       '\x1b[?997;1n',
       '\x1b[?997;2n',
       '\x1b[?997;1n'
@@ -99,11 +102,11 @@ describe('maybePushMode2031Flip', () => {
     const pushed = maybePushMode2031Flip(1, 'dark', transport, subs, last)
 
     expect(pushed).toBe(false)
-    expect(transport.sendInput).not.toHaveBeenCalled()
+    expect(transport.sendInputImmediate).not.toHaveBeenCalled()
     expect(last.has(1)).toBe(false)
   })
 
-  it('leaves last-mode untouched when sendInput reports failure', () => {
+  it('leaves last-mode untouched when immediate input reports failure', () => {
     // So a reconnect / retry will re-emit on the next appearance pass.
     const transport = fakeTransport({ sendOk: false })
     const subs = new Map([[1, true]])
@@ -112,7 +115,7 @@ describe('maybePushMode2031Flip', () => {
     const pushed = maybePushMode2031Flip(1, 'dark', transport, subs, last)
 
     expect(pushed).toBe(false)
-    expect(transport.sendInput).toHaveBeenCalledTimes(1)
+    expect(transport.sendInputImmediate).toHaveBeenCalledTimes(1)
     expect(last.has(1)).toBe(false)
   })
 
@@ -130,8 +133,8 @@ describe('maybePushMode2031Flip', () => {
     maybePushMode2031Flip(1, 'dark', transportA, subs, last) // suppressed
     maybePushMode2031Flip(2, 'dark', transportB, subs, last) // flip
 
-    expect(transportA.sendInput).toHaveBeenCalledTimes(1)
-    expect(transportB.sendInput).toHaveBeenCalledTimes(2)
+    expect(transportA.sendInputImmediate).toHaveBeenCalledTimes(1)
+    expect(transportB.sendInputImmediate).toHaveBeenCalledTimes(2)
     expect(last.get(1)).toBe('dark')
     expect(last.get(2)).toBe('dark')
   })

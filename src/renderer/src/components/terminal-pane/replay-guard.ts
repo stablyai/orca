@@ -1,6 +1,7 @@
 import type { ManagedPane } from '@/lib/pane-manager/pane-manager'
 import { writeForegroundTerminalChunk } from '@/lib/pane-manager/pane-terminal-foreground-render-settle'
 import { recordRendererCrashBreadcrumb } from '@/lib/crash-breadcrumb-recorder'
+import { ensureArabicShapingJoinerForText } from '@/lib/pane-manager/terminal-arabic-shaping-joiner'
 
 // Why: xterm.js auto-responds to terminal query sequences (DA1 `CSI c`,
 // DECRQM `CSI ? Ps $ p`, OSC 10/11 color queries, focus events, CPR) by
@@ -51,6 +52,11 @@ export type ReplayingPanesRef = React.RefObject<Map<number, number>>
 //      which the breadcrumb reports.
 // While the probe is pending (slow-but-alive replay), the guard HOLDS.
 const REPLAY_GUARD_STALL_CHECK_MS = 10_000
+
+type ReplayTerminalOptions = {
+  shouldRefreshViewportSynchronously?: () => boolean
+  stallCheckMs?: number
+}
 
 export function isPaneReplaying(ref: ReplayingPanesRef, paneId: number): boolean {
   return (ref.current.get(paneId) ?? 0) > 0
@@ -130,22 +136,24 @@ export function replayIntoTerminal(
   pane: ManagedPane,
   replayingPanesRef: ReplayingPanesRef,
   data: string,
-  stallCheckMs: number = REPLAY_GUARD_STALL_CHECK_MS
+  options: ReplayTerminalOptions = {}
 ): void {
   if (!data) {
     return
   }
+  ensureArabicShapingJoinerForText(pane.terminal, data)
   const releaseParsed = engageReplayGuard(
     replayingPanesRef.current,
     pane.id,
     pane.terminal,
-    stallCheckMs
+    options.stallCheckMs ?? REPLAY_GUARD_STALL_CHECK_MS
   )
   // Why: hidden/snapshot replay bypasses the live foreground write path, but
   // WebGL/canvas renderers still need a post-parse repaint to drop stale cells.
   writeForegroundTerminalChunk(pane.terminal, data, {
     forceViewportRefresh: true,
     followupViewportRefresh: true,
+    shouldRefreshViewportSynchronously: options.shouldRefreshViewportSynchronously,
     onParsed: releaseParsed
   })
 }
@@ -154,11 +162,12 @@ export function replayIntoTerminalAsync(
   pane: ManagedPane,
   replayingPanesRef: ReplayingPanesRef,
   data: string,
-  stallCheckMs: number = REPLAY_GUARD_STALL_CHECK_MS
+  options: ReplayTerminalOptions = {}
 ): Promise<void> {
   if (!data) {
     return Promise.resolve()
   }
+  ensureArabicShapingJoinerForText(pane.terminal, data)
   return new Promise((resolve) => {
     // Why resolve on either release path: callers await this to sequence
     // restore steps; a lost write completion must not hang the restore chain.
@@ -166,12 +175,13 @@ export function replayIntoTerminalAsync(
       replayingPanesRef.current,
       pane.id,
       pane.terminal,
-      stallCheckMs,
+      options.stallCheckMs ?? REPLAY_GUARD_STALL_CHECK_MS,
       resolve
     )
     writeForegroundTerminalChunk(pane.terminal, data, {
       forceViewportRefresh: true,
       followupViewportRefresh: true,
+      shouldRefreshViewportSynchronously: options.shouldRefreshViewportSynchronously,
       onParsed: releaseParsed
     })
   })

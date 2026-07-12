@@ -237,6 +237,7 @@ export class DaemonPtyAdapter implements IPtyProvider {
         envToDelete: opts.envToDelete,
         command: opts.command,
         startupCommandDelivery: opts.startupCommandDelivery,
+        launchAgent: opts.launchAgent,
         // Why: without this, the daemon always spawns cmd.exe (COMSPEC) or
         // PowerShell as a fallback — regardless of which shell the renderer
         // asked for in the "+" menu or persisted as the default. Forwarding
@@ -252,6 +253,8 @@ export class DaemonPtyAdapter implements IPtyProvider {
 
     let scrollback = restoreInfo ? getRecoveredHistorySeed(restoreInfo) : null
     let result = await createOrAttach(scrollback)
+    const launchIdentity = (): { launchAgent?: NonNullable<typeof result.launchAgent> } =>
+      result.launchAgent ? { launchAgent: result.launchAgent } : {}
 
     if (effectiveCwd) {
       this.initialCwds.set(sessionId, effectiveCwd)
@@ -278,6 +281,7 @@ export class DaemonPtyAdapter implements IPtyProvider {
       return {
         id: sessionId,
         pid,
+        ...launchIdentity(),
         coldRestore: cachedRestore,
         ...(!result.isNew ? { isReattach: true } : {})
       }
@@ -342,11 +346,12 @@ export class DaemonPtyAdapter implements IPtyProvider {
         return {
           id: sessionId,
           pid,
+          ...launchIdentity(),
           coldRestore,
           ...(!result.isNew ? { isReattach: true } : {})
         }
       }
-      return { id: sessionId, pid }
+      return { id: sessionId, pid, ...launchIdentity() }
     }
 
     if (this.historyManager && result.isNew) {
@@ -380,7 +385,12 @@ export class DaemonPtyAdapter implements IPtyProvider {
 
     const isReattach = !result.isNew
     if (!isReattach || !result.snapshot) {
-      return { id: sessionId, pid, ...(isReattach ? { isReattach: true } : {}) }
+      return {
+        id: sessionId,
+        pid,
+        ...launchIdentity(),
+        ...(isReattach ? { isReattach: true } : {})
+      }
     }
 
     const isAltScreen = result.snapshot.modes.alternateScreen
@@ -396,6 +406,7 @@ export class DaemonPtyAdapter implements IPtyProvider {
     return {
       id: sessionId,
       pid,
+      ...launchIdentity(),
       snapshot: snapshotPayload,
       snapshotCols: result.snapshot.cols,
       snapshotRows: result.snapshot.rows,
@@ -650,6 +661,18 @@ export class DaemonPtyAdapter implements IPtyProvider {
     try {
       const result = await this.client.request<{ foregroundProcess: string | null }>(
         'getForegroundProcess',
+        { sessionId: id }
+      )
+      return result.foregroundProcess
+    } catch {
+      return null
+    }
+  }
+
+  async confirmForegroundProcess(id: string): Promise<string | null> {
+    try {
+      const result = await this.client.request<{ foregroundProcess: string | null }>(
+        'confirmForegroundProcess',
         { sessionId: id }
       )
       return result.foregroundProcess

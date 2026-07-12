@@ -1271,6 +1271,7 @@ describe('setActiveWorktree', () => {
     })
 
     store.getState().syncPaneDetachPtyOwnership({
+      detachedLeafId: '11111111-1111-4111-8111-111111111111',
       detachedPtyId: 'pty-detached',
       sourceLayout: {
         root: { type: 'leaf', leafId: 'survivor-leaf' },

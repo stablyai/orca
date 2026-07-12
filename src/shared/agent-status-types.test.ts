@@ -1,8 +1,10 @@
 import { afterEach, describe, it, expect, vi } from 'vitest'
 import {
+  agentSubagentsEqual,
   parseAgentStatusPayload,
   normalizeAgentStatusPayload,
   AGENT_STATUS_MAX_FIELD_LENGTH,
+  AGENT_STATUS_MAX_SUBAGENTS,
   AGENT_STATUS_TOOL_NAME_MAX_LENGTH,
   AGENT_STATUS_TOOL_INPUT_MAX_LENGTH,
   AGENT_STATUS_ASSISTANT_MESSAGE_MAX_LENGTH,
@@ -476,5 +478,57 @@ Fix dispatch fallback preview for normalized status prompts`
     if (last >= 0xdc00 && last <= 0xdfff) {
       expect(secondLast >= 0xd800 && secondLast <= 0xdbff).toBe(true)
     }
+  })
+
+  it('normalizes the subagents field, dropping invalid entries and bounding count', () => {
+    const result = parseAgentStatusPayload(
+      JSON.stringify({
+        state: 'working',
+        subagents: [
+          { id: 'a1', state: 'working', startedAt: 100, agentType: 'general-purpose' },
+          { id: 'r1', state: 'idle', startedAt: 'nope', description: 'line\none' },
+          { id: '', state: 'working', startedAt: 1 },
+          { id: 'bad-state', state: 'running', startedAt: 1 },
+          'garbage',
+          ...Array.from({ length: AGENT_STATUS_MAX_SUBAGENTS + 5 }, (_, i) => ({
+            id: `extra-${i}`,
+            state: 'idle',
+            startedAt: i
+          }))
+        ]
+      })
+    )
+    expect(result?.subagents?.length).toBe(AGENT_STATUS_MAX_SUBAGENTS)
+    expect(result?.subagents?.[0]).toEqual({
+      id: 'a1',
+      state: 'working',
+      startedAt: 100,
+      agentType: 'general-purpose',
+      description: undefined
+    })
+    // Why: non-finite startedAt coerces to 0; descriptions fold to one line.
+    expect(result?.subagents?.[1]).toMatchObject({
+      id: 'r1',
+      startedAt: 0,
+      description: 'line one'
+    })
+  })
+
+  it('omits subagents when absent or empty', () => {
+    expect(parseAgentStatusPayload('{"state":"done"}')?.subagents).toBeUndefined()
+    expect(parseAgentStatusPayload('{"state":"done","subagents":[]}')?.subagents).toBeUndefined()
+  })
+})
+
+describe('agentSubagentsEqual', () => {
+  const snapshot = { id: 'a1', state: 'working' as const, startedAt: 1 }
+
+  it('compares structurally and treats undefined/empty as distinct from populated', () => {
+    expect(agentSubagentsEqual(undefined, undefined)).toBe(true)
+    expect(agentSubagentsEqual([snapshot], [{ ...snapshot }])).toBe(true)
+    expect(agentSubagentsEqual([snapshot], [{ ...snapshot, state: 'idle' }])).toBe(false)
+    expect(agentSubagentsEqual([snapshot], undefined)).toBe(false)
+    expect(agentSubagentsEqual(undefined, [snapshot])).toBe(false)
+    expect(agentSubagentsEqual([snapshot], [snapshot, { ...snapshot, id: 'b' }])).toBe(false)
   })
 })

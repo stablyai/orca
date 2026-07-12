@@ -6,7 +6,7 @@ import { diffViewStateCache, setWithLRU } from '@/lib/scroll-cache'
 import { monaco } from '@/lib/monaco-setup'
 import { computeDiffEditorFontSize } from '@/lib/editor-font-zoom'
 import { useContextualCopySetup } from './useContextualCopySetup'
-import { findWorktreeById } from '@/store/slices/worktree-helpers'
+import { selectWorktreeDiffComments } from '@/store/worktree-diff-comments-selector'
 import { useDiffCommentDecorator } from '../diff-comments/useDiffCommentDecorator'
 import { DiffCommentPopover } from '../diff-comments/DiffCommentPopover'
 import {
@@ -57,7 +57,7 @@ export default function DiffViewer({
   // identity only changes when diffComments actually changes on this worktree.
   // Filtering by relativePath happens in a memo below.
   const allDiffComments = useAppStore((s): DiffComment[] | undefined =>
-    worktreeId ? findWorktreeById(s.worktreesByRepo, worktreeId)?.diffComments : undefined
+    selectWorktreeDiffComments(s, worktreeId)
   )
   const diffComments = useMemo(
     () => (allDiffComments ?? []).filter((c) => c.filePath === relativePath && isDiffComment(c)),

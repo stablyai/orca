@@ -1193,6 +1193,10 @@ describe('GitHandler', () => {
 
       expect(gitBufferSpy).toHaveBeenCalledTimes(2)
       expect(gitSpy).toHaveBeenCalledWith(['add', '--', 'src/file.ts'], tmpDir)
+      const submodulePathReads = gitSpy.mock.calls.filter(
+        ([args]) => args[0] === 'config' && args.includes('.gitmodules')
+      )
+      expect(submodulePathReads).toHaveLength(2)
     })
 
     it('clears pending git.diff reads when a narrow ref fetch runs', async () => {

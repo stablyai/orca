@@ -169,6 +169,13 @@ vi.mock('../telemetry/classify-error', () => ({
   classifyError: classifyErrorMock
 }))
 
+// Why: the real ensure writes to disk from process.resourcesPath, which does
+// not exist under vitest; env assembly only needs the returned dir path.
+vi.mock('../cli/linux-terminal-orca-cli-shim', () => ({
+  ensureLinuxTerminalOrcaCliShimDir: (options: { userDataPath: string }) =>
+    join(options.userDataPath, 'linux-orca-cli-shim')
+}))
+
 vi.mock('../memory/pty-registry', () => ({
   registerPty: registerPtyMock,
   unregisterPty: unregisterPtyMock
@@ -555,6 +562,7 @@ describe('registerPtyHandlers', () => {
       acknowledgeDataEvent: vi.fn(),
       hasChildProcesses: vi.fn(),
       getForegroundProcess: vi.fn(),
+      confirmForegroundProcess: vi.fn(),
       serialize: vi.fn(),
       revive: vi.fn(),
       onData: vi.fn(() => () => {}),
@@ -596,6 +604,7 @@ describe('registerPtyHandlers', () => {
       acknowledgeDataEvent: vi.fn(),
       hasChildProcesses: vi.fn(),
       getForegroundProcess: vi.fn(),
+      confirmForegroundProcess: vi.fn(),
       serialize: vi.fn(),
       revive: vi.fn(),
       onData: vi.fn((handler: (payload: { id: string; data: string }) => void) => {
@@ -1671,6 +1680,28 @@ describe('registerPtyHandlers', () => {
           expect(spawnOptions.envToDelete).toEqual(
             expect.arrayContaining(['CODEX_HOME', 'ORCA_CODEX_HOME'])
           )
+        } finally {
+          Object.defineProperty(process, 'platform', {
+            configurable: true,
+            value: originalPlatform
+          })
+        }
+      })
+
+      it('prepends the bare-orca CLI shim dir to PATH for packaged Linux spawns', async () => {
+        const originalPlatform = process.platform
+        Object.defineProperty(process, 'platform', {
+          configurable: true,
+          value: 'linux'
+        })
+        try {
+          const env = await daemonSpawnAndGetEnv({ PATH: '/usr/local/bin:/usr/bin' })
+          const entries = env.PATH.split(delimiter)
+          const shimDir = join('/tmp/orca-user-data', 'linux-orca-cli-shim')
+          // Why: bare `orca` must resolve to the Orca CLI before /usr/bin/orca
+          // (the GNOME screen reader) inside Orca-managed terminals (#7904).
+          expect(entries.indexOf(shimDir)).toBeGreaterThanOrEqual(0)
+          expect(entries.indexOf(shimDir)).toBeLessThan(entries.indexOf('/usr/bin'))
         } finally {
           Object.defineProperty(process, 'platform', {
             configurable: true,
@@ -3219,6 +3250,40 @@ describe('registerPtyHandlers', () => {
     })
   })
 
+  it('routes runtime foreground confirmation to the provider owning the captured PTY', async () => {
+    const confirmForegroundProcess = vi.fn(async () => 'codex')
+    registerSshPtyProvider('ssh-1', { confirmForegroundProcess } as never)
+    setPtyOwnership('remote-pty', 'ssh-1')
+    const runtime = { setPtyController: vi.fn() }
+    handlers.clear()
+    registerPtyHandlers(mainWindow as never, runtime as never)
+    const controller = runtime.setPtyController.mock.calls[0]?.[0] as {
+      confirmForegroundProcess: (ptyId: string) => Promise<string | null>
+    }
+
+    await expect(controller.confirmForegroundProcess('remote-pty')).resolves.toBe('codex')
+    expect(confirmForegroundProcess).toHaveBeenCalledOnce()
+    expect(confirmForegroundProcess).toHaveBeenCalledWith('remote-pty')
+    deletePtyOwnership('remote-pty')
+  })
+
+  it('returns unavailable runtime confirmation for unsupported or missing providers', async () => {
+    registerSshPtyProvider('ssh-1', {} as never)
+    setPtyOwnership('unsupported-pty', 'ssh-1')
+    setPtyOwnership('missing-pty', 'missing-connection')
+    const runtime = { setPtyController: vi.fn() }
+    handlers.clear()
+    registerPtyHandlers(mainWindow as never, runtime as never)
+    const controller = runtime.setPtyController.mock.calls[0]?.[0] as {
+      confirmForegroundProcess: (ptyId: string) => Promise<string | null>
+    }
+
+    await expect(controller.confirmForegroundProcess('unsupported-pty')).resolves.toBeNull()
+    await expect(controller.confirmForegroundProcess('missing-pty')).resolves.toBeNull()
+    deletePtyOwnership('unsupported-pty')
+    deletePtyOwnership('missing-pty')
+  })
+
   it('rethrows non-not-found local provider shutdown failures', async () => {
     setLocalPtyProvider({
       spawn: vi.fn(),
@@ -3973,6 +4038,7 @@ describe('registerPtyHandlers', () => {
       listProcesses: vi.fn(),
       hasChildProcesses: vi.fn(),
       getForegroundProcess: vi.fn(),
+      confirmForegroundProcess: vi.fn(),
       serialize: vi.fn(),
       revive: vi.fn(),
       getDefaultShell: vi.fn(),
@@ -4034,6 +4100,7 @@ describe('registerPtyHandlers', () => {
       listProcesses: vi.fn(),
       hasChildProcesses: vi.fn(),
       getForegroundProcess: vi.fn(),
+      confirmForegroundProcess: vi.fn(),
       serialize: vi.fn(),
       revive: vi.fn(),
       getDefaultShell: vi.fn(),
@@ -4050,8 +4117,12 @@ describe('registerPtyHandlers', () => {
     await expect(
       handlers.get('pty:getForegroundProcess')!(null, { id: 'remote-pty' })
     ).resolves.toBeNull()
+    await expect(
+      handlers.get('pty:confirmForegroundProcess')!(null, { id: 'remote-pty' })
+    ).resolves.toBeNull()
     expect(provider.hasChildProcesses).not.toHaveBeenCalled()
     expect(provider.getForegroundProcess).not.toHaveBeenCalled()
+    expect(provider.confirmForegroundProcess).not.toHaveBeenCalled()
   })
 
   // Why: regression for the Claude-Code split-pane garbled-render desync. resize
@@ -4067,12 +4138,13 @@ describe('registerPtyHandlers', () => {
       applied: { cols: number; rows: number } | null
       resize?: (cols: number, rows: number) => void
       getAppliedSize?: (id: string) => Promise<{ cols: number; rows: number } | null>
-    }): void {
+    }): ReturnType<typeof vi.fn> {
+      const write = vi.fn()
       setLocalPtyProvider({
         spawn: vi.fn(async (opts: { sessionId?: string }) => ({
           id: opts.sessionId ?? 'daemon-pty'
         })),
-        write: vi.fn(),
+        write,
         resize: vi.fn(args.resize ?? (() => {})),
         getAppliedSize: vi.fn(args.getAppliedSize ?? (async () => args.applied)),
         kill: vi.fn(),
@@ -4082,6 +4154,7 @@ describe('registerPtyHandlers', () => {
         listProcesses: vi.fn(async () => []),
         getForegroundProcess: vi.fn(async () => null)
       } as never)
+      return write
     }
 
     const resizeListener = (): ((event: unknown, args: unknown) => void) => {
@@ -4207,6 +4280,113 @@ describe('registerPtyHandlers', () => {
 
       resizeListener()(mainWindowIpcEvent, { id, cols: 120, rows: 30 })
 
+      expect(runtime.onExternalPtyResize).not.toHaveBeenCalled()
+    })
+
+    it('suppresses the host fit cascade while a remote viewer drives the width', async () => {
+      const resizeSpy = vi.fn()
+      setupProviderWithAppliedSize({ applied: { cols: 80, rows: 24 }, resize: resizeSpy })
+      const runtime = {
+        setPtyController: vi.fn(),
+        createPreAllocatedTerminalHandle: vi.fn(() => null),
+        registerPty: vi.fn(),
+        getDriver: vi.fn(() => ({ kind: 'idle' })),
+        // The whole point of the fix: a PTY with a remote viewer reports true,
+        // even though the presence-lock driver state stays idle/desktop.
+        isRemoteDesktopResizeDriven: vi.fn(() => true),
+        isResizeSuppressed: vi.fn(() => false),
+        onPtySpawned: vi.fn(),
+        onPtyExit: vi.fn(),
+        onPtyData: vi.fn(),
+        recordRemoteDesktopHostReclaimTarget: vi.fn(),
+        onExternalPtyResize: vi.fn()
+      }
+      handlers.clear()
+      registerPtyHandlers(mainWindow as never, runtime as never)
+      const spawn = await handlers.get('pty:spawn')!(null, { cols: 80, rows: 24, env: {} })
+      const id = (spawn as { id: string }).id
+      resizeSpy.mockClear()
+
+      // Host's own safeFit tries to widen the viewed PTY back to its window.
+      resizeListener()(mainWindowIpcEvent, { id, cols: 125, rows: 48 })
+
+      // It must not reach the PTY while the viewer owns the width.
+      expect(resizeSpy).not.toHaveBeenCalled()
+      expect(runtime.recordRemoteDesktopHostReclaimTarget).toHaveBeenCalledWith(id, 125, 48)
+      expect(runtime.onExternalPtyResize).not.toHaveBeenCalled()
+    })
+
+    it('lets trusted host activity reclaim remote viewport ownership', () => {
+      const claimRemoteDesktopHost = vi.fn().mockResolvedValue(true)
+      const runtime = {
+        setPtyController: vi.fn(),
+        claimRemoteDesktopHost
+      }
+      handlers.clear()
+      registerPtyHandlers(mainWindow as never, runtime as never)
+      const call = onMock.mock.calls.find((entry: unknown[]) => entry[0] === 'pty:claimViewport')
+      const claimListener = call?.[1] as
+        | ((event: unknown, args: { id: string; cols: number; rows: number }) => void)
+        | undefined
+      expect(claimListener).toBeTypeOf('function')
+
+      claimListener?.(mainWindowIpcEvent, { id: 'pty-1', cols: 125, rows: 48 })
+
+      expect(claimRemoteDesktopHost).toHaveBeenCalledWith('pty-1', 125, 48)
+    })
+
+    it('does not forward host input when viewport reclaim fails', async () => {
+      const write = setupProviderWithAppliedSize({ applied: { cols: 80, rows: 24 } })
+      const runtime = {
+        setPtyController: vi.fn(),
+        createPreAllocatedTerminalHandle: vi.fn(() => null),
+        registerPty: vi.fn(),
+        getDriver: vi.fn(() => ({ kind: 'idle' })),
+        claimRemoteDesktopHost: vi.fn().mockResolvedValue(false),
+        onPtySpawned: vi.fn(),
+        onPtyExit: vi.fn(),
+        onPtyData: vi.fn()
+      }
+      handlers.clear()
+      registerPtyHandlers(mainWindow as never, runtime as never)
+      const spawn = await handlers.get('pty:spawn')!(null, { cols: 80, rows: 24, env: {} })
+      const id = (spawn as { id: string }).id
+      const claim = onMock.mock.calls.find((entry: unknown[]) => entry[0] === 'pty:claimViewport')
+      const writeEvent = onMock.mock.calls.find((entry: unknown[]) => entry[0] === 'pty:write')
+
+      claim?.[1](mainWindowIpcEvent, { id, cols: 125, rows: 48 })
+      writeEvent?.[1](mainWindowIpcEvent, { id, data: 'x' })
+      await Promise.resolve()
+
+      expect(write).not.toHaveBeenCalled()
+    })
+
+    it('does not populate the remote reclaim cache when only a phone drives', async () => {
+      const resizeSpy = vi.fn()
+      setupProviderWithAppliedSize({ applied: { cols: 80, rows: 24 }, resize: resizeSpy })
+      const runtime = {
+        setPtyController: vi.fn(),
+        createPreAllocatedTerminalHandle: vi.fn(() => null),
+        registerPty: vi.fn(),
+        getDriver: vi.fn(() => ({ kind: 'mobile', clientId: 'phone-A' })),
+        isRemoteDesktopResizeDriven: vi.fn(() => false),
+        isResizeSuppressed: vi.fn(() => false),
+        onPtySpawned: vi.fn(),
+        onPtyExit: vi.fn(),
+        onPtyData: vi.fn(),
+        recordRemoteDesktopHostReclaimTarget: vi.fn(),
+        onExternalPtyResize: vi.fn()
+      }
+      handlers.clear()
+      registerPtyHandlers(mainWindow as never, runtime as never)
+      const spawn = await handlers.get('pty:spawn')!(null, { cols: 80, rows: 24, env: {} })
+      const id = (spawn as { id: string }).id
+      resizeSpy.mockClear()
+
+      resizeListener()(mainWindowIpcEvent, { id, cols: 125, rows: 48 })
+
+      expect(resizeSpy).not.toHaveBeenCalled()
+      expect(runtime.recordRemoteDesktopHostReclaimTarget).not.toHaveBeenCalled()
       expect(runtime.onExternalPtyResize).not.toHaveBeenCalled()
     })
   })

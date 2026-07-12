@@ -113,6 +113,7 @@ function createHarness(args: {
     Promise,
     Buffer,
     URL,
+    AbortController,
     setTimeout,
     clearTimeout
   } as Record<string, unknown>
@@ -192,7 +193,7 @@ describe('getPiAgentStatusExtensionSource', () => {
     await harness.callHook('agent_start')
 
     expect(harness.fetchMock).toHaveBeenCalledTimes(1)
-    expect(harness.spawnMock).toHaveBeenCalledTimes(1)
+    await vi.waitFor(() => expect(harness.spawnMock).toHaveBeenCalledTimes(1))
 
     const [command, args, options] = harness.spawnMock.mock.calls[0] ?? []
     expect(command).toBe('/mnt/c/Windows/System32/curl.exe')
@@ -253,7 +254,7 @@ describe('getPiAgentStatusExtensionSource', () => {
     await harness.callHook('agent_start')
     await harness.callHook('agent_end')
 
-    expect(harness.spawnMock).toHaveBeenCalledTimes(2)
+    await vi.waitFor(() => expect(harness.spawnMock).toHaveBeenCalledTimes(2))
     // Why: WSL-ness and curl.exe presence are process-lifetime constants;
     // the per-event failure path must not re-probe /proc or /mnt/c.
     const procReads = harness.fsMock.readFileSync.mock.calls.filter(([path]) =>
@@ -276,6 +277,98 @@ describe('getPiAgentStatusExtensionSource', () => {
 
     expect(harness.fetchMock).toHaveBeenCalledTimes(1)
     expect(harness.spawnMock).not.toHaveBeenCalled()
+  })
+
+  it('does not hold Pi event dispatch open while hook delivery is pending', async () => {
+    let finishDelivery: (() => void) | undefined
+    const harness = createHarness({
+      kind: 'pi',
+      fetchImpl: vi.fn(
+        () =>
+          new Promise((resolve) => {
+            finishDelivery = () => resolve({ ok: true })
+          })
+      )
+    })
+
+    let handlerReturned = false
+    const handlerCall = harness.callHook('agent_start').then(() => {
+      handlerReturned = true
+    })
+    await Promise.resolve()
+
+    // Why: Pi awaits extension handlers, so loopback status delivery cannot
+    // remain on the agent's critical path when Orca is stalled or restarting.
+    expect(harness.fetchMock).toHaveBeenCalledTimes(1)
+    await vi.waitFor(() => expect(handlerReturned).toBe(true))
+
+    finishDelivery?.()
+    await handlerCall
+  })
+
+  it('leaves runtime shutdown to PTY teardown instead of reporting turn completion', () => {
+    const harness = createHarness({ kind: 'pi' })
+
+    // Why: Pi emits session_shutdown for reload/new/resume/fork while its PTY
+    // stays alive. agent_end is the only extension event that proves done.
+    expect(harness.handlers.session_shutdown).toBeUndefined()
+  })
+
+  it('bounds stalled delivery to one active request and the latest pending status', async () => {
+    const finishDeliveries: (() => void)[] = []
+    const harness = createHarness({
+      kind: 'pi',
+      fetchImpl: vi.fn(
+        () =>
+          new Promise((resolve) => {
+            finishDeliveries.push(() => resolve({ ok: true }))
+          })
+      )
+    })
+
+    await Promise.all([
+      harness.callHook('agent_start'),
+      harness.callHook('tool_execution_start', { toolName: 'read', args: { path: 'one.ts' } }),
+      harness.callHook('agent_end')
+    ])
+
+    expect(harness.fetchMock).toHaveBeenCalledTimes(1)
+    finishDeliveries[0]?.()
+    await vi.waitFor(() => expect(harness.fetchMock).toHaveBeenCalledTimes(2))
+    const latestBody = JSON.parse(String(harness.fetchMock.mock.calls[1]?.[1]?.body))
+    expect(latestBody.payload).toEqual({ hook_event_name: 'agent_end' })
+
+    finishDeliveries[1]?.()
+  })
+
+  it('abandons a stalled request after one second and delivers the latest status', async () => {
+    vi.useFakeTimers()
+    try {
+      let requestCount = 0
+      const harness = createHarness({
+        kind: 'pi',
+        fetchImpl: vi.fn(() => {
+          requestCount += 1
+          return requestCount === 1 ? new Promise(() => {}) : Promise.resolve({ ok: true })
+        })
+      })
+
+      await harness.callHook('agent_start')
+      await harness.callHook('agent_end')
+
+      expect(harness.fetchMock).toHaveBeenCalledTimes(1)
+      const firstSignal = harness.fetchMock.mock.calls[0]?.[1]?.signal as AbortSignal
+      expect(firstSignal.aborted).toBe(false)
+
+      await vi.advanceTimersByTimeAsync(1000)
+
+      expect(firstSignal.aborted).toBe(true)
+      expect(harness.fetchMock).toHaveBeenCalledTimes(2)
+      const latestBody = JSON.parse(String(harness.fetchMock.mock.calls[1]?.[1]?.body))
+      expect(latestBody.payload).toEqual({ hook_event_name: 'agent_end' })
+    } finally {
+      vi.useRealTimers()
+    }
   })
 
   it('does not treat WSLENV alone as WSL evidence', async () => {

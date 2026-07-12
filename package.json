@@ -1,6 +1,6 @@
 {
   "name": "orca",
-  "version": "1.4.135-rc.4",
+  "version": "1.4.138-rc.2",
   "description": "Next-gen IDE for parallel agentic development",
   "homepage": "https://github.com/stablyai/orca",
   "author": "stablyai",
@@ -93,6 +93,8 @@
     "bench:daemon-coldstart": "pnpm run ensure:electron-runtime && node tools/benchmarks/daemon-coldstart-bench.mjs",
     "bench:main-thread-jank": "pnpm run ensure:electron-runtime && node tools/benchmarks/main-thread-jank-bench.mjs",
     "bench:multi-workspace-typing": "pnpm run ensure:electron-runtime && node config/scripts/run-multi-workspace-typing-bench.mjs",
+    "bench:cold-park-reveal": "pnpm run ensure:electron-runtime && node tools/benchmarks/terminal-cold-park-reveal-bench.mjs",
+    "bench:cold-park-resource": "pnpm run ensure:electron-runtime && node tools/benchmarks/terminal-cold-park-resource-bench.mjs",
     "bench:compare": "node config/scripts/compare-benchmark-artifacts.mjs"
   },
   "dependencies": {
@@ -177,6 +179,7 @@
     "lint-staged": "^16.4.0",
     "lowlight": "^3.3.0",
     "lucide-react": "^0.577.0",
+    "marked": "^17.0.1",
     "mermaid": "^11.15.0",
     "monaco-editor": "^0.55.1",
     "oxfmt": "^0.52.0",

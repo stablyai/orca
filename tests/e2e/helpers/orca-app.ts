@@ -32,6 +32,7 @@ import { createSeededTestRepo, isValidGitRepo } from './seeded-test-repo'
 
 type OrcaTestFixtures = {
   electronApp: ElectronApplication
+  registerPostElectronShutdownCleanup: (cleanup: () => Promise<void>) => void
   sharedPage: Page
   orcaPage: Page
   // Why: every fresh userData dir paints the first-launch onboarding overlay
@@ -145,12 +146,36 @@ export const test = base.extend<OrcaTestFixtures, OrcaWorkerFixtures>({
     { scope: 'worker' }
   ],
 
+  // Why: Windows keeps watched worktrees locked until Electron and its
+  // detached test daemons exit. Tests register fixture cleanup here so it runs
+  // after electronApp teardown instead of masking the real assertion failure.
+  registerPostElectronShutdownCleanup: [
+    // oxlint-disable-next-line no-empty-pattern -- Playwright fixture callbacks require object destructuring here.
+    async ({}, provideFixture) => {
+      const cleanups: (() => Promise<void>)[] = []
+      await provideFixture((cleanup) => cleanups.push(cleanup))
+      for (const cleanup of cleanups.toReversed()) {
+        await cleanup()
+      }
+    },
+    { scope: 'test' }
+  ],
+
   // Test-scoped: one Electron app per test
   electronApp: async (
-    { dismissOnboarding, launchEnv, orcaAppExtraEnv, orcaAppExtraArgs },
+    {
+      dismissOnboarding,
+      launchEnv,
+      orcaAppExtraEnv,
+      orcaAppExtraArgs,
+      registerPostElectronShutdownCleanup
+    },
     provideFixture,
     testInfo
   ) => {
+    // Establish fixture ordering: registered path cleanup must run only after
+    // this Electron fixture has released watchers, terminals, and daemons.
+    void registerPostElectronShutdownCleanup
     const mainPath = path.join(process.cwd(), 'out', 'main', 'index.js')
     const userDataDir = mkdtempSync(path.join(os.tmpdir(), 'orca-e2e-userdata-'))
 

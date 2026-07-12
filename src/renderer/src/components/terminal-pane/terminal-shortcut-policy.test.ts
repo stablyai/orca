@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import {
   resolveTerminalShortcutAction,
   type TerminalShortcutEvent
@@ -89,7 +89,9 @@ describe('resolveTerminalShortcutAction', () => {
     })
   })
 
-  it('uses the Codex-compatible Shift+Enter sequence on Windows', () => {
+  it('uses the Codex-compatible Shift+Enter sequence on Windows win32-input-mode panes', () => {
+    // Default and explicit legacy encodings both keep Codex-on-PowerShell
+    // newlining instead of ignoring the chord.
     expect(
       resolveTerminalShortcutAction(
         event({ key: 'Enter', code: 'Enter', shiftKey: true }),
@@ -102,6 +104,140 @@ describe('resolveTerminalShortcutAction', () => {
       type: 'sendInput',
       data: '\x1b\r'
     })
+    expect(
+      resolveTerminalShortcutAction(
+        event({ key: 'Enter', code: 'Enter', shiftKey: true }),
+        false,
+        'false',
+        0,
+        true,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        () => 'alt-enter'
+      )
+    ).toEqual({ type: 'sendInput', data: '\x1b\r' })
+  })
+
+  it('sends CSI-u Shift+Enter to Windows panes whose active agent requires it (#7620)', () => {
+    // Why: droid parses CSI-u directly and treats the Alt+Enter byte as a plain
+    // Enter that submits, so its pane capability must produce `\x1b[13;2u`.
+    expect(
+      resolveTerminalShortcutAction(
+        event({ key: 'Enter', code: 'Enter', shiftKey: true }),
+        false,
+        'false',
+        0,
+        true,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        () => 'csi-u'
+      )
+    ).toEqual({ type: 'sendInput', data: '\x1b[13;2u' })
+  })
+
+  it('preserves the Windows fallback for SSH, WSL, and remote panes', () => {
+    // Why: a Windows client cannot safely infer a remote peer's decoder, so the
+    // local Droid exception must not broaden main's existing remote behavior.
+    const isLocalWindowsConptyPane = vi.fn(() => false)
+    const getWindowsShiftEnterEncoding = vi.fn(() => 'csi-u' as const)
+    for (let index = 0; index < 2; index += 1) {
+      expect(
+        resolveTerminalShortcutAction(
+          event({ key: 'Enter', code: 'Enter', shiftKey: true }),
+          false,
+          'false',
+          0,
+          true,
+          undefined,
+          isLocalWindowsConptyPane,
+          undefined,
+          undefined,
+          getWindowsShiftEnterEncoding
+        )
+      ).toEqual({ type: 'sendInput', data: '\x1b\r' })
+    }
+    expect(isLocalWindowsConptyPane).toHaveBeenCalledTimes(2)
+    expect(getWindowsShiftEnterEncoding).not.toHaveBeenCalled()
+  })
+
+  it('always uses CSI-u Shift+Enter off Windows regardless of Windows encoding', () => {
+    for (const encoding of [() => 'csi-u' as const, () => 'alt-enter' as const, undefined]) {
+      expect(
+        resolveTerminalShortcutAction(
+          event({ key: 'Enter', code: 'Enter', shiftKey: true }),
+          false,
+          'false',
+          0,
+          false,
+          undefined,
+          undefined,
+          undefined,
+          undefined,
+          encoding
+        )
+      ).toEqual({ type: 'sendInput', data: '\x1b[13;2u' })
+    }
+  })
+
+  it('keeps ConPTY and agent lookups off unrelated keystrokes', () => {
+    const isLocalWindowsConptyPane = vi.fn(() => true)
+    const getWindowsShiftEnterEncoding = vi.fn(() => 'csi-u' as const)
+
+    expect(
+      resolveTerminalShortcutAction(
+        event({ key: 'a', code: 'KeyA' }),
+        false,
+        'false',
+        0,
+        true,
+        undefined,
+        isLocalWindowsConptyPane,
+        undefined,
+        undefined,
+        getWindowsShiftEnterEncoding
+      )
+    ).toBeNull()
+    expect(isLocalWindowsConptyPane).not.toHaveBeenCalled()
+    expect(getWindowsShiftEnterEncoding).not.toHaveBeenCalled()
+
+    expect(
+      resolveTerminalShortcutAction(
+        event({ key: 'Enter', code: 'Enter', shiftKey: true }),
+        false,
+        'false',
+        0,
+        true,
+        undefined,
+        isLocalWindowsConptyPane,
+        undefined,
+        undefined,
+        getWindowsShiftEnterEncoding
+      )
+    ).toEqual({ type: 'sendInput', data: '\x1b[13;2u' })
+    expect(isLocalWindowsConptyPane).toHaveBeenCalledTimes(1)
+    expect(getWindowsShiftEnterEncoding).toHaveBeenCalledTimes(1)
+
+    isLocalWindowsConptyPane.mockReturnValue(false)
+    expect(
+      resolveTerminalShortcutAction(
+        event({ key: 'Enter', code: 'Enter', shiftKey: true }),
+        false,
+        'false',
+        0,
+        true,
+        undefined,
+        isLocalWindowsConptyPane,
+        undefined,
+        undefined,
+        getWindowsShiftEnterEncoding
+      )
+    ).toEqual({ type: 'sendInput', data: '\x1b\r' })
+    expect(isLocalWindowsConptyPane).toHaveBeenCalledTimes(2)
+    expect(getWindowsShiftEnterEncoding).toHaveBeenCalledTimes(1)
   })
 
   it('forwards Ctrl+Enter as the kitty CSI-u chord so TUIs can cue instead of send', () => {

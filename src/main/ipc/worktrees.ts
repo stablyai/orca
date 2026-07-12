@@ -5,6 +5,7 @@ import { readFile, stat } from 'node:fs/promises'
 import { randomUUID } from 'node:crypto'
 import type { Store } from '../persistence'
 import { isFolderRepo } from '../../shared/repo-kind'
+import { readBranchRenameFailureOutputForDisplay } from '../agent-hooks/branch-rename-failure-output'
 import {
   isWorkspaceKey,
   parseWorkspaceKey,
@@ -72,6 +73,7 @@ import {
   isOrphanCompatiblePreflightError,
   isOrphanedWorktreeError
 } from './worktree-logic'
+import { dedupeWorktreesByPath } from './worktree-path-comparison'
 import { joinWorktreeRelativePath } from '../runtime/runtime-relative-paths'
 import {
   createLocalWorktree,
@@ -99,6 +101,7 @@ import {
   releaseAutomationWorkspaceProvenanceRequest,
   resolveAutomationWorkspaceProvenance
 } from '../automations/workspace-provenance'
+import { shouldEmitBoundedWarning } from './bounded-warning-dedupe'
 
 type CreateWorktreeArgsWithSystemProvenance = CreateWorktreeArgs & {
   automationProvenance?: AutomationWorkspaceProvenance
@@ -149,7 +152,10 @@ import {
 } from '../worktree-removal-safety'
 import { isWindowsAbsolutePathLike } from '../../shared/cross-platform-path'
 import { DEFAULT_WORKSPACE_STATUS_ID } from '../../shared/workspace-statuses'
-import { FOLDER_WORKSPACE_INSTANCE_SEPARATOR } from '../../shared/worktree-id'
+import {
+  FOLDER_WORKSPACE_INSTANCE_SEPARATOR,
+  getRepoIdFromWorktreeId
+} from '../../shared/worktree-id'
 import { prefetchWorktreeCreateBase } from '../worktree-create-base-prefetch'
 import {
   getLocalProjectGitExecOptions,
@@ -206,19 +212,6 @@ async function closeLocalWatcherForRemoval(worktreePath: string): Promise<void> 
   await closeLocalWatcherForWorktreePath(worktreePath).catch((err) => {
     console.warn(`[filesystem-watcher] failed to close ${worktreePath}:`, err)
   })
-}
-
-function dedupeGitWorktreesByPath(gitWorktrees: GitWorktreeInfo[]): GitWorktreeInfo[] {
-  const uniqueGitWorktrees: GitWorktreeInfo[] = []
-  for (const gitWorktree of gitWorktrees) {
-    if (
-      uniqueGitWorktrees.some((existing) => areWorktreePathsEqual(existing.path, gitWorktree.path))
-    ) {
-      continue
-    }
-    uniqueGitWorktrees.push(gitWorktree)
-  }
-  return uniqueGitWorktrees
 }
 
 function getProjectHostSetupMetaUpdates(
@@ -477,37 +470,59 @@ type DetectedWorktreeScanCacheEntry = {
   worktrees: GitWorktreeInfo[]
 }
 
+type DetectedWorktreeScan = {
+  invalidated: boolean
+  promise: Promise<GitWorktreeInfo[]>
+}
+
 type DetectedWorktreeScanResult = {
   gitWorktrees: GitWorktreeInfo[]
   fresh: boolean
 }
 
 const detectedWorktreeScanCache = new Map<string, DetectedWorktreeScanCacheEntry>()
-const detectedWorktreeScanInFlight = new Map<string, Promise<GitWorktreeInfo[]>>()
-const detectedWorktreeScanGenerations = new Map<string, number>()
+const detectedWorktreeScanInFlight = new Map<string, DetectedWorktreeScan>()
 
 function invalidateDetectedWorktreeScanCache(repoId: string): void {
   const keyPrefix = `${repoId}\0`
   for (const key of new Set([
     ...detectedWorktreeScanCache.keys(),
-    ...detectedWorktreeScanInFlight.keys(),
-    ...detectedWorktreeScanGenerations.keys()
+    ...detectedWorktreeScanInFlight.keys()
   ])) {
     if (!key.startsWith(keyPrefix)) {
       continue
     }
     detectedWorktreeScanCache.delete(key)
-    detectedWorktreeScanInFlight.delete(key)
-    detectedWorktreeScanGenerations.set(key, (detectedWorktreeScanGenerations.get(key) ?? 0) + 1)
+    const inFlight = detectedWorktreeScanInFlight.get(key)
+    if (inFlight) {
+      // Why: the detached scan keeps this token, so later scans can settle
+      // without making an older result fresh again.
+      inFlight.invalidated = true
+      detectedWorktreeScanInFlight.delete(key)
+    }
   }
 }
 
 registerWorktreeChangeInvalidator(invalidateDetectedWorktreeScanCache)
 
 export function __resetDetectedWorktreeScanCacheForTests(): void {
+  // Why: scans still pending across a test reset must not repopulate the
+  // cache afterward and leak state into the next test.
+  for (const scan of detectedWorktreeScanInFlight.values()) {
+    scan.invalidated = true
+  }
   detectedWorktreeScanCache.clear()
   detectedWorktreeScanInFlight.clear()
-  detectedWorktreeScanGenerations.clear()
+}
+
+export function __getDetectedWorktreeScanCacheStatsForTests(): {
+  cacheSize: number
+  inFlightSize: number
+} {
+  return {
+    cacheSize: detectedWorktreeScanCache.size,
+    inFlightSize: detectedWorktreeScanInFlight.size
+  }
 }
 
 async function listDetectedGitWorktrees(
@@ -530,24 +545,25 @@ async function listDetectedGitWorktrees(
 
   const inFlight = detectedWorktreeScanInFlight.get(cacheKey)
   if (inFlight) {
-    return { gitWorktrees: await inFlight, fresh: false }
+    return { gitWorktrees: await inFlight.promise, fresh: false }
   }
 
-  const scan = listRepoWorktrees(repo, localWorktreeGitOptions)
-  const generation = detectedWorktreeScanGenerations.get(cacheKey) ?? 0
+  const scan: DetectedWorktreeScan = {
+    invalidated: false,
+    promise: listRepoWorktrees(repo, localWorktreeGitOptions)
+  }
   detectedWorktreeScanInFlight.set(cacheKey, scan)
   try {
-    const gitWorktrees = await scan
+    const gitWorktrees = await scan.promise
     // Why: a create/remove notification can invalidate while the git scan is
     // still running. Do not let that stale scan repopulate the cache afterward.
-    const isCurrentGeneration = (detectedWorktreeScanGenerations.get(cacheKey) ?? 0) === generation
-    if (isCurrentGeneration) {
+    if (!scan.invalidated) {
       detectedWorktreeScanCache.set(cacheKey, {
         worktrees: gitWorktrees,
         expiresAt: Date.now() + DETECTED_WORKTREE_SCAN_CACHE_TTL_MS
       })
     }
-    return { gitWorktrees, fresh: isCurrentGeneration }
+    return { gitWorktrees, fresh: !scan.invalidated }
   } finally {
     if (detectedWorktreeScanInFlight.get(cacheKey) === scan) {
       detectedWorktreeScanInFlight.delete(cacheKey)
@@ -563,10 +579,9 @@ function getDetectedWorktreeScanCacheKey(
 }
 
 function warnOnce(keySet: Set<string>, key: string, message: string, error?: unknown): void {
-  if (keySet.has(key)) {
+  if (!shouldEmitBoundedWarning(keySet, key)) {
     return
   }
-  keySet.add(key)
   if (error) {
     console.warn(message, error)
   } else {
@@ -718,7 +733,7 @@ function buildDetectedGitWorktrees(
   const settings = store.getSettings()
   const knownOrcaLayouts = buildKnownOrcaWorkspaceLayouts(settings, repo)
   const isLegacyRepoForVisibility = isLegacyRepoForExternalWorktreeVisibility(repo)
-  return dedupeGitWorktreesByPath(gitWorktrees).map((gitWorktree) => {
+  return dedupeWorktreesByPath(gitWorktrees).map((gitWorktree) => {
     const worktreeId = `${repo.id}::${gitWorktree.path}`
     let meta = store.getWorktreeMeta(worktreeId)
     const worktree = mergeWorktree(repo.id, gitWorktree, meta, repo.displayName)
@@ -972,6 +987,7 @@ export function registerWorktreeHandlers(
   ipcMain.removeHandler('worktrees:listLineage')
   ipcMain.removeHandler('worktrees:updateLineage')
   ipcMain.removeHandler('worktrees:persistSortOrder')
+  ipcMain.removeHandler('worktrees:getBranchRenameFailureOutput')
   ipcMain.removeHandler('hooks:check')
   ipcMain.removeHandler('hooks:inspectSetupScriptImports')
   ipcMain.removeHandler('hooks:createIssueCommandRunner')
@@ -2029,6 +2045,14 @@ export function registerWorktreeHandlers(
       // sortEpoch and reorders the sidebar — the exact bug PR #209 tried
       // to fix (clicking a card would clear isUnread → updateMeta →
       // worktrees:changed → fetchWorktrees → sortEpoch++ → re-sort).
+      if (args.updates.displayName !== undefined) {
+        // Why: paired remote clients have no optimistic copy of the rename and
+        // no longer poll for titles, so push the remote-only invalidation.
+        // Gated on displayName to keep isUnread-per-click updates event-free.
+        // getRepoIdFromWorktreeId matches the mobile client's event filter and
+        // never throws after the meta write already succeeded.
+        runtime.notifyWorktreesChangedForRemoteClients(getRepoIdFromWorktreeId(args.worktreeId))
+      }
       return meta
     }
   )
@@ -2075,6 +2099,18 @@ export function registerWorktreeHandlers(
       store.setWorktreeMeta(args.orderedIds[i], { sortOrder: now - i * 1000 })
     }
   })
+
+  // Why: the full generation-failure output is main-memory only (never in
+  // worktree metadata), so the rename-failed dialog pulls it on demand.
+  ipcMain.handle(
+    'worktrees:getBranchRenameFailureOutput',
+    (_event, args: { worktreeId: string }) => {
+      if (typeof args?.worktreeId !== 'string' || args.worktreeId.length === 0) {
+        return null
+      }
+      return readBranchRenameFailureOutputForDisplay(args.worktreeId)
+    }
+  )
 
   ipcMain.handle(
     'hooks:check',

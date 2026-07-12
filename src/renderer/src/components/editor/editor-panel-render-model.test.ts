@@ -109,6 +109,27 @@ describe('getEditorPanelRenderModel HTML preview affordance', () => {
   })
 })
 
+describe('getEditorPanelRenderModel read-only raw rendering (AI Vault View Log)', () => {
+  it('renders a read-only markdown log as raw source with no markdown viewer or chrome', () => {
+    const model = renderModel({ activeFile: markdownFile({ readOnly: true }) })
+
+    // Raw text renderer, not the rich/preview markdown surface.
+    expect(model.isMarkdown).toBe(false)
+    expect(model.hasViewModeToggle).toBe(false)
+    expect(model.canShowMarkdownPreview).toBe(false)
+    expect(model.canExportMarkdownToPdf).toBe(false)
+    expect(model.canShowMarkdownTableOfContents).toBe(false)
+    // Real language is preserved so Monaco still tokenizes the read-only source.
+    expect(model.resolvedLanguage).toBe('markdown')
+  })
+
+  it('keeps markdown chrome for ordinary writable markdown tabs', () => {
+    const model = renderModel({ activeFile: markdownFile() })
+    expect(model.isMarkdown).toBe(true)
+    expect(model.hasViewModeToggle).toBe(true)
+  })
+})
+
 describe('getEditorPanelRenderModel markdown export affordance', () => {
   it('enables export for rendered markdown edit tabs', () => {
     expect(renderModel({}).canExportMarkdownToPdf).toBe(true)

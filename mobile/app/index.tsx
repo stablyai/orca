@@ -1,5 +1,5 @@
 import { useState, useCallback, useEffect, useMemo, useRef } from 'react'
-import { View, Text, StyleSheet, Pressable, FlatList } from 'react-native'
+import { View, Text, StyleSheet, Pressable, FlatList, Alert } from 'react-native'
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useRouter, useFocusEffect } from 'expo-router'
 import {
@@ -25,7 +25,8 @@ import {
   UsageBar
 } from '../src/components/AccountUsage'
 import AsyncStorage from '@react-native-async-storage/async-storage'
-import { loadHosts, removeHost, renameHost } from '../src/transport/host-store'
+import { loadHosts, renameHost } from '../src/transport/host-store'
+import { removeHostAndCloseClient } from '../src/transport/host-removal-lifecycle'
 import { pickResumeWorktree } from '../src/worktree/resume-worktree'
 import type { RpcClient } from '../src/transport/rpc-client'
 import {
@@ -710,15 +711,16 @@ export default function HomeScreen() {
     if (!confirmRemove) {
       return
     }
+    const hostToRemove = confirmRemove
     try {
-      // Why: close the shared client first so the WebSocket is gone
-      // before the host record disappears from loadHosts().
-      closeHostClient(confirmRemove.id)
-      await removeHost(confirmRemove.id)
+      await removeHostAndCloseClient(hostToRemove.id, closeHostClient)
       setConfirmRemove(null)
       setHosts(await loadHosts())
     } catch {
-      setConfirmRemove(null)
+      // Why: ConfirmModal closes on confirm; re-open for retry and surface the
+      // failure instead of silently leaving the host listed.
+      setConfirmRemove(hostToRemove)
+      Alert.alert('Could not remove host', 'Please try again.')
     }
   }
 

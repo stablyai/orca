@@ -300,6 +300,93 @@ describe('pane terminal output scheduler', () => {
     expect(terminal.refresh).not.toHaveBeenCalled()
   })
 
+  it('coalesces a WebGL foreground refresh through xterm public refresh', async () => {
+    const { writeTerminalOutput } = await loadScheduler()
+    const terminal = createForegroundTerminal()
+
+    writeTerminalOutput(terminal, 'active TUI repaint\r\n', {
+      foreground: true,
+      forceForegroundRefresh: true,
+      shouldRefreshForegroundSynchronously: () => false
+    })
+
+    expect(terminal.refresh).toHaveBeenCalledWith(0, 23)
+    expect(terminal._core.refresh).not.toHaveBeenCalled()
+  })
+
+  it('resolves the live renderer after xterm finishes parsing', async () => {
+    const { writeTerminalOutput } = await loadScheduler()
+    const terminal = createForegroundTerminal()
+    let parseCallback: (() => void) | undefined
+    let webglLive = false
+    terminal.write.mockImplementation((_data: string, callback?: () => void) => {
+      parseCallback = callback
+    })
+
+    writeTerminalOutput(terminal, 'queued renderer transition\r\n', {
+      foreground: true,
+      forceForegroundRefresh: true,
+      shouldRefreshForegroundSynchronously: () => !webglLive
+    })
+    webglLive = true
+    parseCallback?.()
+
+    expect(terminal.refresh).toHaveBeenCalledWith(0, 23)
+    expect(terminal._core.refresh).not.toHaveBeenCalled()
+  })
+
+  it('keeps the WebGL follow-up repair on the debounced path', async () => {
+    const scheduledFrames: FrameRequestCallback[] = []
+    vi.stubGlobal('requestAnimationFrame', (callback: FrameRequestCallback) => {
+      scheduledFrames.push(callback)
+      return scheduledFrames.length
+    })
+    vi.stubGlobal('cancelAnimationFrame', vi.fn())
+
+    const { writeTerminalOutput } = await loadScheduler()
+    const terminal = createForegroundTerminal()
+
+    writeTerminalOutput(terminal, 'WebGL cursor restore', {
+      foreground: true,
+      forceForegroundRefresh: true,
+      followupForegroundRefresh: true,
+      shouldRefreshForegroundSynchronously: () => false
+    })
+
+    expect(terminal.refresh).toHaveBeenCalledTimes(1)
+    expect(scheduledFrames).toHaveLength(1)
+    scheduledFrames[0]?.(16)
+
+    expect(terminal.refresh).toHaveBeenCalledTimes(2)
+    expect(terminal._core.refresh).not.toHaveBeenCalled()
+  })
+
+  it('resolves WebGL loss again before the follow-up repair', async () => {
+    const scheduledFrames: FrameRequestCallback[] = []
+    vi.stubGlobal('requestAnimationFrame', (callback: FrameRequestCallback) => {
+      scheduledFrames.push(callback)
+      return scheduledFrames.length
+    })
+    vi.stubGlobal('cancelAnimationFrame', vi.fn())
+
+    const { writeTerminalOutput } = await loadScheduler()
+    const terminal = createForegroundTerminal()
+    let webglLive = true
+
+    writeTerminalOutput(terminal, 'renderer transition', {
+      foreground: true,
+      forceForegroundRefresh: true,
+      followupForegroundRefresh: true,
+      shouldRefreshForegroundSynchronously: () => !webglLive
+    })
+
+    expect(terminal.refresh).toHaveBeenCalledTimes(1)
+    webglLive = false
+    scheduledFrames[0]?.(16)
+
+    expect(terminal._core.refresh).toHaveBeenCalledWith(0, 23, true)
+  })
+
   it('repaints the viewport again on the next frame when foreground output scrolls', async () => {
     const scheduledFrames: FrameRequestCallback[] = []
     vi.stubGlobal('requestAnimationFrame', (callback: FrameRequestCallback) => {
@@ -914,6 +1001,41 @@ describe('pane terminal output scheduler', () => {
     expect(beforeWrite).toHaveBeenCalledTimes(1)
     expect(beforeWrite).toHaveBeenCalledWith('ab')
     expect(terminal.write).toHaveBeenCalledWith('ab')
+  })
+
+  it('keeps preparation attached when a later producer omits it', async () => {
+    vi.useFakeTimers()
+    const { writeTerminalOutput } = await loadScheduler()
+    const terminal = createTerminal()
+    const beforeWrite = vi.fn()
+
+    writeTerminalOutput(terminal, 'مرحبا', { foreground: false, beforeWrite })
+    writeTerminalOutput(terminal, ' fallback notice', { foreground: false })
+    vi.advanceTimersByTime(50)
+
+    expect(beforeWrite).toHaveBeenCalledWith('مرحبا fallback notice')
+    expect(terminal.write).toHaveBeenCalledWith('مرحبا fallback notice')
+  })
+
+  it('ignores unforced chunks when resolving a coalesced forced refresh', async () => {
+    vi.useFakeTimers()
+    const { writeTerminalOutput } = await loadScheduler()
+    const terminal = createForegroundTerminal()
+
+    writeTerminalOutput(terminal, 'forced', {
+      foreground: true,
+      latencySensitive: false,
+      forceForegroundRefresh: true,
+      shouldRefreshForegroundSynchronously: () => false
+    })
+    writeTerminalOutput(terminal, ' ordinary', {
+      foreground: true,
+      latencySensitive: false
+    })
+    vi.advanceTimersByTime(0)
+
+    expect(terminal.refresh).toHaveBeenCalledWith(0, 23)
+    expect(terminal._core.refresh).not.toHaveBeenCalled()
   })
 
   it('runs deferred write preparation before explicit background flushes', async () => {

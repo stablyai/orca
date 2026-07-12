@@ -22,6 +22,7 @@ const mockSubscribeToPtyExit = vi.fn()
 const mockPasteDraftWhenAgentReady = vi.fn()
 const mockMarkTrusted = vi.fn()
 const mockDispatchEvent = vi.fn()
+const mockGetAgentLaunchPlatformForRepo = vi.fn<() => NodeJS.Platform>()
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/
 
 function expectStablePaneSpawn(): string {
@@ -94,6 +95,10 @@ vi.mock('@/lib/agent-paste-draft', () => ({
   pasteDraftWhenAgentReady: mockPasteDraftWhenAgentReady
 }))
 
+vi.mock('@/lib/agent-launch-platform', () => ({
+  getAgentLaunchPlatformForRepo: mockGetAgentLaunchPlatformForRepo
+}))
+
 vi.mock('@/components/terminal-pane/pty-dispatcher', () => ({
   registerEagerPtyBuffer: mockRegisterEagerPtyBuffer,
   subscribeToPtyExit: mockSubscribeToPtyExit
@@ -108,6 +113,7 @@ describe('launchAgentBackgroundSession', () => {
     resetRemoteRuntimeTerminalMultiplexersForTests()
     clearRuntimeCompatibilityCacheForTests()
     vi.clearAllMocks()
+    mockGetAgentLaunchPlatformForRepo.mockReturnValue('linux')
     mockRuntimeEnvironmentTransportCall.mockImplementation(
       (args) =>
         createCompatibleRuntimeStatusResponseIfNeeded(args) ?? mockRuntimeEnvironmentCall(args)
@@ -488,6 +494,62 @@ describe('launchAgentBackgroundSession', () => {
         content: 'run the automation',
         agent: 'aider',
         submit: true
+      })
+    )
+  })
+
+  it('passes Hermes automation prompts through the native startup query', async () => {
+    const { launchAgentBackgroundSession } = await import('./launch-agent-background-session')
+
+    await launchAgentBackgroundSession({
+      agent: 'hermes',
+      worktreeId: 'wt-1',
+      prompt: 'run the automation'
+    })
+
+    expect(mockSpawn).toHaveBeenCalledWith(
+      expect.objectContaining({
+        command: expect.stringContaining('ORCA_HERMES_STARTUP_QUERY'),
+        env: expect.objectContaining({ ORCA_HERMES_STARTUP_QUERY: 'run the automation' })
+      })
+    )
+    expect(mockPasteDraftWhenAgentReady).not.toHaveBeenCalled()
+  })
+
+  it('uses the configured cmd shell for Windows Hermes background launches', async () => {
+    mockGetAgentLaunchPlatformForRepo.mockReturnValue('win32')
+    Object.assign(state.settings, { terminalWindowsShell: 'cmd.exe' })
+    const { launchAgentBackgroundSession } = await import('./launch-agent-background-session')
+
+    await launchAgentBackgroundSession({
+      agent: 'hermes',
+      worktreeId: 'wt-1',
+      prompt: 'run the automation'
+    })
+
+    expect(mockSpawn).toHaveBeenCalledWith(
+      expect.objectContaining({
+        command: expect.stringContaining('powershell.exe -NoProfile -EncodedCommand'),
+        env: expect.objectContaining({ ORCA_HERMES_STARTUP_QUERY: 'run the automation' })
+      })
+    )
+  })
+
+  it('forwards Hermes startup queries through SSH command transport', async () => {
+    state.repos = [{ id: 'repo-1', connectionId: 'ssh-1', path: '/repo' }]
+    const { launchAgentBackgroundSession } = await import('./launch-agent-background-session')
+
+    await launchAgentBackgroundSession({
+      agent: 'hermes',
+      worktreeId: 'wt-1',
+      prompt: 'remote automation prompt'
+    })
+
+    expect(mockSpawn).toHaveBeenCalledWith(
+      expect.objectContaining({
+        command: expect.stringContaining('ORCA_HERMES_STARTUP_QUERY'),
+        connectionId: 'ssh-1',
+        env: expect.objectContaining({ ORCA_HERMES_STARTUP_QUERY: 'remote automation prompt' })
       })
     )
   })

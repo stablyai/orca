@@ -10,6 +10,7 @@ import type {
   BrowserCookieImportResult,
   BrowserSessionProfile,
   BrowserSessionProfileSource,
+  CreateWorktreeResult,
   GitWorktreeInfo,
   RemoveWorktreeResult,
   Repo,
@@ -673,6 +674,8 @@ export type RuntimeWorktreeCreateResult = {
   workspaceLineage?: WorkspaceLineage | null
   warnings: WorktreeLineageWarning[]
   warning?: string
+  startupTerminal?: CreateWorktreeResult['startupTerminal']
+  agentTerminalHandle?: string
 }
 
 export type RuntimeWorktreeRemoveResult = RemoveWorktreeResult & {

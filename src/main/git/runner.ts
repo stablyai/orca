@@ -36,6 +36,7 @@ import {
   quotePosixShell
 } from '../../shared/wsl-login-shell-command'
 import { UNTRANSLATED_GIT_OUTPUT_ENV } from '../../shared/git-output-locale'
+import { endSubprocessStdin } from '../../shared/subprocess-stdin-write'
 
 // ─── Core resolution ────────────────────────────────────────────────
 
@@ -430,7 +431,7 @@ function execFileCapture(
     child.once('error', (error) => finish(error))
 
     if (options.stdin !== undefined) {
-      child.stdin?.end(options.stdin)
+      endSubprocessStdin(child.stdin, options.stdin)
     }
 
     // Why: Node's native execFile timeout waits for the child to exit after
