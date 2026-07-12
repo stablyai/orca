@@ -9909,7 +9909,11 @@ describe('mission session workspaces', () => {
       githubCache: { pr: {}, issue: {} }
     })
     const store = await createStore()
-    const mission = store.createMission({ name: 'Referral', repoIds: ['r1'] })
+    const mission = store.createMission({
+      name: 'Referral',
+      repoIds: ['r1'],
+      sessionAgent: 'claude'
+    })
 
     expect(() => store.ensureMissionSessionWorkspace(mission.id)).toThrow('mission_root_not_ready')
     store.setMissionRootPath(mission.id, '/tmp/orca/missions/referral')
@@ -9918,6 +9922,9 @@ describe('mission session workspaces', () => {
     expect(workspace.missionId).toBe(mission.id)
     expect(workspace.projectGroupId).toBe(`mission:${mission.id}`)
     expect(workspace.folderPath).toBe('/tmp/orca/missions/referral')
+    // Why: the persisted mission agent drives first-open auto-launch even when
+    // the session is created on the lazy retry path.
+    expect(workspace.createdWithAgent).toBe('claude')
     // Idempotent: second ensure returns the same record.
     expect(store.ensureMissionSessionWorkspace(mission.id).id).toBe(workspace.id)
     expect(store.getMissionSessionWorkspace(mission.id)?.id).toBe(workspace.id)

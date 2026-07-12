@@ -2,9 +2,12 @@ import React, { useId, useMemo, useRef, useState } from 'react'
 import { ChevronDown, CircleAlert, CircleCheck, LoaderCircle } from 'lucide-react'
 import AgentCombobox from '@/components/agent/AgentCombobox'
 import { getAgentCatalog } from '@/lib/agent-catalog'
+import {
+  pickQuickWorkspaceAgent,
+  resolveQuickWorkspaceAgentSelection
+} from '@/lib/quick-workspace-agent-selection'
 import { cn } from '@/lib/utils'
 import { filterEnabledTuiAgents } from '../../../../shared/tui-agent-selection'
-import { isTuiAgent } from '../../../../shared/tui-agent-config'
 import type { TuiAgent } from '../../../../shared/types'
 import {
   Dialog,
@@ -78,9 +81,26 @@ export default function MissionCreateDialog(): React.JSX.Element {
   const [branch, setBranch] = useState('')
   const branchDirtyRef = useRef(false)
   const [selected, setSelected] = useState<ReadonlySet<string>>(new Set())
-  const [sessionAgent, setSessionAgent] = useState<TuiAgent | null>(() =>
-    isTuiAgent(defaultTuiAgent) ? defaultTuiAgent : null
+  // Why: mirror the composer's selection rules — a disabled or undetected
+  // default must not be submitted invisibly, and a user pick survives
+  // detection updates via the override (repaired during render, not effects).
+  const [sessionAgentOverride, setSessionAgentOverride] = useState<TuiAgent | null | undefined>(
+    undefined
   )
+  const preferredSessionAgent = useMemo(
+    () => pickQuickWorkspaceAgent(defaultTuiAgent, detectedAgentIds, disabledTuiAgents),
+    [defaultTuiAgent, detectedAgentIds, disabledTuiAgents]
+  )
+  const resolvedSessionAgentSelection = resolveQuickWorkspaceAgentSelection({
+    quickAgentOverride: sessionAgentOverride,
+    preferredQuickAgent: preferredSessionAgent,
+    detectedAgentIds,
+    disabledTuiAgents
+  })
+  if (resolvedSessionAgentSelection.quickAgentOverride !== sessionAgentOverride) {
+    setSessionAgentOverride(resolvedSessionAgentSelection.quickAgentOverride)
+  }
+  const sessionAgent = resolvedSessionAgentSelection.quickAgent
   const [advancedOpen, setAdvancedOpen] = useState(false)
   const [baseBranch, setBaseBranch] = useState('')
   const [setupDecision, setSetupDecision] = useState<'run' | 'skip' | 'inherit'>('inherit')
@@ -265,7 +285,7 @@ export default function MissionCreateDialog(): React.JSX.Element {
                 <AgentCombobox
                   agents={visibleAgents}
                   value={sessionAgent}
-                  onValueChange={setSessionAgent}
+                  onValueChange={setSessionAgentOverride}
                   triggerClassName="h-8 w-full border-input text-xs"
                 />
               </div>

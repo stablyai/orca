@@ -124,7 +124,8 @@ export function registerMissionHandlers(
         branchName: args.branchName ?? null,
         repoIds,
         baseRef: args.baseBranch ?? null,
-        setupDecision: args.setupDecision
+        setupDecision: args.setupDecision,
+        sessionAgent: args.sessionAgent
       })
       notifyReposChanged(mainWindow)
       const memberResults = await createMemberWorktrees(mission, repoIds)
@@ -133,7 +134,7 @@ export function registerMissionHandlers(
       // the sidebar retries via missions:ensureSession.
       try {
         const ensured = ensureMissionRootStrict(store, store.getMission(mission.id) ?? mission)
-        store.ensureMissionSessionWorkspace(ensured.id, { createdWithAgent: args.sessionAgent })
+        store.ensureMissionSessionWorkspace(ensured.id)
       } catch (error) {
         console.warn('[missions] eager session ensure failed:', error)
       }

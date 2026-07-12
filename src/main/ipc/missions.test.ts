@@ -59,6 +59,7 @@ function makeFakeStore() {
       repoIds: string[]
       baseRef?: string | null
       setupDecision?: Mission['setupDecision']
+      sessionAgent?: Mission['sessionAgent']
     }) => {
       mission = {
         id: 'm1',
@@ -68,6 +69,7 @@ function makeFakeStore() {
         tabOrder: 0,
         baseRef: input.baseRef ?? null,
         ...(input.setupDecision ? { setupDecision: input.setupDecision } : {}),
+        ...(input.sessionAgent ? { sessionAgent: input.sessionAgent } : {}),
         createdAt: 1,
         updatedAt: 1
       }
@@ -183,9 +185,8 @@ describe('missions IPC', () => {
     expect(runtime.createManagedWorktree).toHaveBeenCalledWith(
       expect.objectContaining({ baseBranch: 'develop', setupDecision: 'skip' })
     )
-    expect(store.ensureMissionSessionWorkspace).toHaveBeenCalledWith('m1', {
-      createdWithAgent: 'claude'
-    })
+    expect(store.getMission('m1')?.sessionAgent).toBe('claude')
+    expect(store.ensureMissionSessionWorkspace).toHaveBeenCalledWith('m1')
   })
 
   it('ensureSession resolves the root once, links only local members, and is idempotent', async () => {
