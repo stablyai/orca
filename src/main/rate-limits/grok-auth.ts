@@ -62,6 +62,26 @@ function parseExpiresAtMs(iso: string | undefined): number | null {
   return Number.isFinite(ms) ? ms : null
 }
 
+// Why: Grok CLI writes the live OIDC session under auth.x.ai keys. Older or
+// alternate issuer keys can still sit in the same auth.json; Object.values
+// insertion order must not prefer a stale first entry over the live one.
+const PREFERRED_GROK_AUTH_ISSUER = 'https://auth.x.ai'
+
+function sessionFromAuthEntry(authEntry: GrokAuthEntry): GrokAuthSession {
+  return {
+    accessToken: authEntry.key!,
+    userId: typeof authEntry.user_id === 'string' ? authEntry.user_id : null,
+    email: typeof authEntry.email === 'string' ? authEntry.email : null,
+    teamId: typeof authEntry.team_id === 'string' ? authEntry.team_id : null,
+    expiresAtMs: parseExpiresAtMs(authEntry.expires_at),
+    oidcClientId: typeof authEntry.oidc_client_id === 'string' ? authEntry.oidc_client_id : null
+  }
+}
+
+function isPreferredGrokAuthKey(key: string): boolean {
+  return key === PREFERRED_GROK_AUTH_ISSUER || key.startsWith(`${PREFERRED_GROK_AUTH_ISSUER}::`)
+}
+
 export function readGrokAuthSession(): GrokAuthReadResult {
   const path = getGrokAuthPath()
   if (!existsSync(path)) {
@@ -72,23 +92,22 @@ export function readGrokAuthSession(): GrokAuthReadResult {
     if (typeof parsed !== 'object' || parsed === null) {
       return { status: 'error', error: 'Grok auth file is invalid' }
     }
-    for (const entry of Object.values(parsed)) {
+    let fallback: GrokAuthSession | null = null
+    for (const [key, entry] of Object.entries(parsed as Record<string, unknown>)) {
       const authEntry = parseAuthEntry(entry)
       if (!authEntry?.key) {
         continue
       }
-      return {
-        status: 'ok',
-        session: {
-          accessToken: authEntry.key,
-          userId: typeof authEntry.user_id === 'string' ? authEntry.user_id : null,
-          email: typeof authEntry.email === 'string' ? authEntry.email : null,
-          teamId: typeof authEntry.team_id === 'string' ? authEntry.team_id : null,
-          expiresAtMs: parseExpiresAtMs(authEntry.expires_at),
-          oidcClientId:
-            typeof authEntry.oidc_client_id === 'string' ? authEntry.oidc_client_id : null
-        }
+      const session = sessionFromAuthEntry(authEntry)
+      if (isPreferredGrokAuthKey(key)) {
+        return { status: 'ok', session }
       }
+      if (!fallback) {
+        fallback = session
+      }
+    }
+    if (fallback) {
+      return { status: 'ok', session: fallback }
     }
     // Why: a token-less file (e.g. after grok logout) means signed out, not a
     // failure — 'error' would keep a status-bar alert visible for that user.

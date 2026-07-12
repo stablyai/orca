@@ -41,6 +41,7 @@ describe('showOsc52ClipboardBlockedToast', () => {
 
     showOsc52ClipboardBlockedToast()
 
+    expect(toastInfoMock.mock.calls[0]?.[1]?.description).toContain('Grok')
     const options = toastInfoMock.mock.calls[0]?.[1]
     expect(options).toMatchObject({
       action: {

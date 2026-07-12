@@ -2581,7 +2581,7 @@
               "blocked": {
                 "toast": {
                   "97c98f1afe": "打开设置",
-                  "7cf51f74fd": "在终端设置中启用 TUI 剪贴板写入，以从 SSH、tmux、Neovim 或 fzf 进行复制。",
+                  "7cf51f74fd": "在终端设置中启用 TUI 剪贴板写入，以从 SSH、tmux、Neovim、fzf 或 Grok 进行复制。",
                   "89eaa3e80b": "终端剪贴板写入被阻止"
                 }
               }
