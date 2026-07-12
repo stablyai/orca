@@ -1,6 +1,17 @@
 type RepoDisplayLabelItem = {
   path: string
   displayName: string
+  executionHostId?: string | null
+}
+
+// Why: composite key scopes the label map by host so repos on different hosts
+// with the same absolute path (e.g. local /Users/alice and ssh://host /Users/alice)
+// do not overwrite each other's display label.
+export function getRepoDisplayLabelKey(item: {
+  path: string
+  executionHostId?: string | null
+}): string {
+  return item.executionHostId ? `${item.executionHostId}::${item.path}` : item.path
 }
 
 function normalizePathSegments(path: string): string[] {
@@ -29,7 +40,8 @@ export function getRepoDisplayLabelsByPath(
 
   for (const item of items) {
     const displayName = item.displayName || item.path
-    labels.set(item.path, displayName)
+    const key = getRepoDisplayLabelKey(item)
+    labels.set(key, displayName)
     const colliding = itemsByName.get(displayName) ?? []
     colliding.push({ ...item, displayName })
     itemsByName.set(displayName, colliding)
@@ -49,7 +61,8 @@ export function getRepoDisplayLabelsByPath(
       nextLabels = collidingItems.map((item) => labelForDepth(item, depth))
     }
     collidingItems.forEach((item, index) => {
-      labels.set(item.path, nextLabels[index] ?? item.displayName)
+      const key = getRepoDisplayLabelKey(item)
+      labels.set(key, nextLabels[index] ?? item.displayName)
     })
   }
 

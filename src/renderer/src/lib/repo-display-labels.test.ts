@@ -34,6 +34,22 @@ describe('getRepoDisplayLabelsByPath', () => {
     expect(labels.get('/workspace/team2/shared/api')).toBe('team2/shared/api')
   })
 
+  it('scopes same-path repos from different hosts separately', () => {
+    const labels = getRepoDisplayLabelsByPath([
+      { path: '/Users/alice', displayName: 'host-a home', executionHostId: 'local' },
+      { path: '/Users/alice', displayName: 'host-b home', executionHostId: 'ssh:my-host' }
+    ])
+
+    expect(labels.get('local::/Users/alice')).toBe('host-a home')
+    expect(labels.get('ssh:my-host::/Users/alice')).toBe('host-b home')
+  })
+
+  it('falls back to path-only key when executionHostId is absent', () => {
+    const labels = getRepoDisplayLabelsByPath([{ path: '/workspace/web', displayName: 'web' }])
+
+    expect(labels.get('/workspace/web')).toBe('web')
+  })
+
   it('normalizes Windows separators to slash display labels', () => {
     const labels = getRepoDisplayLabelsByPath([
       { path: 'C:\\workspace\\payments\\api', displayName: 'api' },
