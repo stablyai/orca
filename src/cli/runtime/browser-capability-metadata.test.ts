@@ -25,7 +25,8 @@ describe('writeBrowserCapabilityMetadata', () => {
       pid: 123,
       transports: [{ kind: 'unix', endpoint: '/tmp/orca.sock' }],
       authToken: 'scoped-token',
-      startedAt: 1
+      startedAt: 1,
+      authScope: 'browser-capability'
     })
     if (process.platform !== 'win32') {
       expect(statSync(destination).mode & 0o777).toBe(0o600)

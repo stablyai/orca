@@ -15,10 +15,14 @@ export function writeBrowserCapabilityMetadata(
   }
   const destination = getRuntimeMetadataPath(directory)
   const temporary = `${destination}.${process.pid}.tmp`
-  writeFileSync(temporary, `${JSON.stringify({ ...source, authToken }, null, 2)}\n`, {
-    encoding: 'utf8',
-    mode: 0o600
-  })
+  writeFileSync(
+    temporary,
+    `${JSON.stringify({ ...source, authToken, authScope: 'browser-capability' }, null, 2)}\n`,
+    {
+      encoding: 'utf8',
+      mode: 0o600
+    }
+  )
   renameSync(temporary, destination)
   try {
     chmodSync(destination, 0o600)
