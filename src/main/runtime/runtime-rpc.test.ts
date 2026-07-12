@@ -2128,9 +2128,10 @@ describe('OrcaRuntimeRpcServer', () => {
     const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-rpc-'))
     const runtime = new OrcaRuntimeService()
     const server = new OrcaRuntimeRpcServer({ runtime, userDataPath })
-    vi.spyOn(runtime['browserCommands'], 'isBrowserPageAvailable').mockReturnValue(true)
+    vi.spyOn(runtime['browserCommands'], 'isBrowserCapabilityTargetAvailable').mockReturnValue(true)
     const capability = runtime['browserRpcCapabilities'].create({
       browserPageId: 'page-1',
+      browserProfileId: 'profile-1',
       ttlMs: 60_000
     })
 

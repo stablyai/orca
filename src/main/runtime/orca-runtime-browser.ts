@@ -169,7 +169,7 @@ export class RuntimeBrowserCommands {
   async resolveBrowserCapabilityTarget(params: {
     page: string
     worktree?: string
-  }): Promise<{ browserPageId: string; worktree?: string }> {
+  }): Promise<{ browserPageId: string; browserProfileId: string; worktree?: string }> {
     const target = await this.resolveBrowserCommandTarget(params)
     const resolved = this.resolveBrowserPageWebContents(target.worktreeId, target.browserPageId)
     const profileId = browserManager.getSessionProfileIdForTab(resolved.browserPageId)
@@ -182,13 +182,21 @@ export class RuntimeBrowserCommands {
     }
     return {
       browserPageId: resolved.browserPageId,
+      browserProfileId: profile.id,
       ...(params.worktree ? { worktree: params.worktree } : {})
     }
   }
 
-  isBrowserPageAvailable(browserPageId: string): boolean {
+  isBrowserCapabilityTargetAvailable(browserPageId: string, browserProfileId: string): boolean {
     const bridge = this.host.getAgentBrowserBridge()
-    return Boolean(bridge && this.hasLiveRegisteredBrowserPage(bridge, undefined, browserPageId))
+    if (!bridge || !this.hasLiveRegisteredBrowserPage(bridge, undefined, browserPageId)) {
+      return false
+    }
+    const currentProfileId = browserManager.getSessionProfileIdForTab(browserPageId)
+    const currentProfile = currentProfileId
+      ? browserSessionRegistry.getProfile(currentProfileId)
+      : null
+    return currentProfileId === browserProfileId && Boolean(currentProfile?.allowedDomains?.length)
   }
 
   private requireAgentBrowserBridge(): AgentBrowserBridge {

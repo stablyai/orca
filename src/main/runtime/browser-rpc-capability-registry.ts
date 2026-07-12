@@ -51,6 +51,7 @@ type BrowserRpcCapability = {
   id: string
   token: string
   browserPageId: string
+  browserProfileId: string
   worktreeId?: string
   expiresAt: number
 }
@@ -76,16 +77,23 @@ export class BrowserRpcCapabilityRegistry {
 
   create(input: {
     browserPageId: string
+    browserProfileId: string
     worktreeId?: string
     ttlMs: number
   }): BrowserRpcCapability {
-    if (!input.browserPageId || input.ttlMs <= 0 || input.ttlMs > MAX_CAPABILITY_TTL_MS) {
+    if (
+      !input.browserPageId ||
+      !input.browserProfileId ||
+      input.ttlMs <= 0 ||
+      input.ttlMs > MAX_CAPABILITY_TTL_MS
+    ) {
       throw new BrowserRpcCapabilityError('invalid', 'Invalid browser capability request')
     }
     const capability: BrowserRpcCapability = {
       id: randomUUID(),
       token: randomBytes(32).toString('hex'),
       browserPageId: input.browserPageId,
+      browserProfileId: input.browserProfileId,
       ...(input.worktreeId ? { worktreeId: input.worktreeId } : {}),
       expiresAt: this.now() + input.ttlMs
     }
@@ -128,8 +136,12 @@ export class BrowserRpcCapabilityRegistry {
     }
   }
 
-  getPageId(token: string): string {
-    return this.requireActive(token).browserPageId
+  getTarget(token: string): { browserPageId: string; browserProfileId: string } {
+    const capability = this.requireActive(token)
+    return {
+      browserPageId: capability.browserPageId,
+      browserProfileId: capability.browserProfileId
+    }
   }
 
   revoke(id: string): boolean {

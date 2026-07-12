@@ -6,6 +6,7 @@ describe('BrowserRpcCapabilityRegistry', () => {
     const registry = new BrowserRpcCapabilityRegistry({ now: () => 1_000 })
     const capability = registry.create({
       browserPageId: 'page-1',
+      browserProfileId: 'profile-1',
       worktreeId: 'repo::/worktree',
       ttlMs: 60_000
     })
@@ -27,7 +28,11 @@ describe('BrowserRpcCapabilityRegistry', () => {
 
   it('rejects page overrides, implicit tab methods, raw exec, and non-browser RPC', () => {
     const registry = new BrowserRpcCapabilityRegistry()
-    const capability = registry.create({ browserPageId: 'page-1', ttlMs: 60_000 })
+    const capability = registry.create({
+      browserPageId: 'page-1',
+      browserProfileId: 'profile-1',
+      ttlMs: 60_000
+    })
 
     for (const [method, params] of [
       ['browser.snapshot', { page: 'page-2' }],
@@ -54,8 +59,16 @@ describe('BrowserRpcCapabilityRegistry', () => {
   it('expires, revokes, and removes all capabilities for a closed page', () => {
     const now = vi.fn(() => 1_000)
     const registry = new BrowserRpcCapabilityRegistry({ now })
-    const first = registry.create({ browserPageId: 'page-1', ttlMs: 100 })
-    const second = registry.create({ browserPageId: 'page-1', ttlMs: 1_000 })
+    const first = registry.create({
+      browserPageId: 'page-1',
+      browserProfileId: 'profile-1',
+      ttlMs: 100
+    })
+    const second = registry.create({
+      browserPageId: 'page-1',
+      browserProfileId: 'profile-1',
+      ttlMs: 1_000
+    })
 
     now.mockReturnValue(1_101)
     expect(() => registry.authorize(first.token, request(first.token))).toThrow(/expired/)
@@ -63,18 +76,33 @@ describe('BrowserRpcCapabilityRegistry', () => {
     expect(registry.revoke(second.id)).toBe(true)
     expect(() => registry.authorize(second.token, request(second.token))).toThrow(/invalid/i)
 
-    const third = registry.create({ browserPageId: 'page-1', ttlMs: 1_000 })
-    const other = registry.create({ browserPageId: 'page-2', ttlMs: 1_000 })
+    const third = registry.create({
+      browserPageId: 'page-1',
+      browserProfileId: 'profile-1',
+      ttlMs: 1_000
+    })
+    const other = registry.create({
+      browserPageId: 'page-2',
+      browserProfileId: 'profile-2',
+      ttlMs: 1_000
+    })
     expect(registry.revokePage('page-1')).toBe(1)
     expect(() => registry.authorize(third.token, request(third.token))).toThrow(/invalid/i)
     expect(registry.authorize(other.token, request(other.token)).params).toEqual({ page: 'page-2' })
   })
 
-  it('exposes only the bound page id for runtime liveness checks', () => {
+  it('exposes only the bound page and profile for runtime checks', () => {
     const registry = new BrowserRpcCapabilityRegistry()
-    const capability = registry.create({ browserPageId: 'page-1', ttlMs: 1_000 })
+    const capability = registry.create({
+      browserPageId: 'page-1',
+      browserProfileId: 'profile-1',
+      ttlMs: 1_000
+    })
 
-    expect(registry.getPageId(capability.token)).toBe('page-1')
+    expect(registry.getTarget(capability.token)).toEqual({
+      browserPageId: 'page-1',
+      browserProfileId: 'profile-1'
+    })
   })
 })
 

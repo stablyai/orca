@@ -24163,6 +24163,7 @@ export class OrcaRuntimeService {
     const target = await this.browserCommands.resolveBrowserCapabilityTarget(params)
     return this.browserRpcCapabilities.create({
       browserPageId: target.browserPageId,
+      browserProfileId: target.browserProfileId,
       worktreeId: target.worktree,
       ttlMs: params.ttlMs
     })
@@ -24173,12 +24174,17 @@ export class OrcaRuntimeService {
   }
 
   authorizeBrowserCapability(token: string, request: RpcRequest): RpcRequest {
-    const page = this.browserRpcCapabilities.getPageId(token)
-    if (!this.browserCommands.isBrowserPageAvailable(page)) {
-      this.browserRpcCapabilities.revokePage(page)
+    const target = this.browserRpcCapabilities.getTarget(token)
+    if (
+      !this.browserCommands.isBrowserCapabilityTargetAvailable(
+        target.browserPageId,
+        target.browserProfileId
+      )
+    ) {
+      this.browserRpcCapabilities.revokePage(target.browserPageId)
       throw new BrowserRpcCapabilityError(
         'invalid',
-        'Browser capability page is no longer available'
+        'Browser capability page or profile is no longer available'
       )
     }
     return this.browserRpcCapabilities.authorize(token, request)

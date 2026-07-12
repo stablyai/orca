@@ -147,7 +147,8 @@ describe('RuntimeBrowserCommands browser screencast', () => {
     })
 
     await expect(commands.resolveBrowserCapabilityTarget({ page: 'page-1' })).resolves.toEqual({
-      browserPageId: 'page-1'
+      browserPageId: 'page-1',
+      browserProfileId: 'profile-restricted'
     })
   })
 
@@ -160,6 +161,21 @@ describe('RuntimeBrowserCommands browser screencast', () => {
     await expect(commands.resolveBrowserCapabilityTarget({ page: 'page-1' })).rejects.toThrow(
       /allowed-domain policy/
     )
+  })
+
+  it('invalidates a capability target when its browser profile changes', async () => {
+    const { RuntimeBrowserCommands } = await import('./orca-runtime-browser')
+    const commands = new RuntimeBrowserCommands(createHost())
+    webContentsFromIdMock.mockReturnValue({ isDestroyed: () => false })
+    const profileSpy = vi
+      .spyOn(browserManager, 'getSessionProfileIdForTab')
+      .mockReturnValue('profile-restricted')
+    browserSessionRegistryMock.getProfile.mockReturnValue({ allowedDomains: ['localhost'] })
+
+    expect(commands.isBrowserCapabilityTargetAvailable('page-1', 'profile-restricted')).toBe(true)
+
+    profileSpy.mockReturnValue('default')
+    expect(commands.isBrowserCapabilityTargetAvailable('page-1', 'profile-restricted')).toBe(false)
   })
 
   it('waits for explicit worktree browser registration after requesting a hidden mount', async () => {
