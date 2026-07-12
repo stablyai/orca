@@ -37,6 +37,8 @@ orca computer click --app com.spotify.client --element-index 42 --json
 
 Use the fresh state returned by each action for the next element index. Element indexes are the numeric labels shown in the tree; they may be sparse when noisy sections are omitted, so never infer valid indexes from `elementCount` or "Visible elements." Element indexes are short-lived and go stale after delays, navigation, focus changes, scrolling, window changes, or app re-rendering.
 
+In `--json` output, read the accessibility tree and action indexes from `result.snapshot.treeText`; `elementCount` is only a count and must not be used to infer indexes.
+
 ## App Selectors
 
 Prefer bundle IDs from `list-apps`; names are acceptable when unambiguous. Use `pid:<number>` only when bundle ID or name matching is ambiguous.
@@ -101,22 +103,6 @@ action_y = screenshot_pixel_y / screenshot.scale
 Prefer element indexes or element frames from the tree when available. Use raw screenshot-derived coordinates only after checking the latest screenshot scale and window size.
 
 On Linux and Windows, screenshots may come from the visible desktop region for the target window bounds. If visual pixels matter, use `--restore-window` so another window does not cover the target region; if you cannot take focus, trust the tree over potentially occluded pixels.
-
-## Response Structure
-
-`get-app-state --json` returns the accessibility tree under `result.snapshot`:
-
-| Field | Content |
-|-------|---------|
-| `result.snapshot.elementCount` | Total AX elements in the tree |
-| `result.snapshot.treeText` | Indented text tree; each line starts with the element index usable in `--element-index` |
-| `result.snapshot.focusedElementId` | Element index of the currently focused element |
-| `result.screenshot.path` | Screenshot file path (bytes omitted from JSON) |
-| `result.screenshotStatus.state` | Screenshot capture status |
-| `result.elements` | May be empty; use `result.snapshot.*` for the actual tree |
-
-Read `treeText` for element indexes and roles. Use those indexes directly in
-`click --element-index`, `set-value --element-index`, etc.
 
 ## App Notes
 
