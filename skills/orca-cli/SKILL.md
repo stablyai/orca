@@ -130,7 +130,7 @@ orca worktree create --name task --run-hooks --json
 - `--run-hooks` is a legacy alias for `--setup run`; it also reveals/activates the new worktree.
 - `--agent`, `--activate`, and `--run-hooks` reveal the new worktree. Plain create stays in the background.
 - Let Orca choose setup terminal placement from repo settings, including tab vs split behavior. Do not manually create extra setup terminals when `--agent` already owns the first tab.
-- If an older installed CLI rejects `--agent`, `--prompt`, or `--setup`, create the worktree normally, then run `orca terminal create --worktree <selector> --command "codex"` and `orca terminal send` if a prompt is needed. This can leave a fallback shell when no default tabs are configured; close it only after confirming it is unused.
+- If an older installed CLI rejects `--agent`, `--prompt`, or `--setup`, create the worktree normally, then run `orca terminal create --worktree <selector> --command "<requested-agent>"` and `orca terminal send` if a prompt is needed. This can leave a fallback shell when no default tabs are configured; close it only after confirming it is unused.
 - `worktree create` creates a new checkout. For a fresh agent in the **current** checkout (no new worktree), use `orca terminal create --worktree active --command "codex" --json` — that path does not create a second worktree shell.
 
 ## Worktree Comments
