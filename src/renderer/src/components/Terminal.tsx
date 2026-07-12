@@ -72,6 +72,10 @@ import {
 } from './terminal/split-group-mount'
 import { WorktreeSplitLayout, type WorktreePaneRect } from './workbench/WorktreeSplitLayout'
 import { collectLeafWorktreeIds } from '../lib/worktree-layout-tree'
+import {
+  WORKSPACE_STATUS_DRAG_TYPE,
+  readWorkspaceDragData
+} from './sidebar/workspace-status-drag-data'
 import { buildDuplicatedBrowserTabOptions } from '@/lib/duplicate-browser-tab-options'
 import { focusTerminalTabSurface } from '@/lib/focus-terminal-tab-surface'
 import { setForegroundTerminalTabIds } from '@/lib/foreground-terminal-tabs'
@@ -2495,6 +2499,7 @@ const WorktreeSplitSurface = React.memo(function WorktreeSplitSurface({
   const togglePaneSplitDirection = useAppStore((s) => s.togglePaneSplitDirection)
   const focusActiveWorkbenchPane = useAppStore((s) => s.focusActiveWorkbenchPane)
   const moveWorktreePaneBeside = useAppStore((s) => s.moveWorktreePaneBeside)
+  const splitWorktreePaneBeside = useAppStore((s) => s.splitWorktreePaneBeside)
   const [paneDropZone, setPaneDropZone] = useState<'left' | 'right' | 'top' | 'bottom' | null>(null)
   const hasAutomationVisibleBrowser = useBrowserAutomationVisibilityForAny(browserPageIds)
   const hasMobileDrivenBrowser = useBrowserMobileDriverForAny(browserPageIds)
@@ -2546,11 +2551,16 @@ const WorktreeSplitSurface = React.memo(function WorktreeSplitSurface({
         }
       }}
       onDragOver={(event) => {
-        if (
-          !isMultiPane ||
-          !isVisible ||
-          !event.dataTransfer.types.includes(WORKTREE_PANE_DND_MIME)
-        ) {
+        if (!isVisible) {
+          return
+        }
+        const types = event.dataTransfer.types
+        // Accept an existing pane's label (rearrange, only when parallel) or a
+        // sidebar worktree drag (add beside this pane). The workspace board keeps
+        // its own drop target elsewhere, so the two coexist by drop location.
+        const isPaneDrag = isMultiPane && types.includes(WORKTREE_PANE_DND_MIME)
+        const isWorktreeDrag = types.includes(WORKSPACE_STATUS_DRAG_TYPE)
+        if (!isPaneDrag && !isWorktreeDrag) {
           return
         }
         event.preventDefault()
@@ -2563,19 +2573,30 @@ const WorktreeSplitSurface = React.memo(function WorktreeSplitSurface({
         }
       }}
       onDrop={(event) => {
-        if (!event.dataTransfer.types.includes(WORKTREE_PANE_DND_MIME)) {
+        const types = event.dataTransfer.types
+        const isPaneDrag = types.includes(WORKTREE_PANE_DND_MIME)
+        const isWorktreeDrag = types.includes(WORKSPACE_STATUS_DRAG_TYPE)
+        if (!isPaneDrag && !isWorktreeDrag) {
           return
         }
         event.preventDefault()
         const zone = computeWorktreePaneDropZone(event)
         setPaneDropZone(null)
-        const fromWorktreeId = event.dataTransfer.getData(WORKTREE_PANE_DND_MIME)
-        if (!fromWorktreeId || fromWorktreeId === worktreeId) {
-          return
-        }
         const direction = zone === 'left' || zone === 'right' ? 'horizontal' : 'vertical'
         const placement = zone === 'left' || zone === 'top' ? 'before' : 'after'
-        moveWorktreePaneBeside(fromWorktreeId, worktreeId, direction, placement)
+        if (isPaneDrag) {
+          // Rearrange an existing pane within the set (§6.6 B).
+          const fromWorktreeId = event.dataTransfer.getData(WORKTREE_PANE_DND_MIME)
+          if (fromWorktreeId && fromWorktreeId !== worktreeId) {
+            moveWorktreePaneBeside(fromWorktreeId, worktreeId, direction, placement)
+          }
+          return
+        }
+        // A sidebar worktree dropped onto a pane → add it beside this pane (§6.6 A).
+        const draggedWorktreeId = readWorkspaceDragData(event.dataTransfer)
+        if (draggedWorktreeId && draggedWorktreeId !== worktreeId) {
+          splitWorktreePaneBeside(worktreeId, direction, draggedWorktreeId, placement)
+        }
       }}
     >
       {isMultiPane && isVisible ? (
