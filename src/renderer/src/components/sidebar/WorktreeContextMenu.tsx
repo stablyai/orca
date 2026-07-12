@@ -184,6 +184,29 @@ function isContextWorktreeDeletable(
   return repo != null && !worktree.isMainWorktree
 }
 
+type SingleContextDeleteRestriction = 'mission-session' | 'project-missing' | null
+
+// Why: mission sessions are owned by their mission (deleting one here would
+// orphan the mission record and the sidebar would respawn an empty session),
+// and a primary checkout without a resolvable project has nothing to remove.
+function getSingleContextDeleteRestriction(args: {
+  isMultiContext: boolean
+  isMissionSessionWorkspace: boolean
+  isMainWorktree: boolean
+  removesProject: boolean
+}): SingleContextDeleteRestriction {
+  if (args.isMultiContext) {
+    return null
+  }
+  if (args.isMissionSessionWorkspace) {
+    return 'mission-session'
+  }
+  if (args.isMainWorktree && !args.removesProject) {
+    return 'project-missing'
+  }
+  return null
+}
+
 function findSidebarVirtualRowByKey(sidebar: Element, rowKey: string): HTMLElement | null {
   return (
     Array.from(sidebar.querySelectorAll<HTMLElement>('[data-worktree-virtual-row]')).find(
@@ -380,6 +403,12 @@ const WorktreeContextMenu = React.memo(function WorktreeContextMenu({
     [activeContextWorktrees, repoMap]
   )
   const removesProject = shouldRemoveProjectFromContextMenu(repo, worktree)
+  const singleContextDeleteRestriction = getSingleContextDeleteRestriction({
+    isMultiContext,
+    isMissionSessionWorkspace,
+    isMainWorktree: worktree.isMainWorktree,
+    removesProject
+  })
   const sleepLabel =
     isMultiContext && sleepableWorktrees.length > 0
       ? `Sleep ${sleepableWorktrees.length} Workspace${sleepableWorktrees.length === 1 ? '' : 's'}`
@@ -919,17 +948,16 @@ const WorktreeContextMenu = React.memo(function WorktreeContextMenu({
             onSelect={handleDelete}
             disabled={
               deletingContext ||
-              (!isMultiContext && isMissionSessionWorkspace) ||
-              (!isMultiContext && worktree.isMainWorktree && !removesProject) ||
+              singleContextDeleteRestriction !== null ||
               (isMultiContext && batchDeleteWorktrees.length === 0)
             }
             title={
-              !isMultiContext && isMissionSessionWorkspace
+              singleContextDeleteRestriction === 'mission-session'
                 ? translate(
                     'auto.components.sidebar.WorktreeContextMenu.80a3c0efc8',
                     'Mission session — delete the mission instead.'
                   )
-                : !isMultiContext && worktree.isMainWorktree && !removesProject
+                : singleContextDeleteRestriction === 'project-missing'
                   ? translate(
                       'auto.components.sidebar.WorktreeContextMenu.e091caab15',
                       'The project could not be found'
@@ -992,6 +1020,7 @@ export {
   WORKTREE_NATIVE_CONTEXT_MENU_ATTR,
   hasSleepableWorkspaceActivity,
   isContextWorktreeDeletable,
+  getSingleContextDeleteRestriction,
   getWorktreeParentPickerAnchor,
   getWorktreeParentPickerLabel,
   isWorktreeParentPickerDisabled,
