@@ -756,6 +756,7 @@ export function ResourceUsageStatusSegment({
   const [appCollapsed, setAppCollapsed] = useState(true)
   const [sessions, setSessions] = useState<DaemonSession[]>([])
   const [sessionsError, setSessionsError] = useState(false)
+  const [closedSessionCountOffset, setClosedSessionCountOffset] = useState(0)
   const [killConfirm, setKillConfirm] = useState<UnifiedSessionRow | null>(null)
   const [killing, setKilling] = useState(false)
   const [spaceScanSnapshot, setSpaceScanSnapshot] = useState<ResourceUsageSpaceScanSnapshot>(
@@ -786,6 +787,9 @@ export function ResourceUsageStatusSegment({
     }),
     [ptyIdsByTabId, tabsByWorktreeForPtyBindings, terminalLayoutsByTabId, workspaceSessionReady]
   )
+
+  const bindingsRef = useRef(resourceSessionBindings)
+  bindingsRef.current = resourceSessionBindings
 
   // Why: after a kill confirms and the session unmounts, focus would otherwise
   // fall to <body>. We park a ref on the popover body so we can restore focus
@@ -821,12 +825,18 @@ export function ResourceUsageStatusSegment({
       }
       setSessions(result)
       setSessionsError(false)
+      const currentBindings = buildResourceSessionBindingIndex(bindingsRef.current).boundPtyIds.size
+      setClosedSessionCountOffset(result.length - currentBindings)
     } catch {
       if (mountedRef.current) {
         setSessionsError(true)
       }
     }
   }, [mountedRef])
+
+  useEffect(() => {
+    void refreshSessions()
+  }, [refreshSessions])
 
   const daemonActions = useDaemonActions({
     onRestartSettled: () => {
@@ -979,8 +989,12 @@ export function ResourceUsageStatusSegment({
     if (!workspaceSessionReady) {
       return 0
     }
-    return buildResourceSessionBindingIndex(resourceSessionBindings).boundPtyIds.size
-  }, [resourceSessionBindings, workspaceSessionReady])
+    return Math.max(
+      0,
+      buildResourceSessionBindingIndex(resourceSessionBindings).boundPtyIds.size +
+        closedSessionCountOffset
+    )
+  }, [resourceSessionBindings, workspaceSessionReady, closedSessionCountOffset])
   const triggerSessionCount = open ? sessions.length : closedSessionCount
 
   const { totalMemory, totalCpu, hostShare, memBadgeLabel } = useMemo(() => {
@@ -1080,7 +1094,13 @@ export function ResourceUsageStatusSegment({
       // (with optimistic removal) — same UX as a one-off kill from the
       // bulk "Kill orphan terminals" button. Bound sessions still confirm.
       if (!session.bound) {
-        setSessions((prev) => prev.filter((s) => s.id !== session.sessionId))
+        setSessions((prev) => {
+          const next = prev.filter((s) => s.id !== session.sessionId)
+          const currentBindings = buildResourceSessionBindingIndex(bindingsRef.current).boundPtyIds
+            .size
+          setClosedSessionCountOffset(next.length - currentBindings)
+          return next
+        })
         // Why: await the kill before refreshing — otherwise the optimistic
         // removal races a refresh that re-reads the daemon list before the
         // kill lands and re-adds the row that was just removed.
@@ -1111,7 +1131,12 @@ export function ResourceUsageStatusSegment({
     // Why: optimistic removal so rows disappear immediately instead of waiting
     // for the next explicit daemon-side list refresh.
     const orphanIds = new Set(orphans.map((s) => s.id))
-    setSessions((prev) => prev.filter((s) => !orphanIds.has(s.id)))
+    setSessions((prev) => {
+      const next = prev.filter((s) => !orphanIds.has(s.id))
+      const currentBindings = buildResourceSessionBindingIndex(bindingsRef.current).boundPtyIds.size
+      setClosedSessionCountOffset(next.length - currentBindings)
+      return next
+    })
     await Promise.allSettled(orphans.map((s) => window.api.pty.kill(s.id)))
     void refreshSessions()
   }, [sessions, resourceSessionBindings, workspaceSessionReady, refreshSessions])
@@ -1125,7 +1150,12 @@ export function ResourceUsageStatusSegment({
     // Why: optimistic removal — the kill X was on the row that's about to be
     // unmounted, so updating local state immediately avoids a flash where the
     // dialog closes but the killed row waits for the next list refresh.
-    setSessions((prev) => prev.filter((s) => s.id !== target.sessionId))
+    setSessions((prev) => {
+      const next = prev.filter((s) => s.id !== target.sessionId)
+      const currentBindings = buildResourceSessionBindingIndex(bindingsRef.current).boundPtyIds.size
+      setClosedSessionCountOffset(next.length - currentBindings)
+      return next
+    })
     try {
       await window.api.pty.kill(target.sessionId)
     } catch {
