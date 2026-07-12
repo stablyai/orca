@@ -47,6 +47,7 @@ const {
   trackMock,
   getCohortAtEmitMock,
   getAllWebContentsMock,
+  sendToTrustedUIRendererMock,
   clearVisiblePRRefreshWindowMock,
   enqueuePRRefreshMock,
   refreshPRNowMock,
@@ -88,6 +89,7 @@ const {
   trackMock: vi.fn(),
   getCohortAtEmitMock: vi.fn(),
   getAllWebContentsMock: vi.fn(),
+  sendToTrustedUIRendererMock: vi.fn(),
   clearVisiblePRRefreshWindowMock: vi.fn(),
   enqueuePRRefreshMock: vi.fn(),
   refreshPRNowMock: vi.fn(),
@@ -155,6 +157,10 @@ vi.mock('../telemetry/client', () => ({
 
 vi.mock('../telemetry/cohort-classifier', () => ({
   getCohortAtEmit: getCohortAtEmitMock
+}))
+
+vi.mock('./ui', () => ({
+  sendToTrustedUIRenderer: sendToTrustedUIRendererMock
 }))
 
 import { registerGitHubHandlers } from './github'
@@ -233,6 +239,7 @@ describe('registerGitHubHandlers', () => {
     getCohortAtEmitMock.mockReturnValue({ nth_repo_added: undefined })
     getAllWebContentsMock.mockReset()
     getAllWebContentsMock.mockReturnValue([])
+    sendToTrustedUIRendererMock.mockReset()
     clearVisiblePRRefreshWindowMock.mockReset()
     enqueuePRRefreshMock.mockReset()
     refreshPRNowMock.mockReset()
@@ -279,6 +286,96 @@ describe('registerGitHubHandlers', () => {
       null,
       null,
       null
+    )
+  })
+
+  it('targets mutation notifications without broadcasting to 100 browser guests', async () => {
+    const guestSends = Array.from({ length: 100 }, () => vi.fn())
+    getAllWebContentsMock.mockReturnValue(
+      guestSends.map((send, index) => ({
+        id: index + 100,
+        isDestroyed: () => false,
+        send
+      }))
+    )
+    registerGitHubHandlers(store as never, stats as never)
+
+    const result = await handlers['gh:notifyWorkItemMutated'](
+      { sender: { id: 1 } },
+      {
+        repoPath: '/home/runtime/repo',
+        repoId: 'repo-1',
+        type: 'pr',
+        number: 42
+      }
+    )
+
+    expect(result).toBe(true)
+    expect(sendToTrustedUIRendererMock).toHaveBeenCalledOnce()
+    expect(sendToTrustedUIRendererMock).toHaveBeenCalledWith(
+      'gh:workItemMutated',
+      {
+        repoPath: '/workspace/repo',
+        repoId: 'repo-1',
+        type: 'pr',
+        number: 42
+      },
+      1
+    )
+    expect(getAllWebContentsMock).not.toHaveBeenCalled()
+    expect(guestSends.reduce((total, send) => total + send.mock.calls.length, 0)).toBe(0)
+  })
+
+  it('targets mutation notifications with resolved repo id when called by repo path', async () => {
+    registerGitHubHandlers(store as never, stats as never)
+
+    const result = await handlers['gh:notifyWorkItemMutated'](
+      { sender: { id: 1 } },
+      {
+        repoPath: '/workspace/repo',
+        type: 'issue',
+        number: 7
+      }
+    )
+
+    expect(result).toBe(true)
+    expect(sendToTrustedUIRendererMock).toHaveBeenCalledWith(
+      'gh:workItemMutated',
+      {
+        repoPath: '/workspace/repo',
+        repoId: 'repo-1',
+        type: 'issue',
+        number: 7
+      },
+      1
+    )
+  })
+
+  it('targets PR file viewed mutations with repo id for cache invalidation', async () => {
+    setPRFileViewedMock.mockResolvedValue(true)
+    registerGitHubHandlers(store as never, stats as never)
+
+    const result = await handlers['gh:setPRFileViewed'](
+      { sender: { id: 1 } },
+      {
+        repoPath: '/workspace/repo',
+        prNumber: 42,
+        pullRequestId: 'PR_kw',
+        path: 'src/app.ts',
+        viewed: true
+      }
+    )
+
+    expect(result).toBe(true)
+    expect(sendToTrustedUIRendererMock).toHaveBeenCalledWith(
+      'gh:workItemMutated',
+      {
+        repoPath: '/workspace/repo',
+        repoId: 'repo-1',
+        type: 'pr',
+        number: 42
+      },
+      1
     )
   })
 

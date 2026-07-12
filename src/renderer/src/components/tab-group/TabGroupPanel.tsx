@@ -29,6 +29,10 @@ export default function TabGroupPanel({
   hasSplitGroups,
   touchesRightEdge,
   touchesLeftEdge,
+  touchesBottomEdge = false,
+  suppressLeftBorder = false,
+  suppressRightBorder = false,
+  suppressBottomBorder = false,
   reserveClosedExplorerToggleSpace,
   reserveCollapsedSidebarHeaderSpace,
   isTabDragActive = false,
@@ -40,6 +44,10 @@ export default function TabGroupPanel({
   hasSplitGroups: boolean
   touchesRightEdge: boolean
   touchesLeftEdge: boolean
+  touchesBottomEdge?: boolean
+  suppressLeftBorder?: boolean
+  suppressRightBorder?: boolean
+  suppressBottomBorder?: boolean
   reserveClosedExplorerToggleSpace: boolean
   reserveCollapsedSidebarHeaderSpace: boolean
   isTabDragActive?: boolean
@@ -205,7 +213,13 @@ export default function TabGroupPanel({
             // border-l/border-r in those spots stacks a second 1px line
             // next to it, reading as a ~2px bar below the drag strip
             // (where the sibling border continues alone above).
-            ` ${touchesLeftEdge ? '' : 'border-l'} ${touchesRightEdge ? '' : 'border-r'} border-border border-b ${isFocused ? 'border-b-accent' : 'opacity-95'}`
+            ` ${
+              touchesLeftEdge || suppressLeftBorder ? '' : 'border-l'
+            } ${touchesRightEdge || suppressRightBorder ? '' : 'border-r'} ${
+              touchesBottomEdge || suppressBottomBorder ? '' : 'border-b'
+            } border-border ${
+              isFocused && !touchesBottomEdge && !suppressBottomBorder ? 'border-b-accent' : ''
+            } ${isFocused ? '' : 'opacity-95'}`
           : ''
       }`}
       onPointerDown={commands.focusGroup}
@@ -225,7 +239,9 @@ export default function TabGroupPanel({
           user can only drag from the tiny left-sidebar header strip. */}
       <div
         className="h-[32px] shrink-0 border-b border-border bg-card"
+        data-tab-group-strip-id={groupId}
         data-terminal-focus-release-surface="true"
+        data-worktree-id={worktreeId}
       >
         <div className="flex h-full items-stretch pr-1.5">
           {/* Why: Electron's native drag hit-test only respects no-drag on DOM

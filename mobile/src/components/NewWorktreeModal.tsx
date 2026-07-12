@@ -7,7 +7,8 @@ import {
   Switch,
   StyleSheet,
   Platform,
-  ActivityIndicator
+  ActivityIndicator,
+  Keyboard
 } from 'react-native'
 import { ChevronDown, ChevronUp, Check } from 'lucide-react-native'
 import type { RpcClient } from '../transport/rpc-client'
@@ -174,6 +175,7 @@ function NewWorktreeModalContent({
   const [repos, setRepos] = useState<Repo[]>(initialRepos ?? [])
   const [selectedRepo, setSelectedRepo] = useState<Repo | null>(null)
   const [showRepoPicker, setShowRepoPicker] = useState(false)
+  const [nameAutoFocusEnabled, setNameAutoFocusEnabled] = useState(true)
   const [selectedAgentState, setSelectedAgent] = useState<AgentOption>(AGENT_OPTIONS[0]!)
   const [runtimeSettings, setRuntimeSettings] = useState<RuntimeSettings | null>(null)
   const [detectedAgentIdsState, setDetectedAgentIdsState] = useState<DetectedAgentIdsState | null>(
@@ -667,6 +669,13 @@ function NewWorktreeModalContent({
     [repos]
   )
 
+  function prepareSelectionPickerOpen(): void {
+    // Why: picker taps can beat the delayed name-field focus; suppressing it
+    // prevents the keyboard from reopening under the picker drawer.
+    setNameAutoFocusEnabled(false)
+    Keyboard.dismiss()
+  }
+
   return (
     <>
       <BottomDrawer visible={visible} onClose={onClose}>
@@ -689,7 +698,13 @@ function NewWorktreeModalContent({
           <>
             <View style={styles.field}>
               <Text style={styles.label}>Repository</Text>
-              <Pressable style={styles.fieldButton} onPress={() => setShowRepoPicker(true)}>
+              <Pressable
+                style={styles.fieldButton}
+                onPress={() => {
+                  prepareSelectionPickerOpen()
+                  setShowRepoPicker(true)
+                }}
+              >
                 {selectedRepo ? (
                   <View
                     style={[styles.repoDot, { backgroundColor: repoBadgeColor(selectedRepo) }]}
@@ -760,7 +775,7 @@ function NewWorktreeModalContent({
                   setError('')
                 }}
                 placeholderTextColor={colors.textMuted}
-                shouldAutoFocus={visible && !loading && repos.length > 0}
+                shouldAutoFocus={nameAutoFocusEnabled && visible && !loading && repos.length > 0}
                 returnKeyType="done"
                 onSubmitEditing={() => {
                   if (canCreate) {
@@ -775,7 +790,10 @@ function NewWorktreeModalContent({
               <Pressable
                 style={[styles.fieldButton, sshGate.requiresConnection && styles.disabled]}
                 disabled={sshGate.requiresConnection}
-                onPress={() => setShowAgentPicker(true)}
+                onPress={() => {
+                  prepareSelectionPickerOpen()
+                  setShowAgentPicker(true)
+                }}
               >
                 <MobileAgentIcon agentId={selectedAgent.id} size={16} />
                 <Text style={styles.fieldButtonText} numberOfLines={1}>

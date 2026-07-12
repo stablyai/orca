@@ -2,14 +2,16 @@ import { describe, expect, it } from 'vitest'
 import { Editor } from '@tiptap/core'
 import { encodeRawMarkdownHtmlForRichEditor } from './raw-markdown-html'
 import { createRichMarkdownExtensions } from './rich-markdown-extensions'
+import { createRichMarkdownEditorCodec } from './rich-markdown-source-transport'
 import type { SlashCommandId } from './rich-markdown-slash-commands'
 import { slashCommands } from './rich-markdown-slash-commands'
 
 function roundTripMarkdown(content: string): string {
+  const codec = createRichMarkdownEditorCodec()
   const editor = new Editor({
     element: null,
-    extensions: createRichMarkdownExtensions(),
-    content: encodeRawMarkdownHtmlForRichEditor(content),
+    extensions: createRichMarkdownExtensions({ codec }),
+    content: encodeRawMarkdownHtmlForRichEditor(content, codec),
     contentType: 'markdown'
   })
 
@@ -21,10 +23,11 @@ function roundTripMarkdown(content: string): string {
 }
 
 function markdownAfterTextReplace(content: string, search: string, replacement: string): string {
+  const codec = createRichMarkdownEditorCodec()
   const editor = new Editor({
     element: null,
-    extensions: createRichMarkdownExtensions(),
-    content: encodeRawMarkdownHtmlForRichEditor(content),
+    extensions: createRichMarkdownExtensions({ codec }),
+    content: encodeRawMarkdownHtmlForRichEditor(content, codec),
     contentType: 'markdown'
   })
 
@@ -50,9 +53,10 @@ function markdownAfterTextReplace(content: string, search: string, replacement: 
 }
 
 function slashCommandMarkdown(commandId: SlashCommandId): string {
+  const codec = createRichMarkdownEditorCodec()
   const editor = new Editor({
     element: null,
-    extensions: createRichMarkdownExtensions(),
+    extensions: createRichMarkdownExtensions({ codec }),
     content: '',
     contentType: 'markdown'
   })
@@ -71,9 +75,10 @@ function slashCommandMarkdown(commandId: SlashCommandId): string {
 }
 
 function slashCommandSelectionParent(commandId: SlashCommandId): string {
+  const codec = createRichMarkdownEditorCodec()
   const editor = new Editor({
     element: null,
-    extensions: createRichMarkdownExtensions(),
+    extensions: createRichMarkdownExtensions({ codec }),
     content: '',
     contentType: 'markdown'
   })

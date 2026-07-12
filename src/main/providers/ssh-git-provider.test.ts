@@ -7,6 +7,7 @@ type MockMultiplexer = {
   notify: ReturnType<typeof vi.fn>
   onNotification: ReturnType<typeof vi.fn>
   onNotificationByMethod: ReturnType<typeof vi.fn>
+  onDispose: ReturnType<typeof vi.fn>
   dispose: ReturnType<typeof vi.fn>
   isDisposed: ReturnType<typeof vi.fn>
 }
@@ -17,6 +18,9 @@ function createMockMux(): MockMultiplexer {
     notify: vi.fn(),
     onNotification: vi.fn(),
     onNotificationByMethod: vi.fn().mockReturnValue(vi.fn()),
+    // Why: requestGitStreamable subscribes to onDispose before awaiting the
+    // response so it can reject in-flight reassembly if the link drops.
+    onDispose: vi.fn().mockReturnValue(vi.fn()),
     dispose: vi.fn(),
     isDisposed: vi.fn().mockReturnValue(false)
   }
@@ -91,6 +95,53 @@ describe('SshGitProvider', () => {
     expect(mux.request).toHaveBeenNthCalledWith(2, 'git.status', {
       worktreePath: '/home/user/repo'
     })
+  })
+
+  it('getSubmoduleStatus sends git.submoduleStatus request', async () => {
+    const statusResult = { entries: [], conflictOperation: 'unknown' }
+    mux.request.mockResolvedValue(statusResult)
+
+    const result = await provider.getSubmoduleStatus('/home/user/repo', 'vendor/lib')
+
+    expect(mux.request).toHaveBeenCalledWith('git.submoduleStatus', {
+      worktreePath: '/home/user/repo',
+      submodulePath: 'vendor/lib',
+      area: 'unstaged'
+    })
+    expect(result).toEqual(statusResult)
+  })
+
+  it('getSubmoduleStatus forwards the requested source-control area', async () => {
+    const statusResult = { entries: [], conflictOperation: 'unknown' }
+    mux.request.mockResolvedValue(statusResult)
+
+    await provider.getSubmoduleStatus('/home/user/repo', 'vendor/lib', 'staged')
+
+    expect(mux.request).toHaveBeenCalledWith('git.submoduleStatus', {
+      worktreePath: '/home/user/repo',
+      submodulePath: 'vendor/lib',
+      area: 'staged'
+    })
+  })
+
+  it('reports an actionable reconnect message when the relay lacks submodule status', async () => {
+    const methodNotFound = new Error('Method not found: git.submoduleStatus') as Error & {
+      code?: number
+    }
+    methodNotFound.code = -32601
+    mux.request.mockRejectedValueOnce(methodNotFound)
+
+    await expect(provider.getSubmoduleStatus('/home/user/repo', 'vendor/lib')).rejects.toThrow(
+      'SSH submodule diff support is unavailable on this relay. Reconnect the SSH target to update Orca on the host, then try again.'
+    )
+  })
+
+  it('rethrows non-method-not-found submodule status errors unchanged', async () => {
+    mux.request.mockRejectedValueOnce(new Error('fatal: not a submodule'))
+
+    await expect(provider.getSubmoduleStatus('/home/user/repo', 'vendor/lib')).rejects.toThrow(
+      'fatal: not a submodule'
+    )
   })
 
   it('checkIgnoredPaths sends git.checkIgnored request', async () => {
@@ -273,7 +324,10 @@ describe('SshGitProvider', () => {
       'git.exec',
       {
         args: ['clone', '--progress', '--', 'git@example.com:repo.git', 'repo'],
-        cwd: '/home/user'
+        cwd: '/home/user',
+        // Why: exec opts into response streaming so a large stdout is chunked
+        // onto the bulk lane; old relays ignore the flag.
+        __streamResponse: true
       },
       {
         signal: controller.signal,
@@ -306,7 +360,8 @@ describe('SshGitProvider', () => {
     })
     expect(mux.request).toHaveBeenCalledWith('git.exec', {
       args: ['diff', '--cached', '--patch', '--minimal', '--no-color', '--no-ext-diff'],
-      cwd: '/home/user/repo'
+      cwd: '/home/user/repo',
+      __streamResponse: true
     })
   })
 
@@ -589,7 +644,10 @@ describe('SshGitProvider', () => {
     expect(mux.request).toHaveBeenCalledWith('git.diff', {
       worktreePath: '/home/user/repo',
       filePath: 'src/index.ts',
-      staged: true
+      staged: true,
+      // Why: opts into response streaming; a small result still comes back as a
+      // single frame (relay decides), and old relays ignore the flag.
+      __streamResponse: true
     })
     expect(result).toEqual(diffResult)
   })
@@ -803,14 +861,16 @@ describe('SshGitProvider', () => {
       '/home/user/repo',
       'origin',
       'main',
-      'refs/remotes/origin/main'
+      'refs/remotes/origin/main',
+      { skipAutoMaintenance: true }
     )
 
     expect(mux.request).toHaveBeenCalledWith('git.fetchRemoteTrackingRef', {
       worktreePath: '/home/user/repo',
       remote: 'origin',
       branch: 'main',
-      ref: 'refs/remotes/origin/main'
+      ref: 'refs/remotes/origin/main',
+      skipAutoMaintenance: true
     })
   })
 
@@ -831,7 +891,8 @@ describe('SshGitProvider', () => {
     const result = await provider.getBranchDiff('/home/user/repo', 'main')
     expect(mux.request).toHaveBeenCalledWith('git.branchDiff', {
       worktreePath: '/home/user/repo',
-      baseRef: 'main'
+      baseRef: 'main',
+      __streamResponse: true
     })
     expect(result).toEqual(diffs)
   })
@@ -943,6 +1004,31 @@ describe('SshGitProvider', () => {
     expect(mux.request).toHaveBeenCalledTimes(3)
   })
 
+  it('clears pending diff RPCs when submodule status runs', async () => {
+    const diff = {
+      kind: 'text',
+      originalContent: 'old',
+      modifiedContent: 'new',
+      originalIsBinary: false,
+      modifiedIsBinary: false
+    }
+    const pendingDiff = deferredValue(diff)
+    mux.request.mockReturnValueOnce(pendingDiff.promise)
+
+    const first = provider.getDiff('/home/user/repo', 'src/file.ts', false, true)
+    await waitForRequestCount(mux.request, 1)
+
+    mux.request.mockResolvedValueOnce({ entries: [], conflictOperation: 'unknown' })
+    await provider.getSubmoduleStatus('/home/user/repo', 'vendor/lib')
+
+    mux.request.mockResolvedValueOnce(diff)
+    const second = provider.getDiff('/home/user/repo', 'src/file.ts', false, true)
+
+    pendingDiff.resolve()
+    await expect(Promise.all([first, second])).resolves.toEqual([diff, diff])
+    expect(mux.request).toHaveBeenCalledTimes(3)
+  })
+
   it('clears pending diff RPCs when a mutation runs', async () => {
     const diff = {
       kind: 'text',
@@ -959,6 +1045,42 @@ describe('SshGitProvider', () => {
 
     mux.request.mockResolvedValueOnce(undefined)
     await provider.stageFile('/home/user/repo', 'src/file.ts')
+
+    mux.request.mockResolvedValueOnce(diff)
+    const second = provider.getDiff('/home/user/repo', 'src/file.ts', false, true)
+
+    pendingDiff.resolve()
+    await expect(Promise.all([first, second])).resolves.toEqual([diff, diff])
+    expect(mux.request).toHaveBeenCalledTimes(3)
+  })
+
+  it.each([
+    [
+      'clone',
+      (provider: SshGitProvider) =>
+        provider.clone(['clone', '--', 'https://example.com/repo.git', 'repo'], '/projects')
+    ],
+    [
+      'mutating git.exec',
+      (provider: SshGitProvider) =>
+        provider.exec(['commit', '--allow-empty', '-m', 'initialize'], '/home/user/repo')
+    ]
+  ])('clears pending diff RPCs when %s runs', async (_name, mutate) => {
+    const diff = {
+      kind: 'text',
+      originalContent: 'old',
+      modifiedContent: 'new',
+      originalIsBinary: false,
+      modifiedIsBinary: false
+    }
+    const pendingDiff = deferredValue(diff)
+    mux.request.mockReturnValueOnce(pendingDiff.promise)
+
+    const first = provider.getDiff('/home/user/repo', 'src/file.ts', false, true)
+    await waitForRequestCount(mux.request, 1)
+
+    mux.request.mockResolvedValueOnce({ stdout: '', stderr: '' })
+    await mutate(provider)
 
     mux.request.mockResolvedValueOnce(diff)
     const second = provider.getDiff('/home/user/repo', 'src/file.ts', false, true)
@@ -1256,6 +1378,38 @@ describe('SshGitProvider', () => {
       worktreePath: '/home/user/feat',
       newBranch: 'you/fix-auth'
     })
+  })
+
+  it('forceDeletePreservedBranch sends the preserved-branch delete request', async () => {
+    await provider.forceDeletePreservedBranch('/home/user/repo', 'you/fix-auth', 'abc123')
+    expect(mux.request).toHaveBeenCalledWith('git.forceDeletePreservedBranch', {
+      repoPath: '/home/user/repo',
+      branchName: 'you/fix-auth',
+      expectedHead: 'abc123'
+    })
+  })
+
+  it('forceDeletePreservedBranch maps old relays to the reconnect message', async () => {
+    const methodNotFound = Object.assign(
+      new Error('Method not found: git.forceDeletePreservedBranch'),
+      { code: -32601 }
+    )
+    mux.request.mockRejectedValueOnce(methodNotFound)
+
+    await expect(
+      provider.forceDeletePreservedBranch('/home/user/repo', 'you/fix-auth', 'abc123')
+    ).rejects.toThrow(
+      'This SSH host is running an older Orca relay that cannot delete preserved branches. Reconnect to deploy the latest relay, then try again.'
+    )
+  })
+
+  it('forceDeletePreservedBranch rethrows non-method-not-found errors', async () => {
+    const error = new Error('remote update-ref failed')
+    mux.request.mockRejectedValueOnce(error)
+
+    await expect(
+      provider.forceDeletePreservedBranch('/home/user/repo', 'you/fix-auth', 'abc123')
+    ).rejects.toBe(error)
   })
 
   it('isGitRepo always returns true for remote paths', () => {

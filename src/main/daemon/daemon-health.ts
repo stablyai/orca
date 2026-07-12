@@ -1,9 +1,9 @@
 /* oxlint-disable max-lines -- Why: pid validation shares process-identity
 helpers with kill escalation so the SIGKILL safety checks stay co-located. */
-import { execFile, execFileSync } from 'child_process'
-import { existsSync, readFileSync, unlinkSync } from 'fs'
-import { connect, type Socket } from 'net'
-import { promisify } from 'util'
+import { execFile, execFileSync } from 'node:child_process'
+import { existsSync, readFileSync, unlinkSync } from 'node:fs'
+import { connect, type Socket } from 'node:net'
+import { promisify } from 'node:util'
 import {
   getProcessOutputFields,
   iterateProcessOutputLines
@@ -24,6 +24,17 @@ const RESOLVER_HEALTH_CHECK_TIMEOUT_MS = 3_000
 const KILL_WAIT_MS = 3_000
 const KILL_POLL_MS = 100
 const START_TIME_TOLERANCE_MS = 1_500
+// Why: on Windows the pid file's startedAtMs is the daemon's self-reported
+// Node start time, while verification reads the OS process creation time —
+// the gap between them is the exe bootstrap, which AV/disk pressure can
+// stretch to seconds. Pid recycling differs by minutes-to-days, so a wide
+// tolerance keeps the guard effective without false mismatches.
+const WIN32_START_TIME_TOLERANCE_MS = 10_000
+
+// 'rejected' means the daemon answered and refused the handshake (bad token,
+// foreign protocol) — it can never be adopted, unlike 'unreachable', which
+// also covers a live-but-wedged daemon that simply missed the RPC budget.
+export type DaemonHealth = 'healthy' | 'unreachable' | 'rejected' | 'pty-spawn-unhealthy'
 
 type ParsedDaemonPid = {
   pid: number
@@ -69,10 +80,10 @@ function canConnectSocket(socketPath: string): Promise<boolean> {
   })
 }
 
-export function healthCheckDaemon(socketPath: string, tokenPath: string): Promise<boolean> {
+export function checkDaemonHealth(socketPath: string, tokenPath: string): Promise<DaemonHealth> {
   return new Promise((resolve) => {
     if (process.platform !== 'win32' && !existsSync(socketPath)) {
-      resolve(false)
+      resolve('unreachable')
       return
     }
 
@@ -80,13 +91,13 @@ export function healthCheckDaemon(socketPath: string, tokenPath: string): Promis
     try {
       token = readFileSync(tokenPath, 'utf8').trim()
     } catch {
-      resolve(false)
+      resolve('unreachable')
       return
     }
 
     let settled = false
     let sock: Socket | null = null
-    const settle = (result: boolean): void => {
+    const settle = (result: DaemonHealth): void => {
       if (settled) {
         return
       }
@@ -101,7 +112,7 @@ export function healthCheckDaemon(socketPath: string, tokenPath: string): Promis
       sock?.off('connect', onConnect)
       sock?.off('data', onData)
     }
-    const onError = (): void => settle(false)
+    const onError = (): void => settle('unreachable')
     const onConnect = (): void => {
       const hello: HelloMessage = {
         type: 'hello',
@@ -132,13 +143,13 @@ export function healthCheckDaemon(socketPath: string, tokenPath: string): Promis
         try {
           message = JSON.parse(line) as Record<string, unknown>
         } catch {
-          settle(false)
+          settle('rejected')
           return
         }
 
         if (message.type === 'hello') {
           if (!(message as HelloResponse).ok) {
-            settle(false)
+            settle('rejected')
             return
           }
           // Why: a protocol-live daemon with a stale cwd or node-pty helper
@@ -149,12 +160,12 @@ export function healthCheckDaemon(socketPath: string, tokenPath: string): Promis
         }
 
         if (message.id === 'health-1') {
-          settle(message.ok === true)
+          settle(message.ok === true ? 'healthy' : 'pty-spawn-unhealthy')
           return
         }
       }
     }
-    const timer = setTimeout(() => settle(false), HEALTH_CHECK_TIMEOUT_MS)
+    const timer = setTimeout(() => settle('unreachable'), HEALTH_CHECK_TIMEOUT_MS)
 
     sock = connect({ path: socketPath })
     sock.on('error', onError)
@@ -163,6 +174,10 @@ export function healthCheckDaemon(socketPath: string, tokenPath: string): Promis
     let buffer = ''
     sock.on('data', onData)
   })
+}
+
+export async function healthCheckDaemon(socketPath: string, tokenPath: string): Promise<boolean> {
+  return (await checkDaemonHealth(socketPath, tokenPath)) === 'healthy'
 }
 
 function isSystemResolverHealth(value: unknown): value is SystemResolverHealth {
@@ -365,6 +380,10 @@ export function getProcessStartedAtMs(pid: number): number | null {
   }
 
   if (process.platform === 'win32') {
+    // Why: the only OS source is a CIM query costing a powershell spawn —
+    // too slow for this sync path. Windows pid files instead carry the
+    // daemon's self-reported start time from its ready message, and
+    // isDaemonProcess verifies it against CIM CreationDate asynchronously.
     return null
   }
 
@@ -381,27 +400,61 @@ export function getProcessStartedAtMs(pid: number): number | null {
 }
 
 export function startTimeMatches(pid: number, expectedStartedAtMs: number | null): boolean {
-  if (expectedStartedAtMs === null) {
+  return startTimesWithinTolerance(
+    getProcessStartedAtMs(pid),
+    expectedStartedAtMs,
+    START_TIME_TOLERANCE_MS
+  )
+}
+
+// Why: fail open on null — a pid file or OS query without a start time must
+// not veto an otherwise-matching daemon (adoption safety beats recycle safety).
+export function startTimesWithinTolerance(
+  actualStartedAtMs: number | null,
+  expectedStartedAtMs: number | null,
+  toleranceMs: number
+): boolean {
+  if (expectedStartedAtMs === null || actualStartedAtMs === null) {
     return true
   }
-
-  const actualStartedAtMs = getProcessStartedAtMs(pid)
-  if (actualStartedAtMs === null) {
-    return true
-  }
-
-  return Math.abs(actualStartedAtMs - expectedStartedAtMs) <= START_TIME_TOLERANCE_MS
+  return Math.abs(actualStartedAtMs - expectedStartedAtMs) <= toleranceMs
 }
 
 const execFileAsync = promisify(execFile)
+
+export type WindowsProcessIdentity = {
+  commandLine: string
+  startedAtMs: number | null
+}
+
+export function parseWindowsProcessIdentityJson(stdout: string): WindowsProcessIdentity | null {
+  const trimmed = stdout.trim()
+  if (!trimmed) {
+    return null
+  }
+  try {
+    const parsed = JSON.parse(trimmed) as { cmd?: unknown; start?: unknown }
+    if (typeof parsed.cmd !== 'string' || !parsed.cmd) {
+      return null
+    }
+    return {
+      commandLine: parsed.cmd,
+      startedAtMs:
+        typeof parsed.start === 'number' && Number.isFinite(parsed.start) ? parsed.start : null
+    }
+  } catch {
+    return null
+  }
+}
 
 // Why: the only reliable command-line source on Windows is a CIM query, which
 // costs a full powershell.exe spawn (300-800ms cold, worse under Defender).
 // Async because the sync version measurably froze the Electron main thread at
 // startup for the whole spawn (benchmark: ~0.5s warm, 3s timeout cap cold).
-// Timed under ORCA_STARTUP_DIAGNOSTICS so the cold-start benchmark can
-// attribute startup cost to these checks.
-async function queryWindowsProcessCommandLine(pid: number): Promise<string | null> {
+// CreationDate rides along in the same spawn so start-time verification adds
+// zero extra process launches. Timed under ORCA_STARTUP_DIAGNOSTICS so the
+// cold-start benchmark can attribute startup cost to these checks.
+async function queryWindowsProcessIdentity(pid: number): Promise<WindowsProcessIdentity | null> {
   const startedAt = performance.now()
   try {
     const { stdout } = await execFileAsync(
@@ -410,14 +463,17 @@ async function queryWindowsProcessCommandLine(pid: number): Promise<string | nul
         '-NoProfile',
         '-NonInteractive',
         '-Command',
-        `(Get-CimInstance Win32_Process -Filter "ProcessId = ${pid}").CommandLine`
+        `$p = Get-CimInstance Win32_Process -Filter "ProcessId = ${pid}"; ` +
+          `if ($p) { $start = $null; ` +
+          `if ($p.CreationDate) { $start = [long]([DateTimeOffset]$p.CreationDate).ToUnixTimeMilliseconds() }; ` +
+          `@{ cmd = $p.CommandLine; start = $start } | ConvertTo-Json -Compress }`
       ],
       {
         encoding: 'utf8',
         timeout: 3_000
       }
     )
-    return stdout
+    return parseWindowsProcessIdentityJson(stdout)
   } catch {
     return null
   } finally {
@@ -444,15 +500,16 @@ async function isDaemonProcess(
   }
 
   if (process.platform === 'win32') {
-    const output = await queryWindowsProcessCommandLine(pid)
-    if (output === null) {
+    const identity = await queryWindowsProcessIdentity(pid)
+    if (identity === null) {
       return false
     }
     // Why: image names are too broad after PID reuse. Match the daemon entry
     // plus the exact socket/token args so we only kill the daemon for this
     // userData protocol endpoint.
     return (
-      commandLineMatchesDaemon(output, socketPath, tokenPath) && startTimeMatches(pid, startedAtMs)
+      commandLineMatchesDaemon(identity.commandLine, socketPath, tokenPath) &&
+      startTimesWithinTolerance(identity.startedAtMs, startedAtMs, WIN32_START_TIME_TOLERANCE_MS)
     )
   }
 
@@ -479,7 +536,7 @@ async function isDaemonProcess(
 
 async function getDaemonCommandLine(pid: number): Promise<string | null> {
   if (process.platform === 'win32') {
-    return queryWindowsProcessCommandLine(pid)
+    return (await queryWindowsProcessIdentity(pid))?.commandLine ?? null
   }
 
   try {

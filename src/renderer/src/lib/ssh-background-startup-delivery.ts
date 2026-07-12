@@ -2,6 +2,7 @@ import {
   createShellReadyMarkerScanState,
   scanForShellReadyMarker
 } from '@/components/terminal-pane/shell-ready-marker-scan'
+import { buildStartupCommandSubmission } from '../../../shared/startup-command-submission'
 
 const SSH_SHELL_READY_STARTUP_FALLBACK_MS = 1500
 
@@ -76,9 +77,17 @@ export function createSshBackgroundStartupDelivery(
       pendingCommand = null
       // Why: the SSH relay treats spawn.command as metadata for interactive
       // PTYs; hidden automation tabs still submit the command themselves.
-      const submittedCommand =
-        command.endsWith('\r') || command.endsWith('\n') ? command : `${command}\r`
-      options.write(ptyId, submittedCommand)
+      // Why bracketed paste: multiline prompts are pasted literally only when we
+      // synchronized on the Orca shell-ready marker (waitForShellReady) — that
+      // is the bash/zsh overlay with bracketed-paste mode armed. Submit with CR
+      // since the relay drives a remote shell.
+      options.write(
+        ptyId,
+        buildStartupCommandSubmission(command, {
+          submit: '\r',
+          bracketedPasteSafe: options.waitForShellReady
+        })
+      )
     }, 50)
   }
 

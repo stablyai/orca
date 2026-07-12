@@ -120,14 +120,66 @@ describe('computeProjectHeaderDropPreview', () => {
 
   it('supports boundary drops at the end of the full sidebar list', () => {
     const preview = computeProjectHeaderDropPreview({
-      pointerY: 360,
+      pointerY: 400,
       containerTop: 0,
       scrollTop: 0,
       sidebarRepoHeaderIds: ['a', 'b', 'c'],
-      rects: [{ repoId: 'c', bucketKey: 'ungrouped', headerIndex: 2, top: 300, bottom: 328 }]
+      rects: [
+        {
+          repoId: 'c',
+          bucketKey: 'ungrouped',
+          headerIndex: 2,
+          top: 300,
+          bottom: 328,
+          sectionBottom: 380
+        }
+      ]
     })
 
-    expect(preview).toEqual({ dropIndex: 3, dropIndicatorY: 331 })
+    expect(preview).toEqual({ dropIndex: 3, dropIndicatorY: 383 })
+  })
+
+  it('does not create a drop slot inside an expanded project section', () => {
+    const preview = computeProjectHeaderDropPreview({
+      pointerY: 350,
+      containerTop: 0,
+      scrollTop: 0,
+      sidebarRepoHeaderIds: ['a', 'b', 'c'],
+      rects: [
+        {
+          repoId: 'c',
+          bucketKey: 'ungrouped',
+          headerIndex: 2,
+          top: 300,
+          bottom: 328,
+          sectionBottom: 380
+        }
+      ]
+    })
+
+    expect(preview).toBeNull()
+  })
+
+  it('does not create a drop slot in the contents between sibling project headers', () => {
+    const preview = computeProjectHeaderDropPreview({
+      pointerY: 150,
+      containerTop: 0,
+      scrollTop: 0,
+      sidebarRepoHeaderIds: ['a', 'b'],
+      rects: [
+        {
+          repoId: 'a',
+          bucketKey: 'ungrouped',
+          headerIndex: 0,
+          top: 100,
+          bottom: 128,
+          sectionBottom: 220
+        },
+        { repoId: 'b', bucketKey: 'ungrouped', headerIndex: 1, top: 220, bottom: 248 }
+      ]
+    })
+
+    expect(preview).toBeNull()
   })
 })
 

@@ -6,6 +6,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip
 import { basename, normalizeRelativePath } from '@/lib/path'
 import { getEditorDisplayLabel } from '@/components/editor/editor-labels'
 import { renameFileOnDisk } from '@/lib/rename-file'
+import { isImeCompositionKeyDown } from '@/lib/ime-composition-keyboard-event'
 import { detectLanguage } from '@/lib/language-detect'
 import { getFileTypeIcon } from '@/lib/file-type-icons'
 import { useRepoById, useWorktreeById } from '@/store/selectors'
@@ -29,6 +30,7 @@ import { EditorFileTabContextMenu } from './EditorFileTabContextMenu'
 import { translate } from '@/i18n/i18n'
 import { TAB_CONTAINER_WIDTH_CLASSES, TAB_LABEL_WIDTH_CLASSES } from './tab-width-rules'
 import { EditorFileTabCloseButton } from './EditorFileTabCloseButton'
+import { useTabStripPointerActivation } from './tab-strip-pointer-activation'
 
 export default function EditorFileTab({
   file,
@@ -78,6 +80,11 @@ export default function EditorFileTab({
   const isConflictReview = file.mode === 'conflict-review'
   const isCheckDetails = file.mode === 'check-details'
   const isMarkdownPreviewTab = file.mode === 'markdown-preview'
+  // Why: only deleted/renamed mean the file is gone from its path, which is
+  // what strikethrough conveys. 'changed' keeps a normal label — its surface
+  // is the changed-on-disk banner inside the editor.
+  const isMissingFileMutation =
+    file.externalMutation === 'deleted' || file.externalMutation === 'renamed'
   const resolvedLanguage =
     file.mode === 'diff'
       ? detectLanguage(file.relativePath)
@@ -102,8 +109,10 @@ export default function EditorFileTab({
   // user's intent. This flag suppresses the trailing blur-commit.
   const renameCancelledRef = useRef(false)
   // Only on-disk edit tabs are renameable. Diff, conflict-review, and
-  // combined/virtual views don't point at a single concrete file we can safely rename.
-  const canRename = file.mode === 'edit' && !file.diffSource && !file.conflict
+  // combined/virtual views don't point at a single concrete file we can safely
+  // rename. Read-only tabs (AI Vault View Log) also stay unrenameable — rename
+  // would rewrite the agent-owned artifact's backing path.
+  const canRename = file.mode === 'edit' && !file.diffSource && !file.conflict && !file.readOnly
 
   const openRenameInput = (): void => {
     if (!canRename) {
@@ -200,6 +209,12 @@ export default function EditorFileTab({
   }, [menuOpen])
 
   const dragListeners = isRenaming ? undefined : listeners
+  // Why: defer activation to pointer-up so dragging the tab (reorder / move into
+  // another pane / split) does not switch the active tab mid-gesture.
+  const { onPointerDown: onTabPointerDown } = useTabStripPointerActivation({
+    onActivate,
+    disabled: isRenaming
+  })
 
   const tabRoot = (
     <div
@@ -210,11 +225,10 @@ export default function EditorFileTab({
       {...dragListeners}
       className={`group relative flex items-center h-full px-1.5 text-xs cursor-pointer select-none outline-none focus:outline-none focus-visible:outline-none ${getTabStripBorderClasses(hasTabsToRight, { includeTopBorder: includeTopTabBorder })} ${getDropIndicatorClasses(dropIndicator ?? null)} ${getTabRootStateClasses(isActive)}`}
       onPointerDown={(e) => {
-        if (isRenaming || e.button !== 0) {
-          return
-        }
-        onActivate()
-        dragListeners?.onPointerDown?.(e)
+        onTabPointerDown(
+          e,
+          dragListeners?.onPointerDown as ((event: React.PointerEvent<Element>) => void) | undefined
+        )
       }}
       onDoubleClick={() => {
         if (file.isPreview && onMakePermanent) {
@@ -281,6 +295,11 @@ export default function EditorFileTab({
             onClick={(e) => e.stopPropagation()}
             onDoubleClick={(e) => e.stopPropagation()}
             onKeyDown={(e) => {
+              // Why: an Enter that only confirms a CJK IME candidate must not
+              // commit the rename; wait for a non-composition Enter.
+              if (isImeCompositionKeyDown(e)) {
+                return
+              }
               if (e.key === 'Enter') {
                 e.preventDefault()
                 e.stopPropagation()
@@ -296,7 +315,7 @@ export default function EditorFileTab({
           />
         ) : (
           <span
-            className={`${TAB_LABEL_WIDTH_CLASSES}${file.isPreview ? ' italic' : ''}${file.externalMutation ? ' line-through' : ''}`}
+            className={`${TAB_LABEL_WIDTH_CLASSES}${file.isPreview ? ' italic' : ''}${isMissingFileMutation ? ' line-through' : ''}`}
             style={tabStatusColor ? { color: tabStatusColor } : undefined}
             onDoubleClick={(e) => {
               if (file.isPreview && onMakePermanent) {
@@ -317,12 +336,12 @@ export default function EditorFileTab({
             {tabLabel}
           </span>
         )}
-        {file.externalMutation && !isRenaming && (
+        {isMissingFileMutation && !isRenaming && (
           <span className="shrink-0 text-[10px] leading-none font-semibold tracking-wide text-muted-foreground">
             {file.externalMutation}
           </span>
         )}
-        {tabStatus && !isRenaming && !file.externalMutation && (
+        {tabStatus && !isRenaming && !isMissingFileMutation && (
           <span
             className="shrink-0 text-[10px] leading-none font-semibold tracking-wide"
             style={{ color: tabStatusColor }}

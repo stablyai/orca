@@ -18,7 +18,9 @@ import {
   shouldShowCollapseFolderAction,
   shouldShowFindInFolderAction,
   shouldShowCopyFileAction,
-  shouldShowRemoteDownloadAction
+  shouldShowOpenInTerminalAction,
+  shouldShowRemoteDownloadAction,
+  shouldShowViewFileAction
 } from './FileExplorerRow'
 import { FileExplorerVirtualRows } from './FileExplorerVirtualRows'
 import type { TreeNode } from './file-explorer-types'
@@ -575,6 +577,16 @@ describe('FileExplorerRow collapse folder action', () => {
     ).toBe(false)
   })
 
+  it('only shows open in terminal for directories', () => {
+    expect(shouldShowOpenInTerminalAction(directoryNode)).toBe(true)
+    expect(shouldShowOpenInTerminalAction(fileNode)).toBe(false)
+  })
+
+  it('only shows view file for files', () => {
+    expect(shouldShowViewFileAction(fileNode)).toBe(true)
+    expect(shouldShowViewFileAction(directoryNode)).toBe(false)
+  })
+
   it('shows remote download only for desktop SSH or Remote Host file-like rows', () => {
     const runtimeContext = {
       settings: { activeRuntimeEnvironmentId: 'runtime-1' },
@@ -769,6 +781,7 @@ describe('FileExplorerRow collapse folder action', () => {
       deleteShortcutLabel: 'Del',
       onClick: vi.fn(),
       onDoubleClick: vi.fn(),
+      onViewFile: vi.fn(),
       onContextMenuSelect: vi.fn(),
       onCopyPaths: vi.fn(),
       onStartNew: vi.fn(),
@@ -776,6 +789,7 @@ describe('FileExplorerRow collapse folder action', () => {
       onDuplicate: vi.fn(),
       onAddFolderAsProject: vi.fn(),
       canAddFolderAsProject: () => false,
+      onOpenInTerminal: vi.fn(),
       onRequestDelete: vi.fn(),
       onCollapseFolderSubtree,
       onFindInFolder: vi.fn(),
@@ -820,6 +834,7 @@ describe('FileExplorerRow collapse folder action', () => {
       deleteShortcutLabel: 'Del',
       onClick: vi.fn(),
       onDoubleClick: vi.fn(),
+      onViewFile: vi.fn(),
       onContextMenuSelect: vi.fn(),
       onCopyPaths: vi.fn(),
       onStartNew: vi.fn(),
@@ -827,6 +842,7 @@ describe('FileExplorerRow collapse folder action', () => {
       onDuplicate: vi.fn(),
       onAddFolderAsProject: vi.fn(),
       canAddFolderAsProject: () => false,
+      onOpenInTerminal: vi.fn(),
       onRequestDelete: vi.fn(),
       onCollapseFolderSubtree: vi.fn(),
       onFindInFolder,
@@ -871,6 +887,7 @@ describe('FileExplorerRow collapse folder action', () => {
       connectionId: 'ssh-1',
       onClick: vi.fn(),
       onDoubleClick: vi.fn(),
+      onViewFile: vi.fn(),
       onContextMenuSelect: vi.fn(),
       onCopyPaths: vi.fn(),
       onStartNew: vi.fn(),
@@ -878,6 +895,7 @@ describe('FileExplorerRow collapse folder action', () => {
       onDuplicate: vi.fn(),
       onAddFolderAsProject: vi.fn(),
       canAddFolderAsProject: () => false,
+      onOpenInTerminal: vi.fn(),
       onRequestDelete: vi.fn(),
       onCollapseFolderSubtree: vi.fn(),
       onFindInFolder: vi.fn(),
@@ -895,5 +913,111 @@ describe('FileExplorerRow collapse folder action', () => {
     const row = findFileExplorerRow(element)
 
     expect(row.props.connectionId).toBe('ssh-1')
+  })
+
+  it('passes the row node to the open in terminal handler', () => {
+    const onOpenInTerminal = vi.fn()
+    const element = FileExplorerVirtualRows({
+      virtualizer: {
+        getTotalSize: () => 26,
+        getVirtualItems: () => [{ index: 0, key: 'src', start: 0 }],
+        measureElement: vi.fn()
+      } as never,
+      inlineInputIndex: -1,
+      rowProjection: createFileExplorerRowProjection([directoryNode]),
+      inlineInput: null,
+      handleInlineSubmit: vi.fn(),
+      dismissInlineInput: vi.fn(),
+      folderStatusByRelativePath: new Map(),
+      statusByRelativePath: new Map(),
+      ignoredByRelativePath: new Set(),
+      expanded: new Set([directoryNode.path]),
+      dirCache: {},
+      selectedPaths: new Set(),
+      activeFileId: null,
+      flashingPath: null,
+      deleteShortcutLabel: 'Del',
+      onClick: vi.fn(),
+      onDoubleClick: vi.fn(),
+      onViewFile: vi.fn(),
+      onContextMenuSelect: vi.fn(),
+      onCopyPaths: vi.fn(),
+      onStartNew: vi.fn(),
+      onStartRename: vi.fn(),
+      onDuplicate: vi.fn(),
+      onAddFolderAsProject: vi.fn(),
+      canAddFolderAsProject: () => false,
+      onOpenInTerminal,
+      onRequestDelete: vi.fn(),
+      onCollapseFolderSubtree: vi.fn(),
+      onFindInFolder: vi.fn(),
+      onMoveDrop: vi.fn(),
+      onDragTargetChange: vi.fn(),
+      onDragSourceChange: vi.fn(),
+      onDragExpandDir: vi.fn(),
+      onNativeDragTargetChange: vi.fn(),
+      onNativeDragExpandDir: vi.fn(),
+      dropTargetDir: null,
+      dragSourcePath: null,
+      nativeDropTargetDir: null
+    })
+
+    const row = findFileExplorerRow(element)
+    ;(row.props.onOpenInTerminal as () => void)()
+
+    expect(onOpenInTerminal).toHaveBeenCalledWith(directoryNode)
+  })
+
+  it('passes the row node to the view file handler', () => {
+    const onViewFile = vi.fn()
+    const element = FileExplorerVirtualRows({
+      virtualizer: {
+        getTotalSize: () => 26,
+        getVirtualItems: () => [{ index: 0, key: 'src', start: 0 }],
+        measureElement: vi.fn()
+      } as never,
+      inlineInputIndex: -1,
+      rowProjection: createFileExplorerRowProjection([fileNode]),
+      inlineInput: null,
+      handleInlineSubmit: vi.fn(),
+      dismissInlineInput: vi.fn(),
+      folderStatusByRelativePath: new Map(),
+      statusByRelativePath: new Map(),
+      ignoredByRelativePath: new Set(),
+      expanded: new Set(),
+      dirCache: {},
+      selectedPaths: new Set(),
+      activeFileId: null,
+      flashingPath: null,
+      deleteShortcutLabel: 'Del',
+      onClick: vi.fn(),
+      onDoubleClick: vi.fn(),
+      onViewFile,
+      onContextMenuSelect: vi.fn(),
+      onCopyPaths: vi.fn(),
+      onStartNew: vi.fn(),
+      onStartRename: vi.fn(),
+      onDuplicate: vi.fn(),
+      onAddFolderAsProject: vi.fn(),
+      canAddFolderAsProject: () => false,
+      onOpenInTerminal: vi.fn(),
+      onRequestDelete: vi.fn(),
+      onCollapseFolderSubtree: vi.fn(),
+      onFindInFolder: vi.fn(),
+      onMoveDrop: vi.fn(),
+      onDragTargetChange: vi.fn(),
+      onDragSourceChange: vi.fn(),
+      onDragExpandDir: vi.fn(),
+      onNativeDragTargetChange: vi.fn(),
+      onNativeDragExpandDir: vi.fn(),
+      dropTargetDir: null,
+      dragSourcePath: null,
+      nativeDropTargetDir: null
+    })
+
+    const row = findFileExplorerRow(element)
+    ;(row.props.onViewFile as () => void)()
+
+    expect(onViewFile).toHaveBeenCalledWith(fileNode)
   })
 })

@@ -68,6 +68,20 @@ describe('terminal-stream-protocol', () => {
     expect(resize && decodeTerminalStreamJson(resize.payload)).toEqual({ cols: 120, rows: 40 })
   })
 
+  it('round-trips terminal metadata frames', () => {
+    const metadata = decodeTerminalStreamFrame(
+      encodeTerminalStreamFrame({
+        opcode: TerminalStreamOpcode.Metadata,
+        streamId: 11,
+        seq: 4,
+        payload: encodeTerminalStreamJson({ cwd: '/repo/src' })
+      })
+    )
+
+    expect(metadata?.opcode).toBe(TerminalStreamOpcode.Metadata)
+    expect(metadata && decodeTerminalStreamJson(metadata.payload)).toEqual({ cwd: '/repo/src' })
+  })
+
   it('round-trips multiplex subscribe, snapshot request, and unsubscribe frames', () => {
     const subscribe = decodeTerminalStreamFrame(
       encodeTerminalStreamFrame({
@@ -107,6 +121,21 @@ describe('terminal-stream-protocol', () => {
     expect(snapshotRequest?.streamId).toBe(12)
     expect(unsubscribe?.opcode).toBe(TerminalStreamOpcode.Unsubscribe)
     expect(unsubscribe?.streamId).toBe(12)
+  })
+
+  it('round-trips output acknowledgement frames', () => {
+    const ack = decodeTerminalStreamFrame(
+      encodeTerminalStreamFrame({
+        opcode: TerminalStreamOpcode.Ack,
+        streamId: 12,
+        seq: 4,
+        payload: encodeTerminalStreamJson({ bytes: 4096 })
+      })
+    )
+
+    expect(ack?.opcode).toBe(TerminalStreamOpcode.Ack)
+    expect(ack?.streamId).toBe(12)
+    expect(ack && decodeTerminalStreamJson(ack.payload)).toEqual({ bytes: 4096 })
   })
 
   it('rejects unknown frame versions and opcodes', () => {

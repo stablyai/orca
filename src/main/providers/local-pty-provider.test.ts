@@ -1,5 +1,6 @@
 /* oxlint-disable max-lines */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { delimiter } from 'node:path'
 
 const {
   existsSyncMock,
@@ -57,7 +58,10 @@ vi.mock('./windows-powershell-executable', () => ({
 }))
 
 vi.mock('./agent-foreground-process', () => ({
-  resolveAgentForegroundProcess: resolveAgentForegroundProcessMock
+  resolveAgentForegroundProcessWithAvailability: async (...args: unknown[]) => ({
+    available: true,
+    processName: await resolveAgentForegroundProcessMock(...args)
+  })
 }))
 
 vi.mock('../wsl', () => ({
@@ -81,6 +85,7 @@ vi.mock('../wsl', () => ({
 }))
 
 import { LocalPtyProvider } from './local-pty-provider'
+import { isRootLikePath } from './pty-path-safety'
 import { POWERLEVEL10K_WIZARD_DISABLE_ENV } from '../pty/powerlevel10k-wizard-env'
 
 describe('LocalPtyProvider', () => {
@@ -90,6 +95,8 @@ describe('LocalPtyProvider', () => {
     onExit: ReturnType<typeof vi.fn>
     write: ReturnType<typeof vi.fn>
     resize: ReturnType<typeof vi.fn>
+    pause: ReturnType<typeof vi.fn>
+    resume: ReturnType<typeof vi.fn>
     kill: ReturnType<typeof vi.fn>
     process: string
     pid: number
@@ -97,6 +104,7 @@ describe('LocalPtyProvider', () => {
   let exitCb: ((info: { exitCode: number }) => void) | undefined
   let origShell: string | undefined
   let origPowerlevelWizardDisable: string | undefined
+  let origHistFile: string | undefined
   let origPlatform: PropertyDescriptor | undefined
 
   beforeEach(() => {
@@ -104,8 +112,11 @@ describe('LocalPtyProvider', () => {
     Object.defineProperty(process, 'platform', { configurable: true, value: 'linux' })
     origShell = process.env.SHELL
     origPowerlevelWizardDisable = process.env.POWERLEVEL9K_DISABLE_CONFIGURATION_WIZARD
+    origHistFile = process.env.HISTFILE
     process.env.SHELL = '/bin/zsh'
     delete process.env.POWERLEVEL9K_DISABLE_CONFIGURATION_WIZARD
+    // injectHistoryEnv preserves an inherited HISTFILE, so clear it for hermetic history assertions.
+    delete process.env.HISTFILE
 
     existsSyncMock.mockReturnValue(true)
     statSyncMock.mockReturnValue({ isDirectory: () => true, mode: 0o755 })
@@ -132,6 +143,8 @@ describe('LocalPtyProvider', () => {
       }),
       write: vi.fn(),
       resize: vi.fn(),
+      pause: vi.fn(),
+      resume: vi.fn(),
       kill: vi.fn(() => {
         exitCb?.({ exitCode: -1 })
       }),
@@ -156,6 +169,11 @@ describe('LocalPtyProvider', () => {
       delete process.env.POWERLEVEL9K_DISABLE_CONFIGURATION_WIZARD
     } else {
       process.env.POWERLEVEL9K_DISABLE_CONFIGURATION_WIZARD = origPowerlevelWizardDisable
+    }
+    if (origHistFile === undefined) {
+      delete process.env.HISTFILE
+    } else {
+      process.env.HISTFILE = origHistFile
     }
   })
 
@@ -206,6 +224,52 @@ describe('LocalPtyProvider', () => {
       await expect(provider.spawn({ cols: 80, rows: 24, cwd: '/nonexistent' })).rejects.toThrow(
         'does not exist'
       )
+    })
+
+    it('allows an explicitly requested plain shell at POSIX root', async () => {
+      await provider.spawn({ cols: 80, rows: 24, cwd: '/' })
+
+      expect(spawnMock).toHaveBeenCalledWith(
+        expect.any(String),
+        expect.any(Array),
+        expect.objectContaining({ cwd: '/' })
+      )
+    })
+
+    it('falls back to the safe default cwd for automatic agent startup without an explicit cwd', async () => {
+      spawnMock.mockClear()
+      const origHome = process.env.HOME
+      // Pin HOME so we assert the exact resolved candidate, not just non-root-ness —
+      // catches regressions where resolveSafePtyDefaultCwd picks an unintended home.
+      process.env.HOME = '/home/testuser'
+
+      try {
+        // Why: an omitted cwd resolves to a guaranteed-safe default home (the
+        // guard only rejects root-like paths), so the agent must still launch.
+        await expect(
+          provider.spawn({ cols: 80, rows: 24, command: 'codex' })
+        ).resolves.toBeDefined()
+
+        const spawnCall = spawnMock.mock.calls.at(-1)!
+        expect(spawnCall[2].cwd).toBe('/home/testuser')
+        expect(isRootLikePath(spawnCall[2].cwd)).toBe(false)
+      } finally {
+        if (origHome === undefined) {
+          delete process.env.HOME
+        } else {
+          process.env.HOME = origHome
+        }
+      }
+    })
+
+    it('rejects automatic agent startup at POSIX root', async () => {
+      spawnMock.mockClear()
+
+      await expect(
+        provider.spawn({ cols: 80, rows: 24, cwd: '/', command: 'claude' })
+      ).rejects.toThrow(/requires a non-root workspace/)
+
+      expect(spawnMock).not.toHaveBeenCalled()
     })
 
     it('invokes onSpawned callback', async () => {
@@ -363,6 +427,50 @@ describe('LocalPtyProvider', () => {
       expect(spawnCall[2].env.PATH.split(':')[0]).toBe('/tmp/orca-agent-teams-bin')
       expect(spawnCall[2].env.TERM_PROGRAM).toBeUndefined()
       expect(spawnCall[2].env.ORCA_ATTRIBUTION_SHIM_DIR).toBeUndefined()
+    })
+
+    it('does not inherit AppImage runtime env into Linux PTY shells', async () => {
+      const saved = {
+        APPIMAGE: process.env.APPIMAGE,
+        APPDIR: process.env.APPDIR,
+        ARGV0: process.env.ARGV0,
+        OWD: process.env.OWD,
+        APPIMAGE_LIBRARY_PATH: process.env.APPIMAGE_LIBRARY_PATH,
+        PATH: process.env.PATH,
+        LD_LIBRARY_PATH: process.env.LD_LIBRARY_PATH
+      }
+      process.env.APPIMAGE = '/data/apps/orca.appimage'
+      process.env.APPDIR = '/tmp/.mount_orca123'
+      process.env.ARGV0 = '/data/apps/orca.appimage'
+      process.env.OWD = '/home/user/project'
+      process.env.APPIMAGE_LIBRARY_PATH = '/tmp/.mount_orca123/usr/lib'
+      process.env.PATH = ['/tmp/.mount_orca123', '/tmp/.mount_orca123/usr/sbin', '/usr/bin'].join(
+        delimiter
+      )
+      process.env.LD_LIBRARY_PATH = ['/tmp/.mount_orca123/usr/lib', '/opt/audio/lib'].join(
+        delimiter
+      )
+
+      try {
+        await provider.spawn({ cols: 80, rows: 24 })
+      } finally {
+        for (const [key, value] of Object.entries(saved)) {
+          if (value === undefined) {
+            delete process.env[key]
+          } else {
+            process.env[key] = value
+          }
+        }
+      }
+
+      const env = spawnMock.mock.calls.at(-1)?.[2].env
+      expect(env.APPIMAGE).toBeUndefined()
+      expect(env.APPDIR).toBeUndefined()
+      expect(env.ARGV0).toBeUndefined()
+      expect(env.OWD).toBeUndefined()
+      expect(env.APPIMAGE_LIBRARY_PATH).toBeUndefined()
+      expect(env.PATH).toBe('/usr/bin')
+      expect(env.LD_LIBRARY_PATH).toBe('/opt/audio/lib')
     })
 
     it('uses shell wrapper when MiMo home must survive shell startup', async () => {
@@ -526,6 +634,27 @@ describe('LocalPtyProvider', () => {
       expect(spawnCall[2].env.HISTFILE).toContain('terminal-history-wsl/Debian')
     })
 
+    it('repro: keeps explicit PowerShell 7 selection when the pwsh probe is cold-false', async () => {
+      Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
+      const pwshAvailable = vi.fn(() => false)
+      provider.configure({
+        getWindowsShell: () => 'powershell.exe',
+        getWindowsPowerShellImplementation: () => 'pwsh.exe',
+        pwshAvailable
+      })
+
+      await provider.spawn({
+        cols: 80,
+        rows: 24,
+        cwd: 'C:\\Users\\jin\\repo'
+      })
+
+      const spawnCall = spawnMock.mock.calls.at(-1)!
+      expect(spawnCall[0]).toBe(PWSH7_ABS)
+      expect(spawnCall[1]).toContain('-EncodedCommand')
+      expect(pwshAvailable).not.toHaveBeenCalled()
+    })
+
     it('marks Orca terminal handle for WSL import when buildSpawnEnv opts in', async () => {
       Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
       const savedCodexHome = process.env.CODEX_HOME
@@ -546,7 +675,8 @@ describe('LocalPtyProvider', () => {
         await provider.spawn({
           cols: 80,
           rows: 24,
-          cwd: '\\\\wsl.localhost\\Ubuntu\\home\\jin\\repo'
+          cwd: '\\\\wsl.localhost\\Ubuntu\\home\\jin\\repo',
+          env: { ORCA_HERMES_STARTUP_QUERY: 'line one\nline two' }
         })
       } finally {
         if (savedCodexHome === undefined) {
@@ -564,8 +694,12 @@ describe('LocalPtyProvider', () => {
       const spawnCall = spawnMock.mock.calls.at(-1)!
       expect(spawnCall[0]).toBe('wsl.exe')
       expect(spawnCall[2].env.ORCA_TERMINAL_HANDLE).toBe('term_wsl')
-      expect(spawnCall[2].env.WSLENV).toBe(
-        'ORCA_TERMINAL_HANDLE/u:POWERLEVEL9K_DISABLE_CONFIGURATION_WIZARD'
+      expect(spawnCall[2].env.WSLENV?.split(':')).toEqual(
+        expect.arrayContaining([
+          'ORCA_TERMINAL_HANDLE/u',
+          'ORCA_HERMES_STARTUP_QUERY',
+          POWERLEVEL10K_WIZARD_DISABLE_ENV
+        ])
       )
     })
 
@@ -774,6 +908,39 @@ describe('LocalPtyProvider', () => {
     })
   })
 
+  describe('producer flow control', () => {
+    it('pauses and resumes the node-pty process directly', async () => {
+      const { id } = await provider.spawn({ cols: 80, rows: 24 })
+      provider.pauseProducer(id)
+      expect(mockProc.pause).toHaveBeenCalledTimes(1)
+      provider.resumeProducer(id)
+      expect(mockProc.resume).toHaveBeenCalledTimes(1)
+    })
+
+    it('is a no-op for unknown PTY ids', () => {
+      expect(() => {
+        provider.pauseProducer('nonexistent')
+        provider.resumeProducer('nonexistent')
+      }).not.toThrow()
+      expect(mockProc.pause).not.toHaveBeenCalled()
+      expect(mockProc.resume).not.toHaveBeenCalled()
+    })
+
+    it('swallows node-pty throws from a torn-down PTY', async () => {
+      const { id } = await provider.spawn({ cols: 80, rows: 24 })
+      mockProc.pause.mockImplementation(() => {
+        throw new Error('read EIO')
+      })
+      mockProc.resume.mockImplementation(() => {
+        throw new Error('read EIO')
+      })
+      expect(() => {
+        provider.pauseProducer(id)
+        provider.resumeProducer(id)
+      }).not.toThrow()
+    })
+  })
+
   describe('shutdown', () => {
     it('kills the PTY process', async () => {
       // Why: capture the spy reference before shutdown triggers onExit →
@@ -877,6 +1044,24 @@ describe('LocalPtyProvider', () => {
 
     it('returns null for unknown PTY ids', async () => {
       expect(await provider.getForegroundProcess('nonexistent')).toBeNull()
+    })
+  })
+
+  describe('confirmForegroundProcess', () => {
+    it('drops a delayed result after the PTY exits', async () => {
+      let resolveScan!: (processName: string) => void
+      resolveAgentForegroundProcessMock.mockReturnValue(
+        new Promise<string>((resolve) => {
+          resolveScan = resolve
+        })
+      )
+      const { id } = await provider.spawn({ cols: 80, rows: 24 })
+
+      const confirmation = provider.confirmForegroundProcess(id)
+      exitCb?.({ exitCode: 0 })
+      resolveScan('droid')
+
+      await expect(confirmation).resolves.toBeNull()
     })
   })
 

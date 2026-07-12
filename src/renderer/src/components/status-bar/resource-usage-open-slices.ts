@@ -2,48 +2,58 @@ import type { AppState } from '../../store'
 import { getAllWorktreesFromState } from '../../store/selectors'
 
 const EMPTY_TABS_BY_WORKTREE: AppState['tabsByWorktree'] = {}
+const EMPTY_PTY_IDS_BY_TAB_ID: AppState['ptyIdsByTabId'] = {}
+const EMPTY_TERMINAL_LAYOUTS_BY_TAB_ID: AppState['terminalLayoutsByTabId'] = {}
 const EMPTY_RUNTIME_PANE_TITLES_BY_TAB_ID: AppState['runtimePaneTitlesByTabId'] = {}
+const EMPTY_BROWSER_TABS_BY_WORKTREE: AppState['browserTabsByWorktree'] = {}
 const EMPTY_REPOS: AppState['repos'] = []
 const EMPTY_WORKTREES: ReturnType<typeof getAllWorktreesFromState> = []
 
-function shouldReadPopoverSlices(open: boolean, runtimeEnvironmentActive: boolean): boolean {
-  return open && !runtimeEnvironmentActive
-}
-
 export function getResourceUsageTabsByWorktree(
   state: Pick<AppState, 'tabsByWorktree'>,
-  open: boolean,
-  runtimeEnvironmentActive = false
+  open: boolean
 ): AppState['tabsByWorktree'] {
-  return shouldReadPopoverSlices(open, runtimeEnvironmentActive)
-    ? state.tabsByWorktree
-    : EMPTY_TABS_BY_WORKTREE
+  return open ? state.tabsByWorktree : EMPTY_TABS_BY_WORKTREE
+}
+
+export function getResourceUsagePtyIdsByTabId(
+  state: Pick<AppState, 'ptyIdsByTabId'>,
+  open: boolean
+): AppState['ptyIdsByTabId'] {
+  return open ? state.ptyIdsByTabId : EMPTY_PTY_IDS_BY_TAB_ID
+}
+
+export function getResourceUsageTerminalLayoutsByTabId(
+  state: Pick<AppState, 'terminalLayoutsByTabId'>,
+  open: boolean
+): AppState['terminalLayoutsByTabId'] {
+  return open ? state.terminalLayoutsByTabId : EMPTY_TERMINAL_LAYOUTS_BY_TAB_ID
 }
 
 export function getResourceUsageRuntimePaneTitlesByTabId(
   state: Pick<AppState, 'runtimePaneTitlesByTabId'>,
-  open: boolean,
-  runtimeEnvironmentActive = false
+  open: boolean
 ): AppState['runtimePaneTitlesByTabId'] {
-  return shouldReadPopoverSlices(open, runtimeEnvironmentActive)
-    ? state.runtimePaneTitlesByTabId
-    : EMPTY_RUNTIME_PANE_TITLES_BY_TAB_ID
+  return open ? state.runtimePaneTitlesByTabId : EMPTY_RUNTIME_PANE_TITLES_BY_TAB_ID
+}
+
+export function getResourceUsageBrowserTabsByWorktree(
+  state: Pick<AppState, 'browserTabsByWorktree'>,
+  open: boolean
+): AppState['browserTabsByWorktree'] {
+  return open ? state.browserTabsByWorktree : EMPTY_BROWSER_TABS_BY_WORKTREE
 }
 
 export function getResourceUsageRepos(
   state: Pick<AppState, 'repos'>,
-  open: boolean,
-  runtimeEnvironmentActive: boolean
+  open: boolean
 ): AppState['repos'] {
-  return shouldReadPopoverSlices(open, runtimeEnvironmentActive) ? state.repos : EMPTY_REPOS
+  return open ? state.repos : EMPTY_REPOS
 }
 
 export function getResourceUsageAllWorktrees(
   state: Pick<AppState, 'worktreesByRepo'>,
-  open: boolean,
-  runtimeEnvironmentActive: boolean
+  open: boolean
 ): ReturnType<typeof getAllWorktreesFromState> {
-  return shouldReadPopoverSlices(open, runtimeEnvironmentActive)
-    ? getAllWorktreesFromState(state)
-    : EMPTY_WORKTREES
+  return open ? getAllWorktreesFromState(state) : EMPTY_WORKTREES
 }

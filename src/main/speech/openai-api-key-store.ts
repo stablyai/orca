@@ -1,7 +1,7 @@
 import { safeStorage } from 'electron'
-import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'fs'
-import { homedir } from 'os'
-import { join } from 'path'
+import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { homedir } from 'node:os'
+import { join } from 'node:path'
 
 type StoredOpenAiKey = {
   encryptedKeyBase64: string

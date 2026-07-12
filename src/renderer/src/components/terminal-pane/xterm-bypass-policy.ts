@@ -1,4 +1,5 @@
 import { keybindingMatchesInput } from '../../../../shared/keybindings'
+import { isTerminalImeCandidateSelectionKeyEvent } from './terminal-ime-candidate-key-release-guard'
 
 // Why: when a CLI activates kitty progressive enhancement (CSI > N u), xterm's
 // KittyKeyboard encoder turns every modifier chord — including plain Cmd+C —
@@ -18,6 +19,7 @@ export type XtermBypassEvent = {
   code?: string
   keyCode?: number
   isComposing?: boolean
+  repeat?: boolean
   defaultPrevented?: boolean
   metaKey: boolean
   ctrlKey: boolean
@@ -35,6 +37,18 @@ export type XtermBypassOptions = {
 
 export type XtermImeKeyboardOptions = {
   compositionActive: boolean
+  /** True while Linux/Sogou candidate-selection keys (Space/digits) are
+   *  IME-owned: live composition plus a short post-compositionend window. */
+  candidateKeyGuardActive: boolean
+  /** True when the pending-release guard already matched this specific event. */
+  pendingCandidateKeyReleaseActive: boolean
+  // Required so no caller silently falls back to non-mac 229 suppression,
+  // which re-swallows the first key after a macOS IME input-source switch.
+  isMac: boolean
+  // Required Linux/Windows split: Linux passes standalone 229 keydowns like
+  // macOS; the Windows-only suppression guards its preedit-diff race (preedit
+  // can hit the textarea before compositionstart and be flushed by the diff).
+  isLinux: boolean
 }
 
 export const TERMINAL_INTERRUPT_INPUT = '\x03'
@@ -69,18 +83,57 @@ function isXtermHandledKeyEvent(type: string): boolean {
 
 export function shouldSuppressTerminalImeKeyboardEvent(
   event: XtermBypassEvent,
-  options: XtermImeKeyboardOptions = { compositionActive: false }
+  options: XtermImeKeyboardOptions
 ): boolean {
+  const {
+    compositionActive,
+    candidateKeyGuardActive,
+    pendingCandidateKeyReleaseActive,
+    isMac,
+    isLinux
+  } = options
+  const suppressCandidateKey =
+    isLinux &&
+    (pendingCandidateKeyReleaseActive ||
+      (candidateKeyGuardActive && isTerminalImeCandidateSelectionKeyEvent(event)))
+  if (event.type === 'keypress') {
+    // Why: a suppressed candidate keydown is not preventDefault-ed by xterm,
+    // so its native keypress still fires and _keyPress would forward the
+    // literal Space/digit to the PTY.
+    return suppressCandidateKey
+  }
   if (!isXtermHandledKeyEvent(event.type)) {
     return false
   }
-  // Why: IMEs own Process-key / composing keystrokes. Letting xterm translate
-  // Backspace/Enter/etc. into PTY bytes makes TUIs delete committed CJK text
-  // while the user is only editing the preedit candidate.
+  // Why: IMEs own Process-key / composing keystrokes — letting xterm translate
+  // them corrupts committed CJK text. Bare macOS/Linux keydown 229 is exempt:
+  // it must reach xterm's CompositionHelper so it can schedule its textarea
+  // diff (macOS: first key after an input-source switch; Linux: Sogou/fcitx
+  // candidate commits outside a composition session). Windows keeps full
+  // suppression until verified against its preedit-diff race.
+  const passesStandalone229Keydown = isMac || isLinux
   return (
     event.isComposing === true ||
-    event.keyCode === 229 ||
-    (options.compositionActive && TERMINAL_IME_OWNED_KEYS.has(event.key))
+    (event.keyCode === 229 &&
+      (event.type !== 'keydown' || compositionActive || !passesStandalone229Keydown)) ||
+    (compositionActive && TERMINAL_IME_OWNED_KEYS.has(event.key)) ||
+    suppressCandidateKey
+  )
+}
+
+export function shouldPreventDefaultTerminalImeCandidateKey(
+  event: XtermBypassEvent,
+  options: XtermImeKeyboardOptions
+): boolean {
+  // Why: returning false from attachCustomKeyEventHandler does not
+  // preventDefault — the candidate keydown would still fire a keypress and
+  // write into the helper textarea, where a later 229 diff could flush the
+  // leaked selector to the PTY.
+  return (
+    event.type === 'keydown' &&
+    options.isLinux &&
+    options.candidateKeyGuardActive &&
+    isTerminalImeCandidateSelectionKeyEvent(event)
   )
 }
 

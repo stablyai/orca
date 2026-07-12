@@ -4,9 +4,9 @@
 // orchestration so a running runtime is always discoverable via exactly
 // one on-disk file. Method handling lives in `rpc/` and transport specifics
 // live in `rpc/unix-socket-transport.ts` and `rpc/ws-transport.ts`.
-import { randomBytes } from 'crypto'
-import { readdirSync, rmSync } from 'fs'
-import { join } from 'path'
+import { randomBytes } from 'node:crypto'
+import { readdirSync, rmSync } from 'node:fs'
+import { join } from 'node:path'
 import type { RuntimeMetadata, RuntimeTransportMetadata } from '../../shared/runtime-bootstrap'
 import type { OrcaRuntimeService } from './orca-runtime'
 import { writeRuntimeMetadata } from './runtime-metadata'
@@ -16,6 +16,7 @@ import { errorResponse } from './rpc/errors'
 import type { RpcMessageContext, RpcTransport } from './rpc/transport'
 import { UnixSocketTransport } from './rpc/unix-socket-transport'
 import { WebSocketTransport } from './rpc/ws-transport'
+import { readWsFallbackPort, writeWsFallbackPort } from './rpc/ws-fallback-port-store'
 import type { WebSocket } from 'ws'
 import { DeviceRegistry, type DeviceScope } from './device-registry'
 import { loadOrCreateE2EEKeypair, type E2EEKeypair } from './e2ee-keypair'
@@ -123,6 +124,7 @@ const MOBILE_RPC_METHOD_ALLOWLIST = new Set([
   'accounts.selectCodex',
   'accounts.subscribe',
   'accounts.unsubscribe',
+  'aiVault.listSessions',
   'browser.back',
   'browser.dialogAccept',
   'browser.dialogDismiss',
@@ -153,8 +155,13 @@ const MOBILE_RPC_METHOD_ALLOWLIST = new Set([
   'files.openDiff',
   'files.read',
   'files.readChunk',
+  'files.readDir',
   'files.readPreview',
+  'files.readTerminalArtifact',
+  'files.readTerminalArtifactPreview',
   'files.resolveTerminalPath',
+  'files.writeTerminalArtifact',
+  'folderWorkspace.list',
   'git.abortMerge',
   'git.abortRebase',
   'git.bulkStage',
@@ -277,6 +284,7 @@ const MOBILE_RPC_METHOD_ALLOWLIST = new Set([
   'preflight.check',
   'preflight.detectAgents',
   'preflight.detectRemoteAgents',
+  'projectGroup.list',
   'repo.baseRefDefault',
   'repo.gitAvailable',
   'repo.hooks',
@@ -304,6 +312,8 @@ const MOBILE_RPC_METHOD_ALLOWLIST = new Set([
   'settings.update',
   'ssh.connect',
   'ssh.getState',
+  'ssh.listRemovedTargetLabels',
+  'ssh.listTargets',
   'speech.dictation.cancel',
   'speech.dictation.chunk',
   'speech.dictation.finish',
@@ -363,6 +373,23 @@ function isLongPollRequest(request: RpcRequest): boolean {
     return params?.wait === true
   }
   return false
+}
+
+// Why: stamp the authenticated connection's scope onto the status.get success
+// envelope. status.get has no per-connection context inside the dispatcher, so
+// the scope is added here at the transport boundary where the device is known.
+// Failures fall back to the untouched reply rather than dropping the response.
+function injectDeviceScope(response: string, scope: DeviceScope): string {
+  try {
+    const parsed = JSON.parse(response) as RpcResponse
+    if (parsed.ok !== true || typeof parsed.result !== 'object' || parsed.result === null) {
+      return response
+    }
+    ;(parsed.result as Record<string, unknown>).deviceScope = scope
+    return JSON.stringify(parsed)
+  } catch {
+    return response
+  }
 }
 
 export class OrcaRuntimeRpcServer {
@@ -495,7 +522,8 @@ export class OrcaRuntimeRpcServer {
       v: PAIRING_OFFER_VERSION,
       endpoint,
       deviceToken: device.token,
-      publicKeyB64
+      publicKeyB64,
+      scope
     })
     return {
       available: true,
@@ -678,7 +706,13 @@ export class OrcaRuntimeRpcServer {
         const wsTransport = new WebSocketTransport({
           host: '0.0.0.0',
           port: this.wsPort,
-          staticRoot: this.webClientRoot
+          staticRoot: this.webClientRoot,
+          // Why: keep the fallback port stable across restarts so paired
+          // devices' stored endpoints stay valid (STA-1511) — the transport
+          // binds a persisted fallback before the preferred port. wsPort 0
+          // means the caller explicitly wants a random port (E2E) — don't
+          // pin it.
+          ...(this.wsPort !== 0 ? { fallbackPort: readWsFallbackPort(this.userDataPath) } : {})
         })
         this.wsTransport = wsTransport
 
@@ -761,6 +795,9 @@ export class OrcaRuntimeRpcServer {
         })
 
         await wsTransport.start()
+        if (this.wsPort !== 0 && wsTransport.resolvedPort !== this.wsPort) {
+          writeWsFallbackPort(this.userDataPath, wsTransport.resolvedPort)
+        }
         activeTransports.push(wsTransport)
         transportsMeta.push({
           kind: 'websocket',
@@ -969,9 +1006,16 @@ export class OrcaRuntimeRpcServer {
       this.activeLongPolls += 1
     }
 
+    // Why: older/saved WebSocket pairings may not carry scope metadata, so
+    // stamp the authenticated scope onto the one method that probes the runtime.
+    const replyForRequest =
+      request.method === 'status.get'
+        ? (response: string): void => reply(injectDeviceScope(response, device.scope))
+        : reply
+
     const connectionId = ws ? this.wsConnectionIds.get(ws) : undefined
     try {
-      await this.dispatcher.dispatchStreaming(request, reply, {
+      await this.dispatcher.dispatchStreaming(request, replyForRequest, {
         connectionId,
         clientId: token,
         // Why: gates the mobile-only payload diet (native-chat char clipping) so

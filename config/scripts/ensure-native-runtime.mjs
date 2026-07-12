@@ -4,12 +4,11 @@ import { spawnSync } from 'node:child_process'
 import { createRequire } from 'node:module'
 import { existsSync, readFileSync } from 'node:fs'
 import { release } from 'node:os'
-import { basename, dirname, resolve } from 'node:path'
-import { fileURLToPath } from 'node:url'
+import { basename, resolve } from 'node:path'
 
 const require = createRequire(import.meta.url)
-const scriptPath = fileURLToPath(import.meta.url)
-const projectDir = resolve(dirname(scriptPath), '../..')
+const scriptPath = import.meta.filename
+const projectDir = resolve(import.meta.dirname, '../..')
 const runtime = readRuntimeArg()
 
 const NATIVE_MODULES = ['node-pty']
@@ -280,10 +279,12 @@ function getPatchedNodePtyRebuildReason() {
   // Why: a loadable upstream node-pty prebuild is not enough; Orca's Unix
   // patch only lands in the source-built build/Release artifacts.
   const nodePtyDir = resolve(projectDir, 'node_modules', 'node-pty')
-  const missingArtifact = [
-    resolve(nodePtyDir, 'build', 'Release', 'pty.node'),
-    resolve(nodePtyDir, 'build', 'Release', 'spawn-helper')
-  ].find((artifactPath) => !existsSync(artifactPath))
+  const artifactPaths = [resolve(nodePtyDir, 'build', 'Release', 'pty.node')]
+  // Why: node-pty only builds spawn-helper on macOS; Linux builds only pty.node.
+  if (process.platform === 'darwin') {
+    artifactPaths.push(resolve(nodePtyDir, 'build', 'Release', 'spawn-helper'))
+  }
+  const missingArtifact = artifactPaths.find((artifactPath) => !existsSync(artifactPath))
 
   if (!missingArtifact) {
     return null

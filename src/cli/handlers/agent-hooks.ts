@@ -1,7 +1,7 @@
-import { existsSync, mkdirSync, readFileSync, renameSync, unlinkSync, writeFileSync } from 'fs'
-import { homedir } from 'os'
-import { dirname, join } from 'path'
-import { randomUUID } from 'crypto'
+import { existsSync, mkdirSync, readFileSync, renameSync, unlinkSync, writeFileSync } from 'node:fs'
+import { homedir } from 'node:os'
+import { dirname, join } from 'node:path'
+import { randomUUID } from 'node:crypto'
 import type { CommandHandler } from '../dispatch'
 import { printResult } from '../format'
 import { RuntimeClientError, type RuntimeClient, type RuntimeRpcSuccess } from '../runtime-client'
@@ -31,16 +31,7 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 
 function readPersistedState(dataPath: string): PersistedState {
   if (!existsSync(dataPath)) {
-    const defaults = getDefaultPersistedState(homedir())
-    return {
-      ...defaults,
-      settings: {
-        ...defaults.settings,
-        // Why: offline CLI can create the first profile before desktop load;
-        // match the Store fresh-install default instead of pinning old cards.
-        experimentalNewWorktreeCardStyle: true
-      }
-    }
+    return getDefaultPersistedState(homedir())
   }
   try {
     const parsed = JSON.parse(readFileSync(dataPath, 'utf-8'))
@@ -83,14 +74,9 @@ function readEnabledFromDisk(): boolean {
 function updateEnabledOnDisk(enabled: boolean): string {
   const dataPath = getDataPath()
   const state = readPersistedState(dataPath)
-  const experimentalNewWorktreeCardStyle =
-    state.settings?.experimentalNewWorktreeCardStyle ?? state.onboarding?.closedAt === null
   state.settings = {
     ...getDefaultPersistedState(homedir()).settings,
     ...state.settings,
-    // Why: offline CLI can run before Store.load(); mirror its open-onboarding
-    // default without overriding a saved user opt-out.
-    experimentalNewWorktreeCardStyle,
     agentStatusHooksEnabled: enabled
   }
   writePersistedState(dataPath, state)

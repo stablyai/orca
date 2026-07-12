@@ -1,6 +1,5 @@
-import { execFile } from 'node:child_process'
+import { spawn } from 'node:child_process'
 import { existsSync } from 'node:fs'
-import { homedir } from 'node:os'
 import path from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { app, BrowserWindow, dialog, ipcMain, type IpcMainInvokeEvent } from 'electron'
@@ -24,12 +23,15 @@ import { isMarkdownDocumentName, markdownDocumentFromFilePath } from './markdown
 
 const KEYBOARD_INPUT_SOURCE_TIMEOUT_MS = 500
 const MAC_HITOOLBOX_DOMAIN = 'com.apple.HIToolbox'
-const MAC_HITOOLBOX_PREFERENCES_PATH = path.join(
-  homedir(),
-  'Library',
-  'Preferences',
-  `${MAC_HITOOLBOX_DOMAIN}.plist`
-)
+// Why: macOS 15's `plutil -extract <key> json` aborts on the (pure-string)
+// input-source array and the on-disk plist lags cfprefsd; read live prefs via
+// `defaults export`, extract as xml1 (dodges the json bug), then convert to JSON.
+// Absolute paths so a GUI-launched app's minimal PATH can't shadow the tools.
+const MAC_SELECTED_INPUT_SOURCES_JSON_COMMAND = [
+  `/usr/bin/defaults export ${MAC_HITOOLBOX_DOMAIN} -`,
+  '/usr/bin/plutil -extract AppleSelectedInputSources xml1 -o - -',
+  '/usr/bin/plutil -convert json -o - -'
+].join(' | ')
 
 type RegisterAppHandlersOptions = {
   onBeforeRelaunch?: () => void | Promise<void>
@@ -118,13 +120,32 @@ function readCommandStdout(
 ): Promise<string> {
   return new Promise((resolve, reject) => {
     let settled = false
-    let child: ReturnType<typeof execFile> | undefined
+    let child: ReturnType<typeof spawn> | undefined
+
+    // Why: the probe runs a `/bin/sh -c` pipeline, so signaling only the shell
+    // orphans wedged `defaults`/`plutil` stages on a stuck cfprefsd. Spawning
+    // detached makes the child a process-group leader, so one negative-pid
+    // SIGKILL reaps the shell and every stage; child.kill() covers the fallback.
+    const killTree = (): void => {
+      if (!child?.pid) {
+        return
+      }
+      try {
+        process.kill(-child.pid, 'SIGKILL')
+      } catch {
+        child.kill()
+      }
+    }
+
+    // Why: short timeout so a wedged macOS preference probe (corporate-managed
+    // config, sandbox policy, ...) never holds the handle indefinitely. This
+    // manual timer is the only timeout guard, so it owns the process-group kill.
     const timer = setTimeout(() => {
       if (settled) {
         return
       }
       settled = true
-      child?.kill()
+      killTree()
       reject(new Error(timeoutMessage))
     }, KEYBOARD_INPUT_SOURCE_TIMEOUT_MS)
 
@@ -137,24 +158,32 @@ function readCommandStdout(
       callback()
     }
 
-    // Why: execFile's timeout only signals `defaults`; if the callback
-    // never arrives, window-focus keyboard probes would remain pending.
     try {
-      child = execFile(
-        command,
-        args,
-        // Why: short timeout so a wedged macOS preference probe (corporate-managed
-        // config, sandbox policy, ...) never holds the handle indefinitely.
-        // Fall through to the fingerprint on timeout.
-        { encoding: 'utf8', timeout: KEYBOARD_INPUT_SOURCE_TIMEOUT_MS },
-        (error, stdout) => {
-          if (error) {
-            settle(() => reject(error))
-            return
-          }
-          settle(() => resolve(String(stdout ?? '')))
-        }
-      )
+      child = spawn(command, args, { detached: true, stdio: ['ignore', 'pipe', 'ignore'] })
+      let stdout = ''
+      child.stdout?.setEncoding('utf8')
+      child.stdout?.on('data', (chunk: string) => {
+        stdout += chunk
+      })
+      const failWith = (error: Error): void => {
+        killTree()
+        settle(() => reject(error))
+      }
+      // Why: an unhandled Readable 'error' would crash the main process; treat a
+      // stdout read failure the same as a child spawn error.
+      child.stdout?.on('error', failWith)
+      child.on('error', failWith)
+      child.on('close', (code, signal) => {
+        settle(() =>
+          code === 0
+            ? resolve(stdout)
+            : reject(
+                new Error(
+                  `${command} exited with ${signal ? `signal ${signal}` : `code ${code ?? 'unknown'}`}`
+                )
+              )
+        )
+      })
     } catch (error) {
       settle(() => reject(error))
     }
@@ -172,7 +201,7 @@ function readSelectedInputSourceIdFromJson(stdout: string): string | null {
     return null
   }
 
-  for (const record of records.slice().reverse()) {
+  for (const record of records.slice().toReversed()) {
     if (!record || typeof record !== 'object') {
       continue
     }
@@ -196,8 +225,8 @@ function readSelectedInputSourceIdFromJson(stdout: string): string | null {
 async function readSelectedKeyboardInputSourceId(): Promise<string | null> {
   try {
     const stdout = await readCommandStdout(
-      '/usr/bin/plutil',
-      ['-extract', 'AppleSelectedInputSources', 'json', '-o', '-', MAC_HITOOLBOX_PREFERENCES_PATH],
+      '/bin/sh',
+      ['-c', MAC_SELECTED_INPUT_SOURCES_JSON_COMMAND],
       'Selected keyboard input source probe timed out'
     )
     return readSelectedInputSourceIdFromJson(stdout)

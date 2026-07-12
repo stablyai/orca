@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { ArrowDown, ArrowUp, Image as ImageIcon } from 'lucide-react'
-import CommentMarkdown from '@/components/sidebar/CommentMarkdown'
+import CommentMarkdown, {
+  type CommentMarkdownLinkClickHandler
+} from '@/components/sidebar/CommentMarkdown'
 import { cn } from '@/lib/utils'
 import { translate } from '@/i18n/i18n'
 import { basename } from '@/lib/path'
@@ -14,6 +16,7 @@ import { orderNativeChatMessages } from './native-chat-message-grouping'
 import { stripNoiseMessages } from './native-chat-noise'
 import { foldToolMessages, splitNativeChatBlocks } from './native-chat-tool-fold'
 import { isNearBottom, shouldShowJumpToLatest, type ScrollGeometry } from './native-chat-autoscroll'
+import { isNativeChatPastedImagePath } from './native-chat-image-paste'
 import { NativeChatToolRun } from './NativeChatToolRun'
 import { NativeChatCopyButton } from './NativeChatCopyButton'
 import { NATIVE_CHAT_STREAMING_ID } from '../../../../shared/native-chat-streaming'
@@ -43,7 +46,12 @@ function ImageAttachmentRefs({ blocks }: { blocks: NativeChatBlock[] }): React.J
     <div className="mb-2 flex flex-wrap gap-1.5">
       {images.map((image, index) => {
         const label = image.alt ?? image.path ?? image.url ?? 'Image'
-        const name = image.path ? basename(image.path) : label
+        const name =
+          image.path && isNativeChatPastedImagePath(image.path)
+            ? translate('components.native-chat.composer.pastedImageLabel', 'Pasted image')
+            : image.path
+              ? basename(image.path)
+              : label
         return (
           <div
             key={`${label}-${index}`}
@@ -117,12 +125,18 @@ function TypingIndicatorRow(): React.JSX.Element {
 function MessageRow({
   message,
   expandSignal,
-  onScrollMessageToTop
+  onScrollMessageToTop,
+  onLinkClick,
+  allowFileUriLinks = false,
+  deliveryFailed = false
 }: {
   message: NativeChatMessage
   expandSignal: boolean
   /** Align this message's top to the top of the scroll viewport. */
   onScrollMessageToTop: (el: HTMLElement) => void
+  onLinkClick?: CommentMarkdownLinkClickHandler
+  allowFileUriLinks?: boolean
+  deliveryFailed?: boolean
 }): React.JSX.Element | null {
   const rowRef = useRef<HTMLDivElement | null>(null)
   const { prose, tools } = useMemo(() => splitNativeChatBlocks(message.blocks), [message.blocks])
@@ -157,12 +171,26 @@ function MessageRow({
           {markdown ? (
             <>
               <ImageAttachmentRefs blocks={prose} />
-              <CommentMarkdown content={markdown} variant="document" className="text-sm" />
+              <CommentMarkdown
+                content={markdown}
+                variant="document"
+                className="text-sm"
+                onLinkClick={onLinkClick}
+                allowFileUriLinks={allowFileUriLinks}
+              />
             </>
           ) : (
             <ImageAttachmentRefs blocks={prose} />
           )}
         </div>
+        {deliveryFailed ? (
+          <div className="max-w-[85%] text-[11px] text-destructive/80">
+            {translate(
+              'components.native-chat.launchPromptNotDelivered',
+              'Not delivered — check the terminal'
+            )}
+          </div>
+        ) : null}
       </div>
     )
   }
@@ -190,7 +218,13 @@ function MessageRow({
       ) : null}
       <ImageAttachmentRefs blocks={prose} />
       {markdown ? (
-        <CommentMarkdown content={markdown} variant="document" className="text-sm" />
+        <CommentMarkdown
+          content={markdown}
+          variant="document"
+          className="text-sm"
+          onLinkClick={onLinkClick}
+          allowFileUriLinks={allowFileUriLinks}
+        />
       ) : null}
       {tools.length > 0 ? <NativeChatToolRun blocks={tools} expandSignal={expandSignal} /> : null}
     </div>
@@ -201,7 +235,10 @@ export function NativeChatMessageList({
   session,
   isWorking,
   expandSignal,
-  fontScale
+  fontScale,
+  onLinkClick,
+  allowFileUriLinks = false,
+  failedDeliveryMessageIds
 }: {
   session: NativeChatLiveSession
   isWorking: boolean
@@ -209,6 +246,9 @@ export function NativeChatMessageList({
   expandSignal: boolean
   /** Chat-only text multiplier (1 = default), driven by the zoom shortcuts. */
   fontScale: number
+  onLinkClick?: CommentMarkdownLinkClickHandler
+  allowFileUriLinks?: boolean
+  failedDeliveryMessageIds?: ReadonlySet<string>
 }): React.JSX.Element {
   const scrollRef = useRef<HTMLDivElement | null>(null)
   const [stuckToBottom, setStuckToBottom] = useState(true)
@@ -340,6 +380,9 @@ export function NativeChatMessageList({
               message={message}
               expandSignal={expandSignal}
               onScrollMessageToTop={scrollMessageToTop}
+              onLinkClick={onLinkClick}
+              allowFileUriLinks={allowFileUriLinks}
+              deliveryFailed={failedDeliveryMessageIds?.has(message.id) === true}
             />
           ))}
           {showTypingIndicator ? <TypingIndicatorRow /> : null}

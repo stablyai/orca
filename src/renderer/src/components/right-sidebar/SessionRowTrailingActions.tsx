@@ -11,7 +11,7 @@ import { cn } from '@/lib/utils'
 import type { AiVaultSession } from '../../../../shared/ai-vault-types'
 import { agentLabel } from './ai-vault-session-filters'
 import { translate } from '@/i18n/i18n'
-import { SessionActionMenuItems } from './AiVaultSessionRow'
+import { SessionActionMenuItems } from './AiVaultSessionActionMenuItems'
 import {
   aiVaultWorktreeJumpTooltip,
   type AiVaultSessionWorktreeInfo
@@ -42,6 +42,7 @@ export function SessionRowTrailingActions({
   worktreeInfo,
   onToggleDetails,
   onJumpToOriginalPane,
+  showJumpToWorktree,
   onJumpToWorktree,
   onResume,
   onCopyResume,
@@ -60,13 +61,14 @@ export function SessionRowTrailingActions({
   worktreeInfo: AiVaultSessionWorktreeInfo | null
   onToggleDetails: () => void
   onJumpToOriginalPane?: () => void
+  showJumpToWorktree: boolean
   onJumpToWorktree?: () => void
   onResume: () => void
-  onCopyResume: () => void
+  onCopyResume?: () => void
   onCopyId: () => void
   onCopyPath: () => void
-  onOpenLog: () => void
-  onRevealLog: () => void
+  onOpenLog?: () => void
+  onRevealLog?: () => void
   onOpenCwd?: () => void
 }) {
   const jumpToWorktreeTooltip = aiVaultWorktreeJumpTooltip(worktreeInfo)
@@ -109,16 +111,18 @@ export function SessionRowTrailingActions({
             </TooltipContent>
           </Tooltip>
         ) : null}
-        <Tooltip>
-          <WorktreeJumpTooltipTrigger
-            disabled={!onJumpToWorktree}
-            ariaLabel={jumpToWorktreeTooltip}
-            onJumpToWorktree={onJumpToWorktree}
-          />
-          <TooltipContent side="top" sideOffset={4}>
-            {jumpToWorktreeTooltip}
-          </TooltipContent>
-        </Tooltip>
+        {showJumpToWorktree ? (
+          <Tooltip>
+            <WorktreeJumpTooltipTrigger
+              disabled={!onJumpToWorktree}
+              ariaLabel={jumpToWorktreeTooltip}
+              onJumpToWorktree={onJumpToWorktree}
+            />
+            <TooltipContent side="top" sideOffset={4}>
+              {jumpToWorktreeTooltip}
+            </TooltipContent>
+          </Tooltip>
+        ) : null}
         <Tooltip>
           <TooltipTrigger asChild>
             <Button
@@ -208,6 +212,7 @@ export function SessionRowTrailingActions({
             resumeLabel={resumeLabel}
             onResume={onResume}
             onJumpToOriginalPane={onJumpToOriginalPane}
+            showJumpToWorktree={showJumpToWorktree}
             onJumpToWorktree={onJumpToWorktree}
             onCopyResume={onCopyResume}
             onCopyId={onCopyId}

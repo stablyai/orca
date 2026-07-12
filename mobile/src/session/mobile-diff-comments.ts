@@ -77,7 +77,7 @@ export function normalizeMobileDiffComments(value: unknown, worktreeId: string):
     }
     const id = typeof candidate.id === 'string' ? candidate.id : ''
     const filePath = typeof candidate.filePath === 'string' ? candidate.filePath : ''
-    const lineNumber = typeof candidate.lineNumber === 'number' ? candidate.lineNumber : NaN
+    const lineNumber = typeof candidate.lineNumber === 'number' ? candidate.lineNumber : Number.NaN
     const body = typeof candidate.body === 'string' ? candidate.body.trim() : ''
     const createdAt = typeof candidate.createdAt === 'number' ? candidate.createdAt : Date.now()
     if (!id || !filePath || !Number.isFinite(lineNumber) || lineNumber < 0 || !body) {

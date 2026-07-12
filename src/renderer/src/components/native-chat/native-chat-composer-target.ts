@@ -7,6 +7,10 @@ export type NativeChatResolvedTarget = {
   settings: ReturnType<typeof getSettingsForAgentTabRuntimeOwner>
 }
 
+/** Upper bound for clipboard text pulled into the composer via Cmd/Ctrl+V, so a
+ *  pathological clipboard can't stall the round-trip. */
+export const NATIVE_CHAT_CONTEXT_PASTE_MAX_BYTES = 16 * 1024 * 1024
+
 export function nativeChatComposerPlaceholder(hasPty: boolean, canSend: boolean): string {
   if (!hasPty) {
     return translate(

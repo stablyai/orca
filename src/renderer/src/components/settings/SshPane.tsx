@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { toast } from 'sonner'
 import { Plus, Upload } from 'lucide-react'
-import { MAX_SSH_RELAY_GRACE_PERIOD_SECONDS, type SshTarget } from '../../../../shared/ssh-types'
+import type { SshTarget } from '../../../../shared/ssh-types'
 import { SSH_TERMINATE_RECONNECT_REQUIRED } from '../../../../shared/constants'
 import { useAppStore } from '@/store'
 import { useMountedRef } from '@/hooks/useMountedRef'
@@ -10,18 +10,16 @@ import { removeSshTargetWithBestEffortCleanup } from './ssh-target-remove'
 import { SshTargetCard } from './SshTargetCard'
 import { SshTargetDestructiveActions } from './SshTargetDestructiveActions'
 import { SshTargetForm, EMPTY_FORM, type EditingTarget } from './SshTargetForm'
-import {
-  getEditingTargetForSshTarget,
-  getSshTargetDraftConnectionFields,
-  isRelayGracePeriodValid,
-  parseRelayGracePeriodSeconds
-} from './ssh-target-draft'
+import { getEditingTargetForSshTarget } from './ssh-target-draft'
+import { buildSshTargetSavePayload } from './ssh-target-save-payload'
+import { HostRemoveDialog } from '../sidebar/HostRemoveDialog'
+import { resolveSshHostRemoval } from '../sidebar/ssh-host-remove-resolution'
+import { getAllWorktreesFromState } from '@/store/selectors'
+import { toSshExecutionHostId } from '../../../../shared/execution-host'
 import { translate } from '@/i18n/i18n'
 export { getSshPaneSearchEntries } from './ssh-search'
 
-type SshPaneProps = Record<string, never>
-
-export function SshPane(_props: SshPaneProps): React.JSX.Element {
+export function SshPane(): React.JSX.Element {
   const [targets, setTargets] = useState<SshTarget[]>([])
   // Why: connection states are already hydrated and kept up-to-date by the
   // global store (via useIpcEvents.ts). Reading from the store avoids
@@ -32,6 +30,14 @@ export function SshPane(_props: SshPaneProps): React.JSX.Element {
   const [editingId, setEditingId] = useState<string | null>(null)
   const [form, setForm] = useState<EditingTarget>(EMPTY_FORM)
   const [testingIds, setTestingIds] = useState<Set<string>>(new Set())
+  // Why: when a target still has workspaces, route removal through the shared
+  // workspace-aware HostRemoveDialog (same as the sidebar) instead of the plain
+  // confirm, so the user chooses to delete or keep them rather than silently
+  // orphaning them.
+  const [hostRemoveTarget, setHostRemoveTarget] = useState<{
+    targetId: string
+    label: string
+  } | null>(null)
   const mountedRef = useMountedRef()
 
   const setSshTargetsMetadata = useAppStore((s) => s.setSshTargetsMetadata)
@@ -64,7 +70,8 @@ export function SshPane(_props: SshPaneProps): React.JSX.Element {
     // a sync failure must not block listing the already-known targets.
     void (async () => {
       try {
-        await window.api.ssh.importConfig()
+        const result = await window.api.ssh.importConfig()
+        useAppStore.getState().recordSshRepoReadoptions(result.repoReadoptions)
       } catch {
         // Surfaced on demand via the explicit Import button; ignore here.
       }
@@ -77,65 +84,19 @@ export function SshPane(_props: SshPaneProps): React.JSX.Element {
   }, [loadTargets])
 
   const handleSave = async (): Promise<void> => {
-    const { host, configHost, username, port } = getSshTargetDraftConnectionFields(form)
-    if (!host) {
-      toast.error(
-        translate(
-          'auto.components.settings.SshPane.0e5aa04161',
-          'Host or SSH config alias is required'
-        )
-      )
+    const savePayload = buildSshTargetSavePayload(form)
+    if (!savePayload.ok) {
+      toast.error(savePayload.error)
       return
-    }
-
-    if (isNaN(port) || port < 1 || port > 65535) {
-      toast.error(
-        translate('auto.components.settings.SshPane.4db9afce1c', 'Port must be between 1 and 65535')
-      )
-      return
-    }
-
-    const graceSeconds = parseRelayGracePeriodSeconds(form)
-    if (!isRelayGracePeriodValid(form, graceSeconds)) {
-      toast.error(
-        translate(
-          'auto.components.settings.SshPane.3879cbaa52',
-          'Relay grace period must be between 60 and {{value0}} seconds, or choose keep alive until reset',
-          { value0: MAX_SSH_RELAY_GRACE_PERIOD_SECONDS }
-        )
-      )
-      return
-    }
-
-    const identityFile = form.identityFile.trim() || undefined
-    const proxyCommand = form.proxyCommand.trim() || undefined
-    const jumpHost = form.jumpHost.trim() || undefined
-
-    const target = {
-      label: form.label.trim() || (username ? `${username}@${host}` : configHost),
-      configHost,
-      host,
-      port,
-      username,
-      relayGracePeriodSeconds: graceSeconds,
-      ...(identityFile ? { identityFile } : {}),
-      ...(proxyCommand ? { proxyCommand } : {}),
-      ...(jumpHost ? { jumpHost } : {})
     }
 
     try {
-      await (editingId
-        ? // Why: an explicit edit takes ownership of the target, so mark it
-          // `manual` — otherwise the next ~/.ssh/config sync would silently
-          // revert the user's change back to the config value. Carry the
-          // optional fields even when cleared (undefined) so removing e.g. a
-          // config-derived ProxyCommand actually deletes it — updateTarget
-          // merges partially, so an omitted key would keep the stale value.
-          window.api.ssh.updateTarget({
-            id: editingId,
-            updates: { ...target, identityFile, proxyCommand, jumpHost, source: 'manual' }
-          })
-        : window.api.ssh.addTarget({ target }))
+      if (editingId) {
+        await window.api.ssh.updateTarget({ id: editingId, updates: savePayload.payload.updates })
+      } else {
+        const result = await window.api.ssh.addTarget({ target: savePayload.payload.target })
+        useAppStore.getState().recordSshRepoReadoptions(result.repoReadoptions)
+      }
       recordFeatureInteraction('ssh')
       if (!mountedRef.current) {
         return
@@ -173,6 +134,25 @@ export function SshPane(_props: SshPaneProps): React.JSX.Element {
       await window.api.ssh.connect({ targetId })
       await window.api.ssh.terminateSessions({ targetId })
     }
+  }
+
+  // Route removal through the workspace-aware dialog when the target still owns
+  // workspaces; otherwise use the plain confirm (which also ends remote PTYs).
+  const requestRemoveTarget = (
+    target: { id: string; label: string },
+    requestPlainRemove: (target: { id: string; label: string }) => void
+  ): void => {
+    const resolution = resolveSshHostRemoval({
+      targetId: target.id,
+      repos: useAppStore.getState().repos,
+      worktrees: getAllWorktreesFromState(useAppStore.getState()),
+      sshConnectionStates: useAppStore.getState().sshConnectionStates
+    })
+    if (resolution.workspaceCount > 0) {
+      setHostRemoveTarget({ targetId: target.id, label: target.label })
+      return
+    }
+    requestPlainRemove(target)
   }
 
   const handleRemove = async (id: string): Promise<void> => {
@@ -307,17 +287,21 @@ export function SshPane(_props: SshPaneProps): React.JSX.Element {
 
   const handleImport = async (): Promise<void> => {
     try {
-      const synced = (await window.api.ssh.importConfig()) as SshTarget[]
+      // Why: the explicit Import action re-adopts every ~/.ssh/config host,
+      // including ones the user previously deleted — clear tombstones so a
+      // deliberate re-import can bring them back.
+      const result = await window.api.ssh.importConfig({ reAdopt: true })
+      useAppStore.getState().recordSshRepoReadoptions(result.repoReadoptions)
       recordFeatureInteraction('ssh')
       if (mountedRef.current) {
-        if (synced.length === 0) {
+        if (result.targets.length === 0) {
           toast('~/.ssh/config already in sync')
         } else {
           toast.success(
             translate(
               'auto.components.settings.SshPane.f8050f6307',
               'Synced {{value0}} server{{value1}}',
-              { value0: synced.length, value1: synced.length > 1 ? 's' : '' }
+              { value0: result.targets.length, value1: result.targets.length > 1 ? 's' : '' }
             )
           )
         }
@@ -416,7 +400,9 @@ export function SshPane(_props: SshPaneProps): React.JSX.Element {
                     onResetRelay={(id) => requestResetRelay({ id, label: target.label })}
                     onTest={handleTest}
                     onEdit={handleEdit}
-                    onRemove={(id) => requestRemove({ id, label: target.label })}
+                    onRemove={(id) =>
+                      requestRemoveTarget({ id, label: target.label }, requestRemove)
+                    }
                   />
                 ))}
               </div>
@@ -435,6 +421,21 @@ export function SshPane(_props: SshPaneProps): React.JSX.Element {
           </>
         )}
       </SshTargetDestructiveActions>
+
+      {hostRemoveTarget ? (
+        <HostRemoveDialog
+          open
+          onOpenChange={(open) => {
+            if (!open) {
+              setHostRemoveTarget(null)
+              void loadTargets()
+            }
+          }}
+          hostId={toSshExecutionHostId(hostRemoveTarget.targetId)}
+          label={hostRemoveTarget.label}
+          target={{ kind: 'ssh', targetId: hostRemoveTarget.targetId }}
+        />
+      ) : null}
     </div>
   )
 }

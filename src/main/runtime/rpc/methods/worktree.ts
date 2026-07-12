@@ -59,9 +59,12 @@ export const WORKTREE_METHODS: RpcMethod[] = [
   defineMethod({
     name: 'worktree.activate',
     params: WorktreeActivate,
-    handler: async (params, { runtime }) =>
+    handler: async (params, { runtime, clientKind }) =>
+      // Why: clientKind ('mobile'|'runtime') scopes the host-renderer slept-agent
+      // wake to phones so web/desktop activation behavior is unchanged.
       runtime.activateManagedWorktree(params.worktree, {
-        notifyClients: params.notifyClients !== false
+        notifyClients: params.notifyClients !== false,
+        clientKind
       })
   }),
   defineMethod({

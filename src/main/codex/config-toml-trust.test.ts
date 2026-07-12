@@ -8,9 +8,9 @@ import {
   realpathSync,
   rmSync,
   writeFileSync
-} from 'fs'
-import { tmpdir } from 'os'
-import { join } from 'path'
+} from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { escapeRegex } from '../../shared/string-utils'
 import {
   computeTrustKey,
@@ -148,6 +148,46 @@ describe('computeTrustedHash', () => {
       matcher: 'foo'
     })
     expect(a).not.toBe(b)
+  })
+
+  it('drops the matcher on user_prompt_submit/stop like matcher_pattern_for_event', () => {
+    // Why: Codex ignores matchers on these two events and hashes the
+    // identity WITHOUT the matcher field. A definition carrying
+    // `"matcher": ""` (common in third-party installers) must therefore
+    // hash identically to one without a matcher, or the system-trust
+    // mirror misses and the stale-entry sweep deletes the trust Codex
+    // wrote — re-prompting the user on every launch.
+    for (const eventLabel of ['user_prompt_submit', 'stop'] as const) {
+      const base: CodexTrustEntry = {
+        sourcePath: '/x/hooks.json',
+        eventLabel,
+        groupIndex: 0,
+        handlerIndex: 0,
+        command: 'foo'
+      }
+      const bare = computeTrustedHash(base)
+      expect(computeTrustedHash({ ...base, matcher: '' })).toBe(bare)
+      expect(computeTrustedHash({ ...base, matcher: 'anything' })).toBe(bare)
+    }
+  })
+
+  it('pins the matcher-omitted hash for a Stop entry that carries an empty matcher', () => {
+    // Why: regression pin for the shape observed in the wild (a real
+    // Codex 0.140 config.toml, path anonymized): Codex stores the
+    // matcher-omitted hash for Stop even when hooks.json carries
+    // `"matcher": ""`, so we must never fold the matcher into this
+    // identity. If serialization or normalization drifts, this constant
+    // fails loudly.
+    expect(
+      computeTrustedHash({
+        sourcePath: '/home/user/.codex/hooks.json',
+        eventLabel: 'stop',
+        groupIndex: 0,
+        handlerIndex: 0,
+        command: '/home/user/.tma1/hooks/agent-hook.sh',
+        matcher: ''
+      })
+    ).toBe('sha256:f8b48c31eabfba63f117b8570b839a5f6efc1d67867512d661775b5312df946f')
   })
 
   it('produces a different hash when statusMessage is set', () => {
@@ -1068,6 +1108,60 @@ describe('upsertProjectTrustLevel', () => {
     expect(updated).not.toContain('trust_level = "untrusted"')
   })
 
+  it('updates a Codex literal-string Windows project block without duplicating it', () => {
+    const original = ["[projects.'c:\\gemini_etl']", 'trust_level = "untrusted"', ''].join('\n')
+
+    const updated = upsertProjectTrustLevelInContent(original, 'c:\\gemini_etl', 'trusted', {
+      alreadyCanonical: true
+    })
+
+    expect(updated.match(/\[projects\./g)).toHaveLength(1)
+    expect(updated).toContain("[projects.'c:\\gemini_etl']")
+    expect(updated).toContain('trust_level = "trusted"')
+    expect(updated).not.toContain('[projects."c:\\\\gemini_etl"]')
+  })
+
+  it.each([
+    {
+      name: 'drive-letter casing and separators',
+      existingPath: 'c:\\work\\repo',
+      incomingPath: 'C:/work/repo'
+    },
+    {
+      name: 'WSL UNC path casing and separators',
+      existingPath: '\\\\wsl$\\Ubuntu\\home\\u\\proj',
+      incomingPath: '//WSL$/ubuntu/home/u/proj'
+    },
+    {
+      name: 'server UNC path casing and separators',
+      existingPath: '\\\\server\\share\\proj',
+      incomingPath: '//SERVER/share/proj'
+    }
+  ])('matches $name by decoded Windows path value', ({ existingPath, incomingPath }) => {
+    const original = [`[projects.'${existingPath}']`, 'trust_level = "untrusted"', ''].join('\n')
+
+    const updated = upsertProjectTrustLevelInContent(original, incomingPath, 'trusted', {
+      alreadyCanonical: true
+    })
+
+    expect(updated.match(/\[projects\./g)).toHaveLength(1)
+    expect(updated).toContain(`[projects.'${existingPath}']`)
+    expect(updated).toContain('trust_level = "trusted"')
+  })
+
+  it('matches a literal-string POSIX project path containing a quote and backslash', () => {
+    const projectPath = '/tmp/with"quote\\and-backslash'
+    const original = [`[projects.'${projectPath}']`, 'trust_level = "untrusted"', ''].join('\n')
+
+    const updated = upsertProjectTrustLevelInContent(original, projectPath, 'trusted', {
+      alreadyCanonical: true
+    })
+
+    expect(updated.match(/\[projects\./g)).toHaveLength(1)
+    expect(updated).toContain(`[projects.'${projectPath}']`)
+    expect(updated).toContain('trust_level = "trusted"')
+  })
+
   it('preserves an already-canonical remote Windows project path', () => {
     // Why: SSH project paths are resolved on the remote; local realpath would
     // canonicalize the wrong machine if the same path happens to exist locally.
@@ -1418,6 +1512,34 @@ describe('readHookTrustEntries', () => {
       const result = readHookTrustEntries(configPath)
 
       expect(result.get(lookupKey)).toEqual({ trustedHash: 'sha256:CASE', enabled: true })
+    }
+  )
+
+  it.skipIf(process.platform !== 'win32')(
+    'keeps WSL hook trust paths case-sensitive on a Windows host',
+    () => {
+      const upperKey = '/windows/d/Repo/hooks.json:session_start:0:0'
+      const lowerKey = '/windows/d/repo/hooks.json:session_start:0:0'
+      writeFileSync(
+        configPath,
+        [
+          `[hooks.state."${upperKey}"]`,
+          'enabled = true',
+          'trusted_hash = "sha256:UPPER"',
+          '',
+          `[hooks.state."${lowerKey}"]`,
+          'enabled = true',
+          'trusted_hash = "sha256:LOWER"',
+          ''
+        ].join('\n'),
+        'utf-8'
+      )
+
+      const result = readHookTrustEntries(configPath)
+
+      expect(result.get(upperKey)?.trustedHash).toBe('sha256:UPPER')
+      expect(result.get(lowerKey)?.trustedHash).toBe('sha256:LOWER')
+      expect(result.size).toBe(2)
     }
   )
 

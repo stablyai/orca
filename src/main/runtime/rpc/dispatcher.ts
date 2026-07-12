@@ -102,7 +102,7 @@ export class RpcDispatcher {
       signal?: AbortSignal
       clientId?: string
       clientKind?: 'mobile' | 'runtime'
-      sendBinary?: (bytes: Uint8Array<ArrayBufferLike>) => void
+      sendBinary?: (bytes: Uint8Array<ArrayBufferLike>) => boolean | void
       registerBinaryStreamHandler?: (
         streamId: number,
         handler: (frame: TerminalStreamFrame) => void

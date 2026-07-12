@@ -224,6 +224,71 @@ describe('keybindings', () => {
     })
   })
 
+  it('reports quick-command menu conflicts with global shortcuts and digit ranges', () => {
+    expect(
+      findKeybindingConflicts('darwin', {
+        'tab.openQuickCommandsMenu': ['Mod+P']
+      })
+    ).toContainEqual({
+      binding: 'Mod+P',
+      actionIds: expect.arrayContaining(['worktree.quickOpen', 'tab.openQuickCommandsMenu'])
+    })
+
+    expect(
+      findKeybindingConflicts('darwin', {
+        'tab.openQuickCommandsMenu': ['Cmd+P']
+      })
+    ).toContainEqual({
+      binding: 'Mod+P',
+      actionIds: expect.arrayContaining(['worktree.quickOpen', 'tab.openQuickCommandsMenu'])
+    })
+
+    expect(
+      findKeybindingConflicts('linux', {
+        'tab.openQuickCommandsMenu': ['Ctrl+P']
+      })
+    ).toContainEqual({
+      binding: 'Mod+P',
+      actionIds: expect.arrayContaining(['worktree.quickOpen', 'tab.openQuickCommandsMenu'])
+    })
+
+    expect(
+      findKeybindingConflicts('darwin', {
+        'tab.openQuickCommandsMenu': ['Mod+3']
+      })
+    ).toContainEqual({
+      binding: 'Mod+3',
+      actionIds: expect.arrayContaining(['workspace.selectByIndex', 'tab.openQuickCommandsMenu'])
+    })
+
+    expect(
+      findKeybindingConflicts('darwin', {
+        'tab.openQuickCommandsMenu': ['Cmd+3']
+      })
+    ).toContainEqual({
+      binding: 'Cmd+3',
+      actionIds: expect.arrayContaining(['workspace.selectByIndex', 'tab.openQuickCommandsMenu'])
+    })
+
+    expect(
+      findKeybindingConflicts('linux', {
+        'tab.openQuickCommandsMenu': ['Ctrl+3']
+      })
+    ).toContainEqual({
+      binding: 'Ctrl+3',
+      actionIds: expect.arrayContaining(['workspace.selectByIndex', 'tab.openQuickCommandsMenu'])
+    })
+
+    expect(
+      findKeybindingConflicts('linux', {
+        'tab.openQuickCommandsMenu': ['Alt+4']
+      })
+    ).toContainEqual({
+      binding: 'Alt+4',
+      actionIds: expect.arrayContaining(['tab.selectByIndex', 'tab.openQuickCommandsMenu'])
+    })
+  })
+
   it('defines macOS-only rename shortcuts that stay conflict-free', () => {
     expect(getEffectiveKeybindingsForAction('tab.rename', 'darwin')).toEqual(['Mod+R'])
     expect(getEffectiveKeybindingsForAction('tab.rename', 'linux')).toEqual([])
@@ -231,6 +296,7 @@ describe('keybindings', () => {
     expect(getEffectiveKeybindingsForAction('workspace.rename', 'darwin')).toEqual(['Mod+Alt+R'])
     expect(getEffectiveKeybindingsForAction('workspace.rename', 'linux')).toEqual([])
     expect(formatKeybindingList(['Mod+Alt+R'], 'darwin')).toBe('⌘⌥R')
+    expect(getKeybindingDefinition('tab.rename')?.searchKeywords).not.toContain('set title')
     expect(
       keybindingMatchesAction(
         'tab.rename',
@@ -420,6 +486,35 @@ describe('keybindings', () => {
     ).toBe(true)
   })
 
+  it('names terminal title shortcuts after pane menu actions', () => {
+    const setTitle = getKeybindingDefinition('terminal.setTitle')
+    const clearTitle = getKeybindingDefinition('terminal.clearPaneTitle')
+
+    expect(setTitle?.title).toBe('Set Title…')
+    expect(setTitle?.group).toBe('Terminal Panes')
+    expect(setTitle?.scope).toBe('terminal')
+    expect(setTitle?.searchKeywords).toContain('set title')
+    expect(getEffectiveKeybindingsForAction('terminal.setTitle', 'darwin')).toEqual([])
+    expect(getEffectiveKeybindingsForAction('terminal.setTitle', 'linux')).toEqual([])
+    expect(getEffectiveKeybindingsForAction('terminal.setTitle', 'win32')).toEqual([])
+
+    expect(clearTitle?.title).toBe('Clear Pane Title')
+    expect(clearTitle?.group).toBe('Terminal Panes')
+    expect(clearTitle?.scope).toBe('terminal')
+    expect(clearTitle?.searchKeywords).toContain('remove title')
+    expect(getEffectiveKeybindingsForAction('terminal.clearPaneTitle', 'darwin')).toEqual([])
+    expect(getEffectiveKeybindingsForAction('terminal.clearPaneTitle', 'linux')).toEqual([])
+    expect(getEffectiveKeybindingsForAction('terminal.clearPaneTitle', 'win32')).toEqual([])
+    expect(
+      keybindingMatchesAction(
+        'terminal.clearPaneTitle',
+        { key: 't', code: 'KeyT', control: false, meta: true, alt: true, shift: false },
+        'darwin',
+        { 'terminal.clearPaneTitle': ['Mod+Alt+T'] }
+      )
+    ).toBe(true)
+  })
+
   it('keeps workspace delete unassigned until users customize it', () => {
     const binding = {
       key: 'Backspace',
@@ -461,6 +556,38 @@ describe('keybindings', () => {
     expect(definition?.title).toBe('Open Workspace Board')
     expect(definition?.searchKeywords).toEqual(
       expect.arrayContaining(['workspace', 'board', 'kanban'])
+    )
+  })
+
+  it('keeps the quick commands menu toggle unassigned until users customize it', () => {
+    const platforms: readonly KeybindingPlatform[] = ['darwin', 'linux', 'win32']
+
+    for (const platform of platforms) {
+      expect(getEffectiveKeybindingsForAction('tab.openQuickCommandsMenu', platform)).toEqual([])
+    }
+
+    const binding = {
+      key: 'q',
+      code: 'KeyQ',
+      control: true,
+      meta: false,
+      alt: false,
+      shift: true
+    }
+
+    expect(keybindingMatchesAction('tab.openQuickCommandsMenu', binding, 'linux')).toBe(false)
+    expect(
+      keybindingMatchesAction('tab.openQuickCommandsMenu', binding, 'linux', {
+        'tab.openQuickCommandsMenu': ['Mod+Shift+Q']
+      })
+    ).toBe(true)
+
+    const definition = getKeybindingDefinition('tab.openQuickCommandsMenu')
+    expect(definition?.title).toBe('Toggle Quick Commands menu')
+    expect(definition?.group).toBe('Quick Commands')
+    expect(definition?.scope).toBe('tabs')
+    expect(definition?.searchKeywords).toEqual(
+      expect.arrayContaining(['shortcut', 'quick', 'command', 'menu', 'tab'])
     )
   })
 

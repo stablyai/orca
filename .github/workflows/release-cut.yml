@@ -1,6 +1,6 @@
 name: Cut Release
 
-# Why: single entry point for manually and scheduled cutting releases.
+# Why: single entry point for manually cutting releases.
 # Replaces the old local `pnpm release:*` scripts and the standalone scheduled
 # RC workflow so releases are always reproducible from CI and can never be
 # accidentally tagged against an uncommitted or non-main working tree.
@@ -37,16 +37,15 @@ on:
         type: string
         default: main
       dry_run:
-        description: Validate a scheduled-RC run without creating a tag
+        description: Validate an RC release cut without creating a tag
         required: false
         default: false
         type: boolean
-  schedule:
-    # Why: GitHub scheduled workflows are not guaranteed to start exactly on
-    # time and can be delayed or dropped around high-load periods. We retry
-    # across the full target hour and dedupe per PT slot. Cron is UTC, so run
-    # during both PST and PDT equivalents and let the PT-hour gate decide.
-    - cron: '*/5 10,11,22,23 * * *'
+      version_suffix:
+        description: Extra prerelease identifier appended to an rc version (e.g. "perf" -> 1.2.3-rc.4.perf). rc kind only.
+        required: false
+        type: string
+        default: ''
 
 permissions:
   contents: write
@@ -182,8 +181,8 @@ jobs:
 
       - name: Publish complete release-cut RC drafts from prior runs
         id: publish_drafts
-        # Why: this must run even when the current slot already cut a tag; a
-        # later cron retry may be the first chance to unstick a complete RC draft.
+        # Why: a manual RC dispatch should unstick any complete RC draft before
+        # deciding whether to cut another tag.
         if: steps.window.outputs.allowed == 'true' && !(github.event_name == 'workflow_dispatch' && inputs.dry_run)
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -198,6 +197,7 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           KIND: ${{ github.event_name == 'schedule' && 'rc' || inputs.kind }}
+          VERSION_SUFFIX: ${{ github.event_name == 'schedule' && '' || inputs.version_suffix }}
         run: |
           set -euo pipefail
 
@@ -371,6 +371,18 @@ jobs:
                   recover_unpublished_tag "$existing_rc_tag" "latest RC in series" || true
                 fi
                 new="${base}-rc.$((highest_rc + 1))"
+              fi
+              if [[ -n "${VERSION_SUFFIX:-}" ]]; then
+                # Why a dot-appended identifier (rc.N.perf): it sorts just
+                # above its own base rc.N but BELOW rc.N+1, so suffixed side-
+                # branch builds never outrank the main RC series and cannot
+                # hijack the update channel; clients find them by matching the
+                # identifier ("perf") in the prerelease components.
+                if [[ ! "$VERSION_SUFFIX" =~ ^[0-9A-Za-z]+$ ]]; then
+                  echo "::error::version_suffix must be alphanumeric, got: $VERSION_SUFFIX" >&2
+                  exit 1
+                fi
+                new="${new}.${VERSION_SUFFIX}"
               fi
               ;;
             patch|minor|major)
@@ -703,13 +715,9 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - os: macos-15
-            platform: mac
-            release_command: node config/scripts/ensure-native-runtime.mjs --runtime=electron && ORCA_MAC_RELEASE=1 pnpm exec electron-builder --config config/electron-builder.config.cjs --mac --publish always
-            eb_cache_path: |
-              ~/Library/Caches/electron
-              ~/Library/Caches/electron-builder
-          - os: windows-latest
+          # Why: windows-latest moved to the Windows 2025 / VS 2026 image before
+          # node-gyp could detect VS 18, breaking native dependency install.
+          - os: windows-2022
             platform: win
             release_command: 'node config/scripts/ensure-native-runtime.mjs --runtime=electron; if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }; pnpm exec electron-builder --config config/electron-builder.config.cjs --win --publish never'
             eb_cache_path: |
@@ -729,6 +737,10 @@ jobs:
               ~/.cache/electron-builder
 
     runs-on: ${{ matrix.os }}
+    # Why: hosted runners hard-cap jobs at 6h; the Windows SignPath waits
+    # (1h inner + 4h installer) are budgeted to fit under this with the
+    # build itself, so a slow approval can't kill the job mid-flow.
+    timeout-minutes: 360
 
     permissions:
       actions: read
@@ -767,8 +779,8 @@ jobs:
           npm install -g node-gyp@11.5.0
           echo "npm_config_node_gyp=$(npm root -g)/node-gyp/bin/node-gyp.js" >> "$GITHUB_ENV"
 
-      # Cache the Electron binary + electron-builder tool downloads (notarytool,
-      # winCodeSign, nsis, squirrel, AppImage). Saves ~30-90s per job, incl. mac.
+      # Cache the Electron binary + electron-builder tool downloads
+      # (winCodeSign, nsis, squirrel, AppImage). Saves ~30-90s per job.
       - name: Cache electron-builder downloads
         uses: actions/cache@v5
         with:
@@ -798,22 +810,6 @@ jobs:
         if: runner.os == 'Linux'
         run: sudo apt-get update && sudo apt-get install -y python3-gi gir1.2-atspi-2.0 at-spi2-core xclip xdotool rpm
 
-      - name: Verify macOS signing environment
-        if: matrix.platform == 'mac'
-        run: node config/scripts/verify-macos-release-env.mjs
-        env:
-          CSC_LINK: ${{ secrets.MAC_CERTS }}
-          CSC_KEY_PASSWORD: ${{ secrets.MAC_CERTS_PASSWORD }}
-          APPLE_ID: ${{ secrets.APPLE_ID }}
-          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
-          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
-
-      # Why: `plutil -lint` accepts duplicate plist keys, but `codesign`
-      # rejects duplicate entitlements after the expensive app build.
-      - name: Verify macOS entitlements
-        if: matrix.platform == 'mac'
-        run: pnpm verify:macos-entitlements
-
       # Why: telemetry's transport gate (`src/main/telemetry/client.ts:IS_OFFICIAL_BUILD`)
       # requires the build identity to be the literal string `stable` or `rc`,
       # substituted by electron-vite's `define` block at build time. Derive
@@ -830,7 +826,10 @@ jobs:
           TAG: ${{ needs.cut.outputs.tag }}
         run: |
           set -euo pipefail
-          if [[ "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+-rc\.[0-9]+$ ]]; then
+          # Why the optional trailing identifier: suffixed side-branch RCs
+          # (vX.Y.Z-rc.N.perf) are rc-channel prerelease builds — same telemetry
+          # identity as plain RCs.
+          if [[ "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+-rc\.[0-9]+(\.[0-9A-Za-z]+)?$ ]]; then
             identity=rc
           elif [[ "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
             identity=stable
@@ -864,35 +863,6 @@ jobs:
           ORCA_DIAGNOSTICS_TOKEN_URL: https://www.onorca.dev/diagnostics/token
           ORCA_POSTHOG_WRITE_KEY: ${{ secrets.ORCA_POSTHOG_WRITE_KEY }}
 
-      # Why: macOS signing secrets (CSC_LINK, CSC_KEY_PASSWORD) must NOT be
-      # passed to non-macOS builds. electron-builder uses CSC_LINK as the
-      # code-signing certificate on any platform, so leaking the Apple
-      # Developer ID cert to the Windows build causes the NSIS installer to
-      # be signed with an Apple cert whose chain Windows cannot validate,
-      # breaking the auto-updater with "certificate chain could not be built
-      # to a trusted root authority" (issue #631).
-      #
-      # Why retry: electron-builder downloads NSIS/winCodeSign/squirrel
-      # binaries and the Electron runtime from GitHub release assets during
-      # publish. GitHub's download CDN occasionally returns 504s that fail
-      # the whole release. Retry on failure so transient network errors
-      # don't require a manual re-run.
-      - name: Publish release artifacts (macOS)
-        if: matrix.platform == 'mac'
-        uses: nick-fields/retry@v4
-        with:
-          timeout_minutes: 45
-          max_attempts: 3
-          retry_wait_seconds: 30
-          command: ${{ matrix.release_command }}
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          CSC_LINK: ${{ secrets.MAC_CERTS }}
-          CSC_KEY_PASSWORD: ${{ secrets.MAC_CERTS_PASSWORD }}
-          APPLE_ID: ${{ secrets.APPLE_ID }}
-          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
-          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
-
       - name: Publish release artifacts (Linux)
         if: matrix.platform == 'linux-x64' || matrix.platform == 'linux-arm64'
         uses: nick-fields/retry@v4
@@ -917,11 +887,53 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Verify Windows node-pty ConPTY runtime
+        if: matrix.platform == 'win'
+        shell: pwsh
+        run: |
+          $runtimeDir = 'dist/win-unpacked/resources/node_modules/node-pty/build/Release'
+          $requiredFiles = @(
+            "$runtimeDir/conpty.node",
+            "$runtimeDir/conpty/conpty.dll",
+            "$runtimeDir/conpty/OpenConsole.exe"
+          )
+          foreach ($file in $requiredFiles) {
+            if (-not (Test-Path -LiteralPath $file -PathType Leaf)) {
+              throw "Missing Windows node-pty runtime file: $file"
+            }
+            Get-Item -LiteralPath $file
+          }
+
       - name: Install SignPath PowerShell module
         if: matrix.platform == 'win'
         shell: pwsh
         run: |
-          Set-PSRepository -Name PSGallery -InstallationPolicy Trusted
+          $ErrorActionPreference = 'Stop'
+          # Why: force TLS 1.2 so gallery downloads work on older hosted images.
+          [Net.ServicePointManager]::SecurityProtocol = [Net.ServicePointManager]::SecurityProtocol -bor [Net.SecurityProtocolType]::Tls12
+
+          # Why: on some hosted Windows images `Register-PSRepository -Default`
+          # fails inside the legacy nuget.exe provider with "Missing option value
+          # for: '-source'", so PSGallery is never registered and the install
+          # below dies with "No repository with the name 'PSGallery'". PSResourceGet
+          # (bundled with PowerShell 7.4+) has PSGallery registered by default and
+          # avoids that code path, so prefer it and fall back to PowerShellGet only
+          # when it is absent.
+          $useResourceGet = $null -ne (Get-Command -Name Install-PSResource -ErrorAction SilentlyContinue)
+
+          if ($useResourceGet) {
+            if ($null -eq (Get-PSResourceRepository -Name PSGallery -ErrorAction SilentlyContinue)) {
+              Register-PSResourceRepository -PSGallery -Trusted
+            } else {
+              Set-PSResourceRepository -Name PSGallery -Trusted
+            }
+          } else {
+            Install-PackageProvider -Name NuGet -MinimumVersion 2.8.5.201 -Force | Out-Null
+            if ($null -eq (Get-PSRepository -Name PSGallery -ErrorAction SilentlyContinue)) {
+              Register-PSRepository -Default -InstallationPolicy Trusted
+            }
+            Set-PSRepository -Name PSGallery -InstallationPolicy Trusted
+          }
 
           $trimChars = [char[]]@([System.IO.Path]::DirectorySeparatorChar, [System.IO.Path]::AltDirectorySeparatorChar)
           $documentsRoot = [System.IO.Path]::GetFullPath([Environment]::GetFolderPath('MyDocuments')).TrimEnd($trimChars)
@@ -950,7 +962,11 @@ jobs:
             }
 
             try {
-              Install-Module -Name SignPath -Repository PSGallery -MinimumVersion 4.0.0 -MaximumVersion 4.999.999 -Scope CurrentUser -Force -AllowClobber -ErrorAction Stop
+              if ($useResourceGet) {
+                Install-PSResource -Name SignPath -Version '[4.0.0,5.0.0)' -Repository PSGallery -Scope CurrentUser -TrustRepository -Reinstall -ErrorAction Stop
+              } else {
+                Install-Module -Name SignPath -Repository PSGallery -MinimumVersion 4.0.0 -MaximumVersion 4.999.999 -Scope CurrentUser -Force -AllowClobber -ErrorAction Stop
+              }
               Import-Module SignPath -ErrorAction Stop
               Get-Command -Name Get-SignedArtifact -Module SignPath -ErrorAction Stop
               break
@@ -966,6 +982,244 @@ jobs:
               }
             }
           }
+
+      # ── Windows inner-binary signing (issue #7785) ─────────────────────
+      # Why: SignPath cannot deep-sign inside NSIS installers, so inner PE
+      # files (Orca.exe, node-pty *.node, DLLs) are signed via a separate zip
+      # request, then the installer is rebuilt from the signed tree before the
+      # existing installer signing request below. Every step in this chain is
+      # fail-open (continue-on-error + outcome gating): any failure ships the
+      # original installer with unsigned inner binaries, exactly like releases
+      # did before this chain existed. Rehearsed end to end in run 28988432001
+      # (.github/workflows/windows-signing-rehearsal.yml).
+
+      # Why: only unsigned PE files go to SignPath. Files that already carry a
+      # valid signature (Microsoft's OpenConsole.exe) must keep their signer.
+      - name: Stage unsigned inner PE files for signing
+        id: stage-inner
+        if: matrix.platform == 'win'
+        continue-on-error: true
+        shell: pwsh
+        run: |
+          $root = Resolve-Path 'dist/win-unpacked'
+          $stage = New-Item -ItemType Directory -Force -Path 'signing-stage'
+          $list = New-Object System.Collections.Generic.List[string]
+          $skipped = New-Object System.Collections.Generic.List[string]
+
+          Get-ChildItem -Path $root -Recurse -File |
+            Where-Object { $_.Extension -in '.exe', '.dll', '.node' } |
+            ForEach-Object {
+              $relative = [System.IO.Path]::GetRelativePath($root, $_.FullName)
+              $signature = Get-AuthenticodeSignature -FilePath $_.FullName
+              if ($signature.Status -eq 'Valid') {
+                $skipped.Add("$relative  <already signed: $($signature.SignerCertificate.Subject)>")
+                return
+              }
+              $destination = Join-Path $stage.FullName $relative
+              New-Item -ItemType Directory -Force -Path (Split-Path $destination) | Out-Null
+              Copy-Item -Path $_.FullName -Destination $destination -Force
+              $list.Add($relative)
+            }
+
+          if (-not ($list -contains 'Orca.exe')) {
+            throw 'Orca.exe was not staged for signing; unpacked layout changed?'
+          }
+          if (-not ($list | Where-Object { $_ -like '*conpty_console_list.node' })) {
+            throw 'node-pty conpty_console_list.node was not staged; this is the file from issue #7785.'
+          }
+
+          Set-Content -Path 'inner-signing-list.txt' -Value ($list -join "`n")
+          Write-Host "Staged $($list.Count) unsigned PE files for signing:"
+          $list | ForEach-Object { Write-Host "  $_" }
+          Write-Host "Skipped $($skipped.Count) already-signed files:"
+          $skipped | ForEach-Object { Write-Host "  $_" }
+
+      - name: Upload unsigned inner binaries for SignPath
+        id: upload-unsigned-inner
+        if: matrix.platform == 'win' && steps.stage-inner.outcome == 'success'
+        continue-on-error: true
+        uses: actions/upload-artifact@v7
+        with:
+          name: orca-windows-inner-unsigned-${{ needs.cut.outputs.tag }}
+          path: signing-stage/**
+          if-no-files-found: error
+
+      - name: Submit inner binaries signing request
+        id: submit-inner-signing
+        if: matrix.platform == 'win' && steps.upload-unsigned-inner.outcome == 'success'
+        continue-on-error: true
+        uses: signpath/github-action-submit-signing-request@v2
+        with:
+          api-token: ${{ secrets.SIGNPATH_API_TOKEN }}
+          organization-id: c37aa192-a27a-4377-9c90-5d6c95912dc0
+          project-slug: orca
+          signing-policy-slug: release-signing
+          artifact-configuration-slug: windows-inner-binaries-zip
+          github-artifact-id: ${{ steps.upload-unsigned-inner.outputs.artifact-id }}
+          wait-for-completion: false
+
+      - name: Notify Slack that inner-binary signing is waiting for approval
+        id: notify-inner-signing
+        if: matrix.platform == 'win' && steps.submit-inner-signing.outcome == 'success'
+        continue-on-error: true
+        shell: pwsh
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+          SIGNPATH_ORGANIZATION_ID: c37aa192-a27a-4377-9c90-5d6c95912dc0
+          SIGNPATH_REQUEST_ID: ${{ steps.submit-inner-signing.outputs.signing-request-id }}
+          SIGNPATH_REQUEST_URL: ${{ steps.submit-inner-signing.outputs.signing-request-web-url }}
+          TAG: ${{ needs.cut.outputs.tag }}
+          GITHUB_RUN_URL: https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          if ([string]::IsNullOrWhiteSpace($env:SLACK_WEBHOOK_URL)) {
+            throw 'SLACK_WEBHOOK_URL secret is required so release approvers know when SignPath is waiting.'
+          }
+
+          $requestUrl = $env:SIGNPATH_REQUEST_URL
+          if ([string]::IsNullOrWhiteSpace($requestUrl)) {
+            $requestUrl = "https://app.signpath.io/Web/$env:SIGNPATH_ORGANIZATION_ID/SigningRequests/$env:SIGNPATH_REQUEST_ID"
+          }
+
+          $message = "Orca Windows release $env:TAG inner-binaries signing request (1 of 2) is ready for SignPath approval.`n<$requestUrl|Open SignPath signing request>`n<$env:GITHUB_RUN_URL|Open GitHub Actions run>"
+          $payload = @{
+            text = $message
+            blocks = @(
+              @{
+                type = 'section'
+                text = @{
+                  type = 'mrkdwn'
+                  text = $message
+                }
+              }
+            )
+          } | ConvertTo-Json -Depth 5
+
+          Invoke-RestMethod -Method Post -Uri $env:SLACK_WEBHOOK_URL -ContentType 'application/json' -Body $payload
+
+      # Why gate on the notify outcome too: if nobody was told to approve,
+      # don't hold the release for the approval window — fall through and
+      # ship like today instead. The 1h wait (vs the installer's 4h) keeps
+      # both waits plus the build inside the 360-minute job cap; missing it
+      # falls through to today's unsigned-inner flow rather than blocking.
+      - name: Download signed inner binaries from SignPath
+        id: download-signed-inner
+        if: matrix.platform == 'win' && steps.submit-inner-signing.outcome == 'success' && steps.notify-inner-signing.outcome == 'success'
+        continue-on-error: true
+        shell: pwsh
+        env:
+          SIGNPATH_API_TOKEN: ${{ secrets.SIGNPATH_API_TOKEN }}
+          SIGNPATH_REQUEST_ID: ${{ steps.submit-inner-signing.outputs.signing-request-id }}
+        run: |
+          Get-SignedArtifact `
+            -OrganizationId c37aa192-a27a-4377-9c90-5d6c95912dc0 `
+            -ApiToken $env:SIGNPATH_API_TOKEN `
+            -SigningRequestId $env:SIGNPATH_REQUEST_ID `
+            -OutputArtifactPath signed-inner.zip `
+            -Force `
+            -WaitForCompletionTimeoutInSeconds 3600
+
+          New-Item -ItemType Directory -Path signed-inner -Force
+          Expand-Archive -Path signed-inner.zip -DestinationPath signed-inner -Force
+
+      # Why: copy back strictly by the staged list so a layout mismatch in the
+      # returned artifact fails loudly (into fail-open) instead of silently
+      # shipping a mix of signed and unsigned binaries.
+      - name: Restore signed inner binaries into unpacked app
+        id: restore-signed-inner
+        if: matrix.platform == 'win' && steps.download-signed-inner.outcome == 'success'
+        continue-on-error: true
+        shell: pwsh
+        run: |
+          $root = Resolve-Path 'dist/win-unpacked'
+          $failures = New-Object System.Collections.Generic.List[string]
+          foreach ($relative in Get-Content 'inner-signing-list.txt') {
+            $signed = Get-ChildItem -Path signed-inner -Recurse -File |
+              Where-Object { [System.IO.Path]::GetRelativePath((Resolve-Path 'signed-inner'), $_.FullName).TrimStart('\', '/') -like "*$relative" } |
+              Select-Object -First 1
+            if ($null -eq $signed) {
+              $failures.Add("missing from signed artifact: $relative")
+              continue
+            }
+            $signature = Get-AuthenticodeSignature -FilePath $signed.FullName
+            if ($null -eq $signature.SignerCertificate) {
+              $failures.Add("returned without a signature: $relative")
+              continue
+            }
+            Copy-Item -Path $signed.FullName -Destination (Join-Path $root $relative) -Force
+            Write-Host ("{0,-14} {1}  <{2}>" -f $signature.Status, $relative, $signature.SignerCertificate.Subject)
+          }
+          if ($failures.Count -gt 0) {
+            $failures | ForEach-Object { Write-Host "::error::$_" }
+            throw "Signed inner artifact did not round-trip cleanly ($($failures.Count) failures)."
+          }
+
+      # Why this step exists: electron-builder's CopyElevateHelper re-copies a
+      # pristine elevate.exe from its download cache over resources\elevate.exe
+      # on EVERY nsis pack — including the --prepackaged rebuild below — which
+      # clobbered the SignPath signature in v1.4.129-rc.4. There is no supported
+      # way to disable just the copy, so we overwrite the cache's copy with our
+      # signed one (identical bytes plus signature) so the clobber becomes a
+      # no-op. Known quirk: the cache persists across releases via actions/cache,
+      # so later runs may see elevate.exe as already signed and skip staging it —
+      # that is fine (the signature is timestamped) and the evidence gate checks
+      # elevate.exe in the shipped installer unconditionally. If this ever causes
+      # trouble, delete this step; the only effect is elevate.exe shipping
+      # unsigned again, which the evidence gate will flag.
+      - name: Replace cached elevate.exe with the signed copy
+        id: sign-elevate-cache
+        if: matrix.platform == 'win' && steps.restore-signed-inner.outcome == 'success'
+        continue-on-error: true
+        shell: pwsh
+        run: |
+          $signed = 'dist/win-unpacked/resources/elevate.exe'
+          if (-not (Test-Path $signed)) {
+            Write-Host '::warning::No elevate.exe in win-unpacked resources; nothing to protect from the rebuild clobber.'
+            exit 0
+          }
+          $signature = Get-AuthenticodeSignature -FilePath $signed
+          $subject = if ($null -eq $signature.SignerCertificate) { '<none>' } else { $signature.SignerCertificate.Subject }
+          if ($signature.Status -ne 'Valid' -or $subject -notlike '*CN=SignPath Foundation*') {
+            Write-Host "::warning::win-unpacked elevate.exe is not SignPath-signed ($($signature.Status), $subject); skipping cache swap."
+            exit 0
+          }
+          $cached = @(Get-ChildItem "$env:LOCALAPPDATA\electron-builder\Cache\nsis" -Recurse -Filter elevate.exe -ErrorAction SilentlyContinue)
+          if ($cached.Count -eq 0) {
+            Write-Host '::warning::No cached elevate.exe found (electron-builder cache layout changed?); the rebuild will pack the unsigned copy and the evidence gate will flag it.'
+            exit 0
+          }
+          foreach ($file in $cached) {
+            Copy-Item -Path $signed -Destination $file.FullName -Force
+            Write-Host "Replaced $($file.FullName) with the SignPath-signed copy."
+          }
+
+      - name: Rebuild NSIS installer from signed unpacked app
+        id: rebuild-nsis-signed
+        if: matrix.platform == 'win' && steps.restore-signed-inner.outcome == 'success'
+        continue-on-error: true
+        shell: pwsh
+        run: |
+          # Why: keep the pre-rebuild artifacts so a failed rebuild can fall
+          # back to shipping them unchanged (fail-open).
+          New-Item -ItemType Directory -Path prepack-backup -Force | Out-Null
+          Copy-Item 'dist/orca-windows-setup.exe' 'prepack-backup/orca-windows-setup.exe' -Force
+          Copy-Item 'dist/latest.yml' 'prepack-backup/latest.yml' -Force
+
+          pnpm exec electron-builder --config config/electron-builder.config.cjs --win --publish never --prepackaged "$env:GITHUB_WORKSPACE\dist\win-unpacked"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          if (-not (Test-Path 'dist/orca-windows-setup.exe')) {
+            throw 'electron-builder --prepackaged did not produce dist/orca-windows-setup.exe'
+          }
+
+      - name: Roll back to original installer after failed rebuild
+        if: matrix.platform == 'win' && steps.rebuild-nsis-signed.outcome == 'failure'
+        shell: pwsh
+        run: |
+          if (Test-Path 'prepack-backup/orca-windows-setup.exe') {
+            Copy-Item 'prepack-backup/orca-windows-setup.exe' 'dist/orca-windows-setup.exe' -Force
+            Copy-Item 'prepack-backup/latest.yml' 'dist/latest.yml' -Force
+            Write-Warning 'Restored pre-rebuild installer; this release ships with unsigned inner binaries.'
+          }
+      # ── End Windows inner-binary signing ───────────────────────────────
 
       - name: Upload unsigned Windows installer for SignPath
         if: matrix.platform == 'win'
@@ -1001,6 +1255,7 @@ jobs:
           SIGNPATH_REQUEST_URL: ${{ steps.submit-signing-request.outputs.signing-request-web-url }}
           TAG: ${{ needs.cut.outputs.tag }}
           GITHUB_RUN_URL: https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          INNER_SIGNING_SUBMITTED: ${{ steps.submit-inner-signing.outcome == 'success' }}
         run: |
           if ([string]::IsNullOrWhiteSpace($env:SLACK_WEBHOOK_URL)) {
             throw 'SLACK_WEBHOOK_URL secret is required so release approvers know when SignPath is waiting.'
@@ -1011,7 +1266,9 @@ jobs:
             $requestUrl = "https://app.signpath.io/Web/$env:SIGNPATH_ORGANIZATION_ID/SigningRequests/$env:SIGNPATH_REQUEST_ID"
           }
 
-          $message = "Orca Windows release $env:TAG is ready for SignPath approval.`n<$requestUrl|Open SignPath signing request>`n<$env:GITHUB_RUN_URL|Open GitHub Actions run>"
+          # Why: releases where inner signing fell through have only this one request.
+          $stage = if ($env:INNER_SIGNING_SUBMITTED -eq 'true') { 'installer signing request (2 of 2)' } else { 'signing request' }
+          $message = "Orca Windows release $env:TAG $stage is ready for SignPath approval.`n<$requestUrl|Open SignPath signing request>`n<$env:GITHUB_RUN_URL|Open GitHub Actions run>"
           $payload = @{
             text = $message
             blocks = @(
@@ -1094,6 +1351,90 @@ jobs:
           }
           $signature.SignerCertificate | Format-List Subject,Issuer,NotBefore,NotAfter,Thumbprint
 
+      # Why: evidence gate for inner-binary signing (issue #7785, supersedes
+      # PR #7170's Orca.exe-only gate — this covers every staged .exe/.dll/.node
+      # by extracting the shipped installer). Warn-only until the flow has been
+      # proven on a real release, then flip ORCA_WINDOWS_INNER_SIGNATURE_REQUIRED
+      # to 'true' so unsigned inner binaries block the release.
+      - name: Verify Windows inner binary signatures
+        if: matrix.platform == 'win'
+        shell: pwsh
+        env:
+          ORCA_WINDOWS_INNER_SIGNATURE_REQUIRED: 'false'
+          INNER_SIGNING_COMPLETED: ${{ steps.rebuild-nsis-signed.outcome == 'success' }}
+        run: |
+          $required = $env:ORCA_WINDOWS_INNER_SIGNATURE_REQUIRED -eq 'true'
+          if ($env:INNER_SIGNING_COMPLETED -ne 'true') {
+            $message = 'Windows inner-binary signing did not complete; this release ships unsigned inner binaries (fail-open, issue #7785).'
+            if ($required) { throw $message }
+            Write-Host "::warning::$message"
+            exit 0
+          }
+
+          # Why try/catch: while the gate is warn-only, even an unexpected
+          # script error (extraction hiccup, missing file) must not block
+          # the release — only the flip to required makes failures fatal.
+          try {
+            $report = New-Object System.Collections.Generic.List[string]
+            $failures = New-Object System.Collections.Generic.List[string]
+
+            # Why: verify the files a user actually gets on disk, not the build
+            # tree — 7z parses the NSIS exe directly as its embedded payload.
+            $7za = 'node_modules/7zip-bin/win/x64/7za.exe'
+            New-Item -ItemType Directory -Path inner-evidence-extract -Force | Out-Null
+            & $7za x 'dist/orca-windows-setup.exe' '-oinner-evidence-extract' -y | Out-Null
+
+            $root = Resolve-Path 'inner-evidence-extract'
+            # Why elevate.exe is always appended: staging skips already-signed
+            # files, and the persisted electron-builder cache can carry a
+            # previously signed elevate.exe — so it may be absent from the list
+            # in some runs, yet it is the file most at risk of losing its
+            # signature in the NSIS rebuild. Verify it in every release.
+            $targets = @(Get-Content 'inner-signing-list.txt')
+            if ($targets -notcontains 'resources\elevate.exe') {
+              $targets += 'resources\elevate.exe'
+            }
+            foreach ($relative in $targets) {
+              $path = Join-Path $root $relative
+              if (-not (Test-Path $path)) {
+                $failures.Add("missing from installer payload: $relative")
+                continue
+              }
+              $signature = Get-AuthenticodeSignature -FilePath $path
+              $subject = if ($null -eq $signature.SignerCertificate) { '<none>' } else { $signature.SignerCertificate.Subject }
+              $line = "{0,-14} {1}  <{2}>" -f $signature.Status, $relative, $subject
+              $report.Add($line)
+              Write-Host $line
+              if ($signature.Status -ne 'Valid' -or $subject -notlike '*CN=SignPath Foundation*') {
+                $failures.Add("not signed by SignPath Foundation: $relative ($($signature.Status), $subject)")
+              }
+            }
+
+            Set-Content -Path 'inner-signing-evidence.txt' -Value ($report -join "`n")
+            if ($failures.Count -gt 0) {
+              $failures | ForEach-Object { Write-Host "::warning::$_" }
+              $message = "Windows inner-binary evidence gate found $($failures.Count) problems."
+              if ($required) { throw $message }
+              Write-Host "::warning::$message Fail-open until ORCA_WINDOWS_INNER_SIGNATURE_REQUIRED is 'true'."
+            } else {
+              Write-Host "All $($targets.Count) inner binaries in the shipped installer are signed by SignPath Foundation."
+            }
+          } catch {
+            if ($required) { throw }
+            Write-Host "::warning::Windows inner-binary evidence gate errored: $_ (fail-open, issue #7785)."
+          }
+
+      - name: Upload Windows inner signing evidence
+        if: always() && matrix.platform == 'win'
+        uses: actions/upload-artifact@v7
+        with:
+          name: orca-windows-inner-signing-evidence-${{ needs.cut.outputs.tag }}
+          path: |
+            inner-signing-evidence.txt
+            inner-signing-list.txt
+          if-no-files-found: ignore
+          retention-days: 30
+
       - name: Publish signed Windows release artifacts
         if: matrix.platform == 'win'
         uses: nick-fields/retry@v4
@@ -1129,14 +1470,13 @@ jobs:
             exit 1
           fi
 
-      # Why post-publish for macOS/Linux: electron-builder packs and uploads
-      # in a single `--publish always` invocation, so there is no cheap
-      # insertion point between pack and upload without splitting those steps.
-      # Running verify last still blocks the bad release: the
-      # binary is uploaded to the draft, but a failed matrix job blocks
-      # the `publish-release` job (which depends on `build`) from flipping
-      # the release from draft → published, so users never see it. A human
-      # then deletes the draft and re-cuts.
+      # Why post-publish for Linux: electron-builder packs and uploads in a
+      # single `--publish always` invocation, so there is no cheap insertion
+      # point between pack and upload without splitting those steps. Running
+      # verify last still blocks the bad release: the binary is uploaded to the
+      # draft, but a failed matrix job blocks `publish-release` from flipping
+      # the release from draft → published, so users never see it. A human then
+      # deletes the draft and re-cuts.
       #
       # Why this guards against: a misconfigured CI run where
       # `ORCA_POSTHOG_WRITE_KEY` is unset or the tag fails to classify
@@ -1147,10 +1487,41 @@ jobs:
       - name: Verify telemetry constants present in app.asar
         run: node config/scripts/verify-telemetry-constants.mjs
 
+  build-mac:
+    needs:
+      - cut
+      - create-release
+    if: needs.cut.outputs.should_release == 'true'
+    # Why: SignPath requires every job in this signing workflow to be
+    # GitHub-hosted. The actual mac build runs in release-mac-build.yml so
+    # Blacksmith stays outside Windows artifact provenance.
+    runs-on: ubuntu-latest
+    permissions:
+      actions: write
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version-file: package.json
+
+      - name: Run isolated macOS release build
+        run: node config/scripts/run-release-mac-build-workflow.mjs
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RELEASE_MAC_BUILD_REF: ${{ github.ref_name }}
+          RELEASE_MAC_BUILD_RELEASE_RUN_ID: ${{ github.run_id }}
+          RELEASE_MAC_BUILD_TAG: ${{ needs.cut.outputs.tag }}
+          RELEASE_MAC_BUILD_WORKFLOW: release-mac-build.yml
+
   publish-release:
     needs:
       - cut
       - build
+      - build-mac
       - terminal-rendering-golden
     runs-on: ubuntu-latest
     permissions:

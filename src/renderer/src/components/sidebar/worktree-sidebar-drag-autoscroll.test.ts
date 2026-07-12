@@ -183,7 +183,7 @@ describe('refreshWorktreeSidebarDragSession', () => {
     ).toBeNull()
     expect(
       refreshWorktreeSidebarDragSession({
-        session: SESSION,
+        session: { ...SESSION, reorderUnitDraggedIds: ['missing'] },
         groups: [{ key: 'repo:one', worktreeIds: ['a', 'b'] }],
         unitGroups: [{ key: 'repo:one', worktreeIds: ['a'], units: [] }],
         rects: []
@@ -200,6 +200,39 @@ describe('refreshWorktreeSidebarDragSession', () => {
         rects: []
       })
     ).toEqual({ ...SESSION, rects: [] })
+  })
+
+  it('keeps child-card reorder drags even when the child is not a top-level unit', () => {
+    const childSession: WorktreeSidebarDragSession = {
+      ...SESSION,
+      draggingWorktreeId: 'child',
+      draggedIds: ['child'],
+      reorderDraggedIds: ['child'],
+      reorderUnitDraggedIds: ['child']
+    }
+    const rects: WorktreeSidebarDragRect[] = [
+      { worktreeId: 'parent', groupIndex: 0, top: 0, bottom: 80 },
+      { worktreeId: 'child', groupIndex: 1, top: 88, bottom: 128 },
+      { worktreeId: 'sibling', groupIndex: 2, top: 136, bottom: 176 }
+    ]
+
+    expect(
+      refreshWorktreeSidebarDragSession({
+        session: childSession,
+        groups: [{ key: 'repo:one', worktreeIds: ['parent', 'child', 'sibling'] }],
+        unitGroups: [
+          {
+            key: 'repo:one',
+            worktreeIds: ['parent', 'sibling'],
+            units: [
+              { worktreeId: 'parent', worktreeIds: ['parent', 'child'] },
+              { worktreeId: 'sibling', worktreeIds: ['sibling'] }
+            ]
+          }
+        ],
+        rects
+      })
+    ).toEqual({ ...childSession, rects })
   })
 })
 

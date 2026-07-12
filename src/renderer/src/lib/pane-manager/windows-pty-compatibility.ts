@@ -31,6 +31,17 @@ function parseWindowsBuildNumber(osRelease: string | null | undefined): number |
   return Number.isFinite(parsed) && parsed > 0 ? parsed : undefined
 }
 
+function buildXtermWindowsPtyOptions(
+  buildNumber: number | undefined
+): NonNullable<ITerminalOptions['windowsPty']> {
+  // Why: old system ConPTY does not provide reliable wrap markers; passing the
+  // low build number makes xterm mark full-width status rows as wrapped.
+  if (buildNumber === undefined || buildNumber < 21376) {
+    return { backend: 'conpty' }
+  }
+  return { backend: 'conpty', buildNumber }
+}
+
 /**
  * xterm options that select the native-Windows ConPTY backend, returned only for
  * a genuine local Windows pane and `{}` otherwise.
@@ -47,11 +58,19 @@ export function buildWindowsPtyCompatibilityOptions(
   }
   const buildNumber = parseWindowsBuildNumber(context.osRelease)
   return {
-    // Why: native Windows shells are backed by ConPTY, and xterm's dedicated
-    // compatibility heuristics need the OS build to choose the right wrap path.
-    windowsPty:
-      buildNumber === undefined ? { backend: 'conpty' } : { backend: 'conpty', buildNumber }
+    windowsPty: buildXtermWindowsPtyOptions(buildNumber)
   }
+}
+
+/** Mirror of main's effectiveShellOverride fold (pty.ts spawn handlers): a
+ *  tab-level shell override wins, else the global Windows shell setting
+ *  applies — so renderer and main classify a global-WSL default identically
+ *  (the main-side twin is isNativeWindowsLocalPtySpawn). */
+export function resolveWindowsShellOverride(
+  tabShellOverride: string | null | undefined,
+  globalWindowsShell: string | null | undefined
+): string | undefined {
+  return tabShellOverride ?? globalWindowsShell ?? undefined
 }
 
 /**

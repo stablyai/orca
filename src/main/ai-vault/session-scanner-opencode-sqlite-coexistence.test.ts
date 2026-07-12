@@ -1,7 +1,7 @@
-import { mkdtemp, mkdir, rm, writeFile } from 'fs/promises'
-import { mkdtempSync, rmSync } from 'fs'
-import { tmpdir } from 'os'
-import { join } from 'path'
+import { mkdtemp, mkdir, rm, writeFile } from 'node:fs/promises'
+import { mkdtempSync, rmSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import { scanAiVaultSessions } from './session-scanner'
 import Database from '../sqlite/sync-database'
@@ -36,7 +36,8 @@ function isolatedScanRoots(root: string) {
     piSessionsDir: join(root, 'pi-sessions'),
     droidSessionsDir: join(root, 'droid-sessions'),
     droidProjectsDir: join(root, 'droid-projects'),
-    kimiSessionsDir: join(root, 'kimi-sessions')
+    kimiSessionsDir: join(root, 'kimi-sessions'),
+    ompSessionsDir: join(root, 'omp-sessions')
   }
 }
 

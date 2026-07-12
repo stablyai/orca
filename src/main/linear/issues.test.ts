@@ -120,13 +120,77 @@ describe('Linear issue queries', () => {
     expect(rawRequest.mock.calls[0][0]).toContain('estimate')
   })
 
+  it('fetches issue comments with one request (no per-comment user N+1)', async () => {
+    rawRequest.mockResolvedValueOnce({
+      data: {
+        issue: {
+          comments: {
+            nodes: [
+              {
+                id: 'comment-1',
+                body: 'First',
+                createdAt: '2026-01-02T03:04:05.000Z',
+                user: { displayName: 'Ada', avatarUrl: 'https://example.com/a.png' }
+              },
+              {
+                id: 'comment-2',
+                body: 'Second',
+                createdAt: '2026-01-02T03:05:05.000Z',
+                user: { displayName: 'Grace', avatarUrl: null }
+              },
+              {
+                id: 'comment-3',
+                body: 'Third',
+                createdAt: '2026-01-02T03:06:05.000Z',
+                user: null
+              }
+            ]
+          }
+        }
+      }
+    })
+    const { getIssueComments } = await import('./issues')
+
+    await expect(getIssueComments('issue-uuid', 'workspace-1')).resolves.toEqual([
+      {
+        id: 'comment-1',
+        body: 'First',
+        createdAt: '2026-01-02T03:04:05.000Z',
+        user: { displayName: 'Ada', avatarUrl: 'https://example.com/a.png' }
+      },
+      {
+        id: 'comment-2',
+        body: 'Second',
+        createdAt: '2026-01-02T03:05:05.000Z',
+        user: { displayName: 'Grace', avatarUrl: undefined }
+      },
+      { id: 'comment-3', body: 'Third', createdAt: '2026-01-02T03:06:05.000Z', user: undefined }
+    ])
+
+    // The point of the fix: one request regardless of comment count.
+    expect(rawRequest).toHaveBeenCalledTimes(1)
+    expect(rawRequest.mock.calls[0][0]).toContain('query OrcaLinearIssueComments')
+    expect(rawRequest.mock.calls[0][0]).toContain('user {')
+    expect(rawRequest.mock.calls[0][1]).toEqual({ id: 'issue-uuid' })
+  })
+
+  it('returns an empty comment list when no Linear client is configured', async () => {
+    getClients.mockReturnValue([])
+    const { getIssueComments } = await import('./issues')
+
+    await expect(getIssueComments('issue-uuid', 'workspace-1')).resolves.toEqual([])
+    expect(rawRequest).not.toHaveBeenCalled()
+  })
+
   it('passes team filters into Linear before list pagination', async () => {
     rawRequest.mockResolvedValueOnce({
       data: { issues: { nodes: [rawIssue('LIN-1')], pageInfo: { hasNextPage: false } } }
     })
     const { listIssues } = await import('./issues')
 
-    await expect(listIssues('open', 10, 'workspace-1', 'team-1')).resolves.toMatchObject({
+    await expect(
+      listIssues('open', 10, 'workspace-1', { teamId: 'team-1' })
+    ).resolves.toMatchObject({
       items: [{ id: 'LIN-1' }],
       hasMore: false
     })
@@ -138,6 +202,48 @@ describe('Linear issue queries', () => {
         team: { id: { eq: 'team-1' } }
       }
     })
+  })
+
+  it('passes attribute facets into Linear GraphQL variables before pagination', async () => {
+    rawRequest.mockResolvedValueOnce({
+      data: { issues: { nodes: [rawIssue('LIN-1')], pageInfo: { hasNextPage: false } } }
+    })
+    const { listIssues } = await import('./issues')
+
+    await expect(
+      listIssues('all', 10, 'workspace-1', {
+        attributeFilter: {
+          stateIds: ['state-1'],
+          priorities: [0, 1],
+          assignee: { kind: 'unassigned' },
+          labelIds: ['label-1']
+        }
+      })
+    ).resolves.toMatchObject({ items: [{ id: 'LIN-1' }] })
+
+    expect(rawRequest.mock.calls[0][1]).toMatchObject({
+      filter: {
+        state: { id: { in: ['state-1'] } },
+        priority: { in: [0, 1] },
+        assignee: { null: true },
+        labels: { some: { id: { in: ['label-1'] } } }
+      }
+    })
+  })
+
+  it('rejects non-empty attribute filters when workspace scope is all', async () => {
+    const { listIssues } = await import('./issues')
+    await expect(
+      listIssues('all', 10, 'all', {
+        attributeFilter: {
+          stateIds: ['state-1'],
+          priorities: [],
+          assignee: null,
+          labelIds: []
+        }
+      })
+    ).rejects.toThrow(/concrete workspace/i)
+    expect(getClients).not.toHaveBeenCalled()
   })
 
   it('keeps single-workspace search results in Linear relevance order', async () => {

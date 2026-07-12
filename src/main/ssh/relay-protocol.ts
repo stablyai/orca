@@ -2,6 +2,8 @@
 // 13-byte framing header matching VS Code's PersistentProtocol wire format.
 // See design-ssh-support.md § JSON-RPC Protocol Specification.
 
+import { DEFAULT_SSH_RELAY_GRACE_PERIOD_SECONDS } from '../../shared/ssh-types'
+
 export const RELAY_VERSION = '0.1.0'
 export const RELAY_SENTINEL = `ORCA-RELAY v${RELAY_VERSION} READY\n`
 export const RELAY_SENTINEL_TIMEOUT_MS = 10_000
@@ -23,7 +25,7 @@ export const KEEPALIVE_SEND_MS = 5_000
 export const TIMEOUT_MS = 20_000
 
 /** Reconnection grace period (default, overridable by relay --grace-time). */
-export const DEFAULT_GRACE_TIME_MS = 3 * 60 * 60 * 1000 // 3 hours
+export const DEFAULT_GRACE_TIME_MS = DEFAULT_SSH_RELAY_GRACE_PERIOD_SECONDS * 1000
 
 // ── Relay error codes ───────────────────────────────────────────────
 
@@ -52,6 +54,45 @@ export const STREAM_CHUNK_SIZE = 256 * 1024
  * 20-watcher cap idiom. Prevents file-descriptor exhaustion from a buggy
  * client. */
 export const MAX_CONCURRENT_STREAMS = 16
+
+// ── Git response streaming (see docs/relay-git-response-stream-design.md) ──
+
+/** Serialized-JSON size above which the relay chunks a streamable git response
+ * (diff family + exec) onto the bulk lane instead of one JSON-RPC frame. Mirror
+ * of the relay-side constant; the client only opts in — the relay owns the
+ * decision — so this is documentation of the shared contract. */
+export const GIT_RESPONSE_STREAM_THRESHOLD = 256 * 1024
+
+/** Per-chunk size (serialized-result UTF-8 bytes) for git response streaming.
+ * The client reassembles by concatenation and does not depend on this value,
+ * so it stays cross-version safe. */
+export const GIT_RESPONSE_CHUNK_SIZE = 128 * 1024
+
+/** Sentinel the relay returns as the RPC result when the real payload streams
+ * as git.responseChunk frames. Absent from old relays, so a new client falls
+ * back to the plain result they return. */
+export type GitResponseStreamMarker = {
+  __orcaGitResponseStream: { streamId: number; totalBytes: number; chunkCount: number }
+}
+
+export function isGitResponseStreamMarker(value: unknown): value is GitResponseStreamMarker {
+  if (typeof value !== 'object' || value === null || !('__orcaGitResponseStream' in value)) {
+    return false
+  }
+  const marker = (value as { __orcaGitResponseStream?: unknown }).__orcaGitResponseStream
+  if (typeof marker !== 'object' || marker === null) {
+    return false
+  }
+  const fields = marker as Record<string, unknown>
+  return (
+    Number.isInteger(fields.streamId) &&
+    (fields.streamId as number) > 0 &&
+    Number.isInteger(fields.totalBytes) &&
+    (fields.totalBytes as number) >= 0 &&
+    Number.isInteger(fields.chunkCount) &&
+    (fields.chunkCount as number) >= 0
+  )
+}
 
 // ── JSON-RPC types ──────────────────────────────────────────────────
 
@@ -125,7 +166,13 @@ export type DecodedFrame = {
  * Incremental frame parser. Feed it chunks of data; it emits complete frames.
  */
 export class FrameDecoder {
-  private buffer = Buffer.alloc(0)
+  // Why: feed() runs on the Electron main thread for every SSH channel data
+  // event. Rebuilding one contiguous buffer per feed (Buffer.concat) re-copies
+  // every already-buffered byte for each incoming ~32KB TCP chunk — O(n²) per
+  // large frame (a 340KB fs.streamChunk frame cost ~2MB of memcpy). A chunk
+  // list assembles each frame exactly once instead.
+  private chunks: Buffer[] = []
+  private bufferedLength = 0
   private onFrame: (frame: DecodedFrame) => void
   private onError: ((err: Error) => void) | null
 
@@ -135,21 +182,31 @@ export class FrameDecoder {
   }
 
   feed(chunk: Buffer | Uint8Array): void {
-    this.buffer = Buffer.concat([this.buffer, chunk])
+    const buf = Buffer.isBuffer(chunk)
+      ? chunk
+      : Buffer.from(chunk.buffer, chunk.byteOffset, chunk.byteLength)
+    if (buf.length > 0) {
+      this.chunks.push(buf)
+      this.bufferedLength += buf.length
+    }
 
-    while (this.buffer.length >= HEADER_LENGTH) {
-      const length = this.buffer.readUInt32BE(9)
+    while (this.bufferedLength >= HEADER_LENGTH) {
+      const header = this.peekBytes(HEADER_LENGTH)
+      const length = header.readUInt32BE(9)
       const totalLength = HEADER_LENGTH + length
+
+      if (this.bufferedLength < totalLength) {
+        // Not fully received yet (also holds oversized frames until they can
+        // be skipped whole, keeping the decoder synchronized).
+        break
+      }
 
       // Why: throwing here would leave the buffer in a partially consumed
       // state — subsequent feed() calls would try to parse leftover payload
       // bytes as a new header, corrupting every future frame. Instead we
       // skip the entire oversized frame so the decoder stays synchronized.
       if (length > MAX_MESSAGE_SIZE) {
-        if (this.buffer.length < totalLength) {
-          break
-        }
-        this.buffer = this.buffer.subarray(totalLength)
+        this.discardBytes(totalLength)
         const err = new Error(`Frame payload too large: ${length} bytes — discarded`)
         if (this.onError) {
           this.onError(err)
@@ -157,24 +214,83 @@ export class FrameDecoder {
         continue
       }
 
-      if (this.buffer.length < totalLength) {
-        break
-      }
-
+      const framed = this.takeBytes(totalLength)
       const frame: DecodedFrame = {
-        type: this.buffer[0],
-        id: this.buffer.readUInt32BE(1),
-        ack: this.buffer.readUInt32BE(5),
-        payload: this.buffer.subarray(HEADER_LENGTH, totalLength)
+        type: framed[0],
+        id: framed.readUInt32BE(1),
+        ack: framed.readUInt32BE(5),
+        payload: framed.subarray(HEADER_LENGTH, totalLength)
       }
-
-      this.buffer = this.buffer.subarray(totalLength)
       this.onFrame(frame)
     }
   }
 
   reset(): void {
-    this.buffer = Buffer.alloc(0)
+    this.chunks = []
+    this.bufferedLength = 0
+  }
+
+  /** View of the first `count` buffered bytes without consuming them. */
+  private peekBytes(count: number): Buffer {
+    const first = this.chunks[0]
+    if (first.length >= count) {
+      return first
+    }
+    const out = Buffer.allocUnsafe(count)
+    let copied = 0
+    for (const part of this.chunks) {
+      copied += part.copy(out, copied, 0, Math.min(part.length, count - copied))
+      if (copied >= count) {
+        break
+      }
+    }
+    return out
+  }
+
+  /** Consume and return the first `count` buffered bytes (single copy). */
+  private takeBytes(count: number): Buffer {
+    const first = this.chunks[0]
+    if (first.length === count) {
+      this.chunks.shift()
+      this.bufferedLength -= count
+      return first
+    }
+    if (first.length > count) {
+      this.chunks[0] = first.subarray(count)
+      this.bufferedLength -= count
+      return first.subarray(0, count)
+    }
+    const out = Buffer.allocUnsafe(count)
+    let copied = 0
+    while (copied < count) {
+      const part = this.chunks[0]
+      const take = Math.min(part.length, count - copied)
+      part.copy(out, copied, 0, take)
+      copied += take
+      if (take === part.length) {
+        this.chunks.shift()
+      } else {
+        this.chunks[0] = part.subarray(take)
+      }
+    }
+    this.bufferedLength -= count
+    return out
+  }
+
+  /** Consume the first `count` buffered bytes without assembling them. */
+  private discardBytes(count: number): void {
+    let remaining = count
+    while (remaining > 0) {
+      const part = this.chunks[0]
+      if (part.length <= remaining) {
+        this.chunks.shift()
+        remaining -= part.length
+      } else {
+        this.chunks[0] = part.subarray(remaining)
+        remaining = 0
+      }
+    }
+    this.bufferedLength -= count
   }
 }
 

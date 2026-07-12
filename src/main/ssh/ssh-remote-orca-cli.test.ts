@@ -1,6 +1,44 @@
+import { EventEmitter } from 'node:events'
 import { describe, expect, it, vi } from 'vitest'
+
+vi.mock('electron', () => ({
+  app: {
+    isPackaged: false,
+    getAppPath: () => '/host/app'
+  }
+}))
+vi.mock('../persistence', () => ({
+  getCanonicalUserDataPath: () => '/host/user-data'
+}))
+
 import type { OrcaRuntimeService } from '../runtime/orca-runtime'
+import type { HostCliPassthroughOptions } from './ssh-remote-cli-host-passthrough'
 import { runRemoteOrcaCli } from './ssh-remote-orca-cli'
+
+// Why: pointing the passthrough at a missing CLI entry forces the legacy
+// in-process fallback, which is what these dispatch tests exercise.
+const LEGACY_FALLBACK_OPTIONS: HostCliPassthroughOptions = {
+  execPath: '/host/electron',
+  cliEntryPath: '/host/app/out/cli/index.js',
+  userDataPath: '/host/user-data',
+  entryExists: () => false
+}
+
+type FakeChild = EventEmitter & {
+  stdout: EventEmitter
+  stderr: EventEmitter
+  stdin: { end: ReturnType<typeof vi.fn>; on: ReturnType<typeof vi.fn> }
+  kill: ReturnType<typeof vi.fn>
+}
+
+function createFakeChild(): FakeChild {
+  const child = new EventEmitter() as FakeChild
+  child.stdout = new EventEmitter()
+  child.stderr = new EventEmitter()
+  child.stdin = { end: vi.fn(), on: vi.fn() }
+  child.kill = vi.fn()
+  return child
+}
 
 describe('runRemoteOrcaCli', () => {
   function createRuntime() {
@@ -93,11 +131,15 @@ describe('runRemoteOrcaCli', () => {
   it('uses the remote ORCA_TERMINAL_HANDLE as orchestration sender identity', async () => {
     const { runtime, db } = createRuntime()
 
-    const result = await runRemoteOrcaCli(runtime, {
-      argv: ['orchestration', 'send', '--to', 'term_windows', '--subject', 'ping', '--json'],
-      cwd: '/home/alice/repo',
-      env: { ORCA_TERMINAL_HANDLE: 'term_ssh' }
-    })
+    const result = await runRemoteOrcaCli(
+      runtime,
+      {
+        argv: ['orchestration', 'send', '--to', 'term_windows', '--subject', 'ping', '--json'],
+        cwd: '/home/alice/repo',
+        env: { ORCA_TERMINAL_HANDLE: 'term_ssh' }
+      },
+      LEGACY_FALLBACK_OPTIONS
+    )
 
     expect(result.exitCode).toBe(0)
     const payload = JSON.parse(result.stdout) as { ok: boolean }
@@ -108,18 +150,22 @@ describe('runRemoteOrcaCli', () => {
   it('accepts equals-style orchestration flags in the remote shim', async () => {
     const { runtime, db } = createRuntime()
 
-    const result = await runRemoteOrcaCli(runtime, {
-      argv: [
-        'orchestration',
-        'send',
-        '--to=term_windows',
-        '--subject=ping',
-        '--body=--literal-body',
-        '--json'
-      ],
-      cwd: '/home/alice/repo',
-      env: { ORCA_TERMINAL_HANDLE: 'term_ssh' }
-    })
+    const result = await runRemoteOrcaCli(
+      runtime,
+      {
+        argv: [
+          'orchestration',
+          'send',
+          '--to=term_windows',
+          '--subject=ping',
+          '--body=--literal-body',
+          '--json'
+        ],
+        cwd: '/home/alice/repo',
+        env: { ORCA_TERMINAL_HANDLE: 'term_ssh' }
+      },
+      LEGACY_FALLBACK_OPTIONS
+    )
 
     expect(result.exitCode).toBe(0)
     const payload = JSON.parse(result.stdout) as { ok: boolean }
@@ -138,11 +184,15 @@ describe('runRemoteOrcaCli', () => {
       body: 'hello'
     })
 
-    const result = await runRemoteOrcaCli(runtime, {
-      argv: ['orchestration', 'check', '--all', '--json'],
-      cwd: '/home/alice/repo',
-      env: { ORCA_TERMINAL_HANDLE: 'term_ssh' }
-    })
+    const result = await runRemoteOrcaCli(
+      runtime,
+      {
+        argv: ['orchestration', 'check', '--all', '--json'],
+        cwd: '/home/alice/repo',
+        env: { ORCA_TERMINAL_HANDLE: 'term_ssh' }
+      },
+      LEGACY_FALLBACK_OPTIONS
+    )
 
     expect(result.exitCode).toBe(0)
     const payload = JSON.parse(result.stdout) as {
@@ -152,5 +202,93 @@ describe('runRemoteOrcaCli', () => {
     expect(payload.ok).toBe(true)
     expect(payload.result.count).toBe(1)
     expect(payload.result.messages[0]?.subject).toBe('pong')
+  })
+
+  it('routes previously-unsupported commands through the full host CLI', async () => {
+    const { runtime } = createRuntime()
+    const child = createFakeChild()
+    const spawn = vi.fn(() => child)
+
+    const resultPromise = runRemoteOrcaCli(
+      runtime,
+      {
+        argv: ['worktree', 'create', '--repo', 'orca', '--branch', 'fix/x', '--json'],
+        cwd: '/home/alice/repo',
+        env: { ORCA_TERMINAL_HANDLE: 'term_ssh' }
+      },
+      {
+        execPath: '/host/electron',
+        cliEntryPath: '/host/app/out/cli/index.js',
+        userDataPath: '/host/user-data',
+        entryExists: () => true,
+        spawn: spawn as never
+      }
+    )
+
+    await Promise.resolve()
+    child.stdout.emit('data', Buffer.from('{"ok":true}\n'))
+    child.emit('close', 0)
+
+    const result = await resultPromise
+    expect(result).toEqual({ stdout: '{"ok":true}\n', stderr: '', exitCode: 0 })
+    const [, args] = spawn.mock.calls[0] as unknown as [string, string[]]
+    expect(args).toEqual([
+      '/host/app/out/cli/index.js',
+      'worktree',
+      'create',
+      '--repo',
+      'orca',
+      '--branch',
+      'fix/x',
+      '--json'
+    ])
+  })
+
+  it('rejects host-interactive commands with a targeted error instead of bridging them', async () => {
+    const { runtime } = createRuntime()
+    const spawn = vi.fn()
+
+    const result = await runRemoteOrcaCli(
+      runtime,
+      { argv: ['serve'], cwd: '/home/alice', env: {} },
+      { ...LEGACY_FALLBACK_OPTIONS, spawn: spawn as never }
+    )
+
+    expect(result.exitCode).toBe(1)
+    expect(result.stderr).toContain('orca serve')
+    expect(result.stderr).toContain('SSH relay bridge')
+    expect(spawn).not.toHaveBeenCalled()
+  })
+
+  it('reports host-interactive command errors as JSON envelopes with --json', async () => {
+    const { runtime } = createRuntime()
+
+    const result = await runRemoteOrcaCli(
+      runtime,
+      { argv: ['serve', '--json'], cwd: '/home/alice', env: {} },
+      LEGACY_FALLBACK_OPTIONS
+    )
+
+    expect(result.exitCode).toBe(1)
+    const payload = JSON.parse(result.stdout) as {
+      ok: boolean
+      error: { code: string }
+    }
+    expect(payload.ok).toBe(false)
+    expect(payload.error.code).toBe('unsupported_over_ssh')
+  })
+
+  it('explains the root cause when falling back and the command is not in the legacy switch', async () => {
+    const { runtime } = createRuntime()
+
+    const result = await runRemoteOrcaCli(
+      runtime,
+      { argv: ['worktree', 'list'], cwd: '/home/alice', env: {} },
+      LEGACY_FALLBACK_OPTIONS
+    )
+
+    expect(result.exitCode).toBe(1)
+    expect(result.stderr).toContain('Unsupported SSH Orca CLI command: worktree list')
+    expect(result.stderr).toContain('full Orca CLI bridge unavailable')
   })
 })

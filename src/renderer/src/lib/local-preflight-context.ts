@@ -13,8 +13,21 @@ import {
   getCachedWindowsTerminalCapabilities,
   hasCachedWindowsTerminalCapabilities
 } from './windows-terminal-capabilities'
+import {
+  getProjectRuntimePreflightContext,
+  getWslPreflightContext,
+  type LocalPreflightContext
+} from './local-preflight-context-cache'
 
 export { localPreflightContextKey } from './local-preflight-context-key'
+export type { LocalPreflightContext } from './local-preflight-context-cache'
+export {
+  _getProjectRuntimePreflightContextCacheSizeForTest,
+  _getWslPreflightContextCacheSizeForTest,
+  _hasProjectRuntimePreflightContextCacheEntryForTest,
+  _hasWslPreflightContextCacheEntryForTest,
+  resetLocalPreflightContextCachesForTests
+} from './local-preflight-context-cache'
 
 type LocalProjectRuntimeState = Pick<
   AppState,
@@ -26,65 +39,8 @@ type LocalProjectRuntimeWslContext = {
   availableWslDistros?: readonly string[] | null
 }
 
-export type LocalPreflightContext =
-  | {
-      wslDistro?: string | null
-      wslDefault?: boolean
-      runtimeContextKey?: string
-      projectRuntime?: ProjectExecutionRuntimeResolution
-    }
-  | undefined
-
-const wslPreflightContextsByDistro = new Map<string, NonNullable<LocalPreflightContext>>()
-const projectRuntimePreflightContextsByKey = new Map<string, NonNullable<LocalPreflightContext>>()
-
 export function getWslDistroFromPath(path?: string | null): string | null {
   return path ? (parseWslUncPath(path)?.distro ?? null) : null
-}
-
-function getWslPreflightContext(wslDistro: string): NonNullable<LocalPreflightContext> {
-  const cached = wslPreflightContextsByDistro.get(wslDistro)
-  if (cached) {
-    return cached
-  }
-
-  // Why: React/Zustand selectors must return a cached snapshot. A fresh object
-  // here triggers a useSyncExternalStore loop when Settings observes WSL repos.
-  const context = Object.freeze({ wslDistro })
-  wslPreflightContextsByDistro.set(wslDistro, context)
-  return context
-}
-
-function getProjectRuntimeContextObjectCacheKey(
-  resolution: ProjectExecutionRuntimeResolution
-): string {
-  if (resolution.status === 'resolved') {
-    return `${resolution.runtime.cacheKey}:${resolution.runtime.reason}`
-  }
-  return `${resolution.repair.cacheKey}:${resolution.repair.source}`
-}
-
-function getProjectRuntimePreflightContext(
-  resolution: ProjectExecutionRuntimeResolution
-): NonNullable<LocalPreflightContext> {
-  const cacheKey = getProjectRuntimeContextObjectCacheKey(resolution)
-  const cached = projectRuntimePreflightContextsByKey.get(cacheKey)
-  if (cached) {
-    return cached
-  }
-
-  const wslDistro =
-    resolution.status === 'resolved' && resolution.runtime.kind === 'wsl'
-      ? resolution.runtime.distro
-      : undefined
-  // Why: selectors compare by reference; cache each resolved runtime context so
-  // adding projectRuntime does not reintroduce useSyncExternalStore churn.
-  const context = Object.freeze({
-    ...(wslDistro ? { wslDistro } : {}),
-    projectRuntime: resolution
-  })
-  projectRuntimePreflightContextsByKey.set(cacheKey, context)
-  return context
 }
 
 export function getLocalProjectExecutionRuntimeContext(

@@ -1,4 +1,3 @@
-/* eslint-disable max-lines -- Why: git RPC methods share one dispatcher fixture, and keeping the contract cases together makes method coverage easy to audit. */
 import { describe, expect, it, vi } from 'vitest'
 import { RpcDispatcher } from '../dispatcher'
 import type { RpcRequest } from '../core'
@@ -102,6 +101,35 @@ describe('git RPC methods', () => {
     expect(response).toMatchObject({
       ok: true,
       result: ['dist/bundle.js']
+    })
+  })
+
+  it('returns submodule status for a selected worktree area', async () => {
+    const runtime = {
+      getRuntimeId: () => 'test-runtime',
+      getRuntimeGitSubmoduleStatus: vi.fn().mockResolvedValue({
+        entries: [{ path: 'lib.ts', status: 'modified', area: 'unstaged' }],
+        conflictOperation: 'unknown'
+      })
+    } as unknown as OrcaRuntimeService
+    const dispatcher = new RpcDispatcher({ runtime, methods: GIT_METHODS })
+
+    const response = await dispatcher.dispatch(
+      makeRequest('git.submoduleStatus', {
+        worktree: 'id:wt-1',
+        submodulePath: 'vendor/lib',
+        area: 'staged'
+      })
+    )
+
+    expect(runtime.getRuntimeGitSubmoduleStatus).toHaveBeenCalledWith(
+      'id:wt-1',
+      'vendor/lib',
+      'staged'
+    )
+    expect(response).toMatchObject({
+      ok: true,
+      result: { entries: [{ path: 'lib.ts' }] }
     })
   })
 

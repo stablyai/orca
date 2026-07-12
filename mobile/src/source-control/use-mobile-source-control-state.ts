@@ -1,5 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { Keyboard, Platform } from 'react-native'
+import { useCallback, useMemo, useRef, useState } from 'react'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useHostClient, useForceReconnect } from '../transport/client-context'
 import { getWorktreeLabel } from '../session/worktree-label'
@@ -8,28 +7,29 @@ import { useMobileSourceControlLoaders } from './use-mobile-source-control-loade
 import { useMobileSourceControlOpeners } from './use-mobile-source-control-openers'
 import { buildMobileSourceControlPrimaryAction } from './mobile-source-control-primary-action'
 import { useMobileSourceControlRunners } from './use-mobile-source-control-runners'
+import { useMobileSourceControlCreatePrAction } from './use-mobile-source-control-create-pr-action'
+import { useMobileSourceControlKeyboardLift } from './use-mobile-source-control-keyboard-lift'
 import type { RuntimeGitLocalBranches } from '../../../src/shared/runtime-types'
 import {
   buildMobileBranchCompareSection,
   canOpenMobileBranchCompareDiff,
   formatMobileBranchCompareSummary
 } from './mobile-branch-compare'
+
 import {
   buildMobileSourceControlSections,
   countStagedEntries,
   countUnstagedEntries,
   getStageablePaths,
   getUnstageablePaths,
-  isMobileGitDiscardableEntry,
-  isMobileGitStageableEntry,
   type MobileGitStatusEntry
 } from './mobile-git-status'
 import { getMobileCommitFailureStagedEntries } from './mobile-commit-failure-recovery'
 import { useMobileSourceControlCommitFailure } from './use-mobile-source-control-commit-failure'
 import {
+  buildMobileGitStatusEntryViews,
   formatBranchLabel,
-  type MobileBranchEntryView,
-  type MobileGitStatusEntryView
+  type MobileBranchEntryView
 } from './mobile-source-control-screen-state'
 
 type MobileGitLocalBranches = RuntimeGitLocalBranches
@@ -41,10 +41,25 @@ export type MobileSourceControlStateParams = {
   origin: string
   embedded: boolean
   onRequestClose?: () => void
+  onFileOpenStart?: () => void
+  onOpenedFileDiff?: (relativePath: string) => void
+  // When the panel runs inside the hub, "History" switches the segment instead of
+  // pushing the standalone route. Absent for the standalone/dock usage.
+  onOpenHistory?: () => void
 }
 
 export function useMobileSourceControlState(params: MobileSourceControlStateParams) {
-  const { hostId, worktreeId, name, origin, embedded, onRequestClose } = params
+  const {
+    hostId,
+    worktreeId,
+    name,
+    origin,
+    embedded,
+    onRequestClose,
+    onFileOpenStart,
+    onOpenedFileDiff,
+    onOpenHistory
+  } = params
   const insets = useSafeAreaInsets()
   const { client, state: connState } = useHostClient(hostId)
   const forceReconnect = useForceReconnect()
@@ -58,7 +73,7 @@ export function useMobileSourceControlState(params: MobileSourceControlStatePara
   const [discardTarget, setDiscardTarget] = useState<MobileGitStatusEntry | null>(null)
   const [showActionSheet, setShowActionSheet] = useState(false)
   const [actionError, setActionError] = useState<string | null>(null)
-  const [keyboardLift, setKeyboardLift] = useState(0)
+  const keyboardLift = useMobileSourceControlKeyboardLift()
   const busyActionRef = useRef<string | null>(null)
   const worktreeLabel = getWorktreeLabel(name, worktreeId)
   const statusIdentityKey = `${hostId}\0${worktreeId}`
@@ -95,44 +110,17 @@ export function useMobileSourceControlState(params: MobileSourceControlStatePara
     origin,
     embedded,
     onRequestClose,
+    onFileOpenStart,
+    onOpenedFileDiff,
     branchCompareState,
     mountedRef,
     busyActionRef,
     setActionError
   })
 
-  useEffect(() => {
-    const showEvent = Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow'
-    const hideEvent = Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide'
-
-    const onShow = Keyboard.addListener(showEvent, (event) => {
-      // Why: iOS keyboard height already describes the obscured screen area.
-      // Subtracting the safe-area inset lets the commit bar tuck under the keyboard.
-      setKeyboardLift(Math.max(0, event.endCoordinates.height))
-    })
-    const onHide = Keyboard.addListener(hideEvent, () => setKeyboardLift(0))
-
-    return () => {
-      onShow.remove()
-      onHide.remove()
-    }
-  }, [])
-
   const status = screenState.kind === 'ready' ? screenState.status : null
   const entries = status?.entries ?? []
-  const derivedEntries = useMemo<MobileGitStatusEntryView[]>(
-    () =>
-      entries.map((entry) => ({
-        ...entry,
-        canDiscard: isMobileGitDiscardableEntry(entry),
-        canOpen: entry.status !== 'deleted' && entry.conflictStatus !== 'unresolved',
-        canStage: isMobileGitStageableEntry(entry),
-        discardActionId: `discard:${entry.path}`,
-        stageActionId: `stage:${entry.path}`,
-        unstageActionId: `unstage:${entry.path}`
-      })),
-    [entries]
-  )
+  const derivedEntries = useMemo(() => buildMobileGitStatusEntryViews(entries), [entries])
   const sections = useMemo(() => buildMobileSourceControlSections(derivedEntries), [derivedEntries])
   const branchCompareResult = branchCompareState.kind === 'ready' ? branchCompareState.result : null
   const branchCompareSection = useMemo(
@@ -153,13 +141,13 @@ export function useMobileSourceControlState(params: MobileSourceControlStatePara
       })),
     [branchCompareCanOpen, branchCompareSection]
   )
+  // Local changes only: dirty files + committed file diffs vs base (not PR/push).
   const shouldShowBranchCompareSection =
     branchEntries.length > 0 ||
     branchCompareState.kind === 'loading' ||
     branchCompareState.kind === 'error' ||
     (branchCompareResult !== null && branchCompareResult.summary.status !== 'ready')
   const hasVisibleChanges = sections.length > 0 || shouldShowBranchCompareSection
-  const reviewableCount = entries.length + (branchCompareCanOpen ? branchEntries.length : 0)
   const stageablePaths = useMemo(() => getStageablePaths(entries), [entries])
   const unstageablePaths = useMemo(() => getUnstageablePaths(entries), [entries])
   const stagedCount = useMemo(() => countStagedEntries(entries), [entries])
@@ -215,7 +203,17 @@ export function useMobileSourceControlState(params: MobileSourceControlStatePara
     setShowBranchPicker,
     setCreatedPrUrl,
     setCreatedPrWarning,
-    recordCommitFailure
+    recordCommitFailure,
+    onOpenHistory
+  })
+  const createPrAction = useMobileSourceControlCreatePrAction({
+    client,
+    connState,
+    worktreeId,
+    status,
+    hasUncommittedChanges: entries.length > 0,
+    busyAction,
+    createPr: runners.createPr
   })
   const primaryAction = useMemo(
     () =>
@@ -297,7 +295,6 @@ export function useMobileSourceControlState(params: MobileSourceControlStatePara
     branchEntries,
     shouldShowBranchCompareSection,
     hasVisibleChanges,
-    reviewableCount,
     stageablePaths,
     unstageablePaths,
     stagedCount,
@@ -307,6 +304,7 @@ export function useMobileSourceControlState(params: MobileSourceControlStatePara
     upstreamKnown,
     syncLabel,
     primaryAction,
+    createPrAction,
     // actions
     loadStatus,
     openFile,

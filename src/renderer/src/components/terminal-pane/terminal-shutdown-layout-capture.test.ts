@@ -6,6 +6,25 @@ import { getUtf8ByteLength } from '../../../../shared/utf8-byte-limits'
 const LEAF_ID = '11111111-1111-4111-8111-111111111111' as const
 const LEAF_ID_2 = '22222222-2222-4222-8222-222222222222' as const
 
+// Why: capture now appends an absolute cursor restore (see
+// terminal-serialize-absolute-cursor.ts), so pane mocks must expose the
+// cursor fields and content expectations carry the home-position CUP suffix.
+const CURSOR_HOME = '\x1b[1;1H'
+
+function mockTerminal(scrollback: number): {
+  options: { scrollback: number }
+  cols: number
+  rows: number
+  buffer: { active: { cursorX: number; cursorY: number } }
+} {
+  return {
+    options: { scrollback },
+    cols: 80,
+    rows: 24,
+    buffer: { active: { cursorX: 0, cursorY: 0 } }
+  }
+}
+
 const mocks = vi.hoisted(() => ({
   flushTerminalOutput: vi.fn()
 }))
@@ -76,7 +95,7 @@ describe('captureTerminalShutdownLayout', () => {
     const { captureTerminalShutdownLayout } = await import('./terminal-shutdown-layout-capture')
     const order: string[] = []
     const terminal = {
-      options: { scrollback: 1_000 },
+      ...mockTerminal(1_000),
       pendingOutput: ''
     }
     const pane = {
@@ -115,7 +134,7 @@ describe('captureTerminalShutdownLayout', () => {
       root: { type: 'leaf', leafId: LEAF_ID },
       activeLeafId: LEAF_ID,
       expandedLeafId: null,
-      buffersByLeafId: { [LEAF_ID]: 'snapshot:queued-before-quit' },
+      buffersByLeafId: { [LEAF_ID]: `snapshot:queued-before-quit${CURSOR_HOME}` },
       ptyIdsByLeafId: { [LEAF_ID]: 'pty-1' },
       titlesByLeafId: { [LEAF_ID]: 'build logs' }
     })
@@ -127,7 +146,7 @@ describe('captureTerminalShutdownLayout', () => {
       id: 1,
       leafId: LEAF_ID,
       stablePaneId: LEAF_ID,
-      terminal: { options: { scrollback: 50_000 } },
+      terminal: mockTerminal(50_000),
       serializeAddon: {
         serialize: vi.fn(() => 'x'.repeat(512 * 1024))
       }
@@ -166,7 +185,7 @@ describe('captureTerminalShutdownLayout', () => {
       id: 1,
       leafId: LEAF_ID,
       stablePaneId: LEAF_ID,
-      terminal: { options: { scrollback: 512 } },
+      terminal: mockTerminal(512),
       serializeAddon: {
         serialize: vi.fn((options?: { scrollback?: number }) =>
           multibyteRow.repeat(options?.scrollback ?? 0)
@@ -192,7 +211,12 @@ describe('captureTerminalShutdownLayout', () => {
     expect(getUtf8ByteLength(buffer)).toBeLessThanOrEqual(
       TERMINAL_SCROLLBACK_SESSION_BUFFER_BYTE_LIMIT
     )
-    expect(buffer).toHaveLength(TERMINAL_SCROLLBACK_SESSION_BUFFER_BYTE_LIMIT / 2)
+    // Each 'e-acute' row is 2048 UTF-8 bytes; the CUP suffix joins the byte
+    // accounting, so one fewer row fits than the bare limit would allow.
+    const fittingRows = Math.floor(
+      (TERMINAL_SCROLLBACK_SESSION_BUFFER_BYTE_LIMIT - CURSOR_HOME.length) / 2048
+    )
+    expect(buffer).toHaveLength(fittingRows * 1024 + CURSOR_HOME.length)
   })
 
   it('does not preserve prior scrollback buffers or refs for a cleared leaf', async () => {
@@ -201,7 +225,7 @@ describe('captureTerminalShutdownLayout', () => {
       id: 1,
       leafId: LEAF_ID,
       stablePaneId: LEAF_ID,
-      terminal: { options: { scrollback: 1_000 } },
+      terminal: mockTerminal(1_000),
       serializeAddon: {
         serialize: vi.fn(() => '')
       }
@@ -239,7 +263,7 @@ describe('captureTerminalShutdownLayout', () => {
       id: 1,
       leafId: LEAF_ID,
       stablePaneId: LEAF_ID,
-      terminal: { options: { scrollback: 1_000 } },
+      terminal: mockTerminal(1_000),
       serializeAddon: {
         serialize: vi.fn(() => 'dead scrollback')
       }
@@ -248,7 +272,7 @@ describe('captureTerminalShutdownLayout', () => {
       id: 2,
       leafId: LEAF_ID_2,
       stablePaneId: LEAF_ID_2,
-      terminal: { options: { scrollback: 1_000 } },
+      terminal: mockTerminal(1_000),
       serializeAddon: {
         serialize: vi.fn(() => 'live scrollback')
       }
@@ -275,8 +299,8 @@ describe('captureTerminalShutdownLayout', () => {
     expect(layout.activeLeafId).toBe(LEAF_ID_2)
     expect(layout.ptyIdsByLeafId).toEqual({ [LEAF_ID_2]: 'pty-live' })
     expect(layout.buffersByLeafId).toEqual({
-      [LEAF_ID]: 'dead scrollback',
-      [LEAF_ID_2]: 'live scrollback'
+      [LEAF_ID]: `dead scrollback${CURSOR_HOME}`,
+      [LEAF_ID_2]: `live scrollback${CURSOR_HOME}`
     })
   })
 
@@ -286,7 +310,7 @@ describe('captureTerminalShutdownLayout', () => {
       id: 1,
       leafId: LEAF_ID,
       stablePaneId: LEAF_ID,
-      terminal: { options: { scrollback: 1_000 } },
+      terminal: mockTerminal(1_000),
       serializeAddon: {
         serialize: vi.fn(() => 'first scrollback')
       }
@@ -295,7 +319,7 @@ describe('captureTerminalShutdownLayout', () => {
       id: 2,
       leafId: LEAF_ID_2,
       stablePaneId: LEAF_ID_2,
-      terminal: { options: { scrollback: 1_000 } },
+      terminal: mockTerminal(1_000),
       serializeAddon: {
         serialize: vi.fn(() => 'second scrollback')
       }
@@ -335,7 +359,7 @@ describe('captureTerminalShutdownLayout', () => {
       id: 1,
       leafId: LEAF_ID,
       stablePaneId: LEAF_ID,
-      terminal: { options: { scrollback: 1_000 } },
+      terminal: mockTerminal(1_000),
       serializeAddon: {
         serialize: vi.fn(() => '')
       }
@@ -344,7 +368,7 @@ describe('captureTerminalShutdownLayout', () => {
       id: 2,
       leafId: LEAF_ID_2,
       stablePaneId: LEAF_ID_2,
-      terminal: { options: { scrollback: 1_000 } },
+      terminal: mockTerminal(1_000),
       serializeAddon: {
         serialize: vi.fn(() => '')
       }
@@ -373,7 +397,7 @@ describe('captureTerminalShutdownLayout', () => {
       id: 1,
       leafId: LEAF_ID,
       stablePaneId: LEAF_ID,
-      terminal: { options: { scrollback: 1_000 } },
+      terminal: mockTerminal(1_000),
       serializeAddon: {
         serialize: vi.fn(() => '')
       }
@@ -382,7 +406,7 @@ describe('captureTerminalShutdownLayout', () => {
       id: 2,
       leafId: LEAF_ID_2,
       stablePaneId: LEAF_ID_2,
-      terminal: { options: { scrollback: 1_000 } },
+      terminal: mockTerminal(1_000),
       serializeAddon: {
         serialize: vi.fn(() => '')
       }

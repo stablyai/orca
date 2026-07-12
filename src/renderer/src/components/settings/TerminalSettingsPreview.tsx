@@ -10,6 +10,7 @@ import { composeActiveTerminalTheme } from '@/components/terminal-pane/terminal-
 import { clampNumber, resolveEffectiveTerminalAppearance } from '@/lib/terminal-theme'
 import { resolveTerminalFontWeights } from '../../../../shared/terminal-fonts'
 import { resolveTerminalLigaturesEnabled } from '../../../../shared/terminal-ligatures'
+import { normalizeTerminalLineHeight } from '../../../../shared/terminal-line-height-settings'
 import { PREVIEW_BUFFER } from './terminal-preview-content'
 import { SettingsSwitch } from './SettingsFormControls'
 import type { GlobalSettings } from '../../../../shared/types'
@@ -79,6 +80,7 @@ export function TerminalSettingsPreview({
   const skipInitialThemeRewriteRef = useRef(false)
 
   const effectiveFontFamily = previewFontFamily || settings.terminalFontFamily
+  const terminalLineHeight = normalizeTerminalLineHeight(settings.terminalLineHeight)
 
   // Why: lazy-init from the active app theme so the toggle starts in the
   // user's current mode. After init the toggle is independent — flipping
@@ -162,7 +164,7 @@ export function TerminalSettingsPreview({
       fontFamily: buildFontFamily(effectiveFontFamily),
       fontWeight: weights.fontWeight,
       fontWeightBold: weights.fontWeightBold,
-      lineHeight: settings.terminalLineHeight,
+      lineHeight: terminalLineHeight,
       theme: composedTheme ?? undefined,
       allowTransparency:
         settings.terminalBackgroundOpacity !== undefined && settings.terminalBackgroundOpacity < 1,
@@ -208,7 +210,7 @@ export function TerminalSettingsPreview({
     terminal.options.fontFamily = buildFontFamily(effectiveFontFamily)
     terminal.options.fontWeight = weights.fontWeight
     terminal.options.fontWeightBold = weights.fontWeightBold
-    terminal.options.lineHeight = settings.terminalLineHeight
+    terminal.options.lineHeight = terminalLineHeight
     terminal.options.cursorStyle = settings.terminalCursorStyle
     // Why: see constructor — mirror so the unfocused cursor reflects the
     // user's chosen shape (xterm defaults inactive to 'outline').
@@ -218,7 +220,7 @@ export function TerminalSettingsPreview({
     settings.terminalFontSize,
     effectiveFontFamily,
     settings.terminalFontWeight,
-    settings.terminalLineHeight,
+    terminalLineHeight,
     settings.terminalCursorStyle,
     settings.terminalCursorBlink
   ])

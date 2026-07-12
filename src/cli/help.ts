@@ -1,6 +1,7 @@
 /* eslint-disable max-lines -- Why: root and generated command help text live together so CLI discovery stays greppable. */
 import type { CommandSpec } from './args'
 import { findCommandSpec, isCommandGroup, supportsBrowserPageFlag } from './args'
+import { unknownCommandData } from './command-suggestion'
 
 const ROOT_HELP_TEXT = `orca
 
@@ -14,11 +15,17 @@ Startup:
 Diagnostics:
   diagnostics memory        Collect a memory snapshot for Orca and managed terminals
 
+Agent Discovery:
+  agent-context             Print the machine-readable command schema for agents
+
 Environments:
   environment add           Save a remote Orca runtime from a pairing code
   environment list          List saved remote Orca runtimes
   environment show          Show one saved remote Orca runtime
   environment rm            Remove a saved remote Orca runtime
+
+Environment Recipes:
+  vm recipe doctor          Validate a per-workspace environment recipe
 
 Automations:
   automations list          List scheduled Orca automations
@@ -186,9 +193,10 @@ Browser Automation:
 
 Common Commands:
   orca open [--json]
-  orca serve [--port <port>] [--pairing-address <host>] [--mobile-pairing] [--no-pairing] [--json]
+  orca serve [--port <port>] [--pairing-address <host>] [--mobile-pairing] [--no-pairing] [--project-root <path>] [--recipe-json] [--json]
   orca status [--json]
   orca diagnostics memory [--json]
+  orca agent-context [--json]
   orca environment add --name <name> --pairing-code <code> [--json]
   orca environment list [--json]
   orca environment show --environment <selector> [--json]
@@ -336,7 +344,9 @@ export function printHelp(specs: CommandSpec[], commandPath: string[] = []): voi
   }
 
   if (commandPath.length > 0) {
-    console.log(`Unknown command: ${commandPath.join(' ')}\n`)
+    const { nextSteps } = unknownCommandData(specs, commandPath)
+    const recovery = nextSteps.map((step) => `Next step: ${step}`).join('\n')
+    console.log(`Unknown command: ${commandPath.join(' ')}${recovery ? `\n${recovery}` : ''}\n`)
   }
 
   console.log(ROOT_HELP_TEXT)
@@ -344,9 +354,12 @@ export function printHelp(specs: CommandSpec[], commandPath: string[] = []): voi
 
 export function formatCommandHelp(spec: CommandSpec): string {
   const lines = [`orca ${spec.path.join(' ')}`, '', `Usage: ${spec.usage}`, '', spec.summary]
-  const displayedFlags = supportsBrowserPageFlag(spec.path)
-    ? [...spec.allowedFlags, 'page']
-    : spec.allowedFlags
+  const displayedFlags =
+    spec.argumentMode === 'passthrough'
+      ? []
+      : supportsBrowserPageFlag(spec.path)
+        ? [...spec.allowedFlags, 'page']
+        : spec.allowedFlags
 
   if (displayedFlags.length > 0) {
     lines.push('', 'Options:')

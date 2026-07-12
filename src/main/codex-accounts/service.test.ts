@@ -15,6 +15,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { PassThrough } from 'node:stream'
 import type { GlobalSettings } from '../../shared/types'
+import { buildWslCodexAvailabilityArgs, buildWslCodexLoginArgs } from './wsl-codex-command'
 
 const testState = {
   userDataDir: '',
@@ -66,7 +67,7 @@ function createSettings(overrides: Partial<GlobalSettings> = {}): GlobalSettings
     terminalLineHeight: 1,
     terminalScrollSensitivity: 1.15,
     terminalFastScrollSensitivity: 5,
-    terminalTuiScrollSensitivity: 3,
+    terminalTuiScrollSensitivity: 1,
     terminalGpuAcceleration: 'auto',
     terminalLigatures: 'auto',
     terminalCursorStyle: 'block',
@@ -83,7 +84,7 @@ function createSettings(overrides: Partial<GlobalSettings> = {}): GlobalSettings
     terminalRightClickToPaste: false,
     terminalFocusFollowsMouse: false,
     terminalClipboardOnSelect: false,
-    terminalAllowOsc52Clipboard: false,
+    terminalAllowOsc52Clipboard: true,
     setupScriptLaunchMode: 'split-vertical',
     terminalScrollbackRows: 5_000,
     localAccountRuntime: 'host',
@@ -93,6 +94,7 @@ function createSettings(overrides: Partial<GlobalSettings> = {}): GlobalSettings
     rightSidebarOpenByDefault: true,
     sourceControlViewMode: 'list',
     sourceControlGroupOrder: 'changes-first',
+    sourceControlCompareAgainstUpstream: false,
     showTitlebarAppName: true,
     showTasksButton: true,
     floatingTerminalEnabled: false,
@@ -130,6 +132,8 @@ function createSettings(overrides: Partial<GlobalSettings> = {}): GlobalSettings
     defaultLinearTeamSelection: null,
     opencodeSessionCookie: '',
     opencodeWorkspaceId: '',
+    minimaxGroupId: '',
+    minimaxUsageModels: 'general',
     geminiCliOAuthEnabled: false,
     agentCmdOverrides: {},
     keepComputerAwakeWhileAgentsRun: false,
@@ -143,7 +147,6 @@ function createSettings(overrides: Partial<GlobalSettings> = {}): GlobalSettings
     experimentalActivity: true,
     experimentalTerminalAttention: false,
     compactWorktreeCards: false,
-    experimentalWorktreeSymlinks: false,
     terminalWindowsShell: 'powershell.exe',
     terminalWindowsPowerShellImplementation: 'powershell.exe',
     enableGitHubAttribution: true,
@@ -274,6 +277,49 @@ describe('CodexAccountService config sync', () => {
     expect(readFileSync(join(managedHomePath, 'auth.json'), 'utf-8')).toBe(
       '{"account":"managed"}\n'
     )
+  })
+
+  it('rewrites relative path config values when syncing into managed homes', async () => {
+    const canonicalConfigPath = join(testState.fakeHomeDir, '.codex', 'config.toml')
+    writeFileSync(
+      canonicalConfigPath,
+      'model_instructions_file = "instructions.md"\nsandbox_mode = "danger-full-access"\n',
+      'utf-8'
+    )
+    const managedHomePath = createManagedHome(
+      testState.userDataDir,
+      'account-1',
+      'approval_policy = "on-request"\n',
+      '{"account":"managed"}\n'
+    )
+    const settings = createSettings({
+      codexManagedAccounts: [
+        {
+          id: 'account-1',
+          email: 'user@example.com',
+          managedHomePath,
+          providerAccountId: null,
+          workspaceLabel: null,
+          workspaceAccountId: null,
+          createdAt: 1,
+          updatedAt: 1,
+          lastAuthenticatedAt: 1
+        }
+      ],
+      activeCodexManagedAccountId: 'account-1'
+    })
+    const store = createStore(settings)
+    const rateLimits = createRateLimits()
+    const runtimeHome = createRuntimeHome()
+
+    const { CodexAccountService } = await import('./service')
+    new CodexAccountService(store as never, rateLimits as never, runtimeHome as never)
+
+    const managedConfig = readFileSync(join(managedHomePath, 'config.toml'), 'utf-8')
+    expect(managedConfig).toContain(
+      `model_instructions_file = '${join(testState.fakeHomeDir, '.codex', 'instructions.md')}'`
+    )
+    expect(managedConfig).toContain('sandbox_mode = "danger-full-access"')
   })
 
   it('does not rewrite managed configs that already match canonical config', async () => {
@@ -705,7 +751,11 @@ describe('CodexAccountService config sync', () => {
     const wslManagedHomePath = join(testState.userDataDir, 'wsl-managed-home')
     const wslConfigPath = join(testState.userDataDir, 'wsl-config.toml')
     const wslLinuxHomePath = '/home/alice/.local/share/orca/codex-accounts/account-id-for-test/home'
-    writeFileSync(wslConfigPath, 'sandbox_mode = "danger-full-access"\n', 'utf-8')
+    writeFileSync(
+      wslConfigPath,
+      'sandbox_mode = "danger-full-access"\nmodel_instructions_file = "instructions.md"\n',
+      'utf-8'
+    )
 
     const execFileSyncMock = vi.fn((_command: string, args: string[]) => {
       const script = decodeEncodedWslBashCommand(String(args.at(-1)))
@@ -716,22 +766,25 @@ describe('CodexAccountService config sync', () => {
       if (script.includes('readlink -f')) {
         return `${wslLinuxHomePath}\n`
       }
+      if (script.includes('command -v codex')) {
+        throw new Error('bash -ic does not inherit the distro login-shell PATH')
+      }
+      if (args.slice(2, 5).join(' ') === '-- sh -c') {
+        expect(args).toEqual(buildWslCodexAvailabilityArgs('Debian'))
+        return ''
+      }
       mkdirSync(wslManagedHomePath, { recursive: true })
       writeFileSync(join(wslManagedHomePath, '.orca-managed-home'), 'account-id-for-test\n')
       return ''
     })
     const spawnMock = vi.fn((command: string, args: string[]) => {
       expect(command).toBe('wsl.exe')
-      expect(args).toEqual([
-        '-d',
-        'Debian',
-        '--exec',
-        'bash',
-        '-ic',
-        `export CODEX_HOME='${wslLinuxHomePath}'; exec codex login`
-      ])
+      expect(args).toEqual(buildWslCodexLoginArgs('Debian', wslLinuxHomePath))
+      // Why: codex login runs inside WSL, so the rewritten path must be the
+      // Linux-side ~/.codex, not a Windows UNC path.
       expect(readFileSync(join(wslManagedHomePath, 'config.toml'), 'utf-8')).toBe(
-        'sandbox_mode = "danger-full-access"\n'
+        'sandbox_mode = "danger-full-access"\n' +
+          "model_instructions_file = '/home/alice/.codex/instructions.md'\n"
       )
       const child = new EventEmitter() as EventEmitter & {
         stdout: PassThrough
@@ -823,8 +876,8 @@ describe('CodexAccountService config sync', () => {
       if (script.includes('readlink -f')) {
         return `${wslLinuxHomePath}\n`
       }
-      if (script.includes('command -v codex')) {
-        expect(args.slice(0, 5)).toEqual(['-d', 'Debian', '--exec', 'bash', '-ic'])
+      if (args.slice(2, 5).join(' ') === '-- sh -c') {
+        expect(args).toEqual(buildWslCodexAvailabilityArgs('Debian'))
         throw new Error('codex missing')
       }
       mkdirSync(wslManagedHomePath, { recursive: true })
@@ -907,14 +960,7 @@ describe('CodexAccountService config sync', () => {
     })
     const spawnMock = vi.fn((command: string, args: string[]) => {
       expect(command).toBe('wsl.exe')
-      expect(args).toEqual([
-        '-d',
-        'Ubuntu',
-        '--exec',
-        'bash',
-        '-ic',
-        `export CODEX_HOME='${wslLinuxHomePath}'; exec codex login`
-      ])
+      expect(args).toEqual(buildWslCodexLoginArgs('Ubuntu', wslLinuxHomePath))
       const child = new EventEmitter() as EventEmitter & {
         stdout: PassThrough
         stderr: PassThrough
@@ -1022,14 +1068,7 @@ describe('CodexAccountService config sync', () => {
     })
     const spawnMock = vi.fn((command: string, args: string[]) => {
       expect(command).toBe('wsl.exe')
-      expect(args).toEqual([
-        '-d',
-        'Ubuntu',
-        '--exec',
-        'bash',
-        '-ic',
-        `export CODEX_HOME='${wslLinuxHomePath}'; exec codex login`
-      ])
+      expect(args).toEqual(buildWslCodexLoginArgs('Ubuntu', wslLinuxHomePath))
       expect(readFileSync(join(wslManagedHomePath, '.orca-managed-home'), 'utf-8')).toBe(
         'account-1\n'
       )

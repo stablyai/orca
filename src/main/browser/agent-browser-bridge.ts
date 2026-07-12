@@ -1,8 +1,8 @@
 /* eslint-disable max-lines */
-import { execFile, type ChildProcess } from 'child_process'
-import { existsSync, accessSync, chmodSync, readFileSync, constants } from 'fs'
-import { join } from 'path'
-import { platform, arch } from 'os'
+import { execFile, type ChildProcess } from 'node:child_process'
+import { existsSync, accessSync, chmodSync, readFileSync, constants } from 'node:fs'
+import { join } from 'node:path'
+import { platform, arch } from 'node:os'
 import { app, type WebContents } from 'electron'
 import { CdpWsProxy } from './cdp-ws-proxy'
 import { captureFullPageScreenshot } from './cdp-screenshot'
@@ -103,38 +103,45 @@ function focusedTextInsertExpression(
     '(() => {',
     ' const el = document.activeElement;',
     ' if (!el || el === document.body) { return; }',
+    // Why: ARIA spinbutton wrappers can hold focus while a contained or controlled input owns the value.
+    " const editableSelector = \"input:not([type='hidden']):not([type='button']):not([type='checkbox']):not([type='radio']):not([type='file']):not([type='image']):not([type='reset']):not([type='submit']), textarea\";",
+    " const isField = (node) => !!node && (node.matches?.(editableSelector) ?? (node.tagName === 'TEXTAREA' || (node.tagName === 'INPUT' && !/^(hidden|button|checkbox|radio|file|image|reset|submit)$/i.test(node.getAttribute?.('type') ?? ''))));",
+    ' const findField = (root) => root?.querySelector?.(editableSelector) ?? null;',
+    ' let target = el;',
+    " if (!isField(target) && target.getAttribute?.('role') === 'spinbutton') {",
+    "   const controls = target.getAttribute('aria-controls');",
+    '   if (controls) { for (const id of controls.split(/\\s+/)) { if (!id) continue; const controlled = document.getElementById(id); if (isField(controlled)) { target = controlled; break; } const descendant = findField(controlled); if (descendant) { target = descendant; break; } } }',
+    '   if (target === el) { const descendant = findField(target); if (descendant) target = descendant; }',
+    ' }',
     ' const value = ',
     valueExpression,
     ';',
     ` const selectAll = ${selectAll};`,
-    ' const isField =',
-    "   typeof el.value === 'string' && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA');",
-    ' const isEditable =',
-    "   el.isContentEditable === true || (el.getAttribute && el.getAttribute('contenteditable') === 'true');",
+    " const isEditable = target.isContentEditable === true || target.getAttribute?.('contenteditable') === 'true';",
+    ' if (!isField(target) && !isEditable) { return; }',
+    " if (target !== el && typeof target.focus === 'function') { target.focus(); }",
     ' if (selectAll) {',
-    "   if (isField && typeof el.select === 'function') { el.select(); }",
+    "   if (isField(target) && typeof target.select === 'function') { target.select(); }",
     "   else if (isEditable && typeof window.getSelection === 'function') {",
     '     const selection = window.getSelection();',
-    '     if (selection) { selection.selectAllChildren(el); }',
+    '     if (selection) { selection.selectAllChildren(target); }',
     '   }',
     ' }',
     ' let usedExecCommand = false;',
     ' try {',
-    "   if ((isField || isEditable) && document.queryCommandSupported?.('insertText')) {",
+    "   if ((isField(target) || isEditable) && document.queryCommandSupported?.('insertText')) {",
     "     usedExecCommand = document.execCommand('insertText', false, value) === true;",
     '   }',
-    ' } catch (error) { usedExecCommand = false; }',
+    ' } catch { usedExecCommand = false; }',
     ' if (usedExecCommand) { return; }',
-    "   const previous = selectAll ? '' : (isField ? String(el.value ?? '') : String(el.textContent ?? ''));",
-    '   const nextValue = previous + value;',
-    '   if (isField) {',
-    "     const nativeSetter = Object.getOwnPropertyDescriptor(Object.getPrototypeOf(el), 'value')?.set;",
-    '     if (nativeSetter) { nativeSetter.call(el, nextValue); } else { el.value = nextValue; }',
-    '   } else if (isEditable) {',
-    '     el.textContent = nextValue;',
-    '   } else { return; }',
-    "   el.dispatchEvent(new Event('input', { bubbles: true }));",
-    "   el.dispatchEvent(new Event('change', { bubbles: true }));",
+    " const previous = selectAll ? '' : (isField(target) ? String(target.value ?? '') : String(target.textContent ?? ''));",
+    ' const nextValue = previous + value;',
+    ' if (isField(target)) {',
+    "   const nativeSetter = Object.getOwnPropertyDescriptor(Object.getPrototypeOf(target), 'value')?.set;",
+    '   if (nativeSetter) { nativeSetter.call(target, nextValue); } else { target.value = nextValue; }',
+    ' } else { target.textContent = nextValue; }',
+    " target.dispatchEvent(new Event('input', { bubbles: true }));",
+    " target.dispatchEvent(new Event('change', { bubbles: true }));",
     ' })()'
   ].join('')
 }

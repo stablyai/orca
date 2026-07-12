@@ -1,6 +1,6 @@
-import { normalize } from 'path'
-import { realpath, stat } from 'fs/promises'
-import type { Stats } from 'fs'
+import { normalize } from 'node:path'
+import { realpath, stat } from 'node:fs/promises'
+import type { Stats } from 'node:fs'
 import type { Store } from '../persistence'
 import type { FileStat, IFilesystemProvider } from '../providers/types'
 import type { GlobalSettings, Repo } from '../../shared/types'
@@ -20,6 +20,7 @@ import {
   getWorktreePathSettings,
   hasRepoWorktreeBasePath
 } from './worktree-logic'
+import { shouldEmitBoundedWarning } from './bounded-warning-dedupe'
 import { resolveWorktreeCommonGitDirectory } from './worktree-common-git-directory'
 import type {
   WorktreeBaseRepoWatchConfig,
@@ -130,8 +131,7 @@ async function maybeAddBaseTarget(
   // Why: WSL UNC roots are unreliable for native watching; avoid project-level polling.
   if (isWslUncPath(workspaceRoot) || isWslUncPath(repo.path)) {
     const key = `${repo.id}:${workspaceRoot}`
-    if (!skippedWslWarnings.has(key)) {
-      skippedWslWarnings.add(key)
+    if (shouldEmitBoundedWarning(skippedWslWarnings, key)) {
       console.warn(
         `[worktree-base-watcher] skipping WSL worktree root watcher for ${workspaceRoot}`
       )
@@ -157,8 +157,7 @@ async function maybeAddBaseTarget(
     }
   } catch {
     const key = normalizeWatchKey(workspaceRoot)
-    if (!missingRootWarnings.has(key)) {
-      missingRootWarnings.add(key)
+    if (shouldEmitBoundedWarning(missingRootWarnings, key)) {
       console.warn(`[worktree-base-watcher] worktree root unavailable: ${workspaceRoot}`)
     }
   }

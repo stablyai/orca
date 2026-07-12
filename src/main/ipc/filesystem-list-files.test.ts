@@ -1,4 +1,3 @@
-/* eslint-disable max-lines -- Why: one Quick Open file-list suite covers both rg and git fallback process lifecycles. */
 import { describe, expect, it, vi, beforeEach } from 'vitest'
 
 const {
@@ -34,9 +33,15 @@ vi.mock('./local-worktree-runtime-options', () => ({
 }))
 
 import { listQuickOpenFiles } from './filesystem-list-files'
-import { EventEmitter } from 'events'
+import { EventEmitter } from 'node:events'
 import type { Store } from '../persistence'
-import type { ChildProcess } from 'child_process'
+import type { ChildProcess } from 'node:child_process'
+
+const SHA1 = '0123456789abcdef0123456789abcdef01234567'
+
+function staged(mode: string, path: string): string {
+  return `${mode} ${SHA1} 0\t${path}`
+}
 
 function createMockProcess(): ChildProcess {
   const p = new EventEmitter() as unknown as ChildProcess
@@ -306,11 +311,15 @@ describe('filesystem-list-files', () => {
       checkRgAvailableMock.mockResolvedValue(false)
 
       let callIndex = 0
+      const revParseProc = createMockProcess()
       const gitP1 = createMockProcess()
       const gitP2 = createMockProcess()
 
-      spawnMock.mockImplementation((cmd: string) => {
-        if (cmd === 'git') {
+      spawnMock.mockImplementation((cmd: string, args: string[]) => {
+        if (cmd === 'git' && args.includes('rev-parse')) {
+          return revParseProc
+        }
+        if (cmd === 'git' && args.includes('ls-files')) {
           callIndex++
           return callIndex === 1 ? gitP1 : gitP2
         }
@@ -321,9 +330,21 @@ describe('filesystem-list-files', () => {
       const promise = listQuickOpenFiles('/mock/root', storeMock)
 
       setTimeout(() => {
-        ;(gitP1.stdout as unknown as EventEmitter).emit('data', 'src/index.ts\0')
-        ;(gitP1.stdout as unknown as EventEmitter).emit('data', 'package.json\0')
-        ;(gitP1.stdout as unknown as EventEmitter).emit('data', 'node_modules/dep/index.js\0')
+        revParseProc.emit('close', 0, null)
+      }, 0)
+      setTimeout(() => {
+        ;(gitP1.stdout as unknown as EventEmitter).emit(
+          'data',
+          `${staged('100644', 'src/index.ts')}\0`
+        )
+        ;(gitP1.stdout as unknown as EventEmitter).emit(
+          'data',
+          `${staged('100644', 'package.json')}\0`
+        )
+        ;(gitP1.stdout as unknown as EventEmitter).emit(
+          'data',
+          `${staged('100644', 'node_modules/dep/index.js')}\0`
+        )
         gitP1.emit('close', 0, null)
 
         ;(gitP2.stdout as unknown as EventEmitter).emit('data', '.env.local\0')
@@ -338,9 +359,15 @@ describe('filesystem-list-files', () => {
       expect(rgCalls.length).toBe(0)
 
       // Verify git ls-files was called
-      const gitCalls = spawnMock.mock.calls.filter((call) => call[0] === 'git')
+      const gitCalls = spawnMock.mock.calls.filter(
+        (call) => call[0] === 'git' && (call[1] as string[]).includes('ls-files')
+      )
       expect(gitCalls.length).toBe(2)
       expect(gitCalls[0][1]).toContain('ls-files')
+      expect(gitCalls[0][1]).toContain('-s')
+      expect(gitCalls[0][1]).toContain('--directory')
+      expect(gitCalls[1][1]).toContain('--directory')
+      expect(gitCalls[1][1]).toContain('--no-empty-directory')
 
       // Should include valid files and filter node_modules
       expect(result).toContain('src/index.ts')
@@ -353,12 +380,16 @@ describe('filesystem-list-files', () => {
     it('git fallback applies hidden dir blocklist', async () => {
       checkRgAvailableMock.mockResolvedValue(false)
 
+      const revParseProc = createMockProcess()
       const gitP1 = createMockProcess()
       const gitP2 = createMockProcess()
       let callIndex = 0
 
-      spawnMock.mockImplementation((cmd: string) => {
-        if (cmd === 'git') {
+      spawnMock.mockImplementation((cmd: string, args: string[]) => {
+        if (cmd === 'git' && args.includes('rev-parse')) {
+          return revParseProc
+        }
+        if (cmd === 'git' && args.includes('ls-files')) {
           callIndex++
           return callIndex === 1 ? gitP1 : gitP2
         }
@@ -369,10 +400,22 @@ describe('filesystem-list-files', () => {
       const promise = listQuickOpenFiles('/mock/root', storeMock)
 
       setTimeout(() => {
-        ;(gitP1.stdout as unknown as EventEmitter).emit('data', '.next/cache/1.js\0')
-        ;(gitP1.stdout as unknown as EventEmitter).emit('data', '.vscode/settings.json\0')
-        ;(gitP1.stdout as unknown as EventEmitter).emit('data', '.github/workflows/ci.yml\0')
-        ;(gitP1.stdout as unknown as EventEmitter).emit('data', 'valid.ts\0')
+        revParseProc.emit('close', 0, null)
+      }, 0)
+      setTimeout(() => {
+        ;(gitP1.stdout as unknown as EventEmitter).emit(
+          'data',
+          `${staged('100644', '.next/cache/1.js')}\0`
+        )
+        ;(gitP1.stdout as unknown as EventEmitter).emit(
+          'data',
+          `${staged('100644', '.vscode/settings.json')}\0`
+        )
+        ;(gitP1.stdout as unknown as EventEmitter).emit(
+          'data',
+          `${staged('100644', '.github/workflows/ci.yml')}\0`
+        )
+        ;(gitP1.stdout as unknown as EventEmitter).emit('data', `${staged('100644', 'valid.ts')}\0`)
         gitP1.emit('close', 0, null)
 
         gitP2.emit('close', 0, null)
@@ -388,12 +431,16 @@ describe('filesystem-list-files', () => {
       vi.useFakeTimers()
 
       try {
+        const revParseProc = createMockProcess()
         const gitP1 = createMockProcess()
         const gitP2 = createMockProcess()
         let callIndex = 0
 
-        spawnMock.mockImplementation((cmd: string) => {
-          if (cmd === 'git') {
+        spawnMock.mockImplementation((cmd: string, args: string[]) => {
+          if (cmd === 'git' && args.includes('rev-parse')) {
+            return revParseProc
+          }
+          if (cmd === 'git' && args.includes('ls-files')) {
             callIndex++
             return callIndex === 1 ? gitP1 : gitP2
           }
@@ -406,12 +453,17 @@ describe('filesystem-list-files', () => {
         await Promise.resolve()
         await Promise.resolve()
         await Promise.resolve()
+        revParseProc.emit('close', 0, null)
+        await Promise.resolve()
+        await Promise.resolve()
+        await Promise.resolve()
 
         ;(gitP1.stdout as unknown as EventEmitter).emit('data', 'src/index.ts\0partial')
 
+        const rejection = expect(promise).rejects.toThrow('git ls-files timed out')
         await vi.advanceTimersByTimeAsync(10000)
 
-        await expect(promise).resolves.toEqual(['src/index.ts'])
+        await rejection
         expect(gitP1.kill).toHaveBeenCalled()
         expect(gitP2.kill).toHaveBeenCalled()
         expect((gitP1.stdout as unknown as EventEmitter).listenerCount('data')).toBe(0)
@@ -420,6 +472,60 @@ describe('filesystem-list-files', () => {
         expect(gitP1.listenerCount('close')).toBe(0)
       } finally {
         vi.useRealTimers()
+      }
+    })
+
+    it('keeps primary results when only the ignored pass times out', async () => {
+      checkRgAvailableMock.mockResolvedValue(false)
+      const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
+      vi.useFakeTimers()
+
+      try {
+        const revParseProc = createMockProcess()
+        const gitP1 = createMockProcess()
+        const gitP2 = createMockProcess()
+        let callIndex = 0
+
+        spawnMock.mockImplementation((cmd: string, args: string[]) => {
+          if (cmd === 'git' && args.includes('rev-parse')) {
+            return revParseProc
+          }
+          if (cmd === 'git' && args.includes('ls-files')) {
+            callIndex++
+            return callIndex === 1 ? gitP1 : gitP2
+          }
+          return createMockProcess()
+        })
+
+        const storeMock = {} as unknown as Store
+        const promise = listQuickOpenFiles('/mock/root', storeMock)
+
+        await Promise.resolve()
+        await Promise.resolve()
+        await Promise.resolve()
+        revParseProc.emit('close', 0, null)
+        await Promise.resolve()
+        await Promise.resolve()
+        await Promise.resolve()
+
+        ;(gitP1.stdout as unknown as EventEmitter).emit(
+          'data',
+          `${staged('100644', 'src/index.ts')}\0`
+        )
+        gitP1.emit('close', 0, null)
+        // Ignored entries streamed before the timeout are kept.
+        ;(gitP2.stdout as unknown as EventEmitter).emit('data', 'dist/generated.js\0')
+
+        await vi.advanceTimersByTimeAsync(10000)
+
+        await expect(promise).resolves.toEqual(
+          expect.arrayContaining(['src/index.ts', 'dist/generated.js'])
+        )
+        expect(gitP2.kill).toHaveBeenCalled()
+        expect(warnSpy).toHaveBeenCalled()
+      } finally {
+        vi.useRealTimers()
+        warnSpy.mockRestore()
       }
     })
 

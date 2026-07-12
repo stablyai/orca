@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { join, sep } from 'path'
-import type { Event as WatcherEvent, SubscribeCallback } from '@parcel/watcher'
+import { join, sep } from 'node:path'
 import type { GlobalSettings, Repo } from '../../shared/types'
+import type { WorktreeBasePollEvent } from './worktree-base-directory-poller'
 
 vi.mock('fs/promises', () => ({
   readFile: vi.fn(async () => ''),
@@ -9,8 +9,8 @@ vi.mock('fs/promises', () => ({
   stat: vi.fn(async () => ({ isDirectory: () => true }))
 }))
 
-vi.mock('@parcel/watcher', () => ({
-  subscribe: vi.fn()
+vi.mock('./worktree-base-directory-poller', () => ({
+  startWorktreeBaseDirectoryPoller: vi.fn()
 }))
 
 vi.mock('./worktree-remote', () => ({
@@ -21,18 +21,18 @@ vi.mock('../providers/ssh-filesystem-dispatch', () => ({
   getSshFilesystemProvider: vi.fn()
 }))
 
-import { subscribe } from '@parcel/watcher'
 import { getSshFilesystemProvider } from '../providers/ssh-filesystem-dispatch'
 import { notifyWorktreesChanged } from './worktree-remote'
+import { startWorktreeBaseDirectoryPoller } from './worktree-base-directory-poller'
 import {
   disposeWorktreeBaseDirectoryWatchers,
   syncWorktreeBaseDirectoryWatchers
 } from './worktree-base-directory-watcher'
 import { matchingWorktreeBaseRepoIds } from './worktree-base-directory-event-filter'
 
-type WatcherCallback = SubscribeCallback
+type PollerCallback = (events: WorktreeBasePollEvent[]) => void
 
-const watcherCallbacks = new Map<string, WatcherCallback>()
+const watcherCallbacks = new Map<string, PollerCallback>()
 const unsubscribeMocks = new Map<string, ReturnType<typeof vi.fn>>()
 const absolutePath = (...parts: string[]): string => join(sep, ...parts)
 const WORKTREE_ROOT = absolutePath('workspace', 'worktrees')
@@ -69,12 +69,12 @@ function makeWindow(options: { destroyed?: () => boolean } = {}) {
   }
 }
 
-function emit(root: string, events: WatcherEvent[]): void {
+function emit(root: string, events: WorktreeBasePollEvent[]): void {
   const callback = watcherCallbacks.get(root)
   if (!callback) {
-    throw new Error(`No watcher callback for ${root}`)
+    throw new Error(`No poller callback for ${root}`)
   }
-  callback(null, events)
+  callback(events)
 }
 
 describe('worktree base directory watcher', () => {
@@ -83,12 +83,14 @@ describe('worktree base directory watcher', () => {
     watcherCallbacks.clear()
     unsubscribeMocks.clear()
     vi.mocked(getSshFilesystemProvider).mockReturnValue(undefined)
-    vi.mocked(subscribe).mockImplementation(async (root, callback) => {
-      const unsubscribe = vi.fn(async () => {})
-      watcherCallbacks.set(root, callback)
-      unsubscribeMocks.set(root, unsubscribe)
-      return { unsubscribe }
-    })
+    vi.mocked(startWorktreeBaseDirectoryPoller).mockImplementation(
+      async (target, _getRepos, onEvents) => {
+        const unsubscribe = vi.fn(async () => {})
+        watcherCallbacks.set(target.path, onEvents)
+        unsubscribeMocks.set(target.path, unsubscribe)
+        return { unsubscribe }
+      }
+    )
   })
 
   afterEach(async () => {
@@ -103,7 +105,7 @@ describe('worktree base directory watcher', () => {
     emit(WORKTREE_ROOT, [
       { type: 'create', path: join(WORKTREE_ROOT, 'project', 'external-5104') },
       { type: 'create', path: join(WORKTREE_ROOT, 'project', 'external-5104', '.git') }
-    ] as WatcherEvent[])
+    ])
 
     await vi.advanceTimersByTimeAsync(300)
 
@@ -120,7 +122,7 @@ describe('worktree base directory watcher', () => {
 
     emit(WORKTREE_ROOT, [
       { type: 'create', path: join(WORKTREE_ROOT, 'project', 'external-5104', '.git') }
-    ] as WatcherEvent[])
+    ])
     destroyed = true
     await vi.advanceTimersByTimeAsync(300)
 
@@ -132,7 +134,7 @@ describe('worktree base directory watcher', () => {
 
     emit(WORKTREE_ROOT, [
       { type: 'update', path: join(WORKTREE_ROOT, 'project', 'existing', 'src', 'file.ts') }
-    ] as WatcherEvent[])
+    ])
     await vi.advanceTimersByTimeAsync(300)
 
     expect(notifyWorktreesChanged).not.toHaveBeenCalled()
@@ -143,7 +145,7 @@ describe('worktree base directory watcher', () => {
 
     emit(PROJECT_GIT_COMMON_DIR, [
       { type: 'create', path: join(PROJECT_GIT_COMMON_DIR, 'worktrees', 'external-5104', 'gitdir') }
-    ] as WatcherEvent[])
+    ])
     await vi.advanceTimersByTimeAsync(300)
 
     expect(notifyWorktreesChanged).toHaveBeenCalledWith(expect.anything(), 'repo-1')
@@ -158,7 +160,7 @@ describe('worktree base directory watcher', () => {
       makeWindow() as never
     )
 
-    expect(subscribe).not.toHaveBeenCalled()
+    expect(startWorktreeBaseDirectoryPoller).not.toHaveBeenCalled()
   })
 
   it('uses the remote sibling root for default SSH worktree roots', async () => {
@@ -180,7 +182,7 @@ describe('worktree base directory watcher', () => {
       makeWindow() as never
     )
 
-    expect(subscribe).not.toHaveBeenCalled()
+    expect(startWorktreeBaseDirectoryPoller).not.toHaveBeenCalled()
     expect(remoteWatch).toHaveBeenCalledWith('/home/alice', expect.any(Function))
     remoteCallbacks.get('/home/alice')?.([
       {
@@ -209,12 +211,12 @@ describe('worktree base directory watcher', () => {
   })
 
   it('unsubscribes a watcher that finishes installing after disposal starts', async () => {
-    let resolveSubscribe: (subscription: { unsubscribe: () => Promise<void> }) => void = () => {}
+    let resolveInstall: (subscription: { unsubscribe: () => Promise<void> }) => void = () => {}
     const unsubscribe = vi.fn(async () => {})
-    vi.mocked(subscribe).mockImplementationOnce(
+    vi.mocked(startWorktreeBaseDirectoryPoller).mockImplementationOnce(
       async () =>
         new Promise((resolve) => {
-          resolveSubscribe = resolve
+          resolveInstall = resolve
         })
     )
 
@@ -222,9 +224,9 @@ describe('worktree base directory watcher', () => {
       makeStore([makeRepo()]) as never,
       makeWindow() as never
     )
-    await vi.waitFor(() => expect(subscribe).toHaveBeenCalled())
+    await vi.waitFor(() => expect(startWorktreeBaseDirectoryPoller).toHaveBeenCalled())
     const disposePromise = disposeWorktreeBaseDirectoryWatchers()
-    resolveSubscribe({ unsubscribe })
+    resolveInstall({ unsubscribe })
     await syncPromise
     await disposePromise
 
@@ -243,13 +245,13 @@ describe('worktree base directory watcher', () => {
       matchingWorktreeBaseRepoIds(target, {
         type: 'create',
         path: join(WORKTREE_ROOT, 'external-5104', '.git')
-      } as WatcherEvent)
+      })
     ).toEqual(['repo-1'])
     expect(
       matchingWorktreeBaseRepoIds(target, {
         type: 'update',
         path: join(WORKTREE_ROOT, 'external-5104', 'src', 'file.ts')
-      } as WatcherEvent)
+      })
     ).toEqual([])
   })
 })

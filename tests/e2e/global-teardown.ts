@@ -5,8 +5,8 @@
  * test run so we don't litter the user's /tmp with test directories.
  */
 
-import { readFileSync, existsSync, rmSync, readdirSync } from 'fs'
-import path from 'path'
+import { readFileSync, existsSync, rmSync, readdirSync } from 'node:fs'
+import path from 'node:path'
 import { TEST_REPO_PATH_FILE } from './global-setup'
 
 export default function globalTeardown(): void {
@@ -32,7 +32,7 @@ export default function globalTeardown(): void {
     }
 
     rmSync(testRepoDir, { recursive: true, force: true })
-    console.log(`[e2e] Cleaned up test repo at ${testRepoDir}`)
+    console.error(`[e2e] Cleaned up test repo at ${testRepoDir}`)
   }
 
   rmSync(TEST_REPO_PATH_FILE, { force: true })

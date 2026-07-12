@@ -26,6 +26,58 @@ export type SparsePresetsSlice = {
   removeSparsePreset: (args: { repoId: string; presetId: string }) => Promise<void>
 }
 
+type SparsePresetsMaps = Pick<
+  AppState,
+  | 'sparsePresetsByRepo'
+  | 'sparsePresetsLoadingByRepo'
+  | 'sparsePresetsLoadStatusByRepo'
+  | 'sparsePresetsErrorByRepo'
+>
+
+// Why: the four per-repo sparse-preset maps are populated lazily per repo but
+// were never pruned when a repo was removed, so orphaned entries accumulated for
+// the renderer's whole session. Call this from the repo-removal reducers to drop
+// entries for repos that no longer exist. Returns only the maps that changed so
+// unrelated selectors don't re-run.
+export function omitSparsePresetsForRepos(
+  s: SparsePresetsMaps,
+  removedRepoIds: Iterable<string>
+): Partial<AppState> {
+  const removed = removedRepoIds instanceof Set ? removedRepoIds : new Set(removedRepoIds)
+  if (removed.size === 0) {
+    return {}
+  }
+  const omit = <T>(obj: Record<string, T>): Record<string, T> => {
+    let changed = false
+    const out = { ...obj }
+    for (const id of removed) {
+      if (id in out) {
+        delete out[id]
+        changed = true
+      }
+    }
+    return changed ? out : obj
+  }
+  const result: Partial<AppState> = {}
+  const byRepo = omit(s.sparsePresetsByRepo)
+  if (byRepo !== s.sparsePresetsByRepo) {
+    result.sparsePresetsByRepo = byRepo
+  }
+  const loading = omit(s.sparsePresetsLoadingByRepo)
+  if (loading !== s.sparsePresetsLoadingByRepo) {
+    result.sparsePresetsLoadingByRepo = loading
+  }
+  const status = omit(s.sparsePresetsLoadStatusByRepo)
+  if (status !== s.sparsePresetsLoadStatusByRepo) {
+    result.sparsePresetsLoadStatusByRepo = status
+  }
+  const error = omit(s.sparsePresetsErrorByRepo)
+  if (error !== s.sparsePresetsErrorByRepo) {
+    result.sparsePresetsErrorByRepo = error
+  }
+  return result
+}
+
 export const createSparsePresetsSlice: StateCreator<AppState, [], [], SparsePresetsSlice> = (
   set,
   get

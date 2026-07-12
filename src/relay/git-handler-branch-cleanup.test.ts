@@ -1,7 +1,16 @@
 import { describe, expect, it, vi } from 'vitest'
-import * as path from 'path'
+import * as path from 'node:path'
+import { GitCapabilityCache } from '../shared/git-capability-cache'
 import type { GitExec } from './git-handler-ops'
 import { removeWorktreeOp } from './git-handler-worktree-ops'
+import { forceDeletePreservedRelayBranch } from './git-handler-branch-cleanup'
+
+function removeWorktreeWithCapabilityCache(
+  git: GitExec,
+  params: Parameters<typeof removeWorktreeOp>[1]
+) {
+  return removeWorktreeOp(git, params, new GitCapabilityCache())
+}
 
 function worktreeList(...entries: { path: string; branch?: string }[]): string {
   return entries
@@ -18,6 +27,137 @@ function worktreeList(...entries: { path: string; branch?: string }[]): string {
 function resolvedRepoPath(): string {
   return path.posix.resolve('/repo-feature', '/repo/.git', '..')
 }
+
+describe('forceDeletePreservedRelayBranch', () => {
+  it('deletes a preserved branch at the expected head', async () => {
+    const calls: string[][] = []
+    const git = vi.fn<GitExec>(async (args) => {
+      calls.push(args)
+      if (args[0] === 'worktree' && args[1] === 'list') {
+        return { stdout: worktreeList({ path: '/repo', branch: 'main' }), stderr: '' }
+      }
+      return { stdout: '', stderr: '' }
+    })
+
+    await expect(
+      forceDeletePreservedRelayBranch(git, '/repo', 'feature/test', 'abc123')
+    ).resolves.toBeUndefined()
+
+    expect(calls).toEqual([
+      ['worktree', 'list', '--porcelain'],
+      ['update-ref', '-d', 'refs/heads/feature/test', 'abc123'],
+      ['worktree', 'list', '--porcelain'],
+      ['config', '--remove-section', 'branch.feature/test']
+    ])
+  })
+
+  it('maps only ref-moved update-ref delete failures to the preserved-branch message', async () => {
+    const git = vi.fn<GitExec>(async (args) => {
+      if (args[0] === 'worktree' && args[1] === 'list') {
+        return { stdout: worktreeList({ path: '/repo', branch: 'main' }), stderr: '' }
+      }
+      if (args[0] === 'update-ref' && args[1] === '-d') {
+        throw new Error('cannot lock ref')
+      }
+      return { stdout: '', stderr: '' }
+    })
+
+    await expect(
+      forceDeletePreservedRelayBranch(git, '/repo', 'feature/test', 'abc123')
+    ).rejects.toThrow(
+      'Local branch "feature/test" changed after the workspace was deleted. Review it before deleting it.'
+    )
+    expect(git).not.toHaveBeenCalledWith(
+      ['config', '--remove-section', 'branch.feature/test'],
+      '/repo'
+    )
+  })
+
+  it('keeps the checked-out message when the branch is checked out before delete', async () => {
+    const git = vi.fn<GitExec>(async (args) => {
+      if (args[0] === 'worktree' && args[1] === 'list') {
+        return {
+          stdout: worktreeList(
+            { path: '/repo', branch: 'main' },
+            { path: '/repo-feature', branch: 'feature/test' }
+          ),
+          stderr: ''
+        }
+      }
+      return { stdout: '', stderr: '' }
+    })
+
+    await expect(
+      forceDeletePreservedRelayBranch(git, '/repo', 'feature/test', 'abc123')
+    ).rejects.toThrow('Local branch "feature/test" is checked out in another worktree.')
+    expect(git).not.toHaveBeenCalledWith(
+      ['update-ref', '-d', 'refs/heads/feature/test', 'abc123'],
+      '/repo'
+    )
+  })
+
+  it('restores the ref and keeps the checked-out message after a concurrent checkout', async () => {
+    let listCount = 0
+    const git = vi.fn<GitExec>(async (args) => {
+      if (args[0] === 'worktree' && args[1] === 'list') {
+        listCount += 1
+        return {
+          stdout:
+            listCount === 1
+              ? worktreeList({ path: '/repo', branch: 'main' })
+              : worktreeList(
+                  { path: '/repo', branch: 'main' },
+                  { path: '/repo-feature', branch: 'feature/test' }
+                ),
+          stderr: ''
+        }
+      }
+      return { stdout: '', stderr: '' }
+    })
+
+    await expect(
+      forceDeletePreservedRelayBranch(git, '/repo', 'feature/test', 'abc123')
+    ).rejects.toThrow('Local branch "feature/test" is checked out in another worktree.')
+    expect(git).toHaveBeenCalledWith(
+      ['update-ref', '-d', 'refs/heads/feature/test', 'abc123'],
+      '/repo'
+    )
+    expect(git).toHaveBeenCalledWith(
+      ['update-ref', 'refs/heads/feature/test', 'abc123', ''],
+      '/repo'
+    )
+  })
+
+  it('swallows branch config removal failures after deleting the ref', async () => {
+    const git = vi.fn<GitExec>(async (args) => {
+      if (args[0] === 'worktree' && args[1] === 'list') {
+        return { stdout: worktreeList({ path: '/repo', branch: 'main' }), stderr: '' }
+      }
+      if (args[0] === 'config' && args[1] === '--remove-section') {
+        throw new Error('missing section')
+      }
+      return { stdout: '', stderr: '' }
+    })
+
+    await expect(
+      forceDeletePreservedRelayBranch(git, '/repo', 'feature/test', 'abc123')
+    ).resolves.toBeUndefined()
+  })
+
+  it.each([
+    ['empty branch name', '', 'abc123'],
+    ['empty expected head', 'feature/test', ''],
+    ['leading dash branch name', '-feature', 'abc123'],
+    ['NUL branch name', 'feature\0test', 'abc123']
+  ])('rejects invalid input: %s', async (_label, branchName, expectedHead) => {
+    const git = vi.fn<GitExec>()
+
+    await expect(
+      forceDeletePreservedRelayBranch(git, '/repo', branchName, expectedHead)
+    ).rejects.toThrow()
+    expect(git).not.toHaveBeenCalled()
+  })
+})
 
 describe('removeWorktreeOp branch cleanup', () => {
   it('deletes a squash-merged SSH branch when merging it into the base is a no-op', async () => {
@@ -60,7 +200,9 @@ describe('removeWorktreeOp branch cleanup', () => {
       return { stdout: '', stderr: '' }
     })
 
-    await expect(removeWorktreeOp(git, { worktreePath: '/repo-feature' })).resolves.toEqual({})
+    await expect(
+      removeWorktreeWithCapabilityCache(git, { worktreePath: '/repo-feature' })
+    ).resolves.toEqual({})
 
     expect(git).toHaveBeenCalledWith(['branch', '-d', '--', 'feature/test'], expect.any(String))
     expect(git).toHaveBeenCalledWith(
@@ -147,7 +289,9 @@ describe('removeWorktreeOp branch cleanup', () => {
       return { stdout: '', stderr: '' }
     })
 
-    await expect(removeWorktreeOp(git, { worktreePath: '/repo-feature' })).resolves.toEqual({})
+    await expect(
+      removeWorktreeWithCapabilityCache(git, { worktreePath: '/repo-feature' })
+    ).resolves.toEqual({})
 
     expect(git).toHaveBeenCalledWith(
       ['update-ref', '-d', 'refs/heads/feature/test', '1'],
@@ -209,7 +353,9 @@ describe('removeWorktreeOp branch cleanup', () => {
       return { stdout: '', stderr: '' }
     })
 
-    await expect(removeWorktreeOp(git, { worktreePath: '/repo-feature' })).resolves.toEqual({})
+    await expect(
+      removeWorktreeWithCapabilityCache(git, { worktreePath: '/repo-feature' })
+    ).resolves.toEqual({})
 
     const commandIndex = (expectedArgs: string[]) =>
       calls.findIndex(({ args }) => JSON.stringify(args) === JSON.stringify(expectedArgs))
@@ -272,13 +418,15 @@ describe('removeWorktreeOp branch cleanup', () => {
       return { stdout: '', stderr: '' }
     })
 
-    await expect(removeWorktreeOp(git, { worktreePath: '/repo-feature' })).resolves.toEqual({
+    await expect(
+      removeWorktreeWithCapabilityCache(git, { worktreePath: '/repo-feature' })
+    ).resolves.toEqual({
       preservedBranch: { branchName: 'feature/test', head: '1' }
     })
 
     expect(warnSpy).toHaveBeenCalledWith(
       'relay removeWorktree: failed to delete already-merged local branch "feature/test" after removing worktree',
-      expect.any(Error)
+      expect.objectContaining({ message: 'cannot lock ref' })
     )
     expect(warnSpy).toHaveBeenCalledWith(
       'relay removeWorktree: preserved local branch "feature/test" after removing worktree (not fully merged)',

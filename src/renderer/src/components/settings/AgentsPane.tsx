@@ -14,6 +14,11 @@ import { AgentAwakeSetting } from './AgentAwakeSetting'
 import { AgentCacheTimerSection } from './AgentCacheTimerSection'
 import { AgentRuntimeSetting } from './AgentRuntimeSetting'
 import {
+  AgentSessionSourceHomeInput,
+  buildCodexSessionSourceHomeControl,
+  type AgentSessionSourceHomeControl
+} from './codex-session-source-home-control'
+import {
   getAgentGeneratedTabTitlesDescription,
   getAgentGeneratedTabTitlesTitle
 } from './agent-generated-tab-title-copy'
@@ -81,6 +86,8 @@ type AgentRowProps = {
   onSaveOverride: (value: string) => void
   onSaveArgs: (value: string) => void
   onSaveEnv: (value: Record<string, string>) => void
+  /** Codex-only: current runtime scope label + persisted history-source override. */
+  sessionSourceHome?: AgentSessionSourceHomeControl
 }
 
 type AgentCommandOverrideInputProps = {
@@ -277,42 +284,44 @@ function AgentCommandOverrideInput({
   }
 
   return (
-    <div className="flex items-center gap-2">
-      <span className="shrink-0 text-xs text-muted-foreground">
+    <div className="flex flex-col gap-1">
+      <span className="text-xs text-muted-foreground">
         {translate('auto.components.settings.AgentsPane.2e45ca29b6', 'Command')}
       </span>
-      <Input
-        value={cmdDraft}
-        onChange={(e) => setCmdDraft(e.target.value)}
-        onBlur={commitCmd}
-        onKeyDown={(e) => {
-          if (e.key === 'Enter') {
-            commitCmd()
-            e.currentTarget.blur()
-          }
-          if (e.key === 'Escape') {
-            setCmdDraft(draftSeed)
-            e.currentTarget.blur()
-          }
-        }}
-        placeholder={defaultCmd}
-        spellCheck={false}
-        className="h-7 flex-1 font-mono text-xs"
-      />
-      {cmdOverride && (
-        <Button
-          type="button"
-          variant="ghost"
-          size="xs"
-          onClick={() => {
-            onSaveOverride('')
-            setCmdDraft(defaultCmd)
+      <div className="flex items-center gap-2">
+        <Input
+          value={cmdDraft}
+          onChange={(e) => setCmdDraft(e.target.value)}
+          onBlur={commitCmd}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') {
+              commitCmd()
+              e.currentTarget.blur()
+            }
+            if (e.key === 'Escape') {
+              setCmdDraft(draftSeed)
+              e.currentTarget.blur()
+            }
           }}
-          className="h-7 shrink-0 text-xs text-muted-foreground hover:text-foreground"
-        >
-          {translate('auto.components.settings.AgentsPane.5200dac9da', 'Reset')}
-        </Button>
-      )}
+          placeholder={defaultCmd}
+          spellCheck={false}
+          className="h-7 flex-1 font-mono text-xs"
+        />
+        {cmdOverride && (
+          <Button
+            type="button"
+            variant="ghost"
+            size="xs"
+            onClick={() => {
+              onSaveOverride('')
+              setCmdDraft(defaultCmd)
+            }}
+            className="h-7 shrink-0 text-xs text-muted-foreground hover:text-foreground"
+          >
+            {translate('auto.components.settings.AgentsPane.5200dac9da', 'Reset')}
+          </Button>
+        )}
+      </div>
     </div>
   )
 }
@@ -330,45 +339,47 @@ function AgentDefaultArgsInput({
   }
 
   return (
-    <div className="flex items-center gap-2">
-      <span className="shrink-0 text-xs text-muted-foreground">
+    <div className="flex flex-col gap-1">
+      <span className="text-xs text-muted-foreground">
         {translate('auto.components.settings.AgentsPane.cfb3f35775', 'Arguments')}
       </span>
-      <Input
-        value={argsDraft}
-        onChange={(e) => setArgsDraft(e.target.value)}
-        onBlur={commitArgs}
-        onKeyDown={(e) => {
-          if (e.key === 'Enter') {
-            commitArgs()
-            e.currentTarget.blur()
-          }
-          if (e.key === 'Escape') {
-            setArgsDraft(draftSeed)
-            e.currentTarget.blur()
-          }
-        }}
-        placeholder={
-          defaultArgs ||
-          translate('auto.components.settings.AgentsPane.6f99bf5dd0', 'No default arguments')
-        }
-        spellCheck={false}
-        className="h-7 flex-1 font-mono text-xs"
-      />
-      {argsOverride !== defaultArgs && (
-        <Button
-          type="button"
-          variant="ghost"
-          size="xs"
-          onClick={() => {
-            onSaveArgs(defaultArgs)
-            setArgsDraft(defaultArgs)
+      <div className="flex items-center gap-2">
+        <Input
+          value={argsDraft}
+          onChange={(e) => setArgsDraft(e.target.value)}
+          onBlur={commitArgs}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') {
+              commitArgs()
+              e.currentTarget.blur()
+            }
+            if (e.key === 'Escape') {
+              setArgsDraft(draftSeed)
+              e.currentTarget.blur()
+            }
           }}
-          className="h-7 shrink-0 text-xs text-muted-foreground hover:text-foreground"
-        >
-          {translate('auto.components.settings.AgentsPane.5200dac9da', 'Reset')}
-        </Button>
-      )}
+          placeholder={
+            defaultArgs ||
+            translate('auto.components.settings.AgentsPane.6f99bf5dd0', 'No default arguments')
+          }
+          spellCheck={false}
+          className="h-7 flex-1 font-mono text-xs"
+        />
+        {argsOverride !== defaultArgs && (
+          <Button
+            type="button"
+            variant="ghost"
+            size="xs"
+            onClick={() => {
+              onSaveArgs(defaultArgs)
+              setArgsDraft(defaultArgs)
+            }}
+            className="h-7 shrink-0 text-xs text-muted-foreground hover:text-foreground"
+          >
+            {translate('auto.components.settings.AgentsPane.5200dac9da', 'Reset')}
+          </Button>
+        )}
+      </div>
     </div>
   )
 }
@@ -394,11 +405,11 @@ function AgentDefaultEnvInput({
   }
 
   return (
-    <div>
+    <div className="flex flex-col gap-1">
+      <span className="text-xs text-muted-foreground">
+        {translate('auto.components.settings.AgentsPane.8fbe1f37c1', 'Environment')}
+      </span>
       <div className="flex items-center gap-2">
-        <span className="shrink-0 text-xs text-muted-foreground">
-          {translate('auto.components.settings.AgentsPane.8fbe1f37c1', 'Environment')}
-        </span>
         <Input
           value={envDraft}
           onChange={(e) => {
@@ -476,7 +487,8 @@ function AgentRow({
   onSetEnabled,
   onSaveOverride,
   onSaveArgs,
-  onSaveEnv
+  onSaveEnv,
+  sessionSourceHome
 }: AgentRowProps): React.JSX.Element {
   const envSummary = stringifyAgentDefaultEnvDraft(envOverride)
   const defaultEnvSummary = stringifyAgentDefaultEnvDraft(defaultEnv)
@@ -494,15 +506,6 @@ function AgentRow({
         <div className="min-w-0 flex-1 sm:min-w-[12rem]">
           <div className="flex items-center gap-2">
             <span className="text-sm font-medium leading-none">{label}</span>
-            {isDetected ? (
-              <SettingsBadge tone="accent">
-                {translate('auto.components.settings.AgentsPane.c8794e622e', 'Detected')}
-              </SettingsBadge>
-            ) : (
-              <SettingsBadge tone="muted">
-                {translate('auto.components.settings.AgentsPane.df123171d1', 'Not installed')}
-              </SettingsBadge>
-            )}
             {!isEnabled && (
               <SettingsBadge tone="muted">
                 {translate('auto.components.settings.AgentsPane.8dc0192e48', 'Disabled')}
@@ -523,7 +526,7 @@ function AgentRow({
           </div>
         </div>
 
-        <div className="ml-auto grid shrink-0 grid-cols-[max-content_6.5rem_1.75rem_1.75rem_1.75rem] items-center gap-1.5">
+        <div className="ml-auto grid shrink-0 grid-cols-[max-content_6.5rem_1.75rem_1.75rem] items-center gap-1.5">
           <AgentAvailabilityControl
             label={label}
             isEnabled={isEnabled}
@@ -548,28 +551,6 @@ function AgentRow({
                 {isDefault
                   ? translate('auto.components.settings.AgentsPane.24e032fa34', 'Default')
                   : translate('auto.components.settings.AgentsPane.959b67385b', 'Set default')}
-              </Button>
-            )}
-          </div>
-
-          <div className="flex size-7 items-center justify-center">
-            {isDetected && (
-              <Button
-                type="button"
-                variant="ghost"
-                size="icon-sm"
-                onClick={() => setCmdOpen((prev) => !prev)}
-                title={translate(
-                  'auto.components.settings.AgentsPane.db9e9e5887',
-                  'Customize command'
-                )}
-                aria-expanded={cmdOpen}
-                className={cn(
-                  'size-7 text-muted-foreground hover:text-foreground',
-                  (cmdOpen || cmdOverride) && 'text-foreground'
-                )}
-              >
-                <Terminal className="size-3.5" />
               </Button>
             )}
           </div>
@@ -644,7 +625,17 @@ function AgentRow({
               />
             </div>
           )}
-          <p className="mt-1.5 text-[11px] text-muted-foreground">
+          {sessionSourceHome && (
+            <div className="mt-2">
+              <AgentSessionSourceHomeInput
+                key={`${agentId}:${sessionSourceHome.runtimeLabel}:${sessionSourceHome.value}`}
+                runtimeLabel={sessionSourceHome.runtimeLabel}
+                value={sessionSourceHome.value}
+                onSave={sessionSourceHome.onSave}
+              />
+            </div>
+          )}
+          <p className="mt-2 text-[11px] text-muted-foreground">
             {translate(
               'auto.components.settings.AgentsPane.f9f127d664',
               'Override the binary path or name, and edit the default launch arguments or environment for this agent.'
@@ -902,6 +893,11 @@ export function AgentsPane({
                 onSaveOverride={(v) => saveOverride(agent.id, v)}
                 onSaveArgs={(v) => saveAgentArgs(agent.id, v)}
                 onSaveEnv={(v) => saveAgentEnv(agent.id, v)}
+                sessionSourceHome={
+                  agent.id === 'codex'
+                    ? buildCodexSessionSourceHomeControl(settings, updateSettings)
+                    : undefined
+                }
               />
             ))}
           </div>

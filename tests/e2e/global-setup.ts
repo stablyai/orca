@@ -10,11 +10,11 @@
  * temp file so the worker fixture can pick it up at runtime.
  */
 
-import { execSync } from 'child_process'
-import { randomUUID } from 'crypto'
-import { existsSync, mkdirSync, mkdtempSync, writeFileSync } from 'fs'
-import path from 'path'
-import os from 'os'
+import { execSync } from 'node:child_process'
+import { randomUUID } from 'node:crypto'
+import { existsSync, mkdirSync, mkdtempSync, realpathSync, writeFileSync } from 'node:fs'
+import path from 'node:path'
+import os from 'node:os'
 
 /** Temp file where the test repo path is stored for the fixture to read. */
 export const TEST_REPO_PATH_FILE = path.join(os.tmpdir(), 'orca-e2e-test-repo-path.txt')
@@ -26,11 +26,11 @@ export default function globalSetup(): void {
 
   // ── 1. Build the Electron app ──────────────────────────────────────
   if (process.env.SKIP_BUILD && existsSync(outMain)) {
-    console.log('[e2e] SKIP_BUILD set and out/main/index.js exists — skipping build')
+    console.error('[e2e] SKIP_BUILD set and out/main/index.js exists — skipping build')
   } else {
     // Why: --mode e2e is the build-time signal that exposes window.__store;
     // the explicit env var keeps older local overrides working too.
-    console.log('[e2e] Building Electron app with electron-vite build --mode e2e...')
+    console.error('[e2e] Building Electron app with electron-vite build --mode e2e...')
     execSync('npx electron-vite build --mode e2e', {
       env: { ...process.env, VITE_EXPOSE_STORE: 'true' },
       cwd: root,
@@ -39,13 +39,13 @@ export default function globalSetup(): void {
       // when healthy; global setup should not fail before specs can run.
       timeout: ELECTRON_E2E_BUILD_TIMEOUT_MS
     })
-    console.log('[e2e] Build complete.')
+    console.error('[e2e] Build complete.')
   }
   if (process.env.ORCA_E2E_SSH_LOCALHOST === '1' || process.env.ORCA_E2E_SSH_DOCKER === '1') {
     // Why: the SSH specs deploy Orca's relay from out/relay. The
     // normal Electron E2E build does not produce that bundle, so build it only
     // for explicit SSH runs.
-    console.log('[e2e] Building SSH relay bundle for SSH E2E...')
+    console.error('[e2e] Building SSH relay bundle for SSH E2E...')
     execSync('pnpm run build:relay', {
       cwd: root,
       stdio: 'inherit',
@@ -56,7 +56,10 @@ export default function globalSetup(): void {
   // ── 2. Create a seeded test git repo ───────────────────────────────
   // Why: each test run gets its own git repo so the suite is fully
   // idempotent. No test depends on whatever repos the user has open.
-  const testRepoDir = mkdtempSync(path.join(os.tmpdir(), 'orca-e2e-repo-'))
+  // Why: realpathSync so the seeded path matches the store's repo.path on
+  // macOS, where os.tmpdir() (/var/...) symlinks to /private/var/... and the
+  // app canonicalizes repo.path via `git rev-parse --show-toplevel` on add.
+  const testRepoDir = realpathSync(mkdtempSync(path.join(os.tmpdir(), 'orca-e2e-repo-')))
 
   execSync('git init', { cwd: testRepoDir, stdio: 'pipe' })
   execSync('git config user.email "e2e@test.local"', { cwd: testRepoDir, stdio: 'pipe' })
@@ -87,9 +90,9 @@ export default function globalSetup(): void {
     cwd: testRepoDir,
     stdio: 'pipe'
   })
-  console.log(`[e2e] Secondary worktree created at ${worktreeDir}`)
+  console.error(`[e2e] Secondary worktree created at ${worktreeDir}`)
 
   // Write the test repo path so the fixture can read it
   writeFileSync(TEST_REPO_PATH_FILE, testRepoDir)
-  console.log(`[e2e] Test repo created at ${testRepoDir}`)
+  console.error(`[e2e] Test repo created at ${testRepoDir}`)
 }

@@ -20,8 +20,10 @@ import { COMPUTER_HANDLERS } from './handlers/computer'
 import { ENVIRONMENT_HANDLERS } from './handlers/environment'
 import { AGENT_HOOK_HANDLERS } from './handlers/agent-hooks'
 import { DIAGNOSTICS_HANDLERS } from './handlers/diagnostics'
+import { INTROSPECTION_HANDLERS } from './handlers/introspection'
 import { EMULATOR_HANDLERS } from './handlers/emulator'
 import { LINEAR_HANDLERS } from './handlers/linear'
+import { VM_HANDLERS } from './handlers/vm'
 
 export type HandlerContext = {
   flags: Map<string, string | boolean>
@@ -56,8 +58,10 @@ function buildHandlers(): Map<string, CommandHandler> {
     COMPUTER_HANDLERS,
     AGENT_HOOK_HANDLERS,
     DIAGNOSTICS_HANDLERS,
+    INTROSPECTION_HANDLERS,
     ENVIRONMENT_HANDLERS,
-    LINEAR_HANDLERS
+    LINEAR_HANDLERS,
+    VM_HANDLERS
   ]
   for (const group of groups) {
     for (const [key, handler] of Object.entries(group)) {
@@ -71,6 +75,10 @@ function buildHandlers(): Map<string, CommandHandler> {
 }
 
 const HANDLERS = buildHandlers()
+
+// Why: exposes only the canonical command keys (not the handler internals) so the
+// registry-parity guard can check specs↔handlers without rebuilding the table.
+export const HANDLER_COMMAND_KEYS: ReadonlySet<string> = new Set(HANDLERS.keys())
 
 export async function dispatch(commandPath: string[], ctx: HandlerContext): Promise<void> {
   const handler = HANDLERS.get(commandPath.join(' '))

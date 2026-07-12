@@ -1,4 +1,4 @@
-import React, { useCallback, useRef, useState } from 'react'
+import React, { useCallback, useMemo, useRef, useState } from 'react'
 import { useAppStore } from '@/store'
 import { getConnectionId } from '@/lib/connection-context'
 import { detectLanguage } from '@/lib/language-detect'
@@ -18,6 +18,11 @@ import { useEditorPanelContentState } from './useEditorPanelContentState'
 import { useMarkdownPreviewShortcut } from './useMarkdownPreviewShortcut'
 import { useUntitledFileRename } from './useUntitledFileRename'
 import { extractFrontMatter } from './markdown-frontmatter'
+import {
+  selectEditorPanelGitBranchEntries,
+  selectEditorPanelGitStatusEntries
+} from './editor-panel-git-entry-selector'
+import { createEditorPanelDraftSelector } from './editor-panel-draft-selector'
 
 function EditorPanelInner({
   activeFileId: activeFileIdProp,
@@ -33,10 +38,17 @@ function EditorPanelInner({
   const activeFileId = activeFileIdProp ?? globalActiveFileId
   const activeViewStateId = activeViewStateIdProp ?? activeFileId
   const activeFile = openFiles.find((f) => f.id === activeFileId) ?? null
+  const activeWorktreeId = activeFile?.worktreeId
   const markFileDirty = useAppStore((s) => s.markFileDirty)
   const pendingEditorReveal = useAppStore((s) => s.pendingEditorReveal)
-  const gitStatusByWorktree = useAppStore((s) => s.gitStatusByWorktree)
-  const gitBranchChangesByWorktree = useAppStore((s) => s.gitBranchChangesByWorktree)
+  // Why: background Git refreshes for other worktrees must not wake every
+  // mounted Monaco/rich editor pane.
+  const gitStatusEntries = useAppStore((s) =>
+    selectEditorPanelGitStatusEntries(s, activeWorktreeId)
+  )
+  const gitBranchEntries = useAppStore((s) =>
+    selectEditorPanelGitBranchEntries(s, activeWorktreeId)
+  )
   const markdownViewMode = useAppStore((s) => s.markdownViewMode)
   const setMarkdownViewMode = useAppStore((s) => s.setMarkdownViewMode)
   const editorViewMode = useAppStore((s) => s.editorViewMode)
@@ -45,9 +57,15 @@ function EditorPanelInner({
   const openMarkdownPreview = useAppStore((s) => s.openMarkdownPreview)
   const markdownFrontmatterVisible = useAppStore((s) => s.markdownFrontmatterVisible)
   const setMarkdownFrontmatterVisible = useAppStore((s) => s.setMarkdownFrontmatterVisible)
+  const markdownTableOfContentsVisible = useAppStore((s) => s.markdownTableOfContentsVisible)
+  const setMarkdownTableOfContentsVisible = useAppStore((s) => s.setMarkdownTableOfContentsVisible)
   const closeFile = useAppStore((s) => s.closeFile)
   const clearUntitled = useAppStore((s) => s.clearUntitled)
-  const editorDrafts = useAppStore((s) => s.editorDrafts)
+  const editorDraftSelector = useMemo(
+    () => createEditorPanelDraftSelector(activeFile),
+    [activeFile]
+  )
+  const editorDrafts = useAppStore(editorDraftSelector)
   const setEditorDraft = useAppStore((s) => s.setEditorDraft)
   const settings = useAppStore((s) => s.settings)
   const panelRef = useRef<HTMLDivElement>(null)
@@ -75,7 +93,6 @@ function EditorPanelInner({
     },
     [clearCopiedPathToastResetTimer]
   )
-  const [showMarkdownTableOfContents, setShowMarkdownTableOfContents] = useState(false)
   const [sideBySide, setSideBySide] = useState(settings?.diffDefaultView === 'side-by-side')
   const [prevDiffView, setPrevDiffView] = useState(settings?.diffDefaultView)
 
@@ -91,11 +108,11 @@ function EditorPanelInner({
     activeFile.mode === 'edit' &&
     canUseChangesModeForFile(activeFile) &&
     editorViewMode[activeFile.id] === 'changes'
-  const { fileContents, diffContents, reloadFileContent } = useEditorPanelContentState({
+  const { fileContents, diffContents, reloadContent } = useEditorPanelContentState({
     activeFile,
     isChangesMode: requestedChangesMode,
     openFiles,
-    gitStatusByWorktree,
+    gitStatusEntries,
     editorViewMode
   })
   const isChangesMode =
@@ -224,8 +241,8 @@ function EditorPanelInner({
     activeFile,
     fileContents,
     editorDrafts,
-    gitStatusByWorktree,
-    gitBranchChangesByWorktree,
+    gitStatusEntries,
+    gitBranchEntries,
     markdownViewMode,
     isChangesMode
   })
@@ -310,14 +327,14 @@ function EditorPanelInner({
     )?.activeRuntimeEnvironmentId?.trim() ||
     (renameDialogFile ? getConnectionId(renameDialogFile.worktreeId) : null)
   )
-  const markdownFrontmatterSourceFileId =
+  const markdownDocumentStateFileId =
     activeFile.mode === 'markdown-preview'
       ? (activeFile.markdownPreviewSourceFileId ?? activeFile.filePath)
       : activeFile.id
   let activeMarkdownContent: string | null = null
   if (activeFile.mode === 'markdown-preview') {
     activeMarkdownContent =
-      editorDrafts[markdownFrontmatterSourceFileId] ?? fileContents[activeFile.id]?.content ?? null
+      editorDrafts[markdownDocumentStateFileId] ?? fileContents[activeFile.id]?.content ?? null
   } else if (activeFile.mode === 'edit') {
     activeMarkdownContent =
       editorDrafts[activeFile.id] ?? fileContents[activeFile.id]?.content ?? null
@@ -329,7 +346,9 @@ function EditorPanelInner({
     extractFrontMatter(activeMarkdownContent)
   )
   const isMarkdownFrontmatterVisible =
-    markdownFrontmatterVisible[markdownFrontmatterSourceFileId] ?? false
+    markdownFrontmatterVisible[markdownDocumentStateFileId] ?? false
+  const isMarkdownTableOfContentsVisible =
+    markdownTableOfContentsVisible[markdownDocumentStateFileId] ?? false
 
   return (
     <EditorPanelShell
@@ -338,7 +357,7 @@ function EditorPanelInner({
       activeViewStateId={activeViewStateId}
       model={model}
       copiedPathVisible={copiedPathToast?.fileId === activeFile.id}
-      showMarkdownTableOfContents={showMarkdownTableOfContents}
+      showMarkdownTableOfContents={isMarkdownTableOfContentsVisible}
       canShowMarkdownFrontmatterToggle={canShowMarkdownFrontmatterToggle}
       markdownFrontmatterVisible={isMarkdownFrontmatterVisible}
       sideBySide={sideBySide}
@@ -357,12 +376,14 @@ function EditorPanelInner({
       onOpenContainingFolder={handleOpenContainingFolder}
       onToggleSideBySide={() => setSideBySide((prev) => !prev)}
       onEditorToggleChange={handleEditorToggleChange}
-      onToggleMarkdownTableOfContents={() => setShowMarkdownTableOfContents((shown) => !shown)}
-      onToggleMarkdownFrontmatter={() =>
-        setMarkdownFrontmatterVisible(
-          markdownFrontmatterSourceFileId,
-          !isMarkdownFrontmatterVisible
+      onToggleMarkdownTableOfContents={() =>
+        setMarkdownTableOfContentsVisible(
+          markdownDocumentStateFileId,
+          !isMarkdownTableOfContentsVisible
         )
+      }
+      onToggleMarkdownFrontmatter={() =>
+        setMarkdownFrontmatterVisible(markdownDocumentStateFileId, !isMarkdownFrontmatterVisible)
       }
       onExportMarkdownToPdf={() =>
         void exportActiveMarkdownToPdf({ fileId: activeFile.id, root: panelRef.current })
@@ -372,8 +393,10 @@ function EditorPanelInner({
       onDirtyStateHint={handleDirtyStateHint}
       onSave={handleSave}
       onSaveForFile={handleSaveForFile}
-      onReloadFileContent={reloadFileContent}
-      onCloseMarkdownTableOfContents={() => setShowMarkdownTableOfContents(false)}
+      onReloadContent={reloadContent}
+      onCloseMarkdownTableOfContents={() =>
+        setMarkdownTableOfContentsVisible(markdownDocumentStateFileId, false)
+      }
       onCloseRenameDialog={closeRenameDialog}
       onRenameConfirm={handleRenameConfirm}
       markdownAnnotationsEnabled={markdownAnnotationsEnabled}

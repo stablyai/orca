@@ -18,6 +18,7 @@ import { normalizeUiLanguage } from '../../shared/ui-language'
 import { applyAppIcon } from '../app-icon'
 import { normalizeTerminalCustomThemes } from '../../shared/terminal-custom-themes'
 import { normalizeDesktopTerminalScrollbackRows } from '../../shared/terminal-scrollback-policy'
+import { normalizeTerminalLineHeight } from '../../shared/terminal-line-height-settings'
 import { prepareLocalWorktreeRootsForRepos } from '../worktree-root-preparation'
 import { scheduleCurrentWorktreeBaseDirectoryWatcherSync } from './worktree-base-directory-watcher'
 
@@ -66,6 +67,15 @@ export function registerSettingsHandlers(
     return store.getSettings()
   })
 
+  // Why: terminal panes can bind PTYs before async settings hydration
+  // completes. The side-effect authority kill switch is consulted once at
+  // transport creation, so the renderer needs the persisted value
+  // synchronously or pre-hydration bindings would always pick main authority
+  // (terminal-side-effect-authority.md, migration switch).
+  ipcMain.on('settings:get-sync', (event) => {
+    event.returnValue = store.getSettings()
+  })
+
   ipcMain.handle('settings:set', async (event, args: Partial<GlobalSettings>) => {
     const sanitizedArgs = sanitizeRendererSettingsUpdate(args)
     // Why: Floating Workspace grants are trusted only when written by the
@@ -94,6 +104,9 @@ export function registerSettingsHandlers(
       sanitizedArgs.terminalScrollbackRows = normalizeDesktopTerminalScrollbackRows(
         args.terminalScrollbackRows
       )
+    }
+    if ('terminalLineHeight' in args) {
+      sanitizedArgs.terminalLineHeight = normalizeTerminalLineHeight(args.terminalLineHeight)
     }
     if ('uiLanguage' in args) {
       sanitizedArgs.uiLanguage = normalizeUiLanguage(args.uiLanguage)

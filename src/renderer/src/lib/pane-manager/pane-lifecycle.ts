@@ -1,10 +1,3 @@
-// Upstream packaging bug: @xterm/addon-ligatures declares `"main":
-// "lib/addon-ligatures.js"` but ships only the `.mjs` entry, so Vite fails to
-// resolve the bare import. Fixed locally via config/patches/@xterm__addon-ligatures*.
-// Tracking upstream: https://github.com/xtermjs/xterm.js/issues/5822 and
-// https://github.com/xtermjs/xterm.js/pull/5828 — drop the patch once that lands.
-import { LigaturesAddon } from '@xterm/addon-ligatures'
-
 import type { ManagedPaneInternal } from './pane-manager-types'
 import { safeFit } from './pane-tree-ops'
 import {
@@ -12,11 +5,14 @@ import {
   detachPaneFitResizeObserver
 } from './pane-fit-resize-observer'
 import { clearPendingSplitScrollRestore } from './pane-split-scroll'
-import { activateOrcaTerminalUnicodeProvider } from './pane-terminal-unicode-provider'
+import { activateOrcaTerminalUnicodeProvider } from '../../../../shared/terminal-unicode-provider'
 import { attachTerminalMouseWheelMultiplier } from './pane-terminal-mouse-wheel'
 import { attachTerminalScrollIntentTracking } from './terminal-scroll-intent'
 import { attachDomRendererFocusClassSync } from './pane-dom-focus-class-sync'
 import { attachWebgl, cancelPendingWebglRefresh, disposeWebgl } from './pane-webgl-renderer'
+import { configureLazyArabicShapingJoiner } from './terminal-arabic-shaping-joiner'
+import { TerminalLigaturesAddon } from './terminal-ligatures-addon'
+import { resolveCursorAgentImeAnchor } from './terminal-ime-anchor'
 
 // ---------------------------------------------------------------------------
 // Pane creation, terminal open/close, addon management
@@ -28,6 +24,7 @@ export { createPaneDOM } from './pane-dom-creation'
 export function openTerminal(pane: ManagedPaneInternal): void {
   const {
     terminal,
+    container,
     xtermContainer,
     linkTooltip,
     terminalTuiScrollSensitivity,
@@ -40,8 +37,9 @@ export function openTerminal(pane: ManagedPaneInternal): void {
 
   // Open terminal into DOM
   terminal.open(xtermContainer)
-  const linkTooltipContainer = terminal.element ?? xtermContainer
-  linkTooltipContainer.appendChild(linkTooltip)
+  // Why: terminal.element sits under the padded xterm container. Pane-level
+  // placement keeps the hover URL on the true bottom-left window corner.
+  container.appendChild(linkTooltip)
 
   // Load addons (order matters: WebGL must be after open())
   terminal.loadAddon(fitAddon)
@@ -69,12 +67,19 @@ export function openTerminal(pane: ManagedPaneInternal): void {
   // so the activation must stay at this position.
   activateOrcaTerminalUnicodeProvider(terminal)
 
+  // Why: any xterm character joiner makes every repaint scan the whole grid.
+  // Defer registration until the first RTL write; replay and live paths both
+  // ensure it before parsing, so restored Arabic still shapes immediately.
+  pane.arabicShapingJoinerCleanup = configureLazyArabicShapingJoiner(
+    terminal,
+    () => pane.webglAddon != null
+  )
+
   // Why: the OS reads the focused textarea's screen rect at compositionstart to
-  // decide where to display the IME candidate window. xterm.js only repositions
-  // the textarea on compositionupdate (via updateCompositionElements), not on
-  // compositionstart, so the window can appear at a stale cursor position. We
-  // force-sync the textarea position in a capture-phase listener so the OS sees
-  // the correct location before it opens the candidate window.
+  // decide where to display the IME candidate window. xterm positions that
+  // textarea from its own cursor, which can be stale or intentionally hidden by
+  // TUIs. We force-sync after xterm's own composition handlers so the OS sees
+  // the corrected location before it opens the candidate window.
   //
   // Cell dimensions are derived from the public .xterm-screen element's bounds
   // (xterm sizes that element to cols*cellWidth × rows*cellHeight) rather than
@@ -94,11 +99,34 @@ export function openTerminal(pane: ManagedPaneInternal): void {
         return
       }
       const buf = terminal.buffer.active
-      const x = Math.min(buf.cursorX, terminal.cols - 1)
-      textarea.style.top = `${buf.cursorY * cellHeight}px`
-      textarea.style.left = `${x * cellWidth}px`
+      // Why: Cursor Agent draws its prompt UI while leaving xterm's public cursor
+      // on a blank row, so the OS IME anchor needs the rendered prompt row instead.
+      const cursorAgentAnchor = resolveCursorAgentImeAnchor({
+        buffer: buf,
+        rows: terminal.rows,
+        cols: terminal.cols,
+        cursorX: buf.cursorX,
+        cursorY: buf.cursorY
+      })
+      const anchor = cursorAgentAnchor ?? {
+        row: buf.cursorY,
+        column: Math.min(buf.cursorX, terminal.cols - 1)
+      }
+      const applyAnchor = (): void => {
+        textarea.style.top = `${anchor.row * cellHeight}px`
+        textarea.style.left = `${anchor.column * cellWidth}px`
+      }
+      applyAnchor()
+      if (cursorAgentAnchor) {
+        window.setTimeout(() => {
+          if (textarea.isConnected) {
+            applyAnchor()
+          }
+        }, 0)
+      }
     }
-    terminal.element.addEventListener('compositionstart', handler, true)
+    terminal.element.addEventListener('compositionstart', handler)
+    terminal.element.addEventListener('compositionupdate', handler)
     // Store so disposePane() can remove it and avoid a memory leak.
     pane.compositionHandler = handler
   }
@@ -137,7 +165,7 @@ export function attachLigatures(pane: ManagedPaneInternal): void {
     return
   }
   try {
-    const ligaturesAddon = new LigaturesAddon()
+    const ligaturesAddon = new TerminalLigaturesAddon()
     pane.terminal.loadAddon(ligaturesAddon)
     pane.ligaturesAddon = ligaturesAddon
     // Why: ligatures can be enabled after rows already rendered, especially
@@ -199,8 +227,16 @@ export function disposePane(
   pane.focusClassSyncCleanup = null
   pane.terminalScrollIntentDisposable?.dispose()
   pane.terminalScrollIntentDisposable = null
+  // Deregister the RTL shaping joiner: terminal.dispose() below does not.
+  try {
+    pane.arabicShapingJoinerCleanup?.()
+  } catch {
+    /* ignore */
+  }
+  pane.arabicShapingJoinerCleanup = null
   if (pane.compositionHandler) {
-    pane.terminal.element?.removeEventListener('compositionstart', pane.compositionHandler, true)
+    pane.terminal.element?.removeEventListener('compositionstart', pane.compositionHandler)
+    pane.terminal.element?.removeEventListener('compositionupdate', pane.compositionHandler)
     pane.compositionHandler = null
   }
   try {
@@ -213,11 +249,7 @@ export function disposePane(
   } catch {
     /* ignore */
   }
-  try {
-    pane.webglAddon?.dispose()
-  } catch {
-    /* ignore */
-  }
+  disposeWebgl(pane)
   try {
     pane.searchAddon.dispose()
   } catch {

@@ -1,4 +1,3 @@
-/* eslint-disable max-lines -- Why: runtime git routing tests share compatibility-cache and IPC stubs; splitting would hide cross-environment contract drift. */
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   bulkDiscardRuntimeGitPaths,
@@ -13,6 +12,7 @@ import {
   getRuntimeGitHistory,
   getRuntimeGitIgnoredPaths,
   getRuntimeGitStatus,
+  getRuntimeGitSubmoduleStatus,
   pushRuntimeGit,
   rebaseRuntimeGitFromBase
 } from './runtime-git-client'
@@ -24,6 +24,7 @@ import { clearRuntimeCompatibilityCacheForTests } from './runtime-rpc-client'
 
 const gitStatus = vi.fn()
 const gitCheckIgnored = vi.fn()
+const gitSubmoduleStatus = vi.fn()
 const gitDiff = vi.fn()
 const gitHistory = vi.fn()
 const gitBulkStage = vi.fn()
@@ -44,6 +45,7 @@ beforeEach(() => {
   clearRuntimeCompatibilityCacheForTests()
   gitStatus.mockReset()
   gitCheckIgnored.mockReset()
+  gitSubmoduleStatus.mockReset()
   gitDiff.mockReset()
   gitHistory.mockReset()
   gitBulkStage.mockReset()
@@ -67,6 +69,7 @@ beforeEach(() => {
       git: {
         status: gitStatus,
         checkIgnored: gitCheckIgnored,
+        submoduleStatus: gitSubmoduleStatus,
         diff: gitDiff,
         history: gitHistory,
         bulkStage: gitBulkStage,
@@ -185,6 +188,29 @@ describe('runtime git client', () => {
     expect(runtimeEnvironmentCall).not.toHaveBeenCalled()
   })
 
+  it('passes submodule status area through local git IPC', async () => {
+    gitSubmoduleStatus.mockResolvedValue({ entries: [], conflictOperation: 'unknown' })
+
+    await getRuntimeGitSubmoduleStatus(
+      {
+        settings: { activeRuntimeEnvironmentId: null },
+        worktreeId: 'wt-1',
+        worktreePath: '/repo',
+        connectionId: 'ssh-1'
+      },
+      'vendor/lib',
+      'staged'
+    )
+
+    expect(gitSubmoduleStatus).toHaveBeenCalledWith({
+      worktreePath: '/repo',
+      submodulePath: 'vendor/lib',
+      connectionId: 'ssh-1',
+      area: 'staged'
+    })
+    expect(runtimeEnvironmentCall).not.toHaveBeenCalled()
+  })
+
   it('uses local git IPC for history when no remote runtime is active', async () => {
     gitHistory.mockResolvedValue({
       items: [],
@@ -264,6 +290,32 @@ describe('runtime git client', () => {
       selector: 'env-1',
       method: 'git.history',
       params: { worktree: 'id:wt-1', limit: 50, baseRef: 'origin/main' },
+      timeoutMs: 15_000
+    })
+  })
+
+  it('passes submodule status area through the active runtime environment', async () => {
+    runtimeEnvironmentCall.mockResolvedValue({
+      id: 'rpc-1',
+      ok: true,
+      result: { entries: [], conflictOperation: 'unknown' },
+      _meta: { runtimeId: 'remote-runtime' }
+    })
+
+    await getRuntimeGitSubmoduleStatus(
+      {
+        settings: { activeRuntimeEnvironmentId: 'env-1' },
+        worktreeId: 'wt-1',
+        worktreePath: '/repo'
+      },
+      'vendor/lib',
+      'staged'
+    )
+
+    expect(runtimeEnvironmentCall).toHaveBeenCalledWith({
+      selector: 'env-1',
+      method: 'git.submoduleStatus',
+      params: { worktree: 'id:wt-1', submodulePath: 'vendor/lib', area: 'staged' },
       timeoutMs: 15_000
     })
   })

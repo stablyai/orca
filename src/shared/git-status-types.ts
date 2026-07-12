@@ -38,6 +38,11 @@ export type GitUncommittedEntry = {
   conflictStatus?: GitConflictResolutionStatus
   conflictStatusSource?: GitConflictStatusSource
   submodule?: GitSubmoduleStatus
+  // Set on entries that live INSIDE a submodule (lazily loaded when the user
+  // expands a dirty submodule row). Holds the submodule's path relative to the
+  // parent worktree. Drives diff routing into the submodule and read-only
+  // gating — submodule-internal changes are never stageable from the parent.
+  submoduleRoot?: string
   // Working-tree line counts for this entry's staging area (staged vs unstaged
   // diffs are reported separately). Untracked files count their full contents
   // as additions. Undefined for binary files and when the diff is unavailable.

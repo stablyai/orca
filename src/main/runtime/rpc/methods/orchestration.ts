@@ -492,7 +492,7 @@ export const ORCHESTRATION_METHODS: RpcMethod[] = [
       let injected = false
       if (params.inject) {
         try {
-          await runtime.sendTerminal(to, { text: preamble, enter: true })
+          await runtime.sendTerminalAgentPrompt(to, preamble)
           injected = true
         } catch (err) {
           db.failDispatch(ctx.id, err instanceof Error ? err.message : String(err))

@@ -67,6 +67,26 @@ describe('SshPtyProvider', () => {
       })
     })
 
+    it('forwards pane identity as relay metadata on fresh spawn', async () => {
+      mux.request.mockResolvedValue({ id: 'pty-2' })
+
+      await provider.spawn({
+        cols: 120,
+        rows: 40,
+        paneKey: 'tab-a:leaf-a',
+        tabId: 'tab-a'
+      })
+
+      expect(mux.request).toHaveBeenCalledWith('pty.spawn', {
+        cols: 120,
+        rows: 40,
+        cwd: undefined,
+        env: { [POWERLEVEL10K_WIZARD_DISABLE_ENV]: 'true' },
+        paneKey: 'tab-a:leaf-a',
+        tabId: 'tab-a'
+      })
+    })
+
     it('forwards explicit shellOverride and terminalWindowsWslDistro to the relay mux', async () => {
       mux.request.mockResolvedValue({ id: 'pty-2' })
 
@@ -118,8 +138,39 @@ describe('SshPtyProvider', () => {
         cols: 120,
         rows: 40,
         cwd: undefined,
-        env: {}
+        env: {},
+        envToDelete: [POWERLEVEL10K_WIZARD_DISABLE_ENV]
       })
+    })
+
+    it('preserves explicit TERM and forwards final env deletions to the relay', async () => {
+      mux.request.mockResolvedValue({ id: 'pty-env-precedence' })
+      const envToDelete = ['TERM_PROGRAM', 'ORCA_ATTRIBUTION_SHIM_DIR']
+
+      await provider.spawn({
+        cols: 120,
+        rows: 40,
+        env: {
+          TERM: 'screen-256color',
+          TERM_PROGRAM: 'stale-terminal',
+          ORCA_ATTRIBUTION_SHIM_DIR: '/tmp/stale-attribution'
+        },
+        envToDelete
+      })
+
+      expect(mux.request).toHaveBeenCalledWith('pty.spawn', {
+        cols: 120,
+        rows: 40,
+        cwd: undefined,
+        env: {
+          TERM: 'screen-256color',
+          [POWERLEVEL10K_WIZARD_DISABLE_ENV]: 'true'
+        },
+        envToDelete
+      })
+      const spawnCall = mux.request.mock.calls.find((call) => call[0] === 'pty.spawn')
+      expect(spawnCall?.[1]?.env).not.toHaveProperty('TERM_PROGRAM')
+      expect(spawnCall?.[1]?.env).not.toHaveProperty('ORCA_ATTRIBUTION_SHIM_DIR')
     })
 
     it('forwards provider command delivery to the relay', async () => {
@@ -276,6 +327,27 @@ describe('SshPtyProvider', () => {
       })
     })
 
+    it('reattaches with explicit pane identity when hook env was stripped', async () => {
+      mux.request.mockResolvedValue({ replay: 'buffered-output' })
+
+      await provider.spawn({
+        cols: 80,
+        rows: 24,
+        sessionId: 'pty-old',
+        paneKey: 'tab-a:leaf-a',
+        tabId: 'tab-a'
+      })
+
+      expect(mux.request).toHaveBeenCalledWith('pty.attach', {
+        id: 'pty-old',
+        cols: 80,
+        rows: 24,
+        suppressReplayNotification: true,
+        expectedPaneKey: 'tab-a:leaf-a',
+        expectedTabId: 'tab-a'
+      })
+    })
+
     it('does not fresh-spawn over an expired reattach session', async () => {
       mux.request.mockRejectedValueOnce(new Error('PTY "pty-old" not found'))
 
@@ -317,6 +389,20 @@ describe('SshPtyProvider', () => {
     expect(mux.request).toHaveBeenCalledWith('pty.attach', {
       id: 'pty-1',
       suppressReplayNotification: true
+    })
+  })
+
+  it('attachForReconnect forwards expected identity when provided', async () => {
+    await provider.attachForReconnect(scopedPty1, {
+      paneKey: 'tab-a:leaf-a',
+      tabId: 'tab-a'
+    })
+
+    expect(mux.request).toHaveBeenCalledWith('pty.attach', {
+      id: 'pty-1',
+      suppressReplayNotification: true,
+      expectedPaneKey: 'tab-a:leaf-a',
+      expectedTabId: 'tab-a'
     })
   })
 

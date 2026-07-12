@@ -1,7 +1,6 @@
-/* eslint-disable max-lines -- Why: SSH connection utility tests share mocked filesystem and environment setup across auth, proxy, and retry helpers. */
-import { EventEmitter } from 'events'
+import { EventEmitter } from 'node:events'
 import { afterEach, describe, expect, it, vi, beforeEach } from 'vitest'
-import { join } from 'path'
+import { join } from 'node:path'
 import { BaseAgent, utils, type ParsedKey } from 'ssh2'
 
 const { spawnMock } = vi.hoisted(() => ({
@@ -326,6 +325,8 @@ function makeResolved(overrides?: Partial<SshResolvedConfig>): SshResolvedConfig
     forwardAgent: false,
     identitiesOnly: false,
     proxyUseFdpass: false,
+    controlMaster: 'no',
+    controlPersist: 'no',
     ...overrides
   }
 }

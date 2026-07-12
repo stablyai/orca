@@ -41,11 +41,12 @@ export const SESSION_TAB_METHODS: RpcAnyMethod[] = [
   defineMethod({
     name: 'session.tabs.createTerminal',
     params: CreateTerminalTab,
-    handler: async (params, { runtime }) =>
+    handler: async (params, { runtime, signal }) =>
       runtime.createMobileSessionTerminal(params.worktree, {
         afterTabId: params.afterTabId,
         targetGroupId: params.targetGroupId,
         command: params.command,
+        cwd: params.cwd,
         ...(params.env ? { env: params.env } : {}),
         startupCommandDelivery: params.startupCommandDelivery,
         agent: params.agent,
@@ -53,7 +54,10 @@ export const SESSION_TAB_METHODS: RpcAnyMethod[] = [
         ...(params.launchToken ? { launchToken: params.launchToken } : {}),
         ...(params.launchAgent ? { launchAgent: params.launchAgent } : {}),
         activate: params.activate,
-        clientMutationId: params.clientMutationId
+        clientMutationId: params.clientMutationId,
+        // Why: a dead client connection must cancel the surface wait instead
+        // of running down the timeout and rolling back a live tab (#7718).
+        signal
       })
   }),
   defineMethod({

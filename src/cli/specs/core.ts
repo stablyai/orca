@@ -1,5 +1,6 @@
 import type { CommandSpec } from '../args'
 import { GLOBAL_FLAGS } from '../args'
+import { SERVE_COMMAND_SPECS } from './serve'
 
 export const CORE_COMMAND_SPECS: CommandSpec[] = [
   {
@@ -9,25 +10,7 @@ export const CORE_COMMAND_SPECS: CommandSpec[] = [
     allowedFlags: [...GLOBAL_FLAGS],
     examples: ['orca open', 'orca open --json']
   },
-  {
-    path: ['serve'],
-    summary: 'Start an Orca runtime server without opening a desktop window',
-    usage:
-      'orca serve [--port <port>] [--pairing-address <host>] [--mobile-pairing] [--no-pairing] [--json]',
-    allowedFlags: [...GLOBAL_FLAGS, 'port', 'pairing-address', 'mobile-pairing', 'no-pairing'],
-    notes: [
-      'Runs in the foreground and prints the runtime endpoint. Stop it with Ctrl+C.',
-      'Use --pairing-address when clients should connect through a LAN, Tailscale, SSH-forward, or public tunnel address.',
-      'Use --mobile-pairing to print a mobile-scoped pairing QR/link instead of the default runtime-environment pairing link.',
-      'When the web client bundle is available, the server also prints a browser URL with the pairing data embedded.'
-    ],
-    examples: [
-      'orca serve',
-      'orca serve --json',
-      'orca serve --port 6768 --pairing-address 100.64.1.20',
-      'orca serve --pairing-address 100.64.1.20 --mobile-pairing'
-    ]
-  },
+  ...SERVE_COMMAND_SPECS,
   {
     path: ['status'],
     summary: 'Show app/runtime/graph readiness',
@@ -37,6 +20,7 @@ export const CORE_COMMAND_SPECS: CommandSpec[] = [
   },
   {
     path: ['claude-teams'],
+    argumentMode: 'passthrough',
     summary: 'Start Claude Code Agent Teams in the current Orca terminal',
     usage: 'orca claude-teams [claude args...]',
     allowedFlags: [...GLOBAL_FLAGS],
@@ -174,6 +158,12 @@ export const CORE_COMMAND_SPECS: CommandSpec[] = [
   },
   {
     path: ['worktree', 'rm'],
+    // Why: agents reach for git's `remove`/`delete` verbs; accept them as
+    // aliases so a conventional guess resolves instead of dead-ending.
+    aliases: [
+      ['worktree', 'remove'],
+      ['worktree', 'delete']
+    ],
     summary: 'Remove a worktree from Orca and git',
     usage: 'orca worktree rm --worktree <selector> [--force] [--run-hooks] [--json]',
     allowedFlags: [...GLOBAL_FLAGS, 'worktree', 'force', 'run-hooks'],
@@ -252,17 +242,13 @@ export const CORE_COMMAND_SPECS: CommandSpec[] = [
   },
   {
     path: ['terminal', 'switch'],
+    // Why: `focus` is the legacy verb for this action; keep it working as an
+    // alias rather than a duplicate spec + handler registration.
+    aliases: [['terminal', 'focus']],
     summary: 'Switch to a terminal tab in the UI',
     usage: 'orca terminal switch [--terminal <handle>] [--json]',
     allowedFlags: [...GLOBAL_FLAGS, 'terminal'],
     examples: ['orca terminal switch --terminal term_abc123']
-  },
-  {
-    path: ['terminal', 'focus'],
-    summary: 'Switch to a terminal tab in the UI (alias for terminal switch)',
-    usage: 'orca terminal focus [--terminal <handle>] [--json]',
-    allowedFlags: [...GLOBAL_FLAGS, 'terminal'],
-    examples: ['orca terminal focus --terminal term_abc123']
   },
   {
     path: ['terminal', 'close'],

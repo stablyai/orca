@@ -2,12 +2,17 @@
 
 export const MIN_SSH_RELAY_GRACE_PERIOD_SECONDS = 60
 export const MAX_SSH_RELAY_GRACE_PERIOD_SECONDS = 7 * 24 * 60 * 60
-export const DEFAULT_SSH_RELAY_GRACE_PERIOD_SECONDS = 3 * 60 * 60
+export const LEGACY_DEFAULT_SSH_RELAY_GRACE_PERIOD_SECONDS = 3 * 60 * 60
+export const DEFAULT_BOUNDED_SSH_RELAY_GRACE_PERIOD_SECONDS = 24 * 60 * 60
+export const DEFAULT_SSH_RELAY_GRACE_PERIOD_SECONDS = 0
 export const SSH_RELAY_CONFIGURE_GRACE_TIME_METHOD = 'relay.configureGraceTime'
 
 export type SshTarget = {
   id: string
   label: string
+  /** Internal owner for targets that Orca creates as implementation details.
+   *  Owned targets are hidden from normal SSH-host management surfaces. */
+  owner?: { type: 'on-demand-runtime'; runtimeId: string }
   /** Host alias to resolve through OpenSSH config (ssh -G). */
   configHost?: string
   host: string
@@ -31,7 +36,7 @@ export type SshTarget = {
    *  import. */
   source?: 'ssh-config' | 'manual'
   /** Grace period in seconds before relay shuts down after disconnect.
-   *  0 disables expiry. Default: 10800 (3 hours). Max: 604800 (7 days). */
+   *  0 disables expiry. Default: 0 (until reset). Max: 604800 (7 days). */
   relayGracePeriodSeconds?: number
   /** Set to true after a successful connection that triggered a credential
    *  prompt (passphrase or password). Persisted so startup reconnect can
@@ -41,6 +46,43 @@ export type SshTarget = {
   /** Port forwards to auto-restore on connect/reconnect. Persisted so
    *  forwards survive app restarts. */
   portForwards?: SavedPortForward[]
+  /** Reuse a system OpenSSH connection across setup commands. Undefined means
+   *  enabled; false is an explicit per-target compatibility opt-out. */
+  systemSshConnectionReuse?: boolean
+}
+
+/** Identity of a removed SSH target, recorded so that re-adding the same host
+ *  can re-point orphaned repos/worktrees from the old (deleted) target id to
+ *  the new one. Repos store only the target id, so without this record the old
+ *  workspaces are stranded on a dead id when the target is removed. */
+export type RemovedSshTargetTombstone = {
+  /** The id the removed target had — what orphaned repos/worktrees still point at. */
+  oldTargetId: string
+  /** ssh-config alias, if any — the most stable re-adoption key. */
+  configHost?: string
+  host: string
+  port: number
+  username: string
+  label: string
+  /** ms epoch when the target was removed, for pruning old tombstones. */
+  removedAt: number
+}
+
+/** Exact repo ownership changes made while re-adopting a removed SSH host. */
+export type SshRepoReadoption = {
+  oldTargetId: string
+  newTargetId: string
+  repoIds: string[]
+}
+
+export type SshTargetAddResult = {
+  target: SshTarget
+  repoReadoptions: SshRepoReadoption[]
+}
+
+export type SshConfigImportResult = {
+  targets: SshTarget[]
+  repoReadoptions: SshRepoReadoption[]
 }
 
 export type SavedPortForward = {

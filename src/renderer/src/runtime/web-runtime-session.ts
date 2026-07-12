@@ -50,6 +50,7 @@ export async function createWebRuntimeSessionTerminal(args: {
   afterTabId?: string
   targetGroupId?: string
   command?: string
+  cwd?: string
   env?: Record<string, string>
   startupCommandDelivery?: StartupCommandDelivery
   launchConfig?: SleepingAgentLaunchConfig
@@ -78,6 +79,7 @@ export async function createWebRuntimeSessionTerminal(args: {
         afterTabId: args.afterTabId ? toHostSessionTabId(args.afterTabId) : undefined,
         targetGroupId: args.targetGroupId,
         command: args.command,
+        cwd: args.cwd,
         ...(args.env ? { env: args.env } : {}),
         startupCommandDelivery: args.startupCommandDelivery,
         ...(args.launchConfig ? { launchConfig: args.launchConfig } : {}),

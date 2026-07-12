@@ -1,8 +1,3 @@
-/* eslint-disable max-lines -- Why: pinning every layer that should have
-   caught the original "node-pty not available" bug (chained shell, package
-   ordering, probe shape, channel-failure surfacing, .bashrc-noise immunity,
-   platform-tagged logs) requires keeping these scenarios in one file so the
-   shared mock connection and exec-response fixture stay aligned. */
 // Why: regression coverage for the install-probe contract. The original
 // "node-pty is not available" bug shipped because every layer that should
 // have caught it (chained shell, swallowing catch, dir-only probe) was
@@ -109,6 +104,7 @@ function makeMockConnection(capture: SftpWriteCapture): SshConnection {
     end: vi.fn()
   })
   return {
+    canRunConcurrentExecCommands: vi.fn().mockReturnValue(false),
     exec: vi.fn().mockResolvedValue({
       on: vi.fn(),
       stderr: { on: vi.fn() },
@@ -156,7 +152,7 @@ function makeExecResponses(opts: {
   // build toolchain — no chmod/probe/launch slots are reached.
   if (opts.npmInstall !== 'ok') {
     return [
-      'Linux x86_64',
+      '__ORCA_REMOTE_PLATFORM__ Linux x86_64',
       '/home/u',
       '', // mkdir remoteDir (uploadRelay)
       '', // chmod +x node
@@ -175,7 +171,7 @@ function makeExecResponses(opts: {
             ? { reject: 'cd: no such file or directory' }
             : opts.probe
   const slots: ExecResponse[] = [
-    'Linux x86_64',
+    '__ORCA_REMOTE_PLATFORM__ Linux x86_64',
     '/home/u',
     '', // mkdir remoteDir (uploadRelay)
     '', // chmod +x node
@@ -534,7 +530,7 @@ describe('installNativeDeps (via deployAndLaunchRelay)', () => {
     vi.mocked(resolveRemoteNodePath).mockResolvedValueOnce('C:/Program Files/nodejs/node.exe')
     const conn = makeMockConnection(sftpCapture)
     feed([
-      'Windows AMD64',
+      '__ORCA_REMOTE_PLATFORM__ Windows AMD64',
       'C:\\Users\\u',
       '', // mkdir remoteDir
       '', // npm install native deps
@@ -609,7 +605,7 @@ describe('installNativeDeps (via deployAndLaunchRelay)', () => {
     vi.mocked(isRelayAlreadyInstalled).mockResolvedValue(true)
     const conn = makeMockConnection(sftpCapture)
     feed([
-      'Linux x86_64',
+      '__ORCA_REMOTE_PLATFORM__ Linux x86_64',
       '/home/u',
       'MISSING', // first native-deps probe before lock
       'MISSING', // re-probe after lock
@@ -636,7 +632,13 @@ describe('installNativeDeps (via deployAndLaunchRelay)', () => {
   it('does not mutate an existing relay dir when required native deps are present', async () => {
     vi.mocked(isRelayAlreadyInstalled).mockResolvedValue(true)
     const conn = makeMockConnection(sftpCapture)
-    feed(['Linux x86_64', '/home/u', 'ORCA-NATIVE-DEPS-OK', 'DEAD', 'READY'])
+    feed([
+      '__ORCA_REMOTE_PLATFORM__ Linux x86_64',
+      '/home/u',
+      'ORCA-NATIVE-DEPS-OK',
+      'DEAD',
+      'READY'
+    ])
 
     await deployAndLaunchRelay(conn)
 

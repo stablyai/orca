@@ -1,9 +1,9 @@
 /* eslint-disable max-lines -- Why: this integration-style RPC test keeps the request/response contract together so regressions in the external CLI surface are easier to spot. */
-import { existsSync, mkdtempSync } from 'fs'
-import { tmpdir } from 'os'
-import { join } from 'path'
-import { createConnection, type Socket } from 'net'
-import { EventEmitter } from 'events'
+import { existsSync, mkdtempSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import { createConnection, type Socket } from 'node:net'
+import { EventEmitter } from 'node:events'
 import { describe, expect, it, vi } from 'vitest'
 import WebSocket from 'ws'
 import Database from '../sqlite/sync-database'
@@ -13,6 +13,15 @@ import * as runtimeMetadataModule from './runtime-metadata'
 import { readRuntimeMetadata } from './runtime-metadata'
 import { createRuntimeTransportMetadata, OrcaRuntimeRpcServer } from './runtime-rpc'
 import { parsePairingCode } from '../../shared/pairing'
+import { subscribeRemoteRuntimeRequest } from '../../shared/remote-runtime-client'
+import {
+  TerminalStreamOpcode,
+  decodeTerminalStreamFrame,
+  decodeTerminalStreamText,
+  encodeTerminalStreamFrame,
+  encodeTerminalStreamJson,
+  encodeTerminalStreamText
+} from '../../shared/terminal-stream-protocol'
 import { decrypt, deriveSharedKey, encrypt, generateKeyPair } from './rpc/e2ee-crypto'
 import { DeviceRegistry } from './device-registry'
 
@@ -351,6 +360,7 @@ describe('OrcaRuntimeRpcServer', () => {
       expect(parsed?.endpoint).toBe(offer.endpoint)
       expect(parsed?.deviceToken).toBeTruthy()
       expect(parsed?.publicKeyB64).toBeTruthy()
+      expect(parsed?.scope).toBe('runtime')
       expect(server.getDeviceRegistry()?.getDevice(offer.deviceId)?.scope).toBe('runtime')
     }
 
@@ -2049,6 +2059,46 @@ describe('OrcaRuntimeRpcServer', () => {
     await server.stop()
   })
 
+  it('stamps the authenticated device scope onto status.get for WebSocket clients', async () => {
+    const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-rpc-'))
+    const runtime = new OrcaRuntimeService()
+    const server = new OrcaRuntimeRpcServer({ runtime, userDataPath, enableWebSocket: false })
+    server['deviceRegistry'] = new DeviceRegistry(userDataPath)
+    const mobile = server['deviceRegistry']!.addDevice('phone', 'mobile')
+    const runtimeDevice = server['deviceRegistry']!.addDevice('browser', 'runtime')
+
+    const sendStatus = async (token: string): Promise<Record<string, unknown>> => {
+      const replies: Record<string, unknown>[] = []
+      await server['handleWebSocketMessage'](
+        JSON.stringify({ id: 'req_status', method: 'status.get', deviceToken: token }),
+        (response) => replies.push(JSON.parse(response) as Record<string, unknown>),
+        () => {}
+      )
+      return replies[0]!
+    }
+
+    const mobileReply = await sendStatus(mobile.token)
+    expect(mobileReply).toMatchObject({ id: 'req_status', ok: true })
+    // Why: the mobile-scope web client reads this to refuse the full app.
+    expect((mobileReply.result as { deviceScope?: string }).deviceScope).toBe('mobile')
+
+    const runtimeReply = await sendStatus(runtimeDevice.token)
+    expect((runtimeReply.result as { deviceScope?: string }).deviceScope).toBe('runtime')
+
+    // Other methods stay unmodified — only status.get carries the scope.
+    const replies: Record<string, unknown>[] = []
+    await server['handleWebSocketMessage'](
+      JSON.stringify({ id: 'req_forbidden', method: 'files.delete', deviceToken: mobile.token }),
+      (response) => replies.push(JSON.parse(response) as Record<string, unknown>),
+      () => {}
+    )
+    expect(replies[0]).toMatchObject({
+      id: 'req_forbidden',
+      ok: false,
+      error: { code: 'forbidden' }
+    })
+  })
+
   it('rejects requests with the wrong auth token', async () => {
     const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-rpc-'))
     const runtime = new OrcaRuntimeService()
@@ -2608,6 +2658,7 @@ describe('OrcaRuntimeRpcServer', () => {
     if (!phoneOffer.available) {
       throw new Error('WebSocket pairing unavailable')
     }
+    expect(parsePairingCode(phoneOffer.pairingUrl)?.scope).toBe('mobile')
     const phone = await authenticateMobileWsSession(phoneOffer.pairingUrl)
     const phoneResponses = createEncryptedWsResponseReader(phone)
     const metadata = readRuntimeMetadata(userDataPath)
@@ -2714,6 +2765,206 @@ describe('OrcaRuntimeRpcServer', () => {
     } finally {
       phoneResponses.dispose()
       phone.ws.close()
+      await server.stop()
+    }
+  })
+
+  it('keeps active runtime multiplex streams responsive while a background stream is ACK-limited over WebSocket', async () => {
+    const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-rpc-'))
+    const writes: { terminal: string; text: string }[] = []
+    const runtime = new OrcaRuntimeService(makeStore() as never)
+    const spawn = vi
+      .fn()
+      .mockResolvedValueOnce({ id: 'multiplex-background-pty' })
+      .mockResolvedValueOnce({ id: 'multiplex-active-pty' })
+    runtime.setPtyController({
+      spawn,
+      write: (ptyId, data) => {
+        writes.push({ terminal: ptyId, text: data })
+        return true
+      },
+      kill: () => true,
+      getForegroundProcess: async () => null
+    })
+    const server = new OrcaRuntimeRpcServer({
+      runtime,
+      userDataPath,
+      enableWebSocket: true,
+      wsPort: 0
+    })
+
+    await server.start()
+
+    const phoneOffer = server.createPairingOffer({
+      address: '127.0.0.1',
+      name: 'phone',
+      scope: 'mobile'
+    })
+    expect(phoneOffer.available).toBe(true)
+    if (!phoneOffer.available) {
+      throw new Error('WebSocket pairing unavailable')
+    }
+    const pairing = parsePairingCode(phoneOffer.pairingUrl)
+    expect(pairing).toBeTruthy()
+    if (!pairing) {
+      throw new Error('Pairing URL did not parse')
+    }
+
+    const metadata = readRuntimeMetadata(userDataPath)
+    const laptopEndpoint = metadata!.transports[0]!.endpoint
+    const laptopAuthToken = metadata!.authToken
+    const worktree = 'id:repo-1::/tmp/worktree-a'
+    const backgroundLeafId = '11111111-1111-4111-8111-111111111111'
+    const activeLeafId = '22222222-2222-4222-8222-222222222222'
+    const backgroundCreateResponse = await sendRequest(laptopEndpoint, {
+      id: 'laptop_create_background',
+      authToken: laptopAuthToken,
+      method: 'terminal.create',
+      params: {
+        worktree,
+        command: 'background',
+        tabId: 'multiplex-background-tab',
+        leafId: backgroundLeafId
+      }
+    })
+    const activeCreateResponse = await sendRequest(laptopEndpoint, {
+      id: 'laptop_create_active',
+      authToken: laptopAuthToken,
+      method: 'terminal.create',
+      params: {
+        worktree,
+        command: 'active',
+        tabId: 'multiplex-active-tab',
+        leafId: activeLeafId,
+        activate: true
+      }
+    })
+    const backgroundTerminal = (backgroundCreateResponse.result as { terminal: { handle: string } })
+      .terminal
+    const activeTerminal = (activeCreateResponse.result as { terminal: { handle: string } })
+      .terminal
+
+    const responses: Record<string, unknown>[] = []
+    const binaryFrames: Uint8Array<ArrayBufferLike>[] = []
+    const onError = vi.fn()
+    const subscription = await subscribeRemoteRuntimeRequest(
+      pairing,
+      'terminal.multiplex',
+      {},
+      15_000,
+      {
+        onResponse: (response) => responses.push(response as Record<string, unknown>),
+        onBinary: (bytes) => binaryFrames.push(bytes),
+        onError
+      }
+    )
+
+    try {
+      await vi.waitFor(() =>
+        expect(
+          responses.some(
+            (response) => (response.result as { type?: string } | undefined)?.type === 'ready'
+          )
+        ).toBe(true)
+      )
+      subscription.sendBinary(
+        encodeTerminalStreamFrame({
+          seq: 1,
+          opcode: TerminalStreamOpcode.Subscribe,
+          streamId: 0,
+          payload: encodeTerminalStreamJson({
+            streamId: 21,
+            terminal: backgroundTerminal.handle,
+            client: { id: 'desktop-background', type: 'desktop' },
+            capabilities: { ackOutput: 1 }
+          })
+        })
+      )
+      subscription.sendBinary(
+        encodeTerminalStreamFrame({
+          seq: 2,
+          opcode: TerminalStreamOpcode.Subscribe,
+          streamId: 0,
+          payload: encodeTerminalStreamJson({
+            streamId: 22,
+            terminal: activeTerminal.handle,
+            client: { id: 'desktop-active', type: 'desktop' },
+            capabilities: { ackOutput: 1 }
+          })
+        })
+      )
+      await vi.waitFor(() => {
+        const subscribedStreamIds = responses
+          .map((response) => response.result as { type?: string; streamId?: number } | undefined)
+          .filter((result) => result?.type === 'subscribed')
+          .map((result) => result?.streamId)
+        expect(subscribedStreamIds).toEqual(expect.arrayContaining([21, 22]))
+      })
+      binaryFrames.splice(0)
+
+      const backgroundOutput = 'B'.repeat(700 * 1024)
+      runtime.onPtyData('multiplex-background-pty', backgroundOutput, 1)
+      await vi.waitFor(() => {
+        const backgroundFrames = binaryFrames
+          .map((frame) => decodeTerminalStreamFrame(frame))
+          .filter((frame) => frame?.opcode === TerminalStreamOpcode.Output && frame.streamId === 21)
+        const backgroundBytes = backgroundFrames.reduce(
+          (total, frame) => total + (frame?.payload.byteLength ?? 0),
+          0
+        )
+        expect(backgroundBytes).toBeGreaterThan(0)
+        expect(backgroundBytes).toBeLessThan(backgroundOutput.length)
+      })
+
+      const frameCountBeforeActive = binaryFrames.length
+      runtime.onPtyData('multiplex-active-pty', 'ACTIVE_MULTIPLEX_READY\r\n', 2)
+      await vi.waitFor(() => {
+        const activeOutput = binaryFrames
+          .slice(frameCountBeforeActive)
+          .map((frame) => decodeTerminalStreamFrame(frame))
+          .filter((frame) => frame?.opcode === TerminalStreamOpcode.Output && frame.streamId === 22)
+          .map((frame) => (frame ? decodeTerminalStreamText(frame.payload) : ''))
+          .join('')
+        expect(activeOutput).toContain('ACTIVE_MULTIPLEX_READY')
+      })
+
+      subscription.sendBinary(
+        encodeTerminalStreamFrame({
+          seq: 3,
+          opcode: TerminalStreamOpcode.Input,
+          streamId: 22,
+          payload: encodeTerminalStreamText('still interactive\r')
+        })
+      )
+      await vi.waitFor(() =>
+        expect(writes).toContainEqual({
+          terminal: 'multiplex-active-pty',
+          text: 'still interactive\r'
+        })
+      )
+
+      const backgroundBytesBeforeAck = binaryFrames
+        .map((frame) => decodeTerminalStreamFrame(frame))
+        .filter((frame) => frame?.opcode === TerminalStreamOpcode.Output && frame.streamId === 21)
+        .reduce((total, frame) => total + (frame?.payload.byteLength ?? 0), 0)
+      subscription.sendBinary(
+        encodeTerminalStreamFrame({
+          seq: 4,
+          opcode: TerminalStreamOpcode.Ack,
+          streamId: 21,
+          payload: encodeTerminalStreamJson({ bytes: backgroundBytesBeforeAck })
+        })
+      )
+      await vi.waitFor(() => {
+        const backgroundBytesAfterAck = binaryFrames
+          .map((frame) => decodeTerminalStreamFrame(frame))
+          .filter((frame) => frame?.opcode === TerminalStreamOpcode.Output && frame.streamId === 21)
+          .reduce((total, frame) => total + (frame?.payload.byteLength ?? 0), 0)
+        expect(backgroundBytesAfterAck).toBeGreaterThan(backgroundBytesBeforeAck)
+      })
+      expect(onError).not.toHaveBeenCalled()
+    } finally {
+      subscription.close()
       await server.stop()
     }
   })

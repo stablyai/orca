@@ -1,4 +1,4 @@
-import { randomBytes, randomUUID } from 'crypto'
+import { randomBytes, randomUUID } from 'node:crypto'
 import { splitTmuxCommand } from '../../shared/claude-agent-teams-tmux-compat'
 import { ClaudeAgentTeamsTmuxDispatcher } from './claude-agent-teams-tmux-dispatcher'
 import type {

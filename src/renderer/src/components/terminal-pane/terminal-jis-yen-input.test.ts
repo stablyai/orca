@@ -33,6 +33,13 @@ describe('resolveTerminalJisYenInput', () => {
     })
   })
 
+  it('leaves IME-processed yen keydowns (keyCode 229) to the IME', () => {
+    expect(resolveTerminalJisYenInput(event({ keyCode: 229 }), enabledOnMac)).toBeNull()
+    expect(
+      resolveTerminalJisYenInput(event({ type: 'keyup', keyCode: 229 }), enabledOnMac)
+    ).toBeNull()
+  })
+
   it('does not rewrite arbitrary yen text from another physical key', () => {
     expect(resolveTerminalJisYenInput(event({ code: 'KeyY' }), enabledOnMac)).toBeNull()
   })

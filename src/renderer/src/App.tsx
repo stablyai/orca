@@ -7,6 +7,7 @@ import {
   useMemo,
   useRef,
   useState,
+  useSyncExternalStore,
   type SetStateAction
 } from 'react'
 import { lazyWithRetry as lazy } from '@/lib/lazy-with-retry'
@@ -64,6 +65,7 @@ import { onOnboardingReopened } from './components/onboarding/show-onboarding-ev
 import { shouldShowOnboarding } from './components/onboarding/should-show-onboarding'
 import { MarkdownTemplatePicker } from './components/editor/MarkdownTemplatePicker'
 import { FloatingTerminalToggleButton } from './components/floating-terminal/FloatingTerminalToggleButton'
+import { OrcaProfileSwitcher } from './components/orca-profiles/OrcaProfileSwitcher'
 import {
   TOGGLE_FLOATING_TERMINAL_EVENT,
   requestFloatingTerminalOpenMaximized
@@ -112,16 +114,24 @@ import {
 } from './lib/workspace-session'
 import { createSessionWriteSubscriber } from './lib/session-write-subscriber'
 import {
-  fetchWorkspaceSessionFromHosts,
+  fetchWorkspaceSessionWithRuntimeHostOwners,
   patchWorkspaceSessionByHost,
   persistWorkspaceSessionByHostSync
 } from './lib/workspace-session-host-persistence'
+import { collectFolderWorkspaceKeysFromSession } from './lib/workspace-session-hydration-keys'
 import {
   getStartupErrorFallbackUI,
   hydratePersistedUIAfterStartupRead
 } from './lib/startup-ui-hydration'
+import {
+  logRendererStartupDiagnostic,
+  timeRendererStartupStep,
+  timeRendererStartupSyncStep
+} from './startup/startup-diagnostics'
 import { shouldRenderPetOverlay } from './components/pet/pet-overlay-visibility'
 import { applyDocumentTheme } from './lib/document-theme'
+import { getSystemPrefersDark } from './lib/terminal-theme'
+import { publishTerminalViewAttributesAtAppStart } from './components/terminal-pane/terminal-appearance'
 import { isEditableTarget } from './lib/editable-target'
 import { getSelectedTextForFileSearch } from './lib/file-search-selection'
 import { useShortcutLabel } from './hooks/useShortcutLabel'
@@ -153,6 +163,7 @@ import {
   type KeybindingContext,
   type PhysicalModifierToken
 } from '../../shared/keybindings'
+import { toRuntimeExecutionHostId, type ExecutionHostId } from '../../shared/execution-host'
 import {
   ModifierDoubleTapDetector,
   toModifierDoubleTapEvent
@@ -162,6 +173,15 @@ import { showTerminalShortcutCaptureNotification } from '@/lib/terminal-shortcut
 import { resolveMountedLazyModalIds, type LazyModalId } from './lazy-modal-mount-state'
 import { translate } from '@/i18n/i18n'
 import PinnedTabCloseDialog from './components/terminal-pane/PinnedTabCloseDialog'
+import {
+  hasRequestedBackgroundTerminalWorktreeMount,
+  subscribeBackgroundTerminalWorktreeMountRequests
+} from './components/terminal/background-terminal-worktree-mount'
+
+// Why: agents alive during a hard kill (crash, forced update install) need a
+// reasonably fresh resume record on disk; one minute bounds the lost window
+// without measurable per-tick cost (the capture skips unchanged records).
+const SLEEPING_AGENT_RESUME_CAPTURE_INTERVAL_MS = 60_000
 
 const isMac = navigator.userAgent.includes('Mac')
 const isWindows = !isMac && navigator.userAgent.includes('Windows')
@@ -174,6 +194,17 @@ const hasCustomTitleBar = shouldRenderDesktopWindowChrome({
   platform: shortcutPlatform,
   isWebClient: isPairedWebClientWindow()
 })
+
+async function listRuntimeSessionHostIdsForStartup(): Promise<ExecutionHostId[]> {
+  try {
+    return (await window.api.runtimeEnvironments.list()).map((environment) =>
+      toRuntimeExecutionHostId(environment.id)
+    )
+  } catch (err) {
+    console.warn('Failed to list runtime session hosts for startup:', err)
+    return []
+  }
+}
 
 function getKeybindingContext(target: EventTarget | null): KeybindingContext {
   return target instanceof HTMLElement && target.classList.contains('xterm-helper-textarea')
@@ -400,6 +431,7 @@ function App(): React.JSX.Element {
       fetchFolderWorkspacesForAllHosts: s.fetchFolderWorkspacesForAllHosts,
       fetchAllWorktrees: s.fetchAllWorktrees,
       fetchWorktreeLineage: s.fetchWorktreeLineage,
+      fetchOrcaProfiles: s.fetchOrcaProfiles,
       fetchSettings: s.fetchSettings,
       fetchKeybindings: s.fetchKeybindings,
       initGitHubCache: s.initGitHubCache,
@@ -461,6 +493,11 @@ function App(): React.JSX.Element {
   const worktreeSidebarScrollAnchorRef = useRef<VirtualizedScrollAnchor>(null)
   const floatingVisibleTabCount = useAppStore(selectFloatingVisibleTabCount)
   const workspaceSessionReady = useAppStore((s) => s.workspaceSessionReady)
+  const backgroundTerminalMountRequested = useSyncExternalStore(
+    subscribeBackgroundTerminalWorktreeMountRequests,
+    hasRequestedBackgroundTerminalWorktreeMount,
+    hasRequestedBackgroundTerminalWorktreeMount
+  )
   const keybindings = useAppStore((s) => s.keybindings)
   const updateStatus = useAppStore((s) => s.updateStatus)
   const activeContextualTourId = useAppStore((s) => s.activeContextualTourId)
@@ -477,14 +514,16 @@ function App(): React.JSX.Element {
     floatingTerminalEnabled &&
     (floatingTerminalTriggerLocation === 'floating-button' || !statusBarVisible)
   const hasMountedTerminalWorkbenchRef = useRef(false)
-  if (activeWorktreeId !== null) {
+  if (activeWorktreeId !== null || backgroundTerminalMountRequested) {
     hasMountedTerminalWorkbenchRef.current = true
   }
   // Why: skip the terminal bundle on the no-workspace landing path, but once a
   // workspace has mounted, keep Terminal-owned hidden panes alive through sleep
   // and shutdown transitions where activeWorktreeId can briefly become null.
   const shouldMountTerminalWorkbench =
-    activeWorktreeId !== null || hasMountedTerminalWorkbenchRef.current
+    activeWorktreeId !== null ||
+    backgroundTerminalMountRequested ||
+    hasMountedTerminalWorkbenchRef.current
   // Why: visible worktree creation owns its faux tab strip from start to finish;
   // the previous workspace must stay mounted for retention without rendering
   // real chrome.
@@ -843,39 +882,98 @@ function App(): React.JSX.Element {
     // UI mounts.
     let reconnectStarted = false
     void (async () => {
+      const startupStartedAt = performance.now()
+      logRendererStartupDiagnostic('startup-chain-start')
       try {
+        // Why: profile state only feeds the switcher and the add-project
+        // advisory — nothing in the hydration chain reads it synchronously,
+        // so it must not add a serial IPC round-trip before fetchSettings.
+        void actions.fetchOrcaProfiles()
         // Why: repo/worktree hydration routes through settings.activeRuntimeEnvironmentId.
         // Load settings first so a persisted remote runtime does not boot against
         // the local filesystem and then hydrate stale local workspace state.
-        await actions.fetchSettings()
-        // Why: load local + every configured runtime environment (not just the
-        // active one) so a cold start that restored a remote workspace doesn't
-        // hide local repos. The sidebar "All hosts" scope then shows them all.
-        await actions.fetchReposForAllHosts()
-        await actions.fetchProjectGroupsForAllHosts()
-        await actions.fetchFolderWorkspacesForAllHosts()
-        await actions.fetchAllWorktrees()
-        await actions.fetchWorktreeLineage()
-        const persistedUI = await window.api.ui.get()
-        uiHydrated = hydratePersistedUIAfterStartupRead({
-          persistedUI,
-          cancelled,
-          hydratePersistedUI: actions.hydratePersistedUI
-        })
-        // Why: runtime-owned worktree slices live in per-host partitions.
-        // Repos were fetched above, so the known runtime hosts are derivable
-        // here; merge their slices into the unified session the hydrators
-        // expect. An unreadable host partition is skipped (fail-soft).
-        const session = await fetchWorkspaceSessionFromHosts(
-          window.api.session,
-          useAppStore.getState().repos
+        await timeRendererStartupStep('fetch-settings', () => actions.fetchSettings())
+        // Why here: hidden-at-launch PTYs (background terminal reconnects,
+        // agent sessions) can query OSC 10/11 before any terminal pane mounts
+        // and main's responder is silent-until-first-push. Publish composed
+        // view attributes as soon as settings exist, before any spawn below.
+        publishTerminalViewAttributesAtAppStart(
+          useAppStore.getState().settings,
+          getSystemPrefersDark()
         )
-        await actions.fetchKeybindings()
+        // Why: keybindings + onboarding are main-side reads with no dependency
+        // on the catalog/session steps below, so start them now and await them
+        // at their original positions — the round-trips overlap the local
+        // catalog scans instead of queuing after them. Browser session profiles
+        // are deliberately NOT started early: on a remote runtime they route
+        // through a runtime RPC that may not be connected this early, and a
+        // failed fetch clears the profile list. The floating .catch marks the
+        // rejection handled if an earlier awaited step throws first; each await
+        // still rethrows its own failure.
+        const keybindingsPromise = timeRendererStartupStep('fetch-keybindings', () =>
+          actions.fetchKeybindings()
+        )
+        keybindingsPromise.catch(() => {})
+        const onboardingPromise = timeRendererStartupStep('onboarding-get', () =>
+          window.api.onboarding.get()
+        )
+        onboardingPromise.catch(() => {})
+        // Why: hydrate persisted UI immediately after ui.get() so first paint
+        // reflects saved view settings before the catalog scans below. ui.get()
+        // is awaited (not overlapped) because the hydrate must land before the
+        // local-first catalog/session steps run.
+        const persistedUI = await timeRendererStartupStep('ui-get', () => window.api.ui.get())
+        uiHydrated = timeRendererStartupSyncStep('hydrate-persisted-ui', () =>
+          hydratePersistedUIAfterStartupRead({
+            persistedUI,
+            cancelled,
+            hydratePersistedUI: actions.hydratePersistedUI
+          })
+        )
+        const startupRuntimeHostIds = await timeRendererStartupStep(
+          'list-runtime-session-hosts',
+          listRuntimeSessionHostIdsForStartup
+        )
+        // Why: first paint needs local data and persisted view settings, but
+        // saved remote runtimes can spend the full connect timeout. Load only
+        // the local catalog here; remotes refresh after hydration below.
+        await timeRendererStartupStep('fetch-repos-local', () =>
+          actions.fetchReposForAllHosts({ remoteHosts: 'skip' })
+        )
+        await timeRendererStartupStep('fetch-project-groups-local', () =>
+          actions.fetchProjectGroupsForAllHosts({ remoteHosts: 'skip' })
+        )
+        await timeRendererStartupStep('fetch-folder-workspaces-local', () =>
+          actions.fetchFolderWorkspacesForAllHosts({ remoteHosts: 'skip' })
+        )
+        await timeRendererStartupStep('fetch-worktrees', () =>
+          actions.fetchAllWorktrees({ hydrationPurge: 'defer' })
+        )
+        // Why: runtime-owned worktree slices live in per-host partitions.
+        // Remote catalogs now load after first paint, so include saved runtime
+        // host ids from local settings to restore their persisted session slices
+        // without waiting on network reachability. Unreadable partitions skip.
+        const sessionRead = await timeRendererStartupStep('session-get', () =>
+          fetchWorkspaceSessionWithRuntimeHostOwners(
+            window.api.session,
+            useAppStore.getState().repos,
+            startupRuntimeHostIds
+          )
+        )
+        await keybindingsPromise
         if (!cancelled) {
-          actions.hydrateWorkspaceSession(session)
-          actions.hydrateTabsSession(session)
-          actions.hydrateEditorSession(session)
-          actions.hydrateBrowserSession(session)
+          const sessionHydrationOptions = {
+            additionalValidWorkspaceKeys: collectFolderWorkspaceKeysFromSession(sessionRead.session)
+          }
+          timeRendererStartupSyncStep('hydrate-session-stores', () => {
+            actions.hydrateWorkspaceSession(sessionRead.session, {
+              ...sessionHydrationOptions,
+              runtimeHostIdByWorkspaceSessionKey: sessionRead.runtimeHostIdByWorkspaceSessionKey
+            })
+            actions.hydrateTabsSession(sessionRead.session, sessionHydrationOptions)
+            actions.hydrateEditorSession(sessionRead.session, sessionHydrationOptions)
+            actions.hydrateBrowserSession(sessionRead.session, sessionHydrationOptions)
+          })
           // Why: prune lastVisitedAtByWorktreeId entries whose worktrees
           // no longer exist. Must run AFTER hydration — before this point,
           // async repo loads may not have populated worktreesByRepo yet and
@@ -884,10 +982,14 @@ function App(): React.JSX.Element {
           // so users upgrading from a pre-feature build don't see the active
           // worktree sink in the empty-query list.
           // See docs/cmd-j-empty-query-ordering.md.
-          actions.pruneLastVisitedTimestamps()
-          actions.seedActiveWorktreeLastVisitedIfMissing()
-          await actions.fetchBrowserSessionProfiles()
-          const onboardingState = await window.api.onboarding.get()
+          timeRendererStartupSyncStep('visit-timestamp-prune', () => {
+            actions.pruneLastVisitedTimestamps()
+            actions.seedActiveWorktreeLastVisitedIfMissing()
+          })
+          await timeRendererStartupStep('fetch-browser-session-profiles', () =>
+            actions.fetchBrowserSessionProfiles()
+          )
+          const onboardingState = await onboardingPromise
           if (!cancelled) {
             setOnboarding(onboardingState)
             setOnboardingLoaded(true)
@@ -898,11 +1000,13 @@ function App(): React.JSX.Element {
           // tabs through pty.attach on the relay. Passphrase-protected targets
           // are deferred to tab focus to avoid stacking credential dialogs at
           // startup before the user has context.
-          const connectionIds = session.activeConnectionIdsAtShutdown ?? []
+          const connectionIds = sessionRead.session.activeConnectionIdsAtShutdown ?? []
           if (connectionIds.length > 0) {
             try {
               const SSH_RECONNECT_TIMEOUT_MS = 15_000
-              const allTargets = await window.api.ssh.listTargets()
+              const allTargets = await timeRendererStartupStep('ssh-list-targets', () =>
+                window.api.ssh.listTargets()
+              )
               const targetMap = new Map(allTargets.map((t) => [t.id, t]))
               const targets = connectionIds.map((targetId) => ({
                 targetId,
@@ -923,25 +1027,33 @@ function App(): React.JSX.Element {
               // reattached when the user focuses the tab (by which time the
               // slow connect will likely have succeeded).
               const timedOutTargets: string[] = []
-              await Promise.allSettled(
-                eagerTargets.map(({ targetId }) =>
-                  Promise.race([
-                    window.api.ssh.connect({ targetId }),
-                    new Promise((_, reject) =>
-                      setTimeout(
-                        () => reject(new Error('SSH reconnect timeout')),
-                        SSH_RECONNECT_TIMEOUT_MS
-                      )
+              await timeRendererStartupStep(
+                'ssh-reconnect',
+                () =>
+                  Promise.allSettled(
+                    eagerTargets.map(({ targetId }) =>
+                      Promise.race([
+                        window.api.ssh.connect({ targetId }),
+                        new Promise((_, reject) =>
+                          setTimeout(
+                            () => reject(new Error('SSH reconnect timeout')),
+                            SSH_RECONNECT_TIMEOUT_MS
+                          )
+                        )
+                      ]).catch((err) => {
+                        const isTimeout =
+                          err instanceof Error && err.message === 'SSH reconnect timeout'
+                        if (isTimeout) {
+                          timedOutTargets.push(targetId)
+                        }
+                        console.warn(`SSH auto-reconnect failed for ${targetId}:`, err)
+                      })
                     )
-                  ]).catch((err) => {
-                    const isTimeout =
-                      err instanceof Error && err.message === 'SSH reconnect timeout'
-                    if (isTimeout) {
-                      timedOutTargets.push(targetId)
-                    }
-                    console.warn(`SSH auto-reconnect failed for ${targetId}:`, err)
-                  })
-                )
+                  ),
+                {
+                  eagerTargets: eagerTargets.length,
+                  deferredTargets: deferredTargets.length
+                }
               )
               if (timedOutTargets.length > 0) {
                 actions.setDeferredSshReconnectTargets([
@@ -974,14 +1086,20 @@ function App(): React.JSX.Element {
             } catch (err) {
               console.warn('SSH startup reconnect failed:', err)
             }
+          } else {
+            logRendererStartupDiagnostic('ssh-reconnect-skipped', { connectionIds: 0 })
           }
 
           // Why: main overlaps daemon/hook startup with renderer hydration for
           // first paint, but restored terminals still need those services ready
           // before they mount and spawn/reconnect PTYs.
-          await window.api.app.awaitFirstWindowStartupServices()
+          await timeRendererStartupStep('first-window-services-await', () =>
+            window.api.app.awaitFirstWindowStartupServices()
+          )
           reconnectStarted = true
-          await actions.reconnectPersistedTerminals(abortController.signal)
+          await timeRendererStartupStep('reconnect-terminals', () =>
+            actions.reconnectPersistedTerminals(abortController.signal)
+          )
           syncZoomCSSVar()
           // Why (issue #1158): unlock the debounced session writer only after
           // hydration AND all dependent startup steps (SSH reconnect, terminal
@@ -991,6 +1109,26 @@ function App(): React.JSX.Element {
           // and the writer would serialize a partially-mutated store back to
           // disk — the exact data-loss mode this PR fixes.
           actions.setHydrationSucceeded(true)
+          logRendererStartupDiagnostic('startup-hydration-done', {
+            durationMs: Math.round(performance.now() - startupStartedAt)
+          })
+          void (async () => {
+            try {
+              await timeRendererStartupStep('remote-catalog-refresh', async () => {
+                await actions.fetchReposForAllHosts()
+                await actions.fetchProjectGroupsForAllHosts()
+                await actions.fetchFolderWorkspacesForAllHosts()
+              })
+              if (!cancelled) {
+                await timeRendererStartupStep('remote-worktree-refresh', async () => {
+                  await actions.fetchAllWorktrees()
+                  await actions.fetchWorktreeLineage()
+                })
+              }
+            } catch (err) {
+              console.warn('Remote startup catalog refresh failed:', err)
+            }
+          })()
         }
       } catch (error) {
         // Why (issue #1158): previously this catch called hydrateWorkspaceSession
@@ -1242,6 +1380,22 @@ function App(): React.JSX.Element {
     return () => window.removeEventListener('beforeunload', captureAndFlush)
   }, [])
 
+  // Why: beforeunload never fires on a hard kill (crash, forced update
+  // install, TerminateProcess), so agents alive at that moment would leave no
+  // resume record. This periodic capture stores only agent session ids — not
+  // scrollback, see the no-periodic-scrollback note below — and the store
+  // action skips unchanged records, so idle ticks write nothing; real changes
+  // flow through the debounced session-write subscriber.
+  useEffect(() => {
+    const timer = window.setInterval(() => {
+      if (!shouldPersistWorkspaceSession(useAppStore.getState())) {
+        return
+      }
+      useAppStore.getState().captureAllSleepingAgentSessions()
+    }, SLEEPING_AGENT_RESUME_CAPTURE_INTERVAL_MS)
+    return () => window.clearInterval(timer)
+  }, [])
+
   // Own the single window-close-request subscription at the always-mounted App
   // root. Why: the rich confirmation flow lives in Terminal, which is not
   // mounted on the no-workspace landing page (and is lazy-loaded elsewhere), so
@@ -1389,6 +1543,8 @@ function App(): React.JSX.Element {
   // Why: suppress right sidebar controls on full-page navigation surfaces
   // since those surfaces intentionally own the full content area.
   const showRightSidebarControls = !creationLayoutActive && canShowRightSidebarForView(activeView)
+  const showProfileSwitcherInSidebarFooter = showSidebar && sidebarOpen
+  const showProfileSwitcherInTopRight = !showProfileSwitcherInSidebarFooter
 
   const handleToggleExpand = (): void => {
     if (!effectiveActiveTabId) {
@@ -2030,6 +2186,7 @@ function App(): React.JSX.Element {
           </TooltipContent>
         </Tooltip>
       )}
+      {showProfileSwitcherInTopRight ? <OrcaProfileSwitcher /> : null}
       {/* Why: when the right sidebar is open, its own header renders
       an identical close button — hide this copy so only one is
       visible at a time. */}
@@ -2039,6 +2196,25 @@ function App(): React.JSX.Element {
       {hasCustomTitleBar && <div className="window-controls-titlebar-spacer" />}
     </>
   )
+  const workspaceProfileSwitcher =
+    showProfileSwitcherInTopRight &&
+    workspaceChromeActive &&
+    leftTitlebarChromeLayout.shouldMount &&
+    !stackedSidebarOpen ? (
+      <div
+        className="absolute top-0 z-10 flex h-[36px] items-center"
+        style={
+          {
+            right: showRightSidebarControls
+              ? 'calc(var(--window-controls-width) + 42px)'
+              : 'var(--window-controls-width)',
+            WebkitAppRegion: 'no-drag'
+          } as React.CSSProperties
+        }
+      >
+        <OrcaProfileSwitcher />
+      </div>
+    ) : null
 
   return (
     <div
@@ -2216,6 +2392,7 @@ function App(): React.JSX.Element {
                             {rightSidebarToggle}
                           </div>
                         )}
+                        {workspaceProfileSwitcher}
                         <div className="flex flex-1 min-w-0 min-h-0 flex-col">
                           {shouldMountTerminalWorkbench ? (
                             <div

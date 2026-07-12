@@ -1,5 +1,3 @@
-/* oxlint-disable max-lines -- Why: keeping these mocked TabBar wiring cases
- * together avoids duplicating the lightweight renderer harness. */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const appStoreSnapshot: {
@@ -22,6 +20,8 @@ const useAppStoreMock = vi.fn(
       activeTabId: string | null
       activeTabType: 'terminal' | 'editor' | 'browser' | 'simulator' | null
       gitStatusByWorktree: Record<string, never[]>
+      repos: never[]
+      worktreesByRepo: Record<string, never[]>
       unifiedTabsByWorktree: Record<string, unknown[]>
       activeGroupIdByWorktree: Record<string, string>
       pinTab: typeof pinTabMock
@@ -36,6 +36,8 @@ const useAppStoreMock = vi.fn(
       activeTabId: appStoreSnapshot.activeTabId,
       activeTabType: appStoreSnapshot.activeTabType,
       gitStatusByWorktree: {},
+      repos: [],
+      worktreesByRepo: {},
       unifiedTabsByWorktree: appStoreSnapshot.unifiedTabsByWorktree,
       activeGroupIdByWorktree: appStoreSnapshot.activeGroupIdByWorktree,
       pinTab: pinTabMock,
@@ -60,6 +62,12 @@ vi.mock('react', async () => {
     useState: <T>(initial: T) => [initial, vi.fn()] as const
   }
 })
+
+// The headless React mock above stubs hooks, so zustand's useShallow (which
+// calls useRef) has no dispatcher; make it a pass-through like the store mock.
+vi.mock('zustand/react/shallow', () => ({
+  useShallow: (selector: unknown) => selector
+}))
 
 vi.mock('lucide-react', () => ({
   FilePlus: function FilePlus() {
@@ -103,6 +111,8 @@ useAppStoreExport.getState = vi.fn(() => ({
   activeTabId: appStoreSnapshot.activeTabId,
   activeTabType: appStoreSnapshot.activeTabType,
   gitStatusByWorktree: {},
+  repos: [],
+  worktreesByRepo: {},
   unifiedTabsByWorktree: appStoreSnapshot.unifiedTabsByWorktree,
   activeGroupIdByWorktree: appStoreSnapshot.activeGroupIdByWorktree,
   pinTab: pinTabMock,

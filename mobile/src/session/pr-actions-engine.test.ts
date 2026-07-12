@@ -80,6 +80,51 @@ describe('PrActionsEngine — transport-rejection-normalized outcomes settle cle
     expect(engine.error).toBe('socket hung up')
     expect(engine.busy).toBeNull()
   })
+
+  it('surfaces a refetch throw as error without rejecting the action promise', async () => {
+    const engine = new PrActionsEngine({
+      mutations: {
+        mergePR: async () => ({ ok: true }),
+        setPRAutoMerge: async () => ({ ok: true }),
+        updatePRState: async () => ({ ok: true }),
+        requestReviewers: async () => ({ ok: true }),
+        removeReviewers: async () => ({ ok: true }),
+        rerunChecks: async () => ({ ok: true })
+      },
+      prNumber: 1,
+      refetch: async () => {
+        throw new Error('refresh failed')
+      },
+      onChange: () => {}
+    })
+    await expect(engine.merge()).resolves.toBeUndefined()
+    expect(engine.error).toBe('refresh failed')
+    expect(engine.busy).toBeNull()
+  })
+
+  it('does not notify on no-op setError(null) at action start', async () => {
+    const onChange = vi.fn()
+    const engine = new PrActionsEngine({
+      mutations: {
+        mergePR: async () => ({ ok: true }),
+        setPRAutoMerge: async () => ({ ok: true }),
+        updatePRState: async () => ({ ok: true }),
+        requestReviewers: async () => ({ ok: true }),
+        removeReviewers: async () => ({ ok: true }),
+        rerunChecks: async () => ({ ok: true })
+      },
+      prNumber: 1,
+      refetch: () => {},
+      onChange
+    })
+    // Idle: error is already null. Action start must only notify for busy, not a
+    // redundant clearError path.
+    onChange.mockClear()
+    const p = engine.merge()
+    // First notify is setBusy only (setError(null) no-ops).
+    expect(onChange).toHaveBeenCalledTimes(1)
+    await p
+  })
 })
 
 describe('PrActionsEngine — PR identity changes', () => {

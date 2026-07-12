@@ -6,7 +6,8 @@ import {
   markComplexScriptOutput,
   resetTerminalWebglSuggestion
 } from './pane-webgl-renderer'
-import { attachLigatures, openTerminal } from './pane-lifecycle'
+import { attachLigatures, disposePane, openTerminal } from './pane-lifecycle'
+import { ensureArabicShapingJoinerForText } from './terminal-arabic-shaping-joiner'
 import {
   buildDefaultTerminalOptions,
   DEFAULT_TERMINAL_FAST_SCROLL_SENSITIVITY,
@@ -15,6 +16,7 @@ import {
   normalizeTerminalScrollSensitivity,
   resolveTerminalCursorInactiveStyle
 } from './pane-terminal-options'
+import { buildTerminalKeyboardProtocolOptions } from './terminal-keyboard-protocol'
 
 const webglMock = vi.hoisted(() => ({
   contextLossHandler: null as (() => void) | null,
@@ -127,6 +129,70 @@ describe('buildDefaultTerminalOptions', () => {
     // bytes once the terminal advertises support. Regressing this flag
     // silently breaks enhanced chords, especially inside tmux.
     expect(buildDefaultTerminalOptions().vtExtensions?.kittyKeyboard).toBe(true)
+  })
+
+  it('lets a local Windows ConPTY pane override the default and withhold kitty keyboard', () => {
+    // Regression for #2434: per-pane options merge over the default the same way
+    // createPaneDOM merges them, so a local Windows ConPTY override must win and
+    // turn the advertised kittyKeyboard off (CSI-u-blind local CLIs ignore nav keys).
+    const merged = {
+      ...buildDefaultTerminalOptions(),
+      ...buildTerminalKeyboardProtocolOptions({
+        userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)',
+        osRelease: '10.0.26100',
+        connectionId: null,
+        cwd: 'C:\\repo',
+        shellOverride: 'powershell.exe',
+        executionHostId: 'local'
+      })
+    }
+
+    expect(merged.vtExtensions?.kittyKeyboard).toBe(false)
+  })
+
+  it('keeps kitty keyboard when a local Windows ConPTY pane is launching Grok', () => {
+    // Why: Grok needs KKP for Ctrl+Enter interject / Shift+Enter newline; the
+    // ConPTY withhold must not win when launchAgent (or tuiAgent) is grok.
+    const merged = {
+      ...buildDefaultTerminalOptions(),
+      ...buildTerminalKeyboardProtocolOptions({
+        userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)',
+        osRelease: '10.0.26100',
+        connectionId: null,
+        cwd: 'C:\\repo',
+        shellOverride: 'powershell.exe',
+        executionHostId: 'local',
+        tuiAgent: 'grok'
+      })
+    }
+
+    expect(merged.vtExtensions?.kittyKeyboard).toBe(true)
+  })
+
+  it('keeps the advertised kitty keyboard default for SSH and macOS/Linux panes', () => {
+    for (const context of [
+      {
+        userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)',
+        connectionId: 'ssh-1',
+        cwd: 'C:\\repo',
+        shellOverride: null,
+        executionHostId: 'local'
+      },
+      {
+        userAgent: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 14_0)',
+        connectionId: null,
+        cwd: '/repo',
+        shellOverride: null,
+        executionHostId: 'local'
+      }
+    ] as const) {
+      const merged = {
+        ...buildDefaultTerminalOptions(),
+        ...buildTerminalKeyboardProtocolOptions(context)
+      }
+
+      expect(merged.vtExtensions?.kittyKeyboard).toBe(true)
+    }
   })
 })
 
@@ -364,24 +430,27 @@ describe('attachLigatures', () => {
   })
 })
 
-describe('openTerminal — Unicode 11 ordering', () => {
+describe('openTerminal — addon and provider wiring', () => {
   beforeEach(() => {
     vi.stubGlobal('requestAnimationFrame', () => 1)
+    vi.stubGlobal('cancelAnimationFrame', vi.fn())
   })
 
   afterEach(() => {
     vi.unstubAllGlobals()
   })
 
-  // Why: CJK / emoji / ZWJ widths get baked into the buffer at the active
-  // unicode version on write. If anything writes bytes through xterm before
-  // unicode v11 is activated (still on default v6 width tables), wide chars
-  // lay out as single cells. The bug surfaces as the broken `?`-style glyphs
-  // users saw on worktree switch.
-  it('activates unicode 11 before any caller-driven write would be possible', () => {
+  function createOpenTerminalHarness(): {
+    pane: ManagedPaneInternal
+    events: string[]
+    getRegisteredJoinHandler: () => ((text: string) => [number, number][]) | null
+  } {
     const events: string[] = []
+    let registeredJoinHandler: ((text: string) => [number, number][]) | null = null
 
-    const fitAddon = { fit: vi.fn() } as unknown as ManagedPaneInternal['fitAddon']
+    const fitAddon = {
+      fit: vi.fn()
+    } as unknown as ManagedPaneInternal['fitAddon']
     const searchAddon = {} as unknown as ManagedPaneInternal['searchAddon']
     const serializeAddon = {} as unknown as ManagedPaneInternal['serializeAddon']
     const unicode11Addon = {} as unknown as ManagedPaneInternal['unicode11Addon']
@@ -398,14 +467,32 @@ describe('openTerminal — Unicode 11 ordering', () => {
       }
     }
 
-    const fakeContainer = {
+    const fakePaneContainer = {
       appendChild: vi.fn(),
       addEventListener: vi.fn()
     } as unknown as HTMLDivElement
+    const fakeXtermContainer = {
+      appendChild: vi.fn(),
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn()
+    } as unknown as HTMLDivElement
     const fakeTooltip = {} as unknown as HTMLDivElement
+    const fakeTerminalElement = {
+      appendChild: vi.fn(),
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+      querySelector: vi.fn(() => null),
+      classList: { contains: vi.fn(() => false) }
+    } as unknown as HTMLElement
+    vi.stubGlobal(
+      'MutationObserver',
+      vi.fn(function MutationObserver() {
+        return { observe: vi.fn(), disconnect: vi.fn() }
+      })
+    )
 
     const terminal = {
-      element: null as HTMLElement | null,
+      element: fakeTerminalElement,
       textarea: null,
       cols: 80,
       rows: 24,
@@ -429,6 +516,14 @@ describe('openTerminal — Unicode 11 ordering', () => {
       write: vi.fn(() => {
         events.push('write')
       }),
+      registerCharacterJoiner: vi.fn((handler: (text: string) => [number, number][]) => {
+        events.push('registerCharacterJoiner')
+        registeredJoinHandler = handler
+        return 3
+      }),
+      deregisterCharacterJoiner: vi.fn((joinerId: number) => {
+        events.push(`deregisterCharacterJoiner:${joinerId}`)
+      }),
       unicode: unicodeProxy,
       buffer: { active: { cursorX: 0, cursorY: 0 } }
     } as unknown as ManagedPaneInternal['terminal']
@@ -439,8 +534,8 @@ describe('openTerminal — Unicode 11 ordering', () => {
       leafId,
       stablePaneId: leafId,
       terminal,
-      container: fakeContainer,
-      xtermContainer: fakeContainer,
+      container: fakePaneContainer,
+      xtermContainer: fakeXtermContainer,
       linkTooltip: fakeTooltip,
       terminalGpuAcceleration: 'off',
       gpuRenderingEnabled: false,
@@ -461,8 +556,22 @@ describe('openTerminal — Unicode 11 ordering', () => {
       debugLabel: null
     }
 
+    return { pane, events, getRegisteredJoinHandler: () => registeredJoinHandler }
+  }
+
+  // Why: CJK / emoji / ZWJ widths get baked into the buffer at the active
+  // unicode version on write. If anything writes bytes through xterm before
+  // unicode v11 is activated (still on default v6 width tables), wide chars
+  // lay out as single cells. The bug surfaces as the broken `?`-style glyphs
+  // users saw on worktree switch.
+  it('activates unicode 11 before any caller-driven write would be possible', () => {
+    const { pane, events } = createOpenTerminalHarness()
+
     openTerminal(pane)
 
+    expect(pane.container.appendChild).toHaveBeenCalledWith(pane.linkTooltip)
+    expect(pane.xtermContainer.appendChild).not.toHaveBeenCalled()
+    expect(pane.terminal.element!.appendChild).not.toHaveBeenCalled()
     expect(events).toContain('loadAddon:unicode11')
     expect(events).toContain('activeVersion=11')
 
@@ -475,5 +584,43 @@ describe('openTerminal — Unicode 11 ordering', () => {
     const loadUnicodeIdx = events.indexOf('loadAddon:unicode11')
     expect(loadUnicodeIdx).toBeLessThan(unicodeIdx)
     expect(events.indexOf('open')).toBeLessThan(loadUnicodeIdx)
+  })
+
+  // Why: ordinary panes must avoid xterm's full-grid character-joiner scan,
+  // while the first RTL write still registers before xterm parses the text.
+  it('registers Arabic shaping lazily and deregisters it on dispose', () => {
+    const { pane, events } = createOpenTerminalHarness()
+
+    openTerminal(pane)
+
+    expect(events).not.toContain('registerCharacterJoiner')
+    expect(pane.arabicShapingJoinerCleanup).toBeTypeOf('function')
+    ensureArabicShapingJoinerForText(pane.terminal, 'مرحبا')
+    expect(events).toContain('registerCharacterJoiner')
+
+    disposePane(pane, new Map([[pane.id, pane]]))
+
+    expect(events).toContain('deregisterCharacterJoiner:3')
+    expect(pane.arabicShapingJoinerCleanup).toBeNull()
+  })
+
+  // Why: the DOM renderer misrenders joined spans (per-character
+  // letter-spacing blowout), so the joiner must only join while this pane's
+  // WebGL addon is live — locked here against the real openTerminal wiring.
+  it('joins RTL runs only while the pane has a live WebGL addon', () => {
+    const { pane, getRegisteredJoinHandler } = createOpenTerminalHarness()
+
+    openTerminal(pane)
+    ensureArabicShapingJoinerForText(pane.terminal, 'مرحبا')
+    const handler = getRegisteredJoinHandler()!
+
+    expect(pane.webglAddon).toBeNull()
+    expect(handler('مرحبا')).toEqual([])
+
+    pane.webglAddon = {} as never
+    expect(handler('مرحبا')).toEqual([[0, 5]])
+
+    pane.webglAddon = null
+    expect(handler('مرحبا')).toEqual([])
   })
 })

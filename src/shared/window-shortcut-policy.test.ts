@@ -1,7 +1,3 @@
-/* eslint-disable max-lines -- Why: this file covers every branch of the
-shortcut policy (letter chords, zoom variants, alt/shift gating, history
-navigation, new-workspace tab routing). Splitting across files would
-fragment the test of a single pure function. */
 import { describe, expect, it } from 'vitest'
 import {
   isRecentTabSwitcherCommitRelease,
@@ -102,6 +98,54 @@ describe('resolveWindowShortcutAction', () => {
         'win32'
       )
     ).toBeNull()
+  })
+
+  it('resolves customized quick-command menu shortcuts with terminal policy gating', () => {
+    const input: WindowShortcutInput = {
+      code: 'KeyQ',
+      key: 'q',
+      meta: false,
+      control: true,
+      alt: false,
+      shift: true
+    }
+    const overrides: KeybindingOverrides = {
+      'tab.openQuickCommandsMenu': ['Mod+Shift+Q']
+    }
+
+    expect(resolveWindowShortcutAction(input, 'linux', overrides)).toEqual({
+      type: 'toggleQuickCommandsMenu'
+    })
+    expect(
+      resolveWindowShortcutAction(input, 'linux', overrides, {
+        context: 'terminal',
+        terminalShortcutPolicy: 'terminal-first'
+      })
+    ).toBeNull()
+    expect(
+      resolveWindowShortcutAction(input, 'linux', overrides, {
+        context: 'terminal',
+        terminalShortcutPolicy: 'orca-first'
+      })
+    ).toEqual({ type: 'toggleQuickCommandsMenu' })
+  })
+
+  it('keeps digit-index navigation ahead of customized quick-command shortcuts', () => {
+    expect(
+      resolveWindowShortcutAction(
+        { code: 'Digit3', key: '3', meta: true, control: false, alt: false, shift: false },
+        'darwin',
+        { 'tab.openQuickCommandsMenu': ['Mod+3'] }
+      )
+    ).toEqual({ type: 'jumpToWorktreeIndex', index: 2 })
+
+    expect(
+      resolveWindowShortcutAction(
+        { code: 'Digit4', key: '4', meta: false, control: false, alt: true, shift: false },
+        'linux',
+        { 'tab.openQuickCommandsMenu': ['Alt+4'] }
+      )
+    ).toEqual({ type: 'jumpToTabIndex', index: 3 })
   })
 
   it('honors remapped tab/workspace number ranges, including swapping the modifiers', () => {

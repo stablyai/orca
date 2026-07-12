@@ -9,6 +9,9 @@ import {
 } from './rich-markdown-range-bounds'
 import type { RichMarkdownReviewNotePosition } from './rich-markdown-review-note-layout'
 import { findRichMarkdownSelectedTextRanges } from './rich-markdown-review-text-ranges'
+import { getRichMarkdownSelectionVisibleText } from './rich-markdown-visible-text-map'
+import { countRichMarkdownReviewMarkdownLines } from './rich-markdown-review-line-count'
+export { countRichMarkdownReviewMarkdownLines } from './rich-markdown-review-line-count'
 
 const RICH_MARKDOWN_ANNOTATION_BUTTON_SIZE_PX = 24
 const RICH_MARKDOWN_ANNOTATION_EDGE_PADDING_PX = 8
@@ -40,27 +43,6 @@ export type RichMarkdownAnnotationTarget = RichMarkdownComposerState & {
   left?: number
   buttonTop: number
   buttonLeft: number
-}
-
-export function countRichMarkdownReviewMarkdownLines(value: string): number {
-  if (value.length === 0) {
-    return 1
-  }
-  let lineCount = 1
-  for (let index = 0; index < value.length; index += 1) {
-    const charCode = value.charCodeAt(index)
-    if (charCode === 13) {
-      lineCount += 1
-      if (value.charCodeAt(index + 1) === 10) {
-        index += 1
-      }
-      continue
-    }
-    if (charCode === 10) {
-      lineCount += 1
-    }
-  }
-  return lineCount
 }
 
 function serializeRichMarkdownJson(editor: Editor, content: JSONContent[]): string {
@@ -293,7 +275,7 @@ export function getRichMarkdownAnnotationTarget(
   if (!rect) {
     return null
   }
-  const selectedText = window.getSelection()?.toString().trim() ?? ''
+  const selectedText = getRichMarkdownSelectionVisibleText(editor.state)
   if (!selectedText) {
     return null
   }

@@ -2,8 +2,8 @@
 the repo-path validation, preference-threading, and stats wiring patterns are
 reviewable as one surface. Splitting by feature area would risk drifting
 validation/gate conventions across handler files. */
-import { ipcMain, webContents } from 'electron'
-import { resolve } from 'path'
+import { ipcMain } from 'electron'
+import { resolve } from 'node:path'
 import type {
   Repo,
   GitHubCreateIssueFields,
@@ -108,15 +108,12 @@ import type {
 import { appStarSourceSchema } from '../../shared/gh-star-source'
 import { track } from '../telemetry/client'
 import { getCohortAtEmit } from '../telemetry/cohort-classifier'
+import { sendToTrustedUIRenderer } from './ui'
 
 const prRefreshVisibilityCleanupRegistered = new Set<number>()
 
-// Why: notify every renderer (each window has its own SWR cache instance)
-// that a work item was mutated locally so they can drop their cached entry
-// and refetch on the next open. Only emitted after a successful mutation.
-// We skip the originating webContents because that renderer already updated
-// its cache optimistically — re-broadcasting would race the optimistic write
-// and erase it.
+// Why: the app renderer owns the SWR cache; browser guests cannot consume this
+// event. Skip the origin because it already updated its cache optimistically.
 function broadcastWorkItemMutated(
   payload: {
     repoPath: string
@@ -126,15 +123,7 @@ function broadcastWorkItemMutated(
   },
   senderId?: number
 ): void {
-  for (const wc of webContents.getAllWebContents()) {
-    if (wc.isDestroyed()) {
-      continue
-    }
-    if (senderId !== undefined && wc.id === senderId) {
-      continue
-    }
-    wc.send('gh:workItemMutated', payload)
-  }
+  sendToTrustedUIRenderer('gh:workItemMutated', payload, senderId)
 }
 
 // Why: returns the full Repo object instead of just the path string so that
@@ -278,19 +267,27 @@ export function registerGitHubHandlers(store: Store, stats: StatsCollector): voi
         linkedPRNumber?: number | null
         fallbackPRNumber?: number | null
         acceptMergedFallbackPR?: boolean
+        currentHeadOid?: string | null
       }
     ) => {
       const repo = assertRegisteredRepo(args, store)
       const localGitOptions = localGitOptionArgs(store, repo)[0]
       const hostedReviewOptionArgs: [] | [{ localGitExecOptions: { wslDistro?: string } }] =
         localGitOptions ? [{ localGitExecOptions: localGitOptions }] : []
+      const currentHeadOid =
+        typeof args.currentHeadOid === 'string' && args.currentHeadOid.trim().length > 0
+          ? args.currentHeadOid.trim()
+          : null
       const lookupOptions: GitHubPRBranchLookupOptions | undefined = hostedReviewOptionArgs[0]
         ? { ...hostedReviewOptionArgs[0] }
-        : args.acceptMergedFallbackPR === true
+        : args.acceptMergedFallbackPR === true || currentHeadOid !== null
           ? {}
           : undefined
       if (lookupOptions && args.acceptMergedFallbackPR === true) {
         lookupOptions.acceptMergedFallbackPR = true
+      }
+      if (lookupOptions && currentHeadOid !== null) {
+        lookupOptions.currentHeadOid = currentHeadOid
       }
       const lookupOptionArgs: [] | [GitHubPRBranchLookupOptions] = lookupOptions
         ? [lookupOptions]
@@ -498,6 +495,44 @@ export function registerGitHubHandlers(store: Store, stats: StatsCollector): voi
   })
 
   ipcMain.handle(
+    'gh:notifyWorkItemMutated',
+    (
+      event,
+      args: {
+        repoPath: string
+        repoId?: string
+        type: 'issue' | 'pr'
+        number: number
+      }
+    ) => {
+      const repo = args.repoId
+        ? store.getRepos().find((candidate) => candidate.id === args.repoId)
+        : assertRegisteredRepo(args, store)
+      if (!repo) {
+        return false
+      }
+      if (
+        (args.type !== 'issue' && args.type !== 'pr') ||
+        typeof args.number !== 'number' ||
+        !Number.isInteger(args.number) ||
+        args.number < 1
+      ) {
+        return false
+      }
+      broadcastWorkItemMutated(
+        {
+          repoPath: repo.path,
+          repoId: repo.id,
+          type: args.type,
+          number: args.number
+        },
+        event.sender.id
+      )
+      return true
+    }
+  )
+
+  ipcMain.handle(
     'gh:prFileContents',
     (
       _event,
@@ -688,7 +723,7 @@ export function registerGitHubHandlers(store: Store, stats: StatsCollector): voi
       })
       if (ok) {
         broadcastWorkItemMutated(
-          { repoPath: repo.path, type: 'pr', number: args.prNumber },
+          { repoPath: repo.path, repoId: repo.id, type: 'pr', number: args.prNumber },
           event.sender.id
         )
       }

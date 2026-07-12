@@ -40,6 +40,24 @@ describe('StatusPorcelainParser', () => {
     ])
   })
 
+  it('marks staged S... submodule rows as commit-changed gitlinks', () => {
+    const parser = new StatusPorcelainParser()
+    parser.update(
+      '1 M. S... 160000 160000 160000 aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb flutter_mine\n',
+      0
+    )
+    parser.finish()
+
+    expect(parser.entries).toEqual([
+      {
+        path: 'flutter_mine',
+        status: 'modified',
+        area: 'staged',
+        submodule: { commitChanged: true, trackedChanges: false, untrackedChanges: false }
+      }
+    ])
+  })
+
   it('collects unmerged lines for async resolution rather than parsing inline', () => {
     const parser = new StatusPorcelainParser()
     parser.update('u UU N... 100644 100644 100644 100644 aa bb cc both.ts\n', 0)

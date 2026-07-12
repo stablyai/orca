@@ -1,8 +1,8 @@
 /* eslint-disable max-lines -- Why: daemon PTY spawning centralizes platform launch setup,
    preflight validation, and lifecycle guards that must stay in one execution path. */
 import * as pty from 'node-pty'
-import { statSync } from 'fs'
-import { delimiter, win32 as pathWin32 } from 'path'
+import { statSync } from 'node:fs'
+import { delimiter, win32 as pathWin32 } from 'node:path'
 import type { SubprocessHandle } from './session'
 import { DaemonProtocolError } from './types'
 import {
@@ -14,10 +14,16 @@ import { isValidPtySize, normalizePtySize } from './daemon-pty-size'
 import {
   ensureNodePtySpawnHelperExecutable,
   getNodePtySpawnHelperCandidates,
+  resolveUnixShellPath,
   validateWorkingDirectory
 } from '../providers/local-pty-utils'
+import { wrapShellSpawnForMacosTccAttribution } from '../providers/macos-tcc-login-shell'
 import { resolveWindowsShellLaunchArgs } from '../providers/windows-shell-args'
-import { resolveEffectiveWindowsPowerShell } from '../providers/windows-powershell'
+import {
+  resolveEffectiveWindowsPowerShell,
+  shouldProbeWindowsPowerShellAvailability,
+  type WindowsPowerShellShellFamily
+} from '../providers/windows-powershell'
 import {
   buildWindowsPowerShellSpawnAttempts,
   type WindowsShellSpawnAttempt
@@ -25,6 +31,7 @@ import {
 import { isPwshAvailable } from '../pwsh'
 import { isHostCodexHomeForWsl, isWslCodexHomeForHost } from '../pty/codex-home-wsl-env'
 import { removeInheritedNoColor } from '../pty/terminal-color-env'
+import { removeAppImageRuntimeEnv } from '../pty/appimage-terminal-env'
 import { parseWslPath } from '../wsl'
 import { addWslEnvKeys } from '../wsl-env'
 import { getWslContextFromSessionId } from './wsl-session-context'
@@ -35,7 +42,8 @@ import {
 } from '../pty/powerlevel10k-wizard-env'
 import { isWindowsGitBashShellPath, resolveWindowsGitBashShellPath } from '../git-bash'
 import { WINDOWS_GIT_BASH_SHELL } from '../../shared/windows-terminal-shell'
-import { resolveAgentForegroundProcess } from '../providers/agent-foreground-process'
+import { resolveAgentForegroundProcessWithAvailability } from '../providers/agent-foreground-process'
+import { readWindowsConptyProcessIds } from '../providers/windows-conpty-process-membership'
 import {
   isAgentForegroundWrapperProcess,
   recognizeAgentProcess,
@@ -48,6 +56,8 @@ import {
 import { isShellProcess } from '../../shared/shell-process-detection'
 import { parsePtySessionId } from './pty-session-id'
 import { getAgentForegroundContextPaths } from '../providers/agent-foreground-context-paths'
+import { assertSafeAgentStartupCwd, resolveSafePtyDefaultCwd } from '../providers/pty-default-cwd'
+import { ORCA_HERMES_STARTUP_QUERY_ENV } from '../../shared/hermes-startup-query'
 
 const PANE_IDENTITY_ENV_KEYS = [
   'ORCA_PANE_KEY',
@@ -57,8 +67,19 @@ const PANE_IDENTITY_ENV_KEYS = [
 ] as const
 const FOREGROUND_AGENT_CACHE_TTL_MS = 1000
 const SHELL_FOREGROUND_REFRESH_RETRY_MS = 5_000
+// Why: a Windows refresh forks a powershell.exe whole-process-table CIM scan
+// (~10-40x heavier than POSIX `ps`). An idle shell with no agent identity and
+// no recent output retries far slower; output re-arms the 5s retry so an agent
+// start (which always prints) is still resolved promptly.
+const WINDOWS_IDLE_SHELL_FOREGROUND_REFRESH_RETRY_MS = 15_000
+const SHELL_FOREGROUND_OUTPUT_HOT_WINDOW_MS = 10_000
 const STARTUP_AGENT_FOREGROUND_BOOTSTRAP_MS = 5_000
-const PTY_SPAWN_HEALTH_TIMEOUT_MS = 2_000
+const PTY_SPAWN_HEALTH_TIMEOUT_MS = 4_000
+// Why: a busy machine right after an upgrade can make one short-lived shell
+// spawn slow. Retry once before declaring the daemon unable to spawn PTYs, so
+// a transient stall does not silently route every fresh terminal to the local
+// fallback (losing daemon persistence) until a manual restart.
+const PTY_SPAWN_HEALTH_RETRY_ATTEMPTS = 2
 const PENDING_PRE_LISTENER_DATA_MAX_CHARS = 512 * 1024
 
 export type PtySubprocessOptions = {
@@ -82,20 +103,7 @@ export type PtySubprocessOptions = {
  * Returns a stable default working directory for daemon-spawned PTYs.
  */
 function getDefaultCwd(): string {
-  if (process.platform !== 'win32') {
-    return process.env.HOME || '/'
-  }
-
-  // Why: HOMEPATH alone is drive-relative (`\\Users\\name`). Pair it with
-  // HOMEDRIVE when USERPROFILE is unavailable so daemon-spawned Windows PTYs
-  // still start in a valid absolute home directory.
-  if (process.env.USERPROFILE) {
-    return process.env.USERPROFILE
-  }
-  if (process.env.HOMEDRIVE && process.env.HOMEPATH) {
-    return `${process.env.HOMEDRIVE}${process.env.HOMEPATH}`
-  }
-  return 'C:\\'
+  return resolveSafePtyDefaultCwd()
 }
 
 /**
@@ -195,11 +203,13 @@ function isExistingDirectory(path: string | undefined): path is string {
  * Moves the daemon process to a stable cwd after its original cwd disappears.
  */
 function repairDaemonCwd(): string | null {
-  const candidates = [
-    process.env.ORCA_USER_DATA_PATH,
-    getDefaultCwd(),
-    process.platform === 'win32' ? 'C:\\' : '/'
-  ]
+  const candidates = [process.env.ORCA_USER_DATA_PATH]
+  try {
+    candidates.push(getDefaultCwd())
+  } catch {
+    // Keep daemon cwd repair best-effort even when no user terminal cwd is safe.
+  }
+  candidates.push(process.platform === 'win32' ? 'C:\\' : '/')
   for (const candidate of candidates) {
     if (isExistingDirectory(candidate)) {
       try {
@@ -244,8 +254,6 @@ function preflightMacNodePtySpawnEnvironment(): void {
     return
   }
 
-  preflightDaemonCwd()
-
   let candidates: string[]
   try {
     candidates = getNodePtySpawnHelperCandidates()
@@ -264,6 +272,20 @@ function preflightMacNodePtySpawnEnvironment(): void {
   }
 
   throw formatMissingDaemonPathError('helper', candidates[0] ?? '<unresolved>')
+}
+
+/**
+ * Ensures POSIX daemon-owned native PTY spawn prerequisites are still valid.
+ */
+function preflightUnixPtySpawnEnvironment(): void {
+  if (process.platform === 'win32') {
+    return
+  }
+
+  // Why: detached daemons can outlive their launch cwd; repair before every
+  // PTY spawn so Linux/macOS do not wait for startup health recovery.
+  preflightDaemonCwd()
+  preflightMacNodePtySpawnEnvironment()
 }
 
 /**
@@ -292,6 +314,16 @@ function preflightWindowsPtySpawnEnvironment(args: {
 }
 
 /**
+ * Validates POSIX spawn cwd before node-pty can fail with an opaque ENOENT.
+ */
+function preflightPosixPtySpawnEnvironment(validationCwd: string): void {
+  if (process.platform === 'win32') {
+    return
+  }
+  validateWorkingDirectory(validationCwd)
+}
+
+/**
  * Wraps native PTY spawn failures with shell and cwd context.
  */
 function formatPtySpawnError(err: unknown, shellPath: string, spawnCwd: string): Error {
@@ -306,16 +338,9 @@ function formatPtySpawnError(err: unknown, shellPath: string, spawnCwd: string):
 }
 
 /**
- * Runs a short native PTY spawn probe for daemon health checks.
+ * Runs one short native PTY spawn probe (spawn `/bin/sh -c 'exit 0'`).
  */
-export async function checkPtySpawnHealth(): Promise<void> {
-  if (process.platform !== 'darwin') {
-    return
-  }
-
-  ensureNodePtySpawnHelperExecutable()
-  preflightMacNodePtySpawnEnvironment()
-
+function runSinglePtySpawnHealthProbe(): Promise<void> {
   const cwd = isExistingDirectory(process.env.ORCA_USER_DATA_PATH)
     ? process.env.ORCA_USER_DATA_PATH
     : getDefaultCwd()
@@ -336,7 +361,7 @@ export async function checkPtySpawnHealth(): Promise<void> {
     throw formatPtySpawnError(err, '/bin/sh', cwd)
   }
 
-  await new Promise<void>((resolve, reject) => {
+  return new Promise<void>((resolve, reject) => {
     let settled = false
     let exitDisposable: { dispose(): void } | undefined
     const finish = (error?: Error, opts?: { kill?: boolean }): void => {
@@ -375,6 +400,42 @@ export async function checkPtySpawnHealth(): Promise<void> {
       finish(new Error(`PTY spawn health check exited with code ${exitCode}`))
     })
   })
+}
+
+/**
+ * Runs a short native PTY spawn probe for daemon health checks, retrying once
+ * so a transient stall (e.g. a busy machine right after an upgrade) does not
+ * mis-classify a healthy daemon as unable to spawn PTYs.
+ */
+export async function checkPtySpawnHealth(): Promise<void> {
+  if (process.platform === 'win32') {
+    return
+  }
+
+  // Why: Linux/macOS daemons can outlive an app update with a deleted cwd or
+  // stale native PTY path. A real short-lived spawn catches that before the
+  // main process routes fresh panes to a daemon that cannot create terminals.
+  if (process.platform === 'darwin') {
+    ensureNodePtySpawnHelperExecutable()
+  }
+  preflightUnixPtySpawnEnvironment()
+
+  let lastError: unknown
+  for (let attempt = 1; attempt <= PTY_SPAWN_HEALTH_RETRY_ATTEMPTS; attempt++) {
+    try {
+      await runSinglePtySpawnHealthProbe()
+      return
+    } catch (err) {
+      lastError = err
+      if (attempt < PTY_SPAWN_HEALTH_RETRY_ATTEMPTS) {
+        console.warn(
+          `[daemon] PTY spawn health probe attempt ${attempt} failed; retrying`,
+          err instanceof Error ? err.message : err
+        )
+      }
+    }
+  }
+  throw lastError instanceof Error ? lastError : new Error(String(lastError))
 }
 
 /**
@@ -427,14 +488,19 @@ function spawnDaemonPtyWithWindowsFallback(args: {
   spawnCwd: string
   startupCommandDeliveredInShellArgs?: boolean
 } {
-  const spawnAt = (shellPath: string, shellArgs: string[], cwd: string): pty.IPty =>
-    pty.spawn(shellPath, shellArgs, {
+  const spawnAt = (shellPath: string, shellArgs: string[], cwd: string): pty.IPty => {
+    const wrapped = wrapShellSpawnForMacosTccAttribution(shellPath, shellArgs, args.env)
+    return pty.spawn(wrapped.file, wrapped.args, {
       name: args.env.TERM ?? 'xterm-256color',
       cols: args.cols,
       rows: args.rows,
       cwd,
-      env: args.env
+      env: args.env,
+      // Why: bundled ConPTY has the modern wrap-marker behavior xterm expects;
+      // legacy system ConPTY can corrupt full-width TUI rows in scrollback.
+      ...(process.platform === 'win32' ? { useConptyDll: true } : {})
     })
+  }
 
   try {
     return {
@@ -506,6 +572,7 @@ export function createPtySubprocess(opts: PtySubprocessOptions): SubprocessHandl
   removeUnspecifiedPaneIdentityEnv(env, opts.env)
   removeInheritedDevAgentHookEndpoint(env, opts.env)
   removeInheritedElectronRunAsNode(env)
+  removeAppImageRuntimeEnv(env)
   removeInheritedNoColor(env)
 
   env.LANG ??= 'en_US.UTF-8'
@@ -531,6 +598,9 @@ export function createPtySubprocess(opts: PtySubprocessOptions): SubprocessHandl
   let windowsFallbackAttempts: WindowsShellSpawnAttempt[] = []
   const startupAgentRecognition = recognizeAgentProcessFromCommandLine(opts.command)
   const isCodexStartupCommand = startupAgentRecognition?.agent === 'codex'
+  if (opts.command && startupAgentRecognition) {
+    assertSafeAgentStartupCwd(opts.cwd, opts.command)
+  }
   const requestedCwd = opts.cwd || getDefaultCwd()
   let spawnCwd = requestedCwd
   let validationCwd = spawnCwd
@@ -543,6 +613,16 @@ export function createPtySubprocess(opts: PtySubprocessOptions): SubprocessHandl
     // one-off override. Normalize both forms back to the PowerShell family so
     // the shared resolver can still fall back to inbox powershell.exe when
     // pwsh.exe was requested but is unavailable.
+    const resolvedShellFamily: WindowsPowerShellShellFamily =
+      normalizedShellFamily === 'powershell.exe' || normalizedShellFamily === 'pwsh.exe'
+        ? normalizedShellFamily
+        : normalizedShellFamily === 'cmd.exe' || normalizedShellFamily === 'wsl.exe'
+          ? normalizedShellFamily
+          : undefined
+    const shouldProbePwsh = shouldProbeWindowsPowerShellAvailability({
+      shellFamily: resolvedShellFamily,
+      implementation: opts.terminalWindowsPowerShellImplementation
+    })
     const shouldResolvePowerShellFamily =
       opts.terminalWindowsPowerShellImplementation !== undefined ||
       pathWin32.basename(shellPath) === shellPath
@@ -553,14 +633,9 @@ export function createPtySubprocess(opts: PtySubprocessOptions): SubprocessHandl
     } else {
       shellPath = shouldResolvePowerShellFamily
         ? (resolveEffectiveWindowsPowerShell({
-            shellFamily:
-              normalizedShellFamily === 'powershell.exe' || normalizedShellFamily === 'pwsh.exe'
-                ? 'powershell.exe'
-                : normalizedShellFamily === 'cmd.exe' || normalizedShellFamily === 'wsl.exe'
-                  ? normalizedShellFamily
-                  : undefined,
+            shellFamily: resolvedShellFamily,
             implementation: opts.terminalWindowsPowerShellImplementation,
-            pwshAvailable: isPwshAvailable()
+            pwshAvailable: shouldProbePwsh ? isPwshAvailable() : false
           }) ?? shellPath)
         : shellPath
     }
@@ -644,6 +719,11 @@ export function createPtySubprocess(opts: PtySubprocessOptions): SubprocessHandl
         // through Windows wsl.exe; non-default env vars need WSLENV import.
         addWslEnvKeys(env, ['CLAUDE_CONFIG_DIR'])
       }
+      if (env[ORCA_HERMES_STARTUP_QUERY_ENV] !== undefined) {
+        // Why: the startup wrapper expands this only inside WSL; wsl.exe
+        // otherwise drops custom Windows environment variables.
+        addWslEnvKeys(env, [ORCA_HERMES_STARTUP_QUERY_ENV])
+      }
     } else if (codexHomeWslInfo || isWslCodexHomeForHost(env.CODEX_HOME)) {
       // Why: WSL-managed Codex homes are Linux paths. Windows Codex cannot use
       // them. ORCA_CODEX_HOME must go too because shell-ready scripts restore
@@ -662,6 +742,17 @@ export function createPtySubprocess(opts: PtySubprocessOptions): SubprocessHandl
     }
     if (opts.env?.TERM) {
       env.TERM = opts.env.TERM
+    }
+    // Why after the scrub: SHELL must reflect the shell that actually spawns,
+    // matching LocalPtyProvider; and before the launch-config derivation below
+    // so shell-ready wrappers target the resolved shell, not a missing one.
+    const preferredShellPath = shellPath
+    shellPath = resolveUnixShellPath(shellPath)
+    if (shellPath !== preferredShellPath) {
+      env.SHELL = shellPath
+      console.warn(
+        `[daemon/pty] Preferred shell "${preferredShellPath}" is unavailable, fell back to "${shellPath}"`
+      )
     }
     // Why: OpenCode/Codex path restoration and OMP's typed-command status
     // wrapper need shell-ready code after user startup files run.
@@ -708,7 +799,8 @@ export function createPtySubprocess(opts: PtySubprocessOptions): SubprocessHandl
   // binary. The main process fixes this via LocalPtyProvider, but the daemon
   // runs in a separate forked process with its own code path.
   ensureNodePtySpawnHelperExecutable()
-  preflightMacNodePtySpawnEnvironment()
+  preflightUnixPtySpawnEnvironment()
+  preflightPosixPtySpawnEnvironment(validationCwd)
   preflightWindowsPtySpawnEnvironment({
     validationCwd,
     cwdWasExplicit: opts.cwd !== undefined
@@ -773,7 +865,11 @@ export function createPtySubprocess(opts: PtySubprocessOptions): SubprocessHandl
     }
   }
 
+  let lastOutputAt = 0
   proc.onData((data) => {
+    if (data.length > 0) {
+      lastOutputAt = Date.now()
+    }
     if (onDataCb) {
       onDataCb(data)
     } else {
@@ -845,10 +941,16 @@ export function createPtySubprocess(opts: PtySubprocessOptions): SubprocessHandl
       return
     }
     const now = Date.now()
-    const retryMs =
+    const idleNoEvidenceShell =
       fallbackIsShell && !getActiveStartupAgentForeground(now) && !cachedAgentForeground
-        ? SHELL_FOREGROUND_REFRESH_RETRY_MS
-        : FOREGROUND_AGENT_CACHE_TTL_MS
+    // Why: on Windows each refresh is a whole-table CIM scan; only shells with
+    // no agent evidence and no recent output relax, so agent-identity refresh
+    // (cached identity → 1s TTL) and post-output starts keep the fast retry.
+    const retryMs = !idleNoEvidenceShell
+      ? FOREGROUND_AGENT_CACHE_TTL_MS
+      : process.platform === 'win32' && now - lastOutputAt > SHELL_FOREGROUND_OUTPUT_HOT_WINDOW_MS
+        ? WINDOWS_IDLE_SHELL_FOREGROUND_REFRESH_RETRY_MS
+        : SHELL_FOREGROUND_REFRESH_RETRY_MS
     if (foregroundRefreshInFlight || now - lastForegroundRefreshStartedAt < retryMs) {
       return
     }
@@ -857,10 +959,10 @@ export function createPtySubprocess(opts: PtySubprocessOptions): SubprocessHandl
     // Why: daemon foreground reads are sync and run on the IPC hot path.
     // Refresh derived identities (shell/wrapper/helper -> codex/claude/etc.)
     // in the background and serve them from a short cache on later reads.
-    void resolveAgentForegroundProcess(proc.pid, fallbackProcess, {
+    void resolveAgentForegroundProcessWithAvailability(proc.pid, fallbackProcess, {
       contextPaths: agentForegroundContextPaths
     })
-      .then((processName) => {
+      .then(({ processName }) => {
         if (dead) {
           return
         }
@@ -874,6 +976,16 @@ export function createPtySubprocess(opts: PtySubprocessOptions): SubprocessHandl
           ) {
             cachedAgentForeground = null
             startupAgentForeground = null
+          } else if (
+            cachedAgentForeground !== null &&
+            Date.now() - cachedAgentForeground.refreshedAt > FOREGROUND_AGENT_CACHE_TTL_MS &&
+            currentFallbackProcess !== null &&
+            isAgentForegroundWrapperProcess(currentFallbackProcess)
+          ) {
+            // Why: the wrapper's tree no longer resolves to an agent — an expired
+            // identity must not transfer to an unrelated wrapper (e.g. npm right
+            // after an agent exit). Fresh identities survive one-off scan hiccups.
+            cachedAgentForeground = null
           }
           return
         }
@@ -907,6 +1019,7 @@ export function createPtySubprocess(opts: PtySubprocessOptions): SubprocessHandl
 
   return {
     pid: proc.pid,
+    shellPath,
     ...(startupCommandDeliveredInShellArgs ? { startupCommandDeliveredInShellArgs: true } : {}),
     getForegroundProcess: () => {
       // Why: node-pty's `.process` getter reports the PTY's live foreground
@@ -931,11 +1044,73 @@ export function createPtySubprocess(opts: PtySubprocessOptions): SubprocessHandl
         ) {
           return cachedAgentForeground.processName
         }
+        // Why: a wrapper foreground (node/python) can never identify itself, and
+        // readers poll slower than the cache TTL — returning the raw wrapper here
+        // would hide the resolved identity forever. Serve the last resolved agent
+        // while the scheduled refresh revalidates; exit truth is safe because an
+        // exited agent's foreground falls back to the shell, not a wrapper.
+        if (
+          cachedAgentForeground &&
+          fallbackProcess !== null &&
+          isAgentForegroundWrapperProcess(fallbackProcess)
+        ) {
+          return cachedAgentForeground.processName
+        }
         const activeStartupAgentForeground = getActiveStartupAgentForeground(now)
         if (fallbackProcess && isShellProcess(fallbackProcess) && activeStartupAgentForeground) {
           return activeStartupAgentForeground.processName
         }
         return fallbackProcess
+      } catch {
+        return null
+      }
+    },
+    confirmForegroundProcess: async () => {
+      if (dead || !proc.pid) {
+        return null
+      }
+      try {
+        const fallbackProcess = getFallbackForegroundProcess()
+        if (
+          !fallbackProcess ||
+          (recognizeAgentProcess(fallbackProcess) && process.platform !== 'win32') ||
+          (process.platform !== 'win32' && !shouldInspectFallbackForegroundProcess(fallbackProcess))
+        ) {
+          return fallbackProcess
+        }
+        // Why: cached/in-flight scans may predate the OSC command boundary.
+        // Confirmation requires one shared process snapshot started afterward.
+        const resolution = await resolveAgentForegroundProcessWithAvailability(
+          proc.pid,
+          fallbackProcess,
+          {
+            contextPaths: agentForegroundContextPaths,
+            fresh: true,
+            ...(process.platform === 'win32'
+              ? {
+                  forceProcessScan: true,
+                  readWindowsConptyProcessIds: () => readWindowsConptyProcessIds(proc.pid)
+                }
+              : {})
+          }
+        )
+        if (dead || !resolution.available) {
+          return null
+        }
+        const recognized = recognizeAgentProcess(resolution.processName)
+        if (recognized) {
+          cachedAgentForeground = {
+            processName: recognized.processName,
+            refreshedAt: Date.now()
+          }
+          startupAgentForeground = null
+          return recognized.processName
+        }
+        // Why: a successful post-boundary scan that resolves no agent is the
+        // authority that retires stale cached/startup identity.
+        cachedAgentForeground = null
+        startupAgentForeground = null
+        return resolution.processName
       } catch {
         return null
       }
@@ -963,6 +1138,40 @@ export function createPtySubprocess(opts: PtySubprocessOptions): SubprocessHandl
         dead = true
       }
     },
+    // Why pause/resume work on Windows too: node-pty's base Terminal
+    // implements both as socket pause/resume (lib/terminal.js), and
+    // WindowsTerminal wires _socket to the ConPTY conout pipe — pausing stops
+    // conout reads so ConPTY's bounded buffer backpressures the child.
+    pause: () => {
+      if (dead) {
+        return
+      }
+      try {
+        proc.pause()
+      } catch {
+        /* native handle already torn down — flow control is best-effort */
+      }
+    },
+    resume: () => {
+      if (dead) {
+        return
+      }
+      try {
+        proc.resume()
+      } catch {
+        /* native handle already torn down — flow control is best-effort */
+      }
+    },
+    clear: () => {
+      if (dead) {
+        return
+      }
+      try {
+        proc.clear()
+      } catch {
+        // Best-effort: a clear on a just-exited PTY must not kill the handle.
+      }
+    },
     kill: () => {
       if (dead) {
         return
@@ -979,7 +1188,9 @@ export function createPtySubprocess(opts: PtySubprocessOptions): SubprocessHandl
       // has run, proc.pid refers to a recycled pid. Sending SIGKILL would
       // terminate an unrelated process. The fd release is handled by
       // dispose()/destroy(); forceKill is strictly for signalling a live child.
-      if (dead) {
+      // Why: Windows node-pty kill already closes ConPTY; retrying it through
+      // forceKill can double-close the native handle during workspace teardown.
+      if (dead || (process.platform === 'win32' && nodePtyKillIssued)) {
         return
       }
       try {

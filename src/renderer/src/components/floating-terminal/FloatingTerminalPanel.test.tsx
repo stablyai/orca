@@ -50,6 +50,7 @@ type FloatingPanelStoreState = {
       activate?: boolean
       focusAddressBar?: boolean
       sessionProfileId?: string | null
+      sessionPartition?: string | null
       title?: string
       targetGroupId?: string
     }
@@ -1225,6 +1226,61 @@ describe('FloatingTerminalPanel close behavior', () => {
     expect(mocks.focusTerminalTabSurface).toHaveBeenCalledWith('created-tab')
   })
 
+  it('keeps floating browser create and duplicate local during active web runtime sessions', async () => {
+    setFloatingTabs([makeTab({ id: 'tab-1' })])
+    ;(storeBox.state as FloatingPanelStoreState).settings.activeRuntimeEnvironmentId = 'runtime-1'
+    ;(storeBox.state as FloatingPanelStoreState).browserTabsByWorktree = {
+      [FLOATING_TERMINAL_WORKTREE_ID]: [
+        {
+          id: 'browser-1',
+          worktreeId: FLOATING_TERMINAL_WORKTREE_ID,
+          url: 'https://example.com',
+          title: 'Example',
+          loading: false,
+          faviconUrl: null,
+          canGoBack: false,
+          canGoForward: false,
+          loadError: null,
+          sessionProfileId: 'profile-1',
+          sessionPartition: 'persist:orca-browser-session-profile-1',
+          createdAt: 1
+        }
+      ]
+    }
+    mocks.isWebRuntimeSessionActive.mockReturnValue(true)
+    mocks.createWebRuntimeSessionBrowserTab.mockResolvedValue(true)
+
+    const element = await renderPanel(true)
+    const tabBar = findByTypeName(element, 'TabBar')
+    ;(tabBar.props.onNewBrowserTab as () => void)()
+    ;(tabBar.props.onDuplicateBrowserTab as (browserTabId: string) => void)('browser-1')
+
+    expect(mocks.createWebRuntimeSessionBrowserTab).not.toHaveBeenCalled()
+    expect(mocks.createBrowserTab).toHaveBeenNthCalledWith(
+      1,
+      FLOATING_TERMINAL_WORKTREE_ID,
+      'about:blank',
+      {
+        title: 'New Browser Tab',
+        focusAddressBar: true,
+        targetGroupId: 'floating-group',
+        browserRuntimeEnvironmentId: null
+      }
+    )
+    expect(mocks.createBrowserTab).toHaveBeenNthCalledWith(
+      2,
+      FLOATING_TERMINAL_WORKTREE_ID,
+      'https://example.com',
+      {
+        title: 'Example',
+        sessionProfileId: 'profile-1',
+        sessionPartition: 'persist:orca-browser-session-profile-1',
+        targetGroupId: 'floating-group',
+        browserRuntimeEnvironmentId: null
+      }
+    )
+  })
+
   it('hides the active terminal pane from the renderer while the panel is closed', async () => {
     setFloatingTabs([makeTab({ id: 'tab-1' })])
 
@@ -2251,7 +2307,7 @@ describe('FloatingTerminalPanel close behavior', () => {
     expect(mocks.closeUnifiedTab).not.toHaveBeenCalledWith(simulatorTab.id)
   })
 
-  it('routes floating terminal create and close through active web runtime sessions', async () => {
+  it('keeps floating terminal create and close local during active web runtime sessions', async () => {
     const onOpenChange = vi.fn()
     setFloatingTabs([makeTab({ id: 'tab-1' })])
     ;(storeBox.state as FloatingPanelStoreState).settings.activeRuntimeEnvironmentId = 'runtime-1'
@@ -2263,22 +2319,19 @@ describe('FloatingTerminalPanel close behavior', () => {
     ;(tabBar.props.onNewTerminalTab as () => void)()
     await flushAsyncWork()
 
-    expect(mocks.createWebRuntimeSessionTerminal).toHaveBeenCalledWith({
-      worktreeId: FLOATING_TERMINAL_WORKTREE_ID,
-      targetGroupId: 'floating-group',
-      command: undefined,
-      activate: true,
-      selectWorktree: false
-    })
-    expect(mocks.createTab).not.toHaveBeenCalled()
+    expect(mocks.createWebRuntimeSessionTerminal).not.toHaveBeenCalled()
+    expect(mocks.createTab).toHaveBeenCalledWith(
+      FLOATING_TERMINAL_WORKTREE_ID,
+      'floating-group',
+      undefined,
+      { activate: false }
+    )
+    expect(mocks.activateTab).toHaveBeenCalledWith('created-tab')
+    expect(mocks.focusTerminalTabSurface).toHaveBeenCalledWith('created-tab')
 
     ;(tabBar.props.onClose as (tabId: string) => void)('tab-1')
-    expect(mocks.closeWebRuntimeSessionTab).toHaveBeenCalledWith({
-      worktreeId: FLOATING_TERMINAL_WORKTREE_ID,
-      tabId: 'tab-1',
-      environmentId: 'runtime-1'
-    })
-    expect(mocks.closeTab).not.toHaveBeenCalled()
+    expect(mocks.closeWebRuntimeSessionTab).not.toHaveBeenCalled()
+    expect(mocks.closeTab).toHaveBeenCalledWith('tab-1')
     expect(onOpenChange).not.toHaveBeenCalled()
   })
 

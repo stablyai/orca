@@ -34,9 +34,9 @@ import {
   GITHUB_WORK_ITEMS_SSH_REMOTE_REQUIRED_MESSAGE,
   sortWorkItemsByUpdatedAt
 } from '../../shared/work-items'
-import { mkdtemp, readFile, rm, writeFile } from 'fs/promises'
-import { join } from 'path'
-import { tmpdir } from 'os'
+import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
+import { join } from 'node:path'
+import { tmpdir } from 'node:os'
 import { sliceCheckLogTail } from './check-job-log-tail-slice'
 import { getPRConflictSummary } from './conflict-summary'
 import { getSshFilesystemProvider } from '../providers/ssh-filesystem-dispatch'
@@ -62,6 +62,10 @@ import {
   type LocalGitExecOptions,
   type OwnerRepo
 } from './gh-utils'
+import {
+  isCommitPartOfMergedPR,
+  type MergedPRCommitMembership
+} from './merged-pr-commit-membership'
 import { getSshGitProvider } from '../providers/ssh-git-dispatch'
 import {
   hasHostedReviewLocalGitOptions,
@@ -69,6 +73,12 @@ import {
   type HostedReviewExecutionOptions
 } from '../source-control/hosted-review-git-options'
 import { readLocalGitConfigSignature } from './local-git-config-signature'
+import {
+  getRememberedGhCwdResolutionFailure,
+  isGhCwdRepoResolutionFailure,
+  rememberGhCwdResolutionFailure
+} from './gh-cwd-repo-negative-cache'
+import type { GitHubRepoContext } from './github-repository-identity'
 export { _resetOwnerRepoCache } from './gh-utils'
 export {
   getIssue,
@@ -82,6 +92,8 @@ export {
 import {
   mapCheckRunRESTStatus,
   mapCheckRunRESTConclusion,
+  mapCommitStatusRESTStatus,
+  mapCommitStatusRESTConclusion,
   mapCheckStatus,
   mapCheckConclusion,
   mapPRState,
@@ -836,6 +848,43 @@ async function fetchIssueWorkItem(
   return mapIssueWorkItem(JSON.parse(stdout) as Record<string, unknown>)
 }
 
+// REST /pulls/{n} has requested_reviewers but not latestReviews. When the JSON
+// `gh pr view` path fails, still pull review fields from gh so mobile/desktop
+// reviewer lists (CodeRabbit COMMENTED, etc.) are not silently empty.
+const WORK_ITEM_PR_REVIEW_JSON_FIELDS = 'reviewRequests,latestReviews'
+
+async function fetchPullRequestReviewFields(
+  number: number,
+  ownerRepo: OwnerRepo | null,
+  ghOptions: GhExecOptions
+): Promise<Pick<MainWorkItem, 'reviewRequests' | 'latestReviews'>> {
+  try {
+    const args = ownerRepo
+      ? [
+          'pr',
+          'view',
+          String(number),
+          '--repo',
+          `${ownerRepo.owner}/${ownerRepo.repo}`,
+          '--json',
+          WORK_ITEM_PR_REVIEW_JSON_FIELDS
+        ]
+      : ['pr', 'view', String(number), '--json', WORK_ITEM_PR_REVIEW_JSON_FIELDS]
+    const { stdout } = await ghExecFileAsync(args, ghOptions)
+    const item = JSON.parse(stdout) as Record<string, unknown>
+    return {
+      ...(item.reviewRequests !== undefined
+        ? { reviewRequests: usersFromUnknown(item.reviewRequests) }
+        : {}),
+      ...(item.latestReviews !== undefined
+        ? { latestReviews: latestReviewsFromUnknown(item.latestReviews) }
+        : {})
+    }
+  } catch {
+    return {}
+  }
+}
+
 async function fetchPullRequestWorkItem(
   repoPath: string,
   ownerRepo: OwnerRepo | null,
@@ -860,24 +909,36 @@ async function fetchPullRequestWorkItem(
       )
       const item = JSON.parse(stdout) as Record<string, unknown>
       const mapped = mapPullRequestWorkItem(item, ownerRepo)
+      // Why: merge-metadata GraphQL is best-effort. A failure here must not fall
+      // through to the REST path below — that path drops latestReviews and blanks
+      // the mobile/desktop reviewer list for bots that only left a review.
       const baseRefName = typeof item.baseRefName === 'string' ? item.baseRefName : undefined
-      const mergeMetadata = await detectRepositoryMergeMetadata(ownerRepo, baseRefName, ghOptions)
-      return {
-        ...mapped,
-        mergeQueueRequired: mergeMetadata.mergeQueueRequired,
-        ...(mergeMetadata.autoMergeAllowed !== null
-          ? { autoMergeAllowed: mergeMetadata.autoMergeAllowed }
-          : {}),
-        ...(mergeMetadata.mergeMethodSettings
-          ? { mergeMethodSettings: mergeMetadata.mergeMethodSettings }
-          : {})
+      try {
+        const mergeMetadata = await detectRepositoryMergeMetadata(ownerRepo, baseRefName, ghOptions)
+        return {
+          ...mapped,
+          mergeQueueRequired: mergeMetadata.mergeQueueRequired,
+          ...(mergeMetadata.autoMergeAllowed !== null
+            ? { autoMergeAllowed: mergeMetadata.autoMergeAllowed }
+            : {}),
+          ...(mergeMetadata.mergeMethodSettings
+            ? { mergeMethodSettings: mergeMetadata.mergeMethodSettings }
+            : {})
+        }
+      } catch {
+        return mapped
       }
     } catch {
       const { stdout } = await ghExecFileAsync(
         ['api', `repos/${ownerRepo.owner}/${ownerRepo.repo}/pulls/${number}`],
         ghOptions
       )
-      return mapPullRequestWorkItem(JSON.parse(stdout) as Record<string, unknown>, ownerRepo)
+      const mapped = mapPullRequestWorkItem(
+        JSON.parse(stdout) as Record<string, unknown>,
+        ownerRepo
+      )
+      const reviewFields = await fetchPullRequestReviewFields(number, ownerRepo, ghOptions)
+      return { ...mapped, ...reviewFields }
     }
   }
 
@@ -999,6 +1060,32 @@ async function resolvePrWorkItemSource(
   return { source, originCandidate, upstreamCandidate }
 }
 
+/**
+ * gh exec for calls that rely on gh's own cwd→repo resolution (no explicit
+ * owner/repo). Serves a remembered deterministic resolution failure without
+ * spawning, so a remote-less repo costs one gh spawn per config change/TTL
+ * instead of two per Tasks refresh.
+ */
+async function ghCwdResolvedExec(
+  context: GitHubRepoContext,
+  args: string[],
+  ghOptions: GhExecOptions
+): Promise<{ stdout: string; stderr: string }> {
+  const remembered = await getRememberedGhCwdResolutionFailure(context)
+  if (remembered !== null) {
+    throw new Error(remembered)
+  }
+  try {
+    return await ghExecFileAsync(args, ghOptions)
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err)
+    if (isGhCwdRepoResolutionFailure(message)) {
+      await rememberGhCwdResolutionFailure(context, message)
+    }
+    throw err
+  }
+}
+
 async function listRecentWorkItems(
   repoPath: string,
   issueOwnerRepo: OwnerRepo | null,
@@ -1008,7 +1095,8 @@ async function listRecentWorkItems(
   noCache?: boolean,
   localGitOptions: LocalGitExecOptions = {}
 ): Promise<PartialWorkItemsResult> {
-  const ghOptions = ghRepoExecOptions(githubRepoContext(repoPath, connectionId, localGitOptions))
+  const repoContext = githubRepoContext(repoPath, connectionId, localGitOptions)
+  const ghOptions = ghRepoExecOptions(repoContext)
   const requiresExplicitRepo = Boolean(connectionId)
   const restCacheArgs = noCache ? [] : ['--cache', '120s']
   assertSshRepoHasResolvedGitHubSource({ connectionId, issueOwnerRepo, prOwnerRepo })
@@ -1028,7 +1116,8 @@ async function listRecentWorkItems(
           )
         : requiresExplicitRepo
           ? Promise.resolve({ stdout: '[]' })
-          : ghExecFileAsync(
+          : ghCwdResolvedExec(
+              repoContext,
               [
                 'issue',
                 'list',
@@ -1052,7 +1141,8 @@ async function listRecentWorkItems(
           )
         : requiresExplicitRepo
           ? Promise.resolve({ stdout: '[]' })
-          : ghExecFileAsync(
+          : ghCwdResolvedExec(
+              repoContext,
               [
                 'pr',
                 'list',
@@ -1124,7 +1214,8 @@ async function listRecentWorkItems(
   // effectively unusable for the feature — reject-all matches reality. If
   // non-GitHub remotes ever grow source metadata, revisit this symmetry.
   const [issuesResult, prsResult] = await Promise.all([
-    ghExecFileAsync(
+    ghCwdResolvedExec(
+      repoContext,
       [
         'issue',
         'list',
@@ -1137,7 +1228,8 @@ async function listRecentWorkItems(
       ],
       ghOptions
     ),
-    ghExecFileAsync(
+    ghCwdResolvedExec(
+      repoContext,
       [
         'pr',
         'list',
@@ -1174,7 +1266,8 @@ async function listQueriedWorkItems(
   connectionId?: string | null,
   localGitOptions: LocalGitExecOptions = {}
 ): Promise<PartialWorkItemsResult> {
-  const ghOptions = ghRepoExecOptions(githubRepoContext(repoPath, connectionId, localGitOptions))
+  const repoContext = githubRepoContext(repoPath, connectionId, localGitOptions)
+  const ghOptions = ghRepoExecOptions(repoContext)
   const requiresExplicitRepo = Boolean(connectionId)
   assertSshRepoHasResolvedGitHubSource({ connectionId, issueOwnerRepo, prOwnerRepo })
   const hasPrOnlyFilter =
@@ -1203,7 +1296,9 @@ async function listQueriedWorkItems(
       before
     })
     try {
-      const { stdout } = await ghExecFileAsync(args, ghOptions)
+      const { stdout } = issueOwnerRepo
+        ? await ghExecFileAsync(args, ghOptions)
+        : await ghCwdResolvedExec(repoContext, args, ghOptions)
       return {
         items: (JSON.parse(stdout) as Record<string, unknown>[]).map(mapIssueWorkItem)
       }
@@ -1228,7 +1323,9 @@ async function listQueriedWorkItems(
       before
     })
     try {
-      const { stdout } = await ghExecFileAsync(args, ghOptions)
+      const { stdout } = prOwnerRepo
+        ? await ghExecFileAsync(args, ghOptions)
+        : await ghCwdResolvedExec(repoContext, args, ghOptions)
       const mapped = (JSON.parse(stdout) as Record<string, unknown>[]).map((item) =>
         mapPullRequestWorkItem(item, prOwnerRepo)
       )
@@ -1392,7 +1489,10 @@ async function countWorkItemsForQuery(
     ],
     ghOptions
   )
-  return parseInt(stdout.trim(), 10) || 0
+  // Why: over-counts gh cache hits, which is the safe direction — the search
+  // bucket is only 30/min and the next probe corrects the estimate.
+  noteRateLimitSpend('search')
+  return Number.parseInt(stdout.trim(), 10) || 0
 }
 
 function sameOwnerRepo(left: OwnerRepo | null, right: OwnerRepo | null): boolean {
@@ -1446,6 +1546,15 @@ export async function countWorkItems(
 
   const parsedQuery = trimmedQuery ? parseTaskQuery(trimmedQuery) : null
   const effectiveQuery = parsedQuery ?? defaultOpenWorkItemQuery()
+
+  // Why: counts are decorative (pagination totals). The search bucket is only
+  // 30/min, so a multi-repo Tasks page must stop counting when the budget is
+  // gone instead of converting the remaining repos into 403 spawns. getRateLimit
+  // is 30s-cached and single-flight, so priming here is one spawn per window.
+  await getRateLimit()
+  if (rateLimitGuard('search').blocked) {
+    return 0
+  }
 
   await acquire()
   try {
@@ -2283,6 +2392,7 @@ type TrackedUpstreamBranch = {
 }
 
 const TRACKED_UPSTREAM_SNAPSHOT_CACHE_TTL_MS = 30_000
+const TRACKED_UPSTREAM_SNAPSHOT_CACHE_MAX_ENTRIES = 512
 
 type TrackedUpstreamSnapshotCacheEntry = {
   expiresAt: number
@@ -2302,12 +2412,49 @@ const trackedUpstreamSnapshotInFlight = new Map<
   string,
   Promise<TrackedUpstreamSnapshotProbeResult>
 >()
-const trackedUpstreamSnapshotGenerations = new Map<string, number>()
+const trackedUpstreamSnapshotGenerations = new Map<string, symbol>()
 
-function beginTrackedUpstreamSnapshotProbe(cacheKey: string): number {
-  const nextGeneration = (trackedUpstreamSnapshotGenerations.get(cacheKey) ?? 0) + 1
-  trackedUpstreamSnapshotGenerations.set(cacheKey, nextGeneration)
-  return nextGeneration
+function beginTrackedUpstreamSnapshotProbe(cacheKey: string): symbol {
+  const generation = Symbol()
+  trackedUpstreamSnapshotGenerations.set(cacheKey, generation)
+  return generation
+}
+
+function finishTrackedUpstreamSnapshotProbe(cacheKey: string, generation: symbol): void {
+  // Why: generations only guard an active probe; retaining completed repo keys
+  // leaks worktree/runtime identities after the short-lived snapshot TTL expires.
+  if (trackedUpstreamSnapshotGenerations.get(cacheKey) === generation) {
+    trackedUpstreamSnapshotGenerations.delete(cacheKey)
+  }
+}
+
+function pruneTrackedUpstreamSnapshotCache(now: number): void {
+  for (const [cacheKey, cached] of trackedUpstreamSnapshotCache) {
+    if (cached.expiresAt <= now) {
+      trackedUpstreamSnapshotCache.delete(cacheKey)
+    }
+  }
+  // Why: workspace/runtime churn can create unbounded unique keys within one
+  // TTL window, so expiry sweeping alone is not a memory bound.
+  while (trackedUpstreamSnapshotCache.size > TRACKED_UPSTREAM_SNAPSHOT_CACHE_MAX_ENTRIES) {
+    const oldestKey = trackedUpstreamSnapshotCache.keys().next().value
+    if (oldestKey === undefined) {
+      break
+    }
+    trackedUpstreamSnapshotCache.delete(oldestKey)
+  }
+}
+
+export function _getTrackedUpstreamBranchCacheSizesForTests(): {
+  snapshots: number
+  inFlight: number
+  generations: number
+} {
+  return {
+    snapshots: trackedUpstreamSnapshotCache.size,
+    inFlight: trackedUpstreamSnapshotInFlight.size,
+    generations: trackedUpstreamSnapshotGenerations.size
+  }
 }
 
 export function __resetTrackedUpstreamBranchCacheForTests(): void {
@@ -2401,6 +2548,7 @@ async function getTrackedUpstreamBranch(
         upstreamsByBranchName: getCacheableTrackedUpstreamSnapshot(result.upstreamsByBranchName),
         expiresAt: Date.now() + TRACKED_UPSTREAM_SNAPSHOT_CACHE_TTL_MS
       })
+      pruneTrackedUpstreamSnapshotCache(Date.now())
     }
     if (trackedUpstreamSnapshotGenerations.get(cacheKey) !== probeGeneration) {
       const fresherCached = trackedUpstreamSnapshotCache.get(cacheKey)
@@ -2413,6 +2561,7 @@ async function getTrackedUpstreamBranch(
     if (trackedUpstreamSnapshotInFlight.get(cacheKey) === probe) {
       trackedUpstreamSnapshotInFlight.delete(cacheKey)
     }
+    finishTrackedUpstreamSnapshotProbe(cacheKey, probeGeneration)
   }
 }
 
@@ -2768,6 +2917,15 @@ export async function getPRForBranch(
   return outcome.kind === 'found' ? outcome.pr : null
 }
 
+// Why: the exact-linked fallback (`gh pr view` with no resolved repo candidates)
+// returns dataRepo=null, which would leave the merged-PR membership probe unable
+// to run. Derive the PR's own repo from its web URL so a diverged merged linked
+// PR can still be confirmed and cleared. Host-agnostic to cover GitHub Enterprise.
+function ownerRepoFromPullRequestUrl(url: string): OwnerRepo | null {
+  const match = url.match(/^https?:\/\/[^/\s]+\/([^/\s]+)\/([^/\s]+)\/pull\/\d+/)
+  return match ? { owner: match[1], repo: match[2] } : null
+}
+
 export async function getPRForBranchOutcome(
   repoPath: string,
   branch: string,
@@ -2806,7 +2964,55 @@ export async function getPRForBranchOutcome(
       typeof options.currentHeadOid === 'string' && options.currentHeadOid.trim().length > 0
         ? options.currentHeadOid.trim()
         : null
-    const hideMergedImplicitPR = async (candidate: PullRequestLookupData | null) => {
+    let confirmedContainedHeadOid: string | null = null
+    let headDivergedFromMergedPRAtOid: string | null = null
+    const mergedPRContainsHead = async (
+      candidate: PullRequestLookupData,
+      candidateRepo: OwnerRepo | null,
+      headOid: string | null
+    ): Promise<MergedPRCommitMembership> => {
+      if (!candidateRepo || !headOid) {
+        return 'unknown'
+      }
+      const membership = await isCommitPartOfMergedPR({
+        ownerRepo: candidateRepo,
+        prNumber: candidate.number,
+        commitOid: headOid,
+        ghOptions
+      })
+      if (membership === 'contained') {
+        confirmedContainedHeadOid = headOid
+      }
+      return membership
+    }
+    const recordLinkedMergedPRDivergence = async (
+      candidate: PullRequestLookupData | null,
+      candidateRepo: OwnerRepo | null
+    ): Promise<void> => {
+      if (
+        typeof linkedPRNumber !== 'number' ||
+        !candidate ||
+        mapPRState(candidate.state, candidate.isDraft) !== 'merged' ||
+        explicitCurrentHeadOid === null ||
+        candidate.headRefOid === explicitCurrentHeadOid
+      ) {
+        return
+      }
+      const membership = await mergedPRContainsHead(
+        candidate,
+        candidateRepo ?? ownerRepoFromPullRequestUrl(candidate.url),
+        explicitCurrentHeadOid
+      )
+      if (membership === 'not-contained') {
+        // explicitCurrentHeadOid is non-null here (guarded above); record the
+        // exact head so consumers only clear the worktree that actually diverged.
+        headDivergedFromMergedPRAtOid = explicitCurrentHeadOid
+      }
+    }
+    const hideMergedImplicitPR = async (
+      candidate: PullRequestLookupData | null,
+      candidateRepo: OwnerRepo | null
+    ) => {
       if (!candidate || !isMergedImplicitPR(candidate, linkedPRNumber)) {
         return false
       }
@@ -2817,7 +3023,17 @@ export async function getPRForBranchOutcome(
         explicitCurrentHeadOid !== null
           ? explicitCurrentHeadOid
           : await getCurrentHeadOid(repoPath, connectionId, localGitOptions)
-      return shouldHideMergedImplicitPR(candidate, linkedPRNumber, currentHeadOidForMergedImplicit)
+      if (!shouldHideMergedImplicitPR(candidate, linkedPRNumber, currentHeadOidForMergedImplicit)) {
+        return false
+      }
+      // Why: a worktree can sit behind its own PR's final head (update-branch
+      // merges, web-committed suggestions). A head that is one of the PR's own
+      // commits is the same line of work, not a reused branch name — keep the
+      // merged PR visible instead of offering "create a pull request".
+      return (
+        (await mergedPRContainsHead(candidate, candidateRepo, currentHeadOidForMergedImplicit)) !==
+        'contained'
+      )
     }
 
     if (typeof linkedPRNumber === 'number') {
@@ -2884,7 +3100,7 @@ export async function getPRForBranchOutcome(
       }
     }
     let mergedBranchLookupNumber: number | null = null
-    if (await hideMergedImplicitPR(data)) {
+    if (await hideMergedImplicitPR(data, dataRepo)) {
       mergedBranchLookupNumber = data?.number ?? null
       data = null
       dataRepo = null
@@ -2905,20 +3121,26 @@ export async function getPRForBranchOutcome(
       }
       return { kind: 'no-pr', fetchedAt: Date.now() }
     }
+    await recordLinkedMergedPRDivergence(data, dataRepo)
     const fallbackConfirmedMergedBranch =
       typeof fallbackPRNumber === 'number' &&
       mergedBranchLookupNumber === fallbackPRNumber &&
       data.number === fallbackPRNumber
     const explicitHeadHidesMergedImplicitPR =
       explicitCurrentHeadOid !== null &&
-      shouldHideMergedImplicitPR(data, linkedPRNumber, explicitCurrentHeadOid)
+      shouldHideMergedImplicitPR(data, linkedPRNumber, explicitCurrentHeadOid) &&
+      (await mergedPRContainsHead(data, dataRepo, explicitCurrentHeadOid)) !== 'contained'
+    // Why no lazy-HEAD re-check on preservation: fallback numbers come from
+    // callers that already gated them on head equality or confirmed
+    // containment; re-hiding against the main-repo HEAD would blank
+    // deleted-head merged PRs that are deliberately kept visible.
     const shouldPreserveMergedFallback =
       !explicitHeadHidesMergedImplicitPR &&
       (fallbackConfirmedMergedBranch || options.acceptMergedFallbackPR === true)
     // Why: a currently visible PR can be merged outside Orca; when the caller
     // marks the fallback as visible review state, keep its lifecycle fresh even
     // if GitHub no longer reports it by branch (for example deleted heads).
-    if ((await hideMergedImplicitPR(data)) && !shouldPreserveMergedFallback) {
+    if ((await hideMergedImplicitPR(data, dataRepo)) && !shouldPreserveMergedFallback) {
       return { kind: 'no-pr', fetchedAt: Date.now() }
     }
 
@@ -2960,6 +3182,8 @@ export async function getPRForBranchOutcome(
           : {}),
         ...(data.mergeStateStatus !== undefined ? { mergeStateStatus: data.mergeStateStatus } : {}),
         headSha: data.headRefOid,
+        ...(confirmedContainedHeadOid ? { confirmedContainedHeadOid } : {}),
+        ...(headDivergedFromMergedPRAtOid ? { headDivergedFromMergedPRAtOid } : {}),
         ...(data.baseRefName ? { baseRefName: data.baseRefName } : {}),
         prRepo: dataRepo ?? undefined,
         headRepo: dataHeadRepo ?? undefined,
@@ -2973,10 +3197,373 @@ export async function getPRForBranchOutcome(
   }
 }
 
+const PR_CHECKS_ROLLUP_QUERY = `
+query($owner: String!, $repo: String!, $pr: Int!) {
+  repository(owner: $owner, name: $repo) {
+    pullRequest(number: $pr) {
+      headRefOid
+      commits(last: 1) {
+        nodes {
+          commit {
+            statusCheckRollup {
+              contexts(first: 100) {
+                nodes {
+                  __typename
+                  ... on CheckRun {
+                    databaseId
+                    name
+                    status
+                    conclusion
+                    detailsUrl
+                    url
+                    checkSuite {
+                      databaseId
+                      workflowRun {
+                        databaseId
+                      }
+                    }
+                  }
+                  ... on StatusContext {
+                    context
+                    state
+                    targetUrl
+                  }
+                }
+              }
+            }
+            checkSuites(first: 100) {
+              nodes {
+                databaseId
+                status
+                conclusion
+                url
+                app {
+                  name
+                  slug
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}
+`
+
+type GraphQLPRChecksResponse = {
+  data?: {
+    repository?: {
+      pullRequest?: {
+        headRefOid?: string | null
+        commits?: {
+          nodes?: { commit?: GraphQLPRChecksCommit | null }[] | null
+        } | null
+      } | null
+    } | null
+  } | null
+}
+
+type GraphQLPRChecksCommit = {
+  statusCheckRollup?: {
+    contexts?: {
+      nodes?: GraphQLStatusCheckContext[] | null
+    } | null
+  } | null
+  checkSuites?: {
+    nodes?: GraphQLCheckSuite[] | null
+  } | null
+}
+
+type GraphQLCheckRunContext = {
+  __typename: 'CheckRun'
+  databaseId?: number | null
+  name?: string | null
+  status?: string | null
+  conclusion?: string | null
+  detailsUrl?: string | null
+  url?: string | null
+  checkSuite?: {
+    databaseId?: number | null
+    workflowRun?: { databaseId?: number | null } | null
+  } | null
+}
+
+type GraphQLStatusContext = {
+  __typename: 'StatusContext'
+  context?: string | null
+  state?: string | null
+  targetUrl?: string | null
+}
+
+type GraphQLStatusCheckContext =
+  | GraphQLCheckRunContext
+  | GraphQLStatusContext
+  | { __typename?: string | null }
+
+type GraphQLCheckSuite = {
+  databaseId?: number | null
+  status?: string | null
+  conclusion?: string | null
+  url?: string | null
+  app?: { name?: string | null; slug?: string | null } | null
+}
+
+type RestCheckRun = {
+  id?: number
+  name: string
+  status: string
+  conclusion: string | null
+  html_url: string
+  details_url: string | null
+}
+
+type RestCommitStatus = {
+  context?: string
+  state?: string
+  target_url?: string | null
+}
+
+type RestCheckSuite = {
+  id?: number | null
+  status: string | null
+  conclusion: string | null
+  app?: { name?: string | null; slug?: string | null } | null
+}
+
+function isGraphQLCheckRunContext(
+  context: GraphQLStatusCheckContext
+): context is GraphQLCheckRunContext {
+  return context.__typename === 'CheckRun'
+}
+
+function isGraphQLStatusContext(
+  context: GraphQLStatusCheckContext
+): context is GraphQLStatusContext {
+  return context.__typename === 'StatusContext'
+}
+
+function mapGraphQLCheckRunContext(context: GraphQLCheckRunContext): PRCheckDetail | null {
+  const name = nullableString(context.name)
+  if (!name) {
+    return null
+  }
+  const url = nullableString(context.detailsUrl) ?? nullableString(context.url)
+  const checkRunId = nullableNumber(context.databaseId)
+  const workflowRunId =
+    nullableNumber(context.checkSuite?.workflowRun?.databaseId) ?? parseActionsRunId(url)
+  return {
+    name,
+    status: mapCheckRunRESTStatus(context.status ?? ''),
+    conclusion: mapCheckRunRESTConclusion(context.status ?? '', context.conclusion ?? null),
+    url,
+    ...(checkRunId !== null ? { checkRunId } : {}),
+    ...(typeof workflowRunId === 'number' ? { workflowRunId } : {})
+  }
+}
+
+function mapGraphQLStatusContext(context: GraphQLStatusContext): PRCheckDetail | null {
+  const name = nullableString(context.context)
+  if (!name) {
+    return null
+  }
+  const url = nullableString(context.targetUrl)
+  const workflowRunId = parseActionsRunId(url)
+  return {
+    name,
+    status: mapCommitStatusRESTStatus(context.state ?? ''),
+    conclusion: mapCommitStatusRESTConclusion(context.state ?? ''),
+    url,
+    ...(workflowRunId !== undefined ? { workflowRunId } : {})
+  }
+}
+
+function mapRestCheckRun(checkRun: RestCheckRun): PRCheckDetail {
+  return {
+    name: checkRun.name,
+    status: mapCheckRunRESTStatus(checkRun.status),
+    conclusion: mapCheckRunRESTConclusion(checkRun.status, checkRun.conclusion),
+    url: checkRun.details_url || checkRun.html_url || null,
+    ...(typeof checkRun.id === 'number' ? { checkRunId: checkRun.id } : {}),
+    workflowRunId: parseActionsRunId(checkRun.details_url || checkRun.html_url || null)
+  }
+}
+
+function mapRestCommitStatus(status: RestCommitStatus): PRCheckDetail | null {
+  const name = nullableString(status.context)
+  if (!name) {
+    return null
+  }
+  const url = nullableString(status.target_url)
+  const workflowRunId = parseActionsRunId(url)
+  return {
+    name,
+    status: mapCommitStatusRESTStatus(status.state ?? ''),
+    conclusion: mapCommitStatusRESTConclusion(status.state ?? ''),
+    url,
+    ...(workflowRunId !== undefined ? { workflowRunId } : {})
+  }
+}
+
+function mapGraphQLPendingApprovalCheckSuite(
+  ownerRepo: OwnerRepo,
+  suite: GraphQLCheckSuite,
+  headSha: string | null | undefined,
+  index: number
+): PRCheckDetail {
+  return {
+    name: getPendingApprovalCheckSuiteName(suite, headSha, index),
+    status: 'completed',
+    conclusion: 'action_required',
+    // Why: suite-only approval blockers have no check run; use the suite page
+    // as the actionable destination when GraphQL exposes one.
+    url:
+      nullableString(suite.url) ??
+      (headSha ? getPendingApprovalCheckSuiteUrl(ownerRepo, headSha, suite.databaseId) : null)
+  }
+}
+
+function mapGraphQLPRChecksResponse(
+  ownerRepo: OwnerRepo,
+  response: GraphQLPRChecksResponse
+): PRCheckDetail[] | null {
+  const pullRequest = response.data?.repository?.pullRequest
+  if (!pullRequest) {
+    return null
+  }
+  const commit = pullRequest.commits?.nodes?.[0]?.commit
+  if (!commit) {
+    return []
+  }
+
+  const contexts = commit.statusCheckRollup?.contexts?.nodes ?? []
+  const checkRunContexts = contexts.filter(isGraphQLCheckRunContext)
+  const checkRuns = checkRunContexts
+    .map(mapGraphQLCheckRunContext)
+    .filter((check): check is PRCheckDetail => check !== null)
+  const checkRunNames = new Set(checkRuns.map((check) => check.name))
+  const checkSuiteIdsWithRuns = new Set(
+    checkRunContexts
+      .map((context) => nullableNumber(context.checkSuite?.databaseId))
+      .filter((id): id is number => id !== null)
+  )
+  // Why: mixed-CI repos expose Jenkins/Prow/Tide as legacy status contexts
+  // inside the same rollup as check runs. Keep check-run metadata on collisions.
+  const legacyStatuses = contexts
+    .filter(isGraphQLStatusContext)
+    .map(mapGraphQLStatusContext)
+    .filter((check): check is PRCheckDetail => check !== null && !checkRunNames.has(check.name))
+  const pendingApprovalChecks = (commit.checkSuites?.nodes ?? [])
+    .filter((suite) => suite.conclusion?.toLowerCase() === 'action_required')
+    .filter((suite) => {
+      const suiteId = nullableNumber(suite.databaseId)
+      return suiteId === null || !checkSuiteIdsWithRuns.has(suiteId)
+    })
+    .map((suite, index) =>
+      mapGraphQLPendingApprovalCheckSuite(ownerRepo, suite, pullRequest.headRefOid, index)
+    )
+
+  return [...checkRuns, ...legacyStatuses, ...pendingApprovalChecks]
+}
+
+async function getPRChecksViaRestFallback(
+  ownerRepo: OwnerRepo,
+  headSha: string | undefined,
+  ghOptions: GhExecOptions,
+  noCache?: boolean
+): Promise<PRCheckDetail[] | null> {
+  if (!headSha) {
+    return null
+  }
+  try {
+    await assertRateLimitBudget('core')
+  } catch (err) {
+    console.warn('getPRChecks skipped REST fallback, falling back to gh pr checks:', err)
+    return null
+  }
+
+  await acquire()
+  try {
+    const cacheArgs = noCache ? [] : ['--cache', '60s']
+    const encodedHeadSha = encodeURIComponent(headSha)
+    const { stdout } = await ghExecFileAsync(
+      [
+        'api',
+        ...cacheArgs,
+        `repos/${ownerRepo.owner}/${ownerRepo.repo}/commits/${encodedHeadSha}/check-runs?per_page=100`
+      ],
+      ghOptions
+    )
+    noteRateLimitSpend('core')
+    const checkRunData = JSON.parse(stdout) as {
+      check_runs?: RestCheckRun[]
+    }
+    const checkRuns = (checkRunData.check_runs ?? []).map(mapRestCheckRun)
+    const checkRunNames = new Set(checkRuns.map((check) => check.name))
+
+    let legacyStatuses: PRCheckDetail[] = []
+    try {
+      const statusResult = await ghExecFileAsync(
+        [
+          'api',
+          ...cacheArgs,
+          `repos/${ownerRepo.owner}/${ownerRepo.repo}/commits/${encodedHeadSha}/status?per_page=100`
+        ],
+        ghOptions
+      )
+      noteRateLimitSpend('core')
+      const statusData = JSON.parse(statusResult.stdout) as {
+        statuses?: RestCommitStatus[]
+      }
+      legacyStatuses = (statusData.statuses ?? [])
+        .map(mapRestCommitStatus)
+        .filter((check): check is PRCheckDetail => check !== null && !checkRunNames.has(check.name))
+    } catch (err) {
+      // Why: the REST fallback is already degraded; keep richer check-run rows
+      // if the legacy-status enrichment fails.
+      console.warn('getPRChecks REST status fallback failed:', err)
+    }
+
+    let pendingApprovalChecks: PRCheckDetail[] = []
+    try {
+      const suitesResult = await ghExecFileAsync(
+        [
+          'api',
+          ...cacheArgs,
+          `repos/${ownerRepo.owner}/${ownerRepo.repo}/commits/${encodedHeadSha}/check-suites?per_page=100`
+        ],
+        ghOptions
+      )
+      noteRateLimitSpend('core')
+      const suitesData = JSON.parse(suitesResult.stdout) as {
+        check_suites?: RestCheckSuite[]
+      }
+      pendingApprovalChecks = (suitesData.check_suites ?? [])
+        .filter((suite) => suite.conclusion?.toLowerCase() === 'action_required')
+        .map((suite, index) => ({
+          name: getPendingApprovalCheckSuiteName(suite, headSha, index),
+          status: 'completed' as const,
+          conclusion: 'action_required' as const,
+          url: getPendingApprovalCheckSuiteUrl(ownerRepo, headSha, suite.id)
+        }))
+    } catch (err) {
+      console.warn('getPRChecks REST check-suite fallback failed:', err)
+    }
+
+    const checks = [...checkRuns, ...legacyStatuses, ...pendingApprovalChecks]
+    return checks.length > 0 ? checks : null
+  } catch (err) {
+    console.warn('getPRChecks via REST fallback failed, falling back to gh pr checks:', err)
+    return null
+  } finally {
+    release()
+  }
+}
+
 /**
  * Get detailed check statuses for a PR.
- * When branch is provided, uses gh api --cache with the check-runs REST endpoint
- * so 304 Not Modified responses don't count against the rate limit.
+ * Uses GitHub's combined GraphQL rollup so check runs and legacy commit statuses
+ * arrive in one cached request; suite-only approval blockers are included too.
  */
 export async function getPRChecks(
   repoPath: string,
@@ -2987,13 +3574,10 @@ export async function getPRChecks(
   connectionId?: string | null,
   localGitOptions: LocalGitExecOptions = {}
 ): Promise<PRCheckDetail[]> {
+  void headSha
   const ghOptions = ghRepoExecOptions(githubRepoContext(repoPath, connectionId, localGitOptions))
   const ownerRepo = prRepo ?? (await getOwnerRepo(repoPath, connectionId, localGitOptions))
   const fallbackToPRChecks = async (): Promise<PRCheckDetail[]> => {
-    // Why: the REST check-runs path spends core only. Guard GraphQL only when
-    // we actually fall back to `gh pr checks`, so a low GraphQL bucket does not
-    // block fresh REST check data. Keep this outside the gh lock because the
-    // guard may need its own `gh api rate_limit` call.
     await assertRateLimitBudget('graphql')
     await acquire()
     try {
@@ -3024,15 +3608,15 @@ export async function getPRChecks(
     }
   }
 
-  if (ownerRepo && headSha) {
-    let canUseRestChecks = true
+  if (ownerRepo) {
+    let canUseGraphQLRollup = true
     try {
-      await assertRateLimitBudget('core')
+      await assertRateLimitBudget('graphql')
     } catch (err) {
-      canUseRestChecks = false
-      console.warn('getPRChecks skipped REST check-runs, falling back to gh pr checks:', err)
+      canUseGraphQLRollup = false
+      console.warn('getPRChecks skipped GraphQL rollup, falling back to gh pr checks:', err)
     }
-    if (canUseRestChecks) {
+    if (canUseGraphQLRollup) {
       await acquire()
       try {
         // Why: --cache 60s saves rate-limit budget during polling, but when the
@@ -3041,40 +3625,43 @@ export async function getPRChecks(
         const { stdout } = await ghExecFileAsync(
           [
             'api',
+            'graphql',
             ...cacheArgs,
-            `repos/${ownerRepo.owner}/${ownerRepo.repo}/commits/${encodeURIComponent(headSha)}/check-runs?per_page=100`
+            '-f',
+            `owner=${ownerRepo.owner}`,
+            '-f',
+            `repo=${ownerRepo.repo}`,
+            '-F',
+            `pr=${prNumber}`,
+            '-f',
+            `query=${PR_CHECKS_ROLLUP_QUERY}`
           ],
           ghOptions
         )
-        noteRateLimitSpend('core')
-        const data = JSON.parse(stdout) as {
-          check_runs: {
-            id?: number
-            name: string
-            status: string
-            conclusion: string | null
-            html_url: string
-            details_url: string | null
-          }[]
-        }
-        if (data.check_runs.length > 0) {
-          return data.check_runs.map((d) => ({
-            name: d.name,
-            status: mapCheckRunRESTStatus(d.status),
-            conclusion: mapCheckRunRESTConclusion(d.status, d.conclusion),
-            url: d.details_url || d.html_url || null,
-            ...(typeof d.id === 'number' ? { checkRunId: d.id } : {}),
-            workflowRunId: parseActionsRunId(d.details_url || d.html_url || null)
-          }))
+        noteRateLimitSpend('graphql')
+        const checks = mapGraphQLPRChecksResponse(
+          ownerRepo,
+          JSON.parse(stdout) as GraphQLPRChecksResponse
+        )
+        if (checks !== null) {
+          return checks
         }
       } catch (err) {
-        // Why: a PR can outlive the cached head SHA after force-pushes or remote
-        // rewrites. Falling back to `gh pr checks` keeps the panel populated
-        // instead of rendering a false "no checks" state from a stale commit.
-        console.warn('getPRChecks via head SHA failed, falling back to gh pr checks:', err)
+        // Why: if GitHub's richer rollup query is unavailable, the older gh
+        // command still returns the combined check/status list for display.
+        console.warn('getPRChecks via GraphQL rollup failed, falling back to gh pr checks:', err)
       } finally {
         release()
       }
+    }
+    const restChecks = await getPRChecksViaRestFallback(
+      ownerRepo,
+      headSha,
+      ghOptions,
+      options?.noCache
+    )
+    if (restChecks !== null) {
+      return restChecks
     }
   }
 
@@ -3084,6 +3671,42 @@ export async function getPRChecks(
     console.warn('getPRChecks failed:', err)
     throw err
   }
+}
+
+function getPendingApprovalCheckSuiteName(
+  suite: {
+    id?: number | null
+    databaseId?: number | null
+    app?: { name?: string | null; slug?: string | null } | null
+  },
+  headSha: string | null | undefined,
+  index: number
+): string {
+  const appName = suite.app?.name ?? suite.app?.slug ?? null
+  const rawSuiteId = suite.databaseId ?? suite.id
+  const suiteId =
+    typeof rawSuiteId === 'number' && Number.isFinite(rawSuiteId) ? `#${rawSuiteId}` : null
+  if (appName && suiteId) {
+    return `${appName} ${suiteId}`
+  }
+  if (appName) {
+    return appName
+  }
+  if (suiteId) {
+    return suiteId
+  }
+  return `${headSha?.slice(0, 12) ?? 'check-suite'}:${index + 1}`
+}
+
+function getPendingApprovalCheckSuiteUrl(
+  ownerRepo: OwnerRepo,
+  headSha: string,
+  suiteId: number | null | undefined
+): string {
+  const base = `https://github.com/${ownerRepo.owner}/${ownerRepo.repo}/commits/${headSha}/checks`
+  return typeof suiteId === 'number' && Number.isFinite(suiteId)
+    ? `${base}#check-suite-${suiteId}`
+    : base
 }
 
 function nullableString(value: unknown): string | null {
@@ -3982,10 +4605,20 @@ export async function setPRAutoMerge(
   } catch (err) {
     const message =
       err instanceof Error ? err.message : typeof err === 'string' ? err : 'Unknown error'
-    return { ok: false, error: classifyGhError(message).message }
+    return { ok: false, error: classifySetAutoMergeError(message) }
   } finally {
     release()
   }
+}
+
+// Why: GitHub rejects enabling auto-merge on a PR that can already merge with
+// "Pull request is in clean status". Surface the actionable next step (merge
+// directly) instead of the raw GraphQL error.
+function classifySetAutoMergeError(message: string): string {
+  if (/in clean status/i.test(message)) {
+    return 'This pull request can already be merged. Use Merge instead of auto-merge.'
+  }
+  return classifyGhError(message).message
 }
 
 type PRAutoMergeIdentity = {

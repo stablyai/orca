@@ -1,29 +1,20 @@
 import { memo } from 'react'
 import { View, StyleSheet } from 'react-native'
-import type { ConnectionState } from '../transport/types'
-import type { RpcClient } from '../transport/rpc-client'
 import { MobileSourceControlPanel } from '../source-control/MobileSourceControlPanel'
 import { MobileFileExplorerPanel } from '../files/MobileFileExplorerPanel'
-import { MobilePrViewPanel } from '../components/pr-sidebar/MobilePrViewPanel'
 import { mobilePrSidebarStyles } from '../components/pr-sidebar/mobile-pr-sidebar-styles'
 import { useMobileDockResize } from './use-mobile-dock-resize'
 import type { ActivePanel } from './session-panel-host'
-import type { MobileGitStatusResult } from '../source-control/mobile-git-status'
 
 type Props = {
   activePanel: Exclude<ActivePanel, null>
   hostId: string
   worktreeId: string
   name: string
-  client: RpcClient | null
-  connState: ConnectionState
-  branch: string | null
-  headSha: string | null
-  gitStatus: MobileGitStatusResult | null
-  isGithubRepo: boolean
-  branchContextLoaded: boolean
   availableWidth: number
   onRequestClose: () => void
+  onFileOpenStart?: () => void
+  onOpenedFileDiff?: (relativePath: string) => void
 }
 
 type DockPanelContentProps = Omit<Props, 'availableWidth'>
@@ -38,15 +29,10 @@ export function SessionDockColumn({
   hostId,
   worktreeId,
   name,
-  client,
-  connState,
-  branch,
-  headSha,
-  gitStatus,
-  isGithubRepo,
-  branchContextLoaded,
   availableWidth,
-  onRequestClose
+  onRequestClose,
+  onFileOpenStart,
+  onOpenedFileDiff
 }: Props) {
   const { dockWidth, panHandlers } = useMobileDockResize(availableWidth)
   return (
@@ -59,14 +45,9 @@ export function SessionDockColumn({
         hostId={hostId}
         worktreeId={worktreeId}
         name={name}
-        client={client}
-        connState={connState}
-        branch={branch}
-        headSha={headSha}
-        gitStatus={gitStatus}
-        isGithubRepo={isGithubRepo}
-        branchContextLoaded={branchContextLoaded}
         onRequestClose={onRequestClose}
+        onFileOpenStart={onFileOpenStart}
+        onOpenedFileDiff={onOpenedFileDiff}
       />
     </View>
   )
@@ -79,16 +60,14 @@ const DockPanelContent = memo(function DockPanelContent({
   hostId,
   worktreeId,
   name,
-  client,
-  connState,
-  branch,
-  headSha,
-  gitStatus,
-  isGithubRepo,
-  branchContextLoaded,
-  onRequestClose
+  onRequestClose,
+  onFileOpenStart,
+  onOpenedFileDiff
 }: DockPanelContentProps) {
-  if (activePanel === 'sourceControl') {
+  // Source Control and Pull Request share one hub instance so swapping dock icons
+  // keeps commit draft / visited-tab / scroll state and lands on the right segment
+  // (design: PR dock maps to hub + tab=pr).
+  if (activePanel === 'sourceControl' || activePanel === 'pr') {
     return (
       <MobileSourceControlPanel
         hostId={hostId}
@@ -96,31 +75,18 @@ const DockPanelContent = memo(function DockPanelContent({
         name={name}
         origin="session"
         embedded
+        initialTab={activePanel === 'pr' ? 'pr' : 'changes'}
         onRequestClose={onRequestClose}
-      />
-    )
-  }
-  if (activePanel === 'files') {
-    return (
-      <MobileFileExplorerPanel
-        hostId={hostId}
-        worktreeId={worktreeId}
-        name={name}
-        embedded
-        onRequestClose={onRequestClose}
+        onFileOpenStart={onFileOpenStart}
+        onOpenedFileDiff={onOpenedFileDiff}
       />
     )
   }
   return (
-    <MobilePrViewPanel
-      client={client}
-      connState={connState}
+    <MobileFileExplorerPanel
+      hostId={hostId}
       worktreeId={worktreeId}
-      branch={branch}
-      headSha={headSha}
-      gitStatus={gitStatus}
-      isGithubRepo={isGithubRepo}
-      branchContextLoaded={branchContextLoaded}
+      name={name}
       embedded
       onRequestClose={onRequestClose}
     />

@@ -1,18 +1,13 @@
+import {
+  isDocumentBodyOrNull,
+  refreshTerminalImeInputContext,
+  scheduleNextFrame,
+  type TerminalImeInputContextRefocusScheduler
+} from './terminal-ime-input-context-refresh'
+
 export type TerminalInputFocusSync = (focused: boolean) => void
-export type RefocusScheduler = (callback: () => void) => void
+export type RefocusScheduler = TerminalImeInputContextRefocusScheduler
 export const REGULAR_TERMINAL_INPUT_FOCUSED_ATTRIBUTE = 'data-regular-terminal-input-focused'
-
-function isMacUserAgent(): boolean {
-  return typeof navigator !== 'undefined' && navigator.userAgent.includes('Mac')
-}
-
-function scheduleNextFrame(callback: () => void): void {
-  if (typeof requestAnimationFrame === 'function') {
-    requestAnimationFrame(callback)
-  } else {
-    setTimeout(callback, 0)
-  }
-}
 
 export function isXtermHelperTextarea(target: EventTarget | null): target is HTMLElement {
   return target instanceof HTMLElement && target.classList.contains('xterm-helper-textarea')
@@ -59,49 +54,86 @@ export function releaseTerminalFocusForWindowBlur(args: {
   container: HTMLElement
   activeElement: Element | null
   syncFocused: TerminalInputFocusSync
-}): boolean {
-  if (!getPaneOwnedActiveHelperTextarea(args.container, args.activeElement)) {
-    return false
+}): HTMLElement | null {
+  // Why: return the exact helper that owned focus so window-focus reclaim can
+  // refocus *that* split, not whichever helper happens to be first in the DOM
+  // (a single TerminalPane hosts every split as siblings under one container).
+  const releasedHelper = getPaneOwnedActiveHelperTextarea(args.container, args.activeElement)
+  if (!releasedHelper) {
+    return null
   }
 
   args.syncFocused(false)
-  return true
+  return releasedHelper
 }
 
 export function resyncTerminalFocusForWindowFocus(args: {
   container: HTMLElement
   activeElement: Element | null
   syncFocused: TerminalInputFocusSync
+  /**
+   * The exact helper textarea this pane released on window blur. When focus
+   * settled on body/null during app reactivation, reclaim *this* split's
+   * helper rather than whichever helper is first in the DOM.
+   */
+  releasedHelper?: HTMLElement | null
   /** Override the macOS check (tests). Defaults to the navigator user agent. */
   isMac?: boolean
   /** Override the refocus scheduler (tests). Defaults to requestAnimationFrame. */
   scheduleRefocus?: RefocusScheduler
 }): boolean {
-  const helper = getPaneOwnedActiveHelperTextarea(args.container, args.activeElement)
+  const ownedActive = getPaneOwnedActiveHelperTextarea(args.container, args.activeElement)
+  let helper = ownedActive
+  let needsProgrammaticFocus = false
+
   if (!helper) {
-    return false
+    const ownerDocument = args.container.ownerDocument
+    const releasedHelper = args.releasedHelper
+    if (
+      releasedHelper &&
+      releasedHelper.isConnected &&
+      args.container.contains(releasedHelper) &&
+      isDocumentBodyOrNull(args.activeElement, ownerDocument)
+    ) {
+      helper = releasedHelper
+      needsProgrammaticFocus = true
+    } else {
+      return false
+    }
   }
 
   args.syncFocused(true)
 
-  // Why: on macOS, reactivating the app leaves Chromium's NSTextInputContext
-  // stale on the still-focused helper textarea, so the IME is stranded in ASCII
-  // with no way to switch back to CJK (electron#32307/#34952). Forcing a
-  // blur → next-frame refocus rebuilds the input context so the IME works again.
-  // Other platforms don't hit this and shouldn't pay the flicker cost.
-  const isMac = args.isMac ?? isMacUserAgent()
-  if (isMac) {
-    helper.blur()
+  const reclaimedHelper = helper
+
+  // Why: defer the reclaim refocus to the next frame and only take focus if
+  // nothing newer grabbed it — so a click into the sidebar/dialog/rename input
+  // during reactivation isn't yanked back into the terminal. Applies on every
+  // platform (the reporter's bug is Linux); macOS additionally needs the blur
+  // first to rebuild a stale NSTextInputContext (see below).
+  if (needsProgrammaticFocus) {
     const schedule = args.scheduleRefocus ?? scheduleNextFrame
     schedule(() => {
-      // Why: only reclaim focus if nothing else grabbed it during the frame, so
-      // a click into another field mid-reactivation isn't yanked back.
-      const active = helper.ownerDocument.activeElement
-      if (active === helper || active === helper.ownerDocument.body || active === null) {
-        helper.focus()
+      if (!reclaimedHelper.isConnected) {
+        return
+      }
+      const active = reclaimedHelper.ownerDocument.activeElement
+      if (
+        active === reclaimedHelper ||
+        isDocumentBodyOrNull(active, reclaimedHelper.ownerDocument)
+      ) {
+        reclaimedHelper.focus()
       }
     })
+    return true
   }
+
+  // Why: macOS app reactivation leaves a stale NSTextInputContext on the
+  // still-focused helper (electron#32307/#34952); non-mac returns false inside.
+  refreshTerminalImeInputContext(reclaimedHelper, {
+    isMac: args.isMac,
+    scheduleRefocus: args.scheduleRefocus
+  })
 
   return true
 }

@@ -1,12 +1,14 @@
-import { execFile } from 'child_process'
-import path from 'path'
-import { promisify } from 'util'
+import { execFile } from 'node:child_process'
+import path from 'node:path'
+import { promisify } from 'node:util'
+import { buildPosixCommandPathLookupScript } from '../../shared/posix-command-path-lookup'
 import { buildLocalPreflightEnv } from './preflight-local-env'
 import { runPreflightCommandInWsl } from './preflight-wsl-command'
 import type { WslPreflightTarget } from './preflight-wsl-agent-detection'
 
 const execFileAsync = promisify(execFile)
 export const PREFLIGHT_COMMAND_TIMEOUT_MS = 5000
+const WSL_COMMAND_PATH_SENTINEL = '__ORCA_PREFLIGHT_COMMAND_PATH__'
 
 export type PreflightCommandResult = { stdout: string; stderr: string }
 
@@ -81,8 +83,27 @@ export async function isCommandOnPath(
   const finder = process.platform === 'win32' ? 'where' : 'which'
   try {
     const { stdout } = wslTarget
-      ? await execCommandInWsl(wslTarget, `command -v ${shellQuote(command)}`)
+      ? // Why: preflight must validate the executable on PATH, not a shell alias or function.
+        await execCommandInWsl(
+          wslTarget,
+          [
+            buildPosixCommandPathLookupScript({ kind: 'literal', value: command }),
+            'if [ -n "$resolved" ]; then',
+            `printf '${WSL_COMMAND_PATH_SENTINEL}%s\\n' "$resolved"`,
+            'fi'
+          ].join('\n')
+        )
       : await execLocalPreflightCommand(finder, [command])
+    if (wslTarget) {
+      // Why: WSL startup chatter can contain unrelated absolute paths.
+      return stdout
+        .split(/\r?\n/)
+        .map((line) => line.trim())
+        .filter((line) => line.startsWith(WSL_COMMAND_PATH_SENTINEL))
+        .map((line) => line.slice(WSL_COMMAND_PATH_SENTINEL.length))
+        .some((line) => path.posix.isAbsolute(line))
+    }
+
     return stdout
       .split(/\r?\n/)
       .map((line) => line.trim())

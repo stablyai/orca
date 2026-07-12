@@ -253,7 +253,7 @@ function recognizePythonEntrypoint(
   tokens: string[],
   entrypoint: string
 ): RecognizedAgentProcess | null {
-  const moduleFlagIndex = tokens.findIndex((token) => token === '-m')
+  const moduleFlagIndex = tokens.indexOf('-m')
   if (moduleFlagIndex > 0) {
     return recognizePythonModule(tokens[moduleFlagIndex + 1])
   }

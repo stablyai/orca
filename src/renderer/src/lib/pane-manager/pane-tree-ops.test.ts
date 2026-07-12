@@ -252,6 +252,22 @@ describe('safeFit', () => {
     expect(pane.terminal.resize).toHaveBeenCalledWith(49, 20)
   })
 
+  it('parks xterm at a remote desktop owner grid', () => {
+    const pane = createPane({
+      proposedCols: 120,
+      proposedRows: 40,
+      terminalCols: 120,
+      terminalRows: 40
+    })
+    pane.container.dataset.ptyId = 'pty-remote'
+    setFitOverride('pty-remote', 'remote-desktop-fit', 96, 32)
+
+    safeFit(pane)
+
+    expect(pane.terminal.resize).toHaveBeenCalledWith(96, 32)
+    expect(pane.fitAddon.fit).not.toHaveBeenCalled()
+  })
+
   it('skips resize when terminal already matches override dimensions', () => {
     const pane = createPane({
       proposedCols: 120,

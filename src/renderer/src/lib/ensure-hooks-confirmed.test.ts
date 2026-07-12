@@ -139,6 +139,40 @@ describe('ensureHooksConfirmed', () => {
     await expect(promise).resolves.toBe('skip')
   })
 
+  it('prompts for VM recipes using the recipe lifecycle declarations', async () => {
+    const { state, pending } = createTestState()
+    hooksCheckMock.mockResolvedValue({
+      hasHooks: true,
+      hooks: {
+        environmentRecipes: [
+          {
+            id: 'cloud-sandbox',
+            name: 'Cloud Sandbox',
+            description: 'Starts a per-workspace VM.',
+            create: './scripts/start-vm.sh',
+            suspend: './scripts/suspend-vm.sh',
+            resume: './scripts/resume-vm.sh',
+            destroy: './scripts/destroy-vm.sh'
+          }
+        ]
+      },
+      mayNeedUpdate: false
+    })
+
+    const promise = ensureHooksConfirmed(state, 'repo-1', 'vmRecipe')
+
+    await vi.waitFor(() => expect(pending).toHaveLength(1))
+    expect(pending[0].data.scriptKind).toBe('vmRecipe')
+    expect(pending[0].data.scriptContent).toContain('# environmentRecipes.cloud-sandbox')
+    expect(pending[0].data.scriptContent).toContain('create: ./scripts/start-vm.sh')
+    expect(pending[0].data.scriptContent).toContain('suspend: ./scripts/suspend-vm.sh')
+    expect(pending[0].data.scriptContent).toContain('resume: ./scripts/resume-vm.sh')
+    expect(pending[0].data.scriptContent).toContain('destroy: ./scripts/destroy-vm.sh')
+
+    pending[0].resolve('run')
+    await expect(promise).resolves.toBe('run')
+  })
+
   it('returns run without inspecting hooks when the repo is always trusted', async () => {
     const { state, pending } = createTestState()
     state.trustedOrcaHooks['repo-1'] = {
@@ -189,6 +223,28 @@ describe('ensureHooksConfirmed', () => {
     expect(decision).toBe('run')
     expect(hooksCheckMock).toHaveBeenCalledWith({ repoId: 'repo-1' })
     expect(pending).toHaveLength(0)
+  })
+
+  it('inspects the requested host when duplicate repo ids exist', async () => {
+    const { state } = createTestState({
+      settings: { activeRuntimeEnvironmentId: 'env-1' },
+      trustedOrcaHooks: { 'repo-1': { all: { approvedAt: 1 } } },
+      repos: [
+        { id: 'repo-1', displayName: 'Runtime', executionHostId: 'runtime:env-1' },
+        { id: 'repo-1', displayName: 'SSH', connectionId: 'ssh-1' }
+      ]
+    } as unknown as Partial<AppState>)
+    hooksCheckMock.mockResolvedValue({
+      hasHooks: true,
+      hooks: { scripts: {} },
+      mayNeedUpdate: false
+    })
+
+    const decision = await ensureHooksConfirmed(state, 'repo-1', 'archive', 'ssh:ssh-1')
+
+    expect(decision).toBe('run')
+    expect(hooksCheckMock).toHaveBeenCalledWith({ repoId: 'repo-1', hostId: 'ssh:ssh-1' })
+    expect(runtimeEnvironmentCallMock).not.toHaveBeenCalled()
   })
 
   it('checks runtime-owned repo hooks through the repo owner runtime', async () => {

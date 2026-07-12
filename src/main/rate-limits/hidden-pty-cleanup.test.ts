@@ -1,5 +1,9 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { cleanupHiddenRateLimitPty } from './hidden-pty-cleanup'
+import {
+  cleanupHiddenRateLimitPty,
+  getActiveHiddenRateLimitPtyCount,
+  registerHiddenRateLimitPty
+} from './hidden-pty-cleanup'
 
 function setPlatform(platform: NodeJS.Platform): void {
   Object.defineProperty(process, 'platform', {
@@ -97,5 +101,35 @@ describe('cleanupHiddenRateLimitPty', () => {
 
     expect(term.kill).toHaveBeenCalledTimes(1)
     expect(term.destroy).toHaveBeenCalledTimes(1)
+  })
+
+  it('removes registered hidden PTYs when cleanup kills them', () => {
+    setPlatform('darwin')
+    const term = {
+      kill: vi.fn(),
+      destroy: vi.fn()
+    }
+    const registration = registerHiddenRateLimitPty(term)
+
+    expect(getActiveHiddenRateLimitPtyCount()).toBe(1)
+
+    cleanupHiddenRateLimitPty(term, [registration], { kill: true })
+
+    expect(getActiveHiddenRateLimitPtyCount()).toBe(0)
+  })
+
+  it('removes registered hidden PTYs after natural exit cleanup', () => {
+    setPlatform('darwin')
+    const term = {
+      kill: vi.fn(),
+      destroy: vi.fn()
+    }
+    const registration = registerHiddenRateLimitPty(term)
+
+    expect(getActiveHiddenRateLimitPtyCount()).toBe(1)
+
+    cleanupHiddenRateLimitPty(term, [registration], { kill: false })
+
+    expect(getActiveHiddenRateLimitPtyCount()).toBe(0)
   })
 })

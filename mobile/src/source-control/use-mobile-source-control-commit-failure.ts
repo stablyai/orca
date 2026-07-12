@@ -1,9 +1,9 @@
 import { useState } from 'react'
 import type { ConnectionState } from '../transport/types'
 import type { RpcClient } from '../transport/rpc-client'
-import {
-  type MobileCommitFailureRecovery,
-  type RecordMobileCommitFailure
+import type {
+  MobileCommitFailureRecovery,
+  RecordMobileCommitFailure
 } from './mobile-commit-failure-recovery'
 import { useMobileCommitFailureRecovery } from './use-mobile-commit-failure-recovery'
 

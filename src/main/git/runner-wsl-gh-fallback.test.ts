@@ -1,4 +1,3 @@
-/* eslint-disable max-lines -- Why: WSL fallback, retry safety, and glab parity share mocks. */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as WslModule from '../wsl'
 
@@ -348,6 +347,29 @@ describe('ghExecFileAsync WSL fallback', () => {
       2,
       'wsl.exe',
       ['-d', 'Ubuntu', '--', 'bash', '-c', "'glab' 'api' 'projects'"],
+      expect.objectContaining({ cwd: undefined }),
+      expect.any(Function)
+    )
+  })
+
+  it('does not wake the default WSL distro for host-only GitLab diagnostics', async () => {
+    getDefaultWslDistroMock.mockReturnValue('Ubuntu')
+    execFileMock
+      .mockImplementationOnce((_binary, _args, _options, callback) => {
+        callback(Object.assign(new Error('spawn glab ENOENT'), { code: 'ENOENT' }))
+      })
+      .mockImplementationOnce((_binary, _args, _options, callback) => {
+        callback(null, { stdout: 'Logged in to gitlab.com', stderr: '' })
+      })
+
+    await expect(
+      glabExecFileAsync(['auth', 'status'], { allowDefaultWslFallback: false })
+    ).rejects.toThrow('spawn glab ENOENT')
+
+    expect(execFileMock).toHaveBeenCalledTimes(1)
+    expect(execFileMock).toHaveBeenCalledWith(
+      'glab',
+      ['auth', 'status'],
       expect.objectContaining({ cwd: undefined }),
       expect.any(Function)
     )

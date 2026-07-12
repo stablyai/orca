@@ -1,7 +1,7 @@
-import { execFileSync } from 'child_process'
-import { mkdtemp, realpath, rm } from 'fs/promises'
-import { tmpdir } from 'os'
-import * as path from 'path'
+import { execFileSync } from 'node:child_process'
+import { mkdtemp, realpath, rm } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import * as path from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import { listWorktrees, removeWorktree } from './worktree'
 
@@ -30,6 +30,39 @@ async function createRepoWithNewlineWorktree(): Promise<{
   return {
     repoPath: await realpath(repoPath),
     worktreePath: await realpath(requestedWorktreePath)
+  }
+}
+
+async function createRepoWithLockedDeletedWorktree(): Promise<{
+  repoPath: string
+  worktreePath: string
+}> {
+  const root = await mkdtemp(path.join(tmpdir(), 'orca-worktree-locked-delete-'))
+  tempRoots.push(root)
+  const repoPath = path.join(root, 'repo')
+  const requestedWorktreePath = path.join(root, 'locked deleted worktree')
+
+  execFileSync('git', ['init', '--quiet', repoPath])
+  git(repoPath, ['symbolic-ref', 'HEAD', 'refs/heads/main'])
+  git(repoPath, ['config', 'user.email', 'test@example.com'])
+  git(repoPath, ['config', 'user.name', 'Test User'])
+  git(repoPath, ['commit', '--allow-empty', '--quiet', '-m', 'initial'])
+  git(repoPath, [
+    'worktree',
+    'add',
+    '--quiet',
+    '-b',
+    'feature/locked-delete',
+    requestedWorktreePath
+  ])
+  git(repoPath, ['worktree', 'lock', '--reason', 'orca locked stale repro', requestedWorktreePath])
+
+  const worktreePath = await realpath(requestedWorktreePath)
+  await rm(worktreePath, { recursive: true, force: true })
+
+  return {
+    repoPath: await realpath(repoPath),
+    worktreePath
   }
 }
 
@@ -68,4 +101,17 @@ describe('git worktree paths', () => {
       expect(branchExists(repoPath, 'feature/newline')).toBe(false)
     }
   )
+
+  it('preserves a locked worktree whose directory was deleted manually', async () => {
+    const { repoPath, worktreePath } = await createRepoWithLockedDeletedWorktree()
+
+    await expect(removeWorktree(repoPath, worktreePath, true)).rejects.toThrow(
+      'Worktree is locked by Git'
+    )
+
+    expect(git(repoPath, ['worktree', 'list', '--porcelain'])).toContain(
+      worktreePath.replaceAll('\\', '/')
+    )
+    expect(branchExists(repoPath, 'feature/locked-delete')).toBe(true)
+  })
 })
