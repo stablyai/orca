@@ -61,9 +61,23 @@ export function titleHasAnyLegacyAgentName(title: string): boolean {
 
 // Why: `android` contains `droid`; like the legacy names above, Droid must be
 // token-matched so Android terminal titles do not become agent status.
-export const DROID_AGENT_NAME_RE = /(?<![\w./\\-])droid(?![\w./\\-])/i
+// Why: Windows launcher processes surface the .exe suffix in terminal titles.
+// Without the executable suffix, `droid.exe` titles fail to match on Windows
+// and fall through to other agent heuristics (braille spinner → Claude Code).
+export const DROID_AGENT_NAME_RE = new RegExp(
+  `(?<![\\w./\\\\-])droid(?:${WINDOWS_EXECUTABLE_SUFFIX_RE})?(?![\\w./\\\\-])`,
+  'i'
+)
 
 // Why: Hermes/agy are safe to token-match but unsafe as substrings because
 // cwd/path titles like `~/hermes/working` would otherwise count as activity.
-export const HERMES_AGENT_NAME_RE = /(?<![\w./\\-])hermes(?![\w./\\-])/i
-export const AGY_AGENT_NAME_RE = /(?<![\w./\\-])agy(?![\w./\\-])/i
+// Why: same Windows .exe suffix issue — `hermes.exe` titles on Windows are
+// not detected as Hermes, falling through to Claude's braille spinner heuristic.
+export const HERMES_AGENT_NAME_RE = new RegExp(
+  `(?<![\\w./\\\\-])hermes(?:${WINDOWS_EXECUTABLE_SUFFIX_RE})?(?![\\w./\\\\-])`,
+  'i'
+)
+export const AGY_AGENT_NAME_RE = new RegExp(
+  `(?<![\\w./\\\\-])agy(?:${WINDOWS_EXECUTABLE_SUFFIX_RE})?(?![\\w./\\\\-])`,
+  'i'
+)
