@@ -258,6 +258,7 @@ import {
   createPrIntentRunTokenMatches,
   getCreatePrIntentCommitFailureNoticeMessage,
   getCreatePrIntentStagePaths,
+  isCreatePrIntentSyncConflictError,
   resolveCreatePrIntentReviewBase,
   resolveCreatePrIntentRemoteStep,
   type CreatePrIntentRunToken
@@ -1081,6 +1082,12 @@ function SourceControlInner(): React.JSX.Element {
     Record<string, SourceControlActionError | null>
   >({})
   const remoteActionErrorSequenceByWorktreeRef = useRef<Record<string, number>>({})
+  // Why: runCreatePrIntent closes over a stale `remoteActionErrors` (it is not a
+  // callback dep), so mirror the latest remote-action failure into a ref the
+  // intent runner can read synchronously after runRemoteAction resolves.
+  const lastRemoteActionErrorByWorktreeRef = useRef<
+    Record<string, SourceControlActionError | null>
+  >({})
   const previousConflictOperationsRef = useRef<Record<string, GitConflictOperation>>({})
   // Why: keep commit-in-flight state per-worktree. A single boolean would be
   // cleared when the user switched worktrees, letting them double-click Commit
@@ -2511,6 +2518,7 @@ function SourceControlInner(): React.JSX.Element {
           : []
       )
       const failureBranchName = targetIsActiveWorktree ? branchName || null : null
+      lastRemoteActionErrorByWorktreeRef.current[target.worktreeId] = null
       setRemoteActionErrors((prev) => ({ ...prev, [target.worktreeId]: null }))
       try {
         if (kind === 'publish') {
@@ -2609,6 +2617,7 @@ function SourceControlInner(): React.JSX.Element {
           }
         )
         if (remoteActionErrorSequenceByWorktreeRef.current[target.worktreeId] === sequence) {
+          lastRemoteActionErrorByWorktreeRef.current[target.worktreeId] = null
           setRemoteActionErrors((prev) => ({ ...prev, [target.worktreeId]: null }))
         }
         return true
@@ -2620,20 +2629,19 @@ function SourceControlInner(): React.JSX.Element {
         if (remoteActionErrorSequenceByWorktreeRef.current[target.worktreeId] !== sequence) {
           return false
         }
-        setRemoteActionErrors((prev) => ({
-          ...prev,
-          [target.worktreeId]: {
-            kind,
-            message: resolveRemoteActionError(kind, error),
-            rawError: error instanceof Error ? error.message : String(error),
-            syncPushStage: kind === 'sync' ? isSyncPushStageError(error) : false,
-            branchName: failureBranchName,
-            worktreePath: target.worktreePath,
-            entriesSnapshot: recoveryEntrySnapshot.entries,
-            entriesSnapshotTotalCount: recoveryEntrySnapshot.totalCount,
-            sequence
-          }
-        }))
+        const actionError: SourceControlActionError = {
+          kind,
+          message: resolveRemoteActionError(kind, error),
+          rawError: error instanceof Error ? error.message : String(error),
+          syncPushStage: kind === 'sync' ? isSyncPushStageError(error) : false,
+          branchName: failureBranchName,
+          worktreePath: target.worktreePath,
+          entriesSnapshot: recoveryEntrySnapshot.entries,
+          entriesSnapshotTotalCount: recoveryEntrySnapshot.totalCount,
+          sequence
+        }
+        lastRemoteActionErrorByWorktreeRef.current[target.worktreeId] = actionError
+        setRemoteActionErrors((prev) => ({ ...prev, [target.worktreeId]: actionError }))
         return false
       } finally {
         if (!options?.target) {
@@ -4013,15 +4021,14 @@ function SourceControlInner(): React.JSX.Element {
         hasCurrentBranch: Boolean(token.branch)
       })
       if (remoteStep === 'blocked' || remoteStep === 'none') {
+        // Why: `needs_sync` now resolves to the auto 'sync'/'force_push' steps, so
+        // it never reaches this branch — the remaining blockers are simply not
+        // ready to create a review (e.g. auth_required, default_branch).
         setCreatePrIntentNoticeForWorktree(token.worktreeId, {
           tone: 'muted',
           message: translate(
-            eligibility.blockedReason === 'needs_sync'
-              ? 'auto.components.right.sidebar.SourceControl.createPrIntentNeedsSync'
-              : 'auto.components.right.sidebar.SourceControl.createPrIntentBranchNotReady',
-            eligibility.blockedReason === 'needs_sync'
-              ? 'Sync this branch before creating a review.'
-              : 'Branch is not ready to create a review yet.'
+            'auto.components.right.sidebar.SourceControl.createPrIntentBranchNotReady',
+            'Branch is not ready to create a review yet.'
           )
         })
         return
@@ -4029,18 +4036,28 @@ function SourceControlInner(): React.JSX.Element {
 
       setCreatePrIntentNoticeForWorktree(token.worktreeId, {
         tone: 'muted',
-        message: translate(
+        // Why: keep each translate() call on a string-literal key so the
+        // localization-catalog verifier can statically detect every key.
+        message:
           remoteStep === 'publish'
-            ? 'auto.components.right.sidebar.SourceControl.createPrIntentPublishing'
+            ? translate(
+                'auto.components.right.sidebar.SourceControl.createPrIntentPublishing',
+                'Publishing branch…'
+              )
             : remoteStep === 'force_push'
-              ? 'auto.components.right.sidebar.SourceControl.createPrIntentForcePushing'
-              : 'auto.components.right.sidebar.SourceControl.createPrIntentPushing',
-          remoteStep === 'publish'
-            ? 'Publishing branch…'
-            : remoteStep === 'force_push'
-              ? 'Force pushing with lease…'
-              : 'Pushing commits…'
-        )
+              ? translate(
+                  'auto.components.right.sidebar.SourceControl.createPrIntentForcePushing',
+                  'Force pushing with lease…'
+                )
+              : remoteStep === 'sync'
+                ? translate(
+                    'auto.components.right.sidebar.SourceControl.createPrIntentSyncing',
+                    'Syncing branch…'
+                  )
+                : translate(
+                    'auto.components.right.sidebar.SourceControl.createPrIntentPushing',
+                    'Pushing commits…'
+                  )
       })
       const remoteOk = await runRemoteAction(remoteStep, {
         target: operationTarget,
@@ -4050,12 +4067,21 @@ function SourceControlInner(): React.JSX.Element {
         return
       }
       if (!remoteOk) {
+        const remoteError = lastRemoteActionErrorByWorktreeRef.current[token.worktreeId]
+        // A sync push-stage rejection is not a conflict — it falls to the generic
+        // copy so the push-recovery panel drives the fix.
+        const isSyncConflict = isCreatePrIntentSyncConflictError(remoteError)
         setCreatePrIntentNoticeForWorktree(token.worktreeId, {
           tone: 'destructive',
-          message: translate(
-            'auto.components.right.sidebar.SourceControl.createPrIntentRemoteFailed',
-            'Could not update the remote branch. Retry Create PR.'
-          )
+          message: isSyncConflict
+            ? translate(
+                'auto.components.right.sidebar.SourceControl.createPrIntentSyncConflicts',
+                'Sync hit conflicts. Resolve them, then retry Create PR.'
+              )
+            : translate(
+                'auto.components.right.sidebar.SourceControl.createPrIntentRemoteFailed',
+                'Could not update the remote branch. Retry Create PR.'
+              )
         })
         return
       }

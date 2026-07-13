@@ -110,6 +110,17 @@ export function isSyncPushStageError(error: unknown): boolean {
   )
 }
 
+// Why: detects "the working tree has merge conflicts the user must resolve" —
+// both an unconcluded prior merge and a fresh conflict from this operation.
+// Lets the Create PR flow tell a real sync conflict apart from a
+// fetch/network/auth/push failure that only looks similar.
+export function isMergeConflictErrorMessage(message: string): boolean {
+  return (
+    /unmerged files|needs merge|you have not concluded your merge/i.test(message) ||
+    /automatic merge failed|CONFLICT \(|fix conflicts/i.test(message)
+  )
+}
+
 export function resolveRemoteOperationErrorMessage(
   error: unknown,
   options?: RemoteOperationErrorOptions

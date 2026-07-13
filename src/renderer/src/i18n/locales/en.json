@@ -9678,7 +9678,6 @@
             "createPrIntentConfigureAi": "Add a commit message or configure Source Control AI settings.",
             "createPrIntentGenerateFailed": "Could not generate a commit message. Add one and retry.",
             "createPrIntentCommitFailed": "Could not commit changes. Fix the issue, then retry Create PR.",
-            "createPrIntentNeedsSync": "Sync this branch before creating a review.",
             "createPrIntentBranchNotReady": "Branch is not ready to create a review yet.",
             "createPrIntentPublishing": "Publishing branch…",
             "createPrIntentForcePushing": "Force pushing with lease…",
@@ -9715,7 +9714,9 @@
               "a9bf7c171a": "Push Failed",
               "834cb3f23d": "Fix with AI",
               "783a808870": "Close"
-            }
+            },
+            "createPrIntentSyncConflicts": "Sync hit conflicts. Resolve them, then retry Create PR.",
+            "createPrIntentSyncing": "Syncing branch…"
           },
           "SourceControlAgentActionDialog": {
             "8e856842d1": "Could not start the selected agent.",

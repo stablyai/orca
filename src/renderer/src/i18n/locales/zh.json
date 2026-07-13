@@ -9655,7 +9655,6 @@
             "createPrIntentConfigureAi": "请添加提交信息或配置源代码管理 AI 设置。",
             "createPrIntentGenerateFailed": "无法生成提交信息。请添加一条信息后重试。",
             "createPrIntentCommitFailed": "无法提交更改。请修复问题后重试创建 PR。",
-            "createPrIntentNeedsSync": "创建评审前请先同步此分支。",
             "createPrIntentBranchNotReady": "分支尚未准备好创建评审。",
             "createPrIntentPublishing": "正在发布分支…",
             "createPrIntentForcePushing": "正在使用 lease 强制推送…",
@@ -9692,7 +9691,9 @@
               "a9bf7c171a": "推送失败",
               "834cb3f23d": "使用 AI 修复",
               "783a808870": "关闭"
-            }
+            },
+            "createPrIntentSyncConflicts": "Sync hit conflicts. Resolve them, then retry Create PR.",
+            "createPrIntentSyncing": "Syncing branch…"
           },
           "SourceControlAgentActionDialog": {
             "8e856842d1": "无法启动选定的智能体。",
