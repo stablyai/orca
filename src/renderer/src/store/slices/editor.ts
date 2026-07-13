@@ -71,6 +71,7 @@ import {
 import { createUntitledMarkdownFileWithTemplateSelection } from '@/lib/create-untitled-markdown'
 import { extractIpcErrorMessage } from '@/lib/ipc-error'
 import { translate } from '@/i18n/i18n'
+import type { WebChatAgent } from '../../../../shared/ai-vault-types'
 
 export type {
   ActiveRightSidebarTab,
@@ -291,7 +292,16 @@ export type OpenFile = {
   /** Why: live tail is explicit and only meaningful for a read-only local log;
    *  ordinary editor tabs and read-only snapshots keep their existing behavior. */
   liveTail?: boolean
-  mode: 'edit' | 'diff' | 'conflict-review' | 'markdown-preview' | 'check-details'
+  /** web-chat-transcript 탭에서만: 읽어올 웹 대화의 agent/conv id. */
+  webChatAgent?: WebChatAgent
+  webChatSessionId?: string
+  mode:
+    | 'edit'
+    | 'diff'
+    | 'conflict-review'
+    | 'markdown-preview'
+    | 'check-details'
+    | 'web-chat-transcript'
 }
 
 export type ActivityBarPosition = 'top' | 'side'
@@ -511,6 +521,12 @@ export type EditorSlice = {
     >,
     options?: { anchor?: string | null; targetGroupId?: string; sourceFileId?: string }
   ) => void
+  openWebChatTranscript: (args: {
+    agent: WebChatAgent
+    sessionId: string
+    title: string
+    worktreeId: string
+  }) => void
   makePreviewFilePermanent: (fileId: string, tabId?: string) => void
   pinFile: (fileId: string, tabId?: string) => void
   closeFile: (fileId: string) => void
@@ -1962,6 +1978,33 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
       false,
       options?.targetGroupId
     )
+  },
+
+  openWebChatTranscript: (args) => {
+    const id = `web-chat-transcript::${args.agent}::${args.sessionId}`
+    set((s) => {
+      if (s.openFiles.some((f) => f.id === id)) {
+        return buildEditorActiveResult(s, args.worktreeId, id)
+      }
+      const newFile: OpenFile = {
+        id,
+        // Why: 합성 탭 — 실제 파일 경로가 없어 id를 filePath 자리에 재사용(라우팅/키용).
+        filePath: id,
+        relativePath: args.title,
+        worktreeId: args.worktreeId,
+        language: 'markdown',
+        isDirty: false,
+        runtimeEnvironmentId: null,
+        mode: 'web-chat-transcript',
+        webChatAgent: args.agent,
+        webChatSessionId: args.sessionId
+      }
+      return {
+        openFiles: [...s.openFiles, newFile],
+        ...buildEditorActiveResult(s, args.worktreeId, id)
+      }
+    })
+    void openWorkspaceEditorItem(get(), id, args.worktreeId, args.title, 'editor', false)
   },
 
   makePreviewFilePermanent: (fileId, tabId) => {

@@ -19,6 +19,7 @@ import { useEditorPanelContentState } from './useEditorPanelContentState'
 import { useMarkdownPreviewShortcut } from './useMarkdownPreviewShortcut'
 import { useUntitledFileRename } from './useUntitledFileRename'
 import { extractFrontMatter } from './markdown-frontmatter'
+import { EditorWebChatTranscriptPanel } from './EditorWebChatTranscriptPanel'
 import {
   selectEditorPanelGitBranchEntries,
   selectEditorPanelGitStatusEntries
@@ -237,6 +238,10 @@ function EditorPanelInner({
 
   if (!activeFile) {
     return null
+  }
+  // Why: web-chat-transcript 탭은 PTY-비종속 읽기전용 native-chat 표면을 마운트한다.
+  if (activeFile.mode === 'web-chat-transcript') {
+    return <EditorWebChatTranscriptPanel file={activeFile} />
   }
   const model = getEditorPanelRenderModel({
     activeFile,
