@@ -4,21 +4,28 @@
 import { EventEmitter } from 'node:events'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-const { forkMock, existsSyncMock, mkdtempSyncMock, parcelSubscribeMock, rmSyncMock } = vi.hoisted(
-  () => ({
-    forkMock: vi.fn(),
-    existsSyncMock: vi.fn(),
-    mkdtempSyncMock: vi.fn(() => '/tmp/orca-watcher-canary-supervisor-test'),
-    parcelSubscribeMock: vi.fn(),
-    rmSyncMock: vi.fn()
-  })
-)
+const {
+  forkMock,
+  existsSyncMock,
+  mkdtempSyncMock,
+  parcelSubscribeMock,
+  rmSyncMock,
+  writeFileSyncMock
+} = vi.hoisted(() => ({
+  forkMock: vi.fn(),
+  existsSyncMock: vi.fn(),
+  mkdtempSyncMock: vi.fn(() => '/tmp/orca-watcher-canary-supervisor-test'),
+  parcelSubscribeMock: vi.fn(),
+  rmSyncMock: vi.fn(),
+  writeFileSyncMock: vi.fn()
+}))
 
 vi.mock('node:child_process', () => ({ fork: forkMock }))
 vi.mock('node:fs', () => ({
   existsSync: existsSyncMock,
   mkdtempSync: mkdtempSyncMock,
-  rmSync: rmSyncMock
+  rmSync: rmSyncMock,
+  writeFileSync: writeFileSyncMock
 }))
 vi.mock('@parcel/watcher', () => ({ subscribe: parcelSubscribeMock }))
 
@@ -35,6 +42,7 @@ type SentMessage = { op: string; id: number; dir?: string }
 
 class FakeChild extends EventEmitter {
   connected = true
+  pid = 1234
   sent: SentMessage[] = []
   stderr = new EventEmitter()
   kill = vi.fn(() => {
@@ -92,6 +100,19 @@ describe('subscribeViaWatcherProcess', () => {
     const events = [{ type: 'update', path: '/repo/a.txt' }]
     child.emit('message', { op: 'events', id, events })
     expect(callback).toHaveBeenCalledWith(null, events)
+  })
+
+  it('creates the fault-harness pid file without clobbering an existing path', async () => {
+    vi.stubEnv('ORCA_WATCHER_CHILD_PID_FILE', '/tmp/orca-watcher.pid')
+
+    const promise = subscribeViaWatcherProcess('/repo', vi.fn(), {})
+    const child = currentChild()
+
+    expect(writeFileSyncMock).toHaveBeenCalledWith('/tmp/orca-watcher.pid', '1234', {
+      flag: 'wx'
+    })
+    ackSubscribe(child)
+    await promise
   })
 
   it('forwards watcher errors to the callback', async () => {

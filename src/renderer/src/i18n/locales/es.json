@@ -73,6 +73,7 @@
     "matchLabel": {
       "comment": "Comentario",
       "issue": "Issue",
+      "mr": "MR",
       "port": "Puerto",
       "pr": "PR"
     }
@@ -2588,7 +2589,7 @@
               "blocked": {
                 "toast": {
                   "97c98f1afe": "Abrir ajustes",
-                  "7cf51f74fd": "Habilita las escrituras al portapapeles TUI en los ajustes de Terminal para copiar desde SSH, tmux, Neovim o fzf.",
+                  "7cf51f74fd": "Habilita las escrituras al portapapeles TUI en los ajustes de Terminal para copiar desde SSH, tmux, Neovim, fzf o Grok.",
                   "89eaa3e80b": "Escritura al portapapeles del terminal bloqueada"
                 }
               }

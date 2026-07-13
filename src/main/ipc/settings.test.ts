@@ -115,7 +115,10 @@ describe('registerSettingsHandlers', () => {
     registerSettingsHandlers(store as never)
     const handler = handleMock.mock.calls.find(
       (call) => call[0] === 'settings:update-pr-bot-author-override'
-    )?.[1] as (event: typeof settingsInvokeEvent, args: { author: string; isBot: boolean }) => unknown
+    )?.[1] as (
+      event: typeof settingsInvokeEvent,
+      args: { author: string; isBot: boolean }
+    ) => unknown
 
     const result = handler(settingsInvokeEvent, { author: ' Bob ', isBot: true })
 

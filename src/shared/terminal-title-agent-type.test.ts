@@ -1,7 +1,9 @@
 import { describe, expect, it } from 'vitest'
 import {
+  isClaudeAgent,
   isGrokRotatingWorkingTitle,
-  resolveExplicitTerminalTitleAgentType
+  resolveExplicitTerminalTitleAgentType,
+  resolveTerminalTitleAgentType
 } from './terminal-title-agent-type'
 
 describe('isGrokRotatingWorkingTitle', () => {
@@ -56,5 +58,45 @@ describe('resolveExplicitTerminalTitleAgentType', () => {
   it('returns null for plain shell and unknown titles', () => {
     expect(resolveExplicitTerminalTitleAgentType('Terminal 1')).toBeNull()
     expect(resolveExplicitTerminalTitleAgentType('zsh')).toBeNull()
+  })
+
+  // Why: `cursor` is ordinary editor vocabulary, so a name token is not identity.
+  // A Claude/Codex tab working on cursor code must not commit to Cursor identity.
+  it('resolves Cursor by its identity titles, never a bare cursor token', () => {
+    expect(resolveExplicitTerminalTitleAgentType('Cursor Agent')).toBe('cursor')
+    expect(resolveExplicitTerminalTitleAgentType('⠋ Cursor Agent')).toBe('cursor')
+    expect(resolveExplicitTerminalTitleAgentType('Cursor ready')).toBe('cursor')
+    expect(resolveExplicitTerminalTitleAgentType('Cursor - action required')).toBe('cursor')
+    // A Claude tab whose task text mentions a text cursor is not Cursor identity.
+    expect(
+      resolveExplicitTerminalTitleAgentType('⠋ preserve cursor visibility across replays')
+    ).toBeNull()
+    expect(resolveExplicitTerminalTitleAgentType('~/cursor-rules')).toBeNull()
+  })
+})
+
+describe('resolveTerminalTitleAgentType', () => {
+  // Why: the activity facet keeps Claude's braille prefix as Claude — but only when
+  // the "cursor" it mentions is task text, not Cursor's own identity title.
+  it('labels cursor-mentioning agent tabs by their true agent, real Cursor as cursor', () => {
+    expect(resolveTerminalTitleAgentType('⠋ Cursor Agent')).toBe('cursor')
+    expect(resolveTerminalTitleAgentType('Cursor Agent')).toBe('cursor')
+    expect(resolveTerminalTitleAgentType('Cursor ready')).toBe('cursor')
+    expect(resolveTerminalTitleAgentType('Cursor - action required')).toBe('cursor')
+    expect(resolveTerminalTitleAgentType('⠋ preserve cursor visibility across replays')).toBe(
+      'claude'
+    )
+    expect(resolveTerminalTitleAgentType('⠋ Codex: fix cursor offsets')).toBe('codex')
+  })
+})
+
+// Why: this module carries its own isClaudeAgent copy parallel to agent-title-identity.ts;
+// both got the identical isCursorAgentTitle guard, so pin this copy directly to catch drift.
+describe('isClaudeAgent', () => {
+  it('excludes real Cursor identity titles, keeps cursor-mentioning Claude braille titles', () => {
+    expect(isClaudeAgent('⠋ Cursor Agent')).toBe(false)
+    expect(isClaudeAgent('Cursor ready')).toBe(false)
+    expect(isClaudeAgent('⠋ preserve cursor visibility across replays')).toBe(true)
+    expect(isClaudeAgent('⠋ OpenClaude')).toBe(false)
   })
 })

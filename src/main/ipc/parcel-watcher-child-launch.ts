@@ -1,4 +1,5 @@
 import { fork, type ChildProcess } from 'node:child_process'
+import { writeFileSync } from 'node:fs'
 import {
   createWatcherCanaryDirectory,
   removeWatcherCanaryDirectory
@@ -32,6 +33,16 @@ export function launchWatcherChild(
     removeWatcherCanaryDirectory(canaryDir)
     console.error('[parcel-watcher-process] failed to fork watcher process:', error)
     return null
+  }
+  const faultHarnessPidFile = process.env.ORCA_WATCHER_CHILD_PID_FILE
+  if (faultHarnessPidFile && child.pid) {
+    try {
+      // Why: exclusive creation lets the harness identify the child without a
+      // leaked test-only environment variable clobbering an existing file.
+      writeFileSync(faultHarnessPidFile, String(child.pid), { flag: 'wx' })
+    } catch {
+      // Fault-injection observability must never affect watcher availability.
+    }
   }
   child.stderr?.on('data', (chunk: Buffer) => {
     console.error('[parcel-watcher-process]', String(chunk).trimEnd())

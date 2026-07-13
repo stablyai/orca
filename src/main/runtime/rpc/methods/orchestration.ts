@@ -209,6 +209,9 @@ export const ORCHESTRATION_METHODS: RpcMethod[] = [
     handler: async (params, { runtime }) => {
       const db = runtime.getOrchestrationDb()
       const from = params.from ?? 'unknown'
+      // Why: older live shells may lack ORCA_PANE_KEY, but the runtime still
+      // knows the pane behind their resolved handle; persist that authority.
+      const senderPaneKey = params.senderPaneKey ?? runtime.getTerminalPaneKey(from) ?? undefined
 
       if (!isGroupAddress(params.to)) {
         // Point-to-point — existing single-recipient behavior
@@ -221,7 +224,7 @@ export const ORCHESTRATION_METHODS: RpcMethod[] = [
           priority: params.priority as MessagePriority,
           threadId: params.threadId,
           payload: params.payload,
-          senderPaneKey: params.senderPaneKey
+          senderPaneKey
         })
         // Why: worker_done/heartbeat sent via `send` must release the dispatch
         // lock before waking recipients — a coordinator woken by delivery may
@@ -233,6 +236,12 @@ export const ORCHESTRATION_METHODS: RpcMethod[] = [
           // waiter for it would return an empty result before the deadline.
           if (reconciled.action === 'suppressed') {
             return { message: msg }
+          }
+          if (reconciled.action === 'rejected') {
+            const rejection = db.getMessageById(msg.id) ?? msg
+            runtime.deliverPendingMessagesForHandle(params.to)
+            runtime.notifyMessageArrived(params.to, rejection.type)
+            return { message: rejection, lifecycle: reconciled }
           }
         }
         runtime.deliverPendingMessagesForHandle(params.to)
@@ -263,7 +272,7 @@ export const ORCHESTRATION_METHODS: RpcMethod[] = [
           priority: params.priority as MessagePriority,
           threadId,
           payload: params.payload,
-          senderPaneKey: params.senderPaneKey
+          senderPaneKey
         })
       )
       for (const message of messages) {
@@ -304,22 +313,26 @@ export const ORCHESTRATION_METHODS: RpcMethod[] = [
           ? db.getAllMessagesForHandle(handle, undefined, typeFilter)
           : db.getUnreadMessages(handle, typeFilter)
 
+        let visibleMessages = messages
         if (consumeUnread && messages.length > 0) {
           // Why: manual coordinators can consume lifecycle messages before
           // the coordinator loop sees them, but unread `check` is still an
           // authoritative read path for worker_done/heartbeat.
-          for (const message of messages) {
-            reconcileLifecycleMessage(db, message)
-          }
+          visibleMessages = messages.map((message) => {
+            const reconciled = reconcileLifecycleMessage(db, message)
+            return reconciled.action === 'rejected'
+              ? (db.getMessageById(message.id) ?? message)
+              : message
+          })
           db.markAsRead(messages.map((m) => m.id))
         }
 
         if (params.inject) {
-          const formatted = messages.map(formatMessageBanner).join('\n\n')
-          return { messages, formatted, count: messages.length }
+          const formatted = visibleMessages.map(formatMessageBanner).join('\n\n')
+          return { messages: visibleMessages, formatted, count: visibleMessages.length }
         }
 
-        return { messages, count: messages.length }
+        return { messages: visibleMessages, count: visibleMessages.length }
       }
 
       if (signal?.aborted) {
@@ -481,7 +494,11 @@ export const ORCHESTRATION_METHODS: RpcMethod[] = [
           dispatchId: 'ctx_dryrun',
           taskSpec: task.spec,
           coordinatorHandle: params.from ?? 'coordinator',
-          devMode: params.devMode
+          workerHandle: params.to ?? 'worker',
+          devMode: params.devMode,
+          ...(params.to
+            ? { cliCommand: runtime.getTerminalOrchestrationCliCommand(params.to) }
+            : {})
         })
         return { dispatch: null, injected: false, dryRun: true, preamble }
       }
@@ -525,7 +542,9 @@ export const ORCHESTRATION_METHODS: RpcMethod[] = [
         dispatchId: ctx.id,
         taskSpec: task.spec,
         coordinatorHandle: params.from ?? 'coordinator',
-        devMode: params.devMode
+        workerHandle: to,
+        devMode: params.devMode,
+        cliCommand: runtime.getTerminalOrchestrationCliCommand(to)
       })
 
       let injected = false
@@ -568,6 +587,7 @@ export const ORCHESTRATION_METHODS: RpcMethod[] = [
         if (!task) {
           throw new Error(`Task not found: ${params.task}`)
         }
+        const workerHandle = ctx?.assignee_handle ?? 'worker'
         const preamble = buildDispatchPreamble({
           taskId: task.id,
           // Why: prefer the existing dispatch context's id if we have one
@@ -576,7 +596,9 @@ export const ORCHESTRATION_METHODS: RpcMethod[] = [
           dispatchId: ctx?.id ?? 'ctx_preview',
           taskSpec: task.spec,
           coordinatorHandle: params.from ?? 'coordinator',
-          devMode: params.devMode
+          workerHandle,
+          devMode: params.devMode,
+          ...(ctx ? { cliCommand: runtime.getTerminalOrchestrationCliCommand(workerHandle) } : {})
         })
         return { dispatch: ctx ?? null, preamble }
       }

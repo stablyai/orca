@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef } from 'react'
+import { useCallback, useLayoutEffect, useRef } from 'react'
 import { sendRuntimePtyInput } from '@/runtime/runtime-terminal-inspection'
 import { getSettingsForAgentTabRuntimeOwner } from '@/lib/agent-paste-draft'
 import type { AgentType } from '../../../../shared/native-chat-types'
@@ -42,7 +42,9 @@ export function useNativeChatInteractiveSend(
     inFlightRef.current?.cancel()
     inFlightRef.current = null
   }, [])
-  useEffect(() => cancelInFlight, [cancelInFlight])
+  // Why: a split can be rebound without unmounting this view. Cancel during
+  // commit so no delayed answer write can race the replacement PTY.
+  useLayoutEffect(() => cancelInFlight, [cancelInFlight, targetPtyId, terminalTabId])
 
   const sendRaw = useCallback(
     (raw: string) => {

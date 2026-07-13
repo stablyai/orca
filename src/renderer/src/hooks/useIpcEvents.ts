@@ -3,6 +3,7 @@ import { useEffect } from 'react'
 import { toast } from 'sonner'
 import { useAppStore } from '../store'
 import { shouldRetryPaneSpawnOnSshReconnect } from './ssh-reconnect-pane-retry'
+import { applyWorktreeHeadIdentities } from './worktree-head-identity-apply'
 import { getWorktreeMapFromState, getRepoMapFromState } from '@/store/selectors'
 import { applyUIZoom } from '@/lib/ui-zoom'
 import { activateAndRevealWorktree } from '@/lib/worktree-activation'
@@ -1141,6 +1142,22 @@ export function useIpcEvents(): void {
       )
     )
 
+    if (window.api.worktrees.onHeadIdentitiesChanged) {
+      unsubs.push(
+        window.api.worktrees.onHeadIdentitiesChanged((data) => {
+          if (isRuntimeEnvironmentActive()) {
+            // Why: local worktree events carry local repo ids (see onChanged).
+            return
+          }
+          const state = useAppStore.getState()
+          applyWorktreeHeadIdentities(data, {
+            getWorktreesForRepo: (repoId) => state.worktreesByRepo[repoId],
+            updateWorktreeGitIdentity: state.updateWorktreeGitIdentity
+          })
+        })
+      )
+    }
+
     unsubs.push(
       window.api.worktrees.onBaseStatus((event) => {
         if (isRuntimeEnvironmentActive()) {
@@ -1417,6 +1434,7 @@ export function useIpcEvents(): void {
           launchConfig,
           launchToken,
           launchAgent,
+          viewMode,
           title,
           ptyId,
           activate,
@@ -1485,13 +1503,17 @@ export function useIpcEvents(): void {
                     ...(launchAgent
                       ? {
                           launchAgent,
-                          ...initialAgentTabViewModeProps(store.settings, {
-                            agent: launchAgent,
-                            nativeChatTranscriptIsLocalReadable:
-                              isNativeChatTranscriptLocalReadable(
-                                getConnectionIdFromState(store, worktreeId)
-                              )
-                          })
+                          // Why: a paired client resolved explicit mode before
+                          // PTY materialization; only omitted mode uses host defaults.
+                          ...(viewMode
+                            ? { viewMode }
+                            : initialAgentTabViewModeProps(store.settings, {
+                                agent: launchAgent,
+                                nativeChatTranscriptIsLocalReadable:
+                                  isNativeChatTranscriptLocalReadable(
+                                    getConnectionIdFromState(store, worktreeId)
+                                  )
+                              }))
                         }
                       : {}),
                     ...(cwd ? { startupCwd: cwd } : {}),
@@ -1667,16 +1689,20 @@ export function useIpcEvents(): void {
           if (shouldActivate) {
             activateTerminalInitiatedWorktree(store, worktreeId)
           }
+          // Why: the paired launch client already resolved the initial mode, so
+          // its explicit choice must win over this host renderer's local default.
           const tabOptions = data.launchAgent
             ? {
                 ...(shouldActivate ? {} : { activate: false, recordInteraction: false }),
                 launchAgent: data.launchAgent,
-                ...initialAgentTabViewModeProps(store.settings, {
-                  agent: data.launchAgent,
-                  nativeChatTranscriptIsLocalReadable: isNativeChatTranscriptLocalReadable(
-                    getConnectionIdFromState(store, worktreeId)
-                  )
-                }),
+                ...(data.viewMode
+                  ? { viewMode: data.viewMode }
+                  : initialAgentTabViewModeProps(store.settings, {
+                      agent: data.launchAgent,
+                      nativeChatTranscriptIsLocalReadable: isNativeChatTranscriptLocalReadable(
+                        getConnectionIdFromState(store, worktreeId)
+                      )
+                    })),
                 ...(data.cwd ? { startupCwd: data.cwd } : {})
               }
             : shouldActivate

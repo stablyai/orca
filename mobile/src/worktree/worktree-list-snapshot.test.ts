@@ -11,6 +11,7 @@ function agent(overrides: Partial<RuntimeWorktreeAgentRow> = {}): RuntimeWorktre
     state: 'working',
     agentType: 'codex',
     prompt: 'fix mobile lag',
+    tabTitle: null,
     lastAssistantMessage: null,
     toolName: null,
     toolInput: null,

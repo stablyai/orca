@@ -37,7 +37,7 @@ describe('sendNativeChatMessage', () => {
   })
 
   it('writes the framed body immediately, before the Enter', () => {
-    sendNativeChatMessage(SETTINGS, PTY, 'hello world')
+    const handle = sendNativeChatMessage(SETTINGS, PTY, 'hello world')
     // Body lands synchronously; Enter is still pending on the timer.
     expect(sendRuntimePtyInput).toHaveBeenCalledTimes(1)
     expect(sendRuntimePtyInput).toHaveBeenCalledWith(
@@ -45,6 +45,7 @@ describe('sendNativeChatMessage', () => {
       PTY,
       buildNativeChatPasteBytes('hello world')
     )
+    expect(handle.settleAfterMs).toBe(NATIVE_CHAT_SUBMIT_DELAY_MS)
   })
 
   it('does not fire Enter before the proven 500ms gap (busy-agent safety)', () => {
@@ -62,6 +63,14 @@ describe('sendNativeChatMessage', () => {
     expect(sendRuntimePtyInput).toHaveBeenLastCalledWith(SETTINGS, PTY, NATIVE_CHAT_SUBMIT)
   })
 
+  it('cancels the delayed Enter when its owning composer is detached', () => {
+    const handle = sendNativeChatMessage(SETTINGS, PTY, 'hi')
+    handle.cancel()
+    vi.advanceTimersByTime(NATIVE_CHAT_SUBMIT_DELAY_MS)
+
+    expect(sendRuntimePtyInput).toHaveBeenCalledTimes(1)
+  })
+
   it('matches orca-runtime writeTerminalAction Enter gap (500ms)', () => {
     expect(NATIVE_CHAT_SUBMIT_DELAY_MS).toBe(500)
   })
@@ -77,9 +86,13 @@ describe('sendNativeChatMessageWithImageAttachments', () => {
   })
 
   it('bracket-pastes image paths before prompt text so the TUI creates image chips', () => {
-    sendNativeChatMessageWithImageAttachments(SETTINGS, PTY, 'what do you see?', [
+    const handle = sendNativeChatMessageWithImageAttachments(SETTINGS, PTY, 'what do you see?', [
       '/tmp/orca-paste-image.png'
     ])
+
+    expect(handle.settleAfterMs).toBe(
+      NATIVE_CHAT_IMAGE_ATTACHMENT_SETTLE_MS + NATIVE_CHAT_SUBMIT_DELAY_MS
+    )
 
     expect(sendRuntimePtyInput).toHaveBeenCalledTimes(1)
     expect(sendRuntimePtyInput).toHaveBeenLastCalledWith(
@@ -102,7 +115,11 @@ describe('sendNativeChatMessageWithImageAttachments', () => {
   })
 
   it('waits the normal submit gap for an attachment-only send', () => {
-    sendNativeChatMessageWithImageAttachments(SETTINGS, PTY, '', ['/tmp/orca-paste-image.png'])
+    const handle = sendNativeChatMessageWithImageAttachments(SETTINGS, PTY, '', [
+      '/tmp/orca-paste-image.png'
+    ])
+
+    expect(handle.settleAfterMs).toBe(NATIVE_CHAT_SUBMIT_DELAY_MS)
 
     vi.advanceTimersByTime(NATIVE_CHAT_SUBMIT_DELAY_MS - 1)
     expect(sendRuntimePtyInput).toHaveBeenCalledTimes(1)
@@ -110,6 +127,16 @@ describe('sendNativeChatMessageWithImageAttachments', () => {
     vi.advanceTimersByTime(1)
     expect(sendRuntimePtyInput).toHaveBeenCalledTimes(2)
     expect(sendRuntimePtyInput).toHaveBeenLastCalledWith(SETTINGS, PTY, NATIVE_CHAT_SUBMIT)
+  })
+
+  it('cancels deferred prompt and Enter writes after the attachment path', () => {
+    const handle = sendNativeChatMessageWithImageAttachments(SETTINGS, PTY, 'describe', [
+      '/tmp/orca-paste-image.png'
+    ])
+    handle.cancel()
+    vi.runAllTimers()
+
+    expect(sendRuntimePtyInput).toHaveBeenCalledTimes(1)
   })
 })
 
@@ -160,7 +187,9 @@ describe('sendNativeChatAnswer', () => {
 
   it('multi-line: 3 bodies + 3 Enters in order, each Enter 500ms after its body, next body only after prior Enter+buffer', () => {
     const lines = ['answer one', 'answer two', 'answer three']
-    sendNativeChatAnswer(SETTINGS, PTY, lines)
+    const handle = sendNativeChatAnswer(SETTINGS, PTY, lines)
+
+    expect(handle.settleAfterMs).toBe(nativeChatQuestionOffsets(lines.length - 1).enterAt)
 
     // Nothing fires synchronously: even question 0's body is scheduled (setTimeout 0).
     expect(sendRuntimePtyInput).toHaveBeenCalledTimes(0)

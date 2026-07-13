@@ -26,6 +26,7 @@ import {
   clearGrokSessionPathLookupCacheForTests,
   findGrokChatHistoryBySessionId
 } from './grok-session-paths'
+import { AGENT_STATUS_MAX_SUBAGENTS } from './agent-status-types'
 import { makePaneKey } from './stable-pane-id'
 
 const LEAF_ID = '11111111-1111-4111-8111-111111111111'
@@ -1639,6 +1640,44 @@ describe('shared agent-hook-listener', () => {
     expect(event?.payload.interactivePrompt).toBeUndefined()
   })
 
+  it('surfaces the Grok tool-failure error and clears stale tool fields', () => {
+    normalizeHookPayload(
+      state,
+      'grok',
+      {
+        paneKey: PANE_KEY,
+        payload: {
+          hookEventName: 'pre_tool_use',
+          toolName: 'run_terminal_command',
+          toolInput: { command: 'pnpm build' }
+        }
+      },
+      'production'
+    )
+    const failed = normalizeHookPayload(
+      state,
+      'grok',
+      {
+        paneKey: PANE_KEY,
+        payload: {
+          hookEventName: 'post_tool_use_failure',
+          toolName: 'run_terminal_command',
+          toolInput: { command: 'pnpm build' },
+          error: 'command exited with code 1'
+        }
+      },
+      'production'
+    )
+    // Why: keeping toolName set would let the compact sidebar show the tool
+    // instead of the failure text, hiding the error from the user.
+    expect(failed?.payload).toMatchObject({
+      state: 'working',
+      lastAssistantMessage: 'command exited with code 1'
+    })
+    expect(failed?.payload.toolName).toBeUndefined()
+    expect(failed?.payload.toolInput).toBeUndefined()
+  })
+
   it('maps Grok StopFailure to done', () => {
     normalizeHookPayload(
       state,
@@ -2271,9 +2310,9 @@ describe('shared agent-hook-listener', () => {
 
       const stopped = claudeEvent({ hook_event_name: 'SubagentStop', agent_id: 'r1' })
       expect(stopped?.payload.state).toBe('done')
-      expect(stopped?.payload.subagents).toEqual([
-        expect.objectContaining({ id: 'r1', state: 'idle' })
-      ])
+      // Why: a finished one-shot leaves the sidebar instead of squatting as a
+      // permanent idle row for the rest of the session.
+      expect(stopped?.payload.subagents).toBeUndefined()
     })
 
     it('keeps gating on tracked children when background_tasks is absent (older Claude)', () => {
@@ -2367,6 +2406,35 @@ describe('shared agent-hook-listener', () => {
       expect(wakeStop?.payload.state).toBe('done')
       expect(wakeStop?.payload.subagents).toEqual([
         expect.objectContaining({ id: 'aprobe1-6d3cb5b52120b7bf', state: 'idle' })
+      ])
+    })
+
+    it('keeps a teammate whose name differs from its configured agent type', () => {
+      claudeEvent({ hook_event_name: 'UserPromptSubmit', prompt: 'spawn reviewer' })
+      claudeEvent({
+        hook_event_name: 'SubagentStart',
+        agent_id: 'areviewer-6d3cb5b52120b7bf',
+        agent_type: 'security-reviewer'
+      })
+
+      // Why: teammate name and agent type are separate Agent-tool inputs; the
+      // lifecycle id embeds the former while the hook reports the latter.
+      claudeEvent({
+        hook_event_name: 'SubagentStop',
+        agent_id: 'areviewer-6d3cb5b52120b7bf',
+        agent_type: 'security-reviewer'
+      })
+      const idled = claudeEvent({
+        hook_event_name: 'TeammateIdle',
+        teammate_name: 'reviewer',
+        team_name: 'session-x'
+      })
+      expect(idled?.payload.subagents).toEqual([
+        expect.objectContaining({
+          id: 'areviewer-6d3cb5b52120b7bf',
+          agentType: 'security-reviewer',
+          state: 'idle'
+        })
       ])
     })
 
@@ -2517,7 +2585,7 @@ describe('shared agent-hook-listener', () => {
       expect(stopped?.payload.state).toBe('done')
     })
 
-    it('demotes a snapshot-seeded child missing from a present background_tasks list', () => {
+    it('removes a snapshot-seeded child missing from a present background_tasks list', () => {
       seedClaudeSubagentRosterFromSnapshots(state, PANE_KEY, [
         { id: 'a77', state: 'working', startedAt: 1000, agentType: 'general-purpose' }
       ])
@@ -2531,9 +2599,7 @@ describe('shared agent-hook-listener', () => {
         ]
       })
       expect(stop?.payload.state).toBe('done')
-      expect(stop?.payload.subagents).toEqual([
-        expect.objectContaining({ id: 'a77', state: 'idle' })
-      ])
+      expect(stop?.payload.subagents).toBeUndefined()
     })
 
     it('keeps a snapshot-seeded child working while background_tasks still lists it', () => {
@@ -2549,6 +2615,29 @@ describe('shared agent-hook-listener', () => {
       expect(stop?.payload.subagents).toEqual([
         expect.objectContaining({ id: 'a77', state: 'working' })
       ])
+    })
+
+    it('keeps a live child omitted by the background task snapshot cap', () => {
+      claudeEvent({
+        hook_event_name: 'SubagentStart',
+        agent_id: 'alive-after-cap',
+        agent_type: 'general-purpose'
+      })
+      const stop = claudeEvent({
+        hook_event_name: 'Stop',
+        background_tasks: Array.from({ length: AGENT_STATUS_MAX_SUBAGENTS + 1 }, (_, index) => ({
+          id: index === AGENT_STATUS_MAX_SUBAGENTS ? 'alive-after-cap' : `a${index}`,
+          type: 'subagent',
+          status: 'running'
+        }))
+      })
+
+      // Why: the inventory was capped before this id, so omission cannot
+      // prove the lifecycle-tracked child finished or was killed.
+      expect(stop?.payload.subagents).toContainEqual(
+        expect.objectContaining({ id: 'alive-after-cap', state: 'working' })
+      )
+      expect(stop?.payload.state).toBe('working')
     })
 
     it('does not adopt a known child turn-boundary event as the lead state', () => {
@@ -2616,7 +2705,12 @@ describe('shared agent-hook-listener', () => {
 
     it('seeds the roster from persisted snapshots so a teammate-bearing Stop keeps child rows', () => {
       seedClaudeSubagentRosterFromSnapshots(state, PANE_KEY, [
-        { id: 'aprobe2-abc', state: 'idle', startedAt: 1000, agentType: 'probe2' }
+        {
+          id: 'aprobe2-6d3cb5b52120b7bf',
+          state: 'idle',
+          startedAt: 1000,
+          agentType: 'security-reviewer'
+        }
       ])
       claudeEvent({ hook_event_name: 'UserPromptSubmit', prompt: 'after restart' })
       const stop = claudeEvent({
@@ -2627,7 +2721,11 @@ describe('shared agent-hook-listener', () => {
       })
       expect(stop?.payload.state).toBe('done')
       expect(stop?.payload.subagents).toEqual([
-        expect.objectContaining({ id: 'aprobe2-abc', state: 'idle' })
+        expect.objectContaining({
+          id: 'aprobe2-6d3cb5b52120b7bf',
+          agentType: 'security-reviewer',
+          state: 'idle'
+        })
       ])
     })
 

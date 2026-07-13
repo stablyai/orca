@@ -641,6 +641,10 @@ async function syncRuntimeGraph(): Promise<void> {
         tabId: tab.id,
         worktreeId,
         title,
+        // Why: same named-tier explicitTitle as mounted tabs so background/
+        // unmounted agent rows still prefer a rename over prompt/state labels.
+        explicitTitle:
+          resolveTerminalTabTitle({ ...tab, title: '' }, generatedTitlesEnabled, '') || null,
         activeLeafId: layout?.activeLeafId ?? liveLeaves[0][0],
         layout: resolveTerminalLayoutRoot({
           authoritativeRoot: layout?.root,

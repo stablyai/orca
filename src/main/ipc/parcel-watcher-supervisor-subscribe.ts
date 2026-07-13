@@ -1,6 +1,5 @@
 import type { ChildProcess } from 'node:child_process'
 import { existsSync } from 'node:fs'
-import { getWatcherProcessEntryPath } from './parcel-watcher-entry-path'
 import { createHostWatcherSubscription } from './parcel-watcher-host-subscriptions'
 import { subscribeWithInProcessWatcher } from './parcel-watcher-in-process-fallback'
 import { installPendingSubscribeControls } from './parcel-watcher-pending-subscribe'
@@ -22,6 +21,8 @@ type WatcherSupervisorSubscribeOptions = {
   opts: WatcherProcessSubscribeOptions
   hooks: WatcherProcessHooks
   shutdownRequested: boolean
+  entryPath: string
+  useInProcessVitestFallback: boolean
   allocateId: () => number
   records: Map<number, WatcherProcessSubscriptionRecord>
   pendingUnsubscribes: Map<number, () => void>
@@ -42,6 +43,8 @@ export function subscribeThroughWatcherSupervisor({
   opts,
   hooks,
   shutdownRequested,
+  entryPath,
+  useInProcessVitestFallback,
   allocateId,
   records,
   pendingUnsubscribes,
@@ -72,10 +75,9 @@ export function subscribeThroughWatcherSupervisor({
   }
   // Why: under Vitest we cannot fork a real watcher child, so exercise the
   // subscription path in-process (against mocked @parcel/watcher) instead.
-  if (process.env.VITEST) {
+  if (process.env.VITEST && useInProcessVitestFallback) {
     return subscribeWithInProcessWatcher(dir, callback, opts, hooks)
   }
-  const entryPath = getWatcherProcessEntryPath()
   if (!existsSync(entryPath)) {
     return Promise.reject(
       new WatcherProcessFailure(

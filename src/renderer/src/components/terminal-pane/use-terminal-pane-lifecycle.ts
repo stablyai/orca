@@ -31,6 +31,7 @@ import {
 import { createTerminalHandleLinkProvider } from './terminal-handle-links'
 import type { LinkHandlerDeps } from './terminal-link-handlers'
 import { handleOscLink } from './terminal-osc-link-routing'
+import { handleTerminalWebLinkClick } from './terminal-web-link-click'
 import {
   installHttpLinkClickFallback,
   type TerminalLinkRoutingPreferenceRequester
@@ -126,6 +127,10 @@ import { acquireWebviewsDragPassthrough } from '../browser-pane/webview-registry
 import { recordCreatedTerminalPaneSplit } from './terminal-pane-split-completion'
 import { closeTerminalTab } from '../terminal/terminal-tab-actions'
 import { seedStartupSessionRestoredBanner } from './session-restored-banner-pane-state'
+import {
+  resolveTabTitleAfterPaneClose,
+  shouldClearLaunchAgentForClosedPane
+} from './terminal-pane-close-identity'
 
 export function recordRuntimeCreatedTerminalPaneSplit(
   createdPane: unknown,
@@ -1277,6 +1282,13 @@ export function useTerminalPaneLifecycle({
           mouseHideDisposablesRef.current.delete(paneId)
         }
         const transport = paneTransportsRef.current.get(paneId)
+        const closedPtyId = transport?.getPtyId() ?? null
+        const terminalTab = useAppStore
+          .getState()
+          .tabsByWorktree[worktreeId]?.find((candidate) => candidate.id === tabId)
+        if (!isDetachedToTab && shouldClearLaunchAgentForClosedPane(terminalTab, closedPtyId)) {
+          useAppStore.getState().clearTabLaunchAgent(tabId)
+        }
         const panePtyBinding = panePtyBindings.get(paneId)
         if (panePtyBinding) {
           panePtyBinding.dispose()
@@ -1349,10 +1361,7 @@ export function useTerminalPaneLifecycle({
         if (newActivePane) {
           reportActiveRendererPtyForPane(paneTransportsRef.current, newActivePane.id)
           const paneTitles = useAppStore.getState().runtimePaneTitlesByTabId[tabId] ?? {}
-          const activeTitle = paneTitles[newActivePane.id]
-          if (activeTitle) {
-            updateTabTitle(tabId, activeTitle)
-          }
+          updateTabTitle(tabId, resolveTabTitleAfterPaneClose(paneTitles, newActivePane.id))
         }
         scheduleRuntimeGraphSync()
       },
@@ -1480,28 +1489,16 @@ export function useTerminalPaneLifecycle({
       terminalTuiScrollSensitivity: () =>
         normalizeTerminalTuiMouseWheelMultiplier(settingsRef.current?.terminalTuiScrollSensitivity),
       onLinkClick: (event, url) => {
-        if (!event) {
-          return
-        }
         const activePane = managerRef.current?.getActivePane()
-        const handled = handleOscLink(url, event, {
+        handleTerminalWebLinkClick(url, event, {
           ...linkDeps,
+          terminal: activePane?.terminal ?? null,
           startupCwd: activePane ? getPaneLinkCwd(activePane.id) : startupCwd,
           runtimeEnvironmentId: activePane
             ? (linkDeps.getRuntimeEnvironmentIdForPane?.(activePane.id) ?? null)
             : null,
           requestOpenLinksInAppPreference
         })
-        // Why: Cmd/Ctrl+click on a plain-text URL (WebLinksAddon) takes focus
-        // away from the terminal before the click's mouseup reaches
-        // ownerDocument. That leaves xterm's SelectionService drag-select
-        // mousemove listener attached, so subsequent mouse motion extends a
-        // phantom selection until the next click/Esc. Explicitly clearing the
-        // selection also detaches those listeners (see
-        // SelectionService._removeMouseDownListeners).
-        if (handled) {
-          managerRef.current?.getActivePane()?.terminal.clearSelection()
-        }
       },
       formatLinkTooltip: (url, openLinkHint) => formatTerminalUrlTooltip(url, openLinkHint),
       // Why: TerminalPane instances stay mounted for hidden visited worktrees

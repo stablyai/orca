@@ -946,6 +946,8 @@ describe('useIpcEvents browser tab create routing', () => {
         repos: { onChanged: () => () => {} },
         worktrees: {
           onChanged: () => () => {},
+          onGitStatusMetadataChanged: () => () => {},
+          onHeadIdentitiesChanged: () => () => {},
           onBaseStatus: () => () => {},
           onRemoteBranchConflict: () => () => {}
         },
@@ -1730,6 +1732,7 @@ describe('useIpcEvents updater integration', () => {
             command?: string
             launchConfig?: SleepingAgentLaunchConfig
             launchAgent?: TuiAgent
+            viewMode?: 'terminal' | 'chat'
             title?: string
             ptyId?: string
             activate?: boolean
@@ -1758,6 +1761,7 @@ describe('useIpcEvents updater integration', () => {
             cwd?: string
             launchConfig?: SleepingAgentLaunchConfig
             launchAgent?: TuiAgent
+            viewMode?: 'terminal' | 'chat'
             title?: string
             activate?: boolean
             presentation?: 'background' | 'focused'
@@ -1875,6 +1879,7 @@ describe('useIpcEvents updater integration', () => {
               command?: string
               launchConfig?: SleepingAgentLaunchConfig
               launchAgent?: TuiAgent
+              viewMode?: 'terminal' | 'chat'
               title?: string
               ptyId?: string
               activate?: boolean
@@ -1904,6 +1909,7 @@ describe('useIpcEvents updater integration', () => {
               cwd?: string
               launchConfig?: SleepingAgentLaunchConfig
               launchAgent?: TuiAgent
+              viewMode?: 'terminal' | 'chat'
               title?: string
               activate?: boolean
               presentation?: 'background' | 'focused'
@@ -2221,11 +2227,16 @@ describe('useIpcEvents updater integration', () => {
       targetGroupId: 'group-left',
       title: 'Runtime Terminal',
       command: 'codex',
+      launchAgent: 'codex',
+      viewMode: 'terminal',
       activate: true,
       source: 'runtime-session'
     })
 
-    expect(createTab).toHaveBeenCalledWith('wt-2', 'group-left', undefined, undefined)
+    expect(createTab).toHaveBeenCalledWith('wt-2', 'group-left', undefined, {
+      launchAgent: 'codex',
+      viewMode: 'terminal'
+    })
     expect(replyTerminalCreate).toHaveBeenCalledWith({
       requestId: 'req-runtime-session',
       tabId: 'tab-new',
@@ -2361,6 +2372,36 @@ describe('useIpcEvents updater integration', () => {
         leafId: '55555555-5555-4555-8555-555555555555'
       }
     )
+
+    createTab.mockClear()
+    createTerminalListenerRef.current({
+      worktreeId: 'wt-2',
+      ptyId: 'pty-explicit-terminal',
+      launchAgent: 'codex',
+      viewMode: 'terminal'
+    })
+    expect(createTab).toHaveBeenCalledWith('wt-2', undefined, undefined, {
+      initialPtyId: 'pty-explicit-terminal',
+      activate: false,
+      launchAgent: 'codex',
+      viewMode: 'terminal'
+    })
+
+    createTab.mockClear()
+    storeState.settings.openAgentTabsInChatByDefault = false
+    createTerminalListenerRef.current({
+      worktreeId: 'wt-2',
+      ptyId: 'pty-explicit-chat',
+      launchAgent: 'codex',
+      viewMode: 'chat'
+    })
+    expect(createTab).toHaveBeenCalledWith('wt-2', undefined, undefined, {
+      initialPtyId: 'pty-explicit-chat',
+      activate: false,
+      launchAgent: 'codex',
+      viewMode: 'chat'
+    })
+    storeState.settings.openAgentTabsInChatByDefault = true
 
     createTab.mockClear()
     setActiveView.mockClear()

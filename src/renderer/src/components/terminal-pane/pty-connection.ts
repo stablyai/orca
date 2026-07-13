@@ -47,6 +47,7 @@ import { getFitOverrideForPty, bindPanePtyId } from '@/lib/pane-manager/mobile-f
 import { isPtyLocked } from '@/lib/pane-manager/mobile-driver-state'
 import { reconcilePtySizeAcrossFrames, type PtySizeReconcileHandle } from './pty-size-reconcile'
 import { shouldClaimRemoteDesktopViewport } from './remote-desktop-viewport-claim'
+import { getAppliedSizeReadE2eDelayMs } from './pty-applied-size-read-e2e-delay'
 import { createPtySizeReassertion } from './pty-size-reassertion'
 import { isPaneReplaying, replayIntoTerminal, replayIntoTerminalAsync } from './replay-guard'
 import {
@@ -3499,7 +3500,15 @@ export function connectPanePty(
     shouldSuppressDesktopResize: () => shouldSuppressDesktopPtyResize(),
     fit: () => safeFit(pane),
     getTerminalDimensions: () => ({ cols: pane.terminal.cols, rows: pane.terminal.rows }),
-    getAppliedSize: (ptyId) => window.api.pty.getSize(ptyId),
+    getAppliedSize: async (ptyId) => {
+      // Why: e2e seam — delays the read past the reveal fit to reproduce the
+      // busy-daemon/SSH ordering; returns 0 outside e2e builds.
+      const delayMs = getAppliedSizeReadE2eDelayMs()
+      if (delayMs > 0) {
+        await new Promise((resolve) => setTimeout(resolve, delayMs))
+      }
+      return window.api.pty.getSize(ptyId)
+    },
     forwardResize: forwardPtyResize
   })
   let pendingForegroundGridDriftCheckRaf: number | null = null

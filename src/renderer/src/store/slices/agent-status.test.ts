@@ -104,6 +104,31 @@ describe('agent status freshness expiry', () => {
     // No additional bump since the entry was removed before the timer fires
     expect(store.getState().agentStatusEpoch).toBe(2)
   })
+
+  it('arms freshness expiry for status rows written by an external mirror', () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date('2026-04-09T12:00:00.000Z'))
+    const store = createTestStore()
+    const paneKey = 'tab-1:11111111-1111-4111-8111-111111111111'
+    const now = Date.now()
+
+    store.setState({
+      agentStatusByPaneKey: {
+        [paneKey]: {
+          paneKey,
+          state: 'working',
+          prompt: 'Mirrored agent',
+          updatedAt: now,
+          stateStartedAt: now,
+          stateHistory: []
+        }
+      }
+    })
+    store.getState().scheduleAgentStatusFreshness()
+    vi.advanceTimersByTime(AGENT_STATUS_STALE_AFTER_MS + 1)
+
+    expect(store.getState().agentStatusEpoch).toBe(1)
+  })
 })
 
 describe('agent status routing attribution', () => {
@@ -594,6 +619,30 @@ describe('agent status tool + assistant fields', () => {
         updatedAt: 3_000,
         stateStartedAt: 3_000
       })
+    expect(store.getState().agentStatusEpoch).toBe(firstEpoch + 1)
+    expect(store.getState().sortEpoch).toBe(firstSortEpoch + 1)
+  })
+
+  it('bumps aggregate epochs when a same-state entry gains worktree attribution', () => {
+    vi.useFakeTimers()
+    const store = createTestStore()
+    store.getState().setAgentStatus('tab-1:1', { state: 'working', prompt: 'p' }, 'claude', {
+      updatedAt: 1_000,
+      stateStartedAt: 1_000
+    })
+    const firstEpoch = store.getState().agentStatusEpoch
+    const firstSortEpoch = store.getState().sortEpoch
+
+    store
+      .getState()
+      .setAgentStatus(
+        'tab-1:1',
+        { state: 'working', prompt: 'p' },
+        'claude',
+        { updatedAt: 2_000, stateStartedAt: 1_000 },
+        { worktreeId: 'wt-1', tabId: 'tab-1' }
+      )
+
     expect(store.getState().agentStatusEpoch).toBe(firstEpoch + 1)
     expect(store.getState().sortEpoch).toBe(firstSortEpoch + 1)
   })

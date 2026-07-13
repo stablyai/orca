@@ -45,7 +45,7 @@ function makeState(overrides: Partial<AppState> = {}): AppState {
   } as AppState
 }
 
-function makeAutomationTab(): TerminalTab {
+function makeAutomationTab(overrides: Partial<TerminalTab> = {}): TerminalTab {
   return {
     id: 'auto-tab-1',
     ptyId: AUTO_PTY,
@@ -54,13 +54,14 @@ function makeAutomationTab(): TerminalTab {
     customTitle: null,
     color: null,
     sortOrder: 0,
-    createdAt: 1
+    createdAt: 1,
+    ...overrides
   }
 }
 
-function automationState(): AppState {
+function automationState(tabOverrides: Partial<TerminalTab> = {}): AppState {
   return makeState({
-    tabsByWorktree: { 'wt-1': [makeAutomationTab()] } as AppState['tabsByWorktree'],
+    tabsByWorktree: { 'wt-1': [makeAutomationTab(tabOverrides)] } as AppState['tabsByWorktree'],
     terminalLayoutsByTabId: {
       'auto-tab-1': {
         root: { type: 'leaf', leafId: LEAF },
@@ -91,12 +92,14 @@ afterEach(() => {
   vi.unstubAllGlobals()
 })
 
-async function captureGraph(): Promise<RuntimeSyncWindowGraph> {
+async function captureGraph(
+  tabOverrides: Partial<TerminalTab> = {}
+): Promise<RuntimeSyncWindowGraph> {
   vi.useFakeTimers()
   const syncWindowGraph = vi.fn().mockResolvedValue(undefined)
   vi.stubGlobal('window', { api: { runtime: { syncWindowGraph } } })
   vi.stubGlobal('HTMLElement', class HTMLElement {})
-  setRuntimeGraphStoreStateGetter(() => automationState())
+  setRuntimeGraphStoreStateGetter(() => automationState(tabOverrides))
   setRuntimeGraphSyncEnabled(true)
   await flushRuntimeGraphSyncTimer()
   expect(syncWindowGraph).toHaveBeenCalledTimes(1)
@@ -111,12 +114,14 @@ describe('syncRuntimeGraph background automation tabs', () => {
       ptyId === AUTO_PTY ? { flush: () => '', dispose: () => {} } : undefined
     )
 
-    const graph = await captureGraph()
+    const graph = await captureGraph({ customTitle: 'BG-RENAME' })
 
     expect(graph.leaves).toContainEqual(
       expect.objectContaining({ tabId: 'auto-tab-1', leafId: LEAF, ptyId: AUTO_PTY })
     )
-    expect(graph.tabs).toContainEqual(expect.objectContaining({ tabId: 'auto-tab-1' }))
+    expect(graph.tabs).toContainEqual(
+      expect.objectContaining({ tabId: 'auto-tab-1', explicitTitle: 'BG-RENAME' })
+    )
     // Why: the no-live-transport anomaly must stay scoped to mounted tabs; an
     // unmounted background tab legitimately has no live transport yet.
     expect(warnTerminalLifecycleAnomaly).not.toHaveBeenCalled()

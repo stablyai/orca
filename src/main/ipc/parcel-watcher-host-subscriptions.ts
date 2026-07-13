@@ -100,6 +100,21 @@ export function resolvePendingWatcherUnsubscribes(
   pendingUnsubscribes.clear()
 }
 
+export function disposeWatcherSupervisorSubscriptions(
+  records: Map<number, WatcherProcessSubscriptionRecord>,
+  pendingUnsubscribes: Map<number, () => void>,
+  cancelledSubscribesAwaitingChild: Set<number>,
+  error: Error
+): void {
+  for (const record of records.values()) {
+    resetPendingSubscribeAttempt(record)
+    takePendingSubscribe(record)?.reject(error)
+  }
+  resolvePendingWatcherUnsubscribes(pendingUnsubscribes)
+  cancelledSubscribesAwaitingChild.clear()
+  records.clear()
+}
+
 export type CreateHostWatcherSubscriptionOptions = {
   record: WatcherProcessSubscriptionRecord
   records: Map<number, WatcherProcessSubscriptionRecord>

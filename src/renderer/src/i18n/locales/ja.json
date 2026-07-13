@@ -73,6 +73,7 @@
     "matchLabel": {
       "comment": "コメント",
       "issue": "Issue",
+      "mr": "MR",
       "port": "ポート",
       "pr": "PR"
     }
@@ -2588,7 +2589,7 @@
               "blocked": {
                 "toast": {
                   "97c98f1afe": "設定を開く",
-                  "7cf51f74fd": "SSH、tmux、Neovim、または fzf からコピーするには、Terminal 設定で TUI クリップボードへの書き込みを有効にします。",
+                  "7cf51f74fd": "SSH、tmux、Neovim、fzf、または Grok からコピーするには、Terminal 設定で TUI クリップボードへの書き込みを有効にします。",
                   "89eaa3e80b": "Terminal のクリップボードへの書き込みがブロックされました"
                 }
               }

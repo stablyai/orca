@@ -25,6 +25,7 @@ import {
   appendCommandMarkerCache,
   launchPromptAsMessage,
   pendingSendsAsMessages,
+  nextNativeChatPendingSendId,
   prunePendingSends,
   readCommandMarkerCache,
   readPendingSendCache,
@@ -211,7 +212,6 @@ function NativeChatResolvedView({
   const [pending, setPending] = useState<NativeChatPendingSend[]>(() =>
     readPendingSendCache(pendingScope)
   )
-  const pendingCounter = useRef(0)
   // Slash commands aren't chat turns, so they get a small local "Ran /clear"
   // system line instead of a user bubble. Capped + cached per conversation.
   const [commandMarkers, setCommandMarkers] = useState<NativeChatCommandMarker[]>(() =>
@@ -246,14 +246,27 @@ function NativeChatResolvedView({
   const onOptimisticSend = useCallback(
     (text: string, imagePaths?: string[]) => {
       setWorkingInterrupted(false)
-      pendingCounter.current += 1
+      const sentAt = Date.now()
+      const boundary = session.messages.at(-1)
       const entry: NativeChatPendingSend = {
-        id: `${pendingCounter.current}`,
+        id: nextNativeChatPendingSendId(sentAt),
         text,
-        sentAt: Date.now(),
+        sentAt,
+        afterMessageId: boundary?.id ?? null,
+        afterMessageTimestamp: boundary?.timestamp ?? null,
         ...(imagePaths ? { imagePaths } : {})
       }
       setPending(appendPendingSendCache(pendingScope, entry))
+      return entry.id
+    },
+    [pendingScope, session.messages]
+  )
+  const onOptimisticSendCanceled = useCallback(
+    (pendingId: string) => {
+      // Why: detach/interrupt cancels the delayed Enter, so its optimistic echo
+      // must not come back from the pane cache as a prompt that was delivered.
+      const next = readPendingSendCache(pendingScope).filter((entry) => entry.id !== pendingId)
+      setPending(writePendingSendCache(pendingScope, next))
     },
     [pendingScope]
   )
@@ -293,15 +306,20 @@ function NativeChatResolvedView({
 
   // The streaming preview bubble (if any) sits after the transcript but before
   // the optimistic user echoes — same order mobile uses.
-  const streamingText = useMemo(
-    () =>
-      deriveNativeChatStreamingText({
-        messages: sessionAfterCommandBoundaries.messages,
-        previewText: hookPreview,
-        working: hookWorking
-      }),
-    [sessionAfterCommandBoundaries.messages, hookPreview, hookWorking]
+  const pendingMessages = useMemo(
+    () => pendingSendsAsMessages(pending, sessionAfterCommandBoundaries.messages),
+    [pending, sessionAfterCommandBoundaries.messages]
   )
+  const streamingText = useMemo(() => {
+    return deriveNativeChatStreamingText({
+      messages:
+        pendingMessages.length > 0
+          ? [...sessionAfterCommandBoundaries.messages, ...pendingMessages]
+          : sessionAfterCommandBoundaries.messages,
+      previewText: hookPreview,
+      working: hookWorking
+    })
+  }, [sessionAfterCommandBoundaries.messages, pendingMessages, hookPreview, hookWorking])
   const sessionWithPending = useMemo<typeof session>(() => {
     if (pending.length === 0 && commandMarkers.length === 0 && !streamingText) {
       return sessionAfterCommandBoundaries
@@ -312,10 +330,10 @@ function NativeChatResolvedView({
         ...sessionAfterCommandBoundaries.messages,
         ...commandMarkersAsMessages(commandMarkers),
         ...(streamingText ? [nativeChatStreamingMessage(streamingText)] : []),
-        ...pendingSendsAsMessages(pending, sessionAfterCommandBoundaries.messages)
+        ...pendingMessages
       ]
     }
-  }, [sessionAfterCommandBoundaries, pending, commandMarkers, streamingText])
+  }, [sessionAfterCommandBoundaries, pending, pendingMessages, commandMarkers, streamingText])
   // Derive the view state from the pending-augmented session so a send into an
   // otherwise-empty conversation flips to the list (showing the queued bubble)
   // instead of staying on the empty state.
@@ -436,6 +454,7 @@ function NativeChatResolvedView({
         isWorking={isWorking}
         onStop={stopAgent}
         onOptimisticSend={onOptimisticSend}
+        onOptimisticSendCanceled={onOptimisticSendCanceled}
         onSlashCommand={onSlashCommand}
       />
       {contextMenu.menu}

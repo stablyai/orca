@@ -73,6 +73,7 @@
     "matchLabel": {
       "comment": "댓글",
       "issue": "이슈",
+      "mr": "MR",
       "port": "포트",
       "pr": "PR"
     }
@@ -2588,7 +2589,7 @@
               "blocked": {
                 "toast": {
                   "97c98f1afe": "설정 열기",
-                  "7cf51f74fd": "SSH, tmux, Neovim 또는 fzf에서 복사하려면 Terminal 설정에서 TUI 클립보드 쓰기를 활성화하세요.",
+                  "7cf51f74fd": "SSH, tmux, Neovim, fzf 또는 Grok에서 복사하려면 Terminal 설정에서 TUI 클립보드 쓰기를 활성화하세요.",
                   "89eaa3e80b": "Terminal 클립보드 쓰기가 차단되었습니다."
                 }
               }

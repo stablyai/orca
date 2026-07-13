@@ -5,6 +5,7 @@ import { removeWatcherCanaryDirectory } from './parcel-watcher-canary-directory'
 import { launchWatcherChild } from './parcel-watcher-child-launch'
 import { WatcherProcessCrashFuse } from './parcel-watcher-crash-fuse'
 import {
+  disposeWatcherSupervisorSubscriptions,
   failAllWatcherSubscriptions,
   handleWatcherHostMessage,
   reportWatcherTerminalError,
@@ -16,7 +17,8 @@ import {
   startPendingSubscribeTimeout,
   takePendingSubscribe
 } from './parcel-watcher-pending-subscribe'
-import { WatcherProcessFailure } from './parcel-watcher-process-failure'
+import { watcherHostFailure } from './parcel-watcher-process-failure'
+import type { WatcherProcessFailure } from './parcel-watcher-process-failure'
 import type {
   HostToWatcherMessage,
   WatcherProcessSubscribeOptions,
@@ -28,6 +30,7 @@ import type {
   WatcherProcessSubscription,
   WatcherProcessSubscriptionRecord
 } from './parcel-watcher-process-subscription'
+import type { WatcherProcessSupervisorOptions } from './parcel-watcher-process-supervisor-options'
 import { subscribeThroughWatcherSupervisor } from './parcel-watcher-supervisor-subscribe'
 
 export type {
@@ -35,6 +38,7 @@ export type {
   WatcherProcessHooks,
   WatcherProcessSubscription
 } from './parcel-watcher-process-subscription'
+export type { WatcherProcessSupervisorOptions } from './parcel-watcher-process-supervisor-options'
 
 export class WatcherProcessSupervisor {
   private child: ChildProcess | null = null
@@ -45,6 +49,9 @@ export class WatcherProcessSupervisor {
   private readonly records = new Map<number, WatcherProcessSubscriptionRecord>()
   private readonly pendingUnsubscribes = new Map<number, () => void>()
   private readonly cancelledSubscribesAwaitingChild = new Set<number>()
+
+  constructor(private readonly options: WatcherProcessSupervisorOptions = {}) {}
+
   subscribe(
     dir: string,
     callback: WatcherProcessCallback,
@@ -57,6 +64,8 @@ export class WatcherProcessSupervisor {
       opts,
       hooks,
       shutdownRequested: this.shutdownRequested,
+      entryPath: this.options.entryPath ?? getWatcherProcessEntryPath(),
+      useInProcessVitestFallback: this.options.useInProcessVitestFallback ?? true,
       allocateId: () => this.nextSubscriptionId++,
       records: this.records,
       pendingUnsubscribes: this.pendingUnsubscribes,
@@ -73,19 +82,13 @@ export class WatcherProcessSupervisor {
     this.shutdownRequested = true
     const proc = this.child
     this.child = null
-    const error = new WatcherProcessFailure(
-      'file watcher supervisor disposed',
-      'supervisor',
-      'supervisor_disposed'
+    const error = watcherHostFailure('file watcher supervisor disposed', 'supervisor_disposed')
+    disposeWatcherSupervisorSubscriptions(
+      this.records,
+      this.pendingUnsubscribes,
+      this.cancelledSubscribesAwaitingChild,
+      error
     )
-    for (const record of this.records.values()) {
-      resetPendingSubscribeAttempt(record)
-      const pending = takePendingSubscribe(record)
-      pending?.reject(error)
-    }
-    resolvePendingWatcherUnsubscribes(this.pendingUnsubscribes)
-    this.cancelledSubscribesAwaitingChild.clear()
-    this.records.clear()
     proc?.kill()
     this.canaryDir = removeWatcherCanaryDirectory(this.canaryDir)
   }
@@ -96,7 +99,9 @@ export class WatcherProcessSupervisor {
     this.crashFuse.reset()
   }
 
-  private ensureWatcherProcess(entryPath = getWatcherProcessEntryPath()): ChildProcess | null {
+  private ensureWatcherProcess(
+    entryPath = this.options.entryPath ?? getWatcherProcessEntryPath()
+  ): ChildProcess | null {
     if (this.shutdownRequested) {
       return null
     }
@@ -200,11 +205,7 @@ export class WatcherProcessSupervisor {
       )
       failAllWatcherSubscriptions(
         this.records,
-        new WatcherProcessFailure(
-          'file watcher process crashed repeatedly',
-          'supervisor',
-          'supervisor_crash_fuse'
-        )
+        watcherHostFailure('file watcher process crashed repeatedly', 'supervisor_crash_fuse')
       )
       this.canaryDir = removeWatcherCanaryDirectory(this.canaryDir)
       return
@@ -279,9 +280,8 @@ export class WatcherProcessSupervisor {
     if (!replacement) {
       failAllWatcherSubscriptions(
         this.records,
-        new WatcherProcessFailure(
+        watcherHostFailure(
           'file watcher process unavailable after subscription cancellation',
-          'supervisor',
           'process_unavailable'
         )
       )

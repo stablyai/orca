@@ -44,7 +44,11 @@ import { gitExecMutatesRepository } from '../shared/git-exec-mutation'
 import { detectConflictOperation, getStatusOp } from './git-handler-status-ops'
 import { checkIgnoredPathsOp } from './git-handler-check-ignore'
 import { resolveRelayPushTarget } from './git-handler-push-target'
-import { isNoUpstreamError, normalizeGitErrorMessage } from '../shared/git-remote-error'
+import {
+  isNoUpstreamError,
+  normalizeGitErrorMessage,
+  runPullWithDivergenceFallback
+} from '../shared/git-remote-error'
 import { upstreamOnlyCommitsArePatchEquivalent } from '../shared/git-upstream-status'
 import { assertGitPushTargetShape } from '../shared/git-push-target-validation'
 import { getPublishTargetStatus, type GitCommandRunner } from '../shared/git-publish-target-status'
@@ -488,7 +492,7 @@ export class GitHandler {
     const worktreePath = params.worktreePath as string
     const filePath = params.filePath as string
     try {
-      await this.git(['add', '--', filePath], worktreePath)
+      await this.git(['add', '--', this.literalPathspec(filePath)], worktreePath)
     } finally {
       this.clearGitMutationReadCaches()
     }
@@ -512,7 +516,7 @@ export class GitHandler {
     const worktreePath = params.worktreePath as string
     const filePath = params.filePath as string
     try {
-      await this.git(['restore', '--staged', '--', filePath], worktreePath)
+      await this.git(['restore', '--staged', '--', this.literalPathspec(filePath)], worktreePath)
     } finally {
       this.clearGitMutationReadCaches()
     }
@@ -525,7 +529,10 @@ export class GitHandler {
     try {
       for (let i = 0; i < filePaths.length; i += BULK_CHUNK_SIZE) {
         const chunk = filePaths.slice(i, i + BULK_CHUNK_SIZE)
-        await this.git(['add', '--', ...chunk], worktreePath)
+        await this.git(
+          ['add', '--', ...chunk.map((filePath) => this.literalPathspec(filePath))],
+          worktreePath
+        )
       }
     } finally {
       this.clearGitMutationReadCaches()
@@ -539,7 +546,10 @@ export class GitHandler {
     try {
       for (let i = 0; i < filePaths.length; i += BULK_CHUNK_SIZE) {
         const chunk = filePaths.slice(i, i + BULK_CHUNK_SIZE)
-        await this.git(['restore', '--staged', '--', ...chunk], worktreePath)
+        await this.git(
+          ['restore', '--staged', '--', ...chunk.map((filePath) => this.literalPathspec(filePath))],
+          worktreePath
+        )
       }
     } finally {
       this.clearGitMutationReadCaches()
@@ -1015,29 +1025,33 @@ export class GitHandler {
   private async pullWithArgs(params: Record<string, unknown>, pullArgs: string[]) {
     this.clearGitMutationReadCaches()
     const worktreePath = params.worktreePath as string
+    const runPull = async (effectiveArgs: string[]): Promise<void> => {
+      if (params.pushTarget !== undefined) {
+        assertGitPushTargetShape(params.pushTarget)
+        const pushTarget = params.pushTarget as GitPushTarget
+        await this.git(['check-ref-format', '--branch', pushTarget.branchName], worktreePath)
+        await this.git(
+          ['pull', ...effectiveArgs, pushTarget.remoteName, pushTarget.branchName],
+          worktreePath
+        )
+        return
+      }
+      const upstream = await resolveEffectiveGitUpstream((args) => this.git(args, worktreePath))
+      if (upstream && !upstream.isConfiguredUpstream) {
+        // Why: legacy Orca branches may still track origin/main while pushes
+        // target origin/<branch>. Pull the same effective branch the UI reports.
+        await this.git(
+          ['pull', ...effectiveArgs, upstream.remoteName, upstream.branchName],
+          worktreePath
+        )
+        return
+      }
+      await this.git(['pull', ...effectiveArgs], worktreePath)
+    }
+
     try {
       try {
-        if (params.pushTarget !== undefined) {
-          assertGitPushTargetShape(params.pushTarget)
-          const pushTarget = params.pushTarget as GitPushTarget
-          await this.git(['check-ref-format', '--branch', pushTarget.branchName], worktreePath)
-          await this.git(
-            ['pull', ...pullArgs, pushTarget.remoteName, pushTarget.branchName],
-            worktreePath
-          )
-          return
-        }
-        const upstream = await resolveEffectiveGitUpstream((args) => this.git(args, worktreePath))
-        if (upstream && !upstream.isConfiguredUpstream) {
-          // Why: legacy Orca branches may still track origin/main while pushes
-          // target origin/<branch>. Pull the same effective branch the UI reports.
-          await this.git(
-            ['pull', ...pullArgs, upstream.remoteName, upstream.branchName],
-            worktreePath
-          )
-          return
-        }
-        await this.git(['pull', ...pullArgs], worktreePath)
+        await runPullWithDivergenceFallback(pullArgs, runPull)
       } catch (error) {
         // Why: mirror the local gitPull normalization so SSH users see the same
         // actionable messages instead of raw git stderr.

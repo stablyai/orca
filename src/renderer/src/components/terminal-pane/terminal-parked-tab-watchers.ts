@@ -19,6 +19,10 @@ import { subscribeToPtyExit } from './pty-dispatcher'
 import { startParkedTerminalByteWatcher } from './parked-terminal-byte-watcher'
 import { isSnapshotBackedTerminalPty } from './terminal-hidden-view-parking'
 import {
+  resolveTabTitleAfterPaneClose,
+  shouldClearLaunchAgentForClosedPane
+} from './terminal-pane-close-identity'
+import {
   capturedPanesByTabId,
   disposeParkedTabWatchers,
   parkedWatchersByTabId,
@@ -232,7 +236,24 @@ function collapseParkedExitedLeaf(tabId: string, ptyId: string): void {
   }
   const detached = detachTerminalLayoutLeaf(layout, leafId)
   if (detached) {
+    const terminalTab = Object.values(state.tabsByWorktree)
+      .flat()
+      .find((candidate) => candidate.id === tabId)
+    if (shouldClearLaunchAgentForClosedPane(terminalTab, ptyId)) {
+      state.clearTabLaunchAgent(tabId)
+    }
     state.setTabLayout(tabId, detached.sourceLayout)
+    const activeLeafId = detached.sourceLayout.activeLeafId
+    const activePtyId = activeLeafId
+      ? detached.sourceLayout.ptyIdsByLeafId?.[activeLeafId]
+      : undefined
+    const activePaneId = activePtyId
+      ? (parkedWatchersByTabId.get(tabId)?.paneIdByPtyId.get(activePtyId) ?? null)
+      : null
+    state.updateTabTitle(
+      tabId,
+      resolveTabTitleAfterPaneClose(state.runtimePaneTitlesByTabId[tabId] ?? {}, activePaneId)
+    )
   }
 }
 

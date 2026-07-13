@@ -20,6 +20,13 @@ export class WatcherProcessFailure extends Error {
   }
 }
 
+export function watcherHostFailure(
+  message: string,
+  code: WatcherProcessFailureCode
+): WatcherProcessFailure {
+  return new WatcherProcessFailure(message, 'supervisor', code)
+}
+
 export function isWatcherProcessFailure(error: unknown): error is WatcherProcessFailure {
   return error instanceof WatcherProcessFailure
 }
