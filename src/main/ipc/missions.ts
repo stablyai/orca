@@ -66,9 +66,7 @@ export function registerMissionHandlers(
         // Why: inside a mission the repo is the member's identity; the mission
         // name already labels the session card and the shared branch.
         displayName: store.getRepo(repoId)?.displayName ?? mission.name,
-        branchNameOverride: mission.branchName,
-        ...(mission.baseRef ? { baseBranch: mission.baseRef } : {}),
-        ...(mission.setupDecision ? { setupDecision: mission.setupDecision } : {})
+        branchNameOverride: mission.branchName
       })
       store.setMissionMemberWorktree(mission.id, repoId, created.worktree.id)
       return { repoId, worktreeId: created.worktree.id }
@@ -123,8 +121,6 @@ export function registerMissionHandlers(
         name: args.name,
         branchName: args.branchName ?? null,
         repoIds,
-        baseRef: args.baseBranch ?? null,
-        setupDecision: args.setupDecision,
         sessionAgent: args.sessionAgent
       })
       notifyReposChanged(mainWindow)

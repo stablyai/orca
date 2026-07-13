@@ -4685,14 +4685,7 @@
           "507155ae18": "No se pudieron crear algunos espacios de trabajo. Puedes reintentarlo desde la lista de la misión.",
           "e85049f72a": "No se pudo crear la misión. Inténtalo de nuevo.",
           "009decc6e5": "Hecho",
-          "ba57f70473": "Agente",
-          "c43b33e4ef": "Avanzado",
-          "603415390c": "Rama base",
-          "9b2b02c9ee": "Déjalo vacío para ramificar desde la rama predeterminada de cada proyecto.",
-          "c9ffbca654": "Scripts de configuración",
-          "f3cd8cdbd7": "Heredar",
-          "f89f5bad98": "Ejecutar",
-          "41f764a7c2": "Omitir"
+          "ba57f70473": "Agente"
         },
         "MissionDeleteDialog": {
           "7c84ee0d7d": "Eliminar misión",
@@ -4720,8 +4713,7 @@
           "955a21f262": "Opciones de la misión"
         },
         "MissionMemberErrorCopy": {
-          "c8affe1f4b": "Este repositorio aún no tiene commits ni rama predeterminada. Crea un commit inicial (o define una rama predeterminada en la configuración del proyecto) y vuelve a intentarlo.",
-          "cf94215034": "La rama base {{value0}} no existe en este proyecto. Créala allí o cambia la rama base de la misión y vuelve a intentarlo."
+          "c8affe1f4b": "Este repositorio aún no tiene commits ni rama predeterminada. Crea un commit inicial (o define una rama predeterminada en la configuración del proyecto) y vuelve a intentarlo."
         }
       },
       "shared": {

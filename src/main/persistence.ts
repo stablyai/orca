@@ -4210,8 +4210,6 @@ export class Store {
     name: string
     branchName?: string | null
     repoIds: string[]
-    baseRef?: string | null
-    setupDecision?: Mission['setupDecision']
     sessionAgent?: Mission['sessionAgent']
   }): Mission {
     const mission = createMission({

@@ -65,8 +65,6 @@ function makeFakeStore() {
       name: string
       branchName?: string | null
       repoIds: string[]
-      baseRef?: string | null
-      setupDecision?: Mission['setupDecision']
       sessionAgent?: Mission['sessionAgent']
     }) => {
       mission = {
@@ -75,8 +73,6 @@ function makeFakeStore() {
         branchName: input.branchName ?? 'mission/referral',
         members: input.repoIds.map((repoId) => ({ repoId, worktreeId: null, addedAt: 1 })),
         tabOrder: 0,
-        baseRef: input.baseRef ?? null,
-        ...(input.setupDecision ? { setupDecision: input.setupDecision } : {}),
         ...(input.sessionAgent ? { sessionAgent: input.sessionAgent } : {}),
         createdAt: 1,
         updatedAt: 1
@@ -173,7 +169,7 @@ describe('missions IPC', () => {
     expect(store.deleteMission).not.toHaveBeenCalled()
   })
 
-  it('applies base branch, setup decision, and session agent from create args', async () => {
+  it('applies the session agent from create args and ensures the session', async () => {
     const store = makeFakeStore()
     const runtime = {
       createManagedWorktree: vi.fn().mockResolvedValue({ worktree: { id: `r1::${wtPath}` } }),
@@ -185,13 +181,8 @@ describe('missions IPC', () => {
       {
         name: 'Referral',
         repoIds: ['r1'],
-        baseBranch: 'develop',
-        setupDecision: 'skip',
         sessionAgent: 'claude'
       }
-    )
-    expect(runtime.createManagedWorktree).toHaveBeenCalledWith(
-      expect.objectContaining({ baseBranch: 'develop', setupDecision: 'skip' })
     )
     expect(store.getMission('m1')?.sessionAgent).toBe('claude')
     expect(store.ensureMissionSessionWorkspace).toHaveBeenCalledWith('m1')

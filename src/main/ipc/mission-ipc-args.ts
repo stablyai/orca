@@ -5,8 +5,6 @@ export const MissionCreateArgs = z.object({
   name: z.string().min(1),
   branchName: z.string().min(1).optional(),
   repoIds: z.array(z.string().min(1)).min(1),
-  baseBranch: z.string().min(1).optional(),
-  setupDecision: z.enum(['run', 'skip', 'inherit']).optional(),
   sessionAgent: z.string().refine(isTuiAgent).optional()
 })
 

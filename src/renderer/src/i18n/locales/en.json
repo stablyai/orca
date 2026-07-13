@@ -4685,14 +4685,7 @@
           "507155ae18": "Some workspaces could not be created. You can retry from the mission list.",
           "e85049f72a": "Could not create the mission. Try again.",
           "009decc6e5": "Done",
-          "ba57f70473": "Agent",
-          "c43b33e4ef": "Advanced",
-          "603415390c": "Base branch",
-          "9b2b02c9ee": "Leave empty to branch from each project's default branch.",
-          "c9ffbca654": "Setup scripts",
-          "f3cd8cdbd7": "Inherit",
-          "f89f5bad98": "Run",
-          "41f764a7c2": "Skip"
+          "ba57f70473": "Agent"
         },
         "MissionDeleteDialog": {
           "7c84ee0d7d": "Delete Mission",
@@ -4720,8 +4713,7 @@
           "955a21f262": "Mission options"
         },
         "MissionMemberErrorCopy": {
-          "c8affe1f4b": "This repository has no commits or default branch yet. Make an initial commit (or set a default branch in Project Settings), then retry.",
-          "cf94215034": "The base branch {{value0}} doesn't exist in this project. Create it there or change the mission's base branch, then retry."
+          "c8affe1f4b": "This repository has no commits or default branch yet. Make an initial commit (or set a default branch in Project Settings), then retry."
         }
       },
       "shared": {

@@ -372,11 +372,6 @@ export type Mission = {
   /** Physical mission root holding symlinks to local member worktrees.
    *  Resolved lazily on first session ensure; stable afterwards. */
   rootPath?: string | null
-  /** Base ref every member worktree branches from. null/absent = each
-   *  repo's default branch. Applies to add/recreate so members stay uniform. */
-  baseRef?: string | null
-  /** Per-repo setup-script decision applied to member worktree creation. */
-  setupDecision?: 'run' | 'skip' | 'inherit'
   /** Agent auto-launched in the mission session on first open. Persisted so a
    *  failed eager session ensure can still honor the pick on lazy retry. */
   sessionAgent?: TuiAgent

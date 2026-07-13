@@ -10,14 +10,6 @@ describe('formatMissionMemberError', () => {
     expect(formatted).not.toContain('--base')
   })
 
-  it('maps a missing base ref to copy naming the requested branch', () => {
-    const formatted = formatMissionMemberError(
-      'Command failed: git worktree add --no-track -b mission/base-check /tmp/wt develop\nfatal: invalid reference: develop'
-    )
-    expect(formatted).toContain('base branch develop')
-    expect(formatted).not.toContain('fatal:')
-  })
-
   it('passes unknown errors through verbatim', () => {
     const raw = 'Branch "mission/x" already exists locally. Pick a different branch.'
     expect(formatMissionMemberError(raw)).toBe(raw)

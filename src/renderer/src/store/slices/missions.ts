@@ -20,8 +20,6 @@ export type MissionsSlice = {
     name: string
     branchName?: string
     repoIds: string[]
-    baseBranch?: string
-    setupDecision?: 'run' | 'skip' | 'inherit'
     sessionAgent?: TuiAgent
   }) => Promise<MissionCreateResult | null>
   renameMission: (missionId: string, name: string) => Promise<void>
