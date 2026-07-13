@@ -21,10 +21,10 @@ beforeEach(() => {
 })
 
 test('opens a web-chat transcript tab with the session values', () => {
-  openWebChatSessionTranscript({ agent: 'gemini-web', sessionId: 'GEMINI/c_1', title: '표 대화' })
+  openWebChatSessionTranscript({ agent: 'gemini-web', sessionId: 'c_1', title: '표 대화' })
   expect(openWebChatTranscript).toHaveBeenCalledWith({
     agent: 'gemini-web',
-    sessionId: 'GEMINI/c_1',
+    sessionId: 'c_1',
     title: '표 대화',
     worktreeId: 'w1'
   })

@@ -48,6 +48,6 @@ export async function resumeWebChatAsLocalAgent(args: {
     worktreeId: args.worktreeId,
     prompt: seed,
     promptDelivery: 'submit-after-ready',
-    launchSource: 'web-chat-resume'
+    launchSource: 'web_chat_resume'
   })
 }

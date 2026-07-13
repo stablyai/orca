@@ -215,7 +215,7 @@ export const launchSourceSchema = z.enum([
   'conflict_resolution',
   'source_control_recovery',
   'terminal_context_menu',
-  'web-chat-resume',
+  'web_chat_resume',
   'unknown'
 ])
 export type LaunchSource = z.infer<typeof launchSourceSchema>

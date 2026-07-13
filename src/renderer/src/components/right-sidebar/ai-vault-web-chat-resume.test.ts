@@ -51,7 +51,7 @@ test('resumeWebChatAsLocalAgent: 시드로 launchAgentInNewTab 호출', async ()
       agent: 'claude',
       worktreeId: 'w1',
       promptDelivery: 'submit-after-ready',
-      launchSource: 'web-chat-resume',
+      launchSource: 'web_chat_resume',
       prompt: expect.stringContaining('Gemini에서')
     })
   )
