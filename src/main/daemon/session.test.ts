@@ -365,6 +365,19 @@ describe('Session', () => {
       expect(subprocess.written).toEqual([])
     })
 
+    it('still disposes when the legacy force-kill fallback races with process exit', async () => {
+      createSession()
+      subprocess.forceKill = vi.fn(() => {
+        throw new Error('process already exited')
+      })
+      subprocess.dispose = vi.fn()
+
+      await expect(session.forceKillAndDisposeSubprocessAndWait()).resolves.toBeUndefined()
+
+      expect(subprocess.dispose).toHaveBeenCalledOnce()
+      expect(session.state).toBe('exited')
+    })
+
     it('transitions to timed_out after 15 seconds', () => {
       createSession({ shellReadySupported: true })
       session.write('waiting input')
