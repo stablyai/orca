@@ -59,4 +59,29 @@ describe('listWebChatCandidates', () => {
   it('returns empty when the db is missing', () => {
     expect(listWebChatCandidates({ dbPath: '/no/such/chats.db', issues: [] })).toEqual([])
   })
+
+  it('falls back to synced_at for mtimeMs when updated_at and created_at are both null', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'orca-webchat-src-'))
+    dirs.push(dir)
+    const dbPath = join(dir, 'chats.db')
+    const db = new SyncDatabase(dbPath)
+    initChatImportSchema(db)
+    upsertWebConversation(
+      db,
+      {
+        source: 'CHATGPT',
+        externalId: 'c',
+        title: 't3',
+        createdAt: null,
+        updatedAt: null,
+        messages: []
+      },
+      '2026-07-03T00:00:00.000Z'
+    )
+    db.close()
+
+    const cands = listWebChatCandidates({ dbPath, issues: [] })
+    expect(cands).toHaveLength(1)
+    expect(cands[0]?.file.mtimeMs).toBe(Date.parse('2026-07-03T00:00:00.000Z'))
+  })
 })
