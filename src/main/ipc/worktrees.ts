@@ -5,6 +5,7 @@ import { readFile, stat } from 'node:fs/promises'
 import { randomUUID } from 'node:crypto'
 import type { Store } from '../persistence'
 import { isFolderRepo } from '../../shared/repo-kind'
+import { readBranchRenameFailureOutputForDisplay } from '../agent-hooks/branch-rename-failure-output'
 import {
   isWorkspaceKey,
   parseWorkspaceKey,
@@ -986,6 +987,7 @@ export function registerWorktreeHandlers(
   ipcMain.removeHandler('worktrees:listLineage')
   ipcMain.removeHandler('worktrees:updateLineage')
   ipcMain.removeHandler('worktrees:persistSortOrder')
+  ipcMain.removeHandler('worktrees:getBranchRenameFailureOutput')
   ipcMain.removeHandler('hooks:check')
   ipcMain.removeHandler('hooks:inspectSetupScriptImports')
   ipcMain.removeHandler('hooks:createIssueCommandRunner')
@@ -2097,6 +2099,18 @@ export function registerWorktreeHandlers(
       store.setWorktreeMeta(args.orderedIds[i], { sortOrder: now - i * 1000 })
     }
   })
+
+  // Why: the full generation-failure output is main-memory only (never in
+  // worktree metadata), so the rename-failed dialog pulls it on demand.
+  ipcMain.handle(
+    'worktrees:getBranchRenameFailureOutput',
+    (_event, args: { worktreeId: string }) => {
+      if (typeof args?.worktreeId !== 'string' || args.worktreeId.length === 0) {
+        return null
+      }
+      return readBranchRenameFailureOutputForDisplay(args.worktreeId)
+    }
+  )
 
   ipcMain.handle(
     'hooks:check',

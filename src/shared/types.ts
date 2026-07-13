@@ -433,6 +433,17 @@ export type GitWorktreeInfo = {
   isMainWorktree: boolean
 }
 
+/** Head/branch snapshot read from Git metadata files without spawning Git.
+ *  Carries background-worktree freshness when status-only churn includes a
+ *  real head move (external commit/amend/reset) that must not re-enter the
+ *  structural `worktrees:changed` fanout. */
+export type WorktreeHeadIdentity = {
+  worktreePath: string
+  head: string
+  /** Full ref (e.g. `refs/heads/main`), or null for a detached HEAD. */
+  branch: string | null
+}
+
 // ─── Worktree (app-level, enriched) ──────────────────────────────────
 export type WorkspaceStatus = string
 
@@ -2512,6 +2523,8 @@ export type GlobalSettings = {
   editorAutoSave: boolean
   editorAutoSaveDelayMs: number
   editorMinimapEnabled: boolean
+  /** Defaults on for profiles saved before file-editor wrapping became configurable. */
+  editorWordWrap?: boolean
   /** Persisted opt-out for browser spellcheck noise in rich Markdown editing surfaces. */
   richMarkdownSpellcheckEnabled?: boolean
   /** Whether local markdown review note controls and the review panel are shown. */
@@ -2711,6 +2724,11 @@ export type GlobalSettings = {
   diffDefaultView: 'inline' | 'side-by-side'
   diffWordWrap: boolean
   combinedDiffFileTreeVisibleByDefault: boolean
+  /** Comment author logins the user manually marked as bots (stored lowercased).
+   *  Why: some review bots use regular user accounts that defeat both provider
+   *  metadata and login heuristics, so the Humans/Bots comment filter needs a
+   *  user-supplied escape hatch. */
+  prBotAuthorOverrides: string[]
   notifications: NotificationSettings
   /** When true, a countdown timer is shown after a Claude agent becomes idle,
    *  indicating time remaining before the prompt cache expires. Disabled by default. */

@@ -5,6 +5,7 @@ import {
   HERMES_AGENT_NAME_RE,
   containsBrailleSpinner,
   isClaudeManagementTitle,
+  isCursorAgentTitle,
   isGeminiTerminalTitle,
   isPiAgentTitle,
   titleHasAgentName
@@ -30,7 +31,9 @@ export function isClaudeAgent(title: string): boolean {
     return true
   }
   if (containsBrailleSpinner(title)) {
-    return !lower.includes('cursor') && !lower.includes('openclaude')
+    // Why: named non-Claude agents carry braille spinners too. Gate Cursor by its
+    // identity title, not the token, so a Claude title mentioning a cursor stays Claude.
+    return !isCursorAgentTitle(title) && !lower.includes('openclaude')
   }
 
   const trimmedTitle = title.trimStart()
@@ -93,8 +96,9 @@ export function getAgentLabel(title: string): string | null {
   if (titleHasAgentName(title, 'aider')) {
     return 'Aider'
   }
-  // Why: match explicit names before Claude's generic braille heuristic.
-  if (titleHasAgentName(title, 'cursor')) {
+  // Why: `cursor` is ordinary editor vocabulary, not identity. Match Cursor's closed
+  // title set (mirrors @cursor routing), before `isClaudeAgent` claims the braille frame.
+  if (isCursorAgentTitle(title)) {
     return 'Cursor'
   }
   if (DROID_AGENT_NAME_RE.test(title)) {

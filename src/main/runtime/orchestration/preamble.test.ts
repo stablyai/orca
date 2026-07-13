@@ -8,6 +8,7 @@ function baseParams(overrides: Partial<Parameters<typeof buildDispatchPreamble>[
     dispatchId: 'ctx_def456',
     taskSpec: 'Implement the login form',
     coordinatorHandle: 'term_coord',
+    workerHandle: 'term_worker',
     ...overrides
   }
 }
@@ -46,6 +47,7 @@ describe('buildDispatchPreamble', () => {
     expect(result).toContain('--dispatch-id ctx_def456')
     expect(result).toContain('--files-modified "path/a,path/b"')
     expect(result).toContain('--report-path "<optional: path to the full artifact>"')
+    expect(result).toMatch(/orchestration send --to term_coord --from term_worker/)
   })
 
   it(
@@ -83,11 +85,12 @@ describe('buildDispatchPreamble', () => {
     expect(result).toContain('--task-id task_abc123')
     expect(result).toContain('--dispatch-id ctx_def456')
     expect(result).toContain('--phase "<short: investigating|implementing|reviewing|waiting>"')
+    expect(result).toMatch(/orchestration send --to term_coord --from term_worker/)
   })
 
   it('includes ask block with BEHAVIOR RULE #1 forbidding AskUserQuestion', () => {
     const result = buildDispatchPreamble(baseParams())
-    expect(result).toContain('orchestration ask')
+    expect(result).toMatch(/orchestration ask --to term_coord --from term_worker/)
     expect(result).toContain('--question')
     expect(result).toContain('--timeout-ms 600000')
     // Why: the exact phrase is asserted so the rule can't be trimmed away by
@@ -101,6 +104,16 @@ describe('buildDispatchPreamble', () => {
     // Three mentions: the one-liner ban, the TUI-prompt rationale, and the
     // "when tempted to reach for AskUserQuestion" closing line.
     expect(occurrences).toBe(3)
+  })
+
+  it('binds every injected worker command to the dispatched terminal', () => {
+    const result = buildDispatchPreamble(baseParams())
+
+    expect(result).toMatch(/orchestration ask --to term_coord --from term_worker/)
+    expect(result).toMatch(
+      /orchestration send --to term_coord --from term_worker \\\n    --type escalation/
+    )
+    expect(result).toContain('orchestration check --terminal term_worker')
   })
 
   it('tells prompt-returning workers to idle without post-done polling', () => {
@@ -168,6 +181,7 @@ describe('buildDispatchPreamble', () => {
       dispatchId: 'ctx_x',
       taskSpec: 'do stuff',
       coordinatorHandle: 'term_c',
+      workerHandle: 'term_w',
       baseDrift: {
         base: 'origin/main',
         behind: 7,
@@ -190,6 +204,7 @@ describe('buildDispatchPreamble', () => {
       dispatchId: 'ctx_x',
       taskSpec: 'do stuff',
       coordinatorHandle: 'term_c',
+      workerHandle: 'term_w',
       baseDrift: {
         base: 'origin/main',
         behind: 0,
@@ -206,7 +221,8 @@ describe('buildDispatchPreamble', () => {
       taskId: 'task_x',
       dispatchId: 'ctx_x',
       taskSpec: 'do stuff',
-      coordinatorHandle: 'term_c'
+      coordinatorHandle: 'term_c',
+      workerHandle: 'term_w'
     })
 
     expect(result).not.toContain('--- BASE DRIFT ---')
@@ -219,6 +235,7 @@ describe('buildDispatchPreamble', () => {
       dispatchId: 'ctx_x',
       taskSpec: 'do stuff',
       coordinatorHandle: 'term_c',
+      workerHandle: 'term_w',
       baseDrift: {
         base: 'origin/main',
         behind: 3,
@@ -241,7 +258,8 @@ describe('buildDispatchPreamble', () => {
       taskId: 'task_SNAP',
       dispatchId: 'ctx_SNAP',
       taskSpec: 'TASK_BODY',
-      coordinatorHandle: 'term_COORD'
+      coordinatorHandle: 'term_COORD',
+      workerHandle: 'term_WORKER'
     })
     expect(result).toMatchSnapshot()
   })

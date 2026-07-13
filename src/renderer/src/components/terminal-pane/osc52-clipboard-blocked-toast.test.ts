@@ -1,4 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import en from '@/i18n/locales/en.json'
+import es from '@/i18n/locales/es.json'
+import ja from '@/i18n/locales/ja.json'
+import ko from '@/i18n/locales/ko.json'
+import zh from '@/i18n/locales/zh.json'
 import { OSC52_CLIPBOARD_SETTING_ID } from './osc52-clipboard-setting-anchor'
 import type * as Osc52ClipboardBlockedToastModule from './osc52-clipboard-blocked-toast'
 
@@ -41,6 +46,7 @@ describe('showOsc52ClipboardBlockedToast', () => {
 
     showOsc52ClipboardBlockedToast()
 
+    expect(toastInfoMock.mock.calls[0]?.[1]?.description).toContain('Grok')
     const options = toastInfoMock.mock.calls[0]?.[1]
     expect(options).toMatchObject({
       action: {
@@ -66,5 +72,15 @@ describe('showOsc52ClipboardBlockedToast', () => {
     showOsc52ClipboardBlockedToast()
 
     expect(toastInfoMock).toHaveBeenCalledTimes(1)
+  })
+
+  it('mentions Grok in every supported locale', () => {
+    const locales = [en, es, ja, ko, zh]
+
+    for (const locale of locales) {
+      expect(
+        locale.auto.components.terminal.pane.osc52.clipboard.blocked.toast['7cf51f74fd']
+      ).toContain('Grok')
+    }
   })
 })

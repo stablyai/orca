@@ -5,13 +5,17 @@ import type { TerminalTab } from '../../../../shared/types'
 
 // Why: cold-park hysteresis keeps a hidden pane mounted for 30s so quick tab
 // flips never pay a re-hydrate; hot-retain keeps a bounded recently-visible
-// working set warm for 5 minutes beyond that.
+// working set warm for 15 minutes beyond that. The cap (not the clock) is the
+// primary evictor — 8 worktrees covers the ordinary working set at ~4-5MB
+// renderer floor each, so parking only engages for the many-worktree tail it
+// was built for. Reveal cost is a flat ~170ms remount regardless of buffer
+// size, so cutting remount *frequency* beats shaving replay.
 export const TERMINAL_WORKTREE_COLD_PARK_DELAY_MS = 30_000
-export const TERMINAL_WORKTREE_HOT_RETAIN_MS = 5 * 60_000
-export const TERMINAL_WORKTREE_HOT_RETAIN_LIMIT = 4
+export const TERMINAL_WORKTREE_HOT_RETAIN_MS = 15 * 60_000
+export const TERMINAL_WORKTREE_HOT_RETAIN_LIMIT = 8
 export const TERMINAL_WORKTREE_PARK_DELAY_MS = TERMINAL_WORKTREE_COLD_PARK_DELAY_MS
 export const TERMINAL_TAB_COLD_PARK_DELAY_MS = 30_000
-export const TERMINAL_TAB_HOT_RETAIN_MS = 5 * 60_000
+export const TERMINAL_TAB_HOT_RETAIN_MS = 15 * 60_000
 export const TERMINAL_TAB_HOT_RETAIN_LIMIT = 12
 
 // Why: tests override these per call (instead of process.env reads inside the
@@ -134,16 +138,40 @@ export function canParkTerminalTabRenderer(args: {
 
 type ColdParkRetainCandidate = { id: string; hiddenSinceMs: number }
 
+// Why: the single most-recently-hidden candidate is the view the user just
+// switched away from; keeping it warm regardless of the TTL or cap means
+// switching back after any absence (a meeting, coffee) is always instant, the
+// remount cost users actually notice. Ties break by id for determinism.
+function selectLastActiveRetainedId(candidates: ColdParkRetainCandidate[]): string | null {
+  let lastActive: ColdParkRetainCandidate | null = null
+  for (const candidate of candidates) {
+    if (
+      lastActive === null ||
+      candidate.hiddenSinceMs > lastActive.hiddenSinceMs ||
+      (candidate.hiddenSinceMs === lastActive.hiddenSinceMs &&
+        candidate.id.localeCompare(lastActive.id) < 0)
+    ) {
+      lastActive = candidate
+    }
+  }
+  return lastActive?.id ?? null
+}
+
 // Why: hot-retain keeps the most recently hidden ids warm up to the limit;
-// ids hidden past hotRetainMs or beyond the limit cold-park. Ties sort by id
-// so the selection is deterministic.
+// ids hidden past hotRetainMs or beyond the limit cold-park. The last-active
+// id is exempt from both so returning to it never pays a remount. Ties sort by
+// id so the selection is deterministic.
 function selectIdsBeyondHotRetain(
   candidates: ColdParkRetainCandidate[],
   args: { nowMs: number; hotRetainMs: number; hotRetainLimit: number }
 ): Set<string> {
+  const lastActiveId = selectLastActiveRetainedId(candidates)
   const coldParkedIds = new Set<string>()
   const retainedCandidates: ColdParkRetainCandidate[] = []
   for (const candidate of candidates) {
+    if (candidate.id === lastActiveId) {
+      continue
+    }
     if (args.nowMs - candidate.hiddenSinceMs >= args.hotRetainMs) {
       coldParkedIds.add(candidate.id)
     } else {
@@ -154,7 +182,10 @@ function selectIdsBeyondHotRetain(
     const recencyDelta = b.hiddenSinceMs - a.hiddenSinceMs
     return recencyDelta === 0 ? a.id.localeCompare(b.id) : recencyDelta
   })
-  for (const candidate of retainedCandidates.slice(Math.max(0, args.hotRetainLimit))) {
+  // Why: the last-active id already holds one slot in the warm working set, so
+  // the cap counts it out — the remaining candidates fill hotRetainLimit-1.
+  const remainingLimit = lastActiveId === null ? args.hotRetainLimit : args.hotRetainLimit - 1
+  for (const candidate of retainedCandidates.slice(Math.max(0, remainingLimit))) {
     coldParkedIds.add(candidate.id)
   }
   return coldParkedIds

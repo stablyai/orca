@@ -26,6 +26,12 @@ import {
   writeTextFileRemoteAtomic
 } from '../agent-hooks/installer-utils-remote'
 import {
+  buildPosixHookPayloadCapture,
+  buildWindowsHookEnvironmentGuardLines,
+  buildWindowsHookStdinDrainEpilogue,
+  POSIX_HOOK_STDIN_DRAIN_COMMAND
+} from '../agent-hooks/hook-stdin-contract'
+import {
   computeTrustKey,
   computeTrustedHash,
   escapeTomlString,
@@ -136,8 +142,8 @@ export type { CodexWslRuntimeHookInstallPlan }
 function wrapReadablePosixHookCommand(scriptPath: string): string {
   const quoted = `'${scriptPath.replaceAll("'", "'\\''")}'`
   // Why: WSL runtime hooks are written from Windows through UNC, where the
-  // executable bit is not reliable. /bin/sh only needs the script to be readable.
-  return `if [ -r ${quoted} ]; then /bin/sh ${quoted}; fi`
+  // executable bit is not reliable; a missing script must still own stdin.
+  return `if [ -f ${quoted} ] && [ -r ${quoted} ]; then /bin/sh ${quoted}; else ${POSIX_HOOK_STDIN_DRAIN_COMMAND}; fi`
 }
 
 function getSystemConfigPath(): string {
@@ -781,17 +787,17 @@ function getManagedScript(target: 'local' | 'posix' = 'local'): string {
       // surviving PTY reach the current server even though its env points at
       // the prior Orca's coordinates.
       'if defined ORCA_AGENT_HOOK_ENDPOINT if exist "%ORCA_AGENT_HOOK_ENDPOINT%" call "%ORCA_AGENT_HOOK_ENDPOINT%" 2>nul',
-      'if "%ORCA_AGENT_HOOK_PORT%"=="" exit /b 0',
-      'if "%ORCA_AGENT_HOOK_TOKEN%"=="" exit /b 0',
-      'if "%ORCA_PANE_KEY%"=="" exit /b 0',
+      ...buildWindowsHookEnvironmentGuardLines(),
       buildWindowsAgentHookCurlPostCommand('codex'),
       'exit /b 0',
+      ...buildWindowsHookStdinDrainEpilogue(),
       ''
     ].join('\r\n')
   }
 
   return [
     '#!/bin/sh',
+    ...buildPosixHookPayloadCapture(),
     // Why: see claude/hook-service.ts for rationale. Sourcing refreshes
     // PORT/TOKEN/ENV/VERSION from the current Orca so a surviving PTY keeps
     // reporting after a restart.
@@ -821,10 +827,6 @@ function getManagedScript(target: 'local' | 'posix' = 'local'): string {
     '  load_hook_endpoint "$ORCA_AGENT_HOOK_ENDPOINT"',
     'fi',
     'if [ -z "$ORCA_AGENT_HOOK_PORT" ] || [ -z "$ORCA_AGENT_HOOK_TOKEN" ] || [ -z "$ORCA_PANE_KEY" ]; then',
-    '  exit 0',
-    'fi',
-    'payload=$(cat)',
-    'if [ -z "$payload" ]; then',
     '  exit 0',
     'fi',
     'post_codex_hook() {',

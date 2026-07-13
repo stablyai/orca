@@ -79,6 +79,7 @@ function visibleOptions(overrides: Partial<VisibleOptions> = {}): VisibleOptions
     tabsByWorktree: {},
     ptyIdsByTabId: {},
     browserTabsByWorktree: {},
+    worktreeIdsWithLiveAgent: new Set(),
     hideDefaultBranchWorkspace: false,
     hideAutomationGeneratedWorkspaces: false,
     repoMap,
@@ -177,6 +178,24 @@ describe('computeVisibleWorktreeIds', () => {
     )
 
     expect(result).toEqual([])
+  })
+
+  it('keeps a running-agent worktree visible without a live pty when sleeping is hidden (#7197)', () => {
+    const wt = makeWorktree('wt-agent')
+
+    const result = computeVisibleWorktreeIds(
+      { repo1: [wt] },
+      [wt.id],
+      visibleOptions({
+        showSleepingWorkspaces: false,
+        // No live PTY for the tab, but the agent session is live.
+        tabsByWorktree: { [wt.id]: [makeTab('tab-agent', wt.id, null)] },
+        ptyIdsByTabId: { 'tab-agent': [] },
+        worktreeIdsWithLiveAgent: new Set([wt.id])
+      })
+    )
+
+    expect(result).toEqual([wt.id])
   })
 
   it('hides paired web host terminal mirrors while their stream handle is pending', () => {

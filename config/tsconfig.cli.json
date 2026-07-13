@@ -3,6 +3,7 @@
   "include": [
     "../src/cli/**/*",
     "../src/shared/**/*",
+    "../src/main/agent-hooks/hook-stdin-contract.ts",
     "../src/main/agent-hooks/installer-utils.ts",
     "../src/main/agent-hooks/installer-utils-remote.ts",
     "../src/main/agent-hooks/managed-agent-hook-controls.ts",

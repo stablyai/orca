@@ -4,6 +4,7 @@ import type { MobileNetworkInterface } from '../settings/mobile-network-interfac
 import { AndroidLogo, IosBrandIcon } from './MobileBrandIcons'
 import { NetworkInterfacePicker } from './NetworkInterfacePicker'
 import { getChannelTagline, type InstallCopy, type IosChannel } from './mobile-platform-copy'
+import { WindowsFirewallNotice } from './WindowsFirewallNotice'
 export { HeroIntro } from './MobileHeroIntro'
 export { HeroPaired, type PairedDevice } from './MobileHeroPairedDevices'
 import { translate } from '@/i18n/i18n'
@@ -239,6 +240,11 @@ export function HeroFlow({
                   {translate('auto.components.mobile.MobileHero.010dddcf27', 'Copy pairing code')}
                 </button>
               </div>
+              <WindowsFirewallNotice
+                pairingReady={pairQrDataUrl != null}
+                address={selectedAddress}
+                className="mt-3"
+              />
             </div>
             <div className="mp-qr-stack">
               <div

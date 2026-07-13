@@ -126,10 +126,9 @@ export function computeRemoteRelayDir(
 /**
  * Probe whether a fully-installed relay already exists at remoteRelayDir.
  *
- * "Fully installed" means: the directory exists, contains relay.js, AND
- * contains the .install-complete sentinel written at the end of a successful
- * install. A directory missing .install-complete is either mid-install (lock
- * held) or a crashed-install partial — either way we re-run the deploy.
+ * "Fully installed" means: the directory contains relay.js, its isolated
+ * relay-watcher.js child, and the .install-complete sentinel written at the
+ * end of a successful install. Missing artifacts force a complete re-deploy.
  */
 export async function isRelayAlreadyInstalled(
   conn: SshConnection,

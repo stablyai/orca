@@ -1181,9 +1181,7 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
               }
               let agentStatus
               try {
-                agentStatus = await runtime.getTerminalAgentStatusForGuardedSend(
-                  params.terminal
-                )
+                agentStatus = await runtime.getTerminalAgentStatusForGuardedSend(params.terminal)
               } catch (error) {
                 if (isTerminalAgentStatusNotWritable(error)) {
                   throw new Error('terminal_guard_not_writable')

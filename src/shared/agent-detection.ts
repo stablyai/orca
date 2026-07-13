@@ -11,6 +11,7 @@
 export type { AgentStatus } from './agent-title-core'
 export {
   isClaudeManagementTitle,
+  isCursorAgentTitle,
   isCursorNativeAgentTitle,
   isGeminiTerminalTitle,
   isPiTerminalTitle,
