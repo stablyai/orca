@@ -13,10 +13,12 @@ import { MOBILE_AI_VAULT_CAPABILITY } from './agent-history-capability'
 
 export { MOBILE_AI_VAULT_CAPABILITY }
 
-// Why: mirror the desktop renderer's SESSION_LIMIT=500. limit caps only the
-// global recency list; the in-scope Claude union is capped separately host-side,
-// so the response can still be large — hence virtualization + lazy preview.
-const MOBILE_AI_VAULT_SESSION_LIMIT = 500
+// Why: mirror the desktop renderer's SESSION_LIMIT=2000 (raised from 500 so
+// imported web chats aren't pushed past the global recency cap by local
+// sessions). limit caps only the global recency list; the in-scope Claude union
+// is capped separately host-side, so the response can still be large — hence
+// virtualization + lazy preview.
+const MOBILE_AI_VAULT_SESSION_LIMIT = 2000
 
 export type AgentHistoryScreenState =
   | { kind: 'loading' }

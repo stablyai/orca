@@ -4,11 +4,13 @@ import type { ExecutionHostScope } from '../../../../shared/execution-host'
 import { resolveWebChatCwdByAgent } from '../../../../shared/web-chat-location'
 import { useAppStore } from '@/store'
 
-const SESSION_LIMIT = 500
+// Why 2000 not 500: imported web chats share the one global recency list, so
+// hundreds of local transcripts would push older web chats past the cap.
+const SESSION_LIMIT = 2000
 
 // Panel entry and window refocus must show sessions started since the last
 // scan, so they bypass the main process's 15s cache — but a full scan parses
-// up to ~1000 transcripts, so bound forced scans to one per interval. Module
+// up to ~2000 transcripts, so bound forced scans to one per interval. Module
 // scope so the throttle survives panel remounts (the panel unmounts per tab).
 const FORCED_RESCAN_MIN_INTERVAL_MS = 5_000
 let lastForcedRescanAt = 0
