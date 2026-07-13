@@ -3791,8 +3791,17 @@ describe('Claude hook normalization', () => {
     expect(result?.payload.toolInput).toBeUndefined()
   })
 
-  it('PostToolUseFailure surfaces the error text as lastAssistantMessage', () => {
-    const result = _internals.normalizeHookPayload(
+  it('PostToolUseFailure clears stale tool fields until the next PreToolUse', () => {
+    _internals.normalizeHookPayload(
+      'claude',
+      buildBody({
+        hook_event_name: 'PreToolUse',
+        tool_name: 'Edit',
+        tool_input: { file_path: '/src/config.ts' }
+      }),
+      'production'
+    )
+    const failed = _internals.normalizeHookPayload(
       'claude',
       buildBody({
         hook_event_name: 'PostToolUseFailure',
@@ -3802,9 +3811,27 @@ describe('Claude hook normalization', () => {
       }),
       'production'
     )
-    expect(result?.payload.state).toBe('working')
-    expect(result?.payload.toolName).toBe('Edit')
-    expect(result?.payload.lastAssistantMessage).toBe('file is read-only')
+    expect(failed?.payload).toMatchObject({
+      state: 'working',
+      lastAssistantMessage: 'file is read-only'
+    })
+    expect(failed?.payload.toolName).toBeUndefined()
+    expect(failed?.payload.toolInput).toBeUndefined()
+
+    const retry = _internals.normalizeHookPayload(
+      'claude',
+      buildBody({
+        hook_event_name: 'PreToolUse',
+        tool_name: 'Read',
+        tool_input: { file_path: '/src/config.ts' }
+      }),
+      'production'
+    )
+    expect(retry?.payload).toMatchObject({
+      state: 'working',
+      toolName: 'Read',
+      toolInput: '/src/config.ts'
+    })
   })
 
   it('PreToolUse normalizes to working + tool fields', () => {

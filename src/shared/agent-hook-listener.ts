@@ -1375,10 +1375,19 @@ function extractClaudeToolFields(
   hookPayload: Record<string, unknown>
 ): ToolSnapshot {
   const update: ToolSnapshot = {}
-  if (
+  if (eventName === 'PostToolUseFailure') {
+    // Why: the compact sidebar prioritizes current-tool metadata over the
+    // failure message, so a completed failed tool must no longer look active.
+    Object.assign(
+      update,
+      toolUpdate(
+        { toolName: undefined, toolInput: undefined, interactivePrompt: undefined },
+        { hasToolInputField: true }
+      )
+    )
+  } else if (
     eventName === 'PreToolUse' ||
     eventName === 'PostToolUse' ||
-    eventName === 'PostToolUseFailure' ||
     eventName === 'PermissionRequest'
   ) {
     const toolName = readString(hookPayload, 'tool_name')
