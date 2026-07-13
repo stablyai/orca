@@ -145,7 +145,10 @@ export async function fetchGrokRateLimits(
   }
   const session = readResult.session
   if (!isGrokAccessTokenFresh(session)) {
-    return result('error', 'Grok session expired — run grok login to refresh')
+    // Why: Grok CLI owns token rotation via its stored refresh token and
+    // refreshes auth.json on its next run (like Kimi). An expired short-lived
+    // access token is not a logout — don't force an interactive `grok login`.
+    return result('error', 'Grok token expired — open Grok to refresh')
   }
 
   try {

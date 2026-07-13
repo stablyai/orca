@@ -161,4 +161,20 @@ describe('fetchGrokRateLimits', () => {
     expect(result.error).toMatch(/expired/i)
     expect(netFetchMock).not.toHaveBeenCalled()
   })
+
+  it('does not demand an interactive login when the access token is only expired', async () => {
+    // Why: Grok CLI owns token rotation via its stored refresh token and
+    // refreshes ~/.grok/auth.json on its next run (like Kimi). An expired
+    // short-lived access token must not tell the user to run `grok login`.
+    authState.file = JSON.stringify({
+      'https://auth.x.ai::client': {
+        key: 'stale',
+        expires_at: '2000-01-01T00:00:00.000Z'
+      }
+    })
+    const result = await fetchGrokRateLimits()
+    expect(result.status).toBe('error')
+    expect(result.error).not.toMatch(/grok login/i)
+    expect(result.error).toMatch(/open grok/i)
+  })
 })
