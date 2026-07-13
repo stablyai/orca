@@ -1,4 +1,5 @@
 import { execFile as execFileCallback } from 'node:child_process'
+import { setTimeout as wait } from 'node:timers/promises'
 import { promisify } from 'node:util'
 
 type ExecFile = (file: string, args: string[], options: { timeout: number }) => Promise<unknown>
@@ -9,6 +10,7 @@ export const PTY_SESSION_COMMAND_TIMEOUT_MS = 2500
 export const PTY_SESSION_VERIFY_TIMEOUT_MS = 500
 export const MAX_PTY_PROCESS_TREE_SIZE = 1024
 const VERIFY_PID_BATCH_SIZE = 64
+const VERIFY_POLL_INTERVAL_MS = 10
 const PARENT_PID_BATCH_SIZE = 64
 
 export async function killPosixPtySession(
@@ -221,35 +223,75 @@ function resumeProcesses(stopped: Set<number>, killProcess: KillProcess): void {
 
 async function verifyProcessesStopped(pids: number[], run: ExecFile): Promise<boolean> {
   const verificationDeadline = Date.now() + PTY_SESSION_VERIFY_TIMEOUT_MS
-  for (let index = 0; index < pids.length; index += VERIFY_PID_BATCH_SIZE) {
+  let pending = pids
+  while (pending.length > 0) {
+    const nextPending: number[] = []
+    for (let index = 0; index < pending.length; index += VERIFY_PID_BATCH_SIZE) {
+      const remainingMs = verificationDeadline - Date.now()
+      if (remainingMs <= 0) {
+        return false
+      }
+      const batch = pending.slice(index, index + VERIFY_PID_BATCH_SIZE)
+      try {
+        const result = (await run('ps', ['-p', batch.join(','), '-o', 'pid=', '-o', 'stat='], {
+          timeout: remainingMs
+        })) as { stdout?: string | Buffer }
+        const livePids = readLiveProcessIds(result.stdout, batch)
+        if (!livePids) {
+          return false
+        }
+        nextPending.push(...livePids)
+      } catch (error) {
+        if (!isEmptyProcessSelection(error)) {
+          return false
+        }
+      }
+    }
+    pending = nextPending
+    if (pending.length === 0) {
+      return true
+    }
     const remainingMs = verificationDeadline - Date.now()
     if (remainingMs <= 0) {
       return false
     }
-    const batch = pids.slice(index, index + VERIFY_PID_BATCH_SIZE)
-    try {
-      const result = (await run('ps', ['-p', batch.join(','), '-o', 'pid=', '-o', 'stat='], {
-        timeout: remainingMs
-      })) as { stdout?: string | Buffer }
-      if (!hasOnlyExitedProcesses(result.stdout)) {
-        return false
-      }
-    } catch (error) {
-      if (!isEmptyProcessSelection(error)) {
-        return false
-      }
-    }
+    // Why: signal delivery and process reaping are asynchronous; retry the
+    // still-live subset without busy-spawning ps until the bounded deadline.
+    await wait(Math.min(VERIFY_POLL_INTERVAL_MS, remainingMs))
   }
   return true
 }
 
-function hasOnlyExitedProcesses(stdout: string | Buffer | undefined): boolean {
-  return String(stdout ?? '')
+function readLiveProcessIds(
+  stdout: string | Buffer | undefined,
+  expectedPids: readonly number[]
+): number[] | null {
+  const expected = new Set(expectedPids)
+  const seen = new Set<number>()
+  const livePids: number[] = []
+  const lines = String(stdout ?? '')
     .trim()
     .split('\n')
     .map((line) => line.trim())
     .filter(Boolean)
-    .every((line) => line.split(/\s+/).at(-1)?.startsWith('Z') === true)
+  for (const line of lines) {
+    const columns = line.split(/\s+/)
+    const [pidText, status] = columns
+    // Why: numeric coercion accepts signs, decimals, and exponents; process
+    // verification must accept only the canonical PID text emitted by ps.
+    if (columns.length !== 2 || !pidText || !/^[1-9]\d*$/.test(pidText)) {
+      return null
+    }
+    const pid = Number(pidText)
+    if (!Number.isSafeInteger(pid) || !expected.has(pid) || seen.has(pid) || !status) {
+      return null
+    }
+    seen.add(pid)
+    if (!status.startsWith('Z')) {
+      livePids.push(pid)
+    }
+  }
+  return livePids
 }
 
 function isEmptyProcessSelection(error: unknown): boolean {

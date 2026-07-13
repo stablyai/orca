@@ -211,6 +211,48 @@ describe('killPosixPtySession', () => {
     )
   })
 
+  it('waits for a captured process to finish exiting after SIGKILL', async () => {
+    let verificationChecks = 0
+    const run = vi.fn(async (file: string, args: string[]) => {
+      if (file === 'pgrep') {
+        throw emptySelection()
+      }
+      if (file === 'ps' && args.includes('sid=')) {
+        return { stdout: '4242 pts/7\n' }
+      }
+      if (file === 'ps' && args.includes('stat=')) {
+        verificationChecks += 1
+        if (verificationChecks === 1) {
+          return { stdout: '4242 R\n' }
+        }
+        throw emptySelection()
+      }
+      throw new Error(`Unexpected command: ${file} ${args.join(' ')}`)
+    })
+
+    await expect(killPosixPtySession(4242, '/dev/pts/7', 'linux', run, vi.fn())).resolves.toBe(true)
+    expect(verificationChecks).toBe(2)
+  })
+
+  it('fails closed when verification returns a non-canonical PID token', async () => {
+    const run = vi.fn(async (file: string, args: string[]) => {
+      if (file === 'pgrep') {
+        throw emptySelection()
+      }
+      if (file === 'ps' && args.includes('sid=')) {
+        return { stdout: '4242 pts/7\n' }
+      }
+      if (file === 'ps' && args.includes('stat=')) {
+        return { stdout: '+4242 Z\n' }
+      }
+      throw new Error(`Unexpected command: ${file} ${args.join(' ')}`)
+    })
+
+    await expect(killPosixPtySession(4242, '/dev/pts/7', 'linux', run, vi.fn())).resolves.toBe(
+      false
+    )
+  })
+
   it('uses bounded targeted command timeouts for ownership, children, and verification', async () => {
     const run = vi.fn(async (file: string, args?: string[], _options?: { timeout: number }) => {
       if (file === 'pgrep') {
