@@ -41,6 +41,7 @@ function makeSession(overrides: Partial<AiVaultSession> = {}): AiVaultSession {
     queuedMessageCount: 0,
     subagentTranscriptCount: 1,
     resumeCommand: 'claude --resume parent-session',
+    readOnly: false,
     subagent: null,
     ...overrides
   }

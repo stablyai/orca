@@ -32,6 +32,7 @@ const baseSession: AiVaultSession = {
   queuedMessageCount: 0,
   subagentTranscriptCount: 0,
   resumeCommand: "cd '/Users/ada/repo/app' && claude --resume 'session-1'",
+  readOnly: false,
   subagent: null
 }
 
