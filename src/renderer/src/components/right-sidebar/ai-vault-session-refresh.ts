@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { AiVaultListResult, AiVaultSession } from '../../../../shared/ai-vault-types'
 import type { ExecutionHostScope } from '../../../../shared/execution-host'
+import { resolveWebChatCwdByAgent } from '../../../../shared/web-chat-location'
 import { useAppStore } from '@/store'
 
 const SESSION_LIMIT = 500
@@ -89,11 +90,17 @@ export function useAiVaultSessionRefresh(
       const hostScope = executionHostScopeRef.current
       const scanKey = `${hostScope}\n${scopeKey}`
       try {
+        // Imperative read (not a selector) so a mid-scan settings edit can't
+        // retrigger `refresh`, whose identity must stay stable (see deps note below).
+        const settings = useAppStore.getState().settings
         const result = await window.api.aiVault.listSessions({
           limit: SESSION_LIMIT,
           scopePaths: scopePathsRef.current,
           executionHostScope: hostScope,
-          force: args.force
+          force: args.force,
+          webChatCwdByAgent: settings
+            ? resolveWebChatCwdByAgent(settings.webChatDirByAgent, settings.workspaceDir)
+            : undefined
         })
         if (!mountedRef.current || refreshIdRef.current !== refreshId) {
           return
