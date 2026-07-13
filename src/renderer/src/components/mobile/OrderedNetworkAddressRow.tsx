@@ -50,7 +50,10 @@ function AddressRowChrome({
       style={liStyle}
       className={cn('flex items-center gap-2 px-2.5 py-1.5 text-sm', liClassName)}
     >
-      {dragHandle ?? <span className="size-6 shrink-0" aria-hidden />}
+      {/* Why: fixed lead slots keep checkboxes aligned whether the row is selected. */}
+      <span className="flex size-6 shrink-0 items-center justify-center">
+        {dragHandle ?? <span className="size-6" aria-hidden />}
+      </span>
       <span
         className={cn(
           'text-muted-foreground w-4 shrink-0 text-center text-xs tabular-nums',
