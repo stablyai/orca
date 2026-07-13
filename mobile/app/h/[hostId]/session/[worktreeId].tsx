@@ -186,6 +186,7 @@ import {
   confirmsMirroredTabSelection,
   type AppliedSnapshotMarker
 } from '../../../../src/session/session-tab-snapshot-gate'
+import { resolveActiveSessionTab } from '../../../../src/session/active-session-tab'
 import {
   buildMarkdownDiskFallbackDoc,
   shouldReadMarkdownFromDiskAfterReadTabFailure
@@ -1870,26 +1871,27 @@ export default function SessionScreen() {
       const snapshotActive = nextTabs.find((tab) => tab.isActive) ?? nextTabs[0] ?? null
       const pendingActiveSessionTabId = pendingActiveSessionTabIdRef.current
       const pendingActiveTerminalHandle = pendingActiveTerminalHandleRef.current
-      let active = snapshotActive
-      let selectionSource = 'snapshot'
-      if (pendingActiveSessionTabId) {
-        if (snapshotActive?.id === pendingActiveSessionTabId) {
-          if (confirmsMirroredTabSelection(result.publicationEpoch)) {
-            pendingActiveSessionTabIdRef.current = null
-          } else {
-            selectionSource = 'pending-tab-local-ack'
-          }
+      const resolvedActive = resolveActiveSessionTab(nextTabs, {
+        pendingActiveSessionTabId,
+        currentActiveSessionTabId: activeSessionTabIdRef.current
+      })
+      let active = resolvedActive.activeTab
+      let selectionSource =
+        active?.id === snapshotActive?.id
+          ? 'snapshot'
+          : active?.id === pendingActiveSessionTabId
+            ? 'pending-tab'
+            : active?.type === 'browser' && active?.id === activeSessionTabIdRef.current
+              ? 'current-browser-tab'
+              : 'snapshot'
+      if (pendingActiveSessionTabId && snapshotActive?.id === pendingActiveSessionTabId) {
+        if (confirmsMirroredTabSelection(result.publicationEpoch)) {
+          pendingActiveSessionTabIdRef.current = null
         } else {
-          const pendingTab = nextTabs.find((tab) => tab.id === pendingActiveSessionTabId)
-          if (pendingTab) {
-            // Why: desktop tab snapshots can lag a mobile tap while activate RPC
-            // is in flight. Keep the locally selected tab to avoid snapping back.
-            active = pendingTab
-            selectionSource = 'pending-tab'
-          } else {
-            pendingActiveSessionTabIdRef.current = null
-          }
+          selectionSource = 'pending-tab-local-ack'
         }
+      } else if (resolvedActive.clearPendingActiveSessionTabId) {
+        pendingActiveSessionTabIdRef.current = null
       }
       if (pendingActiveTerminalHandle) {
         const pendingTerminalTab = nextTabs.find(
@@ -1899,14 +1901,15 @@ export default function SessionScreen() {
         const pendingTerminalExists = mergedTerminalsForActive.some(
           (terminal) => terminal.handle === pendingActiveTerminalHandle
         )
-        if (
-          snapshotActive?.type === 'terminal' &&
-          snapshotActive.terminal === pendingActiveTerminalHandle
-        ) {
-          if (confirmsMirroredTabSelection(result.publicationEpoch)) {
-            pendingActiveTerminalHandleRef.current = null
-          } else {
+        if (active?.type === 'terminal' && active.terminal === pendingActiveTerminalHandle) {
+          if (
+            snapshotActive?.type === 'terminal' &&
+            snapshotActive.terminal === pendingActiveTerminalHandle &&
+            !confirmsMirroredTabSelection(result.publicationEpoch)
+          ) {
             selectionSource = 'pending-handle-local-ack'
+          } else {
+            pendingActiveTerminalHandleRef.current = null
           }
         } else if (pendingTerminalTab) {
           // Why: desktop active flags can lag a mobile terminal tap. Key by
