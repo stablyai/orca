@@ -129,6 +129,75 @@ function localManagedCodexEvents(): string[] {
 }
 
 describe('CodexHookService', () => {
+  it('installs guarded status hooks into the native home for system-default launches', () => {
+    const systemCodexHome = join(tmpHome, '.codex')
+    const systemHooksPath = join(systemCodexHome, 'hooks.json')
+    mkdirSync(systemCodexHome, { recursive: true })
+    writeFileSync(
+      systemHooksPath,
+      `${JSON.stringify({
+        hooks: {
+          Stop: [{ hooks: [{ command: 'printf user-stop' }] }]
+        }
+      })}\n`,
+      'utf-8'
+    )
+    const userStopTrust = {
+      sourcePath: systemHooksPath,
+      eventLabel: 'stop' as const,
+      groupIndex: 0,
+      handlerIndex: 0,
+      command: 'printf user-stop'
+    }
+    const userTrustConfig = upsertHookTrustEntriesInContent('model = "gpt-5.2-codex"\n', [
+      userStopTrust
+    ])
+    writeFileSync(
+      join(systemCodexHome, 'config.toml'),
+      markHookTrustDisabled(userTrustConfig, hookTrustHeader(`${systemHooksPath}:stop:0:0`)),
+      'utf-8'
+    )
+
+    const service = new CodexHookService()
+    const status = service.installForLaunchHome(null, { runtime: 'host' })
+
+    expect(status.detail).toBeNull()
+    expect(status.state).toBe('installed')
+    const hooksConfig = JSON.parse(readFileSync(join(systemCodexHome, 'hooks.json'), 'utf-8')) as {
+      hooks: Record<string, { hooks?: { command?: string }[] }[]>
+    }
+    expect(Object.keys(hooksConfig.hooks).sort()).toEqual(localManagedCodexEvents())
+    expect(isCodexManagedCommand(hooksConfig.hooks.Stop?.[0]?.hooks?.[0]?.command)).toBe(true)
+    expect(hooksConfig.hooks.Stop?.[1]?.hooks?.[0]?.command).toBe('printf user-stop')
+
+    const trustConfig = readFileSync(join(systemCodexHome, 'config.toml'), 'utf-8')
+    expect(trustConfig).toContain('model = "gpt-5.2-codex"')
+    expect(trustConfig).toContain(':permission_request:0:0')
+    const movedUserTrustHeader = hookTrustHeader(`${systemHooksPath}:stop:1:0`)
+    expect(trustConfig).toContain(movedUserTrustHeader)
+    expect(trustConfig.slice(trustConfig.indexOf(movedUserTrustHeader))).toContain(
+      'enabled = false'
+    )
+    expect(trustConfig).toContain(`trusted_hash = "${computeTrustedHash(userStopTrust)}"`)
+    expect(existsSync(join(userDataDir, 'codex-runtime-home', 'home', 'hooks.json'))).toBe(false)
+
+    expect(service.install().state).toBe('installed')
+    const nativeHooksAfterManagedSelection = JSON.parse(readFileSync(systemHooksPath, 'utf-8')) as {
+      hooks: Record<string, { hooks?: { command?: string }[] }[]>
+    }
+    expect(nativeHooksAfterManagedSelection.hooks.Stop).toHaveLength(1)
+    expect(nativeHooksAfterManagedSelection.hooks.Stop?.[0]?.hooks?.[0]?.command).toBe(
+      'printf user-stop'
+    )
+    expect(
+      Object.values(nativeHooksAfterManagedSelection.hooks).some((definitions) =>
+        definitions.some((definition) =>
+          definition.hooks?.some((hook) => isCodexManagedCommand(hook.command))
+        )
+      )
+    ).toBe(false)
+  })
+
   it('installs PermissionRequest with trust so Codex approval prompts reach Orca', () => {
     const systemCodexHome = join(tmpHome, '.codex')
     mkdirSync(systemCodexHome, { recursive: true })
