@@ -280,6 +280,9 @@ export const test = base.extend<OrcaTestFixtures, OrcaWorkerFixtures>({
     }
 
     const repoPath = isValidGitRepo(testRepoPath) ? testRepoPath : createSeededTestRepo()
+    // Why: the store returns forward-slash-normalized paths on Windows, so
+    // comparing against the Node-side C:\ form fails every fixture boot there.
+    const storeRepoPath = repoPath.replace(/\\/g, '/')
 
     // Add the test repo via the IPC bridge
     // Why: calling window.api.repos.add() goes through the same code path as
@@ -314,7 +317,7 @@ export const test = base.extend<OrcaTestFixtures, OrcaWorkerFixtures>({
             // repos hide those by default after the visibility rollout.
             await store.getState().updateRepo(repo.id, { externalWorktreeVisibility: 'show' })
             return true
-          }, repoPath),
+          }, storeRepoPath),
         {
           timeout: 30_000,
           message: `Expected e2e repo to be loaded: ${repoPath}`
@@ -356,7 +359,7 @@ export const test = base.extend<OrcaTestFixtures, OrcaWorkerFixtures>({
             }
             await store.getState().fetchWorktrees(repo.id)
             return store.getState().worktreesByRepo[repo.id]?.length ?? 0
-          }, repoPath),
+          }, storeRepoPath),
         {
           timeout: 30_000,
           message: 'seeded e2e worktrees did not load'
@@ -392,7 +395,7 @@ export const test = base.extend<OrcaTestFixtures, OrcaWorkerFixtures>({
       if (testWorktree) {
         state.setActiveWorktree(testWorktree.id)
       }
-    }, repoPath)
+    }, storeRepoPath)
 
     // Best-effort seed of a baseline terminal tab when a fresh isolated
     // profile has none yet.
