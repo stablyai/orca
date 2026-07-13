@@ -304,3 +304,37 @@ Replace the synchronous recursive walk with:
    that's exactly what they're for (#1152 comment says so).
 3. Drop the /T full-tree walk entirely; it grants nothing the immediate-children
    ACEs + inheritance propagation don't already cover.
+
+## RC feedback follow-up (2026-06-10, branch Jinwoo-H/windows-acl-grant-idle-priority)
+
+### F8 — One-time whole-PC lag (~10s) on first RC launch
+
+User report after upgrading to the RC containing #5124: boot itself fast, but the entire
+PC lagged ~10s. Not reproducible on later launches.
+
+Root cause: the first-launch background grant. Even without `/T`, granting an inheritable
+`(OI)(CI)` ACE makes Windows auto-inheritance (`SetNamedSecurityInfo`) synchronously
+rewrite the security descriptor of EVERY descendant — tens of thousands of NTFS metadata
+writes (MFT + USN churn) on a real profile. Measured 6.8s on the 28k fixture (D0); ~10s
+on a real profile fits. It ran at normal process priority, concurrent with the boot I/O
+burst → system-wide lag. Marker-gated → runs exactly once → "cannot reproduce" follows.
+(Pre-fix, the same propagation cost existed every launch but was masked by the 60s app
+freeze. Updater + Defender scanning freshly installed binaries also contribute on any
+RC upgrade and are not ours.)
+
+### D4 — Make the one-time grant polite (idle priority + deferred)
+
+`src/main/startup/windows-user-data-acl.ts`:
+1. Each icacls child is dropped to `IDLE_PRIORITY_CLASS` via `os.setPriority(pid,
+   PRIORITY_LOW)` right after spawn (best-effort; normal-priority grant still correct).
+2. The spawn pair is deferred `GRANT_SPAWN_DELAY_MS` (10s) past the call so it never
+   stacks on the launch I/O burst. Unref'd timer: quitting before it fires just means no
+   marker → retry next launch. Marker-hit path stays synchronous and instant.
+Per-write EPERM retries cover the (now ~10s longer) first-launch window — same backstop
+that carried every pre-fix launch where the 60s walk timed out.
+Note: CPU priority doesn't lower Windows I/O priority (that needs PROCESS_MODE_BACKGROUND_BEGIN,
+which only the process itself can enter) — the deferral is what keeps the disk burst off
+the boot path; idle class keeps CPU contention near zero.
+
+Validation: bench run with marker deleted from fixture (`--linger-ms 30000`) — iteration 1
+boots at full speed with grant landing ~10s later at idle priority, iteration 2 marker-hit.

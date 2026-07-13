@@ -1,5 +1,6 @@
 import { spawn } from 'node:child_process'
 import { readFileSync, writeFileSync } from 'node:fs'
+import { constants as osConstants, setPriority } from 'node:os'
 import { join } from 'node:path'
 import { getIcaclsExePath, resolveCurrentWindowsIdentity } from '../win32-utils'
 
@@ -28,12 +29,19 @@ import { getIcaclsExePath, resolveCurrentWindowsIdentity } from '../win32-utils'
  *   retries in codex-accounts/fs-utils and agent-hooks/installer-utils remain
  *   the backstop during the brief async window, exactly as they already were
  *   for the (common) case where the old synchronous walk timed out.
+ * - The icacls children run deferred (past the launch I/O burst) and at idle
+ *   CPU priority. Even without /T, granting an inheritable ACE makes Windows
+ *   auto-inheritance rewrite the security descriptor of every descendant, so
+ *   the one-time first-launch grant churns tens of thousands of NTFS metadata
+ *   writes — at normal priority, concurrent with boot, it visibly lagged the
+ *   whole machine for ~10s in RC testing.
  */
 
 export const WINDOWS_ACL_GRANT_MARKER_FILE = 'windows-acl-grant.json'
 export const WINDOWS_ACL_GRANT_SCHEME_VERSION = 1
 
 const GRANT_TIMEOUT_MS = 120_000
+const GRANT_SPAWN_DELAY_MS = 10_000
 
 type WindowsAclGrantMarker = {
   schemeVersion: number
@@ -53,6 +61,10 @@ type EnsureOptions = {
   spawnFn?: typeof spawn
   /** Test seam — defaults to the real current-user identity. */
   identity?: string | null
+  /** Test seam — defaults to node:os setPriority. */
+  setPriorityFn?: (pid: number, priority: number) => void
+  /** Test seam — defaults to GRANT_SPAWN_DELAY_MS. */
+  spawnDelayMs?: number
 }
 
 function readMarker(userDataPath: string): WindowsAclGrantMarker | null {
@@ -83,6 +95,7 @@ function writeMarker(userDataPath: string, identity: string): void {
 
 function runIcaclsGrant(
   spawnFn: typeof spawn,
+  setPriorityFn: (pid: number, priority: number) => void,
   target: string,
   identity: string
 ): Promise<{ ok: boolean; reason?: string }> {
@@ -98,6 +111,16 @@ function runIcaclsGrant(
         windowsHide: true
       }
     )
+    try {
+      // Idle priority class: the propagation walk is pure background repair;
+      // nothing waits on it (per-write EPERM retries cover the interim), so
+      // it should never compete with the foreground for CPU.
+      if (typeof child.pid === 'number') {
+        setPriorityFn(child.pid, osConstants.priority.PRIORITY_LOW)
+      }
+    } catch {
+      // best-effort — a normal-priority grant is still correct
+    }
     let settled = false
     const settle = (ok: boolean, reason?: string): void => {
       if (settled) {
@@ -139,13 +162,25 @@ export function ensureWindowsUserDataAclGrant(
     return
   }
   const spawnFn = options.spawnFn ?? spawn
+  const setPriorityFn = options.setPriorityFn ?? setPriority
+  const spawnDelayMs = options.spawnDelayMs ?? GRANT_SPAWN_DELAY_MS
   void (async () => {
+    // Defer past the launch I/O burst: the grant's one-time inheritance
+    // propagation saturates the disk, and stacking it on boot reads is what
+    // made first launch lag the whole machine. If the app quits before the
+    // (unref'd) timer fires, no marker is written and the next launch retries.
+    if (spawnDelayMs > 0) {
+      await new Promise<void>((resolve) => {
+        const timer = setTimeout(resolve, spawnDelayMs)
+        timer.unref?.()
+      })
+    }
     // Immediate children first: those explicit ACEs are the durable fix
     // (Chromium replaces the root DACL on every BrowserWindow construction,
     // but never strips explicit ACEs from children). Root second so writes
     // directly under userData succeed before Chromium's first reset.
-    const children = await runIcaclsGrant(spawnFn, join(userDataPath, '*'), identity)
-    const root = await runIcaclsGrant(spawnFn, userDataPath, identity)
+    const children = await runIcaclsGrant(spawnFn, setPriorityFn, join(userDataPath, '*'), identity)
+    const root = await runIcaclsGrant(spawnFn, setPriorityFn, userDataPath, identity)
     if (children.ok && root.ok) {
       try {
         writeMarker(userDataPath, identity)

@@ -807,9 +807,9 @@ function openMainWindow(): BrowserWindow {
   // Why: Chromium's BrowserWindow constructor resets the userData DACL to a
   // Protected DACL, breaking writes in pre-existing subdirs. Explicit ACEs on
   // userData + immediate children fix the tree permanently; the grant runs in
-  // the background on first launch only (marker-gated) because the previous
-  // synchronous recursive walk blocked startup ~60s on large profiles. See
-  // startup/windows-user-data-acl.ts; per-write EPERM retries are the backstop.
+  // the background on first launch only (marker-gated, deferred past the boot
+  // I/O burst, idle-priority — see startup/windows-user-data-acl.ts for why
+  // each layer exists); per-write EPERM retries are the backstop.
   if (process.platform === 'win32') {
     logStartupMilestone('acl-grant-start')
     ensureWindowsUserDataAclGrant(app.getPath('userData'), {
