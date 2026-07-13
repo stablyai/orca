@@ -83,6 +83,8 @@ export type NativeChatViewProps = {
   /** Return this pane to the hosted terminal surface. */
   onSwitchToTerminal?: () => void
   contextMenuActions?: Omit<NativeChatContextMenuActions, 'onPaste'>
+  /** Imported web chat, etc. read-only mount: hides the composer + interactive card. */
+  readOnly?: boolean
 }
 
 /**
@@ -100,7 +102,8 @@ export default function NativeChatView({
   launchAgent,
   resolvedAgent,
   onSwitchToTerminal,
-  contextMenuActions
+  contextMenuActions,
+  readOnly
 }: NativeChatViewProps): React.JSX.Element {
   // Select only this tab's status entry (shallow-compared) so an unrelated
   // pane's status tick doesn't re-render this view or re-run the resolution.
@@ -133,22 +136,14 @@ export default function NativeChatView({
           terminalTabId={terminalTabId}
           onSwitchToTerminal={onSwitchToTerminal}
           contextMenuActions={contextMenuActions}
+          readOnly={readOnly}
         />
       )}
     </NativeChatSessionGate>
   )
 }
 
-function NativeChatResolvedView({
-  paneKey,
-  agent,
-  sessionId,
-  transcriptPath,
-  targetPtyId,
-  terminalTabId,
-  onSwitchToTerminal,
-  contextMenuActions
-}: {
+export type NativeChatResolvedViewProps = {
   paneKey: string
   agent: NativeChatSession['agent']
   sessionId: string | null
@@ -157,7 +152,21 @@ function NativeChatResolvedView({
   terminalTabId: string
   onSwitchToTerminal?: () => void
   contextMenuActions?: Omit<NativeChatContextMenuActions, 'onPaste'>
-}): React.JSX.Element {
+  /** Imported web chat, etc. read-only mount: hides the composer + interactive card. */
+  readOnly?: boolean
+}
+
+export function NativeChatResolvedView({
+  paneKey,
+  agent,
+  sessionId,
+  transcriptPath,
+  targetPtyId,
+  terminalTabId,
+  onSwitchToTerminal,
+  contextMenuActions,
+  readOnly = false
+}: NativeChatResolvedViewProps): React.JSX.Element {
   // Primitive owner selection (no useShallow): routes the pane's read/subscribe to
   // the remote runtime host for a runtime-owned pane; null keeps the local path.
   const runtimeEnvironmentId = useAppStore((s) =>
@@ -423,21 +432,25 @@ function NativeChatResolvedView({
       </div>
       {/* Live interactive cards (question / approval) render just above the
           composer while the agent's interactivePrompt is present (mobile parity). */}
-      <NativeChatInteractiveCard paneKey={paneKey} send={interactiveSend} canSend={canSend} />
+      {!readOnly && (
+        <NativeChatInteractiveCard paneKey={paneKey} send={interactiveSend} canSend={canSend} />
+      )}
       {/* canSend reflects the mobile presence-lock: when a mobile client holds
           the pty, the composer shows its guarded state instead of racing the
           mobile driver (R8). */}
-      <NativeChatComposer
-        ref={composerRef}
-        terminalTabId={terminalTabId}
-        targetPtyId={targetPtyId}
-        agent={agent}
-        canSend={canSend}
-        isWorking={isWorking}
-        onStop={stopAgent}
-        onOptimisticSend={onOptimisticSend}
-        onSlashCommand={onSlashCommand}
-      />
+      {!readOnly && (
+        <NativeChatComposer
+          ref={composerRef}
+          terminalTabId={terminalTabId}
+          targetPtyId={targetPtyId}
+          agent={agent}
+          canSend={canSend}
+          isWorking={isWorking}
+          onStop={stopAgent}
+          onOptimisticSend={onOptimisticSend}
+          onSlashCommand={onSlashCommand}
+        />
+      )}
       {contextMenu.menu}
     </div>
   )
