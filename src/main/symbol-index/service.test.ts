@@ -1,12 +1,24 @@
-import { describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it } from 'vitest'
 import { mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
 import { SymbolIndexService } from './service'
 
 describe('SymbolIndexService', () => {
+  const createdRoots: string[] = []
+  const makeRoot = async (prefix = 'orca-svc-'): Promise<string> => {
+    const root = await mkdtemp(path.join(tmpdir(), prefix))
+    createdRoots.push(root)
+    return root
+  }
+  afterEach(async () => {
+    await Promise.all(
+      createdRoots.splice(0).map((r) => rm(r, { recursive: true, force: true }))
+    )
+  })
+
   it('indexes a worktree and answers findDefinitions; unknown symbol is empty', async () => {
-    const root = await mkdtemp(path.join(tmpdir(), 'orca-svc-'))
+    const root = await makeRoot()
     await writeFile(path.join(root, 'a.ts'), 'export function target() {}')
     const svc = new SymbolIndexService({ maxFiles: 100 })
     await svc.ensureIndexed('w1', root)
@@ -26,7 +38,7 @@ describe('SymbolIndexService', () => {
   })
 
   it('skips indexing a file larger than the size cap', async () => {
-    const root = await mkdtemp(path.join(tmpdir(), 'orca-svc-size-'))
+    const root = await makeRoot('orca-svc-size-')
     const big = path.join(root, 'big.ts')
     // MAX_INDEXABLE_FILE_BYTES is 2_000_000 bytes; pad well past it so the
     // size check trips regardless of the exact trailing-comment overhead.
@@ -45,7 +57,7 @@ describe('SymbolIndexService', () => {
   })
 
   it('reflects file changes incrementally', async () => {
-    const root = await mkdtemp(path.join(tmpdir(), 'orca-svc-'))
+    const root = await makeRoot()
     const file = path.join(root, 'a.ts')
     await writeFile(file, 'export function one() {}')
     const svc = new SymbolIndexService({ maxFiles: 100 })
@@ -66,7 +78,7 @@ describe('SymbolIndexService', () => {
   })
 
   it('drops stale symbols when a previously-indexed file is deleted', async () => {
-    const root = await mkdtemp(path.join(tmpdir(), 'orca-svc-'))
+    const root = await makeRoot()
     const file = path.join(root, 'a.ts')
     await writeFile(file, 'export function staleSym() {}')
     const svc = new SymbolIndexService({ maxFiles: 100 })
@@ -87,7 +99,7 @@ describe('SymbolIndexService', () => {
   })
 
   it('drops stale symbols when a previously-indexed file grows past the size cap', async () => {
-    const root = await mkdtemp(path.join(tmpdir(), 'orca-svc-'))
+    const root = await makeRoot()
     const file = path.join(root, 'a.ts')
     await writeFile(file, 'export function bigStale() {}')
     const svc = new SymbolIndexService({ maxFiles: 100 })

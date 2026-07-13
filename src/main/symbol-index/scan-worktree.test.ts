@@ -1,12 +1,24 @@
-import { describe, expect, it } from 'vitest'
-import { mkdtemp, mkdir, writeFile } from 'node:fs/promises'
+import { afterEach, describe, expect, it } from 'vitest'
+import { mkdtemp, mkdir, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
 import { listIndexableFiles, languageIdForPath } from './scan-worktree'
 
 describe('scan-worktree', () => {
+  const createdRoots: string[] = []
+  const makeRoot = async (prefix = 'orca-scan-'): Promise<string> => {
+    const root = await mkdtemp(path.join(tmpdir(), prefix))
+    createdRoots.push(root)
+    return root
+  }
+  afterEach(async () => {
+    await Promise.all(
+      createdRoots.splice(0).map((r) => rm(r, { recursive: true, force: true }))
+    )
+  })
+
   it('lists supported files and skips node_modules/.git', async () => {
-    const root = await mkdtemp(path.join(tmpdir(), 'orca-scan-'))
+    const root = await makeRoot()
     await writeFile(path.join(root, 'a.ts'), 'export const x = 1')
     await writeFile(path.join(root, 'readme.md'), '# hi')
     await mkdir(path.join(root, 'node_modules', 'pkg'), { recursive: true })
@@ -19,7 +31,7 @@ describe('scan-worktree', () => {
   })
 
   it('bounds directory traversal via maxDirs even when no indexable files are found', async () => {
-    const root = await mkdtemp(path.join(tmpdir(), 'orca-scan-dirs-'))
+    const root = await makeRoot('orca-scan-dirs-')
     for (let i = 0; i < 5; i++) {
       const sub = path.join(root, `d${i}`)
       await mkdir(sub, { recursive: true })
