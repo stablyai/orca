@@ -156,6 +156,8 @@ export type AgentStatusEntry = {
   /** Provider-owned conversation/session id captured from hook payloads.
    *  Used only for exact CLI resume; Orca terminal ids are not agent-session ids. */
   providerSession?: AgentProviderSessionMetadata
+  /** Live-only Command Code turn boundary key; not persisted to last-status.json. */
+  promptInteractionKey?: string
 }
 
 export type MigrationUnsupportedPtyEntry = {
@@ -222,6 +224,8 @@ export type AgentStatusIpcPayload = ParsedAgentStatusPayload & {
   stateStartedAt: number
   orchestration?: AgentStatusOrchestrationContext
   providerSession?: AgentProviderSessionMetadata
+  /** Live-only Command Code turn boundary key; not persisted to last-status.json. */
+  promptInteractionKey?: string
 }
 
 /** Maximum character length for the toolName field. */

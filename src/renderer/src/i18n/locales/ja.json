@@ -2588,7 +2588,7 @@
               "blocked": {
                 "toast": {
                   "97c98f1afe": "設定を開く",
-                  "7cf51f74fd": "SSH、tmux、Neovim、または fzf からコピーするには、Terminal 設定で TUI クリップボードへの書き込みを有効にします。",
+                  "7cf51f74fd": "SSH、tmux、Neovim、fzf、または Grok からコピーするには、Terminal 設定で TUI クリップボードへの書き込みを有効にします。",
                   "89eaa3e80b": "Terminal のクリップボードへの書き込みがブロックされました"
                 }
               }
@@ -5386,7 +5386,9 @@
           "bf16ef0af2": "オフ",
           "3f6892f307": "オン",
           "b82f86d7d2": "Rich Markdown Spellcheck",
-          "5195f0b9ef": "Show browser spelling underlines and suggestions while editing rich Markdown."
+          "5195f0b9ef": "Show browser spelling underlines and suggestions while editing rich Markdown.",
+          "7ddd66fede": "エディターのワードラップ",
+          "9b18de6eea": "水平スクロールを使わずに、ファイルエディターで長い行を折り返します。"
         },
         "AdvancedNetworkSettingsSection": {
           "3e431564b5": "ローカルホスト、127.0.0.1、*.internal",
@@ -7701,7 +7703,9 @@
             "defaultProjectRuntime": "Default Project Runtime",
             "defaultProjectRuntimeDescription": "Choose the runtime inherited by local Windows projects.",
             "d2d2d929c0": "Rich Markdown Spellcheck",
-            "4497e2e2bb": "Show browser spelling underlines and suggestions while editing rich Markdown."
+            "4497e2e2bb": "Show browser spelling underlines and suggestions while editing rich Markdown.",
+            "e61157e926": "エディターのワードラップ",
+            "005be5c699": "水平スクロールを使わずに、ファイルエディターで長い行を折り返します。"
           }
         },
         "git": {
@@ -10639,6 +10643,17 @@
           "trigger-label": "通知するネットワークアドレス",
           "custom-option": "{{address}}（カスタム）",
           "add-custom": "カスタムアドレスを追加…"
+        },
+        "WindowsFirewallNotice": {
+          "repair-success": "Windows Firewall now allows Orca Mobile on private networks",
+          "repair-failed": "Could not add the Windows Firewall rule",
+          "public-title": "Windows marks this network as public",
+          "missing-title": "Allow phone connections through Windows Firewall",
+          "public-description": "Change this trusted Wi-Fi network to Private before allowing Orca Mobile connections.",
+          "missing-description": "Windows may block the pairing server. Add a rule for this Orca app and TCP port {{port}} on Private networks.",
+          "open-settings": "Open network settings",
+          "waiting": "Waiting for Windows…",
+          "allow": "Allow phone connections"
         }
       },
       "gitlab": {
@@ -11436,7 +11451,9 @@
           "c98ce191da": "この差分には開くための変更側ファイルがありません",
           "9b80bbe1de": "ファイルタブを開く",
           "f0fd4174b5": "ファイル タブを開いてリッチ markdown 編集を使用する",
-          "a10d9b8337": "ファイルを開く"
+          "a10d9b8337": "ファイルを開く",
+          "2076ecfc9c": "前の変更",
+          "631dab0df3": "次の変更"
         },
         "EditorPanelMarkdownActionsMenu": {
           "3e0ce48c24": "PDFとしてエクスポート",

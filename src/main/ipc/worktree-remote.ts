@@ -22,6 +22,7 @@ import type {
   LocalBaseRefUpdateSuggestion,
   Repo,
   Worktree,
+  WorktreeHeadIdentity,
   WorktreeMeta
 } from '../../shared/types'
 import { getPRForBranch } from '../github/client'
@@ -1513,6 +1514,30 @@ export function notifyWorktreesChanged(mainWindow: BrowserWindow, repoId: string
   runWorktreeChangeInvalidators(repoId)
   if (!mainWindow.isDestroyed()) {
     mainWindow.webContents.send('worktrees:changed', { repoId })
+  }
+}
+
+export function notifyWorktreeGitStatusMetadataChanged(
+  mainWindow: BrowserWindow,
+  repoId: string
+): void {
+  // Why: index churn is a Source Control freshness hint, not a worktree graph
+  // mutation; keep structural caches and runtime/mobile events untouched.
+  if (!mainWindow.isDestroyed()) {
+    mainWindow.webContents.send('worktrees:gitStatusMetadataChanged', { repoId })
+  }
+}
+
+export function notifyWorktreeHeadIdentitiesChanged(
+  mainWindow: BrowserWindow,
+  repoId: string,
+  identities: WorktreeHeadIdentity[]
+): void {
+  // Why: background worktrees have no active-scoped status refresh, so head
+  // moves detected from metadata files ride this targeted desktop event
+  // instead of re-entering the structural fanout or runtime/mobile events.
+  if (!mainWindow.isDestroyed()) {
+    mainWindow.webContents.send('worktrees:headIdentitiesChanged', { repoId, identities })
   }
 }
 

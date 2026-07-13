@@ -484,6 +484,7 @@ export class Coordinator {
       // part of its instructions).
       taskSpec: strippedSpec,
       coordinatorHandle: this.opts.coordinatorHandle,
+      workerHandle: targetHandle,
       devMode: process.env.ORCA_USER_DATA_PATH?.includes('orca-dev'),
       // Why (§3.2): drift section fires only when behind > 0. The preamble
       // builder gates on this itself; passing the object unconditionally lets

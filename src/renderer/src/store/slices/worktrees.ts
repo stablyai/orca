@@ -1904,11 +1904,25 @@ function buildWorktreePurgeState(s: AppState, worktreeIds: string[]): Partial<Ap
 
   // Collect every tab id (and removed file id) we are about to orphan.
   const doomedTabIds = new Set<string>()
-  // Why: some terminal/agent maps are keyed by ptyId, not tabId. Collect the
-  // doomed panes' ptyIds now (while ptyIdsByTabId is still populated) so this
-  // bulk path can evict them the same way shutdownWorktreeTerminals does on the
-  // single-removeWorktree path.
+  // Why: some terminal/agent maps are keyed by ptyId, not tabId. Collect every
+  // durable wake hint too, because slept panes have already left the live index.
   const doomedPtyIds = new Set<string>()
+  const addDoomedPtyId = (ptyId: string | null | undefined): void => {
+    if (!ptyId) {
+      return
+    }
+    doomedPtyIds.add(ptyId)
+  }
+  const addDoomedTabPtyIds = (tabId: string, tabPtyId: string | null | undefined): void => {
+    for (const ptyId of s.ptyIdsByTabId?.[tabId] ?? []) {
+      addDoomedPtyId(ptyId)
+    }
+    addDoomedPtyId(tabPtyId)
+    addDoomedPtyId(s.lastKnownRelayPtyIdByTabId?.[tabId])
+    for (const ptyId of Object.values(s.terminalLayoutsByTabId?.[tabId]?.ptyIdsByLeafId ?? {})) {
+      addDoomedPtyId(ptyId)
+    }
+  }
   const doomedBrowserWorkspaceIds = new Set<string>()
   const doomedPageIds = new Set<string>()
   const removedFileIds = new Set<string>()
@@ -1917,9 +1931,7 @@ function buildWorktreePurgeState(s: AppState, worktreeIds: string[]): Partial<Ap
       doomedTabIds.add(tab.id)
       // Null-tolerant like the omit* helpers below: some callers pass partial
       // state that omits this slice; the production store always inits it to {}.
-      for (const ptyId of s.ptyIdsByTabId?.[tab.id] ?? []) {
-        doomedPtyIds.add(ptyId)
-      }
+      addDoomedTabPtyIds(tab.id, tab.ptyId)
       // Why: a removed worktree's panes are gone for good, so drop their
       // hibernation output epochs from that module-level map (mirrors the
       // hosted-review prune above). A future pane mints a fresh leafId at epoch 0.
@@ -2130,6 +2142,8 @@ function buildWorktreePurgeState(s: AppState, worktreeIds: string[]): Partial<Ap
     pendingStartupByTabId: omitByTabId(s.pendingStartupByTabId),
     codexRestartNoticeByPtyId: omitByPtyId(s.codexRestartNoticeByPtyId),
     migrationUnsupportedByPtyId: omitByPtyId(s.migrationUnsupportedByPtyId),
+    suppressedPtyExitIds: omitByPtyId(s.suppressedPtyExitIds),
+    pendingCodexPaneRestartIds: omitByPtyId(s.pendingCodexPaneRestartIds),
     // Why: these tab/pane-scoped agent-status, unread, and input maps are only
     // cleared on the single removeWorktree path (via shutdownWorktreeTerminals /
     // dropAgentStatusByWorktree / clearPaneForegroundAgentByWorktree, which read

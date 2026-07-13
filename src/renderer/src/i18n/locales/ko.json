@@ -2588,7 +2588,7 @@
               "blocked": {
                 "toast": {
                   "97c98f1afe": "설정 열기",
-                  "7cf51f74fd": "SSH, tmux, Neovim 또는 fzf에서 복사하려면 Terminal 설정에서 TUI 클립보드 쓰기를 활성화하세요.",
+                  "7cf51f74fd": "SSH, tmux, Neovim, fzf 또는 Grok에서 복사하려면 Terminal 설정에서 TUI 클립보드 쓰기를 활성화하세요.",
                   "89eaa3e80b": "Terminal 클립보드 쓰기가 차단되었습니다."
                 }
               }
@@ -5386,7 +5386,9 @@
           "bf16ef0af2": "끄다",
           "3f6892f307": "~에",
           "b82f86d7d2": "Rich Markdown Spellcheck",
-          "5195f0b9ef": "Show browser spelling underlines and suggestions while editing rich Markdown."
+          "5195f0b9ef": "Show browser spelling underlines and suggestions while editing rich Markdown.",
+          "7ddd66fede": "편집기 자동 줄 바꿈",
+          "9b18de6eea": "가로 스크롤 대신 파일 편집기에서 긴 줄을 자동으로 줄 바꿈합니다."
         },
         "AdvancedNetworkSettingsSection": {
           "3e431564b5": "로컬호스트, 127.0.0.1, *.internal",
@@ -7664,7 +7666,9 @@
             "defaultProjectRuntime": "기본 프로젝트 런타임",
             "defaultProjectRuntimeDescription": "로컬 Windows 프로젝트가 상속할 런타임을 선택합니다.",
             "d2d2d929c0": "Rich Markdown Spellcheck",
-            "4497e2e2bb": "Show browser spelling underlines and suggestions while editing rich Markdown."
+            "4497e2e2bb": "Show browser spelling underlines and suggestions while editing rich Markdown.",
+            "e61157e926": "편집기 자동 줄 바꿈",
+            "005be5c699": "가로 스크롤 대신 파일 편집기에서 긴 줄을 자동으로 줄 바꿈합니다."
           }
         },
         "git": {
@@ -10639,6 +10643,17 @@
           "trigger-label": "알릴 네트워크 주소",
           "custom-option": "{{address}} (사용자 지정)",
           "add-custom": "사용자 지정 주소 추가…"
+        },
+        "WindowsFirewallNotice": {
+          "repair-success": "Windows Firewall now allows Orca Mobile on private networks",
+          "repair-failed": "Could not add the Windows Firewall rule",
+          "public-title": "Windows marks this network as public",
+          "missing-title": "Allow phone connections through Windows Firewall",
+          "public-description": "Change this trusted Wi-Fi network to Private before allowing Orca Mobile connections.",
+          "missing-description": "Windows may block the pairing server. Add a rule for this Orca app and TCP port {{port}} on Private networks.",
+          "open-settings": "Open network settings",
+          "waiting": "Waiting for Windows…",
+          "allow": "Allow phone connections"
         }
       },
       "gitlab": {
@@ -11436,7 +11451,9 @@
           "c98ce191da": "이 차이점에는 열 수 있는 수정된 측면 파일이 없습니다.",
           "9b80bbe1de": "파일 탭 열기",
           "f0fd4174b5": "풍부한 markdown 편집을 사용하려면 파일 탭을 엽니다.",
-          "a10d9b8337": "파일 열기"
+          "a10d9b8337": "파일 열기",
+          "2076ecfc9c": "이전 변경",
+          "631dab0df3": "다음 변경"
         },
         "EditorPanelMarkdownActionsMenu": {
           "3e0ce48c24": "PDF로 내보내기",

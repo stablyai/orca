@@ -90,6 +90,7 @@ export async function runRendererBackpressureRevisitScenario<
   deps,
   maxMedianKeyLatencyMs,
   maxRendererSchedulerQueuedChars,
+  maxRevisitLatencyMs,
   maxTimerDriftMs,
   maxWorstKeyLatencyMs,
   mainRendererPressureTargetChars,
@@ -102,6 +103,7 @@ export async function runRendererBackpressureRevisitScenario<
   deps: RevisitPressureDeps<TMeasurement, TDebug, TScheduler, TMainPressure, TAckGate>
   maxMedianKeyLatencyMs: number
   maxRendererSchedulerQueuedChars: number
+  maxRevisitLatencyMs: number
   maxTimerDriftMs: number
   maxWorstKeyLatencyMs: number
   mainRendererPressureTargetChars: number
@@ -205,7 +207,10 @@ export async function runRendererBackpressureRevisitScenario<
         1
       )}ms heldAckChars=${ackGate?.heldAckChars ?? 0}`
     })
-    expect(revisitLatencyMs).toBeLessThan(maxWorstKeyLatencyMs)
+    // Why: this printf is measured after a worktree switch/focus while the
+    // background panes are still ACK-gate-held, so it gets its own under-load
+    // bound rather than the unloaded worst-key budget.
+    expect(revisitLatencyMs).toBeLessThan(maxRevisitLatencyMs)
 
     await deps.releaseTerminalAckGate(orcaPage)
     await deps.focusPane(orcaPage, loadPanes[0]?.paneKey ?? revisitPane.paneKey)

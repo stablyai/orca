@@ -2588,7 +2588,7 @@
               "blocked": {
                 "toast": {
                   "97c98f1afe": "Open Setting",
-                  "7cf51f74fd": "Enable TUI clipboard writes in Terminal settings to copy from SSH, tmux, Neovim, or fzf.",
+                  "7cf51f74fd": "Enable TUI clipboard writes in Terminal settings to copy from SSH, tmux, Neovim, fzf, or Grok.",
                   "89eaa3e80b": "Terminal clipboard write blocked"
                 }
               }
@@ -5401,7 +5401,9 @@
           "bf16ef0af2": "Off",
           "3f6892f307": "On",
           "b82f86d7d2": "Rich Markdown Spellcheck",
-          "5195f0b9ef": "Show browser spelling underlines and suggestions while editing rich Markdown."
+          "5195f0b9ef": "Show browser spelling underlines and suggestions while editing rich Markdown.",
+          "7ddd66fede": "Editor Word Wrap",
+          "9b18de6eea": "Wrap long lines in file editors instead of requiring horizontal scrolling."
         },
         "AdvancedNetworkSettingsSection": {
           "3e431564b5": "localhost, 127.0.0.1, *.internal",
@@ -7716,7 +7718,9 @@
             "defaultProjectRuntime": "Default Project Runtime",
             "defaultProjectRuntimeDescription": "Choose the runtime inherited by local Windows projects.",
             "d2d2d929c0": "Rich Markdown Spellcheck",
-            "4497e2e2bb": "Show browser spelling underlines and suggestions while editing rich Markdown."
+            "4497e2e2bb": "Show browser spelling underlines and suggestions while editing rich Markdown.",
+            "e61157e926": "Editor Word Wrap",
+            "005be5c699": "Wrap long lines in file editors instead of requiring horizontal scrolling."
           }
         },
         "git": {
@@ -10639,6 +10643,17 @@
           "trigger-label": "Network address to advertise",
           "custom-option": "{{address}} (custom)",
           "add-custom": "Add custom address…"
+        },
+        "WindowsFirewallNotice": {
+          "repair-success": "Windows Firewall now allows Orca Mobile on private networks",
+          "repair-failed": "Could not add the Windows Firewall rule",
+          "public-title": "Windows marks this network as public",
+          "missing-title": "Allow phone connections through Windows Firewall",
+          "public-description": "Change this trusted Wi-Fi network to Private before allowing Orca Mobile connections.",
+          "missing-description": "Windows may block the pairing server. Add a rule for this Orca app and TCP port {{port}} on Private networks.",
+          "open-settings": "Open network settings",
+          "waiting": "Waiting for Windows…",
+          "allow": "Allow phone connections"
         }
       },
       "gitlab": {
@@ -11436,7 +11451,9 @@
           "c98ce191da": "This diff has no modified-side file to open",
           "9b80bbe1de": "Open file tab",
           "f0fd4174b5": "Open file tab to use rich markdown editing",
-          "a10d9b8337": "Open file"
+          "a10d9b8337": "Open file",
+          "2076ecfc9c": "Previous change",
+          "631dab0df3": "Next change"
         },
         "EditorPanelMarkdownActionsMenu": {
           "3e0ce48c24": "Export as PDF",

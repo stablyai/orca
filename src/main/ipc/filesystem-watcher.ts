@@ -72,6 +72,7 @@ const pendingLocalUnsubscribes = new Set<Promise<void>>()
 type LocalWatcherInstallToken = {
   cancelled: boolean
   listeners: Map<number, WebContents>
+  abortController: AbortController
 }
 type LocalWatcherInstallResult = 'installed' | 'unavailable' | 'cancelled'
 // Why: native watcher creation is async. Concurrent local watch requests for
@@ -96,6 +97,9 @@ function cleanupInFlightLocalInstallsForSender(senderId: number): void {
     token.listeners.delete(senderId)
     if (token.listeners.size === 0) {
       token.cancelled = true
+      // Why: match closeLocalWatcherForWorktreePath / closeAllWatchers — abort
+      // so a pending native/forked subscription stops early, not at completion.
+      token.abortController.abort()
     }
   }
 }
@@ -278,7 +282,11 @@ function scheduleBatchFlush(rootKey: string, root: WatchedRoot): void {
 
 // ── Watcher creation ─────────────────────────────────────────────────
 
-async function createWatcher(rootKey: string, rootPath: string): Promise<WatchedRoot> {
+async function createWatcher(
+  rootKey: string,
+  rootPath: string,
+  signal?: AbortSignal
+): Promise<WatchedRoot> {
   const root: WatchedRoot = {
     subscription: null!,
     listeners: new Map(),
@@ -298,6 +306,11 @@ async function createWatcher(rootKey: string, rootPath: string): Promise<Watched
       // default, and Windows prints a shell-level "watchman not recognized"
       // error for that probe. Pinning the backend keeps local watches quiet.
       ...(process.platform === 'win32' ? { backend: 'windows' as const } : {})
+    }
+
+    const markWatcherInterrupted = (): void => {
+      root.batch.overflowed = true
+      scheduleBatchFlush(rootKey, root)
     }
 
     // Why: subscriptions run in a forked watcher process (issue #7547 —
@@ -336,11 +349,13 @@ async function createWatcher(rootKey: string, rootPath: string): Promise<Watched
         scheduleBatchFlush(rootKey, root)
       },
       watcherOptions,
-      () => {
-        // The watcher process crashed and this root was resubscribed; events
-        // during the gap are lost, so hand the renderer an overflow refresh.
-        root.batch.overflowed = true
-        scheduleBatchFlush(rootKey, root)
+      {
+        delivery: { maxEventsPerBatch: MAX_BATCHED_WATCHER_EVENTS },
+        // A child restart or bounded-queue overflow loses path precision; both
+        // require the same conservative renderer refresh.
+        onInterruption: markWatcherInterrupted,
+        onOverflow: markWatcherInterrupted,
+        signal
       }
     )
 
@@ -466,7 +481,11 @@ async function subscribe(worktreePath: string, sender: WebContents): Promise<voi
     return
   }
 
-  const cancelToken: LocalWatcherInstallToken = { cancelled: false, listeners: new Map() }
+  const cancelToken: LocalWatcherInstallToken = {
+    cancelled: false,
+    listeners: new Map(),
+    abortController: new AbortController()
+  }
   inFlightLocalInstalls.set(rootKey, cancelToken)
   addInFlightLocalInstallListener(cancelToken, sender)
   const installPromise = doInstallLocalWatcher(rootKey, worktreePath, cancelToken)
@@ -503,15 +522,23 @@ async function doInstallLocalWatcher(
     // Why: WSL paths use one snapshot subprocess inside the Linux distro so
     // `wsl --shutdown` can kill it; native Windows paths use @parcel/watcher.
     root = isWslPath(worktreePath)
-      ? await createWslWatcher(rootKey, worktreePath, {
-          ignoreDirs: WATCHER_IGNORE_DIRS,
-          scheduleBatchFlush,
-          watchedRoots
-        })
-      : await createWatcher(rootKey, rootKey)
+      ? await createWslWatcher(
+          rootKey,
+          worktreePath,
+          {
+            ignoreDirs: WATCHER_IGNORE_DIRS,
+            scheduleBatchFlush,
+            watchedRoots
+          },
+          cancelToken.abortController.signal
+        )
+      : await createWatcher(rootKey, rootKey, cancelToken.abortController.signal)
   } catch {
     // Why: createWatcher / createWslWatcher already logged the error. Swallow
     // it here so the renderer's watchWorktree call resolves without crashing.
+    if (cancelToken.cancelled) {
+      return 'cancelled'
+    }
     rememberUnwatchableRoot(rootKey)
     return 'unavailable'
   } finally {
@@ -545,6 +572,11 @@ function unsubscribe(worktreePath: string, senderId: number): void {
   if (inFlight) {
     inFlight.listeners.delete(senderId)
     inFlight.cancelled = inFlight.listeners.size === 0
+    // Why: same early-cancel as closeLocalWatcherForWorktreePath — last normal
+    // disconnect must abort the pending native/forked install, not let it finish.
+    if (inFlight.cancelled) {
+      inFlight.abortController.abort()
+    }
   }
 
   const root = watchedRoots.get(rootKey)
@@ -596,6 +628,7 @@ export async function closeLocalWatcherForWorktreePath(worktreePath: string): Pr
     // cancel an in-flight subscription before Git tries to remove the tree.
     inFlight.listeners.clear()
     inFlight.cancelled = true
+    inFlight.abortController.abort()
   }
   await pendingLocalInstallPromises.get(rootKey)?.catch(() => undefined)
 
@@ -926,6 +959,7 @@ export async function closeAllWatchers(): Promise<void> {
   for (const token of inFlightLocalInstalls.values()) {
     token.listeners.clear()
     token.cancelled = true
+    token.abortController.abort()
   }
 
   for (const [rootKey, root] of watchedRoots) {

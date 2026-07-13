@@ -2588,7 +2588,7 @@
               "blocked": {
                 "toast": {
                   "97c98f1afe": "Abrir ajustes",
-                  "7cf51f74fd": "Habilita las escrituras al portapapeles TUI en los ajustes de Terminal para copiar desde SSH, tmux, Neovim o fzf.",
+                  "7cf51f74fd": "Habilita las escrituras al portapapeles TUI en los ajustes de Terminal para copiar desde SSH, tmux, Neovim, fzf o Grok.",
                   "89eaa3e80b": "Escritura al portapapeles del terminal bloqueada"
                 }
               }
@@ -5401,7 +5401,9 @@
           "bf16ef0af2": "Desactivado",
           "3f6892f307": "Activado",
           "b82f86d7d2": "Corrector ortográfico de Rich Markdown",
-          "5195f0b9ef": "Muestra subrayados y sugerencias ortográficas del navegador al editar Rich Markdown."
+          "5195f0b9ef": "Muestra subrayados y sugerencias ortográficas del navegador al editar Rich Markdown.",
+          "7ddd66fede": "Ajuste de línea en el editor",
+          "9b18de6eea": "Ajusta las líneas largas en editores de archivos en lugar de requerir desplazamiento horizontal."
         },
         "AdvancedNetworkSettingsSection": {
           "3e431564b5": "localhost, 127.0.0.1, *.internal",
@@ -7679,7 +7681,9 @@
             "defaultProjectRuntime": "Runtime de proyecto predeterminado",
             "defaultProjectRuntimeDescription": "Elige el runtime que heredarán los proyectos locales de Windows.",
             "d2d2d929c0": "Corrector ortográfico de Rich Markdown",
-            "4497e2e2bb": "Muestra subrayados y sugerencias ortográficas del navegador al editar Rich Markdown."
+            "4497e2e2bb": "Muestra subrayados y sugerencias ortográficas del navegador al editar Rich Markdown.",
+            "e61157e926": "Ajuste de línea en el editor",
+            "005be5c699": "Ajusta las líneas largas en editores de archivos en lugar de requerir desplazamiento horizontal."
           }
         },
         "git": {
@@ -10639,6 +10643,17 @@
           "trigger-label": "Dirección de red para anunciar",
           "custom-option": "{{address}} (personalizada)",
           "add-custom": "Añadir dirección personalizada…"
+        },
+        "WindowsFirewallNotice": {
+          "repair-success": "Windows Firewall now allows Orca Mobile on private networks",
+          "repair-failed": "Could not add the Windows Firewall rule",
+          "public-title": "Windows marks this network as public",
+          "missing-title": "Allow phone connections through Windows Firewall",
+          "public-description": "Change this trusted Wi-Fi network to Private before allowing Orca Mobile connections.",
+          "missing-description": "Windows may block the pairing server. Add a rule for this Orca app and TCP port {{port}} on Private networks.",
+          "open-settings": "Open network settings",
+          "waiting": "Waiting for Windows…",
+          "allow": "Allow phone connections"
         }
       },
       "gitlab": {
@@ -11436,7 +11451,9 @@
           "c98ce191da": "Este diff no tiene ningún archivo del lado modificado para abrir",
           "9b80bbe1de": "Abrir pestaña de archivo",
           "f0fd4174b5": "Abre la pestaña de archivo para usar la edición enriquecida de Markdown",
-          "a10d9b8337": "Abrir archivo"
+          "a10d9b8337": "Abrir archivo",
+          "2076ecfc9c": "Cambio anterior",
+          "631dab0df3": "Cambio siguiente"
         },
         "EditorPanelMarkdownActionsMenu": {
           "3e0ce48c24": "Exportar como PDF",

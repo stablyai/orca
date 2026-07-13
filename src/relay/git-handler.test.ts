@@ -1192,7 +1192,7 @@ describe('GitHandler', () => {
       await Promise.all([first, second])
 
       expect(gitBufferSpy).toHaveBeenCalledTimes(2)
-      expect(gitSpy).toHaveBeenCalledWith(['add', '--', 'src/file.ts'], tmpDir)
+      expect(gitSpy).toHaveBeenCalledWith(['add', '--', ':(literal)src/file.ts'], tmpDir)
       const submodulePathReads = gitSpy.mock.calls.filter(
         ([args]) => args[0] === 'config' && args.includes('.gitmodules')
       )

@@ -750,6 +750,9 @@ function createWebPreloadApi(): Partial<PreloadApi> {
     mobile: {
       listNetworkInterfaces: () => Promise.resolve({ interfaces: [] }),
       getPairingQR: () => Promise.resolve({ available: false }),
+      getWindowsFirewallStatus: () => Promise.resolve({ supported: false }),
+      repairWindowsFirewall: () => Promise.resolve({ ok: false, reason: 'unsupported' }),
+      openWindowsNetworkSettings: () => Promise.resolve(false),
       getRuntimePairingUrl: () => Promise.resolve({ available: false }),
       listDevices: () => Promise.resolve({ devices: [] }),
       revokeDevice: () => Promise.resolve({ revoked: false }),
@@ -1466,6 +1469,8 @@ function createWorktreesApi(): NonNullable<Partial<PreloadApi>['worktrees']> {
     // pairing; the dialog falls back to the persisted excerpt on web clients.
     getBranchRenameFailureOutput: async () => null,
     onChanged: () => noopUnsubscribe,
+    onGitStatusMetadataChanged: () => noopUnsubscribe,
+    onHeadIdentitiesChanged: () => noopUnsubscribe,
     onBaseStatus: () => noopUnsubscribe,
     onRemoteBranchConflict: () => noopUnsubscribe
   }

@@ -56,9 +56,7 @@ describe('PR bot author override updates', () => {
     store.pending.shift()?.()
     await vi.waitFor(() => expect(store.apiUpdate).toHaveBeenCalledTimes(2))
     store.pending.shift()?.()
-    await vi.waitFor(() =>
-      expect(store.settings.prBotAuthorOverrides).toEqual(['alice', 'bob'])
-    )
+    await vi.waitFor(() => expect(store.settings.prBotAuthorOverrides).toEqual(['alice', 'bob']))
   })
 
   it('continues processing updates after an atomic settings write fails', async () => {

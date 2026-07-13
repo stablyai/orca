@@ -2,17 +2,29 @@ import type { OrchestrationDb } from './db'
 import type { MessageRow } from './types'
 import { parsePaneKey } from '../../../shared/stable-pane-id'
 
-// Why: the tab half of a pane key changes when a pane is broken out into its
-// own tab, so only the leaf UUID is identity. Reject only when both keys
-// parse and name different leaves; an unparseable (e.g. legacy numeric) key
-// degrades to payload authority rather than stranding a completion.
-function isForeignPane(assigneePaneKey: string, senderPaneKey: string): boolean {
+// Why: the tab half can change on pane break-out, while opaque legacy keys
+// have no safe equivalence beyond exact equality.
+function isSamePane(assigneePaneKey: string, senderPaneKey: string): boolean {
   if (assigneePaneKey === senderPaneKey) {
-    return false
+    return true
   }
   const assigneeLeaf = parsePaneKey(assigneePaneKey)?.leafId
   const senderLeaf = parsePaneKey(senderPaneKey)?.leafId
-  return Boolean(assigneeLeaf && senderLeaf && assigneeLeaf !== senderLeaf)
+  return Boolean(assigneeLeaf && senderLeaf && assigneeLeaf === senderLeaf)
+}
+
+function hasLifecycleAuthority(
+  dispatch: { assignee_handle: string | null; assignee_pane_key: string | null },
+  msg: MessageRow
+): boolean {
+  if (dispatch.assignee_pane_key) {
+    return Boolean(
+      msg.sender_pane_key && isSamePane(dispatch.assignee_pane_key, msg.sender_pane_key)
+    )
+  }
+  // Why: rows created before pane identity existed can only use the exact
+  // handle recorded at dispatch; payload knowledge alone is not authority.
+  return dispatch.assignee_handle === msg.from_handle
 }
 
 export type LifecycleReconciliationResult =
@@ -21,8 +33,15 @@ export type LifecycleReconciliationResult =
   // read); senders must not wake waiters for it, unlike `ignored` rows that
   // stay unread and still need delivery.
   | { action: 'suppressed' }
+  | LifecycleRejectionResult
   | { action: 'completed'; taskId: string; dispatchId: string }
   | { action: 'heartbeat_recorded'; dispatchId: string }
+
+export type LifecycleRejectionResult = {
+  action: 'rejected'
+  code: 'sender_not_assignee'
+  reason: string
+}
 
 type LogFn = (msg: string) => void
 
@@ -39,6 +58,27 @@ function parseObjectPayload(msg: MessageRow, onInvalidJson: () => void): Record<
   } catch {
     onInvalidJson()
     return {}
+  }
+}
+
+function getPersistedLifecycleRejection(
+  payload: Record<string, unknown>
+): LifecycleRejectionResult | undefined {
+  const rejection = payload._orcaLifecycleRejection
+  if (
+    !rejection ||
+    typeof rejection !== 'object' ||
+    (rejection as { code?: unknown }).code !== 'sender_not_assignee' ||
+    typeof (rejection as { reason?: unknown }).reason !== 'string'
+  ) {
+    return undefined
+  }
+  // Why: the marker is reserved persistence state; treating it as a rejection
+  // also prevents caller-supplied markers from turning lifecycle sends into success.
+  return {
+    action: 'rejected',
+    code: 'sender_not_assignee',
+    reason: (rejection as { reason: string }).reason
   }
 }
 
@@ -75,6 +115,13 @@ function reconcileHeartbeatMessage(
   const payload = parseObjectPayload(msg, () => {
     onLog(`Heartbeat from ${msg.from_handle} has invalid JSON payload; ignored`)
   })
+  const persistedRejection = getPersistedLifecycleRejection(payload)
+  if (persistedRejection) {
+    // Why: the send-path reconcile converts with a no-op logger, so the
+    // coordinator's re-read is the only chance to surface the rejection.
+    onLog(`Heartbeat rejected: ${persistedRejection.reason}`)
+    return persistedRejection
+  }
   const dispatchId = payload.dispatchId
   if (typeof dispatchId !== 'string' || dispatchId.length === 0) {
     onLog(`Heartbeat from ${msg.from_handle} missing dispatchId; ignored`)
@@ -90,17 +137,13 @@ function reconcileHeartbeatMessage(
     return { action: 'suppressed' }
   }
 
-  if (
-    dispatch.assignee_pane_key &&
-    msg.sender_pane_key &&
-    isForeignPane(dispatch.assignee_pane_key, msg.sender_pane_key)
-  ) {
+  if (!hasLifecycleAuthority(dispatch, msg)) {
     // Why: a wrong-pane heartbeat must not refresh liveness — it would mask
     // a hung assignee behind another agent's timer.
-    onLog(
-      `Heartbeat for dispatch ${dispatchId} came from pane ${msg.sender_pane_key}, expected pane ${dispatch.assignee_pane_key}; ignored`
-    )
-    return { action: 'ignored' }
+    const reason = buildLifecycleAuthorityRejectionReason(dispatchId, dispatch, msg)
+    onLog(`Heartbeat rejected: ${reason}`)
+    db.convertLifecycleMessageToRejection(msg.id, reason)
+    return { action: 'rejected', code: 'sender_not_assignee', reason }
   }
 
   // Why: dispatchId-specific writes let the DB ignore late heartbeats for
@@ -119,6 +162,13 @@ function reconcileWorkerDoneMessage(
   const payload = parseObjectPayload(msg, () => {
     onLog(`Warning: invalid payload in worker_done from ${msg.from_handle}`)
   })
+  const persistedRejection = getPersistedLifecycleRejection(payload)
+  if (persistedRejection) {
+    // Why: the send-path reconcile converts with a no-op logger, so the
+    // coordinator's re-read is the only chance to surface the rejection.
+    onLog(`Warning: worker_done rejected: ${persistedRejection.reason}`)
+    return persistedRejection
+  }
 
   const taskId = payload.taskId
   if (typeof taskId !== 'string' || taskId.length === 0) {
@@ -151,26 +201,11 @@ function reconcileWorkerDoneMessage(
     )
     return { action: 'ignored' }
   }
-  if (dispatch.assignee_handle !== msg.from_handle) {
-    // Why: pane leaves are the remint-stable identity behind handles. When
-    // both sides carry one, a foreign leaf is a different pane completing
-    // someone else's task — reject it; the same leaf is the same pane after
-    // a handle remint or tab break-out. Without pane data (older CLI,
-    // sessions without ORCA_PANE_KEY) payload IDs stay the completion
-    // authority.
-    if (
-      dispatch.assignee_pane_key &&
-      msg.sender_pane_key &&
-      isForeignPane(dispatch.assignee_pane_key, msg.sender_pane_key)
-    ) {
-      onLog(
-        `Warning: worker_done for dispatch ${dispatchId} came from pane ${msg.sender_pane_key}, expected pane ${dispatch.assignee_pane_key}; ignored`
-      )
-      return { action: 'ignored' }
-    }
-    onLog(
-      `Warning: worker_done for dispatch ${dispatchId} came from ${msg.from_handle}, expected ${dispatch.assignee_handle ?? '<unknown>'}; accepting payload provenance`
-    )
+  if (!hasLifecycleAuthority(dispatch, msg)) {
+    const reason = buildLifecycleAuthorityRejectionReason(dispatchId, dispatch, msg)
+    onLog(`Warning: worker_done rejected: ${reason}`)
+    db.convertLifecycleMessageToRejection(msg.id, reason)
+    return { action: 'rejected', code: 'sender_not_assignee', reason }
   }
   // Why: `orchestration.send` can release the DB lock before waking the
   // coordinator; the later coordinator read still needs to observe completion.
@@ -202,6 +237,18 @@ function reconcileWorkerDoneMessage(
 
   onLog(`Task ${taskId} completed`)
   return { action: 'completed', taskId, dispatchId }
+}
+
+function buildLifecycleAuthorityRejectionReason(
+  dispatchId: string,
+  dispatch: { assignee_handle: string | null; assignee_pane_key: string | null },
+  msg: MessageRow
+): string {
+  return (
+    `dispatch ${dispatchId} expected handle ${dispatch.assignee_handle ?? '<unknown>'}, ` +
+    `pane ${dispatch.assignee_pane_key ?? '<legacy>'}; received handle ${msg.from_handle}, ` +
+    `pane ${msg.sender_pane_key ?? '<missing>'}`
+  )
 }
 
 function suppressEarlierHeartbeats(

@@ -76,6 +76,7 @@ function insertWorkerDone(
     from?: string
     dispatchId?: string
     filesModified?: string[]
+    senderPaneKey?: string
   }
 ): void {
   const dispatch = db.getDispatchContext(params.taskId)
@@ -83,8 +84,9 @@ function insertWorkerDone(
   if (!dispatchId) {
     throw new Error(`No dispatch for task ${params.taskId}`)
   }
+  const from = params.from ?? dispatch?.assignee_handle ?? 'term_unknown'
   db.insertMessage({
-    from: params.from ?? dispatch?.assignee_handle ?? 'term_unknown',
+    from,
     to: params.to ?? 'coord',
     subject: 'Done',
     type: 'worker_done',
@@ -92,7 +94,10 @@ function insertWorkerDone(
       taskId: params.taskId,
       dispatchId,
       ...(params.filesModified ? { filesModified: params.filesModified } : {})
-    })
+    }),
+    senderPaneKey:
+      params.senderPaneKey ??
+      (from === dispatch?.assignee_handle ? (dispatch.assignee_pane_key ?? undefined) : undefined)
   })
 }
 
@@ -595,20 +600,22 @@ describe('Coordinator', () => {
     expect(db.getDispatchContextById(activeCtx.id)?.status).toBe('completed')
   })
 
-  it('accepts worker_done payload provenance after an assignee handle changes', async () => {
+  it('accepts worker_done pane provenance after an assignee handle changes', async () => {
     db = new OrchestrationDb(':memory:')
     const runtime = createMockRuntime()
     const logs: string[] = []
 
     const task = db.createTask({ spec: 'owned work' })
-    const ctx = db.createDispatchContext(task.id, 'term_owner')
+    const leafId = '11111111-1111-4111-8111-111111111111'
+    const ctx = db.createDispatchContext(task.id, 'term_owner', `tab_before:${leafId}`)
 
     db.insertMessage({
       from: 'term_reminted',
       to: 'coord',
       subject: 'Done after restart',
       type: 'worker_done',
-      payload: JSON.stringify({ taskId: task.id, dispatchId: ctx.id })
+      payload: JSON.stringify({ taskId: task.id, dispatchId: ctx.id }),
+      senderPaneKey: `tab_after:${leafId}`
     })
 
     const coordinator = new Coordinator(db, runtime, {
@@ -622,7 +629,7 @@ describe('Coordinator', () => {
     expect(result.status).toBe('completed')
     expect(db.getTask(task.id)?.status).toBe('completed')
     expect(db.getDispatchContextById(ctx.id)?.status).toBe('completed')
-    expect(logs.some((m) => m.includes('accepting payload provenance'))).toBe(true)
+    expect(logs.some((m) => m.includes('Task') && m.includes('completed'))).toBe(true)
   })
 
   it('can be stopped', async () => {

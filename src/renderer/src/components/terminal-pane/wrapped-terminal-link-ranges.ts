@@ -65,7 +65,7 @@ function translateLineWithCells(line: IBufferLine): { text: string; columns: num
   return { text, columns }
 }
 
-function translateLineWithColumns(line: IBufferLine): { text: string; columns: number[] } {
+export function translateLineWithColumns(line: IBufferLine): { text: string; columns: number[] } {
   const columns: number[] = []
   const text = (line as TerminalBufferLineWithColumns).translateToString(
     false,
