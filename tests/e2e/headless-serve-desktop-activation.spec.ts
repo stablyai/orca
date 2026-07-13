@@ -8,6 +8,7 @@ import { TEST_REPO_PATH_FILE } from './global-setup'
 import { getE2ECompletedOnboardingProfile } from './helpers/e2e-completed-onboarding-profile'
 import { getOrcaElectronLaunchArgs } from './helpers/electron-launch-args'
 import { cleanupE2EDaemons, closeElectronAppForE2E } from './helpers/electron-process-shutdown'
+import { attachRepoAndOpenTerminal } from './helpers/orca-restart'
 import {
   discoverActivePtyId,
   execInTerminal,
@@ -18,11 +19,7 @@ import {
 } from './helpers/terminal'
 import { ensureTerminalVisible, waitForActiveWorktree, waitForSessionReady } from './helpers/store'
 import { RuntimeClient } from '../../src/cli/runtime/client'
-import type {
-  RuntimeStatus,
-  RuntimeTerminalCreate,
-  RuntimeTerminalRead
-} from '../../src/shared/runtime-types'
+import type { RuntimeStatus, RuntimeTerminalListResult } from '../../src/shared/runtime-types'
 import { PROTOCOL_VERSION } from '../../src/main/daemon/types'
 
 const electronPackageDir = path.join(process.cwd(), 'node_modules', 'electron')
@@ -77,7 +74,7 @@ async function waitForProcessExit(child: ChildProcess, timeoutMs: number): Promi
 
 test.describe.configure({ mode: 'serial' })
 
-test('promotes the headless owner without replacing its daemon terminal', async (// oxlint-disable-next-line no-empty-pattern -- This lifecycle test owns both launches and intentionally opts out of the default app fixture.
+test('restores a quit desktop through headless serve without replacing its daemon terminal', async (// oxlint-disable-next-line no-empty-pattern -- This lifecycle test owns all launches and intentionally opts out of the default app fixture.
 {}) => {
   const repoPath = readFileSync(TEST_REPO_PATH_FILE, 'utf8').trim()
   if (!repoPath || !existsSync(repoPath)) {
@@ -88,6 +85,7 @@ test('promotes the headless owner without replacing its daemon terminal', async 
   const mainPath = path.join(process.cwd(), 'out', 'main', 'index.js')
   const userDataDir = mkdtempSync(path.join(os.tmpdir(), 'orca-e2e-serve-promotion-'))
   const env = createLaunchEnv(userDataDir)
+  let desktopApp: ElectronApplication | null = null
   let serveApp: ElectronApplication | null = null
   let activatingProcess: ChildProcess | null = null
 
@@ -97,6 +95,34 @@ test('promotes the headless owner without replacing its daemon terminal', async 
   )
 
   try {
+    desktopApp = await electron.launch({
+      args: getOrcaElectronLaunchArgs(mainPath, false),
+      env
+    })
+    const desktopPage = await desktopApp.firstWindow({ timeout: 60_000 })
+    await desktopPage.waitForLoadState('domcontentloaded')
+    await desktopPage.waitForFunction(() => Boolean(window.__store), null, { timeout: 30_000 })
+    await attachRepoAndOpenTerminal(desktopPage, repoPath)
+    await waitForSessionReady(desktopPage)
+    await waitForActiveWorktree(desktopPage)
+    await ensureTerminalVisible(desktopPage)
+    await waitForActiveTerminalManager(desktopPage, 30_000)
+    await waitForPaneCount(desktopPage, 1, 30_000)
+
+    const originalPtyId = await discoverActivePtyId(desktopPage)
+    const beforeMarker = `SERVE_PROMOTION_BEFORE_${Date.now()}`
+    await execInTerminal(desktopPage, originalPtyId, `echo ${beforeMarker}`)
+    await waitForTerminalOutput(desktopPage, beforeMarker, 15_000)
+
+    const desktopSessions = await desktopPage.evaluate(async () => window.api.pty.listSessions())
+    expect(desktopSessions.map((session) => session.id)).toEqual([originalPtyId])
+    const daemonPidBefore = readDaemonPid(userDataDir)
+
+    // Why: this reproduces the user-visible failure boundary: Cmd+Q closes
+    // the desktop owner while the detached daemon and its PTY stay alive.
+    await closeElectronAppForE2E(desktopApp)
+    desktopApp = null
+
     serveApp = await electron.launch({
       args: [...getOrcaElectronLaunchArgs(mainPath, false), '--serve', '--serve-no-pairing'],
       env
@@ -112,35 +138,15 @@ test('promotes the headless owner without replacing its daemon terminal', async 
       .toBe('openable')
 
     const beforeStatus = await client.call<RuntimeStatus>('status.get')
-    const daemonPidBefore = readDaemonPid(userDataDir)
-    await client.call('repo.add', { path: repoPath, kind: 'git' })
-    const created = await client.call<{ terminal: RuntimeTerminalCreate }>('terminal.create', {
-      worktree: `path:${repoPath}`,
-      title: 'Serve promotion continuity'
+    const headlessInventory = await client.call<RuntimeTerminalListResult>('terminal.list', {
+      limit: 100,
+      requireFreshPtyLiveness: true
     })
-    const terminal = created.result.terminal
-    if (!terminal.ptyId) {
-      throw new Error('Headless terminal did not expose its daemon PTY id')
-    }
-
-    const beforeMarker = `SERVE_PROMOTION_BEFORE_${Date.now()}`
-    await client.call('terminal.send', {
-      terminal: terminal.handle,
-      text: `echo ${beforeMarker}`,
-      enter: true
-    })
-    await expect
-      .poll(
-        async () => {
-          const response = await client.call<{ terminal: RuntimeTerminalRead }>('terminal.read', {
-            terminal: terminal.handle,
-            limit: 200
-          })
-          return response.result.terminal.tail.join('\n')
-        },
-        { timeout: 15_000 }
-      )
-      .toContain(beforeMarker)
+    expect(headlessInventory.result.totalCount).toBe(1)
+    expect(headlessInventory.result.terminals.map((terminal) => terminal.ptyId)).toEqual([
+      originalPtyId
+    ])
+    expect(readDaemonPid(userDataDir)).toBe(daemonPidBefore)
 
     activatingProcess = spawn(electronPath, getOrcaElectronLaunchArgs(mainPath, false), {
       env,
@@ -161,10 +167,21 @@ test('promotes the headless owner without replacing its daemon terminal', async 
     expect(serveApp.process().pid).toBe(ownerPid)
     expect(afterStatus.result.runtimeId).toBe(beforeStatus.result.runtimeId)
     expect(afterStatus.result.desktopWindowStatus).toBe('available')
-    expect(promotedPtyId).toBe(terminal.ptyId)
+    expect(promotedPtyId).toBe(originalPtyId)
     expect(readDaemonPid(userDataDir)).toBe(daemonPidBefore)
     expect(await waitForProcessExit(activatingProcess, 10_000)).toBe(true)
     await waitForTerminalOutput(page, beforeMarker, 30_000)
+
+    const promotedInventory = await client.call<RuntimeTerminalListResult>('terminal.list', {
+      limit: 100,
+      requireFreshPtyLiveness: true
+    })
+    const promotedSessions = await page.evaluate(async () => window.api.pty.listSessions())
+    expect(promotedInventory.result.totalCount).toBe(1)
+    expect(promotedInventory.result.terminals.map((terminal) => terminal.ptyId)).toEqual([
+      originalPtyId
+    ])
+    expect(promotedSessions.map((session) => session.id)).toEqual([originalPtyId])
 
     const afterMarker = `SERVE_PROMOTION_AFTER_${Date.now()}`
     await execInTerminal(page, promotedPtyId, `echo ${afterMarker}`)
@@ -178,6 +195,9 @@ test('promotes the headless owner without replacing its daemon terminal', async 
     }
     if (serveApp) {
       await closeElectronAppForE2E(serveApp)
+    }
+    if (desktopApp) {
+      await closeElectronAppForE2E(desktopApp)
     }
     await cleanupE2EDaemons(userDataDir)
     rmSync(userDataDir, { recursive: true, force: true })

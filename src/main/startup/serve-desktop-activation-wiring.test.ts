@@ -29,6 +29,7 @@ describe('serve desktop activation wiring', () => {
     expect(source).not.toContain(
       'if (!isServeMode) {\n    startDesktopFirstWindowStartupServices()'
     )
+    expect(source).not.toContain('startServeAgentHookServer')
   })
 
   it('publishes the named headless sentinel and only enables promotion after RPC is ready', () => {
