@@ -21,7 +21,10 @@ import {
   loadTerminalAutocompleteEnabled,
   loadTerminalTextScale,
   saveTerminalAutocompleteEnabled,
-  saveTerminalTextScale
+  saveTerminalTextScale,
+  loadTerminalAccessoryWrapMode,
+  saveTerminalAccessoryWrapMode,
+  type TerminalAccessoryWrapMode
 } from '../src/storage/preferences'
 
 type RestoreValue = 'indefinite' | '60s' | '5m' | '30m'
@@ -174,6 +177,26 @@ export default function TerminalSettingsScreen() {
     userToggledAutocompleteRef.current = true
     setAutocompleteEnabled(next)
     void saveTerminalAutocompleteEnabled(next)
+  }, [])
+
+  const [accessoryWrapMode, setAccessoryWrapMode] = useState<TerminalAccessoryWrapMode>('scroll')
+  const userToggledAccessoryWrapModeRef = useRef(false)
+  useEffect(() => {
+    let stale = false
+    void loadTerminalAccessoryWrapMode().then((mode) => {
+      if (!stale && !userToggledAccessoryWrapModeRef.current) {
+        setAccessoryWrapMode(mode)
+      }
+    })
+    return () => {
+      stale = true
+    }
+  }, [])
+  const toggleAccessoryWrapMode = useCallback((next: boolean) => {
+    userToggledAccessoryWrapModeRef.current = true
+    const mode: TerminalAccessoryWrapMode = next ? 'wrap' : 'scroll'
+    setAccessoryWrapMode(mode)
+    void saveTerminalAccessoryWrapMode(mode)
   }, [])
 
   useEffect(() => {
@@ -342,6 +365,21 @@ export default function TerminalSettingsScreen() {
             <Switch
               value={autocompleteEnabled}
               onValueChange={toggleAutocomplete}
+              trackColor={{ false: colors.bgRaised, true: colors.textSecondary }}
+              thumbColor={colors.textPrimary}
+            />
+          </View>
+          <View style={styles.separator} />
+          <View style={styles.row}>
+            <View style={styles.rowContent}>
+              <Text style={styles.rowLabel}>Wrap accessory keys</Text>
+              <Text style={styles.rowSublabel}>
+                {accessoryWrapMode === 'wrap' ? 'Wrap in multiple rows' : 'Scroll horizontally'}
+              </Text>
+            </View>
+            <Switch
+              value={accessoryWrapMode === 'wrap'}
+              onValueChange={toggleAccessoryWrapMode}
               trackColor={{ false: colors.bgRaised, true: colors.textSecondary }}
               thumbColor={colors.textPrimary}
             />

@@ -78,6 +78,14 @@ export const mobileSessionCommandInputStyles = StyleSheet.create({
     flex: 1,
     minWidth: 0
   },
+  accessoryWrap: {
+    flex: 1,
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.xs,
+    gap: spacing.xs
+  },
   accessoryContent: {
     paddingHorizontal: spacing.sm,
     paddingVertical: spacing.xs,

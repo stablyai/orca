@@ -54,7 +54,9 @@ import {
   loadTerminalTextScale,
   HOST_DOCK_MIN_WIDTH,
   saveTerminalTextScale,
-  type MobileTerminalLinkOpenMode
+  type MobileTerminalLinkOpenMode,
+  loadTerminalAccessoryWrapMode,
+  type TerminalAccessoryWrapMode
 } from '../../../../src/storage/preferences'
 import {
   useHostClient,
@@ -903,6 +905,7 @@ export default function SessionScreen() {
   const [autocompleteEnabled, setAutocompleteEnabled] = useState(false)
   const [terminalLinkOpenMode, setTerminalLinkOpenMode] =
     useState<MobileTerminalLinkOpenMode>('orca-browser')
+  const [accessoryWrapMode, setAccessoryWrapMode] = useState<TerminalAccessoryWrapMode>('scroll')
   const [liveInputCapture, setLiveInputCapture] = useState('')
   const {
     clearTerminalLiveInputDefault,
@@ -2855,8 +2858,7 @@ export default function SessionScreen() {
     }, [connState, fetchSessionTabs, fetchTerminals])
   )
 
-  // Why: pick up the Settings → Terminal text size when returning here — the
-  // terminal panes stay mounted, so they update in place.
+  // Why: pick up local user preferences (text scale, autocomplete, link open mode, accessory layout) on focus.
   useFocusEffect(
     useCallback(() => {
       let active = true
@@ -2865,34 +2867,19 @@ export default function SessionScreen() {
           setTerminalTextScale(scale)
         }
       })
-      return () => {
-        active = false
-      }
-    }, [])
-  )
-
-  // Why: pick up the Settings → Terminal autocomplete toggle when returning here.
-  useFocusEffect(
-    useCallback(() => {
-      let active = true
       void loadTerminalAutocompleteEnabled().then((enabled) => {
         if (active) {
           setAutocompleteEnabled(enabled)
         }
       })
-      return () => {
-        active = false
-      }
-    }, [])
-  )
-
-  // Why: link routing is a phone-local choice; reload after Settings → Browser.
-  useFocusEffect(
-    useCallback(() => {
-      let active = true
       void loadTerminalLinkOpenMode().then((mode) => {
         if (active) {
           setTerminalLinkOpenMode(mode)
+        }
+      })
+      void loadTerminalAccessoryWrapMode().then((mode) => {
+        if (active) {
+          setAccessoryWrapMode(mode)
         }
       })
       return () => {
@@ -4884,7 +4871,12 @@ export default function SessionScreen() {
                 ]}
               >
                 {/* Accessory keys */}
-                <View style={styles.accessoryBar}>
+                <View
+                  style={[
+                    styles.accessoryBar,
+                    accessoryWrapMode === 'wrap' && { alignItems: 'flex-start' }
+                  ]}
+                >
                   {/* Why: a fixed, always-visible escape hatch from the open
                   keyboard. Kept outside the horizontal ScrollView so it does
                   not scroll away, and out of the terminal-byte shortcut path so
@@ -4915,169 +4907,183 @@ export default function SessionScreen() {
                   {/* Why: with default tap handling the first tap on any accessory
                   key dismisses the open keyboard and is swallowed, so live
                   input lost its keyboard on every Esc/Tab press (#5106). */}
-                  <ScrollView
-                    style={styles.accessoryScroll}
-                    horizontal
-                    showsHorizontalScrollIndicator={false}
-                    contentContainerStyle={styles.accessoryContent}
-                    keyboardShouldPersistTaps="always"
-                  >
-                    <Pressable
-                      style={({ pressed }) => [
-                        styles.accessoryKey,
-                        pressed && styles.accessoryKeyPressed,
-                        !canSend && styles.accessoryKeyDisabled
-                      ]}
-                      disabled={!canSend}
-                      onPress={() => {
-                        if (activeHandle) {
-                          void toggleDisplayMode(activeHandle)
-                        }
-                      }}
-                      accessibilityLabel={
-                        isPhoneMode(activeHandle)
-                          ? 'Switch to desktop mode'
-                          : 'Switch to phone mode'
-                      }
-                    >
-                      {isPhoneMode(activeHandle) ? (
-                        <Monitor
-                          size={14}
-                          color={canSend ? colors.textSecondary : colors.textMuted}
-                        />
-                      ) : (
-                        <Smartphone
-                          size={14}
-                          color={canSend ? colors.textSecondary : colors.textMuted}
-                        />
-                      )}
-                    </Pressable>
-                    <Pressable
-                      style={({ pressed }) => [
-                        styles.accessoryKey,
-                        liveInputEnabled && styles.accessoryKeyActive,
-                        pressed && styles.accessoryKeyPressed,
-                        !canSend && styles.accessoryKeyDisabled
-                      ]}
-                      disabled={!canSend}
-                      onPress={toggleLiveInput}
-                      accessibilityLabel={
-                        liveInputEnabled
-                          ? 'Switch to buffered command input'
-                          : 'Switch to live terminal input'
-                      }
-                    >
-                      <ChevronsRight
-                        size={14}
-                        color={
-                          liveInputEnabled
-                            ? colors.bgBase
-                            : canSend
-                              ? colors.textSecondary
-                              : colors.textMuted
-                        }
-                      />
-                    </Pressable>
-                    {canPaste && (
-                      <Pressable
-                        style={({ pressed }) => [
-                          styles.accessoryKey,
-                          pressed && styles.accessoryKeyPressed,
-                          !canSend && styles.accessoryKeyDisabled
-                        ]}
-                        disabled={!canSend}
-                        onPress={() => void handlePaste()}
-                        accessibilityLabel="Paste from clipboard"
-                      >
-                        <Text
-                          style={[
-                            styles.accessoryKeyText,
-                            !canSend && styles.accessoryKeyTextDisabled
+                  {(() => {
+                    const keys = (
+                      <>
+                        <Pressable
+                          style={({ pressed }) => [
+                            styles.accessoryKey,
+                            pressed && styles.accessoryKeyPressed,
+                            !canSend && styles.accessoryKeyDisabled
                           ]}
+                          disabled={!canSend}
+                          onPress={() => {
+                            if (activeHandle) {
+                              void toggleDisplayMode(activeHandle)
+                            }
+                          }}
+                          accessibilityLabel={
+                            isPhoneMode(activeHandle)
+                              ? 'Switch to desktop mode'
+                              : 'Switch to phone mode'
+                          }
                         >
-                          Paste
-                        </Text>
-                      </Pressable>
-                    )}
-                    {visibleBuiltInAccessoryKeys.map((key) => (
-                      <Pressable
-                        key={key.id}
-                        style={({ pressed }) => [
-                          styles.accessoryKey,
-                          pressed && styles.accessoryKeyPressed,
-                          !canSend && styles.accessoryKeyDisabled
-                        ]}
-                        disabled={!canSend}
-                        onPressIn={() => {
-                          if (!key.repeatable) {
-                            return
-                          }
-                          const input = createTerminalLiveAccessoryInput(key)
-                          void handleAccessoryKey(input)
-                          startAccessoryRepeat(input)
-                        }}
-                        onPressOut={() => {
-                          if (key.repeatable) {
-                            stopAccessoryRepeat()
-                          }
-                        }}
-                        onPress={() => {
-                          if (key.repeatable) {
-                            return
-                          }
-                          void handleAccessoryKey(createTerminalLiveAccessoryInput(key))
-                        }}
-                        accessibilityLabel={key.accessibilityLabel ?? `Send ${key.label}`}
-                      >
-                        <Text
-                          style={[
-                            styles.accessoryKeyText,
-                            !canSend && styles.accessoryKeyTextDisabled
+                          {isPhoneMode(activeHandle) ? (
+                            <Monitor
+                              size={14}
+                              color={canSend ? colors.textSecondary : colors.textMuted}
+                            />
+                          ) : (
+                            <Smartphone
+                              size={14}
+                              color={canSend ? colors.textSecondary : colors.textMuted}
+                            />
+                          )}
+                        </Pressable>
+                        <Pressable
+                          style={({ pressed }) => [
+                            styles.accessoryKey,
+                            liveInputEnabled && styles.accessoryKeyActive,
+                            pressed && styles.accessoryKeyPressed,
+                            !canSend && styles.accessoryKeyDisabled
                           ]}
+                          disabled={!canSend}
+                          onPress={toggleLiveInput}
+                          accessibilityLabel={
+                            liveInputEnabled
+                              ? 'Switch to buffered command input'
+                              : 'Switch to live terminal input'
+                          }
                         >
-                          {key.label}
-                        </Text>
-                      </Pressable>
-                    ))}
-                    {customKeys.map((key) => (
-                      <Pressable
-                        key={key.id}
-                        style={({ pressed }) => [
-                          styles.accessoryKey,
-                          styles.customAccessoryKey,
-                          pressed && styles.accessoryKeyPressed,
-                          !canSend && styles.accessoryKeyDisabled
-                        ]}
-                        disabled={!canSend}
-                        onPress={() => void handleAccessoryKey({ bytes: key.bytes })}
-                        onLongPress={() => {
-                          triggerMediumImpact()
-                          setDeleteKeyTarget(key)
-                        }}
-                        delayLongPress={400}
-                        accessibilityLabel={`Send ${key.label}`}
-                      >
-                        <Text
-                          style={[
-                            styles.accessoryKeyText,
-                            !canSend && styles.accessoryKeyTextDisabled
+                          <ChevronsRight
+                            size={14}
+                            color={
+                              liveInputEnabled
+                                ? colors.bgBase
+                                : canSend
+                                  ? colors.textSecondary
+                                  : colors.textMuted
+                            }
+                          />
+                        </Pressable>
+                        {canPaste && (
+                          <Pressable
+                            style={({ pressed }) => [
+                              styles.accessoryKey,
+                              pressed && styles.accessoryKeyPressed,
+                              !canSend && styles.accessoryKeyDisabled
+                            ]}
+                            disabled={!canSend}
+                            onPress={() => void handlePaste()}
+                            accessibilityLabel="Paste from clipboard"
+                          >
+                            <Text
+                              style={[
+                                styles.accessoryKeyText,
+                                !canSend && styles.accessoryKeyTextDisabled
+                              ]}
+                            >
+                              Paste
+                            </Text>
+                          </Pressable>
+                        )}
+                        {visibleBuiltInAccessoryKeys.map((key) => (
+                          <Pressable
+                            key={key.id}
+                            style={({ pressed }) => [
+                              styles.accessoryKey,
+                              pressed && styles.accessoryKeyPressed,
+                              !canSend && styles.accessoryKeyDisabled
+                            ]}
+                            disabled={!canSend}
+                            onPressIn={() => {
+                              if (!key.repeatable) {
+                                return
+                              }
+                              const input = createTerminalLiveAccessoryInput(key)
+                              void handleAccessoryKey(input)
+                              startAccessoryRepeat(input)
+                            }}
+                            onPressOut={() => {
+                              if (key.repeatable) {
+                                stopAccessoryRepeat()
+                              }
+                            }}
+                            onPress={() => {
+                              if (key.repeatable) {
+                                return
+                              }
+                              void handleAccessoryKey(createTerminalLiveAccessoryInput(key))
+                            }}
+                            accessibilityLabel={key.accessibilityLabel ?? `Send ${key.label}`}
+                          >
+                            <Text
+                              style={[
+                                styles.accessoryKeyText,
+                                !canSend && styles.accessoryKeyTextDisabled
+                              ]}
+                            >
+                              {key.label}
+                            </Text>
+                          </Pressable>
+                        ))}
+                        {customKeys.map((key) => (
+                          <Pressable
+                            key={key.id}
+                            style={({ pressed }) => [
+                              styles.accessoryKey,
+                              styles.customAccessoryKey,
+                              pressed && styles.accessoryKeyPressed,
+                              !canSend && styles.accessoryKeyDisabled
+                            ]}
+                            disabled={!canSend}
+                            onPress={() => void handleAccessoryKey({ bytes: key.bytes })}
+                            onLongPress={() => {
+                              triggerMediumImpact()
+                              setDeleteKeyTarget(key)
+                            }}
+                            delayLongPress={400}
+                            accessibilityLabel={`Send ${key.label}`}
+                          >
+                            <Text
+                              style={[
+                                styles.accessoryKeyText,
+                                !canSend && styles.accessoryKeyTextDisabled
+                              ]}
+                            >
+                              {key.label}
+                            </Text>
+                          </Pressable>
+                        ))}
+                        <Pressable
+                          style={({ pressed }) => [
+                            styles.accessoryKey,
+                            pressed && styles.accessoryKeyPressed
                           ]}
+                          onPress={() => setShowCustomKeyModal(true)}
+                          accessibilityLabel="Add custom shortcut"
                         >
-                          {key.label}
-                        </Text>
-                      </Pressable>
-                    ))}
-                    <Pressable
-                      style={({ pressed }) => [
-                        styles.accessoryKey,
-                        pressed && styles.accessoryKeyPressed
-                      ]}
-                      onPress={() => setShowCustomKeyModal(true)}
-                      accessibilityLabel="Add custom shortcut"
-                    >
-                      <Plus size={14} color={colors.textSecondary} strokeWidth={2.2} />
-                    </Pressable>
-                  </ScrollView>
+                          <Plus size={14} color={colors.textSecondary} strokeWidth={2.2} />
+                        </Pressable>
+                      </>
+                    )
+
+                    if (accessoryWrapMode === 'wrap') {
+                      return <View style={styles.accessoryWrap}>{keys}</View>
+                    }
+
+                    return (
+                      <ScrollView
+                        style={styles.accessoryScroll}
+                        horizontal
+                        showsHorizontalScrollIndicator={false}
+                        contentContainerStyle={styles.accessoryContent}
+                        keyboardShouldPersistTaps="always"
+                      >
+                        {keys}
+                      </ScrollView>
+                    )
+                  })()}
                 </View>
 
                 {/* Input bar */}

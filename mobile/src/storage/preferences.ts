@@ -204,6 +204,26 @@ export async function saveTerminalLinkOpenMode(mode: MobileTerminalLinkOpenMode)
   await AsyncStorage.setItem(TERMINAL_LINK_OPEN_MODE_KEY, mode)
 }
 
+export type TerminalAccessoryWrapMode = 'scroll' | 'wrap'
+
+const TERMINAL_ACCESSORY_WRAP_MODE_KEY = 'orca:terminalAccessoryWrapMode'
+export const DEFAULT_TERMINAL_ACCESSORY_WRAP_MODE: TerminalAccessoryWrapMode = 'scroll'
+
+export async function loadTerminalAccessoryWrapMode(): Promise<TerminalAccessoryWrapMode> {
+  try {
+    const raw = await AsyncStorage.getItem(TERMINAL_ACCESSORY_WRAP_MODE_KEY)
+    return raw === 'wrap' || raw === 'scroll' ? raw : DEFAULT_TERMINAL_ACCESSORY_WRAP_MODE
+  } catch {
+    return DEFAULT_TERMINAL_ACCESSORY_WRAP_MODE
+  }
+}
+
+export async function saveTerminalAccessoryWrapMode(
+  mode: TerminalAccessoryWrapMode
+): Promise<void> {
+  await AsyncStorage.setItem(TERMINAL_ACCESSORY_WRAP_MODE_KEY, mode)
+}
+
 function stringArray(value: unknown): string[] {
   return Array.isArray(value)
     ? value.filter((item): item is string => typeof item === 'string')
