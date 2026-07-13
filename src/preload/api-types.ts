@@ -891,6 +891,9 @@ export type AppApi = {
   /** Opens a native picker for markdown documents, rooted in the floating
    *  workspace, and authorizes the selected file for editor reads/writes. */
   pickFloatingMarkdownDocument: () => Promise<MarkdownDocument | null>
+  /** Opens a native picker for markdown documents, rooted in the given
+   *  worktree path, and authorizes the selected file for editor reads/writes. */
+  pickWorktreeMarkdownDocument: (cwd: string) => Promise<MarkdownDocument | null>
   /** Opens a native directory picker and authorizes the selected directory
    *  for Floating Workspace markdown file creation. */
   pickFloatingWorkspaceDirectory: () => Promise<string | null>

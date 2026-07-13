@@ -490,6 +490,7 @@ export type EditorSlice = {
     }
   ) => void
   openNewMarkdownInActiveWorkspace: (groupId: string) => Promise<void>
+  openMarkdownFileInActiveWorkspace: (groupId: string) => Promise<void>
   // Why: dispatcher for markdown link activation. Lives on the slice because it
   // sequences openFile, setMarkdownViewMode, and setPendingEditorReveal around
   // an async Monaco remount — all reading/writing state in this slice. See
@@ -1877,6 +1878,37 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
       get().recordFeatureInteraction('markdown-file-created')
     } catch (err) {
       toast.error(extractIpcErrorMessage(err, 'Failed to create untitled markdown file.'))
+    }
+  },
+
+  openMarkdownFileInActiveWorkspace: async (groupId) => {
+    const state = get()
+    const worktreeId = state.activeWorktreeId
+    if (!worktreeId) {
+      return
+    }
+    const worktree = state.getKnownWorktreeById(worktreeId)
+    if (!worktree) {
+      return
+    }
+    try {
+      const document = await window.api.app.pickWorktreeMarkdownDocument(worktree.path)
+      if (!document) {
+        return
+      }
+      get().openFile(
+        {
+          filePath: document.filePath,
+          relativePath: document.relativePath,
+          worktreeId,
+          language: detectLanguage(document.relativePath),
+          mode: 'edit',
+          runtimeEnvironmentId: null
+        },
+        { preview: false, targetGroupId: groupId }
+      )
+    } catch (err) {
+      toast.error(extractIpcErrorMessage(err, 'Failed to open markdown file.'))
     }
   },
 
