@@ -3,6 +3,7 @@ import { ClaudeIcon, DroidIcon, OpenAIIcon } from '@/components/status-bar/icons
 import openClaudeLogoUrl from '../../../../resources/openclaude-logo.png?url'
 import type { TuiAgent } from '../../../shared/types'
 import { getTuiAgentLaunchCommand, TUI_AGENT_CONFIG } from '../../../shared/tui-agent-config'
+import type { WebChatAgent } from '../../../shared/ai-vault-types'
 import {
   AgentLetterIcon,
   AiderIcon,
@@ -26,6 +27,18 @@ export type AgentCatalogEntry = {
   faviconDomain?: string
   /** Homepage/install docs URL, sourced from the README agent badge list. */
   homepageUrl: string
+}
+
+// Why: web chat imports aren't launchable CLI agents, so they stay out of the
+// TuiAgent catalog; AgentIcon renders them via their site favicon instead.
+const WEB_CHAT_ICON_DOMAIN: Record<WebChatAgent, string> = {
+  chatgpt: 'chatgpt.com',
+  'claude-web': 'claude.ai',
+  'gemini-web': 'gemini.google.com'
+}
+
+function isWebChatAgentId(agent: TuiAgent | WebChatAgent): agent is WebChatAgent {
+  return agent in WEB_CHAT_ICON_DOMAIN
 }
 
 function getCatalogPlatform(): NodeJS.Platform {
@@ -302,7 +315,7 @@ export function AgentIcon({
   agent,
   size = 14
 }: {
-  agent: TuiAgent | null | undefined
+  agent: TuiAgent | WebChatAgent | null | undefined
   size?: number
 }): React.JSX.Element {
   // Why: render a neutral question-mark glyph when the agent identity is not
@@ -311,6 +324,18 @@ export function AgentIcon({
   // arrived.
   if (!agent) {
     return <AgentLetterIcon letter="?" size={size} />
+  }
+  if (isWebChatAgentId(agent)) {
+    return (
+      <img
+        src={`https://www.google.com/s2/favicons?domain=${WEB_CHAT_ICON_DOMAIN[agent]}&sz=64`}
+        width={size}
+        height={size}
+        alt=""
+        aria-hidden
+        style={{ borderRadius: 2 }}
+      />
+    )
   }
   if (agent === 'claude' || agent === 'claude-agent-teams') {
     return <ClaudeIcon size={size} />

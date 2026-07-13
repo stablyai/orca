@@ -13,6 +13,7 @@ import {
   readAiVaultSessionDragData
 } from '@/lib/ai-vault-session-drag'
 import { launchAiVaultSessionInNewTab } from '@/lib/launch-ai-vault-session'
+import { isWebChatAgent } from '../../../../shared/ai-vault-types'
 import { useAppStore } from '@/store'
 import { resolveDropZone } from './tab-drop-zone'
 import type { TabDropZone } from './useTabDragSplit'
@@ -196,6 +197,11 @@ export default function AiVaultSessionDropLayer({
             'This session belongs to a different host. Drop it onto a workspace on the same host.'
           )
         )
+        return true
+      }
+
+      // Why: 웹 대화는 읽기전용이라 CLI 이어하기 대상이 아니다(UI에서도 숨겨짐).
+      if (isWebChatAgent(payload.agent)) {
         return true
       }
 
