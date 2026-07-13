@@ -6,7 +6,7 @@
 // best-effort and local-only — remote/Windows/locked/dest-taken all degrade to
 // "folder kept" without disturbing the rename that already succeeded.
 import type { GlobalSettings, Repo } from '../../shared/types'
-import { getRepoIdFromWorktreeId, splitWorktreeId } from '../../shared/worktree-id'
+import { getRepoIdFromWorktreeId, splitWorktreeIdForFilesystem } from '../../shared/worktree-id'
 import { getRepoExecutionHostId, LOCAL_EXECUTION_HOST_ID } from '../../shared/execution-host'
 import { planWorktreeFolderRename } from '../ipc/worktree-folder-rename-target'
 
@@ -35,7 +35,10 @@ export async function renameWorktreeFolderOnFirstWork(
   deps: FirstWorkFolderRenameDeps
 ): Promise<boolean> {
   const repo = deps.getRepo(getRepoIdFromWorktreeId(worktreeId))
-  const parsed = splitWorktreeId(worktreeId)
+  // Why: oldWorktreePath feeds an on-disk folder move. Resolve the synthetic
+  // `::workspace:<uuid>` suffix to the backing folder; identity is migrated
+  // separately via the untouched worktreeId.
+  const parsed = splitWorktreeIdForFilesystem(worktreeId)
   if (!repo || !parsed) {
     return false
   }
