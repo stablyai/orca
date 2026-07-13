@@ -1,3 +1,4 @@
+export const OPEN_FLOATING_TERMINAL_EVENT = 'orca-open-floating-terminal'
 export const TOGGLE_FLOATING_TERMINAL_EVENT = 'orca-toggle-floating-terminal'
 
 // Why: maximize/restore lives in the panel's own keydown handler, but that
@@ -14,8 +15,26 @@ let openMaximizedIntentAt: number | null = null
 // into a later ordinary open and maximizing it unexpectedly.
 const OPEN_MAXIMIZED_INTENT_TTL_MS = 2000
 
+export function requestOpenFloatingTerminal(): void {
+  window.dispatchEvent(new Event(OPEN_FLOATING_TERMINAL_EVENT))
+}
+
 export function requestFloatingTerminalOpenMaximized(): void {
   openMaximizedIntentAt = Date.now()
+}
+
+export function shouldOpenFloatingTerminalOnRequest(opts: {
+  enabled: boolean
+  visibleTabCount: number
+}): boolean {
+  return opts.enabled || opts.visibleTabCount > 0
+}
+
+export function shouldForceCloseFloatingTerminal(opts: {
+  enabled: boolean
+  visibleTabCount: number
+}): boolean {
+  return !opts.enabled && opts.visibleTabCount === 0
 }
 
 export function consumeFloatingTerminalOpenMaximizedIntent(): boolean {

@@ -1,7 +1,9 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   consumeFloatingTerminalOpenMaximizedIntent,
-  requestFloatingTerminalOpenMaximized
+  requestFloatingTerminalOpenMaximized,
+  shouldForceCloseFloatingTerminal,
+  shouldOpenFloatingTerminalOnRequest
 } from './floating-terminal'
 
 describe('floating terminal open-maximized intent', () => {
@@ -41,5 +43,21 @@ describe('floating terminal open-maximized intent', () => {
     vi.advanceTimersByTime(50)
 
     expect(consumeFloatingTerminalOpenMaximizedIntent()).toBe(true)
+  })
+
+  it('opens on request when the preference is enabled', () => {
+    expect(shouldOpenFloatingTerminalOnRequest({ enabled: true, visibleTabCount: 0 })).toBe(true)
+  })
+
+  it('opens on request when floating tabs already exist', () => {
+    expect(shouldOpenFloatingTerminalOnRequest({ enabled: false, visibleTabCount: 1 })).toBe(true)
+  })
+
+  it('does not force-close while floating tabs remain', () => {
+    expect(shouldForceCloseFloatingTerminal({ enabled: false, visibleTabCount: 1 })).toBe(false)
+  })
+
+  it('force-closes only when disabled and empty', () => {
+    expect(shouldForceCloseFloatingTerminal({ enabled: false, visibleTabCount: 0 })).toBe(true)
   })
 })

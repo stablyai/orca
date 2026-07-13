@@ -5,6 +5,7 @@ import {
 } from '../../../shared/localhost-worktree-labels'
 import type { GlobalSettings } from '../../../shared/types'
 import type { WorkspacePort, WorkspacePortScanResult } from '../../../shared/workspace-ports'
+import { requestOpenFloatingTerminal } from './floating-terminal'
 
 export type OpenHttpLinkOptions = {
   worktreeId?: string | null
@@ -25,6 +26,7 @@ type StoreAccessor = () => {
       'openLinksInApp' | 'activeRuntimeEnvironmentId' | 'localhostWorktreeLabelsEnabled'
     >
   > | null
+  activeView?: string
   setActiveWorktree: (worktreeId: string) => void
   createBrowserTab: (worktreeId: string, url: string, opts: { activate: boolean }) => unknown
   repos?: LocalhostLinkRepo[]
@@ -78,22 +80,30 @@ export function openHttpLink(url: string, opts: OpenHttpLinkOptions = {}): void 
     state?.settings?.openLinksInApp === true
 
   if (routeToOrca && worktreeId && state) {
+    const isActivityView = state.activeView === 'activity'
+    const targetWorktreeId = isActivityView ? FLOATING_TERMINAL_WORKTREE_ID : worktreeId
+    const createInAppBrowserTab = (browserUrl: string): void => {
+      state.createBrowserTab(targetWorktreeId, browserUrl, { activate: true })
+      if (isActivityView) {
+        requestOpenFloatingTerminal()
+      }
+    }
     // Why: http clicks from inside a worktree should not push a worktree-switch
     // history entry — the user isn't changing worktrees, they're opening a tab
     // in the one they're already in. activateAndRevealWorktree is reserved for
     // file-link jumps that genuinely switch worktrees.
-    if (worktreeId !== FLOATING_TERMINAL_WORKTREE_ID) {
+    if (!isActivityView && worktreeId !== FLOATING_TERMINAL_WORKTREE_ID) {
       // Why: the floating workspace uses a synthetic worktree id. Promoting it
       // to the global activeWorktreeId deselects the real repo workspace.
       state.setActiveWorktree(worktreeId)
     }
     const localhostRoute = localhostLabelRouteForHttpLink(url, state, sourceOwner)
     if (!localhostRoute) {
-      state.createBrowserTab(worktreeId, url, { activate: true })
+      createInAppBrowserTab(url)
       return
     }
     void openLabeledLocalhostLink(url, localhostRoute, (labeledUrl) => {
-      state.createBrowserTab(worktreeId, labeledUrl, { activate: true })
+      createInAppBrowserTab(labeledUrl)
     })
     return
   }

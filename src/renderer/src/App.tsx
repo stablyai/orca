@@ -67,6 +67,9 @@ import { MarkdownTemplatePicker } from './components/editor/MarkdownTemplatePick
 import { FloatingTerminalToggleButton } from './components/floating-terminal/FloatingTerminalToggleButton'
 import { OrcaProfileSwitcher } from './components/orca-profiles/OrcaProfileSwitcher'
 import {
+  OPEN_FLOATING_TERMINAL_EVENT,
+  shouldForceCloseFloatingTerminal,
+  shouldOpenFloatingTerminalOnRequest,
   TOGGLE_FLOATING_TERMINAL_EVENT,
   requestFloatingTerminalOpenMaximized
 } from '@/lib/floating-terminal'
@@ -539,8 +542,7 @@ function App(): React.JSX.Element {
   // Why: a closed empty floating workspace is not startup-critical. Once it owns
   // tabs, keep it mounted while closed so hidden terminal/browser/editor panes
   // retain their local state.
-  const shouldMountFloatingTerminalPanel =
-    floatingTerminalEnabled && (floatingTerminalOpen || floatingVisibleTabCount > 0)
+  const shouldMountFloatingTerminalPanel = floatingTerminalEnabled || floatingVisibleTabCount > 0
   // Why: the floating workspace is a transient overlay; hotkey minimize should
   // return keyboard focus to the surface the user was working in before it.
   const floatingTerminalReturnFocusRef = useRef<HTMLElement | null>(null)
@@ -621,15 +623,36 @@ function App(): React.JSX.Element {
         setFloatingTerminalOpenWithFocus((open) => !open)
       }
     }
+    const openFloatingTerminal = (): void => {
+      const liveState = useAppStore.getState()
+      const liveFloatingVisibleTabCount = selectFloatingVisibleTabCount(liveState)
+      if (
+        shouldOpenFloatingTerminalOnRequest({
+          enabled: liveState.settings?.floatingTerminalEnabled === true,
+          visibleTabCount: liveFloatingVisibleTabCount
+        })
+      ) {
+        setFloatingTerminalOpenWithFocus(true)
+      }
+    }
+    window.addEventListener(OPEN_FLOATING_TERMINAL_EVENT, openFloatingTerminal)
     window.addEventListener(TOGGLE_FLOATING_TERMINAL_EVENT, toggleFloatingTerminal)
-    return () => window.removeEventListener(TOGGLE_FLOATING_TERMINAL_EVENT, toggleFloatingTerminal)
+    return () => {
+      window.removeEventListener(OPEN_FLOATING_TERMINAL_EVENT, openFloatingTerminal)
+      window.removeEventListener(TOGGLE_FLOATING_TERMINAL_EVENT, toggleFloatingTerminal)
+    }
   }, [floatingTerminalEnabled, setFloatingTerminalOpenWithFocus])
 
   useEffect(() => {
-    if (!floatingTerminalEnabled) {
+    if (
+      shouldForceCloseFloatingTerminal({
+        enabled: floatingTerminalEnabled,
+        visibleTabCount: floatingVisibleTabCount
+      })
+    ) {
       setFloatingTerminalOpenWithFocus(false)
     }
-  }, [floatingTerminalEnabled, setFloatingTerminalOpenWithFocus])
+  }, [floatingTerminalEnabled, floatingVisibleTabCount, setFloatingTerminalOpenWithFocus])
 
   const sidebarWidth = useAppStore((s) => s.sidebarWidth)
   const sidebarOpen = useAppStore((s) => s.sidebarOpen)
