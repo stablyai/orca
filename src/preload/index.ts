@@ -12,6 +12,7 @@ import type { TerminalPaneSplitSource } from '../shared/feature-education-teleme
 import type { ProjectExecutionRuntimeResolution } from '../shared/project-execution-runtime'
 import type { StartupCommandDelivery } from '../shared/codex-startup-delivery'
 import type { SleepingAgentLaunchConfig } from '../shared/agent-session-resume'
+import type { MobileRelayStatus } from '../shared/mobile-relay-status'
 import type {
   BaseRefSearchResult,
   BaseRefDefaultResult,
@@ -4295,7 +4296,17 @@ const api = {
       ipcRenderer.invoke('mobile:revokeRuntimeAccess', args),
 
     isWebSocketReady: (): Promise<{ ready: boolean; endpoint: string | null }> =>
-      ipcRenderer.invoke('mobile:isWebSocketReady')
+      ipcRenderer.invoke('mobile:isWebSocketReady'),
+
+    getRelayStatus: (): Promise<{ status: MobileRelayStatus }> =>
+      ipcRenderer.invoke('mobile:getRelayStatus'),
+
+    onRelayStatusChanged: (callback: (status: MobileRelayStatus) => void): (() => void) => {
+      const listener = (_event: Electron.IpcRendererEvent, status: MobileRelayStatus) =>
+        callback(status)
+      ipcRenderer.on('mobile:relayStatusChanged', listener)
+      return () => ipcRenderer.removeListener('mobile:relayStatusChanged', listener)
+    }
   },
 
   agentStatus: {

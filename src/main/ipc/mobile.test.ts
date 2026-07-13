@@ -293,4 +293,10 @@ describe('registerMobileHandlers', () => {
     ).resolves.toEqual({ revoked: true })
     expect(revokeMobileDevice).toHaveBeenCalledWith('mobile-1')
   })
+
+  it('reports the current relay broker status without exposing a toggle', () => {
+    registerMobileHandlers({} as never, { getRelayStatus: () => 'registered' })
+
+    expect(handlers.get('mobile:getRelayStatus')?.()).toEqual({ status: 'registered' })
+  })
 })
