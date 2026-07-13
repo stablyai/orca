@@ -49,6 +49,7 @@ describe('remarkCalloutAlerts', () => {
 
     expect(bq.data?.hName).toBe('div')
     expect(bq.data?.hProperties?.className).toEqual(['md-alert', 'md-alert-note'])
+    expect(bq.data?.hProperties?.role).toBe('note')
     const [title, body] = bq.children!
     expect(title.data?.hProperties?.className).toEqual(['md-alert-title'])
     expect(titleText(title)).toBe('Note')

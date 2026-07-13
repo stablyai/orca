@@ -1,9 +1,9 @@
 // Renders GitHub/Obsidian callout blockquotes (`> [!NOTE]`, `> [!WARNING]`, …)
 // as styled callout boxes instead of the literal `[!type]` marker. A remark
 // (mdast) transform so it runs before sanitize; output is class-only (no inline
-// SVG) so it survives rehype-sanitize with a small allowlist. Icons + colors are
-// applied in CSS (markdown-preview.css), monochrome per the styleguide with the
-// one semantic accent (destructive) reserved for warning/caution.
+// SVG) so it survives rehype-sanitize with a small allowlist. Colors come from
+// CSS (markdown-preview.css), monochrome per the styleguide with the one
+// semantic accent (destructive) reserved for warning/caution.
 
 export const CALLOUT_ALERT_TYPES = [
   'note',
@@ -24,8 +24,9 @@ const ALERT_LABELS: Record<CalloutAlertType, string> = {
 
 // Marker at the very start of the blockquote's first line, e.g. `[!NOTE]` or
 // `[!note] Custom title`. Trailing spaces/tabs (not newlines) after `]` are eaten
-// so an inline custom title starts clean.
-const MARKER_RE = /^\[!(note|tip|important|warning|caution)\][^\S\r\n]*/i
+// so an inline custom title starts clean. Built from CALLOUT_ALERT_TYPES so a new
+// type added there cannot drift out of sync with the matcher.
+const MARKER_RE = new RegExp(`^\\[!(${CALLOUT_ALERT_TYPES.join('|')})\\][^\\S\\r\\n]*`, 'i')
 
 type MarkdownNode = {
   type: string
@@ -88,9 +89,12 @@ function transformBlockquote(node: MarkdownNode): void {
     ...node.children!.slice(1)
   ]
 
+  // role="note" (not "alert") for every type: these are static rendered content,
+  // and "alert" is an assertive live region that would interrupt screen readers
+  // on each render. Severity is conveyed by the visible title ("Warning"/"Caution").
   node.data = {
     hName: 'div',
-    hProperties: { className: ['md-alert', `md-alert-${type}`] }
+    hProperties: { className: ['md-alert', `md-alert-${type}`], role: 'note' }
   }
   node.children = [titleNode, ...body]
 }

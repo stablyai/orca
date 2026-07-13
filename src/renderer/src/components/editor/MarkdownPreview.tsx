@@ -312,6 +312,7 @@ const markdownPreviewSanitizeSchema = {
     div: [
       ...(defaultSchema.attributes?.div ?? []),
       ['className', /^language-[\w-]+$/, /^md-alert(?:-[a-z]+)?$/],
+      ['role', 'note'],
       'align'
     ],
     p: [...(defaultSchema.attributes?.p ?? []), ['className', 'md-alert-title']],

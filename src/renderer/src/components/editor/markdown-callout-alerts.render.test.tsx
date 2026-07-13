@@ -41,6 +41,8 @@ describe('callout alerts render through the real remark pipeline', () => {
     render('> [!NOTE]\n> Body text.')
     const alert = container.querySelector('div.md-alert.md-alert-note')
     expect(alert).not.toBeNull()
+    // role="note" must survive rehype-sanitize (allowlisted on div).
+    expect(alert?.getAttribute('role')).toBe('note')
     expect(alert?.querySelector('.md-alert-title')?.textContent).toBe('Note')
     expect(alert?.textContent).toContain('Body text.')
     // The literal marker must be gone.
