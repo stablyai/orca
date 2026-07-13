@@ -918,7 +918,7 @@ describe('registerPtyHandlers', () => {
     it('preserves a user CODEX_HOME when the system account is selected', async () => {
       const getSelectedCodexHomePath = vi.fn(() => null)
       const env = await spawnAndGetEnv(
-        { CODEX_HOME: '/tmp/user-codex-home' },
+        { CODEX_HOME: '/tmp/user-codex-home', ORCA_CODEX_HOME: TEST_CODEX_HOME },
         undefined,
         getSelectedCodexHomePath
       )
