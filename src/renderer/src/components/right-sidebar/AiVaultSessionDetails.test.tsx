@@ -1,9 +1,15 @@
 // @vitest-environment happy-dom
 
-import { act, render } from '@testing-library/react'
+import { act, fireEvent, render } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { AiVaultSession, AiVaultSubagentListResult } from '../../../../shared/ai-vault-types'
 import { SessionInlineDetails } from './AiVaultSessionDetails'
+
+const resumeWebChatSpy = vi.fn()
+vi.mock('./ai-vault-web-chat-resume', () => ({
+  resumeWebChatAsLocalAgent: (args: unknown) => resumeWebChatSpy(args),
+  resolveWebChatResumeAgent: vi.fn()
+}))
 
 const listSubagentSessions = vi.fn<(args: unknown) => Promise<AiVaultSubagentListResult>>()
 
@@ -111,5 +117,87 @@ describe('SessionInlineDetails', () => {
 
     expect(queryByText('Latest turns')).not.toBeNull()
     expect(queryByText('Hello from the web chat import')).not.toBeNull()
+  })
+})
+
+describe('SessionInlineDetails web-chat resume', () => {
+  beforeEach(() => {
+    resumeWebChatSpy.mockClear()
+  })
+
+  it('resumes a web-chat session with the resolved agent and active worktree', async () => {
+    const session = makeSession({
+      readOnly: true,
+      agent: 'gemini-web',
+      sessionId: 'c_1',
+      title: 'Web chat'
+    })
+    const { getByTestId } = render(
+      <SessionInlineDetails
+        id="session-web-1"
+        session={session}
+        worktreeInfo={null}
+        vaultScope="workspace"
+        resumeActions={resumeActions}
+        onResumeInWorktree={vi.fn()}
+        onResumeInNewTab={vi.fn()}
+        webResumeAgent="claude"
+        activeWorktreeId="wt-1"
+      />
+    )
+    await act(async () => {})
+
+    fireEvent.click(getByTestId('ai-vault-web-chat-resume'))
+
+    expect(resumeWebChatSpy).toHaveBeenCalledWith({
+      session,
+      agent: 'claude',
+      worktreeId: 'wt-1'
+    })
+  })
+
+  it('disables web-chat resume and shows a hint when no default agent is set', async () => {
+    const { getByTestId } = render(
+      <SessionInlineDetails
+        id="session-web-2"
+        session={makeSession({ readOnly: true, agent: 'chatgpt' })}
+        worktreeInfo={null}
+        vaultScope="workspace"
+        resumeActions={resumeActions}
+        onResumeInWorktree={vi.fn()}
+        onResumeInNewTab={vi.fn()}
+        webResumeAgent={null}
+        activeWorktreeId="wt-1"
+      />
+    )
+    await act(async () => {})
+
+    const button = getByTestId('ai-vault-web-chat-resume') as HTMLButtonElement
+    expect(button.disabled).toBe(true)
+    expect(button.closest('[title]')?.getAttribute('title')).toBe(
+      'Set a default agent before resuming.'
+    )
+
+    fireEvent.click(button)
+    expect(resumeWebChatSpy).not.toHaveBeenCalled()
+  })
+
+  it('does not render web-chat resume for a non-web read-only session', async () => {
+    const { queryByTestId } = render(
+      <SessionInlineDetails
+        id="session-web-3"
+        session={makeSession({ readOnly: true, agent: 'claude' })}
+        worktreeInfo={null}
+        vaultScope="workspace"
+        resumeActions={resumeActions}
+        onResumeInWorktree={vi.fn()}
+        onResumeInNewTab={vi.fn()}
+        webResumeAgent="claude"
+        activeWorktreeId="wt-1"
+      />
+    )
+    await act(async () => {})
+
+    expect(queryByTestId('ai-vault-web-chat-resume')).toBeNull()
   })
 })

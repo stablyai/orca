@@ -10020,6 +10020,8 @@
             "resumeInNewTab": "Resume in New Tab",
             "resumeInWorktree": "Resume in Worktree",
             "viewLog": "View Log",
+            "resumeWebChat": "Resume",
+            "setDefaultAgentToResume": "Set a default agent before resuming.",
             "copyResumeCommand": "Copy Resume Command",
             "openLog": "Open Log",
             "revealLog": "Reveal Log",

@@ -10009,6 +10009,8 @@
             "resumeInNewTab": "Reanudar en nueva pestaña",
             "resumeInWorktree": "Reanudar en worktree",
             "viewLog": "Ver log",
+            "resumeWebChat": "Reanudar",
+            "setDefaultAgentToResume": "Configura un agente predeterminado antes de reanudar.",
             "copyResumeCommand": "Copiar comando para reanudar",
             "openLog": "Abrir registro",
             "revealLog": "Mostrar registro",

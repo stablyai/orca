@@ -8,6 +8,7 @@ import {
   writeAiVaultSessionDragData
 } from '@/lib/ai-vault-session-drag'
 import type { AiVaultScope, AiVaultSession } from '../../../../shared/ai-vault-types'
+import type { TuiAgent } from '../../../../shared/types'
 import type { AiVaultResumeStartup } from '@/lib/ai-vault-resume-command'
 import { translate } from '@/i18n/i18n'
 import { SessionInlineDetails } from './AiVaultSessionDetails'
@@ -49,7 +50,9 @@ export function VaultSessionRow({
   onCopyPath,
   onOpenLog,
   onRevealLog,
-  onOpenCwd
+  onOpenCwd,
+  webResumeAgent,
+  activeWorktreeId
 }: {
   session: AiVaultSession
   liveState: AgentStatusState | null
@@ -73,6 +76,8 @@ export function VaultSessionRow({
   onOpenLog?: () => void
   onRevealLog?: () => void
   onOpenCwd?: () => void
+  webResumeAgent?: TuiAgent | null
+  activeWorktreeId?: string | null
 }) {
   const updatedAt = session.updatedAt ?? session.modifiedAt
   const detailsId = getSessionDetailsId(session.id)
@@ -198,6 +203,8 @@ export function VaultSessionRow({
               onResumeInWorktree={onResumeInWorktree}
               onResumeInNewTab={onResumeInNewTab}
               onOpenLog={onOpenLog}
+              webResumeAgent={webResumeAgent}
+              activeWorktreeId={activeWorktreeId}
             />
           ) : null}
         </div>

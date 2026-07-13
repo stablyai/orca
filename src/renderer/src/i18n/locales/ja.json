@@ -10009,6 +10009,8 @@
             "resumeInNewTab": "新しいタブで再開",
             "resumeInWorktree": "ワークツリーで再開",
             "viewLog": "ログを表示",
+            "resumeWebChat": "再開",
+            "setDefaultAgentToResume": "再開する前にデフォルトエージェントを設定してください。",
             "copyResumeCommand": "再開コマンドをコピー",
             "openLog": "ログを開く",
             "revealLog": "ログを表示",

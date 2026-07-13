@@ -5,10 +5,13 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip
 import { cn } from '@/lib/utils'
 import {
   isAiVaultSessionResumableContent,
+  isWebChatAgent,
   type AiVaultScope,
   type AiVaultSession
 } from '../../../../shared/ai-vault-types'
+import type { TuiAgent } from '../../../../shared/types'
 import { translate } from '@/i18n/i18n'
+import { AiVaultWebChatResumeButton } from './AiVaultWebChatResumeButton'
 import { sessionDetailConversationTurns } from './ai-vault-session-display'
 import { SessionSubagentsSection } from './AiVaultSessionSubagents'
 import { SessionUnsavedConversationNotice } from './AiVaultSessionUnsavedNotice'
@@ -28,7 +31,9 @@ export function SessionInlineDetails({
   resumeActions,
   onResumeInWorktree,
   onResumeInNewTab,
-  onOpenLog
+  onOpenLog,
+  webResumeAgent,
+  activeWorktreeId
 }: {
   id: string
   session: AiVaultSession
@@ -41,12 +46,19 @@ export function SessionInlineDetails({
   onResumeInWorktree: () => void
   onResumeInNewTab: () => void
   onOpenLog?: () => void
+  // Resolved default local agent (null = no valid default) + active workspace,
+  // used only by the read-only web-chat "재개" affordance below.
+  webResumeAgent?: TuiAgent | null
+  activeWorktreeId?: string | null
 }): React.JSX.Element {
   // A zero-turn transcript would resume into an empty conversation, so the plain
   // resume affordances are withheld and a distinct "not saved" state is shown.
   const hasResumableContent = isAiVaultSessionResumableContent(session)
   // Why: 읽기전용 웹 대화는 트랜스크립트만 보여주고 CLI 이어하기 어포던스는 전부 숨긴다.
   const canResume = hasResumableContent && !session.readOnly
+  // Why: web chat is read-only, but it can be *resumed* by seeding a local agent —
+  // offered only for readOnly web sessions (never a non-web session).
+  const showWebChatResume = session.readOnly && isWebChatAgent(session.agent)
   const showResumeInWorktree = canResume && Boolean(resumeActions.worktree.worktreeId)
   const showResumeInNewTab =
     canResume && (!resumeActions.worktree.worktreeId || Boolean(resumeActions.newTab.worktreeId))
@@ -116,8 +128,15 @@ export function SessionInlineDetails({
         ) : null}
       </div>
 
-      {showResumeInWorktree || showResumeInNewTab || onOpenLog ? (
+      {showResumeInWorktree || showResumeInNewTab || showWebChatResume || onOpenLog ? (
         <div className="flex flex-wrap items-center gap-1.5 border-t border-sidebar-border/80 bg-sidebar-accent/15 px-3 py-2">
+          {showWebChatResume ? (
+            <AiVaultWebChatResumeButton
+              session={session}
+              resumeAgent={webResumeAgent ?? null}
+              activeWorktreeId={activeWorktreeId ?? null}
+            />
+          ) : null}
           {showResumeInWorktree ? (
             <Button
               type="button"

@@ -10009,6 +10009,8 @@
             "resumeInNewTab": "在新标签页中恢复",
             "resumeInWorktree": "在工作树中恢复",
             "viewLog": "查看日志",
+            "resumeWebChat": "继续",
+            "setDefaultAgentToResume": "继续之前请先设置默认代理。",
             "copyResumeCommand": "复制恢复命令",
             "openLog": "打开日志",
             "revealLog": "显示日志",

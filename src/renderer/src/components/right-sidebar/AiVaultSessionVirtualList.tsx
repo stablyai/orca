@@ -1,7 +1,12 @@
 import { useVirtualizer } from '@tanstack/react-virtual'
 import { useCallback, useMemo, useRef, useState } from 'react'
 import type { AgentStatusState } from '../../../../shared/agent-status-types'
-import type { AiVaultScope, AiVaultSession } from '../../../../shared/ai-vault-types'
+import {
+  isWebChatAgent,
+  type AiVaultScope,
+  type AiVaultSession
+} from '../../../../shared/ai-vault-types'
+import type { TuiAgent } from '../../../../shared/types'
 import type { AiVaultResumeStartup } from '@/lib/ai-vault-resume-command'
 import { cn } from '@/lib/utils'
 import { translate } from '@/i18n/i18n'
@@ -62,7 +67,9 @@ export function AiVaultSessionVirtualList({
   onCopyPath,
   onOpenLog,
   onRevealLog,
-  onOpenCwd
+  onOpenCwd,
+  webResumeAgent,
+  activeWorktreeId
 }: {
   groups: readonly AiVaultSessionGroup[]
   collapsedGroups: ReadonlySet<string>
@@ -87,6 +94,10 @@ export function AiVaultSessionVirtualList({
   onOpenLog: (session: AiVaultSession) => void
   onRevealLog: (session: AiVaultSession) => void
   onOpenCwd: (session: AiVaultSession) => void
+  // Resolved default local agent + active workspace for the read-only web-chat
+  // "재개" affordance surfaced in each session's detail view.
+  webResumeAgent: TuiAgent | null
+  activeWorktreeId: string | null
 }): React.JSX.Element {
   const listScrollRef = useRef<HTMLDivElement>(null)
   const stickyRangeStartIndexRef = useRef(0)
@@ -215,6 +226,8 @@ export function AiVaultSessionVirtualList({
               onOpenLog={onOpenLog}
               onRevealLog={onRevealLog}
               onOpenCwd={onOpenCwd}
+              webResumeAgent={webResumeAgent}
+              activeWorktreeId={activeWorktreeId}
             />
           ))}
         </div>
@@ -248,7 +261,9 @@ function AiVaultVirtualRow({
   onCopyPath,
   onOpenLog,
   onRevealLog,
-  onOpenCwd
+  onOpenCwd,
+  webResumeAgent,
+  activeWorktreeId
 }: {
   row: AiVaultListRow | undefined
   index: number
@@ -275,6 +290,8 @@ function AiVaultVirtualRow({
   onOpenLog: (session: AiVaultSession) => void
   onRevealLog: (session: AiVaultSession) => void
   onOpenCwd: (session: AiVaultSession) => void
+  webResumeAgent: TuiAgent | null
+  activeWorktreeId: string | null
 }): React.JSX.Element | null {
   if (!row) {
     return null
@@ -305,6 +322,9 @@ function AiVaultVirtualRow({
   // identities that have no single file to open, while Reveal/CWD stay on the
   // existing local-path gate.
   const canOpenLogInOrca = row.type === 'session' && canOpenAiVaultSessionLogInOrca(row.session)
+  // Web sessions have a synthetic filePath so they miss canOpenLogInOrca; their
+  // "보기" routes to a read-only native transcript tab instead (panel handler).
+  const isWebChatSession = row.type === 'session' && isWebChatAgent(row.session.agent)
 
   return (
     <div
@@ -366,11 +386,15 @@ function AiVaultVirtualRow({
           }
           onCopyId={() => onCopyId(row.session)}
           onCopyPath={() => onCopyPath(row.session)}
-          onOpenLog={canOpenLogInOrca ? () => onOpenLog(row.session) : undefined}
+          onOpenLog={
+            canOpenLogInOrca || isWebChatSession ? () => onOpenLog(row.session) : undefined
+          }
           onRevealLog={canOpenLocalSessionPaths ? () => onRevealLog(row.session) : undefined}
           onOpenCwd={
             canOpenLocalSessionPaths && row.session.cwd ? () => onOpenCwd(row.session) : undefined
           }
+          webResumeAgent={webResumeAgent}
+          activeWorktreeId={activeWorktreeId}
         />
       )}
     </div>

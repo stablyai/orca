@@ -34,9 +34,12 @@ import {
 import { useAiVaultSessionLaunchActions } from './ai-vault-session-launch-actions'
 import { useAiVaultSessionWorktreeMap } from './ai-vault-session-worktree'
 import { openAiVaultSessionLogInOrca } from './ai-vault-session-log-open'
+import { openWebChatSessionTranscript } from './ai-vault-web-chat-transcript-open'
+import { resolveWebChatResumeAgent } from './ai-vault-web-chat-resume'
 import { useAiVaultOriginalPaneActions } from './ai-vault-original-pane-actions'
 import {
   AI_VAULT_AGENTS,
+  isWebChatAgent,
   type AiVaultAgent,
   type AiVaultGroup,
   type AiVaultScope,
@@ -71,6 +74,12 @@ export default function AiVaultPanel(): React.JSX.Element {
   const settings = useAppStore((s) => s.settings)
   const runtimeEnvironments = useAppStore((s) => s.runtimeEnvironments)
   const agentCmdOverrides = settings?.agentCmdOverrides
+  // Read-only web-chat sessions resume by seeding Orca's default local agent;
+  // null disables the affordance (no valid default) and drives the detail hint.
+  const webResumeAgent = resolveWebChatResumeAgent(
+    settings?.defaultTuiAgent ?? null,
+    settings?.disabledTuiAgents ?? []
+  )
   const { getOriginalPaneTarget, getSessionLiveState, jumpToOriginalPane, jumpToWorktree } =
     useAiVaultOriginalPaneActions()
   const [query, setQuery] = useState('')
@@ -392,13 +401,21 @@ export default function AiVaultPanel(): React.JSX.Element {
             translate('auto.components.right.sidebar.AiVaultPanel.logPath', 'Log path')
           )
         }
-        onOpenLog={(session) => void openAiVaultSessionLogInOrca(session)}
+        onOpenLog={(session) =>
+          // Web sessions open a read-only native transcript tab; local sessions
+          // open their on-disk log file. Web-only routing stays behind the guard.
+          isWebChatAgent(session.agent)
+            ? openWebChatSessionTranscript(session)
+            : void openAiVaultSessionLogInOrca(session)
+        }
         onRevealLog={(session) => void window.api.shell.openPath(session.filePath)}
         onOpenCwd={(session) => {
           if (session.cwd) {
             void window.api.shell.openPath(session.cwd)
           }
         }}
+        webResumeAgent={webResumeAgent}
+        activeWorktreeId={activeWorktreeId ?? null}
       />
     </div>
   )
