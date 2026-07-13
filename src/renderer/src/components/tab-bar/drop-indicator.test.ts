@@ -3,6 +3,7 @@ import {
   ACTIVE_TAB_INDICATOR_CLASSES,
   getDropIndicatorClasses,
   getTabRootStateClasses,
+  getTabSelectionClasses,
   getTabStripBorderClasses
 } from './drop-indicator'
 
@@ -83,5 +84,24 @@ describe('getTabRootStateClasses', () => {
     expect(classes).toContain('bg-card')
     expect(classes).toContain('text-muted-foreground')
     expect(classes).toContain('hover:text-foreground')
+  })
+})
+
+describe('getTabSelectionClasses', () => {
+  it('returns no treatment for unselected tabs', () => {
+    expect(getTabSelectionClasses(false, false)).toBe('')
+  })
+
+  it('makes inactive selected tabs visibly selected', () => {
+    const classes = getTabSelectionClasses(true, false)
+    expect(classes).toContain('bg-[color-mix(in_srgb,var(--foreground)_6%,var(--card))]')
+    expect(classes).toContain('text-foreground')
+    expect(classes).toContain(
+      'shadow-[inset_0_-2px_0_0_color-mix(in_srgb,var(--foreground)_60%,var(--card))]'
+    )
+  })
+
+  it('leaves active selected tabs on the active-tab treatment', () => {
+    expect(getTabSelectionClasses(true, true)).toBe('')
   })
 })

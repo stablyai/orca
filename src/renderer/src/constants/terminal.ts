@@ -7,6 +7,8 @@ export const SPLIT_TERMINAL_PANE_EVENT = 'orca-split-terminal-pane'
 export const REQUEST_ACTIVE_TERMINAL_PANE_SPLIT_EVENT = 'orca-request-active-terminal-pane-split'
 export const CLOSE_TERMINAL_PANE_EVENT = 'orca-close-terminal-pane'
 export const BACKGROUND_MOUNT_TERMINAL_WORKTREE_EVENT = 'orca-background-mount-terminal-worktree'
+export const REQUEST_CLOSE_SELECTED_VISIBLE_TABS_EVENT =
+  'orca-request-close-selected-visible-tabs'
 
 // Why: mobile wake (experimental agent sleep) must fire the cold-restore
 // --resume of a worktree's mounted hidden hibernated panes without a desktop

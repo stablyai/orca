@@ -12,8 +12,12 @@ import { runWorktreeDelete } from '@/components/sidebar/delete-worktree-flow'
 import { runSleepWorktree } from '@/components/sidebar/sleep-worktree-flow'
 import { createBackgroundSleepingAgentWakeDispatcher } from '@/lib/wake-sleeping-agents-in-background'
 import { OPEN_WORKSPACE_BOARD_EVENT } from '@/components/sidebar/useWorkspaceBoardPanel'
-import { SPLIT_TERMINAL_PANE_EVENT, CLOSE_TERMINAL_PANE_EVENT } from '@/constants/terminal'
 import { requestBackgroundTerminalWorktreeMount } from '@/components/terminal/background-terminal-worktree-mount'
+import {
+  REQUEST_CLOSE_SELECTED_VISIBLE_TABS_EVENT,
+  SPLIT_TERMINAL_PANE_EVENT,
+  CLOSE_TERMINAL_PANE_EVENT
+} from '@/constants/terminal'
 import type { SplitTerminalPaneDetail, CloseTerminalPaneDetail } from '@/constants/terminal'
 import { getVisibleWorktreeIds } from '@/components/sidebar/visible-worktrees'
 import { activateTabNumberShortcut } from '@/lib/tab-number-shortcuts'
@@ -2509,6 +2513,13 @@ export function useIpcEvents(): void {
       window.api.ui.onCloseActiveTab(() => {
         if (isEmptyFloatingWorkspacePanelVisible()) {
           window.dispatchEvent(new Event(TOGGLE_FLOATING_TERMINAL_EVENT))
+          return
+        }
+        const selectedTabsCloseRequest = new Event(REQUEST_CLOSE_SELECTED_VISIBLE_TABS_EVENT, {
+          cancelable: true
+        })
+        window.dispatchEvent(selectedTabsCloseRequest)
+        if (selectedTabsCloseRequest.defaultPrevented) {
           return
         }
         const store = useAppStore.getState()

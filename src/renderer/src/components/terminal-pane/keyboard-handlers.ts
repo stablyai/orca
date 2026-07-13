@@ -37,6 +37,7 @@ import {
   markTerminalPinnedViewport,
   syncTerminalScrollIntentFromViewport
 } from '@/lib/pane-manager/terminal-scroll-intent'
+import { REQUEST_CLOSE_SELECTED_VISIBLE_TABS_EVENT } from '@/constants/terminal'
 
 export function resolveTerminalKeyboardShortcutAction(
   event: Parameters<typeof resolveTerminalShortcutAction>[0],
@@ -570,6 +571,13 @@ export function useTerminalKeyboardShortcuts({
       if (action.type === 'closeActivePane') {
         e.preventDefault()
         e.stopImmediatePropagation()
+        const selectedTabsCloseRequest = new Event(REQUEST_CLOSE_SELECTED_VISIBLE_TABS_EVENT, {
+          cancelable: true
+        })
+        window.dispatchEvent(selectedTabsCloseRequest)
+        if (selectedTabsCloseRequest.defaultPrevented) {
+          return
+        }
         const pane = manager.getActivePane() ?? manager.getPanes()[0]
         if (!pane) {
           return

@@ -3,7 +3,7 @@
  * to a file that was already ~398 code lines on main. The per-type render
  * branches share little beyond drag data, so consolidating them would cost
  * more clarity than the ~5 lines of bloat is worth. */
-import React, { useEffect, useMemo, useRef, useState } from 'react'
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 import { SortableContext } from '@dnd-kit/sortable'
 import {
@@ -86,6 +86,12 @@ import {
   selectTabAgentTypesByTabId
 } from './tab-agent-types-by-tab-id'
 import { resolveCommittedTitleAgentType } from '@/lib/pane-agent-evidence'
+import {
+  reconcileTabStripSelection,
+  resolveTabStripSelectionClick,
+  type TabStripSelectionModifiers
+} from './tab-strip-selection'
+import { getEmptyTabStripSelection } from '@/store/slices/tab-strip-selection'
 
 const isWindows = navigator.userAgent.includes('Windows')
 const isMacOs = navigator.userAgent.includes('Mac')
@@ -945,6 +951,13 @@ function TabBarInner({
   ])
 
   const sortableIds = useMemo(() => orderedItems.map((item) => item.id), [orderedItems])
+  const storedTabSelection =
+    useAppStore((s) => s.tabStripSelectionByWorktree?.[worktreeId]) ?? getEmptyTabStripSelection()
+  const tabSelection =
+    storedTabSelection.tabStripId === resolvedGroupId
+      ? storedTabSelection
+      : getEmptyTabStripSelection()
+  const setTabStripSelection = useAppStore((s) => s.setTabStripSelection)
 
   const activeIndicator =
     hoveredTabInsertion?.groupId === resolvedGroupId ? hoveredTabInsertion : null
@@ -985,6 +998,62 @@ function TabBarInner({
     activeTabType,
     orderedItems
   ])
+  useEffect(() => {
+    setTabStripSelection(worktreeId, (selection) => {
+      if (selection.tabStripId && selection.tabStripId !== resolvedGroupId) {
+        return selection
+      }
+      const next = reconcileTabStripSelection(selection, sortableIds)
+      if (next.selectedIds.length === 0 && next.anchorId === null) {
+        return next
+      }
+      return { ...next, tabStripId: resolvedGroupId }
+    })
+  }, [resolvedGroupId, setTabStripSelection, sortableIds, worktreeId])
+  const selectedVisibleTabIds = useMemo(
+    () => new Set(tabSelection.selectedIds),
+    [tabSelection.selectedIds]
+  )
+  const activateItem = useCallback(
+    (item: TabItem, modifiers: TabStripSelectionModifiers): void => {
+      setTabStripSelection(worktreeId, (selection) => {
+        const scopedSelection =
+          selection.tabStripId && selection.tabStripId !== resolvedGroupId
+            ? getEmptyTabStripSelection()
+            : selection
+        return {
+          ...resolveTabStripSelectionClick({
+            visibleTabIds: sortableIds,
+            clickedId: item.id,
+            activeId: activeVisibleTabId,
+            selection: scopedSelection,
+            modifiers,
+            isMac: isMacOs
+          }),
+          tabStripId: resolvedGroupId
+        }
+      })
+      if (item.type === 'terminal') {
+        onActivate(item.id)
+        return
+      }
+      if (item.type === 'browser') {
+        onActivateBrowserTab?.(item.id)
+        return
+      }
+      onActivateFile?.(item.id)
+    },
+    [
+      activeVisibleTabId,
+      onActivate,
+      onActivateBrowserTab,
+      onActivateFile,
+      resolvedGroupId,
+      setTabStripSelection,
+      sortableIds,
+      worktreeId
+    ]
+  )
   const tabStripLayoutKey = useMemo(
     () =>
       orderedItems
@@ -1154,9 +1223,10 @@ function TabBarInner({
                       (activeTabType === 'terminal' || activeTabType === 'simulator') &&
                       item.id === activeTabId
                     }
+                    isSelected={selectedVisibleTabIds.has(item.id)}
                     isPinned={item.isPinned}
                     isExpanded={expandedPaneByTabId[item.id] === true}
-                    onActivate={onActivate}
+                    onActivate={(_, modifiers) => activateItem(item, modifiers)}
                     onClose={onClose}
                     onCloseOthers={onCloseOthers}
                     onCloseToRight={onCloseToRight}
@@ -1176,9 +1246,10 @@ function TabBarInner({
                     key={item.id}
                     tab={item.data}
                     isActive={activeTabType === 'browser' && activeBrowserTabId === item.id}
+                    isSelected={selectedVisibleTabIds.has(item.id)}
                     isPinned={item.isPinned}
                     hasTabsToRight={index < orderedItems.length - 1}
-                    onActivate={() => onActivateBrowserTab?.(item.id)}
+                    onActivate={(modifiers) => activateItem(item, modifiers)}
                     onClose={() => onCloseBrowserTab?.(item.id)}
                     onCloseToRight={() => onCloseToRight(item.id)}
                     onDuplicate={() => onDuplicateBrowserTab?.(item.id)}
@@ -1207,10 +1278,11 @@ function TabBarInner({
                     key={item.id}
                     file={simFile}
                     isActive={activeTabType === 'simulator' && item.id === activeSimulatorTabId}
+                    isSelected={selectedVisibleTabIds.has(item.id)}
                     isPinned={item.isPinned}
                     hasTabsToRight={index < orderedItems.length - 1}
                     statusByRelativePath={statusByRelativePath}
-                    onActivate={() => onActivateFile?.(item.id)}
+                    onActivate={(modifiers) => activateItem(item, modifiers)}
                     onClose={() => onCloseFile?.(item.id)}
                     onCloseToRight={() => onCloseToRight(item.id)}
                     onCloseAll={() => onCloseAllFiles?.()}
@@ -1230,10 +1302,11 @@ function TabBarInner({
                     (activeTabType === 'editor' || activeTabType === 'simulator') &&
                     activeFileId === item.id
                   }
+                  isSelected={selectedVisibleTabIds.has(item.id)}
                   isPinned={item.isPinned}
                   hasTabsToRight={index < orderedItems.length - 1}
                   statusByRelativePath={statusByRelativePath}
-                  onActivate={() => onActivateFile?.(item.id)}
+                  onActivate={(modifiers) => activateItem(item, modifiers)}
                   onClose={() => onCloseFile?.(item.id)}
                   onCloseToRight={() => onCloseToRight(item.id)}
                   onCloseAll={() => onCloseAllFiles?.()}

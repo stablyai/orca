@@ -16,6 +16,7 @@ import { useAppStore } from '../../store'
 import {
   ACTIVE_TAB_INDICATOR_CLASSES,
   getDropIndicatorClasses,
+  getTabSelectionClasses,
   getTabRootStateClasses,
   getTabStripBorderClasses,
   type DropIndicator
@@ -26,6 +27,7 @@ import { translate } from '@/i18n/i18n'
 import { TAB_CONTAINER_WIDTH_CLASSES, TAB_LABEL_WIDTH_CLASSES } from './tab-width-rules'
 import { useShortcutKeyDetails } from '@/hooks/useShortcutLabel'
 import { useTabStripPointerActivation } from './tab-strip-pointer-activation'
+import type { TabStripSelectionModifiers } from './tab-strip-selection'
 
 type SortableTabProps = {
   tab: TerminalTab
@@ -34,9 +36,10 @@ type SortableTabProps = {
   tabCount: number
   hasTabsToRight: boolean
   isActive: boolean
+  isSelected: boolean
   isPinned: boolean
   isExpanded: boolean
-  onActivate: (tabId: string) => void
+  onActivate: (tabId: string, modifiers: TabStripSelectionModifiers) => void
   onClose: (tabId: string) => void
   onCloseOthers: (tabId: string) => void
   onCloseToRight: (tabId: string) => void
@@ -65,6 +68,7 @@ export default function SortableTab({
   tabCount,
   hasTabsToRight,
   isActive,
+  isSelected,
   isPinned,
   isExpanded,
   onActivate,
@@ -211,13 +215,15 @@ export default function SortableTab({
   // so dnd-kit's a11y attributes (aria-roledescription, etc.) remain on the element — only
   // the pointer listeners are gated so a drag can't start while typing.
   const dragListeners = isEditing ? undefined : listeners
-  const handleActivate = useCallback(() => {
-    onActivate(tab.id)
-  }, [onActivate, tab.id])
-  // Why: defer activation to pointer-up so pressing a tab to drag it (reorder /
-  // move into another pane / split) does not switch the active tab or steal
-  // terminal focus mid-gesture. See tab-strip-pointer-activation.
-  const { onPointerDown: onTabPointerDown } = useTabStripPointerActivation({
+  const handleActivate = useCallback(
+    (modifiers: TabStripSelectionModifiers) => {
+      onActivate(tab.id, modifiers)
+    },
+    [onActivate, tab.id]
+  )
+  // Why: defer activation to click after pointer movement is classified, so
+  // drag gestures do not switch tabs and manual modifier-clicks keep modifiers.
+  const { onPointerDown: onTabPointerDown, onClick: onTabClick } = useTabStripPointerActivation({
     onActivate: handleActivate,
     disabled: isEditing
   })
@@ -236,6 +242,7 @@ export default function SortableTab({
       // pass even if the tab-bar render path had silently broken (the same
       // tautology that let PR #1186's render crash ship past E2E in #1193).
       data-active={isActive ? 'true' : 'false'}
+      data-selected={isSelected ? 'true' : 'false'}
       {...attributes}
       {...dragListeners}
       // Why: on unread activity, tint the whole tab with a subtle amber
@@ -245,7 +252,7 @@ export default function SortableTab({
       // tab still reads as "selected + has activity". The wash is
       // rendered as an absolutely-positioned child below so the ::after
       // pseudo-element stays free for the drop indicator.
-      className={`group relative flex items-center h-full px-1.5 text-xs cursor-pointer select-none outline-none focus:outline-none focus-visible:outline-none ${getTabStripBorderClasses(hasTabsToRight, { includeTopBorder: includeTopTabBorder })} ${getDropIndicatorClasses(dropIndicator ?? null)} ${getTabRootStateClasses(isActive)}`}
+      className={`group relative flex items-center h-full px-1.5 text-xs cursor-pointer select-none outline-none focus:outline-none focus-visible:outline-none ${getTabStripBorderClasses(hasTabsToRight, { includeTopBorder: includeTopTabBorder })} ${getDropIndicatorClasses(dropIndicator ?? null)} ${getTabRootStateClasses(isActive)} ${getTabSelectionClasses(isSelected, isActive)}`}
       onDoubleClick={(e) => {
         if (isEditing) {
           return
@@ -259,6 +266,7 @@ export default function SortableTab({
           dragListeners?.onPointerDown as ((event: React.PointerEvent<Element>) => void) | undefined
         )
       }}
+      onClick={onTabClick}
       onMouseDown={(e) => {
         // Why: prevent default browser middle-click behavior (auto-scroll)
         // but do NOT close here — closing removes the element before mouseup,
@@ -496,7 +504,9 @@ export default function SortableTab({
         hasTabsToRight={hasTabsToRight}
         isPinned={isPinned}
         onOpenChange={setMenuOpen}
-        onActivate={onActivate}
+        onActivate={(targetTabId) =>
+          onActivate(targetTabId, { shiftKey: false, metaKey: false, ctrlKey: false })
+        }
         onClose={onClose}
         onCloseOthers={onCloseOthers}
         onCloseToRight={onCloseToRight}

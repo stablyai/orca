@@ -7,6 +7,7 @@ import { toast } from 'sonner'
 import { useShallow } from 'zustand/react/shallow'
 import {
   BACKGROUND_MOUNT_TERMINAL_WORKTREE_EVENT,
+  REQUEST_CLOSE_SELECTED_VISIBLE_TABS_EVENT,
   TOGGLE_TERMINAL_PANE_EXPAND_EVENT,
   type BackgroundMountTerminalWorktreeDetail
 } from '@/constants/terminal'
@@ -229,6 +230,46 @@ function isPinnedEditorFileTab(
   )
 }
 
+function getOrderedSelectedVisibleTabIds(
+  state: TerminalStoreSnapshot,
+  worktreeId: string,
+  selectedIds: readonly string[],
+  tabStripId: string | null | undefined
+): string[] {
+  const selected = new Set(selectedIds)
+  const visibleOrder = getGroupVisibleTabOrder(state, worktreeId, tabStripId)
+  const order =
+    visibleOrder.length > 0 ? visibleOrder : (state.tabBarOrderByWorktree[worktreeId] ?? [])
+  const ordered = order.filter((id) => selected.has(id))
+  const orderedSet = new Set(ordered)
+  return [...ordered, ...selectedIds.filter((id) => !orderedSet.has(id))]
+}
+
+function getGroupVisibleTabOrder(
+  state: TerminalStoreSnapshot,
+  worktreeId: string,
+  tabStripId: string | null | undefined
+): string[] {
+  if (!tabStripId) {
+    return []
+  }
+  const group = (state.groupsByWorktree[worktreeId] ?? []).find(
+    (candidate) => candidate.id === tabStripId
+  )
+  if (!group) {
+    return []
+  }
+  const unifiedTabsById = new Map(
+    (state.unifiedTabsByWorktree[worktreeId] ?? []).map((tab) => [tab.id, tab])
+  )
+  return group.tabOrder.map((id) => {
+    const tab = unifiedTabsById.get(id)
+    return tab?.contentType === 'terminal' || tab?.contentType === 'browser'
+      ? tab.entityId
+      : (tab?.id ?? id)
+  })
+}
+
 function getKeybindingContext(target: EventTarget | null): KeybindingContext {
   return target instanceof HTMLElement && target.classList.contains('xterm-helper-textarea')
     ? 'terminal'
@@ -262,6 +303,7 @@ function Terminal(): React.JSX.Element | null {
   const activeTabIdByWorktree = useAppStore((s) => s.activeTabIdByWorktree)
   const createTab = useAppStore((s) => s.createTab)
   const closeTab = useAppStore((s) => s.closeTab)
+  const closeUnifiedTab = useAppStore((s) => s.closeUnifiedTab)
   const setActiveTab = useAppStore((s) => s.setActiveTab)
   const setActiveWorktree = useAppStore((s) => s.setActiveWorktree)
   const setTabCustomTitle = useAppStore((s) => s.setTabCustomTitle)
@@ -294,6 +336,8 @@ function Terminal(): React.JSX.Element | null {
     (s) => s.openNewTerminalTabInActiveWorkspace
   )
   const closeBrowserTab = useAppStore((s) => s.closeBrowserTab)
+  const clearTabStripSelection = useAppStore((s) => s.clearTabStripSelection)
+  const setTabStripSelection = useAppStore((s) => s.setTabStripSelection)
   const setActiveBrowserTab = useAppStore((s) => s.setActiveBrowserTab)
   const groupsByWorktree = useAppStore((s) => s.groupsByWorktree)
   const layoutByWorktree = useAppStore((s) => s.layoutByWorktree)
@@ -1323,6 +1367,95 @@ function Terminal(): React.JSX.Element | null {
     ]
   )
 
+  const handleCloseSelectedVisibleTabs = useCallback((): boolean => {
+    const state = useAppStore.getState()
+    const worktreeId = state.activeWorktreeId
+    if (!worktreeId) {
+      return false
+    }
+    const selection = state.tabStripSelectionByWorktree[worktreeId]
+    if (!selection || selection.selectedIds.length < 2) {
+      return false
+    }
+    const selectedIds = getOrderedSelectedVisibleTabIds(
+      state,
+      worktreeId,
+      selection.selectedIds,
+      selection.tabStripId
+    )
+    const retainedPinnedTerminalIds: string[] = []
+    let requestedPinnedTerminalClose = false
+    clearTabStripSelection(worktreeId)
+    for (const visibleId of selectedIds) {
+      const latest = useAppStore.getState()
+      const unifiedTab = findUnifiedTabByVisibleId(latest, worktreeId, visibleId)
+      if (unifiedTab?.contentType === 'terminal') {
+        const pinnedCloseWillPrompt =
+          unifiedTab.isPinned === true && latest.settings?.confirmClosePinnedTab !== false
+        if (pinnedCloseWillPrompt) {
+          retainedPinnedTerminalIds.push(visibleId)
+          if (requestedPinnedTerminalClose || latest.pinnedTabCloseConfirm) {
+            continue
+          }
+          // Why: the pinned-tab dialog is a single-slot request; bulk close
+          // must not overwrite an earlier pinned terminal confirmation.
+          requestedPinnedTerminalClose = true
+        }
+        closeTerminalTab(unifiedTab.entityId)
+        continue
+      }
+      if (unifiedTab?.contentType === 'browser') {
+        handleCloseBrowserTab(unifiedTab.entityId)
+        continue
+      }
+      if (unifiedTab?.contentType === 'simulator') {
+        closeUnifiedTab(unifiedTab.id)
+        continue
+      }
+      if (unifiedTab && EDITOR_TAB_CONTENT_TYPES.has(unifiedTab.contentType)) {
+        handleCloseFile(unifiedTab.entityId)
+        continue
+      }
+      if ((latest.tabsByWorktree[worktreeId] ?? []).some((tab) => tab.id === visibleId)) {
+        closeTerminalTab(visibleId)
+      } else if (
+        (latest.browserTabsByWorktree[worktreeId] ?? []).some((tab) => tab.id === visibleId)
+      ) {
+        handleCloseBrowserTab(visibleId)
+      } else if (
+        latest.openFiles.some((file) => file.worktreeId === worktreeId && file.id === visibleId)
+      ) {
+        handleCloseFile(visibleId)
+      }
+    }
+    if (retainedPinnedTerminalIds.length > 0) {
+      setTabStripSelection(worktreeId, {
+        selectedIds: retainedPinnedTerminalIds,
+        anchorId: retainedPinnedTerminalIds[0] ?? null,
+        tabStripId: selection.tabStripId ?? null
+      })
+    }
+    return true
+  }, [
+    clearTabStripSelection,
+    closeUnifiedTab,
+    handleCloseBrowserTab,
+    handleCloseFile,
+    setTabStripSelection
+  ])
+
+  useEffect(() => {
+    const handleRequest = (event: Event): void => {
+      if (handleCloseSelectedVisibleTabs()) {
+        event.preventDefault()
+      }
+    }
+    window.addEventListener(REQUEST_CLOSE_SELECTED_VISIBLE_TABS_EVENT, handleRequest)
+    return () => {
+      window.removeEventListener(REQUEST_CLOSE_SELECTED_VISIBLE_TABS_EVENT, handleRequest)
+    }
+  }, [handleCloseSelectedVisibleTabs])
+
   const handlePtyExit = useCallback(
     (tabId: string, ptyId: string) => {
       if (consumeSuppressedPtyExit(ptyId)) {
@@ -1719,6 +1852,9 @@ function Terminal(): React.JSX.Element | null {
         }
         e.preventDefault()
         notifyTerminalCapture('tab.close')
+        if (handleCloseSelectedVisibleTabs()) {
+          return
+        }
         if (state.activeTabType === 'editor' && state.activeFileId) {
           handleCloseFile(state.activeFileId)
         } else if (state.activeTabType === 'browser' && state.activeBrowserTabId) {
@@ -1850,6 +1986,7 @@ function Terminal(): React.JSX.Element | null {
     handleCloseBrowserTab,
     closeBrowserTab,
     handleCloseFile,
+    handleCloseSelectedVisibleTabs,
     handleCloseAllFiles,
     keybindings,
     mobileEmulatorEnabled,

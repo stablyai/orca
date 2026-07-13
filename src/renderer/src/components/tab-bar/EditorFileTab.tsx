@@ -21,6 +21,7 @@ import type { TabDragItemData } from '../tab-group/useTabDragSplit'
 import {
   ACTIVE_TAB_INDICATOR_CLASSES,
   getDropIndicatorClasses,
+  getTabSelectionClasses,
   getTabRootStateClasses,
   getTabStripBorderClasses,
   type DropIndicator
@@ -31,10 +32,12 @@ import { translate } from '@/i18n/i18n'
 import { TAB_CONTAINER_WIDTH_CLASSES, TAB_LABEL_WIDTH_CLASSES } from './tab-width-rules'
 import { EditorFileTabCloseButton } from './EditorFileTabCloseButton'
 import { useTabStripPointerActivation } from './tab-strip-pointer-activation'
+import type { TabStripSelectionModifiers } from './tab-strip-selection'
 
 export default function EditorFileTab({
   file,
   isActive,
+  isSelected,
   isPinned,
   hasTabsToRight,
   statusByRelativePath,
@@ -50,10 +53,11 @@ export default function EditorFileTab({
 }: {
   file: OpenFile & { tabId?: string }
   isActive: boolean
+  isSelected: boolean
   isPinned: boolean
   hasTabsToRight: boolean
   statusByRelativePath: Map<string, GitFileStatus>
-  onActivate: () => void
+  onActivate: (modifiers: TabStripSelectionModifiers) => void
   onClose: () => void
   onCloseToRight: () => void
   onCloseAll: () => void
@@ -209,9 +213,9 @@ export default function EditorFileTab({
   }, [menuOpen])
 
   const dragListeners = isRenaming ? undefined : listeners
-  // Why: defer activation to pointer-up so dragging the tab (reorder / move into
-  // another pane / split) does not switch the active tab mid-gesture.
-  const { onPointerDown: onTabPointerDown } = useTabStripPointerActivation({
+  // Why: defer activation to click after pointer movement is classified, so
+  // drag gestures do not switch tabs and manual modifier-clicks keep modifiers.
+  const { onPointerDown: onTabPointerDown, onClick: onTabClick } = useTabStripPointerActivation({
     onActivate,
     disabled: isRenaming
   })
@@ -221,15 +225,17 @@ export default function EditorFileTab({
       ref={setNodeRef}
       data-tab-id={file.tabId ?? file.id}
       data-pinned={isPinned ? 'true' : 'false'}
+      data-selected={isSelected ? 'true' : 'false'}
       {...attributes}
       {...dragListeners}
-      className={`group relative flex items-center h-full px-1.5 text-xs cursor-pointer select-none outline-none focus:outline-none focus-visible:outline-none ${getTabStripBorderClasses(hasTabsToRight, { includeTopBorder: includeTopTabBorder })} ${getDropIndicatorClasses(dropIndicator ?? null)} ${getTabRootStateClasses(isActive)}`}
+      className={`group relative flex items-center h-full px-1.5 text-xs cursor-pointer select-none outline-none focus:outline-none focus-visible:outline-none ${getTabStripBorderClasses(hasTabsToRight, { includeTopBorder: includeTopTabBorder })} ${getDropIndicatorClasses(dropIndicator ?? null)} ${getTabRootStateClasses(isActive)} ${getTabSelectionClasses(isSelected, isActive)}`}
       onPointerDown={(e) => {
         onTabPointerDown(
           e,
           dragListeners?.onPointerDown as ((event: React.PointerEvent<Element>) => void) | undefined
         )
       }}
+      onClick={onTabClick}
       onDoubleClick={() => {
         if (file.isPreview && onMakePermanent) {
           onMakePermanent()
@@ -410,7 +416,7 @@ export default function EditorFileTab({
         repoConnectionId={repo?.connectionId ?? null}
         skipMenuFocusRestoreRef={skipMenuFocusRestoreRef}
         onOpenChange={setMenuOpen}
-        onActivate={onActivate}
+        onActivate={() => onActivate({ shiftKey: false, metaKey: false, ctrlKey: false })}
         onOpenRenameInput={openRenameInput}
         onTogglePin={onTogglePin}
         onClose={onClose}
