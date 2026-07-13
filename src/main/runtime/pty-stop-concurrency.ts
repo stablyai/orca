@@ -6,11 +6,22 @@ export async function mapPtyStopsWithConcurrency<T>(
 ): Promise<T[]> {
   const results = Array<T>(ptyIds.length)
   let nextIndex = 0
+  let didFail = false
+  let firstError: unknown
   const stopNext = async (): Promise<void> => {
     while (nextIndex < ptyIds.length) {
       const index = nextIndex
       nextIndex += 1
-      results[index] = await stopPty(ptyIds[index])
+      try {
+        results[index] = await stopPty(ptyIds[index])
+      } catch (error) {
+        // Why: deletion must attempt and await every snapshotted PTY even when
+        // one provider rejects, otherwise active workers can outlive Git removal.
+        if (!didFail) {
+          firstError = error
+        }
+        didFail = true
+      }
     }
   }
   // Why: remote tools may each consume the full timeout. A small worker pool
@@ -20,5 +31,8 @@ export async function mapPtyStopsWithConcurrency<T>(
     () => stopNext()
   )
   await Promise.all(workers)
+  if (didFail) {
+    throw firstError
+  }
   return results
 }

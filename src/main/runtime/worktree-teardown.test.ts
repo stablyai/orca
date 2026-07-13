@@ -278,6 +278,32 @@ describe('killAllProcessesForWorktree', () => {
     expect(localProvider.shutdown).toHaveBeenCalledTimes(1)
   })
 
+  it('retires runtime and provider state after authoritative fallback absence', async () => {
+    const onPtyExit = vi.fn()
+    const runtime = {
+      stopTerminalsForWorktree: vi.fn().mockResolvedValue({
+        stopped: 0,
+        failedPtyIds: ['w1@@daemon']
+      }),
+      onPtyExit
+    } as unknown as Parameters<typeof killAllProcessesForWorktree>[1]['runtime']
+    const localProvider = createProviderStub(
+      vi
+        .fn()
+        .mockResolvedValueOnce([{ id: 'w1@@daemon', cwd: '/tmp/w1', title: 'shell' }])
+        .mockResolvedValueOnce([])
+    )
+    vi.mocked(localProvider.shutdown).mockRejectedValue(new Error('not found'))
+    listRegisteredPtysMock.mockReturnValue([])
+    const onPtyStopped = vi.fn()
+
+    await expect(
+      killAllProcessesForWorktree('w1', { runtime, localProvider, onPtyStopped })
+    ).resolves.toEqual({ runtimeStopped: 0, providerStopped: 0, registryStopped: 0 })
+    expect(onPtyStopped).toHaveBeenCalledWith('w1@@daemon')
+    expect(onPtyExit).toHaveBeenCalledWith('w1@@daemon', -1)
+  })
+
   it('bounds a 50-session headless fallback sweep to seven shutdown waves', async () => {
     const sessions = Array.from({ length: 50 }, (_, index) => ({
       id: `w1@@${index}`,

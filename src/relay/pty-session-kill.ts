@@ -30,6 +30,12 @@ export async function killPosixPtySession(
     if (!stopProcess(pid, stopped, killProcess)) {
       return false
     }
+    // Why: the PID can exit and be reused between the ownership probe and
+    // SIGSTOP. Re-prove the frozen root before discovering or signaling children.
+    if (!(await rootStillOwnsPty(pid, ptsName, platform, run))) {
+      resumeProcesses(stopped, killProcess)
+      return false
+    }
     const processTree = await freezeProcessTree(pid, stopped, run, killProcess)
     if (!processTree) {
       resumeProcesses(stopped, killProcess)
@@ -44,7 +50,7 @@ export async function killPosixPtySession(
       }
       stopped.delete(candidate)
     }
-    return await verifyProcessesStopped(processTree, platform, run)
+    return await verifyProcessesStopped(processTree, run)
   } catch {
     resumeProcesses(stopped, killProcess)
     return false
@@ -57,20 +63,20 @@ async function rootStillOwnsPty(
   platform: NodeJS.Platform,
   run: ExecFile
 ): Promise<boolean> {
-  const sessionColumn = platform === 'darwin' ? 'sess=' : 'sid='
-  const result = (await run('/bin/ps', ['-p', String(pid), '-o', sessionColumn, '-o', 'tty='], {
-    timeout: PTY_SESSION_COMMAND_TIMEOUT_MS
-  })) as { stdout?: string | Buffer }
-  const [sidText, tty = ''] = String(result.stdout ?? '')
-    .trim()
-    .split(/\s+/)
-  if (Number(sidText) !== pid) {
+  if (typeof ptsName !== 'string') {
+    // Why: without the exact controlling TTY, a recycled session-leader PID
+    // is not enough authority to signal an unrelated user's process tree.
     return false
   }
-  if (typeof ptsName !== 'string') {
-    // Why: some node-pty builds omit the private ptsName field. The
-    // session-leader check plus a real controlling TTY still proves ownership.
-    return tty.length > 0 && tty !== '??' && tty !== '?'
+  const ownerColumn = platform === 'darwin' ? 'pgid=' : 'sid='
+  const result = (await run('ps', ['-p', String(pid), '-o', ownerColumn, '-o', 'tty='], {
+    timeout: PTY_SESSION_COMMAND_TIMEOUT_MS
+  })) as { stdout?: string | Buffer }
+  const [ownerText, tty = ''] = String(result.stdout ?? '')
+    .trim()
+    .split(/\s+/)
+  if (Number(ownerText) !== pid) {
+    return false
   }
   const expectedTty = ptsName.startsWith('/dev/') ? ptsName.slice('/dev/'.length) : ptsName
   return /^[A-Za-z0-9._/-]+$/.test(expectedTty) && tty === expectedTty
@@ -94,7 +100,9 @@ async function freezeProcessTree(
         return null
       }
       const parents = frontier.slice(index, index + PARENT_PID_BATCH_SIZE)
-      for (const child of await listChildren(parents, run, remainingMs)) {
+      const children = await listChildren(parents, run, remainingMs)
+      const newlyStopped: number[] = []
+      for (const child of children) {
         if (seen.has(child)) {
           continue
         }
@@ -105,6 +113,22 @@ async function freezeProcessTree(
         if (!stopProcess(child, stopped, killProcess)) {
           return null
         }
+        newlyStopped.push(child)
+      }
+      const childVerificationRemainingMs = discoveryDeadline - Date.now()
+      if (
+        newlyStopped.length > 0 &&
+        (childVerificationRemainingMs <= 0 ||
+          !(await frozenChildrenStillBelongToParents(
+            newlyStopped,
+            parents,
+            run,
+            childVerificationRemainingMs
+          )))
+      ) {
+        return null
+      }
+      for (const child of newlyStopped) {
         processTree.push(child)
         nextFrontier.push(child)
       }
@@ -120,7 +144,7 @@ async function listChildren(
   timeout: number
 ): Promise<number[]> {
   try {
-    const result = (await run('/usr/bin/pgrep', ['-P', parentPids.join(',')], {
+    const result = (await run('pgrep', ['-P', parentPids.join(',')], {
       timeout
     })) as { stdout?: string | Buffer }
     return String(result.stdout ?? '')
@@ -134,6 +158,39 @@ async function listChildren(
     }
     throw error
   }
+}
+
+async function frozenChildrenStillBelongToParents(
+  childPids: readonly number[],
+  parentPids: readonly number[],
+  run: ExecFile,
+  timeout: number
+): Promise<boolean> {
+  const expectedParents = new Set(parentPids)
+  const verifiedChildren = new Set<number>()
+  const verificationDeadline = Date.now() + timeout
+  for (let index = 0; index < childPids.length; index += VERIFY_PID_BATCH_SIZE) {
+    const remainingMs = verificationDeadline - Date.now()
+    if (remainingMs <= 0) {
+      return false
+    }
+    const batch = childPids.slice(index, index + VERIFY_PID_BATCH_SIZE)
+    const result = (await run('ps', ['-p', batch.join(','), '-o', 'pid=', '-o', 'ppid='], {
+      timeout: remainingMs
+    })) as { stdout?: string | Buffer }
+    for (const line of String(result.stdout ?? '')
+      .trim()
+      .split('\n')) {
+      const [pidText, parentPidText] = line.trim().split(/\s+/)
+      const pid = Number(pidText)
+      const parentPid = Number(parentPidText)
+      if (!batch.includes(pid) || !expectedParents.has(parentPid) || verifiedChildren.has(pid)) {
+        return false
+      }
+      verifiedChildren.add(pid)
+    }
+  }
+  return verifiedChildren.size === childPids.length
 }
 
 function stopProcess(pid: number, stopped: Set<number>, killProcess: KillProcess): boolean {
@@ -162,18 +219,17 @@ function resumeProcesses(stopped: Set<number>, killProcess: KillProcess): void {
   stopped.clear()
 }
 
-async function verifyProcessesStopped(
-  pids: number[],
-  platform: NodeJS.Platform,
-  run: ExecFile
-): Promise<boolean> {
-  const batchSize = platform === 'darwin' ? 1 : VERIFY_PID_BATCH_SIZE
-  for (let index = 0; index < pids.length; index += batchSize) {
-    const batch = pids.slice(index, index + batchSize)
+async function verifyProcessesStopped(pids: number[], run: ExecFile): Promise<boolean> {
+  const verificationDeadline = Date.now() + PTY_SESSION_VERIFY_TIMEOUT_MS
+  for (let index = 0; index < pids.length; index += VERIFY_PID_BATCH_SIZE) {
+    const remainingMs = verificationDeadline - Date.now()
+    if (remainingMs <= 0) {
+      return false
+    }
+    const batch = pids.slice(index, index + VERIFY_PID_BATCH_SIZE)
     try {
-      const pidSelector = platform === 'darwin' ? String(batch[0]) : batch.join(',')
-      const result = (await run('/bin/ps', ['-p', pidSelector, '-o', 'pid=', '-o', 'stat='], {
-        timeout: PTY_SESSION_VERIFY_TIMEOUT_MS
+      const result = (await run('ps', ['-p', batch.join(','), '-o', 'pid=', '-o', 'stat='], {
+        timeout: remainingMs
       })) as { stdout?: string | Buffer }
       if (!hasOnlyExitedProcesses(result.stdout)) {
         return false

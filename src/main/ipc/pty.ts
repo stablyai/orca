@@ -1172,6 +1172,9 @@ export function clearProviderPtyState(id: string): void {
     }
   })
   rendererSerializerByPtyId.delete(id)
+  // Why: direct provider teardown can bypass the ordinary exit listener. The
+  // provider router must not retain a dead SSH/local owner after verified stop.
+  ptyOwnership.delete(id)
   // Why: the hook server's per-paneKey caches (lastPrompt / lastTool) would
   // otherwise accumulate entries for dead panes over the process lifetime.
   // Use the spawn-time paneKey mapping since the server has no other way to

@@ -63,7 +63,12 @@ export async function killAllProcessesForWorktree(
   const failedLocalPtyIds = failedPtyIds.filter((ptyId) => parseAppSshPtyId(ptyId) === null)
   const fallbackResult = deps.connectionId
     ? { providerStopped: 0, registryStopped: 0 }
-    : await sweepLocalProvider(worktreeId, deps.localProvider, failedLocalPtyIds, deps.onPtyStopped)
+    : await sweepLocalProvider(worktreeId, deps.localProvider, failedLocalPtyIds, (ptyId) => {
+        clearStoppedPtyState(ptyId, deps.onPtyStopped)
+        // Why: provider shutdown and already-absent fallbacks do not always emit
+        // an exit event, so retire the runtime record before Git removes its cwd.
+        deps.runtime?.onPtyExit?.(ptyId, -1)
+      })
   result.providerStopped = fallbackResult.providerStopped
   result.registryStopped = fallbackResult.registryStopped
 
@@ -80,7 +85,7 @@ async function sweepLocalProvider(
   worktreeId: string,
   provider: IPtyProvider,
   failedLocalPtyIds: readonly string[],
-  onPtyStopped?: (ptyId: string) => void
+  retirePty?: (ptyId: string) => void
 ): Promise<{ providerStopped: number; registryStopped: number }> {
   const prefix = `${worktreeId}@@`
   const sessions = await provider.listProcesses()
@@ -107,7 +112,7 @@ async function sweepLocalProvider(
     try {
       await provider.shutdown(ptyId, { immediate: true })
       stopped.add(ptyId)
-      clearStoppedPtyState(ptyId, onPtyStopped)
+      retirePty?.(ptyId)
     } catch (error) {
       failedShutdowns.set(ptyId, error)
     }
@@ -121,6 +126,9 @@ async function sweepLocalProvider(
     const unverified = [...failedShutdowns.keys()].filter((ptyId) => remainingIds.has(ptyId))
     if (unverified.length > 0) {
       throw new Error(`Failed to stop local worktree terminals: ${unverified.join(', ')}`)
+    }
+    for (const ptyId of failedShutdowns.keys()) {
+      retirePty?.(ptyId)
     }
   }
 
