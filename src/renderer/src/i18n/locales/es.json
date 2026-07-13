@@ -698,7 +698,9 @@
         "devSearchKeywordToast": "toast",
         "devSearchKeywordSonner": "sonner",
         "devSearchKeywordError": "error",
-        "devSearchKeywordNotification": "notification"
+        "devSearchKeywordNotification": "notification",
+        "webChatImportTitle": "Web Chat Import",
+        "webChatImportDescription": "Set where ChatGPT, Claude.ai, and Gemini conversations are imported from."
       },
       "useAppMenuPaste": {
         "pasteTooLarge": "El contenido pegado es demasiado grande."
@@ -6386,7 +6388,9 @@
           "2309068a6f": "destructivo",
           "65358016ea": "Desechar",
           "dev": "Herramientas de desarrollo",
-          "devDescription": "Herramientas solo de desarrollo para probar estados de la UI."
+          "devDescription": "Herramientas solo de desarrollo para probar estados de la UI.",
+          "webChatImportTitle": "Web Chat Import",
+          "webChatImportDescription": "Set where ChatGPT, Claude.ai, and Gemini conversations are imported from."
         },
         "SettingsFormControls": {
           "42a4d15a30": "No hay fuentes coincidentes.",
@@ -9032,6 +9036,17 @@
         "TerminalInteractionSection": {
           "567633ff50": "Right-click pastes the clipboard into the terminal. Control-click to open the context menu.",
           "c64497148a": "Right-click pastes the clipboard. Control-click opens the context menu."
+        },
+        "WebChatImportPane": {
+          "paneTitle": "Web Chat Import",
+          "paneDescription": "Choose the folder each web agent imports conversations from. Leave a field empty to use the default folder inside your workspace directory.",
+          "browseButton": "Browse"
+        },
+        "webChatImport": {
+          "search": {
+            "title": "Web Chat Import Directories",
+            "description": "Choose the folder each web agent imports conversations from."
+          }
         }
       },
       "right": {

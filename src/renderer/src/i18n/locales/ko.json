@@ -698,7 +698,9 @@
         "devSearchKeywordToast": "toast",
         "devSearchKeywordSonner": "sonner",
         "devSearchKeywordError": "error",
-        "devSearchKeywordNotification": "notification"
+        "devSearchKeywordNotification": "notification",
+        "webChatImportTitle": "Web Chat Import",
+        "webChatImportDescription": "Set where ChatGPT, Claude.ai, and Gemini conversations are imported from."
       },
       "useAppMenuPaste": {
         "pasteTooLarge": "붙여넣기 내용이 너무 큽니다."
@@ -6371,7 +6373,9 @@
           "2309068a6f": "파괴적",
           "65358016ea": "버리기",
           "dev": "Dev Tools",
-          "devDescription": "Dev-only tools for exercising UI states."
+          "devDescription": "Dev-only tools for exercising UI states.",
+          "webChatImportTitle": "Web Chat Import",
+          "webChatImportDescription": "Set where ChatGPT, Claude.ai, and Gemini conversations are imported from."
         },
         "SettingsFormControls": {
           "42a4d15a30": "일치하는 글꼴이 없습니다.",
@@ -9032,6 +9036,17 @@
         "TerminalInteractionSection": {
           "567633ff50": "Right-click pastes the clipboard into the terminal. Control-click to open the context menu.",
           "c64497148a": "Right-click pastes the clipboard. Control-click opens the context menu."
+        },
+        "WebChatImportPane": {
+          "paneTitle": "Web Chat Import",
+          "paneDescription": "Choose the folder each web agent imports conversations from. Leave a field empty to use the default folder inside your workspace directory.",
+          "browseButton": "Browse"
+        },
+        "webChatImport": {
+          "search": {
+            "title": "Web Chat Import Directories",
+            "description": "Choose the folder each web agent imports conversations from."
+          }
         }
       },
       "right": {
