@@ -8,7 +8,10 @@ import {
   getOrcaControlSocketPath,
   spawnSystemSsh,
   spawnSystemSshCommand,
+  downloadFileViaSystemSsh,
   uploadDirectoryViaSystemSsh,
+  uploadFileViaSystemSsh,
+  writeBufferViaSystemSsh,
   writeFileViaSystemSsh,
   type SystemSshBuildArgsOptions,
   type SystemSshProcess
@@ -35,6 +38,7 @@ import {
   type SshConnectionCallbacks
 } from './ssh-connection-utils'
 import type { RemoteHostPlatform } from './ssh-remote-platform'
+import type { FileUploadSession } from '../providers/types'
 import { isSshSessionLimitError } from './ssh-session-limit-error'
 export type { SshConnectionCallbacks } from './ssh-connection-utils'
 
@@ -347,6 +351,54 @@ export class SshConnection {
     })
   }
 
+  async downloadFile(
+    remotePath: string,
+    localPath: string,
+    options?: SshRemoteFileOptions
+  ): Promise<void> {
+    if (!this.useSystemSshTransport) {
+      const sftp = await this.sftp()
+      try {
+        const { fastGetViaSftp } = await import('../providers/ssh-filesystem-provider-sftp')
+        await fastGetViaSftp(sftp, remotePath, localPath)
+      } finally {
+        sftp.end()
+      }
+      return
+    }
+    await downloadFileViaSystemSsh(this.target, remotePath, localPath, {
+      signal: this.systemOperationAbortController.signal,
+      hostPlatform: options?.hostPlatform,
+      ...this.getSystemSshBuildArgsOptions()
+    })
+  }
+
+  async openFileUploadSession(options?: SshRemoteFileOptions): Promise<FileUploadSession> {
+    if (!this.useSystemSshTransport) {
+      const sftp = await this.sftp()
+      const { uploadFile } = await import('./sftp-upload')
+      return {
+        uploadFile: (localPath, remotePath, uploadOptions) =>
+          uploadFile(sftp, localPath, remotePath, uploadOptions),
+        close: () => sftp.end()
+      }
+    }
+    // Why: disconnect replaces the connection controller; an existing import
+    // session must stay bound to the signal and SSH config it opened with.
+    const signal = this.systemOperationAbortController.signal
+    const buildArgsOptions = this.getSystemSshBuildArgsOptions()
+    return {
+      uploadFile: (localPath, remotePath, uploadOptions) =>
+        uploadFileViaSystemSsh(this.target, localPath, remotePath, {
+          signal,
+          hostPlatform: options?.hostPlatform,
+          exclusive: uploadOptions?.exclusive,
+          ...buildArgsOptions
+        }),
+      close: () => {}
+    }
+  }
+
   async writeFile(
     remotePath: string,
     contents: string,
@@ -397,6 +449,30 @@ export class SshConnection {
     await writeFileViaSystemSsh(this.target, remotePath, contents, {
       signal: this.systemOperationAbortController.signal,
       hostPlatform: options?.hostPlatform,
+      ...this.getSystemSshBuildArgsOptions()
+    })
+  }
+
+  async writeBuffer(
+    remotePath: string,
+    contents: Buffer,
+    options?: SshRemoteFileOptions & { append?: boolean; exclusive?: boolean }
+  ): Promise<void> {
+    if (!this.useSystemSshTransport) {
+      const sftp = await this.sftp()
+      try {
+        const { uploadBuffer } = await import('./sftp-upload')
+        await uploadBuffer(sftp, contents, remotePath, options)
+      } finally {
+        sftp.end()
+      }
+      return
+    }
+    await writeBufferViaSystemSsh(this.target, remotePath, contents, {
+      signal: this.systemOperationAbortController.signal,
+      hostPlatform: options?.hostPlatform,
+      append: options?.append,
+      exclusive: options?.exclusive,
       ...this.getSystemSshBuildArgsOptions()
     })
   }

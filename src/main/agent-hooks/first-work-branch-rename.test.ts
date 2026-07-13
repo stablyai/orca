@@ -300,11 +300,16 @@ describe('maybeAutoRenameBranchOnFirstWork', () => {
     expect(setRenameError).toHaveBeenLastCalledWith(WORKTREE_ID, null)
   })
 
-  it('records a user-facing error when branch-name generation fails', async () => {
-    generateBranchNameMock.mockResolvedValueOnce({ success: false, error: 'agent not ready' })
+  it('records a user-facing error and the full CLI output when generation fails', async () => {
+    const failureOutput = { label: 'Pi', exitCode: 1, stdout: '', stderr: 'No API key found.' }
+    generateBranchNameMock.mockResolvedValueOnce({
+      success: false,
+      error: 'agent not ready',
+      failureOutput
+    })
     const { deps, setRenameError } = makeDeps()
     await maybeAutoRenameBranchOnFirstWork(workingEvent(), deps)
-    expect(setRenameError).toHaveBeenCalledWith(WORKTREE_ID, 'agent not ready')
+    expect(setRenameError).toHaveBeenCalledWith(WORKTREE_ID, 'agent not ready', failureOutput)
   })
 
   it('records a user-facing error when no generation agent is configured', async () => {
@@ -341,7 +346,7 @@ describe('maybeAutoRenameBranchOnFirstWork', () => {
     generateBranchNameMock.mockResolvedValueOnce({ success: false, error: 'agent not ready' })
     const { deps, setRenameError } = makeDeps()
     await maybeAutoRenameBranchOnFirstWork(workingEvent(), deps)
-    expect(setRenameError).toHaveBeenCalledWith(WORKTREE_ID, 'agent not ready')
+    expect(setRenameError).toHaveBeenCalledWith(WORKTREE_ID, 'agent not ready', null)
 
     // Second event: the user has since pushed the branch, so it settles benignly.
     // The stale "rename failed" badge must be cleared rather than stick forever.

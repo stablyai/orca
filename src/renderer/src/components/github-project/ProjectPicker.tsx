@@ -30,6 +30,11 @@ import {
   isGitHubProjectRefInputTooLarge
 } from '../../../../shared/github-project-ref-input'
 import { filterGitHubProjectPickerProjects } from './github-project-picker-filter'
+import {
+  getProjectPickerBrowseCacheEntry,
+  peekProjectPickerBrowseCacheEntry,
+  rememberProjectPickerBrowseCacheEntry
+} from './project-picker-browse-cache'
 import { translate } from '@/i18n/i18n'
 
 export type ResolvedProjectSelection = {
@@ -48,15 +53,6 @@ type Props = {
   } | null
   onSelect: (selection: ResolvedProjectSelection) => void
 }
-
-const BROWSE_CACHE_TTL_MS = 5 * 60_000
-type BrowseCacheEntry = {
-  fetchedAt: number
-  projects: GitHubProjectSummary[]
-  partialFailures?: { owner: string; message: string }[]
-}
-
-const browseCacheByRuntimeScope = new Map<string, BrowseCacheEntry>()
 
 function getProjectPickerRuntimeScope(
   settings: Parameters<typeof getActiveRuntimeTarget>[0]
@@ -125,7 +121,7 @@ export default function ProjectPicker({ activeProject, onSelect }: Props): React
   const [query, setQuery] = useState('')
   const [browseLoading, setBrowseLoading] = useState(false)
   const [browseError, setBrowseError] = useState<GitHubProjectViewError | null>(null)
-  const browseCache = browseCacheByRuntimeScope.get(getProjectPickerRuntimeScope(settings))
+  const browseCache = peekProjectPickerBrowseCacheEntry(getProjectPickerRuntimeScope(settings))
   const [browseProjects, setBrowseProjects] = useState<GitHubProjectSummary[]>(
     () => browseCache?.projects ?? []
   )
@@ -147,8 +143,8 @@ export default function ProjectPicker({ activeProject, onSelect }: Props): React
 
   const loadBrowse = useCallback(async () => {
     const cacheKey = getProjectPickerRuntimeScope(settings)
-    const cached = browseCacheByRuntimeScope.get(cacheKey) ?? null
-    if (cached && Date.now() - cached.fetchedAt < BROWSE_CACHE_TTL_MS) {
+    const cached = getProjectPickerBrowseCacheEntry(cacheKey)
+    if (cached) {
       setBrowseProjects(cached.projects)
       setPartialFailures(cached.partialFailures ?? [])
       return
@@ -158,8 +154,7 @@ export default function ProjectPicker({ activeProject, onSelect }: Props): React
     try {
       const res = await listAccessibleProjectsForRuntime(settings)
       if (res.ok) {
-        browseCacheByRuntimeScope.set(cacheKey, {
-          fetchedAt: Date.now(),
+        rememberProjectPickerBrowseCacheEntry(cacheKey, {
           projects: res.projects,
           partialFailures: res.partialFailures
         })

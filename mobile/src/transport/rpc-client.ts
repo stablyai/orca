@@ -567,10 +567,10 @@ export function connect(
         const stream = streamListeners.get(response.id)
         if (stream && response.ok) {
           const result = (response as RpcSuccess).result
-          if (isBrowserScreencastReadyResult(result)) {
+          if (isStreamingSubscriptionReadyResult(result)) {
             stream.subscriptionId = result.subscriptionId
             if (stream.cancelled) {
-              sendBrowserScreencastUnsubscribe(result.subscriptionId)
+              sendServerSubscriptionUnsubscribe(stream)
               removeStreamListener(response.id)
               return
             }
@@ -947,8 +947,21 @@ export function connect(
     if (pendingBrowserScreencastRequestId === id) {
       pendingBrowserScreencastRequestId = null
     }
+    disposeServerSubscriptionStream(id, stream)
+  }
+
+  function disposeRuntimeClientEventsStream(id: string): void {
+    const stream = streamListeners.get(id)
+    if (!stream || stream.method !== 'runtime.clientEvents.subscribe') {
+      return
+    }
+    disposeServerSubscriptionStream(id, stream)
+  }
+
+  function disposeServerSubscriptionStream(id: string, stream: StreamRequest): void {
+    stream.cancelled = true
     if (stream.subscriptionId) {
-      sendBrowserScreencastUnsubscribe(stream.subscriptionId)
+      sendServerSubscriptionUnsubscribe(stream)
       removeStreamListener(id)
       return
     }
@@ -1020,6 +1033,24 @@ export function connect(
       method: 'browser.screencast.unsubscribe',
       params: { subscriptionId }
     })
+  }
+
+  function sendServerSubscriptionUnsubscribe(stream: StreamRequest): void {
+    if (!stream.subscriptionId) {
+      return
+    }
+    if (stream.method === 'browser.screencast') {
+      sendBrowserScreencastUnsubscribe(stream.subscriptionId)
+      return
+    }
+    if (stream.method === 'runtime.clientEvents.subscribe') {
+      sendEncrypted({
+        id: nextId(),
+        deviceToken,
+        method: 'runtime.clientEvents.unsubscribe',
+        params: { subscriptionId: stream.subscriptionId }
+      })
+    }
   }
 
   openConnection()
@@ -1118,6 +1149,10 @@ export function connect(
         const stream = streamListeners.get(id)
         if (stream?.method === 'browser.screencast') {
           disposeBrowserScreencastStream(id)
+          return
+        }
+        if (stream?.method === 'runtime.clientEvents.subscribe') {
+          disposeRuntimeClientEventsStream(id)
           return
         }
         if (stream?.method === 'terminal.subscribe') {
@@ -1243,7 +1278,7 @@ function isTerminalSubscribedResult(
   )
 }
 
-function isBrowserScreencastReadyResult(
+function isStreamingSubscriptionReadyResult(
   value: unknown
 ): value is { type: 'ready'; subscriptionId: string } {
   return (

@@ -25,6 +25,7 @@ import {
   hasPendingAgentResultText,
   HOOK_REQUEST_SLOWLORIS_MS,
   normalizeHookPayload,
+  preparePendingGrokResultDiscovery,
   readRequestBody,
   resolveHookSource,
   writeEndpointFile,
@@ -406,7 +407,8 @@ export class RelayAgentHookServer {
     original: AgentHookEventPayload,
     env?: string,
     version?: string,
-    attempt = 1
+    attempt = 1,
+    discoveryReady = false
   ): void {
     if (
       original.payload.lastAssistantMessage ||
@@ -416,26 +418,37 @@ export class RelayAgentHookServer {
       return
     }
     this.clearAssistantMessageRetry(original.paneKey)
+    if (!discoveryReady) {
+      const discovery = preparePendingGrokResultDiscovery(source, body)
+      if (discovery) {
+        // Why: remote slug-group discovery can outlive the bounded transcript-
+        // flush timers, so completion itself drives the first retry.
+        void discovery
+          .then(() => {
+            if (this.server) {
+              this.applyAssistantMessageRetry(source, body, original, env, version, 1, true)
+            }
+          })
+          .catch((err) => {
+            process.stderr.write(
+              `[relay-hook-server] Grok result discovery failed: ${err instanceof Error ? err.message : String(err)}\n`
+            )
+          })
+        return
+      }
+    }
     const timer = setTimeout(() => {
       try {
         this.assistantMessageRetryTimers.delete(original.paneKey)
-        const current = this.state.lastStatusByPaneKey.get(original.paneKey)
-        if (
-          !current ||
-          current.payload.agentType !== original.payload.agentType ||
-          current.payload.prompt !== original.payload.prompt ||
-          current.payload.lastAssistantMessage
-        ) {
-          return
-        }
-        const event = normalizeHookPayload(this.state, source, body, this.env)
-        if (!event?.payload.lastAssistantMessage) {
-          this.scheduleAssistantMessageRetry(source, body, original, env, version, attempt + 1)
-          return
-        }
-        // Why: the relay runs on SSH targets too; retry from a timer so a delayed
-        // transcript/chat-history write does not block the remote hook server.
-        this.applyEvent(event, source, env, version)
+        this.applyAssistantMessageRetry(
+          source,
+          body,
+          original,
+          env,
+          version,
+          attempt + 1,
+          discoveryReady
+        )
       } catch (err) {
         process.stderr.write(
           `[relay-hook-server] assistant message retry failed: ${err instanceof Error ? err.message : String(err)}\n`
@@ -446,6 +459,41 @@ export class RelayAgentHookServer {
     if (typeof timer.unref === 'function') {
       timer.unref()
     }
+  }
+
+  private applyAssistantMessageRetry(
+    source: AgentHookSource,
+    body: unknown,
+    original: AgentHookEventPayload,
+    env: string | undefined,
+    version: string | undefined,
+    nextAttempt: number,
+    requireExactOriginal: boolean
+  ): void {
+    const current = this.state.lastStatusByPaneKey.get(original.paneKey)
+    if (
+      !current ||
+      (requireExactOriginal && current !== original) ||
+      current.payload.agentType !== original.payload.agentType ||
+      current.payload.prompt !== original.payload.prompt ||
+      current.payload.lastAssistantMessage
+    ) {
+      return
+    }
+    const event = normalizeHookPayload(this.state, source, body, this.env)
+    if (!event?.payload.lastAssistantMessage) {
+      this.scheduleAssistantMessageRetry(
+        source,
+        body,
+        original,
+        env,
+        version,
+        nextAttempt,
+        requireExactOriginal
+      )
+      return
+    }
+    this.applyEvent(event, source, env, version)
   }
 
   private bodyEnv(body: unknown): string | undefined {

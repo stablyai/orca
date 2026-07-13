@@ -118,10 +118,49 @@ function focusedValueSetExpression(
   ].join('')
 }
 
+// Why: rich editors reconcile only browser editing transactions; direct DOM
+// fallback can look correct while leaving their model stale.
+function focusedRichTextEditExpression(
+  valueExpression: string,
+  options?: { selectAll?: boolean }
+): string {
+  const selectAll = options?.selectAll ? 'true' : 'false'
+  return [
+    '(() => {',
+    ' const target = document.activeElement;',
+    ' const value = ',
+    valueExpression,
+    ';',
+    ` const selectAll = ${selectAll};`,
+    " const isEditable = target?.isContentEditable === true || /^(|true|plaintext-only)$/i.test(target?.getAttribute?.('contenteditable') ?? 'false');",
+    " if (!target || target === document.body || !isEditable) { throw new Error('Focused rich-text target is unavailable'); }",
+    ' if (selectAll) {',
+    "   if (typeof window.getSelection !== 'function') { throw new Error('Rich-text selection is unavailable'); }",
+    '   const selection = window.getSelection();',
+    "   if (!selection) { throw new Error('Rich-text selection is unavailable'); }",
+    '   selection.selectAllChildren(target);',
+    ' }',
+    " const editCommand = selectAll && value.length === 0 ? 'delete' : 'insertText';",
+    ' let edited = false;',
+    ' try {',
+    '   edited = document.execCommand(editCommand, false, value) === true;',
+    ' } catch { edited = false; }',
+    " if (!edited) { throw new Error('Browser rich-text editing command failed'); }",
+    ' })()'
+  ].join('')
+}
+
+function isExplicitContentEditableResult(result: unknown): boolean {
+  const value =
+    result && typeof result === 'object' ? (result as { value?: unknown }).value : undefined
+  return typeof value === 'string' && /^(|true|plaintext-only)$/i.test(value)
+}
+
 type AgentBrowserExecOptions = {
   envOverrides?: NodeJS.ProcessEnv
   timeoutMs?: number
   timeoutError?: BrowserError
+  stdinText?: string
 }
 
 type EnqueueTargetedCommandOptions = {
@@ -772,33 +811,35 @@ export class AgentBrowserBridge {
     browserPageId?: string
   ): Promise<BrowserFillResult> {
     await assertClipboardTextWriteWithinLimitWithYield(value)
-    // Why: Input.insertText via Electron's debugger API does not deliver text to
-    // focused inputs in webviews — this is a fundamental Electron limitation.
-    // Agent-browser's fill and click also fail for the same reason.
-    // Workaround: use agent-browser's focus to resolve the ref, then set the value
-    // directly via chunked JS and dispatch input/change events for React/framework compat.
+    // Why: agent-browser's CDP text insertion loses focus in Electron guests.
+    // Resolve the ref first, then edit through the browser's input pipeline.
     return this.enqueueTargetedCommand(
       worktreeId,
       browserPageId,
       async (sessionName) => {
-        await this.execAgentBrowser(sessionName, ['focus', element])
-        await this.execAgentBrowser(sessionName, [
-          'eval',
-          focusedValueSetExpression(JSON.stringify(''))
-        ])
-        for (const chunk of iterateBrowserTextInsertionChunks(
-          value,
-          AGENT_BROWSER_TEXT_ARGUMENT_MAX_BYTES
-        )) {
+        if (!(await this.isExplicitContentEditableTarget(sessionName, element))) {
+          await this.execAgentBrowser(sessionName, ['focus', element])
           await this.execAgentBrowser(sessionName, [
             'eval',
-            focusedValueSetExpression(JSON.stringify(chunk), { append: true })
+            focusedValueSetExpression(JSON.stringify(''))
           ])
+          for (const chunk of iterateBrowserTextInsertionChunks(
+            value,
+            AGENT_BROWSER_TEXT_ARGUMENT_MAX_BYTES
+          )) {
+            await this.execAgentBrowser(sessionName, [
+              'eval',
+              focusedValueSetExpression(JSON.stringify(chunk), { append: true })
+            ])
+          }
+          await this.execAgentBrowser(sessionName, [
+            'eval',
+            focusedValueSetExpression(JSON.stringify(''), { append: true, dispatchEvents: true })
+          ])
+          return { filled: element } as BrowserFillResult
         }
-        await this.execAgentBrowser(sessionName, [
-          'eval',
-          focusedValueSetExpression(JSON.stringify(''), { append: true, dispatchEvents: true })
-        ])
+
+        await this.fillExplicitContentEditable(sessionName, element, value)
         return { filled: element } as BrowserFillResult
       },
       { requireScopedTarget: true }
@@ -1537,10 +1578,22 @@ export class AgentBrowserBridge {
     worktreeId?: string,
     browserPageId?: string
   ): Promise<BrowserClearResult> {
-    return this.enqueueTargetedCommand(worktreeId, browserPageId, async (sessionName) => {
-      // Why: agent-browser has no clear command — use fill with empty string
-      return (await this.execAgentBrowser(sessionName, ['fill', element, ''])) as BrowserClearResult
-    })
+    return this.enqueueTargetedCommand(
+      worktreeId,
+      browserPageId,
+      async (sessionName) => {
+        if (!(await this.isExplicitContentEditableTarget(sessionName, element))) {
+          // Why: agent-browser resolves this ref directly, preserving iframe,
+          // shadow-root, and unfocusable-target semantics for ordinary fields.
+          await this.execAgentBrowser(sessionName, ['fill', element, ''])
+          return { cleared: element }
+        }
+
+        await this.fillExplicitContentEditable(sessionName, element, '')
+        return { cleared: element }
+      },
+      { requireScopedTarget: true }
+    )
   }
 
   async selectAll(
@@ -2387,6 +2440,32 @@ export class AgentBrowserBridge {
     return translated.result
   }
 
+  private async isExplicitContentEditableTarget(
+    sessionName: string,
+    element: string
+  ): Promise<boolean> {
+    const result = await this.execAgentBrowser(sessionName, [
+      'get',
+      'attr',
+      element,
+      'contenteditable'
+    ])
+    return isExplicitContentEditableResult(result)
+  }
+
+  private async fillExplicitContentEditable(
+    sessionName: string,
+    element: string,
+    value: string
+  ): Promise<void> {
+    await this.execAgentBrowser(sessionName, ['focus', element])
+    // Why: stdin avoids argv limits while keeping replacement atomic; chunked
+    // editor transactions can move focus and split one fill across controls.
+    await this.execAgentBrowser(sessionName, ['eval', '--stdin'], {
+      stdinText: focusedRichTextEditExpression(JSON.stringify(value), { selectAll: true })
+    })
+  }
+
   private createPageUnavailableError(sessionName: string): BrowserError {
     return new BrowserError('browser_tab_not_found', pageUnavailableMessageForSession(sessionName))
   }
@@ -2535,6 +2614,11 @@ export class AgentBrowserBridge {
       )
       if (session) {
         session.activeProcess = child
+      }
+      if (execOptions?.stdinText !== undefined && child?.stdin) {
+        // Why: eval --stdin keeps paste-sized scripts out of argv on every platform.
+        child.stdin.on('error', () => {})
+        child.stdin.end(execOptions.stdinText)
       }
     })
   }

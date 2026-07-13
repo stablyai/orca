@@ -58,6 +58,10 @@ describe('electron-builder config', () => {
         expect.objectContaining({
           from: 'native/computer-use-windows/runtime.ps1',
           to: 'computer-use-windows/runtime.ps1'
+        }),
+        expect.objectContaining({
+          from: 'native/windows-cli-launcher/.build/orca.exe',
+          to: 'bin/orca.exe'
         })
       ])
     )

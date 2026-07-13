@@ -25,6 +25,7 @@ import { CLIENT_PLATFORM } from './new-workspace'
 import { tuiAgentToAgentKind } from './telemetry'
 import { agentKindToTuiAgent } from '../../../shared/agent-kind'
 import { useAppStore } from '@/store'
+import type { PendingSidebarWorktreeReveal } from '@/store/slices/ui'
 import { tabHasLivePty } from '@/lib/tab-has-live-pty'
 import {
   activateWebRuntimeSessionWorktree,
@@ -62,6 +63,8 @@ import {
 } from './folder-workspace-path-status'
 import { toast } from 'sonner'
 import { initialAgentTabViewModeProps } from './native-chat-initial-view-mode'
+import { getConnectionId } from '@/lib/connection-context'
+import { isNativeChatTranscriptLocalReadable } from '@/lib/native-chat-transcript-readability'
 
 /** Telemetry payload threaded from the launch site to `pty:spawn`. Main
  *  fires `agent_started` only after the spawn succeeds — see
@@ -182,6 +185,7 @@ function ensureFolderWorkspaceInitialTerminal(
 export function activateAndRevealFolderWorkspace(
   folderWorkspaceId: string,
   opts?: {
+    sidebarRevealBehavior?: PendingSidebarWorktreeReveal['behavior']
     startup?: WorktreeStartupPayload
     runtimeEnvironmentId?: string | null
   }
@@ -225,7 +229,11 @@ export function activateAndRevealFolderWorkspace(
   resumeSleepingAgentSessionsForWorktree(workspaceKey)
   const primaryTabId = ensureFolderWorkspaceInitialTerminal(folderWorkspace, opts?.startup)
 
-  state.revealWorktreeInSidebar(workspaceKey)
+  if (opts?.sidebarRevealBehavior) {
+    state.revealWorktreeInSidebar(workspaceKey, { behavior: opts.sidebarRevealBehavior })
+  } else {
+    state.revealWorktreeInSidebar(workspaceKey)
+  }
 
   return { primaryTabId }
 }
@@ -283,6 +291,7 @@ export function activateAndRevealWorktree(
     setup?: WorktreeSetupLaunch
     defaultTabs?: WorktreeDefaultTabsLaunch
     issueCommand?: IssueCommandLaunch
+    sidebarRevealBehavior?: PendingSidebarWorktreeReveal['behavior']
     notifyHostRuntime?: boolean
     revealInSidebar?: boolean
   }
@@ -382,7 +391,11 @@ export function activateAndRevealWorktree(
 
   // 6. Reveal in sidebar
   if (opts?.revealInSidebar !== false) {
-    state.revealWorktreeInSidebar(worktreeId)
+    if (opts?.sidebarRevealBehavior) {
+      state.revealWorktreeInSidebar(worktreeId, { behavior: opts.sidebarRevealBehavior })
+    } else {
+      state.revealWorktreeInSidebar(worktreeId)
+    }
   }
 
   if (opts?.notifyHostRuntime !== false) {
@@ -571,7 +584,10 @@ export function ensureWorktreeHasInitialTerminal(
           launchAgent,
           ...initialAgentTabViewModeProps(store.settings ?? null, {
             agent: launchAgent,
-            promptDelivery: sequencedStartup?.draftPrompt != null ? 'draft' : undefined
+            promptDelivery: sequencedStartup?.draftPrompt != null ? 'draft' : undefined,
+            nativeChatTranscriptIsLocalReadable: isNativeChatTranscriptLocalReadable(
+              getConnectionId(worktreeId)
+            )
           })
         }
       : {}),
@@ -636,7 +652,10 @@ function applyDefaultTerminalTabs(
             launchAgent,
             ...initialAgentTabViewModeProps(store.settings ?? null, {
               agent: launchAgent,
-              promptDelivery: isStartupTab && startup?.draftPrompt != null ? 'draft' : undefined
+              promptDelivery: isStartupTab && startup?.draftPrompt != null ? 'draft' : undefined,
+              nativeChatTranscriptIsLocalReadable: isNativeChatTranscriptLocalReadable(
+                getConnectionId(worktreeId)
+              )
             })
           }
         : {}),

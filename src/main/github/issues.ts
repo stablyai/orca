@@ -6,6 +6,7 @@ import type {
   ClassifiedError,
   GitHubAssignableUser,
   GitHubCreateIssueFields,
+  GitHubCreateIssueResult,
   GitHubCommentResult,
   GitHubIssueUpdate,
   IssueInfo,
@@ -15,7 +16,7 @@ import type {
 import { mapIssueInfo } from './mappers'
 import type { LocalGitExecOptions, OwnerRepo } from './gh-utils'
 // prettier-ignore
-import { ghExecFileAsync, acquire, release, getIssueOwnerRepo, resolveIssueSource, classifyGhError, classifyListIssuesError, ghRepoExecOptions, githubRepoContext } from './gh-utils'
+import { ghExecFileAsync, acquire, release, getIssueOwnerRepo, resolveIssueSource, classifyGhError, classifyListIssuesError, ghRepoExecOptions, githubRepoContext, extractExecError } from './gh-utils'
 
 // Why: distinguishes a successful-empty listing from a failed fetch. The
 // previous `catch { return [] }` conflated a 403 on a private upstream with an
@@ -29,6 +30,11 @@ import { ghExecFileAsync, acquire, release, getIssueOwnerRepo, resolveIssueSourc
 export type IssueListResult = {
   items: IssueInfo[]
   error?: ClassifiedError
+}
+
+function githubIssueErrorMessage(error: unknown): string {
+  const { stderr, stdout } = extractExecError(error)
+  return stderr.trim() || stdout.trim()
 }
 
 /**
@@ -162,7 +168,7 @@ export async function createIssue(
   connectionId?: string | null,
   fields?: GitHubCreateIssueFields,
   localGitOptions: LocalGitExecOptions = {}
-): Promise<{ ok: true; number: number; url: string } | { ok: false; error: string }> {
+): Promise<GitHubCreateIssueResult> {
   const trimmedTitle = title.trim()
   if (!trimmedTitle) {
     return { ok: false, error: 'Title is required' }
@@ -180,25 +186,71 @@ export async function createIssue(
   }
   await acquire()
   try {
-    const args = [
-      'api',
-      '-X',
-      'POST',
-      `repos/${ownerRepo.owner}/${ownerRepo.repo}/issues`,
-      '--raw-field',
-      `title=${trimmedTitle}`,
-      '--raw-field',
-      `body=${body}`
-    ]
-    for (const label of fields?.labels ?? []) {
-      args.push('--raw-field', `labels[]=${label}`)
-    }
-    for (const assignee of fields?.assignees ?? []) {
-      args.push('--raw-field', `assignees[]=${assignee}`)
+    const createArgs = (issueBody: string) => {
+      const args = [
+        'api',
+        '-X',
+        'POST',
+        `repos/${ownerRepo.owner}/${ownerRepo.repo}/issues`,
+        '--raw-field',
+        `title=${trimmedTitle}`,
+        '--raw-field',
+        `body=${issueBody}`
+      ]
+      for (const label of fields?.labels ?? []) {
+        args.push('--raw-field', `labels[]=${label}`)
+      }
+      for (const assignee of fields?.assignees ?? []) {
+        args.push('--raw-field', `assignees[]=${assignee}`)
+      }
+      return args
     }
 
-    const { stdout } = await ghExecFileAsync(args, ghOptions)
-    const data = JSON.parse(stdout) as { number?: number; html_url?: string; url?: string }
+    const parseIssue = (stdout: string) =>
+      JSON.parse(stdout) as { number?: number; html_url?: string; url?: string }
+
+    let data: { number?: number; html_url?: string; url?: string }
+    try {
+      const { stdout } = await ghExecFileAsync(createArgs(body), ghOptions)
+      data = parseIssue(stdout)
+    } catch (err) {
+      const message = githubIssueErrorMessage(err)
+      if (!/body is too long \(maximum is \d+ characters\)/i.test(message)) {
+        return { ok: false, error: message }
+      }
+
+      // Why: GitHub rejects oversized bodies on create but accepts the same body
+      // on update, so establish the issue before attaching its body.
+      const { stdout } = await ghExecFileAsync(createArgs(''), ghOptions)
+      data = parseIssue(stdout)
+      if (typeof data.number !== 'number') {
+        return { ok: false, error: 'Unexpected response from GitHub' }
+      }
+
+      try {
+        await ghExecFileAsync(
+          [
+            'api',
+            '-X',
+            'PATCH',
+            `repos/${ownerRepo.owner}/${ownerRepo.repo}/issues/${data.number}`,
+            '--raw-field',
+            `body=${body}`
+          ],
+          ghOptions
+        )
+      } catch (patchErr) {
+        const patchMessage = githubIssueErrorMessage(patchErr)
+        const identity = data.html_url ?? data.url ?? `#${data.number}`
+        return {
+          ok: true,
+          number: data.number,
+          url: String(data.html_url ?? data.url ?? ''),
+          bodySaveWarning: `Issue ${identity} was created, but saving its body failed: ${patchMessage}`
+        }
+      }
+    }
+
     if (typeof data.number !== 'number') {
       return { ok: false, error: 'Unexpected response from GitHub' }
     }
@@ -208,8 +260,7 @@ export async function createIssue(
       url: String(data.html_url ?? data.url ?? '')
     }
   } catch (err) {
-    const message = err instanceof Error ? err.message : String(err)
-    return { ok: false, error: message }
+    return { ok: false, error: githubIssueErrorMessage(err) }
   } finally {
     release()
   }

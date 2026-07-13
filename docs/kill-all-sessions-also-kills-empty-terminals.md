@@ -1,6 +1,6 @@
 # Kill all sessions also closes terminal tabs
 
-GitHub: https://github.com/stablyai/orca/issues/8001  
+GitHub: https://github.com/stablyai/orca/issues/8001
 Branch: `bug-kill-all-sessions-doesnt-kill-terminals`
 
 ## Problem

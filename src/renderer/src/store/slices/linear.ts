@@ -22,6 +22,7 @@ import { clampLinearIssueListLimit } from '../../../../shared/linear-issue-read-
 import { isIntegrationCredentialDecryptionError } from '../../../../shared/integration-credential-errors'
 import { clearLinearMetadataCache } from '../../hooks/useIssueMetadata'
 import {
+  isLinearIssueAttributeFilterUnsupportedError,
   linearConnect,
   linearDisconnect,
   linearDisconnectWorkspace,
@@ -1238,6 +1239,11 @@ export const createLinearSlice: StateCreator<AppState, [], [], LinearSlice> = (s
       })
       .catch((error) => {
         console.warn('[linear] listLinearIssues failed:', error)
+        // Why: capability mismatch is actionable (update remote runtime). Swallowing
+        // it as [] would look like "no issues match filters" and hide the fix.
+        if (isLinearIssueAttributeFilterUnsupportedError(error)) {
+          throw error
+        }
         if (
           (isIntegrationCredentialDecryptionError(error) || looksLikeAuthError(error)) &&
           canWriteLinearReadResult(

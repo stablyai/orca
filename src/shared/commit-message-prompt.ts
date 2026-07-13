@@ -19,7 +19,7 @@ Staged diff:
 
 export {
   cleanGeneratedCommitMessage,
-  extractAgentErrorMessage
+  excerptAgentFailureOutput
 } from './commit-message-agent-output'
 
 /** Builds the final prompt sent to the agent. The custom suffix is appended verbatim

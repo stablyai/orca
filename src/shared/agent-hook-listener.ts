@@ -25,9 +25,26 @@ import {
   unlinkSync,
   writeFileSync
 } from 'node:fs'
-import { join } from 'node:path'
+import { isAbsolute, join } from 'node:path'
 
-import { parseAgentStatusPayload, type ParsedAgentStatusPayload } from './agent-status-types'
+import {
+  normalizeAgentStatusPayload,
+  parseAgentStatusPayload,
+  type AgentStatusState,
+  type AgentSubagentSnapshot,
+  type ParsedAgentStatusPayload
+} from './agent-status-types'
+import {
+  claudeRosterHasWorkingSubagent,
+  claudeRosterToSnapshots,
+  claudeTeammateIdMatchesName,
+  foldClaudeBackgroundTasksIntoRoster,
+  markClaudeSubagentIdle,
+  markClaudeTeammateIdleByName,
+  readClaudeBackgroundAgentTasks,
+  upsertWorkingClaudeSubagent,
+  type ClaudeSubagentRoster
+} from './claude-subagent-roster'
 import { ORCA_HOOK_PROTOCOL_VERSION } from './agent-hook-types'
 import { REMOTE_AGENT_HOOK_ENV, type AgentHookSource } from './agent-hook-relay'
 import {
@@ -35,7 +52,16 @@ import {
   type AgentProviderSessionMetadata
 } from './agent-session-resume'
 import { parsePaneKey } from './stable-pane-id'
-import { isHarnessInjectedUserTurnText } from './harness-injected-user-turns'
+import { isKnownHarnessInjectedUserTurnText } from './harness-injected-user-turns'
+import {
+  buildGrokChatHistoryPathCandidates,
+  findGrokChatHistoryBySessionId,
+  getCachedGrokChatHistoryBySessionId,
+  GROK_SESSION_ID_MAX_LENGTH,
+  isSafeGrokSessionId,
+  resolveGrokChatHistoryPathSync,
+  resolveGrokSessionsDir
+} from './grok-session-paths'
 
 /** Maximum request body size accepted by the listener (1 MB). */
 export const HOOK_REQUEST_MAX_BYTES = 1_000_000
@@ -78,6 +104,30 @@ export type HookListenerState = {
   lastStatusByPaneKey: Map<string, AgentHookEventPayload>
   antigravityCompletedTranscriptByPaneKey: Map<string, string>
   ampCompletedCacheKeys: Set<string>
+  /** Live subagents/teammates per Claude pane. Survives turn boundaries —
+   *  background children outlive the lead turn that spawned them. */
+  claudeSubagentRosterByPaneKey: Map<string, ClaudeSubagentRoster>
+  /** Last state derived from the LEAD session's own events (subagent-origin
+   *  events carry `agent_id` and are excluded). Needed so a SubagentStop can
+   *  re-emit the pane status without inventing a lead state. `interrupted`
+   *  persists here because a gated 'working' emit clamps the flag away, and
+   *  the eventual done (when the last child drains) must still carry it. */
+  claudeLeadStateByPaneKey: Map<string, ClaudeLeadTurnState>
+}
+
+export type ClaudeLeadTurnState = {
+  state: AgentStatusState
+  interrupted?: true
+  /** Set when the waiting state was induced by a subagent's PermissionRequest
+   *  or AskUserQuestion (those payloads carry `agent_id`). Only that agent's
+   *  next tool activity may clear the wait — other children's churn must not
+   *  dismiss a pending human-input card. */
+  waitingAgentId?: string
+  /** The lead state a child-induced wait displaced. Restored when the wait
+   *  clears — the lead may have already finished its turn, and inventing
+   *  'working' would leave the pane spinning after the roster drains (the
+   *  done-gate only ever downgrades done → working, never back). */
+  stateBeforeWait?: Pick<ClaudeLeadTurnState, 'state' | 'interrupted'>
 }
 
 export function createHookListenerState(): HookListenerState {
@@ -88,7 +138,9 @@ export function createHookListenerState(): HookListenerState {
     lastToolByPaneKey: new Map(),
     lastStatusByPaneKey: new Map(),
     antigravityCompletedTranscriptByPaneKey: new Map(),
-    ampCompletedCacheKeys: new Set()
+    ampCompletedCacheKeys: new Set(),
+    claudeSubagentRosterByPaneKey: new Map(),
+    claudeLeadStateByPaneKey: new Map()
   }
 }
 
@@ -98,6 +150,8 @@ export function clearPaneCacheState(state: HookListenerState, paneKey: string): 
   deletePaneScopedCacheEntry(state.lastStatusByPaneKey, paneKey)
   deletePaneScopedCacheEntry(state.antigravityCompletedTranscriptByPaneKey, paneKey)
   deletePaneScopedSetEntry(state.ampCompletedCacheKeys, paneKey)
+  state.claudeSubagentRosterByPaneKey.delete(paneKey)
+  state.claudeLeadStateByPaneKey.delete(paneKey)
 }
 
 function clearPaneTurnCacheState(state: HookListenerState, paneKey: string): void {
@@ -135,6 +189,8 @@ export function clearAllListenerCaches(state: HookListenerState): void {
   state.ampCompletedCacheKeys.clear()
   state.warnedVersions.clear()
   state.warnedEnvs.clear()
+  state.claudeSubagentRosterByPaneKey.clear()
+  state.claudeLeadStateByPaneKey.clear()
 }
 
 /** Emit warn-once diagnostics for cross-build (`version`) and dev-vs-prod
@@ -395,8 +451,10 @@ function resolvePrompt(
 ): string {
   // Why: harness-injected turns (task notifications, system reminders) fire
   // UserPromptSubmit but are not the user's ask — keep the cached real prompt
-  // instead of surfacing raw machinery tags in status labels.
-  if (isHarnessInjectedUserTurnText(promptText)) {
+  // instead of surfacing raw machinery tags in status labels. Match only known
+  // harness tags: a real prompt pasting a custom `<my-element>` must reset the
+  // turn, not be mistaken for machinery and leave the pane on a stale prompt.
+  if (isKnownHarnessInjectedUserTurnText(promptText)) {
     return state.lastPromptByPaneKey.get(paneKey) ?? ''
   }
   if (options?.resetOnNewTurn) {
@@ -492,11 +550,19 @@ const TOOL_INPUT_KEYS_BY_TOOL: Record<string, readonly string[]> = {
   exec_command: ['cmd', 'command'],
   shell_command: ['cmd', 'command'],
   run_terminal_cmd: ['command'],
+  // Why: Grok maps Bash/Edit/Write to snake_case first-party tool names
+  // (run_terminal_command, search_replace, …). Without these keys the status
+  // row shows a blank toolInput for the bulk of Grok tool turns.
+  run_terminal_command: ['command'],
+  search_replace: ['file_path', 'path', 'filePath'],
+  write_to_file: ['TargetFile', 'path', 'file_path'],
   execute_code: ['code', 'command', 'cmd'],
   apply_patch: ['path', 'file_path'],
   view_image: ['path', 'file_path'],
   AskUser: ['question', 'prompt', 'message'],
   ask_user: ['question', 'prompt', 'message'],
+  AskUserQuestion: ['questions', 'question', 'prompt', 'message'],
+  ask_user_question: ['questions', 'question', 'prompt', 'message'],
   bash: ['command'],
   powershell: ['command'],
   create: ['path', 'file_path'],
@@ -517,7 +583,6 @@ const TOOL_INPUT_KEYS_BY_TOOL: Record<string, readonly string[]> = {
   skill_manage: ['action', 'name', 'file_path'],
   delegate_task: ['task', 'prompt', 'description'],
   view_file: ['AbsolutePath', 'path', 'file_path'],
-  write_to_file: ['TargetFile', 'path', 'file_path'],
   replace_file_content: ['TargetFile', 'path', 'file_path'],
   multi_replace_file_content: ['TargetFile', 'path', 'file_path'],
   list_dir: ['DirectoryPath', 'path'],
@@ -528,7 +593,9 @@ const TOOL_INPUT_KEYS_BY_TOOL: Record<string, readonly string[]> = {
   manage_task: ['TaskId', 'Action'],
   schedule: ['Prompt', 'DurationSeconds', 'CronExpression'],
   ask_question: ['question', 'questions'],
-  ask_permission: ['Action', 'Target', 'Reason']
+  ask_permission: ['Action', 'Target', 'Reason'],
+  spawn_subagent: ['prompt', 'description', 'subagent_type'],
+  open_page: ['url']
 }
 
 const FALLBACK_TOOL_INPUT_KEYS = [
@@ -625,6 +692,17 @@ function toolUpdate(
   }
 }
 
+/** Clear the active-tool metadata (name/input/prompt) so a just-failed tool
+ *  stops looking in-flight. Why: the compact sidebar prioritizes current-tool
+ *  metadata over the failure message, so a completed failed tool must no
+ *  longer look active or the error text stays hidden behind the tool name. */
+function clearActiveToolFieldsUpdate(): ToolSnapshot {
+  return toolUpdate(
+    { toolName: undefined, toolInput: undefined, interactivePrompt: undefined },
+    { hasToolInputField: true }
+  )
+}
+
 /** True for the AskUserQuestion tool across the casing variants different
  *  agents emit (`AskUserQuestion` / `ask_user_question` / `askUserQuestion`).
  *  Why: this is the structured "pick an option" prompt whose full input the
@@ -673,14 +751,14 @@ function deriveInteractivePrompt(
   toolInput: unknown,
   eventName?: unknown
 ): string | undefined {
-  // Why: an AskUserQuestion is pending only on the Pre/Permission event. On
-  // PostToolUse it has already been answered, so re-asserting the `{questions}`
-  // prompt would re-show an answered card instead of letting it clear. The live
-  // working indicator keys off agentStatus.state (not this prompt), so dropping
-  // it here doesn't suppress it.
+  // Why: providers vary event casing; any post-tool event means the question is
+  // no longer pending and must not recreate its answered live card.
+  const normalizedEventName = normalizeHookEventName(eventName)
+  const isPostToolEvent =
+    normalizedEventName === 'post_tool_use' || normalizedEventName === 'post_tool_use_failure'
   if (
     isAskUserQuestionTool(toolName) &&
-    eventName !== 'PostToolUse' &&
+    !isPostToolEvent &&
     toolInput !== undefined &&
     toolInput !== null
   ) {
@@ -761,8 +839,8 @@ const TRANSCRIPT_CHUNK_BYTES = 64 * 1024
 const TRANSCRIPT_MAX_SCAN_BYTES = 4 * 1024 * 1024
 const AMP_THREAD_ID_MAX_LENGTH = 256
 const AMP_MAX_SCOPED_THREAD_CACHE_KEYS = 32
-const GROK_SESSION_ID_MAX_LENGTH = 128
 const GROK_SESSION_CWD_MAX_LENGTH = 4096
+const GROK_HOME_ENVELOPE_MAX_LENGTH = 4096
 
 function extractAssistantTextFromLine(line: string): string | undefined {
   let entry: unknown
@@ -1031,38 +1109,92 @@ function readBoundedString(
   return value && value.length <= maxLength ? value : undefined
 }
 
-function isSafeGrokSessionId(sessionId: string): boolean {
-  return /^[A-Za-z0-9_-]+$/.test(sessionId) && sessionId.length <= GROK_SESSION_ID_MAX_LENGTH
+function readGrokHomeEnvelope(record: Record<string, unknown>): string | undefined {
+  const value = readBoundedString(record, ['grokHome'], GROK_HOME_ENVELOPE_MAX_LENGTH)
+  if (!value || value !== value.trim() || !isAbsolute(value) || hasControlCharacter(value)) {
+    return undefined
+  }
+  return value
 }
 
-function getGrokChatHistoryPath(hookPayload: Record<string, unknown>): string | undefined {
+function hasControlCharacter(value: string): boolean {
+  return Array.from(value).some((character) => {
+    const code = character.charCodeAt(0)
+    return code <= 0x1f || code === 0x7f
+  })
+}
+
+type GrokSessionMetadata = {
+  sessionId: string
+  cwd?: string
+  sessionsDir: string
+}
+
+function readGrokSessionMetadata(
+  hookPayload: Record<string, unknown>,
+  grokHome?: string
+): GrokSessionMetadata | undefined {
   const sessionId = readBoundedString(
     hookPayload,
     ['sessionId', 'session_id'],
     GROK_SESSION_ID_MAX_LENGTH
   )
+  if (!sessionId || !isSafeGrokSessionId(sessionId)) {
+    return undefined
+  }
   const cwd = readBoundedString(
     hookPayload,
     ['cwd', 'workspaceRoot', 'workspace_root'],
     GROK_SESSION_CWD_MAX_LENGTH
   )
-  if (!sessionId || !cwd || !isSafeGrokSessionId(sessionId)) {
+  // Why: hook scripts report the effective per-PTY/remote home; old scripts
+  // fall back to the listener runtime's Grok home for compatibility.
+  const sessionsDir = grokHome
+    ? join(grokHome, 'sessions')
+    : resolveGrokSessionsDir(process.env, homedir())
+  return { sessionId, cwd, sessionsDir }
+}
+
+function getGrokChatHistoryPath(
+  hookPayload: Record<string, unknown>,
+  grokHome?: string
+): string | undefined {
+  const metadata = readGrokSessionMetadata(hookPayload, grokHome)
+  if (!metadata) {
     return undefined
   }
-  return join(
-    homedir(),
-    '.grok',
-    'sessions',
-    encodeURIComponent(cwd),
-    sessionId,
-    'chat_history.jsonl'
+  const resolved = resolveGrokChatHistoryPathSync({
+    sessionId: metadata.sessionId,
+    cwd: metadata.cwd ?? null,
+    sessionsDir: metadata.sessionsDir
+  })
+  if (resolved) {
+    return resolved
+  }
+  const cached = getCachedGrokChatHistoryBySessionId(metadata.sessionsDir, metadata.sessionId)
+  if (cached) {
+    return cached
+  }
+  // Why: hasPendingAgentResultText only needs a plausible on-disk target when
+  // the file may not exist yet (SessionEnd can race the last write). Prefer a
+  // short-cwd candidate when available; async discovery caches slug groups.
+  if (!metadata.cwd) {
+    return undefined
+  }
+  return (
+    buildGrokChatHistoryPathCandidates({
+      sessionId: metadata.sessionId,
+      cwd: metadata.cwd,
+      sessionsDir: metadata.sessionsDir
+    })[0] ?? undefined
   )
 }
 
 function readLastAssistantFromGrokChatHistory(
-  hookPayload: Record<string, unknown>
+  hookPayload: Record<string, unknown>,
+  grokHome?: string
 ): string | undefined {
-  const chatHistoryPath = getGrokChatHistoryPath(hookPayload)
+  const chatHistoryPath = getGrokChatHistoryPath(hookPayload, grokHome)
   if (!chatHistoryPath) {
     return undefined
   }
@@ -1076,12 +1208,15 @@ export function hasPendingAgentResultText(source: AgentHookSource, body: unknown
   if (!record) {
     return false
   }
-  const directMessage =
-    record.last_assistant_message ?? record.lastAssistantMessage ?? record.message
-  if (typeof directMessage === 'string' && directMessage.trim().length > 0) {
+  if (hasExplicitLastAssistantResult(record)) {
     return false
   }
   if (source === 'copilot') {
+    // Why: Copilot Stop consumes generic `message` as its final assistant text;
+    // Grok and Antigravity use that field for status text instead.
+    if (hasNonEmptyString(record.message)) {
+      return false
+    }
     const transcriptPath = record.transcript_path ?? record.transcriptPath
     return typeof transcriptPath === 'string' && transcriptPath.trim().length > 0
   }
@@ -1097,13 +1232,59 @@ export function hasPendingAgentResultText(source: AgentHookSource, body: unknown
     const transcriptPath = record.transcriptPath ?? record.transcript_path
     return typeof transcriptPath === 'string' && transcriptPath.trim().length > 0
   }
-  if (
-    source === 'grok' &&
-    isGrokEvent(record.hookEventName ?? record.hook_event_name, 'stop', 'session_end')
-  ) {
-    return getGrokChatHistoryPath(record) !== undefined
+  const pendingGrokDiscovery = preparePendingGrokResultDiscovery(source, body)
+  if (pendingGrokDiscovery) {
+    void pendingGrokDiscovery
+    return true
   }
   return false
+}
+
+function hasNonEmptyString(value: unknown): boolean {
+  return typeof value === 'string' && value.trim().length > 0
+}
+
+function hasExplicitLastAssistantResult(record: Record<string, unknown>): boolean {
+  return (
+    hasNonEmptyString(record.last_assistant_message) ||
+    hasNonEmptyString(record.lastAssistantMessage)
+  )
+}
+
+/** Start bounded discovery only for a Grok completion that still needs result text. */
+export function preparePendingGrokResultDiscovery(
+  source: AgentHookSource,
+  body: unknown
+): Promise<void> | null {
+  if (source !== 'grok') {
+    return null
+  }
+  const envelope =
+    typeof body === 'object' && body !== null ? (body as Record<string, unknown>) : null
+  const record = parseHookBodyPayloadRecord(body)
+  if (!record || hasExplicitLastAssistantResult(record)) {
+    return null
+  }
+  const eventName =
+    envelope?.hook_event_name ??
+    envelope?.hookEventName ??
+    record.hook_event_name ??
+    record.hookEventName
+  if (!isGrokEvent(eventName, 'stop', 'session_end')) {
+    return null
+  }
+  const metadata = readGrokSessionMetadata(
+    record,
+    envelope ? readGrokHomeEnvelope(envelope) : undefined
+  )
+  if (!metadata) {
+    return null
+  }
+  // Why: the server can await this signal without moving filesystem discovery
+  // back into the synchronous hook normalization path.
+  return findGrokChatHistoryBySessionId(metadata.sessionsDir, metadata.sessionId).then(
+    () => undefined
+  )
 }
 
 function readLastAssistantFromTranscriptOnce(transcriptPath: string): string | undefined {
@@ -1205,10 +1386,11 @@ function extractClaudeToolFields(
   hookPayload: Record<string, unknown>
 ): ToolSnapshot {
   const update: ToolSnapshot = {}
-  if (
+  if (eventName === 'PostToolUseFailure') {
+    Object.assign(update, clearActiveToolFieldsUpdate())
+  } else if (
     eventName === 'PreToolUse' ||
     eventName === 'PostToolUse' ||
-    eventName === 'PostToolUseFailure' ||
     eventName === 'PermissionRequest'
   ) {
     const toolName = readString(hookPayload, 'tool_name')
@@ -1430,12 +1612,20 @@ function extractCursorToolFields(
     eventName === 'postToolUse' ||
     eventName === 'postToolUseFailure'
   ) {
-    const toolName = readString(hookPayload, 'tool_name')
-    const toolInput = deriveToolInputPreview(toolName, hookPayload.tool_input)
-    const update: ToolSnapshot = toolUpdate(
-      { toolName, toolInput },
-      { hasToolInputField: hasOwnField(hookPayload, 'tool_input') }
-    )
+    const update: ToolSnapshot = {}
+    if (eventName === 'postToolUseFailure') {
+      Object.assign(update, clearActiveToolFieldsUpdate())
+    } else {
+      const toolName = readString(hookPayload, 'tool_name')
+      const toolInput = deriveToolInputPreview(toolName, hookPayload.tool_input)
+      Object.assign(
+        update,
+        toolUpdate(
+          { toolName, toolInput },
+          { hasToolInputField: hasOwnField(hookPayload, 'tool_input') }
+        )
+      )
+    }
     if (eventName === 'postToolUse') {
       const responseText = extractToolResponseText(hookPayload.tool_output)
       if (responseText) {
@@ -1580,10 +1770,11 @@ function extractCopilotToolFields(
   hookPayload: Record<string, unknown>
 ): ToolSnapshot {
   const update: ToolSnapshot = {}
-  if (
+  if (eventName === 'PostToolUseFailure' || eventName === 'ErrorOccurred') {
+    Object.assign(update, clearActiveToolFieldsUpdate())
+  } else if (
     eventName === 'PreToolUse' ||
     eventName === 'PostToolUse' ||
-    eventName === 'PostToolUseFailure' ||
     eventName === 'PermissionRequest'
   ) {
     const copilotToolCall = readCopilotToolCall(hookPayload)
@@ -1842,29 +2033,44 @@ function isGrokEvent(eventName: unknown, ...expected: readonly string[]): boolea
 
 function extractGrokToolFields(
   eventName: unknown,
-  hookPayload: Record<string, unknown>
+  hookPayload: Record<string, unknown>,
+  grokHome?: string
 ): ToolSnapshot {
   if (isGrokEvent(eventName, 'pre_tool_use', 'post_tool_use', 'post_tool_use_failure')) {
-    const toolName =
-      readString(hookPayload, 'toolName') ??
-      readString(hookPayload, 'tool_name') ??
-      readString(hookPayload, 'name')
-    const toolInput =
-      deriveToolInputPreview(toolName, hookPayload.toolInput) ??
-      deriveToolInputPreview(toolName, hookPayload.tool_input) ??
-      deriveToolInputPreview(toolName, hookPayload.input) ??
-      deriveToolInputPreview(toolName, hookPayload.arguments)
-    const update: ToolSnapshot = toolUpdate(
-      { toolName, toolInput },
-      {
-        hasToolInputField: hasAnyOwnField(hookPayload, [
-          'toolInput',
-          'tool_input',
-          'input',
-          'arguments'
-        ])
-      }
-    )
+    const update: ToolSnapshot = {}
+    if (isGrokEvent(eventName, 'post_tool_use_failure')) {
+      Object.assign(update, clearActiveToolFieldsUpdate())
+    } else {
+      const toolName =
+        readString(hookPayload, 'toolName') ??
+        readString(hookPayload, 'tool_name') ??
+        readString(hookPayload, 'name')
+      const rawInput =
+        hookPayload.toolInput ??
+        hookPayload.tool_input ??
+        hookPayload.input ??
+        hookPayload.arguments
+      const toolInput =
+        deriveToolInputPreview(toolName, rawInput) ?? deriveFallbackToolInputPreview(rawInput)
+      // Why: Grok's ask_user_question is auto-allowed and arrives as PreToolUse
+      // (not PermissionRequest). Capture the full question payload so the live
+      // card path can render options instead of only a waiting Notification.
+      const interactivePrompt = deriveInteractivePrompt(toolName, rawInput, eventName)
+      Object.assign(
+        update,
+        toolUpdate(
+          { toolName, toolInput, interactivePrompt },
+          {
+            hasToolInputField: hasAnyOwnField(hookPayload, [
+              'toolInput',
+              'tool_input',
+              'input',
+              'arguments'
+            ])
+          }
+        )
+      )
+    }
     if (isGrokEvent(eventName, 'post_tool_use', 'post_tool_use_failure')) {
       const responseText =
         extractToolResponseText(hookPayload.toolResponse) ??
@@ -1879,7 +2085,7 @@ function extractGrokToolFields(
     }
     return update
   }
-  if (isGrokEvent(eventName, 'stop', 'session_end')) {
+  if (isGrokEvent(eventName, 'stop', 'session_end', 'stop_failure')) {
     const direct =
       readString(hookPayload, 'lastAssistantMessage') ??
       readString(hookPayload, 'last_assistant_message')
@@ -1892,7 +2098,7 @@ function extractGrokToolFields(
     if (fromTranscript) {
       return { lastAssistantMessage: fromTranscript }
     }
-    const fromChatHistory = readLastAssistantFromGrokChatHistory(hookPayload)
+    const fromChatHistory = readLastAssistantFromGrokChatHistory(hookPayload, grokHome)
     if (fromChatHistory) {
       return { lastAssistantMessage: fromChatHistory }
     }
@@ -2094,7 +2300,10 @@ function hasExplicitUserPrompt(
   }
   // Why: harness-injected machinery turns are not proof of a user submit —
   // they must not count for prompt-sent telemetry or permission stickiness.
-  if (isHarnessInjectedUserTurnText(extractedPrompt.text)) {
+  // Match only known harness tags: a real prompt starting with a custom
+  // `<my-element>` is an explicit user turn and must survive interrupt recovery
+  // (a false "not explicit" leaves the agent visibly done after Ctrl+C).
+  if (isKnownHarnessInjectedUserTurnText(extractedPrompt.text)) {
     return false
   }
   // Why: bare `message` fields often contain permission or status copy. They
@@ -2115,7 +2324,8 @@ function hasExplicitUserPrompt(
 function extractToolFields(
   source: AgentHookSource,
   eventName: unknown,
-  hookPayload: Record<string, unknown>
+  hookPayload: Record<string, unknown>,
+  options?: { grokHome?: string }
 ): ToolSnapshot {
   // Why: exhaustive switch so adding a source to AgentHookSource fails
   // typecheck here instead of silently routing through OpenCode's extractor.
@@ -2145,7 +2355,7 @@ function extractToolFields(
     case 'command-code':
       return extractCommandCodeToolFields(eventName, hookPayload)
     case 'grok':
-      return extractGrokToolFields(eventName, hookPayload)
+      return extractGrokToolFields(eventName, hookPayload, options?.grokHome)
     case 'copilot':
       return extractCopilotToolFields(normalizeCopilotEventName(eventName), hookPayload)
     case 'hermes':
@@ -2155,6 +2365,139 @@ function extractToolFields(
   }
 }
 
+function getOrCreateClaudeSubagentRoster(
+  state: HookListenerState,
+  paneKey: string
+): ClaudeSubagentRoster {
+  let roster = state.claudeSubagentRosterByPaneKey.get(paneKey)
+  if (!roster) {
+    roster = new Map()
+    state.claudeSubagentRosterByPaneKey.set(paneKey, roster)
+  }
+  return roster
+}
+
+/** SubagentStart/SubagentStop/TeammateIdle don't map to a pane state by
+ *  themselves; they update the roster and re-emit the lead's last known state
+ *  with the fresh child list so the sidebar reflects spawn/finish immediately
+ *  (a background child can outlive the lead turn by minutes with no other
+ *  hook traffic). */
+function normalizeClaudeSubagentLifecycleEvent(
+  state: HookListenerState,
+  eventName: 'SubagentStart' | 'SubagentStop' | 'TeammateIdle',
+  paneKey: string,
+  hookPayload: Record<string, unknown>
+): ParsedAgentStatusPayload | null {
+  const roster = getOrCreateClaudeSubagentRoster(state, paneKey)
+  if (eventName === 'TeammateIdle') {
+    const teammateName = readString(hookPayload, 'teammate_name')
+    if (!teammateName) {
+      return null
+    }
+    markClaudeTeammateIdleByName(roster, teammateName)
+    clearClaudePendingWaitForAgent(state, paneKey, (waitingAgentId) =>
+      claudeTeammateIdMatchesName(waitingAgentId, teammateName)
+    )
+  } else {
+    const agentId = readString(hookPayload, 'agent_id')
+    if (!agentId) {
+      return null
+    }
+    if (eventName === 'SubagentStart') {
+      upsertWorkingClaudeSubagent(
+        roster,
+        agentId,
+        { agentType: readString(hookPayload, 'agent_type') },
+        Date.now()
+      )
+    } else {
+      markClaudeSubagentIdle(roster, agentId)
+      // Why: a blocked child that dies (killed, errored) without another tool
+      // event would otherwise pin its permission/question wait on the pane
+      // forever — nothing else references that agent again.
+      clearClaudePendingWaitForAgent(state, paneKey, (waitingAgentId) => waitingAgentId === agentId)
+    }
+  }
+  return buildClaudeChildDrivenStatusPayload(state, eventName, paneKey, hookPayload)
+}
+
+/** Sync the Claude lead-turn record when the SERVER infers an interrupt
+ *  outside the hook stream (Ctrl+C with a missed Stop hook). Without this, a
+ *  later child lifecycle event would re-emit the stale pre-interrupt lead
+ *  state and resurrect a cancelled pane. */
+export function markClaudeLeadTurnInterrupted(state: HookListenerState, paneKey: string): void {
+  state.claudeLeadStateByPaneKey.set(paneKey, { state: 'done', interrupted: true })
+}
+
+/** Rebuild a pane's roster from a persisted status snapshot during hydration.
+ *  Restart loses the in-memory roster while the renderer replays the child
+ *  rows from disk; without reseeding, the next teammate-bearing Stop (whose
+ *  task ids never match lifecycle ids) would silently drop those rows. Stale
+ *  seeds self-heal: an empty background_tasks clears, activity refreshes. */
+export function seedClaudeSubagentRosterFromSnapshots(
+  state: HookListenerState,
+  paneKey: string,
+  snapshots: readonly AgentSubagentSnapshot[]
+): void {
+  if (snapshots.length === 0 || state.claudeSubagentRosterByPaneKey.has(paneKey)) {
+    return
+  }
+  const roster = getOrCreateClaudeSubagentRoster(state, paneKey)
+  for (const snapshot of snapshots) {
+    roster.set(snapshot.id, {
+      state: snapshot.state === 'working' ? 'working' : 'idle',
+      startedAt: snapshot.startedAt,
+      agentType: snapshot.agentType,
+      description: snapshot.description,
+      // Why: the seed can be a phantom (child finished while Orca was down,
+      // its SubagentStop lost). Let a PRESENT background_tasks list that
+      // omits the id demote it instead of gating the pane 'working' forever.
+      backgroundTasksAuthoritative: true
+    })
+  }
+}
+
+/** Drop a child-owned waiting state when that child stops/idles, restoring
+ *  the lead state the wait displaced. Without a stash (the wait was the
+ *  pane's first observed lead event) fall back to 'working' and let the next
+ *  lead event resolve it — a transient spinner beats a permanently stuck
+ *  card. */
+function clearClaudePendingWaitForAgent(
+  state: HookListenerState,
+  paneKey: string,
+  ownsWait: (waitingAgentId: string) => boolean
+): void {
+  const lead = state.claudeLeadStateByPaneKey.get(paneKey)
+  if (lead?.state !== 'waiting' || !lead.waitingAgentId || !ownsWait(lead.waitingAgentId)) {
+    return
+  }
+  state.claudeLeadStateByPaneKey.set(paneKey, lead.stateBeforeWait ?? { state: 'working' })
+}
+
+/** Emit a pane status refresh driven by child activity (lifecycle events and
+ *  child-origin tool events): the lead's cached state is re-emitted — gated up
+ *  to 'working' while a child works — without touching the lead's tool/prompt
+ *  caches, so a live AskUserQuestion card or permission wait survives child
+ *  churn. */
+function buildClaudeChildDrivenStatusPayload(
+  state: HookListenerState,
+  eventName: unknown,
+  paneKey: string,
+  hookPayload: Record<string, unknown>
+): ParsedAgentStatusPayload | null {
+  // Why: default 'working' — a spawn is proof of activity even before the
+  // lead's first state-bearing event (e.g. Orca restarted mid-session).
+  const lead = state.claudeLeadStateByPaneKey.get(paneKey)
+  const leadState = lead?.state ?? 'working'
+  const roster = state.claudeSubagentRosterByPaneKey.get(paneKey)
+  return buildClaudeStatusPayload(state, eventName, '', paneKey, hookPayload, {
+    stateName:
+      leadState === 'done' && claudeRosterHasWorkingSubagent(roster) ? 'working' : leadState,
+    updateToolSnapshot: false,
+    interrupted: lead?.interrupted
+  })
+}
+
 function normalizeClaudeEvent(
   state: HookListenerState,
   eventName: unknown,
@@ -2162,6 +2505,14 @@ function normalizeClaudeEvent(
   paneKey: string,
   hookPayload: Record<string, unknown>
 ): ParsedAgentStatusPayload | null {
+  if (
+    eventName === 'SubagentStart' ||
+    eventName === 'SubagentStop' ||
+    eventName === 'TeammateIdle'
+  ) {
+    return normalizeClaudeSubagentLifecycleEvent(state, eventName, paneKey, hookPayload)
+  }
+
   // Why: Claude's AskUserQuestion tool is auto-allowed, so it emits PreToolUse
   // (not PermissionRequest) while blocked on a human answer — Claude posts a
   // Notification instead of PermissionRequest, and Orca does not register the
@@ -2186,30 +2537,157 @@ function normalizeClaudeEvent(
     return null
   }
 
-  const snapshot = resolveToolState(
-    state,
-    paneKey,
-    extractToolFields('claude', eventName, hookPayload),
-    { resetOnNewTurn: isNewTurnEvent('claude', eventName) }
-  )
+  const eventAgentId = readString(hookPayload, 'agent_id')
+  // Why: hook events originating inside a subagent/teammate carry `agent_id`;
+  // the lead session's own events don't. Subagent tool activity keeps that
+  // child's row live but must not be mistaken for the lead's turn state, and
+  // must not overwrite the lead's tool/prompt caches (a live AskUserQuestion
+  // card would vanish when a background child ran its next tool). Two
+  // exceptions take the full path below: waiting-inducing events (a child's
+  // PermissionRequest/AskUserQuestion needs the human's attention on this
+  // pane), and the blocked child's own next tool event (approval granted —
+  // the wait must clear exactly as it does for the lead).
+  const isWaitingInducing = stateName === 'waiting'
+  const subagentOriginId =
+    !isWaitingInducing &&
+    (eventName === 'PreToolUse' ||
+      eventName === 'PostToolUse' ||
+      eventName === 'PostToolUseFailure')
+      ? eventAgentId
+      : undefined
+  if (eventAgentId && (subagentOriginId || isWaitingInducing)) {
+    upsertWorkingClaudeSubagent(
+      getOrCreateClaudeSubagentRoster(state, paneKey),
+      eventAgentId,
+      { agentType: readString(hookPayload, 'agent_type') },
+      Date.now()
+    )
+  }
+  if (subagentOriginId) {
+    const lead = state.claudeLeadStateByPaneKey.get(paneKey)
+    if (lead?.state !== 'waiting' || lead.waitingAgentId !== subagentOriginId) {
+      return buildClaudeChildDrivenStatusPayload(state, eventName, paneKey, hookPayload)
+    }
+    // Why: approval granted — update the tool snapshot exactly as the lead's
+    // own next tool event would (dropping the pending card), but restore the
+    // lead state the wait displaced instead of adopting this child event as
+    // the lead's 'working': the lead may already be done, and the done-gate
+    // never upgrades working back to done once the roster drains.
+    const restored = lead.stateBeforeWait ?? { state: 'working' as const }
+    state.claudeLeadStateByPaneKey.set(paneKey, restored)
+    const roster = state.claudeSubagentRosterByPaneKey.get(paneKey)
+    return buildClaudeStatusPayload(state, eventName, promptText, paneKey, hookPayload, {
+      stateName:
+        restored.state === 'done' && claudeRosterHasWorkingSubagent(roster)
+          ? 'working'
+          : restored.state,
+      updateToolSnapshot: true,
+      interrupted: restored.interrupted
+    })
+  }
 
+  // Why: lead events never carry agent_id, so a known child's id on a
+  // turn-boundary event (a CLI that stops converting child Stops to
+  // SubagentStop) must not retire or resurrect the pane as if the lead
+  // spoke — re-emit it as child activity instead.
+  if (
+    eventAgentId &&
+    !isWaitingInducing &&
+    state.claudeSubagentRosterByPaneKey.get(paneKey)?.has(eventAgentId)
+  ) {
+    return buildClaudeChildDrivenStatusPayload(state, eventName, paneKey, hookPayload)
+  }
+
+  if (eventName === 'Stop' || eventName === 'StopFailure') {
+    // Why: background_tasks is only trusted where unambiguous (empty list,
+    // id-exact matches, unmatched running one-shot subagents) — see
+    // foldClaudeBackgroundTasksIntoRoster. The lifecycle events own teammate
+    // state; teammates report "running" here even while idle. Older Claude
+    // builds without the field keep the incrementally tracked roster.
+    const backgroundTasks = readClaudeBackgroundAgentTasks(hookPayload)
+    if (backgroundTasks.present) {
+      foldClaudeBackgroundTasksIntoRoster(
+        getOrCreateClaudeSubagentRoster(state, paneKey),
+        backgroundTasks.tasks,
+        Date.now()
+      )
+    }
+  }
   const interrupted =
     eventName === 'Stop' && hookPayload['is_interrupt'] === true ? true : undefined
+  // Why: a child-induced wait displaces the lead's own state; stash it so
+  // clearing the wait restores reality (the lead may already be done). A
+  // second child wait carries the ORIGINAL stash forward, not the
+  // intermediate waiting state.
+  const previousLead = state.claudeLeadStateByPaneKey.get(paneKey)
+  const stateBeforeWait =
+    isWaitingInducing && eventAgentId && previousLead
+      ? previousLead.state === 'waiting'
+        ? previousLead.stateBeforeWait
+        : {
+            state: previousLead.state,
+            ...(previousLead.interrupted ? { interrupted: true as const } : {})
+          }
+      : undefined
+  state.claudeLeadStateByPaneKey.set(paneKey, {
+    state: stateName,
+    ...(interrupted ? { interrupted } : {}),
+    ...(isWaitingInducing && eventAgentId ? { waitingAgentId: eventAgentId } : {}),
+    ...(stateBeforeWait ? { stateBeforeWait } : {})
+  })
 
-  return parseAgentStatusPayload(
-    JSON.stringify({
-      state: stateName,
-      prompt: resolvePrompt(state, paneKey, promptText, {
+  // Why: the lead ending its turn is not "done" while spawned subagents or
+  // teammates are still running — that reads as a finished ✅ in the sidebar
+  // while a background review loop is mid-flight. Claude wakes the lead when
+  // a child finishes, so a later Stop with an empty roster resolves to done.
+  const roster = state.claudeSubagentRosterByPaneKey.get(paneKey)
+  const effectiveState =
+    stateName === 'done' && claudeRosterHasWorkingSubagent(roster) ? 'working' : stateName
+
+  return buildClaudeStatusPayload(state, eventName, promptText, paneKey, hookPayload, {
+    stateName: effectiveState,
+    updateToolSnapshot: true,
+    interrupted
+  })
+}
+
+function buildClaudeStatusPayload(
+  state: HookListenerState,
+  eventName: unknown,
+  promptText: string,
+  paneKey: string,
+  hookPayload: Record<string, unknown>,
+  options: { stateName: AgentStatusState; updateToolSnapshot: boolean; interrupted?: boolean }
+): ParsedAgentStatusPayload | null {
+  // Why: child-driven refreshes are roster bookkeeping, not lead tool
+  // activity. Read the cached tool snapshot without merging so they can't
+  // clear a live AskUserQuestion card or clobber the in-flight tool preview.
+  const snapshot = options.updateToolSnapshot
+    ? resolveToolState(state, paneKey, extractToolFields('claude', eventName, hookPayload), {
         resetOnNewTurn: isNewTurnEvent('claude', eventName)
-      }),
-      agentType: 'claude',
-      toolName: snapshot.toolName,
-      toolInput: snapshot.toolInput,
-      interactivePrompt: snapshot.interactivePrompt,
-      lastAssistantMessage: snapshot.lastAssistantMessage,
-      interrupted
-    })
-  )
+      })
+    : (state.lastToolByPaneKey.get(paneKey) ?? {})
+
+  // Why: normalizeAgentStatusPayload validates the object directly — the
+  // JSON stringify/parse round trip the other normalizers use is pure
+  // overhead on this hot per-hook-event path. The normalizer clamps
+  // `interrupted` to done-state payloads, so a gated 'working' emit drops it
+  // while claudeLeadStateByPaneKey preserves it for the eventual done.
+  return normalizeAgentStatusPayload({
+    state: options.stateName,
+    // Why: only lead-origin events (updateToolSnapshot) may reset the prompt
+    // cache; a child-driven refresh must not blank the lead's prompt label.
+    prompt: resolvePrompt(state, paneKey, promptText, {
+      resetOnNewTurn: options.updateToolSnapshot && isNewTurnEvent('claude', eventName)
+    }),
+    agentType: 'claude',
+    toolName: snapshot.toolName,
+    toolInput: snapshot.toolInput,
+    interactivePrompt: snapshot.interactivePrompt,
+    lastAssistantMessage: snapshot.lastAssistantMessage,
+    interrupted: options.interrupted,
+    subagents: claudeRosterToSnapshots(state.claudeSubagentRosterByPaneKey.get(paneKey))
+  })
 }
 
 // Why: Devin uses Claude-compatible hook payload shapes but has its own
@@ -2867,7 +3345,7 @@ function normalizePiCompatibleEvent(
     eventName === 'tool_execution_end' ||
     eventName === 'message_end'
       ? 'working'
-      : eventName === 'agent_end' || eventName === 'session_shutdown'
+      : eventName === 'agent_end'
         ? 'done'
         : null
 
@@ -3013,7 +3491,8 @@ function normalizeGrokEvent(
   eventName: unknown,
   promptText: string,
   paneKey: string,
-  hookPayload: Record<string, unknown>
+  hookPayload: Record<string, unknown>,
+  grokHome?: string
 ): ParsedAgentStatusPayload | null {
   if (isGrokEvent(eventName, 'session_start')) {
     // Why: Grok emits SessionStart when the TUI opens/resumes. It should reset
@@ -3026,18 +3505,25 @@ function normalizeGrokEvent(
   const notificationMessage = readString(hookPayload, 'message')
   const notificationType = getGrokNotificationType(hookPayload)
   const notificationLevel = readString(hookPayload, 'level')
+  const preToolName =
+    readString(hookPayload, 'toolName') ??
+    readString(hookPayload, 'tool_name') ??
+    readString(hookPayload, 'name')
+  // Why: Grok's ask_user_question is auto-allowed, so it emits PreToolUse while
+  // blocked on a human answer (same shape as Kimi). Map that to waiting so the
+  // sidebar attention state matches Claude PermissionRequest UX.
+  const isUserInputPreTool =
+    isGrokEvent(eventName, 'pre_tool_use') && isAskUserQuestionTool(preToolName)
+
   let stateName: 'working' | 'waiting' | 'done' | null = null
   if (
-    isGrokEvent(
-      eventName,
-      'user_prompt_submit',
-      'pre_tool_use',
-      'post_tool_use',
-      'post_tool_use_failure'
-    )
+    isGrokEvent(eventName, 'user_prompt_submit', 'post_tool_use', 'post_tool_use_failure') ||
+    (isGrokEvent(eventName, 'pre_tool_use') && !isUserInputPreTool)
   ) {
     stateName = 'working'
-  } else if (isGrokEvent(eventName, 'stop', 'session_end')) {
+  } else if (isUserInputPreTool) {
+    stateName = 'waiting'
+  } else if (isGrokEvent(eventName, 'stop', 'session_end', 'stop_failure')) {
     stateName = 'done'
   } else if (
     isGrokEvent(eventName, 'notification') &&
@@ -3066,7 +3552,7 @@ function normalizeGrokEvent(
   const snapshot = resolveToolState(
     state,
     paneKey,
-    extractToolFields('grok', eventName, hookPayload),
+    extractToolFields('grok', eventName, hookPayload, { grokHome }),
     { resetOnNewTurn: isNewTurnEvent('grok', eventName) }
   )
 
@@ -3300,7 +3786,14 @@ export function normalizeHookPayload(
       )
       break
     case 'grok':
-      payload = normalizeGrokEvent(state, eventName, promptText, paneKey, hookPayloadRecord)
+      payload = normalizeGrokEvent(
+        state,
+        eventName,
+        promptText,
+        paneKey,
+        hookPayloadRecord,
+        readGrokHomeEnvelope(record)
+      )
       break
     case 'copilot':
       payload = normalizeCopilotEvent(state, eventName, promptText, paneKey, hookPayloadRecord)

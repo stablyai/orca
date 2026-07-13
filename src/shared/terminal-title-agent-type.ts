@@ -4,6 +4,7 @@ import {
   HERMES_AGENT_NAME_RE,
   titleHasAgentName
 } from './agent-name-token-match'
+import { isCursorAgentTitle } from './agent-title-core'
 import {
   getPiCompatibleSyntheticAgentLabel,
   isLegacyPiCompatibleTitle
@@ -97,9 +98,9 @@ export function isClaudeAgent(title: string): boolean {
     return true
   }
   if (containsBrailleSpinner(title)) {
-    // Why: named non-Claude agents can carry braille spinners too; Claude-only
-    // prompt-cache paths must not fire for those explicit agent titles.
-    return !lower.includes('cursor') && !lower.includes('openclaude')
+    // Why: named non-Claude agents carry braille spinners too. Gate Cursor by its
+    // identity title, not the token, so a Claude title mentioning a cursor stays Claude.
+    return !isCursorAgentTitle(title) && !lower.includes('openclaude')
   }
   // Why: permission/action-required Claude titles can omit the usual prefixes.
   // Token-match so cwd/worktree titles like "claude-scratch" do not become
@@ -179,14 +180,9 @@ export function getAgentLabel(title: string): string | null {
   if (titleHasAgentName(title, 'aider')) {
     return 'Aider'
   }
-  // Why: the cursor-agent native title is the literal string "Cursor Agent"
-  // (verified against the 2026.04.17 release) — Orca synthesizes the same
-  // label from hook events so the braille-spinner + agent-name path lights
-  // up working/permission/idle transitions in the renderer. Match before
-  // `isClaudeAgent` because Claude's generic braille heuristic would
-  // otherwise claim every "⠋ Cursor Agent" frame as Claude. Token-match so a
-  // cwd like "~/cursor-rules" can't masquerade as a Cursor agent.
-  if (titleHasAgentName(title, 'cursor')) {
+  // Why: `cursor` is ordinary editor vocabulary, not identity. Match Cursor's closed
+  // title set (mirrors @cursor routing), before `isClaudeAgent` claims the braille frame.
+  if (isCursorAgentTitle(title)) {
     return 'Cursor'
   }
   // Why: synthesized "⠋ Droid" working title needs to be matched before Claude's braille heuristic.

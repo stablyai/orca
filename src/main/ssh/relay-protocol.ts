@@ -55,6 +55,45 @@ export const STREAM_CHUNK_SIZE = 256 * 1024
  * client. */
 export const MAX_CONCURRENT_STREAMS = 16
 
+// ── Git response streaming (see docs/relay-git-response-stream-design.md) ──
+
+/** Serialized-JSON size above which the relay chunks a streamable git response
+ * (diff family + exec) onto the bulk lane instead of one JSON-RPC frame. Mirror
+ * of the relay-side constant; the client only opts in — the relay owns the
+ * decision — so this is documentation of the shared contract. */
+export const GIT_RESPONSE_STREAM_THRESHOLD = 256 * 1024
+
+/** Per-chunk size (serialized-result UTF-8 bytes) for git response streaming.
+ * The client reassembles by concatenation and does not depend on this value,
+ * so it stays cross-version safe. */
+export const GIT_RESPONSE_CHUNK_SIZE = 128 * 1024
+
+/** Sentinel the relay returns as the RPC result when the real payload streams
+ * as git.responseChunk frames. Absent from old relays, so a new client falls
+ * back to the plain result they return. */
+export type GitResponseStreamMarker = {
+  __orcaGitResponseStream: { streamId: number; totalBytes: number; chunkCount: number }
+}
+
+export function isGitResponseStreamMarker(value: unknown): value is GitResponseStreamMarker {
+  if (typeof value !== 'object' || value === null || !('__orcaGitResponseStream' in value)) {
+    return false
+  }
+  const marker = (value as { __orcaGitResponseStream?: unknown }).__orcaGitResponseStream
+  if (typeof marker !== 'object' || marker === null) {
+    return false
+  }
+  const fields = marker as Record<string, unknown>
+  return (
+    Number.isInteger(fields.streamId) &&
+    (fields.streamId as number) > 0 &&
+    Number.isInteger(fields.totalBytes) &&
+    (fields.totalBytes as number) >= 0 &&
+    Number.isInteger(fields.chunkCount) &&
+    (fields.chunkCount as number) >= 0
+  )
+}
+
 // ── JSON-RPC types ──────────────────────────────────────────────────
 
 export type JsonRpcRequest = {

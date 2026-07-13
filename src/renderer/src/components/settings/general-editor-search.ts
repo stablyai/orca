@@ -30,6 +30,17 @@ export const getGeneralEditorSearchEntries = createLocalizedCatalog(() => [
     ]
   },
   {
+    title: translate('auto.components.settings.general.search.e61157e926', 'Editor Word Wrap'),
+    description: translate(
+      'auto.components.settings.general.search.005be5c699',
+      'Wrap long lines in file editors instead of requiring horizontal scrolling.'
+    ),
+    keywords: [
+      ...translateSearchKeyword('auto.components.settings.general.search.e1ee631696', 'editor'),
+      ...translateSearchKeyword('auto.components.settings.general.search.3ca5ab78a5', 'code')
+    ]
+  },
+  {
     title: translate('auto.components.settings.general.search.2760c9933f', 'Default Diff View'),
     description: translate(
       'auto.components.settings.general.search.ecb9415c80',

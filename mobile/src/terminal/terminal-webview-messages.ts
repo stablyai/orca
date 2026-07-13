@@ -2,6 +2,7 @@ import type { RuntimeMobileTerminalTheme } from '../../../src/shared/runtime-typ
 import type { TerminalOscLinkRange } from './terminal-osc-link-ranges'
 
 export type TerminalWebViewCommand =
+  | { type: 'ping'; id?: number }
   | { type: 'write'; id?: number; data: string }
   | {
       type: 'init'

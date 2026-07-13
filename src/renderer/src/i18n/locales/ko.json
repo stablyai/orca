@@ -29,6 +29,7 @@
         "sshToggleDescription": "사용 가능한 SSH 및 원격 Orca 호스트가 있으면 표시합니다.",
         "resourceUsageToggleDescription": "리소스 관리자를 표시합니다. 클릭하면 CPU, 메모리, 세션, 데몬 제어, 워크스페이스 디스크 스캔을 볼 수 있습니다.",
         "portsToggleDescription": "라이브 워크스페이스 포트를 표시합니다. 워크스페이스 범위 포트 및 외부 수신기를 보려면 클릭하세요.",
+        "antigravityToggleDescription": "활성 워크스페이스에 대한 Antigravity 구독 사용량을 표시합니다.",
         "grokToggleDescription": "Grok CLI로 로그인한 경우 Grok 구독 크레딧 사용량을 표시합니다."
       }
     }
@@ -457,6 +458,13 @@
               "all": "아직 댓글이 없습니다."
             }
           }
+        },
+        "bot": {
+          "author": {
+            "overrides": {
+              "6d5d52b53f": "봇 작성자 재정의 한도에 도달했습니다"
+            }
+          }
         }
       },
       "resume": {
@@ -721,6 +729,8 @@
       "GitHubItemDialog": {
         "3ab6ac0fc8": "선택한 GitHub 이슈 또는 PR을 미리보기하고 편집합니다.",
         "3cd5ae5b7b": "변경된 파일이 없습니다.",
+        "filesUnavailable": "변경된 파일을 불러올 수 없습니다.",
+        "filesRetry": "재시도",
         "999b5ad7d9": "파일",
         "4bd1f5b055": "체크",
         "e30a5470c9": "대화",
@@ -1384,7 +1394,9 @@
         "1ff5d979df": "할당된 사람이 없음",
         "checkActionRequiredHint": "머지가 해제되려면 이 검사에 대해 GitHub에서 수동 작업(예: 워크플로우 실행 승인)이 필요합니다.",
         "dd5d9a4f17": "{{value0}}에 업데이트됨",
-        "71a3c0f9d2": "워크스페이스 시작"
+        "71a3c0f9d2": "워크스페이스 시작",
+        "filesUnavailable": "Couldn't load changed files.",
+        "filesRetry": "Retry"
       },
       "QuickOpen": {
         "1dbd3f59ff": "이동",
@@ -1735,7 +1747,11 @@
         "editReviewersWithCurrent": "리뷰어 편집: {{value0}}",
         "linearEmptyAttributeFilter": "선택한 필터와 일치하는 이슈가 없습니다. 필터를 지우거나 다른 조건을 시도하세요.",
         "linearEmptyUnfilteredScope": "이 워크트리 범위에 이슈가 없습니다. 검색하거나 팀을 조정해 보세요.",
-        "linearFetchMore": "더 불러오기"
+        "linearFetchMore": "더 불러오기",
+        "jiraSortAscending": "오름차순",
+        "jiraSortDescending": "내림차순",
+        "jiraSortBy": "정렬 기준",
+        "jiraToggleSortDirection": "{{value0}}으로 정렬"
       },
       "Terminal": {
         "73768427cf": "닫기",
@@ -2361,7 +2377,9 @@
             "failed": "삭제되지 않은 워크스페이스: {{value0}}",
             "error": "워크스페이스 정리 실패",
             "skippedAncestor": "중첩된 워크스페이스를 제거할 수 없어 건너뛰었습니다.",
-            "timedOut": "{{value0}} 제거가 예상보다 오래 걸리고 있습니다. 백그라운드에서 계속 실행됩니다."
+            "timedOut": "{{value0}} 제거가 예상보다 오래 걸리고 있습니다. 백그라운드에서 계속 실행됩니다.",
+            "stillRemoving": "Still removing workspaces: {{value0}}",
+            "skippedPendingAncestor": "Skipped because a nested workspace has not finished removing."
           },
           "candidateRow": {
             "gitLabel": "Git",
@@ -2570,7 +2588,7 @@
               "blocked": {
                 "toast": {
                   "97c98f1afe": "설정 열기",
-                  "7cf51f74fd": "SSH, tmux, Neovim 또는 fzf에서 복사하려면 Terminal 설정에서 TUI 클립보드 쓰기를 활성화하세요.",
+                  "7cf51f74fd": "SSH, tmux, Neovim, fzf 또는 Grok에서 복사하려면 Terminal 설정에서 TUI 클립보드 쓰기를 활성화하세요.",
                   "89eaa3e80b": "Terminal 클립보드 쓰기가 차단되었습니다."
                 }
               }
@@ -2998,9 +3016,9 @@
             "2483c60695": "···",
             "c35af53b73": "로그인",
             "f19a63e7cd": "사용량을 보려면 로그인하세요.",
-            "5c938d39ac": "%주간",
-            "54e8d6bb2d": "% Fable",
-            "d79c3362c4": "% 5h",
+            "5c938d39ac": "주간",
+            "54e8d6bb2d": "Fable",
+            "d79c3362c4": "5h",
             "a79c64f87e": "Fable",
             "8295903d17": "전환 후 이전 대화를 계속하기 전에 라이브 Claude terminals을 다시 시작하십시오.",
             "c98ea88392": "다른 계정 없음",
@@ -3034,6 +3052,8 @@
             "06741a2f3d": "MiniMax 사용량 세부 정보 열기",
             "3bbf140864": "MiniMax 사용량",
             "remoteServerLabel": "원격 서버",
+            "antigravityUsage": "Antigravity 사용량",
+            "antigravityUsageDetails": "Antigravity 사용량 세부 정보 열기",
             "grokUsageAria": "Grok 사용량 세부 정보 열기",
             "grokUsageMenu": "Grok 사용량"
           },
@@ -3166,7 +3186,7 @@
             }
           },
           "tooltip": {
-            "cedb7b99e3": "% 남음",
+            "cedb7b99e3": "% 사용",
             "6d6df77f41": "데이터가 없습니다",
             "7f7f208060": "월간",
             "252c096536": "주간",
@@ -3198,6 +3218,17 @@
           },
           "SshTargetStatusRow": {
             "sshHost": "SSH 호스트"
+          },
+          "usagePercentageLabel": {
+            "used": "{{value0}}% 사용",
+            "remaining": "{{value0}}% 남음"
+          },
+          "UsagePercentageDisplayChangeNotice": {
+            "title": "Usage now shows % used",
+            "body": "Prefer remaining? Change it in Settings.",
+            "dismiss": "Dismiss",
+            "openSettings": "Open Settings",
+            "gotIt": "Got it"
           }
         }
       },
@@ -4282,7 +4313,9 @@
               "1d0fa5c0a5": "워크스페이스 {{value0}}을(를) 삭제하지 못했습니다.",
               "ead7b8ee15": "파일이 변경되었습니다. 어쨌든 삭제하려면 강제 삭제를 사용하세요.",
               "905fc8efac": "Git은 이미 이 워크스페이스를 제거했습니다. 강제 삭제를 사용하여 Orca에서 삭제합니다.",
-              "0899ebdb28": "Git은 이미 이 워크스페이스를 잊어버렸지만 해당 디렉토리는 여전히 디스크에 있습니다. 강제 삭제를 사용하여 분리된 디렉터리를 제거합니다."
+              "0899ebdb28": "Git은 이미 이 워크스페이스를 잊어버렸지만 해당 디렉토리는 여전히 디스크에 있습니다. 강제 삭제를 사용하여 분리된 디렉터리를 제거합니다.",
+              "locked": "이 워크트리는 Git에 의해 잠겨 있습니다. 저장소에서 git worktree unlock <worktree-path>을 실행한 후 삭제를 다시 시도하세요.",
+              "lockedReason": "이 워크트리는 Git에 의해 잠겨 있습니다. Git 보고: {{value0}}. 저장소에서 git worktree unlock <worktree-path>을 실행한 후 삭제를 다시 시도하세요."
             }
           }
         },
@@ -4514,13 +4547,13 @@
           "6f7a8b9c0d": "취소",
           "7a8b9c0d1e": "설정 열기",
           "8b9c0d1e2f": "호스트 제거",
-          "workspacesFailed": "Could not remove {{count}} of this host’s workspaces. The host was kept so you can retry.",
+          "workspacesFailed": "이 호스트에서 워크트리 {{count}}개를 제거할 수 없었습니다. 재시도할 수 있도록 호스트가 유지되었습니다.",
           "oneWorkspace": "워크트리 1개",
-          "manyWorkspaces": "{{count}} workspaces",
-          "hostHasWorkspacesDefault": "Removes {{value0}} and its credentials from this computer. Its {{value1}} stay in Orca — remote files are not touched.",
-          "alsoDeleteRemote": "Also delete these {{value0}} on {{value1}}",
-          "alsoForgetLocal": "Also remove these {{value0}} from Orca",
-          "advanced": "Advanced",
+          "manyWorkspaces": "워크트리 {{count}}개",
+          "hostHasWorkspacesDefault": "이 컴퓨터에서 {{value0}}과(와) 해당 자격 증명을 제거합니다. {{value1}}은(는) Orca에 남아 있습니다 — 원격 파일은 변경되지 않습니다.",
+          "alsoDeleteRemote": "{{value1}}에서 이러한 {{value0}}도 삭제",
+          "alsoForgetLocal": "Orca에서 이러한 {{value0}}도 제거",
+          "advanced": "고급",
           "alsoDeleteRemoteHint": "원격 Git 워크트리와 해당 브랜치를 영구적으로 삭제합니다. 이 작업은 되돌릴 수 없습니다.",
           "alsoForgetLocalHint": "Orca에서만 제거합니다. 원격 파일, 워크트리, 브랜치는 그대로 남아 있습니다."
         },
@@ -4638,11 +4671,11 @@
         },
         "ForgetSshWorkspaceDialog": {
           "reconnectFailed": "재연결 실패",
-          "forgetBody": "Removes this workspace from Orca only. Files, the Git worktree, and branches on {{host}} are left untouched.",
+          "forgetBody": "이 작업 공간을 Orca에서만 제거합니다. 파일, Git 워크트리, {{host}}의 브랜치는 그대로 유지됩니다.",
           "title": "Delete “{{name}}”?",
           "disconnectedBody": "이 워크트리의 SSH 호스트가 연결되어 있지 않습니다. 재연결하여 원격에서도 삭제하거나 Orca에서만 제거하세요.",
           "ghostBody": "{{host}} is no longer a saved SSH host, so this workspace is no longer connected to a live host. It can only be removed from Orca — files and branches on the remote are left untouched.",
-          "cancel": "Cancel",
+          "cancel": "취소",
           "forget": "Orca에서 제거",
           "reconnectAndDelete": "재연결 후 삭제"
         }
@@ -4666,7 +4699,7 @@
           "a2f040ac1c": "{{value0}}개 세션을 종료했습니다.",
           "63520148e2": "{{value0}}개 세션이 종료를 거부했습니다.",
           "cc0a26cb14": "{{value0}}개 세션이 종료를 거부했습니다.",
-          "71a8d342b0": "Terminal tabs absent: {{value0}}/{{value1}}. Failed close attempts: {{value2}}. Exact PTY shutdown requests accepted: {{value3}}; failed: {{value4}}.",
+          "71a8d342b0": "터미널 탭 누락: {{value0}}/{{value1}}. 닫기 시도 실패: {{value2}}. 정확한 PTY 종료 요청 수락: {{value3}}; 실패: {{value4}}.",
           "2e57c1a940": "관리 요청이 실패하여 데몬 종료 결과가 확인되지 않았습니다.",
           "993af6052c": "데몬 관리가 종료를 보고함: {{value0}}/{{value1}}; 정확한 정리 전에 아직 존재: {{value2}}.",
           "1f0d8ac762": "터미널 정리가 오류와 함께 완료되었습니다.",
@@ -5290,11 +5323,11 @@
           },
           "nativeChat": {
             "title": "네이티브 채팅",
-            "description": "Claude 및 Codex terminal 세션에 대한 데스크톱 채팅 화면을 미리 봅니다.",
-            "copy": "지원되는 Claude 및 Codex terminal 창에서 전환할 수 있는 기본 채팅 보기를 추가합니다. 성적표 충실도, 스트리밍 및 terminal 패리티를 조정하는 동안 실험적입니다.",
+            "description": "지원되는 에이전트 터미널 세션의 데스크톱 채팅 화면을 미리 봅니다.",
+            "copy": "지원되는 에이전트 터미널 창에서 전환할 수 있는 네이티브 채팅 보기를 추가합니다. 대화 기록 충실도, 스트리밍, 터미널 동작 일치를 조정하는 동안 실험적으로 제공됩니다.",
             "toggleLabel": "기본 채팅 전환",
             "defaultTitle": "기본 보기",
-            "defaultCopy": "새로운 Claude 및 Codex terminal 탭이 열리는 방식을 선택하세요.",
+            "defaultCopy": "지원되는 에이전트의 새 터미널 탭을 여는 방식을 선택합니다.",
             "defaultViewLabel": "기본 기본 채팅 보기",
             "defaultViewTerminal": "Terminal 채팅",
             "defaultViewNative": "네이티브 채팅"
@@ -5353,7 +5386,9 @@
           "bf16ef0af2": "끄다",
           "3f6892f307": "~에",
           "b82f86d7d2": "Rich Markdown Spellcheck",
-          "5195f0b9ef": "Show browser spelling underlines and suggestions while editing rich Markdown."
+          "5195f0b9ef": "Show browser spelling underlines and suggestions while editing rich Markdown.",
+          "7ddd66fede": "편집기 자동 줄 바꿈",
+          "9b18de6eea": "가로 스크롤 대신 파일 편집기에서 긴 줄을 자동으로 줄 바꿈합니다."
         },
         "AdvancedNetworkSettingsSection": {
           "3e431564b5": "로컬호스트, 127.0.0.1, *.internal",
@@ -6668,9 +6703,9 @@
           "d23b43c5be": "설정 스크립트 위치",
           "34a0dfa06e": "새 워크스페이스를 만들 때 repos 설정 스크립트를 실행할 위치입니다.",
           "21f8da2078": "워크스페이스 설정 스크립트",
-          "6e6480a7df": "terminal의 프로그램(tmux, Neovim, fzf, SSH)이 시스템 클립보드에 복사할 수 있게 합니다.",
+          "6e6480a7df": "terminal의 프로그램(Grok, tmux, Neovim, fzf, SSH)이 시스템 클립보드에 복사할 수 있게 합니다.",
           "3338dcf8c1": "TUI 클립보드 쓰기 허용(OSC 52)",
-          "69c64a479c": "tmux, Neovim 및 fzf가 PTY(SSH 포함)를 통해 시스템 클립보드에 복사하도록 합니다.",
+          "69c64a479c": "Grok, tmux, Neovim 및 fzf가 PTY(SSH 포함)를 통해 시스템 클립보드에 복사하도록 합니다.",
           "4729c645fc": "terminal 선택 사항을 클립보드에 자동으로 복사합니다.",
           "902f5dee1f": "선택 시 복사",
           "9129b7e805": "terminal 패널에 마우스를 가리키면 클릭하지 않고도 활성화됩니다.",
@@ -6703,9 +6738,9 @@
           "348246b06f": "false",
           "5936387ddd": "자동",
           "adbafefe56": "custom",
-          "16753eea48": "Windows에서는 마우스 오른쪽 버튼을 클릭하여 클립보드를 붙여넣습니다. Ctrl+마우스 오른쪽 버튼을 클릭하면 컨텍스트 메뉴가 열립니다.",
+          "16753eea48": "마우스 오른쪽 버튼을 클릭하여 클립보드를 붙여넣습니다. Ctrl+마우스 오른쪽 버튼을 클릭하면 컨텍스트 메뉴가 열립니다.",
           "9c178cf8aa": "붙여넣으려면 마우스 오른쪽 버튼을 클릭하세요.",
-          "af0c3b6e39": "Windows에서는 마우스 오른쪽 버튼을 클릭하여 클립보드를 terminal에 붙여넣습니다. 컨텍스트 메뉴를 열려면 Ctrl+오른쪽 클릭을 사용하세요.",
+          "af0c3b6e39": "마우스 오른쪽 버튼을 클릭하여 클립보드를 terminal에 붙여넣습니다. 컨텍스트 메뉴를 열려면 Ctrl+오른쪽 클릭을 사용하세요.",
           "29154326bb": "켜기",
           "ab20575a8a": "끄기",
           "ab3a1f9068": "wsl.exe",
@@ -7171,10 +7206,15 @@
               "workspaceOptions": "워크스페이스 옵션",
               "detailed": "상세"
             },
+            "antigravityUsageTitle": "Antigravity 사용량",
+            "antigravityUsageDescription": "상태 표시줄에 Antigravity 구독 사용량을 표시합니다.",
+            "antigravityKeyword": "antigravity",
             "f8e2a1c4b6": "Grok 사용량",
             "e7d1b0f3a5": "Grok CLI OAuth에서 Grok 주간 크레딧 사용량을 표시합니다.",
             "d6c0a9e2f4": "grok",
-            "c5b9f8d1e3": "xai"
+            "c5b9f8d1e3": "xai",
+            "usagePercentageDisplayTitle": "사용량 백분율",
+            "usagePercentageDisplayDescription": "공급자 한도를 사용한 비율 또는 남은 비율로 표시할지 선택합니다."
           }
         },
         "auto": {
@@ -7459,7 +7499,8 @@
             },
             "nativeChat": {
               "title": "네이티브 채팅",
-              "description": "Claude 및 Codex terminal 세션에 대한 데스크톱 채팅 화면을 미리 봅니다."
+              "description": "지원되는 에이전트 터미널 세션의 데스크톱 채팅 화면을 미리 봅니다.",
+              "grok": "grok"
             }
           }
         },
@@ -7625,7 +7666,9 @@
             "defaultProjectRuntime": "기본 프로젝트 런타임",
             "defaultProjectRuntimeDescription": "로컬 Windows 프로젝트가 상속할 런타임을 선택합니다.",
             "d2d2d929c0": "Rich Markdown Spellcheck",
-            "4497e2e2bb": "Show browser spelling underlines and suggestions while editing rich Markdown."
+            "4497e2e2bb": "Show browser spelling underlines and suggestions while editing rich Markdown.",
+            "e61157e926": "편집기 자동 줄 바꿈",
+            "005be5c699": "가로 스크롤 대신 파일 편집기에서 긴 줄을 자동으로 줄 바꿈합니다."
           }
         },
         "git": {
@@ -8425,7 +8468,7 @@
               "e55186fe2b": "오른쪽 클릭",
               "28ff08ed35": "창",
               "e7d2793b03": "터미널",
-              "8ba875c132": "Windows에서는 마우스 오른쪽 버튼을 클릭하여 클립보드를 terminal에 붙여넣습니다. 컨텍스트 메뉴를 열려면 Ctrl+오른쪽 클릭을 사용하세요.",
+              "8ba875c132": "마우스 오른쪽 버튼을 클릭하여 클립보드를 terminal에 붙여넣습니다. 컨텍스트 메뉴를 열려면 Ctrl+오른쪽 클릭을 사용하세요.",
               "f0b8448570": "붙여넣으려면 마우스 오른쪽 버튼을 클릭하세요.",
               "04994f6929": "기본값",
               "fc564eadaf": "데비안",
@@ -8981,6 +9024,14 @@
           "a8f3e2c1b4": "주간 크레딧",
           "b7e2d9f0a3": "터미널의 grok /usage 화면과 같은 주간 크레딧 비율입니다.",
           "c6d1a8f4e2": "{{when}}에 재설정"
+        },
+        "AppearanceWindowSidebarSection": {
+          "usagePercentageDisplayUsed": "사용",
+          "usagePercentageDisplayRemaining": "남음"
+        },
+        "TerminalInteractionSection": {
+          "567633ff50": "Right-click pastes the clipboard into the terminal. Control-click to open the context menu.",
+          "c64497148a": "Right-click pastes the clipboard. Control-click opens the context menu."
         }
       },
       "right": {
@@ -9615,7 +9666,9 @@
                 "b13f85d75c": "타임라인",
                 "f5cf324efa": "Comment display options",
                 "5e6e5a13fa": "보기",
-                "actionRequiredHint": "This check needs a manual action on GitHub (for example, approving the workflow run) before merging is unblocked."
+                "actionRequiredHint": "This check needs a manual action on GitHub (for example, approving the workflow run) before merging is unblocked.",
+                "b3195cba33": "작성자의 봇 지정 해제",
+                "f588b46a6c": "작성자를 봇으로 지정"
               },
               "empty": {
                 "state": {
@@ -9836,6 +9889,9 @@
               }
             }
           },
+          "fileExplorerOperationOwner": {
+            "unresolved": "이 워크스페이스를 소유한 호스트를 확인할 수 없습니다. 연결을 확인한 후 다시 시도하세요."
+          },
           "useFileDeletion": {
             "72691dfebc": "{{value0}} '{{value1}}'에 실패했습니다.",
             "96affe1302": "'{{value0}}'이(가) {{value1}}(으)로 이동되었습니다.",
@@ -9844,7 +9900,12 @@
             "a76c74f105": "파괴적",
             "92276aceb7": "삭제",
             "7fb9435c86": "원격 호스트의 디렉터리와 그 안의 내용을 영구적으로 삭제합니다. 이 작업은 되돌릴 수 없습니다.",
-            "23e98f192f": "원격 호스트의 파일을 영구적으로 삭제합니다. 이 작업은 되돌릴 수 없습니다."
+            "23e98f192f": "원격 호스트의 파일을 영구적으로 삭제합니다. 이 작업은 되돌릴 수 없습니다.",
+            "8b8ee9d22f": "이 파일을 소유한 호스트를 확인할 수 없습니다. 워크스페이스 연결을 확인한 후 다시 시도하세요.",
+            "af1270b90d": "{{count}}개 항목을 영구적으로 삭제하시겠습니까?",
+            "dd029aa5cd": "원격 호스트의 선택한 항목과 디렉터리 내용을 영구적으로 삭제합니다. 이 작업은 되돌릴 수 없습니다.",
+            "77fdc36183": "Delete {{count}} items?",
+            "fca915a67a": "Remote items are permanently deleted and cannot be undone. Local items move to the {{value0}}."
           },
           "useFileExplorerHandlers": {
             "32cd9fd991": "심볼릭 링크 대상을 열 수 없습니다"
@@ -10012,8 +10073,8 @@
             "jumpToOriginalPane": "원래 창으로 이동",
             "jumpToWorktree": "작업 트리로 이동",
             "recoverableBadge": "저장 안 됨",
-            "subagentCountSingular": "1 subagent",
-            "subagentCountPlural": "{{value0}} subagents"
+            "subagentCountSingular": "서브에이전트 1개",
+            "subagentCountPlural": "서브에이전트 {{value0}}개"
           },
           "FileExplorerNameFilter": {
             "26fb73c6e3": "파일 찾기",
@@ -10070,9 +10131,14 @@
             "noActiveWorktreeTarget": "사용 가능한 활성 작업 트리가 없습니다."
           },
           "AiVaultSessionSubagents": {
-            "subagentsCount": "Subagents ({{value0}})",
-            "messageCount": "{{value0}} msgs",
-            "viewLog": "View Log"
+            "subagentsCount": "서브에이전트 ({{value0}})",
+            "messageCount": "{{value0}}개 메시지",
+            "viewLog": "로그 보기"
+          },
+          "aiVaultSessionLogOpen": {
+            "workspaceGone": "Couldn't open log — workspace is no longer available.",
+            "notAuthorized": "Couldn't open log — path not authorized.",
+            "alreadyEditable": "Log is already open for editing."
           }
         }
       },
@@ -10470,9 +10536,9 @@
           "fb5f28330e": "사이드바에 표시",
           "c669abcf8f": "사이드바에서 숨기기",
           "e1c7b4a92d": "Configure in Settings > Mobile.",
-          "a4f8c2d91e": "Remove Orca Mobile from left sidebar",
-          "b7e3d1c84a": "Show Orca Mobile in left sidebar",
-          "f3d8e5b71a": "Adds the shortcut back to the left sidebar."
+          "a4f8c2d91e": "왼쪽 사이드바에서 Orca Mobile 제거",
+          "b7e3d1c84a": "왼쪽 사이드바에 Orca Mobile 표시",
+          "f3d8e5b71a": "단축키를 왼쪽 사이드바에 다시 추가합니다."
         },
         "PhoneCarousel": {
           "96d651cb87": "Terminal 세션",
@@ -10577,6 +10643,17 @@
           "trigger-label": "알릴 네트워크 주소",
           "custom-option": "{{address}} (사용자 지정)",
           "add-custom": "사용자 지정 주소 추가…"
+        },
+        "WindowsFirewallNotice": {
+          "repair-success": "Windows Firewall now allows Orca Mobile on private networks",
+          "repair-failed": "Could not add the Windows Firewall rule",
+          "public-title": "Windows marks this network as public",
+          "missing-title": "Allow phone connections through Windows Firewall",
+          "public-description": "Change this trusted Wi-Fi network to Private before allowing Orca Mobile connections.",
+          "missing-description": "Windows may block the pairing server. Add a rule for this Orca app and TCP port {{port}} on Private networks.",
+          "open-settings": "Open network settings",
+          "waiting": "Waiting for Windows…",
+          "allow": "Allow phone connections"
         }
       },
       "gitlab": {
@@ -10989,11 +11066,11 @@
                 "945865332e": "로그인 중"
               },
               "UsagePage": {
-                "64265cb295": "71% 5시간",
+                "64265cb295": "29% 사용 5시간",
                 "be5a165875": "다음으로 전환",
                 "277a9c65a9": "Codex 계정",
                 "4dce5ca3aa": "4일 3시간 후에 재설정됩니다.",
-                "05ce4ecdd3": "62% 남음",
+                "05ce4ecdd3": "38% 사용",
                 "0470aaed99": "주간",
                 "f421abf962": "세션",
                 "5e45fb1238": "1분 전에 업데이트됨",
@@ -11374,7 +11451,9 @@
           "c98ce191da": "이 차이점에는 열 수 있는 수정된 측면 파일이 없습니다.",
           "9b80bbe1de": "파일 탭 열기",
           "f0fd4174b5": "풍부한 markdown 편집을 사용하려면 파일 탭을 엽니다.",
-          "a10d9b8337": "파일 열기"
+          "a10d9b8337": "파일 열기",
+          "2076ecfc9c": "이전 변경",
+          "631dab0df3": "다음 변경"
         },
         "EditorPanelMarkdownActionsMenu": {
           "3e0ce48c24": "PDF로 내보내기",
@@ -11573,7 +11652,8 @@
           "1c99b726e0": "링크 삭제",
           "cdfe166f6f": "링크 수정",
           "bfc813e909": "링크 열기",
-          "7b0b945fdc": "링크를 붙여넣거나 입력하세요…"
+          "7b0b945fdc": "링크를 붙여넣거나 입력하세요…",
+          "copyLink": "링크 복사"
         },
         "RichMarkdownReviewNoteLayer": {
           "f3ef92952b": "이 메모",
@@ -11600,7 +11680,8 @@
           "68d090241d": "전체 단어 일치",
           "fd97c7e585": "바꾸기",
           "44682b4159": "리치 markdown 편집기에서 바꾸기",
-          "c2884f5e95": "모두 바꾸기"
+          "c2884f5e95": "모두 바꾸기",
+          "preservedRichContentReadOnly": "보존된 리치 콘텐츠는 리치 모드에서 읽기 전용입니다."
         },
         "RichMarkdownSlashMenu": {
           "82c6816ff8": "블록을 찾을 수 없습니다.",
@@ -11817,6 +11898,24 @@
           "3fa2b8d417": "디스크에서 다시 로드",
           "a95d02c644": "편집 내용 유지",
           "2c8f1e07b9": "비교 로딩 중..."
+        },
+        "RichMarkdownEditor": {
+          "citationLinkAvailable": "{{value0}}, {{value1}} 링크. Enter 키로 열거나 Tab 키로 링크 작업으로 이동하세요.",
+          "citationFallbackLabel": "인용",
+          "citationLinkUnavailable": "{{value0}}, 인용 링크를 사용할 수 없습니다. {{value1}}",
+          "tabForCitationActions": "Tab 키로 사용 가능한 작업으로 이동하세요.",
+          "noCitationActions": "사용 가능한 링크 작업이 없습니다."
+        },
+        "richMarkdownHtmlSuperscriptLink": {
+          "availableAriaLabel": "{{value0}}, {{value1}} 링크",
+          "unavailableAriaLabel": "{{value0}}, 인용 링크를 사용할 수 없음"
+        },
+        "richMarkdownLinkClipboard": {
+          "copiedLink": "링크를 복사했습니다",
+          "copyLinkFailed": "링크를 복사하지 못했습니다"
+        },
+        "richMarkdownSourceOwningCutFeedback": {
+          "selectLessContent": "보존된 HTML 인용을 잘라내려면 더 적은 콘텐츠를 선택하거나 코드 모드를 사용하세요."
         }
       },
       "diff": {
@@ -11887,6 +11986,21 @@
             "ead6fc0510": "자동 크래시 보고서가 캡처되지 않았습니다. 그래도 세부 정보를 보내고, 가능한 경우 최근 진단 로그를 포함할 수 있습니다.",
             "b082f27490": "최근 진단 로그 첨부",
             "e59f0b9427": "보고서와 함께 크기가 제한되고 민감 정보가 제거된 로그 묶음을 보냅니다."
+          },
+          "submit": {
+            "notice": {
+              "unknownError": "The crash report request failed before it returned a reason.",
+              "ticketUploaded": "Diagnostic ticket {{value0}} was uploaded but not linked.",
+              "uncheckDiagnostics": "Uncheck \"Attach recent diagnostic logs\" and try again, or copy the details.",
+              "checkConnection": "Check your connection and try again, or copy the details.",
+              "notSent": "Crash report wasn't sent",
+              "copyDetails": "Copy Details",
+              "sentWithoutDiagnostics": "Crash report sent without diagnostic logs",
+              "diagnosticsReason": "Diagnostic logs were not attached: {{value0}}"
+            }
+          },
+          "copy": {
+            "copyFailed": "충돌 보고서 세부 정보를 복사하지 못했습니다."
           }
         }
       },
@@ -12672,7 +12786,7 @@
         "profiles": {
           "switcher": {
             "cloud": {
-              "unavailable": "클라우드 로그인을 사용할 수 없습니다"
+              "unavailable": "클라우드 로그인 사용 불가"
             },
             "reconnect": "프로필 다시 연결",
             "connect": "프로필 연결",
@@ -12680,7 +12794,7 @@
             "create": {
               "profile": {
                 "for": {
-                  "org": "조직용 프로필 만들기"
+                  "org": "조직용 프로필 생성"
                 }
               }
             },
@@ -12716,51 +12830,51 @@
               "confirm": {
                 "move": {
                   "title": "프로젝트를 이동하시겠습니까?",
-                  "description": "{{repoName}}을(를) {{targetName}}(으)로 이동합니다. Orca가 {{activeProfileName}}에서 제거하고 파일은 그대로 유지한 채 {{targetName}}(으)로 다시 시작합니다.",
+                  "description": "{{repoName}}을(를) {{targetName}}(으)로 이동합니다. Orca가 해당 프로젝트를 {{activeProfileName}}에서 제거한 뒤 파일은 유지하고 {{targetName}}(으)로 다시 시작합니다.",
                   "action": "프로젝트 이동"
                 },
                 "copy": {
                   "title": "프로젝트를 복사하시겠습니까?",
-                  "description": "{{repoName}}을(를) {{targetName}}(으)로 복사합니다. 두 프로필은 같은 파일을 가리키며 Orca 메타데이터는 별도로 유지됩니다.",
+                  "description": "{{repoName}}을(를) {{targetName}}(으)로 복사합니다. 두 프로필 모두 동일한 파일을 별도의 Orca 메타데이터와 함께 가리킵니다.",
                   "action": "프로젝트 복사"
                 },
                 "live": {
-                  "work": "이 프로젝트에서 진행 중인 작업"
+                  "work": "이 프로젝트의 활성 작업"
                 },
                 "cancel": "취소",
-                "terminalSingular": "{{count}}개의 실행 중인 터미널 탭",
-                "terminalPlural": "{{count}}개의 실행 중인 터미널 탭",
-                "agentSingular": "{{count}}개의 활성 에이전트",
-                "agentPlural": "{{count}}개의 활성 에이전트",
-                "browserSingular": "{{count}}개의 브라우저 워크스페이스",
-                "browserPlural": "{{count}}개의 브라우저 워크스페이스"
+                "terminalSingular": "활성 터미널 탭 {{count}}개",
+                "terminalPlural": "활성 터미널 탭 {{count}}개",
+                "agentSingular": "활성 에이전트 {{count}}개",
+                "agentPlural": "활성 에이전트 {{count}}개",
+                "browserSingular": "브라우저 작업 공간 {{count}}개",
+                "browserPlural": "브라우저 작업 공간 {{count}}개"
               }
             }
           },
           "signout": {
             "confirm": {
               "title": "로그아웃하시겠습니까?",
-              "description": "{{profileName}}에서 로그아웃하고 해당 프로젝트, 워크트리 및 로컬 메타데이터는 이 기기에 유지합니다.",
+              "description": "{{profileName}}에서 로그아웃하고 프로젝트, 워크트리 및 로컬 메타데이터를 이 장치에 유지합니다.",
               "cancel": "취소",
               "action": "로그아웃"
             }
           },
           "switch": {
             "confirm": {
-              "target": "선택한 프로필",
+              "target": "선택된 프로필",
               "title": "프로필을 전환하시겠습니까?",
-              "description": "{{targetName}}(으)로 전환하면 Orca가 다시 시작되고 {{activeProfileName}}의 워크스페이스가 다시 로드됩니다.",
+              "description": "{{targetName}}(으)로 전환하면 Orca가 다시 시작되고 {{activeProfileName}}의 작업 공간이 다시 로드됩니다.",
               "live": {
-                "work": "이 프로필에서 진행 중인 작업"
+                "work": "이 프로필의 활성 작업"
               },
               "cancel": "취소",
               "switch": "프로필 전환",
-              "terminalSingular": "{{count}}개의 실행 중인 터미널 탭",
-              "terminalPlural": "{{count}}개의 실행 중인 터미널 탭",
-              "agentSingular": "{{count}}개의 활성 에이전트",
-              "agentPlural": "{{count}}개의 활성 에이전트",
-              "browserSingular": "{{count}}개의 브라우저 워크스페이스",
-              "browserPlural": "{{count}}개의 브라우저 워크스페이스"
+              "terminalSingular": "활성 터미널 탭 {{count}}개",
+              "terminalPlural": "활성 터미널 탭 {{count}}개",
+              "agentSingular": "활성 에이전트 {{count}}개",
+              "agentPlural": "활성 에이전트 {{count}}개",
+              "browserSingular": "브라우저 작업 공간 {{count}}개",
+              "browserPlural": "브라우저 작업 공간 {{count}}개"
             }
           },
           "org": {
@@ -12777,18 +12891,18 @@
                 }
               },
               "remove": {
-                "confirm": "삭제",
+                "confirm": "제거",
                 "cancel": "취소",
-                "label": "구성원 삭제"
+                "label": "팀원 제거"
               },
               "title": "조직 구성원",
               "load": {
-                "error": "조직 구성원을 불러오지 못했습니다."
+                "error": "조직 구성원을 로드할 수 없습니다."
               },
               "retry": "다시 시도",
               "pending": {
                 "title": "대기 중인 초대",
-                "revoke": "철회"
+                "revoke": "취소"
               },
               "invite": {
                 "title": "초대",
@@ -12797,24 +12911,24 @@
                 "submit": "보내기"
               },
               "error": {
-                "forbidden": "현재 역할로는 이 작업을 수행할 수 없습니다.",
+                "forbidden": "이 작업을 수행할 권한이 없습니다.",
                 "conflict": "이미 구성원이거나 초대되었습니다.",
                 "remove": {
-                  "self": "자신은 삭제할 수 없습니다."
+                  "self": "자신을 제거할 수 없습니다."
                 },
                 "own": {
-                  "role": "자신의 역할은 변경할 수 없습니다."
+                  "role": "자신의 역할을 변경할 수 없습니다."
                 },
                 "not": {
-                  "found": "해당 구성원이 더 이상 이 조직에 없습니다."
+                  "found": "해당 팀원은 이 조직에 없습니다."
                 },
                 "reconnect": "구성원을 관리하려면 프로필을 다시 연결하세요.",
-                "unconfigured": "이 빌드에서는 조직 관리를 사용할 수 없습니다.",
-                "failed": "문제가 발생했습니다. 다시 시도하세요."
+                "unconfigured": "이 빌드에서 조직 관리를 사용할 수 없습니다.",
+                "failed": "문제가 발생했습니다. 다시 시도해 주세요."
               },
               "subtitle": {
-                "named": "{{orgName}}에서 Orca로 협업할 수 있는 사용자입니다.",
-                "default": "조직에서 Orca로 협업할 수 있는 사용자입니다."
+                "named": "{{orgName}}에서 Orca에 협업할 수 있는 사람들.",
+                "default": "조직에서 Orca에 협업할 수 있는 사람들."
               }
             }
           }

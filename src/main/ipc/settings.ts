@@ -21,6 +21,7 @@ import { normalizeDesktopTerminalScrollbackRows } from '../../shared/terminal-sc
 import { normalizeTerminalLineHeight } from '../../shared/terminal-line-height-settings'
 import { prepareLocalWorktreeRootsForRepos } from '../worktree-root-preparation'
 import { scheduleCurrentWorktreeBaseDirectoryWatcherSync } from './worktree-base-directory-watcher'
+import { applyPRBotAuthorOverride } from '../../shared/pr-bot-author-overrides'
 
 // Why: the whitelist is the source-of-truth for which keys we emit on. Casting
 // to a Set once at module load lets the IPC handler's per-key membership
@@ -65,6 +66,28 @@ export function registerSettingsHandlers(
 
   ipcMain.handle('settings:get', () => {
     return store.getSettings()
+  })
+
+  ipcMain.handle(
+    'settings:update-pr-bot-author-override',
+    (event, args: { author: string; isBot: boolean }) => {
+      const current = store.getSettings().prBotAuthorOverrides
+      const next = applyPRBotAuthorOverride(current, args.author, args.isBot)
+      store.updateSettings(
+        { prBotAuthorOverrides: next },
+        { notifyListeners: true, originWebContentsId: event.sender.id }
+      )
+      return store.getSettings()
+    }
+  )
+
+  // Why: terminal panes can bind PTYs before async settings hydration
+  // completes. The side-effect authority kill switch is consulted once at
+  // transport creation, so the renderer needs the persisted value
+  // synchronously or pre-hydration bindings would always pick main authority
+  // (terminal-side-effect-authority.md, migration switch).
+  ipcMain.on('settings:get-sync', (event) => {
+    event.returnValue = store.getSettings()
   })
 
   ipcMain.handle('settings:set', async (event, args: Partial<GlobalSettings>) => {

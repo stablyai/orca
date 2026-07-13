@@ -100,6 +100,7 @@ function showDeleteFailureToast(): void {
       'branch has changes'
     ),
     canForceDelete: true,
+    forceDeleteReason: 'dirty',
     onViewChanges: () =>
       toast.message(
         translate(

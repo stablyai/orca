@@ -2,6 +2,7 @@ import { createReadStream } from 'node:fs'
 import { createInterface } from 'node:readline'
 import type { AiVaultSession } from '../../shared/ai-vault-types'
 import { LOCAL_EXECUTION_HOST_ID, type ExecutionHostId } from '../../shared/execution-host'
+import { isKnownHarnessInjectedUserTurnText } from '../../shared/harness-injected-user-turns'
 import type {
   FileWithMtime,
   ResumableSessionParseState,
@@ -119,8 +120,11 @@ export function consumeClaudeSessionLine(state: ClaudeSessionParseState, line: s
     const title = extractMessageText(record.message)
     addPreviewContent(accumulator, 'user', asRecord(record.message)?.content, record.timestamp)
     if (title) {
-      // Meta prompts (injected context) only seed the last-resort title.
-      if (record.isMeta === true) {
+      // Meta prompts (injected context) only seed the last-resort title. Some
+      // injected turns (task notifications) carry no isMeta, so also gate on
+      // the known-tag classifier — a real prompt pasting a custom `<my-element>`
+      // must seed the primary title, not be demoted as machinery.
+      if (record.isMeta === true || isKnownHarnessInjectedUserTurnText(title)) {
         state.metaTitle ??= title
       } else {
         state.firstUserTitle ??= title

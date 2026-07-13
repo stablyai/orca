@@ -7,7 +7,8 @@ import {
   useWindowDimensions,
   ScrollView,
   Keyboard,
-  BackHandler
+  BackHandler,
+  Modal
 } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { Gesture, GestureDetector, GestureHandlerRootView } from 'react-native-gesture-handler'
@@ -264,96 +265,105 @@ function MountedBottomDrawer({
     return { opacity: progress.value * dragFade }
   })
 
+  // Why: rendering through a full-screen Modal lifts the sheet into its own
+  // native window so it always covers the viewport — even when the drawer is
+  // mounted deep inside a ScrollView, where a plain absolute overlay anchors to
+  // the scrolled content and clips the sheet. The Modal stays mounted (visible)
+  // for the whole life of MountedBottomDrawer so the reanimated exit animation
+  // runs before the parent unmounts us; show/hide is driven by `progress`, so
+  // animationType stays "none". onRequestClose handles the Android back button.
   return (
-    <Animated.View
-      pointerEvents={visible ? 'auto' : 'none'}
-      style={[styles.overlay, { zIndex, elevation: zIndex }]}
-      accessibilityViewIsModal
-      aria-modal
-    >
-      <GestureHandlerRootView style={styles.root}>
-        <Animated.View style={[styles.backdrop, backdropStyle]}>
-          <Pressable style={StyleSheet.absoluteFill} onPress={dismiss} />
-        </Animated.View>
-
-        <View style={[styles.anchor, isWideLayout && styles.anchorWide]} pointerEvents="box-none">
-          <Animated.View
-            style={[
-              styles.drawer,
-              {
-                width: '100%',
-                maxWidth: isWideLayout ? modalMaxWidth : undefined,
-                maxHeight: screenHeight - insets.top - spacing.lg,
-                paddingBottom: insets.bottom + spacing.lg
-              },
-              drawerStyle
-            ]}
-          >
-            {!contentScrollable ? (
-              <>
-                <GestureDetector gesture={handlePanGesture}>
-                  <Animated.View
-                    style={styles.handleHitArea}
-                    accessibilityRole="button"
-                    accessibilityLabel="Dismiss drawer"
-                  >
-                    <View style={styles.handle} />
-                  </Animated.View>
-                </GestureDetector>
-                <View style={styles.staticContent}>{children}</View>
-              </>
-            ) : dragContentToDismiss ? (
-              <>
-                <GestureDetector gesture={handlePanGesture}>
-                  <Animated.View
-                    style={styles.handleHitArea}
-                    accessibilityRole="button"
-                    accessibilityLabel="Dismiss drawer"
-                  >
-                    <View style={styles.handle} />
-                  </Animated.View>
-                </GestureDetector>
-                <GestureDetector gesture={contentPanGesture}>
-                  <Animated.View collapsable={false}>
-                    <GestureDetector gesture={scrollGesture}>
-                      <Animated.ScrollView
-                        bounces={false}
-                        keyboardShouldPersistTaps="handled"
-                        onScroll={scrollHandler}
-                        scrollEventThrottle={16}
-                        showsVerticalScrollIndicator={false}
-                      >
-                        {children}
-                      </Animated.ScrollView>
-                    </GestureDetector>
-                  </Animated.View>
-                </GestureDetector>
-              </>
-            ) : (
-              <>
-                <GestureDetector gesture={handlePanGesture}>
-                  <Animated.View
-                    style={styles.handleHitArea}
-                    accessibilityRole="button"
-                    accessibilityLabel="Dismiss drawer"
-                  >
-                    <View style={styles.handle} />
-                  </Animated.View>
-                </GestureDetector>
-                <ScrollView
-                  bounces={false}
-                  keyboardShouldPersistTaps="handled"
-                  showsVerticalScrollIndicator={false}
-                >
-                  {children}
-                </ScrollView>
-              </>
-            )}
-            <View style={styles.bottomExtension} />
+    <Modal visible transparent animationType="none" statusBarTranslucent onRequestClose={dismiss}>
+      <Animated.View
+        pointerEvents={visible ? 'auto' : 'none'}
+        style={[styles.overlay, { zIndex, elevation: zIndex }]}
+        accessibilityViewIsModal
+        aria-modal
+      >
+        <GestureHandlerRootView style={styles.root}>
+          <Animated.View style={[styles.backdrop, backdropStyle]}>
+            <Pressable style={StyleSheet.absoluteFill} onPress={dismiss} />
           </Animated.View>
-        </View>
-      </GestureHandlerRootView>
-    </Animated.View>
+
+          <View style={[styles.anchor, isWideLayout && styles.anchorWide]} pointerEvents="box-none">
+            <Animated.View
+              style={[
+                styles.drawer,
+                {
+                  width: '100%',
+                  maxWidth: isWideLayout ? modalMaxWidth : undefined,
+                  maxHeight: screenHeight - insets.top - spacing.lg,
+                  paddingBottom: insets.bottom + spacing.lg
+                },
+                drawerStyle
+              ]}
+            >
+              {!contentScrollable ? (
+                <>
+                  <GestureDetector gesture={handlePanGesture}>
+                    <Animated.View
+                      style={styles.handleHitArea}
+                      accessibilityRole="button"
+                      accessibilityLabel="Dismiss drawer"
+                    >
+                      <View style={styles.handle} />
+                    </Animated.View>
+                  </GestureDetector>
+                  <View style={styles.staticContent}>{children}</View>
+                </>
+              ) : dragContentToDismiss ? (
+                <>
+                  <GestureDetector gesture={handlePanGesture}>
+                    <Animated.View
+                      style={styles.handleHitArea}
+                      accessibilityRole="button"
+                      accessibilityLabel="Dismiss drawer"
+                    >
+                      <View style={styles.handle} />
+                    </Animated.View>
+                  </GestureDetector>
+                  <GestureDetector gesture={contentPanGesture}>
+                    <Animated.View collapsable={false}>
+                      <GestureDetector gesture={scrollGesture}>
+                        <Animated.ScrollView
+                          bounces={false}
+                          keyboardShouldPersistTaps="handled"
+                          onScroll={scrollHandler}
+                          scrollEventThrottle={16}
+                          showsVerticalScrollIndicator={false}
+                        >
+                          {children}
+                        </Animated.ScrollView>
+                      </GestureDetector>
+                    </Animated.View>
+                  </GestureDetector>
+                </>
+              ) : (
+                <>
+                  <GestureDetector gesture={handlePanGesture}>
+                    <Animated.View
+                      style={styles.handleHitArea}
+                      accessibilityRole="button"
+                      accessibilityLabel="Dismiss drawer"
+                    >
+                      <View style={styles.handle} />
+                    </Animated.View>
+                  </GestureDetector>
+                  <ScrollView
+                    bounces={false}
+                    keyboardShouldPersistTaps="handled"
+                    showsVerticalScrollIndicator={false}
+                  >
+                    {children}
+                  </ScrollView>
+                </>
+              )}
+              <View style={styles.bottomExtension} />
+            </Animated.View>
+          </View>
+        </GestureHandlerRootView>
+      </Animated.View>
+    </Modal>
   )
 }
 

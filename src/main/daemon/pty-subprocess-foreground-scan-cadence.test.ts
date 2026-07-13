@@ -40,7 +40,10 @@ vi.mock('../providers/windows-powershell-executable', () => ({
 }))
 
 vi.mock('../providers/agent-foreground-process', () => ({
-  resolveAgentForegroundProcess: resolveAgentForegroundProcessMock
+  resolveAgentForegroundProcessWithAvailability: async (...args: unknown[]) => ({
+    available: true,
+    processName: await resolveAgentForegroundProcessMock(...args)
+  })
 }))
 
 import { createPtySubprocess } from './pty-subprocess'

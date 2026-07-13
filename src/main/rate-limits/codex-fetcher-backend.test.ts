@@ -10,7 +10,9 @@ const { childSpawnMock, readFileMock, ptySpawnMock } = vi.hoisted(() => ({
 vi.mock('node:child_process', () => ({ spawn: childSpawnMock }))
 vi.mock('node:fs/promises', () => ({ readFile: readFileMock }))
 vi.mock('node-pty', () => ({ spawn: ptySpawnMock }))
-vi.mock('./codex-auth-presence', () => ({ codexAuthExists: vi.fn(async () => true) }))
+vi.mock('./codex-auth-presence', () => ({
+  probeCodexAuthPresence: vi.fn(async () => 'present')
+}))
 
 import { consumeCodexRateLimitResetCredit, fetchCodexRateLimits } from './codex-fetcher'
 

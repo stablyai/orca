@@ -9,8 +9,8 @@ import {
 } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { createHash, randomUUID } from 'node:crypto'
-import { escapeRegex } from '../../shared/string-utils'
 import { copyFileWithWindowsRetry, renameFileWithWindowsRetry } from '../codex-accounts/fs-utils'
+import { foldWslUncPathCaseInsensitiveParts } from '../../shared/wsl-paths'
 import {
   createTomlLineScanState,
   isTomlStructuralLine,
@@ -202,7 +202,30 @@ function normalizeWindowsPathSeparators(sourcePath: string): string {
 }
 
 function usesWindowsPathSeparators(sourcePath: string): boolean {
-  return /^[A-Za-z]:[\\/]/.test(sourcePath) || sourcePath.startsWith('\\\\')
+  return (
+    /^[A-Za-z]:[\\/]/.test(sourcePath) ||
+    sourcePath.startsWith('\\\\') ||
+    sourcePath.startsWith('//')
+  )
+}
+
+// Why: Codex and Orca can disagree on quote style, separators, and casing for
+// the same Windows project, including when the caller targets a remote host.
+export function normalizeCodexProjectPathForLookup(projectPath: string): string {
+  if (!usesWindowsPathSeparators(projectPath)) {
+    return projectPath
+  }
+  // Why: the Linux path under a WSL share is case-sensitive, so folding it would
+  // conflate distinct dirs (e.g. .../Repo vs .../repo) onto one trust key.
+  const slashedPath = normalizeWindowsPathSeparators(projectPath)
+  return foldWslUncPathCaseInsensitiveParts(slashedPath) ?? slashedPath.toLowerCase()
+}
+
+// Why: trust revocations recorded before WSL tails compared case-sensitively
+// can carry drifted casing; fold fully so matching errs toward revoked.
+export function normalizeCodexProjectPathForRevocationLookup(projectPath: string): string {
+  const normalized = normalizeCodexProjectPathForLookup(projectPath)
+  return usesWindowsPathSeparators(projectPath) ? normalized.toLowerCase() : normalized
 }
 
 export function parseTrustKey(key: string): {
@@ -346,12 +369,11 @@ export function upsertProjectTrustLevelInContent(
   const trustedProjectPath = options?.alreadyCanonical
     ? projectPath
     : getCodexCanonicalProjectPath(projectPath)
-  const headerPattern = buildProjectHeaderPattern(trustedProjectPath)
-  const match = headerPattern.exec(existing)
+  const headerLineEnd = findProjectHeaderLineEnd(existing, trustedProjectPath)
   const eol = existing.includes('\r\n') ? '\r\n' : '\n'
   const trustLine = `trust_level = "${trustLevel}"`
 
-  if (!match) {
+  if (headerLineEnd === null) {
     const block = [`[projects."${escapeTomlString(trustedProjectPath)}"]`, trustLine].join(eol)
     if (existing.length === 0) {
       return `${block}${eol}`
@@ -364,7 +386,6 @@ export function upsertProjectTrustLevelInContent(
     return `${existing}${separator}${block}${eol}`
   }
 
-  const headerLineEnd = match.index + match[0].length
   const after = existing.slice(headerLineEnd)
   const nextHeaderRel = findNextTableHeader(after)
   const blockEnd = nextHeaderRel === -1 ? existing.length : headerLineEnd + nextHeaderRel
@@ -517,14 +538,17 @@ type TrustBlockRange = {
 // casing) must not prevent findTrustBlockRanges from matching an existing block.
 export function normalizeHookTrustKeyForLookup(key: string): string {
   const parsed = parseTrustKey(key)
-  const separated = parsed
-    ? `${normalizeWindowsPathSeparators(parsed.sourcePath)}:${parsed.eventLabel}:${parsed.groupIndex}:${parsed.handlerIndex}`
-    : normalizeWindowsPathSeparators(key)
-  return process.platform === 'win32' ? separated.toLowerCase() : separated
+  // Why: fold by path shape, not host platform — hook sources on WSL and SSH
+  // Windows remotes need the same folding when Orca runs on macOS or Linux.
+  const foldedPath = normalizeCodexProjectPathForLookup(parsed ? parsed.sourcePath : key)
+  return parsed
+    ? `${foldedPath}:${parsed.eventLabel}:${parsed.groupIndex}:${parsed.handlerIndex}`
+    : foldedPath
 }
 
 function findTrustBlockRanges(content: string, key: string): TrustBlockRange[] {
   const ranges: TrustBlockRange[] = []
+  const normalizedKey = normalizeHookTrustKeyForLookup(key)
   let cursor = 0
   let scanState = createTomlLineScanState()
   while (cursor < content.length) {
@@ -534,10 +558,7 @@ function findTrustBlockRanges(content: string, key: string): TrustBlockRange[] {
     const line = rawLine.replace(/\r$/, '')
     const nextCursor = newlineIdx === -1 ? content.length : newlineIdx + 1
     const headerKey = isTomlStructuralLine(scanState) ? parseHookStateHeaderKey(line) : null
-    if (
-      headerKey !== null &&
-      normalizeHookTrustKeyForLookup(headerKey) === normalizeHookTrustKeyForLookup(key)
-    ) {
+    if (headerKey !== null && normalizeHookTrustKeyForLookup(headerKey) === normalizedKey) {
       const headerLineEnd = rawLine.endsWith('\r') ? lineEnd - 1 : lineEnd
       const after = content.slice(headerLineEnd)
       const nextHeaderRel = findNextTableHeader(after)
@@ -550,20 +571,6 @@ function findTrustBlockRanges(content: string, key: string): TrustBlockRange[] {
     cursor = nextCursor
   }
   return ranges
-}
-
-function buildProjectHeaderPattern(projectPath: string): RegExp {
-  const headerPathValues = [projectPath]
-  if (usesWindowsPathSeparators(projectPath)) {
-    headerPathValues.push(projectPath.replace(/\//g, '\\'), projectPath.replace(/\\/g, '/'))
-  }
-  const headerPaths = [...new Set(headerPathValues)].map((path) =>
-    escapeRegex(escapeTomlString(path))
-  )
-  return new RegExp(
-    `(^|\\r?\\n)[ \\t]*\\[projects\\."(?:${headerPaths.join('|')})"\\][ \\t]*(?:#[^\\r\\n]*)?(?=\\r?\\n|$)`,
-    process.platform === 'win32' ? 'i' : undefined
-  )
 }
 
 type ParsedTomlString = {
@@ -589,6 +596,48 @@ function parseHookStateHeaderKey(line: string): string | null {
   }
   index = skipTomlInlineWhitespace(trimmed, index + 1)
   return index === trimmed.length || trimmed[index] === '#' ? parsedKey.value : null
+}
+
+export function parseCodexProjectHeaderPath(line: string): string | null {
+  // Why: mirror section headers come from split CRLF files and retain the
+  // terminal carriage return, while direct upserts scan CR-stripped lines.
+  const trimmed = line.replace(/\r$/, '').trimStart()
+  const prefixMatch = /^\[[ \t]*projects[ \t]*\.[ \t]*/.exec(trimmed)
+  if (!prefixMatch) {
+    return null
+  }
+  const parsedPath = parseTomlSingleLineString(trimmed, prefixMatch[0].length)
+  if (!parsedPath) {
+    return null
+  }
+  let index = skipTomlInlineWhitespace(trimmed, parsedPath.endIndex)
+  if (trimmed[index] !== ']') {
+    return null
+  }
+  index = skipTomlInlineWhitespace(trimmed, index + 1)
+  return index === trimmed.length || trimmed[index] === '#' ? parsedPath.value : null
+}
+
+function findProjectHeaderLineEnd(content: string, projectPath: string): number | null {
+  const lookupPath = normalizeCodexProjectPathForLookup(projectPath)
+  let cursor = 0
+  let scanState = createTomlLineScanState()
+  while (cursor < content.length) {
+    const newlineIndex = content.indexOf('\n', cursor)
+    const lineEnd = newlineIndex === -1 ? content.length : newlineIndex
+    const rawLine = content.slice(cursor, lineEnd)
+    const line = rawLine.replace(/\r$/, '')
+    const existingPath = isTomlStructuralLine(scanState) ? parseCodexProjectHeaderPath(line) : null
+    if (existingPath !== null && normalizeCodexProjectPathForLookup(existingPath) === lookupPath) {
+      return rawLine.endsWith('\r') ? lineEnd - 1 : lineEnd
+    }
+    scanState = updateTomlLineScanState(scanState, line)
+    if (newlineIndex === -1) {
+      return null
+    }
+    cursor = newlineIndex + 1
+  }
+  return null
 }
 
 function parseTomlSingleLineString(line: string, startIndex: number): ParsedTomlString | null {

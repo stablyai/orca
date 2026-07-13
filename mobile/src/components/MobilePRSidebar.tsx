@@ -14,6 +14,7 @@ import {
   type MobilePrTitleAction
 } from '../session/use-mobile-pr-title-action'
 import { useMobilePrAiTriage, type MobilePrAiTriage } from '../session/use-mobile-pr-ai-triage'
+import { usePRBotAuthorOverrides } from '../session/use-pr-bot-author-overrides'
 import { buildFixChecksPrompt, buildResolveConflictsPrompt } from '../session/pr-ai-triage-prompt'
 import { prSidebarRenderBranch } from './mobile-pr-sidebar-presentation'
 import { mobilePrSidebarStyles as styles } from './pr-sidebar/mobile-pr-sidebar-styles'
@@ -89,6 +90,13 @@ export function MobilePRSidebar({
     refetch
   })
   const triage = useMobilePrAiTriage({ client, connState, worktreeId })
+  // Keyed on the PR payload identity so overrides re-fetch with each PR refetch
+  // instead of staying a stale one-shot snapshot for the whole session.
+  const botAuthorOverrides = usePRBotAuthorOverrides(
+    client,
+    connState,
+    state.kind === 'ready' ? state.data.details : null
+  )
 
   return (
     <ScrollView
@@ -114,6 +122,7 @@ export function MobilePRSidebar({
         commentActions={commentActions}
         titleAction={titleAction}
         triage={triage}
+        botAuthorOverrides={botAuthorOverrides}
         showOpenOnWeb={showOpenOnWeb}
       />
     </ScrollView>
@@ -134,7 +143,8 @@ function PrSidebarContent({
   commentActions,
   titleAction,
   triage,
-  showOpenOnWeb
+  showOpenOnWeb,
+  botAuthorOverrides
 }: {
   branch: ReturnType<typeof prSidebarRenderBranch>
   state: PrSidebarState
@@ -150,6 +160,7 @@ function PrSidebarContent({
   titleAction: MobilePrTitleAction
   triage: MobilePrAiTriage
   showOpenOnWeb: boolean
+  botAuthorOverrides: ReadonlySet<string>
 }) {
   if (branch === 'loading') {
     return (
@@ -215,6 +226,7 @@ function PrSidebarContent({
         titleAction={titleAction}
         triage={triage}
         refetch={refetch}
+        botAuthorOverrides={botAuthorOverrides}
         showOpenOnWeb={showOpenOnWeb}
       />
     )
@@ -231,7 +243,8 @@ function PrSidebarSections({
   titleAction,
   triage,
   refetch,
-  showOpenOnWeb
+  showOpenOnWeb,
+  botAuthorOverrides
 }: {
   data: Extract<PrSidebarState, { kind: 'ready' }>['data']
   client: RpcClient | null
@@ -242,6 +255,7 @@ function PrSidebarSections({
   triage: MobilePrAiTriage
   refetch: () => void
   showOpenOnWeb: boolean
+  botAuthorOverrides: ReadonlySet<string>
 }) {
   const pr = data.pr
   // Bind the triage launchers to this PR's data; the prompt builders are pure so
@@ -314,6 +328,7 @@ function PrSidebarSections({
         prState={data.pr.state}
         prRepo={data.pr.prRepo ?? null}
         actions={commentActions}
+        botAuthorOverrides={botAuthorOverrides}
       />
     </>
   )

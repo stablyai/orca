@@ -17,6 +17,7 @@ import {
 } from './SettingsFormControls'
 import { translate } from '@/i18n/i18n'
 import { RichMarkdownSpellcheckSetting } from './RichMarkdownSpellcheckSetting'
+import { EditorWordWrapSetting } from './EditorWordWrapSetting'
 
 export type AutoSaveDelayDraftState = {
   sourceDelayMs: number
@@ -247,6 +248,8 @@ export function GeneralEditorSettingsSection({
           ]}
         />
       </SearchableSetting>
+
+      <EditorWordWrapSetting settings={settings} updateSettings={updateSettings} />
 
       <SearchableSetting
         title={translate(

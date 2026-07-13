@@ -7,6 +7,7 @@ import type { TerminalColorSchemeMode } from '../../../../shared/terminal-color-
 import type { StartupCommandDelivery } from '../../../../shared/codex-startup-delivery'
 import type { SetupSplitDirection, TuiAgent } from '../../../../shared/types'
 import type { SleepingAgentLaunchConfig } from '../../../../shared/agent-session-resume'
+import type { TerminalKittyKeyboardModeTracker } from '../../../../shared/terminal-kitty-keyboard-mode-tracker'
 
 export type PtyConnectionDeps = {
   tabId: string
@@ -37,6 +38,10 @@ export type PtyConnectionDeps = {
   restoredPtyIdByLeafId?: Record<string, string>
   paneTransportsRef: React.RefObject<Map<number, PtyTransport>>
   paneMode2031Ref: React.RefObject<Map<number, boolean>>
+  /** Per-pane mirror of the kitty keyboard flags the pane's application
+   *  negotiated. Fed from PTY output here; read by the keyboard policy. */
+  paneKittyKeyboardModesRef: React.RefObject<Map<number, TerminalKittyKeyboardModeTracker>>
+
   paneLastThemeModeRef: React.RefObject<Map<number, TerminalColorSchemeMode>>
   replayingPanesRef: ReplayingPanesRef
   restoredViewportBlankingPanesRef?: RestoredViewportBlankingPanesRef
@@ -71,4 +76,10 @@ export type PtyConnectionDeps = {
   setCacheTimerStartedAt: (key: string, ts: number | null) => void
   syncPanePtyLayoutBinding: (paneId: number, ptyId: string | null) => void
   clearExitedPanePtyLayoutBinding: (paneId: number, exitedPtyId: string) => void
+  /** Records a DECSET 2031 subscription answered from main's
+   *  '2031-subscribe' fact, mirroring the xterm CSI handler's registry write
+   *  (paneMode2031 + last replied theme) so later theme flips push CSI 997.
+   *  The reply itself is sent by the fact handler — query authority stays
+   *  with the view (model/view contract invariant 6). */
+  recordPaneMode2031Subscription?: (paneId: number, repliedMode: 'dark' | 'light') => void
 }

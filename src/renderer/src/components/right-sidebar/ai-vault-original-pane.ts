@@ -12,7 +12,7 @@ export type AiVaultOriginalPaneTarget = {
   leafId: string
 }
 
-type OriginalPaneState = Pick<
+export type OriginalPaneState = Pick<
   AppState,
   | 'agentStatusByPaneKey'
   | 'retainedAgentsByPaneKey'
@@ -87,10 +87,10 @@ function entryPromptCandidates(entry: {
   return [...candidates]
 }
 
-function promptsMatchSession(
+export function promptsMatchSession(
   session: AiVaultSession,
   entry: Parameters<typeof entryPromptCandidates>[0]
-) {
+): boolean {
   const sessionCandidates = sessionPromptCandidates(session)
   if (sessionCandidates.length === 0) {
     return false
@@ -134,7 +134,7 @@ function getTabOwnerWorktreeId(
   return null
 }
 
-function resolveOriginalPaneTarget(args: {
+export function resolveOriginalPaneTarget(args: {
   state: OriginalPaneState
   paneKey: string
   worktreeIdHint?: string

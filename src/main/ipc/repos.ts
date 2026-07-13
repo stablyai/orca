@@ -74,6 +74,7 @@ import {
   searchBaseRefDetails
 } from '../git/repo'
 import { getSshGitProvider } from '../providers/ssh-git-dispatch'
+import { getSshGitCapabilityCache } from '../git/git-capability-state'
 import { getSshFilesystemProvider } from '../providers/ssh-filesystem-dispatch'
 import { getSshGitUsername, resolveLocalGitUsername } from '../git/git-username'
 import { enrichRepoGitUsernames } from '../repo-git-username-enrichment'
@@ -95,6 +96,7 @@ import {
 } from '../project-groups/folder-workspace-path-status'
 import { getGitCloneFailureMessage } from '../../shared/git-clone-failure-message'
 import { prepareLocalWorktreeRootForRepo } from '../worktree-root-preparation'
+import { runWithGitReadCacheInvalidation } from '../git/status'
 
 // Why: `method` answers "which entry point did the user take?", not "what did
 // they add?" — so the IPC the renderer invoked IS the method. We never send
@@ -981,7 +983,7 @@ async function runWithClonePathLock<T>(clonePathKey: string, task: () => Promise
 
   try {
     await previous
-    return await task()
+    return await runWithGitReadCacheInvalidation(task)
   } finally {
     release()
     if (cloneInFlightByPath.get(clonePathKey) === tail) {
@@ -2548,32 +2550,33 @@ async function searchBaseRefDetailsForRepo(
         .split('\n')
         .map((line) => line.trim())
         .filter(Boolean)
+      const capabilities = getSshGitCapabilityCache(provider)
       const runSearch = async (patternGroup?: 'segmented' | 'branchRoot'): Promise<string> => {
-        try {
-          return (
-            await provider.exec(
-              buildSearchBaseRefsArgv(normalizedQuery, limit, {
-                remoteNames: remotes,
-                patternGroup
-              }),
-              repo.path
-            )
-          ).stdout
-        } catch (err) {
-          if (!isForEachRefExcludeUnsupportedError(err)) {
-            throw err
-          }
-          return (
-            await provider.exec(
-              buildSearchBaseRefsArgv(normalizedQuery, limit, {
-                excludeRemoteHead: false,
-                remoteNames: remotes,
-                patternGroup
-              }),
-              repo.path
-            )
-          ).stdout
-        }
+        return capabilities.runWithFallback(
+          'for-each-ref-exclude',
+          async () =>
+            (
+              await provider.exec(
+                buildSearchBaseRefsArgv(normalizedQuery, limit, {
+                  remoteNames: remotes,
+                  patternGroup
+                }),
+                repo.path
+              )
+            ).stdout,
+          async () =>
+            (
+              await provider.exec(
+                buildSearchBaseRefsArgv(normalizedQuery, limit, {
+                  excludeRemoteHead: false,
+                  remoteNames: remotes,
+                  patternGroup
+                }),
+                repo.path
+              )
+            ).stdout,
+          isForEachRefExcludeUnsupportedError
+        )
       }
       // Why: delegate the NUL-parse + HEAD filter + dedup + limit pipeline
       // to the shared helper so the SSH and local paths cannot diverge.

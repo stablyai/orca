@@ -3,6 +3,7 @@
   "include": [
     "../src/cli/**/*",
     "../src/shared/**/*",
+    "../src/main/agent-hooks/hook-stdin-contract.ts",
     "../src/main/agent-hooks/installer-utils.ts",
     "../src/main/agent-hooks/installer-utils-remote.ts",
     "../src/main/agent-hooks/managed-agent-hook-controls.ts",
@@ -40,8 +41,9 @@
   ],
   "compilerOptions": {
     "composite": true,
-    "module": "CommonJS",
-    "moduleResolution": "Node",
+    // TypeScript 7 removed node10 resolution; Node16 preserves CommonJS emit for this package.
+    "module": "Node16",
+    "moduleResolution": "Node16",
     "rootDir": "../src",
     "outDir": "../out"
   }

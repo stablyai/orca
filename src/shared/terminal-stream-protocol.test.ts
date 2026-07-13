@@ -123,6 +123,21 @@ describe('terminal-stream-protocol', () => {
     expect(unsubscribe?.streamId).toBe(12)
   })
 
+  it('round-trips output acknowledgement frames', () => {
+    const ack = decodeTerminalStreamFrame(
+      encodeTerminalStreamFrame({
+        opcode: TerminalStreamOpcode.Ack,
+        streamId: 12,
+        seq: 4,
+        payload: encodeTerminalStreamJson({ bytes: 4096 })
+      })
+    )
+
+    expect(ack?.opcode).toBe(TerminalStreamOpcode.Ack)
+    expect(ack?.streamId).toBe(12)
+    expect(ack && decodeTerminalStreamJson(ack.payload)).toEqual({ bytes: 4096 })
+  })
+
   it('rejects unknown frame versions and opcodes', () => {
     const encoded = encodeTerminalStreamFrame({
       opcode: TerminalStreamOpcode.Output,

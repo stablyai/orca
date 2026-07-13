@@ -67,6 +67,25 @@ describe('worktree RPC methods', () => {
     })
   })
 
+  it('routes dirty-file force to the runtime server', async () => {
+    const runtime = {
+      getRuntimeId: () => 'test-runtime',
+      removeManagedWorktree: vi.fn().mockResolvedValue({})
+    } as unknown as OrcaRuntimeService
+    const dispatcher = new RpcDispatcher({ runtime, methods: WORKTREE_METHODS })
+
+    const response = await dispatcher.dispatch(
+      makeRequest('worktree.rm', {
+        worktree: 'id:wt-1',
+        force: true,
+        runHooks: false
+      })
+    )
+
+    expect(runtime.removeManagedWorktree).toHaveBeenCalledWith('id:wt-1', true, false)
+    expect(response).toMatchObject({ ok: true, result: { removed: true } })
+  })
+
   it('routes create options to the runtime server', async () => {
     const runtime = {
       getRuntimeId: () => 'test-runtime',
@@ -453,14 +472,18 @@ describe('worktree RPC methods', () => {
     const runtime = {
       getRuntimeId: () => 'test-runtime',
       showRepo: vi.fn().mockResolvedValue(repo),
-      createManagedWorktree: vi.fn().mockResolvedValue({ worktree: { id: 'wt-1' } })
+      createManagedWorktree: vi.fn().mockResolvedValue({
+        worktree: { id: 'wt-1' },
+        startupTerminal: { spawned: true, handle: 'term_agent' }
+      })
     } as unknown as OrcaRuntimeService
     const dispatcher = new RpcDispatcher({ runtime, methods: WORKTREE_METHODS })
 
-    await dispatcher.dispatch(
+    const response = await dispatcher.dispatch(
       makeRequest('worktree.create', {
         repo: 'repo-1',
         name: 'agent-startup',
+        startupAgent: 'codex',
         startupCommand: "codex 'summarize repo'",
         startupCommandDelivery: 'shell-ready',
         startupEnv: { ORCA_AGENT_MODE: 'direct' },
@@ -473,11 +496,17 @@ describe('worktree RPC methods', () => {
       })
     )
 
+    expect(response).toMatchObject({
+      ok: true,
+      result: { agentTerminalHandle: 'term_agent' }
+    })
+
     expect(runtime.createManagedWorktree).toHaveBeenCalledWith(
       expect.objectContaining({
         repoSelector: 'repo-1',
         name: 'agent-startup',
         activate: true,
+        startupAgent: 'codex',
         startup: {
           command: "codex 'summarize repo'",
           startupCommandDelivery: 'shell-ready',

@@ -19,6 +19,17 @@ export type PanelAction =
 
 export const SESSION_DOCK_MIN_MAIN_WIDTH = 360
 
+export function shouldShowSessionHeaderChecksAction(args: {
+  isFolderWorkspaceRoute: boolean
+  repoContextLoaded: boolean
+  hostedChecksSupported: boolean
+}): boolean {
+  // Why: the hosted checks panel is provider-gated and the pr-panel guard
+  // force-closes it for unsupported providers, so offering the action there
+  // (or before the provider probe resolves) would be a silent no-op.
+  return !args.isFolderWorkspaceRoute && args.repoContextLoaded && args.hostedChecksSupported
+}
+
 export function canDockSessionPanel(args: {
   isWideLayout: boolean
   availableWidth: number

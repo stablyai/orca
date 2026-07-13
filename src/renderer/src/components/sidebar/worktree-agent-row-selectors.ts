@@ -97,7 +97,9 @@ function getLiveEntriesByWorktree(state: WorktreeAgentRowsState): Map<string, Ag
     if (!parsed) {
       continue
     }
-    const worktreeId = tabIdToWorktreeId.get(parsed.tabId) ?? entry.worktreeId
+    const tabWorktreeId = tabIdToWorktreeId.get(parsed.tabId)
+    // Why: keep early attributed child rows, but hide completed rows once their tab is gone.
+    const worktreeId = tabWorktreeId ?? (entry.state === 'done' ? undefined : entry.worktreeId)
     if (!worktreeId) {
       continue
     }

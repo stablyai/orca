@@ -1,6 +1,9 @@
 import type { DaemonPtyAdapter } from './daemon-pty-adapter'
+import { shutdownDegradedFallbackSessions } from './degraded-daemon-fallback-shutdown'
 import type {
   IPtyProvider,
+  PtyBackgroundStreamEvent,
+  PtyProviderBufferSnapshot,
   PtyProcessInfo,
   PtySpawnOptions,
   PtySpawnResult
@@ -23,7 +26,11 @@ export class DegradedDaemonPtyProvider implements IPtyProvider {
   private fallback: ManagedPtyProvider
   private sessionProviders = new Map<string, ManagedPtyProvider>()
   private unsubscribers: (() => void)[] = []
-  private dataListeners: ((payload: { id: string; data: string }) => void)[] = []
+  private dataListeners: ((payload: {
+    id: string
+    data: string
+    sequenceChars?: number
+  }) => void)[] = []
   private exitListeners: ((payload: { id: string; code: number }) => void)[] = []
 
   constructor(opts: {
@@ -93,6 +100,18 @@ export class DegradedDaemonPtyProvider implements IPtyProvider {
     this.providerFor(id).resize(id, cols, rows)
   }
 
+  pauseProducer(id: string): void {
+    this.providerFor(id).pauseProducer?.(id)
+  }
+
+  resumeProducer(id: string): void {
+    this.providerFor(id).resumeProducer?.(id)
+  }
+
+  setPtyBackgrounded(id: string, background: boolean): void {
+    this.providerFor(id).setPtyBackgrounded?.(id, background)
+  }
+
   async shutdown(id: string, opts: { immediate?: boolean; keepHistory?: boolean }): Promise<void> {
     await this.providerFor(id).shutdown(id, opts)
     if (!opts.keepHistory) {
@@ -116,6 +135,15 @@ export class DegradedDaemonPtyProvider implements IPtyProvider {
     return (await this.providerFor(id).getAppliedSize?.(id)) ?? null
   }
 
+  async getBufferSnapshot(
+    id: string,
+    opts?: { scrollbackRows?: number }
+  ): Promise<PtyProviderBufferSnapshot | null> {
+    // Why: a preserved legacy daemon can still thin its monitoring stream;
+    // recovery must reach the adapter that owns that session's full model.
+    return (await this.providerFor(id).getBufferSnapshot?.(id, opts)) ?? null
+  }
+
   async clearBuffer(id: string): Promise<void> {
     await this.providerFor(id).clearBuffer(id)
   }
@@ -130,6 +158,10 @@ export class DegradedDaemonPtyProvider implements IPtyProvider {
 
   async getForegroundProcess(id: string): Promise<string | null> {
     return this.providerFor(id).getForegroundProcess(id)
+  }
+
+  async confirmForegroundProcess(id: string): Promise<string | null> {
+    return this.providerFor(id).confirmForegroundProcess?.(id) ?? null
   }
 
   async serialize(ids: string[]): Promise<string> {
@@ -155,12 +187,25 @@ export class DegradedDaemonPtyProvider implements IPtyProvider {
     return this.fallback.getProfiles()
   }
 
-  onData(callback: (payload: { id: string; data: string }) => void): () => void {
+  onData(
+    callback: (payload: { id: string; data: string; sequenceChars?: number }) => void
+  ): () => void {
     this.dataListeners.push(callback)
     return () => {
       const idx = this.dataListeners.indexOf(callback)
       if (idx !== -1) {
         this.dataListeners.splice(idx, 1)
+      }
+    }
+  }
+
+  onBackgroundStreamEvent(callback: (payload: PtyBackgroundStreamEvent) => void): () => void {
+    const unsubscribes = this.allProviders().flatMap(
+      (provider) => provider.onBackgroundStreamEvent?.(callback) ?? []
+    )
+    return () => {
+      for (const unsubscribe of unsubscribes) {
+        unsubscribe()
       }
     }
   }
@@ -237,28 +282,7 @@ export class DegradedDaemonPtyProvider implements IPtyProvider {
   }
 
   async shutdownFallbackSessions(): Promise<number> {
-    const ids = [...this.sessionProviders]
-      .filter(([, provider]) => provider === this.fallback)
-      .map(([id]) => id)
-    const results = await Promise.allSettled(
-      ids.map(async (id) => {
-        await this.fallback.shutdown(id, { immediate: true })
-        this.sessionProviders.delete(id)
-      })
-    )
-    // Why: this runs first in the daemon-restart sequence. A throw here would
-    // abort the whole restart and leave "Restart daemon" — the user's recovery
-    // path for a wedged terminal — unusable, recreating the original lockup. So
-    // it is best-effort: log failures, keep restarting, and only count the
-    // sessions that actually shut down.
-    const failed = results.filter((result) => result.status === 'rejected')
-    if (failed.length > 0) {
-      console.warn(
-        `[daemon] ${failed.length} local fallback PTY session(s) failed to shut down during daemon restart; continuing restart`,
-        ...failed.map((result) => (result as PromiseRejectedResult).reason)
-      )
-    }
-    return results.length - failed.length
+    return shutdownDegradedFallbackSessions(this.sessionProviders, this.fallback)
   }
 
   getCurrentDaemonSessionIds(): string[] {

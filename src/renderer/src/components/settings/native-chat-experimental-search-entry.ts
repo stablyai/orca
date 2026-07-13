@@ -10,7 +10,7 @@ export function getNativeChatExperimentalSearchEntry(): SettingsSearchEntry {
     ),
     description: translate(
       'auto.components.settings.experimental.search.nativeChat.description',
-      'Preview the desktop chat surface for Claude and Codex terminal sessions.'
+      'Preview the desktop chat surface for supported agent terminal sessions.'
     ),
     keywords: [
       ...translateSearchKeyword(
@@ -32,6 +32,10 @@ export function getNativeChatExperimentalSearchEntry(): SettingsSearchEntry {
       ...translateSearchKeyword(
         'auto.components.settings.experimental.search.nativeChat.codex',
         'codex'
+      ),
+      ...translateSearchKeyword(
+        'auto.components.settings.experimental.search.nativeChat.grok',
+        'grok'
       ),
       ...translateSearchKeyword(
         'auto.components.settings.experimental.search.nativeChat.terminal',

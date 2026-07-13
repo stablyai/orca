@@ -38,6 +38,7 @@ describe('createRemoteRuntimePtyTransport', () => {
     terminal: string
     client: { id: string; type: string }
     viewport?: { cols: number; rows: number }
+    capabilities?: { desktopViewportClaims?: 1 }
   } {
     const frames = subscriptionSendBinary.mock.calls
       .map((call) => decodeTerminalStreamFrame(call[0]))
@@ -51,6 +52,7 @@ describe('createRemoteRuntimePtyTransport', () => {
       terminal: string
       client: { id: string; type: string }
       viewport?: { cols: number; rows: number }
+      capabilities?: { desktopViewportClaims?: 1 }
     }>(frame.payload)
     if (!payload) {
       throw new Error('invalid terminal subscribe payload')
@@ -165,7 +167,14 @@ describe('createRemoteRuntimePtyTransport', () => {
     })
 
     expect(onError).not.toHaveBeenCalled()
-    expect(transport.getPtyId()).toBe('remote:terminal-1')
+    expect(transport.getPtyId()).toBe('remote:env-1@@terminal-1')
+    expect(transport.getRuntimeEnvironmentId?.()).toBe('env-1')
+    await vi.waitFor(() =>
+      expect(latestSubscribePayload().capabilities).toEqual({
+        ackOutput: 1,
+        desktopViewportClaims: 1
+      })
+    )
     expect(runtimeSubscribe).toHaveBeenCalledWith(
       expect.objectContaining({
         selector: 'env-1',
@@ -177,9 +186,88 @@ describe('createRemoteRuntimePtyTransport', () => {
     await vi.waitFor(() => expect(subscriptionSendBinary).toHaveBeenCalled())
     expect(latestSubscribePayload()).toMatchObject({
       terminal: 'terminal-1',
-      client: { id: 'desktop:tab-1:pane:1', type: 'desktop' },
+      client: { id: expect.stringMatching(/^desktop:tab-1:pane:1:/), type: 'desktop' },
       viewport: { cols: 120, rows: 40 }
     })
+  })
+
+  it('scopes the same legacy handle independently for each runtime environment', async () => {
+    const { createRemoteRuntimePtyTransport } = await import('./remote-runtime-pty-transport')
+    const first = createRemoteRuntimePtyTransport('env-1', { worktreeId: 'wt-1' })
+    const second = createRemoteRuntimePtyTransport('env-2', { worktreeId: 'wt-2' })
+
+    first.attach({ existingPtyId: 'remote:terminal-1', callbacks: {} })
+    second.attach({ existingPtyId: 'remote:terminal-1', callbacks: {} })
+
+    expect(first.getPtyId()).toBe('remote:env-1@@terminal-1')
+    expect(second.getPtyId()).toBe('remote:env-2@@terminal-1')
+  })
+
+  it('parks passive peers when another remote desktop owns the grid', async () => {
+    const { createRemoteRuntimePtyTransport } = await import('./remote-runtime-pty-transport')
+    const { getFitOverrideForPty, setFitOverride } =
+      await import('@/lib/pane-manager/mobile-fit-overrides')
+    const transport = createRemoteRuntimePtyTransport('env-1', { worktreeId: 'wt-1' })
+    await transport.connect({ url: '', cols: 120, rows: 40, callbacks: {} })
+    const { streamId } = latestSubscribePayload()
+    const ptyId = transport.getPtyId()
+    expect(ptyId).not.toBeNull()
+
+    subscriptionCallbacks?.onResponse({
+      ok: true,
+      result: {
+        type: 'fit-override-changed',
+        streamId,
+        mode: 'remote-desktop-fit',
+        cols: 96,
+        rows: 32
+      }
+    })
+
+    expect(ptyId ? getFitOverrideForPty(ptyId) : null).toEqual({
+      mode: 'remote-desktop-fit',
+      cols: 96,
+      rows: 32
+    })
+    if (ptyId) {
+      setFitOverride(ptyId, 'desktop-fit', 0, 0)
+    }
+  })
+
+  it('gives separate paired viewers of the same host pane distinct refresh identities', async () => {
+    const { createRemoteRuntimePtyTransport } = await import('./remote-runtime-pty-transport')
+    const first = createRemoteRuntimePtyTransport('env-1', {
+      worktreeId: 'wt-1',
+      tabId: 'tab-1',
+      leafId: 'pane:1'
+    })
+    const second = createRemoteRuntimePtyTransport('env-1', {
+      worktreeId: 'wt-1',
+      tabId: 'tab-1',
+      leafId: 'pane:1'
+    })
+
+    first.attach({ existingPtyId: 'remote:terminal-1', cols: 80, rows: 24, callbacks: {} })
+    second.attach({ existingPtyId: 'remote:terminal-1', cols: 120, rows: 40, callbacks: {} })
+
+    await vi.waitFor(() => {
+      const subscribeFrames = subscriptionSendBinary.mock.calls
+        .map((call) => decodeTerminalStreamFrame(call[0]))
+        .filter((frame) => frame?.opcode === TerminalStreamOpcode.Subscribe)
+      expect(subscribeFrames).toHaveLength(2)
+      const clientIds = subscribeFrames.map((frame) => {
+        const payload = frame
+          ? decodeTerminalStreamJson<{ client: { id: string } }>(frame.payload)
+          : null
+        return payload?.client.id
+      })
+      expect(clientIds[0]).toMatch(/^desktop:tab-1:pane:1:/)
+      expect(clientIds[1]).toMatch(/^desktop:tab-1:pane:1:/)
+      expect(clientIds[0]).not.toBe(clientIds[1])
+    })
+
+    first.destroy?.()
+    second.destroy?.()
   })
 
   it('routes encoded restored terminal ids to their owning runtime environment', async () => {
@@ -593,7 +681,9 @@ describe('createRemoteRuntimePtyTransport', () => {
         params: {
           terminal: 'terminal-new',
           text: 'x',
-          client: { id: 'desktop:tab-1:pane:1', type: 'desktop' }
+          client: { id: expect.stringMatching(/^desktop:tab-1:pane:1:/), type: 'desktop' },
+          viewport: { cols: 80, rows: 24 },
+          claimViewport: true
         },
         timeoutMs: 15_000
       })
@@ -1363,6 +1453,83 @@ describe('createRemoteRuntimePtyTransport', () => {
     await vi.waitFor(() => expect(runtimeSubscribe).toHaveBeenCalledTimes(2))
   })
 
+  it('releases pending claimed input when reconnect subscription fails', async () => {
+    const { createRemoteRuntimePtyTransport } = await import('./remote-runtime-pty-transport')
+    const onError = vi.fn()
+    const transport = createRemoteRuntimePtyTransport('env-1', {
+      worktreeId: 'wt-1',
+      tabId: 'tab-1',
+      leafId: 'pane:1'
+    })
+    await transport.connect({ url: '', callbacks: { onError } })
+    let rejectReconnect = (_error: Error): void => {}
+    runtimeSubscribe.mockImplementationOnce(
+      () =>
+        new Promise((_, reject) => {
+          rejectReconnect = reject
+        })
+    )
+
+    subscriptionCallbacks?.onClose?.()
+    await vi.waitFor(() => expect(runtimeSubscribe).toHaveBeenCalledTimes(2))
+    expect(transport.claimViewport?.(101, 33)).toBe(true)
+    const accepted = transport.sendInputAccepted?.('\x03')
+    await Promise.resolve()
+    rejectReconnect(new Error('reconnect failed'))
+
+    await expect(accepted).resolves.toBe(false)
+    expect(onError).toHaveBeenCalledWith('reconnect failed')
+  })
+
+  it('releases pending claimed input when the remote terminal ends', async () => {
+    const { createRemoteRuntimePtyTransport } = await import('./remote-runtime-pty-transport')
+    const transport = createRemoteRuntimePtyTransport('env-1', {
+      worktreeId: 'wt-1',
+      tabId: 'tab-1',
+      leafId: 'pane:1'
+    })
+    await transport.connect({ url: '', callbacks: {} })
+    const { streamId } = latestSubscribePayload()
+
+    expect(transport.claimViewport?.(101, 33)).toBe(true)
+    const accepted = transport.sendInputAccepted?.('x')
+    subscriptionCallbacks?.onResponse({
+      ok: true,
+      result: { type: 'end', streamId }
+    })
+
+    await expect(accepted).resolves.toBe(false)
+  })
+
+  it('retries when a replacement transport closes before its stream installs', async () => {
+    const transportCallbacks: NonNullable<typeof subscriptionCallbacks>[] = []
+    runtimeSubscribe.mockImplementation(
+      async (_args: unknown, callbacks: NonNullable<typeof subscriptionCallbacks>) => {
+        transportCallbacks.push(callbacks)
+        subscriptionCallbacks = callbacks
+        return { unsubscribe: vi.fn(), sendBinary: subscriptionSendBinary }
+      }
+    )
+    const { createRemoteRuntimePtyTransport } = await import('./remote-runtime-pty-transport')
+    const transport = createRemoteRuntimePtyTransport('env-1', {
+      worktreeId: 'wt-1',
+      tabId: 'tab-1',
+      leafId: 'pane:1'
+    })
+    const connected = transport.connect({ url: '', callbacks: {} })
+    await vi.waitFor(() => expect(transportCallbacks).toHaveLength(1))
+    transportCallbacks[0].onResponse({ ok: true, result: { type: 'ready' } })
+    await connected
+
+    transportCallbacks[0].onClose?.()
+    await vi.waitFor(() => expect(transportCallbacks).toHaveLength(2))
+    transportCallbacks[1].onResponse({ ok: true, result: { type: 'ready' } })
+    transportCallbacks[1].onClose?.()
+
+    await vi.waitFor(() => expect(transportCallbacks).toHaveLength(3))
+    transport.destroy?.()
+  })
+
   it('resubscribes with the latest pane viewport after the remote stream closes', async () => {
     const { createRemoteRuntimePtyTransport } = await import('./remote-runtime-pty-transport')
     const transport = createRemoteRuntimePtyTransport('env-1', {
@@ -1382,6 +1549,110 @@ describe('createRemoteRuntimePtyTransport', () => {
     await vi.waitFor(() => {
       expect(latestSubscribePayload().viewport).toEqual({ cols: 132, rows: 43 })
     })
+  })
+
+  it('replays a viewport that changed during the subscribe round-trip once the stream is current', async () => {
+    // Why: a resize landing while the subscribe is in flight takes the one-shot
+    // RPC fallback, which is refresh-only (no leak) and no-ops before the stream
+    // floor exists. The transport must replay the latest viewport over the
+    // now-current stream so the PTY does not stall at the subscribe-time width.
+    // Hold the multiplex "ready" to keep the round-trip open across the resize.
+    runtimeSubscribe.mockImplementation(
+      async (_args: unknown, callbacks: typeof subscriptionCallbacks) => {
+        subscriptionCallbacks = callbacks
+        return { unsubscribe: vi.fn(), sendBinary: subscriptionSendBinary }
+      }
+    )
+    // Drain microtasks WITHOUT advancing timers, so the 33ms viewport batcher
+    // cannot fire — the replayed Resize frame must come from the round-trip
+    // flush alone (this test fails if that flush is removed).
+    const flushMicrotasks = async (): Promise<void> => {
+      for (let i = 0; i < 20; i += 1) {
+        await Promise.resolve()
+      }
+    }
+
+    const { createRemoteRuntimePtyTransport } = await import('./remote-runtime-pty-transport')
+    const transport = createRemoteRuntimePtyTransport('env-1', {
+      worktreeId: 'wt-1',
+      tabId: 'tab-1',
+      leafId: 'pane:1'
+    })
+
+    transport.attach({
+      existingPtyId: 'remote:terminal-1',
+      cols: 80,
+      rows: 24,
+      callbacks: {}
+    })
+    await vi.waitFor(() => expect(runtimeSubscribe).toHaveBeenCalled())
+
+    // Resize while the stream is not yet current (subscribe still pending).
+    expect(transport.resize(132, 43)).toBe(true)
+
+    // Release readiness and drain the resolution chain by microtasks only.
+    emitMultiplexReady()
+    await flushMicrotasks()
+
+    // The Subscribe frame still carries the subscribe-time viewport...
+    expect(latestSubscribePayload().viewport).toEqual({ cols: 80, rows: 24 })
+    // ...and the newer viewport is replayed as a Resize frame over the stream,
+    // before the batcher's 33ms timer could have produced it.
+    const resizeFrame = latestFrameForOpcode(TerminalStreamOpcode.Resize)
+    expect(resizeFrame && decodeTerminalStreamJson(resizeFrame.payload)).toEqual({
+      cols: 132,
+      rows: 43
+    })
+
+    transport.destroy?.()
+  })
+
+  it('replays a claim before input typed during the subscribe round-trip', async () => {
+    vi.useFakeTimers()
+    try {
+      runtimeSubscribe.mockImplementation(
+        async (_args: unknown, callbacks: typeof subscriptionCallbacks) => {
+          subscriptionCallbacks = callbacks
+          return { unsubscribe: vi.fn(), sendBinary: subscriptionSendBinary }
+        }
+      )
+      const { createRemoteRuntimePtyTransport } = await import('./remote-runtime-pty-transport')
+      const transport = createRemoteRuntimePtyTransport('env-1', {
+        worktreeId: 'wt-1',
+        tabId: 'tab-1',
+        leafId: 'pane:1'
+      })
+
+      transport.attach({
+        existingPtyId: 'remote:terminal-1',
+        cols: 80,
+        rows: 24,
+        callbacks: {}
+      })
+      await vi.waitFor(() => expect(runtimeSubscribe).toHaveBeenCalled())
+      expect(transport.claimViewport?.(101, 33)).toBe(true)
+      expect(transport.sendInput('x')).toBe(true)
+      await vi.advanceTimersByTimeAsync(8)
+      expect(runtimeCall).not.toHaveBeenCalledWith(
+        expect.objectContaining({ method: 'terminal.send' })
+      )
+
+      emitMultiplexReady()
+      await vi.waitFor(() => {
+        const opcodes = subscriptionSendBinary.mock.calls
+          .map((call) => decodeTerminalStreamFrame(call[0])?.opcode)
+          .filter((opcode) => opcode !== undefined)
+        expect(opcodes).toEqual([
+          TerminalStreamOpcode.Subscribe,
+          TerminalStreamOpcode.ClaimViewport,
+          TerminalStreamOpcode.Resize,
+          TerminalStreamOpcode.Input
+        ])
+      })
+      transport.destroy?.()
+    } finally {
+      vi.useRealTimers()
+    }
   })
 
   it('coalesces rapid remote terminal input before sending it to the runtime', async () => {
@@ -1512,7 +1783,9 @@ describe('createRemoteRuntimePtyTransport', () => {
       params: {
         terminal: 'terminal-1',
         text: '\x03',
-        client: { id: 'desktop:tab-1:pane:1', type: 'desktop' }
+        client: { id: expect.stringMatching(/^desktop:tab-1:pane:1:/), type: 'desktop' },
+        viewport: { cols: 80, rows: 24 },
+        claimViewport: true
       },
       timeoutMs: 15_000
     })
@@ -1553,7 +1826,9 @@ describe('createRemoteRuntimePtyTransport', () => {
         params: {
           terminal: 'terminal-1',
           text: 'a\x03',
-          client: { id: 'desktop:tab-1:pane:1', type: 'desktop' }
+          client: { id: expect.stringMatching(/^desktop:tab-1:pane:1:/), type: 'desktop' },
+          viewport: { cols: 80, rows: 24 },
+          claimViewport: true
         },
         timeoutMs: 15_000
       })
@@ -1801,6 +2076,42 @@ describe('createRemoteRuntimePtyTransport', () => {
     }
   })
 
+  it('sends an activity claim before the user input it sizes', async () => {
+    vi.useFakeTimers()
+    try {
+      const { createRemoteRuntimePtyTransport } = await import('./remote-runtime-pty-transport')
+      const transport = createRemoteRuntimePtyTransport('env-1', {
+        worktreeId: 'wt-1',
+        tabId: 'tab-1',
+        leafId: 'pane:1'
+      })
+
+      await transport.connect({ url: '', callbacks: {} })
+      const { streamId } = latestSubscribePayload()
+      subscriptionSendBinary.mockClear()
+
+      expect(transport.claimViewport?.(101, 33)).toBe(true)
+      expect(transport.sendInput('x')).toBe(true)
+      await vi.runOnlyPendingTimersAsync()
+
+      const frames = subscriptionSendBinary.mock.calls.map((call) =>
+        decodeTerminalStreamFrame(call[0])
+      )
+      expect(frames.map((frame) => frame?.opcode)).toEqual([
+        TerminalStreamOpcode.ClaimViewport,
+        TerminalStreamOpcode.Resize,
+        TerminalStreamOpcode.Input
+      ])
+      expect(frames[0]?.streamId).toBe(streamId)
+      expect(frames[0] ? decodeTerminalStreamJson(frames[0].payload) : null).toEqual({
+        cols: 101,
+        rows: 33
+      })
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
   it('replays remote scrollback through the parser without firing stale attention events', async () => {
     const { createRemoteRuntimePtyTransport } = await import('./remote-runtime-pty-transport')
     const onReplayData = vi.fn()
@@ -1990,9 +2301,9 @@ describe('createRemoteRuntimePtyTransport', () => {
     emitOutput(streamId, 'live-after-overflow')
 
     expect(onReplayData).not.toHaveBeenCalled()
-    expect(onError).toHaveBeenCalledWith(
-      'Remote terminal snapshot exceeded the 2 MiB replay limit; live output will continue.'
-    )
+    // Why: an oversized snapshot is skipped but live output continues, so the
+    // transport classifies it as benign and never surfaces a fatal red banner.
+    expect(onError).not.toHaveBeenCalled()
     expect(onConnect).toHaveBeenCalled()
     expect(onData).toHaveBeenCalledWith('live-after-overflow', expect.objectContaining({ seq: 1 }))
   })
