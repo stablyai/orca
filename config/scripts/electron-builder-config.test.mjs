@@ -249,6 +249,14 @@ describe('electron-builder config', () => {
     ).toBe(true)
   })
 
+  it('includes proper-lockfile in the packaged runtime closure', () => {
+    const packagedTargets = createPackagedRuntimeNodeModuleResources().map(
+      (resource) => resource.to
+    )
+
+    expect(packagedTargets).toContain(join('node_modules', 'proper-lockfile'))
+  })
+
   it('prunes non-target @parcel/watcher platform subpackages from packaged runtime resources', async () => {
     const resourcesDir = await mkdtemp(join(tmpdir(), 'orca-parcel-watcher-prune-'))
     try {
