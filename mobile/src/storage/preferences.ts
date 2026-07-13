@@ -240,19 +240,34 @@ function knownVisibleUsageProviders(ids: string[]): UsageProviderKey[] {
   return USAGE_PROVIDER_IDS.filter((id) => ids.includes(id))
 }
 
+// Distinguishes an I/O read failure from corrupt content. Only the I/O failure
+// propagates: a write must abort on it (it can't know the real stored set), but
+// corrupt content — missing, malformed JSON, or a non-array — normalizes to the
+// default so a toggle can self-heal it. loadVisibleUsageProviders maps the I/O
+// failure to the default for display; a write re-bases on the default and
+// rewrites, which repairs the stored value.
+async function readVisibleUsageProviders(): Promise<Set<UsageProviderKey>> {
+  const raw = await AsyncStorage.getItem(VISIBLE_USAGE_PROVIDERS_KEY)
+  if (raw === null) {
+    return new Set(DEFAULT_VISIBLE_USAGE_PROVIDERS)
+  }
+  let parsed: unknown
+  try {
+    parsed = JSON.parse(raw)
+  } catch {
+    return new Set(DEFAULT_VISIBLE_USAGE_PROVIDERS)
+  }
+  // Only a real array carries the "explicit empty set = show none" semantics;
+  // corrupted non-array JSON (e.g. `{}`) falls back to the default instead.
+  if (!Array.isArray(parsed)) {
+    return new Set(DEFAULT_VISIBLE_USAGE_PROVIDERS)
+  }
+  return new Set(knownVisibleUsageProviders(stringArray(parsed)))
+}
+
 export async function loadVisibleUsageProviders(): Promise<Set<UsageProviderKey>> {
   try {
-    const raw = await AsyncStorage.getItem(VISIBLE_USAGE_PROVIDERS_KEY)
-    if (raw === null) {
-      return new Set(DEFAULT_VISIBLE_USAGE_PROVIDERS)
-    }
-    const parsed: unknown = JSON.parse(raw)
-    // Only a real array carries the "explicit empty set = show none" semantics;
-    // corrupted non-array JSON (e.g. `{}`) falls back to the default instead.
-    if (!Array.isArray(parsed)) {
-      return new Set(DEFAULT_VISIBLE_USAGE_PROVIDERS)
-    }
-    return new Set(knownVisibleUsageProviders(stringArray(parsed)))
+    return await readVisibleUsageProviders()
   } catch {
     return new Set(DEFAULT_VISIBLE_USAGE_PROVIDERS)
   }
@@ -264,4 +279,38 @@ export async function saveVisibleUsageProviders(ids: ReadonlySet<UsageProviderKe
     VISIBLE_USAGE_PROVIDERS_KEY,
     JSON.stringify(USAGE_PROVIDER_IDS.filter((id) => ids.has(id)))
   )
+}
+
+// Serialize toggles so two fast switches can't lose each other through a
+// read-modify-write race on the same key: each toggle re-reads the latest
+// stored set and changes only its own provider, so it never clobbers a
+// provider it didn't touch. ponytail: a module-level chain is enough for the
+// single settings screen; revisit if more writers appear.
+let visibleUsageWrite: Promise<Set<UsageProviderKey>> = Promise.resolve(new Set())
+
+export function setUsageProviderVisible(
+  id: UsageProviderKey,
+  value: boolean
+): Promise<Set<UsageProviderKey>> {
+  visibleUsageWrite = visibleUsageWrite
+    .catch(() => undefined)
+    .then(async () => {
+      // Strict read: if the read fails, abort the write rather than clobber the
+      // stored set with the default (which would drop stored-only providers).
+      const next = await readVisibleUsageProviders()
+      if (value) {
+        next.add(id)
+      } else {
+        next.delete(id)
+      }
+      await saveVisibleUsageProviders(next)
+      return next
+    })
+  return visibleUsageWrite
+}
+
+// Read after any in-flight toggle settles, so a screen that re-mounts right
+// after a toggle sees the just-written value instead of a pre-write snapshot.
+export function loadVisibleUsageProvidersSettled(): Promise<Set<UsageProviderKey>> {
+  return visibleUsageWrite.catch(() => undefined).then(() => loadVisibleUsageProviders())
 }

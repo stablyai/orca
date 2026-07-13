@@ -1,7 +1,7 @@
-import { useCallback, useRef, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { View, Text, StyleSheet, Pressable, Switch, ScrollView } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
-import { useRouter, useFocusEffect } from 'expo-router'
+import { useRouter } from 'expo-router'
 import { ChevronLeft } from 'lucide-react-native'
 import { colors, spacing, typography } from '../src/theme/mobile-theme'
 import {
@@ -9,46 +9,52 @@ import {
   DEFAULT_VISIBLE_USAGE_PROVIDERS,
   type UsageProviderKey
 } from '../src/components/AccountUsage'
-import { loadVisibleUsageProviders, saveVisibleUsageProviders } from '../src/storage/preferences'
+import {
+  loadVisibleUsageProvidersSettled,
+  setUsageProviderVisible
+} from '../src/storage/preferences'
 
 export default function AccountUsageSettingsScreen() {
   const router = useRouter()
   const insets = useSafeAreaInsets()
-  const [visible, setVisible] = useState<Set<UsageProviderKey>>(
-    () => new Set(DEFAULT_VISIBLE_USAGE_PROVIDERS)
-  )
-  // Why: a fast toggle before the initial load resolves must win — otherwise
-  // the delayed read would clobber it with the stored value (mirrors the
-  // Settings → Terminal autocomplete toggle guard).
-  const userToggledRef = useRef(false)
+  // Why: null until the stored set loads. Switches stay disabled while null so a
+  // tap can't persist against the default base and silently drop a stored-only
+  // provider (e.g. an opted-in Grok); the load resolves within a frame or two.
+  const [visible, setVisible] = useState<Set<UsageProviderKey> | null>(null)
 
-  useFocusEffect(
-    useCallback(() => {
-      let active = true
-      void loadVisibleUsageProviders().then((set) => {
-        if (active && !userToggledRef.current) {
-          setVisible(set)
-        }
-      })
-      return () => {
-        active = false
+  // Why: this screen is the only writer of the visibility set, so load once on
+  // mount rather than on every focus — a focus-reload could resolve mid-toggle
+  // and overwrite the optimistic UI with a pre-write snapshot. The settled read
+  // also waits for any in-flight toggle so a quick leave/return shows the latest.
+  useEffect(() => {
+    let active = true
+    void loadVisibleUsageProvidersSettled().then((stored) => {
+      if (active) {
+        setVisible(stored)
       }
-    }, [])
-  )
+    })
+    return () => {
+      active = false
+    }
+  }, [])
 
   const toggle = useCallback((id: UsageProviderKey, value: boolean) => {
-    userToggledRef.current = true
+    // Optimistic UI; the storage-level toggle re-reads the latest stored set and
+    // changes only this provider, so it survives an unmount and never clobbers
+    // one the user didn't touch. Swallow a write failure so the UI stays put.
     setVisible((prev) => {
+      if (!prev) {
+        return prev
+      }
       const next = new Set(prev)
       if (value) {
         next.add(id)
       } else {
         next.delete(id)
       }
-      // Swallow a storage write failure so the UI stays on the user's choice.
-      void saveVisibleUsageProviders(next).catch(() => {})
       return next
     })
+    void setUsageProviderVisible(id, value).catch(() => {})
   }, [])
 
   return (
@@ -75,8 +81,13 @@ export default function AccountUsageSettingsScreen() {
               <View style={styles.row}>
                 <Text style={styles.rowLabel}>{descriptor.label}</Text>
                 <Switch
-                  value={visible.has(descriptor.id)}
+                  value={
+                    visible
+                      ? visible.has(descriptor.id)
+                      : DEFAULT_VISIBLE_USAGE_PROVIDERS.includes(descriptor.id)
+                  }
                   onValueChange={(v) => toggle(descriptor.id, v)}
+                  disabled={visible === null}
                   trackColor={{ false: colors.bgRaised, true: colors.textSecondary }}
                   thumbColor={colors.textPrimary}
                 />
