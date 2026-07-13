@@ -69,9 +69,11 @@ import {
 // creation before this slice finishes evaluating.
 import { disposeParkedTerminalWatchersForPtyIds } from '@/components/terminal-pane/terminal-parked-watcher-registry'
 import {
+  collectDurableTerminalLayoutLeafIds,
   normalizeTerminalLayoutSnapshot,
   resolvePtyBoundActiveLeafId
 } from '@/components/terminal-pane/terminal-layout-leaf-ids'
+import { forgetTerminalScrollIntentStatesByKey } from '@/lib/pane-manager/terminal-scroll-intent'
 import { shutdownBufferCaptures } from '@/components/terminal-pane/shutdown-buffer-captures'
 import { callRuntimeRpc } from '@/runtime/runtime-rpc-client'
 import { parseRemoteRuntimePtyId, toRemoteRuntimePtyId } from '@/runtime/runtime-terminal-stream'
@@ -937,6 +939,11 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
     let tab!: TerminalTab
     set((s) => {
       const orphanTerminalIds = getOrphanTerminalIds(s, worktreeId)
+      for (const orphanTabId of orphanTerminalIds) {
+        forgetTerminalScrollIntentStatesByKey(
+          collectDurableTerminalLayoutLeafIds(s.terminalLayoutsByTabId[orphanTabId])
+        )
+      }
       const orphanCleanupPatch = buildOrphanTerminalCleanupPatch(s, worktreeId, orphanTerminalIds)
       const existing = (s.tabsByWorktree[worktreeId] ?? []).filter(
         (entry) => !orphanTerminalIds.has(entry.id)
@@ -1198,6 +1205,9 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
 
   closeTab: (tabId, opts) => {
     let closingWorktreeId: string | null = null
+    forgetTerminalScrollIntentStatesByKey(
+      collectDurableTerminalLayoutLeafIds(get().terminalLayoutsByTabId[tabId])
+    )
     set((s) => {
       const next = { ...s.tabsByWorktree }
       let closingPtyId: string | null = null
@@ -2782,6 +2792,11 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
   },
 
   setTabLayout: (tabId, layout) => {
+    if (!layout) {
+      forgetTerminalScrollIntentStatesByKey(
+        collectDurableTerminalLayoutLeafIds(get().terminalLayoutsByTabId[tabId])
+      )
+    }
     set((s) => {
       const next = { ...s.terminalLayoutsByTabId }
       if (layout) {

@@ -153,6 +153,7 @@ import { restoreTerminalFitToDesktop, restoreTerminalFitsToDesktop } from './ter
 import { useVisibleTerminalTabClaim } from './use-visible-terminal-tab-claim'
 import { TerminalSshReconnectOverlay } from './TerminalSshReconnectOverlay'
 import { selectTerminalTabAgentTypesByLeaf } from './terminal-tab-agent-type-index'
+import { TerminalJumpToBottomButton } from './TerminalJumpToBottomButton'
 
 const NATIVE_CHAT_ROOT_SELECTOR = '[data-native-chat-root="true"]'
 
@@ -3102,6 +3103,20 @@ export default function TerminalPane({
         panes={managerRef.current?.getPanes() ?? []}
         paneIds={sessionRestoredBannerPaneIds}
       />
+      {isRendererVisible && !showSshReconnectOverlay
+        ? managedPanes.map((pane) => {
+            // Why: native chat owns the whole leaf surface; terminal chrome must
+            // stay scoped to sibling xterm panes instead of covering the chat UI.
+            if (effectiveChatViewMode && pane.leafId === chatLeafId) {
+              return null
+            }
+            return createPortal(
+              <TerminalJumpToBottomButton terminal={pane.terminal} />,
+              pane.container,
+              `terminal-jump-to-bottom-${tabId}-${pane.leafId}`
+            )
+          })
+        : null}
       {effectiveChatViewMode && chatPane?.container
         ? createPortal(
             <div className="absolute inset-0 z-10 flex min-h-0 min-w-0 bg-background">

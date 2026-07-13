@@ -7,6 +7,7 @@ export const SPLIT_TERMINAL_PANE_EVENT = 'orca-split-terminal-pane'
 export const REQUEST_ACTIVE_TERMINAL_PANE_SPLIT_EVENT = 'orca-request-active-terminal-pane-split'
 export const CLOSE_TERMINAL_PANE_EVENT = 'orca-close-terminal-pane'
 export const BACKGROUND_MOUNT_TERMINAL_WORKTREE_EVENT = 'orca-background-mount-terminal-worktree'
+export const SET_WORKTREE_TERMINAL_AUTO_SCROLL_EVENT = 'orca-set-worktree-terminal-auto-scroll'
 
 // Why: mobile wake (experimental agent sleep) must fire the cold-restore
 // --resume of a worktree's mounted hidden hibernated panes without a desktop
@@ -80,6 +81,11 @@ export type BackgroundMountTerminalWorktreeDetail = {
    *  which tabs they need. Omitted → whole-worktree mount (legacy dispatch
    *  sites); a real activation always lifts the restriction. */
   tabIds?: readonly string[]
+}
+
+export type SetWorktreeTerminalAutoScrollDetail = {
+  worktreeIds: readonly string[]
+  enabled: boolean
 }
 
 export type WakeHibernatedAgentsWorktreeDetail = {

@@ -132,24 +132,30 @@ export function createHostWatcherSubscription({
   killWatcherChildIfIdle,
   sendToChild
 }: CreateHostWatcherSubscriptionOptions): WatcherProcessSubscription {
+  let unsubscribePromise: Promise<void> | undefined
   return {
     unsubscribe: (): Promise<void> => {
-      if (!records.delete(record.id)) {
-        return Promise.resolve()
-      }
-      resetPendingSubscribeAttempt(record)
-      const child = getChild()
-      if (!child?.connected) {
-        return Promise.resolve()
-      }
-      if (records.size === 0) {
-        killWatcherChildIfIdle()
-        return Promise.resolve()
-      }
-      return new Promise((resolve) => {
-        pendingUnsubscribes.set(record.id, resolve)
-        sendToChild(child, { op: 'unsubscribe', id: record.id })
-      })
+      // Why: duplicate callers must observe the same child teardown completion;
+      // an early-resolved duplicate can race worktree deletion or shutdown.
+      unsubscribePromise ??= (() => {
+        if (!records.delete(record.id)) {
+          return Promise.resolve()
+        }
+        resetPendingSubscribeAttempt(record)
+        const child = getChild()
+        if (!child?.connected) {
+          return Promise.resolve()
+        }
+        if (records.size === 0) {
+          killWatcherChildIfIdle()
+          return Promise.resolve()
+        }
+        return new Promise<void>((resolve) => {
+          pendingUnsubscribes.set(record.id, resolve)
+          sendToChild(child, { op: 'unsubscribe', id: record.id })
+        })
+      })()
+      return unsubscribePromise
     }
   }
 }

@@ -15,11 +15,13 @@ import {
 } from '@/components/ui/dropdown-menu'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import {
+  ArrowDownToLine,
   Copy,
   Bell,
   BellOff,
   CircleX,
   Moon,
+  Pause,
   Pencil,
   Pin,
   PinOff,
@@ -54,6 +56,10 @@ import {
   parseWorkspaceKey,
   worktreeWorkspaceKey
 } from '../../../../shared/workspace-scope'
+import {
+  areWorktreeTerminalsFollowingOutput,
+  setWorktreeTerminalAutoScroll
+} from './worktree-terminal-auto-scroll'
 
 type Props = {
   worktree: Worktree
@@ -77,6 +83,7 @@ const DELETE_POSITION_RESTORE_STABLE_FRAMES = 6
 // teardown set() churn. Module-level (one allocation, never recreated per render) so
 // the reference is constant and Zustand's Object.is equality short-circuits.
 const EMPTY_TABS_BY_WORKTREE: AppState['tabsByWorktree'] = {}
+const EMPTY_TERMINAL_LAYOUTS_BY_TAB_ID: AppState['terminalLayoutsByTabId'] = {}
 const EMPTY_PTY_IDS_BY_TAB_ID: AppState['ptyIdsByTabId'] = {}
 const EMPTY_BROWSER_TABS_BY_WORKTREE: AppState['browserTabsByWorktree'] = {}
 const EMPTY_DELETE_STATE_BY_WORKTREE_ID: AppState['deleteStateByWorktreeId'] = {}
@@ -136,6 +143,29 @@ function getWorktreeParentPickerLabel(validParentWorktreeId: string | null): str
     : translate(
         'auto.components.sidebar.WorktreeContextMenu.setParentWorkspace',
         'Set Parent Worktree...'
+      )
+}
+
+function getTerminalAutoScrollMenuLabel(enabled: boolean, isMultiContext: boolean): string {
+  if (enabled) {
+    return isMultiContext
+      ? translate(
+          'auto.components.sidebar.WorktreeContextMenu.disableTerminalAutoScrollSelected',
+          'Disable Auto-scroll for Selected Workspaces'
+        )
+      : translate(
+          'auto.components.sidebar.WorktreeContextMenu.disableTerminalAutoScroll',
+          'Disable Auto-scroll'
+        )
+  }
+  return isMultiContext
+    ? translate(
+        'auto.components.sidebar.WorktreeContextMenu.enableTerminalAutoScrollSelected',
+        'Enable Auto-scroll for Selected Workspaces'
+      )
+    : translate(
+        'auto.components.sidebar.WorktreeContextMenu.enableTerminalAutoScroll',
+        'Enable Auto-scroll'
       )
 }
 
@@ -322,6 +352,9 @@ const WorktreeContextMenu = React.memo(function WorktreeContextMenu({
   const tabsByWorktree = useAppStore((s) =>
     selectMenuScopedMap(menuOpen, s.tabsByWorktree, EMPTY_TABS_BY_WORKTREE)
   )
+  const terminalLayoutsByTabId = useAppStore((s) =>
+    selectMenuScopedMap(menuOpen, s.terminalLayoutsByTabId, EMPTY_TERMINAL_LAYOUTS_BY_TAB_ID)
+  )
   const ptyIdsByTabId = useAppStore((s) =>
     selectMenuScopedMap(menuOpen, s.ptyIdsByTabId, EMPTY_PTY_IDS_BY_TAB_ID)
   )
@@ -344,6 +377,13 @@ const WorktreeContextMenu = React.memo(function WorktreeContextMenu({
         hasSleepableWorkspaceActivity(item.id, tabsByWorktree, ptyIdsByTabId, browserTabsByWorktree)
       ),
     [activeContextWorktrees, browserTabsByWorktree, ptyIdsByTabId, tabsByWorktree]
+  )
+  const hasContextTerminalTabs = activeContextWorktrees.some(
+    (item) => (tabsByWorktree[item.id] ?? []).length > 0
+  )
+  const contextTerminalAutoScrollEnabled = areWorktreeTerminalsFollowingOutput(
+    { tabsByWorktree, terminalLayoutsByTabId },
+    activeContextWorktrees.map((item) => item.id)
   )
   const deletingContext = useMemo(
     () => activeContextWorktrees.some((item) => deleteStateByWorktreeId[item.id]?.isDeleting),
@@ -435,6 +475,16 @@ const WorktreeContextMenu = React.memo(function WorktreeContextMenu({
   const handleTogglePin = useCallback(() => {
     setWorktreesPinnedAndReveal([worktree.id], !worktree.isPinned)
   }, [worktree.id, worktree.isPinned, setWorktreesPinnedAndReveal])
+
+  const handleToggleTerminalAutoScroll = useCallback(() => {
+    // Why: followOutput/pinnedViewport is the canonical toggle state, including
+    // parked panes; manual scrolling can therefore disable following naturally.
+    setWorktreeTerminalAutoScroll(
+      useAppStore.getState(),
+      activeContextWorktrees.map((item) => item.id),
+      !contextTerminalAutoScrollEnabled
+    )
+  }, [activeContextWorktrees, contextTerminalAutoScrollEnabled])
 
   const handleCreateGroupFromRepo = useCallback(() => {
     if (!repo) {
@@ -852,6 +902,19 @@ const WorktreeContextMenu = React.memo(function WorktreeContextMenu({
             </>
           ) : null}
 
+          <DropdownMenuItem
+            onSelect={handleToggleTerminalAutoScroll}
+            disabled={deletingContext || !hasContextTerminalTabs}
+          >
+            {contextTerminalAutoScrollEnabled ? (
+              <Pause className="size-3.5" />
+            ) : (
+              <ArrowDownToLine className="size-3.5" />
+            )}
+            {getTerminalAutoScrollMenuLabel(contextTerminalAutoScrollEnabled, isMultiContext)}
+          </DropdownMenuItem>
+          <DropdownMenuSeparator />
+
           <Tooltip>
             <TooltipTrigger asChild>
               <DropdownMenuItem
@@ -976,6 +1039,7 @@ export {
   isContextWorktreeDeletable,
   getWorktreeParentPickerAnchor,
   getWorktreeParentPickerLabel,
+  getTerminalAutoScrollMenuLabel,
   isWorktreeParentPickerDisabled,
   shouldRemoveProjectFromContextMenu,
   shouldUseNativeContextMenu,

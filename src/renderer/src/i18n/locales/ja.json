@@ -2674,6 +2674,9 @@
             "removedTitle": "SSHホストが削除されました",
             "removedBody": "このワークスペースのSSHホストが削除されたため、接続できません。ワークスペースを削除してクリアしてください — リモートファイルはそのまま残ります。",
             "removeWorkspaceButton": "ワークスペースを削除"
+          },
+          "TerminalJumpToBottomButton": {
+            "jumpToBottom": "一番下へ移動"
           }
         }
       },
@@ -4187,7 +4190,11 @@
           "setParentWorkspace": "親ワークツリーを設定...",
           "workspaceSection": "ワークスペース",
           "primaryDeleteDisabled": "プライマリワークツリーは削除できません。代わりにプロジェクトを削除してください。",
-          "deleteWorktree": "ワークツリーを削除"
+          "deleteWorktree": "ワークツリーを削除",
+          "enableTerminalAutoScroll": "自動スクロールを有効化",
+          "enableTerminalAutoScrollSelected": "選択したワークスペースで自動スクロールを有効化",
+          "disableTerminalAutoScroll": "自動スクロールを無効化",
+          "disableTerminalAutoScrollSelected": "選択したワークスペースで自動スクロールを無効化"
         },
         "WorktreeList": {
           "d880ea0744": "グループを作成し、このプロジェクトをそのグループに移動します。",

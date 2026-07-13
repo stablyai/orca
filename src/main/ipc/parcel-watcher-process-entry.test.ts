@@ -111,6 +111,28 @@ describe('parcel watcher process canary', () => {
     expect(exitSpy).toHaveBeenCalledWith(2)
   })
 
+  it('releases the native subscription once for duplicate unsubscribe messages', async () => {
+    const unsubscribe = vi.fn().mockResolvedValue(undefined)
+    subscribeMock
+      .mockResolvedValueOnce({ unsubscribe: vi.fn() })
+      .mockResolvedValueOnce({ unsubscribe })
+    const sendMock = vi.fn()
+    process.send = sendMock
+
+    await import('./parcel-watcher-process-entry')
+    await vi.advanceTimersByTimeAsync(0)
+    process.emit('message', { op: 'subscribe', id: 1, dir: '/repo', opts: {} })
+    await vi.advanceTimersByTimeAsync(0)
+    expect(sendMock).toHaveBeenCalledWith({ op: 'subscribed', id: 1 })
+
+    process.emit('message', { op: 'unsubscribe', id: 1 })
+    process.emit('message', { op: 'unsubscribe', id: 1 })
+    await vi.advanceTimersByTimeAsync(0)
+
+    expect(unsubscribe).toHaveBeenCalledTimes(1)
+    expect(sendMock).toHaveBeenCalledWith({ op: 'unsubscribed', id: 1 })
+  })
+
   it('drains active crawls before starting teardown deadlock detection', async () => {
     let finishSecondCrawl:
       | ((subscription: { unsubscribe: () => Promise<void> }) => void)

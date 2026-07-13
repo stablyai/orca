@@ -2674,6 +2674,9 @@
             "removedTitle": "SSH 主机已移除",
             "removedBody": "此工作区的 SSH 主机已被移除，无法再连接。请移除工作区以清理 — 远程文件不会受影响。",
             "removeWorkspaceButton": "移除工作区"
+          },
+          "TerminalJumpToBottomButton": {
+            "jumpToBottom": "跳转到底部"
           }
         }
       },
@@ -4187,7 +4190,11 @@
           "setParentWorkspace": "设置父工作树...",
           "workspaceSection": "工作区",
           "primaryDeleteDisabled": "主工作树不能删除。请改为移除项目。",
-          "deleteWorktree": "删除工作树"
+          "deleteWorktree": "删除工作树",
+          "enableTerminalAutoScroll": "开启自动滚动",
+          "enableTerminalAutoScrollSelected": "为所选工作区开启自动滚动",
+          "disableTerminalAutoScroll": "关闭自动滚动",
+          "disableTerminalAutoScrollSelected": "为所选工作区关闭自动滚动"
         },
         "WorktreeList": {
           "d880ea0744": "创建一个组并将该项目移入其中。",

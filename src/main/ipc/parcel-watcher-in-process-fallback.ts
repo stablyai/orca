@@ -114,11 +114,17 @@ export async function subscribeWithInProcessWatcher(
     throw error
   }
   clearPendingControls()
+  let unsubscribePromise: Promise<void> | undefined
   return {
-    unsubscribe: async (): Promise<void> => {
-      active = false
-      eventDelivery.close()
-      await subscription.unsubscribe()
+    unsubscribe: (): Promise<void> => {
+      // Why: overlapping cleanup paths must share the native teardown instead
+      // of releasing the same Parcel watcher handle more than once.
+      unsubscribePromise ??= (async () => {
+        active = false
+        eventDelivery.close()
+        await subscription.unsubscribe()
+      })()
+      return unsubscribePromise
     }
   }
 }

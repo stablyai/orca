@@ -25,6 +25,7 @@ import {
   releaseRendererPtyVisibilityClaim,
   setRendererPtyVisibilityClaim
 } from './pty-renderer-delivery-claims'
+import { useWorktreeTerminalAutoScroll } from './use-worktree-terminal-auto-scroll'
 
 type UseTerminalPaneGlobalEffectsArgs = {
   tabId: string
@@ -122,6 +123,7 @@ export function useTerminalPaneGlobalEffects({
     isActiveRef,
     isVisibleRef
   })
+  useWorktreeTerminalAutoScroll(worktreeId, managerRef)
 
   useEffect(() => {
     const paneTransports = paneTransportsRef.current

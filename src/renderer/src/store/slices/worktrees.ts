@@ -54,6 +54,8 @@ import {
 } from '@/lib/source-control-huge-repo-warning-dismissals'
 import { showLocalBaseRefUpdateSuggestionToast } from '@/components/sidebar/local-base-ref-suggestion-toast'
 import { showPreservedBranchToast } from '@/components/sidebar/preserved-branch-toast'
+import { collectDurableTerminalLayoutLeafIds } from '@/components/terminal-pane/terminal-layout-leaf-ids'
+import { forgetTerminalScrollIntentStatesByKey } from '@/lib/pane-manager/terminal-scroll-intent'
 import { translate } from '@/i18n/i18n'
 import {
   getRepoExecutionHostId,
@@ -1937,6 +1939,9 @@ function buildWorktreePurgeState(s: AppState, worktreeIds: string[]): Partial<Ap
       // Null-tolerant like the omit* helpers below: some callers pass partial
       // state that omits this slice; the production store always inits it to {}.
       addDoomedTabPtyIds(tab.id, tab.ptyId)
+      forgetTerminalScrollIntentStatesByKey(
+        collectDurableTerminalLayoutLeafIds(s.terminalLayoutsByTabId?.[tab.id])
+      )
       // Why: a removed worktree's panes are gone for good, so drop their
       // hibernation output epochs from that module-level map (mirrors the
       // hosted-review prune above). A future pane mints a fresh leafId at epoch 0.
@@ -3329,6 +3334,11 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
       await purgeOrphanedRuntimeSshProjects(get, destroyedRuntimeSshTargetIds)
       const tabs = get().tabsByWorktree[worktreeId] ?? []
       const tabIds = new Set(tabs.map((t) => t.id))
+      for (const tab of tabs) {
+        forgetTerminalScrollIntentStatesByKey(
+          collectDurableTerminalLayoutLeafIds(get().terminalLayoutsByTabId[tab.id])
+        )
+      }
 
       // Why: this path deletes tabsByWorktree wholesale (not via closeTab), so
       // purge the module-level maps keyed by this worktree/its tabs here too —

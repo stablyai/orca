@@ -2674,6 +2674,9 @@
             "removedTitle": "SSH 호스트가 제거됨",
             "removedBody": "이 워크트리의 SSH 호스트가 제거되어 더 이상 연결할 수 없습니다. 워크트리를 제거하여 정리하세요 — 원격 파일은 그대로 남아 있습니다.",
             "removeWorkspaceButton": "워크트리 제거"
+          },
+          "TerminalJumpToBottomButton": {
+            "jumpToBottom": "맨 아래로 이동"
           }
         }
       },
@@ -4187,7 +4190,11 @@
           "setParentWorkspace": "상위 워크트리 설정...",
           "workspaceSection": "워크스페이스",
           "primaryDeleteDisabled": "기본 작업 트리는 삭제할 수 없습니다. 대신 프로젝트를 제거하세요.",
-          "deleteWorktree": "작업 트리 삭제"
+          "deleteWorktree": "작업 트리 삭제",
+          "enableTerminalAutoScroll": "자동 스크롤 켜기",
+          "enableTerminalAutoScrollSelected": "선택한 워크스페이스에서 자동 스크롤 켜기",
+          "disableTerminalAutoScroll": "자동 스크롤 끄기",
+          "disableTerminalAutoScrollSelected": "선택한 워크스페이스에서 자동 스크롤 끄기"
         },
         "WorktreeList": {
           "d880ea0744": "그룹을 만들고 이 프로젝트를 그룹으로 이동하세요.",

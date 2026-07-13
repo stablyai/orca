@@ -4,9 +4,13 @@ import {
   captureTerminalWriteScrollIntent,
   enforceTerminalCurrentScrollIntent,
   enforceTerminalWriteScrollIntent,
+  forgetTerminalScrollIntentStateByKey,
   getTerminalScrollIntentKind,
+  getTerminalScrollIntentKindByKey,
+  isTerminalViewportAtBottom,
   markTerminalFollowOutput,
   markTerminalPinnedViewport,
+  setTerminalScrollIntentKindByKey,
   syncTerminalScrollIntentFromViewport,
   syncTerminalScrollIntentSoon
 } from './terminal-scroll-intent'
@@ -97,6 +101,12 @@ describe('terminal scroll intent', () => {
     const terminal = createTerminal({ viewportY: 42, baseY: 100 })
 
     expect(getTerminalScrollIntentKind(terminal)).toBe('pinnedViewport')
+  })
+
+  it('reports bottom using the same one-row tolerance as follow-output inference', () => {
+    expect(isTerminalViewportAtBottom(createTerminal({ viewportY: 99, baseY: 100 }))).toBe(true)
+    expect(isTerminalViewportAtBottom(createTerminal({ viewportY: 98, baseY: 100 }))).toBe(false)
+    expect(isTerminalViewportAtBottom({})).toBe(true)
   })
 
   it('preserves a pinned viewport after output moves xterm to bottom', () => {
@@ -253,6 +263,59 @@ describe('terminal scroll intent', () => {
     remountedDisposable.dispose()
   })
 
+  it('changes an existing pane-keyed pinned viewport to follow output', () => {
+    vi.stubGlobal('Element', TestElement)
+    const firstTerminal = createTerminal({ viewportY: 76, baseY: 100 })
+    const firstHost = new TestElement() as unknown as HTMLElement
+    const firstDisposable = attachTerminalScrollIntentTracking(firstTerminal, firstHost, 'leaf-2')
+    markTerminalPinnedViewport(firstTerminal)
+
+    setTerminalScrollIntentKindByKey('leaf-2', 'followOutput')
+
+    const remountedTerminal = createTerminal({ viewportY: 0, baseY: 100 })
+    const remountedHost = new TestElement() as unknown as HTMLElement
+    const remountedDisposable = attachTerminalScrollIntentTracking(
+      remountedTerminal,
+      remountedHost,
+      'leaf-2'
+    )
+    enforceTerminalCurrentScrollIntent(remountedTerminal)
+
+    expect(remountedTerminal.scrollToBottom).toHaveBeenCalledTimes(1)
+    expect(getTerminalScrollIntentKind(remountedTerminal)).toBe('followOutput')
+
+    firstDisposable.dispose()
+    remountedDisposable.dispose()
+  })
+
+  it('creates a durable follow-output directive before its terminal mounts', () => {
+    vi.stubGlobal('Element', TestElement)
+    setTerminalScrollIntentKindByKey('missing-leaf', 'followOutput')
+    expect(getTerminalScrollIntentKindByKey('missing-leaf')).toBe('followOutput')
+
+    const terminal = createTerminal({ viewportY: 42, baseY: 100 })
+    const host = new TestElement() as unknown as HTMLElement
+    const disposable = attachTerminalScrollIntentTracking(terminal, host, 'missing-leaf')
+    enforceTerminalCurrentScrollIntent(terminal)
+
+    expect(terminal.scrollToBottom).toHaveBeenCalledTimes(1)
+    expect(getTerminalScrollIntentKind(terminal)).toBe('followOutput')
+    disposable.dispose()
+  })
+
+  it('creates a durable pinned directive before its terminal mounts', () => {
+    setTerminalScrollIntentKindByKey('cold-leaf', 'pinnedViewport')
+    expect(getTerminalScrollIntentKindByKey('cold-leaf')).toBe('pinnedViewport')
+  })
+
+  it('forgets durable intent when a leaf is permanently retired', () => {
+    setTerminalScrollIntentKindByKey('retired-leaf', 'pinnedViewport')
+
+    forgetTerminalScrollIntentStateByKey('retired-leaf')
+
+    expect(getTerminalScrollIntentKindByKey('retired-leaf')).toBe('followOutput')
+  })
+
   it('tracks pointer-driven scrollbar scrolls without using output scroll as intent', () => {
     vi.stubGlobal('Element', TestElement)
     const terminal = createTerminal({ viewportY: 100, baseY: 100 })
@@ -356,6 +419,73 @@ describe('terminal scroll intent', () => {
     terminal.buffer.active.viewportY = 0
     enforceTerminalCurrentScrollIntent(terminal)
     expect(terminal.scrollToLine).toHaveBeenLastCalledWith(75)
+  })
+
+  it('does not let queued viewport sampling override a newer explicit pin', async () => {
+    vi.useFakeTimers()
+    const frameCallbacks: FrameRequestCallback[] = []
+    vi.stubGlobal('requestAnimationFrame', (callback: FrameRequestCallback) => {
+      frameCallbacks.push(callback)
+      return frameCallbacks.length
+    })
+    const terminal = createTerminal({ viewportY: 100, baseY: 100 })
+
+    syncTerminalScrollIntentSoon(terminal)
+    markTerminalPinnedViewport(terminal)
+    for (const callback of frameCallbacks) {
+      callback(16)
+    }
+    await vi.runAllTimersAsync()
+
+    expect(getTerminalScrollIntentKind(terminal)).toBe('pinnedViewport')
+  })
+
+  it('cancels delayed sampling when an old terminal unmounts before the same leaf remounts', async () => {
+    vi.useFakeTimers()
+    vi.stubGlobal('Element', TestElement)
+    const frameCallbacks: FrameRequestCallback[] = []
+    vi.stubGlobal('requestAnimationFrame', (callback: FrameRequestCallback) => {
+      frameCallbacks.push(callback)
+      return frameCallbacks.length
+    })
+    const oldTerminal = createTerminal({ viewportY: 40, baseY: 100 })
+    const oldDisposable = attachTerminalScrollIntentTracking(
+      oldTerminal,
+      new TestElement() as unknown as HTMLElement,
+      'remounted-leaf'
+    )
+
+    syncTerminalScrollIntentSoon(oldTerminal)
+    oldDisposable.dispose()
+    setTerminalScrollIntentKindByKey('remounted-leaf', 'followOutput')
+    const remountedDisposable = attachTerminalScrollIntentTracking(
+      createTerminal({ viewportY: 100, baseY: 100 }),
+      new TestElement() as unknown as HTMLElement,
+      'remounted-leaf'
+    )
+    while (frameCallbacks.length > 0) {
+      frameCallbacks.shift()?.(16)
+    }
+    await vi.runAllTimersAsync()
+
+    expect(getTerminalScrollIntentKindByKey('remounted-leaf')).toBe('followOutput')
+    remountedDisposable.dispose()
+  })
+
+  it('retries a pinned viewport after xterm render dimensions become available', () => {
+    const terminal = createTerminal({ viewportY: 42, baseY: 100 })
+    markTerminalPinnedViewport(terminal)
+    terminal.buffer.active.viewportY = 100
+    terminal.scrollToLine.mockImplementationOnce(() => {
+      throw new TypeError("Cannot read properties of undefined (reading 'dimensions')")
+    })
+
+    enforceTerminalCurrentScrollIntent(terminal)
+    expect(terminal.buffer.active.viewportY).toBe(100)
+
+    enforceTerminalCurrentScrollIntent(terminal)
+    expect(terminal.scrollToLine).toHaveBeenLastCalledWith(42)
+    expect(terminal.buffer.active.viewportY).toBe(42)
   })
 
   it('enforces current intent once for visibility resume', () => {
