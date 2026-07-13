@@ -1009,7 +1009,7 @@ export function InlineUsageBars({
       ? {
           key: 'weekly',
           used: clampUsedPercent(limits.weekly.usedPercent),
-          label: translate('auto.components.status.bar.StatusBar.5c938d39ac', 'wk')
+          label: formatWindowLabel(limits.weekly.windowMinutes)
         }
       : null,
     limits.fableWeekly
@@ -1238,10 +1238,13 @@ function VerboseProviderUsage({
     return window !== null
   })
 
+  // Why: weekly-only plans have no session window; the mini meter follows the first visible window instead of vanishing.
+  const primaryVisibleWindow = visibleWindows[0]?.window
+
   return (
     <>
-      {p.session && !compact ? (
-        <MiniBar usedPct={clampUsedPercent(p.session.usedPercent)} display={display} />
+      {primaryVisibleWindow && !compact ? (
+        <MiniBar usedPct={clampUsedPercent(primaryVisibleWindow.usedPercent)} display={display} />
       ) : null}
       {visibleWindows.map((window, index) => (
         <React.Fragment key={window.key}>

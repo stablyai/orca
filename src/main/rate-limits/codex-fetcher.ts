@@ -28,6 +28,12 @@ import {
   createAuthFilesystemOperation,
   type SharedAuthFilesystemOperation
 } from './auth-filesystem-operation'
+import {
+  classifyCodexRateLimitWindows,
+  CODEX_SESSION_WINDOW_MINUTES,
+  CODEX_WEEKLY_WINDOW_MINUTES,
+  isCodexWeeklyWindowDuration
+} from './codex-rate-limit-window-classification'
 
 const RPC_TIMEOUT_MS = 10_000
 const WSL_RPC_TIMEOUT_MS = 25_000
@@ -528,10 +534,14 @@ async function fetchViaBackend(
   if (typeof payload.plan_type !== 'string') {
     return null
   }
+  const { session, weekly } = classifyCodexRateLimitWindows(
+    mapBackendUsageWindow(payload.rate_limit?.primary_window, CODEX_SESSION_WINDOW_MINUTES),
+    mapBackendUsageWindow(payload.rate_limit?.secondary_window, CODEX_WEEKLY_WINDOW_MINUTES)
+  )
   return {
     provider: 'codex',
-    session: mapBackendUsageWindow(payload.rate_limit?.primary_window, 300),
-    weekly: mapBackendUsageWindow(payload.rate_limit?.secondary_window, 10080),
+    session,
+    weekly,
     // Surfaced for the status-bar Usage row (e.g. "Codex · Plus").
     planType: payload.plan_type,
     ...(payload.rate_limit_reset_credits !== undefined
@@ -701,8 +711,15 @@ async function fetchViaRpc(options?: FetchCodexRateLimitsOptions): Promise<Provi
 
             const wrapper = msg.result as RpcRateLimitsResponse | undefined
             const result = wrapper?.rateLimits
-            const session = mapRpcWindow(result?.primary, 300)
-            const weekly = mapRpcWindow(result?.secondary, 10080)
+            const primaryWindowMinutes = isCodexWeeklyWindowDuration(
+              result?.primary?.windowDurationMins
+            )
+              ? CODEX_WEEKLY_WINDOW_MINUTES
+              : CODEX_SESSION_WINDOW_MINUTES
+            const { session, weekly } = classifyCodexRateLimitWindows(
+              mapRpcWindow(result?.primary, primaryWindowMinutes),
+              mapRpcWindow(result?.secondary, CODEX_WEEKLY_WINDOW_MINUTES)
+            )
             const rateLimitResetCredits = mapRpcRateLimitResetCredits(
               wrapper?.rateLimitResetCredits
             )

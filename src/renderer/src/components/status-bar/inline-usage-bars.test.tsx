@@ -99,6 +99,58 @@ describe('InlineUsageBars', () => {
     expect(markup).toContain('32% used now')
   })
 
+  it('uses the reported duration for a sole Codex weekly primary window', async () => {
+    const { InlineUsageBars } = await import('./StatusBar')
+    const limits: ProviderRateLimits = {
+      provider: 'codex',
+      session: {
+        usedPercent: 37,
+        windowMinutes: 10_080,
+        resetsAt: null,
+        resetDescription: null
+      },
+      weekly: null,
+      updatedAt: Date.now(),
+      error: null,
+      status: 'ok'
+    }
+
+    const markup = renderToStaticMarkup(<InlineUsageBars limits={limits} isFetching={false} />)
+
+    expect(markup).toContain('37% used wk')
+    expect(markup).not.toContain('37% used 5h')
+  })
+
+  it('keeps the mini meter when Codex exposes only a weekly window', async () => {
+    const { ProviderDetailsMenu } = await import('./StatusBar')
+    const limits: ProviderRateLimits = {
+      provider: 'codex',
+      session: null,
+      weekly: {
+        usedPercent: 37,
+        windowMinutes: 10_080,
+        resetsAt: null,
+        resetDescription: null
+      },
+      updatedAt: Date.now(),
+      error: null,
+      status: 'ok'
+    }
+
+    const markup = renderToStaticMarkup(
+      <ProviderDetailsMenu
+        provider={limits}
+        compact={false}
+        iconOnly={false}
+        ariaLabel="Open Codex usage details"
+      />
+    )
+
+    expect(markup).toContain('w-[48px] h-[6px]')
+    expect(markup).toContain('width:37%')
+    expect(markup).toContain('37% used wk')
+  })
+
   it('shows remaining copy and remaining meter fill', async () => {
     mocks.usagePercentageDisplay = 'remaining'
     const { InlineUsageBars } = await import('./StatusBar')
