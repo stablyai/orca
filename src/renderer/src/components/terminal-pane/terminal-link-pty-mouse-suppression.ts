@@ -1,5 +1,5 @@
 import type { IDisposable, Terminal } from '@xterm/xterm'
-import { isTerminalLinkActivation } from './terminal-link-activation'
+import { isTerminalHttpLinkActivation } from './terminal-http-link-activation'
 
 const CAPTURE_LISTENER_OPTIONS = { capture: true } as const
 
@@ -33,7 +33,7 @@ export function installTerminalLinkPtyMouseSuppression(
   const handleMouseDown = (event: MouseEvent): void => {
     if (
       event.button !== 0 ||
-      !isTerminalLinkActivation(event) ||
+      !isTerminalHttpLinkActivation(event) ||
       !shouldSuppressMouseEvent(event)
     ) {
       return

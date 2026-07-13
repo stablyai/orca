@@ -134,12 +134,13 @@ function makeTerminal(options?: {
   }
 }
 
-function mouseEventForRow(row: number): MouseEvent {
+function mouseEventForRow(row: number, options: { altKey?: boolean } = {}): MouseEvent {
   let defaultPrevented = false
   return {
     button: 0,
     metaKey: true,
     ctrlKey: false,
+    altKey: options.altKey ?? false,
     shiftKey: true,
     get defaultPrevented() {
       return defaultPrevented
@@ -236,6 +237,95 @@ describe('hard-wrapped terminal HTTP clicks', () => {
     expect(new URL(FRAMED_URL_ROWS[0]).pathname).toHaveLength(88)
   })
 
+  it('reconstructs a URL that fills each cursor-positioned TUI row up to its frame', () => {
+    const cols = 135
+    const linePrefix = ' │   '
+    const lineSuffix = '│ '
+    const contentWidth = cols - linePrefix.length - lineSuffix.length
+    const fullWidthRows = Array.from(
+      { length: Math.ceil(FULL_URL.length / contentWidth) },
+      (_value, index) => FULL_URL.slice(index * contentWidth, (index + 1) * contentWidth)
+    )
+    const { terminal } = makeTerminal({
+      cols,
+      urlRows: fullWidthRows,
+      linePrefix,
+      lineSuffix,
+      softWrapped: false
+    })
+
+    expect(
+      handleTerminalWebLinkClick(fullWidthRows[0], mouseEventForRow(0), {
+        terminal,
+        worktreeId: 'wt-1',
+        worktreePath: '/tmp',
+        startupCwd: '/tmp'
+      })
+    ).toBe(true)
+
+    expect(openUrlMock).toHaveBeenCalledTimes(1)
+    expect(openUrlMock).toHaveBeenCalledWith(FULL_URL)
+  })
+
+  it('reconstructs supported URLs spanning more than twenty framed rows', () => {
+    const cols = 80
+    const linePrefix = ' │   '
+    const lineSuffix = '│ '
+    const contentWidth = cols - linePrefix.length - lineSuffix.length
+    const longUrl = `http://example.com/${'a'.repeat(contentWidth * 20)}`
+    const urlRows = Array.from(
+      { length: Math.ceil(longUrl.length / contentWidth) },
+      (_value, index) => longUrl.slice(index * contentWidth, (index + 1) * contentWidth)
+    )
+    const { terminal } = makeTerminal({
+      cols,
+      urlRows,
+      linePrefix,
+      lineSuffix,
+      softWrapped: false
+    })
+
+    expect(urlRows).toHaveLength(21)
+    expect(
+      handleTerminalWebLinkClick(urlRows[0], mouseEventForRow(0), {
+        terminal,
+        worktreeId: 'wt-1',
+        worktreePath: '/tmp',
+        startupCwd: '/tmp'
+      })
+    ).toBe(true)
+    expect(openUrlMock).toHaveBeenCalledWith(longUrl)
+  })
+
+  it('keeps nested HTTP URLs inside a wrapped query parameter', () => {
+    const cols = 80
+    const linePrefix = ' │   '
+    const lineSuffix = '│ '
+    const contentWidth = cols - linePrefix.length - lineSuffix.length
+    const firstRow = `http://example.com/${'a'.repeat(contentWidth - 'http://example.com/'.length)}`
+    const nestedQuery = 'segment?redirect=https://nested.example/path'
+    const secondRow = `${nestedQuery}${'b'.repeat(contentWidth - nestedQuery.length)}`
+    const urlRows = [firstRow, secondRow, 'tail']
+    const fullUrl = urlRows.join('')
+    const { terminal } = makeTerminal({
+      cols,
+      urlRows,
+      linePrefix,
+      lineSuffix,
+      softWrapped: false
+    })
+
+    expect(
+      handleTerminalWebLinkClick(firstRow, mouseEventForRow(0), {
+        terminal,
+        worktreeId: 'wt-1',
+        worktreePath: '/tmp',
+        startupCwd: '/tmp'
+      })
+    ).toBe(true)
+    expect(openUrlMock).toHaveBeenCalledWith(fullUrl)
+  })
+
   it('does not append an unrelated aligned TUI row to a complete URL', () => {
     const { terminal, registrations } = makeTerminal({
       cols: 135,
@@ -266,6 +356,29 @@ describe('hard-wrapped terminal HTTP clicks', () => {
     disposable.dispose()
   })
 
+  it('does not join a complete URL to multiple unrelated framed rows', () => {
+    const unrelatedFilledRow = 'a'.repeat(103)
+    const { terminal } = makeTerminal({
+      cols: 110,
+      urlRows: ['http://example.com/', unrelatedFilledRow, 'unrelated'],
+      linePrefix: ' │   ',
+      lineSuffix: '│ ',
+      softWrapped: false
+    })
+
+    expect(
+      handleTerminalWebLinkClick('http://example.com/', mouseEventForRow(0), {
+        terminal,
+        worktreeId: 'wt-1',
+        worktreePath: '/tmp',
+        startupCwd: '/tmp'
+      })
+    ).toBe(true)
+
+    expect(openUrlMock).toHaveBeenCalledOnce()
+    expect(openUrlMock).toHaveBeenCalledWith('http://example.com/')
+  })
+
   it('does not suppress a modifier-click when the buffer position is not an HTTP link', () => {
     const { terminal, registrations } = makeTerminal({ urlRows: ['not-a-link'] })
     const disposable = installHttpLinkClickFallback(terminal, { worktreeId: 'wt-1' })
@@ -274,6 +387,26 @@ describe('hard-wrapped terminal HTTP clicks', () => {
     mouseDown!(mouseEventForRow(0))
 
     expect(terminal.options.mouseEventsRequireAlt).toBe(false)
+    disposable.dispose()
+  })
+
+  it('leaves Alt-modified link gestures to the child TUI', () => {
+    const { terminal, registrations } = makeTerminal()
+    const disposable = installHttpLinkClickFallback(terminal, { worktreeId: 'wt-1' })
+    const mouseDown = registrations.find(([name]) => name === 'mousedown')?.[1]
+    const event = mouseEventForRow(0, { altKey: true })
+
+    mouseDown!(event)
+    expect(terminal.options.mouseEventsRequireAlt).toBe(false)
+    expect(
+      handleTerminalWebLinkClick(URL_ROWS[0], event, {
+        terminal,
+        worktreeId: 'wt-1',
+        worktreePath: '/tmp',
+        startupCwd: '/tmp'
+      })
+    ).toBe(false)
+    expect(openUrlMock).not.toHaveBeenCalled()
     disposable.dispose()
   })
 

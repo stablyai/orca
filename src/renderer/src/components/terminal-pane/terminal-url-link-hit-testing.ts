@@ -5,9 +5,10 @@ import {
   dedupeLogicalLines
 } from './terminal-file-link-hit-testing'
 import { buildHardWrappedHttpLogicalLineCandidates } from './hard-wrapped-terminal-http-links'
-import { isTerminalLinkActivation } from './terminal-link-activation'
+import { isTerminalHttpLinkActivation } from './terminal-http-link-activation'
 import { installTerminalLinkPtyMouseSuppression } from './terminal-link-pty-mouse-suppression'
 import { getTerminalBufferPositionForMouseEvent } from './terminal-mouse-buffer-position'
+import { TERMINAL_HTTP_URL_MAX_LENGTH } from './terminal-http-link-limits'
 import { buildWrappedLogicalLine, rangeForParsedFileLink } from './wrapped-terminal-link-ranges'
 
 type UrlLinkHitTestDeps = {
@@ -32,7 +33,7 @@ type ParsedTerminalHttpLink = {
 }
 
 const HTTP_SCHEME_PREFIXES = ['https://', 'http://'] as const
-export const TERMINAL_HTTP_URL_MAX_LENGTH = 2048
+export { TERMINAL_HTTP_URL_MAX_LENGTH } from './terminal-http-link-limits'
 
 export function extractTerminalHttpLinks(lineText: string): ParsedTerminalHttpLink[] {
   const links: ParsedTerminalHttpLink[] = []
@@ -62,7 +63,7 @@ function isDesktopHttpLinkFallbackActivation(event: MouseEvent): boolean {
   // Why: desktop terminal links require an intentional Cmd/Ctrl gesture so
   // plain clicks remain available for cursor placement and selection. Mobile
   // tap routing is handled separately under mobile/src/terminal.
-  return isTerminalLinkActivation(event)
+  return isTerminalHttpLinkActivation(event)
 }
 
 function* iterateTerminalHttpUrlCandidates(
@@ -196,7 +197,7 @@ export function openHttpLinkAtTerminalMouseEvent(
   event: MouseEvent,
   deps: UrlLinkHitTestDeps
 ): boolean {
-  if (event.button !== 0 || !isTerminalLinkActivation(event)) {
+  if (event.button !== 0 || !isTerminalHttpLinkActivation(event)) {
     return false
   }
   const position = getTerminalBufferPositionForMouseEvent(terminal, event)

@@ -1,5 +1,6 @@
 import type { Terminal } from '@xterm/xterm'
 import type { LinkHandlerDeps } from './terminal-link-handlers'
+import { isTerminalHttpLinkActivation } from './terminal-http-link-activation'
 import { handleOscLink } from './terminal-osc-link-routing'
 import {
   openHttpLinkAtTerminalMouseEvent,
@@ -19,10 +20,11 @@ export function handleTerminalWebLinkClick(
   event: MouseEvent | undefined,
   deps: TerminalWebLinkClickDeps
 ): boolean {
-  if (!event) {
+  if (!event || !isTerminalHttpLinkActivation(event)) {
     return false
   }
 
+  let handled: boolean
   if (
     deps.terminal &&
     openHttpLinkAtTerminalMouseEvent(deps.terminal, event, {
@@ -34,12 +36,14 @@ export function handleTerminalWebLinkClick(
     // Why: WebLinksAddon only knows the physical row; Orca's logical hit-test
     // preserves the complete URL rendered across hard-wrapped TUI rows.
     event.preventDefault()
-    deps.terminal.clearSelection()
-    return true
+    handled = true
+  } else {
+    handled = handleOscLink(url, event, deps)
   }
 
-  const handled = handleOscLink(url, event, deps)
   if (handled) {
+    // Why: link navigation can steal focus before xterm's mouseup cleanup;
+    // clearing selection also detaches its pending drag-selection listeners.
     deps.terminal?.clearSelection()
   }
   return handled
