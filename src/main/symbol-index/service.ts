@@ -1,10 +1,15 @@
-import { readFile } from 'node:fs/promises'
+import { readFile, stat } from 'node:fs/promises'
 import type { IpcMain } from 'electron'
 import type { FindDefinitionsRequest, FindDefinitionsResponse } from '../../shared/symbol-index'
 import { SYMBOL_INDEX_IPC } from '../../shared/symbol-index'
 import { SymbolIndexStore } from './index-store'
 import { parseDefinitions } from './parser'
 import { languageIdForPath, listIndexableFiles } from './scan-worktree'
+
+// Why: a single huge file (e.g. a committed/generated multi-MB source file)
+// would be tree-sitter-parsed synchronously on the Electron main thread,
+// blocking the UI and risking an OOM. Skip files above this size instead.
+const MAX_INDEXABLE_FILE_BYTES = 2_000_000
 
 type Deps = { maxFiles?: number }
 
@@ -49,6 +54,14 @@ export class SymbolIndexService {
     if (!languageId) {
       return
     }
+    try {
+      const info = await stat(abs)
+      if (info.size > MAX_INDEXABLE_FILE_BYTES) {
+        return
+      }
+    } catch {
+      return
+    }
     let source: string
     try {
       source = await readFile(abs, 'utf8')
@@ -74,7 +87,9 @@ export class SymbolIndexService {
   async findDefinitions(req: FindDefinitionsRequest): Promise<FindDefinitionsResponse> {
     if (!this.store.hasWorktree(req.worktreeId)) {
       // Kick off indexing in the background; tell the caller to fall back now.
-      void this.ensureIndexed(req.worktreeId, req.worktreeRoot)
+      // Why: this is fire-and-forget, so guard against an unhandled promise
+      // rejection reaching the Electron main process if indexing ever throws.
+      void this.ensureIndexed(req.worktreeId, req.worktreeRoot).catch(() => {})
       return { status: 'indexing', definitions: [] }
     }
     return { status: 'ready', definitions: this.store.find(req.worktreeId, req.symbol) }

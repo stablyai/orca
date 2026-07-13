@@ -23,12 +23,18 @@ export function languageIdForPath(absPath: string): string | null {
 
 export async function listIndexableFiles(
   root: string,
-  opts: { maxFiles: number }
+  opts: { maxFiles: number; maxDirs?: number }
 ): Promise<string[]> {
+  // Why: maxFiles alone never trips when a tree has many directories but few
+  // (or zero) indexable files (e.g. millions of empty dirs), so traversal
+  // must also be bounded by directories visited.
+  const maxDirs = opts.maxDirs ?? 100_000
   const out: string[] = []
   const stack: string[] = [root]
-  while (stack.length > 0 && out.length < opts.maxFiles) {
+  let dirsVisited = 0
+  while (stack.length > 0 && out.length < opts.maxFiles && dirsVisited < maxDirs) {
     const dir = stack.pop()!
+    dirsVisited++
     let entries
     try {
       entries = await readdir(dir, { withFileTypes: true })

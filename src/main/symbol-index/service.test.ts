@@ -25,6 +25,25 @@ describe('SymbolIndexService', () => {
     svc.dispose()
   })
 
+  it('skips indexing a file larger than the size cap', async () => {
+    const root = await mkdtemp(path.join(tmpdir(), 'orca-svc-size-'))
+    const big = path.join(root, 'big.ts')
+    // MAX_INDEXABLE_FILE_BYTES is 2_000_000 bytes; pad well past it so the
+    // size check trips regardless of the exact trailing-comment overhead.
+    const content = `export function hugeSymbol() {}\n// ${'x'.repeat(2_100_000)}`
+    await writeFile(big, content)
+    const svc = new SymbolIndexService({ maxFiles: 100 })
+    await svc.ensureIndexed('w1', root)
+
+    const res = await svc.findDefinitions({
+      worktreeId: 'w1',
+      worktreeRoot: root,
+      symbol: 'hugeSymbol'
+    })
+    expect(res).toEqual({ status: 'ready', definitions: [] })
+    svc.dispose()
+  })
+
   it('reflects file changes incrementally', async () => {
     const root = await mkdtemp(path.join(tmpdir(), 'orca-svc-'))
     const file = path.join(root, 'a.ts')

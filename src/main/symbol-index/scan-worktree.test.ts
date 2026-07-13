@@ -18,6 +18,20 @@ describe('scan-worktree', () => {
     expect(files).toEqual([path.join(root, 'a.ts')])
   })
 
+  it('bounds directory traversal via maxDirs even when no indexable files are found', async () => {
+    const root = await mkdtemp(path.join(tmpdir(), 'orca-scan-dirs-'))
+    for (let i = 0; i < 5; i++) {
+      const sub = path.join(root, `d${i}`)
+      await mkdir(sub, { recursive: true })
+      await writeFile(path.join(sub, 'f.ts'), 'export const x = 1')
+    }
+
+    const files = await listIndexableFiles(root, { maxFiles: 100, maxDirs: 3 })
+    // Only a subset of the 5 subdirectories may be visited before the
+    // maxDirs bound trips, even though maxFiles was never reached.
+    expect(files.length).toBeLessThan(5)
+  })
+
   it('maps extensions to language ids', () => {
     expect(languageIdForPath('/x/a.ts')).toBe('typescript')
     expect(languageIdForPath('/x/a.py')).toBe('python')
