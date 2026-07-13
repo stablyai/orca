@@ -103,6 +103,9 @@ export class DegradedDaemonPtyProvider implements IPtyProvider {
     return this.findProviderForExistingSession(id) !== null
   }
 
+  canVerifyFullSessionTeardown(id: string): boolean {
+    return this.providerFor(id).canVerifyFullSessionTeardown?.(id) ?? true
+  }
   write(id: string, data: string): void {
     this.providerFor(id).write(id, data)
   }

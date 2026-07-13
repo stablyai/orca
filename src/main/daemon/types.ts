@@ -17,6 +17,9 @@ import type { TuiAgent } from '../../shared/types'
 // Why: bump when adding daemon wire behavior so same-version old daemons do
 // not silently accept the handshake and then reject new RPCs.
 export const PROTOCOL_VERSION = 22
+// Why: v22 is the first daemon whose immediate kill awaits and verifies the
+// complete POSIX process tree or Windows ConPTY exit instead of only its leader.
+export const VERIFIED_FULL_SESSION_TEARDOWN_PROTOCOL_VERSION = 22
 export const PREVIOUS_DAEMON_PROTOCOL_VERSIONS = [
   1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21
 ] as const

@@ -3421,6 +3421,13 @@ export function registerPtyHandlers(
         }
         return false
       }
+      // Why: protocol-v21 and older daemons acknowledge leader-only kills.
+      // Worktree deletion must preserve the session rather than accept that as
+      // proof that resistant descendants or a Windows ConPTY have exited.
+      if (provider.canVerifyFullSessionTeardown?.(ptyId) === false) {
+        console.warn(`[pty] Provider cannot verify full PTY session teardown: ${ptyId}`)
+        return false
+      }
       let providerExitObserved = false
       try {
         providerExitObserved = await shutdownProviderAndDetectExit(provider, ptyId, {

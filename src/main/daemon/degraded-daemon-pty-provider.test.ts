@@ -92,11 +92,13 @@ function createProvider(label: string, sessions: string[] = []): ProviderMock {
 
 function createDaemonAdapter(
   label: string,
-  sessions: string[] = []
+  sessions: string[] = [],
+  protocolVersion = 22
 ): DaemonPtyAdapter & ProviderMock {
   return {
     ...createProvider(label, sessions),
-    protocolVersion: 13,
+    protocolVersion,
+    canVerifyFullSessionTeardown: vi.fn(() => protocolVersion >= 22),
     listSessions: vi.fn(async () => []),
     ackColdRestore: vi.fn(),
     clearTombstone: vi.fn(),
@@ -138,6 +140,18 @@ describe('DegradedDaemonPtyProvider', () => {
     expect(fallback.spawn).toHaveBeenCalledWith({ cols: 80, rows: 24 })
     expect(current.write).toHaveBeenCalledWith('daemon-session', 'old\n')
     expect(fallback.write).toHaveBeenCalledWith(fresh.id, 'new\n')
+  })
+
+  it('rejects verified teardown for v21 daemon sessions but permits the local fallback', async () => {
+    const current = createDaemonAdapter('daemon')
+    const legacy = createDaemonAdapter('legacy', ['legacy-session'], 21)
+    const fallback = createProvider('fallback')
+    const provider = new DegradedDaemonPtyProvider({ current, legacy: [legacy], fallback })
+    await provider.discoverDaemonSessions()
+    const fresh = await provider.spawn({ cols: 80, rows: 24 })
+
+    expect(provider.canVerifyFullSessionTeardown('legacy-session')).toBe(false)
+    expect(provider.canVerifyFullSessionTeardown(fresh.id)).toBe(true)
   })
 
   it('routes a previously daemon-backed id to fallback after daemon exit removes the mapping', async () => {

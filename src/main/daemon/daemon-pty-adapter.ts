@@ -12,6 +12,7 @@ import { supportsPtyStartupBarrier } from './shell-ready'
 import { CODEX_SHELL_READY_TIMEOUT_MS } from './session'
 import {
   PROTOCOL_VERSION,
+  VERIFIED_FULL_SESSION_TEARDOWN_PROTOCOL_VERSION,
   type CreateOrAttachResult,
   type DaemonEvent,
   type GetSnapshotResult,
@@ -439,6 +440,10 @@ export class DaemonPtyAdapter implements IPtyProvider {
 
   hasPty(id: string): boolean {
     return this.activeSessionIds.has(id)
+  }
+
+  canVerifyFullSessionTeardown(_id: string): boolean {
+    return this.protocolVersion >= VERIFIED_FULL_SESSION_TEARDOWN_PROTOCOL_VERSION
   }
 
   write(id: string, data: string): void {

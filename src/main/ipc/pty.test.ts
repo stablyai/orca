@@ -2967,6 +2967,50 @@ describe('registerPtyHandlers', () => {
         expect(listProcesses).not.toHaveBeenCalled()
       })
 
+      it('fails closed before shutdown when the provider cannot verify the full session', async () => {
+        const shutdown = vi.fn(async () => undefined)
+        const hasPty = vi.fn(() => false)
+        const runtime = {
+          setPtyController: vi.fn(),
+          onPtyExit: vi.fn()
+        }
+        setLocalPtyProvider({
+          spawn: vi.fn(),
+          hasPty,
+          canVerifyFullSessionTeardown: vi.fn(() => false),
+          write: vi.fn(),
+          resize: vi.fn(),
+          shutdown,
+          sendSignal: vi.fn(),
+          getCwd: vi.fn(),
+          getInitialCwd: vi.fn(),
+          clearBuffer: vi.fn(),
+          acknowledgeDataEvent: vi.fn(),
+          hasChildProcesses: vi.fn(),
+          getForegroundProcess: vi.fn(),
+          serialize: vi.fn(),
+          revive: vi.fn(),
+          onData: vi.fn(() => () => {}),
+          onReplay: vi.fn(() => () => {}),
+          onExit: vi.fn(() => () => {}),
+          listProcesses: vi.fn(async () => []),
+          attach: vi.fn(),
+          getDefaultShell: vi.fn(),
+          getProfiles: vi.fn()
+        } as never)
+        handlers.clear()
+        registerPtyHandlers(mainWindow as never, runtime as never)
+        const controller = runtime.setPtyController.mock.calls[0]?.[0] as {
+          stopAndWait: (ptyId: string) => Promise<boolean>
+        }
+
+        await expect(controller.stopAndWait('legacy-daemon-pty')).resolves.toBe(false)
+
+        expect(shutdown).not.toHaveBeenCalled()
+        expect(hasPty).not.toHaveBeenCalled()
+        expect(runtime.onPtyExit).not.toHaveBeenCalled()
+      })
+
       it('finishes headless current-relay SSH shutdown before remote removal without inventory', async () => {
         const order: string[] = []
         const request = vi.fn(async (method: string) => {

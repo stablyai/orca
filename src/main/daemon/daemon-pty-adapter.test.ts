@@ -191,6 +191,18 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
     })
   })
 
+  describe('verified full-session teardown capability', () => {
+    it('accepts v22 and rejects a retained v21 daemon', () => {
+      const legacy = new DaemonPtyAdapter({ socketPath, tokenPath, protocolVersion: 21 })
+      try {
+        expect(adapter.canVerifyFullSessionTeardown('current-session')).toBe(true)
+        expect(legacy.canVerifyFullSessionTeardown('legacy-session')).toBe(false)
+      } finally {
+        legacy.dispose()
+      }
+    })
+  })
+
   describe('producer flow control', () => {
     it('routes pausePty/resumePty notifications to the daemon session subprocess', async () => {
       const { id } = await adapter.spawn({ cols: 80, rows: 24 })

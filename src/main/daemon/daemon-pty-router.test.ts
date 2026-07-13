@@ -22,7 +22,8 @@ function buildSessionIds(prefix: string, count: number): string[] {
 function createAdapter(
   label: string,
   sessions: string[] = [],
-  reconcileResult?: { alive: string[]; killed: string[] }
+  reconcileResult?: { alive: string[]; killed: string[] },
+  protocolVersion = 22
 ): AdapterMock {
   const writes: { id: string; data: string }[] = []
   const dataListeners: ((payload: { id: string; data: string; sequenceChars?: number }) => void)[] =
@@ -30,6 +31,7 @@ function createAdapter(
   const backgroundListeners: ((payload: PtyBackgroundStreamEvent) => void)[] = []
   const exitListeners: ((payload: { id: string; code: number }) => void)[] = []
   return {
+    protocolVersion,
     spawn: vi.fn(async (opts: PtySpawnOptions): Promise<PtySpawnResult> => {
       const id = opts.sessionId ?? `${label}-new`
       sessions.push(id)
@@ -43,6 +45,7 @@ function createAdapter(
       }))
     ),
     hasPty: vi.fn((id: string) => sessions.includes(id)),
+    canVerifyFullSessionTeardown: vi.fn(() => protocolVersion >= 22),
     write: vi.fn((id: string, data: string) => {
       writes.push({ id, data })
     }),
@@ -154,6 +157,16 @@ describe('DaemonPtyRouter', () => {
     expect(current.spawn).toHaveBeenCalledWith({ cols: 80, rows: 24 })
     expect(legacy.write).toHaveBeenCalledWith('legacy-session', 'old\n')
     expect(current.write).toHaveBeenCalledWith(fresh.id, 'new\n')
+  })
+
+  it('reports that a v21 legacy owner cannot verify full-session teardown', async () => {
+    const current = createAdapter('current')
+    const legacy = createAdapter('legacy', ['legacy-session'], undefined, 21)
+    const router = new DaemonPtyRouter({ current, legacy: [legacy] })
+    await router.discoverLegacySessions()
+
+    expect(router.canVerifyFullSessionTeardown('legacy-session')).toBe(false)
+    expect(router.canVerifyFullSessionTeardown('current-session')).toBe(true)
   })
 
   it('routes background hints and authoritative snapshots to the session owner', async () => {

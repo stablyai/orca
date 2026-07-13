@@ -83,6 +83,10 @@ export class DaemonPtyRouter implements IPtyProvider {
     return this.current.hasPty(id) || this.legacy.some((adapter) => adapter.hasPty(id))
   }
 
+  canVerifyFullSessionTeardown(id: string): boolean {
+    return this.adapterFor(id).canVerifyFullSessionTeardown(id)
+  }
+
   write(id: string, data: string): void {
     this.adapterFor(id).write(id, data)
   }

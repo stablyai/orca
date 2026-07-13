@@ -203,6 +203,10 @@ export type IPtyProvider = {
    */
   getAppliedSize?: (id: string) => Promise<{ cols: number; rows: number } | null>
 
+  /** False when this provider can only stop the PTY leader and cannot prove
+   * the complete process/session tree exited. Destructive teardown must abort. */
+  canVerifyFullSessionTeardown?: (id: string) => boolean
+
   shutdown(id: string, opts: { immediate?: boolean; keepHistory?: boolean }): Promise<void>
   sendSignal(id: string, signal: string): Promise<void>
   getCwd(id: string): Promise<string>
