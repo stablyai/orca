@@ -3,7 +3,7 @@ import {
   parseLoopbackUrlWithPort,
   type LocalhostWorktreeLabelRoute
 } from '../../../shared/localhost-worktree-labels'
-import type { GlobalSettings } from '../../../shared/types'
+import type { GlobalSettings, TopLevelView } from '../../../shared/types'
 import type { WorkspacePort, WorkspacePortScanResult } from '../../../shared/workspace-ports'
 import { requestOpenFloatingTerminal } from './floating-terminal'
 
@@ -26,7 +26,7 @@ type StoreAccessor = () => {
       'openLinksInApp' | 'activeRuntimeEnvironmentId' | 'localhostWorktreeLabelsEnabled'
     >
   > | null
-  activeView?: string
+  activeView?: TopLevelView
   setActiveWorktree: (worktreeId: string) => void
   createBrowserTab: (worktreeId: string, url: string, opts: { activate: boolean }) => unknown
   repos?: LocalhostLinkRepo[]

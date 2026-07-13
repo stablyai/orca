@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../shared/constants'
+import type { TopLevelView } from '../../../shared/types'
 import type { WorkspacePortScanResult } from '../../../shared/workspace-ports'
 import {
   openHttpLink,
@@ -33,7 +34,7 @@ const storeState = {
   allWorktrees: vi.fn(
     () => [] as { id: string; projectId?: string; repoId?: string; displayName?: string }[]
   ),
-  activeView: undefined as string | undefined,
+  activeView: undefined as TopLevelView | undefined,
   workspacePortScan: null as { result: WorkspacePortScanResult } | null,
   workspacePortScansByKey: {} as Record<string, WorkspacePortScanResult>
 }
