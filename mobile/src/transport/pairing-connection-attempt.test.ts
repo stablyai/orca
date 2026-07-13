@@ -1,5 +1,11 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { startPairingConnectionAttempt } from './pairing-connection-attempt'
+import {
+  PAIR_CONNECT_TIMEOUT_MS,
+  PAIR_MAX_DIAL_ENDPOINTS,
+  PAIRING_OVERALL_TIMEOUT_MS,
+  resolvePairDialPlan,
+  startPairingConnectionAttempt
+} from './pairing-connection-attempt'
 
 describe('pairing connection attempt cleanup', () => {
   afterEach(() => {
@@ -37,5 +43,36 @@ describe('pairing connection attempt cleanup', () => {
     vi.advanceTimersByTime(25_000)
     expect(attempt.timedOut).toBe(false)
     expect(closeClient).toHaveBeenCalledTimes(1)
+  })
+})
+
+describe('resolvePairDialPlan (KTD4)', () => {
+  it('uses a shorter per-endpoint timeout than steady-state 12s', () => {
+    const plan = resolvePairDialPlan(['ws://100.1.1.1:6768', 'ws://192.168.1.10:6768'])
+    expect(plan.connectTimeoutMs).toBe(PAIR_CONNECT_TIMEOUT_MS)
+    expect(plan.connectTimeoutMs).toBeLessThan(12_000)
+    expect(plan.endpoints).toHaveLength(2)
+  })
+
+  it('caps pair-time exploration at three endpoints', () => {
+    const endpoints = [
+      'ws://100.1.1.1:6768',
+      'ws://192.168.1.10:6768',
+      'ws://10.0.0.5:6768',
+      'ws://10.0.0.6:6768'
+    ]
+    const plan = resolvePairDialPlan(endpoints)
+    expect(plan.endpoints).toHaveLength(PAIR_MAX_DIAL_ENDPOINTS)
+    expect(plan.endpoints).toEqual(endpoints.slice(0, PAIR_MAX_DIAL_ENDPOINTS))
+  })
+
+  it('keeps n×timeout + margin within the overall pair budget', () => {
+    const plan = resolvePairDialPlan([
+      'ws://100.1.1.1:6768',
+      'ws://192.168.1.10:6768',
+      'ws://10.0.0.5:6768'
+    ])
+    const dialBudget = plan.endpoints.length * plan.connectTimeoutMs
+    expect(dialBudget + 7_000).toBeLessThanOrEqual(PAIRING_OVERALL_TIMEOUT_MS)
   })
 })

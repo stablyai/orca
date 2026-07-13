@@ -14,7 +14,8 @@ vi.mock('./host-logical-client', () => ({
   openHostLogicalClient: (...args: unknown[]) => connectMock(...args)
 }))
 vi.mock('./host-store', () => ({
-  loadHosts: () => loadHostsMock()
+  loadHosts: () => loadHostsMock(),
+  updateHostLastGoodEndpoint: vi.fn(async () => {})
 }))
 vi.mock('./connection-revival-triggers', () => ({
   subscribeConnectionRevivalTriggers: () => () => {}

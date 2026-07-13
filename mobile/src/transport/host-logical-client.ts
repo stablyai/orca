@@ -4,12 +4,26 @@ import { createStableLogicalRpcClient } from './stable-logical-rpc-client'
 import type { ConnectionLogSink, HostProfile } from './types'
 import { directPathForEndpoint } from './mobile-direct-endpoint-probe'
 import { startMobileEndpointLifecycle } from './mobile-endpoint-lifecycle'
+import { updateHostLastGoodEndpoint } from './host-store'
+
+function directDialUrls(host: HostProfile): string[] {
+  const fromOverlay =
+    host.endpoints?.filter(({ kind }) => kind !== 'relay').map(({ url }) => url) ?? []
+  return [...new Set([host.endpoint, ...fromOverlay])]
+}
 
 export function openHostLogicalClient(host: HostProfile, onLog: ConnectionLogSink): RpcClient {
-  // Why: the stable facade owns app-visible RPC/subscription state while the
-  // direct socket remains a replaceable first physical generation.
+  // Why: ordered direct endpoints (Tailscale then LAN) come from the pairing
+  // overlay; sticky last-good is separate from host.endpoint (KTD9).
   const logical = createStableLogicalRpcClient(
-    connect(host.endpoint, host.deviceToken, host.publicKeyB64, { onLog }),
+    connect(host.endpoint, host.deviceToken, host.publicKeyB64, {
+      onLog,
+      endpoints: directDialUrls(host),
+      lastGoodEndpoint: host.lastGoodEndpoint,
+      onDialSuccess: (endpoint) => {
+        void updateHostLastGoodEndpoint(host.id, endpoint)
+      }
+    }),
     directPathForEndpoint(host, host.endpoint)
   )
   if (Platform.OS === 'web') {
