@@ -1222,6 +1222,9 @@ export function createPtySubprocess(opts: PtySubprocessOptions): SubprocessHandl
           nodePtyKillIssued = true
           proc.kill()
         } catch {
+          // Why: a transient ConPTY close failure must not permanently block
+          // a later verified worktree-deletion retry.
+          nodePtyKillIssued = false
           return false
         }
       }

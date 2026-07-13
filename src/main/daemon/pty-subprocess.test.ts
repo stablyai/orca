@@ -2680,6 +2680,28 @@ describe('createPtySubprocess', () => {
       }
     })
 
+    it('retries verified Windows teardown after node-pty kill throws transiently', async () => {
+      const proc = mockPtyProcess(123456)
+      proc.kill
+        .mockImplementationOnce(() => {
+          throw new Error('transient ConPTY close failure')
+        })
+        .mockImplementationOnce(() => proc._simulateExit(0))
+      spawnMock.mockReturnValue(proc)
+      const origPlatform = Object.getOwnPropertyDescriptor(process, 'platform')
+      Object.defineProperty(process, 'platform', { value: 'win32' })
+      try {
+        const handle = createPtySubprocess({ sessionId: 'test', cols: 80, rows: 24 })
+
+        await expect(handle.forceKillAndWait!()).resolves.toBe(false)
+        await expect(handle.forceKillAndWait!()).resolves.toBe(true)
+
+        expect(proc.kill).toHaveBeenCalledTimes(2)
+      } finally {
+        restorePlatform(origPlatform)
+      }
+    })
+
     it('dispose() on Windows skips destroy after forceKill falls back to node-pty kill()', () => {
       const proc = mockPtyProcess(123456) as ReturnType<typeof mockPtyProcess> & {
         destroy: ReturnType<typeof vi.fn>
