@@ -81,6 +81,7 @@ export default function AccountUsageSettingsScreen() {
               <View style={styles.row}>
                 <Text style={styles.rowLabel}>{descriptor.label}</Text>
                 <Switch
+                  accessibilityLabel={`Show ${descriptor.label} usage`}
                   value={
                     visible
                       ? visible.has(descriptor.id)
