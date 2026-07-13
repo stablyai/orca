@@ -109,9 +109,14 @@
       "rules": {
         "curly": "off",
         "prefer-template": "off",
-        "no-unused-vars": "off",
         "unicorn/prefer-at": "off",
         "unicorn/prefer-includes": "off"
+      }
+    },
+    {
+      "files": ["extensions/chat-import/lib/**"],
+      "rules": {
+        "no-unused-vars": "off"
       }
     }
   ],
