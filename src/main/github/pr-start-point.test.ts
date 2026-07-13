@@ -374,4 +374,58 @@ describe('resolveGitHubPrStartPoint', () => {
     expect(gitExec).toHaveBeenCalledWith(['fetch', 'origin', 'refs/pull/42/head'])
     expect(gitExec).toHaveBeenCalledWith(['fetch', 'backup', 'refs/pull/42/head'])
   })
+
+  // Why: a non-missing-ref failure (auth/network/SSH) on the refs/pull fallback
+  // must surface verbatim, not be masked by the generic "not found anywhere"
+  // message. Otherwise an SSH/auth problem looks like a missing ref.
+  it('surfaces a hard refs/pull error instead of a not-found message (same-repo fallback)', async () => {
+    const fetchRemoteTrackingRef = vi.fn(async () => {
+      throw new Error('fatal: could not find remote ref')
+    })
+    const gitExec = vi.fn(async (args: string[]) => {
+      if (args[0] === 'fetch' && args[2] === 'refs/pull/42/head') {
+        throw new Error('Permission denied (publickey)')
+      }
+      throw new Error(`unexpected git call: ${args.join(' ')}`)
+    })
+
+    const result = await resolveGitHubPrStartPoint({
+      repoPath: '/repo-root',
+      prNumber: 42,
+      headRefName: 'feature/missing',
+      baseRefName: 'main',
+      gitExec,
+      fetchRemoteTrackingRef,
+      resolveRemote: async () => 'yzc',
+      resolveRemoteAlternatives: async () => ['origin', 'backup']
+    })
+
+    expect(result.error).toBe('Failed to fetch refs/pull/42/head: Permission denied (publickey)')
+  })
+
+  // Why: the cross-repo path must also surface a hard refs/pull error verbatim
+  // rather than the plain not-found message.
+  it('surfaces a hard refs/pull error instead of a not-found message (cross-repo)', async () => {
+    const fetchRemoteTrackingRef = vi.fn(async () => {})
+    const gitExec = vi.fn(async (args: string[]) => {
+      if (args[0] === 'fetch' && args[2] === 'refs/pull/42/head') {
+        throw new Error('Permission denied (publickey)')
+      }
+      throw new Error(`unexpected git call: ${args.join(' ')}`)
+    })
+
+    const result = await resolveGitHubPrStartPoint({
+      repoPath: '/repo-root',
+      prNumber: 42,
+      headRefName: 'feature/missing',
+      baseRefName: 'main',
+      isCrossRepository: true,
+      gitExec,
+      fetchRemoteTrackingRef,
+      resolveRemote: async () => 'yzc',
+      resolveRemoteAlternatives: async () => ['origin', 'backup']
+    })
+
+    expect(result.error).toBe('Failed to fetch refs/pull/42/head: Permission denied (publickey)')
+  })
 })

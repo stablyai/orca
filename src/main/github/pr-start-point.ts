@@ -126,7 +126,7 @@ export async function resolveGitHubPrStartPoint(
   }
 
   const fetchPullRequestHeadShaFromAnyRemote = async (): Promise<
-    { remote: string; sha: string } | { error: string }
+    { remote: string; sha: string } | { error: string } | { notFoundAnywhere: true }
   > => {
     const pullRef = `refs/pull/${args.prNumber}/head`
     let workingRemote: string | null = null
@@ -146,9 +146,11 @@ export async function resolveGitHubPrStartPoint(
       }
     }
     if (workingRemote === null) {
-      return {
-        error: `Failed to fetch ${pullRef} from any configured remote (${remoteCandidates.join(', ')}).`
-      }
+      // Why: separate a genuine "missing everywhere" case from a hard failure
+      // (auth/network/SSH). Only the former gets the synthesized not-found
+      // message; a hard error is surfaced verbatim so the user sees the real
+      // cause instead of a misleading "ref not found" message.
+      return { notFoundAnywhere: true }
     }
     let sha: string
     try {
@@ -199,6 +201,11 @@ export async function resolveGitHubPrStartPoint(
   // PR head (fork or same-repo) as refs/pull/<N>/head on the upstream repo.
   if (isCrossRepository) {
     const headResult = await fetchPullRequestHeadShaFromAnyRemote()
+    if ('notFoundAnywhere' in headResult) {
+      return {
+        error: `Failed to fetch refs/pull/${args.prNumber}/head from any configured remote (${remoteCandidates.join(', ')}).`
+      }
+    }
     if ('error' in headResult) {
       return headResult
     }
@@ -226,25 +233,28 @@ export async function resolveGitHubPrStartPoint(
     // Why: missing fork metadata can make a fork PR look like a same-repo
     // branch. Only that missing-ref case should fall back to refs/pull.
     const headResult = await fetchPullRequestHeadShaFromAnyRemote()
-    if (!('error' in headResult)) {
-      await resolvePushTarget()
-      const compareBaseFetchError = await fetchCompareBaseRef(headResult.remote)
-      if (compareBaseFetchError) {
-        return compareBaseFetchError
-      }
+    if ('notFoundAnywhere' in headResult) {
       return {
-        baseBranch: headResult.sha,
-        ...(baseRefName
-          ? { compareBaseRef: `refs/remotes/${headResult.remote}/${baseRefName}` }
-          : {}),
-        headSha: headResult.sha,
-        branchNameOverride: headRefName,
-        ...(pushTarget ? { pushTarget } : {}),
-        ...(maintainerCanModify !== undefined ? { maintainerCanModify } : {})
+        error: `Failed to fetch ${headRefName} (or refs/pull/${args.prNumber}/head) from any configured remote (${remoteCandidates.join(', ')}).`
       }
     }
+    if ('error' in headResult) {
+      return headResult
+    }
+    await resolvePushTarget()
+    const compareBaseFetchError = await fetchCompareBaseRef(headResult.remote)
+    if (compareBaseFetchError) {
+      return compareBaseFetchError
+    }
     return {
-      error: `Failed to fetch ${headRefName} (or refs/pull/${args.prNumber}/head) from any configured remote (${remoteCandidates.join(', ')}).`
+      baseBranch: headResult.sha,
+      ...(baseRefName
+        ? { compareBaseRef: `refs/remotes/${headResult.remote}/${baseRefName}` }
+        : {}),
+      headSha: headResult.sha,
+      branchNameOverride: headRefName,
+      ...(pushTarget ? { pushTarget } : {}),
+      ...(maintainerCanModify !== undefined ? { maintainerCanModify } : {})
     }
   }
   if ('error' in headRemoteResult) {

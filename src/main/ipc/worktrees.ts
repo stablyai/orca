@@ -1344,47 +1344,55 @@ export function registerWorktreeHandlers(
       // identical for single-remote repos; for local we honor getDefaultRemote
       // and fall back to `origin`-then-rest if no explicit default is configured
       // (so fork setups with `origin` + `upstream` keep working).
-      const resolveRemoteList = async (): Promise<string[]> => {
-        if (repo.connectionId) {
-          try {
-            const { stdout } = await gitExec(['remote'])
-            const remotes = stdout
-              .split('\n')
-              .map((line) => line.trim())
-              .filter(Boolean)
-            return remotes.length > 0 ? remotes : ['origin']
-          } catch {
-            return ['origin']
-          }
+      // Why: memoize the enumeration so resolveRemote and resolveRemoteAlternatives
+      // share one ordered list instead of each paying a git/SSH round-trip.
+      let remoteListPromise: Promise<string[]> | null = null
+      const resolveRemoteList = (): Promise<string[]> => {
+        if (!remoteListPromise) {
+          remoteListPromise = (async (): Promise<string[]> => {
+            if (repo.connectionId) {
+              try {
+                const { stdout } = await gitExec(['remote'])
+                const remotes = stdout
+                  .split('\n')
+                  .map((line) => line.trim())
+                  .filter(Boolean)
+                return remotes.length > 0 ? remotes : ['origin']
+              } catch {
+                return ['origin']
+              }
+            }
+            const localOptions = {
+              cwd: repo.path,
+              ...getLocalProjectWorktreeGitOptions(store, repo)
+            }
+            const enumerate = async (): Promise<string[]> => {
+              const { stdout } = await gitExecFileAsync(['remote'], localOptions)
+              return stdout
+                .split('\n')
+                .map((line) => line.trim())
+                .filter(Boolean)
+            }
+            try {
+              const primary = await getDefaultRemote(
+                repo.path,
+                getLocalProjectWorktreeGitOptions(store, repo)
+              )
+              const remotes = await enumerate()
+              return [primary, ...remotes.filter((r) => r !== primary)]
+            } catch (defaultError) {
+              const remotes = await enumerate()
+              if (remotes.length === 0) {
+                throw defaultError instanceof Error
+                  ? defaultError
+                  : new Error('Could not enumerate git remotes.')
+              }
+              const preferred = remotes.includes('origin') ? 'origin' : remotes[0]!
+              return [preferred, ...remotes.filter((r) => r !== preferred)]
+            }
+          })()
         }
-        const localOptions = {
-          cwd: repo.path,
-          ...getLocalProjectWorktreeGitOptions(store, repo)
-        }
-        const enumerate = async (): Promise<string[]> => {
-          const { stdout } = await gitExecFileAsync(['remote'], localOptions)
-          return stdout
-            .split('\n')
-            .map((line) => line.trim())
-            .filter(Boolean)
-        }
-        try {
-          const primary = await getDefaultRemote(
-            repo.path,
-            getLocalProjectWorktreeGitOptions(store, repo)
-          )
-          const remotes = await enumerate()
-          return [primary, ...remotes.filter((r) => r !== primary)]
-        } catch (defaultError) {
-          const remotes = await enumerate()
-          if (remotes.length === 0) {
-            throw defaultError instanceof Error
-              ? defaultError
-              : new Error('Could not enumerate git remotes.')
-          }
-          const preferred = remotes.includes('origin') ? 'origin' : remotes[0]!
-          return [preferred, ...remotes.filter((r) => r !== preferred)]
-        }
+        return remoteListPromise
       }
 
       return resolveGitHubPrStartPoint({

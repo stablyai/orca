@@ -16401,49 +16401,57 @@ export class OrcaRuntimeService {
     // the `origin`-first preference but no longer errors on fork-style multi-
     // remote setups — the resolver falls through to alternatives when the
     // primary lacks the head branch.
-    const resolveRemoteList = async (): Promise<string[]> => {
-      if (sshGitProvider) {
-        const { stdout } = await sshGitProvider.exec(['remote'], repo.path)
-        const remotes = stdout
-          .split('\n')
-          .map((line) => line.trim())
-          .filter(Boolean)
-        if (remotes.length === 0) {
-          throw new Error('Repo has no configured git remotes.')
-        }
-        if (remotes.includes('origin')) {
-          return ['origin', ...remotes.filter((r) => r !== 'origin')]
-        }
-        return remotes
+    // Why: memoize the enumeration so resolveRemote and resolveRemoteAlternatives
+    // draw from one ordered list instead of each paying a git/SSH round-trip.
+    let remoteListPromise: Promise<string[]> | null = null
+    const resolveRemoteList = (): Promise<string[]> => {
+      if (!remoteListPromise) {
+        remoteListPromise = (async (): Promise<string[]> => {
+          if (sshGitProvider) {
+            const { stdout } = await sshGitProvider.exec(['remote'], repo.path)
+            const remotes = stdout
+              .split('\n')
+              .map((line) => line.trim())
+              .filter(Boolean)
+            if (remotes.length === 0) {
+              throw new Error('Repo has no configured git remotes.')
+            }
+            if (remotes.includes('origin')) {
+              return ['origin', ...remotes.filter((r) => r !== 'origin')]
+            }
+            return remotes
+          }
+          try {
+            const primary = await getDefaultRemote(repo.path, localWorktreeGitOptions)
+            const { stdout } = await gitExecFileAsync(['remote'], {
+              cwd: repo.path,
+              ...localWorktreeGitOptions
+            })
+            const remotes = stdout
+              .split('\n')
+              .map((line) => line.trim())
+              .filter(Boolean)
+            return [primary, ...remotes.filter((r) => r !== primary)]
+          } catch (defaultError) {
+            const { stdout } = await gitExecFileAsync(['remote'], {
+              cwd: repo.path,
+              ...localWorktreeGitOptions
+            })
+            const remotes = stdout
+              .split('\n')
+              .map((line) => line.trim())
+              .filter(Boolean)
+            if (remotes.length === 0) {
+              throw defaultError instanceof Error
+                ? defaultError
+                : new Error('Could not enumerate git remotes.')
+            }
+            const preferred = remotes.includes('origin') ? 'origin' : remotes[0]!
+            return [preferred, ...remotes.filter((r) => r !== preferred)]
+          }
+        })()
       }
-      try {
-        const primary = await getDefaultRemote(repo.path, localWorktreeGitOptions)
-        const { stdout } = await gitExecFileAsync(['remote'], {
-          cwd: repo.path,
-          ...localWorktreeGitOptions
-        })
-        const remotes = stdout
-          .split('\n')
-          .map((line) => line.trim())
-          .filter(Boolean)
-        return [primary, ...remotes.filter((r) => r !== primary)]
-      } catch (defaultError) {
-        const { stdout } = await gitExecFileAsync(['remote'], {
-          cwd: repo.path,
-          ...localWorktreeGitOptions
-        })
-        const remotes = stdout
-          .split('\n')
-          .map((line) => line.trim())
-          .filter(Boolean)
-        if (remotes.length === 0) {
-          throw defaultError instanceof Error
-            ? defaultError
-            : new Error('Could not enumerate git remotes.')
-        }
-        const preferred = remotes.includes('origin') ? 'origin' : remotes[0]!
-        return [preferred, ...remotes.filter((r) => r !== preferred)]
-      }
+      return remoteListPromise
     }
 
     // Why: SSH repos can't fetch over the relay's read-only git.exec channel, so
