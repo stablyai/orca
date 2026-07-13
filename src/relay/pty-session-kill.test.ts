@@ -11,6 +11,11 @@ function emptySelection(): Error & { code: number; stdout: string } {
 
 describe('killPosixPtySession', () => {
   it('freezes and kills a Linux descendant that escaped into a new session', async () => {
+    const toReversedDescriptor = Object.getOwnPropertyDescriptor(Array.prototype, 'toReversed')
+    Object.defineProperty(Array.prototype, 'toReversed', {
+      configurable: true,
+      value: undefined
+    })
     const run = vi.fn(async (file: string, args: string[]) => {
       if (file === '/bin/ps' && args.includes('sid=')) {
         return { stdout: '4242 pts/7\n' }
@@ -32,9 +37,17 @@ describe('killPosixPtySession', () => {
     })
     const killProcess = vi.fn()
 
-    await expect(killPosixPtySession(4242, '/dev/pts/7', 'linux', run, killProcess)).resolves.toBe(
-      true
-    )
+    try {
+      await expect(
+        killPosixPtySession(4242, '/dev/pts/7', 'linux', run, killProcess)
+      ).resolves.toBe(true)
+    } finally {
+      if (toReversedDescriptor) {
+        Object.defineProperty(Array.prototype, 'toReversed', toReversedDescriptor)
+      } else {
+        Reflect.deleteProperty(Array.prototype, 'toReversed')
+      }
+    }
 
     expect(killProcess.mock.calls).toEqual([
       [4242, 'SIGSTOP'],

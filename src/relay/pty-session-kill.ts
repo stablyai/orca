@@ -35,7 +35,9 @@ export async function killPosixPtySession(
       resumeProcesses(stopped, killProcess)
       return false
     }
-    for (const candidate of processTree.toReversed()) {
+    // Why: remote relays support Node 18, which predates Array#toReversed.
+    for (let index = processTree.length - 1; index >= 0; index -= 1) {
+      const candidate = processTree[index]!
       if (!signalProcess(candidate, 'SIGKILL', killProcess)) {
         resumeProcesses(stopped, killProcess)
         return false
