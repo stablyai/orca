@@ -1,4 +1,4 @@
-import { useCallback, useState } from 'react'
+import { useCallback, useRef, useState } from 'react'
 import { useMountedRef } from '@/hooks/useMountedRef'
 import { useAppStore } from '../../store'
 import type {
@@ -55,6 +55,7 @@ export function useResourceSessionCleanupReview({
 } = {}): ResourceSessionCleanupReviewApi {
   const [state, setState] = useState<ResourceSessionCleanupReviewState>({ phase: 'closed' })
   const mountedRef = useMountedRef()
+  const operationGenerationRef = useRef(0)
 
   const listCurrentSessions = useCallback(async (): Promise<DaemonSession[]> => {
     const sessions = await dependencies.listSessions()
@@ -65,6 +66,7 @@ export function useResourceSessionCleanupReview({
   }, [dependencies, mountedRef, onSessionsLoaded])
 
   const runReview = useCallback(async (): Promise<void> => {
+    const generation = ++operationGenerationRef.current
     setState({ phase: 'reviewing' })
     try {
       const review = await reviewResourceSessionCleanup({
@@ -72,11 +74,11 @@ export function useResourceSessionCleanupReview({
         readBindings: dependencies.readBindings,
         inspectInactiveCleanup: dependencies.inspectInactiveCleanup
       })
-      if (mountedRef.current) {
+      if (mountedRef.current && operationGenerationRef.current === generation) {
         setState({ phase: 'ready', review })
       }
     } catch (error) {
-      if (mountedRef.current) {
+      if (mountedRef.current && operationGenerationRef.current === generation) {
         setState({
           phase: 'error',
           operation: 'review',
@@ -88,6 +90,7 @@ export function useResourceSessionCleanupReview({
 
   const runCleanup = useCallback(
     async (review: ResourceSessionCleanupReview): Promise<void> => {
+      const generation = ++operationGenerationRef.current
       setState({ phase: 'running', review })
       try {
         const result = await executeResourceSessionCleanup(review, {
@@ -104,11 +107,11 @@ export function useResourceSessionCleanupReview({
           // The per-session outcomes remain authoritative even if the optional
           // presentation refresh is temporarily unavailable.
         }
-        if (mountedRef.current) {
+        if (mountedRef.current && operationGenerationRef.current === generation) {
           setState({ phase: 'completed', review, result })
         }
       } catch (error) {
-        if (mountedRef.current) {
+        if (mountedRef.current && operationGenerationRef.current === generation) {
           setState({
             phase: 'error',
             operation: 'cleanup',
@@ -142,8 +145,14 @@ export function useResourceSessionCleanupReview({
   }, [runCleanup, runReview, state])
 
   const close = useCallback((): void => {
-    setState((current) => (current.phase === 'running' ? current : { phase: 'closed' }))
-  }, [])
+    if (state.phase === 'running') {
+      return
+    }
+    // Why: dismissal cancels only the dialog's pending review presentation;
+    // confirmed cleanup stays non-cancellable and continues to settlement.
+    operationGenerationRef.current += 1
+    setState({ phase: 'closed' })
+  }, [state.phase])
 
   return { state, review: runReview, confirm, retry, close }
 }

@@ -88,6 +88,30 @@ describe('useResourceSessionCleanupReview', () => {
     expect(result.current.state.phase).toBe('ready')
   })
 
+  it('does not reopen after a dismissed review settles', async () => {
+    const inspection = deferred<{ id: string; safety: 'inactive' }[]>()
+    const { result } = renderHook(() =>
+      useResourceSessionCleanupReview({
+        dependencies: dependencies({ inspectInactiveCleanup: vi.fn(() => inspection.promise) })
+      })
+    )
+
+    let completion!: Promise<void>
+    act(() => {
+      completion = result.current.review()
+    })
+    expect(result.current.state.phase).toBe('reviewing')
+    act(() => {
+      result.current.close()
+    })
+    await act(async () => {
+      inspection.resolve([{ id: 'idle', safety: 'inactive' }])
+      await completion
+    })
+
+    expect(result.current.state.phase).toBe('closed')
+  })
+
   it('locks dismissal while confirmed cleanup is running', async () => {
     const cleanup = deferred<{ id: string; outcome: 'killed' }[]>()
     const { result } = renderHook(() =>
