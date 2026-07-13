@@ -30,6 +30,9 @@ export type AiVaultScanOptions = {
   droidSessionsDir?: string
   droidProjectsDir?: string
   kimiSessionsDir?: string
+  // Why: chat-import SQLite DB path for imported web conversations (ChatGPT/
+  // Claude.ai/Gemini). Tests inject a temp DB; unset falls back to chatImportDbPath().
+  webchatDbPath?: string
   limit?: number
   limitPerAgent?: number
   // Active workspace/project paths whose sessions must be included regardless of

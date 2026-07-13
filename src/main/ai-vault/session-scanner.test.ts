@@ -7,6 +7,7 @@ import { scanAiVaultSessions } from './session-scanner'
 import {
   isolatedScanRoots,
   jsonLines,
+  seedWebChatDb,
   writeAntigravityScannerFixture
 } from './session-scanner-test-fixtures'
 
@@ -725,6 +726,14 @@ describe('scanAiVaultSessions', () => {
       ])
     )
 
+    // Web chat: imported conversations live in a chat-import SQLite DB, one
+    // row per source (chatgpt/claude-web/gemini-web), not on the filesystem.
+    await seedWebChatDb(roots.webchatDbPath, [
+      ['CHATGPT', 'chatgpt-session', 'ChatGPT vault title'],
+      ['CLAUDE', 'claude-web-session', 'Claude web vault title'],
+      ['GEMINI', 'gemini-web-session', 'Gemini web vault title']
+    ])
+
     const result = await scanAiVaultSessions({ ...roots, platform: 'darwin', limit: 20 })
 
     expect(result.issues).toEqual([])
@@ -768,6 +777,10 @@ describe('scanAiVaultSessions', () => {
     expect(commandByAgent.get('kimi')).toBe(
       "cd '/tmp/kimi' && kimi --session 'session_kimi-session'"
     )
+    // Web chat conversations are read-only imports, not a launchable CLI agent.
+    expect(commandByAgent.get('chatgpt')).toBe('')
+    expect(commandByAgent.get('claude-web')).toBe('')
+    expect(commandByAgent.get('gemini-web')).toBe('')
 
     const ompSession = result.sessions.find((session) => session.agent === 'omp')
     expect(ompSession?.model).toBe('gpt-5.4-mini')
