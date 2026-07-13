@@ -9956,7 +9956,8 @@
             "worktreeUnavailable": "워크트리는 더 이상 사용할 수 없습니다.",
             "openSupportedWorkspace": "Open a workspace before resuming a session.",
             "localSessionSshWorkspaceUnsupported": "이 세션의 기록은 이 컴퓨터에 저장되어 있어 SSH 워크스페이스에서는 재개할 수 없습니다. 대신 로컬 워크스페이스를 여세요.",
-            "sessionHostMismatchUnsupported": "이 세션은 다른 호스트에 속합니다. 재개하려면 같은 호스트의 워크스페이스를 여세요."
+            "sessionHostMismatchUnsupported": "이 세션은 다른 호스트에 속합니다. 재개하려면 같은 호스트의 워크스페이스를 여세요.",
+            "webChatResumeEmpty": "이어갈 대화 내용이 없어요."
           },
           "AiVaultPanelControls": {
             "scanningSessions": "세션 스캔 중",

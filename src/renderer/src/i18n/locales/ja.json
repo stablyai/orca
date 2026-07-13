@@ -9956,7 +9956,8 @@
             "worktreeUnavailable": "ワークツリーは利用できなくなりました。",
             "openSupportedWorkspace": "Open a workspace before resuming a session.",
             "localSessionSshWorkspaceUnsupported": "このセッションの履歴はこのマシンに保存されているため、SSH ワークスペースでは再開できません。代わりにローカルワークスペースを開いてください。",
-            "sessionHostMismatchUnsupported": "このセッションは別のホストに属しています。再開するには同じホスト上のワークスペースを開いてください。"
+            "sessionHostMismatchUnsupported": "このセッションは別のホストに属しています。再開するには同じホスト上のワークスペースを開いてください。",
+            "webChatResumeEmpty": "再開できる会話がありません。"
           },
           "AiVaultPanelControls": {
             "scanningSessions": "Scanning sessions",

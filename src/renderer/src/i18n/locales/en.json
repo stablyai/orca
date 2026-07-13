@@ -9956,7 +9956,8 @@
             "worktreeUnavailable": "Worktree is no longer available.",
             "openSupportedWorkspace": "Open a workspace before resuming a session.",
             "sessionHostMismatchUnsupported": "This session belongs to a different host. Open a workspace on the same host to resume it.",
-            "localSessionSshWorkspaceUnsupported": "This session's history is stored on this machine, so it can't resume in an SSH workspace. Open a local workspace instead."
+            "localSessionSshWorkspaceUnsupported": "This session's history is stored on this machine, so it can't resume in an SSH workspace. Open a local workspace instead.",
+            "webChatResumeEmpty": "There's no conversation to resume."
           },
           "AiVaultPanelControls": {
             "scanningSessions": "Scanning sessions",
