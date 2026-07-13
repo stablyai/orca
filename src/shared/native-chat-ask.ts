@@ -4,7 +4,7 @@ import type {
   AskQuestion,
   InteractiveQuestionParser
 } from './native-chat-ask-types'
-import type { NativeChatBlock, NativeChatMessage } from './native-chat-types'
+import type { NativeChatMessage } from './native-chat-types'
 
 export type { AskOption, AskPrompt, AskQuestion, InteractiveQuestionParser }
 
@@ -90,19 +90,17 @@ export function parseAskFromStatus(
   }
 }
 
-function questionToolFor(block: NativeChatBlock): InteractiveQuestionParser | null {
-  return block.type === 'tool-call' ? (QUESTION_TOOL_PARSERS.get(block.name) ?? null) : null
-}
-
-/** Resolve the newest question tool that has not received its FIFO tool result. */
+/** Resolve the newest question tool that has not received its FIFO tool result.
+ *  Transcript replay parses each tool-call through the same registered-parser +
+ *  canonical-shape fallback as live status, so a question tool that rendered
+ *  live cannot vanish from pending state after a reconnect/replay. */
 export function extractPendingAsk(messages: readonly NativeChatMessage[]): AskPrompt | null {
   let pending: AskPrompt | null = null
   const outstanding: (AskPrompt | null)[] = []
   for (const message of messages) {
     for (const block of message.blocks) {
-      const parser = questionToolFor(block)
       if (block.type === 'tool-call') {
-        const parsed = parser ? parser(block.input) : null
+        const parsed = parseToolInput(block.name, block.input)
         if (parsed) {
           pending = parsed
         }

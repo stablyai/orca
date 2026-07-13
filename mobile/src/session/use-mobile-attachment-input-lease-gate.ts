@@ -46,6 +46,17 @@ export function useMobileAttachmentInputLeaseGate({
       while (!nativeChatInputLeaseReadyRef.current && Date.now() < deadline) {
         await new Promise((resolve) => setTimeout(resolve, LEASE_READY_POLL_MS))
       }
+      // Why: the wait can outlive the target too — re-check so a tab/host switch
+      // or disconnect mid-wait doesn't send into the wrong (or dead) terminal.
+      // A moved-away target drops silently like the pre-wait guard; only a lease
+      // that never recovered warrants the toast.
+      if (
+        connStateRef.current !== 'connected' ||
+        targetHandle !== activeHandleRef.current ||
+        activeSessionTabTypeRef.current !== 'terminal'
+      ) {
+        return false
+      }
       if (nativeChatInputLeaseReadyRef.current) {
         return true
       }
