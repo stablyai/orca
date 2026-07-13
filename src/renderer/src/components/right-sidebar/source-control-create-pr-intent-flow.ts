@@ -156,13 +156,13 @@ export function resolveCreatePrIntentRemoteStep({
   return 'none'
 }
 
-export function isCreatePrIntentSyncConflictError(
-  error:
-    | (Pick<SourceControlActionError, 'kind' | 'syncPushStage'> &
-        Partial<Pick<SourceControlActionError, 'rawError'>>)
-    | null
-    | undefined
-): boolean {
+export type CreatePrIntentRemoteFailure =
+  | (Pick<SourceControlActionError, 'kind' | 'syncPushStage'> &
+      Partial<Pick<SourceControlActionError, 'rawError'>>)
+  | null
+  | undefined
+
+export function isCreatePrIntentSyncConflictError(error: CreatePrIntentRemoteFailure): boolean {
   // Why: only a genuine merge conflict earns the "resolve conflicts" copy. A
   // sync push-stage rejection is a push failure, and a fetch/network/auth
   // failure during sync is neither a conflict nor push-stage — both must fall
@@ -172,6 +172,27 @@ export function isCreatePrIntentSyncConflictError(
     return false
   }
   return isMergeConflictErrorMessage(error.rawError ?? '')
+}
+
+// The actionable remote steps that show an in-progress notice while running.
+export type CreatePrIntentProgressStep = 'publish' | 'force_push' | 'sync' | 'push'
+
+export function resolveCreatePrIntentProgressStep(
+  remoteStep: CreatePrIntentRemoteStep
+): CreatePrIntentProgressStep {
+  // Why: 'blocked'/'none' are handled before this runs, so every remaining step
+  // is actionable; anything that is not publish/force_push/sync is a plain push.
+  return remoteStep === 'publish' || remoteStep === 'force_push' || remoteStep === 'sync'
+    ? remoteStep
+    : 'push'
+}
+
+export function resolveCreatePrIntentRemoteFailureNoticeKind(
+  error: CreatePrIntentRemoteFailure
+): 'sync_conflict' | 'remote_failed' {
+  // Why: only a genuine sync merge-conflict earns the "resolve conflicts" notice;
+  // push-stage rejections and fetch/network/auth failures fall to generic copy.
+  return isCreatePrIntentSyncConflictError(error) ? 'sync_conflict' : 'remote_failed'
 }
 
 export function getCreatePrIntentCommitFailureNoticeMessage(

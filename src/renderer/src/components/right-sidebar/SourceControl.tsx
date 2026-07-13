@@ -258,7 +258,8 @@ import {
   createPrIntentRunTokenMatches,
   getCreatePrIntentCommitFailureNoticeMessage,
   getCreatePrIntentStagePaths,
-  isCreatePrIntentSyncConflictError,
+  resolveCreatePrIntentProgressStep,
+  resolveCreatePrIntentRemoteFailureNoticeKind,
   resolveCreatePrIntentReviewBase,
   resolveCreatePrIntentRemoteStep,
   type CreatePrIntentRunToken
@@ -2035,6 +2036,11 @@ function SourceControlInner(): React.JSX.Element {
     for (const key of Object.keys(remoteActionErrorSequenceByWorktreeRef.current)) {
       if (!worktreeMap.has(key)) {
         delete remoteActionErrorSequenceByWorktreeRef.current[key]
+      }
+    }
+    for (const key of Object.keys(lastRemoteActionErrorByWorktreeRef.current)) {
+      if (!worktreeMap.has(key)) {
+        delete lastRemoteActionErrorByWorktreeRef.current[key]
       }
     }
     for (const key of Object.keys(generateInFlightRef.current)) {
@@ -4034,22 +4040,23 @@ function SourceControlInner(): React.JSX.Element {
         return
       }
 
+      const progressStep = resolveCreatePrIntentProgressStep(remoteStep)
       setCreatePrIntentNoticeForWorktree(token.worktreeId, {
         tone: 'muted',
         // Why: keep each translate() call on a string-literal key so the
         // localization-catalog verifier can statically detect every key.
         message:
-          remoteStep === 'publish'
+          progressStep === 'publish'
             ? translate(
                 'auto.components.right.sidebar.SourceControl.createPrIntentPublishing',
                 'Publishing branch…'
               )
-            : remoteStep === 'force_push'
+            : progressStep === 'force_push'
               ? translate(
                   'auto.components.right.sidebar.SourceControl.createPrIntentForcePushing',
                   'Force pushing with lease…'
                 )
-              : remoteStep === 'sync'
+              : progressStep === 'sync'
                 ? translate(
                     'auto.components.right.sidebar.SourceControl.createPrIntentSyncing',
                     'Syncing branch…'
@@ -4070,18 +4077,19 @@ function SourceControlInner(): React.JSX.Element {
         const remoteError = lastRemoteActionErrorByWorktreeRef.current[token.worktreeId]
         // A sync push-stage rejection is not a conflict — it falls to the generic
         // copy so the push-recovery panel drives the fix.
-        const isSyncConflict = isCreatePrIntentSyncConflictError(remoteError)
+        const failureNoticeKind = resolveCreatePrIntentRemoteFailureNoticeKind(remoteError)
         setCreatePrIntentNoticeForWorktree(token.worktreeId, {
           tone: 'destructive',
-          message: isSyncConflict
-            ? translate(
-                'auto.components.right.sidebar.SourceControl.createPrIntentSyncConflicts',
-                'Sync hit conflicts. Resolve them, then retry Create PR.'
-              )
-            : translate(
-                'auto.components.right.sidebar.SourceControl.createPrIntentRemoteFailed',
-                'Could not update the remote branch. Retry Create PR.'
-              )
+          message:
+            failureNoticeKind === 'sync_conflict'
+              ? translate(
+                  'auto.components.right.sidebar.SourceControl.createPrIntentSyncConflicts',
+                  'Sync hit conflicts. Resolve them, then retry Create PR.'
+                )
+              : translate(
+                  'auto.components.right.sidebar.SourceControl.createPrIntentRemoteFailed',
+                  'Could not update the remote branch. Retry Create PR.'
+                )
         })
         return
       }

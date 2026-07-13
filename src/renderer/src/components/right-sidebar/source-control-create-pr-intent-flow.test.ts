@@ -8,6 +8,8 @@ import {
   getCreatePrIntentCommitFailureNoticeMessage,
   getCreatePrIntentStagePaths,
   isCreatePrIntentSyncConflictError,
+  resolveCreatePrIntentProgressStep,
+  resolveCreatePrIntentRemoteFailureNoticeKind,
   resolveCreatePrIntentReviewBase,
   resolveCreatePrIntentRemoteStep
 } from './source-control-create-pr-intent-flow'
@@ -344,5 +346,70 @@ describe('source-control Create PR intent flow helpers', () => {
     ).toBe(false)
     expect(isCreatePrIntentSyncConflictError(null)).toBe(false)
     expect(isCreatePrIntentSyncConflictError(undefined)).toBe(false)
+  })
+
+  it('recognizes every merge-conflict wording git can emit during sync', () => {
+    // The fresh-conflict pattern's other alternatives: "Automatic merge failed"
+    // and "fix conflicts" are the most common real pull output.
+    expect(
+      isCreatePrIntentSyncConflictError({
+        kind: 'sync',
+        syncPushStage: false,
+        rawError: 'Automatic merge failed; fix conflicts and then commit the result.'
+      })
+    ).toBe(true)
+    // The unconcluded-merge pattern's other alternatives: "unmerged files" and
+    // "needs merge".
+    expect(
+      isCreatePrIntentSyncConflictError({
+        kind: 'sync',
+        rawError: 'error: Pulling is not possible because you have unmerged files.'
+      })
+    ).toBe(true)
+    expect(
+      isCreatePrIntentSyncConflictError({
+        kind: 'sync',
+        rawError: "error: path 'src/app.ts' needs merge"
+      })
+    ).toBe(true)
+  })
+
+  it('maps each actionable remote step to its progress notice', () => {
+    expect(resolveCreatePrIntentProgressStep('publish')).toBe('publish')
+    expect(resolveCreatePrIntentProgressStep('force_push')).toBe('force_push')
+    expect(resolveCreatePrIntentProgressStep('sync')).toBe('sync')
+    // 'push' and any step that is not publish/force_push/sync render the push copy.
+    expect(resolveCreatePrIntentProgressStep('push')).toBe('push')
+    expect(resolveCreatePrIntentProgressStep('blocked')).toBe('push')
+    expect(resolveCreatePrIntentProgressStep('none')).toBe('push')
+  })
+
+  it('picks the sync-conflict notice only for a genuine sync merge conflict', () => {
+    expect(
+      resolveCreatePrIntentRemoteFailureNoticeKind({
+        kind: 'sync',
+        syncPushStage: false,
+        rawError: 'CONFLICT (content): Merge conflict in src/app.ts'
+      })
+    ).toBe('sync_conflict')
+    // Push-stage sync rejection -> generic copy so push recovery drives the fix.
+    expect(
+      resolveCreatePrIntentRemoteFailureNoticeKind({
+        kind: 'sync',
+        syncPushStage: true,
+        rawError: 'CONFLICT (content): Merge conflict in src/app.ts'
+      })
+    ).toBe('remote_failed')
+    // Fetch/auth failures and missing errors -> generic copy.
+    expect(
+      resolveCreatePrIntentRemoteFailureNoticeKind({
+        kind: 'sync',
+        syncPushStage: false,
+        rawError: 'fatal: Authentication failed for remote'
+      })
+    ).toBe('remote_failed')
+    expect(resolveCreatePrIntentRemoteFailureNoticeKind({ kind: 'push' })).toBe('remote_failed')
+    expect(resolveCreatePrIntentRemoteFailureNoticeKind(null)).toBe('remote_failed')
+    expect(resolveCreatePrIntentRemoteFailureNoticeKind(undefined)).toBe('remote_failed')
   })
 })
