@@ -5,11 +5,14 @@ import type {
   LinearCollectionResult,
   LinearIssue
 } from '../../../../shared/types'
-import { isClipboardTextByteLengthOverLimit } from '../../../../shared/clipboard-text'
+import {
+  WORKSPACE_SOURCE_QUERY_MAX_BYTES,
+  isWorkspaceSourceQueryWithinLimit
+} from '../../../../shared/workspace-source-query'
 
 export type SmartNameMode = 'smart' | 'github' | 'gitlab' | 'branches' | 'linear' | 'text'
 
-export const SMART_WORKSPACE_SOURCE_QUERY_MAX_BYTES = 2048
+export const SMART_WORKSPACE_SOURCE_QUERY_MAX_BYTES = WORKSPACE_SOURCE_QUERY_MAX_BYTES
 
 export type SmartWorkspaceSourceRow =
   | { kind: 'use-name'; value: string; name: string }
@@ -38,7 +41,7 @@ export function isSmartWorkspaceSourceQueryWithinLimit(
   query: string,
   maxBytes = SMART_WORKSPACE_SOURCE_QUERY_MAX_BYTES
 ): boolean {
-  return !isClipboardTextByteLengthOverLimit(query, maxBytes)
+  return isWorkspaceSourceQueryWithinLimit(query, maxBytes)
 }
 
 export function getBranchSearchRequest({

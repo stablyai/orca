@@ -1,10 +1,12 @@
 import type { WebSocket } from 'ws'
 import {
   DESKTOP_PROTOCOL_VERSION,
-  MIN_COMPATIBLE_MOBILE_VERSION
+  MIN_COMPATIBLE_MOBILE_VERSION,
+  MOBILE_WORKSPACE_SOURCE_SELECTOR_RUNTIME_CAPABILITY
 } from '../../src/shared/protocol-version'
 import { handleMockFilePreviewRequest } from './mock-server-file-preview-data'
 import { handleMockGitRequest } from './mock-server-git-state'
+import { handleMockWorkspaceSourceRequest } from './mock-server-workspace-source'
 import { FAKE_SCROLLBACK, STREAMING_CHUNKS } from './mock-server-terminal-fixtures'
 import { createMockRepos, createMockWorktrees, readScenarioNumber } from './mobile-lag-scenario'
 
@@ -103,6 +105,9 @@ export function handleRequest(
   if (handleMockFilePreviewRequest(request, respond, success, error)) {
     return
   }
+  if (handleMockWorkspaceSourceRequest(request, respond, success, FAKE_REPOS[0]?.id ?? 'repo-1')) {
+    return
+  }
 
   switch (request.method) {
     case 'status.get':
@@ -114,7 +119,8 @@ export function handleRequest(
           graphStatus: 'ready',
           windowCount: 1,
           tabCount: 2,
-          terminalCount: 2
+          terminalCount: 2,
+          capabilities: [MOBILE_WORKSPACE_SOURCE_SELECTOR_RUNTIME_CAPABILITY]
         })
       )
       break

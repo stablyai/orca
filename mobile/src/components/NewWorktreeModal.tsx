@@ -18,6 +18,9 @@ import { BottomDrawer } from './BottomDrawer'
 import { PickerListDrawer } from './PickerListDrawer'
 import { MobileAgentIcon } from './MobileAgentIcon'
 import { MobileWorkspaceNameInput } from './MobileWorkspaceNameInput'
+import { NewWorkspaceSourceDrawer } from './NewWorkspaceSourceDrawer'
+import { NewWorkspaceSourceField } from './NewWorkspaceSourceField'
+import { useNewWorktreeModalPresentation } from './new-worktree-modal-presentation'
 import { getSuggestedCreatureName } from './worktree-name-suggestion'
 import { deriveWorkspaceSshGate, workspaceSshStatusLabel } from '../tasks/workspace-ssh-gate'
 import { WORKTREE_CREATE_TIMEOUT_MS } from '../tasks/workspace-create-timeout'
@@ -34,7 +37,6 @@ import {
   MOBILE_TUI_AGENT_LAUNCH_COMMANDS
 } from '../tasks/mobile-tui-agents'
 import type { PersistedTrustedOrcaHooks, TuiAgent } from '../../../src/shared/types'
-import type { SshConnectionState } from '../../../src/shared/ssh-types'
 import {
   NEW_WORKTREE_AGENT_OPTIONS as AGENT_OPTIONS,
   NEW_WORKTREE_BLANK_AGENT as BLANK_TERMINAL,
@@ -49,6 +51,9 @@ import {
   refreshMobileNewWorkspaceDialogSelectedRepo,
   resolveMobileNewWorkspaceDialogRepoId
 } from '../worktree/new-workspace-dialog-repo-selection'
+import { useNewWorkspaceSource } from '../workspace-source/use-new-workspace-source'
+import { buildWorkspaceSourceCreateCandidate } from '../workspace-source/workspace-source-create-candidate'
+import { useLiveWorkspaceSshState } from '../workspace-source/use-live-workspace-ssh-state'
 
 type Repo = {
   id: string
@@ -56,6 +61,7 @@ type Repo = {
   path: string
   badgeColor?: string
   connectionId?: string | null
+  kind?: 'git' | 'folder'
 }
 
 type SetupDecision = 'inherit' | 'run' | 'skip'
@@ -124,6 +130,8 @@ type Props = {
   // on the on-disk directory basename, so paths (not displayNames) are
   // what the suggestion logic must dedupe against.
   existingWorktreePaths?: readonly string[]
+  existingWorktreeBranches?: readonly { repoId: string; branch: string }[]
+  hostCapabilities?: readonly string[] | null
   onCreated: (worktreeId: string, name: string) => void
   onClose: () => void
 }
@@ -133,6 +141,8 @@ export function NewWorktreeModal({
   client,
   hostId,
   existingWorktreePaths,
+  existingWorktreeBranches,
+  hostCapabilities,
   onCreated,
   onClose
 }: Props) {
@@ -157,6 +167,8 @@ export function NewWorktreeModal({
       client={client}
       hostId={hostId}
       existingWorktreePaths={existingWorktreePaths}
+      existingWorktreeBranches={existingWorktreeBranches}
+      hostCapabilities={hostCapabilities}
       onCreated={onCreated}
       onClose={onClose}
     />
@@ -168,6 +180,8 @@ function NewWorktreeModalContent({
   client,
   hostId,
   existingWorktreePaths,
+  existingWorktreeBranches,
+  hostCapabilities,
   onCreated,
   onClose
 }: Props) {
@@ -183,9 +197,6 @@ function NewWorktreeModalContent({
   )
   const [agentOverriddenState, setAgentOverridden] = useState(false)
   const [showAgentPicker, setShowAgentPicker] = useState(false)
-  const [sshState, setSshState] = useState<SshConnectionState | null>(null)
-  const [sshConnectingTargetId, setSshConnectingTargetId] = useState<string | null>(null)
-  const [name, setName] = useState('')
   const [note, setNote] = useState('')
   const [showAdvanced, setShowAdvanced] = useState(false)
   const [setupHookDetails, setSetupHookDetails] = useState<SetupHookDetails | null>(null)
@@ -197,9 +208,11 @@ function NewWorktreeModalContent({
   > | null>(null)
   const [runSetup, setRunSetup] = useState(true)
   const [creating, setCreating] = useState(false)
+  const createInFlightRef = useRef(false)
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(initialRepos == null)
   const lastVisitedRepo = useLastVisitedWorktreeRepoId(hostId, visible)
+  const modalPresentation = useNewWorktreeModalPresentation()
 
   // Why: matches the desktop UI — the input shows a generic "Workspace name"
   // placeholder, not the suggested creature. The creature name is only used
@@ -208,11 +221,31 @@ function NewWorktreeModalContent({
   // existingWorktreePaths at submission time.
 
   const selectedRepoConnectionId = selectedRepo?.connectionId ?? null
+  const liveSsh = useLiveWorkspaceSshState({
+    visible,
+    client,
+    targetId: selectedRepoConnectionId
+  })
   const sshGate = deriveWorkspaceSshGate({
     connectionId: selectedRepoConnectionId,
-    state: sshState,
-    connecting: sshConnectingTargetId === selectedRepoConnectionId
+    state: liveSsh.state,
+    connecting: liveSsh.connecting
   })
+  const workspaceSource = useNewWorkspaceSource({
+    visible,
+    client,
+    capabilities: hostCapabilities,
+    repo: selectedRepo,
+    repoConnected: !selectedRepoConnectionId || sshGate.status === 'connected',
+    sshStateGeneration: liveSsh.generation
+  })
+  const selectedRepoWorktreeBranches = useMemo(
+    () =>
+      (existingWorktreeBranches ?? [])
+        .filter((worktree) => worktree.repoId === selectedRepo?.id)
+        .map((worktree) => worktree.branch),
+    [existingWorktreeBranches, selectedRepo?.id]
+  )
   const detectedAgentIds =
     detectedAgentIdsState?.connectionId === selectedRepoConnectionId &&
     (selectedRepoConnectionId === null || sshGate.status === 'connected')
@@ -326,45 +359,6 @@ function NewWorktreeModalContent({
   }, [visible, client, hostId])
 
   useEffect(() => {
-    if (!visible || !client || !selectedRepoConnectionId) {
-      return
-    }
-    let stale = false
-    void client
-      .sendRequest('ssh.getState', { targetId: selectedRepoConnectionId })
-      .then((response) => {
-        if (stale) {
-          return
-        }
-        if (!response.ok) {
-          throw new Error(response.error.message)
-        }
-        const state = (response as RpcSuccess).result as { state?: SshConnectionState | null }
-        setSshState(
-          state.state ?? {
-            targetId: selectedRepoConnectionId,
-            status: 'disconnected',
-            error: null,
-            reconnectAttempt: 0
-          }
-        )
-      })
-      .catch((err) => {
-        if (!stale) {
-          setSshState({
-            targetId: selectedRepoConnectionId,
-            status: 'error',
-            error: err instanceof Error ? err.message : 'Failed to read SSH connection state.',
-            reconnectAttempt: 0
-          })
-        }
-      })
-    return () => {
-      stale = true
-    }
-  }, [client, selectedRepoConnectionId, visible])
-
-  useEffect(() => {
     if (!visible || !client) {
       return
     }
@@ -445,47 +439,6 @@ function NewWorktreeModalContent({
     }
   }, [client, selectedRepo])
 
-  async function connectSelectedSshRepo(): Promise<void> {
-    if (!client || !selectedRepoConnectionId) {
-      return
-    }
-    setSshConnectingTargetId(selectedRepoConnectionId)
-    setSshState({
-      targetId: selectedRepoConnectionId,
-      status: 'connecting',
-      error: null,
-      reconnectAttempt: 0
-    })
-    try {
-      const response = await client.sendRequest(
-        'ssh.connect',
-        { targetId: selectedRepoConnectionId },
-        { timeoutMs: 120_000 }
-      )
-      if (!response.ok) {
-        throw new Error(response.error.message)
-      }
-      const result = (response as RpcSuccess).result as { state?: SshConnectionState | null }
-      setSshState(
-        result.state ?? {
-          targetId: selectedRepoConnectionId,
-          status: 'connected',
-          error: null,
-          reconnectAttempt: 0
-        }
-      )
-    } catch (err) {
-      setSshState({
-        targetId: selectedRepoConnectionId,
-        status: 'error',
-        error: err instanceof Error ? err.message : 'Failed to connect to SSH repository.',
-        reconnectAttempt: 0
-      })
-    } finally {
-      setSshConnectingTargetId((current) => (current === selectedRepoConnectionId ? null : current))
-    }
-  }
-
   async function persistSetupHookTrust(
     repoId: string,
     contentHash: string,
@@ -508,9 +461,10 @@ function NewWorktreeModalContent({
   }
 
   async function handleCreate(options: CreateOptions = {}) {
-    if (!client || !selectedRepo) {
+    if (!client || !selectedRepo || createInFlightRef.current) {
       return
     }
+    createInFlightRef.current = true
     setCreating(true)
     setError('')
 
@@ -555,7 +509,7 @@ function NewWorktreeModalContent({
       // server invent one. The pre-flight basename dedupe is only a hint;
       // the authoritative collision is checked server-side against git
       // branches/remotes/PRs, so we also retry-with-suffix on conflict.
-      const trimmedName = name.trim()
+      const trimmedName = workspaceSource.name.value.trim()
       const baseName = trimmedName || getSuggestedCreatureName(existingWorktreePaths ?? [])
 
       // Why: mirrors src/renderer/src/store/slices/worktrees.ts
@@ -602,32 +556,41 @@ function NewWorktreeModalContent({
           contentHash: setupTrust.contentHash,
           previouslyApproved: wasSetupHookPreviouslyApproved(trustedOrcaHooks, selectedRepo.id)
         })
+        modalPresentation.openLayer('setup-trust')
         return
       }
 
       let lastError: string | null = null
       for (let attempt = 0; attempt < 25; attempt += 1) {
         const candidateName = candidateFor(attempt)
-        const params: Record<string, unknown> = {
-          repo: `id:${selectedRepo.id}`,
+        const baseParams: Record<string, unknown> = {
           startupCommand: command,
-          setupDecision,
-          name: candidateName
+          setupDecision
         }
         if (selectedAgent.id !== '__blank__') {
-          params.createdWithAgent = selectedAgent.id
+          baseParams.createdWithAgent = selectedAgent.id
         }
         if (note.trim()) {
-          params.comment = note.trim()
+          baseParams.comment = note.trim()
         }
+        const params = buildWorkspaceSourceCreateCandidate({
+          baseParams,
+          baseName,
+          name: workspaceSource.name,
+          source: workspaceSource.source,
+          selectedRepoId: selectedRepo.id,
+          attempt
+        })
 
         const response = await client.sendRequest('worktree.create', params, {
           timeoutMs: WORKTREE_CREATE_TIMEOUT_MS
         })
         if (response.ok) {
-          const result = (response as RpcSuccess).result as { worktree: { id: string } }
+          const result = (response as RpcSuccess).result as {
+            worktree: { id: string; displayName?: string }
+          }
           onClose()
-          onCreated(result.worktree.id, candidateName)
+          onCreated(result.worktree.id, result.worktree.displayName ?? candidateName)
           return
         }
 
@@ -640,6 +603,7 @@ function NewWorktreeModalContent({
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Failed to create workspace')
     } finally {
+      createInFlightRef.current = false
       setCreating(false)
     }
   }
@@ -676,9 +640,34 @@ function NewWorktreeModalContent({
     Keyboard.dismiss()
   }
 
+  function openSelectionLayer(layer: 'source' | 'repository' | 'agent'): void {
+    prepareSelectionPickerOpen()
+    modalPresentation.openLayer(layer)
+  }
+
+  function closeSelectionLayer(layer: 'source' | 'repository' | 'agent'): void {
+    if (layer === 'source') {
+      workspaceSource.setDrawerVisible(false)
+    } else if (layer === 'repository') {
+      setShowRepoPicker(false)
+    } else {
+      setShowAgentPicker(false)
+    }
+    modalPresentation.closeLayer(layer)
+  }
+
+  function closeSetupTrustPrompt(): void {
+    setSetupTrustPrompt(null)
+    modalPresentation.closeLayer('setup-trust')
+  }
+
   return (
     <>
-      <BottomDrawer visible={visible} onClose={onClose}>
+      <BottomDrawer
+        visible={visible && modalPresentation.visibleLayer === 'form'}
+        onClose={onClose}
+        onHidden={() => modalPresentation.handleLayerHidden('form')}
+      >
         <View style={styles.header}>
           <Text style={styles.title}>Create Workspace</Text>
           <Text style={styles.subtitle}>
@@ -701,7 +690,7 @@ function NewWorktreeModalContent({
               <Pressable
                 style={styles.fieldButton}
                 onPress={() => {
-                  prepareSelectionPickerOpen()
+                  openSelectionLayer('repository')
                   setShowRepoPicker(true)
                 }}
               >
@@ -750,7 +739,7 @@ function NewWorktreeModalContent({
                           sshGate.connectInProgress && styles.disabled
                         ]}
                         disabled={sshGate.connectInProgress}
-                        onPress={() => void connectSelectedSshRepo()}
+                        onPress={() => void liveSsh.connect()}
                       >
                         <Text style={styles.sshConnectText}>
                           {sshGate.connectInProgress ? 'Connecting...' : 'Connect'}
@@ -763,15 +752,22 @@ function NewWorktreeModalContent({
               </View>
             ) : null}
 
+            {selectedRepo ? (
+              <NewWorkspaceSourceField
+                controller={workspaceSource}
+                onPrepareOpen={() => openSelectionLayer('source')}
+              />
+            ) : null}
+
             <View style={styles.field}>
               <Text style={styles.label}>
                 Workspace Name <Text style={styles.labelHint}>[Optional]</Text>
               </Text>
               <MobileWorkspaceNameInput
                 style={styles.input}
-                value={name}
+                value={workspaceSource.name.value}
                 onChangeText={(t) => {
-                  setName(t)
+                  workspaceSource.setManualName(t)
                   setError('')
                 }}
                 placeholderTextColor={colors.textMuted}
@@ -791,7 +787,7 @@ function NewWorktreeModalContent({
                 style={[styles.fieldButton, sshGate.requiresConnection && styles.disabled]}
                 disabled={sshGate.requiresConnection}
                 onPress={() => {
-                  prepareSelectionPickerOpen()
+                  openSelectionLayer('agent')
                   setShowAgentPicker(true)
                 }}
               >
@@ -905,20 +901,43 @@ function NewWorktreeModalContent({
 
       {/* Sub-modals for pickers — rendered outside the main modal so they
           layer on top and scroll without touch conflicts. */}
+      <NewWorkspaceSourceDrawer
+        visible={
+          visible &&
+          modalPresentation.visibleLayer === 'source' &&
+          selectedRepo != null &&
+          workspaceSource.drawerVisible
+        }
+        client={client}
+        repoId={selectedRepo?.id ?? ''}
+        availability={workspaceSource.availability}
+        sshStateGeneration={workspaceSource.sshStateGeneration}
+        name={workspaceSource.name}
+        worktreeBranches={selectedRepoWorktreeBranches}
+        onSelect={(source) => {
+          workspaceSource.selectSource(source)
+          modalPresentation.closeLayer('source')
+        }}
+        onClose={() => closeSelectionLayer('source')}
+        onHidden={() => modalPresentation.handleLayerHidden('source')}
+        onOpen={workspaceSource.refreshLinearStatus}
+      />
+
       <PickerListDrawer
-        visible={visible && showRepoPicker}
+        visible={visible && modalPresentation.visibleLayer === 'repository' && showRepoPicker}
         title="Repository"
         items={repoPickerItems}
         selectedId={selectedRepo?.id ?? ''}
         onSelect={(item) => setSelectedRepo(item.repo)}
-        onClose={() => setShowRepoPicker(false)}
+        onClose={() => closeSelectionLayer('repository')}
+        onHidden={() => modalPresentation.handleLayerHidden('repository')}
         renderIcon={(item) => {
           return <View style={[styles.repoDot, { backgroundColor: repoBadgeColor(item.repo) }]} />
         }}
       />
 
       <PickerListDrawer
-        visible={visible && showAgentPicker}
+        visible={visible && modalPresentation.visibleLayer === 'agent' && showAgentPicker}
         title="Agent"
         items={pickerAgentOptions}
         selectedId={selectedAgent.id}
@@ -926,13 +945,17 @@ function NewWorktreeModalContent({
           setAgentOverridden(true)
           setSelectedAgent(agent)
         }}
-        onClose={() => setShowAgentPicker(false)}
+        onClose={() => closeSelectionLayer('agent')}
+        onHidden={() => modalPresentation.handleLayerHidden('agent')}
         renderIcon={(agent) => <MobileAgentIcon agentId={agent.id} size={18} />}
       />
 
       <BottomDrawer
-        visible={visible && setupTrustPrompt != null}
-        onClose={() => setSetupTrustPrompt(null)}
+        visible={
+          visible && modalPresentation.visibleLayer === 'setup-trust' && setupTrustPrompt != null
+        }
+        onClose={closeSetupTrustPrompt}
+        onHidden={() => modalPresentation.handleLayerHidden('setup-trust')}
       >
         {setupTrustPrompt ? (
           <View>
@@ -968,7 +991,7 @@ function NewWorktreeModalContent({
                         false
                       )
                       const approvedHash = setupTrustPrompt.contentHash
-                      setSetupTrustPrompt(null)
+                      closeSetupTrustPrompt()
                       await handleCreate({
                         setupOverride: 'run',
                         approvedSetupContentHash: approvedHash
@@ -995,7 +1018,7 @@ function NewWorktreeModalContent({
                         true
                       )
                       const approvedHash = setupTrustPrompt.contentHash
-                      setSetupTrustPrompt(null)
+                      closeSetupTrustPrompt()
                       await handleCreate({
                         setupOverride: 'run',
                         approvedSetupContentHash: approvedHash
@@ -1014,7 +1037,7 @@ function NewWorktreeModalContent({
                 style={styles.trustActionRow}
                 disabled={creating}
                 onPress={() => {
-                  setSetupTrustPrompt(null)
+                  closeSetupTrustPrompt()
                   void handleCreate({ setupOverride: 'skip' })
                 }}
               >

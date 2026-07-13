@@ -1,4 +1,4 @@
-import { type ReactNode, useCallback, useEffect, useState } from 'react'
+import { type ReactNode, useCallback, useEffect, useRef, useState } from 'react'
 import {
   View,
   Pressable,
@@ -24,6 +24,7 @@ import Animated, {
 } from 'react-native-reanimated'
 import { colors, spacing } from '../theme/mobile-theme'
 import { resolveBottomDrawerMounted } from './bottom-drawer-mount-state'
+import { useBottomDrawerNativeVisibility } from './use-bottom-drawer-native-visibility'
 import { useResponsiveLayout } from '../layout/responsive-layout'
 
 const DISMISS_THRESHOLD = 80
@@ -39,6 +40,7 @@ const TOP_SCROLL_EPSILON = 1
 type Props = {
   visible: boolean
   onClose: () => void
+  onHidden?: () => void
   children: ReactNode
   dragContentToDismiss?: boolean
   contentScrollable?: boolean
@@ -48,6 +50,7 @@ type Props = {
 export function BottomDrawer({
   visible,
   onClose,
+  onHidden,
   children,
   dragContentToDismiss = true,
   contentScrollable = true,
@@ -55,6 +58,12 @@ export function BottomDrawer({
 }: Props) {
   const [mounted, setMounted] = useState(visible)
   const resolvedMounted = resolveBottomDrawerMounted(visible, mounted)
+  const onHiddenRef = useRef(onHidden)
+  onHiddenRef.current = onHidden
+  const handleHidden = useCallback(() => {
+    setMounted(false)
+    onHiddenRef.current?.()
+  }, [])
 
   // Why: opening drawers should mount before commit; waiting for a passive
   // Effect adds a null render before every drawer can animate in.
@@ -72,7 +81,7 @@ export function BottomDrawer({
     <MountedBottomDrawer
       visible={visible}
       onClose={onClose}
-      onHidden={() => setMounted(false)}
+      onHidden={handleHidden}
       dragContentToDismiss={dragContentToDismiss}
       contentScrollable={contentScrollable}
       zIndex={zIndex}
@@ -83,7 +92,7 @@ export function BottomDrawer({
 }
 
 type MountedBottomDrawerProps = Props & {
-  onHidden: () => void
+  onHidden: NonNullable<Props['onHidden']>
 }
 
 function MountedBottomDrawer({
@@ -103,6 +112,10 @@ function MountedBottomDrawer({
   const contentDragCanDismiss = useSharedValue(false)
   const { height: screenHeight } = useWindowDimensions()
   const insets = useSafeAreaInsets()
+  const { nativeVisible, hideNativeModal, reportHidden } = useBottomDrawerNativeVisibility(
+    visible,
+    onHidden
+  )
   // Why: on wide/tablet canvases a full-width sheet looks stretched; cap it and
   // center it horizontally. Vertical bottom-anchoring (and all the drag/keyboard
   // transforms below) is unchanged, so phone behavior stays identical.
@@ -117,11 +130,11 @@ function MountedBottomDrawer({
       Keyboard.dismiss()
       progress.value = withTiming(0, { duration: BOTTOM_DRAWER_HIDE_DURATION_MS }, (finished) => {
         if (finished) {
-          runOnJS(onHidden)()
+          runOnJS(hideNativeModal)()
         }
       })
     }
-  }, [onHidden, visible])
+  }, [hideNativeModal, visible])
 
   // Why: KeyboardAvoidingView and useAnimatedKeyboard are both unreliable
   // inside Modal (iOS ignores KAV; Android needs adjustNothing for
@@ -271,9 +284,17 @@ function MountedBottomDrawer({
   // the scrolled content and clips the sheet. The Modal stays mounted (visible)
   // for the whole life of MountedBottomDrawer so the reanimated exit animation
   // runs before the parent unmounts us; show/hide is driven by `progress`, so
-  // animationType stays "none". onRequestClose handles the Android back button.
+  // animationType stays "none". On iOS, onDismiss is the ownership boundary:
+  // UIKit must finish dismissing this controller before a sibling can present.
   return (
-    <Modal visible transparent animationType="none" statusBarTranslucent onRequestClose={dismiss}>
+    <Modal
+      visible={nativeVisible}
+      transparent
+      animationType="none"
+      statusBarTranslucent
+      onRequestClose={dismiss}
+      onDismiss={reportHidden}
+    >
       <Animated.View
         pointerEvents={visible ? 'auto' : 'none'}
         style={[styles.overlay, { zIndex, elevation: zIndex }]}

@@ -12,6 +12,7 @@ type Props<T extends { id: string; label: string }> = {
   selectedId: string
   onSelect: (item: T) => void
   onClose: () => void
+  onHidden?: () => void
   renderIcon?: (item: T) => ReactNode
 }
 
@@ -22,6 +23,7 @@ export function PickerListDrawer<T extends { id: string; label: string }>({
   selectedId,
   onSelect,
   onClose,
+  onHidden,
   renderIcon
 }: Props<T>) {
   const [closing, setClosing] = useState(false)
@@ -64,6 +66,7 @@ export function PickerListDrawer<T extends { id: string; label: string }>({
     <BottomDrawer
       visible={drawerVisible}
       onClose={finishClose}
+      onHidden={onHidden}
       dragContentToDismiss={false}
       contentScrollable={false}
     >

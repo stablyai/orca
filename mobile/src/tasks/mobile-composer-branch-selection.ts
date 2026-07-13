@@ -12,6 +12,8 @@ export function resolveComposerBranchSelection(args: {
   currentName: string
   lastAutoName: string
 }): ComposerBranchSelection {
+  // Why: the existing Tasks composer treats any non-auto name as user-owned,
+  // even when it happens to prefix the selected branch.
   const shouldAutoName = !args.currentName.trim() || args.currentName === args.lastAutoName
   if (!shouldAutoName) {
     return {

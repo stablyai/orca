@@ -184,7 +184,7 @@ export function HostScreen({
   const [showGroupPicker, setShowGroupPicker] = useState(false)
   const [showFilterModal, setShowFilterModal] = useState(false)
   const [actionTarget, setActionTarget] = useState<Worktree | null>(null)
-  const [hostCapabilities, setHostCapabilities] = useState<string[]>([])
+  const [hostCapabilities, setHostCapabilities] = useState<string[] | null>(null)
   const [confirmDelete, setConfirmDelete] = useState<Worktree | null>(null)
   const [confirmRemoveHost, setConfirmRemoveHost] = useState(false)
   const [routeActionState, setRouteActionState] = useState(() =>
@@ -519,7 +519,7 @@ export function HostScreen({
       // Why: drop the prior host's capabilities while disconnected/switching so
       // a capability-gated action (e.g. Agent Session History) can't linger for
       // a host that doesn't support it.
-      setHostCapabilities([])
+      setHostCapabilities(null)
       return
     }
     let cancelled = false
@@ -1373,7 +1373,7 @@ export function HostScreen({
                       hostId,
                       worktreeId: actionTarget.worktreeId,
                       worktreeName: actionTarget.displayName || actionTarget.repo,
-                      hostCapabilities,
+                      hostCapabilities: hostCapabilities ?? [],
                       navigate: navigateFromHostList,
                       onDone: () => setActionTarget(null)
                     }),
@@ -1428,6 +1428,11 @@ export function HostScreen({
         client={client}
         hostId={hostId}
         existingWorktreePaths={existingWorktreePaths}
+        existingWorktreeBranches={displayWorktrees.map((worktree) => ({
+          repoId: worktree.repoId,
+          branch: worktree.branch
+        }))}
+        hostCapabilities={hostCapabilities}
         onVisibleChange={(visible) => {
           newWorktreeModalVisibleRef.current = visible
         }}
