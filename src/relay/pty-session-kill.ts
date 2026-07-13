@@ -49,19 +49,54 @@ async function killDarwinPtyProcesses(
   }
   // Why: Darwin pkill has no SID selector and its TTY filter does not match
   // forkpty children. A targeted ps query avoids a system-wide inventory.
-  const result = (await run('ps', ['-t', tty, '-o', 'pid='], { timeout: 3000 })) as {
+  const result = (await run('/bin/ps', ['-t', tty, '-o', 'pid=', '-o', 'ppid='], {
+    timeout: 3000
+  })) as {
     stdout?: string | Buffer
   }
-  const pids = String(result.stdout ?? '')
-    .split(/\s+/)
-    .map(Number)
-    .filter((candidate) => Number.isSafeInteger(candidate) && candidate > 0)
-  if (!pids.includes(rootPid)) {
+  const rows = String(result.stdout ?? '')
+    .trim()
+    .split('\n')
+    .map((line) => line.trim().split(/\s+/).map(Number))
+    .filter(
+      (row): row is [number, number] =>
+        row.length === 2 &&
+        row.every((candidate) => Number.isSafeInteger(candidate) && candidate >= 0) &&
+        row[0] > 0
+    )
+  if (!rows.some(([candidate]) => candidate === rootPid)) {
     return false
   }
-  // Kill the leader last so its child job groups cannot be reparented between
-  // the ownership snapshot and their signals.
-  for (const candidate of [...pids.filter((entry) => entry !== rootPid), rootPid]) {
+  const parentByPid = new Map(rows)
+  const depth = (pid: number): number => {
+    let current = pid
+    let result = 0
+    const visited = new Set<number>()
+    while (current !== rootPid && !visited.has(current)) {
+      visited.add(current)
+      const parent = parentByPid.get(current)
+      if (!parent || !parentByPid.has(parent)) {
+        break
+      }
+      current = parent
+      result += 1
+    }
+    return result
+  }
+  // Why: descendants must be signalled before their parents so the snapshot
+  // cannot be invalidated by reparenting while teardown is in progress.
+  const pids = rows
+    .map(([candidate]) => candidate)
+    .sort((a, b) => {
+      if (a === rootPid) {
+        return 1
+      }
+      if (b === rootPid) {
+        return -1
+      }
+      return depth(b) - depth(a)
+    })
+  for (const candidate of pids) {
     try {
       killProcess(candidate, 'SIGKILL')
     } catch (error) {

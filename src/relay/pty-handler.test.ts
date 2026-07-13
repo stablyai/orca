@@ -109,7 +109,7 @@ describe('PtyHandler', () => {
     mockPtyInstance.kill.mockReset()
     mockPtyInstance.clear.mockReset()
     mockKillPosixPtySession.mockReset()
-    mockKillPosixPtySession.mockResolvedValue(false)
+    mockKillPosixPtySession.mockResolvedValue(true)
 
     mockPtySpawn.mockReturnValue({ ...mockPtyInstance })
 
@@ -745,7 +745,7 @@ describe('PtyHandler', () => {
 
     expect(handler.retainedStartupCommandCount).toBe(0)
     expect(term.write).not.toHaveBeenCalled()
-    expect(killSpy).toHaveBeenCalledWith('SIGKILL')
+    expect(killSpy).not.toHaveBeenCalledWith('SIGKILL')
   })
 
   it('increments PTY ids on each spawn', async () => {
@@ -1056,7 +1056,7 @@ describe('PtyHandler', () => {
       id: 'pty-1',
       data: 'last words'
     })
-    expect(mockKill).toHaveBeenCalledWith('SIGKILL')
+    expect(mockKill).not.toHaveBeenCalledWith('SIGKILL')
   })
 
   it('notifies pty.exit when graceful shutdown falls back to SIGKILL', async () => {
@@ -1085,7 +1085,7 @@ describe('PtyHandler', () => {
     expect(handler.activePtyCount).toBe(0)
   })
 
-  it('kills PTY on shutdown with SIGKILL when immediate', async () => {
+  it('kills the full POSIX PTY session when shutdown is immediate', async () => {
     const mockKill = vi.fn()
     mockPtySpawn.mockReturnValue({
       ...mockPtyInstance,
@@ -1097,7 +1097,26 @@ describe('PtyHandler', () => {
     await dispatcher.callRequest('pty.spawn', {})
     await dispatcher.callRequest('pty.shutdown', { id: 'pty-1', immediate: true })
     expect(mockKillPosixPtySession).toHaveBeenCalledWith(process.pid, undefined)
-    expect(mockKill).toHaveBeenCalledWith('SIGKILL')
+    expect(mockKill).not.toHaveBeenCalledWith('SIGKILL')
+  })
+
+  it('fails closed when full POSIX PTY session teardown cannot be verified', async () => {
+    const mockKill = vi.fn()
+    mockKillPosixPtySession.mockResolvedValue(false)
+    mockPtySpawn.mockReturnValue({
+      ...mockPtyInstance,
+      kill: mockKill,
+      onData: vi.fn(),
+      onExit: vi.fn()
+    })
+
+    await dispatcher.callRequest('pty.spawn', {})
+
+    await expect(
+      dispatcher.callRequest('pty.shutdown', { id: 'pty-1', immediate: true })
+    ).rejects.toThrow('Unable to verify full PTY session teardown: pty-1')
+    expect(mockKill).not.toHaveBeenCalled()
+    expect(handler.activePtyCount).toBe(1)
   })
 
   it('does not signal a recycled root pid after the POSIX session kill succeeds', async () => {
@@ -1779,7 +1798,7 @@ describe('PtyHandler', () => {
     await dispatcher.callRequest('pty.shutdown', { id: 'pty-1', immediate: true })
     onExitCb!({ exitCode: 0 })
 
-    expect(mockKill).toHaveBeenCalledWith('SIGKILL')
+    expect(mockKill).not.toHaveBeenCalledWith('SIGKILL')
     expect(exits).toEqual([{ id: 'pty-1', paneKey: 'tab-shutdown:0' }])
     expect(handler.activePtyCount).toBe(0)
   })

@@ -1484,8 +1484,6 @@ export function registerWorktreeHandlers(
               runtime,
               localProvider: getLocalPtyProvider(),
               onPtyStopped: clearProviderPtyState
-            }).catch((err) => {
-              console.warn(`[worktree-teardown] failed for ${args.worktreeId}:`, err)
             })
             removeWorktreeMetadataAndTransientState(store, args.worktreeId)
             preservedBranchCleanupByWorktreeId.delete(args.worktreeId)
@@ -1834,18 +1832,14 @@ export function registerWorktreeHandlers(
             runtime,
             localProvider: getLocalPtyProvider(),
             onPtyStopped: clearProviderPtyState
+          }).then((r) => {
+            const total = r.runtimeStopped + r.providerStopped + r.registryStopped
+            if (total > 0) {
+              console.info(
+                `[worktree-teardown] ${args.worktreeId} killed runtime=${r.runtimeStopped} provider=${r.providerStopped} registry=${r.registryStopped}`
+              )
+            }
           })
-            .then((r) => {
-              const total = r.runtimeStopped + r.providerStopped + r.registryStopped
-              if (total > 0) {
-                console.info(
-                  `[worktree-teardown] ${args.worktreeId} killed runtime=${r.runtimeStopped} provider=${r.providerStopped} registry=${r.registryStopped}`
-                )
-              }
-            })
-            .catch((err) => {
-              console.warn(`[worktree-teardown] failed for ${args.worktreeId}:`, err)
-            })
 
           try {
             const removeOptions = {

@@ -22373,6 +22373,49 @@ describe('OrcaRuntimeService', () => {
     ).resolves.toEqual({ stopped: 0, failedPtyIds: ['ssh:ssh-1@@failed'] })
   })
 
+  it('bounds concurrent verified worktree stops', async () => {
+    const runtime = new OrcaRuntimeService(store)
+    const releases: (() => void)[] = []
+    let active = 0
+    let peak = 0
+    const stopAndWait = vi.fn(
+      () =>
+        new Promise<boolean>((resolve) => {
+          active += 1
+          peak = Math.max(peak, active)
+          releases.push(() => {
+            active -= 1
+            resolve(true)
+          })
+        })
+    )
+    runtime.setPtyController({
+      write: () => true,
+      kill: () => false,
+      stopAndWait,
+      getForegroundProcess: async () => null
+    })
+    for (let index = 0; index < 20; index += 1) {
+      runtime.registerPty(`pty-${index}`, TEST_WORKTREE_ID, null)
+    }
+
+    const stopping = runtime.stopTerminalsForWorktree(TEST_WORKTREE_ID, {
+      worktreeTeardown: true
+    })
+    await vi.waitFor(() => expect(stopAndWait).toHaveBeenCalledTimes(8))
+    while (stopAndWait.mock.calls.length < 20) {
+      const callsBeforeRelease = stopAndWait.mock.calls.length
+      releases.splice(0).forEach((release) => release())
+      await vi.waitFor(() =>
+        expect(stopAndWait.mock.calls.length).toBeGreaterThan(callsBeforeRelease)
+      )
+    }
+    releases.splice(0).forEach((release) => release())
+
+    await expect(stopping).resolves.toEqual({ stopped: 20 })
+    expect(peak).toBe(8)
+  })
+
   it('keeps generic worktree terminal stops graceful', async () => {
     const runtime = new OrcaRuntimeService(store)
     const kill = vi.fn(() => true)
@@ -29555,6 +29598,23 @@ describe('OrcaRuntimeService', () => {
       expect(gitIdx).toBeGreaterThan(killIdx)
     })
 
+    it('does not invoke Git removal when local provider teardown remains unverified', async () => {
+      const ptyId = `${TEST_WORKTREE_ID}@@daemon`
+      const localProvider = createProviderStub(async () => [
+        { id: ptyId, cwd: '/tmp/worktree-a', title: 'shell' }
+      ])
+      localProvider.shutdown.mockRejectedValue(new Error('daemon still alive'))
+      const runtime = new OrcaRuntimeService(store, undefined, {
+        getLocalProvider: () => localProvider as never
+      })
+
+      await expect(runtime.removeManagedWorktree(TEST_WORKTREE_ID)).rejects.toThrow(
+        `Failed to stop local worktree terminals: ${ptyId}`
+      )
+
+      expect(removeWorktree).not.toHaveBeenCalled()
+    })
+
     it('thunk resolves the installed provider lazily, not at construction time', async () => {
       // Simulates the daemon adapter being installed AFTER OrcaRuntimeService
       // construction (setLocalPtyProvider(routedAdapter) in daemon-init).
@@ -29661,7 +29721,7 @@ describe('OrcaRuntimeService', () => {
         runtime.registerPty('ssh:ssh-1@@late', remoteWorktreeId, 'ssh-1')
         releaseLateSpawn()
         await vi.waitFor(() => expect(callOrder).toContain('stop:ssh:ssh-1@@existing'))
-        expect(callOrder).not.toContain('stop:ssh:ssh-1@@late')
+        expect(callOrder).toContain('stop:ssh:ssh-1@@late')
         expect(callOrder).not.toContain('git-remove')
 
         releaseFirstStop()

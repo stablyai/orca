@@ -33,9 +33,9 @@ export type WorktreeTeardownResult = {
  *    canonical source for memory attribution; it also redundantly backstops
  *    daemon spawns.
  *
- * Local provider and registry sweeps remain best-effort because they overlap
- * local ownership sources. An unverified SSH-owned stop fails closed because
- * those local fallbacks cannot prove the remote PTY is gone before removal.
+ * Provider and registry ownership overlap, so their targets are deduplicated
+ * before shutdown. Any stop that cannot be verified fails closed: Git removal
+ * must never race a shell whose cwd still belongs to the worktree.
  */
 export async function killAllProcessesForWorktree(
   worktreeId: string,
@@ -46,80 +46,99 @@ export async function killAllProcessesForWorktree(
     providerStopped: 0,
     registryStopped: 0
   }
-  let failedRemotePtyIds: string[] = []
+  let failedPtyIds: string[] = []
 
   if (deps.runtime) {
-    const r = await deps.runtime
-      .stopTerminalsForWorktree(worktreeId, { worktreeTeardown: true })
-      .catch(() => ({ stopped: 0 }))
+    const r = await deps.runtime.stopTerminalsForWorktree(worktreeId, {
+      worktreeTeardown: true
+    })
     result.runtimeStopped = r.stopped
-    failedRemotePtyIds =
-      'failedPtyIds' in r
-        ? (r.failedPtyIds ?? []).filter((ptyId) => parseAppSshPtyId(ptyId) !== null)
-        : []
+    failedPtyIds = 'failedPtyIds' in r ? (r.failedPtyIds ?? []) : []
   }
 
-  result.providerStopped = await sweepProviderByPrefix(
+  const failedRemotePtyIds = failedPtyIds.filter((ptyId) => parseAppSshPtyId(ptyId) !== null)
+  const failedLocalPtyIds = failedPtyIds.filter((ptyId) => parseAppSshPtyId(ptyId) === null)
+  const fallbackResult = await sweepLocalProvider(
     worktreeId,
     deps.localProvider,
+    failedLocalPtyIds,
     deps.onPtyStopped
   )
-  result.registryStopped = await sweepRegistryForWorktree(
-    worktreeId,
-    deps.localProvider,
-    deps.onPtyStopped
-  )
+  result.providerStopped = fallbackResult.providerStopped
+  result.registryStopped = fallbackResult.registryStopped
 
   if (failedRemotePtyIds.length > 0) {
-    // Why: local prefix/registry sweeps cannot prove an SSH-owned PTY dead;
-    // remote Git removal must not proceed after an unverified exact stop.
+    // Why: the local provider cannot prove an SSH-owned PTY dead; remote Git
+    // removal must not proceed after an unverified exact stop.
     throw new Error(`Failed to stop remote worktree terminals: ${failedRemotePtyIds.join(', ')}`)
   }
 
   return result
 }
 
-async function sweepProviderByPrefix(
+async function sweepLocalProvider(
   worktreeId: string,
   provider: IPtyProvider,
+  failedLocalPtyIds: readonly string[],
   onPtyStopped?: (ptyId: string) => void
-): Promise<number> {
+): Promise<{ providerStopped: number; registryStopped: number }> {
   const prefix = `${worktreeId}@@`
-  const sessions = await provider.listProcesses().catch(() => [])
-  let killed = 0
-  for (const s of sessions) {
-    if (!s.id.startsWith(prefix)) {
+  const sessions = await provider.listProcesses()
+  const targets = new Map<string, 'provider' | 'registry'>()
+  for (const session of sessions) {
+    if (session.id.startsWith(prefix)) {
+      targets.set(session.id, 'provider')
+    }
+  }
+  for (const entry of listRegisteredPtys()) {
+    if (entry.worktreeId === worktreeId && !targets.has(entry.ptyId)) {
+      targets.set(entry.ptyId, 'registry')
+    }
+  }
+  for (const ptyId of failedLocalPtyIds) {
+    if (!targets.has(ptyId)) {
+      targets.set(ptyId, 'registry')
+    }
+  }
+
+  const failedShutdowns = new Map<string, unknown>()
+  const stopped = new Set<string>()
+  await Promise.all(
+    [...targets].map(async ([ptyId]) => {
+      try {
+        await provider.shutdown(ptyId, { immediate: true })
+        stopped.add(ptyId)
+        clearStoppedPtyState(ptyId, onPtyStopped)
+      } catch (error) {
+        failedShutdowns.set(ptyId, error)
+      }
+    })
+  )
+
+  if (failedShutdowns.size > 0) {
+    // Why: duplicate/stale registry rows may report "not found" after another
+    // owner already stopped the PTY. Only an authoritative post-sweep absence
+    // converts that rejection into verified success.
+    const remainingIds = new Set((await provider.listProcesses()).map((session) => session.id))
+    const unverified = [...failedShutdowns.keys()].filter((ptyId) => remainingIds.has(ptyId))
+    if (unverified.length > 0) {
+      throw new Error(`Failed to stop local worktree terminals: ${unverified.join(', ')}`)
+    }
+  }
+
+  let providerStopped = 0
+  let registryStopped = 0
+  for (const [ptyId, owner] of targets) {
+    if (!stopped.has(ptyId)) {
       continue
     }
-    try {
-      await provider.shutdown(s.id, { immediate: true })
-      clearStoppedPtyState(s.id, onPtyStopped)
-      killed += 1
-    } catch {
-      // Already dead, or the backend dropped the session — treat as success.
-      killed += 1
+    if (owner === 'provider') {
+      providerStopped += 1
+    } else {
+      registryStopped += 1
     }
   }
-  return killed
-}
-
-async function sweepRegistryForWorktree(
-  worktreeId: string,
-  localProvider: IPtyProvider,
-  onPtyStopped?: (ptyId: string) => void
-): Promise<number> {
-  const entries = listRegisteredPtys().filter((r) => r.worktreeId === worktreeId)
-  let killed = 0
-  for (const entry of entries) {
-    try {
-      await localProvider.shutdown(entry.ptyId, { immediate: true })
-      clearStoppedPtyState(entry.ptyId, onPtyStopped)
-      killed += 1
-    } catch {
-      /* ignore — best-effort */
-    }
-  }
-  return killed
+  return { providerStopped, registryStopped }
 }
 
 function clearStoppedPtyState(ptyId: string, onPtyStopped?: (ptyId: string) => void): void {

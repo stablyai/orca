@@ -6762,6 +6762,22 @@ describe('registerWorktreeHandlers', () => {
     })
   })
 
+  it('does not remove worktree state when verified PTY teardown fails', async () => {
+    const worktreeId = 'repo-1::/workspace/feature-wt'
+    mockKnownFeatureWorktree()
+    store.getWorktreeMeta.mockReturnValue(makeWorktreeMeta())
+    killAllProcessesForWorktreeMock.mockRejectedValue(
+      new Error(`Failed to stop local worktree terminals: ${worktreeId}@@daemon`)
+    )
+
+    await expect(handlers['worktrees:remove'](null, { worktreeId })).rejects.toThrow(
+      'Failed to stop local worktree terminals'
+    )
+
+    expect(removeWorktreeMock).not.toHaveBeenCalled()
+    expect(store.removeWorktreeMeta).not.toHaveBeenCalled()
+  })
+
   it('runs the archive hook on remove when skipArchive is not set', async () => {
     mockKnownFeatureWorktree()
     removeWorktreeMock.mockResolvedValue(undefined)

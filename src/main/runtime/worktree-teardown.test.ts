@@ -92,7 +92,7 @@ describe('killAllProcessesForWorktree', () => {
     expect(onPtyStopped).toHaveBeenCalledWith('1')
   })
 
-  it('best-effort: swallows errors from listProcesses and shutdown', async () => {
+  it('fails closed when the provider inventory cannot be read', async () => {
     const localProvider = createProviderStub(() => Promise.reject(new Error('boom')))
     listRegisteredPtysMock.mockReturnValue([
       { ptyId: 'x', worktreeId: 'w1', sessionId: null, paneKey: null, pid: 10 }
@@ -101,12 +101,7 @@ describe('killAllProcessesForWorktree', () => {
       new Error('already dead')
     )
 
-    const result = await killAllProcessesForWorktree('w1', { localProvider })
-
-    // listProcesses rejected → provider sweep returns 0; registry shutdown
-    // rejected → counted as not-killed (registry sweep currently swallows).
-    expect(result.providerStopped).toBe(0)
-    expect(result.registryStopped).toBe(0)
+    await expect(killAllProcessesForWorktree('w1', { localProvider })).rejects.toThrow('boom')
   })
 
   it('does not let cleanup hook failures abort teardown', async () => {
@@ -180,6 +175,67 @@ describe('killAllProcessesForWorktree', () => {
     expect(localProvider.listProcesses).toHaveBeenCalledTimes(1)
   })
 
+  it('fails closed when a local runtime PTY remains after fallback shutdown rejects', async () => {
+    const runtime = {
+      stopTerminalsForWorktree: vi.fn().mockResolvedValue({
+        stopped: 0,
+        failedPtyIds: ['w1@@daemon']
+      })
+    } as unknown as Parameters<typeof killAllProcessesForWorktree>[1]['runtime']
+    const localProvider = createProviderStub(async () => [
+      { id: 'w1@@daemon', cwd: '/tmp/w1', title: 'shell' }
+    ])
+    vi.mocked(localProvider.shutdown).mockRejectedValue(new Error('daemon still alive'))
+    listRegisteredPtysMock.mockReturnValue([])
+
+    await expect(killAllProcessesForWorktree('w1', { runtime, localProvider })).rejects.toThrow(
+      'Failed to stop local worktree terminals: w1@@daemon'
+    )
+  })
+
+  it('recovers a failed local runtime stop through one deduplicated provider shutdown', async () => {
+    const runtime = {
+      stopTerminalsForWorktree: vi.fn().mockResolvedValue({
+        stopped: 0,
+        failedPtyIds: ['w1@@daemon']
+      })
+    } as unknown as Parameters<typeof killAllProcessesForWorktree>[1]['runtime']
+    const localProvider = createProviderStub(async () => [
+      { id: 'w1@@daemon', cwd: '/tmp/w1', title: 'shell' }
+    ])
+    listRegisteredPtysMock.mockReturnValue([
+      { ptyId: 'w1@@daemon', worktreeId: 'w1', sessionId: null, paneKey: null, pid: 10 }
+    ])
+
+    await expect(killAllProcessesForWorktree('w1', { runtime, localProvider })).resolves.toEqual({
+      runtimeStopped: 0,
+      providerStopped: 1,
+      registryStopped: 0
+    })
+    expect(localProvider.shutdown).toHaveBeenCalledTimes(1)
+  })
+
+  it('accepts a stale duplicate registry row only after authoritative absence verification', async () => {
+    const localProvider = createProviderStub(
+      vi
+        .fn()
+        .mockResolvedValueOnce([{ id: 'w1@@daemon', cwd: '/tmp/w1', title: 'shell' }])
+        .mockResolvedValueOnce([])
+    )
+    vi.mocked(localProvider.shutdown).mockRejectedValue(new Error('not found'))
+    listRegisteredPtysMock.mockReturnValue([
+      { ptyId: 'w1@@daemon', worktreeId: 'w1', sessionId: null, paneKey: null, pid: 10 }
+    ])
+
+    await expect(killAllProcessesForWorktree('w1', { localProvider })).resolves.toEqual({
+      runtimeStopped: 0,
+      providerStopped: 0,
+      registryStopped: 0
+    })
+    expect(localProvider.listProcesses).toHaveBeenCalledTimes(2)
+    expect(localProvider.shutdown).toHaveBeenCalledTimes(1)
+  })
+
   it('awaits each runtime stop before fallback sweeps and preserves unrelated sessions', async () => {
     const releases = new Map<string, () => void>()
     const liveSessions = new Set(['w1@@target', 'w2@@target', 'witness@@unrelated'])
@@ -229,7 +285,7 @@ describe('killAllProcessesForWorktree', () => {
     expect(liveSessions.has('witness@@unrelated')).toBe(true)
   })
 
-  it('tolerates an unexpected runtime worktree-stop failure', async () => {
+  it('fails closed on an unexpected runtime worktree-stop failure', async () => {
     const stopTerminalsForWorktree = vi.fn().mockRejectedValue(new Error('graph not ready'))
     const runtime = {
       stopTerminalsForWorktree
@@ -238,8 +294,9 @@ describe('killAllProcessesForWorktree', () => {
     const localProvider = createProviderStub(async () => [])
     listRegisteredPtysMock.mockReturnValue([])
 
-    const result = await killAllProcessesForWorktree('w1', { runtime, localProvider })
-
-    expect(result.runtimeStopped).toBe(0)
+    await expect(killAllProcessesForWorktree('w1', { runtime, localProvider })).rejects.toThrow(
+      'graph not ready'
+    )
+    expect(localProvider.listProcesses).not.toHaveBeenCalled()
   })
 })

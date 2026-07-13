@@ -13,17 +13,18 @@ describe('killPosixPtySession', () => {
   })
 
   it('targets Darwin forkpty jobs through their controlling TTY', async () => {
-    const run = vi.fn().mockResolvedValue({ stdout: '4242\n4243\n' })
+    const run = vi.fn().mockResolvedValue({ stdout: '4242 1\n4243 4242\n4244 4243\n' })
     const killProcess = vi.fn()
 
     await expect(
       killPosixPtySession(4242, '/dev/ttys042', 'darwin', run, killProcess)
     ).resolves.toBe(true)
 
-    expect(run).toHaveBeenCalledWith('ps', ['-t', 'ttys042', '-o', 'pid='], {
+    expect(run).toHaveBeenCalledWith('/bin/ps', ['-t', 'ttys042', '-o', 'pid=', '-o', 'ppid='], {
       timeout: 3000
     })
     expect(killProcess.mock.calls).toEqual([
+      [4244, 'SIGKILL'],
       [4243, 'SIGKILL'],
       [4242, 'SIGKILL']
     ])
@@ -50,7 +51,7 @@ describe('killPosixPtySession', () => {
   })
 
   it('does not signal a Darwin TTY that no longer owns the root pid', async () => {
-    const run = vi.fn().mockResolvedValue({ stdout: '9999\n' })
+    const run = vi.fn().mockResolvedValue({ stdout: '9999 1\n' })
     const killProcess = vi.fn()
 
     await expect(

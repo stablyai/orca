@@ -845,6 +845,11 @@ export class PtyHandler {
         managed.pty.pid,
         (managed.pty as unknown as { ptsName?: unknown }).ptsName
       )
+      if (!killedSession && process.platform !== 'win32' && !managed.disposed) {
+        // Why: killing only the forkpty leader can strand HUP-resistant job
+        // groups in a deleted cwd. Fail closed so worktree removal is aborted.
+        throw new Error(`Unable to verify full PTY session teardown: ${id}`)
+      }
       if (!killedSession && !managed.disposed) {
         managed.pty.kill('SIGKILL')
       }

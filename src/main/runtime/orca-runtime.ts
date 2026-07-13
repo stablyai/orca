@@ -2125,6 +2125,27 @@ async function hasLocalWorktreeBaseRef(
   )
 }
 
+async function mapPtyStopsWithConcurrency(
+  ptyIds: readonly string[],
+  concurrency: number,
+  stopPty: (ptyId: string) => Promise<boolean>
+): Promise<boolean[]> {
+  const results = Array<boolean>(ptyIds.length)
+  let nextIndex = 0
+  const stopNext = async (): Promise<void> => {
+    while (nextIndex < ptyIds.length) {
+      const index = nextIndex
+      nextIndex += 1
+      results[index] = await stopPty(ptyIds[index])
+    }
+  }
+  // Why: remote tools may each consume the full timeout. A small worker pool
+  // bounds resource use without making teardown latency linear in PTY count.
+  const workers = Array.from({ length: Math.min(concurrency, ptyIds.length) }, () => stopNext())
+  await Promise.all(workers)
+  return results
+}
+
 export class OrcaRuntimeService {
   private readonly runtimeId = randomUUID()
   private readonly startedAt = Date.now()
@@ -16959,8 +16980,6 @@ export class OrcaRuntimeService {
               runtime: this,
               localProvider,
               onPtyStopped: this.onPtyStopped ?? undefined
-            }).catch((err) => {
-              console.warn(`[worktree-teardown] failed for ${removalTarget.id}:`, err)
             })
           }
           this.removeWorktreeMetadataAndHistory(store, removalTarget.id)
@@ -17295,23 +17314,19 @@ export class OrcaRuntimeService {
             runtime: this,
             localProvider,
             onPtyStopped: this.onPtyStopped ?? undefined
+          }).then((r) => {
+            const total = r.runtimeStopped + r.providerStopped + r.registryStopped
+            if (total > 0) {
+              // Why (design §4.4 observability): breadcrumb lets ops
+              // distinguish a renderer-state-induced leak (diff-path purge
+              // non-empty) from a backend-induced one (nothing to kill but
+              // memory still pinned). Emit only when the sweep actually did
+              // work so steady-state logs stay quiet.
+              console.info(
+                `[worktree-teardown] ${removalTarget.id} killed runtime=${r.runtimeStopped} provider=${r.providerStopped} registry=${r.registryStopped}`
+              )
+            }
           })
-            .then((r) => {
-              const total = r.runtimeStopped + r.providerStopped + r.registryStopped
-              if (total > 0) {
-                // Why (design §4.4 observability): breadcrumb lets ops
-                // distinguish a renderer-state-induced leak (diff-path purge
-                // non-empty) from a backend-induced one (nothing to kill but
-                // memory still pinned). Emit only when the sweep actually did
-                // work so steady-state logs stay quiet.
-                console.info(
-                  `[worktree-teardown] ${removalTarget.id} killed runtime=${r.runtimeStopped} provider=${r.providerStopped} registry=${r.registryStopped}`
-                )
-              }
-            })
-            .catch((err) => {
-              console.warn(`[worktree-teardown] failed for ${removalTarget.id}:`, err)
-            })
         }
 
         try {
@@ -18940,22 +18955,28 @@ export class OrcaRuntimeService {
       }
     }
 
-    let stopped = 0
-    const failedPtyIds: string[] = []
-    for (const ptyId of ptyIds) {
+    const stopPty = async (ptyId: string): Promise<boolean> => {
       // Why: worktree removal immediately follows this with provider/registry
       // sweeps. Await the verified stop so those sweeps cannot overlap a
       // provider shutdown with a second ConPTY teardown on Windows (#8275).
       // Why: deletion needs provider acknowledgement before its fallback sweeps,
       // while the shared terminal.stop RPC must preserve graceful shell teardown.
       if (opts.worktreeTeardown && this.ptyController?.stopAndWait) {
-        if (await this.ptyController.stopAndWait(ptyId)) {
-          stopped += 1
-        } else {
-          failedPtyIds.push(ptyId)
-        }
-      } else if (this.ptyController?.kill(ptyId)) {
+        return this.ptyController.stopAndWait(ptyId)
+      }
+      return this.ptyController?.kill(ptyId) ?? false
+    }
+    const ids = [...ptyIds]
+    const stopResults = opts.worktreeTeardown
+      ? await mapPtyStopsWithConcurrency(ids, 8, stopPty)
+      : await Promise.all(ids.map(stopPty))
+    let stopped = 0
+    const failedPtyIds: string[] = []
+    for (const [index, didStop] of stopResults.entries()) {
+      if (didStop) {
         stopped += 1
+      } else if (opts.worktreeTeardown) {
+        failedPtyIds.push(ids[index])
       }
     }
     return failedPtyIds.length > 0 ? { stopped, failedPtyIds } : { stopped }
