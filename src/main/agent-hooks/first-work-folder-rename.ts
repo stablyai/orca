@@ -46,6 +46,9 @@ export async function renameWorktreeFolderOnFirstWork(
     repoId: repo.id,
     repoPath: repo.path,
     oldWorktreePath: parsed.worktreePath,
+    worktreeIdSuffix: parsed.worktreePath.slice(
+      parsed.worktreePath.replace(/::workspace:[0-9a-f-]{36}$/, '').length
+    ),
     newLeaf,
     settings: deps.getSettings(),
     platform: process.platform,
