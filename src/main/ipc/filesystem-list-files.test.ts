@@ -71,6 +71,29 @@ describe('filesystem-list-files', () => {
     getLocalGitOptionsForRegisteredWorktreeMock.mockReturnValue({})
   })
 
+  it('stops local rg passes at the requested result budget', async () => {
+    const p1 = createMockProcess()
+    const p2 = createMockProcess()
+    spawnMock.mockImplementation((_cmd, args: string[]) => (isIgnoredRgPass(args) ? p2 : p1))
+    const promise = listQuickOpenFiles(
+      '/mock/root',
+      {} as unknown as Store,
+      undefined,
+      undefined,
+      2
+    )
+
+    setTimeout(() => {
+      ;(p1.stdout as unknown as EventEmitter).emit('data', 'one.ts\ntwo.ts\nthree.ts\n')
+      ;(p2.stdout as unknown as EventEmitter).emit('data', 'ignored.ts\n')
+    }, 0)
+    const result = await promise
+
+    expect(result).toEqual(['one.ts', 'two.ts'])
+    expect(p1.kill).toHaveBeenCalled()
+    expect(p2.kill).toHaveBeenCalled()
+  })
+
   it('merges normal files and ignored files and filters correctly', async () => {
     const p1 = createMockProcess()
     const p2 = createMockProcess()

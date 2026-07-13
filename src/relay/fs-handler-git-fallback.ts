@@ -33,9 +33,9 @@ import { buildRelayGitEnv } from './relay-command-env'
 export function listFilesWithGit(
   rootPath: string,
   excludePathPrefixes: readonly string[] = [],
-  options: { signal?: AbortSignal } = {}
+  options: { signal?: AbortSignal; maxResults?: number } = {}
 ): Promise<string[]> {
-  const { signal } = options
+  const { signal, maxResults } = options
   if (signal?.aborted) {
     return Promise.reject(fileListingCancellationError(signal))
   }
@@ -53,15 +53,16 @@ export function listFilesWithGit(
       let buf = ''
       let done = false
 
-      const processPath = (path: string): void => {
+      const processPath = (path: string): boolean => {
         if (!path) {
-          return
+          return false
         }
         if (path.endsWith('/')) {
           directoryPaths.add(path)
         } else {
           gitPaths.add(path)
         }
+        return maxResults !== undefined && gitPaths.size + directoryPaths.size >= maxResults
       }
 
       const child = spawn('git', ['ls-files', ...args], {
@@ -108,7 +109,12 @@ export function listFilesWithGit(
         let start = 0
         let idx = buf.indexOf('\0', start)
         while (idx !== -1) {
-          processPath(buf.substring(start, idx))
+          if (processPath(buf.substring(start, idx))) {
+            buf = ''
+            child.kill()
+            resolvePass()
+            return
+          }
           start = idx + 1
           idx = buf.indexOf('\0', start)
         }
@@ -198,11 +204,12 @@ export function listFilesWithGit(
         gitPaths,
         directoryPaths,
         excludePathPrefixes,
-        signal
+        signal,
+        maxResults
       })
       // Why: directory placeholders are expanded after Git exits; restore
       // Git's path order for empty queries and fuzzy-score ties over SSH.
-      return files.sort()
+      return files.sort().slice(0, maxResults)
     })
     .catch((err) => {
       killSurvivors('git ls-files canceled after sibling failure')

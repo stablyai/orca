@@ -15,16 +15,23 @@ const { transportFactory, getMockTransport, resetMockTransports } = vi.hoisted((
     readSession: ReturnType<typeof vi.fn>
     subscribe: ReturnType<typeof vi.fn>
     unsubscribe: ReturnType<typeof vi.fn>
+    emit: (frame: unknown) => void
   }
   const transports = new Map<string | null, MockTransport>()
   const getMockTransport = (ownerId: string | null): MockTransport => {
     let transport = transports.get(ownerId)
     if (!transport) {
       const unsubscribe = vi.fn()
+      let listener: (frame: unknown) => void = () => {}
       transport = {
         unsubscribe,
         readSession: vi.fn().mockResolvedValue({ messages: [] }),
-        subscribe: vi.fn(() => unsubscribe)
+        subscribe: vi.fn((_args, onFrame) => {
+          listener = onFrame
+          onFrame({ type: 'snapshot', messages: [], hasMore: false })
+          return unsubscribe
+        }),
+        emit: (frame) => listener(frame)
       }
       transports.set(ownerId, transport)
     }
@@ -74,14 +81,14 @@ describe('mergeNativeChatLiveSession', () => {
     expect(session.messages).toHaveLength(1)
   })
 
-  it("clears 'working' once the assistant message flushes to the transcript", () => {
+  it("keeps 'working' authoritative when a prior assistant message is present", () => {
     const session = mergeNativeChatLiveSession({
       sources: { transcript: [user('u-1', 'do a thing'), assistant('a-1', 'done')] },
       sessionId: 'sess',
       agent: 'claude',
       hookState: 'working'
     })
-    expect(session.status).toBe('ready')
+    expect(session.status).toBe('working')
   })
 
   it('leaves completed states (done/waiting/blocked) on the derived status', () => {
@@ -177,17 +184,12 @@ describe('useNativeChatLiveSession — transport routing', () => {
     resetMockTransports()
   })
 
-  it('routes the initial read and subscribe through the runtime transport', async () => {
+  it('uses the subscription snapshot for the initial runtime load', async () => {
     await render({ paneKey: PANE, agent: AGENT, sessionId: SESSION, runtimeEnvironmentId: 'env-1' })
 
     expect(transportFactory).toHaveBeenCalledWith('env-1')
     const transport = getMockTransport('env-1')
-    expect(transport.readSession).toHaveBeenCalledWith(
-      AGENT,
-      SESSION,
-      expect.any(Number),
-      undefined
-    )
+    expect(transport.readSession).not.toHaveBeenCalled()
     expect(transport.subscribe).toHaveBeenCalledOnce()
   })
 
@@ -228,11 +230,16 @@ describe('useNativeChatLiveSession — transport routing', () => {
     expect(transport.unsubscribe).toHaveBeenCalledOnce()
   })
 
-  it('surfaces a runtime read error in the error phase (R4 end-to-end)', async () => {
-    getMockTransport('env-1').readSession.mockResolvedValueOnce({ error: 'runtime too old' })
-
+  it('surfaces a runtime snapshot error in the error phase (R4 end-to-end)', async () => {
     await render({ paneKey: PANE, agent: AGENT, sessionId: SESSION, runtimeEnvironmentId: 'env-1' })
-    await flush()
+    await act(async () => {
+      getMockTransport('env-1').emit({
+        type: 'snapshot',
+        messages: [],
+        hasMore: false,
+        error: 'runtime too old'
+      })
+    })
 
     expect(latest?.status).toBe('error')
     expect(latest?.error).toBe('runtime too old')
@@ -251,7 +258,7 @@ describe('useNativeChatLiveSession — transport routing', () => {
 
     expect(transportFactory).toHaveBeenCalledWith(null)
     const transport = getMockTransport(null)
-    expect(transport.readSession).toHaveBeenCalledOnce()
+    expect(transport.readSession).not.toHaveBeenCalled()
     expect(transport.subscribe).toHaveBeenCalledOnce()
   })
 
@@ -261,7 +268,6 @@ describe('useNativeChatLiveSession — transport routing', () => {
       assistant(`m-${n}`, 't')
     )
     const first = getMockTransport('env-1')
-    first.readSession.mockResolvedValueOnce({ messages: many })
     let resolveEarlier: (result: { messages: NativeChatMessage[] }) => void = () => {}
     first.readSession.mockImplementationOnce(
       () => new Promise((resolve) => (resolveEarlier = resolve))
@@ -272,6 +278,9 @@ describe('useNativeChatLiveSession — transport routing', () => {
       agent: AGENT,
       sessionId: SESSION,
       runtimeEnvironmentId: 'env-1'
+    })
+    await act(async () => {
+      first.emit({ type: 'snapshot', messages: many, hasMore: true })
     })
     // Kick off load-earlier against env-1, then flip the owner before it resolves.
     await act(async () => {
@@ -291,5 +300,105 @@ describe('useNativeChatLiveSession — transport routing', () => {
     })
 
     expect(latest?.messages.map((m) => m.id)).not.toContain('stale')
+  })
+
+  it('discards a load-earlier resolve from before transcript replacement', async () => {
+    const transport = getMockTransport('env-1')
+    const many = Array.from({ length: NATIVE_CHAT_INITIAL_LIMIT }, (_unused, n) =>
+      assistant(`old-${n}`, 'old')
+    )
+    let resolveEarlier: (result: { messages: NativeChatMessage[] }) => void = () => {}
+    transport.readSession.mockImplementationOnce(
+      () => new Promise((resolve) => (resolveEarlier = resolve))
+    )
+    await render({
+      paneKey: PANE,
+      agent: AGENT,
+      sessionId: SESSION,
+      runtimeEnvironmentId: 'env-1'
+    })
+    await act(async () => transport.emit({ type: 'snapshot', messages: many, hasMore: true }))
+    await act(async () => latest?.loadEarlier())
+
+    await act(async () =>
+      transport.emit({
+        type: 'replacement',
+        messages: [assistant('replacement', 'new inode')],
+        hasMore: false
+      })
+    )
+    await act(async () => {
+      resolveEarlier({ messages: [assistant('stale-page', 'old inode')] })
+      await Promise.resolve()
+    })
+
+    expect(latest?.messages.map((message) => message.id)).toEqual(['replacement'])
+  })
+
+  it('discards a load-earlier resolve from before a reconnect snapshot', async () => {
+    const transport = getMockTransport('env-1')
+    const many = Array.from({ length: NATIVE_CHAT_INITIAL_LIMIT }, (_unused, n) =>
+      assistant(`old-${n}`, 'old')
+    )
+    let resolveEarlier: (result: { messages: NativeChatMessage[] }) => void = () => {}
+    transport.readSession.mockImplementationOnce(
+      () => new Promise((resolve) => (resolveEarlier = resolve))
+    )
+    await render({
+      paneKey: PANE,
+      agent: AGENT,
+      sessionId: SESSION,
+      runtimeEnvironmentId: 'env-1'
+    })
+    await act(async () => transport.emit({ type: 'snapshot', messages: many, hasMore: true }))
+    await act(async () => latest?.loadEarlier())
+
+    await act(async () =>
+      transport.emit({
+        type: 'snapshot',
+        messages: [assistant('reconnected', 'fresh snapshot')],
+        hasMore: false
+      })
+    )
+    await act(async () => {
+      resolveEarlier({ messages: [assistant('stale-page', 'old generation')] })
+      await Promise.resolve()
+    })
+
+    expect(latest?.messages.map((message) => message.id)).toEqual(['reconnected'])
+  })
+
+  it('discards a load-earlier resolve from before a transcript-path rebind', async () => {
+    const transport = getMockTransport('env-1')
+    const many = Array.from({ length: NATIVE_CHAT_INITIAL_LIMIT }, (_unused, n) =>
+      assistant(`old-path-${n}`, 'old')
+    )
+    let resolveEarlier: (result: { messages: NativeChatMessage[] }) => void = () => {}
+    transport.readSession.mockImplementationOnce(
+      () => new Promise((resolve) => (resolveEarlier = resolve))
+    )
+    const root = await render({
+      paneKey: PANE,
+      agent: AGENT,
+      sessionId: SESSION,
+      transcriptPath: '/old/transcript',
+      runtimeEnvironmentId: 'env-1'
+    })
+    await act(async () => transport.emit({ type: 'snapshot', messages: many, hasMore: true }))
+    await act(async () => latest?.loadEarlier())
+
+    await rerender(root, {
+      paneKey: PANE,
+      agent: AGENT,
+      sessionId: SESSION,
+      transcriptPath: '/new/transcript',
+      runtimeEnvironmentId: 'env-1'
+    })
+    await act(async () => {
+      resolveEarlier({ messages: [assistant('stale-old-path', 'old transcript')] })
+      await Promise.resolve()
+    })
+
+    expect(latest?.messages.map((message) => message.id)).not.toContain('stale-old-path')
   })
 })

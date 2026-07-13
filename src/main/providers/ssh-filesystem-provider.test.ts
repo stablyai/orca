@@ -533,6 +533,16 @@ describe('SshFilesystemProvider', () => {
     )
   })
 
+  it('listFiles forwards a bounded result budget to the relay', async () => {
+    mux.request.mockResolvedValue([])
+    await provider.listFiles('/home/user/project', { maxResults: 20_000 })
+    expect(mux.request).toHaveBeenCalledWith(
+      'fs.listFiles',
+      { rootPath: '/home/user/project', maxResults: 20_000 },
+      { signal: undefined }
+    )
+  })
+
   describe('watch', () => {
     it('sends fs.watch request and returns unsubscribe', async () => {
       const callback = vi.fn()

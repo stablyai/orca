@@ -193,6 +193,45 @@ describe('mobile presence lock — driver state machine', () => {
     expect(ptySizes.get('pty-1')).toEqual({ cols: 45, rows: 20 })
   })
 
+  it('restores the pre-write driver after overlapping claims from one phone both fail', async () => {
+    const { runtime } = createRuntime()
+    await runtime.handleMobileSubscribe('pty-1', 'phone-A', { cols: 45, rows: 20 })
+    await runtime.reclaimTerminalForDesktop('pty-1')
+
+    const first = runtime.beginMobileInputFloor('pty-1', 'phone-A')!
+    const second = runtime.beginMobileInputFloor('pty-1', 'phone-A')!
+    first.rollback()
+    expect(runtime.getDriver('pty-1')).toEqual({ kind: 'mobile', clientId: 'phone-A' })
+
+    second.rollback()
+    expect(runtime.getDriver('pty-1')).toEqual({ kind: 'desktop' })
+  })
+
+  it('keeps a successful overlapping claim as the rollback baseline', async () => {
+    const { runtime, ptySizes } = createRuntime()
+    await runtime.handleMobileSubscribe('pty-1', 'phone-A', { cols: 45, rows: 20 })
+    await runtime.reclaimTerminalForDesktop('pty-1')
+
+    const successful = runtime.beginMobileInputFloor('pty-1', 'phone-A')!
+    const rejected = runtime.beginMobileInputFloor('pty-1', 'phone-A')!
+    await successful.commit()
+    rejected.rollback()
+
+    expect(runtime.getDriver('pty-1')).toEqual({ kind: 'mobile', clientId: 'phone-A' })
+    expect(ptySizes.get('pty-1')).toEqual({ cols: 45, rows: 20 })
+  })
+
+  it('mobile input without an active subscriber cannot create an orphaned floor lock', async () => {
+    const { runtime } = createRuntime()
+    await runtime.handleMobileSubscribe('pty-1', 'phone-A', { cols: 45, rows: 20 })
+    runtime.handleMobileUnsubscribe('pty-1', 'phone-A')
+    await vi.advanceTimersByTimeAsync(250)
+
+    await runtime.mobileTookFloor('pty-1', 'phone-A')
+
+    expect(runtime.getDriver('pty-1')).toEqual({ kind: 'idle' })
+  })
+
   it('handleMobileUnsubscribe last leaver flips driver to idle after soft-leave grace', async () => {
     const { runtime, driverEvents } = createRuntime()
     await runtime.handleMobileSubscribe('pty-1', 'phone-A', { cols: 45, rows: 20 })

@@ -97,6 +97,23 @@ describe('relay quick open ignored file listing', () => {
     expect(ignoredArgs).toContain('!packages/other/**')
   })
 
+  it('stops both relay listing passes at a bounded result budget', async () => {
+    const primaryProc = createMockProcess()
+    const ignoredProc = createMockProcess()
+    let callIndex = 0
+    spawnMock.mockImplementation(() => (++callIndex === 1 ? primaryProc : ignoredProc))
+
+    const promise = listFilesWithRg('/remote/root', [], { maxResults: 2 })
+    ;(primaryProc.stdout as unknown as EventEmitter).emit(
+      'data',
+      'src/one.ts\nsrc/two.ts\nsrc/three.ts\n'
+    )
+
+    await expect(promise).resolves.toEqual(['src/one.ts', 'src/two.ts'])
+    expect(primaryProc.kill).toHaveBeenCalled()
+    expect(ignoredProc.kill).toHaveBeenCalled()
+  })
+
   it('git fallback ignored pass includes ignored non-env files', async () => {
     const root = await makeTempRoot()
     await writeRel(root, 'dist/generated.js')

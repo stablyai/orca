@@ -30,6 +30,7 @@ import {
 
 type TestSubscription = {
   unsubscribe: ReturnType<typeof vi.fn>
+  watching: boolean
 }
 
 type DeferredSubscription = {
@@ -69,7 +70,7 @@ function deferredSubscription(): DeferredSubscription {
   return {
     promise,
     reject: rejectPromise,
-    resolve: () => resolvePromise({ unsubscribe }),
+    resolve: () => resolvePromise({ unsubscribe, watching: true }),
     unsubscribe
   }
 }

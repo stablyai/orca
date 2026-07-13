@@ -24,6 +24,20 @@ async function writeFixture(prefix: string, records: unknown[]): Promise<string>
 }
 
 describe('readNativeChatTranscript (claude)', () => {
+  it('decodes OpenClaude with the Claude transcript format', async () => {
+    const filePath = await writeFixture('orca-native-chat-openclaude-', [
+      {
+        type: 'assistant',
+        uuid: 'openclaude-assistant',
+        message: { role: 'assistant', content: [{ type: 'text', text: 'hello' }] }
+      }
+    ])
+
+    await expect(
+      readNativeChatTranscript('openclaude', 'session', { filePath })
+    ).resolves.toMatchObject({ messages: [{ id: 'openclaude-assistant' }] })
+  })
+
   it('returns ordered user/assistant/tool messages with no 5-message cap', async () => {
     const records: unknown[] = []
     // 4 user/assistant turns = 8 messages, well past the AI-Vault preview cap.

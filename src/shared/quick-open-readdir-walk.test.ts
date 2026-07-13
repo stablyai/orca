@@ -434,6 +434,17 @@ describe('quick-open readdir walk', () => {
     ).rejects.toThrow('File listing timed out')
   })
 
+  it('returns a successful bounded prefix without consuming the safety cap', async () => {
+    const root = await makeTempRoot()
+    await writeRel(root, 'a.ts')
+    await writeRel(root, 'b.ts')
+
+    const files = await listQuickOpenFilesWithReaddir(root, { maxResults: 1 })
+
+    expect(files).toHaveLength(1)
+    expect(['a.ts', 'b.ts']).toContain(files[0])
+  })
+
   it('does not list symlinked files or follow symlinked directories', async () => {
     const root = await makeTempRoot()
     await writeRel(root, 'src/index.ts')

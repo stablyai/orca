@@ -29,7 +29,6 @@ import {
   ChevronRight,
   ChevronsRight,
   Copy,
-  Eraser,
   Folder,
   File,
   FileText,
@@ -198,6 +197,16 @@ import {
   isDictationSetupRequiredError
 } from '../../../../src/dictation/mobile-dictation-setup'
 import { TerminalPaneView } from '../../../../src/session/TerminalPaneView'
+import { MobileNativeChatOverlay } from '../../../../src/session/MobileNativeChatOverlay'
+import { useMobileNativeChatController } from '../../../../src/session/use-mobile-native-chat-controller'
+import { useMobileNativeChatReadability } from '../../../../src/session/use-mobile-native-chat-readability'
+import { useMobileNativeChatInputLease } from '../../../../src/session/use-mobile-native-chat-input-lease'
+import { getActiveTabIdForHandle } from '../../../../src/session/mobile-active-terminal-tab'
+import { updateTerminalCwdFromStreamEvent } from '../../../../src/session/mobile-terminal-stream-cwd'
+import { getMobileTerminalActionSheetActions } from '../../../../src/session/mobile-terminal-action-sheet-actions'
+import * as nativeChatTerminalStream from '../../../../src/session/mobile-native-chat-terminal-stream'
+import { useMobileNativeChatTerminalStream } from '../../../../src/session/use-mobile-native-chat-terminal-stream'
+import { subscribeMobileTerminalSafely } from '../../../../src/session/mobile-terminal-stream-subscribe'
 import {
   getRepoIdFromMobileWorktreeId,
   isFileExistsErrorMessage,
@@ -245,21 +254,6 @@ import type {
 type TerminalLiveAccessoryInput = ReturnType<typeof createTerminalLiveAccessoryInput>
 
 const TERMINAL_KEYBOARD_DISMISS_ACTION_SHEET_FALLBACK_MS = 450
-
-function getActiveTabIdForHandle(
-  tabs: MobileSessionTab[],
-  terminalHandle: string | null
-): string | null {
-  if (!terminalHandle) {
-    return null
-  }
-  return (
-    tabs.find(
-      (tab): tab is Extract<MobileSessionTab, { type: 'terminal' }> =>
-        tab.type === 'terminal' && tab.terminal === terminalHandle
-    )?.id ?? terminalHandle
-  )
-}
 
 function MarkdownReader({
   documentId,
@@ -801,21 +795,6 @@ function FileReader({
   return renderSourceText(doc.content)
 }
 
-function updateTerminalCwdFromStreamEvent(
-  handle: string,
-  data: Record<string, unknown>,
-  terminalCwd: Map<string, string>
-): void {
-  if (!('cwd' in data)) {
-    return
-  }
-  if (typeof data.cwd === 'string' && data.cwd.trim().length > 0) {
-    terminalCwd.set(handle, data.cwd)
-    return
-  }
-  terminalCwd.delete(handle)
-}
-
 export default function SessionScreen() {
   const {
     hostId,
@@ -1190,11 +1169,47 @@ export default function SessionScreen() {
     },
     [clearToastHideTimer]
   )
+  const showNativeChatSendError = useCallback(
+    (message: string) => showToast(message, 1600),
+    [showToast]
+  )
+  const nativeChatTranscriptIsLocalReadable = useMobileNativeChatReadability(client, worktreeId)
+  const {
+    ready: nativeChatInputLeaseReady,
+    readyRef: nativeChatInputLeaseReadyRef,
+    markReady: markNativeChatInputLeaseReady,
+    clear: clearNativeChatInputLease
+  } = useMobileNativeChatInputLease({
+    activeHandle,
+    connected: connState === 'connected'
+  })
+  const nativeChatController = useMobileNativeChatController({
+    client,
+    hostId,
+    worktreeId,
+    activeSessionTab,
+    activeSessionTabId,
+    activeHandleRef,
+    deviceTokenRef,
+    nativeChatTranscriptIsLocalReadable,
+    nativeChatInputLeaseReady,
+    onSendError: showNativeChatSendError
+  })
+  const { chatTabIds, toggleTabChatView, showNativeChat, showNativeChatRef } = nativeChatController
 
   const dictation = useMobileDictation({
     client,
     enabled: canSend,
     onTranscript: (text) => {
+      // Why: dictation belongs to the visible composer. Native chat consumes it
+      // locally; terminal mode retains the live-input routing and flush contract.
+      if (showNativeChatRef.current) {
+        nativeChatController.setChatComposerText((current) =>
+          appendBufferedDictation(current, text)
+        )
+        showToast('Dictation inserted')
+        return
+      }
       // Live mode inserts the transcript straight into its originating PTY as
       // text (no Return — the user sends it themselves), matching live keystroke
       // semantics; buffered mode keeps appending to the command field.
@@ -1313,21 +1328,26 @@ export default function SessionScreen() {
     return handle ? terminalRefs.current.get(handle) : undefined
   }, [])
 
-  const unsubscribeTerminal = useCallback((handle: string) => {
-    terminalUnsubsRef.current.get(handle)?.()
-    terminalUnsubsRef.current.delete(handle)
-    subscribingHandlesRef.current.delete(handle)
-    subscribeSeqRef.current.set(handle, (subscribeSeqRef.current.get(handle) ?? 0) + 1)
-    // Why: a fresh subscription will land on a new server-side state machine
-    // run (or the same one with a higher seq); reset the high-water mark so
-    // the first scrollback isn't accidentally dropped as stale.
-    layoutSeqRef.current.delete(handle)
-  }, [])
+  const unsubscribeTerminal = useCallback(
+    (handle: string) => {
+      terminalUnsubsRef.current.get(handle)?.()
+      terminalUnsubsRef.current.delete(handle)
+      subscribingHandlesRef.current.delete(handle)
+      subscribeSeqRef.current.set(handle, (subscribeSeqRef.current.get(handle) ?? 0) + 1)
+      // Why: a fresh subscription will land on a new server-side state machine
+      // run (or the same one with a higher seq); reset the high-water mark so
+      // the first scrollback isn't accidentally dropped as stale.
+      layoutSeqRef.current.delete(handle)
+      clearNativeChatInputLease(handle)
+    },
+    [clearNativeChatInputLease]
+  )
+  const unsubscribeTerminalRef = useRef(unsubscribeTerminal)
+  unsubscribeTerminalRef.current = unsubscribeTerminal
 
   const clearTerminalCache = useCallback(() => {
-    for (const unsub of terminalUnsubsRef.current.values()) {
-      unsub()
-    }
+    terminalUnsubsRef.current.forEach((unsub) => unsub())
+    clearNativeChatInputLease()
     terminalUnsubsRef.current.clear()
     subscribingHandlesRef.current.clear()
     initializedHandlesRef.current.clear()
@@ -1339,7 +1359,7 @@ export default function SessionScreen() {
     for (const term of terminalRefs.current.values()) {
       term.clear()
     }
-  }, [])
+  }, [clearNativeChatInputLease])
 
   // Why: measures the phone viewport once from the first available TerminalWebView.
   // The viewport dims are passed with every subscribe call so the server can
@@ -1371,10 +1391,12 @@ export default function SessionScreen() {
       if (subscribingHandlesRef.current.has(handle)) {
         return
       }
-      if (!getTerminalRef(handle)) {
-        return
-      }
-      if (!webReadyHandlesRef.current.has(handle)) {
+      const covered = nativeChatTerminalStream.isTerminalCoveredByNativeChat(
+        showNativeChatRef.current,
+        activeHandleRef.current,
+        handle
+      )
+      if (!covered && (!getTerminalRef(handle) || !webReadyHandlesRef.current.has(handle))) {
         return
       }
 
@@ -1386,19 +1408,38 @@ export default function SessionScreen() {
       // The viewport is embedded in the subscribe params so the server resizes
       // the PTY before serializing scrollback. This eliminates the focus→safeFit
       // race and the measure→resize→resubscribe pipeline.
-      const unsub = client.subscribe(
-        'terminal.subscribe',
+      const unsub = subscribeMobileTerminalSafely(
+        client,
         {
           terminal: handle,
           client: { id: deviceTokenRef.current!, type: 'mobile' as const },
           viewport: viewportRef.current ?? undefined,
-          capabilities: { terminalBinaryStream: 1 }
+          capabilities: nativeChatTerminalStream.mobileNativeChatTerminalCapabilities(covered)
         },
         (result) => {
           if (subscribeSeqRef.current.get(handle) !== seq) {
             return
           }
           const data = result as Record<string, unknown>
+          if (data.type === 'end' || data.type === 'error') {
+            unsubscribeTerminalRef.current(handle)
+            return
+          }
+          if (data.type === 'subscribed') {
+            markNativeChatInputLeaseReady(handle)
+            return
+          }
+          // Why: retain the subscription as the mobile input-floor lease, but
+          // do not mutate covered xterm state; return-to-terminal resubscribes.
+          if (
+            nativeChatTerminalStream.isTerminalCoveredByNativeChat(
+              showNativeChatRef.current,
+              activeHandleRef.current,
+              handle
+            )
+          ) {
+            return
+          }
           // Why: stale-event filter. Server-side state machine bumps a
           // monotonic seq on every applyLayout. Drop `resized` events
           // whose seq is strictly older than what we've already observed
@@ -1426,9 +1467,6 @@ export default function SessionScreen() {
             layoutSeqRef.current.set(handle, eventSeq)
           } else if (eventSeq != null && data.type === 'scrollback') {
             layoutSeqRef.current.set(handle, eventSeq)
-          }
-          if (data.type === 'subscribed') {
-            return
           }
           if (data.type === 'scrollback') {
             if (initializedHandlesRef.current.has(handle)) {
@@ -1579,7 +1617,8 @@ export default function SessionScreen() {
             }
             scheduleDelayedAction(() => getTerminalRef(handle)?.resetZoom(), 200)
           }
-        }
+        },
+        () => unsubscribeTerminalRef.current(handle)
       )
 
       if (subscribeSeqRef.current.get(handle) === seq) {
@@ -1589,8 +1628,20 @@ export default function SessionScreen() {
       }
       subscribingHandlesRef.current.delete(handle)
     },
-    [client, getTerminalRef, scheduleDelayedAction]
+    [client, getTerminalRef, markNativeChatInputLeaseReady, scheduleDelayedAction]
   )
+
+  useMobileNativeChatTerminalStream({
+    showNativeChat,
+    activeHandle,
+    activeTabType: activeSessionTab?.type ?? null,
+    subscriptionsRef: terminalUnsubsRef,
+    subscribingRef: subscribingHandlesRef,
+    webReadyRef: webReadyHandlesRef,
+    initializedRef: initializedHandlesRef,
+    subscribe: subscribeToTerminal,
+    unsubscribe: unsubscribeTerminal
+  })
 
   // Why: toggles between phone and desktop mode via server RPC. The server
   // handles the actual resize and emits a 'resized' event on the existing
@@ -3802,6 +3853,7 @@ export default function SessionScreen() {
       return (
         flushedPendingInput &&
         connStateRef.current === 'connected' &&
+        nativeChatInputLeaseReadyRef.current &&
         targetHandle === activeHandleRef.current &&
         activeSessionTabTypeRef.current === 'terminal'
       )
@@ -4866,6 +4918,15 @@ export default function SessionScreen() {
                     onOpenUrl={handleTerminalOpenUrl}
                   />
                 ))}
+                <MobileNativeChatOverlay
+                  controller={nativeChatController}
+                  onAttachImage={() => void attachImage('library')}
+                  isAttaching={isAttaching}
+                  onMicPress={handleDictationToggle}
+                  micActive={dictation.isRecording}
+                  inputLocked={connState !== 'connected' || !nativeChatInputLeaseReady}
+                  keyboardInset={keyboardLift}
+                />
                 {toastMessage && (
                   <Animated.View pointerEvents="none" style={[styles.toast, toastAnimatedStyle]}>
                     <Text style={styles.toastText}>{toastMessage}</Text>
@@ -4875,8 +4936,9 @@ export default function SessionScreen() {
             )}
 
             {/* Why: translate instead of resizing so keyboard open/close does not
-            trigger a server-side PTY viewport change. */}
-            {!activeMarkdownTab && !activeFileTab && !activeBrowserTab && (
+            trigger a server-side PTY viewport change. The dock hides in native
+            chat because that view supplies its own composer. */}
+            {!activeMarkdownTab && !activeFileTab && !activeBrowserTab && !showNativeChat && (
               <View
                 style={[
                   styles.commandDock,
@@ -5297,55 +5359,19 @@ export default function SessionScreen() {
       <ActionSheetModal
         visible={actionTarget != null}
         title={actionTarget?.title || 'Terminal'}
-        actions={[
-          ...(actionTarget
-            ? [
-                {
-                  label: isPhoneMode(actionTarget.handle) ? 'Switch to Desktop' : 'Switch to Phone',
-                  icon: isPhoneMode(actionTarget.handle) ? Monitor : Smartphone,
-                  onPress: () => {
-                    const target = actionTarget
-                    setActionTarget(null)
-                    if (target) {
-                      void toggleDisplayMode(target.handle)
-                    }
-                  }
-                }
-              ]
-            : []),
-          {
-            label: 'Rename',
-            onPress: () => {
-              const target = actionTarget
-              setActionTarget(null)
-              if (target) {
-                setRenameTarget(target)
-              }
-            }
-          },
-          {
-            label: 'Clear Terminal',
-            icon: Eraser,
-            onPress: () => {
-              const target = actionTarget
-              setActionTarget(null)
-              if (target) {
-                void handleClearTerminal(target)
-              }
-            }
-          },
-          {
-            label: 'Close',
-            destructive: true,
-            onPress: () => {
-              const target = actionTarget
-              setActionTarget(null)
-              if (target) {
-                void handleCloseTerminal(target)
-              }
-            }
-          }
-        ]}
+        actions={getMobileTerminalActionSheetActions({
+          target: actionTarget,
+          tabs: sessionTabs.filter((tab) => tab.type === 'terminal'),
+          chatTabIds,
+          nativeChatTranscriptIsLocalReadable,
+          onDismiss: () => setActionTarget(null),
+          onToggleChat: toggleTabChatView,
+          isPhoneMode,
+          onToggleDisplayMode: (handle) => void toggleDisplayMode(handle),
+          onRename: setRenameTarget,
+          onClear: (target) => void handleClearTerminal(target),
+          onClose: (target) => void handleCloseTerminal(target)
+        })}
         onClose={() => setActionTarget(null)}
       />
       <ActionSheetModal

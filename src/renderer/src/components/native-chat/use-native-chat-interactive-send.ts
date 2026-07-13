@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef } from 'react'
 import { sendRuntimePtyInput } from '@/runtime/runtime-terminal-inspection'
 import { getSettingsForAgentTabRuntimeOwner } from '@/lib/agent-paste-draft'
 import type { AgentType } from '../../../../shared/native-chat-types'
+import { resolveNativeChatTranscriptAgent } from '../../../../shared/native-chat-agent-support'
 import {
   sendNativeChatAnswer,
   sendNativeChatMessage,
@@ -19,6 +20,10 @@ export type NativeChatInteractiveSend = {
   sendRaw: (raw: string) => void
   /** Send ESC to interrupt — cancels a question / denies an approval. */
   cancel: () => void
+}
+
+export function shouldStepNativeChatAskAnswer(agent: AgentType): boolean {
+  return resolveNativeChatTranscriptAgent(agent) === 'claude'
 }
 
 /**
@@ -72,10 +77,9 @@ export function useNativeChatInteractiveSend(
       // so each Enter lands on its rendered question and only the last submits.
       // Other agents (e.g. Codex) submit the whole answer with one Enter, so
       // gate the stepping on Claude and send a single body + Enter otherwise.
-      inFlightRef.current =
-        agent === 'claude'
-          ? sendNativeChatAnswer(settings, targetPtyId, text.split('\n'))
-          : sendNativeChatMessage(settings, targetPtyId, text)
+      inFlightRef.current = shouldStepNativeChatAskAnswer(agent)
+        ? sendNativeChatAnswer(settings, targetPtyId, text.split('\n'))
+        : sendNativeChatMessage(settings, targetPtyId, text)
     },
     [terminalTabId, targetPtyId, agent, cancelInFlight]
   )

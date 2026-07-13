@@ -152,7 +152,7 @@ describe('nativeChat:readSession handler', () => {
     }
   })
 
-  it('emits appended messages over nativeChat:appended and tears down on destroy', async () => {
+  it('emits snapshot and appended frames and tears down on destroy', async () => {
     const root = await mkdtemp(join(tmpdir(), 'orca-native-chat-ipc-sub-'))
     tempRoots.push(root)
     const projectsDir = join(root, '.claude', 'projects')
@@ -214,13 +214,14 @@ describe('nativeChat:readSession handler', () => {
         })}\n`
       )
 
-      // Seed-at-0 means the first appended event carries the whole-file re-read;
-      // the new turn 'a-1' arrives across one of the appended events. Collect ids
-      // from every appended event and assert the new turn shows up.
+      // The first frame is a bounded snapshot and later frames are appends.
+      // Collect ids across both and assert the new turn shows up.
       const appendedIds = (): string[] =>
         sent
           .filter((s) => s.channel === 'nativeChat:appended')
-          .flatMap((s) => (s.payload as { messages: { id: string }[] }).messages.map((m) => m.id))
+          .flatMap((s) =>
+            (s.payload as { frame: { messages: { id: string }[] } }).frame.messages.map((m) => m.id)
+          )
       await waitFor(() => appendedIds().includes('a-1'))
       const appendedEvent = sent.find((s) => s.channel === 'nativeChat:appended')!
       const payload = appendedEvent.payload as { subscriptionId: string }

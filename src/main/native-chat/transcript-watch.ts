@@ -1,187 +1,99 @@
-// Live transcript tailing: watch a resolved session JSONL file and emit only
-// the messages parsed from bytes appended since the last read. Modeled on the
-// incremental byte-offset read in codex-usage/scanner.ts (parseCodexUsageFile's
-// skipInitialBytes), but specialized to the NativeChatMessage record decoders.
-//
-// Teardown discipline (plan U4 risk: file-watch fd leaks): every subscription
-// owns exactly one fs.FSWatcher and one debounce timer. unsubscribe() closes
-// the watcher and clears the timer synchronously, and the module tracks the live
-// watcher count so tests can assert no watcher survives teardown.
-
 import { watch, type FSWatcher } from 'node:fs'
 import { open, stat } from 'node:fs/promises'
+import { basename, dirname } from 'node:path'
 import type { AgentType, NativeChatMessage } from '../../shared/native-chat-types'
 import { resolveSessionFilePath, type ResolveSessionFileOptions } from './session-file-resolver'
 import {
-  decodeClaudeTranscriptLine,
-  decodeCodexTranscriptLine,
-  decodeGrokTranscriptLine
-} from './transcript-line-decoders'
-import { decodeTranscriptStream } from './transcript-stream-lines'
+  readIncrementalTranscriptMessages,
+  resetIncrementalTranscriptState,
+  type IncrementalTranscriptState
+} from './transcript-incremental-reader'
+import {
+  nativeChatLineDecoderForAgent,
+  readNativeChatTranscriptTailFile
+} from './transcript-tail-reader'
+
+export { readNativeChatTranscriptTail } from './transcript-tail-reader'
 
 export type SubscribeNativeChatTranscriptArgs = ResolveSessionFileOptions & {
   agent: AgentType
   sessionId: string
-  /** Called with the newly-appended messages whenever the file grows. Never
-   *  called with an empty array. */
   onAppend: (messages: NativeChatMessage[]) => void
-  /** Resolve directly to this file, skipping path discovery (used by tests). */
+  onInitialSnapshot?: (
+    messages: NativeChatMessage[],
+    hasMore: boolean,
+    beforeOffset: number
+  ) => void
+  onReplace?: (messages: NativeChatMessage[], hasMore: boolean, beforeOffset: number) => void
+  initialLimit?: number
   filePath?: string
-  /** Coalesce window for rapid fs.watch events (ms). Defaults to 40ms. */
   debounceMs?: number
 }
 
 export type NativeChatTranscriptSubscription = {
-  /** Closes the watcher and releases the file handle. Idempotent. */
   unsubscribe: () => void
+  watching: boolean
 }
 
-// Why: a single watch event can fire several times for one append; we read from
-// the last byte offset so re-entrant reads never re-emit prior messages. Each
-// decoder is stateless per-line, so tailing reuses the same record→message
-// mapping the full reader uses.
 const DEFAULT_DEBOUNCE_MS = 40
-
-// Why: process-wide count of live FSWatchers opened by this module. The U4 leak
-// test asserts this returns to zero after unsubscribe so a forgotten handle is
-// caught deterministically rather than relying on OS fd inspection.
+const ROTATION_RETRY_MS = 25
+const MAX_ROTATION_RETRY_MS = 2_000
 let activeWatcherCount = 0
 
-/** Test-only: number of fs watchers this module currently holds open. */
 export function getActiveNativeChatWatcherCount(): number {
   return activeWatcherCount
 }
 
-function lineDecoderForAgent(
-  agent: AgentType
-): ((line: string, fallbackId: string) => NativeChatMessage | null) | null {
-  if (agent === 'claude') {
-    return decodeClaudeTranscriptLine
-  }
-  if (agent === 'codex') {
-    return decodeCodexTranscriptLine
-  }
-  if (agent === 'grok') {
-    return decodeGrokTranscriptLine
-  }
-  return null
+async function fileVersion(filePath: string): Promise<{ identity: string; size: number }> {
+  const value = await stat(filePath)
+  return { identity: `${value.dev}:${value.ino}`, size: value.size }
 }
 
-async function fileSize(filePath: string): Promise<number> {
-  try {
-    return (await stat(filePath)).size
-  } catch {
-    return 0
+async function boundaryFingerprint(filePath: string, offset: number): Promise<string> {
+  if (offset <= 0) {
+    return ''
   }
-}
-
-/**
- * Read bytes [start, end) of the file and decode each complete line into a
- * NativeChatMessage. Opens its own fd and always closes it (no leak on the read
- * path, distinct from the long-lived watcher). Returns the messages plus the
- * byte offset actually consumed so a partially-written trailing line is re-read
- * on the next append rather than dropped.
- */
-async function readAppendedMessages(
-  filePath: string,
-  start: number,
-  decode: (line: string, fallbackId: string) => NativeChatMessage | null
-): Promise<{ messages: NativeChatMessage[]; consumedTo: number }> {
-  const end = await fileSize(filePath)
-  if (end <= start) {
-    // File shrank (rotation/replacement) or unchanged — caller resets offset.
-    return { messages: [], consumedTo: end }
-  }
-
+  const start = Math.max(0, offset - 64)
   const handle = await open(filePath, 'r')
   try {
-    const stream = handle.createReadStream({
-      encoding: 'utf-8',
-      start,
-      end: end - 1,
-      autoClose: false
-    })
-    const { messages, consumedBytes } = await decodeTranscriptStream(
-      stream,
-      filePath,
-      start,
-      decode,
-      false
-    )
-    return { messages, consumedTo: start + consumedBytes }
+    const buffer = Buffer.allocUnsafe(offset - start)
+    const { bytesRead } = await handle.read(buffer, 0, buffer.length, start)
+    return buffer.subarray(0, bytesRead).toString('base64')
   } finally {
     await handle.close()
   }
 }
 
-/**
- * Subscribe to live appends on an agent's transcript file. Returns an
- * unsubscribe fn that tears the watcher down completely.
- *
- * Handles file rotation/replacement: when the file shrinks (a new session id
- * resolved to a smaller/newer file, or the file was truncated), the offset is
- * reset to 0 so the replacement's content is read from the top.
- */
 export async function subscribeNativeChatTranscript(
   args: SubscribeNativeChatTranscriptArgs
 ): Promise<NativeChatTranscriptSubscription> {
-  const { agent, sessionId, onAppend, debounceMs } = args
-  const decode = lineDecoderForAgent(agent)
-  const filePath = args.filePath ?? (await resolveSessionFilePath(agent, sessionId, args))
-
-  if (!filePath || !decode) {
-    // Nothing watchable — return a no-op teardown so callers can unconditionally
-    // unsubscribe without null-checks.
-    return { unsubscribe: () => {} }
+  const { agent, sessionId, onAppend, onInitialSnapshot, onReplace, initialLimit, debounceMs } =
+    args
+  const resolvedDecode = nativeChatLineDecoderForAgent(agent)
+  const resolvedFilePath = args.filePath ?? (await resolveSessionFilePath(agent, sessionId, args))
+  if (!resolvedFilePath || !resolvedDecode) {
+    return { unsubscribe: () => {}, watching: false }
   }
+  const filePath = resolvedFilePath
+  const decode = resolvedDecode
 
-  // Why: seed the offset at 0 so the FIRST drain re-reads the whole file. This
-  // closes the read/subscribe race — a turn appended between the caller's
-  // readSession EOF and the watcher install is still emitted. Re-emitted lines
-  // collapse by deterministic id in the assembler (no dup, no drop). Subsequent
-  // drains use the incremental offset so the full re-read happens only once.
-  let offset = 0
+  const state: IncrementalTranscriptState = {
+    offset: 0,
+    pendingChunks: [],
+    pendingStart: 0,
+    pendingBytes: 0,
+    droppingOversizedRecord: false
+  }
+  let watchedIdentity: string | null = null
+  let watchedBoundary = ''
+  let initialDrain = true
   let closed = false
   let reading = false
   let pendingReadRequested = false
+  let rotationRetryCount = 0
   let debounceTimer: ReturnType<typeof setTimeout> | null = null
-
-  async function drain(): Promise<void> {
-    if (closed) {
-      return
-    }
-    if (reading) {
-      // A read is already in flight; mark that another pass is needed so rapid
-      // successive appends coalesce without dropping the trailing one.
-      pendingReadRequested = true
-      return
-    }
-    reading = true
-    try {
-      do {
-        pendingReadRequested = false
-        try {
-          const currentSize = await fileSize(filePath!)
-          if (currentSize < offset) {
-            // Rotation/replacement/truncation: re-read from the top.
-            offset = 0
-          }
-          const { messages, consumedTo } = await readAppendedMessages(filePath!, offset, decode!)
-          offset = consumedTo
-          if (!closed && messages.length > 0) {
-            onAppend(messages)
-          }
-        } catch {
-          // Why: a transient read failure (EACCES/EIO/ENOENT during rotation)
-          // must not leave the subscription permanently deaf. Stop this drain;
-          // the finally resets `reading` so a later fs event re-arms the read.
-          break
-        }
-      } while (pendingReadRequested && !closed)
-    } finally {
-      reading = false
-    }
-  }
+  let watcher: FSWatcher | null = null
+  let watcherNeedsRebind = false
 
   function scheduleDrain(): void {
     if (closed) {
@@ -196,21 +108,167 @@ export async function subscribeNativeChatTranscript(
     }, debounceMs ?? DEFAULT_DEBOUNCE_MS)
   }
 
-  let watcher: FSWatcher
+  function scheduleRotationRetry(): void {
+    if (closed || debounceTimer) {
+      return
+    }
+    const retryDelay = Math.min(
+      ROTATION_RETRY_MS * 2 ** Math.min(rotationRetryCount, 7),
+      MAX_ROTATION_RETRY_MS
+    )
+    rotationRetryCount += 1
+    debounceTimer = setTimeout(() => {
+      debounceTimer = null
+      void drain()
+    }, retryDelay)
+  }
+
+  async function readAndEmitAppends(): Promise<void> {
+    const remaining = await readIncrementalTranscriptMessages(
+      filePath,
+      state,
+      decode,
+      (messages) => {
+        if (!closed) {
+          onAppend(messages)
+        }
+      }
+    )
+    if (!closed && remaining.length > 0) {
+      onAppend(remaining)
+    }
+  }
+
+  async function drainOnce(): Promise<void> {
+    const current = await fileVersion(filePath)
+    const currentBoundary = await boundaryFingerprint(filePath, state.offset)
+    if (closed) {
+      return
+    }
+    if (watcherNeedsRebind) {
+      bindWatcher()
+    }
+    const identityChanged = watchedIdentity !== null && current.identity !== watchedIdentity
+    const contentReplaced =
+      identityChanged ||
+      current.size < state.offset ||
+      (state.offset > 0 && watchedBoundary !== currentBoundary)
+    if (contentReplaced) {
+      resetIncrementalTranscriptState(state)
+    }
+    watchedIdentity = current.identity
+
+    const replacementSnapshot =
+      contentReplaced && !initialDrain && onReplace && initialLimit
+        ? await readNativeChatTranscriptTailFile(filePath, initialLimit, decode)
+        : null
+    if (closed) {
+      return
+    }
+    if (replacementSnapshot && onReplace) {
+      state.offset = replacementSnapshot.consumedTo
+      state.pendingStart = state.offset
+      onReplace(
+        replacementSnapshot.messages,
+        replacementSnapshot.hasMore,
+        replacementSnapshot.beforeOffset
+      )
+      await readAndEmitAppends()
+      watchedBoundary = await boundaryFingerprint(filePath, state.offset)
+      rotationRetryCount = 0
+      return
+    }
+
+    const initialSnapshot =
+      initialDrain && onInitialSnapshot && initialLimit
+        ? await readNativeChatTranscriptTailFile(filePath, initialLimit, decode)
+        : null
+    if (closed) {
+      return
+    }
+    if (initialDrain && onInitialSnapshot) {
+      initialDrain = false
+      if (initialSnapshot) {
+        state.offset = initialSnapshot.consumedTo
+        state.pendingStart = state.offset
+        onInitialSnapshot(
+          initialSnapshot.messages,
+          initialSnapshot.hasMore,
+          initialSnapshot.beforeOffset
+        )
+        await readAndEmitAppends()
+      } else {
+        const messages = await readIncrementalTranscriptMessages(filePath, state, decode)
+        onInitialSnapshot(messages, false, 0)
+      }
+    } else {
+      initialDrain = false
+      await readAndEmitAppends()
+    }
+    watchedBoundary = await boundaryFingerprint(filePath, state.offset)
+    rotationRetryCount = 0
+  }
+
+  async function drain(): Promise<void> {
+    if (closed) {
+      return
+    }
+    if (reading) {
+      pendingReadRequested = true
+      return
+    }
+    reading = true
+    try {
+      do {
+        pendingReadRequested = false
+        try {
+          await drainOnce()
+        } catch {
+          // Why: unlink/recreate can detach fs.watch from the pathname. Keep one
+          // capped-backoff retry alive until a successor appears or we unsubscribe.
+          scheduleRotationRetry()
+          break
+        }
+      } while (pendingReadRequested && !closed)
+    } finally {
+      reading = false
+    }
+  }
+
+  function bindWatcher(): void {
+    const watchedName = basename(filePath)
+    // Why: file watchers stay bound to an unlinked inode on macOS. Watching
+    // the parent keeps observing a successor even after a long recreate gap.
+    const nextWatcher = watch(dirname(filePath), (_event, changedName) => {
+      if (changedName === null || changedName.toString() === watchedName) {
+        scheduleDrain()
+      }
+    })
+    nextWatcher.on('error', () => {
+      // Why: Windows can emit EPERM when a watched directory disappears. An
+      // error listener prevents a process crash and retries against its successor.
+      if (closed || watcher !== nextWatcher) {
+        return
+      }
+      watcherNeedsRebind = true
+      nextWatcher.close()
+      watcher = null
+      scheduleRotationRetry()
+    })
+    watcher = nextWatcher
+    watcherNeedsRebind = false
+  }
+
   try {
-    watcher = watch(filePath, scheduleDrain)
+    bindWatcher()
   } catch {
-    // File vanished between resolve and watch — return a no-op teardown.
-    return { unsubscribe: () => {} }
+    return { unsubscribe: () => {}, watching: false }
   }
   activeWatcherCount++
-
-  // Why: on some platforms fs.watch can miss the very first append that lands
-  // between offset-seed and watcher install. Kick one debounced drain so a
-  // turn written immediately after subscribe is still picked up.
   scheduleDrain()
 
   return {
+    watching: true,
     unsubscribe: () => {
       if (closed) {
         return
@@ -220,7 +278,8 @@ export async function subscribeNativeChatTranscript(
         clearTimeout(debounceTimer)
         debounceTimer = null
       }
-      watcher.close()
+      watcher?.close()
+      watcher = null
       activeWatcherCount--
     }
   }

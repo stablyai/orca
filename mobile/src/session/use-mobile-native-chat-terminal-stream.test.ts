@@ -1,0 +1,69 @@
+import { createElement } from 'react'
+import { act, create, type ReactTestRenderer } from 'react-test-renderer'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { useMobileNativeChatTerminalStream } from './use-mobile-native-chat-terminal-stream'
+
+describe('useMobileNativeChatTerminalStream', () => {
+  let renderer: ReactTestRenderer | null = null
+  const subscriptionsRef = { current: new Map<string, () => void>() }
+  const subscribingRef = { current: new Set<string>() }
+  const webReadyRef = { current: new Set(['terminal-1']) }
+  const initializedRef = { current: new Set(['terminal-1']) }
+  const subscribe = vi.fn((handle: string) => subscriptionsRef.current.set(handle, () => {}))
+  const unsubscribe = vi.fn((handle: string) => subscriptionsRef.current.delete(handle))
+
+  beforeEach(() => {
+    globalThis.IS_REACT_ACT_ENVIRONMENT = true
+    subscriptionsRef.current = new Map([['terminal-1', () => {}]])
+    subscribingRef.current = new Set()
+    webReadyRef.current = new Set(['terminal-1'])
+    initializedRef.current = new Set(['terminal-1'])
+    subscribe.mockClear()
+    unsubscribe.mockClear()
+  })
+
+  afterEach(() => {
+    act(() => renderer?.unmount())
+    renderer = null
+  })
+
+  function Harness({ showNativeChat }: { showNativeChat: boolean }): null {
+    useMobileNativeChatTerminalStream({
+      showNativeChat,
+      activeHandle: 'terminal-1',
+      activeTabType: 'terminal',
+      subscriptionsRef,
+      subscribingRef,
+      webReadyRef,
+      initializedRef,
+      subscribe,
+      unsubscribe
+    })
+    return null
+  }
+
+  it('replaces output with a lease-only stream while covered, then restores output', async () => {
+    const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+    try {
+      await act(async () => {
+        renderer = create(createElement(Harness, { showNativeChat: false }))
+      })
+      await act(async () => {
+        renderer?.update(createElement(Harness, { showNativeChat: true }))
+      })
+
+      expect(unsubscribe).toHaveBeenNthCalledWith(1, 'terminal-1')
+      expect(subscribe).toHaveBeenNthCalledWith(1, 'terminal-1')
+      expect(initializedRef.current.has('terminal-1')).toBe(false)
+
+      await act(async () => {
+        renderer?.update(createElement(Harness, { showNativeChat: false }))
+      })
+
+      expect(unsubscribe).toHaveBeenNthCalledWith(2, 'terminal-1')
+      expect(subscribe).toHaveBeenNthCalledWith(2, 'terminal-1')
+    } finally {
+      consoleSpy.mockRestore()
+    }
+  })
+})

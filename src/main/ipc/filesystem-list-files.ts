@@ -20,7 +20,8 @@ export async function listQuickOpenFiles(
   rootPath: string,
   store: Store,
   excludePaths?: string[],
-  signal?: AbortSignal
+  signal?: AbortSignal,
+  maxResults?: number
 ): Promise<string[]> {
   const authorizedRootPath = await resolveAuthorizedPath(rootPath, store)
   const localGitOptions = getLocalGitOptionsForRegisteredWorktree(
@@ -41,7 +42,13 @@ export async function listQuickOpenFiles(
   // can run.
   const rgAvailable = await checkRgAvailable(authorizedRootPath, localGitOptions.wslDistro)
   if (!rgAvailable) {
-    return listFilesWithGit(authorizedRootPath, excludePathPrefixes, localGitOptions, signal)
+    return listFilesWithGit(
+      authorizedRootPath,
+      excludePathPrefixes,
+      localGitOptions,
+      signal,
+      maxResults
+    )
   }
 
   const files = new Set<string>()
@@ -67,7 +74,7 @@ export async function listQuickOpenFiles(
       let done = false
       let parseablePathCount = 0
 
-      const processLine = (rawLine: string): void => {
+      const processLine = (rawLine: string): boolean => {
         const translated =
           wslDistroForOutput && rawLine.startsWith('/')
             ? toWindowsWslPath(rawLine, wslDistroForOutput)
@@ -77,16 +84,20 @@ export async function listQuickOpenFiles(
           getQuickOpenRgOutputMode(rawLine, translated, authorizedRootPath)
         )
         if (relPath === null) {
-          return
+          return false
         }
         parseablePathCount++
         if (!shouldIncludeQuickOpenPath(relPath)) {
-          return
+          return false
         }
         if (shouldExcludeQuickOpenRelPath(relPath, excludePathPrefixes)) {
-          return
+          return false
+        }
+        if (maxResults !== undefined && files.size >= maxResults) {
+          return true
         }
         files.add(relPath)
+        return maxResults !== undefined && files.size >= maxResults
       }
 
       const child = wslAwareSpawn('rg', args, {
@@ -101,7 +112,12 @@ export async function listQuickOpenFiles(
         let start = 0
         let newlineIdx = buf.indexOf('\n', start)
         while (newlineIdx !== -1) {
-          processLine(buf.substring(start, newlineIdx))
+          if (processLine(buf.substring(start, newlineIdx))) {
+            buf = ''
+            child.kill()
+            finish()
+            return
+          }
           start = newlineIdx + 1
           newlineIdx = buf.indexOf('\n', start)
         }
@@ -189,7 +205,7 @@ export async function listQuickOpenFiles(
     killSurvivors()
     throw err
   }
-  return Array.from(files)
+  return Array.from(files).slice(0, maxResults)
 }
 
 function getQuickOpenRgOutputMode(

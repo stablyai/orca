@@ -173,9 +173,9 @@ import type { KeybindingActionId, KeybindingFileSnapshot } from '../shared/keybi
 import type { AiVaultListArgs, AiVaultSubagentListArgs } from '../shared/ai-vault-types'
 import type { AgentType } from '../shared/native-chat-types'
 import type {
-  NativeChatAppendedMessages,
   NativeChatAppendedPayload,
-  NativeChatReadSessionResult
+  NativeChatReadSessionResult,
+  NativeChatSubscriptionFrame
 } from './api-types'
 import {
   ORCA_EDITOR_PREPARE_HOT_EXIT_EVENT,
@@ -3866,12 +3866,13 @@ const api = {
         agent: AgentType
         sessionId: string
         transcriptPath?: string
+        limit?: number
       },
-      onAppended: (messages: NativeChatAppendedMessages) => void
+      onFrame: (frame: NativeChatSubscriptionFrame) => void
     ): (() => void) => {
       const listener = (_event: Electron.IpcRendererEvent, payload: NativeChatAppendedPayload) => {
         if (payload.subscriptionId === args.subscriptionId) {
-          onAppended(payload.messages)
+          onFrame(payload.frame)
         }
       }
       ipcRenderer.on('nativeChat:appended', listener)

@@ -119,7 +119,7 @@ export function useNativeChatLiveSession(
   // The active read window; raised by loadEarlier to page in older history.
   const limitRef = useRef(NATIVE_CHAT_INITIAL_LIMIT)
 
-  // Appended messages accumulate separately from the initial read so a re-read
+  // Appended messages accumulate separately from the initial snapshot so pagination
   // (session change or load-earlier) doesn't lose in-flight appends mid-swap;
   // they reset with the same effect that re-subscribes. Live frames merge by id
   // (re-emitted ids replace in place, no unbounded concat) and the bucket is
@@ -139,6 +139,7 @@ export function useNativeChatLiveSession(
   // host is discarded after an owner flip (the session id can stay the same).
   const latestTransport = useRef(transport)
   latestTransport.current = transport
+  const transcriptEpochRef = useRef(0)
 
   // Incremental assembler: reset on the base axis (session/agent/read swap),
   // applyAppends on the hot append axis. `appliedTranscriptRef` is the exact
@@ -150,6 +151,10 @@ export function useNativeChatLiveSession(
   const baseMessagesRef = useRef<readonly NativeChatMessage[]>(EMPTY_MESSAGES)
 
   useEffect(() => {
+    // Why: agent/path/owner rebinds can keep the same session and transport;
+    // every source generation must invalidate pagination captured before it.
+    transcriptEpochRef.current += 1
+    setLoadingEarlier(false)
     if (!sessionId) {
       // No session id yet: nothing to read or tail. Surface live hook state on
       // an empty transcript; backfills once the id arrives (effect re-runs).
@@ -167,36 +172,37 @@ export function useNativeChatLiveSession(
     setAppended([])
     setHasMore(false)
 
-    void transport
-      .readSession(agent, sessionId, limitRef.current, transcriptPath ?? undefined)
-      .then((result) => {
-        if (cancelled) {
-          return
-        }
-        if (result && 'error' in result) {
-          setRead({ phase: 'error', error: result.error })
-          return
-        }
-        const messages = result?.messages ?? []
-        setRead({ phase: 'ready', messages })
-        setHasMore(hasMoreNativeChatHistory(messages.length, limitRef.current))
-      })
-      .catch((err: unknown) => {
-        if (!cancelled) {
-          setRead({ phase: 'error', error: err instanceof Error ? err.message : String(err) })
-        }
-      })
-
     const subscriptionId = nextSubscriptionId()
     const unsubscribe = transport.subscribe(
-      { subscriptionId, agent, sessionId, transcriptPath: transcriptPath ?? undefined },
-      (messages) => {
+      {
+        subscriptionId,
+        agent,
+        sessionId,
+        transcriptPath: transcriptPath ?? undefined,
+        limit: limitRef.current
+      },
+      (frame) => {
         if (!cancelled) {
+          if (frame.type === 'snapshot' || frame.type === 'replacement') {
+            // Why: reconnect snapshots and inode replacements are both
+            // authoritative generations; older pagination must not repaint them.
+            transcriptEpochRef.current += 1
+            setLoadingEarlier(false)
+            if ('error' in frame && frame.error) {
+              setRead({ phase: 'error', error: frame.error })
+              return
+            }
+            replaceList(appendMergerRef.current, frame.messages)
+            setAppended([])
+            setRead({ phase: 'ready', messages: appendMergerRef.current.list })
+            setHasMore(frame.hasMore)
+            return
+          }
           // Merge by id (re-emits replace in place) then bound to the window so
           // the bucket can't grow without limit. The base read still holds older
           // turns, and the assembler re-dedups the concat, so trimming the recent
           // append tail can't drop a turn the base window still covers (#6).
-          const merged = applyAppend(appendMergerRef.current, messages)
+          const merged = applyAppend(appendMergerRef.current, frame.messages)
           const bounded = boundNativeChatWindow(merged, limitRef.current)
           if (bounded !== merged) {
             replaceList(appendMergerRef.current, bounded)
@@ -232,13 +238,18 @@ export function useNativeChatLiveSession(
       return
     }
     const nextLimit = nextNativeChatLimit(limitRef.current)
+    const requestEpoch = transcriptEpochRef.current
     setLoadingEarlier(true)
     void transport
       .readSession(agent, sessionId, nextLimit, transcriptPath ?? undefined)
       .then((result) => {
         // Ignore a stale resolve from a session that swapped OR an owner that
         // flipped underneath us — either would paint the wrong host's history.
-        if (latestSessionId.current !== sessionId || latestTransport.current !== transport) {
+        if (
+          latestSessionId.current !== sessionId ||
+          latestTransport.current !== transport ||
+          transcriptEpochRef.current !== requestEpoch
+        ) {
           return
         }
         if (!result || 'error' in result) {
@@ -259,7 +270,9 @@ export function useNativeChatLiveSession(
         // Always clear the loading flag — even after a session swap — so a stale
         // resolve can't leave loadingEarlier stuck true on the new session. Only
         // APPLYING the result above is gated on the session-id match.
-        setLoadingEarlier(false)
+        if (transcriptEpochRef.current === requestEpoch) {
+          setLoadingEarlier(false)
+        }
       })
   }, [agent, sessionId, transcriptPath, transport, hasMore, loadingEarlier, read.phase])
 
@@ -273,7 +286,7 @@ export function useNativeChatLiveSession(
     // Base axis: the read's message array reference changes on session swap and
     // loadEarlier; sessionId/agent identify the conversation. Any change forces a
     // full reset so a missed trigger can't leave the cache stale.
-    const baseSig = `${agent} ${sessionId ?? ''}`
+    const baseSig = `${agent}\u0000${sessionId ?? ''}`
     const baseChanged = baseSig !== baseSigRef.current || baseMessages !== baseMessagesRef.current
     const applied = appliedTranscriptRef.current
     const isSuffixExtension =

@@ -29,9 +29,9 @@ export const LIST_FILES_TIMEOUT_MS = 25_000
 export function listFilesWithRg(
   rootPath: string,
   excludePathPrefixes: readonly string[] = [],
-  options: { signal?: AbortSignal } = {}
+  options: { signal?: AbortSignal; maxResults?: number } = {}
 ): Promise<string[]> {
-  const { signal } = options
+  const { signal, maxResults } = options
   if (signal?.aborted) {
     return Promise.reject(fileListingCancellationError(signal))
   }
@@ -67,6 +67,9 @@ export function listFilesWithRg(
         return true
       }
       files.add(relPath)
+      if (maxResults !== undefined && files.size >= maxResults) {
+        finishAtLimit()
+      }
       return true
     }
 
@@ -134,6 +137,9 @@ export function listFilesWithRg(
             if (processLine(passBuf.substring(start, idx))) {
               passFileCount++
             }
+            if (done) {
+              return
+            }
             start = idx + 1
             idx = passBuf.indexOf('\n', start)
           }
@@ -197,6 +203,16 @@ export function listFilesWithRg(
         }
         entry.reject(new Error(reason))
       }
+    }
+
+    function finishAtLimit(): void {
+      if (done) {
+        return
+      }
+      done = true
+      signal?.removeEventListener('abort', onAbort)
+      killSurvivors('rg list reached bounded result limit')
+      resolve(Array.from(files).slice(0, maxResults))
     }
 
     // Why: a cancelled scan (workspace switch, superseded request) must stop

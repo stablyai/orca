@@ -73,7 +73,8 @@ export async function listFilesWithGit(
   rootPath: string,
   excludePathPrefixes: readonly string[],
   localGitOptions: { wslDistro?: string },
-  signal?: AbortSignal
+  signal?: AbortSignal,
+  maxResults?: number
 ): Promise<string[]> {
   const isGitWorkTree = await isInsideGitWorkTree(rootPath, localGitOptions, signal)
   if (signal?.aborted) {
@@ -83,6 +84,7 @@ export async function listFilesWithGit(
     return listQuickOpenFilesWithReaddir(rootPath, {
       excludePathPrefixes,
       budget: createQuickOpenReaddirBudget(),
+      maxResults,
       signal
     })
   }
@@ -101,15 +103,16 @@ export async function listFilesWithGit(
       let buf = ''
       let done = false
 
-      const processPath = (path: string): void => {
+      const processPath = (path: string): boolean => {
         if (!path) {
-          return
+          return false
         }
         if (path.endsWith('/')) {
           directoryPaths.add(path)
         } else {
           gitPaths.add(path)
         }
+        return maxResults !== undefined && gitPaths.size + directoryPaths.size >= maxResults
       }
 
       // Why: git ls-files outputs paths relative to cwd, so we set cwd to
@@ -156,7 +159,12 @@ export async function listFilesWithGit(
         let start = 0
         let nulIdx = buf.indexOf('\0', start)
         while (nulIdx !== -1) {
-          processPath(buf.substring(start, nulIdx))
+          if (processPath(buf.substring(start, nulIdx))) {
+            buf = ''
+            child.kill()
+            resolvePass()
+            return
+          }
           start = nulIdx + 1
           nulIdx = buf.indexOf('\0', start)
         }
@@ -244,9 +252,10 @@ export async function listFilesWithGit(
     gitPaths,
     directoryPaths,
     excludePathPrefixes,
-    signal
+    signal,
+    maxResults
   })
   // Why: directory placeholders are expanded after Git exits; restore Git's
   // path order so empty queries and fuzzy-score ties remain stable.
-  return files.sort()
+  return files.sort().slice(0, maxResults)
 }
