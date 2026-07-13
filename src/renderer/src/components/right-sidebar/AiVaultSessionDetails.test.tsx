@@ -3,12 +3,12 @@
 import { act, fireEvent, render } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { AiVaultSession, AiVaultSubagentListResult } from '../../../../shared/ai-vault-types'
+import { TooltipProvider } from '@/components/ui/tooltip'
 import { SessionInlineDetails } from './AiVaultSessionDetails'
 
 const resumeWebChatSpy = vi.fn()
 vi.mock('./ai-vault-web-chat-resume', () => ({
-  resumeWebChatAsLocalAgent: (args: unknown) => resumeWebChatSpy(args),
-  resolveWebChatResumeAgent: vi.fn()
+  resumeWebChatAsLocalAgent: (args: unknown) => resumeWebChatSpy(args)
 }))
 
 const listSubagentSessions = vi.fn<(args: unknown) => Promise<AiVaultSubagentListResult>>()
@@ -157,26 +157,39 @@ describe('SessionInlineDetails web-chat resume', () => {
   })
 
   it('disables web-chat resume and shows a hint when no default agent is set', async () => {
-    const { getByTestId } = render(
-      <SessionInlineDetails
-        id="session-web-2"
-        session={makeSession({ readOnly: true, agent: 'chatgpt' })}
-        worktreeInfo={null}
-        vaultScope="workspace"
-        resumeActions={resumeActions}
-        onResumeInWorktree={vi.fn()}
-        onResumeInNewTab={vi.fn()}
-        webResumeAgent={null}
-        activeWorktreeId="wt-1"
-      />
+    // Why: the hint now rides a Radix Tooltip (STYLEGUIDE.md forbids `title`), so the
+    // trigger needs a TooltipProvider ancestor the way the app root supplies one.
+    const { getByTestId, getAllByText, queryByText } = render(
+      <TooltipProvider>
+        <SessionInlineDetails
+          id="session-web-2"
+          session={makeSession({ readOnly: true, agent: 'chatgpt' })}
+          worktreeInfo={null}
+          vaultScope="workspace"
+          resumeActions={resumeActions}
+          onResumeInWorktree={vi.fn()}
+          onResumeInNewTab={vi.fn()}
+          webResumeAgent={null}
+          activeWorktreeId="wt-1"
+        />
+      </TooltipProvider>
     )
     await act(async () => {})
 
     const button = getByTestId('ai-vault-web-chat-resume') as HTMLButtonElement
     expect(button.disabled).toBe(true)
-    expect(button.closest('[title]')?.getAttribute('title')).toBe(
-      'Set a default agent before resuming.'
-    )
+    expect(button.closest('[title]')).toBeNull()
+
+    const hint = 'Set a default agent before resuming.'
+    expect(queryByText(hint)).toBeNull()
+
+    // Focusing the tooltip trigger (the span wrapping the disabled button) opens
+    // the tooltip synchronously, the same way keyboard focus does in the app.
+    const trigger = button.parentElement as HTMLElement
+    await act(async () => {
+      fireEvent.focus(trigger)
+    })
+    expect(getAllByText(hint).length).toBeGreaterThan(0)
 
     fireEvent.click(button)
     expect(resumeWebChatSpy).not.toHaveBeenCalled()

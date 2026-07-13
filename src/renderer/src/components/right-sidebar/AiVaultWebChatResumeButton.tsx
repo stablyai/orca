@@ -1,14 +1,16 @@
 import type React from 'react'
 import { Play } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import type { TuiAgent } from '../../../../shared/types'
 import type { AiVaultSession } from '../../../../shared/ai-vault-types'
 import { translate } from '@/i18n/i18n'
 import { resumeWebChatAsLocalAgent } from './ai-vault-web-chat-resume'
 
 // Web resume seeds the default local agent with the imported transcript. Disabled
-// when there is no valid default agent or no active workspace to launch into; the
-// span wrapper carries a hint since a disabled button can't surface its own tooltip.
+// when there is no valid default agent or no active workspace to launch into; a
+// Radix Tooltip (not `title`, STYLEGUIDE.md) carries the hint so it also surfaces
+// on keyboard focus, with the span wrapper keeping hover reachable on a disabled button.
 export function AiVaultWebChatResumeButton({
   session,
   resumeAgent,
@@ -58,9 +60,16 @@ export function AiVaultWebChatResumeButton({
 
   if (disabled && hint) {
     return (
-      <span className="inline-flex" title={hint}>
-        {button}
-      </span>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <span className="inline-flex" onClick={(event) => event.stopPropagation()}>
+            {button}
+          </span>
+        </TooltipTrigger>
+        <TooltipContent side="top" sideOffset={4}>
+          {hint}
+        </TooltipContent>
+      </Tooltip>
     )
   }
   return button
