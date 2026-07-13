@@ -189,6 +189,7 @@ export default function EditHostScreen() {
             <Text style={styles.label}>Name</Text>
             <TextInput
               style={styles.input}
+              accessibilityLabel="Name"
               value={name}
               onChangeText={(value) => {
                 setName(value)
@@ -204,6 +205,7 @@ export default function EditHostScreen() {
             <Text style={styles.label}>Address</Text>
             <TextInput
               style={styles.input}
+              accessibilityLabel="Address"
               value={address}
               onChangeText={(value) => {
                 setAddress(value)
