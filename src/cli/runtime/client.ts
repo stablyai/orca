@@ -115,7 +115,10 @@ export class RuntimeClient {
           // that this client machine has a local Orca desktop process.
           app: {
             running: false,
-            pid: null
+            pid: null,
+            ...(response.result.desktopWindowStatus
+              ? { desktopWindowStatus: response.result.desktopWindowStatus }
+              : {})
           },
           runtime: {
             state: graphState === 'ready' ? 'ready' : 'graph_not_ready',
@@ -169,15 +172,25 @@ export class RuntimeClient {
 
   async openOrca(timeoutMs = 15_000): Promise<RuntimeRpcSuccess<CliStatusResult>> {
     const initial = await this.getCliStatus()
-    if (initial.result.runtime.reachable) {
+    if (this.remotePairing) {
       return initial
     }
 
     launchOrcaApp()
+    if (initial.result.app.desktopWindowStatus === 'blocked') {
+      throwDesktopActivationBlocked()
+    }
+    if (initial.result.app.desktopWindowStatus === 'available') {
+      return initial
+    }
+
     const startedAt = Date.now()
     while (Date.now() - startedAt < timeoutMs) {
       const status = await this.getCliStatus()
-      if (status.result.runtime.reachable) {
+      if (status.result.app.desktopWindowStatus === 'blocked') {
+        throwDesktopActivationBlocked()
+      }
+      if (status.result.app.desktopWindowStatus === 'available') {
         return status
       }
       await delay(250)
@@ -185,9 +198,16 @@ export class RuntimeClient {
 
     throw new RuntimeClientError(
       'runtime_open_timeout',
-      'Timed out waiting for Orca to start. Run the Orca app manually and try again.'
+      'Timed out waiting for an Orca desktop window. The runtime may still be running headlessly.'
     )
   }
+}
+
+function throwDesktopActivationBlocked(): never {
+  throw new RuntimeClientError(
+    'desktop_activation_blocked',
+    'Orca is running headlessly, but it cannot open a desktop window safely because the persistent terminal provider is unavailable. Quit Orca normally and start the app again; do not use open -n.'
+  )
 }
 
 function resolveRemotePairing(

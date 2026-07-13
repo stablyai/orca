@@ -172,6 +172,10 @@ import type {
   LinearStatusSetResult
 } from '../../shared/linear-agent-access'
 import {
+  HEADLESS_RUNTIME_WINDOW_ID,
+  type RuntimeDesktopWindowStatus
+} from '../../shared/runtime-types'
+import {
   LINEAR_SEARCH_MAX_LIMIT,
   LINEAR_WRITE_BODY_CAP,
   clampLinearSearchLimit
@@ -2502,8 +2506,10 @@ export class OrcaRuntimeService {
   private readonly onPtyStopped: ((ptyId: string) => void) | null
   private readonly onTerminalAgentStatus: ((event: RuntimeTerminalAgentStatusEvent) => void) | null
   private readonly onTerminalSideEffects: ((batch: TerminalSideEffectBatch) => void) | null
+  private terminalSideEffectConsumerAvailable = false
   private readonly getAgentStatusSnapshotFn: (() => AgentStatusIpcPayload[]) | null
   private readonly buildAgentHookPtyEnv: (() => Record<string, string>) | null
+  private readonly getDesktopWindowStatusFn: () => RuntimeDesktopWindowStatus
   private accountServices: RuntimeAccountServices | null = null
   private commitMessageAgentEnv: CommitMessageAgentEnvironmentResolvers | null = null
   private automationService: AutomationService | null = null
@@ -2537,6 +2543,7 @@ export class OrcaRuntimeService {
       // managed-Codex sessions. The runtime ctor runs in BOTH window and serve.
       getAdditionalAiVaultCodexHomePaths?: () => readonly string[]
       buildAgentHookPtyEnv?: () => Record<string, string>
+      getDesktopWindowStatus?: () => RuntimeDesktopWindowStatus
     }
   ) {
     this.store = store
@@ -2563,6 +2570,7 @@ export class OrcaRuntimeService {
     this.onPtyStopped = deps?.onPtyStopped ?? null
     this.onTerminalAgentStatus = deps?.onTerminalAgentStatus ?? null
     this.buildAgentHookPtyEnv = deps?.buildAgentHookPtyEnv ?? null
+    this.getDesktopWindowStatusFn = deps?.getDesktopWindowStatus ?? (() => 'openable')
     this.onTerminalSideEffects = deps?.onTerminalSideEffects ?? null
     // Why: the ConPTY spawn mark can land after daemon stream data already
     // created this PTY's emulator; the mark retrofits the DA1 override here
@@ -2965,6 +2973,7 @@ export class OrcaRuntimeService {
       rendererGraphEpoch: this.rendererGraphEpoch,
       graphStatus: this.graphStatus,
       authoritativeWindowId: this.authoritativeWindowId,
+      desktopWindowStatus: hasRenderer ? 'available' : this.getDesktopWindowStatusFn(),
       liveTabCount: this.tabs.size,
       liveLeafCount: this.leaves.size,
       runtimeProtocolVersion: RUNTIME_PROTOCOL_VERSION,
@@ -3079,9 +3088,76 @@ export class OrcaRuntimeService {
   }
 
   attachWindow(windowId: number): void {
+    if (this.authoritativeWindowId === HEADLESS_RUNTIME_WINDOW_ID) {
+      // Why: promotion is a renderer reload of the same graph owner, not a new
+      // runtime; stale handles must transition before the real window publishes.
+      this.persistWindowlessPtyBindingsForDesktopAttach()
+      this.markRendererReloading(HEADLESS_RUNTIME_WINDOW_ID)
+      this.authoritativeWindowId = windowId
+      return
+    }
     if (this.authoritativeWindowId === null) {
+      // Why: a promoted serve can close and later reopen its window while new
+      // background PTYs keep arriving; every windowless gap needs this handoff.
+      this.persistWindowlessPtyBindingsForDesktopAttach()
       this.authoritativeWindowId = windowId
     }
+  }
+
+  private persistWindowlessPtyBindingsForDesktopAttach(): void {
+    const session = this.store?.getWorkspaceSession?.()
+    if (!session || !this.store?.setWorkspaceSession) {
+      return
+    }
+    const promotablePtys = [...this.ptysById.values()].filter((pty) => {
+      if (!pty.connected || !pty.tabId) {
+        return false
+      }
+      const tab = session.tabsByWorktree[pty.worktreeId]?.find(
+        (candidate) => candidate.id === pty.tabId
+      )
+      if (!tab) {
+        return false
+      }
+      const layoutPtyIds = Object.values(
+        session.terminalLayoutsByTabId[pty.tabId]?.ptyIdsByLeafId ?? {}
+      )
+      return tab.ptyId === pty.ptyId || layoutPtyIds.includes(pty.ptyId)
+    })
+    if (promotablePtys.length === 0) {
+      return
+    }
+
+    // Why: renderer hydration treats an explicitly-present shutdown list as
+    // authoritative. A windowless owner has no renderer shutdown pass, so seed
+    // that existing reattach contract before its next desktop window loads.
+    const activeWorktreeIdsOnShutdown = [
+      ...new Set([
+        ...(session.activeWorktreeIdsOnShutdown ?? []),
+        ...promotablePtys.map((pty) => pty.worktreeId)
+      ])
+    ]
+    const activeConnectionIdsAtShutdown = [
+      ...new Set([
+        ...(session.activeConnectionIdsAtShutdown ?? []),
+        ...promotablePtys
+          .map((pty) => pty.connectionId)
+          .filter((connectionId): connectionId is string => connectionId !== null)
+      ])
+    ]
+    const remoteSessionIdsByTabId = { ...session.remoteSessionIdsByTabId }
+    for (const pty of promotablePtys) {
+      if (pty.connectionId && pty.tabId) {
+        remoteSessionIdsByTabId[pty.tabId] = pty.ptyId
+      }
+    }
+
+    this.store.setWorkspaceSession({
+      ...session,
+      activeWorktreeIdsOnShutdown,
+      ...(activeConnectionIdsAtShutdown.length > 0 ? { activeConnectionIdsAtShutdown } : {}),
+      ...(Object.keys(remoteSessionIdsByTabId).length > 0 ? { remoteSessionIdsByTabId } : {})
+    })
   }
 
   syncWindowGraph(windowId: number, graph: RuntimeSyncWindowGraph): RuntimeSyncWindowGraphResult {
@@ -3208,6 +3284,7 @@ export class OrcaRuntimeService {
     this.rebuildLeafPtyIndex()
     this.notifyMobileSessionTabSnapshots()
     this.graphStatus = 'ready'
+    this.setTerminalSideEffectConsumerAvailable(windowId !== HEADLESS_RUNTIME_WINDOW_ID)
     this.refreshWritableFlags()
     for (const leaf of this.leaves.values()) {
       this.adoptPreAllocatedHandle(leaf)
@@ -5985,7 +6062,7 @@ export class OrcaRuntimeService {
   /** Record one derived side-effect fact: batched per chunk while applying
    *  bytes, emitted immediately for between-chunk facts (stale-title timer). */
   private recordTerminalSideEffectFact(ptyId: string, fact: TerminalSideEffectFact): void {
-    if (!this.onTerminalSideEffects) {
+    if (!this.onTerminalSideEffects || !this.terminalSideEffectConsumerAvailable) {
       return
     }
     const entry = this.ptyTitleTrackersByPtyId.get(ptyId)
@@ -6001,7 +6078,11 @@ export class OrcaRuntimeService {
     facts: TerminalSideEffectFact[],
     options: { replay?: boolean } = {}
   ): void {
-    if (!this.onTerminalSideEffects || facts.length === 0) {
+    if (
+      !this.onTerminalSideEffects ||
+      !this.terminalSideEffectConsumerAvailable ||
+      facts.length === 0
+    ) {
       return
     }
     const batch: TerminalSideEffectBatch = {
@@ -6180,7 +6261,7 @@ export class OrcaRuntimeService {
         // Why: bell/command-finished/pr-link/2031 facts exist only for the
         // pty:sideEffect channel. Headless serve has no consumer, so skip the
         // per-chunk bell walk and 133/URL/2031 scans entirely.
-        ...(this.onTerminalSideEffects
+        ...(this.terminalSideEffectConsumerAvailable
           ? {
               onBell: () => {
                 this.recordTerminalSideEffectFact(ptyId, { kind: 'bell' })
@@ -6213,7 +6294,7 @@ export class OrcaRuntimeService {
       // headless serve skips the per-chunk scrape entirely. The detector
       // self-arms on the Command Code banner; the spawn command (when main
       // saw one) mirrors the renderer detector's startupCommand fast-arm.
-      commandCodeDetector: this.onTerminalSideEffects
+      commandCodeDetector: this.terminalSideEffectConsumerAvailable
         ? createCommandCodeOutputStatusDetector({
             startupCommand: this.terminalSpawnCommandsByPtyId.get(ptyId) ?? null,
             onWorking: (prompt) => {
@@ -6310,6 +6391,19 @@ export class OrcaRuntimeService {
   private disposePtyTitleTracker(ptyId: string): void {
     this.ptyTitleTrackersByPtyId.get(ptyId)?.tracker.dispose()
     this.ptyTitleTrackersByPtyId.delete(ptyId)
+  }
+
+  private setTerminalSideEffectConsumerAvailable(available: boolean): void {
+    const nextAvailable = available && this.onTerminalSideEffects !== null
+    if (nextAvailable === this.terminalSideEffectConsumerAvailable) {
+      return
+    }
+    this.terminalSideEffectConsumerAvailable = nextAvailable
+    // Why: optional bell/command/link scanners are selected when a tracker is
+    // created. Rebuild at the window boundary so pure headless output stays cheap.
+    for (const ptyId of [...this.ptyTitleTrackersByPtyId.keys()]) {
+      this.disposePtyTitleTracker(ptyId)
+    }
   }
 
   private extractLastOsc7CwdForPty(
@@ -17578,12 +17672,12 @@ export class OrcaRuntimeService {
   ): Promise<RuntimeTerminalCreate> {
     const presentation = resolveTerminalPresentation(opts)
     const requiresRendererFocus = opts.presentation === 'focused' || opts.focus === true
+    const availableAuthoritativeWindow = this.getAvailableAuthoritativeWindow()
     // Why: pre-diff createTerminal fell back to the renderer's active worktree
     // when no selector was provided. The new background-spawn branch hard-
     // requires a resolvable selector, so route the no-selector case through
     // the renderer IPC path to preserve that behavior.
-    const rendererWindow =
-      opts.rendererBacked === true ? this.getAvailableAuthoritativeWindow() : null
+    const rendererWindow = opts.rendererBacked === true ? availableAuthoritativeWindow : null
     const shouldCreateInBackground =
       worktreeSelector !== undefined &&
       ((!requiresRendererFocus && opts.rendererBacked !== true) ||
@@ -17704,7 +17798,12 @@ export class OrcaRuntimeService {
         tabId,
         leafId,
         ...(launchOpts.sessionId ? { sessionId: launchOpts.sessionId } : {}),
-        ...(launchOpts.persistHostSessionBinding ? { persistHostSessionBinding: true } : {})
+        // Why: a headless-created pane has no renderer session writer. Persist
+        // its tab/leaf binding at spawn so a later promoted window reattaches
+        // the live daemon or SSH PTY instead of replacing it with a fresh one.
+        ...(launchOpts.persistHostSessionBinding || availableAuthoritativeWindow === null
+          ? { persistHostSessionBinding: true }
+          : {})
       })
       this.registerPreAllocatedHandleForPty(result.id, preAllocatedHandle)
       this.registerPty(result.id, workspace.id, workspace.connectionId)
@@ -19049,6 +19148,7 @@ export class OrcaRuntimeService {
     // against whatever the renderer rebuilds next.
     this.rendererGraphEpoch += 1
     this.graphStatus = 'reloading'
+    this.setTerminalSideEffectConsumerAvailable(false)
     this.rememberDetachedPreAllocatedLeaves()
     this.handles.clear()
     this.handleByLeafKey.clear()
@@ -19065,6 +19165,7 @@ export class OrcaRuntimeService {
       return
     }
     this.graphStatus = 'ready'
+    this.setTerminalSideEffectConsumerAvailable(windowId !== HEADLESS_RUNTIME_WINDOW_ID)
     this.refreshWritableFlags()
   }
 
@@ -19078,6 +19179,7 @@ export class OrcaRuntimeService {
       this.rendererGraphEpoch += 1
     }
     this.graphStatus = 'unavailable'
+    this.setTerminalSideEffectConsumerAvailable(false)
     this.authoritativeWindowId = null
     this.rememberDetachedPreAllocatedLeaves()
     this.tabs.clear()

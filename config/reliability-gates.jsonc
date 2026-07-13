@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "updatedAt": "2026-07-12",
+  "updatedAt": "2026-07-13",
   "policy": {
     "maturityLevels": [
       "experimental",
@@ -159,6 +159,165 @@
         "SSH watches classify head-move triggers but skip the metadata-read identity diff; remote background-worktree heads still wait on a structural event or activation."
       ],
       "demotionRule": "Keep experimental or demote if the focused gate flakes without a product or harness bug, if index-only churn can emit worktrees:changed, or if structural add/remove/HEAD/lock changes fail to converge."
+    },
+    {
+      "id": "runtime.headless-desktop-promotion-continuity",
+      "title": "Headless serve opens its desktop without replacing live terminal sessions",
+      "maturity": "experimental",
+      "protection": "partial",
+      "owner": "runtime-platform",
+      "layer": "electron-runtime-contract",
+      "surfaces": [
+        "headless orca serve",
+        "single-instance desktop activation",
+        "CLI open",
+        "persistent terminal reattach"
+      ],
+      "platforms": [
+        "macos",
+        "linux",
+        "windows"
+      ],
+      "providers": [
+        "local",
+        "daemon",
+        "ssh"
+      ],
+      "coveredPlatforms": [
+        "macos"
+      ],
+      "coveredProviders": [
+        "local",
+        "daemon",
+        "ssh"
+      ],
+      "coverageNotes": "Deterministic unit coverage exercises activation gating, single-instance ownership, quit policy, local/remote CLI status, headless binding persistence, local daemon identity, and SSH identity transfer. A macOS Electron journey starts one headless owner in an isolated profile, creates and writes to a daemon PTY, activates the GUI through a second process, and verifies the original owner/runtime/daemon/PTY identities plus pre- and post-promotion I/O. Live packaged, Linux, and Windows journeys remain uncollected.",
+      "motivatingLinks": [
+        "https://github.com/stablyai/orca/issues/8457"
+      ],
+      "invariant": "A safely promotable headless serve process is the single app owner. Desktop activation opens a window in that same process only after the persistent PTY provider and runtime RPC are ready; every live persisted local or SSH terminal remains bound to the same PTY/session, and a committed Cmd+Q still exits the promoted app.",
+      "oracle": "Unit tests coalesce early activation, fail closed on a fallback local provider, preserve the production single-instance path for serve, expose explicit desktop window state to local and remote clients, persist headless tab/leaf bindings, transfer local and SSH reattach metadata, and retain quit intent. The Electron journey asserts one main-process PID, runtime id, daemon PID, and PTY id across activation; confirms output written before promotion is visible afterward; confirms new terminal input still works; and requires the activating second process to exit.",
+      "commands": [
+        "pnpm exec vitest run --config config/vitest.config.ts src/main/startup/serve-desktop-activation.test.ts src/main/startup/serve-desktop-activation-wiring.test.ts src/main/startup/single-instance-lock.test.ts src/main/startup/window-all-closed-quit-policy.test.ts src/cli/runtime-client.test.ts src/cli/runtime/websocket-transport.test.ts src/main/runtime/orca-runtime.test.ts",
+        "pnpm exec electron-vite build --mode e2e",
+        "pnpm run test:e2e -- tests/e2e/headless-serve-desktop-activation.spec.ts --workers=1"
+      ],
+      "testFiles": [
+        "src/main/startup/serve-desktop-activation.test.ts",
+        "src/main/startup/serve-desktop-activation-wiring.test.ts",
+        "src/main/startup/single-instance-lock.test.ts",
+        "src/main/startup/window-all-closed-quit-policy.test.ts",
+        "src/cli/runtime-client.test.ts",
+        "src/cli/runtime/websocket-transport.test.ts",
+        "src/main/runtime/orca-runtime.test.ts",
+        "tests/e2e/headless-serve-desktop-activation.spec.ts"
+      ],
+      "assertionRefs": [
+        {
+          "file": "src/main/startup/serve-desktop-activation.test.ts",
+          "assertions": [
+            "early activation requests coalesce until the persistent provider is ready",
+            "a blocked provider drops pending activation and never opens a window"
+          ]
+        },
+        {
+          "file": "src/main/startup/serve-desktop-activation-wiring.test.ts",
+          "assertions": [
+            "second-instance and macOS app activation use the same safety gate",
+            "headless PTY registration waits for provider settlement and promotion waits for RPC startup"
+          ]
+        },
+        {
+          "file": "src/main/startup/single-instance-lock.test.ts",
+          "assertions": [
+            "serve never skips the single-instance lock even in development",
+            "the isolated E2E profile can opt into the production ownership path"
+          ]
+        },
+        {
+          "file": "src/main/startup/window-all-closed-quit-policy.test.ts",
+          "assertions": [
+            "a promoted serve owner remains alive after an ordinary window close but exits after a committed quit"
+          ]
+        },
+        {
+          "file": "src/cli/runtime-client.test.ts",
+          "assertions": [
+            "local open activates a reachable headless owner and waits for a desktop window",
+            "unsafe promotion returns an explicit blocked error instead of launching a second owner"
+          ]
+        },
+        {
+          "file": "src/cli/runtime/websocket-transport.test.ts",
+          "assertions": [
+            "remote-paired open reports remote desktop state without launching a local app"
+          ]
+        },
+        {
+          "file": "src/main/runtime/orca-runtime.test.ts",
+          "assertions": [
+            "the headless sentinel transfers authority to the first real window",
+            "headless local and SSH PTY bindings are persisted on first promotion and later windowless reattach without changing ordinary desktop spawn persistence",
+            "status distinguishes available, openable, initializing, and blocked desktop states",
+            "desktop-only bell, command, and link scanners remain disabled until a real renderer graph is ready"
+          ]
+        },
+        {
+          "file": "tests/e2e/headless-serve-desktop-activation.spec.ts",
+          "assertions": [
+            "desktop activation keeps the same main owner PID, runtime id, daemon PID, and PTY id",
+            "terminal output written before promotion remains visible and post-promotion input/output still works",
+            "the activating second process exits instead of becoming another owner"
+          ]
+        }
+      ],
+      "evidenceRuns": [
+        {
+          "date": "2026-07-13",
+          "runner": "local",
+          "platform": "macos",
+          "command": "pnpm exec vitest run --config config/vitest.config.ts src/main/startup/serve-desktop-activation.test.ts src/main/startup/serve-desktop-activation-wiring.test.ts src/main/startup/single-instance-lock.test.ts src/main/startup/window-all-closed-quit-policy.test.ts src/cli/runtime-client.test.ts src/cli/runtime/websocket-transport.test.ts src/main/runtime/orca-runtime.test.ts",
+          "result": "passed",
+          "durationSeconds": 13,
+          "summary": "Seven activation, ownership, quit, local/remote CLI, and runtime contract files passed with 704 tests, including first and repeated windowless reattach, local/SSH identity transfer, ordinary desktop persistence isolation, and dynamic side-effect scanner gating."
+        },
+        {
+          "date": "2026-07-13",
+          "runner": "local",
+          "platform": "macos",
+          "command": "pnpm run test:e2e -- tests/e2e/headless-serve-desktop-activation.spec.ts --workers=1",
+          "result": "passed",
+          "durationSeconds": 52,
+          "summary": "The isolated Electron journey passed repeatedly on the final source; the latest 51.6-second run retained the same main owner, runtime, daemon, and PTY, restored pre-promotion output, accepted post-promotion input, and observed the activating process exit."
+        }
+      ],
+      "runtimeBudget": {
+        "p95Seconds": 120,
+        "scope": "focused unit contracts plus one isolated Electron headless-to-desktop journey"
+      },
+      "flakeHistory": {
+        "status": "unknown",
+        "evidence": "New deterministic contracts and two consecutive local macOS Electron passes; CI and cross-platform soak history are not yet available."
+      },
+      "redGreenEvidence": {
+        "status": "complete",
+        "evidence": "The first Electron red run proved that bypassing the dev single-instance lock created a second owner. After enforcing one owner, the next red run retained owner/runtime/daemon identity but exposed a new PTY because the headless tab/leaf binding was not persisted. The final implementation persists that binding before renderer hydration and both subsequent Electron runs kept the original PTY and transcript. Focused unit tests were also observed red before the activation gate, promotion metadata transfer, and headless spawn-persistence changes were added."
+      },
+      "performanceBudget": {
+        "required": false,
+        "evidence": "Activation adds no polling in the app owner and performs one bounded pass over live PTY records plus persisted terminal bindings only when a headless owner opens its first window. Desktop-only bell, command, PR-link, and mode scanners are rebuilt only while a real renderer graph is ready, preserving the prior pure-headless output path. CLI open keeps its existing 250ms bounded startup poll."
+      },
+      "promotionCriteria": [
+        "Collect at least 100 consecutive CI or soak passes or 14 days without an unexplained flake.",
+        "Add live packaged activation coverage on macOS plus representative Linux and Windows single-instance journeys.",
+        "Add an Electron SSH promotion journey in addition to the deterministic identity-transfer unit contract."
+      ],
+      "knownGaps": [
+        "The Electron journey uses an isolated development bundle rather than the installed application so it cannot disturb a real user session.",
+        "Linux and Windows single-instance activation have unit coverage but no live Electron evidence yet.",
+        "SSH identity transfer is deterministic unit coverage only; the live Electron journey currently exercises the local daemon provider."
+      ],
+      "demotionRule": "Quarantine the Electron journey only with a linked product or harness defect; demote if activation changes the owner/runtime/daemon/PTY identity, loses prior output, opens before provider readiness, or fails to honor a committed quit."
     },
     {
       "id": "editor.live-log-append-stability",
