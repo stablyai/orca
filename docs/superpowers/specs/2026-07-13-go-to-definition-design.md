@@ -74,6 +74,13 @@ cursor by searching the visible symbol text in files"* 라고 남겨 두었다. 
 | 통합 | `MonacoEditor.tsx` | 액션/프로바이더 등록 (기존 `orca.searchInFiles` 옆) | 위 |
 | 키바인딩 | `src/shared/keybindings.ts` | `editor.goToDefinition` 액션 + 기본값(Cmd+B, F12) | 없음 |
 
+**키바인딩 충돌 해결(중요):** `Mod+B`(Cmd+B)는 이미 `sidebar.left.toggle`(전역)에 바인딩돼
+있다. PyCharm과 동일하게 **에디터에 포커스가 있을 때만** Cmd+B가 정의로 이동을 가로채고,
+그 외에는 기존 사이드바 토글이 동작한다. 구현은 에디터 DOM의 capture 단계에서
+`editorShortcutMatches('editor.goToDefinition', event)` 매칭 시 `preventDefault()`
++`stopPropagation()`으로 전역 핸들러보다 우선(기존 `installEditorFindShortcut` 패턴과 동일).
+추가로 F12, Cmd+클릭도 지원.
+
 `SymbolDef` 형태(초안): `{ name: string, kind: string, path: string, line: number, column: number }`
 
 ## 동작 흐름 & UX
