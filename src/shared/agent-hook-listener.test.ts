@@ -1639,6 +1639,44 @@ describe('shared agent-hook-listener', () => {
     expect(event?.payload.interactivePrompt).toBeUndefined()
   })
 
+  it('surfaces the Grok tool-failure error and clears stale tool fields', () => {
+    normalizeHookPayload(
+      state,
+      'grok',
+      {
+        paneKey: PANE_KEY,
+        payload: {
+          hookEventName: 'pre_tool_use',
+          toolName: 'run_terminal_command',
+          toolInput: { command: 'pnpm build' }
+        }
+      },
+      'production'
+    )
+    const failed = normalizeHookPayload(
+      state,
+      'grok',
+      {
+        paneKey: PANE_KEY,
+        payload: {
+          hookEventName: 'post_tool_use_failure',
+          toolName: 'run_terminal_command',
+          toolInput: { command: 'pnpm build' },
+          error: 'command exited with code 1'
+        }
+      },
+      'production'
+    )
+    // Why: keeping toolName set would let the compact sidebar show the tool
+    // instead of the failure text, hiding the error from the user.
+    expect(failed?.payload).toMatchObject({
+      state: 'working',
+      lastAssistantMessage: 'command exited with code 1'
+    })
+    expect(failed?.payload.toolName).toBeUndefined()
+    expect(failed?.payload.toolInput).toBeUndefined()
+  })
+
   it('maps Grok StopFailure to done', () => {
     normalizeHookPayload(
       state,
