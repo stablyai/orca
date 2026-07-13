@@ -3420,6 +3420,26 @@
             "failedOne": "1台のサーバー更新に失敗",
             "updatedOne": "1台のサーバーを更新完了"
           },
+          "ResourceSessionCleanupDialog": {
+            "title": "Review unbound terminals",
+            "reviewing": "Checking current process activity…",
+            "running": "Closing confirmed inactive terminals…",
+            "completed": "Cleanup finished. Review the verified result below.",
+            "description": "Only terminals freshly verified as idle shells can be closed. Active and unverified terminals are protected.",
+            "inactiveOne": "1 inactive terminal can be closed.",
+            "inactiveMany": "{{value0}} inactive terminals can be closed.",
+            "protectedOne": "1 active or unverified terminal will be protected.",
+            "protectedMany": "{{value0}} active or unverified terminals will be protected.",
+            "gone": "{{value0}} terminal(s) already exited during review.",
+            "result": "Closed: {{value0}}. Protected: {{value1}}. Already gone: {{value2}}. Failed: {{value3}}.",
+            "closing": "Closing…",
+            "cancel": "Cancel",
+            "none": "No inactive terminals to kill",
+            "killOne": "Kill 1 inactive terminal",
+            "killMany": "Kill {{value0}} inactive terminals",
+            "close": "Close",
+            "retry": "Retry"
+          },
           "resource": {
             "memory": {
               "metric": {

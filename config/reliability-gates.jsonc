@@ -7881,137 +7881,283 @@
       "demotionRule": "Keep experimental or demote to protection none if the suite flakes, permits a mismatched terminal send, performs more than one inventory list per call, accepts client-supplied grants, or relay and desktop error codes diverge."
     },
     {
-      "id": "ssh-port-forward.renderer-snapshot-continuity",
-      "title": "SSH forwarded-port state survives stale renderer hydration",
-      "maturity": "experimental",
-      "protection": "partial",
-      "owner": "desktop-ssh",
-      "layer": "renderer-ssh-snapshot-reconciliation",
-      "surfaces": [
-        "SSH Ports panel",
-        "forwarded-port renderer state",
-        "persisted forward restoration",
-        "ssh2 port forwarding",
-        "system-SSH port forwarding"
-      ],
-      "platforms": ["macos", "linux", "windows"],
-      "providers": ["ssh2", "system-ssh"],
-      "coveredPlatforms": ["macos"],
-      "coveredProviders": ["ssh2", "system-ssh"],
-      "coverageNotes": "A deterministic renderer ordering test covers stale initial snapshots independently by target and stream, including hydration after partial SSH authority reconciliation. Headed macOS Electron tests force the same startup hydration race and use an ephemeral Docker sshd, a real remote Git worktree, real remote Node listeners, real HTTP forwards, in-place relay and full transport reconnect restoration, collision rejection, scan refresh, explicit removal, and an unrelated surviving forward through both transports. The forced-system run requires a recorded OpenSSH -L invocation.",
-      "motivatingLinks": ["user-reported SSH Ports panel disappearance"],
-      "invariant": "For one connected SSH authority, a renderer snapshot may update Forwarded or Detected state only if no newer push for that target and stream arrived after the snapshot began. Active tunnels and persisted intent remain authoritative through scan refresh and reconnect until explicit removal or a real connection-lifecycle transition.",
-      "oracle": "Hold empty initial Forwarded and Detected snapshot promises, publish live events, release the snapshots, and require each target and stream to preserve only its own newer push while applying unaffected snapshots. Reject one target's Detected snapshot and require its Forwarded snapshot plus later targets to hydrate independently. Begin another target with partial connected authority and require its snapshots to hydrate after same-watermark authority reconciliation. In headed Electron, hold an authoritative empty Forwarded snapshot across renderer reload, add a forward through the Ports panel, release and confirm the wrapped main handler resumed, then complete a later renderer-to-main listPortForwards round trip as the ordered hydration-continuation barrier. Before checking the Forwarded row, require main inventory, persisted intent, HTTP, remote process identity, and close warnings to prove the tunnel remained authoritative. Then forward two real Docker listeners, refresh detection, force an in-place relay-channel reconnect, perform a full transport reconnect, reject a bound local-port collision, remove one row, and require all signals to agree.",
-      "commands": [
-        "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/hooks/useIpcEvents.test.ts src/main/ssh/ssh-port-forward.test.ts src/main/ssh/system-ssh-forward-process.test.ts src/main/ipc/ssh.test.ts src/main/ssh/ssh-relay-session.test.ts tests/e2e/helpers/ssh-port-forward-snapshot-barrier.unit.test.ts --reporter=dot",
-        "pnpm exec electron-vite build --mode e2e",
-        "ORCA_E2E_SSH_DOCKER=1 ORCA_E2E_FORWARD_APP_LOGS=1 SKIP_BUILD=1 pnpm exec playwright test tests/e2e/ssh-port-forward-lifecycle.spec.ts --config tests/playwright.config.ts --project electron-headful --workers=1",
-        "ORCA_E2E_SSH_DOCKER=1 ORCA_SSH_FORCE_SYSTEM_TRANSPORT=1 ORCA_E2E_FORWARD_APP_LOGS=1 SKIP_BUILD=1 pnpm exec playwright test tests/e2e/ssh-port-forward-lifecycle.spec.ts --config tests/playwright.config.ts --project electron-headful --workers=1"
-      ],
-      "testFiles": [
-        "src/renderer/src/hooks/useIpcEvents.test.ts",
-        "src/main/ssh/ssh-port-forward.test.ts",
-        "src/main/ssh/system-ssh-forward-process.test.ts",
-        "src/main/ipc/ssh.test.ts",
-        "src/main/ssh/ssh-relay-session.test.ts",
-        "tests/e2e/helpers/ssh-port-forward-snapshot-barrier.unit.test.ts",
-        "tests/e2e/ssh-port-forward-lifecycle.spec.ts"
-      ],
-      "assertionRefs": [
-        {
-          "file": "src/renderer/src/hooks/useIpcEvents.test.ts",
-          "assertions": ["does not let initial SSH port snapshots overwrite newer push events"]
+          "id": "ssh-port-forward.renderer-snapshot-continuity",
+          "title": "SSH forwarded-port state survives stale renderer hydration",
+          "maturity": "experimental",
+          "protection": "partial",
+          "owner": "desktop-ssh",
+          "layer": "renderer-ssh-snapshot-reconciliation",
+          "surfaces": [
+            "SSH Ports panel",
+            "forwarded-port renderer state",
+            "persisted forward restoration",
+            "ssh2 port forwarding",
+            "system-SSH port forwarding"
+          ],
+          "platforms": ["macos", "linux", "windows"],
+          "providers": ["ssh2", "system-ssh"],
+          "coveredPlatforms": ["macos"],
+          "coveredProviders": ["ssh2", "system-ssh"],
+          "coverageNotes": "A deterministic renderer ordering test covers stale initial snapshots independently by target and stream, including hydration after partial SSH authority reconciliation. Headed macOS Electron tests force the same startup hydration race and use an ephemeral Docker sshd, a real remote Git worktree, real remote Node listeners, real HTTP forwards, in-place relay and full transport reconnect restoration, collision rejection, scan refresh, explicit removal, and an unrelated surviving forward through both transports. The forced-system run requires a recorded OpenSSH -L invocation.",
+          "motivatingLinks": ["user-reported SSH Ports panel disappearance"],
+          "invariant": "For one connected SSH authority, a renderer snapshot may update Forwarded or Detected state only if no newer push for that target and stream arrived after the snapshot began. Active tunnels and persisted intent remain authoritative through scan refresh and reconnect until explicit removal or a real connection-lifecycle transition.",
+          "oracle": "Hold empty initial Forwarded and Detected snapshot promises, publish live events, release the snapshots, and require each target and stream to preserve only its own newer push while applying unaffected snapshots. Reject one target's Detected snapshot and require its Forwarded snapshot plus later targets to hydrate independently. Begin another target with partial connected authority and require its snapshots to hydrate after same-watermark authority reconciliation. In headed Electron, hold an authoritative empty Forwarded snapshot across renderer reload, add a forward through the Ports panel, release and confirm the wrapped main handler resumed, then complete a later renderer-to-main listPortForwards round trip as the ordered hydration-continuation barrier. Before checking the Forwarded row, require main inventory, persisted intent, HTTP, remote process identity, and close warnings to prove the tunnel remained authoritative. Then forward two real Docker listeners, refresh detection, force an in-place relay-channel reconnect, perform a full transport reconnect, reject a bound local-port collision, remove one row, and require all signals to agree.",
+          "commands": [
+            "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/hooks/useIpcEvents.test.ts src/main/ssh/ssh-port-forward.test.ts src/main/ssh/system-ssh-forward-process.test.ts src/main/ipc/ssh.test.ts src/main/ssh/ssh-relay-session.test.ts tests/e2e/helpers/ssh-port-forward-snapshot-barrier.unit.test.ts --reporter=dot",
+            "pnpm exec electron-vite build --mode e2e",
+            "ORCA_E2E_SSH_DOCKER=1 ORCA_E2E_FORWARD_APP_LOGS=1 SKIP_BUILD=1 pnpm exec playwright test tests/e2e/ssh-port-forward-lifecycle.spec.ts --config tests/playwright.config.ts --project electron-headful --workers=1",
+            "ORCA_E2E_SSH_DOCKER=1 ORCA_SSH_FORCE_SYSTEM_TRANSPORT=1 ORCA_E2E_FORWARD_APP_LOGS=1 SKIP_BUILD=1 pnpm exec playwright test tests/e2e/ssh-port-forward-lifecycle.spec.ts --config tests/playwright.config.ts --project electron-headful --workers=1"
+          ],
+          "testFiles": [
+            "src/renderer/src/hooks/useIpcEvents.test.ts",
+            "src/main/ssh/ssh-port-forward.test.ts",
+            "src/main/ssh/system-ssh-forward-process.test.ts",
+            "src/main/ipc/ssh.test.ts",
+            "src/main/ssh/ssh-relay-session.test.ts",
+            "tests/e2e/helpers/ssh-port-forward-snapshot-barrier.unit.test.ts",
+            "tests/e2e/ssh-port-forward-lifecycle.spec.ts"
+          ],
+          "assertionRefs": [
+            {
+              "file": "src/renderer/src/hooks/useIpcEvents.test.ts",
+              "assertions": ["does not let initial SSH port snapshots overwrite newer push events"]
+            },
+            {
+              "file": "src/main/ssh/ssh-port-forward.test.ts",
+              "assertions": ["lists forwards filtered by connectionId", "removes a forward by id"]
+            },
+            {
+              "file": "src/main/ssh/system-ssh-forward-process.test.ts",
+              "assertions": [
+                "does not spawn ssh when the requested local forward port is already in use",
+                "sends SIGTERM then SIGKILL when the process does not exit",
+                "does not resolve stop until the process exits"
+              ]
+            },
+            {
+              "file": "src/main/ipc/ssh.test.ts",
+              "assertions": [
+                "preserves active port forwards and live connections across handler re-registration",
+                "persists desired forwards and broadcasts when an active forward closes unexpectedly"
+              ]
+            },
+            {
+              "file": "src/main/ssh/ssh-relay-session.test.ts",
+              "assertions": ["cleans up port forwards on reconnect"]
+            },
+            {
+              "file": "tests/e2e/helpers/ssh-port-forward-snapshot-barrier.unit.test.ts",
+              "assertions": ["holds only the first matching request while its snapshot is unresolved"]
+            },
+            {
+              "file": "tests/e2e/ssh-port-forward-lifecycle.spec.ts",
+              "assertions": ["keeps a user-forwarded listener live across scan refresh @headful"]
+            }
+          ],
+          "evidenceRuns": [
+            {
+              "date": "2026-07-30",
+              "runner": "local",
+              "platform": "macos",
+              "command": "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/hooks/useIpcEvents.test.ts src/main/ssh/ssh-port-forward.test.ts src/main/ssh/system-ssh-forward-process.test.ts src/main/ipc/ssh.test.ts src/main/ssh/ssh-relay-session.test.ts tests/e2e/helpers/ssh-port-forward-snapshot-barrier.unit.test.ts --reporter=dot",
+              "result": "passed",
+              "durationSeconds": 6.77,
+              "summary": "Six renderer, main-process, and barrier lifecycle files passed with 215 tests, including deterministic stale-snapshot, rejected-stream, partial-authority, and single-capture isolation plus existing collision, delayed-exit, reconnect, persistence, re-registration, and unrelated-forward contracts."
+            },
+            {
+              "date": "2026-07-30",
+              "runner": "local",
+              "platform": "macos",
+              "command": "ORCA_E2E_SSH_DOCKER=1 ORCA_E2E_FORWARD_APP_LOGS=1 SKIP_BUILD=1 pnpm exec playwright test tests/e2e/ssh-port-forward-lifecycle.spec.ts --config tests/playwright.config.ts --project electron-headful --workers=1",
+              "result": "passed",
+              "durationSeconds": 53.7,
+              "summary": "Headed Electron passed against a real Docker sshd over ssh2 after forcing the stale startup-snapshot race and exact renderer-continuation barrier, with two remote listeners, scan refresh, in-place relay and full transport reconnect restoration, collision rejection, explicit removal, independent state inventories, HTTP responses, process identity, and no live forward-close warning."
+            },
+            {
+              "date": "2026-07-30",
+              "runner": "local",
+              "platform": "macos",
+              "command": "ORCA_E2E_SSH_DOCKER=1 ORCA_SSH_FORCE_SYSTEM_TRANSPORT=1 ORCA_E2E_FORWARD_APP_LOGS=1 SKIP_BUILD=1 pnpm exec playwright test tests/e2e/ssh-port-forward-lifecycle.spec.ts --config tests/playwright.config.ts --project electron-headful --workers=1",
+              "result": "passed",
+              "durationSeconds": 66,
+              "summary": "The identical stale-snapshot and headed lifecycle passed through forced system OpenSSH, with a wrapper marker proving the -L forward process executed; in-place relay and full transport reconnects restored both intents, no unexpected forward close was captured before assertions, and intentional removal completed."
+            }
+          ],
+          "runtimeBudget": {
+            "p95Seconds": 180,
+            "scope": "focused renderer/main contracts plus two headed Docker SSH transport runs"
+          },
+          "flakeHistory": {
+            "status": "unknown",
+            "evidence": "The deterministic contract and both real transport runs passed locally; CI and soak history are not yet available."
+          },
+          "redGreenEvidence": {
+            "status": "complete",
+            "evidence": "The identical renderer unit and headed Electron oracles fail on current main because the stale empty hydration reply becomes a second and final Forwarded write, pass with bounded per-target per-stream pending-hydration state, fail again when only that fix is removed, and pass again after restoration. In the tightened headed revert, both transports first proved main inventory, persisted intent, HTTP, remote process identity, no live close warning, and renderer continuation, then failed only at the missing Forwarded-row assertion. Both passed after rebuilding the restored candidate."
+          },
+          "performanceBudget": {
+            "required": true,
+            "evidence": "The fix adds one effect-scoped map containing only unresolved target hydrations, one O(1) boolean write per relevant existing push event, and one O(1) authority/stream check per initial snapshot. Forwarded and Detected hydrate independently so a stalled stream does not block its peer or later targets; entries are removed after both settle. It adds no polling, timers, IPC calls, scans, subprocesses, or renderer subscriptions."
+          },
+          "promotionCriteria": [
+            "Collect 100 consecutive focused CI passes or 14 days of soak history.",
+            "Run the headed topology on Linux and Windows with their native system-SSH clients.",
+            "Re-run the headed snapshot barrier after Electron major-version upgrades.",
+            "Keep the independent Forwarded and Detected freshness assertions and both transport runs green."
+          ],
+          "knownGaps": [
+            "Headed live evidence is macOS-only; Linux and Windows system-SSH clients were not exercised.",
+            "The headed race uses Electron's private invoke-handler registry to delay the real listPortForwards handler because Electron exposes no public handler-wrapping API.",
+            "The live run reconnects an existing app session but does not restart the packaged application from disk.",
+            "The live topology uses an SSH Git worktree; folder-workspace behavior is covered by target-scoped renderer reconciliation rather than a second headed topology."
+          ],
+          "demotionRule": "Keep experimental or demote if same-authority snapshots can overwrite newer pushes, reconnect silently loses persisted intent, one forward operation disturbs unrelated forwards, live HTTP diverges from renderer/main inventory, or either transport topology flakes without an identified product or harness fault."
         },
-        {
-          "file": "src/main/ssh/ssh-port-forward.test.ts",
-          "assertions": ["lists forwards filtered by connectionId", "removes a forward by id"]
-        },
-        {
-          "file": "src/main/ssh/system-ssh-forward-process.test.ts",
-          "assertions": [
-            "does not spawn ssh when the requested local forward port is already in use",
-            "sends SIGTERM then SIGKILL when the process does not exit",
-            "does not resolve stop until the process exits"
-          ]
-        },
-        {
-          "file": "src/main/ipc/ssh.test.ts",
-          "assertions": [
-            "preserves active port forwards and live connections across handler re-registration",
-            "persists desired forwards and broadcasts when an active forward closes unexpectedly"
-          ]
-        },
-        {
-          "file": "src/main/ssh/ssh-relay-session.test.ts",
-          "assertions": ["cleans up port forwards on reconnect"]
-        },
-        {
-          "file": "tests/e2e/helpers/ssh-port-forward-snapshot-barrier.unit.test.ts",
-          "assertions": ["holds only the first matching request while its snapshot is unresolved"]
-        },
-        {
-          "file": "tests/e2e/ssh-port-forward-lifecycle.spec.ts",
-          "assertions": ["keeps a user-forwarded listener live across scan refresh @headful"]
+    {
+          "id": "terminal-session.unbound-cleanup-safety",
+          "title": "Unbound terminal cleanup protects live and unverified PTY sessions",
+          "maturity": "experimental",
+          "protection": "partial",
+          "owner": "terminal-runtime",
+          "layer": "shared-main-renderer-contract",
+          "surfaces": [
+            "Resource Manager",
+            "terminal lifecycle",
+            "PTY process inspection",
+            "daemon session cleanup",
+            "SSH session cleanup"
+          ],
+          "platforms": [
+            "macos",
+            "linux",
+            "windows"
+          ],
+          "providers": [
+            "local",
+            "daemon",
+            "ssh",
+            "wsl"
+          ],
+          "coveredPlatforms": [
+            "macos"
+          ],
+          "coveredProviders": [
+            "local",
+            "daemon",
+            "ssh"
+          ],
+          "coverageNotes": "Deterministic macOS tests cover shared shell classification, grouped provider inventory, local/daemon guarded shutdown, parsed and owned disconnected-SSH protection, renderer reconciliation, confirmation UI, and removal of the former direct-kill bypass. Shell-name fixtures include POSIX, PowerShell, CMD, and Git Bash forms, but live Linux, Windows, WSL, and SSH process evidence remains uncollected.",
+          "motivatingLinks": [
+            "https://github.com/stablyai/orca/issues/8459",
+            "https://github.com/stablyai/orca/issues/8457"
+          ],
+          "invariant": "Renderer absence alone never authorizes PTY shutdown; ordinary unbound-session cleanup closes only sessions that remain in the reviewed renderer intersection and are freshly confirmed by their owning provider as a known shell with no child processes. Active, unknown, disconnected, newly bound, newly created, and already-gone sessions are protected or skipped.",
+          "oracle": "Review a fresh provider inventory against renderer bindings read after the inventory resolves, freeze only those reviewed IDs, intersect them again immediately before confirmation, then reclassify in main from a fresh owning-provider inventory plus child and foreground evidence. Assert shutdown is called only for inactive results through the existing exact PTY lifecycle, while active, unknown, disconnected, gone, newly bound, and later-created sessions never reach shutdown.",
+          "commands": [
+            "pnpm exec vitest run --config config/vitest.config.ts src/shared/pty-inactive-cleanup.test.ts src/main/ipc/pty-inactive-cleanup.test.ts src/main/ipc/pty.test.ts src/renderer/src/components/status-bar/resource-session-cleanup-review.test.ts src/renderer/src/components/status-bar/use-resource-session-cleanup-review.test.tsx src/renderer/src/components/status-bar/ResourceSessionCleanupDialog.test.tsx src/renderer/src/components/status-bar/ResourceUsageStatusSegment.rows.test.tsx src/renderer/src/components/status-bar/ResourceUsageStatusSegment.session-polling.test.ts src/renderer/src/components/status-bar/resource-session-bindings.test.ts src/renderer/src/components/status-bar/mergeSnapshotAndSessions.test.ts"
+          ],
+          "testFiles": [
+            "src/shared/pty-inactive-cleanup.test.ts",
+            "src/main/ipc/pty-inactive-cleanup.test.ts",
+            "src/main/ipc/pty.test.ts",
+            "src/renderer/src/components/status-bar/resource-session-cleanup-review.test.ts",
+            "src/renderer/src/components/status-bar/use-resource-session-cleanup-review.test.tsx",
+            "src/renderer/src/components/status-bar/ResourceSessionCleanupDialog.test.tsx",
+            "src/renderer/src/components/status-bar/ResourceUsageStatusSegment.rows.test.tsx",
+            "src/renderer/src/components/status-bar/ResourceUsageStatusSegment.session-polling.test.ts",
+            "src/renderer/src/components/status-bar/resource-session-bindings.test.ts",
+            "src/renderer/src/components/status-bar/mergeSnapshotAndSessions.test.ts"
+          ],
+          "assertionRefs": [
+            {
+              "file": "src/main/ipc/pty-inactive-cleanup.test.ts",
+              "assertions": [
+                "known idle POSIX and Windows shell forms require negative child evidence before becoming inactive",
+                "non-shell foreground or positive child evidence remains active even when the other inspection rejects",
+                "missing providers, null foreground, failed inventory, and partial negative evidence remain unknown",
+                "each provider inventory runs once and absent IDs become gone"
+              ]
+            },
+            {
+              "file": "src/main/ipc/pty.test.ts",
+              "assertions": [
+                "guarded cleanup kills only the freshly confirmed idle shell and protects the active agent",
+                "a disconnected app-scoped SSH ID remains protected without falling back to the local provider",
+                "reviewed sessions are revalidated at cleanup time, gone sessions skip shutdown, and independent shutdown failures settle"
+              ]
+            },
+            {
+              "file": "src/renderer/src/components/status-bar/resource-session-cleanup-review.test.ts",
+              "assertions": [
+                "bindings are read after fresh session inventory and reviewed IDs are immutable",
+                "newly bound and gone reviewed sessions are excluded before guarded cleanup while later-created sessions are never chased",
+                "final killed, protected, gone, and failed outcomes are counted without overclaiming"
+              ]
+            },
+            {
+              "file": "src/renderer/src/components/status-bar/use-resource-session-cleanup-review.test.tsx",
+              "assertions": [
+                "review, running, completed, error, and retry states preserve the confirmation boundary",
+                "running cleanup cannot be dismissed and continues after unmount while React callbacks remain mount-gated",
+                "the visible session inventory refreshes after guarded cleanup settles"
+              ]
+            },
+            {
+              "file": "src/renderer/src/components/status-bar/ResourceSessionCleanupDialog.test.tsx",
+              "assertions": [
+                "the dialog distinguishes inactive candidates from active or unverified protected sessions",
+                "no destructive action is enabled while reviewing, running, errored, or when no inactive candidate exists",
+                "completed copy reports only aggregate verified outcomes and exposes no process IDs"
+              ]
+            },
+            {
+              "file": "src/renderer/src/components/status-bar/ResourceUsageStatusSegment.session-polling.test.ts",
+              "assertions": [
+                "individual unbound rows route through explicit confirmation and the former direct pty.kill bypass is absent",
+                "Resource Manager has no renderer bulk-kill map and adds no child or foreground polling to its open or closed inventory effect"
+              ]
+            }
+          ],
+          "evidenceRuns": [
+            {
+              "date": "2026-07-13",
+              "runner": "local",
+              "platform": "macos",
+              "command": "pnpm exec vitest run --config config/vitest.config.ts src/shared/pty-inactive-cleanup.test.ts src/main/ipc/pty-inactive-cleanup.test.ts src/main/ipc/pty.test.ts src/renderer/src/components/status-bar/resource-session-cleanup-review.test.ts src/renderer/src/components/status-bar/use-resource-session-cleanup-review.test.tsx src/renderer/src/components/status-bar/ResourceSessionCleanupDialog.test.tsx src/renderer/src/components/status-bar/ResourceUsageStatusSegment.rows.test.tsx src/renderer/src/components/status-bar/ResourceUsageStatusSegment.session-polling.test.ts src/renderer/src/components/status-bar/resource-session-bindings.test.ts src/renderer/src/components/status-bar/mergeSnapshotAndSessions.test.ts",
+              "result": "passed",
+              "durationSeconds": 4.84,
+              "summary": "11 focused shared, main IPC, renderer coordinator, hook, dialog, binding, merge, and source-regression files passed with 348 tests."
+            }
+          ],
+          "runtimeBudget": {
+            "p95Seconds": 15,
+            "scope": "focused shared, main IPC, renderer coordinator, and Resource Manager tests"
+          },
+          "flakeHistory": {
+            "status": "unknown",
+            "evidence": "New deterministic local coverage; CI and soak history are not yet available."
+          },
+          "redGreenEvidence": {
+            "status": "partial",
+            "evidence": "RED runs first failed because the classifier, guarded handlers, coordinator, hook, dialog, and safe Resource Manager wiring did not exist. The prior source also contained an individual unbound-row confirmation bypass and a Promise.allSettled bulk pty.kill map. The consolidated GREEN run passed 11 files and 348 tests in 4.84 seconds; live provider and cross-platform red/green artifacts remain gaps."
+          },
+          "performanceBudget": {
+            "required": false,
+            "evidence": "No background process inspection was added. Provider inventory and process confirmation run only after an explicit review or confirmation action, are grouped once per provider, and normalize batches to at most 500 unique IDs."
+          },
+          "promotionCriteria": [
+            "Run the focused gate for at least 100 consecutive CI passes or 14 days across required platforms.",
+            "Add packaged macOS evidence with disposable idle and active sessions, including input survival for the protected process.",
+            "Add live SSH and WSL evidence, plus native Linux and Windows process inspection and cleanup evidence.",
+            "Exercise provider disconnect during the review-to-confirm interval in a packaged app."
+          ],
+          "knownGaps": [
+            "The current evidence is deterministic contract coverage, not a packaged Electron Resource Manager interaction.",
+            "Live SSH disconnect and remote process survival are not yet exercised; disconnected routing is covered with provider-contract doubles.",
+            "WSL, native Linux, and native Windows process inspection are not live-tested in this run.",
+            "The separate serve/headless-to-GUI lifecycle defect remains tracked by issue #8457 and is intentionally outside this gate."
+          ],
+          "demotionRule": "Keep experimental or demote to protection none if cleanup calls shutdown without fresh inactive evidence, falls back a disconnected SSH ID to local, adds background process polling, or bypasses confirmation for an individual unbound row."
         }
-      ],
-      "evidenceRuns": [
-        {
-          "date": "2026-07-30",
-          "runner": "local",
-          "platform": "macos",
-          "command": "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/hooks/useIpcEvents.test.ts src/main/ssh/ssh-port-forward.test.ts src/main/ssh/system-ssh-forward-process.test.ts src/main/ipc/ssh.test.ts src/main/ssh/ssh-relay-session.test.ts tests/e2e/helpers/ssh-port-forward-snapshot-barrier.unit.test.ts --reporter=dot",
-          "result": "passed",
-          "durationSeconds": 6.77,
-          "summary": "Six renderer, main-process, and barrier lifecycle files passed with 215 tests, including deterministic stale-snapshot, rejected-stream, partial-authority, and single-capture isolation plus existing collision, delayed-exit, reconnect, persistence, re-registration, and unrelated-forward contracts."
-        },
-        {
-          "date": "2026-07-30",
-          "runner": "local",
-          "platform": "macos",
-          "command": "ORCA_E2E_SSH_DOCKER=1 ORCA_E2E_FORWARD_APP_LOGS=1 SKIP_BUILD=1 pnpm exec playwright test tests/e2e/ssh-port-forward-lifecycle.spec.ts --config tests/playwright.config.ts --project electron-headful --workers=1",
-          "result": "passed",
-          "durationSeconds": 53.7,
-          "summary": "Headed Electron passed against a real Docker sshd over ssh2 after forcing the stale startup-snapshot race and exact renderer-continuation barrier, with two remote listeners, scan refresh, in-place relay and full transport reconnect restoration, collision rejection, explicit removal, independent state inventories, HTTP responses, process identity, and no live forward-close warning."
-        },
-        {
-          "date": "2026-07-30",
-          "runner": "local",
-          "platform": "macos",
-          "command": "ORCA_E2E_SSH_DOCKER=1 ORCA_SSH_FORCE_SYSTEM_TRANSPORT=1 ORCA_E2E_FORWARD_APP_LOGS=1 SKIP_BUILD=1 pnpm exec playwright test tests/e2e/ssh-port-forward-lifecycle.spec.ts --config tests/playwright.config.ts --project electron-headful --workers=1",
-          "result": "passed",
-          "durationSeconds": 66,
-          "summary": "The identical stale-snapshot and headed lifecycle passed through forced system OpenSSH, with a wrapper marker proving the -L forward process executed; in-place relay and full transport reconnects restored both intents, no unexpected forward close was captured before assertions, and intentional removal completed."
-        }
-      ],
-      "runtimeBudget": {
-        "p95Seconds": 180,
-        "scope": "focused renderer/main contracts plus two headed Docker SSH transport runs"
-      },
-      "flakeHistory": {
-        "status": "unknown",
-        "evidence": "The deterministic contract and both real transport runs passed locally; CI and soak history are not yet available."
-      },
-      "redGreenEvidence": {
-        "status": "complete",
-        "evidence": "The identical renderer unit and headed Electron oracles fail on current main because the stale empty hydration reply becomes a second and final Forwarded write, pass with bounded per-target per-stream pending-hydration state, fail again when only that fix is removed, and pass again after restoration. In the tightened headed revert, both transports first proved main inventory, persisted intent, HTTP, remote process identity, no live close warning, and renderer continuation, then failed only at the missing Forwarded-row assertion. Both passed after rebuilding the restored candidate."
-      },
-      "performanceBudget": {
-        "required": true,
-        "evidence": "The fix adds one effect-scoped map containing only unresolved target hydrations, one O(1) boolean write per relevant existing push event, and one O(1) authority/stream check per initial snapshot. Forwarded and Detected hydrate independently so a stalled stream does not block its peer or later targets; entries are removed after both settle. It adds no polling, timers, IPC calls, scans, subprocesses, or renderer subscriptions."
-      },
-      "promotionCriteria": [
-        "Collect 100 consecutive focused CI passes or 14 days of soak history.",
-        "Run the headed topology on Linux and Windows with their native system-SSH clients.",
-        "Re-run the headed snapshot barrier after Electron major-version upgrades.",
-        "Keep the independent Forwarded and Detected freshness assertions and both transport runs green."
-      ],
-      "knownGaps": [
-        "Headed live evidence is macOS-only; Linux and Windows system-SSH clients were not exercised.",
-        "The headed race uses Electron's private invoke-handler registry to delay the real listPortForwards handler because Electron exposes no public handler-wrapping API.",
-        "The live run reconnects an existing app session but does not restart the packaged application from disk.",
-        "The live topology uses an SSH Git worktree; folder-workspace behavior is covered by target-scoped renderer reconciliation rather than a second headed topology."
-      ],
-      "demotionRule": "Keep experimental or demote if same-authority snapshots can overwrite newer pushes, reconnect silently loses persisted intent, one forward operation disturbs unrelated forwards, live HTTP diverges from renderer/main inventory, or either transport topology flakes without an identified product or harness fault."
-    }
   ]
 }

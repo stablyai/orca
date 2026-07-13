@@ -3126,6 +3126,10 @@ function createPtyApi(): NonNullable<Partial<PreloadApi>['pty']> {
     // Web panes clear the host buffer via the terminal.clearBuffer runtime RPC.
     clearBuffer: () => {},
     kill: () => Promise.resolve(),
+    // Why: this policy inspects desktop-owned providers; web terminals are
+    // remote-runtime surfaces and must never be presented as local candidates.
+    inspectInactiveCleanup: () => Promise.resolve([]),
+    killInactiveSessions: () => Promise.resolve([]),
     ackColdRestore: () => {},
     ackData: () => {},
     onDeliveryResyncRequest: () => noopUnsubscribe,
