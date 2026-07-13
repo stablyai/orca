@@ -94,6 +94,9 @@ export function EditorFileTabContextMenu({
   const renameShortcut = useOptionalShortcutLabel('tab.rename')
   const closeShortcut = useOptionalShortcutLabel('tab.close')
   const closeAllShortcut = useOptionalShortcutLabel('tab.closeAll')
+  // Why: web-chat-transcript tabs are synthetic — file.filePath is a
+  // `web-chat-transcript::agent::sessionId` id, not a real filesystem path.
+  const isSyntheticTab = file.mode === 'web-chat-transcript'
 
   return (
     <DropdownMenu open={open} onOpenChange={onOpenChange} modal={false}>
@@ -192,6 +195,7 @@ export function EditorFileTabContextMenu({
           </>
         ) : null}
         <DropdownMenuItem
+          disabled={isSyntheticTab}
           onSelect={() => {
             void window.api.ui.writeClipboardText(file.filePath)
           }}
@@ -212,6 +216,7 @@ export function EditorFileTabContextMenu({
         </DropdownMenuItem>
         <DropdownMenuSeparator />
         <DropdownMenuItem
+          disabled={isSyntheticTab}
           onSelect={() => {
             if (
               shouldBlockEditorTabLocalOpen(

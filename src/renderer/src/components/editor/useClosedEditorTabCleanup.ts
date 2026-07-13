@@ -68,5 +68,8 @@ function disposeClosedEditorTab(prevId: string, prevFile: OpenFile): void {
       break
     case 'check-details':
       break
+    case 'web-chat-transcript':
+      // Why: synthetic tab with no Monaco model or filePath-keyed cache entries to clean up.
+      break
   }
 }

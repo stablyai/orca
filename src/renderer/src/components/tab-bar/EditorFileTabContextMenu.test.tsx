@@ -196,7 +196,7 @@ function extractText(node: unknown): string {
   return el.props && 'children' in el.props ? extractText(el.props.children) : ''
 }
 
-async function renderMenu(): Promise<unknown> {
+async function renderMenu(fileOverride?: Record<string, unknown>): Promise<unknown> {
   const module = await import('./EditorFileTabContextMenu')
   return module.EditorFileTabContextMenu({
     open: true,
@@ -209,7 +209,8 @@ async function renderMenu(): Promise<unknown> {
       worktreeId: 'wt-1',
       language: 'typescript',
       isDirty: false,
-      mode: 'edit'
+      mode: 'edit',
+      ...fileOverride
     },
     unifiedTabId: 'tab-1',
     groupId: 'group-1',
@@ -297,5 +298,53 @@ describe('EditorFileTabContextMenu close-all shortcut', () => {
     expect(closeAllItem).toBeTruthy()
     expect(findElementsByType(closeAllItem, 'DropdownMenuShortcut')).toHaveLength(0)
     expect(findElementsByType(tree, 'DropdownMenuShortcut')).toHaveLength(0)
+  })
+})
+
+describe('EditorFileTabContextMenu web-chat-transcript gating', () => {
+  beforeEach(() => {
+    vi.resetModules()
+    shortcutLabelMock.mockImplementation(assignedShortcutLabel)
+    vi.stubGlobal('navigator', { userAgent: 'Mac' })
+  })
+
+  afterEach(() => {
+    vi.unstubAllGlobals()
+  })
+
+  it('disables Copy Path and Reveal in Finder for a synthetic web-chat-transcript tab', async () => {
+    const tree = expandNode(
+      await renderMenu({
+        filePath: 'web-chat-transcript::gemini-web::GEMINI/c_1',
+        relativePath: 'Gemini Web: c_1',
+        mode: 'web-chat-transcript',
+        webChatAgent: 'gemini-web',
+        webChatSessionId: 'GEMINI/c_1'
+      })
+    )
+    const menuItems = findElementsByType(tree, 'DropdownMenuItem')
+
+    const copyPathItem = menuItems.find((item) => extractText(item.props.children) === 'Copy Path')
+    const revealItem = menuItems.find((item) =>
+      extractText(item.props.children).includes('Reveal in Finder')
+    )
+
+    expect(copyPathItem).toBeTruthy()
+    expect(revealItem).toBeTruthy()
+    expect(copyPathItem?.props.disabled).toBe(true)
+    expect(revealItem?.props.disabled).toBe(true)
+  })
+
+  it('keeps Copy Path and Reveal in Finder enabled for a normal edit tab', async () => {
+    const tree = expandNode(await renderMenu())
+    const menuItems = findElementsByType(tree, 'DropdownMenuItem')
+
+    const copyPathItem = menuItems.find((item) => extractText(item.props.children) === 'Copy Path')
+    const revealItem = menuItems.find((item) =>
+      extractText(item.props.children).includes('Reveal in Finder')
+    )
+
+    expect(copyPathItem?.props.disabled).toBeFalsy()
+    expect(revealItem?.props.disabled).toBeFalsy()
   })
 })
