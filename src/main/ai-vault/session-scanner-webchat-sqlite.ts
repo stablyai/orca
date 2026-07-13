@@ -21,7 +21,9 @@ type ConvRow = { title: string | null; created_at: string | null; updated_at: st
 type MsgRow = { role: string; text: string | null; created_at: string | null }
 
 function openReadonly(dbPath: string): SyncDatabase {
-  const db = new SyncDatabase(dbPath, { readonly: true, fileMustExist: true })
+  // Why: query_only (not OS readonly) so we can safely read a WAL-mode DB
+  // written by the native host — an OS-readonly handle can't attach the -shm.
+  const db = new SyncDatabase(dbPath, { fileMustExist: true })
   db.pragma('query_only = ON')
   return db
 }
