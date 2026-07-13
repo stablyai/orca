@@ -228,7 +228,7 @@
     "*.{ts,tsx,js,jsx,mjs,mts,cts}": [
       "oxlint",
       "oxlint --config config/oxlint-react-doctor.json",
-      "oxfmt --write"
+      "oxfmt --write --no-error-on-unmatched-pattern"
     ],
     "*.{json,css}": [
       "oxfmt --write"
