@@ -86,6 +86,7 @@ export type KeybindingActionId =
   | 'browser.focusAddressBar'
   | 'browser.grabElement'
   | 'editor.find'
+  | 'editor.goToDefinition'
   | 'editor.replace'
   | 'editor.save'
   | 'editor.markdownPreview'
@@ -811,6 +812,14 @@ export const KEYBINDING_DEFINITIONS: readonly KeybindingDefinition[] = [
     scope: 'editor',
     searchKeywords: ['shortcut', 'editor', 'find', 'search'],
     defaultBindings: platformBindings(['Mod+F'])
+  },
+  {
+    id: 'editor.goToDefinition',
+    title: 'Go to Definition',
+    group: 'Editors',
+    scope: 'editor',
+    searchKeywords: ['shortcut', 'editor', 'go to definition', 'jump', 'symbol', 'declaration'],
+    defaultBindings: platformBindings(['Mod+B', 'F12'])
   },
   {
     id: 'editor.replace',
