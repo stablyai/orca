@@ -3578,6 +3578,7 @@ export type PreloadApi = {
     }>
     getPairingQR: (args?: {
       address?: string
+      addresses?: string[]
       connectionMode?: MobilePairingConnectionMode
       rotate?: boolean
     }) => Promise<
@@ -3593,6 +3594,7 @@ export type PreloadApi = {
           qrError?: 'encoding_failed'
           pairingUrl: string
           endpoint: string
+          endpoints: string[]
           deviceId: string
           /** Mode the QR actually encodes. */
           connectionMode: MobilePairingConnectionMode

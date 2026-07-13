@@ -1,4 +1,10 @@
-import { PairingOfferSchema, type PairingOffer } from './types'
+import {
+  PairingOfferSchema,
+  normalizePairingEndpoints,
+  type PairingOffer
+} from './types'
+
+export { normalizePairingEndpoints }
 
 // Why: this file mirrors src/shared/pairing.ts (which is covered by CI
 // vitest) but uses atob/btoa because Metro/Hermes don't ship Node's

@@ -155,7 +155,35 @@ describe('registerMobileHandlers', () => {
     })
 
     expect(createMobilePairingOffer).toHaveBeenCalledWith({
-      address: '100.102.47.57',
+      addresses: ['100.102.47.57'],
+      connectionMode: undefined,
+      rotate: undefined,
+      name: expect.stringMatching(/^Mobile /)
+    })
+  })
+
+  it('passes ordered addresses through to pairing offer creation', async () => {
+    networkInterfacesMock.mockReturnValue({})
+    const createMobilePairingOffer = vi.fn().mockResolvedValue({
+      available: true,
+      pairingUrl: 'orca://pair#mobile-multi',
+      endpoint: 'ws://100.64.1.20:6768',
+      endpoints: ['ws://100.64.1.20:6768', 'ws://192.168.1.24:6768'],
+      deviceId: 'mobile-2'
+    })
+    registerMobileHandlers({ createMobilePairingOffer } as never)
+
+    await expect(
+      handlers.get('mobile:getPairingQR')?.(null, {
+        addresses: ['100.64.1.20', '192.168.1.24']
+      })
+    ).resolves.toMatchObject({
+      available: true,
+      endpoints: ['ws://100.64.1.20:6768', 'ws://192.168.1.24:6768']
+    })
+
+    expect(createMobilePairingOffer).toHaveBeenCalledWith({
+      addresses: ['100.64.1.20', '192.168.1.24'],
       connectionMode: undefined,
       rotate: undefined,
       name: expect.stringMatching(/^Mobile /)

@@ -1,5 +1,6 @@
 import { z } from 'zod'
 import {
+  MAX_PAIRING_ENDPOINTS,
   PairingOfferSchema,
   type PairingOffer
 } from '../../../src/shared/mobile-relay-pairing-offer'
@@ -10,8 +11,31 @@ import {
 } from './mobile-relay-host-overlay'
 import { MobileRelayEndpointSchema } from '../../../src/shared/mobile-relay-credential-contract'
 
-export { PairingOfferSchema }
+export { MAX_PAIRING_ENDPOINTS, PairingOfferSchema }
 export type { PairingOffer }
+
+/** Preferred dial order: `endpoints` when present, else `[endpoint]`. Deduped + capped. */
+export function normalizePairingEndpoints(
+  endpoint: string,
+  endpoints?: readonly string[] | null
+): string[] {
+  const primary = endpoint.trim()
+  const raw = endpoints && endpoints.length > 0 ? [...endpoints] : [primary]
+  const seen = new Set<string>()
+  const ordered: string[] = []
+  for (const candidate of [primary, ...raw]) {
+    const value = candidate.trim()
+    if (!value || seen.has(value)) {
+      continue
+    }
+    seen.add(value)
+    ordered.push(value)
+    if (ordered.length >= MAX_PAIRING_ENDPOINTS) {
+      break
+    }
+  }
+  return ordered.length > 0 ? ordered : [primary]
+}
 
 export type RpcRequest = {
   id: string

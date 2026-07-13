@@ -44,7 +44,11 @@ import type {
   PairingGetEndpointsResult,
   PairingProvisionRelayParams
 } from '../../shared/mobile-relay-credential-contract'
-import { encodePairingOffer, PAIRING_OFFER_VERSION } from '../../shared/pairing'
+import {
+  encodePairingOffer,
+  normalizePairingEndpoints,
+  PAIRING_OFFER_VERSION
+} from '../../shared/pairing'
 import { resolveAdvertisedPairingEndpoint } from './pairing-endpoint'
 import {
   decodeTerminalStreamFrame,
@@ -635,6 +639,8 @@ export class OrcaRuntimeRpcServer {
 
   createPairingOffer(args: {
     address?: string | null
+    /** Ordered advertise addresses; when set, takes precedence over `address`. */
+    addresses?: readonly string[] | null
     name?: string
     rotate?: boolean
     scope?: DeviceScope
@@ -644,6 +650,7 @@ export class OrcaRuntimeRpcServer {
         available: true
         pairingUrl: string
         endpoint: string
+        endpoints: string[]
         deviceId: string
         webClientUrl: string | null
       } {
@@ -665,11 +672,22 @@ export class OrcaRuntimeRpcServer {
       return pairingUnavailable('e2ee_key_unavailable', E2EE_KEY_UNAVAILABLE_GUIDANCE)
     }
 
-    const advertised = resolveAdvertisedPairingEndpoint(rawEndpoint, args.address)
-    if (!advertised.ok) {
-      return pairingUnavailable(advertised.reason, advertised.guidance)
+    const addressList =
+      args.addresses && args.addresses.length > 0
+        ? [...args.addresses]
+        : args.address
+          ? [args.address]
+          : [null]
+    const resolved: string[] = []
+    for (const address of addressList) {
+      const advertised = resolveAdvertisedPairingEndpoint(rawEndpoint, address)
+      if (!advertised.ok) {
+        return pairingUnavailable(advertised.reason, advertised.guidance)
+      }
+      resolved.push(advertised.endpoint)
     }
-    const endpoint = advertised.endpoint
+    const endpoints = normalizePairingEndpoints(resolved[0]!, resolved)
+    const endpoint = endpoints[0]!
     const deviceName = args.name ?? `CLI ${new Date().toLocaleDateString()}`
     const scope = args.scope ?? 'runtime'
     let device: DeviceEntry
@@ -684,6 +702,7 @@ export class OrcaRuntimeRpcServer {
     const pairingUrl = encodePairingOffer({
       v: PAIRING_OFFER_VERSION,
       endpoint,
+      endpoints: endpoints.length > 1 ? endpoints : undefined,
       deviceToken: device.token,
       publicKeyB64,
       scope
@@ -692,6 +711,7 @@ export class OrcaRuntimeRpcServer {
       available: true,
       pairingUrl,
       endpoint,
+      endpoints,
       deviceId: device.deviceId,
       webClientUrl:
         this.webClientRoot && scope === 'runtime' ? createWebClientUrl(endpoint, pairingUrl) : null
@@ -700,6 +720,8 @@ export class OrcaRuntimeRpcServer {
 
   async createMobilePairingOffer(args: {
     address?: string | null
+    /** Ordered advertise addresses; when set, takes precedence over `address`. */
+    addresses?: readonly string[] | null
     connectionMode?: MobilePairingConnectionMode
     name?: string
     rotate?: boolean
@@ -884,6 +906,7 @@ export class OrcaRuntimeRpcServer {
       pairingUrl: encodePairingOffer({
         v: PAIRING_OFFER_VERSION,
         endpoint: direct.endpoint,
+        endpoints: direct.endpoints.length > 1 ? direct.endpoints : undefined,
         deviceToken: device.token,
         publicKeyB64,
         scope: 'mobile',
