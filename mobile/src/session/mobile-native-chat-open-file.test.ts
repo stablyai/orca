@@ -55,4 +55,39 @@ describe('resolveMobileNativeChatWorktreePath', () => {
       relativePath: 'src/app.ts'
     })
   })
+
+  it('resolves null when the resolve request rejects', async () => {
+    const sendRequest = vi.fn().mockRejectedValue(new Error('Request timed out'))
+    await expect(
+      resolveMobileNativeChatWorktreePath({
+        client: { sendRequest } as unknown as RpcClient,
+        worktreeId: 'worktree',
+        pathText: 'src/app.ts',
+        terminal: null
+      })
+    ).resolves.toBeNull()
+  })
+
+  it('does not reject when the open request fails', async () => {
+    const sendRequest = vi
+      .fn()
+      .mockResolvedValueOnce({
+        ok: true,
+        result: {
+          exists: true,
+          isDirectory: false,
+          openTarget: { kind: 'worktree-file', relativePath: 'src/app.ts' }
+        }
+      })
+      .mockRejectedValueOnce(new Error('connection interrupted'))
+
+    await expect(
+      openMobileNativeChatFile({
+        client: { sendRequest } as unknown as RpcClient,
+        worktreeId: 'worktree',
+        pathText: 'src/app.ts',
+        terminal: null
+      })
+    ).resolves.toBeUndefined()
+  })
 })

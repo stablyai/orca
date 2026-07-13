@@ -67,16 +67,28 @@ export function useMobileNativeChatDrafts(args: {
     }
     setPendingBySession((previous) => {
       const current = previous[pendingKey] ?? []
-      const next = current.filter(
-        (pending) =>
-          !messages.some(
-            (message) =>
-              message.role === 'user' &&
-              message.blocks.some(
-                (block) => block.type === 'text' && block.text.trim() === pending.text.trim()
-              )
-          )
-      )
+      // Why: consume one landed user message per pending entry so duplicate-text
+      // sends still in flight are not all dropped when a single one lands.
+      const landedCounts = new Map<string, number>()
+      for (const message of messages) {
+        if (message.role !== 'user') {
+          continue
+        }
+        for (const block of message.blocks) {
+          if (block.type === 'text') {
+            const text = block.text.trim()
+            landedCounts.set(text, (landedCounts.get(text) ?? 0) + 1)
+          }
+        }
+      }
+      const next = current.filter((pending) => {
+        const remaining = landedCounts.get(pending.text.trim()) ?? 0
+        if (remaining > 0) {
+          landedCounts.set(pending.text.trim(), remaining - 1)
+          return false
+        }
+        return true
+      })
       return next.length === current.length ? previous : { ...previous, [pendingKey]: next }
     })
   }, [messages, pendingKey])

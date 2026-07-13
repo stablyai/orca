@@ -121,6 +121,16 @@ describe('useMobileNativeChatAnswerSend', () => {
     ])
   })
 
+  it('submits a non-Claude multi-line answer with a single Enter', async () => {
+    const sendRequest = vi.fn().mockResolvedValue(acceptedResponse())
+    await mount({ sendRequest } as unknown as RpcClient, vi.fn(), 'codex')
+
+    await expect(answerSend?.answerAsk('first\nsecond')).resolves.toBe(true)
+    // Codex is not stepped: the whole answer goes in one write with a single Enter.
+    expect(sendRequest).toHaveBeenCalledTimes(1)
+    expect(sendRequest.mock.calls[0]?.[1]).toMatchObject({ text: 'first\nsecond', enter: true })
+  })
+
   it('stops at the first rejected write and reports failure', async () => {
     const onSendError = vi.fn()
     const sendRequest = vi.fn().mockResolvedValue({

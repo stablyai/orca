@@ -55,6 +55,18 @@ describe('buildMobileNativeChatData', () => {
     expect(data.some((m) => m.id === 'streaming')).toBe(true)
   })
 
+  it('shows a short new streaming reply even after a longer previous turn', () => {
+    // The last folded turn is a long completed reply; a short new stream must not
+    // be suppressed just for being shorter than the prior turn.
+    const { streaming, data } = buildMobileNativeChatData({
+      messages: [assistant('a1', 'This is a long completed previous answer that ran on a while')],
+      streamingText: 'Ok',
+      pending: []
+    })
+    expect(streaming).toBe('Ok')
+    expect(data.some((m) => m.id === 'streaming')).toBe(true)
+  })
+
   it('drops the streaming bubble once the real assistant turn already contains it', () => {
     const { streaming, data } = buildMobileNativeChatData({
       messages: [assistant('a1', 'done answer')],

@@ -153,6 +153,49 @@ describe('runtime subscribe', () => {
     })
   })
 
+  it('settles with an empty snapshot when the first ok frame is an unrecognized shape', async () => {
+    markRuntimeEnvironmentCompatible(ENV)
+    const { deliver } = stubSubscribe()
+    const onFrame = vi.fn()
+    const transport = getNativeChatSessionTransport(ENV)
+
+    transport.subscribe({ subscriptionId: 's-1', agent: 'claude', sessionId: 'sess-1' }, onFrame)
+    await Promise.resolve()
+
+    // An ok response we can't parse must still un-stick the view exactly once,
+    // carrying any error the runtime sent.
+    deliver({ type: 'ready', error: 'boom' })
+    deliver({ type: 'ready' })
+
+    expect(onFrame).toHaveBeenCalledTimes(1)
+    expect(onFrame).toHaveBeenCalledWith({
+      type: 'snapshot',
+      messages: [],
+      hasMore: false,
+      error: 'boom'
+    })
+  })
+
+  it('carries an error on a post-initial reconnect snapshot', async () => {
+    markRuntimeEnvironmentCompatible(ENV)
+    const { deliver } = stubSubscribe()
+    const onFrame = vi.fn()
+    const transport = getNativeChatSessionTransport(ENV)
+
+    transport.subscribe({ subscriptionId: 's-1', agent: 'claude', sessionId: 'sess-1' }, onFrame)
+    await Promise.resolve()
+
+    deliver({ type: 'snapshot', messages: [message('m-1')] })
+    deliver({ type: 'snapshot', messages: [], error: 'runtime too old' })
+
+    expect(onFrame).toHaveBeenLastCalledWith({
+      type: 'snapshot',
+      messages: [],
+      hasMore: false,
+      error: 'runtime too old'
+    })
+  })
+
   it('sync unsubscribe closes the dedicated stream and issues no unsubscribe RPC (KTD-6)', async () => {
     markRuntimeEnvironmentCompatible(ENV)
     const { unsubscribe } = stubSubscribe()

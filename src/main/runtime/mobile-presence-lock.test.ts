@@ -232,6 +232,22 @@ describe('mobile presence lock — driver state machine', () => {
     expect(runtime.getDriver('pty-1')).toEqual({ kind: 'idle' })
   })
 
+  it('admits a soft-leaving client to reserve the input floor within the grace window', async () => {
+    const { runtime } = createRuntime()
+    await runtime.handleMobileSubscribe('pty-1', 'phone-A', { cols: 45, rows: 20 })
+    runtime.handleMobileUnsubscribe('pty-1', 'phone-A')
+
+    // Inside the soft-leave grace a late write still reserves and commits the floor.
+    const claim = runtime.beginMobileInputFloor('pty-1', 'phone-A')
+    expect(claim).not.toBeNull()
+    await claim!.commit()
+    expect(runtime.getDriver('pty-1')).toEqual({ kind: 'mobile', clientId: 'phone-A' })
+
+    // Past the grace the client is fully gone and is rejected.
+    await vi.advanceTimersByTimeAsync(250)
+    expect(runtime.beginMobileInputFloor('pty-1', 'phone-A')).toBeNull()
+  })
+
   it('handleMobileUnsubscribe last leaver flips driver to idle after soft-leave grace', async () => {
     const { runtime, driverEvents } = createRuntime()
     await runtime.handleMobileSubscribe('pty-1', 'phone-A', { cols: 45, rows: 20 })

@@ -94,6 +94,66 @@ describe('native chat transcript watcher errors', () => {
     subscription.unsubscribe()
     expect(watchers[1]!.close).toHaveBeenCalledOnce()
   })
+
+  it('surfaces an error snapshot when the initial drain throws', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'orca-native-chat-initial-error-'))
+    roots.push(root)
+    // The transcript file is absent, so the first drain's stat throws before any
+    // snapshot reads — the watched directory exists, so the subscription binds.
+    const filePath = join(root, 'transcript.jsonl')
+    const onInitialSnapshot = vi.fn()
+    const onAppend = vi.fn()
+    const subscription = await subscribeNativeChatTranscript({
+      agent: 'claude',
+      sessionId: 'session',
+      filePath,
+      onInitialSnapshot,
+      onAppend,
+      initialLimit: 40,
+      debounceMs: 0
+    })
+    expect(subscription.watching).toBe(true)
+
+    await vi.waitFor(() =>
+      expect(onInitialSnapshot).toHaveBeenCalledWith([], false, 0, 'Transcript unavailable')
+    )
+    // Surfaced once, not spammed by the capped rotation retry loop.
+    await new Promise((resolve) => setTimeout(resolve, 120))
+    expect(onInitialSnapshot).toHaveBeenCalledOnce()
+
+    subscription.unsubscribe()
+  })
+
+  it('still wins with a real initial snapshot once the transcript becomes readable', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'orca-native-chat-initial-recover-'))
+    roots.push(root)
+    const filePath = join(root, 'transcript.jsonl')
+    const onInitialSnapshot = vi.fn()
+    const subscription = await subscribeNativeChatTranscript({
+      agent: 'claude',
+      sessionId: 'session',
+      filePath,
+      onInitialSnapshot,
+      onAppend: () => {},
+      initialLimit: 40,
+      debounceMs: 0
+    })
+    await vi.waitFor(() =>
+      expect(onInitialSnapshot).toHaveBeenCalledWith([], false, 0, 'Transcript unavailable')
+    )
+
+    // initialDrain stays true after the error, so a recovered read delivers the
+    // real snapshot instead of stranding the client on the error frame.
+    await writeFile(filePath, claudeLine('u-recovered', 'user', 'back'))
+    watchCallbacks[0]!('change', 'transcript.jsonl')
+    await vi.waitFor(() =>
+      expect(onInitialSnapshot.mock.calls.flat(2)).toEqual(
+        expect.arrayContaining([expect.objectContaining({ id: 'u-recovered' })])
+      )
+    )
+
+    subscription.unsubscribe()
+  })
 })
 
 function claudeLine(uuid: string, role: 'user' | 'assistant', text: string): string {

@@ -1151,7 +1151,8 @@ function createNativeChatApi(): NativeChatApi {
                   onFrame({
                     type: 'snapshot',
                     messages: result.messages,
-                    hasMore: result.hasMore ?? false
+                    hasMore: result.hasMore ?? false,
+                    ...(result.error ? { error: result.error } : {})
                   })
                 } else {
                   onFrame(
@@ -1164,6 +1165,18 @@ function createNativeChatApi(): NativeChatApi {
                       : { type: 'appended', messages: result.messages }
                   )
                 }
+              } else if (!receivedInitial) {
+                // Why: an ok response whose payload shape we don't recognize would
+                // otherwise never flip receivedInitial, stranding the view on
+                // 'loading'. Settle it with an empty snapshot (carrying any error
+                // the runtime sent) so the UI resolves.
+                receivedInitial = true
+                onFrame({
+                  type: 'snapshot',
+                  messages: [],
+                  hasMore: false,
+                  ...(result?.error ? { error: result.error } : {})
+                })
               }
             }
           },

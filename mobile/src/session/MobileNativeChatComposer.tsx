@@ -40,6 +40,10 @@ type Props = {
   isAttaching?: boolean
   onMicPress?: () => void
   micActive?: boolean
+  /** Dictation trigger style — 'hold' uses press-in/out, 'toggle' uses tap. */
+  dictationMode?: 'toggle' | 'hold'
+  onMicPressIn?: () => void
+  onMicPressOut?: () => void
   disabled?: boolean
   placeholder?: string
   filePaths?: string[]
@@ -54,12 +58,21 @@ export function MobileNativeChatComposer({
   isAttaching = false,
   onMicPress,
   micActive = false,
+  dictationMode = 'toggle',
+  onMicPressIn,
+  onMicPressOut,
   disabled = false,
   placeholder = 'Message, @files, /commands',
   filePaths = NO_FILE_PATHS,
   onNeedFiles
 }: Props): React.JSX.Element {
   const [cursor, setCursor] = useState(0)
+  // Transiently drives the native caret after a mid-text autocomplete insert,
+  // then released on the next selection change so manual caret placement still
+  // works (a permanently controlled `selection` breaks it in React Native).
+  const [pendingSelection, setPendingSelection] = useState<{ start: number; end: number } | null>(
+    null
+  )
   const sendingRef = useRef(false)
   const [sending, setSending] = useState(false)
   const trimmed = value.trim()
@@ -93,6 +106,7 @@ export function MobileNativeChatComposer({
     const { text: nextText, cursor: nextCursor } = applyAutocomplete(value, trigger, suggestion)
     onChangeText(nextText)
     setCursor(nextCursor)
+    setPendingSelection({ start: nextCursor, end: nextCursor })
   }
 
   const handleSend = async (): Promise<void> => {
@@ -150,7 +164,12 @@ export function MobileNativeChatComposer({
           style={styles.input}
           value={value}
           onChangeText={handleChange}
-          onSelectionChange={(e) => setCursor(e.nativeEvent.selection.end)}
+          // Controlled only transiently right after an autocomplete insert.
+          selection={pendingSelection ?? undefined}
+          onSelectionChange={(e) => {
+            setCursor(e.nativeEvent.selection.end)
+            setPendingSelection(null)
+          }}
           placeholder={placeholder}
           placeholderTextColor={colors.textMuted}
           selectionColor={colors.accentBlue}
@@ -162,7 +181,10 @@ export function MobileNativeChatComposer({
           <Pressable
             accessibilityLabel={micActive ? 'Stop dictation' : 'Dictate'}
             style={({ pressed }) => [styles.iconButton, pressed && styles.pressed]}
-            onPress={onMicPress}
+            // Hold mode is walkie-talkie (press-in/out); toggle mode taps.
+            onPress={dictationMode === 'hold' ? undefined : onMicPress}
+            onPressIn={dictationMode === 'hold' ? onMicPressIn : undefined}
+            onPressOut={dictationMode === 'hold' ? onMicPressOut : undefined}
             disabled={disabled}
           >
             {micActive ? (

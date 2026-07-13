@@ -118,9 +118,9 @@ export function MobileNativeChatAsk({ prompt, onAnswer, onCancel }: Props): Reac
 
       <ScrollView style={styles.scroll} keyboardShouldPersistTaps="always">
         <Text style={styles.questionText}>{q.question}</Text>
-        {q.options.map((opt) => (
+        {q.options.map((opt, optIndex) => (
           <OptionRow
-            key={opt.label}
+            key={`${optIndex}:${opt.label}`}
             label={opt.label}
             description={opt.description}
             selected={(selections[index] ?? []).includes(opt.label)}

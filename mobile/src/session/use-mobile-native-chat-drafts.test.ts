@@ -1,9 +1,20 @@
 import { createElement } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import type { NativeChatMessage } from '../../../src/shared/native-chat-types'
 import { useMobileNativeChatDrafts } from './use-mobile-native-chat-drafts'
 
 type DraftState = ReturnType<typeof useMobileNativeChatDrafts>
+
+function userTextMessage(id: string, text: string): NativeChatMessage {
+  return {
+    id,
+    role: 'user',
+    blocks: [{ type: 'text', text }],
+    timestamp: null,
+    source: 'transcript'
+  }
+}
 
 describe('useMobileNativeChatDrafts', () => {
   let renderer: ReactTestRenderer | null = null
@@ -19,13 +30,19 @@ describe('useMobileNativeChatDrafts', () => {
     state = null
   })
 
-  function Harness({ tabId }: { tabId: string }): null {
+  function Harness({
+    tabId,
+    messages = []
+  }: {
+    tabId: string
+    messages?: NativeChatMessage[]
+  }): null {
     state = useMobileNativeChatDrafts({
       hostId: 'host',
       worktreeId: 'worktree',
       tabId,
       sessionId: `session-${tabId}`,
-      messages: []
+      messages
     })
     return null
   }
@@ -70,6 +87,25 @@ describe('useMobileNativeChatDrafts', () => {
     await switchTo('a')
     expect(state?.composerText).toBe('')
     expect(state?.pending.map((pending) => pending.text)).toEqual(['from a'])
+  })
+
+  it('clears one pending per landed message so duplicate sends are not all dropped', async () => {
+    await mount('a')
+    const origin = state?.captureSendOrigin()
+    act(() => {
+      if (origin) {
+        state?.acceptSend(origin, 'ping')
+        state?.acceptSend(origin, 'ping')
+      }
+    })
+    expect(state?.pending.map((pending) => pending.text)).toEqual(['ping', 'ping'])
+
+    await act(async () =>
+      renderer?.update(
+        createElement(Harness, { tabId: 'a', messages: [userTextMessage('m1', 'ping')] })
+      )
+    )
+    expect(state?.pending.map((pending) => pending.text)).toEqual(['ping'])
   })
 
   it('does not erase newer edits when an older send settles', async () => {

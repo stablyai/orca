@@ -85,7 +85,10 @@ function deriveStreaming(folded: NativeChatMessage[], streamingText?: string): s
           .join('')
           .trim()
       : ''
-  if (lastText.includes(text) || text.length <= lastText.length) {
+  // Hide the synthetic bubble only once the real turn has landed leading with the
+  // streamed text. A bare length compare would suppress a short new reply behind a
+  // longer previous turn; a completed prior turn won't start with the new prefix.
+  if (lastText.startsWith(text)) {
     return null
   }
   return text

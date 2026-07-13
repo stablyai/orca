@@ -43,7 +43,13 @@ describe('useMobileNativeChatTerminalStream', () => {
   }
 
   it('replaces output with a lease-only stream while covered, then restores output', async () => {
-    const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+    const original = console.error
+    const consoleSpy = vi.spyOn(console, 'error').mockImplementation((...args) => {
+      if (typeof args[0] === 'string' && args[0].includes('react-test-renderer is deprecated')) {
+        return
+      }
+      original(...args)
+    })
     try {
       await act(async () => {
         renderer = create(createElement(Harness, { showNativeChat: false }))

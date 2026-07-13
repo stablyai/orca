@@ -53,6 +53,13 @@ export function useMobileNativeChatFileSearch(args: {
       const normalizedQuery = query.trim().toLowerCase().slice(0, 256)
       const cached = queryCacheRef.current.get(normalizedQuery)
       if (cached) {
+        // Why: cancel and stale-out any in-flight debounced query so an older
+        // request cannot later clobber this displayed cached result.
+        if (timerRef.current) {
+          clearTimeout(timerRef.current)
+          timerRef.current = null
+        }
+        sequenceRef.current++
         setNativeChatFilePaths(cached)
         return
       }

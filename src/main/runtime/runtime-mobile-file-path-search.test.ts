@@ -38,6 +38,19 @@ describe('RuntimeMobileFilePathSearchCache', () => {
     expect(load.mock.calls.map((call) => call[0])).toEqual(['a', 'b', 'c', 'a-reloaded'])
   })
 
+  it('reloads an unevicted key once its TTL has elapsed', async () => {
+    // TTL expiry without capacity pressure — exercises the now >= expiresAt path
+    // that LRU eviction otherwise masks.
+    const cache = new RuntimeMobileFilePathSearchCache(2, 100)
+    const load = vi.fn(async (path: string) => ({ paths: [path], totalCount: 1, truncated: false }))
+
+    await cache.get('a', () => load('a'), 0)
+    await cache.get('a', () => load('a-live'), 50)
+    await cache.get('a', () => load('a-expired'), 150)
+
+    expect(load.mock.calls.map((call) => call[0])).toEqual(['a', 'a-expired'])
+  })
+
   it('coalesces concurrent cold loads for the same worktree', async () => {
     const cache = new RuntimeMobileFilePathSearchCache(2, 100)
     let resolveLoad: (value: RuntimeMobileFilePathInventory) => void = () => {}

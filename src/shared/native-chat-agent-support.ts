@@ -12,6 +12,13 @@ export function isNativeChatSupportedAgent(agent: string | null | undefined): bo
   return agent != null && NATIVE_CHAT_SUPPORTED_AGENTS.has(agent)
 }
 
+/** True when the agent renders Claude's multi-step AskUserQuestion — one question
+ *  per step, each Enter advancing — so a multi-line answer must be paced per line.
+ *  Other agents submit the whole answer with a single Enter. */
+export function shouldStepNativeChatAskAnswer(agent: string | null | undefined): boolean {
+  return resolveNativeChatTranscriptAgent(agent) === 'claude'
+}
+
 export function resolveNativeChatTranscriptAgent(
   agent: string | null | undefined
 ): NativeChatTranscriptAgent | null {

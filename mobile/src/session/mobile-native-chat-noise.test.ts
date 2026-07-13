@@ -31,8 +31,15 @@ describe('isNoiseMessage', () => {
     expect(isNoiseMessage(msg('user', '[Request interrupted by user]'))).toBe(true)
   })
 
+  it('flags inter-agent harness turns (teammate/agent messages)', () => {
+    expect(isNoiseMessage(msg('user', '<teammate-message>ping</teammate-message>'))).toBe(true)
+    expect(isNoiseMessage(msg('user', '<agent-message>status update'))).toBe(true)
+  })
+
   it('keeps real user messages', () => {
     expect(isNoiseMessage(msg('user', 'make it work for codex'))).toBe(false)
+    // A genuine custom tag is not a known harness tag, so it stays a user turn.
+    expect(isNoiseMessage(msg('user', '<bash-brothers> is my band'))).toBe(false)
   })
 
   it('keeps assistant and tool turns', () => {

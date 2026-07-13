@@ -174,6 +174,7 @@ import {
   type MobileNewTabAgentSettings
 } from '../../../../src/session/mobile-new-tab-agent-options'
 import { useMobileImageAttachment } from '../../../../src/session/use-mobile-image-attachment'
+import { useMobileAttachmentInputLeaseGate } from '../../../../src/session/use-mobile-attachment-input-lease-gate'
 import { useMobileTerminalPaste } from '../../../../src/session/use-mobile-terminal-paste'
 import { useTerminalLiveInputModePreference } from '../../../../src/session/use-terminal-live-input-mode-preference'
 import { MobileTerminalLiveInputStatus } from '../../../../src/session/MobileTerminalLiveInputStatus'
@@ -3846,20 +3847,14 @@ export default function SessionScreen() {
     showToast
   })
 
-  const flushPendingLiveInputBeforeAttachmentSend = useCallback(
-    async (targetHandle: string): Promise<boolean> => {
-      const flushedPendingInput = await flushPendingLiveInputBeforeExternalSend(targetHandle)
-      // Why: image picking/upload and IME flushing can outlive the original tab.
-      return (
-        flushedPendingInput &&
-        connStateRef.current === 'connected' &&
-        nativeChatInputLeaseReadyRef.current &&
-        targetHandle === activeHandleRef.current &&
-        activeSessionTabTypeRef.current === 'terminal'
-      )
-    },
-    [flushPendingLiveInputBeforeExternalSend]
-  )
+  const flushPendingLiveInputBeforeAttachmentSend = useMobileAttachmentInputLeaseGate({
+    flushPendingLiveInputBeforeExternalSend,
+    connStateRef,
+    activeHandleRef,
+    activeSessionTabTypeRef,
+    nativeChatInputLeaseReadyRef,
+    showToast
+  })
 
   const { attachImage, isAttaching } = useMobileImageAttachment({
     client,
@@ -4924,6 +4919,9 @@ export default function SessionScreen() {
                   isAttaching={isAttaching}
                   onMicPress={handleDictationToggle}
                   micActive={dictation.isRecording}
+                  dictationMode={dictationMode}
+                  onMicPressIn={handleDictationPressIn}
+                  onMicPressOut={handleDictationPressOut}
                   inputLocked={connState !== 'connected' || !nativeChatInputLeaseReady}
                   keyboardInset={keyboardLift}
                 />

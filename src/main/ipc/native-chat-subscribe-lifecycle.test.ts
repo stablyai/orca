@@ -107,6 +107,23 @@ function subscribe(sender: SenderHarness['sender'], subscriptionId: string): voi
   listener({ sender }, { subscriptionId, agent: 'claude', sessionId: `session-${subscriptionId}` })
 }
 
+type InitialSnapshotCallback = (
+  messages: unknown[],
+  hasMore: boolean,
+  beforeOffset: number,
+  error?: string
+) => void
+
+// The onInitialSnapshot callback the handler passed into the Nth subscribeTranscript
+// call; transcript-watch fires it during setup, so tests invoke it directly.
+function initialSnapshot(callIndex: number): InitialSnapshotCallback {
+  const call = subscribeTranscript.mock.calls[callIndex]
+  if (!call) {
+    throw new Error('subscribeTranscript was not called')
+  }
+  return (call[0] as { onInitialSnapshot: InitialSnapshotCallback }).onInitialSnapshot
+}
+
 function unsubscribe(sender: SenderHarness['sender'], subscriptionId: string): void {
   const listener = listeners.get('nativeChat:unsubscribe')
   if (!listener) {
@@ -225,5 +242,40 @@ describe('nativeChat subscribe lifecycle', () => {
     replacementRenderer.destroy()
     expect(replacementPending.unsubscribe).toHaveBeenCalledOnce()
     expect(_getNativeChatSenderCleanupCountForTest()).toBe(0)
+  })
+
+  it('forwards an initial-drain error onto the snapshot frame', () => {
+    const pending = deferredSubscription()
+    subscribeTranscript.mockReturnValueOnce(pending.promise)
+    const renderer = createSender(5)
+
+    subscribe(renderer.sender, 'drain-error')
+    // transcript-watch delivers the drain error synchronously via onInitialSnapshot;
+    // invoke the captured callback to exercise the handler's forwarding closure.
+    initialSnapshot(0)([], false, 0, 'Transcript unavailable')
+
+    expect(renderer.sender.send).toHaveBeenCalledWith('nativeChat:appended', {
+      subscriptionId: 'drain-error',
+      frame: {
+        type: 'snapshot',
+        messages: [],
+        hasMore: false,
+        error: 'Transcript unavailable'
+      }
+    })
+  })
+
+  it('omits error from the snapshot frame on a clean initial drain', () => {
+    const pending = deferredSubscription()
+    subscribeTranscript.mockReturnValueOnce(pending.promise)
+    const renderer = createSender(6)
+
+    subscribe(renderer.sender, 'drain-clean')
+    initialSnapshot(0)([], false, 0)
+
+    expect(renderer.sender.send).toHaveBeenCalledWith('nativeChat:appended', {
+      subscriptionId: 'drain-clean',
+      frame: { type: 'snapshot', messages: [], hasMore: false }
+    })
   })
 })

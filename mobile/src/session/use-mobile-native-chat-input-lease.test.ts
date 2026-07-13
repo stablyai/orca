@@ -43,6 +43,7 @@ describe('useMobileNativeChatInputLease', () => {
       act(() => lease?.clear())
       expect(lease?.ready).toBe(false)
       act(() => lease?.markReady('terminal'))
+      expect(lease?.ready).toBe(true)
 
       await act(async () => renderer?.update(createElement(Harness, { connected: false })))
       expect(lease?.ready).toBe(false)

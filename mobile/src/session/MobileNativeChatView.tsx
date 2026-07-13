@@ -55,6 +55,9 @@ type Props = {
   isAttaching?: boolean
   onMicPress?: () => void
   micActive?: boolean
+  dictationMode?: 'toggle' | 'hold'
+  onMicPressIn?: () => void
+  onMicPressOut?: () => void
   inputLocked?: boolean
   filePaths?: string[]
   onNeedFiles?: (query: string) => void
@@ -94,6 +97,9 @@ export function MobileNativeChatView({
   isAttaching,
   onMicPress,
   micActive,
+  dictationMode,
+  onMicPressIn,
+  onMicPressOut,
   inputLocked,
   filePaths,
   onNeedFiles,
@@ -140,24 +146,17 @@ export function MobileNativeChatView({
     [foldedMessages, streamingText, pending]
   )
 
-  // Follow the tail as the conversation grows, but only when already pinned to
-  // the bottom — don't yank the user away while they read history.
+  // Follow the tail as the conversation grows and keep the newest message above
+  // the keyboard when it opens — but only when already pinned to the bottom, so
+  // we don't yank the user away while they read history. (Also fires on keyboard
+  // close, which is harmless while atBottom.)
   useEffect(() => {
     if (data.length === 0 || !atBottom) {
       return
     }
-    const t = setTimeout(() => listRef.current?.scrollToEnd({ animated: true }), 50)
-    return () => clearTimeout(t)
-  }, [data.length, atBottom])
-
-  // Keep the newest message visible above the keyboard when it opens.
-  useEffect(() => {
-    if (keyboardInset <= 0 || data.length === 0 || !atBottom) {
-      return
-    }
     const t = setTimeout(() => listRef.current?.scrollToEnd({ animated: true }), 60)
     return () => clearTimeout(t)
-  }, [keyboardInset, data.length, atBottom])
+  }, [data.length, atBottom, keyboardInset])
 
   const handleSend = useCallback(
     async (text: string): Promise<boolean> => {
@@ -365,6 +364,9 @@ export function MobileNativeChatView({
         isAttaching={isAttaching}
         onMicPress={onMicPress}
         micActive={micActive}
+        dictationMode={dictationMode}
+        onMicPressIn={onMicPressIn}
+        onMicPressOut={onMicPressOut}
         disabled={inputLocked}
         placeholder={
           inputLocked ? 'Input is locked by another client' : 'Message, @files, /commands'

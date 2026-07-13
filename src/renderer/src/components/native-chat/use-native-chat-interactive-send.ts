@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef } from 'react'
 import { sendRuntimePtyInput } from '@/runtime/runtime-terminal-inspection'
 import { getSettingsForAgentTabRuntimeOwner } from '@/lib/agent-paste-draft'
 import type { AgentType } from '../../../../shared/native-chat-types'
-import { resolveNativeChatTranscriptAgent } from '../../../../shared/native-chat-agent-support'
+import { shouldStepNativeChatAskAnswer } from '../../../../shared/native-chat-agent-support'
 import {
   sendNativeChatAnswer,
   sendNativeChatMessage,
@@ -20,10 +20,6 @@ export type NativeChatInteractiveSend = {
   sendRaw: (raw: string) => void
   /** Send ESC to interrupt — cancels a question / denies an approval. */
   cancel: () => void
-}
-
-export function shouldStepNativeChatAskAnswer(agent: AgentType): boolean {
-  return resolveNativeChatTranscriptAgent(agent) === 'claude'
 }
 
 /**

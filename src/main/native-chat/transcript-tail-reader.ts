@@ -82,11 +82,13 @@ export async function readNativeChatTranscriptTailFile(
       decodeLine(0, newestFirst)
     }
     const chronological = newestFirst.toReversed()
-    const selected = chronological.slice(-limit)
+    // Why: slice(-0) returns the whole array, so a non-positive limit must
+    // window to nothing explicitly rather than leak every buffered record.
+    const selected = limit > 0 ? chronological.slice(Math.max(0, chronological.length - limit)) : []
     return {
       messages: selected.map((entry) => entry.message),
       consumedTo,
-      hasMore: chronological.length > limit,
+      hasMore: limit > 0 && chronological.length > limit,
       beforeOffset: selected[0]?.offset ?? end
     }
   } finally {

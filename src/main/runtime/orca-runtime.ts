@@ -8512,7 +8512,11 @@ export class OrcaRuntimeService {
     ptyId: string,
     clientId: string
   ): { commit: () => Promise<void>; rollback: () => void } | null {
-    if (!this.mobileSubscribers.get(ptyId)?.has(clientId)) {
+    // Why: admit a client still inside its soft-leave grace (mirrors
+    // mobileTookFloor) so a write landing in that window reserves the floor
+    // instead of being dropped; post-grace/orphaned writers stay rejected.
+    const softLeaver = this.pendingSoftLeavers.get(ptyId)
+    if (!this.mobileSubscribers.get(ptyId)?.has(clientId) && softLeaver?.clientId !== clientId) {
       return null
     }
     const state = this.mobileInputFloorClaims.get(ptyId) ?? {

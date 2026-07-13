@@ -7,21 +7,27 @@ export async function resolveMobileNativeChatWorktreePath(args: {
   pathText: string
   terminal: string | null
 }): Promise<string | null> {
-  const response = await args.client.sendRequest('files.resolveTerminalPath', {
-    worktree: `id:${args.worktreeId}`,
-    pathText: args.pathText,
-    ...(args.terminal ? { terminal: args.terminal } : {})
-  })
-  if (!response.ok) {
+  try {
+    const response = await args.client.sendRequest('files.resolveTerminalPath', {
+      worktree: `id:${args.worktreeId}`,
+      pathText: args.pathText,
+      ...(args.terminal ? { terminal: args.terminal } : {})
+    })
+    if (!response.ok) {
+      return null
+    }
+    const resolved = response.result as RuntimeTerminalPathResolution
+    if (!resolved.exists || resolved.isDirectory) {
+      return null
+    }
+    return resolved.openTarget?.kind === 'worktree-file'
+      ? resolved.openTarget.relativePath
+      : (resolved.relativePath ?? null)
+  } catch {
+    // Callers fire-and-forget file opens; a disconnect/timeout must not become
+    // an unhandled rejection.
     return null
   }
-  const resolved = response.result as RuntimeTerminalPathResolution
-  if (!resolved.exists || resolved.isDirectory) {
-    return null
-  }
-  return resolved.openTarget?.kind === 'worktree-file'
-    ? resolved.openTarget.relativePath
-    : (resolved.relativePath ?? null)
 }
 
 export async function openMobileNativeChatFile(args: {
@@ -32,9 +38,14 @@ export async function openMobileNativeChatFile(args: {
 }): Promise<void> {
   const relativePath = await resolveMobileNativeChatWorktreePath(args)
   if (relativePath) {
-    await args.client.sendRequest('files.open', {
-      worktree: `id:${args.worktreeId}`,
-      relativePath
-    })
+    try {
+      await args.client.sendRequest('files.open', {
+        worktree: `id:${args.worktreeId}`,
+        relativePath
+      })
+    } catch {
+      // Best-effort open; failures surface as a no-op rather than an
+      // unhandled rejection.
+    }
   }
 }

@@ -132,6 +132,11 @@ export function useNativeChatLiveSession(
   // Live hook state for this pane, selected narrowly so unrelated status churn
   // doesn't re-render the chat view.
   const hookState = useAppStore((s) => s.agentStatusByPaneKey[paneKey]?.state ?? null)
+  // When that state began (epoch ms). A separate primitive selector so it doesn't
+  // churn renders; lets a stale 'working' self-heal once this turn's reply lands.
+  const hookStateStartedAt = useAppStore(
+    (s) => s.agentStatusByPaneKey[paneKey]?.stateStartedAt ?? null
+  )
 
   const latestSessionId = useRef<string | null>(sessionId)
   latestSessionId.current = sessionId
@@ -166,11 +171,39 @@ export function useNativeChatLiveSession(
     }
 
     let cancelled = false
+    // Set by the first authoritative snapshot/replacement frame so the
+    // independent readSession seed below can never clobber a live snapshot.
+    let frameArrived = false
     limitRef.current = NATIVE_CHAT_INITIAL_LIMIT
     setRead({ phase: 'loading' })
     replaceList(appendMergerRef.current, [])
     setAppended([])
     setHasMore(false)
+
+    // Independent initial seed: the subscribe stream normally delivers the first
+    // snapshot, but a persistent initial-drain error, or an older runtime whose
+    // subscribe only wires onAppend, would otherwise strand the view at 'loading'
+    // forever. Apply this only while no authoritative frame has landed yet, so a
+    // live snapshot always wins and a late seed never repaints it.
+    void transport
+      .readSession(agent, sessionId, limitRef.current, transcriptPath ?? undefined)
+      .then((result) => {
+        if (cancelled || frameArrived) {
+          return
+        }
+        if (result && 'error' in result) {
+          setRead({ phase: 'error', error: result.error })
+          return
+        }
+        const messages = result?.messages ?? []
+        setRead({ phase: 'ready', messages })
+        setHasMore(hasMoreNativeChatHistory(messages.length, limitRef.current))
+      })
+      .catch((err: unknown) => {
+        if (!cancelled && !frameArrived) {
+          setRead({ phase: 'error', error: err instanceof Error ? err.message : String(err) })
+        }
+      })
 
     const subscriptionId = nextSubscriptionId()
     const unsubscribe = transport.subscribe(
@@ -186,6 +219,7 @@ export function useNativeChatLiveSession(
           if (frame.type === 'snapshot' || frame.type === 'replacement') {
             // Why: reconnect snapshots and inode replacements are both
             // authoritative generations; older pagination must not repaint them.
+            frameArrived = true
             transcriptEpochRef.current += 1
             setLoadingEarlier(false)
             if ('error' in frame && frame.error) {
@@ -317,9 +351,20 @@ export function useNativeChatLiveSession(
       sessionId,
       agent,
       hookState,
+      stateStartedAt: hookStateStartedAt,
       loading: read.phase === 'loading',
       ...(read.phase === 'error' ? { error: read.error } : {})
     })
     return { ...session, hasMore, loadingEarlier, loadEarlier }
-  }, [assembledMessages, read, sessionId, agent, hookState, hasMore, loadingEarlier, loadEarlier])
+  }, [
+    assembledMessages,
+    read,
+    sessionId,
+    agent,
+    hookState,
+    hookStateStartedAt,
+    hasMore,
+    loadingEarlier,
+    loadEarlier
+  ])
 }

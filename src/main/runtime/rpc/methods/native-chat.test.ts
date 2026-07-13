@@ -11,7 +11,8 @@ const watcher = vi.hoisted(() => ({
     onInitialSnapshot?: (
       messages: NativeChatMessage[],
       hasMore: boolean,
-      beforeOffset: number
+      beforeOffset: number,
+      error?: string
     ) => void
     onAppend: (messages: NativeChatMessage[]) => void
   },
@@ -204,6 +205,36 @@ describe('nativeChat.readSession clientKind truncation gating', () => {
     expect(encoded).toContain('truncated')
   })
 
+  it('keeps sibling tool-call keys that share a 128-char prefix distinct', async () => {
+    const prefix = 'p'.repeat(128)
+    cachedResult.value = {
+      messages: [
+        {
+          ...makeMessage('ignored'),
+          blocks: [
+            {
+              type: 'tool-call',
+              name: 'Write',
+              input: { [`${prefix}A`]: 'first', [`${prefix}B`]: 'second' }
+            }
+          ]
+        }
+      ]
+    }
+    const result = await readSessionHandler()(
+      { agent: 'claude', sessionId: 's' },
+      ctxWith('mobile')
+    )
+    const block = (result as { messages: NativeChatMessage[] }).messages[0].blocks[0] as {
+      input: Record<string, unknown>
+    }
+    const keys = Object.keys(block.input)
+
+    expect(keys).toHaveLength(2)
+    expect(new Set(keys).size).toBe(2)
+    expect(Object.values(block.input)).toEqual(expect.arrayContaining(['first', 'second']))
+  })
+
   it('passes oversized tool output through intact for runtime (web/desktop) clients', async () => {
     cachedResult.value = { messages: [makeMessage(OVERSIZED)] }
     const result = await readSessionHandler()(
@@ -301,6 +332,51 @@ describe('nativeChat.subscribe initial snapshot', () => {
 
     expect(emitted).toEqual([
       { type: 'snapshot', messages: [], hasMore: false, error: 'Transcript unavailable' }
+    ])
+  })
+
+  it('forwards an initial-drain error onto the snapshot frame', async () => {
+    watcher.watching = true
+    watcher.args = null
+    const emitted: unknown[] = []
+    await subscribeHandler()(
+      { agent: 'claude', sessionId: 's' },
+      streamingContext('mobile'),
+      (value) => emitted.push(value)
+    )
+
+    activeWatcherArgs().onInitialSnapshot?.([], false, 0, 'Transcript unavailable')
+
+    expect(emitted).toEqual([
+      {
+        type: 'snapshot',
+        messages: [],
+        hasMore: false,
+        beforeOffset: 0,
+        error: 'Transcript unavailable'
+      }
+    ])
+  })
+
+  it('omits error from the snapshot frame on a clean initial drain', async () => {
+    watcher.watching = true
+    watcher.args = null
+    const emitted: unknown[] = []
+    await subscribeHandler()(
+      { agent: 'claude', sessionId: 's' },
+      streamingContext('mobile'),
+      (value) => emitted.push(value)
+    )
+
+    activeWatcherArgs().onInitialSnapshot?.([makeMessage('hi')], false, 7)
+
+    expect(emitted).toEqual([
+      {
+        type: 'snapshot',
+        messages: [expect.objectContaining({ id: 'a-1' })],
+        hasMore: false,
+        beforeOffset: 7
+      }
     ])
   })
 })

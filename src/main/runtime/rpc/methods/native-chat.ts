@@ -124,7 +124,12 @@ function sanitizeToolInput(
       result['…'] = 'truncated'
       break
     }
-    const boundedKey = key.slice(0, Math.min(key.length, budget.remaining, 128))
+    let boundedKey = key.slice(0, Math.min(key.length, budget.remaining, 128))
+    // Why: sibling keys sharing a >=128-char (or budget-truncated) prefix collapse
+    // to the same bounded key; suffix collisions so neither field is silently lost.
+    if (Object.prototype.hasOwnProperty.call(result, boundedKey)) {
+      boundedKey = `${boundedKey}~${count}`
+    }
     budget.remaining -= boundedKey.length
     result[boundedKey] = sanitizeToolInput(
       (value as Record<string, unknown>)[key],
@@ -227,15 +232,18 @@ export const NATIVE_CHAT_METHODS: readonly RpcAnyMethod[] = [
         sessionId: params.sessionId,
         transcriptPath: params.transcriptPath,
         initialLimit: limit,
-        onInitialSnapshot: (messages, hasMore, beforeOffset) => {
+        onInitialSnapshot: (messages, hasMore, beforeOffset, error) => {
           if (closed) {
             return
           }
+          // Forward an initial-drain error so a watching client's first frame carries it
+          // instead of stranding the view at 'loading' when the read keeps throwing.
           emit({
             type: 'snapshot',
             messages: windowForClient(messages, clientKind, limit),
             hasMore,
-            beforeOffset
+            beforeOffset,
+            ...(error ? { error } : {})
           })
         },
         onReplace: (messages, hasMore, beforeOffset) => {

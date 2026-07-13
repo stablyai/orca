@@ -88,9 +88,53 @@ describe('detectFilePathSegments', () => {
     ])
   })
 
-  it('does not match scoped package names', () => {
-    expect(detectFilePathSegments('install @scope/pkg.js')).toEqual([
-      { type: 'text', value: 'install @scope/pkg.js' }
+  it('detects scoped-package file paths with a segment-leading @', () => {
+    expect(detectFilePathSegments('open @types/react/index.d.ts here')).toEqual([
+      { type: 'text', value: 'open ' },
+      {
+        type: 'file',
+        value: '@types/react/index.d.ts',
+        path: '@types/react/index.d.ts'
+      },
+      { type: 'text', value: ' here' }
+    ])
+    expect(
+      detectFilePathSegments('node_modules/@scope/pkg/file.ts').filter((s) => s.type === 'file')
+    ).toEqual([
+      {
+        type: 'file',
+        value: 'node_modules/@scope/pkg/file.ts',
+        path: 'node_modules/@scope/pkg/file.ts'
+      }
+    ])
+  })
+
+  it('does not match emails or git URLs with a mid-token @', () => {
+    expect(detectFilePathSegments('clone git@github.com:user/repo.git')).toEqual([
+      { type: 'text', value: 'clone git@github.com:user/repo.git' }
+    ])
+    expect(detectFilePathSegments('open user@host.com/path/file.txt')).toEqual([
+      { type: 'text', value: 'open user@host.com/path/file.txt' }
+    ])
+  })
+
+  it('returns a single text segment when the run has no dot', () => {
+    const text = 'a/'.repeat(8192)
+    expect(detectFilePathSegments(text)).toEqual([{ type: 'text', value: text }])
+  })
+
+  it('skips detection for runs over the length cap even with dots', () => {
+    // 'a.b/'-repeats pass the dot precheck, so this exercises the length cap that
+    // bounds CANDIDATE_PATTERN's worst-case backtracking.
+    const text = 'a.b/'.repeat(2000)
+    expect(detectFilePathSegments(text)).toEqual([{ type: 'text', value: text }])
+  })
+
+  it('still detects a path in a long-but-under-cap run', () => {
+    const prefix = 'context '.repeat(200)
+    const segments = detectFilePathSegments(`${prefix}src/app/Main.tsx`)
+    expect(segments.filter((s) => s.type === 'file')).toEqual([
+      { type: 'file', value: 'src/app/Main.tsx', path: 'src/app/Main.tsx' }
     ])
   })
 })
@@ -120,6 +164,16 @@ describe('isFilePathCodeSpan', () => {
 
   it('rejects urls in code spans', () => {
     expect(isFilePathCodeSpan('https://x.com/a.ts')).toBe(false)
+  })
+
+  it('accepts scoped-package paths with a segment-leading @', () => {
+    expect(isFilePathCodeSpan('@types/react/index.d.ts')).toBe(true)
+    expect(isFilePathCodeSpan('node_modules/@scope/pkg/file.ts')).toBe(true)
+  })
+
+  it('rejects emails and git URLs with a mid-token @', () => {
+    expect(isFilePathCodeSpan('git@github.com:user/repo.git')).toBe(false)
+    expect(isFilePathCodeSpan('user@host.com/path/file.txt')).toBe(false)
   })
 })
 

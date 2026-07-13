@@ -52,6 +52,27 @@ describe('extractPendingAsk', () => {
     ).toBeNull()
   })
 
+  it('survives an unrelated earlier tool result (FIFO, not adjacency)', () => {
+    // A parallel Bash call precedes the ask; its result resolves the Bash call
+    // (oldest outstanding), so the unanswered question must remain pending.
+    const ask = extractPendingAsk([
+      msg([{ type: 'tool-call', name: 'Bash', input: { command: 'ls' } }], 'c1'),
+      msg([{ type: 'tool-call', name: 'AskUserQuestion', input: askInput }], 'a1'),
+      msg([{ type: 'tool-result', output: 'ls output' }], 'r1')
+    ])
+    expect(ask?.questions[0]!.question).toBe('Pick one')
+  })
+
+  it("clears the ask only when the ask's own result arrives", () => {
+    const ask = extractPendingAsk([
+      msg([{ type: 'tool-call', name: 'Bash', input: { command: 'ls' } }], 'c1'),
+      msg([{ type: 'tool-call', name: 'AskUserQuestion', input: askInput }], 'a1'),
+      msg([{ type: 'tool-result', output: 'ls output' }], 'r1'),
+      msg([{ type: 'tool-result', output: 'answered' }], 'r2')
+    ])
+    expect(ask).toBeNull()
+  })
+
   it('keeps the latest ask when several appear', () => {
     const ask = extractPendingAsk([
       msg([{ type: 'tool-call', name: 'AskUserQuestion', input: askInput }], 'a1'),

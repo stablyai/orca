@@ -150,7 +150,8 @@ function createRuntimeNativeChatTransport(environmentId: string): NativeChatSess
                     onFrame({
                       type: 'snapshot',
                       messages: frame.messages,
-                      hasMore: frame.hasMore ?? false
+                      hasMore: frame.hasMore ?? false,
+                      ...(frame.error ? { error: frame.error } : {})
                     })
                   } else {
                     onFrame(
@@ -163,6 +164,18 @@ function createRuntimeNativeChatTransport(environmentId: string): NativeChatSess
                         : { type: 'appended', messages: frame.messages }
                     )
                   }
+                } else if (!receivedInitial) {
+                  // Why: an ok response whose payload shape we don't recognize
+                  // would otherwise never flip receivedInitial, stranding the view
+                  // on 'loading'. Settle it with an empty snapshot (carrying any
+                  // error the runtime sent) so the UI resolves.
+                  receivedInitial = true
+                  onFrame({
+                    type: 'snapshot',
+                    messages: [],
+                    hasMore: false,
+                    ...(frame?.error ? { error: frame.error } : {})
+                  })
                 }
               },
               // Established-then-dropped: resume the tail. onClose also fires on our

@@ -390,8 +390,12 @@ describe('terminal output batching', () => {
     await vi.waitFor(() => expect(rollback).toHaveBeenCalledOnce())
     expect(commit).toHaveBeenCalledOnce()
 
-    beginMobileInputFloor.mockReturnValueOnce(null)
-    handlers.get(streamId)?.(
+    // Post-unsubscribe: capture the still-registered handler, tear down the
+    // subscription, then replay a frame. The closed guard must drop it, so no
+    // further sendTerminal dispatch and no write reach the PTY.
+    const staleHandler = handlers.get(streamId)!
+    runtime.cleanupSubscription('terminal-1:mobile-1')
+    staleHandler(
       decodeTerminalStreamFrame(
         encodeTerminalStreamFrame({
           opcode: TerminalStreamOpcode.Input,
@@ -401,10 +405,10 @@ describe('terminal output batching', () => {
         })
       )!
     )
-    await vi.waitFor(() => expect(runtime.sendTerminal).toHaveBeenCalledTimes(3))
+    await Promise.resolve()
+    expect(runtime.sendTerminal).toHaveBeenCalledTimes(2)
     expect(write).toHaveBeenCalledOnce()
 
-    runtime.cleanupSubscription('terminal-1:mobile-1')
     await dispatchPromise
   })
 })

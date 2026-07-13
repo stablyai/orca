@@ -8,6 +8,9 @@ type Props = {
   isAttaching: boolean
   onMicPress: () => void
   micActive: boolean
+  dictationMode: 'toggle' | 'hold'
+  onMicPressIn: () => void
+  onMicPressOut: () => void
   inputLocked: boolean
   keyboardInset: number
 }
@@ -20,6 +23,9 @@ export function MobileNativeChatOverlay({
   isAttaching,
   onMicPress,
   micActive,
+  dictationMode,
+  onMicPressIn,
+  onMicPressOut,
   inputLocked,
   keyboardInset
 }: Props): React.JSX.Element | null {
@@ -55,6 +61,9 @@ export function MobileNativeChatOverlay({
         isAttaching={isAttaching}
         onMicPress={onMicPress}
         micActive={micActive}
+        dictationMode={dictationMode}
+        onMicPressIn={onMicPressIn}
+        onMicPressOut={onMicPressOut}
         inputLocked={inputLocked}
         filePaths={controller.nativeChatFilePaths}
         onNeedFiles={controller.loadNativeChatFiles}

@@ -5,7 +5,7 @@ import {
   MOBILE_NATIVE_CHAT_SUBMIT_DELAY_MS
 } from './mobile-native-chat-answer-stepping'
 import { sendMobileNativeChatMessage } from './mobile-native-chat-send'
-import { resolveNativeChatTranscriptAgent } from '../../../src/shared/native-chat-agent-support'
+import { shouldStepNativeChatAskAnswer } from '../../../src/shared/native-chat-agent-support'
 
 /** Sends an AskUserQuestion answer to the active chat pane, with Claude's
  *  multi-step stepping. Extracted from the session route to keep that file under
@@ -121,7 +121,7 @@ export function useMobileNativeChatAnswerSend(args: {
       const lines = text.split('\n')
       // Only Claude renders one question per step and advances on each Enter, so
       // a multi-line answer is paced per question; non-Claude submits in one Enter.
-      if (resolveNativeChatTranscriptAgent(agentRef.current) !== 'claude' || lines.length <= 1) {
+      if (!shouldStepNativeChatAskAnswer(agentRef.current) || lines.length <= 1) {
         return (await sendTerminal(text, true)) || fail()
       }
       for (let index = 0; index < lines.length; index += 1) {

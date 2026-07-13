@@ -1,41 +1,16 @@
-import type {
-  NativeChatBlock,
-  NativeChatImageRefBlock,
-  NativeChatMessage,
-  NativeChatSource,
-  NativeChatTextBlock,
-  NativeChatToolCallBlock,
-  NativeChatToolResultBlock
+import {
+  isImageRefBlock,
+  isTextBlock,
+  NATIVE_CHAT_SOURCE_PRIORITY,
+  type NativeChatBlock,
+  type NativeChatMessage,
+  type NativeChatToolCallBlock,
+  type NativeChatToolResultBlock
 } from '../../../src/shared/native-chat-types'
 
-// Why: the mobile bundle can only `import type` from the repo's src/shared —
-// Metro doesn't watch outside the mobile package, so runtime values imported
-// from there fail to resolve. These mirror the values in native-chat-types.ts
-// (source precedence + block guards); keep them in sync with that file.
-
-/** Source precedence — higher wins when two sources describe the same turn.
- *  Mirrors NATIVE_CHAT_SOURCE_PRIORITY in src/shared/native-chat-types.ts. */
-export const NATIVE_CHAT_SOURCE_PRIORITY: Record<NativeChatSource, number> = {
-  transcript: 3,
-  hook: 2,
-  scrape: 1
-}
-
-export function isTextBlock(block: NativeChatBlock): block is NativeChatTextBlock {
-  return block.type === 'text'
-}
-
-export function isToolCallBlock(block: NativeChatBlock): block is NativeChatToolCallBlock {
-  return block.type === 'tool-call'
-}
-
-export function isToolResultBlock(block: NativeChatBlock): block is NativeChatToolResultBlock {
-  return block.type === 'tool-result'
-}
-
-export function isImageRefBlock(block: NativeChatBlock): block is NativeChatImageRefBlock {
-  return block.type === 'image-ref'
-}
+// Re-export the block guards and source priority so other mobile modules keep
+// importing them from here rather than reaching into src/shared directly.
+export { isImageRefBlock, isTextBlock, NATIVE_CHAT_SOURCE_PRIORITY }
 
 function isToolOnlyMessage(message: NativeChatMessage): boolean {
   return (
@@ -74,21 +49,37 @@ export type ToolPair = {
 }
 
 /** Pair each tool call with its result so a request and its output render as one
- *  block. A result attaches to the most recent unmatched call; an orphan result
- *  (no preceding call) stands on its own. */
+ *  block. Blocks carry no tool ids, so calls and results pair by ordinal FIFO —
+ *  the Nth result answers the Nth call. Parallel calls batch as
+ *  [call, call, result, result], so positional adjacency would misgraft the
+ *  first result onto the second call. A call dropped past `limit` still consumes
+ *  its result (tracked as a null slot) so the drop never grafts onto a kept
+ *  call; a result with no matching call stands on its own. */
 export function pairToolBlocks(blocks: readonly NativeChatBlock[], limit = Infinity): ToolPair[] {
   const pairs: ToolPair[] = []
+  // Per call ordinal: the pair index it filled, or null when dropped past limit.
+  const callSlots: Array<number | null> = []
+  let resultOrdinal = 0
   for (const block of blocks) {
     if (block.type === 'tool-call') {
       if (pairs.length < limit) {
+        callSlots.push(pairs.length)
         pairs.push({ call: block })
+      } else {
+        callSlots.push(null)
       }
     } else if (block.type === 'tool-result') {
-      const last = pairs[pairs.length - 1]
-      if (last && last.call && !last.result) {
-        last.result = block
-      } else if (pairs.length < limit) {
-        pairs.push({ result: block })
+      const slot = callSlots[resultOrdinal]
+      if (slot === undefined) {
+        // No call at this ordinal — an orphan result; render it on its own.
+        if (pairs.length < limit) {
+          pairs.push({ result: block })
+        }
+      } else {
+        resultOrdinal += 1
+        if (slot !== null) {
+          pairs[slot]!.result = block
+        }
       }
     }
   }

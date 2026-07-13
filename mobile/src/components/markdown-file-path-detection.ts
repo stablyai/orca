@@ -87,9 +87,21 @@ const EXTENSION_SET = new Set<string>(FILE_EXTENSIONS)
 const CANDIDATE_PATTERN =
   /(?:[A-Za-z]:[\\/]|\\\\)?(?:\.{1,2}[\\/])?(?:[\w.@~+-]+[\\/])+[\w.@+-]+\.[A-Za-z0-9]+/g
 
+// A path candidate in chat prose is short; a much longer run can't hold one worth
+// linkifying but can push CANDIDATE_PATTERN into super-linear backtracking, so we
+// skip detection entirely above this cap.
+const MAX_DETECTION_LENGTH = 2000
+
+// A mid-token '@' (one preceded by a non-separator) marks an email or git URL such
+// as git@github.com; a segment-leading '@' is a scoped package dir (@scope/…) and
+// stays eligible.
+function hasMidTokenAt(candidate: string): boolean {
+  return /[^\\/]@/.test(candidate)
+}
+
 function isOpenablePath(candidate: string): boolean {
   // Reject anything URL-ish or scheme-bearing — those are handled as web links.
-  if (candidate.includes('://') || candidate.includes('@')) {
+  if (candidate.includes('://') || hasMidTokenAt(candidate)) {
     return false
   }
   // Must contain a separator (a bare "file.ts" is too ambiguous in prose).
@@ -128,6 +140,12 @@ export function normalizeFilePath(path: string): string {
  * reassemble the run exactly. Returns a single text segment when nothing matches.
  */
 export function detectFilePathSegments(text: string): FilePathSegment[] {
+  // Every real match ends in a name.ext, so a dot is mandatory; skip the regex when
+  // there is none, or when the run is too long to hold a chat path but long enough
+  // to drive CANDIDATE_PATTERN into super-linear backtracking.
+  if (text.length > MAX_DETECTION_LENGTH || !text.includes('.')) {
+    return [{ type: 'text', value: text }]
+  }
   const segments: FilePathSegment[] = []
   let lastIndex = 0
   let match: RegExpExecArray | null
@@ -171,7 +189,7 @@ export function isFilePathCodeSpan(code: string): boolean {
   if (!trimmed || /\s/.test(trimmed)) {
     return false
   }
-  if (trimmed.includes('://') || trimmed.includes('@')) {
+  if (trimmed.includes('://') || hasMidTokenAt(trimmed)) {
     return false
   }
   if (isOpenablePath(trimmed)) {

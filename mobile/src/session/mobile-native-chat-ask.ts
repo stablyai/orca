@@ -119,21 +119,30 @@ function questionToolFor(block: NativeChatBlock): InteractiveQuestionParser | nu
   return QUESTION_TOOL_PARSERS.get(block.name) ?? null
 }
 
-/** The most recent interactive question still awaiting an answer, or null. A
- *  question is answered once any tool-result follows it in the message stream. */
+/** The most recent interactive question still awaiting an answer, or null. Blocks
+ *  carry no tool ids, so a tool-result resolves the OLDEST outstanding tool-call
+ *  (FIFO). The ask is cleared only when its own call is the one resolved — a
+ *  parallel sibling tool's result (e.g. arriving after reconnect) must not clear
+ *  an unanswered question. */
 export function extractPendingAsk(messages: readonly NativeChatMessage[]): AskPrompt | null {
   let pending: AskPrompt | null = null
+  // FIFO of outstanding tool-calls; each entry is the ask prompt it started, or
+  // null for a non-ask call (still queued so it consumes its own result).
+  const outstanding: Array<AskPrompt | null> = []
   for (const message of messages) {
     for (const block of message.blocks) {
       const parser = questionToolFor(block)
-      if (parser && block.type === 'tool-call') {
-        const parsed = parser(block.input)
+      if (block.type === 'tool-call') {
+        const parsed = parser ? parser(block.input) : null
         if (parsed) {
           pending = parsed
         }
-      } else if (block.type === 'tool-result') {
-        // A result means the preceding ask (if any) has been answered.
-        pending = null
+        outstanding.push(parsed)
+      } else if (block.type === 'tool-result' && outstanding.length > 0) {
+        const resolved = outstanding.shift()
+        if (resolved && resolved === pending) {
+          pending = null
+        }
       }
     }
   }

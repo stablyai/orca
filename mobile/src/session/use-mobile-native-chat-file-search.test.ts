@@ -105,6 +105,32 @@ describe('useMobileNativeChatFileSearch', () => {
     ])
   })
 
+  it('cancels an in-flight query on a cache hit so a stale result cannot clobber it', async () => {
+    const sendRequest = vi.fn(async (_method: string, params: { query: string }) =>
+      rpcSuccess(params.query === 'app' ? ['src/app.ts'] : ['src/beta.ts'])
+    )
+    await mount({ sendRequest } as unknown as RpcClient)
+
+    // Populate the cache for 'app'.
+    act(() => state?.loadNativeChatFiles('app'))
+    await act(async () => vi.advanceTimersByTimeAsync(120))
+    expect(state?.nativeChatFilePaths).toEqual(['src/app.ts'])
+
+    // Schedule 'beta' (debounced, unresolved), then hit the cache for 'app'.
+    act(() => {
+      state?.loadNativeChatFiles('beta')
+      state?.loadNativeChatFiles('app')
+    })
+    expect(state?.nativeChatFilePaths).toEqual(['src/app.ts'])
+
+    // The cancelled 'beta' request must never fire and overwrite the cached result.
+    await act(async () => vi.advanceTimersByTimeAsync(120))
+    expect(state?.nativeChatFilePaths).toEqual(['src/app.ts'])
+    expect(
+      sendRequest.mock.calls.filter(([, params]) => (params as { query: string }).query === 'beta')
+    ).toHaveLength(0)
+  })
+
   it('coalesces overlapping legacy inventory requests on a slow host', async () => {
     let resolveList: (value: Awaited<ReturnType<RpcClient['sendRequest']>>) => void = () => {}
     const listResponse = new Promise<Awaited<ReturnType<RpcClient['sendRequest']>>>((resolve) => {

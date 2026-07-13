@@ -91,6 +91,32 @@ describe('mergeNativeChatLiveSession', () => {
     expect(session.status).toBe('working')
   })
 
+  it("self-heals a stale 'working' once this turn's assistant reply lands", () => {
+    // Trailing assistant reply (ts 2) post-dates the working turn's start (ts 1),
+    // so a dropped/late Stop hook must not strand 'working' on a visible reply.
+    const session = mergeNativeChatLiveSession({
+      sources: { transcript: [user('u-1', 'go'), assistant('a-1', 'done')] },
+      sessionId: 'sess',
+      agent: 'claude',
+      hookState: 'working',
+      stateStartedAt: 1
+    })
+    expect(session.status).toBe('ready')
+  })
+
+  it("keeps 'working' when the trailing assistant reply predates the working turn", () => {
+    // Trailing reply (ts 2) is older than the new working turn (started at ts 5),
+    // so the agent is working again — the stale reply must not suppress 'working'.
+    const session = mergeNativeChatLiveSession({
+      sources: { transcript: [user('u-1', 'go'), assistant('a-1', 'prior')] },
+      sessionId: 'sess',
+      agent: 'claude',
+      hookState: 'working',
+      stateStartedAt: 5
+    })
+    expect(session.status).toBe('working')
+  })
+
   it('leaves completed states (done/waiting/blocked) on the derived status', () => {
     const session = mergeNativeChatLiveSession({
       sources: { transcript: [user('u-1', 'hi')] },
@@ -184,12 +210,14 @@ describe('useNativeChatLiveSession — transport routing', () => {
     resetMockTransports()
   })
 
-  it('uses the subscription snapshot for the initial runtime load', async () => {
+  it('seeds from readSession alongside the subscription for the initial runtime load', async () => {
     await render({ paneKey: PANE, agent: AGENT, sessionId: SESSION, runtimeEnvironmentId: 'env-1' })
 
     expect(transportFactory).toHaveBeenCalledWith('env-1')
     const transport = getMockTransport('env-1')
-    expect(transport.readSession).not.toHaveBeenCalled()
+    // The independent seed guards against a stuck 'loading' when the stream never
+    // delivers a snapshot; a live snapshot still wins when it does (see below).
+    expect(transport.readSession).toHaveBeenCalledOnce()
     expect(transport.subscribe).toHaveBeenCalledOnce()
   })
 
@@ -258,7 +286,7 @@ describe('useNativeChatLiveSession — transport routing', () => {
 
     expect(transportFactory).toHaveBeenCalledWith(null)
     const transport = getMockTransport(null)
-    expect(transport.readSession).not.toHaveBeenCalled()
+    expect(transport.readSession).toHaveBeenCalledOnce()
     expect(transport.subscribe).toHaveBeenCalledOnce()
   })
 
@@ -268,10 +296,6 @@ describe('useNativeChatLiveSession — transport routing', () => {
       assistant(`m-${n}`, 't')
     )
     const first = getMockTransport('env-1')
-    let resolveEarlier: (result: { messages: NativeChatMessage[] }) => void = () => {}
-    first.readSession.mockImplementationOnce(
-      () => new Promise((resolve) => (resolveEarlier = resolve))
-    )
 
     const root = await render({
       paneKey: PANE,
@@ -282,6 +306,11 @@ describe('useNativeChatLiveSession — transport routing', () => {
     await act(async () => {
       first.emit({ type: 'snapshot', messages: many, hasMore: true })
     })
+    // Arm the pending read for load-earlier only; the initial seed already ran.
+    let resolveEarlier: (result: { messages: NativeChatMessage[] }) => void = () => {}
+    first.readSession.mockImplementationOnce(
+      () => new Promise((resolve) => (resolveEarlier = resolve))
+    )
     // Kick off load-earlier against env-1, then flip the owner before it resolves.
     await act(async () => {
       latest?.loadEarlier()
@@ -307,10 +336,6 @@ describe('useNativeChatLiveSession — transport routing', () => {
     const many = Array.from({ length: NATIVE_CHAT_INITIAL_LIMIT }, (_unused, n) =>
       assistant(`old-${n}`, 'old')
     )
-    let resolveEarlier: (result: { messages: NativeChatMessage[] }) => void = () => {}
-    transport.readSession.mockImplementationOnce(
-      () => new Promise((resolve) => (resolveEarlier = resolve))
-    )
     await render({
       paneKey: PANE,
       agent: AGENT,
@@ -318,6 +343,11 @@ describe('useNativeChatLiveSession — transport routing', () => {
       runtimeEnvironmentId: 'env-1'
     })
     await act(async () => transport.emit({ type: 'snapshot', messages: many, hasMore: true }))
+    // Arm the pending read for load-earlier only; the initial seed already ran.
+    let resolveEarlier: (result: { messages: NativeChatMessage[] }) => void = () => {}
+    transport.readSession.mockImplementationOnce(
+      () => new Promise((resolve) => (resolveEarlier = resolve))
+    )
     await act(async () => latest?.loadEarlier())
 
     await act(async () =>
@@ -340,10 +370,6 @@ describe('useNativeChatLiveSession — transport routing', () => {
     const many = Array.from({ length: NATIVE_CHAT_INITIAL_LIMIT }, (_unused, n) =>
       assistant(`old-${n}`, 'old')
     )
-    let resolveEarlier: (result: { messages: NativeChatMessage[] }) => void = () => {}
-    transport.readSession.mockImplementationOnce(
-      () => new Promise((resolve) => (resolveEarlier = resolve))
-    )
     await render({
       paneKey: PANE,
       agent: AGENT,
@@ -351,6 +377,11 @@ describe('useNativeChatLiveSession — transport routing', () => {
       runtimeEnvironmentId: 'env-1'
     })
     await act(async () => transport.emit({ type: 'snapshot', messages: many, hasMore: true }))
+    // Arm the pending read for load-earlier only; the initial seed already ran.
+    let resolveEarlier: (result: { messages: NativeChatMessage[] }) => void = () => {}
+    transport.readSession.mockImplementationOnce(
+      () => new Promise((resolve) => (resolveEarlier = resolve))
+    )
     await act(async () => latest?.loadEarlier())
 
     await act(async () =>
@@ -373,10 +404,6 @@ describe('useNativeChatLiveSession — transport routing', () => {
     const many = Array.from({ length: NATIVE_CHAT_INITIAL_LIMIT }, (_unused, n) =>
       assistant(`old-path-${n}`, 'old')
     )
-    let resolveEarlier: (result: { messages: NativeChatMessage[] }) => void = () => {}
-    transport.readSession.mockImplementationOnce(
-      () => new Promise((resolve) => (resolveEarlier = resolve))
-    )
     const root = await render({
       paneKey: PANE,
       agent: AGENT,
@@ -385,6 +412,11 @@ describe('useNativeChatLiveSession — transport routing', () => {
       runtimeEnvironmentId: 'env-1'
     })
     await act(async () => transport.emit({ type: 'snapshot', messages: many, hasMore: true }))
+    // Arm the pending read for load-earlier only; the initial seed already ran.
+    let resolveEarlier: (result: { messages: NativeChatMessage[] }) => void = () => {}
+    transport.readSession.mockImplementationOnce(
+      () => new Promise((resolve) => (resolveEarlier = resolve))
+    )
     await act(async () => latest?.loadEarlier())
 
     await rerender(root, {
@@ -400,5 +432,58 @@ describe('useNativeChatLiveSession — transport routing', () => {
     })
 
     expect(latest?.messages.map((message) => message.id)).not.toContain('stale-old-path')
+  })
+
+  it('seeds ready from readSession when the subscription never delivers a frame', async () => {
+    const transport = getMockTransport('env-1')
+    // Older runtime: the stream wires only appends and stays silent for an empty
+    // tail, so no snapshot arrives — the independent seed must settle the view.
+    transport.subscribe.mockImplementation(() => transport.unsubscribe)
+    transport.readSession.mockResolvedValueOnce({ messages: [user('u-seed', 'hi')] })
+
+    await render({ paneKey: PANE, agent: AGENT, sessionId: SESSION, runtimeEnvironmentId: 'env-1' })
+
+    expect(latest?.status).not.toBe('loading')
+    expect(latest?.messages.map((message) => message.id)).toEqual(['u-seed'])
+  })
+
+  it('keeps the live snapshot when a readSession seed resolves after it', async () => {
+    const transport = getMockTransport('env-1')
+    // The seed resolves only after the authoritative snapshot has already landed.
+    let resolveSeed: (result: { messages: NativeChatMessage[] }) => void = () => {}
+    transport.readSession.mockImplementationOnce(
+      () => new Promise((resolve) => (resolveSeed = resolve))
+    )
+
+    await render({ paneKey: PANE, agent: AGENT, sessionId: SESSION, runtimeEnvironmentId: 'env-1' })
+    await act(async () =>
+      transport.emit({ type: 'snapshot', messages: [user('u-live', 'live')], hasMore: false })
+    )
+    await act(async () => {
+      resolveSeed({ messages: [user('u-stale', 'stale')] })
+      await Promise.resolve()
+    })
+
+    expect(latest?.messages.map((message) => message.id)).toEqual(['u-live'])
+  })
+
+  it("self-heals a stale 'working' hook once this turn's reply has landed", async () => {
+    // The hook must read stateStartedAt from the store and thread it into the
+    // merge, so a dropped Stop hook doesn't strand 'Agent is working'.
+    useAppStore.setState({
+      agentStatusByPaneKey: { [PANE]: { state: 'working', stateStartedAt: 1 } as never }
+    })
+    const transport = getMockTransport('env-1')
+    await render({ paneKey: PANE, agent: AGENT, sessionId: SESSION, runtimeEnvironmentId: 'env-1' })
+    await act(async () =>
+      transport.emit({
+        type: 'snapshot',
+        messages: [user('u-1', 'go'), assistant('a-1', 'done')],
+        hasMore: false
+      })
+    )
+
+    // The reply (ts 2) post-dates stateStartedAt (1): the stuck 'working' heals.
+    expect(latest?.status).toBe('ready')
   })
 })

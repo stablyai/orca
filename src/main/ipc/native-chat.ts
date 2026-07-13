@@ -151,13 +151,15 @@ async function handleSubscribe(event: IpcMainEvent, args: NativeChatSubscribeArg
       sessionId,
       transcriptPath,
       initialLimit: limit,
-      onInitialSnapshot: (messages, hasMore) => {
+      onInitialSnapshot: (messages, hasMore, _beforeOffset, error) => {
         if (sender.isDestroyed()) {
           return
         }
+        // Forward an initial-drain error so a watching client's first frame carries it
+        // instead of stranding the view at 'loading' when the read keeps throwing.
         const payload: NativeChatAppendedPayload = {
           subscriptionId,
-          frame: { type: 'snapshot', messages, hasMore }
+          frame: { type: 'snapshot', messages, hasMore, ...(error ? { error } : {}) }
         }
         sender.send('nativeChat:appended', payload)
       },

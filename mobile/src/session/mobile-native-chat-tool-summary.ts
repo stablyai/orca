@@ -41,7 +41,8 @@ export function briefToolArg(input: unknown): string {
     const obj = input as Record<string, unknown>
     const path = obj.file_path ?? obj.path ?? obj.notebook_path
     if (typeof path === 'string' && path.length > 0) {
-      return path.split('/').pop() ?? path
+      // Paths come raw from agent transcripts; Windows hosts emit backslashes.
+      return path.split(/[\\/]/).pop() ?? path
     }
     const cmd = obj.command ?? obj.cmd ?? obj.query ?? obj.pattern
     if (typeof cmd === 'string') {

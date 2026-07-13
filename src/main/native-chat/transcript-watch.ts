@@ -22,7 +22,11 @@ export type SubscribeNativeChatTranscriptArgs = ResolveSessionFileOptions & {
   onInitialSnapshot?: (
     messages: NativeChatMessage[],
     hasMore: boolean,
-    beforeOffset: number
+    beforeOffset: number,
+    /** Set when the initial drain could not deliver a transcript; the subscriber
+     *  surfaces it as an error snapshot so a watching client never sticks on
+     *  'loading'. Empty messages accompany it. */
+    error?: string
   ) => void
   onReplace?: (messages: NativeChatMessage[], hasMore: boolean, beforeOffset: number) => void
   initialLimit?: number
@@ -87,6 +91,9 @@ export async function subscribeNativeChatTranscript(
   let watchedIdentity: string | null = null
   let watchedBoundary = ''
   let initialDrain = true
+  // Guards the one-time error snapshot emitted when the initial drain throws, so
+  // a persistently-failing retry loop can't spam the subscriber with error frames.
+  let initialErrorEmitted = false
   let closed = false
   let reading = false
   let pendingReadRequested = false
@@ -226,6 +233,13 @@ export async function subscribeNativeChatTranscript(
         } catch {
           // Why: unlink/recreate can detach fs.watch from the pathname. Keep one
           // capped-backoff retry alive until a successor appears or we unsubscribe.
+          // A still-pending initial drain also surfaces one error snapshot so a
+          // watching client isn't stranded at 'loading' when the read keeps
+          // throwing; initialDrain stays true so a recovered read can still win.
+          if (initialDrain && onInitialSnapshot && !initialErrorEmitted) {
+            initialErrorEmitted = true
+            onInitialSnapshot([], false, 0, 'Transcript unavailable')
+          }
           scheduleRotationRetry()
           break
         }

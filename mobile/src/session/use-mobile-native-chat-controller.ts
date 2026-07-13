@@ -22,6 +22,9 @@ import { useMobileNativeChatDrafts } from './use-mobile-native-chat-drafts'
 import { useMobileNativeChatFileSearch } from './use-mobile-native-chat-file-search'
 import { useMobileNativeChatSession } from './use-mobile-native-chat-session'
 import { useMobileNativeChatStop } from './use-mobile-native-chat-stop'
+import { useThrottledLatestValue } from './use-throttled-latest-value'
+
+const NATIVE_CHAT_STREAM_THROTTLE_MS = 50
 
 export type MobileNativeChatController = {
   chatTabIds: Set<string>
@@ -74,11 +77,16 @@ export function useMobileNativeChatController(args: {
     onSendError
   } = args
   const [chatTabIds, setChatTabIds] = useState<Set<string>>(new Set())
+  const chatTabIdsToggledRef = useRef(false)
 
   useEffect(() => {
     let active = true
+    // Re-arm per host/worktree so the fresh load can seed the new selection.
+    chatTabIdsToggledRef.current = false
     void loadNativeChatTabIds(hostId, worktreeId).then((ids) => {
-      if (active) {
+      // Why: a toggle before this load resolves is authoritative; the load must
+      // not revert the user's in-memory choice back to the persisted state.
+      if (active && !chatTabIdsToggledRef.current) {
         // Why: route reuse must clear the prior worktree's selection even when
         // the newly loaded worktree has no saved chat tabs.
         setChatTabIds(new Set(ids))
@@ -91,6 +99,7 @@ export function useMobileNativeChatController(args: {
 
   const toggleTabChatView = useCallback(
     (tabId: string) => {
+      chatTabIdsToggledRef.current = true
       setChatTabIds((previous) => {
         const next = new Set(previous)
         if (next.has(tabId)) {
@@ -140,9 +149,12 @@ export function useMobileNativeChatController(args: {
 
   const nativeChatStatus = activeChatResolution ? activeSessionTab?.agentStatus : null
   const nativeChatAgentWorking = nativeChatStatus?.state === 'working'
-  const nativeChatStreamingText = nativeChatAgentWorking
-    ? nativeChatStatus?.lastAssistantMessage
-    : undefined
+  // Throttle the streaming bubble: OpenCode emits a status frame per streamed
+  // part, and each one re-renders and re-parses the whole accumulated markdown.
+  const nativeChatStreamingText = useThrottledLatestValue(
+    nativeChatAgentWorking ? nativeChatStatus?.lastAssistantMessage : undefined,
+    NATIVE_CHAT_STREAM_THROTTLE_MS
+  )
   const nativeChatBlocked =
     nativeChatStatus?.state === 'waiting' || nativeChatStatus?.state === 'blocked'
   const nativeChatPermission =
@@ -220,7 +232,6 @@ export function useMobileNativeChatController(args: {
     cancelNativeChatAnswer,
     client,
     deviceTokenRef,
-    streamIdentity,
     nativeChatInputLeaseReady,
     onSendError
   ])
