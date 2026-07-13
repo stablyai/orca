@@ -8,5 +8,12 @@ export const CHAT_IMPORT_HOST_COMMAND_SPECS: CommandSpec[] = [
     summary: 'Run the browser native-messaging host for web chat import',
     usage: 'orca chat-import-host',
     allowedFlags: []
+  },
+  {
+    path: ['chat-import-host', 'install'],
+    summary: 'Register the native-messaging host manifest so the browser can launch it',
+    usage:
+      'orca chat-import-host install --extension-id <id> [--browser chrome|edge|brave|chromium]',
+    allowedFlags: ['extension-id', 'browser']
   }
 ]
