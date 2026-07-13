@@ -114,7 +114,8 @@ vi.mock('@/components/ui/card', () => ({
   CardTitle: 'CardTitle'
 }))
 
-vi.mock('@/lib/pane-manager/pane-terminal-options', () => ({
+vi.mock('@/lib/pane-manager/pane-terminal-options', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
   buildDefaultTerminalOptions: () => ({ scrollback: 0 })
 }))
 
