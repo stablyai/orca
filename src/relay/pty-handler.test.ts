@@ -127,6 +127,7 @@ describe('PtyHandler', () => {
     expect(methods).toContain('pty.spawn')
     expect(methods).toContain('pty.attach')
     expect(methods).toContain('pty.shutdown')
+    expect(methods).toContain('pty.shutdownSession')
     expect(methods).toContain('pty.sendSignal')
     expect(methods).toContain('pty.getCwd')
     expect(methods).toContain('pty.getInitialCwd')
@@ -1085,7 +1086,7 @@ describe('PtyHandler', () => {
     expect(handler.activePtyCount).toBe(0)
   })
 
-  it('kills the full POSIX PTY session when shutdown is immediate', async () => {
+  it('kills the full POSIX PTY session through the capability method', async () => {
     const mockKill = vi.fn()
     mockPtySpawn.mockReturnValue({
       ...mockPtyInstance,
@@ -1095,7 +1096,7 @@ describe('PtyHandler', () => {
     })
 
     await dispatcher.callRequest('pty.spawn', {})
-    await dispatcher.callRequest('pty.shutdown', { id: 'pty-1', immediate: true })
+    await dispatcher.callRequest('pty.shutdownSession', { id: 'pty-1' })
     expect(mockKillPosixPtySession).toHaveBeenCalledWith(process.pid, undefined)
     expect(mockKill).not.toHaveBeenCalledWith('SIGKILL')
   })

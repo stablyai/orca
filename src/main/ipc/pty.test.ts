@@ -857,7 +857,7 @@ describe('registerPtyHandlers', () => {
       })
 
       expect(result).toMatchObject({ id: expect.any(String) })
-      expect(runtime.beginWorktreePtySpawn).toHaveBeenCalledWith('wt-renderer')
+      expect(runtime.beginWorktreePtySpawn).toHaveBeenCalledWith('wt-renderer', undefined)
       expect(runtime.registerPty).toHaveBeenCalledWith(
         expect.any(String),
         'wt-renderer',
@@ -1854,7 +1854,7 @@ describe('registerPtyHandlers', () => {
         )
         expect(spawnOptions.env.ORCA_AGENT_HOOK_PORT).toBe('5678')
         expect(spawnOptions.env.ORCA_AGENT_HOOK_TOKEN).toBe('agent-token')
-        expect(runtime.beginWorktreePtySpawn).toHaveBeenCalledWith('wt-runtime')
+        expect(runtime.beginWorktreePtySpawn).toHaveBeenCalledWith('wt-runtime', undefined)
         expect(releaseWorktreeSpawn).toHaveBeenCalledTimes(1)
       })
 
@@ -2955,7 +2955,7 @@ describe('registerPtyHandlers', () => {
       it('finishes headless current-relay SSH shutdown before remote removal without inventory', async () => {
         const order: string[] = []
         const request = vi.fn(async (method: string) => {
-          if (method === 'pty.shutdown') {
+          if (method === 'pty.shutdownSession') {
             order.push('shutdown')
             return undefined
           }
@@ -2998,12 +2998,14 @@ describe('registerPtyHandlers', () => {
         deletePtyOwnership('ssh:ssh-1@@headless-current')
       })
 
-      it('bounds headless legacy-relay SSH verification to one inventory before removal', async () => {
+      it('fails headless legacy-relay teardown closed before inventory or removal', async () => {
         const order: string[] = []
         const request = vi.fn(async (method: string) => {
-          if (method === 'pty.shutdown') {
-            order.push('shutdown')
-            return undefined
+          if (method === 'pty.shutdownSession') {
+            order.push('shutdown-miss')
+            throw Object.assign(new Error('Method not found'), {
+              code: JsonRpcErrorCode.MethodNotFound
+            })
           }
           if (method === 'pty.hasPty') {
             order.push('hasPty-miss')
@@ -3044,16 +3046,14 @@ describe('registerPtyHandlers', () => {
             runtime.stopTerminalsForWorktree('id:wt-headless-legacy', {
               worktreeTeardown: true
             })
-          ).resolves.toEqual({ stopped: 2 })
-          order.push('git-remove')
+          ).resolves.toEqual({ stopped: 0, failedPtyIds: ptyIds })
         })
 
-        expect(order.at(-1)).toBe('git-remove')
-        expect(order.filter((step) => step === 'shutdown')).toHaveLength(2)
-        expect(request.mock.calls.filter(([method]) => method === 'pty.hasPty')).toHaveLength(1)
+        expect(order.filter((step) => step === 'shutdown-miss')).toHaveLength(2)
+        expect(request.mock.calls.filter(([method]) => method === 'pty.hasPty')).toHaveLength(0)
         expect(
           request.mock.calls.filter(([method]) => method === 'pty.listProcesses')
-        ).toHaveLength(1)
+        ).toHaveLength(0)
         for (const ptyId of ptyIds) {
           deletePtyOwnership(ptyId)
         }

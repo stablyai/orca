@@ -22215,7 +22215,7 @@ describe('OrcaRuntimeService', () => {
   })
 
   it('uses authoritative runtime PTYs for teardown while the renderer graph is reloading', async () => {
-    const stopAndWait = vi.fn(async () => true)
+    const stopAndWait = vi.fn(async (_ptyId: string) => true)
     const runtime = new OrcaRuntimeService(store)
     runtime.setPtyController({
       write: () => true,
@@ -22402,6 +22402,87 @@ describe('OrcaRuntimeService', () => {
       failedPtyIds: ['ssh:ssh-1@@relay-only']
     })
     expect(stopAndWait).toHaveBeenCalledWith('ssh:ssh-1@@relay-only')
+  })
+
+  it('filters runtime PTYs and durable leases to the deleting SSH host', async () => {
+    const runtime = new OrcaRuntimeService({
+      ...store,
+      getSshRemotePtyLeases: () => [
+        {
+          targetId: 'ssh-a',
+          ptyId: 'lease-a',
+          worktreeId: TEST_WORKTREE_ID,
+          state: 'detached' as const,
+          createdAt: 1,
+          updatedAt: 2
+        },
+        {
+          targetId: 'ssh-b',
+          ptyId: 'lease-b',
+          worktreeId: TEST_WORKTREE_ID,
+          state: 'detached' as const,
+          createdAt: 1,
+          updatedAt: 2
+        }
+      ]
+    })
+    const stopAndWait = vi.fn(async (_ptyId: string) => true)
+    runtime.setPtyController({
+      write: () => true,
+      kill: () => false,
+      stopAndWait,
+      getForegroundProcess: async () => null
+    })
+    runtime.registerPty('ssh:ssh-a@@runtime-a', TEST_WORKTREE_ID, 'ssh-a')
+    runtime.registerPty('ssh:ssh-b@@runtime-b', TEST_WORKTREE_ID, 'ssh-b')
+
+    await expect(
+      runtime.stopTerminalsForWorktree(TEST_WORKTREE_ID, {
+        worktreeTeardown: true,
+        connectionId: 'ssh-a'
+      })
+    ).resolves.toEqual({ stopped: 2 })
+    expect(stopAndWait.mock.calls.map(([ptyId]) => ptyId).sort()).toEqual([
+      'ssh:ssh-a@@lease-a',
+      'ssh:ssh-a@@runtime-a'
+    ])
+  })
+
+  it('scopes spawn admission independently for identical worktree ids on two SSH hosts', async () => {
+    const runtime = new OrcaRuntimeService(store)
+    const releaseHostA = runtime.beginWorktreePtySpawn(TEST_WORKTREE_ID, 'ssh-a')
+    const hostBOperation = vi.fn(async () => 'host-b-removed')
+
+    await expect(
+      runtime.runWithWorktreePtyTeardown(TEST_WORKTREE_ID, hostBOperation, 'ssh-b')
+    ).resolves.toBe('host-b-removed')
+    expect(hostBOperation).toHaveBeenCalledTimes(1)
+
+    let hostARan = false
+    const hostATeardown = runtime.runWithWorktreePtyTeardown(
+      TEST_WORKTREE_ID,
+      async () => {
+        hostARan = true
+      },
+      'ssh-a'
+    )
+    await Promise.resolve()
+    expect(hostARan).toBe(false)
+    releaseHostA()
+    await hostATeardown
+    expect(hostARan).toBe(true)
+  })
+
+  it('does not collide local admission with an SSH connection named local', async () => {
+    const runtime = new OrcaRuntimeService(store)
+    const releaseLocal = runtime.beginWorktreePtySpawn(TEST_WORKTREE_ID)
+    const sshOperation = vi.fn(async () => 'ssh-removed')
+
+    await expect(
+      runtime.runWithWorktreePtyTeardown(TEST_WORKTREE_ID, sshOperation, 'local')
+    ).resolves.toBe('ssh-removed')
+    expect(sshOperation).toHaveBeenCalledTimes(1)
+    releaseLocal()
   })
 
   it('bounds concurrent verified worktree stops', async () => {
@@ -29706,11 +29787,39 @@ describe('OrcaRuntimeService', () => {
       expect(preDaemonProvider.shutdown).not.toHaveBeenCalled()
     })
 
-    it('drains headless and late SSH spawns before remote worktree removal', async () => {
+    it('waits for delayed daemon startup before CLI removal captures the provider', async () => {
+      const startup = deferred<void>()
+      const fallbackProvider = createProviderStub(async () => [])
+      const daemonPtyId = `${TEST_WORKTREE_ID}@@daemon-startup`
+      const daemonProvider = createProviderStub(async () => [
+        { id: daemonPtyId, cwd: TEST_WORKTREE_PATH, title: 'shell' }
+      ])
+      let currentProvider = fallbackProvider
+      const runtime = new OrcaRuntimeService(store, undefined, {
+        getLocalProvider: () => currentProvider as never,
+        awaitLocalPtyStartup: () => startup.promise
+      })
+
+      const removal = runtime.removeManagedWorktree(TEST_WORKTREE_ID)
+      await Promise.resolve()
+      expect(removeWorktree).not.toHaveBeenCalled()
+      expect(fallbackProvider.listProcesses).not.toHaveBeenCalled()
+
+      currentProvider = daemonProvider
+      startup.resolve()
+      await removal
+
+      expect(daemonProvider.shutdown).toHaveBeenCalledWith(daemonPtyId, { immediate: true })
+      expect(fallbackProvider.shutdown).not.toHaveBeenCalled()
+      expect(removeWorktree).toHaveBeenCalledTimes(1)
+    })
+
+    it('drains headless and late runtime-backed SSH spawns before remote removal', async () => {
       const remoteRepo = {
         ...store.getRepo(TEST_REPO_ID)!,
         path: '/remote/repo',
-        connectionId: 'ssh-1'
+        connectionId: 'ssh-1',
+        executionHostId: 'runtime:runtime-a' as const
       }
       const remoteWorktree = {
         path: '/remote/feature-wt',
@@ -29729,7 +29838,7 @@ describe('OrcaRuntimeService', () => {
         getAllWorktreeMeta: () => ({ [remoteWorktreeId]: makeWorktreeMeta() }),
         getWorktreeMeta: (id: string) => (id === remoteWorktreeId ? makeWorktreeMeta() : undefined),
         removeWorktreeMeta: () => {
-          expect(() => runtime.beginWorktreePtySpawn(remoteWorktreeId)).toThrow(
+          expect(() => runtime.beginWorktreePtySpawn(remoteWorktreeId, 'ssh-1')).toThrow(
             'Worktree teardown is in progress'
           )
           rejectedDuringRemoteMetadataCleanup = true
@@ -29775,7 +29884,7 @@ describe('OrcaRuntimeService', () => {
         getForegroundProcess: async () => null
       })
       runtime.registerPty('ssh:ssh-1@@existing', remoteWorktreeId, 'ssh-1')
-      const releaseLateSpawn = runtime.beginWorktreePtySpawn(remoteWorktreeId)
+      const releaseLateSpawn = runtime.beginWorktreePtySpawn(remoteWorktreeId, 'ssh-1')
 
       try {
         const removal = runtime.removeManagedWorktree(remoteWorktreeId)
@@ -29790,7 +29899,7 @@ describe('OrcaRuntimeService', () => {
 
         releaseFirstStop()
         await removal
-        const releasePostRemovalSpawn = runtime.beginWorktreePtySpawn(remoteWorktreeId)
+        const releasePostRemovalSpawn = runtime.beginWorktreePtySpawn(remoteWorktreeId, 'ssh-1')
         releasePostRemovalSpawn()
 
         expect(callOrder).toEqual([

@@ -193,6 +193,30 @@ describe('killAllProcessesForWorktree', () => {
     expect(localProvider.listProcesses).toHaveBeenCalledTimes(1)
   })
 
+  it('does not sweep a colliding local-provider worktree during SSH teardown', async () => {
+    const stopTerminalsForWorktree = vi.fn().mockResolvedValue({ stopped: 1 })
+    const runtime = {
+      stopTerminalsForWorktree
+    } as unknown as Parameters<typeof killAllProcessesForWorktree>[1]['runtime']
+    const localProvider = createProviderStub(async () => [
+      { id: 'w1@@local-witness', cwd: '/tmp/w1', title: 'shell' }
+    ])
+
+    await expect(
+      killAllProcessesForWorktree('w1', {
+        runtime,
+        localProvider,
+        connectionId: 'ssh-1'
+      })
+    ).resolves.toEqual({ runtimeStopped: 1, providerStopped: 0, registryStopped: 0 })
+    expect(stopTerminalsForWorktree).toHaveBeenCalledWith('w1', {
+      worktreeTeardown: true,
+      connectionId: 'ssh-1'
+    })
+    expect(localProvider.listProcesses).not.toHaveBeenCalled()
+    expect(localProvider.shutdown).not.toHaveBeenCalled()
+  })
+
   it('fails closed when a local runtime PTY remains after fallback shutdown rejects', async () => {
     const runtime = {
       stopTerminalsForWorktree: vi.fn().mockResolvedValue({

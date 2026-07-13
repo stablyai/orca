@@ -7,6 +7,9 @@ type KillProcess = (pid: number, signal: NodeJS.Signals) => void
 const execFile = promisify(execFileCallback) as ExecFile
 export const PTY_SESSION_COMMAND_TIMEOUT_MS = 2500
 export const PTY_SESSION_VERIFY_TIMEOUT_MS = 500
+export const MAX_PTY_PROCESS_TREE_SIZE = 1024
+const VERIFY_PID_BATCH_SIZE = 64
+const PARENT_PID_BATCH_SIZE = 64
 
 export async function killPosixPtySession(
   pid: number,
@@ -15,141 +18,180 @@ export async function killPosixPtySession(
   run: ExecFile = execFile,
   killProcess: KillProcess = process.kill
 ): Promise<boolean> {
-  if (platform === 'win32' || !Number.isSafeInteger(pid) || pid <= 0) {
+  if ((platform !== 'linux' && platform !== 'darwin') || !Number.isSafeInteger(pid) || pid <= 0) {
     return false
   }
 
+  const stopped = new Set<number>()
   try {
-    if (platform === 'linux') {
-      // Why: forkpty makes the Linux shell a session leader. SID targeting
-      // includes background job groups without a broad process inventory.
-      try {
-        await run('pkill', ['-KILL', '-s', String(pid), '.*'], {
-          timeout: PTY_SESSION_COMMAND_TIMEOUT_MS
-        })
-      } catch (error) {
-        if (!isEmptyProcessSelection(error)) {
-          throw error
-        }
+    if (!(await rootStillOwnsPty(pid, ptsName, platform, run))) {
+      return false
+    }
+    if (!stopProcess(pid, stopped, killProcess)) {
+      return false
+    }
+    const processTree = await freezeProcessTree(pid, stopped, run, killProcess)
+    if (!processTree) {
+      resumeProcesses(stopped, killProcess)
+      return false
+    }
+    for (const candidate of processTree.toReversed()) {
+      if (!signalProcess(candidate, 'SIGKILL', killProcess)) {
+        resumeProcesses(stopped, killProcess)
+        return false
       }
-      return await verifyLinuxSessionStopped(pid, run)
+      stopped.delete(candidate)
     }
-    if (platform === 'darwin') {
-      return await killDarwinPtyProcesses(pid, ptsName, run, killProcess)
-    }
-    return false
+    return await verifyProcessesStopped(processTree, platform, run)
   } catch {
-    // Missing platform tools and already-empty sessions fall back to node-pty.
+    resumeProcesses(stopped, killProcess)
     return false
   }
 }
 
-async function killDarwinPtyProcesses(
-  rootPid: number,
+async function rootStillOwnsPty(
+  pid: number,
   ptsName: unknown,
+  platform: NodeJS.Platform,
+  run: ExecFile
+): Promise<boolean> {
+  const sessionColumn = platform === 'darwin' ? 'sess=' : 'sid='
+  const result = (await run('/bin/ps', ['-p', String(pid), '-o', sessionColumn, '-o', 'tty='], {
+    timeout: PTY_SESSION_COMMAND_TIMEOUT_MS
+  })) as { stdout?: string | Buffer }
+  const [sidText, tty = ''] = String(result.stdout ?? '')
+    .trim()
+    .split(/\s+/)
+  if (Number(sidText) !== pid) {
+    return false
+  }
+  if (typeof ptsName !== 'string') {
+    // Why: some node-pty builds omit the private ptsName field. The
+    // session-leader check plus a real controlling TTY still proves ownership.
+    return tty.length > 0 && tty !== '??' && tty !== '?'
+  }
+  const expectedTty = ptsName.startsWith('/dev/') ? ptsName.slice('/dev/'.length) : ptsName
+  return /^[A-Za-z0-9._/-]+$/.test(expectedTty) && tty === expectedTty
+}
+
+async function freezeProcessTree(
+  rootPid: number,
+  stopped: Set<number>,
   run: ExecFile,
   killProcess: KillProcess
-): Promise<boolean> {
-  if (typeof ptsName !== 'string') {
-    return false
-  }
-  const tty = ptsName.startsWith('/dev/') ? ptsName.slice('/dev/'.length) : ptsName
-  if (!/^[A-Za-z0-9._-]+$/.test(tty)) {
-    return false
-  }
-  // Why: Darwin pkill has no SID selector and its TTY filter does not match
-  // forkpty children. A targeted ps query avoids a system-wide inventory.
-  const result = (await run('/bin/ps', ['-t', tty, '-o', 'pid=', '-o', 'ppid='], {
-    timeout: PTY_SESSION_COMMAND_TIMEOUT_MS
-  })) as {
-    stdout?: string | Buffer
-  }
-  const rows = String(result.stdout ?? '')
-    .trim()
-    .split('\n')
-    .map((line) => line.trim().split(/\s+/).map(Number))
-    .filter(
-      (row): row is [number, number] =>
-        row.length === 2 &&
-        row.every((candidate) => Number.isSafeInteger(candidate) && candidate >= 0) &&
-        row[0] > 0
-    )
-  if (!rows.some(([candidate]) => candidate === rootPid)) {
-    return false
-  }
-  const parentByPid = new Map(rows)
-  const depth = (pid: number): number => {
-    let current = pid
-    let result = 0
-    const visited = new Set<number>()
-    while (current !== rootPid && !visited.has(current)) {
-      visited.add(current)
-      const parent = parentByPid.get(current)
-      if (!parent || !parentByPid.has(parent)) {
-        break
+): Promise<number[] | null> {
+  const processTree = [rootPid]
+  const seen = new Set(processTree)
+  let frontier = [rootPid]
+  const discoveryDeadline = Date.now() + PTY_SESSION_COMMAND_TIMEOUT_MS
+  while (frontier.length > 0) {
+    const nextFrontier: number[] = []
+    for (let index = 0; index < frontier.length; index += PARENT_PID_BATCH_SIZE) {
+      const remainingMs = discoveryDeadline - Date.now()
+      if (remainingMs <= 0) {
+        return null
       }
-      current = parent
-      result += 1
+      const parents = frontier.slice(index, index + PARENT_PID_BATCH_SIZE)
+      for (const child of await listChildren(parents, run, remainingMs)) {
+        if (seen.has(child)) {
+          continue
+        }
+        if (seen.size >= MAX_PTY_PROCESS_TREE_SIZE) {
+          return null
+        }
+        seen.add(child)
+        if (!stopProcess(child, stopped, killProcess)) {
+          return null
+        }
+        processTree.push(child)
+        nextFrontier.push(child)
+      }
     }
-    return result
+    frontier = nextFrontier
   }
-  // Why: descendants must be signalled before their parents so the snapshot
-  // cannot be invalidated by reparenting while teardown is in progress.
-  const pids = rows
-    .map(([candidate]) => candidate)
-    .sort((a, b) => {
-      if (a === rootPid) {
-        return 1
-      }
-      if (b === rootPid) {
-        return -1
-      }
-      return depth(b) - depth(a)
-    })
-  for (const candidate of pids) {
+  return processTree
+}
+
+async function listChildren(
+  parentPids: readonly number[],
+  run: ExecFile,
+  timeout: number
+): Promise<number[]> {
+  try {
+    const result = (await run('/usr/bin/pgrep', ['-P', parentPids.join(',')], {
+      timeout
+    })) as { stdout?: string | Buffer }
+    return String(result.stdout ?? '')
+      .trim()
+      .split(/\s+/)
+      .map(Number)
+      .filter((candidate) => Number.isSafeInteger(candidate) && candidate > 0)
+  } catch (error) {
+    if (isEmptyProcessSelection(error)) {
+      return []
+    }
+    throw error
+  }
+}
+
+function stopProcess(pid: number, stopped: Set<number>, killProcess: KillProcess): boolean {
+  try {
+    killProcess(pid, 'SIGSTOP')
+    stopped.add(pid)
+    return true
+  } catch {
+    return false
+  }
+}
+
+function signalProcess(pid: number, signal: NodeJS.Signals, killProcess: KillProcess): boolean {
+  try {
+    killProcess(pid, signal)
+    return true
+  } catch (error) {
+    return (error as NodeJS.ErrnoException).code === 'ESRCH'
+  }
+}
+
+function resumeProcesses(stopped: Set<number>, killProcess: KillProcess): void {
+  for (const pid of stopped) {
+    signalProcess(pid, 'SIGCONT', killProcess)
+  }
+  stopped.clear()
+}
+
+async function verifyProcessesStopped(
+  pids: number[],
+  platform: NodeJS.Platform,
+  run: ExecFile
+): Promise<boolean> {
+  const batchSize = platform === 'darwin' ? 1 : VERIFY_PID_BATCH_SIZE
+  for (let index = 0; index < pids.length; index += batchSize) {
+    const batch = pids.slice(index, index + batchSize)
     try {
-      killProcess(candidate, 'SIGKILL')
+      const pidSelector = platform === 'darwin' ? String(batch[0]) : batch.join(',')
+      const result = (await run('/bin/ps', ['-p', pidSelector, '-o', 'pid=', '-o', 'stat='], {
+        timeout: PTY_SESSION_VERIFY_TIMEOUT_MS
+      })) as { stdout?: string | Buffer }
+      if (!hasOnlyExitedProcesses(result.stdout)) {
+        return false
+      }
     } catch (error) {
-      if ((error as NodeJS.ErrnoException).code !== 'ESRCH') {
+      if (!isEmptyProcessSelection(error)) {
         return false
       }
     }
   }
-  return await verifyDarwinTtyStopped(tty, run)
+  return true
 }
 
-async function verifyLinuxSessionStopped(pid: number, run: ExecFile): Promise<boolean> {
-  try {
-    const result = (await run('/bin/ps', ['-s', String(pid), '-o', 'stat='], {
-      timeout: PTY_SESSION_VERIFY_TIMEOUT_MS
-    })) as { stdout?: string | Buffer }
-    return hasOnlyExitedProcesses(result.stdout)
-  } catch (error) {
-    return isEmptyProcessSelection(error)
-  }
-}
-
-async function verifyDarwinTtyStopped(tty: string, run: ExecFile): Promise<boolean> {
-  try {
-    const result = (await run('/bin/ps', ['-t', tty, '-o', 'pid=', '-o', 'stat='], {
-      timeout: PTY_SESSION_VERIFY_TIMEOUT_MS
-    })) as { stdout?: string | Buffer }
-    return hasOnlyExitedProcesses(result.stdout, true)
-  } catch (error) {
-    return isEmptyProcessSelection(error)
-  }
-}
-
-function hasOnlyExitedProcesses(stdout: string | Buffer | undefined, pidColumn = false): boolean {
-  const lines = String(stdout ?? '')
+function hasOnlyExitedProcesses(stdout: string | Buffer | undefined): boolean {
+  return String(stdout ?? '')
     .trim()
     .split('\n')
     .map((line) => line.trim())
     .filter(Boolean)
-  return lines.every((line) => {
-    const stat = pidColumn ? line.split(/\s+/).at(-1) : line
-    return stat?.startsWith('Z') === true
-  })
+    .every((line) => line.split(/\s+/).at(-1)?.startsWith('Z') === true)
 }
 
 function isEmptyProcessSelection(error: unknown): boolean {
@@ -157,7 +199,7 @@ function isEmptyProcessSelection(error: unknown): boolean {
     return false
   }
   const processError = error as { code?: unknown; stdout?: unknown }
-  // Why: BSD/procps ps exits 1 for an empty selector. Only that exact empty
-  // result proves absence; ENOENT, timeout, and malformed output fail closed.
+  // Why: BSD/procps ps/pgrep exit 1 for an empty selector. Only that exact
+  // empty result proves absence; ENOENT, timeout, and malformed output fail closed.
   return processError.code === 1 && String(processError.stdout ?? '').trim() === ''
 }

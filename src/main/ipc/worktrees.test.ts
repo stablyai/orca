@@ -6749,6 +6749,7 @@ describe('registerWorktreeHandlers', () => {
     expect(killAllProcessesForWorktreeMock).toHaveBeenCalledWith(worktreeId, {
       runtime: runtimeStub,
       localProvider: ptyProvider,
+      connectionId: null,
       onPtyStopped: clearProviderPtyStateMock
     })
     expect(killAllProcessesForWorktreeMock.mock.invocationCallOrder[0]).toBeLessThan(
@@ -8665,21 +8666,27 @@ describe('registerWorktreeHandlers', () => {
       const ptyProvider = {} as never
       const worktreeId = 'repo-1::/workspace/feature-wt'
       store.getRepo.mockReturnValue(repo)
+      store.getRepos.mockReturnValue([repo])
       getLocalPtyProviderMock.mockReturnValue(ptyProvider)
       // Why: a removed/disconnected SSH target has no live provider; forgetLocal
       // must not reach for one.
       getSshGitProviderMock.mockReturnValue(undefined)
 
-      const result = await handlers['worktrees:forgetLocal'](null, { worktreeId })
+      const result = await handlers['worktrees:forgetLocal'](null, {
+        worktreeId,
+        hostId: 'ssh:ssh-dead'
+      })
 
       expect(result).toEqual({})
       expect(runtimeStub.runWithWorktreePtyTeardown).toHaveBeenCalledWith(
         worktreeId,
-        expect.any(Function)
+        expect.any(Function),
+        'ssh-dead'
       )
       expect(killAllProcessesForWorktreeMock).toHaveBeenCalledWith(worktreeId, {
         runtime: runtimeStub,
         localProvider: ptyProvider,
+        connectionId: 'ssh-dead',
         onPtyStopped: clearProviderPtyStateMock
       })
       expect(runtimeStub.clearOptimisticReconcileToken).toHaveBeenCalledWith(worktreeId)

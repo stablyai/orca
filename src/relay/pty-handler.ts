@@ -533,6 +533,11 @@ export class PtyHandler {
     this.dispatcher.onRequest('pty.spawn', (p, context) => this.spawn(p, context))
     this.dispatcher.onRequest('pty.attach', (p) => this.attach(p))
     this.dispatcher.onRequest('pty.shutdown', (p) => this.shutdown(p))
+    // Why: method presence proves the relay can kill and verify the whole PTY
+    // process tree. Older relays only removed the forkpty leader/map entry.
+    this.dispatcher.onRequest('pty.shutdownSession', (p) =>
+      this.shutdown({ ...p, immediate: true })
+    )
     this.dispatcher.onRequest('pty.sendSignal', (p) => this.sendSignal(p))
     this.dispatcher.onRequest('pty.getCwd', (p) => this.getCwd(p))
     this.dispatcher.onRequest('pty.getInitialCwd', (p) => this.getInitialCwd(p))

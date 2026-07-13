@@ -7,6 +7,7 @@ import { mapPtyStopsWithConcurrency } from './pty-stop-concurrency'
 export type WorktreeTeardownDeps = {
   runtime?: OrcaRuntimeService
   localProvider: IPtyProvider
+  connectionId?: string | null
   onPtyStopped?: (ptyId: string) => void
 }
 
@@ -51,7 +52,8 @@ export async function killAllProcessesForWorktree(
 
   if (deps.runtime) {
     const r = await deps.runtime.stopTerminalsForWorktree(worktreeId, {
-      worktreeTeardown: true
+      worktreeTeardown: true,
+      ...(deps.connectionId !== undefined ? { connectionId: deps.connectionId } : {})
     })
     result.runtimeStopped = r.stopped
     failedPtyIds = 'failedPtyIds' in r ? (r.failedPtyIds ?? []) : []
@@ -59,12 +61,9 @@ export async function killAllProcessesForWorktree(
 
   const failedRemotePtyIds = failedPtyIds.filter((ptyId) => parseAppSshPtyId(ptyId) !== null)
   const failedLocalPtyIds = failedPtyIds.filter((ptyId) => parseAppSshPtyId(ptyId) === null)
-  const fallbackResult = await sweepLocalProvider(
-    worktreeId,
-    deps.localProvider,
-    failedLocalPtyIds,
-    deps.onPtyStopped
-  )
+  const fallbackResult = deps.connectionId
+    ? { providerStopped: 0, registryStopped: 0 }
+    : await sweepLocalProvider(worktreeId, deps.localProvider, failedLocalPtyIds, deps.onPtyStopped)
   result.providerStopped = fallbackResult.providerStopped
   result.registryStopped = fallbackResult.registryStopped
 

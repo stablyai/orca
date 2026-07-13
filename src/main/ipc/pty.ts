@@ -3127,7 +3127,7 @@ export function registerPtyHandlers(
         !admissionHeldRuntimeSpawnArgs.has(args) &&
         args.worktreeId &&
         runtime?.beginWorktreePtySpawn
-          ? runtime.beginWorktreePtySpawn(args.worktreeId)
+          ? runtime.beginWorktreePtySpawn(args.worktreeId, args.connectionId)
           : null
       const paneSpawnReservation = materializedPaneKey
         ? reservePaneSpawn(materializedPaneKey)
@@ -3612,14 +3612,17 @@ export function registerPtyHandlers(
     resetPtyRendererDeliveryDebug()
   })
 
-  const registerWorktreePtySpawnHandler = <T extends { worktreeId?: string }, R>(
+  const registerWorktreePtySpawnHandler = <
+    T extends { worktreeId?: string; connectionId?: string | null },
+    R
+  >(
     channel: string,
     handler: (event: IpcMainInvokeEvent, args: T) => Promise<R>
   ): void => {
     ipcMain.handle(channel, async (event, args: T) => {
       const releaseWorktreeSpawn =
         typeof args.worktreeId === 'string' && runtime?.beginWorktreePtySpawn
-          ? runtime.beginWorktreePtySpawn(args.worktreeId)
+          ? runtime.beginWorktreePtySpawn(args.worktreeId, args.connectionId)
           : null
       try {
         return await handler(event, args)

@@ -422,10 +422,10 @@ describe('SshPtyProvider', () => {
     expect(mux.notify).toHaveBeenCalledWith('pty.resize', { id: 'pty-1', cols: 120, rows: 40 })
   })
 
-  it('shutdown sends pty.shutdown request', async () => {
+  it('immediate shutdown requires the full-session relay method', async () => {
     await provider.shutdown(scopedPty1, { immediate: true })
     expect(mux.request).toHaveBeenCalledWith(
-      'pty.shutdown',
+      'pty.shutdownSession',
       {
         id: 'pty-1',
         immediate: true,
@@ -467,7 +467,7 @@ describe('SshPtyProvider', () => {
   it('shutdown forwards keepHistory: true over the relay', async () => {
     await provider.shutdown(scopedPty1, { immediate: true, keepHistory: true })
     expect(mux.request).toHaveBeenCalledWith(
-      'pty.shutdown',
+      'pty.shutdownSession',
       {
         id: 'pty-1',
         immediate: true,
@@ -571,7 +571,7 @@ describe('SshPtyProvider', () => {
       if (method === 'pty.spawn') {
         return { id: 'pty-3' }
       }
-      if (method === 'pty.shutdown' || method === 'pty.attach') {
+      if (method === 'pty.shutdownSession' || method === 'pty.attach') {
         return undefined
       }
       throw new Error(`Unexpected request: ${method}`)
@@ -624,7 +624,7 @@ describe('SshPtyProvider', () => {
       if (method === 'pty.listProcesses') {
         return inventory
       }
-      if (method === 'pty.shutdown') {
+      if (method === 'pty.shutdownSession') {
         return undefined
       }
       throw new Error(`Unexpected request: ${method}`)
@@ -642,6 +642,27 @@ describe('SshPtyProvider', () => {
     expect(
       mux.request.mock.calls.filter(([method]) => method === 'pty.listProcesses')
     ).toHaveLength(1)
+  })
+
+  it('fails closed when an older relay lacks full-session shutdown', async () => {
+    mux.request.mockImplementation(async (method: string) => {
+      if (method === 'pty.shutdownSession') {
+        throw Object.assign(new Error('Method not found'), {
+          code: JsonRpcErrorCode.MethodNotFound
+        })
+      }
+      if (method === 'pty.listProcesses') {
+        return []
+      }
+      throw new Error(`Unexpected request: ${method}`)
+    })
+
+    await expect(provider.shutdown(scopedPty1, { immediate: true })).rejects.toThrow(
+      'Method not found'
+    )
+    expect(
+      mux.request.mock.calls.filter(([method]) => method === 'pty.listProcesses')
+    ).toHaveLength(0)
   })
 
   it('getDefaultShell returns shell path', async () => {

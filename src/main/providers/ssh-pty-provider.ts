@@ -263,7 +263,7 @@ export class SshPtyProvider implements IPtyProvider {
 
   async shutdown(id: string, opts: { immediate?: boolean; keepHistory?: boolean }): Promise<void> {
     await this.mux.request(
-      'pty.shutdown',
+      opts.immediate ? 'pty.shutdownSession' : 'pty.shutdown',
       {
         id: this.toRelayPtyId(id),
         immediate: opts.immediate ?? false,

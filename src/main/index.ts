@@ -1777,6 +1777,7 @@ app.whenReady().then(async () => {
     // provider reference eagerly here would freeze the pre-daemon LocalPtyProvider
     // and defeat the teardown helper's prefix sweep (design §4.3 wire-up).
     getLocalProvider: () => getLocalPtyProvider(),
+    awaitLocalPtyStartup: () => localPtyStartupReady,
     onPtyStopped: clearProviderPtyState,
     onTerminalAgentStatus: (event) => {
       agentHookServer.ingestTerminalStatus(event)
