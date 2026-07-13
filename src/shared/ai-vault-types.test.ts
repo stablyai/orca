@@ -1,8 +1,11 @@
 import { describe, expect, it } from 'vitest'
 import {
+  aiVaultAgentLabel,
   aiVaultSessionRecoverableSignalCount,
+  buildAiVaultResumeCommand,
   isAiVaultSessionRecoverableEmpty,
   isAiVaultSessionResumableContent,
+  isWebChatAgent,
   type AiVaultSessionPreviewMessage
 } from './ai-vault-types'
 
@@ -84,5 +87,27 @@ describe('aiVaultSessionRecoverableSignalCount', () => {
         subagentTranscriptCount: 3
       })
     ).toBe(3)
+  })
+})
+
+describe('web chat agents', () => {
+  it('classifies web chat agents', () => {
+    expect(isWebChatAgent('chatgpt')).toBe(true)
+    expect(isWebChatAgent('claude')).toBe(false)
+  })
+  it('labels web chat agents', () => {
+    expect(aiVaultAgentLabel('chatgpt')).toBe('ChatGPT')
+    expect(aiVaultAgentLabel('claude-web')).toBe('Claude.ai')
+    expect(aiVaultAgentLabel('gemini-web')).toBe('Gemini')
+  })
+  it('produces no resume command for web chat agents (read-only)', () => {
+    expect(
+      buildAiVaultResumeCommand({
+        agent: 'chatgpt',
+        sessionId: 'abc',
+        cwd: null,
+        platform: 'darwin'
+      })
+    ).toBe('')
   })
 })
