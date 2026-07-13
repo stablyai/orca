@@ -26809,6 +26809,11 @@ describe('OrcaRuntimeService', () => {
       if (args[0] === 'config') {
         return { stdout: 'origin\n', stderr: '' }
       }
+      // Why: the multi-remote resolver enumerates `git remote` to enumerate
+      // fall-back candidates when the primary can't satisfy the PR head ref.
+      if (args[0] === 'remote') {
+        return { stdout: 'origin\n', stderr: '' }
+      }
       if (args[0] === 'fetch') {
         return { stdout: '', stderr: '' }
       }

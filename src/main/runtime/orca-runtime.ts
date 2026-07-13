@@ -16397,27 +16397,54 @@ export class OrcaRuntimeService {
     const gitExec = sshGitProvider
       ? (gitArgs: string[]) => sshGitProvider.exec(gitArgs, repo.path)
       : (gitArgs: string[]) => gitExecFileAsync(gitArgs, localGitExecOptions ?? { cwd: repo.path })
-    const resolveRemote = sshGitProvider
-      ? async () => {
-          const { stdout } = await sshGitProvider.exec(['remote'], repo.path)
-          const remotes = stdout
-            .split('\n')
-            .map((line) => line.trim())
-            .filter(Boolean)
-          if (remotes.includes('origin')) {
-            return 'origin'
-          }
-          if (remotes.length === 1) {
-            return remotes[0]!
-          }
-          if (remotes.length === 0) {
-            throw new Error('Repo has no configured git remotes.')
-          }
-          throw new Error(
-            `Repo has multiple remotes (${remotes.join(', ')}) and no default is configured.`
-          )
+    // Why: enumerate once so primary/alternatives stay in sync. SSH preserves
+    // the `origin`-first preference but no longer errors on fork-style multi-
+    // remote setups — the resolver falls through to alternatives when the
+    // primary lacks the head branch.
+    const resolveRemoteList = async (): Promise<string[]> => {
+      if (sshGitProvider) {
+        const { stdout } = await sshGitProvider.exec(['remote'], repo.path)
+        const remotes = stdout
+          .split('\n')
+          .map((line) => line.trim())
+          .filter(Boolean)
+        if (remotes.length === 0) {
+          throw new Error('Repo has no configured git remotes.')
         }
-      : () => getDefaultRemote(repo.path, localWorktreeGitOptions)
+        if (remotes.includes('origin')) {
+          return ['origin', ...remotes.filter((r) => r !== 'origin')]
+        }
+        return remotes
+      }
+      try {
+        const primary = await getDefaultRemote(repo.path, localWorktreeGitOptions)
+        const { stdout } = await gitExecFileAsync(['remote'], {
+          cwd: repo.path,
+          ...localWorktreeGitOptions
+        })
+        const remotes = stdout
+          .split('\n')
+          .map((line) => line.trim())
+          .filter(Boolean)
+        return [primary, ...remotes.filter((r) => r !== primary)]
+      } catch (defaultError) {
+        const { stdout } = await gitExecFileAsync(['remote'], {
+          cwd: repo.path,
+          ...localWorktreeGitOptions
+        })
+        const remotes = stdout
+          .split('\n')
+          .map((line) => line.trim())
+          .filter(Boolean)
+        if (remotes.length === 0) {
+          throw defaultError instanceof Error
+            ? defaultError
+            : new Error('Could not enumerate git remotes.')
+        }
+        const preferred = remotes.includes('origin') ? 'origin' : remotes[0]!
+        return [preferred, ...remotes.filter((r) => r !== preferred)]
+      }
+    }
 
     // Why: SSH repos can't fetch over the relay's read-only git.exec channel, so
     // route the PR head fetch through the write-capable helper instead of gitExec.
@@ -16440,7 +16467,8 @@ export class OrcaRuntimeService {
       localGitOptions: localWorktreeGitOptions,
       gitExec,
       fetchRemoteTrackingRef,
-      resolveRemote
+      resolveRemote: async () => (await resolveRemoteList())[0]!,
+      resolveRemoteAlternatives: async () => (await resolveRemoteList()).slice(1)
     })
   }
 

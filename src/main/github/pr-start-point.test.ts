@@ -45,7 +45,8 @@ describe('resolveGitHubPrStartPoint', () => {
       baseRefName: 'main',
       gitExec,
       fetchRemoteTrackingRef,
-      resolveRemote: async () => 'origin'
+      resolveRemote: async () => 'origin',
+      resolveRemoteAlternatives: async () => []
     })
 
     expect(fetchRemoteTrackingRef).toHaveBeenCalledWith('origin', 'fix-issue-6933')
@@ -82,7 +83,8 @@ describe('resolveGitHubPrStartPoint', () => {
       headRefName: 'feat/onboarding-model-choice-782',
       gitExec,
       fetchRemoteTrackingRef,
-      resolveRemote: async () => 'origin'
+      resolveRemote: async () => 'origin',
+      resolveRemoteAlternatives: async () => []
     })
 
     expect(getPullRequestPushTargetMock).toHaveBeenCalledWith('/repo-root', 1849, null)
@@ -110,7 +112,8 @@ describe('resolveGitHubPrStartPoint', () => {
       isCrossRepository: true,
       gitExec,
       fetchRemoteTrackingRef,
-      resolveRemote: async () => 'origin'
+      resolveRemote: async () => 'origin',
+      resolveRemoteAlternatives: async () => []
     })
 
     expect(getPullRequestPushTargetMock).toHaveBeenCalledWith('/repo-root', 1849, null)
@@ -149,7 +152,8 @@ describe('resolveGitHubPrStartPoint', () => {
       prNumber: 1738,
       gitExec,
       fetchRemoteTrackingRef,
-      resolveRemote: async () => 'origin'
+      resolveRemote: async () => 'origin',
+      resolveRemoteAlternatives: async () => []
     })
 
     expect(getWorkItemMock).toHaveBeenCalledWith('/repo-root', 1738, 'pr', null)
@@ -190,7 +194,8 @@ describe('resolveGitHubPrStartPoint', () => {
       isCrossRepository: true,
       gitExec,
       fetchRemoteTrackingRef,
-      resolveRemote: async () => 'origin'
+      resolveRemote: async () => 'origin',
+      resolveRemoteAlternatives: async () => []
     })
 
     expect(result).toEqual({
@@ -222,7 +227,8 @@ describe('resolveGitHubPrStartPoint', () => {
       baseRefName: 'develop',
       gitExec,
       fetchRemoteTrackingRef,
-      resolveRemote: async () => 'origin'
+      resolveRemote: async () => 'origin',
+      resolveRemoteAlternatives: async () => []
     })
 
     expect(fetchRemoteTrackingRef).toHaveBeenCalledWith('origin', 'feature/add-feature')
@@ -235,5 +241,137 @@ describe('resolveGitHubPrStartPoint', () => {
       branchNameOverride: 'feature/add-feature',
       pushTarget: { remoteName: 'origin', branchName: 'feature/add-feature' }
     })
+  })
+
+  // Why: covers the multi-remote bug where the alphabetic-first remote (e.g.
+  // `yzc`) lacks the PR branch, so the resolver must walk `origin` next.
+  it('falls back to an alternate remote when the primary returns missing-ref', async () => {
+    const fetchRemoteTrackingRef = vi.fn(async (remote: string, branch: string) => {
+      if (remote === 'yzc' && branch === 'fix/qweather-agent-tool-port') {
+        throw new Error('fatal: could not find remote ref fix/qweather-agent-tool-port')
+      }
+    })
+    const gitExec = vi.fn(async (args: string[]) => {
+      if (
+        args[0] === 'rev-parse' &&
+        args[1] === '--verify' &&
+        args[2] === 'origin/fix/qweather-agent-tool-port'
+      ) {
+        return { stdout: 'deadbeef\n', stderr: '' }
+      }
+      return { stdout: '', stderr: '' }
+    })
+
+    const result = await resolveGitHubPrStartPoint({
+      repoPath: '/repo-root',
+      prNumber: 4711,
+      headRefName: 'fix/qweather-agent-tool-port',
+      baseRefName: 'main',
+      gitExec,
+      fetchRemoteTrackingRef,
+      resolveRemote: async () => 'yzc',
+      resolveRemoteAlternatives: async () => ['origin']
+    })
+
+    expect(fetchRemoteTrackingRef).toHaveBeenCalledWith('yzc', 'fix/qweather-agent-tool-port')
+    expect(fetchRemoteTrackingRef).toHaveBeenCalledWith('origin', 'fix/qweather-agent-tool-port')
+    expect(gitExec).toHaveBeenCalledWith([
+      'rev-parse',
+      '--verify',
+      'origin/fix/qweather-agent-tool-port'
+    ])
+    expect(result).toEqual({
+      baseBranch: 'deadbeef',
+      compareBaseRef: 'refs/remotes/origin/main',
+      headSha: 'deadbeef',
+      branchNameOverride: 'fix/qweather-agent-tool-port',
+      pushTarget: { remoteName: 'origin', branchName: 'fix/qweather-agent-tool-port' }
+    })
+  })
+
+  // Why: reproduces the exact bug-report failure. The git runner rejects with
+  // `.message = "Command failed: git fetch yzc …"` (no missing-ref text) and
+  // stashes git's `fatal: couldn't find remote ref …` in `.stderr`. The
+  // resolver must read `.stderr` to recognize the missing ref and walk to
+  // `origin`, otherwise it would surface the bogus `Failed to fetch yzc/…`.
+  it('falls back to an alternate remote when the primary error hides the missing ref in .stderr', async () => {
+    const fetchRemoteTrackingRef = vi.fn(async (remote: string, branch: string) => {
+      if (remote === 'yzc' && branch === 'fix/qweather-agent-tool-port') {
+        throw Object.assign(
+          new Error(
+            'Command failed: git fetch yzc +refs/heads/fix/qweather-agent-tool-port:refs/remotes/yzc/fix/qweather-agent-tool-port'
+          ),
+          { stderr: "fatal: couldn't find remote ref refs/heads/fix/qweather-agent-tool-port" }
+        )
+      }
+    })
+    const gitExec = vi.fn(async (args: string[]) => {
+      if (
+        args[0] === 'rev-parse' &&
+        args[1] === '--verify' &&
+        args[2] === 'origin/fix/qweather-agent-tool-port'
+      ) {
+        return { stdout: 'deadbeef\n', stderr: '' }
+      }
+      return { stdout: '', stderr: '' }
+    })
+
+    const result = await resolveGitHubPrStartPoint({
+      repoPath: '/repo-root',
+      prNumber: 4711,
+      headRefName: 'fix/qweather-agent-tool-port',
+      baseRefName: 'main',
+      gitExec,
+      fetchRemoteTrackingRef,
+      resolveRemote: async () => 'yzc',
+      resolveRemoteAlternatives: async () => ['origin']
+    })
+
+    expect(fetchRemoteTrackingRef).toHaveBeenCalledWith('yzc', 'fix/qweather-agent-tool-port')
+    expect(fetchRemoteTrackingRef).toHaveBeenCalledWith('origin', 'fix/qweather-agent-tool-port')
+    expect(result).toEqual({
+      baseBranch: 'deadbeef',
+      compareBaseRef: 'refs/remotes/origin/main',
+      headSha: 'deadbeef',
+      branchNameOverride: 'fix/qweather-agent-tool-port',
+      pushTarget: { remoteName: 'origin', branchName: 'fix/qweather-agent-tool-port' }
+    })
+  })
+
+  // Why: surfaces the original bug report's error message when every configured
+  // remote is missing the branch. The user-visible message used to read
+  // `Failed to fetch <primary>/<branch>` even when an alternate remote could
+  // have served the ref.
+  it('reports the configured remotes when none can resolve the head branch', async () => {
+    const fetchRemoteTrackingRef = vi.fn(async () => {
+      throw new Error('fatal: could not find remote ref')
+    })
+    const gitExec = vi.fn(async (args: string[]) => {
+      if (args[0] === 'fetch' && args[2] === 'refs/pull/42/head') {
+        throw new Error('fatal: could not find remote ref refs/pull/42/head')
+      }
+      throw new Error(`unexpected git call: ${args.join(' ')}`)
+    })
+
+    const result = await resolveGitHubPrStartPoint({
+      repoPath: '/repo-root',
+      prNumber: 42,
+      headRefName: 'feature/missing',
+      baseRefName: 'main',
+      gitExec,
+      fetchRemoteTrackingRef,
+      resolveRemote: async () => 'yzc',
+      resolveRemoteAlternatives: async () => ['origin', 'backup']
+    })
+
+    expect(result.error).toBe(
+      'Failed to fetch feature/missing (or refs/pull/42/head) from any configured remote (yzc, origin, backup).'
+    )
+    // Why: the refs/pull/<N>/head fallback must also probe alternatives before
+    // returning an error — here every remote rejects the same way, so the
+    // iteration visits each candidate before bubbling up the unified error.
+    expect(gitExec).toHaveBeenCalledWith(['fetch', 'yzc', 'refs/pull/42/head'])
+    expect(gitExec).toHaveBeenCalledWith(['fetch', 'origin', 'refs/pull/42/head'])
+    expect(gitExec).toHaveBeenCalledWith(['fetch', 'backup', 'refs/pull/42/head'])
   })
 })

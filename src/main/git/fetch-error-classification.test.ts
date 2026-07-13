@@ -21,4 +21,19 @@ describe('isMissingRemoteRefGitError', () => {
       isMissingRemoteRefGitError(new Error('fatal: unable to access repo: Could not resolve host'))
     ).toBe(false)
   })
+
+  // Why: the git runner's execFile rejection prefixes `.message` with
+  // `Command failed: git fetch <remote> …` and stashes git's real diagnostic in
+  // `.stderr`. The classifier must read both, otherwise the multi-remote PR
+  // resolver treats a missing ref as a hard failure and never walks to the
+  // next remote (the original bug report's `Failed to fetch yzc/…` error).
+  it('matches a missing ref carried in .stderr rather than .message', () => {
+    const error = Object.assign(
+      new Error(
+        'Command failed: git fetch yzc +refs/heads/fix/qweather-agent-tool-port:refs/remotes/yzc/fix/qweather-agent-tool-port'
+      ),
+      { stderr: "fatal: couldn't find remote ref refs/heads/fix/qweather-agent-tool-port" }
+    )
+    expect(isMissingRemoteRefGitError(error)).toBe(true)
+  })
 })
