@@ -457,6 +457,60 @@ describe('hydrateWorkspaceSession', () => {
     ])
   })
 
+  it('hydrates many layouts without repeatedly flattening all restored tabs', () => {
+    const store = createTestStore()
+    const worktreeId = 'repo1::/wt-many-tabs'
+    const tabCount = 200
+    const tabs = Array.from({ length: tabCount }, (_, index) =>
+      makeTab({ id: `perf-tab-${index}`, worktreeId, sortOrder: index })
+    )
+    seedStore(store, {
+      worktreesByRepo: {
+        repo1: [makeWorktree({ id: worktreeId, repoId: 'repo1', path: '/wt-many-tabs' })]
+      }
+    })
+    const originalFlat = Array.prototype.flat as (this: unknown[], depth?: number) => unknown[]
+    let terminalTabFlatCalls = 0
+    let terminalTabReferencesCopied = 0
+    const flatSpy = vi.spyOn(Array.prototype, 'flat').mockImplementation(function (
+      this: unknown[],
+      depth?: number
+    ) {
+      const flattened = originalFlat.call(this, depth)
+      if (
+        flattened.some(
+          (value) =>
+            typeof value === 'object' &&
+            value !== null &&
+            'id' in value &&
+            String(value.id).startsWith('perf-tab-')
+        )
+      ) {
+        terminalTabFlatCalls += 1
+        terminalTabReferencesCopied += flattened.length
+      }
+      return flattened
+    })
+
+    try {
+      store.getState().hydrateWorkspaceSession({
+        activeRepoId: 'repo1',
+        activeWorktreeId: worktreeId,
+        activeTabId: tabs[0]!.id,
+        tabsByWorktree: { [worktreeId]: tabs },
+        terminalLayoutsByTabId: Object.fromEntries(tabs.map((tab) => [tab.id, makeLayout()])),
+        activeWorktreeIdsOnShutdown: []
+      })
+    } finally {
+      flatSpy.mockRestore()
+    }
+
+    expect(terminalTabFlatCalls).toBe(0)
+    expect(terminalTabReferencesCopied).toBe(0)
+    expect(Object.keys(store.getState().terminalLayoutsByTabId)).toHaveLength(tabCount)
+    expect(Object.keys(store.getState().ptyIdsByTabId)).toHaveLength(tabCount)
+  })
+
   it('stashes deferred SSH session ids for worktrees not yet in worktreesByRepo', async () => {
     // Why: at cold start SSH worktrees are absent from worktreesByRepo (relay
     // discovery needs the connection). The deferred stash must fall back to
