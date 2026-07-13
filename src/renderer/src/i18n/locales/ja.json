@@ -3261,6 +3261,44 @@
                 }
               }
             }
+          },
+          "ProviderUsageTrendsPanel": {
+            "a943a7552f": "Today",
+            "9ee129dafa": "Past 7 days",
+            "185fa97be8": "Past 30 days",
+            "ee44e741c5": "Past 6 months",
+            "3556677a27": "1D",
+            "7e4594b3fb": "7D",
+            "9f7ff81364": "30D",
+            "613129b7a5": "6M",
+            "custom": "Custom",
+            "2c03693c93": "Scanning local usage history…",
+            "c6fe2aabea": "Couldn’t load usage trends.",
+            "a3e9ef9aa3": "Track local {{providerName}} usage",
+            "ee16f3d219": "Chart hourly and daily token trends from local {{providerName}} history. Data never leaves this device.",
+            "df2104b90b": "Enable usage tracking",
+            "4fef262630": "No local {{providerName}} usage found for this period.",
+            "068bb8df88": "{{providerName}} usage trend charts",
+            "9c58d562da": "Time Trends",
+            "038ca39d74": "Day Trends",
+            "53ce9bcf71": "Chart mode",
+            "6bf9f80378": "Switch trends range",
+            "start": "Start",
+            "end": "End"
+          },
+          "ProviderUsageTrendsChart": {
+            "cacheRead": "Cache read",
+            "cacheWrite": "Cache write",
+            "cachedInput": "Cached input",
+            "reasoning": "Reasoning",
+            "e439b699d2": "Hourly usage rhythm, one line per day",
+            "bdc3231af0": "Latest day",
+            "51b34e464e": "Avg (active days)",
+            "c38468a96a": "Peak",
+            "ca43656c36": "Daily token totals",
+            "c3c18e7ce7": "Total",
+            "339ca0bf28": "Input",
+            "e415aa4570": "Output"
           }
         }
       },

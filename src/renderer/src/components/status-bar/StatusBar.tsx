@@ -63,7 +63,7 @@ import { UpdateStatusSegment } from './UpdateStatusSegment'
 import { isStatusBarItemAvailable } from './status-bar-agent-gating'
 import { getVisibleUsageProvider, isUsageEmptyState } from './status-bar-provider-visibility'
 import { StatusBarUsageEmptyCta } from './StatusBarUsageEmptyCta'
-import { ClaudeUsageTrendsPanel } from './ClaudeUsageTrendsPanel'
+import { ProviderUsageTrendsPanel } from './ProviderUsageTrendsPanel'
 import { UsagePercentageDisplayChangeNotice } from './UsagePercentageDisplayChangeNotice'
 import { shouldOpenStatusBarContextMenu } from './status-bar-context-menu-policy'
 import { TOGGLE_FLOATING_TERMINAL_EVENT } from '@/lib/floating-terminal'
@@ -852,7 +852,7 @@ function ClaudeSwitcherMenu({
         // Why: the trends panel charts this desktop's local transcripts; with a
         // remote runtime active the popover shows the remote account (#7973),
         // so pairing it with local-disk charts would misattribute the data.
-        hasActiveRuntimeEnvironment ? undefined : <ClaudeUsageTrendsPanel />
+        hasActiveRuntimeEnvironment ? undefined : <ProviderUsageTrendsPanel provider="claude" />
       }
       open={open}
       onOpenChange={handleOpenChange}
@@ -1541,6 +1541,11 @@ function CodexSwitcherMenu({
           )}
         />
       }
+      sideContent={
+        // Why: local Codex history belongs to this desktop, whereas the
+        // account bars can represent a remote runtime's separate account.
+        hasActiveRuntimeEnvironment ? undefined : <ProviderUsageTrendsPanel provider="codex" />
+      }
       open={open}
       onOpenChange={handleOpenChange}
     >
@@ -1876,6 +1881,7 @@ function StatusBarInner({ floatingTerminalOpen }: StatusBarProps): React.JSX.Ele
   const floatingTerminalShortcut = useShortcutLabel('floatingTerminal.toggle')
   const rateLimits = useAppStore((s) => s.rateLimits)
   const settings = useAppStore((s) => s.settings)
+  const hasActiveRuntimeEnvironment = Boolean(settings?.activeRuntimeEnvironmentId?.trim())
   const refreshRateLimits = useAppStore((s) => s.refreshRateLimits)
   const statusBarVisible = useAppStore((s) => s.statusBarVisible)
   const statusBarItems = useAppStore((s) => s.statusBarItems)
@@ -2142,6 +2148,13 @@ function StatusBarInner({ floatingTerminalOpen }: StatusBarProps): React.JSX.Ele
                 provider={visibleOpencodeGo}
                 compact={compact}
                 iconOnly={iconOnly}
+                // Why: OpenCode history is scanned from this desktop, so it
+                // must not be paired with a remote runtime's rate-limit account.
+                sideContent={
+                  hasActiveRuntimeEnvironment ? undefined : (
+                    <ProviderUsageTrendsPanel provider="openCode" />
+                  )
+                }
                 ariaLabel={translate(
                   'auto.components.status.bar.StatusBar.629251f4b6',
                   'Open OpenCode Go usage details'

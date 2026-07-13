@@ -83,9 +83,21 @@ export type OpenCodeUsageDailyAggregate = {
   estimatedCostUsd: number | null
 }
 
+export type OpenCodeUsageHourlyAggregate = {
+  day: string
+  hour: number
+  eventCount: number
+  inputTokens: number
+  cachedInputTokens: number
+  outputTokens: number
+  reasoningOutputTokens: number
+  totalTokens: number
+}
+
 export type OpenCodeUsagePersistedDatabase = OpenCodeUsageProcessedDatabase & {
   sessions: OpenCodeUsageSession[]
   dailyAggregates: OpenCodeUsageDailyAggregate[]
+  hourlyAggregates: OpenCodeUsageHourlyAggregate[]
   /** Session ids this database counted. Sibling copies (opencode-backup.db)
    *  duplicate sessions; ownership keeps each session counted by exactly one
    *  cached database across incremental scans. */
@@ -101,6 +113,7 @@ export type OpenCodeUsagePersistedState = {
   processedDatabases: OpenCodeUsagePersistedDatabase[]
   sessions: OpenCodeUsageSession[]
   dailyAggregates: OpenCodeUsageDailyAggregate[]
+  hourlyAggregates: OpenCodeUsageHourlyAggregate[]
   scanState: {
     enabled: boolean
     lastScanStartedAt: number | null
@@ -124,6 +137,7 @@ export type OpenCodeUsageParsedEvent = {
 
 export type OpenCodeUsageAttributedEvent = OpenCodeUsageParsedEvent & {
   day: string
+  hour: number
   projectKey: string
   projectLabel: string
   repoId: string | null

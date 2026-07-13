@@ -7,6 +7,7 @@ import type {
   ClaudeUsageBreakdownRow,
   ClaudeUsageDailyPoint,
   ClaudeUsageHourlyPoint,
+  ClaudeUsageHourlyQuery,
   ClaudeUsageHourlyResult,
   ClaudeUsageRange,
   ClaudeUsageScanState,
@@ -26,9 +27,6 @@ import { createWorktreeRefs, getSessionProjectLabel, scanClaudeUsageFiles } from
 const SCHEMA_VERSION = 6
 const STALE_MS = 5 * 60_000
 const AUTOMATION_ATTRIBUTION_WINDOW_MS = 5 * 60_000
-// Why: matches the longest trends window (6 months) plus slack; hourly rows
-// older than this are never served, keeping chart payloads bounded.
-const HOURLY_RETENTION_DAYS = 185
 
 // Why: capture the path after configureDevUserDataPath() but before app.setName()
 // mutates Electron's derived userData location, matching the persistence/store pattern.
@@ -292,6 +290,17 @@ function getDayCutoff(days: number): string {
   const month = String(now.getMonth() + 1).padStart(2, '0')
   const day = String(now.getDate()).padStart(2, '0')
   return `${year}-${month}-${day}`
+}
+
+function isValidDayKey(value: string): boolean {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) {
+    return false
+  }
+  const [year, month, day] = value.split('-').map(Number)
+  const parsed = new Date(year, month - 1, day)
+  return (
+    parsed.getFullYear() === year && parsed.getMonth() === month - 1 && parsed.getDate() === day
+  )
 }
 
 function getLocalDay(timestamp: string): string | null {
@@ -567,18 +576,30 @@ export class ClaudeUsageStore {
     return [...byDay.values()].sort((left, right) => left.day.localeCompare(right.day))
   }
 
-  async getHourly(days: number): Promise<ClaudeUsageHourlyResult> {
+  async getHourly(query: ClaudeUsageHourlyQuery): Promise<ClaudeUsageHourlyResult> {
     await this.refresh(false)
     return {
       scanState: this.getScanState(),
-      points: this.buildHourly(days)
+      points: this.buildHourly(query)
     }
   }
 
-  private buildHourly(days: number): ClaudeUsageHourlyPoint[] {
-    const clampedDays = Math.min(Math.max(Math.floor(days) || 1, 1), HOURLY_RETENTION_DAYS)
-    const cutoff = getDayCutoff(clampedDays)
-    return this.state.hourlyAggregates.filter((entry) => entry.day >= cutoff)
+  private buildHourly(query: ClaudeUsageHourlyQuery): ClaudeUsageHourlyPoint[] {
+    if ('days' in query) {
+      const days = Math.max(Math.floor(query.days) || 1, 1)
+      const cutoff = getDayCutoff(days)
+      return this.state.hourlyAggregates.filter((entry) => entry.day >= cutoff)
+    }
+    if (
+      !isValidDayKey(query.startDay) ||
+      !isValidDayKey(query.endDay) ||
+      query.startDay > query.endDay
+    ) {
+      return []
+    }
+    return this.state.hourlyAggregates.filter(
+      (entry) => entry.day >= query.startDay && entry.day <= query.endDay
+    )
   }
 
   async getBreakdown(

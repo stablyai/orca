@@ -2,6 +2,7 @@ import { ipcMain } from 'electron'
 import type { OpenCodeUsageStore } from '../opencode-usage/store'
 import type {
   OpenCodeUsageBreakdownKind,
+  OpenCodeUsageHourlyQuery,
   OpenCodeUsageRange,
   OpenCodeUsageScope
 } from '../../shared/opencode-usage-types'
@@ -28,6 +29,9 @@ export function registerOpenCodeUsageHandlers(openCodeUsage: OpenCodeUsageStore)
     'openCodeUsage:getDaily',
     (_event, args: { scope: OpenCodeUsageScope; range: OpenCodeUsageRange }) =>
       openCodeUsage.getDaily(args.scope, args.range)
+  )
+  ipcMain.handle('openCodeUsage:getHourly', (_event, args: OpenCodeUsageHourlyQuery) =>
+    openCodeUsage.getHourly(args)
   )
   ipcMain.handle(
     'openCodeUsage:getBreakdown',

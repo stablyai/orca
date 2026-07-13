@@ -450,7 +450,7 @@ describe('ClaudeUsageStore', () => {
       ]
     })
 
-    const result = await store.getHourly(7)
+    const result = await store.getHourly({ days: 7 })
 
     expect(result.scanState.enabled).toBe(false)
     expect(result.points).toEqual([
@@ -459,7 +459,7 @@ describe('ClaudeUsageStore', () => {
     ])
   })
 
-  it('clamps hourly windows to the 185-day retention ceiling', async () => {
+  it('serves hourly points across the requested custom date range', async () => {
     const makeHourly = (day: string, hour: number) => ({
       day,
       hour,
@@ -473,8 +473,11 @@ describe('ClaudeUsageStore', () => {
       hourlyAggregates: [makeHourly('2025-09-01', 9), makeHourly('2025-12-01', 9)]
     })
 
-    const result = await store.getHourly(10_000)
+    const result = await store.getHourly({
+      startDay: '2025-01-01',
+      endDay: '2025-12-31'
+    })
 
-    expect(result.points).toEqual([makeHourly('2025-12-01', 9)])
+    expect(result.points).toEqual([makeHourly('2025-09-01', 9), makeHourly('2025-12-01', 9)])
   })
 })

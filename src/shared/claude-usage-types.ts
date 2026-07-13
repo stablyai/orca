@@ -46,6 +46,8 @@ export type ClaudeUsageHourlyPoint = {
   cacheWriteTokens: number
 }
 
+export type ClaudeUsageHourlyQuery = { days: number } | { startDay: string; endDay: string }
+
 export type ClaudeUsageHourlyResult = {
   scanState: ClaudeUsageScanState
   points: ClaudeUsageHourlyPoint[]

@@ -36,6 +36,24 @@ export type OpenCodeUsageDailyPoint = {
   totalTokens: number
 }
 
+export type OpenCodeUsageHourlyPoint = {
+  day: string
+  hour: number
+  eventCount: number
+  inputTokens: number
+  cachedInputTokens: number
+  outputTokens: number
+  reasoningOutputTokens: number
+  totalTokens: number
+}
+
+export type OpenCodeUsageHourlyQuery = { days: number } | { startDay: string; endDay: string }
+
+export type OpenCodeUsageHourlyResult = {
+  scanState: OpenCodeUsageScanState
+  points: OpenCodeUsageHourlyPoint[]
+}
+
 export type OpenCodeUsageBreakdownRow = {
   key: string
   label: string

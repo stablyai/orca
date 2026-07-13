@@ -11,6 +11,7 @@ import { canonicalizeUsageWorktreePaths } from '../usage-worktree-canonicalizer'
 import type {
   CodexUsageAttributedEvent,
   CodexUsageDailyAggregate,
+  CodexUsageHourlyAggregate,
   CodexUsageLocationBreakdown,
   CodexUsageLocationModelBreakdown,
   CodexUsageModelBreakdown,
@@ -467,7 +468,7 @@ function getDefaultProjectLabel(cwd: string | null): string {
   return parts.at(-1) ?? cwd
 }
 
-function localDayFromTimestamp(timestamp: string): string | null {
+function localDayAndHourFromTimestamp(timestamp: string): { day: string; hour: number } | null {
   const parsed = new Date(timestamp)
   if (Number.isNaN(parsed.getTime())) {
     return null
@@ -475,7 +476,7 @@ function localDayFromTimestamp(timestamp: string): string | null {
   const year = parsed.getFullYear()
   const month = String(parsed.getMonth() + 1).padStart(2, '0')
   const day = String(parsed.getDate()).padStart(2, '0')
-  return `${year}-${month}-${day}`
+  return { day: `${year}-${month}-${day}`, hour: parsed.getHours() }
 }
 
 async function buildWorktreesWithCanonicalPaths(
@@ -529,10 +530,11 @@ export async function attributeCodexUsageEvent(
   event: CodexUsageParsedEvent,
   worktrees: (CodexUsageWorktreeRef & { canonicalPath: string })[]
 ): Promise<CodexUsageAttributedEvent | null> {
-  const day = localDayFromTimestamp(event.timestamp)
-  if (!day) {
+  const dayAndHour = localDayAndHourFromTimestamp(event.timestamp)
+  if (!dayAndHour) {
     return null
   }
+  const { day, hour } = dayAndHour
 
   let repoId: string | null = null
   let worktreeId: string | null = null
@@ -557,6 +559,7 @@ export async function attributeCodexUsageEvent(
   return {
     ...event,
     day,
+    hour,
     projectKey,
     projectLabel,
     repoId,
@@ -702,12 +705,14 @@ function mergeLocationModelBreakdown(
   })
 }
 
-function aggregateCodexUsage(events: CodexUsageAttributedEvent[]): {
+export function aggregateCodexUsage(events: CodexUsageAttributedEvent[]): {
   sessions: CodexUsageSession[]
   dailyAggregates: CodexUsageDailyAggregate[]
+  hourlyAggregates: CodexUsageHourlyAggregate[]
 } {
   const sessionsById = new Map<string, CodexUsageSession>()
   const dailyByKey = new Map<string, CodexUsageDailyAggregate>()
+  const hourlyByKey = new Map<string, CodexUsageHourlyAggregate>()
 
   for (const event of events) {
     const session = sessionsById.get(event.sessionId) ?? createEmptySession(event)
@@ -743,6 +748,30 @@ function aggregateCodexUsage(events: CodexUsageAttributedEvent[]): {
     daily.reasoningOutputTokens += event.reasoningOutputTokens
     daily.totalTokens += event.totalTokens
     daily.hasInferredPricing ||= event.hasInferredPricing
+
+    // Why: the status-bar trends chart compares an account's usage rhythm,
+    // not individual projects, so keep this compact projection dimension-free.
+    const hourlyKey = `${event.day}::${event.hour}`
+    const hourly = hourlyByKey.get(hourlyKey)
+    if (hourly) {
+      hourly.eventCount++
+      hourly.inputTokens += event.inputTokens
+      hourly.cachedInputTokens += event.cachedInputTokens
+      hourly.outputTokens += event.outputTokens
+      hourly.reasoningOutputTokens += event.reasoningOutputTokens
+      hourly.totalTokens += event.totalTokens
+    } else {
+      hourlyByKey.set(hourlyKey, {
+        day: event.day,
+        hour: event.hour,
+        eventCount: 1,
+        inputTokens: event.inputTokens,
+        cachedInputTokens: event.cachedInputTokens,
+        outputTokens: event.outputTokens,
+        reasoningOutputTokens: event.reasoningOutputTokens,
+        totalTokens: event.totalTokens
+      })
+    }
   }
 
   return {
@@ -751,7 +780,8 @@ function aggregateCodexUsage(events: CodexUsageAttributedEvent[]): {
       left.day === right.day
         ? left.projectLabel.localeCompare(right.projectLabel)
         : left.day.localeCompare(right.day)
-    )
+    ),
+    hourlyAggregates: sortHourlyAggregates(hourlyByKey)
   }
 }
 
@@ -888,6 +918,34 @@ function mergeDailyAggregates(
     existing.totalTokens += aggregate.totalTokens
     existing.hasInferredPricing ||= aggregate.hasInferredPricing
   }
+}
+
+function mergeHourlyAggregates(
+  target: Map<string, CodexUsageHourlyAggregate>,
+  hourlyAggregates: CodexUsageHourlyAggregate[]
+): void {
+  for (const aggregate of hourlyAggregates) {
+    const key = `${aggregate.day}::${aggregate.hour}`
+    const existing = target.get(key)
+    if (!existing) {
+      target.set(key, { ...aggregate })
+      continue
+    }
+    existing.eventCount += aggregate.eventCount
+    existing.inputTokens += aggregate.inputTokens
+    existing.cachedInputTokens += aggregate.cachedInputTokens
+    existing.outputTokens += aggregate.outputTokens
+    existing.reasoningOutputTokens += aggregate.reasoningOutputTokens
+    existing.totalTokens += aggregate.totalTokens
+  }
+}
+
+function sortHourlyAggregates(
+  hourlyByKey: Map<string, CodexUsageHourlyAggregate>
+): CodexUsageHourlyAggregate[] {
+  return [...hourlyByKey.values()].sort((left, right) =>
+    left.day === right.day ? left.hour - right.hour : left.day.localeCompare(right.day)
+  )
 }
 
 export function parseCodexUsageRecord(
@@ -1051,6 +1109,7 @@ export async function scanCodexUsageFiles(
   processedFiles: CodexUsagePersistedFile[]
   sessions: CodexUsageSession[]
   dailyAggregates: CodexUsageDailyAggregate[]
+  hourlyAggregates: CodexUsageHourlyAggregate[]
 }> {
   const files = await listCodexSessionFiles()
   const previousByPath = new Map(previousProcessedFiles.map((file) => [file.path, file]))
@@ -1083,6 +1142,7 @@ export async function scanCodexUsageFiles(
       previous &&
       previous.mtimeMs === fileInfo.mtimeMs &&
       previous.size === fileInfo.size &&
+      Array.isArray(previous.hourlyAggregates) &&
       Array.isArray(previous.ownedEventKeys) &&
       typeof previous.hasDeferredClaims === 'boolean'
     if (canReuse) {
@@ -1137,6 +1197,7 @@ export async function scanCodexUsageFiles(
   const processedFiles: CodexUsagePersistedFile[] = []
   const sessionsById = new Map<string, CodexUsageSession>()
   const dailyByKey = new Map<string, CodexUsageDailyAggregate>()
+  const hourlyByKey = new Map<string, CodexUsageHourlyAggregate>()
   for (const filePath of files) {
     const processed = reusedByPath.get(filePath) ?? parsedByPath.get(filePath)
     if (!processed) {
@@ -1145,6 +1206,7 @@ export async function scanCodexUsageFiles(
     processedFiles.push(processed)
     mergeSessions(sessionsById, processed.sessions)
     mergeDailyAggregates(dailyByKey, processed.dailyAggregates)
+    mergeHourlyAggregates(hourlyByKey, processed.hourlyAggregates)
   }
 
   return {
@@ -1154,7 +1216,8 @@ export async function scanCodexUsageFiles(
       left.day === right.day
         ? left.projectLabel.localeCompare(right.projectLabel)
         : left.day.localeCompare(right.day)
-    )
+    ),
+    hourlyAggregates: sortHourlyAggregates(hourlyByKey)
   }
 }
 

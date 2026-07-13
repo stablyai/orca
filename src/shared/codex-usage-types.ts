@@ -36,6 +36,24 @@ export type CodexUsageDailyPoint = {
   totalTokens: number
 }
 
+export type CodexUsageHourlyPoint = {
+  day: string
+  hour: number
+  eventCount: number
+  inputTokens: number
+  cachedInputTokens: number
+  outputTokens: number
+  reasoningOutputTokens: number
+  totalTokens: number
+}
+
+export type CodexUsageHourlyQuery = { days: number } | { startDay: string; endDay: string }
+
+export type CodexUsageHourlyResult = {
+  scanState: CodexUsageScanState
+  points: CodexUsageHourlyPoint[]
+}
+
 export type CodexUsageBreakdownRow = {
   key: string
   label: string

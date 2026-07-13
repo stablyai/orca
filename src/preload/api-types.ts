@@ -349,6 +349,7 @@ import type {
   ClaudeUsageBreakdownKind,
   ClaudeUsageBreakdownRow,
   ClaudeUsageDailyPoint,
+  ClaudeUsageHourlyQuery,
   ClaudeUsageHourlyResult,
   ClaudeUsageRange,
   ClaudeUsageScanState,
@@ -394,6 +395,8 @@ import type {
   CodexUsageBreakdownKind,
   CodexUsageBreakdownRow,
   CodexUsageDailyPoint,
+  CodexUsageHourlyQuery,
+  CodexUsageHourlyResult,
   CodexUsageRange,
   CodexUsageScanState,
   CodexUsageScope,
@@ -405,6 +408,8 @@ import type {
   OpenCodeUsageBreakdownKind,
   OpenCodeUsageBreakdownRow,
   OpenCodeUsageDailyPoint,
+  OpenCodeUsageHourlyQuery,
+  OpenCodeUsageHourlyResult,
   OpenCodeUsageRange,
   OpenCodeUsageScanState,
   OpenCodeUsageScope,
@@ -735,7 +740,7 @@ export type ClaudeUsageApi = {
     scope: ClaudeUsageScope
     range: ClaudeUsageRange
   }) => Promise<ClaudeUsageDailyPoint[]>
-  getHourly: (args: { days: number }) => Promise<ClaudeUsageHourlyResult>
+  getHourly: (args: ClaudeUsageHourlyQuery) => Promise<ClaudeUsageHourlyResult>
   getBreakdown: (args: {
     scope: ClaudeUsageScope
     range: ClaudeUsageRange
@@ -765,6 +770,7 @@ export type CodexUsageApi = {
     scope: CodexUsageScope
     range: CodexUsageRange
   }) => Promise<CodexUsageDailyPoint[]>
+  getHourly: (args: CodexUsageHourlyQuery) => Promise<CodexUsageHourlyResult>
   getBreakdown: (args: {
     scope: CodexUsageScope
     range: CodexUsageRange
@@ -794,6 +800,7 @@ export type OpenCodeUsageApi = {
     scope: OpenCodeUsageScope
     range: OpenCodeUsageRange
   }) => Promise<OpenCodeUsageDailyPoint[]>
+  getHourly: (args: OpenCodeUsageHourlyQuery) => Promise<OpenCodeUsageHourlyResult>
   getBreakdown: (args: {
     scope: OpenCodeUsageScope
     range: OpenCodeUsageRange

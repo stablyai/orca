@@ -1,13 +1,15 @@
 import { describe, expect, it } from 'vitest'
-import type { ClaudeUsageHourlyPoint } from '../../../../shared/claude-usage-types'
 import {
   buildDayTrend,
   buildHourOfDayModel,
   buildMonotoneLinePath,
   getHourTooltipStats,
+  getTimeTrendsLineOpacity,
+  listLocalDaysInRange,
   listRecentLocalDays,
-  pointTotalTokens
-} from './claude-usage-trends-model'
+  pointTotalTokens,
+  type UsageHourlyPoint
+} from './provider-usage-trends-model'
 
 // Why: local-time Date construction keeps day keys deterministic across CI zones.
 const REFERENCE = new Date(2026, 3, 9, 12, 0, 0)
@@ -15,37 +17,49 @@ const REFERENCE = new Date(2026, 3, 9, 12, 0, 0)
 function makePoint(
   day: string,
   hour: number,
-  overrides: Partial<ClaudeUsageHourlyPoint> = {}
-): ClaudeUsageHourlyPoint {
+  overrides: Partial<UsageHourlyPoint> = {}
+): UsageHourlyPoint {
   return {
     day,
     hour,
-    turnCount: 1,
+    eventCount: 1,
     inputTokens: 100,
     outputTokens: 20,
     cacheReadTokens: 10,
     cacheWriteTokens: 5,
+    reasoningOutputTokens: 0,
+    totalTokens: 135,
     ...overrides
   }
 }
 
-describe('listRecentLocalDays', () => {
-  it('returns local day keys oldest to today', () => {
+describe('local day lists', () => {
+  it('returns recent local day keys oldest to today', () => {
     expect(listRecentLocalDays(3, REFERENCE)).toEqual(['2026-04-07', '2026-04-08', '2026-04-09'])
+  })
+
+  it('returns every valid day in a custom inclusive range', () => {
+    expect(listLocalDaysInRange('2025-12-30', '2026-01-02')).toEqual([
+      '2025-12-30',
+      '2025-12-31',
+      '2026-01-01',
+      '2026-01-02'
+    ])
+    expect(listLocalDaysInRange('2026-02-30', '2026-03-01')).toEqual([])
   })
 })
 
 describe('buildHourOfDayModel', () => {
-  it('buckets points into day columns by hour and tracks the max cell', () => {
+  it('buckets points into selected day columns by hour and tracks the max cell', () => {
+    const dayKeys = listRecentLocalDays(7, REFERENCE)
     const model = buildHourOfDayModel(
       [
         makePoint('2026-04-09', 10),
-        makePoint('2026-04-09', 10, { inputTokens: 50 }),
-        makePoint('2026-04-08', 22, { inputTokens: 1000 }),
-        makePoint('2026-01-01', 5, { inputTokens: 9999 })
+        makePoint('2026-04-09', 10, { inputTokens: 50, totalTokens: 85 }),
+        makePoint('2026-04-08', 22, { inputTokens: 1000, totalTokens: 1035 }),
+        makePoint('2026-01-01', 5, { inputTokens: 9999, totalTokens: 9999 })
       ],
-      7,
-      REFERENCE
+      dayKeys
     )
 
     expect(model.dayKeys).toHaveLength(7)
@@ -58,11 +72,10 @@ describe('buildHourOfDayModel', () => {
 })
 
 describe('buildDayTrend', () => {
-  it('zero-fills daily buckets across the window and sums totals', () => {
+  it('zero-fills daily buckets across the selected window and sums totals', () => {
     const trend = buildDayTrend(
       [makePoint('2026-04-09', 10), makePoint('2026-04-09', 22), makePoint('2026-04-05', 3)],
-      '7d',
-      REFERENCE
+      listRecentLocalDays(7, REFERENCE)
     )
 
     expect(trend.kind).toBe('day')
@@ -74,20 +87,18 @@ describe('buildDayTrend', () => {
     expect(trend.windowTotalTokens).toBe(405)
   })
 
-  it('buckets the 6M window by month and drops points before the window', () => {
+  it('buckets a long preset by month and trims its leading partial month', () => {
     const trend = buildDayTrend(
       [
         makePoint('2026-04-01', 10),
-        makePoint('2026-03-15', 10, { inputTokens: 200 }),
-        makePoint('2025-01-01', 10, { inputTokens: 9999 })
+        makePoint('2026-03-15', 10, { inputTokens: 200, totalTokens: 235 }),
+        makePoint('2025-01-01', 10, { inputTokens: 9999, totalTokens: 9999 })
       ],
-      '6m',
-      REFERENCE
+      listRecentLocalDays(180, REFERENCE),
+      { trimPartialFirstMonth: true }
     )
 
     expect(trend.kind).toBe('month')
-    // 180 days before 2026-04-09 lands mid-October, so the partial oldest
-    // month is trimmed and the series starts at the first full month.
     expect(trend.buckets[0]?.key).toBe('2025-11')
     expect(trend.buckets.at(-1)?.key).toBe('2026-04')
     expect(trend.buckets.at(-1)?.totalTokens).toBe(135)
@@ -105,7 +116,6 @@ describe('buildMonotoneLinePath', () => {
     const path = buildMonotoneLinePath([5, 5, 5], toX, toY)
     expect(path.startsWith('M0,95')).toBe(true)
     expect(path.match(/C/g)).toHaveLength(2)
-    // Flat input must stay flat: every y coordinate (odd position) is 95.
     const numbers = path.match(/-?\d+(?:\.\d+)?/g)?.map(Number) ?? []
     const yValues = numbers.filter((_, index) => index % 2 === 1)
     expect(yValues.length).toBeGreaterThan(0)
@@ -119,7 +129,7 @@ describe('buildMonotoneLinePath', () => {
 })
 
 describe('getHourTooltipStats', () => {
-  it('averages only days with activity at that hour and reports the peak', () => {
+  it('averages only active days and reports the selected range end separately', () => {
     const model = buildHourOfDayModel(
       [
         makePoint('2026-04-09', 10, {
@@ -127,28 +137,36 @@ describe('getHourTooltipStats', () => {
           outputTokens: 0,
           cacheReadTokens: 0,
           cacheWriteTokens: 0,
-          turnCount: 1
+          totalTokens: 65
         }),
         makePoint('2026-04-08', 10, {
           inputTokens: 300,
           outputTokens: 0,
           cacheReadTokens: 0,
-          cacheWriteTokens: 0
+          cacheWriteTokens: 0,
+          totalTokens: 300
         })
       ],
-      7,
-      REFERENCE
+      listRecentLocalDays(7, REFERENCE)
     )
 
     const stats = getHourTooltipStats(model, 10)
-    expect(stats.today).toBe(65)
+    expect(stats.latest).toBe(65)
     expect(stats.peak).toBe(300)
     expect(stats.average).toBe(Math.round((65 + 300) / 2))
   })
 })
 
 describe('pointTotalTokens', () => {
-  it('sums all four token counters', () => {
-    expect(pointTotalTokens(makePoint('2026-04-09', 1))).toBe(135)
+  it('uses the provider-reported total so cached and reasoning tokens are not double-counted', () => {
+    expect(pointTotalTokens(makePoint('2026-04-09', 1, { totalTokens: 120 }))).toBe(120)
+  })
+})
+
+describe('getTimeTrendsLineOpacity', () => {
+  it('lowers line opacity for long custom ranges while retaining a visible floor', () => {
+    expect(getTimeTrendsLineOpacity(1)).toBe(0.9)
+    expect(getTimeTrendsLineOpacity(365)).toBeLessThan(0.08)
+    expect(getTimeTrendsLineOpacity(10_000)).toBe(0.02)
   })
 })

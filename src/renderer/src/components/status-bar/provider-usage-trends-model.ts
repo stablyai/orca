@@ -1,33 +1,51 @@
-import type { ClaudeUsageHourlyPoint } from '../../../../shared/claude-usage-types'
+export type UsageTrendsMode = 'time' | 'day'
+export type UsageTrendsPreset = '1d' | '7d' | '30d' | '6m'
+export type UsageTrendsWindow = UsageTrendsPreset | 'custom'
 
-export type ClaudeUsageTrendsMode = 'time' | 'day'
-export type ClaudeUsageTrendsWindow = '1d' | '7d' | '30d' | '6m'
+export type UsageHourlyPoint = {
+  day: string
+  hour: number
+  eventCount: number
+  inputTokens: number
+  outputTokens: number
+  cacheReadTokens: number
+  cacheWriteTokens: number
+  reasoningOutputTokens: number
+  totalTokens: number
+}
 
-export const TRENDS_WINDOW_DAYS: Record<ClaudeUsageTrendsWindow, number> = {
+export const TRENDS_WINDOW_DAYS: Record<UsageTrendsPreset, number> = {
   '1d': 1,
   '7d': 7,
   '30d': 30,
   '6m': 180
 }
 
-// Why: with 30+ overlaid day-lines, per-line opacity must drop so overlap
-// density reads as darkness where usage repeats daily (ported from UsageScope).
-export const TIME_TRENDS_LINE_OPACITY: Record<ClaudeUsageTrendsWindow, number> = {
-  '1d': 0.9,
-  '7d': 0.38,
-  '30d': 0.2,
-  '6m': 0.08
+const MONTHLY_BUCKET_THRESHOLD_DAYS = 45
+
+export function pointTotalTokens(point: UsageHourlyPoint): number {
+  return point.totalTokens
 }
 
-export function pointTotalTokens(point: ClaudeUsageHourlyPoint): number {
-  return point.inputTokens + point.outputTokens + point.cacheReadTokens + point.cacheWriteTokens
-}
-
-function formatLocalDayKey(date: Date): string {
+export function formatLocalDayKey(date: Date): string {
   const year = date.getFullYear()
   const month = String(date.getMonth() + 1).padStart(2, '0')
   const day = String(date.getDate()).padStart(2, '0')
   return `${year}-${month}-${day}`
+}
+
+function dayKeyToLocalDate(dayKey: string): Date | null {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(dayKey)
+  if (!match) {
+    return null
+  }
+  const year = Number(match[1])
+  const month = Number(match[2])
+  const day = Number(match[3])
+  const date = new Date(year, month - 1, day, 12)
+  return date.getFullYear() === year && date.getMonth() === month - 1 && date.getDate() === day
+    ? date
+    : null
 }
 
 export function listRecentLocalDays(days: number, reference: Date = new Date()): string[] {
@@ -42,8 +60,36 @@ export function listRecentLocalDays(days: number, reference: Date = new Date()):
   return result
 }
 
-export type ClaudeUsageHourOfDayModel = {
-  /** Local day keys, oldest → today (today is always the last index). */
+export function listLocalDaysInRange(startDay: string, endDay: string): string[] {
+  const start = dayKeyToLocalDate(startDay)
+  const end = dayKeyToLocalDate(endDay)
+  if (!start || !end || start > end) {
+    return []
+  }
+  const days: string[] = []
+  for (const cursor = new Date(start); cursor <= end; cursor.setDate(cursor.getDate() + 1)) {
+    days.push(formatLocalDayKey(cursor))
+  }
+  return days
+}
+
+export function getTimeTrendsLineOpacity(dayCount: number): number {
+  if (dayCount <= 1) {
+    return 0.9
+  }
+  if (dayCount <= 7) {
+    return 0.38
+  }
+  if (dayCount <= 30) {
+    return 0.2
+  }
+  // Why: custom ranges can span years. Keep their overlaid paths legible
+  // without turning a long local history into an opaque SVG block.
+  return Math.max(0.02, Math.min(0.08, 14 / dayCount))
+}
+
+export type ProviderUsageHourOfDayModel = {
+  /** Local day keys, oldest → selected range end. */
   dayKeys: string[]
   /** columns[dayIndex][hour 0-23] = total tokens in that local hour bucket. */
   columns: number[][]
@@ -51,11 +97,9 @@ export type ClaudeUsageHourOfDayModel = {
 }
 
 export function buildHourOfDayModel(
-  points: ClaudeUsageHourlyPoint[],
-  days: number,
-  reference: Date = new Date()
-): ClaudeUsageHourOfDayModel {
-  const dayKeys = listRecentLocalDays(days, reference)
+  points: UsageHourlyPoint[],
+  dayKeys: string[]
+): ProviderUsageHourOfDayModel {
   const indexByDay = new Map(dayKeys.map((day, index) => [day, index]))
   const columns = dayKeys.map(() => Array.from({ length: 24 }, () => 0))
   let maxTokens = 0
@@ -75,50 +119,52 @@ export function buildHourOfDayModel(
   return { dayKeys, columns, maxTokens }
 }
 
-export type ClaudeUsageTrendsBucket = {
+export type UsageTrendsBucket = {
   /** 'YYYY-MM-DD' for day buckets, 'YYYY-MM' for month buckets. */
   key: string
-  turnCount: number
+  eventCount: number
   inputTokens: number
   outputTokens: number
   cacheReadTokens: number
   cacheWriteTokens: number
+  reasoningOutputTokens: number
   totalTokens: number
 }
 
-export type ClaudeUsageDayTrend = {
+export type ProviderUsageDayTrend = {
   kind: 'day' | 'month'
-  buckets: ClaudeUsageTrendsBucket[]
+  buckets: UsageTrendsBucket[]
   maxTotalTokens: number
   windowTotalTokens: number
 }
 
-function createEmptyBucket(key: string): ClaudeUsageTrendsBucket {
+function createEmptyBucket(key: string): UsageTrendsBucket {
   return {
     key,
-    turnCount: 0,
+    eventCount: 0,
     inputTokens: 0,
     outputTokens: 0,
     cacheReadTokens: 0,
     cacheWriteTokens: 0,
+    reasoningOutputTokens: 0,
     totalTokens: 0
   }
 }
 
-function listRecentLocalMonths(days: number, reference: Date): string[] {
-  const anchor = new Date(reference)
-  anchor.setHours(12, 0, 0, 0)
-  const start = new Date(anchor)
-  start.setDate(anchor.getDate() - (days - 1))
+function listMonthsForDayRange(dayKeys: string[], trimPartialFirstMonth: boolean): string[] {
+  const firstDate = dayKeyToLocalDate(dayKeys[0] ?? '')
+  const lastDate = dayKeyToLocalDate(dayKeys.at(-1) ?? '')
+  if (!firstDate || !lastDate) {
+    return []
+  }
+  const cursor = new Date(firstDate.getFullYear(), firstDate.getMonth(), 15, 12)
+  if (trimPartialFirstMonth && firstDate.getDate() !== 1) {
+    cursor.setMonth(cursor.getMonth() + 1)
+  }
   const months: string[] = []
-  // Why: a window that starts mid-month would render its oldest month as an
-  // artificially tiny bar; drop that partial month so month totals compare
-  // honestly (the current month-to-date bar is conventional and kept).
-  const firstFullMonthOffset = start.getDate() === 1 ? 0 : 1
-  const cursor = new Date(start.getFullYear(), start.getMonth() + firstFullMonthOffset, 15, 12)
   while (
-    cursor.getFullYear() < anchor.getFullYear() ||
-    (cursor.getFullYear() === anchor.getFullYear() && cursor.getMonth() <= anchor.getMonth())
+    cursor.getFullYear() < lastDate.getFullYear() ||
+    (cursor.getFullYear() === lastDate.getFullYear() && cursor.getMonth() <= lastDate.getMonth())
   ) {
     months.push(`${cursor.getFullYear()}-${String(cursor.getMonth() + 1).padStart(2, '0')}`)
     cursor.setMonth(cursor.getMonth() + 1)
@@ -127,32 +173,32 @@ function listRecentLocalMonths(days: number, reference: Date): string[] {
 }
 
 export function buildDayTrend(
-  points: ClaudeUsageHourlyPoint[],
-  window: Exclude<ClaudeUsageTrendsWindow, '1d'>,
-  reference: Date = new Date()
-): ClaudeUsageDayTrend {
-  const days = TRENDS_WINDOW_DAYS[window]
-  // Why: 180 daily bars cannot fit a popover-width plot, so the 6M view
-  // buckets by month like UsageScope's dashboard trend chart.
-  const kind: 'day' | 'month' = window === '6m' ? 'month' : 'day'
+  points: UsageHourlyPoint[],
+  dayKeys: string[],
+  options: { trimPartialFirstMonth?: boolean } = {}
+): ProviderUsageDayTrend {
+  const kind: 'day' | 'month' = dayKeys.length > MONTHLY_BUCKET_THRESHOLD_DAYS ? 'month' : 'day'
   const keys =
-    kind === 'month' ? listRecentLocalMonths(days, reference) : listRecentLocalDays(days, reference)
+    kind === 'month'
+      ? listMonthsForDayRange(dayKeys, options.trimPartialFirstMonth ?? false)
+      : dayKeys
   const bucketByKey = new Map(keys.map((key) => [key, createEmptyBucket(key)]))
-  const earliestDay = listRecentLocalDays(days, reference)[0]
+  const selectedDays = new Set(dayKeys)
 
   for (const point of points) {
-    if (point.day < earliestDay) {
+    if (!selectedDays.has(point.day)) {
       continue
     }
     const bucket = bucketByKey.get(kind === 'month' ? point.day.slice(0, 7) : point.day)
     if (!bucket) {
       continue
     }
-    bucket.turnCount += point.turnCount
+    bucket.eventCount += point.eventCount
     bucket.inputTokens += point.inputTokens
     bucket.outputTokens += point.outputTokens
     bucket.cacheReadTokens += point.cacheReadTokens
     bucket.cacheWriteTokens += point.cacheWriteTokens
+    bucket.reasoningOutputTokens += point.reasoningOutputTokens
     bucket.totalTokens += pointTotalTokens(point)
   }
 
@@ -225,16 +271,16 @@ export function buildMonotoneLinePath(
 }
 
 export function getHourTooltipStats(
-  model: ClaudeUsageHourOfDayModel,
+  model: ProviderUsageHourOfDayModel,
   hour: number
-): { today: number; average: number; peak: number } {
+): { latest: number; average: number; peak: number } {
   const values = model.columns.map((column) => column[hour] ?? 0)
   const activeValues = values.filter((value) => value > 0)
-  const today = values.at(-1) ?? 0
+  const latest = values.at(-1) ?? 0
   const average =
     activeValues.length === 0
       ? 0
       : Math.round(activeValues.reduce((sum, value) => sum + value, 0) / activeValues.length)
   const peak = values.reduce((max, value) => Math.max(max, value), 0)
-  return { today, average, peak }
+  return { latest, average, peak }
 }

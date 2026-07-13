@@ -3,11 +3,11 @@ import { i18n, translate } from '@/i18n/i18n'
 import {
   buildMonotoneLinePath,
   getHourTooltipStats,
-  TIME_TRENDS_LINE_OPACITY,
-  type ClaudeUsageDayTrend,
-  type ClaudeUsageHourOfDayModel,
-  type ClaudeUsageTrendsWindow
-} from './claude-usage-trends-model'
+  getTimeTrendsLineOpacity,
+  type ProviderUsageDayTrend,
+  type ProviderUsageHourOfDayModel,
+  type UsageTrendsBucket
+} from './provider-usage-trends-model'
 import {
   ChartTooltip,
   MARGIN_LEFT,
@@ -19,13 +19,15 @@ import {
   valueY,
   YAxis,
   type ChartDims
-} from './claude-usage-trend-chart-frame'
+} from './provider-usage-trend-chart-frame'
 
 const HOUR_TICKS = [0, 3, 6, 9, 12, 15, 18, 21]
 // Why: UsageScope pads the 24h domain by 0.4h so the 00/23 lines are not
 // clipped at the plot boundary.
 const HOUR_DOMAIN_PADDING = 0.4
-const DAY_BAR_WIDTH: Record<'7d' | '30d' | '6m', number> = { '7d': 16, '30d': 5, '6m': 13 }
+function getDayBarWidth(bucketCount: number): number {
+  return bucketCount <= 7 ? 16 : bucketCount <= 30 ? 5 : 13
+}
 
 function hourX(hour: number, dims: ChartDims): number {
   return (
@@ -70,17 +72,15 @@ function formatBucketLabel(
 }
 
 export function TimeTrendsChart({
-  model,
-  window: trendsWindow
+  model
 }: {
-  model: ClaudeUsageHourOfDayModel
-  window: ClaudeUsageTrendsWindow
+  model: ProviderUsageHourOfDayModel
 }): React.JSX.Element {
   const [hoveredHour, setHoveredHour] = useState<number | null>(null)
   const { ref, dims } = useChartDims()
   const maxValue = Math.max(1, model.maxTokens * 1.15)
-  const lineOpacity = TIME_TRENDS_LINE_OPACITY[trendsWindow]
-  const todayIndex = model.columns.length - 1
+  const lineOpacity = getTimeTrendsLineOpacity(model.columns.length)
+  const latestDayIndex = model.columns.length - 1
 
   const handleMouseMove = (event: React.MouseEvent<SVGSVGElement>): void => {
     const bounds = event.currentTarget.getBoundingClientRect()
@@ -103,7 +103,7 @@ export function TimeTrendsChart({
         height={dims.height}
         role="img"
         aria-label={translate(
-          'auto.components.status.bar.claude.usage.trend.charts.e439b699d2',
+          'auto.components.status.bar.ProviderUsageTrendsChart.e439b699d2',
           'Hourly usage rhythm, one line per day'
         )}
         onMouseMove={handleMouseMove}
@@ -141,10 +141,10 @@ export function TimeTrendsChart({
           />
         ) : null}
         {model.columns.map((column, dayIndex) => {
-          const isToday = dayIndex === todayIndex
-          // Why: flat zero-days would just thicken the baseline; today stays
-          // visible even when empty so the emphasis line always exists.
-          if (!isToday && column.every((value) => value === 0)) {
+          const isLatestDay = dayIndex === latestDayIndex
+          // Why: flat zero-days would just thicken the baseline; the selected
+          // range end stays visible even when empty so its emphasis line exists.
+          if (!isLatestDay && column.every((value) => value === 0)) {
             return null
           }
           return (
@@ -157,8 +157,8 @@ export function TimeTrendsChart({
               )}
               fill="none"
               stroke="var(--chart-3)"
-              strokeWidth={isToday ? 2 : 1}
-              strokeOpacity={isToday ? 1 : lineOpacity}
+              strokeWidth={isLatestDay ? 2 : 1}
+              strokeOpacity={isLatestDay ? 1 : lineOpacity}
               strokeLinecap="round"
               strokeLinejoin="round"
             />
@@ -171,22 +171,22 @@ export function TimeTrendsChart({
           rows={[
             {
               label: translate(
-                'auto.components.status.bar.claude.usage.trend.charts.bdc3231af0',
-                'Today'
+                'auto.components.status.bar.ProviderUsageTrendsChart.bdc3231af0',
+                'Latest day'
               ),
-              value: stats.today,
+              value: stats.latest,
               emphasized: true
             },
             {
               label: translate(
-                'auto.components.status.bar.claude.usage.trend.charts.51b34e464e',
+                'auto.components.status.bar.ProviderUsageTrendsChart.51b34e464e',
                 'Avg (active days)'
               ),
               value: stats.average
             },
             {
               label: translate(
-                'auto.components.status.bar.claude.usage.trend.charts.c38468a96a',
+                'auto.components.status.bar.ProviderUsageTrendsChart.c38468a96a',
                 'Peak'
               ),
               value: stats.peak
@@ -200,16 +200,22 @@ export function TimeTrendsChart({
 
 export function DayTrendsChart({
   trend,
-  window: trendsWindow
+  extraRows
 }: {
-  trend: ClaudeUsageDayTrend
-  window: Exclude<ClaudeUsageTrendsWindow, '1d'>
+  trend: ProviderUsageDayTrend
+  extraRows: {
+    label: string
+    key: keyof Pick<
+      UsageTrendsBucket,
+      'cacheReadTokens' | 'cacheWriteTokens' | 'reasoningOutputTokens'
+    >
+  }[]
 }): React.JSX.Element {
   const [hoveredIndex, setHoveredIndex] = useState<number | null>(null)
   const { ref, dims } = useChartDims()
   const maxValue = Math.max(1, trend.maxTotalTokens * 1.15)
   const band = plotWidth(dims) / Math.max(1, trend.buckets.length)
-  const barWidth = Math.min(DAY_BAR_WIDTH[trendsWindow], band - 2)
+  const barWidth = Math.min(getDayBarWidth(trend.buckets.length), band - 2)
   const bucketCenter = (index: number): number => MARGIN_LEFT + (index + 0.5) * band
 
   const handleMouseMove = (event: React.MouseEvent<SVGSVGElement>): void => {
@@ -242,8 +248,8 @@ export function DayTrendsChart({
         height={dims.height}
         role="img"
         aria-label={translate(
-          'auto.components.status.bar.claude.usage.trend.charts.ca43656c36',
-          'Daily Claude token totals'
+          'auto.components.status.bar.ProviderUsageTrendsChart.ca43656c36',
+          'Daily token totals'
         )}
         onMouseMove={handleMouseMove}
         onMouseLeave={() => setHoveredIndex(null)}
@@ -258,7 +264,11 @@ export function DayTrendsChart({
               textAnchor="middle"
               className="fill-muted-foreground font-mono text-[8px]"
             >
-              {formatBucketLabel(trend.kind, bucket.key, trendsWindow === '7d' ? 'axis7d' : 'axis')}
+              {formatBucketLabel(
+                trend.kind,
+                bucket.key,
+                trend.kind === 'day' && trend.buckets.length <= 7 ? 'axis7d' : 'axis'
+              )}
             </text>
           ) : null
         )}
@@ -288,7 +298,7 @@ export function DayTrendsChart({
           rows={[
             {
               label: translate(
-                'auto.components.status.bar.claude.usage.trend.charts.c3c18e7ce7',
+                'auto.components.status.bar.ProviderUsageTrendsChart.c3c18e7ce7',
                 'Total'
               ),
               value: hovered.totalTokens,
@@ -296,32 +306,19 @@ export function DayTrendsChart({
             },
             {
               label: translate(
-                'auto.components.status.bar.claude.usage.trend.charts.339ca0bf28',
+                'auto.components.status.bar.ProviderUsageTrendsChart.339ca0bf28',
                 'Input'
               ),
               value: hovered.inputTokens
             },
             {
               label: translate(
-                'auto.components.status.bar.claude.usage.trend.charts.e415aa4570',
+                'auto.components.status.bar.ProviderUsageTrendsChart.e415aa4570',
                 'Output'
               ),
               value: hovered.outputTokens
             },
-            {
-              label: translate(
-                'auto.components.status.bar.claude.usage.trend.charts.30770186a7',
-                'Cache read'
-              ),
-              value: hovered.cacheReadTokens
-            },
-            {
-              label: translate(
-                'auto.components.status.bar.claude.usage.trend.charts.9f3938265f',
-                'Cache write'
-              ),
-              value: hovered.cacheWriteTokens
-            }
+            ...extraRows.map((row) => ({ label: row.label, value: hovered[row.key] }))
           ]}
         />
       ) : null}

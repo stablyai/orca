@@ -10,7 +10,8 @@ vi.mock('electron', () => ({
   }
 }))
 
-import { attributeCodexUsageEvent, parseCodexUsageRecord } from './scanner'
+import { aggregateCodexUsage, attributeCodexUsageEvent, parseCodexUsageRecord } from './scanner'
+import type { CodexUsageAttributedEvent } from './types'
 
 describe('parseCodexUsageRecord', () => {
   it('uses token totals only as a duplicate baseline', () => {
@@ -319,5 +320,57 @@ describe('attributeCodexUsageEvent', () => {
 
     expect(attributed?.projectKey).toBe('cwd:d:/other/repo')
     expect(attributed?.worktreeId).toBeNull()
+  })
+})
+
+describe('aggregateCodexUsage', () => {
+  it('aggregates account-wide hourly token buckets across projects', () => {
+    const event = (
+      projectKey: string,
+      inputTokens: number,
+      hour = 10
+    ): CodexUsageAttributedEvent => ({
+      sessionId: `session-${projectKey}`,
+      timestamp: '2026-04-09T10:00:00.000Z',
+      eventKey: `event-${projectKey}`,
+      day: '2026-04-09',
+      hour,
+      cwd: `/workspace/${projectKey}`,
+      model: 'gpt-5.2-codex',
+      hasInferredPricing: false,
+      projectKey,
+      projectLabel: projectKey,
+      repoId: null,
+      worktreeId: null,
+      inputTokens,
+      cachedInputTokens: 10,
+      outputTokens: 25,
+      reasoningOutputTokens: 10,
+      totalTokens: inputTokens + 25
+    })
+
+    expect(
+      aggregateCodexUsage([event('one', 100), event('two', 50), event('three', 30, 22)])
+    ).toMatchObject({
+      hourlyAggregates: [
+        {
+          day: '2026-04-09',
+          hour: 10,
+          eventCount: 2,
+          inputTokens: 150,
+          cachedInputTokens: 20,
+          outputTokens: 50,
+          reasoningOutputTokens: 20,
+          totalTokens: 200
+        },
+        {
+          day: '2026-04-09',
+          hour: 22,
+          eventCount: 1,
+          inputTokens: 30,
+          totalTokens: 55
+        }
+      ]
+    })
   })
 })
