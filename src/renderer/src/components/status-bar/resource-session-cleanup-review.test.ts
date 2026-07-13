@@ -4,6 +4,7 @@ import type { ResourceSessionBindingInputs } from './resource-session-bindings'
 import type { DaemonSession } from './resource-usage-merge-types'
 import {
   executeResourceSessionCleanup,
+  RESOURCE_SESSION_CLEANUP_EXECUTION_ERROR,
   RESOURCE_SESSION_CLEANUP_REVIEW_ERROR,
   RESOURCE_SESSION_CLEANUP_SESSION_NOT_READY_ERROR,
   reviewResourceSessionCleanup,
@@ -102,6 +103,26 @@ describe('resource session cleanup review', () => {
     })
   })
 
+  it('skips inactive-cleanup inspection when every current session is bound', async () => {
+    const inspect = vi.fn()
+
+    await expect(
+      reviewResourceSessionCleanup({
+        listSessions: async () => [session('bound')],
+        readBindings: () => bindingsWith('bound'),
+        inspectInactiveCleanup: inspect
+      })
+    ).resolves.toEqual({
+      reviewedIds: [],
+      inspections: [],
+      inactiveIds: [],
+      activeCount: 0,
+      unknownCount: 0,
+      goneCount: 0
+    })
+    expect(inspect).not.toHaveBeenCalled()
+  })
+
   it('blocks review until workspace session hydration is ready', async () => {
     await expect(
       reviewResourceSessionCleanup({
@@ -134,6 +155,28 @@ describe('resource session cleanup review', () => {
     })
 
     expect(kill).toHaveBeenCalledWith(['reviewed'])
+  })
+
+  it('blocks cleanup until workspace session hydration is ready', async () => {
+    await expect(
+      executeResourceSessionCleanup(reviewWithInactive('idle'), {
+        listSessions: async () => [session('idle')],
+        readBindings: () => ({ ...bindingsWith(), workspaceSessionReady: false }),
+        killInactiveSessions: vi.fn()
+      })
+    ).rejects.toThrow(RESOURCE_SESSION_CLEANUP_SESSION_NOT_READY_ERROR)
+  })
+
+  it('replaces cleanup transport failures with stable execution copy', async () => {
+    await expect(
+      executeResourceSessionCleanup(reviewWithInactive('idle'), {
+        listSessions: async () => [session('idle')],
+        readBindings: () => bindingsWith(),
+        killInactiveSessions: async () => {
+          throw new Error('raw transport details')
+        }
+      })
+    ).rejects.toThrow(RESOURCE_SESSION_CLEANUP_EXECUTION_ERROR)
   })
 
   it('protects a reviewed candidate that becomes bound and counts a disappeared one as gone', async () => {

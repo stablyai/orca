@@ -110,9 +110,9 @@ describe('ResourceSessionCleanupDialog', () => {
   })
 
   it('shows retry after an error without offering cleanup', () => {
-    renderDialog({ phase: 'error', operation: 'review', message: 'Unable to check.' })
+    renderDialog({ phase: 'error', operation: 'review', code: 'review-failed' })
 
-    expect(screen.getByText('Unable to check.')).toBeTruthy()
+    expect(screen.getByText('Unable to check current terminal activity.')).toBeTruthy()
     expect((screen.getByRole('button', { name: 'Retry' }) as HTMLButtonElement).disabled).toBe(
       false
     )

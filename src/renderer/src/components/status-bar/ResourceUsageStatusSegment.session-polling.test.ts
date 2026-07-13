@@ -36,6 +36,8 @@ describe('ResourceUsageStatusSegment session inventory', () => {
     expect(source).not.toContain('if (!session.bound)')
     expect(source).not.toContain('Promise.allSettled(orphans.map')
     expect(source).not.toContain('window.api.pty.kill(session.sessionId)')
+    expect(source).toContain("'{{value0}} unbound terminal'")
+    expect(source).toContain("'{{value0}} unbound terminals'")
   })
 
   it('seeds the closed badge from daemon inventory instead of wake-hint bound PTYs', () => {

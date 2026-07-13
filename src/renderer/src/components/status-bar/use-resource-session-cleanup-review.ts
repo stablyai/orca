@@ -9,6 +9,7 @@ import type { ResourceSessionBindingInputs } from './resource-session-bindings'
 import type { DaemonSession } from './resource-usage-merge-types'
 import {
   executeResourceSessionCleanup,
+  getResourceSessionCleanupErrorCode,
   reviewResourceSessionCleanup,
   type ResourceSessionCleanupReview,
   type ResourceSessionCleanupReviewState
@@ -82,7 +83,7 @@ export function useResourceSessionCleanupReview({
         setState({
           phase: 'error',
           operation: 'review',
-          message: error instanceof Error ? error.message : 'Unable to review terminal sessions.'
+          code: getResourceSessionCleanupErrorCode(error, 'review')
         })
       }
     }
@@ -115,8 +116,7 @@ export function useResourceSessionCleanupReview({
           setState({
             phase: 'error',
             operation: 'cleanup',
-            message:
-              error instanceof Error ? error.message : 'Unable to clean up inactive terminals.',
+            code: getResourceSessionCleanupErrorCode(error, 'cleanup'),
             review
           })
         }

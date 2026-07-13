@@ -80,7 +80,11 @@ describe('useResourceSessionCleanupReview', () => {
     await act(async () => {
       await result.current.review()
     })
-    expect(result.current.state).toMatchObject({ phase: 'error', operation: 'review' })
+    expect(result.current.state).toMatchObject({
+      phase: 'error',
+      operation: 'review',
+      code: 'review-failed'
+    })
 
     await act(async () => {
       await result.current.retry()
@@ -136,6 +140,7 @@ describe('useResourceSessionCleanupReview', () => {
       cleanup.resolve([{ id: 'idle', outcome: 'killed' }])
       await completion
     })
+    expect(result.current.state.phase).toBe('completed')
   })
 
   it('refreshes the visible session inventory after guarded cleanup settles', async () => {

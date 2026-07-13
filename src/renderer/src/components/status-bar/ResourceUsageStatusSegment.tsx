@@ -1342,12 +1342,12 @@ export function ResourceUsageStatusSegment({
                 {unboundCount === 1
                   ? translate(
                       'auto.components.status.bar.ResourceUsageStatusSegment.30ff2c3c31',
-                      '{{value0}} unbound',
+                      '{{value0}} unbound terminal',
                       { value0: unboundCount }
                     )
                   : translate(
                       'auto.components.status.bar.ResourceUsageStatusSegment.b8f4a2c1d0e3',
-                      '{{value0}} unbound',
+                      '{{value0}} unbound terminals',
                       { value0: unboundCount }
                     )}
               </span>

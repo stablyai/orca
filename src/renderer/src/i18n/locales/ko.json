@@ -3438,7 +3438,10 @@
             "killOne": "Kill 1 inactive terminal",
             "killMany": "Kill {{value0}} inactive terminals",
             "close": "Close",
-            "retry": "Retry"
+            "retry": "Retry",
+            "errorSessionNotReady": "작업 공간 세션을 아직 불러오는 중입니다.",
+            "errorReview": "현재 터미널 활동을 확인할 수 없습니다.",
+            "errorCleanup": "비활성 터미널을 정리할 수 없습니다."
           },
           "resource": {
             "memory": {

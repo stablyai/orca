@@ -10,7 +10,123 @@ import {
   DialogTitle
 } from '@/components/ui/dialog'
 import { translate } from '@/i18n/i18n'
-import type { ResourceSessionCleanupReviewState } from './resource-session-cleanup-review'
+import type {
+  ResourceSessionCleanupErrorCode,
+  ResourceSessionCleanupReviewState
+} from './resource-session-cleanup-review'
+
+const TRANSLATION_PREFIX = 'auto.components.status.bar.ResourceSessionCleanupDialog'
+
+function getErrorDescription(code: ResourceSessionCleanupErrorCode): string {
+  switch (code) {
+    case 'session-not-ready':
+      return translate(
+        `${TRANSLATION_PREFIX}.errorSessionNotReady`,
+        'Workspace sessions are still loading.'
+      )
+    case 'cleanup-failed':
+      return translate(
+        `${TRANSLATION_PREFIX}.errorCleanup`,
+        'Unable to clean up inactive terminals.'
+      )
+    case 'review-failed':
+      return translate(
+        `${TRANSLATION_PREFIX}.errorReview`,
+        'Unable to check current terminal activity.'
+      )
+  }
+}
+
+function getDialogDescription(state: ResourceSessionCleanupReviewState): string {
+  switch (state.phase) {
+    case 'reviewing':
+      return translate(`${TRANSLATION_PREFIX}.reviewing`, 'Checking current process activity…')
+    case 'running':
+      return translate(`${TRANSLATION_PREFIX}.running`, 'Closing confirmed inactive terminals…')
+    case 'completed':
+      return translate(
+        `${TRANSLATION_PREFIX}.completed`,
+        'Cleanup finished. Review the verified result below.'
+      )
+    case 'error':
+      return getErrorDescription(state.code)
+    case 'closed':
+    case 'ready':
+      return translate(
+        `${TRANSLATION_PREFIX}.description`,
+        'Only terminals freshly verified as idle shells can be closed. Active and unverified terminals are protected.'
+      )
+  }
+}
+
+function getKillButtonLabel(inactiveCount: number): string {
+  if (inactiveCount === 0) {
+    return translate(`${TRANSLATION_PREFIX}.none`, 'No inactive terminals to kill')
+  }
+  if (inactiveCount === 1) {
+    return translate(`${TRANSLATION_PREFIX}.killOne`, 'Kill 1 inactive terminal')
+  }
+  return translate(`${TRANSLATION_PREFIX}.killMany`, 'Kill {{value0}} inactive terminals', {
+    value0: inactiveCount
+  })
+}
+
+function ResourceSessionCleanupDialogActions({
+  state,
+  inactiveCount,
+  onClose,
+  onRetry,
+  onConfirm
+}: {
+  state: ResourceSessionCleanupReviewState
+  inactiveCount: number
+  onClose: () => void
+  onRetry: () => void
+  onConfirm: () => void
+}): React.JSX.Element {
+  switch (state.phase) {
+    case 'running':
+      return (
+        <Button variant="destructive" disabled>
+          <LoaderCircle className="size-4 animate-spin" />
+          {translate(`${TRANSLATION_PREFIX}.closing`, 'Closing…')}
+        </Button>
+      )
+    case 'ready':
+      return (
+        <>
+          <Button variant="outline" onClick={onClose}>
+            {translate(`${TRANSLATION_PREFIX}.cancel`, 'Cancel')}
+          </Button>
+          <Button variant="destructive" onClick={onConfirm} disabled={inactiveCount === 0}>
+            {getKillButtonLabel(inactiveCount)}
+          </Button>
+        </>
+      )
+    case 'error':
+      return (
+        <>
+          <Button variant="outline" onClick={onClose}>
+            {translate(`${TRANSLATION_PREFIX}.close`, 'Close')}
+          </Button>
+          <Button onClick={onRetry}>{translate(`${TRANSLATION_PREFIX}.retry`, 'Retry')}</Button>
+        </>
+      )
+    case 'completed':
+      return (
+        <Button variant="outline" onClick={onClose}>
+          {translate(`${TRANSLATION_PREFIX}.close`, 'Close')}
+        </Button>
+      )
+    case 'closed':
+    case 'reviewing':
+      return (
+        <Button variant="outline" onClick={onClose}>
+          {translate(`${TRANSLATION_PREFIX}.cancel`, 'Cancel')}
+        </Button>
+      )
+  }
+}
 
 export function ResourceSessionCleanupDialog({
   state,
@@ -58,29 +174,7 @@ export function ResourceSessionCleanupDialog({
               'Review unbound terminals'
             )}
           </DialogTitle>
-          <DialogDescription className="text-xs">
-            {state.phase === 'reviewing'
-              ? translate(
-                  'auto.components.status.bar.ResourceSessionCleanupDialog.reviewing',
-                  'Checking current process activity…'
-                )
-              : state.phase === 'running'
-                ? translate(
-                    'auto.components.status.bar.ResourceSessionCleanupDialog.running',
-                    'Closing confirmed inactive terminals…'
-                  )
-                : state.phase === 'completed'
-                  ? translate(
-                      'auto.components.status.bar.ResourceSessionCleanupDialog.completed',
-                      'Cleanup finished. Review the verified result below.'
-                    )
-                  : state.phase === 'error'
-                    ? state.message
-                    : translate(
-                        'auto.components.status.bar.ResourceSessionCleanupDialog.description',
-                        'Only terminals freshly verified as idle shells can be closed. Active and unverified terminals are protected.'
-                      )}
-          </DialogDescription>
+          <DialogDescription className="text-xs">{getDialogDescription(state)}</DialogDescription>
         </DialogHeader>
 
         {state.phase === 'ready' ? (
@@ -137,67 +231,13 @@ export function ResourceSessionCleanupDialog({
         ) : null}
 
         <DialogFooter>
-          {state.phase === 'running' ? (
-            <Button variant="destructive" disabled>
-              <LoaderCircle className="size-4 animate-spin" />
-              {translate(
-                'auto.components.status.bar.ResourceSessionCleanupDialog.closing',
-                'Closing…'
-              )}
-            </Button>
-          ) : state.phase === 'ready' ? (
-            <>
-              <Button variant="outline" onClick={onClose}>
-                {translate(
-                  'auto.components.status.bar.ResourceSessionCleanupDialog.cancel',
-                  'Cancel'
-                )}
-              </Button>
-              <Button variant="destructive" onClick={onConfirm} disabled={inactiveCount === 0}>
-                {inactiveCount === 0
-                  ? translate(
-                      'auto.components.status.bar.ResourceSessionCleanupDialog.none',
-                      'No inactive terminals to kill'
-                    )
-                  : inactiveCount === 1
-                    ? translate(
-                        'auto.components.status.bar.ResourceSessionCleanupDialog.killOne',
-                        'Kill 1 inactive terminal'
-                      )
-                    : translate(
-                        'auto.components.status.bar.ResourceSessionCleanupDialog.killMany',
-                        'Kill {{value0}} inactive terminals',
-                        { value0: inactiveCount }
-                      )}
-              </Button>
-            </>
-          ) : state.phase === 'error' ? (
-            <>
-              <Button variant="outline" onClick={onClose}>
-                {translate(
-                  'auto.components.status.bar.ResourceSessionCleanupDialog.close',
-                  'Close'
-                )}
-              </Button>
-              <Button onClick={onRetry}>
-                {translate(
-                  'auto.components.status.bar.ResourceSessionCleanupDialog.retry',
-                  'Retry'
-                )}
-              </Button>
-            </>
-          ) : state.phase === 'completed' ? (
-            <Button variant="outline" onClick={onClose}>
-              {translate('auto.components.status.bar.ResourceSessionCleanupDialog.close', 'Close')}
-            </Button>
-          ) : (
-            <Button variant="outline" onClick={onClose}>
-              {translate(
-                'auto.components.status.bar.ResourceSessionCleanupDialog.cancel',
-                'Cancel'
-              )}
-            </Button>
-          )}
+          <ResourceSessionCleanupDialogActions
+            state={state}
+            inactiveCount={inactiveCount}
+            onClose={onClose}
+            onRetry={onRetry}
+            onConfirm={onConfirm}
+          />
         </DialogFooter>
       </DialogContent>
     </Dialog>

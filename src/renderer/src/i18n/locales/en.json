@@ -3478,7 +3478,10 @@
             "killOne": "Kill 1 inactive terminal",
             "killMany": "Kill {{value0}} inactive terminals",
             "close": "Close",
-            "retry": "Retry"
+            "retry": "Retry",
+            "errorSessionNotReady": "Workspace sessions are still loading.",
+            "errorReview": "Unable to check current terminal activity.",
+            "errorCleanup": "Unable to clean up inactive terminals."
           },
           "resource": {
             "memory": {

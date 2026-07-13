@@ -5713,6 +5713,34 @@ describe('registerPtyHandlers', () => {
     expect(localShutdown).not.toHaveBeenCalled()
   })
 
+  it('inactive cleanup fails closed when SSH disconnects after inspection', async () => {
+    const remoteShutdown = vi.fn().mockResolvedValue(undefined)
+    const localShutdown = vi.fn().mockResolvedValue(undefined)
+    const id = 'ssh:ssh-cleanup-race@@idle'
+    setLocalPtyProvider(makeInactiveCleanupProvider({ ids: [], shutdown: localShutdown }))
+    registerSshPtyProvider(
+      'ssh-cleanup-race',
+      makeInactiveCleanupProvider({
+        ids: [id],
+        shutdown: remoteShutdown,
+        confirmForegroundProcess: async () => {
+          unregisterSshPtyProvider('ssh-cleanup-race')
+          return 'zsh'
+        }
+      })
+    )
+    setPtyOwnership(id, 'ssh-cleanup-race')
+    handlers.clear()
+    registerPtyHandlers(mainWindow as never)
+
+    await expect(handlers.get('pty:killInactiveSessions')!(null, { ids: [id] })).resolves.toEqual([
+      { id, outcome: 'failed' }
+    ])
+    expect(remoteShutdown).not.toHaveBeenCalled()
+    expect(localShutdown).not.toHaveBeenCalled()
+    deletePtyOwnership(id)
+  })
+
   it('inactive cleanup revalidates after review and reports a disappeared session as gone', async () => {
     const shutdown = vi.fn().mockResolvedValue(undefined)
     let listed = true

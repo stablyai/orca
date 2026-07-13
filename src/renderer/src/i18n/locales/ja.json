@@ -3438,7 +3438,10 @@
             "killOne": "Kill 1 inactive terminal",
             "killMany": "Kill {{value0}} inactive terminals",
             "close": "Close",
-            "retry": "Retry"
+            "retry": "Retry",
+            "errorSessionNotReady": "ワークスペースのセッションを読み込み中です。",
+            "errorReview": "現在のターミナルのアクティビティを確認できません。",
+            "errorCleanup": "非アクティブなターミナルをクリーンアップできません。"
           },
           "resource": {
             "memory": {

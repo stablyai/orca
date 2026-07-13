@@ -3438,7 +3438,10 @@
             "killOne": "Kill 1 inactive terminal",
             "killMany": "Kill {{value0}} inactive terminals",
             "close": "Close",
-            "retry": "Retry"
+            "retry": "Retry",
+            "errorSessionNotReady": "工作区会话仍在加载中。",
+            "errorReview": "无法检查当前终端活动。",
+            "errorCleanup": "无法清理非活动终端。"
           },
           "resource": {
             "memory": {

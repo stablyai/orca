@@ -58,26 +58,34 @@ test.describe('Resource Manager unbound session cleanup safety', () => {
         )
         .toEqual({ idle: false, active: true })
 
-      const marker = `ORCA_UNBOUND_SURVIVED_${Date.now()}`
+      const markerPrefix = `ORCA_UNBOUND_SURVIVED_${Date.now()}_`
+      const markerSuffix = 'EXECUTED'
       await orcaPage.evaluate(
-        async ({ id, outputMarker }) => {
+        async ({ id, outputMarkerPrefix, outputMarkerSuffix }) => {
           window.api.pty.write(id, '\u0003')
           await new Promise((resolve) => setTimeout(resolve, 200))
-          window.api.pty.write(id, `printf '${outputMarker}\\n'\r`)
+          // Why: the complete marker is absent from the typed command, so a
+          // match proves the shell executed printf rather than merely echoing it.
+          window.api.pty.write(
+            id,
+            `printf '%s%s\\n' '${outputMarkerPrefix}' '${outputMarkerSuffix}'\r`
+          )
         },
-        { id: activeId, outputMarker: marker }
+        { id: activeId, outputMarkerPrefix: markerPrefix, outputMarkerSuffix: markerSuffix }
       )
       await expect
         .poll(
           () =>
             orcaPage.evaluate(
-              async ({ id, outputMarker }) => {
+              async ({ id, outputMarkerPrefix, outputMarkerSuffix }) => {
                 const snapshot = await window.api.pty.getMainBufferSnapshot(id, {
                   scrollbackRows: 100
                 })
-                return snapshot?.data.includes(outputMarker) ?? false
+                return (
+                  snapshot?.data.includes(`${outputMarkerPrefix}${outputMarkerSuffix}`) ?? false
+                )
               },
-              { id: activeId, outputMarker: marker }
+              { id: activeId, outputMarkerPrefix: markerPrefix, outputMarkerSuffix: markerSuffix }
             ),
           { timeout: 10_000, message: 'Protected active session did not accept later input' }
         )

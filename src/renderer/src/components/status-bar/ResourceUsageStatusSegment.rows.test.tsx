@@ -132,7 +132,9 @@ describe('resource manager row presentation', () => {
       })
     )
 
-    expect(container.querySelector('button[aria-label="Kill session unbound-a"]')).not.toBeNull()
+    const killButton = container.querySelector('button[aria-label="Kill session unbound-a"]')
+    expect(killButton).not.toBeNull()
+    expect(killButton?.classList.contains('can-hover:opacity-0')).toBe(false)
   })
 
   it('shows browsers as read-only workspace resources', () => {
