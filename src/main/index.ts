@@ -298,6 +298,7 @@ import { StarNagService } from './star-nag/service'
 import { agentHookServer, type AgentHookProviderSessionIdentity } from './agent-hooks/server'
 import { createHookProviderSessionInvalidator } from './agent-hooks/hook-provider-session-invalidation'
 import { createHookStatusSessionTabsInvalidator } from './agent-hooks/hook-status-session-tabs-invalidation'
+import { SymbolIndexService } from './symbol-index/service'
 import { wslHookRelayManager } from './agent-hooks/wsl-hook-relay-manager'
 import { maybeAutoRenameBranchOnFirstWork } from './agent-hooks/first-work-branch-rename'
 import { rememberBranchRenameFailureOutput } from './agent-hooks/branch-rename-failure-output'
@@ -418,6 +419,7 @@ let pendingUnpairedDeviceAuthFailure = false
 let headlessBrowserDisplayAvailable = false
 
 let starNag: StarNagService | null = null
+let symbolIndexService: SymbolIndexService | null = null
 let agentAwakeService: AgentAwakeService | null = null
 let crashReports: CrashReportStore | null = null
 let unsubscribeAgentAwakeStatusChanges: (() => void) | null = null
@@ -3031,6 +3033,8 @@ void app.whenReady().then(async () => {
   starNag = new StarNagService(store, stats)
   starNag.start()
   starNag.registerIpcHandlers()
+  symbolIndexService = new SymbolIndexService()
+  symbolIndexService.registerIpcHandlers()
   const agentBrowserBridge = new AgentBrowserBridge(browserManager, {
     onTabsChanged: (worktreeId) => runtimeService.notifyMobileSessionTabsChanged(worktreeId)
   })
@@ -3494,6 +3498,7 @@ app.on('will-quit', (e) => {
   destroySystemTray()
   // Why: an agent still working at quit gets no terminating hook, so stats.flushAsync() closes those sessions out synchronously (only the write is deferred) — otherwise their duration is lost.
   starNag?.stop()
+  symbolIndexService?.dispose()
   automations?.stop()
   // Why: plugin hosts are forked children; dispose sends shutdown and
   // escalates to SIGKILL so they cannot outlive the app. The promise joins
