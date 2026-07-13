@@ -5,21 +5,57 @@ describe('killPosixPtySession', () => {
   it('targets the full POSIX session with a bounded argument list', async () => {
     const run = vi.fn().mockResolvedValue(undefined)
 
-    await expect(killPosixPtySession(4242, 'linux', run)).resolves.toBe(true)
+    await expect(killPosixPtySession(4242, '/dev/pts/7', 'linux', run)).resolves.toBe(true)
 
-    expect(run).toHaveBeenCalledWith('pkill', ['-KILL', '-s', '4242'], { timeout: 3000 })
+    expect(run).toHaveBeenCalledWith('pkill', ['-KILL', '-s', '4242', '.*'], {
+      timeout: 3000
+    })
+  })
+
+  it('targets Darwin forkpty jobs through their controlling TTY', async () => {
+    const run = vi.fn().mockResolvedValue({ stdout: '4242\n4243\n' })
+    const killProcess = vi.fn()
+
+    await expect(
+      killPosixPtySession(4242, '/dev/ttys042', 'darwin', run, killProcess)
+    ).resolves.toBe(true)
+
+    expect(run).toHaveBeenCalledWith('ps', ['-t', 'ttys042', '-o', 'pid='], {
+      timeout: 3000
+    })
+    expect(killProcess.mock.calls).toEqual([
+      [4243, 'SIGKILL'],
+      [4242, 'SIGKILL']
+    ])
   })
 
   it('leaves Windows ConPTY teardown to node-pty', async () => {
     const run = vi.fn()
 
-    await expect(killPosixPtySession(4242, 'win32', run)).resolves.toBe(false)
+    await expect(killPosixPtySession(4242, undefined, 'win32', run)).resolves.toBe(false)
     expect(run).not.toHaveBeenCalled()
   })
 
-  it('falls back cleanly when the session is already empty or pkill is unavailable', async () => {
+  it('falls back cleanly when pkill is unavailable', async () => {
     const run = vi.fn().mockRejectedValue(new Error('pkill failed'))
 
-    await expect(killPosixPtySession(4242, 'darwin', run)).resolves.toBe(false)
+    await expect(killPosixPtySession(4242, '/dev/ttys042', 'darwin', run)).resolves.toBe(false)
+  })
+
+  it('rejects an absent or ambiguous Darwin PTY name', async () => {
+    const run = vi.fn()
+
+    await expect(killPosixPtySession(4242, '/dev/ttys1,ttys2', 'darwin', run)).resolves.toBe(false)
+    expect(run).not.toHaveBeenCalled()
+  })
+
+  it('does not signal a Darwin TTY that no longer owns the root pid', async () => {
+    const run = vi.fn().mockResolvedValue({ stdout: '9999\n' })
+    const killProcess = vi.fn()
+
+    await expect(
+      killPosixPtySession(4242, '/dev/ttys042', 'darwin', run, killProcess)
+    ).resolves.toBe(false)
+    expect(killProcess).not.toHaveBeenCalled()
   })
 })

@@ -1096,7 +1096,7 @@ describe('PtyHandler', () => {
 
     await dispatcher.callRequest('pty.spawn', {})
     await dispatcher.callRequest('pty.shutdown', { id: 'pty-1', immediate: true })
-    expect(mockKillPosixPtySession).toHaveBeenCalledWith(process.pid)
+    expect(mockKillPosixPtySession).toHaveBeenCalledWith(process.pid, undefined)
     expect(mockKill).toHaveBeenCalledWith('SIGKILL')
   })
 
@@ -1113,7 +1113,7 @@ describe('PtyHandler', () => {
     await dispatcher.callRequest('pty.spawn', {})
     await dispatcher.callRequest('pty.shutdown', { id: 'pty-1', immediate: true })
 
-    expect(mockKillPosixPtySession).toHaveBeenCalledWith(process.pid)
+    expect(mockKillPosixPtySession).toHaveBeenCalledWith(process.pid, undefined)
     expect(mockKill).not.toHaveBeenCalled()
   })
 

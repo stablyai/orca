@@ -841,7 +841,10 @@ export class PtyHandler {
     if (immediate) {
       this.releaseStartupCommand(managed)
       this.flushPtyOutput(id)
-      const killedSession = await killPosixPtySession(managed.pty.pid)
+      const killedSession = await killPosixPtySession(
+        managed.pty.pid,
+        (managed.pty as unknown as { ptsName?: unknown }).ptsName
+      )
       if (!killedSession && !managed.disposed) {
         managed.pty.kill('SIGKILL')
       }
