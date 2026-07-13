@@ -130,6 +130,7 @@ export class DaemonPtyAdapter implements IPtyProvider {
   // resume died with the connection. Owe those sessions a resume on the next
   // connect; the daemon's 5s failsafe covers the window in between.
   private producerResumesOwedOnReconnect = new Set<string>()
+  private lastConnectionGeneration = 0
   private static CHECKPOINT_INTERVAL_MS = 5_000
   // Why: a streaming session (build logs, `yes`) re-triggers a full multi-MB
   // snapshot checkpoint on every 5s tick via pending-buffer overflow or the
@@ -429,12 +430,7 @@ export class DaemonPtyAdapter implements IPtyProvider {
     if (!this.supportsAuthoritativeBufferSnapshots) {
       this.setPtyBackgrounded(id, false)
     }
-
-    await this.client.request<CreateOrAttachResult>('createOrAttach', {
-      sessionId: id,
-      cols: 80,
-      rows: 24
-    })
+    await this.requestAttach(id)
   }
 
   hasPty(id: string): boolean {
@@ -910,23 +906,40 @@ export class DaemonPtyAdapter implements IPtyProvider {
 
   private async ensureConnected(): Promise<void> {
     await this.client.ensureConnected()
-    // Why sampled before setupEventRouting: routing is (re)installed exactly
-    // once per connection, so "no listener yet" identifies a fresh connect —
-    // the only time the daemon-side backgrounded set needs a resync (it is
-    // process state that died with the previous daemon/socket).
-    const isFreshConnection = this.removeEventListener === null
+    const connectionGeneration = this.client.getConnectionGeneration()
+    const isFreshConnection = connectionGeneration !== this.lastConnectionGeneration
+    this.lastConnectionGeneration = connectionGeneration
     this.setupEventRouting()
     this.scheduleCheckpointTimer()
     this.flushOwedProducerResumes()
     if (isFreshConnection) {
       this.resyncBackgroundedSessions()
+      await this.reattachActiveSessionsOnFreshReconnect()
     }
+  }
+
+  private async requestAttach(id: string): Promise<void> {
+    await this.client.request<CreateOrAttachResult>('createOrAttach', {
+      sessionId: id,
+      cols: 80,
+      rows: 24
+    })
   }
 
   private resyncBackgroundedSessions(): void {
     for (const id of this.backgroundedSessionIds) {
       // Harmless no-op for sessions the daemon doesn't know (yet).
       this.client.notify('setSessionBackground', { sessionId: id, background: true })
+    }
+  }
+
+  private async reattachActiveSessionsOnFreshReconnect(): Promise<void> {
+    const activeSessionIds = [...this.activeSessionIds]
+    for (const id of activeSessionIds) {
+      if (this.killedSessionTombstones.has(id)) {
+        continue
+      }
+      await this.requestAttach(id)
     }
   }
 

@@ -547,6 +547,75 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
 
       adapter2.dispose()
     })
+
+    it('reattaches active sessions after a fresh reconnect', async () => {
+      const { id } = await adapter.spawn({ cols: 80, rows: 24 })
+      const dataPayloads: { id: string; data: string }[] = []
+      adapter.onData((payload) => dataPayloads.push(payload))
+      const internals = adapter as unknown as {
+        client: DaemonClient
+        ensureConnected: () => Promise<void>
+      }
+
+      internals.client.disconnect()
+      await internals.ensureConnected()
+
+      lastSubprocess._simulateData('after-reconnect')
+      await waitFor(() => dataPayloads.length > 0)
+      expect(dataPayloads.at(-1)).toEqual({ id, data: 'after-reconnect' })
+    })
+
+    it('does not reattach again on same-connection ensureConnected calls', async () => {
+      const { id } = await adapter.spawn({ cols: 80, rows: 24 })
+      const requestSpy = vi.spyOn(DaemonClient.prototype, 'request')
+      const internals = adapter as unknown as {
+        ensureConnected: () => Promise<void>
+      }
+
+      requestSpy.mockClear()
+      await internals.ensureConnected()
+
+      expect(
+        requestSpy.mock.calls.filter(
+          ([type, payload]) =>
+            type === 'createOrAttach' &&
+            typeof payload === 'object' &&
+            payload !== null &&
+            'sessionId' in payload &&
+            (payload as { sessionId: string }).sessionId === id
+        )
+      ).toHaveLength(0)
+      requestSpy.mockRestore()
+    })
+
+    it('skips tombstoned session ids during reconnect reattach', async () => {
+      const { id } = await adapter.spawn({ cols: 80, rows: 24 })
+      const requestSpy = vi.spyOn(DaemonClient.prototype, 'request')
+      const internals = adapter as unknown as {
+        client: DaemonClient
+        ensureConnected: () => Promise<void>
+        activeSessionIds: Set<string>
+        killedSessionTombstones: Map<string, number>
+      }
+
+      internals.killedSessionTombstones.set(id, Date.now())
+      internals.activeSessionIds.add(id)
+      requestSpy.mockClear()
+      internals.client.disconnect()
+      await internals.ensureConnected()
+
+      expect(
+        requestSpy.mock.calls.filter(
+          ([type, payload]) =>
+            type === 'createOrAttach' &&
+            typeof payload === 'object' &&
+            payload !== null &&
+            'sessionId' in payload &&
+            (payload as { sessionId: string }).sessionId === id
+        )
+      ).toHaveLength(0)
+      requestSpy.mockRestore()
+    })
   })
 
   describe('listProcesses', () => {

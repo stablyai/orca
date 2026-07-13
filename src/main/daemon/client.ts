@@ -59,6 +59,10 @@ export class DaemonClient {
     return this.connected
   }
 
+  getConnectionGeneration(): number {
+    return this.connectionGeneration
+  }
+
   async ensureConnected(): Promise<void> {
     if (this.connected) {
       return
