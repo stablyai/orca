@@ -110,7 +110,7 @@ export function SortableOrderedNetworkAddressRow({
         <button
           type="button"
           className={cn(
-            'text-muted-foreground hover:text-foreground -ml-0.5 flex size-6 shrink-0 items-center justify-center rounded-sm',
+            'text-muted-foreground hover:text-foreground flex size-6 items-center justify-center rounded-sm',
             dragDisabled
               ? 'cursor-default opacity-40'
               : 'cursor-grab touch-none active:cursor-grabbing'
