@@ -569,8 +569,8 @@ describe('aiVaultSessionResumeLabel', () => {
 })
 
 describe('aiVaultSessionRowResumeGating', () => {
-  const zeroTurnSession = { messageCount: 0, previewMessages: [] }
-  const sessionWithTurns = { messageCount: 3, previewMessages: [] }
+  const zeroTurnSession = { messageCount: 0, previewMessages: [], readOnly: false }
+  const sessionWithTurns = { messageCount: 3, previewMessages: [], readOnly: false }
   const unblocked = { blocked: false }
 
   it('withholds every resume affordance for a zero-turn session', () => {
@@ -594,7 +594,8 @@ describe('aiVaultSessionRowResumeGating', () => {
   it('treats user/assistant previews as resumable content when the turn count is unknown', () => {
     const previewOnlySession = {
       messageCount: 0,
-      previewMessages: [{ role: 'user' as const, text: 'hello', timestamp: null }]
+      previewMessages: [{ role: 'user' as const, text: 'hello', timestamp: null }],
+      readOnly: false
     }
     expect(aiVaultSessionRowResumeGating(previewOnlySession, unblocked)).toEqual({
       resumeDisabled: false,
@@ -606,6 +607,14 @@ describe('aiVaultSessionRowResumeGating', () => {
     expect(aiVaultSessionRowResumeGating(sessionWithTurns, unblocked)).toEqual({
       resumeDisabled: false,
       canCopyResumeCommand: true
+    })
+  })
+
+  it('hides resume and copy affordances for a read-only session even with turns', () => {
+    const readOnlySession = { messageCount: 3, previewMessages: [], readOnly: true }
+    expect(aiVaultSessionRowResumeGating(readOnlySession, unblocked)).toEqual({
+      resumeDisabled: true,
+      canCopyResumeCommand: false
     })
   })
 })

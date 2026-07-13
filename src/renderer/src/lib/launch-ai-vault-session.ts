@@ -6,7 +6,7 @@ import {
   createWebRuntimeSessionTerminal,
   isWebRuntimeSessionActive
 } from '@/runtime/web-runtime-session'
-import type { AiVaultAgent } from '../../../shared/ai-vault-types'
+import type { AiVaultAgent, WebChatAgent } from '../../../shared/ai-vault-types'
 import type { SleepingAgentLaunchConfig } from '../../../shared/agent-session-resume'
 import type { TabSplitDirection } from '@/store/slices/tabs'
 
@@ -15,7 +15,9 @@ export type LaunchAiVaultSessionInNewTabResult =
   | { tabId: null; groupId?: string; runtimeLaunch: Promise<boolean> }
 
 export function launchAiVaultSessionInNewTab(args: {
-  agent: AiVaultAgent
+  // Why: web chat sessions are read-only and never reach this CLI launcher —
+  // callers must guard with isWebChatAgent before calling.
+  agent: Exclude<AiVaultAgent, WebChatAgent>
   worktreeId: string
   command: string
   env?: Record<string, string>

@@ -16,7 +16,11 @@ import {
   getAiVaultResumeWorkspaceExecutionHostId,
   getAiVaultResumeWorkspaceTargetStatus
 } from '@/lib/ai-vault-resume-target'
-import type { AiVaultAgent, AiVaultSession } from '../../../../shared/ai-vault-types'
+import {
+  isWebChatAgent,
+  type AiVaultAgent,
+  type AiVaultSession
+} from '../../../../shared/ai-vault-types'
 import type { Worktree } from '../../../../shared/types'
 import { translate } from '@/i18n/i18n'
 import { agentLabel } from './ai-vault-session-filters'
@@ -78,6 +82,10 @@ export function useAiVaultSessionLaunchActions({
 
   const handleResume = useCallback(
     (session: AiVaultSession, targetWorktreeId?: string): void => {
+      // Why: 웹 대화는 읽기전용이라 CLI 이어하기 대상이 아니다(UI에서도 숨겨짐).
+      if (isWebChatAgent(session.agent)) {
+        return
+      }
       const targetId = resolveAiVaultSessionLaunchTarget({
         sessionFilePath: session.filePath,
         sessionExecutionHostId: session.executionHostId,
