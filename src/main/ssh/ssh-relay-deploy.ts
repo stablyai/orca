@@ -56,6 +56,10 @@ import {
   MIN_SSH_RELAY_GRACE_PERIOD_SECONDS
 } from '../../shared/ssh-types'
 
+function escapePosixExtendedRegex(value: string): string {
+  return value.replace(/[.[\]{}()*+?^$|\\]/g, '\\$&')
+}
+
 export type RelayDeployResult = {
   transport: MultiplexerTransport
   platform: RelayPlatform
@@ -745,9 +749,16 @@ async function launchRelay(
         const pid = pidOutput.trim()
         if (/^[1-9]\d*$/.test(pid)) {
           const relayCommandMarker = 'ORCA_RELAY_PID_MATCH'
+          const relayScriptPattern = '(^|[[:space:]])relay\\.js([[:space:]]|$)'
+          const sockPathPattern =
+            `(^|[[:space:]])--sock-path[[:space:]]+` +
+            `${escapePosixExtendedRegex(sockFile)}([[:space:]]|$)`
           const commandLine = await execCommand(
             conn,
-            `ps -ww -p ${pid} -o command= 2>/dev/null | grep -F -- ${shellEscape('relay.js')} | grep -F -- ${shellEscape(`--sock-path ${sockFile}`)} >/dev/null && echo ${relayCommandMarker} || true`
+            `cmd="$(ps -ww -p ${pid} -o command= 2>/dev/null)" && ` +
+              `printf '%s\\n' "$cmd" | grep -Eq -- ${shellEscape(relayScriptPattern)} && ` +
+              `printf '%s\\n' "$cmd" | grep -Eq -- ${shellEscape(sockPathPattern)} ` +
+              `>/dev/null && echo ${relayCommandMarker} || true`
           ).catch(() => '')
           if (commandLine.trim() === relayCommandMarker) {
             await execCommand(conn, `kill -TERM ${pid}`).catch(() => {})

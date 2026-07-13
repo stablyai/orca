@@ -176,11 +176,17 @@ describe('deployAndLaunchRelay', () => {
 
     await deployAndLaunchRelay(conn)
 
-    const cleanupCommands = mockExecCommand.mock.calls
-      .map(([, command]) => command as string)
-      .filter((command) => command.includes('.pid') || command.includes('kill -TERM'))
+    const commands = mockExecCommand.mock.calls.map(([, command]) => command as string)
+    const cleanupCommands = commands.filter(
+      (command) => command.includes('.pid') || command.includes('kill -TERM')
+    )
+    const ownershipCheckCommand = commands.find((command) => command.includes('grep -Eq --')) ?? ''
     expect(cleanupCommands[0]).toContain('cat ')
     expect(cleanupCommands[0]).toContain('.pid')
+    expect(ownershipCheckCommand).toContain(
+      "grep -Eq -- '(^|[[:space:]])relay\\.js([[:space:]]|$)'"
+    )
+    expect(ownershipCheckCommand).toContain('--sock-path[[:space:]]+')
     expect(cleanupCommands[1]).toBe('kill -TERM 4242')
     expect(cleanupCommands[2]).toContain('rm -f ')
     expect(cleanupCommands[2]).toContain('.pid')

@@ -842,8 +842,16 @@ async function main(): Promise<void> {
         if (detached && !isWindowsNamedPipePath(sockPath)) {
           try {
             writeFileSync(pidFile, `${process.pid}\n`)
-          } catch {
-            // Best effort: relay operation does not depend on the pidfile.
+          } catch (err) {
+            const pidWriteErr = err instanceof Error ? err : new Error(String(err))
+            relayLogLine(
+              `[relay] Socket server error before ready: failed to write pidfile ${pidFile}: ${pidWriteErr.message}`
+            )
+            server.close(() => {
+              cleanupOwnedSocket()
+              reject(pidWriteErr as NodeJS.ErrnoException)
+            })
+            return
           }
         }
         server.on('error', (err) => {

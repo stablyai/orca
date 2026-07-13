@@ -346,6 +346,66 @@ describe('Subprocess: Relay entry point', () => {
   )
 
   it.skipIf(process.platform === 'win32')(
+    'fails detached startup when pidfile creation fails',
+    async () => {
+      tmpDir = mkdtempSync(path.join(tmpdir(), 'relay-pidfile-fail-'))
+      const sockPath = path.join(tmpDir, 'relay.sock')
+      const pidPath = `${sockPath}.pid`
+      const preloadPath = path.join(tmpDir, 'fail-pidfile-write.js')
+      writeFileSync(
+        preloadPath,
+        [
+          "const fs = require('node:fs')",
+          'const originalWriteFileSync = fs.writeFileSync',
+          'fs.writeFileSync = function patchedWriteFileSync(file, ...rest) {',
+          "  if (String(file).endsWith('.pid')) {",
+          "    const err = new Error('pidfile write blocked')",
+          "    err.code = 'EACCES'",
+          '    throw err',
+          '  }',
+          '  return originalWriteFileSync.call(this, file, ...rest)',
+          '}'
+        ].join('\n')
+      )
+
+      let stderr = ''
+      const proc = spawnChild(
+        'node',
+        [relayEntry, '--detached', '--grace-time', '10', '--sock-path', sockPath],
+        {
+          stdio: ['ignore', 'pipe', 'pipe'],
+          env: {
+            ...process.env,
+            NODE_OPTIONS: [process.env.NODE_OPTIONS, `--require ${preloadPath}`]
+              .filter(Boolean)
+              .join(' ')
+          }
+        }
+      )
+      proc.stderr!.on('data', (chunk: Buffer) => {
+        stderr += chunk.toString('utf8')
+      })
+
+      let code: number | null
+      let signal: NodeJS.Signals | null
+      try {
+        ;({ code, signal } = await waitForChildExit(proc))
+      } finally {
+        if (proc.exitCode === null && proc.signalCode === null) {
+          proc.kill('SIGKILL')
+        }
+      }
+
+      expect(code).toBe(1)
+      expect(signal).toBeNull()
+      expect(existsSync(sockPath)).toBe(false)
+      expect(existsSync(pidPath)).toBe(false)
+      expect(stderr).toContain('failed to write pidfile')
+    },
+    10_000
+  )
+
+  it.skipIf(process.platform === 'win32')(
     'does not unlink a newer relay socket when an older relay exits',
     async () => {
       tmpDir = mkdtempSync(path.join(tmpdir(), 'relay-rebound-'))
