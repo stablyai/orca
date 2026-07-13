@@ -9,6 +9,11 @@ export type OrchestrationSkillLocationId =
   | 'codex-home'
   | 'codex-plugin-cache'
   | 'agents-home'
+  | 'grok-home'
+  | 'opencode-home'
+  | 'pi-home'
+  | 'antigravity-home'
+  | 'cursor-home'
 
 export type OrchestrationSkillAgentStatus = {
   agent: TuiAgent
@@ -45,6 +50,35 @@ const ORCHESTRATION_SKILL_LOCATIONS: readonly OrchestrationSkillLocationDefiniti
     matchesSkill: (skill) =>
       isGlobalOrchestrationSkill(skill) &&
       pathContainsSegments(skill.rootPath, ['.agents', 'skills'])
+  },
+  {
+    id: 'grok-home',
+    matchesSkill: (skill) =>
+      isGlobalOrchestrationSkill(skill) && pathContainsSegments(skill.rootPath, ['.grok', 'skills'])
+  },
+  {
+    id: 'opencode-home',
+    matchesSkill: (skill) =>
+      isGlobalOrchestrationSkill(skill) &&
+      pathContainsSegments(skill.rootPath, ['.config', 'opencode', 'skills'])
+  },
+  {
+    id: 'pi-home',
+    matchesSkill: (skill) =>
+      isGlobalOrchestrationSkill(skill) &&
+      pathContainsSegments(skill.rootPath, ['.pi', 'agent', 'skills'])
+  },
+  {
+    id: 'antigravity-home',
+    matchesSkill: (skill) =>
+      isGlobalOrchestrationSkill(skill) &&
+      pathContainsSegments(skill.rootPath, ['.gemini', 'antigravity', 'skills'])
+  },
+  {
+    id: 'cursor-home',
+    matchesSkill: (skill) =>
+      isGlobalOrchestrationSkill(skill) &&
+      pathContainsSegments(skill.rootPath, ['.cursor', 'skills'])
   }
 ]
 
@@ -52,8 +86,15 @@ const ORCHESTRATION_SKILL_LOCATION_IDS_BY_AGENT: Partial<
   Record<TuiAgent, readonly OrchestrationSkillLocationId[]>
 > = {
   claude: ['claude-home', 'agents-home'],
+  // Why: Agent Teams runs Claude Code, so it reads the same ~/.claude skills.
+  'claude-agent-teams': ['claude-home', 'agents-home'],
   openclaude: ['claude-home', 'agents-home'],
-  codex: ['codex-home', 'codex-plugin-cache', 'agents-home']
+  codex: ['codex-home', 'codex-plugin-cache', 'agents-home'],
+  grok: ['grok-home', 'agents-home'],
+  opencode: ['opencode-home', 'agents-home'],
+  pi: ['pi-home', 'agents-home'],
+  antigravity: ['antigravity-home', 'agents-home'],
+  cursor: ['cursor-home', 'agents-home']
 }
 
 function normalizeSkillName(value: string): string {
