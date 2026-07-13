@@ -2111,7 +2111,7 @@ app.whenReady().then(async () => {
   })
   registerMobileHandlers(runtimeRpc)
 
-  startTerminalRuntimeStartupServices()
+  void startTerminalRuntimeStartupServices()
   app.on('activate', requestDesktopActivation)
 
   if (serveOptions) {

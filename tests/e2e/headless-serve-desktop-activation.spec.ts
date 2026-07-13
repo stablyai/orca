@@ -72,6 +72,36 @@ async function waitForProcessExit(child: ChildProcess, timeoutMs: number): Promi
   })
 }
 
+async function waitForTerminalCommandRoundTrip(
+  page: Parameters<typeof execInTerminal>[0],
+  ptyId: string,
+  marker: string,
+  timeoutMs: number
+): Promise<void> {
+  const midpoint = Math.floor(marker.length / 2)
+  const firstHalf = marker.slice(0, midpoint)
+  const secondHalf = marker.slice(midpoint)
+
+  await expect
+    .poll(
+      async () => {
+        if ((await getTerminalContent(page)).includes(marker)) {
+          return true
+        }
+        // Why: the typed command never contains the complete marker, so an
+        // early shell echo cannot masquerade as a completed command round trip.
+        await execInTerminal(page, ptyId, `printf '%s%s\\n' '${firstHalf}' '${secondHalf}'`)
+        return false
+      },
+      {
+        timeout: timeoutMs,
+        intervals: [500, 1_000, 2_000],
+        message: `Terminal command did not complete with marker "${marker}"`
+      }
+    )
+    .toBe(true)
+}
+
 test.describe.configure({ mode: 'serial' })
 
 test('restores a quit desktop through headless serve without replacing its daemon terminal', async (// oxlint-disable-next-line no-empty-pattern -- This lifecycle test owns all launches and intentionally opts out of the default app fixture.
@@ -111,8 +141,7 @@ test('restores a quit desktop through headless serve without replacing its daemo
 
     const originalPtyId = await discoverActivePtyId(desktopPage)
     const beforeMarker = `SERVE_PROMOTION_BEFORE_${Date.now()}`
-    await execInTerminal(desktopPage, originalPtyId, `echo ${beforeMarker}`)
-    await waitForTerminalOutput(desktopPage, beforeMarker, 15_000)
+    await waitForTerminalCommandRoundTrip(desktopPage, originalPtyId, beforeMarker, 30_000)
 
     const desktopSessions = await desktopPage.evaluate(async () => window.api.pty.listSessions())
     expect(desktopSessions.map((session) => session.id)).toEqual([originalPtyId])
@@ -150,7 +179,7 @@ test('restores a quit desktop through headless serve without replacing its daemo
 
     activatingProcess = spawn(electronPath, getOrcaElectronLaunchArgs(mainPath, false), {
       env,
-      stdio: 'pipe'
+      stdio: 'ignore'
     })
 
     const page = await serveApp.firstWindow({ timeout: 60_000 })
@@ -184,8 +213,7 @@ test('restores a quit desktop through headless serve without replacing its daemo
     expect(promotedSessions.map((session) => session.id)).toEqual([originalPtyId])
 
     const afterMarker = `SERVE_PROMOTION_AFTER_${Date.now()}`
-    await execInTerminal(page, promotedPtyId, `echo ${afterMarker}`)
-    await waitForTerminalOutput(page, afterMarker, 15_000)
+    await waitForTerminalCommandRoundTrip(page, promotedPtyId, afterMarker, 15_000)
     await expect(page.locator('.xterm:visible').first()).toBeVisible()
     expect(await getTerminalContent(page)).toContain(beforeMarker)
   } finally {

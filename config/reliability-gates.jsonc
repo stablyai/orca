@@ -191,12 +191,12 @@
         "daemon",
         "ssh"
       ],
-      "coverageNotes": "Deterministic unit coverage exercises activation gating, single-instance ownership, quit policy, local/remote CLI status, headless binding persistence, local daemon identity, and SSH identity transfer. A macOS Electron journey starts one headless owner in an isolated profile, creates and writes to a daemon PTY, activates the GUI through a second process, and verifies the original owner/runtime/daemon/PTY identities plus pre- and post-promotion I/O. Live packaged, Linux, and Windows journeys remain uncollected.",
+      "coverageNotes": "Deterministic unit coverage exercises activation gating, single-instance ownership, quit policy, local/remote CLI status, headless binding persistence, local daemon identity, and SSH identity transfer. A macOS Electron journey creates a daemon PTY in an isolated desktop profile, quits the desktop while the daemon survives, starts a headless owner against that profile, and activates the GUI through a second process. It verifies the original runtime/daemon/PTY identities, exact one-session inventories, and pre- and post-promotion I/O. Live packaged, Linux, and Windows journeys remain uncollected.",
       "motivatingLinks": [
         "https://github.com/stablyai/orca/issues/8457"
       ],
       "invariant": "A safely promotable headless serve process is the single app owner. Desktop activation opens a window in that same process only after the persistent PTY provider and runtime RPC are ready; every live persisted local or SSH terminal remains bound to the same PTY/session, and a committed Cmd+Q still exits the promoted app.",
-      "oracle": "Unit tests coalesce early activation, fail closed on a fallback local provider, preserve the production single-instance path for serve, expose explicit desktop window state to local and remote clients, persist headless tab/leaf bindings, transfer local and SSH reattach metadata, and retain quit intent. The Electron journey asserts one main-process PID, runtime id, daemon PID, and PTY id across activation; confirms output written before promotion is visible afterward; confirms new terminal input still works; and requires the activating second process to exit.",
+      "oracle": "Unit tests coalesce early activation, fail closed on a fallback local provider, preserve the production single-instance path for serve, expose explicit desktop window state to local and remote clients, persist headless tab/leaf bindings, transfer local and SSH reattach metadata, and retain quit intent. The Electron journey asserts one main-process PID, runtime id, daemon PID, and PTY id across activation; requires the runtime and daemon inventories to contain exactly that original PTY; confirms output written before promotion is visible afterward; confirms new terminal input still works; and requires the activating second process to exit.",
       "commands": [
         "pnpm exec vitest run --config config/vitest.config.ts src/main/startup/serve-desktop-activation.test.ts src/main/startup/serve-desktop-activation-wiring.test.ts src/main/startup/single-instance-lock.test.ts src/main/startup/window-all-closed-quit-policy.test.ts src/cli/runtime-client.test.ts src/cli/runtime/websocket-transport.test.ts src/main/runtime/orca-runtime.test.ts",
         "pnpm exec electron-vite build --mode e2e",
@@ -266,6 +266,7 @@
           "file": "tests/e2e/headless-serve-desktop-activation.spec.ts",
           "assertions": [
             "desktop activation keeps the same main owner PID, runtime id, daemon PID, and PTY id",
+            "headless adoption and desktop promotion keep exactly one runtime and daemon session for the original PTY",
             "terminal output written before promotion remains visible and post-promotion input/output still works",
             "the activating second process exits instead of becoming another owner"
           ]
@@ -287,8 +288,8 @@
           "platform": "macos",
           "command": "pnpm run test:e2e -- tests/e2e/headless-serve-desktop-activation.spec.ts --workers=1",
           "result": "passed",
-          "durationSeconds": 52,
-          "summary": "The isolated Electron journey passed repeatedly on the final source; the latest 51.6-second run retained the same main owner, runtime, daemon, and PTY, restored pre-promotion output, accepted post-promotion input, and observed the activating process exit."
+          "durationSeconds": 57,
+          "summary": "The isolated Electron journey passed on the final source in 57.2 seconds. It created the PTY under a desktop owner, preserved the daemon through desktop quit and headless adoption, retained the same serve owner/runtime/daemon/PTY through promotion, kept both inventories at exactly one original session, restored pre-promotion output, accepted post-promotion input, and observed the activating process exit."
         }
       ],
       "runtimeBudget": {
@@ -297,7 +298,7 @@
       },
       "flakeHistory": {
         "status": "unknown",
-        "evidence": "New deterministic contracts and two consecutive local macOS Electron passes; CI and cross-platform soak history are not yet available."
+        "evidence": "New deterministic contracts and local macOS Electron passes are available. One precondition run exposed that the old PTY discovery probe could mistake an early shell echo for a completed command; the test now requires a split-marker command round trip and passed afterward. CI and cross-platform soak history are not yet available."
       },
       "redGreenEvidence": {
         "status": "complete",

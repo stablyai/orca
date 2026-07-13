@@ -14,15 +14,14 @@ describe('serve desktop activation wiring', () => {
 
   it('settles the persistent provider before headless PTY registration', () => {
     const appReadyIndex = source.indexOf('app.whenReady().then(async () => {')
-    const startupIndex = source.indexOf(
-      '\n  startTerminalRuntimeStartupServices()\n',
-      appReadyIndex
-    )
+    const startupIndex = source.indexOf('startTerminalRuntimeStartupServices()', appReadyIndex)
     const serveIndex = source.indexOf('if (serveOptions) {', appReadyIndex)
     const ptyReadyIndex = source.indexOf('await localPtyStartupReady', serveIndex)
     const headlessRegistrationIndex = source.indexOf('registerHeadlessPtyRuntime(', serveIndex)
 
+    expect(appReadyIndex).toBeGreaterThanOrEqual(0)
     expect(startupIndex).toBeGreaterThanOrEqual(0)
+    expect(serveIndex).toBeGreaterThanOrEqual(0)
     expect(startupIndex).toBeLessThan(serveIndex)
     expect(ptyReadyIndex).toBeGreaterThan(serveIndex)
     expect(headlessRegistrationIndex).toBeGreaterThan(ptyReadyIndex)
@@ -41,6 +40,7 @@ describe('serve desktop activation wiring', () => {
     const rpcIndex = source.indexOf('await runtimeRpc.start()', serveIndex)
     const settleIndex = source.indexOf('settleServeDesktopActivation()', rpcIndex)
 
+    expect(serveIndex).toBeGreaterThanOrEqual(0)
     expect(sentinelIndex).toBeGreaterThan(serveIndex)
     expect(rpcIndex).toBeGreaterThan(sentinelIndex)
     expect(settleIndex).toBeGreaterThan(rpcIndex)
