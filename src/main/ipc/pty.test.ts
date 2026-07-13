@@ -902,6 +902,28 @@ describe('registerPtyHandlers', () => {
       expect(env.ORCA_CODEX_HOME).toBe(TEST_CODEX_HOME)
     })
 
+    it('drops an inherited Orca Codex home when the system account is selected', async () => {
+      const env = await spawnAndGetEnv(
+        { CODEX_HOME: TEST_CODEX_HOME, ORCA_CODEX_HOME: TEST_CODEX_HOME },
+        undefined,
+        () => null
+      )
+
+      expect(env.CODEX_HOME).toBeUndefined()
+      expect(env.ORCA_CODEX_HOME).toBeUndefined()
+    })
+
+    it('preserves a user CODEX_HOME when the system account is selected', async () => {
+      const env = await spawnAndGetEnv(
+        { CODEX_HOME: '/tmp/user-codex-home' },
+        undefined,
+        () => null
+      )
+
+      expect(env.CODEX_HOME).toBe('/tmp/user-codex-home')
+      expect(env.ORCA_CODEX_HOME).toBeUndefined()
+    })
+
     it('injects the OpenCode hook env into Orca terminal PTYs', async () => {
       // Why: clear any ambient OPENCODE_CONFIG_DIR so the mock's value is used
       const env = await spawnAndGetEnv(undefined, { OPENCODE_CONFIG_DIR: undefined })

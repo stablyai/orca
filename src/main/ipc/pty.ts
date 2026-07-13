@@ -975,6 +975,14 @@ export function buildPtyHostEnv(
     // Why: user startup files may re-export CODEX_HOME; shell-ready wrappers
     // restore this runtime home before Codex can be launched from the prompt.
     baseEnv.ORCA_CODEX_HOME = opts.selectedCodexHomePath
+  } else if (baseEnv.ORCA_CODEX_HOME) {
+    // Why: a nested Orca can inherit the parent's managed home. Once the system
+    // account is selected, remove only that Orca-owned override and preserve a
+    // distinct user-configured CODEX_HOME.
+    if (baseEnv.CODEX_HOME === baseEnv.ORCA_CODEX_HOME) {
+      delete baseEnv.CODEX_HOME
+    }
+    delete baseEnv.ORCA_CODEX_HOME
   }
 
   // Why: WSL shells need the managed userData root for shell-ready wrappers; dev-mode terminals need the same export so `orca` targets the live dev instance.
