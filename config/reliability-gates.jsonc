@@ -17,6 +17,150 @@
   },
   "gates": [
     {
+      "id": "git-worktree.refresh-event-semantics",
+      "title": "Index-only Git metadata cannot trigger structural worktree refresh fanout",
+      "maturity": "experimental",
+      "protection": "partial",
+      "owner": "terminal-runtime",
+      "layer": "main-preload-renderer-contract",
+      "surfaces": [
+        "terminal input availability",
+        "worktree discovery",
+        "Source Control status refresh"
+      ],
+      "platforms": [
+        "macos",
+        "linux",
+        "windows"
+      ],
+      "providers": [
+        "local",
+        "ssh"
+      ],
+      "coveredPlatforms": [
+        "macos"
+      ],
+      "coveredProviders": [
+        "local",
+        "ssh"
+      ],
+      "coverageNotes": "Local deterministic evidence covers git-common classification, desktop watcher debounce counts, non-overlapping poller semantics, macOS native-watch fallback, preload cleanup, and Source Control active-visible repo filtering. Linux/Windows are covered at the shared poller layer by forcing the non-darwin path; live platform runs remain gaps.",
+      "motivatingLinks": [
+        "https://github.com/stablyai/orca/pull/7086"
+      ],
+      "invariant": "Index-only Git activity below the common Git directory must not emit worktrees:changed, invalidate worktree caches, or trigger fetchWorktrees fanout; structural add/remove/HEAD/gitdir/locked/config.worktree changes must still refresh worktrees and nudge Source Control; external head moves (commit, amend, reset) must reach background worktree rows through spawn-free metadata reads, never through structural fanout.",
+      "oracle": "Classify exact git-common paths as structural, status-only, or ignored; count notifications from debounced watcher events; force the Linux/Windows poll path to emit allowlisted leaf events, detect linked HEAD rewrites independent of entry-directory mtime, and surface in-place index rewrites via the backstop re-stat; diff head identities from metadata-file reads and notify only real head moves; assert Source Control subscribes to both structural and status-only signals with active-repo and visibility filters.",
+      "commands": [
+        "pnpm exec vitest run --config config/vitest.config.ts src/main/ipc/worktree-base-directory-event-filter.test.ts src/main/ipc/worktree-base-directory-watcher.test.ts src/main/ipc/worktree-base-directory-poller.test.ts src/main/ipc/worktree-head-identity-reader.test.ts src/renderer/src/hooks/worktree-head-identity-apply.test.ts src/renderer/src/components/right-sidebar/git-status-push-signal-refresh.test.ts src/renderer/src/hooks/useIpcEvents.test.ts"
+      ],
+      "testFiles": [
+        "src/main/ipc/worktree-base-directory-event-filter.test.ts",
+        "src/main/ipc/worktree-base-directory-watcher.test.ts",
+        "src/main/ipc/worktree-base-directory-poller.test.ts",
+        "src/main/ipc/worktree-head-identity-reader.test.ts",
+        "src/renderer/src/hooks/worktree-head-identity-apply.test.ts",
+        "src/renderer/src/components/right-sidebar/git-status-push-signal-refresh.test.ts",
+        "src/renderer/src/hooks/useIpcEvents.test.ts"
+      ],
+      "assertionRefs": [
+        {
+          "file": "src/main/ipc/worktree-base-directory-event-filter.test.ts",
+          "assertions": [
+            "primary HEAD and packed-refs classify as structural while primary index classifies as status-only",
+            "linked HEAD/gitdir/locked classify as structural while linked index classifies as status-only",
+            "HEAD reflog appends classify as status-only for linked and primary checkouts while per-ref reflogs stay ignored",
+            "config.worktree classifies as structural at both linked and primary levels",
+            "ignored common-dir churn, spaces, Windows separators, and outside-root paths do not match structurally"
+          ]
+        },
+        {
+          "file": "src/main/ipc/worktree-base-directory-watcher.test.ts",
+          "assertions": [
+            "linked index bursts produce zero notifyWorktreesChanged calls and one debounced status-only notification",
+            "linked HEAD and locked metadata still produce a structural worktree notification",
+            "status-only head moves emit head identities without structural fanout and only when heads actually changed",
+            "structural notifications re-baseline head identities silently and SSH watches never read identities",
+            "SSH-shaped index renames are status-only while overflow remains conservatively structural"
+          ]
+        },
+        {
+          "file": "src/main/ipc/worktree-base-directory-poller.test.ts",
+          "assertions": [
+            "non-darwin git-common polling emits entry create/delete and allowlisted HEAD/index leaf events",
+            "linked HEAD rewrites are detected even after restoring the entry-directory mtime",
+            "linked and primary HEAD reflog appends emit despite bumping no watched leaf or entry dir",
+            "in-place index rewrites surface through the periodic backstop re-stat",
+            "primary checkout HEAD changes and macOS narrow watch/fallback behavior still emit"
+          ]
+        },
+        {
+          "file": "src/renderer/src/components/right-sidebar/git-status-push-signal-refresh.test.ts",
+          "assertions": [
+            "Source Control nudges only for the active visible repo on structural and status-only signals",
+            "preload subscriptions and terminal command-finished listeners are cleaned up"
+          ]
+        },
+        {
+          "file": "src/main/ipc/worktree-head-identity-reader.test.ts",
+          "assertions": [
+            "loose-ref, packed-refs, detached, unborn, and relative-gitdir layouts resolve or skip without spawning Git",
+            "traversal-shaped or backslash/colon symrefs are rejected before any path join and only hex object ids are ever emitted"
+          ]
+        },
+        {
+          "file": "src/renderer/src/hooks/worktree-head-identity-apply.test.ts",
+          "assertions": [
+            "head identities patch matching rows by path (including Windows separator/casing drift) and skip unknown rows"
+          ]
+        },
+        {
+          "file": "src/renderer/src/hooks/useIpcEvents.test.ts",
+          "assertions": [
+            "renderer preload API fixtures include the status-metadata and head-identity subscription contracts"
+          ]
+        }
+      ],
+      "evidenceRuns": [
+        {
+          "date": "2026-07-12",
+          "runner": "local",
+          "platform": "macos",
+          "command": "pnpm exec vitest run --config config/vitest.config.ts src/main/ipc/worktree-base-directory-event-filter.test.ts src/main/ipc/worktree-base-directory-watcher.test.ts src/main/ipc/worktree-base-directory-poller.test.ts src/main/ipc/worktree-head-identity-reader.test.ts src/renderer/src/hooks/worktree-head-identity-apply.test.ts src/renderer/src/components/right-sidebar/git-status-push-signal-refresh.test.ts src/renderer/src/hooks/useIpcEvents.test.ts",
+          "result": "passed",
+          "durationSeconds": 3.12,
+          "summary": "7 files and 130 tests passed locally, adding head-identity emit-on-change without structural fanout, reflog status triggers, config.worktree structural classification, the in-place index backstop, and the spawn-free head reader with symref traversal rejection and hex-object-id output validation."
+        }
+      ],
+      "runtimeBudget": {
+        "p95Seconds": 10,
+        "scope": "focused main/preload/renderer unit and polling tests"
+      },
+      "flakeHistory": {
+        "status": "unknown",
+        "evidence": "New experimental deterministic gate with one local macOS run; needs CI soak before promotion."
+      },
+      "redGreenEvidence": {
+        "status": "partial",
+        "evidence": "The watcher count assertions fail against the old single-signal classifier because linked index events call notifyWorktreesChanged. Saved CI red/green artifacts are still needed before blocking promotion."
+      },
+      "performanceBudget": {
+        "required": true,
+        "evidence": "Index-only bursts produce zero structural notifications, so renderer fetchWorktrees and detected-worktree cache invalidation are not reached. The non-darwin poller stays bounded and non-overlapping, compares HEAD/gitdir/locked signatures every tick, and gates linked index inspection behind the entry-directory signature. A 30-second live Electron run with 2,000 external linked-status calls delivered 50 ordered input chunks and recorded zero Orca-owned git worktree spawns across six diagnostic windows; a locked create/delete positive control still caused structural refreshes."
+      },
+      "promotionCriteria": [
+        "Run in soak for at least 100 consecutive passes or 14 days across required CI platforms.",
+        "Attach live Electron main-thread diagnostic evidence for repeated linked-worktree index rewrites while typing.",
+        "Add Linux/Windows live watcher evidence if shared poller-layer coverage diverges from platform behavior."
+      ],
+      "knownGaps": [
+        "The live Electron diagnostic and screenshot evidence must remain attached to the motivating PR for durable review.",
+        "Linux and Windows are forced through the shared non-darwin poller in unit tests but are not live-tested here.",
+        "Git loose ref watching remains outside this incident fix by design.",
+        "SSH watches classify head-move triggers but skip the metadata-read identity diff; remote background-worktree heads still wait on a structural event or activation."
+      ],
+      "demotionRule": "Keep experimental or demote if the focused gate flakes without a product or harness bug, if index-only churn can emit worktrees:changed, or if structural add/remove/HEAD/lock changes fail to converge."
+    },
+    {
       "id": "editor.live-log-append-stability",
       "title": "Long live session logs retain their Monaco viewport while appending",
       "maturity": "experimental",

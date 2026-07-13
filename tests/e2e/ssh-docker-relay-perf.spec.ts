@@ -1,4 +1,3 @@
-import type { Page } from '@stablyai/playwright-test'
 import { test, expect } from './helpers/orca-app'
 import { ensureTerminalVisible, waitForActiveWorktree, waitForSessionReady } from './helpers/store'
 import {
@@ -15,6 +14,10 @@ import {
   startDockerSshRelayTarget,
   type DockerSshRelayTarget
 } from './helpers/docker-ssh-relay-target'
+import {
+  connectDockerSshRelayTarget,
+  reconnectDockerSshRelayTarget
+} from './helpers/docker-ssh-relay-connection'
 
 const RUN_DOCKER_SSH = process.env.ORCA_E2E_SSH_DOCKER === '1'
 const KEY_LATENCY_SAMPLES = 'abcdefghij'
@@ -40,12 +43,6 @@ type SshPtyAckGateWindow = Window & {
     release: () => void
     snapshot: () => SshPtyAckGateSnapshot
   }
-}
-
-type ConnectedDockerRemote = {
-  targetId: string
-  repoId: string
-  worktreeId: string
 }
 
 function shellQuote(value: string): string {
@@ -87,73 +84,6 @@ function remoteBackgroundFloodScript(runId: string): string {
     "process.stdin.on('data', (chunk) => { if (chunk.includes(String.fromCharCode(3))) stop(); if (chunk.includes('g')) start() })",
     "process.on('SIGINT', stop)"
   ].join(';')
-}
-
-async function connectDockerRemote(
-  page: Page,
-  target: DockerSshRelayTarget
-): Promise<ConnectedDockerRemote> {
-  return await page.evaluate(
-    async ({ target, remotePath }) => {
-      const store = window.__store
-      if (!store) {
-        throw new Error('Store unavailable')
-      }
-      const credentialUnsub = window.api.ssh.onCredentialRequest((request) => {
-        void window.api.ssh.submitCredential({ requestId: request.requestId, value: null })
-      })
-      try {
-        const { target: createdTarget, repoReadoptions } = await window.api.ssh.addTarget({
-          target: {
-            label: `Docker SSH Relay Perf ${Date.now()}`,
-            host: '127.0.0.1',
-            port: target.port,
-            username: 'root',
-            identityFile: target.identityFile,
-            identitiesOnly: true,
-            relayGracePeriodSeconds: 1
-          }
-        })
-        store.getState().recordSshRepoReadoptions(repoReadoptions)
-        const state = await window.api.ssh.connect({ targetId: createdTarget.id })
-        if (!state || state.status !== 'connected') {
-          throw new Error(`SSH target did not connect: ${JSON.stringify(state)}`)
-        }
-        store.getState().setSshConnectionState(createdTarget.id, state)
-        const labels = new Map(store.getState().sshTargetLabels)
-        labels.set(createdTarget.id, createdTarget.label)
-        store.getState().setSshTargetLabels(labels)
-
-        const result = await window.api.repos.addRemote({
-          connectionId: createdTarget.id,
-          remotePath,
-          displayName: 'Docker SSH Relay Perf'
-        })
-        if ('error' in result) {
-          throw new Error(result.error)
-        }
-        await store.getState().fetchRepos()
-        await store.getState().fetchWorktrees(result.repo.id)
-        const worktree = (store.getState().worktreesByRepo[result.repo.id] ?? [])[0]
-        if (!worktree) {
-          throw new Error(`No remote worktree found for ${result.repo.path}`)
-        }
-        store.getState().setActiveWorktree(worktree.id)
-        if ((store.getState().tabsByWorktree[worktree.id] ?? []).length === 0) {
-          store.getState().createTab(worktree.id)
-        }
-        store.getState().setActiveTabType('terminal')
-        return {
-          targetId: createdTarget.id,
-          repoId: result.repo.id,
-          worktreeId: worktree.id
-        }
-      } finally {
-        credentialUnsub()
-      }
-    },
-    { target, remotePath: DOCKER_SSH_RELAY_REMOTE_REPO_PATH }
-  )
 }
 
 function median(values: number[]): number {
@@ -208,21 +138,6 @@ async function stopRemoteLoad(page: Page, ptyId: string): Promise<void> {
   await page.evaluate((targetPtyId) => window.api.pty.write(targetPtyId, '\x03'), ptyId)
 }
 
-async function reconnectDockerTarget(page: Page, targetId: string): Promise<void> {
-  await page.evaluate(async (targetId) => {
-    const store = window.__store
-    if (!store) {
-      throw new Error('Store unavailable')
-    }
-    await window.api.ssh.disconnect({ targetId })
-    const state = await window.api.ssh.connect({ targetId })
-    if (!state || state.status !== 'connected') {
-      throw new Error(`SSH target did not reconnect: ${JSON.stringify(state)}`)
-    }
-    store.getState().setSshConnectionState(targetId, state)
-  }, targetId)
-}
-
 test.describe('Docker SSH relay perf', () => {
   test.skip(!RUN_DOCKER_SSH, 'Set ORCA_E2E_SSH_DOCKER=1 to run Docker-backed SSH relay perf.')
   test.skip(process.platform === 'win32', 'Docker SSH relay perf uses POSIX ssh tooling.')
@@ -236,7 +151,7 @@ test.describe('Docker SSH relay perf', () => {
       target = startDockerSshRelayTarget(testInfo)
       await waitForSessionReady(orcaPage)
       await waitForActiveWorktree(orcaPage)
-      await connectDockerRemote(orcaPage, target)
+      await connectDockerSshRelayTarget(orcaPage, target)
       await ensureTerminalVisible(orcaPage, 45_000)
       await waitForActiveTerminalManager(orcaPage, 60_000)
       const ptyId = await waitForActivePanePtyId(orcaPage, 60_000)
@@ -274,7 +189,7 @@ test.describe('Docker SSH relay perf', () => {
       target = startDockerSshRelayTarget(testInfo)
       await waitForSessionReady(orcaPage)
       await waitForActiveWorktree(orcaPage)
-      await connectDockerRemote(orcaPage, target)
+      await connectDockerSshRelayTarget(orcaPage, target)
       await ensureTerminalVisible(orcaPage, 45_000)
       await waitForActiveTerminalManager(orcaPage, 60_000)
       backgroundPtyId = await waitForActivePanePtyId(orcaPage, 60_000)
@@ -350,7 +265,7 @@ test.describe('Docker SSH relay perf', () => {
       target = startDockerSshRelayTarget(testInfo)
       await waitForSessionReady(orcaPage)
       await waitForActiveWorktree(orcaPage)
-      const remote = await connectDockerRemote(orcaPage, target)
+      const remote = await connectDockerSshRelayTarget(orcaPage, target)
       await ensureTerminalVisible(orcaPage, 45_000)
       await waitForActiveTerminalManager(orcaPage, 60_000)
       const ptyId = await waitForActivePanePtyId(orcaPage, 60_000)
@@ -448,7 +363,7 @@ test.describe('Docker SSH relay perf', () => {
       target = startDockerSshRelayTarget(testInfo)
       await waitForSessionReady(orcaPage)
       await waitForActiveWorktree(orcaPage)
-      const remote = await connectDockerRemote(orcaPage, target)
+      const remote = await connectDockerSshRelayTarget(orcaPage, target)
       await ensureTerminalVisible(orcaPage, 45_000)
       await waitForActiveTerminalManager(orcaPage, 60_000)
       const beforePtyId = await waitForActivePanePtyId(orcaPage, 60_000)
@@ -456,7 +371,7 @@ test.describe('Docker SSH relay perf', () => {
       await execInTerminal(orcaPage, beforePtyId, `printf ${shellQuote(beforeMarker)}`)
       await waitForTerminalOutput(orcaPage, beforeMarker, 20_000, 60_000)
 
-      await reconnectDockerTarget(orcaPage, remote.targetId)
+      await reconnectDockerSshRelayTarget(orcaPage, remote.targetId)
       await ensureTerminalVisible(orcaPage, 45_000)
       await waitForActiveTerminalManager(orcaPage, 60_000)
       const afterPtyId = await waitForActivePanePtyId(orcaPage, 60_000)
