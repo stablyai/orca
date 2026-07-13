@@ -68,6 +68,8 @@ type ManagedPty = {
   attachIdentity?: PtyIdentity
   worktreeId?: string
   terminalHandle?: string
+  explicitTerm?: string
+  envToDelete: string[]
   startupCommand?: ManagedStartupCommand
 }
 
@@ -81,6 +83,18 @@ type ManagedStartupCommand = {
   waitForShellReady: boolean
   scanState: ShellReadyScanState | null
   timer: ReturnType<typeof setTimeout> | null
+}
+
+// Why: node-pty's Windows agent throws "Signals not supported on windows." for
+// any signal argument. ConPTY/winpty has no signal semantics — a bare kill()
+// force-terminates the child — so drop the signal on Windows and forward it
+// (SIGTERM graceful vs SIGKILL force) on POSIX.
+function killPtyProcess(pty: IPty, signal: string): void {
+  if (process.platform === 'win32') {
+    pty.kill()
+    return
+  }
+  pty.kill(signal)
 }
 
 function disposeManagedPty(managed: ManagedPty): void {
@@ -180,6 +194,16 @@ type SerializedPtyEntry = {
   attachIdentity?: PtyIdentity
   worktreeId?: string
   terminalHandle?: string
+  explicitTerm?: string
+  envToDelete?: string[]
+}
+
+function sanitizeEnvToDelete(value: unknown): string[] {
+  return Array.isArray(value)
+    ? value
+        .filter((key): key is string => typeof key === 'string' && key.length > 0)
+        .slice(0, 1_024)
+    : []
 }
 
 export type PtyExitListener = (event: { id: string; paneKey?: string }) => void
@@ -283,9 +307,19 @@ export class PtyHandler {
    *  otherwise agent-status over SSH silently breaks on every revive. */
   private buildSpawnEnv(
     rendererEnv: Record<string, string> | undefined,
-    ctx: { id: string; paneKey?: string; shell: string; command?: string }
+    ctx: { id: string; paneKey?: string; shell: string; command?: string },
+    envToDelete: readonly string[] = []
   ): Record<string, string> {
-    const baseEnv = { ...process.env, ...rendererEnv } as Record<string, string>
+    const baseEnv = {
+      ...process.env,
+      TERM: 'xterm-256color',
+      COLORTERM: 'truecolor',
+      TERM_PROGRAM: 'Orca',
+      TERM_PROGRAM_VERSION:
+        rendererEnv?.ORCA_APP_VERSION || process.env.ORCA_APP_VERSION || '0.0.0-dev',
+      FORCE_HYPERLINK: '1',
+      ...rendererEnv
+    } as Record<string, string>
     const augmented: Record<string, string> = {}
     for (const augmenter of this.envAugmenters) {
       try {
@@ -296,7 +330,25 @@ export class PtyHandler {
         )
       }
     }
-    return { ...baseEnv, ...augmented }
+    const result = { ...baseEnv, ...augmented }
+    // Why: match local/daemon precedence so relay defaults and augmenters
+    // cannot resurrect attribution or identity values explicitly removed.
+    for (const key of envToDelete) {
+      delete result[key]
+    }
+    if (
+      !envToDelete.includes('TERM') &&
+      rendererEnv &&
+      Object.prototype.hasOwnProperty.call(rendererEnv, 'TERM')
+    ) {
+      result.TERM = rendererEnv.TERM
+    }
+    // Why: node-pty treats missing/empty TERM as its own platform-specific
+    // default. Normalize here so POSIX and Windows relay children agree.
+    if (!result.TERM) {
+      result.TERM = 'xterm-256color'
+    }
+    return result
   }
 
   private clearStartupCommandTimer(managed: ManagedPty): void {
@@ -562,6 +614,15 @@ export class PtyHandler {
     const rows = (params.rows as number) || 24
     const cwd = (params.cwd as string) || resolveDefaultCwd()
     const env = params.env as Record<string, string> | undefined
+    const envToDelete = sanitizeEnvToDelete(params.envToDelete)
+    const explicitTerm =
+      !envToDelete.includes('TERM') &&
+      env &&
+      Object.prototype.hasOwnProperty.call(env, 'TERM') &&
+      typeof env.TERM === 'string' &&
+      env.TERM.length > 0
+        ? env.TERM
+        : undefined
     const shellOverride =
       typeof params.shellOverride === 'string' ? params.shellOverride.trim() : ''
     const resolvedShellOverride = resolvePtyShellOverride(shellOverride)
@@ -585,7 +646,7 @@ export class PtyHandler {
       typeof params.terminalWindowsWslDistro === 'string' ? params.terminalWindowsWslDistro : null
     const commandDelivery = params.commandDelivery === 'provider' ? 'provider' : 'renderer'
     const shouldProviderDeliverCommand = commandDelivery === 'provider' && command !== undefined
-    const spawnEnv = this.buildSpawnEnv(env, { id, paneKey, shell, command })
+    const spawnEnv = this.buildSpawnEnv(env, { id, paneKey, shell, command }, envToDelete)
     const launchCommandHint = resolveSetupAgentSequenceLaunchCommand(spawnEnv, command)
     const shouldEmitShellReadyMarker =
       launchCommandHint !== undefined &&
@@ -607,7 +668,9 @@ export class PtyHandler {
     // When overlays are injected, the launch wrapper keeps those paths after
     // user startup files re-export their defaults.
     const term = pty.spawn(shell, shellLaunch.args, {
-      name: 'xterm-256color',
+      // Why: node-pty overwrites env.TERM with `name`; keep caller-selected
+      // terminal identities instead of losing them at the final spawn boundary.
+      name: spawnEnv.TERM ?? 'xterm-256color',
       cols,
       rows,
       cwd,
@@ -635,6 +698,8 @@ export class PtyHandler {
       tabId,
       ...(attachIdentity.paneKey || attachIdentity.tabId ? { attachIdentity } : {}),
       worktreeId,
+      ...(explicitTerm !== undefined ? { explicitTerm } : {}),
+      envToDelete,
       ...(terminalHandle ? { terminalHandle } : {}),
       ...(shouldProviderDeliverCommand
         ? {
@@ -657,11 +722,11 @@ export class PtyHandler {
       // response is discarded and no renderer can own this PTY. Shut it down
       // immediately so it does not linger as an unreachable remote shell.
       this.releaseStartupCommand(managed)
-      term.kill('SIGTERM')
+      killPtyProcess(term, 'SIGTERM')
       managed.killTimer = setTimeout(() => {
         const still = this.ptys.get(id)
         if (still && !still.disposed) {
-          still.pty.kill('SIGKILL')
+          killPtyProcess(still.pty, 'SIGKILL')
           // Why: stale-spawn cleanup has no client who will ever attach. If
           // SIGKILL's onExit is missed (kernel edge case, uninterruptible
           // sleep), the managed entry + ptmx fd would leak forever. Dispose
@@ -786,7 +851,7 @@ export class PtyHandler {
     if (immediate) {
       this.releaseStartupCommand(managed)
       this.flushPtyOutput(id)
-      managed.pty.kill('SIGKILL')
+      killPtyProcess(managed.pty, 'SIGKILL')
       // Why: SIGKILL has already reaped the child; release the ptmx fd on the
       // same tick. Deferring to onExit leaves a window where the fd is live
       // with a dead child. Idempotent via the disposed guard — if onExit fires
@@ -805,7 +870,7 @@ export class PtyHandler {
       this.clearPtyFlowState(id)
     } else {
       this.releaseStartupCommand(managed)
-      managed.pty.kill('SIGTERM')
+      killPtyProcess(managed.pty, 'SIGTERM')
 
       // Why: Some processes ignore SIGTERM (e.g. a hung child, a custom signal
       // handler). Without a SIGKILL fallback the PTY process would leak and the
@@ -819,7 +884,7 @@ export class PtyHandler {
       managed.killTimer = setTimeout(() => {
         const still = this.ptys.get(id)
         if (still && !still.disposed) {
-          still.pty.kill('SIGKILL')
+          killPtyProcess(still.pty, 'SIGKILL')
           this.flushPtyOutput(id)
           // Why: emit pty.exit BEFORE disposeManagedPty sets disposed=true.
           // The natural onExit short-circuits on `managed.disposed`, so
@@ -935,6 +1000,8 @@ export class PtyHandler {
         tabId: managed.tabId,
         attachIdentity: managed.attachIdentity,
         worktreeId: managed.worktreeId,
+        ...(managed.explicitTerm !== undefined ? { explicitTerm: managed.explicitTerm } : {}),
+        envToDelete: managed.envToDelete,
         ...(managed.terminalHandle ? { terminalHandle: managed.terminalHandle } : {})
       })
     }
@@ -976,6 +1043,16 @@ export class PtyHandler {
       if (entry.terminalHandle) {
         revivedEnv.ORCA_TERMINAL_HANDLE = entry.terminalHandle
       }
+      const explicitTerm =
+        typeof entry.explicitTerm === 'string' && entry.explicitTerm.length > 0
+          ? entry.explicitTerm
+          : undefined
+      if (explicitTerm !== undefined) {
+        revivedEnv.TERM = explicitTerm
+      }
+      // Why: serialized state can come from an older or untrusted client, so
+      // revive reapplies the same bounds as a fresh spawn before retaining it.
+      const envToDelete = sanitizeEnvToDelete(entry.envToDelete)
       const shell = resolveDefaultShell()
       // Why: `command` is intentionally absent from this revive path because
       // SerializedPtyEntry (see line 99) does not persist it — ManagedPty
@@ -984,14 +1061,19 @@ export class PtyHandler {
       // undefined` for revived PTYs and prepares the Pi default plus OMP's
       // typed-command wrapper. Plumbing `command` through serialization is a
       // separate, larger change.
-      const spawnEnv = this.buildSpawnEnv(revivedEnv, {
-        id: entry.id,
-        paneKey: entry.paneKey,
-        shell
-      })
+      const spawnEnv = this.buildSpawnEnv(
+        revivedEnv,
+        {
+          id: entry.id,
+          paneKey: entry.paneKey,
+          shell
+        },
+        envToDelete
+      )
       const shellLaunch = getRelayShellLaunchConfig(shell, spawnEnv)
       const term = ptyMod.spawn(shell, shellLaunch.args, {
-        name: 'xterm-256color',
+        // Why: revive must preserve the same terminal identity as fresh spawn.
+        name: spawnEnv.TERM ?? 'xterm-256color',
         cols: entry.cols,
         rows: entry.rows,
         cwd: entry.cwd,
@@ -1008,6 +1090,8 @@ export class PtyHandler {
         tabId: entry.tabId,
         attachIdentity: entry.attachIdentity,
         worktreeId: entry.worktreeId,
+        ...(explicitTerm !== undefined ? { explicitTerm } : {}),
+        envToDelete,
         ...(entry.terminalHandle ? { terminalHandle: entry.terminalHandle } : {})
       })
 
@@ -1068,7 +1152,7 @@ export class PtyHandler {
       // ptmx fd release via disposeManagedPty is synchronous, so there is
       // no graceful-shutdown window to preserve at this point.
       try {
-        managed.pty.kill('SIGKILL')
+        killPtyProcess(managed.pty, 'SIGKILL')
       } catch {
         /* child may already be dead */
       }

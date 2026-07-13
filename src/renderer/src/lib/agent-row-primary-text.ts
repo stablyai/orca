@@ -1,7 +1,12 @@
 import type { AgentStatusEntry } from '../../../shared/agent-status-types'
+import {
+  findOrcaDispatchTaskMarkerIndex,
+  ORCA_DISPATCH_STATUS_PREAMBLE_PREFIX,
+  ORCA_DISPATCH_STATUS_TASK_MARKER
+} from '../../../shared/orca-dispatch-status-prompt'
 
-export const ORCA_DISPATCH_PREAMBLE_PREFIX = 'You are working inside Orca, a multi-agent IDE.'
-const ORCA_DISPATCH_TASK_MARKER = '=== TASK ==='
+export const ORCA_DISPATCH_PREAMBLE_PREFIX = ORCA_DISPATCH_STATUS_PREAMBLE_PREFIX
+const ORCA_DISPATCH_TASK_MARKER = ORCA_DISPATCH_STATUS_TASK_MARKER
 const ORCA_DISPATCH_TASK_ID_MARKER = 'Your task ID is:'
 // Why: match deriveGeneratedTabTitle's scan budget — previews only need the
 // first non-empty task line, not the rest of a paste-sized worker prompt.
@@ -43,25 +48,21 @@ export function orchestrationLabelsMatchLiveDispatch(
 export function getAgentRowPrimaryText(
   entry: Pick<AgentStatusEntry, 'orchestration' | 'prompt'>
 ): string {
+  // Why: prefer richer orchestration labels when they match the live dispatch,
+  // then fall back to the TASK-body preview. Never surface the lifecycle
+  // preamble itself — status prompts are single-line ~200-char folds, and the
+  // first characters are boilerplate ("You are working inside Orca…").
   if (orchestrationLabelsMatchLiveDispatch(entry)) {
     return (
       entry.orchestration?.displayName?.trim() ||
       entry.orchestration?.taskTitle?.trim() ||
-      getOrcaDispatchTaskPreview(entry.prompt) ||
-      // Why: non-dispatch and unmatched paths keep a full trim for display; this
-      // branch only runs for matched dispatch turns, where a bounded preview
-      // almost always succeeds first.
-      entry.prompt.trimStart().slice(0, ORCA_DISPATCH_TASK_PREVIEW_SCAN_LIMIT).trim()
+      getOrcaDispatchTaskPreview(entry.prompt)
     )
   }
-  return (
-    getOrcaDispatchTaskPreview(entry.prompt) ||
-    // Why: ordinary prompts stay small; dispatch prompts without a TASK marker
-    // still must not full-trim a multi-MB body for a sidebar label.
-    (isOrcaDispatchPrompt(entry.prompt)
-      ? entry.prompt.trimStart().slice(0, ORCA_DISPATCH_TASK_PREVIEW_SCAN_LIMIT).trim()
-      : entry.prompt.trim())
-  )
+  if (isOrcaDispatchPrompt(entry.prompt)) {
+    return getOrcaDispatchTaskPreview(entry.prompt)
+  }
+  return entry.prompt.trim()
 }
 
 export function getAgentRowGeneratedTitleText(
@@ -97,13 +98,20 @@ export function getOrcaDispatchTaskId(prompt: string): string | null {
 function getOrcaDispatchTaskPreview(prompt: string): string {
   // Why: sidebar rows call this during render; never full-trim/split paste-sized
   // dispatch prompts — only scan bounded windows for the marker and first line.
+  // Production status prompts are already folded to a single line (newlines →
+  // spaces) and capped ~200 chars by normalizePromptField, which preserves
+  // `=== TASK ===` + body. Prefer the first non-empty line so multi-line raw
+  // preambles still work; a single-line fold is one "line" after the marker.
   if (!isOrcaDispatchPrompt(prompt)) {
     return ''
   }
   const scan = prompt
     .trimStart()
     .slice(0, ORCA_DISPATCH_TASK_MARKER_SCAN_LIMIT + ORCA_DISPATCH_TASK_PREVIEW_SCAN_LIMIT)
-  const taskMarkerIndex = scan.indexOf(ORCA_DISPATCH_TASK_MARKER)
+  // Why: share the normalizer's standalone-line marker rule. A naive indexOf
+  // would treat base-drift commit subjects that mention `=== TASK ===` as the
+  // real separator when helpers are called with raw multi-line preambles.
+  const taskMarkerIndex = findOrcaDispatchTaskMarkerIndex(scan)
   if (taskMarkerIndex === -1) {
     return ''
   }

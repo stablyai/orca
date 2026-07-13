@@ -38,6 +38,7 @@ import { writeFileAtomically } from './fs-utils'
 import {
   getOrcaManagedCodexHomePath,
   getSystemCodexHomePath,
+  syncCodexGlobalInstructionsIntoManagedHome,
   syncSystemCodexResourcesIntoManagedHome
 } from '../codex/codex-home-paths'
 import { startSystemCodexSessionBridgeInBackground } from '../codex/codex-session-bridge'
@@ -141,7 +142,7 @@ export class CodexRuntimeHomeService {
     if (target?.runtime === 'wsl') {
       const wslTarget = this.resolveWslDefaultTarget(target)
       const syncedRuntimeHomePath = this.syncWslRuntimeForCurrentSelection(wslTarget)
-      this.syncWslConfigSettingsForLaunch(wslTarget, syncedRuntimeHomePath)
+      this.syncWslConfigAndGlobalInstructionsForLaunch(wslTarget, syncedRuntimeHomePath)
       const runtimeHomePath = syncedRuntimeHomePath ?? this.getWslSystemCodexHomePath(wslTarget)
       this.startWslSessionBridgeForLaunch(wslTarget, runtimeHomePath)
       return runtimeHomePath
@@ -223,10 +224,7 @@ export class CodexRuntimeHomeService {
     return home ? this.joinWslPath(home, '.codex') : null
   }
 
-  // Why: WSL needs the same promote-then-mirror transaction as host. It keeps
-  // in-Orca changes while reconciling a newer external ~/.codex edit before
-  // advancing the per-distro baseline. Only runs on a materialized runtime.
-  private syncWslConfigSettingsForLaunch(
+  private syncWslConfigAndGlobalInstructionsForLaunch(
     target: CodexAccountSelectionTarget,
     runtimeHomePath: string | null
   ): void {
@@ -242,6 +240,12 @@ export class CodexRuntimeHomeService {
     if (!systemHomePath || systemHomePath === runtimeHomePath) {
       return
     }
+    // Why: WSL uses a distro-local CODEX_HOME, so host resource mirroring
+    // cannot provide the distro user's global instructions.
+    syncCodexGlobalInstructionsIntoManagedHome({
+      systemHomePath,
+      managedHomePath: runtimeHomePath
+    })
     syncSystemConfigIntoManagedCodexHome({ runtimeHomePath, systemHomePath })
   }
 

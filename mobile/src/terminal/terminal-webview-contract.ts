@@ -1,4 +1,5 @@
 import type { RuntimeMobileTerminalTheme } from '../../../src/shared/runtime-types'
+import type { StyleProp, ViewStyle } from 'react-native'
 import type { TerminalOscLinkRange } from './terminal-osc-link-ranges'
 
 type TerminalMouseTrackingMode = 'none' | 'x10' | 'vt200' | 'drag' | 'any'
@@ -27,6 +28,7 @@ export type TerminalSelectionEvents = {
   onKeyboardAvoidanceMetrics?: (metrics: TerminalKeyboardAvoidanceMetrics) => void
   onHaptic?: (kind: 'selection' | 'success' | 'error' | 'edge-bump') => void
   onTerminalInput?: (bytes: string) => void
+  onTerminalQueryReply?: (bytes: string) => void
   onTerminalTap?: () => void
   // Tap landed on a detected file path; RN resolves + opens it.
   onFileTap?: (pathText: string, line: number | null, column: number | null) => void
@@ -37,7 +39,20 @@ export type TerminalSelectionEvents = {
   onTextScaleChange?: (scale: number) => void
 }
 
+export type TerminalWebViewProps = {
+  style?: StyleProp<ViewStyle>
+  terminalTheme?: MobileTerminalTheme
+  // Why: baseline zoom multiplier applied on top of fit-to-width scale; raw
+  // xterm fontSize alone cannot drive apparent size because fitting cancels it.
+  textScale?: number
+  onWebReady?: () => void
+  onEngineError?: (message: string) => void
+} & TerminalSelectionEvents
+
 export type TerminalWebViewHandle = {
+  // Why: iOS can preserve the native view while discarding its JS/backing-store
+  // state; foreground recovery must wait for the document to answer before replay.
+  prepareForForegroundRecovery: () => void
   write: (data: string) => void
   init: (
     cols: number,

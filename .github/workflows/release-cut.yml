@@ -41,6 +41,11 @@ on:
         required: false
         default: false
         type: boolean
+      version_suffix:
+        description: Extra prerelease identifier appended to an rc version (e.g. "perf" -> 1.2.3-rc.4.perf). rc kind only.
+        required: false
+        type: string
+        default: ''
 
 permissions:
   contents: write
@@ -192,6 +197,7 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           KIND: ${{ github.event_name == 'schedule' && 'rc' || inputs.kind }}
+          VERSION_SUFFIX: ${{ github.event_name == 'schedule' && '' || inputs.version_suffix }}
         run: |
           set -euo pipefail
 
@@ -365,6 +371,18 @@ jobs:
                   recover_unpublished_tag "$existing_rc_tag" "latest RC in series" || true
                 fi
                 new="${base}-rc.$((highest_rc + 1))"
+              fi
+              if [[ -n "${VERSION_SUFFIX:-}" ]]; then
+                # Why a dot-appended identifier (rc.N.perf): it sorts just
+                # above its own base rc.N but BELOW rc.N+1, so suffixed side-
+                # branch builds never outrank the main RC series and cannot
+                # hijack the update channel; clients find them by matching the
+                # identifier ("perf") in the prerelease components.
+                if [[ ! "$VERSION_SUFFIX" =~ ^[0-9A-Za-z]+$ ]]; then
+                  echo "::error::version_suffix must be alphanumeric, got: $VERSION_SUFFIX" >&2
+                  exit 1
+                fi
+                new="${new}.${VERSION_SUFFIX}"
               fi
               ;;
             patch|minor|major)
@@ -808,7 +826,10 @@ jobs:
           TAG: ${{ needs.cut.outputs.tag }}
         run: |
           set -euo pipefail
-          if [[ "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+-rc\.[0-9]+$ ]]; then
+          # Why the optional trailing identifier: suffixed side-branch RCs
+          # (vX.Y.Z-rc.N.perf) are rc-channel prerelease builds — same telemetry
+          # identity as plain RCs.
+          if [[ "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+-rc\.[0-9]+(\.[0-9A-Za-z]+)?$ ]]; then
             identity=rc
           elif [[ "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
             identity=stable
@@ -841,6 +862,20 @@ jobs:
           ORCA_BUILD_IDENTITY: ${{ steps.tag-classify.outputs.identity }}
           ORCA_DIAGNOSTICS_TOKEN_URL: https://www.onorca.dev/diagnostics/token
           ORCA_POSTHOG_WRITE_KEY: ${{ secrets.ORCA_POSTHOG_WRITE_KEY }}
+
+      - name: Gate runtime file-watcher process isolation
+        if: runner.os == 'Linux'
+        run: |
+          # Why: #8212 is a native-process crash contract. Prove both the Node
+          # host and the exact Electron runtime survive SIGSEGV before packaging.
+          node config/scripts/runtime-file-watcher-fault-harness.mjs
+          ELECTRON_RUN_AS_NODE=1 pnpm exec electron config/scripts/runtime-file-watcher-fault-harness.mjs
+
+      - name: Gate SSH relay watcher process isolation
+        run: |
+          # Why: the remote native watcher shares a daemon with live PTYs.
+          # Kill only its child and require both PTY and watch recovery before packaging.
+          node config/scripts/relay-watcher-fault-harness.mjs
 
       - name: Publish release artifacts (Linux)
         if: matrix.platform == 'linux-x64' || matrix.platform == 'linux-arm64'

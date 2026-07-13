@@ -214,6 +214,87 @@ describe('fetchClaudeRateLimits', () => {
     })
   })
 
+  it('maps active Fable usage from the scoped OAuth limits array without a PTY read', async () => {
+    const configDir = '/Users/test/.claude'
+    const authPreparation: ClaudeRuntimeAuthPreparation = {
+      configDir,
+      envPatch: { CLAUDE_CONFIG_DIR: configDir },
+      stripAuthEnv: false,
+      provenance: 'managed:account-1'
+    }
+    vi.mocked(readActiveClaudeKeychainCredentialsStrict).mockResolvedValueOnce(
+      JSON.stringify({ claudeAiOauth: { accessToken: 'oauth-token' } })
+    )
+    netFetchMock.mockResolvedValueOnce(
+      new Response(
+        JSON.stringify({
+          five_hour: { utilization: 36 },
+          seven_day: { utilization: 73 },
+          fable_weekly: { utilization: 12 },
+          limits: [
+            { kind: 'weekly_scoped', percent: 55, scope: null },
+            {
+              kind: 'weekly_scoped',
+              percent: 100,
+              resets_at: '2026-07-17T20:00:00.099908+00:00',
+              is_active: true,
+              scope: { model: { display_name: 'Fable' } }
+            }
+          ]
+        }),
+        { status: 200 }
+      )
+    )
+
+    await expect(
+      fetchClaudeRateLimits({ authPreparation, allowUsagePanelSupplement: true })
+    ).resolves.toMatchObject({
+      provider: 'claude',
+      status: 'ok',
+      fableWeekly: {
+        usedPercent: 100,
+        resetsAt: Date.parse('2026-07-17T20:00:00.099908+00:00')
+      },
+      usageMetadata: { attemptedSources: ['oauth'] }
+    })
+    expect(fetchViaPty).not.toHaveBeenCalled()
+  })
+
+  it('ignores inactive scoped Fable usage and retains the legacy OAuth fallback', async () => {
+    const configDir = '/Users/test/.claude'
+    const authPreparation: ClaudeRuntimeAuthPreparation = {
+      configDir,
+      envPatch: { CLAUDE_CONFIG_DIR: configDir },
+      stripAuthEnv: false,
+      provenance: 'system'
+    }
+    vi.mocked(readActiveClaudeKeychainCredentialsStrict).mockResolvedValueOnce(
+      JSON.stringify({ claudeAiOauth: { accessToken: 'oauth-token' } })
+    )
+    netFetchMock.mockResolvedValueOnce(
+      new Response(
+        JSON.stringify({
+          five_hour: { utilization: 11 },
+          seven_day: { utilization: 22 },
+          fable_weekly: { utilization: 33 },
+          limits: [
+            {
+              kind: 'weekly_scoped',
+              percent: 90,
+              is_active: false,
+              scope: { model: { display_name: 'fable' } }
+            }
+          ]
+        }),
+        { status: 200 }
+      )
+    )
+
+    await expect(fetchClaudeRateLimits({ authPreparation })).resolves.toMatchObject({
+      fableWeekly: { usedPercent: 33 }
+    })
+  })
+
   it('supplements managed-account OAuth usage with Fable from the CLI usage panel', async () => {
     const configDir = '/Users/test/.claude'
     const authPreparation: ClaudeRuntimeAuthPreparation = {

@@ -78,6 +78,10 @@ import type {
 } from '../../shared/types'
 import { browserSessionRegistry } from './browser-session-registry'
 import { setupClientHintsOverride } from './browser-session-ua'
+import {
+  createChromiumCookieSnapshot,
+  type ChromiumCookieSnapshot
+} from './chromium-cookie-snapshot'
 import { resolveChromiumCookiesPath } from './chromium-cookie-path'
 
 // ---------------------------------------------------------------------------
@@ -1455,9 +1459,6 @@ export async function importCookiesFromBrowser(
     return importCookiesFromSafari(browser, targetPartition)
   }
 
-  // Why: SQLite can coordinate with Chromium's live WAL locks without a pre-copy.
-  const sourceCookiesPath = browser.cookiesPath
-
   // Why: Electron's cookies.set() API rejects many valid cookie values (binary
   // bytes > 0x7F etc). Instead, decrypt from the source browser and write
   // plaintext directly to the SQLite `value` column. CookieMonster reads
@@ -1507,7 +1508,32 @@ export async function importCookiesFromBrowser(
     mkdirSync(stagingDir, { recursive: true })
     copyFileSync(liveCookiesPath, stagingCookiesPath)
   } catch {
+    // Why: copyFile is not atomic and can leave a partial database after an
+    // I/O failure, so failed imports must not retain sensitive cookie data.
+    try {
+      unlinkSync(stagingCookiesPath)
+    } catch {
+      /* best-effort */
+    }
     return { ok: false, reason: 'Could not create staging cookie database.' }
+  }
+
+  let sourceSnapshot: ChromiumCookieSnapshot
+  try {
+    // Why: the browser can commit cookies only to WAL while it remains open;
+    // snapshot retries prevent pairing the main DB with a racing WAL generation.
+    sourceSnapshot = createChromiumCookieSnapshot(browser.cookiesPath)
+  } catch (err) {
+    try {
+      unlinkSync(stagingCookiesPath)
+    } catch {
+      /* best-effort */
+    }
+    diag(`  Chromium snapshot failed: ${err}`)
+    return {
+      ok: false,
+      reason: `Could not copy ${browser.label} cookies database. Try closing ${browser.label} first.`
+    }
   }
 
   let sourceDb: InstanceType<typeof DatabaseSync> | null = null
@@ -1516,7 +1542,10 @@ export async function importCookiesFromBrowser(
   try {
     // Why: Chromium stores timestamps as microseconds since 1601, which can exceed
     // Number.MAX_SAFE_INTEGER (~9e15). readBigInts ensures no precision loss.
-    sourceDb = new DatabaseSync(sourceCookiesPath, { readOnly: true, readBigInts: true })
+    sourceDb = new DatabaseSync(sourceSnapshot.databasePath, {
+      readOnly: true,
+      readBigInts: true
+    })
     stagingDb = new DatabaseSync(stagingCookiesPath)
 
     const targetColumnInfo = stagingDb
@@ -1783,6 +1812,12 @@ export async function importCookiesFromBrowser(
       reason: reasonWithDiagLog(
         `Could not import cookies from ${browser.label}: ${summarizeCookieImportError(err)}.`
       )
+    }
+  } finally {
+    try {
+      sourceSnapshot.cleanup()
+    } catch (err) {
+      diag(`  Chromium snapshot cleanup failed: ${err}`)
     }
   }
 }

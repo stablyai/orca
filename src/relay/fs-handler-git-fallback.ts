@@ -10,7 +10,7 @@ import { spawn } from 'node:child_process'
 import { fileListingCancellationError } from '../shared/file-listing-cancellation'
 import type { SearchOptions, SearchResult } from './fs-handler-utils'
 import { buildGitLsFilesArgsForQuickOpen } from '../shared/quick-open-filter'
-import { expandQuickOpenGitFilesWithNestedRepos } from '../shared/quick-open-readdir-walk'
+import { expandQuickOpenGitFileListing } from '../shared/quick-open-readdir-walk'
 import {
   buildGitGrepArgs,
   buildSubmatchRegex,
@@ -40,6 +40,7 @@ export function listFilesWithGit(
     return Promise.reject(fileListingCancellationError(signal))
   }
   const gitPaths = new Set<string>()
+  const directoryPaths = new Set<string>()
   const { primary, ignoredPass } = buildGitLsFilesArgsForQuickOpen(excludePathPrefixes)
   const children: {
     child: ReturnType<typeof spawn>
@@ -56,7 +57,11 @@ export function listFilesWithGit(
         if (!path) {
           return
         }
-        gitPaths.add(path)
+        if (path.endsWith('/')) {
+          directoryPaths.add(path)
+        } else {
+          gitPaths.add(path)
+        }
       }
 
       const child = spawn('git', ['ls-files', ...args], {
@@ -171,15 +176,34 @@ export function listFilesWithGit(
   const onAbort = (): void => killSurvivors('git ls-files cancelled')
   signal?.addEventListener('abort', onAbort, { once: true })
 
-  return Promise.all([runGitLsFiles(primary), runGitLsFiles(ignoredPass)])
-    .then(() =>
-      expandQuickOpenGitFilesWithNestedRepos({
+  return Promise.all([
+    runGitLsFiles(primary),
+    // Why: ignored files are supplementary — a failed or timed-out ignored
+    // pass must not discard the primary listing the user actually needs
+    // (#7719 root cause: the all-or-nothing failure showed zero files).
+    // Entries streamed before the failure are kept; a cancelled scan still
+    // rejects via the primary pass or the expansion's cancellation check.
+    runGitLsFiles(ignoredPass).catch((err: Error) => {
+      if (!signal?.aborted) {
+        console.warn(
+          '[relay quick-open] git ignored-file pass failed; keeping primary results:',
+          err
+        )
+      }
+    })
+  ])
+    .then(async () => {
+      const files = await expandQuickOpenGitFileListing({
         rootPath,
         gitPaths,
+        directoryPaths,
         excludePathPrefixes,
         signal
       })
-    )
+      // Why: directory placeholders are expanded after Git exits; restore
+      // Git's path order for empty queries and fuzzy-score ties over SSH.
+      return files.sort()
+    })
     .catch((err) => {
       killSurvivors('git ls-files canceled after sibling failure')
       if (signal?.aborted) {

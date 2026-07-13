@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import { Pressable, ScrollView, View } from 'react-native'
 import { Code, Pencil } from 'lucide-react-native'
 import { MobileMarkdown } from '../components/MobileMarkdown'
@@ -25,9 +25,15 @@ export function MobileFileMarkdownPreview({
   initialLine
 }: Props) {
   const [mode, setMode] = useState<'preview' | 'source'>(() => (initialLine ? 'source' : 'preview'))
-  useEffect(() => {
+  const [previousRelativePath, setPreviousRelativePath] = useState(relativePath)
+  const [previousInitialLine, setPreviousInitialLine] = useState(initialLine)
+  // Why: opening a different file or line target must switch modes before paint,
+  // never briefly retain the prior file's manually selected mode.
+  if (relativePath !== previousRelativePath || initialLine !== previousInitialLine) {
+    setPreviousRelativePath(relativePath)
+    setPreviousInitialLine(initialLine)
     setMode(initialLine ? 'source' : 'preview')
-  }, [initialLine, relativePath])
+  }
   const previewSelected = mode === 'preview'
   const sourceSelected = mode === 'source'
 

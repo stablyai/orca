@@ -71,9 +71,17 @@ type LiveSubscription = {
 // same renderer can watch several panes, and a destroyed window tears down all
 // of its watchers — strict teardown to avoid fd leaks (plan U4 risk).
 const liveSubscriptions = new Map<number, Map<string, LiveSubscription>>()
+// Why: unsubscribe and renderer destruction must invalidate async watcher setup
+// before it can publish a late subscription into the live map.
+const pendingSubscriptions = new Map<number, Map<string, symbol>>()
 const senderCleanupRegistered = new Set<number>()
 
 function teardownSubscription(senderId: number, subscriptionId: string): void {
+  const pendingBySubId = pendingSubscriptions.get(senderId)
+  pendingBySubId?.delete(subscriptionId)
+  if (pendingBySubId?.size === 0) {
+    pendingSubscriptions.delete(senderId)
+  }
   const bySubId = liveSubscriptions.get(senderId)
   const live = bySubId?.get(subscriptionId)
   if (!live || !bySubId) {
@@ -87,6 +95,9 @@ function teardownSubscription(senderId: number, subscriptionId: string): void {
 }
 
 function teardownAllForSender(senderId: number): void {
+  // The destroyed event can arrive before async subscription setup stores a watcher.
+  senderCleanupRegistered.delete(senderId)
+  pendingSubscriptions.delete(senderId)
   const bySubId = liveSubscriptions.get(senderId)
   if (!bySubId) {
     return
@@ -95,7 +106,6 @@ function teardownAllForSender(senderId: number): void {
     live.subscription.unsubscribe()
   }
   liveSubscriptions.delete(senderId)
-  senderCleanupRegistered.delete(senderId)
 }
 
 function registerSenderCleanup(sender: WebContents): void {
@@ -107,6 +117,27 @@ function registerSenderCleanup(sender: WebContents): void {
   sender.once('destroyed', () => teardownAllForSender(sender.id))
 }
 
+function beginPendingSubscription(senderId: number, subscriptionId: string): symbol {
+  teardownSubscription(senderId, subscriptionId)
+  const token = Symbol(subscriptionId)
+  const bySubId = pendingSubscriptions.get(senderId) ?? new Map<string, symbol>()
+  bySubId.set(subscriptionId, token)
+  pendingSubscriptions.set(senderId, bySubId)
+  return token
+}
+
+function takePendingSubscription(senderId: number, subscriptionId: string, token: symbol): boolean {
+  const bySubId = pendingSubscriptions.get(senderId)
+  if (bySubId?.get(subscriptionId) !== token) {
+    return false
+  }
+  bySubId.delete(subscriptionId)
+  if (bySubId.size === 0) {
+    pendingSubscriptions.delete(senderId)
+  }
+  return true
+}
+
 async function handleSubscribe(event: IpcMainEvent, args: NativeChatSubscribeArgs): Promise<void> {
   const sender = event.sender
   if (sender.isDestroyed()) {
@@ -114,26 +145,32 @@ async function handleSubscribe(event: IpcMainEvent, args: NativeChatSubscribeArg
   }
   const { subscriptionId, agent, sessionId, transcriptPath } = args
   // Replace any prior subscription under the same id (session change/resubscribe).
-  teardownSubscription(sender.id, subscriptionId)
+  const pendingToken = beginPendingSubscription(sender.id, subscriptionId)
   registerSenderCleanup(sender)
 
-  const subscription = await subscribeNativeChatTranscript({
-    agent,
-    sessionId,
-    transcriptPath,
-    onAppend: (messages) => {
-      if (sender.isDestroyed()) {
-        return
+  let subscription: NativeChatTranscriptSubscription
+  try {
+    subscription = await subscribeNativeChatTranscript({
+      agent,
+      sessionId,
+      transcriptPath,
+      onAppend: (messages) => {
+        if (sender.isDestroyed()) {
+          return
+        }
+        const payload: NativeChatAppendedPayload = { subscriptionId, messages }
+        sender.send('nativeChat:appended', payload)
       }
-      const payload: NativeChatAppendedPayload = { subscriptionId, messages }
-      sender.send('nativeChat:appended', payload)
-    }
-  })
+    })
+  } catch {
+    takePendingSubscription(sender.id, subscriptionId, pendingToken)
+    return
+  }
 
-  // The window may have gone away (or the subscription been replaced) while we
-  // resolved the file path — don't register a now-orphaned watcher.
-  const stillCurrent = !sender.isDestroyed()
-  if (!stillCurrent) {
+  // Why: unmount, destruction, or a newer same-id subscribe can invalidate setup
+  // while path resolution is pending; only the owning token may publish its watcher.
+  const stillCurrent = takePendingSubscription(sender.id, subscriptionId, pendingToken)
+  if (sender.isDestroyed() || !stillCurrent) {
     subscription.unsubscribe()
     return
   }
@@ -147,12 +184,26 @@ async function handleSubscribe(event: IpcMainEvent, args: NativeChatSubscribeArg
   liveSubscriptions.set(sender.id, bySubId)
 }
 
-/** Test-only: drop all live transcript subscriptions between runs. */
+/** Test-only: drop all live and pending transcript subscriptions between runs. */
 export function clearNativeChatSubscriptions(): void {
-  const senderIds = Array.from(liveSubscriptions.keys())
+  const senderIds = new Set([...liveSubscriptions.keys(), ...pendingSubscriptions.keys()])
   for (const senderId of senderIds) {
     teardownAllForSender(senderId)
   }
+  pendingSubscriptions.clear()
+  senderCleanupRegistered.clear()
+}
+
+export function _getNativeChatSenderCleanupCountForTest(): number {
+  return senderCleanupRegistered.size
+}
+
+export function _getNativeChatPendingSubscriptionCountForTest(): number {
+  let count = 0
+  for (const bySubId of pendingSubscriptions.values()) {
+    count += bySubId.size
+  }
+  return count
 }
 
 export function registerNativeChatHandlers(): void {

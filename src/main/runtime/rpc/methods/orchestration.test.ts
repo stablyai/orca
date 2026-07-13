@@ -90,6 +90,153 @@ describe('orchestration RPC methods', () => {
       expect(runtime.deliverPendingMessagesForHandle).toHaveBeenCalledWith('term_b')
     })
 
+    it('stores the sender pane key on the message row', async () => {
+      setup()
+      vi.spyOn(runtime, 'deliverPendingMessagesForHandle').mockImplementation(() => {})
+      vi.spyOn(runtime, 'notifyMessageArrived').mockImplementation(() => {})
+
+      const result = (await call('orchestration.send', {
+        from: 'term_a',
+        to: 'term_b',
+        subject: 'hello',
+        senderPaneKey: 'tab_a:leaf_a'
+      })) as { message: { id: string } }
+
+      expect(db.getMessageById(result.message.id)?.sender_pane_key).toBe('tab_a:leaf_a')
+    })
+
+    it('recovers missing sender pane identity from the resolved handle', async () => {
+      setup()
+      vi.spyOn(runtime, 'getTerminalPaneKey').mockReturnValue('tab_worker:leaf_worker')
+      vi.spyOn(runtime, 'deliverPendingMessagesForHandle').mockImplementation(() => {})
+
+      const result = (await call('orchestration.send', {
+        from: 'term_worker',
+        to: 'term_coord',
+        subject: 'hello'
+      })) as { message: { id: string } }
+
+      expect(runtime.getTerminalPaneKey).toHaveBeenCalledWith('term_worker')
+      expect(db.getMessageById(result.message.id)?.sender_pane_key).toBe('tab_worker:leaf_worker')
+    })
+
+    it('completes an identity-less injected send through its explicit worker handle', async () => {
+      setup()
+      const task = db.createTask({ spec: 'work' })
+      const dispatch = db.createDispatchContext(task.id, 'term_worker', 'tab_worker:leaf_worker')
+      vi.spyOn(runtime, 'getTerminalPaneKey').mockImplementation((handle) =>
+        handle === 'term_worker' ? 'tab_worker:leaf_worker' : null
+      )
+      vi.spyOn(runtime, 'deliverPendingMessagesForHandle').mockImplementation(() => {})
+
+      await call('orchestration.send', {
+        from: 'term_worker',
+        to: 'term_coord',
+        subject: 'Done',
+        type: 'worker_done',
+        payload: JSON.stringify({ taskId: task.id, dispatchId: dispatch.id })
+      })
+
+      expect(db.getTask(task.id)?.status).toBe('completed')
+      expect(db.getDispatchContextById(dispatch.id)?.status).toBe('completed')
+    })
+
+    it('rejects an identity-less lifecycle send resolved through the coordinator handle', async () => {
+      setup()
+      const task = db.createTask({ spec: 'work' })
+      const dependent = db.createTask({ spec: 'dependent', deps: [task.id] })
+      const dispatch = db.createDispatchContext(task.id, 'term_worker', 'tab_worker:leaf_worker')
+      vi.spyOn(runtime, 'getTerminalPaneKey').mockImplementation((handle) =>
+        handle === 'term_coord' ? 'tab_coord:leaf_coord' : null
+      )
+      vi.spyOn(runtime, 'deliverPendingMessagesForHandle').mockImplementation(() => {})
+
+      await call('orchestration.send', {
+        from: 'term_coord',
+        to: 'term_coord',
+        subject: 'Done',
+        type: 'worker_done',
+        payload: JSON.stringify({ taskId: task.id, dispatchId: dispatch.id })
+      })
+
+      expect(db.getTask(task.id)?.status).toBe('dispatched')
+      expect(db.getTask(dependent.id)?.status).toBe('pending')
+    })
+
+    it('does not replace a foreign sender pane with its claimed assignee handle pane', async () => {
+      setup()
+      const task = db.createTask({ spec: 'work' })
+      const dispatch = db.createDispatchContext(task.id, 'term_worker', 'tab_worker:leaf_worker')
+      vi.spyOn(runtime, 'getTerminalPaneKey').mockReturnValue('tab_worker:leaf_worker')
+      vi.spyOn(runtime, 'deliverPendingMessagesForHandle').mockImplementation(() => {})
+      vi.spyOn(runtime, 'notifyMessageArrived').mockImplementation(() => {})
+
+      const result = (await call('orchestration.send', {
+        from: 'term_worker',
+        to: 'term_coord',
+        subject: 'Done',
+        type: 'worker_done',
+        senderPaneKey: 'tab_foreign:leaf_foreign',
+        payload: JSON.stringify({ taskId: task.id, dispatchId: dispatch.id })
+      })) as {
+        message: { id: string; type: string; subject: string }
+        lifecycle: { action: string; code: string; reason: string }
+      }
+
+      expect(db.getTask(task.id)?.status).toBe('dispatched')
+      expect(result.lifecycle).toMatchObject({
+        action: 'rejected',
+        code: 'sender_not_assignee',
+        reason: expect.stringContaining('expected handle term_worker')
+      })
+      expect(result.message).toMatchObject({
+        type: 'worker_done',
+        subject: 'Rejected worker_done: Done'
+      })
+      expect(db.getUnreadMessages('term_coord')).toEqual([
+        expect.objectContaining({ id: result.message.id, type: 'worker_done' })
+      ])
+      expect(runtime.notifyMessageArrived).toHaveBeenCalledWith('term_coord', 'worker_done')
+    })
+
+    it('does not wake waiters for a heartbeat suppressed at send time', async () => {
+      setup()
+      const task = db.createTask({ spec: 'work' })
+      const dispatch = db.createDispatchContext(task.id, 'term_worker')
+      db.updateTaskStatus(task.id, 'completed')
+      vi.spyOn(runtime, 'deliverPendingMessagesForHandle').mockImplementation(() => {})
+      const notify = vi.spyOn(runtime, 'notifyMessageArrived').mockImplementation(() => {})
+
+      const result = (await call('orchestration.send', {
+        from: 'term_worker',
+        to: 'term_coord',
+        subject: 'alive',
+        type: 'heartbeat',
+        payload: JSON.stringify({ dispatchId: dispatch.id })
+      })) as { message: { id: string } }
+
+      expect(notify).not.toHaveBeenCalled()
+      expect(db.getMessageById(result.message.id)).toMatchObject({ read: 1 })
+    })
+
+    it('still wakes waiters for a heartbeat on an active dispatch', async () => {
+      setup()
+      const task = db.createTask({ spec: 'work' })
+      const dispatch = db.createDispatchContext(task.id, 'term_worker')
+      vi.spyOn(runtime, 'deliverPendingMessagesForHandle').mockImplementation(() => {})
+      const notify = vi.spyOn(runtime, 'notifyMessageArrived').mockImplementation(() => {})
+
+      await call('orchestration.send', {
+        from: 'term_worker',
+        to: 'term_coord',
+        subject: 'alive',
+        type: 'heartbeat',
+        payload: JSON.stringify({ dispatchId: dispatch.id })
+      })
+
+      expect(notify).toHaveBeenCalledWith('term_coord', 'heartbeat')
+    })
+
     it('rejects missing --to', () => {
       const method = findMethod('orchestration.send')
       expect(() => method.params!.parse({ subject: 'hi' })).toThrow()
@@ -319,6 +466,23 @@ describe('orchestration RPC methods', () => {
       expect(result.messages[0].to_handle).toBe('term_b')
     })
 
+    it('fans out @cursor by title match without claiming a cursor-mentioning title', async () => {
+      setupWithTerminals([
+        makeSummary('term_a', { title: 'Codex' }),
+        makeSummary('term_b', { title: 'Cursor ready' }),
+        makeSummary('term_c', { title: '✳ Fix the text cursor blink' })
+      ])
+
+      const result = (await call('orchestration.send', {
+        from: 'term_a',
+        to: '@cursor',
+        subject: 'cursor only'
+      })) as { messages: { to_handle: string }[]; recipients: number }
+
+      expect(result.recipients).toBe(1)
+      expect(result.messages[0].to_handle).toBe('term_b')
+    })
+
     it('fans out @worktree:<id> to matching worktree', async () => {
       setupWithTerminals([
         makeSummary('term_a', { worktreeId: 'wt_1' }),
@@ -442,9 +606,9 @@ describe('orchestration RPC methods', () => {
   })
 
   describe('orchestration.check', () => {
-    function createDispatchedTask(assigneeHandle = 'term_worker') {
+    function createDispatchedTask(assigneeHandle = 'term_worker', assigneePaneKey?: string) {
       const task = db.createTask({ spec: 'manual check work' })
-      const dispatch = db.createDispatchContext(task.id, assigneeHandle)
+      const dispatch = db.createDispatchContext(task.id, assigneeHandle, assigneePaneKey)
       return { task, dispatch }
     }
 
@@ -454,6 +618,7 @@ describe('orchestration RPC methods', () => {
       taskId?: string
       dispatchId?: string
       filesModified?: string[]
+      senderPaneKey?: string
     }): void {
       const payload: Record<string, unknown> = {}
       if (params.taskId !== undefined) {
@@ -471,7 +636,8 @@ describe('orchestration RPC methods', () => {
         to: params.to ?? 'term_coord',
         subject: 'Done',
         type: 'worker_done',
-        payload: JSON.stringify(payload)
+        payload: JSON.stringify(payload),
+        senderPaneKey: params.senderPaneKey
       })
     }
 
@@ -598,13 +764,15 @@ describe('orchestration RPC methods', () => {
       expect(db.getDispatchContextById(dispatch.id)?.status).toBe('dispatched')
     })
 
-    it('does not complete worker_done from a terminal that does not own the dispatch', async () => {
+    it('completes worker_done by payload IDs when the sender handle changed', async () => {
       setup()
-      const { task, dispatch } = createDispatchedTask('term_owner')
+      const leafId = '11111111-1111-4111-8111-111111111111'
+      const { task, dispatch } = createDispatchedTask('term_owner', `tab_before:${leafId}`)
       insertWorkerDone({
-        from: 'term_intruder',
+        from: 'term_reminted',
         taskId: task.id,
-        dispatchId: dispatch.id
+        dispatchId: dispatch.id,
+        senderPaneKey: `tab_after:${leafId}`
       })
 
       const result = (await call('orchestration.check', {
@@ -613,8 +781,8 @@ describe('orchestration RPC methods', () => {
       })) as { count: number }
 
       expect(result.count).toBe(1)
-      expect(db.getTask(task.id)?.status).toBe('dispatched')
-      expect(db.getDispatchContextById(dispatch.id)?.status).toBe('dispatched')
+      expect(db.getTask(task.id)?.status).toBe('completed')
+      expect(db.getDispatchContextById(dispatch.id)?.status).toBe('completed')
     })
 
     it('does not complete worker_done for a stale inactive dispatch', async () => {
@@ -638,6 +806,34 @@ describe('orchestration RPC methods', () => {
       expect(db.getTask(task.id)?.status).toBe('dispatched')
       expect(db.getDispatchContextById(staleDispatch.id)?.status).toBe('failed')
       expect(db.getDispatchContextById(activeDispatch.id)?.status).toBe('dispatched')
+    })
+
+    it('returns a persisted foreign completion as a rejection diagnostic', async () => {
+      setup()
+      const { task, dispatch } = createDispatchedTask('term_worker', 'tab_worker:leaf_worker')
+      insertWorkerDone({
+        from: 'term_foreign',
+        taskId: task.id,
+        dispatchId: dispatch.id,
+        senderPaneKey: 'tab_foreign:leaf_foreign'
+      })
+
+      const result = (await call('orchestration.check', {
+        terminal: 'term_coord',
+        types: 'worker_done'
+      })) as { count: number; messages: { type: string; subject: string; body: string }[] }
+
+      expect(result).toMatchObject({
+        count: 1,
+        messages: [
+          {
+            type: 'worker_done',
+            subject: 'Rejected worker_done: Done',
+            body: expect.stringContaining('expected handle term_worker')
+          }
+        ]
+      })
+      expect(db.getTask(task.id)?.status).toBe('dispatched')
     })
 
     it('records heartbeat returned by unread manual check', async () => {
@@ -670,6 +866,11 @@ describe('orchestration RPC methods', () => {
       ).rejects.toThrow('Invalid --types')
     })
 
+    it('rejects conflicting message read modes', () => {
+      const method = findMethod('orchestration.check')
+      expect(() => method.params!.parse({ unread: true, peek: true })).toThrow(/read mode/)
+    })
+
     it('default (unread only) marks returned rows as read', async () => {
       setup()
       db.insertMessage({ from: 'a', to: 'b', subject: 'one' })
@@ -684,6 +885,36 @@ describe('orchestration RPC methods', () => {
         count: number
       }
       expect(second.count).toBe(0)
+    })
+
+    it('--peek returns unread messages without marking them read', async () => {
+      setup()
+      db.insertMessage({ from: 'a', to: 'b', subject: 'one' })
+
+      const result = (await call('orchestration.check', {
+        terminal: 'b',
+        peek: true
+      })) as { count: number }
+
+      expect(result.count).toBe(1)
+      expect(db.getUnreadMessages('b')).toHaveLength(1)
+    })
+
+    it("treats the CLI's {peek, unread:false} compat pair as peek, not all", async () => {
+      setup()
+      const seen = db.insertMessage({ from: 'a', to: 'b', subject: 'seen' })
+      db.markAsRead([seen.id])
+      db.insertMessage({ from: 'a', to: 'b', subject: 'fresh' })
+
+      const result = (await call('orchestration.check', {
+        terminal: 'b',
+        peek: true,
+        unread: false
+      })) as { messages: { subject: string }[]; count: number }
+
+      expect(result.count).toBe(1)
+      expect(result.messages[0]?.subject).toBe('fresh')
+      expect(db.getUnreadMessages('b')).toHaveLength(1)
     })
 
     it('--all returns every message for the handle without marking read', async () => {
@@ -1000,6 +1231,24 @@ describe('orchestration RPC methods', () => {
     })
   })
 
+  describe('orchestration.taskList --brief', () => {
+    it('abbreviates specs server-side so full text never crosses the wire', async () => {
+      setup()
+      db.createTask({ spec: `First line\n${'detail '.repeat(40)}` })
+      db.createTask({ spec: 'Short task' })
+
+      const result = (await call('orchestration.taskList', { brief: true })) as {
+        tasks: { spec: string; spec_truncated: boolean }[]
+      }
+
+      const [long, short] = result.tasks
+      expect(long.spec).toHaveLength(160)
+      expect(long.spec_truncated).toBe(true)
+      expect(short.spec).toBe('Short task')
+      expect(short.spec_truncated).toBe(false)
+    })
+  })
+
   describe('orchestration.taskUpdate', () => {
     it('updates task status', async () => {
       setup()
@@ -1048,6 +1297,20 @@ describe('orchestration RPC methods', () => {
 
       expect(result.dispatch.task_id).toBe(task.id)
       expect(result.dispatch.status).toBe('dispatched')
+    })
+
+    it('records the assignee pane key on the dispatch context', async () => {
+      setup()
+      vi.spyOn(runtime, 'getTerminalPaneKey').mockReturnValue('tab_w:leaf_w')
+      const task = db.createTask({ spec: 'work' })
+
+      const result = (await call('orchestration.dispatch', {
+        task: task.id,
+        to: 'term_a'
+      })) as { dispatch: { id: string } }
+
+      expect(runtime.getTerminalPaneKey).toHaveBeenCalledWith('term_a')
+      expect(db.getDispatchContextById(result.dispatch.id)?.assignee_pane_key).toBe('tab_w:leaf_w')
     })
 
     it('rejects dispatch for a pending task', async () => {

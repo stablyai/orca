@@ -225,6 +225,28 @@ describe('ensureHooksConfirmed', () => {
     expect(pending).toHaveLength(0)
   })
 
+  it('inspects the requested host when duplicate repo ids exist', async () => {
+    const { state } = createTestState({
+      settings: { activeRuntimeEnvironmentId: 'env-1' },
+      trustedOrcaHooks: { 'repo-1': { all: { approvedAt: 1 } } },
+      repos: [
+        { id: 'repo-1', displayName: 'Runtime', executionHostId: 'runtime:env-1' },
+        { id: 'repo-1', displayName: 'SSH', connectionId: 'ssh-1' }
+      ]
+    } as unknown as Partial<AppState>)
+    hooksCheckMock.mockResolvedValue({
+      hasHooks: true,
+      hooks: { scripts: {} },
+      mayNeedUpdate: false
+    })
+
+    const decision = await ensureHooksConfirmed(state, 'repo-1', 'archive', 'ssh:ssh-1')
+
+    expect(decision).toBe('run')
+    expect(hooksCheckMock).toHaveBeenCalledWith({ repoId: 'repo-1', hostId: 'ssh:ssh-1' })
+    expect(runtimeEnvironmentCallMock).not.toHaveBeenCalled()
+  })
+
   it('checks runtime-owned repo hooks through the repo owner runtime', async () => {
     const { state, pending } = createTestState({
       settings: { activeRuntimeEnvironmentId: 'focused-env' },

@@ -29,7 +29,12 @@ const {
     addTarget: vi.fn(),
     updateTarget: vi.fn(),
     removeTarget: vi.fn(),
-    importFromSshConfig: vi.fn().mockReturnValue([])
+    importFromSshConfig: vi.fn().mockReturnValue([]),
+    lastRepoReadoptions: [] as {
+      oldTargetId: string
+      newTargetId: string
+      repoIds: string[]
+    }[]
   },
   mockConnectionManager: {
     connect: vi.fn(),
@@ -293,6 +298,7 @@ describe('SSH IPC handlers', () => {
     mockSshStore.updateTarget.mockReset()
     mockSshStore.removeTarget.mockReset()
     mockSshStore.importFromSshConfig.mockReset().mockReturnValue([])
+    mockSshStore.lastRepoReadoptions = []
     mockWindow.webContents.send.mockReset()
     mockStore.getSshRemotePtyLeases.mockReset().mockReturnValue([])
     mockStore.markSshRemotePtyLease.mockReset()
@@ -379,7 +385,28 @@ describe('SSH IPC handlers', () => {
 
     const result = await handlers.get('ssh:addTarget')!(null, { target: newTarget })
     expect(mockSshStore.addTarget).toHaveBeenCalledWith(newTarget)
-    expect(result).toEqual(withId)
+    expect(result).toEqual({ target: withId, repoReadoptions: [] })
+  })
+
+  it('ssh:addTarget returns exact re-adoption evidence and refreshes repos', async () => {
+    const target = {
+      id: 'ssh-new',
+      label: 'Server',
+      host: 'server.example.com',
+      port: 22,
+      username: 'deploy'
+    }
+    const repoReadoptions = [
+      { oldTargetId: 'ssh-old', newTargetId: 'ssh-new', repoIds: ['repo-1'] }
+    ]
+    mockSshStore.addTarget.mockReturnValue(target)
+    mockSshStore.lastRepoReadoptions = repoReadoptions
+
+    const result = await handlers.get('ssh:addTarget')!(null, { target })
+
+    expect(result).toEqual({ target, repoReadoptions })
+    expect(mockWindow.webContents.send).toHaveBeenCalledWith('repos:changed')
+    expect(mockSshStore.lastRepoReadoptions).toEqual([])
   })
 
   it('ssh:removeTarget calls store.removeTarget', async () => {
@@ -438,7 +465,7 @@ describe('SSH IPC handlers', () => {
     mockSshStore.importFromSshConfig.mockReturnValue(imported)
 
     const result = await handlers.get('ssh:importConfig')!(null, {})
-    expect(result).toEqual(imported)
+    expect(result).toEqual({ targets: imported, repoReadoptions: [] })
   })
 
   it('ssh:connect throws for unknown targetId', async () => {

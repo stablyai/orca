@@ -10,7 +10,7 @@ import { spawn } from 'node:child_process'
 import { readFile } from 'node:fs/promises'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
-import { codexAuthExists } from './codex-auth-presence'
+import { probeCodexAuthPresence } from './codex-auth-presence'
 import { resolveCodexCommand } from '../codex-cli/command'
 import { withMacTailscaleDnsHint } from '../network/macos-tailscale-dns-diagnostic'
 import { getCmdExePath, getSpawnArgsForWindows } from '../win32-utils'
@@ -1026,13 +1026,13 @@ export async function fetchCodexRateLimits(
   // Why: never spawn the `codex` binary unless the user has signed in. Without
   // auth the RPC/PTY paths can only error, and spawning them shows up as an
   // unexpected background Codex process for users who don't use Codex.
-  const hasCodexAuth = await codexAuthExists(options?.codexHomePath, {
+  const authPresence = await probeCodexAuthPresence(options?.codexHomePath, {
     signal: options?.signal
   })
   if (options?.signal?.aborted) {
     return abortedCodexRateLimitResult()
   }
-  if (!hasCodexAuth) {
+  if (authPresence === 'absent') {
     return {
       provider: 'codex',
       session: null,
@@ -1040,6 +1040,19 @@ export async function fetchCodexRateLimits(
       updatedAt: Date.now(),
       error: 'Codex not signed in',
       status: 'unavailable'
+    }
+  }
+  if (authPresence !== 'present') {
+    return {
+      provider: 'codex',
+      session: null,
+      weekly: null,
+      updatedAt: Date.now(),
+      error:
+        authPresence === 'timeout'
+          ? 'Timed out while checking Codex sign-in status'
+          : 'Codex sign-in status is unavailable',
+      status: 'error'
     }
   }
 

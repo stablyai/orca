@@ -19,9 +19,7 @@ import { toSshExecutionHostId } from '../../../../shared/execution-host'
 import { translate } from '@/i18n/i18n'
 export { getSshPaneSearchEntries } from './ssh-search'
 
-type SshPaneProps = Record<string, never>
-
-export function SshPane(_props: SshPaneProps): React.JSX.Element {
+export function SshPane(): React.JSX.Element {
   const [targets, setTargets] = useState<SshTarget[]>([])
   // Why: connection states are already hydrated and kept up-to-date by the
   // global store (via useIpcEvents.ts). Reading from the store avoids
@@ -72,7 +70,8 @@ export function SshPane(_props: SshPaneProps): React.JSX.Element {
     // a sync failure must not block listing the already-known targets.
     void (async () => {
       try {
-        await window.api.ssh.importConfig()
+        const result = await window.api.ssh.importConfig()
+        useAppStore.getState().recordSshRepoReadoptions(result.repoReadoptions)
       } catch {
         // Surfaced on demand via the explicit Import button; ignore here.
       }
@@ -92,9 +91,12 @@ export function SshPane(_props: SshPaneProps): React.JSX.Element {
     }
 
     try {
-      await (editingId
-        ? window.api.ssh.updateTarget({ id: editingId, updates: savePayload.payload.updates })
-        : window.api.ssh.addTarget({ target: savePayload.payload.target }))
+      if (editingId) {
+        await window.api.ssh.updateTarget({ id: editingId, updates: savePayload.payload.updates })
+      } else {
+        const result = await window.api.ssh.addTarget({ target: savePayload.payload.target })
+        useAppStore.getState().recordSshRepoReadoptions(result.repoReadoptions)
+      }
       recordFeatureInteraction('ssh')
       if (!mountedRef.current) {
         return
@@ -288,17 +290,18 @@ export function SshPane(_props: SshPaneProps): React.JSX.Element {
       // Why: the explicit Import action re-adopts every ~/.ssh/config host,
       // including ones the user previously deleted — clear tombstones so a
       // deliberate re-import can bring them back.
-      const synced = (await window.api.ssh.importConfig({ reAdopt: true })) as SshTarget[]
+      const result = await window.api.ssh.importConfig({ reAdopt: true })
+      useAppStore.getState().recordSshRepoReadoptions(result.repoReadoptions)
       recordFeatureInteraction('ssh')
       if (mountedRef.current) {
-        if (synced.length === 0) {
+        if (result.targets.length === 0) {
           toast('~/.ssh/config already in sync')
         } else {
           toast.success(
             translate(
               'auto.components.settings.SshPane.f8050f6307',
               'Synced {{value0}} server{{value1}}',
-              { value0: synced.length, value1: synced.length > 1 ? 's' : '' }
+              { value0: result.targets.length, value1: result.targets.length > 1 ? 's' : '' }
             )
           )
         }

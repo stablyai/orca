@@ -1,5 +1,19 @@
 import type { Terminal } from '@xterm/xterm'
 
+type ArabicShapingTerminal = Pick<Terminal, 'registerCharacterJoiner' | 'deregisterCharacterJoiner'>
+
+type LazyArabicShapingJoinerState = {
+  cleanup: (() => void) | null
+  isShapingActive: () => boolean
+  registrationAttempted: boolean
+  trailingHighSurrogate: string
+}
+
+const lazyArabicShapingJoinerByTerminal = new WeakMap<
+  ArabicShapingTerminal,
+  LazyArabicShapingJoinerState
+>()
+
 // Why: xterm draws every cell's glyph in isolation, so Arabic output shows
 // disconnected letterforms in logical (reversed) order — upstream has no
 // BiDi/shaping support (xtermjs/xterm.js#701, Orca #5262). Joining each RTL
@@ -27,6 +41,27 @@ export function isStrongRtlCodePoint(codePoint: number): boolean {
     // Mende Kikakui, Adlam, Arabic Mathematical symbols.
     (codePoint >= 0x1e800 && codePoint <= 0x1eeff)
   )
+}
+
+function containsStrongRtlText(text: string): boolean {
+  for (let index = 0; index < text.length; index++) {
+    const unit = text.charCodeAt(index)
+    if (unit < RTL_SCAN_FLOOR) {
+      continue
+    }
+    let codePoint = unit
+    if (unit >= 0xd800 && unit <= 0xdbff && index + 1 < text.length) {
+      const low = text.charCodeAt(index + 1)
+      if (low >= 0xdc00 && low <= 0xdfff) {
+        codePoint = (unit - 0xd800) * 0x400 + (low - 0xdc00) + 0x10000
+        index++
+      }
+    }
+    if (isStrongRtlCodePoint(codePoint)) {
+      return true
+    }
+  }
+  return false
 }
 
 // Neutral characters may sit inside an RTL run (so a multi-word phrase joins
@@ -169,7 +204,7 @@ export function findRtlJoinRanges(text: string): [number, number][] {
  *  character joiners, so disposePane() must call this to avoid leaking the
  *  registration (xtermjs/xterm.js#3289). */
 export function registerArabicShapingJoiner(
-  terminal: Pick<Terminal, 'registerCharacterJoiner' | 'deregisterCharacterJoiner'>,
+  terminal: ArabicShapingTerminal,
   isShapingActive: () => boolean
 ): () => void {
   // Why: the DOM renderer sizes a joined span with one letter-spacing value
@@ -183,5 +218,72 @@ export function registerArabicShapingJoiner(
   )
   return () => {
     terminal.deregisterCharacterJoiner(joinerId)
+  }
+}
+
+/** Configure RTL shaping without registering an xterm character joiner until
+ *  output actually contains RTL text. Any registered joiner makes xterm scan
+ *  every visible cell on every repaint, even when its handler returns no ranges. */
+export function configureLazyArabicShapingJoiner(
+  terminal: ArabicShapingTerminal,
+  isShapingActive: () => boolean
+): () => void {
+  const previousState = lazyArabicShapingJoinerByTerminal.get(terminal)
+  try {
+    previousState?.cleanup?.()
+  } catch {
+    // A disposed terminal can reject deregistration; replace stale state anyway.
+  }
+
+  const state: LazyArabicShapingJoinerState = {
+    cleanup: null,
+    isShapingActive,
+    registrationAttempted: false,
+    trailingHighSurrogate: ''
+  }
+  lazyArabicShapingJoinerByTerminal.set(terminal, state)
+
+  return () => {
+    if (lazyArabicShapingJoinerByTerminal.get(terminal) !== state) {
+      return
+    }
+    try {
+      state.cleanup?.()
+    } catch {
+      // Pane teardown must continue if xterm disposed before deregistration.
+    } finally {
+      lazyArabicShapingJoinerByTerminal.delete(terminal)
+    }
+  }
+}
+
+/** Register the configured joiner immediately before the first RTL write. */
+export function ensureArabicShapingJoinerForText(
+  terminal: ArabicShapingTerminal,
+  text: string
+): void {
+  const state = lazyArabicShapingJoinerByTerminal.get(terminal)
+  if (!state || state.cleanup || state.registrationAttempted) {
+    return
+  }
+
+  // Why: PTY/replay chunks can split supplementary-plane RTL code points
+  // between their surrogate halves; retain only that one boundary code unit.
+  const scanText = state.trailingHighSurrogate + text
+  const finalCharacter = scanText.at(-1) ?? ''
+  const finalCodeUnit = finalCharacter.charCodeAt(0)
+  state.trailingHighSurrogate =
+    finalCodeUnit >= 0xd800 && finalCodeUnit <= 0xdbff ? finalCharacter : ''
+  if (!containsStrongRtlText(scanText)) {
+    return
+  }
+
+  state.trailingHighSurrogate = ''
+  state.registrationAttempted = true
+  try {
+    state.cleanup = registerArabicShapingJoiner(terminal, state.isShapingActive)
+  } catch {
+    // Why: shaping is optional; a registration race with pane disposal must
+    // never drop the PTY/replay bytes that triggered it or retry every chunk.
   }
 }

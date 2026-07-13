@@ -1,28 +1,32 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
-const { lstatMock } = vi.hoisted(() => ({
-  lstatMock: vi.fn()
+const { lstatMock, readdirMock } = vi.hoisted(() => ({
+  lstatMock: vi.fn(),
+  readdirMock: vi.fn()
 }))
 
 vi.mock('fs/promises', async () => {
   const actual = await vi.importActual<typeof import('fs/promises')>('fs/promises') // eslint-disable-line @typescript-eslint/consistent-type-imports -- vi.importActual requires inline import()
   lstatMock.mockImplementation(actual.lstat)
+  readdirMock.mockImplementation(actual.readdir)
   return {
     ...actual,
-    lstat: lstatMock
+    lstat: lstatMock,
+    readdir: readdirMock
   }
 })
 
-import { mkdtemp, mkdir, rm, symlink, writeFile } from 'node:fs/promises'
+import { mkdtemp, mkdir, rename, rm, symlink, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import {
   classifyQuickOpenGitEntry,
   createQuickOpenReaddirBudget,
-  expandQuickOpenGitFilesWithNestedRepos,
+  expandQuickOpenGitFileListing,
   isQuickOpenReaddirBudgetError,
   listQuickOpenFilesWithReaddir,
-  parseQuickOpenGitLsFilesEntry
+  parseQuickOpenGitLsFilesEntry,
+  QUICK_OPEN_READDIR_MAX_FILES
 } from './quick-open-readdir-walk'
 import { isFileListingCancellation } from './file-listing-cancellation'
 
@@ -94,7 +98,7 @@ describe('quick-open readdir walk', () => {
 
   it('keeps ordinary git entries without lstat calls', async () => {
     await expect(
-      expandQuickOpenGitFilesWithNestedRepos({
+      expandQuickOpenGitFileListing({
         rootPath: '/unused/root',
         gitPaths: [
           staged('100644', 'README.md'),
@@ -152,7 +156,7 @@ describe('quick-open readdir walk', () => {
     await writeRel(root, 'packages/lib/src/lib.ts')
 
     await expect(
-      expandQuickOpenGitFilesWithNestedRepos({
+      expandQuickOpenGitFileListing({
         rootPath: root,
         gitPaths: [
           staged('100644', 'README.md'),
@@ -180,7 +184,7 @@ describe('quick-open readdir walk', () => {
     await writeRel(root, 'packages/lib/c.ts')
 
     await expect(
-      expandQuickOpenGitFilesWithNestedRepos({
+      expandQuickOpenGitFileListing({
         rootPath: root,
         gitPaths: [staged('160000', 'packages/app'), staged('160000', 'packages/lib')],
         budget: createQuickOpenReaddirBudget({ maxFiles: 2 })
@@ -199,13 +203,216 @@ describe('quick-open readdir walk', () => {
     }
 
     await expect(
-      expandQuickOpenGitFilesWithNestedRepos({
+      expandQuickOpenGitFileListing({
         rootPath: root,
         gitPaths: [staged('160000', 'packages/app')],
         excludePathPrefixes: ['packages/app/excluded'],
         budget: createQuickOpenReaddirBudget({ maxFiles: 5 })
       })
     ).resolves.toEqual(['packages/app/keep.ts'])
+  })
+
+  it('expands allowed ignored directories without walking blocked or excluded directories', async () => {
+    const root = await makeTempRoot()
+    await writeRel(root, 'dist/generated.js')
+    await writeRel(root, 'node_modules/pkg/index.js')
+    await writeRel(root, '.cache/state.json')
+    await writeRel(root, '.local/share/state.json')
+    await writeRel(root, '.local/config.toml')
+    await writeRel(root, 'excluded/other.js')
+
+    await expect(
+      expandQuickOpenGitFileListing({
+        rootPath: root,
+        gitPaths: [],
+        directoryPaths: [
+          'dist/',
+          '.local/',
+          'node_modules/',
+          '.cache/',
+          '.local/share/',
+          'excluded/'
+        ],
+        excludePathPrefixes: ['excluded'],
+        budget: createQuickOpenReaddirBudget({ maxFiles: 2 })
+      })
+    ).resolves.toEqual(['.local/config.toml', 'dist/generated.js'])
+
+    const walkedPaths = readdirMock.mock.calls.map(([path]) => path)
+    expect(walkedPaths).toContain(join(root, 'dist'))
+    expect(walkedPaths).toContain(join(root, '.local'))
+    expect(walkedPaths).not.toContain(join(root, '.local', 'share'))
+  })
+
+  it('batches many allowed directory placeholders with bounded concurrency', async () => {
+    const root = await makeTempRoot()
+    const directoryPaths = Array.from({ length: 40 }, (_, index) => `generated-${index}/`)
+    await Promise.all(
+      directoryPaths.map((directoryPath, index) =>
+        writeRel(root, `${directoryPath}file-${index}.ts`)
+      )
+    )
+
+    const actual = await vi.importActual<typeof import('node:fs/promises')>('node:fs/promises') // eslint-disable-line @typescript-eslint/consistent-type-imports -- vi.importActual requires inline import()
+    let activeReads = 0
+    let maxActiveReads = 0
+    readdirMock.mockImplementation(async (...args: Parameters<typeof actual.readdir>) => {
+      activeReads++
+      maxActiveReads = Math.max(maxActiveReads, activeReads)
+      await new Promise((resolve) => setTimeout(resolve, 5))
+      try {
+        return await actual.readdir(...args)
+      } finally {
+        activeReads--
+      }
+    })
+
+    try {
+      const files = await expandQuickOpenGitFileListing({
+        rootPath: root,
+        gitPaths: [],
+        directoryPaths
+      })
+      expect(files).toHaveLength(directoryPaths.length)
+      expect(maxActiveReads).toBeGreaterThan(1)
+      expect(maxActiveReads).toBeLessThanOrEqual(32)
+    } finally {
+      readdirMock.mockImplementation(actual.readdir)
+    }
+  })
+
+  it('preserves symlink leaves from collapsed Git directories without following them', async () => {
+    const root = await makeTempRoot()
+    await mkdirRel(root, 'scratch')
+    await writeRel(root, 'target/file.ts')
+
+    try {
+      await symlink(join(root, 'target', 'file.ts'), join(root, 'scratch', 'link.ts'))
+      await symlink(join(root, 'target'), join(root, 'scratch', 'linked-dir'), 'dir')
+    } catch (err) {
+      if ((err as NodeJS.ErrnoException).code === 'EPERM') {
+        return
+      }
+      throw err
+    }
+
+    await expect(
+      expandQuickOpenGitFileListing({
+        rootPath: root,
+        gitPaths: [],
+        directoryPaths: ['scratch/']
+      })
+    ).resolves.toEqual(['scratch/link.ts', 'scratch/linked-dir'])
+  })
+
+  it('does not follow a collapsed directory replaced by a symlink', async () => {
+    const root = await makeTempRoot()
+    const outsideRoot = await makeTempRoot()
+    await writeRel(outsideRoot, 'secret.ts')
+
+    try {
+      await symlink(outsideRoot, join(root, 'dist'), 'dir')
+    } catch (err) {
+      if ((err as NodeJS.ErrnoException).code === 'EPERM') {
+        return
+      }
+      throw err
+    }
+
+    await expect(
+      expandQuickOpenGitFileListing({
+        rootPath: root,
+        gitPaths: [],
+        directoryPaths: ['dist/']
+      })
+    ).resolves.toEqual([])
+  })
+
+  it('discards entries when a collapsed directory changes during readdir', async () => {
+    const root = await makeTempRoot()
+    const outsideRoot = await makeTempRoot()
+    await mkdirRel(root, 'dist')
+    await writeRel(outsideRoot, 'secret.ts')
+    const actual = await vi.importActual<typeof import('node:fs/promises')>('node:fs/promises') // eslint-disable-line @typescript-eslint/consistent-type-imports -- vi.importActual requires inline import()
+    const distPath = join(root, 'dist')
+    let swapped = false
+    readdirMock.mockImplementation(async (...args: Parameters<typeof actual.readdir>) => {
+      if (!swapped && args[0] === distPath) {
+        swapped = true
+        await rename(distPath, join(root, 'old-dist'))
+        await symlink(outsideRoot, distPath, 'dir')
+      }
+      return actual.readdir(...args)
+    })
+
+    try {
+      await expect(
+        expandQuickOpenGitFileListing({
+          rootPath: root,
+          gitPaths: [],
+          directoryPaths: ['dist/']
+        })
+      ).resolves.toEqual([])
+    } finally {
+      readdirMock.mockImplementation(actual.readdir)
+    }
+  })
+
+  it('walks overlapping primary and ignored placeholders only once', async () => {
+    const root = await makeTempRoot()
+    await writeRel(root, 'foo/a.ts')
+    await writeRel(root, 'foo/bar/b.ts')
+
+    await expect(
+      expandQuickOpenGitFileListing({
+        rootPath: root,
+        gitPaths: [],
+        directoryPaths: ['foo/', 'foo/bar/'],
+        budget: createQuickOpenReaddirBudget({ maxFiles: 2 })
+      })
+    ).resolves.toEqual(['foo/a.ts', 'foo/bar/b.ts'])
+
+    expect(
+      readdirMock.mock.calls.filter(([path]) => path === join(root, 'foo', 'bar'))
+    ).toHaveLength(1)
+  })
+
+  it('rejects instead of returning a partial ignored-directory expansion', async () => {
+    const root = await makeTempRoot()
+    await writeRel(root, 'dist/a.js')
+    await writeRel(root, 'dist/b.js')
+
+    await expect(
+      expandQuickOpenGitFileListing({
+        rootPath: root,
+        gitPaths: [],
+        directoryPaths: ['dist/'],
+        budget: createQuickOpenReaddirBudget({ maxFiles: 1 })
+      })
+    ).rejects.toThrow('File listing exceeded')
+  })
+
+  it('keeps the default safety cap for a very large collapsed directory', async () => {
+    const root = await makeTempRoot()
+    await mkdirRel(root, 'dist')
+    readdirMock.mockResolvedValueOnce(
+      Array.from({ length: QUICK_OPEN_READDIR_MAX_FILES + 1 }, (_, index) => ({
+        name: `file-${index}.ts`,
+        isDirectory: () => false,
+        isFile: () => true,
+        isSymbolicLink: () => false
+      }))
+    )
+
+    // Why: directory collapse prevents generated trees from flooding the relay;
+    // the Git fallback must reject rather than silently return a partial list.
+    await expect(
+      expandQuickOpenGitFileListing({
+        rootPath: root,
+        gitPaths: [],
+        directoryPaths: ['dist/']
+      })
+    ).rejects.toThrow('File listing exceeded 10000 files')
   })
 
   it('identifies budget errors so callers can translate only those to install-rg guidance', () => {
@@ -248,13 +455,31 @@ describe('quick-open readdir walk', () => {
     expect(files).not.toContain('linked-dir/file.ts')
   })
 
+  it('walks an explicitly selected symlinked workspace root', async () => {
+    const targetRoot = await makeTempRoot()
+    const linkContainer = await makeTempRoot()
+    await writeRel(targetRoot, 'src/index.ts')
+    const linkedRoot = join(linkContainer, 'linked-workspace')
+
+    try {
+      await symlink(targetRoot, linkedRoot, 'dir')
+    } catch (err) {
+      if ((err as NodeJS.ErrnoException).code === 'EPERM') {
+        return
+      }
+      throw err
+    }
+
+    await expect(listQuickOpenFilesWithReaddir(linkedRoot)).resolves.toEqual(['src/index.ts'])
+  })
+
   it('fills nested repo paths containing spaces and glob metacharacters', async () => {
     const root = await makeTempRoot()
     await makeNestedRepo(root, 'packages/app [one] space')
     await writeRel(root, 'packages/app [one] space/src/main.ts')
 
     await expect(
-      expandQuickOpenGitFilesWithNestedRepos({
+      expandQuickOpenGitFileListing({
         rootPath: root,
         gitPaths: ['packages/app [one] space/']
       })
@@ -276,7 +501,7 @@ describe('quick-open readdir walk', () => {
     await rejection.catch((err) => expect(isQuickOpenReaddirBudgetError(err)).toBe(false))
   })
 
-  it('stops nested-repo expansion when the signal aborts (#7721)', async () => {
+  it('stops ignored-directory expansion when the signal aborts (#7721)', async () => {
     const root = await makeTempRoot()
     await writeRel(root, 'src/kept.ts')
 
@@ -284,11 +509,27 @@ describe('quick-open readdir walk', () => {
     controller.abort()
 
     await expect(
-      expandQuickOpenGitFilesWithNestedRepos({
+      expandQuickOpenGitFileListing({
         rootPath: root,
-        gitPaths: ['src/kept.ts'],
+        gitPaths: [],
+        directoryPaths: ['src/'],
         signal: controller.signal
       })
+    ).rejects.toSatisfy(isFileListingCancellation)
+  })
+
+  it('rejects when cancellation lands during an empty readdir batch', async () => {
+    const root = await makeTempRoot()
+    const controller = new AbortController()
+    const actual = await vi.importActual<typeof import('node:fs/promises')>('node:fs/promises') // eslint-disable-line @typescript-eslint/consistent-type-imports -- vi.importActual requires inline import()
+    readdirMock.mockImplementationOnce(async (...args: Parameters<typeof actual.readdir>) => {
+      const entries = await actual.readdir(...args)
+      controller.abort()
+      return entries
+    })
+
+    await expect(
+      listQuickOpenFilesWithReaddir(root, { signal: controller.signal })
     ).rejects.toSatisfy(isFileListingCancellation)
   })
 })

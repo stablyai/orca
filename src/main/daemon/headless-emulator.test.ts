@@ -98,6 +98,74 @@ describe('HeadlessEmulator', () => {
         uri: 'https://example.com/issue/1234'
       })
     })
+
+    it('serializes split synchronized rich TUI frames for model-backed replay', async () => {
+      emulator = new HeadlessEmulator({ cols: 80, rows: 12 })
+      const richFrame = [
+        '\x1b[?2026h',
+        '\x1b[?1049h',
+        '\x1b[2J\x1b[H',
+        '\x1b[?25l',
+        '\x1b[2;36m╭────────────────────────────╮\x1b[0m\r\n',
+        '\x1b[2;36m│ Codex rich restore 🟢 ███░ │\x1b[0m\r\n',
+        '\x1b[2;36m│ status streaming           │\x1b[0m\r\n',
+        '\x1b[2;36m╰────────────────────────────╯\x1b[0m',
+        '\x1b[6;4H\x1b[?25h',
+        '\x1b[?2026l'
+      ].join('')
+
+      // Why: hidden rich TUI bytes may arrive split across DEC 2026 frame
+      // boundaries; model/view work needs the headless model to preserve the
+      // final visible state before renderer writes can be removed.
+      await emulator.write(richFrame.slice(0, 17))
+      await emulator.write(richFrame.slice(17, 91))
+      await emulator.write(richFrame.slice(91))
+
+      const snapshot = emulator.getSnapshot()
+      expect(snapshot.modes.alternateScreen).toBe(true)
+      expect(snapshot.snapshotAnsi).toContain('Codex rich restore')
+      expect(snapshot.snapshotAnsi).toContain('🟢')
+      expect(snapshot.snapshotAnsi).toContain('███░')
+      expect(snapshot.snapshotAnsi).toContain('╭')
+      expect(snapshot.snapshotAnsi).not.toContain('\x1b[?2026h')
+
+      const replay = new HeadlessEmulator({ cols: snapshot.cols, rows: snapshot.rows })
+      try {
+        await replay.write(snapshot.rehydrateSequences + snapshot.snapshotAnsi)
+        const replayed = replay.getSnapshot()
+        expect(replayed.modes.alternateScreen).toBe(true)
+        expect(replayed.snapshotAnsi).toContain('Codex rich restore')
+        expect(replayed.snapshotAnsi).toContain('🟢')
+        expect(replayed.snapshotAnsi).toContain('███░')
+      } finally {
+        replay.dispose()
+      }
+    })
+
+    it('preserves the normal buffer behind an alternate-screen snapshot', async () => {
+      emulator = new HeadlessEmulator({ cols: 40, rows: 6 })
+      await emulator.write('shell history one\r\nshell history two')
+      await emulator.write('\x1b[?1049h\x1b[2J\x1b[HTUI frame')
+
+      const snapshot = emulator.getSnapshot()
+      expect(snapshot.scrollbackAnsi).toContain('shell history one')
+      expect(snapshot.snapshotAnsi).toContain('TUI frame')
+      expect(snapshot.snapshotAnsi).not.toContain('shell history one')
+
+      const replay = new HeadlessEmulator({ cols: snapshot.cols, rows: snapshot.rows })
+      try {
+        await replay.write(
+          snapshot.scrollbackAnsi + snapshot.rehydrateSequences + snapshot.snapshotAnsi
+        )
+        expect(replay.getVisibleLines().join('\n')).toContain('TUI frame')
+
+        await replay.write('\x1b[?1049l')
+        expect(replay.getVisibleLines().join('\n')).toContain('shell history one')
+        expect(replay.getVisibleLines().join('\n')).toContain('shell history two')
+      } finally {
+        replay.dispose()
+      }
+    })
   })
 
   describe('OSC-7 CWD tracking', () => {
@@ -305,6 +373,49 @@ describe('HeadlessEmulator', () => {
       expect(emulator.getSnapshot().modes.sgrMouseMode).toBe(false)
     })
 
+    it('tracks kitty keyboard flags for emulator re-seed parity', async () => {
+      emulator = new HeadlessEmulator({ cols: 80, rows: 24 })
+      expect(emulator.getSnapshot().modes.kittyKeyboardFlags).toBe(0)
+
+      await emulator.write('\x1b[=5;1u')
+      expect(emulator.getSnapshot().modes.kittyKeyboardFlags).toBe(5)
+    })
+
+    it('round-trips a pushed CSI > 1 u flag through the core-internals read path', async () => {
+      // Why: getKittyKeyboardFlags reads _core.coreService.kittyKeyboard.flags,
+      // a private xterm surface. If an xterm upgrade breaks that path this
+      // must fail loudly instead of the responder silently answering ?0u.
+      emulator = new HeadlessEmulator({ cols: 80, rows: 24 })
+
+      await emulator.write('\x1b[>1u')
+      expect(emulator.getSnapshot().modes.kittyKeyboardFlags).toBe(1)
+    })
+
+    it('snapshots the active-buffer kitty flags (alt screen keeps its own set)', async () => {
+      emulator = new HeadlessEmulator({ cols: 80, rows: 24 })
+      // Kitty flags are per screen buffer: entering the alt screen swaps to
+      // its own (empty) flag set, exactly what a CSI ? u reply would report.
+      await emulator.write('\x1b[=5;1u\x1b[?1049h')
+      expect(emulator.getSnapshot().modes.kittyKeyboardFlags).toBe(0)
+
+      await emulator.write('\x1b[=3;1u')
+      expect(emulator.getSnapshot().modes.kittyKeyboardFlags).toBe(3)
+
+      await emulator.write('\x1b[?1049l')
+      expect(emulator.getSnapshot().modes.kittyKeyboardFlags).toBe(5)
+    })
+
+    it('never pushes kitty flags into rehydrateSequences', async () => {
+      // Why: POST_REPLAY_REATTACH_RESET's deliberate kitty reset must stay
+      // authoritative for renderer replays (terminal-query-authority.md).
+      emulator = new HeadlessEmulator({ cols: 80, rows: 24 })
+      await emulator.write('\x1b[?1049h\x1b[=5;1u')
+
+      const snapshot = emulator.getSnapshot()
+      expect(snapshot.modes.kittyKeyboardFlags).toBe(5)
+      expect(snapshot.rehydrateSequences).not.toContain('u')
+    })
+
     it('tracks split SGR mouse reporting sequences', async () => {
       emulator = new HeadlessEmulator({ cols: 80, rows: 24 })
 
@@ -497,6 +608,48 @@ describe('HeadlessEmulator', () => {
       expect(snapshot.modes.sgrMouseMode).toBe(true)
       expect(snapshot.rehydrateSequences).toContain('\x1b[?1006h')
       expect(snapshot.rehydrateSequences).not.toContain('\x1b[?1002h')
+    })
+
+    it('records kitty flags without pushing them into renderer rehydration', async () => {
+      emulator = new HeadlessEmulator({ cols: 80, rows: 24 })
+      // OMP/pi negotiate progressive enhancement with a level-1 push.
+      await emulator.write('\x1b[>1u')
+
+      const snapshot = emulator.getSnapshot()
+      expect(snapshot.modes.kittyKeyboardFlags).toBe(1)
+      // Why: renderer replay deliberately resets stale CSI-u state; the daemon
+      // warm-reattach path re-seeds the model from modes.kittyKeyboardFlags.
+      expect(snapshot.rehydrateSequences).not.toContain('\x1b[=1;1u')
+    })
+
+    it('omits kitty rehydration after the TUI pops its flags', async () => {
+      emulator = new HeadlessEmulator({ cols: 80, rows: 24 })
+      await emulator.write('\x1b[>1u')
+      await emulator.write('\x1b[<u')
+
+      const snapshot = emulator.getSnapshot()
+      expect(snapshot.modes.kittyKeyboardFlags).toBe(0)
+      expect(snapshot.rehydrateSequences).not.toContain('u')
+    })
+
+    it('keeps kitty flags out of alternate-screen renderer rehydration', async () => {
+      emulator = new HeadlessEmulator({ cols: 80, rows: 24 })
+      await emulator.write('\x1b[?1049h\x1b[>1u')
+
+      const snapshot = emulator.getSnapshot()
+      const altScreenIndex = snapshot.rehydrateSequences.indexOf('\x1b[?1049h')
+      const kittyIndex = snapshot.rehydrateSequences.indexOf('\x1b[=1;1u')
+      expect(altScreenIndex).toBeGreaterThanOrEqual(0)
+      expect(kittyIndex).toBe(-1)
+    })
+
+    it('drops kitty rehydration after a TUI soft reset (DECSTR)', async () => {
+      emulator = new HeadlessEmulator({ cols: 80, rows: 24 })
+      await emulator.write('\x1b[>1u')
+      await emulator.write('\x1b[!p')
+
+      const snapshot = emulator.getSnapshot()
+      expect(snapshot.modes.kittyKeyboardFlags).toBe(0)
     })
   })
 

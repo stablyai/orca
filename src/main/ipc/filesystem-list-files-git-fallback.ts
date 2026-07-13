@@ -3,9 +3,10 @@ import { gitSpawn } from '../git/runner'
 import { buildGitLsFilesArgsForQuickOpen } from '../../shared/quick-open-filter'
 import {
   createQuickOpenReaddirBudget,
-  expandQuickOpenGitFilesWithNestedRepos,
+  expandQuickOpenGitFileListing,
   listQuickOpenFilesWithReaddir
 } from '../../shared/quick-open-readdir-walk'
+import { fileListingCancellationError } from '../../shared/file-listing-cancellation'
 
 /**
  * Fallback file lister using git ls-files. Used when rg is not available.
@@ -16,9 +17,13 @@ import {
  */
 async function isInsideGitWorkTree(
   rootPath: string,
-  localGitOptions: { wslDistro?: string }
+  localGitOptions: { wslDistro?: string },
+  signal?: AbortSignal
 ): Promise<boolean> {
-  return new Promise((resolve) => {
+  if (signal?.aborted) {
+    throw fileListingCancellationError(signal)
+  }
+  return new Promise((resolve, reject) => {
     const child = gitSpawn(['rev-parse', '--is-inside-work-tree'], {
       cwd: rootPath,
       ...(localGitOptions.wslDistro ? { wslDistro: localGitOptions.wslDistro } : {}),
@@ -26,22 +31,37 @@ async function isInsideGitWorkTree(
     })
     let done = false
     let timer: ReturnType<typeof setTimeout>
+    const cleanup = (): void => {
+      clearTimeout(timer)
+      child.off('error', handleError)
+      child.off('close', handleClose)
+      signal?.removeEventListener('abort', handleAbort)
+    }
     const finish = (isGitRepo: boolean): void => {
       if (done) {
         return
       }
       done = true
-      clearTimeout(timer)
-      child.off('error', handleError)
-      child.off('close', handleClose)
+      cleanup()
       resolve(isGitRepo)
+    }
+    const cancel = (): void => {
+      if (done) {
+        return
+      }
+      done = true
+      child.kill()
+      cleanup()
+      reject(fileListingCancellationError(signal))
     }
     const handleError = (): void => finish(false)
     const handleClose = (code: number | null, signal: NodeJS.Signals | null): void =>
       finish(code === 0 && signal === null)
+    const handleAbort = (): void => cancel()
 
     child.once('error', handleError)
     child.once('close', handleClose)
+    signal?.addEventListener('abort', handleAbort, { once: true })
     timer = setTimeout(() => {
       child.kill()
       finish(false)
@@ -52,16 +72,23 @@ async function isInsideGitWorkTree(
 export async function listFilesWithGit(
   rootPath: string,
   excludePathPrefixes: readonly string[],
-  localGitOptions: { wslDistro?: string }
+  localGitOptions: { wslDistro?: string },
+  signal?: AbortSignal
 ): Promise<string[]> {
-  if (!(await isInsideGitWorkTree(rootPath, localGitOptions))) {
+  const isGitWorkTree = await isInsideGitWorkTree(rootPath, localGitOptions, signal)
+  if (signal?.aborted) {
+    throw fileListingCancellationError(signal)
+  }
+  if (!isGitWorkTree) {
     return listQuickOpenFilesWithReaddir(rootPath, {
       excludePathPrefixes,
-      budget: createQuickOpenReaddirBudget()
+      budget: createQuickOpenReaddirBudget(),
+      signal
     })
   }
 
   const gitPaths = new Set<string>()
+  const directoryPaths = new Set<string>()
   const { primary, ignoredPass } = buildGitLsFilesArgsForQuickOpen(excludePathPrefixes)
   const children: {
     child: ChildProcess
@@ -78,7 +105,11 @@ export async function listFilesWithGit(
         if (!path) {
           return
         }
-        gitPaths.add(path)
+        if (path.endsWith('/')) {
+          directoryPaths.add(path)
+        } else {
+          gitPaths.add(path)
+        }
       }
 
       // Why: git ls-files outputs paths relative to cwd, so we set cwd to
@@ -168,7 +199,7 @@ export async function listFilesWithGit(
     })
   }
 
-  const killSurvivors = (): void => {
+  const killSurvivors = (reason = 'git ls-files canceled after sibling failure'): void => {
     // Why: Promise.all rejects on the first failed pass; cancel the sibling so
     // a stuck git process cannot keep scanning after Quick Open has failed.
     for (const entry of children) {
@@ -178,20 +209,44 @@ export async function listFilesWithGit(
       if (entry.child.exitCode === null && entry.child.signalCode === null) {
         entry.child.kill()
       }
-      entry.reject(new Error('git ls-files canceled after sibling failure'))
+      entry.reject(new Error(reason))
     }
   }
 
+  const onAbort = (): void => killSurvivors('git ls-files cancelled')
+  signal?.addEventListener('abort', onAbort, { once: true })
   try {
-    await Promise.all([runGitLsFiles(primary), runGitLsFiles(ignoredPass)])
+    await Promise.all([
+      runGitLsFiles(primary),
+      // Why: ignored files are supplementary — a failed or timed-out ignored
+      // pass must not discard the primary listing the user actually needs
+      // (#7719 root cause: the all-or-nothing failure showed zero files).
+      // Entries streamed before the failure are kept; a cancelled scan still
+      // rejects via the primary pass or the expansion's cancellation check.
+      runGitLsFiles(ignoredPass).catch((err: Error) => {
+        if (!signal?.aborted) {
+          console.warn('[quick-open] git ignored-file pass failed; keeping primary results:', err)
+        }
+      })
+    ])
   } catch (err) {
     killSurvivors()
+    if (signal?.aborted) {
+      throw fileListingCancellationError(signal)
+    }
     throw err
+  } finally {
+    signal?.removeEventListener('abort', onAbort)
   }
 
-  return expandQuickOpenGitFilesWithNestedRepos({
+  const files = await expandQuickOpenGitFileListing({
     rootPath,
     gitPaths,
-    excludePathPrefixes
+    directoryPaths,
+    excludePathPrefixes,
+    signal
   })
+  // Why: directory placeholders are expanded after Git exits; restore Git's
+  // path order so empty queries and fuzzy-score ties remain stable.
+  return files.sort()
 }

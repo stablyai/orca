@@ -77,10 +77,11 @@ function Popover(props: {
   pulseKey: number
 }): JSX.Element {
   const { expanded, targeted, swapped, pulseKey } = props
-  const sessionPctText = swapped ? '100% left' : '4% left'
+  // Why: bars show % used (consumption), matching the live status-bar meter.
+  const sessionPctText = swapped ? '0% used' : '96% used'
   const sessionResetText = swapped ? 'Resets in 5h' : 'Resets in 47m'
-  const sessionFillWidth = swapped ? '100%' : '4%'
-  const weeklyFillWidth = '62%'
+  const sessionFillWidth = swapped ? '0%' : '96%'
+  const weeklyFillWidth = '38%'
 
   return (
     <div
@@ -144,7 +145,7 @@ function Popover(props: {
           <span>
             {translate(
               'auto.components.feature.wall.agents.orchestration.UsagePage.05ce4ecdd3',
-              '62% left'
+              '38% used'
             )}
           </span>
         }
@@ -201,15 +202,15 @@ function Popover(props: {
             <SwitchAccount
               accountWidthClassName="w-24"
               tag="Team"
-              fillPct={100}
-              metaText="100%"
+              fillPct={0}
+              metaText="0%"
               highlighted={targeted}
             />
             <SwitchAccount
               accountWidthClassName="w-32"
               tag={null}
-              fillPct={78}
-              metaText="78%"
+              fillPct={22}
+              metaText="22%"
               highlighted={false}
             />
           </div>
@@ -295,11 +296,12 @@ function SwitchAccount(props: {
 
 // The 340px-wide light pill at the bottom of the panel that the popover tip
 // points down to. Codex chip is the "active" one — it animates from a near-
-// empty red bar to a full green bar after the account swap.
+// full red bar (% used) to an empty green bar after the account swap.
 function BottomBar(props: { swapped: boolean }): JSX.Element {
-  const codexFillWidth = props.swapped ? '100%' : '4%'
+  // Why: match live status-bar consumption meters (% used), same as the popover.
+  const codexFillWidth = props.swapped ? '0%' : '96%'
   const codexFillColor = props.swapped ? 'rgb(34 197 94)' : 'rgb(239 68 68)'
-  const codexMeta = props.swapped ? '100% 5h · 96% wk' : '4% 47m'
+  const codexMeta = props.swapped ? '0% used 5h · 4% used wk' : '96% used 47m'
   return (
     <div
       className="absolute bottom-[22px] left-1/2 flex -translate-x-1/2 items-center gap-3.5 rounded-lg border border-border bg-muted/60 px-3.5 py-1.5 text-[11px] shadow-[0_1px_2px_rgba(24,24,27,0.04)]"
@@ -308,12 +310,12 @@ function BottomBar(props: { swapped: boolean }): JSX.Element {
       <div className="inline-flex items-center gap-1.5 font-mono text-[10.5px] text-muted-foreground">
         <ClaudeIcon size={12} />
         <span className="block h-1 w-9 overflow-hidden rounded-full bg-foreground/[0.12]">
-          <span className="block h-full rounded-full bg-emerald-500" style={{ width: '71%' }} />
+          <span className="block h-full rounded-full bg-emerald-500" style={{ width: '29%' }} />
         </span>
         <span>
           {translate(
             'auto.components.feature.wall.agents.orchestration.UsagePage.64265cb295',
-            '71% 5h'
+            '29% used 5h'
           )}
         </span>
       </div>

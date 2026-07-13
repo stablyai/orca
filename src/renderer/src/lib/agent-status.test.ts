@@ -533,6 +533,19 @@ describe('getAgentLabel', () => {
     expect(getAgentLabel('Aider idle')).toBe('Aider')
     expect(getAgentLabel('Devin working')).toBe('Devin')
   })
+
+  // Why: `cursor` is ordinary editor vocabulary in another agent's task title, so a
+  // bare token is not Cursor identity — a Claude tab working on cursor code was being
+  // mislabeled Cursor on the worktree card. Match Cursor's closed title set only.
+  it('labels Cursor by identity, not a bare "cursor" token in another agent title', () => {
+    expect(getAgentLabel('Cursor Agent')).toBe('Cursor')
+    expect(getAgentLabel('⠋ Cursor Agent')).toBe('Cursor')
+    expect(getAgentLabel('Cursor ready')).toBe('Cursor')
+    expect(getAgentLabel('Cursor - action required')).toBe('Cursor')
+    expect(getAgentLabel('⠋ preserve cursor visibility across replays')).toBe('Claude Code')
+    expect(getAgentLabel('⠋ Codex: fix cursor offsets')).toBe('Codex')
+    expect(getAgentLabel('Terminal Cursor and Orca slows down')).toBeNull()
+  })
 })
 
 describe('isClaudeAgent', () => {
@@ -540,6 +553,13 @@ describe('isClaudeAgent', () => {
     expect(isClaudeAgent('⠋ Claude Code')).toBe(true)
     expect(isClaudeAgent('⠋ OpenClaude')).toBe(false)
     expect(isClaudeAgent('OpenClaude ready')).toBe(false)
+  })
+
+  // Why: a braille Claude title merely mentioning a text cursor is still Claude, so its
+  // prompt-cache paths must fire; only Cursor's own identity titles are excluded.
+  it('counts cursor-mentioning Claude braille titles as Claude, excludes real Cursor', () => {
+    expect(isClaudeAgent('⠋ preserve cursor visibility across replays')).toBe(true)
+    expect(isClaudeAgent('⠋ Cursor Agent')).toBe(false)
   })
 
   it('does not classify non-prefix Claude mentions as Claude agent titles', () => {

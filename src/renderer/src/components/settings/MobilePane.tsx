@@ -11,6 +11,7 @@ import { MobileNetworkInterfaceSection } from './MobileNetworkInterfaceSection'
 import { MobilePairingQrSection } from './MobilePairingQrSection'
 import { MobilePairedDevicesSection, type PairedDevice } from './MobilePairedDevicesSection'
 import { MobileAutoRestoreFitSection } from './MobileAutoRestoreFitSection'
+import { WindowsFirewallNotice } from '../mobile/WindowsFirewallNotice'
 import { translate } from '@/i18n/i18n'
 export { getMobilePaneSearchEntries } from './mobile-pane-search'
 
@@ -181,6 +182,8 @@ export function MobilePane(): React.JSX.Element {
         onCodeCopiedChange={setCodeCopied}
         onClearCodeCopiedTimer={clearCodeCopiedResetTimer}
       />
+
+      <WindowsFirewallNotice pairingReady={qrDataUrl != null} address={selectedAddress} />
 
       <MobilePairedDevicesSection
         devices={devices}

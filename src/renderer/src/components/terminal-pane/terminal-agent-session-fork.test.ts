@@ -153,7 +153,9 @@ describe('forkAgentSessionFromPane', () => {
         launchSource: 'terminal_context_menu'
       })
     )
-    expect(mockActivateAndRevealWorktree).toHaveBeenCalledWith('wt-fork')
+    expect(mockActivateAndRevealWorktree).toHaveBeenCalledWith('wt-fork', {
+      sidebarRevealBehavior: 'auto'
+    })
     expect(mockToast.success).toHaveBeenCalledWith(
       'Top-level session fork opened in a new workspace'
     )
@@ -344,7 +346,9 @@ describe('forkAgentSessionFromPane', () => {
       undefined
     )
     expect(mockLaunchAgentInNewTab).not.toHaveBeenCalled()
-    expect(mockActivateAndRevealWorktree).toHaveBeenCalledWith('wt-fork')
+    expect(mockActivateAndRevealWorktree).toHaveBeenCalledWith('wt-fork', {
+      sidebarRevealBehavior: 'auto'
+    })
     expect(mockWriteClipboardText).toHaveBeenCalledWith(
       expect.stringContaining('Assistant: here is the current plan')
     )

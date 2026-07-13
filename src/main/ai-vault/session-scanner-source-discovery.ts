@@ -8,6 +8,7 @@ import { droidDiscoveries, kimiDiscoveries } from './session-scanner-droid-kimi-
 import { opencodeDiscoveries } from './session-scanner-opencode-sources'
 import type { AiVaultScanOptions, SessionFileDiscovery } from './session-scanner-types'
 import { normalizeAgentSessionsDir } from './session-scanner-values'
+import { resolveGrokSessionsDir } from '../../shared/grok-session-paths'
 
 const CLAUDE_PROJECTS_DIR = join(homedir(), '.claude', 'projects')
 export const DEFAULT_CODEX_HOME_DIR = join(homedir(), '.codex')
@@ -19,10 +20,7 @@ const COPILOT_SESSIONS_DIR = join(
   'session-state'
 )
 const CURSOR_PROJECTS_DIR = join(homedir(), '.cursor', 'projects')
-const GROK_SESSIONS_DIR = join(
-  process.env.GROK_HOME?.trim() || join(homedir(), '.grok'),
-  'sessions'
-)
+const GROK_SESSIONS_DIR = resolveGrokSessionsDir()
 const HERMES_SESSIONS_DIR = join(homedir(), '.hermes', 'sessions')
 const ROVO_SESSIONS_DIR = join(homedir(), '.rovodev', 'sessions')
 const OPENCLAW_STATE_DIR = process.env.OPENCLAW_STATE_DIR?.trim() || join(homedir(), '.openclaw')

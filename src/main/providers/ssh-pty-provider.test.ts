@@ -138,8 +138,39 @@ describe('SshPtyProvider', () => {
         cols: 120,
         rows: 40,
         cwd: undefined,
-        env: {}
+        env: {},
+        envToDelete: [POWERLEVEL10K_WIZARD_DISABLE_ENV]
       })
+    })
+
+    it('preserves explicit TERM and forwards final env deletions to the relay', async () => {
+      mux.request.mockResolvedValue({ id: 'pty-env-precedence' })
+      const envToDelete = ['TERM_PROGRAM', 'ORCA_ATTRIBUTION_SHIM_DIR']
+
+      await provider.spawn({
+        cols: 120,
+        rows: 40,
+        env: {
+          TERM: 'screen-256color',
+          TERM_PROGRAM: 'stale-terminal',
+          ORCA_ATTRIBUTION_SHIM_DIR: '/tmp/stale-attribution'
+        },
+        envToDelete
+      })
+
+      expect(mux.request).toHaveBeenCalledWith('pty.spawn', {
+        cols: 120,
+        rows: 40,
+        cwd: undefined,
+        env: {
+          TERM: 'screen-256color',
+          [POWERLEVEL10K_WIZARD_DISABLE_ENV]: 'true'
+        },
+        envToDelete
+      })
+      const spawnCall = mux.request.mock.calls.find((call) => call[0] === 'pty.spawn')
+      expect(spawnCall?.[1]?.env).not.toHaveProperty('TERM_PROGRAM')
+      expect(spawnCall?.[1]?.env).not.toHaveProperty('ORCA_ATTRIBUTION_SHIM_DIR')
     })
 
     it('forwards provider command delivery to the relay', async () => {

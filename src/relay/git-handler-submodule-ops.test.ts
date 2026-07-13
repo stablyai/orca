@@ -2,8 +2,11 @@ import { describe, expect, it } from 'vitest'
 import * as path from 'node:path'
 import type { GitExec } from './git-handler-ops'
 import {
+  MAX_SUBMODULE_PATHS_CACHE_ENTRIES,
   SUBMODULE_PATHS_CACHE_TTL_MS,
+  clearSubmodulePathsCache,
   createSubmodulePathsCache,
+  getSubmodulePathsCacheCount,
   listSubmodulePathsCached,
   resolveSubmoduleWorktreePath
 } from './git-handler-submodule-ops'
@@ -56,6 +59,18 @@ describe('listSubmodulePathsCached', () => {
     expect(calls()).toBe(2)
   })
 
+  it('prunes expired entries when a different remote worktree misses', async () => {
+    const { git } = gitmodulesExec(['vendor/lib'])
+    const cache = createSubmodulePathsCache()
+
+    await listSubmodulePathsCached(git, '/repo-a', cache, 0)
+    await listSubmodulePathsCached(git, '/repo-b', cache, 0)
+    expect(getSubmodulePathsCacheCount(cache)).toBe(2)
+
+    await listSubmodulePathsCached(git, '/repo-c', cache, SUBMODULE_PATHS_CACHE_TTL_MS + 1)
+    expect(getSubmodulePathsCacheCount(cache)).toBe(1)
+  })
+
   it('caches an empty result so a submodule-free repo is not re-read', async () => {
     let calls = 0
     const git: GitExec = async () => {
@@ -70,6 +85,67 @@ describe('listSubmodulePathsCached', () => {
     expect(first).toEqual([])
     expect(second).toEqual([])
     expect(calls).toBe(1)
+  })
+
+  it('stays bounded through prolonged remote-worktree churn and retains recent entries', async () => {
+    const { git, calls } = gitmodulesExec(['vendor/lib'])
+    const cache = createSubmodulePathsCache()
+    let now = 0
+
+    for (let wave = 0; wave < 4; wave += 1) {
+      for (let i = 0; i < MAX_SUBMODULE_PATHS_CACHE_ENTRIES; i += 1) {
+        await listSubmodulePathsCached(git, `/wave-${wave}-repo-${i}`, cache, now)
+      }
+      expect(getSubmodulePathsCacheCount(cache)).toBe(MAX_SUBMODULE_PATHS_CACHE_ENTRIES)
+      now += SUBMODULE_PATHS_CACHE_TTL_MS + 1
+    }
+
+    await listSubmodulePathsCached(git, '/retained-repo', cache, now)
+    for (let i = 0; i < MAX_SUBMODULE_PATHS_CACHE_ENTRIES - 1; i += 1) {
+      await listSubmodulePathsCached(git, `/final-repo-${i}`, cache, now)
+    }
+    await listSubmodulePathsCached(git, '/retained-repo', cache, now)
+    await listSubmodulePathsCached(
+      git,
+      `/final-repo-${MAX_SUBMODULE_PATHS_CACHE_ENTRIES - 1}`,
+      cache,
+      now
+    )
+    await listSubmodulePathsCached(git, '/overflow-repo', cache, now)
+
+    expect(getSubmodulePathsCacheCount(cache)).toBe(MAX_SUBMODULE_PATHS_CACHE_ENTRIES)
+    const callsBeforeReads = calls()
+    await listSubmodulePathsCached(git, '/retained-repo', cache, now)
+    expect(calls()).toBe(callsBeforeReads)
+    await listSubmodulePathsCached(git, '/final-repo-0', cache, now)
+    expect(calls()).toBe(callsBeforeReads + 1)
+  })
+
+  it('does not let a pre-mutation SSH read repopulate the cache', async () => {
+    let resolveOldRead: ((value: { stdout: string; stderr: string }) => void) | undefined
+    let calls = 0
+    const git: GitExec = () => {
+      calls += 1
+      if (calls > 1) {
+        return Promise.resolve({ stdout: 'submodule.lib.path fresh-lib\n', stderr: '' })
+      }
+      return new Promise((resolve) => {
+        resolveOldRead = resolve
+      })
+    }
+    const cache = createSubmodulePathsCache()
+
+    const oldRead = listSubmodulePathsCached(git, '/repo', cache, 1_000)
+    expect(resolveOldRead).toBeTypeOf('function')
+    clearSubmodulePathsCache(cache)
+    resolveOldRead?.({ stdout: 'submodule.lib.path old-lib\n', stderr: '' })
+
+    await expect(oldRead).resolves.toEqual(['old-lib'])
+    expect(getSubmodulePathsCacheCount(cache)).toBe(0)
+    await expect(listSubmodulePathsCached(git, '/repo', cache, 1_001)).resolves.toEqual([
+      'fresh-lib'
+    ])
+    expect(calls).toBe(2)
   })
 })
 

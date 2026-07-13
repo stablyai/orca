@@ -29,12 +29,12 @@ vi.mock('./gemini-usage-fetcher', () => ({
   fetchGeminiRateLimits: vi.fn()
 }))
 
-vi.mock('./opencode-go-usage-fetcher', () => ({
-  fetchOpenCodeGoRateLimits: vi.fn()
-}))
-
 vi.mock('./kimi-fetcher', () => ({
   fetchKimiRateLimits: vi.fn()
+}))
+
+vi.mock('./opencode-go-usage-fetcher', () => ({
+  fetchOpenCodeGoRateLimits: vi.fn()
 }))
 
 vi.mock('./minimax-fetcher', () => ({
@@ -73,7 +73,7 @@ async function flushMicrotasks(times = 4): Promise<void> {
 }
 
 function okProvider(
-  provider: 'claude' | 'codex' | 'gemini' | 'opencode-go' | 'kimi' | 'minimax' | 'grok',
+  provider: ProviderRateLimits['provider'],
   usedPercent: number,
   updatedAt = Date.now()
 ): ProviderRateLimits {
@@ -93,7 +93,7 @@ function okProvider(
 }
 
 function errorProvider(
-  provider: 'claude' | 'codex' | 'gemini' | 'opencode-go' | 'kimi' | 'minimax' | 'grok',
+  provider: ProviderRateLimits['provider'],
   message: string
 ): ProviderRateLimits {
   return {
@@ -103,6 +103,20 @@ function errorProvider(
     updatedAt: Date.now(),
     error: message,
     status: 'error'
+  }
+}
+
+function unavailableProvider(
+  provider: ProviderRateLimits['provider'],
+  message = 'Not configured'
+): ProviderRateLimits {
+  return {
+    provider,
+    session: null,
+    weekly: null,
+    updatedAt: Date.now(),
+    error: message,
+    status: 'unavailable'
   }
 }
 
@@ -337,6 +351,187 @@ describe('RateLimitService', () => {
 
       expect(fetchClaudeRateLimits).toHaveBeenCalledTimes(1)
       expect(fetchCodexRateLimits).toHaveBeenCalledTimes(1)
+
+      service.stop()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('recovers a failed deferred-startup Claude fetch on the next focus', async () => {
+    vi.useFakeTimers()
+    try {
+      vi.mocked(fetchClaudeRateLimits)
+        .mockResolvedValueOnce(errorProvider('claude', 'auth restarting'))
+        .mockResolvedValueOnce(okProvider('claude', 12))
+      vi.mocked(fetchCodexRateLimits).mockResolvedValue(okProvider('codex', 24))
+
+      const service = new RateLimitService()
+      const window = new FakeRateLimitWindow()
+      service.attach(asRateLimitWindow(window))
+      service.start({ fetchImmediately: false })
+
+      await vi.advanceTimersByTimeAsync(1000)
+      expect(service.getState().claude?.status).toBe('error')
+      expect(service.getState().codex?.status).toBe('ok')
+
+      window.emit('focus')
+      await vi.advanceTimersByTimeAsync(0)
+
+      expect(fetchClaudeRateLimits).toHaveBeenCalledTimes(2)
+      expect(fetchCodexRateLimits).toHaveBeenCalledTimes(1)
+      expect(fetchGeminiRateLimits).toHaveBeenCalledTimes(1)
+      expect(fetchOpenCodeGoRateLimits).toHaveBeenCalledTimes(1)
+      expect(fetchKimiRateLimits).toHaveBeenCalledTimes(1)
+      expect(fetchMiniMaxRateLimits).toHaveBeenCalledTimes(1)
+      expect(fetchGrokRateLimits).toHaveBeenCalledTimes(1)
+      expect(service.getState().claude?.status).toBe('ok')
+
+      service.stop()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('throttles repeated active-window retries while Claude is still failing', async () => {
+    vi.useFakeTimers()
+    try {
+      vi.mocked(fetchClaudeRateLimits).mockResolvedValue(errorProvider('claude', 'still failing'))
+      vi.mocked(fetchCodexRateLimits).mockResolvedValue(okProvider('codex', 24))
+
+      const service = new RateLimitService()
+      const window = new FakeRateLimitWindow()
+      service.attach(asRateLimitWindow(window))
+      service.start({ fetchImmediately: false })
+
+      await vi.advanceTimersByTimeAsync(1000)
+      expect(fetchClaudeRateLimits).toHaveBeenCalledTimes(1)
+
+      window.emit('focus')
+      await vi.advanceTimersByTimeAsync(0)
+      expect(fetchClaudeRateLimits).toHaveBeenCalledTimes(2)
+
+      window.emit('show')
+      await vi.advanceTimersByTimeAsync(0)
+      expect(fetchClaudeRateLimits).toHaveBeenCalledTimes(2)
+
+      await vi.advanceTimersByTimeAsync(30 * 1000)
+      window.emit('restore')
+      await vi.advanceTimersByTimeAsync(0)
+      expect(fetchClaudeRateLimits).toHaveBeenCalledTimes(3)
+
+      service.stop()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('keeps a full-fetch retry on the 5-minute cadence for a provider without a dedicated fetch cycle', async () => {
+    vi.useFakeTimers()
+    try {
+      // Kimi has no individual fetch cycle, so recovering it re-runs fetchAll
+      // (which hits Claude's tight-budget endpoint). A durable Kimi error must
+      // not drive that full fetch every 30s — it stays on the 5-minute cadence.
+      vi.mocked(fetchClaudeRateLimits).mockResolvedValue(okProvider('claude', 12))
+      vi.mocked(fetchCodexRateLimits).mockResolvedValue(okProvider('codex', 24))
+      vi.mocked(fetchKimiRateLimits).mockResolvedValue(errorProvider('kimi', 'token expired'))
+
+      const service = new RateLimitService()
+      const window = new FakeRateLimitWindow()
+      service.attach(asRateLimitWindow(window))
+      service.start({ fetchImmediately: false })
+
+      await vi.advanceTimersByTimeAsync(1000)
+      expect(fetchKimiRateLimits).toHaveBeenCalledTimes(1)
+      expect(service.getState().kimi?.status).toBe('error')
+
+      // First activation recovers immediately (retry timestamps start at 0).
+      window.emit('focus')
+      await vi.advanceTimersByTimeAsync(0)
+      expect(fetchKimiRateLimits).toHaveBeenCalledTimes(2)
+      expect(fetchClaudeRateLimits).toHaveBeenCalledTimes(2)
+
+      // Well past the 30s failure throttle but inside the 5-minute window: the
+      // full fetch (and the Claude read it entails) must not fire again.
+      await vi.advanceTimersByTimeAsync(2 * 60 * 1000)
+      window.emit('show')
+      await vi.advanceTimersByTimeAsync(0)
+      expect(fetchKimiRateLimits).toHaveBeenCalledTimes(2)
+      expect(fetchClaudeRateLimits).toHaveBeenCalledTimes(2)
+
+      // After the full 5-minute window the retry fires again.
+      await vi.advanceTimersByTimeAsync(4 * 60 * 1000)
+      window.emit('restore')
+      await vi.advanceTimersByTimeAsync(0)
+      expect(fetchKimiRateLimits).toHaveBeenCalledTimes(3)
+
+      service.stop()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('debounces unavailable providers on active window events', async () => {
+    vi.useFakeTimers()
+    try {
+      vi.mocked(fetchClaudeRateLimits).mockResolvedValue(unavailableProvider('claude'))
+      vi.mocked(fetchCodexRateLimits).mockResolvedValue(unavailableProvider('codex'))
+      vi.mocked(fetchGeminiRateLimits).mockResolvedValue(unavailableProvider('gemini'))
+      vi.mocked(fetchOpenCodeGoRateLimits).mockResolvedValue(unavailableProvider('opencode-go'))
+      vi.mocked(fetchKimiRateLimits).mockResolvedValue(unavailableProvider('kimi'))
+
+      const service = new RateLimitService()
+      const window = new FakeRateLimitWindow()
+      service.attach(asRateLimitWindow(window))
+      service.start({ fetchImmediately: false })
+
+      await vi.advanceTimersByTimeAsync(1000)
+      expect(fetchClaudeRateLimits).toHaveBeenCalledTimes(1)
+
+      window.emit('focus')
+      await vi.advanceTimersByTimeAsync(0)
+
+      expect(fetchClaudeRateLimits).toHaveBeenCalledTimes(1)
+      expect(fetchCodexRateLimits).toHaveBeenCalledTimes(1)
+      expect(fetchGeminiRateLimits).toHaveBeenCalledTimes(1)
+      expect(fetchOpenCodeGoRateLimits).toHaveBeenCalledTimes(1)
+      expect(fetchKimiRateLimits).toHaveBeenCalledTimes(1)
+
+      await vi.advanceTimersByTimeAsync(5 * 60 * 1000)
+      window.emit('show')
+      await vi.advanceTimersByTimeAsync(0)
+
+      expect(fetchClaudeRateLimits).toHaveBeenCalledTimes(2)
+      expect(fetchCodexRateLimits).toHaveBeenCalledTimes(2)
+      expect(fetchGeminiRateLimits).toHaveBeenCalledTimes(2)
+      expect(fetchOpenCodeGoRateLimits).toHaveBeenCalledTimes(2)
+      expect(fetchKimiRateLimits).toHaveBeenCalledTimes(2)
+
+      service.stop()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('still debounces a focus event within the window after a successful fetch', async () => {
+    vi.useFakeTimers()
+    try {
+      vi.mocked(fetchClaudeRateLimits).mockResolvedValue(okProvider('claude', 12))
+      vi.mocked(fetchCodexRateLimits).mockResolvedValue(okProvider('codex', 24))
+
+      const service = new RateLimitService()
+      const window = new FakeRateLimitWindow()
+      service.attach(asRateLimitWindow(window))
+      service.start({ fetchImmediately: false })
+
+      await vi.advanceTimersByTimeAsync(1000)
+      expect(fetchClaudeRateLimits).toHaveBeenCalledTimes(1)
+
+      // A focus within MIN_REFETCH_MS after a GOOD fetch must still no-op.
+      window.emit('focus')
+      await vi.advanceTimersByTimeAsync(0)
+
+      expect(fetchClaudeRateLimits).toHaveBeenCalledTimes(1)
 
       service.stop()
     } finally {

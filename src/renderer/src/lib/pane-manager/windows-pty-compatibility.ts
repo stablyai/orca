@@ -62,6 +62,17 @@ export function buildWindowsPtyCompatibilityOptions(
   }
 }
 
+/** Mirror of main's effectiveShellOverride fold (pty.ts spawn handlers): a
+ *  tab-level shell override wins, else the global Windows shell setting
+ *  applies — so renderer and main classify a global-WSL default identically
+ *  (the main-side twin is isNativeWindowsLocalPtySpawn). */
+export function resolveWindowsShellOverride(
+  tabShellOverride: string | null | undefined,
+  globalWindowsShell: string | null | undefined
+): string | undefined {
+  return tabShellOverride ?? globalWindowsShell ?? undefined
+}
+
 /**
  * Raw client-side heuristic for a native-Windows ConPTY pane (Windows UA, no SSH
  * connection, non-WSL cwd/shell). Necessary but not sufficient: it cannot tell a

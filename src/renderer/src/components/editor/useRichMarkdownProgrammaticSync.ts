@@ -11,8 +11,10 @@ import {
   setRichMarkdownImageResolverContext,
   type RichMarkdownImageResolverSettings
 } from './rich-markdown-image-context'
+import type { RichMarkdownEditorCodec } from './rich-markdown-source-transport'
 
 type RichMarkdownProgrammaticSyncOptions = {
+  codec: RichMarkdownEditorCodec
   content: string
   docLinkMenuSetter: Dispatch<SetStateAction<DocLinkMenuState | null>>
   editor: Editor | null
@@ -36,6 +38,7 @@ type RichMarkdownEditorStorage = {
 }
 
 export function useRichMarkdownProgrammaticSync({
+  codec,
   content,
   docLinkMenuSetter,
   editor,
@@ -103,7 +106,7 @@ export function useRichMarkdownProgrammaticSync({
     }
     isApplyingProgrammaticUpdateRef.current = true
     try {
-      applyExternalRichMarkdownContent(editor, content, lastCommittedMarkdownRef)
+      applyExternalRichMarkdownContent(editor, content, lastCommittedMarkdownRef, codec)
     } finally {
       isApplyingProgrammaticUpdateRef.current = false
     }
@@ -111,6 +114,7 @@ export function useRichMarkdownProgrammaticSync({
     syncDocLinkMenu(editor, rootRef.current, docLinkMenuSetter)
   }, [
     content,
+    codec,
     docLinkMenuSetter,
     editor,
     fileId,
@@ -124,15 +128,19 @@ export function useRichMarkdownProgrammaticSync({
 function applyExternalRichMarkdownContent(
   editor: Editor,
   content: string,
-  lastCommittedMarkdownRef: MutableRefObject<string>
+  lastCommittedMarkdownRef: MutableRefObject<string>,
+  codec: RichMarkdownEditorCodec
 ): void {
   try {
     const hadFocus = editor.isFocused
     const { from: prevFrom, to: prevTo } = editor.state.selection
-    editor.commands.setContent(encodeRawMarkdownHtmlForRichEditor(content), {
-      contentType: 'markdown',
-      emitUpdate: false
-    })
+    editor.commands.setContent(
+      encodeRawMarkdownHtmlForRichEditor(content, codec, { htmlSuperscriptLinks: true }),
+      {
+        contentType: 'markdown',
+        emitUpdate: false
+      }
+    )
     // Why: normalizeEmptyListItems avoids splitting hard-wrapped paragraphs from
     // external content, matching onCreate's single-paragraph reflow behavior.
     normalizeEmptyListItems(editor)

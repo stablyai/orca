@@ -79,6 +79,8 @@ function makeEntry(overrides: Partial<AgentStatusEntry> & { paneKey: string }): 
     stateStartedAt: overrides.stateStartedAt ?? overrides.updatedAt ?? NOW - 30_000,
     agentType: overrides.agentType ?? 'codex',
     paneKey: overrides.paneKey,
+    worktreeId: overrides.worktreeId,
+    tabId: overrides.tabId,
     terminalTitle: overrides.terminalTitle,
     stateHistory: overrides.stateHistory ?? [],
     interrupted: overrides.interrupted
@@ -455,6 +457,62 @@ describe('sortWorktreesSmart — cold start fallback', () => {
     const sorted = sortWorktreesSmart([a, b], {}, repoMap, {}, {}, {})
     // Higher sortOrder wins on cold start.
     expect(sorted.map((w) => w.id)).toEqual(['b', 'a'])
+  })
+
+  it('uses fresh attributed agents before their headless tabs are mirrored', () => {
+    const blocked = makeWorktree({ id: 'blocked', displayName: 'Blocked', sortOrder: 0 })
+    const persistedFirst = makeWorktree({
+      id: 'persisted-first',
+      displayName: 'Persisted first',
+      sortOrder: 100
+    })
+    const key = paneKey('headless-tab')
+    const entries = {
+      [key]: makeEntry({
+        paneKey: key,
+        worktreeId: blocked.id,
+        tabId: 'headless-tab',
+        state: 'blocked',
+        stateStartedAt: Date.now() - 1_000,
+        updatedAt: Date.now()
+      })
+    }
+
+    const sorted = sortWorktreesSmart([persistedFirst, blocked], {}, repoMap, entries, {}, {})
+
+    expect(sorted.map((worktree) => worktree.id)).toEqual(['blocked', 'persisted-first'])
+  })
+
+  it('uses a fresh agent resolved through its mirrored tab without a worktree stamp', () => {
+    const blocked = makeWorktree({ id: 'blocked', displayName: 'Blocked', sortOrder: 0 })
+    const persistedFirst = makeWorktree({
+      id: 'persisted-first',
+      displayName: 'Persisted first',
+      sortOrder: 100
+    })
+    const key = paneKey('mirrored-tab')
+    const tabsByWorktree = {
+      [blocked.id]: [makeTab({ id: 'mirrored-tab', worktreeId: blocked.id })]
+    }
+    const entries = {
+      [key]: makeEntry({
+        paneKey: key,
+        state: 'blocked',
+        stateStartedAt: Date.now() - 1_000,
+        updatedAt: Date.now()
+      })
+    }
+
+    const sorted = sortWorktreesSmart(
+      [persistedFirst, blocked],
+      tabsByWorktree,
+      repoMap,
+      entries,
+      {},
+      {}
+    )
+
+    expect(sorted.map((worktree) => worktree.id)).toEqual(['blocked', 'persisted-first'])
   })
 
   it('falls back to the path label when a persisted worktree has no displayName', () => {

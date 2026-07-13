@@ -70,19 +70,16 @@ export function createProcessTableSnapshotReader<T = string>(
   deps: ProcessTableSnapshotReaderDeps<T>
 ): {
   getSnapshot: () => Promise<T>
+  getFreshSnapshot: () => Promise<T>
   reset: () => void
 } {
   const ttlMs = deps.ttlMs ?? DEFAULT_SNAPSHOT_TTL_MS
   let cached: Snapshot<T> | null = null
   let inFlight: Promise<T> | null = null
+  let sequence = 0
+  let freshQueued: { promise: Promise<T>; startSequence: number | null } | null = null
 
-  async function getSnapshot(): Promise<T> {
-    if (cached && deps.now() - cached.capturedAtMs < ttlMs) {
-      return cached.value
-    }
-    if (inFlight) {
-      return inFlight
-    }
+  async function runSnapshot(): Promise<T> {
     const promise = deps.runPs()
     inFlight = promise
     try {
@@ -92,22 +89,78 @@ export function createProcessTableSnapshotReader<T = string>(
       cached = { value, capturedAtMs: deps.now() }
       return value
     } finally {
-      // Clear in-flight on success and failure so a transient `ps` error
-      // (timeout, nonzero exit) retries on the next call instead of being
-      // cached; callers keep their existing best-effort fall-through.
       if (inFlight === promise) {
         inFlight = null
       }
     }
   }
 
+  async function getSnapshot(): Promise<T> {
+    if (cached && deps.now() - cached.capturedAtMs < ttlMs) {
+      return cached.value
+    }
+    if (inFlight) {
+      return inFlight
+    }
+    if (freshQueued) {
+      // Why: a fresh request schedules its scan in a microtask so same-turn
+      // callers can share it; an ordinary miss must not start a competing scan.
+      return freshQueued.promise
+    }
+    return runSnapshot()
+  }
+
+  function getFreshSnapshot(): Promise<T> {
+    const requestSequence = ++sequence
+    if (freshQueued?.startSequence === null) {
+      return freshQueued.promise
+    }
+    const priorFresh = freshQueued?.promise ?? null
+    const priorScan = inFlight
+    const entry: { promise: Promise<T>; startSequence: number | null } = {
+      promise: Promise.resolve(undefined as never),
+      startSequence: null
+    }
+    entry.promise = Promise.resolve().then(async () => {
+      for (const prior of [priorFresh, priorScan]) {
+        if (!prior) {
+          continue
+        }
+        try {
+          await prior
+        } catch {
+          // The post-boundary scan below owns the confirmation result.
+        }
+      }
+      // Why: same-turn callers join while startSequence is null; later callers
+      // queue behind this scan. The sequence proves every shared scan began
+      // strictly after each request without relying on wall-clock precision.
+      entry.startSequence = ++sequence
+      if (entry.startSequence <= requestSequence) {
+        throw new Error('fresh process snapshot did not start after request')
+      }
+      return runSnapshot()
+    })
+    freshQueued = entry
+    const clearQueued = (): void => {
+      if (freshQueued === entry) {
+        freshQueued = null
+      }
+    }
+    void entry.promise.then(clearQueued, clearQueued)
+    return entry.promise
+  }
+
   return {
     getSnapshot,
+    getFreshSnapshot,
     // Why: lets tests that mock `ps` per case clear the cross-call cache so one
     // case's snapshot can't satisfy the next within the TTL window.
     reset: () => {
       cached = null
       inFlight = null
+      sequence = 0
+      freshQueued = null
     }
   }
 }
@@ -133,6 +186,11 @@ const defaultReader = createProcessTableSnapshotReader<ProcessTableRow[]>({
  */
 export function getProcessTableSnapshot(): Promise<ProcessTableRow[]> {
   return defaultReader.getSnapshot()
+}
+
+/** Capture process rows from a scan that starts after this request. */
+export function getFreshProcessTableSnapshot(): Promise<ProcessTableRow[]> {
+  return defaultReader.getFreshSnapshot()
 }
 
 /**

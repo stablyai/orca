@@ -4,6 +4,7 @@ import {
   pasteDraftToAgentPtyWhenReady
 } from '@/lib/agent-paste-draft'
 import { sendFollowupPromptWhenAgentReady } from '@/lib/agent-followup-delivery'
+import { showAutomationPromptNotSentToast } from '@/lib/agent-background-session-timeout-toast'
 import type { AgentStartupPlan } from '@/lib/tui-agent-startup'
 import type { LinkedWorkItemContext } from '@/lib/linked-work-item-context'
 import {
@@ -302,12 +303,17 @@ async function deliverAgentStartupToTerminal(
   // (aider, goose, etc.) that need their initial prompt typed into the live
   // session and submitted. Wait until the agent owns the PTY before writing.
   if (startup.followupPrompt) {
-    await sendFollowupPromptWhenAgentReady({
+    const delivered = await sendFollowupPromptWhenAgentReady({
       ptyId,
       expectedProcess: startup.expectedProcess,
       prompt: startup.followupPrompt,
       settings: runtimeSettings
     })
+    // Why: a dropped follow-up is otherwise silent — surface the same toast the
+    // draft path uses so the user knows to open the workspace and paste it.
+    if (!delivered) {
+      showAutomationPromptNotSentToast(startup.agent)
+    }
   }
 
   // Why: draftPrompt uses bracketed-paste so the URL lands atomically in the
@@ -321,7 +327,9 @@ async function deliverAgentStartupToTerminal(
       agent: startup.agent,
       // Why: startup.draftPrompt is only attached after native draft launch
       // planning is unavailable, so this paste is the first delivery attempt.
-      forcePaste: true
+      forcePaste: true,
+      // Why: surface a dropped draft instead of silently losing it.
+      onTimeout: () => showAutomationPromptNotSentToast(startup.agent)
     })
   }
 }

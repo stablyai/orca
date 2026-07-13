@@ -1,6 +1,7 @@
 import { z } from 'zod'
 import {
   AI_VAULT_AGENTS,
+  AI_VAULT_SCOPE_PATHS_MAX_COUNT,
   type AiVaultListArgs,
   type AiVaultListResult,
   type AiVaultSession
@@ -121,7 +122,11 @@ export async function scanRuntimeAiVaultSessions(
     {
       limit: args.limit,
       force: args.force,
-      scopePaths: args.scopePaths,
+      // Why: cap here so the set of scanned paths is explicit on this side —
+      // the RPC schema CLAMPS to the same bound anyway (older hosts had no
+      // cap). Dropped paths only lose the older-than-recency-cap guarantee,
+      // never the recent sessions themselves.
+      scopePaths: args.scopePaths?.slice(0, AI_VAULT_SCOPE_PATHS_MAX_COUNT),
       executionHostId
     },
     options.timeoutMs

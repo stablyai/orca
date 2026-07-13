@@ -82,6 +82,37 @@ describe('createIpcPtyTransport', () => {
     transport.disconnect()
   })
 
+  it('leaves the transport silently unbound after a failed connect — sendInput drops with no write IPC (frozen-terminal repro)', async () => {
+    const { createIpcPtyTransport } = await import('./pty-transport')
+    const spawn = window.api.pty.spawn as unknown as ReturnType<typeof vi.fn>
+    const write = window.api.pty.write as unknown as ReturnType<typeof vi.fn>
+    const transport = createIpcPtyTransport({})
+
+    // Generic spawn failure (e.g. daemon not ready during a startup restore):
+    // the error IS surfaced via onError, but the transport stays unbound and
+    // every later keystroke is dropped with no further signal.
+    spawn.mockRejectedValueOnce(new Error('daemon socket not ready'))
+    const onError = vi.fn()
+    await transport.connect({ url: '', callbacks: { onError } })
+    expect(onError).toHaveBeenCalled()
+    expect(transport.isConnected()).toBe(false)
+    expect(transport.sendInput('echo hello\r')).toBe(false)
+    await flushPtySideEffects()
+    expect(write).not.toHaveBeenCalled()
+
+    // The tombstoned-session rejection is swallowed with NO callback at all —
+    // a restored pane that hits it renders persisted content while eating
+    // keystrokes with zero user-visible signal (Discord #performance / #2836).
+    spawn.mockRejectedValueOnce(new Error('TerminalKilledError: session xyz was explicitly killed'))
+    const onErrorKilled = vi.fn()
+    await transport.connect({ url: '', callbacks: { onError: onErrorKilled } })
+    expect(onErrorKilled).not.toHaveBeenCalled()
+    expect(transport.isConnected()).toBe(false)
+    expect(transport.sendInput('echo hello\r')).toBe(false)
+    await flushPtySideEffects()
+    expect(write).not.toHaveBeenCalled()
+  })
+
   it('ignores a stale exit for a previous PTY after reconnecting the same transport', async () => {
     const { createIpcPtyTransport } = await import('./pty-transport')
     const spawn = window.api.pty.spawn as unknown as ReturnType<typeof vi.fn>
@@ -207,7 +238,18 @@ describe('createIpcPtyTransport', () => {
     const { createIpcPtyTransport } = await import('./pty-transport')
     const localTransport = createIpcPtyTransport({
       cwd: '\\\\wsl.localhost\\Ubuntu-24.04\\home\\alice\\repo',
-      shellOverride: 'wsl.exe'
+      shellOverride: 'wsl.exe',
+      projectRuntime: {
+        status: 'resolved',
+        runtime: {
+          kind: 'wsl',
+          hostPlatform: 'wsl',
+          projectId: 'repo',
+          distro: 'Ubuntu-24.04',
+          reason: 'project-override',
+          cacheKey: 'repo:wsl'
+        }
+      }
     })
     const sshTransport = createIpcPtyTransport({
       connectionId: 'ssh-1',
@@ -220,6 +262,51 @@ describe('createIpcPtyTransport', () => {
       shellOverride: 'wsl.exe'
     })
     expect(sshTransport.getLocalSessionMetadata?.()).toBeNull()
+  })
+
+  it('keeps captured Windows and WSL metadata when existing PTYs reattach', async () => {
+    const { createIpcPtyTransport } = await import('./pty-transport')
+    const currentWslForWindowsPty = createIpcPtyTransport({
+      cwd: 'C:\\repo',
+      shellOverride: 'pwsh.exe',
+      projectRuntime: {
+        status: 'resolved',
+        runtime: {
+          kind: 'wsl',
+          hostPlatform: 'wsl',
+          projectId: 'repo',
+          distro: 'Ubuntu-24.04',
+          reason: 'project-override',
+          cacheKey: 'repo:wsl'
+        }
+      }
+    })
+    const currentWindowsForWslPty = createIpcPtyTransport({
+      cwd: '\\\\wsl.localhost\\Ubuntu-24.04\\home\\alice\\repo',
+      shellOverride: 'wsl.exe',
+      projectRuntime: {
+        status: 'resolved',
+        runtime: {
+          kind: 'windows-host',
+          hostPlatform: 'win32',
+          projectId: 'repo',
+          reason: 'project-override',
+          cacheKey: 'repo:windows'
+        }
+      }
+    })
+
+    currentWslForWindowsPty.attach({ existingPtyId: 'windows-pty', callbacks: {} })
+    currentWindowsForWslPty.attach({ existingPtyId: 'wsl-pty', callbacks: {} })
+
+    expect(currentWslForWindowsPty.getLocalSessionMetadata?.()).toEqual({
+      cwd: 'C:\\repo',
+      shellOverride: 'pwsh.exe'
+    })
+    expect(currentWindowsForWslPty.getLocalSessionMetadata?.()).toEqual({
+      cwd: '\\\\wsl.localhost\\Ubuntu-24.04\\home\\alice\\repo',
+      shellOverride: 'wsl.exe'
+    })
   })
 
   it('sends the missing-cwd fallback flag only for local IPC spawns', async () => {
@@ -293,6 +380,42 @@ describe('createIpcPtyTransport', () => {
     transport.disconnect()
   })
 
+  it('runs title side effects even when the data callback does not render the chunk', async () => {
+    const { createIpcPtyTransport } = await import('./pty-transport')
+    const onTitleChange = vi.fn()
+    const onDataCallback = vi.fn()
+    const transport = createIpcPtyTransport({ onTitleChange })
+
+    await transport.connect({ url: '', callbacks: { onData: onDataCallback } })
+
+    onData?.({ id: 'pty-1', data: '\u001b]0;hidden-title\u0007' })
+
+    expect(onDataCallback).toHaveBeenCalledWith('\u001b]0;hidden-title\u0007')
+    expect(onTitleChange).not.toHaveBeenCalled()
+
+    await flushPtySideEffects()
+
+    expect(onTitleChange).toHaveBeenCalledWith('hidden-title', 'hidden-title')
+    transport.disconnect()
+  })
+
+  it('drops the OSC-9999 cross-chunk carry on resetAgentStatusCarry', async () => {
+    // Why: a model-restore marker means bytes were dropped between chunks —
+    // a partial OSC-9999 prefix carried across that gap would swallow the
+    // next live chunk's head as bogus status payload.
+    const { createPtyOutputProcessor } = await import('./pty-transport')
+    const processor = createPtyOutputProcessor({})
+    const callbacks = { onData: vi.fn() }
+
+    processor.processData('\x1b]9999;', callbacks)
+    expect(callbacks.onData).toHaveBeenLastCalledWith('')
+
+    processor.resetAgentStatusCarry()
+    processor.processData('plain output after the gap', callbacks)
+
+    expect(callbacks.onData).toHaveBeenLastCalledWith('plain output after the gap')
+  })
+
   it('does not schedule PTY side-effect drains for ordinary output with no working title', async () => {
     vi.useFakeTimers()
     try {
@@ -308,6 +431,80 @@ describe('createIpcPtyTransport', () => {
       expect(vi.getTimerCount()).toBe(0)
       expect(onTitleChange).not.toHaveBeenCalled()
       expect(onBell).not.toHaveBeenCalled()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('compacts ignored Cursor native titles into one deferred drain', async () => {
+    vi.useFakeTimers()
+    try {
+      const { createPtyOutputProcessor } = await import('./pty-transport')
+      const onTitleChange = vi.fn()
+      const processor = createPtyOutputProcessor({ onTitleChange })
+      const callbacks = { onData: vi.fn() }
+      const ignoredTitles = Array.from({ length: 4_096 }, () => '\x1b]0;Cursor Agent\x07').join('')
+
+      processor.processData(ignoredTitles, callbacks)
+
+      expect(vi.getTimerCount()).toBe(1)
+      await vi.runOnlyPendingTimersAsync()
+
+      expect(vi.getTimerCount()).toBe(0)
+      expect(onTitleChange).not.toHaveBeenCalled()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('lets an ignored Cursor native title clear a pending stale-title fallback', async () => {
+    vi.useFakeTimers()
+    try {
+      const { createPtyOutputProcessor } = await import('./pty-transport')
+      const onAgentBecameIdle = vi.fn()
+      const processor = createPtyOutputProcessor({
+        onTitleChange: vi.fn(),
+        onAgentBecameIdle,
+        onAgentBecameWorking: vi.fn()
+      })
+      const callbacks = { onData: vi.fn() }
+
+      processor.processData('\x1b]0;⠋ Cursor Agent\x07', callbacks)
+      await vi.advanceTimersByTimeAsync(0)
+      processor.processData('plain output\r\n', callbacks)
+      await vi.advanceTimersByTimeAsync(0)
+
+      processor.processData('\x1b]0;Cursor Agent\x07', callbacks)
+      await vi.advanceTimersByTimeAsync(0)
+      await vi.advanceTimersByTimeAsync(3_000)
+
+      expect(onAgentBecameIdle).not.toHaveBeenCalled()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('re-arms stale-title fallback after a later title-free output scan', async () => {
+    vi.useFakeTimers()
+    try {
+      const { createPtyOutputProcessor } = await import('./pty-transport')
+      const onTitleChange = vi.fn()
+      const processor = createPtyOutputProcessor({
+        onTitleChange,
+        onAgentBecameIdle: vi.fn(),
+        onAgentBecameWorking: vi.fn()
+      })
+      const callbacks = { onData: vi.fn() }
+
+      processor.processData('\x1b]0;⠋ Cursor Agent\x07', callbacks)
+      await vi.advanceTimersByTimeAsync(0)
+      onTitleChange.mockClear()
+      processor.processData('\x1b]0;Cursor Agent\x07', callbacks)
+      processor.processData('plain output\r\n', callbacks)
+      await vi.advanceTimersByTimeAsync(0)
+      await vi.advanceTimersByTimeAsync(3_000)
+
+      expect(onTitleChange).toHaveBeenCalledWith('Cursor Agent', 'Cursor Agent')
     } finally {
       vi.useRealTimers()
     }
@@ -1088,6 +1285,7 @@ describe('createIpcPtyTransport', () => {
     const spawnMock = vi.fn().mockResolvedValue({
       id: 'pty-reattach',
       isReattach: true,
+      launchAgent: 'droid',
       snapshot: 'snapshot data',
       snapshotCols: 132,
       snapshotRows: 43
@@ -1125,6 +1323,7 @@ describe('createIpcPtyTransport', () => {
 
     expect(result).toEqual({
       id: 'pty-reattach',
+      launchAgent: 'droid',
       snapshot: 'snapshot data',
       snapshotCols: 132,
       snapshotRows: 43,
@@ -1132,6 +1331,30 @@ describe('createIpcPtyTransport', () => {
       coldRestore: undefined,
       replay: undefined,
       sessionExpired: undefined
+    })
+  })
+
+  it('drops an unknown daemon launch identity from the connection result', async () => {
+    const { createIpcPtyTransport } = await import('./pty-transport')
+    const spawn = window.api.pty.spawn as unknown as ReturnType<typeof vi.fn>
+    spawn.mockResolvedValueOnce({
+      id: 'pty-unknown-launch-agent',
+      isReattach: true,
+      launchAgent: 'not-an-agent'
+    })
+
+    const result = await createIpcPtyTransport({}).connect({ url: '', callbacks: {} })
+
+    expect(result).toEqual({
+      id: 'pty-unknown-launch-agent',
+      snapshot: undefined,
+      snapshotCols: undefined,
+      snapshotRows: undefined,
+      isAlternateScreen: undefined,
+      sessionExpired: undefined,
+      coldRestore: undefined,
+      replay: undefined,
+      pendingEscapeTailAnsi: undefined
     })
   })
 

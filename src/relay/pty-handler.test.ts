@@ -1018,6 +1018,88 @@ describe('PtyHandler', () => {
     expect(mockKill).toHaveBeenCalledWith('SIGTERM')
   })
 
+  // Why: node-pty's Windows agent throws "Signals not supported on windows."
+  // for any signal argument. killPtyProcess drops the signal on win32 — cover
+  // every call site so a future regression cannot reintroduce signal args.
+  describe('kills PTY without a signal on Windows', () => {
+    async function withWindowsPlatform(fn: () => Promise<void>): Promise<void> {
+      const originalPlatform = process.platform
+      Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
+      try {
+        await fn()
+      } finally {
+        Object.defineProperty(process, 'platform', {
+          configurable: true,
+          value: originalPlatform
+        })
+      }
+    }
+
+    function mockKillablePty(): ReturnType<typeof vi.fn> {
+      const mockKill = vi.fn()
+      mockPtySpawn.mockReturnValue({
+        ...mockPtyInstance,
+        kill: mockKill,
+        onData: vi.fn(),
+        onExit: vi.fn()
+      })
+      return mockKill
+    }
+
+    function expectBareKills(mockKill: ReturnType<typeof vi.fn>, times: number): void {
+      expect(mockKill).toHaveBeenCalledTimes(times)
+      expect(mockKill.mock.calls.every((args) => args.length === 0)).toBe(true)
+    }
+
+    it('on graceful shutdown', async () => {
+      await withWindowsPlatform(async () => {
+        const mockKill = mockKillablePty()
+        await dispatcher.callRequest('pty.spawn', {})
+        await dispatcher.callRequest('pty.shutdown', { id: 'pty-1', immediate: false })
+        expectBareKills(mockKill, 1)
+      })
+    })
+
+    it('on immediate shutdown', async () => {
+      await withWindowsPlatform(async () => {
+        const mockKill = mockKillablePty()
+        await dispatcher.callRequest('pty.spawn', {})
+        await dispatcher.callRequest('pty.shutdown', { id: 'pty-1', immediate: true })
+        expectBareKills(mockKill, 1)
+      })
+    })
+
+    it('on stale-spawn cleanup including the SIGKILL fallback', async () => {
+      await withWindowsPlatform(async () => {
+        const mockKill = mockKillablePty()
+        await dispatcher.callRequest('pty.spawn', {}, { isStale: () => true })
+        expectBareKills(mockKill, 1)
+        vi.advanceTimersByTime(5000)
+        expectBareKills(mockKill, 2)
+      })
+    })
+
+    it('on graceful-shutdown SIGKILL fallback', async () => {
+      await withWindowsPlatform(async () => {
+        const mockKill = mockKillablePty()
+        await dispatcher.callRequest('pty.spawn', {})
+        await dispatcher.callRequest('pty.shutdown', { id: 'pty-1', immediate: false })
+        expectBareKills(mockKill, 1)
+        vi.advanceTimersByTime(5000)
+        expectBareKills(mockKill, 2)
+      })
+    })
+
+    it('on dispose', async () => {
+      await withWindowsPlatform(async () => {
+        const mockKill = mockKillablePty()
+        await dispatcher.callRequest('pty.spawn', {})
+        handler.dispose()
+        expectBareKills(mockKill, 1)
+      })
+    })
+  })
+
   it('flushes pending PTY output before immediate shutdown cleanup', async () => {
     let dataCallback: ((data: string) => void) | undefined
     const mockKill = vi.fn()
@@ -1290,9 +1372,76 @@ describe('PtyHandler', () => {
       }
     }
 
-    const spawnEnv = mockPtySpawn.mock.calls[0][2] as { env: Record<string, string> }
+    const spawnEnv = mockPtySpawn.mock.calls[0][2] as {
+      name: string
+      env: Record<string, string>
+    }
+    expect(spawnEnv.name).toBe('xterm-256color')
     expect(spawnEnv.env.SEEN_OPENCODE_CONFIG_DIR).toBe('/remote/renderer-opencode')
     expect(spawnEnv.env.SEEN_PI_CODING_AGENT_DIR).toBe('/remote/pi')
+  })
+
+  it('applies identity defaults, then deletions, while preserving explicit TERM', async () => {
+    handler.addEnvAugmenter(() => ({
+      TERM: 'augmenter-term',
+      TERM_PROGRAM: 'augmenter-terminal',
+      ORCA_ATTRIBUTION_SHIM_DIR: '/tmp/augmenter-attribution'
+    }))
+
+    await dispatcher.callRequest('pty.spawn', {
+      env: {
+        TERM: 'screen-256color',
+        TERM_PROGRAM: 'renderer-terminal',
+        ORCA_ATTRIBUTION_SHIM_DIR: '/tmp/renderer-attribution'
+      },
+      envToDelete: ['TERM_PROGRAM', 'ORCA_ATTRIBUTION_SHIM_DIR']
+    })
+
+    const spawnEnv = mockPtySpawn.mock.calls[0][2] as {
+      name: string
+      env: Record<string, string>
+    }
+    expect(spawnEnv.name).toBe('screen-256color')
+    expect(spawnEnv.env.TERM).toBe('screen-256color')
+    expect(spawnEnv.env.COLORTERM).toBe('truecolor')
+    expect(spawnEnv.env.FORCE_HYPERLINK).toBe('1')
+    expect(spawnEnv.env.TERM_PROGRAM).toBeUndefined()
+    expect(spawnEnv.env.ORCA_ATTRIBUTION_SHIM_DIR).toBeUndefined()
+  })
+
+  it('replaces an ambient TERM=dumb when no explicit TERM is supplied', async () => {
+    const previousTerm = process.env.TERM
+    process.env.TERM = 'dumb'
+    try {
+      await dispatcher.callRequest('pty.spawn', {})
+    } finally {
+      if (previousTerm === undefined) {
+        delete process.env.TERM
+      } else {
+        process.env.TERM = previousTerm
+      }
+    }
+
+    const spawnEnv = mockPtySpawn.mock.calls[0][2] as {
+      name: string
+      env: Record<string, string>
+    }
+    expect(spawnEnv.name).toBe('xterm-256color')
+    expect(spawnEnv.env.TERM).toBe('xterm-256color')
+    expect(spawnEnv.env.TERM_PROGRAM).toBe('Orca')
+  })
+
+  it('uses the safe terminal default when TERM is deleted without a custom value', async () => {
+    await dispatcher.callRequest('pty.spawn', {
+      envToDelete: ['TERM']
+    })
+
+    const spawnEnv = mockPtySpawn.mock.calls[0][2] as {
+      name: string
+      env: Record<string, string>
+    }
+    expect(spawnEnv.name).toBe('xterm-256color')
+    expect(spawnEnv.env.TERM).toBe('xterm-256color')
   })
 
   it('lets relay env augmenters resolve the original sequenced startup command hint', async () => {
@@ -1402,6 +1551,172 @@ describe('PtyHandler', () => {
     expect(callArgs.env.ORCA_WORKTREE_ID).toBe('wt-5')
     expect(callArgs.env.ORCA_AGENT_HOOK_PORT).toBe('12345')
     expect(callArgs.env.ORCA_AGENT_HOOK_TOKEN).toBe('abc-uuid')
+    expect(callArgs.env.TERM).toBe('xterm-256color')
+    expect(callArgs.env.TERM_PROGRAM).toBe('Orca')
+  })
+
+  it('normalizes an explicit empty TERM and preserves sanitized env deletions on revive', async () => {
+    await dispatcher.callRequest('pty.spawn', {
+      env: { TERM: '' },
+      envToDelete: ['ORCA_ATTRIBUTION_SHIM_DIR', '', 42]
+    })
+
+    const initialEnv = mockPtySpawn.mock.calls[0][2] as {
+      name: string
+      env: Record<string, string>
+    }
+    expect(initialEnv.name).toBe('xterm-256color')
+    expect(initialEnv.env.TERM).toBe('xterm-256color')
+
+    const state = (await dispatcher.callRequest('pty.serialize', { ids: ['pty-1'] })) as string
+    const [serialized] = JSON.parse(state) as {
+      explicitTerm?: string
+      envToDelete?: string[]
+    }[]
+    expect(serialized.explicitTerm).toBeUndefined()
+    expect(serialized.envToDelete).toEqual(['ORCA_ATTRIBUTION_SHIM_DIR'])
+
+    handler.dispose()
+    mockPtySpawn.mockClear()
+    dispatcher = createMockDispatcher()
+    handler = new PtyHandler(dispatcher as unknown as RelayDispatcher)
+    handler.addEnvAugmenter(() => ({
+      ORCA_ATTRIBUTION_SHIM_DIR: '/tmp/revived-attribution'
+    }))
+    const killSpy = vi.spyOn(process, 'kill').mockImplementation(() => true)
+    try {
+      await dispatcher.callRequest('pty.revive', { state })
+    } finally {
+      killSpy.mockRestore()
+    }
+
+    const revivedEnv = mockPtySpawn.mock.calls[0][2] as {
+      name: string
+      env: Record<string, string>
+    }
+    expect(revivedEnv.name).toBe('xterm-256color')
+    expect(revivedEnv.env.TERM).toBe('xterm-256color')
+    expect(revivedEnv.env.ORCA_ATTRIBUTION_SHIM_DIR).toBeUndefined()
+  })
+
+  it('drops legacy empty explicit TERM metadata after revive', async () => {
+    const state = JSON.stringify([
+      {
+        id: 'pty-8',
+        pid: process.pid,
+        cols: 80,
+        rows: 24,
+        cwd: process.cwd(),
+        explicitTerm: '',
+        envToDelete: ['ORCA_ATTRIBUTION_SHIM_DIR']
+      }
+    ])
+    handler.addEnvAugmenter(() => ({
+      ORCA_ATTRIBUTION_SHIM_DIR: '/tmp/legacy-empty-attribution'
+    }))
+    const killSpy = vi.spyOn(process, 'kill').mockImplementation(() => true)
+    try {
+      await dispatcher.callRequest('pty.revive', { state })
+    } finally {
+      killSpy.mockRestore()
+    }
+
+    const revivedEnv = mockPtySpawn.mock.calls[0][2] as {
+      name: string
+      env: Record<string, string>
+    }
+    expect(revivedEnv.name).toBe('xterm-256color')
+    expect(revivedEnv.env.TERM).toBe('xterm-256color')
+    expect(revivedEnv.env.ORCA_ATTRIBUTION_SHIM_DIR).toBeUndefined()
+
+    const serializedState = (await dispatcher.callRequest('pty.serialize', {
+      ids: ['pty-8']
+    })) as string
+    const [serialized] = JSON.parse(serializedState) as {
+      explicitTerm?: string
+      envToDelete?: string[]
+    }[]
+    expect(serialized.explicitTerm).toBeUndefined()
+    expect(serialized.envToDelete).toEqual(['ORCA_ATTRIBUTION_SHIM_DIR'])
+  })
+
+  it('preserves explicit TERM and env deletions through repeated revive cycles', async () => {
+    await dispatcher.callRequest('pty.spawn', {
+      env: { TERM: 'screen-256color' },
+      envToDelete: ['ORCA_ATTRIBUTION_SHIM_DIR']
+    })
+    let state = (await dispatcher.callRequest('pty.serialize', { ids: ['pty-1'] })) as string
+
+    const killSpy = vi.spyOn(process, 'kill').mockImplementation(() => true)
+    try {
+      handler.dispose()
+      mockPtySpawn.mockClear()
+      dispatcher = createMockDispatcher()
+      handler = new PtyHandler(dispatcher as unknown as RelayDispatcher)
+      handler.addEnvAugmenter(() => ({
+        ORCA_ATTRIBUTION_SHIM_DIR: '/tmp/first-revive'
+      }))
+      await dispatcher.callRequest('pty.revive', { state })
+
+      const firstRevivedEnv = mockPtySpawn.mock.calls[0][2] as {
+        name: string
+        env: Record<string, string>
+      }
+      expect(firstRevivedEnv.name).toBe('screen-256color')
+      expect(firstRevivedEnv.env.TERM).toBe('screen-256color')
+      expect(firstRevivedEnv.env.ORCA_ATTRIBUTION_SHIM_DIR).toBeUndefined()
+      state = (await dispatcher.callRequest('pty.serialize', { ids: ['pty-1'] })) as string
+      expect(JSON.parse(state)).toMatchObject([
+        {
+          explicitTerm: 'screen-256color',
+          envToDelete: ['ORCA_ATTRIBUTION_SHIM_DIR']
+        }
+      ])
+
+      handler.dispose()
+      mockPtySpawn.mockClear()
+      dispatcher = createMockDispatcher()
+      handler = new PtyHandler(dispatcher as unknown as RelayDispatcher)
+      handler.addEnvAugmenter(() => ({
+        ORCA_ATTRIBUTION_SHIM_DIR: '/tmp/second-revive'
+      }))
+      await dispatcher.callRequest('pty.revive', { state })
+    } finally {
+      killSpy.mockRestore()
+    }
+
+    const secondRevivedEnv = mockPtySpawn.mock.calls[0][2] as {
+      name: string
+      env: Record<string, string>
+    }
+    expect(secondRevivedEnv.name).toBe('screen-256color')
+    expect(secondRevivedEnv.env.TERM).toBe('screen-256color')
+    expect(secondRevivedEnv.env.ORCA_ATTRIBUTION_SHIM_DIR).toBeUndefined()
+  })
+
+  it('revives legacy serialized entries with default TERM and no env deletions', async () => {
+    handler.addEnvAugmenter(() => ({
+      ORCA_ATTRIBUTION_SHIM_DIR: '/tmp/legacy-attribution'
+    }))
+    const state = JSON.stringify([
+      {
+        id: 'pty-7',
+        pid: process.pid,
+        cols: 80,
+        rows: 24,
+        cwd: process.cwd()
+      }
+    ])
+    const killSpy = vi.spyOn(process, 'kill').mockImplementation(() => true)
+    try {
+      await dispatcher.callRequest('pty.revive', { state })
+    } finally {
+      killSpy.mockRestore()
+    }
+
+    const revivedEnv = mockPtySpawn.mock.calls[0][2] as { env: Record<string, string> }
+    expect(revivedEnv.env.TERM).toBe('xterm-256color')
+    expect(revivedEnv.env.ORCA_ATTRIBUTION_SHIM_DIR).toBe('/tmp/legacy-attribution')
   })
 
   it('revive preserves attach identity metadata without exporting hook identity env', async () => {

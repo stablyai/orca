@@ -13,6 +13,10 @@ import {
   markMacQuitAndInstallInFlight,
   resetMacInstallState
 } from './updater-mac-install'
+import {
+  armUpdateInstallExitWatchdog,
+  disarmUpdateInstallExitWatchdog
+} from './update-install-exit-watchdog'
 import { registerAutoUpdaterHandlers } from './updater-events'
 import { recordUpdaterLifecycle } from './updater-lifecycle-diagnostics'
 import {
@@ -635,6 +639,10 @@ async function performQuitAndInstall(): Promise<void> {
       // still recover flags (PTYs may already be dead — residual OK).
       if (process.platform !== 'darwin' || isMacInstallerReady()) {
         updateInstallCommitted = true
+        // Why: past this point recovery is forbidden and the installer waits
+        // for this process to exit; a wedged async shutdown would otherwise
+        // strand the user with no app and no update (#4438).
+        armUpdateInstallExitWatchdog()
       }
     })
   } catch (error) {
@@ -658,6 +666,7 @@ function resetQuitForUpdateState(): void {
   quittingForUpdate = false
   updateInstallCommitted = false
   quitAndInstallNativeInvoked = false
+  disarmUpdateInstallExitWatchdog()
   resetMacInstallState()
 }
 
