@@ -960,6 +960,9 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
   const [linkedWorkItem, setLinkedWorkItem] = useState<LinkedWorkItemSummary | null>(
     () => linkedWorkItemSeed
   )
+  const initialLinearBranchName = linkedWorkItemSeed?.linearBranchName?.trim()
+    ? linkedWorkItemSeed.linearBranchName
+    : undefined
   const taskSourceContext = useMemo(() => {
     if (
       persistDraft &&
@@ -1082,9 +1085,12 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
   const [compareBaseRef, setCompareBaseRef] = useState<string | undefined>(
     persistDraft ? newWorkspaceDraft?.compareBaseRef : undefined
   )
-  const [branchNameOverride, setBranchNameOverride] = useState<string | undefined>(undefined)
-  const [branchNameOverridePreservesNameEdits, setBranchNameOverridePreservesNameEdits] =
-    useState(false)
+  const [branchNameOverride, setBranchNameOverride] = useState<string | undefined>(
+    initialLinearBranchName
+  )
+  const [branchNameOverridePreservesNameEdits, setBranchNameOverridePreservesNameEdits] = useState(
+    Boolean(initialLinearBranchName)
+  )
   const [smartNameMode, setSmartNameMode] = useState<SmartNameMode>('smart')
   // Why (#5181): when the user picks an existing LOCAL branch, let them reuse it
   // (check it out) instead of creating a new branch from it. `reuseEligibleBranch`
@@ -2929,6 +2935,7 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
       }
       setStartFromResetHint(null)
       setBranchNameOverride(undefined)
+      setBranchNameOverridePreservesNameEdits(false)
       setForkPushWarning(null)
       branchAutoNameRef.current = ''
       smartGitHubPrStartPointSelectionRef.current = null
@@ -3037,6 +3044,7 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
       applyLinkedGitLabWorkItem(item)
       setStartFromResetHint(null)
       setBranchNameOverride(undefined)
+      setBranchNameOverridePreservesNameEdits(false)
       setForkPushWarning(null)
       branchAutoNameRef.current = ''
       // Why: MR metadata can be sourced from one host/account while the
@@ -3222,9 +3230,11 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
         setName(suggestedName)
         lastAutoNameRef.current = suggestedName
       }
-      setBranchNameOverride(undefined)
+      const linearBranchName = issue.branchName?.trim() ? issue.branchName : undefined
+      setBranchNameOverride(linearBranchName)
+      setBranchNameOverridePreservesNameEdits(Boolean(linearBranchName))
       setForkPushWarning(null)
-      branchAutoNameRef.current = ''
+      branchAutoNameRef.current = linearBranchName ?? ''
       // Why: match the GitHub issue/PR flow by drafting linked context for
       // review instead of auto-submitting. Auto-filling the note here would
       // turn a source selection into user-authored instructions.

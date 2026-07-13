@@ -42,6 +42,14 @@ describe('buildLinearIssueLinkedWorkItem', () => {
 
     expect(item.linearWorkspaceId).toBe('ws-1')
   })
+
+  it('carries a usable Linear branch name exactly', () => {
+    const item = buildLinearIssueLinkedWorkItem(
+      makeIssue({ branchName: 'team/eng-123-fix-launch-context' })
+    )
+
+    expect(item.linearBranchName).toBe('team/eng-123-fix-launch-context')
+  })
 })
 
 describe('isLinearLinkedWorkItem', () => {

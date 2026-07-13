@@ -9,5 +9,8 @@ export function isLinearLinkedWorkItem(
 }
 
 export function buildLinearIssueLinkedWorkItem(issue: LinearIssue): LinkedWorkItemSummary {
-  return buildLinearWorkspaceSource(issue)
+  return {
+    ...buildLinearWorkspaceSource(issue),
+    ...(issue.branchName?.trim() ? { linearBranchName: issue.branchName } : {})
+  }
 }

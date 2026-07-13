@@ -22,7 +22,7 @@ export function formatLinearIssueRelativeTime(input: string): string {
 }
 
 export function buildLinearIssueBranchName(issue: LinearIssue): string {
-  return getLinearIssueWorkspaceName(issue)
+  return issue.branchName?.trim() ? issue.branchName : getLinearIssueWorkspaceName(issue)
 }
 
 export function buildLinearIssuePrompt(issue: LinearIssue): string {
