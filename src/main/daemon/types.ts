@@ -12,6 +12,7 @@ export type {
 // ─── Protocol Version ────────────────────────────────────────────────
 import type { StartupCommandDelivery } from '../../shared/codex-startup-delivery'
 import type { TuiAgent } from '../../shared/types'
+import type { AgentId } from '../../shared/custom-agent'
 // Why: daemons can survive app updates. Bump for IPC wire-shape changes, or
 // when daemon-baked behavior cannot be delivered by on-disk wrapper refresh.
 // Why: bump when adding daemon wire behavior so same-version old daemons do
@@ -107,7 +108,7 @@ export type CreateOrAttachRequest = {
     envToDelete?: string[]
     command?: string
     startupCommandDelivery?: StartupCommandDelivery
-    launchAgent?: TuiAgent
+    launchAgent?: AgentId
     /** Explicit Windows shell override selected by the user (e.g. 'wsl.exe').
      *  The daemon forwards this to its subprocess spawner so each tab honors
      *  the shell picked in the "+" menu or the persisted default-shell setting,
@@ -364,7 +365,7 @@ export type CreateOrAttachResult = {
   pid: number | null
   shellState: ShellReadyState
   historySeeded?: boolean
-  launchAgent?: TuiAgent
+  launchAgent?: AgentId
 }
 export type GetSnapshotResult = {
   snapshot: TerminalSnapshot | null

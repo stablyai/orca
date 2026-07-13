@@ -13,15 +13,17 @@ import {
   resolveStartupShell,
   type AgentStartupShell
 } from './tui-agent-startup-shell'
-import { getTuiAgentLaunchCommand, TUI_AGENT_CONFIG } from './tui-agent-config'
+import { getTuiAgentLaunchCommand, TUI_AGENT_CONFIG, type TuiAgentConfig } from './tui-agent-config'
 import type { StartupCommandDelivery } from './codex-startup-delivery'
 import { buildSleepingAgentLaunchConfig } from './sleeping-agent-launch-config'
 import { planHermesStartupQuery } from './hermes-startup-query'
 import { inlineAgentDraftFitsPlatform } from './agent-draft-platform-limit'
 import type { TuiAgent } from './types'
+import type { AgentId, CustomAgentDefinition } from './custom-agent'
+import { customAgentForId, isCustomAgentId } from './custom-agent'
 
 export type AgentStartupPlan = {
-  agent: TuiAgent
+  agent: AgentId
   launchCommand: string
   expectedProcess: string
   followupPrompt: string | null
@@ -33,19 +35,23 @@ export type AgentStartupPlan = {
 }
 
 function resolveBaseCommand(args: {
-  agent: TuiAgent
-  cmdOverrides: Partial<Record<TuiAgent, string>>
+  agent: AgentId
+  cmdOverrides: Partial<Record<string, string>>
   platform: NodeJS.Platform
   shell: AgentStartupShell
   agentArgs?: string | null
   isRemote?: boolean
+  customAgent?: CustomAgentDefinition
+  customAgents?: readonly CustomAgentDefinition[]
 }): { ok: true; command: string } | { ok: false; error: string } {
   const override = args.cmdOverrides[args.agent]
   const command =
     override ||
-    getTuiAgentLaunchCommand(TUI_AGENT_CONFIG[args.agent], args.platform, {
-      isRemote: args.isRemote
-    })
+    (args.customAgent || customAgentForId(args.agent, args.customAgents)
+      ? (args.customAgent || customAgentForId(args.agent, args.customAgents))!.command
+      : getTuiAgentLaunchCommand(TUI_AGENT_CONFIG[args.agent as TuiAgent], args.platform, {
+          isRemote: args.isRemote
+        }))
   const suffix = planAgentCliArgsSuffix(args.agentArgs, args.shell)
   if (!suffix.ok) {
     return suffix
@@ -56,9 +62,9 @@ function resolveBaseCommand(args: {
 }
 
 export function buildAgentStartupPlan(args: {
-  agent: TuiAgent
+  agent: AgentId
   prompt: string
-  cmdOverrides: Partial<Record<TuiAgent, string>>
+  cmdOverrides: Partial<Record<string, string>>
   platform: NodeJS.Platform
   shell?: AgentStartupShell
   allowEmptyPromptLaunch?: boolean
@@ -67,11 +73,21 @@ export function buildAgentStartupPlan(args: {
   /** Why: SSH remotes deploy the CLI shim as plain `orca`, so the Linux-only
    * `orca-ide` rename must be skipped for remote launches. */
   isRemote?: boolean
+  customAgent?: CustomAgentDefinition
+  customAgents?: readonly CustomAgentDefinition[]
 }): AgentStartupPlan | null {
   const { agent, prompt, cmdOverrides, platform, allowEmptyPromptLaunch = false } = args
   const shell = resolveStartupShell(platform, args.shell)
   const trimmedPrompt = prompt.trim()
-  const config = TUI_AGENT_CONFIG[agent]
+  const customAgent = args.customAgent ?? customAgentForId(agent, args.customAgents)
+  const config: TuiAgentConfig = isCustomAgentId(agent)
+    ? {
+        detectCmd: '',
+        launchCmd: '',
+        expectedProcess: agent,
+        promptInjectionMode: customAgent?.promptMode === 'argv' ? 'argv' : 'stdin-after-start'
+      }
+    : TUI_AGENT_CONFIG[agent]
   const usesQuery = config.promptInjectionMode === 'hermes-query' && Boolean(trimmedPrompt)
   const baseCommand = resolveBaseCommand({
     agent,
@@ -79,7 +95,9 @@ export function buildAgentStartupPlan(args: {
     platform,
     shell,
     agentArgs: usesQuery ? null : args.agentArgs,
-    isRemote: args.isRemote
+    isRemote: args.isRemote,
+    customAgent,
+    customAgents: args.customAgents
   })
   if (!baseCommand.ok) {
     return null
@@ -114,6 +132,19 @@ export function buildAgentStartupPlan(args: {
       followupPrompt: null,
       launchConfig,
       ...(agent === 'codex' ? { startupCommandDelivery: 'shell-ready' as const } : {}),
+      ...(args.agentEnv ? { env: { ...args.agentEnv } } : {})
+    }
+  }
+
+  if (isCustomAgentId(agent) && customAgent?.promptMode === 'template') {
+    const template = customAgent.promptTemplate
+    if (!template || !template.includes('{prompt}')) return null
+    return {
+      agent,
+      launchCommand: template.replaceAll('{prompt}', quotedPrompt),
+      expectedProcess: config.expectedProcess,
+      followupPrompt: null,
+      launchConfig,
       ...(args.agentEnv ? { env: { ...args.agentEnv } } : {})
     }
   }
@@ -189,7 +220,7 @@ export function buildAgentStartupPlan(args: {
 export function buildAgentResumeStartupPlan(args: {
   agent: ResumableTuiAgent
   providerSession: AgentProviderSessionMetadata
-  cmdOverrides: Partial<Record<TuiAgent, string>>
+  cmdOverrides: Partial<Record<string, string>>
   platform: NodeJS.Platform
   shell?: AgentStartupShell
   agentArgs?: string | null
@@ -238,7 +269,7 @@ export function buildAgentResumeStartupPlan(args: {
 }
 
 export type AgentDraftLaunchPlan = {
-  agent: TuiAgent
+  agent: AgentId
   launchCommand: string
   expectedProcess: string
   launchConfig: SleepingAgentLaunchConfig
@@ -247,7 +278,7 @@ export type AgentDraftLaunchPlan = {
 }
 
 export function buildAgentDraftLaunchPlan(args: {
-  agent: TuiAgent
+  agent: AgentId
   draft: string
   cmdOverrides: Partial<Record<TuiAgent, string>>
   platform: NodeJS.Platform
@@ -256,10 +287,15 @@ export function buildAgentDraftLaunchPlan(args: {
   agentEnv?: Record<string, string> | null
   /** Why: see buildAgentStartupPlan — remote launches use the plain `orca` shim. */
   isRemote?: boolean
+  customAgent?: CustomAgentDefinition
+  customAgents?: readonly CustomAgentDefinition[]
 }): AgentDraftLaunchPlan | null {
   const { agent, draft, cmdOverrides, platform } = args
   const shell = resolveStartupShell(platform, args.shell)
-  const config = TUI_AGENT_CONFIG[agent]
+  const customAgent = args.customAgent ?? customAgentForId(agent, args.customAgents)
+  const config: TuiAgentConfig = isCustomAgentId(agent)
+    ? { detectCmd: '', launchCmd: '', expectedProcess: agent, promptInjectionMode: 'stdin-after-start' }
+    : TUI_AGENT_CONFIG[agent]
   const trimmed = draft.trim()
   if (!trimmed) {
     return null
@@ -270,7 +306,9 @@ export function buildAgentDraftLaunchPlan(args: {
     platform,
     shell,
     agentArgs: args.agentArgs,
-    isRemote: args.isRemote
+    isRemote: args.isRemote,
+    customAgent,
+    customAgents: args.customAgents
   })
   if (!baseCommand.ok) {
     return null

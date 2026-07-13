@@ -13,6 +13,7 @@ import type { TerminalPaneSplitSource } from '../../../shared/feature-education-
 import type { StartupCommandDelivery } from '../../../shared/codex-startup-delivery'
 import type { SleepingAgentLaunchConfig } from '../../../shared/agent-session-resume'
 import type { TerminalPaneLayoutNode, TuiAgent } from '../../../shared/types'
+import type { AgentId } from '../../../shared/custom-agent'
 import type { AppState } from '../store/types'
 import { getRuntimeEnvironmentIdForWorktree } from '../lib/worktree-runtime-owner'
 import { useAppStore } from '../store'
@@ -55,7 +56,7 @@ export async function createWebRuntimeSessionTerminal(args: {
   startupCommandDelivery?: StartupCommandDelivery
   launchConfig?: SleepingAgentLaunchConfig
   agent?: TuiAgent
-  launchAgent?: TuiAgent
+  launchAgent?: AgentId
   activate?: boolean
   selectWorktree?: boolean
 }): Promise<boolean> {

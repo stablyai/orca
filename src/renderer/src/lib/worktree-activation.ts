@@ -9,6 +9,7 @@ import type {
   WorktreeDefaultTabsLaunch,
   WorktreeSetupLaunch
 } from '../../../shared/types'
+import { customAgentForId, isCustomAgentId, type AgentId } from '../../../shared/custom-agent'
 import type { EventProps } from '../../../shared/telemetry-events'
 import type { StartupCommandDelivery } from '../../../shared/codex-startup-delivery'
 import type {
@@ -78,7 +79,7 @@ export type WorktreeStartupPayload = {
   launchConfig?: SleepingAgentLaunchConfig
   resumeProviderSession?: AgentProviderSessionMetadata
   launchToken?: string
-  launchAgent?: TuiAgent
+  launchAgent?: AgentId
   draftPrompt?: string
   startupCommandDelivery?: StartupCommandDelivery
   initialAgentStatus?: { agent: TuiAgent; prompt: string }
@@ -103,7 +104,7 @@ type WorktreeActivationStore = Partial<WorktreeRuntimeOwnerState> & {
     shellOverride?: string,
     options?: {
       pendingActivationSpawn?: boolean
-      launchAgent?: TuiAgent
+      launchAgent?: AgentId
       recordInteraction?: boolean
       viewMode?: Tab['viewMode']
       activate?: boolean
@@ -240,11 +241,14 @@ export function activateAndRevealFolderWorkspace(
 
 function buildCreatedAgentReopenStartup(worktree: Worktree): WorktreeStartupPayload | undefined {
   const agent = worktree.createdWithAgent
-  if (!isTuiAgent(agent)) {
+  if (!agent) {
     return undefined
   }
 
   const state = useAppStore.getState()
+  if (isCustomAgentId(agent) && customAgentForId(agent, state.settings?.customAgents)?.enabled !== true) {
+    return undefined
+  }
   const repo = state.repos.find((entry) => entry.id === worktree.repoId)
   const launchPlatform = repo
     ? getAgentLaunchPlatformForRepo(
@@ -257,11 +261,16 @@ function buildCreatedAgentReopenStartup(worktree: Worktree): WorktreeStartupPayl
     agent,
     prompt: '',
     cmdOverrides: state.settings?.agentCmdOverrides ?? {},
-    agentArgs: resolveTuiAgentLaunchArgs(agent, state.settings?.agentDefaultArgs),
-    agentEnv: resolveTuiAgentLaunchEnv(agent, state.settings?.agentDefaultEnv),
+    agentArgs: isTuiAgent(agent)
+      ? resolveTuiAgentLaunchArgs(agent, state.settings?.agentDefaultArgs)
+      : undefined,
+    agentEnv: isTuiAgent(agent)
+      ? resolveTuiAgentLaunchEnv(agent, state.settings?.agentDefaultEnv)
+      : undefined,
     platform: launchPlatform,
     isRemote: repo ? repoIsRemote(repo) : false,
-    allowEmptyPromptLaunch: true
+    allowEmptyPromptLaunch: true,
+    customAgents: state.settings?.customAgents
   })
   if (!startupPlan) {
     return undefined

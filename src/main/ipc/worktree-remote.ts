@@ -62,6 +62,7 @@ import { requireSshGitProvider } from '../providers/ssh-git-dispatch'
 import { getSshFilesystemProvider } from '../providers/ssh-filesystem-dispatch'
 import type { SshGitProvider } from '../providers/ssh-git-provider'
 import { TUI_AGENT_CONFIG, isTuiAgent } from '../../shared/tui-agent-config'
+import { isAgentId } from '../../shared/custom-agent'
 import { isWindowsAbsolutePathLike } from '../../shared/cross-platform-path'
 import { getSshGitUsername } from '../git/git-username'
 import { runWorktreeChangeInvalidators } from './worktree-change-invalidators'
@@ -298,7 +299,7 @@ async function spawnLocalStartupAndSetupTerminals(args: {
       ...(setup ? { claudeAgentTeamsSourceCommand: startup.command } : {}),
       env: sequencedStartup.env,
       ...(sequencedStartup.launchConfig ? { launchConfig: sequencedStartup.launchConfig } : {}),
-      ...(isTuiAgent(createdWithAgent) ? { launchAgent: createdWithAgent } : {}),
+      ...(createdWithAgent ? { launchAgent: createdWithAgent } : {}),
       startupCommandDelivery: sequencedStartup.startupCommandDelivery,
       telemetry: sequencedStartup.telemetry,
       activate: true
@@ -1892,8 +1893,8 @@ export async function createRemoteWorktree(
       : shouldSetDisplayName(effectiveRequestedName, branchName, effectiveSanitizedName)
         ? { displayName: effectiveRequestedName }
         : {}),
-    ...(isTuiAgent(args.createdWithAgent) ? { createdWithAgent: args.createdWithAgent } : {}),
-    ...(args.pendingFirstAgentMessageRename === true && isTuiAgent(args.createdWithAgent)
+    ...(isAgentId(args.createdWithAgent) ? { createdWithAgent: args.createdWithAgent } : {}),
+    ...(args.pendingFirstAgentMessageRename === true && isAgentId(args.createdWithAgent)
       ? { pendingFirstAgentMessageRename: true }
       : {}),
     ...(sparseDirectories.length > 0
@@ -2522,8 +2523,8 @@ export async function createLocalWorktree(
           sparsePresetId
         }
       : {}),
-    ...(isTuiAgent(args.createdWithAgent) ? { createdWithAgent: args.createdWithAgent } : {}),
-    ...(args.pendingFirstAgentMessageRename === true && isTuiAgent(args.createdWithAgent)
+    ...(isAgentId(args.createdWithAgent) ? { createdWithAgent: args.createdWithAgent } : {}),
+    ...(args.pendingFirstAgentMessageRename === true && isAgentId(args.createdWithAgent)
       ? { pendingFirstAgentMessageRename: true }
       : {}),
     ...(args.linkedIssue !== undefined ? { linkedIssue: args.linkedIssue } : {}),

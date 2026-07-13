@@ -22,7 +22,7 @@ import { readCurrentProcessMacSystemResolverHealth } from '../network/macos-syst
 import type { SubprocessHandle } from './session'
 import { checkPtySpawnHealth } from './pty-subprocess'
 import { createNoopDaemonFileLog, type DaemonFileLog } from './daemon-file-log'
-import { isTuiAgent } from '../../shared/tui-agent-config'
+import { isAgentId } from '../../shared/custom-agent'
 import {
   PROTOCOL_VERSION,
   NOTIFY_PREFIX,
@@ -344,7 +344,7 @@ export class DaemonServer {
           startupCommandDelivery: p.startupCommandDelivery,
           // Why: daemon RPC payloads are untrusted JSON. Persist only the
           // allowlisted enum used for byte routing, never arbitrary identity.
-          ...(isTuiAgent(p.launchAgent) ? { launchAgent: p.launchAgent } : {}),
+          ...(isAgentId(p.launchAgent) ? { launchAgent: p.launchAgent } : {}),
           shellOverride: p.shellOverride,
           terminalWindowsWslDistro: p.terminalWindowsWslDistro,
           terminalWindowsPowerShellImplementation: p.terminalWindowsPowerShellImplementation,

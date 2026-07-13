@@ -1,7 +1,10 @@
 import type React from 'react'
+import { Terminal } from 'lucide-react'
 import { ClaudeIcon, DroidIcon, OpenAIIcon } from '@/components/status-bar/icons'
 import openClaudeLogoUrl from '../../../../resources/openclaude-logo.png?url'
 import type { TuiAgent } from '../../../shared/types'
+import type { AgentId, CustomAgentDefinition } from '../../../shared/custom-agent'
+import { customAgentForId, isCustomAgentId } from '../../../shared/custom-agent'
 import { getTuiAgentLaunchCommand, TUI_AGENT_CONFIG } from '../../../shared/tui-agent-config'
 import {
   AgentLetterIcon,
@@ -17,7 +20,7 @@ import { createLocalizedCatalog } from '@/i18n/localized-catalog'
 import { AGENT_FAVICON_ASSETS } from './agent-favicon-assets'
 
 export type AgentCatalogEntry = {
-  id: TuiAgent
+  id: AgentId
   label: string
   /** Default CLI binary name used for PATH detection. */
   cmd: string
@@ -28,6 +31,7 @@ export type AgentCatalogEntry = {
   /** Homepage/install docs URL, sourced from the README agent badge list. */
   homepageUrl: string
 }
+export type NativeAgentCatalogEntry = Omit<AgentCatalogEntry, 'id'> & { id: TuiAgent }
 
 function getCatalogPlatform(): NodeJS.Platform {
   const userAgent = typeof navigator === 'undefined' ? '' : navigator.userAgent
@@ -43,7 +47,7 @@ function getCatalogPlatform(): NodeJS.Platform {
   return typeof process === 'undefined' ? 'linux' : process.platform
 }
 
-export const getAgentCatalog = createLocalizedCatalog((): AgentCatalogEntry[] => [
+const NATIVE_AGENT_CATALOG = createLocalizedCatalog((): AgentCatalogEntry[] => [
   {
     id: 'claude',
     label: translate('auto.lib.agent.catalog.0708ed89f1', 'Claude'),
@@ -293,19 +297,36 @@ export const getAgentCatalog = createLocalizedCatalog((): AgentCatalogEntry[] =>
   }
 ])
 
+export function getAgentCatalog(): NativeAgentCatalogEntry[]
+export function getAgentCatalog(customAgents: readonly CustomAgentDefinition[]): AgentCatalogEntry[]
+export function getAgentCatalog(customAgents: readonly CustomAgentDefinition[] = []): AgentCatalogEntry[] {
+  return [
+    ...NATIVE_AGENT_CATALOG(),
+    ...customAgents.map((agent) => ({
+      id: agent.id,
+      label: agent.name,
+      cmd: agent.command,
+      homepageUrl: '',
+      ...(agent.icon.kind === 'image' ? { iconUrl: agent.icon.dataUrl } : {})
+    }))
+  ]
+}
+
 // Why: tests and a few legacy call sites still import a catalog snapshot.
 export const AGENT_CATALOG: AgentCatalogEntry[] = getAgentCatalog()
 
-export function getAgentLabel(agent: TuiAgent): string {
+export function getAgentLabel(agent: AgentId): string {
   return getAgentCatalog().find((entry) => entry.id === agent)?.label ?? agent
 }
 
 export function AgentIcon({
   agent,
-  size = 14
+  size = 14,
+  customAgents = []
 }: {
-  agent: TuiAgent | null | undefined
+  agent: AgentId | null | undefined
   size?: number
+  customAgents?: readonly CustomAgentDefinition[]
 }): React.JSX.Element {
   // Why: render a neutral question-mark glyph when the agent identity is not
   // yet known. Before, the caller coerced null → 'claude', which caused Codex
@@ -341,11 +362,18 @@ export function AgentIcon({
   if (agent === 'opencode') {
     return <OpenCodeIcon size={size} />
   }
-  const catalogEntry = getAgentCatalog().find((a) => a.id === agent)
+  const catalogEntry = getAgentCatalog(customAgents ?? []).find((a) => a.id === agent)
+  if (isCustomAgentId(agent)) {
+    const customIcon = customAgentForId(agent, customAgents)
+    if (customIcon?.icon.kind === 'terminal') return <Terminal size={size} aria-hidden />
+    if (customIcon?.icon.kind === 'letter') {
+      return <AgentLetterIcon letter={customIcon.icon.value} size={size} />
+    }
+  }
   // Why: prefer the favicon bundled at build time so the icon renders without a
   // live network request — Google's favicon service is unreachable in some
   // regions and offline, which left these icons broken (#8451).
-  const bundledFaviconUrl = AGENT_FAVICON_ASSETS[agent]
+  const bundledFaviconUrl = isCustomAgentId(agent) ? undefined : AGENT_FAVICON_ASSETS[agent]
   // Why: one resolved src for guard + attribute so empty `iconUrl` cannot pass
   // a truthy `||` check while `??` still renders a broken `<img src="">`.
   const iconSrc = catalogEntry?.iconUrl ?? bundledFaviconUrl

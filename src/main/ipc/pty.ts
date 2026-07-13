@@ -34,7 +34,8 @@ import {
   redactPtyIdForDiagnostics
 } from '../../shared/pty-delivery-diagnostics'
 import { recordCrashBreadcrumb } from '../crash-reporting/crash-breadcrumb-store'
-import { isTuiAgent } from '../../shared/tui-agent-config'
+import { isAgentId } from '../../shared/custom-agent'
+import type { AgentId } from '../../shared/custom-agent'
 import type { SleepingAgentLaunchConfig } from '../../shared/agent-session-resume'
 import type { ProjectExecutionRuntimeResolution } from '../../shared/project-execution-runtime'
 import {
@@ -3588,7 +3589,7 @@ export function registerPtyHandlers(
         command?: string
         commandDelivery?: 'renderer' | 'provider'
         launchConfig?: SleepingAgentLaunchConfig
-        launchAgent?: TuiAgent
+        launchAgent?: AgentId
         startupCommandDelivery?: StartupCommandDelivery
         connectionId?: string | null
         worktreeId?: string
@@ -3940,7 +3941,7 @@ export function registerPtyHandlers(
       if (args.startupCommandDelivery !== undefined) {
         spawnOptions.startupCommandDelivery = args.startupCommandDelivery
       }
-      if (isTuiAgent(args.launchAgent)) {
+      if (isAgentId(args.launchAgent)) {
         spawnOptions.launchAgent = args.launchAgent
       }
       if (args.worktreeId !== undefined) {

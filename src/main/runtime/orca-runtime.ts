@@ -142,6 +142,8 @@ import type {
   WorkspaceSessionState,
   DirEntry
 } from '../../shared/types'
+import type { AgentId } from '../../shared/custom-agent'
+import { customAgentForId, isCustomAgentId } from '../../shared/custom-agent'
 import { assertWorktreeUnlockedForRemoval } from '../../shared/worktree-removal'
 import {
   getRepoExecutionHostId,
@@ -982,7 +984,7 @@ type RuntimePtyWorktreeRecord = {
   paneKey: string | null
   launchConfig: SleepingAgentLaunchConfig | null
   launchToken: string | null
-  launchAgent: TuiAgent | null
+  launchAgent: AgentId | null
   foregroundAgent: TuiAgent | null
   connected: boolean
   disconnectedAt: number | null
@@ -1014,7 +1016,7 @@ type TerminalCreateOptions = {
   env?: Record<string, string>
   launchConfig?: WorktreeStartupLaunch['launchConfig']
   launchToken?: string
-  launchAgent?: TuiAgent
+  launchAgent?: AgentId
   startupCommandDelivery?: WorktreeStartupLaunch['startupCommandDelivery']
   telemetry?: WorktreeStartupLaunch['telemetry']
   title?: string
@@ -1212,7 +1214,7 @@ type RuntimePtyController = {
 }
 
 type WorktreeStartupDraftPaste = {
-  agent: TuiAgent
+  agent: AgentId
   content: string
 }
 
@@ -1312,7 +1314,7 @@ type RuntimeNotifier = {
       cwd?: string
       launchConfig?: SleepingAgentLaunchConfig
       launchToken?: string
-      launchAgent?: TuiAgent
+      launchAgent?: AgentId
       activate?: boolean
       presentation?: RuntimeTerminalPresentation
       tabId?: string
@@ -2609,6 +2611,7 @@ export class OrcaRuntimeService {
     GlobalSettings,
     | 'defaultTuiAgent'
     | 'disabledTuiAgents'
+    | 'customAgents'
     | 'agentCmdOverrides'
     | 'agentDefaultArgs'
     | 'agentDefaultEnv'
@@ -2632,6 +2635,7 @@ export class OrcaRuntimeService {
     return {
       defaultTuiAgent: settings.defaultTuiAgent ?? null,
       disabledTuiAgents: settings.disabledTuiAgents ?? [],
+      customAgents: settings.customAgents ?? [],
       agentCmdOverrides: settings.agentCmdOverrides ?? {},
       agentDefaultArgs: settings.agentDefaultArgs ?? {},
       agentDefaultEnv: settings.agentDefaultEnv ?? {},
@@ -2656,6 +2660,7 @@ export class OrcaRuntimeService {
       | 'agentStatusHooksEnabled'
       | 'defaultTuiAgent'
       | 'disabledTuiAgents'
+      | 'customAgents'
       | 'agentDefaultArgs'
       | 'agentDefaultEnv'
       | 'defaultTaskSource'
@@ -14095,9 +14100,9 @@ export class OrcaRuntimeService {
   private async buildStartupForDraft(
     repo: Repo,
     draft: string,
-    requestedAgent?: TuiAgent
+    requestedAgent?: AgentId
   ): Promise<{
-    agent: TuiAgent
+    agent: AgentId
     startup: WorktreeStartupLaunch
     draftPaste?: WorktreeStartupDraftPaste
   } | null> {
@@ -14116,7 +14121,10 @@ export class OrcaRuntimeService {
       return null
     }
     let agent =
-      isTuiAgent(preferredAgent) && isTuiAgentEnabled(preferredAgent, settings.disabledTuiAgents)
+      (isTuiAgent(preferredAgent) || isCustomAgentId(preferredAgent)) &&
+      isTuiAgentEnabled(preferredAgent, settings.disabledTuiAgents) &&
+      (!isCustomAgentId(preferredAgent) ||
+        customAgentForId(preferredAgent, settings.customAgents)?.enabled === true)
         ? preferredAgent
         : null
     if (!agent) {
@@ -14149,11 +14157,16 @@ export class OrcaRuntimeService {
       agent,
       draft: content,
       cmdOverrides: settings.agentCmdOverrides ?? {},
-      agentArgs: resolveTuiAgentLaunchArgs(agent, settings.agentDefaultArgs),
-      agentEnv: resolveTuiAgentLaunchEnv(agent, settings.agentDefaultEnv),
+      agentArgs: isTuiAgent(agent)
+        ? resolveTuiAgentLaunchArgs(agent, settings.agentDefaultArgs)
+        : undefined,
+      agentEnv: isTuiAgent(agent)
+        ? resolveTuiAgentLaunchEnv(agent, settings.agentDefaultEnv)
+        : undefined,
       platform: agentLaunchPlatform,
       shell: queuedShell,
-      isRemote
+      isRemote,
+      customAgents: settings.customAgents
     })
     if (draftLaunchPlan) {
       return {
@@ -14173,12 +14186,17 @@ export class OrcaRuntimeService {
       agent,
       prompt: '',
       cmdOverrides: settings.agentCmdOverrides ?? {},
-      agentArgs: resolveTuiAgentLaunchArgs(agent, settings.agentDefaultArgs),
-      agentEnv: resolveTuiAgentLaunchEnv(agent, settings.agentDefaultEnv),
+      agentArgs: isTuiAgent(agent)
+        ? resolveTuiAgentLaunchArgs(agent, settings.agentDefaultArgs)
+        : undefined,
+      agentEnv: isTuiAgent(agent)
+        ? resolveTuiAgentLaunchEnv(agent, settings.agentDefaultEnv)
+        : undefined,
       platform: agentLaunchPlatform,
       shell: queuedShell,
       isRemote,
-      allowEmptyPromptLaunch: true
+      allowEmptyPromptLaunch: true,
+      customAgents: settings.customAgents
     })
     if (!startupPlan) {
       return null
@@ -14199,14 +14217,17 @@ export class OrcaRuntimeService {
 
   private buildStartupForAgent(
     repo: Repo,
-    agent: TuiAgent,
+    agent: AgentId,
     prompt: string | undefined
-  ): { agent: TuiAgent; startup: WorktreeStartupLaunch; followup?: WorktreeStartupFollowup } {
+  ): { agent: AgentId; startup: WorktreeStartupLaunch; followup?: WorktreeStartupFollowup } {
     if (!this.store) {
       throw new Error('runtime_unavailable')
     }
     const settings = this.store.getSettings()
-    if (!isTuiAgentEnabled(agent, settings.disabledTuiAgents)) {
+    if (
+      !isTuiAgentEnabled(agent, settings.disabledTuiAgents) ||
+      (isCustomAgentId(agent) && customAgentForId(agent, settings.customAgents)?.enabled !== true)
+    ) {
       throw new Error('Selected agent is disabled. Choose an enabled agent before creating.')
     }
     // Why: CLI clients may target SSH runtimes from macOS/Windows, so quote for
@@ -14222,12 +14243,17 @@ export class OrcaRuntimeService {
       agent,
       prompt: prompt ?? '',
       cmdOverrides: settings.agentCmdOverrides ?? {},
-      agentArgs: resolveTuiAgentLaunchArgs(agent, settings.agentDefaultArgs),
-      agentEnv: resolveTuiAgentLaunchEnv(agent, settings.agentDefaultEnv),
+      agentArgs: isTuiAgent(agent)
+        ? resolveTuiAgentLaunchArgs(agent, settings.agentDefaultArgs)
+        : undefined,
+      agentEnv: isTuiAgent(agent)
+        ? resolveTuiAgentLaunchEnv(agent, settings.agentDefaultEnv)
+        : undefined,
       platform: agentLaunchPlatform,
       shell: queuedShell,
       isRemote,
-      allowEmptyPromptLaunch: true
+      allowEmptyPromptLaunch: true,
+      customAgents: settings.customAgents
     })
     if (!startupPlan) {
       throw new Error(`Could not build launch command for ${agent}.`)
@@ -14254,6 +14280,7 @@ export class OrcaRuntimeService {
   }
 
   private markLocalWorkspaceTrustedForAgent(agent: TuiAgent, workspacePath: string): void {
+    if (!isTuiAgent(agent)) return
     const preset = TUI_AGENT_CONFIG[agent].preflightTrust
     if (!preset) {
       return
@@ -14525,14 +14552,15 @@ export class OrcaRuntimeService {
     return null
   }
 
-  private waitForStartupDraftReady(handle: string, agent: TuiAgent): Promise<string | null> {
+  private waitForStartupDraftReady(handle: string, agent: AgentId): Promise<string | null> {
     const livePty = this.getLivePtyForHandle(handle)
     const ptyId = livePty?.pty.ptyId
     if (!ptyId) {
       return Promise.resolve(null)
     }
-    const readySignal =
-      TUI_AGENT_CONFIG[agent].draftPasteReadySignal ?? 'render-quiet-after-bracketed-paste'
+    const readySignal = isTuiAgent(agent)
+      ? (TUI_AGENT_CONFIG[agent].draftPasteReadySignal ?? 'render-quiet-after-bracketed-paste')
+      : 'render-quiet-after-bracketed-paste'
     return new Promise<string | null>((resolve) => {
       let settled = false
       const scanner = createDraftPasteReadyScanner(readySignal)
@@ -14624,8 +14652,8 @@ export class OrcaRuntimeService {
     runHooks?: boolean
     activate?: boolean
     setupDecision?: 'run' | 'skip' | 'inherit'
-    createdWithAgent?: TuiAgent
-    startupAgent?: TuiAgent
+    createdWithAgent?: AgentId
+    startupAgent?: AgentId
     startupPrompt?: string
     pendingFirstAgentMessageRename?: boolean
     automationProvenance?: AutomationWorkspaceProvenance
@@ -14643,7 +14671,9 @@ export class OrcaRuntimeService {
     const requestedAgent = args.startupAgent ?? args.createdWithAgent
     const requestedAgentEnabled =
       requestedAgent !== undefined
-        ? isTuiAgentEnabled(requestedAgent, createSettings.disabledTuiAgents)
+        ? isTuiAgentEnabled(requestedAgent, createSettings.disabledTuiAgents) &&
+          (!isCustomAgentId(requestedAgent) ||
+            customAgentForId(requestedAgent, createSettings.customAgents)?.enabled === true)
         : false
     if ((args.startup || args.startupAgent) && requestedAgent && !requestedAgentEnabled) {
       throw new Error('Selected agent is disabled. Choose an enabled agent before creating.')
@@ -17838,9 +17868,9 @@ export class OrcaRuntimeService {
       cwd?: string
       env?: Record<string, string>
       startupCommandDelivery?: WorktreeStartupLaunch['startupCommandDelivery']
-      agent?: TuiAgent
+      agent?: AgentId
       launchConfig?: SleepingAgentLaunchConfig
-      launchAgent?: TuiAgent
+      launchAgent?: AgentId
       activate?: boolean
       clientMutationId?: string
       signal?: AbortSignal
@@ -17882,9 +17912,9 @@ export class OrcaRuntimeService {
       cwd?: string
       env?: Record<string, string>
       startupCommandDelivery?: WorktreeStartupLaunch['startupCommandDelivery']
-      agent?: TuiAgent
+      agent?: AgentId
       launchConfig?: SleepingAgentLaunchConfig
-      launchAgent?: TuiAgent
+      launchAgent?: AgentId
       activate?: boolean
       clientMutationId?: string
       signal?: AbortSignal
@@ -18071,16 +18101,16 @@ export class OrcaRuntimeService {
       command?: string
       env?: Record<string, string>
       startupCommandDelivery?: WorktreeStartupLaunch['startupCommandDelivery']
-      agent?: TuiAgent
+      agent?: AgentId
       launchConfig?: SleepingAgentLaunchConfig
-      launchAgent?: TuiAgent
+      launchAgent?: AgentId
     }
   ): Promise<{
     command?: string
     env?: Record<string, string>
     startupCommandDelivery?: WorktreeStartupLaunch['startupCommandDelivery']
     launchConfig?: SleepingAgentLaunchConfig
-    launchAgent?: TuiAgent
+    launchAgent?: AgentId
   }> {
     if (opts.command || !opts.agent) {
       return {
@@ -18095,7 +18125,10 @@ export class OrcaRuntimeService {
       throw new Error('runtime_unavailable')
     }
     const settings = this.store.getSettings()
-    if (!isTuiAgentEnabled(opts.agent, settings.disabledTuiAgents)) {
+    if (
+      !isTuiAgentEnabled(opts.agent, settings.disabledTuiAgents) ||
+      (isCustomAgentId(opts.agent) && customAgentForId(opts.agent, settings.customAgents)?.enabled !== true)
+    ) {
       throw new Error('Selected agent is disabled. Choose an enabled agent before creating.')
     }
     // Why: mobile may be running on iOS while the actual terminal shell is
@@ -18113,23 +18146,28 @@ export class OrcaRuntimeService {
       agent: opts.agent,
       prompt: '',
       cmdOverrides: settings.agentCmdOverrides ?? {},
-      agentArgs: resolveTuiAgentLaunchArgs(opts.agent, settings.agentDefaultArgs),
-      agentEnv: resolveTuiAgentLaunchEnv(opts.agent, settings.agentDefaultEnv),
+      agentArgs: isTuiAgent(opts.agent)
+        ? resolveTuiAgentLaunchArgs(opts.agent, settings.agentDefaultArgs)
+        : undefined,
+      agentEnv: isTuiAgent(opts.agent)
+        ? resolveTuiAgentLaunchEnv(opts.agent, settings.agentDefaultEnv)
+        : undefined,
       platform,
       shell: queuedShell,
       isRemote,
-      allowEmptyPromptLaunch: true
+      allowEmptyPromptLaunch: true,
+      customAgents: settings.customAgents
     })
     if (!startupPlan) {
       throw new Error(`Could not build launch command for ${opts.agent}.`)
     }
-    if (workspace.connectionId) {
+    if (workspace.connectionId && isTuiAgent(opts.agent)) {
       await this.markRemoteWorkspaceTrustedForAgent(
         opts.agent,
         workspace.connectionId,
         workspace.path
       )
-    } else {
+    } else if (isTuiAgent(opts.agent)) {
       this.markLocalWorkspaceTrustedForAgent(opts.agent, workspace.path)
     }
     return {
@@ -18151,7 +18189,7 @@ export class OrcaRuntimeService {
       env?: Record<string, string>
       startupCommandDelivery?: WorktreeStartupLaunch['startupCommandDelivery']
       identity?: { tabId: string; leafId: string; sessionId?: string }
-      launchAgent?: TuiAgent
+      launchAgent?: AgentId
       targetGroupId?: string
       launchConfig?: SleepingAgentLaunchConfig
     } = {}

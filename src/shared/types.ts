@@ -29,6 +29,7 @@ import type {
   SourceControlAiSettings
 } from './source-control-ai-types'
 import type { StartupCommandDelivery } from './codex-startup-delivery'
+import type { AgentId, CustomAgentDefinition } from './custom-agent'
 import type { AgentKind, LaunchSource, RequestKind } from './telemetry-events'
 import type { SleepingAgentLaunchConfig, SleepingAgentSessionRecord } from './agent-session-resume'
 import type { ClaudeAgentTeamsMode } from './claude-agent-teams-tmux-compat'
@@ -327,7 +328,7 @@ export type FolderWorkspace = {
   /** User-authored sidebar ordering. Higher values render earlier in Manual sort. */
   manualOrder?: number
   workspaceStatus?: WorkspaceStatus
-  createdWithAgent?: TuiAgent
+  createdWithAgent?: AgentId
   pendingFirstAgentMessageRename?: boolean
   firstAgentMessageRenameError?: string | null
   lastActivityAt: number
@@ -856,7 +857,7 @@ export type TerminalTab = {
    *  event (a freshly-launched, idle agent reports no live status yet). Live
    *  hook status overrides this once the agent does anything. Plain terminals
    *  and manually-started agents omit it. */
-  launchAgent?: TuiAgent
+  launchAgent?: AgentId
   /** Why: when `setActiveWorktree` bumps generation on all-dead tabs to drive a
    *  TerminalPane remount, the fresh PTY that results is caused by navigation,
    *  not by the user doing work. Without this flag the resulting
@@ -2037,7 +2038,7 @@ export type WorktreeStartupLaunch = {
   env?: Record<string, string>
   launchConfig?: SleepingAgentLaunchConfig
   launchToken?: string
-  launchAgent?: TuiAgent
+  launchAgent?: AgentId
   startupCommandDelivery?: StartupCommandDelivery
   telemetry?: { agent_kind: AgentKind; launch_source: LaunchSource; request_kind: RequestKind }
 }
@@ -2781,10 +2782,12 @@ export type GlobalSettings = {
    *  - null: auto (first detected agent)
    *  - 'blank': blank terminal (no agent launched)
    *  - TuiAgent: a specific agent id */
-  defaultTuiAgent: TuiAgent | 'blank' | null
+  defaultTuiAgent: AgentId | 'blank' | null
   /** Agents hidden from future picker and automatic launch choices. Detection
    *  remains a raw PATH capability snapshot. */
-  disabledTuiAgents: TuiAgent[]
+  disabledTuiAgents: AgentId[]
+  /** User-defined terminal agents. Native agents remain in TUI_AGENT_CONFIG. */
+  customAgents: CustomAgentDefinition[]
   /** One-shot guard so the experimental Claude Agent Teams launch mode starts
    *  hidden for existing profiles without overriding later user opt-ins. */
   claudeAgentTeamsDefaultDisabledMigrated?: boolean

@@ -204,6 +204,7 @@ import {
   SOURCE_CONTROL_TEXT_ACTION_IDS
 } from '../shared/source-control-ai-actions'
 import { normalizeDisabledTuiAgents } from '../shared/tui-agent-selection'
+import { normalizeAgentIds, normalizeCustomAgents } from '../shared/custom-agent'
 import {
   DEFAULT_TUI_AGENT_ARGS,
   DEFAULT_TUI_AGENT_ENV,
@@ -5217,7 +5218,10 @@ export class Store {
       sanitizedUpdates.minimizeToTrayOnClose = updates.minimizeToTrayOnClose === true
     }
     if ('disabledTuiAgents' in updates) {
-      sanitizedUpdates.disabledTuiAgents = normalizeDisabledTuiAgents(updates.disabledTuiAgents)
+      sanitizedUpdates.disabledTuiAgents = normalizeAgentIds(updates.disabledTuiAgents)
+    }
+    if ('customAgents' in updates) {
+      sanitizedUpdates.customAgents = normalizeCustomAgents(updates.customAgents)
     }
     if ('agentDefaultArgs' in updates) {
       sanitizedUpdates.agentDefaultArgs = normalizeTuiAgentArgsRecord(updates.agentDefaultArgs)

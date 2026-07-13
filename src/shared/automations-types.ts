@@ -1,4 +1,5 @@
 import type { SetupDecision, TuiAgent } from './types'
+import type { AgentId } from './custom-agent'
 import type { TaskSourceContext, WorkspaceRunContext } from './task-source-context'
 
 export type AutomationWorkspaceMode = 'existing' | 'new_per_run'
@@ -92,7 +93,7 @@ export type Automation = {
   name: string
   prompt: string
   precheck: AutomationPrecheck | null
-  agentId: TuiAgent
+  agentId: AgentId
   /** Why: runContext carries the logical project + host setup identity for
    *  multi-host projects; projectId remains only as the legacy repo-id storage
    *  field for pre-host-context automations.
@@ -161,7 +162,7 @@ export type AutomationCreateInput = {
   name: string
   prompt: string
   precheck?: AutomationPrecheck | null
-  agentId: TuiAgent
+  agentId: AgentId
   runContext?: WorkspaceRunContext | null
   sourceContext?: TaskSourceContext | null
   /** @deprecated Legacy repo-id compatibility field required for older stored

@@ -9,7 +9,7 @@ import {
   type ShellReadyScanState
 } from '../shell-ready-marker-scanner'
 import { isPowerShellProcess } from '../../shared/shell-process-detection'
-import type { TuiAgent } from '../../shared/types'
+import type { AgentId } from '../../shared/custom-agent'
 import type {
   PendingOutputRecord,
   SessionState,
@@ -79,7 +79,7 @@ export type SessionOptions = {
   cols: number
   rows: number
   terminalHandle?: string
-  launchAgent?: TuiAgent
+  launchAgent?: AgentId
   subprocess: SubprocessHandle
   shellReadySupported: boolean
   shellReadyTimeoutMs?: number
@@ -102,7 +102,7 @@ type AttachedClient = {
 export class Session {
   readonly sessionId: string
   readonly terminalHandle: string | null
-  readonly launchAgent: TuiAgent | null
+  readonly launchAgent: AgentId | null
   private _state: SessionState = 'running'
   private _shellState: ShellReadyState
   private _exitCode: number | null = null

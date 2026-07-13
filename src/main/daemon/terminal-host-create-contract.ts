@@ -1,5 +1,5 @@
 import type { StartupCommandDelivery } from '../../shared/codex-startup-delivery'
-import type { TuiAgent } from '../../shared/types'
+import type { AgentId } from '../../shared/custom-agent'
 import type { ShellReadyState, TerminalSnapshot } from './types'
 
 export type CreateOrAttachOptions = {
@@ -11,7 +11,7 @@ export type CreateOrAttachOptions = {
   envToDelete?: string[]
   command?: string
   startupCommandDelivery?: StartupCommandDelivery
-  launchAgent?: TuiAgent
+  launchAgent?: AgentId
   /** Explicit shell the renderer asked for, forwarded to the subprocess. */
   shellOverride?: string
   terminalWindowsWslDistro?: string | null
@@ -28,6 +28,6 @@ export type CreateOrAttachResult = {
   pid: number | null
   shellState: ShellReadyState
   historySeeded?: boolean
-  launchAgent?: TuiAgent
+  launchAgent?: AgentId
   attachToken: symbol
 }

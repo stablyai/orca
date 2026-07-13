@@ -8,12 +8,13 @@ import {
   normalizeTuiAgentArgsRecord,
   normalizeTuiAgentEnvRecord
 } from '../../../../shared/tui-agent-launch-defaults'
-import { isTuiAgent } from '../../../../shared/tui-agent-config'
+import { isAgentId } from '../../../../shared/custom-agent'
 import { isTaskProvider } from '../../../../shared/task-providers'
 import { normalizeDisabledTuiAgents } from '../../../../shared/tui-agent-selection'
 import { normalizePRBotAuthorOverrides } from '../../../../shared/pr-bot-author-overrides'
 import { normalizeWorktreeCardProperties } from '../../../../shared/worktree-card-properties'
 import type { TaskProvider } from '../../../../shared/types'
+import { normalizeCustomAgents } from '../../../../shared/custom-agent'
 
 const NullableString = z.string().nullable()
 const StringArray = z.array(z.string())
@@ -132,12 +133,16 @@ export const SettingsUpdate = z
     defaultTuiAgent: z
       .unknown()
       .transform((value) =>
-        value === null || value === 'blank' || isTuiAgent(value) ? value : undefined
+        value === null || value === 'blank' || isAgentId(value) ? value : undefined
       )
       .optional(),
     disabledTuiAgents: z
       .unknown()
       .transform((value) => normalizeDisabledTuiAgents(value))
+      .optional(),
+    customAgents: z
+      .unknown()
+      .transform((value) => normalizeCustomAgents(value))
       .optional(),
     agentDefaultArgs: z
       .unknown()

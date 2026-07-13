@@ -28,6 +28,8 @@ import {
   resolveTuiAgentLaunchEnv
 } from '../../../shared/tui-agent-launch-defaults'
 import { tuiAgentToAgentKind } from '@/lib/telemetry'
+import { isCustomAgentId } from '../../../shared/custom-agent'
+import { isTuiAgent } from '../../../shared/tui-agent-config'
 import { isGitRepoKind } from '../../../shared/repo-kind'
 import { callRuntimeRpc, getActiveRuntimeTarget } from '@/runtime/runtime-rpc-client'
 import { resolveWorktreeCreateBaseBranch } from '@/runtime/worktree-create-base'
@@ -383,7 +385,7 @@ export type UseComposerStateResult = {
   promptTextareaRef: React.RefObject<HTMLTextAreaElement | null>
   nameInputRef: React.RefObject<HTMLInputElement | null>
   submit: () => Promise<void>
-  submitQuick: (agent: TuiAgent | null) => Promise<void>
+  submitQuick: (agent: import('../../../shared/custom-agent').AgentId | null) => Promise<void>
   /** Invoked by the Enter handler to re-check whether submission should fire. */
   createDisabled: boolean
 }
@@ -3318,7 +3320,7 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
     folderTargetRequiresConnection
 
   const submitFolderTarget = useCallback(
-    async (requestedAgent: TuiAgent | null): Promise<void> => {
+    async (requestedAgent: import('../../../shared/custom-agent').AgentId | null): Promise<void> => {
       if (!selectedProjectGroup?.parentPath || folderCreateDisabled) {
         return
       }
@@ -3346,10 +3348,13 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
           quickAgent: agent,
           autoRenameBranchFromWork: settings?.autoRenameBranchFromWork,
           agentCmdOverrides: settings?.agentCmdOverrides,
-          agentArgs: agent
+          customAgents: settings?.customAgents,
+          agentArgs: agent && isTuiAgent(agent)
             ? resolveTuiAgentLaunchArgs(agent, settings?.agentDefaultArgs)
             : undefined,
-          agentEnv: agent ? resolveTuiAgentLaunchEnv(agent, settings?.agentDefaultEnv) : undefined,
+          agentEnv: agent && isTuiAgent(agent)
+            ? resolveTuiAgentLaunchEnv(agent, settings?.agentDefaultEnv)
+            : undefined,
           terminalWindowsShell: settings?.terminalWindowsShell,
           isRemote: folderTargetIsRemote,
           launchSource: telemetrySource === 'onboarding' ? 'onboarding' : 'new_workspace_composer',
@@ -3605,6 +3610,7 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
         cmdOverrides: settings?.agentCmdOverrides ?? {},
         agentArgs: resolveTuiAgentLaunchArgs(tuiAgent, settings?.agentDefaultArgs),
         agentEnv: resolveTuiAgentLaunchEnv(tuiAgent, settings?.agentDefaultEnv),
+        customAgents: settings?.customAgents,
         platform: selectedRepoAgentLaunchPlatform,
         shell: selectedRepoStartupShell,
         isRemote: selectedRepoIsRemote
@@ -4022,8 +4028,13 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
                 agent,
                 draft: quickDraftPrompt,
                 cmdOverrides: settings?.agentCmdOverrides ?? {},
-                agentArgs: resolveTuiAgentLaunchArgs(agent, settings?.agentDefaultArgs),
-                agentEnv: resolveTuiAgentLaunchEnv(agent, settings?.agentDefaultEnv),
+                agentArgs: isTuiAgent(agent)
+                  ? resolveTuiAgentLaunchArgs(agent, settings?.agentDefaultArgs)
+                  : undefined,
+                agentEnv: isTuiAgent(agent)
+                  ? resolveTuiAgentLaunchEnv(agent, settings?.agentDefaultEnv)
+                  : undefined,
+                customAgents: settings?.customAgents,
                 platform: selectedRepoAgentLaunchPlatform,
                 shell: selectedRepoStartupShell,
                 isRemote: selectedRepoIsRemote
@@ -4047,12 +4058,17 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
             agent,
             prompt: quickPrompt,
             cmdOverrides: settings?.agentCmdOverrides ?? {},
-            agentArgs: resolveTuiAgentLaunchArgs(agent, settings?.agentDefaultArgs),
-            agentEnv: resolveTuiAgentLaunchEnv(agent, settings?.agentDefaultEnv),
+            agentArgs: isTuiAgent(agent)
+              ? resolveTuiAgentLaunchArgs(agent, settings?.agentDefaultArgs)
+              : undefined,
+            agentEnv: isTuiAgent(agent)
+              ? resolveTuiAgentLaunchEnv(agent, settings?.agentDefaultEnv)
+              : undefined,
             platform: selectedRepoAgentLaunchPlatform,
             shell: selectedRepoStartupShell,
             isRemote: selectedRepoIsRemote,
-            allowEmptyPromptLaunch: true
+            allowEmptyPromptLaunch: true,
+            customAgents: settings?.customAgents
           })
           if (startupPlan && quickDraftPrompt) {
             startupPlan.draftPrompt = quickDraftPrompt
@@ -4063,7 +4079,7 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
           agent === null
             ? null
             : {
-                agent_kind: tuiAgentToAgentKind(agent),
+                agent_kind: isCustomAgentId(agent) ? 'other' : tuiAgentToAgentKind(agent),
                 launch_source:
                   telemetrySource === 'onboarding' ? 'onboarding' : 'new_workspace_composer',
                 request_kind: 'new'

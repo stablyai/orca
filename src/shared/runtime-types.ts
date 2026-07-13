@@ -23,6 +23,7 @@ import type {
   WorkspaceLineage,
   WorktreeLineageWarning
 } from './types'
+import type { AgentId } from './custom-agent'
 import type { TerminalPaneLayoutNode } from './types'
 import type {
   RuntimeMarkdownReadTabResult,
@@ -136,7 +137,7 @@ export type RuntimeMobileSessionTerminalTab = {
   ptyId?: string | null
   terminalTheme?: RuntimeMobileTerminalTheme
   agentStatus?: AgentStatusEntry | null
-  launchAgent?: TuiAgent
+  launchAgent?: AgentId
   startupCwd?: string
   parentLayout?: TerminalLayoutSnapshot
   /** Tab-level color/pin (per parentTabId), host-persisted for remote servers. */
@@ -489,7 +490,7 @@ type RuntimeTerminalCreateBaseRequestPayload = {
   env?: Record<string, string>
   launchConfig?: SleepingAgentLaunchConfig
   launchToken?: string
-  launchAgent?: TuiAgent
+  launchAgent?: AgentId
   startupCommandDelivery?: StartupCommandDelivery
   title?: string
   activate?: boolean

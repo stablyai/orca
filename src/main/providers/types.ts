@@ -12,11 +12,11 @@ import type {
   GitStagingArea,
   GitUpstreamStatus,
   GitWorktreeInfo,
-  TuiAgent,
   RemoveWorktreeResult,
   SearchOptions,
   SearchResult
 } from '../../shared/types'
+import type { AgentId } from '../../shared/custom-agent'
 import type { GitHistoryOptions, GitHistoryResult } from '../../shared/git-history'
 import type { CommitMessageDraftContext } from '../../shared/commit-message-generation'
 import type { WorkspaceSpaceDirectoryScanResult } from '../../shared/workspace-space-types'
@@ -64,7 +64,7 @@ export type PtySpawnOptions = {
   commandDelivery?: 'renderer' | 'provider'
   startupCommandDelivery?: StartupCommandDelivery
   /** Minimal allowlisted launch ownership preserved by daemon reattach. */
-  launchAgent?: TuiAgent
+  launchAgent?: AgentId
   /** Orca worktree identity. When present, the local provider scopes shell
    *  history to this worktree so ArrowUp only surfaces local commands. */
   worktreeId?: string
@@ -109,7 +109,7 @@ export type PtySpawnResult = {
    *  provider could not publish a pid (e.g., race during spawn). */
   pid?: number | null
   /** Minimal allowlisted launch ownership returned by daemon reattach. */
-  launchAgent?: TuiAgent
+  launchAgent?: AgentId
   /** ANSI snapshot of the terminal screen, present when reattaching to an
    *  existing daemon session. Write this to xterm.js to restore visual state. */
   snapshot?: string

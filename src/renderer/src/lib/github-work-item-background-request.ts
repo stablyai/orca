@@ -136,7 +136,8 @@ export async function resolvePreferredQuickAgentForGitHubWorkItem(
   return pickQuickWorkspaceAgent(
     store.settings?.defaultTuiAgent,
     detectedAgents,
-    store.settings?.disabledTuiAgents
+    store.settings?.disabledTuiAgents,
+    store.settings?.customAgents
   )
 }
 

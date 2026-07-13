@@ -16,6 +16,11 @@ import {
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { filterEnabledTuiAgents, isTuiAgentEnabled } from '../../../../shared/tui-agent-selection'
+import {
+  customAgentForId,
+  isCustomAgentId,
+  type CustomAgentDefinition
+} from '../../../../shared/custom-agent'
 import type { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import {
@@ -266,8 +271,11 @@ function buildHermesCronSchedule(draft: AutomationDraft): string {
   })
 }
 
-function getAgentLabel(agentId: string): string {
-  return getAgentCatalog().find((agent) => agent.id === agentId)?.label ?? agentId
+function getAgentLabel(
+  agentId: string,
+  customAgents?: readonly CustomAgentDefinition[]
+): string {
+  return getAgentCatalog(customAgents ?? []).find((agent) => agent.id === agentId)?.label ?? agentId
 }
 
 function getExternalAutomationKey(
@@ -391,7 +399,11 @@ export default function AutomationsPage(): React.JSX.Element {
   const setPendingAutomationRunNavigation = useAppStore((s) => s.setPendingAutomationRunNavigation)
   const repoMap = useRepoMap()
   const worktreeMap = useWorktreeMap()
-  const enabledAgents = filterEnabledTuiAgents(AGENTS, settings?.disabledTuiAgents)
+  const agentIds = getAgentCatalog(settings?.customAgents ?? []).map((agent) => agent.id)
+  const enabledAgents = filterEnabledTuiAgents(agentIds, settings?.disabledTuiAgents).filter(
+    (agentId) =>
+      !isCustomAgentId(agentId) || customAgentForId(agentId, settings?.customAgents)?.enabled
+  )
   const defaultAgent =
     settings?.defaultTuiAgent &&
     settings.defaultTuiAgent !== 'blank' &&
@@ -2473,7 +2485,9 @@ export default function AutomationsPage(): React.JSX.Element {
                           <span className="shrink-0">/</span>
                           <span className="truncate">{workspaceLabel}</span>
                           <span className="shrink-0">·</span>
-                          <span className="truncate">{getAgentLabel(automation.agentId)}</span>
+                          <span className="truncate">
+                            {getAgentLabel(automation.agentId, settings?.customAgents)}
+                          </span>
                         </span>
                         <span className="mt-1 block truncate text-xs text-muted-foreground">
                           {usageText}
@@ -2891,6 +2905,7 @@ export default function AutomationsPage(): React.JSX.Element {
                       : (selectedWorktree?.displayName ?? 'Missing workspace')
                   }
                   hostLabelById={hostLabelById}
+                  customAgents={settings?.customAgents}
                   runNowAvailability={selectedRunNowAvailability}
                   now={relativeNow}
                   onRunNow={(automation) => void runNow(automation)}

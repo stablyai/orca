@@ -2,11 +2,11 @@ import { agentDeliversDraftViaNativePrefill } from '@/lib/agent-native-draft-pre
 import { pasteDraftWhenAgentReady } from '@/lib/agent-paste-draft'
 import { isNativeChatSupportedAgent } from '@/lib/native-chat-supported-agent'
 import { useAppStore } from '@/store'
-import type { TuiAgent } from '../../../shared/types'
+import type { AgentId } from '../../../shared/custom-agent'
 
 export function deliverLaunchPromptToAgentTab(args: {
   tabId: string
-  agent: TuiAgent
+  agent: AgentId
   content: string
   submit: boolean
   forcePaste: boolean
