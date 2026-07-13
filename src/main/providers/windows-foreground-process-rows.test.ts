@@ -19,6 +19,13 @@ type ExecFileCall = [string, string[], Record<string, unknown>, ExecFileCallback
 
 const POWERSHELL_ROWS_JSON = JSON.stringify([
   {
+    ProcessId: 100,
+    ParentProcessId: 50,
+    Name: 'powershell.exe',
+    CommandLine: 'powershell.exe',
+    ExecutablePath: 'C:/Windows/System32/WindowsPowerShell/v1.0/powershell.exe'
+  },
+  {
     ProcessId: 200,
     ParentProcessId: 100,
     Name: 'node.exe',
@@ -28,6 +35,11 @@ const POWERSHELL_ROWS_JSON = JSON.stringify([
 ])
 
 const WMIC_ROWS_VALUE =
+  'CommandLine=powershell.exe\n' +
+  'ExecutablePath=C:/Windows/System32/WindowsPowerShell/v1.0/powershell.exe\n' +
+  'Name=powershell.exe\n' +
+  'ParentProcessId=50\n' +
+  'ProcessId=100\n\n' +
   'CommandLine=node C:/Users/dev/AppData/codex/bin/codex.js\n' +
   'ExecutablePath=C:/Program Files/nodejs/node.exe\n' +
   'Name=node.exe\n' +
@@ -36,9 +48,9 @@ const WMIC_ROWS_VALUE =
 
 /** Returns the options object passed to the mocked execFile for a given command. */
 function optionsForCommand(command: string): Record<string, unknown> | undefined {
-  const call = execFileMock.mock.calls.find(
-    (args) => (args as ExecFileCall)[0] === command
-  ) as ExecFileCall | undefined
+  const call = execFileMock.mock.calls.find((args) => (args as ExecFileCall)[0] === command) as
+    | ExecFileCall
+    | undefined
   return call?.[2]
 }
 
