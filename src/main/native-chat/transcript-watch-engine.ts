@@ -173,7 +173,9 @@ export async function installTranscriptWatcher(
     watchedIdentity = current.identity
 
     const replacementSnapshot =
-      contentReplaced && !initialDrain && onReplace && initialLimit
+      // Why: 0 is a valid window — an explicit undefined check keeps an empty
+      // snapshot empty instead of falling back to an unbounded incremental read.
+      contentReplaced && !initialDrain && onReplace && initialLimit !== undefined
         ? await readNativeChatTranscriptTailFile(filePath, initialLimit, decode)
         : null
     if (closed) {
@@ -194,7 +196,7 @@ export async function installTranscriptWatcher(
     }
 
     const initialSnapshot =
-      initialDrain && onInitialSnapshot && initialLimit
+      initialDrain && onInitialSnapshot && initialLimit !== undefined
         ? await readNativeChatTranscriptTailFile(filePath, initialLimit, decode)
         : null
     if (closed) {

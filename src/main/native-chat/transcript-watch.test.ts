@@ -169,6 +169,25 @@ describe('subscribeNativeChatTranscript', () => {
     expect(snapshots).toEqual([{ ids: ['u-798', 'u-799'], hasMore: true }])
   })
 
+  it('keeps an explicit zero-limit snapshot empty instead of reading unbounded', async () => {
+    const filePath = await tempFile(claudeLine('u-0', 'user', 'hello'))
+    const snapshots: { ids: string[]; hasMore: boolean }[] = []
+    const sub = await subscribeNativeChatTranscript({
+      agent: 'claude',
+      sessionId: 'ignored',
+      filePath,
+      initialLimit: 0,
+      onInitialSnapshot: (messages, hasMore) =>
+        snapshots.push({ ids: messages.map((message) => message.id), hasMore }),
+      onAppend: () => {},
+      debounceMs: 5
+    })
+
+    await waitFor(() => snapshots.length === 1)
+    sub.unsubscribe()
+    expect(snapshots).toEqual([{ ids: [], hasMore: false }])
+  })
+
   it('pages older history by byte cursor without resending the growing tail', async () => {
     const filePath = await tempFile(
       Array.from({ length: 10 }, (_unused, index) =>
