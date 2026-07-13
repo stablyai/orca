@@ -24,6 +24,7 @@ import {
   scanForShellReady,
   type ShellReadyScanState
 } from '../main/shell-ready-marker-scanner'
+import { killPosixPtySession } from './pty-session-kill'
 
 // Why: node-pty is a native addon that may not be installed on the remote.
 // Dynamic import keeps the require() lazy so loadPty() returns null gracefully
@@ -840,9 +841,15 @@ export class PtyHandler {
     if (immediate) {
       this.releaseStartupCommand(managed)
       this.flushPtyOutput(id)
-      managed.pty.kill('SIGKILL')
-      // Why: SIGKILL has already reaped the child; release the ptmx fd on the
-      // same tick. Deferring to onExit leaves a window where the fd is live
+      const killedSession = await killPosixPtySession(managed.pty.pid)
+      if (!killedSession && !managed.disposed) {
+        managed.pty.kill('SIGKILL')
+      }
+      if (managed.disposed) {
+        return
+      }
+      // Why: SIGKILL has been delivered to the session; release the ptmx fd on
+      // the same tick. Deferring to onExit leaves a window where the fd is live
       // with a dead child. Idempotent via the disposed guard — if onExit fires
       // later and also calls disposeManagedPty, the second call is a no-op.
       disposeManagedPty(managed)

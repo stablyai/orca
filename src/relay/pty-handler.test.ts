@@ -27,8 +27,16 @@ const { mockPtySpawn, mockPtyInstance } = vi.hoisted(() => ({
   }
 }))
 
+const { mockKillPosixPtySession } = vi.hoisted(() => ({
+  mockKillPosixPtySession: vi.fn().mockResolvedValue(false)
+}))
+
 vi.mock('node-pty', () => ({
   spawn: mockPtySpawn
+}))
+
+vi.mock('./pty-session-kill', () => ({
+  killPosixPtySession: mockKillPosixPtySession
 }))
 
 import { PtyHandler, attachIdentityMismatches } from './pty-handler'
@@ -100,6 +108,8 @@ describe('PtyHandler', () => {
     mockPtyInstance.resize.mockReset()
     mockPtyInstance.kill.mockReset()
     mockPtyInstance.clear.mockReset()
+    mockKillPosixPtySession.mockReset()
+    mockKillPosixPtySession.mockResolvedValue(false)
 
     mockPtySpawn.mockReturnValue({ ...mockPtyInstance })
 
@@ -1086,7 +1096,25 @@ describe('PtyHandler', () => {
 
     await dispatcher.callRequest('pty.spawn', {})
     await dispatcher.callRequest('pty.shutdown', { id: 'pty-1', immediate: true })
+    expect(mockKillPosixPtySession).toHaveBeenCalledWith(process.pid)
     expect(mockKill).toHaveBeenCalledWith('SIGKILL')
+  })
+
+  it('does not signal a recycled root pid after the POSIX session kill succeeds', async () => {
+    const mockKill = vi.fn()
+    mockKillPosixPtySession.mockResolvedValue(true)
+    mockPtySpawn.mockReturnValue({
+      ...mockPtyInstance,
+      kill: mockKill,
+      onData: vi.fn(),
+      onExit: vi.fn()
+    })
+
+    await dispatcher.callRequest('pty.spawn', {})
+    await dispatcher.callRequest('pty.shutdown', { id: 'pty-1', immediate: true })
+
+    expect(mockKillPosixPtySession).toHaveBeenCalledWith(process.pid)
+    expect(mockKill).not.toHaveBeenCalled()
   })
 
   it('throws for attach on nonexistent PTY', async () => {
