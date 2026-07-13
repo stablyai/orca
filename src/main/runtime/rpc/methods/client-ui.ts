@@ -10,6 +10,7 @@ import {
 } from '../../../../shared/tui-agent-launch-defaults'
 import { isTuiAgent } from '../../../../shared/tui-agent-config'
 import { isTaskProvider } from '../../../../shared/task-providers'
+import { AI_VAULT_GROUPS, AI_VAULT_SORTS } from '../../../../shared/ai-vault-types'
 import { normalizeDisabledTuiAgents } from '../../../../shared/tui-agent-selection'
 import { normalizeWorktreeCardProperties } from '../../../../shared/worktree-card-properties'
 import type { PersistedUIState, TaskProvider } from '../../../../shared/types'
@@ -178,8 +179,8 @@ const UiUpdate = z
         // Disabled agents (see AiVaultViewOptions); lenient on ids so persisted
         // state survives agent-catalog changes.
         disabledAgents: z.array(z.string()),
-        sort: z.enum(['updated', 'created']),
-        group: z.enum(['project', 'folder', 'agent']),
+        sort: z.enum(AI_VAULT_SORTS),
+        group: z.enum(AI_VAULT_GROUPS),
         hideEmptySessions: z.boolean()
       })
       .strict()

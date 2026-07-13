@@ -32,8 +32,12 @@ export const AI_VAULT_SCOPE_PATHS_MAX_COUNT = 64
 
 export type AiVaultAgent = (typeof AI_VAULT_AGENTS)[number]
 export type AiVaultScope = 'workspace' | 'project' | 'all'
-export type AiVaultSort = 'updated' | 'created'
-export type AiVaultGroup = 'project' | 'folder' | 'agent'
+// Runtime tuples so the RPC Zod schema can reuse the same allowed values
+// instead of re-listing them (single source of truth for sort/group).
+export const AI_VAULT_SORTS = ['updated', 'created'] as const
+export const AI_VAULT_GROUPS = ['project', 'folder', 'agent'] as const
+export type AiVaultSort = (typeof AI_VAULT_SORTS)[number]
+export type AiVaultGroup = (typeof AI_VAULT_GROUPS)[number]
 
 export const AI_VAULT_AGENT_LABELS = {
   claude: 'Claude',

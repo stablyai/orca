@@ -1943,8 +1943,11 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
 
   aiVaultViewOptions: cloneDefaultAiVaultViewOptions(),
   setAiVaultViewOptions: (options) => {
-    window.api.ui.set({ aiVaultViewOptions: options }).catch(console.error)
-    set({ aiVaultViewOptions: options })
+    // Normalize before persisting (like the sibling setters) so a partially
+    // built object from a future caller can't write an invalid shape to disk.
+    const normalized = normalizeAiVaultViewOptions(options)
+    window.api.ui.set({ aiVaultViewOptions: normalized }).catch(console.error)
+    set({ aiVaultViewOptions: normalized })
   },
 
   sortBy: 'recent',
