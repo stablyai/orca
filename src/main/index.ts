@@ -90,7 +90,9 @@ import { getDevInstanceIdentity } from './startup/dev-instance-identity'
 import { hydrateShellPath, mergePathSegments } from './startup/hydrate-shell-path'
 import {
   acquireSingleInstanceLock,
+  decideSingleInstanceLockFallback,
   logSingleInstanceLockBypass,
+  logSingleInstanceLockFallback,
   logSingleInstanceLockFailure,
   shouldBypassSingleInstanceLock
 } from './startup/single-instance-lock'
@@ -556,16 +558,33 @@ if (bypassSingleInstanceLock) {
   // Electron reports a false lock loss before any normal app logs exist.
   logSingleInstanceLockBypass()
 }
-const hasSingleInstanceLock =
+let singleInstanceLockFallback = false
+let hasSingleInstanceLock =
   is.dev && !isServeMode
     ? true
     : bypassSingleInstanceLock
       ? true
       : acquireSingleInstanceLock(app, focusExistingWindow)
+if (!hasSingleInstanceLock) {
+  const fallbackDecision = decideSingleInstanceLockFallback({
+    appIsPackaged: app.isPackaged,
+    isDev: is.dev,
+    isServeMode,
+    userDataPath: app.getPath('userData')
+  })
+  if (fallbackDecision.shouldContinue) {
+    // Why: macOS 26 can report a false lock loss before any userData exists.
+    // Continue only after same-profile primary evidence is absent.
+    singleInstanceLockFallback = true
+    hasSingleInstanceLock = true
+    logSingleInstanceLockFallback()
+  }
+}
 if (startupDiagnosticsEnabled) {
   logStartupDiagnostic('single-instance-lock-result', {
     acquired: hasSingleInstanceLock,
     bypassed: bypassSingleInstanceLock,
+    fallback: singleInstanceLockFallback,
     skippedForDev: is.dev && !isServeMode
   })
 }
