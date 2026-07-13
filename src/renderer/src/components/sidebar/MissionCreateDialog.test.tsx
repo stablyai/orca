@@ -17,6 +17,7 @@ vi.mock('@/store', () => ({
       activeModal: 'mission-create',
       closeModal: mocks.closeModal,
       repos: [{ id: 'r1', displayName: 'Dashboard' }],
+      projectGroups: [],
       createMission: mocks.createMission,
       setSidebarListMode: mocks.setSidebarListMode,
       settings: null,
@@ -46,10 +47,6 @@ vi.mock('@/components/ui/repo-multi-combobox', () => ({
 
 vi.mock('@/components/agent/AgentCombobox', () => ({
   default: () => null
-}))
-
-vi.mock('./MissionGroupQuickAdd', () => ({
-  MissionGroupQuickAdd: () => null
 }))
 
 import MissionCreateDialog from './MissionCreateDialog'

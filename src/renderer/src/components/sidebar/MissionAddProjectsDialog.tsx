@@ -12,7 +12,7 @@ import RepoMultiCombobox from '@/components/ui/repo-multi-combobox'
 import { useAppStore } from '@/store'
 import { translate } from '@/i18n/i18n'
 import { isMissionEligibleRepo } from '../../../../shared/missions'
-import { MissionGroupQuickAdd } from './MissionGroupQuickAdd'
+import { getMissionEligibleGroupRepoIds } from './mission-group-selection'
 import type { Mission } from '../../../../shared/types'
 
 export function MissionAddProjectsDialog({
@@ -23,6 +23,7 @@ export function MissionAddProjectsDialog({
   onOpenChange: (open: boolean) => void
 }): React.JSX.Element {
   const repos = useAppStore((s) => s.repos)
+  const projectGroups = useAppStore((s) => s.projectGroups)
   const addMissionMembers = useAppStore((s) => s.addMissionMembers)
   const [selected, setSelected] = useState<ReadonlySet<string>>(new Set())
   const [submitting, setSubmitting] = useState(false)
@@ -34,6 +35,17 @@ export function MissionAddProjectsDialog({
   const candidates = useMemo(
     () => repos.filter((repo) => isMissionEligibleRepo(repo) && !memberIds.has(repo.id)),
     [repos, memberIds]
+  )
+  // Why: existing members are excluded inside the combobox — group rows only
+  // act on repos the picker itself offers, so no extra exclusion is needed.
+  const groupOptions = useMemo(
+    () =>
+      projectGroups.map((group) => ({
+        id: group.id,
+        name: group.name,
+        repoIds: getMissionEligibleGroupRepoIds(projectGroups, repos, group.id)
+      })),
+    [projectGroups, repos]
   )
 
   function close(): void {
@@ -77,20 +89,13 @@ export function MissionAddProjectsDialog({
             )}
           </p>
         ) : (
-          <div className="space-y-1">
-            <div className="flex justify-end">
-              <MissionGroupQuickAdd
-                excludeRepoIds={memberIds}
-                onAdd={(repoIds) => setSelected(new Set([...selected, ...repoIds]))}
-              />
-            </div>
-            <RepoMultiCombobox
-              repos={candidates}
-              selected={selected}
-              onChange={setSelected}
-              onSelectAll={() => setSelected(new Set(candidates.map((repo) => repo.id)))}
-            />
-          </div>
+          <RepoMultiCombobox
+            repos={candidates}
+            selected={selected}
+            onChange={setSelected}
+            onSelectAll={() => setSelected(new Set(candidates.map((repo) => repo.id)))}
+            groups={groupOptions}
+          />
         )}
         <DialogFooter>
           <Button type="button" variant="outline" size="sm" className="text-xs" onClick={close}>

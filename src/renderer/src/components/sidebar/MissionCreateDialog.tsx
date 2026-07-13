@@ -25,7 +25,7 @@ import { useAppStore } from '@/store'
 import { translate } from '@/i18n/i18n'
 import { isMissionEligibleRepo, slugifyMissionBranch } from '../../../../shared/missions'
 import { formatMissionMemberError } from './mission-member-error-copy'
-import { MissionGroupQuickAdd } from './MissionGroupQuickAdd'
+import { getMissionEligibleGroupRepoIds } from './mission-group-selection'
 import {
   MissionCreateMemberStatusList,
   type MissionCreateMemberStatus
@@ -36,6 +36,7 @@ export default function MissionCreateDialog(): React.JSX.Element {
   const open = useAppStore((s) => s.activeModal === 'mission-create')
   const closeModal = useAppStore((s) => s.closeModal)
   const repos = useAppStore((s) => s.repos)
+  const projectGroups = useAppStore((s) => s.projectGroups)
   const createMission = useAppStore((s) => s.createMission)
   const setSidebarListMode = useAppStore((s) => s.setSidebarListMode)
 
@@ -91,6 +92,15 @@ export default function MissionCreateDialog(): React.JSX.Element {
   }, [detectedAgentIds, disabledTuiAgents])
 
   const eligibleRepos = useMemo(() => repos.filter(isMissionEligibleRepo), [repos])
+  const groupOptions = useMemo(
+    () =>
+      projectGroups.map((group) => ({
+        id: group.id,
+        name: group.name,
+        repoIds: getMissionEligibleGroupRepoIds(projectGroups, repos, group.id)
+      })),
+    [projectGroups, repos]
+  )
   const repoNameById = useMemo(
     () => new Map(eligibleRepos.map((repo) => [repo.id, repo.displayName])),
     [eligibleRepos]
@@ -235,22 +245,15 @@ export default function MissionCreateDialog(): React.JSX.Element {
                 />
               </div>
               <div className="space-y-1">
-                <div className="flex items-center justify-between">
-                  <Label className="text-[11px] text-muted-foreground">
-                    {translate(
-                      'auto.components.sidebar.MissionCreateDialog.bcea32d392',
-                      'Projects'
-                    )}
-                  </Label>
-                  <MissionGroupQuickAdd
-                    onAdd={(repoIds) => setSelected(new Set([...selected, ...repoIds]))}
-                  />
-                </div>
+                <Label className="text-[11px] text-muted-foreground">
+                  {translate('auto.components.sidebar.MissionCreateDialog.bcea32d392', 'Projects')}
+                </Label>
                 <RepoMultiCombobox
                   repos={eligibleRepos}
                   selected={selected}
                   onChange={setSelected}
                   onSelectAll={() => setSelected(new Set(eligibleRepos.map((repo) => repo.id)))}
+                  groups={groupOptions}
                 />
               </div>
               <div className="space-y-1">

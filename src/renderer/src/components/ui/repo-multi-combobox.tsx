@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/button'
 import {
   Command,
   CommandEmpty,
+  CommandGroup,
   CommandInput,
   CommandItem,
   CommandList
@@ -14,6 +15,12 @@ import { cn } from '@/lib/utils'
 import type { Repo } from '../../../../shared/types'
 import RepoBadgeLabel from '@/components/repo/RepoBadgeLabel'
 import { translate } from '@/i18n/i18n'
+
+export type RepoMultiComboboxGroup = {
+  id: string
+  name: string
+  repoIds: readonly string[]
+}
 
 type RepoMultiComboboxProps = {
   repos: Repo[]
@@ -28,6 +35,10 @@ type RepoMultiComboboxProps = {
    *  signal, so the caller can persist `null` (sticky-all) rather than a
    *  frozen snapshot that would exclude repos added later. */
   onSelectAll: () => void
+  /** Optional bulk-select rows rendered as a "Groups" section above the repo
+   *  list. A group row toggles its repos as one unit; membership is expanded
+   *  to individual repos at selection time (snapshot semantics). */
+  groups?: readonly RepoMultiComboboxGroup[]
   getRepoHostLabel?: (repo: Repo) => string | null | undefined
   triggerClassName?: string
 }
@@ -69,11 +80,53 @@ export function getRepoMultiComboboxDetail(repo: Repo, hostLabel?: string | null
   return trimmedHostLabel ? `${trimmedHostLabel} · ${repo.path}` : repo.path
 }
 
+/** Group rows resolved against the combobox's own repo list: a row can only
+ *  ever select repos the picker shows, and groups the intersection (or the
+ *  search query) leaves empty are dropped. */
+export function getVisibleComboboxGroups(
+  groups: readonly RepoMultiComboboxGroup[],
+  repos: readonly Pick<Repo, 'id'>[],
+  query: string
+): { id: string; name: string; repoIds: string[] }[] {
+  const selectableIds = new Set(repos.map((repo) => repo.id))
+  const trimmedQuery = query.trim().toLowerCase()
+  return groups
+    .filter((group) => !trimmedQuery || group.name.toLowerCase().includes(trimmedQuery))
+    .map((group) => ({
+      id: group.id,
+      name: group.name,
+      repoIds: group.repoIds.filter((repoId) => selectableIds.has(repoId))
+    }))
+    .filter((group) => group.repoIds.length > 0)
+}
+
+/** Toggle semantics for a group row: selects the group's repos, or deselects
+ *  them when all are already selected. Returns null when the deselect would
+ *  empty the selection — the pickers require at least one selected repo. */
+export function toggleComboboxGroupSelection(
+  selected: ReadonlySet<string>,
+  groupRepoIds: readonly string[]
+): Set<string> | null {
+  const next = new Set(selected)
+  const allSelected = groupRepoIds.every((repoId) => next.has(repoId))
+  if (allSelected) {
+    for (const repoId of groupRepoIds) {
+      next.delete(repoId)
+    }
+    return next.size > 0 ? next : null
+  }
+  for (const repoId of groupRepoIds) {
+    next.add(repoId)
+  }
+  return next
+}
+
 export default function RepoMultiCombobox({
   repos,
   selected,
   onChange,
   onSelectAll,
+  groups,
   getRepoHostLabel,
   triggerClassName
 }: RepoMultiComboboxProps): React.JSX.Element {
@@ -82,6 +135,10 @@ export default function RepoMultiCombobox({
   const [commandValue, setCommandValue] = useState('')
 
   const filteredRepos = useMemo(() => searchRepos(repos, query), [repos, query])
+  const visibleGroups = useMemo(
+    () => (groups && groups.length > 0 ? getVisibleComboboxGroups(groups, repos, query) : []),
+    [groups, repos, query]
+  )
   const allSelected = selected.size === repos.length && repos.length > 0
 
   const handleOpenChange = useCallback((nextOpen: boolean) => {
@@ -110,6 +167,16 @@ export default function RepoMultiCombobox({
     [onChange, selected]
   )
 
+  const toggleGroup = useCallback(
+    (groupRepoIds: readonly string[]) => {
+      const next = toggleComboboxGroupSelection(selected, groupRepoIds)
+      if (next) {
+        onChange(next)
+      }
+    },
+    [onChange, selected]
+  )
+
   const handleSelectAll = useCallback(() => {
     if (allSelected) {
       // Why: toggle — clicking "All projects" while everything is selected
@@ -125,6 +192,35 @@ export default function RepoMultiCombobox({
     }
     onSelectAll()
   }, [allSelected, onChange, onSelectAll, repos])
+
+  const repoItems = filteredRepos.map((repo) => {
+    const isSelected = selected.has(repo.id)
+    const isLastSelected = isSelected && selected.size <= 1
+    const detail = getRepoMultiComboboxDetail(repo, getRepoHostLabel?.(repo))
+    return (
+      <CommandItem
+        key={repo.id}
+        value={repo.id}
+        onSelect={() => toggle(repo.id)}
+        disabled={isLastSelected}
+        className="items-center gap-2 px-3 py-1.5 text-xs"
+      >
+        <Check
+          className={cn('size-3 text-muted-foreground', isSelected ? 'opacity-70' : 'opacity-0')}
+        />
+        <div className="min-w-0 flex-1">
+          <span className="inline-flex items-center gap-1.5 text-xs">
+            <RepoBadgeLabel
+              name={repo.displayName}
+              color={repo.badgeColor}
+              className="max-w-full"
+            />
+          </span>
+          <p className="mt-0.5 truncate text-[10px] text-muted-foreground">{detail}</p>
+        </div>
+      </CommandItem>
+    )
+  })
 
   return (
     <Popover open={open} onOpenChange={handleOpenChange}>
@@ -192,37 +288,49 @@ export default function RepoMultiCombobox({
                 'No projects match your search.'
               )}
             </CommandEmpty>
-            {filteredRepos.map((repo) => {
-              const isSelected = selected.has(repo.id)
-              const isLastSelected = isSelected && selected.size <= 1
-              const detail = getRepoMultiComboboxDetail(repo, getRepoHostLabel?.(repo))
-              return (
-                <CommandItem
-                  key={repo.id}
-                  value={repo.id}
-                  onSelect={() => toggle(repo.id)}
-                  disabled={isLastSelected}
-                  className="items-center gap-2 px-3 py-1.5 text-xs"
-                >
-                  <Check
-                    className={cn(
-                      'size-3 text-muted-foreground',
-                      isSelected ? 'opacity-70' : 'opacity-0'
-                    )}
-                  />
-                  <div className="min-w-0 flex-1">
-                    <span className="inline-flex items-center gap-1.5 text-xs">
-                      <RepoBadgeLabel
-                        name={repo.displayName}
-                        color={repo.badgeColor}
-                        className="max-w-full"
+            {visibleGroups.length > 0 ? (
+              <CommandGroup
+                heading={translate('auto.components.ui.repo.multi.combobox.f6c169f19a', 'Groups')}
+              >
+                {visibleGroups.map((group) => {
+                  const groupSelected = group.repoIds.every((repoId) => selected.has(repoId))
+                  return (
+                    <CommandItem
+                      key={`group:${group.id}`}
+                      value={`group:${group.id}`}
+                      onSelect={() => toggleGroup(group.repoIds)}
+                      className="items-center gap-2 px-3 py-1.5 text-xs"
+                    >
+                      <Check
+                        className={cn(
+                          'size-3 text-muted-foreground',
+                          groupSelected ? 'opacity-70' : 'opacity-0'
+                        )}
                       />
-                    </span>
-                    <p className="mt-0.5 truncate text-[10px] text-muted-foreground">{detail}</p>
-                  </div>
-                </CommandItem>
-              )
-            })}
+                      <span className="min-w-0 flex-1 truncate">{group.name}</span>
+                      <span className="pl-2 text-[10px] text-muted-foreground">
+                        {translate(
+                          'auto.components.ui.repo.multi.combobox.2f01be5a6c',
+                          '{{value0}} projects',
+                          { value0: group.repoIds.length }
+                        )}
+                      </span>
+                    </CommandItem>
+                  )
+                })}
+              </CommandGroup>
+            ) : null}
+            {/* Why: the "Projects" heading only earns its place when a Groups
+                section sits above it — group-less pickers keep the flat list. */}
+            {visibleGroups.length > 0 ? (
+              <CommandGroup
+                heading={translate('auto.components.ui.repo.multi.combobox.55821ddef9', 'Projects')}
+              >
+                {repoItems}
+              </CommandGroup>
+            ) : (
+              repoItems
+            )}
           </CommandList>
         </Command>
       </PopoverContent>

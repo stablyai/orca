@@ -2425,7 +2425,10 @@
               "4471d4a1c0": "No projects match your search.",
               "bfd8ce21c6": "All projects",
               "a58a0cd100": "Search projects...",
-              "65a3dae41d": "No projects"
+              "65a3dae41d": "No projects",
+              "f6c169f19a": "Groups",
+              "55821ddef9": "Projects",
+              "2f01be5a6c": "{{value0}} projects"
             }
           }
         },
@@ -4717,10 +4720,6 @@
         },
         "MissionMemberErrorCopy": {
           "c8affe1f4b": "This repository has no commits or default branch yet. Make an initial commit (or set a default branch in Project Settings), then retry."
-        },
-        "MissionGroupQuickAdd": {
-          "38cb504307": "Add group",
-          "fa306c69f4": "{{value0}} projects"
         }
       },
       "shared": {
