@@ -6,7 +6,7 @@ import {
 } from '../../shared/linear-agent-access'
 import type { RpcDispatcher } from '../runtime/rpc/dispatcher'
 import type { RpcResponse } from '../runtime/rpc/core'
-import { RemoteCliArgumentError, type ParsedRemoteCli } from './ssh-remote-linear-argument-error'
+import { RemoteCliArgumentError, type ParsedRemoteCli } from './ssh-remote-cli-argument-error'
 
 import {
   LINEAR_ISSUE_FLAGS,

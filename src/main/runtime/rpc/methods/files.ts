@@ -392,6 +392,7 @@ export const FILE_METHODS: RpcAnyMethod[] = [
       await new Promise<void>((resolve, reject) => {
         let settled = false
         let unwatch: (() => void) | null = null
+        let terminalError: Error | null = null
         const eventBatcher = createFileWatchEventBatcher(params.worktree, emit)
         const finish = (): void => {
           if (settled) {
@@ -402,11 +403,32 @@ export const FILE_METHODS: RpcAnyMethod[] = [
           resolve()
         }
         const cleanup = (): void => {
-          eventBatcher.flush()
-          eventBatcher.dispose()
+          // Mark cleanup complete before emitting so a synchronous transport
+          // abort cannot re-enter this function and duplicate error/end.
+          finish()
+          if (terminalError) {
+            // Why: recovery emits overflow before giving up. Flush that final
+            // refresh so clients never end on a knowingly stale snapshot.
+            eventBatcher.flush()
+            eventBatcher.dispose()
+            emit({ type: 'error', message: terminalError.message })
+          } else {
+            eventBatcher.flush()
+            eventBatcher.dispose()
+          }
           unwatch?.()
           emit({ type: 'end' })
-          finish()
+        }
+        const handleTerminalError = (error: Error): void => {
+          if (settled || terminalError) {
+            return
+          }
+          terminalError = error
+          if (unwatch) {
+            runtime.cleanupSubscription(subscriptionId)
+          } else {
+            cleanup()
+          }
         }
         const handleAbort = (): void => {
           if (unwatch) {
@@ -420,9 +442,14 @@ export const FILE_METHODS: RpcAnyMethod[] = [
         }
         signal?.addEventListener('abort', handleAbort, { once: true })
         void runtime
-          .watchFileExplorer(params.worktree, (events) => {
-            eventBatcher.push(events)
-          })
+          .watchFileExplorer(
+            params.worktree,
+            (events) => {
+              eventBatcher.push(events)
+            },
+            handleTerminalError,
+            signal
+          )
           .then((nextUnwatch) => {
             if (signal?.aborted || settled) {
               // Why: the connection can close while watch setup is still
@@ -438,7 +465,9 @@ export const FILE_METHODS: RpcAnyMethod[] = [
           })
           .catch((error) => {
             if (!settled) {
+              settled = true
               signal?.removeEventListener('abort', handleAbort)
+              eventBatcher.dispose()
               reject(error)
             }
           })

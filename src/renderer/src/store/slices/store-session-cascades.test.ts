@@ -186,6 +186,8 @@ describe('removeProject cascade', () => {
         tab1: ['pty1'],
         tab2: ['pty2']
       },
+      suppressedPtyExitIds: { pty1: true, pty2: true },
+      pendingCodexPaneRestartIds: { pty1: true, pty2: true },
       terminalLayoutsByTabId: {
         tab1: makeLayout(),
         tab2: makeLayout()
@@ -212,9 +214,20 @@ describe('removeProject cascade', () => {
     expect(mockApi.pty.kill).toHaveBeenCalledWith('pty1')
     expect(mockApi.pty.kill).toHaveBeenCalledWith('pty2')
 
-    // Killed PTY IDs are suppressed
-    expect(s.suppressedPtyExitIds['pty1']).toBe(true)
-    expect(s.suppressedPtyExitIds['pty2']).toBe(true)
+    // The tabs are gone before async exit events can close them, so retaining
+    // their one-shot guards would leak ephemeral PTY ids for the renderer session.
+    expect(s.suppressedPtyExitIds['pty1']).toBeUndefined()
+    expect(s.suppressedPtyExitIds['pty2']).toBeUndefined()
+    expect(s.pendingCodexPaneRestartIds['pty1']).toBeUndefined()
+    expect(s.pendingCodexPaneRestartIds['pty2']).toBeUndefined()
+
+    store.getState().clearTabPtyId('tab1', 'pty1')
+    store.getState().clearTabPtyId('tab2', 'pty2')
+
+    // Why: exit IPC can arrive after repo purge but before the mounted pane
+    // unmounts. A late exit must not recreate an index for a tab with no owner.
+    expect(store.getState().ptyIdsByTabId['tab1']).toBeUndefined()
+    expect(store.getState().ptyIdsByTabId['tab2']).toBeUndefined()
   })
 })
 
@@ -1659,6 +1672,7 @@ describe('reconnectPersistedTerminals', () => {
         tabsByWorktree: s.tabsByWorktree,
         ptyIdsByTabId: s.ptyIdsByTabId,
         browserTabsByWorktree: s.browserTabsByWorktree,
+        worktreeIdsWithLiveAgent: new Set(),
         hideDefaultBranchWorkspace: false,
         hideAutomationGeneratedWorkspaces: false,
         repoMap: new Map(s.repos.map((repo) => [repo.id, repo])),
@@ -2007,6 +2021,7 @@ describe('reconnectPersistedTerminals', () => {
         tabsByWorktree: s.tabsByWorktree,
         ptyIdsByTabId: s.ptyIdsByTabId,
         browserTabsByWorktree: s.browserTabsByWorktree,
+        worktreeIdsWithLiveAgent: new Set(),
         hideDefaultBranchWorkspace: false,
         hideAutomationGeneratedWorkspaces: false,
         repoMap: new Map(s.repos.map((repo) => [repo.id, repo])),

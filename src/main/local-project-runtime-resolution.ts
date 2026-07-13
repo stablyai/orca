@@ -1,5 +1,5 @@
 import type { Store } from './persistence'
-import type { Repo } from '../shared/types'
+import type { Project, Repo } from '../shared/types'
 import {
   resolveProjectExecutionRuntime,
   type ProjectExecutionRuntimeResolution
@@ -21,6 +21,25 @@ function canResolveProjectRuntimeForWorktreeId(store: Store): boolean {
   return canResolveProjectRuntimeForRepo(store) && typeof store.getRepo === 'function'
 }
 
+function resolveLocalProjectRuntime(
+  store: Store,
+  project: Project,
+  settings: ReturnType<Store['getSettings']> = store.getSettings()
+): ProjectExecutionRuntimeResolution {
+  const wslAvailable = hasCachedWslAvailability()
+    ? (getCachedWslAvailability() ?? undefined)
+    : undefined
+  const availableWslDistros = hasCachedWslDistros() ? getCachedWslDistros() : null
+  return resolveProjectExecutionRuntime({
+    appPlatform: process.platform,
+    projectId: project.id,
+    projectRuntimePreference: project.localWindowsRuntimePreference,
+    globalWindowsRuntimeDefault: settings.localWindowsRuntimeDefault,
+    wslAvailable,
+    availableWslDistros
+  })
+}
+
 export function resolveLocalProjectRuntimeForRepo(
   store: Store,
   repo: Repo
@@ -35,18 +54,41 @@ export function resolveLocalProjectRuntimeForRepo(
   if (!project) {
     return undefined
   }
-  const wslAvailable = hasCachedWslAvailability()
-    ? (getCachedWslAvailability() ?? undefined)
-    : undefined
-  const availableWslDistros = hasCachedWslDistros() ? getCachedWslDistros() : null
-  return resolveProjectExecutionRuntime({
-    appPlatform: process.platform,
-    projectId: project.id,
-    projectRuntimePreference: project.localWindowsRuntimePreference,
-    globalWindowsRuntimeDefault: store.getSettings().localWindowsRuntimeDefault,
-    wslAvailable,
-    availableWslDistros
-  })
+  return resolveLocalProjectRuntime(store, project)
+}
+
+export function resolveLocalProjectRuntimesForRepos(
+  store: Store,
+  repos: readonly Repo[]
+): ReadonlyMap<string, ProjectExecutionRuntimeResolution> {
+  const runtimeByRepoId = new Map<string, ProjectExecutionRuntimeResolution>()
+  if (!canResolveProjectRuntimeForRepo(store)) {
+    return runtimeByRepoId
+  }
+  const requestedRepoIds = new Set(
+    repos
+      .filter((repo) => getRepoExecutionHostId(repo) === LOCAL_EXECUTION_HOST_ID)
+      .map((repo) => repo.id)
+  )
+  if (requestedRepoIds.size === 0) {
+    return runtimeByRepoId
+  }
+  const settings = store.getSettings()
+  for (const project of store.getProjects()) {
+    const matchingRepoIds = project.sourceRepoIds.filter(
+      (repoId) => requestedRepoIds.has(repoId) && !runtimeByRepoId.has(repoId)
+    )
+    if (matchingRepoIds.length === 0) {
+      continue
+    }
+    // Why: one project runtime applies to every source repo in that project;
+    // resolving it once prevents mobile polls from rescanning project settings.
+    const runtime = resolveLocalProjectRuntime(store, project, settings)
+    for (const repoId of matchingRepoIds) {
+      runtimeByRepoId.set(repoId, runtime)
+    }
+  }
+  return runtimeByRepoId
 }
 
 export function resolveLocalProjectRuntimeForWorktreeId(

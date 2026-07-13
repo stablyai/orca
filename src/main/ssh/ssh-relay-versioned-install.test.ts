@@ -108,11 +108,12 @@ describe('isRelayAlreadyInstalled', () => {
     ).rejects.toBe(sessionLimitError)
   })
 
-  it('checks for relay.js AND .install-complete in addition to the dir', async () => {
+  it('checks for both relay process artifacts and .install-complete', async () => {
     mockExec.mockResolvedValueOnce('OK')
     await isRelayAlreadyInstalled(conn, '/r')
     const cmd = mockExec.mock.calls.at(-1)?.[1] ?? ''
     expect(cmd).toContain('relay.js')
+    expect(cmd).toContain('relay-watcher.js')
     expect(cmd).toContain('.install-complete')
   })
 })

@@ -128,7 +128,12 @@ describe('file RPC methods', () => {
       await vi.waitFor(() => {
         expect(replies).toHaveLength(1)
       })
-      expect(runtime.watchFileExplorer).toHaveBeenCalledWith('id:wt-1', expect.any(Function))
+      expect(runtime.watchFileExplorer).toHaveBeenCalledWith(
+        'id:wt-1',
+        expect.any(Function),
+        expect.any(Function),
+        undefined
+      )
       expect(replies[0]).toMatchObject({
         ok: true,
         streaming: true,
@@ -172,17 +177,63 @@ describe('file RPC methods', () => {
     }
   })
 
+  it('ends a ready file-watch stream when its watcher fails terminally', async () => {
+    let onTerminalError: ((error: Error) => void) | undefined
+    const unwatch = vi.fn()
+    const cleanups = new Map<string, () => void>()
+    let emitWatchChange:
+      | ((events: { kind: 'overflow'; absolutePath: string }[]) => void)
+      | undefined
+    const runtime = {
+      getRuntimeId: () => 'test-runtime',
+      watchFileExplorer: vi.fn(async (_worktree, callback, nextTerminalError) => {
+        emitWatchChange = callback
+        onTerminalError = nextTerminalError
+        return unwatch
+      }),
+      registerSubscriptionCleanup: vi.fn((id, cleanup) => cleanups.set(id, cleanup)),
+      cleanupSubscription: vi.fn((id) => {
+        const cleanup = cleanups.get(id)
+        cleanups.delete(id)
+        cleanup?.()
+      })
+    } as unknown as OrcaRuntimeService
+    const dispatcher = new RpcDispatcher({ runtime, methods: FILE_METHODS })
+    const replies: { result?: { type?: string; message?: string } }[] = []
+
+    const dispatch = dispatcher.dispatchStreaming(
+      makeRequest('files.watch', { worktree: 'id:wt-1' }),
+      (response) => replies.push(JSON.parse(response))
+    )
+    await vi.waitFor(() => expect(replies[0]?.result?.type).toBe('ready'))
+
+    emitWatchChange?.([{ kind: 'overflow', absolutePath: '/repo' }])
+    onTerminalError?.(new Error('file watcher process crashed repeatedly'))
+    await dispatch
+
+    expect(replies.map((reply) => reply.result?.type)).toEqual(['ready', 'changed', 'error', 'end'])
+    expect(replies[2]?.result?.message).toContain('crashed repeatedly')
+    expect(unwatch).toHaveBeenCalledTimes(1)
+    expect(cleanups.size).toBe(0)
+  })
+
   it('tears down a file watch that resolves after the connection already closed', async () => {
     type WatchCallback = (
       events: { kind: 'update'; absolutePath: string; isDirectory?: boolean }[]
     ) => void
     const unwatch = vi.fn()
     let resolveWatch: (value: () => void) => void = () => {}
-    const watchFileExplorer = vi.fn((_worktree: string, _callback: WatchCallback) => {
-      return new Promise<() => void>((resolve) => {
-        resolveWatch = resolve
-      })
-    })
+    const watchFileExplorer = vi.fn(
+      (
+        _worktree: string,
+        _callback: WatchCallback,
+        _onTerminalError?: (error: Error) => void,
+        _signal?: AbortSignal
+      ) =>
+        new Promise<() => void>((resolve) => {
+          resolveWatch = resolve
+        })
+    )
     const runtime = {
       getRuntimeId: () => 'test-runtime',
       watchFileExplorer,
@@ -200,6 +251,7 @@ describe('file RPC methods', () => {
     await vi.waitFor(() => {
       expect(watchFileExplorer).toHaveBeenCalled()
     })
+    expect(watchFileExplorer.mock.calls[0]?.[3]).toBe(abortController.signal)
     abortController.abort()
     await dispatch
 

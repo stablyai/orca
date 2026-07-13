@@ -510,11 +510,15 @@ describe('startWorkspaceCleanupBackgroundRemoval', () => {
       approvedCandidates: [parent]
     })
     expect(onResult).toHaveBeenCalledTimes(1)
-    expect(onLateResult).toHaveBeenCalledWith({
-      removedIds: [child.worktreeId, parent.worktreeId],
+    expect(onLateResult).toHaveBeenNthCalledWith(1, {
+      removedIds: [child.worktreeId],
       failures: []
     })
-    expect(toast.success).toHaveBeenLastCalledWith('Removed workspaces: 2')
+    expect(onLateResult).toHaveBeenNthCalledWith(2, {
+      removedIds: [parent.worktreeId],
+      failures: []
+    })
+    expect(toast.success).toHaveBeenLastCalledWith('Removed workspaces: 1')
   })
 
   it('hardens a provisional parent skip after the child late-fails post-batch', async () => {
@@ -554,13 +558,18 @@ describe('startWorkspaceCleanupBackgroundRemoval', () => {
     rejectChild(new Error('remote removal failed'))
     await settleBackgroundRemoval()
 
-    expect(onLateResult).toHaveBeenCalledWith({
+    expect(onLateResult).toHaveBeenNthCalledWith(1, {
       removedIds: [],
       failures: [
         expect.objectContaining({
           worktreeId: child.worktreeId,
           message: 'remote removal failed'
-        }),
+        })
+      ]
+    })
+    expect(onLateResult).toHaveBeenNthCalledWith(2, {
+      removedIds: [],
+      failures: [
         expect.objectContaining({
           worktreeId: parent.worktreeId,
           message: 'Skipped because a nested workspace could not be removed.'

@@ -85,6 +85,7 @@ import {
 import { maybeRedirectAppImageCliLaunch } from './startup/appimage-cli-redirect'
 import { maybeRedirectPackagedCliEntryLaunch } from './startup/packaged-cli-entry-redirect'
 import { startFirstWindowStartupServices } from './startup/first-window-startup-services'
+import { createWslCliReconciliationStartupBarrier } from './startup/wsl-cli-reconciliation-startup-barrier'
 import { getDevInstanceIdentity } from './startup/dev-instance-identity'
 import { hydrateShellPath, mergePathSegments } from './startup/hydrate-shell-path'
 import {
@@ -133,6 +134,7 @@ import { StarNagService } from './star-nag/service'
 import { agentHookServer } from './agent-hooks/server'
 import { wslHookRelayManager } from './agent-hooks/wsl-hook-relay-manager'
 import { maybeAutoRenameBranchOnFirstWork } from './agent-hooks/first-work-branch-rename'
+import { rememberBranchRenameFailureOutput } from './agent-hooks/branch-rename-failure-output'
 import { renameWorktreeFolderOnFirstWork } from './agent-hooks/first-work-folder-rename'
 import { moveWorktree } from './git/worktree'
 import { getRepoIdFromWorktreeId } from '../shared/worktree-id'
@@ -186,6 +188,7 @@ import { applyElectronProxySettings } from './network/proxy-settings'
 import { preserveAgentAuthBeforeRestart } from './agent-auth-restart-preservation'
 import { CliInstaller } from './cli/cli-installer'
 import { installLinuxBareOrcaDispatcher } from './cli/linux-bare-orca-dispatcher'
+import { reconcileManagedWslCliRegistrations } from './cli/wsl-cli-registration-reconciliation'
 import { selfHealRuntimeEnvironmentFocus } from './runtime-environment-focus-self-heal'
 
 let mainWindow: BrowserWindow | null = null
@@ -224,6 +227,8 @@ let keybindings: KeybindingService | null = null
 const expectedRendererReload = createWebContentsTimedFlag()
 const recoveryReloadInFlight = createWebContentsTimedFlag()
 let firstWindowStartupServicesReady: Promise<void> = Promise.resolve()
+let managedWslCliReconciliationReady: Promise<void> = Promise.resolve()
+let managedWslCliStartupBarrierReady: Promise<void> = Promise.resolve()
 // Why: GPU child crashes clustered right after launch indicate a broken driver;
 // track them so Orca can move this build onto software rendering.
 const gpuLaunchTimeMs = Date.now()
@@ -320,6 +325,7 @@ function maybeAutoRenameBranchOnFirstWorkFromHook(event: {
         return !!meta?.orcaCreationSource && meta.preserveBranchOnDelete !== true
       },
       setDisplayName: (worktreeId, displayName) => {
+        rememberBranchRenameFailureOutput(worktreeId, null)
         const scope = parseWorkspaceKey(worktreeId)
         if (scope?.type === 'folder') {
           currentStore.updateFolderWorkspace(scope.folderWorkspaceId, {
@@ -351,7 +357,10 @@ function maybeAutoRenameBranchOnFirstWorkFromHook(event: {
               moveWorktree
             })
         : undefined,
-      setRenameError: (worktreeId, error) => {
+      setRenameError: (worktreeId, error, failureOutput) => {
+        // Refresh the local-only full-output capture before the dedupe below:
+        // a repeat of the same error string still comes from a fresh run.
+        rememberBranchRenameFailureOutput(worktreeId, error === null ? null : failureOutput)
         // Skip the write + renderer push when nothing changes — benign skips
         // clear the error on every settled worktree, most of which never had one.
         const scope = parseWorkspaceKey(worktreeId)
@@ -605,7 +614,9 @@ if (hasSingleInstanceLock) {
 }
 
 ipcMain.handle('app:awaitFirstWindowStartupServices', async () => {
-  await firstWindowStartupServicesReady
+  // Why: window rendering and local RPC startup stay independent, but restored
+  // WSL terminals get a bounded chance to receive launcher repairs first.
+  await Promise.all([firstWindowStartupServicesReady, managedWslCliStartupBarrierReady])
 })
 
 ipcMain.handle(
@@ -1017,6 +1028,7 @@ function openMainWindow(): BrowserWindow {
       stateStartedAt,
       launchToken,
       providerSession,
+      promptInteractionKey,
       isReplay
     }) => {
       if (mainWindow?.isDestroyed()) {
@@ -1036,6 +1048,7 @@ function openMainWindow(): BrowserWindow {
         receivedAt,
         stateStartedAt,
         ...(providerSession ? { providerSession } : {}),
+        ...(promptInteractionKey ? { promptInteractionKey } : {}),
         ...(orchestration ? { orchestration } : {})
       })
       recordAgentStateCrashBreadcrumb(payload.agentType ?? 'unknown', payload.state)
@@ -1595,6 +1608,34 @@ app.whenReady().then(async () => {
   electronApp.setAppUserModelId(devInstanceIdentity.appUserModelId)
   app.setName(devInstanceIdentity.name)
 
+  // Why: managed WSL launchers live outside the Windows app bundle, so keep
+  // their launcher and bridge contract synchronized across app updates.
+  managedWslCliReconciliationReady = reconcileManagedWslCliRegistrations({
+    isPackaged: app.isPackaged,
+    userDataPath: getCanonicalUserDataPath(),
+    appVersion: app.getVersion()
+  })
+    .then((results) => {
+      for (const result of results) {
+        if (result.outcome === 'failed') {
+          console.warn(
+            `[wsl-cli] ${result.distro} managed registration reconciliation failed: ${result.error}`
+          )
+        } else if (result.outcome === 'repaired') {
+          console.log(`[wsl-cli] Repaired managed registration in ${result.distro}.`)
+        }
+      }
+    })
+    .catch((error) => {
+      console.warn(
+        '[wsl-cli] Managed registration reconciliation discovery failed:',
+        error instanceof Error ? error.message : String(error)
+      )
+    })
+  managedWslCliStartupBarrierReady = createWslCliReconciliationStartupBarrier(
+    managedWslCliReconciliationReady
+  )
+
   const activeOrcaProfile = ensureActiveOrcaProfile()
   store = new Store({ dataFile: activeOrcaProfile.dataFile })
   logStartupMilestone('store-loaded')
@@ -2049,6 +2090,9 @@ app.whenReady().then(async () => {
   }
 
   if (serveOptions) {
+    // Why: headless serve has no renderer startup barrier, so settle managed
+    // WSL command reconciliation before exposing its runtime transport.
+    await managedWslCliReconciliationReady
     await startServeAgentHookServer()
     registerHeadlessPtyRuntime(
       runtime,

@@ -511,6 +511,11 @@ describe('registerWorktreeHandlers', () => {
     expect(handlers['worktrees:resolveMrBase']).toBeDefined()
   })
 
+  it('clears the branch rename failure-output handler before re-registering IPC handlers', () => {
+    expect(removeHandlerMock).toHaveBeenCalledWith('worktrees:getBranchRenameFailureOutput')
+    expect(handlers['worktrees:getBranchRenameFailureOutput']).toBeDefined()
+  })
+
   it('prefetches the local default create base through the runtime refresh cache', async () => {
     const repo = {
       id: 'repo-1',

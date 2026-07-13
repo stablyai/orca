@@ -970,7 +970,8 @@
 .editor-header {
   display: flex;
   align-items: center;
-  gap: 12px;
+  /* Keep adjacent actions aligned with the app's compact toolbar spacing. */
+  gap: 4px;
   min-height: 36px;
   padding: 6px 14px;
   background: var(--editor-surface);

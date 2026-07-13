@@ -87,11 +87,11 @@ export function OrcaProfileSwitcher({
   }, [fetchProfiles, loading, profiles.length])
 
   // Why: the Orca Cloud account UX isn't ready for production users yet, so the
-  // trigger stays hidden in packaged builds. Dev builds still show it when
-  // cloud auth is configured, and a dev-only Settings > Dev Tools > Orca Cloud
-  // section mirrors it. import.meta.env.PROD is true only in packaged builds
-  // (false in dev and under vitest), so tests still exercise the render path.
-  if (import.meta.env.PROD) {
+  // trigger stays hidden in packaged builds. Dev builds still show it when cloud
+  // auth is configured. electron-vite build forces NODE_ENV=production, so PROD
+  // is baked true even for the e2e bundle; exempt MODE==='e2e' so the switcher
+  // specs can exercise the render path while real packaged prod builds stay hidden.
+  if (import.meta.env.PROD && import.meta.env.MODE !== 'e2e') {
     return null
   }
 

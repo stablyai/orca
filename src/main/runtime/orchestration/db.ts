@@ -46,6 +46,22 @@ function generateId(prefix: string): string {
   return `${prefix}_${randomBytes(6).toString('hex')}`
 }
 
+function addLifecycleRejectionMarker(payload: string | null, reason: string): string {
+  let parsed: Record<string, unknown> = {}
+  try {
+    const value: unknown = payload ? JSON.parse(payload) : {}
+    if (value && typeof value === 'object' && !Array.isArray(value)) {
+      parsed = value as Record<string, unknown>
+    }
+  } catch {
+    // Authority reconciliation only reaches this path with object payloads.
+  }
+  return JSON.stringify({
+    ...parsed,
+    _orcaLifecycleRejection: { code: 'sender_not_assignee', reason }
+  })
+}
+
 // Why: v1 → v2 added `'heartbeat'` to messages.type CHECK + `last_heartbeat_at`
 // column (preamble-hardening PR). v2 → v3 adds `delivered_at` column so
 // push-on-idle can distinguish queued-but-undelivered from user-acknowledged
@@ -352,6 +368,27 @@ export class OrchestrationDb {
     return this.db
       .prepare('SELECT * FROM messages WHERE to_handle = ? AND read = 0 ORDER BY sequence')
       .all(toHandle) as MessageRow[]
+  }
+
+  convertLifecycleMessageToRejection(messageId: string, reason: string): MessageRow | undefined {
+    const message = this.getMessageById(messageId)
+    if (!message || (message.type !== 'worker_done' && message.type !== 'heartbeat')) {
+      return message
+    }
+
+    const originalBody = message.body ? `\n\nOriginal body:\n${message.body}` : ''
+    const body = `Orca rejected this ${message.type}: ${reason}${originalBody}`
+    const payload = addLifecycleRejectionMarker(message.payload, reason)
+    // Why: rejected lifecycle signals must remain auditable without reaching
+    // later read paths as actionable completion or liveness events.
+    this.db
+      .prepare(
+        `UPDATE messages
+         SET priority = 'high', subject = ?, body = ?, payload = ?
+         WHERE id = ?`
+      )
+      .run(`Rejected ${message.type}: ${message.subject}`, body, payload, messageId)
+    return this.getMessageById(messageId)
   }
 
   // Why: push-on-idle delivery must not replay messages that were already

@@ -3,6 +3,7 @@ import { useEffect } from 'react'
 import { toast } from 'sonner'
 import { useAppStore } from '../store'
 import { shouldRetryPaneSpawnOnSshReconnect } from './ssh-reconnect-pane-retry'
+import { applyWorktreeHeadIdentities } from './worktree-head-identity-apply'
 import { getWorktreeMapFromState, getRepoMapFromState } from '@/store/selectors'
 import { applyUIZoom } from '@/lib/ui-zoom'
 import { activateAndRevealWorktree } from '@/lib/worktree-activation'
@@ -1140,6 +1141,22 @@ export function useIpcEvents(): void {
         }
       )
     )
+
+    if (window.api.worktrees.onHeadIdentitiesChanged) {
+      unsubs.push(
+        window.api.worktrees.onHeadIdentitiesChanged((data) => {
+          if (isRuntimeEnvironmentActive()) {
+            // Why: local worktree events carry local repo ids (see onChanged).
+            return
+          }
+          const state = useAppStore.getState()
+          applyWorktreeHeadIdentities(data, {
+            getWorktreesForRepo: (repoId) => state.worktreesByRepo[repoId],
+            updateWorktreeGitIdentity: state.updateWorktreeGitIdentity
+          })
+        })
+      )
+    }
 
     unsubs.push(
       window.api.worktrees.onBaseStatus((event) => {
@@ -3029,6 +3046,9 @@ export function useIpcEvents(): void {
       const statusPayload = data.orchestration
         ? { ...resolvedPayload, orchestration: data.orchestration }
         : resolvedPayload
+      const statusPayloadWithTurnBoundary = data.promptInteractionKey
+        ? { ...statusPayload, promptInteractionKey: data.promptInteractionKey }
+        : statusPayload
       const existingStatus = store.agentStatusByPaneKey[data.paneKey]
       if (existingStatus && data.receivedAt < existingStatus.updatedAt) {
         // Why: the store rejects out-of-order status rows; keep notification and
@@ -3075,7 +3095,7 @@ export function useIpcEvents(): void {
       const statusWorktreeId = data.worktreeId ?? owningWorktreeId
       store.setAgentStatus(
         data.paneKey,
-        statusPayload,
+        statusPayloadWithTurnBoundary,
         terminalTitle,
         {
           updatedAt: data.receivedAt,

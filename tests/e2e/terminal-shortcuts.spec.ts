@@ -19,6 +19,7 @@ import type { ElectronApplication, Page } from '@stablyai/playwright-test'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../src/shared/constants'
 import {
   execInTerminal,
+  sendToTerminal,
   countVisibleTerminalPanes,
   waitForActiveTerminalManager,
   waitForTerminalOutput,
@@ -518,19 +519,27 @@ test.describe('Terminal Shortcuts', () => {
     await waitForPaneCount(orcaPage, 1, 30_000)
   })
 
-  test('Shift+Enter writes the platform newline chord for terminal TUIs', async ({
-    orcaPage,
-    electronApp
-  }) => {
+  test('Shift+Enter follows the pane Kitty keyboard state', async ({ orcaPage, electronApp }) => {
     await installMainProcessPtyWriteSpy(electronApp)
-    await waitForActivePanePtyId(orcaPage)
+    const ptyId = await waitForActivePanePtyId(orcaPage)
 
-    await pressAndExpectWrite(
-      orcaPage,
-      electronApp,
-      'Shift+Enter',
-      process.platform === 'win32' ? '\x1b\r' : '\x1b[13;2u'
-    )
+    await pressAndExpectWrite(orcaPage, electronApp, 'Shift+Enter', '\x1b\r')
+    if (process.platform === 'win32') {
+      return
+    }
+
+    // Why: exercise the production PTY-output tracker, not xterm's renderer-
+    // local flag state, so the test covers the bytes the shortcut policy sees.
+    await execInTerminal(orcaPage, ptyId, "printf '\\033[>1u'")
+    await expect.poll(() => getKittyKeyboardFlags(orcaPage)).toBe(1)
+    await pressAndExpectWrite(orcaPage, electronApp, 'Shift+Enter', '\x1b[13;2u')
+
+    // Clear the shell's unconsumed CSI-u line before resetting flags in a settled
+    // command; otherwise its line editor can swallow the reset bytes.
+    await sendToTerminal(orcaPage, ptyId, '\x15\x03')
+    await execInTerminal(orcaPage, ptyId, "printf '\\033[=0u'")
+    await expect.poll(() => getKittyKeyboardFlags(orcaPage)).toBe(0)
+    await pressAndExpectWrite(orcaPage, electronApp, 'Shift+Enter', '\x1b\r')
   })
 
   test('Droid gets CSI-u Shift+Enter on Windows without changing Antigravity', async ({
@@ -769,14 +778,8 @@ test.describe('Terminal Shortcuts', () => {
     // Ctrl+Backspace → \x17 (unix-word-rubout).
     await pressAndExpectWrite(orcaPage, electronApp, 'Control+Backspace', '\x17')
 
-    // Shift+Enter stays distinct; Windows keeps Esc+CR unless the active agent
-    // explicitly requires CSI-u (currently Droid, #7620).
-    await pressAndExpectWrite(
-      orcaPage,
-      electronApp,
-      'Shift+Enter',
-      process.platform === 'win32' ? '\x1b\r' : '\x1b[13;2u'
-    )
+    // The shell has not enabled KKP, so Shift+Enter must not leak CSI-u text.
+    await pressAndExpectWrite(orcaPage, electronApp, 'Shift+Enter', '\x1b\r')
 
     // --- send-input chords (macOS-only) ---
 

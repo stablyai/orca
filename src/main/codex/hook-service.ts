@@ -27,6 +27,12 @@ import {
   writeTextFileRemoteAtomic
 } from '../agent-hooks/installer-utils-remote'
 import {
+  buildPosixHookPayloadCapture,
+  buildWindowsHookEnvironmentGuardLines,
+  buildWindowsHookStdinDrainEpilogue,
+  POSIX_HOOK_STDIN_DRAIN_COMMAND
+} from '../agent-hooks/hook-stdin-contract'
+import {
   computeTrustKey,
   computeTrustedHash,
   escapeTomlString,
@@ -148,11 +154,16 @@ function codexPosixTrustCommandVariants(scriptPath: string): string[] {
   const direct = wrapPosixDirectHookCommand(scriptPath)
   const quoted = `'${scriptPath.replaceAll("'", "'\\''")}'`
   const quotedDirect = `/bin/sh ${quoted}`
+  const guardedReadableWithDrain = `if [ -f ${quoted} ] && [ -r ${quoted} ]; then /bin/sh ${quoted}; else ${POSIX_HOOK_STDIN_DRAIN_COMMAND}; fi`
   return [
     direct,
     // Intermediate #8390 form before dual-model unquoted paths.
     ...(quotedDirect === direct ? [] : [quotedDirect]),
+    // Current-main launchers must remain removable after switching Codex to
+    // its control-flow-free direct command shape.
     wrapPosixHookCommand(scriptPath),
+    guardedReadableWithDrain,
+    `if [ -x ${quoted} ]; then /bin/sh ${quoted}; fi`,
     `if [ -r ${quoted} ]; then /bin/sh ${quoted}; fi`
   ]
 }
@@ -805,17 +816,17 @@ function getManagedScript(target: 'local' | 'posix' = 'local'): string {
       // surviving PTY reach the current server even though its env points at
       // the prior Orca's coordinates.
       'if defined ORCA_AGENT_HOOK_ENDPOINT if exist "%ORCA_AGENT_HOOK_ENDPOINT%" call "%ORCA_AGENT_HOOK_ENDPOINT%" 2>nul',
-      'if "%ORCA_AGENT_HOOK_PORT%"=="" exit /b 0',
-      'if "%ORCA_AGENT_HOOK_TOKEN%"=="" exit /b 0',
-      'if "%ORCA_PANE_KEY%"=="" exit /b 0',
+      ...buildWindowsHookEnvironmentGuardLines(),
       buildWindowsAgentHookCurlPostCommand('codex'),
       'exit /b 0',
+      ...buildWindowsHookStdinDrainEpilogue(),
       ''
     ].join('\r\n')
   }
 
   return [
     '#!/bin/sh',
+    ...buildPosixHookPayloadCapture(),
     // Why: see claude/hook-service.ts for rationale. Sourcing refreshes
     // PORT/TOKEN/ENV/VERSION from the current Orca so a surviving PTY keeps
     // reporting after a restart.
@@ -845,10 +856,6 @@ function getManagedScript(target: 'local' | 'posix' = 'local'): string {
     '  load_hook_endpoint "$ORCA_AGENT_HOOK_ENDPOINT"',
     'fi',
     'if [ -z "$ORCA_AGENT_HOOK_PORT" ] || [ -z "$ORCA_AGENT_HOOK_TOKEN" ] || [ -z "$ORCA_PANE_KEY" ]; then',
-    '  exit 0',
-    'fi',
-    'payload=$(cat)',
-    'if [ -z "$payload" ]; then',
     '  exit 0',
     'fi',
     'post_codex_hook() {',
