@@ -6758,6 +6758,11 @@
             "fastDescription": "수정 키로 스크롤할 때 적용되는 추가 배율.",
             "tui": "TUI",
             "tuiDescription": "전체 화면 터미널 앱을 위한 개별 휠 보고."
+          },
+          "minimumContrastRatio": {
+            "title": "Minimum Contrast Ratio",
+            "description": "Raises low-contrast ANSI text toward the background until this ratio is met. Set to 1 to use theme colors as-is.",
+            "helper": "1 leaves colors unchanged; 4.5 is the accessibility default."
           }
         },
         "TerminalSettingsPreview": {
@@ -8460,6 +8465,10 @@
               "title": "테마 모드",
               "keyword_target": "대상",
               "keyword_editing": "편집"
+            },
+            "minimumContrastRatio": {
+              "title": "Minimum Contrast Ratio",
+              "description": "Raises low-contrast ANSI text toward the background until this ratio is met. Set to 1 to use theme colors as-is."
             }
           },
           "windows": {

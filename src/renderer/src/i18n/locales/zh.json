@@ -6758,6 +6758,11 @@
             "fastDescription": "按住修饰键滚动时的额外倍数。",
             "tui": "TUI",
             "tuiDescription": "面向全屏终端应用的离散滚轮报告。"
+          },
+          "minimumContrastRatio": {
+            "title": "Minimum Contrast Ratio",
+            "description": "Raises low-contrast ANSI text toward the background until this ratio is met. Set to 1 to use theme colors as-is.",
+            "helper": "1 leaves colors unchanged; 4.5 is the accessibility default."
           }
         },
         "TerminalSettingsPreview": {
@@ -8460,6 +8465,10 @@
               "title": "主题模式",
               "keyword_target": "目标",
               "keyword_editing": "编辑"
+            },
+            "minimumContrastRatio": {
+              "title": "Minimum Contrast Ratio",
+              "description": "Raises low-contrast ANSI text toward the background until this ratio is met. Set to 1 to use theme colors as-is."
             }
           },
           "windows": {

@@ -6773,6 +6773,11 @@
             "fastDescription": "Multiplicador adicional al desplazarse con una tecla modificadora.",
             "tui": "TUI",
             "tuiDescription": "Eventos discretos de rueda para apps de terminal de pantalla completa."
+          },
+          "minimumContrastRatio": {
+            "title": "Minimum Contrast Ratio",
+            "description": "Raises low-contrast ANSI text toward the background until this ratio is met. Set to 1 to use theme colors as-is.",
+            "helper": "1 leaves colors unchanged; 4.5 is the accessibility default."
           }
         },
         "TerminalSettingsPreview": {
@@ -8475,6 +8480,10 @@
               "title": "Modo del tema",
               "keyword_target": "destino",
               "keyword_editing": "edición"
+            },
+            "minimumContrastRatio": {
+              "title": "Minimum Contrast Ratio",
+              "description": "Raises low-contrast ANSI text toward the background until this ratio is met. Set to 1 to use theme colors as-is."
             }
           },
           "windows": {
