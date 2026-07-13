@@ -45,10 +45,11 @@ export function SessionInlineDetails({
   // A zero-turn transcript would resume into an empty conversation, so the plain
   // resume affordances are withheld and a distinct "not saved" state is shown.
   const hasResumableContent = isAiVaultSessionResumableContent(session)
-  const showResumeInWorktree = hasResumableContent && Boolean(resumeActions.worktree.worktreeId)
+  // Why: 읽기전용 웹 대화는 트랜스크립트만 보여주고 CLI 이어하기 어포던스는 전부 숨긴다.
+  const canResume = hasResumableContent && !session.readOnly
+  const showResumeInWorktree = canResume && Boolean(resumeActions.worktree.worktreeId)
   const showResumeInNewTab =
-    hasResumableContent &&
-    (!resumeActions.worktree.worktreeId || Boolean(resumeActions.newTab.worktreeId))
+    canResume && (!resumeActions.worktree.worktreeId || Boolean(resumeActions.newTab.worktreeId))
   const detailTurns = sessionDetailConversationTurns(session, 3)
   const worktreeDisplay = worktreeInfo
 
