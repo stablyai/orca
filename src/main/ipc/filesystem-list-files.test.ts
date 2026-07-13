@@ -71,7 +71,7 @@ describe('filesystem-list-files', () => {
     getLocalGitOptionsForRegisteredWorktreeMock.mockReturnValue({})
   })
 
-  it('stops local rg passes at the requested result budget', async () => {
+  it('settles both local rg passes when one reaches the result budget', async () => {
     const p1 = createMockProcess()
     const p2 = createMockProcess()
     spawnMock.mockImplementation((_cmd, args: string[]) => (isIgnoredRgPass(args) ? p2 : p1))
@@ -84,8 +84,9 @@ describe('filesystem-list-files', () => {
     )
 
     setTimeout(() => {
-      ;(p1.stdout as unknown as EventEmitter).emit('data', 'one.ts\ntwo.ts\nthree.ts\n')
-      ;(p2.stdout as unknown as EventEmitter).emit('data', 'ignored.ts\n')
+      ;(p1.stdout as unknown as EventEmitter).emit('data', 'one.ts\ntwo.ts')
+      p1.emit('close', 0, null)
+      // The ignored pass deliberately stays silent and never closes.
     }, 0)
     const result = await promise
 
@@ -398,6 +399,43 @@ describe('filesystem-list-files', () => {
       expect(result).toContain('.env.local')
       expect(result).toContain('dist/generated.js')
       expect(result).not.toContain('node_modules/dep/index.js')
+    })
+
+    it('settles both git passes when one reaches the result budget', async () => {
+      checkRgAvailableMock.mockResolvedValue(false)
+      const revParseProc = createMockProcess()
+      const gitP1 = createMockProcess()
+      const gitP2 = createMockProcess()
+      let callIndex = 0
+
+      spawnMock.mockImplementation((cmd: string, args: string[]) => {
+        if (cmd === 'git' && args.includes('rev-parse')) {
+          return revParseProc
+        }
+        if (cmd === 'git' && args.includes('ls-files')) {
+          callIndex += 1
+          return callIndex === 1 ? gitP1 : gitP2
+        }
+        return createMockProcess()
+      })
+
+      const promise = listQuickOpenFiles(
+        '/mock/root',
+        {} as unknown as Store,
+        undefined,
+        undefined,
+        2
+      )
+      setTimeout(() => revParseProc.emit('close', 0, null), 0)
+      setTimeout(() => {
+        ;(gitP1.stdout as unknown as EventEmitter).emit('data', 'one.ts\0two.ts')
+        gitP1.emit('close', 0, null)
+        // The ignored pass deliberately stays silent and never closes.
+      }, 10)
+
+      await expect(promise).resolves.toEqual(['one.ts', 'two.ts'])
+      expect(gitP1.kill).toHaveBeenCalled()
+      expect(gitP2.kill).toHaveBeenCalled()
     })
 
     it('git fallback applies hidden dir blocklist', async () => {

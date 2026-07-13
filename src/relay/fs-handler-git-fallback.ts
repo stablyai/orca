@@ -46,6 +46,7 @@ export function listFilesWithGit(
     child: ReturnType<typeof spawn>
     isDone: () => boolean
     reject: (error: Error) => void
+    resolve: () => void
   }[] = []
 
   const runGitLsFiles = (args: string[]): Promise<void> => {
@@ -101,7 +102,8 @@ export function listFilesWithGit(
       children.push({
         child,
         isDone: () => done,
-        reject: rejectPass
+        reject: rejectPass,
+        resolve: resolvePass
       })
 
       function handleStdoutData(chunk: string): void {
@@ -111,8 +113,7 @@ export function listFilesWithGit(
         while (idx !== -1) {
           if (processPath(buf.substring(start, idx))) {
             buf = ''
-            child.kill()
-            resolvePass()
+            finishAtLimit()
             return
           }
           start = idx + 1
@@ -137,8 +138,10 @@ export function listFilesWithGit(
           rejectPass(new Error(`git ls-files killed by ${signal}`))
           return
         }
-        if (buf) {
-          processPath(buf)
+        if (buf && processPath(buf)) {
+          buf = ''
+          finishAtLimit()
+          return
         }
         if (code === 0) {
           resolvePass()
@@ -173,6 +176,18 @@ export function listFilesWithGit(
         entry.child.kill()
       }
       entry.reject(new Error(reason))
+    }
+  }
+
+  function finishAtLimit(): void {
+    for (const entry of children) {
+      if (entry.isDone()) {
+        continue
+      }
+      entry.resolve()
+      if (entry.child.exitCode === null && entry.child.signalCode === null) {
+        entry.child.kill()
+      }
     }
   }
 

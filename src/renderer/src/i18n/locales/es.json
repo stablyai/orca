@@ -13014,6 +13014,7 @@
           "title": "No se pudo cargar la conversación",
           "subtitle": "No se pudo leer la transcripción. Vuelva a la terminal para seguir trabajando."
         },
+        "pairHost": "Empareje un host para ver el historial de chat del agente.",
         "notAgent": {
           "title": "No hay conversación aquí",
           "subtitle": "Este terminal no está ejecutando un agente de código reconocido."

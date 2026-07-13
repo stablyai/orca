@@ -96,6 +96,7 @@ export async function listFilesWithGit(
     child: ChildProcess
     isDone: () => boolean
     reject: (error: Error) => void
+    resolve: () => void
   }[] = []
 
   const runGitLsFiles = (args: string[]): Promise<void> => {
@@ -152,7 +153,8 @@ export async function listFilesWithGit(
       children.push({
         child,
         isDone: () => done,
-        reject: rejectPass
+        reject: rejectPass,
+        resolve: resolvePass
       })
       const handleStdoutData = (chunk: string): void => {
         buf += chunk
@@ -161,8 +163,7 @@ export async function listFilesWithGit(
         while (nulIdx !== -1) {
           if (processPath(buf.substring(start, nulIdx))) {
             buf = ''
-            child.kill()
-            resolvePass()
+            finishAtLimit()
             return
           }
           start = nulIdx + 1
@@ -184,8 +185,10 @@ export async function listFilesWithGit(
           rejectPass(new Error(`git ls-files killed by ${signal}`))
           return
         }
-        if (buf) {
-          processPath(buf)
+        if (buf && processPath(buf)) {
+          buf = ''
+          finishAtLimit()
+          return
         }
         if (code === 0) {
           resolvePass()
@@ -218,6 +221,18 @@ export async function listFilesWithGit(
         entry.child.kill()
       }
       entry.reject(new Error(reason))
+    }
+  }
+
+  function finishAtLimit(): void {
+    for (const entry of children) {
+      if (entry.isDone()) {
+        continue
+      }
+      entry.resolve()
+      if (entry.child.exitCode === null && entry.child.signalCode === null) {
+        entry.child.kill()
+      }
     }
   }
 

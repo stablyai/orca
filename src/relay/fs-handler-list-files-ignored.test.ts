@@ -163,6 +163,22 @@ describe('relay quick open ignored file listing', () => {
     expect(ignoredArgs).toContain(':(exclude,glob)packages/other/**')
   })
 
+  it('settles both relay git passes when one reaches the result budget', async () => {
+    const primaryProc = createMockProcess()
+    const ignoredProc = createMockProcess()
+    let callIndex = 0
+    spawnMock.mockImplementation(() => (++callIndex === 1 ? primaryProc : ignoredProc))
+
+    const promise = listFilesWithGit('/remote/root', [], { maxResults: 2 })
+    ;(primaryProc.stdout as unknown as EventEmitter).emit('data', 'src/one.ts\0src/two.ts')
+    primaryProc.emit('close', 0, null)
+    // The ignored pass deliberately stays silent and never closes.
+
+    await expect(promise).resolves.toEqual(['src/one.ts', 'src/two.ts'])
+    expect(primaryProc.kill).toHaveBeenCalled()
+    expect(ignoredProc.kill).toHaveBeenCalled()
+  })
+
   it('git fallback fills nested git repos returned as root-relative placeholders', async () => {
     const root = await makeTempRoot()
     await writeRel(root, 'README.md')

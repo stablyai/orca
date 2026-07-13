@@ -8,7 +8,6 @@ import {
 } from '../../../../shared/native-chat-types'
 import {
   applyAppend,
-  boundNativeChatWindow,
   createNativeChatMerger,
   replaceList
 } from '../../../../shared/native-chat-merge'
@@ -236,12 +235,7 @@ export function useNativeChatLiveSession(
           // the bucket can't grow without limit. The base read still holds older
           // turns, and the assembler re-dedups the concat, so trimming the recent
           // append tail can't drop a turn the base window still covers (#6).
-          const merged = applyAppend(appendMergerRef.current, frame.messages)
-          const bounded = boundNativeChatWindow(merged, limitRef.current)
-          if (bounded !== merged) {
-            replaceList(appendMergerRef.current, bounded)
-          }
-          setAppended(appendMergerRef.current.list)
+          setAppended(applyAppend(appendMergerRef.current, frame.messages, limitRef.current))
         }
       }
     )

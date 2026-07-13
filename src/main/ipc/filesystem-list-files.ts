@@ -52,7 +52,11 @@ export async function listQuickOpenFiles(
   }
 
   const files = new Set<string>()
-  const children: ChildProcess[] = []
+  const children: {
+    child: ChildProcess
+    isDone: () => boolean
+    finish: () => void
+  }[] = []
   // Why: WSL-routed rg can emit Linux-native absolute paths. UNC repos carry
   // their distro in the path; Windows-path repos carry it in project runtime.
   const wslDistroForOutput = parseWslPath(authorizedRootPath)?.distro ?? localGitOptions.wslDistro
@@ -105,7 +109,6 @@ export async function listQuickOpenFiles(
         ...(localGitOptions.wslDistro ? { wslDistro: localGitOptions.wslDistro } : {}),
         stdio: ['ignore', 'pipe', 'pipe']
       })
-      children.push(child)
       let timer: ReturnType<typeof setTimeout>
       const handleStdoutData = (chunk: string): void => {
         buf += chunk
@@ -114,8 +117,7 @@ export async function listQuickOpenFiles(
         while (newlineIdx !== -1) {
           if (processLine(buf.substring(start, newlineIdx))) {
             buf = ''
-            child.kill()
-            finish()
+            finishAtLimit()
             return
           }
           start = newlineIdx + 1
@@ -141,8 +143,10 @@ export async function listQuickOpenFiles(
           finish(new Error(`rg killed by ${signal}`))
           return
         }
-        if (buf) {
-          processLine(buf)
+        if (buf && processLine(buf)) {
+          buf = ''
+          finishAtLimit()
+          return
         }
         if (code === 0 || code === 1) {
           finish()
@@ -173,6 +177,8 @@ export async function listQuickOpenFiles(
         }
       }
 
+      children.push({ child, isDone: () => done, finish })
+
       child.stdout!.setEncoding('utf-8')
       child.stdout!.on('data', handleStdoutData)
       child.stderr!.on('data', handleStderrData)
@@ -192,9 +198,25 @@ export async function listQuickOpenFiles(
     // Why: if one rg pass fails, Promise.all rejects immediately while the
     // sibling scan can keep walking a huge tree until timeout. Stop it so
     // repeated Quick Open attempts do not accumulate local rg processes.
-    for (const child of children) {
-      if (child.exitCode === null && child.signalCode === null) {
-        child.kill()
+    for (const entry of children) {
+      if (entry.isDone()) {
+        continue
+      }
+      entry.finish()
+      if (entry.child.exitCode === null && entry.child.signalCode === null) {
+        entry.child.kill()
+      }
+    }
+  }
+
+  function finishAtLimit(): void {
+    for (const entry of children) {
+      if (entry.isDone()) {
+        continue
+      }
+      entry.finish()
+      if (entry.child.exitCode === null && entry.child.signalCode === null) {
+        entry.child.kill()
       }
     }
   }

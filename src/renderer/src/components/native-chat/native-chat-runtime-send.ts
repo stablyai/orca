@@ -5,49 +5,26 @@
 import { sendRuntimePtyInput } from '@/runtime/runtime-terminal-inspection'
 import type { getSettingsForAgentTabRuntimeOwner } from '@/lib/agent-paste-draft'
 import {
+  nativeChatQuestionOffsets,
+  scheduleNativeChatAnswer,
+  NATIVE_CHAT_ADVANCE_BUFFER_MS,
+  NATIVE_CHAT_QUESTION_STEP_MS,
+  NATIVE_CHAT_SUBMIT_DELAY_MS
+} from '../../../../shared/native-chat-answer-stepping'
+import {
   buildNativeChatImagePasteBytes,
   buildNativeChatPasteBytes,
   NATIVE_CHAT_SUBMIT
 } from './native-chat-send'
 
-// Why: agent TUIs swallow a `\r` bundled into the same pty write as a framed
-// paste, so a one-shot send leaves the text sitting in the input box, unsent.
-// Write the body first, then the Enter after a delay so the agent processes the
-// paste before the submit. The gap must clear the agent's paste-handling latency
-// even while it's BUSY (Codex): a short gap (60ms) fires Enter before a busy
-// Codex has landed the paste into its input, so the submit hits an empty box and
-// the message sits "Queued" forever. 500ms is orca-runtime's proven value in
-// writeTerminalAction({enter:true}), so match it here.
-export const NATIVE_CHAT_SUBMIT_DELAY_MS = 500
-export const NATIVE_CHAT_IMAGE_ATTACHMENT_SETTLE_MS = 300
-
-// Why: Claude Code's AskUserQuestion is a MULTI-STEP prompt — it renders one
-// question at a time and each Enter advances to the next (the final Enter
-// submits the whole thing). After firing a question's Enter we must let the TUI
-// render the next question before writing its body, or that body lands on the
-// wrong (or no) active question. This buffer is added ON TOP of the body→Enter
-// gap; a previous attempt that spaced Enters only ~350ms apart fired them faster
-// than the next question rendered, leaking answers as fresh prompts.
-export const NATIVE_CHAT_ADVANCE_BUFFER_MS = 300
-
-/** Per-question wall-clock cadence: body→Enter gap plus the advance buffer that
- *  lets the next AskUserQuestion step render before its body is written. */
-export const NATIVE_CHAT_QUESTION_STEP_MS =
-  NATIVE_CHAT_SUBMIT_DELAY_MS + NATIVE_CHAT_ADVANCE_BUFFER_MS
-
-/** Pure scheduling math for a per-question answer sequence. For question index
- *  `i` (0-based) returns the offsets (ms from the start of the send) at which to
- *  write its framed body and its Enter. Body for question 0 fires at 0; each
- *  later question starts a full step after the previous, so its body is never
- *  written until the previous question's Enter has fired plus the advance
- *  buffer. Exactly one Enter per question; the last Enter submits the prompt. */
-export function nativeChatQuestionOffsets(index: number): {
-  bodyAt: number
-  enterAt: number
-} {
-  const bodyAt = index * NATIVE_CHAT_QUESTION_STEP_MS
-  return { bodyAt, enterAt: bodyAt + NATIVE_CHAT_SUBMIT_DELAY_MS }
+export {
+  nativeChatQuestionOffsets,
+  NATIVE_CHAT_ADVANCE_BUFFER_MS,
+  NATIVE_CHAT_QUESTION_STEP_MS,
+  NATIVE_CHAT_SUBMIT_DELAY_MS
 }
+
+export const NATIVE_CHAT_IMAGE_ATTACHMENT_SETTLE_MS = 300
 
 /** Cancels an in-flight send's pending pty writes (the delayed Enter, and any
  *  later question bodies/Enters). Safe to call after the send completes. */
@@ -138,20 +115,11 @@ export function sendNativeChatAnswer(
   if (lines.length <= 1) {
     return sendNativeChatMessage(settings, ptyId, lines[0] ?? '')
   }
-  const timers: ReturnType<typeof setTimeout>[] = []
-  lines.forEach((line, index) => {
-    const { bodyAt, enterAt } = nativeChatQuestionOffsets(index)
-    timers.push(
-      setTimeout(() => {
-        sendRuntimePtyInput(settings, ptyId, buildNativeChatPasteBytes(line))
-      }, bodyAt)
-    )
-    timers.push(
-      setTimeout(() => {
-        sendRuntimePtyInput(settings, ptyId, NATIVE_CHAT_SUBMIT)
-      }, enterAt)
-    )
-  })
+  const timers = scheduleNativeChatAnswer(
+    lines,
+    (line) => sendRuntimePtyInput(settings, ptyId, buildNativeChatPasteBytes(line)),
+    () => sendRuntimePtyInput(settings, ptyId, NATIVE_CHAT_SUBMIT)
+  )
   return {
     cancel: () => {
       for (const timer of timers) {

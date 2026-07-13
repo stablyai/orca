@@ -13014,6 +13014,7 @@
           "title": "Could not load conversation",
           "subtitle": "The transcript could not be read. Toggle back to the terminal to keep working."
         },
+        "pairHost": "Pair a host to view agent chat history.",
         "notAgent": {
           "title": "No conversation here",
           "subtitle": "This terminal is not running a recognized coding agent."

@@ -1093,7 +1093,10 @@ function createNativeChatApi(): NativeChatApi {
           type: 'snapshot',
           messages: [],
           hasMore: false,
-          error: 'Pair a host to view agent chat history.'
+          error: translate(
+            'components.native-chat.state.pairHost',
+            'Pair a host to view agent chat history.'
+          )
         })
         return () => {}
       }
