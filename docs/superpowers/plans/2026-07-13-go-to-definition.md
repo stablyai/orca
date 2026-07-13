@@ -408,10 +408,13 @@ const JAVA_QUERY = `
 (enum_declaration name: (identifier) @name)
 `
 
+// NOTE (confirmed against src/renderer/src/lib/language-detect.ts): Orca maps
+// .ts AND .tsx onto the single id 'typescript', and .js/.jsx/.mjs/.cjs onto
+// 'javascript'. There is no 'typescriptreact' id. The `tsx` tree-sitter grammar
+// parses .ts/.js/.jsx/.tsx alike, so both ids use grammarKey 'tsx'.
 const CONFIGS: Record<string, LanguageConfig> = {
-  typescript: { languageId: 'typescript', grammarKey: 'typescript', query: TS_QUERY },
-  typescriptreact: { languageId: 'typescriptreact', grammarKey: 'tsx', query: TS_QUERY },
-  javascript: { languageId: 'javascript', grammarKey: 'typescript', query: TS_QUERY },
+  typescript: { languageId: 'typescript', grammarKey: 'tsx', query: TS_QUERY },
+  javascript: { languageId: 'javascript', grammarKey: 'tsx', query: TS_QUERY },
   python: { languageId: 'python', grammarKey: 'python', query: PY_QUERY },
   go: { languageId: 'go', grammarKey: 'go', query: GO_QUERY },
   rust: { languageId: 'rust', grammarKey: 'rust', query: RUST_QUERY },
@@ -733,11 +736,14 @@ Align the extension map ids with the ones confirmed in Task 3 Step 1.
 import { readdir } from 'node:fs/promises'
 import path from 'node:path'
 
+// ids must match detectLanguage(): .tsx collapses onto 'typescript'.
 const EXT_TO_LANGUAGE: Record<string, string> = {
   '.ts': 'typescript',
-  '.tsx': 'typescriptreact',
+  '.tsx': 'typescript',
   '.js': 'javascript',
   '.jsx': 'javascript',
+  '.mjs': 'javascript',
+  '.cjs': 'javascript',
   '.py': 'python',
   '.go': 'go',
   '.rs': 'rust',
