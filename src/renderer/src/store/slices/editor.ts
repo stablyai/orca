@@ -337,7 +337,9 @@ function resolveDiffRuntimeEnvironmentId(
   }
   // Why: Source Control callers often know only the worktree. Runtime-host
   // diffs still need their owner stamped so content loads through runtime RPC.
-  return getRuntimeEnvironmentIdForWorktree(state, worktreeId) ?? undefined
+  // Preserve a resolved `null`: a local-owned worktree must pin to local, not
+  // collapse to `undefined` and inherit the globally-active runtime environment.
+  return getRuntimeEnvironmentIdForWorktree(state, worktreeId)
 }
 
 export type PendingEditorReveal = {
@@ -1637,7 +1639,7 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
           : (file.runtimeEnvironmentId ??
             (options?.suppressActiveRuntimeFallback
               ? null
-              : (s.settings?.activeRuntimeEnvironmentId?.trim() ?? undefined)))
+              : getRuntimeEnvironmentIdForWorktree(s, worktreeId)))
       const reusableOpenFileModes = getReusableOpenFileModes(file.mode)
       const existing = s.openFiles.find(
         (f) =>
@@ -1886,8 +1888,7 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
       file.runtimeEnvironmentId === null
         ? null
         : (file.runtimeEnvironmentId ??
-          initialState.settings?.activeRuntimeEnvironmentId?.trim() ??
-          undefined)
+          getRuntimeEnvironmentIdForWorktree(initialState, file.worktreeId))
     const sourceFileId =
       options?.sourceFileId ??
       resolveEditorFileIdForOwner(
