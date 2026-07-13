@@ -1,5 +1,7 @@
 import { z } from 'zod'
 import { defineStreamingMethod, defineMethod, type RpcAnyMethod } from '../core'
+import { OptionalString, requiredString } from '../schemas'
+import { isTerminalLeafId, makePaneKey } from '../../../../shared/stable-pane-id'
 
 // Why: monotonically increasing per-process counter eliminates the
 // Date.now() collision that could fire when two near-simultaneous
@@ -13,10 +15,24 @@ const NotificationUnsubscribeParams = z.object({
     .pipe(z.string().min(1, 'Missing subscriptionId'))
 })
 
-// Why: notifications.subscribe streams desktop notification events to mobile
-// clients over WebSocket. The mobile client shows a local push notification
-// for each event. This avoids requiring Firebase/APNs — the existing
-// persistent WebSocket connection doubles as the push channel.
+// Why: `notifications.dispatch` is the agent-facing trigger behind `orca notify`.
+// It carries an arbitrary message and (via the resolved pane) deep-links the
+// tap to a specific terminal on desktop and mobile. `message` is required;
+// `terminal`/`worktree` select which pane the tap should focus (optional — a
+// bare notify still fires without click routing).
+const NotificationDispatchParams = z.object({
+  message: requiredString('Missing --message'),
+  title: OptionalString,
+  terminal: OptionalString,
+  worktree: OptionalString
+})
+
+/**
+ * Registers notification RPC methods for mobile subscriptions and agent dispatch.
+ *
+ * Mobile subscriptions reuse the persistent WebSocket as the push channel,
+ * while `notifications.dispatch` backs the CLI-triggered notification path.
+ */
 export const NOTIFICATION_METHODS: readonly RpcAnyMethod[] = [
   defineStreamingMethod({
     name: 'notifications.subscribe',
@@ -51,6 +67,47 @@ export const NOTIFICATION_METHODS: readonly RpcAnyMethod[] = [
     handler: async (params, { runtime }) => {
       runtime.cleanupSubscription(params.subscriptionId)
       return { unsubscribed: true }
+    }
+  }),
+  defineMethod({
+    name: 'notifications.dispatch',
+    params: NotificationDispatchParams,
+    handler: async (params, { runtime }) => {
+      let worktreeId: string | undefined
+      let paneKey: string | undefined
+      try {
+        // Reuse the exact resolution `terminal focus` uses: an explicit handle,
+        // else the active terminal in the selected (or current) worktree.
+        const handle = params.terminal ?? (await runtime.resolveActiveTerminal(params.worktree))
+        const terminal = await runtime.showTerminal(handle)
+        worktreeId = terminal.worktreeId
+        if (terminal.tabId && !terminal.tabId.includes(':') && isTerminalLeafId(terminal.leafId)) {
+          paneKey = makePaneKey(terminal.tabId, terminal.leafId)
+        }
+      } catch (error) {
+        // Why: a bare `orca notify --message …` with no live terminal should
+        // still fire a plain notification. Only surface the error when the
+        // caller explicitly named a target that could not be resolved.
+        if (params.terminal || params.worktree) {
+          throw error
+        }
+      }
+
+      const result = await runtime.dispatchNotification({
+        source: 'dispatch',
+        message: params.message,
+        ...(params.title ? { title: params.title } : {}),
+        ...(worktreeId ? { worktreeId } : {}),
+        ...(paneKey ? { paneKey } : {})
+      })
+
+      return {
+        dispatch: {
+          ...result,
+          ...(worktreeId ? { worktreeId } : {}),
+          ...(paneKey ? { paneKey } : {})
+        }
+      }
     }
   })
 ]

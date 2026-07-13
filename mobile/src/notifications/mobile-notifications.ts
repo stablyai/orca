@@ -10,6 +10,7 @@ type NotificationEvent = {
   title: string
   body: string
   worktreeId?: string
+  paneKey?: string
   notificationId?: string
 }
 

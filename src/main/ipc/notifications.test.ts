@@ -849,6 +849,92 @@ describe('registerNotificationHandlers', () => {
     expect(notificationCtorMock).not.toHaveBeenCalled()
   })
 
+  it('delivers a custom "dispatch" message with pane key to mobile and native', async () => {
+    const dispatchMobileNotification = vi.fn()
+    registerNotificationHandlers(
+      {
+        getSettings: () => ({
+          notifications: {
+            enabled: true,
+            agentTaskComplete: true,
+            terminalBell: true,
+            suppressWhenFocused: true
+          }
+        })
+      } as never,
+      { dispatchMobileNotification, setNotificationDispatcher: vi.fn() } as never
+    )
+
+    const handler = getDispatchHandler()
+    expect(
+      await handler(
+        {},
+        {
+          source: 'dispatch',
+          title: 'Blocked',
+          message: 'Needs your input on the migration',
+          worktreeId: 'repo::wt1',
+          paneKey: 'tab-9:11111111-1111-4111-8111-111111111111'
+        }
+      )
+    ).toEqual({ delivered: true })
+
+    expect(dispatchMobileNotification).toHaveBeenCalledWith({
+      type: 'notification',
+      source: 'dispatch',
+      title: 'Blocked',
+      body: 'Needs your input on the migration',
+      worktreeId: 'repo::wt1',
+      paneKey: 'tab-9:11111111-1111-4111-8111-111111111111'
+    })
+    expect(notificationCtorMock).toHaveBeenCalledWith(
+      expectedNativeNotificationOptions({
+        title: 'Blocked',
+        body: 'Needs your input on the migration'
+      })
+    )
+  })
+
+  it('registers a runtime notification dispatcher that honors the global enable toggle', async () => {
+    let enabled = false
+    const dispatchMobileNotification = vi.fn()
+    const setNotificationDispatcher = vi.fn()
+    registerNotificationHandlers(
+      {
+        getSettings: () => ({
+          notifications: {
+            enabled,
+            agentTaskComplete: true,
+            terminalBell: true,
+            suppressWhenFocused: true
+          }
+        })
+      } as never,
+      { dispatchMobileNotification, setNotificationDispatcher } as never
+    )
+
+    expect(setNotificationDispatcher).toHaveBeenCalledTimes(1)
+    const dispatcher = setNotificationDispatcher.mock.calls[0]![0] as (request: unknown) => unknown
+
+    // Global toggle off: the dispatcher short-circuits without touching mobile.
+    expect(await dispatcher({ source: 'dispatch', message: 'ping' })).toEqual({
+      delivered: false,
+      reason: 'disabled'
+    })
+    expect(dispatchMobileNotification).not.toHaveBeenCalled()
+
+    // Global toggle on: it reuses the same native+mobile delivery path.
+    enabled = true
+    expect(
+      await dispatcher({ source: 'dispatch', message: 'ping', worktreeId: 'repo::wt1' })
+    ).toEqual({
+      delivered: true
+    })
+    expect(dispatchMobileNotification).toHaveBeenCalledWith(
+      expect.objectContaining({ type: 'notification', source: 'dispatch', body: 'ping' })
+    )
+  })
+
   it('does not dispatch mobile notifications when notifications are disabled', async () => {
     const dispatchMobileNotification = vi.fn()
     registerNotificationHandlers(

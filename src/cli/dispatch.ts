@@ -7,6 +7,7 @@ import { REPO_HANDLERS } from './handlers/repo'
 import { WORKTREE_HANDLERS } from './handlers/worktree'
 import { FILE_HANDLERS } from './handlers/file'
 import { TERMINAL_HANDLERS } from './handlers/terminal'
+import { NOTIFY_HANDLERS } from './handlers/notify'
 import { BROWSER_NAV_HANDLERS } from './handlers/browser-nav'
 import { BROWSER_INTERACT_HANDLERS } from './handlers/browser-interact'
 import { BROWSER_TAB_HANDLERS } from './handlers/browser-tab'
@@ -45,6 +46,7 @@ function buildHandlers(): Map<string, CommandHandler> {
     WORKTREE_HANDLERS,
     FILE_HANDLERS,
     TERMINAL_HANDLERS,
+    NOTIFY_HANDLERS,
     BROWSER_NAV_HANDLERS,
     BROWSER_INTERACT_HANDLERS,
     BROWSER_TAB_HANDLERS,

@@ -14,6 +14,7 @@ import type {
   GitWorktreeInfo,
   RemoveWorktreeResult,
   Repo,
+  NotificationDispatchResult,
   TabGroupLayoutNode,
   TerminalColorOverrides,
   TerminalLayoutSnapshot,
@@ -539,6 +540,14 @@ export type RuntimeTerminalClose = {
   handle: string
   tabId: string
   ptyKilled: boolean
+}
+
+/** Result of `notifications.dispatch` (the `orca notify` runtime RPC). */
+export type RuntimeNotificationDispatch = NotificationDispatchResult & {
+  /** Resolved worktree the tap will activate, when a target was resolved. */
+  worktreeId?: string
+  /** Resolved pane key the tap will focus, when a live pane was resolved. */
+  paneKey?: string
 }
 
 export type RuntimeTerminalWaitCondition = 'exit' | 'tui-idle'

@@ -173,6 +173,7 @@ export function supportsBrowserPageFlag(commandPath: string[]): boolean {
       'repo',
       'worktree',
       'terminal',
+      'notify',
       'file',
       'orchestration',
       'computer',

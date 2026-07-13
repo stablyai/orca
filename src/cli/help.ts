@@ -80,6 +80,9 @@ Terminals:
   terminal focus            Alias for terminal switch
   terminal close            Close a terminal pane (or tab if last pane)
 
+Notifications:
+  notify                    Fire a native notification that deep-links to a pane
+
 Orchestration:
   orchestration send        Send an inter-agent message
   orchestration check       Check messages for a terminal
@@ -221,6 +224,7 @@ Common Commands:
   orca terminal split [--terminal <handle>] [--direction horizontal|vertical] [--json]
   orca terminal switch [--terminal <handle>] [--json]
   orca terminal close [--terminal <handle>] [--json]
+  orca notify --message <text> [--title <text>] [--pane <handle>|--worktree <selector>] [--json]
   orca project list [--json]
   orca project setups [--project <id>] [--host <host-id>] [--json]
   orca project setup-existing-folder --project <id> --host <host-id> --path <path> [--kind git|folder] [--display-name <name>] [--json]

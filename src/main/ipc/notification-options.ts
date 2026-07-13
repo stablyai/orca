@@ -3,6 +3,10 @@ import type { NotificationDispatchRequest } from '../../shared/types'
 const NOTIFICATION_AGENT_LABEL_MAX_LENGTH = 40
 const NOTIFICATION_TITLE_CONTEXT_MAX_LENGTH = 80
 const NOTIFICATION_BODY_PREVIEW_MAX_LENGTH = 180
+// Why: `dispatch` bodies are agent-authored (often an AI summary), so allow a
+// longer preview than the auto-generated sources while still bounding the
+// string the OS notification center has to render.
+const NOTIFICATION_DISPATCH_BODY_MAX_LENGTH = 500
 
 const AGENT_TYPE_LABELS: Readonly<Record<string, string>> = {
   claude: 'Claude',
@@ -20,6 +24,12 @@ const AGENT_TYPE_LABELS: Readonly<Record<string, string>> = {
   hermes: 'Hermes'
 }
 
+/**
+ * Converts an internal notification request into Electron display text.
+ *
+ * Dispatcher-triggered notifications carry agent-authored prose, while the
+ * existing automatic sources still use their compact generated copy.
+ */
 export function buildNotificationOptions(args: NotificationDispatchRequest): {
   title: string
   body: string
@@ -37,6 +47,13 @@ export function buildNotificationOptions(args: NotificationDispatchRequest): {
     return {
       title: 'Orca notifications are on',
       body: 'This is a test notification from Orca.'
+    }
+  }
+
+  if (args.source === 'dispatch') {
+    return {
+      title: normalizeNotificationText(args.title, NOTIFICATION_TITLE_CONTEXT_MAX_LENGTH) || 'Orca',
+      body: normalizeNotificationText(args.message, NOTIFICATION_DISPATCH_BODY_MAX_LENGTH)
     }
   }
 

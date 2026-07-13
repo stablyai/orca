@@ -25,14 +25,26 @@ export const SINGLE_INSTANCE_LOCK_BYPASS_MESSAGE =
  * way dev (`orca-dev` userData) and packaged (`orca` userData) runs lock in
  * separate namespaces instead of serialising against each other.
  */
-export function acquireSingleInstanceLock(app: App, onSecondInstance: () => void): boolean {
+export function acquireSingleInstanceLock(
+  app: App,
+  onSecondInstance: (argv: string[]) => void
+): boolean {
   if (!app.requestSingleInstanceLock()) {
     return false
   }
-  app.on('second-instance', onSecondInstance)
+  // Why: forward the second launch's argv so Windows/Linux protocol activations
+  // (`orca://…` arrives as an argv entry, not an event) can be routed by the
+  // handler. macOS delivers the same intent via `open-url` instead.
+  app.on('second-instance', (_event, argv) => onSecondInstance(argv))
   return true
 }
 
+/**
+ * Decide whether to skip the packaged single-instance lock. Only ever true on a
+ * packaged macOS build with `ORCA_BYPASS_SINGLE_INSTANCE_LOCK=1` set — a
+ * diagnostics-only escape hatch. Dev and serve-mode runs, and every non-darwin
+ * platform, always keep the lock. `env` and `platform` are injectable for tests.
+ */
 export function shouldBypassSingleInstanceLock(options: {
   env?: NodeJS.ProcessEnv
   isDev: boolean
@@ -49,10 +61,18 @@ export function shouldBypassSingleInstanceLock(options: {
   )
 }
 
+/**
+ * Emit the canonical lock-failure diagnostic (this launch could not acquire the
+ * single-instance lock and is exiting) through the startup diagnostic sink.
+ */
 export function logSingleInstanceLockFailure(write?: StartupDiagnosticSink): void {
   writeStartupDiagnosticLine(SINGLE_INSTANCE_LOCK_FAILURE_MESSAGE, write)
 }
 
+/**
+ * Emit the diagnostic noting that the packaged macOS single-instance lock is
+ * being bypassed via `ORCA_BYPASS_SINGLE_INSTANCE_LOCK`.
+ */
 export function logSingleInstanceLockBypass(write?: StartupDiagnosticSink): void {
   writeStartupDiagnosticLine(SINGLE_INSTANCE_LOCK_BYPASS_MESSAGE, write)
 }
